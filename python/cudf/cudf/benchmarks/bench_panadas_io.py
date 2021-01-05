@@ -1,30 +1,36 @@
 # Copyright (c) 2020, NVIDIA CORPORATION.
 
-import glob
+import cudf
 import io
+import glob
 import os
 import pandas as pd
 import pytest
 
 from bench_cudf_io import get_dataset_dir, get_dtypes
-from get_datasets import create_pandas_dataset
+from get_datasets import create_dataset
+
+datatype = ["float32", "float64", "int32", "int64", "str", "datetime64[s]"]
+
+null_frequency = [0.1, 0.4, 0.8]
 
 
-@pytest.mark.parametrize(
-    "dtype", ["float32", "float64", "int32", "int64", "str", "datetime64[s]"]
-)
-def bench_to_csv(benchmark, dtype):
-    pd_df, file_path = create_pandas_dataset(
-        dtype, file_type="csv", only_file=False
+@pytest.mark.parametrize("dtype", datatype)
+@pytest.mark.parametrize("null_frequency", null_frequency)
+def bench_to_csv(benchmark, dtype, null_frequency):
+    table, file_path = create_dataset(
+        dtype, file_type="csv", only_file=False, null_frequency=null_frequency
     )
+
+    pd_df = cudf._fuzz_testing.utils.pyarrow_to_pandas(table)
     benchmark(pd_df.to_csv, file_path)
 
 
-@pytest.mark.parametrize(
-    "dtype", ["float32", "float64", "int32", "int64", "str", "datetime64[s]"]
-)
+@pytest.mark.parametrize("dtype", datatype)
 def bench_from_csv(benchmark, use_buffer, dtype):
-    file_path = create_pandas_dataset(dtype, file_type="csv", only_file=True)
+    file_path = create_dataset(
+        dtype, file_type="csv", only_file=True, null_frequency=None
+    )
 
     if use_buffer == "True":
         with open(file_path, "rb") as f:
@@ -35,13 +41,14 @@ def bench_from_csv(benchmark, use_buffer, dtype):
     os.remove(file_path)
 
 
-@pytest.mark.parametrize(
-    "dtype", ["float32", "float64", "int32", "int64", "str", "datetime64[s]"]
-)
+@pytest.mark.parametrize("dtype", datatype)
 def bench_read_orc(benchmark, use_buffer, dtype):
-    file_path = create_pandas_dataset(dtype, file_type="orc", only_file=True)
+    file_path = create_dataset(
+        dtype, file_type="orc", only_file=True, null_frequency=None
+    )
+
     if ~os.path.isfile(file_path):
-        pytest.skip(file_path, "  file does not exist")
+        pytest.skip("no ORC file to read")
 
     if use_buffer == "True":
         with open(file_path, "rb") as f:
@@ -52,23 +59,23 @@ def bench_read_orc(benchmark, use_buffer, dtype):
     os.remove(file_path)
 
 
-@pytest.mark.parametrize(
-    "dtype", ["float32", "float64", "int32", "int64", "str", "datetime64[s]"]
-)
-def bench_to_parquet(benchmark, dtype):
-    pd_df, file_path = create_pandas_dataset(
-        dtype, file_type="parquet", only_file=False
+@pytest.mark.parametrize("dtype", datatype)
+@pytest.mark.parametrize("null_frequency", null_frequency)
+def bench_to_parquet(benchmark, dtype, null_frequency):
+    table, file_path = create_dataset(
+        dtype, file_type="csv", only_file=False, null_frequency=null_frequency
     )
+
+    pd_df = cudf._fuzz_testing.utils.pyarrow_to_pandas(table)
     benchmark(pd_df.to_parquet, file_path)
 
 
-@pytest.mark.parametrize(
-    "dtype", ["float32", "float64", "int32", "int64", "str", "datetime64[s]"]
-)
+@pytest.mark.parametrize("dtype", datatype)
 def bench_read_parquet(benchmark, use_buffer, dtype):
-    file_path = create_pandas_dataset(
-        dtype, file_type="parquet", only_file=True
+    file_path = create_dataset(
+        dtype, file_type="parquet", only_file=True, null_frequency=None
     )
+
     if use_buffer == "True":
         with open(file_path, "rb") as f:
             file = io.BytesIO(f.read())
@@ -81,9 +88,6 @@ def bench_read_parquet(benchmark, use_buffer, dtype):
 @pytest.mark.parametrize("dtype", ["infer", "provide"])
 @pytest.mark.parametrize("file_path", glob.glob(get_dataset_dir() + "json_*"))
 def bench_json(benchmark, file_path, use_buffer, dtype):
-    if ~os.path.isfile(file_path):
-        pytest.skip(file_path, "  file does not exist")
-
     if "bz2" in file_path:
         compression = "bz2"
     elif "gzip" in file_path:

@@ -6,9 +6,13 @@ import glob
 import io
 import os
 
-from get_datasets import create_cudf_dataset
+from get_datasets import create_dataset
 
 from conftest import option
+
+datatype = ["float32", "float64", "int32", "int64", "str", "datetime64[s]"]
+
+null_frequency = [0.1, 0.4, 0.8]
 
 
 def get_dataset_dir():
@@ -88,21 +92,23 @@ def bench_json(benchmark, file_path, use_buffer, dtype):
     )
 
 
-@pytest.mark.parametrize(
-    "dtype", ["float32", "float64", "int32", "int64", "str", "datetime64[s]"]
-)
-def bench_to_csv(benchmark, dtype):
-    cudf_df, file_path = create_cudf_dataset(
-        dtype, file_type="csv", only_file=False
+@pytest.mark.parametrize("dtype", datatype)
+@pytest.mark.parametrize("null_frequency", null_frequency)
+def bench_to_csv(benchmark, dtype, null_frequency):
+    table, file_path = create_dataset(
+        dtype, file_type="csv", only_file=False, null_frequency=null_frequency
     )
+
+    cudf_df = cudf.DataFrame.from_arrow(table)
     benchmark(cudf_df.to_csv, file_path)
 
 
-@pytest.mark.parametrize(
-    "dtype", ["float32", "float64", "int32", "int64", "str", "datetime64[s]"]
-)
+@pytest.mark.parametrize("dtype", datatype)
 def bench_from_csv(benchmark, use_buffer, dtype):
-    file_path = create_cudf_dataset(dtype, file_type="csv", only_file=True)
+    file_path = create_dataset(
+        dtype, file_type="csv", only_file=True, null_frequency=None
+    )
+
     if use_buffer == "True":
         with open(file_path, "rb") as f:
             file = io.BytesIO(f.read())
@@ -112,44 +118,53 @@ def bench_from_csv(benchmark, use_buffer, dtype):
     os.remove(file_path)
 
 
-@pytest.mark.parametrize(
-    "dtype", ["float32", "float64", "int32", "int64", "str", "datetime64[s]"]
-)
-def bench_to_orc(benchmark, dtype):
-    cudf_df, file_path = create_cudf_dataset(
-        dtype, file_type="orc", only_file=False
+@pytest.mark.parametrize("dtype", datatype)
+@pytest.mark.parametrize("null_frequency", null_frequency)
+def bench_to_orc(benchmark, dtype, null_frequency):
+    table, file_path = create_dataset(
+        dtype, file_type="orc", only_file=False, null_frequency=null_frequency
     )
+
+    cudf_df = cudf.DataFrame.from_arrow(table)
     benchmark(cudf_df.to_orc, file_path)
 
 
-@pytest.mark.parametrize(
-    "dtype", ["float32", "float64", "int32", "int64", "str", "datetime64[s]"]
-)
-def bench_read_orc(benchmark, use_buffer, dtype):
-    file_path = create_cudf_dataset(dtype, file_type="orc", only_file=True)
+@pytest.mark.parametrize("dtype", datatype)
+def bench_read_orc(benchmark, use_buffer, bench_pandas, dtype):
+    file_path = create_dataset(
+        dtype, file_type="orc", only_file=True, null_frequency=None
+    )
+
     if use_buffer == "True":
         with open(file_path, "rb") as f:
             file = io.BytesIO(f.read())
     else:
         file = file_path
     benchmark(cudf.read_orc, file)
+    if not bench_pandas:
+        os.remove(file_path)
 
 
-@pytest.mark.parametrize(
-    "dtype", ["float32", "float64", "int32", "int64", "str", "datetime64[s]"]
-)
-def bench_to_parquet(benchmark, dtype):
-    cudf_df, file_path = create_cudf_dataset(
-        dtype, file_type="parquet", only_file=False
+@pytest.mark.parametrize("dtype", datatype)
+@pytest.mark.parametrize("null_frequency", null_frequency)
+def bench_to_parquet(benchmark, dtype, null_frequency):
+    table, file_path = create_dataset(
+        dtype,
+        file_type="parquet",
+        only_file=False,
+        null_frequency=null_frequency,
     )
+
+    cudf_df = cudf.DataFrame.from_arrow(table)
     benchmark(cudf_df.to_parquet, file_path)
 
 
-@pytest.mark.parametrize(
-    "dtype", ["float32", "float64", "int32", "int64", "str", "datetime64[s]"]
-)
+@pytest.mark.parametrize("dtype", datatype)
 def bench_read_parquet(benchmark, use_buffer, dtype):
-    file_path = create_cudf_dataset(dtype, file_type="parquet", only_file=True)
+    file_path = create_dataset(
+        dtype, file_type="parquet", only_file=True, null_frequency=None
+    )
+
     if use_buffer == "True":
         with open(file_path, "rb") as f:
             file = io.BytesIO(f.read())

@@ -6,7 +6,8 @@ import pandas as pd
 
 
 path = "gcs://anaconda-public-data/nyc-taxi/csv/"
-cudf_df = cudf.read_csv(path + "2014/yellow_tripdata_2014-01.csv")
+# NYC taxi data from January 2016
+cudf_df = cudf.read_csv(path + "2016/yellow_tripdata_2016-01.csv")
 
 
 def obtain_file_path(file_type):
@@ -15,20 +16,13 @@ def obtain_file_path(file_type):
     return file_path
 
 
-def obtain_json_data():
-    pd_df = cudf_df.to_pandas()
+def bench_to_json(benchmark):
     file_path = obtain_file_path(file_type="json")
-    pd_df.to_json(file_path)
-    return file_path
-
-
-def bench_to_csv(benchmark):
-    file_path = obtain_file_path(file_type="csv")
-    benchmark(cudf_df.to_csv, file_path)
+    benchmark(cudf_df.to_json, file_path)
 
 
 def bench_read_json(benchmark, use_buffer):
-    file_path = obtain_json_data()
+    file_path = obtain_file_path(file_type="json")
     if use_buffer == "True":
         with open(file_path, "rb") as f:
             file = io.BytesIO(f.read())
@@ -36,6 +30,11 @@ def bench_read_json(benchmark, use_buffer):
         file = file_path
     benchmark(cudf.read_json, file)
     os.remove(file_path)
+
+
+def bench_to_csv(benchmark):
+    file_path = obtain_file_path(file_type="csv")
+    benchmark(cudf_df.to_csv, file_path)
 
 
 def bench_read_csv(benchmark, use_buffer):
@@ -151,8 +150,18 @@ def bench_pandas_read_parquet(benchmark, use_buffer, bench_pandas):
     os.remove(file_path)
 
 
+def bench_pandas_to_json(benchmark, bench_pandas):
+    if not bench_pandas:
+        pytest.skip(
+            "bench_pandas=False, panda functions " " will not be benchmarked"
+        )
+    file_path = obtain_file_path(file_type="json")
+    pd_df = cudf_df.to_pandas()
+    benchmark(pd_df.to_json, file_path)
+
+
 def bench_pandas_read_json(benchmark, use_buffer):
-    file_path = obtain_json_data()
+    file_path = obtain_file_path(file_type="json")
     if use_buffer == "True":
         with open(file_path, "rb") as f:
             file = io.BytesIO(f.read())
