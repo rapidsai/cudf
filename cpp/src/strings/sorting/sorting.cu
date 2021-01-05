@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,12 +17,12 @@
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/detail/gather.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
-#include <cudf/strings/sorting.hpp>
+#include <cudf/strings/detail/sorting.hpp>
 #include <cudf/strings/string_view.cuh>
 #include <cudf/strings/strings_column_view.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
-#include <rmm/device_vector.hpp>
+#include <rmm/device_uvector.hpp>
 #include <rmm/exec_policy.hpp>
 
 #include <thrust/sequence.h>
@@ -33,7 +33,6 @@ namespace strings {
 namespace detail {
 // return sorted version of the given strings column
 std::unique_ptr<cudf::column> sort(strings_column_view strings,
-                                   sort_type stype,
                                    cudf::order order,
                                    cudf::null_order null_order,
                                    rmm::cuda_stream_view stream,
@@ -45,27 +44,24 @@ std::unique_ptr<cudf::column> sort(strings_column_view strings,
 
   // sort the indices of the strings
   size_type num_strings = strings.size();
-  rmm::device_vector<size_type> indices(num_strings);
+  rmm::device_uvector<size_type> indices(num_strings, stream);
   thrust::sequence(rmm::exec_policy(stream), indices.begin(), indices.end());
   thrust::sort(rmm::exec_policy(stream),
                indices.begin(),
                indices.end(),
-               [d_column, stype, order, null_order] __device__(size_type lhs, size_type rhs) {
+               [d_column, order, null_order] __device__(size_type lhs, size_type rhs) {
                  bool lhs_null{d_column.is_null(lhs)};
                  bool rhs_null{d_column.is_null(rhs)};
                  if (lhs_null || rhs_null)
                    return (null_order == cudf::null_order::BEFORE ? !rhs_null : !lhs_null);
                  string_view lhs_str = d_column.element<string_view>(lhs);
                  string_view rhs_str = d_column.element<string_view>(rhs);
-                 int cmp             = 0;
-                 if (stype & sort_type::length) cmp = lhs_str.length() - rhs_str.length();
-                 if (stype & sort_type::name) cmp = lhs_str.compare(rhs_str);
+                 auto const cmp      = lhs_str.compare(rhs_str);
                  return (order == cudf::order::ASCENDING ? (cmp < 0) : (cmp > 0));
                });
 
   // create a column_view as a wrapper of these indices
-  column_view indices_view(
-    data_type{type_id::INT32}, num_strings, indices.data().get(), nullptr, 0);
+  column_view indices_view(data_type{type_id::INT32}, num_strings, indices.data(), nullptr, 0);
   // now build a new strings column from the indices
   auto table_sorted = cudf::detail::gather(table_view{{strings.parent()}},
                                            indices_view,

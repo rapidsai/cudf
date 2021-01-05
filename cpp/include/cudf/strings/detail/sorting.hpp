@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2020, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -25,20 +25,10 @@ namespace strings {
 namespace detail {
 
 /**
- * @brief Sort types for the sort method.
- */
-enum sort_type {
-  none   = 0,  ///< no sorting
-  length = 1,  ///< sort by string length
-  name   = 2   ///< sort by characters code-points
-};
-
-/**
  * @brief Returns a new strings column that is a sorted version of the
  * strings in this instance.
  *
  * @param strings Strings instance for this operation.
- * @param stype Specify what attribute of the string to sort on.
  * @param order Sort strings in ascending or descending order.
  * @param null_order Sort nulls to the beginning or the end of the new column.
  * @param stream CUDA stream used for device memory operations and kernel launches.
@@ -47,7 +37,6 @@ enum sort_type {
  */
 std::unique_ptr<cudf::column> sort(
   strings_column_view strings,
-  sort_type stype,
   cudf::order order                   = cudf::order::ASCENDING,
   cudf::null_order null_order         = cudf::null_order::BEFORE,
   rmm::cuda_stream_view stream        = rmm::cuda_stream_default,

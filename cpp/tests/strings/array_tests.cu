@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2020, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,8 +20,8 @@
 #include <cudf/scalar/scalar.hpp>
 #include <cudf/strings/copying.hpp>
 #include <cudf/strings/detail/scatter.cuh>
+#include <cudf/strings/detail/sorting.hpp>
 #include <cudf/strings/detail/utilities.hpp>
-#include <cudf/strings/sorting.hpp>
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/utilities/error.hpp>
 
@@ -45,7 +45,7 @@ TEST_F(StringsColumnTest, Sort)
                                                 {0, 1, 1, 1, 1, 1, 1});
 
   auto strings_view = cudf::strings_column_view(h_strings);
-  auto results      = cudf::strings::detail::sort(strings_view, cudf::strings::detail::name);
+  auto results      = cudf::strings::detail::sort(strings_view);
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, h_expected);
 }
 
@@ -54,7 +54,7 @@ TEST_F(StringsColumnTest, SortZeroSizeStringsColumn)
   cudf::column_view zero_size_strings_column(
     cudf::data_type{cudf::type_id::STRING}, 0, nullptr, nullptr, 0);
   auto strings_view = cudf::strings_column_view(zero_size_strings_column);
-  auto results      = cudf::strings::detail::sort(strings_view, cudf::strings::detail::name);
+  auto results      = cudf::strings::detail::sort(strings_view);
   cudf::test::expect_strings_empty(results->view());
 }
 

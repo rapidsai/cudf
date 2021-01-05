@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-20, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,13 +14,14 @@
  * limitations under the License.
  */
 
-#include "sort_impl.cuh"
-
 #include <cudf/column/column.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/sorting.hpp>
 #include <cudf/sorting.hpp>
+#include <cudf/strings/detail/sorting.hpp>
 #include <cudf/table/table_view.hpp>
+
+#include <sort/sort_impl.cuh>
 
 #include <rmm/cuda_stream_view.hpp>
 
@@ -72,6 +73,18 @@ std::unique_ptr<table> sort(table_view input,
                             rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
+
+  if (input.num_columns() == 1 && input.column(0).type().id() == type_id::STRING) {
+    auto col_order  = column_order.empty() ? order::ASCENDING : column_order.front();
+    auto precedence = null_precedence.empty() ? null_order::BEFORE : null_precedence.front();
+    auto input_col  = strings_column_view(input.column(0));
+    auto result =
+      cudf::strings::detail::sort(input_col, col_order, precedence, rmm::cuda_stream_default, mr);
+    std::vector<std::unique_ptr<column>> cols;
+    cols.emplace_back(std::move(result));
+    return std::make_unique<table>(std::move(cols));
+  }
+
   return detail::sort_by_key(
     input, input, column_order, null_precedence, rmm::cuda_stream_default, mr);
 }
