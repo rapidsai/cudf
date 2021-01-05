@@ -7,11 +7,11 @@ import pandas as pd
 from pandas.core.tools.datetimes import _unit_map
 
 import cudf
+from cudf import _lib as libcudf
 from cudf._lib.strings.char_types import is_integer as cpp_is_integer
 from cudf.core import column
 from cudf.core.index import as_index
 from cudf.utils.dtypes import is_scalar
-import cudf._lib as libcudf
 
 _unit_dtype_map = {
     "ns": "datetime64[ns]",
@@ -461,15 +461,31 @@ class DateOffset(pd.DateOffset, metaclass=_UndoOffsetMeta):
             "nanosecond",
         }
 
-        supported_kwargs = {"months", "years"}
+        supported_kwargs = {
+            "years",
+            "months",
+            "weeks",
+            "days",
+            "hours",
+            "minutes",
+            "seconds",
+            "microseconds",
+            "nanoseconds",
+        }
 
         kwds = self._combine_months_and_years(**kwds)
+        kwds = self._combine_timedeltas_to_nanos(**kwds)
 
         scalars = {}
         for k, v in kwds.items():
             if k in all_possible_kwargs:
                 # Months must be int16
-                dtype = "int16" if k == "months" else None
+                if k == "months":
+                    dtype = "int16"
+                elif k == "nanoseconds":
+                    dtype = "timedelta64[ns]"
+                else:
+                    dtype = None
                 scalars[k] = cudf.Scalar(v, dtype=dtype)
 
         super().__init__(n=n, normalize=normalize, **kwds)
@@ -488,29 +504,43 @@ class DateOffset(pd.DateOffset, metaclass=_UndoOffsetMeta):
         )
         return kwargs
 
-    def _combine_timedeltas_to_lcd(self, **kwargs):
+    def _combine_timedeltas_to_nanos(self, **kwargs):
         weeks = kwargs.pop("weeks", 0)
         days = kwargs.pop("days", 0) + 7 * weeks
-
-        # if there are no other kwargs, return
-        assert not kwargs
-        return days
+        hours = kwargs.pop("hours", 0) + days * 24
+        minutes = kwargs.pop("minutes", 0) + hours * 60
+        seconds = kwargs.pop("seconds", 0) + minutes * 60
+        milliseconds = kwargs.pop("milliseconds", 0) + seconds * 1000
+        microseconds = kwargs.pop("microseconds", 0) + milliseconds * 1000
+        nanoseconds = kwargs.pop("nanoseconds", 0) + microseconds * 1000
+        kwargs["nanoseconds"] = nanoseconds
+        return kwargs
 
     def _datetime_binop(self, datetime_col, op):
         if self._is_no_op:
             return datetime_col
         else:
-            rhs = self._generate_column(len(datetime_col), op)
-            out = libcudf.datetime.add_months(datetime_col, rhs)
-        return out
+            if "months" in self._scalars._gpu_scalars:
+                rhs = self._generate_months_column(len(datetime_col), op)
+                datetime_col = libcudf.datetime.add_months(datetime_col, rhs)
+            if "nanoseconds" in self._scalars._gpu_scalars:
+                datetime_col = datetime_col + self._generate_nanos_column(
+                    len(datetime_col), op
+                )
+            return datetime_col
 
-    def _generate_column(self, size, op):
+    def _generate_months_column(self, size, op):
         months = self._scalars._gpu_scalars["months"]
         months = -months if op == "sub" else months
         # TODO: pass a scalar instead of constructing a column
         # https://github.com/rapidsai/cudf/issues/6990
         col = cudf.core.column.as_column(months, length=size)
         return col
+
+    def _generate_nanos_column(self, size, op):
+        nanos = self._scalars._gpu_scalars["nanoseconds"]
+        nanos = -nanos if op == "sub" else nanos
+        return cudf.core.column.as_column(nanos, length=size)
 
     @property
     def _is_no_op(self):

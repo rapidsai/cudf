@@ -1477,8 +1477,16 @@ def test_scalar_power_invalid(dtype_l, dtype_r):
     [
         "months",
         "years",
+        "days",
+        "hours",
+        "minutes",
+        "seconds",
+        "microseconds",
         pytest.param(
-            "days", marks=pytest.mark.xfail(reason="not yet implemented")
+            "nanoseconds",
+            marks=pytest.mark.xfail(
+                reason="https://github.com/pandas-dev/pandas/issues/36589"
+            ),
         ),
     ],
 )
