@@ -211,65 +211,29 @@ std::vector<std::vector<std::string>> read_orc_statistics(source_info const& src
     CUDF_FAIL("Unsupported source type");
   }
 
-  // Get size of file and size of postscript
-  const auto len         = source->size();
-  const auto max_ps_size = std::min(len, static_cast<size_t>(256));
-
-  // Read uncompressed postscript section (max 255 bytes + 1 byte for length)
-  auto buffer            = source->host_read(len - max_ps_size, max_ps_size);
-  const size_t ps_length = buffer->data()[max_ps_size - 1];
-  const uint8_t* ps_data = &buffer->data()[max_ps_size - ps_length - 1];
-  orc::ProtobufReader pb;
-  orc::PostScript ps;
-  pb.init(ps_data, ps_length);
-  CUDF_EXPECTS(pb.read(ps, ps_length), "Cannot read postscript");
-  CUDF_EXPECTS(ps.footerLength + ps_length < len, "Invalid footer length");
-
-  // If compression is used, all the rest of the metadata is compressed
-  // If no compressed is used, the decompressor is simply a pass-through
-  std::unique_ptr<orc::OrcDecompressor> decompressor =
-    std::make_unique<orc::OrcDecompressor>(ps.compression, ps.compressionBlockSize);
-
-  // Read compressed filefooter section
-  buffer           = source->host_read(len - ps_length - 1 - ps.footerLength, ps.footerLength);
-  size_t ff_length = 0;
-  auto ff_data     = decompressor->Decompress(buffer->data(), ps.footerLength, &ff_length);
-  orc::FileFooter ff;
-  pb.init(ff_data, ff_length);
-  CUDF_EXPECTS(pb.read(ff, ff_length), "Cannot read filefooter");
-  CUDF_EXPECTS(ff.types.size() > 0, "No columns found");
-
-  // Read compressed metadata section
-  buffer =
-    source->host_read(len - ps_length - 1 - ps.footerLength - ps.metadataLength, ps.metadataLength);
-  size_t md_length = 0;
-  auto md_data     = decompressor->Decompress(buffer->data(), ps.metadataLength, &md_length);
-  orc::Metadata md;
-  pb.init(md_data, md_length);
-  CUDF_EXPECTS(pb.read(md, md_length), "Cannot read metadata");
+  orc::metadata metadata(source.get());
 
   // Initialize statistics to return
   std::vector<std::vector<std::string>> statistics_blobs;
 
   // Get column names
-  std::vector<std::string> column_names;
-  for (auto i = 0; i < ff.types.size(); i++) { column_names.push_back(ff.GetColumnName(i)); }
-  statistics_blobs.push_back(column_names);
+  statistics_blobs.emplace_back();
+  for (auto i = 0; i < metadata.get_num_columns(); i++) {
+    statistics_blobs.back().push_back(metadata.get_column_name(i));
+  }
 
   // Get file-level statistics, statistics of each column of file
-  std::vector<std::string> file_column_statistics_blobs;
-  for (orc::ColumnStatistics stats : ff.statistics) {
-    file_column_statistics_blobs.push_back(std::string(stats.begin(), stats.end()));
+  statistics_blobs.emplace_back();
+  for (auto const& stats : metadata.ff.statistics) {
+    statistics_blobs.back().push_back(std::string(stats.cbegin(), stats.cend()));
   }
-  statistics_blobs.push_back(file_column_statistics_blobs);
 
   // Get stripe-level statistics
-  for (orc::StripeStatistics stripe_stats : md.stripeStats) {
-    std::vector<std::string> stripe_column_statistics_blobs;
-    for (orc::ColumnStatistics stats : stripe_stats.colStats) {
-      stripe_column_statistics_blobs.push_back(std::string(stats.begin(), stats.end()));
+  for (auto const& stripe_stats : metadata.md.stripeStats) {
+    statistics_blobs.emplace_back();
+    for (auto const& stats : stripe_stats.colStats) {
+      statistics_blobs.back().push_back(std::string(stats.cbegin(), stats.cend()));
     }
-    statistics_blobs.push_back(stripe_column_statistics_blobs);
   }
 
   return statistics_blobs;
@@ -360,7 +324,7 @@ std::unique_ptr<std::vector<uint8_t>> write_parquet(parquet_writer_options const
                        options.get_metadata(),
                        options.is_enabled_return_filemetadata(),
                        options.get_column_chunks_file_path(),
-                       options.is_enabled_int96_timestamps());
+                       options.get_decimal_precision());
 }
 
 /**
@@ -394,8 +358,9 @@ std::shared_ptr<pq_chunked_state> write_parquet_chunked_begin(
     state->user_metadata_with_nullability = *op.get_nullable_metadata();
     state->user_metadata                  = &state->user_metadata_with_nullability;
   }
-  state->int96_timestamps = op.is_enabled_int96_timestamps();
-  state->stream           = 0;
+  state->int96_timestamps   = op.is_enabled_int96_timestamps();
+  state->_decimal_precision = op.get_decimal_precision();
+  state->stream             = 0;
   state->wp->write_chunked_begin(*state);
   return state;
 }

@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 
+#include <cudf/dictionary/dictionary_column_view.hpp>
 #include <groupby/sort/group_single_pass_reduction_util.cuh>
 
 #include <rmm/cuda_stream_view.hpp>
@@ -27,13 +28,11 @@ std::unique_ptr<column> group_sum(column_view const& values,
                                   rmm::cuda_stream_view stream,
                                   rmm::mr::device_memory_resource* mr)
 {
-  return type_dispatcher(values.type(),
-                         reduce_functor<aggregation::SUM>{},
-                         values,
-                         num_groups,
-                         group_labels,
-                         stream,
-                         mr);
+  auto values_type = cudf::is_dictionary(values.type())
+                       ? dictionary_column_view(values).keys().type()
+                       : values.type();
+  return type_dispatcher(
+    values_type, reduce_functor<aggregation::SUM>{}, values, num_groups, group_labels, stream, mr);
 }
 
 }  // namespace detail
