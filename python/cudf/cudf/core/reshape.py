@@ -997,16 +997,12 @@ def unstack(df, level, fill_value=None):
     if not isinstance(df.index, cudf.MultiIndex):
         if isinstance(df, cudf.DataFrame):
             dtype = df._columns[0].dtype
-            if any(
-                [
-                    not df._columns[i].dtype == dtype
-                    for i in range(len(df._columns))
-                ]
-            ):
-                raise ValueError(
-                    "Calling unstack() on single index dataframe"
-                    " with different column datatype is not supported."
-                )
+            for col in df._columns:
+                if not col.dtype == dtype:
+                    raise ValueError(
+                        "Calling unstack() on single index dataframe"
+                        " with different column datatype is not supported."
+                    )
             res = df.T.stack(dropna=False)
             # Result's index is a multiindex
             res.index.names = tuple(df.columns.names) + df.index.names
