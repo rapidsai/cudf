@@ -1,7 +1,7 @@
 # Copyright (c) 2020, NVIDIA CORPORATION.
 import datetime as dt
 from numbers import Number
-from typing import Sequence, Tuple, Union, cast
+from typing import Any, Sequence, Tuple, Union, cast
 
 import numpy as np
 import pandas as pd
@@ -294,22 +294,25 @@ class TimeDeltaColumn(column.ColumnBase):
     def time_unit(self) -> str:
         return self._time_unit
 
-    def fillna(self, fill_value) -> "TimeDeltaColumn":
-        if cudf.utils.utils.isnat(fill_value):
-            return _fillna_natwise(self)
-        col = self  # type: column.ColumnBase
-        if is_scalar(fill_value):
-            if isinstance(fill_value, np.timedelta64):
-                dtype = determine_out_dtype(self.dtype, fill_value.dtype)
-                fill_value = fill_value.astype(dtype)
-                col = col.astype(dtype)
-            if not isinstance(fill_value, cudf.Scalar):
-                fill_value = cudf.Scalar(fill_value, dtype=dtype)
+    def fillna(
+        self, fill_value: Any = None, method: str = None, dtype: Dtype = None
+    ) -> "TimeDeltaColumn":
+        if fill_value is not None:
+            if cudf.utils.utils.isnat(fill_value):
+                return _fillna_natwise(self)
+            col = self  # type: column.ColumnBase
+            if is_scalar(fill_value):
+                if isinstance(fill_value, np.timedelta64):
+                    dtype = determine_out_dtype(self.dtype, fill_value.dtype)
+                    fill_value = fill_value.astype(dtype)
+                    col = col.astype(dtype)
+                if not isinstance(fill_value, cudf.Scalar):
+                    fill_value = cudf.Scalar(fill_value, dtype=dtype)
+            else:
+                fill_value = column.as_column(fill_value, nan_as_null=False)
+            return super().fillna(col, fill_value)
         else:
-            fill_value = column.as_column(fill_value, nan_as_null=False)
-
-        result = libcudf.replace.replace_nulls(col, fill_value)
-        return result
+            return super().fillna(method=method)
 
     def as_numerical_column(
         self, dtype: Dtype

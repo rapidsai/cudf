@@ -52,6 +52,7 @@ def test_null_series(nrows, dtype):
     elif "Int" in psrepr:
         psrepr = psrepr.replace("Int", "int")
     assert psrepr.split() == sr.__repr__().split()
+    pd.reset_option("display.max_rows")
 
 
 dtype_categories = [
@@ -79,9 +80,8 @@ def test_null_dataframe(ncols):
     pdfrepr = pdfrepr.replace("NaN", "<NA>")
     pdfrepr = pdfrepr.replace("NaT", "<NA>")
     pdfrepr = pdfrepr.replace("None", "<NA>")
-    print(pdf)
-    print(gdf)
     assert pdfrepr.split() == gdf.__repr__().split()
+    pd.reset_option("display.max_columns")
 
 
 @pytest.mark.parametrize("dtype", repr_categories)
@@ -92,6 +92,7 @@ def test_full_series(nrows, dtype):
     sr = cudf.from_pandas(ps)
     pd.options.display.max_rows = int(nrows)
     assert ps.__repr__() == sr.__repr__()
+    pd.reset_option("display.max_rows")
 
 
 @pytest.mark.parametrize("dtype", repr_categories)
@@ -111,6 +112,8 @@ def test_full_dataframe_20(dtype, nrows, ncols):
     assert pdf.__repr__() == gdf.__repr__()
     assert pdf._repr_html_() == gdf._repr_html_()
     assert pdf._repr_latex_() == gdf._repr_latex_()
+    pd.reset_option("display.max_rows")
+    pd.reset_option("display.max_columns")
 
 
 @pytest.mark.parametrize("dtype", repr_categories)
@@ -126,6 +129,8 @@ def test_full_dataframe_21(dtype, nrows, ncols):
     pd.options.display.max_rows = int(nrows)
     pd.options.display.max_columns = int(ncols)
     assert pdf.__repr__() == gdf.__repr__()
+    pd.reset_option("display.max_rows")
+    pd.reset_option("display.max_columns")
 
 
 @given(
@@ -142,6 +147,7 @@ def test_integer_dataframe(x):
     pd.options.display.max_columns = 1
     assert gdf.__repr__() == pdf.__repr__()
     assert gdf.T.__repr__() == pdf.T.__repr__()
+    pd.reset_option("display.max_columns")
 
 
 @given(
@@ -153,8 +159,7 @@ def test_integer_dataframe(x):
 def test_integer_series(x):
     sr = cudf.Series(x)
     ps = pd.Series(x)
-    print(sr)
-    print(ps)
+
     assert sr.__repr__() == ps.__repr__()
 
 
@@ -226,7 +231,10 @@ def test_MI():
     gdfT = gdf.T
     pdfT = pdf.T
     assert gdf.__repr__() == pdf.__repr__()
+    assert gdf.index.__repr__() == pdf.index.__repr__()
     assert gdfT.__repr__() == pdfT.__repr__()
+    pd.reset_option("display.max_rows")
+    pd.reset_option("display.max_columns")
 
 
 @pytest.mark.parametrize("nrows", [0, 1, 3, 5, 10])
@@ -241,7 +249,10 @@ def test_groupby_MI(nrows, ncols):
     pd.options.display.max_rows = nrows
     pd.options.display.max_columns = ncols
     assert gdg.__repr__() == pdg.__repr__()
+    assert gdg.index.__repr__() == pdg.index.__repr__()
     assert gdg.T.__repr__() == pdg.T.__repr__()
+    pd.reset_option("display.max_rows")
+    pd.reset_option("display.max_columns")
 
 
 @pytest.mark.parametrize("dtype", utils.NUMERIC_TYPES)
@@ -1114,5 +1125,294 @@ def test_timedelta_index_repr(index, expected_repr):
     if not PANDAS_GE_110:
         pytest.xfail(reason="pandas >= 1.1 requried")
     actual_repr = index.__repr__()
+
+    assert actual_repr.split() == expected_repr.split()
+
+
+@pytest.mark.parametrize(
+    "pmi",
+    [
+        pd.MultiIndex.from_tuples(
+            [(1, "red"), (1, "blue"), (2, "red"), (2, "blue")]
+        ),
+        pd.MultiIndex.from_tuples(
+            [(1, "red"), (1, "blue"), (2, "red"), (2, "blue")] * 10
+        ),
+        pd.MultiIndex.from_tuples([(1, "red", 102, "sdf")]),
+        pd.MultiIndex.from_tuples(
+            [
+                ("abc", 0.234, 1),
+                ("a", -0.34, 0),
+                ("ai", 111, 4385798),
+                ("rapids", 0, 34534534),
+            ],
+            names=["alphabets", "floats", "ints"],
+        ),
+    ],
+)
+@pytest.mark.parametrize(
+    "max_seq_items",
+    [
+        None,
+        pytest.param(
+            1,
+            marks=pytest.mark.xfail(
+                reason="https://github.com/pandas-dev/pandas/issues/38415"
+            ),
+        ),
+        2,
+        5,
+        10,
+        100,
+    ],
+)
+def test_mulitIndex_repr(pmi, max_seq_items):
+    pd.set_option("display.max_seq_items", max_seq_items)
+    gmi = cudf.from_pandas(pmi)
+    print(gmi)
+    print(pmi)
+    assert gmi.__repr__() == pmi.__repr__()
+    pd.reset_option("display.max_seq_items")
+
+
+@pytest.mark.parametrize(
+    "gdi, expected_repr",
+    [
+        (
+            cudf.DataFrame(
+                {
+                    "a": [None, 1, 2, 3],
+                    "b": ["abc", None, "xyz", None],
+                    "c": [0.345, np.nan, 100, 10],
+                }
+            )
+            .set_index(["a", "b"])
+            .index,
+            textwrap.dedent(
+                """
+                MultiIndex([(<NA>, 'abc'),
+                            (   1,  <NA>),
+                            (   2, 'xyz'),
+                            (   3,  <NA>)],
+                        names=['a', 'b'])
+                """
+            ),
+        ),
+        (
+            cudf.DataFrame(
+                {
+                    "a": cudf.Series([None, np.nan, 2, 3], nan_as_null=False),
+                    "b": ["abc", None, "xyz", None],
+                    "c": [0.345, np.nan, 100, 10],
+                }
+            )
+            .set_index(["a", "b"])
+            .index,
+            textwrap.dedent(
+                """
+            MultiIndex([(<NA>, 'abc'),
+                        ( nan,  <NA>),
+                        ( 2.0, 'xyz'),
+                        ( 3.0,  <NA>)],
+                    names=['a', 'b'])
+            """
+            ),
+        ),
+        (
+            cudf.DataFrame(
+                {
+                    "a": cudf.Series([None, 1, 2, 3], dtype="datetime64[ns]"),
+                    "b": ["abc", None, "xyz", None],
+                    "c": [0.345, np.nan, 100, 10],
+                }
+            )
+            .set_index(["a", "b"])
+            .index,
+            textwrap.dedent(
+                """
+            MultiIndex([(                         '<NA>', 'abc'),
+                        ('1970-01-01 00:00:00.000000001',  <NA>),
+                        ('1970-01-01 00:00:00.000000002', 'xyz'),
+                        ('1970-01-01 00:00:00.000000003',  <NA>)],
+                    names=['a', 'b'])
+            """
+            ),
+        ),
+        (
+            cudf.DataFrame(
+                {
+                    "a": cudf.Series([None, 1, 2, 3], dtype="datetime64[ns]"),
+                    "b": ["abc", None, "xyz", None],
+                    "c": [0.345, np.nan, 100, 10],
+                }
+            )
+            .set_index(["a", "b", "c"])
+            .index,
+            textwrap.dedent(
+                """
+                MultiIndex([(                         '<NA>', 'abc', 0.345),
+                            ('1970-01-01 00:00:00.000000001',  <NA>,  <NA>),
+                            ('1970-01-01 00:00:00.000000002', 'xyz', 100.0),
+                            ('1970-01-01 00:00:00.000000003',  <NA>,  10.0)],
+                        names=['a', 'b', 'c'])
+                """
+            ),
+        ),
+        (
+            cudf.DataFrame(
+                {
+                    "a": ["abc", None, "xyz", None],
+                    "b": cudf.Series([None, 1, 2, 3], dtype="timedelta64[ns]"),
+                    "c": [0.345, np.nan, 100, 10],
+                }
+            )
+            .set_index(["a", "b", "c"])
+            .index,
+            textwrap.dedent(
+                """
+                MultiIndex([('abc',                      '<NA>', 0.345),
+                            ( <NA>, '0 days 00:00:00.000000001',  <NA>),
+                            ('xyz', '0 days 00:00:00.000000002', 100.0),
+                            ( <NA>, '0 days 00:00:00.000000003',  10.0)],
+                        names=['a', 'b', 'c'])
+                """
+            ),
+        ),
+        (
+            cudf.DataFrame(
+                {
+                    "a": ["abc", None, "xyz", None],
+                    "b": cudf.Series([None, 1, 2, 3], dtype="timedelta64[ns]"),
+                    "c": [0.345, np.nan, 100, 10],
+                }
+            )
+            .set_index(["c", "a"])
+            .index,
+            textwrap.dedent(
+                """
+                MultiIndex([(0.345, 'abc'),
+                            ( <NA>,  <NA>),
+                            (100.0, 'xyz'),
+                            ( 10.0,  <NA>)],
+                        names=['c', 'a'])
+                """
+            ),
+        ),
+        (
+            cudf.DataFrame(
+                {
+                    "a": [None, None, None, None],
+                    "b": cudf.Series(
+                        [None, None, None, None], dtype="timedelta64[ns]"
+                    ),
+                    "c": [0.345, np.nan, 100, 10],
+                }
+            )
+            .set_index(["b", "a"])
+            .index,
+            textwrap.dedent(
+                """
+            MultiIndex([('<NA>', <NA>),
+                        ('<NA>', <NA>),
+                        ('<NA>', <NA>),
+                        ('<NA>', <NA>)],
+                    names=['b', 'a'])
+            """
+            ),
+        ),
+        (
+            cudf.DataFrame(
+                {
+                    "a": [1, 2, None, 3, 5],
+                    "b": [
+                        "abc",
+                        "def, hi, bye",
+                        None,
+                        ", one, two, three, four",
+                        None,
+                    ],
+                    "c": cudf.Series(
+                        [0.3232, np.nan, 1, None, -0.34534], nan_as_null=False
+                    ),
+                    "d": [None, 100, 2000324, None, None],
+                }
+            )
+            .set_index(["a", "b", "c", "d"])
+            .index,
+            textwrap.dedent(
+                """
+    MultiIndex([(   1,                     'abc',   0.3232,    <NA>),
+                (   2,            'def, hi, bye',      nan,     100),
+                (<NA>,                      <NA>,      1.0, 2000324),
+                (   3, ', one, two, three, four',     <NA>,    <NA>),
+                (   5,                      <NA>, -0.34534,    <NA>)],
+            names=['a', 'b', 'c', 'd'])
+    """
+            ),
+        ),
+        (
+            cudf.DataFrame(
+                {
+                    "a": [1, 2, None, 3, 5],
+                    "b": [
+                        "abc",
+                        "def, hi, bye",
+                        None,
+                        ", one, two, three, four",
+                        None,
+                    ],
+                    "c": cudf.Series(
+                        [0.3232, np.nan, 1, None, -0.34534], nan_as_null=False
+                    ),
+                    "d": [None, 100, 2000324, None, None],
+                }
+            )
+            .set_index(["b", "a", "c", "d"])
+            .index,
+            textwrap.dedent(
+                """
+    MultiIndex([(                    'abc',    1,   0.3232,    <NA>),
+                (           'def, hi, bye',    2,      nan,     100),
+                (                     <NA>, <NA>,      1.0, 2000324),
+                (', one, two, three, four',    3,     <NA>,    <NA>),
+                (                     <NA>,    5, -0.34534,    <NA>)],
+            names=['b', 'a', 'c', 'd'])
+    """
+            ),
+        ),
+        (
+            cudf.DataFrame(
+                {
+                    "a": ["(abc", "2", None, "3", "5"],
+                    "b": [
+                        "abc",
+                        "def, hi, bye",
+                        None,
+                        ", one, two, three, four",
+                        None,
+                    ],
+                    "c": cudf.Series(
+                        [0.3232, np.nan, 1, None, -0.34534], nan_as_null=False
+                    ),
+                    "d": [None, 100, 2000324, None, None],
+                }
+            )
+            .set_index(["a", "b", "c", "d"])
+            .index,
+            textwrap.dedent(
+                """
+    MultiIndex([('(abc',                     'abc',   0.3232,    <NA>),
+                (   '2',            'def, hi, bye',      nan,     100),
+                (  <NA>,                      <NA>,      1.0, 2000324),
+                (   '3', ', one, two, three, four',     <NA>,    <NA>),
+                (   '5',                      <NA>, -0.34534,    <NA>)],
+            names=['a', 'b', 'c', 'd'])
+    """
+            ),
+        ),
+    ],
+)
+def test_mulitIndex_null_repr(gdi, expected_repr):
+    actual_repr = gdi.__repr__()
 
     assert actual_repr.split() == expected_repr.split()

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2020, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -45,7 +45,7 @@ namespace cudf {
  * @param mr            Device memory resource used to allocate the returned column's device memory
  * @return              The column resulting from applying the unary function to
  *                      every element of the input
- **/
+ */
 std::unique_ptr<column> transform(
   column_view const& input,
   std::string const& unary_udf,
@@ -63,7 +63,7 @@ std::unique_ptr<column> transform(
  * @param mr            Device memory resource used to allocate the returned bitmask.
  * @return A pair containing a `device_buffer` with the new bitmask and it's
  * null count obtained by replacing `NaN` in `input` with null.
- **/
+ */
 std::pair<std::unique_ptr<rmm::device_buffer>, size_type> nans_to_nulls(
   column_view const& input,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
@@ -82,7 +82,7 @@ std::pair<std::unique_ptr<rmm::device_buffer>, size_type> nans_to_nulls(
  * @return A pair containing a `device_buffer` with the new bitmask and it's
  * null count obtained from input considering `true` represent `valid`/`1` and
  * `false` represent `invalid`/`0`.
- **/
+ */
 std::pair<std::unique_ptr<rmm::device_buffer>, cudf::size_type> bools_to_mask(
   column_view const& input,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());

@@ -1,5 +1,7 @@
 # Copyright (c) 2018, NVIDIA CORPORATION.
 
+import pickle
+
 import msgpack
 import numpy as np
 import pandas as pd
@@ -285,3 +287,12 @@ def test_serialize_list_columns(data):
     df = cudf.DataFrame(data)
     recreated = df.__class__.deserialize(*df.serialize())
     assert_eq(recreated, df)
+
+
+def test_deserialize_cudf_0_16(datadir):
+    fname = datadir / "pkl" / "stringColumnWithRangeIndex_cudf_0.16.pkl"
+
+    expected = cudf.DataFrame({"a": ["hi", "hello", "world", None]})
+    actual = pickle.load(open(fname, "rb"))
+
+    assert_eq(expected, actual)

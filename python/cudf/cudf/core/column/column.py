@@ -701,12 +701,19 @@ class ColumnBase(Column, Serializable):
 
         self._mimic_inplace(out, inplace=True)
 
-    def fillna(self, value: Union[ScalarObj, "ColumnBase"]) -> "ColumnBase":
+    def fillna(
+        self: T,
+        value: Any = None,
+        method: builtins.str = None,
+        dtype: Dtype = None,
+    ) -> T:
         """Fill null values with ``value``.
 
         Returns a copy with null filled.
         """
-        raise NotImplementedError
+        return libcudf.replace.replace_nulls(
+            input_col=self, replacement=value, method=method, dtype=dtype
+        )
 
     def isnull(self) -> "ColumnBase":
         """Identify missing values in a Column.
@@ -1839,9 +1846,7 @@ def as_column(
             np.asarray(arbitrary), dtype=dtype, nan_as_null=nan_as_null
         )
     elif isinstance(arbitrary, cudf.Scalar):
-        data = ColumnBase.from_scalar(
-            arbitrary.device_value, length if length else 1
-        )
+        data = ColumnBase.from_scalar(arbitrary, length if length else 1)
     elif isinstance(arbitrary, pd.core.arrays.masked.BaseMaskedArray):
         cudf_dtype = arbitrary._data.dtype
 

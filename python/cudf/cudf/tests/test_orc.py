@@ -421,6 +421,8 @@ def test_orc_writer_sliced(tmpdir):
     [
         "TestOrcFile.decimal.same.values.orc",
         "TestOrcFile.decimal.multiple.values.orc",
+        # For addional information take look at PR 7034
+        "TestOrcFile.decimal.runpos.issue.orc",
     ],
 )
 def test_orc_reader_decimal_type(datadir, orc_file):

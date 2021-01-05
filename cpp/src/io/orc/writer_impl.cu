@@ -49,13 +49,13 @@ struct row_group_index_info {
 namespace {
 /**
  * @brief Helper for pinned host memory
- **/
+ */
 template <typename T>
 using pinned_buffer = std::unique_ptr<T, decltype(&cudaFreeHost)>;
 
 /**
  * @brief Function that translates GDF compression to ORC compression
- **/
+ */
 orc::CompressionKind to_orc_compression(compression_type compression)
 {
   switch (compression) {
@@ -68,7 +68,7 @@ orc::CompressionKind to_orc_compression(compression_type compression)
 
 /**
  * @brief Function that translates GDF dtype to ORC datatype
- **/
+ */
 constexpr orc::TypeKind to_orc_type(cudf::type_id id)
 {
   switch (id) {
@@ -91,7 +91,7 @@ constexpr orc::TypeKind to_orc_type(cudf::type_id id)
 
 /**
  * @brief Function that translates time unit to nanoscale multiple
- **/
+ */
 template <typename T>
 constexpr T to_clockscale(cudf::type_id timestamp_id)
 {
@@ -110,7 +110,7 @@ constexpr T to_clockscale(cudf::type_id timestamp_id)
  * @brief Helper kernel for converting string data/offsets into nvstrdesc
  * REMOVEME: Once we eliminate the legacy readers/writers, the kernels could be
  * made to use the native offset+data layout.
- **/
+ */
 __global__ void stringdata_to_nvstrdesc(gpu::nvstrdesc_s *dst,
                                         const size_type *offsets,
                                         const char *strdata,
@@ -141,13 +141,13 @@ __global__ void stringdata_to_nvstrdesc(gpu::nvstrdesc_s *dst,
 
 /**
  * @brief Helper class that adds ORC-specific column info
- **/
+ */
 class orc_column_view {
  public:
   /**
    * @brief Constructor that extracts out the string position + length pairs
    * for building dictionaries for string columns
-   **/
+   */
   explicit orc_column_view(size_t id,
                            size_t str_id,
                            column_view const &col,
@@ -194,7 +194,7 @@ class orc_column_view {
 
   /**
    * @brief Function that associates an existing dictionary chunk allocation
-   **/
+   */
   void attach_dict_chunk(gpu::DictionaryChunk *host_dict, gpu::DictionaryChunk *dev_dict)
   {
     dict   = host_dict;
@@ -209,7 +209,7 @@ class orc_column_view {
 
   /**
    * @brief Function that associates an existing stripe dictionary allocation
-   **/
+   */
   void attach_stripe_dict(gpu::StripeDictionary *host_stripe_dict,
                           gpu::StripeDictionary *dev_stripe_dict)
   {

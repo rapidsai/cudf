@@ -278,17 +278,19 @@ class DatetimeColumn(column.ColumnBase):
             )
         return binop(lhs, rhs, op=op, out_dtype=out_dtype, reflect=reflect)
 
-    def fillna(self, fill_value: Any) -> "ColumnBase":
-        if cudf.utils.utils.isnat(fill_value):
-            return _fillna_natwise(self)
-        if is_scalar(fill_value):
-            if not isinstance(fill_value, cudf.Scalar):
-                fill_value = cudf.Scalar(fill_value, dtype=self.dtype)
-        else:
-            fill_value = column.as_column(fill_value, nan_as_null=False)
+    def fillna(
+        self, fill_value: Any = None, method: str = None, dtype: Dtype = None
+    ) -> "DatetimeColumn":
+        if fill_value is not None:
+            if cudf.utils.utils.isnat(fill_value):
+                return _fillna_natwise(self)
+            if is_scalar(fill_value):
+                if not isinstance(fill_value, cudf.Scalar):
+                    fill_value = cudf.Scalar(fill_value, dtype=self.dtype)
+            else:
+                fill_value = column.as_column(fill_value, nan_as_null=False)
 
-        result = libcudf.replace.replace_nulls(self, fill_value)
-        return result
+        return super().fillna(fill_value, method)
 
     def find_first_value(self, value: ScalarObj, closest: bool = False) -> int:
         """
