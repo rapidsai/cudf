@@ -60,3 +60,4 @@ dependencies:
       - git+https://github.com/dask/dask.git@master
       - git+https://github.com/dask/distributed.git@master
       - git+https://github.com/python-streamz/streamz.git
+      - pyorc
