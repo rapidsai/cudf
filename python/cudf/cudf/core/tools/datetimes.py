@@ -433,10 +433,6 @@ class DateOffset(pd.DateOffset, metaclass=_UndoOffsetMeta):
                 "normalize not yet supported for DateOffset"
             )
 
-        # TODO: Pandas supports combinations
-        if len(kwds) > 1:
-            raise NotImplementedError("Multiple time units not yet supported")
-
         all_possible_kwargs = {
             "years",
             "months",
@@ -471,6 +467,8 @@ class DateOffset(pd.DateOffset, metaclass=_UndoOffsetMeta):
             "nanoseconds",
         }
 
+        super().__init__(n=n, normalize=normalize, **kwds)
+
         kwds = self._combine_months_and_years(**kwds)
         kwds = self._combine_timedeltas_to_nanos(**kwds)
 
@@ -485,8 +483,6 @@ class DateOffset(pd.DateOffset, metaclass=_UndoOffsetMeta):
                 else:
                     dtype = None
                 scalars[k] = cudf.Scalar(v, dtype=dtype)
-
-        super().__init__(n=n, normalize=normalize, **kwds)
 
         wrong_kwargs = set(kwds.keys()).difference(supported_kwargs)
         if len(wrong_kwargs) > 0:
@@ -563,13 +559,6 @@ class DateOffset(pd.DateOffset, metaclass=_UndoOffsetMeta):
             object.__setattr__(self, name, value)
 
 
-    def from_scalars(self, scalars):
-        off = object.__new__(DateOffset)
-        off._scalars = scalars
-        return off
-
     def __neg__(self):
-        new_scalars = _DateOffsetScalars(
-            {k: -v for k, v in self._scalars.items()}
-        )
-        return DateOffset.from_scalars(new_scalars)
+        new_scalars = {k: -v for k, v in self.kwds.items()}
+        return DateOffset(**new_scalars)
