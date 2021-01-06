@@ -303,6 +303,16 @@ public final class HostColumnVector extends HostColumnVectorCore {
     }
   }
 
+  public static HostColumnVector emptyStructs(DataType dataType, long rows) {
+    StructData sd = new StructData();
+    try (ColumnBuilder cb = new ColumnBuilder(dataType, rows)) {
+      for (long i = 0; i < rows; i++) {
+        cb.append(sd);
+      }
+      return cb.build();
+    }
+  }
+
   /**
    * Create a new vector from the given values.
    */

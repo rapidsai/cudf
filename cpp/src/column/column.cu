@@ -266,7 +266,7 @@ struct create_column_from_view {
                        cudf::detail::slice(child, begin, end), stream, mr);
                    });
 
-    auto num_rows = children.empty() ? 0 : children.front()->size();
+    auto num_rows = view.size();
 
     return make_structs_column(num_rows,
                                std::move(children),

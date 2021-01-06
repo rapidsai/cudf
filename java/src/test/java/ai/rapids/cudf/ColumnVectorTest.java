@@ -3673,4 +3673,30 @@ public class ColumnVectorTest extends CudfTestBase {
       assertColumnsAreEqual(expected, copiedChildCv);
     }
   }
+
+  @Test
+  void testMakeStructEmpty() {
+    final int numRows = 10;
+    try (ColumnVector expected = ColumnVector.emptyStructs(new StructType(false, new ArrayList<>()), numRows);
+         ColumnVector created = ColumnVector.makeStruct(numRows)) {
+      assertColumnsAreEqual(expected, created);
+    }
+  }
+
+  @Test
+  void testMakeStruct() {
+    try (ColumnVector expected = ColumnVector.fromStructs(new StructType(false,
+            Arrays.asList(
+                new BasicType(false, DType.INT32),
+                new BasicType(false, DType.INT32),
+                new BasicType(false, DType.INT32))),
+        new HostColumnVector.StructData(1, 2, 3),
+        new HostColumnVector.StructData(4, 5, 6));
+         ColumnVector child1 = ColumnVector.fromInts(1, 4);
+         ColumnVector child2 = ColumnVector.fromInts(2, 5);
+         ColumnVector child3 = ColumnVector.fromInts(3, 6);
+         ColumnVector created = ColumnVector.makeStruct(child1, child2, child3)) {
+      assertColumnsAreEqual(expected, created);
+    }
+  }
 }
