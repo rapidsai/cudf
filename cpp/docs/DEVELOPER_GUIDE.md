@@ -693,29 +693,35 @@ There are a number of traits defined in `include/cudf/utilities/traits.hpp` that
 partial specialization of dispatched function objects. For example `is_numeric<T>()` can be used to 
 specialize for any numeric type.
 
-# Testing
+# Unit Testing
 
-Unit tests in libcudf are written using [Google Test](https://github.com/google/googletest/blob/master/googletest/docs/primer.md).
+Unit tests in libcudf are written using 
+[Google Test](https://github.com/google/googletest/blob/master/googletest/docs/primer.md).
 
-**Important:** Instead of including `gtest/gtest.h` directly, use `#include <cudf_test/cudf_gtest.hpp>`.
+**Important:** Instead of including `gtest/gtest.h` directly, use 
+`#include <cudf_test/cudf_gtest.hpp>`.
 
 ## Directory and File Naming
 
-The naming of unit test directories and source files should be consistent with the feature being tested.
+The naming of unit test directories and source files should be consistent with the feature being 
+tested. For example, the tests for APIs in `copying.hpp` should live in `cudf/cpp/tests/copying`.
+Each feature (or set of related features) should have its own test source file named 
+`<feature>_tests.cu/cpp`. For example, `cudf/cpp/src/copying/scatter.cu` has tests in 
+`cudf/cpp/tests/copying/scatter_tests.cu`.
 
-For example, the tests for APIs in `copying.hpp` should live in `cudf/cpp/tests/copying`.
-Each feature (or set of related features) should have its own test source file named `<feature>_tests.cu/cpp`.
-For example, for `cudf/cpp/src/copying/scatter.cu` should have its associated tests in `cudf/cpp/tests/copying/scatter_tests.cu`.
-
-In the interest of improving compile time, whenever possible, test source files should be `.cpp` files.
-This is because `nvcc` is generally slower than `gcc` in compiling host code.
+In the interest of improving compile time, whenever possible, test source files should be `.cpp` 
+files because `nvcc` is slower than `gcc` in compiling host code. Note that `thrust::device_vector`
+includes device code, and so must only be used in `.cu` files. `rmm::device_uvector`, 
+`rmm::device_buffer` and the various `column_wrapper` types described later can be used in `.cpp` 
+files, and are therefore preferrred in test code over `thrust::device_vector`.
 
 ## Base Fixture
 
-All libcudf unit tests should make use of a GTest ["Test Fixture"](https://github.com/google/googletest/blob/master/googletest/docs/primer.md#test-fixtures-using-the-same-data-configuration-for-multiple-tests-same-data-multiple-tests).
-Even if the fixture is empty, it should inherit from the base fixture `cudf::test::BaseFixture` found in `include/utilities/test/base_fixture.hpp`.
-This is to ensure that RMM is properly initialized/finalized. 
-`cudf::test::BaseFixture` already inherits from `::testing::Test` and therefore it is not necessary for your test fixtures to inherit from it.
+All `libcudf` unit tests should make use of a GTest ["Test Fixture"](https://github.com/google/googletest/blob/master/googletest/docs/primer.md#test-fixtures-using-the-same-data-configuration-for-multiple-tests-same-data-multiple-tests).
+Even if the fixture is empty, it should inherit from the base fixture `cudf::test::BaseFixture` 
+found in `include/cudf_test/base_fixture.hpp`. This ensures that RMM is properly initialized and 
+finalized. `cudf::test::BaseFixture` already inherits from `::testing::Test` and therefore it is 
+not necessary for your test fixtures to inherit from it.
 
 Example:
 ```c++
@@ -724,9 +730,9 @@ class MyTestFiture : public cudf::test::BaseFixture {...};
 
 ## Typed Tests
 
-In libcudf we must ensure that features work across all of the types we support.
-In order to automate the process of running the same tests across multiple types, we make use of GTest's [Typed Tests](https://github.com/google/googletest/blob/master/googletest/docs/advanced.md#typed-tests).
-Typed tests allow you to write a test once and run it across all types in a list of types.
+`libcudf` features must work across all of the supported types. In order to automate the process of 
+running the same tests across multiple types, we use GTest's [Typed Tests](https://github.com/google/googletest/blob/master/googletest/docs/advanced.md#typed-tests). Typed tests allow you to write a test once 
+and run it across a list of types.
 
 For example:
 ```c++
@@ -734,42 +740,47 @@ For example:
 template <typename T>
 class TypedTestFixture : cudf::test::BaseFixture {...};
 using TestTypes = cudf::test:Types<int,float,double>; // Notice custom cudf type list type
-TYPED_TEST_CASE(TypedTestFixture,TestTypes);
+TYPED_TEST_CASE(TypedTestFixture, TestTypes);
 TYPED_TEST(TypedTestFixture, FirstTest){
     // Access the current type using `TypeParam`
     using T = TypeParam;
 }
 ```
+
 To specify the list of types to use, instead of GTest's `::testing::Types<...>`, libcudf provides `cudf::test::Types<...>` which is a custom, drop-in replacement for `::testing::Types`.
-In this example, all tests using the `TypedTestFixture` fixture will run once for each type in the list defined in `TestTypes` (`int, float, double`).
+In this example, all tests using the `TypedTestFixture` fixture will run once for each type in the 
+list defined in `TestTypes` (`int, float, double`).
 
 ### Type Lists
 
-The list of types that are used in tests should be consistent across all tests.
-To ensure consistency, several sets of common type lists are provided in `include/utilities/test/type_lists.hpp`.
-For example, `NumericTypes` gives a type list of all numeric types, or `FixedWidthTypes` gives a list of all fixed-width element types, and `AllTypes` provides a list of every element type libcudf supports.
-Example:
+The list of types that are used in tests should be consistent across all tests. To ensure 
+consistency, several sets of common type lists are provided in 
+`include/cudf_test/type_lists.hpp`. For example, `NumericTypes` is a type list of all numeric types,
+`FixedWidthTypes` is a list of all fixed-width element types, and `AllTypes` is a list of every 
+element type that libcudf supports.
+
 ```c++
 #include <cudf_test/type_lists.hpp>
 
 // All tests using TypeTestFixture will be invoked once for each numeric type
 TYPED_TEST_CASE(TypedTestFixture, cudf::test::NumericTypes);
 ```
-Therefore, whenever possible, avoid creating a custom type list and instead use one of the ones provided in `include/utilities/test/type_lists.hpp`.
+
+Whenever possible, use one of the type list provided in `include/utilities/test/type_lists.hpp` 
+rather than creating new custom lists.
 
 #### Advanced Type Lists
 
-Sometimes it is necessary to generate more advanced type lists than the simple list of single types in the `TypeList` example above. 
-libcudf provides a set of meta-programming utilities in `include/utilities/test/type_list_utilities.hpp` for generating and composing more advanced type lists;
+Sometimes it is necessary to generate more advanced type lists than the simple lists of single types 
+in the `TypeList` example above. `libcudf` provides a set of meta-programming utilities in 
+`include/cudf_test/type_list_utilities.hpp` for generating and composing more advanced type lists.
 
-For example, it may be useful to generate a type list where each element in the list is *two* types, i.e., a *nested type list*.
-In a nested type list, each element in the list is itself another list. 
-In order to access the type within the nested list, use `GetType<NestedList, N>`, which will return the `N`th type in the nested list.
+For example, it may be useful to generate a *nested* type list where each element in the list is two
+types. In a nested type list, each element in the list is itself another list. In order to access 
+the `N`th type within the nested list, use `GetType<NestedList, N>`.
 
+Imagine testing all possible two-type combinations of `<int,float>`. This could be done manually:
 
-Imagine testing all possible two-type combinations of `<int,float>`.
-
-This could be done manually:
 ```c++
 using namespace cudf::test;
 template <typename TwoTypes>
@@ -785,46 +796,53 @@ TYPED_TEST(TwoTypesFixture, FirstTest){
 }
 ```
 
-In the above example, one had to manually specify the cross product of combinations of `<int,float>` and `<float,int>`.
-However, `CrossProduct` is a utility in `type_list_utilities.hpp` which materializes the cross product automatically:
+The above example manually specifies all pairs composed of `int` and `float`. `CrossProduct` is a 
+utility in `type_list_utilities.hpp` which materializes this cross product automatically.
+
 ```c++
 using TwoTypesList = Types< Types<int, int>, Types<int, float>, 
                             Types<float, int>, Types<float, float> >;
 using CrossProductTypeList = CrossProduct< Types<int, float>, Types<int, float> >;
 // TwoTypesList and CrossProductTypeList are identical
 ```
-`CrossProduct` can be used with an arbitrary number of type lists to generate nested type lists of 2 or more types. 
-**However**, overuse of `CrossProduct` can dramatically inflate compile time. 
-For example, the cross product of two type lists of size `n` and `m` will result in a new list with `n*m` nested type lists.
-This means `n*m` templates will be instantiated.
-`n` and `m` do not need to be large before compile time becomes unreasonable.
 
-There are a number of other utilities in `type_list_utilities.hpp`. 
-For more details, see the documentation in that file and their associated tests in `cudf/cpp/tests/utilities_tests/type_list_tests.cpp`.
+`CrossProduct` can be used with an arbitrary number of type lists to generate nested type lists of
+two or more types. **However**, overuse of `CrossProduct` can dramatically inflate compile time. 
+The cross product of two type lists of size `n` and `m` will result in a new list with 
+`n*m` nested type lists. This means `n*m` templates will be instantiated; `n` and `m` need not be 
+large before compile time becomes unreasonable.
+
+There are a number of other utilities in `type_list_utilities.hpp`. For more details, see the 
+documentation in that file and their associated tests in 
+`cudf/cpp/tests/utilities_tests/type_list_tests.cpp`.
 
 ## Utilities
 
-libcudf provides a number of utilities that make common operations needed in testing more convenient. 
-These can be found in `include/utilities/test/`. 
-Before creating your own test utilities, look to see if one already exists that does what you need.
-If not, consider adding a new utility to do what you need.
-However, make sure that the utility is generic enough to be useful for other tests and is not overly tailored to your specific testing need.
+libcudf provides a number of utilities in `include/cudf_test` to make common testing operations more
+convenient. Before creating your own test utilities, look to see if one already exists that does 
+what you need. If not, consider adding a new utility to do what you need. However, make sure that 
+the utility is generic enough to be useful for other tests and is not overly tailored to your 
+specific testing need.
 
 ### Column Wrappers
 
-In order to make generating input columns easier, libcudf provides the `*_column_wrapper` classes in `include/utilities/test/column_wrapper.hpp`.
-These classes wrap a `cudf::column` and provide constructors for initializing a `cudf::column` object usable with libcudf APIs.
-Any `*_column_wrapper` class is implicitly convertible to a `column_view` or `mutable_column_view` and therefore may be transparently passed into any API expecting a `column_view` or `mutable_column_view` argument.
+In order to make generating input columns easier, libcudf provides the `*_column_wrapper` classes in
+`include/cudf_test/column_wrapper.hpp`. These classes wrap a `cudf::column` and provide constructors
+for initializing a `cudf::column` object usable with libcudf APIs. Any `*_column_wrapper` class is 
+implicitly convertible to a `column_view` or `mutable_column_view` and therefore may be 
+transparently passed to any API expecting a `column_view` or `mutable_column_view` argument.
 
 #### `fixed_width_column_wrapper`
 
-The `fixed_width_column_wrapper` class should be used for constructing and initializing a column of any fixed-width element type, e.g., numeric types, timestamp types, boolean, etc.
-
-`fixed_width_column_wrapper` provides constructors that accept an iterator range to generate each element in the column.
-For nullable columns, an additional iterator can be provided indicating the validity of each element.
-There are also constructors that accept a `std::initializer_list<T>` for the column elements and optionally for the validity of each element.
+The `fixed_width_column_wrapper` class should be used for constructing and initializing a column of
+any fixed-width element type, e.g., numeric types, timestamp types, Boolean, etc. 
+`fixed_width_column_wrapper` provides constructors that accept an iterator range to generate each 
+element in the column. For nullable columns, an additional iterator can be provided to indicate the 
+validity of each element. There are also constructors that accept a `std::initializer_list<T>` for 
+the column elements and optionally for the validity of each element.
 
 Example:
+
 ```c++
 // Creates a non-nullable column of INT32 elements with 5 elements: {0, 1, 2, 3, 4}
 auto elements = make_counting_transform_iterator(0, [](auto i){return i;});
@@ -842,11 +860,21 @@ fixed_width_column_wrapper<int32_t> w{{1, 2, 3, 4}};
 fixed_width_column_wrapper<int32_t> w{ {1,2,3,4}, {1, 0, 1, 0}};
 ```
 
+#### `fixed_point_column_wrapper`
+
+TODO
+
+#### `dictionary_column_wrapper`
+
+TODO
+
 #### `strings_column_wrapper`
 
-The `strings_column_wrapper` class should be used for creating columns of strings. It provides constructors that accept an iterator range to generate each string in the column. 
-For nullable columns, an additional iterator can be provided indicating the validity of each string.
-There are also constructors that accept a `std::initializer_list<std::string>` for the column's strings and optionally for the validity of each element.
+The `strings_column_wrapper` class should be used to create columns of strings. It provides 
+constructors that accept an iterator range to generate each string in the column. For nullable 
+columns, an additional iterator can be provided to indicate the validity of each string. There are 
+also constructors that accept a `std::initializer_list<std::string>` for the column's strings and 
+optionally for the validity of each element.
 
 Example:
 ```c++
@@ -871,17 +899,150 @@ auto validity = make_counting_transform_iterator(0, [](auto i){return i%2;});
 strings_column_wrapper s({"", "this", "is", "a", "column", "of", "strings"}, validity);
 ```
 
-### Column Utilities
+#### `lists_column_wrapper`
 
-### `expect_columns_equal`
+The `lists_column_wrapper` class should be used to create columns of lists. It provides 
+constructors that accept an iterator range to generate each list in the column. For nullable 
+columns, an additional iterator can be provided to indicate the validity of each list. There are 
+also constructors that accept a `std::initializer_list<T>` for the column's lists and 
+optionally for the validity of each element. A number of other constructors are available.
 
-A common operation in testing is verifying that two columns are equal to another and another.
-The utility function `expect_columns_equal` in `include/utilities/test/column_utilities.cuh` should be used for this purpose.
-It uses GTest macros to verify the equality of two columns metadata and the contents of each column.
+Example:
+```c++
+// Creates an empty LIST column
+// []
+lists_column_wrapper l{};
 
+// Creates a LIST column with 1 list composed of 2 total integers
+// [{0, 1}]
+lists_column_wrapper l{0, 1};
 
+// Creates a LIST column with 3 lists
+// [{0, 1}, {2, 3}, {4, 5}]
+lists_column_wrapper l{ {0, 1}, {2, 3}, {4, 5} };
 
-## Strings Support<a name="string_support"></a>
+// Creates a LIST of LIST columns with 2 lists on the top level and
+// 4 below
+// [ {{0, 1}, {2, 3}}, {{4, 5}, {6, 7}} ]
+lists_column_wrapper l{ {{0, 1}, {2, 3}}, {{4, 5}, {6, 7}} };
+
+// Creates a LIST column with 1 list composed of 5 total integers
+// [{0, 1, 2, 3, 4}]
+auto elements = make_counting_transform_iterator(0, [](auto i){return i*2;});
+lists_column_wrapper l(elements, elements+5);
+
+// Creates a LIST column with 1 lists composed of 2 total integers
+// [{0, NULL}]
+auto validity = make_counting_transform_iterator(0, [](auto i){return i%2;});
+lists_column_wrapper l{{0, 1}, validity};
+
+// Creates a LIST column with 1 lists composed of 5 total integers
+// [{0, NULL, 2, NULL, 4}]
+auto elements = make_counting_transform_iterator(0, [](auto i){return i*2;});
+auto validity = make_counting_transform_iterator(0, [](auto i){return i%2;});
+lists_column_wrapper l(elements, elements+5, validity);
+
+// Creates a LIST column with 1 list composed of 2 total strings
+// [{"abc", "def"}]
+lists_column_wrapper l{"abc", "def"};
+
+// Creates a LIST of LIST columns with 2 lists on the top level and 4 below
+// [ {{0, 1}, NULL}, {{4, 5}, NULL} ]
+auto validity = make_counting_transform_iterator(0, [](auto i){return i%2;});
+lists_column_wrapper l{ {{{0, 1}, {2, 3}}, validity}, {{{4, 5}, {6, 7}}, validity} };
+```
+
+#### `structs_column_wrapper`
+
+The `structs_column_wrapper` class should be used to create columns of structs. It provides 
+constructors that accept a vector or initializer list of pre-constructed columns or column wrappers
+for child columns. For nullable columns, an additional iterator can be provided to indicate the 
+validity of each struct.
+
+Examples:
+```c++
+// The following constructs a column for struct< int, string >.
+auto child_int_col = fixed_width_column_wrapper<int32_t>{ 1, 2, 3, 4, 5 }.release();
+auto child_string_col = string_column_wrapper {"All", "the", "leaves", "are", "brown"}.release();
+
+std::vector<std::unique_ptr<column>> child_columns;
+child_columns.push_back(std::move(child_int_col));
+child_columns.push_back(std::move(child_string_col));
+
+struct_column_wrapper struct_column_wrapper{
+  child_cols,
+  {1,0,1,0,1} // Validity
+};
+
+auto struct_col {struct_column_wrapper.release()};
+```
+
+```c++
+// The following constructs a column for struct< int, string >.
+fixed_width_column_wrapper<int32_t> child_int_col_wrapper{ 1, 2, 3, 4, 5 };
+string_column_wrapper child_string_col_wrapper {"All", "the", "leaves", "are", "brown"};
+
+struct_column_wrapper struct_column_wrapper{
+  {child_int_col_wrapper, child_string_col_wrapper}
+  {1,0,1,0,1} // Validity
+};
+
+auto struct_col {struct_column_wrapper.release()};
+```
+
+```c++
+// The following constructs a column for struct< int, string >.
+fixed_width_column_wrapper<int32_t> child_int_col_wrapper{ 1, 2, 3, 4, 5 };
+string_column_wrapper child_string_col_wrapper {"All", "the", "leaves", "are", "brown"};
+
+struct_column_wrapper struct_column_wrapper{
+  {child_int_col_wrapper, child_string_col_wrapper}
+  cudf::test::make_counting_transform_iterator(0, [](auto i){ return i%2; }) // Validity
+};
+
+auto struct_col {struct_column_wrapper.release()};
+```
+
+### Column Comparison Utilities
+
+A common operation in testing is verifying that two columns are equal, or equivalent, or that they
+have the same metadata.
+
+#### `expect_column_properties_equal`
+
+Verifies that two columns have the same type, size, and nullability. For nested types, recursively 
+verifies the equality of type, size and nullability of all nested children.
+
+#### `expect_column_properties_equivalent`
+
+Verifies that two columns have equivalent type and equal size, ignoring nullability. For nested 
+types, recursively verifies the equivalence of type, and equality of size of all nested children,
+ignoring nullability.
+
+Note "equivalent type". Most types are equivalent if and only they are equal. `fixed_point` types
+are the exception. They are equivalent if the representation type is equal, even if they have 
+different scales.
+
+#### `expect_columns_equal`
+
+Verifies that two columns have equal properties and verifies elementwise equality of the column 
+data. Null elements are treated as equal.
+
+#### `expect_columns_equivalent`
+
+Verifies that two columns have equivalent properties and verifies elementwise equivalence of the 
+column data. Null elements are treated as equivalent.
+#### `expect_equal_buffers`
+
+Verifies the bitwise equality of two device memory buffers.
+
+### Printing and accessing column data
+
+`include/cudf_test/column_utilities.hpp` defines various functions and overloads for printing 
+columns (`print`), converting column data to string (`to_string`, `to_strings`), and copying data to
+the host (`to_host).
+
+# Strings Support<a name="string_support"></a>
 
 In order to represent variable width strings, libcudf uses a *compound* column (i.e., column with children).
 The parent column's type is `STRING` and contains no data, but contains the count of the number of strings and the bitmask representing the validity of each string element.
