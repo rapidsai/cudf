@@ -165,6 +165,9 @@ class ListDtype(ExtensionDtype):
         else:
             return f"ListDtype({self.element_type})"
 
+    def __hash__(self):
+        return id(self)
+
 
 class StructDtype(ExtensionDtype):
 
