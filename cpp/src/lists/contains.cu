@@ -16,6 +16,7 @@
 
 #include <thrust/logical.h>
 #include <cudf/column/column_factories.hpp>
+#include <cudf/detail/iterator.cuh>
 #include <cudf/detail/valid_if.cuh>
 #include <cudf/lists/contains.hpp>
 #include <cudf/lists/list_device_view.cuh>
@@ -32,6 +33,9 @@ namespace lists {
 
 namespace {
 
+/**
+ * @brief Construct null-mask for result of `contains()` called with scalar search key.
+ */
 std::pair<rmm::device_buffer, size_type> construct_null_mask(
   cudf::detail::lists_column_device_view const& d_lists,
   cudf::scalar const& skey,
@@ -64,6 +68,9 @@ std::pair<rmm::device_buffer, size_type> construct_null_mask(
                                 });
 }
 
+/**
+ * @brief Construct null-mask for result of `contains()` called with column of search keys.
+ */
 std::pair<rmm::device_buffer, size_type> construct_null_mask(
   cudf::detail::lists_column_device_view const& d_lists,
   cudf::column_device_view const& d_skeys,
@@ -104,6 +111,38 @@ struct lookup_functor {
     CUDF_FAIL("lists::contains() is only supported on numeric types and strings.");
   }
 
+  template <typename T, typename SearchKeyPairIter>
+  std::enable_if_t<cudf::is_numeric<T>() || std::is_same<T, cudf::string_view>::value, void>
+  op_impl(cudf::detail::lists_column_device_view const& d_lists,
+          SearchKeyPairIter search_key_iter,
+          cudf::mutable_column_device_view output_bools,
+          rmm::cuda_stream_view stream,
+          rmm::mr::device_memory_resource* mr) const
+  {
+    thrust::transform(rmm::exec_policy(stream),
+                      thrust::make_counting_iterator(0),
+                      thrust::make_counting_iterator(d_lists.size()),
+                      output_bools.data<bool>(),
+                      [d_lists, search_key_iter] __device__(auto row_index) {
+                        auto search_key_and_validity    = search_key_iter[row_index];
+                        auto const& search_key_is_valid = search_key_and_validity.second;
+
+                        if (!search_key_is_valid) { return false; }
+
+                        auto list = cudf::list_device_view(d_lists, row_index);
+                        if (list.is_null()) { return false; }
+                        auto search_key = search_key_and_validity.first;
+
+                        return thrust::find_if(thrust::seq,
+                                               list.pair_begin<T>(),
+                                               list.pair_end<T>(),
+                                               [search_key] __device__(auto element_and_validity) {
+                                                 return element_and_validity.second &&
+                                                        (element_and_validity.first == search_key);
+                                               }) != list.pair_end<T>();
+                      });
+  }
+
   template <typename T>
   std::enable_if_t<cudf::is_numeric<T>() || std::is_same<T, cudf::string_view>::value, void>
   operator()(cudf::detail::lists_column_device_view const& d_lists,
@@ -113,50 +152,21 @@ struct lookup_functor {
              rmm::mr::device_memory_resource* mr) const
   {
     assert(skey.is_valid() && "skey should have been checked for nulls by this point.");
-
-    auto h_scalar = static_cast<cudf::scalar_type_t<T> const&>(skey);
-    auto d_scalar = cudf::get_scalar_device_view(h_scalar);
-
-    thrust::transform(rmm::exec_policy(stream),
-                      thrust::make_counting_iterator(0),
-                      thrust::make_counting_iterator(d_lists.size()),
-                      output_bools.data<bool>(),
-                      [d_lists, d_scalar] __device__(auto row_index) {
-                        auto list = cudf::list_device_view(d_lists, row_index);
-                        if (list.is_null()) { return false; }
-                        for (size_type i{0}; i < list.size(); ++i) {
-                          if (list.is_null(i)) { return false; }
-                          auto list_element = list.template element<T>(i);
-                          if (list_element == d_scalar.value()) { return true; }
-                        }
-                        return false;
-                      });
+    return op_impl<T>(d_lists, detail::make_pair_iterator<T>(skey), output_bools, stream, mr);
   }
 
   template <typename T>
   std::enable_if_t<cudf::is_numeric<T>() || std::is_same<T, cudf::string_view>::value, void>
   operator()(cudf::detail::lists_column_device_view const& d_lists,
-             cudf::column_device_view const& d_skeys,
+             cudf::column_device_view const& d_search_keys,
+             bool search_keys_have_nulls,
              cudf::mutable_column_device_view output_bools,
              rmm::cuda_stream_view stream,
              rmm::mr::device_memory_resource* mr) const
   {
-    thrust::transform(rmm::exec_policy(stream),
-                      thrust::make_counting_iterator(0),
-                      thrust::make_counting_iterator(d_lists.size()),
-                      output_bools.data<bool>(),
-                      [d_lists, d_skeys] __device__(auto row_index) {
-                        if (d_skeys.is_null(row_index)) { return false; }
-                        auto list = cudf::list_device_view(d_lists, row_index);
-                        if (list.is_null()) { return false; }
-                        auto skey = d_skeys.template element<T>(row_index);
-                        for (size_type i{0}; i < list.size(); ++i) {
-                          if (list.is_null(i)) { return false; }
-                          auto list_element = list.template element<T>(i);
-                          if (list_element == skey) { return true; }
-                        }
-                        return false;
-                      });
+    return search_keys_have_nulls
+             ? op_impl<T>(d_lists, d_search_keys.pair_begin<T, true>(), output_bools, stream, mr)
+             : op_impl<T>(d_lists, d_search_keys.pair_begin<T, false>(), output_bools, stream, mr);
   }
 };
 
@@ -237,8 +247,14 @@ std::unique_ptr<column> contains(cudf::lists_column_view const& lists,
   auto ret_bools_mutable_device_view =
     mutable_column_device_view::create(ret_bools->mutable_view(), stream);
 
-  cudf::type_dispatcher(
-    skeys.type(), lookup_functor{}, d_lists, *d_skeys, *ret_bools_mutable_device_view, stream, mr);
+  cudf::type_dispatcher(skeys.type(),
+                        lookup_functor{},
+                        d_lists,
+                        *d_skeys,
+                        skeys.has_nulls(),
+                        *ret_bools_mutable_device_view,
+                        stream,
+                        mr);
 
   return ret_bools;
 }
