@@ -218,7 +218,7 @@ class DatetimeColumn(column.ColumnBase):
 
     def binary_operator(self, op, rhs, reflect=False):
         if isinstance(rhs, cudf.DateOffset):
-            return rhs._datetime_binop(self, op)
+            return rhs._datetime_binop(self, op, reflect=reflect)
         lhs, rhs = self, rhs
         if op in ("eq", "ne", "lt", "gt", "le", "ge"):
             out_dtype = np.bool
