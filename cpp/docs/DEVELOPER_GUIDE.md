@@ -219,7 +219,6 @@ namespace detail{
         CUDA_TRY(cudaMemcpyAsync(...,stream.value()));
         kernel<<<..., stream>>>(...);
         thrust::algorithm(rmm::exec_policy(stream), ...);
-        stream.synchronize();
     }
 } // namespace detail
 
@@ -227,16 +226,24 @@ void external_function(...){
     detail::external_function(...);
 }
 ```
+
+**Note:** It's important to synchronize the stream if *and only if* it is necessary. For example,
+when a non-pointer value is returned from the API that is the result of an asynchronous 
+device-to-host copy, the stream used for the copy should be synchronized before returning. However,
+when a column is returned, the stream should not be synchronized because doing so will break 
+asynchrony if and when we add an asynchronous API to libcudf.
+
 **Note:** `cudaDeviceSynchronize()` should *never* be used.
  This limits the ability to do any multi-stream/multi-threaded work with libcudf APIs.
 
  ### Stream Creation
 
-There may be times in implementing `libcudf` features where it would be advantageous to use streams *internally*, i.e., to accomplish overlap in implementing an algorithm. 
-However, dynamically creating a stream can be expensive. 
-There are plans in the future to add a "stream pool" for this situation to avoid dynamic stream creation.
-However, for the time being, `libcudf` features should avoid creating streams (even if it is slightly less efficient). 
-It is a good idea to leave a `//TODO` note indicating where using a stream would be beneficial.
+There may be times in implementing `libcudf` features where it would be advantageous to use streams 
+*internally*, i.e., to accomplish overlap in implementing an algorithm. However, dynamically 
+creating a stream can be expensive. RMM has recently added a stream pool for this situation to 
+avoid dynamic stream creation. However, this is not yet exposed in `libcudf`, so for the time being, 
+`libcudf` features should avoid creating streams (even if it is slightly less efficient). It is a 
+good idea to leave a `// TODO:` note indicating where using a stream would be beneficial.
 
 ## Memory Allocation
 
