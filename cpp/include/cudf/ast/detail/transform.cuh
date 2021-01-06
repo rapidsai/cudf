@@ -126,7 +126,6 @@ struct binary_row_output : public row_output {
  * This class is designed for n-ary transform evaluation. Currently this class assumes that there's
  * only one relevant "row index" in its methods, which corresponds to a row in a single input table
  * and the same row index in an output column.
- *
  */
 struct row_evaluator {
   friend struct row_output;

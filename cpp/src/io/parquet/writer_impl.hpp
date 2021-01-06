@@ -53,7 +53,7 @@ using namespace cudf::io;
 
 /**
  * @brief Implementation for parquet writer
- **/
+ */
 class writer::impl {
   // Parquet datasets are divided into fixed-size, independent rowgroups
   static constexpr uint32_t DEFAULT_ROWGROUP_MAXSIZE = 128 * 1024 * 1024;  // 128MB
@@ -69,7 +69,7 @@ class writer::impl {
    * @param filepath Filepath if storing dataset to a file
    * @param options Settings for controlling behavior
    * @param mr Device memory resource to use for device memory allocation
-   **/
+   */
   explicit impl(std::unique_ptr<data_sink> sink,
                 parquet_writer_options const& options,
                 rmm::mr::device_memory_resource* mr);
@@ -83,12 +83,12 @@ class writer::impl {
    * @param column_chunks_file_path Column chunks file path to be set in the raw output metadata
    * @param stream CUDA stream used for device memory operations and kernel launches.
    * @return unique_ptr to FileMetadata thrift message if requested
-   **/
+   */
   std::unique_ptr<std::vector<uint8_t>> write(table_view const& table,
                                               const table_metadata* metadata,
                                               bool return_filemetadata,
                                               const std::string& column_chunks_file_path,
-                                              bool int96_timestamps,
+                                              std::vector<uint8_t> const& decimal_precisions,
                                               rmm::cuda_stream_view stream);
 
   /**
@@ -131,7 +131,7 @@ class writer::impl {
    * @param num_rows Total number of rows
    * @param fragment_size Number of rows per fragment
    * @param stream CUDA stream used for device memory operations and kernel launches.
-   **/
+   */
   void init_page_fragments(hostdevice_vector<gpu::PageFragment>& frag,
                            hostdevice_vector<gpu::EncColumnDesc>& col_desc,
                            uint32_t num_columns,
@@ -149,7 +149,7 @@ class writer::impl {
    * @param num_fragments Total number of fragments per column
    * @param fragment_size Number of rows per fragment
    * @param stream CUDA stream used for device memory operations and kernel launches.
-   **/
+   */
   void gather_fragment_statistics(statistics_chunk* dst_stats,
                                   hostdevice_vector<gpu::PageFragment>& frag,
                                   hostdevice_vector<gpu::EncColumnDesc>& col_desc,
@@ -166,7 +166,7 @@ class writer::impl {
    * @param num_columns Total number of columns
    * @param num_dictionaries Total number of dictionaries
    * @param stream CUDA stream used for device memory operations and kernel launches.
-   **/
+   */
   void build_chunk_dictionaries(hostdevice_vector<gpu::EncColumnChunk>& chunks,
                                 hostdevice_vector<gpu::EncColumnDesc>& col_desc,
                                 uint32_t num_rowgroups,
@@ -184,7 +184,7 @@ class writer::impl {
    * @param num_pages Total number of pages
    * @param num_stats_bfr Number of statistics buffers
    * @param stream CUDA stream used for device memory operations and kernel launches.
-   **/
+   */
   void init_encoder_pages(hostdevice_vector<gpu::EncColumnChunk>& chunks,
                           hostdevice_vector<gpu::EncColumnDesc>& col_desc,
                           gpu::EncPage* pages,
@@ -210,7 +210,7 @@ class writer::impl {
    * @param page_stats optional page-level statistics (nullptr if none)
    * @param chunk_stats optional chunk-level statistics (nullptr if none)
    * @param stream CUDA stream used for device memory operations and kernel launches.
-   **/
+   */
   void encode_pages(hostdevice_vector<gpu::EncColumnChunk>& chunks,
                     gpu::EncPage* pages,
                     uint32_t num_columns,

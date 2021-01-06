@@ -361,7 +361,6 @@ void reader::impl::set_record_starts(rmm::cuda_stream_view stream)
  * Sets the d_data_ data member.
  * Only rows that need to be parsed are copied, based on the byte range
  * Also updates the array of record starts to match the device data offset.
- *
  */
 void reader::impl::upload_data_to_device(rmm::cuda_stream_view stream)
 {

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2020, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -47,7 +47,7 @@ void expect_tables_equal(cudf::table_view lhs, cudf::table_view rhs);
  *
  * @param lhs The first table
  * @param rhs The second table
- **/
+ */
 void expect_tables_equivalent(cudf::table_view lhs, cudf::table_view rhs);
 
 }  // namespace test
