@@ -516,7 +516,12 @@ class DateOffset(pd.DateOffset, metaclass=_UndoOffsetMeta):
         kwargs["nanoseconds"] = nanoseconds
         return kwargs
 
-    def _datetime_binop(self, datetime_col, op):
+    def _datetime_binop(self, datetime_col, op, reflect=False):
+        if reflect == True and op == "sub":
+            raise TypeError(
+                f"Can not subtract a {type(datetime_col).__name__}"
+                f" from a {type(self).__name__}"
+            )
         if op not in {"add", "sub"}:
             raise TypeError(
                 f"{op} not supported between {type(self).__name__}"
