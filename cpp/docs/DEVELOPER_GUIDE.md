@@ -532,25 +532,29 @@ void isolated_helper_function(...);
 
 [**Anonymous namespaces should *never* be used in a header file.**](https://wiki.sei.cmu.edu/confluence/display/cplusplus/DCL59-CPP.+Do+not+define+an+unnamed+namespace+in+a+header+file) 
 
-
-
-
 # Error Handling
+
+`libcudf` follows conventions (and provides utilities) enforcing compile-time and run-time 
+conditions and detecting and handling CUDA errors. Communication of errors is always via C++ 
+exceptions.
 
 ## Runtime Conditions
 
-For ensuring runtime conditions necessary for correct execution, the `CUDF_EXPECTS` macro should be used.
+Use the `CUDF_EXPECTS` macro to enforce runtime conditions necessary for correct execution.
 
 Example usage:
 ```c++
 CUDF_EXPECTS(lhs.type() == rhs.type(), "Column type mismatch");
 ```
 
-The first argument is the conditional expression expected to resolve to  `true`  under normal conditions. If the conditional evaluates to  `false`, then an error has occurred and an instance of  `cudf::logic_error`  is thrown. The second argument to  `CUDF_EXPECTS`  is a short description of the error that has occurred and is used for the exceptions `what()` message. 
+The first argument is the conditional expression expected to resolve to  `true`  under normal 
+conditions. If the conditional evaluates to  `false`, then an error has occurred and an instance of  `cudf::logic_error` is thrown. The second argument to  `CUDF_EXPECTS` is a short description of the 
+error that has occurred and is used for the exception's `what()` message. 
 
-There are times where a particular code path, if reached, should indicate an error no matter what. For example, in the  `default`  case of a  `switch`  statement where the only valid code paths are in one of the  `case`  statements.
-
-For these cases, the  `CUDF_FAIL`  convenience macro should be used. This is effectively the same as doing  `CUDF_EXPECTS(false, reason)`.
+There are times where a particular code path, if reached, should indicate an error no matter what. 
+For example, often the `default` case of a `switch` statement represents an invalid alternative. 
+Use the `CUDF_FAIL` macro for such errors. This is effectively the same as calling 
+`CUDF_EXPECTS(false, reason)`.
 
 Example:
 ```c++
@@ -559,7 +563,9 @@ CUDF_FAIL("This code path should not be reached.");
 
 ### CUDA Error Checking
 
-Checking for the successful completion of CUDA runtime API functions should be done via the  `CUDA_TRY`  macro. This macro throws a `cudf::cuda_error` exception if the return value of the CUDA API does not return  `cudaSuccess`. The thrown exception will include a description of the CUDA error code that occurred in it's  `what()`  message.
+Use the `CUDA_TRY` macro to check for the successful completion of CUDA runtime API functions. This 
+macro throws a `cudf::cuda_error` exception if the CUDA API return value is not `cudaSuccess`. The 
+thrown exception includes a description of the CUDA error code in it's  `what()`  message.
 
 Example:
 
@@ -567,10 +573,9 @@ Example:
 CUDA_TRY( cudaMemcpy(&dst, &src, num_bytes) );
 ```
 
-
 ## Compile-Time Conditions
 
-Some conditions can be verified at compile time. These should be done using `static_assert`. For example,
+Use `static_assert` to enforce compile-time conditions. For example,
 
 ```c++
 template <typename T>
@@ -580,21 +585,25 @@ void trivial_types_only(T t){
 }
 ```
 
-
 # Type Dispatcher
 
-The device memory for a column's elements is stored in a `void*`. 
-This is known as *type-erasure*, because the data's type we are pointing to is not known at compile time.
-In order to determine the type, we must use the runtime information stored in the columns `type()`. 
-We can then use that type information to reconstruct the data's type `T`, i.e., casting the `void*` to the appropriate `T*`.
+`libcudf` stores data (for columns and scalars) "type erased" in `void*` device memory. This 
+*type-erasure* enables interoperability with other languages and type systems, such as Python and 
+Java. In order to determine the type, `libcudf` algorithms must use the run-time information stored 
+in the column `type()` to reconstruct the data type `T` by casting the `void*` to the appropriate 
+`T*`.
 
-This type "reconstruction" or *type dispatching* is pervasive throughout `libcudf`. 
-The `type_dispatcher` is a centralized utility that automates the process of mapping the runtime type information in `data_type` to a concrete C++ type.
+This so-called *type dispatch* is pervasive throughout `libcudf`. The `type_dispatcher` is a 
+central utility that automates the process of mapping the runtime type information in `data_type` 
+to a concrete C++ type.
 
-At a high level, you give the `type_dispatcher` a `data_type` and a function object (sometimes known as a *functor*) with an `operator()` template. 
-Then, based on the value of `data_type::id()`, it will invoke the corresponding instantiation of the `operator()` template. 
+At a high level, you call the `type_dispatcher` with a `data_type` and a function object (also 
+known as a *functor*) with an `operator()` template. Based on the value of `data_type::id()`, the 
+type dispatcher invokes the corresponding instantiation of the `operator()` template. 
 
-This simplified example of how the `type_dispatcher` works shows how the value of `data_type::id()` determines which instantiation of the `F::operator()` template is invoked. 
+This simplified example shows how the value of `data_type::id()` determines which instantiation of 
+the `F::operator()` template is invoked.
+
 ```c++
 template <typename F>
 void type_dispatcher(data_type t, F f){
@@ -606,22 +615,24 @@ void type_dispatcher(data_type t, F f){
 }
 ```
 
-The below example shows a function object called `size_of_functor` that returns the size of the dispatched type:
+The following example shows a function object called `size_of_functor` that returns the size of the 
+dispatched type.
 
 ```c++
 struct size_of_functor{
-template <typename T>
-int operator()(){ return sizeof(T); }
+  template <typename T>
+  int operator()(){ return sizeof(T); }
 };
+
 cudf::type_dispatcher(data_type{type_id::INT8}, size_of_functor{});  // returns 1
 cudf::type_dispatcher(data_type{type_id::INT32}, size_of_functor{});  // returns 4
 cudf::type_dispatcher(data_type{type_id::FLOAT64}, size_of_functor{});  // returns 8
 ```
 
-By default, the `type_dispatcher` uses `cudf::type_to_id<t>` to provide the mapping
-of `cudf::type_id`s to dispatched C++ types.
-However, this mapping may be customized by explicitly specifying a user-defined trait for the `IdTypeMap`.
-For example, to always dispatch `int32_t` for all values of `cudf::type_id`:
+By default, `type_dispatcher` uses `cudf::type_to_id<t>` to provide the mapping of `cudf::type_id` 
+to dispatched C++ types. However, this mapping may be customized by explicitly specifying a 
+user-defined trait for the `IdTypeMap`. For example, to always dispatch `int32_t` for all values of 
+`cudf::type_id`:
 
 ```c++
 template<cudf::type_id t> struct always_int{ using type = int32_t; }
@@ -629,14 +640,15 @@ template<cudf::type_id t> struct always_int{ using type = int32_t; }
 // This will always invoke `operator()<int32_t>`
 cudf::type_dispatcher<always_int>(data_type, f);
 ```
-## Specializing Type Dispatched Code Paths
-It is often necessary to customize the dispatched `operator()` for different types. 
-This can be done in several ways.
 
-The first method is to use explicit, full template specialization. This is useful
-for specializing behavior for single types. For example, a function object that
-prints `"int32_t"` or `"double"` when invoked with either of those types, else it
-prints `"unhandled type"`:
+## Specializing Type-Dispatched Code Paths
+
+It is often necessary to customize the dispatched `operator()` for different types. This can be 
+done in several ways.
+
+The first method is to use explicit, full template specialization. This is useful for specializing 
+behavior for single types. The following example function object prints `"int32_t"` or `"double"` 
+when invoked with either of those types, or `"unhandled type"` otherwise.
 
 ```c++
 struct type_printer {
@@ -653,10 +665,10 @@ template <>
 void type_printer::operator()<double>() { std::cout << "double\n"; }
 ```
 
-A second method is to use SFINAE with `std::enable_if_t`. This is useful for
-partially specializing for a set of types that share some property. For example, a
-functor that prints `integral` or `floating point` for integral or floating
-point types:
+The second method is to use [SFINAE](https://en.cppreference.com/w/cpp/language/sfinae) with 
+`std::enable_if_t`. This is useful to partially specialize for a set of types with a common trait. 
+The following example functor prints `integral` or `floating point` for integral or floating point
+types, respectively.
 
 ```c++
 struct integral_or_floating_point {
@@ -673,12 +685,13 @@ template < typename ColumnType,
            std::enable_if_t<std::is_floating_point<ColumnType>::value>* = nullptr> 
 void operator()() { std::cout << "floating point\n"; }
 };
-``` 
-For more info on SFINAE and `std::enable_if`, see https://eli.thegreenplace.net/2014/sfinae-and-enable_if
+```
 
-There are a number of traits defined in `cpp/include/cudf/utilities/traits.hpp` that are useful for partially specializing dispatched function objects. 
-For example `is_numeric<T>()` can be used to specialize for any numeric type.
+For more info on SFINAE with `std::enable_if`, [see this post](https://eli.thegreenplace.net/2014/sfinae-and-enable_if).
 
+There are a number of traits defined in `include/cudf/utilities/traits.hpp` that are useful for 
+partial specialization of dispatched function objects. For example `is_numeric<T>()` can be used to 
+specialize for any numeric type.
 
 # Testing
 
