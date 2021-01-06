@@ -2289,7 +2289,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
 
 
   /**
-   * Create a new struct column made pointing to existing columns. Note that this will NOT copy
+   * Create a new struct column view of existing column views. Note that this will NOT copy
    * the contents of the input columns to make a new vector, but makes a view that must not
    * outlive the child views that it references. The resulting column cannot be null.
    * @param rows the number of rows in the struct column. This is needed if no columns
@@ -2298,7 +2298,6 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * @return the new column view. It is the responsibility of the caller to close this.
    */
   public static ColumnView makeStructView(long rows, ColumnView... columns) {
-
     long[] handles = new long[columns.length];
     for (int i = 0; i < columns.length; i++) {
       ColumnView cv = columns[i];
@@ -2311,7 +2310,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
   }
 
   /**
-   * Create a new struct column made pointing to existing columns. Note that this will NOT copy
+   * Create a new struct column view of existing column views. Note that this will NOT copy
    * the contents of the input columns to make a new vector, but makes a view that must not
    * outlive the child views that it references. The resulting column cannot be null.
    * @param columns the columns to add to the struct in the order they should be added
