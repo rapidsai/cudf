@@ -252,52 +252,45 @@ table_with_metadata read_orc(orc_reader_options const& options, rmm::mr::device_
 void write_orc(orc_writer_options const& options, rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  auto writer = make_writer<detail_orc::writer>(options.get_sink(), options, mr);
 
-  writer->write(options.get_table(), options.get_metadata());
+  namespace detail_orc = cudf::io::detail::orc;
+  auto writer = make_writer<detail_orc::writer>(options.get_sink(), options, detail_orc::SingleWriteMode::YES, mr);
+
+  writer->write(options.get_table());
 }
 
-/**
- * @copydoc cudf::io::write_orc_chunked_begin
- */
-std::shared_ptr<orc_chunked_state> write_orc_chunked_begin(chunked_orc_writer_options const& opts,
-                                                           rmm::mr::device_memory_resource* mr)
+// Constructor to create orc chunked writer
+orc_chunked_writer::orc_chunked_writer(chunked_orc_writer_options const& op,
+                                       rmm::mr::device_memory_resource* mr)
 {
-  CUDF_FUNC_RANGE();
-  orc_writer_options options;
-  options.set_compression(opts.get_compression());
-  options.enable_statistics(opts.enable_statistics());
-  auto state = std::make_shared<orc_chunked_state>();
-  state->wp  = make_writer<detail_orc::writer>(opts.get_sink(), options, mr);
-
-  // have to make a copy of the metadata here since we can't really
-  // guarantee the lifetime of the incoming pointer
-  if (opts.get_metadata() != nullptr) {
-    state->user_metadata_with_nullability = *opts.get_metadata();
-    state->user_metadata                  = &state->user_metadata_with_nullability;
-  }
-  state->stream = 0;
-  state->wp->write_chunked_begin(*state);
-  return state;
+  namespace detail_orc = cudf::io::detail::orc;
+  writer               = make_writer<detail_orc::writer>(
+    op.get_sink(), op, detail_orc::SingleWriteMode::NO, mr, rmm::cuda_stream_default);
 }
 
-/**
- * @copydoc cudf::io::write_orc_chunked
- */
-void write_orc_chunked(table_view const& table, std::shared_ptr<orc_chunked_state> state)
+// Moves writer unique pointer to object
+orc_chunked_writer& orc_chunked_writer::operator=(orc_chunked_writer&& rhs)
 {
-  CUDF_FUNC_RANGE();
-  state->wp->write_chunk(table, *state);
+  writer = std::move(rhs.writer);
+
+  return *this;
 }
 
-/**
- * @copydoc cudf::io::write_orc_chunked_end
- */
-void write_orc_chunked_end(std::shared_ptr<orc_chunked_state>& state)
+// Writes table to output
+orc_chunked_writer& orc_chunked_writer::write(table_view const& table)
 {
   CUDF_FUNC_RANGE();
-  state->wp->write_chunked_end(*state);
-  state.reset();
+
+  writer->write_chunk(table);
+
+  return *this;
+}
+
+// Finishes the chunked/streamed write process
+void orc_chunked_writer::close()
+{
+  CUDF_FUNC_RANGE();
+  return writer->close();
 }
 
 using namespace cudf::io::detail::parquet;

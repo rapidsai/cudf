@@ -22,8 +22,19 @@
 
 namespace cudf {
 namespace io {
+
+// Forward declaration
+class orc_reader_options;
+class orc_writer_options;
+class chunked_orc_writer_options;
+
 namespace detail {
 namespace orc {
+/**
+ * @brief Whether writer writes in chunks or at once
+ */
+enum class SingleWriteMode : bool { YES, NO };
+
 /**
  * @brief Class to read ORC dataset data into columns.
  */
@@ -86,11 +97,30 @@ class writer {
    *
    * @param sink The data sink to write the data to
    * @param options Settings for controlling writing behavior
+   * @param mode Option to write at once or in chunks
    * @param mr Device memory resource to use for device memory allocation
+   * @param stream CUDA stream used for device memory operations and kernel launches
    */
   explicit writer(std::unique_ptr<cudf::io::data_sink> sink,
                   orc_writer_options const& options,
-                  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+                  SingleWriteMode mode = SingleWriteMode::NO,
+                  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource(),
+                  rmm::cuda_stream_view stream = rmm::cuda_stream_default);
+
+  /**
+   * @brief Constructor with chunked writer options.
+   *
+   * @param sink The data sink to write the data to
+   * @param options Settings for controlling writing behavior
+   * @param mode Option to write at once or in chunks
+   * @param mr Device memory resource to use for device memory allocation
+   * @param stream CUDA stream used for device memory operations and kernel launches
+   */
+  explicit writer(std::unique_ptr<cudf::io::data_sink> sink,
+                  chunked_orc_writer_options const& options,
+                  SingleWriteMode mode = SingleWriteMode::YES,
+                  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource(),
+                  rmm::cuda_stream_view stream = rmm::cuda_stream_default);
 
   /**
    * @brief Destructor explicitly declared to avoid inlining in header
@@ -101,34 +131,20 @@ class writer {
    * @brief Writes the entire dataset.
    *
    * @param table Set of columns to output
-   * @param metadata Table metadata and column names
-   * @param stream CUDA stream used for device memory operations and kernel launches.
    */
-  void write(table_view const& table,
-             const table_metadata* metadata = nullptr,
-             rmm::cuda_stream_view stream   = rmm::cuda_stream_default);
-
-  /**
-   * @brief Begins the chunked/streamed write process.
-   *
-   * @param[in] state Internal state maintained between chunks.
-   */
-  void write_chunked_begin(struct orc_chunked_state& state);
+  void write(table_view const& table);
 
   /**
    * @brief Writes a single subtable as part of a larger ORC file/table write.
    *
    * @param[in] table The table information to be written
-   * @param[in] state Internal state maintained between chunks.
    */
-  void write_chunk(table_view const& table, struct orc_chunked_state& state);
+  void write_chunk(table_view const& table);
 
   /**
    * @brief Finishes the chunked/streamed write process.
-   *
-   * @param[in] state Internal state maintained between chunks.
    */
-  void write_chunked_end(struct orc_chunked_state& state);
+  void close();
 };
 }  // namespace orc
 }  // namespace detail
