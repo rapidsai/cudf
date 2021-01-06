@@ -95,14 +95,27 @@ struct StripeFooter {
 };
 
 struct IntegerStatistics {
-  int64_t minimum;
-  int64_t maximum;
-  int64_t sum;
+  thrust::optional<int64_t> minimum;
+  thrust::optional<int64_t> maximum;
+  thrust::optional<int64_t> sum;
+};
+
+struct DoubleStatistics {
+  thrust::optional<double> minimum;
+  thrust::optional<double> maximum;
+  thrust::optional<double> sum;
 };
 
 struct ColumnStatistics {
   thrust::optional<uint64_t> numberOfValues;
   thrust::optional<IntegerStatistics> intStatistics;
+  thrust::optional<DoubleStatistics> doubleStatistics;
+  // thrust::optional<StringStatistics> stringStatistics;
+  // thrust::optional<BucketStatistics> bucketStatistics;
+  // thrust::optional<DecimalStatistics> decimalStatistics;
+  // thrust::optional<DateStatistics> dateStatistics;
+  // thrust::optional<BinaryStatistics> binaryStatistics;
+  // thrust::optional<TimestampStatistics> timestampStatistics;
 };
 
 struct StripeStatistics {
@@ -137,6 +150,7 @@ class ProtobufReader {
   void read(Stream &, size_t maxlen);
   void read(ColumnEncoding &, size_t maxlen);
   void read(IntegerStatistics &s, size_t maxlen);
+  void read(DoubleStatistics &s, size_t maxlen);
   void read(ColumnStatistics &, size_t maxlen);
   void read(StripeStatistics &, size_t maxlen);
   void read(Metadata &, size_t maxlen);
@@ -160,7 +174,7 @@ class ProtobufReader {
   void function_builder(T &s, size_t maxlen, std::tuple<Operator...> &op);
 
   template <typename base_t,
-            typename std::enable_if_t<!std::is_integral<base_t>::value and
+            typename std::enable_if_t<!std::is_arithmetic<base_t>::value and
                                       !std::is_enum<base_t>::value> * = nullptr>
   int static constexpr encode_field_number_base(int field_number) noexcept
   {
@@ -173,6 +187,20 @@ class ProtobufReader {
   int static constexpr encode_field_number_base(int field_number) noexcept
   {
     return (field_number * 8) + PB_TYPE_VARINT;
+  }
+
+  template <typename base_t,
+            typename std::enable_if_t<std::is_same<base_t, float>::value> * = nullptr>
+  int static constexpr encode_field_number_base(int field_number) noexcept
+  {
+    return (field_number * 8) + PB_TYPE_FIXED32;
+  }
+
+  template <typename base_t,
+            typename std::enable_if_t<std::is_same<base_t, double>::value> * = nullptr>
+  int static constexpr encode_field_number_base(int field_number) noexcept
+  {
+    return (field_number * 8) + PB_TYPE_FIXED64;
   }
 
   template <typename T, typename std::enable_if_t<!std::is_class<T>::value> * = nullptr>
@@ -257,6 +285,13 @@ class ProtobufReader {
   {
     auto const size = read_field_size(end);
     read(value, size);
+  }
+
+  template <typename T, typename std::enable_if_t<std::is_floating_point<T>::value> * = nullptr>
+  void read_field(T &value, const uint8_t *end)
+  {
+    memcpy(&value, m_cur, sizeof(T));
+    m_cur += sizeof(T);
   }
 
   template <typename T>

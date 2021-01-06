@@ -248,8 +248,13 @@ void parse_orc_statistics(std::vector<std::vector<std::string>> const& blobs)
   reader.read(cs);
   std::cout << cs.numberOfValues.value_or(0) << '\n';
   if (cs.intStatistics.has_value()) {
-    auto intstats = cs.intStatistics.value();
-    std::cout << intstats.minimum << ' ' << intstats.maximum << ' ' << intstats.sum << '\n';
+    auto istats = cs.intStatistics.value();
+    std::cout << istats.minimum.value() << ' ' << istats.maximum.value() << ' '
+              << istats.sum.value() << '\n';
+  } else if (cs.doubleStatistics.has_value()) {
+    auto fstats = cs.doubleStatistics.value();
+    std::cout << fstats.minimum.value() << ' ' << fstats.maximum.value() << ' '
+              << fstats.sum.value_or(std::numeric_limits<double>::quiet_NaN()) << '\n';
   }
 }
 

@@ -947,7 +947,7 @@ TEST_F(OrcChunkedWriterTest, ChunkedStats)
   auto sequence = cudf::test::make_counting_transform_iterator(0, [](auto i) { return i; });
   auto validity = cudf::test::make_counting_transform_iterator(0, [](auto i) { return i % 2; });
   constexpr auto num_rows = 100;
-  column_wrapper<int32_t, typename decltype(sequence)::value_type> col(
+  column_wrapper<float, typename decltype(sequence)::value_type> col(
     sequence, sequence + num_rows, validity);
   std::vector<std::unique_ptr<column>> cols;
   cols.push_back(col.release());
