@@ -331,12 +331,11 @@ std::unique_ptr<std::vector<uint8_t>> write_parquet(parquet_writer_options const
   namespace detail_pq = cudf::io::detail::parquet;
 
   auto writer = make_writer<detail_parquet::writer>(
-    options.get_sink(), options, detail_pq::SingleWriteMode::YES, mr);
+    options.get_sink(), options, detail_pq::SingleWriteMode::YES, mr, rmm::cuda_stream_default);
 
   return writer->write(options.get_table(),
                        options.is_enabled_return_filemetadata(),
-                       options.get_column_chunks_file_path(),
-                       rmm::cuda_stream_default);
+                       options.get_column_chunks_file_path());
 }
 
 // Constructor to create parquet chunked writer
@@ -344,8 +343,8 @@ parquet_chunked_writer::parquet_chunked_writer(chunked_parquet_writer_options co
                                                rmm::mr::device_memory_resource* mr)
 {
   namespace detail_pq = cudf::io::detail::parquet;
-  writer =
-    make_writer<detail_parquet::writer>(op.get_sink(), op, detail_pq::SingleWriteMode::NO, mr);
+  writer              = make_writer<detail_parquet::writer>(
+    op.get_sink(), op, detail_pq::SingleWriteMode::NO, mr, rmm::cuda_stream_default);
 }
 
 // Moves writer unique pointer to object

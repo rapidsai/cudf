@@ -109,26 +109,32 @@ class writer {
    *
    * @param sink The data sink to write the data to
    * @param options Settings for controlling writing behavior
-   * @param mode Option to write at once or in chunks.
+   * @param mode Option to write at once or in chunks
    * @param mr Device memory resource to use for device memory allocation
+   * @param stream CUDA stream used for device memory operations and kernel launches
    */
   explicit writer(std::unique_ptr<cudf::io::data_sink> sink,
                   parquet_writer_options const& options,
                   SingleWriteMode mode                = SingleWriteMode::YES,
-                  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+                  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource(),
+                  rmm::cuda_stream_view stream        = rmm::cuda_stream_default);
 
   /**
    * @brief Constructor for writer to handle chunked parquet options.
    *
    * @param sink The data sink to write the data to
    * @param options Settings for controlling writing behavior for chunked writer
-   * @param mode Option to write at once or in chunks.
+   * @param mode Option to write at once or in chunks
    * @param mr Device memory resource to use for device memory allocation
+   * @param stream CUDA stream used for device memory operations and kernel launches
+   *
+   * @return A parquet-compatible blob that contains the data for all rowgroups in the list
    */
   explicit writer(std::unique_ptr<cudf::io::data_sink> sink,
                   chunked_parquet_writer_options const& options,
                   SingleWriteMode mode                = SingleWriteMode::NO,
-                  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+                  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource(),
+                  rmm::cuda_stream_view stream        = rmm::cuda_stream_default);
 
   /**
    * @brief Destructor explicitly-declared to avoid inlined in header
@@ -141,13 +147,10 @@ class writer {
    * @param table Set of columns to output
    * @param return_filemetadata If true, return the raw file metadata
    * @param column_chunks_file_path Column chunks file path to be set in the raw output metadata
-   * @param stream CUDA stream used for device memory operations and kernel launches.
    */
-  std::unique_ptr<std::vector<uint8_t>> write(
-    table_view const& table,
-    bool return_filemetadata,
-    const std::string column_chunks_file_path = "",
-    rmm::cuda_stream_view stream              = rmm::cuda_stream_default);
+  std::unique_ptr<std::vector<uint8_t>> write(table_view const& table,
+                                              bool return_filemetadata,
+                                              const std::string column_chunks_file_path = "");
 
   /**
    * @brief Writes a single subtable as part of a larger parquet file/table write.

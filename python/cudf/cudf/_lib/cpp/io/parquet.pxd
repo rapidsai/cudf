@@ -171,10 +171,10 @@ cdef extern from "cudf/io/parquet.hpp" namespace "cudf::io" nogil:
     cdef cppclass parquet_chunked_writer:
         parquet_chunked_writer() except+
         parquet_chunked_writer(chunked_parquet_writer_options args) except+
-        unique_ptr[vector[uint8_t]] write(
+        parquet_chunked_writer& write(
             cudf_table_view.table_view table_,
         ) except+
-        unique_ptr[vector[uint8_t]] write_end(
+        unique_ptr[vector[uint8_t]] close(
             bool return_meta,
             string column_chunks_file_path,) except+
 

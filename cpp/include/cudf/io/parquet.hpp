@@ -383,7 +383,7 @@ table_with_metadata read_parquet(
 class parquet_writer_options_builder;
 
 /**
- * @brief Settings for `parquet_writer()`.
+ * @brief Settings for `write_parquet()`.
  */
 class parquet_writer_options {
   // Specify the sink to use for writer output

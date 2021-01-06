@@ -503,8 +503,7 @@ void writer::impl::init_page_fragments(hostdevice_vector<gpu::PageFragment> &fra
                                        uint32_t num_columns,
                                        uint32_t num_fragments,
                                        uint32_t num_rows,
-                                       uint32_t fragment_size,
-                                       rmm::cuda_stream_view stream)
+                                       uint32_t fragment_size)
 {
   CUDA_TRY(cudaMemcpyAsync(col_desc.device_ptr(),
                            col_desc.host_ptr(),
@@ -531,8 +530,7 @@ void writer::impl::gather_fragment_statistics(statistics_chunk *frag_stats_chunk
                                               hostdevice_vector<gpu::EncColumnDesc> &col_desc,
                                               uint32_t num_columns,
                                               uint32_t num_fragments,
-                                              uint32_t fragment_size,
-                                              rmm::cuda_stream_view stream)
+                                              uint32_t fragment_size)
 {
   rmm::device_vector<statistics_group> frag_stats_group(num_fragments * num_columns);
 
@@ -552,8 +550,7 @@ void writer::impl::build_chunk_dictionaries(hostdevice_vector<gpu::EncColumnChun
                                             hostdevice_vector<gpu::EncColumnDesc> &col_desc,
                                             uint32_t num_rowgroups,
                                             uint32_t num_columns,
-                                            uint32_t num_dictionaries,
-                                            rmm::cuda_stream_view stream)
+                                            uint32_t num_dictionaries)
 {
   size_t dict_scratch_size = (size_t)num_dictionaries * gpu::kDictScratchSize;
   rmm::device_vector<uint32_t> dict_scratch(dict_scratch_size / sizeof(uint32_t));
@@ -591,8 +588,7 @@ void writer::impl::init_encoder_pages(hostdevice_vector<gpu::EncColumnChunk> &ch
                                       uint32_t num_rowgroups,
                                       uint32_t num_columns,
                                       uint32_t num_pages,
-                                      uint32_t num_stats_bfr,
-                                      rmm::cuda_stream_view stream)
+                                      uint32_t num_stats_bfr)
 {
   rmm::device_vector<statistics_merge_group> page_stats_mrg(num_stats_bfr);
   CUDA_TRY(cudaMemcpyAsync(chunks.device_ptr(),
@@ -631,8 +627,7 @@ void writer::impl::encode_pages(hostdevice_vector<gpu::EncColumnChunk> &chunks,
                                 gpu_inflate_input_s *comp_in,
                                 gpu_inflate_status_s *comp_out,
                                 const statistics_chunk *page_stats,
-                                const statistics_chunk *chunk_stats,
-                                rmm::cuda_stream_view stream)
+                                const statistics_chunk *chunk_stats)
 {
   gpu::EncodePages(
     pages, chunks.device_ptr(), pages_in_batch, first_page_in_batch, comp_in, comp_out, stream);
@@ -673,8 +668,10 @@ void writer::impl::encode_pages(hostdevice_vector<gpu::EncColumnChunk> &chunks,
 writer::impl::impl(std::unique_ptr<data_sink> sink,
                    parquet_writer_options const &options,
                    SingleWriteMode mode,
-                   rmm::mr::device_memory_resource *mr)
+                   rmm::mr::device_memory_resource *mr,
+                   rmm::cuda_stream_view stream)
   : _mr(mr),
+    stream(stream),
     compression_(to_parquet_compression(options.get_compression())),
     stats_granularity_(options.get_stats_level()),
     int96_timestamps(options.is_enabled_int96_timestamps()),
@@ -688,8 +685,10 @@ writer::impl::impl(std::unique_ptr<data_sink> sink,
 writer::impl::impl(std::unique_ptr<data_sink> sink,
                    chunked_parquet_writer_options const &options,
                    SingleWriteMode mode,
-                   rmm::mr::device_memory_resource *mr)
+                   rmm::mr::device_memory_resource *mr,
+                   rmm::cuda_stream_view stream)
   : _mr(mr),
+    stream(stream),
     compression_(to_parquet_compression(options.get_compression())),
     stats_granularity_(options.get_stats_level()),
     int96_timestamps(options.is_enabled_int96_timestamps()),
@@ -719,13 +718,9 @@ void writer::impl::init_state()
 }
 
 std::unique_ptr<std::vector<uint8_t>> writer::impl::write(
-  table_view const &table,
-  bool return_filemetadata,
-  const std::string &column_chunks_file_path,
-  rmm::cuda_stream_view stream)
+  table_view const &table, bool return_filemetadata, const std::string &column_chunks_file_path)
 {
   CUDF_EXPECTS(not is_closed, "Data has already been flushed to out and closed");
-  stream_ = stream;
   init_state();
   write(table);
   return close(return_filemetadata, column_chunks_file_path);
@@ -777,7 +772,7 @@ void writer::impl::write(table_view const &table)
                                  int96_timestamps,
                                  decimal_precision,
                                  decimal_precision_idx,
-                                 stream_);
+                                 stream);
   }
 
   CUDF_EXPECTS(decimal_precision_idx == decimal_precision.size(),
@@ -947,8 +942,7 @@ void writer::impl::write(table_view const &table)
   uint32_t num_fragments = (uint32_t)((num_rows + fragment_size - 1) / fragment_size);
   hostdevice_vector<gpu::PageFragment> fragments(num_columns * num_fragments);
   if (fragments.size() != 0) {
-    init_page_fragments(
-      fragments, col_desc, num_columns, num_fragments, num_rows, fragment_size, stream_);
+    init_page_fragments(fragments, col_desc, num_columns, num_fragments, num_rows, fragment_size);
   }
 
   size_t global_rowgroup_base = md.row_groups.size();
@@ -986,13 +980,8 @@ void writer::impl::write(table_view const &table)
   if (stats_granularity_ != statistics_freq::STATISTICS_NONE) {
     frag_stats.resize(num_fragments * num_columns);
     if (frag_stats.size() != 0) {
-      gather_fragment_statistics(frag_stats.data().get(),
-                                 fragments,
-                                 col_desc,
-                                 num_columns,
-                                 num_fragments,
-                                 fragment_size,
-                                 stream_);
+      gather_fragment_statistics(
+        frag_stats.data().get(), fragments, col_desc, num_columns, num_fragments, fragment_size);
     }
   }
   // Initialize row groups and column chunks
@@ -1068,8 +1057,7 @@ void writer::impl::write(table_view const &table)
 
   // Build chunk dictionaries and count pages
   if (num_chunks != 0) {
-    build_chunk_dictionaries(
-      chunks, col_desc, num_rowgroups, num_columns, num_dictionaries, stream_);
+    build_chunk_dictionaries(chunks, col_desc, num_rowgroups, num_columns, num_dictionaries);
   }
 
   // Initialize batches of rowgroups to encode (mainly to limit peak memory usage)
@@ -1118,8 +1106,8 @@ void writer::impl::write(table_view const &table)
     (compression_ != parquet::Compression::UNCOMPRESSED) ? max_pages_in_batch : 0;
   uint32_t num_stats_bfr =
     (stats_granularity_ != statistics_freq::STATISTICS_NONE) ? num_pages + num_chunks : 0;
-  rmm::device_buffer uncomp_bfr(max_uncomp_bfr_size, stream_);
-  rmm::device_buffer comp_bfr(max_comp_bfr_size, stream_);
+  rmm::device_buffer uncomp_bfr(max_uncomp_bfr_size, stream);
+  rmm::device_buffer comp_bfr(max_comp_bfr_size, stream);
   rmm::device_vector<gpu_inflate_input_s> comp_in(max_comp_pages);
   rmm::device_vector<gpu_inflate_status_s> comp_out(max_comp_pages);
   rmm::device_vector<gpu::EncPage> pages(num_pages);
@@ -1147,8 +1135,7 @@ void writer::impl::write(table_view const &table)
                        num_rowgroups,
                        num_columns,
                        num_pages,
-                       num_stats_bfr,
-                       stream_);
+                       num_stats_bfr);
   }
 
   auto host_bfr = [&]() {
@@ -1186,8 +1173,7 @@ void writer::impl::write(table_view const &table)
       comp_out.data().get(),
       (stats_granularity_ == statistics_freq::STATISTICS_PAGE) ? page_stats.data().get() : nullptr,
       (stats_granularity_ != statistics_freq::STATISTICS_NONE) ? page_stats.data().get() + num_pages
-                                                               : nullptr,
-      stream_);
+                                                               : nullptr);
     for (; r < rnext; r++, global_r++) {
       for (auto i = 0; i < num_columns; i++) {
         gpu::EncColumnChunk *ck = &chunks[r * num_columns + i];
@@ -1201,7 +1187,7 @@ void writer::impl::write(table_view const &table)
 
         if (out_sink_->supports_device_write()) {
           // let the writer do what it wants to retrieve the data from the gpu.
-          out_sink_->device_write(dev_bfr + ck->ck_stat_size, ck->compressed_size, stream_);
+          out_sink_->device_write(dev_bfr + ck->ck_stat_size, ck->compressed_size, stream);
           // we still need to do a (much smaller) memcpy for the statistics.
           if (ck->ck_stat_size != 0) {
             md.row_groups[global_r].columns[i].meta_data.statistics_blob.resize(ck->ck_stat_size);
@@ -1210,8 +1196,8 @@ void writer::impl::write(table_view const &table)
                               dev_bfr,
                               ck->ck_stat_size,
                               cudaMemcpyDeviceToHost,
-                              stream_.value()));
-            stream_.synchronize();
+                              stream.value()));
+            stream.synchronize();
           }
         } else {
           // copy the full data
@@ -1219,8 +1205,8 @@ void writer::impl::write(table_view const &table)
                                    dev_bfr,
                                    ck->ck_stat_size + ck->compressed_size,
                                    cudaMemcpyDeviceToHost,
-                                   stream_.value()));
-          stream_.synchronize();
+                                   stream.value()));
+          stream.synchronize();
           out_sink_->host_write(host_bfr.get() + ck->ck_stat_size, ck->compressed_size);
           if (ck->ck_stat_size != 0) {
             md.row_groups[global_r].columns[i].meta_data.statistics_blob.resize(ck->ck_stat_size);
@@ -1280,16 +1266,18 @@ std::unique_ptr<std::vector<uint8_t>> writer::impl::close(
 writer::writer(std::unique_ptr<data_sink> sink,
                parquet_writer_options const &options,
                SingleWriteMode mode,
-               rmm::mr::device_memory_resource *mr)
-  : _impl(std::make_unique<impl>(std::move(sink), options, mode, mr))
+               rmm::mr::device_memory_resource *mr,
+               rmm::cuda_stream_view stream)
+  : _impl(std::make_unique<impl>(std::move(sink), options, mode, mr, stream))
 {
 }
 
 writer::writer(std::unique_ptr<data_sink> sink,
                chunked_parquet_writer_options const &options,
                SingleWriteMode mode,
-               rmm::mr::device_memory_resource *mr)
-  : _impl(std::make_unique<impl>(std::move(sink), options, mode, mr))
+               rmm::mr::device_memory_resource *mr,
+               rmm::cuda_stream_view stream)
+  : _impl(std::make_unique<impl>(std::move(sink), options, mode, mr, stream))
 {
 }
 
@@ -1299,10 +1287,9 @@ writer::~writer() = default;
 // Forward to implementation
 std::unique_ptr<std::vector<uint8_t>> writer::write(table_view const &table,
                                                     bool return_filemetadata,
-                                                    const std::string column_chunks_file_path,
-                                                    rmm::cuda_stream_view stream)
+                                                    const std::string column_chunks_file_path)
 {
-  return _impl->write(table, return_filemetadata, column_chunks_file_path, stream);
+  return _impl->write(table, return_filemetadata, column_chunks_file_path);
 }
 
 // Forward to implementation
