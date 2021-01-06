@@ -485,7 +485,6 @@ thrust::lower_bound(rmm::exec_policy(stream),
 
 ## Namespaces
 
-
 ### External
 All public libcudf APIs should be placed in the `cudf` namespace*. Example:
 ```c++
@@ -494,18 +493,22 @@ namespace cudf{
 } // namespace cudf
 ```
 
-
-For most functions, the top-level `cudf` namespace is sufficient. However, for logically grouping a broad set of functions, further namespaces may be used. For example, there are numerous functions that are specific to columns of Strings. These functions are put in the `cudf::strings::` namespace. Similarly, functionality used exclusively for unit testing is placed in the `cudf::test::` namespace. 
-
-
+The top-level `cudf` namespace is sufficient for most of the public API. However, to logically 
+group a broad set of functions, further namespaces may be used. For example, there are numerous 
+functions that are specific to columns of Strings. These functions reside in the `cudf::strings::` 
+namespace. Similarly, functionality used exclusively for unit testing is in the `cudf::test::` 
+namespace. 
 
 ### Internal
 
-Many functions are not meant for public use. Such functions should be placed in either the `detail` or an *anonymous* namespace depending on the situation.
+Many functions are not meant for public use, so place them in either the `detail` or an *anonymous* 
+namespace, depending on the situation.
 
-#### `detail`
+#### `detail` namespace
 
-For functions or objects that will be used across *multiple* translation units (i.e., source files), they should be exposed in an internal header file and placed in the `detail` namespace. Example:
+Functions or objects that will be used across *multiple* translation units (i.e., source files), 
+should be exposed in an internal header file and placed in the `detail` namespace. Example:
+
 ```c++
 // some_utilities.hpp
 namespace cudf{
@@ -514,9 +517,12 @@ void reusable_helper_function(...);
 } // namespace detail
 } // namespace cudf
 ```
-#### Anonymous 
 
-If a function or class will only be used in a *single* translation unit, it should be put in an *anonymous* namespace within source file where it is used. Example:
+#### Anonymous namespace
+
+Functions or objects that will only be used in a *single* translation unit should be defined in an 
+*anonymous* namespace in the source file where it is used. Example:
+
 ```c++
 // some_file.cpp
 namespace{
