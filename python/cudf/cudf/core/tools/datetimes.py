@@ -517,6 +517,11 @@ class DateOffset(pd.DateOffset, metaclass=_UndoOffsetMeta):
         return kwargs
 
     def _datetime_binop(self, datetime_col, op):
+        if op not in {"add", "sub"}:
+            raise TypeError(
+                f"{op} not supported between {type(self).__name__}"
+                f" and {type(datetime_col).__name__}"
+            )
         if self._is_no_op:
             return datetime_col
         else:
@@ -553,3 +558,5 @@ class DateOffset(pd.DateOffset, metaclass=_UndoOffsetMeta):
             raise AttributeError("DateOffset objects are immutable.")
         else:
             object.__setattr__(self, name, value)
+
+    # TODO: implement __neg__
