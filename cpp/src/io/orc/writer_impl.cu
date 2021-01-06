@@ -270,8 +270,7 @@ void writer::impl::init_dictionaries(orc_column_view *columns,
                                      std::vector<int> const &str_col_ids,
                                      uint32_t *dict_data,
                                      uint32_t *dict_index,
-                                     hostdevice_vector<gpu::DictionaryChunk> &dict,
-                                     rmm::cuda_stream_view stream)
+                                     hostdevice_vector<gpu::DictionaryChunk> &dict)
 {
   const size_t num_rowgroups = dict.size() / str_col_ids.size();
 
@@ -318,8 +317,7 @@ void writer::impl::build_dictionaries(orc_column_view *columns,
                                       std::vector<uint32_t> const &stripe_list,
                                       hostdevice_vector<gpu::DictionaryChunk> const &dict,
                                       uint32_t *dict_index,
-                                      hostdevice_vector<gpu::StripeDictionary> &stripe_dict,
-                                      rmm::cuda_stream_view stream)
+                                      hostdevice_vector<gpu::StripeDictionary> &stripe_dict)
 {
   const auto num_rowgroups = dict.size() / str_col_ids.size();
 
@@ -544,8 +542,7 @@ rmm::device_buffer writer::impl::encode_columns(orc_column_view *columns,
                                                 std::vector<uint32_t> const &stripe_list,
                                                 std::vector<Stream> const &streams,
                                                 std::vector<int32_t> const &strm_ids,
-                                                hostdevice_vector<gpu::EncChunk> &chunks,
-                                                rmm::cuda_stream_view stream)
+                                                hostdevice_vector<gpu::EncChunk> &chunks)
 {
   // Allocate combined buffer for RLE data and string data output
   std::vector<size_t> strm_offsets(streams.size());
@@ -679,8 +676,7 @@ std::vector<StripeInformation> writer::impl::gather_stripes(
   size_t num_data_streams,
   std::vector<uint32_t> const &stripe_list,
   hostdevice_vector<gpu::EncChunk> &chunks,
-  hostdevice_vector<gpu::StripeStream> &strm_desc,
-  rmm::cuda_stream_view stream)
+  hostdevice_vector<gpu::StripeStream> &strm_desc)
 {
   std::vector<StripeInformation> stripes(stripe_list.size());
   size_t group        = 0;
@@ -740,8 +736,7 @@ std::vector<std::vector<uint8_t>> writer::impl::gather_statistic_blobs(
   size_t num_rowgroups,
   std::vector<uint32_t> const &stripe_list,
   std::vector<StripeInformation> const &stripes,
-  hostdevice_vector<gpu::EncChunk> &chunks,
-  rmm::cuda_stream_view stream)
+  hostdevice_vector<gpu::EncChunk> &chunks)
 {
   size_t num_stat_blobs = (1 + stripe_list.size()) * num_columns;
   size_t num_chunks     = chunks.size();
@@ -955,8 +950,7 @@ void writer::impl::write_data_stream(gpu::StripeStream const &strm_desc,
                                      uint8_t const *compressed_data,
                                      uint8_t *stream_out,
                                      StripeInformation &stripe,
-                                     std::vector<Stream> &streams,
-                                     rmm::cuda_stream_view stream)
+                                     std::vector<Stream> &streams)
 {
   const auto length                                    = strm_desc.stream_size;
   streams[chunk.strm_id[strm_desc.stream_type]].length = length;
@@ -1009,7 +1003,7 @@ writer::impl::impl(std::unique_ptr<data_sink> sink,
 
 writer::impl::~impl(){
     if (not is_closed) {
-        close()
+        close();
     }
 }
 
@@ -1025,7 +1019,7 @@ writer::impl::impl(std::unique_ptr<data_sink> sink,
     stream(stream),
     _mr(mr)
 {
-    if (opts.get_metadata() != nullptr) {
+    if (options.get_metadata() != nullptr) {
         user_metadata_with_nullability = *options.get_metadata();
         user_metadata = &user_metadata_with_nullability;
     }
@@ -1090,8 +1084,7 @@ void writer::impl::write_chunk(table_view const &table)
                       str_col_ids,
                       dict_data.data().get(),
                       dict_index.data().get(),
-                      dict,
-                      stream);
+                      dict);
   }
 
   // Decide stripe boundaries early on, based on uncompressed size
@@ -1130,8 +1123,7 @@ void writer::impl::write_chunk(table_view const &table)
                        stripe_list,
                        dict,
                        dict_index.data().get(),
-                       stripe_dict,
-                       stream);
+                       stripe_dict);
   }
 
   // Initialize streams
@@ -1150,8 +1142,7 @@ void writer::impl::write_chunk(table_view const &table)
                                stripe_list,
                                streams,
                                strm_ids,
-                               chunks,
-                               stream);
+                               chunks);
 
   // Assemble individual disparate column chunks into contiguous data streams
   const auto num_index_streams  = (num_columns + 1);
@@ -1164,8 +1155,7 @@ void writer::impl::write_chunk(table_view const &table)
                                 num_data_streams,
                                 stripe_list,
                                 chunks,
-                                strm_desc,
-                                stream);
+                                strm_desc);
 
   // Gather column statistics
   std::vector<std::vector<uint8_t>> column_stats;
@@ -1176,8 +1166,7 @@ void writer::impl::write_chunk(table_view const &table)
                                           num_rowgroups,
                                           stripe_list,
                                           stripes,
-                                          chunks,
-                                          stream);
+                                          chunks);
   }
 
   // Allocate intermediate output stream buffer
@@ -1282,8 +1271,7 @@ void writer::impl::write_chunk(table_view const &table)
                         static_cast<uint8_t *>(compressed_data.data()),
                         stream_output.get(),
                         stripes[stripe_id],
-                        streams,
-                        stream);
+                        streams);
     }
 
     // Write stripefooter consisting of stream information
@@ -1422,7 +1410,7 @@ writer::writer(std::unique_ptr<data_sink> sink,
                orc_writer_options const &options,
                SingleWriteMode mode,
                rmm::mr::device_memory_resource *mr,
-               rmm::cuda_stream_view stream = rmm::cuda_stream_default)
+               rmm::cuda_stream_view stream)
   : _impl(std::make_unique<impl>(std::move(sink), options, mode, mr, stream))
 {
 }
@@ -1432,7 +1420,7 @@ writer::writer(std::unique_ptr<data_sink> sink,
                chunked_orc_writer_options const &options,
                SingleWriteMode mode,
                rmm::mr::device_memory_resource *mr,
-               rmm::cuda_stream_view stream = rmm::cuda_stream_default)
+               rmm::cuda_stream_view stream)
   : _impl(std::make_unique<impl>(std::move(sink), options, mode, mr, stream))
 {
 }
@@ -1453,7 +1441,7 @@ void writer::write_chunk(table_view const &table)
 }
 
 // Forward to implementation
-void writer::close() { _impl->write_chunked_end(); }
+void writer::close() { _impl->close(); }
 
 }  // namespace orc
 }  // namespace detail

@@ -16,7 +16,6 @@
 
 #pragma once
 
-#include "chunked_state.hpp"
 #include "orc.h"
 #include "orc_gpu.h"
 
@@ -170,8 +169,7 @@ class writer::impl {
                                      size_t num_columns,
                                      size_t num_rows,
                                      std::vector<uint32_t> const& stripe_list,
-                                     std::vector<int32_t>& strm_ids,
-                                     const orc_chunked_state& state);
+                                     std::vector<int32_t>& strm_ids);
 
   /**
    * @brief Encodes the streams as a series of column data chunks
@@ -335,8 +333,6 @@ class writer::impl {
   bool enable_dictionary_ = true;
   bool enable_statistics_ = true;
 
-  /// Cuda stream to be used
-  rmm::cuda_stream_view stream;
   /// Overall file metadata.  Filled in during the process and written during write_chunked_end()
   cudf::io::orc::FileFooter ff;
   cudf::io::orc::Metadata md;

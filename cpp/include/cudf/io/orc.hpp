@@ -19,6 +19,7 @@
 #include <cudf/io/types.hpp>
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
+#include <cudf/io/detail/orc.hpp>
 
 #include <memory>
 #include <string>

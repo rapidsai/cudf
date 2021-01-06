@@ -16,7 +16,14 @@
 
 #pragma once
 
-#include <cudf/io/orc.hpp>
+#include <cudf/io/types.hpp>
+#include <cudf/table/table_view.hpp>
+#include <cudf/types.hpp>
+
+#include <memory>
+#include <string>
+#include <unordered_map>
+#include <vector>
 
 #include <rmm/cuda_stream_view.hpp>
 

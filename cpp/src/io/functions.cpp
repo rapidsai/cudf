@@ -19,6 +19,7 @@
 #include <cudf/io/avro.hpp>
 #include <cudf/io/csv.hpp>
 #include <cudf/io/datasource.hpp>
+#include <cudf/io/data_sink.hpp>
 #include <cudf/io/detail/avro.hpp>
 #include <cudf/io/detail/csv.hpp>
 #include <cudf/io/detail/json.hpp>
@@ -31,7 +32,6 @@
 #include <cudf/utilities/error.hpp>
 
 #include "io/orc/orc.h"
-#include "orc/chunked_state.hpp"
 #include "parquet/chunked_state.hpp"
 
 namespace cudf {
@@ -128,22 +128,23 @@ std::unique_ptr<reader> make_reader(source_info const& src_info,
   return std::make_unique<reader>(std::move(datasources), options, mr);
 }
 
-template <typename writer, typename writer_options>
-std::unique_ptr<writer> make_writer(sink_info const& sink,
-                                    writer_options const& options,
-                                    rmm::mr::device_memory_resource* mr)
+template <typename writer, typename... Ts>
+std::unique_ptr<writer> make_writer(sink_info const& sink, Ts&&... args)
 {
   if (sink.type == io_type::FILEPATH) {
-    return std::make_unique<writer>(cudf::io::data_sink::create(sink.filepath), options, mr);
+    return std::make_unique<writer>(cudf::io::data_sink::create(sink.filepath),
+                                    std::forward<Ts>(args)...);
   }
   if (sink.type == io_type::HOST_BUFFER) {
-    return std::make_unique<writer>(cudf::io::data_sink::create(sink.buffer), options, mr);
+    return std::make_unique<writer>(cudf::io::data_sink::create(sink.buffer),
+                                    std::forward<Ts>(args)...);
   }
   if (sink.type == io_type::VOID) {
-    return std::make_unique<writer>(cudf::io::data_sink::create(), options, mr);
+    return std::make_unique<writer>(cudf::io::data_sink::create(), std::forward<Ts>(args)...);
   }
   if (sink.type == io_type::USER_IMPLEMENTED) {
-    return std::make_unique<writer>(cudf::io::data_sink::create(sink.user_sink), options, mr);
+    return std::make_unique<writer>(cudf::io::data_sink::create(sink.user_sink),
+                                    std::forward<Ts>(args)...);
   }
   CUDF_FAIL("Unsupported sink type");
 }
