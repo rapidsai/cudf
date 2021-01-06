@@ -335,10 +335,8 @@ def get_units(value):
     return value
 
 
-class _DateOffsetScalars(object):
-    def __init__(self, scalars):
-        self._gpu_scalars = scalars
-
+class _DateOffsetScalars(dict):
+    pass
 
 class _UndoOffsetMeta(pd._libs.tslibs.offsets.OffsetMeta):
     """
@@ -530,17 +528,17 @@ class DateOffset(pd.DateOffset, metaclass=_UndoOffsetMeta):
         if self._is_no_op:
             return datetime_col
         else:
-            if "months" in self._scalars._gpu_scalars:
+            if "months" in self._scalars:
                 rhs = self._generate_months_column(len(datetime_col), op)
                 datetime_col = libcudf.datetime.add_months(datetime_col, rhs)
-            if "nanoseconds" in self._scalars._gpu_scalars:
+            if "nanoseconds" in self._scalars:
                 datetime_col = datetime_col + self._generate_nanos_column(
                     len(datetime_col), op
                 )
             return datetime_col
 
     def _generate_months_column(self, size, op):
-        months = self._scalars._gpu_scalars["months"]
+        months = self._scalars["months"]
         months = -months if op == "sub" else months
         # TODO: pass a scalar instead of constructing a column
         # https://github.com/rapidsai/cudf/issues/6990
@@ -548,7 +546,7 @@ class DateOffset(pd.DateOffset, metaclass=_UndoOffsetMeta):
         return col
 
     def _generate_nanos_column(self, size, op):
-        nanos = self._scalars._gpu_scalars["nanoseconds"]
+        nanos = self._scalars["nanoseconds"]
         nanos = -nanos if op == "sub" else nanos
         return cudf.core.column.as_column(nanos, length=size)
 
@@ -564,4 +562,14 @@ class DateOffset(pd.DateOffset, metaclass=_UndoOffsetMeta):
         else:
             object.__setattr__(self, name, value)
 
-    # TODO: implement __neg__
+
+    def from_scalars(self, scalars):
+        off = object.__new__(DateOffset)
+        off._scalars = scalars
+        return off
+
+    def __neg__(self):
+        new_scalars = _DateOffsetScalars(
+            {k: -v for k, v in self._scalars.items()}
+        )
+        return DateOffset.from_scalars(new_scalars)
