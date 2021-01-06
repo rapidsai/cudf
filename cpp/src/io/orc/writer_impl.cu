@@ -49,13 +49,13 @@ struct row_group_index_info {
 namespace {
 /**
  * @brief Helper for pinned host memory
- **/
+ */
 template <typename T>
 using pinned_buffer = std::unique_ptr<T, decltype(&cudaFreeHost)>;
 
 /**
  * @brief Function that translates GDF compression to ORC compression
- **/
+ */
 orc::CompressionKind to_orc_compression(compression_type compression)
 {
   switch (compression) {
@@ -68,7 +68,7 @@ orc::CompressionKind to_orc_compression(compression_type compression)
 
 /**
  * @brief Function that translates GDF dtype to ORC datatype
- **/
+ */
 constexpr orc::TypeKind to_orc_type(cudf::type_id id)
 {
   switch (id) {
@@ -91,7 +91,7 @@ constexpr orc::TypeKind to_orc_type(cudf::type_id id)
 
 /**
  * @brief Function that translates time unit to nanoscale multiple
- **/
+ */
 template <typename T>
 constexpr T to_clockscale(cudf::type_id timestamp_id)
 {
@@ -110,16 +110,19 @@ constexpr T to_clockscale(cudf::type_id timestamp_id)
  * @brief Helper kernel for converting string data/offsets into nvstrdesc
  * REMOVEME: Once we eliminate the legacy readers/writers, the kernels could be
  * made to use the native offset+data layout.
- **/
+ */
 __global__ void stringdata_to_nvstrdesc(gpu::nvstrdesc_s *dst,
                                         const size_type *offsets,
                                         const char *strdata,
                                         const uint32_t *nulls,
+                                        const size_type column_offset,
                                         size_type column_size)
 {
   size_type row = blockIdx.x * blockDim.x + threadIdx.x;
   if (row < column_size) {
-    uint32_t is_valid = (nulls) ? (nulls[row >> 5] >> (row & 0x1f)) & 1 : 1;
+    uint32_t is_valid = (nulls != nullptr)
+                          ? (nulls[(row + column_offset) / 32] >> ((row + column_offset) % 32)) & 1
+                          : 1;
     size_t count;
     const char *ptr;
     if (is_valid) {
@@ -138,13 +141,13 @@ __global__ void stringdata_to_nvstrdesc(gpu::nvstrdesc_s *dst,
 
 /**
  * @brief Helper class that adds ORC-specific column info
- **/
+ */
 class orc_column_view {
  public:
   /**
    * @brief Constructor that extracts out the string position + length pairs
    * for building dictionaries for string columns
-   **/
+   */
   explicit orc_column_view(size_t id,
                            size_t str_id,
                            column_view const &col,
@@ -158,6 +161,7 @@ class orc_column_view {
       _null_count(col.null_count()),
       _data(col.head<uint8_t>() + col.offset() * _type_width),
       _nulls(col.nullable() ? col.null_mask() : nullptr),
+      _column_offset(col.offset()),
       _clockscale(to_clockscale<uint8_t>(col.type().id())),
       _type_kind(to_orc_type(col.type().id()))
   {
@@ -170,6 +174,7 @@ class orc_column_view {
         view.offsets().data<size_type>() + view.offset(),
         view.chars().data<char>(),
         _nulls,
+        _column_offset,
         _data_count);
       _data = _indexes.data();
 
@@ -189,7 +194,7 @@ class orc_column_view {
 
   /**
    * @brief Function that associates an existing dictionary chunk allocation
-   **/
+   */
   void attach_dict_chunk(gpu::DictionaryChunk *host_dict, gpu::DictionaryChunk *dev_dict)
   {
     dict   = host_dict;
@@ -204,7 +209,7 @@ class orc_column_view {
 
   /**
    * @brief Function that associates an existing stripe dictionary allocation
-   **/
+   */
   void attach_stripe_dict(gpu::StripeDictionary *host_stripe_dict,
                           gpu::StripeDictionary *dev_stripe_dict)
   {
@@ -224,6 +229,7 @@ class orc_column_view {
   bool nullable() const noexcept { return (_nulls != nullptr); }
   void const *data() const noexcept { return _data; }
   uint32_t const *nulls() const noexcept { return _nulls; }
+  size_type column_offset() const noexcept { return _column_offset; }
   uint8_t clockscale() const noexcept { return _clockscale; }
 
   void set_orc_encoding(ColumnEncodingKind e) { _encoding_kind = e; }
@@ -237,12 +243,13 @@ class orc_column_view {
   size_t _str_id    = 0;
   bool _string_type = false;
 
-  size_t _type_width     = 0;
-  size_t _data_count     = 0;
-  size_t _null_count     = 0;
-  void const *_data      = nullptr;
-  uint32_t const *_nulls = nullptr;
-  uint8_t _clockscale    = 0;
+  size_t _type_width       = 0;
+  size_t _data_count       = 0;
+  size_t _null_count       = 0;
+  void const *_data        = nullptr;
+  uint32_t const *_nulls   = nullptr;
+  size_type _column_offset = 0;
+  uint8_t _clockscale      = 0;
 
   // ORC-related members
   std::string _name{};
@@ -277,6 +284,7 @@ void writer::impl::init_dictionaries(orc_column_view *columns,
     for (size_t g = 0; g < num_rowgroups; g++) {
       auto *ck              = &dict[g * str_col_ids.size() + i];
       ck->valid_map_base    = str_column.nulls();
+      ck->column_offset     = str_column.column_offset();
       ck->column_data_base  = str_column.data();
       ck->dict_data         = dict_data + i * num_rows + g * row_index_stride_;
       ck->dict_index        = dict_index + i * num_rows;  // Indexed by abs row
@@ -579,12 +587,14 @@ rmm::device_buffer writer::impl::encode_columns(orc_column_view *columns,
       ck->type_kind     = columns[i].orc_kind();
       if (ck->type_kind == TypeKind::STRING) {
         ck->valid_map_base   = columns[i].nulls();
+        ck->column_offset    = columns[i].column_offset();
         ck->column_data_base = (ck->encoding_kind == DICTIONARY_V2)
                                  ? columns[i].host_stripe_dict(stripe_id)->dict_index
                                  : columns[i].data();
         ck->dtype_len = 1;
       } else {
         ck->valid_map_base   = columns[i].nulls();
+        ck->column_offset    = columns[i].column_offset();
         ck->column_data_base = columns[i].data();
         ck->dtype_len        = columns[i].type_width();
       }
@@ -760,6 +770,7 @@ std::vector<std::vector<uint8_t>> writer::impl::gather_statistic_blobs(
     desc->num_rows         = columns[i].data_count();
     desc->num_values       = columns[i].data_count();
     desc->valid_map_base   = columns[i].nulls();
+    desc->column_offset    = columns[i].column_offset();
     desc->column_data_base = columns[i].data();
     if (desc->stats_dtype == dtype_timestamp64) {
       // Timestamp statistics are in milliseconds

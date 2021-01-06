@@ -136,18 +136,6 @@ def to_csv(
                 "Dataframe doesn't have the labels provided in columns"
             )
 
-    if sep == "-":
-        # TODO: Remove this error once following issue is fixed:
-        # https://github.com/rapidsai/cudf/issues/6699
-        if any(
-            isinstance(col, cudf.core.column.DatetimeColumn)
-            for col in df._data.columns
-        ):
-            raise ValueError(
-                "sep cannot be '-' when writing a datetime64 dtype to csv, "
-                "refer to: https://github.com/rapidsai/cudf/issues/6699"
-            )
-
     # TODO: Need to typecast categorical columns to the underlying
     # categories dtype to write the actual data to csv. Remove this
     # workaround once following issue is fixed:

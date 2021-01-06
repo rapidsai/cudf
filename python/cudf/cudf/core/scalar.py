@@ -39,7 +39,7 @@ class Scalar(object):
         >>> df = cudf.DataFrame({'a':[1,2,3], 'b':[4.5, 5.5, 6.5]})
         >>> slr = cudf.Scalar(10, dtype='uint8')
         >>> df - slr
-        a    b
+           a    b
         0 -9 -5.5
         1 -8 -4.5
         2 -7 -3.5

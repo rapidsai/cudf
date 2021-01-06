@@ -49,13 +49,13 @@ using namespace cudf::io;
 namespace {
 /**
  * @brief Helper for pinned host memory
- **/
+ */
 template <typename T>
 using pinned_buffer = std::unique_ptr<T, decltype(&cudaFreeHost)>;
 
 /**
  * @brief Function that translates GDF compression to parquet compression
- **/
+ */
 parquet::Compression to_parquet_compression(compression_type compression)
 {
   switch (compression) {
@@ -124,7 +124,7 @@ column_view get_leaf_col(column_view col)
  * @brief Helper kernel for converting string data/offsets into nvstrdesc
  * REMOVEME: Once we eliminate the legacy readers/writers, the kernels could be
  * made to use the native offset+data layout.
- **/
+ */
 __global__ void stringdata_to_nvstrdesc(gpu::nvstrdesc_s *dst,
                                         const size_type *offsets,
                                         const char *strdata,
@@ -152,18 +152,20 @@ __global__ void stringdata_to_nvstrdesc(gpu::nvstrdesc_s *dst,
 
 /**
  * @brief Helper class that adds parquet-specific column info
- **/
+ */
 class parquet_column_view {
  public:
   /**
    * @brief Constructor that extracts out the string position + length pairs
    * for building dictionaries for string columns
-   **/
+   */
   explicit parquet_column_view(size_t id,
                                column_view const &col,
                                std::vector<bool> const &nullability,
                                const table_metadata *metadata,
                                bool int96_timestamps,
+                               std::vector<uint8_t> const &decimal_precision,
+                               uint &decimal_precision_idx,
                                rmm::cuda_stream_view stream)
     : _col(col),
       _leaf_col(get_leaf_col(col)),
@@ -175,6 +177,7 @@ class parquet_column_view {
       _null_count(_leaf_col.null_count()),
       _data(col.head<uint8_t>() + col.offset() * _type_width),
       _nulls(_leaf_col.nullable() ? _leaf_col.null_mask() : nullptr),
+      _offset(col.offset()),
       _converted_type(ConvertedType::UNKNOWN),
       _ts_scale(0),
       _dremel_offsets(0, stream),
@@ -294,6 +297,28 @@ class parquet_column_view {
         _converted_type = ConvertedType::UTF8;
         _stats_dtype    = statistics_dtype::dtype_string;
         break;
+      case cudf::type_id::DECIMAL32:
+        _physical_type  = Type::INT32;
+        _converted_type = ConvertedType::DECIMAL;
+        _stats_dtype    = statistics_dtype::dtype_int32;
+        _decimal_scale  = -_leaf_col.type().scale();  // parquet and cudf disagree about scale signs
+        CUDF_EXPECTS(decimal_precision.size() > decimal_precision_idx,
+                     "Not enough decimal precision values passed for data!");
+        CUDF_EXPECTS(decimal_precision[decimal_precision_idx] > _decimal_scale,
+                     "Precision must be greater than scale!");
+        _decimal_precision = decimal_precision[decimal_precision_idx++];
+        break;
+      case cudf::type_id::DECIMAL64:
+        _physical_type  = Type::INT64;
+        _converted_type = ConvertedType::DECIMAL;
+        _stats_dtype    = statistics_dtype::dtype_decimal64;
+        _decimal_scale  = -_leaf_col.type().scale();  // parquet and cudf disagree about scale signs
+        CUDF_EXPECTS(decimal_precision.size() > decimal_precision_idx,
+                     "Not enough decimal precision values passed for data!");
+        CUDF_EXPECTS(decimal_precision[decimal_precision_idx] > _decimal_scale,
+                     "Precision must be greater than scale!");
+        _decimal_precision = decimal_precision[decimal_precision_idx++];
+        break;
       default:
         _physical_type = UNDEFINED_TYPE;
         _stats_dtype   = dtype_none;
@@ -378,7 +403,10 @@ class parquet_column_view {
   bool nullable() const { return _nullability.back(); }
   void const *data() const noexcept { return _data; }
   uint32_t const *nulls() const noexcept { return _nulls; }
+  size_type offset() const noexcept { return _offset; }
   bool level_nullable(size_t level) const { return _nullability[level]; }
+  int32_t decimal_scale() const noexcept { return _decimal_scale; }
+  uint8_t decimal_precision() const noexcept { return _decimal_precision; }
 
   // List related data
   column_view cudf_col() const noexcept { return _col; }
@@ -435,6 +463,7 @@ class parquet_column_view {
   size_t _null_count     = 0;
   void const *_data      = nullptr;
   uint32_t const *_nulls = nullptr;
+  size_type _offset      = 0;
 
   // parquet-related members
   std::string _name{};
@@ -463,6 +492,10 @@ class parquet_column_view {
 
   // String-related members
   rmm::device_buffer _indexes;
+
+  // Decimal-related members
+  int32_t _decimal_scale     = 0;
+  uint8_t _decimal_precision = 0;
 };
 
 void writer::impl::init_page_fragments(hostdevice_vector<gpu::PageFragment> &frag,
@@ -653,10 +686,11 @@ std::unique_ptr<std::vector<uint8_t>> writer::impl::write(
   const table_metadata *metadata,
   bool return_filemetadata,
   const std::string &column_chunks_file_path,
-  bool int96_timestamps,
+  std::vector<uint8_t> const &decimal_precisions,
   rmm::cuda_stream_view stream)
 {
-  pq_chunked_state state{metadata, SingleWriteMode::YES, int96_timestamps, stream};
+  pq_chunked_state state{
+    metadata, SingleWriteMode::YES, int96_timestamps, decimal_precisions, stream};
 
   write_chunked_begin(state);
   write_chunk(table, state);
@@ -694,6 +728,8 @@ void writer::impl::write_chunk(table_view const &table, pq_chunked_state &state)
       ? std::vector<std::vector<bool>>{}
       : get_per_column_nullability(table, state.user_metadata_with_nullability.column_nullable);
 
+  uint decimal_precision_idx = 0;
+
   for (auto it = table.begin(); it < table.end(); ++it) {
     const auto col        = *it;
     const auto current_id = parquet_columns.size();
@@ -711,8 +747,13 @@ void writer::impl::write_chunk(table_view const &table, pq_chunked_state &state)
                                  this_column_nullability,
                                  state.user_metadata,
                                  state.int96_timestamps,
+                                 state._decimal_precision,
+                                 decimal_precision_idx,
                                  state.stream);
   }
+
+  CUDF_EXPECTS(decimal_precision_idx == state._decimal_precision.size(),
+               "Too many decimal precision values!");
 
   // first call. setup metadata. num_rows will get incremented as write_chunk is
   // called multiple times.
@@ -764,7 +805,9 @@ void writer::impl::write_chunk(table_view const &table, pq_chunked_state &state)
         list_schema[nesting_depth * 2].type = physical_type;
         list_schema[nesting_depth * 2].converted_type =
           physical_type == parquet::Type::INT96 ? ConvertedType::UNKNOWN : col.converted_type();
-        list_schema[nesting_depth * 2].num_children = 0;
+        list_schema[nesting_depth * 2].num_children      = 0;
+        list_schema[nesting_depth * 2].decimal_precision = col.decimal_precision();
+        list_schema[nesting_depth * 2].decimal_scale     = col.decimal_scale();
 
         std::vector<std::string> path_in_schema;
         std::transform(
@@ -787,8 +830,10 @@ void writer::impl::write_chunk(table_view const &table, pq_chunked_state &state)
             ? OPTIONAL
             : REQUIRED;
 
-        col_schema.name         = col.name();
-        col_schema.num_children = 0;  // Leaf node
+        col_schema.name              = col.name();
+        col_schema.num_children      = 0;  // Leaf node
+        col_schema.decimal_precision = col.decimal_precision();
+        col_schema.decimal_scale     = col.decimal_scale();
 
         this_table_schema.push_back(std::move(col_schema));
       }
@@ -830,6 +875,7 @@ void writer::impl::write_chunk(table_view const &table, pq_chunked_state &state)
     *desc                  = gpu::EncColumnDesc{};  // Zero out all fields
     desc->column_data_base = col.data();
     desc->valid_map_base   = col.nulls();
+    desc->column_offset    = col.offset();
     desc->stats_dtype      = col.stats_type();
     desc->ts_scale         = col.ts_scale();
     // TODO (dm): Enable dictionary for list after refactor
@@ -1221,11 +1267,11 @@ std::unique_ptr<std::vector<uint8_t>> writer::write(table_view const &table,
                                                     const table_metadata *metadata,
                                                     bool return_filemetadata,
                                                     const std::string column_chunks_file_path,
-                                                    bool int96_timestamps,
+                                                    std::vector<uint8_t> const &decimal_precisions,
                                                     rmm::cuda_stream_view stream)
 {
   return _impl->write(
-    table, metadata, return_filemetadata, column_chunks_file_path, int96_timestamps, stream);
+    table, metadata, return_filemetadata, column_chunks_file_path, decimal_precisions, stream);
 }
 
 // Forward to implementation

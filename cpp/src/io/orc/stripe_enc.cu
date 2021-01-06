@@ -15,6 +15,8 @@
  */
 
 #include <cub/cub.cuh>
+#include <cudf/column/column_device_view.cuh>
+#include <cudf/utilities/bit.hpp>
 #include <io/utilities/block_utils.cuh>
 #include <rmm/cuda_stream_view.hpp>
 #include "orc_common.h"
@@ -120,8 +122,7 @@ static inline __device__ uint32_t CountLeadingBytes64(uint64_t v) { return __clz
  * @param[in] inpos position in input buffer
  * @param[in] count number of bytes to encode
  * @param[in] t thread id
- *
- **/
+ */
 template <StreamIndexType cid, uint32_t inmask>
 static __device__ void StoreBytes(
   orcenc_state_s *s, const uint8_t *inbuf, uint32_t inpos, uint32_t count, int t)
@@ -152,8 +153,7 @@ static __device__ void StoreBytes(
  * @param[in] t thread id
  *
  * @return number of input values encoded
- *
- **/
+ */
 template <StreamIndexType cid, uint32_t inmask>
 static __device__ uint32_t ByteRLE(
   orcenc_state_s *s, const uint8_t *inbuf, uint32_t inpos, uint32_t numvals, uint32_t flush, int t)
@@ -264,13 +264,13 @@ static __device__ uint32_t ByteRLE(
 
 /**
  * @brief Maps the symbol size in bytes to RLEv2 5-bit length code
- **/
+ */
 static const __device__ __constant__ uint8_t kByteLengthToRLEv2_W[9] = {
   0, 7, 15, 23, 27, 28, 29, 30, 31};
 
 /**
  * @brief Encode a varint value, return the number of bytes written
- **/
+ */
 static inline __device__ uint32_t StoreVarint(uint8_t *dst, uint64_t v)
 {
   uint32_t bytecnt = 0;
@@ -354,8 +354,7 @@ static inline __device__ void StoreBitsBigEndian(
  * @param[in] temp_storage_half shared memory storage to performance half warp reduce
  *
  * @return number of input values encoded
- *
- **/
+ */
 template <StreamIndexType cid,
           class T,
           bool is_signed,
@@ -597,8 +596,7 @@ static __device__ uint32_t IntegerRLE(orcenc_state_s *s,
  * @param[in] strenc string encoder state
  * @param[in] len(t) string length (per thread)
  * @param[in] t thread id
- *
- **/
+ */
 static __device__ void StoreStringData(uint8_t *dst,
                                        strdata_enc_state_s *strenc,
                                        uint32_t len,
@@ -638,8 +636,7 @@ static __device__ void StoreStringData(uint8_t *dst,
  * @param[in] vals input values
  * @param[in] numvals number of values
  * @param[in] t thread id
- *
- **/
+ */
 template <class T>
 inline __device__ void lengths_to_positions(volatile T *vals, uint32_t numvals, unsigned int t)
 {
@@ -651,7 +648,7 @@ inline __device__ void lengths_to_positions(volatile T *vals, uint32_t numvals, 
 
 /**
  * @brief Timestamp scale table (powers of 10)
- **/
+ */
 static const __device__ __constant__ int32_t kTimeScale[10] = {
   1000000000, 100000000, 10000000, 1000000, 100000, 10000, 1000, 100, 10, 1};
 
@@ -661,8 +658,7 @@ static const __device__ __constant__ int32_t kTimeScale[10] = {
  * @param[in] chunks EncChunk device array [rowgroup][column]
  * @param[in] num_columns Number of columns
  * @param[in] num_rowgroups Number of row groups
- *
- **/
+ */
 // blockDim {512,1,1}
 template <int block_size>
 __global__ void __launch_bounds__(block_size)
@@ -712,10 +708,12 @@ __global__ void __launch_bounds__(block_size)
         uint8_t valid = 0;
         if (row < s->chunk.valid_rows) {
           if (s->chunk.valid_map_base) {
-            uint8_t valid_map[4];
-            auto const valid_map_byte_idx = row >> 3;
-            memcpy(valid_map, &s->chunk.valid_map_base[valid_map_byte_idx / 4], 4);
-            valid = valid_map[valid_map_byte_idx % 4];
+            size_type current_valid_offset = row + s->chunk.column_offset;
+            size_type next_valid_offset    = current_valid_offset + min(32, s->chunk.valid_rows);
+
+            bitmask_type mask = cudf::detail::get_mask_offset_word(
+              s->chunk.valid_map_base, 0, current_valid_offset, next_valid_offset);
+            valid = 0xff & mask;
           } else {
             valid = 0xff;
           }
@@ -971,8 +969,7 @@ __global__ void __launch_bounds__(block_size)
  * @param[in] stripes Stripe dictionaries device array [stripe][string_column]
  * @param[in] chunks EncChunk device array [rowgroup][column]
  * @param[in] num_columns Number of columns
- *
- **/
+ */
 // blockDim {512,1,1}
 template <int block_size>
 __global__ void __launch_bounds__(block_size)
@@ -1059,8 +1056,7 @@ __global__ void __launch_bounds__(block_size)
  * @param[in] chunks EncChunk device array [rowgroup][column]
  * @param[in] num_stripe_streams Total number of streams
  * @param[in] num_columns Number of columns
- *
- **/
+ */
 // blockDim {1024,1,1}
 __global__ void __launch_bounds__(1024)
   gpuCompactOrcDataStreams(StripeStream *strm_desc, EncChunk *chunks, uint32_t num_columns)
@@ -1118,8 +1114,7 @@ __global__ void __launch_bounds__(1024)
  * @param[out] comp_out Per-block compression status
  * @param[in] compressed_bfr Compression output buffer
  * @param[in] comp_blk_size Compression block size
- *
- **/
+ */
 // blockDim {256,1,1}
 __global__ void __launch_bounds__(256) gpuInitCompressionBlocks(StripeStream *strm_desc,
                                                                 EncChunk *chunks,
@@ -1168,8 +1163,7 @@ __global__ void __launch_bounds__(256) gpuInitCompressionBlocks(StripeStream *st
  * @param[in] comp_out Per-block compression status
  * @param[in] compressed_bfr Compression output buffer
  * @param[in] comp_blk_size Compression block size
- *
- **/
+ */
 // blockDim {1024,1,1}
 __global__ void __launch_bounds__(1024) gpuCompactCompressedBlocks(StripeStream *strm_desc,
                                                                    gpu_inflate_input_s *comp_in,

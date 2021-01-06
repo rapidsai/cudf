@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2020, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -167,6 +167,27 @@ TEST_F(groupby_count_string_test, basic)
     test_single_agg(keys, vals, expect_keys, expect_vals, std::move(agg1), force_use_sort_impl::YES);
 }
 // clang-format on
+
+struct groupby_dictionary_count_test : public cudf::test::BaseFixture {
+};
+
+TEST_F(groupby_dictionary_count_test, basic)
+{
+  using K = int32_t;
+  using V = std::string;
+  using R = cudf::detail::target_type_t<V, aggregation::COUNT_VALID>;
+
+  // clang-format off
+  strings_column_wrapper       keys{"1", "3", "3", "5", "5", "0"};
+  dictionary_column_wrapper<K> vals{ 1,   1,   1,   1,   1,   1};
+  strings_column_wrapper             expect_keys{"0", "1", "3", "5"};
+  fixed_width_column_wrapper<R, int> expect_vals{ 1,   1,   2,   2};
+  // clang-format on
+
+  test_single_agg(keys, vals, expect_keys, expect_vals, cudf::make_count_aggregation());
+  test_single_agg(
+    keys, vals, expect_keys, expect_vals, cudf::make_count_aggregation(), force_use_sort_impl::YES);
+}
 
 }  // namespace test
 }  // namespace cudf

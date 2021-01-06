@@ -64,7 +64,7 @@ namespace test {
  * @param f The unary function to apply to the counting iterator.
  * This should be a host function and not a device function.
  * @return auto A transform iterator that applies `f` to a counting iterator
- **/
+ */
 template <typename UnaryFunction>
 auto make_counting_transform_iterator(cudf::size_type start, UnaryFunction f)
 {
@@ -79,7 +79,7 @@ namespace detail {
  * API expecting a `column_view` or `mutable_column_view`.
  *
  * `column_wrapper` should not be instantiated directly.
- **/
+ */
 class column_wrapper {
  public:
   /**
@@ -88,7 +88,7 @@ class column_wrapper {
    * Allows passing in a `column_wrapper` (or any class deriving from
    * `column_wrapper`) to be passed into any API expecting a `column_view`
    * parameter.
-   **/
+   */
   operator column_view() const { return wrapped->view(); }
 
   /**
@@ -97,12 +97,12 @@ class column_wrapper {
    * Allows passing in a `column_wrapper` (or any class deriving from
    * `column_wrapper`) to be passed into any API expecting a
    * `mutable_column_view` parameter.
-   **/
+   */
   operator mutable_column_view() { return wrapped->mutable_view(); }
 
   /**
    * @brief Releases internal unique_ptr to wrapped column
-   **/
+   */
   std::unique_ptr<cudf::column> release() { return std::move(wrapped); }
 
  protected:
@@ -111,7 +111,7 @@ class column_wrapper {
 
 /**
  * @brief Convert between source and target types when they differ and where possible.
- **/
+ */
 template <typename From, typename To>
 struct fixed_width_type_converter {
   // Are the types same - simply copy elements from [begin, end) to out
@@ -156,7 +156,7 @@ struct fixed_width_type_converter {
  * @param begin Beginning of the sequence of elements
  * @param end End of the sequence of elements
  * @return rmm::device_buffer Buffer containing all elements in the range `[begin,end)`
- **/
+ */
 template <typename ElementTo,
           typename ElementFrom,
           typename InputIterator,
@@ -181,7 +181,7 @@ rmm::device_buffer make_elements(InputIterator begin, InputIterator end)
  * @param begin Beginning of the sequence of elements
  * @param end End of the sequence of elements
  * @return rmm::device_buffer Buffer containing all elements in the range `[begin,end)`
- **/
+ */
 template <typename ElementTo,
           typename ElementFrom,
           typename InputIterator,
@@ -206,7 +206,7 @@ rmm::device_buffer make_elements(InputIterator begin, InputIterator end)
  * @param begin Beginning of the sequence of elements
  * @param end End of the sequence of elements
  * @return rmm::device_buffer Buffer containing all elements in the range `[begin,end)`
- **/
+ */
 template <typename ElementTo,
           typename ElementFrom,
           typename InputIterator,
@@ -235,7 +235,7 @@ rmm::device_buffer make_elements(InputIterator begin, InputIterator end)
  * @param end The end of the validity indicator sequence
  * @return std::vector Contains a bitmask where bits are set for every
  * element in `[begin,end)` that evaluated to `true`.
- **/
+ */
 template <typename ValidityIterator>
 std::vector<bitmask_type> make_null_mask_vector(ValidityIterator begin, ValidityIterator end)
 {
@@ -261,7 +261,7 @@ std::vector<bitmask_type> make_null_mask_vector(ValidityIterator begin, Validity
  * @param end The end of the validity indicator sequence
  * @return rmm::device_buffer Contains a bitmask where bits are set for every
  * element in `[begin,end)` that evaluated to `true`.
- **/
+ */
 template <typename ValidityIterator>
 rmm::device_buffer make_null_mask(ValidityIterator begin, ValidityIterator end)
 {
@@ -283,12 +283,12 @@ rmm::device_buffer make_null_mask(ValidityIterator begin, ValidityIterator end)
  * @param end The end of the sequence of values to convert to strings
  * @param v The beginning of the validity indicator sequence
  * @return std::pair containing the vector of chars and offsets
- **/
+ */
 template <typename StringsIterator, typename ValidityIterator>
 auto make_chars_and_offsets(StringsIterator begin, StringsIterator end, ValidityIterator v)
 {
   std::vector<char> chars{};
-  std::vector<int32_t> offsets(1, 0);
+  std::vector<cudf::size_type> offsets(1, 0);
   for (auto str = begin; str < end; ++str) {
     std::string tmp = (*v++) ? std::string(*str) : std::string{};
     chars.insert(chars.end(), std::cbegin(tmp), std::cend(tmp));
@@ -305,13 +305,13 @@ auto make_chars_and_offsets(StringsIterator begin, StringsIterator end, Validity
  * @tparam ElementTo The fixed-width element type that is created
  * @tparam SourceElementT The fixed-width element type that is used to create elements of type
  * `ElementTo`
- **/
+ */
 template <typename ElementTo, typename SourceElementT = ElementTo>
 class fixed_width_column_wrapper : public detail::column_wrapper {
  public:
   /**
    * @brief Default constructor initializes an empty column with proper dtype
-   **/
+   */
   fixed_width_column_wrapper() : column_wrapper{}
   {
     std::vector<ElementTo> empty;
@@ -338,7 +338,7 @@ class fixed_width_column_wrapper : public detail::column_wrapper {
    *
    * @param begin The beginning of the sequence of elements
    * @param end The end of the sequence of elements
-   **/
+   */
   template <typename InputIterator>
   fixed_width_column_wrapper(InputIterator begin, InputIterator end) : column_wrapper{}
   {
@@ -370,7 +370,7 @@ class fixed_width_column_wrapper : public detail::column_wrapper {
    * @param begin The beginning of the sequence of elements
    * @param end The end of the sequence of elements
    * @param v The beginning of the sequence of validity indicators
-   **/
+   */
   template <typename InputIterator, typename ValidityIterator>
   fixed_width_column_wrapper(InputIterator begin, InputIterator end, ValidityIterator v)
     : column_wrapper{}
@@ -394,7 +394,7 @@ class fixed_width_column_wrapper : public detail::column_wrapper {
    * @endcode
    *
    * @param element_list The list of elements
-   **/
+   */
   template <typename ElementFrom>
   fixed_width_column_wrapper(std::initializer_list<ElementFrom> elements)
     : fixed_width_column_wrapper(std::cbegin(elements), std::cend(elements))
@@ -417,7 +417,7 @@ class fixed_width_column_wrapper : public detail::column_wrapper {
    *
    * @param elements The list of elements
    * @param validity The list of validity indicator booleans
-   **/
+   */
   template <typename ElementFrom>
   fixed_width_column_wrapper(std::initializer_list<ElementFrom> elements,
                              std::initializer_list<bool> validity)
@@ -441,7 +441,7 @@ class fixed_width_column_wrapper : public detail::column_wrapper {
    * convertible to `bool`
    * @param element_list The list of elements
    * @param v The beginning of the sequence of validity indicators
-   **/
+   */
   template <typename ValidityIterator, typename ElementFrom>
   fixed_width_column_wrapper(std::initializer_list<ElementFrom> element_list, ValidityIterator v)
     : fixed_width_column_wrapper(std::cbegin(element_list), std::cend(element_list), v)
@@ -465,7 +465,7 @@ class fixed_width_column_wrapper : public detail::column_wrapper {
    * @param begin The beginning of the sequence of elements
    * @param end The end of the sequence of elements
    * @param validity The list of validity indicator booleans
-   **/
+   */
   template <typename InputIterator>
   fixed_width_column_wrapper(InputIterator begin,
                              InputIterator end,
@@ -506,6 +506,22 @@ class fixed_width_column_wrapper : public detail::column_wrapper {
 template <typename Rep>
 class fixed_point_column_wrapper : public detail::column_wrapper {
  public:
+  /**
+   * @brief Construct a non-nullable column of the decimal elements in the range `[begin,end)`.
+   *
+   * Example:
+   * @code{.cpp}
+   * // Creates a non-nullable column of DECIMAL32 elements with 5 elements: {0, 2, 4, 6, 8}
+   * auto elements = make_counting_transform_iterator(0, [](auto i) { return i * 2;});
+   * auto w = fixed_point_column_wrapper<int32_t>(elements, elements + 5, scale_type{0});
+   * @endcode
+   *
+   * @tparam FixedPointRepIterator Iterator for fixed_point::rep
+   *
+   * @param begin The beginning of the sequence of elements
+   * @param end   The end of the sequence of elements
+   * @param scale The scale of the elements in the column
+   */
   template <typename FixedPointRepIterator>
   fixed_point_column_wrapper(FixedPointRepIterator begin,
                              FixedPointRepIterator end,
@@ -524,6 +540,18 @@ class fixed_point_column_wrapper : public detail::column_wrapper {
       new cudf::column{data_type, size, rmm::device_buffer{elements.data(), size * sizeof(Rep)}});
   }
 
+  /**
+   * @brief Construct a non-nullable column of decimal elements from an initializer list.
+   *
+   * Example:
+   * @code{.cpp}
+   * // Creates a non-nullable `decimal32` column with 4 elements: {42.0, 4.2, 0.4}
+   * auto const col = fixed_point_column_wrapper<int32_t>{{420, 42, 4}, scale_type{-1}};
+   * @endcode
+   *
+   * @param values The initializer list of already shifted values
+   * @param scale  The scale of the elements in the column
+   */
   fixed_point_column_wrapper(std::initializer_list<Rep> values, numeric::scale_type scale)
     : fixed_point_column_wrapper(std::cbegin(values), std::cend(values), scale)
   {
@@ -543,8 +571,8 @@ class fixed_point_column_wrapper : public detail::column_wrapper {
    * // Creates a nullable column of DECIMAL32 elements with 5 elements: {null, 100, null, 300,
    * null}
    * auto elements = make_counting_transform_iterator(0, [](auto i){ return i; });
-   * auto validity = make_counting_transform_iterator(0, [](auto i){ return i%2; });
-   * fixed_point_column_wrapper<int32_t> w(elements, elements + 5, validity, 2);
+   * auto validity = make_counting_transform_iterator(0, [](auto i){ return i % 2; });
+   * fixed_point_column_wrapper<int32_t> w(elements, elements + 5, validity, scale_type{2});
    * @endcode
    *
    * Note: similar to `std::vector`, this "range" constructor should be used
@@ -552,8 +580,8 @@ class fixed_point_column_wrapper : public detail::column_wrapper {
    *       be used for the `initializer_list` constructors
    *
    * @param begin The beginning of the sequence of elements
-   * @param end The end of the sequence of elements
-   * @param v The beginning of the sequence of validity indicators
+   * @param end   The end of the sequence of elements
+   * @param v     The beginning of the sequence of validity indicators
    * @param scale The scale of the elements in the column
    */
   template <typename FixedPointRepIterator, typename ValidityIterator>
@@ -577,11 +605,91 @@ class fixed_point_column_wrapper : public detail::column_wrapper {
                                    detail::make_null_mask(v, v + size),
                                    cudf::UNKNOWN_NULL_COUNT});
   }
+
+  /**
+   * @brief Construct a nullable column from an initializer list of decimal elements using another
+   * list to indicate the validity of each element.
+   *
+   * The validity of each element is determined by an `initializer_list` of booleans where `true`
+   * indicates the element is valid, and `false` indicates the element is null.
+   *
+   * Example:
+   * @code{.cpp}
+   * // Creates a nullable INT32 column with 4 elements: {1, null, 3, null}
+   * fixed_width_column_wrapper<int32_t> w{ {1,2,3,4}, {1, 0, 1, 0}, scale_type{0}};
+   * @endcode
+   *
+   * @param elements The initializer list of elements
+   * @param validity The initializer list of validity indicator booleans
+   * @param scale    The scale of the elements in the column
+   */
+  fixed_point_column_wrapper(std::initializer_list<Rep> elements,
+                             std::initializer_list<bool> validity,
+                             numeric::scale_type scale)
+    : fixed_point_column_wrapper(
+        std::cbegin(elements), std::cend(elements), std::cbegin(validity), scale)
+  {
+  }
+
+  /**
+   * @brief Construct a nullable column from an initializer list of decimal elements and the the
+   * range `[v, v + element_list.size())` interpreted as booleans to indicate the validity of each
+   * element.
+   *
+   * Example:
+   * @code{.cpp}
+   * // Creates a nullable INT32 column with 4 elements: {null, 1, null, 3}
+   * auto validity = make_counting_transform_iterator(0, [](auto i) { return i % 2; });
+   * auto w        = fixed_width_column_wrapper<int32_t>{ {1,2,3,4}, validity, scale_type{0}};
+   * @endcode
+   *
+   * @tparam ValidityIterator Dereferencing a ValidityIterator must be convertible to `bool`
+   *
+   * @param element_list The initializer list of elements
+   * @param v            The beginning of the sequence of validity indicators
+   * @param scale        The scale of the elements in the column
+   */
+  template <typename ValidityIterator>
+  fixed_point_column_wrapper(std::initializer_list<Rep> element_list,
+                             ValidityIterator v,
+                             numeric::scale_type scale)
+    : fixed_point_column_wrapper(std::cbegin(element_list), std::cend(element_list), v, scale)
+  {
+  }
+
+  /**
+   * @brief Construct a nullable column of the decimal elements in the range `[begin,end)` using a
+   * validity initializer list to indicate the validity of each element.
+   *
+   * The validity of each element is determined by an `initializer_list` of booleans where `true`
+   * indicates the element is valid, and `false` indicates the element is null.
+   *
+   * Example:
+   * @code{.cpp}
+   * // Creates a nullable column of DECIMAL32 elements with 5 elements: {null, 1, null, 3, null}
+   * fixed_point_column_wrapper<int32_t> w(elements, elements + 5, {0, 1, 0, 1, 0}, scale_type{0});
+   * @endcode
+   *
+   * @tparam FixedPointRepIterator Iterator for fixed_point::rep
+   *
+   * @param begin    The beginning of the sequence of elements
+   * @param end      The end of the sequence of elements
+   * @param validity The initializer list of validity indicator booleans
+   * @param scale    The scale of the elements in the column
+   */
+  template <typename FixedPointRepIterator>
+  fixed_point_column_wrapper(FixedPointRepIterator begin,
+                             FixedPointRepIterator end,
+                             std::initializer_list<bool> const& validity,
+                             numeric::scale_type scale)
+    : fixed_point_column_wrapper(begin, end, std::cbegin(validity), scale)
+  {
+  }
 };
 
 /**
  * @brief `column_wrapper` derived class for wrapping columns of strings.
- **/
+ */
 class strings_column_wrapper : public detail::column_wrapper {
  public:
   /**
@@ -608,12 +716,12 @@ class strings_column_wrapper : public detail::column_wrapper {
    * dereferencing a `StringsIterator`.
    * @param begin The beginning of the sequence
    * @param end The end of the sequence
-   **/
+   */
   template <typename StringsIterator>
   strings_column_wrapper(StringsIterator begin, StringsIterator end) : column_wrapper{}
   {
     std::vector<char> chars;
-    std::vector<int32_t> offsets;
+    std::vector<cudf::size_type> offsets;
     auto all_valid           = make_counting_transform_iterator(0, [](auto i) { return true; });
     std::tie(chars, offsets) = detail::make_chars_and_offsets(begin, end, all_valid);
     wrapped                  = cudf::make_strings_column(chars, offsets);
@@ -641,19 +749,19 @@ class strings_column_wrapper : public detail::column_wrapper {
    *
    * @tparam StringsIterator A `std::string` must be constructible from
    * dereferencing a `StringsIterator`.
-   * @tparam ValidityIterator Dereferencing a ValidityIterator must be
-   * convertible to `bool`
+   * @tparam ValidityIterator Dereferencing a ValidityIterator must be convertible to `bool`
+   *
    * @param begin The beginning of the sequence
    * @param end The end of the sequence
    * @param v The beginning of the sequence of validity indicators
-   **/
+   */
   template <typename StringsIterator, typename ValidityIterator>
   strings_column_wrapper(StringsIterator begin, StringsIterator end, ValidityIterator v)
     : column_wrapper{}
   {
     size_type num_strings = std::distance(begin, end);
     std::vector<char> chars;
-    std::vector<int32_t> offsets;
+    std::vector<size_type> offsets;
     std::tie(chars, offsets) = detail::make_chars_and_offsets(begin, end, v);
     wrapped =
       cudf::make_strings_column(chars, offsets, detail::make_null_mask_vector(v, v + num_strings));
@@ -670,7 +778,7 @@ class strings_column_wrapper : public detail::column_wrapper {
    * @endcode
    *
    * @param strings The list of strings
-   **/
+   */
   strings_column_wrapper(std::initializer_list<std::string> strings)
     : strings_column_wrapper(std::cbegin(strings), std::cend(strings))
   {
@@ -693,7 +801,7 @@ class strings_column_wrapper : public detail::column_wrapper {
    * convertible to `bool`
    * @param strings The list of strings
    * @param v The beginning of the sequence of validity indicators
-   **/
+   */
   template <typename ValidityIterator>
   strings_column_wrapper(std::initializer_list<std::string> strings, ValidityIterator v)
     : strings_column_wrapper(std::cbegin(strings), std::cend(strings), v)
@@ -714,7 +822,7 @@ class strings_column_wrapper : public detail::column_wrapper {
    *
    * @param strings The list of strings
    * @param validity The list of validity indicator booleans
-   **/
+   */
   strings_column_wrapper(std::initializer_list<std::string> strings,
                          std::initializer_list<bool> validity)
     : strings_column_wrapper(std::cbegin(strings), std::cend(strings), std::cbegin(validity))
@@ -946,6 +1054,16 @@ class dictionary_column_wrapper<std::string> : public detail::column_wrapper {
   operator dictionary_column_view() const { return cudf::dictionary_column_view{wrapped->view()}; }
 
   /**
+   * @brief Access keys column view
+   */
+  column_view keys() const { return cudf::dictionary_column_view{wrapped->view()}.keys(); }
+
+  /**
+   * @brief Access indices column view
+   */
+  column_view indices() const { return cudf::dictionary_column_view{wrapped->view()}.indices(); }
+
+  /**
    * @brief Default constructor initializes an empty dictionary column of strings
    */
   dictionary_column_wrapper() : dictionary_column_wrapper(std::initializer_list<std::string>{}) {}
@@ -1108,7 +1226,6 @@ class dictionary_column_wrapper<std::string> : public detail::column_wrapper {
  *   // situation 2 (cudf TEST_F case)
  *   {LCW{}}
  * @endcode
- *
  */
 template <typename T, typename SourceElementT = T>
 class lists_column_wrapper : public detail::column_wrapper {
