@@ -1463,10 +1463,9 @@ class DataFrame(Frame, Serializable):
 
         Parameters
         ----------
-
         other : DataFrame, or object coercible into a DataFrame
             Should have at least one matching index/column label with the 
-            original DataFrame.If a Series is passed, its name attribute must
+            original DataFrame. If a Series is passed, its name attribute must
             be set, and that will be used as the column name to align with the 
             original DataFrame.
 
@@ -1479,8 +1478,8 @@ class DataFrame(Frame, Serializable):
             True: overwrite original DataFrame’s values with values from other.
             False: only update values that are NA in the original DataFrame.
 
-        filter_func : callable(1d-array) -> bool 1d-array, optional
-            Can choose to replace values other than NA. 
+        filter_func : None
+            filter_func is not supported yet
             Return True for values that should be updated.
 
         errors : {‘raise’, ‘ignore’}, default ‘ignore’
@@ -1504,7 +1503,7 @@ class DataFrame(Frame, Serializable):
         # TODO: Support other joins
         if join != "left": 
             raise NotImplementedError("Only left join is supported")
-        if errors not in ["ignore", "raise"]:
+        if errors not in {"ignore", "raise"}:
             raise ValueError("The parameter errors must be either 'ignore' or 'raise'")
         if filter_func != None:
             raise NotImplementedError("filter_func is not supported yet")
@@ -1512,8 +1511,9 @@ class DataFrame(Frame, Serializable):
         if not isinstance(other, DataFrame):
             other = DataFrame(other)
 
-        other = other.reindex(self.index, axis=0)
-        other = other.reindex(self.columns, axis=1)
+        if self.index != self.columns:
+            other = other.reindex(self.index, axis=0)
+            other = other.reindex(self.columns, axis=1)
 
         for col in self.columns: 
             this = self[col]
@@ -1534,9 +1534,8 @@ class DataFrame(Frame, Serializable):
             if mask.all():
                 continue
 
-            self.loc[mask, col] = this[mask]
-            self.loc[~mask, col] = that[~mask]
-
+            self[col] = this.where(mask, that)
+            
         
     def __add__(self, other):
         return self._apply_op("__add__", other)
