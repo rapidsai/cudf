@@ -862,11 +862,70 @@ fixed_width_column_wrapper<int32_t> w{ {1,2,3,4}, {1, 0, 1, 0}};
 
 #### `fixed_point_column_wrapper`
 
-TODO
+The `fixed_point_column_wrapper` class should be used for constructing and initializing a column of
+any fixed-point element type (DECIMAL32 or DECIMAL64). `fixed_point_column_wrapper` provides 
+constructors that accept an iterator range to generate each element in the column. For nullable 
+columns, an additional iterator can be provided to indicate the validity of each element. 
+Constructors also take the scale of the fixed-point values to create.
+
+Example:
+```c++
+// Creates a non-nullable column of 4 DECIMAL32 elements of scale 3: {1000, 2000, 3000, 4000}
+auto elements = make_counting_transform_iterator(0, [](auto i){ return i; });
+fixed_point_column_wrapper<int32_t> w(elements, elements + 4, 3);
+
+// Creates a nullable column of 5 DECIMAL32 elements of scale 2: {null, 100, null, 300, null}
+auto elements = make_counting_transform_iterator(0, [](auto i){ return i; });
+auto validity = make_counting_transform_iterator(0, [](auto i){ return i%2; });
+fixed_point_column_wrapper<int32_t> w(elements, elements + 5, validity, 2);
+```
 
 #### `dictionary_column_wrapper`
 
-TODO
+The `dictionary_column_wrapper` class should be used to create dictionary columns. 
+`dictionary_column_wrapper` provides constructors that accept an iterator range to generate each 
+element in the column. For nullable columns, an additional iterator can be provided to indicate the 
+validity of each element. There are also constructors that accept a `std::initializer_list<T>` for 
+the column elements and optionally for the validity of each element.
+
+Example:
+```c++
+// Creates a non-nullable dictionary column of INT32 elements with 5 elements
+// keys = {0, 2, 6}, indices = {0, 1, 1, 2, 2}
+std::vector<int32_t> elements{0, 2, 2, 6, 6};
+dictionary_column_wrapper<int32_t> w(element.begin(), elements.end());
+
+// Creates a nullable dictionary column with 5 elements and a validity iterator.
+std::vector<int32_t> elements{0, 2, 0, 6, 0};
+// Validity iterator here sets even rows to null.
+auto validity = make_counting_transform_iterator(0, [](auto i){return i%2;})
+// keys = {2, 6}, indices = {NULL, 0, NULL, 1, NULL}
+dictionary_column_wrapper<int32_t> w(elements, elements + 5, validity);
+
+// Creates a non-nullable dictionary column with 4 elements.
+// keys = {1, 2, 3}, indices = {0, 1, 2, 0}
+dictionary_column_wrapper<int32_t> w{{1, 2, 3, 1}};
+
+// Creates a nullable dictionary column with 4 elements and validity initializer.
+// keys = {1, 3}, indices = {0, NULL, 1, NULL}
+dictionary_column_wrapper<int32_t> w{ {1, 0, 3, 0}, {1, 0, 1, 0}};
+
+// Creates a nullable column of dictionary elements with 5 elements and validity initializer.
+std::vector<int32_t> elements{0, 2, 2, 6, 6};
+// keys = {2, 6}, indices = {NULL, 0, NULL, 1, NULL}
+dictionary_width_column_wrapper<int32_t> w(elements, elements + 5, {0, 1, 0, 1, 0});
+
+// Creates a non-nullable dictionary column with 7 string elements
+std::vector<std::string> strings{"", "aaa", "bbb", "aaa", "bbb", "ccc", "bbb"};
+// keys = {"","aaa","bbb","ccc"}, indices = {0, 1, 2, 1, 2, 3, 2}
+dictionary_column_wrapper<std::string> d(strings.begin(), strings.end());
+
+// Creates a nullable dictionary column with 7 string elements and a validity iterator.
+// Validity iterator here sets even rows to null.
+// keys = {"a", "bb"}, indices = {NULL, 1, NULL, 1, NULL, 0, NULL}
+auto validity = make_counting_transform_iterator(0, [](auto i){return i%2;});
+dictionary_column_wrapper<std::string> d({"", "bb", "", "bb", "", "a", ""}, validity);
+```
 
 #### `strings_column_wrapper`
 
