@@ -72,6 +72,19 @@ class JSONReader(IOFuzz):
                 # https://github.com/rapidsai/cudf/issues/6586
                 - set(cudf.utils.dtypes.DATETIME_TYPES)
             )
+            # TODO: Uncomment following after following
+            # issue is fixed:
+            # https://github.com/rapidsai/cudf/issues/7086
+            # dtypes_list.extend(
+            #     [
+            #         cudf.core.dtypes.ListDtype("int32"),
+            #         cudf.core.dtypes.ListDtype(
+            #             cudf.core.dtypes.ListDtype(
+            #                 cudf.core.dtypes.ListDtype("str")
+            #             )
+            #         ),
+            #     ]
+            # )
             dtypes_meta, num_rows, num_cols = _generate_rand_meta(
                 self, dtypes_list
             )
@@ -143,6 +156,19 @@ class JSONWriter(IOFuzz):
                 # https://github.com/rapidsai/cudf/issues/6586
                 - set(cudf.utils.dtypes.DATETIME_TYPES)
             )
+            # TODO: Uncomment following after following
+            # issue is fixed:
+            # https://github.com/rapidsai/cudf/issues/7086
+            # dtypes_list.extend(
+            #     [
+            #         cudf.core.dtypes.ListDtype("int32"),
+            #         cudf.core.dtypes.ListDtype(
+            #             cudf.core.dtypes.ListDtype(
+            #                 cudf.core.dtypes.ListDtype("str")
+            #             )
+            #         ),
+            #     ]
+            # )
             dtypes_meta, num_rows, num_cols = _generate_rand_meta(
                 self, dtypes_list
             )
