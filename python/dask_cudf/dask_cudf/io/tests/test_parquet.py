@@ -448,3 +448,9 @@ def test_create_metadata_file_inconsistent_schema(tmpdir):
     # Check that we can now read the ddf
     # with the _metadata file present
     dask_cudf.read_parquet(str(tmpdir), gather_statistics=True,).compute()
+
+
+def test_explicit_cudf_engine(tmpdir):
+    df = cudf.DataFrame({"a": [1, 1, 3]})
+    p = os.path.join(tmpdir, "test_engine_cudf.parquet")
+    df.to_parquet(str(p), engine="cudf")
