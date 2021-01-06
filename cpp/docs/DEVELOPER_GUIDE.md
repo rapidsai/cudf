@@ -383,7 +383,12 @@ The preferred style for how inputs are passed in and outputs are returned is the
 
 ### Multiple Return Values
 
-Sometimes it is necessary for functions to have multiple outputs. There are a few ways this can be done in C++ (including creating a  `struct`  for the output). One convenient way to do this is using  `std::tie`  and  `std::make_pair`. Note that objects passed to `std::make_pair` will invoke either the copy constructor or the move constructor of the object, and it may be preferable to move non-trivially copyable objects (and required for types with deleted copy constructors, like `std::unique_ptr`).
+Sometimes it is necessary for functions to have multiple outputs. There are a few ways this can be 
+done in C++ (including creating a  `struct`  for the output). One convenient way to do this is 
+using `std::tie`  and  `std::make_pair`. Note that objects passed to `std::make_pair` will invoke 
+either the copy constructor or the move constructor of the object, and it may be preferable to move 
+non-trivially copyable objects (and required for types with deleted copy constructors, like 
+`std::unique_ptr`).
 
 ```c++
 std::pair<table, table> return_two_tables(void){
@@ -401,7 +406,82 @@ cudf::table out1;
 std::tie(out0, out1) = cudf::return_two_outputs();
 ```
 
-Note:  `std::tuple`  _could_  be used if not for the fact that Cython does not support  `std::tuple`. Therefore, libcudf APIs must use  `std::pair`, and are therefore limited to return only two objects of different types. Multiple objects of the same type may be returned via a  `std::vector<T>`.
+Note:  `std::tuple`  _could_  be used if not for the fact that Cython does not support 
+`std::tuple`. Therefore, libcudf APIs must use  `std::pair`, and are therefore limited to return 
+only two objects of different types. Multiple objects of the same type may be returned via a 
+`std::vector<T>`.
+
+## Iterator-based interfaces
+
+Increasingly, libcudf is moving toward internal (`detail`) APIs with iterator parameters rather 
+than explicit `column`/`table`/`scalar` parameters. As with STL, iterators enable generic 
+algorithms to be applied to arbitrary containers. A good example of this is `cudf::copy_if_else`. 
+This function takes two inputs, and a Boolean mask. It copies the corresponding element from the 
+first or second input depending on whether the mask at that index is true or false. Implementing
+`copy_if_else` for all combinations of `column` and `scalar` parameters is simplified by using
+iterators in the `detail` API.
+
+```c++
+template <typename FilterFn, typename LeftIter, typename RightIter>
+std::unique_ptr<column> copy_if_else(
+  bool nullable,
+  LeftIter lhs_begin,
+  LeftIter lhs_end,
+  RightIter rhs,
+  FilterFn filter,
+  ...);
+```
+`LeftIter` and `RightIter` need only implement the necessary interface for an iterator. `libcudf` 
+provides a number of iterator types and utilities that are useful with iterator-based APIs from 
+`libcudf` as well as Thrust algorithms. Most are defined in `include/detail/iterator.cuh`. 
+
+### Pair iterator
+
+The pair iterator is used to access elements of nullable columns as a pair containing an element's 
+value and validity. `cudf::detail::make_pair_iterator` can be used to create a pair iterator from a 
+`column_device_view` or a `cudf::scalar`.
+
+### Null-replacement iterator
+
+This iterator replaces the null/validity value for each element with a specified constant (true or
+false). Created using `cudf::detail::make_null_replacement_iterator`.
+
+### Validity iterator
+
+This iterator returns the validity of the underlying element (true or false). Created using 
+`cudf::detail::make_validity_iterator`.
+
+### Index-normalizing iterators
+
+The proliferation of data types supported by `libcudf` can result in long compile times. One area
+where compile time was a problem is in types used to store indices, which can be any integer type.
+The "Indexalator", or index-normalizing iterator (`include/cudf/detail/indexalator.cuh`), can be 
+used for index types (integers) without requiring a type-specific instance. It can be used for any 
+iterator interface for reading an array of integer values of type `int8`, `int16`, `int32`, 
+`int64`, `uint8`, `uint16`, `uint32`, or `uint64`. Reading specific elements always return a 
+`cudf::size_type` integer.
+
+Use the `indexalator_factory` to create an appropriate input iterator from a column_view. Example 
+input iterator usage:
+
+```c++
+auto begin = indexalator_factory::create_input_iterator(gather_map);
+auto end   = begin + gather_map.size();
+auto result = detail::gather( source, begin, end, IGNORE, stream, mr );
+```
+
+Example output iterator usage:
+
+```c++
+auto result_itr = indexalator_factory::create_output_iterator(indices->mutable_view());
+thrust::lower_bound(rmm::exec_policy(stream),
+                    input->begin<Element>(),
+                    input->end<Element>(),
+                    values->begin<Element>(),
+                    values->end<Element>(),
+                    result_itr,
+                    thrust::less<Element>());
+```
 
 ## Namespaces
 
