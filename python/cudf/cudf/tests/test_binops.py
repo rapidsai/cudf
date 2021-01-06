@@ -1498,8 +1498,6 @@ def test_scalar_power_invalid(dtype_l, dtype_r):
 def test_datetime_dateoffset_binaryop(
     date_col, n_periods, frequency, dtype, op
 ):
-    # TODO: test that we fail for non-integer n_periods
-    # TODO: test reflected ops
     gsr = cudf.Series(date_col, dtype=dtype)
     psr = gsr.to_pandas()  # converts to nanos
 
@@ -1513,6 +1511,48 @@ def test_datetime_dateoffset_binaryop(
 
     utils.assert_eq(expect, got)
 
+    expect = op(psr, -poffset)
+    got = op(gsr, -goffset)
+
+    utils.assert_eq(expect, got)
+
+
+@pytest.mark.parametrize(
+    "date_col",
+    [
+        [
+            "2000-01-01 00:00:00.012345678",
+            "2000-01-31 00:00:00.012345678",
+            "2000-02-29 00:00:00.012345678",
+        ]
+    ],
+)
+@pytest.mark.parametrize('kwargs', [
+    {'months': 2, 'years':5},
+    {'microseconds':1, 'seconds':1},
+    {'months': 2, 'years':5, 'seconds': 923, 'microseconds':481},
+    pytest.param({'milliseconds':4}, marks=pytest.mark.xfail(reason='Pandas gets the wrong answer for milliseconds')),
+    pytest.param({'milliseconds':4, 'years': 2}, marks=pytest.mark.xfail(reason='Pandas construction fails with these keywords')),
+    pytest.param({'nanoseconds': 12}, marks=pytest.mark.xfail(reason='Pandas gets the wrong answer for nanoseconds'))
+])
+@pytest.mark.parametrize("op", [operator.add, operator.sub])
+def test_datetime_dateoffset_binaryop_multiple(date_col, kwargs, op):
+
+    gsr = cudf.Series(date_col, dtype='datetime64[ns]')
+    psr = gsr.to_pandas()
+
+    poffset = pd.DateOffset(**kwargs)
+    goffset = cudf.DateOffset(**kwargs)
+
+    expect = op(psr, poffset)
+    got = op(gsr, goffset)
+
+    utils.assert_eq(expect, got)
+    
+
+# TODO: write tests for multiple units
+# TODO: test that we fail for non-integer n_periods
+# TODO
 
 @pytest.mark.parametrize(
     "date_col",
