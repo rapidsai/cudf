@@ -247,6 +247,10 @@ void parse_orc_statistics(std::vector<std::vector<std::string>> const& blobs)
   orc::ColumnStatistics cs;
   reader.read(cs);
   std::cout << cs.numberOfValues.value_or(0) << '\n';
+  if (cs.intStatistics.has_value()) {
+    auto intstats = cs.intStatistics.value();
+    std::cout << intstats.minimum << ' ' << intstats.maximum << ' ' << intstats.sum << '\n';
+  }
 }
 
 // Freeform API wraps the detail reader class API

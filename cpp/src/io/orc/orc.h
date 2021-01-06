@@ -94,8 +94,15 @@ struct StripeFooter {
   std::string writerTimezone = "";      // time zone of the writer
 };
 
+struct IntegerStatistics {
+  int64_t minimum;
+  int64_t maximum;
+  int64_t sum;
+};
+
 struct ColumnStatistics {
   thrust::optional<uint64_t> numberOfValues;
+  thrust::optional<IntegerStatistics> intStatistics;
 };
 
 struct StripeStatistics {
@@ -129,6 +136,7 @@ class ProtobufReader {
   void read(StripeFooter &, size_t maxlen);
   void read(Stream &, size_t maxlen);
   void read(ColumnEncoding &, size_t maxlen);
+  void read(IntegerStatistics &s, size_t maxlen);
   void read(ColumnStatistics &, size_t maxlen);
   void read(StripeStatistics &, size_t maxlen);
   void read(Metadata &, size_t maxlen);
@@ -245,6 +253,13 @@ class ProtobufReader {
   }
 
   template <typename T>
+  auto read_field(T &value, const uint8_t *end) -> decltype(read(value, 0))
+  {
+    auto const size = read_field_size(end);
+    read(value, size);
+  }
+
+  template <typename T>
   void read_packed_field(T &value, const uint8_t *end)
   {
     auto const len       = get<uint32_t>();
@@ -314,7 +329,8 @@ class ProtobufReader {
 
  public:
   /**
-   * @brief Returns a field reader object of correct type, based on the `field_value` type.
+   * @brief Returns a field reader object of correct type, based on the `field_value`
+   * type.
    *
    * @tparam Type of the field (inferred from `field_value` type)
    * @param field_number The field number of the field to be read
@@ -342,8 +358,8 @@ class ProtobufReader {
   }
 
   /**
-   * @brief Returns a field reader that does not decode data, with type based on the `field_value`
-   * type.
+   * @brief Returns a field reader that does not decode data, with type based on the
+   * `field_value` type.
    *
    * @tparam Type of the field (inferred from `field_value` type)
    * @param field_number The field number of the field to be read
