@@ -95,7 +95,7 @@ struct StripeFooter {
 };
 
 struct ColumnStatistics {
-  uint64_t numberOfValues = 0;
+  thrust::optional<uint64_t> numberOfValues;
 };
 
 struct StripeStatistics {
@@ -151,20 +151,45 @@ class ProtobufReader {
   template <typename T, typename... Operator>
   void function_builder(T &s, size_t maxlen, std::tuple<Operator...> &op);
 
-  template <
-    typename T,
-    typename std::enable_if_t<!std::is_integral<T>::value and !std::is_enum<T>::value> * = nullptr>
-  int static constexpr encode_field_number(int field_number) noexcept
+  template <typename base_t,
+            typename std::enable_if_t<!std::is_integral<base_t>::value and
+                                      !std::is_enum<base_t>::value> * = nullptr>
+  int static constexpr encode_field_number_base(int field_number) noexcept
   {
     return (field_number * 8) + PB_TYPE_FIXEDLEN;
   }
 
-  template <
-    typename T,
-    typename std::enable_if_t<std::is_integral<T>::value or std::is_enum<T>::value> * = nullptr>
-  int static constexpr encode_field_number(int field_number) noexcept
+  template <typename base_t,
+            typename std::enable_if_t<std::is_integral<base_t>::value or
+                                      std::is_enum<base_t>::value> * = nullptr>
+  int static constexpr encode_field_number_base(int field_number) noexcept
   {
     return (field_number * 8) + PB_TYPE_VARINT;
+  }
+
+  template <typename T, typename std::enable_if_t<!std::is_class<T>::value> * = nullptr>
+  int static constexpr encode_field_number(int field_number) noexcept
+  {
+    return encode_field_number_base<T>(field_number);
+  }
+
+  // containters change the field number encoding
+  template <typename T,
+            typename std::enable_if_t<
+              std::is_class<T>::value and
+              !std::is_same<T, thrust::optional<typename T::value_type>>::value> * = nullptr>
+  int static constexpr encode_field_number(int field_number) noexcept
+  {
+    return encode_field_number_base<T>(field_number);
+  }
+
+  // optional fields don't change the field number encoding
+  template <typename T,
+            typename std::enable_if_t<
+              std::is_same<T, thrust::optional<typename T::value_type>>::value> * = nullptr>
+  int static constexpr encode_field_number(int field_number) noexcept
+  {
+    return encode_field_number_base<typename T::value_type>(field_number);
   }
 
   uint32_t read_field_size(const uint8_t *end);
@@ -207,6 +232,16 @@ class ProtobufReader {
     auto const size = read_field_size(end);
     value.emplace_back();
     read(value.back(), size);
+  }
+
+  template <typename T,
+            typename std::enable_if_t<
+              std::is_same<T, thrust::optional<typename T::value_type>>::value> * = nullptr>
+  void read_field(T &value, const uint8_t *end)
+  {
+    typename T::value_type contained_value;
+    read_field(contained_value, end);
+    value = contained_value;
   }
 
   template <typename T>

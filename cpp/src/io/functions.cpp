@@ -246,7 +246,7 @@ void parse_orc_statistics(std::vector<std::vector<std::string>> const& blobs)
     orc::ProtobufReader(reinterpret_cast<const uint8_t*>(cstats[1].c_str()), cstats[1].size());
   orc::ColumnStatistics cs;
   reader.read(cs);
-  std::cout << cs.numberOfValues << '\n';
+  std::cout << cs.numberOfValues.value_or(0) << '\n';
 }
 
 // Freeform API wraps the detail reader class API
