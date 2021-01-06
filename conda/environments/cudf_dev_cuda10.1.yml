@@ -1,3 +1,5 @@
+# Copyright (c) 2021, NVIDIA CORPORATION.
+
 name: cudf_dev
 channels:
   - rapidsai
