@@ -478,11 +478,11 @@ std::vector<table_view> split(table_view const& input, std::vector<size_type> co
 
 /**
  * @brief Column data in a serialized format
- * 
+ *
  * @ingroup copy_split
  *
- * Contains data from an array of columns in two contiguous buffers: one on host, which contains table metadata
- * and one on device which contains the table data.
+ * Contains data from an array of columns in two contiguous buffers: one on host, which contains
+ * table metadata and one on device which contains the table data.
  */
 struct packed_columns {
   std::unique_ptr<std::vector<uint8_t>> metadata;

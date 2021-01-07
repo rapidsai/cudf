@@ -232,8 +232,10 @@ __global__ void copy_partition(int num_src_bufs,
  * @param metadata Metadata to add information to
  * @param type Column type
  * @param size Column size
- * @param data_offset Offset into contiguous data buffer, or -1 if pointer should deserialize to null
- * @param null_mask_offset Offset into contiguous data buffer, or -1 if pointer should deserialize to null
+ * @param data_offset Offset into contiguous data buffer, or -1 if pointer should deserialize to
+ * null
+ * @param null_mask_offset Offset into contiguous data buffer, or -1 if pointer should deserialize
+ * to null
  * @param num_children # of children
  */
 void add_column_metadata(std::vector<uint8_t>& metadata,

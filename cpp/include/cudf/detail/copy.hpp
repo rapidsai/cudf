@@ -101,8 +101,8 @@ std::unique_ptr<column> shift(
 struct serialized_column {
   data_type type;
   size_type size;
-  int64_t data_offset;      // offset into contiguous data buffer, or -1 if column data is null
-  int64_t null_mask_offset; // offset into contiguous data buffer, or -1 if column data is null
+  int64_t data_offset;       // offset into contiguous data buffer, or -1 if column data is null
+  int64_t null_mask_offset;  // offset into contiguous data buffer, or -1 if column data is null
   size_type num_children;
 };
 

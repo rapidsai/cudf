@@ -12,7 +12,7 @@ namespace {
  * @brief Deserialize a single column into a column_view
  *
  * Deserializes a single column (it's children are assumed to be already deserialized)
- * non-recursively.  
+ * non-recursively.
  *
  * @param serial_column Serialized column information
  * @param children Children for the column
