@@ -8,21 +8,23 @@ namespace detail {
 
 namespace {
 
+/**
+ * @brief Deserialize a single column into a column_view
+ *
+ * Deserializes a single column (it's children are assumed to be already deserialized)
+ * non-recursively.  
+ *
+ * @param serial_column Serialized column information
+ * @param children Children for the column
+ * @param base_ptr Base pointer for the entire contiguous buffer from which all columns
+ * were serialized into
+ * @return Fully formed column_view
+ */
 column_view deserialize_column(serialized_column serial_column,
                                std::vector<column_view> const& children,
                                uint8_t const* base_ptr)
 {
   auto data_ptr = serial_column.data_offset != -1 ? base_ptr + serial_column.data_offset : 0;
-
-  // size_t is an unsigned int so -1 is the max value of size_t. If the offset
-  // is UINT64_MAX then just assume there's no null mask instead of thinking
-  // what if there IS a null mask but the buffer is just -1u sized. This translates
-  // to 16 EB of memory. No GPU has that amount of memory and it'll be a while
-  // before anyone does. By that time, we'll have bigger problems because all code
-  // that exists will need to be re-written to consider memory > 16 EB. It'll be
-  // bigger than Y2K; and I'll be prepared with a cottage in Waknaghat and a lifetime
-  // supply of soylent and shotgun ammo.
-  // TODO: Replace above with better reasoning
   auto null_mask_ptr =
     serial_column.null_mask_offset != -1
       ? reinterpret_cast<bitmask_type const*>(base_ptr + serial_column.null_mask_offset)
@@ -39,6 +41,9 @@ column_view deserialize_column(serialized_column serial_column,
 
 }  // anonymous namespace
 
+/**
+ * @copydoc cudf::detail::pack
+ */
 packed_columns pack(cudf::table_view const& input,
                     cudaStream_t stream,
                     rmm::mr::device_memory_resource* mr)
@@ -49,6 +54,9 @@ packed_columns pack(cudf::table_view const& input,
   return std::move(contig_split_result[0].data);
 }
 
+/**
+ * @copydoc cudf::detail::unpack
+ */
 table_view unpack(packed_columns const& input)
 {
   CUDF_EXPECTS(input.metadata != nullptr && input.gpu_data != nullptr,
@@ -79,12 +87,18 @@ table_view unpack(packed_columns const& input)
 
 }  // namespace detail
 
+/**
+ * @copydoc cudf::pack
+ */
 packed_columns pack(cudf::table_view const& input, rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
   return detail::pack(input, 0, mr);
 }
 
+/**
+ * @copydoc cudf::unpack
+ */
 table_view unpack(packed_columns const& input)
 {
   CUDF_FUNC_RANGE();

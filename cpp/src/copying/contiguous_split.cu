@@ -226,6 +226,16 @@ __global__ void copy_partition(int num_src_bufs,
               buf_info[buf_index].bit_shift);
 }
 
+/**
+ * @brief Add metadata information to the metadata buffer.
+ *
+ * @param metadata Metadata to add information to
+ * @param type Column type
+ * @param size Column size
+ * @param data_offset Offset into contiguous data buffer, or -1 if pointer should deserialize to null
+ * @param null_mask_offset Offset into contiguous data buffer, or -1 if pointer should deserialize to null
+ * @param num_children # of children
+ */
 void add_column_metadata(std::vector<uint8_t>& metadata,
                          data_type type,
                          size_type size,
@@ -235,7 +245,7 @@ void add_column_metadata(std::vector<uint8_t>& metadata,
 {
   detail::serialized_column column_metadata{
     type, size, data_offset, null_mask_offset, num_children};
-  auto bytes = reinterpret_cast<uint8_t const*>(&column_metadata);
+  auto const bytes = reinterpret_cast<uint8_t const*>(&column_metadata);
   std::copy(bytes, bytes + sizeof(detail::serialized_column), std::back_inserter(metadata));
 }
 
