@@ -20,7 +20,50 @@ Pandas' [groupby API](https://pandas.pydata.org/pandas-docs/stable/user_guide/gr
 
 ## Grouping
 
-### The grouper object
+A GroupBy object is created by grouping the values of a `Series` or `DataFrame`
+by one or more columns:
+
+```python
+import cudf
+
+>>> df = cudf.DataFrame({'a': [1, 1, 1, 2, 2], 'b': [1, 1, 2, 2, 3], 'c': [1, 2, 3, 4, 5]})
+>>> df
+>>> gb1 = df.groupby('a')  # grouping by a single column
+>>> gb2 = df.groupby(['a', 'b'])  # grouping by multiple columns
+>>> gb3 = df.groupby(cudf.Series(['a', 'a', 'b', 'b', 'b']))  # grouping by an external column
+```
+
+### Grouping by index levels
+
+You can also group by one or more levels of a MultiIndex:
+
+```python
+>>> df = cudf.DataFrame(
+...     {'a': [1, 1, 1, 2, 2], 'b': [1, 1, 2, 2, 3], 'c': [1, 2, 3, 4, 5]}
+... ).set_index(['a', 'b'])
+...
+>>> df.groupby(level='a')
+```
+
+### The `Grouper` object
+
+A `Grouper` can be used to disambiguate between columns and levels when they have the same name:
+
+```python
+>>> df
+   b  c
+b
+1  1  1
+1  1  2
+1  2  3
+2  2  4
+2  3  5
+>>> df.groupby('b', level='b')  # ValueError: Cannot specify both by and level
+>>> df.groupby([cudf.Grouper(key='b'), cudf.Grouper(level='b')])  # OK
+```
+
+
+
 
 ## Aggregating
 
