@@ -732,6 +732,11 @@ schema_tree_node construct_schema_for_column(linked_column_view const &col,
  */
 struct schema_tree_node : public SchemaElement {
   linked_column_view const *leaf_column;
+  // TODO: Think about making schema a class that holds a vector of schema_tree_nodes. The function
+  // construct_schema_tree could be its constructor.
+  // It can have method to get the per column nullability given a schema node index corresponding
+  // to a leaf schema.
+  // Much easier than that is a method to get path in schema, given a leaf node
 };
 
 std::vector<schema_tree_node> construct_schema_tree(
@@ -916,15 +921,38 @@ std::vector<schema_tree_node> construct_schema_tree(
 }
 
 struct new_parquet_column_view {
-  new_parquet_column_view(Type physical_type, linked_column_view const *cudf_col)
-    : physical_type(physical_type), cudf_col(cudf_col)
+  new_parquet_column_view(Type physical_type, linked_column_view const *linked_cudf_col)
+    : physical_type(physical_type)
   {
+    // Construct single inheritance column_view from linked_column_view
+    auto curr_col                           = linked_cudf_col;
+    column_view single_inheritance_cudf_col = *curr_col;
+    while (curr_col->parent) {
+      auto const &parent = *curr_col->parent;
+
+      // For list columns, we still need to retain the offset child column.
+      auto children =
+        (parent.type().id() == type_id::LIST)
+          ? std::vector<column_view>{parent.child(lists_column_view::offsets_column_index),
+                                     single_inheritance_cudf_col}
+          : std::vector<column_view>{single_inheritance_cudf_col};
+
+      single_inheritance_cudf_col = column_view(parent.type(),
+                                                parent.size(),
+                                                parent.head(),
+                                                parent.null_mask(),
+                                                UNKNOWN_NULL_COUNT,
+                                                parent.offset(),
+                                                children);
+
+      curr_col = curr_col->parent;
+    }
+    cudf_col = single_inheritance_cudf_col;
   }
 
   Type physical_type;
 
-  // TODO: Convert this to column_view that is constructed from linked_column_view in ctor
-  linked_column_view const *cudf_col;
+  column_view cudf_col;
 
   // int32_t ts_scale;
   std::vector<bool> level_nullable;
