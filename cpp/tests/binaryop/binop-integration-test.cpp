@@ -2241,6 +2241,21 @@ TYPED_TEST(FixedPointTestBothReps, FixedPointBinaryOpMultiplyScalar)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
 }
 
+TYPED_TEST(FixedPointTestBothReps, FixedPointBinaryOpSimplePlus)
+{
+  using namespace numeric;
+  using decimalXX = TypeParam;
+  using RepType   = device_storage_type_t<decimalXX>;
+
+  auto const lhs      = fp_wrapper<RepType>{{150, 200}, scale_type{-2}};
+  auto const rhs      = fp_wrapper<RepType>{{2250, 1005}, scale_type{-3}};
+  auto const expected = fp_wrapper<RepType>{{3750, 3005}, scale_type{-3}};
+
+  auto const result = cudf::binary_operation(lhs, rhs, cudf::binary_operator::ADD, {});
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
+}
+
 TYPED_TEST(FixedPointTestBothReps, FixedPointBinaryOpEqualSimple)
 {
   using namespace numeric;
