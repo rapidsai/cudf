@@ -725,6 +725,41 @@ TEST_F(ParquetWriterTest, NonNullable)
   CUDF_TEST_EXPECT_TABLES_EQUAL(*result.tbl, *expected);
 }
 
+TEST_F(ParquetWriterTest, Struct)
+{
+  // Struct<is_human:bool, Struct<names:string, ages:int>>
+
+  auto names = {"Samuel Vimes",
+                "Carrot Ironfoundersson",
+                "Angua von Uberwald",
+                "Cheery Littlebottom",
+                "Detritus",
+                "Mr Slant"};
+
+  auto num_rows{std::distance(names.begin(), names.end())};
+
+  // `Name` column has all valid values.
+  auto names_col = cudf::test::strings_column_wrapper{names.begin(), names.end()};
+
+  auto ages_col =
+    cudf::test::fixed_width_column_wrapper<int32_t>{{48, 27, 25, 31, 351, 351}, {1, 1, 1, 1, 1, 0}};
+
+  auto struct_1 = cudf::test::structs_column_wrapper{{names_col, ages_col}, {1, 1, 1, 1, 0, 1}};
+
+  auto is_human_col = cudf::test::fixed_width_column_wrapper<bool>{
+    {true, true, false, false, false, false}, {1, 1, 0, 1, 1, 0}};
+
+  auto struct_2 =
+    cudf::test::structs_column_wrapper{{is_human_col, struct_1}, {0, 1, 1, 1, 1, 1}}.release();
+
+  auto expected = table_view({*struct_2});
+
+  auto filepath = temp_env->get_temp_filepath("Struct.parquet");
+  cudf_io::parquet_writer_options args =
+    cudf_io::parquet_writer_options::builder(cudf_io::sink_info{filepath}, expected);
+  cudf_io::write_parquet(args);
+}
+
 // custom data sink that supports device writes. uses plain file io.
 class custom_test_data_sink : public cudf::io::data_sink {
  public:
@@ -2197,5 +2232,24 @@ TEST_F(ParquetReaderTest, DecimalRead)
     read_opts.set_columns({"dec20p1"});
     EXPECT_THROW(cudf_io::read_parquet(read_opts), cudf::logic_error);
   }
+}
+
+TEST_F(ParquetReaderTest, Struct)
+{
+  cudf_io::parquet_reader_options reader_opts =
+    cudf_io::parquet_reader_options_builder(cudf_io::source_info(
+      "/Users/dmakkar/Developer/Porting/temp/parq_struct/parquet_list_of_structs.parquet"));
+
+  cudf_io::read_parquet(reader_opts);
+
+  reader_opts = cudf_io::parquet_reader_options_builder(cudf_io::source_info(
+    "/Users/dmakkar/Developer/Porting/temp/parq_struct/parquet_complex.parquet"));
+
+  cudf_io::read_parquet(reader_opts);
+
+  reader_opts = cudf_io::parquet_reader_options_builder(cudf_io::source_info(
+    "/Users/dmakkar/Developer/Porting/temp/parq_struct/parquet_list_of_nullable_structs.parquet"));
+
+  cudf_io::read_parquet(reader_opts);
 }
 CUDF_TEST_PROGRAM_MAIN()
