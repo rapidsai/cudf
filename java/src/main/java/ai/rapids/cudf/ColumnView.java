@@ -1,6 +1,6 @@
 /*
  *
- *  Copyright (c) 2020, NVIDIA CORPORATION.
+ *  Copyright (c) 2020-2021, NVIDIA CORPORATION.
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -2287,6 +2287,42 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
     return new ColumnVector(mapLookup(getNativeView(), key.getScalarHandle()));
   }
 
+
+  /**
+   * Create a new struct column view of existing column views. Note that this will NOT copy
+   * the contents of the input columns to make a new vector, but makes a view that must not
+   * outlive the child views that it references. The resulting column cannot be null.
+   * @param rows the number of rows in the struct column. This is needed if no columns
+   *             are provided.
+   * @param columns the columns to add to the struct in the order they should be added
+   * @return the new column view. It is the responsibility of the caller to close this.
+   */
+  public static ColumnView makeStructView(long rows, ColumnView... columns) {
+    long[] handles = new long[columns.length];
+    for (int i = 0; i < columns.length; i++) {
+      ColumnView cv = columns[i];
+      if (rows != cv.getRowCount()) {
+        throw new IllegalArgumentException("All columns must have the same number of rows");
+      }
+      handles[i] = cv.getNativeView();
+    }
+    return new ColumnView(makeStructView(handles, rows));
+  }
+
+  /**
+   * Create a new struct column view of existing column views. Note that this will NOT copy
+   * the contents of the input columns to make a new vector, but makes a view that must not
+   * outlive the child views that it references. The resulting column cannot be null.
+   * @param columns the columns to add to the struct in the order they should be added
+   * @return the new column view. It is the responsibility of the caller to close this.
+   */
+  public static ColumnView makeStructView(ColumnView... columns) {
+    if (columns.length <= 0) {
+      throw new IllegalArgumentException("At least one column is needed to get the row count");
+    }
+    return makeStructView(columns[0].rows, columns);
+  }
+
   /////////////////////////////////////////////////////////////////////////////
   // INTERNAL/NATIVE ACCESS
   /////////////////////////////////////////////////////////////////////////////
@@ -2620,7 +2656,9 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
   private static native long clamper(long nativeView, long loScalarHandle, long loScalarReplaceHandle,
                                      long hiScalarHandle, long hiScalarReplaceHandle);
 
-  protected native long title(long handle);
+  protected static native long title(long handle);
+
+  private static native long makeStructView(long[] handles, long rowCount);
 
   private static native long isTimestamp(long nativeView, String format);
   /**
@@ -2755,7 +2793,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
         mainOffsetsDevBuff.copyFromHostBuffer(mainColOffsets, 0, offsetsLen);
       }
       List<DeviceMemoryBuffer> toClose = new ArrayList<>();
-      long[] childHandles = (devChildren.isEmpty()) ? null : new long[devChildren.size()];
+      long[] childHandles = new long[devChildren.size()];
       for (ColumnView.NestedColumnVector ncv : devChildren) {
         toClose.addAll(ncv.getBuffersToClose());
       }
