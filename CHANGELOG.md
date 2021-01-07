@@ -10,6 +10,7 @@
 - PR #6885 Share `factorize` implementation with Index and cudf module
 
 - PR #6775 Implement cudf.DateOffset for months
+- PR #7069 Pack/unpack for serialization/deserialization of table_views
 
 ## Improvements
 
