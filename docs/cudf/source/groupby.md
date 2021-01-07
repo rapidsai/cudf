@@ -62,10 +62,27 @@ b
 >>> df.groupby([cudf.Grouper(key='b'), cudf.Grouper(level='b')])  # OK
 ```
 
-
-
-
 ## Aggregating
+
+cuDF supports the following aggregations:
+
+| dtype/agg | Numeric | Datetime | String | Categorical | List | Struct |
+| --------  | ------- | -------- | ------ | ----------- | ---- | ------ |
+| count     | ✅      | ✅       | ✅     | ✅          |      |        |
+| size      | ✅      | ✅       | ✅     | ✅          |      |        |
+| sum       | ✅      | ✅       |        |             |      |        |
+| idxmin    | ✅      | ✅       |        |             |      |        |
+| idxmax    | ✅      | ✅       |        |             |      |        |
+| min       | ✅      | ✅       | ✅     |             |      |        |
+| max       | ✅      | ✅       | ✅     |             |      |        |
+| mean      | ✅      | ✅       |        |             |      |        |
+| var       | ✅      | ✅       |        |             |      |        |
+| std       | ✅      | ✅       |        |             |      |        |
+| quantile  | ✅      | ✅       |        |             |      |        |
+| median    | ✅      | ✅       |        |             |      |        |
+| nunique   | ✅      | ✅       | ✅     | ✅          |      |        |
+| nth       | ✅      | ✅       | ✅     |             |      |        |
+| collect   | ✅      | ✅       | ✅     |             | ✅   |        |
 
 ## GroupBy apply
 
