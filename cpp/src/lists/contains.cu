@@ -77,7 +77,7 @@ std::pair<rmm::device_buffer, size_type> construct_null_mask(
                           d_lists.size());
   }
 
-  return construct_null_mask_impl<false>(d_lists, thrust::make_constant_iterator(true));
+  return construct_null_mask_impl<false>(d_lists, make_validity_iterator(search_key));
 }
 
 /**
