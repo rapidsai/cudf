@@ -394,7 +394,6 @@ class Merge(object):
 
 
         '''
-
         ltype = lcol.dtype
         rtype = rcol.dtype
 
@@ -428,30 +427,29 @@ class Merge(object):
 
 
         if how == "inner":
-            if isinstance(ltype, CategoricalDtype) and isinstance(rtype, CategoricalDtype):
-                # sub-cases for when both operands are categorical
-                if ltype == rtype:
-                    # equal categories, equal ordering
-                    return ltype
-                elif not (ltype.ordered or rtype.ordered):
-                    # neiter ordered, so categories must be different
-                    return self.input_to_libcudf_casting_rules(
-                        dtype_l.categories,
-                        dtype_r.categories,
-                        how
-                else:
-                    # only one of the operands is ordered
-                    raise TypeError(
-                        "inner merging on categorical variables when" \
-                        "only one side is ordered is ambiguous"
-                    )
-            elif type(ltype) != type(rtype):
-                # drop to the underlying types in this case
+            # sub-cases for when both operands are categorical
+            if ltype == rtype:
+                # equal categories, equal ordering
+                return ltype
+            elif not (ltype.ordered or rtype.ordered):
+                # neiter ordered, so categories must be different
                 return self.input_to_libcudf_casting_rules(
-                    dtype_l.categories,
-                    dtype_r.categories,
-                    how
+                    ltype.categories,
+                    rtype.categories,
+                    how)
+            else:
+                # only one of the operands is ordered
+                raise TypeError(
+                    "inner merging on categorical variables when" \
+                    "only one side is ordered is ambiguous"
                 )
+        elif type(ltype) != type(rtype):
+            # drop to the underlying types in this case
+            return self.input_to_libcudf_casting_rules(
+                ltype.categories,
+                rtype.categories,
+                how
+            )
 
         # for left or right joins, the join generally proceeds,
         # with the dtype from the major operand taking priority
@@ -464,24 +462,12 @@ class Merge(object):
                 mjr_dtype = mjr_dtype.categories.dtype
             if isinstance(mnr_dtype, CategoricalDtype):
                 mnr_dtype = mnr_dtype.categories.dtype
-            return 
-                return self.input_to_libcudf_casting_rules(
-                    mjr_dtype,
-                    mnr_dtype,
-                    how
-                )
+            return self.input_to_libcudf_casting_rules(
+                mjr_dtype,
+                mnr_dtype,
+                how
+            )
 
-
-
-
-            # equal categories, equal ordering -> join proceeds
-            # equal categories, unequal ordering -> join proceeds
-            # unequal categoires, equal ordering -> join fails
-            # unequal categories, unequal ordering -> join fails
-
-
-        if isinstance(dtype_l, CategoricalDtype) and isinstance(dtype_r, CategoricalDtype):
-            if how == "left"
 
     def _input_to_libcudf_castrules_one_cat(self, lcol, rcol, how):
         return 
@@ -504,14 +490,14 @@ class Merge(object):
 
         dtype_l = lcol.dtype
         dtype_r = rcol.dtype
+
+        # if either side is categorical, different logic
+        if isinstance(dtype_l, CategoricalDtype) or isinstance(dtype_r, CategoricalDtype):
+            return self._input_to_libcudf_castrules_any_cat(lcol, rcol, how)
+
         libcudf_join_type = None
         if pd.api.types.is_dtype_equal(dtype_l, dtype_r):
             libcudf_join_type = dtype_l
-        elif isinstance(dtype_l, CategoricalDtype) and isinstance(
-            dtype_r, CategoricalDtype
-        ):
-            # categories are not equal
-            libcudf_join_type = np.dtype("O")
         elif how == "left":
             check_col = rcol.fillna(0)
             if not check_col.can_cast_safely(dtype_l):
@@ -538,15 +524,6 @@ class Merge(object):
                 )
             else:
                 libcudf_join_type = dtype_r
-
-        elif isinstance(dtype_l, CategoricalDtype):
-            if how == "right":
-                raise ValueError(ctgry_err.format(rcol, "right"))
-            libcudf_join_type = lcol.cat().categories.dtype
-        elif isinstance(dtype_r, CategoricalDtype):
-            if how == "left":
-                raise ValueError(ctgry_err.format(lcol, "left"))
-            libcudf_join_type = rcol.cat().categories.dtype
         elif how in {"inner", "outer"}:
             if (np.issubdtype(dtype_l, np.number)) and (
                 np.issubdtype(dtype_r, np.number)
