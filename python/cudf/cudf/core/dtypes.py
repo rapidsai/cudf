@@ -229,6 +229,10 @@ class DecimalDtype(ExtensionDtype):
     def precision(self):
         return self._typ.precision
 
+    @precision.setter
+    def precision(self, value):
+        self._typ = pa.decimal128(precision=value, scale=self.scale)
+
     @property
     def scale(self):
         return self._typ.scale
