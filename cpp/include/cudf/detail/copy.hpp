@@ -89,15 +89,42 @@ std::unique_ptr<column> shift(
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
+ * @brief The data that is stored as anonymous bytes in the `packed_columns` metadata
+ * field
+ *
+ * @ingroup copy_split
+ *
+ * The metadata field of the `packed_columns` struct is simply an array of these.
+ * This struct is exposed here because it is needed by both contiguous_split, pack
+ * and unpack;
+ */
+struct serialized_column {
+  data_type type;
+  size_type size;
+  int64_t data_offset;      // offset into contiguous data buffer, or -1 if column data is null
+  int64_t null_mask_offset; // offset into contiguous data buffer, or -1 if column data is null
+  size_type num_children;
+};
+
+/**
  * @copydoc cudf::contiguous_split
  *
  * @param stream CUDA stream used for device memory operations and kernel launches.
  **/
-std::vector<contiguous_split_result> contiguous_split(
+std::vector<packed_table> contiguous_split(
   cudf::table_view const& input,
   std::vector<size_type> const& splits,
   rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+
+/**
+ * @copydoc cudf::pack
+ *
+ * @param stream Optional CUDA stream on which to execute kernels
+ **/
+packed_columns pack(cudf::table_view const& input,
+                    cudaStream_t stream                 = 0,
+                    rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
  * @copydoc cudf::allocate_like(column_view const&, size_type, mask_allocation_policy,

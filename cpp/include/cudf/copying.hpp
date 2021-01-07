@@ -477,22 +477,35 @@ std::vector<column_view> split(column_view const& input, std::vector<size_type> 
 std::vector<table_view> split(table_view const& input, std::vector<size_type> const& splits);
 
 /**
+ * @brief Column data in a serialized format
+ * 
+ * @ingroup copy_split
+ *
+ * Contains data from an array of columns in two contiguous buffers: one on host, which contains table metadata
+ * and one on device which contains the table data.
+ */
+struct packed_columns {
+  std::unique_ptr<std::vector<uint8_t>> metadata;
+  std::unique_ptr<rmm::device_buffer> gpu_data;
+};
+
+/**
  * @brief The result(s) of a `contiguous_split`
  *
  * @ingroup copy_split
  *
  * Each table_view resulting from a split operation performed by contiguous_split,
- * will be returned wrapped in a `contiguous_split_result`.  The table_view and internal
+ * will be returned wrapped in a `packed_table`.  The table_view and internal
  * column_views in this struct are not owned by a top level cudf::table or cudf::column.
- * The backing memory is instead owned by the `all_data` field and in one
+ * The backing memory and metadata is instead owned by the `data` field and is in one
  * contiguous block.
  *
  * The user is responsible for assuring that the `table` or any derived table_views do
- * not outlive the memory owned by `all_data`
+ * not outlive the memory owned by `data`
  */
-struct contiguous_split_result {
+struct packed_table {
   cudf::table_view table;
-  std::unique_ptr<rmm::device_buffer> all_data;
+  packed_columns data;
 };
 
 /**
@@ -502,7 +515,7 @@ struct contiguous_split_result {
  * @ingroup copy_split
  *
  * The memory for the output views is allocated in a single contiguous `rmm::device_buffer` returned
- * in the `contiguous_split_result`. There is no top-level owning table.
+ * in the `packed_table`. There is no top-level owning table.
  *
  * The returned views of `input` are constructed from a vector of indices, that indicate
  * where each split should occur. The `i`th returned `table_view` is sliced as
@@ -514,7 +527,7 @@ struct contiguous_split_result {
  *
  * @note It is the caller's responsibility to ensure that the returned views
  * do not outlive the viewed device memory contained in the `all_data` field of the
- * returned contiguous_split_result.
+ * returned packed_table.
  *
  * @code{.pseudo}
  * Example:
@@ -536,10 +549,41 @@ struct contiguous_split_result {
  * @return The set of requested views of `input` indicated by the `splits` and the viewed memory
  * buffer.
  */
-std::vector<contiguous_split_result> contiguous_split(
+std::vector<packed_table> contiguous_split(
   cudf::table_view const& input,
   std::vector<size_type> const& splits,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+
+/**
+ * @brief Deep-copy a `table_view` into a serialized contiguous memory format
+ *
+ * The metadata from the `table_view` is copied into a host vector of bytes and the data from the
+ * `table_view` is copied into a `device_buffer`. Pass the output of this function into
+ * `cudf::unpack` to deserialize.
+ *
+ * @param input View of the table to pack
+ * @param[in] mr Optional, The resource to use for all returned device allocations
+ * @return packed_columns A struct containing the serialized metadata and data in contiguous host
+ *         and device memory respectively
+ */
+packed_columns pack(cudf::table_view const& input,
+                    rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+
+/**
+ * @brief Deserialize the result of `cudf::pack`
+ *
+ * Converts the result of a serialized table into a `table_view` that points to the data stored in
+ * the contiguous device buffer contained in `input`.
+ *
+ * It is the caller's responsibility to ensure that the `table_view` in the output does not outlive
+ * the data in the input.
+ *
+ * No new device memory is allocated in this function.
+ *
+ * @param input The packed columns to unpack
+ * @return The unpacked `table_view`
+ */
+table_view unpack(packed_columns const& input);
 
 /**
  * @brief   Returns a new column, where each element is selected from either @p lhs or

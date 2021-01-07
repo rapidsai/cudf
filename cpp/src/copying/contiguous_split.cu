@@ -17,6 +17,7 @@
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_view.hpp>
 #include <cudf/copying.hpp>
+#include <cudf/detail/copy.hpp>
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/utilities/cuda.cuh>
@@ -123,7 +124,6 @@ struct dst_buf_info {
  * @param stride Size of the kernel block
  * @param value_shift Shift incoming 4-byte offset values down by this amount
  * @param bit_shift Shift incoming data right by this many bits
- *
  */
 __device__ void copy_buffer(uint8_t* __restrict__ dst,
                             uint8_t* __restrict__ src,
@@ -203,7 +203,6 @@ __device__ void copy_buffer(uint8_t* __restrict__ dst,
  * @param src_bufs Input source buffers (N)
  * @param dst_bufs Desination buffers (N*M)
  * @param buf_info Information on the range of values to be copied for each destination buffer.
- *
  */
 __global__ void copy_partition(int num_src_bufs,
                                int num_partitions,
@@ -225,6 +224,19 @@ __global__ void copy_partition(int num_src_bufs,
               blockDim.x,
               buf_info[buf_index].value_shift,
               buf_info[buf_index].bit_shift);
+}
+
+void add_column_metadata(std::vector<uint8_t>& metadata,
+                         data_type type,
+                         size_type size,
+                         int64_t data_offset,
+                         int64_t null_mask_offset,
+                         size_type num_children)
+{
+  detail::serialized_column column_metadata{
+    type, size, data_offset, null_mask_offset, num_children};
+  auto bytes = reinterpret_cast<uint8_t const*>(&column_metadata);
+  std::copy(bytes, bytes + sizeof(detail::serialized_column), std::back_inserter(metadata));
 }
 
 // The block of functions below are all related:
@@ -273,7 +285,7 @@ template <typename InputIter>
 size_t compute_offset_stack_size(InputIter begin, InputIter end, int offset_depth = 0)
 {
   return std::accumulate(begin, end, 0, [offset_depth](auto stack_size, column_view const& col) {
-    auto const num_buffers = (col.head() != nullptr ? 1 : 0) + (col.nullable() ? 1 : 0);
+    auto const num_buffers = 1 + (col.nullable() ? 1 : 0);
     return stack_size + (offset_depth * num_buffers) +
            compute_offset_stack_size(
              col.child_begin(), col.child_end(), offset_depth + is_offset_type(col.type().id()));
@@ -302,11 +314,11 @@ OutputIter setup_src_buf_data(InputIter begin, InputIter end, OutputIter out_buf
       out_buf++;
     }
     // NOTE: we're always returning the base pointer here.  column-level offset is accounted
-    // for later.
-    if (col.head() != nullptr) {
-      *out_buf = const_cast<uint8_t*>(col.head<uint8_t>());
-      out_buf++;
-    }
+    // for later. Also, for some column types (string, list, struct) this pointer will be null
+    // because there is no associated data with the root column.
+    *out_buf = const_cast<uint8_t*>(col.head<uint8_t>());
+    out_buf++;
+
     out_buf = setup_src_buf_data(col.child_begin(), col.child_end(), out_buf);
   });
   return out_buf;
@@ -331,8 +343,7 @@ template <typename InputIter>
 size_type count_src_bufs(InputIter begin, InputIter end)
 {
   auto buf_iter = thrust::make_transform_iterator(begin, [](column_view const& col) {
-    return (col.head() != nullptr ? 1 : 0) + (col.nullable() ? 1 : 0) +
-           count_src_bufs(col.child_begin(), col.child_end());
+    return 1 + (col.nullable() ? 1 : 0) + count_src_bufs(col.child_begin(), col.child_end());
   });
   return std::accumulate(buf_iter, buf_iter + std::distance(begin, end), 0);
 }
@@ -419,38 +430,53 @@ std::pair<src_buf_info*, size_type> buf_info_functor::operator()<cudf::string_vi
   int parent_offset_index,
   int offset_depth)
 {
-  strings_column_view scv(col);
-
   if (col.nullable()) {
     std::tie(current, offset_stack_pos) =
       add_null_buffer(col, current, offset_stack_pos, parent_offset_index, offset_depth);
   }
 
-  auto offset_col = current;
+  // string columns hold no actual data, but we need to keep a record
+  // of it so we know it's size when we are constructing the output columns
+  *current = src_buf_info(
+    type_id::STRING, nullptr, offset_stack_pos, parent_offset_index, false, col.offset());
+  current++;
+  offset_stack_pos += offset_depth;
 
-  // info for the offsets buffer
-  *current = src_buf_info(type_id::INT32,
-                          scv.offsets().begin<cudf::id_to_type<type_id::INT32>>(),
-                          offset_stack_pos,
-                          parent_offset_index,
-                          false,
-                          col.offset());
+  // string columns don't necessarily have children
+  if (col.num_children() > 0) {
+    CUDF_EXPECTS(col.num_children() == 2, "Encountered malformed string column");
+    strings_column_view scv(col);
 
-  // prevent appending buf_info for non-exist chars buffer
-  if (scv.chars_size() > 0) {
+    // info for the offsets buffer
+    auto offset_col = current;
+    CUDF_EXPECTS(scv.offsets().nullable() == false, "Encountered nullable string offsets column");
+    *current = src_buf_info(type_id::INT32,
+                            // note: offsets can be null in the case where the string column
+                            // has been created with empty_like().
+                            scv.offsets().begin<cudf::id_to_type<type_id::INT32>>(),
+                            offset_stack_pos,
+                            parent_offset_index,
+                            false,
+                            col.offset());
+
     current++;
     offset_stack_pos += offset_depth;
 
-    // since we are crossing an offset boundary, our offset_depth and parent_offset_index go up.
+    // since we are crossing an offset boundary, calculate our new depth and parent offset index.
     offset_depth++;
     parent_offset_index = offset_col - head;
+
+    // prevent appending buf_info for non-existent chars buffer
+    CUDF_EXPECTS(scv.chars().nullable() == false, "Encountered nullable string chars column");
 
     // info for the chars buffer
     *current = src_buf_info(
       type_id::INT8, nullptr, offset_stack_pos, parent_offset_index, false, col.offset());
+    current++;
+    offset_stack_pos += offset_depth;
   }
 
-  return {current + 1, offset_stack_pos + offset_depth};
+  return {current, offset_stack_pos};
 }
 
 template <>
@@ -468,10 +494,20 @@ std::pair<src_buf_info*, size_type> buf_info_functor::operator()<cudf::list_view
       add_null_buffer(col, current, offset_stack_pos, parent_offset_index, offset_depth);
   }
 
-  auto offset_col = current;
+  // list columns hold no actual data, but we need to keep a record
+  // of it so we know it's size when we are constructing the output columns
+  *current = src_buf_info(
+    type_id::LIST, nullptr, offset_stack_pos, parent_offset_index, false, col.offset());
+  current++;
+  offset_stack_pos += offset_depth;
+
+  CUDF_EXPECTS(col.num_children() == 2, "Encountered malformed list column");
 
   // info for the offsets buffer
-  *current = src_buf_info(type_id::INT32,
+  auto offset_col = current;
+  *current        = src_buf_info(type_id::INT32,
+                          // note: offsets can be null in the case where the lists column
+                          // has been created with empty_like().
                           lcv.offsets().begin<cudf::id_to_type<type_id::INT32>>(),
                           offset_stack_pos,
                           parent_offset_index,
@@ -480,7 +516,7 @@ std::pair<src_buf_info*, size_type> buf_info_functor::operator()<cudf::list_view
   current++;
   offset_stack_pos += offset_depth;
 
-  // since we are crossing an offset boundary, our offset_depth and parent_offset_index go up.
+  // since we are crossing an offset boundary, calculate our new depth and parent offset index.
   offset_depth++;
   parent_offset_index = offset_col - head;
 
@@ -505,6 +541,13 @@ std::pair<src_buf_info*, size_type> buf_info_functor::operator()<cudf::struct_vi
     std::tie(current, offset_stack_pos) =
       add_null_buffer(col, current, offset_stack_pos, parent_offset_index, offset_depth);
   }
+
+  // struct columns hold no actual data, but we need to keep a record
+  // of it so we know it's size when we are constructing the output columns
+  *current = src_buf_info(
+    type_id::STRUCT, nullptr, offset_stack_pos, parent_offset_index, false, col.offset());
+  current++;
+  offset_stack_pos += offset_depth;
 
   // recurse on children
   return setup_source_buf_info(col.child_begin(),
@@ -573,46 +616,54 @@ BufInfo build_output_columns(InputIter begin,
                              InputIter end,
                              BufInfo info_begin,
                              Output out_begin,
-                             uint8_t const* const base_ptr)
+                             uint8_t const* const base_ptr,
+                             std::vector<uint8_t>& metadata)
 {
   auto current_info = info_begin;
-  std::transform(begin, end, out_begin, [&current_info, base_ptr](column_view const& src) {
-    // Use C++17 structured bindings
-    bitmask_type const* bitmask_ptr;
-    size_type null_count;
-    std::tie(bitmask_ptr, null_count) = [&]() {
-      if (src.nullable()) {
-        auto const ptr = reinterpret_cast<bitmask_type const*>(base_ptr + current_info->dst_offset);
-        ++current_info;
-        return std::make_pair(ptr, UNKNOWN_NULL_COUNT);
-      }
-      return std::make_pair(static_cast<bitmask_type const*>(nullptr), 0);
-    }();
-    uint8_t const* data_ptr;
-    size_type size;
-    std::tie(data_ptr, size) = [&]() {
-      if (src.head()) {
-        auto const ptr = base_ptr + current_info->dst_offset;
-        // if we have data, num_elements will always be the correct size.
-        // we don't want to use num_rows because if we are an offset column, num_rows
-        // represents the # of rows of our owning parent. num_elements always represents
-        // the proper size for this column
-        auto const size = current_info->num_elements;
-        ++current_info;
-        return std::make_pair(ptr, size);
-      }
-      // Parent columns w/o data (e.g., strings, lists) don't have an associated `dst_buf_info`,
-      // therefore, use the first child's info if it has at least one child. Their num_rows value
-      // will be correct (also see comment above)
-      auto const size = (src.num_children() == 0) ? 0 : current_info->num_rows;
-      return std::make_pair(static_cast<uint8_t const*>(nullptr), size);
-    }();
-    auto children = std::vector<column_view>{};
-    children.reserve(src.num_children());
-    current_info = build_output_columns(
-      src.child_begin(), src.child_end(), current_info, std::back_inserter(children), base_ptr);
-    return column_view{src.type(), size, data_ptr, bitmask_ptr, null_count, 0, std::move(children)};
-  });
+  std::transform(
+    begin, end, out_begin, [&current_info, base_ptr, &metadata](column_view const& src) {
+      // Use C++17 structured bindings
+      bitmask_type const* bitmask_ptr;
+      size_type null_count;
+      std::tie(bitmask_ptr, null_count) = [&]() {
+        if (src.nullable()) {
+          auto const ptr =
+            reinterpret_cast<bitmask_type const*>(base_ptr + current_info->dst_offset);
+          ++current_info;
+          return std::make_pair(ptr, UNKNOWN_NULL_COUNT);
+        }
+        return std::make_pair(static_cast<bitmask_type const*>(nullptr), 0);
+      }();
+
+      // size/data pointer for the column
+      auto const size = current_info->num_elements;
+      uint8_t const* data_ptr =
+        size == 0 || src.head() == nullptr ? nullptr : base_ptr + current_info->dst_offset;
+      ++current_info;
+
+      // children
+      auto children = std::vector<column_view>{};
+      children.reserve(src.num_children());
+
+      // add metadata
+      add_column_metadata(
+        metadata,
+        src.type(),
+        size,
+        data_ptr ? data_ptr - base_ptr : -1,
+        bitmask_ptr ? reinterpret_cast<uint8_t const*>(bitmask_ptr) - base_ptr : -1,
+        src.num_children());
+
+      current_info = build_output_columns(src.child_begin(),
+                                          src.child_end(),
+                                          current_info,
+                                          std::back_inserter(children),
+                                          base_ptr,
+                                          metadata);
+
+      return column_view{
+        src.type(), size, data_ptr, bitmask_ptr, null_count, 0, std::move(children)};
+    });
 
   return current_info;
 }
@@ -667,7 +718,6 @@ struct dst_offset_output_iterator {
  *
  * Note: columns types which themselves inherently have no data (strings, lists,
  * structs) return 0.
- *
  */
 struct size_of_helper {
   template <typename T>
@@ -687,10 +737,10 @@ struct size_of_helper {
 
 namespace detail {
 
-std::vector<contiguous_split_result> contiguous_split(cudf::table_view const& input,
-                                                      std::vector<size_type> const& splits,
-                                                      rmm::cuda_stream_view stream,
-                                                      rmm::mr::device_memory_resource* mr)
+std::vector<packed_table> contiguous_split(cudf::table_view const& input,
+                                           std::vector<size_type> const& splits,
+                                           rmm::cuda_stream_view stream,
+                                           rmm::mr::device_memory_resource* mr)
 {
   if (input.num_columns() == 0) { return {}; }
   if (splits.size() > 0) {
@@ -708,23 +758,55 @@ std::vector<contiguous_split_result> contiguous_split(cudf::table_view const& in
     }
   }
 
-  size_t const num_partitions = splits.size() + 1;
+  size_t const num_partitions   = splits.size() + 1;
+  size_t const num_root_columns = input.num_columns();
 
   // if inputs are empty, just return num_partitions empty tables
   if (input.column(0).size() == 0) {
-    std::vector<contiguous_split_result> result;
-    result.reserve(num_partitions);
+    // build the empty metadata used for all partitions. we have to do this for all children
+    // recursively because:
+    // - the general rule in cudf is that we should be preserving the full hierarchy of columns even
+    // for
+    //   the case of something empty at the top. this is necessary to preserve full type
+    //   information.
+    //
+    // see also:  empty_like()
+    std::vector<uint8_t> metadata;
+    add_column_metadata(
+      metadata, data_type{type_id::EMPTY}, static_cast<size_type>(num_root_columns), 0, 0, 0);
+    std::function<void(column_view const&, std::vector<uint8_t>&)> build_empty_column_metadata;
+    build_empty_column_metadata = [&build_empty_column_metadata](column_view const& col,
+                                                                 std::vector<uint8_t>& metadata) {
+      add_column_metadata(metadata, col.type(), 0, -1, -1, col.num_children());
 
+      std::for_each(col.child_begin(),
+                    col.child_end(),
+                    [&metadata, &build_empty_column_metadata](column_view const& col) {
+                      build_empty_column_metadata(col, metadata);
+                    });
+    };
+    std::for_each(input.begin(),
+                  input.end(),
+                  [&metadata, &build_empty_column_metadata](column_view const& col) {
+                    build_empty_column_metadata(col, metadata);
+                  });
+
+    // build the empty results
+    std::vector<packed_table> result;
+    result.reserve(num_partitions);
     auto iter = thrust::make_counting_iterator(0);
-    std::transform(
-      iter, iter + num_partitions, std::back_inserter(result), [&input](int partition_index) {
-        return contiguous_split_result{input, std::make_unique<rmm::device_buffer>()};
-      });
+    std::transform(iter,
+                   iter + num_partitions,
+                   std::back_inserter(result),
+                   [&input, num_root_columns, &metadata](int partition_index) {
+                     return packed_table{
+                       input,
+                       packed_columns{std::make_unique<std::vector<uint8_t>>(metadata),
+                                      std::make_unique<rmm::device_buffer>()}};
+                   });
 
     return result;
   }
-
-  size_t const num_root_columns = input.num_columns();
 
   // compute # of source buffers (column data, validity, children), # of partitions
   // and total # of buffers
@@ -822,8 +904,13 @@ std::vector<contiguous_split_result> contiguous_split(cudf::table_view const& in
       int row_end   = d_indices[split_index + 1] + src_info.column_offset;
       while (stack_size > 0) {
         stack_size--;
-        row_start = d_src_buf_info[offset_stack[stack_size]].offsets[row_start];
-        row_end   = d_src_buf_info[offset_stack[stack_size]].offsets[row_end];
+        auto const offsets = d_src_buf_info[offset_stack[stack_size]].offsets;
+        // this case can happen when you have empty string or list columns constructed with
+        // empty_like()
+        if (offsets != nullptr) {
+          row_start = offsets[row_start];
+          row_end   = offsets[row_end];
+        }
       }
 
       // final row indices and row count
@@ -835,7 +922,7 @@ std::vector<contiguous_split_result> contiguous_split(cudf::table_view const& in
       int const bit_shift = src_info.is_validity ? row_start % 32 : 0;
       // # of rows isn't necessarily the same as # of elements to be copied.
       auto const num_elements = [&]() {
-        if (src_info.offsets != nullptr) {
+        if (src_info.offsets != nullptr && num_rows > 0) {
           return num_rows + 1;
         } else if (src_info.is_validity) {
           return (num_rows + 31) / 32;
@@ -940,16 +1027,32 @@ std::vector<contiguous_split_result> contiguous_split(cudf::table_view const& in
   }
 
   // build the output.
-  std::vector<contiguous_split_result> result;
+  std::vector<packed_table> result;
   result.reserve(num_partitions);
+  std::vector<uint8_t> metadata;
   std::vector<column_view> cols;
   cols.reserve(num_root_columns);
   auto cur_dst_buf_info = h_dst_buf_info;
   for (size_t idx = 0; idx < num_partitions; idx++) {
-    cur_dst_buf_info = build_output_columns(
-      input.begin(), input.end(), cur_dst_buf_info, std::back_inserter(cols), h_dst_bufs[idx]);
-    result.push_back(contiguous_split_result{
-      cudf::table_view{cols}, std::make_unique<rmm::device_buffer>(std::move(out_buffers[idx]))});
+    // first metadata entry is a stub indicating how many total (top level) columns
+    // there are
+    add_column_metadata(
+      metadata, data_type{type_id::EMPTY}, static_cast<size_type>(num_root_columns), -1, -1, 0);
+
+    // traverse the buffers and build the columns.
+    cur_dst_buf_info = build_output_columns(input.begin(),
+                                            input.end(),
+                                            cur_dst_buf_info,
+                                            std::back_inserter(cols),
+                                            h_dst_bufs[idx],
+                                            metadata);
+
+    result.push_back(packed_table{
+      cudf::table_view{cols},
+      packed_columns{std::make_unique<std::vector<uint8_t>>(std::move(metadata)),
+                     std::make_unique<rmm::device_buffer>(std::move(out_buffers[idx]))}});
+
+    metadata.clear();
     cols.clear();
   }
 
@@ -964,9 +1067,9 @@ std::vector<contiguous_split_result> contiguous_split(cudf::table_view const& in
 
 };  // namespace detail
 
-std::vector<contiguous_split_result> contiguous_split(cudf::table_view const& input,
-                                                      std::vector<size_type> const& splits,
-                                                      rmm::mr::device_memory_resource* mr)
+std::vector<packed_table> contiguous_split(cudf::table_view const& input,
+                                           std::vector<size_type> const& splits,
+                                           rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
   return cudf::detail::contiguous_split(input, splits, rmm::cuda_stream_default, mr);

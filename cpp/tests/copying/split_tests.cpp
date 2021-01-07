@@ -1040,7 +1040,7 @@ TYPED_TEST(ContiguousSplitTest, LongColumn)
       cudf::table_view t({c});
       return cudf::contiguous_split(t, splits);
     },
-    [](cudf::column_view const& expected, cudf::contiguous_split_result const& result) {
+    [](cudf::column_view const& expected, cudf::packed_table const& result) {
       CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected, result.table.column(0));
     });
 }
@@ -1055,7 +1055,7 @@ TEST_F(ContiguousSplitStringTableTest, StringWithInvalids)
     [](cudf::table_view const& t, std::vector<cudf::size_type> const& splits) {
       return cudf::contiguous_split(t, splits);
     },
-    [](cudf::table_view const& expected, cudf::contiguous_split_result const& result) {
+    [](cudf::table_view const& expected, cudf::packed_table const& result) {
       CUDF_TEST_EXPECT_TABLES_EQUAL(expected, result.table);
     });
 }
@@ -1099,9 +1099,7 @@ TEST_F(ContiguousSplitStringTableTest, EmptyOutputColumn)
     [](cudf::table_view const& t, std::vector<cudf::size_type> const& splits) {
       return cudf::contiguous_split(t, splits);
     },
-    [](cudf::contiguous_split_result const& t, int num_cols) {
-      EXPECT_EQ(t.table.num_columns(), num_cols);
-    });
+    [](cudf::packed_table const& t, int num_cols) { EXPECT_EQ(t.table.num_columns(), num_cols); });
 }
 
 TEST_F(ContiguousSplitStringTableTest, NullStringColumn)
@@ -1110,7 +1108,7 @@ TEST_F(ContiguousSplitStringTableTest, NullStringColumn)
     [](cudf::table_view const& t, std::vector<cudf::size_type> const& splits) {
       return cudf::contiguous_split(t, splits);
     },
-    [](cudf::table const& expected, cudf::contiguous_split_result const& result) {
+    [](cudf::table const& expected, cudf::packed_table const& result) {
       CUDF_TEST_EXPECT_TABLES_EQUAL(expected.view(), result.table);
     });
 }
@@ -1127,7 +1125,7 @@ TYPED_TEST(ContiguousSplitTableTest, SplitEndLessThanSize)
     [](cudf::table_view const& t, std::vector<cudf::size_type> const& splits) {
       return cudf::contiguous_split(t, splits);
     },
-    [](cudf::table_view const& expected, cudf::contiguous_split_result const& result) {
+    [](cudf::table_view const& expected, cudf::packed_table const& result) {
       CUDF_TEST_EXPECT_TABLES_EQUAL(expected, result.table);
     });
 }
@@ -1138,7 +1136,7 @@ TYPED_TEST(ContiguousSplitTableTest, SplitEndToSize)
     [](cudf::table_view const& t, std::vector<cudf::size_type> const& splits) {
       return cudf::contiguous_split(t, splits);
     },
-    [](cudf::table_view const& expected, cudf::contiguous_split_result const& result) {
+    [](cudf::table_view const& expected, cudf::packed_table const& result) {
       CUDF_TEST_EXPECT_TABLES_EQUAL(expected, result.table);
     });
 }
@@ -1187,9 +1185,7 @@ TEST_F(ContiguousSplitTableCornerCases, EmptyOutputColumn)
     [](cudf::table_view const& t, std::vector<cudf::size_type> const& splits) {
       return cudf::contiguous_split(t, splits);
     },
-    [](cudf::contiguous_split_result const& t, int num_cols) {
-      EXPECT_EQ(t.table.num_columns(), num_cols);
-    });
+    [](cudf::packed_table const& t, int num_cols) { EXPECT_EQ(t.table.num_columns(), num_cols); });
 }
 
 TEST_F(ContiguousSplitTableCornerCases, MixedColumnTypes)
@@ -1286,7 +1282,7 @@ TEST_F(ContiguousSplitNestedTypesTest, Lists)
       cudf::table_view t({c});
       return cudf::contiguous_split(t, splits);
     },
-    [](cudf::column_view const& expected, cudf::contiguous_split_result const& result) {
+    [](cudf::column_view const& expected, cudf::packed_table const& result) {
       CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected, result.table.column(0));
     });
 }
@@ -1298,7 +1294,7 @@ TEST_F(ContiguousSplitNestedTypesTest, ListsWithNulls)
       cudf::table_view t({c});
       return cudf::contiguous_split(t, splits);
     },
-    [](cudf::column_view const& expected, cudf::contiguous_split_result const& result) {
+    [](cudf::column_view const& expected, cudf::packed_table const& result) {
       CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected, result.table.column(0));
     });
 }
@@ -1311,7 +1307,7 @@ TEST_F(ContiguousSplitNestedTypesTest, Structs)
       cudf::table_view t({c});
       return cudf::contiguous_split(t, splits);
     },
-    [](cudf::column_view const& expected, cudf::contiguous_split_result const& result) {
+    [](cudf::column_view const& expected, cudf::packed_table const& result) {
       CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected, result.table.column(0));
     });
 }
@@ -1324,7 +1320,7 @@ TEST_F(ContiguousSplitNestedTypesTest, StructsWithNulls)
       cudf::table_view t({c});
       return cudf::contiguous_split(t, splits);
     },
-    [](cudf::column_view const& expected, cudf::contiguous_split_result const& result) {
+    [](cudf::column_view const& expected, cudf::packed_table const& result) {
       CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected, result.table.column(0));
     });
 }
@@ -1336,7 +1332,7 @@ TEST_F(ContiguousSplitNestedTypesTest, StructsOfList)
       cudf::table_view t({c});
       return cudf::contiguous_split(t, splits);
     },
-    [](cudf::column_view const& expected, cudf::contiguous_split_result const& result) {
+    [](cudf::column_view const& expected, cudf::packed_table const& result) {
       CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected, result.table.column(0));
     });
 }
