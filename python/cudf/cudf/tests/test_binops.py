@@ -1542,3 +1542,15 @@ def test_binops_decimal():
     got = a + a
     assert expect.dtype == got.dtype
     utils.assert_eq(expect, got)
+
+    b = cudf.Series(
+        [decimal.Decimal("2.25"), decimal.Decimal("1.005")],
+        dtype=cudf.DecimalDtype(scale=3, precision=4),
+    )
+    expect = cudf.Series(
+        [decimal.Decimal("3.75"), decimal.Decimal("5.005")],
+        dtype=cudf.DecimalDtype(scale=3, precision=5),
+    )
+    got = a + b
+    assert expect.dtype == got.dtype
+    utils.assert_eq(expect, got)
