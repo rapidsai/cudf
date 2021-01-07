@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 
+#include <thrust/iterator/constant_iterator.h>
 #include <thrust/logical.h>
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/iterator.cuh>
@@ -32,6 +33,27 @@ namespace cudf {
 namespace lists {
 
 namespace {
+
+template <bool search_keys_have_nulls, typename SearchKeyValidityIter>
+std::pair<rmm::device_buffer, size_type> construct_null_mask_impl(
+  cudf::detail::lists_column_device_view const& d_lists, SearchKeyValidityIter search_key_iter)
+{
+  return cudf::detail::valid_if(thrust::make_counting_iterator(0),
+                                thrust::make_counting_iterator(d_lists.size()),
+                                [d_lists, search_key_iter] __device__(auto const& row_index) {
+                                  // Bail, if search_key row is null.
+                                  if (search_keys_have_nulls && !search_key_iter[row_index]) {
+                                    return false;
+                                  }
+                                  auto list = cudf::list_device_view(d_lists, row_index);
+                                  if (list.is_null()) { return false; }
+                                  return thrust::none_of(
+                                    thrust::seq,
+                                    thrust::make_counting_iterator(0),
+                                    thrust::make_counting_iterator(list.size()),
+                                    [&list] __device__(auto const& i) { return list.is_null(i); });
+                                });
+}
 
 /**
  * @brief Construct null-mask for result of `contains()` called with scalar search key.
@@ -55,17 +77,7 @@ std::pair<rmm::device_buffer, size_type> construct_null_mask(
                           d_lists.size());
   }
 
-  return cudf::detail::valid_if(thrust::make_counting_iterator(0),
-                                thrust::make_counting_iterator(d_lists.size()),
-                                [d_lists] __device__(auto const& row_index) {
-                                  auto list = cudf::list_device_view(d_lists, row_index);
-                                  if (list.is_null()) { return false; }
-                                  return thrust::none_of(
-                                    thrust::seq,
-                                    thrust::make_counting_iterator(0),
-                                    thrust::make_counting_iterator(list.size()),
-                                    [&list] __device__(auto const& i) { return list.is_null(i); });
-                                });
+  return construct_null_mask_impl<false>(d_lists, thrust::make_constant_iterator(true));
 }
 
 /**
@@ -86,21 +98,10 @@ std::pair<rmm::device_buffer, size_type> construct_null_mask(
     return std::make_pair(rmm::device_buffer{0, stream, mr}, size_type{0});
   }
 
-  return cudf::detail::valid_if(thrust::make_counting_iterator(0),
-                                thrust::make_counting_iterator(d_lists.size()),
-                                [d_lists, d_search_keys] __device__(auto const& row_index) {
-                                  if (d_search_keys.is_null(row_index)) { return false; }
-
-                                  auto list = cudf::list_device_view(d_lists, row_index);
-
-                                  if (list.is_null()) { return false; }
-
-                                  return thrust::none_of(
-                                    thrust::seq,
-                                    thrust::make_counting_iterator(0),
-                                    thrust::make_counting_iterator(list.size()),
-                                    [&list] __device__(auto const& i) { return list.is_null(i); });
-                                });
+  return search_keys_column_has_nulls
+           ? construct_null_mask_impl<true>(d_lists,
+                                            cudf::detail::make_validity_iterator(d_search_keys))
+           : construct_null_mask_impl<false>(d_lists, thrust::make_constant_iterator(true));
 }
 
 struct lookup_functor {
