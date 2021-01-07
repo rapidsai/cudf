@@ -1,4 +1,4 @@
-# Copyright (c) 2020, NVIDIA CORPORATION.
+# Copyright (c) 2020-2021, NVIDIA CORPORATION.
 
 import pickle
 
@@ -113,7 +113,6 @@ class ListColumn(ColumnBase):
 
     def serialize(self):
         header = {}
-        frames = []
         header["type-serialized"] = pickle.dumps(type(self))
         header["dtype"] = pickle.dumps(self.dtype)
         header["null_count"] = self.null_count
