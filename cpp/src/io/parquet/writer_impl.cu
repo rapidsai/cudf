@@ -34,6 +34,8 @@
 #include <rmm/device_uvector.hpp>
 #include <rmm/device_vector.hpp>
 
+#include <thrust/iterator/transform_output_iterator.h>
+
 #include <algorithm>
 #include <cstring>
 #include <numeric>
@@ -174,6 +176,7 @@ class parquet_column_view {
       _list_type(col.type().id() == type_id::LIST),
       _type_width((_string_type || _list_type) ? 0 : cudf::size_of(col.type())),
       _row_count(col.size()),
+      // Unused
       _null_count(_leaf_col.null_count()),
       _data(col.head<uint8_t>() + col.offset() * _type_width),
       _nulls(_leaf_col.nullable() ? _leaf_col.null_mask() : nullptr),
@@ -300,8 +303,9 @@ class parquet_column_view {
       case cudf::type_id::DECIMAL32:
         _physical_type  = Type::INT32;
         _converted_type = ConvertedType::DECIMAL;
-        _stats_dtype    = statistics_dtype::dtype_int32;
-        _decimal_scale  = -_leaf_col.type().scale();  // parquet and cudf disagree about scale signs
+        // TODO: Why is decimal 32 stats int32?
+        _stats_dtype   = statistics_dtype::dtype_int32;
+        _decimal_scale = -_leaf_col.type().scale();  // parquet and cudf disagree about scale signs
         CUDF_EXPECTS(decimal_precision.size() > decimal_precision_idx,
                      "Not enough decimal precision values passed for data!");
         CUDF_EXPECTS(decimal_precision[decimal_precision_idx] > _decimal_scale,
@@ -394,12 +398,19 @@ class parquet_column_view {
     _path_in_schema.push_back(_name);
   }
 
+  // Unused
   auto is_string() const noexcept { return _string_type; }
+  // Used only for schema gen and EncColDesc gen
   auto is_list() const noexcept { return _list_type; }
+  // Unused
   size_t type_width() const noexcept { return _type_width; }
+  // schema and EncColDesc
   size_t row_count() const noexcept { return _row_count; }
+  // EncColDesc
   size_t data_count() const noexcept { return _data_count; }
+  // Unused
   size_t null_count() const noexcept { return _null_count; }
+  // Unused
   bool nullable() const { return _nullability.back(); }
   void const *data() const noexcept { return _data; }
   uint32_t const *nulls() const noexcept { return _nulls; }
@@ -497,6 +508,445 @@ class parquet_column_view {
   int32_t _decimal_scale     = 0;
   uint8_t _decimal_precision = 0;
 };
+/*
+class bridge_column {
+ public:
+  bridge_column(cudf::column_view const &col) : cudf_column(col)
+  {
+    // convert struct column to individual data stream columns
+    std::function<std::vector<column_view>(column_view const &)> unpack_column =
+      [&](column_view const &col) {
+        if (cudf::is_nested(col.type())) {
+          std::vector<column_view> v;
+          if (col.type().id() == type_id::STRUCT) {
+            for (auto child_it = col.child_begin(); child_it < col.child_end(); child_it++) {
+              auto unpacked_children = unpack_column(*child_it);
+
+              // wrap children in single column struct with current struct col's nullmask and insert
+              // into the column of vectors to return
+              std::transform(unpacked_children.begin(),
+                             unpacked_children.end(),
+                             std::back_inserter(v),
+                             [&](auto unpacked_child) {
+                               return column_view(data_type(type_id::STRUCT),
+                                                  col.size(),
+                                                  nullptr,
+                                                  col.null_mask(),
+                                                  UNKNOWN_NULL_COUNT,
+                                                  col.offset(),
+                                                  {unpacked_child});
+                             });
+            }
+          } else if (col.type().id() == type_id::LIST) {
+            auto unpacked_children =
+              unpack_column(col.child(lists_column_view::child_column_index));
+
+            // wrap children in individual lists with the same offsets and nullmask as current col
+            // and insert into the column of vectors to return
+            std::transform(unpacked_children.begin(),
+                           unpacked_children.end(),
+                           std::back_inserter(v),
+                           [&](auto unpacked_child) {
+                             return column_view(data_type(type_id::LIST),
+                                                col.size(),
+                                                nullptr,
+                                                col.null_mask(),
+                                                UNKNOWN_NULL_COUNT,
+                                                col.offset(),
+                                                {col.child(lists_column_view::offsets_column_index),
+                                                 unpacked_child});
+                           });
+          }
+          return v;
+        } else {
+          return std::vector<column_view>{col};
+        }
+      };
+
+    // Unpack struct columns into columns that capture individual data streams
+    std::vector<column_view> unpacked_columns = unpack_column(col);
+
+    // Construct a parquet_column_view from each of the unpacked columns
+  }
+
+  // schema
+  std::vector<SchemaElement> get_schema()
+  {
+    // Simply go through cudf_column and generate schema
+    std::vector<SchemaElement> schema;
+    std::function<void(column_view const &)> add_schema = [&](column_view const &col) {
+      if (col.type().id() == type_id::STRUCT) {
+        // if struct, add current and recursively call for all children
+        SchemaElement struct_schema;
+        // Use input schema to influence this
+        struct_schema.repetition_type =
+          col.nullable() ? FieldRepetitionType::OPTIONAL : FieldRepetitionType::REQUIRED;
+        // Depends on input schema as well as whether parent is list
+        struct_schema.name         = "";
+        struct_schema.num_children = col.num_children();
+        schema.push_back(std::move(struct_schema));
+        for (auto child_it = col.child_begin(); child_it < col.child_end(); child_it++) {
+          add_schema(*child_it);
+        }
+      } else if (col.type().id() == type_id::LIST) {
+        // if list, add two elements for current and recursively call for child.
+        // Child has to be named "element"
+        // List schema is denoted by two levels for each nesting level and one final level for leaf.
+        // The top level is the same name as the column name.
+        // So e.g. List<List<int>> is denoted in the schema by
+        // "col_name" : { "list" : { "element" : { "list" : { "element" } } } }
+
+        SchemaElement list_schema_1;
+        // Use input schema to influence this
+        list_schema_1.repetition_type =
+          col.nullable() ? FieldRepetitionType::OPTIONAL : FieldRepetitionType::REQUIRED;
+        // Depends on input schema as well as whether parent is list
+        list_schema_1.name         = "";
+        list_schema_1.num_children = 1;
+        schema.push_back(std::move(list_schema_1));
+
+        SchemaElement list_schema_2;
+        list_schema_2.repetition_type = FieldRepetitionType::REPEATED;
+        list_schema_2.name            = "list";
+        list_schema_2.num_children    = 1;
+        schema.push_back(std::move(list_schema_2));
+      } else {
+        // if leaf, add current
+        SchemaElement col_schema;
+      }
+    };
+  }
+
+ private:
+  column_view cudf_column;
+  std::vector<parquet_column_view> parquet_cols;
+};
+ */
+// 1. We need to convert all cudf columns into a format where the child knows its parent. First
+//    define a class that enables this.
+// 2. Convert individual cudf columns into that format.
+// 3. For each input cudf column, use input schema to construct output schema in tree format
+// 4. For each leaf of output schema, use stored augmented cudf leaf column to travel upwards and
+//    get its heirarchy. Also get its precribed nullability and path in schema. Construct pcv from
+//    these informations.
+
+struct linked_column_view : public column_view {
+  // TODO: we are currently keeping all column_view children info multiple times - once for each
+  //       copy of this object. Options:
+  // 1. Inherit from column_view_base. Only lose out on children vector. That is not needed.
+  // 2. Don't inherit at all. make linked_column_view keep a reference wrapper to its column_view
+  // 3. OR, WAIT A SECOND! Why do we need to keep linked_column as children at all? We only need to
+  //    assign the linked column to leaf node of schema and go up from there?
+  //    ANS: BECAUSE, we need to keep all the constructed linked columns somewhere anyway. leaf
+  //    level linked_column will only have its parent info but its parent would also need to be
+  //    linked_column to have a chain all the way up to top. Ab dobara mat poochna.
+  linked_column_view(column_view const &col) : column_view(col), parent(nullptr)
+  {
+    for (auto child_it = col.child_begin(); child_it < col.child_end(); ++child_it) {
+      children.emplace_back(this, *child_it);
+    }
+  }
+
+  linked_column_view(linked_column_view const *parent, column_view const &col)
+    : column_view(col), parent(parent)
+  {
+    for (auto child_it = col.child_begin(); child_it < col.child_end(); ++child_it) {
+      children.emplace_back(this, *child_it);
+    }
+  }
+
+  // linked_column_view() = default;
+
+  linked_column_view const *parent;
+  std::vector<linked_column_view> children;
+};
+
+std::vector<linked_column_view> input_table_to_linked_columns(table_view const &table)
+{
+  std::vector<linked_column_view> result;
+  // std::transform(table.begin(), table.end(), std::back_inserter(result), [](auto const &col) {
+  //   return linked_column_view(col);
+  // });
+  for (column_view const &col : table) { result.emplace_back(col); }
+
+  return result;
+}
+/*
+struct schema_tree_node : public SchemaElement {
+  schema_tree_node const *parent;
+  std::vector<schema_tree_node> children;
+
+  linked_column_view leaf_column;
+};
+
+schema_tree_node construct_schema_for_column(linked_column_view const &col,
+                                             schema_tree_node const *parent)
+{
+  if (col.type().id() == type_id::STRUCT) {
+    // if struct, add current and recursively call for all children
+    schema_tree_node struct_schema;
+    // Use input schema to influence this
+    struct_schema.repetition_type =
+      col.nullable() ? FieldRepetitionType::OPTIONAL : FieldRepetitionType::REQUIRED;
+    // Depends on input schema as well as whether parent is list
+    struct_schema.name         = "";
+    struct_schema.num_children = col.num_children();
+    std::transform(col.children.begin(),
+                   col.children.end(),
+                   std::back_inserter(struct_schema.children),
+                   [&](linked_column_view const &col) {
+                     return construct_schema_for_column(col, &struct_schema);
+                   });
+    return struct_schema;
+  } else if (col.type().id() == type_id::LIST) {
+    // if list, add two elements for current and recursively call for child.
+    // Child has to be named "element"
+    // List schema is denoted by two levels for each nesting level and one final level for leaf.
+    // The top level is the same name as the column name.
+    // So e.g. List<List<int>> is denoted in the schema by
+    // "col_name" : { "list" : { "element" : { "list" : { "element" } } } }
+
+    schema_tree_node list_schema_1;
+    // Use input schema to influence this
+    list_schema_1.repetition_type =
+      col.nullable() ? FieldRepetitionType::OPTIONAL : FieldRepetitionType::REQUIRED;
+    // Depends on input schema as well as whether parent is list
+    list_schema_1.name         = "";
+    list_schema_1.num_children = 1;
+    list_schema_1.children.resize(1);
+
+    schema_tree_node &list_schema_2 = list_schema_1.children[0];
+    list_schema_2.repetition_type   = FieldRepetitionType::REPEATED;
+    list_schema_2.name              = "list";
+    list_schema_2.num_children      = 1;
+    list_schema_2.parent            = &list_schema_1;
+    list_schema_2.children.push_back(construct_schema_for_column(
+      col.children[lists_column_view::child_column_index], &list_schema_2));
+
+    return list_schema_1;
+  } else {
+    // if leaf, add current
+    schema_tree_node list_schema_1;
+  }
+}
+ */
+struct schema_tree_node : public SchemaElement {
+  linked_column_view const *leaf_column;
+};
+
+std::vector<schema_tree_node> construct_schema_tree(
+  std::vector<linked_column_view> const &linked_columns)
+{
+  std::vector<schema_tree_node> schema;
+  schema_tree_node root{};
+  root.type            = UNDEFINED_TYPE;
+  root.repetition_type = NO_REPETITION_TYPE;
+  root.name            = "schema";
+  root.num_children    = linked_columns.size();
+  schema.push_back(std::move(root));
+
+  std::function<void(linked_column_view const &, size_t)> add_schema =
+    [&](linked_column_view const &col, size_t parent_idx) {
+      if (col.type().id() == type_id::STRUCT) {
+        // if struct, add current and recursively call for all children
+        schema_tree_node struct_schema;
+        // Use input schema to influence this
+        struct_schema.repetition_type =
+          col.nullable() ? FieldRepetitionType::OPTIONAL : FieldRepetitionType::REQUIRED;
+        // Depends on input schema as well as whether parent is list
+        struct_schema.name         = "";
+        struct_schema.num_children = col.num_children();
+        struct_schema.parent_idx   = parent_idx;
+        schema.push_back(std::move(struct_schema));
+
+        auto struct_node_index = schema.size() - 1;
+        for (auto child_it = col.children.begin(); child_it < col.children.end(); child_it++) {
+          add_schema(*child_it, struct_node_index);
+        }
+      } else if (col.type().id() == type_id::LIST) {
+        // if list, add two elements for current and recursively call for child.
+        // TODO: Child has to be named "element"
+        // List schema is denoted by two levels for each nesting level and one final level for leaf.
+        // The top level is the same name as the column name.
+        // So e.g. List<List<int>> is denoted in the schema by
+        // "col_name" : { "list" : { "element" : { "list" : { "element" } } } }
+
+        schema_tree_node list_schema_1{};
+        // Use input schema to influence this
+        list_schema_1.repetition_type =
+          col.nullable() ? FieldRepetitionType::OPTIONAL : FieldRepetitionType::REQUIRED;
+        // Depends on input schema as well as whether parent is list
+        list_schema_1.name         = "";
+        list_schema_1.num_children = 1;
+        list_schema_1.parent_idx   = parent_idx;
+        schema.push_back(std::move(list_schema_1));
+
+        schema_tree_node list_schema_2{};
+        list_schema_2.repetition_type = FieldRepetitionType::REPEATED;
+        list_schema_2.name            = "list";
+        list_schema_2.num_children    = 1;
+        list_schema_2.parent_idx      = schema.size() - 1;  // Parent is list_schema_1, last added.
+        schema.push_back(std::move(list_schema_2));
+
+        add_schema(col.children[lists_column_view::child_column_index], schema.size() - 1);
+      } else {
+        // if leaf, add current
+        schema_tree_node col_schema{};
+
+        switch (col.type().id()) {
+          case cudf::type_id::INT8:
+            col_schema.type           = Type::INT32;
+            col_schema.converted_type = ConvertedType::INT_8;
+            break;
+          case cudf::type_id::INT16:
+            col_schema.type           = Type::INT32;
+            col_schema.converted_type = ConvertedType::INT_16;
+            break;
+          case cudf::type_id::INT32: col_schema.type = Type::INT32; break;
+          case cudf::type_id::INT64: col_schema.type = Type::INT64; break;
+          case cudf::type_id::UINT8:
+            col_schema.type           = Type::INT32;
+            col_schema.converted_type = ConvertedType::UINT_8;
+            break;
+          case cudf::type_id::UINT16:
+            col_schema.type           = Type::INT32;
+            col_schema.converted_type = ConvertedType::UINT_16;
+            break;
+          case cudf::type_id::UINT32:
+            col_schema.type           = Type::INT32;
+            col_schema.converted_type = ConvertedType::UINT_32;
+            break;
+          case cudf::type_id::UINT64:
+            col_schema.type           = Type::INT64;
+            col_schema.converted_type = ConvertedType::UINT_64;
+            break;
+          case cudf::type_id::FLOAT32: col_schema.type = Type::FLOAT; break;
+          case cudf::type_id::FLOAT64: col_schema.type = Type::DOUBLE; break;
+          case cudf::type_id::BOOL8: col_schema.type = Type::BOOLEAN; break;
+          // unsupported outside cudf for parquet 1.0.
+          case cudf::type_id::DURATION_DAYS:
+            col_schema.type           = Type::INT32;
+            col_schema.converted_type = ConvertedType::TIME_MILLIS;
+            break;
+          // case cudf::type_id::DURATION_SECONDS:
+          //   col_schema.type           = Type::INT64;
+          //   col_schema.converted_type = ConvertedType::TIME_MILLIS;
+          //   // TODO: when and where to decide scale?
+          //   _ts_scale = 1000;
+          //   break;
+          // case cudf::type_id::DURATION_MILLISECONDS:
+          //   col_schema.type           = Type::INT64;
+          //   col_schema.converted_type = ConvertedType::TIME_MILLIS;
+          //   break;
+          // case cudf::type_id::DURATION_MICROSECONDS:
+          //   col_schema.type           = Type::INT64;
+          //   col_schema.converted_type = ConvertedType::TIME_MICROS;
+          //   break;
+          // // unsupported outside cudf for parquet 1.0.
+          // case cudf::type_id::DURATION_NANOSECONDS:
+          //   col_schema.type           = Type::INT64;
+          //   col_schema.converted_type = ConvertedType::TIME_MICROS;
+          //   _ts_scale = -1000;  // negative value indicates division by absolute value
+          //   break;
+          // case cudf::type_id::TIMESTAMP_DAYS:
+          //   col_schema.type           = Type::INT32;
+          //   col_schema.converted_type = ConvertedType::DATE;
+          //   break;
+          // case cudf::type_id::TIMESTAMP_SECONDS:
+          //   // TODO: Add int96 timestamp to in-schema
+          //   col_schema.type           = int96_timestamps ? Type::INT96 : Type::INT64;
+          //   col_schema.converted_type = ConvertedType::TIMESTAMP_MILLIS;
+          //   _ts_scale                 = 1000;
+          //   break;
+          // case cudf::type_id::TIMESTAMP_MILLISECONDS:
+          //   col_schema.type           = int96_timestamps ? Type::INT96 : Type::INT64;
+          //   col_schema.converted_type = ConvertedType::TIMESTAMP_MILLIS;
+          //   break;
+          // case cudf::type_id::TIMESTAMP_MICROSECONDS:
+          //   col_schema.type           = int96_timestamps ? Type::INT96 : Type::INT64;
+          //   col_schema.converted_type = ConvertedType::TIMESTAMP_MICROS;
+          //   break;
+          // case cudf::type_id::TIMESTAMP_NANOSECONDS:
+          //   col_schema.type           = int96_timestamps ? Type::INT96 : Type::INT64;
+          //   col_schema.converted_type = ConvertedType::TIMESTAMP_MICROS;
+          //   _ts_scale = -1000;  // negative value indicates division by absolute value
+          //   break;
+          // case cudf::type_id::STRING:
+          //   col_schema.type           = Type::BYTE_ARRAY;
+          //   col_schema.converted_type = ConvertedType::UTF8;
+          //   break;
+          // case cudf::type_id::DECIMAL32:
+          //   col_schema.type           = Type::INT32;
+          //   col_schema.converted_type = ConvertedType::DECIMAL;
+          //   // TODO: Decimal scale to be put in input schema
+          //   col_schema.decimal_scale =
+          //     -col.type().scale();  // parquet and cudf disagree about scale signs
+          //   CUDF_EXPECTS(decimal_precision.size() > decimal_precision_idx,
+          //                "Not enough decimal precision values passed for data!");
+          //   CUDF_EXPECTS(decimal_precision[decimal_precision_idx] > _decimal_scale,
+          //                "Precision must be greater than scale!");
+          //   _decimal_precision = decimal_precision[decimal_precision_idx++];
+          //   break;
+          // case cudf::type_id::DECIMAL64:
+          //   col_schema.type           = Type::INT64;
+          //   col_schema.converted_type = ConvertedType::DECIMAL;
+          //   col_schema.decimal_scale =
+          //     -col.type().scale();  // parquet and cudf disagree about scale signs
+          //   CUDF_EXPECTS(decimal_precision.size() > decimal_precision_idx,
+          //                "Not enough decimal precision values passed for data!");
+          //   CUDF_EXPECTS(decimal_precision[decimal_precision_idx] > _decimal_scale,
+          //                "Precision must be greater than scale!");
+          //   _decimal_precision = decimal_precision[decimal_precision_idx++];
+          //   break;
+          default: col_schema.type = UNDEFINED_TYPE; break;
+        }
+        // Use input schema to influence this
+        col_schema.repetition_type = col.nullable() ? OPTIONAL : REQUIRED;
+        // TODO: name using input schema
+        col_schema.parent_idx  = parent_idx;
+        col_schema.leaf_column = &col;
+        schema.push_back(col_schema);
+      }
+    };
+
+  // Add all linked_columns to schema using parent_idx = 0 (root)
+  for (auto const &col : linked_columns) { add_schema(col, 0); }
+
+  return schema;
+}
+
+struct new_parquet_column_view {
+  new_parquet_column_view(Type physical_type, linked_column_view const *cudf_col)
+    : physical_type(physical_type), cudf_col(cudf_col)
+  {
+  }
+
+  Type physical_type;
+
+  // TODO: Convert this to column_view that is constructed from linked_column_view in ctor
+  linked_column_view const *cudf_col;
+
+  // int32_t ts_scale;
+  std::vector<bool> level_nullable;
+};
+
+void schema_gen_megafunction(table_view const &table)
+{
+  auto vec         = input_table_to_linked_columns(table);
+  auto schema_tree = construct_schema_tree(vec);
+  // Construct parquet_column_views from the schema tree leaf nodes.
+  std::vector<new_parquet_column_view> parquet_columns;
+
+  for (schema_tree_node const &schema_node : schema_tree) {
+    if (schema_node.leaf_column) {
+      // Calculate level nullability from schema and pass to new_parquet_column
+      // Construct path in schema for this leaf node and pass in
+      parquet_columns.emplace_back(schema_node.type, schema_node.leaf_column);
+    }
+  }
+
+  printf("pcvs gen\n");
+}
 
 void writer::impl::init_page_fragments(hostdevice_vector<gpu::PageFragment> &frag,
                                        hostdevice_vector<gpu::EncColumnDesc> &col_desc,
@@ -708,6 +1158,8 @@ void writer::impl::write_chunked_begin(pq_chunked_state &state)
 
 void writer::impl::write_chunk(table_view const &table, pq_chunked_state &state)
 {
+  schema_gen_megafunction(table);
+
   size_type num_columns = table.num_columns();
   size_type num_rows    = 0;
 
