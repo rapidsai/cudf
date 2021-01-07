@@ -38,4 +38,13 @@ class DecimalColumn(ColumnBase):
     def binary_operator(self, op, other, reflect=False):
         if reflect:
             self, other = other, self
-        return libcudf.binaryop.binaryop(self, other, op, "int32")
+        result = libcudf.binaryop.binaryop(self, other, op, "int32")
+        result.dtype.precision = binop_precision(self.dtype, other.dtype, op)
+        return result
+
+
+def binop_precision(l_dtype, r_dtype, op):
+    p1, p2 = l_dtype.precision, r_dtype.precision
+    s1, s2 = l_dtype.scale, r_dtype.scale
+    if op == "add":
+        return max(s1, s2) + max(p1 - s1, p2 - s2) + 1
