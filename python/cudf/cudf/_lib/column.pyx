@@ -567,7 +567,10 @@ cdef class Column:
         return result
 
 
-def make_column_from_scalar(DeviceScalar val, size_type size):
+def make_column_from_scalar(object py_val, size_type size):
+
+    cdef DeviceScalar val = py_val.device_value
+
     cdef const scalar* c_val = val.get_raw_ptr()
     cdef unique_ptr[column] c_result
     with nogil:

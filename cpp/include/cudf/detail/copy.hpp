@@ -40,7 +40,7 @@ namespace detail {
  * @param[in] end Index of the last desired element in the slice (exclusive).
  *
  * @return ColumnView View of the elements `[begin,end)` from `input`.
- **/
+ */
 template <typename ColumnView>
 ColumnView slice(ColumnView const& input, cudf::size_type begin, cudf::size_type end)
 {

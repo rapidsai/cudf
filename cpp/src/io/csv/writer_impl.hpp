@@ -44,7 +44,7 @@ using namespace cudf::io;
 
 /**
  * @brief Implementation for CSV writer
- **/
+ */
 class writer::impl {
  public:
   /**
@@ -53,7 +53,7 @@ class writer::impl {
    * @param sink Output sink
    * @param options Settings for controlling behavior
    * @param mr Device memory resource to use for device memory allocation
-   **/
+   */
   impl(std::unique_ptr<data_sink> sink,
        csv_writer_options const& options,
        rmm::mr::device_memory_resource* mr);
@@ -64,7 +64,7 @@ class writer::impl {
    * @param table The set of columns
    * @param metadata The metadata associated with the table
    * @param stream CUDA stream used for device memory operations and kernel launches.
-   **/
+   */
   void write(table_view const& table,
              const table_metadata* metadata = nullptr,
              rmm::cuda_stream_view stream   = rmm::cuda_stream_default);
@@ -75,7 +75,7 @@ class writer::impl {
    * @param table The set of columns
    * @param metadata The metadata associated with the table
    * @param stream CUDA stream used for device memory operations and kernel launches.
-   **/
+   */
   void write_chunked_begin(table_view const& table,
                            const table_metadata* metadata = nullptr,
                            rmm::cuda_stream_view stream   = rmm::cuda_stream_default);
@@ -86,7 +86,7 @@ class writer::impl {
    * @param strings_column Subset of columns converted to string to be written.
    * @param metadata The metadata associated with the table
    * @param stream CUDA stream used for device memory operations and kernel launches.
-   **/
+   */
   void write_chunked(strings_column_view const& strings_column,
                      const table_metadata* metadata = nullptr,
                      rmm::cuda_stream_view stream   = rmm::cuda_stream_default);
@@ -97,7 +97,7 @@ class writer::impl {
    * @param table The set of columns
    * @param metadata The metadata associated with the table
    * @param stream CUDA stream used for device memory operations and kernel launches.
-   **/
+   */
   void write_chunked_end(table_view const& table,
                          const table_metadata* metadata = nullptr,
                          rmm::cuda_stream_view stream   = rmm::cuda_stream_default)

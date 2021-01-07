@@ -50,7 +50,7 @@ TEST_F(StringsSubstringsTest, Substring)
 }
 
 class SubstringParmsTest : public StringsSubstringsTest,
-                           public testing::WithParamInterface<int32_t> {
+                           public testing::WithParamInterface<cudf::size_type> {
 };
 
 TEST_P(SubstringParmsTest, Substring)
