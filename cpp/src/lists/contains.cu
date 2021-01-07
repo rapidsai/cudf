@@ -34,10 +34,30 @@ namespace lists {
 
 namespace {
 
-template <bool search_keys_have_nulls, typename SearchKeyValidityIter>
-std::pair<rmm::device_buffer, size_type> construct_null_mask_impl(
-  cudf::detail::lists_column_device_view const& d_lists, SearchKeyValidityIter search_key_iter)
+template <bool search_keys_have_nulls,
+          bool search_keys_are_all_nulls,
+          typename SearchKeyValidityIter>
+std::pair<rmm::device_buffer, size_type> construct_null_mask(
+  cudf::detail::lists_column_device_view const& d_lists,
+  SearchKeyValidityIter search_key_iter,
+  bool input_column_has_nulls,
+  rmm::cuda_stream_view stream,
+  rmm::mr::device_memory_resource* mr)
 {
+  using namespace cudf;
+  using namespace cudf::detail;
+
+  static_assert(search_keys_have_nulls || !search_keys_are_all_nulls);
+
+  if (!search_keys_have_nulls && !input_column_has_nulls) {
+    return std::make_pair(rmm::device_buffer{0, stream, mr}, size_type{0});
+  }
+
+  if (search_keys_are_all_nulls) {
+    return std::make_pair(cudf::create_null_mask(d_lists.size(), mask_state::ALL_NULL, mr),
+                          d_lists.size());
+  }
+
   return cudf::detail::valid_if(thrust::make_counting_iterator(0),
                                 thrust::make_counting_iterator(d_lists.size()),
                                 [d_lists, search_key_iter] __device__(auto const& row_index) {
@@ -53,55 +73,6 @@ std::pair<rmm::device_buffer, size_type> construct_null_mask_impl(
                                     thrust::make_counting_iterator(list.size()),
                                     [&list] __device__(auto const& i) { return list.is_null(i); });
                                 });
-}
-
-/**
- * @brief Construct null-mask for result of `contains()` called with scalar search key.
- */
-std::pair<rmm::device_buffer, size_type> construct_null_mask(
-  cudf::detail::lists_column_device_view const& d_lists,
-  cudf::scalar const& search_key,
-  bool input_column_has_nulls,
-  rmm::cuda_stream_view stream,
-  rmm::mr::device_memory_resource* mr)
-{
-  using namespace cudf;
-  using namespace cudf::detail;
-
-  if (search_key.is_valid(stream) && !input_column_has_nulls) {
-    return std::make_pair(rmm::device_buffer{0, stream, mr}, size_type{0});
-  }
-
-  if (!search_key.is_valid(stream)) {
-    return std::make_pair(cudf::create_null_mask(d_lists.size(), mask_state::ALL_NULL, mr),
-                          d_lists.size());
-  }
-
-  return construct_null_mask_impl<false>(d_lists, make_validity_iterator(search_key));
-}
-
-/**
- * @brief Construct null-mask for result of `contains()` called with column of search keys.
- */
-std::pair<rmm::device_buffer, size_type> construct_null_mask(
-  cudf::detail::lists_column_device_view const& d_lists,
-  cudf::column_device_view const& d_search_keys,
-  bool input_column_has_nulls,
-  bool search_keys_column_has_nulls,
-  rmm::cuda_stream_view stream,
-  rmm::mr::device_memory_resource* mr)
-{
-  using namespace cudf;
-  using namespace cudf::detail;
-
-  if (!search_keys_column_has_nulls && !input_column_has_nulls) {
-    return std::make_pair(rmm::device_buffer{0, stream, mr}, size_type{0});
-  }
-
-  return search_keys_column_has_nulls
-           ? construct_null_mask_impl<true>(d_lists,
-                                            cudf::detail::make_validity_iterator(d_search_keys))
-           : construct_null_mask_impl<false>(d_lists, thrust::make_constant_iterator(true));
 }
 
 struct lookup_functor {
@@ -200,11 +171,17 @@ std::unique_ptr<column> contains(cudf::lists_column_view const& lists,
   auto const device_view = column_device_view::create(lists.parent(), stream);
   auto const d_lists     = lists_column_device_view(*device_view);
 
+  auto const lists_column_has_nulls = lists.has_nulls() || lists.child().has_nulls();
+
   rmm::device_buffer null_mask;
   size_type num_nulls;
 
-  std::tie(null_mask, num_nulls) = construct_null_mask(
-    d_lists, search_key, lists.has_nulls() || lists.child().has_nulls(), stream, mr);
+  std::tie(null_mask, num_nulls) =
+    search_key.is_valid(stream)
+      ? construct_null_mask<false, false>(
+          d_lists, make_validity_iterator(search_key), lists_column_has_nulls, stream, mr)
+      : construct_null_mask<true, true>(
+          d_lists, make_validity_iterator(search_key), lists_column_has_nulls, stream, mr);
 
   auto ret_bools = make_fixed_width_column(
     data_type{type_id::BOOL8}, lists.size(), std::move(null_mask), num_nulls, stream, mr);
@@ -245,16 +222,17 @@ std::unique_ptr<column> contains(cudf::lists_column_view const& lists,
   auto const d_lists     = lists_column_device_view(*device_view);
   auto const d_skeys     = column_device_view::create(search_keys, stream);
 
+  auto const lists_column_has_nulls = lists.has_nulls() || lists.child().has_nulls();
+
   rmm::device_buffer null_mask;
   size_type num_nulls;
 
   std::tie(null_mask, num_nulls) =
-    construct_null_mask(d_lists,
-                        *d_skeys,
-                        lists.has_nulls() || lists.child().has_nulls(),
-                        search_keys.has_nulls(),
-                        stream,
-                        mr);
+    search_keys.has_nulls()
+      ? construct_null_mask<true, false>(
+          d_lists, make_validity_iterator(*d_skeys), lists_column_has_nulls, stream, mr)
+      : construct_null_mask<false, false>(
+          d_lists, thrust::make_constant_iterator(true), lists_column_has_nulls, stream, mr);
 
   auto ret_bools = make_fixed_width_column(
     data_type{type_id::BOOL8}, lists.size(), std::move(null_mask), num_nulls, stream, mr);
