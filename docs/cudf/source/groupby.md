@@ -1,7 +1,7 @@
 GroupBy
 =======
 
-cuDF's supports a small (but important) subset of
+cuDF supports a small (but important) subset of
 Pandas' [groupby API](https://pandas.pydata.org/pandas-docs/stable/user_guide/groupby.html).
 
 ## Summary of supported operations
@@ -62,10 +62,32 @@ b
 >>> df.groupby([cudf.Grouper(key='b'), cudf.Grouper(level='b')])  # OK
 ```
 
-## Aggregating
+## Aggregation
 
-The following table summarizes the supported aggregations
-and the dtypes on which they are supported.
+Aggregations on groups is supported via the `agg` method:
+
+```
+>>> df
+   a  b  c
+0  1  1  1
+1  1  1  2
+2  1  2  3
+3  2  2  4
+4  2  3  5
+>>> df.groupby('a').agg('sum')
+   b  c
+a
+1  4  6
+2  5  9
+>>> df.groupby('a').agg({'b': ['sum', 'min'], 'c': 'mean'})
+    b        c
+  sum min mean
+a
+1   4   1  2.0
+2   5   2  4.5
+```
+
+The following table summarizes the available aggregations and the types that support them:
 
 | Aggregations\dtypes | Numeric  | Datetime | String   | Categorical | List |
 | ------------------- | -------- | -------  | -------- | ----------- | ---- |
@@ -87,4 +109,60 @@ and the dtypes on which they are supported.
 
 ## GroupBy apply
 
-## Rolling.groupby()
+To apply function on each group, use the `GroupBy.apply()` method:
+
+```python
+>>> df
+   a  b  c
+0  1  1  1
+1  1  1  2
+2  1  2  3
+3  2  2  4
+4  2  3  5
+>>> df.groupby('a').apply(lambda x: x.max() - x.min())
+   a  b  c
+a
+0  0  1  2
+1  0  1  1
+```
+
+### Limitations
+
+* `apply` works by applying the provided function to each group sequentially,
+  and concatenating the results together. **This can be very slow**, especially
+  for a large number of small groups. For a small number of large groups, it
+  can give acceptable performance
+
+* The results may not always match Pandas exactly. For example, cuDF may return
+  a `DataFrame` containing a single column where Pandas returns a `Series`.
+  Some post-processing may be required to match Pandas behavior.
+
+* cuDF does not support some of the exceptional cases that Pandas supports with
+  `apply`, such as [`describe`](https://pandas.pydata.org/pandas-docs/stable/user_guide/groupby.html#flexible-apply).
+
+## Rolling window calculations
+
+Use the `GroupBy.rolling()` method to perform rolling window calculations on each group:
+
+```python
+>>> df
+   a  b  c
+0  1  1  1
+1  1  1  2
+2  1  2  3
+3  2  2  4
+4  2  3  5
+```
+
+Rolling window sum on each group with a window size of 2:
+
+```
+>>> df.groupby('a').rolling(2).sum()
+        a     b     c
+a
+1 0  <NA>  <NA>  <NA>
+  1     2     2     3
+  2     2     3     5
+2 3  <NA>  <NA>  <NA>
+  4     4     5     9
+```
