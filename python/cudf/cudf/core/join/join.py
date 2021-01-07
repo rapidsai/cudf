@@ -455,19 +455,18 @@ class Merge(object):
         # with the dtype from the major operand taking priority
         if how in {"left", "right"}:
             if how == "left":
-                mjr_dtype, mnr_dtype = ltype, rtype
+                mjr, mnr = lcol, rcol
             elif how == "right":
-                mjr_dtype, mnr_dtype = rtype, ltype
-            if isinstance(mjr_dtype, CategoricalDtype):
-                mjr_dtype = mjr_dtype.categories.dtype
-            if isinstance(mnr_dtype, CategoricalDtype):
-                mnr_dtype = mnr_dtype.categories.dtype
+                mjr, mnr = rcol, lcol
+            if isinstance(mjr.dtype, CategoricalDtype):
+                mjr = mjr.categories
+            if isinstance(mnr.dtype, CategoricalDtype):
+                mnr = mnr.categories
             return self.input_to_libcudf_casting_rules(
-                mjr_dtype,
-                mnr_dtype,
+                mjr,
+                mnr,
                 how
             )
-
 
     def _input_to_libcudf_castrules_one_cat(self, lcol, rcol, how):
         return 
@@ -566,10 +565,12 @@ class Merge(object):
             dtype_r, CategoricalDtype
         ):
             if pd.api.types.is_dtype_equal(dtype_l, dtype_r):
-                if how in {"inner", "left"}:
-                    merge_return_type = dtype_l
+                merge_return_type = dtype_l
             else:
-                merge_return_type = "category"
+                if how == 'left':
+                    return dtype_l
+                elif how == 'right':
+                    return dtype_r
         return merge_return_type
 
     def compute_output_dtypes(self):
@@ -657,7 +658,11 @@ class Merge(object):
         return output
 
     def _build_output_col(self, col, dtype):
-
+        # problem:
+        # equal dtypes, merge performed in int8 land via codes
+        # then build_categorical_column works with those codes
+        # unequal dtypes, merge performed in resolved dtype between both categories
+        # now the resulting data is not codes indexed into categories
         if isinstance(
             dtype, (cudf.core.dtypes.CategoricalDtype, pd.CategoricalDtype)
         ):

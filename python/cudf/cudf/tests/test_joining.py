@@ -1267,7 +1267,7 @@ def test_categorical_typecast_left():
     result = left.merge(right, on='key', how='left')
 
     expect_dtype = CategoricalDtype(categories=[1,2,3], ordered=False)
-    expect_data = cudf.Series([1,2,3], dtype=expect_dtype)
+    expect_data = cudf.Series([1,2,3], dtype=expect_dtype, name='key')
 
     assert_eq(expect_data, result['key'])
 
@@ -1276,11 +1276,12 @@ def test_categorical_typecast_left():
     left = make_categorical_dataframe([1,2,3], ordered=True)
     right = make_categorical_dataframe([1,2,3], ordered=False)
 
+    import pdb
+    pdb.set_trace()
     result = left.merge(right, on='key', how='left')
 
     expect_dtype = CategoricalDtype(categories=[1,2,3], ordered=True)
-    expect_data = cudf.Series([1,2,3], dtype=expect_dtype)
-
+    expect_data = cudf.Series([1,2,3], dtype=expect_dtype, name='key')
     assert_eq(expect_data, result['key'])
 
     # equal categories, left is not ordered, right is ordered
@@ -1291,7 +1292,7 @@ def test_categorical_typecast_left():
     result = left.merge(right, on='key', how='left')
 
     expect_dtype = CategoricalDtype(categories=[1,2,3], ordered=True)
-    expect_data = cudf.Series([1,2,3], dtype=expect_dtype)
+    expect_data = cudf.Series([1,2,3], dtype=expect_dtype, name='key')
 
     with pytest.raises(TypeError):
         assert_eq(expect_data, result['key'])
@@ -1303,7 +1304,7 @@ def test_categorical_typecast_left():
     result = left.merge(right, on='key', how='left')
 
     expect_dtype = CategoricalDtype(categories=[1,2,3], ordered=False)
-    expect_data = cudf.Series([2,3], dtype=expect_dtype)
+    expect_data = cudf.Series([2,3], dtype=expect_dtype, name='key')
 
     assert_eq(expect_data, result['key'])
 
@@ -1313,7 +1314,7 @@ def test_categorical_typecast_left():
 
     result = left.merge(right, on='key', how='left')
     expect_dtype = CategoricalDtype(categories=[1,2,3], ordered=True)
-    expect_data = cudf.Series([2,3], dtype=expect_dtype)
+    expect_data = cudf.Series([2,3], dtype=expect_dtype, name='key')
 
     assert_eq(expect_data, result['key'])
 
