@@ -156,7 +156,7 @@ Use the `GroupBy.rolling()` method to perform rolling window calculations on eac
 
 Rolling window sum on each group with a window size of 2:
 
-```
+```python
 >>> df.groupby('a').rolling(2).sum()
         a     b     c
 a
