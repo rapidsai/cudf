@@ -163,7 +163,8 @@ ConfigureBench(SEARCH_BENCH "${SEARCH_BENCH_SRC}")
 # - sort benchmark --------------------------------------------------------------------------------
 
 set(SORT_BENCH_SRC
-  "${CUDF_BENCHMARKS_SOURCE_DIR}/sort/sort_benchmark.cu")
+  "${CUDF_BENCHMARKS_SOURCE_DIR}/sort/sort_benchmark.cu"
+  "${CUDF_BENCHMARKS_SOURCE_DIR}/sort/sort_strings_benchmark.cu")
 
 ConfigureBench(SORT_BENCH "${SORT_BENCH_SRC}")
 

@@ -41,7 +41,6 @@ using backref_type = thrust::pair<size_type, size_type>;
  * There are three call types based on the number of regex instructions in the given pattern.
  * Small to medium instruction lengths can use the stack effectively though smaller executes faster.
  * Longer patterns require global memory. Shorter patterns are common in data cleaning.
- *
  */
 template <size_t stack_size>
 struct backrefs_fn {

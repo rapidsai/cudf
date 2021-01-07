@@ -242,7 +242,7 @@ struct column_scatterer_impl<dictionary32, MapIterator> {
  * @param[in] mr Device memory resource used to allocate the returned table's device memory
  *
  * @return Result of scattering values from source to target
- **/
+ */
 template <typename MapIterator>
 std::unique_ptr<table> scatter(
   table_view const& source,

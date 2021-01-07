@@ -26,7 +26,7 @@ namespace detail {
 
 /**
  * @brief Sort types for the sort method.
- **/
+ */
 enum sort_type {
   none   = 0,  ///< no sorting
   length = 1,  ///< sort by string length

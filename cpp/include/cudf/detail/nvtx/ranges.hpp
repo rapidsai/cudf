@@ -21,7 +21,6 @@
 namespace cudf {
 /**
  * @brief Tag type for libcudf's NVTX domain.
- *
  */
 struct libcudf_domain {
   static constexpr char const* name{"libcudf"};  ///< Name of the libcudf domain
@@ -29,7 +28,6 @@ struct libcudf_domain {
 
 /**
  * @brief Alias for an NVTX range in the libcudf domain.
- *
  */
 using thread_range = ::nvtx3::domain_thread_range<libcudf_domain>;
 
@@ -49,6 +47,5 @@ using thread_range = ::nvtx3::domain_thread_range<libcudf_domain>;
  *    ...
  * }
  * ```
- *
  */
 #define CUDF_FUNC_RANGE() NVTX3_FUNC_RANGE_IN(cudf::libcudf_domain)

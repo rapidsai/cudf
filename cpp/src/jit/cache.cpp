@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2020, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -61,7 +61,7 @@ boost::filesystem::path get_user_home_cache_dir()
  * The default cache directory is `$HOME/.cudf/$CUDF_VERSION`. If no overrides
  * are used and if $HOME is not defined, returns an empty path and file
  * caching is not used.
- **/
+ */
 boost::filesystem::path getCacheDir()
 {
   // The environment variable always overrides the
