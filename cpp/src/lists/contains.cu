@@ -106,14 +106,18 @@ std::pair<rmm::device_buffer, size_type> construct_null_mask(
 
 struct lookup_functor {
   template <typename T, typename... Args>
-  std::enable_if_t<!cudf::is_numeric<T>() && !std::is_same<T, cudf::string_view>::value, void>
+  std::enable_if_t<!cudf::is_numeric<T>() && !cudf::is_chrono<T>() &&
+                     !std::is_same<T, cudf::string_view>::value,
+                   void>
   operator()(Args&&...) const
   {
     CUDF_FAIL("lists::contains() is only supported on numeric types and strings.");
   }
 
   template <typename T, typename SearchKeyPairIter>
-  std::enable_if_t<cudf::is_numeric<T>() || std::is_same<T, cudf::string_view>::value, void>
+  std::enable_if_t<cudf::is_numeric<T>() || cudf::is_chrono<T>() ||
+                     std::is_same<T, cudf::string_view>::value,
+                   void>
   op_impl(cudf::detail::lists_column_device_view const& d_lists,
           SearchKeyPairIter search_key_iter,
           cudf::mutable_column_device_view output_bools,
@@ -145,7 +149,9 @@ struct lookup_functor {
   }
 
   template <typename T>
-  std::enable_if_t<cudf::is_numeric<T>() || std::is_same<T, cudf::string_view>::value, void>
+  std::enable_if_t<cudf::is_numeric<T>() || cudf::is_chrono<T>() ||
+                     std::is_same<T, cudf::string_view>::value,
+                   void>
   operator()(cudf::detail::lists_column_device_view const& d_lists,
              cudf::scalar const& search_key,
              cudf::mutable_column_device_view output_bools,
@@ -157,7 +163,9 @@ struct lookup_functor {
   }
 
   template <typename T>
-  std::enable_if_t<cudf::is_numeric<T>() || std::is_same<T, cudf::string_view>::value, void>
+  std::enable_if_t<cudf::is_numeric<T>() || cudf::is_chrono<T>() ||
+                     std::is_same<T, cudf::string_view>::value,
+                   void>
   operator()(cudf::detail::lists_column_device_view const& d_lists,
              cudf::column_device_view const& d_search_keys,
              bool search_keys_have_nulls,

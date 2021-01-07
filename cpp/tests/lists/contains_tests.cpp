@@ -28,17 +28,17 @@
 struct ContainsTest : public cudf::test::BaseFixture {
 };
 
-using NumericTypes =
-  cudf::test::Concat<cudf::test::IntegralTypesNotBool, cudf::test::FloatingPointTypes>;
+using ContainsTestTypes = cudf::test::
+  Concat<cudf::test::IntegralTypesNotBool, cudf::test::FloatingPointTypes, cudf::test::ChronoTypes>;
 
 template <typename T>
 struct TypedContainsTest : public ContainsTest {
 };
 
-TYPED_TEST_CASE(TypedContainsTest, NumericTypes);
+TYPED_TEST_CASE(TypedContainsTest, ContainsTestTypes);
 
 namespace {
-template <typename T>
+template <typename T, std::enable_if_t<cudf::is_numeric<T>(), void>* = nullptr>
 auto create_scalar_search_key(T const& value)
 {
   using namespace cudf;
@@ -50,7 +50,7 @@ auto create_scalar_search_key(T const& value)
   return search_key;
 }
 
-template <>
+template <typename T, std::enable_if_t<std::is_same<T, std::string>::value, void>* = nullptr>
 auto create_scalar_search_key(std::string const& value)
 {
   using namespace cudf;
@@ -59,7 +59,31 @@ auto create_scalar_search_key(std::string const& value)
   return make_string_scalar(value);
 }
 
-template <typename T>
+template <typename T, std::enable_if_t<cudf::is_timestamp<T>(), void>* = nullptr>
+auto create_scalar_search_key(typename T::rep const& value)
+{
+  using namespace cudf;
+  using namespace cudf::test;
+
+  auto search_key = make_timestamp_scalar(data_type{type_to_id<T>()});
+  search_key->set_valid(true);
+  static_cast<scalar_type_t<typename T::rep>*>(search_key.get())->set_value(value);
+  return search_key;
+}
+
+template <typename T, std::enable_if_t<cudf::is_duration<T>(), void>* = nullptr>
+auto create_scalar_search_key(typename T::rep const& value)
+{
+  using namespace cudf;
+  using namespace cudf::test;
+
+  auto search_key = make_duration_scalar(data_type{type_to_id<T>()});
+  search_key->set_valid(true);
+  static_cast<scalar_type_t<typename T::rep>*>(search_key.get())->set_value(value);
+  return search_key;
+}
+
+template <typename T, std::enable_if_t<cudf::is_numeric<T>(), void>* = nullptr>
 auto create_null_search_key()
 {
   using namespace cudf;
@@ -69,6 +93,29 @@ auto create_null_search_key()
   search_key->set_valid(false);
   return search_key;
 }
+
+template <typename T, std::enable_if_t<cudf::is_timestamp<T>(), void>* = nullptr>
+auto create_null_search_key()
+{
+  using namespace cudf;
+  using namespace cudf::test;
+
+  auto search_key = make_timestamp_scalar(data_type{type_to_id<T>()});
+  search_key->set_valid(false);
+  return search_key;
+}
+
+template <typename T, std::enable_if_t<cudf::is_duration<T>(), void>* = nullptr>
+auto create_null_search_key()
+{
+  using namespace cudf;
+  using namespace cudf::test;
+
+  auto search_key = make_duration_scalar(data_type{type_to_id<T>()});
+  search_key->set_valid(false);
+  return search_key;
+}
+
 }  // namespace
 
 TYPED_TEST(TypedContainsTest, ListContainsScalarWithNoNulls)
@@ -319,7 +366,16 @@ TEST_F(ContainsTest, ScalarTypeRelatedExceptions)
   }
 }
 
-TYPED_TEST(TypedContainsTest, ListContainsVectorWithNoNulls)
+template <typename T>
+struct TypedVectorContainsTest : public ContainsTest {
+};
+
+using VectorContainsTestTypes =
+  cudf::test::Concat<cudf::test::IntegralTypesNotBool, cudf::test::FloatingPointTypes>;
+
+TYPED_TEST_CASE(TypedVectorContainsTest, VectorContainsTestTypes);
+
+TYPED_TEST(TypedVectorContainsTest, ListContainsVectorWithNoNulls)
 {
   using namespace cudf;
   using namespace cudf::test;
@@ -347,7 +403,7 @@ TYPED_TEST(TypedContainsTest, ListContainsVectorWithNoNulls)
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected_result, *actual_result);
 }
 
-TYPED_TEST(TypedContainsTest, ListContainsVectorWithNullLists)
+TYPED_TEST(TypedVectorContainsTest, ListContainsVectorWithNullLists)
 {
   // Test List columns that have NULL list rows.
 
@@ -383,7 +439,7 @@ TYPED_TEST(TypedContainsTest, ListContainsVectorWithNullLists)
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected_result, *actual_result);
 }
 
-TYPED_TEST(TypedContainsTest, ListContainsVectorNonNullListsWithNullValues)
+TYPED_TEST(TypedVectorContainsTest, ListContainsVectorNonNullListsWithNullValues)
 {
   // Test List columns that have no NULL list rows, but NULL elements in some list rows.
   using namespace cudf;
@@ -412,7 +468,7 @@ TYPED_TEST(TypedContainsTest, ListContainsVectorNonNullListsWithNullValues)
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected_result, *actual_result);
 }
 
-TYPED_TEST(TypedContainsTest, ListContainsVectorWithNullsInLists)
+TYPED_TEST(TypedVectorContainsTest, ListContainsVectorWithNullsInLists)
 {
   using namespace cudf;
   using namespace cudf::test;
@@ -442,7 +498,7 @@ TYPED_TEST(TypedContainsTest, ListContainsVectorWithNullsInLists)
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected_result, *actual_result);
 }
 
-TYPED_TEST(TypedContainsTest, ListContainsVectorWithNullsInListsAndInSearchKeys)
+TYPED_TEST(TypedVectorContainsTest, ListContainsVectorWithNullsInListsAndInSearchKeys)
 {
   using namespace cudf;
   using namespace cudf::test;
