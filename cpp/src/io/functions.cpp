@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2020, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,8 +18,8 @@
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/io/avro.hpp>
 #include <cudf/io/csv.hpp>
-#include <cudf/io/datasource.hpp>
 #include <cudf/io/data_sink.hpp>
+#include <cudf/io/datasource.hpp>
 #include <cudf/io/detail/avro.hpp>
 #include <cudf/io/detail/csv.hpp>
 #include <cudf/io/detail/json.hpp>
@@ -255,7 +255,8 @@ void write_orc(orc_writer_options const& options, rmm::mr::device_memory_resourc
   CUDF_FUNC_RANGE();
 
   namespace detail_orc = cudf::io::detail::orc;
-  auto writer = make_writer<detail_orc::writer>(options.get_sink(), options, detail_orc::SingleWriteMode::YES, mr);
+  auto writer          = make_writer<detail_orc::writer>(
+    options.get_sink(), options, detail_orc::SingleWriteMode::YES, mr);
 
   writer->write(options.get_table());
 }
@@ -291,6 +292,7 @@ orc_chunked_writer& orc_chunked_writer::write(table_view const& table)
 void orc_chunked_writer::close()
 {
   CUDF_FUNC_RANGE();
+
   return writer->close();
 }
 

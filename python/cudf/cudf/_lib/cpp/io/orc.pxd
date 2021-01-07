@@ -1,4 +1,4 @@
-# Copyright (c) 2020, NVIDIA CORPORATION.
+# Copyright (c) 2020-2021, NVIDIA CORPORATION.
 
 from libcpp cimport bool
 from libcpp.string cimport string
@@ -107,13 +107,16 @@ cdef extern from "cudf/io/orc.hpp" \
         cudf_io_types.compression_type get_compression() except+
         bool enable_statistics() except+
         cudf_table_view.table_view get_table() except+
-        const cudf_io_types.table_metadata_with_nullability *get_metadata() except+
+        const cudf_io_types.table_metadata_with_nullability *get_metadata(
+        ) except+
 
         # setter
         void set_compression(cudf_io_types.compression_type comp) except+
         void enable_statistics(bool val) except+
         void set_table(cudf_table_view.table_view tbl) except+
-        void set_metadata(cudf_io_types.table_metadata_with_nullability* meta) except+
+        void set_metadata(
+            cudf_io_types.table_metadata_with_nullability* meta
+        ) except+
 
         @staticmethod
         chunked_orc_writer_options_builder builder(
@@ -142,4 +145,3 @@ cdef extern from "cudf/io/orc.hpp" \
             cudf_table_view.table_view table_,
         ) except+
         void close() except+
-

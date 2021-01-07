@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2020, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -1001,10 +1001,9 @@ writer::impl::impl(std::unique_ptr<data_sink> sink,
 {
 }
 
-writer::impl::~impl(){
-    if (not is_closed) {
-        close();
-    }
+writer::impl::~impl()
+{
+  if (not closed) { close(); }
 }
 
 writer::impl::impl(std::unique_ptr<data_sink> sink,
@@ -1019,16 +1018,15 @@ writer::impl::impl(std::unique_ptr<data_sink> sink,
     stream(stream),
     _mr(mr)
 {
-    if (options.get_metadata() != nullptr) {
-        user_metadata_with_nullability = *options.get_metadata();
-        user_metadata = &user_metadata_with_nullability;
-    }
+  if (options.get_metadata() != nullptr) {
+    user_metadata_with_nullability = *options.get_metadata();
+    user_metadata                  = &user_metadata_with_nullability;
+  }
 }
-
 
 void writer::impl::write(table_view const &table)
 {
-  CUDF_EXPECTS(not is_closed, "Data has already been flushed to out and closed");
+  CUDF_EXPECTS(not closed, "Data has already been flushed to out and closed");
   init_state();
   write_chunk(table);
   close();
@@ -1038,13 +1036,13 @@ void writer::impl::init_state()
 {
   // Write file header
   out_sink_->host_write(MAGIC, std::strlen(MAGIC));
-  is_initialized = true;
+  initialized = true;
 }
 
 void writer::impl::write_chunk(table_view const &table)
 {
-  CUDF_EXPECTS(not is_closed, "Data has already been flushed to out and closed");
-  if (not is_initialized) init_state();
+  CUDF_EXPECTS(not closed, "Data has already been flushed to out and closed");
+  if (not initialized) init_state();
   size_type num_columns = table.num_columns();
   size_type num_rows    = 0;
 
@@ -1052,10 +1050,10 @@ void writer::impl::write_chunk(table_view const &table)
   std::vector<int> str_col_ids;
 
   if (user_metadata_with_nullability.column_nullable.size() > 0) {
-    CUDF_EXPECTS(user_metadata_with_nullability.column_nullable.size() ==
-                   static_cast<size_t>(num_columns),
-                 "When passing values in user_metadata_with_nullability, data for all columns must "
-                 "be specified");
+    CUDF_EXPECTS(
+      user_metadata_with_nullability.column_nullable.size() == static_cast<size_t>(num_columns),
+      "When passing values in user_metadata_with_nullability, data for all columns must "
+      "be specified");
   }
 
   // Wrapper around cudf columns to attach ORC-specific type info
@@ -1149,24 +1147,14 @@ void writer::impl::write_chunk(table_view const &table)
   const auto num_data_streams   = streams.size() - num_index_streams;
   const auto num_stripe_streams = stripe_list.size() * num_data_streams;
   hostdevice_vector<gpu::StripeStream> strm_desc(num_stripe_streams);
-  auto stripes = gather_stripes(num_columns,
-                                num_rows,
-                                num_index_streams,
-                                num_data_streams,
-                                stripe_list,
-                                chunks,
-                                strm_desc);
+  auto stripes = gather_stripes(
+    num_columns, num_rows, num_index_streams, num_data_streams, stripe_list, chunks, strm_desc);
 
   // Gather column statistics
   std::vector<std::vector<uint8_t>> column_stats;
   if (enable_statistics_ && num_columns > 0 && num_rows > 0) {
-    column_stats = gather_statistic_blobs(orc_columns.data(),
-                                          num_columns,
-                                          num_rows,
-                                          num_rowgroups,
-                                          stripe_list,
-                                          stripes,
-                                          chunks);
+    column_stats = gather_statistic_blobs(
+      orc_columns.data(), num_columns, num_rows, num_rowgroups, stripe_list, stripes, chunks);
   }
 
   // Allocate intermediate output stream buffer
@@ -1313,9 +1301,7 @@ void writer::impl::write_chunk(table_view const &table)
       ff.statistics[0] = std::move(buffer_);
       for (int i = 0; i < num_columns; i++) {
         size_t idx = stripe_list.size() * num_columns + i;
-        if (idx < column_stats.size()) {
-          ff.statistics[1 + i] = std::move(column_stats[idx]);
-        }
+        if (idx < column_stats.size()) { ff.statistics[1 + i] = std::move(column_stats[idx]); }
       }
     }
     // Stripe-level statistics
@@ -1330,8 +1316,7 @@ void writer::impl::write_chunk(table_view const &table)
       for (int i = 0; i < num_columns; i++) {
         size_t idx = stripe_list.size() * i + stripe_id;
         if (idx < column_stats.size()) {
-          md.stripeStats[first_stripe + stripe_id].colStats[1 + i] =
-            std::move(column_stats[idx]);
+          md.stripeStats[first_stripe + stripe_id].colStats[1 + i] = std::move(column_stats[idx]);
         }
       }
     }
@@ -1359,23 +1344,21 @@ void writer::impl::write_chunk(table_view const &table)
     }
   }
   ff.stripes.insert(ff.stripes.end(),
-                          std::make_move_iterator(stripes.begin()),
-                          std::make_move_iterator(stripes.end()));
+                    std::make_move_iterator(stripes.begin()),
+                    std::make_move_iterator(stripes.end()));
   ff.numberOfRows += num_rows;
 }
 
 void writer::impl::close()
 {
-  CUDF_EXPECTS(not is_closed, "Data has already been flushed to out and closed");
-  is_closed = true;
+  CUDF_EXPECTS(not closed, "Data has already been flushed to out and closed");
+  closed = true;
   ProtobufWriter pbw_(&buffer_);
   PostScript ps;
 
   ff.contentLength = out_sink_->bytes_written();
   if (user_metadata) {
-    for (auto it = user_metadata->user_data.begin();
-         it != user_metadata->user_data.end();
-         it++) {
+    for (auto it = user_metadata->user_data.begin(); it != user_metadata->user_data.end(); it++) {
       ff.metadata.push_back({it->first, it->second});
     }
   }
@@ -1429,16 +1412,10 @@ writer::writer(std::unique_ptr<data_sink> sink,
 writer::~writer() = default;
 
 // Forward to implementation
-void writer::write(table_view const &table)
-{
-  _impl->write(table);
-}
+void writer::write(table_view const &table) { _impl->write(table); }
 
 // Forward to implementation
-void writer::write_chunk(table_view const &table)
-{
-  _impl->write_chunk(table);
-}
+void writer::write_chunk(table_view const &table) { _impl->write_chunk(table); }
 
 // Forward to implementation
 void writer::close() { _impl->close(); }

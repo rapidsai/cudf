@@ -1,4 +1,4 @@
-# Copyright (c) 2020, NVIDIA CORPORATION.
+# Copyright (c) 2020-2021, NVIDIA CORPORATION.
 
 import cudf
 
@@ -152,4 +152,3 @@ def _index_level_name(index_name, level, column_names):
         return index_name
     else:
         return f"__index_level_{level}__"
-

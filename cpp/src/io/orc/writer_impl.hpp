@@ -1,5 +1,5 @@
 /*
- i Copyright (c) 2019-2020, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -72,7 +72,7 @@ class writer::impl {
                 SingleWriteMode mode,
                 rmm::mr::device_memory_resource* mr,
                 rmm::cuda_stream_view stream);
-   
+
   /**
    * @brief Constructor with chunked writer options.
    *
@@ -207,7 +207,6 @@ class writer::impl {
    * @param stripe_list List of stripe boundaries
    * @param chunks List of column data chunks
    * @param strm_desc List of stream descriptors
-   * @param stream CUDA stream used for device memory operations and kernel launches.
    *
    * @return The stripes' information
    */
@@ -346,8 +345,10 @@ class writer::impl {
   /// special parameter only used by detail::write() to indicate that we are guaranteeing
   /// a single table write.  this enables some internal optimizations.
   bool const single_write_mode;
-  bool is_initialized = false;
-  bool is_closed = false;
+  /// To track whether necessary members have been initialized
+  bool initialized = false;
+  /// to track if the output has been written to sink
+  bool closed = false;
 
   std::vector<uint8_t> buffer_;
   std::unique_ptr<data_sink> out_sink_;

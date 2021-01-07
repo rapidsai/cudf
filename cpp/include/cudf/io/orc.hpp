@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,10 +16,10 @@
 
 #pragma once
 
+#include <cudf/io/detail/orc.hpp>
 #include <cudf/io/types.hpp>
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
-#include <cudf/io/detail/orc.hpp>
 
 #include <memory>
 #include <string>
@@ -790,9 +790,8 @@ class orc_chunked_writer {
    * @param[in] op options used to write table
    * @param[in] mr Device memory resource to use for device memory allocation
    */
-  orc_chunked_writer(
-    chunked_orc_writer_options const& op,
-    rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+  orc_chunked_writer(chunked_orc_writer_options const& op,
+                     rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
   /**
    * @brief Moves writer unique pointer to object

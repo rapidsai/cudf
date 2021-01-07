@@ -1,4 +1,4 @@
-# Copyright (c) 2020, NVIDIA CORPORATION.
+# Copyright (c) 2020-2021, NVIDIA CORPORATION.
 
 import cudf
 
@@ -213,8 +213,8 @@ cdef class ORCWriter:
     cdef compression_type comp_type
     cdef object index
 
-    def  __cinit__(self, object path, object index=None,
-                   object compression=None, bool enable_statistics=True):
+    def __cinit__(self, object path, object index=None,
+                  object compression=None, bool enable_statistics=True):
         self.sink = make_sink_info(path, self._data_sink)
         self.enable_stats = enable_statistics
         self.comp_type = _get_comp_type(compression)
@@ -252,7 +252,7 @@ cdef class ORCWriter:
     def _initialize_chunked_state(self, Table table):
         """
         Prepare all the values required to build the
-        chunked_orc_writer_options """
+        chunked_orc_writer_options anb creates a writer"""
         cdef unique_ptr[table_metadata_with_nullability] tbl_meta
         tbl_meta = make_unique[table_metadata_with_nullability]()
 
@@ -260,8 +260,8 @@ cdef class ORCWriter:
         tbl_meta.get().column_names = get_column_names(table, self.index)
         pandas_metadata = generate_pandas_metadata(table, self.index)
         tbl_meta.get().user_data[str.encode("pandas")] = \
-                str.encode(pandas_metadata)
-        
+            str.encode(pandas_metadata)
+
         cdef chunked_orc_writer_options args
         with nogil:
             args = move(

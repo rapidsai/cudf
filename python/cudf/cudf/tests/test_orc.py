@@ -1,4 +1,4 @@
-# Copyright (c) 2019-2020, NVIDIA CORPORATION.
+# Copyright (c) 2019-2021, NVIDIA CORPORATION.
 
 import os
 import datetime
@@ -406,7 +406,9 @@ def test_orc_writer(datadir, tmpdir, reference_file, columns, compression):
         ("TestOrcFile.demo-12-zlib.orc", ["_col1", "_col3", "_col5"]),
     ],
 )
-def test_chunked_orc_writer(datadir, tmpdir, reference_file, columns, compression):
+def test_chunked_orc_writer(
+    datadir, tmpdir, reference_file, columns, compression
+):
     pdf_fname = datadir / reference_file
     gdf_fname = tmpdir.join("chunked_gdf.orc")
 

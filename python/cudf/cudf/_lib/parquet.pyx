@@ -1,4 +1,4 @@
-# Copyright (c) 2019-2020, NVIDIA CORPORATION.
+# Copyright (c) 2019-2021, NVIDIA CORPORATION.
 
 # cython: boundscheck = False
 
@@ -22,6 +22,13 @@ from cudf.utils.dtypes import (
     is_list_dtype,
     is_struct_dtype
 )
+
+from cudf._lib.utils cimport get_column_names
+from cudf._lib.utils import (
+    _index_level_name,
+    generate_pandas_metadata,
+)
+
 from libc.stdlib cimport free
 from libc.stdint cimport uint8_t
 from libcpp.memory cimport shared_ptr, unique_ptr, make_unique
@@ -59,14 +66,6 @@ from cudf._lib.io.utils cimport (
 
 cimport cudf._lib.cpp.types as cudf_types
 cimport cudf._lib.cpp.io.types as cudf_io_types
-
-#cimport cudf._lib.utils.get_column_names
-from cudf._lib.utils cimport get_column_names
-
-from cudf._lib.utils import (
-    _index_level_name,
-    generate_pandas_metadata,
-)
 
 cdef class BufferArrayFromVector:
     cdef Py_ssize_t length

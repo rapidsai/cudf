@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -787,7 +787,9 @@ TEST_F(OrcChunkedWriterTest, ReadStripes)
   auto filepath = temp_env->get_temp_filepath("ChunkedStripes.orc");
   cudf_io::chunked_orc_writer_options opts =
     cudf_io::chunked_orc_writer_options::builder(cudf_io::sink_info{filepath});
-  {cudf_io::orc_chunked_writer(opts).write(*table1).write(*table2);}
+  {
+    cudf_io::orc_chunked_writer(opts).write(*table1).write(*table2);
+  }
 
   cudf_io::orc_reader_options read_opts =
     cudf_io::orc_reader_options::builder(cudf_io::source_info{filepath}).stripes({1, 0, 1});

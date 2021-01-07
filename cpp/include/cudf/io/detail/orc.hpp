@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -22,7 +22,6 @@
 
 #include <memory>
 #include <string>
-#include <unordered_map>
 #include <vector>
 
 #include <rmm/cuda_stream_view.hpp>
@@ -110,9 +109,9 @@ class writer {
    */
   explicit writer(std::unique_ptr<cudf::io::data_sink> sink,
                   orc_writer_options const& options,
-                  SingleWriteMode mode = SingleWriteMode::NO,
+                  SingleWriteMode mode                = SingleWriteMode::NO,
                   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource(),
-                  rmm::cuda_stream_view stream = rmm::cuda_stream_default);
+                  rmm::cuda_stream_view stream        = rmm::cuda_stream_default);
 
   /**
    * @brief Constructor with chunked writer options.
@@ -125,9 +124,9 @@ class writer {
    */
   explicit writer(std::unique_ptr<cudf::io::data_sink> sink,
                   chunked_orc_writer_options const& options,
-                  SingleWriteMode mode = SingleWriteMode::YES,
+                  SingleWriteMode mode                = SingleWriteMode::YES,
                   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource(),
-                  rmm::cuda_stream_view stream = rmm::cuda_stream_default);
+                  rmm::cuda_stream_view stream        = rmm::cuda_stream_default);
 
   /**
    * @brief Destructor explicitly declared to avoid inlining in header
