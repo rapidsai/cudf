@@ -243,6 +243,21 @@ TEST_F(StringsCharsTest, Integers)
   EXPECT_TRUE(cudf::strings::all_integer(cudf::strings_column_view(strings2)));
 }
 
+TEST_F(StringsCharsTest, ValidIntegers)
+{
+  cudf::test::strings_column_wrapper strings1(
+    {"+175", "-34", "9.8", "17+2", "+-14", "1234567890", "67de", "", "1e10", "-", "++", ""});
+  auto results = cudf::strings::is_valid_fixed_point(cudf::strings_column_view(strings1), true, data_type::INT64);
+  cudf::test::fixed_width_column_wrapper<bool> expected1({1, 1, 1, 0, 0, 1, 0, 0, 0, 0, 0, 0});
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected1);
+  
+  cudf::test::strings_column_wrapper strings2(
+    {"0", "+0", "-0", "1234567890", "-27341132", "+012", "023", "-045", "-1.1", "+1000.1"});
+  results = cudf::strings::is_valid_fixed_point(cudf::strings_column_view(strings2), true, data_type::INT64);
+  cudf::test::fixed_width_column_wrapper<bool> expected2({1, 1, 1, 1, 1, 1, 1, 1, 1, 1});
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected2);
+}
+
 TEST_F(StringsCharsTest, Floats)
 {
   cudf::test::strings_column_wrapper strings1({"+175",
@@ -390,3 +405,4 @@ TEST_F(StringsCharsTest, EmptyStringsColumn)
   EXPECT_EQ(cudf::type_id::STRING, results->view().type().id());
   EXPECT_EQ(0, results->view().size());
 }
+
