@@ -189,5 +189,19 @@ def test_get_dummies_prefix_sep(prefix, prefix_sep):
     utils.assert_eq(encoded_expected, encoded_actual)
 
 
-if __name__ == "__main__":
-    test_onehot_random()
+def test_get_dummies_with_nan():
+    df = cudf.DataFrame(
+        {"a": cudf.Series([1, 2, np.nan, None], nan_as_null=False)}
+    )
+    expected = cudf.DataFrame(
+        {
+            "a_1.0": [1, 0, 0, 0],
+            "a_2.0": [0, 1, 0, 0],
+            "a_nan": [0, 0, 1, 0],
+            "a_null": [0, 0, 0, 1],
+        },
+        dtype="uint8",
+    )
+    actual = cudf.get_dummies(df, dummy_na=True, columns=["a"])
+
+    utils.assert_eq(expected, actual)

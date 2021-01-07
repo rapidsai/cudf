@@ -113,11 +113,11 @@ class writer {
    */
   std::unique_ptr<std::vector<uint8_t>> write(
     table_view const& table,
-    const table_metadata* metadata            = nullptr,
-    bool return_filemetadata                  = false,
-    const std::string column_chunks_file_path = "",
-    bool int96_timestamps                     = false,
-    rmm::cuda_stream_view stream              = rmm::cuda_stream_default);
+    const table_metadata* metadata                = nullptr,
+    bool return_filemetadata                      = false,
+    const std::string column_chunks_file_path     = "",
+    std::vector<uint8_t> const& decimal_precision = {},
+    rmm::cuda_stream_view stream                  = rmm::cuda_stream_default);
 
   /**
    * @brief Begins the chunked/streamed write process.
