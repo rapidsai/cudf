@@ -64,25 +64,26 @@ b
 
 ## Aggregating
 
-cuDF supports the following aggregations:
+The following table summarizes the supported aggregations
+and the dtypes on which they are supported.
 
-| dtype/agg | Numeric | Datetime | String | Categorical | List | Struct |
-| --------  | ------- | -------- | ------ | ----------- | ---- | ------ |
-| count     | ✅      | ✅       | ✅     | ✅          |      |        |
-| size      | ✅      | ✅       | ✅     | ✅          |      |        |
-| sum       | ✅      | ✅       |        |             |      |        |
-| idxmin    | ✅      | ✅       |        |             |      |        |
-| idxmax    | ✅      | ✅       |        |             |      |        |
-| min       | ✅      | ✅       | ✅     |             |      |        |
-| max       | ✅      | ✅       | ✅     |             |      |        |
-| mean      | ✅      | ✅       |        |             |      |        |
-| var       | ✅      | ✅       |        |             |      |        |
-| std       | ✅      | ✅       |        |             |      |        |
-| quantile  | ✅      | ✅       |        |             |      |        |
-| median    | ✅      | ✅       |        |             |      |        |
-| nunique   | ✅      | ✅       | ✅     | ✅          |      |        |
-| nth       | ✅      | ✅       | ✅     |             |      |        |
-| collect   | ✅      | ✅       | ✅     |             | ✅   |        |
+| Aggregations\dtypes | Numeric  | Datetime | String   | Categorical | List |
+| ------------------- | -------- | -------  | -------- | ----------- | ---- |
+| count               | ✅       | ✅       | ✅       | ✅          |      |
+| size                | ✅       | ✅       | ✅       | ✅          |      |
+| sum                 | ✅       | ✅       |          |             |      |
+| idxmin              | ✅       | ✅       |          |             |      |
+| idxmax              | ✅       | ✅       |          |             |      |
+| min                 | ✅       | ✅       | ✅       |             |      |
+| max                 | ✅       | ✅       | ✅       |             |      |
+| mean                | ✅       | ✅       |          |             |      |
+| var                 | ✅       | ✅       |          |             |      |
+| std                 | ✅       | ✅       |          |             |      |
+| quantile            | ✅       | ✅       |          |             |      |
+| median              | ✅       | ✅       |          |             |      |
+| nunique             | ✅       | ✅       | ✅       | ✅          |      |
+| nth                 | ✅       | ✅       | ✅       |             |      |
+| collect             | ✅       | ✅       | ✅       |             | ✅   |
 
 ## GroupBy apply
 
