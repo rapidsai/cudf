@@ -1,4 +1,4 @@
-# Copyright (c) 2020, NVIDIA CORPORATION.
+# Copyright (c) 2020-2021, NVIDIA CORPORATION.
 
 import decimal
 import pickle
@@ -164,6 +164,9 @@ class ListDtype(ExtensionDtype):
             return f"ListDtype({self.element_type.__repr__()})"
         else:
             return f"ListDtype({self.element_type})"
+
+    def __hash__(self):
+        return hash(self._typ)
 
 
 class StructDtype(ExtensionDtype):

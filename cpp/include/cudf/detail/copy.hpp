@@ -40,7 +40,7 @@ namespace detail {
  * @param[in] end Index of the last desired element in the slice (exclusive).
  *
  * @return ColumnView View of the elements `[begin,end)` from `input`.
- **/
+ */
 template <typename ColumnView>
 ColumnView slice(ColumnView const& input, cudf::size_type begin, cudf::size_type end)
 {
@@ -92,7 +92,7 @@ std::unique_ptr<column> shift(
  * @copydoc cudf::contiguous_split
  *
  * @param stream CUDA stream used for device memory operations and kernel launches.
- **/
+ */
 std::vector<contiguous_split_result> contiguous_split(
   cudf::table_view const& input,
   std::vector<size_type> const& splits,

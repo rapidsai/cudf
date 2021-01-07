@@ -40,7 +40,7 @@ namespace test {
  * ```
  * class MyTestFixture : public cudf::test::BaseFixture {};
  * ```
- **/
+ */
 class BaseFixture : public ::testing::Test {
   rmm::mr::device_memory_resource *_mr{rmm::mr::get_current_device_resource()};
 
@@ -48,7 +48,7 @@ class BaseFixture : public ::testing::Test {
   /**
    * @brief Returns pointer to `device_memory_resource` that should be used for
    * all tests inheriting from this fixture
-   **/
+   */
   rmm::mr::device_memory_resource *mr() { return _mr; }
 };
 
@@ -96,7 +96,6 @@ namespace detail {
  * now uses a local UniformRandomGenerator object.  If we didn't generate an incrementing seed
  * for each one, every call to make_random_wrapped_column() would return the same values. This
  * fixes that case and also leaves results across multiple test runs deterministic.
- *
  */
 uint64_t random_generator_incrementing_seed();
 
@@ -117,7 +116,7 @@ uint64_t random_generator_incrementing_seed();
  * ```
  *
  * @tparam T The type of values that will be generated.
- **/
+ */
 template <typename T = cudf::size_type, typename Engine = std::default_random_engine>
 class UniformRandomGenerator {
  public:
@@ -157,7 +156,7 @@ class UniformRandomGenerator {
 
   /**
    * @brief Returns the next random number.
-   **/
+   */
   template <typename TL = T, std::enable_if_t<!cudf::is_timestamp<TL>()> * = nullptr>
   T generate()
   {
@@ -280,7 +279,6 @@ inline auto parse_cudf_test_opts(int argc, char **argv)
  * maintaining the original functionality. In addition, this custom `main`
  * function parses the command line to customize test behavior, like the
  * allocation mode used for creating the default memory resource.
- *
  */
 #define CUDF_TEST_PROGRAM_MAIN()                                        \
   int main(int argc, char **argv)                                       \

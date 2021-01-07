@@ -2226,14 +2226,29 @@ def test_arrow_handle_no_index_name(pdf, gdf):
 @pytest.mark.parametrize("num_bins", [1, 2, 4, 20])
 @pytest.mark.parametrize("right", [True, False])
 @pytest.mark.parametrize("dtype", NUMERIC_TYPES + ["bool"])
-def test_series_digitize(num_rows, num_bins, right, dtype):
+@pytest.mark.parametrize("series_bins", [True, False])
+def test_series_digitize(num_rows, num_bins, right, dtype, series_bins):
     data = np.random.randint(0, 100, num_rows).astype(dtype)
     bins = np.unique(np.sort(np.random.randint(2, 95, num_bins).astype(dtype)))
     s = gd.Series(data)
-    indices = s.digitize(bins, right)
+    if series_bins:
+        s_bins = gd.Series(bins)
+        indices = s.digitize(s_bins, right)
+    else:
+        indices = s.digitize(bins, right)
     np.testing.assert_array_equal(
         np.digitize(data, bins, right), indices.to_array()
     )
+
+
+def test_series_digitize_invalid_bins():
+    s = gd.Series(np.random.randint(0, 30, 80), dtype="int32")
+    bins = gd.Series([2, None, None, 50, 90], dtype="int32")
+
+    with pytest.raises(
+        ValueError, match="`bins` cannot contain null entries."
+    ):
+        _ = s.digitize(bins)
 
 
 def test_pandas_non_contiguious():
