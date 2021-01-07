@@ -303,3 +303,6 @@ def to_orc(df, fname, compression=None, enable_statistics=True, **kwargs):
             libcudf.orc.write_orc(df, file_obj, compression, enable_statistics)
     else:
         libcudf.orc.write_orc(df, path_or_buf, compression, enable_statistics)
+
+
+ORCWriter = libcudf.orc.ORCWriter

@@ -117,8 +117,7 @@ cdef extern from "cudf/io/orc.hpp" \
 
         @staticmethod
         chunked_orc_writer_options_builder builder(
-            cudf_io_types.sink_info &sink,
-            cudf_table_view.table_view &tbl
+            cudf_io_types.sink_info &sink
         ) except+
 
     cdef cppclass chunked_orc_writer_options_builder:
