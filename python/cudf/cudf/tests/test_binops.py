@@ -1548,7 +1548,7 @@ def test_binops_decimal():
         dtype=cudf.DecimalDtype(scale=3, precision=4),
     )
     expect = cudf.Series(
-        [decimal.Decimal("3.75"), decimal.Decimal("5.005")],
+        [decimal.Decimal("3.75"), decimal.Decimal("3.005")],
         dtype=cudf.DecimalDtype(scale=3, precision=5),
     )
     got = a + b

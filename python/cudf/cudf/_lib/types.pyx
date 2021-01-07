@@ -191,7 +191,7 @@ cdef dtype_from_structs_column_view(column_view cv):
     return StructDtype(fields)
 
 cdef dtype_from_decimal_column_view(column_view cv):
-    scale = cv.type().scale()
+    scale = -cv.type().scale()
     precision = 18 # max of 64 bit integer
     return DecimalDtype(precision=precision, scale=scale)
 

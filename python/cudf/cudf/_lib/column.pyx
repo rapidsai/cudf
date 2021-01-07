@@ -396,7 +396,7 @@ cdef class Column:
                 )
             )
         cdef libcudf_types.data_type dtype = (
-            libcudf_types.data_type(tid, self.dtype.scale)
+            libcudf_types.data_type(tid, -self.dtype.scale)
             if tid == libcudf_types.type_id.DECIMAL64
             else libcudf_types.data_type(tid)
         )
