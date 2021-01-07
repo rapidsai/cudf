@@ -78,7 +78,8 @@ boost::filesystem::path getCacheDir()
     // Make per device cache based on compute capability. This is to avoid multiple devices of
     // different compute capability to access the same kernel cache.
     int device;
-    int cc_major, cc_minor;
+    int cc_major;
+    int cc_minor;
     CUDA_TRY(cudaGetDevice(&device));
     CUDA_TRY(cudaDeviceGetAttribute(&cc_major, cudaDevAttrComputeCapabilityMajor, device));
     CUDA_TRY(cudaDeviceGetAttribute(&cc_minor, cudaDevAttrComputeCapabilityMinor, device));
