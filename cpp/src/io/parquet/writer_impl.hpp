@@ -246,7 +246,7 @@ class writer::impl {
   /// argument to write()
   table_metadata const* user_metadata = nullptr;
   // to track if the output has been written to sink
-  bool is_closed = false;
+  bool closed = false;
   /// vector of precision values for decimal writing. Exactly one entry
   /// per decimal column.
   std::vector<uint8_t> decimal_precision;

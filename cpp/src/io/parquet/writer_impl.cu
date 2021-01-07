@@ -704,7 +704,7 @@ writer::impl::impl(std::unique_ptr<data_sink> sink,
 
 writer::impl::~impl()
 {
-  if (not is_closed) close(false, "");
+  if (not closed) close(false, "");
 }
 
 void writer::impl::init_state()
@@ -720,7 +720,7 @@ void writer::impl::init_state()
 std::unique_ptr<std::vector<uint8_t>> writer::impl::write(
   table_view const &table, bool return_filemetadata, const std::string &column_chunks_file_path)
 {
-  CUDF_EXPECTS(not is_closed, "Data has already been flushed to out and closed");
+  CUDF_EXPECTS(not closed, "Data has already been flushed to out and closed");
   init_state();
   write(table);
   return close(return_filemetadata, column_chunks_file_path);
@@ -728,7 +728,7 @@ std::unique_ptr<std::vector<uint8_t>> writer::impl::write(
 
 void writer::impl::write(table_view const &table)
 {
-  CUDF_EXPECTS(not is_closed, "Data has already been flushed to out and closed");
+  CUDF_EXPECTS(not closed, "Data has already been flushed to out and closed");
 
   if (initialized == false) { init_state(); }
   size_type num_columns = table.num_columns();
@@ -1231,8 +1231,8 @@ void writer::impl::write(table_view const &table)
 std::unique_ptr<std::vector<uint8_t>> writer::impl::close(
   bool return_filemetadata, const std::string &column_chunks_file_path)
 {
-  CUDF_EXPECTS(not is_closed, "Data has already been flushed to out and closed");
-  is_closed = true;
+  CUDF_EXPECTS(not closed, "Data has already been flushed to out and closed");
+  closed = true;
   CompactProtocolWriter cpw(&buffer_);
   file_ender_s fendr;
   buffer_.resize(0);

@@ -24,7 +24,7 @@ from cudf.utils.dtypes import (
 )
 from libc.stdlib cimport free
 from libc.stdint cimport uint8_t
-from libcpp.memory cimport shared_ptr, unique_ptr, make_unique
+from libcpp.memory cimport unique_ptr, make_unique
 from libcpp.string cimport string
 from libcpp.map cimport map
 from libcpp.vector cimport vector
@@ -420,6 +420,7 @@ cdef class ParquetWriter:
     cudf.io.parquet.write_parquet
     """
     cdef bool initialized
+    cdef bool closed
     cdef unique_ptr[cpp_parquet_chunked_writer] writer
     cdef cudf_io_types.sink_info sink
     cdef unique_ptr[cudf_io_types.data_sink] _data_sink
@@ -454,9 +455,10 @@ cdef class ParquetWriter:
         cdef bool return_meta
         cdef string column_chunks_file_path
 
-        if not self.initialized:
+        if not self.initialized or self.closed:
             return None
 
+        self.closed = True
         # Update metadata-collection options
         if metadata_file_path is not None:
             column_chunks_file_path = str.encode(metadata_file_path)
@@ -479,11 +481,12 @@ cdef class ParquetWriter:
         return None
 
     def __dealloc__(self):
-        self.close()
+        if not self.closed:
+            self.close()
 
     def _initialize_chunked_state(self, Table table):
-        """ Wraps write_parquet_chunked_begin. This is called lazily on the first
-        call to write, so that we can get metadata from the first table """
+        """ Prepares all the values required to build the
+        chunked_parquet_writer_options and creates a writer"""
         cdef unique_ptr[cudf_io_types.table_metadata_with_nullability] tbl_meta
         tbl_meta = make_unique[cudf_io_types.table_metadata_with_nullability]()
 
@@ -493,7 +496,6 @@ cdef class ParquetWriter:
         tbl_meta.get().user_data[str.encode("pandas")] = \
             str.encode(pandas_metadata)
 
-        # call write_parquet_chunked_begin
         cdef chunked_parquet_writer_options args
         with nogil:
             args = move(
