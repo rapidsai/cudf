@@ -24,9 +24,11 @@
 #include <io/parquet/compact_protocol_writer.hpp>
 
 #include <cudf/column/column_device_view.cuh>
+#include <cudf/table/table_device_view.cuh>
 #include <cudf/lists/lists_column_view.hpp>
 #include <cudf/null_mask.hpp>
 #include <cudf/strings/strings_column_view.hpp>
+#include <cudf/detail/utilities/cuda.cuh>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_buffer.hpp>
@@ -470,6 +472,7 @@ class parquet_column_view {
 
 void writer::impl::init_page_fragments(hostdevice_vector<gpu::PageFragment> &frag,
                                        hostdevice_vector<gpu::EncColumnDesc> &col_desc,
+                                       table_device_view *input_table_device_view,
                                        uint32_t num_columns,
                                        uint32_t num_fragments,
                                        uint32_t num_rows,
@@ -481,6 +484,9 @@ void writer::impl::init_page_fragments(hostdevice_vector<gpu::PageFragment> &fra
                            col_desc.memory_size(),
                            cudaMemcpyHostToDevice,
                            stream.value()));
+  gpu::InitColumnDeviceViews(col_desc.device_ptr(),
+                             input_table_device_view,
+                             stream);
   gpu::InitPageFragments(frag.device_ptr(),
                          col_desc.device_ptr(),
                          num_fragments,
@@ -717,6 +723,9 @@ void writer::impl::write_chunk(table_view const &table, pq_chunked_state &state)
                                  state.stream);
   }
 
+  // Early exit for empty table
+  if (num_rows == 0 || num_columns == 0) { return; }
+
   // first call. setup metadata. num_rows will get incremented as write_chunk is
   // called multiple times.
   // Calculate the sum of depths of all list columns
@@ -821,6 +830,10 @@ void writer::impl::write_chunk(table_view const &table, pq_chunked_state &state)
     state.md.num_rows += num_rows;
   }
 
+  // Create table_device_view so that corresponding column_device_view data
+  // can be written into col_desc members
+  auto input_table_device_view = table_device_view::create(table);
+
   // Initialize column description
   hostdevice_vector<gpu::EncColumnDesc> col_desc(num_columns);
 
@@ -831,9 +844,9 @@ void writer::impl::write_chunk(table_view const &table, pq_chunked_state &state)
     // GPU column description
     auto *desc             = &col_desc[i];
     *desc                  = gpu::EncColumnDesc{};  // Zero out all fields
-    desc->column_data_base = col.data();
-    desc->valid_map_base   = col.nulls();
-    desc->column_offset    = col.offset();
+    //desc->column_data_base = col.data();
+    //desc->valid_map_base   = col.nulls();
+    //desc->column_offset    = col.offset();
     desc->stats_dtype      = col.stats_type();
     desc->ts_scale         = col.ts_scale();
     // TODO (dm): Enable dictionary for list after refactor
@@ -850,7 +863,7 @@ void writer::impl::write_chunk(table_view const &table, pq_chunked_state &state)
       desc->def_values      = col.definition_levels();
     }
     desc->num_values     = col.data_count();
-    desc->num_rows       = col.row_count();
+    //desc->num_rows       = col.row_count();
     desc->physical_type  = static_cast<uint8_t>(col.physical_type());
     desc->converted_type = static_cast<uint8_t>(col.converted_type());
     auto count_bits      = [](uint16_t number) {
@@ -877,10 +890,15 @@ void writer::impl::write_chunk(table_view const &table, pq_chunked_state &state)
 
   uint32_t num_fragments = (uint32_t)((num_rows + fragment_size - 1) / fragment_size);
   hostdevice_vector<gpu::PageFragment> fragments(num_columns * num_fragments);
-  if (fragments.size() != 0) {
-    init_page_fragments(
-      fragments, col_desc, num_columns, num_fragments, num_rows, fragment_size, state.stream);
-  }
+
+  CUDF_EXPECTS(
+    fragments.size() != 0,
+    "Fragment size cannot evaluate to 0 ");
+
+  //TODO : Add view to init_page_fragments and initialize col_desc column_device_view members
+  init_page_fragments(
+    fragments, col_desc, input_table_device_view.get(), num_columns, num_fragments,
+    num_rows, fragment_size, state.stream);
 
   size_t global_rowgroup_base = state.md.row_groups.size();
 
