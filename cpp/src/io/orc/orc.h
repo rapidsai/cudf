@@ -23,7 +23,10 @@
 #include <string>
 #include <vector>
 
-#include "io/comp/io_uncomp.h"
+#include <cudf/utilities/error.hpp>
+
+#include <io/comp/io_uncomp.h>
+#include <cudf/io/datasource.hpp>
 #include "orc_common.h"
 
 namespace cudf {
@@ -54,9 +57,6 @@ struct SchemaType {
     0;  // optional: the maximum length of the type for varchar or char in UTF-8 characters
   uint32_t precision = 0;  // optional: the precision and scale for decimal
   uint32_t scale     = 0;
-  // Inferred fields
-  int32_t parent_idx = -1;  // parent node (equal to current node for root nodes)
-  int32_t field_idx  = -1;  // field index in parent's subtype vector
 };
 
 struct UserMetadataItem {
@@ -64,19 +64,17 @@ struct UserMetadataItem {
   std::string value;  // the user defined binary value as string
 };
 
-typedef std::vector<uint8_t> ColumnStatistics;  // Column statistics blob
+typedef std::vector<uint8_t> ColStatsBlob;  // Column statistics blob
 
 struct FileFooter {
-  uint64_t headerLength  = 0;                // the length of the file header in bytes (always 3)
-  uint64_t contentLength = 0;                // the length of the file header and body in bytes
-  std::vector<StripeInformation> stripes;    // the information about the stripes
-  std::vector<SchemaType> types;             // the schema information
-  std::vector<UserMetadataItem> metadata;    // the user metadata that was added
-  uint64_t numberOfRows = 0;                 // the total number of rows in the file
-  std::vector<ColumnStatistics> statistics;  // Column statistics blobs
-  uint32_t rowIndexStride = 0;               // the maximum number of rows in each index entry
-  // Helper methods
-  std::string GetColumnName(uint32_t column_id);  // return the column name
+  uint64_t headerLength  = 0;              // the length of the file header in bytes (always 3)
+  uint64_t contentLength = 0;              // the length of the file header and body in bytes
+  std::vector<StripeInformation> stripes;  // the information about the stripes
+  std::vector<SchemaType> types;           // the schema information
+  std::vector<UserMetadataItem> metadata;  // the user metadata that was added
+  uint64_t numberOfRows = 0;               // the total number of rows in the file
+  std::vector<ColStatsBlob> statistics;    // Column statistics blobs
+  uint32_t rowIndexStride = 0;             // the maximum number of rows in each index entry
 };
 
 struct Stream {
@@ -97,7 +95,7 @@ struct StripeFooter {
 };
 
 struct StripeStatistics {
-  std::vector<ColumnStatistics> colStats;  // Column statistics blobs
+  std::vector<ColStatsBlob> colStats;  // Column statistics blobs
 };
 
 struct Metadata {
@@ -112,98 +110,259 @@ struct Metadata {
 
 class ProtobufReader {
  public:
-  ProtobufReader() { m_base = m_cur = m_end = nullptr; }
-  ProtobufReader(const uint8_t *base, size_t len) { init(base, len); }
-  void init(const uint8_t *base, size_t len)
+  ProtobufReader(const uint8_t *base, size_t len) : m_base(base), m_cur(base), m_end(base + len) {}
+
+  template <typename T>
+  void read(T &s)
   {
-    m_base = m_cur = base;
-    m_end          = base + len;
+    read(s, m_end - m_cur);
   }
-  ptrdiff_t bytecount() const { return m_cur - m_base; }
-  unsigned int getb() { return (m_cur < m_end) ? *m_cur++ : 0; }
+  void read(PostScript &, size_t maxlen);
+  void read(FileFooter &, size_t maxlen);
+  void read(StripeInformation &, size_t maxlen);
+  void read(SchemaType &, size_t maxlen);
+  void read(UserMetadataItem &, size_t maxlen);
+  void read(StripeFooter &, size_t maxlen);
+  void read(Stream &, size_t maxlen);
+  void read(ColumnEncoding &, size_t maxlen);
+  void read(StripeStatistics &, size_t maxlen);
+  void read(Metadata &, size_t maxlen);
+
+ private:
+  template <int index>
+  friend class FunctionSwitchImpl;
+
   void skip_bytes(size_t bytecnt)
   {
     bytecnt = std::min(bytecnt, (size_t)(m_end - m_cur));
     m_cur += bytecnt;
   }
-  uint32_t get_u32()
-  {
-    uint32_t v = 0;
-    for (uint32_t l = 0;; l += 7) {
-      uint32_t c = getb();
-      v |= (c & 0x7f) << l;
-      if (c < 0x80) return v;
-    }
-  }
-  uint64_t get_u64()
-  {
-    uint64_t v = 0;
-    for (uint64_t l = 0;; l += 7) {
-      uint64_t c = getb();
-      v |= (c & 0x7f) << l;
-      if (c < 0x80) return v;
-    }
-  }
-  int32_t get_i32()
-  {
-    uint32_t u = get_u32();
-    return (int32_t)((u >> 1u) ^ -(int32_t)(u & 1));
-  }
-  int64_t get_i64()
-  {
-    uint64_t u = get_u64();
-    return (int64_t)((u >> 1u) ^ -(int64_t)(u & 1));
-  }
+
+  template <typename T>
+  T get();
+
   void skip_struct_field(int t);
 
- public:
-  bool read(PostScript &, size_t maxlen);
-  bool read(FileFooter &, size_t maxlen);
-  bool read(StripeInformation &, size_t maxlen);
-  bool read(SchemaType &, size_t maxlen);
-  bool read(UserMetadataItem &, size_t maxlen);
-  bool read(StripeFooter &, size_t maxlen);
-  bool read(Stream &, size_t maxlen);
-  bool read(ColumnEncoding &, size_t maxlen);
-  bool read(StripeStatistics &, size_t maxlen);
-  bool read(Metadata &, size_t maxlen);
-
- protected:
-  bool InitSchema(FileFooter &);
-
   template <typename T, typename... Operator>
-  bool function_builder(T &s, size_t maxlen, std::tuple<Operator...> &op);
-  template <typename T>
-  bool function_builder_return(T &s, const uint8_t *end);
-  struct FieldInt32;
-  struct FieldUInt32;
-  struct FieldInt64;
-  struct FieldUInt64;
-  template <typename Enum>
-  struct FieldEnum;
-  struct FieldPackedUInt32;
-  struct FieldString;
-  struct FieldRepeatedString;
-  template <typename Enum>
-  struct FieldRepeatedStructFunctor;
-  template <typename Enum>
-  struct FieldRepeatedStructBlobFunctor;
-  template <typename Enum>
-  FieldRepeatedStructFunctor<Enum> FieldRepeatedStruct(int f, std::vector<Enum> &v)
+  void function_builder(T &s, size_t maxlen, std::tuple<Operator...> &op);
+
+  template <
+    typename T,
+    typename std::enable_if_t<!std::is_integral<T>::value and !std::is_enum<T>::value> * = nullptr>
+  int static constexpr encode_field_number(int field_number) noexcept
   {
-    return FieldRepeatedStructFunctor<Enum>(f, v);
-  }
-  template <typename Enum>
-  FieldRepeatedStructBlobFunctor<Enum> FieldRepeatedStructBlob(int f, std::vector<Enum> &v)
-  {
-    return FieldRepeatedStructBlobFunctor<Enum>(f, v);
+    return (field_number * 8) + PB_TYPE_FIXEDLEN;
   }
 
- protected:
-  const uint8_t *m_base;
+  template <
+    typename T,
+    typename std::enable_if_t<std::is_integral<T>::value or std::is_enum<T>::value> * = nullptr>
+  int static constexpr encode_field_number(int field_number) noexcept
+  {
+    return (field_number * 8) + PB_TYPE_VARINT;
+  }
+
+  uint32_t read_field_size(const uint8_t *end);
+
+  template <typename T, typename std::enable_if_t<std::is_integral<T>::value> * = nullptr>
+  void read_field(T &value, const uint8_t *end)
+  {
+    value = get<T>();
+  }
+
+  template <typename T, typename std::enable_if_t<std::is_enum<T>::value> * = nullptr>
+  void read_field(T &value, const uint8_t *end)
+  {
+    value = static_cast<T>(get<uint32_t>());
+  }
+
+  template <typename T, typename std::enable_if_t<std::is_same<T, std::string>::value> * = nullptr>
+  void read_field(T &value, const uint8_t *end)
+  {
+    auto const size = read_field_size(end);
+    value.assign(reinterpret_cast<const char *>(m_cur), size);
+    m_cur += size;
+  }
+
+  template <typename T,
+            typename std::enable_if_t<std::is_same<T, std::vector<std::string>>::value> * = nullptr>
+  void read_field(T &value, const uint8_t *end)
+  {
+    auto const size = read_field_size(end);
+    value.emplace_back(reinterpret_cast<const char *>(m_cur), size);
+    m_cur += size;
+  }
+
+  template <typename T,
+            typename std::enable_if_t<
+              std::is_same<T, std::vector<typename T::value_type>>::value and
+              !std::is_same<std::string, typename T::value_type>::value> * = nullptr>
+  void read_field(T &value, const uint8_t *end)
+  {
+    auto const size = read_field_size(end);
+    value.emplace_back();
+    read(value.back(), size);
+  }
+
+  template <typename T>
+  void read_packed_field(T &value, const uint8_t *end)
+  {
+    auto const len       = get<uint32_t>();
+    auto const field_end = std::min(m_cur + len, end);
+    while (m_cur < field_end) value.push_back(get<typename T::value_type>());
+  }
+
+  template <typename T>
+  void read_raw_field(T &value, const uint8_t *end)
+  {
+    auto const size = read_field_size(end);
+    value.emplace_back(m_cur, m_cur + size);
+    m_cur += size;
+  }
+
+  template <typename T>
+  struct field_reader {
+    int const encoded_field_number;
+    T &output_value;
+
+    field_reader(int field_number, T &field_value)
+      : encoded_field_number(encode_field_number<T>(field_number)), output_value(field_value)
+    {
+    }
+
+    inline void operator()(ProtobufReader *pbr, const uint8_t *end)
+    {
+      pbr->read_field(output_value, end);
+    }
+  };
+
+  template <typename T>
+  struct packed_field_reader {
+    int const encoded_field_number;
+    T &output_value;
+
+    packed_field_reader(int field_number, T &field_value)
+      : encoded_field_number(encode_field_number<T>(field_number)), output_value(field_value)
+    {
+    }
+
+    inline void operator()(ProtobufReader *pbr, const uint8_t *end)
+    {
+      pbr->read_packed_field(output_value, end);
+    }
+  };
+
+  template <typename T>
+  struct raw_field_reader {
+    int const encoded_field_number;
+    T &output_value;
+
+    raw_field_reader(int field_number, T &field_value)
+      : encoded_field_number(encode_field_number<T>(field_number)), output_value(field_value)
+    {
+    }
+
+    inline void operator()(ProtobufReader *pbr, const uint8_t *end)
+    {
+      pbr->read_raw_field(output_value, end);
+    }
+  };
+
+  const uint8_t *const m_base;
   const uint8_t *m_cur;
-  const uint8_t *m_end;
+  const uint8_t *const m_end;
+
+ public:
+  /**
+   * @brief Returns a field reader object of correct type, based on the `field_value` type.
+   *
+   * @tparam Type of the field (inferred from `field_value` type)
+   * @param field_number The field number of the field to be read
+   * @param field_value Reference to the object the field reader will write to
+   * @return the field reader object of the right type
+   */
+  template <typename T>
+  static auto make_field_reader(int field_number, T &field_value)
+  {
+    return field_reader<T>(field_number, field_value);
+  }
+
+  /**
+   * @brief Returns a reader object for packed fields, based on the `field_value` type.
+   *
+   * @tparam Type of the field (inferred from `field_value` type)
+   * @param field_number The field number of the field to be read
+   * @param field_value Reference to the object the field reader will write to
+   * @return the packed field reader object of the right type
+   */
+  template <typename T>
+  static auto make_packed_field_reader(int field_number, T &field_value)
+  {
+    return packed_field_reader<T>(field_number, field_value);
+  }
+
+  /**
+   * @brief Returns a field reader that does not decode data, with type based on the `field_value`
+   * type.
+   *
+   * @tparam Type of the field (inferred from `field_value` type)
+   * @param field_number The field number of the field to be read
+   * @param field_value Reference to the object the field reader will write to
+   * @return the raw field reader object of the right type
+   */
+  template <typename T>
+  static auto make_raw_field_reader(int field_number, T &field_value)
+  {
+    return raw_field_reader<T>(field_number, field_value);
+  }
 };
+
+template <>
+inline uint8_t ProtobufReader::get<uint8_t>()
+{
+  return (m_cur < m_end) ? *m_cur++ : 0;
+};
+
+template <>
+inline uint32_t ProtobufReader::get<uint32_t>()
+{
+  uint32_t v = 0;
+  for (uint32_t l = 0;; l += 7) {
+    uint32_t c = get<uint8_t>();
+    v |= (c & 0x7f) << l;
+    if (c < 0x80) return v;
+  }
+}
+
+template <>
+inline uint64_t ProtobufReader::get<uint64_t>()
+{
+  uint64_t v = 0;
+  for (uint64_t l = 0;; l += 7) {
+    uint64_t c = get<uint8_t>();
+    v |= (c & 0x7f) << l;
+    if (c < 0x80) return v;
+  }
+}
+
+template <typename T>
+auto decode_zigzag(T u)
+{
+  using signed_t = std::make_signed_t<T>;
+  return static_cast<signed_t>((u >> 1u) ^ -static_cast<signed_t>(u & 1));
+}
+
+template <>
+inline int32_t ProtobufReader::get<int32_t>()
+{
+  return decode_zigzag(get<uint32_t>());
+}
+
+template <>
+inline int64_t ProtobufReader::get<int64_t>()
+{
+  return decode_zigzag(get<uint64_t>());
+}
 
 /**
  * @brief Class for encoding Orc's metadata with Protocol Buffers
@@ -277,6 +436,68 @@ class OrcDecompressor {
   uint32_t const m_blockSize;
   std::unique_ptr<HostDecompressor> m_decompressor;
   std::vector<uint8_t> m_buf;
+};
+
+/**
+ * @brief A helper class for ORC file metadata. Provides some additional
+ * convenience methods for initializing and accessing metadata.
+ */
+class metadata {
+  using OrcStripeInfo = std::pair<const StripeInformation *, const StripeFooter *>;
+
+ public:
+  explicit metadata(datasource *const src);
+
+  /**
+   * @brief Filters and reads the info of only a selection of stripes
+   *
+   * @param[in] stripes Indices of individual stripes
+   * @param[in] row_start Starting row of the selection
+   * @param[in,out] row_count Total number of rows selected
+   *
+   * @return List of stripe info and total number of selected rows
+   */
+  std::vector<OrcStripeInfo> select_stripes(const std::vector<size_type> &stripes,
+                                            size_type &row_start,
+                                            size_type &row_count);
+
+  /**
+   * @brief Filters and reduces down to a selection of columns
+   *
+   * @param[in] use_names List of column names to select
+   * @param[out] has_timestamp_column Whether there is a orc::TIMESTAMP column
+   *
+   * @return List of ORC column indexes
+   */
+  std::vector<int> select_columns(std::vector<std::string> use_names, bool &has_timestamp_column);
+
+  size_t get_total_rows() const { return ff.numberOfRows; }
+  int get_num_stripes() const { return ff.stripes.size(); }
+  int get_num_columns() const { return ff.types.size(); }
+  std::string const &get_column_name(int32_t column_id)
+  {
+    if (column_names.empty() && get_num_columns() != 0) { init_column_names(); }
+    return column_names[column_id];
+  }
+  int get_row_index_stride() const { return ff.rowIndexStride; }
+
+ public:
+  PostScript ps;
+  FileFooter ff;
+  Metadata md;
+  std::vector<StripeFooter> stripefooters;
+  std::unique_ptr<OrcDecompressor> decompressor;
+
+ private:
+  struct schema_indexes {
+    int32_t parent = -1;
+    int32_t field  = -1;
+  };
+  std::vector<schema_indexes> get_schema_indexes() const;
+  void init_column_names();
+
+  std::vector<std::string> column_names;
+  datasource *const source;
 };
 
 }  // namespace orc

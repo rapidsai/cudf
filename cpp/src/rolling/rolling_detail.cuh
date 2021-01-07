@@ -124,16 +124,15 @@ bool __device__ process_rolling_window(column_device_view input,
 {
   cudf::size_type count = end_index - start_index;
 
-  bool output_is_valid                      = (count >= min_periods);
+  bool output_is_valid                      = count >= min_periods;
   output.element<OutputType>(current_index) = count;
 
   return output_is_valid;
 }
 
 /**
- * @brief Calculates row-number within [start_index, end_index).
- *        Count is updated depending on `min_periods`
- *        Returns true if it was valid, else false.
+ * @brief Calculates row-number of current index within [start_index, end_index). Count is updated
+ *        depending on `min_periods`. Returns `true` if it was valid, else `false`.
  */
 template <typename InputType,
           typename OutputType,
@@ -149,8 +148,8 @@ bool __device__ process_rolling_window(column_device_view input,
                                        size_type current_index,
                                        size_type min_periods)
 {
-  bool output_is_valid                      = ((end_index - start_index) >= min_periods);
-  output.element<OutputType>(current_index) = ((current_index - start_index) + 1);
+  bool output_is_valid                      = end_index - start_index >= min_periods;
+  output.element<OutputType>(current_index) = current_index - start_index + 1;
 
   return output_is_valid;
 }

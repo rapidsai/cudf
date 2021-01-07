@@ -33,6 +33,7 @@
 #include <cudf/detail/unary.hpp>
 #include <cudf/detail/utilities/cuda.cuh>
 #include <cudf/detail/utilities/hash_functions.cuh>
+#include <cudf/dictionary/dictionary_column_view.hpp>
 #include <cudf/groupby.hpp>
 #include <cudf/scalar/scalar.hpp>
 #include <cudf/table/row_operators.cuh>
@@ -104,6 +105,7 @@ template <typename Map>
 class hash_compound_agg_finalizer final : public cudf::detail::aggregation_finalizer {
   size_t col_idx;
   column_view col;
+  data_type result_type;
   cudf::detail::result_cache* sparse_results;
   cudf::detail::result_cache* dense_results;
   rmm::device_vector<size_type> const& gather_map;
@@ -135,6 +137,8 @@ class hash_compound_agg_finalizer final : public cudf::detail::aggregation_final
       stream(stream),
       mr(mr)
   {
+    result_type = cudf::is_dictionary(col.type()) ? cudf::dictionary_column_view(col).keys().type()
+                                                  : col.type();
   }
 
   auto to_dense_agg_result(cudf::aggregation const& agg)
@@ -184,7 +188,7 @@ class hash_compound_agg_finalizer final : public cudf::detail::aggregation_final
   void visit(cudf::detail::min_aggregation const& agg) override
   {
     if (dense_results->has_result(col_idx, agg)) return;
-    if (col.type().id() == type_id::STRING)
+    if (result_type.id() == type_id::STRING)
       dense_results->add_result(col_idx, agg, gather_argminmax(aggregation::ARGMIN));
     else
       dense_results->add_result(col_idx, agg, to_dense_agg_result(agg));
@@ -194,7 +198,7 @@ class hash_compound_agg_finalizer final : public cudf::detail::aggregation_final
   {
     if (dense_results->has_result(col_idx, agg)) return;
 
-    if (col.type().id() == type_id::STRING)
+    if (result_type.id() == type_id::STRING)
       dense_results->add_result(col_idx, agg, gather_argminmax(aggregation::ARGMAX));
     else
       dense_results->add_result(col_idx, agg, to_dense_agg_result(agg));
@@ -215,7 +219,7 @@ class hash_compound_agg_finalizer final : public cudf::detail::aggregation_final
       cudf::detail::binary_operation(sum_result,
                                      count_result,
                                      binary_operator::DIV,
-                                     cudf::detail::target_type(col.type(), aggregation::MEAN),
+                                     cudf::detail::target_type(result_type, aggregation::MEAN),
                                      stream,
                                      mr);
     dense_results->add_result(col_idx, agg, std::move(result));
@@ -237,7 +241,7 @@ class hash_compound_agg_finalizer final : public cudf::detail::aggregation_final
     auto count_view  = column_device_view::create(count_result);
 
     auto var_result = make_fixed_width_column(
-      cudf::detail::target_type(col.type(), agg.kind), col.size(), mask_state::ALL_NULL, stream);
+      cudf::detail::target_type(result_type, agg.kind), col.size(), mask_state::ALL_NULL, stream);
     auto var_result_view = mutable_column_device_view::create(var_result->mutable_view());
     mutable_table_view var_table_view{{var_result->mutable_view()}};
     cudf::detail::initialize_with_identity(var_table_view, {agg.kind}, stream);
@@ -285,11 +289,15 @@ flatten_single_pass_aggs(std::vector<aggregation_request> const& requests)
       }
     };
 
+    auto values_type = cudf::is_dictionary(request.values.type())
+                         ? cudf::dictionary_column_view(request.values).keys().type()
+                         : request.values.type();
     for (auto&& agg : agg_v) {
-      for (auto const& agg_s : agg->get_simple_aggregations(request.values.type()))
+      for (auto const& agg_s : agg->get_simple_aggregations(values_type))
         insert_agg(i, request.values, agg_s);
     }
   }
+
   return std::make_tuple(table_view(columns), std::move(agg_kinds), std::move(col_ids));
 }
 
@@ -389,8 +397,12 @@ auto create_sparse_results_table(table_view const& flattened_values,
           : (col.has_nulls() or agg == aggregation::VARIANCE or agg == aggregation::STD);
       auto mask_flag = (nullable) ? mask_state::ALL_NULL : mask_state::UNALLOCATED;
 
+      auto col_type = cudf::is_dictionary(col.type())
+                        ? cudf::dictionary_column_view(col).keys().type()
+                        : col.type();
+
       return make_fixed_width_column(
-        cudf::detail::target_type(col.type(), agg), col.size(), mask_flag, stream);
+        cudf::detail::target_type(col_type, agg), col.size(), mask_flag, stream);
     });
 
   table sparse_table(std::move(sparse_columns));
