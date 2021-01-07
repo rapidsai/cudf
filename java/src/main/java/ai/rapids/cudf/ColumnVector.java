@@ -1,6 +1,6 @@
 /*
  *
- *  Copyright (c) 2019-2020, NVIDIA CORPORATION.
+ *  Copyright (c) 2019-2021, NVIDIA CORPORATION.
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -321,6 +321,33 @@ public final class ColumnVector extends ColumnView {
   public static ColumnVector fromScalar(Scalar scalar, int rows) {
     long columnHandle = fromScalar(scalar.getScalarHandle(), rows);
     return new ColumnVector(columnHandle);
+  }
+
+  /**
+   * Create a new struct vector made up of existing columns. Note that this will copy
+   * the contents of the input columns to make a new vector. If you only want to
+   * do a quick temporary computation you can use ColumnView.makeStructView.
+   * @param columns the columns to make the struct from.
+   * @return the new ColumnVector
+   */
+  public static ColumnVector makeStruct(ColumnView... columns) {
+    try (ColumnView cv = ColumnView.makeStructView(columns)) {
+      return cv.copyToColumnVector();
+    }
+  }
+
+  /**
+   * Create a new struct vector made up of existing columns. Note that this will copy
+   * the contents of the input columns to make a new vector. If you only want to
+   * do a quick temporary computation you can use ColumnView.makeStructView.
+   * @param rows the number of rows in the struct. Used for structs with no children.
+   * @param columns the columns to make the struct from.
+   * @return the new ColumnVector
+   */
+  public static ColumnVector makeStruct(long rows, ColumnView... columns) {
+    try (ColumnView cv = ColumnView.makeStructView(rows, columns)) {
+      return cv.copyToColumnVector();
+    }
   }
 
   /**
@@ -863,6 +890,15 @@ public final class ColumnVector extends ColumnView {
   public static ColumnVector fromStructs(HostColumnVector.DataType dataType,
                                          HostColumnVector.StructData... lists) {
     try (HostColumnVector host = HostColumnVector.fromStructs(dataType, lists)) {
+      return host.copyToDevice();
+    }
+  }
+  /**
+   * This method is evolving, unstable and currently test only.
+   * Please use with caution and expect it to change in the future.
+   */
+  public static ColumnVector emptyStructs(HostColumnVector.DataType dataType, long numRows) {
+    try (HostColumnVector host = HostColumnVector.emptyStructs(dataType, numRows)) {
       return host.copyToDevice();
     }
   }
