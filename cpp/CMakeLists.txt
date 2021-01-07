@@ -30,6 +30,11 @@ option(ARROW_STATIC_LIB "Build and statically link Arrow libraries" OFF)
 option(HT_DEFAULT_ALLOCATOR "Use the default allocator for hash tables" ON)
 option(PER_THREAD_DEFAULT_STREAM "Build with per-thread default stream" OFF)
 option(AUTO_DETECT_CUDA_ARCHITECTURES "Auto-detect CUDA architectures to build from the GPUs on the current system" OFF)
+option(DISABLE_DEPRECATION_WARNING "Disable warnings generated from deprecated declarations." OFF)
+# Option to enable line info in CUDA device compilation to allow introspection when profiling / memchecking
+option(CMAKE_CUDA_LINEINFO "Enable the -lineinfo option for nvcc (useful for cuda-memcheck / profiler" OFF)
+# cudart can be statically linked or dynamically linked. The python ecosystem wants dynamic linking
+option(CUDA_STATIC_RUNTIME "Statically link the CUDA runtime" OFF)
 
 message(STATUS "Build with NVTX support: ${USE_NVTX}")
 message(STATUS "Configure CMake to build tests: ${BUILD_TESTS}")
@@ -40,11 +45,19 @@ message(STATUS "Build and statically link Arrow libraries: ${ARROW_STATIC_LIB}")
 message(STATUS "Use the default allocator for hash tables: ${HT_DEFAULT_ALLOCATOR}")
 message(STATUS "Build with per-thread default stream: ${PER_THREAD_DEFAULT_STREAM}")
 message(STATUS "Auto-detect CUDA architectures to build from the GPUs on the current system: ${AUTO_DETECT_CUDA_ARCHITECTURES}")
+message(STATUS "Disable warnings generated from deprecated declarations: ${DISABLE_DEPRECATION_WARNING}")
+message(STATUS "Enable the -lineinfo option for nvcc (useful for cuda-memcheck / profiler: ${CMAKE_CUDA_LINEINFO}")
+message(STATUS "Statically link the CUDA runtime: ${CUDA_STATIC_RUNTIME}")
 
 # Set a default build type if none was specified
 set(DEFAULT_BUILD_TYPE "Release")
 set(CUDF_BUILD_TESTS ${BUILD_TESTS})
 set(CUDF_BUILD_BENCHMARKS ${BUILD_BENCHMARKS})
+
+set(CUDF_CXX_FLAGS "")
+set(CUDF_CUDA_FLAGS "")
+set(CUDF_CXX_DEFINITIONS "")
+set(CUDF_CUDA_DEFINITIONS "")
 
 if(NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
     message(STATUS "Setting build type to '${DEFAULT_BUILD_TYPE}' since none specified.")
@@ -80,14 +93,8 @@ endif("$ENV{CONDA_BUILD}" STREQUAL "1")
 ###################################################################################################
 # - compiler options ------------------------------------------------------------------------------
 
-set(CMAKE_CXX_STANDARD 14)
 set(CMAKE_C_COMPILER $ENV{CC})
 set(CMAKE_CXX_COMPILER $ENV{CXX})
-set(CMAKE_CXX_STANDARD_REQUIRED ON)
-
-set(CMAKE_CUDA_STANDARD 14)
-set(CMAKE_CUDA_STANDARD_REQUIRED ON)
-set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 
 # find CUDAToolkit package, set CUDA compilation flags
 include(cmake/Modules/ConfigureCUDA.cmake)
@@ -149,18 +156,35 @@ function(add_library_module NAMESPACE MODULE MODULE_SOURCE_DIRS)
     message(STATUS "Adding library module ${NAMESPACE}_${MODULE} ...")
     message(TRACE "Using sources: ${MODULE_SRC}")
     add_library("${NAMESPACE}_${MODULE}" "${MODULE_SRC}")
-    set_target_properties("${NAMESPACE}_${MODULE}" PROPERTIES BUILD_RPATH "\$ORIGIN")
+    set_target_properties("${NAMESPACE}_${MODULE}"
+        PROPERTIES BUILD_RPATH                         "\$ORIGIN"
+                   # set target compile options
+                   CXX_STANDARD                        14
+                   CXX_STANDARD_REQUIRED               ON
+                   CUDA_STANDARD                       14
+                   CUDA_STANDARD_REQUIRED              ON
+                   POSITION_INDEPENDENT_CODE           ON
+                   INTERFACE_POSITION_INDEPENDENT_CODE ON
+    )
+    target_compile_options("${NAMESPACE}_${MODULE}"
+                    PUBLIC "$<$<COMPILE_LANGUAGE:CXX>:${CUDF_CXX_FLAGS}>"
+                           "$<$<COMPILE_LANGUAGE:CUDA>:${CUDF_CUDA_FLAGS}>"
+    )
+    target_compile_definitions("${NAMESPACE}_${MODULE}"
+                    PUBLIC "$<$<COMPILE_LANGUAGE:CXX>:${CUDF_CXX_DEFINITIONS}>"
+                           "$<$<COMPILE_LANGUAGE:CUDA>:${CUDF_CUDA_DEFINITIONS}>"
+    )
     # Disable Jitify log printing. See https://github.com/NVIDIA/jitify/issues/79
     target_compile_definitions("${NAMESPACE}_${MODULE}" PRIVATE "JITIFY_PRINT_LOG=0")
     # Specify include paths for the current target and dependents
     target_include_directories("${NAMESPACE}_${MODULE}"
-        PUBLIC      "$<BUILD_INTERFACE:${DLPACK_INCLUDE_DIR}>"
-                    "$<BUILD_INTERFACE:${JITIFY_INCLUDE_DIR}>"
-                    "$<BUILD_INTERFACE:${LIBCUDACXX_INCLUDE_DIR}>"
-                    "$<BUILD_INTERFACE:${CUDA_DATAFRAME_SOURCE_DIR}/include>"
-                    "$<BUILD_INTERFACE:${CUDF_GENERATED_INCLUDE_DIR}/include>"
-        PRIVATE     "$<BUILD_INTERFACE:${CUDA_DATAFRAME_SOURCE_DIR}/src>"
-        INTERFACE   "$<INSTALL_INTERFACE:include>")
+                   PUBLIC      "$<BUILD_INTERFACE:${DLPACK_INCLUDE_DIR}>"
+                               "$<BUILD_INTERFACE:${JITIFY_INCLUDE_DIR}>"
+                               "$<BUILD_INTERFACE:${LIBCUDACXX_INCLUDE_DIR}>"
+                               "$<BUILD_INTERFACE:${CUDA_DATAFRAME_SOURCE_DIR}/include>"
+                               "$<BUILD_INTERFACE:${CUDF_GENERATED_INCLUDE_DIR}/include>"
+                   PRIVATE     "$<BUILD_INTERFACE:${CUDA_DATAFRAME_SOURCE_DIR}/src>"
+                   INTERFACE   "$<INSTALL_INTERFACE:include>")
     # Add Conda library paths if specified
     if(CONDA_LINK_DIRS)
         target_link_directories("${NAMESPACE}_${MODULE}" PUBLIC "$<BUILD_INTERFACE:${CONDA_LINK_DIRS}>")
@@ -168,24 +192,23 @@ function(add_library_module NAMESPACE MODULE MODULE_SOURCE_DIRS)
     # Add Conda include paths if specified
     if(CONDA_INCLUDE_DIRS)
         target_include_directories("${NAMESPACE}_${MODULE}" PUBLIC "$<BUILD_INTERFACE:${CONDA_INCLUDE_DIRS}>")
-    endif(CONDA_INCLUDE_DIRS)
+    endif()
     # Instruct jitify to use the kernel JIT cache
     if(JITIFY_USE_CACHE)
-        target_compile_definitions("${NAMESPACE}_${MODULE}" PUBLIC
-            JITIFY_USE_CACHE CUDF_VERSION=${CMAKE_PROJECT_VERSION})
-    endif(JITIFY_USE_CACHE)
+        target_compile_definitions("${NAMESPACE}_${MODULE}" PUBLIC JITIFY_USE_CACHE "CUDF_VERSION=${CMAKE_PROJECT_VERSION}")
+    endif()
     # Set hash table allocator
     if(HT_DEFAULT_ALLOCATOR)
         target_compile_definitions("${NAMESPACE}_${MODULE}" PUBLIC HT_DEFAULT_ALLOCATOR)
-    endif(HT_DEFAULT_ALLOCATOR)
+    endif()
     # Per-thread default stream
     if(PER_THREAD_DEFAULT_STREAM)
         target_compile_definitions("${NAMESPACE}_${MODULE}" PUBLIC CUDA_API_PER_THREAD_DEFAULT_STREAM)
-    endif(PER_THREAD_DEFAULT_STREAM)
+    endif()
     # Disable NVTX if necessary
     if(NOT USE_NVTX)
         target_compile_definitions("${NAMESPACE}_${MODULE}" PUBLIC NVTX_DISABLE)
-    endif(NOT USE_NVTX)
+    endif()
     # Define spdlog level
     target_compile_definitions("${NAMESPACE}_${MODULE}" PUBLIC "SPDLOG_ACTIVE_LEVEL=SPDLOG_LEVEL_${LOGGING_LEVEL}")
     # Compile stringified JIT sources first
@@ -196,10 +219,14 @@ function(add_library_module NAMESPACE MODULE MODULE_SOURCE_DIRS)
                           Boost::filesystem
                           ${ARROW_LIBRARIES}
                           cudf::Thrust
-                          rmm::rmm
-                          CUDA::nvrtc
-                          ${CUDART_LIBRARY}
-                          CUDA::cuda_driver)
+                          rmm::rmm)
+    if(CUDA_STATIC_RUNTIME)
+        target_link_libraries("${NAMESPACE}_${MODULE}" PUBLIC CUDA::nvrtc CUDA::cudart_static CUDA::cuda_driver)
+    else()
+        target_link_libraries("${NAMESPACE}_${MODULE}" PUBLIC CUDA::nvrtc CUDA::cudart CUDA::cuda_driver)
+    endif()
+    # `-Wl,--disable-new-dtags`: apply RUNPATH to transitive dependencies (this is a temporary solution)
+    target_link_options("${NAMESPACE}_${MODULE}" PRIVATE "LINKER:--disable-new-dtags")
     # Add alias target cudf::<module_name> for exporting
     add_library("${NAMESPACE}::${MODULE}" ALIAS "${NAMESPACE}_${MODULE}")
 endfunction()
@@ -269,8 +296,18 @@ message(STATUS "Generating proxy library: cudf")
 file(WRITE "${CUDF_PROXY_SRC}" "// This file is generated by ${CMAKE_CURRENT_LIST_FILE} \n")
 add_library("${CUDF_PROXY_NAME}" "${CUDF_PROXY_SRC}")
 # `-Wl,--no-as-needed`: link libraries to cudf even if no symbols in that library are called
-target_link_options("${CUDF_PROXY_NAME}" PRIVATE "LINKER:--no-as-needed")
-set_target_properties("${CUDF_PROXY_NAME}" PROPERTIES BUILD_RPATH "\$ORIGIN")
+# `-Wl,--disable-new-dtags`: apply RUNPATH to transitive dependencies (this is a temporary solution)
+target_link_options("${CUDF_PROXY_NAME}" PRIVATE "LINKER:--no-as-needed,--disable-new-dtags")
+set_target_properties("${CUDF_PROXY_NAME}"
+    PROPERTIES BUILD_RPATH "\$ORIGIN"
+               # set target compile options
+               CXX_STANDARD                        14
+               CXX_STANDARD_REQUIRED               ON
+               CUDA_STANDARD                       14
+               CUDA_STANDARD_REQUIRED              ON
+               POSITION_INDEPENDENT_CODE           ON
+               INTERFACE_POSITION_INDEPENDENT_CODE ON
+)
 add_library("${CUDF_PROXY_NAME}::${CUDF_PROXY_NAME}" ALIAS "${CUDF_PROXY_NAME}")
 # Link the proxy libcudf.so to libcudf_base.so and each `libcudf_<module>.so`
 target_link_libraries("${CUDF_PROXY_NAME}" PUBLIC "${CUDF_NAMESPACE}::${CUDF_BASE_NAME}" "${CUDF_MODULES}")

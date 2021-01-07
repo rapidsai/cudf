@@ -17,6 +17,8 @@
 function(find_and_configure_rmm VERSION)
 
     if(ARGC GREATER 2 AND (ARGV1 AND ARGV2))
+        set(BUILD_TESTS OFF)
+        set(BUILD_BENCHMARKS OFF)
         add_subdirectory("${ARGV1}" "${ARGV2}" EXCLUDE_FROM_ALL)
         return()
     endif()
@@ -26,6 +28,11 @@ function(find_and_configure_rmm VERSION)
         GIT_REPOSITORY  https://github.com/rapidsai/rmm.git
         GIT_TAG         branch-${VERSION}
         GIT_SHALLOW     TRUE
+        OPTIONS         "BUILD_TESTS OFF"
+                        "BUILD_BENCHMARKS OFF"
+                        "CUDA_STATIC_RUNTIME ${CUDA_STATIC_RUNTIME}"
+                        "CMAKE_CUDA_ARCHITECTURES ${CMAKE_CUDA_ARCHITECTURES}"
+                        "DISABLE_DEPRECATION_WARNING ${DISABLE_DEPRECATION_WARNING}"
     )
 endfunction()
 

@@ -14,18 +14,15 @@
 # limitations under the License.
 #=============================================================================
 
-# Enable the CUDA language
-enable_language(CUDA)
-
 if(NOT CMAKE_CUDA_COMPILER)
     message(SEND_ERROR "CMake cannot locate a CUDA compiler")
 endif(NOT CMAKE_CUDA_COMPILER)
 
 if(CMAKE_COMPILER_IS_GNUCXX)
-    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Werror -Wno-error=deprecated-declarations")
+    list(APPEND CUDF_CXX_FLAGS -Werror -Wno-error=deprecated-declarations)
     if(CUDF_BUILD_TESTS OR CUDF_BUILD_BENCHMARKS)
         # Suppress parentheses warning which causes gmock to fail
-        set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} -Xcompiler=-Wno-parentheses")
+        list(APPEND CUDF_CUDA_FLAGS -Xcompiler=-Wno-parentheses)
     endif()
 endif(CMAKE_COMPILER_IS_GNUCXX)
 
@@ -85,42 +82,24 @@ message("GPU_ARCHS = ${GPU_ARCHS}")
 
 set(CMAKE_CUDA_ARCHITECTURES ${GPU_ARCHS})
 
-set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} --expt-extended-lambda --expt-relaxed-constexpr")
+list(APPEND CUDF_CUDA_FLAGS --expt-extended-lambda --expt-relaxed-constexpr)
 
 # set warnings as errors
-set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} -Werror=cross-execution-space-call -Xcompiler=-Wall,-Werror,-Wno-error=deprecated-declarations")
+list(APPEND CUDF_CUDA_FLAGS -Werror=cross-execution-space-call)
+list(APPEND CUDF_CUDA_FLAGS -Xcompiler=-Wall,-Werror,-Wno-error=deprecated-declarations)
 
-option(DISABLE_DEPRECATION_WARNING "Disable warnings generated from deprecated declarations." OFF)
 if(DISABLE_DEPRECATION_WARNING)
-    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wno-deprecated-declarations")
-    set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} -Xcompiler=-Wno-deprecated-declarations")
-endif(DISABLE_DEPRECATION_WARNING)
+    list(APPEND CUDF_CXX_FLAGS -Wno-deprecated-declarations)
+    list(APPEND CUDF_CUDA_FLAGS -Xcompiler=-Wno-deprecated-declarations)
+endif()
 
 # Option to enable line info in CUDA device compilation to allow introspection when profiling / memchecking
-option(CMAKE_CUDA_LINEINFO "Enable the -lineinfo option for nvcc (useful for cuda-memcheck / profiler" OFF)
 if(CMAKE_CUDA_LINEINFO)
-    set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} -lineinfo")
-endif(CMAKE_CUDA_LINEINFO)
+    list(APPEND CUDF_CUDA_FLAGS -lineinfo)
+endif()
 
 # Debug options
 if(CMAKE_BUILD_TYPE MATCHES Debug)
     message(STATUS "Building with debugging flags")
-    set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} -G -Xcompiler=-rdynamic")
-endif(CMAKE_BUILD_TYPE MATCHES Debug)
-
-# To apply RUNPATH to transitive dependencies (this is a temporary solution)
-set(CMAKE_SHARED_LINKER_FLAGS "-Wl,--disable-new-dtags")
-set(CMAKE_EXE_LINKER_FLAGS "-Wl,--disable-new-dtags")
-
-###################################################################################################
-# - cudart options --------------------------------------------------------------------------------
-# cudart can be statically linked or dynamically linked. The python ecosystem wants dynamic linking
-
-option(CUDA_STATIC_RUNTIME "Statically link the CUDA runtime" OFF)
-
-if(CUDA_STATIC_RUNTIME)
-    message(STATUS "Enabling static linking of cudart")
-    set(CUDART_LIBRARY CUDA::cudart_static)
-else()
-    set(CUDART_LIBRARY CUDA::cudart)
-endif(CUDA_STATIC_RUNTIME)
+    list(APPEND CUDF_CUDA_FLAGS -G -Xcompiler=-rdynamic)
+endif()

@@ -65,8 +65,13 @@ function(ConfigureBench CMAKE_BENCH_NAME CMAKE_BENCH_SRC)
                    "${CUDA_DATAFRAME_SOURCE_DIR}/tests/utilities/base_fixture.cpp"
                    "${CUDA_DATAFRAME_SOURCE_DIR}/benchmarks/io/cuio_benchmark_common.cpp")
     set_target_properties(${CMAKE_BENCH_NAME}
-        PROPERTIES POSITION_INDEPENDENT_CODE ON
+        PROPERTIES CXX_STANDARD              14
+                   CXX_STANDARD_REQUIRED     ON
+                   CUDA_STANDARD             14
+                   CUDA_STANDARD_REQUIRED    ON
                    RUNTIME_OUTPUT_DIRECTORY "$<BUILD_INTERFACE:${CUDA_DATAFRAME_BINARY_DIR}/gbenchmarks>")
+    # `-Wl,--disable-new-dtags`: apply RUNPATH to transitive dependencies (this is a temporary solution)
+    target_link_options(${CMAKE_BENCH_NAME} PRIVATE "LINKER:--disable-new-dtags")
     target_link_libraries(${CMAKE_BENCH_NAME} gtest gmock benchmark benchmark_main pthread cudf_datagen cudf)
     set(BENCHMARK_LIST ${BENCHMARK_LIST} ${CMAKE_BENCH_NAME} CACHE INTERNAL "BENCHMARK_LIST")
 endfunction(ConfigureBench)
