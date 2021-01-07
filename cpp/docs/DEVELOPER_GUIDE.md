@@ -1,17 +1,54 @@
 # libcudf C++ Developer Guide
 
-This document serves as a guide for contributors to libcudf C++ code. Developers should also refer to these additional files for further documentation of `libcudf` best practices.
+This document serves as a guide for contributors to libcudf C++ code. Developers should also refer 
+to these additional files for further documentation of `libcudf` best practices.
 
 * [Documentation Guide](DOCUMENTATION.md) for guidelines on documenting libcudf code.
 * [Testing Guide(TESTING.md) for guidelines on writing unit tests.
 * [Benchmarking Guide](TODO) for guidelines on writing unit benchmarks.
 
+# Overview
+
+libcudf is a C++ library that provides GPU-accelerated data-parallel algorithms for processing 
+column-oriented tabular data. Algorithms provided range from slicing and filtering to sorting, 
+and various types of aggregations, to database type operations such as grouping and joins. libcudf
+serves a number of clients via multiple language interfaces, including Python and Java. Users may
+also use libcudf directly from C++ code.
+
+## Lexicon
+
+This section defines terminology used within libcudf
+
+### Column
+
+A column is an array of data of a single type. Along with Tables, columns are the fundamental data 
+structures used in libcudf. Most libcudf algorithms operate on columns. Columns may have a validity
+mask representing whether each element is valid or null (invalid). Columns of nested types are 
+supported, meaning that a column may have child columns.
+
+### Element
+
+An individual data item within a column. Also known as a row.
+
+### Scalar
+
+A type representing a single element of a data type.
+
+### Table
+
+A table is a collection of columns. It is also known as a dataframe.
+
+### View
+
+A view is a non-owning object that provides zero-copy access (possibly with slicing or offsets) data 
+owned by another object. Examples are column views and table views. 
+
 # Directory Structure and File Naming
 
-External/public libcudf APIs should be grouped based on functionality into an appropriately titled 
-header file  in `cudf/cpp/include/cudf/`. For example,  `cudf/cpp/include/cudf/copying.hpp` 
+External/public libcudf APIs are grouped based on functionality into an appropriately titled 
+header file  in `cudf/cpp/include/cudf/`. For example, `cudf/cpp/include/cudf/copying.hpp` 
 contains the APIs for functions related to copying from one column to another. Note the  `.hpp` 
-file extension used to indicate a C++ header file. 
+file extension used to indicate a C++ header file.
 
 Header files should use the `#pragma once` include guard. 
 
@@ -62,28 +99,6 @@ RMM provides a "default" memory resource for each device that can be accessed an
 `rmm::mr::get_current_device_resource()` and `rmm::mr::set_current_device_resource(...)` functions, 
 respectively. All memory resource parameters should be defaulted to use the return value of 
 `rmm::mr::get_current_device_resource()`. 
-
-## `rmm::device_buffer`
-
-The fundamental device memory owning class in `libcudf++`. 
-
-Allocates non-typed, uninitialized device memory using a `device_memory_resource`. If no resource 
-is explicitly provided, uses `rmm::mr::get_current_device_resource()`. 
-
-`device_buffer` is movable and copyable. A copy performs a deep copy of the `device_buffer`'s 
-device memory, whereas a move moves ownership of the device memory from one `device_buffer` to another.
-
-Example:
-```c++
-rmm::device_buffer buff(100); // Allocates at least 100 bytes of uninitialized device memory
-void * raw_data = buff.data(); // Raw pointer to underlying device memory
-
-rmm::device_buffer copy(buff); // Deep copies `buff` into `copy`
-rmm::device_buffer moved_to(std::move(buff)); // Moves contents of `buff` into `moved_to`
-
-custom_memory_resource mr;
-rmm::device_buffer custom_buff(100, &mr); // Allocates 100 bytes from the custom memory resource
-```
 
 ## `cudf::column`
 
@@ -194,13 +209,18 @@ object, only for the derived typed scalar class objects.
 
 ## Streams
 
-We do not yet expose CUDA streams in external libcudf APIs. 
-However, in order to ease the transition to future use of streams, all libcudf APIs that allocate device memory or execute a kernel should be implemented using asynchronous APIs on the default stream (e.g., stream 0). 
+CUDA streams are not yet exposed in external libcudf APIs. However, in order to ease the transition 
+to future use of streams, all libcudf APIs that allocate device memory or execute a kernel should be 
+implemented using asynchronous APIs on the default stream (e.g., stream 0).
 
-The recommended pattern for doing this is to make the definition of the external API invoke an internal API in the `detail` namespace. The internal `detail` API will have all the same parameters, plus a `rmm::cuda_stream_view` parameter at the end defaulted to `rmm::cuda_stream_default`. 
-The implementation should be wholly contained in the `detail` API definition and use only asynchronous versions of CUDA APIs with the defaulted stream parameter. 
+The recommended pattern for doing this is to make the definition of the external API invoke an 
+internal API in the `detail` namespace. The internal `detail` API has the same parameters as the 
+public API, plus a `rmm::cuda_stream_view` parameter at the end defaulted to 
+`rmm::cuda_stream_default`. The implementation should be wholly contained in the `detail` API 
+definition and use only asynchronous versions of CUDA APIs with the stream parameter.
 
-In order to make the `detail` API callable from other libcudf functions, it should be exposed in a header placed in the `cudf/cpp/include/detail/` directory.
+In order to make the `detail` API callable from other libcudf functions, it should be exposed in a 
+header placed in the `cudf/cpp/include/detail/` directory.
 
 For example:
 
@@ -250,19 +270,21 @@ good idea to leave a `// TODO:` note indicating where using a stream would be be
 
 ## Memory Allocation
 
-Device [memory resources](#memory_resource) are used in libcudf to abstract and control how device memory is allocated. 
+Device [memory resources](#memory_resource) are used in libcudf to abstract and control how device 
+memory is allocated. 
 
 ### Output Memory
 
-Any libcudf API that allocates memory that is *returned* to a user must accept a pointer to a `device_memory_resource` as the last parameter. Inside the API, this memory resource must be used
+Any libcudf API that allocates memory that is *returned* to a user must accept a pointer to a 
+`device_memory_resource` as the last parameter. Inside the API, this memory resource must be used
 to allocate any memory for returned objects. It should therefore be passed into functions whose
 outputs will be returned. Example:
 
 ```c++
 // Returned `column` contains newly allocated memory, 
 // therefore the API must accept a memory resource pointer
-std::unique_ptr<column> returns_output_memory(..., 
-                                              rmm::device_memory_resource * mr = rmm::mr::get_current_device_resource());
+std::unique_ptr<column> returns_output_memory(
+  ..., rmm::device_memory_resource * mr = rmm::mr::get_current_device_resource());
 
 // This API does not allocate any new *output* memory, therefore
 // a memory resource is unnecessary
@@ -276,7 +298,8 @@ allocate temporary, scratch memory for intermediate results. Always use the defa
 obtained from `rmm::mr::get_current_device_resource()` for temporary memory allocations. Example:
 
 ```c++
-rmm::device_buffer some_function(..., rmm::mr::device_memory_resource mr * = rmm::mr::get_current_device_resource()){
+rmm::device_buffer some_function(
+  ..., rmm::mr::device_memory_resource mr * = rmm::mr::get_current_device_resource()) {
     rmm::device_buffer returned_buffer(..., mr); // Returned buffer uses the passed in MR
     ...
     rmm::device_buffer temporary_buffer(...); // Temporary buffer uses default MR
@@ -287,12 +310,17 @@ rmm::device_buffer some_function(..., rmm::mr::device_memory_resource mr * = rmm
 
 ### Memory Management
 
-RMM provides classes built to use `device_memory_resource`(*)s for device memory allocation with
-automated lifetime management:
+`libcudf` code generally eschews raw pointers and direct memory allocation. Use RMM classes built to
+use `device_memory_resource`(*)s for device memory allocation with automated lifetime management.
 
 #### `rmm::device_buffer`
-Allocates a specified number of bytes of untyped, uninitialized device memory. 
-`rmm::device_buffer` is copyable and movable.
+Allocates a specified number of bytes of untyped, uninitialized device memory using a 
+`device_memory_resource`. If no resource is explicitly provided, uses 
+`rmm::mr::get_current_device_resource()`. 
+
+`rmm::device_buffer` is copyable and movable. A copy performs a deep copy of the `device_buffer`'s 
+device memory, whereas a move moves ownership of the device memory from one `device_buffer` to 
+another.
 
 ```c++
 // Allocates at least 100 bytes of uninitialized device memory 
@@ -302,6 +330,9 @@ void * raw_data = buff.data(); // Raw pointer to underlying device memory
 
 rmm::device_buffer copy(buff); // Deep copies `buff` into `copy`
 rmm::device_buffer moved_to(std::move(buff)); // Moves contents of `buff` into `moved_to`
+
+custom_memory_resource *mr...;
+rmm::device_buffer custom_buff(100, mr); // Allocates 100 bytes from the custom_memory_resource
 ```
 
 #### `rmm::device_scalar<T>`
@@ -588,6 +619,28 @@ void trivial_types_only(T t){
 }
 ```
 
+# Data Types
+
+Columns may contain data of a number of types (see `enum class type_id` in `include/cudf/types.hpp`)
+
+ * Numeric data: signed and unsigned integers (8-, 16-, 32-, or 64-bit), floats (32- or 64-bit), and
+   Booleans (8-bit).
+ * Timestamp data with resolution of days, seconds, milliseconds, microseconds, or nanoseconds.
+ * Duration data with resolution of days, seconds, milliseconds, microseconds, or nanoseconds.
+ * Decimal fixed-point data (32- or 64-bit).
+ * Strings
+ * Dictionaries
+ * Lists of any type
+ * Structs of columns of any type
+
+Most algorithms must support columns of any data type. This leads to complexity in the code, and 
+is one of the primary challenges a libcudf developer faces. Sometimes we develop new algorithms with
+gradual support for more data types to make this easier. Typically we start with fixed-width data
+types such as numeric types and timestamps/durations, adding support for nested types later.
+
+Enabling an algorithm differently for different types uses either template specialization or SFINAE,
+as discussed in [Specializing Type-Dispatched Code Paths](#specializing-type-dispatched-code-paths).
+
 # Type Dispatcher
 
 `libcudf` stores data (for columns and scalars) "type erased" in `void*` device memory. This 
@@ -695,6 +748,10 @@ For more info on SFINAE with `std::enable_if`, [see this post](https://eli.thegr
 There are a number of traits defined in `include/cudf/utilities/traits.hpp` that are useful for 
 partial specialization of dispatched function objects. For example `is_numeric<T>()` can be used to 
 specialize for any numeric type.
+
+# Nested Data Types
+
+// TODO
 
 # Strings Support<a name="string_support"></a>
 
