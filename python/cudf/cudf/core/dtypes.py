@@ -248,3 +248,9 @@ class DecimalDtype(ExtensionDtype):
     @property
     def itemsize(self):
         return 8
+
+    def __repr__(self):
+        return (
+            f"{self.__class__.__name__}"
+            f"(precision={self.precision}, scale={self.scale})"
+        )
