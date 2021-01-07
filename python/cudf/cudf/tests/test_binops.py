@@ -2,6 +2,7 @@
 
 from __future__ import division
 
+import decimal
 import operator
 import random
 from itertools import product
@@ -1527,3 +1528,17 @@ def test_binops_with_lhs_numpy_scalar(frame, dtype):
         expected = pd.Index(expected)
 
     utils.assert_eq(expected, got)
+
+
+def test_binops_decimal():
+    a = cudf.Series(
+        [decimal.Decimal("1.5"), decimal.Decimal("2.0")],
+        dtype=cudf.DecimalDtype(scale=2, precision=2),
+    )
+    expect = cudf.Series(
+        [decimal.Decimal("3.0"), decimal.Decimal("4.0")],
+        dtype=cudf.DecimalDtype(scale=2, precision=3),
+    )
+    got = a + a
+    assert expect.dtype == got.dtype
+    utils.assert_eq(expect, got)
