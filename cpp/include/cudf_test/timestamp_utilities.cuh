@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2020, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,11 +19,8 @@
 #include <cudf/wrappers/timestamps.hpp>
 #include <cudf_test/column_wrapper.hpp>
 
-#include <thrust/device_vector.h>
 #include <thrust/logical.h>
 #include <thrust/sequence.h>
-
-#include <rmm/thrust_rmm_allocator.h>
 
 namespace cudf {
 namespace test {
@@ -31,7 +28,7 @@ using time_point_ms =
   cuda::std::chrono::time_point<cuda::std::chrono::system_clock, cuda::std::chrono::milliseconds>;
 
 /**
- * @brief Creates a `thrust::device_vector` with ascending timestamps in the
+ * @brief Creates a `fixed_width_column_wrapper` with ascending timestamps in the
  * range `[start, stop)`.
  *
  * The period is inferred from `count` and difference between `start`
@@ -43,7 +40,7 @@ using time_point_ms =
  * @param count The number of timestamps to create
  * @param start The first timestamp as a cuda::std::chrono::time_point
  * @param stop The last timestamp as a cuda::std::chrono::time_point
- **/
+ */
 template <typename T, bool nullable = false>
 inline cudf::test::fixed_width_column_wrapper<T, int64_t> generate_timestamps(int32_t count,
                                                                               time_point_ms start,

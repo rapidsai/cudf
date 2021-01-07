@@ -51,7 +51,7 @@ std::unique_ptr<table> sample(table_view const& input,
   if (replacement == sample_with_replacement::TRUE) {
     auto RandomGen = [seed, num_rows] __device__(auto i) {
       thrust::default_random_engine rng(seed);
-      thrust::uniform_int_distribution<size_type> dist{0, num_rows};
+      thrust::uniform_int_distribution<size_type> dist{0, num_rows - 1};
       rng.discard(i);
       return dist(rng);
     };
@@ -66,7 +66,7 @@ std::unique_ptr<table> sample(table_view const& input,
       data_type{type_id::INT32}, num_rows, mask_state::UNALLOCATED, stream.value());
     auto gather_map_mutable_view = gather_map->mutable_view();
     // Shuffle all the row indices
-    thrust::shuffle_copy(rmm::exec_policy(stream)->on(stream.value()),
+    thrust::shuffle_copy(rmm::exec_policy(stream),
                          thrust::counting_iterator<size_type>(0),
                          thrust::counting_iterator<size_type>(num_rows),
                          gather_map_mutable_view.begin<size_type>(),

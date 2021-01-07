@@ -15,6 +15,7 @@
  */
 
 #include <cudf_test/base_fixture.hpp>
+#include <cudf_test/column_utilities.hpp>
 #include <cudf_test/column_wrapper.hpp>
 #include <cudf_test/type_lists.hpp>
 
@@ -26,12 +27,13 @@
 #include <cudf/utilities/error.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
 
+#include <rmm/exec_policy.hpp>
+
 #include <algorithm>
 #include <limits>
 #include <numeric>
 #include <type_traits>
 #include <vector>
-#include "cudf_test/column_utilities.hpp"
 
 using namespace numeric;
 
@@ -507,7 +509,7 @@ TEST_F(FixedPointTest, DecimalXXThrustOnDevice)
   thrust::device_vector<decimal32> vec1(1000, decimal32{1, scale_type{-2}});
 
   auto const sum = thrust::reduce(
-    rmm::exec_policy(0)->on(0), std::cbegin(vec1), std::cend(vec1), decimal32{0, scale_type{-2}});
+    rmm::exec_policy(), std::cbegin(vec1), std::cend(vec1), decimal32{0, scale_type{-2}});
 
   EXPECT_EQ(static_cast<int32_t>(sum), 1000);
 
@@ -523,7 +525,7 @@ TEST_F(FixedPointTest, DecimalXXThrustOnDevice)
   std::iota(std::begin(vec2), std::end(vec2), 1);
 
   auto const res1 = thrust::reduce(
-    rmm::exec_policy(0)->on(0), std::cbegin(vec1), std::cend(vec1), decimal32{0, scale_type{-2}});
+    rmm::exec_policy(), std::cbegin(vec1), std::cend(vec1), decimal32{0, scale_type{-2}});
 
   auto const res2 = std::accumulate(std::cbegin(vec2), std::cend(vec2), 0);
 
@@ -531,11 +533,8 @@ TEST_F(FixedPointTest, DecimalXXThrustOnDevice)
 
   thrust::device_vector<int32_t> vec3(1000);
 
-  thrust::transform(rmm::exec_policy(0)->on(0),
-                    std::cbegin(vec1),
-                    std::cend(vec1),
-                    std::begin(vec3),
-                    cast_to_int32_fn{});
+  thrust::transform(
+    rmm::exec_policy(), std::cbegin(vec1), std::cend(vec1), std::begin(vec3), cast_to_int32_fn{});
 
   thrust::host_vector<int32_t> vec3_host = vec3;
 

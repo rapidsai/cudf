@@ -3,6 +3,7 @@
 from numbers import Number
 
 import numpy as np
+import pandas as pd
 from nvtx import annotate
 from pandas.api.types import is_integer_dtype
 
@@ -16,6 +17,7 @@ from cudf.utils.dtypes import (
     min_column_type,
     min_signed_type,
     numeric_normalize_types,
+    to_cudf_compatible_scalar,
 )
 
 
@@ -107,6 +109,8 @@ class NumericalColumn(column.ColumnBase):
         if other is None:
             return other
         if isinstance(other, cudf.Scalar):
+            if self.dtype == other.dtype:
+                return other
             # expensive device-host transfer just to
             # adjust the dtype
             other = other.value
@@ -130,7 +134,7 @@ class NumericalColumn(column.ColumnBase):
                     other, size=len(self), dtype=other_dtype
                 )
                 return column.build_column(
-                    data=Buffer.from_array_lik(ary),
+                    data=Buffer.from_array_like(ary),
                     dtype=ary.dtype,
                     mask=self.mask,
                 )
@@ -413,15 +417,18 @@ class NumericalColumn(column.ColumnBase):
             replaced, to_replace_col, replacement_col
         )
 
-    def fillna(self, fill_value):
+    def fillna(self, fill_value=None, method=None):
         """
         Fill null values with *fill_value*
         """
+        if method is not None:
+            return super().fillna(fill_value, method)
+
         if (
             isinstance(fill_value, cudf.Scalar)
             and fill_value.dtype == self.dtype
         ):
-            return libcudf.replace.replace_nulls(self, fill_value)
+            return super().fillna(fill_value, method)
         if np.isscalar(fill_value):
             # castsafely to the same dtype as self
             fill_value_casted = self.dtype.type(fill_value)
@@ -438,9 +445,8 @@ class NumericalColumn(column.ColumnBase):
                 fill_value = _safe_cast_to_int(fill_value, self.dtype)
             else:
                 fill_value = fill_value.astype(self.dtype)
-        result = libcudf.replace.replace_nulls(self, fill_value)
 
-        return result
+        return super().fillna(fill_value, method)
 
     def find_first_value(self, value, closest=False):
         """
@@ -448,6 +454,9 @@ class NumericalColumn(column.ColumnBase):
         columns, returns the offset of the first larger value
         if closest=True.
         """
+        value = to_cudf_compatible_scalar(value)
+        if not pd.api.types.is_number(value):
+            raise ValueError("Expected a numeric value")
         found = 0
         if len(self):
             found = cudautils.find_first(
@@ -474,6 +483,9 @@ class NumericalColumn(column.ColumnBase):
         columns, returns the offset of the last smaller value
         if closest=True.
         """
+        value = to_cudf_compatible_scalar(value)
+        if not pd.api.types.is_number(value):
+            raise ValueError("Expected a numeric value")
         found = 0
         if len(self):
             found = cudautils.find_last(
@@ -687,8 +699,9 @@ def digitize(column, bins, right=False):
     ----------
     column : Column
         Input column.
-    bins : np.array
-        1-D monotonically increasing array of bins with same type as `column`.
+    bins : Column-like
+        1-D column-like object of bins with same type as `column`, should be
+        monotonically increasing.
     right : bool
         Indicates whether interval contains the right or left bin edge.
 
@@ -696,9 +709,15 @@ def digitize(column, bins, right=False):
     -------
     A device array containing the indices
     """
-    assert column.dtype == bins.dtype
-    bins_buf = Buffer(bins.view("|u1"))
-    bin_col = NumericalColumn(data=bins_buf, dtype=bins.dtype)
+    if not column.dtype == bins.dtype:
+        raise ValueError(
+            "Digitize() expects bins and input column have the same dtype."
+        )
+
+    bin_col = as_column(bins, dtype=bins.dtype)
+    if bin_col.nullable:
+        raise ValueError("`bins` cannot contain null entries.")
+
     return as_column(
         libcudf.sort.digitize(column.as_frame(), bin_col.as_frame(), right)
     )

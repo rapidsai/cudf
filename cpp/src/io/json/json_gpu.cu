@@ -32,6 +32,8 @@
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_buffer.hpp>
+#include <rmm/device_vector.hpp>
+#include <rmm/exec_policy.hpp>
 
 #include <thrust/detail/copy.h>
 #include <thrust/find.h>
@@ -543,12 +545,12 @@ __global__ void convert_data_to_columns_kernel(parse_options_view opts,
        input_field_index++) {
     auto const desc =
       next_field_descriptor(current, row_data_range.second, opts, input_field_index, col_map);
-    auto const value_len = desc.value_end - desc.value_begin;
+    auto const value_len = static_cast<size_t>(std::max(desc.value_end - desc.value_begin, 0L));
 
     current = desc.value_end + 1;
 
     // Empty fields are not legal values
-    if (value_len > 0 && !serialized_trie_contains(opts.trie_na, desc.value_begin, value_len)) {
+    if (!serialized_trie_contains(opts.trie_na, desc.value_begin, value_len)) {
       // Type dispatcher does not handle strings
       if (column_types[desc.column].id() == type_id::STRING) {
         auto str_list           = static_cast<string_pair *>(output_columns[desc.column]);
@@ -614,13 +616,13 @@ __global__ void detect_data_types_kernel(
        input_field_index++) {
     auto const desc =
       next_field_descriptor(current, row_data_range.second, opts, input_field_index, col_map);
-    auto const value_len = desc.value_end - desc.value_begin;
+    auto const value_len = static_cast<size_t>(std::max(desc.value_end - desc.value_begin, 0L));
 
     // Advance to the next field; +1 to skip the delimiter
     current = desc.value_end + 1;
 
     // Checking if the field is empty/valid
-    if (value_len <= 0 || serialized_trie_contains(opts.trie_na, desc.value_begin, value_len)) {
+    if (serialized_trie_contains(opts.trie_na, desc.value_begin, value_len)) {
       // Increase the null count for array rows, where the null count is initialized to zero.
       if (!are_rows_objects) { atomicAdd(&column_infos[desc.column].null_count, 1); }
       continue;
@@ -753,7 +755,6 @@ __device__ key_value_range get_next_key_value_range(char const *begin,
  * @param[in] row_offsets The offset of each row in the input
  * @param[out] keys_cnt Number of keys found in the file
  * @param[out] keys_info optional, information (offset, length, hash) for each found key
- *
  */
 __global__ void collect_keys_info_kernel(parse_options_view const options,
                                          device_span<char const> const data,
@@ -835,7 +836,7 @@ std::vector<cudf::io::column_type_histogram> detect_data_types(
   if (do_set_null_count) {
     // Set the null count to the row count (all fields assumes to be null).
     thrust::for_each(
-      rmm::exec_policy(stream)->on(stream.value()),
+      rmm::exec_policy(stream),
       d_column_infos.begin(),
       d_column_infos.end(),
       [num_records = row_offsets.size()] __device__(auto &info) { info.null_count = num_records; });

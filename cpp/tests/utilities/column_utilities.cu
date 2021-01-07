@@ -25,7 +25,7 @@
 #include <cudf/table/row_operators.cuh>
 #include <cudf/table/table_device_view.cuh>
 #include <cudf/utilities/bit.hpp>
-#include "cudf/utilities/type_dispatcher.hpp"
+#include <cudf/utilities/type_dispatcher.hpp>
 
 #include <cudf_test/column_utilities.hpp>
 #include <cudf_test/column_wrapper.hpp>
@@ -33,6 +33,8 @@
 #include <cudf_test/detail/column_utilities.hpp>
 
 #include <jit/type.h>
+
+#include <rmm/exec_policy.hpp>
 
 #include <thrust/equal.h>
 #include <thrust/iterator/counting_iterator.h>
@@ -371,7 +373,6 @@ struct column_comparator {
 
 /**
  * @copydoc cudf::test::expect_column_properties_equal
- *
  */
 void expect_column_properties_equal(column_view const& lhs, column_view const& rhs)
 {
@@ -380,7 +381,6 @@ void expect_column_properties_equal(column_view const& lhs, column_view const& r
 
 /**
  * @copydoc cudf::test::expect_column_properties_equivalent
- *
  */
 void expect_column_properties_equivalent(column_view const& lhs, column_view const& rhs)
 {
@@ -389,7 +389,6 @@ void expect_column_properties_equivalent(column_view const& lhs, column_view con
 
 /**
  * @copydoc cudf::test::expect_columns_equal
- *
  */
 void expect_columns_equal(cudf::column_view const& lhs,
                           cudf::column_view const& rhs,
@@ -400,7 +399,6 @@ void expect_columns_equal(cudf::column_view const& lhs,
 
 /**
  * @copydoc cudf::test::expect_columns_equivalent
- *
  */
 void expect_columns_equivalent(cudf::column_view const& lhs,
                                cudf::column_view const& rhs,
@@ -411,7 +409,6 @@ void expect_columns_equivalent(cudf::column_view const& lhs,
 
 /**
  * @copydoc cudf::test::expect_equal_buffers
- *
  */
 void expect_equal_buffers(void const* lhs, void const* rhs, std::size_t size_bytes)
 {
@@ -426,7 +423,6 @@ void expect_equal_buffers(void const* lhs, void const* rhs, std::size_t size_byt
 
 /**
  * @copydoc cudf::test::bitmask_to_host
- *
  */
 std::vector<bitmask_type> bitmask_to_host(cudf::column_view const& c)
 {
@@ -516,7 +512,7 @@ std::string nested_offsets_to_string(NestedColumnView const& c, std::string cons
   // normalize the offset values for the column offset
   size_type const* d_offsets = offsets.head<size_type>() + c.offset();
   thrust::transform(
-    rmm::exec_policy(0)->on(0),
+    rmm::exec_policy(),
     d_offsets,
     d_offsets + output_size,
     shifted_offsets.begin(),
@@ -733,7 +729,6 @@ namespace detail {
 
 /**
  * @copydoc cudf::test::detail::to_strings
- *
  */
 std::vector<std::string> to_strings(cudf::column_view const& col, std::string const& indent)
 {
@@ -785,7 +780,6 @@ std::string to_string(std::vector<bitmask_type> const& null_mask,
 
 /**
  * @copydoc cudf::test::to_strings
- *
  */
 std::vector<std::string> to_strings(cudf::column_view const& col)
 {
@@ -794,7 +788,6 @@ std::vector<std::string> to_strings(cudf::column_view const& col)
 
 /**
  * @copydoc cudf::test::to_string(cudf::column_view, std::string)
- *
  */
 std::string to_string(cudf::column_view const& col, std::string const& delimiter)
 {
@@ -803,7 +796,6 @@ std::string to_string(cudf::column_view const& col, std::string const& delimiter
 
 /**
  * @copydoc cudf::test::to_string(std::vector<bitmask_type>, size_type)
- *
  */
 std::string to_string(std::vector<bitmask_type> const& null_mask, size_type null_mask_size)
 {
@@ -812,7 +804,6 @@ std::string to_string(std::vector<bitmask_type> const& null_mask, size_type null
 
 /**
  * @copydoc cudf::test::print
- *
  */
 void print(cudf::column_view const& col, std::ostream& os, std::string const& delimiter)
 {
@@ -821,7 +812,6 @@ void print(cudf::column_view const& col, std::ostream& os, std::string const& de
 
 /**
  * @copydoc cudf::test::validate_host_masks
- *
  */
 bool validate_host_masks(std::vector<bitmask_type> const& expected_mask,
                          std::vector<bitmask_type> const& got_mask,

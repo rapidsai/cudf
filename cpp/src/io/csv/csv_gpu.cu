@@ -33,6 +33,7 @@
 #include <cudf/utilities/type_dispatcher.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
+#include <rmm/exec_policy.hpp>
 
 #include <thrust/detail/copy.h>
 #include <thrust/transform.h>
@@ -224,7 +225,7 @@ __global__ void __launch_bounds__(csvparse_block_dim)
       long tempPos   = pos - 1;
       long field_len = pos - start;
 
-      if (field_len < 0 || serialized_trie_contains(opts.trie_na, raw_csv + start, field_len)) {
+      if (serialized_trie_contains(opts.trie_na, raw_csv + start, field_len)) {
         atomicAdd(&d_columnData[actual_col].null_count, 1);
       } else if (serialized_trie_contains(opts.trie_true, raw_csv + start, field_len) ||
                  serialized_trie_contains(opts.trie_false, raw_csv + start, field_len)) {
@@ -331,7 +332,11 @@ __inline__ __device__ cudf::timestamp_s decode_value(char const *begin,
                                                      parse_options_view const &opts)
 {
   auto milli = parseDateTimeFormat(begin, end, opts.dayfirst);
-  return timestamp_s{cudf::duration_s{milli / 1000}};
+  if (milli == -1) {
+    return timestamp_s{cudf::duration_s{convertStrToInteger<int64_t>(begin, end)}};
+  } else {
+    return timestamp_s{cudf::duration_s{milli / 1000}};
+  }
 }
 
 template <>
@@ -340,7 +345,11 @@ __inline__ __device__ cudf::timestamp_ms decode_value(char const *begin,
                                                       parse_options_view const &opts)
 {
   auto milli = parseDateTimeFormat(begin, end, opts.dayfirst);
-  return timestamp_ms{cudf::duration_ms{milli}};
+  if (milli == -1) {
+    return timestamp_ms{cudf::duration_ms{convertStrToInteger<int64_t>(begin, end)}};
+  } else {
+    return timestamp_ms{cudf::duration_ms{milli}};
+  }
 }
 
 template <>
@@ -349,7 +358,11 @@ __inline__ __device__ cudf::timestamp_us decode_value(char const *begin,
                                                       parse_options_view const &opts)
 {
   auto milli = parseDateTimeFormat(begin, end, opts.dayfirst);
-  return timestamp_us{cudf::duration_us{milli * 1000}};
+  if (milli == -1) {
+    return timestamp_us{cudf::duration_us{convertStrToInteger<int64_t>(begin, end)}};
+  } else {
+    return timestamp_us{cudf::duration_us{milli * 1000}};
+  }
 }
 
 template <>
@@ -358,7 +371,11 @@ __inline__ __device__ cudf::timestamp_ns decode_value(char const *begin,
                                                       parse_options_view const &opts)
 {
   auto milli = parseDateTimeFormat(begin, end, opts.dayfirst);
-  return timestamp_ns{cudf::duration_ns{milli * 1000000}};
+  if (milli == -1) {
+    return timestamp_ns{cudf::duration_ns{convertStrToInteger<int64_t>(begin, end)}};
+  } else {
+    return timestamp_ns{cudf::duration_ns{milli * 1000000}};
+  }
 }
 
 #ifndef DURATION_DECODE_VALUE
@@ -555,7 +572,7 @@ struct decode_op {
  * @param[out] data The output column data
  * @param[out] valid The bitmaps indicating whether column fields are valid
  * @param[out] num_valid The numbers of valid fields in columns
- **/
+ */
 __global__ void __launch_bounds__(csvparse_block_dim)
   convert_csv_to_cudf(cudf::io::parse_options_view options,
                       device_span<char const> data,
@@ -639,7 +656,7 @@ __global__ void __launch_bounds__(csvparse_block_dim)
 /*
  * @brief Merge two packed row contexts (each corresponding to a block of characters)
  * and return the packed row context corresponding to the merged character block
- **/
+ */
 inline __device__ packed_rowctx_t merge_row_contexts(packed_rowctx_t first_ctx,
                                                      packed_rowctx_t second_ctx)
 {
@@ -656,7 +673,7 @@ inline __device__ packed_rowctx_t merge_row_contexts(packed_rowctx_t first_ctx,
  * @brief Per-character context:
  * 1-bit count (0 or 1) per context in the lower 4 bits
  * 2-bit output context id per input context in bits 8..15
- **/
+ */
 constexpr __device__ uint32_t make_char_context(uint32_t id0,
                                                 uint32_t id1,
                                                 uint32_t id2 = ROW_CTX_COMMENT,
@@ -680,8 +697,7 @@ constexpr __device__ uint32_t make_char_context(uint32_t id0,
  * NOTE: This is probably the most performance-critical piece of the row gathering kernel.
  * The char_ctx value should be created via make_char_context, and its value should
  * have been evaluated at compile-time.
- *
- **/
+ */
 inline __device__ void merge_char_context(uint4 &ctx, uint32_t char_ctx, uint32_t pos)
 {
   uint32_t id0 = (ctx.w >> 0) & 3;
@@ -698,7 +714,7 @@ inline __device__ void merge_char_context(uint4 &ctx, uint32_t char_ctx, uint32_
 
 /*
  * Convert the context-with-row-bitmaps version to a packed row context
- **/
+ */
 inline __device__ packed_rowctx_t pack_rowmaps(uint4 ctx_map)
 {
   return pack_row_contexts(make_row_context(__popc(ctx_map.x), (ctx_map.w >> 0) & 3),
@@ -708,7 +724,7 @@ inline __device__ packed_rowctx_t pack_rowmaps(uint4 ctx_map)
 
 /*
  * Selects the row bitmap corresponding to the given parser state
- **/
+ */
 inline __device__ uint32_t select_rowmap(uint4 ctx_map, uint32_t ctxid)
 {
   return (ctxid == ROW_CTX_NONE)
@@ -731,7 +747,6 @@ inline __device__ uint32_t select_rowmap(uint4 ctx_map, uint32_t ctxid)
  * @param ctxtree[out] packed row context tree
  * @param ctxb[in] packed row context for the current character block
  * @param t thread id (leaf node id)
- *
  */
 template <uint32_t lanemask, uint32_t tmask, uint32_t base, uint32_t level_scale>
 inline __device__ void ctx_merge(uint64_t *ctxtree, packed_rowctx_t *ctxb, uint32_t t)
@@ -788,8 +803,7 @@ inline __device__ void ctx_unmerge(
  * @param ctxtree[out] packed row context tree
  * @param ctxb[in] packed row context for the current character block
  * @param t thread id (leaf node id)
- *
- **/
+ */
 static inline __device__ void rowctx_merge_transform(uint64_t ctxtree[1024],
                                                      packed_rowctx_t ctxb,
                                                      uint32_t t)
@@ -823,7 +837,7 @@ static inline __device__ void rowctx_merge_transform(uint64_t ctxtree[1024],
  * @param[in] t thread id (leaf node id)
  *
  * @return Final row context and count (row_position*4 + context_id format)
- **/
+ */
 static inline __device__ rowctx32_t rowctx_inverse_merge_transform(uint64_t ctxtree[1024],
                                                                    uint32_t t)
 {
@@ -871,7 +885,7 @@ static inline __device__ rowctx32_t rowctx_inverse_merge_transform(uint64_t ctxt
  * @param quotechar Quote character
  * @param escapechar Delimiter escape character
  * @param commentchar Comment line character (skip rows starting with this character)
- **/
+ */
 __global__ void __launch_bounds__(rowofs_block_dim)
   gather_row_offsets_gpu(uint64_t *row_ctx,
                          device_span<uint64_t> offsets_out,
@@ -1013,7 +1027,7 @@ size_t __host__ count_blank_rows(const cudf::io::parse_options_view &opts,
   const auto comment  = opts.comment != '\0' ? opts.comment : newline;
   const auto carriage = (opts.skipblanklines && opts.terminator == '\n') ? '\r' : comment;
   return thrust::count_if(
-    rmm::exec_policy(stream)->on(stream.value()),
+    rmm::exec_policy(stream),
     row_offsets.begin(),
     row_offsets.end(),
     [data = data, newline, comment, carriage] __device__(const uint64_t pos) {
@@ -1032,7 +1046,7 @@ void __host__ remove_blank_rows(cudf::io::parse_options_view const &options,
   const auto comment  = options.comment != '\0' ? options.comment : newline;
   const auto carriage = (options.skipblanklines && options.terminator == '\n') ? '\r' : comment;
   auto new_end        = thrust::remove_if(
-    rmm::exec_policy(stream)->on(stream.value()),
+    rmm::exec_policy(stream),
     row_offsets.begin(),
     row_offsets.end(),
     [data = data, d_size, newline, comment, carriage] __device__(const uint64_t pos) {

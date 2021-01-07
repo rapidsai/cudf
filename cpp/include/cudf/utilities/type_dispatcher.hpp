@@ -30,7 +30,7 @@
  * @file
  * @brief Defines the mapping between `cudf::type_id` runtime type information
  * and concrete C++ types.
- **/
+ */
 namespace cudf {
 /**
  * @addtogroup utility_dispatcher
@@ -51,7 +51,7 @@ namespace cudf {
  * ```
  *
  * @tparam T The type to map to a `cudf::type_id`
- **/
+ */
 template <typename T>
 inline constexpr type_id type_to_id()
 {
@@ -78,7 +78,7 @@ struct id_to_type_impl {
  * static_assert(std::is_same<int32_t, id_to_type<id_type::INT32>);
  * ```
  * @tparam t The `cudf::type_id` to map
- **/
+ */
 template <cudf::type_id Id>
 using id_to_type = typename id_to_type_impl<Id>::type;
 
@@ -124,7 +124,7 @@ bool type_id_matches_device_storage_type(type_id const& id)
 
  * @param Type The concrete C++ type
  * @param Id The `cudf::type_id` enum
- **/
+ */
 #ifndef CUDF_TYPE_MAPPING
 #define CUDF_TYPE_MAPPING(Type, Id)                   \
   template <>                                         \
@@ -146,7 +146,7 @@ bool type_id_matches_device_storage_type(type_id const& id)
 /**
  * @brief Defines all of the mappings between C++ types and their corresponding
  * `cudf::type_id` values.
- **/
+ */
 CUDF_TYPE_MAPPING(bool, type_id::BOOL8);
 CUDF_TYPE_MAPPING(int8_t, type_id::INT8);
 CUDF_TYPE_MAPPING(int16_t, type_id::INT16);
@@ -376,7 +376,7 @@ using scalar_device_type_t = typename type_to_scalar_type_impl<T>::ScalarDeviceT
  * @param args Parameter pack of arguments forwarded to the `operator()`
  * invocation
  * @return Whatever is returned by the callable's `operator()`
- **/
+ */
 // This pragma disables a compiler warning that complains about the valid usage
 // of calling a __host__ functor from this function which is __host__ __device__
 #pragma nv_exec_check_disable

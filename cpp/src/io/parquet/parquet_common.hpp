@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018, NVIDIA CORPORATION.
+ * Copyright (c) 2018-2020, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -26,7 +26,7 @@ namespace io {
 namespace parquet {
 /**
  * @brief Basic data types in Parquet, determines how data is physically stored
- **/
+ */
 enum Type {
   UNDEFINED_TYPE       = -1,  // Undefined for non-leaf nodes
   BOOLEAN              = 0,
@@ -41,7 +41,7 @@ enum Type {
 
 /**
  * @brief High-level data types in Parquet, determines how data is logically interpreted
- **/
+ */
 enum ConvertedType {
   UNKNOWN = -1,  // No type information present
   UTF8    = 0,   // a BYTE_ARRAY actually contains UTF8 encoded chars
@@ -77,7 +77,7 @@ enum ConvertedType {
 
 /**
  * @brief Encoding types for the actual data stream
- **/
+ */
 enum class Encoding : uint8_t {
   PLAIN                   = 0,
   GROUP_VAR_INT           = 1,  // Deprecated, never used
@@ -92,7 +92,7 @@ enum class Encoding : uint8_t {
 
 /**
  * @brief Compression codec used for compressed data pages
- **/
+ */
 enum Compression {
   UNCOMPRESSED = 0,
   SNAPPY       = 1,
@@ -105,7 +105,7 @@ enum Compression {
 
 /**
  * @brief Compression codec used for compressed data pages
- **/
+ */
 enum FieldRepetitionType {
   NO_REPETITION_TYPE = -1,
   REQUIRED = 0,  // This field is required (can not be null) and each record has exactly 1 value.
@@ -115,7 +115,7 @@ enum FieldRepetitionType {
 
 /**
  * @brief Types of pages
- **/
+ */
 enum class PageType : uint8_t {
   DATA_PAGE       = 0,
   INDEX_PAGE      = 1,
@@ -125,7 +125,7 @@ enum class PageType : uint8_t {
 
 /**
  * @brief Thrift compact protocol struct field types
- **/
+ */
 enum {
   ST_FLD_TRUE   = 1,
   ST_FLD_FALSE  = 2,

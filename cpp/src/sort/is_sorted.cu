@@ -21,8 +21,9 @@
 #include <cudf/types.hpp>
 #include <cudf/utilities/error.hpp>
 
-#include <rmm/thrust_rmm_allocator.h>
 #include <rmm/cuda_stream_view.hpp>
+#include <rmm/device_vector.hpp>
+#include <rmm/exec_policy.hpp>
 
 namespace cudf {
 namespace detail {
@@ -41,7 +42,7 @@ auto is_sorted(cudf::table_view const& in,
   auto ineq_op = row_lexicographic_comparator<has_nulls>(
     *in_d, *in_d, d_column_order.data().get(), d_null_precedence.data().get());
 
-  auto sorted = thrust::is_sorted(rmm::exec_policy(stream)->on(stream.value()),
+  auto sorted = thrust::is_sorted(rmm::exec_policy(stream),
                                   thrust::make_counting_iterator(0),
                                   thrust::make_counting_iterator(in.num_rows()),
                                   ineq_op);

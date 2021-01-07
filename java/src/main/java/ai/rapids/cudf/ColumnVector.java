@@ -1,6 +1,6 @@
 /*
  *
- *  Copyright (c) 2019-2020, NVIDIA CORPORATION.
+ *  Copyright (c) 2019-2021, NVIDIA CORPORATION.
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -83,8 +83,8 @@ public final class ColumnVector extends ColumnView {
     super(ColumnVector.initViewHandle(
         type, (int)rows, nullCount.orElse(UNKNOWN_NULL_COUNT).intValue(),
         dataBuffer, validityBuffer, offsetBuffer, null));
-    assert type != DType.LIST : "This constructor should not be used for list type";
-    if (type != DType.STRING) {
+    assert !type.equals(DType.LIST) : "This constructor should not be used for list type";
+    if (!type.equals(DType.STRING)) {
       assert offsetBuffer == null : "offsets are only supported for STRING";
     }
     assert (nullCount.isPresent() && nullCount.get() <= Integer.MAX_VALUE)
@@ -120,7 +120,7 @@ public final class ColumnVector extends ColumnView {
     super(initViewHandle(type, (int)rows, nullCount.orElse(UNKNOWN_NULL_COUNT).intValue(),
         dataBuffer, validityBuffer,
         offsetBuffer, childHandles));
-    if (type != DType.STRING && type != DType.LIST) {
+    if (!type.equals(DType.STRING) && !type.equals(DType.LIST)) {
       assert offsetBuffer == null : "offsets are only supported for STRING, LISTS";
     }
     assert (nullCount.isPresent() && nullCount.get() <= Integer.MAX_VALUE)
@@ -324,6 +324,33 @@ public final class ColumnVector extends ColumnView {
   }
 
   /**
+   * Create a new struct vector made up of existing columns. Note that this will copy
+   * the contents of the input columns to make a new vector. If you only want to
+   * do a quick temporary computation you can use ColumnView.makeStructView.
+   * @param columns the columns to make the struct from.
+   * @return the new ColumnVector
+   */
+  public static ColumnVector makeStruct(ColumnView... columns) {
+    try (ColumnView cv = ColumnView.makeStructView(columns)) {
+      return cv.copyToColumnVector();
+    }
+  }
+
+  /**
+   * Create a new struct vector made up of existing columns. Note that this will copy
+   * the contents of the input columns to make a new vector. If you only want to
+   * do a quick temporary computation you can use ColumnView.makeStructView.
+   * @param rows the number of rows in the struct. Used for structs with no children.
+   * @param columns the columns to make the struct from.
+   * @return the new ColumnVector
+   */
+  public static ColumnVector makeStruct(long rows, ColumnView... columns) {
+    try (ColumnView cv = ColumnView.makeStructView(rows, columns)) {
+      return cv.copyToColumnVector();
+    }
+  }
+
+  /**
    * Create a new vector of length rows, starting at the initialValue and going by step each time.
    * Only numeric types are supported.
    * @param initialValue the initial value to start at.
@@ -393,15 +420,15 @@ public final class ColumnVector extends ColumnView {
   public static ColumnVector stringConcatenate(Scalar separator, Scalar narep, ColumnView[] columns) {
     assert columns.length >= 2 : ".stringConcatenate() operation requires at least 2 columns";
     assert separator != null : "separator scalar provided may not be null";
-    assert separator.getType() == DType.STRING : "separator scalar must be a string scalar";
+    assert separator.getType().equals(DType.STRING) : "separator scalar must be a string scalar";
     assert narep != null : "narep scalar provided may not be null";
-    assert narep.getType() == DType.STRING : "narep scalar must be a string scalar";
+    assert narep.getType().equals(DType.STRING) : "narep scalar must be a string scalar";
     long size = columns[0].getRowCount();
     long[] column_views = new long[columns.length];
 
     for(int i = 0; i < columns.length; i++) {
       assert columns[i] != null : "Column vectors passed may not be null";
-      assert columns[i].getType() == DType.STRING : "All columns must be of type string for .cat() operation";
+      assert columns[i].getType().equals(DType.STRING) : "All columns must be of type string for .cat() operation";
       assert columns[i].getRowCount() == size : "Row count mismatch, all columns must have the same number of rows";
       column_views[i] = columns[i].getNativeView();
     }
@@ -426,8 +453,8 @@ public final class ColumnVector extends ColumnView {
       assert columns[i] != null : "Column vectors passed may not be null";
       assert columns[i].getRowCount() == size : "Row count mismatch, all columns must be the same size";
       assert !columns[i].getType().isDurationType() : "Unsupported column type Duration";
-      assert !columns[i].getType().isTimestamp() : "Unsupported column type Timestamp";
-      assert !columns[i].getType().isNestedType() || columns[i].getType() == DType.LIST :
+      assert !columns[i].getType().isTimestampType() : "Unsupported column type Timestamp";
+      assert !columns[i].getType().isNestedType() || columns[i].getType().equals(DType.LIST) :
           "Unsupported nested type column";
       columnViews[i] = columns[i].getNativeView();
     }
@@ -435,15 +462,15 @@ public final class ColumnVector extends ColumnView {
   }
 
   /**
-   * Create a new vector containing the MD5 hash of each row in the table.
+   * Create a new vector containing the murmur3 hash of each row in the table.
    *
    * @param seed integer seed for the murmur3 hash function
    * @param columns array of columns to hash, must have identical number of rows.
-   * @return the new ColumnVector of 32 character hex strings representing each row's hash value.
+   * @return the new ColumnVector of 32-bit values representing each row's hash value.
    */
   public static ColumnVector serial32BitMurmurHash3(int seed, ColumnView columns[]) {
     if (columns.length < 1) {
-      throw new IllegalArgumentException("MD5 hashing requires at least 1 column of input");
+      throw new IllegalArgumentException("Murmur3 hashing requires at least 1 column of input");
     }
     long[] columnViews = new long[columns.length];
     long size = columns[0].getRowCount();
@@ -452,7 +479,7 @@ public final class ColumnVector extends ColumnView {
       assert columns[i] != null : "Column vectors passed may not be null";
       assert columns[i].getRowCount() == size : "Row count mismatch, all columns must be the same size";
       assert !columns[i].getType().isDurationType() : "Unsupported column type Duration";
-      assert !columns[i].getType().isTimestamp() : "Unsupported column type Timestamp";
+      assert !columns[i].getType().isTimestampType() : "Unsupported column type Timestamp";
       assert !columns[i].getType().isNestedType() : "Unsupported column of nested type";
       columnViews[i] = columns[i].getNativeView();
     }
@@ -460,13 +487,50 @@ public final class ColumnVector extends ColumnView {
   }
 
   /**
-   * Create a new vector containing the MD5 hash of each row in the table, seed defaulted to 0.
+   * Create a new vector containing the murmur3 hash of each row in the table, seed defaulted to 0.
    *
    * @param columns array of columns to hash, must have identical number of rows.
-   * @return the new ColumnVector of 32 character hex strings representing each row's hash value.
+   * @return the new ColumnVector of 32-bit values representing each row's hash value.
    */
   public static ColumnVector serial32BitMurmurHash3(ColumnView columns[]) {
     return serial32BitMurmurHash3(0, columns);
+  }
+
+  /**
+   * Create a new vector containing spark's 32-bit murmur3 hash of each row in the table.
+   * Spark's murmur3 hash uses a different tail processing algorithm.
+   *
+   * @param seed integer seed for the murmur3 hash function
+   * @param columns array of columns to hash, must have identical number of rows.
+   * @return the new ColumnVector of 32-bit values representing each row's hash value.
+   */
+  public static ColumnVector spark32BitMurmurHash3(int seed, ColumnView columns[]) {
+    if (columns.length < 1) {
+      throw new IllegalArgumentException("Murmur3 hashing requires at least 1 column of input");
+    }
+    long[] columnViews = new long[columns.length];
+    long size = columns[0].getRowCount();
+
+    for(int i = 0; i < columns.length; i++) {
+      assert columns[i] != null : "Column vectors passed may not be null";
+      assert columns[i].getRowCount() == size : "Row count mismatch, all columns must be the same size";
+      assert !columns[i].getType().isDurationType() : "Unsupported column type Duration";
+      assert !columns[i].getType().isTimestampType() : "Unsupported column type Timestamp";
+      assert !columns[i].getType().isNestedType() : "Unsupported column of nested type";
+      columnViews[i] = columns[i].getNativeView();
+    }
+    return new ColumnVector(hash(columnViews, HashType.HASH_SPARK_MURMUR3.getNativeId(), new int[0], seed));
+  }
+
+  /**
+   * Create a new vector containing spark's 32-bit murmur3 hash of each row in the table with the
+   * seed set to 0. Spark's murmur3 hash uses a different tail processing algorithm.
+   *
+   * @param columns array of columns to hash, must have identical number of rows.
+   * @return the new ColumnVector of 32-bit values representing each row's hash value.
+   */
+  public static ColumnVector spark32BitMurmurHash3(ColumnView columns[]) {
+    return spark32BitMurmurHash3(0, columns);
   }
 
   /**
@@ -492,7 +556,7 @@ public final class ColumnVector extends ColumnView {
    */
   @Override
   public ColumnVector castTo(DType type) {
-    if (this.type == type) {
+    if (this.type.equals(type)) {
       // Optimization
       return incRefCount();
     }
@@ -826,6 +890,15 @@ public final class ColumnVector extends ColumnView {
   public static ColumnVector fromStructs(HostColumnVector.DataType dataType,
                                          HostColumnVector.StructData... lists) {
     try (HostColumnVector host = HostColumnVector.fromStructs(dataType, lists)) {
+      return host.copyToDevice();
+    }
+  }
+  /**
+   * This method is evolving, unstable and currently test only.
+   * Please use with caution and expect it to change in the future.
+   */
+  public static ColumnVector emptyStructs(HostColumnVector.DataType dataType, long numRows) {
+    try (HostColumnVector host = HostColumnVector.emptyStructs(dataType, numRows)) {
       return host.copyToDevice();
     }
   }

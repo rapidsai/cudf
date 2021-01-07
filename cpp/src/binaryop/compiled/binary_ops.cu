@@ -22,8 +22,9 @@
 #include <cudf/scalar/scalar_device_view.cuh>
 #include <cudf/table/table_view.hpp>
 
-#include <rmm/thrust_rmm_allocator.h>
 #include <rmm/cuda_stream_view.hpp>
+#include <rmm/device_vector.hpp>
+#include <rmm/exec_policy.hpp>
 
 namespace cudf {
 namespace binops {
@@ -126,12 +127,12 @@ struct binary_op {
       if (lhs.has_nulls()) {
         auto lhs_itr = cudf::detail::make_null_replacement_iterator(*lhs_device_view, Lhs{});
         reversed
-          ? thrust::transform(rmm::exec_policy(stream)->on(stream.value()),
+          ? thrust::transform(rmm::exec_policy(stream),
                               lhs_itr,
                               lhs_itr + lhs.size(),
                               out_itr,
                               apply_binop_scalar_rhs_lhs<Lhs, Rhs, Out>{op, rhs_scalar_view})
-          : thrust::transform(rmm::exec_policy(stream)->on(stream.value()),
+          : thrust::transform(rmm::exec_policy(stream),
                               lhs_itr,
                               lhs_itr + lhs.size(),
                               out_itr,
@@ -141,12 +142,12 @@ struct binary_op {
           thrust::make_counting_iterator(size_type{0}),
           [col = *lhs_device_view] __device__(size_type i) { return col.element<Lhs>(i); });
         reversed
-          ? thrust::transform(rmm::exec_policy(stream)->on(stream.value()),
+          ? thrust::transform(rmm::exec_policy(stream),
                               lhs_itr,
                               lhs_itr + lhs.size(),
                               out_itr,
                               apply_binop_scalar_rhs_lhs<Lhs, Rhs, Out>{op, rhs_scalar_view})
-          : thrust::transform(rmm::exec_policy(stream)->on(stream.value()),
+          : thrust::transform(rmm::exec_policy(stream),
                               lhs_itr,
                               lhs_itr + lhs.size(),
                               out_itr,
@@ -178,7 +179,7 @@ struct binary_op {
       if (lhs.has_nulls() && rhs.has_nulls()) {
         auto lhs_itr = cudf::detail::make_null_replacement_iterator(*lhs_device_view, Lhs{});
         auto rhs_itr = cudf::detail::make_null_replacement_iterator(*rhs_device_view, Rhs{});
-        thrust::transform(rmm::exec_policy(stream)->on(stream.value()),
+        thrust::transform(rmm::exec_policy(stream),
                           lhs_itr,
                           lhs_itr + lhs.size(),
                           rhs_itr,
@@ -189,7 +190,7 @@ struct binary_op {
         auto rhs_itr = thrust::make_transform_iterator(
           thrust::make_counting_iterator(size_type{0}),
           [col = *rhs_device_view] __device__(size_type i) { return col.element<Rhs>(i); });
-        thrust::transform(rmm::exec_policy(stream)->on(stream.value()),
+        thrust::transform(rmm::exec_policy(stream),
                           lhs_itr,
                           lhs_itr + lhs.size(),
                           rhs_itr,
@@ -200,7 +201,7 @@ struct binary_op {
           thrust::make_counting_iterator(size_type{0}),
           [col = *lhs_device_view] __device__(size_type i) { return col.element<Lhs>(i); });
         auto rhs_itr = cudf::detail::make_null_replacement_iterator(*rhs_device_view, Rhs{});
-        thrust::transform(rmm::exec_policy(stream)->on(stream.value()),
+        thrust::transform(rmm::exec_policy(stream),
                           lhs_itr,
                           lhs_itr + lhs.size(),
                           rhs_itr,
@@ -213,7 +214,7 @@ struct binary_op {
         auto rhs_itr = thrust::make_transform_iterator(
           thrust::make_counting_iterator(size_type{0}),
           [col = *rhs_device_view] __device__(size_type i) { return col.element<Rhs>(i); });
-        thrust::transform(rmm::exec_policy(stream)->on(stream.value()),
+        thrust::transform(rmm::exec_policy(stream),
                           lhs_itr,
                           lhs_itr + lhs.size(),
                           rhs_itr,
@@ -313,7 +314,7 @@ struct null_considering_binop {
     compare_functor<LhsViewT, RhsViewT, OutT, CompareFunc> binop_func{lhsv, rhsv, cfunc};
 
     // Execute it on every element
-    thrust::transform(rmm::exec_policy(stream)->on(stream.value()),
+    thrust::transform(rmm::exec_policy(stream),
                       thrust::make_counting_iterator(0),
                       thrust::make_counting_iterator(col_size),
                       out_col,

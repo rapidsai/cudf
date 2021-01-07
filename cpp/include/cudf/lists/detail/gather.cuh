@@ -21,6 +21,7 @@
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_uvector.hpp>
+#include <rmm/exec_policy.hpp>
 
 #include <thrust/transform_scan.h>
 
@@ -82,7 +83,7 @@ gather_data make_gather_data(cudf::lists_column_view const& source_column,
   // generate the compacted outgoing offsets.
   auto count_iter = thrust::make_counting_iterator<int32_t>(0);
   thrust::transform_exclusive_scan(
-    rmm::exec_policy(stream)->on(stream.value()),
+    rmm::exec_policy(stream),
     count_iter,
     count_iter + offset_count,
     dst_offsets_v.begin<int32_t>(),
@@ -106,7 +107,7 @@ gather_data make_gather_data(cudf::lists_column_view const& source_column,
 
   // generate the base offsets
   rmm::device_uvector<int32_t> base_offsets = rmm::device_uvector<int32_t>(output_count, stream);
-  thrust::transform(rmm::exec_policy(stream)->on(stream.value()),
+  thrust::transform(rmm::exec_policy(stream),
                     gather_map,
                     gather_map + output_count,
                     base_offsets.data(),
@@ -231,7 +232,6 @@ gather_data make_gather_data(cudf::lists_column_view const& source_column,
  *
  * @returns The gather_data struct needed to construct the gather map for the
  *          next level of recursion.
- *
  */
 template <bool NullifyOutOfBounds, typename MapItType>
 gather_data make_gather_data(cudf::lists_column_view const& source_column,
@@ -260,7 +260,6 @@ gather_data make_gather_data(cudf::lists_column_view const& source_column,
  * @param mr Memory resource to use for all allocations
  *
  * @returns column with elements gathered based on `gather_data`
- *
  */
 std::unique_ptr<column> gather_list_nested(
   lists_column_view const& list,
@@ -279,7 +278,6 @@ std::unique_ptr<column> gather_list_nested(
  * @param mr Memory resource to use for all allocations
  *
  * @returns column with elements gathered based on `gather_data`
- *
  */
 std::unique_ptr<column> gather_list_leaf(
   column_view const& column,

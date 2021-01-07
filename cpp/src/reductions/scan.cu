@@ -28,6 +28,8 @@
 #include <cudf/utilities/type_dispatcher.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
+#include <rmm/device_vector.hpp>
+#include <rmm/exec_policy.hpp>
 
 namespace cudf {
 namespace detail {
@@ -50,7 +52,7 @@ struct ScanDispatcher {
   template <typename T>
   static constexpr bool is_supported()
   {
-    return std::is_arithmetic<T>::value || is_string_supported<T>();
+    return std::is_arithmetic<T>::value || is_string_supported<T>() || is_fixed_point<T>();
   }
 
   // for arithmetic types
@@ -72,7 +74,7 @@ struct ScanDispatcher {
 
     if (input_view.has_nulls()) {
       auto input = make_null_replacement_iterator(*d_input, Op::template identity<T>());
-      thrust::exclusive_scan(rmm::exec_policy(stream)->on(stream.value()),
+      thrust::exclusive_scan(rmm::exec_policy(stream),
                              input,
                              input + size,
                              output.data<T>(),
@@ -80,7 +82,7 @@ struct ScanDispatcher {
                              Op{});
     } else {
       auto input = d_input->begin<T>();
-      thrust::exclusive_scan(rmm::exec_policy(stream)->on(stream.value()),
+      thrust::exclusive_scan(rmm::exec_policy(stream),
                              input,
                              input + size,
                              output.data<T>(),
@@ -108,13 +110,12 @@ struct ScanDispatcher {
   {
     rmm::device_buffer mask =
       detail::create_null_mask(input_view.size(), mask_state::UNINITIALIZED, stream, mr);
-    auto d_input             = column_device_view::create(input_view, stream);
-    auto v                   = detail::make_validity_iterator(*d_input);
-    auto first_null_position = thrust::find_if_not(rmm::exec_policy(stream)->on(stream.value()),
-                                                   v,
-                                                   v + input_view.size(),
-                                                   thrust::identity<bool>{}) -
-                               v;
+    auto d_input = column_device_view::create(input_view, stream);
+    auto v       = detail::make_validity_iterator(*d_input);
+    auto first_null_position =
+      thrust::find_if_not(
+        rmm::exec_policy(stream), v, v + input_view.size(), thrust::identity<bool>{}) -
+      v;
     cudf::set_null_mask(
       static_cast<cudf::bitmask_type*>(mask.data()), 0, first_null_position, true);
     cudf::set_null_mask(
@@ -147,12 +148,10 @@ struct ScanDispatcher {
 
     if (input_view.has_nulls()) {
       auto input = make_null_replacement_iterator(*d_input, Op::template identity<T>());
-      thrust::inclusive_scan(
-        rmm::exec_policy(stream)->on(stream.value()), input, input + size, output.data<T>(), Op{});
+      thrust::inclusive_scan(rmm::exec_policy(stream), input, input + size, output.data<T>(), Op{});
     } else {
       auto input = d_input->begin<T>();
-      thrust::inclusive_scan(
-        rmm::exec_policy(stream)->on(stream.value()), input, input + size, output.data<T>(), Op{});
+      thrust::inclusive_scan(rmm::exec_policy(stream), input, input + size, output.data<T>(), Op{});
     }
 
     CHECK_CUDA(stream.value());
@@ -173,18 +172,12 @@ struct ScanDispatcher {
 
     if (input_view.has_nulls()) {
       auto input = make_null_replacement_iterator(*d_input, Op::template identity<T>());
-      thrust::inclusive_scan(rmm::exec_policy(stream)->on(stream.value()),
-                             input,
-                             input + size,
-                             result.data().get(),
-                             Op{});
+      thrust::inclusive_scan(
+        rmm::exec_policy(stream), input, input + size, result.data().get(), Op{});
     } else {
       auto input = d_input->begin<T>();
-      thrust::inclusive_scan(rmm::exec_policy(stream)->on(stream.value()),
-                             input,
-                             input + size,
-                             result.data().get(),
-                             Op{});
+      thrust::inclusive_scan(
+        rmm::exec_policy(stream), input, input + size, result.data().get(), Op{});
     }
     CHECK_CUDA(stream.value());
 
@@ -220,15 +213,18 @@ struct ScanDispatcher {
                                      rmm::cuda_stream_view stream,
                                      rmm::mr::device_memory_resource* mr)
   {
-    std::unique_ptr<column> output;
-    if (inclusive == scan_type::INCLUSIVE)
-      output = inclusive_scan<T>(input, null_handling, stream, mr);
-    else
-      output = exclusive_scan<T>(input, null_handling, stream, mr);
+    auto output = [&] {
+      using Type = device_storage_type_t<T>;
+      return inclusive == scan_type::INCLUSIVE
+               ? inclusive_scan<Type>(input, null_handling, stream, mr)
+               : exclusive_scan<Type>(input, null_handling, stream, mr);
+    }();
+
     if (null_handling == null_policy::EXCLUDE) {
       CUDF_EXPECTS(input.null_count() == output->null_count(),
                    "Input / output column null count mismatch");
     }
+
     return output;
   }
 
@@ -251,8 +247,9 @@ std::unique_ptr<column> scan(
   rmm::cuda_stream_view stream,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
 {
-  CUDF_EXPECTS(is_numeric(input.type()) || is_compound(input.type()),
-               "Unexpected non-numeric or non-string type.");
+  CUDF_EXPECTS(
+    is_numeric(input.type()) || is_compound(input.type()) || is_fixed_point(input.type()),
+    "Unexpected non-numeric or non-string type.");
 
   switch (agg->kind) {
     case aggregation::SUM:
@@ -280,6 +277,9 @@ std::unique_ptr<column> scan(
                                    stream,
                                    mr);
     case aggregation::PRODUCT:
+      // a product scan on a decimal type with non-zero scale would result in each element having
+      // a different scale, and because scale is stored once per column, this is not possible
+      if (is_fixed_point(input.type())) CUDF_FAIL("decimal32/64 cannot support product scan");
       return cudf::type_dispatcher(input.type(),
                                    ScanDispatcher<cudf::DeviceProduct>(),
                                    input,

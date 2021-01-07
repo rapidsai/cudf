@@ -12,6 +12,8 @@ FetchContent_Declare(
     GIT_REPOSITORY https://github.com/NVIDIA/thrust.git
     GIT_TAG        1.10.0
     GIT_SHALLOW    true
+    # NOTE: If you change the GIT_TAG you will likely need to change this patch file too
+    PATCH_COMMAND  patch -p1 -N < ${CMAKE_CURRENT_SOURCE_DIR}/thrust.patch || true
 )
 
 FetchContent_GetProperties(thrust)

@@ -26,6 +26,7 @@
 #include <cudf/strings/strings_column_view.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
+#include <rmm/exec_policy.hpp>
 
 #include <thrust/sequence.h>
 
@@ -52,7 +53,7 @@ std::unique_ptr<cudf::column> copy_slice(strings_column_view const& strings,
     auto offsets_column = std::make_unique<cudf::column>(
       cudf::slice(strings.offsets(), {0, strings_count + 1}).front(), stream, mr);
     auto data_size =
-      cudf::detail::get_value<size_type>(offsets_column->view(), strings_count, stream);
+      cudf::detail::get_value<int32_t>(offsets_column->view(), strings_count, stream);
     auto chars_column = std::make_unique<cudf::column>(
       cudf::slice(strings.chars(), {0, data_size}).front(), stream, mr);
     auto null_mask = cudf::detail::copy_bitmask(strings.null_mask(), 0, strings_count, stream, mr);
@@ -64,11 +65,11 @@ std::unique_ptr<cudf::column> copy_slice(strings_column_view const& strings,
                                stream,
                                mr);
   }
+
   // do the gather instead
-  auto execpol = rmm::exec_policy(stream);
   // build indices
   rmm::device_vector<size_type> indices(strings_count);
-  thrust::sequence(execpol->on(stream.value()), indices.begin(), indices.end(), start, step);
+  thrust::sequence(rmm::exec_policy(stream), indices.begin(), indices.end(), start, step);
   // create a column_view as a wrapper of these indices
   column_view indices_view(
     data_type{type_id::INT32}, strings_count, indices.data().get(), nullptr, 0);

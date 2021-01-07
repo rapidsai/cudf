@@ -20,10 +20,10 @@
 
 #include <cudf/utilities/type_dispatcher.hpp>
 
-#include <rmm/thrust_rmm_allocator.h>
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_buffer.hpp>
 #include <rmm/device_scalar.hpp>
+#include <rmm/exec_policy.hpp>
 
 #include <cub/device/device_reduce.cuh>
 
@@ -33,7 +33,7 @@
 namespace cudf {
 namespace reduction {
 namespace detail {
-/** --------------------------------------------------------------------------*
+/**
  * @brief Compute the specified simple reduction over the input range of elements.
  *
  * @param[in] d_in      the begin iterator
@@ -45,7 +45,7 @@ namespace detail {
  * @tparam Op               the reduction operator with device binary operator
  * @tparam InputIterator    the input column iterator
  * @tparam OutputType       the output type of reduction
- * ----------------------------------------------------------------------------**/
+ */
 template <typename Op,
           typename InputIterator,
           typename OutputType = typename thrust::iterator_value<InputIterator>::type,
@@ -148,7 +148,7 @@ std::unique_ptr<scalar> reduce(InputIterator d_in,
   return std::unique_ptr<scalar>(s);
 }
 
-/** --------------------------------------------------------------------------*
+/**
  * @brief compute reduction by the compound operator (reduce and transform)
  *
  * @param[in] d_in      the begin iterator
@@ -166,7 +166,7 @@ std::unique_ptr<scalar> reduce(InputIterator d_in,
  * @tparam Op               the reduction operator with device binary operator
  * @tparam InputIterator    the input column iterator
  * @tparam OutputType       the output type of reduction
- * ----------------------------------------------------------------------------**/
+ */
 template <typename Op,
           typename InputIterator,
           typename OutputType,
@@ -209,7 +209,7 @@ std::unique_ptr<scalar> reduce(InputIterator d_in,
   // compute the result value from intermediate value in device
   using ScalarType = cudf::scalar_type_t<OutputType>;
   auto result      = new ScalarType(OutputType{0}, true, stream, mr);
-  thrust::for_each_n(rmm::exec_policy(stream)->on(stream.value()),
+  thrust::for_each_n(rmm::exec_policy(stream),
                      intermediate_result.data(),
                      1,
                      [dres = result->data(), cop, valid_count, ddof] __device__(auto i) {

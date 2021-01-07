@@ -19,8 +19,8 @@
 #include <cudf/types.hpp>
 #include <cudf/utilities/traits.hpp>
 
-#include <rmm/thrust_rmm_allocator.h>
 #include <rmm/cuda_stream_view.hpp>
+#include <rmm/device_vector.hpp>
 
 namespace cudf {
 /**
@@ -583,7 +583,6 @@ std::unique_ptr<cudf::column> make_lists_column(
  * @param[in] null_mask The bits specifying the null struct values in the column.
  * @param[in] stream Optional stream for use with all memory allocation and device kernels.
  * @param[in] mr Optional resource to use for device memory allocation.
- *
  */
 std::unique_ptr<cudf::column> make_structs_column(
   size_type num_rows,
