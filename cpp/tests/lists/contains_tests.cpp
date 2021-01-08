@@ -602,7 +602,7 @@ TEST_F(ContainsTest, VectorTypeRelatedExceptions)
       {{1, 2, 3}, {4, 5, 6}},
       {{1, 2, 3},
        {4, 5, 6}}}.release();
-    auto skey = fixed_width_column_wrapper<int32_t>{0, 1, 2, 3};
+    auto skey = fixed_width_column_wrapper<int32_t>{0, 1, 2};
     CUDF_EXPECT_THROW_MESSAGE(lists::contains(list_of_lists->view(), skey),
                               "Nested types not supported in lists::contains()");
   }

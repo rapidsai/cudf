@@ -75,6 +75,9 @@ std::pair<rmm::device_buffer, size_type> construct_null_mask(
                                 });
 }
 
+/**
+ * @brief Functor to search each list row for the specified search keys.
+ */
 struct lookup_functor {
   template <typename T, typename... Args>
   std::enable_if_t<!cudf::is_numeric<T>() && !cudf::is_chrono<T>() &&
@@ -123,11 +126,13 @@ struct lookup_functor {
   std::enable_if_t<cudf::is_numeric<T>() || cudf::is_chrono<T>() ||
                      std::is_same<T, cudf::string_view>::value,
                    void>
-  operator()(cudf::detail::lists_column_device_view const& d_lists,
-             cudf::scalar const& search_key,
-             cudf::mutable_column_device_view output_bools,
-             rmm::cuda_stream_view stream,
-             rmm::mr::device_memory_resource* mr) const
+  operator()(
+    cudf::detail::lists_column_device_view const& d_lists,
+    cudf::scalar const& search_key,
+    bool search_key_is_null,  // Ignored for scalars. This is decipherable from `search_key`.
+    cudf::mutable_column_device_view output_bools,
+    rmm::cuda_stream_view stream,
+    rmm::mr::device_memory_resource* mr) const
   {
     assert(search_key.is_valid() && "skey should have been checked for nulls by this point.");
     return op_impl<T>(d_lists, detail::make_pair_iterator<T>(search_key), output_bools, stream, mr);
@@ -150,14 +155,40 @@ struct lookup_functor {
   }
 };
 
+template <bool search_keys_have_nulls, typename SearchKeyType>
+auto get_validity_iterator(SearchKeyType const& search_key)
+{
+  return cudf::detail::make_validity_iterator(search_key);
+}
+
+template <>
+auto get_validity_iterator<false, cudf::column_device_view>(cudf::column_device_view const&)
+{
+  // Column of search_keys where there are no nulls. All are valid.
+  return thrust::make_constant_iterator(true);
+}
+
+auto get_search_keys_device_iterable_view(cudf::column_view const& search_keys,
+                                          rmm::cuda_stream_view stream)
+{
+  return column_device_view::create(search_keys, stream);
+}
+
+auto get_search_keys_device_iterable_view(cudf::scalar const& search_key,
+                                          rmm::cuda_stream_view stream)
+{
+  return &search_key;
+}
+
 }  // namespace
 
 namespace detail {
 
-std::unique_ptr<column> contains(cudf::lists_column_view const& lists,
-                                 cudf::scalar const& search_key,
-                                 rmm::cuda_stream_view stream,
-                                 rmm::mr::device_memory_resource* mr)
+template <bool search_keys_have_nulls, bool search_keys_are_all_null, typename SearchKeyType>
+std::unique_ptr<column> contains_impl(cudf::lists_column_view const& lists,
+                                      SearchKeyType const& search_key,
+                                      rmm::cuda_stream_view stream,
+                                      rmm::mr::device_memory_resource* mr)
 {
   using namespace cudf;
   using namespace cudf::detail;
@@ -170,6 +201,7 @@ std::unique_ptr<column> contains(cudf::lists_column_view const& lists,
 
   auto const device_view = column_device_view::create(lists.parent(), stream);
   auto const d_lists     = lists_column_device_view(*device_view);
+  auto const d_skeys     = get_search_keys_device_iterable_view(search_key, stream);
 
   auto const lists_column_has_nulls = lists.has_nulls() || lists.child().has_nulls();
 
@@ -177,23 +209,25 @@ std::unique_ptr<column> contains(cudf::lists_column_view const& lists,
   size_type num_nulls;
 
   std::tie(null_mask, num_nulls) =
-    search_key.is_valid(stream)
-      ? construct_null_mask<false, false>(
-          d_lists, make_validity_iterator(search_key), lists_column_has_nulls, stream, mr)
-      : construct_null_mask<true, true>(
-          d_lists, make_validity_iterator(search_key), lists_column_has_nulls, stream, mr);
+    construct_null_mask<search_keys_have_nulls, search_keys_are_all_null>(
+      d_lists,
+      get_validity_iterator<search_keys_have_nulls>(*d_skeys),
+      lists_column_has_nulls,
+      stream,
+      mr);
 
   auto ret_bools = make_fixed_width_column(
     data_type{type_id::BOOL8}, lists.size(), std::move(null_mask), num_nulls, stream, mr);
 
-  if (search_key.is_valid()) {
+  if (!search_keys_are_all_null) {
     auto ret_bools_mutable_device_view =
       mutable_column_device_view::create(ret_bools->mutable_view(), stream);
 
     cudf::type_dispatcher(search_key.type(),
                           lookup_functor{},
                           d_lists,
-                          search_key,
+                          *d_skeys,
+                          search_keys_have_nulls,
                           *ret_bools_mutable_device_view,
                           stream,
                           mr);
@@ -203,53 +237,24 @@ std::unique_ptr<column> contains(cudf::lists_column_view const& lists,
 }
 
 std::unique_ptr<column> contains(cudf::lists_column_view const& lists,
+                                 cudf::scalar const& search_key,
+                                 rmm::cuda_stream_view stream,
+                                 rmm::mr::device_memory_resource* mr)
+{
+  return search_key.is_valid(stream) ? contains_impl<false, false>(lists, search_key, stream, mr)
+                                     : contains_impl<true, true>(lists, search_key, stream, mr);
+}
+
+std::unique_ptr<column> contains(cudf::lists_column_view const& lists,
                                  cudf::column_view const& search_keys,
                                  rmm::cuda_stream_view stream,
                                  rmm::mr::device_memory_resource* mr)
 {
-  using namespace cudf;
-  using namespace cudf::detail;
-
-  CUDF_EXPECTS(!cudf::is_nested(lists.child().type()),
-               "Nested types not supported in lists::contains()");
-  CUDF_EXPECTS(lists.child().type().id() == search_keys.type().id(),
-               "Type of search key does not match list column element type.");
   CUDF_EXPECTS(search_keys.size() == lists.size(),
                "Number of search keys must match list column size.");
-  CUDF_EXPECTS(search_keys.type().id() != type_id::EMPTY, "Type cannot be empty.");
 
-  auto const device_view = column_device_view::create(lists.parent(), stream);
-  auto const d_lists     = lists_column_device_view(*device_view);
-  auto const d_skeys     = column_device_view::create(search_keys, stream);
-
-  auto const lists_column_has_nulls = lists.has_nulls() || lists.child().has_nulls();
-
-  rmm::device_buffer null_mask;
-  size_type num_nulls;
-
-  std::tie(null_mask, num_nulls) =
-    search_keys.has_nulls()
-      ? construct_null_mask<true, false>(
-          d_lists, make_validity_iterator(*d_skeys), lists_column_has_nulls, stream, mr)
-      : construct_null_mask<false, false>(
-          d_lists, thrust::make_constant_iterator(true), lists_column_has_nulls, stream, mr);
-
-  auto ret_bools = make_fixed_width_column(
-    data_type{type_id::BOOL8}, lists.size(), std::move(null_mask), num_nulls, stream, mr);
-
-  auto ret_bools_mutable_device_view =
-    mutable_column_device_view::create(ret_bools->mutable_view(), stream);
-
-  cudf::type_dispatcher(search_keys.type(),
-                        lookup_functor{},
-                        d_lists,
-                        *d_skeys,
-                        search_keys.has_nulls(),
-                        *ret_bools_mutable_device_view,
-                        stream,
-                        mr);
-
-  return ret_bools;
+  return search_keys.has_nulls() ? contains_impl<true, false>(lists, search_keys, stream, mr)
+                                 : contains_impl<false, false>(lists, search_keys, stream, mr);
 }
 
 }  // namespace detail
