@@ -251,8 +251,6 @@ class writer::impl {
   // special parameter only used by detail::write() to indicate that we are guaranteeing
   // a single table write.  this enables some internal optimizations.
   bool const single_write_mode = true;
-  // To track whether necessary members have been initialized
-  bool initialized = false;
 
   std::vector<uint8_t> buffer_;
   std::unique_ptr<data_sink> out_sink_;

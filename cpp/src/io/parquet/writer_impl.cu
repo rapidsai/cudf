@@ -680,6 +680,7 @@ writer::impl::impl(std::unique_ptr<data_sink> sink,
     single_write_mode(mode == SingleWriteMode::YES),
     user_metadata(options.get_metadata())
 {
+  init_state();
 }
 
 writer::impl::impl(std::unique_ptr<data_sink> sink,
@@ -700,6 +701,8 @@ writer::impl::impl(std::unique_ptr<data_sink> sink,
     user_metadata_with_nullability = *options.get_nullable_metadata();
     user_metadata                  = &user_metadata_with_nullability;
   }
+
+  init_state();
 }
 
 writer::impl::~impl()
@@ -714,14 +717,12 @@ void writer::impl::init_state()
   fhdr.magic = parquet_magic;
   out_sink_->host_write(&fhdr, sizeof(fhdr));
   current_chunk_offset = sizeof(file_header_s);
-  initialized          = true;
 }
 
 std::unique_ptr<std::vector<uint8_t>> writer::impl::write(
   table_view const &table, std::string const &column_chunks_file_path)
 {
   CUDF_EXPECTS(not closed, "Data has already been flushed to out and closed");
-  init_state();
   write(table);
   return close(column_chunks_file_path);
 }
@@ -730,7 +731,6 @@ void writer::impl::write(table_view const &table)
 {
   CUDF_EXPECTS(not closed, "Data has already been flushed to out and closed");
 
-  if (initialized == false) { init_state(); }
   size_type num_columns = table.num_columns();
   size_type num_rows    = 0;
 

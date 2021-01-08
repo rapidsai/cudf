@@ -432,6 +432,7 @@ cdef class ParquetWriter:
         self.comp_type = _get_comp_type(compression)
         self.index = index
         self.initialized = False
+        self.closed = False
 
     def write_table(self, Table table):
         """ Writes a single table to the file """
