@@ -45,7 +45,8 @@ TEST_F(StringsColumnTest, Sort)
   cudf::test::strings_column_wrapper h_expected({"<null>", "", "aa", "bb", "bbb", "eee", "ééé"},
                                                 {0, 1, 1, 1, 1, 1, 1});
 
-  auto results = cudf::sort(cudf::table_view({h_strings}));
+  auto results =
+    cudf::sort(cudf::table_view({h_strings}), {cudf::order::ASCENDING}, {cudf::null_order::BEFORE});
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(results->view().column(0), h_expected);
 }
 

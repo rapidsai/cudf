@@ -39,8 +39,10 @@ struct sort_strings_comparator {
   {
     bool lhs_null{d_column.is_null(lhs)};
     bool rhs_null{d_column.is_null(rhs)};
-    if (lhs_null || rhs_null)
+    if (lhs_null || rhs_null) {
+      if (order == cudf::order::DESCENDING) thrust::swap(lhs_null, rhs_null);
       return (null_order == cudf::null_order::BEFORE ? !rhs_null : !lhs_null);
+    }
     auto const lhs_str = d_column.element<string_view>(lhs);
     auto const rhs_str = d_column.element<string_view>(rhs);
     auto const cmp     = lhs_str.compare(rhs_str);
