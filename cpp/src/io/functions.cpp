@@ -335,7 +335,8 @@ std::unique_ptr<std::vector<uint8_t>> write_parquet(parquet_writer_options const
   auto writer = make_writer<detail_parquet::writer>(
     options.get_sink(), options, detail_pq::SingleWriteMode::YES, mr, rmm::cuda_stream_default);
 
-  return writer->write(options.get_table(), options.get_column_chunks_file_path());
+  writer->write(options.get_table());
+  return writer->close(options.get_column_chunks_file_path());
 }
 
 /**

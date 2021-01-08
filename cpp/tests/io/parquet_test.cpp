@@ -1066,7 +1066,7 @@ TEST_F(ParquetChunkedWriterTest, MismatchedTypes)
   writer.close();
 }
 
-TEST_F(ParquetChunkedWriterTest, WritingAndClosingAfterClosed)
+TEST_F(ParquetChunkedWriterTest, ChunkedWriteAfterClosing)
 {
   srand(31337);
   auto table = create_random_fixed_table<int>(4, 4, true);
@@ -1077,7 +1077,6 @@ TEST_F(ParquetChunkedWriterTest, WritingAndClosingAfterClosed)
   cudf_io::parquet_chunked_writer writer(args);
   writer.write(*table).close();
   EXPECT_THROW(writer.write(*table), cudf::logic_error);
-  EXPECT_THROW(writer.close(), cudf::logic_error);
 }
 
 TEST_F(ParquetChunkedWriterTest, ReadingUnclosedFile)

@@ -417,7 +417,6 @@ cdef class ParquetWriter:
     cudf.io.parquet.write_parquet
     """
     cdef bool initialized
-    cdef bool closed
     cdef unique_ptr[cpp_parquet_chunked_writer] writer
     cdef cudf_io_types.sink_info sink
     cdef unique_ptr[cudf_io_types.data_sink] _data_sink
@@ -432,7 +431,6 @@ cdef class ParquetWriter:
         self.comp_type = _get_comp_type(compression)
         self.index = index
         self.initialized = False
-        self.closed = False
 
     def write_table(self, Table table):
         """ Writes a single table to the file """
@@ -452,10 +450,9 @@ cdef class ParquetWriter:
         cdef unique_ptr[vector[uint8_t]] out_metadata_c
         cdef string column_chunks_file_path
 
-        if not self.initialized or self.closed:
+        if not self.initialized:
             return None
 
-        self.closed = True
         # Update metadata-collection options
         if metadata_file_path is not None:
             column_chunks_file_path = str.encode(metadata_file_path)
@@ -473,8 +470,7 @@ cdef class ParquetWriter:
         return None
 
     def __dealloc__(self):
-        if not self.closed:
-            self.close()
+        self.close()
 
     def _initialize_chunked_state(self, Table table):
         """ Prepares all the values required to build the

@@ -102,17 +102,6 @@ class writer::impl {
   void init_state();
 
   /**
-   * @brief Write an entire dataset to parquet format.
-   *
-   * @param table The set of columns
-   * @param column_chunks_file_path Column chunks file path to be set in the raw output metadata
-   *
-   * @return unique_ptr to FileMetadata thrift message if requested
-   */
-  std::unique_ptr<std::vector<uint8_t>> write(table_view const& table,
-                                              std::string const& column_chunks_file_path);
-
-  /**
    * @brief Writes a single subtable as part of a larger parquet file/table write,
    * normally used for chunked writing.
    *
@@ -238,15 +227,15 @@ class writer::impl {
   cudf::io::parquet::FileMetaData md;
   // optional user metadata
   table_metadata_with_nullability user_metadata_with_nullability;
-  /// only used in the write_chunked() case. copied from the (optionally) user supplied
-  /// argument to write()
+  // only used in the write_chunked() case. copied from the (optionally) user supplied
+  // argument to write()
   table_metadata const* user_metadata = nullptr;
   // to track if the output has been written to sink
   bool closed = false;
-  /// vector of precision values for decimal writing. Exactly one entry
-  /// per decimal column.
+  // vector of precision values for decimal writing. Exactly one entry
+  // per decimal column.
   std::vector<uint8_t> decimal_precision;
-  /// current write position for rowgroups/chunks
+  // current write position for rowgroups/chunks
   std::size_t current_chunk_offset;
   // special parameter only used by detail::write() to indicate that we are guaranteeing
   // a single table write.  this enables some internal optimizations.

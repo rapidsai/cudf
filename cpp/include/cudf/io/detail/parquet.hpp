@@ -142,15 +142,6 @@ class writer {
   ~writer();
 
   /**
-   * @brief Writes the dataset as per options provided.
-   *
-   * @param table Set of columns to output
-   * @param column_chunks_file_path Column chunks file path to be set in the raw output metadata
-   */
-  std::unique_ptr<std::vector<uint8_t>> write(table_view const& table,
-                                              std::string const& column_chunks_file_path);
-
-  /**
    * @brief Writes a single subtable as part of a larger parquet file/table write.
    *
    * @param[in] table The table information to be written

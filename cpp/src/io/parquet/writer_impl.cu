@@ -705,10 +705,7 @@ writer::impl::impl(std::unique_ptr<data_sink> sink,
   init_state();
 }
 
-writer::impl::~impl()
-{
-  if (not closed) close("");
-}
+writer::impl::~impl() { close(""); }
 
 void writer::impl::init_state()
 {
@@ -717,14 +714,6 @@ void writer::impl::init_state()
   fhdr.magic = parquet_magic;
   out_sink_->host_write(&fhdr, sizeof(fhdr));
   current_chunk_offset = sizeof(file_header_s);
-}
-
-std::unique_ptr<std::vector<uint8_t>> writer::impl::write(
-  table_view const &table, std::string const &column_chunks_file_path)
-{
-  CUDF_EXPECTS(not closed, "Data has already been flushed to out and closed");
-  write(table);
-  return close(column_chunks_file_path);
 }
 
 void writer::impl::write(table_view const &table)
@@ -1231,7 +1220,6 @@ void writer::impl::write(table_view const &table)
 std::unique_ptr<std::vector<uint8_t>> writer::impl::close(
   std::string const &column_chunks_file_path)
 {
-  CUDF_EXPECTS(not closed, "Data has already been flushed to out and closed");
   closed = true;
   CompactProtocolWriter cpw(&buffer_);
   file_ender_s fendr;
@@ -1283,13 +1271,6 @@ writer::writer(std::unique_ptr<data_sink> sink,
 
 // Destructor within this translation unit
 writer::~writer() = default;
-
-// Forward to implementation
-std::unique_ptr<std::vector<uint8_t>> writer::write(table_view const &table,
-                                                    std::string const &column_chunks_file_path)
-{
-  return _impl->write(table, column_chunks_file_path);
-}
 
 // Forward to implementation
 void writer::write(table_view const &table) { _impl->write(table); }
