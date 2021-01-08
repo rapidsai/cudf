@@ -705,7 +705,7 @@ writer::impl::impl(std::unique_ptr<data_sink> sink,
   init_state();
 }
 
-writer::impl::~impl() { close(""); }
+writer::impl::~impl() { close(); }
 
 void writer::impl::init_state()
 {
