@@ -758,7 +758,6 @@ TEST_F(OrcChunkedWriterTest, MismatchedTypes)
   cudf_io::orc_chunked_writer writer(opts);
   writer.write(*table1);
   EXPECT_THROW(writer.write(*table2), cudf::logic_error);
-  writer.close();
 }
 
 TEST_F(OrcChunkedWriterTest, ChunkedWritingAfterClosing)
@@ -787,7 +786,6 @@ TEST_F(OrcChunkedWriterTest, MismatchedStructure)
   cudf_io::orc_chunked_writer writer(opts);
   writer.write(*table1);
   EXPECT_THROW(writer.write(*table2), cudf::logic_error);
-  writer.close();
 }
 
 TEST_F(OrcChunkedWriterTest, ReadStripes)
@@ -801,9 +799,7 @@ TEST_F(OrcChunkedWriterTest, ReadStripes)
   auto filepath = temp_env->get_temp_filepath("ChunkedStripes.orc");
   cudf_io::chunked_orc_writer_options opts =
     cudf_io::chunked_orc_writer_options::builder(cudf_io::sink_info{filepath});
-  {
-    cudf_io::orc_chunked_writer(opts).write(*table1).write(*table2);
-  }
+  cudf_io::orc_chunked_writer(opts).write(*table1).write(*table2);
 
   cudf_io::orc_reader_options read_opts =
     cudf_io::orc_reader_options::builder(cudf_io::source_info{filepath}).stripes({1, 0, 1});

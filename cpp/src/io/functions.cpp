@@ -263,7 +263,6 @@ void write_orc(orc_writer_options const& options, rmm::mr::device_memory_resourc
     options.get_sink(), options, detail_orc::SingleWriteMode::YES, mr);
 
   writer->write(options.get_table());
-  writer->close();
 }
 
 /**
@@ -296,7 +295,7 @@ void orc_chunked_writer::close()
 {
   CUDF_FUNC_RANGE();
 
-  return writer->close();
+  writer->close();
 }
 
 using namespace cudf::io::detail::parquet;
