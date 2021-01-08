@@ -23,6 +23,7 @@
 #include <io/utilities/hostdevice_vector.hpp>
 
 #include <cudf/column/column_device_view.cuh>
+#include <cudf/table/table_device_view.cuh>
 #include <cudf/lists/lists_column_view.hpp>
 #include <cudf/types.hpp>
 
@@ -229,6 +230,15 @@ struct EncColumnDesc : stats_column_desc {
   size_type const *level_offsets;  //!< Offset array for per-row pre-calculated rep/def level values
   uint8_t const *rep_values;       //!< Pre-calculated repetition level values
   uint8_t const *def_values;       //!< Pre-calculated definition level values
+
+  column_device_view * leaf_column;
+  column_device_view * parent_column;
+
+  //Copied from stats_column_desc
+  statistics_dtype temp_stats_dtype;  //!< physical data type of column
+  uint32_t temp_num_values;  //!< Number of data values in column. Different from num_rows in case of
+  int32_t temp_ts_scale;  //!< timestamp scale (>0: multiply by scale, <0: divide by -scale)
+                        //!< nested columns
 };
 
 constexpr int max_page_fragment_size = 5000;  //!< Max number of rows in a page fragment
@@ -438,12 +448,16 @@ dremel_data get_dremel_data(column_view h_col,
  * @param[in] stream CUDA stream to use, default 0
  */
 void InitPageFragments(PageFragment *frag,
-                       const EncColumnDesc *col_desc,
+                       EncColumnDesc *col_desc,
                        int32_t num_fragments,
                        int32_t num_columns,
                        uint32_t fragment_size,
                        uint32_t num_rows,
                        rmm::cuda_stream_view stream);
+
+void InitColumnDeviceViews(EncColumnDesc *col_desc,
+                           table_device_view *input_table_device_view,
+                           rmm::cuda_stream_view stream);
 
 /**
  * @brief Launches kernel for initializing fragment statistics groups

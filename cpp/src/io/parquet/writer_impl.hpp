@@ -33,6 +33,7 @@
 #include <cudf/io/detail/parquet.hpp>
 #include <cudf/io/parquet.hpp>
 #include <cudf/table/table.hpp>
+#include <cudf/table/table_device_view.cuh>
 #include <cudf/utilities/error.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
@@ -134,6 +135,7 @@ class writer::impl {
    */
   void init_page_fragments(hostdevice_vector<gpu::PageFragment>& frag,
                            hostdevice_vector<gpu::EncColumnDesc>& col_desc,
+                           table_device_view *input_table_device_view,
                            uint32_t num_columns,
                            uint32_t num_fragments,
                            uint32_t num_rows,
