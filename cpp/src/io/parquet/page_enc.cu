@@ -167,11 +167,10 @@ __global__ void __launch_bounds__(block_size) gpuInitPageFragments(PageFragment 
     {
       auto col = *(s->col.parent_column);
       while (col.type().id() == type_id::LIST) {
-        lists_column_device_view list_col(col);
-        auto offset_col = list_col.offsets();
+        auto offset_col = col.child(lists_column_view::offsets_column_index);
         s->start_value_idx = offset_col.element<size_type>(s->start_value_idx);
-        s->end_value_idx = offset_col.element<size_type>(s->end_value_idx);
-        col = list_col.child();
+        end_value_idx = offset_col.element<size_type>(end_value_idx);
+        col = col.child(lists_column_view::child_column_index);
       }
     }
 #endif
@@ -1085,9 +1084,8 @@ __global__ void __launch_bounds__(128, 8) gpuEncodePages(EncPage *pages,
     {
       auto col = *(s->col.parent_column);
       while (col.type().id() == type_id::LIST) {
-        lists_column_device_view list_col(col);
-        s->page_start_val = list_col.offsets().element<size_type>(s->page_start_val);
-        col = list_col.child();
+        s->page_start_val = col.child(lists_column_view::offsets_column_index).element<size_type>(s->page_start_val);
+        col = col.child(lists_column_view::child_column_index);
       }
     }
 #endif
