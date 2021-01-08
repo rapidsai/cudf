@@ -1527,15 +1527,18 @@ def test_datetime_dateoffset_binaryop(
         ]
     ],
 )
-@pytest.mark.parametrize('kwargs', [
-    {'weeks': 0.5},
-    {'days': 0.5},
-    {'hours': 0.5},
-    {'minutes': 0.5},
-    {'seconds': 0.5},
-    utils.xfail_param({'seconds': 0.5e-6}),
-    utils.xfail_param({'microseconds': 0.5}),
-])
+@pytest.mark.parametrize(
+    "kwargs",
+    [
+        {"weeks": 0.5},
+        {"days": 0.5},
+        {"hours": 0.5},
+        {"minutes": 0.5},
+        {"seconds": 0.5},
+        utils.xfail_param({"seconds": 0.5e-6}),
+        utils.xfail_param({"microseconds": 0.5}),
+    ],
+)
 @pytest.mark.parametrize(
     "dtype",
     ["datetime64[ns]", "datetime64[us]", "datetime64[ms]", "datetime64[s]"],
@@ -1555,6 +1558,7 @@ def test_datetime_dateoffset_binaryop_fractional_periods(
 
     utils.assert_eq(expect, got)
 
+
 @pytest.mark.parametrize(
     "date_col",
     [
@@ -1565,18 +1569,36 @@ def test_datetime_dateoffset_binaryop_fractional_periods(
         ]
     ],
 )
-@pytest.mark.parametrize('kwargs', [
-    {'months': 2, 'years':5},
-    {'microseconds':1, 'seconds':1},
-    {'months': 2, 'years':5, 'seconds': 923, 'microseconds':481},
-    pytest.param({'milliseconds':4}, marks=pytest.mark.xfail(reason='Pandas gets the wrong answer for milliseconds')),
-    pytest.param({'milliseconds':4, 'years': 2}, marks=pytest.mark.xfail(reason='Pandas construction fails with these keywords')),
-    pytest.param({'nanoseconds': 12}, marks=pytest.mark.xfail(reason='Pandas gets the wrong answer for nanoseconds'))
-])
+@pytest.mark.parametrize(
+    "kwargs",
+    [
+        {"months": 2, "years": 5},
+        {"microseconds": 1, "seconds": 1},
+        {"months": 2, "years": 5, "seconds": 923, "microseconds": 481},
+        pytest.param(
+            {"milliseconds": 4},
+            marks=pytest.mark.xfail(
+                reason="Pandas gets the wrong answer for milliseconds"
+            ),
+        ),
+        pytest.param(
+            {"milliseconds": 4, "years": 2},
+            marks=pytest.mark.xfail(
+                reason="Pandas construction fails with these keywords"
+            ),
+        ),
+        pytest.param(
+            {"nanoseconds": 12},
+            marks=pytest.mark.xfail(
+                reason="Pandas gets the wrong answer for nanoseconds"
+            ),
+        ),
+    ],
+)
 @pytest.mark.parametrize("op", [operator.add, operator.sub])
 def test_datetime_dateoffset_binaryop_multiple(date_col, kwargs, op):
 
-    gsr = cudf.Series(date_col, dtype='datetime64[ns]')
+    gsr = cudf.Series(date_col, dtype="datetime64[ns]")
     psr = gsr.to_pandas()
 
     poffset = pd.DateOffset(**kwargs)
@@ -1587,11 +1609,6 @@ def test_datetime_dateoffset_binaryop_multiple(date_col, kwargs, op):
 
     utils.assert_eq(expect, got)
 
-
-
-
-# TODO: test that we fail for non-integer n_periods
-# TODO: test that we succeed for fractional periods with frequencies less than month
 
 @pytest.mark.parametrize(
     "date_col",
