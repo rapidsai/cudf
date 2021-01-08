@@ -311,12 +311,28 @@ def rand_dataframe(dtypes_meta, rows, seed=random.randint(0, 2 ** 32 - 1)):
         null_frequency = copy.deepcopy(meta["null_frequency"])
         cardinality = copy.deepcopy(meta["cardinality"])
 
-        if isinstance(dtype, cudf.core.dtypes.ListDtype):
+        if dtype == "list":
+            lists_max_length = meta["lists_max_length"]
+            nesting_max_depth = meta["nesting_max_depth"]
+            value_type = meta["value_type"]
+            nesting_depth = np.random.randint(1, nesting_max_depth)
+
+            dtype = cudf.core.dtypes.ListDtype(value_type)
+            i = 1
+            while i < nesting_depth:
+                dtype = cudf.core.dtypes.ListDtype(dtype)
+                i += 1
+
             column_params.append(
                 ColumnParameters(
                     cardinality=cardinality,
                     null_frequency=null_frequency,
-                    generator=list_generator(dtype=dtype, size=cardinality),
+                    generator=list_generator(
+                        dtype=value_type,
+                        size=cardinality,
+                        nesting_depth=nesting_depth,
+                        lists_max_length=lists_max_length,
+                    ),
                     is_sorted=False,
                     dtype=dtype,
                 )
@@ -461,7 +477,8 @@ def boolean_generator(size):
     return lambda: np.random.choice(a=[False, True], size=size)
 
 
-def get_nested_list(dtype, cardinality, nesting_levels):
+def get_nested_list(dtype, nesting_depth, list_max_length):
+    cardinality = np.random.randint(0, list_max_length)
     dtype = np.dtype(dtype)
     if dtype.kind in ("i", "u"):
         values = int_generator(dtype=dtype, size=cardinality)()
@@ -473,32 +490,31 @@ def get_nested_list(dtype, cardinality, nesting_levels):
             for _ in range(cardinality)
         ]
     elif dtype.kind == "M":
-        values = datetime_generator(dtype=dtype, size=cardinality)()
+        values = datetime_generator(dtype=dtype, size=cardinality)().astype(
+            dtype
+        )
     elif dtype.kind == "m":
-        values = timedelta_generator(dtype=dtype, size=cardinality)()
+        values = timedelta_generator(dtype=dtype, size=cardinality)().astype(
+            dtype
+        )
     elif dtype.kind == "b":
-        values = boolean_generator(cardinality)()
+        values = boolean_generator(cardinality)().astype(dtype)
     else:
         raise TypeError(f"Unsupported dtype: {dtype}")
 
-    while nesting_levels > 1:
+    while nesting_depth > 1:
         values = [values]
-        nesting_levels -= 1
+        nesting_depth -= 1
     return values
 
 
-def list_generator(dtype, size):
-    arrow_type = dtype.to_arrow()
-    nesting_levels = 0
-    while isinstance(arrow_type, pa.ListType):
-        arrow_type = arrow_type.value_type
-        nesting_levels += 1
+def list_generator(dtype, size, nesting_depth, lists_max_length):
 
     return lambda: [
         get_nested_list(
-            dtype=dtype.leaf_type,
-            cardinality=size,
-            nesting_levels=nesting_levels,
+            dtype=dtype,
+            nesting_depth=nesting_depth,
+            list_max_length=lists_max_length,
         )
         for _ in range(size)
     ]
