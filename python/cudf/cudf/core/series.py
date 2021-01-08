@@ -2448,7 +2448,14 @@ class Series(Frame, Serializable):
 
         def encode(cat):
             if cat is None:
-                return self.isnull()
+                if self.dtype.kind == "f":
+                    # Need to ignore `np.nan` values incase
+                    # of a float column
+                    return self.__class__(
+                        libcudf.unary.is_null((self._column))
+                    )
+                else:
+                    return self.isnull()
             elif np.issubdtype(type(cat), np.floating) and np.isnan(cat):
                 return self.__class__(libcudf.unary.is_nan(self._column))
             else:
