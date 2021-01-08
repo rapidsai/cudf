@@ -704,7 +704,7 @@ writer::impl::impl(std::unique_ptr<data_sink> sink,
 
 writer::impl::~impl()
 {
-  if (not closed) close(false, "");
+  if (not closed) close("");
 }
 
 void writer::impl::init_state()
@@ -718,12 +718,12 @@ void writer::impl::init_state()
 }
 
 std::unique_ptr<std::vector<uint8_t>> writer::impl::write(
-  table_view const &table, bool return_filemetadata, const std::string &column_chunks_file_path)
+  table_view const &table, std::string const &column_chunks_file_path)
 {
   CUDF_EXPECTS(not closed, "Data has already been flushed to out and closed");
   init_state();
   write(table);
-  return close(return_filemetadata, column_chunks_file_path);
+  return close(column_chunks_file_path);
 }
 
 void writer::impl::write(table_view const &table)
@@ -1229,7 +1229,7 @@ void writer::impl::write(table_view const &table)
 }
 
 std::unique_ptr<std::vector<uint8_t>> writer::impl::close(
-  bool return_filemetadata, const std::string &column_chunks_file_path)
+  std::string const &column_chunks_file_path)
 {
   CUDF_EXPECTS(not closed, "Data has already been flushed to out and closed");
   closed = true;
@@ -1243,7 +1243,7 @@ std::unique_ptr<std::vector<uint8_t>> writer::impl::close(
   out_sink_->flush();
 
   // Optionally output raw file metadata with the specified column chunk file path
-  if (return_filemetadata) {
+  if (column_chunks_file_path.length() > 0) {
     file_header_s fhdr = {parquet_magic};
     buffer_.resize(0);
     buffer_.insert(buffer_.end(),
@@ -1286,20 +1286,18 @@ writer::~writer() = default;
 
 // Forward to implementation
 std::unique_ptr<std::vector<uint8_t>> writer::write(table_view const &table,
-                                                    bool return_filemetadata,
-                                                    const std::string column_chunks_file_path)
+                                                    std::string const &column_chunks_file_path)
 {
-  return _impl->write(table, return_filemetadata, column_chunks_file_path);
+  return _impl->write(table, column_chunks_file_path);
 }
 
 // Forward to implementation
 void writer::write(table_view const &table) { _impl->write(table); }
 
 // Forward to implementation
-std::unique_ptr<std::vector<uint8_t>> writer::close(bool return_filemetadata,
-                                                    const std::string &column_chunks_file_path)
+std::unique_ptr<std::vector<uint8_t>> writer::close(std::string const &column_chunks_file_path)
 {
-  return _impl->close(return_filemetadata, column_chunks_file_path);
+  return _impl->close(column_chunks_file_path);
 }
 
 std::unique_ptr<std::vector<uint8_t>> writer::merge_rowgroup_metadata(

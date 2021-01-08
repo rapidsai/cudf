@@ -323,7 +323,9 @@ std::unique_ptr<std::vector<uint8_t>> merge_rowgroup_metadata(
   return detail_parquet::writer::merge_rowgroup_metadata(metadata_list);
 }
 
-// Freeform API wraps the detail writer class API
+/**
+ * @copydoc cudf::io::write_parquet
+ */
 std::unique_ptr<std::vector<uint8_t>> write_parquet(parquet_writer_options const& options,
                                                     rmm::mr::device_memory_resource* mr)
 {
@@ -333,12 +335,12 @@ std::unique_ptr<std::vector<uint8_t>> write_parquet(parquet_writer_options const
   auto writer = make_writer<detail_parquet::writer>(
     options.get_sink(), options, detail_pq::SingleWriteMode::YES, mr, rmm::cuda_stream_default);
 
-  return writer->write(options.get_table(),
-                       options.is_enabled_return_filemetadata(),
-                       options.get_column_chunks_file_path());
+  return writer->write(options.get_table(), options.get_column_chunks_file_path());
 }
 
-// Constructor to create parquet chunked writer
+/**
+ * @copydoc cudf::io::parquet_chunked_writer::parquet_chunked_writer
+ */
 parquet_chunked_writer::parquet_chunked_writer(chunked_parquet_writer_options const& op,
                                                rmm::mr::device_memory_resource* mr)
 {
@@ -347,15 +349,9 @@ parquet_chunked_writer::parquet_chunked_writer(chunked_parquet_writer_options co
     op.get_sink(), op, detail_pq::SingleWriteMode::NO, mr, rmm::cuda_stream_default);
 }
 
-// Moves writer unique pointer to object
-parquet_chunked_writer& parquet_chunked_writer::operator=(parquet_chunked_writer&& rhs)
-{
-  writer = std::move(rhs.writer);
-
-  return *this;
-}
-
-// Writes table to output
+/**
+ * @copydoc cudf::io::parquet_chunked_writer::write
+ */
 parquet_chunked_writer& parquet_chunked_writer::write(table_view const& table)
 {
   CUDF_FUNC_RANGE();
@@ -365,12 +361,14 @@ parquet_chunked_writer& parquet_chunked_writer::write(table_view const& table)
   return *this;
 }
 
-// Finishes the chunked/streamed write process
+/**
+ * @copydoc cudf::io::parquet_chunked_writer::close
+ */
 std::unique_ptr<std::vector<uint8_t>> parquet_chunked_writer::close(
-  bool return_filemetadata, const std::string& column_chunks_file_path)
+  std::string const& column_chunks_file_path)
 {
   CUDF_FUNC_RANGE();
-  return writer->close(return_filemetadata, column_chunks_file_path);
+  return writer->close(column_chunks_file_path);
 }
 
 }  // namespace io

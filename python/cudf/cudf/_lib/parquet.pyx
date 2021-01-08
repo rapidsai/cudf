@@ -381,11 +381,9 @@ cpdef write_parquet(
     cdef parquet_writer_options args
     cdef unique_ptr[vector[uint8_t]] out_metadata_c
     cdef string c_column_chunks_file_path
-    cdef bool return_filemetadata = False
     cdef bool _int96_timestamps = int96_timestamps
     if metadata_file_path is not None:
         c_column_chunks_file_path = str.encode(metadata_file_path)
-        return_filemetadata = True
 
     # Perform write
     with nogil:
@@ -395,7 +393,6 @@ cpdef write_parquet(
             .compression(comp_type)
             .stats_level(stat_freq)
             .column_chunks_file_path(c_column_chunks_file_path)
-            .return_filemetadata(return_filemetadata)
             .int96_timestamps(_int96_timestamps)
             .build()
         )
@@ -452,7 +449,6 @@ cdef class ParquetWriter:
 
     def close(self, object metadata_file_path=None):
         cdef unique_ptr[vector[uint8_t]] out_metadata_c
-        cdef bool return_meta
         cdef string column_chunks_file_path
 
         if not self.initialized or self.closed:
@@ -462,15 +458,10 @@ cdef class ParquetWriter:
         # Update metadata-collection options
         if metadata_file_path is not None:
             column_chunks_file_path = str.encode(metadata_file_path)
-            return_meta = True
-        else:
-            return_meta = False
 
         with nogil:
             out_metadata_c = move(
-                self.writer.get()[0].close(
-                    return_meta, column_chunks_file_path
-                )
+                self.writer.get()[0].close(column_chunks_file_path)
             )
 
         if metadata_file_path is not None:

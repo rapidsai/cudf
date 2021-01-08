@@ -71,7 +71,6 @@ cdef extern from "cudf/io/parquet.hpp" namespace "cudf::io" nogil:
         cudf_io_types.statistics_freq get_stats_level() except +
         cudf_table_view.table_view get_table() except +
         const cudf_io_types.table_metadata get_metadata() except +
-        bool is_enabled_return_filemetadata() except +
         string get_column_chunks_file_path() except+
 
         void set_metadata(
@@ -82,9 +81,6 @@ cdef extern from "cudf/io/parquet.hpp" namespace "cudf::io" nogil:
         ) except +
         void set_compression(
             cudf_io_types.compression_type compression
-        ) except +
-        void enable_return_filemetadata(
-            bool req
         ) except +
         void set_column_chunks_file_path(
             string column_chunks_file_path
@@ -111,9 +107,6 @@ cdef extern from "cudf/io/parquet.hpp" namespace "cudf::io" nogil:
         ) except +
         parquet_writer_options_builder& compression(
             cudf_io_types.compression_type compression
-        ) except +
-        parquet_writer_options_builder& return_filemetadata(
-            bool req
         ) except +
         parquet_writer_options_builder& column_chunks_file_path(
             string column_chunks_file_path
@@ -175,8 +168,8 @@ cdef extern from "cudf/io/parquet.hpp" namespace "cudf::io" nogil:
             cudf_table_view.table_view table_,
         ) except+
         unique_ptr[vector[uint8_t]] close(
-            bool return_meta,
-            string column_chunks_file_path,) except+
+            string column_chunks_file_path,
+        ) except+
 
     cdef unique_ptr[vector[uint8_t]] merge_rowgroup_metadata(
         const vector[unique_ptr[vector[uint8_t]]]& metadata_list

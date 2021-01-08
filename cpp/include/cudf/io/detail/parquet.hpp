@@ -145,12 +145,10 @@ class writer {
    * @brief Writes the dataset as per options provided.
    *
    * @param table Set of columns to output
-   * @param return_filemetadata If true, return the raw file metadata
    * @param column_chunks_file_path Column chunks file path to be set in the raw output metadata
    */
   std::unique_ptr<std::vector<uint8_t>> write(table_view const& table,
-                                              bool return_filemetadata,
-                                              const std::string column_chunks_file_path = "");
+                                              std::string const& column_chunks_file_path);
 
   /**
    * @brief Writes a single subtable as part of a larger parquet file/table write.
@@ -162,13 +160,11 @@ class writer {
   /**
    * @brief Finishes the chunked/streamed write process.
    *
-   * @param[in] return_filemetadata If true, return the raw file metadata
    * @param[in] column_chunks_file_path Column chunks file path to be set in the raw output metadata
    *
    * @return A parquet-compatible blob that contains the data for all rowgroups in the list
    */
-  std::unique_ptr<std::vector<uint8_t>> close(bool return_filemetadata                   = false,
-                                              const std::string& column_chunks_file_path = "");
+  std::unique_ptr<std::vector<uint8_t>> close(std::string const& column_chunks_file_path = "");
 
   /**
    * @brief Merges multiple metadata blobs returned by write_all into a single metadata blob

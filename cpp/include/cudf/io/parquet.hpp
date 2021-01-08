@@ -396,8 +396,6 @@ class parquet_writer_options {
   table_view _table;
   // Optional associated metadata
   const table_metadata* _metadata = nullptr;
-  // Optionally return the raw parquet file metadata output
-  bool _return_filemetadata = false;
   // Parquet writes can write INT96 or TIMESTAMP_MICROS. Defaults to TIMESTAMP_MICROS.
   bool _write_timestamps_as_int96 = false;
   // Column chunks file path to be set in the raw output metadata
@@ -475,11 +473,6 @@ class parquet_writer_options {
   bool is_enabled_int96_timestamps() const { return _write_timestamps_as_int96; }
 
   /**
-   * @brief Returns `true` if metadata is required, `false` otherwise.
-   */
-  bool is_enabled_return_filemetadata() const { return _return_filemetadata; }
-
-  /**
    * @brief Returns Column chunks file path to be set in the raw output metadata.
    */
   std::string get_column_chunks_file_path() const { return _column_chunks_file_path; }
@@ -509,13 +502,6 @@ class parquet_writer_options {
    * @param compression The compression type to use.
    */
   void set_compression(compression_type compression) { _compression = compression; }
-
-  /**
-   * @brief Sets whether filemetadata is required or not.
-   *
-   * @param req Boolean value to enable/disable return of file metadata.
-   */
-  void enable_return_filemetadata(bool req) { _return_filemetadata = req; }
 
   /**
    * @brief Sets timestamp writing preferences. INT96 timestamps will be written
@@ -596,18 +582,6 @@ class parquet_writer_options_builder {
   parquet_writer_options_builder& compression(compression_type compression)
   {
     options._compression = compression;
-    return *this;
-  }
-
-  /**
-   * @brief Sets whether filemetadata is required or not in parquet_writer_options.
-   *
-   * @param req Boolean value to enable/disable return of file metadata.
-   * @return this for chaining.
-   */
-  parquet_writer_options_builder& return_filemetadata(bool req)
-  {
-    options._return_filemetadata = req;
     return *this;
   }
 
@@ -940,14 +914,6 @@ class parquet_chunked_writer {
     rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
   /**
-   * @brief Moves writer unique pointer to object
-   *
-   * @param[in] rhs writer class that needs to be moved
-   * @return returns reference of the class object
-   */
-  parquet_chunked_writer& operator=(parquet_chunked_writer&& rhs);
-
-  /**
    * @brief Writes table to output.
    *
    * @param[in] table Table that needs to be written
@@ -958,12 +924,10 @@ class parquet_chunked_writer {
   /**
    * @brief Finishes the chunked/streamed write process.
    *
-   * @param[in] return_filemetadata If true, return the raw parquet file metadata
    * @param[in] column_chunks_file_path Column chunks file path to be set in the raw output metadata
    * @return unique_ptr to FileMetadata thrift message if requested
    */
-  std::unique_ptr<std::vector<uint8_t>> close(bool return_filemetadata                   = false,
-                                              const std::string& column_chunks_file_path = "");
+  std::unique_ptr<std::vector<uint8_t>> close(std::string const& column_chunks_file_path = "");
 
   // Unique pointer to impl writer class
   std::unique_ptr<cudf::io::detail::parquet::writer> writer;
