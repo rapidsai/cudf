@@ -205,7 +205,6 @@ cdef class ORCWriter:
     cudf.io.orc.to_orc
     """
     cdef bool initialized
-    cdef bool closed
     cdef unique_ptr[orc_chunked_writer] writer
     cdef sink_info sink
     cdef unique_ptr[data_sink] _data_sink
@@ -220,7 +219,6 @@ cdef class ORCWriter:
         self.comp_type = _get_comp_type(compression)
         self.index = index
         self.initialized = False
-        self.closed = False
 
     def write_table(self, Table table):
         """ Writes a single table to the file """
@@ -237,17 +235,14 @@ cdef class ORCWriter:
             self.writer.get()[0].write(tv)
 
     def close(self):
-        if not self.initialized or self.closed:
+        if not self.initialized:
             return
 
         with nogil:
             self.writer.get()[0].close()
 
-        closed = True
-
     def __dealloc__(self):
-        if not self.closed:
-            self.close()
+        self.close()
 
     def _initialize_chunked_state(self, Table table):
         """

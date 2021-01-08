@@ -794,14 +794,6 @@ class orc_chunked_writer {
                      rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
   /**
-   * @brief Moves writer unique pointer to object
-   *
-   * @param[in] rhs writer class that needs to be moved
-   * @return returns reference of the class object
-   */
-  orc_chunked_writer& operator=(orc_chunked_writer&& rhs);
-
-  /**
    * @brief Writes table to output.
    *
    * @param[in] table Table that needs to be written

@@ -94,13 +94,6 @@ class writer::impl {
   ~impl();
 
   /**
-   * @brief Write an entire dataset to ORC format.
-   *
-   * @param table The set of columns
-   */
-  void write(table_view const& table);
-
-  /**
    * @brief Begins the chunked/streamed write process.
    */
   void init_state();
@@ -110,7 +103,7 @@ class writer::impl {
    *
    * @param[in] table The table information to be written
    */
-  void write_chunk(table_view const& table);
+  void write(table_view const& table);
 
   /**
    * @brief Finishes the chunked/streamed write process.
@@ -345,8 +338,6 @@ class writer::impl {
   /// special parameter only used by detail::write() to indicate that we are guaranteeing
   /// a single table write.  this enables some internal optimizations.
   bool const single_write_mode;
-  /// To track whether necessary members have been initialized
-  bool initialized = false;
   /// to track if the output has been written to sink
   bool closed = false;
 

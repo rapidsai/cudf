@@ -240,7 +240,9 @@ std::vector<std::vector<std::string>> read_orc_statistics(source_info const& src
   return statistics_blobs;
 }
 
-// Freeform API wraps the detail reader class API
+/**
+ * @copydoc cudf::io::read_orc
+ */
 table_with_metadata read_orc(orc_reader_options const& options, rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
@@ -249,7 +251,9 @@ table_with_metadata read_orc(orc_reader_options const& options, rmm::mr::device_
   return reader->read(options);
 }
 
-// Freeform API wraps the detail writer class API
+/**
+ * @copydoc cudf::io::write_orc
+ */
 void write_orc(orc_writer_options const& options, rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
@@ -259,9 +263,12 @@ void write_orc(orc_writer_options const& options, rmm::mr::device_memory_resourc
     options.get_sink(), options, detail_orc::SingleWriteMode::YES, mr);
 
   writer->write(options.get_table());
+  writer->close();
 }
 
-// Constructor to create orc chunked writer
+/**
+ * @copydoc cudf::io::orc_chunked_writer::orc_chunked_writer
+ */
 orc_chunked_writer::orc_chunked_writer(chunked_orc_writer_options const& op,
                                        rmm::mr::device_memory_resource* mr)
 {
@@ -270,25 +277,21 @@ orc_chunked_writer::orc_chunked_writer(chunked_orc_writer_options const& op,
     op.get_sink(), op, detail_orc::SingleWriteMode::NO, mr, rmm::cuda_stream_default);
 }
 
-// Moves writer unique pointer to object
-orc_chunked_writer& orc_chunked_writer::operator=(orc_chunked_writer&& rhs)
-{
-  writer = std::move(rhs.writer);
-
-  return *this;
-}
-
-// Writes table to output
+/**
+ * @copydoc cudf::io::orc_chunked_writer::write
+ */
 orc_chunked_writer& orc_chunked_writer::write(table_view const& table)
 {
   CUDF_FUNC_RANGE();
 
-  writer->write_chunk(table);
+  writer->write(table);
 
   return *this;
 }
 
-// Finishes the chunked/streamed write process
+/**
+ * @copydoc cudf::io::orc_chunked_writer::close
+ */
 void orc_chunked_writer::close()
 {
   CUDF_FUNC_RANGE();

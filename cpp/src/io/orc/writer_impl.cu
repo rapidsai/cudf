@@ -999,11 +999,7 @@ writer::impl::impl(std::unique_ptr<data_sink> sink,
     stream(stream),
     _mr(mr)
 {
-}
-
-writer::impl::~impl()
-{
-  if (not closed) { close(); }
+    init_state();
 }
 
 writer::impl::impl(std::unique_ptr<data_sink> sink,
@@ -1022,13 +1018,12 @@ writer::impl::impl(std::unique_ptr<data_sink> sink,
     user_metadata_with_nullability = *options.get_metadata();
     user_metadata                  = &user_metadata_with_nullability;
   }
+
+  init_state();
 }
 
-void writer::impl::write(table_view const &table)
+writer::impl::~impl()
 {
-  CUDF_EXPECTS(not closed, "Data has already been flushed to out and closed");
-  init_state();
-  write_chunk(table);
   close();
 }
 
@@ -1036,13 +1031,11 @@ void writer::impl::init_state()
 {
   // Write file header
   out_sink_->host_write(MAGIC, std::strlen(MAGIC));
-  initialized = true;
 }
 
-void writer::impl::write_chunk(table_view const &table)
+void writer::impl::write(table_view const &table)
 {
   CUDF_EXPECTS(not closed, "Data has already been flushed to out and closed");
-  if (not initialized) init_state();
   size_type num_columns = table.num_columns();
   size_type num_rows    = 0;
 
@@ -1351,7 +1344,6 @@ void writer::impl::write_chunk(table_view const &table)
 
 void writer::impl::close()
 {
-  CUDF_EXPECTS(not closed, "Data has already been flushed to out and closed");
   closed = true;
   ProtobufWriter pbw_(&buffer_);
   PostScript ps;
@@ -1413,9 +1405,6 @@ writer::~writer() = default;
 
 // Forward to implementation
 void writer::write(table_view const &table) { _impl->write(table); }
-
-// Forward to implementation
-void writer::write_chunk(table_view const &table) { _impl->write_chunk(table); }
 
 // Forward to implementation
 void writer::close() { _impl->close(); }
