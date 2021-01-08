@@ -325,20 +325,20 @@ class writer::impl {
   bool enable_dictionary_ = true;
   bool enable_statistics_ = true;
 
-  /// Overall file metadata.  Filled in during the process and written during write_chunked_end()
+  // Overall file metadata.  Filled in during the process and written during write_chunked_end()
   cudf::io::orc::FileFooter ff;
   cudf::io::orc::Metadata md;
-  /// current write position for rowgroups/chunks
+  // current write position for rowgroups/chunks
   size_t current_chunk_offset;
-  /// optional user metadata
+  // optional user metadata
   table_metadata const* user_metadata = nullptr;
-  /// only used in the write_chunked() case. copied from the (optionally) user supplied
-  /// argument to write_chunked_begin()
+  // only used in the write_chunked() case. copied from the (optionally) user supplied
+  // argument to write_chunked_begin()
   table_metadata_with_nullability user_metadata_with_nullability;
-  /// special parameter only used by detail::write() to indicate that we are guaranteeing
-  /// a single table write.  this enables some internal optimizations.
+  // special parameter only used by detail::write() to indicate that we are guaranteeing
+  // a single table write.  this enables some internal optimizations.
   bool const single_write_mode;
-  /// to track if the output has been written to sink
+  // to track if the output has been written to sink
   bool closed = false;
 
   std::vector<uint8_t> buffer_;

@@ -134,18 +134,11 @@ class writer {
   ~writer();
 
   /**
-   * @brief Writes the entire dataset.
-   *
-   * @param table Set of columns to output
-   */
-  void write(table_view const& table);
-
-  /**
    * @brief Writes a single subtable as part of a larger ORC file/table write.
    *
    * @param[in] table The table information to be written
    */
-  void write_chunk(table_view const& table);
+  void write(table_view const& table);
 
   /**
    * @brief Finishes the chunked/streamed write process.

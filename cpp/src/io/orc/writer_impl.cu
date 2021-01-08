@@ -1330,10 +1330,10 @@ void writer::impl::write(table_view const &table)
   } else {
     // verify the user isn't passing mismatched tables
     CUDF_EXPECTS(ff.types.size() == 1 + orc_columns.size(),
-                 "Mismatch in table structure between multiple calls to write_chunk");
+                 "Mismatch in table structure between multiple calls to write");
     for (auto i = 0; i < num_columns; i++) {
       CUDF_EXPECTS(ff.types[1 + i].kind == orc_columns[i].orc_kind(),
-                   "Mismatch in column types between multiple calls to write_chunk");
+                   "Mismatch in column types between multiple calls to write");
     }
   }
   ff.stripes.insert(ff.stripes.end(),
