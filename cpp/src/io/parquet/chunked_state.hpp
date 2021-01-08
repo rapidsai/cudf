@@ -53,19 +53,24 @@ struct pq_chunked_state {
   /// only used in the write_chunked() case. copied from the (optionally) user supplied
   /// argument to write_parquet_chunked_begin()
   bool single_write_mode;
-  ///  timestamps should be written as int96 types
+  /// timestamps should be written as int96 types
   bool int96_timestamps;
+  /// vector of precision values for decimal writing. Exactly one entry
+  /// per decimal column.
+  std::vector<uint8_t> _decimal_precision;
 
   pq_chunked_state() = default;
 
   pq_chunked_state(table_metadata const* metadata,
-                   SingleWriteMode mode         = SingleWriteMode::NO,
-                   bool write_int96_timestamps  = false,
-                   rmm::cuda_stream_view stream = rmm::cuda_stream_default)
+                   SingleWriteMode mode                          = SingleWriteMode::NO,
+                   bool write_int96_timestamps                   = false,
+                   std::vector<uint8_t> const& decimal_precision = {},
+                   rmm::cuda_stream_view stream                  = rmm::cuda_stream_default)
     : stream{stream},
       user_metadata{metadata},
       single_write_mode{mode == SingleWriteMode::YES},
-      int96_timestamps(write_int96_timestamps)
+      int96_timestamps(write_int96_timestamps),
+      _decimal_precision(decimal_precision)
   {
   }
 };

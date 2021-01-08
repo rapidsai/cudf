@@ -111,7 +111,7 @@ void CUDA_DEVICE_CALLABLE md5_process(TKey const& key, md5_intermediate_data* ha
 /**
  * Normalization of floating point NANs and zeros helper
  */
-template <typename T, typename std::enable_if_t<std::is_floating_point<T>::value>* = nullptr>
+template <typename T, std::enable_if_t<std::is_floating_point<T>::value>* = nullptr>
 T CUDA_DEVICE_CALLABLE normalize_nans_and_zeros_helper(T key)
 {
   if (isnan(key)) {
@@ -148,7 +148,7 @@ void CUDA_DEVICE_CALLABLE uint32ToLowercaseHexString(uint32_t num, char* destina
 }
 
 struct MD5ListHasher {
-  template <typename T, typename std::enable_if_t<is_chrono<T>()>* = nullptr>
+  template <typename T, std::enable_if_t<is_chrono<T>()>* = nullptr>
   void __device__ operator()(column_device_view data_col,
                              size_type offset_begin,
                              size_type offset_end,
@@ -157,7 +157,7 @@ struct MD5ListHasher {
     release_assert(false && "MD5 Unsupported chrono type column");
   }
 
-  template <typename T, typename std::enable_if_t<!is_fixed_width<T>()>* = nullptr>
+  template <typename T, std::enable_if_t<!is_fixed_width<T>()>* = nullptr>
   void __device__ operator()(column_device_view data_col,
                              size_type offset_begin,
                              size_type offset_end,
@@ -166,7 +166,7 @@ struct MD5ListHasher {
     release_assert(false && "MD5 Unsupported non-fixed-width type column");
   }
 
-  template <typename T, typename std::enable_if_t<is_floating_point<T>()>* = nullptr>
+  template <typename T, std::enable_if_t<is_floating_point<T>()>* = nullptr>
   void __device__ operator()(column_device_view data_col,
                              size_type offset_begin,
                              size_type offset_end,
@@ -179,9 +179,9 @@ struct MD5ListHasher {
     }
   }
 
-  template <typename T,
-            typename std::enable_if_t<is_fixed_width<T>() && !is_floating_point<T>() &&
-                                      !is_chrono<T>()>* = nullptr>
+  template <
+    typename T,
+    std::enable_if_t<is_fixed_width<T>() && !is_floating_point<T>() && !is_chrono<T>()>* = nullptr>
   void CUDA_DEVICE_CALLABLE operator()(column_device_view data_col,
                                        size_type offset_begin,
                                        size_type offset_end,
@@ -268,7 +268,7 @@ struct MD5Hash {
       uint32ToLowercaseHexString(hash_state->hash_value[i], result_location + (8 * i));
   }
 
-  template <typename T, typename std::enable_if_t<is_chrono<T>()>* = nullptr>
+  template <typename T, std::enable_if_t<is_chrono<T>()>* = nullptr>
   void __device__ operator()(column_device_view col,
                              size_type row_index,
                              md5_intermediate_data* hash_state) const
@@ -276,7 +276,7 @@ struct MD5Hash {
     release_assert(false && "MD5 Unsupported chrono type column");
   }
 
-  template <typename T, typename std::enable_if_t<!is_fixed_width<T>()>* = nullptr>
+  template <typename T, std::enable_if_t<!is_fixed_width<T>()>* = nullptr>
   void __device__ operator()(column_device_view col,
                              size_type row_index,
                              md5_intermediate_data* hash_state) const
@@ -284,7 +284,7 @@ struct MD5Hash {
     release_assert(false && "MD5 Unsupported non-fixed-width type column");
   }
 
-  template <typename T, typename std::enable_if_t<is_floating_point<T>()>* = nullptr>
+  template <typename T, std::enable_if_t<is_floating_point<T>()>* = nullptr>
   void __device__ operator()(column_device_view col,
                              size_type row_index,
                              md5_intermediate_data* hash_state) const
@@ -292,9 +292,9 @@ struct MD5Hash {
     md5_process(normalize_nans_and_zeros_helper<T>(col.element<T>(row_index)), hash_state);
   }
 
-  template <typename T,
-            typename std::enable_if_t<is_fixed_width<T>() && !is_floating_point<T>() &&
-                                      !is_chrono<T>()>* = nullptr>
+  template <
+    typename T,
+    std::enable_if_t<is_fixed_width<T>() && !is_floating_point<T>() && !is_chrono<T>()>* = nullptr>
   void CUDA_DEVICE_CALLABLE operator()(column_device_view col,
                                        size_type row_index,
                                        md5_intermediate_data* hash_state) const
@@ -370,15 +370,15 @@ struct MurmurHash3_32 {
   using argument_type = Key;
   using result_type   = hash_value_type;
 
-  CUDA_HOST_DEVICE_CALLABLE MurmurHash3_32() : m_seed(0) {}
+  MurmurHash3_32() = default;
   CUDA_HOST_DEVICE_CALLABLE MurmurHash3_32(uint32_t seed) : m_seed(seed) {}
 
-  CUDA_HOST_DEVICE_CALLABLE uint32_t rotl32(uint32_t x, int8_t r) const
+  CUDA_DEVICE_CALLABLE uint32_t rotl32(uint32_t x, int8_t r) const
   {
     return (x << r) | (x >> (32 - r));
   }
 
-  CUDA_HOST_DEVICE_CALLABLE uint32_t fmix32(uint32_t h) const
+  CUDA_DEVICE_CALLABLE uint32_t fmix32(uint32_t h) const
   {
     h ^= h >> 16;
     h *= 0x85ebca6b;
@@ -399,7 +399,7 @@ struct MurmurHash3_32 {
    *
    * @returns A hash value that intelligently combines the lhs and rhs hash values
    */
-  CUDA_HOST_DEVICE_CALLABLE result_type hash_combine(result_type lhs, result_type rhs)
+  CUDA_DEVICE_CALLABLE result_type hash_combine(result_type lhs, result_type rhs)
   {
     result_type combined{lhs};
 
@@ -408,11 +408,11 @@ struct MurmurHash3_32 {
     return combined;
   }
 
-  result_type CUDA_HOST_DEVICE_CALLABLE operator()(Key const& key) const { return compute(key); }
+  result_type CUDA_DEVICE_CALLABLE operator()(Key const& key) const { return compute(key); }
 
   // compute wrapper for floating point types
-  template <typename T, typename std::enable_if_t<std::is_floating_point<T>::value>* = nullptr>
-  hash_value_type CUDA_HOST_DEVICE_CALLABLE compute_floating_point(T const& key) const
+  template <typename T, std::enable_if_t<std::is_floating_point<T>::value>* = nullptr>
+  hash_value_type CUDA_DEVICE_CALLABLE compute_floating_point(T const& key) const
   {
     if (key == T{0.0}) {
       return compute(T{0.0});
@@ -425,10 +425,10 @@ struct MurmurHash3_32 {
   }
 
   template <typename TKey>
-  result_type CUDA_HOST_DEVICE_CALLABLE compute(TKey const& key) const
+  result_type CUDA_DEVICE_CALLABLE compute(TKey const& key) const
   {
     constexpr int len         = sizeof(argument_type);
-    const uint8_t* const data = (const uint8_t*)&key;
+    uint8_t const* const data = reinterpret_cast<uint8_t const*>(&key);
     constexpr int nblocks     = len / 4;
 
     uint32_t h1           = m_seed;
@@ -436,7 +436,7 @@ struct MurmurHash3_32 {
     constexpr uint32_t c2 = 0x1b873593;
     //----------
     // body
-    const uint32_t* const blocks = (const uint32_t*)(data + nblocks * 4);
+    uint32_t const* const blocks = reinterpret_cast<uint32_t const*>(data + nblocks * 4);
     for (int i = -nblocks; i; i++) {
       uint32_t k1 = blocks[i];  // getblock32(blocks,i);
       k1 *= c1;
@@ -448,7 +448,7 @@ struct MurmurHash3_32 {
     }
     //----------
     // tail
-    const uint8_t* tail = (const uint8_t*)(data + nblocks * 4);
+    uint8_t const* tail = reinterpret_cast<uint8_t const*>(data + nblocks * 4);
     uint32_t k1         = 0;
     switch (len & 3) {
       case 3: k1 ^= tail[2] << 16;
@@ -468,11 +468,11 @@ struct MurmurHash3_32 {
   }
 
  private:
-  uint32_t m_seed;
+  uint32_t m_seed{0};
 };
 
 template <>
-hash_value_type CUDA_HOST_DEVICE_CALLABLE MurmurHash3_32<bool>::operator()(bool const& key) const
+hash_value_type CUDA_DEVICE_CALLABLE MurmurHash3_32<bool>::operator()(bool const& key) const
 {
   return this->compute(static_cast<uint8_t>(key));
 }
@@ -481,28 +481,24 @@ hash_value_type CUDA_HOST_DEVICE_CALLABLE MurmurHash3_32<bool>::operator()(bool 
  * @brief Specialization of MurmurHash3_32 operator for strings.
  */
 template <>
-hash_value_type CUDA_HOST_DEVICE_CALLABLE
+hash_value_type CUDA_DEVICE_CALLABLE
 MurmurHash3_32<cudf::string_view>::operator()(cudf::string_view const& key) const
 {
-  const int len         = (int)key.size_bytes();
-  const uint8_t* data   = (const uint8_t*)key.data();
-  const int nblocks     = len / 4;
+  auto const len        = key.size_bytes();
+  uint8_t const* data   = reinterpret_cast<uint8_t const*>(key.data());
+  int const nblocks     = len / 4;
   result_type h1        = m_seed;
   constexpr uint32_t c1 = 0xcc9e2d51;
   constexpr uint32_t c2 = 0x1b873593;
-  auto getblock32       = [] __host__ __device__(const uint32_t* p, int i) -> uint32_t {
-  // Individual byte reads for unaligned accesses (very likely)
-#ifndef __CUDA_ARCH__
-    CUDF_FAIL("Hashing a string in host code is not supported.");
-#else
-    auto q = (const uint8_t*)(p + i);
+  auto getblock32       = [] __device__(uint32_t const* p, int i) -> uint32_t {
+    // Individual byte reads for unaligned accesses (very likely)
+    auto q = (uint8_t const*)(p + i);
     return q[0] | (q[1] << 8) | (q[2] << 16) | (q[3] << 24);
-#endif
   };
 
   //----------
   // body
-  const uint32_t* const blocks = (const uint32_t*)(data + nblocks * 4);
+  uint32_t const* const blocks = reinterpret_cast<uint32_t const*>(data + nblocks * 4);
   for (int i = -nblocks; i; i++) {
     uint32_t k1 = getblock32(blocks, i);
     k1 *= c1;
@@ -514,7 +510,7 @@ MurmurHash3_32<cudf::string_view>::operator()(cudf::string_view const& key) cons
   }
   //----------
   // tail
-  const uint8_t* tail = (const uint8_t*)(data + nblocks * 4);
+  uint8_t const* tail = reinterpret_cast<uint8_t const*>(data + nblocks * 4);
   uint32_t k1         = 0;
   switch (len & 3) {
     case 3: k1 ^= tail[2] << 16;
@@ -534,14 +530,164 @@ MurmurHash3_32<cudf::string_view>::operator()(cudf::string_view const& key) cons
 }
 
 template <>
-hash_value_type CUDA_HOST_DEVICE_CALLABLE MurmurHash3_32<float>::operator()(float const& key) const
+hash_value_type CUDA_DEVICE_CALLABLE MurmurHash3_32<float>::operator()(float const& key) const
 {
   return this->compute_floating_point(key);
 }
 
 template <>
-hash_value_type CUDA_HOST_DEVICE_CALLABLE
-MurmurHash3_32<double>::operator()(double const& key) const
+hash_value_type CUDA_DEVICE_CALLABLE MurmurHash3_32<double>::operator()(double const& key) const
+{
+  return this->compute_floating_point(key);
+}
+
+template <typename Key>
+struct SparkMurmurHash3_32 {
+  using argument_type = Key;
+  using result_type   = hash_value_type;
+
+  SparkMurmurHash3_32() = default;
+  CUDA_HOST_DEVICE_CALLABLE SparkMurmurHash3_32(uint32_t seed) : m_seed(seed) {}
+
+  CUDA_DEVICE_CALLABLE uint32_t rotl32(uint32_t x, int8_t r) const
+  {
+    return (x << r) | (x >> (32 - r));
+  }
+
+  CUDA_DEVICE_CALLABLE uint32_t fmix32(uint32_t h) const
+  {
+    h ^= h >> 16;
+    h *= 0x85ebca6b;
+    h ^= h >> 13;
+    h *= 0xc2b2ae35;
+    h ^= h >> 16;
+    return h;
+  }
+
+  result_type CUDA_DEVICE_CALLABLE operator()(Key const& key) const { return compute(key); }
+
+  // compute wrapper for floating point types
+  template <typename T, std::enable_if_t<std::is_floating_point<T>::value>* = nullptr>
+  hash_value_type CUDA_DEVICE_CALLABLE compute_floating_point(T const& key) const
+  {
+    if (key == T{0.0}) {
+      return compute(T{0.0});
+    } else if (isnan(key)) {
+      T nan = std::numeric_limits<T>::quiet_NaN();
+      return compute(nan);
+    } else {
+      return compute(key);
+    }
+  }
+
+  template <typename TKey>
+  result_type CUDA_DEVICE_CALLABLE compute(TKey const& key) const
+  {
+    constexpr int len        = sizeof(TKey);
+    int8_t const* const data = reinterpret_cast<int8_t const*>(&key);
+    constexpr int nblocks    = len / 4;
+
+    uint32_t h1           = m_seed;
+    constexpr uint32_t c1 = 0xcc9e2d51;
+    constexpr uint32_t c2 = 0x1b873593;
+    //----------
+    // body
+    uint32_t const* const blocks = reinterpret_cast<uint32_t const*>(data + nblocks * 4);
+    for (int i = -nblocks; i; i++) {
+      uint32_t k1 = blocks[i];
+      k1 *= c1;
+      k1 = rotl32(k1, 15);
+      k1 *= c2;
+      h1 ^= k1;
+      h1 = rotl32(h1, 13);
+      h1 = h1 * 5 + 0xe6546b64;
+    }
+    //----------
+    // byte by byte tail processing
+    for (int i = nblocks * 4; i < len; i++) {
+      int32_t k1 = data[i];
+      k1 *= c1;
+      k1 = rotl32(k1, 15);
+      k1 *= c2;
+      h1 ^= k1;
+      h1 = rotl32(h1, 13);
+      h1 = h1 * 5 + 0xe6546b64;
+    }
+    //----------
+    // finalization
+    h1 ^= len;
+    h1 = fmix32(h1);
+    return h1;
+  }
+
+ private:
+  uint32_t m_seed{0};
+};
+
+template <>
+hash_value_type CUDA_DEVICE_CALLABLE SparkMurmurHash3_32<bool>::operator()(bool const& key) const
+{
+  return this->compute<uint32_t>(key);
+}
+
+/**
+ * @brief Specialization of MurmurHash3_32 operator for strings.
+ */
+template <>
+hash_value_type CUDA_DEVICE_CALLABLE
+SparkMurmurHash3_32<cudf::string_view>::operator()(cudf::string_view const& key) const
+{
+  auto const len        = key.size_bytes();
+  int8_t const* data    = reinterpret_cast<int8_t const*>(key.data());
+  int const nblocks     = len / 4;
+  result_type h1        = m_seed;
+  constexpr uint32_t c1 = 0xcc9e2d51;
+  constexpr uint32_t c2 = 0x1b873593;
+  auto getblock32       = [] __device__(uint32_t const* p, int i) -> uint32_t {
+    // Individual byte reads for unaligned accesses (very likely)
+    auto q = (const uint8_t*)(p + i);
+    return q[0] | (q[1] << 8) | (q[2] << 16) | (q[3] << 24);
+  };
+
+  //----------
+  // body
+  uint32_t const* const blocks = reinterpret_cast<uint32_t const*>(data + nblocks * 4);
+  for (int i = -nblocks; i; i++) {
+    uint32_t k1 = getblock32(blocks, i);
+    k1 *= c1;
+    k1 = rotl32(k1, 15);
+    k1 *= c2;
+    h1 ^= k1;
+    h1 = rotl32(h1, 13);
+    h1 = h1 * 5 + 0xe6546b64;
+  }
+  //----------
+  // Spark's byte by byte tail processing
+  for (int i = nblocks * 4; i < len; i++) {
+    int32_t k1 = data[i];
+    k1 *= c1;
+    k1 = rotl32(k1, 15);
+    k1 *= c2;
+    h1 ^= k1;
+    h1 = rotl32(h1, 13);
+    h1 = h1 * 5 + 0xe6546b64;
+  }
+  //----------
+  // finalization
+  h1 ^= len;
+  h1 = fmix32(h1);
+  return h1;
+}
+
+template <>
+hash_value_type CUDA_DEVICE_CALLABLE SparkMurmurHash3_32<float>::operator()(float const& key) const
+{
+  return this->compute_floating_point(key);
+}
+
+template <>
+hash_value_type CUDA_DEVICE_CALLABLE
+SparkMurmurHash3_32<double>::operator()(double const& key) const
 {
   return this->compute_floating_point(key);
 }
@@ -576,7 +722,7 @@ struct IdentityHash {
 
   template <typename return_type = result_type>
   CUDA_HOST_DEVICE_CALLABLE std::enable_if_t<!std::is_arithmetic<Key>::value, return_type>
-  operator()(const Key& key) const
+  operator()(Key const& key) const
   {
     release_assert(false && "IdentityHash does not support this data type");
     return 0;
@@ -584,7 +730,7 @@ struct IdentityHash {
 
   template <typename return_type = result_type>
   CUDA_HOST_DEVICE_CALLABLE std::enable_if_t<std::is_arithmetic<Key>::value, return_type>
-  operator()(const Key& key) const
+  operator()(Key const& key) const
   {
     return static_cast<result_type>(key);
   }
