@@ -189,7 +189,6 @@ extern "C" __global__ void __launch_bounds__(128, 8)
 
 /**
  * @brief Shared mem state for gpuParseRowGroupIndex
- *
  */
 struct rowindex_state_s {
   ColumnDesc chunk;
@@ -219,8 +218,7 @@ enum row_entry_state_e {
  * @param[in] start start position in byte stream
  * @param[in] end end of byte stream
  * @return bytes consumed
- *
- **/
+ */
 static uint32_t __device__ ProtobufParseRowIndexEntry(rowindex_state_s *s,
                                                       const uint8_t *start,
                                                       const uint8_t *end)
@@ -314,8 +312,7 @@ static uint32_t __device__ ProtobufParseRowIndexEntry(rowindex_state_s *s,
  *
  * @param[in,out] s row group index state
  * @param[in] num_rowgroups Number of index entries to read
- *
- **/
+ */
 static __device__ void gpuReadRowGroupIndexEntries(rowindex_state_s *s, int num_rowgroups)
 {
   const uint8_t *index_data = s->chunk.streams[CI_INDEX];
@@ -349,8 +346,7 @@ static __device__ void gpuReadRowGroupIndexEntries(rowindex_state_s *s, int num_
  * @param[in] ci_id index to convert (CI_DATA or CI_DATA2)
  * @param[in] num_rowgroups Number of index entries
  * @param[in] t thread id
- *
- **/
+ */
 static __device__ void gpuMapRowIndexToUncompressed(rowindex_state_s *s,
                                                     int ci_id,
                                                     int num_rowgroups,
@@ -396,8 +392,7 @@ static __device__ void gpuMapRowIndexToUncompressed(rowindex_state_s *s,
  * @param[in] num_columns Number of columns
  * @param[in] num_stripes Number of stripes
  * @param[in] num_rowgroups Number of row groups
- *
- **/
+ */
 // blockDim {128,1,1}
 extern "C" __global__ void __launch_bounds__(128, 8)
   gpuParseRowGroupIndex(RowGroup *row_groups,

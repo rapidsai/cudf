@@ -20,7 +20,6 @@
 
 /**
  * @file Utility code involving integer arithmetic
- *
  */
 
 #include <cmath>

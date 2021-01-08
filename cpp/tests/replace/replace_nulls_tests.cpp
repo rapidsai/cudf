@@ -180,6 +180,61 @@ TEST_F(ReplaceNullsStringsTest, SimpleReplaceScalar)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*result, expected_w);
 }
 
+struct ReplaceNullsPolicyStringTest : public cudf::test::BaseFixture {
+};
+
+TEST_F(ReplaceNullsPolicyStringTest, PrecedingFill)
+{
+  cudf::test::strings_column_wrapper input({"head", "", "", "mid", "mid", "", "tail"},
+                                           {1, 0, 0, 1, 1, 0, 1});
+
+  cudf::test::strings_column_wrapper expected({"head", "head", "head", "mid", "mid", "mid", "tail"},
+                                              cudf::test::all_valid());
+
+  auto result = cudf::replace_nulls(input, cudf::replace_policy::PRECEDING);
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(result->view(), expected);
+}
+
+TEST_F(ReplaceNullsPolicyStringTest, FollowingFill)
+{
+  cudf::test::strings_column_wrapper input({"head", "", "", "mid", "mid", "", "tail"},
+                                           {1, 0, 0, 1, 1, 0, 1});
+
+  cudf::test::strings_column_wrapper expected({"head", "mid", "mid", "mid", "mid", "tail", "tail"},
+                                              cudf::test::all_valid());
+
+  auto result = cudf::replace_nulls(input, cudf::replace_policy::FOLLOWING);
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(result->view(), expected);
+}
+
+TEST_F(ReplaceNullsPolicyStringTest, PrecedingFillLeadingNulls)
+{
+  cudf::test::strings_column_wrapper input({"", "", "", "mid", "mid", "", "tail"},
+                                           {0, 0, 0, 1, 1, 0, 1});
+
+  cudf::test::strings_column_wrapper expected({"", "", "", "mid", "mid", "mid", "tail"},
+                                              {0, 0, 0, 1, 1, 1, 1});
+
+  auto result = cudf::replace_nulls(input, cudf::replace_policy::PRECEDING);
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(result->view(), expected);
+}
+
+TEST_F(ReplaceNullsPolicyStringTest, FollowingFillTrailingNulls)
+{
+  cudf::test::strings_column_wrapper input({"head", "", "", "mid", "mid", "", ""},
+                                           {1, 0, 0, 1, 1, 0, 0});
+
+  cudf::test::strings_column_wrapper expected({"head", "mid", "mid", "mid", "mid", "", ""},
+                                              {1, 1, 1, 1, 1, 0, 0});
+
+  auto result = cudf::replace_nulls(input, cudf::replace_policy::FOLLOWING);
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(result->view(), expected);
+}
+
 template <typename T>
 struct ReplaceNullsTest : public cudf::test::BaseFixture {
 };
@@ -450,6 +505,69 @@ TEST_F(ReplaceDictionaryTest, ReplaceNullsNoNulls)
   result =
     cudf::dictionary::detail::replace_nulls(dict_input, cudf::numeric_scalar<int64_t>(0, false));
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(result->view(), input->view());
+}
+
+struct ReplaceNullsPolicyDictionaryTest : public cudf::test::BaseFixture {
+};
+
+TEST_F(ReplaceNullsPolicyDictionaryTest, PrecedingFill)
+{
+  cudf::test::strings_column_wrapper input_w({"head", "", "", "mid1", "mid2", "tail", "", ""},
+                                             {1, 0, 0, 1, 1, 1, 0, 0});
+  auto input = cudf::dictionary::encode(input_w);
+
+  cudf::test::strings_column_wrapper expected_w(
+    {"head", "head", "head", "mid1", "mid2", "tail", "tail", "tail"}, cudf::test::all_valid());
+  auto expected = cudf::dictionary::encode(expected_w);
+
+  auto result = cudf::replace_nulls(*input, cudf::replace_policy::PRECEDING);
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(result->view(), expected->view());
+}
+
+TEST_F(ReplaceNullsPolicyDictionaryTest, FollowingFill)
+{
+  cudf::test::strings_column_wrapper input_w({"head", "", "", "mid1", "mid2", "", "", "tail"},
+                                             {1, 0, 0, 1, 1, 0, 0, 1});
+  auto input = cudf::dictionary::encode(input_w);
+
+  cudf::test::strings_column_wrapper expected_w(
+    {"head", "mid1", "mid1", "mid1", "mid2", "tail", "tail", "tail"}, cudf::test::all_valid());
+  auto expected = cudf::dictionary::encode(expected_w);
+
+  auto result = cudf::replace_nulls(*input, cudf::replace_policy::FOLLOWING);
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(result->view(), expected->view());
+}
+
+TEST_F(ReplaceNullsPolicyDictionaryTest, PrecedingFillLeadingNulls)
+{
+  cudf::test::strings_column_wrapper input_w({"", "", "", "mid1", "mid2", "", "", "tail"},
+                                             {0, 0, 0, 1, 1, 0, 0, 1});
+  auto input = cudf::dictionary::encode(input_w);
+
+  cudf::test::strings_column_wrapper expected_w(
+    {"", "", "", "mid1", "mid2", "mid2", "mid2", "tail"}, {0, 0, 0, 1, 1, 1, 1, 1});
+  auto expected = cudf::dictionary::encode(expected_w);
+
+  auto result = cudf::replace_nulls(*input, cudf::replace_policy::PRECEDING);
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(result->view(), expected->view());
+}
+
+TEST_F(ReplaceNullsPolicyDictionaryTest, FollowingFillTrailingNulls)
+{
+  cudf::test::strings_column_wrapper input_w({"head", "", "", "mid", "tail", "", "", ""},
+                                             {1, 0, 0, 1, 1, 0, 0, 0});
+  auto input = cudf::dictionary::encode(input_w);
+
+  cudf::test::strings_column_wrapper expected_w({"head", "mid", "mid", "mid", "tail", "", "", ""},
+                                                {1, 1, 1, 1, 1, 0, 0, 0});
+  auto expected = cudf::dictionary::encode(expected_w);
+
+  auto result = cudf::replace_nulls(*input, cudf::replace_policy::FOLLOWING);
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(result->view(), expected->view());
 }
 
 CUDF_TEST_PROGRAM_MAIN()

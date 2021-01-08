@@ -1,6 +1,6 @@
 /*
  *
- *  Copyright (c) 2019-2020, NVIDIA CORPORATION.
+ *  Copyright (c) 2019-2021, NVIDIA CORPORATION.
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -324,6 +324,33 @@ public final class ColumnVector extends ColumnView {
   }
 
   /**
+   * Create a new struct vector made up of existing columns. Note that this will copy
+   * the contents of the input columns to make a new vector. If you only want to
+   * do a quick temporary computation you can use ColumnView.makeStructView.
+   * @param columns the columns to make the struct from.
+   * @return the new ColumnVector
+   */
+  public static ColumnVector makeStruct(ColumnView... columns) {
+    try (ColumnView cv = ColumnView.makeStructView(columns)) {
+      return cv.copyToColumnVector();
+    }
+  }
+
+  /**
+   * Create a new struct vector made up of existing columns. Note that this will copy
+   * the contents of the input columns to make a new vector. If you only want to
+   * do a quick temporary computation you can use ColumnView.makeStructView.
+   * @param rows the number of rows in the struct. Used for structs with no children.
+   * @param columns the columns to make the struct from.
+   * @return the new ColumnVector
+   */
+  public static ColumnVector makeStruct(long rows, ColumnView... columns) {
+    try (ColumnView cv = ColumnView.makeStructView(rows, columns)) {
+      return cv.copyToColumnVector();
+    }
+  }
+
+  /**
    * Create a new vector of length rows, starting at the initialValue and going by step each time.
    * Only numeric types are supported.
    * @param initialValue the initial value to start at.
@@ -435,15 +462,15 @@ public final class ColumnVector extends ColumnView {
   }
 
   /**
-   * Create a new vector containing the MD5 hash of each row in the table.
+   * Create a new vector containing the murmur3 hash of each row in the table.
    *
    * @param seed integer seed for the murmur3 hash function
    * @param columns array of columns to hash, must have identical number of rows.
-   * @return the new ColumnVector of 32 character hex strings representing each row's hash value.
+   * @return the new ColumnVector of 32-bit values representing each row's hash value.
    */
   public static ColumnVector serial32BitMurmurHash3(int seed, ColumnView columns[]) {
     if (columns.length < 1) {
-      throw new IllegalArgumentException("MD5 hashing requires at least 1 column of input");
+      throw new IllegalArgumentException("Murmur3 hashing requires at least 1 column of input");
     }
     long[] columnViews = new long[columns.length];
     long size = columns[0].getRowCount();
@@ -460,13 +487,50 @@ public final class ColumnVector extends ColumnView {
   }
 
   /**
-   * Create a new vector containing the MD5 hash of each row in the table, seed defaulted to 0.
+   * Create a new vector containing the murmur3 hash of each row in the table, seed defaulted to 0.
    *
    * @param columns array of columns to hash, must have identical number of rows.
-   * @return the new ColumnVector of 32 character hex strings representing each row's hash value.
+   * @return the new ColumnVector of 32-bit values representing each row's hash value.
    */
   public static ColumnVector serial32BitMurmurHash3(ColumnView columns[]) {
     return serial32BitMurmurHash3(0, columns);
+  }
+
+  /**
+   * Create a new vector containing spark's 32-bit murmur3 hash of each row in the table.
+   * Spark's murmur3 hash uses a different tail processing algorithm.
+   *
+   * @param seed integer seed for the murmur3 hash function
+   * @param columns array of columns to hash, must have identical number of rows.
+   * @return the new ColumnVector of 32-bit values representing each row's hash value.
+   */
+  public static ColumnVector spark32BitMurmurHash3(int seed, ColumnView columns[]) {
+    if (columns.length < 1) {
+      throw new IllegalArgumentException("Murmur3 hashing requires at least 1 column of input");
+    }
+    long[] columnViews = new long[columns.length];
+    long size = columns[0].getRowCount();
+
+    for(int i = 0; i < columns.length; i++) {
+      assert columns[i] != null : "Column vectors passed may not be null";
+      assert columns[i].getRowCount() == size : "Row count mismatch, all columns must be the same size";
+      assert !columns[i].getType().isDurationType() : "Unsupported column type Duration";
+      assert !columns[i].getType().isTimestampType() : "Unsupported column type Timestamp";
+      assert !columns[i].getType().isNestedType() : "Unsupported column of nested type";
+      columnViews[i] = columns[i].getNativeView();
+    }
+    return new ColumnVector(hash(columnViews, HashType.HASH_SPARK_MURMUR3.getNativeId(), new int[0], seed));
+  }
+
+  /**
+   * Create a new vector containing spark's 32-bit murmur3 hash of each row in the table with the
+   * seed set to 0. Spark's murmur3 hash uses a different tail processing algorithm.
+   *
+   * @param columns array of columns to hash, must have identical number of rows.
+   * @return the new ColumnVector of 32-bit values representing each row's hash value.
+   */
+  public static ColumnVector spark32BitMurmurHash3(ColumnView columns[]) {
+    return spark32BitMurmurHash3(0, columns);
   }
 
   /**
@@ -826,6 +890,15 @@ public final class ColumnVector extends ColumnView {
   public static ColumnVector fromStructs(HostColumnVector.DataType dataType,
                                          HostColumnVector.StructData... lists) {
     try (HostColumnVector host = HostColumnVector.fromStructs(dataType, lists)) {
+      return host.copyToDevice();
+    }
+  }
+  /**
+   * This method is evolving, unstable and currently test only.
+   * Please use with caution and expect it to change in the future.
+   */
+  public static ColumnVector emptyStructs(HostColumnVector.DataType dataType, long numRows) {
+    try (HostColumnVector host = HostColumnVector.emptyStructs(dataType, numRows)) {
       return host.copyToDevice();
     }
   }

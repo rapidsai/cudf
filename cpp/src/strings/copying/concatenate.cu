@@ -119,7 +119,7 @@ __global__ void fused_concatenate_string_offset_kernel(column_device_view const*
                                                        size_t const* partition_offsets,
                                                        size_type const num_input_views,
                                                        size_type const output_size,
-                                                       size_type* output_data,
+                                                       int32_t* output_data,
                                                        bitmask_type* output_mask,
                                                        size_type* out_valid_count)
 {

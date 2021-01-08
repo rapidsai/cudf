@@ -232,7 +232,6 @@ __global__ void replace_strings_second_pass(cudf::column_device_view input,
  * of old values to be replaced
  * @param[in] d_replacement_values Device array with the new values
  * @param[in] replacement_valid Valid mask associated with d_replacement_values
- *
  */
 template <class T, bool input_has_nulls, bool replacement_has_nulls>
 __global__ void replace_kernel(cudf::column_device_view input,

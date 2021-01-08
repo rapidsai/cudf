@@ -383,7 +383,7 @@ __device__ __inline__ cudf::size_type* infer_integral_field_counter(char const* 
  * @param[out] positions Array containing the output positions
  *
  * @return cudf::size_type total number of occurrences
- **/
+ */
 template <class T>
 cudf::size_type find_all_from_set(const rmm::device_buffer& d_data,
                                   const std::vector<char>& keys,
@@ -405,7 +405,7 @@ cudf::size_type find_all_from_set(const rmm::device_buffer& d_data,
  * @param[out] positions Array containing the output positions
  *
  * @return cudf::size_type total number of occurrences
- **/
+ */
 template <class T>
 cudf::size_type find_all_from_set(const char* h_data,
                                   size_t h_size,
@@ -421,7 +421,7 @@ cudf::size_type find_all_from_set(const char* h_data,
  * @param[in] keys Vector containing the keys to count in the buffer
  *
  * @return cudf::size_type total number of occurrences
- **/
+ */
 cudf::size_type count_all_from_set(const rmm::device_buffer& d_data, const std::vector<char>& keys);
 
 /**
@@ -436,7 +436,7 @@ cudf::size_type count_all_from_set(const rmm::device_buffer& d_data, const std::
  * @param[in] keys Vector containing the keys to count in the buffer
  *
  * @return cudf::size_type total number of occurrences
- **/
+ */
 cudf::size_type count_all_from_set(const char* h_data,
                                    size_t h_size,
                                    const std::vector<char>& keys);
@@ -453,7 +453,7 @@ cudf::size_type count_all_from_set(const char* h_data,
  * @param[in] ext_to_comp_map User supplied mapping of file extension to compression type
  *
  * @return string representing compression type ("gzip, "bz2", etc)
- **/
+ */
 std::string infer_compression_type(
   const compression_type& compression_arg,
   const std::string& filename,
