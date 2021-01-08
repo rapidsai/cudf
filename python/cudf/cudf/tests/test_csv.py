@@ -1,4 +1,4 @@
-# Copyright (c) 2018-2020, NVIDIA CORPORATION.
+# Copyright (c) 2018-2021, NVIDIA CORPORATION.
 
 import csv
 import gzip
@@ -15,7 +15,7 @@ import pytest
 
 import cudf
 from cudf import read_csv
-from cudf.tests.utils import assert_eq
+from cudf.tests.utils import assert_eq, assert_exceptions_equal
 
 
 def make_numeric_dataframe(nrows, dtype):
@@ -1935,3 +1935,23 @@ def test_na_filter_empty_fields():
         StringIO(buffer), keep_default_na=False, na_values=test_na
     )
     assert_eq(pdf, gdf)
+
+
+def test_csv_sep_error():
+    pdf = pd.DataFrame({"a": [1, 2, 3]})
+    gdf = cudf.DataFrame({"a": [1, 2, 3]})
+    assert_exceptions_equal(
+        lfunc=pdf.to_csv,
+        rfunc=gdf.to_csv,
+        lfunc_args_and_kwargs=([], {"sep": "abc"}),
+        rfunc_args_and_kwargs=([], {"sep": "abc"}),
+        expected_error_message='"sep" must be a 1-character string',
+    )
+
+    assert_exceptions_equal(
+        lfunc=pdf.to_csv,
+        rfunc=gdf.to_csv,
+        lfunc_args_and_kwargs=([], {"sep": 1}),
+        rfunc_args_and_kwargs=([], {"sep": 1}),
+        expected_error_message='"sep" must be string, not int',
+    )
