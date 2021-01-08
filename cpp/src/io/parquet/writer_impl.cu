@@ -1236,11 +1236,10 @@ void writer::impl::write_chunk(table_view const &table, pq_chunked_state &state)
                                  state.stream);
   }
 
-  CUDF_EXPECTS(decimal_precision_idx == state._decimal_precision.size(),
-               "Too many decimal precision values!");
-
   // Early exit for empty table
   if (num_rows == 0 || num_columns == 0) { return; }
+  CUDF_EXPECTS(decimal_precision_idx == state._decimal_precision.size(),
+               "Too many decimal precision values!");
 
   // first call. setup metadata. num_rows will get incremented as write_chunk is
   // called multiple times.
