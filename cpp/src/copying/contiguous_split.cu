@@ -232,6 +232,7 @@ __global__ void copy_partition(int num_src_bufs,
  * @param metadata Metadata to add information to
  * @param type Column type
  * @param size Column size
+ * @param null_count Column null count
  * @param data_offset Offset into contiguous data buffer, or -1 if pointer should deserialize to
  * null
  * @param null_mask_offset Offset into contiguous data buffer, or -1 if pointer should deserialize
@@ -241,12 +242,13 @@ __global__ void copy_partition(int num_src_bufs,
 void add_column_metadata(std::vector<uint8_t>& metadata,
                          data_type type,
                          size_type size,
+                         size_type null_count,
                          int64_t data_offset,
                          int64_t null_mask_offset,
                          size_type num_children)
 {
   detail::serialized_column column_metadata{
-    type, size, data_offset, null_mask_offset, num_children};
+    type, size, null_count, data_offset, null_mask_offset, num_children};
   auto const bytes = reinterpret_cast<uint8_t const*>(&column_metadata);
   std::copy(bytes, bytes + sizeof(detail::serialized_column), std::back_inserter(metadata));
 }
@@ -662,6 +664,7 @@ BufInfo build_output_columns(InputIter begin,
         metadata,
         src.type(),
         size,
+        null_count,
         data_ptr ? data_ptr - base_ptr : -1,
         bitmask_ptr ? reinterpret_cast<uint8_t const*>(bitmask_ptr) - base_ptr : -1,
         src.num_children());
@@ -784,12 +787,17 @@ std::vector<packed_table> contiguous_split(cudf::table_view const& input,
     //
     // see also:  empty_like()
     std::vector<uint8_t> metadata;
-    add_column_metadata(
-      metadata, data_type{type_id::EMPTY}, static_cast<size_type>(num_root_columns), 0, 0, 0);
+    add_column_metadata(metadata,
+                        data_type{type_id::EMPTY},
+                        static_cast<size_type>(num_root_columns),
+                        UNKNOWN_NULL_COUNT,
+                        -1,
+                        -1,
+                        0);
     std::function<void(column_view const&, std::vector<uint8_t>&)> build_empty_column_metadata;
     build_empty_column_metadata = [&build_empty_column_metadata](column_view const& col,
                                                                  std::vector<uint8_t>& metadata) {
-      add_column_metadata(metadata, col.type(), 0, -1, -1, col.num_children());
+      add_column_metadata(metadata, col.type(), 0, UNKNOWN_NULL_COUNT, -1, -1, col.num_children());
 
       std::for_each(col.child_begin(),
                     col.child_end(),
@@ -1048,8 +1056,13 @@ std::vector<packed_table> contiguous_split(cudf::table_view const& input,
   for (size_t idx = 0; idx < num_partitions; idx++) {
     // first metadata entry is a stub indicating how many total (top level) columns
     // there are
-    add_column_metadata(
-      metadata, data_type{type_id::EMPTY}, static_cast<size_type>(num_root_columns), -1, -1, 0);
+    add_column_metadata(metadata,
+                        data_type{type_id::EMPTY},
+                        static_cast<size_type>(num_root_columns),
+                        UNKNOWN_NULL_COUNT,
+                        -1,
+                        -1,
+                        0);
 
     // traverse the buffers and build the columns.
     cur_dst_buf_info = build_output_columns(input.begin(),

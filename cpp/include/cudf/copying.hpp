@@ -586,6 +586,23 @@ packed_columns pack(cudf::table_view const& input,
 table_view unpack(packed_columns const& input);
 
 /**
+ * @brief Deserialize the result of `cudf::pack`
+ *
+ * Converts the result of a serialized table into a `table_view` that points to the data stored in
+ * the contiguous device buffer contained in `gpu_data` using the metadata contained in the host
+ * buffer `metadata`.
+ *
+ * It is the caller's responsibility to ensure that the `table_view` in the output does not outlive
+ * the data in the input.
+ *
+ * No new device memory is allocated in this function.
+ *
+ * @param input The packed columns to unpack
+ * @return The unpacked `table_view`
+ */
+table_view unpack(uint8_t const* metadata, uint8_t const* gpu_data);
+
+/**
  * @brief   Returns a new column, where each element is selected from either @p lhs or
  *          @p rhs based on the value of the corresponding element in @p boolean_mask
  *

@@ -24,8 +24,8 @@ column_view deserialize_column(serialized_column serial_column,
                                std::vector<column_view> const& children,
                                uint8_t const* base_ptr)
 {
-  auto data_ptr = serial_column.data_offset != -1 ? base_ptr + serial_column.data_offset : 0;
-  auto null_mask_ptr =
+  auto const data_ptr = serial_column.data_offset != -1 ? base_ptr + serial_column.data_offset : 0;
+  auto const null_mask_ptr =
     serial_column.null_mask_offset != -1
       ? reinterpret_cast<bitmask_type const*>(base_ptr + serial_column.null_mask_offset)
       : 0;
@@ -34,7 +34,7 @@ column_view deserialize_column(serialized_column serial_column,
                      serial_column.size,
                      data_ptr,
                      null_mask_ptr,
-                     UNKNOWN_NULL_COUNT,
+                     serial_column.null_count,
                      0,
                      children);
 }
@@ -57,12 +57,12 @@ packed_columns pack(cudf::table_view const& input,
 /**
  * @copydoc cudf::detail::unpack
  */
-table_view unpack(packed_columns const& input)
+table_view unpack(uint8_t const* metadata, uint8_t const* gpu_data)
 {
-  CUDF_EXPECTS(input.metadata != nullptr && input.gpu_data != nullptr,
-               "Encountered invalid packed column input");
-  auto serialized_columns = reinterpret_cast<serialized_column const*>(input.metadata->data());
-  uint8_t const* base_ptr = static_cast<uint8_t const*>(input.gpu_data->data());
+  // gpu data can be null if everything is empty but the metadata must always be valid
+  CUDF_EXPECTS(metadata != nullptr, "Encountered invalid packed column input");
+  auto serialized_columns = reinterpret_cast<serialized_column const*>(metadata);
+  uint8_t const* base_ptr = gpu_data;
   // first entry is a stub where size == the total # of top level columns (see contiguous_split.cu)
   auto const num_columns = serialized_columns[0].size;
   size_t current_index   = 1;
@@ -102,7 +102,17 @@ packed_columns pack(cudf::table_view const& input, rmm::mr::device_memory_resour
 table_view unpack(packed_columns const& input)
 {
   CUDF_FUNC_RANGE();
-  return detail::unpack(input);
+  return detail::unpack(input.metadata->data(),
+                        reinterpret_cast<uint8_t const*>(input.gpu_data->data()));
+}
+
+/**
+ * @copydoc cudf::unpack
+ */
+table_view unpack(uint8_t const* metadata, uint8_t const* gpu_data)
+{
+  CUDF_FUNC_RANGE();
+  return detail::unpack(metadata, gpu_data);
 }
 
 }  // namespace cudf
