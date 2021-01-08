@@ -242,19 +242,39 @@ std::vector<std::vector<std::string>> read_orc_statistics(source_info const& src
 void parse_orc_statistics(std::vector<std::vector<std::string>> const& blobs)
 {
   auto& cstats = blobs[1];
-  auto reader =
-    orc::ProtobufReader(reinterpret_cast<const uint8_t*>(cstats[1].c_str()), cstats[1].size());
-  orc::ColumnStatistics cs;
-  reader.read(cs);
-  std::cout << cs.numberOfValues.value_or(0) << '\n';
-  if (cs.intStatistics.has_value()) {
-    auto istats = cs.intStatistics.value();
-    std::cout << istats.minimum.value() << ' ' << istats.maximum.value() << ' '
-              << istats.sum.value() << '\n';
-  } else if (cs.doubleStatistics.has_value()) {
-    auto fstats = cs.doubleStatistics.value();
-    std::cout << fstats.minimum.value() << ' ' << fstats.maximum.value() << ' '
-              << fstats.sum.value_or(std::numeric_limits<double>::quiet_NaN()) << '\n';
+  for (auto& c : cstats) {
+    orc::ColumnStatistics cs;
+    orc::ProtobufReader(reinterpret_cast<const uint8_t*>(c.c_str()), c.size()).read(cs);
+    std::cout << cs.numberOfValues.value_or(0) << ' ';
+    if (cs.intStatistics.has_value()) {
+      auto istats = cs.intStatistics.value();
+      std::cout << istats.minimum.value() << ' ' << istats.maximum.value() << ' '
+                << istats.sum.value();
+    } else if (cs.doubleStatistics.has_value()) {
+      auto fstats = cs.doubleStatistics.value();
+      std::cout << fstats.minimum.value() << ' ' << fstats.maximum.value() << ' '
+                << fstats.sum.value_or(std::numeric_limits<double>::quiet_NaN());
+    } else if (cs.stringStatistics.has_value()) {
+      auto sstats = cs.stringStatistics.value();
+      std::cout << sstats.minimum << ' ' << sstats.maximum << ' ' << sstats.sum.value_or(0);
+    } else if (cs.bucketStatistics.has_value()) {
+      auto bstats = cs.bucketStatistics.value();
+      for (auto& cnt : bstats.count) std::cout << cnt << ' ';
+    } else if (cs.decimalStatistics.has_value()) {
+      auto dstats = cs.decimalStatistics.value();
+      std::cout << dstats.minimum << ' ' << dstats.maximum << ' ' << dstats.sum;
+    } else if (cs.dateStatistics.has_value()) {
+      auto dstats = cs.dateStatistics.value();
+      std::cout << dstats.minimum.value() << ' ' << dstats.maximum.value();
+    } else if (cs.binaryStatistics.has_value()) {
+      auto bstats = cs.binaryStatistics.value();
+      std::cout << bstats.sum.value();
+    } else if (cs.timestampStatistics.has_value()) {
+      auto tstats = cs.timestampStatistics.value();
+      std::cout << tstats.minimum.value() << ' ' << tstats.maximum.value()
+                << tstats.minimumUtc.value() << tstats.maximumUtc.value();
+    }
+    std::cout << "\n";
   }
 }
 

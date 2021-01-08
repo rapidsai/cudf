@@ -106,16 +106,48 @@ struct DoubleStatistics {
   thrust::optional<double> sum;
 };
 
+struct StringStatistics {
+  std::string minimum;
+  std::string maximum;
+  thrust::optional<int64_t> sum;
+};
+
+struct BucketStatistics {
+  std::vector<uint64_t> count;
+};
+
+struct DecimalStatistics {
+  std::string minimum;
+  std::string maximum;
+  std::string sum;
+};
+
+struct DateStatistics {
+  thrust::optional<int32_t> minimum;
+  thrust::optional<int32_t> maximum;
+};
+
+struct BinaryStatistics {
+  thrust::optional<int64_t> sum;
+};
+
+struct TimestampStatistics {
+  thrust::optional<int64_t> minimum;
+  thrust::optional<int64_t> maximum;
+  thrust::optional<int64_t> minimumUtc;
+  thrust::optional<int64_t> maximumUtc;
+};
+
 struct ColumnStatistics {
   thrust::optional<uint64_t> numberOfValues;
   thrust::optional<IntegerStatistics> intStatistics;
   thrust::optional<DoubleStatistics> doubleStatistics;
-  // thrust::optional<StringStatistics> stringStatistics;
-  // thrust::optional<BucketStatistics> bucketStatistics;
-  // thrust::optional<DecimalStatistics> decimalStatistics;
-  // thrust::optional<DateStatistics> dateStatistics;
-  // thrust::optional<BinaryStatistics> binaryStatistics;
-  // thrust::optional<TimestampStatistics> timestampStatistics;
+  thrust::optional<StringStatistics> stringStatistics;
+  thrust::optional<BucketStatistics> bucketStatistics;
+  thrust::optional<DecimalStatistics> decimalStatistics;
+  thrust::optional<DateStatistics> dateStatistics;
+  thrust::optional<BinaryStatistics> binaryStatistics;
+  thrust::optional<TimestampStatistics> timestampStatistics;
 };
 
 struct StripeStatistics {
@@ -149,8 +181,14 @@ class ProtobufReader {
   void read(StripeFooter &, size_t maxlen);
   void read(Stream &, size_t maxlen);
   void read(ColumnEncoding &, size_t maxlen);
-  void read(IntegerStatistics &s, size_t maxlen);
-  void read(DoubleStatistics &s, size_t maxlen);
+  void read(IntegerStatistics &, size_t maxlen);
+  void read(DoubleStatistics &, size_t maxlen);
+  void read(StringStatistics &, size_t maxlen);
+  void read(BucketStatistics &, size_t maxlen);
+  void read(DecimalStatistics &, size_t maxlen);
+  void read(DateStatistics &, size_t maxlen);
+  void read(BinaryStatistics &, size_t maxlen);
+  void read(TimestampStatistics &, size_t maxlen);
   void read(ColumnStatistics &, size_t maxlen);
   void read(StripeStatistics &, size_t maxlen);
   void read(Metadata &, size_t maxlen);

@@ -945,24 +945,25 @@ TEST_F(OrcReaderTest, CombinedSkipRowTest)
 TEST_F(OrcChunkedWriterTest, ChunkedStats)
 {
   auto sequence = cudf::test::make_counting_transform_iterator(0, [](auto i) { return i; });
-  auto validity = cudf::test::make_counting_transform_iterator(0, [](auto i) { return i % 2; });
-  constexpr auto num_rows = 100;
-  column_wrapper<float, typename decltype(sequence)::value_type> col(
+  auto validity = cudf::test::make_counting_transform_iterator(0, [](auto i) { return true; });
+
+  std::vector<const char*> strings{
+    "Monday", "Monday", "Friday", "Monday", "Friday", "Friday", "Friday"};
+  int num_rows = strings.size();
+
+  column_wrapper<int32_t, typename decltype(sequence)::value_type> col(
     sequence, sequence + num_rows, validity);
+
+  column_wrapper<cudf::string_view> col1{strings.begin(), strings.end()};
   std::vector<std::unique_ptr<column>> cols;
   cols.push_back(col.release());
+  cols.push_back(col1.release());
   auto expected = std::make_unique<table>(std::move(cols));
   EXPECT_EQ(1, expected->num_columns());
-  auto const halves = cudf::split(expected->view(), {num_rows / 2});
-  auto filepath     = temp_env->get_temp_filepath("OrcStatsMerge.orc");
-  // cudf_io::chunked_orc_writer_options opts =
-  //  cudf_io::chunked_orc_writer_options::builder(cudf_io::sink_info{filepath});
-  // auto state = cudf_io::write_orc_chunked_begin(opts);
-  // cudf_io::write_orc_chunked(halves[0], state);
-  // cudf_io::write_orc_chunked(halves[1], state);
-  // cudf_io::write_orc_chunked_end(state);
+  auto filepath = temp_env->get_temp_filepath("OrcStatsMerge.orc");
+
   cudf_io::orc_writer_options out_opts =
-    cudf_io::orc_writer_options::builder(cudf_io::sink_info{filepath}, halves[0]);
+    cudf_io::orc_writer_options::builder(cudf_io::sink_info{filepath}, expected->view());
   cudf_io::write_orc(out_opts);
 
   auto const stats = cudf_io::read_orc_statistics(cudf_io::source_info{filepath});
@@ -971,7 +972,7 @@ TEST_F(OrcChunkedWriterTest, ChunkedStats)
     for (auto& s : v) std::cout << "|" << s.size() << "| ";
     std::cout << std::endl;
   }
-  CUDF_TEST_EXPECT_TABLES_EQUAL(halves[0], halves[1]);
+  ASSERT_EQ(1, 2);
 }
 
 CUDF_TEST_PROGRAM_MAIN()
