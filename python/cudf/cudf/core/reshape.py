@@ -164,13 +164,13 @@ def concat(objs, axis=0, join="outer", ignore_index=False, sort=None):
     >>> df3 = cudf.DataFrame([['c', 3, 'cat'], ['d', 4, 'dog']],
     ...                    columns=['letter', 'number', 'animal'])
     >>> df3
-    letter  number animal
+      letter  number animal
     0      c       3    cat
     1      d       4    dog
     >>> cudf.concat([df1, df3], sort=False)
       letter  number animal
-    0      a       1   None
-    1      b       2   None
+    0      a       1   <NA>
+    1      b       2   <NA>
     0      c       3    cat
     1      d       4    dog
 
@@ -625,7 +625,7 @@ def get_dummies(
     0   1.0
     1   2.0
     2   NaN
-    3  null
+    3  <NA>
 
     >>> cudf.get_dummies(df, dummy_na=True, columns=["a"])
        a_1.0  a_2.0  a_nan  a_null
@@ -902,6 +902,11 @@ def unstack(df, level, fill_value=None):
     Pivots the specified levels of the index labels of df to the innermost
     levels of the columns labels of the result.
 
+    * If the index of ``df`` has multiple levels, returns a ``Dataframe`` with
+      specified level of the index pivoted to the column levels.
+    * If the index of ``df`` has single level, returns a ``Series`` with all
+      column levels pivoted to the index levels.
+
     Parameters
     ----------
     df : DataFrame
@@ -913,7 +918,7 @@ def unstack(df, level, fill_value=None):
 
     Returns
     -------
-    DataFrame with specified index levels pivoted to column levels
+    Series or DataFrame
 
     Examples
     --------
@@ -964,7 +969,25 @@ def unstack(df, level, fill_value=None):
     a
     1     5  <NA>     6  <NA>     7
     2  <NA>     8  <NA>     9  <NA>
+
+    Unstacking single level index dataframe:
+
+    >>> df = cudf.DataFrame({('c', 1): [1, 2, 3], ('c', 2):[9, 8, 7]})
+    >>> df.unstack()
+    c  1  0    1
+          1    2
+          2    3
+       2  0    9
+          1    8
+          2    7
+    dtype: int64
     """
+    if not isinstance(df, cudf.DataFrame):
+        raise ValueError("`df` should be a cudf Dataframe object.")
+
+    if df.empty:
+        raise ValueError("Cannot unstack an empty dataframe.")
+
     if fill_value is not None:
         raise NotImplementedError("fill_value is not supported.")
     if pd.api.types.is_list_like(level):
@@ -972,10 +995,17 @@ def unstack(df, level, fill_value=None):
             return df
     df = df.copy(deep=False)
     if not isinstance(df.index, cudf.MultiIndex):
-        raise NotImplementedError(
-            "Calling unstack() on a DataFrame without a MultiIndex "
-            "is not supported"
-        )
+        dtype = df._columns[0].dtype
+        for col in df._columns:
+            if not col.dtype == dtype:
+                raise ValueError(
+                    "Calling unstack() on single index dataframe"
+                    " with different column datatype is not supported."
+                )
+        res = df.T.stack(dropna=False)
+        # Result's index is a multiindex
+        res.index.names = tuple(df.columns.names) + df.index.names
+        return res
     else:
         columns = df.index._poplevels(level)
         index = df.index

@@ -50,7 +50,6 @@ namespace detail {
  * not-obvious computation of null count, which could lead to undesirable performance issues.
  * This information is also generally not needed in device code, and on the host-side
  * is easily accessible from the associated column_view.
- *
  */
 class alignas(16) column_device_view_base {
  public:

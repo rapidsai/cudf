@@ -233,8 +233,8 @@ std::unique_ptr<column> split_record_fn(strings_column_view const& strings,
     data_type{type_id::INT32}, strings_count + 1, mask_state::UNALLOCATED, stream, mr);
   auto d_offsets = offsets->mutable_view().data<int32_t>();
   thrust::transform(rmm::exec_policy(stream),
-                    thrust::make_counting_iterator(0),
-                    thrust::make_counting_iterator(strings_count),
+                    thrust::make_counting_iterator<size_type>(0),
+                    thrust::make_counting_iterator<size_type>(strings_count),
                     d_offsets,
                     counter);
   thrust::exclusive_scan(

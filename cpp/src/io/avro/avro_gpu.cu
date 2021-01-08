@@ -64,8 +64,7 @@ static inline int64_t __device__ avro_decode_zigzag_varint(const uint8_t *&cur, 
  * @param[in] global_Dictionary Global dictionary entries
  *
  * @return data pointer at the end of the row (start of next row)
- *
- **/
+ */
 static const uint8_t *__device__ avro_decode_row(const schemadesc_s *schema,
                                                  schemadesc_s *schema_g,
                                                  uint32_t schema_len,
@@ -226,8 +225,7 @@ static const uint8_t *__device__ avro_decode_row(const schemadesc_s *schema,
  * @param[in] min_row_size Minimum size in bytes of a row
  * @param[in] max_rows Maximum number of rows to load
  * @param[in] first_row Crop all rows below first_row
- *
- **/
+ */
 // blockDim {32,num_warps,1}
 extern "C" __global__ void __launch_bounds__(num_warps * 32, 2)
   gpuDecodeAvroColumnData(block_desc_s *blocks,
@@ -312,7 +310,7 @@ extern "C" __global__ void __launch_bounds__(num_warps * 32, 2)
  * @param[in] first_row Crop all rows below first_row
  * @param[in] min_row_size Minimum size in bytes of a row
  * @param[in] stream CUDA stream to use, default 0
- **/
+ */
 void DecodeAvroColumnData(block_desc_s *blocks,
                           schemadesc_s *schema,
                           device_span<nvstrdesc_s> global_dictionary,
