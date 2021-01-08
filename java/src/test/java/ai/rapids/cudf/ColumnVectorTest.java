@@ -2333,6 +2333,7 @@ public class ColumnVectorTest extends CudfTestBase {
                                                        Long[] unscaledDecimal) {
     DType decimalType = DType.create(isDec32 ? DType.DTypeEnum.DECIMAL32 : DType.DTypeEnum.DECIMAL64, scale);
     try (ColumnVector sourceColumn = sourceData.get();
+         ColumnVector expectedColumn = returnData.get();
          ColumnVector decimalColumn = sourceColumn.castTo(decimalType);
          HostColumnVector hostDecimalColumn = decimalColumn.copyToHost();
          ColumnVector returnColumn = decimalColumn.castTo(sourceType)) {
@@ -2341,7 +2342,7 @@ public class ColumnVectorTest extends CudfTestBase {
             (isDec32 ? hostDecimalColumn.getInt(i) : hostDecimalColumn.getLong(i));
         assertEquals(unscaledDecimal[i], actual);
       }
-      assertColumnsAreEqual(returnData.get(), returnColumn);
+      assertColumnsAreEqual(expectedColumn, returnColumn);
     }
   }
 
