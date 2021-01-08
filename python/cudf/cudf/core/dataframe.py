@@ -1513,9 +1513,10 @@ class DataFrame(Frame, Serializable):
         if not isinstance(other, DataFrame):
             other = DataFrame(other)
 
-        if self.index != self.columns:
-            other = other.reindex(self.index, axis=0)
+        if self.columns.any() != other.columns.any():
             other = other.reindex(self.columns, axis=1)
+        if self.index.any() != other.index.any():
+            other = other.reindex(self.index, axis=0)
 
         for col in self.columns: 
             this = self[col]
