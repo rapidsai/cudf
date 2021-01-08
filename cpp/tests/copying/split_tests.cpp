@@ -114,7 +114,7 @@ std::vector<std::vector<bool>> create_expected_validity(std::vector<cudf::size_t
       std::vector<bool>(validity.begin() + indices[index], validity.begin() + indices[index + 1]));
   }
 
-  return std::move(result);
+  return result;
 }
 
 template <typename T>
@@ -147,7 +147,7 @@ std::vector<cudf::table> create_expected_string_tables_for_splits(
   auto ret_cols_1 = create_expected_string_columns(strings[1], indices, validity[1]);
 
   std::vector<cudf::table> ret_tables;
-  for (int i = 0; i < ret_cols_0.size(); ++i) {
+  for (size_t i = 0; i < ret_cols_0.size(); ++i) {
     std::vector<std::unique_ptr<cudf::column>> scols;
     scols.push_back(ret_cols_0[i].release());
     scols.push_back(ret_cols_1[i].release());
@@ -666,7 +666,7 @@ void split_null_input_strings_column_value(SplitFunc Split, CompareFunc Compare)
 
   auto expected = create_expected_string_tables_for_splits(strings, validity_masks, splits);
 
-  for (int i = 0; i < result.size(); ++i) { Compare(expected[i], result[i]); }
+  for (size_t i = 0; i < result.size(); ++i) { Compare(expected[i], result[i]); }
 }
 
 // split with strings
@@ -958,7 +958,7 @@ void split_nested_struct_of_list(SplitFunc Split, CompareFunc Compare)
   auto expected_struct_validity = create_expected_validity(splits, struct_validity);
   EXPECT_EQ(expected_names.size(), result.size());
 
-  for (int index = 0; index < result.size(); index++) {
+  for (size_t index = 0; index < result.size(); index++) {
     auto expected =
       structs_column_wrapper({expected_names[index], expected_ages[index], expected_lists[index]},
                              expected_struct_validity[index]);
@@ -1430,7 +1430,7 @@ TEST_F(ContiguousSplitNestedTypesTest, ListOfStruct)
   auto expected = cudf::split(static_cast<cudf::column_view>(*outer_list), splits);
   CUDF_EXPECTS(result.size() == expected.size(), "Split result size mismatch");
 
-  for (int index = 0; index < result.size(); index++) {
+  for (size_t index = 0; index < result.size(); index++) {
     cudf::test::expect_columns_equivalent(expected[index], result[index].table.column(0));
   }
 }
