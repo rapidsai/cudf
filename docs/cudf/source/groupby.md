@@ -10,7 +10,7 @@ Pandas' [groupby API](https://pandas.pydata.org/pandas-docs/stable/user_guide/gr
 1. Basic aggregations such as "sum", "mean", etc.
 1. Quantile aggregation
 1. A "collect" or `list` aggregation for collecting values in a group into lists
-1. Automatic exclusion of "nuisance" columns when aggregating
+1. Automatic exclusion of columns with unsupported dtypes ("nuisance" columns) when aggregating
 1. Iterating over the groups of a GroupBy object
 1. `GroupBy.groups` API that returns a mapping of group keys to row labels
 1. `GroupBy.apply` API for performing arbitrary operations on each group. Note that
