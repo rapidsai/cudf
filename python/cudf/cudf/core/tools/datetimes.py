@@ -338,6 +338,7 @@ def get_units(value):
 class _DateOffsetScalars(dict):
     pass
 
+
 class _UndoOffsetMeta(pd._libs.tslibs.offsets.OffsetMeta):
     """
     For backward compatibility reasons, `pd.DateOffset` is defined
@@ -511,7 +512,7 @@ class DateOffset(pd.DateOffset, metaclass=_UndoOffsetMeta):
         return kwargs
 
     def _datetime_binop(self, datetime_col, op, reflect=False):
-        if reflect == True and op == "sub":
+        if reflect and op == "sub":
             raise TypeError(
                 f"Can not subtract a {type(datetime_col).__name__}"
                 f" from a {type(self).__name__}"
@@ -557,7 +558,6 @@ class DateOffset(pd.DateOffset, metaclass=_UndoOffsetMeta):
             raise AttributeError("DateOffset objects are immutable.")
         else:
             object.__setattr__(self, name, value)
-
 
     def __neg__(self):
         new_scalars = {k: -v for k, v in self.kwds.items()}
