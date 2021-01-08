@@ -1528,6 +1528,44 @@ def test_datetime_dateoffset_binaryop(
     ],
 )
 @pytest.mark.parametrize('kwargs', [
+    {'weeks': 0.5},
+    {'days': 0.5},
+    {'hours': 0.5},
+    {'minutes': 0.5},
+    {'seconds': 0.5},
+    utils.xfail_param({'seconds': 0.5e-6}),
+    utils.xfail_param({'microseconds': 0.5}),
+])
+@pytest.mark.parametrize(
+    "dtype",
+    ["datetime64[ns]", "datetime64[us]", "datetime64[ms]", "datetime64[s]"],
+)
+@pytest.mark.parametrize("op", [operator.add, operator.sub])
+def test_datetime_dateoffset_binaryop_fractional_periods(
+    date_col, kwargs, dtype, op
+):
+    gsr = cudf.Series(date_col, dtype=dtype)
+    psr = gsr.to_pandas()  # converts to nanos
+
+    goffset = cudf.DateOffset(**kwargs)
+    poffset = pd.DateOffset(**kwargs)
+
+    expect = op(psr, poffset)
+    got = op(gsr, goffset)
+
+    utils.assert_eq(expect, got)
+
+@pytest.mark.parametrize(
+    "date_col",
+    [
+        [
+            "2000-01-01 00:00:00.012345678",
+            "2000-01-31 00:00:00.012345678",
+            "2000-02-29 00:00:00.012345678",
+        ]
+    ],
+)
+@pytest.mark.parametrize('kwargs', [
     {'months': 2, 'years':5},
     {'microseconds':1, 'seconds':1},
     {'months': 2, 'years':5, 'seconds': 923, 'microseconds':481},
@@ -1548,11 +1586,12 @@ def test_datetime_dateoffset_binaryop_multiple(date_col, kwargs, op):
     got = op(gsr, goffset)
 
     utils.assert_eq(expect, got)
-    
 
-# TODO: write tests for multiple units
+
+
+
 # TODO: test that we fail for non-integer n_periods
-# TODO
+# TODO: test that we succeed for fractional periods with frequencies less than month
 
 @pytest.mark.parametrize(
     "date_col",
