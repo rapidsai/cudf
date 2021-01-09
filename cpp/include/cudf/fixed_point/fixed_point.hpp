@@ -276,6 +276,20 @@ class fixed_point {
   }
 
   /**
+   * @brief Method that returns the underlying value stored of the `fixed_point` number
+   *
+   * @return rep The underlying value stored of the `fixed_point` number
+   */
+  CUDA_HOST_DEVICE_CALLABLE rep value() const { return _value; }
+
+  /**
+   * @brief Method that returns the scale of the `fixed_point` number
+   *
+   * @return scale_type The scale of the `fixed_point` number
+   */
+  CUDA_HOST_DEVICE_CALLABLE scale_type scale() const { return _scale; }
+
+  /**
    * @brief Explicit conversion operator to `bool`
    *
    * @return The `fixed_point` value as a boolean (zero is `false`, nonzero is `true`)
