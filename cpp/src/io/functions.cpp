@@ -271,8 +271,8 @@ void parse_orc_statistics(std::vector<std::vector<std::string>> const& blobs)
       std::cout << bstats.sum.value();
     } else if (cs.timestampStatistics.has_value()) {
       auto tstats = cs.timestampStatistics.value();
-      std::cout << tstats.minimum.value() << ' ' << tstats.maximum.value()
-                << tstats.minimumUtc.value() << tstats.maximumUtc.value();
+      std::cout << tstats.minimum.value_or(0) << ' ' << tstats.maximum.value_or(0)
+                << tstats.minimumUtc.value_or(0) << ' ' << tstats.maximumUtc.value_or(0);
     }
     std::cout << "\n";
   }

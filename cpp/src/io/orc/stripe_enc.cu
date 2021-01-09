@@ -96,7 +96,6 @@ struct orcenc_state_s {
 };
 
 static inline __device__ uint32_t zigzag(uint32_t v) { return v; }
-static inline __device__ uint64_t zigzag(uint64_t v) { return v; }
 static inline __device__ uint32_t zigzag(int32_t v)
 {
   int32_t s = (v >> 31);
