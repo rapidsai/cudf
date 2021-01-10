@@ -55,7 +55,14 @@ set_target_properties(cudftestutil
                CUDA_STANDARD_REQUIRED    ON
 )
 
-target_link_libraries(cudftestutil gmock gtest pthread cudf)
+target_link_libraries(cudftestutil
+               PUBLIC GTest::gmock
+                      GTest::gtest
+                      GTest::gmock_main
+                      GTest::gtest_main
+                      pthread
+                      cudf)
+
 target_include_directories(cudftestutil
     PUBLIC "$<BUILD_INTERFACE:${CUDA_DATAFRAME_SOURCE_DIR}>"
            "$<BUILD_INTERFACE:${CUDA_DATAFRAME_SOURCE_DIR}/src>")
@@ -80,7 +87,7 @@ function(ConfigureTest CMAKE_TEST_NAME CMAKE_TEST_SRC)
                    RUNTIME_OUTPUT_DIRECTORY "$<BUILD_INTERFACE:${CUDA_DATAFRAME_BINARY_DIR}/gtests>")
     # `-Wl,--disable-new-dtags`: apply RUNPATH to transitive dependencies (this is a temporary solution)
     target_link_options(${CMAKE_TEST_NAME} PRIVATE "LINKER:--disable-new-dtags")
-    target_link_libraries(${CMAKE_TEST_NAME} gmock gtest pthread gmock_main gtest_main cudf cudftestutil)
+    target_link_libraries(${CMAKE_TEST_NAME} PUBLIC cudftestutil)
     add_test(NAME ${CMAKE_TEST_NAME} COMMAND ${CMAKE_TEST_NAME})
     set(CUDF_TEST_LIST ${CUDF_TEST_LIST} ${CMAKE_TEST_NAME} CACHE INTERNAL "CUDF_TEST_LIST")
 endfunction(ConfigureTest)

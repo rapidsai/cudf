@@ -46,7 +46,15 @@ CPMFindPackage(NAME benchmark
 
 add_library(cudf_datagen STATIC "${CUDA_DATAFRAME_SOURCE_DIR}/benchmarks/common/generate_benchmark_input.cpp")
 
-target_link_libraries(cudf_datagen gtest gmock benchmark pthread cudf)
+target_link_libraries(cudf_datagen
+               PUBLIC GTest::gmock
+                      GTest::gtest
+                      GTest::gmock_main
+                      GTest::gtest_main
+                      benchmark::benchmark
+                      benchmark::benchmark_main
+                      pthread
+                      cudf)
 
 target_include_directories(cudf_datagen
     PUBLIC "$<BUILD_INTERFACE:${CUDF_BENCHMARKS_SOURCE_DIR}>"
@@ -72,7 +80,7 @@ function(ConfigureBench CMAKE_BENCH_NAME CMAKE_BENCH_SRC)
                    RUNTIME_OUTPUT_DIRECTORY "$<BUILD_INTERFACE:${CUDA_DATAFRAME_BINARY_DIR}/gbenchmarks>")
     # `-Wl,--disable-new-dtags`: apply RUNPATH to transitive dependencies (this is a temporary solution)
     target_link_options(${CMAKE_BENCH_NAME} PRIVATE "LINKER:--disable-new-dtags")
-    target_link_libraries(${CMAKE_BENCH_NAME} gtest gmock benchmark benchmark_main pthread cudf_datagen cudf)
+    target_link_libraries(${CMAKE_BENCH_NAME} cudf_datagen)
     set(BENCHMARK_LIST ${BENCHMARK_LIST} ${CMAKE_BENCH_NAME} CACHE INTERNAL "BENCHMARK_LIST")
 endfunction(ConfigureBench)
 
