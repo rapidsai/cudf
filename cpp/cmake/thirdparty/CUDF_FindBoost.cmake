@@ -14,8 +14,8 @@
 # limitations under the License.
 #=============================================================================
 
-# Min version set to newest boost in Ubuntu apt repositories
-set(CUDF_MIN_VERSION_Boost 1.71.0)
+# Min version set to newest boost in Ubuntu bionic apt repositories
+set(CUDF_MIN_VERSION_Boost 1.65.0)
 
 # Don't look for a Boost CMake configuration file because it adds the
 # `-DBOOST_ALL_NO_LIB` and `-DBOOST_FILESYSTEM_DYN_LINK` compile defs
