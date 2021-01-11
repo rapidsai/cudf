@@ -270,18 +270,18 @@ __device__ inline int string_view::compare(const char* data, size_type bytes) co
   size_type const len  = std::min(len1, len2);
   size_type idx        = 0;
 #if defined(__CUDA_ARCH__)
-  if (len >= 4) {
+  if (len >= 8) {
     uint32_t const align_a = 3 & reinterpret_cast<uintptr_t>(ptr1);
     uint32_t const align_b = 3 & reinterpret_cast<uintptr_t>(ptr2);
-    auto const offset_a    = align_a * 8;
-    auto const offset_b    = align_b * 8;
-
-    auto s32_a = reinterpret_cast<uint32_t const*>(ptr1 - align_a);
-    auto s32_b = reinterpret_cast<uint32_t const*>(ptr2 - align_b);
+    // assumes we can read the 32-bit block of an unaligned pointer
+    auto s32_a = reinterpret_cast<uint32_t const*>(ptr1 - align_a) + 1;
+    auto s32_b = reinterpret_cast<uint32_t const*>(ptr2 - align_b) + 1;
+    // convert align to bit shift count
+    uint32_t const offset_a = align_a * 8;
+    uint32_t const offset_b = align_b * 8;
     do {
-      // assumes memory is allocated on a 4-byte boundary
-      uint32_t const a = (offset_a == 0) ? *s32_a : __funnelshift_r(*s32_a, *(s32_a + 1), offset_a);
-      uint32_t const b = (offset_b == 0) ? *s32_b : __funnelshift_r(*s32_b, *(s32_b + 1), offset_b);
+      uint32_t const a = __funnelshift_r(*(s32_a - 1), *s32_a, offset_a);
+      uint32_t const b = __funnelshift_r(*(s32_b - 1), *s32_b, offset_b);
       if (a != b) { return __byte_perm(a, 0, 0x0123) < __byte_perm(b, 0, 0x0123) ? -1 : 1; }
       idx += 4;
       ++s32_a;
