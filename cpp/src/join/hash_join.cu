@@ -574,31 +574,17 @@ std::unique_ptr<cudf::table> hash_join::hash_join_impl::full_join(
 
 template <cudf::detail::join_kind JoinKind>
 std::pair<rmm::device_vector<size_type>, rmm::device_vector<size_type>>
-hash_join::hash_join_impl::compute_hash_join_indices(
-  cudf::table_view const &probe,
-  std::vector<size_type> const &probe_on,
-  std::vector<std::pair<cudf::size_type, cudf::size_type>> const &columns_in_common,
-  common_columns_output_side common_columns_output_side,
-  null_equality compare_nulls,
-  rmm::cuda_stream_view stream,
-  rmm::mr::device_memory_resource *mr) const
+hash_join::hash_join_impl::compute_hash_join(cudf::table_view const &probe,
+                                             std::vector<size_type> const &probe_on,
+                                             null_equality compare_nulls,
+                                             rmm::cuda_stream_view stream,
+                                             rmm::mr::device_memory_resource *mr) const
 {
   CUDF_EXPECTS(0 != probe.num_columns(), "Hash join probe table is empty");
   CUDF_EXPECTS(probe.num_rows() < cudf::detail::MAX_JOIN_SIZE,
                "Probe column size is too big for hash join");
   CUDF_EXPECTS(_build_on.size() == probe_on.size(),
                "Mismatch in number of columns to be joined on");
-
-  CUDF_EXPECTS(std::all_of(columns_in_common.begin(),
-                           columns_in_common.end(),
-                           [this, &probe_on](auto pair) {
-                             size_t p = std::find(probe_on.begin(), probe_on.end(), pair.first) -
-                                        probe_on.begin();
-                             size_t b = std::find(_build_on.begin(), _build_on.end(), pair.second) -
-                                        _build_on.begin();
-                             return (p != probe_on.size()) && (b != _build_on.size()) && (p == b);
-                           }),
-               "Invalid values passed to columns_in_common");
 
   if (is_trivial_join(probe, _build, probe_on, _build_on, JoinKind)) {
     return std::make_pair(rmm::device_vector<size_type>{}, rmm::device_vector<size_type>{});
@@ -629,8 +615,18 @@ hash_join::hash_join_impl::compute_hash_join(
   rmm::cuda_stream_view stream,
   rmm::mr::device_memory_resource *mr) const
 {
-  auto joined_indices = compute_hash_join_indices<JoinKind>(
-    probe, probe_on, columns_in_common, common_columns_output_side, compare_nulls, stream, mr);
+  CUDF_EXPECTS(std::all_of(columns_in_common.begin(),
+                           columns_in_common.end(),
+                           [this, &probe_on](auto pair) {
+                             size_t p = std::find(probe_on.begin(), probe_on.end(), pair.first) -
+                                        probe_on.begin();
+                             size_t b = std::find(_build_on.begin(), _build_on.end(), pair.second) -
+                                        _build_on.begin();
+                             return (p != probe_on.size()) && (b != _build_on.size()) && (p == b);
+                           }),
+               "Invalid values passed to columns_in_common");
+
+  auto joined_indices = compute_hash_join<JoinKind>(probe, probe_on, compare_nulls, stream, mr);
 
   if (is_trivial_join(probe, _build, probe_on, _build_on, JoinKind)) {
     return get_empty_joined_table(probe, _build, columns_in_common, common_columns_output_side);
