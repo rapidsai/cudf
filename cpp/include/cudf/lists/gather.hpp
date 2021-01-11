@@ -30,6 +30,8 @@ namespace lists {
 /**
  * @brief Segmented gather of the elements within a list element in each row of a list column.
  *
+ * `source_column` with any depth and `gather_map_list` with depth 1 are only supported.
+ *
  * * @code{.pseudo}
  * source_column   : [{"a", "b", "c", "d"}, {"1", "2", "3", "4"}, {"x", "y", "z"}]
  * gather_map_list : [{0, 1, 3, 2}, {1, 3, 2}, {}]
