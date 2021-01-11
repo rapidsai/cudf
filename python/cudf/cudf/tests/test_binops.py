@@ -1530,27 +1530,44 @@ def test_binops_with_lhs_numpy_scalar(frame, dtype):
     utils.assert_eq(expected, got)
 
 
-def test_binops_decimal():
-    a = cudf.Series(
-        [decimal.Decimal("1.5"), decimal.Decimal("2.0")],
-        dtype=cudf.DecimalDtype(scale=2, precision=2),
-    )
-    expect = cudf.Series(
-        [decimal.Decimal("3.0"), decimal.Decimal("4.0")],
-        dtype=cudf.DecimalDtype(scale=2, precision=3),
-    )
-    got = a + a
+def decimal_op_assert_helper(op, lhs, s1, p1, rhs, s2, p2, expect, s3, p3):
+    def decimal_series(input, s, p):
+        return cudf.Series(
+            [decimal.Decimal(x) for x in input],
+            dtype=cudf.DecimalDtype(scale=s, precision=p),
+        )
+
+    a = decimal_series(lhs, s1, p1)
+    b = decimal_series(rhs, s2, p2)
+    expect = decimal_series(expect, s3, p3)
+
+    got = op(a, b)
     assert expect.dtype == got.dtype
     utils.assert_eq(expect, got)
 
-    b = cudf.Series(
-        [decimal.Decimal("2.25"), decimal.Decimal("1.005")],
-        dtype=cudf.DecimalDtype(scale=3, precision=4),
+
+def test_binops_decimal():
+    decimal_op_assert_helper(
+        operator.add,
+        ["1.5", "2.0"],
+        2,
+        2,
+        ["1.5", "2.0"],
+        2,
+        2,
+        ["3.0", "4.0"],
+        2,
+        3,
     )
-    expect = cudf.Series(
-        [decimal.Decimal("3.75"), decimal.Decimal("3.005")],
-        dtype=cudf.DecimalDtype(scale=3, precision=5),
+    decimal_op_assert_helper(
+        operator.add,
+        ["1.5", "2.0"],
+        2,
+        2,
+        ["2.25", "1.005"],
+        3,
+        4,
+        ["3.75", "3.005"],
+        3,
+        5,
     )
-    got = a + b
-    assert expect.dtype == got.dtype
-    utils.assert_eq(expect, got)
