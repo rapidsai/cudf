@@ -31,6 +31,14 @@ namespace cudf {
  * @file
  */
 
+std::pair<rmm::device_vector<size_type>, rmm::device_vector<size_type>> inner_join(
+  cudf::table_view const& left,
+  cudf::table_view const& right,
+  std::vector<cudf::size_type> const& left_on,
+  std::vector<cudf::size_type> const& right_on,
+  null_equality compare_nulls         = null_equality::EQUAL,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+
 /**
  * @brief Performs an inner join on the specified columns of two
  * tables (`left`, `right`)
@@ -94,6 +102,14 @@ std::unique_ptr<cudf::table> inner_join(
   std::vector<cudf::size_type> const& left_on,
   std::vector<cudf::size_type> const& right_on,
   std::vector<std::pair<cudf::size_type, cudf::size_type>> const& columns_in_common,
+  null_equality compare_nulls         = null_equality::EQUAL,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+
+std::pair<rmm::device_vector<size_type>, rmm::device_vector<size_type>> left_join(
+  cudf::table_view const& left,
+  cudf::table_view const& right,
+  std::vector<cudf::size_type> const& left_on,
+  std::vector<cudf::size_type> const& right_on,
   null_equality compare_nulls         = null_equality::EQUAL,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
@@ -165,6 +181,14 @@ std::unique_ptr<cudf::table> left_join(
   null_equality compare_nulls         = null_equality::EQUAL,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
+std::pair<rmm::device_vector<size_type>, rmm::device_vector<size_type>> full_join(
+  cudf::table_view const& left,
+  cudf::table_view const& right,
+  std::vector<cudf::size_type> const& left_on,
+  std::vector<cudf::size_type> const& right_on,
+  null_equality compare_nulls         = null_equality::EQUAL,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+
 /**
  * @brief Performs a full join (also known as full outer join) on the
  * specified columns of two tables (`left`, `right`)
@@ -232,6 +256,7 @@ std::unique_ptr<cudf::table> full_join(
   std::vector<std::pair<cudf::size_type, cudf::size_type>> const& columns_in_common,
   null_equality compare_nulls         = null_equality::EQUAL,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+
 /**
  * @brief Performs a left semi join on the specified columns of two
  * tables (`left`, `right`)

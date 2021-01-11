@@ -101,7 +101,8 @@ TEST_F(JoinTest, FullJoinNoCommon)
   exp_cols.push_back(exp_col0_1.release());
   Table gold(std::move(exp_cols));
 
-  auto result            = cudf::full_join(t0, t1, {0}, {0}, {});
+  auto result =
+    cudf::full_join(t0, t1, {0}, {0}, std::vector<std::pair<cudf::size_type, cudf::size_type>>{});
   auto result_sort_order = cudf::sorted_order(result->view());
   auto sorted_result     = cudf::gather(result->view(), *result_sort_order);
 
@@ -131,7 +132,8 @@ TEST_F(JoinTest, LeftJoinNoNullsWithNoCommon)
   Table t0(std::move(cols0));
   Table t1(std::move(cols1));
 
-  auto result            = cudf::left_join(t0, t1, {0}, {0}, {});
+  auto result =
+    cudf::left_join(t0, t1, {0}, {0}, std::vector<std::pair<cudf::size_type, cudf::size_type>>{});
   auto result_sort_order = cudf::sorted_order(result->view());
   auto sorted_result     = cudf::gather(result->view(), *result_sort_order);
 
@@ -1262,7 +1264,8 @@ TEST_F(JoinDictionaryTest, LeftJoinNoNulls)
   auto g0 = cudf::table_view({col0_0, col0_1_w, col0_2});
   auto g1 = cudf::table_view({col1_0, col1_1_w, col1_2});
   {
-    auto result      = cudf::left_join(t0, t1, {0}, {0}, {});
+    auto result =
+      cudf::left_join(t0, t1, {0}, {0}, std::vector<std::pair<cudf::size_type, cudf::size_type>>{});
     auto result_view = result->view();
     auto decoded1    = cudf::dictionary::decode(result_view.column(1));
     auto decoded4    = cudf::dictionary::decode(result_view.column(4));
@@ -1273,7 +1276,8 @@ TEST_F(JoinDictionaryTest, LeftJoinNoNulls)
                                                    decoded4->view(),
                                                    result_view.column(5)});
 
-    auto gold = cudf::left_join(g0, g1, {0}, {0}, {});
+    auto gold =
+      cudf::left_join(g0, g1, {0}, {0}, std::vector<std::pair<cudf::size_type, cudf::size_type>>{});
     CUDF_TEST_EXPECT_TABLES_EQUAL(*gold, cudf::table_view(result_decoded));
   }
   {
