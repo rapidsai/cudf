@@ -1530,16 +1530,15 @@ def test_binops_with_lhs_numpy_scalar(frame, dtype):
     utils.assert_eq(expected, got)
 
 
-def decimal_op_assert_helper(op, lhs, s1, p1, rhs, s2, p2, expect, s3, p3):
-    def decimal_series(input, s, p):
-        return cudf.Series(
-            [decimal.Decimal(x) for x in input],
-            dtype=cudf.DecimalDtype(scale=s, precision=p),
-        )
+def decimal_op_assert_helper(
+    op, lhs, l_dtype, rhs, r_dtype, expect, expect_dtype
+):
+    def decimal_series(input, dtype):
+        return cudf.Series([decimal.Decimal(x) for x in input], dtype=dtype)
 
-    a = decimal_series(lhs, s1, p1)
-    b = decimal_series(rhs, s2, p2)
-    expect = decimal_series(expect, s3, p3)
+    a = decimal_series(lhs, l_dtype)
+    b = decimal_series(rhs, r_dtype)
+    expect = decimal_series(expect, expect_dtype)
 
     got = op(a, b)
     assert expect.dtype == got.dtype
@@ -1547,27 +1546,63 @@ def decimal_op_assert_helper(op, lhs, s1, p1, rhs, s2, p2, expect, s3, p3):
 
 
 def test_binops_decimal():
+    # addition
     decimal_op_assert_helper(
         operator.add,
         ["1.5", "2.0"],
-        2,
-        2,
+        cudf.DecimalDtype(scale=2, precision=2),
         ["1.5", "2.0"],
-        2,
-        2,
+        cudf.DecimalDtype(scale=2, precision=2),
         ["3.0", "4.0"],
-        2,
-        3,
+        cudf.DecimalDtype(scale=2, precision=3),
     )
+
     decimal_op_assert_helper(
         operator.add,
         ["1.5", "2.0"],
-        2,
-        2,
+        cudf.DecimalDtype(scale=2, precision=2),
         ["2.25", "1.005"],
-        3,
-        4,
+        cudf.DecimalDtype(scale=3, precision=4),
         ["3.75", "3.005"],
-        3,
-        5,
+        cudf.DecimalDtype(scale=3, precision=5),
+    )
+
+    decimal_op_assert_helper(
+        operator.add,
+        ["100", "200"],
+        cudf.DecimalDtype(scale=-2, precision=3),
+        ["0.1", "0.2"],
+        cudf.DecimalDtype(scale=3, precision=4),
+        ["100.1", "200.2"],
+        cudf.DecimalDtype(scale=3, precision=9),
+    )
+
+    decimal_op_assert_helper(
+        operator.sub,
+        ["1.5", "2.0"],
+        cudf.DecimalDtype(scale=2, precision=2),
+        ["2.25", "1.005"],
+        cudf.DecimalDtype(scale=3, precision=4),
+        ["-0.75", "0.995"],
+        cudf.DecimalDtype(scale=3, precision=5),
+    )
+
+    decimal_op_assert_helper(
+        operator.sub,
+        ["1.5", "2.0"],
+        cudf.DecimalDtype(scale=2, precision=2),
+        ["2.25", "1.005"],
+        cudf.DecimalDtype(scale=3, precision=4),
+        ["-0.75", "0.995"],
+        cudf.DecimalDtype(scale=3, precision=5),
+    )
+
+    decimal_op_assert_helper(
+        operator.sub,
+        ["100", "200"],
+        cudf.DecimalDtype(scale=-2, precision=3),
+        ["0.1", "0.2"],
+        cudf.DecimalDtype(scale=3, precision=4),
+        ["99.9", "199.8"],
+        cudf.DecimalDtype(scale=3, precision=9),
     )
