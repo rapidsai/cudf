@@ -1220,6 +1220,7 @@ void writer::impl::write(table_view const &table)
 std::unique_ptr<std::vector<uint8_t>> writer::impl::close(
   std::string const &column_chunks_file_path)
 {
+  if (closed) { return nullptr; }
   closed = true;
   CompactProtocolWriter cpw(&buffer_);
   file_ender_s fendr;

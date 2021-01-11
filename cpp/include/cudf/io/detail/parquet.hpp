@@ -153,7 +153,8 @@ class writer {
    *
    * @param[in] column_chunks_file_path Column chunks file path to be set in the raw output metadata
    *
-   * @return A parquet-compatible blob that contains the data for all rowgroups in the list
+   * @return A parquet-compatible blob that contains the data for all rowgroups in the list only if
+   * `column_chunks_file_path` is provided, else null.
    */
   std::unique_ptr<std::vector<uint8_t>> close(std::string const& column_chunks_file_path = "");
 
