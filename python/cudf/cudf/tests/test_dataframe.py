@@ -8193,30 +8193,45 @@ def test_agg_for_dataframe_with_string_columns(aggs):
         gdf.agg(aggs)
 
 
-@pytest.mark.parametrize("join",["left"],)
-@pytest.mark.parametrize("overwrite",[True, False],)
-@pytest.mark.parametrize("filter_func",[None],)
-@pytest.mark.parametrize("errors",["ignore"],)
+@pytest.mark.parametrize(
+    "join", ["left"],
+)
+@pytest.mark.parametrize(
+    "overwrite", [True, False],
+)
+@pytest.mark.parametrize(
+    "filter_func", [None],
+)
+@pytest.mark.parametrize(
+    "errors", ["ignore"],
+)
 @pytest.mark.parametrize(
     "data",
     [
         {"a": [1, 2, 3], "b": [3, 4, 5]},
-        {"a": [1.0, 2.0, 3.0], "b": [3.0, 4.0, 5.0]},
-        {"a": [False, False, True], "b": [True, True, False]},
-        {"a": [2.0, np.nan, 4.0], "b": [np.nan, np.nan, np.nan]},
-        {"a": [np.nan, np.nan, np.nan], "b": [np.nan, np.nan, np.nan]},
+        {"e": [1.0, 2.0, 3.0], "d": [3.0, 4.0, 5.0]},
+        {"b": [4.0, 3.0, 1.0], "c": [2.0, 5.0, 8.0]},
+        {"c": [True, False, False], "d": [False, True, True]},
+        {"g": [2.0, np.nan, 4.0], "n": [np.nan, np.nan, np.nan]},
+        {"b": [np.nan, np.nan, 3.0], "c": [6.0, np.nan, np.nan]},
+        {"d": [np.nan, np.nan, np.nan], "e": [np.nan, np.nan, np.nan]},
+        {"b": [np.nan, np.nan, np.nan], "c": [np.nan, np.nan, np.nan]},
     ],
 )
 @pytest.mark.parametrize(
     "data2",
     [
+        {"b": [3, 5, 6], "e": [8, 2, 1]},
         {"a": [7, 5, 8], "b": [2.0, 7.0, 9.0]},
-        {"a": [True, False, True], "b":[3.0, 4.0, 5.0]},
+        {"c": [True, False, True], "d": [3.0, 4.0, 5.0]},
+        {"e": [False, False, True], "g": [True, True, False]},
         {"a": [np.nan, np.nan, np.nan], "b": [np.nan, np.nan, np.nan]},
-        {"a": [np.nan, 2.0, np.nan], "b": [2, np.nan, 5.0]}, 
+        {"b": [np.nan, 2.0, np.nan], "c": [2, np.nan, 5.0]},
     ],
 )
-def test_update_for_dataframes(data, data2, join, overwrite, filter_func, errors):
+def test_update_for_dataframes(
+    data, data2, join, overwrite, filter_func, errors
+):
     pdf = pd.DataFrame(data)
     gdf = gd.DataFrame(data)
 
@@ -8225,24 +8240,26 @@ def test_update_for_dataframes(data, data2, join, overwrite, filter_func, errors
 
     expect = pdf.update(other_pd, join, overwrite, filter_func, errors)
     got = gdf.update(other_gd, join, overwrite, filter_func, errors)
-    
+
     assert_eq(expect, got)
 
-@pytest.mark.parametrize("join",["right"],)
-def test_update_for_right_join(join):
-    pdf = pd.DataFrame({"a": [1, 2, 3], "b": [3.0, 4.0, 5.0]})
-    gdf = gd.DataFrame({"a": [1, 2, 3], "b": [3.0, 4.0, 5.0]})
 
-    other_pd = pd.DataFrame({"a": [1, np.nan, 3], "b": [np.nan, 2.0, 5.0]})
+@pytest.mark.parametrize(
+    "join", ["right"],
+)
+def test_update_for_right_join(join):
+    gdf = gd.DataFrame({"a": [1, 2, 3], "b": [3.0, 4.0, 5.0]})
     other_gd = gd.DataFrame({"a": [1, np.nan, 3], "b": [np.nan, 2.0, 5.0]})
 
     with pytest.raises(
-        NotImplementedError,
-        match="Only left join is supported"
+        NotImplementedError, match="Only left join is supported"
     ):
-        gdf.update(other_gd,join)
+        gdf.update(other_gd, join)
 
-@pytest.mark.parametrize("errors",["raise"],)
+
+@pytest.mark.parametrize(
+    "errors", ["raise"],
+)
 def test_update_for_data_overlap(errors):
     pdf = pd.DataFrame({"a": [1, 2, 3], "b": [3.0, 4.0, 5.0]})
     gdf = gd.DataFrame({"a": [1, 2, 3], "b": [3.0, 4.0, 5.0]})
@@ -8250,4 +8267,9 @@ def test_update_for_data_overlap(errors):
     other_pd = pd.DataFrame({"a": [1, np.nan, 3], "b": [np.nan, 2.0, 5.0]})
     other_gd = gd.DataFrame({"a": [1, np.nan, 3], "b": [np.nan, 2.0, 5.0]})
 
-    assert_exceptions_equal(lambda: pdf.update(other_pd,errors), lambda: gdf.update(other_gd,errors))
+    assert_exceptions_equal(
+        lfunc=pdf.update,
+        rfunc=gdf.update,
+        lfunc_args_and_kwargs=([other_pd, errors], {}),
+        rfunc_args_and_kwargs=([other_gd, errors], {}),
+    )
