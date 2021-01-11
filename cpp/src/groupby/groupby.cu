@@ -183,6 +183,17 @@ groupby::groups groupby::get_groups(table_view values, rmm::mr::device_memory_re
   }
 }
 
+std::unique_ptr<cudf::column> groupby::get_group_label(rmm::mr::device_memory_resource* mr)
+{
+  auto d_group_labels = helper().group_labels();
+  auto group_label = cudf::make_numeric_column(cudf::data_type(type_to_id<cudf::size_type>()), d_group_labels.size(),
+                                                mask_state::UNALLOCATED, rmm::cuda_stream_default, mr);
+  auto group_label_mview = group_label->mutable_view();
+
+  thrust::copy(d_group_labels.begin(), d_group_labels.end(), group_label_mview.begin<cudf::size_type>());
+  return group_label;
+}
+
 // Get the sort helper object
 detail::sort::sort_groupby_helper& groupby::helper()
 {

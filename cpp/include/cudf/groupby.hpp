@@ -195,6 +195,9 @@ class groupby {
   groups get_groups(cudf::table_view values             = {},
                     rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
+  std::unique_ptr<cudf::column> get_group_label(
+                    rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+
  private:
   table_view _keys;                                      ///< Keys that determine grouping
   null_policy _include_null_keys{null_policy::EXCLUDE};  ///< Include rows in keys
