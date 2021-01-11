@@ -50,7 +50,7 @@ def binop_precision(l_dtype, r_dtype, op):
     s1, s2 = l_dtype.scale, r_dtype.scale
     if op in ("add", "sub"):
         return max(s1, s2) + max(p1 - s1, p2 - s2) + 1
-    if op == "mul":
+    elif op == "mul":
         return p1 + p2 + 1
     else:
         raise NotImplementedError()
