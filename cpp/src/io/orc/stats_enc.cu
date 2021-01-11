@@ -307,7 +307,7 @@ __global__ void __launch_bounds__(encode_threads_per_block)
             cur, 1, s->chunk.min_value.str_val.ptr, s->chunk.min_value.str_val.length);
           cur = pb_put_binary(
             cur, 2, s->chunk.max_value.str_val.ptr, s->chunk.max_value.str_val.length);
-          cur = pb_put_uint(cur, 3, s->chunk.sum.i_val);
+          cur = pb_put_int(cur, 3, s->chunk.sum.i_val);
         }
         break;
       case dtype_bool:
