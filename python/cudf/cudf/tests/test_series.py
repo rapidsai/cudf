@@ -664,6 +664,7 @@ def test_series_mode(df, dropna):
         np.repeat([-0.6459412758761901], 100),
         np.repeat(np.nan, 100),
         np.array([1.123, 2.343, np.nan, 0.0]),
+        np.arange(-100.5,101.5,1),
     ],
 )
 @pytest.mark.parametrize("decimals", [-5, -3, -1, 0, 1, 4, 12])

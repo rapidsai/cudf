@@ -1765,8 +1765,6 @@ class Frame(libcudf.table.Table):
             columns not included in `decimals` will be left as is. Elements
             of `decimals` which are not columns of the input will be
             ignored.
-        deep : boolean, optional, default False
-            Whether to make deep copy or shallow copy of the columns.
 
         Returns
         -------
@@ -1821,8 +1819,6 @@ class Frame(libcudf.table.Table):
         3   0.2   0.0
         """
 
-        copy_data = self._data.copy(deep=True)
-
         if isinstance(decimals, cudf.Series):
             decimals = decimals.to_pandas()
 
@@ -1832,23 +1828,38 @@ class Frame(libcudf.table.Table):
                 and not decimals.index.is_unique
             ):
                 raise ValueError("Index of decimals must be unique")
-            for name, col in copy_data.items():
-                if (
-                    pd.api.types.is_numeric_dtype(col.dtype)
-                    and name in decimals.keys()
-                ):
-                    copy_data[name] = col.round(decimals[name])
 
+            cols = {
+                name: col.round(decimals[name])
+                if (
+                    name in decimals.keys()
+                    and pd.api.types.is_numeric_dtype(col.dtype)
+                )
+                else col.copy(deep=True)
+                for name, col in self._data.items()
+            }
         elif isinstance(decimals, int):
-            for name, col in copy_data.items():
-                if pd.api.types.is_numeric_dtype(col.dtype):
-                    copy_data[name] = col.round(decimals)
+            cols = {
+                name: col.round(decimals)
+                if pd.api.types.is_numeric_dtype(col.dtype)
+                else col.copy(deep=True)
+                for name, col in self._data.items()
+            }
         else:
             raise TypeError(
                 "decimals must be an integer, a dict-like or a Series"
             )
 
-        return self._from_table(Frame(copy_data, self._index))
+        return self.__class__._from_table(
+            Frame(
+                data=cudf.core.column_accessor.ColumnAccessor(
+                    cols,
+                    multiindex=self._data.multiindex,
+                    level_names=self._data.level_names,
+                )
+            ),
+            index=self._index,
+        )
 
     @annotate("SAMPLE", color="orange", domain="cudf_python")
     def sample(

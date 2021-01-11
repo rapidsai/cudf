@@ -1,6 +1,5 @@
 # Copyright (c) 2021, NVIDIA CORPORATION.
 
-from libc.stdint cimport int32_t
 from libcpp.memory cimport unique_ptr
 from libcpp.utility cimport move
 

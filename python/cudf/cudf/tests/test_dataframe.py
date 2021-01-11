@@ -3247,14 +3247,15 @@ def test_ndim():
         -3,
         0,
         5,
-        pd.Series([4, 3, -6], index=["x", "y", "z"]),
-        gd.Series([-2, 1, 12], index=["x", "y", "z"]),
-        {"x": 15, "y": -2, "z": 8},
+        pd.Series([1, 4, 3, -6], index=["w", "x", "y", "z"]),
+        gd.Series([-4, -2, 12], index=["x", "y", "z"]),
+        {"w": -3, "x": 15, "y": -2},
     ],
 )
 def test_dataframe_round(decimals):
     pdf = pd.DataFrame(
         {
+            "w": np.arange(0.5, 10.5, 1),
             "x": np.random.normal(-100, 100, 10),
             "y": np.array(
                 [
