@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 #
-# Copyright (c) 2018, NVIDIA CORPORATION.
+# Copyright (c) 2018-2021, NVIDIA CORPORATION.
 #
 # cudf documentation build configuration file, created by
 # sphinx-quickstart on Wed May  3 10:59:22 2017.
@@ -44,6 +44,7 @@ extensions = [
     "IPython.sphinxext.ipython_directive",
     "nbsphinx",
     "recommonmark",
+    "sphinxemoji.sphinxemoji",
 ]
 
 
@@ -65,7 +66,7 @@ master_doc = "index"
 
 # General information about the project.
 project = "cudf"
-copyright = "2020, NVIDIA"
+copyright = "2021, NVIDIA"
 author = "NVIDIA"
 
 # The version info for the project you're documenting, acts as replacement for
@@ -73,7 +74,7 @@ author = "NVIDIA"
 # built documents.
 #
 # The short X.Y version.
-version = '0.18'
+version = "0.18"
 # The full version, including alpha/beta/rc tags.
 release = "0.15.0"
 
@@ -200,8 +201,13 @@ numpydoc_class_members_toctree = False
 
 autoclass_content = "init"
 
+sphinxemoji_style = "twemoji"
+
 
 def setup(app):
     app.add_js_file("copybutton_pydocs.js")
     app.add_css_file("params.css")
     app.add_css_file("https://docs.rapids.ai/assets/css/custom.css")
+    app.add_js_file("https://twemoji.maxcdn.com/v/latest/twemoji.min.js")
+    app.add_js_file("twemoji.js")
+    app.add_css_file("twemoji.css")
