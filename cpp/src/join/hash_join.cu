@@ -573,8 +573,8 @@ std::unique_ptr<cudf::table> hash_join::hash_join_impl::full_join(
 }
 
 template <cudf::detail::join_kind JoinKind>
-std::pair<std::unique_ptr<cudf::table>, std::unique_ptr<cudf::table>>
-hash_join::hash_join_impl::compute_hash_join(
+std::pair<rmm::device_vector<size_type>, rmm::device_vector<size_type>>
+hash_join::hash_join_impl::compute_hash_join_indices(
   cudf::table_view const &probe,
   std::vector<size_type> const &probe_on,
   std::vector<std::pair<cudf::size_type, cudf::size_type>> const &columns_in_common,
@@ -601,7 +601,7 @@ hash_join::hash_join_impl::compute_hash_join(
                "Invalid values passed to columns_in_common");
 
   if (is_trivial_join(probe, _build, probe_on, _build_on, JoinKind)) {
-    return get_empty_joined_table(probe, _build, columns_in_common, common_columns_output_side);
+    return std::make_pair(rmm::device_vector<size_type>{}, rmm::device_vector<size_type>{});
   }
 
   auto probe_selected = probe.select(probe_on);
@@ -615,7 +615,27 @@ hash_join::hash_join_impl::compute_hash_join(
   constexpr cudf::detail::join_kind ProbeJoinKind = (JoinKind == cudf::detail::join_kind::FULL_JOIN)
                                                       ? cudf::detail::join_kind::LEFT_JOIN
                                                       : JoinKind;
-  auto joined_indices = probe_join_indices<ProbeJoinKind>(probe_selected, compare_nulls, stream);
+  return probe_join_indices<ProbeJoinKind>(probe_selected, compare_nulls, stream);
+}
+
+template <cudf::detail::join_kind JoinKind>
+std::pair<std::unique_ptr<cudf::table>, std::unique_ptr<cudf::table>>
+hash_join::hash_join_impl::compute_hash_join(
+  cudf::table_view const &probe,
+  std::vector<size_type> const &probe_on,
+  std::vector<std::pair<cudf::size_type, cudf::size_type>> const &columns_in_common,
+  common_columns_output_side common_columns_output_side,
+  null_equality compare_nulls,
+  rmm::cuda_stream_view stream,
+  rmm::mr::device_memory_resource *mr) const
+{
+  auto joined_indices = compute_hash_join_indices<JoinKind>(
+    probe, probe_on, columns_in_common, common_columns_output_side, compare_nulls, stream, mr);
+
+  if (is_trivial_join(probe, _build, probe_on, _build_on, JoinKind)) {
+    return get_empty_joined_table(probe, _build, columns_in_common, common_columns_output_side);
+  }
+
   return cudf::detail::construct_join_output_df<JoinKind>(
     probe, _build, joined_indices, columns_in_common, common_columns_output_side, stream, mr);
 }

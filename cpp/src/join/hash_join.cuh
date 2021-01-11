@@ -257,6 +257,16 @@ struct hash_join::hash_join_impl {
     rmm::mr::device_memory_resource* mr) const;
 
  private:
+  template <cudf::detail::join_kind JoinKind>
+  std::pair<rmm::device_vector<size_type>, rmm::device_vector<size_type>> compute_hash_join_indices(
+    cudf::table_view const& probe,
+    std::vector<size_type> const& probe_on,
+    std::vector<std::pair<cudf::size_type, cudf::size_type>> const& columns_in_common,
+    common_columns_output_side common_columns_output_side,
+    null_equality compare_nulls,
+    rmm::cuda_stream_view stream,
+    rmm::mr::device_memory_resource* mr) const;
+
   /**
    * @brief Performs hash join by probing the columns provided in `probe` as per
    * the joining indices given in `probe_on` and returns a (`probe`, `_build`) table pair, which
