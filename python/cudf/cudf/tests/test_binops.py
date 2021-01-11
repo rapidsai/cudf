@@ -1606,3 +1606,33 @@ def test_binops_decimal():
         ["99.9", "199.8"],
         cudf.DecimalDtype(scale=3, precision=9),
     )
+
+    decimal_op_assert_helper(
+        operator.mul,
+        ["1.5", "2.0"],
+        cudf.DecimalDtype(scale=2, precision=2),
+        ["1.5", "3.0"],
+        cudf.DecimalDtype(scale=3, precision=4),
+        ["2.25", "6.0"],
+        cudf.DecimalDtype(scale=5, precision=7),
+    )
+
+    decimal_op_assert_helper(
+        operator.mul,
+        ["100", "200"],
+        cudf.DecimalDtype(scale=-2, precision=3),
+        ["0.1", "0.2"],
+        cudf.DecimalDtype(scale=3, precision=4),
+        ["10.0", "40.0"],
+        cudf.DecimalDtype(scale=1, precision=8),
+    )
+
+    decimal_op_assert_helper(
+        operator.mul,
+        ["1000", "2000"],
+        cudf.DecimalDtype(scale=-3, precision=4),
+        ["0.343", "0.500"],
+        cudf.DecimalDtype(scale=3, precision=3),
+        ["343.0", "1000.0"],
+        cudf.DecimalDtype(scale=0, precision=8),
+    )
