@@ -112,7 +112,7 @@ cdef compression_type _get_comp_type(object compression):
     elif compression == "snappy":
         return compression_type.SNAPPY
     else:
-        raise ValueError("Unsupported `compression` type")
+        raise ValueError(f"Unsupported `compression` type {compression}")
 
 
 cpdef write_orc(Table table,
@@ -225,11 +225,13 @@ cdef class ORCWriter:
         if not self.initialized:
             self._initialize_chunked_state(table)
 
-        cdef table_view tv = table.data_view()
-        if self.index is not False:
-            if isinstance(table._index, cudf.core.multiindex.MultiIndex) \
-                    or table._index.name is not None:
-                tv = table.view()
+        cdef table_view tv
+        if self.index is not False and (
+            table._index.name is not None or
+                isinstance(table._index, cudf.core.multiindex.MultiIndex)):
+            tv = table.view()
+        else:
+            tv = table.data_view()
 
         with nogil:
             self.writer.get()[0].write(tv)
