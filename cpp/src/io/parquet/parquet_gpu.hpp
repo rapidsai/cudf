@@ -296,6 +296,16 @@ inline uint32_t __device__ GetDtypeLogicalLen(uint8_t parquet_dtype)
   }
 }
 
+inline uint32_t __device__ GetDtypeLogicalLen(column_device_view *col)
+{
+  switch (col->type().id()) {
+    case cudf::type_id::INT8:
+    case cudf::type_id::UINT8: return 1;
+    case cudf::type_id::INT16:
+    case cudf::type_id::UINT16: return 2;
+    default: return 4;
+  }
+}
 /**
  * @brief Return worst-case compressed size of compressed data given the uncompressed size
  */

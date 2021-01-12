@@ -185,7 +185,7 @@ __global__ void __launch_bounds__(block_size) gpuInitPageFragments(PageFragment 
   dtype_len =
     (dtype == INT96) ? 12 : (dtype == INT64 || dtype == DOUBLE) ? 8 : (dtype == BOOLEAN) ? 1 : 4;
   if (dtype == INT32) {
-    dtype_len_in = GetDtypeLogicalLen(s->col.converted_type);
+    dtype_len_in = GetDtypeLogicalLen(s->col.leaf_column);
   } else if (dtype == INT96) {
     // cudf doesn't support INT96 internally and uses INT64, so treat INT96 as an INT64 for
     // computing dictionary hash values and reading the data, but we do treat it as 12 bytes for
@@ -1051,7 +1051,7 @@ __global__ void __launch_bounds__(128, 8) gpuEncodePages(EncPage *pages,
   dtype_len_out =
     (dtype == INT96) ? 12 : (dtype == INT64 || dtype == DOUBLE) ? 8 : (dtype == BOOLEAN) ? 1 : 4;
   if (dtype == INT32) {
-    dtype_len_in = GetDtypeLogicalLen(s->col.converted_type);
+    dtype_len_in = GetDtypeLogicalLen(s->col.leaf_column);
   } else if (dtype == INT96) {
     dtype_len_in = 8;
   } else {
