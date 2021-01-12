@@ -288,5 +288,5 @@ def does_not_raise():
     yield
 
 
-def xfail_param(param, reason=None):
-    return pytest.param(param, marks=pytest.mark.xfail(reason=reason))
+def xfail_param(param, **kwargs):
+    return pytest.param(param, marks=pytest.mark.xfail(**kwargs))
