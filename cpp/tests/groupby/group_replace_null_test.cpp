@@ -82,7 +82,7 @@ TYPED_TEST(GroupbyReplaceNullsTest, FollowingFill)
     cudf::test::fixed_width_column_wrapper<K>(key.begin(), key.end(), mask.begin()),
     cudf::test::fixed_width_column_wrapper<K>(
       expect_col.begin(), expect_col.end(), cudf::test::all_valid()),
-    cudf::replace_policy::PRECEDING);
+    cudf::replace_policy::FOLLOWING);
 }
 
 TYPED_TEST(GroupbyReplaceNullsTest, PrecedingFillLeadingNulls)
@@ -127,5 +127,5 @@ TYPED_TEST(GroupbyReplaceNullsTest, FollowingFillTrailingNulls)
     cudf::test::fixed_width_column_wrapper<K>(key.begin(), key.end(), mask.begin()),
     cudf::test::fixed_width_column_wrapper<K>(
       expect_col.begin(), expect_col.end(), cudf::test::all_valid()),
-    cudf::replace_policy::PRECEDING);
+    cudf::replace_policy::FOLLOWING);
 }
