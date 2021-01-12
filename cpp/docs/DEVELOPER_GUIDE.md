@@ -53,7 +53,7 @@ file extension used to indicate a C++ header file.
 Header files should use the `#pragma once` include guard. 
 
 The naming of external API headers should be consistent with the name of the folder that contains 
-the source files that implement the API. For example, the implementation of the APIs found in  
+the source files that implement the API. For example, the implementation of the APIs found in
 `cudf/cpp/include/cudf/copying.hpp` are located in `cudf/src/copying`. Likewise, the unit tests for 
 the APIs reside in `cudf/tests/copying/`.
 
@@ -65,8 +65,8 @@ the APIs reside in `cudf/tests/copying/`.
 - `.cuh` : Headers containing CUDA device code
 
 Only use `.cu` and `.cuh` if necessary. A good indicator is the inclusion of `__device__` and other
-symbols that are only recognized by `nvcc`. Also, Thrust APIs executed on a device execution policy,
-which should always be `rmm::exec_policy` in libcudf.
+symbols that are only recognized by `nvcc`. Another indicator is Thrust algorithm APIs with a device
+execution policy (always `rmm::exec_policy` in libcudf).
 
 # libcudf Data Structures
 
@@ -77,9 +77,9 @@ data structures you will use when developing libcudf code.
 
 Resource ownership is an essential concept in libcudf. In short, an "owning" object owns a 
 resource (such as device memory). It acquires that resource during construction and releases the 
-resource in destruction (RAII). A "non-owning" object does not own resources. Any class in libcudf 
-with the `*_view` suffix is non-owning. For more detail see the 
-[`libcudf++` presentation.](https://docs.google.com/presentation/d/1zKzAtc1AWFKfMhiUlV5yRZxSiPLwsObxMlWRWz_f5hA/edit?usp=sharing)
+resource in destruction ([RAII](https://en.cppreference.com/w/cpp/language/raii)). A "non-owning"
+object does not own resources. Any class in libcudf with the `*_view` suffix is non-owning. For more
+detail see the [`libcudf++` presentation.](https://docs.google.com/presentation/d/1zKzAtc1AWFKfMhiUlV5yRZxSiPLwsObxMlWRWz_f5hA/edit?usp=sharing)
 
 libcudf functions typically take views as input (`column_view`, `table_view`, or `scalar_view`)
 and produce `unique_ptr`s to owning objects as output. For example, 
