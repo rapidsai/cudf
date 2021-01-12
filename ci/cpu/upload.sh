@@ -40,14 +40,14 @@ export CUSTREAMZ_FILE=`conda build conda/recipes/custreamz --python=$PYTHON --ou
 ################################################################################
 
 gpuci_logger "Starting conda uploads"
-if [ "$UPLOAD_LIBCUDF" == "1" ]; then
+if [[ "$BUILD_LIBCUDF" == "1" && "$UPLOAD_LIBCUDF" == "1" ]]; then
   test -e ${LIBCUDF_FILE}
   echo "Upload libcudf"
   echo ${LIBCUDF_FILE}
   gpuci_retry anaconda -t ${MY_UPLOAD_KEY} upload -u ${CONDA_USERNAME:-rapidsai} ${LABEL_OPTION} --skip-existing ${LIBCUDF_FILE}
 fi
 
-if [ "$UPLOAD_CUDF" == "1" ]; then
+if [[ "$BUILD_CUDF" == "1" && "$UPLOAD_CUDF" == "1" ]]; then
   test -e ${CUDF_FILE}
   echo "Upload cudf"
   echo ${CUDF_FILE}
@@ -64,14 +64,14 @@ if [ "$UPLOAD_CUDF" == "1" ]; then
   gpuci_retry anaconda -t ${MY_UPLOAD_KEY} upload -u ${CONDA_USERNAME:-rapidsai} ${LABEL_OPTION} --skip-existing ${CUSTREAMZ_FILE}
 fi
 
-if [ "$UPLOAD_LIBCUDF_KAFKA" == "1" ]; then
+if [[ "$BUILD_LIBCUDF" == "1" && "$UPLOAD_LIBCUDF_KAFKA" == "1" ]]; then
   test -e ${LIBCUDF_KAFKA_FILE}
   echo "Upload libcudf_kafka"
   echo ${LIBCUDF_KAFKA_FILE}
   gpuci_retry anaconda -t ${MY_UPLOAD_KEY} upload -u ${CONDA_USERNAME:-rapidsai} ${LABEL_OPTION} --skip-existing ${LIBCUDF_KAFKA_FILE}
 fi
 
-if [ "$UPLOAD_CUDF_KAFKA" == "1" ]; then
+if [[ "$BUILD_CUDF" == "1" && "$UPLOAD_CUDF_KAFKA" == "1" ]]; then
   test -e ${CUDF_KAFKA_FILE}
   echo "Upload cudf_kafka"
   echo ${CUDF_KAFKA_FILE}

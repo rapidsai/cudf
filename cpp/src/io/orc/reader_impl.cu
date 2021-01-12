@@ -23,6 +23,7 @@
 #include "timezone.cuh"
 
 #include <io/comp/gpuinflate.h>
+#include <io/orc/orc.h>
 
 #include <cudf/table/table.hpp>
 #include <cudf/utilities/error.hpp>
@@ -120,174 +121,6 @@ constexpr std::pair<gpu::StreamIndexType, uint32_t> get_index_type_and_pos(
 }
 
 }  // namespace
-
-/**
- * @brief A helper class for ORC file metadata. Provides some additional
- * convenience methods for initializing and accessing metadata.
- */
-class metadata {
-  using OrcStripeInfo = std::pair<const StripeInformation *, const StripeFooter *>;
-
- public:
-  explicit metadata(datasource *const src) : source(src)
-  {
-    const auto len         = source->size();
-    const auto max_ps_size = std::min(len, static_cast<size_t>(256));
-
-    // Read uncompressed postscript section (max 255 bytes + 1 byte for length)
-    auto buffer            = source->host_read(len - max_ps_size, max_ps_size);
-    const size_t ps_length = buffer->data()[max_ps_size - 1];
-    const uint8_t *ps_data = &buffer->data()[max_ps_size - ps_length - 1];
-    ProtobufReader pb;
-    pb.init(ps_data, ps_length);
-    CUDF_EXPECTS(pb.read(ps, ps_length), "Cannot read postscript");
-    CUDF_EXPECTS(ps.footerLength + ps_length < len, "Invalid footer length");
-
-    // If compression is used, all the rest of the metadata is compressed
-    // If no compressed is used, the decompressor is simply a pass-through
-    decompressor = std::make_unique<OrcDecompressor>(ps.compression, ps.compressionBlockSize);
-
-    // Read compressed filefooter section
-    buffer           = source->host_read(len - ps_length - 1 - ps.footerLength, ps.footerLength);
-    size_t ff_length = 0;
-    auto ff_data     = decompressor->Decompress(buffer->data(), ps.footerLength, &ff_length);
-    pb.init(ff_data, ff_length);
-    CUDF_EXPECTS(pb.read(ff, ff_length), "Cannot read filefooter");
-    CUDF_EXPECTS(get_num_columns() > 0, "No columns found");
-  }
-
-  /**
-   * @brief Filters and reads the info of only a selection of stripes
-   *
-   * @param[in] stripes Indices of individual stripes
-   * @param[in] row_start Starting row of the selection
-   * @param[in,out] row_count Total number of rows selected
-   *
-   * @return List of stripe info and total number of selected rows
-   */
-  auto select_stripes(const std::vector<size_type> &stripes,
-                      size_type &row_start,
-                      size_type &row_count)
-  {
-    std::vector<OrcStripeInfo> selection;
-
-    if (!stripes.empty()) {
-      size_t stripe_rows = 0;
-      for (const auto &stripe_idx : stripes) {
-        CUDF_EXPECTS(stripe_idx >= 0 && stripe_idx < get_num_stripes(), "Invalid stripe index");
-        selection.emplace_back(&ff.stripes[stripe_idx], nullptr);
-        stripe_rows += ff.stripes[stripe_idx].numberOfRows;
-      }
-      // row_start is 0 if stripes are set. If this is not true anymore, then
-      // row_start needs to be subtracted to get the correct row_count
-      CUDF_EXPECTS(row_start == 0, "Start row index should be 0");
-      row_count = static_cast<size_type>(stripe_rows);
-    } else {
-      row_start = std::max(row_start, 0);
-      if (row_count < 0) {
-        row_count = static_cast<size_type>(
-          std::min<size_t>(get_total_rows() - row_start, std::numeric_limits<size_type>::max()));
-      } else {
-        row_count =
-          static_cast<size_type>(std::min<size_t>(get_total_rows() - row_start, row_count));
-      }
-      CUDF_EXPECTS(row_count >= 0 && row_start >= 0, "Negative row count or starting row");
-      CUDF_EXPECTS(
-        !(row_start > 0 && (row_count > (std::numeric_limits<size_type>::max() - row_start))),
-        "Summation of starting row index and number of rows would cause overflow");
-
-      size_type stripe_skip_rows = 0;
-      for (size_t i = 0, count = 0; i < ff.stripes.size(); ++i) {
-        count += ff.stripes[i].numberOfRows;
-        if (count > static_cast<size_t>(row_start)) {
-          if (selection.empty()) {
-            stripe_skip_rows =
-              static_cast<size_type>(row_start - (count - ff.stripes[i].numberOfRows));
-          }
-          selection.emplace_back(&ff.stripes[i], nullptr);
-        }
-        if (count >= static_cast<size_t>(row_start) + static_cast<size_t>(row_count)) { break; }
-      }
-      row_start = stripe_skip_rows;
-    }
-
-    // Read each stripe's stripefooter metadata
-    if (not selection.empty()) {
-      orc::ProtobufReader pb;
-
-      stripefooters.resize(selection.size());
-      for (size_t i = 0; i < selection.size(); ++i) {
-        const auto stripe         = selection[i].first;
-        const auto sf_comp_offset = stripe->offset + stripe->indexLength + stripe->dataLength;
-        const auto sf_comp_length = stripe->footerLength;
-        CUDF_EXPECTS(sf_comp_offset + sf_comp_length < source->size(),
-                     "Invalid stripe information");
-
-        const auto buffer = source->host_read(sf_comp_offset, sf_comp_length);
-        size_t sf_length  = 0;
-        auto sf_data      = decompressor->Decompress(buffer->data(), sf_comp_length, &sf_length);
-        pb.init(sf_data, sf_length);
-        CUDF_EXPECTS(pb.read(stripefooters[i], sf_length), "Cannot read stripefooter");
-        selection[i].second = &stripefooters[i];
-      }
-    }
-
-    return selection;
-  }
-
-  /**
-   * @brief Filters and reduces down to a selection of columns
-   *
-   * @param[in] use_names List of column names to select
-   * @param[out] has_timestamp_column Whether there is a orc::TIMESTAMP column
-   *
-   * @return List of ORC column indexes
-   */
-  auto select_columns(std::vector<std::string> use_names, bool &has_timestamp_column)
-  {
-    std::vector<int> selection;
-
-    if (not use_names.empty()) {
-      int index = 0;
-      for (const auto &use_name : use_names) {
-        for (int i = 0; i < get_num_columns(); ++i, ++index) {
-          if (index >= get_num_columns()) { index = 0; }
-          if (ff.GetColumnName(index) == use_name) {
-            selection.emplace_back(index);
-            if (ff.types[index].kind == orc::TIMESTAMP) { has_timestamp_column = true; }
-            index++;
-            break;
-          }
-        }
-      }
-    } else {
-      // For now, only select all leaf nodes
-      for (int i = 0; i < get_num_columns(); ++i) {
-        if (ff.types[i].subtypes.empty()) {
-          selection.emplace_back(i);
-          if (ff.types[i].kind == orc::TIMESTAMP) { has_timestamp_column = true; }
-        }
-      }
-    }
-    CUDF_EXPECTS(selection.size() > 0, "Filtered out all columns");
-
-    return selection;
-  }
-
-  inline size_t get_total_rows() const { return ff.numberOfRows; }
-  inline int get_num_stripes() const { return ff.stripes.size(); }
-  inline int get_num_columns() const { return ff.types.size(); }
-  inline int get_row_index_stride() const { return ff.rowIndexStride; }
-
- public:
-  PostScript ps;
-  FileFooter ff;
-  std::vector<StripeFooter> stripefooters;
-  std::unique_ptr<OrcDecompressor> decompressor;
-
- private:
-  datasource *const source;
-};
 
 namespace {
 /**
@@ -594,7 +427,7 @@ reader::impl::impl(std::unique_ptr<datasource> source,
   : _mr(mr), _source(std::move(source))
 {
   // Open and parse the source dataset metadata
-  _metadata = std::make_unique<metadata>(_source.get());
+  _metadata = std::make_unique<cudf::io::orc::metadata>(_source.get());
 
   // Select only columns required by the options
   _selected_columns = _metadata->select_columns(options.get_columns(), _has_timestamp_column);
@@ -815,7 +648,7 @@ table_with_metadata reader::impl::read(size_type skip_rows,
   // Return column names (must match order of returned columns)
   out_metadata.column_names.resize(_selected_columns.size());
   for (size_t i = 0; i < _selected_columns.size(); i++) {
-    out_metadata.column_names[i] = _metadata->ff.GetColumnName(_selected_columns[i]);
+    out_metadata.column_names[i] = _metadata->get_column_name(_selected_columns[i]);
   }
   // Return user metadata
   for (const auto &kv : _metadata->ff.metadata) {

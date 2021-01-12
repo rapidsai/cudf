@@ -975,7 +975,8 @@ TYPED_TEST(FixedPointTests, MinMaxCountLagLead)
   auto const expected_lead = fp_wrapper{{1729, 55, 3, 1, 2, 0}, {1, 1, 1, 1, 1, 0}, scale};
   auto const expected_count_val = fw_wrapper{{2, 3, 3, 3, 3, 2}, {1, 1, 1, 1, 1, 1}};
   auto const expected_count_all = fw_wrapper{{2, 3, 3, 3, 3, 2}, {1, 1, 1, 1, 1, 1}};
-  // auto const expected_rowno     = fw_wrapper{{1, 2, 2, 2, 2, 2}, {1, 1, 1, 1, 1, 1}};
+  auto const expected_rowno     = fw_wrapper{{1, 2, 2, 2, 2, 2}, {1, 1, 1, 1, 1, 1}};
+  auto const expected_rowno1    = fw_wrapper{{1, 1, 1, 1, 1, 1}, {1, 1, 1, 1, 1, 1}};
 
   auto const min   = rolling_window(input, 2, 1, 1, make_min_aggregation());
   auto const max   = rolling_window(input, 2, 1, 1, make_max_aggregation());
@@ -983,7 +984,7 @@ TYPED_TEST(FixedPointTests, MinMaxCountLagLead)
   auto const lead  = rolling_window(input, 2, 1, 1, make_lead_aggregation(1));
   auto const valid = rolling_window(input, 2, 1, 1, make_count_aggregation());
   auto const all   = rolling_window(input, 2, 1, 1, make_count_aggregation(null_policy::INCLUDE));
-  EXPECT_THROW(rolling_window(input, 2, 1, 1, make_row_number_aggregation()), cudf::logic_error);
+  auto const rowno = rolling_window(input, 2, 1, 1, make_row_number_aggregation());
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_min, min->view());
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_max, max->view());
@@ -991,7 +992,13 @@ TYPED_TEST(FixedPointTests, MinMaxCountLagLead)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_lead, lead->view());
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_count_val, valid->view());
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_count_all, all->view());
-  // CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_rowno, rowno->view());
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_rowno, rowno->view());
+
+  // ROW_NUMBER will always return row 1 if the preceding window is set to a constant 1
+  for (int following = 1; following < 5; ++following) {
+    auto const rowno1 = rolling_window(input, 1, following, 1, make_row_number_aggregation());
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_rowno1, rowno1->view());
+  }
 }
 
 TYPED_TEST(FixedPointTests, MinMaxCountLagLeadNulls)
@@ -1011,7 +1018,7 @@ TYPED_TEST(FixedPointTests, MinMaxCountLagLeadNulls)
   auto const expected_lead      = fp_wrapper{{1729, 55, 343, 1, 2, 0}, {0, 1, 0, 1, 1, 0}, scale};
   auto const expected_count_val = fw_wrapper{{1, 2, 1, 2, 2, 2}, {1, 1, 1, 1, 1, 1}};
   auto const expected_count_all = fw_wrapper{{2, 3, 3, 3, 3, 2}, {1, 1, 1, 1, 1, 1}};
-  // auto const expected_rowno     = fw_wrapper{{1, 2, 2, 2, 2, 2}, {1, 1, 1, 1, 1, 1}};
+  auto const expected_rowno     = fw_wrapper{{1, 2, 2, 2, 2, 2}, {1, 1, 1, 1, 1, 1}};
 
   auto const min   = rolling_window(input, 2, 1, 1, make_min_aggregation());
   auto const max   = rolling_window(input, 2, 1, 1, make_max_aggregation());
@@ -1019,7 +1026,7 @@ TYPED_TEST(FixedPointTests, MinMaxCountLagLeadNulls)
   auto const lead  = rolling_window(input, 2, 1, 1, make_lead_aggregation(1));
   auto const valid = rolling_window(input, 2, 1, 1, make_count_aggregation());
   auto const all   = rolling_window(input, 2, 1, 1, make_count_aggregation(null_policy::INCLUDE));
-  EXPECT_THROW(rolling_window(input, 2, 1, 1, make_row_number_aggregation()), cudf::logic_error);
+  auto const rowno = rolling_window(input, 2, 1, 1, make_row_number_aggregation());
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_min, min->view());
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_max, max->view());
@@ -1027,7 +1034,7 @@ TYPED_TEST(FixedPointTests, MinMaxCountLagLeadNulls)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_lead, lead->view());
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_count_val, valid->view());
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_count_all, all->view());
-  // CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_rowno, rowno->view());
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_rowno, rowno->view());
 }
 
 CUDF_TEST_PROGRAM_MAIN()
