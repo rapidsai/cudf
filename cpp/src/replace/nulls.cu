@@ -403,12 +403,6 @@ std::unique_ptr<cudf::column> replace_nulls_policy_impl(cudf::column_view const&
 namespace cudf {
 namespace detail {
 
-/**
- * @brief Functor used by `inclusive_scan` to determine the index to gather from in
- *        the result column. When current row in input column is NULL, return previous
- *        accumulated index, otherwise return the current index. The second element in
- *        the return tuple is discarded.
- */
 __device__ thrust::tuple<cudf::size_type, bool> replace_policy_functor::operator()(
   thrust::tuple<cudf::size_type, bool> const& lhs, thrust::tuple<cudf::size_type, bool> const& rhs)
 {

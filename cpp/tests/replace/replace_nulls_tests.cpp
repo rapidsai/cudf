@@ -17,7 +17,6 @@
  * limitations under the License.
  */
 
-#include <cudf/groupby.hpp>
 #include <cudf/replace.hpp>
 
 #include <tests/groupby/groupby_test_util.hpp>
