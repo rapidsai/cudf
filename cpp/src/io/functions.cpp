@@ -244,35 +244,26 @@ void parse_orc_statistics(std::vector<std::vector<std::string>> const& blobs)
 {
   auto& cstats = blobs[1];
   for (auto& c : cstats) {
-    orc::ColumnStatistics cs;
+    column_statistics cs;
     orc::ProtobufReader(reinterpret_cast<const uint8_t*>(c.c_str()), c.size()).read(cs);
 
     if (cs.intStatistics.get()) {
       cs.type = statistics_type::INT;
     } else if (cs.doubleStatistics.get()) {
       cs.type = statistics_type::DOUBLE;
-    } /*else if (cs.stringStatistics.has_value()) {
-      auto sstats = cs.stringStatistics.value();
-      std::cout << sstats.minimum << ' ' << sstats.maximum << ' ' << sstats.sum.value_or(0);
-    } else if (cs.bucketStatistics.has_value()) {
-      auto bstats = cs.bucketStatistics.value();
-      for (auto& cnt : bstats.count) std::cout << cnt << ' ';
-    } else if (cs.decimalStatistics.has_value()) {
-      auto dstats = cs.decimalStatistics.value();
-      std::cout << dstats.minimum << ' ' << dstats.maximum << ' ' << dstats.sum;
-    } else if (cs.dateStatistics.has_value()) {
-      auto dstats = cs.dateStatistics.value();
-      std::cout << dstats.minimum.value() << ' ' << dstats.maximum.value();
-    } else if (cs.binaryStatistics.has_value()) {
-      auto bstats = cs.binaryStatistics.value();
-      std::cout << bstats.sum.value();
-    } else if (cs.timestampStatistics.has_value()) {
-      auto tstats = cs.timestampStatistics.value();
-      std::cout << tstats.minimum.value_or(0) << ' ' << tstats.maximum.value_or(0) << ' '
-                << tstats.minimumUtc.value_or(0) << ' ' << tstats.maximumUtc.value_or(0);
+    } else if (cs.stringStatistics.get()) {
+      cs.type = statistics_type::STRING;
+    } else if (cs.bucketStatistics.get()) {
+      cs.type = statistics_type::BUCKET;
+    } else if (cs.decimalStatistics.get()) {
+      cs.type = statistics_type::DECIMAL;
+    } else if (cs.dateStatistics.get()) {
+      cs.type = statistics_type::DATE;
+    } else if (cs.binaryStatistics.get()) {
+      cs.type = statistics_type::BINARY;
+    } else if (cs.timestampStatistics.get()) {
+      cs.type = statistics_type::TIMESTAMP;
     }
-    */
-    std::cout << "\n";
   }
 }
 

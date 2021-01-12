@@ -94,75 +94,6 @@ struct StripeFooter {
   std::vector<ColumnEncoding> columns;  // the encoding of each column
   std::string writerTimezone = "";      // time zone of the writer
 };
-template <typename T>
-struct min_max_statistics {
-  std::unique_ptr<T> minimum;
-  std::unique_ptr<T> maximum;
-
-  auto has_minimum() const { return minimum != nullptr; }
-  auto has_maximum() const { return maximum != nullptr; }
-  auto *get_minimum() const { return minimum.get(); }
-  auto *get_maximum() const { return maximum.get(); }
-};
-
-template <typename T>
-struct sum_statistics {
-  std::unique_ptr<T> sum;
-
-  auto has_sum() const { return sum != nullptr; }
-  auto *get_sum() const { return sum.get(); }
-};
-
-struct integer_statistics : min_max_statistics<int64_t>, sum_statistics<int64_t> {
-};
-
-struct double_statistics : min_max_statistics<double>, sum_statistics<double> {
-};
-
-struct StringStatistics {
-  std::unique_ptr<std::string> minimum;
-  std::unique_ptr<std::string> maximum;
-  std::unique_ptr<int64_t> sum;
-};
-
-struct BucketStatistics {
-  std::vector<uint64_t> count;
-};
-
-struct DecimalStatistics {
-  std::unique_ptr<std::string> minimum;
-  std::unique_ptr<std::string> maximum;
-  std::unique_ptr<std::string> sum;
-};
-
-struct DateStatistics {
-  std::unique_ptr<int32_t> minimum;
-  std::unique_ptr<int32_t> maximum;
-};
-
-struct BinaryStatistics {
-  std::unique_ptr<int64_t> sum;
-};
-
-struct TimestampStatistics {
-  std::unique_ptr<int64_t> minimum;
-  std::unique_ptr<int64_t> maximum;
-  std::unique_ptr<int64_t> minimumUtc;
-  std::unique_ptr<int64_t> maximumUtc;
-};
-
-struct ColumnStatistics {
-  std::unique_ptr<uint64_t> numberOfValues;
-  statistics_type type = statistics_type::NONE;
-  std::unique_ptr<integer_statistics> intStatistics;
-  std::unique_ptr<double_statistics> doubleStatistics;
-  // std::unique_ptr<StringStatistics> stringStatistics;
-  // std::unique_ptr<BucketStatistics> bucketStatistics;
-  // std::unique_ptr<DecimalStatistics> decimalStatistics;
-  // std::unique_ptr<DateStatistics> dateStatistics;
-  // std::unique_ptr<BinaryStatistics> binaryStatistics;
-  // std::unique_ptr<TimestampStatistics> timestampStatistics;
-};
 
 struct StripeStatistics {
   std::vector<ColStatsBlob> colStats;  // Column statistics blobs
@@ -172,12 +103,9 @@ struct Metadata {
   std::vector<StripeStatistics> stripeStats;
 };
 
-// Minimal protobuf reader for orc metadata
-
 /**
  * @brief Class for parsing Orc's Protocol Buffers encoded metadata
  */
-
 class ProtobufReader {
  public:
   ProtobufReader(const uint8_t *base, size_t len) : m_base(base), m_cur(base), m_end(base + len) {}
@@ -197,13 +125,13 @@ class ProtobufReader {
   void read(ColumnEncoding &, size_t maxlen);
   void read(integer_statistics &, size_t maxlen);
   void read(double_statistics &, size_t maxlen);
-  void read(StringStatistics &, size_t maxlen);
-  void read(BucketStatistics &, size_t maxlen);
-  void read(DecimalStatistics &, size_t maxlen);
-  void read(DateStatistics &, size_t maxlen);
-  void read(BinaryStatistics &, size_t maxlen);
-  void read(TimestampStatistics &, size_t maxlen);
-  void read(ColumnStatistics &, size_t maxlen);
+  void read(string_statistics &, size_t maxlen);
+  void read(bucket_statistics &, size_t maxlen);
+  void read(decimal_statistics &, size_t maxlen);
+  void read(date_statistics &, size_t maxlen);
+  void read(binary_statistics &, size_t maxlen);
+  void read(timestamp_statistics &, size_t maxlen);
+  void read(column_statistics &, size_t maxlen);
   void read(StripeStatistics &, size_t maxlen);
   void read(Metadata &, size_t maxlen);
 
