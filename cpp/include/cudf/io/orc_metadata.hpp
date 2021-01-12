@@ -28,11 +28,11 @@
 namespace cudf {
 namespace io {
 
-struct orc_statistics {
+struct raw_orc_statistics {
   std::vector<std::string> column_names;
   std::vector<std::string> column_statistics;
   std::vector<std::vector<std::string>> stripe_statistics;
-  orc_statistics() = default;
+  raw_orc_statistics() = default;
 };
 
 /**
@@ -44,14 +44,14 @@ struct orc_statistics {
  * from a file:
  * @code
  *  std::string filepath = "dataset.orc";
- *  auto result = cudf::read_orc_statistics(cudf::source_info(filepath));
+ *  auto result = cudf::read_raw_orc_statistics(cudf::source_info(filepath));
  * @endcode
  *
  * @param src_info Dataset source
  *
  * @return ORC file statistics and column names.
  */
-orc_statistics read_orc_statistics(source_info const &src_info);
+raw_orc_statistics read_raw_orc_statistics(source_info const &src_info);
 
 template <typename T>
 struct minmax_statistics {
@@ -78,7 +78,7 @@ struct integer_statistics : minmax_statistics<int64_t>, sum_statistics<int64_t> 
 struct double_statistics : minmax_statistics<double>, sum_statistics<double> {
 };
 
-struct string_statistics : minmax_statistics<std::string>, sum_statistics<int64_t> {
+struct string_statistics : minmax_statistics<std::string>, sum_statistics<uint64_t> {
 };
 
 struct bucket_statistics {
@@ -132,7 +132,7 @@ struct column_statistics {
   // TODO: hasNull
 };
 
-void parse_orc_statistics(orc_statistics const &blobs);
+void parse_orc_statistics(raw_orc_statistics const &blobs);
 
 }  // namespace io
 }  // namespace cudf

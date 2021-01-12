@@ -8,8 +8,8 @@ from libcpp.utility cimport move
 from cudf._lib.cpp.column.column cimport column
 
 from cudf._lib.cpp.io.orc_metadata cimport (
-    orc_statistics,
-    read_orc_statistics as libcudf_read_orc_statistics
+    raw_orc_statistics,
+    read_raw_orc_statistics as libcudf_read_raw_orc_statistics
 )
 from cudf._lib.cpp.io.orc cimport (
     orc_reader_options,
@@ -36,16 +36,16 @@ from cudf._lib.types cimport underlying_type_t_type_id
 import numpy as np
 
 
-cpdef read_orc_statistics(filepath_or_buffer):
+cpdef read_raw_orc_statistics(filepath_or_buffer):
     """
-    Cython function to call into libcudf API, see `read_orc_statistics`.
+    Cython function to call into libcudf API, see `read_raw_orc_statistics`.
 
     See Also
     --------
-    cudf.io.orc.read_orc_statistics
+    cudf.io.orc.read_raw_orc_statistics
     """
 
-    cdef orc_statistics raw = libcudf_read_orc_statistics(make_source_info([filepath_or_buffer]))
+    cdef raw_orc_statistics raw = libcudf_read_raw_orc_statistics(make_source_info([filepath_or_buffer]))
     return (raw.column_names, raw.column_statistics, raw.stripe_statistics)
 
 

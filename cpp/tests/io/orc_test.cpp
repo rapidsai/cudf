@@ -973,7 +973,7 @@ TEST_F(OrcChunkedWriterTest, ChunkedStats)
     cudf_io::orc_writer_options::builder(cudf_io::sink_info{filepath}, expected->view());
   cudf_io::write_orc(out_opts);
 
-  auto const stats = cudf_io::read_orc_statistics(cudf_io::source_info{filepath});
+  auto const stats = cudf_io::read_raw_orc_statistics(cudf_io::source_info{filepath});
   cudf_io::parse_orc_statistics(stats);
   ASSERT_EQ(1, 2);
 }

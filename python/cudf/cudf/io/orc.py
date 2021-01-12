@@ -102,8 +102,8 @@ def read_orc_metadata(path):
     return num_rows, num_stripes, col_names
 
 
-@ioutils.doc_read_orc_statistics()
-def read_orc_statistics(
+@ioutils.doc_read_raw_orc_statistics()
+def read_raw_orc_statistics(
     filepath_or_buffer, columns=None, **kwargs,
 ):
     """{docstring}"""
@@ -113,7 +113,7 @@ def read_orc_statistics(
     )
     if not is_single_filepath_or_buffer:
         raise NotImplementedError(
-            "`read_orc_statistics` does not yet support reading multiple files"
+            "`read_raw_orc_statistics` does not yet support reading multiple files"
         )
 
     filepath_or_buffer, compression = ioutils.get_filepath_or_buffer(
@@ -123,7 +123,7 @@ def read_orc_statistics(
         ValueError("URL content-encoding decompression is not supported")
 
     # Read in statistics and unpack
-    (column_names, raw_file_statistics, raw_stripes_statistics) = libcudf.orc.read_orc_statistics(filepath_or_buffer)
+    (column_names, raw_file_statistics, raw_stripes_statistics) = libcudf.orc.read_raw_orc_statistics(filepath_or_buffer)
 
     # Parse column names
     column_names = [
@@ -173,7 +173,7 @@ def _filter_stripes(
     ]
 
     # Read and parse file-level and stripe-level statistics
-    file_statistics, stripes_statistics = read_orc_statistics(
+    file_statistics, stripes_statistics = read_raw_orc_statistics(
         filepath_or_buffer, columns_in_predicate
     )
 

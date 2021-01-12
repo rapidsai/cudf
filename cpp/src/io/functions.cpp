@@ -195,7 +195,7 @@ void write_csv(csv_writer_options const& options, rmm::mr::device_memory_resourc
 namespace detail_orc = cudf::io::detail::orc;
 
 // Freeform API wraps the detail reader class API
-orc_statistics read_orc_statistics(source_info const& src_info)
+raw_orc_statistics read_raw_orc_statistics(source_info const& src_info)
 {
   // Get source to read statistics from
   std::unique_ptr<datasource> source;
@@ -215,7 +215,7 @@ orc_statistics read_orc_statistics(source_info const& src_info)
   orc::metadata metadata(source.get());
 
   // Initialize statistics to return
-  orc_statistics result;
+  raw_orc_statistics result;
 
   // Get column names
   for (auto i = 0; i < metadata.get_num_columns(); i++) {
@@ -238,7 +238,7 @@ orc_statistics read_orc_statistics(source_info const& src_info)
   return result;
 }
 
-void parse_orc_statistics(orc_statistics const& blobs)
+void parse_orc_statistics(raw_orc_statistics const& blobs)
 {
   auto& cstats = blobs.column_statistics;
   for (auto& c : cstats) {
