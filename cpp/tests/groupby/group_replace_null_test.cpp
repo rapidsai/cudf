@@ -22,6 +22,7 @@
 #include <cudf_test/type_lists.hpp>
 
 #include <cudf/detail/aggregation/aggregation.hpp>
+#include "cudf/types.hpp"
 
 template <typename T>
 struct GroupbyReplaceNullsTest : public cudf::test::BaseFixture {
@@ -48,11 +49,79 @@ TYPED_TEST(GroupbyReplaceNullsTest, PrecedingFill)
   using K = TypeParam;
   using V = int32_t;
 
+  // Group 0 value: {42, 24, null}  --> {42, 24, 24}
+  // Group 1 value: {7, null, null} --> {7, 7, 7}
   std::vector<K> key = cudf::test::make_type_param_vector<K>({0, 1, 0, 1, 0, 1});
   std::vector<V> val = cudf::test::make_type_param_vector<V>({42, 7, 24, 10, 1, 1000});
   std::vector<cudf::valid_type> mask =
     cudf::test::make_type_param_vector<cudf::valid_type>({1, 1, 1, 0, 0, 0});
   std::vector<K> expect_col = cudf::test::make_type_param_vector<K>({42, 7, 24, 7, 24, 7});
+
+  TestReplaceNullsGroupby(
+    cudf::test::fixed_width_column_wrapper<K>(key.begin(), key.end(), mask.begin()),
+    cudf::test::fixed_width_column_wrapper<K>(
+      expect_col.begin(), expect_col.end(), cudf::test::all_valid()),
+    cudf::replace_policy::PRECEDING);
+}
+
+TYPED_TEST(GroupbyReplaceNullsTest, FollowingFill)
+{
+  using K = TypeParam;
+  using V = int32_t;
+
+  // Group 0 value: {2, null, 32}               --> {2, 32, 32}
+  // Group 1 value: {8, null, null, 128, 256}   --> {8, 128, 128, 128, 256}
+  std::vector<K> key = cudf::test::make_type_param_vector<K>({0, 0, 1, 1, 0, 1, 1, 1});
+  std::vector<V> val = cudf::test::make_type_param_vector<V>({2, 4, 8, 16, 32, 64, 128, 256});
+  std::vector<cudf::valid_type> mask =
+    cudf::test::make_type_param_vector<cudf::valid_type>({1, 0, 1, 0, 1, 0, 1, 1});
+  std::vector<K> expect_col =
+    cudf::test::make_type_param_vector<K>({2, 32, 8, 128, 32, 128, 128, 256});
+
+  TestReplaceNullsGroupby(
+    cudf::test::fixed_width_column_wrapper<K>(key.begin(), key.end(), mask.begin()),
+    cudf::test::fixed_width_column_wrapper<K>(
+      expect_col.begin(), expect_col.end(), cudf::test::all_valid()),
+    cudf::replace_policy::PRECEDING);
+}
+
+TYPED_TEST(GroupbyReplaceNullsTest, PrecedingFillLeadingNulls)
+{
+  using K = TypeParam;
+  using V = int32_t;
+
+  // Group 0 value: {null, 24, null}    --> {null, 24, 24}
+  // Group 1 value: {null, null, null}  --> {null, null, null}
+  std::vector<K> key = cudf::test::make_type_param_vector<K>({0, 1, 0, 1, 0, 1});
+  std::vector<V> val = cudf::test::make_type_param_vector<V>({42, 7, 24, 10, 1, 1000});
+  std::vector<cudf::valid_type> mask =
+    cudf::test::make_type_param_vector<cudf::valid_type>({0, 0, 1, 0, 0, 0});
+  std::vector<K> expect_col = cudf::test::make_type_param_vector<K>({-1, -1, 24, -1, 24, -1});
+  std::vector<K> expect_valid =
+    cudf::test::make_type_param_vector<cudf::valid_type>({0, 0, 1, 0, 1, 0});
+
+  TestReplaceNullsGroupby(
+    cudf::test::fixed_width_column_wrapper<K>(key.begin(), key.end(), mask.begin()),
+    cudf::test::fixed_width_column_wrapper<K>(
+      expect_col.begin(), expect_col.end(), cudf::test::all_valid()),
+    cudf::replace_policy::PRECEDING);
+}
+
+TYPED_TEST(GroupbyReplaceNullsTest, FollowingFillTrailingNulls)
+{
+  using K = TypeParam;
+  using V = int32_t;
+
+  // Group 0 value: {2, null, null}                 --> {2, null, null}
+  // Group 1 value: {null, null, 64, null, null}    --> {64, 64, 64, null, null}
+  std::vector<K> key = cudf::test::make_type_param_vector<K>({0, 0, 1, 1, 0, 1, 1, 1});
+  std::vector<V> val = cudf::test::make_type_param_vector<V>({2, 4, 8, 16, 32, 64, 128, 256});
+  std::vector<cudf::valid_type> mask =
+    cudf::test::make_type_param_vector<cudf::valid_type>({1, 0, 0, 0, 0, 1, 0, 0});
+  std::vector<K> expect_col =
+    cudf::test::make_type_param_vector<K>({2, -1, 64, 64, -1, 64, -1, -1});
+  std::vector<K> expect_valid =
+    cudf::test::make_type_param_vector<cudf::valid_type>({1, 0, 1, 1, 0, 1, 0, 0});
 
   TestReplaceNullsGroupby(
     cudf::test::fixed_width_column_wrapper<K>(key.begin(), key.end(), mask.begin()),
