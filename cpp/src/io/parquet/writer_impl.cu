@@ -413,7 +413,7 @@ class parquet_column_view {
   // List related data
   column_view cudf_col() const noexcept { return _col; }
   column_view leaf_col() const noexcept { return _leaf_col; }
-  size_type const *const *nesting_offsets() const noexcept { return _offsets_array.data().get(); }
+  //size_type const *const *nesting_offsets() const noexcept { return _offsets_array.data().get(); }
   size_type nesting_levels() const noexcept { return _offsets_array.size(); }
   size_type const *level_offsets() const noexcept { return _dremel_offsets.data(); }
   uint8_t const *repetition_levels() const noexcept { return _rep_level.data(); }
@@ -897,7 +897,7 @@ void writer::impl::write_chunk(table_view const &table, pq_chunked_state &state)
       desc->dict_data  = col.get_dict_data();
     }
     if (col.is_list()) {
-      desc->nesting_offsets = col.nesting_offsets();
+      //desc->nesting_offsets = col.nesting_offsets();
       desc->nesting_levels  = col.nesting_levels();
       desc->level_offsets   = col.level_offsets();
       desc->rep_values      = col.repetition_levels();

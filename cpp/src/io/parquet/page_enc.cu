@@ -158,12 +158,6 @@ __global__ void __launch_bounds__(block_size) gpuInitPageFragments(PageFragment 
     // etc...
     s->start_value_idx      = start_row;
     size_type end_value_idx = start_row + s->frag.num_rows;
-#if 0// remove
-    for (size_type i = 0; i < s->col.nesting_levels; i++) {
-      s->start_value_idx = s->col.nesting_offsets[i][s->start_value_idx];
-      end_value_idx      = s->col.nesting_offsets[i][end_value_idx];
-    }
-#else
     {
       auto col = *(s->col.parent_column);
       while (col.type().id() == type_id::LIST) {
@@ -173,7 +167,6 @@ __global__ void __launch_bounds__(block_size) gpuInitPageFragments(PageFragment 
         col = col.child(lists_column_view::child_column_index);
       }
     }
-#endif
     s->frag.start_value_idx = s->start_value_idx;
     s->frag.num_leaf_values = end_value_idx - s->start_value_idx;
 
@@ -1012,7 +1005,7 @@ __global__ void __launch_bounds__(128, 8) gpuEncodePages(EncPage *pages,
         if (t == 0) { s->cur = rle_out; }
       }
     }
-  } else if (s->page.page_type != PageType::DICTIONARY_PAGE && s->col.nesting_levels > 0) {
+  } else if (s->page.page_type != PageType::DICTIONARY_PAGE && s->col.parent_column != nullptr) {
     auto encode_levels = [&](uint8_t const *lvl_val_data, uint32_t nbits) {
       // For list types, the repetition and definition levels are pre-calculated. We just need to
       // encode and write them now.
@@ -1076,11 +1069,6 @@ __global__ void __launch_bounds__(128, 8) gpuEncodePages(EncPage *pages,
       s->rle_out = dst + 1;
     }
     s->page_start_val = s->page.start_row;
-#if 0// remove
-    for (size_type i = 0; i < s->col.nesting_levels; i++) {
-      s->page_start_val = s->col.nesting_offsets[i][s->page_start_val];
-    }
-#else
     {
       auto col = *(s->col.parent_column);
       while (col.type().id() == type_id::LIST) {
@@ -1088,7 +1076,6 @@ __global__ void __launch_bounds__(128, 8) gpuEncodePages(EncPage *pages,
         col = col.child(lists_column_view::child_column_index);
       }
     }
-#endif
   }
   __syncthreads();
   for (uint32_t cur_val_idx = 0; cur_val_idx < s->page.num_leaf_values;) {
