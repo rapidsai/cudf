@@ -28,6 +28,13 @@
 namespace cudf {
 namespace io {
 
+struct orc_statistics {
+  std::vector<std::string> column_names;
+  std::vector<std::string> column_statistics;
+  std::vector<std::vector<std::string>> stripe_statistics;
+  orc_statistics() = default;
+};
+
 /**
  * @brief Reads file-level and stripe-level statistics of ORC dataset
  *
@@ -42,12 +49,9 @@ namespace io {
  *
  * @param src_info Dataset source
  *
- * @return Decompressed ColumnStatistics blobs stored in a vector of vectors. The first element of
- * result vector, which is itself a vector, contains the name of each column. The second element
- * contains statistics of each column of the whole file. Remaining elements contain statistics of
- * each column for each stripe.
+ * @return ORC file statistics and column names.
  */
-std::vector<std::vector<std::string>> read_orc_statistics(source_info const& src_info);
+orc_statistics read_orc_statistics(source_info const &src_info);
 
 template <typename T>
 struct minmax_statistics {
@@ -83,18 +87,18 @@ struct bucket_statistics {
   auto *get_count(size_t index) const { return &count.at(index); }
 };
 
-struct decimal_statistics : minmax_statistics<std::string>, sum_statistics<std::string>{
+struct decimal_statistics : minmax_statistics<std::string>, sum_statistics<std::string> {
 };
 
-struct date_statistics : minmax_statistics<int32_t>{
+struct date_statistics : minmax_statistics<int32_t> {
 };
 
-struct binary_statistics : sum_statistics<int64_t>{
+struct binary_statistics : sum_statistics<int64_t> {
 };
 
 struct timestamp_statistics : minmax_statistics<int64_t> {
   std::unique_ptr<int64_t> minimumUtc;
-  std::unique_ptr<int64_t> maximumUtc; 
+  std::unique_ptr<int64_t> maximumUtc;
 
   auto has_minimumUtc() const { return minimumUtc != nullptr; }
   auto has_maximumUtc() const { return maximumUtc != nullptr; }
@@ -128,7 +132,7 @@ struct column_statistics {
   // TODO: hasNull
 };
 
-void parse_orc_statistics(std::vector<std::vector<std::string>> const& blobs);
+void parse_orc_statistics(orc_statistics const &blobs);
 
 }  // namespace io
 }  // namespace cudf

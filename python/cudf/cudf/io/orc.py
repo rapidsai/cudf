@@ -123,10 +123,7 @@ def read_orc_statistics(
         ValueError("URL content-encoding decompression is not supported")
 
     # Read in statistics and unpack
-    statistics = libcudf.orc.read_orc_statistics(filepath_or_buffer)
-    if not statistics:
-        return None
-    (column_names, raw_file_statistics, *raw_stripes_statistics,) = statistics
+    (column_names, raw_file_statistics, raw_stripes_statistics) = libcudf.orc.read_orc_statistics(filepath_or_buffer)
 
     # Parse column names
     column_names = [

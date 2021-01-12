@@ -195,7 +195,7 @@ void write_csv(csv_writer_options const& options, rmm::mr::device_memory_resourc
 namespace detail_orc = cudf::io::detail::orc;
 
 // Freeform API wraps the detail reader class API
-std::vector<std::vector<std::string>> read_orc_statistics(source_info const& src_info)
+orc_statistics read_orc_statistics(source_info const& src_info)
 {
   // Get source to read statistics from
   std::unique_ptr<datasource> source;
@@ -215,34 +215,32 @@ std::vector<std::vector<std::string>> read_orc_statistics(source_info const& src
   orc::metadata metadata(source.get());
 
   // Initialize statistics to return
-  std::vector<std::vector<std::string>> statistics_blobs;
+  orc_statistics result;
 
   // Get column names
-  statistics_blobs.emplace_back();
   for (auto i = 0; i < metadata.get_num_columns(); i++) {
-    statistics_blobs.back().push_back(metadata.get_column_name(i));
+    result.column_names.push_back(metadata.get_column_name(i));
   }
 
   // Get file-level statistics, statistics of each column of file
-  statistics_blobs.emplace_back();
   for (auto const& stats : metadata.ff.statistics) {
-    statistics_blobs.back().push_back(std::string(stats.cbegin(), stats.cend()));
+    result.column_statistics.push_back(std::string(stats.cbegin(), stats.cend()));
   }
 
   // Get stripe-level statistics
   for (auto const& stripe_stats : metadata.md.stripeStats) {
-    statistics_blobs.emplace_back();
+    result.stripe_statistics.emplace_back();
     for (auto const& stats : stripe_stats.colStats) {
-      statistics_blobs.back().push_back(std::string(stats.cbegin(), stats.cend()));
+      result.stripe_statistics.back().push_back(std::string(stats.cbegin(), stats.cend()));
     }
   }
 
-  return statistics_blobs;
+  return result;
 }
 
-void parse_orc_statistics(std::vector<std::vector<std::string>> const& blobs)
+void parse_orc_statistics(orc_statistics const& blobs)
 {
-  auto& cstats = blobs[1];
+  auto& cstats = blobs.column_statistics;
   for (auto& c : cstats) {
     column_statistics cs;
     orc::ProtobufReader(reinterpret_cast<const uint8_t*>(c.c_str()), c.size()).read(cs);
