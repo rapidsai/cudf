@@ -1,7 +1,7 @@
 # libcudf C++ Developer Guide
 
 This document serves as a guide for contributors to libcudf C++ code. Developers should also refer 
-to these additional files for further documentation of `libcudf` best practices.
+to these additional files for further documentation of libcudf best practices.
 
 * [Documentation Guide](DOCUMENTATION.md) for guidelines on documenting libcudf code.
 * [Testing Guide(TESTING.md) for guidelines on writing unit tests.
@@ -10,8 +10,8 @@ to these additional files for further documentation of `libcudf` best practices.
 # Overview
 
 libcudf is a C++ library that provides GPU-accelerated data-parallel algorithms for processing 
-column-oriented tabular data. Algorithms provided range from slicing and filtering to sorting, 
-and various types of aggregations, to database type operations such as grouping and joins. libcudf
+column-oriented tabular data. libcudf provides algorithms including slicing, filtering, sorting, 
+various types of aggregations, and database-type operations such as grouping and joins. libcudf
 serves a number of clients via multiple language interfaces, including Python and Java. Users may
 also use libcudf directly from C++ code.
 
@@ -75,13 +75,13 @@ data structures you will use when developing libcudf code.
 
 ## Views and Ownership
 
-Resource ownership is an essential concept in `libcudf`. In short, an "owning" object owns a 
+Resource ownership is an essential concept in libcudf. In short, an "owning" object owns a 
 resource (such as device memory). It acquires that resource during construction and releases the 
-resource in destruction (RAII). A "non-owning" object does not own resources. Any class in `libcudf` 
+resource in destruction (RAII). A "non-owning" object does not own resources. Any class in libcudf 
 with the `*_view` suffix is non-owning. For more detail see the 
 [`libcudf++` presentation.](https://docs.google.com/presentation/d/1zKzAtc1AWFKfMhiUlV5yRZxSiPLwsObxMlWRWz_f5hA/edit?usp=sharing)
 
-`libcudf` functions typically take views as input (`column_view`, `table_view`, or `scalar_view`)
+libcudf functions typically take views as input (`column_view`, `table_view`, or `scalar_view`)
 and produce `unique_ptr`s to owning objects as output. For example, 
 
 ```c++
@@ -90,7 +90,7 @@ std::unique_ptr<table> sort(table_view const& input);
 
 ## `rmm::device_memory_resource`<a name="memory_resource"></a>
 
-`libcudf` Allocates all device memory via RMM memory resources (MR). See the 
+libcudf Allocates all device memory via RMM memory resources (MR). See the 
 [RMM documentation](https://github.com/rapidsai/rmm/blob/main/README.md) for details.
 
 ### Current Device Memory Resource
@@ -102,7 +102,7 @@ respectively. All memory resource parameters should be defaulted to use the retu
 
 ## `cudf::column`
 
-`cudf::column` is a core owning data structure in `libcudf`. Most libcudf public APIs produce either 
+`cudf::column` is a core owning data structure in libcudf. Most libcudf public APIs produce either 
 a `cudf::column` or a `cudf::table` as output. A `column` contains `device_buffer`s which own the 
 device memory for the elements of a column and an optional null indicator bitmask. 
 
@@ -127,7 +127,7 @@ A `column` may have nested (child) columns, depending on the data type of the co
 
 ### `cudf::column_view`
 
-`cudf::column_view` is a core non-owning data structure in `libcudf`. It is an immutable, 
+`cudf::column_view` is a core non-owning data structure in libcudf. It is an immutable, 
 non-owning view of device memory as a column. Most libcudf public APIs take views as inputs.
 
 ### `cudf::mutable_column_view`
@@ -261,11 +261,11 @@ asynchrony if and when we add an asynchronous API to libcudf.
 
  ### Stream Creation
 
-There may be times in implementing `libcudf` features where it would be advantageous to use streams 
+There may be times in implementing libcudf features where it would be advantageous to use streams 
 *internally*, i.e., to accomplish overlap in implementing an algorithm. However, dynamically 
 creating a stream can be expensive. RMM has recently added a stream pool for this situation to 
-avoid dynamic stream creation. However, this is not yet exposed in `libcudf`, so for the time being, 
-`libcudf` features should avoid creating streams (even if it is slightly less efficient). It is a 
+avoid dynamic stream creation. However, this is not yet exposed in libcudf, so for the time being, 
+libcudf features should avoid creating streams (even if it is slightly less efficient). It is a 
 good idea to leave a `// TODO:` note indicating where using a stream would be beneficial.
 
 ## Memory Allocation
@@ -310,7 +310,7 @@ rmm::device_buffer some_function(
 
 ### Memory Management
 
-`libcudf` code generally eschews raw pointers and direct memory allocation. Use RMM classes built to
+libcudf code generally eschews raw pointers and direct memory allocation. Use RMM classes built to
 use `device_memory_resource`(*)s for device memory allocation with automated lifetime management.
 
 #### `rmm::device_buffer`
@@ -465,9 +465,9 @@ std::unique_ptr<column> copy_if_else(
   FilterFn filter,
   ...);
 ```
-`LeftIter` and `RightIter` need only implement the necessary interface for an iterator. `libcudf` 
+`LeftIter` and `RightIter` need only implement the necessary interface for an iterator. libcudf 
 provides a number of iterator types and utilities that are useful with iterator-based APIs from 
-`libcudf` as well as Thrust algorithms. Most are defined in `include/detail/iterator.cuh`. 
+libcudf as well as Thrust algorithms. Most are defined in `include/detail/iterator.cuh`. 
 
 ### Pair iterator
 
@@ -487,7 +487,7 @@ This iterator returns the validity of the underlying element (true or false). Cr
 
 ### Index-normalizing iterators
 
-The proliferation of data types supported by `libcudf` can result in long compile times. One area
+The proliferation of data types supported by libcudf can result in long compile times. One area
 where compile time was a problem is in types used to store indices, which can be any integer type.
 The "Indexalator", or index-normalizing iterator (`include/cudf/detail/indexalator.cuh`), can be 
 used for index types (integers) without requiring a type-specific instance. It can be used for any 
@@ -568,7 +568,7 @@ void isolated_helper_function(...);
 
 # Error Handling
 
-`libcudf` follows conventions (and provides utilities) enforcing compile-time and run-time 
+libcudf follows conventions (and provides utilities) enforcing compile-time and run-time 
 conditions and detecting and handling CUDA errors. Communication of errors is always via C++ 
 exceptions.
 
@@ -643,13 +643,13 @@ as discussed in [Specializing Type-Dispatched Code Paths](#specializing-type-dis
 
 # Type Dispatcher
 
-`libcudf` stores data (for columns and scalars) "type erased" in `void*` device memory. This 
+libcudf stores data (for columns and scalars) "type erased" in `void*` device memory. This 
 *type-erasure* enables interoperability with other languages and type systems, such as Python and 
-Java. In order to determine the type, `libcudf` algorithms must use the run-time information stored 
+Java. In order to determine the type, libcudf algorithms must use the run-time information stored 
 in the column `type()` to reconstruct the data type `T` by casting the `void*` to the appropriate 
 `T*`.
 
-This so-called *type dispatch* is pervasive throughout `libcudf`. The `type_dispatcher` is a 
+This so-called *type dispatch* is pervasive throughout libcudf. The `type_dispatcher` is a 
 central utility that automates the process of mapping the runtime type information in `data_type` 
 to a concrete C++ type.
 
@@ -755,7 +755,7 @@ specialize for any numeric type.
 
 # Strings Support<a name="string_support"></a>
 
-In order to represent variable width strings, libcudf uses a *compound* column (i.e., column with children).
+In order to represent variable-width strings, libcudf uses a *compound* column (i.e., column with children).
 The parent column's type is `STRING` and contains no data, but contains the count of the number of strings and the bitmask representing the validity of each string element.
 The parent has two children.
 The first is a non-nullable column of `INT32` elements that indicate the offset to beginning of each string in a dense column of characters.
