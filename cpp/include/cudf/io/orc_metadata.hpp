@@ -51,6 +51,12 @@ namespace io {
  */
 std::vector<std::vector<std::string>> read_orc_statistics(source_info const& src_info);
 
+enum class statistics_type {
+  NONE,
+  INT,
+  DOUBLE,
+};
+
 void parse_orc_statistics(std::vector<std::vector<std::string>> const& blobs);
 
 }  // namespace io

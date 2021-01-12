@@ -26,11 +26,12 @@
 #include <cudf/io/detail/parquet.hpp>
 #include <cudf/io/json.hpp>
 #include <cudf/io/orc.hpp>
+#include <cudf/io/orc_metadata.hpp>
 #include <cudf/io/parquet.hpp>
 #include <cudf/table/table.hpp>
 #include <cudf/utilities/error.hpp>
 
-#include "io/orc/orc.h"
+#include <io/orc/orc.h>
 #include "orc/chunked_state.hpp"
 #include "parquet/chunked_state.hpp"
 
@@ -245,16 +246,12 @@ void parse_orc_statistics(std::vector<std::vector<std::string>> const& blobs)
   for (auto& c : cstats) {
     orc::ColumnStatistics cs;
     orc::ProtobufReader(reinterpret_cast<const uint8_t*>(c.c_str()), c.size()).read(cs);
-    std::cout << cs.numberOfValues.value_or(0) << ' ';
-    if (cs.intStatistics.has_value()) {
-      auto istats = cs.intStatistics.value();
-      std::cout << istats.minimum.value() << ' ' << istats.maximum.value() << ' '
-                << istats.sum.value();
-    } else if (cs.doubleStatistics.has_value()) {
-      auto fstats = cs.doubleStatistics.value();
-      std::cout << fstats.minimum.value() << ' ' << fstats.maximum.value() << ' '
-                << fstats.sum.value_or(std::numeric_limits<double>::quiet_NaN());
-    } else if (cs.stringStatistics.has_value()) {
+
+    if (cs.intStatistics.get()) {
+      cs.type = statistics_type::INT;
+    } else if (cs.doubleStatistics.get()) {
+      cs.type = statistics_type::DOUBLE;
+    } /*else if (cs.stringStatistics.has_value()) {
       auto sstats = cs.stringStatistics.value();
       std::cout << sstats.minimum << ' ' << sstats.maximum << ' ' << sstats.sum.value_or(0);
     } else if (cs.bucketStatistics.has_value()) {
@@ -274,6 +271,7 @@ void parse_orc_statistics(std::vector<std::vector<std::string>> const& blobs)
       std::cout << tstats.minimum.value_or(0) << ' ' << tstats.maximum.value_or(0) << ' '
                 << tstats.minimumUtc.value_or(0) << ' ' << tstats.maximumUtc.value_or(0);
     }
+    */
     std::cout << "\n";
   }
 }

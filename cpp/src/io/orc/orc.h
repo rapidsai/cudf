@@ -27,6 +27,7 @@
 
 #include <io/comp/io_uncomp.h>
 #include <cudf/io/datasource.hpp>
+#include <cudf/io/orc_metadata.hpp>
 #include "orc_common.h"
 
 namespace cudf {
@@ -93,23 +94,35 @@ struct StripeFooter {
   std::vector<ColumnEncoding> columns;  // the encoding of each column
   std::string writerTimezone = "";      // time zone of the writer
 };
+template <typename T>
+struct min_max_statistics {
+  std::unique_ptr<T> minimum;
+  std::unique_ptr<T> maximum;
 
-struct IntegerStatistics {
-  thrust::optional<int64_t> minimum;
-  thrust::optional<int64_t> maximum;
-  thrust::optional<int64_t> sum;
+  auto has_minimum() const { return minimum != nullptr; }
+  auto has_maximum() const { return maximum != nullptr; }
+  auto *get_minimum() const { return minimum.get(); }
+  auto *get_maximum() const { return maximum.get(); }
 };
 
-struct DoubleStatistics {
-  thrust::optional<double> minimum;
-  thrust::optional<double> maximum;
-  thrust::optional<double> sum;
+template <typename T>
+struct sum_statistics {
+  std::unique_ptr<T> sum;
+
+  auto has_sum() const { return sum != nullptr; }
+  auto *get_sum() const { return sum.get(); }
+};
+
+struct integer_statistics : min_max_statistics<int64_t>, sum_statistics<int64_t> {
+};
+
+struct double_statistics : min_max_statistics<double>, sum_statistics<double> {
 };
 
 struct StringStatistics {
-  std::string minimum;
-  std::string maximum;
-  thrust::optional<int64_t> sum;
+  std::unique_ptr<std::string> minimum;
+  std::unique_ptr<std::string> maximum;
+  std::unique_ptr<int64_t> sum;
 };
 
 struct BucketStatistics {
@@ -117,37 +130,38 @@ struct BucketStatistics {
 };
 
 struct DecimalStatistics {
-  std::string minimum;
-  std::string maximum;
-  std::string sum;
+  std::unique_ptr<std::string> minimum;
+  std::unique_ptr<std::string> maximum;
+  std::unique_ptr<std::string> sum;
 };
 
 struct DateStatistics {
-  thrust::optional<int32_t> minimum;
-  thrust::optional<int32_t> maximum;
+  std::unique_ptr<int32_t> minimum;
+  std::unique_ptr<int32_t> maximum;
 };
 
 struct BinaryStatistics {
-  thrust::optional<int64_t> sum;
+  std::unique_ptr<int64_t> sum;
 };
 
 struct TimestampStatistics {
-  thrust::optional<int64_t> minimum;
-  thrust::optional<int64_t> maximum;
-  thrust::optional<int64_t> minimumUtc;
-  thrust::optional<int64_t> maximumUtc;
+  std::unique_ptr<int64_t> minimum;
+  std::unique_ptr<int64_t> maximum;
+  std::unique_ptr<int64_t> minimumUtc;
+  std::unique_ptr<int64_t> maximumUtc;
 };
 
 struct ColumnStatistics {
-  thrust::optional<uint64_t> numberOfValues;
-  thrust::optional<IntegerStatistics> intStatistics;
-  thrust::optional<DoubleStatistics> doubleStatistics;
-  thrust::optional<StringStatistics> stringStatistics;
-  thrust::optional<BucketStatistics> bucketStatistics;
-  thrust::optional<DecimalStatistics> decimalStatistics;
-  thrust::optional<DateStatistics> dateStatistics;
-  thrust::optional<BinaryStatistics> binaryStatistics;
-  thrust::optional<TimestampStatistics> timestampStatistics;
+  std::unique_ptr<uint64_t> numberOfValues;
+  statistics_type type = statistics_type::NONE;
+  std::unique_ptr<integer_statistics> intStatistics;
+  std::unique_ptr<double_statistics> doubleStatistics;
+  // std::unique_ptr<StringStatistics> stringStatistics;
+  // std::unique_ptr<BucketStatistics> bucketStatistics;
+  // std::unique_ptr<DecimalStatistics> decimalStatistics;
+  // std::unique_ptr<DateStatistics> dateStatistics;
+  // std::unique_ptr<BinaryStatistics> binaryStatistics;
+  // std::unique_ptr<TimestampStatistics> timestampStatistics;
 };
 
 struct StripeStatistics {
@@ -181,8 +195,8 @@ class ProtobufReader {
   void read(StripeFooter &, size_t maxlen);
   void read(Stream &, size_t maxlen);
   void read(ColumnEncoding &, size_t maxlen);
-  void read(IntegerStatistics &, size_t maxlen);
-  void read(DoubleStatistics &, size_t maxlen);
+  void read(integer_statistics &, size_t maxlen);
+  void read(double_statistics &, size_t maxlen);
   void read(StringStatistics &, size_t maxlen);
   void read(BucketStatistics &, size_t maxlen);
   void read(DecimalStatistics &, size_t maxlen);
@@ -241,7 +255,9 @@ class ProtobufReader {
     return (field_number * 8) + PB_TYPE_FIXED64;
   }
 
-  template <typename T, typename std::enable_if_t<!std::is_class<T>::value> * = nullptr>
+  template <typename T,
+            typename std::enable_if_t<!std::is_class<T>::value or
+                                      std::is_same<T, std::string>::value> * = nullptr>
   int static constexpr encode_field_number(int field_number) noexcept
   {
     return encode_field_number_base<T>(field_number);
@@ -249,9 +265,8 @@ class ProtobufReader {
 
   // containters change the field number encoding
   template <typename T,
-            typename std::enable_if_t<
-              std::is_class<T>::value and
-              !std::is_same<T, thrust::optional<typename T::value_type>>::value> * = nullptr>
+            typename std::enable_if_t<std::is_same<T, std::vector<typename T::value_type>>::value>
+              * = nullptr>
   int static constexpr encode_field_number(int field_number) noexcept
   {
     return encode_field_number_base<T>(field_number);
@@ -260,10 +275,10 @@ class ProtobufReader {
   // optional fields don't change the field number encoding
   template <typename T,
             typename std::enable_if_t<
-              std::is_same<T, thrust::optional<typename T::value_type>>::value> * = nullptr>
+              std::is_same<T, std::unique_ptr<typename T::element_type>>::value> * = nullptr>
   int static constexpr encode_field_number(int field_number) noexcept
   {
-    return encode_field_number_base<typename T::value_type>(field_number);
+    return encode_field_number_base<typename T::element_type>(field_number);
   }
 
   uint32_t read_field_size(const uint8_t *end);
@@ -310,12 +325,12 @@ class ProtobufReader {
 
   template <typename T,
             typename std::enable_if_t<
-              std::is_same<T, thrust::optional<typename T::value_type>>::value> * = nullptr>
+              std::is_same<T, std::unique_ptr<typename T::element_type>>::value> * = nullptr>
   void read_field(T &value, const uint8_t *end)
   {
-    typename T::value_type contained_value;
+    typename T::element_type contained_value;
     read_field(contained_value, end);
-    value = contained_value;
+    value = std::make_unique<typename T::element_type>(std::move(contained_value));
   }
 
   template <typename T>
