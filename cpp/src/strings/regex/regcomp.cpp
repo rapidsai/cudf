@@ -230,7 +230,7 @@ class regex_parser {
     /* merge spans */
     reclass yycls{builtins};
     if (cls.size() >= 2) {
-      int np   = 0;
+      int np        = 0;
       std::size_t p = 0;
       yycls.literals += cls[p++];
       yycls.literals += cls[p++];
