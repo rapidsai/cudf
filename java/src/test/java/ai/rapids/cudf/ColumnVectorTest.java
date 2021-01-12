@@ -3830,4 +3830,40 @@ public class ColumnVectorTest extends CudfTestBase {
       assertColumnsAreEqual(expected, created);
     }
   }
+
+  @Test
+  void testMakeListEmpty() {
+    final int numRows = 10;
+    try (ColumnVector expected =
+             ColumnVector.fromLists(
+                 new ListType(false, new BasicType(false, DType.STRING)),
+                 Arrays.asList(),
+                 Arrays.asList(),
+                 Arrays.asList(),
+                 Arrays.asList(),
+                 Arrays.asList(),
+                 Arrays.asList(),
+                 Arrays.asList(),
+                 Arrays.asList(),
+                 Arrays.asList(),
+                 Arrays.asList());
+         ColumnVector created = ColumnVector.makeList(numRows, DType.STRING)) {
+      assertColumnsAreEqual(expected, created);
+    }
+  }
+
+  @Test
+  void testMakeList() {
+    try (ColumnVector expected =
+             ColumnVector.fromLists(
+                 new ListType(false, new BasicType(false, DType.INT32)),
+                 Arrays.asList(1, 3, 5),
+                 Arrays.asList(2, 4, 6));
+         ColumnVector child1 = ColumnVector.fromInts(1, 2);
+         ColumnVector child2 = ColumnVector.fromInts(3, 4);
+         ColumnVector child3 = ColumnVector.fromInts(5, 6);
+         ColumnVector created = ColumnVector.makeList(child1, child2, child3)) {
+      assertColumnsAreEqual(expected, created);
+    }
+  }
 }
