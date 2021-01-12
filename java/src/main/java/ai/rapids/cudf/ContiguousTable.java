@@ -82,7 +82,7 @@ public final class ContiguousTable implements AutoCloseable {
     if (metadataBuffer == null) {
       metadataBuffer = createMetadataDirectBuffer(metadataHandle);
     }
-    return metadataBuffer;
+    return metadataBuffer.asReadOnlyBuffer();
   }
 
   /** Close the contiguous table instance and its underlying resources. */

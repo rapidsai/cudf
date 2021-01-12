@@ -1749,20 +1749,18 @@ public final class Table implements AutoCloseable {
    * Construct a table from a packed representation.
    * @param metadata host-based metadata for the table
    * @param data GPU data buffer for the table
-   * @return table whic is zero-copy reconstructed from the packed-form
+   * @return table which is zero-copy reconstructed from the packed-form
    */
   public static Table fromPackedTable(ByteBuffer metadata, DeviceMemoryBuffer data) {
-    metadata.rewind();
-
     // Ensure the metadata buffer is direct so it can be passed to JNI
     ByteBuffer directBuffer = metadata;
     if (!directBuffer.isDirect()) {
-      directBuffer = ByteBuffer.allocateDirect(metadata.capacity());
+      directBuffer = ByteBuffer.allocateDirect(metadata.remaining());
       directBuffer.put(metadata);
       directBuffer.flip();
     }
 
-    long[] columnViewAddresses = columnViewsFromPacked(metadata, data.getAddress());
+    long[] columnViewAddresses = columnViewsFromPacked(directBuffer, data.getAddress());
     ColumnVector[] columns = new ColumnVector[columnViewAddresses.length];
     Table result = null;
     try {
