@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2019, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -262,48 +262,17 @@ __device__ inline int string_view::compare(const string_view& in) const
 
 __device__ inline int string_view::compare(const char* data, size_type bytes) const
 {
-  unsigned char const* ptr1 = reinterpret_cast<const unsigned char*>(this->data());
-  unsigned char const* ptr2 = reinterpret_cast<const unsigned char*>(data);
-
-  size_type const len1 = size_bytes();
-  size_type const len2 = bytes;
-  size_type const len  = std::min(len1, len2);
-  size_type idx        = 0;
-#if defined(__CUDA_ARCH__)
-  if (len >= 8) {
-    uint32_t const align_a = 3 & reinterpret_cast<uintptr_t>(ptr1);
-    uint32_t const align_b = 3 & reinterpret_cast<uintptr_t>(ptr2);
-    // assumes we can read the 32-bit block of an unaligned pointer
-    auto s32_a = reinterpret_cast<uint32_t const*>(ptr1 - align_a) + 1;
-    auto s32_b = reinterpret_cast<uint32_t const*>(ptr2 - align_b) + 1;
-    // convert align to bit shift count
-    uint32_t const offset_a = align_a * 8;
-    uint32_t const offset_b = align_b * 8;
-    do {
-      uint32_t const a = __funnelshift_r(*(s32_a - 1), *s32_a, offset_a);
-      uint32_t const b = __funnelshift_r(*(s32_b - 1), *s32_b, offset_b);
-      if (a != b) { return __byte_perm(a, 0, 0x0123) < __byte_perm(b, 0, 0x0123) ? -1 : 1; }
-      idx += 4;
-      ++s32_a;
-      ++s32_b;
-    } while (idx + 4 <= len);
-  }
-  while (idx < len) {
-    auto const a = ptr1[idx];
-    auto const b = ptr2[idx];
-    if (a != b) { return static_cast<int>(a) - static_cast<int>(b); }
-    ++idx;
-  }
-#else
-  while (idx < len) {
+  size_type const len1      = size_bytes();
+  const unsigned char* ptr1 = reinterpret_cast<const unsigned char*>(this->data());
+  const unsigned char* ptr2 = reinterpret_cast<const unsigned char*>(data);
+  size_type idx             = 0;
+  for (; (idx < len1) && (idx < bytes); ++idx) {
     if (*ptr1 != *ptr2) return static_cast<int32_t>(*ptr1) - static_cast<int32_t>(*ptr2);
     ++ptr1;
     ++ptr2;
-    ++idx;
   }
-#endif
-  if (len1 < len2) return -1;
-  if (len2 < len1) return 1;
+  if (idx < len1) return 1;
+  if (idx < bytes) return -1;
   return 0;
 }
 
