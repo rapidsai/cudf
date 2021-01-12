@@ -1,4 +1,4 @@
-# Unit Testing in `libcudf`
+# Unit Testing in libcudf
 
 Unit tests in libcudf are written using 
 [Google Test](https://github.com/google/googletest/blob/master/googletest/docs/primer.md).
@@ -22,7 +22,7 @@ files, and are therefore preferrred in test code over `thrust::device_vector`.
 
 ## Base Fixture
 
-All `libcudf` unit tests should make use of a GTest ["Test Fixture"](https://github.com/google/googletest/blob/master/googletest/docs/primer.md#test-fixtures-using-the-same-data-configuration-for-multiple-tests-same-data-multiple-tests).
+All libcudf unit tests should make use of a GTest ["Test Fixture"](https://github.com/google/googletest/blob/master/googletest/docs/primer.md#test-fixtures-using-the-same-data-configuration-for-multiple-tests-same-data-multiple-tests).
 Even if the fixture is empty, it should inherit from the base fixture `cudf::test::BaseFixture` 
 found in `include/cudf_test/base_fixture.hpp`. This ensures that RMM is properly initialized and 
 finalized. `cudf::test::BaseFixture` already inherits from `::testing::Test` and therefore it is 
@@ -35,7 +35,7 @@ class MyTestFiture : public cudf::test::BaseFixture {...};
 
 ## Typed Tests
 
-`libcudf` features must work across all of the supported types. In order to automate the process of 
+libcudf features must work across all of the supported types. In order to automate the process of 
 running the same tests across multiple types, we use GTest's [Typed Tests](https://github.com/google/googletest/blob/master/googletest/docs/advanced.md#typed-tests). Typed tests allow you to write a test once 
 and run it across a list of types.
 
@@ -77,7 +77,7 @@ rather than creating new custom lists.
 #### Advanced Type Lists
 
 Sometimes it is necessary to generate more advanced type lists than the simple lists of single types 
-in the `TypeList` example above. `libcudf` provides a set of meta-programming utilities in 
+in the `TypeList` example above. libcudf provides a set of meta-programming utilities in 
 `include/cudf_test/type_list_utilities.hpp` for generating and composing more advanced type lists.
 
 For example, it may be useful to generate a *nested* type list where each element in the list is two
