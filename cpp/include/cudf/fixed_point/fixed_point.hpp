@@ -276,9 +276,9 @@ class fixed_point {
   }
 
   /**
-   * @brief Method that returns the underlying value stored of the `fixed_point` number
+   * @brief Method that returns the underlying value of the `fixed_point` number
    *
-   * @return rep The underlying value stored of the `fixed_point` number
+   * @return The underlying value of the `fixed_point` number
    */
   CUDA_HOST_DEVICE_CALLABLE rep value() const { return _value; }
 
