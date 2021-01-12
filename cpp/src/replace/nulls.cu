@@ -25,6 +25,7 @@
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/replace.hpp>
+#include <cudf/detail/replace/nulls.cuh>
 #include <cudf/detail/utilities/cuda.cuh>
 #include <cudf/dictionary/detail/replace.hpp>
 #include <cudf/dictionary/dictionary_column_view.hpp>
@@ -45,8 +46,8 @@
 #include <thrust/iterator/discard_iterator.h>
 #include <thrust/iterator/reverse_iterator.h>
 #include <thrust/iterator/zip_iterator.h>
-#include <thrust/transform.h>
 #include <thrust/scan.h>
+#include <thrust/transform.h>
 
 namespace {  // anonymous
 
@@ -361,22 +362,6 @@ std::unique_ptr<cudf::column> replace_nulls_scalar_kernel_forwarder::operator()<
 }
 
 /**
- * @brief Functor used by `inclusive_scan` to determine the index to gather from in
- *        the result column. When current row in input column is NULL, return previous
- *        accumulated index, otherwise return the current index. The second element in
- *        the return tuple is discarded.
- */
-struct replace_policy_functor {
-  __device__ thrust::tuple<cudf::size_type, bool> operator()(
-    thrust::tuple<cudf::size_type, bool> const& lhs,
-    thrust::tuple<cudf::size_type, bool> const& rhs)
-  {
-    return thrust::get<1>(rhs) ? thrust::make_tuple(thrust::get<0>(rhs), true)
-                               : thrust::make_tuple(thrust::get<0>(lhs), true);
-  }
-};
-
-/**
  * @brief Function used by replace_nulls policy
  */
 
@@ -394,7 +379,7 @@ std::unique_ptr<cudf::column> replace_nulls_policy_impl(cudf::column_view const&
   auto gm_begin = thrust::make_zip_iterator(
     thrust::make_tuple(gather_map.begin(), thrust::make_discard_iterator()));
 
-  auto func = replace_policy_functor();
+  auto func = cudf::detail::replace_policy_functor();
   if (replace_policy == cudf::replace_policy::PRECEDING) {
     thrust::inclusive_scan(
       rmm::exec_policy(stream), in_begin, in_begin + input.size(), gm_begin, func);
@@ -413,54 +398,24 @@ std::unique_ptr<cudf::column> replace_nulls_policy_impl(cudf::column_view const&
   return std::move(output->release()[0]);
 }
 
-/**
- * @brief Function used by groupby replace_nulls policy
- */
-
- std::unique_ptr<cudf::column> replace_nulls_policy_impl(cudf::column_view const& key,
-                                                         cudf::column_view const& input,
-                                                         cudf::replace_policy const& replace_policy,
-                                                         rmm::cuda_stream_view stream,
-                                                         rmm::mr::device_memory_resource* mr)
-{
-  auto key_begin = key.begin<cudf::size_type>();
-
-  auto device_in = cudf::column_device_view::create(input);
-  auto index     = thrust::make_counting_iterator<cudf::size_type>(0);
-  auto valid_it  = cudf::detail::make_validity_iterator(*device_in);
-  auto in_begin  = thrust::make_zip_iterator(thrust::make_tuple(index, valid_it));
-
-  rmm::device_uvector<cudf::size_type> gather_map(input.size(), stream, mr);
-  // rmm::device_vector<cudf::valid_type> valid_holder(input.size());
-  auto gm_begin = thrust::make_zip_iterator(
-    thrust::make_tuple(gather_map.begin(), thrust::make_discard_iterator()));
-  // auto gm_begin = thrust::make_zip_iterator(
-  //   thrust::make_tuple(gather_map.begin(), valid_holder.begin()));
-
-  auto func = replace_policy_functor();
-  thrust::equal_to<cudf::size_type> eq;
-  // thrust::plus<cudf::size_type> binop;
-  if (replace_policy == cudf::replace_policy::PRECEDING) {
-    thrust::inclusive_scan_by_key(
-      rmm::exec_policy(stream), key_begin, key_begin+key.size(), in_begin, gm_begin, eq, func);
-  }
-  // else {
-  //   auto key_rbegin = thrust::make_reverse_iterator(key_begin + key.size());
-  //   auto in_rbegin = thrust::make_reverse_iterator(in_begin + input.size());
-  //   auto gm_rbegin = thrust::make_reverse_iterator(gm_begin + gather_map.size());
-  //   thrust::inclusive_scan_by_key(
-  //     rmm::exec_policy(stream), key_rbegin, key_rbegin+key.size(), in_rbegin, gm_rbegin, eq, func);
-  // }
-
-  auto output = cudf::detail::gather(cudf::table_view({input}), gather_map.begin(), gather_map.end(), cudf::out_of_bounds_policy::DONT_CHECK);
-
-  return std::move(output->release()[0]);
-}
-
 }  // end anonymous namespace
 
 namespace cudf {
 namespace detail {
+
+/**
+ * @brief Functor used by `inclusive_scan` to determine the index to gather from in
+ *        the result column. When current row in input column is NULL, return previous
+ *        accumulated index, otherwise return the current index. The second element in
+ *        the return tuple is discarded.
+ */
+__device__ thrust::tuple<cudf::size_type, bool> replace_policy_functor::operator()(
+  thrust::tuple<cudf::size_type, bool> const& lhs, thrust::tuple<cudf::size_type, bool> const& rhs)
+{
+  return thrust::get<1>(rhs) ? thrust::make_tuple(thrust::get<0>(rhs), true)
+                             : thrust::make_tuple(thrust::get<0>(lhs), true);
+}
+
 std::unique_ptr<cudf::column> replace_nulls(cudf::column_view const& input,
                                             cudf::column_view const& replacement,
                                             rmm::cuda_stream_view stream,
@@ -504,21 +459,6 @@ std::unique_ptr<cudf::column> replace_nulls(cudf::column_view const& input,
   return replace_nulls_policy_impl(input, replace_policy, stream, mr);
 }
 
-std::unique_ptr<cudf::column> replace_nulls(cudf::column_view const& key,
-                                            cudf::column_view const& input,
-                                            cudf::replace_policy const& replace_policy,
-                                            rmm::cuda_stream_view stream,
-                                            rmm::mr::device_memory_resource* mr)
-{
-  if (input.is_empty()) { return cudf::empty_like(input); }
-
-  CUDF_EXPECTS(input.size() == key.size(), "Key-value size mismatch.");
-
-  if (!input.has_nulls()) { return std::make_unique<cudf::column>(input, stream, mr); }
-
-  return replace_nulls_policy_impl(key, input, replace_policy, stream, mr);
-}
-
 }  // namespace detail
 
 std::unique_ptr<cudf::column> replace_nulls(cudf::column_view const& input,
@@ -543,16 +483,6 @@ std::unique_ptr<cudf::column> replace_nulls(column_view const& input,
 {
   CUDF_FUNC_RANGE();
   return cudf::detail::replace_nulls(input, replace_policy, rmm::cuda_stream_default, mr);
-}
-
-std::unique_ptr<column> replace_nulls(
-  column_view const& key,
-  column_view const& input,
-  replace_policy const& replace_policy,
-  rmm::mr::device_memory_resource* mr)
-{
-  CUDF_FUNC_RANGE();
-  return cudf::detail::replace_nulls(key, input, replace_policy, rmm::cuda_stream_default, mr);
 }
 
 }  // namespace cudf

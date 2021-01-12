@@ -17,7 +17,6 @@
 #pragma once
 
 #include <cudf/types.hpp>
-#include <cudf/groupby.hpp>
 #include <memory>
 
 namespace cudf {
@@ -83,23 +82,6 @@ std::unique_ptr<column> replace_nulls(
  * @returns Copy of `input` with null values replaced based on `replace_policy`.
  */
 std::unique_ptr<column> replace_nulls(
-  column_view const& input,
-  replace_policy const& replace_policy,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
-
-/**
- * @brief 
- *
- *
- * @param[in] key
- * @param[in] input A column whose null values will be replaced.
- * @param[in] replace_policy Specify the position of replacement values relative to null values.
- * @param[in] mr Device memory resource used to allocate device memory of the returned column.
- *
- * @returns
- */
-std::unique_ptr<column> replace_nulls(
-  column_view const& key,
   column_view const& input,
   replace_policy const& replace_policy,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());

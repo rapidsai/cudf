@@ -17,6 +17,8 @@
 #pragma once
 
 #include <cudf/aggregation.hpp>
+#include <cudf/column/column_view.hpp>
+#include <cudf/replace.hpp>
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
 
@@ -195,8 +197,19 @@ class groupby {
   groups get_groups(cudf::table_view values             = {},
                     rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
-  std::unique_ptr<cudf::column> get_group_label(
-                    rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+  /**
+   * @brief
+   *
+   * @param[in] value A column whose null values will be replaced.
+   * @param[in] replace_policy Specify the position of replacement values relative to null values.
+   * @param[in] mr Device memory resource used to allocate device memory of the returned column.
+   *
+   * @returns
+   */
+  std::unique_ptr<cudf::column> replace_nulls(
+    column_view const& value,
+    cudf::replace_policy replace_policy,
+    rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
  private:
   table_view _keys;                                      ///< Keys that determine grouping

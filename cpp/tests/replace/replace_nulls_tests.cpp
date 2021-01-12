@@ -17,8 +17,8 @@
  * limitations under the License.
  */
 
-#include <cudf/replace.hpp>
 #include <cudf/groupby.hpp>
+#include <cudf/replace.hpp>
 
 #include <tests/groupby/groupby_test_util.hpp>
 
@@ -437,46 +437,6 @@ TYPED_TEST(ReplaceNullsPolicyTest, FollowingFillTrailingNulls)
       expect_col.begin(), expect_col.end(), expect_mask.begin()),
     cudf::replace_policy::FOLLOWING);
 }
-
-// template <typename T>
-// struct ReplaceNullsGroupbyTest : public cudf::test::BaseFixture {
-// };
-
-// TYPED_TEST_CASE(ReplaceNullsGroupbyTest, test_types);
-
-// template <typename T>
-// void TestReplaceNullsGroupby(cudf::test::fixed_width_column_wrapper<T> key,
-//                               cudf::test::fixed_width_column_wrapper<int32_t> input,
-//                               cudf::test::fixed_width_column_wrapper<T> expected,
-//                               cudf::replace_policy policy)
-// {
-//   cudf::groupby::groupby gb_obj(table_view({key}), false, false, {}, {});
-//   auto labels = gb_obj.get_group_label();
-
-//   auto result = cudf::replace_nulls(*labels, input, policy);
-//   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*result, expected);
-// }
-
-// TYPED_TEST(ReplaceNullsGroupbyTest, PrecedingFill)
-// {
-//   using K = TypeParam;
-//   using V = int32_t;
-
-//   std::vector<K> key =
-//     cudf::test::make_type_param_vector<K>({0, 1, 0, 1, 0, 1});
-//   std::vector<V> val =
-//     cudf::test::make_type_param_vector<V>({42, 7, 24, 10, 1, 1000});
-//   std::vector<cudf::valid_type> mask =
-//     cudf::test::make_type_param_vector<cudf::valid_type>({1, 1, 1, 0, 0, 0});
-//   std::vector<K> expect_col =
-//     cudf::test::make_type_param_vector<K>({42, 7, 24, 7, 24, 7});
-
-//   TestReplaceNullsGroupby(
-//     cudf::test::fixed_width_column_wrapper<K>(key.begin(), key.end(), mask.begin()),
-//     cudf::test::fixed_width_column_wrapper<K>(
-//       expect_col.begin(), expect_col.end(), cudf::test::all_valid()),
-//     cudf::replace_policy::PRECEDING);
-// }
 
 struct ReplaceDictionaryTest : public cudf::test::BaseFixture {
 };
