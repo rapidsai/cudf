@@ -25,8 +25,6 @@
 
 #include <rmm/cuda_stream_view.hpp>
 
-#include <thrust/count.h>
-
 namespace cudf {
 namespace detail {
 
