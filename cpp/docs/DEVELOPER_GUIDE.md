@@ -751,27 +751,93 @@ specialize for any numeric type.
 
 # Nested Data Types
 
-// TODO
+libcudf supports a number of nested data types, including strings, lists, and structs. A string is 
+simply a character string, but a column of strings may have a different-length string in each row.
+A list is a list of elements of any type, so a column of lists of integers has rows with a list of 
+integers, possibly of a different length, in each row. In a colum of structs, each row is a 
+structure comprising one or more fields. These fields are stored in structure-of-arrays format, so 
+that the column of structs has a nested column for each field of the structure. 
 
-# Strings Support<a name="string_support"></a>
+As the heading implies, these column types may be nested arbitrarily. One may create a column of 
+lists of structs, where the fields of the struct may be of any type, including strings, lists and 
+structs. Thinking about deeply nested data types can be confusing for column-based data, even with 
+experience. Therefore it is important to carefully write algorithms, and to test and document them
+well.
 
-In order to represent variable-width strings, libcudf uses a *compound* column (i.e., column with children).
-The parent column's type is `STRING` and contains no data, but contains the count of the number of strings and the bitmask representing the validity of each string element.
-The parent has two children.
-The first is a non-nullable column of `INT32` elements that indicate the offset to beginning of each string in a dense column of characters.
-The second is a non-nullable column of `INT8` elements of all the characters across all the strings packed together. With this representation, `characters[offsets[i]]` is the first character of string `i`, and the size of string `i` is given by `offsets[i+1] - offsets[i]`.
+## List columns
 
-The image below shows an example of this compound column representation of strings:
+In order to represent variable-width elements, libcudf columns contain a vector of child columns.
+For list columns, the parent column's type is `LIST` and contains no data, but its size represents
+the number of lists in the column, and its null mask represents the validity of each list element.
+The parent has two children. 
 
+1. A non-nullable column of `INT32` elements that indicates the offset to the beginning of each list
+   in a dense column of elements.
+2. A column containing the actual data and optional null mask for all elements of all the lists 
+   packed together.
+   
+With this representation, `data[offsets[i]]` is the first element of list `i`, and the size of list
+`i` is given by `offsets[i+1] - offsets[i]`.
+
+Note that the data may be of any type, and therefore the data column may itself be a nested column
+of any type. Note also that not only is each list nullable (using the null mask of the parent), but
+each list element may be nullable. So you may have a lists column with null row 3, and also null
+element 2 of row 4.
+
+## Strings columns
+
+Strings are represented in much the same way as lists, except that the data child column is always 
+a non-nullable column of `INT8` data. The parent column's type is `STRING` and contains no data,
+but its size represents the number of strings in the column, and its null mask represents the 
+validity of each string. To summarize, the strings column children are:
+
+1. A non-nullable column of `INT32` elements that indicates the offset to the beginning of each 
+   string in a dense column of all characters.
+2. A non-nullable column of `INT8` elements of all the characters across all the strings packed 
+   together.
+
+With this representation, `characters[offsets[i]]` is the first character of string `i`, and the 
+size of string `i` is given by `offsets[i+1] - offsets[i]`. The following image shows an example of
+this compound column representation of strings.
 
 ![strings](strings.png)
 
-The first challenge with strings columns is that it is effectively impossible to do any operation that modifies the length of any string in-place.
-For example, consider trying to append the character `'a'` to the end of each string.
-This would require dynamically resizing the characters column to allow inserting `'a'` at the end of each string, and then modifying the offsets column to indicate the new size of each element. As a result, every operation that can modify the strings in the column must be out-of-place. 
+## Structs columns
 
-The second challenge is that in an out-of-place operation on a string column, unlike with fixed-width elements, the size of the output cannot be known *a priori*. 
-For example, consider scattering into a column of strings:
+Structs are represented similarly to lists, except that they have multiple child data columns.
+The parent column's type is `STRUCT` and contains no data, but its size represents the number of 
+structs in the column, and its null mask represents the validity of each struct element. The parent 
+has `N + 1` children, where `N` is the number of fields in the struct. 
+
+1. A non-nullable column of `INT32` elements that indicates the offset to the beginning of each 
+   struct in each dense column of elements.
+2. For each field, a column containing the actual field data and optional null mask for all elements
+   of all the structs packed together.
+   
+With this representation, `child[0][offsets[i]]` is the first field of struct `i`, 
+`child[1][offsets[i]]` is the second field of struct `i`, etc.
+
+## Dictionary columns
+
+Dictionaries provide an efficient way to represent low-cardinality data by storing a single copy 
+of each value. A dictionary comprises a column of sorted keys and a column containing an index into the 
+keys column for each row of the parent column. The keys column may have any libcudf data type, 
+such as a numerical type or strings. The indices represent the corresponding positions of each 
+element's value in the keys.
+
+## Nested column challenges
+
+The first challenge with nested columns is that it is effectively impossible to do any operation 
+that modifies the length of any string or list in place. For example, consider trying to append the 
+character `'a'` to the end of each string. This requires dynamically resizing the characters column
+to allow inserting `'a'` at the end of each string, and then modifying the offsets column to 
+indicate the new size of each element. As a result, every operation that can modify the strings or
+lists in a column must be done out-of-place.
+
+The second challenge is that in an out-of-place operation on a strings column, unlike with fixed-
+width elements, the size of the output cannot be known *a priori*. For example, consider scattering 
+into a column of strings:
+
 ```c++
 destination:    {"this", "is", "a", "column", "of", "strings"}
 scatter_map:    {1, 3, 5}
@@ -780,44 +846,81 @@ scatter_values: {"red", "green", "blue"}
 result:         {"this", "red", "a", "green", "of", "blue"}
 ```
 
-In this example, the strings `"red", "green", "blue"` will respectively be scattered into positions `1,3,5` of `destination`. 
-Recall from above that this operation cannot be done in-place, therefore `result` will be generated by selectively copying strings from `destination` and `scatter_values`. 
-Notice that `result`'s child column of characters will require storage for `19` characters. 
-However, there is no way to know ahead of time that `result` will require `19` characters. 
-Therefore, most operations that produce a new output column of strings use a two-phase approach:
+In this example, the strings "red", "green", and "blue" will respectively be scattered into
+positions `1`, `3`, and `5` of `destination`. Recall from above that this operation cannot be done 
+in place, therefore `result` will be generated by selectively copying strings from `destination` and `scatter_values`. 
+Notice that `result`'s child column of characters requires storage for `19` characters. However, 
+there is no way to know ahead of time that `result` will require `19` characters. Therefore, most 
+operations that produce a new output column of strings use a two-phase approach:
 
-1. First, determine the number and size of each string in the result
-    - This amounts to materializing the output's offsets column 
-2. Second, allocate sufficient storage for all of the output characters and materialize each output string
+1. Determine the number and size of each string in the result. This amounts to materializing the
+   output offsets column.
+2. Allocate sufficient storage for all of the output characters and materialize each output string.
 
-In scatter, the first phase consists of using the `scatter_map` to determine if string `i` in the output will come from `destination` or from `scatter_values` and use the corresponding size(s) to materialize the offsets column and determine the size of the output. Then, in the second phase, sufficient storage is allocated for the output's characters, and then the characters are filled with the corresponding strings from either `destination` or `scatter_values`.
+In scatter, the first phase consists of using the `scatter_map` to determine whether string `i` in
+the output will come from `destination` or from `scatter_values` and use the corresponding size(s) 
+to materialize the offsets column and determine the size of the output. Then, in the second phase, 
+sufficient storage is allocated for the output's characters, and then the characters are filled 
+with the corresponding strings from either `destination` or `scatter_values`.
 
+## Nested Type Views
 
-### `cudf::string_view`
+libcudf provides view types for nested column types as well as for the data elements within them.
 
-This is the data type for a `STRING` column like `int32_t` is the data type for an `INT32` column. As it's name implies, this is a read-only object instance that points to device memory inside the strings column. It's lifespan is the same (or less) as the column it was created from.
+### `cudf::strings_column_view` and `cudf::string_view`
 
-Use the `column_device_view::element` method to access an individual row element. Like any other column, do not call `element()` on a row that is null. 
-```
-   column_device_view d_strings;
+`cudf::strings_column_view` is a view of a strings column, like `cudf::column_view` is a view of 
+any `cudf::column`. `cudf::string_view` is a view of a single string, and therefore 
+`cudf::string_view` is the data type of a `cudf::column` of type `STRING` just like `int32_t` is the data 
+type for a `cudf::column` of type `INT32`. As it's name implies, this is a read-only object instance
+that points to device memory inside the strings column. It's lifespan is the same (or less) as the 
+column it views.
+
+Use the `column_device_view::element` method to access an individual row element. Like any other
+column, do not call `element()` on a row that is null. 
+
+```c++
+   cudf::column_device_view d_strings;
    ...
    if( d_strings.is_valid(row_index) ) {
       string_view d_str = d_strings.element<string_view>(row_index);
       ...
    }
 ```
-A null string is not the same as an empty string. Use the `string_scalar` class if you need an instance of a class object to represent a null string.
 
-The `string_view` contains comparison operators `<,>,==,<=,>=` so they can be used in many cudf functions like `sort` without specific strings code.
-The data for a `string_view` instance is required to be [UTF-8](#UTF-8) and all operators and methods expect this encoding. Unless documented otherwise,
-position and length parameters are specified in characters and not bytes.
-The class also includes a `string_view::const_iterator` which can be used to navigate through individual characters within the string.
+A null string is not the same as an empty string. Use the `string_scalar` class if you need an 
+instance of a class object to represent a null string.
 
-The `type-dispatcher` dispatches to the `string_view` data type when invoked on a `STRING` column.
+The `string_view` contains comparison operators `<,>,==,<=,>=` that can be used in many cudf 
+functions like `sort` without string-specific code. The data for a `string_view` instance is 
+required to be [UTF-8](#UTF-8) and all operators and methods expect this encoding. Unless documented
+otherwise, position and length parameters are specified in characters and not bytes. The class also
+includes a `string_view::const_iterator` which can be used to navigate through individual characters
+within the string.
 
+`cudf::type_dispatcher` dispatches to the `string_view` data type when invoked on a `STRING` column.
 
-### UTF-8
+#### UTF-8
 
-The cudf strings column only supports UTF-8 encoding for strings data. [UTF-8](https://en.wikipedia.org/wiki/UTF-8) is a variable-length character encoding where each character can be 1-4 bytes. This means the length of a string is not the same as its size in bytes. For this reason, it recommended to use the `string_view` class to access these characters for most operations.
+The libcudf strings column only supports UTF-8 encoding for strings data. 
+[UTF-8](https://en.wikipedia.org/wiki/UTF-8) is a variable-length character encoding wherein each 
+character can be 1-4 bytes. This means the length of a string is not the same as its size in bytes.
+For this reason, it is recommended to use the `string_view` class to access these characters for
+most operations.
 
-The `string_view.cuh` also includes some utility methods for reading and writing (`to_char_utf8/from_char_utf8`) individual UTF-8 characters to/from byte arrays.
+The `string_view.cuh` header also includes some utility methods for reading and writing 
+(`to_char_utf8/from_char_utf8`) individual UTF-8 characters to/from byte arrays.
+
+### `cudf::lists_column_view` and `cudf::lists_view`
+
+`cudf::lists_column_view` is a view of a lists column. `cudf::list_view` is a view of a single list, and 
+therefore `cudf::list_view` is the data type of a `cudf::column` of type `LIST`.
+
+`cudf::type_dispatcher` dispatches to the `list_view` data type when invoked on a `LIST` column.
+
+### `cudf::structs_column_view` and `cudf::struct_view`
+
+`cudf::structs_column_view` is a view of a structs column. `cudf::struct_view` is a view of a single
+struct, and therefore `cudf::struct_view` is the data type of a `cudf::column` of type `STRUCT`.
+
+`cudf::type_dispatcher` dispatches to the `struct_view` data type when invoked on a `STRUCT` column.
