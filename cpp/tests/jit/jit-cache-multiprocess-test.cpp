@@ -82,7 +82,7 @@ TEST_F(JitCacheMultiProcessTest, MultiProcessTest)
   CUDA_TRY(cudaMallocManaged(&input, sizeof(input)));
   CUDA_TRY(cudaMallocManaged(&output, sizeof(output) * num_tests * 2));
 
-  for (size_t i = 0; i < num_tests; i++) {
+  for (int i = 0; i < num_tests; i++) {
     if (cpid > 0)
       usleep(10000);
     else
