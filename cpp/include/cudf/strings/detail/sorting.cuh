@@ -37,20 +37,23 @@ namespace detail {
 struct sort_strings_comparator {
   __device__ bool operator()(size_type lhs, size_type rhs)
   {
-    bool lhs_null{d_column.is_null(lhs)};
-    bool rhs_null{d_column.is_null(rhs)};
-    if (lhs_null || rhs_null) {
-      if (order == cudf::order::DESCENDING) thrust::swap(lhs_null, rhs_null);
-      return (null_order == cudf::null_order::BEFORE ? !rhs_null : !lhs_null);
+    if (has_nulls) {
+      bool lhs_null{d_column.is_null(lhs)};
+      bool rhs_null{d_column.is_null(rhs)};
+      if (lhs_null || rhs_null) {
+        if (!ascending) thrust::swap(lhs_null, rhs_null);
+        return (null_prec == cudf::null_order::BEFORE ? !rhs_null : !lhs_null);
+      }
     }
     auto const lhs_str = d_column.element<string_view>(lhs);
     auto const rhs_str = d_column.element<string_view>(rhs);
     auto const cmp     = lhs_str.compare(rhs_str);
-    return (order == cudf::order::ASCENDING ? (cmp < 0) : (cmp > 0));
+    return ascending ? (cmp < 0) : (cmp > 0);
   }
   column_device_view const d_column;
-  cudf::order order;
-  cudf::null_order null_order;
+  bool has_nulls;
+  bool ascending;
+  cudf::null_order null_prec;
 };
 
 /**
@@ -58,8 +61,8 @@ struct sort_strings_comparator {
  * input strings column.
  *
  * @param strings Strings instance for this operation.
- * @param order Sort strings in ascending or descending order.
- * @param null_order Sort nulls to the beginning or the end of the new column.
+ * @param sort_order Sort strings in ascending or descending order.
+ * @param null_precedence Sort nulls to the beginning or the end of the new column.
  * @param stream CUDA stream used for device memory operations and kernel launches.
  * @param mr Device memory resource used to allocate the returned column's device memory.
  * @return Indices of the sorted rows.
@@ -67,8 +70,8 @@ struct sort_strings_comparator {
 template <bool stable = false>
 std::unique_ptr<cudf::column> sorted_order(
   strings_column_view const strings,
-  cudf::order order                   = cudf::order::ASCENDING,
-  cudf::null_order null_order         = cudf::null_order::BEFORE,
+  cudf::order sort_order              = cudf::order::ASCENDING,
+  cudf::null_order null_precedence    = cudf::null_order::BEFORE,
   rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
 {
@@ -81,7 +84,8 @@ std::unique_ptr<cudf::column> sorted_order(
   thrust::sequence(
     rmm::exec_policy(stream), d_indices.begin<size_type>(), d_indices.end<size_type>(), 0);
 
-  sort_strings_comparator comparator{d_column, order, null_order};
+  sort_strings_comparator comparator{
+    d_column, strings.has_nulls(), sort_order == cudf::order::ASCENDING, null_precedence};
   if (stable) {
     thrust::stable_sort(rmm::exec_policy(stream),
                         d_indices.begin<size_type>(),
