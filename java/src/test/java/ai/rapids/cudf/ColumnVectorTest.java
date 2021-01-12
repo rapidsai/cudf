@@ -2690,6 +2690,34 @@ public class ColumnVectorTest extends CudfTestBase {
   }
 
   @Test
+  void testListContainsString() {
+    List<String> list1 = Arrays.asList("Héllo there", "thésé");
+    List<String> list2 = Arrays.asList("", "ARé some", "test strings");
+    List<String> list3 = Arrays.asList(null, "", "ARé some", "test strings");
+    List<String> list4 = null;
+    try (ColumnVector v = ColumnVector.fromLists(new HostColumnVector.ListType(true,
+             new HostColumnVector.BasicType(true, DType.STRING)), list1, list2, list3, list4);
+         ColumnVector expected = ColumnVector.fromBoxedBooleans(true, false, null, null);
+         ColumnVector result = v.listContains(Scalar.fromString("thésé"))) {
+      assertColumnsAreEqual(expected, result);
+    }
+  }
+
+  @Test
+  void testListContainsInt() {
+    List<Integer> list1 = Arrays.asList(1, 2, 3);
+    List<Integer> list2 = Arrays.asList(4, 5, 6);
+    List<Integer> list3 = Arrays.asList(7, 8, 9);
+    List<Integer> list4 = null;
+    try (ColumnVector v = ColumnVector.fromLists(new HostColumnVector.ListType(true,
+        new HostColumnVector.BasicType(true, DType.INT32)), list1, list2, list3, list4);
+         ColumnVector expected = ColumnVector.fromBoxedBooleans(false, false, true, null);
+         ColumnVector result = v.listContains(Scalar.fromInt(7))) {
+      assertColumnsAreEqual(expected, result);
+    }
+  }
+
+  @Test
   void testStringSplitRecord() {
       try (ColumnVector v = ColumnVector.fromStrings("Héllo there", "thésé", "null", "", "ARé some", "test strings");
            ColumnVector expected = ColumnVector.fromLists(

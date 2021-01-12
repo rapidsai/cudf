@@ -2287,6 +2287,14 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
     return new ColumnVector(mapLookup(getNativeView(), key.getScalarHandle()));
   }
 
+  public final ColumnVector listContains(Scalar key) {
+
+    assert type.equals(DType.LIST) : "column type must be a LIST";
+    assert key != null : "target string may not be null";
+
+    return new ColumnVector(listContains(getNativeView(), key.getScalarHandle()));
+  }
+
   /////////////////////////////////////////////////////////////////////////////
   // INTERNAL/NATIVE ACCESS
   /////////////////////////////////////////////////////////////////////////////
@@ -2521,6 +2529,8 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
   private static native long byteCount(long viewHandle) throws CudfException;
 
   private static native long extractListElement(long nativeView, int index);
+
+  private static native long listContains(long nativeView, long key);
 
   private static native long castTo(long nativeHandle, int type, int scale);
 
