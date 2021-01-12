@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2020, NVIDIA CORPORATION.
+ * Copyright (c) 2021, Baidu CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -25,6 +25,7 @@
 #include <cudf/utilities/type_dispatcher.hpp>
 #include <strings/utilities.cuh>
 #include <strings/utilities.hpp>
+#include <strings/utilities.cuh>
 
 #include <thrust/logical.h>
 
@@ -32,29 +33,34 @@ namespace cudf {
 namespace strings {
 
 /**
-   * Parses this UTF8String(trimmed if needed) to INT8/16/32/64...
-   *
-   * Note that, in this method we accumulate the result in negative format, and convert it to
-   * positive format at the end, if this string is not started with '-'. This is because min value
-   * is bigger than max value in digits, e.g. Long.MAX_VALUE is '9223372036854775807' and
-   * Long.MIN_VALUE is '-9223372036854775808'.
-   *
-   * This code is mostly copied from LazyLong.parseLong in Hive.
-   *
+ * Check whether the UTF8String is valid when convert data from string to all kinds of integers,
+ * like INT8/16/32/64. for example, if allow_decimal is true, this will return `true, true` when input string 
+ * is `1.23, 123`, or this function will return `false, true`, it means firt element is invalid, 
+ * while second data is valid. 
+ *
+ * Note that, in this method we accumulate the result in negative format, and convert it to
+ * positive format at the end, if this string is not started with '-'. This is because min value
+ * is bigger than max value in digits, e.g. Long.MAX_VALUE is '9223372036854775807' and
+ * Long.MIN_VALUE is '-9223372036854775808'.
+ *
+ * This code is mostly copied from LazyLong.parseLong in Hive.
+ *
  * @param d_str String to check.
- * @param allow_decimal Decimal format or not
- * @param min_value min_value that corresponds to the type that is checking
- * @return true if string has valid integer characters
-   */
-__device__ bool is_valid_fixed_point(string_view const& d_str, bool allow_decimal, long min_value)
+ * @param allow_decimal whether we allow the data is Decimal type or not.
+ * @param min_value min_value that corresponds to the type that is checking.
+ * @return true if string has valid integer characters or decimal characters.
+ */
+__device__ bool is_valid_element(string_view const& d_str, bool allow_decimal, long min_value)
 {
   int offset = 0;
   size_type bytes = d_str.size_bytes();
   const char* data    = d_str.data();
+  // strip leading white space
   while (offset < bytes && data[offset] == ' ') ++offset;
   if (offset == bytes)  return false;
 
   int end = bytes - 1;
+  // strip trailing white space
   while (end > offset && data[end] == ' ') --end;
 
   char c_sign = data[offset];
@@ -74,7 +80,7 @@ __device__ bool is_valid_fixed_point(string_view const& d_str, bool allow_decima
     ++offset;
     // We allow decimals and will return a truncated integral in that case.
     // Therefore we won't throw an exception here (checking the fractional
-    // part happens below.
+    // part happens below).
     if (c == separator && allow_decimal)  break;
 
     int digit;
@@ -84,15 +90,17 @@ __device__ bool is_valid_fixed_point(string_view const& d_str, bool allow_decima
       return false;
     }
 
-    // We are going to process the new digit and accumulate the result. However, before doing
-    // this, if the result is already smaller than the stopValue(Long.MIN_VALUE / radix), then
-    // result * 10 will definitely be smaller than minValue, and we can stop.
+    // We are going to process the new digit and accumulate the result. However, 
+    // before doing this, if the result is already smaller than the stopValue which is
+    // (std::numeric_limits<data_type>::min() / radix), then result * 10 will definitely 
+    // be smaller than minValue, and we can stop.
     if (result < stop_value)  return false;
 
     result = result * radix - digit;
 
-    // Since the previous result is less than or equal to stopValue(Long.MIN_VALUE / radix), we
-    // can just use `result > 0` to check overflow. If result overflows, we should stop.
+    // Since the previous result is less than or equal to stopValue which is 
+    // (std::numeric_limits<data_type>::min() / radix), we can just use `result > 0` 
+    // to check overflow. If result overflows, we should stop.
     if (result > 0) return false;
   }
   // This is the case when we've encountered a decimal separator. The fractional
@@ -113,8 +121,37 @@ __device__ bool is_valid_fixed_point(string_view const& d_str, bool allow_decima
 }
 
 namespace detail {
+namespace {
 
-std::unique_ptr<column> is_valid_fixed_point(
+/**
+ * @brief The dispatch functions for calculate the min value of input data type
+ * to check overflow.
+ *
+ * The output is the min value of spicified type.
+ */
+struct min_value_of_type{
+  template <typename T>
+  long operator()()
+  { 
+    CUDF_FAIL("Unsupported current data type check."); 
+  }
+};
+
+template <>
+long min_value_of_type::operator()<int8_t>() { return std::numeric_limits<int8_t>::min(); }
+
+template <>
+long min_value_of_type::operator()<int16_t>() { return std::numeric_limits<int16_t>::min(); }
+
+template <>
+long min_value_of_type::operator()<int32_t>() { return std::numeric_limits<int32_t>::min(); }
+
+template <>
+long min_value_of_type::operator()<int64_t>() { return std::numeric_limits<int64_t>::min(); }
+
+} //namespace
+
+std::unique_ptr<column> is_valid_element(
   strings_column_view const& strings,
   bool allow_decimal,
   data_type input_type,
@@ -126,14 +163,7 @@ std::unique_ptr<column> is_valid_fixed_point(
   auto d_allow_decimal = allow_decimal;
 
   // ready a min_value corresponds to the input type in order to check overflow
-  long d_min_value = 0;
-  switch (input_type.id()) {
-    case type_id::INT8: d_min_value = -128;
-    case type_id::INT16: d_min_value = -32768;
-    case type_id::INT32: d_min_value = -2147483648;
-    case type_id::INT64: d_min_value = -9223372036854775808;
-    default: CUDF_FAIL("Unsupported current data type check when convert string type");
-  }
+  long d_min_value = cudf::type_dispatcher(input_type, min_value_of_type{}) ;
 
   // create output column
   auto results   = make_numeric_column(data_type{type_id::BOOL8},
@@ -149,7 +179,7 @@ std::unique_ptr<column> is_valid_fixed_point(
                     d_results,
                     [d_column,d_allow_decimal,d_min_value] __device__(size_type idx) {
                       if (d_column.is_null(idx)) return false;
-                      return strings::is_valid_fixed_point(d_column.element<string_view>(idx), d_allow_decimal, d_min_value);
+                      return strings::is_valid_element(d_column.element<string_view>(idx), d_allow_decimal, d_min_value);
                     });
   results->set_null_count(strings.null_count());
   return results;
@@ -159,13 +189,13 @@ std::unique_ptr<column> is_valid_fixed_point(
 
 // external API
 
-std::unique_ptr<column> is_valid_fixed_point(strings_column_view const& strings,
+std::unique_ptr<column> is_valid_element(strings_column_view const& strings,
                                           bool allow_decimal,
                                           data_type input_type,
                                           rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::is_valid_fixed_point(strings, allow_decimal, input_type, rmm::cuda_stream_default, mr);
+  return detail::is_valid_element(strings, allow_decimal, input_type, rmm::cuda_stream_default, mr);
 }
 
 }  // namespace strings
