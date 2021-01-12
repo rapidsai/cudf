@@ -180,7 +180,7 @@ TEST_F(ColumnUtilitiesStringsTest, StringsToHostAllNulls)
     thrust::make_transform_iterator(h_strings.begin(), [](auto str) { return str != nullptr; }));
   auto host_data = cudf::test::to_host<std::string>(strings);
   auto results   = host_data.first;
-  EXPECT_EQ(size_t{3}, host_data.first.size());
+  EXPECT_EQ(std::size_t{3}, host_data.first.size());
   EXPECT_TRUE(std::all_of(results.begin(), results.end(), [](auto s) { return s.empty(); }));
 }
 

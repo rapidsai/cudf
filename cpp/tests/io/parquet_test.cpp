@@ -2021,7 +2021,7 @@ TEST_F(ParquetReaderTest, DecimalRead)
       -9694494, -5343299, 3558393,  -8789072, 2697890,  -4454707, 8299309,  -6223703, -3112513,
       7537487,  825776,   -495683,  328299,   -4529727, 0,        -9999999, 9999999};
 
-    EXPECT_EQ(static_cast<size_t>(result.tbl->view().column(0).size()),
+    EXPECT_EQ(static_cast<std::size_t>(result.tbl->view().column(0).size()),
               sizeof(col0_data) / sizeof(col0_data[0]));
     cudf::test::fixed_point_column_wrapper<int32_t> col0(
       std::begin(col0_data), std::end(col0_data), validity, numeric::scale_type{-4});
@@ -2046,7 +2046,7 @@ TEST_F(ParquetReaderTest, DecimalRead)
                            45844829680593,  71401416837149,  0,
                            -99999999999999, 99999999999999};
 
-    EXPECT_EQ(static_cast<size_t>(result.tbl->view().column(1).size()),
+    EXPECT_EQ(static_cast<std::size_t>(result.tbl->view().column(1).size()),
               sizeof(col1_data) / sizeof(col1_data[0]));
     cudf::test::fixed_point_column_wrapper<int64_t> col1(
       std::begin(col1_data), std::end(col1_data), validity, numeric::scale_type{-5});
@@ -2162,7 +2162,7 @@ TEST_F(ParquetReaderTest, DecimalRead)
                            9913714, 901749,  7776938, 3186566, 4955569, 5131067, 98619,
                            2282579, 7521455, 4430706, 1937859, 4532040, 0};
 
-    EXPECT_EQ(static_cast<size_t>(result.tbl->view().column(0).size()),
+    EXPECT_EQ(static_cast<std::size_t>(result.tbl->view().column(0).size()),
               sizeof(col0_data) / sizeof(col0_data[0]));
     cudf::test::fixed_point_column_wrapper<int64_t> col0(
       std::begin(col0_data), std::end(col0_data), validity_c0, numeric::scale_type{-3});
@@ -2191,7 +2191,7 @@ TEST_F(ParquetReaderTest, DecimalRead)
                            0,
                            363993164092};
 
-    EXPECT_EQ(static_cast<size_t>(result.tbl->view().column(1).size()),
+    EXPECT_EQ(static_cast<std::size_t>(result.tbl->view().column(1).size()),
               sizeof(col1_data) / sizeof(col1_data[0]));
     cudf::test::fixed_point_column_wrapper<int64_t> col1(
       std::begin(col1_data), std::end(col1_data), validity_c1, numeric::scale_type{-11});

@@ -216,8 +216,8 @@ class regex_parser {
     }
 
     /* sort on span start */
-    for (size_t p = 0; p < cls.size(); p += 2)
-      for (size_t np = p + 2; np < cls.size(); np += 2)
+    for (std::size_t p = 0; p < cls.size(); p += 2)
+      for (std::size_t np = p + 2; np < cls.size(); np += 2)
         if (cls[np] < cls[p]) {
           c           = cls[np];
           cls[np]     = cls[p];
@@ -231,7 +231,7 @@ class regex_parser {
     reclass yycls{builtins};
     if (cls.size() >= 2) {
       int np   = 0;
-      size_t p = 0;
+      std::size_t p = 0;
       yycls.literals += cls[p++];
       yycls.literals += cls[p++];
       for (; p < cls.size(); p += 2) {
@@ -682,7 +682,7 @@ class regex_compiler {
     int rep_start = -1;
 
     out.clear();
-    for (size_t i = 0; i < in.size(); i++) {
+    for (std::size_t i = 0; i < in.size(); i++) {
       if (in[i].t != COUNTED && in[i].t != COUNTED_LAZY) {
         out.push_back(in[i]);
         if (in[i].t == LBRA || in[i].t == LBRA_NC) {
@@ -701,11 +701,11 @@ class regex_compiler {
         regex_parser::Item item = in[i];
         if (item.d.yycount.n <= 0) {
           // need to erase
-          for (size_t j = 0; j < i - rep_start; j++) out.pop_back();
+          for (std::size_t j = 0; j < i - rep_start; j++) out.pop_back();
         } else {
           // repeat
           for (int j = 1; j < item.d.yycount.n; j++)
-            for (size_t k = rep_start; k < i; k++) out.push_back(in[k]);
+            for (std::size_t k = rep_start; k < i; k++) out.push_back(in[k]);
         }
 
         // optional repeats
@@ -715,7 +715,7 @@ class regex_compiler {
             o_item.t    = LBRA_NC;
             o_item.d.yy = 0;
             out.push_back(o_item);
-            for (size_t k = rep_start; k < i; k++) out.push_back(in[k]);
+            for (std::size_t k = rep_start; k < i; k++) out.push_back(in[k]);
           }
           for (int j = item.d.yycount.n; j < item.d.yycount.m; j++) {
             regex_parser::Item o_item;
@@ -746,7 +746,7 @@ class regex_compiler {
             }
           } else  // copy it once then put '*'
           {
-            for (size_t k = rep_start; k < i; k++) out.push_back(in[k]);
+            for (std::size_t k = rep_start; k < i; k++) out.push_back(in[k]);
 
             if (item.t == COUNTED) {
               o_item.t = STAR;
@@ -908,7 +908,7 @@ void reprog::optimize2()
 void reprog::print()
 {
   printf("Instructions:\n");
-  for (size_t i = 0; i < _insts.size(); i++) {
+  for (std::size_t i = 0; i < _insts.size(); i++) {
     const reinst& inst = _insts[i];
     printf("%zu :", i);
     switch (inst.type) {

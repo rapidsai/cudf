@@ -284,7 +284,7 @@ bool CompactProtocolReader::read(KeyValue *k)
  */
 bool CompactProtocolReader::InitSchema(FileMetaData *md)
 {
-  if (static_cast<size_t>(WalkSchema(md)) != md->schema.size()) return false;
+  if (static_cast<std::size_t>(WalkSchema(md)) != md->schema.size()) return false;
 
   /* Inside FileMetaData, there is a std::vector of RowGroups and each RowGroup contains a
    * a std::vector of ColumnChunks. Each ColumnChunk has a member ColumnMetaData, which contains
