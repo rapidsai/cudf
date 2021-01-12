@@ -924,3 +924,10 @@ therefore `cudf::list_view` is the data type of a `cudf::column` of type `LIST`.
 struct, and therefore `cudf::struct_view` is the data type of a `cudf::column` of type `STRUCT`.
 
 `cudf::type_dispatcher` dispatches to the `struct_view` data type when invoked on a `STRUCT` column.
+
+# cuIO: file reading and writing
+
+cuIO is a component of libcudf that provides GPU-accelerated reading and writing of data file 
+formats commonly used in data analytics, including CSV, Parquet, ORC, and Avro.
+
+// TODO: add more detail and move to a separate file.
