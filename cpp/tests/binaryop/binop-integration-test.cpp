@@ -2296,6 +2296,54 @@ TYPED_TEST(FixedPointTestBothReps, FixedPointBinaryOpEqualLessGreater)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(true_col, greater_result->view());
 }
 
+TYPED_TEST(FixedPointTestBothReps, FixedPointBinaryOpNullMaxSimple)
+{
+  using namespace numeric;
+  using decimalXX = TypeParam;
+  using RepType   = device_storage_type_t<decimalXX>;
+
+  auto const trues    = std::vector<bool>(4, true);
+  auto const col1     = fp_wrapper<RepType>{{400, 300, 200, 100}, {1, 0, 1, 1}, scale_type{-2}};
+  auto const col2     = fp_wrapper<RepType>{{100, 200, 300, 400}, {1, 1, 1, 0}, scale_type{-2}};
+  auto const expected = fp_wrapper<RepType>{{400, 200, 300, 100}, {1, 1, 1, 1}, scale_type{-2}};
+
+  auto const result = cudf::binary_operation(col1, col2, binary_operator::NULL_MAX, {});
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
+}
+
+TYPED_TEST(FixedPointTestBothReps, FixedPointBinaryOpNullMinSimple)
+{
+  using namespace numeric;
+  using decimalXX = TypeParam;
+  using RepType   = device_storage_type_t<decimalXX>;
+
+  auto const trues    = std::vector<bool>(4, true);
+  auto const col1     = fp_wrapper<RepType>{{400, 300, 200, 100}, {1, 1, 1, 0}, scale_type{-2}};
+  auto const col2     = fp_wrapper<RepType>{{100, 200, 300, 400}, {1, 0, 1, 1}, scale_type{-2}};
+  auto const expected = fp_wrapper<RepType>{{100, 300, 200, 400}, {1, 1, 1, 1}, scale_type{-2}};
+
+  auto const result = cudf::binary_operation(col1, col2, binary_operator::NULL_MIN, {});
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
+}
+
+TYPED_TEST(FixedPointTestBothReps, FixedPointBinaryOpNullEqualsSimple)
+{
+  using namespace numeric;
+  using decimalXX = TypeParam;
+  using RepType   = device_storage_type_t<decimalXX>;
+
+  auto const trues    = std::vector<bool>(4, true);
+  auto const col1     = fp_wrapper<RepType>{{400, 300, 300, 100}, {1, 1, 1, 0}, scale_type{-2}};
+  auto const col2     = fp_wrapper<RepType>{{40, 200, 20, 400}, {1, 0, 1, 0}, scale_type{-1}};
+  auto const expected = wrapper<bool>{{1, 0, 0, 1}, {1, 1, 1, 1}};
+
+  auto const result = cudf::binary_operation(col1, col2, binary_operator::NULL_EQUALS, {});
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
+}
+
 }  // namespace binop
 }  // namespace test
 }  // namespace cudf
