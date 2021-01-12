@@ -68,6 +68,46 @@ Only use `.cu` and `.cuh` if necessary. A good indicator is the inclusion of `__
 symbols that are only recognized by `nvcc`. Another indicator is Thrust algorithm APIs with a device
 execution policy (always `rmm::exec_policy` in libcudf).
 
+## Code and Documentation Style and Formatting
+
+libcudf code uses [snake_case](https://en.wikipedia.org/wiki/Snake_case) for all names except in a 
+two cases: template parameters and unit tests and test case names may use Pascal case, aka 
+[UpperCamelCase](https://en.wikipedia.org/wiki/Camel_case). We do not use [Hungarian notation](https://en.wikipedia.org/wiki/Hungarian_notation), except sometimes when naming device data variables and their corresponding
+host copies. Private member variables are typically prefixed with an underscore.
+
+```c++
+template <typename IteratorType>
+void algorithm_function(int x, rmm::cuda_stream_view s, rmm::device_memory_resource* mr) 
+{
+  ...
+}
+
+class utility_class 
+{
+  ...
+ private:
+  int _rating{};
+  std::unique_ptr<cudf::column> _column{};
+}
+
+TYPED_TEST_CASE(RepeatTypedTestFixture, cudf::test::FixedWidthTypes);
+
+TYPED_TEST(RepeatTypedTestFixture, RepeatScalarCount)
+{
+  ...
+}
+```
+
+C++ formatting is enforced using `clang-format`. You should configure `clang-format` on your 
+machine to use the `cudf/cpp/.clang-format` configuration file, and run `clang-format` on all 
+changed code before committing it. The easiest way to do this is to configure your editor to 
+"format on save".
+
+Aspects of code style not discussed above and not automatically enforceable are typically caught
+during code review, or not enforced.
+
+Documentation is discussed in the [Documentation Guide](DOCUMENTATION.md).
+
 # libcudf Data Structures
 
 Application data in libcudf is contained in Columns and Tables, but there are a variety of other
