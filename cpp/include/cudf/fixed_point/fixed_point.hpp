@@ -285,7 +285,7 @@ class fixed_point {
   /**
    * @brief Method that returns the scale of the `fixed_point` number
    *
-   * @return scale_type The scale of the `fixed_point` number
+   * @return The scale of the `fixed_point` number
    */
   CUDA_HOST_DEVICE_CALLABLE scale_type scale() const { return _scale; }
 
