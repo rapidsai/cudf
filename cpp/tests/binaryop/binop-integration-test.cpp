@@ -2303,9 +2303,9 @@ TYPED_TEST(FixedPointTestBothReps, FixedPointBinaryOpNullMaxSimple)
   using RepType   = device_storage_type_t<decimalXX>;
 
   auto const trues    = std::vector<bool>(4, true);
-  auto const col1     = fp_wrapper<RepType>{{400, 300, 200, 100}, {1, 0, 1, 1}, scale_type{-2}};
-  auto const col2     = fp_wrapper<RepType>{{100, 200, 300, 400}, {1, 1, 1, 0}, scale_type{-2}};
-  auto const expected = fp_wrapper<RepType>{{400, 200, 300, 100}, {1, 1, 1, 1}, scale_type{-2}};
+  auto const col1     = fp_wrapper<RepType>{{40, 30, 20, 10, 0}, {1, 0, 1, 1, 0}, scale_type{-2}};
+  auto const col2     = fp_wrapper<RepType>{{10, 20, 30, 40, 0}, {1, 1, 1, 0, 0}, scale_type{-2}};
+  auto const expected = fp_wrapper<RepType>{{40, 20, 30, 10, 0}, {1, 1, 1, 1, 0}, scale_type{-2}};
 
   auto const result = cudf::binary_operation(col1, col2, binary_operator::NULL_MAX, {});
 
@@ -2319,9 +2319,9 @@ TYPED_TEST(FixedPointTestBothReps, FixedPointBinaryOpNullMinSimple)
   using RepType   = device_storage_type_t<decimalXX>;
 
   auto const trues    = std::vector<bool>(4, true);
-  auto const col1     = fp_wrapper<RepType>{{400, 300, 200, 100}, {1, 1, 1, 0}, scale_type{-2}};
-  auto const col2     = fp_wrapper<RepType>{{100, 200, 300, 400}, {1, 0, 1, 1}, scale_type{-2}};
-  auto const expected = fp_wrapper<RepType>{{100, 300, 200, 400}, {1, 1, 1, 1}, scale_type{-2}};
+  auto const col1     = fp_wrapper<RepType>{{40, 30, 20, 10, 0}, {1, 1, 1, 0, 0}, scale_type{-1}};
+  auto const col2     = fp_wrapper<RepType>{{10, 20, 30, 40, 0}, {1, 0, 1, 1, 0}, scale_type{-1}};
+  auto const expected = fp_wrapper<RepType>{{10, 30, 20, 40, 0}, {1, 1, 1, 1, 0}, scale_type{-1}};
 
   auto const result = cudf::binary_operation(col1, col2, binary_operator::NULL_MIN, {});
 
