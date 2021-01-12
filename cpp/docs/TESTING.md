@@ -18,7 +18,7 @@ In the interest of improving compile time, whenever possible, test source files 
 files because `nvcc` is slower than `gcc` in compiling host code. Note that `thrust::device_vector`
 includes device code, and so must only be used in `.cu` files. `rmm::device_uvector`, 
 `rmm::device_buffer` and the various `column_wrapper` types described later can be used in `.cpp` 
-files, and are therefore preferrred in test code over `thrust::device_vector`.
+files, and are therefore preferred in test code over `thrust::device_vector`.
 
 ## Base Fixture
 
