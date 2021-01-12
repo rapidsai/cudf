@@ -20,6 +20,14 @@ function(find_and_configure_arrow VERSION BUILD_STATIC)
     set(ARROW_BUILD_STATIC OFF)
     set(CPMAddOrFindPackage CPMFindPackage)
 
+    if(NOT ARROW_ARMV8_ARCH)
+        set(ARROW_ARMV8_ARCH "armv8-a")
+    endif()
+
+    if(NOT ARROW_SIMD_LEVEL)
+        set(ARROW_SIMD_LEVEL "NONE")
+    endif()
+
     if(BUILD_STATIC)
         set(ARROW_BUILD_STATIC ON)
         set(ARROW_BUILD_SHARED OFF)
@@ -34,23 +42,24 @@ function(find_and_configure_arrow VERSION BUILD_STATIC)
         GIT_TAG         apache-arrow-${VERSION}
         GIT_SHALLOW     TRUE
         SOURCE_SUBDIR   cpp
-        OPTIONS         "CMAKE_VERBOSE_MAKEFILE         ON"
-                        "ARROW_IPC                      ON"
-                        "ARROW_CUDA                     ON"
-                        "ARROW_DATASET                  ON"
-                        "ARROW_WITH_BACKTRACE           ON"
-                        "ARROW_CXXFLAGS                 -w"
-                        "ARROW_JEMALLOC                 OFF"
-                        "ARROW_SIMD_LEVEL               NONE"
-                        "ARROW_BUILD_STATIC             ${ARROW_BUILD_STATIC}"
-                        "ARROW_BUILD_SHARED             ${ARROW_BUILD_SHARED}"
-                        "ARROW_DEPENDENCY_USE_SHARED    ${ARROW_BUILD_SHARED}"
-                        "ARROW_BOOST_USE_SHARED         ${ARROW_BUILD_SHARED}"
-                        "ARROW_BROTLI_USE_SHARED        ${ARROW_BUILD_SHARED}"
-                        "ARROW_GFLAGS_USE_SHARED        ${ARROW_BUILD_SHARED}"
-                        "ARROW_GRPC_USE_SHARED          ${ARROW_BUILD_SHARED}"
-                        "ARROW_PROTOBUF_USE_SHARED      ${ARROW_BUILD_SHARED}"
-                        "ARROW_ZSTD_USE_SHARED          ${ARROW_BUILD_SHARED}")
+        OPTIONS         "CMAKE_VERBOSE_MAKEFILE ON"
+                        "ARROW_IPC ON"
+                        "ARROW_CUDA ON"
+                        "ARROW_DATASET ON"
+                        "ARROW_WITH_BACKTRACE ON"
+                        "ARROW_CXXFLAGS -w"
+                        "ARROW_JEMALLOC OFF"
+                        "ARROW_ARMV8_ARCH ${ARROW_ARMV8_ARCH}"
+                        "ARROW_SIMD_LEVEL ${ARROW_SIMD_LEVEL}"
+                        "ARROW_BUILD_STATIC ${ARROW_BUILD_STATIC}"
+                        "ARROW_BUILD_SHARED ${ARROW_BUILD_SHARED}"
+                        "ARROW_DEPENDENCY_USE_SHARED ${ARROW_BUILD_SHARED}"
+                        "ARROW_BOOST_USE_SHARED ${ARROW_BUILD_SHARED}"
+                        "ARROW_BROTLI_USE_SHARED ${ARROW_BUILD_SHARED}"
+                        "ARROW_GFLAGS_USE_SHARED ${ARROW_BUILD_SHARED}"
+                        "ARROW_GRPC_USE_SHARED ${ARROW_BUILD_SHARED}"
+                        "ARROW_PROTOBUF_USE_SHARED ${ARROW_BUILD_SHARED}"
+                        "ARROW_ZSTD_USE_SHARED ${ARROW_BUILD_SHARED}")
 
 
     set(ARROW_FOUND TRUE)
