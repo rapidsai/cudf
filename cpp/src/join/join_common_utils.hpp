@@ -19,6 +19,8 @@
 #include <cudf/table/row_operators.cuh>
 #include <cudf/table/table_view.hpp>
 
+#include <rmm/device_uvector.hpp>
+
 #include <hash/concurrent_unordered_multimap.cuh>
 
 #include <limits>
@@ -31,7 +33,7 @@ constexpr int DEFAULT_JOIN_BLOCK_SIZE = 128;
 constexpr int DEFAULT_JOIN_CACHE_SIZE = 128;
 constexpr size_type JoinNoneValue     = -1;
 
-using VectorPair = std::pair<rmm::device_vector<size_type>, rmm::device_vector<size_type>>;
+using VectorPair = std::pair<rmm::device_uvector<size_type>, rmm::device_uvector<size_type>>;
 
 using multimap_type =
   concurrent_unordered_multimap<hash_value_type,

@@ -20,7 +20,7 @@
 #include <cudf/types.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
-#include <rmm/device_vector.hpp>
+#include <rmm/device_uvector.hpp>
 
 #include <vector>
 
@@ -31,7 +31,7 @@ namespace cudf {
  * @file
  */
 
-std::pair<rmm::device_vector<size_type>, rmm::device_vector<size_type>> inner_join(
+std::pair<rmm::device_uvector<size_type>, rmm::device_uvector<size_type>> inner_join(
   cudf::table_view const& left,
   cudf::table_view const& right,
   std::vector<cudf::size_type> const& left_on,
@@ -105,7 +105,7 @@ std::unique_ptr<cudf::table> inner_join(
   null_equality compare_nulls         = null_equality::EQUAL,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
-std::pair<rmm::device_vector<size_type>, rmm::device_vector<size_type>> left_join(
+std::pair<rmm::device_uvector<size_type>, rmm::device_uvector<size_type>> left_join(
   cudf::table_view const& left,
   cudf::table_view const& right,
   std::vector<cudf::size_type> const& left_on,
@@ -181,7 +181,7 @@ std::unique_ptr<cudf::table> left_join(
   null_equality compare_nulls         = null_equality::EQUAL,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
-std::pair<rmm::device_vector<size_type>, rmm::device_vector<size_type>> full_join(
+std::pair<rmm::device_uvector<size_type>, rmm::device_uvector<size_type>> full_join(
   cudf::table_view const& left,
   cudf::table_view const& right,
   std::vector<cudf::size_type> const& left_on,
@@ -438,7 +438,7 @@ class hash_join {
             ///< `inner_join`.
   };
 
-  std::pair<rmm::device_vector<size_type>, rmm::device_vector<size_type>> inner_join(
+  std::pair<rmm::device_uvector<size_type>, rmm::device_uvector<size_type>> inner_join(
     cudf::table_view const& probe,
     std::vector<size_type> const& probe_on,
     null_equality compare_nulls         = null_equality::EQUAL,
@@ -489,7 +489,7 @@ class hash_join {
     rmm::cuda_stream_view stream                          = rmm::cuda_stream_default,
     rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource()) const;
 
-  std::pair<rmm::device_vector<size_type>, rmm::device_vector<size_type>> left_join(
+  std::pair<rmm::device_uvector<size_type>, rmm::device_uvector<size_type>> left_join(
     cudf::table_view const& probe,
     std::vector<size_type> const& probe_on,
     null_equality compare_nulls         = null_equality::EQUAL,
@@ -526,7 +526,7 @@ class hash_join {
     rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
     rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource()) const;
 
-  std::pair<rmm::device_vector<size_type>, rmm::device_vector<size_type>> full_join(
+  std::pair<rmm::device_uvector<size_type>, rmm::device_uvector<size_type>> full_join(
     cudf::table_view const& probe,
     std::vector<size_type> const& probe_on,
     null_equality compare_nulls         = null_equality::EQUAL,
