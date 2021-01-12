@@ -139,7 +139,7 @@ transparently passed to any API expecting a `column_view` or `mutable_column_vie
 
 #### `fixed_width_column_wrapper`
 
-The `fixed_width_column_wrapper` class should be used for constructing and initializing a column of
+The `fixed_width_column_wrapper` class should be used for constructing and initializing columns of
 any fixed-width element type, e.g., numeric types, timestamp types, Boolean, etc. 
 `fixed_width_column_wrapper` provides constructors that accept an iterator range to generate each 
 element in the column. For nullable columns, an additional iterator can be provided to indicate the 
@@ -167,7 +167,7 @@ fixed_width_column_wrapper<int32_t> w{ {1,2,3,4}, {1, 0, 1, 0}};
 
 #### `fixed_point_column_wrapper`
 
-The `fixed_point_column_wrapper` class should be used for constructing and initializing a column of
+The `fixed_point_column_wrapper` class should be used for constructing and initializing columns of
 any fixed-point element type (DECIMAL32 or DECIMAL64). `fixed_point_column_wrapper` provides 
 constructors that accept an iterator range to generate each element in the column. For nullable 
 columns, an additional iterator can be provided to indicate the validity of each element. 
