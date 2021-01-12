@@ -521,18 +521,6 @@ hash_join::hash_join_impl::hash_join_impl(cudf::table_view const &build,
   _hash_table = build_join_hash_table(_build_selected, compare_nulls, stream);
 }
 
-std::pair<rmm::device_uvector<size_type>, rmm::device_uvector<size_type>>
-hash_join::hash_join_impl::inner_join(cudf::table_view const &probe,
-                                      std::vector<size_type> const &probe_on,
-                                      null_equality compare_nulls,
-                                      rmm::cuda_stream_view stream,
-                                      rmm::mr::device_memory_resource *mr) const
-{
-  CUDF_FUNC_RANGE();
-  return compute_hash_join<cudf::detail::join_kind::INNER_JOIN>(
-    probe, probe_on, compare_nulls, stream, mr);
-}
-
 std::pair<std::unique_ptr<cudf::table>, std::unique_ptr<cudf::table>>
 hash_join::hash_join_impl::inner_join(
   cudf::table_view const &probe,
@@ -546,18 +534,6 @@ hash_join::hash_join_impl::inner_join(
   CUDF_FUNC_RANGE();
   return compute_hash_join<cudf::detail::join_kind::INNER_JOIN>(
     probe, probe_on, columns_in_common, common_columns_output_side, compare_nulls, stream, mr);
-}
-
-std::pair<rmm::device_uvector<size_type>, rmm::device_uvector<size_type>>
-hash_join::hash_join_impl::left_join(cudf::table_view const &probe,
-                                     std::vector<size_type> const &probe_on,
-                                     null_equality compare_nulls,
-                                     rmm::cuda_stream_view stream,
-                                     rmm::mr::device_memory_resource *mr) const
-{
-  CUDF_FUNC_RANGE();
-  return compute_hash_join<cudf::detail::join_kind::LEFT_JOIN>(
-    probe, probe_on, compare_nulls, stream, mr);
 }
 
 std::unique_ptr<cudf::table> hash_join::hash_join_impl::left_join(
@@ -579,18 +555,6 @@ std::unique_ptr<cudf::table> hash_join::hash_join_impl::left_join(
                                                           mr);
   return cudf::detail::combine_table_pair(std::move(probe_build_pair.first),
                                           std::move(probe_build_pair.second));
-}
-
-std::pair<rmm::device_uvector<size_type>, rmm::device_uvector<size_type>>
-hash_join::hash_join_impl::full_join(cudf::table_view const &probe,
-                                     std::vector<size_type> const &probe_on,
-                                     null_equality compare_nulls,
-                                     rmm::cuda_stream_view stream,
-                                     rmm::mr::device_memory_resource *mr) const
-{
-  CUDF_FUNC_RANGE();
-  return compute_hash_join<cudf::detail::join_kind::FULL_JOIN>(
-    probe, probe_on, compare_nulls, stream, mr);
 }
 
 std::unique_ptr<cudf::table> hash_join::hash_join_impl::full_join(
@@ -616,11 +580,11 @@ std::unique_ptr<cudf::table> hash_join::hash_join_impl::full_join(
 
 template <cudf::detail::join_kind JoinKind>
 std::pair<rmm::device_uvector<size_type>, rmm::device_uvector<size_type>>
-hash_join::hash_join_impl::compute_hash_join(cudf::table_view const &probe,
-                                             std::vector<size_type> const &probe_on,
-                                             null_equality compare_nulls,
-                                             rmm::cuda_stream_view stream,
-                                             rmm::mr::device_memory_resource *mr) const
+hash_join::hash_join_impl::compute_hash_join_indices(cudf::table_view const &probe,
+                                                     std::vector<size_type> const &probe_on,
+                                                     null_equality compare_nulls,
+                                                     rmm::cuda_stream_view stream,
+                                                     rmm::mr::device_memory_resource *mr) const
 {
   CUDF_EXPECTS(0 != probe.num_columns(), "Hash join probe table is empty");
   CUDF_EXPECTS(probe.num_rows() < cudf::detail::MAX_JOIN_SIZE,
@@ -669,7 +633,8 @@ hash_join::hash_join_impl::compute_hash_join(
                            }),
                "Invalid values passed to columns_in_common");
 
-  auto joined_indices = compute_hash_join<JoinKind>(probe, probe_on, compare_nulls, stream, mr);
+  auto joined_indices =
+    compute_hash_join_indices<JoinKind>(probe, probe_on, compare_nulls, stream, mr);
 
   if (is_trivial_join(probe, _build, probe_on, _build_on, JoinKind)) {
     return get_empty_joined_table(probe, _build, columns_in_common, common_columns_output_side);

@@ -231,13 +231,6 @@ struct hash_join::hash_join_impl {
                  null_equality compare_nulls,
                  rmm::cuda_stream_view stream = rmm::cuda_stream_default);
 
-  std::pair<rmm::device_uvector<size_type>, rmm::device_uvector<size_type>> inner_join(
-    cudf::table_view const& probe,
-    std::vector<size_type> const& probe_on,
-    null_equality compare_nulls,
-    rmm::cuda_stream_view stream,
-    rmm::mr::device_memory_resource* mr) const;
-
   std::pair<std::unique_ptr<cudf::table>, std::unique_ptr<cudf::table>> inner_join(
     cudf::table_view const& probe,
     std::vector<size_type> const& probe_on,
@@ -247,24 +240,10 @@ struct hash_join::hash_join_impl {
     rmm::cuda_stream_view stream,
     rmm::mr::device_memory_resource* mr) const;
 
-  std::pair<rmm::device_uvector<size_type>, rmm::device_uvector<size_type>> left_join(
-    cudf::table_view const& probe,
-    std::vector<size_type> const& probe_on,
-    null_equality compare_nulls,
-    rmm::cuda_stream_view stream,
-    rmm::mr::device_memory_resource* mr) const;
-
   std::unique_ptr<cudf::table> left_join(
     cudf::table_view const& probe,
     std::vector<size_type> const& probe_on,
     std::vector<std::pair<cudf::size_type, cudf::size_type>> const& columns_in_common,
-    null_equality compare_nulls,
-    rmm::cuda_stream_view stream,
-    rmm::mr::device_memory_resource* mr) const;
-
-  std::pair<rmm::device_uvector<size_type>, rmm::device_uvector<size_type>> full_join(
-    cudf::table_view const& probe,
-    std::vector<size_type> const& probe_on,
     null_equality compare_nulls,
     rmm::cuda_stream_view stream,
     rmm::mr::device_memory_resource* mr) const;
@@ -279,12 +258,12 @@ struct hash_join::hash_join_impl {
 
  private:
   template <cudf::detail::join_kind JoinKind>
-  std::pair<rmm::device_uvector<size_type>, rmm::device_uvector<size_type>> compute_hash_join(
-    cudf::table_view const& probe,
-    std::vector<size_type> const& probe_on,
-    null_equality compare_nulls,
-    rmm::cuda_stream_view stream,
-    rmm::mr::device_memory_resource* mr) const;
+  std::pair<rmm::device_uvector<size_type>, rmm::device_uvector<size_type>>
+  compute_hash_join_indices(cudf::table_view const& probe,
+                            std::vector<size_type> const& probe_on,
+                            null_equality compare_nulls,
+                            rmm::cuda_stream_view stream,
+                            rmm::mr::device_memory_resource* mr) const;
 
   /**
    * @brief Performs hash join by probing the columns provided in `probe` as per

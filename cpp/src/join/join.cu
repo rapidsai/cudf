@@ -139,16 +139,6 @@ hash_join::hash_join(cudf::table_view const& build,
 {
 }
 
-std::pair<rmm::device_uvector<size_type>, rmm::device_uvector<size_type>> hash_join::inner_join(
-  cudf::table_view const& probe,
-  std::vector<size_type> const& probe_on,
-  null_equality compare_nulls,
-  rmm::cuda_stream_view stream,
-  rmm::mr::device_memory_resource* mr) const
-{
-  return impl->inner_join(probe, probe_on, compare_nulls, stream, mr);
-}
-
 std::pair<std::unique_ptr<cudf::table>, std::unique_ptr<cudf::table>> hash_join::inner_join(
   cudf::table_view const& probe,
   std::vector<size_type> const& probe_on,
@@ -162,16 +152,6 @@ std::pair<std::unique_ptr<cudf::table>, std::unique_ptr<cudf::table>> hash_join:
     probe, probe_on, columns_in_common, common_columns_output_side, compare_nulls, stream, mr);
 }
 
-std::pair<rmm::device_uvector<size_type>, rmm::device_uvector<size_type>> hash_join::left_join(
-  cudf::table_view const& probe,
-  std::vector<size_type> const& probe_on,
-  null_equality compare_nulls,
-  rmm::cuda_stream_view stream,
-  rmm::mr::device_memory_resource* mr) const
-{
-  return impl->left_join(probe, probe_on, compare_nulls, stream, mr);
-}
-
 std::unique_ptr<cudf::table> hash_join::left_join(
   cudf::table_view const& probe,
   std::vector<size_type> const& probe_on,
@@ -181,16 +161,6 @@ std::unique_ptr<cudf::table> hash_join::left_join(
   rmm::mr::device_memory_resource* mr) const
 {
   return impl->left_join(probe, probe_on, columns_in_common, compare_nulls, stream, mr);
-}
-
-std::pair<rmm::device_uvector<size_type>, rmm::device_uvector<size_type>> hash_join::full_join(
-  cudf::table_view const& probe,
-  std::vector<size_type> const& probe_on,
-  null_equality compare_nulls,
-  rmm::cuda_stream_view stream,
-  rmm::mr::device_memory_resource* mr) const
-{
-  return impl->full_join(probe, probe_on, compare_nulls, stream, mr);
 }
 
 std::unique_ptr<cudf::table> hash_join::full_join(
