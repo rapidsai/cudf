@@ -11,7 +11,12 @@ from cudf.utils.utils import pa_mask_buffer_to_mask
 class DecimalColumn(ColumnBase):
     @classmethod
     def from_arrow(cls, data: pa.Array):
-        mask = pa_mask_buffer_to_mask(data.buffers()[0], len(data))
+        mask_buf = data.buffers()[0]
+        mask = (
+            pa_mask_buffer_to_mask(mask_buf, len(data))
+            if mask_buf is not None
+            else None
+        )
         bts = data.buffers()[1].to_pybytes()
         bts = b"".join(list(more_itertools.sliced(bts, 8))[::2])
         return cls(
@@ -24,20 +29,25 @@ class DecimalColumn(ColumnBase):
     def to_arrow(self):
         data_buf_64 = self.base_data.to_host_array()
         zeros_buf = bytes(data_buf_64.size)
-        data_buf_128 = bytes(
-            more_itertools.flatten(
-                more_itertools.interleave(
-                    more_itertools.chunked(data_buf_64, 8),
-                    more_itertools.chunked(zeros_buf, 8),
+        data_buf_128 = pa.py_buffer(
+            bytes(
+                more_itertools.flatten(
+                    more_itertools.interleave(
+                        more_itertools.chunked(data_buf_64, 8),
+                        more_itertools.chunked(zeros_buf, 8),
+                    )
                 )
             )
         )
-        mask_buf = bytes(self.base_mask.to_host_array())
+        mask_buf = (
+            pa.py_buffer(bytes(self.base_mask.to_host_array()))
+            if self.base_mask is not None
+            else None
+        )
         return pa.Array.from_buffers(
             type=self.dtype.to_arrow(),
             length=self.size,
-            # TODO handle nulls
-            buffers=[pa.py_buffer(mask_buf), pa.py_buffer(data_buf_128)],
+            buffers=[mask_buf, data_buf_128],
         )
 
     def binary_operator(self, op, other, reflect=False):

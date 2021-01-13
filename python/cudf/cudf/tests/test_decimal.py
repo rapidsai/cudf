@@ -12,7 +12,9 @@ from cudf.core.column import DecimalColumn
         [Decimal("1.1"), Decimal("2.2"), Decimal("3.3"), Decimal("4.4")],
         [1, 2, 3, 4],
         [42, 1729, 4104],
-        # [1, 2, None, 4]  TODO
+        [1, 2, None, 4],
+        [None, None, None],
+        []
     ],
 )
 @pytest.mark.parametrize(
