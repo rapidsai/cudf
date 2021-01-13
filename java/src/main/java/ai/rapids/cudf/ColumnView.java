@@ -2290,9 +2290,14 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
   public final ColumnVector listContains(Scalar key) {
 
     assert type.equals(DType.LIST) : "column type must be a LIST";
-    assert key != null : "target string may not be null";
-
     return new ColumnVector(listContains(getNativeView(), key.getScalarHandle()));
+  }
+
+
+  public final ColumnVector listContainsColumn(ColumnView key) {
+
+    assert type.equals(DType.LIST) : "column type must be a LIST";
+    return new ColumnVector(listContainsColumn(getNativeView(), key.getNativeView()));
   }
 
   /////////////////////////////////////////////////////////////////////////////
@@ -2531,6 +2536,8 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
   private static native long extractListElement(long nativeView, int index);
 
   private static native long listContains(long nativeView, long key);
+
+  private static native long listContainsColumn(long nativeView, long keyColumn);
 
   private static native long castTo(long nativeHandle, int type, int scale);
 

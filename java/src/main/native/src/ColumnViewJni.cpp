@@ -334,7 +334,7 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_listContains(JNIEnv *env,
                                                                     jlong column_view,
                                                                     jlong lookup_key) {
   JNI_NULL_CHECK(env, column_view, "column is null", 0);
-  JNI_NULL_CHECK(env, lookup_key, "lookup scalar delimiter is null", 0);
+  JNI_NULL_CHECK(env, lookup_key, "lookup scalar is null", 0);
   try {
     cudf::jni::auto_set_device(env);
     cudf::column_view *cv = reinterpret_cast<cudf::column_view *>(column_view);
@@ -342,6 +342,24 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_listContains(JNIEnv *env,
     cudf::scalar *lookup_scalar = reinterpret_cast<cudf::scalar *>(lookup_key);
 
     std::unique_ptr<cudf::column> ret = cudf::lists::contains(lcv, *lookup_scalar);
+    return reinterpret_cast<jlong>(ret.release());
+  }
+  CATCH_STD(env, 0);
+}
+
+
+JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_listContainsColumn(JNIEnv *env, jclass,
+                                                                    jlong column_view,
+                                                                    jlong lookup_key_cv) {
+  JNI_NULL_CHECK(env, column_view, "column is null", 0);
+  JNI_NULL_CHECK(env, lookup_key_cv, "lookup column is null", 0);
+  try {
+    cudf::jni::auto_set_device(env);
+    cudf::column_view *cv = reinterpret_cast<cudf::column_view *>(column_view);
+    cudf::lists_column_view lcv(*cv);
+    cudf::column_view *lookup_cv = reinterpret_cast<cudf::column_view *>(lookup_key_cv);
+
+    std::unique_ptr<cudf::column> ret = cudf::lists::contains(lcv, *lookup_cv);
     return reinterpret_cast<jlong>(ret.release());
   }
   CATCH_STD(env, 0);
