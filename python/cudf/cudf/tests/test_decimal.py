@@ -14,7 +14,7 @@ from cudf.core.column import DecimalColumn
         [42, 1729, 4104],
         [1, 2, None, 4],
         [None, None, None],
-        []
+        [],
     ],
 )
 @pytest.mark.parametrize(
