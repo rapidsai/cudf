@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -283,6 +283,19 @@ std::unique_ptr<column> gather_list_leaf(
   column_view const& column,
   gather_data const& gd,
   rmm::cuda_stream_view stream,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+
+/**
+ * @copydoc cudf::lists::segmented_gather(lists_column_view const& source_column,
+ *                                        lists_column_view const& gather_map_list,
+ *                                        rmm::mr::device_memory_resource* mr)
+ *
+ * @param stream CUDA stream on which to execute kernels
+ */
+std::unique_ptr<column> segmented_gather(
+  lists_column_view const& source_column,
+  lists_column_view const& gather_map_list,
+  rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 }  // namespace detail
