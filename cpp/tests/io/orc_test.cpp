@@ -958,7 +958,6 @@ TEST_F(OrcChunkedWriterTest, ChunkedStats)
     sequence, sequence + num_rows, valid_all);
   column_wrapper<cudf::timestamp_s, typename decltype(sequence)::value_type> col5(
     sequence, sequence + num_rows, validity);
-  // date
   std::vector<std::unique_ptr<column>> cols;
   cols.push_back(col1.release());
   cols.push_back(col2.release());
@@ -973,9 +972,56 @@ TEST_F(OrcChunkedWriterTest, ChunkedStats)
     cudf_io::orc_writer_options::builder(cudf_io::sink_info{filepath}, expected->view());
   cudf_io::write_orc(out_opts);
 
-  auto const stats = cudf_io::read_raw_orc_statistics(cudf_io::source_info{filepath});
-  cudf_io::parse_orc_statistics(stats);
-  ASSERT_EQ(1, 2);
+  auto const stats = cudf_io::read_parsed_orc_statistics(cudf_io::source_info{filepath});
+
+  auto const expected_column_names =
+    std::vector<std::string>{"col0", "_col0", "_col1", "_col2", "_col3", "_col4"};
+  EXPECT_EQ(stats.column_names, expected_column_names);
+
+  auto validate_statistics = [&](std::vector<cudf_io::column_statistics> const& stats) {
+    auto& s0 = stats[0];
+    EXPECT_EQ(s0.type, cudf_io::statistics_type::NONE);
+    EXPECT_EQ(*s0.numberOfValues, 9);
+
+    auto& s1 = stats[1];
+    EXPECT_EQ(s1.type, cudf_io::statistics_type::INT);
+    EXPECT_EQ(*s1.numberOfValues, 4);
+    EXPECT_EQ(*s1.intStatistics->get_minimum(), 1);
+    EXPECT_EQ(*s1.intStatistics->get_maximum(), 7);
+    EXPECT_EQ(*s1.intStatistics->get_sum(), 16);
+
+    auto& s2 = stats[2];
+    EXPECT_EQ(s2.type, cudf_io::statistics_type::DOUBLE);
+    EXPECT_EQ(*s2.numberOfValues, 4);
+    EXPECT_EQ(*s2.doubleStatistics->get_minimum(), 1.);
+    EXPECT_EQ(*s2.doubleStatistics->get_maximum(), 7.);
+    // No sum ATM, filed #7087
+    EXPECT_EQ(s2.doubleStatistics->get_sum(), nullptr);
+
+    auto& s3 = stats[3];
+    EXPECT_EQ(s3.type, cudf_io::statistics_type::STRING);
+    EXPECT_EQ(*s3.numberOfValues, 9);
+    EXPECT_EQ(*s3.stringStatistics->get_minimum(), "Friday");
+    EXPECT_EQ(*s3.stringStatistics->get_maximum(), "Wednesday");
+    EXPECT_EQ(*s3.stringStatistics->get_sum(), 58);
+
+    auto& s4 = stats[4];
+    EXPECT_EQ(s4.type, cudf_io::statistics_type::BUCKET);
+    EXPECT_EQ(*s4.numberOfValues, 9);
+    EXPECT_EQ(*s4.bucketStatistics->get_count(0), 8);
+
+    auto& s5 = stats[5];
+    EXPECT_EQ(s5.type, cudf_io::statistics_type::TIMESTAMP);
+    EXPECT_EQ(*s5.numberOfValues, 4);
+    EXPECT_EQ(*s5.timestampStatistics->get_minimumUtc(), 1000);
+    EXPECT_EQ(*s5.timestampStatistics->get_maximumUtc(), 7000);
+    EXPECT_EQ(s5.timestampStatistics->get_minimum(), nullptr);
+    EXPECT_EQ(s5.timestampStatistics->get_maximum(), nullptr);
+  };
+
+  validate_statistics(stats.column_stats);
+  // There's only one stripe, so column stats are the same as stripe stats
+  validate_statistics(stats.stripe_stats[0]);
 }
 
 CUDF_TEST_PROGRAM_MAIN()

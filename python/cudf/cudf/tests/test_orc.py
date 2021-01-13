@@ -514,7 +514,7 @@ def test_orc_write_statistics(tmpdir, datadir, nrows):
 
     # Read back written ORC's statistics
     orc_file = pa.orc.ORCFile(fname)
-    (file_stats, stripes_stats,) = cudf.io.orc.read_raw_orc_statistics(fname)
+    (file_stats, stripe_stats,) = cudf.io.orc.read_raw_orc_statistics(fname)
 
     # check file stats
     for col in gdf:
@@ -533,14 +533,14 @@ def test_orc_write_statistics(tmpdir, datadir, nrows):
         # pandas is unable to handle min/max of string col with nulls
         stripe_df = cudf.DataFrame(stripe.to_pandas())
         for col in stripe_df:
-            if "minimum" in stripes_stats[stripe_idx][col]:
+            if "minimum" in stripe_stats[stripe_idx][col]:
                 actual_min = stripe_df[col].min()
-                stats_min = stripes_stats[stripe_idx][col]["minimum"]
+                stats_min = stripe_stats[stripe_idx][col]["minimum"]
                 assert normalized_equals(actual_min, stats_min)
 
-            if "maximum" in stripes_stats[stripe_idx][col]:
+            if "maximum" in stripe_stats[stripe_idx][col]:
                 actual_max = stripe_df[col].max()
-                stats_max = stripes_stats[stripe_idx][col]["maximum"]
+                stats_max = stripe_stats[stripe_idx][col]["maximum"]
                 assert normalized_equals(actual_max, stats_max)
 
 
@@ -555,7 +555,7 @@ def test_orc_write_bool_statistics(tmpdir, datadir, nrows):
 
     # Read back written ORC's statistics
     orc_file = pa.orc.ORCFile(fname)
-    (file_stats, stripes_stats,) = cudf.io.orc.read_raw_orc_statistics(fname)
+    (file_stats, stripe_stats,) = cudf.io.orc.read_raw_orc_statistics(fname)
 
     # check file stats
     col = "col_bool"
@@ -575,14 +575,14 @@ def test_orc_write_bool_statistics(tmpdir, datadir, nrows):
         # pandas is unable to handle min/max of string col with nulls
         stripe_df = cudf.DataFrame(stripe.to_pandas())
 
-        if "true_count" in stripes_stats[stripe_idx][col]:
+        if "true_count" in stripe_stats[stripe_idx][col]:
             actual_true_count = stripe_df[col].sum()
-            stats_true_count = stripes_stats[stripe_idx][col]["true_count"]
+            stats_true_count = stripe_stats[stripe_idx][col]["true_count"]
             assert normalized_equals(actual_true_count, stats_true_count)
 
-        if "number_of_values" in stripes_stats[stripe_idx][col]:
+        if "number_of_values" in stripe_stats[stripe_idx][col]:
             actual_valid_count = stripe_df[col].valid_count
-            stats_valid_count = stripes_stats[stripe_idx][col][
+            stats_valid_count = stripe_stats[stripe_idx][col][
                 "number_of_values"
             ]
             assert normalized_equals(actual_valid_count, stats_valid_count)

@@ -12,8 +12,8 @@ cdef extern from "cudf/io/orc_metadata.hpp" \
     cdef cppclass raw_orc_statistics:
         raw_orc_statistics() except +
         vector[string] column_names
-        vector[string] column_statistics
-        vector[vector[string]] stripe_statistics
+        vector[string] column_stats
+        vector[vector[string]] stripe_stats
 
     cdef raw_orc_statistics read_raw_orc_statistics(
         cudf_io_types.source_info src_info

@@ -224,45 +224,71 @@ raw_orc_statistics read_raw_orc_statistics(source_info const& src_info)
 
   // Get file-level statistics, statistics of each column of file
   for (auto const& stats : metadata.ff.statistics) {
-    result.column_statistics.push_back(std::string(stats.cbegin(), stats.cend()));
+    result.column_stats.push_back(std::string(stats.cbegin(), stats.cend()));
   }
 
   // Get stripe-level statistics
   for (auto const& stripe_stats : metadata.md.stripeStats) {
-    result.stripe_statistics.emplace_back();
+    result.stripe_stats.emplace_back();
     for (auto const& stats : stripe_stats.colStats) {
-      result.stripe_statistics.back().push_back(std::string(stats.cbegin(), stats.cend()));
+      result.stripe_stats.back().push_back(std::string(stats.cbegin(), stats.cend()));
     }
   }
 
   return result;
 }
 
-void parse_orc_statistics(raw_orc_statistics const& blobs)
+void set_column_statistics_type(column_statistics* cs)
 {
-  auto& cstats = blobs.column_statistics;
-  for (auto& c : cstats) {
-    column_statistics cs;
-    orc::ProtobufReader(reinterpret_cast<const uint8_t*>(c.c_str()), c.size()).read(cs);
-
-    if (cs.intStatistics.get()) {
-      cs.type = statistics_type::INT;
-    } else if (cs.doubleStatistics.get()) {
-      cs.type = statistics_type::DOUBLE;
-    } else if (cs.stringStatistics.get()) {
-      cs.type = statistics_type::STRING;
-    } else if (cs.bucketStatistics.get()) {
-      cs.type = statistics_type::BUCKET;
-    } else if (cs.decimalStatistics.get()) {
-      cs.type = statistics_type::DECIMAL;
-    } else if (cs.dateStatistics.get()) {
-      cs.type = statistics_type::DATE;
-    } else if (cs.binaryStatistics.get()) {
-      cs.type = statistics_type::BINARY;
-    } else if (cs.timestampStatistics.get()) {
-      cs.type = statistics_type::TIMESTAMP;
-    }
+  if (cs->intStatistics.get()) {
+    cs->type = statistics_type::INT;
+  } else if (cs->doubleStatistics.get()) {
+    cs->type = statistics_type::DOUBLE;
+  } else if (cs->stringStatistics.get()) {
+    cs->type = statistics_type::STRING;
+  } else if (cs->bucketStatistics.get()) {
+    cs->type = statistics_type::BUCKET;
+  } else if (cs->decimalStatistics.get()) {
+    cs->type = statistics_type::DECIMAL;
+  } else if (cs->dateStatistics.get()) {
+    cs->type = statistics_type::DATE;
+  } else if (cs->binaryStatistics.get()) {
+    cs->type = statistics_type::BINARY;
+  } else if (cs->timestampStatistics.get()) {
+    cs->type = statistics_type::TIMESTAMP;
   }
+}
+
+parsed_orc_statistics read_parsed_orc_statistics(source_info const& src_info)
+{
+  auto const raw_stats = read_raw_orc_statistics(src_info);
+
+  parsed_orc_statistics result;
+  result.column_names = raw_stats.column_names;
+
+  auto parse_column_statistics = [](auto const& raw_col_stats) {
+    column_statistics col_stats;
+    orc::ProtobufReader(reinterpret_cast<const uint8_t*>(raw_col_stats.c_str()),
+                        raw_col_stats.size())
+      .read(col_stats);
+    set_column_statistics_type(&col_stats);
+    return col_stats;
+  };
+
+  std::transform(raw_stats.column_stats.cbegin(),
+                 raw_stats.column_stats.cend(),
+                 std::back_inserter(result.column_stats),
+                 parse_column_statistics);
+
+  for (auto const& ss : raw_stats.stripe_stats) {
+    result.stripe_stats.emplace_back();
+    std::transform(ss.cbegin(),
+                   ss.cend(),
+                   std::back_inserter(result.stripe_stats.back()),
+                   parse_column_statistics);
+  }
+
+  return result;
 }
 
 // Freeform API wraps the detail reader class API

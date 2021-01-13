@@ -46,7 +46,7 @@ cpdef read_raw_orc_statistics(filepath_or_buffer):
     """
 
     cdef raw_orc_statistics raw = libcudf_read_raw_orc_statistics(make_source_info([filepath_or_buffer]))
-    return (raw.column_names, raw.column_statistics, raw.stripe_statistics)
+    return (raw.column_names, raw.column_stats, raw.stripe_stats)
 
 
 cpdef read_orc(object filepath_or_buffer,

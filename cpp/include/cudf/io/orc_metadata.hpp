@@ -30,8 +30,8 @@ namespace io {
 
 struct raw_orc_statistics {
   std::vector<std::string> column_names;
-  std::vector<std::string> column_statistics;
-  std::vector<std::vector<std::string>> stripe_statistics;
+  std::vector<std::string> column_stats;
+  std::vector<std::vector<std::string>> stripe_stats;
   raw_orc_statistics() = default;
 };
 
@@ -129,10 +129,16 @@ struct column_statistics {
   std::unique_ptr<date_statistics> dateStatistics;
   std::unique_ptr<binary_statistics> binaryStatistics;
   std::unique_ptr<timestamp_statistics> timestampStatistics;
-  // TODO: hasNull
+  // TODO: hasNull (issue #7087)
 };
 
-void parse_orc_statistics(raw_orc_statistics const &blobs);
+struct parsed_orc_statistics {
+  std::vector<std::string> column_names;
+  std::vector<column_statistics> column_stats;
+  std::vector<std::vector<column_statistics>> stripe_stats;
+};
+
+parsed_orc_statistics read_parsed_orc_statistics(source_info const &src_info);
 
 }  // namespace io
 }  // namespace cudf

@@ -176,11 +176,11 @@ void ProtobufReader::read(column_statistics &s, size_t maxlen)
                             make_field_reader(2, s.intStatistics),
                             make_field_reader(3, s.doubleStatistics),
                             make_field_reader(4, s.stringStatistics),
-                            make_field_reader(5, s.bucketStatistics));
-  // make_field_reader(6, s.decimalStatistics),
-  // make_field_reader(7, s.dateStatistics),
-  // make_field_reader(8, s.binaryStatistics),
-  // make_field_reader(9, s.timestampStatistics));
+                            make_field_reader(5, s.bucketStatistics),
+                            make_field_reader(6, s.decimalStatistics),
+                            make_field_reader(7, s.dateStatistics),
+                            make_field_reader(8, s.binaryStatistics),
+                            make_field_reader(9, s.timestampStatistics));
   function_builder(s, maxlen, op);
 }
 
