@@ -42,7 +42,7 @@ cpdef read_raw_orc_statistics(filepath_or_buffer):
 
     See Also
     --------
-    cudf.io.orc.read_raw_orc_statistics
+    cudf.io.orc.read_orc_statistics
     """
 
     cdef raw_orc_statistics raw = (
