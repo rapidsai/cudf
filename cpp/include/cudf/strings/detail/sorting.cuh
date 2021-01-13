@@ -42,7 +42,7 @@ struct sort_strings_comparator {
       bool rhs_null{d_column.is_null(rhs)};
       if (lhs_null || rhs_null) {
         if (!ascending) thrust::swap(lhs_null, rhs_null);
-        return (null_prec == cudf::null_order::BEFORE ? !rhs_null : !lhs_null);
+        return null_prec == cudf::null_order::BEFORE ? !rhs_null : !lhs_null;
       }
     }
     auto const lhs_str = d_column.element<string_view>(lhs);
