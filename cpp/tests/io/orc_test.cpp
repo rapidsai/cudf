@@ -981,18 +981,18 @@ TEST_F(OrcChunkedWriterTest, ChunkedStats)
   auto validate_statistics = [&](std::vector<cudf_io::column_statistics> const& stats) {
     auto& s0 = stats[0];
     EXPECT_EQ(s0.type, cudf_io::statistics_type::NONE);
-    EXPECT_EQ(*s0.numberOfValues, 9);
+    EXPECT_EQ(*s0.numberOfValues, 9ul);
 
     auto& s1 = stats[1];
     EXPECT_EQ(s1.type, cudf_io::statistics_type::INT);
-    EXPECT_EQ(*s1.numberOfValues, 4);
+    EXPECT_EQ(*s1.numberOfValues, 4ul);
     EXPECT_EQ(*s1.intStatistics->get_minimum(), 1);
     EXPECT_EQ(*s1.intStatistics->get_maximum(), 7);
     EXPECT_EQ(*s1.intStatistics->get_sum(), 16);
 
     auto& s2 = stats[2];
     EXPECT_EQ(s2.type, cudf_io::statistics_type::DOUBLE);
-    EXPECT_EQ(*s2.numberOfValues, 4);
+    EXPECT_EQ(*s2.numberOfValues, 4ul);
     EXPECT_EQ(*s2.doubleStatistics->get_minimum(), 1.);
     EXPECT_EQ(*s2.doubleStatistics->get_maximum(), 7.);
     // No sum ATM, filed #7087
@@ -1000,19 +1000,19 @@ TEST_F(OrcChunkedWriterTest, ChunkedStats)
 
     auto& s3 = stats[3];
     EXPECT_EQ(s3.type, cudf_io::statistics_type::STRING);
-    EXPECT_EQ(*s3.numberOfValues, 9);
+    EXPECT_EQ(*s3.numberOfValues, 9ul);
     EXPECT_EQ(*s3.stringStatistics->get_minimum(), "Friday");
     EXPECT_EQ(*s3.stringStatistics->get_maximum(), "Wednesday");
-    EXPECT_EQ(*s3.stringStatistics->get_sum(), 58);
+    EXPECT_EQ(*s3.stringStatistics->get_sum(), 58ul);
 
     auto& s4 = stats[4];
     EXPECT_EQ(s4.type, cudf_io::statistics_type::BUCKET);
-    EXPECT_EQ(*s4.numberOfValues, 9);
-    EXPECT_EQ(*s4.bucketStatistics->get_count(0), 8);
+    EXPECT_EQ(*s4.numberOfValues, 9ul);
+    EXPECT_EQ(*s4.bucketStatistics->get_count(0), 8ul);
 
     auto& s5 = stats[5];
     EXPECT_EQ(s5.type, cudf_io::statistics_type::TIMESTAMP);
-    EXPECT_EQ(*s5.numberOfValues, 4);
+    EXPECT_EQ(*s5.numberOfValues, 4ul);
     EXPECT_EQ(*s5.timestampStatistics->get_minimumUtc(), 1000);
     EXPECT_EQ(*s5.timestampStatistics->get_maximumUtc(), 7000);
     EXPECT_EQ(s5.timestampStatistics->get_minimum(), nullptr);

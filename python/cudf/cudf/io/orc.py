@@ -113,7 +113,7 @@ def read_raw_orc_statistics(
     )
     if not is_single_filepath_or_buffer:
         raise NotImplementedError(
-            "`read_raw_orc_statistics` does not yet support reading multiple files"
+            "`read_raw_orc_statistics` does not support reading multiple files"
         )
 
     filepath_or_buffer, compression = ioutils.get_filepath_or_buffer(
