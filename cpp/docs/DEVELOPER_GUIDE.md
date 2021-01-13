@@ -863,7 +863,8 @@ Dictionaries provide an efficient way to represent low-cardinality data by stori
 of each value. A dictionary comprises a column of sorted keys and a column containing an index into the 
 keys column for each row of the parent column. The keys column may have any libcudf data type, 
 such as a numerical type or strings. The indices represent the corresponding positions of each 
-element's value in the keys.
+element's value in the keys. The indices child column can have any unsigned integer type 
+(`UINT8`, `UINT16`, `UINT32`, or `UINT64`).
 
 ## Nested column challenges
 
