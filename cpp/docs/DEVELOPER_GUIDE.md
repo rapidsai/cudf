@@ -4,7 +4,7 @@ This document serves as a guide for contributors to libcudf C++ code. Developers
 to these additional files for further documentation of libcudf best practices.
 
 * [Documentation Guide](DOCUMENTATION.md) for guidelines on documenting libcudf code.
-* [Testing Guide(TESTING.md) for guidelines on writing unit tests.
+* [Testing Guide](TESTING.md) for guidelines on writing unit tests.
 * [Benchmarking Guide](TODO) for guidelines on writing unit benchmarks.
 
 # Overview
