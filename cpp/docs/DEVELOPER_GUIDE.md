@@ -57,6 +57,9 @@ the source files that implement the API. For example, the implementation of the 
 `cudf/cpp/include/cudf/copying.hpp` are located in `cudf/src/copying`. Likewise, the unit tests for 
 the APIs reside in `cudf/tests/copying/`.
 
+Internal API headers containing `detail` namespace definitions that are used across translation 
+units inside libcudf should be placed in `include/cudf/detail`.
+
 ## File extensions
 
 - `.hpp` : C++ header files
