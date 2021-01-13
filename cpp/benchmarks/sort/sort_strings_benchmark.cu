@@ -22,7 +22,7 @@
 #include <cudf/sorting.hpp>
 #include <cudf/types.hpp>
 
-class SortStrings : public cudf::benchmark {
+class Sort : public cudf::benchmark {
 };
 
 static void BM_sort(benchmark::State& state)
@@ -38,12 +38,12 @@ static void BM_sort(benchmark::State& state)
 }
 
 #define SORT_BENCHMARK_DEFINE(name)          \
-  BENCHMARK_DEFINE_F(SortStrings, name)      \
+  BENCHMARK_DEFINE_F(Sort, name)             \
   (::benchmark::State & st) { BM_sort(st); } \
-  BENCHMARK_REGISTER_F(SortStrings, name)    \
+  BENCHMARK_REGISTER_F(Sort, name)           \
     ->RangeMultiplier(8)                     \
     ->Ranges({{1 << 10, 1 << 24}})           \
     ->UseManualTime()                        \
     ->Unit(benchmark::kMillisecond);
 
-SORT_BENCHMARK_DEFINE(stringssort)
+SORT_BENCHMARK_DEFINE(strings)
