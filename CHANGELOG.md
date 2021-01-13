@@ -8,8 +8,8 @@
 - PR #6929 Add `Index.set_names` api
 - PR #6907 Add `replace_null` API with `replace_policy` parameter, `fixed_width` column support
 - PR #6885 Share `factorize` implementation with Index and cudf module
-
 - PR #6775 Implement cudf.DateOffset for months
+- PR #6715 Add Python DecimalColumn
 
 ## Improvements
 
@@ -34,7 +34,6 @@
 - PR #6942 Fix cudf::merge gtest for dictionary columns
 
 
-# cuDF 0.17.0 (Date TBD)
 # cuDF 0.17.0 (10 Dec 2020)
 
 ## New Features
@@ -65,7 +64,6 @@
 - PR #6737 New build process (Project Flash)
 - PR #6652 Add support for struct columns in concatenate
 - PR #6675 Add DecimalDtype to cuDF
-- PR #6715 Add Python DecimalColumn
 - PR #6739 Add Java bindings for is_timestamp
 - PR #6808 Add support for reading decimal32 and decimal64 from parquet
 - PR #6781 Add serial murmur3 hashing
