@@ -396,6 +396,7 @@ data. Null elements are treated as equal.
 
 Verifies that two columns have equivalent properties and verifies elementwise equivalence of the 
 column data. Null elements are treated as equivalent.
+
 #### `expect_equal_buffers`
 
 Verifies the bitwise equality of two device memory buffers.
