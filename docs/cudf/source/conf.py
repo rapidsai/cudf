@@ -44,7 +44,6 @@ extensions = [
     "IPython.sphinxext.ipython_directive",
     "nbsphinx",
     "recommonmark",
-    "sphinxemoji.sphinxemoji",
 ]
 
 
@@ -201,13 +200,8 @@ numpydoc_class_members_toctree = False
 
 autoclass_content = "init"
 
-sphinxemoji_style = "twemoji"
-
 
 def setup(app):
     app.add_js_file("copybutton_pydocs.js")
     app.add_css_file("params.css")
     app.add_css_file("https://docs.rapids.ai/assets/css/custom.css")
-    app.add_js_file("https://twemoji.maxcdn.com/v/latest/twemoji.min.js")
-    app.add_js_file("twemoji.js")
-    app.add_css_file("twemoji.css")
