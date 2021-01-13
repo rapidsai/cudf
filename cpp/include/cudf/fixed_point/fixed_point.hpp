@@ -276,6 +276,20 @@ class fixed_point {
   }
 
   /**
+   * @brief Method that returns the underlying value of the `fixed_point` number
+   *
+   * @return The underlying value of the `fixed_point` number
+   */
+  CUDA_HOST_DEVICE_CALLABLE rep value() const { return _value; }
+
+  /**
+   * @brief Method that returns the scale of the `fixed_point` number
+   *
+   * @return The scale of the `fixed_point` number
+   */
+  CUDA_HOST_DEVICE_CALLABLE scale_type scale() const { return _scale; }
+
+  /**
    * @brief Explicit conversion operator to `bool`
    *
    * @return The `fixed_point` value as a boolean (zero is `false`, nonzero is `true`)
@@ -520,12 +534,18 @@ class fixed_point {
    */
   explicit operator std::string() const
   {
-    int const n          = std::pow(10, -_scale);
-    int const f          = _value % n;
-    auto const num_zeros = std::max(0, (-_scale - static_cast<int32_t>(std::to_string(f).size())));
-    auto const zeros     = num_zeros <= 0 ? std::string("") : std::string(num_zeros, '0');
-    return std::to_string(_value / n) + std::string(".") + zeros +
-           std::to_string(std::abs(_value) % n);
+    if (_scale < 0) {
+      int const n = std::pow(10, -_scale);
+      int const f = _value % n;
+      auto const num_zeros =
+        std::max(0, (-_scale - static_cast<int32_t>(std::to_string(f).size())));
+      auto const zeros = std::string(num_zeros, '0');
+      return std::to_string(_value / n) + std::string(".") + zeros +
+             std::to_string(std::abs(_value) % n);
+    } else {
+      auto const zeros = std::string(_scale, '0');
+      return std::to_string(_value) + zeros;
+    }
   }
 };  // namespace numeric
 

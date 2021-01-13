@@ -166,8 +166,8 @@ class Frame(libcudf.table.Table):
         >>> df = cudf.DataFrame({'A' : [None, None]})
         >>> df
               A
-        0  null
-        1  null
+        0  <NA>
+        1  <NA>
         >>> df.empty
         False
         >>> df.dropna().empty
@@ -179,7 +179,7 @@ class Frame(libcudf.table.Table):
         >>> s
         0       1
         1       2
-        2    null
+        2    <NA>
         dtype: int64
         >>> s.empty
         False
@@ -862,9 +862,9 @@ class Frame(libcudf.table.Table):
         >>> ser.where(ser > 2)
         0       4
         1       3
-        2    null
-        3    null
-        4    null
+        2    <NA>
+        3    <NA>
+        4    <NA>
         dtype: int64
         """
 
@@ -1041,8 +1041,8 @@ class Frame(libcudf.table.Table):
         4     0
         dtype: int64
         >>> ser.mask(ser > 2)
-        0    null
-        1    null
+        0    <NA>
+        1    <NA>
         2       2
         3       1
         4       0
@@ -1247,10 +1247,10 @@ class Frame(libcudf.table.Table):
         ...                             np.datetime64("NaT"),
         ...                             np.datetime64("NaT")]})
         >>> df
-               name        toy       born
-        0    Alfred  Batmobile 1940-04-25
-        1    Batman       None       null
-        2  Catwoman   Bullwhip       null
+               name        toy                 born
+        0    Alfred  Batmobile  1940-04-25 00:00:00
+        1    Batman       <NA>                 <NA>
+        2  Catwoman   Bullwhip                 <NA>
 
         Drop the rows where at least one element is null.
 
@@ -1269,17 +1269,17 @@ class Frame(libcudf.table.Table):
         Drop the rows where all elements are null.
 
         >>> df.dropna(how='all')
-               name        toy       born
-        0    Alfred  Batmobile 1940-04-25
-        1    Batman       None       null
-        2  Catwoman   Bullwhip       null
+               name        toy                 born
+        0    Alfred  Batmobile  1940-04-25 00:00:00
+        1    Batman       <NA>                 <NA>
+        2  Catwoman   Bullwhip                 <NA>
 
         Keep only the rows with at least 2 non-null values.
 
         >>> df.dropna(thresh=2)
-               name        toy       born
-        0    Alfred  Batmobile 1940-04-25
-        2  Catwoman   Bullwhip       null
+               name        toy                 born
+        0    Alfred  Batmobile  1940-04-25 00:00:00
+        2  Catwoman   Bullwhip                 <NA>
 
         Define in which columns to look for null values.
 
@@ -1334,8 +1334,8 @@ class Frame(libcudf.table.Table):
         >>> df
               a     b
         0     1     3
-        1     2  null
-        2  null     5
+        1     2  <NA>
+        2  <NA>     5
         >>> df.fillna(4)
            a  b
         0  1  3
@@ -1353,7 +1353,7 @@ class Frame(libcudf.table.Table):
         >>> ser
         0       a
         1       b
-        2    None
+        2    <NA>
         3       c
         dtype: object
         >>> ser.fillna('z')
@@ -1374,7 +1374,7 @@ class Frame(libcudf.table.Table):
         dtype: object
         >>> df.fillna({'a': 3, 'b': 4}, inplace=True)
         >>> df
-        a  b
+           a  b
         0  1  3
         1  2  4
         2  3  5

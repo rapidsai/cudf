@@ -16,6 +16,7 @@
 
 #include <cudf/concatenate.hpp>
 #include <cudf/copying.hpp>
+#include <cudf/fixed_point/fixed_point.hpp>
 #include <cudf/io/data_sink.hpp>
 #include <cudf/io/parquet.hpp>
 #include <cudf/strings/string_view.cuh>
@@ -286,6 +287,14 @@ TEST_F(ParquetWriterTest, MultiColumn)
   auto col3_data = random_values<int32_t>(num_rows);
   auto col4_data = random_values<float>(num_rows);
   auto col5_data = random_values<double>(num_rows);
+  auto col6_vals = random_values<int32_t>(num_rows);
+  auto col7_vals = random_values<int64_t>(num_rows);
+  auto col6_data = cudf::test::make_counting_transform_iterator(0, [col6_vals](auto i) {
+    return numeric::decimal32{col6_vals[i], numeric::scale_type{5}};
+  });
+  auto col7_data = cudf::test::make_counting_transform_iterator(0, [col7_vals](auto i) {
+    return numeric::decimal64{col7_vals[i], numeric::scale_type{-5}};
+  });
   auto validity  = cudf::test::make_counting_transform_iterator(0, [](auto i) { return true; });
 
   // column_wrapper<bool> col0{
@@ -295,6 +304,8 @@ TEST_F(ParquetWriterTest, MultiColumn)
   column_wrapper<int32_t> col3{col3_data.begin(), col3_data.end(), validity};
   column_wrapper<float> col4{col4_data.begin(), col4_data.end(), validity};
   column_wrapper<double> col5{col5_data.begin(), col5_data.end(), validity};
+  column_wrapper<numeric::decimal32> col6{col6_data, col6_data + num_rows, validity};
+  column_wrapper<numeric::decimal64> col7{col7_data, col7_data + num_rows, validity};
 
   cudf_io::table_metadata expected_metadata;
   // expected_metadata.column_names.emplace_back("bools");
@@ -303,6 +314,8 @@ TEST_F(ParquetWriterTest, MultiColumn)
   expected_metadata.column_names.emplace_back("int32s");
   expected_metadata.column_names.emplace_back("floats");
   expected_metadata.column_names.emplace_back("doubles");
+  expected_metadata.column_names.emplace_back("decimal32s");
+  expected_metadata.column_names.emplace_back("decimal64s");
 
   std::vector<std::unique_ptr<column>> cols;
   // cols.push_back(col0.release());
@@ -311,13 +324,17 @@ TEST_F(ParquetWriterTest, MultiColumn)
   cols.push_back(col3.release());
   cols.push_back(col4.release());
   cols.push_back(col5.release());
+  cols.push_back(col6.release());
+  cols.push_back(col7.release());
   auto expected = std::make_unique<table>(std::move(cols));
-  EXPECT_EQ(5, expected->num_columns());
+  EXPECT_EQ(7, expected->num_columns());
 
   auto filepath = temp_env->get_temp_filepath("MultiColumn.parquet");
   cudf_io::parquet_writer_options out_opts =
     cudf_io::parquet_writer_options::builder(cudf_io::sink_info{filepath}, expected->view())
       .metadata(&expected_metadata);
+  std::vector<uint8_t> precisions = {10, 20};
+  out_opts.set_decimal_precision(precisions);
   cudf_io::write_parquet(out_opts);
 
   cudf_io::parquet_reader_options in_opts =
@@ -338,6 +355,14 @@ TEST_F(ParquetWriterTest, MultiColumnWithNulls)
   auto col3_data = random_values<int32_t>(num_rows);
   auto col4_data = random_values<float>(num_rows);
   auto col5_data = random_values<double>(num_rows);
+  auto col6_vals = random_values<int32_t>(num_rows);
+  auto col7_vals = random_values<int64_t>(num_rows);
+  auto col6_data = cudf::test::make_counting_transform_iterator(0, [col6_vals](auto i) {
+    return numeric::decimal32{col6_vals[i], numeric::scale_type{-2}};
+  });
+  auto col7_data = cudf::test::make_counting_transform_iterator(0, [col7_vals](auto i) {
+    return numeric::decimal64{col7_vals[i], numeric::scale_type{-8}};
+  });
   // auto col0_mask = cudf::test::make_counting_transform_iterator(
   //    0, [](auto i) { return (i % 2); });
   auto col1_mask = cudf::test::make_counting_transform_iterator(0, [](auto i) { return (i < 10); });
@@ -347,6 +372,9 @@ TEST_F(ParquetWriterTest, MultiColumnWithNulls)
   auto col4_mask =
     cudf::test::make_counting_transform_iterator(0, [](auto i) { return (i >= 40 || i <= 60); });
   auto col5_mask = cudf::test::make_counting_transform_iterator(0, [](auto i) { return (i > 80); });
+  auto col6_mask = cudf::test::make_counting_transform_iterator(0, [](auto i) { return (i % 5); });
+  auto col7_mask =
+    cudf::test::make_counting_transform_iterator(0, [](auto i) { return (i != 55); });
 
   // column_wrapper<bool> col0{
   //    col0_data.begin(), col0_data.end(), col0_mask};
@@ -355,6 +383,8 @@ TEST_F(ParquetWriterTest, MultiColumnWithNulls)
   column_wrapper<int32_t> col3{col3_data.begin(), col3_data.end(), col3_mask};
   column_wrapper<float> col4{col4_data.begin(), col4_data.end(), col4_mask};
   column_wrapper<double> col5{col5_data.begin(), col5_data.end(), col5_mask};
+  column_wrapper<numeric::decimal32> col6{col6_data, col6_data + num_rows, col6_mask};
+  column_wrapper<numeric::decimal64> col7{col7_data, col7_data + num_rows, col7_mask};
 
   cudf_io::table_metadata expected_metadata;
   // expected_metadata.column_names.emplace_back("bools");
@@ -363,6 +393,8 @@ TEST_F(ParquetWriterTest, MultiColumnWithNulls)
   expected_metadata.column_names.emplace_back("int32s");
   expected_metadata.column_names.emplace_back("floats");
   expected_metadata.column_names.emplace_back("doubles");
+  expected_metadata.column_names.emplace_back("decimal32s");
+  expected_metadata.column_names.emplace_back("decimal64s");
 
   std::vector<std::unique_ptr<column>> cols;
   // cols.push_back(col0.release());
@@ -371,13 +403,18 @@ TEST_F(ParquetWriterTest, MultiColumnWithNulls)
   cols.push_back(col3.release());
   cols.push_back(col4.release());
   cols.push_back(col5.release());
+  cols.push_back(col6.release());
+  cols.push_back(col7.release());
   auto expected = std::make_unique<table>(std::move(cols));
-  EXPECT_EQ(5, expected->num_columns());
+  EXPECT_EQ(7, expected->num_columns());
 
   auto filepath = temp_env->get_temp_filepath("MultiColumnWithNulls.parquet");
   cudf_io::parquet_writer_options out_opts =
     cudf_io::parquet_writer_options::builder(cudf_io::sink_info{filepath}, expected->view())
       .metadata(&expected_metadata);
+  std::vector<uint8_t> precisions = {9, 20};
+  out_opts.set_decimal_precision(precisions);
+
   cudf_io::write_parquet(out_opts);
 
   cudf_io::parquet_reader_options in_opts =
@@ -1282,6 +1319,61 @@ TEST_F(ParquetChunkedWriterTest, ReadRowGroupsError)
   EXPECT_THROW(cudf_io::read_parquet(read_opts), cudf::logic_error);
 }
 
+TEST_F(ParquetChunkedWriterTest, DecimalWrite)
+{
+  constexpr cudf::size_type num_rows = 500;
+  auto seq_col0                      = random_values<int32_t>(num_rows);
+  auto seq_col1                      = random_values<int64_t>(num_rows);
+
+  auto valids = cudf::test::make_counting_transform_iterator(0, [](auto i) { return i % 2 == 0; });
+
+  auto col0 = cudf::test::fixed_point_column_wrapper<int32_t>{
+    seq_col0.begin(), seq_col0.end(), valids, numeric::scale_type{5}};
+  auto col1 = cudf::test::fixed_point_column_wrapper<int64_t>{
+    seq_col1.begin(), seq_col1.end(), valids, numeric::scale_type{-9}};
+
+  auto table = table_view({col0, col1});
+
+  auto filepath = temp_env->get_temp_filepath("DecimalWrite.parquet");
+  cudf_io::chunked_parquet_writer_options args =
+    cudf_io::chunked_parquet_writer_options::builder(cudf_io::sink_info{filepath});
+
+  // verify failure if no decimal precision given
+  auto state = cudf_io::write_parquet_chunked_begin(args);
+  EXPECT_THROW(cudf_io::write_parquet_chunked(table, state), cudf::logic_error);
+
+  // verify failure if too small a precision is given
+  std::vector<uint8_t> precisions{7, 1};
+  args.set_decimal_precision_data(precisions);
+  state = cudf_io::write_parquet_chunked_begin(args);
+  EXPECT_THROW(cudf_io::write_parquet_chunked(table, state), cudf::logic_error);
+
+  // verify failure if too few precisions given
+  precisions.pop_back();
+  args.set_decimal_precision_data(precisions);
+  state = cudf_io::write_parquet_chunked_begin(args);
+  EXPECT_THROW(cudf_io::write_parquet_chunked(table, state), cudf::logic_error);
+
+  // verify failure if too many precisions given
+  precisions = {7, 14, 11};
+  args.set_decimal_precision_data(precisions);
+  state = cudf_io::write_parquet_chunked_begin(args);
+  EXPECT_THROW(cudf_io::write_parquet_chunked(table, state), cudf::logic_error);
+
+  // write correctly
+  precisions.pop_back();
+  args.set_decimal_precision_data(precisions);
+  state = cudf_io::write_parquet_chunked_begin(args);
+  cudf_io::write_parquet_chunked(table, state);
+  cudf_io::write_parquet_chunked_end(state);
+
+  cudf_io::parquet_reader_options read_opts =
+    cudf_io::parquet_reader_options::builder(cudf_io::source_info{filepath});
+  auto result = cudf_io::read_parquet(read_opts);
+
+  CUDF_TEST_EXPECT_TABLES_EQUAL(*result.tbl, table);
+}
+
 TYPED_TEST(ParquetChunkedWriterNumericTypeTest, UnalignedSize)
 {
   // write out two 31 row tables and make sure they get
@@ -1397,7 +1489,7 @@ class custom_test_memmap_sink : public cudf::io::data_sink {
 
   bool supports_device_write() const override { return supports_device_writes; }
 
-  void device_write(void const* gpu_data, size_t size, rmm::cuda_stream_view stream)
+  void device_write(void const* gpu_data, size_t size, rmm::cuda_stream_view stream) override
   {
     char* ptr = nullptr;
     CUDA_TRY(cudaMallocHost(&ptr, size));
@@ -1929,7 +2021,8 @@ TEST_F(ParquetReaderTest, DecimalRead)
       -9694494, -5343299, 3558393,  -8789072, 2697890,  -4454707, 8299309,  -6223703, -3112513,
       7537487,  825776,   -495683,  328299,   -4529727, 0,        -9999999, 9999999};
 
-    EXPECT_EQ(result.tbl->view().column(0).size(), sizeof(col0_data) / sizeof(col0_data[0]));
+    EXPECT_EQ(static_cast<std::size_t>(result.tbl->view().column(0).size()),
+              sizeof(col0_data) / sizeof(col0_data[0]));
     cudf::test::fixed_point_column_wrapper<int32_t> col0(
       std::begin(col0_data), std::end(col0_data), validity, numeric::scale_type{-4});
     cudf::test::expect_columns_equal(result.tbl->view().column(0), col0);
@@ -1953,7 +2046,8 @@ TEST_F(ParquetReaderTest, DecimalRead)
                            45844829680593,  71401416837149,  0,
                            -99999999999999, 99999999999999};
 
-    EXPECT_EQ(result.tbl->view().column(1).size(), sizeof(col1_data) / sizeof(col1_data[0]));
+    EXPECT_EQ(static_cast<std::size_t>(result.tbl->view().column(1).size()),
+              sizeof(col1_data) / sizeof(col1_data[0]));
     cudf::test::fixed_point_column_wrapper<int64_t> col1(
       std::begin(col1_data), std::end(col1_data), validity, numeric::scale_type{-5});
     cudf::test::expect_columns_equal(result.tbl->view().column(1), col1);
@@ -2068,7 +2162,8 @@ TEST_F(ParquetReaderTest, DecimalRead)
                            9913714, 901749,  7776938, 3186566, 4955569, 5131067, 98619,
                            2282579, 7521455, 4430706, 1937859, 4532040, 0};
 
-    EXPECT_EQ(result.tbl->view().column(0).size(), sizeof(col0_data) / sizeof(col0_data[0]));
+    EXPECT_EQ(static_cast<std::size_t>(result.tbl->view().column(0).size()),
+              sizeof(col0_data) / sizeof(col0_data[0]));
     cudf::test::fixed_point_column_wrapper<int64_t> col0(
       std::begin(col0_data), std::end(col0_data), validity_c0, numeric::scale_type{-3});
     cudf::test::expect_columns_equal(result.tbl->view().column(0), col0);
@@ -2096,7 +2191,8 @@ TEST_F(ParquetReaderTest, DecimalRead)
                            0,
                            363993164092};
 
-    EXPECT_EQ(result.tbl->view().column(1).size(), sizeof(col1_data) / sizeof(col1_data[0]));
+    EXPECT_EQ(static_cast<std::size_t>(result.tbl->view().column(1).size()),
+              sizeof(col1_data) / sizeof(col1_data[0]));
     cudf::test::fixed_point_column_wrapper<int64_t> col1(
       std::begin(col1_data), std::end(col1_data), validity_c1, numeric::scale_type{-11});
     cudf::test::expect_columns_equal(result.tbl->view().column(1), col1);
