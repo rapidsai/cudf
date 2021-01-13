@@ -141,6 +141,14 @@ def to_csv(
                 "Dataframe doesn't have the labels provided in columns"
             )
 
+    if any(
+        isinstance(col, cudf.core.column.ListColumn)
+        for col in df._data.columns
+    ):
+        raise NotImplementedError(
+            "Writing to csv format is not yet supported with list columns."
+        )
+
     # TODO: Need to typecast categorical columns to the underlying
     # categories dtype to write the actual data to csv. Remove this
     # workaround once following issue is fixed:
