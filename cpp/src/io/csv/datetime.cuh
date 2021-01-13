@@ -383,6 +383,11 @@ __inline__ __device__ bool skip_if_starts_with(char const** begin,
   return found;
 }
 
+__inline__ __device__ void skip_spaces(char const** begin, char const* end)
+{
+  *begin = thrust::find(thrust::seq, *begin, end, [&](char elem) { return elem != ' '; });
+}
+
 template <typename T>
 __inline__ __device__ int64_t to_time_delta(char const* begin, char const* end)
 {
@@ -394,13 +399,13 @@ __inline__ __device__ int64_t to_time_delta(char const* begin, char const* end)
   // single pass to parse days, hour, minute, seconds, nanosecond
   auto cur         = begin;
   auto const value = parse_integer<int32_t>(&cur, end);
-  while (*cur == ' ' && cur <= end) ++cur;
+  skip_spaces(&cur, end);
   if (std::is_same<T, cudf::duration_D>::value || cur >= end) {  // %value
     return value;
   }
   // " days [+]"
   bool const has_days_seperator = skip_if_starts_with(&cur, end, "days");
-  while (*cur == ' ' && cur <= end) ++cur;
+  skip_spaces(&cur, end);
   cur += (*cur == '+');
   if (has_days_seperator) {
     days = value;
@@ -415,7 +420,6 @@ __inline__ __device__ int64_t to_time_delta(char const* begin, char const* end)
     ++cur;
     minute = parse_integer<int8_t>(&cur, end);
   }
-
   int8_t second{0};
   if (*cur == sep) {
     ++cur;
