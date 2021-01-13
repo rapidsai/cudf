@@ -468,8 +468,8 @@ std::unique_ptr<cudf::column> create_random_column<cudf::list_view>(data_profile
   auto list_column = std::move(leaf_column);
   for (int lvl = 0; lvl < dist_params.max_depth; ++lvl) {
     // Generating the next level - offsets point into the current list column
-    auto current_child_column = std::move(list_column);
-    auto const num_rows       = current_child_column->size() / single_level_mean;
+    auto current_child_column      = std::move(list_column);
+    cudf::size_type const num_rows = current_child_column->size() / single_level_mean;
 
     std::vector<int32_t> offsets{0};
     offsets.reserve(num_rows + 1);
