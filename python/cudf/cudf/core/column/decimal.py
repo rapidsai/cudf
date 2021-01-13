@@ -5,18 +5,20 @@ from cudf import _lib as libcudf
 from cudf.core.buffer import Buffer
 from cudf.core.column import ColumnBase
 from cudf.core.dtypes import DecimalDtype
+from cudf.utils.utils import pa_mask_buffer_to_mask
 
 
 class DecimalColumn(ColumnBase):
     @classmethod
     def from_arrow(cls, data: pa.Array):
-        # TODO handle nulls
+        mask = pa_mask_buffer_to_mask(data.buffers()[0], len(data))
         bts = data.buffers()[1].to_pybytes()
         bts = b"".join(list(more_itertools.sliced(bts, 8))[::2])
         return cls(
             data=Buffer.from_bytes(bts),
             size=len(data),
             dtype=DecimalDtype.from_arrow(data.type),
+            mask=mask,
         )
 
     def to_arrow(self):
@@ -30,11 +32,12 @@ class DecimalColumn(ColumnBase):
                 )
             )
         )
+        mask_buf = bytes(self.base_mask.to_host_array())
         return pa.Array.from_buffers(
             type=self.dtype.to_arrow(),
             length=self.size,
             # TODO handle nulls
-            buffers=[None, pa.py_buffer(data_buf_128)],
+            buffers=[pa.py_buffer(mask_buf), pa.py_buffer(data_buf_128)],
         )
 
     def binary_operator(self, op, other, reflect=False):

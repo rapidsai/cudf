@@ -42,6 +42,7 @@ from cudf.utils import cudautils, docutils, ioutils, utils
 from cudf.utils.docutils import copy_docstring
 from cudf.utils.dtypes import (
     can_convert_to_column,
+    is_decimal_dtype,
     is_list_dtype,
     is_list_like,
     is_mixed_with_object_dtype,
@@ -1098,6 +1099,7 @@ class Series(Frame, Serializable):
                 preprocess._column, cudf.core.column.CategoricalColumn
             )
             and not is_list_dtype(preprocess.dtype)
+            and not is_decimal_dtype(preprocess.dtype)
         ) or isinstance(
             preprocess._column, cudf.core.column.timedelta.TimeDeltaColumn
         ):
