@@ -14,13 +14,13 @@
  * limitations under the License.
  */
 
+#include <benchmarks/fixture/benchmark_fixture.hpp>
+#include <benchmarks/synchronization/synchronization.hpp>
 #include <cudf/column/column_view.hpp>
 #include <cudf/reduction.hpp>
 #include <cudf/types.hpp>
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_wrapper.hpp>
-#include <fixture/benchmark_fixture.hpp>
-#include <synchronization/synchronization.hpp>
 
 #include <memory>
 #include <random>
@@ -31,7 +31,7 @@ class Reduction : public cudf::benchmark {
 template <typename type>
 void BM_reduction_anyall(benchmark::State& state, std::unique_ptr<cudf::aggregation> const& agg)
 {
-  const cudf::size_type column_size{(cudf::size_type)state.range(0)};
+  const cudf::size_type column_size{static_cast<cudf::size_type>(state.range(0))};
 
   cudf::test::UniformRandomGenerator<long> rand_gen(0, 100);
   auto data_it = cudf::test::make_counting_transform_iterator(
