@@ -304,7 +304,6 @@ class GroupedRollingTest : public cudf::test::BaseFixture {
     // input data and mask
 
     std::vector<bitmask_type> in_valid = cudf::test::bitmask_to_host(input);
-    bitmask_type* valid_mask           = in_valid.data();
 
     for (size_type i = 0; i < num_rows; i++) {
       // load sizes
@@ -890,7 +889,6 @@ class GroupedTimeRangeRollingTest : public cudf::test::BaseFixture {
     // input data and mask
 
     std::vector<bitmask_type> in_valid = cudf::test::bitmask_to_host(input);
-    bitmask_type* valid_mask           = in_valid.data();
 
     for (size_type i = 0; i < num_rows; i++) {
       // load sizes

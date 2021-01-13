@@ -278,6 +278,7 @@ OrcDecompressor::OrcDecompressor(CompressionKind kind, uint32_t blockSize)
   if (kind != NONE) {
     int stream_type = IO_UNCOMP_STREAM_TYPE_INFER;  // Will be treated as invalid
     switch (kind) {
+      case NONE: break;
       case ZLIB:
         stream_type    = IO_UNCOMP_STREAM_TYPE_INFLATE;
         m_log2MaxRatio = 11;  // < 2048:1
