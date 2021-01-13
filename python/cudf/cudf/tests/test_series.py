@@ -686,6 +686,7 @@ def test_series_round(arr, decimals):
     result = ser.round(decimals)
     expected = pser.round(decimals)
 
+    assert_eq(result, expected)
     np.array_equal(ser.nullmask.to_array(), result.to_array())
 
 

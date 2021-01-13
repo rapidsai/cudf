@@ -3249,7 +3249,7 @@ def test_ndim():
         5,
         pd.Series([1, 4, 3, -6], index=["w", "x", "y", "z"]),
         gd.Series([-4, -2, 12], index=["x", "y", "z"]),
-        {"w": -3, "x": 15, "y": -2},
+        {"w": -1, "x": 15, "y": 2},
     ],
 )
 def test_dataframe_round(decimals):
@@ -3292,7 +3292,7 @@ def test_dataframe_round(decimals):
         mask = np.random.randint(0, 2, 10)
         arr[mask == 1] = np.nan
         pdf[c] = arr
-    gdf = gd.DataFrame.from_pandas(pdf)
+        gdf[c] = gd.Series(arr)
 
     result = gdf.round(decimals)
     expected = pdf.round(pdecimals)
