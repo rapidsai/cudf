@@ -1,4 +1,4 @@
-# Copyright (c) 2018-2020, NVIDIA CORPORATION.
+# Copyright (c) 2018-2021, NVIDIA CORPORATION.
 
 from io import BytesIO, StringIO
 
@@ -118,6 +118,11 @@ def to_csv(
     **kwargs,
 ):
     """{docstring}"""
+
+    if not isinstance(sep, str):
+        raise TypeError(f'"sep" must be string, not {type(sep).__name__}')
+    elif len(sep) > 1:
+        raise TypeError('"sep" must be a 1-character string')
 
     return_as_string = False
     if path_or_buf is None:

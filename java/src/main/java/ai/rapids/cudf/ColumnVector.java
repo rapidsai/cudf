@@ -1,6 +1,6 @@
 /*
  *
- *  Copyright (c) 2019-2020, NVIDIA CORPORATION.
+ *  Copyright (c) 2019-2021, NVIDIA CORPORATION.
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -19,7 +19,6 @@
 package ai.rapids.cudf;
 
 import ai.rapids.cudf.HostColumnVector.Builder;
-import ai.rapids.cudf.WindowOptions.FrameType;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -324,6 +323,80 @@ public final class ColumnVector extends ColumnView {
   }
 
   /**
+   * Create a new struct vector made up of existing columns. Note that this will copy
+   * the contents of the input columns to make a new vector. If you only want to
+   * do a quick temporary computation you can use ColumnView.makeStructView.
+   * @param columns the columns to make the struct from.
+   * @return the new ColumnVector
+   */
+  public static ColumnVector makeStruct(ColumnView... columns) {
+    try (ColumnView cv = ColumnView.makeStructView(columns)) {
+      return cv.copyToColumnVector();
+    }
+  }
+
+  /**
+   * Create a new struct vector made up of existing columns. Note that this will copy
+   * the contents of the input columns to make a new vector. If you only want to
+   * do a quick temporary computation you can use ColumnView.makeStructView.
+   * @param rows the number of rows in the struct. Used for structs with no children.
+   * @param columns the columns to make the struct from.
+   * @return the new ColumnVector
+   */
+  public static ColumnVector makeStruct(long rows, ColumnView... columns) {
+    try (ColumnView cv = ColumnView.makeStructView(rows, columns)) {
+      return cv.copyToColumnVector();
+    }
+  }
+
+  /**
+   * Create a LIST column from the given columns. Each list in the returned column will have the
+   * same number of entries in it as columns passed into this method. Be careful about the
+   * number of rows passed in as there are limits on the maximum output size supported for
+   * column lists.
+   * @param columns the columns to make up the list column, in the order they will appear in the
+   *                resulting lists.
+   * @return the new LIST ColumnVector
+   */
+  public static ColumnVector makeList(ColumnView... columns) {
+    if (columns.length <= 0) {
+      throw new IllegalArgumentException("At least one column is needed to get the row count");
+    }
+    return makeList(columns[0].getRowCount(), columns[0].getType(), columns);
+  }
+
+  /**
+   * Create a LIST column from the given columns. Each list in the returned column will have the
+   * same number of entries in it as columns passed into this method. Be careful about the
+   * number of rows passed in as there are limits on the maximum output size supported for
+   * column lists.
+   * @param rows the number of rows to create, for the special case of an empty list.
+   * @param type the type of the child column, for the special case of an empty list.
+   * @param columns the columns to make up the list column, in the order they will appear in the
+   *                resulting lists.
+   * @return the new LIST ColumnVector
+   */
+  public static ColumnVector makeList(long rows, DType type, ColumnView... columns) {
+    long[] handles = new long[columns.length];
+    for (int i = 0; i < columns.length; i++) {
+      ColumnView cv = columns[i];
+      if (rows != cv.getRowCount()) {
+        throw new IllegalArgumentException("All columns must have the same number of rows");
+      }
+      if (!type.equals(cv.getType())) {
+        throw new IllegalArgumentException("All columns must have the same type");
+      }
+
+      handles[i] = cv.getNativeView();
+    }
+    if (columns.length == 0 && type.isNestedType()) {
+      throw new IllegalArgumentException(
+          "Creating an empty list column of nested types is not currently supported");
+    }
+    return new ColumnVector(makeList(handles, type.typeId.nativeId, type.getScale(), rows));
+  }
+
+  /**
    * Create a new vector of length rows, starting at the initialValue and going by step each time.
    * Only numeric types are supported.
    * @param initialValue the initial value to start at.
@@ -543,6 +616,9 @@ public final class ColumnVector extends ColumnView {
   private static native long sequence(long initialValue, long step, int rows);
 
   private static native long fromScalar(long scalarHandle, int rowCount) throws CudfException;
+
+  private static native long makeList(long[] handles, long typeHandle, int scale, long rows)
+      throws CudfException;
 
   private static native long concatenate(long[] viewHandles) throws CudfException;
 
@@ -863,6 +939,15 @@ public final class ColumnVector extends ColumnView {
   public static ColumnVector fromStructs(HostColumnVector.DataType dataType,
                                          HostColumnVector.StructData... lists) {
     try (HostColumnVector host = HostColumnVector.fromStructs(dataType, lists)) {
+      return host.copyToDevice();
+    }
+  }
+  /**
+   * This method is evolving, unstable and currently test only.
+   * Please use with caution and expect it to change in the future.
+   */
+  public static ColumnVector emptyStructs(HostColumnVector.DataType dataType, long numRows) {
+    try (HostColumnVector host = HostColumnVector.emptyStructs(dataType, numRows)) {
       return host.copyToDevice();
     }
   }
