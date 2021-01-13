@@ -97,6 +97,35 @@ std::unique_ptr<column> byte_cast(
   flip_endianness endian_configuration,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
+/**
+ * @brief Explodes a list column's elements.
+ *
+ * Any list is exploded into individual rows and
+ * the other rows are duplicated.
+ * ```
+ * [[5,10,15], 100],
+ * [[20,25],   200],
+ * [[30],      300],
+ * returns
+ * [5,         100],
+ * [10,        100],
+ * [15,        100],
+ * [20,        200],
+ * [25,        200],
+ * [30,        300],
+ * ```
+ *
+ * @param input_table Table to explode.
+ * @param explode_column_idx Column index to explode inside the table.
+ * @param mr Device memory resource used to allocate the returned column's device memory.
+ *
+ * @return A new table with explode_col exploded.
+ */
+std::unique_ptr<table> explode(
+  table_view const& input_table,
+  int const explode_column_idx,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+
 /** @} */  // end of group
 
 }  // namespace cudf
