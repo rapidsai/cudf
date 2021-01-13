@@ -129,7 +129,6 @@ join_result full_join(table_view const& left_input,
                       table_view const& right_input,
                       std::vector<size_type> const& left_on,
                       std::vector<size_type> const& right_on,
-                      std::vector<std::pair<size_type, size_type>> const& columns_in_common,
                       null_equality compare_nulls,
                       rmm::cuda_stream_view stream,
                       rmm::mr::device_memory_resource* mr)
