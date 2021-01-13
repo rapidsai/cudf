@@ -36,7 +36,7 @@ namespace cudf {
  *
  * A `join_result` holds two columns containing the
  * left and right gathermaps.
- */  // TODO: explain this better
+ */ // TODO: explain this better
 struct join_result {
   column_view left_indices;   /// < The left gathermap
   column_view right_indices;  /// < The right gathermap
@@ -44,7 +44,12 @@ struct join_result {
   std::unique_ptr<rmm::device_buffer> right_buf;
 };
 
-std::unique_ptr<cudf::table> inner_join(
+/**
+ * @brief Performs  an inner join on the specified columns of two
+ * tables (`left`, `right`), and returns the row indices corresponding
+ * to the result.
+ */ // TODO: explain this better
+join_result inner_join(
   cudf::table_view const& left,
   cudf::table_view const& right,
   std::vector<cudf::size_type> const& left_on,
@@ -119,6 +124,18 @@ std::unique_ptr<cudf::table> inner_join(
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
+ * @brief Performs a left join on the specified columns of two
+ * tables (`left`, `right`), and returns the row indices corresponding
+ * to the result.
+ */ // TODO: explain this better
+join_result left_join(cudf::table_view const& left,
+                      cudf::table_view const& right,
+                      std::vector<cudf::size_type> const& left_on,
+                      std::vector<cudf::size_type> const& right_on,
+                      null_equality compare_nulls         = null_equality::EQUAL,
+                      rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+
+/**
  * @brief Performs a left join (also known as left outer join) on the
  * specified columns of two tables (`left`, `right`)
  *
@@ -185,6 +202,18 @@ std::unique_ptr<cudf::table> left_join(
   std::vector<std::pair<cudf::size_type, cudf::size_type>> const& columns_in_common,
   null_equality compare_nulls         = null_equality::EQUAL,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+
+/**
+ * @brief Performs a left join on the specified columns of two
+ * tables (`left`, `right`), and returns the row indices corresponding
+ * to the result.
+ */ // TODO: explain this better
+join_result full_join(cudf::table_view const& left,
+                      cudf::table_view const& right,
+                      std::vector<cudf::size_type> const& left_on,
+                      std::vector<cudf::size_type> const& right_on,
+                      null_equality compare_nulls         = null_equality::EQUAL,
+                      rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
  * @brief Performs a full join (also known as full outer join) on the
@@ -436,6 +465,18 @@ class hash_join {
   };
 
   /**
+   * @brief Performs  an inner join on the specified columns of two
+   * tables (`left`, `right`), and returns the row indices corresponding
+   * to the result.
+   */ // TODO: explain this better
+  join_result inner_join(
+    cudf::table_view const& probe,
+    std::vector<size_type> const& probe_on,
+    null_equality compare_nulls         = null_equality::EQUAL,
+    rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
+    rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource()) const;
+
+  /**
    * @brief Performs an inner join by probing in the internal hash table.
    *
    * Given that it is sometimes desired to choose the small table to be the `build` side for an
@@ -480,6 +521,18 @@ class hash_join {
     rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource()) const;
 
   /**
+   * @brief Performs a left join on the specified columns of two
+   * tables (`left`, `right`), and returns the row indices corresponding
+   * to the result.
+   */ // TODO: explain this better
+  join_result left_join(
+    cudf::table_view const& probe,
+    std::vector<size_type> const& probe_on,
+    null_equality compare_nulls         = null_equality::EQUAL,
+    rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
+    rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource()) const;
+
+  /**
    * @brief Performs a left join by probing in the internal hash table.
    *
    * More details please @see cudf::left_join().
@@ -505,6 +558,18 @@ class hash_join {
     cudf::table_view const& probe,
     std::vector<size_type> const& probe_on,
     std::vector<std::pair<cudf::size_type, cudf::size_type>> const& columns_in_common,
+    null_equality compare_nulls         = null_equality::EQUAL,
+    rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
+    rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource()) const;
+
+  /**
+   * @brief Performs a full join on the specified columns of two
+   * tables (`left`, `right`), and returns the row indices corresponding
+   * to the result.
+   */ // TODO: explain this better
+  join_result full_join(
+    cudf::table_view const& probe,
+    std::vector<size_type> const& probe_on,
     null_equality compare_nulls         = null_equality::EQUAL,
     rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
     rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource()) const;

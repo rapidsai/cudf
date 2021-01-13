@@ -26,6 +26,17 @@
 namespace cudf {
 namespace detail {
 
+join_result inner_join(table_view const& left_input,
+                       table_view const& right_input,
+                       std::vector<size_type> const& left_on,
+                       std::vector<size_type> const& right_on,
+                       null_equality compare_nulls,
+                       rmm::cuda_stream_view stream,
+                       rmm::mr::device_memory_resource* mr)
+{
+  return cudf::join_result{};
+}
+
 std::unique_ptr<table> inner_join(
   table_view const& left_input,
   table_view const& right_input,
@@ -79,6 +90,17 @@ std::unique_ptr<table> inner_join(
   }
 }
 
+join_result left_join(table_view const& left_input,
+                      table_view const& right_input,
+                      std::vector<size_type> const& left_on,
+                      std::vector<size_type> const& right_on,
+                      null_equality compare_nulls,
+                      rmm::cuda_stream_view stream,
+                      rmm::mr::device_memory_resource* mr)
+{
+  return cudf::join_result{};
+}
+
 std::unique_ptr<table> left_join(
   table_view const& left_input,
   table_view const& right_input,
@@ -101,6 +123,18 @@ std::unique_ptr<table> left_join(
 
   cudf::hash_join hj_obj(right, right_on, compare_nulls, stream);
   return hj_obj.left_join(left, left_on, columns_in_common, compare_nulls, stream, mr);
+}
+
+join_result full_join(table_view const& left_input,
+                      table_view const& right_input,
+                      std::vector<size_type> const& left_on,
+                      std::vector<size_type> const& right_on,
+                      std::vector<std::pair<size_type, size_type>> const& columns_in_common,
+                      null_equality compare_nulls,
+                      rmm::cuda_stream_view stream,
+                      rmm::mr::device_memory_resource* mr)
+{
+  return cudf::join_result{};
 }
 
 std::unique_ptr<table> full_join(
@@ -176,6 +210,18 @@ std::unique_ptr<cudf::table> hash_join::full_join(
 
 // external APIs
 
+join_result inner_join(table_view const& left,
+                       table_view const& right,
+                       std::vector<size_type> const& left_on,
+                       std::vector<size_type> const& right_on,
+                       null_equality compare_nulls,
+                       rmm::mr::device_memory_resource* mr)
+{
+  CUDF_FUNC_RANGE();
+  return detail::inner_join(
+    left, right, left_on, right_on, compare_nulls, rmm::cuda_stream_default, mr);
+}
+
 std::unique_ptr<table> inner_join(
   table_view const& left,
   table_view const& right,
@@ -190,6 +236,18 @@ std::unique_ptr<table> inner_join(
     left, right, left_on, right_on, columns_in_common, compare_nulls, rmm::cuda_stream_default, mr);
 }
 
+join_result left_join(table_view const& left,
+                      table_view const& right,
+                      std::vector<size_type> const& left_on,
+                      std::vector<size_type> const& right_on,
+                      null_equality compare_nulls,
+                      rmm::mr::device_memory_resource* mr)
+{
+  CUDF_FUNC_RANGE();
+  return detail::left_join(
+    left, right, left_on, right_on, compare_nulls, rmm::cuda_stream_default, mr);
+}
+
 std::unique_ptr<table> left_join(
   table_view const& left,
   table_view const& right,
@@ -202,6 +260,18 @@ std::unique_ptr<table> left_join(
   CUDF_FUNC_RANGE();
   return detail::left_join(
     left, right, left_on, right_on, columns_in_common, compare_nulls, rmm::cuda_stream_default, mr);
+}
+
+join_result full_join(table_view const& left,
+                      table_view const& right,
+                      std::vector<size_type> const& left_on,
+                      std::vector<size_type> const& right_on,
+                      null_equality compare_nulls,
+                      rmm::mr::device_memory_resource* mr)
+{
+  CUDF_FUNC_RANGE();
+  return detail::full_join(
+    left, right, left_on, right_on, compare_nulls, rmm::cuda_stream_default, mr);
 }
 
 std::unique_ptr<table> full_join(
