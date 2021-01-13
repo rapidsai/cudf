@@ -1,12 +1,11 @@
 # Copyright (c) 2020, NVIDIA CORPORATION.
 
-import cudf
-import numpy as np
 import os
-import pandas as pd
 import shutil
 import argparse
+
 from collections import namedtuple
+from cudf.tests import dataset_generator as dg
 
 # Update url and dir where datasets needs to be copied
 Dataset = namedtuple("Dataset", ["url", "dir"])
@@ -21,47 +20,32 @@ datasets = {
 }
 
 
-def create_random_data(dtype, file_type, only_file):
+def create_dataset(dtype, file_type, only_file, null_frequency):
     file_dir = "cudf/benchmarks/cuio_data/"
     file_path = os.path.join(
         file_dir, "file_data" + str(dtype) + "." + file_type
     )
-
     if only_file:
-        return None, file_path, None
+        return file_path
 
-    if dtype == "datetime64[s]":
-        n_samples = 2 ** 19
-    else:
-        n_samples = 2 ** 21
+    n_samples = 2 ** 21
     n_features = 2 ** 6
     random_state = 23
-    np.random.seed(random_state)
-    X = np.random.rand(n_samples, n_features)
+    column_info = []
+    for i in range(n_features):
+        column_info.append(
+            {
+                "dtype": dtype,
+                "null_frequency": null_frequency,
+                "cardinality": int(n_samples / n_features),
+            }
+        )
+    # Generates a pyarrow table
+    table = dg.rand_dataframe(
+        dtypes_meta=column_info, rows=n_samples, seed=random_state
+    )
 
-    return X, file_path, n_features
-
-
-def create_cudf_dataset(dtype, file_type, only_file):
-    X, file_path, n_features = create_random_data(dtype, file_type, only_file)
-    if only_file:
-        return file_path
-
-    X = cudf.DataFrame(X).astype(dtype)
-    X.columns = [str(i) for i in range(n_features)]
-
-    return X, file_path
-
-
-def create_pandas_dataset(dtype, file_type, only_file):
-    X, file_path, n_features = create_random_data(dtype, file_type, only_file)
-    if only_file:
-        return file_path
-
-    X = pd.DataFrame(X).astype(dtype)
-    X.columns = [str(i) for i in range(n_features)]
-
-    return X, file_path
+    return table, file_path
 
 
 def delete_dir(path):
