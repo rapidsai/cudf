@@ -1477,7 +1477,7 @@ class DataFrame(Frame, Serializable):
             be set, and that will be used as the column name to align with the
             original DataFrame.
 
-        join : {‘left’}, default ‘left’
+        join : {`left`}, default `left`
             Only left join is implemented, keeping the index and
             columns of the original object.
 

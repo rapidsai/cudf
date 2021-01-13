@@ -8210,23 +8210,40 @@ def test_agg_for_dataframe_with_string_columns(aggs):
     [
         {"a": [1, 2, 3], "b": [3, 4, 5]},
         {"e": [1.0, 2.0, 3.0], "d": [3.0, 4.0, 5.0]},
-        {"b": [4.0, 3.0, 1.0], "c": [2.0, 5.0, 8.0]},
         {"c": [True, False, False], "d": [False, True, True]},
         {"g": [2.0, np.nan, 4.0], "n": [np.nan, np.nan, np.nan]},
-        {"b": [np.nan, np.nan, 3.0], "c": [6.0, np.nan, np.nan]},
         {"d": [np.nan, np.nan, np.nan], "e": [np.nan, np.nan, np.nan]},
-        {"b": [np.nan, np.nan, np.nan], "c": [np.nan, np.nan, np.nan]},
+        {"a": [1.0, 2, 3], "b": pd.Series([4.0, 8.0, 3.0], index=[1, 2, 3])},
+        {
+            "d": [1.0, 2.0, 3.0],
+            "c": pd.Series([np.nan, np.nan, np.nan], index=[1, 2, 3]),
+        },
+        {
+            "a": [False, True, False],
+            "b": pd.Series([1.0, 2.0, np.nan], index=[1, 2, 3]),
+        },
+        {
+            "a": [np.nan, np.nan, np.nan],
+            "e": pd.Series([np.nan, np.nan, np.nan], index=[1, 2, 3]),
+        },
     ],
 )
 @pytest.mark.parametrize(
     "data2",
     [
         {"b": [3, 5, 6], "e": [8, 2, 1]},
-        {"a": [7, 5, 8], "b": [2.0, 7.0, 9.0]},
         {"c": [True, False, True], "d": [3.0, 4.0, 5.0]},
         {"e": [False, False, True], "g": [True, True, False]},
-        {"a": [np.nan, np.nan, np.nan], "b": [np.nan, np.nan, np.nan]},
-        {"b": [np.nan, 2.0, np.nan], "c": [2, np.nan, 5.0]},
+        {"g": [np.nan, np.nan, np.nan], "c": [np.nan, np.nan, np.nan]},
+        {"a": [7, 5, 8], "b": pd.Series([2.0, 7.0, 9.0], index=[0, 1, 2])},
+        {
+            "b": [np.nan, 2.0, np.nan],
+            "c": pd.Series([2, np.nan, 5.0], index=[2, 3, 4]),
+        },
+        {
+            "a": [True, np.nan, True],
+            "d": pd.Series([False, True, np.nan], index=[0, 1, 3]),
+        },
     ],
 )
 def test_update_for_dataframes(
