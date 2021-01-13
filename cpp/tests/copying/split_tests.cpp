@@ -914,7 +914,7 @@ void split_structs_no_children(SplitFunc Split, CompareFunc Compare)
     std::vector<cudf::size_type> splits{2};
     auto result = Split(*struct_column, splits);
 
-    EXPECT_EQ(result.size(), 2);
+    EXPECT_EQ(result.size(), 2ul);
     Compare(*expected, result[0]);
     Compare(*expected, result[1]);
   }
@@ -933,7 +933,7 @@ void split_structs_no_children(SplitFunc Split, CompareFunc Compare)
     std::vector<cudf::size_type> splits{2};
     auto result = Split(*struct_column, splits);
 
-    EXPECT_EQ(result.size(), 2);
+    EXPECT_EQ(result.size(), 2ul);
     Compare(*expected, result[0]);
     Compare(*expected, result[1]);
   }
@@ -948,7 +948,7 @@ void split_structs_no_children(SplitFunc Split, CompareFunc Compare)
     std::vector<cudf::size_type> splits{4};
     auto result = Split(*struct_column, splits);
 
-    EXPECT_EQ(result.size(), 2);
+    EXPECT_EQ(result.size(), 2ul);
     Compare(*expected0, result[0]);
     Compare(*expected1, result[1]);
   }
@@ -969,7 +969,7 @@ void split_structs_no_children(SplitFunc Split, CompareFunc Compare)
     std::vector<cudf::size_type> splits{4};
     auto result = Split(*struct_column, splits);
 
-    EXPECT_EQ(result.size(), 2);
+    EXPECT_EQ(result.size(), 2ul);
     Compare(*expected0, result[0]);
     Compare(*expected1, result[1]);
   }
