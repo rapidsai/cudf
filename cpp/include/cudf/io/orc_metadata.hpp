@@ -95,7 +95,13 @@ struct integer_statistics : minmax_statistics<int64_t>, sum_statistics<int64_t> 
 struct double_statistics : minmax_statistics<double>, sum_statistics<double> {
 };
 
-// According to ORC specs, the sum should be signed, but pyarrow uses unsigned value
+/**
+ * @brief Statistics for string columns.
+ *
+ * Minimum and maximum are the first and last element in hexicographical order (respectively).
+ * Sum is the total length of elements in the column.
+ * Note: According to ORC specs, the sum should be signed, but pyarrow uses unsigned value
+ */
 struct string_statistics : minmax_statistics<std::string>, sum_statistics<uint64_t> {
 };
 

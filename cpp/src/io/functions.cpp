@@ -151,7 +151,6 @@ std::unique_ptr<writer> make_writer(sink_info const& sink,
 
 }  // namespace
 
-// Freeform API wraps the detail reader class API
 table_with_metadata read_avro(avro_reader_options const& opts, rmm::mr::device_memory_resource* mr)
 {
   namespace avro = cudf::io::detail::avro;
@@ -161,7 +160,6 @@ table_with_metadata read_avro(avro_reader_options const& opts, rmm::mr::device_m
   return reader->read(opts);
 }
 
-// Freeform API wraps the detail reader class API
 table_with_metadata read_json(json_reader_options const& opts, rmm::mr::device_memory_resource* mr)
 {
   namespace json = cudf::io::detail::json;
@@ -171,7 +169,6 @@ table_with_metadata read_json(json_reader_options const& opts, rmm::mr::device_m
   return reader->read(opts);
 }
 
-// Freeform API wraps the detail reader class API
 table_with_metadata read_csv(csv_reader_options const& options, rmm::mr::device_memory_resource* mr)
 {
   namespace csv = cudf::io::detail::csv;
@@ -194,7 +191,6 @@ void write_csv(csv_writer_options const& options, rmm::mr::device_memory_resourc
 
 namespace detail_orc = cudf::io::detail::orc;
 
-// Freeform API wraps the detail reader class API
 raw_orc_statistics read_raw_orc_statistics(source_info const& src_info)
 {
   // Get source to read statistics from
@@ -291,7 +287,6 @@ parsed_orc_statistics read_parsed_orc_statistics(source_info const& src_info)
   return result;
 }
 
-// Freeform API wraps the detail reader class API
 table_with_metadata read_orc(orc_reader_options const& options, rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
@@ -355,7 +350,6 @@ void write_orc_chunked_end(std::shared_ptr<orc_chunked_state>& state)
 using namespace cudf::io::detail::parquet;
 namespace detail_parquet = cudf::io::detail::parquet;
 
-// Freeform API wraps the detail reader class API
 table_with_metadata read_parquet(parquet_reader_options const& options,
                                  rmm::mr::device_memory_resource* mr)
 {
