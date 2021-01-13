@@ -349,10 +349,12 @@ std::unique_ptr<column> make_fixed_width_column_for_output(column_view const& lh
  */
 bool is_basic_arithmetic_binop(binary_operator op)
 {
-  return op == binary_operator::ADD or  ///< operator +
-         op == binary_operator::SUB or  ///< operator -
-         op == binary_operator::MUL or  ///< operator *
-         op == binary_operator::DIV;    ///< operator / using common type of lhs and rhs
+  return op == binary_operator::ADD or       // operator +
+         op == binary_operator::SUB or       // operator -
+         op == binary_operator::MUL or       // operator *
+         op == binary_operator::DIV or       // operator / using common type of lhs and rhs
+         op == binary_operator::NULL_MIN or  // 2 null = null, 1 null = value, else min
+         op == binary_operator::NULL_MAX;    // 2 null = null, 1 null = value, else max
 }
 
 /**
@@ -360,12 +362,13 @@ bool is_basic_arithmetic_binop(binary_operator op)
  */
 bool is_comparison_binop(binary_operator op)
 {
-  return op == binary_operator::EQUAL or        ///< operator ==
-         op == binary_operator::NOT_EQUAL or    ///< operator !=
-         op == binary_operator::LESS or         ///< operator <
-         op == binary_operator::GREATER or      ///< operator >
-         op == binary_operator::LESS_EQUAL or   ///< operator <=
-         op == binary_operator::GREATER_EQUAL;  ///< operator >=
+  return op == binary_operator::EQUAL or          // operator ==
+         op == binary_operator::NOT_EQUAL or      // operator !=
+         op == binary_operator::LESS or           // operator <
+         op == binary_operator::GREATER or        // operator >
+         op == binary_operator::LESS_EQUAL or     // operator <=
+         op == binary_operator::GREATER_EQUAL or  // operator >=
+         op == binary_operator::NULL_EQUALS;      // 2 null = true; 1 null = false; else ==
 }
 
 /**
