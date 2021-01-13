@@ -3354,6 +3354,8 @@ class DataFrame(Frame, Serializable):
         else:
             return out.copy(deep=copy)
 
+        #working on adding level support
+
     def nans_to_nulls(self):
         """
         Convert nans (if any) to nulls.
