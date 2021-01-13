@@ -1012,6 +1012,7 @@ TYPED_TEST(FixedPointTests, MinMaxCountLagLeadNulls)
 
   auto const scale              = scale_type{-1};
   auto const input              = fp_wrapper{{42, 1729, 55, 343, 1, 2}, {1, 0, 1, 0, 1, 1}, scale};
+  auto const expected_sum       = fp_wrapper{{42, 97, 55, 56, 3, 3}, {1, 1, 1, 1, 1, 1}, scale};
   auto const expected_min       = fp_wrapper{{42, 42, 55, 1, 1, 1}, {1, 1, 1, 1, 1, 1}, scale};
   auto const expected_max       = fp_wrapper{{42, 55, 55, 55, 2, 2}, {1, 1, 1, 1, 1, 1}, scale};
   auto const expected_lag       = fp_wrapper{{0, 42, 1729, 55, 343, 1}, {0, 1, 0, 1, 0, 1}, scale};
@@ -1020,6 +1021,7 @@ TYPED_TEST(FixedPointTests, MinMaxCountLagLeadNulls)
   auto const expected_count_all = fw_wrapper{{2, 3, 3, 3, 3, 2}, {1, 1, 1, 1, 1, 1}};
   auto const expected_rowno     = fw_wrapper{{1, 2, 2, 2, 2, 2}, {1, 1, 1, 1, 1, 1}};
 
+  auto const sum   = rolling_window(input, 2, 1, 1, make_sum_aggregation());
   auto const min   = rolling_window(input, 2, 1, 1, make_min_aggregation());
   auto const max   = rolling_window(input, 2, 1, 1, make_max_aggregation());
   auto const lag   = rolling_window(input, 2, 1, 1, make_lag_aggregation(1));
@@ -1028,6 +1030,7 @@ TYPED_TEST(FixedPointTests, MinMaxCountLagLeadNulls)
   auto const all   = rolling_window(input, 2, 1, 1, make_count_aggregation(null_policy::INCLUDE));
   auto const rowno = rolling_window(input, 2, 1, 1, make_row_number_aggregation());
 
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_sum, sum->view());
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_min, min->view());
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_max, max->view());
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_lag, lag->view());
