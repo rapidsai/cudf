@@ -35,7 +35,7 @@ namespace lists {
 namespace {
 
 template <bool search_keys_have_nulls,
-          bool search_keys_are_all_nulls,
+          bool search_key_is_null_scalar,
           typename SearchKeyValidityIter>
 std::pair<rmm::device_buffer, size_type> construct_null_mask(
   cudf::detail::lists_column_device_view const& d_lists,
@@ -47,13 +47,13 @@ std::pair<rmm::device_buffer, size_type> construct_null_mask(
   using namespace cudf;
   using namespace cudf::detail;
 
-  static_assert(search_keys_have_nulls || !search_keys_are_all_nulls);
+  static_assert(search_keys_have_nulls || !search_key_is_null_scalar);
 
   if (!search_keys_have_nulls && !input_column_has_nulls) {
     return std::make_pair(rmm::device_buffer{0, stream, mr}, size_type{0});
   }
 
-  if (search_keys_are_all_nulls) {
+  if (search_key_is_null_scalar) {
     return std::make_pair(cudf::create_null_mask(d_lists.size(), mask_state::ALL_NULL, mr),
                           d_lists.size());
   }
@@ -184,7 +184,7 @@ auto get_search_keys_device_iterable_view(cudf::scalar const& search_key,
 
 namespace detail {
 
-template <bool search_keys_have_nulls, bool search_keys_are_all_null, typename SearchKeyType>
+template <bool search_keys_have_nulls, bool search_key_is_null_scalar, typename SearchKeyType>
 std::unique_ptr<column> contains_impl(cudf::lists_column_view const& lists,
                                       SearchKeyType const& search_key,
                                       rmm::cuda_stream_view stream,
@@ -209,7 +209,7 @@ std::unique_ptr<column> contains_impl(cudf::lists_column_view const& lists,
   size_type num_nulls;
 
   std::tie(null_mask, num_nulls) =
-    construct_null_mask<search_keys_have_nulls, search_keys_are_all_null>(
+    construct_null_mask<search_keys_have_nulls, search_key_is_null_scalar>(
       d_lists,
       get_validity_iterator<search_keys_have_nulls>(*d_skeys),
       lists_column_has_nulls,
@@ -219,7 +219,7 @@ std::unique_ptr<column> contains_impl(cudf::lists_column_view const& lists,
   auto ret_bools = make_fixed_width_column(
     data_type{type_id::BOOL8}, lists.size(), std::move(null_mask), num_nulls, stream, mr);
 
-  if (!search_keys_are_all_null) {
+  if (!search_key_is_null_scalar) {
     auto ret_bools_mutable_device_view =
       mutable_column_device_view::create(ret_bools->mutable_view(), stream);
 
