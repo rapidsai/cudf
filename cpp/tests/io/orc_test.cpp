@@ -1019,9 +1019,9 @@ TEST_F(OrcChunkedWriterTest, ChunkedStats)
     EXPECT_EQ(s5.timestampStatistics->get_maximum(), nullptr);
   };
 
-  validate_statistics(stats.column_stats);
+  validate_statistics(stats.file_stats);
   // There's only one stripe, so column stats are the same as stripe stats
-  validate_statistics(stats.stripe_stats[0]);
+  validate_statistics(stats.stripes_stats[0]);
 }
 
 CUDF_TEST_PROGRAM_MAIN()

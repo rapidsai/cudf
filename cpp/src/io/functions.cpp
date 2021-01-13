@@ -220,14 +220,14 @@ raw_orc_statistics read_raw_orc_statistics(source_info const& src_info)
 
   // Get file-level statistics, statistics of each column of file
   for (auto const& stats : metadata.ff.statistics) {
-    result.column_stats.push_back(std::string(stats.cbegin(), stats.cend()));
+    result.file_stats.push_back(std::string(stats.cbegin(), stats.cend()));
   }
 
   // Get stripe-level statistics
-  for (auto const& stripe_stats : metadata.md.stripeStats) {
-    result.stripe_stats.emplace_back();
-    for (auto const& stats : stripe_stats.colStats) {
-      result.stripe_stats.back().push_back(std::string(stats.cbegin(), stats.cend()));
+  for (auto const& stripes_stats : metadata.md.stripeStats) {
+    result.stripes_stats.emplace_back();
+    for (auto const& stats : stripes_stats.colStats) {
+      result.stripes_stats.back().push_back(std::string(stats.cbegin(), stats.cend()));
     }
   }
 
@@ -271,16 +271,16 @@ parsed_orc_statistics read_parsed_orc_statistics(source_info const& src_info)
     return col_stats;
   };
 
-  std::transform(raw_stats.column_stats.cbegin(),
-                 raw_stats.column_stats.cend(),
-                 std::back_inserter(result.column_stats),
+  std::transform(raw_stats.file_stats.cbegin(),
+                 raw_stats.file_stats.cend(),
+                 std::back_inserter(result.file_stats),
                  parse_column_statistics);
 
-  for (auto const& ss : raw_stats.stripe_stats) {
-    result.stripe_stats.emplace_back();
+  for (auto const& ss : raw_stats.stripes_stats) {
+    result.stripes_stats.emplace_back();
     std::transform(ss.cbegin(),
                    ss.cend(),
-                   std::back_inserter(result.stripe_stats.back()),
+                   std::back_inserter(result.stripes_stats.back()),
                    parse_column_statistics);
   }
 

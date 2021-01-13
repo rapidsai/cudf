@@ -34,13 +34,13 @@ namespace io {
  * The buffers can be parsed using a Protobuf parser. Alternatively, use `parsed_orc_statistics` to
  * get the statistics parsed into a libcudf representation.
  *
- * The `column_names` and `column_stats` members contain one element per column. The `stripe_stats`
+ * The `column_names` and `file_stats` members contain one element per column. The `stripes_stats`
  * contains one element per stripe, where each element contains column statistics for each column.
  */
 struct raw_orc_statistics {
   std::vector<std::string> column_names;
-  std::vector<std::string> column_stats;
-  std::vector<std::vector<std::string>> stripe_stats;
+  std::vector<std::string> file_stats;
+  std::vector<std::vector<std::string>> stripes_stats;
 };
 
 /**
@@ -171,13 +171,13 @@ struct column_statistics {
 /**
  * @brief Holds column names and parsed file-level and stripe-level statistics.
  *
- * The `column_names` and `column_stats` members contain one element per column. The `stripe_stats`
+ * The `column_names` and `file_stats` members contain one element per column. The `stripes_stats`
  * contains one element per stripe, where each element contains column statistics for each column.
  */
 struct parsed_orc_statistics {
   std::vector<std::string> column_names;
-  std::vector<column_statistics> column_stats;
-  std::vector<std::vector<column_statistics>> stripe_stats;
+  std::vector<column_statistics> file_stats;
+  std::vector<std::vector<column_statistics>> stripes_stats;
 };
 
 parsed_orc_statistics read_parsed_orc_statistics(source_info const &src_info);
