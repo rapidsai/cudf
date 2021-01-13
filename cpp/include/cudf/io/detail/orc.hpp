@@ -16,6 +16,7 @@
 
 #pragma once
 
+#include <cudf/io/detail/utils.hpp>
 #include <cudf/io/types.hpp>
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
@@ -36,10 +37,6 @@ class chunked_orc_writer_options;
 
 namespace detail {
 namespace orc {
-/**
- * @brief Whether writer writes in chunks or at once
- */
-enum class SingleWriteMode : bool { YES, NO };
 
 /**
  * @brief Class to read ORC dataset data into columns.

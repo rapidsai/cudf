@@ -258,9 +258,9 @@ void write_orc(orc_writer_options const& options, rmm::mr::device_memory_resourc
 {
   CUDF_FUNC_RANGE();
 
-  namespace detail_orc = cudf::io::detail::orc;
-  auto writer          = make_writer<detail_orc::writer>(
-    options.get_sink(), options, detail_orc::SingleWriteMode::YES, mr);
+  namespace io_detail = cudf::io::detail;
+  auto writer         = make_writer<detail_orc::writer>(
+    options.get_sink(), options, io_detail::SingleWriteMode::YES, mr);
 
   writer->write(options.get_table());
 }
@@ -271,9 +271,9 @@ void write_orc(orc_writer_options const& options, rmm::mr::device_memory_resourc
 orc_chunked_writer::orc_chunked_writer(chunked_orc_writer_options const& op,
                                        rmm::mr::device_memory_resource* mr)
 {
-  namespace detail_orc = cudf::io::detail::orc;
-  writer               = make_writer<detail_orc::writer>(
-    op.get_sink(), op, detail_orc::SingleWriteMode::NO, mr, rmm::cuda_stream_default);
+  namespace io_detail = cudf::io::detail;
+  writer              = make_writer<detail_orc::writer>(
+    op.get_sink(), op, io_detail::SingleWriteMode::NO, mr, rmm::cuda_stream_default);
 }
 
 /**

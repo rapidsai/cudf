@@ -1341,6 +1341,7 @@ void writer::impl::write(table_view const &table)
 
 void writer::impl::close()
 {
+  if (closed) { return; }
   closed = true;
   ProtobufWriter pbw_(&buffer_);
   PostScript ps;
