@@ -32,6 +32,27 @@ namespace cudf {
  */
 
 /**
+ * @brief The result of a `join`.
+ *
+ * A `join_result` holds two columns containing the
+ * left and right gathermaps.
+ */  // TODO: explain this better
+struct join_result {
+  column_view left_indices;   /// < The left gathermap
+  column_view right_indices;  /// < The right gathermap
+  std::unique_ptr<rmm::device_buffer> left_buf;
+  std::unique_ptr<rmm::device_buffer> right_buf;
+};
+
+std::unique_ptr<cudf::table> inner_join(
+  cudf::table_view const& left,
+  cudf::table_view const& right,
+  std::vector<cudf::size_type> const& left_on,
+  std::vector<cudf::size_type> const& right_on,
+  null_equality compare_nulls         = null_equality::EQUAL,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+
+/**
  * @brief Performs an inner join on the specified columns of two
  * tables (`left`, `right`)
  *
