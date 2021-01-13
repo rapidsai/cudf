@@ -7,7 +7,9 @@ I/O Supported dtypes
 The following table lists are compatible cudf types for each supported IO format.
 
 .. |supported| replace:: :raw-html:`&#9989;`
+.. The above corresponds to White heavy check mark in unicode: https://unicode-table.com/en/2705/
 .. |not-supported| replace:: :raw-html:`&#10060;`
+.. The above corresponds to Cross Mark in unicode: https://unicode-table.com/en/274C/
 
 .. rst-class:: io-supported-types-table
 .. table::
