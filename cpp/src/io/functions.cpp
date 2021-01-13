@@ -281,7 +281,7 @@ parsed_orc_statistics read_parsed_orc_statistics(source_info const& src_info)
                  parse_column_statistics);
 
   for (auto const& ss : raw_stats.stripe_stats) {
-    result.stripe_stats.emplace_back();
+    result.ss.emplace_back();
     std::transform(ss.cbegin(),
                    ss.cend(),
                    std::back_inserter(result.stripe_stats.back()),
