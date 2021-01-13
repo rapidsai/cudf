@@ -135,10 +135,10 @@ if hasArg clean; then
 fi
 
 if (( ${BUILD_ALL_GPU_ARCH} == 0 )); then
-    GPU_ARCH="-DGPU_ARCHS="
+    CUDF_CMAKE_CUDA_ARCHITECTURESS="-DCMAKE_CUDA_ARCHITECTURES="
     echo "Building for the architecture of the GPU in the system..."
 else
-    GPU_ARCH="-DGPU_ARCHS=ALL"
+    CUDF_CMAKE_CUDA_ARCHITECTURESS=""
     echo "Building for *ALL* supported GPU architectures..."
 fi
 
@@ -149,8 +149,9 @@ if buildAll || hasArg libcudf; then
     mkdir -p ${LIB_BUILD_DIR}
     cd ${LIB_BUILD_DIR}
     cmake -DCMAKE_INSTALL_PREFIX=${INSTALL_PREFIX} \
-          ${GPU_ARCH} \
+          ${CUDF_CMAKE_CUDA_ARCHITECTURESS} \
           -DUSE_NVTX=${BUILD_NVTX} \
+          -DBUILD_TESTS=${BUILD_TESTS} \
           -DBUILD_BENCHMARKS=${BUILD_BENCHMARKS} \
           -DDISABLE_DEPRECATION_WARNING=${BUILD_DISABLE_DEPRECATION_WARNING} \
           -DPER_THREAD_DEFAULT_STREAM=${BUILD_PER_THREAD_DEFAULT_STREAM} \
@@ -160,18 +161,11 @@ fi
 if buildAll || hasArg libcudf; then
 
     cd ${LIB_BUILD_DIR}
+
+    make -j${PARALLEL_LEVEL} cudf VERBOSE=${VERBOSE}
+
     if [[ ${INSTALL_TARGET} != "" ]]; then
-        make -j${PARALLEL_LEVEL} install_cudf VERBOSE=${VERBOSE}
-    else
-        make -j${PARALLEL_LEVEL} cudf VERBOSE=${VERBOSE}
-    fi
-
-    if [[ ${BUILD_TESTS} == "ON" ]]; then
-        make -j${PARALLEL_LEVEL} build_tests_cudf VERBOSE=${VERBOSE}
-    fi
-
-    if [[ ${BUILD_BENCHMARKS} == "ON" ]]; then
-        make -j${PARALLEL_LEVEL} build_benchmarks_cudf VERBOSE=${VERBOSE}
+        make -j${PARALLEL_LEVEL} install VERBOSE=${VERBOSE}
     fi
 fi
 

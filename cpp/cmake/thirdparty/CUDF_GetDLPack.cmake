@@ -1,5 +1,5 @@
 #=============================================================================
-# Copyright (c) 2020, NVIDIA CORPORATION.
+# Copyright (c) 2020-2021, NVIDIA CORPORATION.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -26,7 +26,7 @@ function(find_and_configure_dlpack VERSION)
         set(DLPACK_INCLUDE_DIR ${DLPACK_INCLUDE_DIR} PARENT_SCOPE)
         return()
     endif()
-    CPMAddPackage(NAME  dlpack
+    CPMFindPackage(NAME dlpack
         VERSION         ${VERSION}
         GIT_REPOSITORY  https://github.com/dmlc/dlpack.git
         GIT_TAG         v${VERSION}

@@ -14,7 +14,7 @@
 # limitations under the License.
 #=============================================================================
 
-cmake_minimum_required(VERSION 3.14...3.18 FATAL_ERROR)
+cmake_minimum_required(VERSION 3.18 FATAL_ERROR)
 
 project(CUDF_BENCHMARKS VERSION 0.18.0 LANGUAGES C CXX CUDA)
 
@@ -44,7 +44,7 @@ CPMFindPackage(NAME benchmark
     OPTIONS         "BENCHMARK_ENABLE_TESTING OFF"
                     "BENCHMARK_ENABLE_INSTALL OFF")
 
-add_library(cudf_datagen STATIC "${CUDA_DATAFRAME_SOURCE_DIR}/benchmarks/common/generate_benchmark_input.cpp")
+add_library(cudf_datagen STATIC "${CUDF_SOURCE_DIR}/benchmarks/common/generate_benchmark_input.cpp")
 
 target_link_libraries(cudf_datagen
                PUBLIC GTest::gmock
@@ -58,30 +58,25 @@ target_link_libraries(cudf_datagen
 
 target_include_directories(cudf_datagen
     PUBLIC "$<BUILD_INTERFACE:${CUDF_BENCHMARKS_SOURCE_DIR}>"
-           "$<BUILD_INTERFACE:${CUDA_DATAFRAME_SOURCE_DIR}>"
-           "$<BUILD_INTERFACE:${CUDA_DATAFRAME_SOURCE_DIR}/src>")
+           "$<BUILD_INTERFACE:${CUDF_SOURCE_DIR}>"
+           "$<BUILD_INTERFACE:${CUDF_SOURCE_DIR}/src>")
 
 ###################################################################################################
 # - compiler function -----------------------------------------------------------------------------
-
-set(BENCHMARK_LIST CACHE INTERNAL "BENCHMARK_LIST")
 
 function(ConfigureBench CMAKE_BENCH_NAME CMAKE_BENCH_SRC)
     add_executable(${CMAKE_BENCH_NAME}
                    ${CMAKE_BENCH_SRC}
                    "${CUDF_BENCHMARKS_SOURCE_DIR}/synchronization/synchronization.cpp"
-                   "${CUDA_DATAFRAME_SOURCE_DIR}/tests/utilities/base_fixture.cpp"
-                   "${CUDA_DATAFRAME_SOURCE_DIR}/benchmarks/io/cuio_benchmark_common.cpp")
+                   "${CUDF_SOURCE_DIR}/tests/utilities/base_fixture.cpp"
+                   "${CUDF_SOURCE_DIR}/benchmarks/io/cuio_benchmark_common.cpp")
     set_target_properties(${CMAKE_BENCH_NAME}
         PROPERTIES CXX_STANDARD              14
                    CXX_STANDARD_REQUIRED     ON
                    CUDA_STANDARD             14
                    CUDA_STANDARD_REQUIRED    ON
-                   RUNTIME_OUTPUT_DIRECTORY "$<BUILD_INTERFACE:${CUDA_DATAFRAME_BINARY_DIR}/gbenchmarks>")
-    # `-Wl,--disable-new-dtags`: apply RUNPATH to transitive dependencies (this is a temporary solution)
-    target_link_options(${CMAKE_BENCH_NAME} PRIVATE "LINKER:--disable-new-dtags")
+                   RUNTIME_OUTPUT_DIRECTORY "$<BUILD_INTERFACE:${CUDF_BINARY_DIR}/gbenchmarks>")
     target_link_libraries(${CMAKE_BENCH_NAME} cudf_datagen)
-    set(BENCHMARK_LIST ${BENCHMARK_LIST} ${CMAKE_BENCH_NAME} CACHE INTERNAL "BENCHMARK_LIST")
 endfunction(ConfigureBench)
 
 ###################################################################################################

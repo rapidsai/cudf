@@ -14,7 +14,7 @@
 # limitations under the License.
 #=============================================================================
 
-cmake_minimum_required(VERSION 3.14...3.18 FATAL_ERROR)
+cmake_minimum_required(VERSION 3.18 FATAL_ERROR)
 
 project(CUDF_TESTS VERSION 0.18.0 LANGUAGES C CXX CUDA)
 
@@ -64,8 +64,8 @@ target_link_libraries(cudftestutil
                       cudf)
 
 target_include_directories(cudftestutil
-    PUBLIC "$<BUILD_INTERFACE:${CUDA_DATAFRAME_SOURCE_DIR}>"
-           "$<BUILD_INTERFACE:${CUDA_DATAFRAME_SOURCE_DIR}/src>")
+    PUBLIC "$<BUILD_INTERFACE:${CUDF_SOURCE_DIR}>"
+           "$<BUILD_INTERFACE:${CUDF_SOURCE_DIR}/src>")
 
 install(TARGETS cudftestutil
         DESTINATION lib
@@ -73,8 +73,6 @@ install(TARGETS cudftestutil
 
 ###################################################################################################
 # - compiler function -----------------------------------------------------------------------------
-
-set(CUDF_TEST_LIST CACHE INTERNAL "CUDF_TEST_LIST")
 
 function(ConfigureTest CMAKE_TEST_NAME CMAKE_TEST_SRC)
     add_executable(${CMAKE_TEST_NAME}
@@ -84,12 +82,9 @@ function(ConfigureTest CMAKE_TEST_NAME CMAKE_TEST_SRC)
                    CXX_STANDARD_REQUIRED     ON
                    CUDA_STANDARD             14
                    CUDA_STANDARD_REQUIRED    ON
-                   RUNTIME_OUTPUT_DIRECTORY "$<BUILD_INTERFACE:${CUDA_DATAFRAME_BINARY_DIR}/gtests>")
-    # `-Wl,--disable-new-dtags`: apply RUNPATH to transitive dependencies (this is a temporary solution)
-    target_link_options(${CMAKE_TEST_NAME} PRIVATE "LINKER:--disable-new-dtags")
+                   RUNTIME_OUTPUT_DIRECTORY "$<BUILD_INTERFACE:${CUDF_BINARY_DIR}/gtests>")
     target_link_libraries(${CMAKE_TEST_NAME} PUBLIC cudftestutil)
     add_test(NAME ${CMAKE_TEST_NAME} COMMAND ${CMAKE_TEST_NAME})
-    set(CUDF_TEST_LIST ${CUDF_TEST_LIST} ${CMAKE_TEST_NAME} CACHE INTERNAL "CUDF_TEST_LIST")
 endfunction(ConfigureTest)
 
 ###################################################################################################
@@ -316,13 +311,13 @@ ConfigureTest(INTEROP_TEST "${INTEROP_TEST_SRC}")
 # - jit cache tests -------------------------------------------------------------------------------
 
 set(JITCACHE_TEST_SRC
-    "${CUDA_DATAFRAME_SOURCE_DIR}/src/jit/cache.cpp"
+    "${CUDF_SOURCE_DIR}/src/jit/cache.cpp"
     "${CUDF_TESTS_SOURCE_DIR}/jit/jit-cache-test.cpp")
 
 ConfigureTest(JITCACHE_TEST "${JITCACHE_TEST_SRC}")
 
 set(JITCACHE_MULTI_TEST_SRC
-    "${CUDA_DATAFRAME_SOURCE_DIR}/src/jit/cache.cpp"
+    "${CUDF_SOURCE_DIR}/src/jit/cache.cpp"
     "${CUDF_TESTS_SOURCE_DIR}/jit/jit-cache-multiprocess-test.cpp")
 
 ConfigureTest(JITCACHE_MULTIPROC_TEST "${JITCACHE_MULTI_TEST_SRC}")

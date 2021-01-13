@@ -1,5 +1,5 @@
 #=============================================================================
-# Copyright (c) 2020, NVIDIA CORPORATION.
+# Copyright (c) 2020-2021, NVIDIA CORPORATION.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -15,14 +15,12 @@
 #=============================================================================
 
 function(find_and_configure_thrust VERSION)
-    CPMFindPackage(NAME Thrust
+    CPMAddPackage(NAME Thrust
         VERSION         ${VERSION}
         GIT_REPOSITORY  https://github.com/NVIDIA/thrust.git
         GIT_TAG         ${VERSION}
         GIT_SHALLOW     TRUE
-        # If there is no pre-installed thrust we can use, we'll install our fetched copy together with cuDF
-        OPTIONS         "THRUST_INSTALL TRUE"
-        PATCH_COMMAND   patch -p1 -N < ${CUDA_DATAFRAME_SOURCE_DIR}/cmake/thrust.patch || true)
+        PATCH_COMMAND   patch -p1 -N < ${CUDF_SOURCE_DIR}/cmake/thrust.patch || true)
 
     thrust_create_target(cudf::Thrust FROM_OPTIONS)
     set(THRUST_LIBRARY "cudf::Thrust" PARENT_SCOPE)

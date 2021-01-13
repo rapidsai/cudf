@@ -1,5 +1,5 @@
 #=============================================================================
-# Copyright (c) 2020, NVIDIA CORPORATION.
+# Copyright (c) 2020-2021, NVIDIA CORPORATION.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -16,12 +16,17 @@
 
 function(find_and_configure_rmm VERSION)
 
+    # If building against a local RMM source repo without installing,
+    # set the RMM_HOME and RMM_ROOT environment variables to the source
+    # and binary dirs, i.e. the git repo root and build dir, respectively.
     if(ARGC GREATER 2 AND (ARGV1 AND ARGV2))
         set(BUILD_TESTS OFF)
         set(BUILD_BENCHMARKS OFF)
         add_subdirectory("${ARGV1}" "${ARGV2}" EXCLUDE_FROM_ALL)
         return()
     endif()
+
+    # Alteratively, set `-DCPM_rmm_SOURCE=/path/to/rmm` in the CMake configure flags.
 
     CPMFindPackage(NAME rmm
         VERSION         ${VERSION}
@@ -32,6 +37,7 @@ function(find_and_configure_rmm VERSION)
                         "BUILD_BENCHMARKS OFF"
                         "CUDA_STATIC_RUNTIME ${CUDA_STATIC_RUNTIME}"
                         "CMAKE_CUDA_ARCHITECTURES ${CMAKE_CUDA_ARCHITECTURES}"
+                        "SUPPORTED_CUDA_ARCHITECTURES ${CMAKE_CUDA_ARCHITECTURES}"
                         "DISABLE_DEPRECATION_WARNING ${DISABLE_DEPRECATION_WARNING}"
     )
 endfunction()

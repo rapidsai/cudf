@@ -1,5 +1,5 @@
 #=============================================================================
-# Copyright (c) 2020, NVIDIA CORPORATION.
+# Copyright (c) 2020-2021, NVIDIA CORPORATION.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -110,7 +110,7 @@ function(find_and_configure_arrow VERSION BUILD_STATIC)
         endif()
     else()
         set(ARROW_FOUND FALSE)
-        message(FATAL_ERROR "Arrow library not found or downloaded.")
+        message(FATAL_ERROR "CUDF: Arrow library not found or downloaded.")
     endif()
 
     set(ARROW_FOUND "${ARROW_FOUND}" PARENT_SCOPE)

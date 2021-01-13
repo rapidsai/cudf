@@ -1,5 +1,5 @@
 #=============================================================================
-# Copyright (c) 2018-2020, NVIDIA CORPORATION.
+# Copyright (c) 2018-2021, NVIDIA CORPORATION.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -14,8 +14,23 @@
 # limitations under the License.
 #=============================================================================
 
+# Find the CUDAToolkit
+find_package(CUDAToolkit REQUIRED)
+
+message(STATUS "CUDF: CUDAToolkit_VERSION: ${CUDAToolkit_VERSION}")
+message(STATUS "CUDF: CUDAToolkit_VERSION_MAJOR: ${CUDAToolkit_VERSION_MAJOR}")
+message(STATUS "CUDF: CUDAToolkit_VERSION_MINOR: ${CUDAToolkit_VERSION_MINOR}")
+
+# Auto-detect available GPU compute architectures
+
+include(${CUDF_SOURCE_DIR}/cmake/Modules/SetGPUArchs.cmake)
+message(STATUS "CUDF: Building CUDF for GPU architectures: ${CMAKE_CUDA_ARCHITECTURES}")
+
+# Only enable the CUDA language after including SetGPUArchs.cmake
+enable_language(CUDA)
+
 if(NOT CMAKE_CUDA_COMPILER)
-    message(SEND_ERROR "CMake cannot locate a CUDA compiler")
+    message(SEND_ERROR "CUDF: CMake cannot locate a CUDA compiler")
 endif(NOT CMAKE_CUDA_COMPILER)
 
 if(CMAKE_COMPILER_IS_GNUCXX)
@@ -25,62 +40,6 @@ if(CMAKE_COMPILER_IS_GNUCXX)
         list(APPEND CUDF_CUDA_FLAGS -Xcompiler=-Wno-parentheses)
     endif()
 endif(CMAKE_COMPILER_IS_GNUCXX)
-
-# Find the CUDAToolkit
-find_package(CUDAToolkit REQUIRED)
-
-message(STATUS "CUDAToolkit_VERSION: ${CUDAToolkit_VERSION}")
-message(STATUS "CUDAToolkit_VERSION_MAJOR: ${CUDAToolkit_VERSION_MAJOR}")
-message(STATUS "CUDAToolkit_VERSION_MINOR: ${CUDAToolkit_VERSION_MINOR}")
-
-# Auto-detect available GPU compute architectures
-set(GPU_ARCHS "ALL" CACHE STRING
-  "List of GPU architectures (semicolon-separated) to be compiled for. Pass 'ALL' if you want to compile for all supported GPU architectures. Empty string means to auto-detect the GPUs on the current system")
-
-if("${GPU_ARCHS}" STREQUAL "")
-    set(AUTO_DETECT_CUDA_ARCHITECTURES ON)
-endif()
-
-if(AUTO_DETECT_CUDA_ARCHITECTURES)
-    set(GPU_ARCHS "")
-else()
-    set(GPU_ARCHS "ALL")
-endif()
-
-if("${GPU_ARCHS}" STREQUAL "")
-  include(cmake/EvalGpuArchs.cmake)
-  evaluate_gpu_archs(GPU_ARCHS)
-endif()
-
-if("${GPU_ARCHS}" STREQUAL "ALL")
-    # Check for embedded vs workstation architectures
-    if(CMAKE_SYSTEM_PROCESSOR MATCHES "aarch64")
-        # This is being built for Linux4Tegra or SBSA ARM64
-        set(GPU_ARCHS "62")
-        if((CUDAToolkit_VERSION_MAJOR EQUAL 9) OR (CUDAToolkit_VERSION_MAJOR GREATER 9))
-            list(APPEND GPU_ARCHS "72")
-        endif()
-        if((CUDAToolkit_VERSION_MAJOR EQUAL 11) OR (CUDAToolkit_VERSION_MAJOR GREATER 11))
-            list(APPEND GPU_ARCHS "75;80")
-        endif()
-    else()
-        # This is being built for an x86 or x86_64 architecture
-        set(GPU_ARCHS "60")
-        if((CUDAToolkit_VERSION_MAJOR EQUAL 9) OR (CUDAToolkit_VERSION_MAJOR GREATER 9))
-            list(APPEND GPU_ARCHS "70")
-        endif()
-        if((CUDAToolkit_VERSION_MAJOR EQUAL 10) OR (CUDAToolkit_VERSION_MAJOR GREATER 10))
-            list(APPEND GPU_ARCHS "75")
-        endif()
-        if((CUDAToolkit_VERSION_MAJOR EQUAL 11) OR (CUDAToolkit_VERSION_MAJOR GREATER 11))
-            list(APPEND GPU_ARCHS "80")
-        endif()
-    endif()
-endif()
-
-message("GPU_ARCHS = ${GPU_ARCHS}")
-
-set(CMAKE_CUDA_ARCHITECTURES ${GPU_ARCHS})
 
 list(APPEND CUDF_CUDA_FLAGS --expt-extended-lambda --expt-relaxed-constexpr)
 
@@ -94,12 +53,12 @@ if(DISABLE_DEPRECATION_WARNING)
 endif()
 
 # Option to enable line info in CUDA device compilation to allow introspection when profiling / memchecking
-if(CMAKE_CUDA_LINEINFO)
+if(CUDA_ENABLE_LINEINFO)
     list(APPEND CUDF_CUDA_FLAGS -lineinfo)
 endif()
 
 # Debug options
 if(CMAKE_BUILD_TYPE MATCHES Debug)
-    message(STATUS "Building with debugging flags")
+    message(STATUS "CUDF: Building with debugging flags")
     list(APPEND CUDF_CUDA_FLAGS -G -Xcompiler=-rdynamic)
 endif()

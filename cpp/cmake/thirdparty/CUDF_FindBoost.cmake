@@ -1,5 +1,5 @@
 #=============================================================================
-# Copyright (c) 2020, NVIDIA CORPORATION.
+# Copyright (c) 2020-2021, NVIDIA CORPORATION.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -21,16 +21,18 @@ set(CUDF_MIN_VERSION_Boost 1.65.0)
 # `-DBOOST_ALL_NO_LIB` and `-DBOOST_FILESYSTEM_DYN_LINK` compile defs
 set(Boost_NO_BOOST_CMAKE ON)
 
+# TODO: Use CPMFindPackage to add or build Boost
+
 find_package(Boost ${CUDF_MIN_VERSION_Boost} QUIET MODULE COMPONENTS filesystem)
 
-message(STATUS "Boost_FOUND: ${Boost_FOUND}")
+message(STATUS "CUDF: Boost_FOUND: ${Boost_FOUND}")
 
 if(NOT Boost_FOUND)
-    message(FATAL_ERROR "Boost not found, please check your settings.")
+    message(FATAL_ERROR "CUDF: Boost not found, please check your settings.")
 endif()
 
-message(STATUS "Boost_LIBRARIES: ${Boost_LIBRARIES}")
-message(STATUS "Boost_INCLUDE_DIRS: ${Boost_INCLUDE_DIRS}")
+message(STATUS "CUDF: Boost_LIBRARIES: ${Boost_LIBRARIES}")
+message(STATUS "CUDF: Boost_INCLUDE_DIRS: ${Boost_INCLUDE_DIRS}")
 
 list(APPEND CUDF_CXX_DEFINITIONS BOOST_NO_CXX14_CONSTEXPR)
 list(APPEND CUDF_CUDA_DEFINITIONS BOOST_NO_CXX14_CONSTEXPR)
