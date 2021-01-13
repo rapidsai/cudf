@@ -1614,13 +1614,70 @@ def test_binops_with_lhs_numpy_scalar(frame, dtype):
             ["343.0", "1000.0"],
             cudf.DecimalDtype(scale=0, precision=8),
         ),
+        (
+            operator.add,
+            ["1.5", None, "2.0"],
+            cudf.DecimalDtype(scale=2, precision=2),
+            ["1.5", None, "2.0"],
+            cudf.DecimalDtype(scale=2, precision=2),
+            ["3.0", None, "4.0"],
+            cudf.DecimalDtype(scale=2, precision=3),
+        ),
+        (
+            operator.add,
+            ["1.5", None],
+            cudf.DecimalDtype(scale=2, precision=2),
+            ["2.25", "1.005"],
+            cudf.DecimalDtype(scale=3, precision=4),
+            ["3.75", None],
+            cudf.DecimalDtype(scale=3, precision=5),
+        ),
+        (
+            operator.sub,
+            ["1.5", None],
+            cudf.DecimalDtype(scale=2, precision=2),
+            ["2.25", None],
+            cudf.DecimalDtype(scale=3, precision=4),
+            ["-0.75", None],
+            cudf.DecimalDtype(scale=3, precision=5),
+        ),
+        (
+            operator.sub,
+            ["1.5", "2.0"],
+            cudf.DecimalDtype(scale=2, precision=2),
+            ["2.25", None],
+            cudf.DecimalDtype(scale=3, precision=4),
+            ["-0.75", None],
+            cudf.DecimalDtype(scale=3, precision=5),
+        ),
+        (
+            operator.mul,
+            ["1.5", None],
+            cudf.DecimalDtype(scale=2, precision=2),
+            ["1.5", None],
+            cudf.DecimalDtype(scale=3, precision=4),
+            ["2.25", None],
+            cudf.DecimalDtype(scale=5, precision=7),
+        ),
+        (
+            operator.mul,
+            ["100", "200"],
+            cudf.DecimalDtype(scale=-2, precision=3),
+            ["0.1", None],
+            cudf.DecimalDtype(scale=3, precision=4),
+            ["10.0", None],
+            cudf.DecimalDtype(scale=1, precision=8),
+        ),
     ],
 )
 def test_binops_decimal(args):
     op, lhs, l_dtype, rhs, r_dtype, expect, expect_dtype = args
 
     def decimal_series(input, dtype):
-        return cudf.Series([decimal.Decimal(x) for x in input], dtype=dtype)
+        return cudf.Series(
+            [x if x is None else decimal.Decimal(x) for x in input],
+            dtype=dtype,
+        )
 
     a = decimal_series(lhs, l_dtype)
     b = decimal_series(rhs, r_dtype)

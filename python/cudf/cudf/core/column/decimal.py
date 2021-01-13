@@ -13,9 +13,9 @@ class DecimalColumn(ColumnBase):
     def from_arrow(cls, data: pa.Array):
         mask_buf = data.buffers()[0]
         mask = (
-            pa_mask_buffer_to_mask(mask_buf, len(data))
-            if mask_buf is not None
-            else None
+            mask_buf
+            if mask_buf is None
+            else pa_mask_buffer_to_mask(mask_buf, len(data))
         )
         bts = data.buffers()[1].to_pybytes()
         bts = b"".join(list(more_itertools.sliced(bts, 8))[::2])
@@ -40,9 +40,9 @@ class DecimalColumn(ColumnBase):
             )
         )
         mask_buf = (
-            pa.py_buffer(bytes(self.base_mask.to_host_array()))
-            if self.base_mask is not None
-            else None
+            self.base_mask
+            if self.base_mask is None
+            else pa.py_buffer(bytes(self.base_mask.to_host_array()))
         )
         return pa.Array.from_buffers(
             type=self.dtype.to_arrow(),
