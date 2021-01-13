@@ -10,15 +10,14 @@ from get_datasets import create_dataset
 
 from conftest import option
 
-datatype = ['float32', 'float64',
-            'int32', 'int64',
-            'str', 'datetime64[s]']
+datatype = ["float32", "float64", "int32", "int64", "str", "datetime64[s]"]
 
 null_frequency = [0.1, 0.4, 0.8]
 
 
 def get_dataset_dir():
     print(" option.dataset_dir : ", option.dataset_dir)
+    print(" option.run_bench : ", option.run_bench)
     if option.dataset_dir == "NONE":
         return "cudf/benchmarks/cuio_data/datasets/"
     print(" option.dataset_dir : ", option.dataset_dir)
@@ -101,9 +100,9 @@ def bench_json(benchmark, file_path, use_buffer, dtype, run_bench):
 def bench_to_csv(benchmark, dtype, null_frequency, run_bench):
     if not run_bench:
         pytest.skip("Pytest variable run_bench not passed as True")
-    table, file_path = create_dataset(dtype, file_type="csv",
-                                      only_file=False,
-                                      null_frequency=null_frequency)
+    table, file_path = create_dataset(
+        dtype, file_type="csv", only_file=False, null_frequency=null_frequency
+    )
 
     cudf_df = cudf.DataFrame.from_arrow(table)
     benchmark(cudf_df.to_csv, file_path)
@@ -113,9 +112,9 @@ def bench_to_csv(benchmark, dtype, null_frequency, run_bench):
 def bench_from_csv(benchmark, use_buffer, dtype, run_bench):
     if not run_bench:
         pytest.skip("Pytest variable run_bench not passed as True")
-    file_path = create_dataset(dtype, file_type="csv",
-                               only_file=True,
-                               null_frequency=None)
+    file_path = create_dataset(
+        dtype, file_type="csv", only_file=True, null_frequency=None
+    )
 
     if use_buffer == "True":
         with open(file_path, "rb") as f:
@@ -131,22 +130,21 @@ def bench_from_csv(benchmark, use_buffer, dtype, run_bench):
 def bench_to_orc(benchmark, dtype, null_frequency, run_bench):
     if not run_bench:
         pytest.skip("Pytest variable run_bench not passed as True")
-    table, file_path = create_dataset(dtype, file_type="orc",
-                                      only_file=False,
-                                      null_frequency=null_frequency)
-    
+    table, file_path = create_dataset(
+        dtype, file_type="orc", only_file=False, null_frequency=null_frequency
+    )
+
     cudf_df = cudf.DataFrame.from_arrow(table)
     benchmark(cudf_df.to_orc, file_path)
 
 
 @pytest.mark.parametrize("dtype", datatype)
-def bench_read_orc(benchmark, use_buffer, bench_pandas,
-                   run_bench, dtype):
+def bench_read_orc(benchmark, use_buffer, bench_pandas, run_bench, dtype):
     if not run_bench:
         pytest.skip("Pytest variable run_bench not passed as True")
-    file_path = create_dataset(dtype, file_type="orc",
-                               only_file=True,
-                               null_frequency=None)
+    file_path = create_dataset(
+        dtype, file_type="orc", only_file=True, null_frequency=None
+    )
 
     if use_buffer == "True":
         with open(file_path, "rb") as f:
@@ -163,10 +161,13 @@ def bench_read_orc(benchmark, use_buffer, bench_pandas,
 def bench_to_parquet(benchmark, dtype, null_frequency, run_bench):
     if not run_bench:
         pytest.skip("Pytest variable run_bench not passed as True")
-    table, file_path = create_dataset(dtype, file_type="parquet",
-                                      only_file=False,
-                                      null_frequency=null_frequency)
-    
+    table, file_path = create_dataset(
+        dtype,
+        file_type="parquet",
+        only_file=False,
+        null_frequency=null_frequency,
+    )
+
     cudf_df = cudf.DataFrame.from_arrow(table)
     benchmark(cudf_df.to_parquet, file_path)
 
@@ -175,9 +176,9 @@ def bench_to_parquet(benchmark, dtype, null_frequency, run_bench):
 def bench_read_parquet(benchmark, use_buffer, dtype, run_bench):
     if not run_bench:
         pytest.skip("Pytest variable run_bench not passed as True")
-    file_path = create_dataset(dtype, file_type="parquet",
-                               only_file=True,
-                               null_frequency=None)
+    file_path = create_dataset(
+        dtype, file_type="parquet", only_file=True, null_frequency=None
+    )
 
     if use_buffer == "True":
         with open(file_path, "rb") as f:

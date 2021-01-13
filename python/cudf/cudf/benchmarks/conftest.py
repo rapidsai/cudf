@@ -3,6 +3,7 @@ option = None
 
 
 def pytest_addoption(parser):
+    parser.addoption("--run_bench", action="store", default=False)
     parser.addoption("--bench_pandas", action="store", default=False)
     parser.addoption("--use_buffer", action="store", default=False)
     parser.addoption("--dataset_dir", action="store", default="NONE")
@@ -17,6 +18,8 @@ def pytest_generate_tests(metafunc):
     option_value = metafunc.config.option.bench_pandas
     if "bench_pandas" in metafunc.fixturenames and option_value is not None:
         metafunc.parametrize("bench_pandas", [option_value])
+    if "run_bench" in metafunc.fixturenames and option_value is not None:
+        metafunc.parametrize("run_bench", [option_value])
 
 
 def pytest_configure(config):
