@@ -61,7 +61,7 @@ struct raw_orc_statistics {
 raw_orc_statistics read_raw_orc_statistics(source_info const &src_info);
 
 /**
- * @brief Base class for different column statistics that include optional min and max values.
+ * @brief Base class for column statistics that include optional min and max values.
  *
  * Includes accessors for the min and max values.
  */
@@ -77,7 +77,7 @@ struct minmax_statistics {
 };
 
 /**
- * @brief Base class for different column statistics that include optional sum value.
+ * @brief Base class for column statistics that include optional sum value.
  *
  * Includes accessors for the sum value.
  */
@@ -125,7 +125,7 @@ struct timestamp_statistics : minmax_statistics<int64_t> {
 };
 
 /**
- * @brief Enumerator for types of column statistics that can be included in `columnStatistics`.
+ * @brief Enumerator for types of column statistics that can be included in `column_statistics`.
  *
  * Different statistics types are generated for different column data types.
  */
