@@ -28,11 +28,19 @@
 namespace cudf {
 namespace io {
 
+/**
+ * @brief Holds column names and buffers containing raw file-level and stripe-level statistics.
+ *
+ * The buffers can be parsed using a Protobuf parser. Alternatively, use `parsed_orc_statistics` to
+ * get the statistics parsed into a libcudf representation.
+ *
+ * The `column_names` and `column_stats` members contain one element per column. The `stripe_stats`
+ * contains one element per stripe, where each element contains column statistics for each column.
+ */
 struct raw_orc_statistics {
   std::vector<std::string> column_names;
   std::vector<std::string> column_stats;
   std::vector<std::vector<std::string>> stripe_stats;
-  raw_orc_statistics() = default;
 };
 
 /**
@@ -43,8 +51,7 @@ struct raw_orc_statistics {
  * The following code snippet demonstrates how to read statistics of a dataset
  * from a file:
  * @code
- *  std::string filepath = "dataset.orc";
- *  auto result = cudf::read_raw_orc_statistics(cudf::source_info(filepath));
+ *  auto result = cudf::read_raw_orc_statistics(cudf::source_info("dataset.orc"));
  * @endcode
  *
  * @param src_info Dataset source
@@ -53,6 +60,11 @@ struct raw_orc_statistics {
  */
 raw_orc_statistics read_raw_orc_statistics(source_info const &src_info);
 
+/**
+ * @brief Base class for different column statistics that include optional min and max values.
+ *
+ * Includes accessors for the min and max values.
+ */
 template <typename T>
 struct minmax_statistics {
   std::unique_ptr<T> minimum;
@@ -64,6 +76,11 @@ struct minmax_statistics {
   auto *get_maximum() const { return maximum.get(); }
 };
 
+/**
+ * @brief Base class for different column statistics that include optional sum value.
+ *
+ * Includes accessors for the sum value.
+ */
 template <typename T>
 struct sum_statistics {
   std::unique_ptr<T> sum;
@@ -78,6 +95,7 @@ struct integer_statistics : minmax_statistics<int64_t>, sum_statistics<int64_t> 
 struct double_statistics : minmax_statistics<double>, sum_statistics<double> {
 };
 
+// According to ORC specs, the sum should be signed, but pyarrow uses unsigned value
 struct string_statistics : minmax_statistics<std::string>, sum_statistics<uint64_t> {
 };
 
@@ -106,6 +124,11 @@ struct timestamp_statistics : minmax_statistics<int64_t> {
   auto *get_maximumUtc() const { return maximumUtc.get(); }
 };
 
+/**
+ * @brief Enumerator for types of column statistics that can be included in `columnStatistics`.
+ *
+ * Different statistics types are generated for different column data types.
+ */
 enum class statistics_type {
   NONE,
   INT,
@@ -118,6 +141,13 @@ enum class statistics_type {
   TIMESTAMP,
 };
 
+/**
+ * @brief Contains per-column ORC statistics.
+ *
+ * `std::unique_ptr` is used to wrap the optional values.
+ * At most one of the ***_statistics members has a non-null value. The `type` member can se used to
+ * find the valid more easily.
+ */
 struct column_statistics {
   std::unique_ptr<uint64_t> numberOfValues;
   statistics_type type = statistics_type::NONE;
@@ -132,6 +162,12 @@ struct column_statistics {
   // TODO: hasNull (issue #7087)
 };
 
+/**
+ * @brief Holds column names and parsed file-level and stripe-level statistics.
+ *
+ * The `column_names` and `column_stats` members contain one element per column. The `stripe_stats`
+ * contains one element per stripe, where each element contains column statistics for each column.
+ */
 struct parsed_orc_statistics {
   std::vector<std::string> column_names;
   std::vector<column_statistics> column_stats;
