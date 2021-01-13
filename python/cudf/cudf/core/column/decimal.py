@@ -67,7 +67,3 @@ def binop_precision(l_dtype, r_dtype, op):
         return p1 + p2 + 1
     else:
         raise NotImplementedError()
-    # TODO extend with -, *, / + unit tests
-    # TODO think about TRUE_DIV vs FLOOR_DIV vs (DIV only in C++))
-    # TODO DIVISION rule -> p1 - s1 + s2 + max(6, s1 + p2 + 1)
-    #     just do what C++ does -> highlight in review so Keith can comment
