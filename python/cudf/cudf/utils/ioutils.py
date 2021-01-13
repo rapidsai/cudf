@@ -271,7 +271,7 @@ cudf.io.orc.read_orc
 doc_read_orc_metadata = docfmt_partial(docstring=_docstring_read_orc_metadata)
 
 
-_docstring_read_raw_orc_statistics = """
+_docstring_read_orc_statistics = """
 Read an ORC file's file-level and stripe-level statistics
 
 Parameters
@@ -294,8 +294,8 @@ See Also
 --------
 cudf.io.orc.read_orc
 """
-doc_read_raw_orc_statistics = docfmt_partial(
-    docstring=_docstring_read_raw_orc_statistics
+doc_read_orc_statistics = docfmt_partial(
+    docstring=_docstring_read_orc_statistics
 )
 
 _docstring_read_orc = """
