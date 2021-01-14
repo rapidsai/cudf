@@ -15,7 +15,6 @@
  */
 #pragma once
 
-#include <cudf/column/column.hpp>
 #include <cudf/strings/strings_column_view.hpp>
 
 namespace cudf {

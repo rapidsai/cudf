@@ -13,37 +13,33 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-#include <cudf/column/column.hpp>
+
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
-#include <cudf/strings/detail/utilities.hpp>
-#include <cudf/strings/string_view.cuh>
-#include <cudf/strings/strings_column_view.hpp>
-#include <cudf/utilities/traits.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
-#include <strings/utilities.cuh>
-#include <strings/utilities.hpp>
-#include <strings/utilities.cuh>
+
+#include <rmm/exec_policy.hpp>
 
 #include <thrust/logical.h>
 
 namespace cudf {
 namespace strings {
-
+namespace detail {
+namespace {
 /**
- * Check whether the UTF8String is valid when convert data from string to all kinds of integers,
- * like INT8/16/32/64. for example, if allow_decimal is true, this will return `true, true` when input string 
- * is `1.23, 123`, or this function will return `false, true`, it means firt element is invalid, 
- * while second data is valid. 
- *
+ * Check whether the string is valid when convert string to signed integers,
+ * like INT8/16/32/64. For example, if allow_decimal is true, then strings 
+ * `['1.23', '123']` will return `[true, true]`.
+ * If `allow_decimal` is false, then this function will return `[false, true]`.
+ * 
  * Note that, in this method we accumulate the result in negative format, and convert it to
  * positive format at the end, if this string is not started with '-'. This is because min value
  * is bigger than max value in digits, e.g. Long.MAX_VALUE is '9223372036854775807' and
  * Long.MIN_VALUE is '-9223372036854775808'.
  *
- * This code is mostly copied from LazyLong.parseLong in Hive.
+ * This code is heavily based off of LazyLong.parseLong from Hive, but updated for C++.
  *
  * @param d_str String to check.
  * @param allow_decimal whether we allow the data is Decimal type or not.
@@ -91,9 +87,9 @@ __device__ bool is_valid_element(string_view const& d_str, bool allow_decimal, l
     }
 
     // We are going to process the new digit and accumulate the result. However, 
-    // before doing this, if the result is already smaller than the stopValue which is
+    // before doing this, if the result is already smaller than the stop_value which is
     // (std::numeric_limits<data_type>::min() / radix), then result * 10 will definitely 
-    // be smaller than minValue, and we can stop.
+    // be smaller than the min_value, and we can stop.
     if (result < stop_value)  return false;
 
     result = result * radix - digit;
@@ -106,11 +102,13 @@ __device__ bool is_valid_element(string_view const& d_str, bool allow_decimal, l
   // This is the case when we've encountered a decimal separator. The fractional
   // part will not change the number, but we will verify that the fractional part
   // is well formed.
-  while (offset <= end) {
-    char currentByte = data[offset];
-    if (currentByte < '0' || currentByte > '9') return false;
-    ++offset;
-  }
+  if (offset <= end && thrust::any_of(thrust::seq,
+                                      data+offset,
+                                      data+end,
+                                      [] (char ch) {
+                                        return (ch<'0' || ch>'9');
+                                      }))
+    return false;
 
   if (!negative) {
     result = -result;
@@ -120,14 +118,13 @@ __device__ bool is_valid_element(string_view const& d_str, bool allow_decimal, l
   return true;
 }
 
-namespace detail {
-namespace {
+} //namespace
 
 /**
- * @brief The dispatch functions for calculate the min value of input data type
- * to check overflow.
+ * @brief The dispatch functions return the min value of the input data type
+ * used for checking overflow.
  *
- * The output is the min value of spicified type.
+ * The output is the min value of specified type.
  */
 struct min_value_of_type{
   template <typename T>
@@ -148,8 +145,6 @@ long min_value_of_type::operator()<int32_t>() { return std::numeric_limits<int32
 
 template <>
 long min_value_of_type::operator()<int64_t>() { return std::numeric_limits<int64_t>::min(); }
-
-} //namespace
 
 std::unique_ptr<column> is_valid_element(
   strings_column_view const& strings,
@@ -179,7 +174,7 @@ std::unique_ptr<column> is_valid_element(
                     d_results,
                     [d_column,d_allow_decimal,d_min_value] __device__(size_type idx) {
                       if (d_column.is_null(idx)) return false;
-                      return strings::is_valid_element(d_column.element<string_view>(idx), d_allow_decimal, d_min_value);
+                      return is_valid_element(d_column.element<string_view>(idx), d_allow_decimal, d_min_value);
                     });
   results->set_null_count(strings.null_count());
   return results;
