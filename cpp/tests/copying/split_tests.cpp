@@ -1164,7 +1164,7 @@ TEST_F(ContiguousSplitStringTableTest, EmptyInputColumn)
   {
     std::vector<cudf::size_type> splits;
     auto result = cudf::contiguous_split(src_table, splits);
-    CUDF_EXPECTS(result.size() == 1, "Incorrect returned contiguous_split_result size!");
+    CUDF_EXPECTS(result.size() == 1, "Incorrect returned contiguous_split result size!");
 
     CUDF_TEST_EXPECT_TABLES_EQUIVALENT(src_table, result[0].table);
   }
@@ -1172,7 +1172,7 @@ TEST_F(ContiguousSplitStringTableTest, EmptyInputColumn)
   {
     std::vector<cudf::size_type> splits{0, 0, 0, 0};
     auto result = cudf::contiguous_split(src_table, splits);
-    CUDF_EXPECTS(result.size() == 5, "Incorrect returned contiguous_split_result size!");
+    CUDF_EXPECTS(result.size() == 5, "Incorrect returned contiguous_split result size!");
 
     for (size_t idx = 0; idx < result.size(); idx++) {
       CUDF_TEST_EXPECT_TABLES_EQUIVALENT(src_table, result[idx].table);
@@ -1515,7 +1515,7 @@ TEST_F(ContiguousSplitNestedTypesTest, StructsNoChildren)
       cudf::table_view t({c});
       return cudf::contiguous_split(t, splits);
     },
-    [](cudf::column_view const& expected, cudf::contiguous_split_result const& result) {
+    [](cudf::column_view const& expected, cudf::packed_table const& result) {
       CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected, result.table.column(0));
     });
 }

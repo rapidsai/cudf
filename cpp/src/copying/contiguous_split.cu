@@ -239,7 +239,7 @@ __global__ void copy_partition(int num_src_bufs,
  * to null
  * @param num_children # of children
  */
-void add_column_metadata(std::vector<uint8_t>& metadata,
+void add_column_metadata(std::vector<detail::serialized_column>& metadata,
                          data_type type,
                          size_type size,
                          size_type null_count,
@@ -247,10 +247,23 @@ void add_column_metadata(std::vector<uint8_t>& metadata,
                          int64_t null_mask_offset,
                          size_type num_children)
 {
-  detail::serialized_column column_metadata{
-    type, size, null_count, data_offset, null_mask_offset, num_children};
-  auto const bytes = reinterpret_cast<uint8_t const*>(&column_metadata);
-  std::copy(bytes, bytes + sizeof(detail::serialized_column), std::back_inserter(metadata));
+  metadata.push_back({type, size, null_count, data_offset, null_mask_offset, num_children});
+}
+
+/**
+ * @brief Convert vector of serialized_column structs into a vector of anonymous bytes
+ *
+ * @param metadata Incoming serialized column metadata
+ * @returns Vector of anonymous bytes
+ */
+std::vector<uint8_t> metadata_to_bytes(std::vector<detail::serialized_column> const& metadata)
+{
+  std::vector<uint8_t> metadata_bytes;
+  auto const metadata_begin = reinterpret_cast<uint8_t const*>(metadata.data());
+  std::copy(metadata_begin,
+            metadata_begin + (metadata.size() * sizeof(detail::serialized_column)),
+            std::back_inserter(metadata_bytes));
+  return metadata_bytes;
 }
 
 // The block of functions below are all related:
@@ -631,7 +644,7 @@ BufInfo build_output_columns(InputIter begin,
                              BufInfo info_begin,
                              Output out_begin,
                              uint8_t const* const base_ptr,
-                             std::vector<uint8_t>& metadata)
+                             std::vector<detail::serialized_column>& metadata)
 {
   auto current_info = info_begin;
   std::transform(
@@ -786,7 +799,7 @@ std::vector<packed_table> contiguous_split(cudf::table_view const& input,
     //   information.
     //
     // see also:  empty_like()
-    std::vector<uint8_t> metadata;
+    std::vector<detail::serialized_column> metadata;
     add_column_metadata(metadata,
                         data_type{type_id::EMPTY},
                         static_cast<size_type>(num_root_columns),
@@ -794,9 +807,11 @@ std::vector<packed_table> contiguous_split(cudf::table_view const& input,
                         -1,
                         -1,
                         0);
-    std::function<void(column_view const&, std::vector<uint8_t>&)> build_empty_column_metadata;
-    build_empty_column_metadata = [&build_empty_column_metadata](column_view const& col,
-                                                                 std::vector<uint8_t>& metadata) {
+    std::function<void(column_view const&, std::vector<detail::serialized_column>&)>
+      build_empty_column_metadata;
+    build_empty_column_metadata = [&build_empty_column_metadata](
+                                    column_view const& col,
+                                    std::vector<detail::serialized_column>& metadata) {
       add_column_metadata(metadata, col.type(), 0, UNKNOWN_NULL_COUNT, -1, -1, col.num_children());
 
       std::for_each(col.child_begin(),
@@ -815,15 +830,16 @@ std::vector<packed_table> contiguous_split(cudf::table_view const& input,
     std::vector<packed_table> result;
     result.reserve(num_partitions);
     auto iter = thrust::make_counting_iterator(0);
-    std::transform(iter,
-                   iter + num_partitions,
-                   std::back_inserter(result),
-                   [&input, num_root_columns, &metadata](int partition_index) {
-                     return packed_table{
-                       input,
-                       packed_columns{std::make_unique<std::vector<uint8_t>>(metadata),
-                                      std::make_unique<rmm::device_buffer>()}};
-                   });
+    std::transform(
+      iter,
+      iter + num_partitions,
+      std::back_inserter(result),
+      [&input, num_root_columns, &metadata](int partition_index) {
+        return packed_table{
+          input,
+          packed_columns{std::make_unique<std::vector<uint8_t>>(metadata_to_bytes(metadata)),
+                         std::make_unique<rmm::device_buffer>()}};
+      });
 
     return result;
   }
@@ -1049,7 +1065,7 @@ std::vector<packed_table> contiguous_split(cudf::table_view const& input,
   // build the output.
   std::vector<packed_table> result;
   result.reserve(num_partitions);
-  std::vector<uint8_t> metadata;
+  std::vector<detail::serialized_column> metadata;
   std::vector<column_view> cols;
   cols.reserve(num_root_columns);
   auto cur_dst_buf_info = h_dst_buf_info;
@@ -1074,7 +1090,7 @@ std::vector<packed_table> contiguous_split(cudf::table_view const& input,
 
     result.push_back(packed_table{
       cudf::table_view{cols},
-      packed_columns{std::make_unique<std::vector<uint8_t>>(std::move(metadata)),
+      packed_columns{std::make_unique<std::vector<uint8_t>>(metadata_to_bytes(metadata)),
                      std::make_unique<rmm::device_buffer>(std::move(out_buffers[idx]))}});
 
     metadata.clear();
