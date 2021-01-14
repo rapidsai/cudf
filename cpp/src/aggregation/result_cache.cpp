@@ -54,7 +54,7 @@ std::unique_ptr<column> result_cache::release_result(size_t col_idx, aggregation
   auto result_it                 = _cache[col_idx].find(agg);
   std::unique_ptr<column> result = std::move(result_it->second.second);
   _cache[col_idx].erase(result_it);
-  return std::move(result);
+  return result;
 }
 
 }  // namespace detail
