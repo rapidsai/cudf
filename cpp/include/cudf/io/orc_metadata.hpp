@@ -44,7 +44,7 @@ struct raw_orc_statistics {
 };
 
 /**
- * @brief Reads file-level and stripe-level statistics of ORC dataset
+ * @brief Reads file-level and stripe-level statistics of ORC dataset.
  *
  * @ingroup io_readers
  *
@@ -56,7 +56,7 @@ struct raw_orc_statistics {
  *
  * @param src_info Dataset source
  *
- * @return ORC file statistics and column names.
+ * @return Column names and encoded ORC statistics
  */
 raw_orc_statistics read_raw_orc_statistics(source_info const& src_info);
 
@@ -156,14 +156,17 @@ struct timestamp_statistics : minmax_statistics<int64_t> {
 };
 
 namespace orc {
+// forward declare the type that ProtobufReader uses. The `cudf::io::column_statistics` objects,
+// returned from `read_parsed_orc_statistics`, are constructed from
+// `cudf::io::orc::column_statistics` objects that `ProtobufReader` initializes.
 struct column_statistics;
-}
+}  // namespace orc
+
 /**
  * @brief Contains per-column ORC statistics.
  *
- * `std::unique_ptr` is used to wrap the optional values.
- * At most one of the `***_statistics members` has a non-null value. The `type` member can se used
- * to find the valid more easily.
+ * All columns can have the `number_of_values`. Depending on the data type, a column can have
+ * additional statistics, accessible through `type_specific_stats` accessor.
  */
 class column_statistics {
  private:
@@ -192,7 +195,8 @@ class column_statistics {
  * @brief Holds column names and parsed file-level and stripe-level statistics.
  *
  * The `column_names` and `file_stats` members contain one element per column. The `stripes_stats`
- * contains one element per stripe, where each element contains column statistics for each column.
+ * member contains one element per stripe, where each element contains column statistics for each
+ * column.
  */
 struct parsed_orc_statistics {
   std::vector<std::string> column_names;
@@ -200,6 +204,15 @@ struct parsed_orc_statistics {
   std::vector<std::vector<column_statistics>> stripes_stats;
 };
 
+/**
+ * @brief Reads file-level and stripe-level statistics of ORC dataset.
+ *
+ * @ingroup io_readers
+ *
+ * @param src_info Dataset source
+ *
+ * @return Column names and decoded ORC statistics
+ */
 parsed_orc_statistics read_parsed_orc_statistics(source_info const& src_info);
 
 }  // namespace io
