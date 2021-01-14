@@ -58,7 +58,24 @@ struct raw_orc_statistics {
  *
  * @return ORC file statistics and column names.
  */
-raw_orc_statistics read_raw_orc_statistics(source_info const &src_info);
+raw_orc_statistics read_raw_orc_statistics(source_info const& src_info);
+
+/**
+ * @brief Enumerator for types of column statistics that can be included in `column_statistics`.
+ *
+ * Different statistics types are generated for different column data types.
+ */
+enum class statistics_type {
+  NONE,
+  INT,
+  DOUBLE,
+  STRING,
+  BUCKET,
+  DECIMAL,
+  DATE,
+  BINARY,
+  TIMESTAMP,
+};
 
 /**
  * @brief Base class for column statistics that include optional min and max values.
@@ -90,9 +107,11 @@ struct sum_statistics {
 };
 
 struct integer_statistics : minmax_statistics<int64_t>, sum_statistics<int64_t> {
+  static constexpr statistics_type type = statistics_type::INT;
 };
 
 struct double_statistics : minmax_statistics<double>, sum_statistics<double> {
+  static constexpr statistics_type type = statistics_type::DOUBLE;
 };
 
 /**
@@ -103,24 +122,30 @@ struct double_statistics : minmax_statistics<double>, sum_statistics<double> {
  * Note: According to ORC specs, the sum should be signed, but pyarrow uses unsigned value
  */
 struct string_statistics : minmax_statistics<std::string>, sum_statistics<uint64_t> {
+  static constexpr statistics_type type = statistics_type::STRING;
 };
 
 struct bucket_statistics {
+  static constexpr statistics_type type = statistics_type::BUCKET;
   std::vector<uint64_t> _count;
 
   auto count(size_t index) const { return &_count.at(index); }
 };
 
 struct decimal_statistics : minmax_statistics<std::string>, sum_statistics<std::string> {
+  static constexpr statistics_type type = statistics_type::DECIMAL;
 };
 
 struct date_statistics : minmax_statistics<int32_t> {
+  static constexpr statistics_type type = statistics_type::DATE;
 };
 
 struct binary_statistics : sum_statistics<int64_t> {
+  static constexpr statistics_type type = statistics_type::BINARY;
 };
 
 struct timestamp_statistics : minmax_statistics<int64_t> {
+  static constexpr statistics_type type = statistics_type::TIMESTAMP;
   std::unique_ptr<int64_t> _minimum_utc;
   std::unique_ptr<int64_t> _maximum_utc;
 
@@ -130,23 +155,9 @@ struct timestamp_statistics : minmax_statistics<int64_t> {
   auto maximum_utc() const { return _maximum_utc.get(); }
 };
 
-/**
- * @brief Enumerator for types of column statistics that can be included in `column_statistics`.
- *
- * Different statistics types are generated for different column data types.
- */
-enum class statistics_type {
-  NONE,
-  INT,
-  DOUBLE,
-  STRING,
-  BUCKET,
-  DECIMAL,
-  DATE,
-  BINARY,
-  TIMESTAMP,
-};
-
+namespace orc {
+struct column_statistics;
+}
 /**
  * @brief Contains per-column ORC statistics.
  *
@@ -154,21 +165,27 @@ enum class statistics_type {
  * At most one of the `***_statistics members` has a non-null value. The `type` member can se used
  * to find the valid more easily.
  */
-struct column_statistics {
-  std::unique_ptr<uint64_t> number_of_values;
-  statistics_type type = statistics_type::NONE;
-  std::unique_ptr<integer_statistics> int_stats;
-  std::unique_ptr<double_statistics> double_stats;
-  std::unique_ptr<string_statistics> string_stats;
-  std::unique_ptr<bucket_statistics> bucket_stats;
-  std::unique_ptr<decimal_statistics> decimal_stats;
-  std::unique_ptr<date_statistics> date_stats;
-  std::unique_ptr<binary_statistics> binary_stats;
-  std::unique_ptr<timestamp_statistics> timestamp_stats;
-  // TODO: hasNull (issue #7087)
+class column_statistics {
+ private:
+  std::unique_ptr<uint64_t> _number_of_values;
+  statistics_type _type = statistics_type::NONE;
+  void* type_spec_stats;
 
-  // auto has_number_of_values() const { return number_of_values != nullptr; }
-  // auto number_of_values() const { return number_of_values.get(); }
+ public:
+  column_statistics(cudf::io::orc::column_statistics&& other);
+
+  auto has_number_of_values() const { return _number_of_values != nullptr; }
+  auto number_of_values() const { return _number_of_values.get(); }
+
+  auto const& type() const { return _type; }
+
+  template <typename T>
+  T const* type_specific_stats() const
+  {
+    if (T::type != _type) return nullptr;
+    return static_cast<T*>(type_spec_stats);
+  }
+  // TODO: destructor to free type_spec_stats
 };
 
 /**
@@ -183,7 +200,7 @@ struct parsed_orc_statistics {
   std::vector<std::vector<column_statistics>> stripes_stats;
 };
 
-parsed_orc_statistics read_parsed_orc_statistics(source_info const &src_info);
+parsed_orc_statistics read_parsed_orc_statistics(source_info const& src_info);
 
 }  // namespace io
 }  // namespace cudf

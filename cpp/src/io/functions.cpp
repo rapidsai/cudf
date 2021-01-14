@@ -234,24 +234,33 @@ raw_orc_statistics read_raw_orc_statistics(source_info const& src_info)
   return result;
 }
 
-void set_column_statistics_type(column_statistics* cs)
+column_statistics::column_statistics(cudf::io::orc::column_statistics&& cs)
 {
-  if (cs->int_stats.get()) {
-    cs->type = statistics_type::INT;
-  } else if (cs->double_stats.get()) {
-    cs->type = statistics_type::DOUBLE;
-  } else if (cs->string_stats.get()) {
-    cs->type = statistics_type::STRING;
-  } else if (cs->bucket_stats.get()) {
-    cs->type = statistics_type::BUCKET;
-  } else if (cs->decimal_stats.get()) {
-    cs->type = statistics_type::DECIMAL;
-  } else if (cs->date_stats.get()) {
-    cs->type = statistics_type::DATE;
-  } else if (cs->binary_stats.get()) {
-    cs->type = statistics_type::BINARY;
-  } else if (cs->timestamp_stats.get()) {
-    cs->type = statistics_type::TIMESTAMP;
+  _number_of_values = std::move(cs.number_of_values);
+  if (cs.int_stats.get()) {
+    _type           = statistics_type::INT;
+    type_spec_stats = cs.int_stats.release();
+  } else if (cs.double_stats.get()) {
+    _type           = statistics_type::DOUBLE;
+    type_spec_stats = cs.double_stats.release();
+  } else if (cs.string_stats.get()) {
+    _type           = statistics_type::STRING;
+    type_spec_stats = cs.string_stats.release();
+  } else if (cs.bucket_stats.get()) {
+    _type           = statistics_type::BUCKET;
+    type_spec_stats = cs.bucket_stats.release();
+  } else if (cs.decimal_stats.get()) {
+    _type           = statistics_type::DECIMAL;
+    type_spec_stats = cs.decimal_stats.release();
+  } else if (cs.date_stats.get()) {
+    _type           = statistics_type::DATE;
+    type_spec_stats = cs.date_stats.release();
+  } else if (cs.binary_stats.get()) {
+    _type           = statistics_type::BINARY;
+    type_spec_stats = cs.binary_stats.release();
+  } else if (cs.timestamp_stats.get()) {
+    _type           = statistics_type::TIMESTAMP;
+    type_spec_stats = cs.timestamp_stats.release();
   }
 }
 
@@ -263,12 +272,11 @@ parsed_orc_statistics read_parsed_orc_statistics(source_info const& src_info)
   result.column_names = raw_stats.column_names;
 
   auto parse_column_statistics = [](auto const& raw_col_stats) {
-    column_statistics col_stats;
+    orc::column_statistics stats_internal;
     orc::ProtobufReader(reinterpret_cast<const uint8_t*>(raw_col_stats.c_str()),
                         raw_col_stats.size())
-      .read(col_stats);
-    set_column_statistics_type(&col_stats);
-    return col_stats;
+      .read(stats_internal);
+    return column_statistics(std::move(stats_internal));
   };
 
   std::transform(raw_stats.file_stats.cbegin(),

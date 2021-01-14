@@ -95,6 +95,24 @@ struct StripeFooter {
   std::string writerTimezone = "";      // time zone of the writer
 };
 
+/**
+ * @brief Contains per-column ORC statistics.
+ *
+ * At most one of the `***_statistics members` has a non-null value.
+ */
+struct column_statistics {
+  std::unique_ptr<uint64_t> number_of_values;
+  std::unique_ptr<integer_statistics> int_stats;
+  std::unique_ptr<double_statistics> double_stats;
+  std::unique_ptr<string_statistics> string_stats;
+  std::unique_ptr<bucket_statistics> bucket_stats;
+  std::unique_ptr<decimal_statistics> decimal_stats;
+  std::unique_ptr<date_statistics> date_stats;
+  std::unique_ptr<binary_statistics> binary_stats;
+  std::unique_ptr<timestamp_statistics> timestamp_stats;
+  // TODO: hasNull (issue #7087)
+};
+
 struct StripeStatistics {
   std::vector<ColStatsBlob> colStats;  // Column statistics blobs
 };
