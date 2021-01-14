@@ -28,6 +28,7 @@ class CudfEngine(ArrowEngine):
         # a tuple `(meta, stats, parts, index)`.  However, newer Dask
         # versions may return an additional element for "common" kwargs
         # that were previously embedded in every element of `parts`.
+        # (See: https://github.com/dask/dask/pull/7066)
         meta_info = ArrowEngine.read_metadata(*args, **kwargs)
         meta = meta_info[0]
 
