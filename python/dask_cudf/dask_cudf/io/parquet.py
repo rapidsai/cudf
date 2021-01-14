@@ -24,7 +24,12 @@ from cudf.io import write_to_dataset
 class CudfEngine(ArrowEngine):
     @staticmethod
     def read_metadata(*args, **kwargs):
-        meta, stats, parts, index = ArrowEngine.read_metadata(*args, **kwargs)
+        # Use `ArrowEngine.read_metadata` - Expect the result to be
+        # a tuple `(meta, stats, parts, index)`.  However, newer Dask
+        # versions may return an additional element for "common" kwargs
+        # that were previously embedded in every element of `parts`.
+        meta_info = ArrowEngine.read_metadata(*args, **kwargs)
+        meta = meta_info[0]
 
         # If `strings_to_categorical==True`, convert objects to int32
         strings_to_cats = kwargs.get("strings_to_categorical", False)
@@ -38,7 +43,8 @@ class CudfEngine(ArrowEngine):
             else:
                 new_meta[col] = as_column(meta[col])
 
-        return (new_meta, stats, parts, index)
+        # Update the `meta` element of the original `read_metadata` result
+        return (new_meta,) + meta_info[1:]
 
     @staticmethod
     def read_partition(
