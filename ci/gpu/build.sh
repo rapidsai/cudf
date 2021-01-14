@@ -82,8 +82,8 @@ gpuci_conda_retry install -y \
                   "ucx-py=${MINOR_VERSION}"
 
 # https://docs.rapids.ai/maintainers/depmgmt/
-# gpuci_conda_retry remove --force rapids-build-env rapids-notebook-env
-# gpuci_conda_retry install -y "your-pkg=1.0.0"
+gpuci_conda_retry remove --force rapids-build-env rapids-notebook-env
+gpuci_conda_retry install -y "s3fs=0.5.2" "boto3" "moto=1.3.14" "httpretty"
 
 gpuci_logger "Check compiler versions"
 python --version
