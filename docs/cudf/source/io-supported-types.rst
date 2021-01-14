@@ -1,9 +1,6 @@
 I/O Supported dtypes
 ====================
 
-.. role:: raw-html(raw)
-   :format: html
-
 The following table lists are compatible cudf types for each supported IO format.
 
 .. rst-class:: io-supported-types-table
