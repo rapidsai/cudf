@@ -34,7 +34,27 @@ join_result inner_join(table_view const& left_input,
                        rmm::cuda_stream_view stream,
                        rmm::mr::device_memory_resource* mr)
 {
-  return cudf::join_result{};
+  // Make sure any dictionary columns have matched key sets.
+  // This will return any new dictionary columns created as well as updated table_views.
+  auto matched = cudf::dictionary::detail::match_dictionaries(
+    {left_input.select(left_on), right_input.select(right_on)},
+    stream,
+    rmm::mr::get_current_device_resource());  // temporary objects returned
+
+  // now rebuild the table views with the updated ones
+  auto const left  = scatter_columns(matched.second.front(), left_on, left_input);
+  auto const right = scatter_columns(matched.second.back(), right_on, right_input);
+
+  // For `inner_join`, we can freely choose either the `left` or `right` table to use for
+  // building/probing the hash map. Because building is typically more expensive than probing, we
+  // build the hash map from the smaller table.
+  if (right.num_rows() > left.num_rows()) {
+    cudf::hash_join hj_obj(left, left_on, compare_nulls, stream);
+    return hj_obj.inner_join(right, right_on, compare_nulls, stream, mr);
+  } else {
+    cudf::hash_join hj_obj(right, right_on, compare_nulls, stream);
+    return hj_obj.inner_join(left, left_on, compare_nulls, stream, mr);
+  }
 }
 
 std::unique_ptr<table> inner_join(
@@ -170,6 +190,15 @@ hash_join::hash_join(cudf::table_view const& build,
                      rmm::cuda_stream_view stream)
   : impl{std::make_unique<const hash_join::hash_join_impl>(build, build_on, compare_nulls, stream)}
 {
+}
+
+join_result hash_join::inner_join(cudf::table_view const& probe,
+                                  std::vector<size_type> const& probe_on,
+                                  null_equality compare_nulls,
+                                  rmm::cuda_stream_view stream,
+                                  rmm::mr::device_memory_resource* mr) const
+{
+  return impl->inner_join(probe, probe_on, compare_nulls, stream, mr);
 }
 
 std::pair<std::unique_ptr<cudf::table>, std::unique_ptr<cudf::table>> hash_join::inner_join(

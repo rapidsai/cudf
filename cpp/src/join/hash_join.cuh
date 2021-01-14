@@ -231,6 +231,12 @@ struct hash_join::hash_join_impl {
                  null_equality compare_nulls,
                  rmm::cuda_stream_view stream = rmm::cuda_stream_default);
 
+  join_result inner_join(cudf::table_view const& probe,
+                         std::vector<size_type> const& probe_on,
+                         null_equality compare_nulls,
+                         rmm::cuda_stream_view stream,
+                         rmm::mr::device_memory_resource* mr) const;
+
   std::pair<std::unique_ptr<cudf::table>, std::unique_ptr<cudf::table>> inner_join(
     cudf::table_view const& probe,
     std::vector<size_type> const& probe_on,
@@ -264,6 +270,13 @@ struct hash_join::hash_join_impl {
                             null_equality compare_nulls,
                             rmm::cuda_stream_view stream,
                             rmm::mr::device_memory_resource* mr) const;
+
+  template <cudf::detail::join_kind JoinKind>
+  join_result compute_hash_join(cudf::table_view const& probe,
+                                std::vector<size_type> const& probe_on,
+                                null_equality compare_nulls,
+                                rmm::cuda_stream_view stream,
+                                rmm::mr::device_memory_resource* mr) const;
 
   /**
    * @brief Performs hash join by probing the columns provided in `probe` as per
