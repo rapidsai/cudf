@@ -493,6 +493,8 @@ public final class Table implements AutoCloseable {
                                                  long columnHandle,
                                                  boolean checkCount);
 
+  private static native long[] explode(long tableHandle, int index);
+
   private native long createCudfTableView(long[] nativeColumnViewHandles);
 
   /////////////////////////////////////////////////////////////////////////////
@@ -1604,6 +1606,34 @@ public final class Table implements AutoCloseable {
     return contiguousSplit(nativeHandle, indices);
   }
 
+  /**
+   * Explodes a list column's elements.
+   *
+   * Any list is exploded, which means the elements of the list in each row are expanded
+   * into new rows in the output. The corresponding rows for other columns in the input
+   * are duplicated.
+   *
+   * <code>
+   * Example:
+   * input:  [[5,10,15], 100],
+   *         [[20,25],   200],
+   *         [[30],      300],
+   * index: 0
+   * output: [5,         100],
+   *         [10,        100],
+   *         [15,        100],
+   *         [20,        200],
+   *         [25,        200],
+   *         [30,        300],
+   * </code>
+   * @param index Column index to explode inside the table.
+   * @return A new table with explode_col exploded.
+   */
+  public Table explode(int index) {
+    assert 0 <= index && index < columns.length : "Column index is out of range";
+    assert columns[index].getType().equals(DType.LIST) : "Column to explode must be of type LIST";
+    return new Table(explode(nativeHandle, index));
+  }
 
   /**
    * Gathers the rows of this table according to `gatherMap` such that row "i"
