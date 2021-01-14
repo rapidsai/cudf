@@ -246,6 +246,12 @@ struct hash_join::hash_join_impl {
     rmm::cuda_stream_view stream,
     rmm::mr::device_memory_resource* mr) const;
 
+  join_result left_join(cudf::table_view const& probe,
+                        std::vector<size_type> const& probe_on,
+                        null_equality compare_nulls,
+                        rmm::cuda_stream_view stream,
+                        rmm::mr::device_memory_resource* mr) const;
+
   std::unique_ptr<cudf::table> left_join(
     cudf::table_view const& probe,
     std::vector<size_type> const& probe_on,
@@ -253,6 +259,12 @@ struct hash_join::hash_join_impl {
     null_equality compare_nulls,
     rmm::cuda_stream_view stream,
     rmm::mr::device_memory_resource* mr) const;
+
+  join_result full_join(cudf::table_view const& probe,
+                        std::vector<size_type> const& probe_on,
+                        null_equality compare_nulls,
+                        rmm::cuda_stream_view stream,
+                        rmm::mr::device_memory_resource* mr) const;
 
   std::unique_ptr<cudf::table> full_join(
     cudf::table_view const& probe,

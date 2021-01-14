@@ -547,6 +547,17 @@ hash_join::hash_join_impl::inner_join(
     probe, probe_on, columns_in_common, common_columns_output_side, compare_nulls, stream, mr);
 }
 
+join_result hash_join::hash_join_impl::left_join(cudf::table_view const &probe,
+                                                 std::vector<size_type> const &probe_on,
+                                                 null_equality compare_nulls,
+                                                 rmm::cuda_stream_view stream,
+                                                 rmm::mr::device_memory_resource *mr) const
+{
+  CUDF_FUNC_RANGE();
+  return compute_hash_join<cudf::detail::join_kind::INNER_JOIN>(
+    probe, probe_on, compare_nulls, stream, mr);
+}
+
 std::unique_ptr<cudf::table> hash_join::hash_join_impl::left_join(
   cudf::table_view const &probe,
   std::vector<size_type> const &probe_on,
@@ -566,6 +577,17 @@ std::unique_ptr<cudf::table> hash_join::hash_join_impl::left_join(
                                                           mr);
   return cudf::detail::combine_table_pair(std::move(probe_build_pair.first),
                                           std::move(probe_build_pair.second));
+}
+
+join_result hash_join::hash_join_impl::full_join(cudf::table_view const &probe,
+                                                 std::vector<size_type> const &probe_on,
+                                                 null_equality compare_nulls,
+                                                 rmm::cuda_stream_view stream,
+                                                 rmm::mr::device_memory_resource *mr) const
+{
+  CUDF_FUNC_RANGE();
+  return compute_hash_join<cudf::detail::join_kind::INNER_JOIN>(
+    probe, probe_on, compare_nulls, stream, mr);
 }
 
 std::unique_ptr<cudf::table> hash_join::hash_join_impl::full_join(

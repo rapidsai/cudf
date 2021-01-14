@@ -118,7 +118,18 @@ join_result left_join(table_view const& left_input,
                       rmm::cuda_stream_view stream,
                       rmm::mr::device_memory_resource* mr)
 {
-  return cudf::join_result{};
+  // Make sure any dictionary columns have matched key sets.
+  // This will return any new dictionary columns created as well as updated table_views.
+  auto matched = cudf::dictionary::detail::match_dictionaries(
+    {left_input.select(left_on), right_input.select(right_on)},  // these should match
+    stream,
+    rmm::mr::get_current_device_resource());  // temporary objects returned
+  // now rebuild the table views with the updated ones
+  table_view const left  = scatter_columns(matched.second.front(), left_on, left_input);
+  table_view const right = scatter_columns(matched.second.back(), right_on, right_input);
+
+  cudf::hash_join hj_obj(right, right_on, compare_nulls, stream);
+  return hj_obj.left_join(left, left_on, compare_nulls, stream, mr);
 }
 
 std::unique_ptr<table> left_join(
@@ -153,7 +164,18 @@ join_result full_join(table_view const& left_input,
                       rmm::cuda_stream_view stream,
                       rmm::mr::device_memory_resource* mr)
 {
-  return cudf::join_result{};
+  // Make sure any dictionary columns have matched key sets.
+  // This will return any new dictionary columns created as well as updated table_views.
+  auto matched = cudf::dictionary::detail::match_dictionaries(
+    {left_input.select(left_on), right_input.select(right_on)},  // these should match
+    stream,
+    rmm::mr::get_current_device_resource());  // temporary objects returned
+  // now rebuild the table views with the updated ones
+  table_view const left  = scatter_columns(matched.second.front(), left_on, left_input);
+  table_view const right = scatter_columns(matched.second.back(), right_on, right_input);
+
+  cudf::hash_join hj_obj(right, right_on, compare_nulls, stream);
+  return hj_obj.full_join(left, left_on, compare_nulls, stream, mr);
 }
 
 std::unique_ptr<table> full_join(
@@ -214,6 +236,15 @@ std::pair<std::unique_ptr<cudf::table>, std::unique_ptr<cudf::table>> hash_join:
     probe, probe_on, columns_in_common, common_columns_output_side, compare_nulls, stream, mr);
 }
 
+join_result hash_join::left_join(cudf::table_view const& probe,
+                                 std::vector<size_type> const& probe_on,
+                                 null_equality compare_nulls,
+                                 rmm::cuda_stream_view stream,
+                                 rmm::mr::device_memory_resource* mr) const
+{
+  return impl->left_join(probe, probe_on, compare_nulls, stream, mr);
+}
+
 std::unique_ptr<cudf::table> hash_join::left_join(
   cudf::table_view const& probe,
   std::vector<size_type> const& probe_on,
@@ -223,6 +254,15 @@ std::unique_ptr<cudf::table> hash_join::left_join(
   rmm::mr::device_memory_resource* mr) const
 {
   return impl->left_join(probe, probe_on, columns_in_common, compare_nulls, stream, mr);
+}
+
+join_result hash_join::full_join(cudf::table_view const& probe,
+                                 std::vector<size_type> const& probe_on,
+                                 null_equality compare_nulls,
+                                 rmm::cuda_stream_view stream,
+                                 rmm::mr::device_memory_resource* mr) const
+{
+  return impl->full_join(probe, probe_on, compare_nulls, stream, mr);
 }
 
 std::unique_ptr<cudf::table> hash_join::full_join(
