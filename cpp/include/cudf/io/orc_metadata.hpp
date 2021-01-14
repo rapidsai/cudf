@@ -172,7 +172,7 @@ class column_statistics {
  private:
   std::unique_ptr<uint64_t> _number_of_values;
   statistics_type _type = statistics_type::NONE;
-  void* type_spec_stats;
+  void* _type_specific_stats;
 
  public:
   column_statistics(cudf::io::orc::column_statistics&& other);
@@ -186,9 +186,11 @@ class column_statistics {
   T const* type_specific_stats() const
   {
     if (T::type != _type) return nullptr;
-    return static_cast<T*>(type_spec_stats);
+    return static_cast<T*>(_type_specific_stats);
   }
-  // TODO: destructor to free type_spec_stats
+
+  column_statistics(column_statistics&&) = default;
+  ~column_statistics();
 };
 
 /**
