@@ -65,7 +65,7 @@ master_doc = "index"
 
 # General information about the project.
 project = "cudf"
-copyright = "2021, NVIDIA"
+copyright = "2018-2021, NVIDIA"
 author = "NVIDIA"
 
 # The version info for the project you're documenting, acts as replacement for
