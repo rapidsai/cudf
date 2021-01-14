@@ -45,7 +45,11 @@ struct JitCacheTest : public ::testing::Test, public cudf::jit::cudfJitCache {
   void purgeFileCache()
   {
 #if defined(JITIFY_USE_CACHE)
-    boost::filesystem::remove_all(cudf::jit::getCacheDir());
+    std::vector<boost::filesystem::path> file_paths;
+    for (auto& path : boost::filesystem::recursive_directory_iterator(cudf::jit::getCacheDir())) {
+      if (boost::filesystem::is_regular_file(path)) { file_paths.push_back(path); }
+    }
+    for (auto& file_path : file_paths) { boost::filesystem::remove(file_path); }
 #endif
   }
 
