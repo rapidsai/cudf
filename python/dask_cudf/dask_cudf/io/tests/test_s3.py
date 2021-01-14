@@ -14,7 +14,6 @@ moto = pytest.importorskip("moto", minversion="1.3.14")
 boto3 = pytest.importorskip("boto3")
 requests = pytest.importorskip("requests")
 s3fs = pytest.importorskip("s3fs")
-httpretty = pytest.importorskip("httpretty")
 
 
 @contextmanager
@@ -97,9 +96,6 @@ def s3_context(s3_base, bucket, files=None):
                 client.delete_object(Bucket=bucket, Key=f)
             except Exception:
                 pass
-            finally:
-                httpretty.HTTPretty.disable()
-                httpretty.HTTPretty.reset()
 
 
 def test_read_csv(s3_base, s3so):
