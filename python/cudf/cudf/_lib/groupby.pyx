@@ -15,6 +15,7 @@ from cudf._lib.table cimport Table
 from cudf._lib.aggregation cimport make_aggregation, Aggregation
 
 from cudf._lib.cpp.table.table cimport table, table_view
+from cudf._lib.cpp.replace cimport replace_policy
 cimport cudf._lib.cpp.types as libcudf_types
 cimport cudf._lib.cpp.groupby as libcudf_groupby
 cimport cudf._lib.cpp.aggregation as libcudf_aggregation
@@ -169,6 +170,18 @@ cdef class GroupBy:
         result = Table(data=result_data, index=grouped_keys)
         return result
 
+    def replace_nulls(self, Column values, replace_policy policy):
+        cdef column_view val_view = values.view()
+        cdef unique_ptr[column_view] c_result
+
+        with nogil:
+            c_result = move(
+                self.c_obj.get()[0].replace_nulls(val_view, policy)
+            )
+        
+        result = Column.from_unique_ptr(c_result)
+
+        return result
 
 def _drop_unsupported_aggs(Table values, aggs):
     """
