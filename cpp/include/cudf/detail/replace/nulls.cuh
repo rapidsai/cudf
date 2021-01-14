@@ -22,16 +22,21 @@
 namespace cudf {
 namespace detail {
 
+using idx_valid_pair_t = thrust::tuple<cudf::size_type, bool>;
+
 /**
- * @brief Functor used by `inclusive_scan` to determine the index to gather from in
- *        the result column. When current row in input column is NULL, return previous
- *        accumulated index, otherwise return the current index. The second element in
- *        the return tuple is discarded.
+ * @brief Functor used by `replace_nulls(replace_policy)` to determine the index to gather from in
+ * the result column.
+ *
+ * Binary functor passed to `inclusive_scan` or `inclusive_scan_by_key`. Both parameter and return
+ * type are a tuple of cudf::size_type and boolean. For parameter, the first of the tuple is the
+ * index of the row, and the second is the validity of that row. For return value, the first is the
+ * index in the gather map for the output column. If the current row in input is NULL, it is the
+ * index accumulated along the iteration direction; if the current row in input is valid, it is the
+ * index of current row. The second element of the return tuple is discarded.
  */
 struct replace_policy_functor {
-  __device__ thrust::tuple<cudf::size_type, bool> operator()(
-    thrust::tuple<cudf::size_type, bool> const& lhs,
-    thrust::tuple<cudf::size_type, bool> const& rhs);
+  __device__ idx_valid_pair_t operator()(idx_valid_pair_t const& lhs, idx_valid_pair_t const& rhs);
 };
 
 }  // namespace detail

@@ -198,17 +198,45 @@ class groupby {
                     rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
   /**
-   * @brief
+   * @brief Replace null values with first preceding/following non-null value with the same group
+   * key
+   *
+   * Similar to cudf::replace_nulls with `replace_policy` parameter, except that the replacement
+   * value is looked up from each group, not globally.
+   *
+   * If `input[i]` is NULL, then `output[i]` will contain the first non-null value that has the
+   * same group key as `input[i]`, where the non-null value may precede or follow `input[i]`,
+   * based on `replace_policy`.
+   *
+   * Example:
+   * @code{.pseudo}
+   *
+   * //Inputs:
+   * gbobj = groupby({0,  1,  1,    0});
+   * value = column ({42, 21, NULL, NULL});
+   * policy = PRECEDING;
+   *
+   * //Groups:
+   * group 0: {42, NULL}
+   * group 1: {21, NULL}
+   *
+   * //Outputs:
+   * res = gbobj.replace_nulls(value, policy);
+   * group 0 is now {42, 42}
+   * group 1 is now {21, 21}
+   * res is now {42, 21, 21, 42}
+   *
+   * @endcode
    *
    * @param[in] value A column whose null values will be replaced.
    * @param[in] replace_policy Specify the position of replacement values relative to null values.
    * @param[in] mr Device memory resource used to allocate device memory of the returned column.
    *
-   * @returns
+   * @return Copy of `value` with null values replaced based on `replace_policy`.
    */
   std::unique_ptr<cudf::column> replace_nulls(
     column_view const& value,
-    cudf::replace_policy replace_policy,
+    cudf::replace_policy const& replace_policy,
     rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
  private:

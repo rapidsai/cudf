@@ -403,8 +403,8 @@ std::unique_ptr<cudf::column> replace_nulls_policy_impl(cudf::column_view const&
 namespace cudf {
 namespace detail {
 
-__device__ thrust::tuple<cudf::size_type, bool> replace_policy_functor::operator()(
-  thrust::tuple<cudf::size_type, bool> const& lhs, thrust::tuple<cudf::size_type, bool> const& rhs)
+__device__ idx_valid_pair_t replace_policy_functor::operator()(idx_valid_pair_t const& lhs,
+                                                               idx_valid_pair_t const& rhs)
 {
   return thrust::get<1>(rhs) ? thrust::make_tuple(thrust::get<0>(rhs), true)
                              : thrust::make_tuple(thrust::get<0>(lhs), true);

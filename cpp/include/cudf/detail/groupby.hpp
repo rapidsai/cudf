@@ -48,12 +48,6 @@ std::pair<std::unique_ptr<table>, std::vector<aggregation_result>> groupby(
   rmm::mr::device_memory_resource* mr);
 }  // namespace hash
 
-std::unique_ptr<column> replace_nulls(rmm::device_vector<cudf::size_type> const& key,
-                                      cudf::column_view const& value,
-                                      cudf::replace_policy replace_policy,
-                                      rmm::cuda_stream_view stream,
-                                      rmm::mr::device_memory_resource* mr);
-
 }  // namespace detail
 }  // namespace groupby
 }  // namespace cudf

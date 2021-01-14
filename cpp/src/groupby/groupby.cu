@@ -21,6 +21,7 @@
 #include <cudf/detail/aggregation/aggregation.hpp>
 #include <cudf/detail/gather.hpp>
 #include <cudf/detail/groupby.hpp>
+#include <cudf/detail/groupby/group_transforms.hpp>
 #include <cudf/detail/groupby/sort_helper.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/dictionary/dictionary_column_view.hpp>
@@ -184,18 +185,18 @@ groupby::groups groupby::get_groups(table_view values, rmm::mr::device_memory_re
 }
 
 std::unique_ptr<column> groupby::replace_nulls(column_view const& value,
-                                               cudf::replace_policy replace_policy,
+                                               cudf::replace_policy const& replace_policy,
                                                rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
   if (value.is_empty()) { return cudf::empty_like(value); }
   if (!value.has_nulls()) { return std::make_unique<cudf::column>(value); }
 
-  return detail::replace_nulls(helper().group_labels(rmm::cuda_stream_default),
-                               value,
-                               replace_policy,
-                               rmm::cuda_stream_default,
-                               mr);
+  return detail::group_replace_nulls(value,
+                                     helper().group_labels(rmm::cuda_stream_default),
+                                     replace_policy,
+                                     rmm::cuda_stream_default,
+                                     mr);
 }
 
 // Get the sort helper object
