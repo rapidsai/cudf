@@ -45,7 +45,7 @@ class memory_mapped_source : public datasource {
     uint8_t *_data = nullptr;
 
    public:
-    memory_mapped_buffer(uint8_t *data, size_t size) : _data(data), _size(size) {}
+    memory_mapped_buffer(uint8_t *data, size_t size) : _size(size), _data(data) {}
     size_t size() const override { return _size; }
     const uint8_t *data() const override { return _data; }
   };
