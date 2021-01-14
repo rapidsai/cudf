@@ -117,70 +117,74 @@ void ProtobufReader::read(ColumnEncoding &s, size_t maxlen)
 
 void ProtobufReader::read(integer_statistics &s, size_t maxlen)
 {
-  auto op = std::make_tuple(
-    make_field_reader(1, s.minimum), make_field_reader(2, s.maximum), make_field_reader(3, s.sum));
+  auto op = std::make_tuple(make_field_reader(1, s._minimum),
+                            make_field_reader(2, s._maximum),
+                            make_field_reader(3, s._sum));
   function_builder(s, maxlen, op);
 }
 
 void ProtobufReader::read(double_statistics &s, size_t maxlen)
 {
-  auto op = std::make_tuple(
-    make_field_reader(1, s.minimum), make_field_reader(2, s.maximum), make_field_reader(3, s.sum));
+  auto op = std::make_tuple(make_field_reader(1, s._minimum),
+                            make_field_reader(2, s._maximum),
+                            make_field_reader(3, s._sum));
   function_builder(s, maxlen, op);
 }
 
 void ProtobufReader::read(string_statistics &s, size_t maxlen)
 {
-  auto op = std::make_tuple(
-    make_field_reader(1, s.minimum), make_field_reader(2, s.maximum), make_field_reader(3, s.sum));
+  auto op = std::make_tuple(make_field_reader(1, s._minimum),
+                            make_field_reader(2, s._maximum),
+                            make_field_reader(3, s._sum));
   function_builder(s, maxlen, op);
 }
 
 void ProtobufReader::read(bucket_statistics &s, size_t maxlen)
 {
-  auto op = std::make_tuple(make_packed_field_reader(1, s.count));
+  auto op = std::make_tuple(make_packed_field_reader(1, s._count));
   function_builder(s, maxlen, op);
 }
 
 void ProtobufReader::read(decimal_statistics &s, size_t maxlen)
 {
-  auto op = std::make_tuple(
-    make_field_reader(1, s.minimum), make_field_reader(2, s.maximum), make_field_reader(3, s.sum));
+  auto op = std::make_tuple(make_field_reader(1, s._minimum),
+                            make_field_reader(2, s._maximum),
+                            make_field_reader(3, s._sum));
   function_builder(s, maxlen, op);
 }
 
 void ProtobufReader::read(date_statistics &s, size_t maxlen)
 {
-  auto op = std::make_tuple(make_field_reader(1, s.minimum), make_field_reader(2, s.maximum));
+  auto op = std::make_tuple(make_field_reader(1, s._minimum), make_field_reader(2, s._maximum));
   function_builder(s, maxlen, op);
 }
 
 void ProtobufReader::read(binary_statistics &s, size_t maxlen)
 {
-  auto op = std::make_tuple(make_field_reader(1, s.sum));
+  auto op = std::make_tuple(make_field_reader(1, s._sum));
   function_builder(s, maxlen, op);
 }
 
 void ProtobufReader::read(timestamp_statistics &s, size_t maxlen)
 {
-  auto op = std::make_tuple(make_field_reader(1, s.minimum),
-                            make_field_reader(2, s.maximum),
-                            make_field_reader(3, s.minimumUtc),
-                            make_field_reader(4, s.maximumUtc));
+  auto op = std::make_tuple(make_field_reader(1, s._minimum),
+                            make_field_reader(2, s._maximum),
+                            make_field_reader(3, s._minimum_utc),
+                            make_field_reader(4, s._maximum_utc));
   function_builder(s, maxlen, op);
 }
 
 void ProtobufReader::read(column_statistics &s, size_t maxlen)
 {
-  auto op = std::make_tuple(make_field_reader(1, s.numberOfValues),
-                            make_field_reader(2, s.intStatistics),
-                            make_field_reader(3, s.doubleStatistics),
-                            make_field_reader(4, s.stringStatistics),
-                            make_field_reader(5, s.bucketStatistics),
-                            make_field_reader(6, s.decimalStatistics),
-                            make_field_reader(7, s.dateStatistics),
-                            make_field_reader(8, s.binaryStatistics),
-                            make_field_reader(9, s.timestampStatistics));
+  auto op = std::make_tuple(make_field_reader(1, s.number_of_values),
+                            make_field_reader(2, s.int_stats),
+                            make_field_reader(3, s.double_stats),
+                            make_field_reader(4, s.string_stats),
+                            make_field_reader(5, s.bucket_stats),
+                            make_field_reader(6, s.decimal_stats),
+                            make_field_reader(7, s.date_stats),
+                            make_field_reader(8, s.binary_stats),
+                            make_field_reader(9, s.timestamp_stats));
   function_builder(s, maxlen, op);
 }
 

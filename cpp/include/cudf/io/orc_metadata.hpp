@@ -67,13 +67,13 @@ raw_orc_statistics read_raw_orc_statistics(source_info const &src_info);
  */
 template <typename T>
 struct minmax_statistics {
-  std::unique_ptr<T> minimum;
-  std::unique_ptr<T> maximum;
+  std::unique_ptr<T> _minimum;
+  std::unique_ptr<T> _maximum;
 
-  auto has_minimum() const { return minimum != nullptr; }
-  auto has_maximum() const { return maximum != nullptr; }
-  auto *get_minimum() const { return minimum.get(); }
-  auto *get_maximum() const { return maximum.get(); }
+  auto has_minimum() const { return _minimum != nullptr; }
+  auto has_maximum() const { return _maximum != nullptr; }
+  auto minimum() const { return _minimum.get(); }
+  auto maximum() const { return _maximum.get(); }
 };
 
 /**
@@ -83,10 +83,10 @@ struct minmax_statistics {
  */
 template <typename T>
 struct sum_statistics {
-  std::unique_ptr<T> sum;
+  std::unique_ptr<T> _sum;
 
-  auto has_sum() const { return sum != nullptr; }
-  auto *get_sum() const { return sum.get(); }
+  auto has_sum() const { return _sum != nullptr; }
+  auto sum() const { return _sum.get(); }
 };
 
 struct integer_statistics : minmax_statistics<int64_t>, sum_statistics<int64_t> {
@@ -106,9 +106,9 @@ struct string_statistics : minmax_statistics<std::string>, sum_statistics<uint64
 };
 
 struct bucket_statistics {
-  std::vector<uint64_t> count;
+  std::vector<uint64_t> _count;
 
-  auto *get_count(size_t index) const { return &count.at(index); }
+  auto count(size_t index) const { return &_count.at(index); }
 };
 
 struct decimal_statistics : minmax_statistics<std::string>, sum_statistics<std::string> {
@@ -121,13 +121,13 @@ struct binary_statistics : sum_statistics<int64_t> {
 };
 
 struct timestamp_statistics : minmax_statistics<int64_t> {
-  std::unique_ptr<int64_t> minimumUtc;
-  std::unique_ptr<int64_t> maximumUtc;
+  std::unique_ptr<int64_t> _minimum_utc;
+  std::unique_ptr<int64_t> _maximum_utc;
 
-  auto has_minimumUtc() const { return minimumUtc != nullptr; }
-  auto has_maximumUtc() const { return maximumUtc != nullptr; }
-  auto *get_minimumUtc() const { return minimumUtc.get(); }
-  auto *get_maximumUtc() const { return maximumUtc.get(); }
+  auto has_minimum_utc() const { return _minimum_utc != nullptr; }
+  auto has_maximum_utc() const { return _maximum_utc != nullptr; }
+  auto minimum_utc() const { return _minimum_utc.get(); }
+  auto maximum_utc() const { return _maximum_utc.get(); }
 };
 
 /**
@@ -151,21 +151,24 @@ enum class statistics_type {
  * @brief Contains per-column ORC statistics.
  *
  * `std::unique_ptr` is used to wrap the optional values.
- * At most one of the ***_statistics members has a non-null value. The `type` member can se used to
- * find the valid more easily.
+ * At most one of the `***_statistics members` has a non-null value. The `type` member can se used
+ * to find the valid more easily.
  */
 struct column_statistics {
-  std::unique_ptr<uint64_t> numberOfValues;
+  std::unique_ptr<uint64_t> number_of_values;
   statistics_type type = statistics_type::NONE;
-  std::unique_ptr<integer_statistics> intStatistics;
-  std::unique_ptr<double_statistics> doubleStatistics;
-  std::unique_ptr<string_statistics> stringStatistics;
-  std::unique_ptr<bucket_statistics> bucketStatistics;
-  std::unique_ptr<decimal_statistics> decimalStatistics;
-  std::unique_ptr<date_statistics> dateStatistics;
-  std::unique_ptr<binary_statistics> binaryStatistics;
-  std::unique_ptr<timestamp_statistics> timestampStatistics;
+  std::unique_ptr<integer_statistics> int_stats;
+  std::unique_ptr<double_statistics> double_stats;
+  std::unique_ptr<string_statistics> string_stats;
+  std::unique_ptr<bucket_statistics> bucket_stats;
+  std::unique_ptr<decimal_statistics> decimal_stats;
+  std::unique_ptr<date_statistics> date_stats;
+  std::unique_ptr<binary_statistics> binary_stats;
+  std::unique_ptr<timestamp_statistics> timestamp_stats;
   // TODO: hasNull (issue #7087)
+
+  // auto has_number_of_values() const { return number_of_values != nullptr; }
+  // auto number_of_values() const { return number_of_values.get(); }
 };
 
 /**

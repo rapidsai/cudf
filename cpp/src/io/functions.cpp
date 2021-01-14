@@ -236,21 +236,21 @@ raw_orc_statistics read_raw_orc_statistics(source_info const& src_info)
 
 void set_column_statistics_type(column_statistics* cs)
 {
-  if (cs->intStatistics.get()) {
+  if (cs->int_stats.get()) {
     cs->type = statistics_type::INT;
-  } else if (cs->doubleStatistics.get()) {
+  } else if (cs->double_stats.get()) {
     cs->type = statistics_type::DOUBLE;
-  } else if (cs->stringStatistics.get()) {
+  } else if (cs->string_stats.get()) {
     cs->type = statistics_type::STRING;
-  } else if (cs->bucketStatistics.get()) {
+  } else if (cs->bucket_stats.get()) {
     cs->type = statistics_type::BUCKET;
-  } else if (cs->decimalStatistics.get()) {
+  } else if (cs->decimal_stats.get()) {
     cs->type = statistics_type::DECIMAL;
-  } else if (cs->dateStatistics.get()) {
+  } else if (cs->date_stats.get()) {
     cs->type = statistics_type::DATE;
-  } else if (cs->binaryStatistics.get()) {
+  } else if (cs->binary_stats.get()) {
     cs->type = statistics_type::BINARY;
-  } else if (cs->timestampStatistics.get()) {
+  } else if (cs->timestamp_stats.get()) {
     cs->type = statistics_type::TIMESTAMP;
   }
 }
