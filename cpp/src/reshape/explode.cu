@@ -67,8 +67,7 @@ std::unique_ptr<table> explode_functor::operator()<list_view>(
    explode column. This unrolls the top level of lists. Then we need to insert the explode column
    back into the table and return it. */
   lists_column_view lc{input_table.column(explode_column_idx)};
-  // rmm::device_uvector<unsigned int> gather_map_indices(lc.child().size(), stream, mr);
-  rmm::device_vector<size_type> gather_map_indices(lc.child().size());
+  rmm::device_uvector<unsigned int> gather_map_indices(lc.child().size(), stream, mr);
   auto offsets = lc.offsets();
 
   auto offsets_minus_one = thrust::make_transform_iterator(offsets.begin<size_type>(),
