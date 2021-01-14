@@ -100,8 +100,8 @@ std::unique_ptr<column> byte_cast(
 /**
  * @brief Explodes a list column's elements.
  *
- * Any list is exploded into individual rows and
- * the other rows are duplicated.
+ * Any list is exploded, which means the elements of the list in each row are expanded into new rows
+ * in the output. The corresponding rows for other columns in the input are duplicated. Example:
  * ```
  * [[5,10,15], 100],
  * [[20,25],   200],
@@ -123,7 +123,7 @@ std::unique_ptr<column> byte_cast(
  */
 std::unique_ptr<table> explode(
   table_view const& input_table,
-  int const explode_column_idx,
+  size_type explode_column_idx,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /** @} */  // end of group
