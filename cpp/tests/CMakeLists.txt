@@ -48,6 +48,11 @@ add_library(cudftestutil STATIC
             "${CUDF_TESTS_SOURCE_DIR}/utilities/table_utilities.cu"
             "${CUDF_TESTS_SOURCE_DIR}/strings/utilities.cu")
 
+target_compile_options(cudftestutil
+            PRIVATE "$<$<COMPILE_LANGUAGE:CXX>:${CUDF_CXX_FLAGS}>"
+                    "$<$<COMPILE_LANGUAGE:CUDA>:${CUDF_CUDA_FLAGS}>"
+)
+
 set_target_properties(cudftestutil
     PROPERTIES CXX_STANDARD              14
                CXX_STANDARD_REQUIRED     ON
@@ -75,8 +80,11 @@ install(TARGETS cudftestutil
 # - compiler function -----------------------------------------------------------------------------
 
 function(ConfigureTest CMAKE_TEST_NAME CMAKE_TEST_SRC)
-    add_executable(${CMAKE_TEST_NAME}
-                    ${CMAKE_TEST_SRC})
+    add_executable(${CMAKE_TEST_NAME} ${CMAKE_TEST_SRC})
+    target_compile_options(${CMAKE_TEST_NAME}
+                PRIVATE "$<$<COMPILE_LANGUAGE:CXX>:${CUDF_CXX_FLAGS}>"
+                        "$<$<COMPILE_LANGUAGE:CUDA>:${CUDF_CUDA_FLAGS}>"
+    )
     set_target_properties(${CMAKE_TEST_NAME}
         PROPERTIES CXX_STANDARD              14
                    CXX_STANDARD_REQUIRED     ON

@@ -46,6 +46,11 @@ CPMFindPackage(NAME benchmark
 
 add_library(cudf_datagen STATIC "${CUDF_SOURCE_DIR}/benchmarks/common/generate_benchmark_input.cpp")
 
+target_compile_options(cudf_datagen
+            PRIVATE "$<$<COMPILE_LANGUAGE:CXX>:${CUDF_CXX_FLAGS}>"
+                    "$<$<COMPILE_LANGUAGE:CUDA>:${CUDF_CUDA_FLAGS}>"
+)
+
 target_link_libraries(cudf_datagen
                PUBLIC GTest::gmock
                       GTest::gtest
@@ -70,6 +75,10 @@ function(ConfigureBench CMAKE_BENCH_NAME CMAKE_BENCH_SRC)
                    "${CUDF_BENCHMARKS_SOURCE_DIR}/synchronization/synchronization.cpp"
                    "${CUDF_SOURCE_DIR}/tests/utilities/base_fixture.cpp"
                    "${CUDF_SOURCE_DIR}/benchmarks/io/cuio_benchmark_common.cpp")
+    target_compile_options(${CMAKE_BENCH_NAME}
+                PRIVATE "$<$<COMPILE_LANGUAGE:CXX>:${CUDF_CXX_FLAGS}>"
+                        "$<$<COMPILE_LANGUAGE:CUDA>:${CUDF_CUDA_FLAGS}>"
+    )
     set_target_properties(${CMAKE_BENCH_NAME}
         PROPERTIES CXX_STANDARD              14
                    CXX_STANDARD_REQUIRED     ON
