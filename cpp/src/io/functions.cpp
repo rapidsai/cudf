@@ -264,6 +264,23 @@ column_statistics::column_statistics(cudf::io::orc::column_statistics&& cs)
   }
 }
 
+column_statistics& column_statistics::operator=(column_statistics&& other) noexcept
+{
+  _number_of_values    = std::move(other._number_of_values);
+  _type                = other._type;
+  _type_specific_stats = other._type_specific_stats;
+
+  other._type                = statistics_type::NONE;
+  other._type_specific_stats = nullptr;
+
+  return *this;
+}
+
+column_statistics::column_statistics(column_statistics&& other) noexcept
+{
+  *this = std::move(other);
+}
+
 column_statistics::~column_statistics()
 {
   switch (_type) {

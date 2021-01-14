@@ -203,7 +203,11 @@ class column_statistics {
   void* _type_specific_stats = nullptr;
 
  public:
+  column_statistics() = default;
   column_statistics(cudf::io::orc::column_statistics&& other);
+
+  column_statistics& operator=(column_statistics&&) noexcept;
+  column_statistics(column_statistics&&) noexcept;
 
   auto has_number_of_values() const { return _number_of_values != nullptr; }
   auto number_of_values() const { return _number_of_values.get(); }
@@ -225,7 +229,6 @@ class column_statistics {
     return static_cast<T*>(_type_specific_stats);
   }
 
-  column_statistics(column_statistics&&) = default;
   ~column_statistics();
 };
 
