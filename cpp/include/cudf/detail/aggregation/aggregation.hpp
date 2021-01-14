@@ -411,6 +411,15 @@ struct target_type_impl<
   using type = int64_t;
 };
 
+// Summing fixed_point numbers should just underlying stored type
+template <typename Source, aggregation::Kind k>
+struct target_type_impl<
+  Source,
+  k,
+  std::enable_if_t<cudf::is_fixed_point<Source>() && (k == aggregation::SUM)>> {
+  using type = Source;
+};
+
 // Summing/Multiplying float/doubles, use same type accumulator
 template <typename Source, aggregation::Kind k>
 struct target_type_impl<
