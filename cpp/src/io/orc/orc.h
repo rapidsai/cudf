@@ -98,7 +98,7 @@ struct StripeFooter {
 /**
  * @brief Contains per-column ORC statistics.
  *
- * At most one of the `***_statistics members` has a non-null value.
+ * At most one of the `***_statistics` members has a non-null value.
  */
 struct column_statistics {
   std::unique_ptr<uint64_t> number_of_values;
@@ -392,8 +392,8 @@ class ProtobufReader {
   }
 
   /**
-   * @brief Returns a field reader that does not decode data, with type based on the
-   * `field_value` type.
+   * @brief Returns a field reader that does not decode data, with type based on the `field_value`
+   * type.
    *
    * @tparam Type of the field (inferred from `field_value` type)
    * @param field_number The field number of the field to be read

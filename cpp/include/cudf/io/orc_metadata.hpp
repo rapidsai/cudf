@@ -63,7 +63,7 @@ raw_orc_statistics read_raw_orc_statistics(source_info const& src_info);
 /**
  * @brief Enumerator for types of column statistics that can be included in `column_statistics`.
  *
- * Different statistics types are generated for different column data types.
+ * The statistics type depends on the column data type.
  */
 enum class statistics_type {
   NONE,
@@ -78,9 +78,9 @@ enum class statistics_type {
 };
 
 /**
- * @brief Base class for column statistics that include optional min and max values.
+ * @brief Base class for column statistics that include optional minimum and maximum.
  *
- * Includes accessors for the min and max values.
+ * Includes accessors for the minimum and maximum values.
  */
 template <typename T>
 struct minmax_statistics {
@@ -94,7 +94,7 @@ struct minmax_statistics {
 };
 
 /**
- * @brief Base class for column statistics that include optional sum value.
+ * @brief Base class for column statistics that include an optional sum.
  *
  * Includes accessors for the sum value.
  */
@@ -106,10 +106,16 @@ struct sum_statistics {
   auto sum() const { return _sum.get(); }
 };
 
+/**
+ * @brief Statistics for integral columns.
+ */
 struct integer_statistics : minmax_statistics<int64_t>, sum_statistics<int64_t> {
   static constexpr statistics_type type = statistics_type::INT;
 };
 
+/**
+ * @brief Statistics for floating point columns.
+ */
 struct double_statistics : minmax_statistics<double>, sum_statistics<double> {
   static constexpr statistics_type type = statistics_type::DOUBLE;
 };
@@ -117,14 +123,19 @@ struct double_statistics : minmax_statistics<double>, sum_statistics<double> {
 /**
  * @brief Statistics for string columns.
  *
- * Minimum and maximum are the first and last element in hexicographical order (respectively).
- * Sum is the total length of elements in the column.
+ * The `minimum` and `maximum` are the first and last element in hexicographical order
+ * (respectively). The `sum` is the total length of elements in the column.
  * Note: According to ORC specs, the sum should be signed, but pyarrow uses unsigned value
  */
 struct string_statistics : minmax_statistics<std::string>, sum_statistics<uint64_t> {
   static constexpr statistics_type type = statistics_type::STRING;
 };
 
+/**
+ * @brief Statistics for boolean columns.
+ *
+ * The `count` array includes the count of `false` and `true` values.
+ */
 struct bucket_statistics {
   static constexpr statistics_type type = statistics_type::BUCKET;
   std::vector<uint64_t> _count;
@@ -132,18 +143,35 @@ struct bucket_statistics {
   auto count(size_t index) const { return &_count.at(index); }
 };
 
+/**
+ * @brief Statistics for decimal columns.
+ */
 struct decimal_statistics : minmax_statistics<std::string>, sum_statistics<std::string> {
   static constexpr statistics_type type = statistics_type::DECIMAL;
 };
 
+/**
+ * @brief Statistics for date(time) columns.
+ */
 struct date_statistics : minmax_statistics<int32_t> {
   static constexpr statistics_type type = statistics_type::DATE;
 };
 
+/**
+ * @brief Statistics for binary columns.
+ *
+ * The `sum` is the total number of bytes across all elements.
+ */
 struct binary_statistics : sum_statistics<int64_t> {
   static constexpr statistics_type type = statistics_type::BINARY;
 };
 
+/**
+ * @brief Statistics for timestamp columns.
+ *
+ * The `minimum` and `maximum` min/m,ax elements in the column, as the number of milliseconds since
+ * the UNIX epoch. The `minimum_utc` and `maximum_utc` are the same values adjusted to UTC.
+ */
 struct timestamp_statistics : minmax_statistics<int64_t> {
   static constexpr statistics_type type = statistics_type::TIMESTAMP;
   std::unique_ptr<int64_t> _minimum_utc;
@@ -165,14 +193,14 @@ struct column_statistics;
 /**
  * @brief Contains per-column ORC statistics.
  *
- * All columns can have the `number_of_values`. Depending on the data type, a column can have
- * additional statistics, accessible through `type_specific_stats` accessor.
+ * All columns can have the `number_of_values` statistics. Depending on the data type, a column can
+ * have additional statistics, accessible through `type_specific_stats` accessor.
  */
 class column_statistics {
  private:
   std::unique_ptr<uint64_t> _number_of_values;
-  statistics_type _type = statistics_type::NONE;
-  void* _type_specific_stats;
+  statistics_type _type      = statistics_type::NONE;
+  void* _type_specific_stats = nullptr;
 
  public:
   column_statistics(cudf::io::orc::column_statistics&& other);
@@ -182,6 +210,14 @@ class column_statistics {
 
   auto const& type() const { return _type; }
 
+  /**
+   * @brief Returns a non-owning pointer to the type-specific statistics of the given type.
+   *
+   * Returns null if the requested statistics type does not match the type of the currently held
+   * type-specific statistics.
+   *
+   * @tparam T the statistics type
+   */
   template <typename T>
   T const* type_specific_stats() const
   {

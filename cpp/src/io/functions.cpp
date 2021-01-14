@@ -32,8 +32,8 @@
 #include <cudf/utilities/error.hpp>
 
 #include <io/orc/orc.h>
-#include "orc/chunked_state.hpp"
-#include "parquet/chunked_state.hpp"
+#include <io/orc/chunked_state.hpp>
+#include <io/parquet/chunked_state.hpp>
 
 namespace cudf {
 namespace io {
@@ -312,10 +312,10 @@ parsed_orc_statistics read_parsed_orc_statistics(source_info const& src_info)
                  std::back_inserter(result.file_stats),
                  parse_column_statistics);
 
-  for (auto const& ss : raw_stats.stripes_stats) {
+  for (auto const& raw_stripe_stats : raw_stats.stripes_stats) {
     result.stripes_stats.emplace_back();
-    std::transform(ss.cbegin(),
-                   ss.cend(),
+    std::transform(raw_stripe_stats.cbegin(),
+                   raw_stripe_stats.cend(),
                    std::back_inserter(result.stripes_stats.back()),
                    parse_column_statistics);
   }
