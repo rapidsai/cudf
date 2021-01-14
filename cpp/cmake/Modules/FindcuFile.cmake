@@ -62,7 +62,7 @@ find_path(cuFile_INCLUDE_DIR
     cufile.h
   HINTS
     ${PKG_cuFile_INCLUDE_DIRS}
-    /usr/local/gds/lib
+    /usr/local/cuda/lib64
 )
 
 find_library(cuFile_LIBRARY
@@ -70,7 +70,7 @@ find_library(cuFile_LIBRARY
     cufile
   HINTS
     ${PKG_cuFile_LIBRARY_DIRS}
-    /usr/local/gds/lib
+    /usr/local/cuda/lib64
 )
 
 find_library(cuFileRDMA_LIBRARY
@@ -78,7 +78,7 @@ find_library(cuFileRDMA_LIBRARY
     cufile_rdma
   HINTS
     ${PKG_cuFile_LIBRARY_DIRS}
-    /usr/local/gds/lib
+    /usr/local/cuda/lib64
 )
 
 include(FindPackageHandleStandardArgs)

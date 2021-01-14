@@ -124,6 +124,7 @@ test:
     - test -f $PREFIX/include/cudf/lists/detail/copying.hpp
     - test -f $PREFIX/include/cudf/lists/extract.hpp
     - test -f $PREFIX/include/cudf/lists/contains.hpp
+    - test -f $PREFIX/include/cudf/lists/gather.hpp
     - test -f $PREFIX/include/cudf/lists/lists_column_view.hpp
     - test -f $PREFIX/include/cudf/merge.hpp
     - test -f $PREFIX/include/cudf/null_mask.hpp
