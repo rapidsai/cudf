@@ -47,7 +47,9 @@ def s3_base(worker_id):
         # with an S3 endpoint on localhost
 
         endpoint_port = (
-            "5000" if worker_id == "master" else "555" + worker_id.lstrip("gw")
+            5000
+            if worker_id == "master"
+            else 5550 + int(worker_id.lstrip("gw"))
         )
         endpoint_uri = f"http://127.0.0.1:{endpoint_port}/"
 
@@ -78,7 +80,7 @@ def s3so(worker_id):
     Returns s3 storage options to pass to fsspec
     """
     endpoint_port = (
-        "5000" if worker_id == "master" else "555" + worker_id.lstrip("gw")
+        5000 if worker_id == "master" else 5550 + int(worker_id.lstrip("gw"))
     )
     endpoint_uri = f"http://127.0.0.1:{endpoint_port}/"
 
