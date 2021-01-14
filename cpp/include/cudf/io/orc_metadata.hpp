@@ -212,7 +212,7 @@ class column_statistics {
   auto has_number_of_values() const { return _number_of_values != nullptr; }
   auto number_of_values() const { return _number_of_values.get(); }
 
-  auto const& type() const { return _type; }
+  auto type() const { return _type; }
 
   /**
    * @brief Returns a non-owning pointer to the type-specific statistics of the given type.
