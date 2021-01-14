@@ -1840,7 +1840,8 @@ JNIEXPORT jobjectArray JNICALL Java_ai_rapids_cudf_Table_contiguousSplit(JNIEnv 
     cudf::jni::native_jobjectArray<jobject> n_result =
         cudf::jni::contiguous_table_array(env, result.size());
     for (int i = 0; i < result.size(); i++) {
-      n_result.set(i, cudf::jni::contiguous_table_from(env, result[i].data));
+      n_result.set(i, cudf::jni::contiguous_table_from(env, result[i].data,
+                                                       result[i].table.num_rows()));
     }
     return n_result.wrapped();
   }

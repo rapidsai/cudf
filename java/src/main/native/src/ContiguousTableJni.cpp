@@ -36,7 +36,7 @@ bool cache_contiguous_table_jni(JNIEnv *env) {
   }
 
   From_packed_table_method =
-      env->GetStaticMethodID(cls, "fromPackedTable", CONTIGUOUS_TABLE_FACTORY_SIG("JJJJ"));
+      env->GetStaticMethodID(cls, "fromPackedTable", CONTIGUOUS_TABLE_FACTORY_SIG("JJJJJ"));
   if (From_packed_table_method == nullptr) {
     return false;
   }
@@ -56,15 +56,15 @@ void release_contiguous_table_jni(JNIEnv *env) {
   }
 }
 
-jobject contiguous_table_from(JNIEnv *env, cudf::packed_columns &split) {
+jobject contiguous_table_from(JNIEnv *env, cudf::packed_columns &split, long row_count) {
   jlong metadata_address = reinterpret_cast<jlong>(split.metadata.get());
   jlong data_address = reinterpret_cast<jlong>(split.gpu_data->data());
   jlong data_size = static_cast<jlong>(split.gpu_data->size());
   jlong rmm_buffer_address = reinterpret_cast<jlong>(split.gpu_data.get());
 
-  jobject contig_table_obj =
-      env->CallStaticObjectMethod(Contiguous_table_jclass, From_packed_table_method,
-                                  metadata_address, data_address, data_size, rmm_buffer_address);
+  jobject contig_table_obj = env->CallStaticObjectMethod(
+      Contiguous_table_jclass, From_packed_table_method, metadata_address, data_address, data_size,
+      rmm_buffer_address, row_count);
 
   if (contig_table_obj != nullptr) {
     split.metadata.release();

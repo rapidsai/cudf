@@ -29,30 +29,43 @@ public final class ContiguousTable implements AutoCloseable {
   private Table table = null;
   private DeviceMemoryBuffer buffer;
   private ByteBuffer metadataBuffer = null;
+  private final long rowCount;
 
   // This method is invoked by JNI
   static ContiguousTable fromPackedTable(long metadataHandle,
                                          long dataAddress,
                                          long dataLength,
-                                         long rmmBufferAddress) {
+                                         long rmmBufferAddress,
+                                         long rowCount) {
     DeviceMemoryBuffer buffer = DeviceMemoryBuffer.fromRmm(dataAddress, dataLength, rmmBufferAddress);
-    return new ContiguousTable(metadataHandle, buffer);
+    return new ContiguousTable(metadataHandle, buffer, rowCount);
   }
 
   /** Construct a contiguous table instance given a table and the device buffer backing it. */
   ContiguousTable(Table table, DeviceMemoryBuffer buffer) {
     this.table = table;
     this.buffer = buffer;
+    this.rowCount = table.getRowCount();
   }
 
   /**
    * Construct a contiguous table
    * @param metadataHandle address of the cudf packed_table host-based metadata instance
    * @param buffer buffer containing the packed table data
+   * @param rowCount number of rows in the table
    */
-  ContiguousTable(long metadataHandle, DeviceMemoryBuffer buffer) {
+  ContiguousTable(long metadataHandle, DeviceMemoryBuffer buffer, long rowCount) {
     this.metadataHandle = metadataHandle;
     this.buffer = buffer;
+    this.rowCount = rowCount;
+  }
+
+  /**
+   * Returns the number of rows in the table. This accessor avoids manifesting
+   * the Table instance if only the row count is needed.
+   */
+  public long getRowCount() {
+    return rowCount;
   }
 
   /** Get the table instance, reconstructing it from the metadata if necessary. */

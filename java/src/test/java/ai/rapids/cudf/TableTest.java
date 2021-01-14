@@ -1,6 +1,6 @@
 /*
  *
- *  Copyright (c) 2019-2020, NVIDIA CORPORATION.
+ *  Copyright (c) 2019-2021, NVIDIA CORPORATION.
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -1672,9 +1672,13 @@ public class TableTest extends CudfTestBase {
         .build()) {
       splits = t1.contiguousSplit(2, 5, 9);
       assertEquals(4, splits.length);
+      assertEquals(2, splits[0].getRowCount());
       assertEquals(2, splits[0].getTable().getRowCount());
+      assertEquals(3, splits[1].getRowCount());
       assertEquals(3, splits[1].getTable().getRowCount());
+      assertEquals(4, splits[2].getRowCount());
       assertEquals(4, splits[2].getTable().getRowCount());
+      assertEquals(1, splits[3].getRowCount());
       assertEquals(1, splits[3].getTable().getRowCount());
     } finally {
       if (splits != null) {
@@ -1697,9 +1701,13 @@ public class TableTest extends CudfTestBase {
         .build()) {
       splits = t1.contiguousSplit(2, 5, 9);
       assertEquals(4, splits.length);
+      assertEquals(2, splits[0].getRowCount());
       assertEquals(2, splits[0].getTable().getRowCount());
+      assertEquals(3, splits[1].getRowCount());
       assertEquals(3, splits[1].getTable().getRowCount());
+      assertEquals(4, splits[2].getRowCount());
       assertEquals(4, splits[2].getTable().getRowCount());
+      assertEquals(1, splits[3].getRowCount());
       assertEquals(1, splits[3].getTable().getRowCount());
     } finally {
       if (splits != null) {
