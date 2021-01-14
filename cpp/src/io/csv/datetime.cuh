@@ -385,7 +385,7 @@ __inline__ __device__ bool skip_if_starts_with(char const** begin,
 
 __inline__ __device__ void skip_spaces(char const** begin, char const* end)
 {
-  *begin = thrust::find(thrust::seq, *begin, end, [&](char elem) { return elem != ' '; });
+  *begin = thrust::find_if(thrust::seq, *begin, end, [](auto elem) { return elem != ' '; });
 }
 
 template <typename T>
