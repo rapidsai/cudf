@@ -40,7 +40,7 @@ conda list --show-channel-urls
 #libcudf Doxygen build
 gpuci_logger "Build libcudf docs..."
 cd $PROJECT_WORKSPACE/cpp/doxygen
-wget "https://docs.rapids.ai/api/librmm/${BRANCH_VERSION}/rmm.tag" || echo "Failed to download rmm Doxygen tag"
+wget "https://raw.githubusercontent.com/rapidsai/docs/gh-pages/api/rmm/${BRANCH_VERSION}/rmm.tag" || echo "Failed to download rmm Doxygen tag"
 doxygen Doxyfile
 
 #cudf Sphinx Build
