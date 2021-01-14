@@ -1038,6 +1038,13 @@ TYPED_TEST(FixedPointTests, MinMaxCountLagLeadNulls)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_count_val, valid->view());
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_count_all, all->view());
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_rowno, rowno->view());
+
+  EXPECT_THROW(rolling_window(input, 2, 1, 1, make_product_aggregation()), cudf::logic_error);
+  EXPECT_THROW(rolling_window(input, 2, 1, 1, make_mean_aggregation()), cudf::logic_error);
+  EXPECT_THROW(rolling_window(input, 2, 1, 1, make_variance_aggregation()), cudf::logic_error);
+  EXPECT_THROW(rolling_window(input, 2, 1, 1, make_std_aggregation()), cudf::logic_error);
+  EXPECT_THROW(rolling_window(input, 2, 1, 1, make_sum_of_squares_aggregation()),
+               cudf::logic_error);
 }
 
 CUDF_TEST_PROGRAM_MAIN()
