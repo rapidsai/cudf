@@ -411,7 +411,7 @@ struct target_type_impl<
   using type = int64_t;
 };
 
-// Summing fixed_point numbers should just underlying stored type
+// Summing fixed_point numbers, use the same type accumulator
 template <typename Source, aggregation::Kind k>
 struct target_type_impl<
   Source,
