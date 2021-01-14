@@ -17,7 +17,7 @@
 #include <io/utilities/block_utils.cuh>
 
 #include <cudf/detail/utilities/cuda.cuh>
-#include <cudf/lists/lists_column_device_view.cuh>
+//#include <cudf/lists/lists_column_device_view.cuh> // TODO : Remove
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
@@ -112,7 +112,7 @@ inline __device__ uint32_t uint64_init_hash(uint64_t v)
 // blockDim {512,1,1}
 template <int block_size>
 __global__ void __launch_bounds__(block_size) gpuInitPageFragments(PageFragment *frag,
-                                                                   EncColumnDesc *col_desc,
+                                                                   const EncColumnDesc *col_desc,
                                                                    int32_t num_fragments,
                                                                    int32_t num_columns,
                                                                    uint32_t fragment_size,
@@ -158,7 +158,7 @@ __global__ void __launch_bounds__(block_size) gpuInitPageFragments(PageFragment 
     // etc...
     s->start_value_idx      = start_row;
     size_type end_value_idx = start_row + s->frag.num_rows;
-    {
+    if (s->col.parent_column != nullptr) {
       auto col = *(s->col.parent_column);
       while (col.type().id() == type_id::LIST) {
         auto offset_col = col.child(lists_column_view::offsets_column_index);
@@ -170,7 +170,7 @@ __global__ void __launch_bounds__(block_size) gpuInitPageFragments(PageFragment 
     s->frag.start_value_idx = s->start_value_idx;
     s->frag.num_leaf_values = end_value_idx - s->start_value_idx;
 
-    if (s->col.parent_column != nullptr) {
+    if (s->col.level_offsets != nullptr) {
       // For nested schemas, the number of values in a fragment is not directly related to the
       // number of encoded data elements or the number of rows.  It is simply the number of
       // repetition/definition values which together encode validity and nesting information.
@@ -202,7 +202,7 @@ __global__ void __launch_bounds__(block_size) gpuInitPageFragments(PageFragment 
   for (uint32_t i = 0; i < nvals; i += block_size) {
     uint32_t val_idx      = start_value_idx + i + t;
     uint32_t is_valid =
-      (i + t < nvals && val_idx < s->col.num_values) ?
+      (i + t < nvals && val_idx < s->col.leaf_column->size()) ?
         s->col.leaf_column->is_valid(val_idx)
         : 0;
     uint32_t valid_warp = ballot(is_valid);
@@ -1088,7 +1088,7 @@ __global__ void __launch_bounds__(128, 8) gpuEncodePages(EncPage *pages,
       val_idx  = (is_valid) ? s->col.dict_data[val_idx] : val_idx;
     } else {
       is_valid =
-        (val_idx < s->col.num_values && cur_val_idx + t < s->page.num_leaf_values) ?
+        (val_idx < s->col.leaf_column->size() && cur_val_idx + t < s->page.num_leaf_values) ?
           s->col.leaf_column->is_valid(val_idx)
           : 0;
     }
@@ -2001,11 +2001,11 @@ void InitPageFragments(PageFragment *frag,
 }
 
 void InitColumnDeviceViews(EncColumnDesc *col_desc,
-                           table_device_view *input_table_device_view,
+                           const table_device_view &input_table_device_view,
                            rmm::cuda_stream_view stream)
 {
   cudf::detail::device_single_thread(
-      [col_desc, td_view = *input_table_device_view] __device__() mutable {
+      [col_desc, td_view = input_table_device_view] __device__() mutable {
         for (size_type i = 0; i < td_view.num_columns(); ++i) {
           auto col = td_view.column(i);
           //If this is a list type then assign leaf column

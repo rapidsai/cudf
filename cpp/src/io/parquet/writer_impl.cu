@@ -502,7 +502,7 @@ class parquet_column_view {
 
 void writer::impl::init_page_fragments(hostdevice_vector<gpu::PageFragment> &frag,
                                        hostdevice_vector<gpu::EncColumnDesc> &col_desc,
-                                       table_device_view *input_table_device_view,
+                                       const table_device_view &input_table_device_view,
                                        uint32_t num_columns,
                                        uint32_t num_fragments,
                                        uint32_t num_rows,
@@ -714,8 +714,11 @@ void writer::impl::write_chunked_begin(pq_chunked_state &state)
 
 void writer::impl::write_chunk(table_view const &table, pq_chunked_state &state)
 {
+  // Early exit for empty table
+  if (table.num_rows() == 0 || table.num_columns() == 0) { return; }
+
   size_type num_columns = table.num_columns();
-  size_type num_rows    = 0;
+  size_type num_rows    = table.num_rows();
 
   // Wrapper around cudf columns to attach parquet-specific type info.
   // Note : I wish we could do this in the begin() function but since the
@@ -740,8 +743,6 @@ void writer::impl::write_chunk(table_view const &table, pq_chunked_state &state)
     const auto col        = *it;
     const auto current_id = parquet_columns.size();
 
-    num_rows = std::max<uint32_t>(num_rows, col.size());
-
     // if the user is explicitly saying "I am only calling this once", assume the columns in this
     // one table tell us everything we need to know about their nullability.
     // Empty nullability means the writer figures out the nullability from the cudf columns.
@@ -758,8 +759,6 @@ void writer::impl::write_chunk(table_view const &table, pq_chunked_state &state)
                                  state.stream);
   }
 
-  // Early exit for empty table
-  if (num_rows == 0 || num_columns == 0) { return; }
   CUDF_EXPECTS(decimal_precision_idx == state._decimal_precision.size(),
                "Too many decimal precision values!");
 
@@ -885,9 +884,6 @@ void writer::impl::write_chunk(table_view const &table, pq_chunked_state &state)
     // GPU column description
     auto *desc             = &col_desc[i];
     *desc                  = gpu::EncColumnDesc{};  // Zero out all fields
-    //desc->column_data_base = col.data();
-    //desc->valid_map_base   = col.nulls();
-    //desc->column_offset    = col.offset();
     desc->stats_dtype      = col.stats_type();
     desc->ts_scale         = col.ts_scale();
     // TODO (dm): Enable dictionary for list after refactor
@@ -897,14 +893,12 @@ void writer::impl::write_chunk(table_view const &table, pq_chunked_state &state)
       desc->dict_data  = col.get_dict_data();
     }
     if (col.is_list()) {
-      //desc->nesting_offsets = col.nesting_offsets();
       desc->nesting_levels  = col.nesting_levels();
       desc->level_offsets   = col.level_offsets();
       desc->rep_values      = col.repetition_levels();
       desc->def_values      = col.definition_levels();
     }
     desc->num_values     = col.data_count();
-    //desc->num_rows       = col.row_count();
     desc->physical_type  = static_cast<uint8_t>(col.physical_type());
     desc->converted_type = static_cast<uint8_t>(col.converted_type());
     auto count_bits      = [](uint16_t number) {
@@ -938,7 +932,7 @@ void writer::impl::write_chunk(table_view const &table, pq_chunked_state &state)
 
   //TODO : Add view to init_page_fragments and initialize col_desc column_device_view members
   init_page_fragments(
-    fragments, col_desc, input_table_device_view.get(), num_columns, num_fragments,
+    fragments, col_desc, *input_table_device_view.get(), num_columns, num_fragments,
     num_rows, fragment_size, state.stream);
 
   size_t global_rowgroup_base = state.md.row_groups.size();

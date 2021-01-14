@@ -233,12 +233,6 @@ struct EncColumnDesc : stats_column_desc {
 
   column_device_view * leaf_column;
   column_device_view * parent_column;
-
-  //Copied from stats_column_desc
-  statistics_dtype temp_stats_dtype;  //!< physical data type of column
-  uint32_t temp_num_values;  //!< Number of data values in column. Different from num_rows in case of
-  int32_t temp_ts_scale;  //!< timestamp scale (>0: multiply by scale, <0: divide by -scale)
-                        //!< nested columns
 };
 
 constexpr int max_page_fragment_size = 5000;  //!< Max number of rows in a page fragment
@@ -466,7 +460,7 @@ void InitPageFragments(PageFragment *frag,
                        rmm::cuda_stream_view stream);
 
 void InitColumnDeviceViews(EncColumnDesc *col_desc,
-                           table_device_view *input_table_device_view,
+                           const table_device_view &input_table_device_view,
                            rmm::cuda_stream_view stream);
 
 /**
