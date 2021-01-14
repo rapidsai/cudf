@@ -169,7 +169,7 @@ struct binary_statistics : sum_statistics<int64_t> {
 /**
  * @brief Statistics for timestamp columns.
  *
- * The `minimum` and `maximum` min/m,ax elements in the column, as the number of milliseconds since
+ * The `minimum` and `maximum` min/max elements in the column, as the number of milliseconds since
  * the UNIX epoch. The `minimum_utc` and `maximum_utc` are the same values adjusted to UTC.
  */
 struct timestamp_statistics : minmax_statistics<int64_t> {
