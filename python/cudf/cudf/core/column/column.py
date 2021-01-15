@@ -35,7 +35,7 @@ from cudf._lib.null_mask import (
 from cudf._lib.scalar import as_device_scalar
 from cudf._lib.stream_compaction import distinct_count as cpp_distinct_count
 from cudf._lib.transform import bools_to_mask
-from cudf._typing import Dtype, ScalarLike
+from cudf._typing import ColumnLike, Dtype, ScalarLike
 from cudf.core.abc import Serializable
 from cudf.core.buffer import Buffer
 from cudf.core.dtypes import CategoricalDtype
@@ -148,6 +148,14 @@ class ColumnBase(Column, Serializable):
         self, binop: builtins.str, rhs, reflect: bool = False
     ) -> "ColumnBase":
         raise NotImplementedError()
+
+    def find_and_replace(
+        self: T,
+        to_replace: ColumnLike,
+        replacement: ColumnLike,
+        all_nan: bool = False,
+    ) -> T:
+        raise NotImplementedError
 
     def clip(self, lo: ScalarLike, hi: ScalarLike) -> "ColumnBase":
         return libcudf.replace.clip(self, lo, hi)

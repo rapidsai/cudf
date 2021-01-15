@@ -19,7 +19,7 @@ import cudf
 from cudf import _lib as libcudf
 from cudf._lib.scalar import as_device_scalar
 from cudf._lib.transform import bools_to_mask
-from cudf._typing import Dtype, ScalarLike
+from cudf._typing import ColumnLike, Dtype, ScalarLike
 from cudf.core.buffer import Buffer
 from cudf.core.column import column
 from cudf.core.column.methods import ColumnMethodsMixin
@@ -47,7 +47,7 @@ ParentType = Union["cudf.Series", "cudf.Index"]
 class CategoricalAccessor(ColumnMethodsMixin):
     _column: "CategoricalColumn"
 
-    def __init__(self, column, parent: ParentType = None):
+    def __init__(self, column: Any, parent: ParentType = None):
         """
         Accessor object for categorical properties of the Series values.
         Be aware that assigning to `categories` is a inplace operation,
@@ -1039,7 +1039,7 @@ class CategoricalColumn(column.ColumnBase):
         )
 
     def to_pandas(
-        self, index=None, nullable: bool = False, **kwargs
+        self, index=ColumnLike, nullable: bool = False, **kwargs
     ) -> pd.Series:
         signed_dtype = min_signed_type(len(self.categories))
         codes = self.cat().codes.astype(signed_dtype).fillna(-1).to_array()
@@ -1096,9 +1096,9 @@ class CategoricalColumn(column.ColumnBase):
 
     def find_and_replace(
         self,
-        to_replace: Union["ColumnBase", list],
-        replacement: Union["ColumnBase", list],
-        all_nan: bool,
+        to_replace: ColumnLike,
+        replacement: ColumnLike,
+        all_nan: bool = False,
     ) -> "CategoricalColumn":
         """
         Return col with *to_replace* replaced with *replacement*.

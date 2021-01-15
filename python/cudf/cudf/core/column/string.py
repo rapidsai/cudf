@@ -143,7 +143,7 @@ from cudf._lib.strings.translate import (
     translate as cpp_translate,
 )
 from cudf._lib.strings.wrap import wrap as cpp_wrap
-from cudf._typing import Dtype, ScalarLike
+from cudf._typing import ColumnLike, Dtype, ScalarLike
 from cudf.core.buffer import Buffer
 from cudf.core.column import column, datetime
 from cudf.core.column.methods import ColumnMethodsMixin
@@ -4999,7 +4999,10 @@ class StringColumn(column.ColumnBase):
             return True
 
     def find_and_replace(
-        self, to_replace, replacement, all_nan: bool
+        self,
+        to_replace: ColumnLike,
+        replacement: ColumnLike,
+        all_nan: bool = False,
     ) -> "StringColumn":
         """
         Return col with *to_replace* replaced with *value*

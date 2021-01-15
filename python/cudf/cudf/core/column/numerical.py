@@ -11,7 +11,7 @@ from pandas.api.types import is_integer_dtype
 import cudf
 from cudf import _lib as libcudf
 from cudf._lib.quantiles import quantile as cpp_quantile
-from cudf._typing import BinaryOperand, Dtype, DtypeObj, ScalarLike
+from cudf._typing import BinaryOperand, ColumnLike, Dtype, DtypeObj, ScalarLike
 from cudf.core.buffer import Buffer
 from cudf.core.column import (
     ColumnBase,
@@ -415,9 +415,9 @@ class NumericalColumn(ColumnBase):
 
     def find_and_replace(
         self,
-        to_replace: Union["ColumnBase", list],
-        replacement: Union["ColumnBase", list],
-        all_nan: bool,
+        to_replace: ColumnLike,
+        replacement: ColumnLike,
+        all_nan: bool = False,
     ) -> "NumericalColumn":
         """
         Return col with *to_replace* replaced with *value*.
