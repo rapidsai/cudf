@@ -1,10 +1,10 @@
-from typing import List, Any, TYPE_CHECKING
+from typing import List, Any, Optional, TYPE_CHECKING
 
 import cudf
 
 class Table(object):
     _data: cudf.core.column_accessor.ColumnAccessor
-    _index: cudf.core.index.Index
+    _index: Optional[cudf.core.index.Index]
 
     def __init__(self, data: object = None, index: object = None) -> None: ...
 
