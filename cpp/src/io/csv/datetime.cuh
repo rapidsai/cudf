@@ -21,14 +21,13 @@
 #include "thrust/reduce.h"
 
 /**
- * @brief Simplified parsing function for use by date and time parsing
+ * @brief Parses non-negative integral vales.
  *
  * This helper function is only intended to handle positive integers. The input
  * character string is expected to be well-formed.
  *
- * @param[in] begin Beginning of the character string
- * @param[in] end End of the character string
- *
+ * @param begin Pointer to the first element of the string
+ * @param end Pointer to the last element of the string
  * @return The parsed and converted value
  */
 template <typename T>
@@ -65,15 +64,11 @@ __inline__ __device__ constexpr uint32_t operator"" _erasInYears(unsigned long l
 }
 
 /**
- * @brief Compute number of days since "March 1, 0000", given a date
+ * @brief Computes the number of days since "March 1, 0000", given a date.
  *
- * This function takes year, month, and day and returns the number of days
- * since the baseline which is taken as 0000-03-01. This value is chosen as the
- * origin for ease of calculation (now February becomes the last month).
- *
- * @param[in] year
- * @param[in] month
- * @param[in] day
+ * This function takes year, month, and day and returns the number of days since the baseline which
+ * is taken as 0000-03-01. This value is chosen as the origin for ease of calculation (now February
+ * becomes the last month).
  *
  * @return days since March 1, 0000
  */
@@ -98,14 +93,9 @@ __inline__ __device__ constexpr int32_t days_since_baseline(int year, int month,
 }
 
 /**
- * @brief Compute number of days since epoch, given a date
+ * @brief Computes the number of days since epoch, given a date.
  *
- * This function takes year, month, and day and returns the number of days
- * since epoch (1970-01-01).
- *
- * @param[in] year
- * @param[in] month
- * @param[in] day
+ * This function takes year, month, and day and returns the number of days since epoch (1970-01-01).
  *
  * @return days since epoch
  */
@@ -119,17 +109,10 @@ __inline__ __device__ constexpr int32_t days_since_epoch(int year, int month, in
 }
 
 /**
- * @brief Compute the number of seconds since epoch, given a date and time
+ * @brief Computes the number of seconds since epoch, given a date and time.
  *
  * This function takes year, month, day, hour, minute and second and returns
- * the number of seconds since epoch (1970-01-01)
- *
- * @param[in] year
- * @param[in] month
- * @param[in] day
- * @param[in] hour
- * @param[in] minute
- * @param[in] second
+ * the number of seconds since epoch (1970-01-01),
  *
  * @return seconds since epoch
  */
@@ -144,15 +127,14 @@ __inline__ __device__ constexpr int64_t seconds_since_epoch(
 }
 
 /**
- * @brief Extract the Day, Month, and Year from a string
+ * @brief Extracts the Day, Month, and Year from a string.
  *
- * @param[in] begin Beginning of the character string
- * @param[in] end End of the character string
+ * @param[in] begin Pointer to the first element of the string
+ * @param[in] end Pointer to the last element of the string
  * @param[in] dayfirst Flag indicating that first field is the day
  * @param[out] year
  * @param[out] month
  * @param[out] day
- *
  * @return true if successful, false otherwise
  */
 __inline__ __device__ bool extract_date(
@@ -220,16 +202,16 @@ __inline__ __device__ bool extract_date(
 }
 
 /**
- * @brief Parse a character stream to extract the hour, minute, second and
- * millisecond time field values.
+ * @brief Parses a string to extract the hour, minute, second and millisecond time field
+ * values.
  *
- * Incoming format is expected to be HH:MM:SS.MS, with the latter second and
- * millisecond fields optional. Each time field can be a single, double,
- * or triple (in the case of milliseconds) digits. 12-hr and 24-hr time format
- * is detected via the absence or presence of AM/PM characters at the end.
+ * Incoming format is expected to be `HH:MM:SS.MS`, with the latter second and millisecond fields
+ * optional. Each time field can be a single, double, or triple (in the case of milliseconds)
+ * digits. 12-hr and 24-hr time format is detected via the absence or presence of AM/PM characters
+ * at the end.
  *
- * @param[in] begin Beginning of the character string
- * @param[in] end End of the character string
+ * @param[in] begin Pointer to the first element of the string
+ * @param[in] end Pointer to the last element of the string
  * @param[out] hour The hour value
  * @param[out] minute The minute value
  * @param[out] second The second value (0 if not present)
@@ -274,16 +256,15 @@ __inline__ __device__ void extract_time(
 }
 
 /**
- * @brief Parse a Date string into a date32, days since epoch
+ * @brief Parses a date string into a `date32`, days since epoch.
  *
- * This function takes a string and produces a date32 representation
- * Acceptable formats are a combination of MM/YYYY and MM/DD/YYYY
+ * This function takes a string and produces a `date32` representation.
+ * Acceptable formats are a combination of `MM/YYYY` and `MM/DD/YYYY`.
  *
- * @param[in] begin Beginning of the character string
- * @param[in] end End of the character string
- * @param[in] dayfirst Flag to indicate that day is the first field - DD/MM/YYYY
- *
- * @return returns the number of days since epoch
+ * @param[in] begin Pointer to the first element of the string
+ * @param[in] end Pointer to the last element of the string
+ * @param[in] dayfirst Flag to indicate that day is the first field - `DD/MM/YYYY`
+ * @return Number of days since epoch
  */
 __inline__ __device__ int32_t to_date(char const* begin, char const* end, bool dayfirst)
 {
@@ -298,16 +279,14 @@ __inline__ __device__ int32_t to_date(char const* begin, char const* end, bool d
 }
 
 /**
- * @brief Parses a datetime character stream and computes the number of
- * milliseconds since epoch.
+ * @brief Parses a datetime string and computes the number of milliseconds since epoch.
  *
- * This function takes a string and produces a date32 representation
- * Acceptable formats are a combination of MM/YYYY and MM/DD/YYYY
+ * This function takes a string and produces a `date32` representation.
+ * Acceptable formats are a combination of `MM/YYYY` and `MM/DD/YYYY`.
  *
- * @param[in] begin Beginning of the character string
- * @param[in] end End of the character string
+ * @param[in] begin Pointer to the first element of the string
+ * @param[in] end Pointer to the last element of the string
  * @param[in] dayfirst Flag to indicate day/month or month/day order
- *
  * @return Milliseconds since epoch
  */
 __inline__ __device__ int64_t to_date_time(char const* begin, char const* end, bool dayfirst)
@@ -317,13 +296,12 @@ __inline__ __device__ int64_t to_date_time(char const* begin, char const* end, b
   int64_t answer = -1;
 
   // Find end of the date portion
-  // TODO: Refactor all the date/time parsing to remove multiple passes over
-  // each character because of find() then convert(); that can also avoid the
-  // ugliness below.
+  // TODO: Refactor all the date/time parsing to remove multiple passes over each character because
+  // of find() then convert(); that can also avoid the ugliness below.
   auto sep_pos = thrust::find(thrust::seq, begin, end, 'T');
   if (sep_pos == end) {
-    // Attempt to locate the position between date and time, ignore premature
-    // space separators around the day/month/year portions
+    // Attempt to locate the position between date and time, ignore premature space separators
+    // around the day/month/year portions
     int count = 0;
     for (auto i = begin; i <= end; ++i) {
       if (count == 3 && *i == ' ') {
@@ -350,7 +328,15 @@ __inline__ __device__ int64_t to_date_time(char const* begin, char const* end, b
   return answer;
 }
 
-// parse integer and update the begin iterator
+/**
+ * @brief Parses the input string into an integral value of the given type.
+ *
+ * Moves the `begin` iterator past the parsed value.
+ *
+ * @param begin Pointer to the first element of the string
+ * @param end Pointer to the last element of the string
+ * @return The parsed and converted value
+ */
 template <typename T>
 __inline__ __device__ T parse_integer(char const** begin, char const* end)
 {
@@ -371,6 +357,15 @@ __inline__ __device__ T parse_integer(char const** begin, char const* end)
   return is_negative ? -value : value;
 }
 
+/**
+ * @brief Excludes the prefix from the input range if the string starts with the prefix.
+ *
+ * @tparam N length on the prefix, plus one
+ * @param begin Pointer to the first element of the string
+ * @param end Pointer to the first element after the string
+ * @param prefix String we're searching for at the start of the input range
+ * @return true if the input range starts with the given prefix
+ */
 template <int N>
 __inline__ __device__ bool skip_if_starts_with(char const** begin,
                                                char const* end,
@@ -383,11 +378,24 @@ __inline__ __device__ bool skip_if_starts_with(char const** begin,
   return found;
 }
 
+/**
+ * @brief Modifies the input range to exclude the leading space characters.
+ *
+ * @param begin Pointer to the first element of the string
+ * @param end Pointer to the first element after the string
+ */
 __inline__ __device__ void skip_spaces(char const** begin, char const* end)
 {
   *begin = thrust::find_if(thrust::seq, *begin, end, [](auto elem) { return elem != ' '; });
 }
 
+/**
+ * @brief Parses the input string into a duration of the given type.
+ *
+ * @param begin Pointer to the first element of the string
+ * @param end Pointer to the last element of the string
+ * @return The parsed duration
+ */
 template <typename T>
 __inline__ __device__ int64_t to_time_delta(char const* begin, char const* end)
 {

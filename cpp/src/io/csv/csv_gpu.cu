@@ -61,6 +61,7 @@ constexpr uint32_t csvparse_block_dim = 128;
  */
 __device__ __inline__ bool is_whitespace(char c) { return c == '\t' || c == ' '; }
 
+// TODO: replace with `trim_whitespaces_quotes` once `end` semantics is fixed
 /*
  * @brief Scans a character stream within a range, and adjusts the start and end
  * indices of the range to ignore whitespace and quotation characters.
