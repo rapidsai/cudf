@@ -400,13 +400,13 @@ __inline__ __device__ int64_t to_time_delta(char const* begin, char const* end)
   // single pass to parse days, hour, minute, seconds, nanosecond
   auto cur         = begin;
   auto const value = parse_integer<int32_t>(&cur, end);
-  skip_spaces(&cur, end);
+  skip_spaces(&cur, end + 1);
   if (std::is_same<T, cudf::duration_D>::value || cur >= end) {  // %value
     return value;
   }
   // " days [+]"
-  bool const has_days_seperator = skip_if_starts_with(&cur, end, "days");
-  skip_spaces(&cur, end);
+  bool const has_days_seperator = skip_if_starts_with(&cur, end + 1, "days");
+  skip_spaces(&cur, end + 1);
   cur += (*cur == '+');
   if (has_days_seperator) {
     days = value;
