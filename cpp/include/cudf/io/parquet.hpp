@@ -847,6 +847,18 @@ class chunked_parquet_writer_options_builder {
   }
 
   /**
+   * @brief Sets decimal precision data.
+   *
+   * @param v Vector of precision data flattened with exactly one entry per
+   *          decimal column.
+   */
+   chunked_parquet_writer_options_builder& decimal_precision(std::vector<uint8_t> const& v)
+   {
+     options._decimal_precision = v;
+     return *this;
+   }
+
+  /**
    * @brief Sets compression type to chunked_parquet_writer_options.
    *
    * compression The compression type to use.

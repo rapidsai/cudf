@@ -3949,6 +3949,20 @@ public class TableTest extends CudfTestBase {
         .build();
   }
 
+  private Table getExpectedFileTableWithDecimals() {
+    return new TestBuilder()
+        .column(true, false, false, true, false)
+        .column(5, 1, 0, 2, 7)
+        .column(new Byte[]{2, 3, 4, 5, 9})
+        .column(3l, 9l, 4l, 2l, 20l)
+        .column("this", "is", "a", "test", "string")
+        .column(1.0f, 3.5f, 5.9f, 7.1f, 9.8f)
+        .column(5.0d, 9.5d, 0.9d, 7.23d, 2.8d)
+        .decimal32Column(3, 298, 2473, 2119, 1273, 9879)
+        .decimal64Column(4, 398l, 1322l, 983237l, 99872l, 21337l)
+        .build();
+  }
+
   @Test
   void testParquetWriteToFileNoNames() throws IOException {
     File tempFile = File.createTempFile("test-nonames", ".parquet");
@@ -4008,9 +4022,12 @@ public class TableTest extends CudfTestBase {
 
   @Test
   void testParquetWriteToBufferChunkedInt96() {
-    try (Table table0 = getExpectedFileTable();
+    try (Table table0 = getExpectedFileTableWithDecimals();
          MyBufferConsumer consumer = new MyBufferConsumer()) {
-      ParquetWriterOptions options = ParquetWriterOptions.builder().withTimestampInt96(true).build();
+      ParquetWriterOptions options = ParquetWriterOptions.builder()
+          .withTimestampInt96(true)
+          .withPrecisionValues(5, 5)
+          .build();
 
       try (TableWriter writer = Table.writeParquetChunked(options, consumer)) {
         writer.write(table0);
@@ -4043,11 +4060,13 @@ public class TableTest extends CudfTestBase {
   @Test
   void testParquetWriteToFileWithNames() throws IOException {
     File tempFile = File.createTempFile("test-names", ".parquet");
-    try (Table table0 = getExpectedFileTable()) {
+    try (Table table0 = getExpectedFileTableWithDecimals()) {
       ParquetWriterOptions options = ParquetWriterOptions.builder()
-          .withColumnNames("first", "second", "third", "fourth", "fifth", "sixth", "seventh")
+          .withColumnNames("first", "second", "third", "fourth", "fifth", "sixth", "seventh",
+              "eighth", "nineth")
           .withCompressionType(CompressionType.NONE)
           .withStatisticsFrequency(ParquetWriterOptions.StatisticsFrequency.NONE)
+          .withPrecisionValues(5, 6)
           .build();
       try (TableWriter writer = Table.writeParquetChunked(options, tempFile.getAbsoluteFile())) {
         writer.write(table0);
@@ -4063,12 +4082,14 @@ public class TableTest extends CudfTestBase {
   @Test
   void testParquetWriteToFileWithNamesAndMetadata() throws IOException {
     File tempFile = File.createTempFile("test-names-metadata", ".parquet");
-    try (Table table0 = getExpectedFileTable()) {
+    try (Table table0 = getExpectedFileTableWithDecimals()) {
       ParquetWriterOptions options = ParquetWriterOptions.builder()
-          .withColumnNames("first", "second", "third", "fourth", "fifth", "sixth", "seventh")
+          .withColumnNames("first", "second", "third", "fourth", "fifth", "sixth", "seventh",
+            "eighth", "nineth")
           .withMetadata("somekey", "somevalue")
           .withCompressionType(CompressionType.NONE)
           .withStatisticsFrequency(ParquetWriterOptions.StatisticsFrequency.NONE)
+          .withPrecisionValues(6, 8)
           .build();
       try (TableWriter writer = Table.writeParquetChunked(options, tempFile.getAbsoluteFile())) {
         writer.write(table0);
@@ -4084,10 +4105,11 @@ public class TableTest extends CudfTestBase {
   @Test
   void testParquetWriteToFileUncompressedNoStats() throws IOException {
     File tempFile = File.createTempFile("test-uncompressed", ".parquet");
-    try (Table table0 = getExpectedFileTable()) {
+    try (Table table0 = getExpectedFileTableWithDecimals()) {
       ParquetWriterOptions options = ParquetWriterOptions.builder()
           .withCompressionType(CompressionType.NONE)
           .withStatisticsFrequency(ParquetWriterOptions.StatisticsFrequency.NONE)
+          .withPrecisionValues(4, 6)
           .build();
       try (TableWriter writer = Table.writeParquetChunked(options, tempFile.getAbsoluteFile())) {
         writer.write(table0);

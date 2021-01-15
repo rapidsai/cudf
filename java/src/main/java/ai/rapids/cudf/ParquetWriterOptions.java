@@ -18,6 +18,10 @@
 
 package ai.rapids.cudf;
 
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.List;
+
 /**
  * Settings for writing Parquet files.
  */
@@ -42,6 +46,7 @@ public class ParquetWriterOptions extends CompressedMetadataWriterOptions {
   public static class Builder extends CMWriterBuilder<Builder> {
     private StatisticsFrequency statsGranularity = StatisticsFrequency.ROWGROUP;
     private boolean isTimestampTypeInt96 = false;
+    private List<Integer> precisionList = new ArrayList<>();
 
     public Builder withStatisticsFrequency(StatisticsFrequency statsGranularity) {
       this.statsGranularity = statsGranularity;
@@ -53,6 +58,14 @@ public class ParquetWriterOptions extends CompressedMetadataWriterOptions {
      */
     public Builder withTimestampInt96(boolean int96) {
       this.isTimestampTypeInt96 = int96;
+      return this;
+    }
+
+    /**
+     * Flattened precision values for all the decimal columns
+     */
+    public Builder withPrecisionValues(int... precisionValues) {
+      Arrays.stream(precisionValues).forEach(i -> precisionList.add(i));
       return this;
     }
 
@@ -73,10 +86,15 @@ public class ParquetWriterOptions extends CompressedMetadataWriterOptions {
     super(builder);
     this.statsGranularity = builder.statsGranularity;
     this.isTimestampTypeInt96 = builder.isTimestampTypeInt96;
+    this.precisions = builder.precisionList.stream().mapToInt(i->i).toArray();
   }
 
   public StatisticsFrequency getStatisticsFrequency() {
     return statsGranularity;
+  }
+
+  public int[] getPrecisions() {
+    return precisions;
   }
 
   /**
@@ -87,4 +105,6 @@ public class ParquetWriterOptions extends CompressedMetadataWriterOptions {
   }
 
   private boolean isTimestampTypeInt96;
+
+  private int[] precisions;
 }
