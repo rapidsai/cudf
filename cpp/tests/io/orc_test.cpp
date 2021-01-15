@@ -120,6 +120,10 @@ TYPED_TEST_CASE(OrcChunkedWriterNumericTypeTest, SupportedTypes);
 struct OrcReaderTest : public cudf::test::BaseFixture {
 };
 
+// Test fixture for statistics tests
+struct OrcStatisticsTest : public cudf::test::BaseFixture {
+};
+
 namespace {
 // Generates a vector of uniform random values of type T
 template <typename T>
@@ -939,7 +943,7 @@ TEST_F(OrcReaderTest, CombinedSkipRowTest)
   skip_row.test(2, 100, 110);
 }
 
-TEST_F(OrcChunkedWriterTest, ChunkedStats)
+TEST_F(OrcStatisticsTest, Basic)
 {
   auto sequence  = cudf::test::make_counting_transform_iterator(0, [](auto i) { return i; });
   auto validity  = cudf::test::make_counting_transform_iterator(0, [](auto i) { return i % 2; });
