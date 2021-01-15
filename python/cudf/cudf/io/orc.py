@@ -305,18 +305,17 @@ def to_orc(df, fname, compression=None, enable_statistics=True, **kwargs):
                 "Writing to ORC format is not yet supported with "
                 "Struct columns."
             )
+        elif isinstance(col, cudf.core.column.CategoricalColumn):
+            raise NotImplementedError(
+                "Writing to ORC format is not yet supported with "
+                "Categorical columns."
+            )
 
-    if any(
-        isinstance(col, cudf.core.column.CategoricalColumn)
-        for col in df._data.columns
-    ) or isinstance(df.index, cudf.CategoricalIndex):
-        df = df.copy(deep=False)
-        for col_name, col in df._data.items():
-            if isinstance(col, cudf.core.column.CategoricalColumn):
-                df._data[col_name] = col.astype(col.cat().categories.dtype)
-
-        if isinstance(df.index, cudf.CategoricalIndex):
-            df.index = df.index.astype(df.index.categories.dtype)
+    if isinstance(df.index, cudf.CategoricalIndex):
+        raise NotImplementedError(
+            "Writing to ORC format is not yet supported with "
+            "Categorical columns."
+        )
 
     path_or_buf = ioutils.get_writer_filepath_or_buffer(
         path_or_data=fname, mode="wb", **kwargs
