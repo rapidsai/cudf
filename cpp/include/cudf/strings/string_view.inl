@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,96 +14,54 @@
  * limitations under the License.
  */
 
+#include <thrust/count.h>
 #include <thrust/find.h>
 #include <cstdlib>
 
-namespace {
-using BYTE = uint8_t;
-
-// number of characters in a string computed on-demand
-// the _length member is initialized to this value as a place-holder
-constexpr cudf::size_type UNKNOWN_STRING_LENGTH{-1};
-// the byte-width of the characters in a string is computed on-demand
-// the _char_width member is initialized to this value as a place-holder
-constexpr int8_t UNKNOWN_CHAR_WIDTH{-1};
-// this value is assigned to the _char_width member if the string
-// contains characters of different widths
-constexpr int8_t VARIABLE_CHAR_WIDTH{0};
-
-/**
- * @brief Returns the number of bytes used to represent the provided byte.
- * This could be 0 to 4 bytes. 0 is returned for intermediate bytes within a
- * single character. For example, for the two-byte 0xC3A8 single character,
- * the first byte would return 2 and the second byte would return 0.
- *
- * @param byte Byte from an encoded character.
- * @return Number of bytes.
- */
-__host__ __device__ inline cudf::size_type bytes_in_utf8_byte(BYTE byte)
-{
-  cudf::size_type count = 1;
-  count += (int)((byte & 0xF0) == 0xF0);  // 4-byte character prefix
-  count += (int)((byte & 0xE0) == 0xE0);  // 3-byte character prefix
-  count += (int)((byte & 0xC0) == 0xC0);  // 2-byte character prefix
-  count -= (int)((byte & 0xC0) == 0x80);  // intermediate byte
-  return count;
-}
-
-/**
- * @brief Returns the number of bytes used in the provided char array by
- * searching for a null-terminator byte.
- *
- * @param str Null-terminated array of chars.
- * @return Number of bytes.
- */
-__device__ inline cudf::size_type string_bytes(const char* str)
-{
-  if (!str) return 0;
-  cudf::size_type bytes = 0;
-  while (*str++) ++bytes;
-  return bytes;
-}
-
-}  // namespace
+// This file should only include device code logic.
+// Host or host/device code should be defined in the string_view.cuh header file.
 
 namespace cudf {
+namespace strings {
+namespace detail {
 
-__host__ __device__ inline string_view::string_view()
-  : _data(""), _bytes(0), _length(0), _char_width(0)
+/**
+ * @brief Return the number of UTF-8 characters in this provided char array.
+ *
+ * @param str String with encoded char bytes.
+ * @param bytes Number of bytes in str.
+ * @return The number of characters in the array.
+ */
+__device__ inline size_type characters_in_string(const char* str, size_type bytes)
 {
+  if ((str == 0) || (bytes == 0)) return 0;
+  auto ptr = reinterpret_cast<uint8_t const*>(str);
+  return thrust::count_if(
+    thrust::seq, ptr, ptr + bytes, [](uint8_t chr) { return is_begin_utf8_char(chr); });
 }
-
-__host__ __device__ inline string_view::string_view(const char* data, size_type bytes)
-  : _data(data), _bytes(bytes), _length(UNKNOWN_STRING_LENGTH), _char_width(UNKNOWN_CHAR_WIDTH)
-{
-}
-
-//
-__host__ __device__ inline size_type string_view::size_bytes() const { return _bytes; }
+}  // namespace detail
+}  // namespace strings
 
 __device__ inline size_type string_view::length() const
 {
   if (_length == UNKNOWN_STRING_LENGTH)
     _length = strings::detail::characters_in_string(_data, _bytes);
   if (_length && (_char_width == UNKNOWN_CHAR_WIDTH)) {
-    const BYTE* bytes = reinterpret_cast<const BYTE*>(data());
-    auto chwidth      = bytes_in_utf8_byte(*bytes);  // see if they are all the same width
-    _char_width       = (thrust::find_if(thrust::seq,
-                                   bytes,
-                                   bytes + size_bytes(),
-                                   [chwidth](auto ch) {
-                                     auto width = bytes_in_utf8_byte(ch);
-                                     return (width != 0) && (width != chwidth);
-                                   })) == (bytes + size_bytes())
-                    ? chwidth
+    uint8_t const* ptr = reinterpret_cast<uint8_t const*>(data());
+    auto const first   = strings::detail::bytes_in_utf8_byte(*ptr);
+    // see if they are all the same width
+    _char_width = (thrust::find_if(thrust::seq,
+                                   ptr,
+                                   ptr + size_bytes(),
+                                   [first](auto ch) {
+                                     auto width = strings::detail::bytes_in_utf8_byte(ch);
+                                     return (width != 0) && (width != first);
+                                   })) == (ptr + size_bytes())
+                    ? first
                     : VARIABLE_CHAR_WIDTH;
   }
   return _length;
 }
-
-__host__ __device__ inline const char* string_view::data() const { return _data; }
-
-__host__ __device__ inline bool string_view::empty() const { return _bytes == 0; }
 
 // this custom iterator knows about UTF8 encoding
 __device__ inline string_view::const_iterator::const_iterator(const string_view& str, size_type pos)
@@ -113,7 +71,8 @@ __device__ inline string_view::const_iterator::const_iterator(const string_view&
 
 __device__ inline string_view::const_iterator& string_view::const_iterator::operator++()
 {
-  if (byte_pos < bytes) byte_pos += bytes_in_utf8_byte((BYTE)p[byte_pos]);
+  if (byte_pos < bytes)
+    byte_pos += strings::detail::bytes_in_utf8_byte(static_cast<uint8_t>(p[byte_pos]));
   ++char_pos;
   return *this;
 }
@@ -145,7 +104,7 @@ __device__ inline string_view::const_iterator& string_view::const_iterator::oper
 __device__ inline string_view::const_iterator& string_view::const_iterator::operator--()
 {
   if (byte_pos > 0)
-    while (bytes_in_utf8_byte((BYTE)p[--byte_pos]) == 0)
+    while (strings::detail::bytes_in_utf8_byte(static_cast<uint8_t>(p[--byte_pos])) == 0)
       ;
   --char_pos;
   return *this;
@@ -248,7 +207,7 @@ __device__ inline size_type string_view::byte_offset(size_type pos) const
   const char* eptr = sptr + _bytes;
   if (_char_width > 0) return pos * _char_width;
   while ((pos > 0) && (sptr < eptr)) {
-    size_type charbytes = bytes_in_utf8_byte((BYTE)*sptr++);
+    size_type charbytes = strings::detail::bytes_in_utf8_byte(static_cast<uint8_t>(*sptr++));
     if (charbytes) --pos;
     offset += charbytes;
   }
@@ -407,57 +366,4 @@ __device__ inline size_type string_view::character_offset(size_type bytepos) con
   return strings::detail::characters_in_string(data(), bytepos);
 }
 
-namespace strings {
-namespace detail {
-__host__ __device__ inline size_type bytes_in_char_utf8(char_utf8 chr)
-{
-  size_type count = 1;
-  count += (int)((chr & (unsigned)0x0000FF00) > 0);
-  count += (int)((chr & (unsigned)0x00FF0000) > 0);
-  count += (int)((chr & (unsigned)0xFF000000) > 0);
-  return count;
-}
-
-__host__ __device__ inline size_type to_char_utf8(const char* pSrc, char_utf8& chr)
-{
-  size_type chwidth = bytes_in_utf8_byte((BYTE)*pSrc);
-  chr               = (char_utf8)(*pSrc++) & 0xFF;
-  if (chwidth > 1) {
-    chr = chr << 8;
-    chr |= ((char_utf8)(*pSrc++) & 0xFF);  // << 8;
-    if (chwidth > 2) {
-      chr = chr << 8;
-      chr |= ((char_utf8)(*pSrc++) & 0xFF);  // << 16;
-      if (chwidth > 3) {
-        chr = chr << 8;
-        chr |= ((char_utf8)(*pSrc++) & 0xFF);  // << 24;
-      }
-    }
-  }
-  return chwidth;
-}
-
-__host__ __device__ inline size_type from_char_utf8(char_utf8 chr, char* dst)
-{
-  size_type chwidth = bytes_in_char_utf8(chr);
-  for (size_type idx = 0; idx < chwidth; ++idx) {
-    dst[chwidth - idx - 1] = (char)chr & 0xFF;
-    chr                    = chr >> 8;
-  }
-  return chwidth;
-}
-
-// counts the number of characters in the given char array
-__host__ __device__ inline size_type characters_in_string(const char* str, size_type bytes)
-{
-  if ((str == 0) || (bytes == 0)) return 0;
-  //
-  unsigned int nchars = 0;
-  for (size_type idx = 0; idx < bytes; ++idx)
-    nchars += (unsigned int)(((BYTE)str[idx] & 0xC0) != 0x80);
-  return (size_type)nchars;
-}
-
-}  // namespace detail
-}  // namespace strings
 }  // namespace cudf

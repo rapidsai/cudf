@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -30,6 +30,26 @@ namespace cudf {
 using char_utf8 = uint32_t;  ///< UTF-8 characters are 1-4 bytes
 
 /**
+ * @brief The string length is initialized to this value as a place-holder
+ *
+ * The number of characters in a string computed on-demand.
+ */
+constexpr cudf::size_type UNKNOWN_STRING_LENGTH{-1};
+
+/**
+ * @brief Tje char width is initialized to this value as a place-holder.
+ *
+ * The byte-width of the characters in a string is computed on-demand.
+ */
+constexpr int8_t UNKNOWN_CHAR_WIDTH{-1};
+
+/**
+ * @brief This value is assigned to the _char_width member if the string
+ * contains characters of different widths.
+ */
+constexpr int8_t VARIABLE_CHAR_WIDTH{0};
+
+/**
  * @brief A non-owning, immutable view of device data that is a variable length
  * char array representing a UTF-8 string.
  *
@@ -37,34 +57,15 @@ using char_utf8 = uint32_t;  ///< UTF-8 characters are 1-4 bytes
  *
  * The caller must maintain the device memory for the lifetime of this instance.
  *
- * It provides a simple wrapper and string operations for an individual string
- * within a column of strings.
+ * This may be used to wrap a device pointer and size but any member function
+ * that requires accessing the device memory must be called from a kernel.
  */
 class string_view {
  public:
   /**
-   * @brief Default constructor represents an empty string.
-   */
-  __host__ __device__ string_view();
-
-  /**
-   * @brief Create instance from existing device char array.
-   *
-   * @param data Device char array encoded in UTF8.
-   * @param bytes Number of bytes in data array.
-   */
-  __host__ __device__ string_view(const char* data, size_type bytes);
-
-  string_view(const string_view&) = default;
-  string_view(string_view&&)      = default;
-  ~string_view()                  = default;
-  string_view& operator=(const string_view&) = default;
-  string_view& operator=(string_view&&) = default;
-
-  /**
    * @brief Return the number of bytes in this string
    */
-  __host__ __device__ size_type size_bytes() const;
+  __host__ __device__ inline size_type size_bytes() const { return _bytes; }
   /**
    * @brief Return the number of characters in this string
    */
@@ -72,12 +73,12 @@ class string_view {
   /**
    * @brief Return a pointer to the internal device array
    */
-  __host__ __device__ const char* data() const;
+  __host__ __device__ inline const char* data() const { return _data; }
 
   /**
    * @brief Return true if string has no characters
    */
-  __host__ __device__ bool empty() const;
+  __host__ __device__ inline bool empty() const { return size_bytes() == 0; }
 
   /**
    * @brief Handy iterator for navigating through encoded characters.
@@ -281,6 +282,28 @@ class string_view {
    */
   __device__ string_view substr(size_type start, size_type length) const;
 
+  /**
+   * @brief Default constructor represents an empty string.
+   */
+  __host__ __device__ inline string_view() : _data(""), _bytes(0), _length(0), _char_width(0) {}
+
+  /**
+   * @brief Create instance from existing device char array.
+   *
+   * @param data Device char array encoded in UTF8.
+   * @param bytes Number of bytes in data array.
+   */
+  __host__ __device__ inline string_view(const char* data, size_type bytes)
+    : _data(data), _bytes(bytes), _length(UNKNOWN_STRING_LENGTH), _char_width(UNKNOWN_CHAR_WIDTH)
+  {
+  }
+
+  string_view(const string_view&) = default;
+  string_view(string_view&&)      = default;
+  ~string_view()                  = default;
+  string_view& operator=(const string_view&) = default;
+  string_view& operator=(string_view&&) = default;
+
  private:
   const char* _data{};           ///< Pointer to device memory contain char array for this string
   size_type _bytes{};            ///< Number of bytes in _data for this string
@@ -298,40 +321,6 @@ class string_view {
 
 namespace strings {
 namespace detail {
-/**
- * @brief Returns the number of bytes in the specified character.
- *
- * @param character Single character
- * @return Number of bytes
- */
-__host__ __device__ size_type bytes_in_char_utf8(char_utf8 character);
-
-/**
- * @brief Convert a char array into a char_utf8 value.
- *
- * @param str String containing encoded char bytes.
- * @param[out] character Single char_utf8 value.
- * @return The number of bytes in the character
- */
-__host__ __device__ size_type to_char_utf8(const char* str, char_utf8& character);
-
-/**
- * @brief Place a char_utf8 value into a char array.
- *
- * @param character Single character
- * @param[out] str Allocated char array with enough space to hold the encoded characer.
- * @return The number of bytes in the character
- */
-__host__ __device__ size_type from_char_utf8(char_utf8 character, char* str);
-
-/**
- * @brief Return the number of UTF-8 characters in this provided char array.
- *
- * @param str String with encoded char bytes.
- * @param bytes Number of bytes in str.
- * @return The number of characters in the array.
- */
-__host__ __device__ size_type characters_in_string(const char* str, size_type bytes);
 
 /**
  * @brief This will return true if passed the first byte of a UTF-8 character.
@@ -345,8 +334,90 @@ constexpr bool is_begin_utf8_char(uint8_t byte)
   return (byte & 0xC0) != 0x80;
 }
 
+/**
+ * @brief Returns the number of bytes in the specified character.
+ *
+ * @param character Single character
+ * @return Number of bytes
+ */
+constexpr size_type bytes_in_char_utf8(char_utf8 character)
+{
+  return 1 + static_cast<size_type>((character & unsigned{0x0000FF00}) > 0) +
+         static_cast<size_type>((character & unsigned{0x00FF0000}) > 0) +
+         static_cast<size_type>((character & unsigned{0xFF000000}) > 0);
+}
+
+/**
+ * @brief Returns the number of bytes used to represent the provided byte.
+ *
+ * This could be 0 to 4 bytes. 0 is returned for intermediate bytes within a
+ * single character. For example, for the two-byte 0xC3A8 single character,
+ * the first byte would return 2 and the second byte would return 0.
+ *
+ * @param byte Byte from an encoded character.
+ * @return Number of bytes.
+ */
+constexpr size_type bytes_in_utf8_byte(uint8_t byte)
+{
+  return 1 + static_cast<size_type>((byte & 0xF0) == 0xF0)  // 4-byte character prefix
+         + static_cast<size_type>((byte & 0xE0) == 0xE0)    // 3-byte character prefix
+         + static_cast<size_type>((byte & 0xC0) == 0xC0)    // 2-byte character prefix
+         - static_cast<size_type>((byte & 0xC0) == 0x80);   // intermediate byte
+}
+
+/**
+ * @brief Convert a char array into a char_utf8 value.
+ *
+ * @param str String containing encoded char bytes.
+ * @param[out] character Single char_utf8 value.
+ * @return The number of bytes in the character
+ */
+__host__ __device__ inline size_type to_char_utf8(const char* str, char_utf8& character)
+{
+  size_type const chr_width = bytes_in_utf8_byte(static_cast<uint8_t>(*str));
+
+  character = static_cast<char_utf8>(*str++) & 0xFF;
+  if (chr_width > 1) {
+    character = character << 8;
+    character |= (static_cast<char_utf8>(*str++) & 0xFF);  // << 8;
+    if (chr_width > 2) {
+      character = character << 8;
+      character |= (static_cast<char_utf8>(*str++) & 0xFF);  // << 16;
+      if (chr_width > 3) {
+        character = character << 8;
+        character |= (static_cast<char_utf8>(*str++) & 0xFF);  // << 24;
+      }
+    }
+  }
+  return chr_width;
+}
+
+/**
+ * @brief Place a char_utf8 value into a char array.
+ *
+ * @param character Single character
+ * @param[out] str Allocated char array with enough space to hold the encoded characer.
+ * @return The number of bytes in the character
+ */
+__host__ __device__ inline size_type from_char_utf8(char_utf8 character, char* str)
+{
+  size_type const chr_width = bytes_in_char_utf8(character);
+  for (size_type idx = 0; idx < chr_width; ++idx) {
+    str[chr_width - idx - 1] = static_cast<char>(character) & 0xFF;
+    character                = character >> 8;
+  }
+  return chr_width;
+}
+
 }  // namespace detail
 }  // namespace strings
 }  // namespace cudf
 
+// Using device specific intrinsic functions in device only code causes a
+// compile error for .cpp files.
+// Many .cpp files need only the host member functions defined above.
+// Therefore, the device only functions are isolated in the .inl file
+// included below.
+#if defined(__CUDA_ARCH__)
 #include "./string_view.inl"
+#endif
