@@ -32,7 +32,8 @@ namespace lists {
  * Output `column[i]` is set to null if one or more of the following are true:
  *   1. The search key `search_key` is null
  *   2. The list row `lists[i]` is null
- *   3. The list row `lists[i]` contains even *one* null
+ *   3. The list row `lists[i]` does not contain the search key, and contains at least
+ *      one null.
  *
  * @param lists Lists column whose `n` rows are to be searched
  * @param search_key The scalar key to be looked up in each list row
@@ -55,7 +56,8 @@ std::unique_ptr<column> contains(
  * Output `column[i]` is set to null if one or more of the following are true:
  *   1. The row `search_keys[i]` is null
  *   2. The list row `lists[i]` is null
- *   3. The list row `lists[i]` contains even *one* null
+ *   3. The list row `lists[i]` does not contain the `search_keys[i]`, and contains at least
+ *      one null.
  *
  * @param lists Lists column whose `n` rows are to be searched
  * @param search_keys Column of elements to be looked up in each list row
