@@ -818,7 +818,7 @@ class CategoricalColumn(column.ColumnBase):
         header["data"], data_frames = self.codes.serialize()
         header["data_frames_count"] = len(data_frames)
         frames.extend(data_frames)
-        if self.nullable:
+        if self.mask is not None:
             mask_header, mask_frames = self.mask.serialize()
             header["mask"] = mask_header
             frames.extend(mask_frames)

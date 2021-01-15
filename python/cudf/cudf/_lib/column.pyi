@@ -8,10 +8,10 @@ from cudf.core.column import ColumnBase
 T = TypeVar("T")
 
 class Column:
-    _data: Union[Buffer, None]
-    _mask: Buffer
-    _base_data: Buffer
-    _base_mask: Buffer
+    _data: Optional[Buffer]
+    _mask: Optional[Buffer]
+    _base_data: Optional[Buffer]
+    _base_mask: Optional[Buffer]
     _dtype: DtypeObj
     _offset: int
     _null_count: int
@@ -20,10 +20,10 @@ class Column:
 
     def __init__(
         self,
-        data: Union[Buffer, None],
+        data: Optional[Buffer],
         dtype: Dtype,
         size: int = None,
-        mask: Buffer = None,
+        mask: Optional[Buffer] = None,
         offset: int = None,
         null_count: int = None,
         children: Tuple["ColumnBase", ...] = (),
@@ -43,7 +43,7 @@ class Column:
         ...
 
     @property
-    def base_data(self) -> Buffer:
+    def base_data(self) -> Optional[Buffer]:
         ...
 
     @property
@@ -51,7 +51,7 @@ class Column:
         ...
 
     @property
-    def data(self) -> Buffer:
+    def data(self) -> Optional[Buffer]:
         ...
 
     @property
@@ -70,7 +70,7 @@ class Column:
         ...
 
     @property
-    def base_mask(self) -> Buffer:
+    def base_mask(self) -> Optional[Buffer]:
         ...
 
     @property
@@ -78,17 +78,17 @@ class Column:
         ...
 
     @property
-    def mask(self) -> Buffer:
+    def mask(self) -> Optional[Buffer]:
         ...
 
     @property
     def mask_ptr(self) -> int:
         ...
 
-    def set_base_mask(self, value: Union[Buffer, None]) -> None:
+    def set_base_mask(self, value: Optional[Buffer]) -> None:
         ...
 
-    def set_mask(self: T, value: Union[Buffer, None]) -> T:
+    def set_mask(self: T, value: Optional[Buffer]) -> T:
         ...
 
     @property

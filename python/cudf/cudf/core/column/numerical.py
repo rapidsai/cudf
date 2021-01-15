@@ -53,6 +53,7 @@ class NumericalColumn(ColumnBase):
         if size is None:
             size = data.size // dtype.itemsize
             size = size - offset
+
         super().__init__(
             data,
             size=size,

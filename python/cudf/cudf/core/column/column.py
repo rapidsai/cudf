@@ -169,7 +169,9 @@ class ColumnBase(Column, Serializable):
         return bool(libcudf.reduce.reduce("any", self, dtype=np.bool_))
 
     def __sizeof__(self) -> int:
-        n = self.data.size
+        n = 0
+        if self.data is not None:
+            n += self.data.size
         if self.nullable:
             n += bitmask_allocation_size_bytes(self.size)
         return n
@@ -559,6 +561,7 @@ class ColumnBase(Column, Serializable):
                     + f" total bytes into {dtype} with size {dtype.itemsize}"
                 )
 
+            assert self.base_data is not None
             new_buf_ptr = (
                 self.base_data.ptr + self.offset * self.dtype.itemsize
             )
@@ -1165,11 +1168,12 @@ class ColumnBase(Column, Serializable):
         header["type-serialized"] = pickle.dumps(type(self))
         header["dtype"] = self.dtype.str
 
-        data_header, data_frames = self.data.serialize()
-        header["data"] = data_header
-        frames.extend(data_frames)
+        if self.data is not None:
+            data_header, data_frames = self.data.serialize()
+            header["data"] = data_header
+            frames.extend(data_frames)
 
-        if self.nullable:
+        if self.mask is not None:
             mask_header, mask_frames = self.mask.serialize()
             header["mask"] = mask_header
             frames.extend(mask_frames)
