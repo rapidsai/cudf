@@ -1352,7 +1352,7 @@ class CategoricalColumn(column.ColumnBase):
             self._codes = other_col._codes
         return out
 
-    def view(self, dtype) -> "ColumnBase":
+    def view(self, dtype: Dtype) -> "ColumnBase":
         raise NotImplementedError(
             "Categorical column views are not currently supported"
         )
