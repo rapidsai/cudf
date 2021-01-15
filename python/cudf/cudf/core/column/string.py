@@ -143,7 +143,7 @@ from cudf._lib.strings.translate import (
     translate as cpp_translate,
 )
 from cudf._lib.strings.wrap import wrap as cpp_wrap
-from cudf._typing import Dtype, ScalarObj
+from cudf._typing import Dtype, ScalarLike
 from cudf.core.buffer import Buffer
 from cudf.core.column import column, datetime
 from cudf.core.column.methods import ColumnMethodsMixin
@@ -4789,7 +4789,7 @@ class StringColumn(column.ColumnBase):
         # TODO: Implement dtype validation of the children here somehow
         super().set_base_children(value)
 
-    def __contains__(self, item: ScalarObj) -> bool:
+    def __contains__(self, item: ScalarLike) -> bool:
         return True in self.str().contains(f"^{item}$")
 
     def str(self, parent: ParentType = None) -> StringMethods:
@@ -5021,17 +5021,19 @@ class StringColumn(column.ColumnBase):
         else:
             return super().fillna(method=method)
 
-    def _find_first_and_last(self, value: ScalarObj) -> Tuple[int, int]:
+    def _find_first_and_last(self, value: ScalarLike) -> Tuple[int, int]:
         found_indices = self.str().contains(f"^{value}$")
         found_indices = libcudf.unary.cast(found_indices, dtype=np.int32)
         first = column.as_column(found_indices).find_first_value(1)
         last = column.as_column(found_indices).find_last_value(1)
         return first, last
 
-    def find_first_value(self, value: ScalarObj, closest: bool = False) -> int:
+    def find_first_value(
+        self, value: ScalarLike, closest: bool = False
+    ) -> int:
         return self._find_first_and_last(value)[0]
 
-    def find_last_value(self, value: ScalarObj, closest: bool = False) -> int:
+    def find_last_value(self, value: ScalarLike, closest: bool = False) -> int:
         return self._find_first_and_last(value)[1]
 
     def normalize_binop_value(self, other) -> "column.ColumnBase":
@@ -5053,7 +5055,7 @@ class StringColumn(column.ColumnBase):
         else:
             raise TypeError(f"cannot broadcast {type(other)}")
 
-    def default_na_value(self) -> ScalarObj:
+    def default_na_value(self) -> ScalarLike:
         return None
 
     def binary_operator(

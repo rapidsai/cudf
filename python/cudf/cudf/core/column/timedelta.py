@@ -15,7 +15,7 @@ from cudf._typing import (
     DatetimeLikeScalar,
     Dtype,
     DtypeObj,
-    ScalarObj,
+    ScalarLike,
 )
 from cudf.core.buffer import Buffer
 from cudf.core.column import ColumnBase, column, string
@@ -285,7 +285,7 @@ class TimeDeltaColumn(column.ColumnBase):
             ),
         )
 
-    def default_na_value(self) -> ScalarObj:
+    def default_na_value(self) -> ScalarLike:
         """Returns the default NA value for this column
         """
         return np.timedelta64("nat", self.time_unit)

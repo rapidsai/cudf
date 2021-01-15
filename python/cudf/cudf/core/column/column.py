@@ -35,7 +35,7 @@ from cudf._lib.null_mask import (
 from cudf._lib.scalar import as_device_scalar
 from cudf._lib.stream_compaction import distinct_count as cpp_distinct_count
 from cudf._lib.transform import bools_to_mask
-from cudf._typing import Dtype, ScalarObj
+from cudf._typing import Dtype, ScalarLike
 from cudf.core.abc import Serializable
 from cudf.core.buffer import Buffer
 from cudf.core.dtypes import CategoricalDtype
@@ -149,7 +149,7 @@ class ColumnBase(Column, Serializable):
     ) -> "ColumnBase":
         raise NotImplementedError()
 
-    def clip(self, lo: ScalarObj, hi: ScalarObj) -> "ColumnBase":
+    def clip(self, lo: ScalarLike, hi: ScalarLike) -> "ColumnBase":
         return libcudf.replace.clip(self, lo, hi)
 
     def equals(self, other: "ColumnBase", check_dtypes: bool = False) -> bool:
@@ -450,7 +450,7 @@ class ColumnBase(Column, Serializable):
 
     def _fill(
         self,
-        fill_value: ScalarObj,
+        fill_value: ScalarLike,
         begin: int,
         end: int,
         inplace: bool = False,
@@ -485,7 +485,7 @@ class ColumnBase(Column, Serializable):
         libcudf.filling.fill_in_place(result.codes, begin, end, fill_scalar)
         return result
 
-    def shift(self, offset: int, fill_value: ScalarObj) -> "ColumnBase":
+    def shift(self, offset: int, fill_value: ScalarLike) -> "ColumnBase":
         return libcudf.copying.shift(self, offset, fill_value)
 
     @property
@@ -605,7 +605,7 @@ class ColumnBase(Column, Serializable):
             )
             return self.take(gather_map)
 
-    def __getitem__(self, arg) -> Union[ScalarObj, "ColumnBase"]:
+    def __getitem__(self, arg) -> Union[ScalarLike, "ColumnBase"]:
         if is_scalar(arg):
             return self.element_indexing(int(arg))
         elif isinstance(arg, slice):
@@ -752,7 +752,9 @@ class ColumnBase(Column, Serializable):
         """
         return self.notnull()
 
-    def find_first_value(self, value: ScalarObj, closest: bool = False) -> int:
+    def find_first_value(
+        self, value: ScalarLike, closest: bool = False
+    ) -> int:
         """
         Returns offset of first value that matches
         """
@@ -763,7 +765,7 @@ class ColumnBase(Column, Serializable):
             raise ValueError("value not found")
         return indices[0]
 
-    def find_last_value(self, value: ScalarObj, closest: bool = False) -> int:
+    def find_last_value(self, value: ScalarLike, closest: bool = False) -> int:
         """
         Returns offset of last value that matches
         """
@@ -785,7 +787,7 @@ class ColumnBase(Column, Serializable):
     ) -> "ColumnBase":
         raise TypeError(f"cannot perform quantile with type {self.dtype}")
 
-    def median(self, skipna: bool = None) -> ScalarObj:
+    def median(self, skipna: bool = None) -> ScalarLike:
         raise TypeError(f"cannot perform median with type {self.dtype}")
 
     def take(self: T, indices: "ColumnBase", keep_index: bool = True) -> T:
@@ -922,7 +924,7 @@ class ColumnBase(Column, Serializable):
         return self._is_monotonic_decreasing
 
     def get_slice_bound(
-        self, label: ScalarObj, side: builtins.str, kind: builtins.str
+        self, label: ScalarLike, side: builtins.str, kind: builtins.str
     ) -> int:
         """
         Calculate slice bound that corresponds to given label.
@@ -1249,7 +1251,7 @@ class ColumnBase(Column, Serializable):
 
     def _process_for_reduction(
         self, skipna: bool = None, min_count: int = 0
-    ) -> Union["ColumnBase", ScalarObj]:
+    ) -> Union["ColumnBase", ScalarLike]:
         skipna = True if skipna is None else skipna
 
         if skipna:
@@ -1925,7 +1927,7 @@ def as_column(
 
 
 def column_applymap(
-    udf: Callable[[ScalarObj], ScalarObj],
+    udf: Callable[[ScalarLike], ScalarLike],
     column: "ColumnBase",
     out_dtype: Dtype,
 ) -> "ColumnBase":
@@ -2115,7 +2117,7 @@ def arange(
 
 
 def full(
-    size: int, fill_value: ScalarObj, dtype: Dtype = None
+    size: int, fill_value: ScalarLike, dtype: Dtype = None
 ) -> "ColumnBase":
     """
     Returns a column of given size and dtype, filled with a given value.

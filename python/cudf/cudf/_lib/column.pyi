@@ -1,6 +1,6 @@
 from typing import Tuple, Union, TypeVar, Optional
 
-from cudf._typing import DtypeObj, Dtype, ScalarObj
+from cudf._typing import DtypeObj, Dtype, ScalarLike
 from cudf.core.buffer import Buffer
 from cudf.core.column import ColumnBase
 
@@ -115,7 +115,7 @@ class Column:
 
     @staticmethod
     def from_scalar(
-        val: ScalarObj,
+        val: ScalarLike,
         size: int
-    ) -> "ColumnBase":  # TODO: This should be Scalar, not ScalarObj
+    ) -> "ColumnBase":  # TODO: This should be Scalar, not ScalarLike
         ...

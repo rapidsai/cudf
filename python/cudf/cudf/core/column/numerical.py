@@ -11,7 +11,7 @@ from pandas.api.types import is_integer_dtype
 import cudf
 from cudf import _lib as libcudf
 from cudf._lib.quantiles import quantile as cpp_quantile
-from cudf._typing import BinaryOperand, Dtype, DtypeObj, ScalarObj
+from cudf._typing import BinaryOperand, Dtype, DtypeObj, ScalarLike
 from cudf.core.buffer import Buffer
 from cudf.core.column import (
     ColumnBase,
@@ -63,7 +63,7 @@ class NumericalColumn(ColumnBase):
             null_count=null_count,
         )
 
-    def __contains__(self, item: ScalarObj) -> bool:
+    def __contains__(self, item: ScalarLike) -> bool:
         """
         Returns True if column contains item, else False.
         """
@@ -122,8 +122,8 @@ class NumericalColumn(ColumnBase):
         return libcudf.reduce.scan(op, self, True)
 
     def normalize_binop_value(
-        self, other: ScalarObj
-    ) -> Union["ColumnBase", ScalarObj]:
+        self, other: ScalarLike
+    ) -> Union["ColumnBase", ScalarLike]:
         if other is None:
             return other
         if isinstance(other, cudf.Scalar):
@@ -274,7 +274,7 @@ class NumericalColumn(ColumnBase):
         kurt = term_one_section_one * term_one_section_two - 3 * term_two
         return kurt
 
-    def skew(self, skipna: bool = None) -> ScalarObj:
+    def skew(self, skipna: bool = None) -> ScalarLike:
         skipna = True if skipna is None else skipna
 
         if len(self) == 0 or (not skipna and self.has_nulls):
@@ -376,7 +376,7 @@ class NumericalColumn(ColumnBase):
         )
 
     def applymap(
-        self, udf: Callable[[ScalarObj], ScalarObj], out_dtype: Dtype = None
+        self, udf: Callable[[ScalarLike], ScalarLike], out_dtype: Dtype = None
     ) -> "ColumnBase":
         """Apply an element-wise function to transform the values in the Column.
 
@@ -398,7 +398,7 @@ class NumericalColumn(ColumnBase):
         out = column.column_applymap(udf=udf, column=self, out_dtype=out_dtype)
         return out
 
-    def default_na_value(self) -> ScalarObj:
+    def default_na_value(self) -> ScalarLike:
         """Returns the default NA value for this column
         """
         dkind = self.dtype.kind
@@ -478,7 +478,9 @@ class NumericalColumn(ColumnBase):
 
         return super().fillna(fill_value, method)
 
-    def find_first_value(self, value: ScalarObj, closest: bool = False) -> int:
+    def find_first_value(
+        self, value: ScalarLike, closest: bool = False
+    ) -> int:
         """
         Returns offset of first value that matches. For monotonic
         columns, returns the offset of the first larger value
@@ -507,7 +509,7 @@ class NumericalColumn(ColumnBase):
             raise ValueError("value not found")
         return found
 
-    def find_last_value(self, value: ScalarObj, closest: bool = False) -> int:
+    def find_last_value(self, value: ScalarLike, closest: bool = False) -> int:
         """
         Returns offset of last value that matches. For monotonic
         columns, returns the offset of the last smaller value
@@ -639,8 +641,8 @@ class NumericalColumn(ColumnBase):
 
 @annotate("BINARY_OP", color="orange", domain="cudf_python")
 def _numeric_column_binop(
-    lhs: Union["ColumnBase", ScalarObj],
-    rhs: Union["ColumnBase", ScalarObj],
+    lhs: Union["ColumnBase", ScalarLike],
+    rhs: Union["ColumnBase", ScalarLike],
     op: str,
     out_dtype: Dtype,
     reflect: bool = False,

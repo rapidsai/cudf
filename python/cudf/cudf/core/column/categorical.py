@@ -19,7 +19,7 @@ import cudf
 from cudf import _lib as libcudf
 from cudf._lib.scalar import as_device_scalar
 from cudf._lib.transform import bools_to_mask
-from cudf._typing import Dtype, ScalarObj
+from cudf._typing import Dtype, ScalarLike
 from cudf.core.buffer import Buffer
 from cudf.core.column import column
 from cudf.core.column.methods import ColumnMethodsMixin
@@ -801,7 +801,7 @@ class CategoricalColumn(column.ColumnBase):
             (self.base_children[0].size) / self.base_children[0].dtype.itemsize
         )
 
-    def __contains__(self, item: ScalarObj) -> bool:
+    def __contains__(self, item: ScalarLike) -> bool:
         try:
             self._encode(item)
         except ValueError:
@@ -950,7 +950,7 @@ class CategoricalColumn(column.ColumnBase):
 
     def _fill(
         self,
-        fill_value: ScalarObj,
+        fill_value: ScalarLike,
         begin: int,
         end: int,
         inplace: bool = False,
@@ -997,7 +997,7 @@ class CategoricalColumn(column.ColumnBase):
             raise TypeError("Categoricals can only compare with the same type")
         return self.as_numerical.binary_operator(op, rhs.as_numerical)
 
-    def normalize_binop_value(self, other: ScalarObj) -> "CategoricalColumn":
+    def normalize_binop_value(self, other: ScalarLike) -> "CategoricalColumn":
 
         if isinstance(other, np.ndarray) and other.ndim == 0:
             other = other.item()
@@ -1026,7 +1026,7 @@ class CategoricalColumn(column.ColumnBase):
         )
         return col, inds
 
-    def element_indexing(self, index: int) -> ScalarObj:
+    def element_indexing(self, index: int) -> ScalarLike:
         val = self.as_numerical.element_indexing(index)
         return self._decode(int(val)) if val is not None else val
 
@@ -1063,7 +1063,7 @@ class CategoricalColumn(column.ColumnBase):
         """
         raise NotImplementedError("cudf.Categorical is not yet implemented")
 
-    def clip(self, lo: ScalarObj, hi: ScalarObj) -> "column.ColumnBase":
+    def clip(self, lo: ScalarLike, hi: ScalarLike) -> "column.ColumnBase":
         return (
             self.astype(self.categories.dtype).clip(lo, hi).astype(self.dtype)
         )
@@ -1083,15 +1083,15 @@ class CategoricalColumn(column.ColumnBase):
             ordered=self.ordered,
         )
 
-    def _encode(self, value) -> "ScalarObj":
+    def _encode(self, value) -> "ScalarLike":
         return self.categories.find_first_value(value)
 
-    def _decode(self, value: int) -> "ScalarObj":
+    def _decode(self, value: int) -> "ScalarLike":
         if value == self.default_na_value():
             return None
         return self.categories.element_indexing(value)
 
-    def default_na_value(self) -> "ScalarObj":
+    def default_na_value(self) -> "ScalarLike":
         return -1
 
     def find_and_replace(
@@ -1213,7 +1213,7 @@ class CategoricalColumn(column.ColumnBase):
         return result
 
     def find_first_value(
-        self, value: "ScalarObj", closest: bool = False
+        self, value: "ScalarLike", closest: bool = False
     ) -> int:
         """
         Returns offset of first value that matches
@@ -1221,7 +1221,7 @@ class CategoricalColumn(column.ColumnBase):
         return self.as_numerical.find_first_value(self._encode(value))
 
     def find_last_value(
-        self, value: "ScalarObj", closest: bool = False
+        self, value: "ScalarLike", closest: bool = False
     ) -> int:
         """
         Returns offset of last value that matches

@@ -10,7 +10,7 @@ from nvtx import annotate
 
 import cudf
 from cudf import _lib as libcudf
-from cudf._typing import DatetimeLikeScalar, Dtype, DtypeObj, ScalarObj
+from cudf._typing import DatetimeLikeScalar, Dtype, DtypeObj, ScalarLike
 from cudf.core.buffer import Buffer
 from cudf.core.column import ColumnBase, column, string
 from cudf.utils.dtypes import is_scalar
@@ -75,7 +75,7 @@ class DatetimeColumn(column.ColumnBase):
 
         self._time_unit, _ = np.datetime_data(self.dtype)
 
-    def __contains__(self, item: ScalarObj) -> bool:
+    def __contains__(self, item: ScalarLike) -> bool:
         try:
             item_as_dt64 = np.datetime64(item, self._time_unit)
         except ValueError:
@@ -136,7 +136,7 @@ class DatetimeColumn(column.ColumnBase):
     def get_dt_field(self, field: str) -> "ColumnBase":
         return libcudf.datetime.extract_datetime_component(self, field)
 
-    def normalize_binop_value(self, other: DatetimeLikeScalar) -> ScalarObj:
+    def normalize_binop_value(self, other: DatetimeLikeScalar) -> ScalarLike:
         if isinstance(other, cudf.Scalar):
             return other
 
@@ -227,7 +227,7 @@ class DatetimeColumn(column.ColumnBase):
         """
         return np.datetime64("nat", self.time_unit)
 
-    def mean(self, skipna=None, dtype=np.float64) -> ScalarObj:
+    def mean(self, skipna=None, dtype=np.float64) -> ScalarLike:
         return pd.Timestamp(
             self.as_numerical.mean(skipna=skipna, dtype=dtype),
             unit=self.time_unit,
@@ -292,7 +292,9 @@ class DatetimeColumn(column.ColumnBase):
 
         return super().fillna(fill_value, method)
 
-    def find_first_value(self, value: ScalarObj, closest: bool = False) -> int:
+    def find_first_value(
+        self, value: ScalarLike, closest: bool = False
+    ) -> int:
         """
         Returns offset of first value that matches
         """
@@ -300,7 +302,7 @@ class DatetimeColumn(column.ColumnBase):
         value = column.as_column(value, dtype=self.dtype).as_numerical[0]
         return self.as_numerical.find_first_value(value, closest=closest)
 
-    def find_last_value(self, value: ScalarObj, closest: bool = False) -> int:
+    def find_last_value(self, value: ScalarLike, closest: bool = False) -> int:
         """
         Returns offset of last value that matches
         """
@@ -346,8 +348,8 @@ class DatetimeColumn(column.ColumnBase):
 
 @annotate("BINARY_OP", color="orange", domain="cudf_python")
 def binop(
-    lhs: Union["ColumnBase", ScalarObj],
-    rhs: Union["ColumnBase", ScalarObj],
+    lhs: Union["ColumnBase", ScalarLike],
+    rhs: Union["ColumnBase", ScalarLike],
     op: str,
     out_dtype: Dtype,
     reflect: bool,

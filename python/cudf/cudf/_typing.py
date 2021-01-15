@@ -18,18 +18,10 @@ DtypeObj = Union["ExtensionDtype", np.dtype]
 DatetimeLikeScalar = TypeVar(
     "DatetimeLikeScalar", Period, Timestamp, Timedelta
 )
-ScalarObj = Any
+ScalarLike = Any
 
 # columns
-AnyColumn = Union[
-    "cudf.core.column.CategoricalColumn",
-    "cudf.core.column.DatetimeColumn",
-    "cudf.core.column.ListColumn",
-    "cudf.core.column.NumericalColumn",
-    "cudf.core.column.StringColumn",
-    "cudf.core.column.StructColumn",
-    "cudf.core.column.TimeDeltaColumn",
-]
+ColumnLike = Any
 
 # binary operation
 BinaryOperand = Union["cudf.Scalar", "cudf.core.column.ColumnBase"]
