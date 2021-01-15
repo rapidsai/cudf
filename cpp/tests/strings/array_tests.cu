@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2020, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,11 +18,12 @@
 #include <cudf/column/column_factories.hpp>
 #include <cudf/copying.hpp>
 #include <cudf/scalar/scalar.hpp>
+#include <cudf/sorting.hpp>
 #include <cudf/strings/copying.hpp>
 #include <cudf/strings/detail/scatter.cuh>
 #include <cudf/strings/detail/utilities.hpp>
-#include <cudf/strings/sorting.hpp>
 #include <cudf/strings/strings_column_view.hpp>
+#include <cudf/table/table_view.hpp>
 #include <cudf/utilities/error.hpp>
 
 #include <tests/strings/utilities.h>
@@ -44,18 +45,17 @@ TEST_F(StringsColumnTest, Sort)
   cudf::test::strings_column_wrapper h_expected({"<null>", "", "aa", "bb", "bbb", "eee", "ééé"},
                                                 {0, 1, 1, 1, 1, 1, 1});
 
-  auto strings_view = cudf::strings_column_view(h_strings);
-  auto results      = cudf::strings::detail::sort(strings_view, cudf::strings::detail::name);
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, h_expected);
+  auto results =
+    cudf::sort(cudf::table_view({h_strings}), {cudf::order::ASCENDING}, {cudf::null_order::BEFORE});
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(results->view().column(0), h_expected);
 }
 
 TEST_F(StringsColumnTest, SortZeroSizeStringsColumn)
 {
   cudf::column_view zero_size_strings_column(
     cudf::data_type{cudf::type_id::STRING}, 0, nullptr, nullptr, 0);
-  auto strings_view = cudf::strings_column_view(zero_size_strings_column);
-  auto results      = cudf::strings::detail::sort(strings_view, cudf::strings::detail::name);
-  cudf::test::expect_strings_empty(results->view());
+  auto results = cudf::sort(cudf::table_view({zero_size_strings_column}));
+  cudf::test::expect_strings_empty(results->view().column(0));
 }
 
 class SliceParmsTest : public StringsColumnTest,
