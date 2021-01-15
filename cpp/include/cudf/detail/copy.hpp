@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018-2020, NVIDIA CORPORATION.
+ * Copyright (c) 2018-2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -87,25 +87,6 @@ std::unique_ptr<column> shift(
   scalar const& fill_value,
   rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
-
-/**
- * @brief The data that is stored as anonymous bytes in the `packed_columns` metadata
- * field
- *
- * @ingroup copy_split
- *
- * The metadata field of the `packed_columns` struct is simply an array of these.
- * This struct is exposed here because it is needed by both contiguous_split, pack
- * and unpack;
- */
-struct serialized_column {
-  data_type type;
-  size_type size;
-  size_type null_count;
-  int64_t data_offset;       // offset into contiguous data buffer, or -1 if column data is null
-  int64_t null_mask_offset;  // offset into contiguous data buffer, or -1 if column data is null
-  size_type num_children;
-};
 
 /**
  * @copydoc cudf::contiguous_split

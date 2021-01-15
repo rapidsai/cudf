@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020, NVIDIA CORPORATION.
+ * Copyright (c) 2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -26,9 +26,16 @@ namespace test {
 struct PackUnpackTest : public BaseFixture {
   void run_test(cudf::table_view const& t)
   {
+    // verify pack/unpack works
     auto packed   = pack(t);
     auto unpacked = unpack(packed);
     cudf::test::expect_tables_equal(t, unpacked);
+
+    // verify pack_metadata itself works
+    auto metadata = pack_metadata(
+      unpacked, reinterpret_cast<uint8_t const*>(packed.gpu_data->data()), packed.gpu_data->size());
+    EXPECT_EQ(metadata.size(), packed.metadata->size());
+    EXPECT_EQ(std::equal(metadata.begin(), metadata.end(), packed.metadata->begin()), true);
   }
   void run_test(std::vector<column_view> const& t) { run_test(cudf::table_view{t}); }
 };

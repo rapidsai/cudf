@@ -570,6 +570,23 @@ packed_columns pack(cudf::table_view const& input,
                     rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
+ * @brief Produce the metadata used for packing a table stored in a contiguous buffer.
+ *
+ * The metadata from the `table_view` is copied into a host vector of bytes which can be used to
+ * construct a packed_columns or packed_table structure.  The caller is responsible for
+ * guaranteeing that that all of the columns in the table point into `contiguous_buffer`.
+ *
+ * @param input View of the table to pack
+ * @param contgiuous_buffer A contiguous buffer of device memory which contains the data referenced
+ * by the columns in `table`
+ * @param buffer_size The size of `contiguous_buffer`.
+ * @return Vector of bytes representing the metadata used to `unpack` a packed_columns struct.
+ */
+std::vector<uint8_t> pack_metadata(table_view const& table,
+                                   uint8_t const* contiguous_buffer,
+                                   size_t buffer_size);
+
+/**
  * @brief Deserialize the result of `cudf::pack`
  *
  * Converts the result of a serialized table into a `table_view` that points to the data stored in

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2020, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -224,46 +224,6 @@ __global__ void copy_partition(int num_src_bufs,
               blockDim.x,
               buf_info[buf_index].value_shift,
               buf_info[buf_index].bit_shift);
-}
-
-/**
- * @brief Add metadata information to the metadata buffer.
- *
- * @param metadata Metadata to add information to
- * @param type Column type
- * @param size Column size
- * @param null_count Column null count
- * @param data_offset Offset into contiguous data buffer, or -1 if pointer should deserialize to
- * null
- * @param null_mask_offset Offset into contiguous data buffer, or -1 if pointer should deserialize
- * to null
- * @param num_children # of children
- */
-void add_column_metadata(std::vector<detail::serialized_column>& metadata,
-                         data_type type,
-                         size_type size,
-                         size_type null_count,
-                         int64_t data_offset,
-                         int64_t null_mask_offset,
-                         size_type num_children)
-{
-  metadata.push_back({type, size, null_count, data_offset, null_mask_offset, num_children});
-}
-
-/**
- * @brief Convert vector of serialized_column structs into a vector of anonymous bytes
- *
- * @param metadata Incoming serialized column metadata
- * @returns Vector of anonymous bytes
- */
-std::vector<uint8_t> metadata_to_bytes(std::vector<detail::serialized_column> const& metadata)
-{
-  std::vector<uint8_t> metadata_bytes;
-  auto const metadata_begin = reinterpret_cast<uint8_t const*>(metadata.data());
-  std::copy(metadata_begin,
-            metadata_begin + (metadata.size() * sizeof(detail::serialized_column)),
-            std::back_inserter(metadata_bytes));
-  return metadata_bytes;
 }
 
 // The block of functions below are all related:
@@ -643,55 +603,41 @@ BufInfo build_output_columns(InputIter begin,
                              InputIter end,
                              BufInfo info_begin,
                              Output out_begin,
-                             uint8_t const* const base_ptr,
-                             std::vector<detail::serialized_column>& metadata)
+                             uint8_t const* const base_ptr)
 {
   auto current_info = info_begin;
-  std::transform(
-    begin, end, out_begin, [&current_info, base_ptr, &metadata](column_view const& src) {
-      // Use C++17 structured bindings
-      bitmask_type const* bitmask_ptr;
-      size_type null_count;
-      std::tie(bitmask_ptr, null_count) = [&]() {
-        if (src.nullable()) {
-          auto const ptr =
-            reinterpret_cast<bitmask_type const*>(base_ptr + current_info->dst_offset);
-          ++current_info;
-          return std::make_pair(ptr, UNKNOWN_NULL_COUNT);
-        }
-        return std::make_pair(static_cast<bitmask_type const*>(nullptr), 0);
-      }();
+  std::transform(begin, end, out_begin, [&current_info, base_ptr](column_view const& src) {
+    // Use C++17 structured bindings
+    bitmask_type const* bitmask_ptr;
+    size_type null_count;
+    std::tie(bitmask_ptr, null_count) = [&]() {
+      if (src.nullable()) {
+        auto const ptr =
+          current_info->num_elements == 0
+            ? nullptr
+            : reinterpret_cast<bitmask_type const*>(base_ptr + current_info->dst_offset);
+        auto const null_count = current_info->num_elements == 0 ? 0 : UNKNOWN_NULL_COUNT;
+        ++current_info;
+        return std::make_pair(ptr, null_count);
+      }
+      return std::make_pair(static_cast<bitmask_type const*>(nullptr), 0);
+    }();
 
-      // size/data pointer for the column
-      auto const size = current_info->num_elements;
-      uint8_t const* data_ptr =
-        size == 0 || src.head() == nullptr ? nullptr : base_ptr + current_info->dst_offset;
-      ++current_info;
+    // size/data pointer for the column
+    auto const size = current_info->num_elements;
+    uint8_t const* data_ptr =
+      size == 0 || src.head() == nullptr ? nullptr : base_ptr + current_info->dst_offset;
+    ++current_info;
 
-      // children
-      auto children = std::vector<column_view>{};
-      children.reserve(src.num_children());
+    // children
+    auto children = std::vector<column_view>{};
+    children.reserve(src.num_children());
 
-      // add metadata
-      add_column_metadata(
-        metadata,
-        src.type(),
-        size,
-        null_count,
-        data_ptr ? data_ptr - base_ptr : -1,
-        bitmask_ptr ? reinterpret_cast<uint8_t const*>(bitmask_ptr) - base_ptr : -1,
-        src.num_children());
+    current_info = build_output_columns(
+      src.child_begin(), src.child_end(), current_info, std::back_inserter(children), base_ptr);
 
-      current_info = build_output_columns(src.child_begin(),
-                                          src.child_end(),
-                                          current_info,
-                                          std::back_inserter(children),
-                                          base_ptr,
-                                          metadata);
-
-      return column_view{
-        src.type(), size, data_ptr, bitmask_ptr, null_count, 0, std::move(children)};
-    });
+    return column_view{src.type(), size, data_ptr, bitmask_ptr, null_count, 0, std::move(children)};
+  });
 
   return current_info;
 }
@@ -791,55 +737,20 @@ std::vector<packed_table> contiguous_split(cudf::table_view const& input,
 
   // if inputs are empty, just return num_partitions empty tables
   if (input.column(0).size() == 0) {
-    // build the empty metadata used for all partitions. we have to do this for all children
-    // recursively because:
-    // - the general rule in cudf is that we should be preserving the full hierarchy of columns even
-    // for
-    //   the case of something empty at the top. this is necessary to preserve full type
-    //   information.
-    //
-    // see also:  empty_like()
-    std::vector<detail::serialized_column> metadata;
-    add_column_metadata(metadata,
-                        data_type{type_id::EMPTY},
-                        static_cast<size_type>(num_root_columns),
-                        UNKNOWN_NULL_COUNT,
-                        -1,
-                        -1,
-                        0);
-    std::function<void(column_view const&, std::vector<detail::serialized_column>&)>
-      build_empty_column_metadata;
-    build_empty_column_metadata = [&build_empty_column_metadata](
-                                    column_view const& col,
-                                    std::vector<detail::serialized_column>& metadata) {
-      add_column_metadata(metadata, col.type(), 0, UNKNOWN_NULL_COUNT, -1, -1, col.num_children());
-
-      std::for_each(col.child_begin(),
-                    col.child_end(),
-                    [&metadata, &build_empty_column_metadata](column_view const& col) {
-                      build_empty_column_metadata(col, metadata);
-                    });
-    };
-    std::for_each(input.begin(),
-                  input.end(),
-                  [&metadata, &build_empty_column_metadata](column_view const& col) {
-                    build_empty_column_metadata(col, metadata);
-                  });
-
     // build the empty results
     std::vector<packed_table> result;
     result.reserve(num_partitions);
     auto iter = thrust::make_counting_iterator(0);
-    std::transform(
-      iter,
-      iter + num_partitions,
-      std::back_inserter(result),
-      [&input, num_root_columns, &metadata](int partition_index) {
-        return packed_table{
-          input,
-          packed_columns{std::make_unique<std::vector<uint8_t>>(metadata_to_bytes(metadata)),
-                         std::make_unique<rmm::device_buffer>()}};
-      });
+    std::transform(iter,
+                   iter + num_partitions,
+                   std::back_inserter(result),
+                   [&input, num_root_columns](int partition_index) {
+                     return packed_table{
+                       input,
+                       packed_columns{std::make_unique<std::vector<uint8_t>>(pack_metadata(
+                                        input, static_cast<uint8_t const*>(nullptr), 0)),
+                                      std::make_unique<rmm::device_buffer>()}};
+                   });
 
     return result;
   }
@@ -1065,35 +976,23 @@ std::vector<packed_table> contiguous_split(cudf::table_view const& input,
   // build the output.
   std::vector<packed_table> result;
   result.reserve(num_partitions);
-  std::vector<detail::serialized_column> metadata;
   std::vector<column_view> cols;
   cols.reserve(num_root_columns);
   auto cur_dst_buf_info = h_dst_buf_info;
   for (size_t idx = 0; idx < num_partitions; idx++) {
-    // first metadata entry is a stub indicating how many total (top level) columns
-    // there are
-    add_column_metadata(metadata,
-                        data_type{type_id::EMPTY},
-                        static_cast<size_type>(num_root_columns),
-                        UNKNOWN_NULL_COUNT,
-                        -1,
-                        -1,
-                        0);
-
     // traverse the buffers and build the columns.
-    cur_dst_buf_info = build_output_columns(input.begin(),
-                                            input.end(),
-                                            cur_dst_buf_info,
-                                            std::back_inserter(cols),
-                                            h_dst_bufs[idx],
-                                            metadata);
+    cur_dst_buf_info = build_output_columns(
+      input.begin(), input.end(), cur_dst_buf_info, std::back_inserter(cols), h_dst_bufs[idx]);
 
+    // pack the columns
+    cudf::table_view t{cols};
     result.push_back(packed_table{
-      cudf::table_view{cols},
-      packed_columns{std::make_unique<std::vector<uint8_t>>(metadata_to_bytes(metadata)),
-                     std::make_unique<rmm::device_buffer>(std::move(out_buffers[idx]))}});
+      t,
+      packed_columns{
+        std::make_unique<std::vector<uint8_t>>(cudf::pack_metadata(
+          t, reinterpret_cast<uint8_t const*>(out_buffers[idx].data()), out_buffers[idx].size())),
+        std::make_unique<rmm::device_buffer>(std::move(out_buffers[idx]))}});
 
-    metadata.clear();
     cols.clear();
   }
 
