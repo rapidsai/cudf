@@ -26,6 +26,12 @@ using namespace cudf::test;
 class ExplodeTest : public cudf::test::BaseFixture {
 };
 
+template <typename T>
+class ExplodeTypedTest : public cudf::test::BaseFixture {
+};
+
+TYPED_TEST_CASE(ExplodeTypedTest, cudf::test::FixedPointTypes);
+
 TEST_F(ExplodeTest, Empty)
 {
   lists_column_wrapper<int32_t> a{};
@@ -309,6 +315,89 @@ TEST_F(ExplodeTest, NullsInNestedDoubleExplode)
 
   auto ret = cudf::explode(t, 0);
   ret      = cudf::explode(ret->view(), 0);
+
+  CUDF_TEST_EXPECT_TABLES_EQUAL(ret->view(), expected);
+}
+
+TEST_F(ExplodeTest, NestedStructs)
+{
+  /*
+      a                   b
+      [[1, 2], [7, 6, 5]] {100, "100"}
+      [[5, 6]]            {200, "200"}
+      [[0, 3],[5],[2, 1]] {300, "300"}
+  */
+
+  auto valids = cudf::test::make_counting_transform_iterator(
+    0, [](auto i) { return i % 2 == 0 ? true : false; });
+
+  lists_column_wrapper<int32_t> a(
+    {lists_column_wrapper<int32_t>{lists_column_wrapper<int32_t>({1, 2}, valids),
+                                   lists_column_wrapper<int32_t>{7, 6, 5}},
+     lists_column_wrapper<int32_t>{lists_column_wrapper<int32_t>{5, 6}},
+     lists_column_wrapper<int32_t>{lists_column_wrapper<int32_t>{0, 3},
+                                   lists_column_wrapper<int32_t>{5},
+                                   lists_column_wrapper<int32_t>({2, 1}, valids)}});
+  fixed_width_column_wrapper<int32_t> b1({100, 200, 300});
+  strings_column_wrapper b2{"100", "200", "300"};
+  structs_column_wrapper b({b1, b2});
+
+  lists_column_wrapper<int32_t> expected_a{lists_column_wrapper<int32_t>({1, 2}, valids),
+                                           lists_column_wrapper<int32_t>{7, 6, 5},
+                                           lists_column_wrapper<int32_t>{5, 6},
+                                           lists_column_wrapper<int32_t>{0, 3},
+                                           lists_column_wrapper<int32_t>{5},
+                                           lists_column_wrapper<int32_t>({2, 1}, valids)};
+  fixed_width_column_wrapper<int32_t> expected_b1{100, 100, 200, 300, 300, 300};
+  strings_column_wrapper expected_b2{"100", "100", "200", "300", "300", "300"};
+  structs_column_wrapper expected_b({expected_b1, expected_b2});
+
+  cudf::table_view t({a, b});
+  cudf::table_view expected({expected_a, expected_b});
+
+  auto ret = cudf::explode(t, 0);
+
+  CUDF_TEST_EXPECT_TABLES_EQUAL(ret->view(), expected);
+}
+
+TYPED_TEST(ExplodeTypedTest, ListOfStructs)
+{
+  /*
+    a                        b
+    [{70, "70"}, {75, "75"}] 100
+    [{50, "50"}, {55, "55"}] 200
+    [{35, "35"}, {45, "45"}] 300
+    [{25, "25"}, {30, "30"}] 400
+    [{15, "15"}, {20, "20"}] 500
+*/
+
+  auto numeric_col =
+    fixed_width_column_wrapper<TypeParam, int32_t>{{70, 75, 50, 55, 35, 45, 25, 30, 15, 20}};
+  strings_column_wrapper string_col{"70", "75", "50", "55", "35", "45", "25", "30", "15", "20"};
+  auto struct_col = structs_column_wrapper{{numeric_col, string_col}}.release();
+  auto a          = cudf::make_lists_column(5,
+                                   fixed_width_column_wrapper<int32_t>{0, 2, 4, 6, 8, 10}.release(),
+                                   std::move(struct_col),
+                                   cudf::UNKNOWN_NULL_COUNT,
+                                   {});
+
+  fixed_width_column_wrapper<int32_t> b{100, 200, 300, 400, 500};
+
+  cudf::test::print(a->view());
+  cudf::test::print(b);
+
+  cudf::table_view t({a->view(), b});
+  auto ret = cudf::explode(t, 0);
+
+  auto expected_numeric_col =
+    fixed_width_column_wrapper<TypeParam, int32_t>{{70, 75, 50, 55, 35, 45, 25, 30, 15, 20}};
+  strings_column_wrapper expected_string_col{
+    "70", "75", "50", "55", "35", "45", "25", "30", "15", "20"};
+
+  auto expected_a = structs_column_wrapper{{expected_numeric_col, expected_string_col}}.release();
+  fixed_width_column_wrapper<int32_t> expected_b{100, 100, 200, 200, 300, 300, 400, 400, 500, 500};
+
+  cudf::table_view expected({expected_a->view(), expected_b});
 
   CUDF_TEST_EXPECT_TABLES_EQUAL(ret->view(), expected);
 }
