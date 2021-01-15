@@ -144,7 +144,6 @@ class Frame(libcudf.table.Table):
         >>> midx.size
         5
         """
-        self._index
         return self._num_columns * self._num_rows
 
     @property
