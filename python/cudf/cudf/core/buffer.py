@@ -131,7 +131,7 @@ class Buffer(Serializable):
         return buf
 
     @classmethod
-    def empty(cls, size) -> "Buffer":
+    def empty(cls, size: int) -> "Buffer":
         dbuf = DeviceBuffer(size=size)
         return Buffer(dbuf)
 
