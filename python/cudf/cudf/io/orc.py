@@ -294,13 +294,17 @@ def read_orc(
 def to_orc(df, fname, compression=None, enable_statistics=True, **kwargs):
     """{docstring}"""
 
-    if any(
-        isinstance(col, cudf.core.column.ListColumn)
-        for col in df._data.columns
-    ):
-        raise NotImplementedError(
-            "Writing to ORC format is not yet supported with list columns."
-        )
+    for col in df._data.columns:
+        if isinstance(col, cudf.core.column.ListColumn):
+            raise NotImplementedError(
+                "Writing to ORC format is not yet supported with "
+                "list columns."
+            )
+        elif isinstance(col, cudf.core.column.StructColumn):
+            raise NotImplementedError(
+                "Writing to ORC format is not yet supported with "
+                "Struct columns."
+            )
 
     if any(
         isinstance(col, cudf.core.column.CategoricalColumn)
