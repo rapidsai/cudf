@@ -1378,7 +1378,7 @@ def _create_empty_categorical_column(
 
 
 def pandas_categorical_as_column(
-    categorical, codes=None
+    categorical: ColumnLike, codes: ColumnLike = None
 ) -> "CategoricalColumn":
 
     """Creates a CategoricalColumn from a pandas.Categorical
