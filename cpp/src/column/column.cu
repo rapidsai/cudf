@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2020, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -266,7 +266,7 @@ struct create_column_from_view {
                        cudf::detail::slice(child, begin, end), stream, mr);
                    });
 
-    auto num_rows = children.empty() ? 0 : children.front()->size();
+    auto num_rows = view.size();
 
     return make_structs_column(num_rows,
                                std::move(children),

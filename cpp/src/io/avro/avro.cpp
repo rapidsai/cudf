@@ -135,7 +135,7 @@ bool container::parse(file_metadata *md, size_t max_num_rows, size_t first_row)
       if (parent_idx >= 0) {
         while (parent_idx >= 0) {
           if (md->schema[parent_idx].kind == type_union) {
-            int pos = parent_idx + 1;
+            std::size_t pos = parent_idx + 1;
             for (int num_children = md->schema[parent_idx].num_children; num_children > 0;
                  --num_children) {
               int skip = 1;
