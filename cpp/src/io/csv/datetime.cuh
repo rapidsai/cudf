@@ -358,7 +358,7 @@ __inline__ __device__ T parse_integer(char const** begin, char const* end)
   T value                = 0;
 
   auto cur = *begin + is_negative;
-  while (cur <= end) {
+  while (cur < end) {
     if (*cur >= '0' && *cur <= '9') {
       value *= 10;
       value += *cur - '0';
@@ -391,6 +391,7 @@ __inline__ __device__ void skip_spaces(char const** begin, char const* end)
 template <typename T>
 __inline__ __device__ int64_t to_time_delta(char const* begin, char const* end)
 {
+  ++end;
   // %d days [+]%H:%M:%S.n => %d days, %d days [+]%H:%M:%S,  %H:%M:%S.n, %H:%M:%S, %value.
   constexpr char sep = ':';
 

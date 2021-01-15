@@ -72,15 +72,14 @@ __device__ __inline__ bool is_whitespace(char c) { return c == '\t' || c == ' ';
  *
  * @return Adjusted or unchanged start_idx and end_idx
  */
-__device__ __inline__ void trim_field_start_end(const char *data,
-                                                long *start,
-                                                long *end,
+__device__ __inline__ void trim_field_start_end(const char **start,
+                                                const char **end,
                                                 char quotechar = '\0')
 {
-  while ((*start < *end) && is_whitespace(data[*start])) { (*start)++; }
-  if ((*start < *end) && data[*start] == quotechar) { (*start)++; }
-  while ((*start <= *end) && is_whitespace(data[*end])) { (*end)--; }
-  if ((*start <= *end) && data[*end] == quotechar) { (*end)--; }
+  while ((*start < *end) && is_whitespace(**start)) { (*start)++; }
+  if ((*start < *end) && **start == quotechar) { (*start)++; }
+  while ((*start <= *end) && is_whitespace(**end)) { (*end)--; }
+  if ((*start <= *end) && **end == quotechar) { (*end)--; }
 }
 
 /*
@@ -206,10 +205,10 @@ __global__ void __launch_bounds__(csvparse_block_dim)
   // the data
   if (rec_id_next >= row_offsets.size()) { return; }
 
-  long start = row_offsets[rec_id];
-  long stop  = row_offsets[rec_id_next];
+  auto start = raw_csv + row_offsets[rec_id];
+  auto stop  = raw_csv + row_offsets[rec_id_next];
 
-  long pos       = start;
+  auto pos       = start;
   int col        = 0;
   int actual_col = 0;
 
@@ -217,20 +216,20 @@ __global__ void __launch_bounds__(csvparse_block_dim)
   while (col < column_flags.size()) {
     if (start > stop) { break; }
 
-    pos = cudf::io::gpu::seek_field_end(raw_csv + pos, raw_csv + stop, opts) - raw_csv;
+    pos = cudf::io::gpu::seek_field_end(pos, stop, opts);
 
     // Checking if this is a column that the user wants --- user can filter
     // columns
     if (column_flags[col] & column_parse::enabled) {
-      long tempPos   = pos - 1;
+      auto tempPos   = pos - 1;
       long field_len = pos - start;
 
-      if (serialized_trie_contains(opts.trie_na, raw_csv + start, field_len)) {
+      if (serialized_trie_contains(opts.trie_na, start, field_len)) {
         atomicAdd(&d_columnData[actual_col].null_count, 1);
-      } else if (serialized_trie_contains(opts.trie_true, raw_csv + start, field_len) ||
-                 serialized_trie_contains(opts.trie_false, raw_csv + start, field_len)) {
+      } else if (serialized_trie_contains(opts.trie_true, start, field_len) ||
+                 serialized_trie_contains(opts.trie_false, start, field_len)) {
         atomicAdd(&d_columnData[actual_col].bool_count, 1);
-      } else if (cudf::io::gpu::is_infinity(raw_csv + start, raw_csv + tempPos)) {
+      } else if (cudf::io::gpu::is_infinity(start, tempPos)) {
         atomicAdd(&d_columnData[actual_col].float_count, 1);
       } else {
         long countNumber   = 0;
@@ -244,16 +243,16 @@ __global__ void __launch_bounds__(csvparse_block_dim)
 
         // Modify start & end to ignore whitespace and quotechars
         // This could possibly result in additional empty fields
-        trim_field_start_end(raw_csv, &start, &tempPos);
+        trim_field_start_end(&start, &tempPos);
         field_len = tempPos - start + 1;
 
-        for (long startPos = start; startPos <= tempPos; startPos++) {
-          if (is_digit(raw_csv[startPos])) {
+        for (auto startPos = start; startPos <= tempPos; startPos++) {
+          if (is_digit(*startPos)) {
             countNumber++;
             continue;
           }
           // Looking for unique characters that will help identify column types.
-          switch (raw_csv[startPos]) {
+          switch (*startPos) {
             case '.': countDecimal++; break;
             case '-': countDash++; break;
             case '+': countPlus++; break;
@@ -270,9 +269,7 @@ __global__ void __launch_bounds__(csvparse_block_dim)
         // Integers have to have the length of the string
         long int_req_number_cnt = field_len;
         // Off by one if they start with a minus sign
-        if ((raw_csv[start] == '-' || raw_csv[start] == '+') && field_len > 1) {
-          --int_req_number_cnt;
-        }
+        if ((*start == '-' || *start == '+') && field_len > 1) { --int_req_number_cnt; }
 
         if (column_flags[col] & column_parse::as_datetime) {
           // PANDAS uses `object` dtype if the date is unparseable
@@ -282,8 +279,8 @@ __global__ void __launch_bounds__(csvparse_block_dim)
             atomicAdd(&d_columnData[actual_col].string_count, 1);
           }
         } else if (countNumber == int_req_number_cnt) {
-          bool is_negative       = (raw_csv[start] == '-');
-          char const *data_begin = raw_csv + start + (is_negative || (raw_csv[start] == '+'));
+          bool is_negative       = (*start == '-');
+          char const *data_begin = start + (is_negative || (*start == '+'));
           cudf::size_type *ptr   = cudf::io::gpu::infer_integral_field_counter(
             data_begin, data_begin + countNumber, is_negative, d_columnData[actual_col]);
           atomicAdd(ptr, 1);
@@ -592,48 +589,47 @@ __global__ void __launch_bounds__(csvparse_block_dim)
   // the data
   if (rec_id_next >= row_offsets.size()) return;
 
-  long start = row_offsets[rec_id];
-  long stop  = row_offsets[rec_id_next];
+  auto start = raw_csv + row_offsets[rec_id];
+  auto stop  = raw_csv + row_offsets[rec_id_next];
 
-  long pos       = start;
+  auto pos       = start;
   int col        = 0;
   int actual_col = 0;
 
   while (col < column_flags.size()) {
     if (start > stop) break;
 
-    pos = cudf::io::gpu::seek_field_end(raw_csv + pos, raw_csv + stop, options) - raw_csv;
+    pos = cudf::io::gpu::seek_field_end(pos, stop, options);
 
     if (column_flags[col] & column_parse::enabled) {
       // check if the entire field is a NaN string - consistent with pandas
-      auto const is_valid =
-        !serialized_trie_contains(options.trie_na, raw_csv + start, pos - start);
+      auto const is_valid = !serialized_trie_contains(options.trie_na, start, pos - start);
 
       // Modify start & end to ignore whitespace and quotechars
-      long tempPos = pos - 1;
+      auto tempPos = pos - 1;
       if (is_valid && dtypes[actual_col].id() != cudf::type_id::STRING) {
-        trim_field_start_end(raw_csv, &start, &tempPos, options.quotechar);
+        trim_field_start_end(&start, &tempPos, options.quotechar);
       }
       if (is_valid) {
         // Type dispatcher does not handle STRING
         if (dtypes[actual_col].id() == cudf::type_id::STRING) {
-          long end = pos;
+          auto end = pos;
           if (options.keepquotes == false) {
-            if ((raw_csv[start] == options.quotechar) && (raw_csv[end - 1] == options.quotechar)) {
-              start++;
-              end--;
+            if ((*start == options.quotechar) && (*(end - 1) == options.quotechar)) {
+              ++start;
+              --end;
             }
           }
           auto str_list = static_cast<std::pair<const char *, size_t> *>(columns[actual_col]);
-          str_list[rec_id].first  = raw_csv + start;
+          str_list[rec_id].first  = start;
           str_list[rec_id].second = end - start;
         } else {
           if (cudf::type_dispatcher(dtypes[actual_col],
                                     decode_op{},
                                     columns[actual_col],
                                     rec_id,
-                                    raw_csv + start,
-                                    raw_csv + tempPos,
+                                    start,
+                                    tempPos,
                                     options,
                                     column_flags[col])) {
             // set the valid bitmap - all bits were set to 0 to start
@@ -645,11 +641,11 @@ __global__ void __launch_bounds__(csvparse_block_dim)
         str_list[rec_id].first  = nullptr;
         str_list[rec_id].second = 0;
       }
-      actual_col++;
+      ++actual_col;
     }
-    pos++;
+    ++pos;
     start = pos;
-    col++;
+    ++col;
   }
 }
 
