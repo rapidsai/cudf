@@ -115,6 +115,18 @@ std::unique_ptr<column> byte_cast(
  * [30,        300],
  * ```
  *
+ * Nulls propagate in different ways depending on what is null.
+ *```
+ * [[5,null,15], 100],
+ * [null,        200]
+ * returns
+ * [5,           100],
+ * [null,        100],
+ * [15,          100],
+ * ```
+ * Note that null lists are completely removed from the output
+ * and nulls inside lists are pulled out and remain.
+ *
  * @param input_table Table to explode.
  * @param explode_column_idx Column index to explode inside the table.
  * @param mr Device memory resource used to allocate the returned column's device memory.
