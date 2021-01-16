@@ -8191,3 +8191,61 @@ def test_agg_for_dataframe_with_string_columns(aggs):
         ),
     ):
         gdf.agg(aggs)
+
+
+@pytest.mark.parametrize(
+    "gdf",
+    [
+        gd.DataFrame({"a": [[1], [2], [3]]}),
+        gd.DataFrame(
+            {
+                "left-a": [0, 1, 2],
+                "a": [[1], None, [3]],
+                "right-a": ["abc", "def", "ghi"],
+            }
+        ),
+        gd.DataFrame(
+            {
+                "left-a": [[], None, None],
+                "a": [[1], None, [3]],
+                "right-a": ["abc", "def", "ghi"],
+            }
+        ),
+    ],
+)
+def test_dataframe_roundtrip_arrow_list_dtype(gdf):
+    table = gdf.to_arrow()
+    expected = gd.DataFrame.from_arrow(table)
+
+    assert_eq(gdf, expected)
+
+
+@pytest.mark.parametrize(
+    "gdf",
+    [
+        gd.DataFrame({"a": [{"one": 3, "two": 4, "three": 10}]}),
+        gd.DataFrame(
+            {
+                "left-a": [0, 1, 2],
+                "a": [{"x": 0.23, "y": 43}, None, {"x": 23.9, "y": 4.3}],
+                "right-a": ["abc", "def", "ghi"],
+            }
+        ),
+        gd.DataFrame(
+            {
+                "left-a": [{"a": 1}, None, None],
+                "a": [
+                    {"one": 324, "two": 23432, "three": 324},
+                    None,
+                    {"one": 3.24, "two": 1, "three": 324},
+                ],
+                "right-a": ["abc", "def", "ghi"],
+            }
+        ),
+    ],
+)
+def test_dataframe_roundtrip_arrow_struct_dtype(gdf):
+    table = gdf.to_arrow()
+    expected = gd.DataFrame.from_arrow(table)
+
+    assert_eq(gdf, expected)

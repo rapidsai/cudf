@@ -2069,7 +2069,12 @@ class Frame(libcudf.table.Table):
                 else:
                     dtype = np_dtypes[name]
 
-                result._data[name] = result._data[name].astype(dtype)
+                if cudf.utils.dtypes.is_struct_dtype(dtype):
+                    result._data[name] = result._data[name]._rename_fields(
+                        [field.name for field in data[name].type]
+                    )
+                elif not cudf.utils.dtypes.is_list_dtype(dtype):
+                    result._data[name] = result._data[name].astype(dtype)
 
         result = libcudf.table.Table(
             result._data.select_by_label(column_names)
