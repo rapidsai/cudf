@@ -411,13 +411,13 @@ struct target_type_impl<
   using type = int64_t;
 };
 
-// Summing fixed_point numbers, use the same type accumulator
+// Summing fixed_point numbers, always use the decimal64 accumulator
 template <typename Source, aggregation::Kind k>
 struct target_type_impl<
   Source,
   k,
   std::enable_if_t<cudf::is_fixed_point<Source>() && (k == aggregation::SUM)>> {
-  using type = Source;
+  using type = numeric::decimal64;
 };
 
 // Summing/Multiplying float/doubles, use same type accumulator
