@@ -3353,7 +3353,7 @@ class DataFrame(Frame, Serializable):
             self._data = out._data
         else:
             return out.copy(deep=copy)
-
+        #change email and username 
 
     def nans_to_nulls(self):
         """
