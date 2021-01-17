@@ -63,11 +63,16 @@ auto get_pair_iterator(cudf::scalar const& search_key)
  */
 template <bool search_keys_have_nulls>
 struct lookup_functor {
+  template <typename ElementType>
+  struct is_supported {
+    static constexpr bool value = cudf::is_numeric<ElementType>() ||
+                                  cudf::is_chrono<ElementType>() ||
+                                  std::is_same<ElementType, cudf::string_view>::value;
+  };
+
   template <typename ElementType, typename... Args>
-  std::enable_if_t<!cudf::is_numeric<ElementType>() && !cudf::is_chrono<ElementType>() &&
-                     !std::is_same<ElementType, cudf::string_view>::value,
-                   std::unique_ptr<column>>
-  operator()(Args&&...) const
+  std::enable_if_t<!is_supported<ElementType>::value, std::unique_ptr<column>> operator()(
+    Args&&...) const
   {
     CUDF_FAIL("lists::contains() is only supported on numeric types, chrono types, and strings.");
   }
@@ -138,13 +143,11 @@ struct lookup_functor {
   }
 
   template <typename ElementType, typename SearchKeyType>
-  std::enable_if_t<cudf::is_numeric<ElementType>() || cudf::is_chrono<ElementType>() ||
-                     std::is_same<ElementType, cudf::string_view>::value,
-                   std::unique_ptr<column>>
-  operator()(cudf::lists_column_view const& lists,
-             SearchKeyType const& search_key,
-             rmm::cuda_stream_view stream,
-             rmm::mr::device_memory_resource* mr)
+  std::enable_if_t<is_supported<ElementType>::value, std::unique_ptr<column>> operator()(
+    cudf::lists_column_view const& lists,
+    SearchKeyType const& search_key,
+    rmm::cuda_stream_view stream,
+    rmm::mr::device_memory_resource* mr)
   {
     using namespace cudf;
     using namespace cudf::detail;
