@@ -1005,11 +1005,11 @@ TYPED_TEST(FixedPointTests, MinMaxCountLagLeadNulls)
 {
   using namespace numeric;
   using namespace cudf;
-  using decimalXX  = TypeParam;
-  using RepType    = cudf::device_storage_type_t<decimalXX>;
-  using fp_wrapper = cudf::test::fixed_point_column_wrapper<RepType>;
+  using decimalXX    = TypeParam;
+  using RepType      = cudf::device_storage_type_t<decimalXX>;
+  using fp_wrapper   = cudf::test::fixed_point_column_wrapper<RepType>;
   using fp64_wrapper = cudf::test::fixed_point_column_wrapper<int64_t>;
-  using fw_wrapper = cudf::test::fixed_width_column_wrapper<size_type>;
+  using fw_wrapper   = cudf::test::fixed_width_column_wrapper<size_type>;
 
   auto const scale              = scale_type{-1};
   auto const input              = fp_wrapper{{42, 1729, 55, 343, 1, 2}, {1, 0, 1, 0, 1, 1}, scale};
