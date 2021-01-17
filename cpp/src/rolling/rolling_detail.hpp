@@ -41,7 +41,7 @@ static constexpr bool is_rolling_supported()
       (op == aggregation::SUM) or (op == aggregation::MIN) or (op == aggregation::MAX) or
       (op == aggregation::COUNT_VALID) or (op == aggregation::COUNT_ALL) or
       (op == aggregation::MEAN) or (op == aggregation::ROW_NUMBER) or (op == aggregation::LEAD) or
-      (op == aggregation::LAG);
+      (op == aggregation::LAG) or (op == aggregation::COLLECT);
 
     constexpr bool is_valid_numeric_agg =
       (cudf::is_numeric<ColumnType>() or cudf::is_duration<ColumnType>() or
@@ -53,17 +53,23 @@ static constexpr bool is_rolling_supported()
   } else if (cudf::is_timestamp<ColumnType>() || cudf::is_fixed_point<ColumnType>()) {
     return (op == aggregation::MIN) or (op == aggregation::MAX) or
            (op == aggregation::COUNT_VALID) or (op == aggregation::COUNT_ALL) or
-           (op == aggregation::ROW_NUMBER) or (op == aggregation::LEAD) or (op == aggregation::LAG);
+           (op == aggregation::ROW_NUMBER) or (op == aggregation::LEAD) or (op == aggregation::LAG) or
+           (op == aggregation::COLLECT);
   } else if (std::is_same<ColumnType, cudf::string_view>()) {
     return (op == aggregation::MIN) or (op == aggregation::MAX) or
            (op == aggregation::COUNT_VALID) or (op == aggregation::COUNT_ALL) or
-           (op == aggregation::ROW_NUMBER);
+           (op == aggregation::ROW_NUMBER) or (op == aggregation::COLLECT);
 
   } else if (std::is_same<ColumnType, cudf::list_view>()) {
     return (op == aggregation::COUNT_VALID) or (op == aggregation::COUNT_ALL) or
-           (op == aggregation::ROW_NUMBER);
-  } else
+           (op == aggregation::ROW_NUMBER) or (op == aggregation::COLLECT);
+  } else if (std::is_same<ColumnType, cudf::struct_view>()) {
+    // TODO: Add support for COUNT_VALID, COUNT_ALL, ROW_NUMBER.
+    return op == aggregation::COLLECT;
+  }
+  else {
     return false;
+  }
 }
 
 // return true if this Op is specialized for strings.

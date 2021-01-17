@@ -141,4 +141,24 @@ TEST_F(CollectListTest, ProofOfConcept)
   foo();
 }
 
+TEST_F(CollectListTest, Integration)
+{
+  using namespace cudf;
+  using namespace cudf::test;
+
+  auto size_data_type = data_type{type_to_id<size_type>()};
+
+  auto ints_column = fixed_width_column_wrapper<size_type>{70,71,72,73,74};
+
+  auto prev_column = fixed_width_column_wrapper<size_type>{1,2,2,2,2};
+  auto foll_column = fixed_width_column_wrapper<size_type>{1,1,1,1,0};
+
+  CUDF_EXPECTS(static_cast<column_view>(prev_column).size() == static_cast<column_view>(foll_column).size(), "");
+
+  auto sizes = cudf::rolling_window(ints_column, prev_column, foll_column, 1, make_collect_aggregation());
+
+  print("Sizes: ", *sizes);
+ 
+}
+
 CUDF_TEST_PROGRAM_MAIN()

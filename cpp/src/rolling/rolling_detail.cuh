@@ -34,6 +34,7 @@
 #include <cudf/detail/utilities/cuda.cuh>
 #include <cudf/detail/utilities/device_operators.cuh>
 #include <cudf/rolling.hpp>
+#include <cudf/strings/detail/utilities.cuh>
 #include <cudf/types.hpp>
 #include <cudf/utilities/bit.hpp>
 #include <cudf/utilities/error.hpp>
@@ -310,7 +311,7 @@ template <typename InputType,
           std::enable_if_t<!std::is_same<InputType, cudf::string_view>::value and
                            !(op == aggregation::COUNT_VALID || op == aggregation::COUNT_ALL ||
                              op == aggregation::ROW_NUMBER || op == aggregation::LEAD ||
-                             op == aggregation::LAG)>* = nullptr>
+                             op == aggregation::LAG || op == aggregation::COLLECT)>* = nullptr>
 bool __device__ process_rolling_window(column_device_view input,
                                        column_device_view ignored_default_outputs,
                                        mutable_column_device_view output,
@@ -814,7 +815,7 @@ struct rolling_window_launcher {
   template <aggregation::Kind op,
             typename PrecedingWindowIterator,
             typename FollowingWindowIterator>
-  std::enable_if_t<!(op == aggregation::MEAN || op == aggregation::LEAD || op == aggregation::LAG),
+  std::enable_if_t<!(op == aggregation::MEAN || op == aggregation::LEAD || op == aggregation::LAG || op == aggregation::COLLECT),
                    std::unique_ptr<column>>
   operator()(column_view const& input,
              column_view const& default_outputs,
@@ -894,6 +895,45 @@ struct rolling_window_launcher {
       cudf::DeviceLeadLag{static_cast<cudf::detail::lead_lag_aggregation*>(agg.get())->row_offset},
       stream,
       mr);
+  }
+  
+  template <aggregation::Kind op,
+            typename PrecedingWindowIterator,
+            typename FollowingWindowIterator>
+  std::enable_if_t<(op == aggregation::COLLECT), std::unique_ptr<column>>
+  operator()(column_view const& input,
+             column_view const& default_outputs,
+             PrecedingWindowIterator preceding_window_begin,
+             FollowingWindowIterator following_window_begin,
+             size_type min_periods,
+             std::unique_ptr<aggregation> const& agg,
+             rmm::cuda_stream_view stream,
+             rmm::mr::device_memory_resource* mr)
+  {
+    // COLLECT() should be supported on all data types.
+    // Output column must be of type `list<T>`.
+
+    // FIXME: min_periods not yet supported:
+    //   1. Short term: Construct null-mask based on (list.size() >= min_periods)
+    //   2. Long  term: Reduce list sizes to zero, for null rows.
+
+    using namespace cudf;
+    if (input.is_empty()) return empty_like(input);
+
+    // Materialize offsets column.
+    auto size_data_type = data_type{type_to_id<size_type>()};
+    auto sizes = make_fixed_width_column(size_data_type, input.size());
+    auto mutable_sizes = sizes->mutable_view();
+    thrust::transform(thrust::device, 
+                      preceding_window_begin,
+                      preceding_window_begin + input.size(),
+                      following_window_begin,
+                      mutable_sizes.begin<size_type>(),
+                      [] __device__(auto preceding, auto following) { return preceding + following; }
+                      );
+    auto offsets = cudf::strings::detail::make_offsets_child_column(sizes->view().begin<size_type>(),
+                                                                    sizes->view().end<size_type>());
+    return offsets;
   }
 };
 
