@@ -2690,11 +2690,15 @@ public final class Table implements AutoCloseable {
     }
 
     @SuppressWarnings("unchecked")
-    private static <T> ColumnVector fromLists(DataType dataType, Object[][] dataArray) {
+    private static <T> ColumnVector fromLists(DataType dataType, Object[] dataArray) {
       List[] dataLists = new List[dataArray.length];
       for (int i = 0; i < dataLists.length; ++i) {
-        Object[] dataList = dataArray[i];
-        dataLists[i] = dataList != null ? Arrays.asList(dataList) : null;
+        // The element in dataArray can be an array or list, because the below overloaded
+        // version accepts a List of Array as rows.
+        //  `public TestBuilder column(ListType dataType, List<?>... values)`
+        Object dataList = dataArray[i];
+        dataLists[i] = dataList == null ? null :
+            (dataList instanceof List ? (List)dataList : Arrays.asList((Object[])dataList));
       }
       return ColumnVector.fromLists(dataType, dataLists);
     }
@@ -2712,7 +2716,7 @@ public final class Table implements AutoCloseable {
           Object dataArray = typeErasedData.get(i);
           if (dtype.isNestedType()) {
             if (dtype.equals(DType.LIST)) {
-              columns.add(fromLists(dataType, (Object[][]) dataArray));
+              columns.add(fromLists(dataType, (Object[]) dataArray));
             } else if (dtype.equals(DType.STRUCT)) {
               columns.add(fromStructs(dataType, (StructData[]) dataArray));
             } else {
