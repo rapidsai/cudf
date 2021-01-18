@@ -1979,6 +1979,7 @@ class Frame(libcudf.table.Table):
         np_dtypes = None
         if isinstance(data.schema.pandas_metadata, dict):
             metadata = data.schema.pandas_metadata
+            print(metadata)
             pandas_dtypes = {
                 col["field_name"]: col["pandas_type"]
                 for col in metadata["columns"]
@@ -2056,24 +2057,36 @@ class Frame(libcudf.table.Table):
         else:
             result = cudf_category_frame
 
-        # In a scenario where column is of type list/other non
-        # pandas types, there will be no pandas metadata associated with
+        # In a scenario where column is of type non pandas types,
+        # there will be no pandas metadata associated with
         # given arrow table as those types can only originate from
         # arrow.
         if pandas_dtypes:
             for name in result._data.names:
+                dtype = None
                 if pandas_dtypes[name] == "categorical":
                     dtype = "category"
                 elif pandas_dtypes[name] == "bool":
                     dtype = pandas_dtypes[name]
-                else:
+                elif (
+                    pandas_dtypes[name] == "empty"
+                    and np_dtypes[name] == "object"
+                ):
                     dtype = np_dtypes[name]
-
-                if cudf.utils.dtypes.is_struct_dtype(dtype):
+                elif pandas_dtypes[
+                    name
+                ] == "object" and cudf.utils.dtypes.is_struct_dtype(
+                    np_dtypes[name]
+                ):
                     result._data[name] = result._data[name]._rename_fields(
                         [field.name for field in data[name].type]
                     )
-                elif not cudf.utils.dtypes.is_list_dtype(dtype):
+                else:
+                    # No special handling means the dtype already
+                    # exists in cudf, hence there is no need to type-cast.
+                    continue
+
+                if dtype is not None:
                     result._data[name] = result._data[name].astype(dtype)
 
         result = libcudf.table.Table(
