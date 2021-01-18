@@ -1,4 +1,5 @@
 import more_itertools
+import numpy as np
 import pyarrow as pa
 
 from cudf import _lib as libcudf
@@ -17,11 +18,15 @@ class DecimalColumn(ColumnBase):
             if mask_buf is None
             else pa_mask_buffer_to_mask(mask_buf, len(data))
         )
-        bts = data.buffers()[1].to_pybytes()
-        bts = b"".join(list(more_itertools.sliced(bts, 8))[::2])
+        data_buf = np.frombuffer(data.buffers()[1]).view("uint8")
+        data_64 = (
+            np.concatenate(np.array_split(data_buf, len(data_buf) // 8)[::2])
+            if len(data)
+            else data_buf
+        )
         return cls(
-            data=Buffer.from_bytes(bts),
-            size=len(data),
+            data=Buffer(data_64),
+            size=len(data_64) // 8,
             dtype=DecimalDtype.from_arrow(data.type),
             mask=mask,
         )

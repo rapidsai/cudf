@@ -10,6 +10,7 @@ from cudf.core.column import DecimalColumn
     "data",
     [
         [Decimal("1.1"), Decimal("2.2"), Decimal("3.3"), Decimal("4.4")],
+        [1],
         [1, 2, 3, 4],
         [42, 1729, 4104],
         [1, 2, None, 4],
