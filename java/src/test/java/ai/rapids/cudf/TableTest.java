@@ -4409,13 +4409,14 @@ public class TableTest extends CudfTestBase {
   void testExplode() {
     // Child is primitive type
     try (Table t1 = new Table.TestBuilder()
-            .column(new ListType(false, new BasicType(true, DType.INT32)),
+            .column(new ListType(true, new BasicType(true, DType.INT32)),
                 Arrays.asList(1, 2, 3),
                 Arrays.asList(4, 5),
-                Arrays.asList(6))
-            .column("s1", "s2", "s3")
-            .column(   1,    3,    5)
-            .column(12.0, 14.0, 13.0)
+                Arrays.asList(6),
+                null)
+            .column("s1", "s2", "s3", "s4")
+            .column(   1,    3,    5,    7)
+            .column(12.0, 14.0, 13.0, 11.0)
             .build();
          Table expected = new Table.TestBuilder()
             .column(   1,    2,    3,    4,    5,    6)
