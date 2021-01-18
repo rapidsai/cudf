@@ -331,7 +331,6 @@ add_library(cudf
     "${CUDF_SOURCE_DIR}/src/strings/replace/multi_re.cu"
     "${CUDF_SOURCE_DIR}/src/strings/replace/replace.cu"
     "${CUDF_SOURCE_DIR}/src/strings/replace/replace_re.cu"
-    "${CUDF_SOURCE_DIR}/src/strings/sorting/sorting.cu"
     "${CUDF_SOURCE_DIR}/src/strings/split/partition.cu"
     "${CUDF_SOURCE_DIR}/src/strings/split/split.cu"
     "${CUDF_SOURCE_DIR}/src/strings/split/split_record.cu"
