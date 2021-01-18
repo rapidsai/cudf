@@ -1980,7 +1980,6 @@ class Frame(libcudf.table.Table):
         np_dtypes = None
         if isinstance(data.schema.pandas_metadata, dict):
             metadata = data.schema.pandas_metadata
-            print(metadata)
             pandas_dtypes = {
                 col["field_name"]: col["pandas_type"]
                 for col in metadata["columns"]
