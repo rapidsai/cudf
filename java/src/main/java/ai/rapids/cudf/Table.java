@@ -1624,8 +1624,21 @@ public final class Table implements AutoCloseable {
    *         [15,        100],
    *         [20,        200],
    *         [25,        200],
-   *         [30,        300],
+   *         [30,        300]
    * </code>
+   *
+   * Nulls propagate in different ways depending on what is null.
+   * <code>
+   *     [[5,null,15], 100],
+   *     [null,        200]
+   * returns:
+   *     [5,           100],
+   *     [null,        100],
+   *     [15,          100]
+   * </code>
+   * Note that null lists are completely removed from the output
+   * and nulls inside lists are pulled out and remain.
+   *
    * @param index Column index to explode inside the table.
    * @return A new table with explode_col exploded.
    */
