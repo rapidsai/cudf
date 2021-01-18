@@ -31,7 +31,7 @@ constexpr size_type MAX_JOIN_SIZE{std::numeric_limits<size_type>::max()};
 
 constexpr int DEFAULT_JOIN_BLOCK_SIZE = 128;
 constexpr int DEFAULT_JOIN_CACHE_SIZE = 128;
-constexpr size_type JoinNoneValue     = -1;
+constexpr size_type JoinNoneValue     = std::numeric_limits<size_type>::min();
 
 using VectorPair = std::pair<rmm::device_uvector<size_type>, rmm::device_uvector<size_type>>;
 
