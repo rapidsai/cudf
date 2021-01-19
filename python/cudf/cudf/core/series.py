@@ -1569,6 +1569,8 @@ class Series(Frame, Serializable):
             return other._column
         elif isinstance(other, Index):
             return Series(other)._column
+        elif other is cudf.NA:
+            return cudf.Scalar(other, dtype=self.dtype)
         else:
             return self._column.normalize_binop_value(other)
 
