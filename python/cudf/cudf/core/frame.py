@@ -2064,20 +2064,24 @@ class Frame(libcudf.table.Table):
         if pandas_dtypes:
             for name in result._data.names:
                 dtype = None
-                if pandas_dtypes[name] == "categorical":
+                if (
+                    len(result._data[name]) == 0
+                    and pandas_dtypes[name] == "categorical"
+                ):
+                    # Empty Categorical Column
                     dtype = "category"
-                elif pandas_dtypes[name] == "bool":
-                    dtype = pandas_dtypes[name]
                 elif (
                     pandas_dtypes[name] == "empty"
                     and np_dtypes[name] == "object"
                 ):
+                    # Column with all nulls and dtype is "object"
                     dtype = np_dtypes[name]
                 elif pandas_dtypes[
                     name
                 ] == "object" and cudf.utils.dtypes.is_struct_dtype(
                     np_dtypes[name]
                 ):
+                    # Column is a Struct Column
                     result._data[name] = result._data[name]._rename_fields(
                         [field.name for field in data[name].type]
                     )
