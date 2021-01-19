@@ -565,12 +565,19 @@ class Merge(object):
             dtype_r, CategoricalDtype
         ):
             if pd.api.types.is_dtype_equal(dtype_l, dtype_r):
-                merge_return_type = dtype_l
+                if how in {"inner", "left"}:
+                    merge_return_type = dtype_l
+                elif how == "outer" and not (
+                    dtype_l.ordered or dtype_r.ordered
+                ):
+                    new_cats = cudf.concat(
+                        dtype_l.categories, dtype_r.categories
+                    ).unique()
+                    merge_return_type = cudf.core.dtypes.CategoricalDtype(
+                        categories=new_cats
+                    )
             else:
-                if how == 'left':
-                    return dtype_l
-                elif how == 'right':
-                    return dtype_r
+                merge_return_type = "category"
         return merge_return_type
 
     def compute_output_dtypes(self):
