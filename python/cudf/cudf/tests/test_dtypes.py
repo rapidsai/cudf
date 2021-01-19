@@ -8,9 +8,9 @@ import pytest
 import cudf
 from cudf.core.dtypes import (
     CategoricalDtype,
+    DecimalDtype,
     ListDtype,
     StructDtype,
-    DecimalDtype,
 )
 from cudf.tests.utils import assert_eq
 
@@ -139,3 +139,9 @@ def test_decimal_dtype():
     dt = DecimalDtype(4, 2)
     assert dt.to_arrow() == pa.decimal128(4, 2)
     assert dt == DecimalDtype.from_arrow(pa.decimal128(4, 2))
+
+
+def test_max_precision():
+    DecimalDtype(scale=0, precision=18)
+    with pytest.raises(ValueError):
+        DecimalDtype(scale=0, precision=19)

@@ -32,3 +32,10 @@ def test_round_trip_decimal_column(data, typ):
     pa_arr = pa.array(data, type=typ)
     col = DecimalColumn.from_arrow(pa_arr)
     assert pa_arr.equals(col.to_arrow())
+
+
+def test_from_arrow_max_precision():
+    with pytest.raises(ValueError):
+        DecimalColumn.from_arrow(
+            pa.array([1, 2, 3], type=pa.decimal128(scale=0, precision=19))
+        )
