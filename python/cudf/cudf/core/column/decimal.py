@@ -51,11 +51,17 @@ class DecimalColumn(ColumnBase):
         if reflect:
             self, other = other, self
         result = libcudf.binaryop.binaryop(self, other, op, "int32")
-        result.dtype.precision = binop_precision(self.dtype, other.dtype, op)
+        result.dtype.precision = _binop_precision(self.dtype, other.dtype, op)
         return result
 
 
-def binop_precision(l_dtype, r_dtype, op):
+def _binop_precision(l_dtype, r_dtype, op):
+    """
+    Returns the result precision when performing the
+    binary operation `op` for the given dtypes.
+
+    See: https://docs.microsoft.com/en-us/sql/t-sql/data-types/precision-scale-and-length-transact-sql
+    """  # noqa: E501
     p1, p2 = l_dtype.precision, r_dtype.precision
     s1, s2 = l_dtype.scale, r_dtype.scale
     if op in ("add", "sub"):
