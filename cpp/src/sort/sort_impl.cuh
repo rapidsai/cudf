@@ -139,6 +139,22 @@ struct single_column_sort_fn {
     CUDF_FAIL("Only numeric types are suitable for radix sorting");
   }
 
+  template <typename T, typename std::enable_if_t<cudf::is_numeric<T>()>* = nullptr>
+  void fast_numeric_stable_sort(column_view const& input,
+                                mutable_column_view& indices,
+                                rmm::cuda_stream_view stream)
+  {
+    auto temp_col = std::make_unique<column>(input, stream);
+    auto d_col    = temp_col->mutable_view();
+    thrust::stable_sort_by_key(
+      rmm::exec_policy(stream), d_col.begin<T>(), d_col.end<T>(), indices.begin<size_type>());
+  }
+  template <typename T, typename std::enable_if_t<!cudf::is_numeric<T>()>* = nullptr>
+  void fast_numeric_stable_sort(column_view const&, mutable_column_view&, rmm::cuda_stream_view)
+  {
+    CUDF_FAIL("Only numeric types are suitable for radix sorting");
+  }
+
   /**
    * @brief Sorts a single column with a relationally comparable type.
    *
@@ -158,14 +174,18 @@ struct single_column_sort_fn {
                   null_order null_precedence,
                   rmm::cuda_stream_view stream)
   {
-    // a stable sort or a column with nulls requires the comparator
     if (stable) {
-      auto keys = column_device_view::create(input, stream);
-      thrust::stable_sort(rmm::exec_policy(stream),
-                          indices.begin<size_type>(),
-                          indices.end<size_type>(),
-                          comparator<T>{*keys, input.has_nulls(), ascending, null_precedence});
+      if (!ascending || input.has_nulls() || !cudf::is_numeric<T>()) {
+        auto keys = column_device_view::create(input, stream);
+        thrust::stable_sort(rmm::exec_policy(stream),
+                            indices.begin<size_type>(),
+                            indices.end<size_type>(),
+                            comparator<T>{*keys, input.has_nulls(), ascending, null_precedence});
+      } else {
+        fast_numeric_stable_sort<T>(input, indices, stream);
+      }
     } else {
+      // column with nulls or non-numeric column will also use a comparator
       if (input.has_nulls() || !cudf::is_numeric<T>()) {
         auto keys = column_device_view::create(input, stream);
         thrust::sort(rmm::exec_policy(stream),
@@ -173,6 +193,7 @@ struct single_column_sort_fn {
                      indices.end<size_type>(),
                      comparator<T>{*keys, input.has_nulls(), ascending, null_precedence});
       } else {
+        // wicked fast sort for a non-stable, non-null, numeric column
         fast_numeric_sort<T>(input, indices, ascending, stream);
       }
     }
@@ -237,16 +258,6 @@ std::unique_ptr<column> sorted_order(table_view input,
   if (not null_precedence.empty()) {
     CUDF_EXPECTS(static_cast<std::size_t>(input.num_columns()) == null_precedence.size(),
                  "Mismatch between number of columns and null_precedence size.");
-  }
-
-  // fast-path for single strings column sort
-  if (input.num_columns() == 1 && input.column(0).type().id() == type_id::STRING) {
-    return cudf::strings::detail::sorted_order<stable>(
-      strings_column_view(input.column(0)),
-      column_order.empty() ? order::ASCENDING : column_order.front(),
-      null_precedence.empty() ? null_order::BEFORE : null_precedence.front(),
-      stream,
-      mr);
   }
 
   std::unique_ptr<column> sorted_indices = cudf::make_numeric_column(
