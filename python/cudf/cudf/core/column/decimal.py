@@ -1,3 +1,5 @@
+# Copyright (c) 2021, NVIDIA CORPORATION.
+
 import cupy as cp
 import numpy as np
 import pyarrow as pa

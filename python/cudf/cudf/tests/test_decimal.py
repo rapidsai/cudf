@@ -1,3 +1,5 @@
+# Copyright (c) 2021, NVIDIA CORPORATION.
+
 from decimal import Decimal
 
 import pyarrow as pa
