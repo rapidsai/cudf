@@ -31,6 +31,7 @@ class DecimalColumn(ColumnBase):
         data_buf_64 = self.base_data.to_host_array().view("int64")
         data_buf_128 = np.empty(len(data_buf_64) * 2, dtype="int64")
         data_buf_128[::2] = data_buf_64
+        # pad negative values with `1` bits, otherwise pad with `0` bits
         data_buf_128[1::2] = np.piecewise(
             data_buf_64, [data_buf_64 < 0], [-1, 0]
         )
