@@ -181,8 +181,6 @@ auto inline make_validity_iterator(column_device_view const& column)
  *
  * For `p = *(iter + i)`, `p` is the validity of the scalar.
  *
- * The behaviour is undefined if the scalar is destroyed before the iterator is dereferenced.
- *
  * @param scalar_value The scalar to iterate
  * @return auto Iterator that returns scalar validity
  */
