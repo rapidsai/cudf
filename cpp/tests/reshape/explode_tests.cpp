@@ -156,7 +156,6 @@ TEST_F(ExplodeTest, NullsInList)
 
   auto valids = cudf::test::make_counting_transform_iterator(
     0, [](auto i) { return i % 2 == 0 ? true : false; });
-  auto always_valid = cudf::test::make_counting_transform_iterator(0, [](auto i) { return true; });
 
   lists_column_wrapper<int32_t> a{lists_column_wrapper<int32_t>({1, 2, 7}, valids),
                                   lists_column_wrapper<int32_t>({5, 6, 0, 9}, valids),
