@@ -290,9 +290,3 @@ def compile_udf(udf, type_signature):
     )
     output_type = numpy_support.as_dtype(return_type)
     return (ptx_code, output_type.type)
-
-
-@cuda.jit
-def alternating_chunks(inp, outp, chunk_size):
-    i = cuda.grid(1)
-    outp[i] = inp[i + (i // chunk_size) * chunk_size]

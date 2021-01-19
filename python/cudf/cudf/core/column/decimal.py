@@ -7,7 +7,6 @@ from cudf import _lib as libcudf
 from cudf.core.buffer import Buffer
 from cudf.core.column import ColumnBase
 from cudf.core.dtypes import DecimalDtype
-from cudf.utils.cudautils import alternating_chunks
 from cudf.utils.utils import pa_mask_buffer_to_mask
 
 
@@ -20,12 +19,11 @@ class DecimalColumn(ColumnBase):
             if mask_buf is None
             else pa_mask_buffer_to_mask(mask_buf, len(data))
         )
-        data_128 = cp.array(np.frombuffer(data.buffers()[1]).view("uint8"))
-        data_64 = cp.empty(data_128.size // 2, dtype=data_128.dtype)
-        alternating_chunks.forall(data_64.size)(data_128, data_64, 4)
+        data_128 = cp.array(np.frombuffer(data.buffers()[1]).view("int64"))
+        data_64 = data_128[::2].copy()
         return cls(
-            data=Buffer(data_64),
-            size=len(data_64) // 8,
+            data=Buffer(data_64.view("uint8")),
+            size=len(data),
             dtype=DecimalDtype.from_arrow(data.type),
             mask=mask,
         )
