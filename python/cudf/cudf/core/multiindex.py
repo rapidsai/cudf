@@ -185,6 +185,27 @@ class MultiIndex(Index):
         assert len(value) == self.nlevels
         self._names = pd.core.indexes.frozen.FrozenList(value)
 
+    def rename(self, names, inplace=False):
+        """
+        Alter Multiindex level names
+
+        Defaults to returning new index.
+
+        Parameters
+        ----------
+        names : list of label
+            Names to set, length must be the same as number of levels
+        inplace : bool, default False
+            If True, modifies objects directly, instead of creating a new
+            ``MultiIndex``
+
+        Returns
+        -------
+        None or Index
+        """
+
+        return self.set_names(names, level=None, inplace=inplace)
+
     def set_names(self, names, level=None, inplace=False):
         if (
             level is not None

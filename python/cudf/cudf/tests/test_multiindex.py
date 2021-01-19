@@ -1452,3 +1452,52 @@ def test_multiindex_set_names_error(level, names):
         lfunc_args_and_kwargs=([], {"names": names, "level": level}),
         rfunc_args_and_kwargs=([], {"names": names, "level": level}),
     )
+
+
+@pytest.mark.parametrize(
+    "idx",
+    [
+        pd.MultiIndex.from_product([["python", "cobra"], [2018, 2019]]),
+        pd.MultiIndex.from_product(
+            [["python", "cobra"], [2018, 2019]], names=["old name", None]
+        ),
+    ],
+)
+@pytest.mark.parametrize(
+    "names",
+    [
+        [None, None],
+        ["a", None],
+        ["new name", "another name"],
+        [1, None],
+        [2, 3],
+        [42, "name"],
+    ],
+)
+@pytest.mark.parametrize("inplace", [True, False])
+def test_multiindex_rename(idx, names, inplace):
+    pi = idx.copy()
+    gi = cudf.from_pandas(idx)
+
+    expected = pi.rename(names=names, inplace=inplace)
+    actual = gi.rename(names=names, inplace=inplace)
+
+    if inplace:
+        expected, actual = pi, gi
+
+    assert_eq(expected, actual)
+
+
+@pytest.mark.parametrize(
+    "names", ["plain string", 123, ["str"], ["l1", "l2", "l3"]]
+)
+def test_multiindex_rename_error(names):
+    pi = pd.MultiIndex.from_product([["python", "cobra"], [2018, 2019]])
+    gi = cudf.from_pandas(pi)
+
+    assert_exceptions_equal(
+        lfunc=pi.rename,
+        rfunc=gi.rename,
+        lfunc_args_and_kwargs=([], {"names": names}),
+        rfunc_args_and_kwargs=([], {"names": names}),
+    )
