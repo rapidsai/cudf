@@ -896,20 +896,61 @@ struct rolling_window_launcher {
       stream,
       mr);
   }
-  
+
+  // TODO: Move to lists/utilities.
+  cudf::size_type get_num_child_rows(cudf::column_view const& list_offsets,
+                                   rmm::cuda_stream_view stream = rmm::cuda_stream_default)
+  {
+    // Number of rows in child-column == last offset value.
+    cudf::size_type num_child_rows{};
+    CUDA_TRY(cudaMemcpyAsync(&num_child_rows,
+                            list_offsets.data<cudf::size_type>() + list_offsets.size() - 1,
+                            sizeof(cudf::size_type),
+                            cudaMemcpyDeviceToHost,
+                            stream.value()));
+    stream.synchronize();
+    return num_child_rows;
+  }
+
+  template <typename PrecedingIter, typename FollowingIter>
+  std::unique_ptr<column> get_collect_list_offsets(column_view const& input,
+                                                   PrecedingIter preceding_begin,
+                                                   FollowingIter following_begin,
+                                                   size_type min_periods,
+                                                   rmm::cuda_stream_view stream,
+                                                   rmm::mr::device_memory_resource* mr)
+  {
+    // Materialize offsets column.
+    auto size_data_type = data_type{type_to_id<size_type>()};
+    auto sizes = make_fixed_width_column(size_data_type, input.size());
+    auto mutable_sizes = sizes->mutable_view();
+    thrust::transform(thrust::device, 
+                      preceding_begin,
+                      preceding_begin + input.size(),
+                      following_begin,
+                      mutable_sizes.begin<size_type>(),
+                      [] __device__(auto preceding, auto following) { return preceding + following; }
+                      );
+    return cudf::strings::detail::make_offsets_child_column(sizes->view().begin<size_type>(),
+                                                            sizes->view().end<size_type>(), stream, mr);
+  }
+
   template <aggregation::Kind op,
-            typename PrecedingWindowIterator,
-            typename FollowingWindowIterator>
+            typename PrecedingIter,
+            typename FollowingIter>
   std::enable_if_t<(op == aggregation::COLLECT), std::unique_ptr<column>>
   operator()(column_view const& input,
              column_view const& default_outputs,
-             PrecedingWindowIterator preceding_window_begin,
-             FollowingWindowIterator following_window_begin,
+             PrecedingIter preceding_begin,
+             FollowingIter following_begin,
              size_type min_periods,
              std::unique_ptr<aggregation> const& agg,
              rmm::cuda_stream_view stream,
              rmm::mr::device_memory_resource* mr)
   {
+    CUDF_EXPECTS(default_outputs.is_empty(),
+                 "Only LEAD/LAG window functions support default values.");
+
     // COLLECT() should be supported on all data types.
     // Output column must be of type `list<T>`.
 
@@ -918,22 +959,55 @@ struct rolling_window_launcher {
     //   2. Long  term: Reduce list sizes to zero, for null rows.
 
     using namespace cudf;
+    using namespace cudf::detail;
+
     if (input.is_empty()) return empty_like(input);
 
-    // Materialize offsets column.
+    // Materialize collect list's offsets.
+    auto offsets = get_collect_list_offsets(input, preceding_begin, following_begin, min_periods, stream, mr);
+
     auto size_data_type = data_type{type_to_id<size_type>()};
-    auto sizes = make_fixed_width_column(size_data_type, input.size());
-    auto mutable_sizes = sizes->mutable_view();
-    thrust::transform(thrust::device, 
-                      preceding_window_begin,
-                      preceding_window_begin + input.size(),
-                      following_window_begin,
-                      mutable_sizes.begin<size_type>(),
-                      [] __device__(auto preceding, auto following) { return preceding + following; }
-                      );
-    auto offsets = cudf::strings::detail::make_offsets_child_column(sizes->view().begin<size_type>(),
-                                                                    sizes->view().end<size_type>());
-    return offsets;
+
+    // Generate list child's mapping to parent list.
+    // If    
+    //       input list == [A,B,C,D,E]
+    //   and  preceding == [1,2,2,2,2],
+    //   and  following == [1,1,1,1,0],
+    // then, 
+    //       result     == [ [A,B], [A,B,C], [B,C,D], [C,D,E], [D,E] ]
+    // i.e.  result offset column == [0,2,5,8,11,13],
+    //   and result child  column == [A,B,A,B,C,B,C,D,C,D,E,D,E].
+    // Mapping back to `input`    == [0,1,0,1,2,1,2,3,2,3,4,3,4]
+
+    // 1. Scatter `1` to all offsets except the first and last.
+    auto num_child_rows = get_num_child_rows(offsets->view());
+    auto scatter_map = make_fixed_width_column(size_data_type, offsets->size()-2);
+    thrust::copy(thrust::device, 
+                 offsets->view().template begin<size_type>()+1, 
+                 offsets->view().template end<size_type>()-1, 
+                 scatter_map->mutable_view().template begin<size_type>());
+    auto scatter_values = make_fixed_width_column(size_data_type, offsets->size()-2);
+    thrust::fill_n(thrust::device, 
+                   scatter_values->mutable_view().template begin<size_type>(), 
+                   offsets->size()-2, 
+                   size_type{1}); // [1,1,1,1,...1]
+    auto scatter_output = make_fixed_width_column(size_data_type , num_child_rows);
+    thrust::fill_n(thrust::device, 
+                   scatter_output->mutable_view().template begin<size_type>(), 
+                   num_child_rows, 
+                   0); // [0,0,0,...0]
+    thrust::scatter(thrust::device, 
+                    scatter_values->view().template begin<size_type>(), 
+                    scatter_values->view().template end<size_type>(), 
+                    scatter_map->view().template begin<size_type>(), 
+                    scatter_output->mutable_view().template begin<size_type>()); // [0,1,0,0,1,...]
+    auto per_row_mapping = make_fixed_width_column(size_data_type, num_child_rows);
+    thrust::inclusive_scan(thrust::device,
+                           scatter_output->view().template begin<size_type>(),
+                           scatter_output->view().template end<size_type>(),
+                           per_row_mapping->mutable_view().template begin<size_type>());
+
+    return per_row_mapping;
   }
 };
 
