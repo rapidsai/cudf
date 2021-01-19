@@ -4966,7 +4966,7 @@ class StringColumn(column.ColumnBase):
         lhs = self
         if reflect:
             lhs, rhs = rhs, lhs
-        if isinstance(rhs, (StringColumn, str)):
+        if isinstance(rhs, (StringColumn, str, cudf.Scalar)):
             if op == "add":
                 return lhs.str().cat(others=rhs)
             elif op in ("eq", "ne", "gt", "lt", "ge", "le"):

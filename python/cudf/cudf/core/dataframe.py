@@ -6794,6 +6794,15 @@ class DataFrame(Frame, Serializable):
         """{docstring}"""
         from cudf.io import parquet as pq
 
+        if any(
+            isinstance(col, cudf.core.column.StructColumn)
+            for col in self._data.columns
+        ):
+            raise NotImplementedError(
+                "Writing to parquet format is not yet supported "
+                "with Struct columns."
+            )
+
         return pq.to_parquet(self, path, *args, **kwargs)
 
     @ioutils.doc_to_feather()

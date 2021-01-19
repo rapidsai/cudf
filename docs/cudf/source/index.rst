@@ -8,6 +8,7 @@ Welcome to cuDF's documentation!
    api.rst
    10min.ipynb
    basics.rst
+   io.rst
    groupby.md
    dask-cudf.md
    10min-cudf-cupy.ipynb
