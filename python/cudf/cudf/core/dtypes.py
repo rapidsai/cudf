@@ -259,6 +259,11 @@ class DecimalDtype(ExtensionDtype):
 
     @precision.setter
     def precision(self, value):
+        if value > self._MAX_PRECISION:
+            raise ValueError(
+                f"Cannot construct a {type(self).__name__}"
+                f" with precision > {self._MAX_PRECISION}"
+            )
         self._typ = pa.decimal128(precision=value, scale=self.scale)
 
     @property
