@@ -221,6 +221,7 @@ class DecimalDtype(ExtensionDtype):
 
     name = "decimal"
     _metadata = ("precision", "scale")
+    _MAX_PRECISION = len(str(np.iinfo("int64").max)) - 1
 
     def __init__(self, precision, scale):
         """
@@ -245,6 +246,11 @@ class DecimalDtype(ExtensionDtype):
             13.0051 is representable with precision=6 and scale=4,
             and *not* representable with precision<6 or scale<4.
         """
+        if precision > self._MAX_PRECISION:
+            raise ValueError(
+                f"Cannot construct a {type(self).__name__}"
+                f" with precision > {self._MAX_PRECISION}"
+            )
         self._typ = pa.decimal128(precision, scale)
 
     @property

@@ -29,8 +29,11 @@ class DecimalColumn(ColumnBase):
 
     def to_arrow(self):
         data_buf_64 = self.base_data.to_host_array().view("int64")
-        data_buf_128 = np.zeros(len(data_buf_64) * 2, dtype="int64")
+        data_buf_128 = np.empty(len(data_buf_64) * 2, dtype="int64")
         data_buf_128[::2] = data_buf_64
+        data_buf_128[1::2] = np.piecewise(
+            data_buf_64, [data_buf_64 < 0], [-1, 0]
+        )
         data_buf = pa.py_buffer(data_buf_128)
         mask_buf = (
             self.base_mask
