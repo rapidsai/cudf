@@ -35,7 +35,7 @@ class DecimalColumn(ColumnBase):
         mask_buf = (
             self.base_mask
             if self.base_mask is None
-            else pa.py_buffer(bytes(self.base_mask.to_host_array()))
+            else pa.py_buffer(self.base_mask.to_host_array())
         )
         return pa.Array.from_buffers(
             type=self.dtype.to_arrow(),
