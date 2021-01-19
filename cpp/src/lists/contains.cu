@@ -41,7 +41,7 @@ auto get_search_keys_device_iterable_view(cudf::column_view const& search_keys,
 }
 
 auto get_search_keys_device_iterable_view(cudf::scalar const& search_key,
-                                          rmm::cuda_stream_view stream)
+                                          rmm::cuda_stream_view)
 {
   return &search_key;
 }
@@ -52,7 +52,7 @@ auto get_pair_iterator(cudf::column_device_view const& d_search_keys)
   return d_search_keys.pair_begin<ElementType, has_nulls>();
 }
 
-template <typename ElementType, bool ignore>
+template <typename ElementType, bool>
 auto get_pair_iterator(cudf::scalar const& search_key)
 {
   return cudf::detail::make_pair_iterator<ElementType>(search_key);
