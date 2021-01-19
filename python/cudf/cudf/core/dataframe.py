@@ -1477,7 +1477,7 @@ class DataFrame(Frame, Serializable):
             be set, and that will be used as the column name to align with the
             original DataFrame.
 
-        join : {`left`}, default `left`
+        join : {'left'}, default 'left'
             Only left join is implemented, keeping the index and
             columns of the original object.
 
@@ -1488,10 +1488,10 @@ class DataFrame(Frame, Serializable):
 
         filter_func : None
             filter_func is not supported yet
-            Return True for values that should be updated.
+            Return True for values that should be updated.S
 
-        errors : {‘raise’, ‘ignore’}, default ‘ignore’
-            If ‘raise’, will raise a ValueError if the DataFrame and other
+        errors : {'raise', 'ignore'}, default 'ignore'
+            If 'raise', will raise a ValueError if the DataFrame and other
             both contain non-NA data in the same place.
 
 
@@ -1502,12 +1502,11 @@ class DataFrame(Frame, Serializable):
         Raises
         -------
         ValueError
-            - When ``errors``= 'raise' and there’s overlapping non-NA data.
+            - When ``errors`` = 'raise' and there's overlapping non-NA data.
             - When ``errors`` is not either 'ignore' or 'raise'
 
         NotImplementedError
-            - If ``join`` != ‘left’
-
+            - If ``join`` != 'left'
         """
         # TODO: Support other joins
         if join != "left":
