@@ -22,8 +22,6 @@
 #include <cudf_test/cudf_gtest.hpp>
 #include <cudf_test/table_utilities.hpp>
 
-//#include <cudf/types.hpp>
-
 #include <benchmark/benchmark.h>
 #include <benchmarks/common/generate_benchmark_input.hpp>
 #include <benchmarks/fixture/benchmark_fixture.hpp>
@@ -43,7 +41,6 @@ static void BM_sort(benchmark::State& state, bool nulls)
 
   const cudf::size_type n_rows{(cudf::size_type)state.range(0)};
   const cudf::size_type n_cols{(cudf::size_type)state.range(1)};
-  auto type_size = cudf::size_of(cudf::data_type(cudf::type_to_id<Type>()));
 
   // Create columns with values in the range [0,100)
   std::vector<column_wrapper> columns;
