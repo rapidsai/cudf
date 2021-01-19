@@ -201,7 +201,7 @@ TYPED_TEST(FixedPointTestBothReps, GroupByCount)
   test_single_agg(keys, vals, expect_keys, expect_vals, std::move(agg2));
 }
 
-TYPED_TEST(FixedPointTestBothReps, GroupBySum)
+TYPED_TEST(FixedPointTestBothReps, GroupBySumProduct)
 {
   using namespace numeric;
   using decimalXX    = TypeParam;
@@ -222,6 +222,11 @@ TYPED_TEST(FixedPointTestBothReps, GroupBySum)
 
   auto agg1 = cudf::make_sum_aggregation();
   test_single_agg(keys, vals, expect_keys, expect_vals, std::move(agg1), force_use_sort_impl::YES);
+
+  auto agg2 = cudf::make_product_aggregation();
+  EXPECT_THROW(test_single_agg(
+                 keys, vals, expect_keys, expect_vals, std::move(agg2), force_use_sort_impl::YES),
+               cudf::logic_error);
 }
 
 TYPED_TEST(FixedPointTestBothReps, GroupByMin)
@@ -243,6 +248,28 @@ TYPED_TEST(FixedPointTestBothReps, GroupByMin)
   // test_single_agg(keys, vals, expect_keys, expect_vals, std::move(agg));
 
   auto agg1 = cudf::make_min_aggregation();
+  test_single_agg(keys, vals, expect_keys, expect_vals, std::move(agg1), force_use_sort_impl::YES);
+}
+
+TYPED_TEST(FixedPointTestBothReps, GroupByMax)
+{
+  using namespace numeric;
+  using decimalXX  = TypeParam;
+  using RepType    = cudf::device_storage_type_t<decimalXX>;
+  using fp_wrapper = cudf::test::fixed_point_column_wrapper<RepType>;
+  using K          = int32_t;
+
+  auto const scale = scale_type{-1};
+  auto const keys  = fixed_width_column_wrapper<K>{1, 2, 3, 1, 2, 2, 1, 3, 3, 2};
+  auto const vals  = fp_wrapper{{0, 1, 2, 3, 4, 5, 6, 7, 8, 9}, scale};
+
+  auto const expect_keys = fixed_width_column_wrapper<K>{1, 2, 3};
+  auto const expect_vals = fp_wrapper{{6, 9, 8}, scale};
+
+  // auto agg = cudf::make_min_aggregation();
+  // test_single_agg(keys, vals, expect_keys, expect_vals, std::move(agg));
+
+  auto agg1 = cudf::make_max_aggregation();
   test_single_agg(keys, vals, expect_keys, expect_vals, std::move(agg1), force_use_sort_impl::YES);
 }
 
