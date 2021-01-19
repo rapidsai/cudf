@@ -221,7 +221,7 @@ class DecimalDtype(ExtensionDtype):
 
     name = "decimal"
     _metadata = ("precision", "scale")
-    _MAX_PRECISION = len(str(np.iinfo("int64").max)) - 1
+    _MAX_PRECISION = np.floor(np.log10(np.iinfo("int64").max))
 
     def __init__(self, precision, scale):
         """
