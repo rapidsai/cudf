@@ -216,6 +216,9 @@ class StructDtype(ExtensionDtype):
     def __repr__(self):
         return f"StructDtype({self.fields})"
 
+    def __hash__(self):
+        return hash(self._typ)
+
 
 class DecimalDtype(ExtensionDtype):
 
@@ -291,3 +294,6 @@ class DecimalDtype(ExtensionDtype):
             f"{self.__class__.__name__}"
             f"(precision={self.precision}, scale={self.scale})"
         )
+
+    def __hash__(self):
+        return hash(self._typ)

@@ -1,4 +1,4 @@
-# Copyright (c) 2018-2020, NVIDIA CORPORATION.
+# Copyright (c) 2018-2021, NVIDIA CORPORATION.
 
 from io import BytesIO, StringIO
 
@@ -119,6 +119,11 @@ def to_csv(
 ):
     """{docstring}"""
 
+    if not isinstance(sep, str):
+        raise TypeError(f'"sep" must be string, not {type(sep).__name__}')
+    elif len(sep) > 1:
+        raise TypeError('"sep" must be a 1-character string')
+
     return_as_string = False
     if path_or_buf is None:
         path_or_buf = StringIO()
@@ -134,6 +139,18 @@ def to_csv(
         except KeyError:
             raise NameError(
                 "Dataframe doesn't have the labels provided in columns"
+            )
+
+    for col in df._data.columns:
+        if isinstance(col, cudf.core.column.ListColumn):
+            raise NotImplementedError(
+                "Writing to csv format is not yet supported with "
+                "list columns."
+            )
+        elif isinstance(col, cudf.core.column.StructColumn):
+            raise NotImplementedError(
+                "Writing to csv format is not yet supported with "
+                "Struct columns."
             )
 
     # TODO: Need to typecast categorical columns to the underlying

@@ -40,28 +40,27 @@
 TEST_F(JitCacheMultiProcessTest, MultiProcessTest)
 {
   int num_tests = 20;
-  int *input, *output;
+  // Cannot initialize scalars before forking
+  rmm::device_scalar<int> *input;
+  rmm::device_scalar<int> *output;
   int expect = 64;
 
   auto tester = [&](int pid, int test_no) {
     // Brand new cache object that has nothing in in-memory cache
     cudf::jit::cudfJitCache cache;
 
-    // Parent writes to output[0], child writes to output[1]
-    size_t idx = 2 * test_no + (pid == 0);
-
-    *input      = 4;
-    output[idx] = 1;
+    input->set_value(4);
+    output->set_value(1);
 
     // make program
     auto program = cache.getProgram("FileCacheTestProg3", program3_source);
     // make kernel
     auto kernel = cache.getKernelInstantiation("my_kernel", program, {"3", "int"});
-    (*std::get<1>(kernel)).configure(grid, block).launch(input, &output[idx]);
+    (*std::get<1>(kernel)).configure(grid, block).launch(input->data(), output->data());
     CUDA_TRY(cudaDeviceSynchronize());
 
-    ASSERT_TRUE(expect == output[idx]) << "Expected val: " << expect << '\n'
-                                       << "  Actual val: " << output[idx];
+    ASSERT_TRUE(expect == output->value()) << "Expected val: " << expect << '\n'
+                                           << "  Actual val: " << output->value();
   };
 
   // This pipe is how the child process will send output to parent
@@ -79,10 +78,10 @@ TEST_F(JitCacheMultiProcessTest, MultiProcessTest)
     dup2(pipefd[1], STDOUT_FILENO);  // redirect stdout to pipe
   }
 
-  CUDA_TRY(cudaMallocManaged(&input, sizeof(input)));
-  CUDA_TRY(cudaMallocManaged(&output, sizeof(output) * num_tests * 2));
+  input  = new rmm::device_scalar<int>();
+  output = new rmm::device_scalar<int>();
 
-  for (size_t i = 0; i < num_tests; i++) {
+  for (int i = 0; i < num_tests; i++) {
     if (cpid > 0)
       usleep(10000);
     else
