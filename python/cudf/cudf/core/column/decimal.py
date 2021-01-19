@@ -1,5 +1,4 @@
 import cupy as cp
-import more_itertools
 import numpy as np
 import pyarrow as pa
 
@@ -29,17 +28,10 @@ class DecimalColumn(ColumnBase):
         )
 
     def to_arrow(self):
-        data_buf_64 = self.base_data.to_host_array()
-        zeros_buf = bytes(data_buf_64.size)
+        data_buf_64 = self.base_data.to_host_array().view("int64")
+        zeros_buf = np.zeros(len(data_buf_64), dtype="int64")
         data_buf_128 = pa.py_buffer(
-            bytes(
-                more_itertools.flatten(
-                    more_itertools.interleave(
-                        more_itertools.chunked(data_buf_64, 8),
-                        more_itertools.chunked(zeros_buf, 8),
-                    )
-                )
-            )
+            np.ravel((data_buf_64, zeros_buf), order="F")
         )
         mask_buf = (
             self.base_mask
