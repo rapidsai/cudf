@@ -2903,30 +2903,16 @@ public class ColumnVectorTest extends CudfTestBase {
   void testListContainsString() {
     List<String> list1 = Arrays.asList("Héllo there", "thésé");
     List<String> list2 = Arrays.asList("", "ARé some", "test strings");
-    List<String> list3 = Arrays.asList(null, "", "ARé some", "test strings");
-    List<String> list4 = null;
+    List<String> list3 = Arrays.asList(null, "", "ARé some", "test strings", "thésé");
+    List<String> list4 = Arrays.asList(null, "", "ARé some", "test strings");
+    List<String> list5 = null;
     try (ColumnVector v = ColumnVector.fromLists(new HostColumnVector.ListType(true,
-             new HostColumnVector.BasicType(true, DType.STRING)), list1, list2, list3, list4);
-         ColumnVector expected = ColumnVector.fromBoxedBooleans(true, false, null, null);
+        new HostColumnVector.BasicType(true, DType.STRING)), list1, list2, list3, list4, list5);
+         ColumnVector expected = ColumnVector.fromBoxedBooleans(true, false, true, null, null);
          ColumnVector result = v.listContains(Scalar.fromString("thésé"))) {
       assertColumnsAreEqual(expected, result);
     }
   }
-
-//  @Test
-//  void testListContainsString() {
-//    List<String> list1 = Arrays.asList("Héllo there", "thésé");
-//    List<String> list2 = Arrays.asList("", "ARé some", "test strings");
-//    List<String> list3 = Arrays.asList(null, "", "ARé some", "test strings", "thésé");
-//    List<String> list4 = Arrays.asList(null, "", "ARé some", "test strings");
-//    List<String> list5 = null;
-//    try (ColumnVector v = ColumnVector.fromLists(new HostColumnVector.ListType(true,
-//        new HostColumnVector.BasicType(true, DType.STRING)), list1, list2, list3, list4, list5);
-//         ColumnVector expected = ColumnVector.fromBoxedBooleans(true, false, true, null, null);
-//         ColumnVector result = v.listContains(Scalar.fromString("thésé"))) {
-//      assertColumnsAreEqual(expected, result);
-//    }
-//  }
 
   @Test
   void testListContainsInt() {
@@ -2948,11 +2934,29 @@ public class ColumnVectorTest extends CudfTestBase {
     List<String> list1 = Arrays.asList("Héllo there", "thésé");
     List<String> list2 = Arrays.asList("", "ARé some", "test strings");
     List<String> list3 = Arrays.asList("FOO", "", "ARé some", "test");
-    List<String> list4 = null;
+    List<String> list4 = Arrays.asList(null, "FOO", "", "ARé some", "test");
+    List<String> list5 = Arrays.asList(null, "FOO", "", "ARé some", "test");
+    List<String> list6 = null;
     try (ColumnVector v = ColumnVector.fromLists(new HostColumnVector.ListType(true,
-        new HostColumnVector.BasicType(true, DType.STRING)), list1, list2, list3, list4);
-         ColumnVector expected = ColumnVector.fromBoxedBooleans(true, true, true, null);
-         ColumnVector result = v.listContainsColumn(ColumnVector.fromStrings("thésé", "", "test", null))) {
+        new HostColumnVector.BasicType(true, DType.STRING)), list1, list2, list3, list4, list5, list6);
+         ColumnVector expected = ColumnVector.fromBoxedBooleans(true, true, true, true, null, null);
+         ColumnVector result = v.listContainsColumn(
+             ColumnVector.fromStrings("thésé", "", "test", "test", "iotA", null))) {
+      assertColumnsAreEqual(expected, result);
+    }
+  }
+
+  @Test
+  void testListContainsIntCol() {
+    List<Integer> list1 = Arrays.asList(1, 2, 3);
+    List<Integer> list2 = Arrays.asList(4, 5, 6);
+    List<Integer> list3 = Arrays.asList(null, 8, 9);
+    List<Integer> list4 = Arrays.asList(null, 8, 9);
+    List<Integer> list5 = null;
+    try (ColumnVector v = ColumnVector.fromLists(new HostColumnVector.ListType(true,
+        new HostColumnVector.BasicType(true, DType.INT32)), list1, list2, list3, list4, list5);
+         ColumnVector expected = ColumnVector.fromBoxedBooleans(true, false, true, null, null);
+         ColumnVector result = v.listContainsColumn(ColumnVector.fromBoxedInts(3, 3, 8, 3, null))) {
       assertColumnsAreEqual(expected, result);
     }
   }
