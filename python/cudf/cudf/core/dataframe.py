@@ -6836,6 +6836,7 @@ class DataFrame(Frame, Serializable):
         line_terminator="\n",
         chunksize=None,
         encoding=None,
+        compression=None,
     ):
         """{docstring}"""
         from cudf.io import csv as csv
@@ -6851,6 +6852,7 @@ class DataFrame(Frame, Serializable):
             line_terminator=line_terminator,
             chunksize=chunksize,
             encoding=encoding,
+            compression=compression,
         )
 
     @ioutils.doc_to_orc()

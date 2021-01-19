@@ -1957,12 +1957,24 @@ def test_csv_sep_error():
     )
 
 
-def test_csv_encoding_error():
+def test_to_csv_encoding_error():
     # TODO: Remove this test once following
     # issue is fixed: https://github.com/rapidsai/cudf/issues/2957
     df = cudf.DataFrame({"a": ["你好", "test"]})
     encoding = "utf-8-sig"
-    error_message = f"Encoding {encoding} is not supported. \
-        Currently, only utf-8 encoding is supported."
+    error_message = (
+        f"Encoding {encoding} is not supported. "
+        + "Currently, only utf-8 encoding is supported."
+    )
     with pytest.raises(NotImplementedError, match=re.escape(error_message)):
         df.to_csv("test.csv", encoding=encoding)
+
+
+def test_to_csv_compression_error():
+    df = cudf.DataFrame({"a": ["test"]})
+    compression = "snappy"
+    error_message = (
+        f"Writing compressed csv is not currently supported in cudf"
+    )
+    with pytest.raises(NotImplementedError, match=re.escape(error_message)):
+        df.to_csv("test.csv", compression=compression)
