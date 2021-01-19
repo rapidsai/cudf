@@ -115,6 +115,7 @@ def to_csv(
     index=True,
     line_terminator="\n",
     chunksize=None,
+    encoding=None,
     **kwargs,
 ):
     """{docstring}"""
@@ -123,6 +124,11 @@ def to_csv(
         raise TypeError(f'"sep" must be string, not {type(sep).__name__}')
     elif len(sep) > 1:
         raise TypeError('"sep" must be a 1-character string')
+
+    if encoding and encoding != "utf-8":
+        raise NotImplementedError(
+            f"Encoding {encoding} is not supported. Currently, only utf-8 encoding is supported."
+        )
 
     return_as_string = False
     if path_or_buf is None:

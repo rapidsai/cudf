@@ -931,6 +931,9 @@ index : bool, default True
 line_terminator : char, default '\\n'
 chunksize : int or None, default None
     Rows to write at a time
+encoding: str, default 'utf-8'
+    A string representing the encoding to use in the output file
+    Only ‘utf-8’ is currently supported
 
 Returns
 -------

@@ -1955,3 +1955,13 @@ def test_csv_sep_error():
         rfunc_args_and_kwargs=([], {"sep": 1}),
         expected_error_message='"sep" must be string, not int',
     )
+
+
+def test_csv_encoding_error():
+    # TODO: Remove this test once following
+    # issue is fixed: https://github.com/rapidsai/cudf/issues/2957
+    df = cudf.DataFrame({"a": ["你好", "test"]})
+    encoding = "utf-8-sig"
+    error_message = f"Encoding {encoding} is not supported. Currently, only utf-8 encoding is supported."
+    with pytest.raises(NotImplementedError, match=re.escape(error_message)):
+        csv_buf = df.to_csv("test.csv", encoding=encoding)
