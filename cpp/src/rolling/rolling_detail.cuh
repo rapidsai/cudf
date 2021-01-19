@@ -963,7 +963,7 @@ struct rolling_window_launcher {
     // For the example above:
     //   offsets        == [0, 2, 5, 8, 11, 13]
     //   scatter result == [0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1, 0]
-    //
+
     auto num_child_rows = get_num_child_rows(offsets);
     auto scatter_values = make_fixed_width_column(size_data_type, 
                                                   offsets.size()-2, 
@@ -993,12 +993,47 @@ struct rolling_window_launcher {
     // For the example above:
     //   scatter result == [0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1, 0]
     //   inclusive_scan == [0, 0, 1, 1, 1, 2, 2, 2, 3, 3, 3, 4, 4]
-    auto per_row_mapping = make_fixed_width_column(size_data_type, num_child_rows);
+    auto per_row_mapping = make_fixed_width_column(size_data_type, 
+                                                   num_child_rows, 
+                                                   mask_state::UNALLOCATED,
+                                                   stream, 
+                                                   mr);
     thrust::inclusive_scan(thrust::device,
                            scatter_output->view().template begin<size_type>(),
                            scatter_output->view().template end<size_type>(),
                            per_row_mapping->mutable_view().template begin<size_type>());
     return per_row_mapping;
+  }
+
+  template <typename PrecedingIter>
+  std::unique_ptr<column> get_gather_map_for_child_column(column_view const& child_offsets,
+                                                          column_view const& per_row_mapping,
+                                                          PrecedingIter preceding_iter,
+                                                          rmm::cuda_stream_view stream,
+                                                          rmm::mr::device_memory_resource* mr)
+  {
+    auto gather_map = make_fixed_width_column(data_type{type_to_id<size_type>()}, 
+                                              per_row_mapping.size(),
+                                              mask_state::UNALLOCATED,
+                                              stream,
+                                              mr);
+    thrust::for_each_n( // Convert to transform().
+        thrust::device,
+        thrust::make_counting_iterator<size_type>(0),
+        per_row_mapping.size(),
+        [d_offsets = child_offsets.template begin<size_type>(),   // E.g. [0,   2,     5,     8,     11, 13]
+         d_groups  = per_row_mapping.template begin<size_type>(), // E.g. [0,0, 1,1,1, 2,2,2, 3,3,3, 4,4]
+         d_prev    = preceding_iter,
+         d_output  = gather_map->mutable_view().template begin<size_type>()]          
+        __device__(auto i) {
+            auto group = d_groups[i];
+            auto group_start_offset = d_offsets[group];
+            auto relative_index = i - group_start_offset;
+
+            d_output[i] = (group - d_prev[group] + 1) + relative_index;
+        }
+    );
+    return gather_map;
   }
 
   template <aggregation::Kind op,
@@ -1037,26 +1072,27 @@ struct rolling_window_launcher {
                                             stream, 
                                             mr);
 
+    // Map each element of the collect() result's child column
+    // to the index where it appears in the input.
     auto per_row_mapping = get_list_child_to_input_mapping(offsets->view(), stream, mr);
 
-    auto gather_map = make_fixed_width_column(data_type{type_to_id<size_type>()}, per_row_mapping->size());
-    thrust::for_each_n(
-        thrust::device,
-        thrust::make_counting_iterator<size_type>(0),
-        per_row_mapping->size(),
-        [d_offsets = offsets->view().template begin<size_type>(),         // [0,   2,     5,     8,     11, 13]
-        d_groups   = per_row_mapping->view().template begin<size_type>(), // [0,0, 1,1,1, 2,2,2, 3,3,3, 4,4]
-        d_prev     = preceding_begin,
-        d_output   = gather_map->mutable_view().template begin<size_type>()]          
-        __device__(auto i) {
-            auto group = d_groups[i];
-            auto group_start_offset = d_offsets[group];
-            auto relative_index = i - group_start_offset;
+    // Generate gather map to produce the collect() result's child column.
+    auto gather_map = get_gather_map_for_child_column(offsets->view(), 
+                                                      per_row_mapping->view(), 
+                                                      preceding_begin,
+                                                      stream,
+                                                      mr);
 
-            d_output[i] = (group - d_prev[group] + 1) + relative_index;
-        }
-    );
-    return gather_map;
+    // gather(), to construct child column.
+    auto gather_output = cudf::gather(table_view{std::vector<column_view>{input}}, gather_map->view());
+    
+    return make_lists_column(input.size(),
+                             std::move(offsets),
+                             std::move(gather_output->release()[0]),
+                             0,
+                             {},
+                             stream,
+                             mr);
   }
 };
 
