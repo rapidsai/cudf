@@ -40,8 +40,7 @@ auto get_search_keys_device_iterable_view(cudf::column_view const& search_keys,
   return column_device_view::create(search_keys, stream);
 }
 
-auto get_search_keys_device_iterable_view(cudf::scalar const& search_key,
-                                          rmm::cuda_stream_view)
+auto get_search_keys_device_iterable_view(cudf::scalar const& search_key, rmm::cuda_stream_view)
 {
   return &search_key;
 }
