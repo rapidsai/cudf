@@ -134,9 +134,7 @@ def to_csv(
         raise NotImplementedError(error_msg)
 
     if compression:
-        error_msg = (
-            f"Writing compressed csv is not currently supported in cudf"
-        )
+        error_msg = "Writing compressed csv is not currently supported in cudf"
         raise NotImplementedError(error_msg)
 
     return_as_string = False

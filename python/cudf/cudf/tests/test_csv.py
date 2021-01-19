@@ -1973,8 +1973,6 @@ def test_to_csv_encoding_error():
 def test_to_csv_compression_error():
     df = cudf.DataFrame({"a": ["test"]})
     compression = "snappy"
-    error_message = (
-        f"Writing compressed csv is not currently supported in cudf"
-    )
+    error_message = "Writing compressed csv is not currently supported in cudf"
     with pytest.raises(NotImplementedError, match=re.escape(error_message)):
         df.to_csv("test.csv", compression=compression)
