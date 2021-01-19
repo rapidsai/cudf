@@ -29,10 +29,9 @@ class DecimalColumn(ColumnBase):
 
     def to_arrow(self):
         data_buf_64 = self.base_data.to_host_array().view("int64")
-        zeros_buf = np.zeros(len(data_buf_64), dtype="int64")
-        data_buf_128 = pa.py_buffer(
-            np.ravel((data_buf_64, zeros_buf), order="F")
-        )
+        data_buf_128 = np.zeros(len(data_buf_64) * 2, dtype="int64")
+        data_buf_128[::2] = data_buf_64
+        data_buf = pa.py_buffer(data_buf_128)
         mask_buf = (
             self.base_mask
             if self.base_mask is None
@@ -41,7 +40,7 @@ class DecimalColumn(ColumnBase):
         return pa.Array.from_buffers(
             type=self.dtype.to_arrow(),
             length=self.size,
-            buffers=[mask_buf, data_buf_128],
+            buffers=[mask_buf, data_buf],
         )
 
     def binary_operator(self, op, other, reflect=False):
