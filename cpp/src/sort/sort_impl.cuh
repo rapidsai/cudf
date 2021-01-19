@@ -18,7 +18,6 @@
 
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/gather.hpp>
-#include <cudf/strings/detail/sorting.cuh>
 #include <cudf/table/row_operators.cuh>
 #include <cudf/table/table_device_view.cuh>
 #include <cudf/utilities/error.hpp>
