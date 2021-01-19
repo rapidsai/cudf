@@ -220,7 +220,7 @@ class MultiIndex(Index):
                     ('B', 2020),
                     ('B', 2021)],
                 names=['lv1', 'lv2'])
-        
+
         ``names`` argument must be a list, and must have same length as
         ``MultiIndex.levels``:
 
