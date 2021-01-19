@@ -80,10 +80,10 @@ struct single_column_sort_fn {
   {
     // A non-stable sort on a numeric column with no nulls can use the radix sort but
     // requires making a copy of the input data and the indices.
-    auto temp_col = std::make_unique<column>(input, stream);
-    auto d_col    = temp_col->mutable_view();
-    auto temp_seq = std::make_unique<column>(indices, stream);
-    auto d_seq    = temp_seq->view();
+    auto temp_col = column(input, stream);
+    auto d_col    = temp_col.mutable_view();
+    auto temp_seq = column(indices, stream);
+    auto d_seq    = temp_seq.view();
     if (ascending) {
       size_t tbytes = 0;
       cub::DeviceRadixSort::SortPairs(nullptr,
@@ -143,8 +143,8 @@ struct single_column_sort_fn {
                                 mutable_column_view& indices,
                                 rmm::cuda_stream_view stream)
   {
-    auto temp_col = std::make_unique<column>(input, stream);
-    auto d_col    = temp_col->mutable_view();
+    auto temp_col = column(input, stream);
+    auto d_col    = temp_col.mutable_view();
     thrust::stable_sort_by_key(
       rmm::exec_policy(stream), d_col.begin<T>(), d_col.end<T>(), indices.begin<size_type>());
   }
