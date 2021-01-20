@@ -424,14 +424,7 @@ class Merge(object):
                         "neither side is ordered"
                     )
 
-
-
-        if how == "inner":
-            # sub-cases for when both operands are categorical
-            if ltype == rtype:
-                # equal categories, equal ordering
-                return ltype
-            elif not (ltype.ordered or rtype.ordered):
+            if not (ltype.ordered or rtype.ordered):
                 # neiter ordered, so categories must be different
                 return self.input_to_libcudf_casting_rules(
                     ltype.categories,
@@ -443,30 +436,59 @@ class Merge(object):
                     "inner merging on categorical variables when" \
                     "only one side is ordered is ambiguous"
                 )
-        elif type(ltype) != type(rtype):
-            # drop to the underlying types in this case
-            return self.input_to_libcudf_casting_rules(
-                ltype.categories,
-                rtype.categories,
-                how
-            )
+
+        elif how in {'left', 'right'}:
+            if how == 'left':
+                major, minor = ltype, rtype
+            elif how == 'right':
+                major, minor = rtype, ltype
+            
+            # preserve ordering from the major table
+            if minor.ordered and not major.ordered:
+                warnings.warn(
+                    f"{how} join does not preserve ordering from"
+                    " the minor operand"
+                )
+                if major.categories.equals(minor.categories):
+                    return major
+                else:
+                    raise TypeError(
+                        f"{how} join when {how} table is unordered"
+                        " and the other is not may only proceed when"
+                        " categories are identical"
+                    )
+            elif major.ordered and not minor.ordered:
+                return major
+            elif major.ordered and minor.ordered:
+                # categories must be different
+                raise TypeError(
+                    f"{how} join when the {how} categorical"
+                    " is unordered, but the other is not, is"
+                    " ambiguous"
+                )
+            else:
+                # neither ordered, categories different
+                return major
+
+            
+        
 
         # for left or right joins, the join generally proceeds,
         # with the dtype from the major operand taking priority
-        if how in {"left", "right"}:
-            if how == "left":
-                mjr, mnr = lcol, rcol
-            elif how == "right":
-                mjr, mnr = rcol, lcol
-            if isinstance(mjr.dtype, CategoricalDtype):
-                mjr = mjr.categories
-            if isinstance(mnr.dtype, CategoricalDtype):
-                mnr = mnr.categories
-            return self.input_to_libcudf_casting_rules(
-                mjr,
-                mnr,
-                how
-            )
+#        if how in {"left", "right"}:
+#            if how == "left":
+#                mjr, mnr = lcol, rcol
+#            elif how == "right":
+#                mjr, mnr = rcol, lcol
+#            if isinstance(mjr.dtype, CategoricalDtype):
+#                mjr = mjr.categories
+#            if isinstance(mnr.dtype, CategoricalDtype):
+#                mnr = mnr.categories
+#            return self.input_to_libcudf_casting_rules(
+#                mjr,
+#                mnr,
+#                how
+#            )
 
     def _input_to_libcudf_castrules_one_cat(self, lcol, rcol, how):
         return 
@@ -576,6 +598,10 @@ class Merge(object):
                     merge_return_type = cudf.core.dtypes.CategoricalDtype(
                         categories=new_cats
                     )
+            elif how == 'left':
+                return dtype_l
+            elif how == 'right':
+                return dtype_r
             else:
                 merge_return_type = "category"
         return merge_return_type
