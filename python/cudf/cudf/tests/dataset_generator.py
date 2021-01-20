@@ -318,7 +318,7 @@ def rand_dataframe(dtypes_meta, rows, seed=random.randint(0, 2 ** 32 - 1)):
             nesting_depth = np.random.randint(1, nesting_max_depth)
 
             dtype = cudf.core.dtypes.ListDtype(value_type)
-            i = 1
+            i = 0
             while i < nesting_depth:
                 dtype = cudf.core.dtypes.ListDtype(dtype)
                 i += 1
@@ -477,6 +477,32 @@ def boolean_generator(size):
     return lambda: np.random.choice(a=[False, True], size=size)
 
 
+def get_nested_lists(dtype, nesting_depth, list_max_length):
+    n_values = np.random.randint(1, list_max_length)
+
+    all_values = [
+        get_nested_list(
+            dtype=dtype,
+            nesting_depth=nesting_depth,
+            list_max_length=list_max_length,
+        )
+        for _ in range(n_values)
+    ]
+
+    if nesting_depth > 1 and len(all_values) > 1:
+        values = [np.random.choice(all_values, int(n_values / 2)).tolist()] + [
+            np.random.choice(all_values, int(n_values / 2)).tolist()
+        ]
+        nesting_depth -= 1
+    else:
+        values = all_values
+
+    while nesting_depth > 1:
+        values = [values]
+        nesting_depth -= 1
+    return values
+
+
 def get_nested_list(dtype, nesting_depth, list_max_length):
     cardinality = np.random.randint(0, list_max_length)
     dtype = np.dtype(dtype)
@@ -502,16 +528,13 @@ def get_nested_list(dtype, nesting_depth, list_max_length):
     else:
         raise TypeError(f"Unsupported dtype: {dtype}")
 
-    while nesting_depth > 1:
-        values = [values]
-        nesting_depth -= 1
-    return values
+    return values.tolist()
 
 
 def list_generator(dtype, size, nesting_depth, lists_max_length):
 
     return lambda: [
-        get_nested_list(
+        get_nested_lists(
             dtype=dtype,
             nesting_depth=nesting_depth,
             list_max_length=lists_max_length,
