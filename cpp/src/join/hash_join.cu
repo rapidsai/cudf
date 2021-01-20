@@ -432,25 +432,22 @@ std::pair<std::unique_ptr<table>, std::unique_ptr<table>> construct_join_output_
   std::unique_ptr<table> common_table = std::make_unique<table>();
   // Construct the joined columns
   if (join_kind::FULL_JOIN == JoinKind) {
-    auto complement_indices = get_left_join_indices_complement(
-      joined_indices.second, probe.num_rows(), build.num_rows(), stream);
     if (not columns_in_common.empty()) {
       auto common_from_build = detail::gather(build.select(build_common_col),
-                                              complement_indices.second.begin(),
-                                              complement_indices.second.end(),
+                                              joined_indices.second.begin() + probe.num_rows(),
+                                              joined_indices.second.end(),
                                               bounds_policy,
                                               stream,
                                               rmm::mr::get_current_device_resource());
       auto common_from_probe = detail::gather(probe.select(probe_common_col),
                                               joined_indices.first.begin(),
-                                              joined_indices.first.end(),
+                                              joined_indices.first.begin() + probe.num_rows(),
                                               bounds_policy,
                                               stream,
                                               rmm::mr::get_current_device_resource());
       common_table           = cudf::detail::concatenate(
-        {common_from_build->view(), common_from_probe->view()}, stream, mr);
+        {common_from_probe->view(), common_from_build->view()}, stream, mr);
     }
-    joined_indices = concatenate_vector_pairs(complement_indices, joined_indices, stream);
   } else {
     if (not columns_in_common.empty()) {
       common_table = detail::gather(probe.select(probe_common_col),
@@ -641,10 +638,7 @@ hash_join::hash_join_impl::compute_hash_join_indices(cudf::table_view const &pro
                           [](const auto &b, const auto &p) { return b.type() == p.type(); }),
                "Mismatch in joining column data types");
 
-  constexpr cudf::detail::join_kind ProbeJoinKind = (JoinKind == cudf::detail::join_kind::FULL_JOIN)
-                                                      ? cudf::detail::join_kind::LEFT_JOIN
-                                                      : JoinKind;
-  return probe_join_indices<ProbeJoinKind>(probe_selected, compare_nulls, stream);
+  return probe_join_indices<JoinKind>(probe_selected, compare_nulls, stream);
 }
 
 template <cudf::detail::join_kind JoinKind>
@@ -706,14 +700,13 @@ hash_join::hash_join_impl::compute_hash_join(
 }
 
 template <cudf::detail::join_kind JoinKind>
-std::enable_if_t<JoinKind != cudf::detail::join_kind::FULL_JOIN,
-                 std::pair<rmm::device_uvector<size_type>, rmm::device_uvector<size_type>>>
+std::pair<rmm::device_uvector<size_type>, rmm::device_uvector<size_type>>
 hash_join::hash_join_impl::probe_join_indices(cudf::table_view const &probe,
                                               null_equality compare_nulls,
                                               rmm::cuda_stream_view stream) const
 {
   // Trivial left join case - exit early
-  if (!_hash_table && JoinKind == cudf::detail::join_kind::LEFT_JOIN) {
+  if (!_hash_table && JoinKind != cudf::detail::join_kind::INNER_JOIN) {
     return get_trivial_left_join_indices(probe, stream);
   }
 
@@ -721,8 +714,20 @@ hash_join::hash_join_impl::probe_join_indices(cudf::table_view const &probe,
 
   auto build_table = cudf::table_device_view::create(_build_selected, stream);
   auto probe_table = cudf::table_device_view::create(probe, stream);
-  return cudf::detail::probe_join_hash_table<JoinKind>(
+
+  constexpr cudf::detail::join_kind ProbeJoinKind = (JoinKind == cudf::detail::join_kind::FULL_JOIN)
+                                                      ? cudf::detail::join_kind::LEFT_JOIN
+                                                      : JoinKind;
+  auto join_indices = cudf::detail::probe_join_hash_table<ProbeJoinKind>(
     *build_table, *probe_table, *_hash_table, compare_nulls, stream);
+
+  if (JoinKind == cudf::detail::join_kind::FULL_JOIN) {
+    auto complement_indices = detail::get_left_join_indices_complement(
+      join_indices.second, probe.num_rows(), _build.num_rows(), stream);
+    join_indices = detail::concatenate_vector_pairs(join_indices, complement_indices, stream);
+  }
+
+  return join_indices;
 }
 
 }  // namespace cudf

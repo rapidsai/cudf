@@ -1527,8 +1527,8 @@ TEST_F(JoinTest, FullJoinGatherMap)
   auto lmap_sorted     = cudf::gather(cudf::table_view({result.first->view()}), *lmap_sort_order);
   auto rmap_sorted     = cudf::gather(cudf::table_view({result.second->view()}), *rmap_sort_order);
 
-  column_wrapper<int32_t> lmap_gold{{NoneValue, NoneValue, NoneValue, NoneValue, 0, 1, 2, 3}};
-  column_wrapper<int32_t> rmap_gold{{NoneValue, NoneValue, NoneValue, NoneValue, 0, 1, 2, 3}};
+  column_wrapper<int32_t> lmap_gold{{NoneValue, NoneValue, NoneValue, NoneValue, 0, 1, 2, 3, 4}};
+  column_wrapper<int32_t> rmap_gold{{NoneValue, NoneValue, NoneValue, NoneValue, 0, 1, 2, 3, 4}};
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(lmap_sorted->view().column(0), lmap_gold);
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(rmap_sorted->view().column(0), rmap_gold);

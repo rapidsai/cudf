@@ -361,11 +361,8 @@ struct hash_join::hash_join_impl {
    * @return Join output indices vector pair.
    */
   template <cudf::detail::join_kind JoinKind>
-  std::enable_if_t<JoinKind != cudf::detail::join_kind::FULL_JOIN,
-                   std::pair<rmm::device_uvector<size_type>, rmm::device_uvector<size_type>>>
-  probe_join_indices(cudf::table_view const& probe,
-                     null_equality compare_nulls,
-                     rmm::cuda_stream_view stream) const;
+  std::pair<rmm::device_uvector<size_type>, rmm::device_uvector<size_type>> probe_join_indices(
+    cudf::table_view const& probe, null_equality compare_nulls, rmm::cuda_stream_view stream) const;
 };
 
 }  // namespace cudf
