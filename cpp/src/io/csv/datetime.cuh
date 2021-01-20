@@ -102,7 +102,7 @@ __inline__ __device__ constexpr int32_t days_since_baseline(int year, int month,
 __inline__ __device__ constexpr int32_t days_since_epoch(int year, int month, int day)
 {
   // Shift the start date to epoch to match unix time
-  static_assert(days_since_baseline(1970, 1, 1) == 719468_days,
+  static_assert(static_cast<uint32_t>(daysSinceBaseline(1970, 1, 1)) == 719468_days,
                 "Baseline to epoch returns incorrect number of days");
 
   return days_since_baseline(year, month, day) - days_since_baseline(1970, 1, 1);
