@@ -221,6 +221,8 @@ TYPED_TEST(FixedPointTestBothReps, GroupBySumProductMinMaxDecimalAsValue)
     auto const expect_vals_min = fp_wrapper{{0, 1, 2}, scale};
     auto const expect_vals_max = fp_wrapper{{6, 9, 8}, scale};
 
+    // group_by sort tests
+
     auto agg1 = cudf::make_sum_aggregation();
     test_single_agg(
       keys, vals, expect_keys, expect_vals_sum, std::move(agg1), force_use_sort_impl::YES);
@@ -237,6 +239,21 @@ TYPED_TEST(FixedPointTestBothReps, GroupBySumProductMinMaxDecimalAsValue)
     EXPECT_THROW(
       test_single_agg(keys, vals, expect_keys, {}, std::move(agg4), force_use_sort_impl::YES),
       cudf::logic_error);
+
+    // group_by hash tests
+
+    auto agg5 = cudf::make_sum_aggregation();
+    test_single_agg(keys, vals, expect_keys, expect_vals_sum, std::move(agg5));
+
+    // auto agg6 = cudf::make_min_aggregation();
+    // test_single_agg(keys, vals, expect_keys, expect_vals_min, std::move(agg6));
+
+    // auto agg7 = cudf::make_max_aggregation();
+    // test_single_agg(keys, vals, expect_keys, expect_vals_max, std::move(agg7));
+
+    // auto agg8 = cudf::make_product_aggregation();
+    // EXPECT_THROW(test_single_agg(keys, vals, expect_keys, {}, std::move(agg8)),
+    // cudf::logic_error);
   }
 }
 

@@ -341,7 +341,8 @@ struct elementwise_aggregator {
                              column_device_view source,
                              size_type source_index) const noexcept
   {
-    update_target_element<Source, k, target_has_nulls, source_has_nulls>{}(
+    using DeviceType = device_storage_type_t<Source>;
+    update_target_element<DeviceType, k, target_has_nulls, source_has_nulls>{}(
       target, target_index, source, source_index);
   }
 };
