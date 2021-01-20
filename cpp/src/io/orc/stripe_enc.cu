@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2020, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -96,7 +96,6 @@ struct orcenc_state_s {
 };
 
 static inline __device__ uint32_t zigzag(uint32_t v) { return v; }
-static inline __device__ uint64_t zigzag(uint64_t v) { return v; }
 static inline __device__ uint32_t zigzag(int32_t v)
 {
   int32_t s = (v >> 31);
