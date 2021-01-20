@@ -274,5 +274,6 @@ class IntervalDtype(StructDtype):
         return ArrowIntervalType(
             pa.from_numpy_dtype(self.subtype), self.closed
         )
+
     def __hash__(self):
         return hash(self._typ)
