@@ -32,8 +32,10 @@ class DecimalColumn(ColumnBase):
     def to_arrow(self):
         data_buf_64 = self.base_data.to_host_array().view("int64")
         data_buf_128 = np.empty(len(data_buf_64) * 2, dtype="int64")
+        # use striding to set the first 64 bits of each 128-bit chunk:
         data_buf_128[::2] = data_buf_64
-        # pad negative values with `1` bits, otherwise pad with `0` bits
+        # use striding again to set the remaining bits of each 128-bit chunk:
+        # 0 for non-negative values, -1 for negative values:
         data_buf_128[1::2] = np.piecewise(
             data_buf_64, [data_buf_64 < 0], [-1, 0]
         )
