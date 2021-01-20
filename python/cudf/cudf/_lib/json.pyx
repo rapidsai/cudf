@@ -76,12 +76,22 @@ cpdef read_json(object filepath_or_buffer,
         if isinstance(dtype, abc.Mapping):
             c_dtypes.reserve(len(dtype))
             for k, v in dtype.items():
+                if cudf.utils.dtypes.is_categorical_dtype(v):
+                    raise NotImplementedError(
+                        "CategoricalDtype as dtype is not yet "
+                        "supported in JSON reader"
+                    )
                 c_dtypes.push_back(str(str(k) + ":" + str(v)).encode())
         elif not isinstance(dtype, abc.Iterable):
             raise TypeError("`dtype` must be 'list like' or 'dict'")
         else:
             c_dtypes.reserve(len(dtype))
             for col_dtype in dtype:
+                if cudf.utils.dtypes.is_categorical_dtype(col_dtype):
+                    raise NotImplementedError(
+                        "CategoricalDtype as dtype is not yet "
+                        "supported in JSON reader"
+                    )
                 c_dtypes.push_back(str(col_dtype).encode())
 
     cdef json_reader_options opts = move(

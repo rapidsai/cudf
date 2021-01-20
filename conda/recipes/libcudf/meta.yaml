@@ -123,6 +123,7 @@ test:
     - test -f $PREFIX/include/cudf/lists/detail/concatenate.hpp
     - test -f $PREFIX/include/cudf/lists/detail/copying.hpp
     - test -f $PREFIX/include/cudf/lists/extract.hpp
+    - test -f $PREFIX/include/cudf/lists/gather.hpp
     - test -f $PREFIX/include/cudf/lists/lists_column_view.hpp
     - test -f $PREFIX/include/cudf/merge.hpp
     - test -f $PREFIX/include/cudf/null_mask.hpp
@@ -166,7 +167,6 @@ test:
     - test -f $PREFIX/include/cudf/strings/padding.hpp
     - test -f $PREFIX/include/cudf/strings/replace.hpp
     - test -f $PREFIX/include/cudf/strings/replace_re.hpp
-    - test -f $PREFIX/include/cudf/strings/sorting.hpp
     - test -f $PREFIX/include/cudf/strings/split/partition.hpp
     - test -f $PREFIX/include/cudf/strings/split/split.hpp
     - test -f $PREFIX/include/cudf/strings/strings_column_view.hpp

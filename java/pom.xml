@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!--
-  Copyright (c) 2019-2020, NVIDIA CORPORATION.
+  Copyright (c) 2019-2021, NVIDIA CORPORATION.
 
   Licensed under the Apache License, Version 2.0 (the "License");
   you may not use this file except in compliance with the License.
@@ -148,6 +148,7 @@
         <PER_THREAD_DEFAULT_STREAM>OFF</PER_THREAD_DEFAULT_STREAM>
         <RMM_LOGGING_LEVEL>INFO</RMM_LOGGING_LEVEL>
         <USE_GDS>OFF</USE_GDS>
+        <GPU_ARCHS>ALL</GPU_ARCHS>
         <native.build.path>${project.build.directory}/cmake-build</native.build.path>
         <slf4j.version>1.7.30</slf4j.version>
     </properties>
@@ -375,7 +376,7 @@
                                     <arg value="-DCMAKE_CXX_FLAGS=${cxx.flags}"/>
                                     <arg value="-DCMAKE_EXPORT_COMPILE_COMMANDS=${CMAKE_EXPORT_COMPILE_COMMANDS}"/>
                                     <arg value="-DCUDF_CPP_BUILD_DIR=${CUDF_CPP_BUILD_DIR}"/>
-                                    <arg value="-DGPU_ARCHS=ALL"/>
+                                    <arg value="-DGPU_ARCHS=${GPU_ARCHS}"/>
                                 </exec>
                                 <exec dir="${native.build.path}"
                                       failonerror="true"
