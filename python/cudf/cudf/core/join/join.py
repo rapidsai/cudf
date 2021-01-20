@@ -470,25 +470,6 @@ class Merge(object):
                 # neither ordered, categories different
                 return major
 
-            
-        
-
-        # for left or right joins, the join generally proceeds,
-        # with the dtype from the major operand taking priority
-#        if how in {"left", "right"}:
-#            if how == "left":
-#                mjr, mnr = lcol, rcol
-#            elif how == "right":
-#                mjr, mnr = rcol, lcol
-#            if isinstance(mjr.dtype, CategoricalDtype):
-#                mjr = mjr.categories
-#            if isinstance(mnr.dtype, CategoricalDtype):
-#                mnr = mnr.categories
-#            return self.input_to_libcudf_casting_rules(
-#                mjr,
-#                mnr,
-#                how
-#            )
 
     def _input_to_libcudf_castrules_one_cat(self, lcol, rcol, how):
         return 
