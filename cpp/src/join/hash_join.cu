@@ -521,11 +521,12 @@ hash_join::hash_join_impl::hash_join_impl(cudf::table_view const &build,
   _hash_table = build_join_hash_table(_build_selected, compare_nulls, stream);
 }
 
-join_result hash_join::hash_join_impl::inner_join(cudf::table_view const &probe,
-                                                  std::vector<size_type> const &probe_on,
-                                                  null_equality compare_nulls,
-                                                  rmm::cuda_stream_view stream,
-                                                  rmm::mr::device_memory_resource *mr) const
+std::pair<std::unique_ptr<cudf::column>, std::unique_ptr<cudf::column>>
+hash_join::hash_join_impl::inner_join(cudf::table_view const &probe,
+                                      std::vector<size_type> const &probe_on,
+                                      null_equality compare_nulls,
+                                      rmm::cuda_stream_view stream,
+                                      rmm::mr::device_memory_resource *mr) const
 {
   CUDF_FUNC_RANGE();
   return compute_hash_join<cudf::detail::join_kind::INNER_JOIN>(
@@ -547,11 +548,12 @@ hash_join::hash_join_impl::inner_join(
     probe, probe_on, columns_in_common, common_columns_output_side, compare_nulls, stream, mr);
 }
 
-join_result hash_join::hash_join_impl::left_join(cudf::table_view const &probe,
-                                                 std::vector<size_type> const &probe_on,
-                                                 null_equality compare_nulls,
-                                                 rmm::cuda_stream_view stream,
-                                                 rmm::mr::device_memory_resource *mr) const
+std::pair<std::unique_ptr<cudf::column>, std::unique_ptr<cudf::column>>
+hash_join::hash_join_impl::left_join(cudf::table_view const &probe,
+                                     std::vector<size_type> const &probe_on,
+                                     null_equality compare_nulls,
+                                     rmm::cuda_stream_view stream,
+                                     rmm::mr::device_memory_resource *mr) const
 {
   CUDF_FUNC_RANGE();
   return compute_hash_join<cudf::detail::join_kind::INNER_JOIN>(
@@ -579,11 +581,12 @@ std::unique_ptr<cudf::table> hash_join::hash_join_impl::left_join(
                                           std::move(probe_build_pair.second));
 }
 
-join_result hash_join::hash_join_impl::full_join(cudf::table_view const &probe,
-                                                 std::vector<size_type> const &probe_on,
-                                                 null_equality compare_nulls,
-                                                 rmm::cuda_stream_view stream,
-                                                 rmm::mr::device_memory_resource *mr) const
+std::pair<std::unique_ptr<cudf::column>, std::unique_ptr<cudf::column>>
+hash_join::hash_join_impl::full_join(cudf::table_view const &probe,
+                                     std::vector<size_type> const &probe_on,
+                                     null_equality compare_nulls,
+                                     rmm::cuda_stream_view stream,
+                                     rmm::mr::device_memory_resource *mr) const
 {
   CUDF_FUNC_RANGE();
   return compute_hash_join<cudf::detail::join_kind::INNER_JOIN>(
@@ -645,11 +648,12 @@ hash_join::hash_join_impl::compute_hash_join_indices(cudf::table_view const &pro
 }
 
 template <cudf::detail::join_kind JoinKind>
-join_result hash_join::hash_join_impl::compute_hash_join(cudf::table_view const &probe,
-                                                         std::vector<size_type> const &probe_on,
-                                                         null_equality compare_nulls,
-                                                         rmm::cuda_stream_view stream,
-                                                         rmm::mr::device_memory_resource *mr) const
+std::pair<std::unique_ptr<cudf::column>, std::unique_ptr<cudf::column>>
+hash_join::hash_join_impl::compute_hash_join(cudf::table_view const &probe,
+                                             std::vector<size_type> const &probe_on,
+                                             null_equality compare_nulls,
+                                             rmm::cuda_stream_view stream,
+                                             rmm::mr::device_memory_resource *mr) const
 {
   auto join_indices =
     compute_hash_join_indices<JoinKind>(probe, probe_on, compare_nulls, stream, mr);
@@ -664,7 +668,8 @@ join_result hash_join::hash_join_impl::compute_hash_join(cudf::table_view const 
                                                   join_indices.second.release(),
                                                   rmm::device_buffer{},
                                                   0);
-  return join_result{std::move(left_map), std::move(right_map)};
+  return std::make_pair<std::unique_ptr<cudf::column>, std::unique_ptr<cudf::column>>(
+    std::move(left_map), std::move(right_map));
 }
 
 template <cudf::detail::join_kind JoinKind>

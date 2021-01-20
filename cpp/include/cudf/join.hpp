@@ -32,22 +32,11 @@ namespace cudf {
  */
 
 /**
- * @brief The result of a `join`.
- *
- * A `join_result` holds two columns containing the
- * left and right gathermaps.
- */ // TODO: explain this better
-struct join_result {
-  std::unique_ptr<cudf::column> left_indices;   /// < The left gathermap
-  std::unique_ptr<cudf::column> right_indices;  /// < The left gathermap
-};
-
-/**
  * @brief Performs  an inner join on the specified columns of two
  * tables (`left`, `right`), and returns the row indices corresponding
  * to the result.
  */ // TODO: explain this better
-join_result inner_join(
+std::pair<std::unique_ptr<cudf::column>, std::unique_ptr<cudf::column>> inner_join(
   cudf::table_view const& left,
   cudf::table_view const& right,
   std::vector<cudf::size_type> const& left_on,
@@ -126,12 +115,13 @@ std::unique_ptr<cudf::table> inner_join(
  * tables (`left`, `right`), and returns the row indices corresponding
  * to the result.
  */ // TODO: explain this better
-join_result left_join(cudf::table_view const& left,
-                      cudf::table_view const& right,
-                      std::vector<cudf::size_type> const& left_on,
-                      std::vector<cudf::size_type> const& right_on,
-                      null_equality compare_nulls         = null_equality::EQUAL,
-                      rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+std::pair<std::unique_ptr<cudf::column>, std::unique_ptr<cudf::column>> left_join(
+  cudf::table_view const& left,
+  cudf::table_view const& right,
+  std::vector<cudf::size_type> const& left_on,
+  std::vector<cudf::size_type> const& right_on,
+  null_equality compare_nulls         = null_equality::EQUAL,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
  * @brief Performs a left join (also known as left outer join) on the
@@ -206,12 +196,13 @@ std::unique_ptr<cudf::table> left_join(
  * tables (`left`, `right`), and returns the row indices corresponding
  * to the result.
  */ // TODO: explain this better
-join_result full_join(cudf::table_view const& left,
-                      cudf::table_view const& right,
-                      std::vector<cudf::size_type> const& left_on,
-                      std::vector<cudf::size_type> const& right_on,
-                      null_equality compare_nulls         = null_equality::EQUAL,
-                      rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+std::pair<std::unique_ptr<cudf::column>, std::unique_ptr<cudf::column>> full_join(
+  cudf::table_view const& left,
+  cudf::table_view const& right,
+  std::vector<cudf::size_type> const& left_on,
+  std::vector<cudf::size_type> const& right_on,
+  null_equality compare_nulls         = null_equality::EQUAL,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
  * @brief Performs a full join (also known as full outer join) on the
@@ -467,7 +458,7 @@ class hash_join {
    * tables (`left`, `right`), and returns the row indices corresponding
    * to the result.
    */ // TODO: explain this better
-  join_result inner_join(
+  std::pair<std::unique_ptr<cudf::column>, std::unique_ptr<cudf::column>> inner_join(
     cudf::table_view const& probe,
     std::vector<size_type> const& probe_on,
     null_equality compare_nulls         = null_equality::EQUAL,
@@ -523,7 +514,7 @@ class hash_join {
    * tables (`left`, `right`), and returns the row indices corresponding
    * to the result.
    */ // TODO: explain this better
-  join_result left_join(
+  std::pair<std::unique_ptr<cudf::column>, std::unique_ptr<cudf::column>> left_join(
     cudf::table_view const& probe,
     std::vector<size_type> const& probe_on,
     null_equality compare_nulls         = null_equality::EQUAL,
@@ -565,7 +556,7 @@ class hash_join {
    * tables (`left`, `right`), and returns the row indices corresponding
    * to the result.
    */ // TODO: explain this better
-  join_result full_join(
+  std::pair<std::unique_ptr<cudf::column>, std::unique_ptr<cudf::column>> full_join(
     cudf::table_view const& probe,
     std::vector<size_type> const& probe_on,
     null_equality compare_nulls         = null_equality::EQUAL,
