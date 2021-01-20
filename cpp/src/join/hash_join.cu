@@ -556,7 +556,7 @@ hash_join::hash_join_impl::left_join(cudf::table_view const &probe,
                                      rmm::mr::device_memory_resource *mr) const
 {
   CUDF_FUNC_RANGE();
-  return compute_hash_join<cudf::detail::join_kind::INNER_JOIN>(
+  return compute_hash_join<cudf::detail::join_kind::LEFT_JOIN>(
     probe, probe_on, compare_nulls, stream, mr);
 }
 
@@ -589,7 +589,7 @@ hash_join::hash_join_impl::full_join(cudf::table_view const &probe,
                                      rmm::mr::device_memory_resource *mr) const
 {
   CUDF_FUNC_RANGE();
-  return compute_hash_join<cudf::detail::join_kind::INNER_JOIN>(
+  return compute_hash_join<cudf::detail::join_kind::FULL_JOIN>(
     probe, probe_on, compare_nulls, stream, mr);
 }
 

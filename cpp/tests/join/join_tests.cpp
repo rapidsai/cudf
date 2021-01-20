@@ -33,11 +33,15 @@
 #include <cudf_test/table_utilities.hpp>
 #include <cudf_test/type_lists.hpp>
 
+#include <limits>
+
 template <typename T>
 using column_wrapper = cudf::test::fixed_width_column_wrapper<T>;
 using strcol_wrapper = cudf::test::strings_column_wrapper;
 using CVector        = std::vector<std::unique_ptr<cudf::column>>;
 using Table          = cudf::table;
+constexpr cudf::size_type NoneValue =
+  std::numeric_limits<cudf::size_type>::min();  // TODO: how to test if this isn't public?
 
 struct JoinTest : public cudf::test::BaseFixture {
 };
@@ -1429,7 +1433,7 @@ TEST_F(JoinDictionaryTest, FullJoinWithNulls)
   CUDF_TEST_EXPECT_TABLES_EQUAL(*gold, cudf::table_view(result_decoded));
 }
 
-TEST_F(JoinTest, InnerJoinNoNullsGathermap)
+TEST_F(JoinTest, InnerJoinGathermap)
 {
   column_wrapper<int32_t> col0_0{{3, 1, 2, 0, 2}};
   strcol_wrapper col0_1({"s1", "s1", "s0", "s4", "s0"});
@@ -1458,6 +1462,74 @@ TEST_F(JoinTest, InnerJoinNoNullsGathermap)
 
   column_wrapper<int32_t> lmap_gold{{0, 2, 4}};
   column_wrapper<int32_t> rmap_gold{{1, 1, 4}};
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(lmap_sorted->view().column(0), lmap_gold);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(rmap_sorted->view().column(0), rmap_gold);
+}
+
+TEST_F(JoinTest, LeftJoinGathermap)
+{
+  column_wrapper<int32_t> col0_0{{3, 1, 2, 0, 3}};
+  strcol_wrapper col0_1({"s0", "s1", "s2", "s4", "s1"});
+  column_wrapper<int32_t> col0_2{{0, 1, 2, 4, 1}};
+
+  column_wrapper<int32_t> col1_0{{2, 2, 0, 4, 3}};
+  strcol_wrapper col1_1({"s1", "s0", "s1", "s2", "s1"});
+  column_wrapper<int32_t> col1_2{{1, 0, 1, 2, 1}};
+
+  CVector cols0, cols1;
+  cols0.push_back(col0_0.release());
+  cols0.push_back(col0_1.release());
+  cols0.push_back(col0_2.release());
+  cols1.push_back(col1_0.release());
+  cols1.push_back(col1_1.release());
+  cols1.push_back(col1_2.release());
+
+  Table t0(std::move(cols0));
+  Table t1(std::move(cols1));
+
+  auto result          = cudf::left_join(t0, t1, {0, 1}, {0, 1});
+  auto lmap_sort_order = cudf::sorted_order(cudf::table_view({result.first->view()}));
+  auto rmap_sort_order = cudf::sorted_order(cudf::table_view({result.second->view()}));
+  auto lmap_sorted     = cudf::gather(cudf::table_view({result.first->view()}), *lmap_sort_order);
+  auto rmap_sorted     = cudf::gather(cudf::table_view({result.second->view()}), *rmap_sort_order);
+
+  column_wrapper<int32_t> lmap_gold{{0, 1, 2, 3, 4}};
+  column_wrapper<int32_t> rmap_gold{{NoneValue, NoneValue, NoneValue, NoneValue, 4}};
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(lmap_sorted->view().column(0), lmap_gold);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(rmap_sorted->view().column(0), rmap_gold);
+}
+
+TEST_F(JoinTest, FullJoinGatherMap)
+{
+  column_wrapper<int32_t> col0_0{{3, 1, 2, 0, 3}};
+  strcol_wrapper col0_1({"s0", "s1", "s2", "s4", "s1"});
+  column_wrapper<int32_t> col0_2{{0, 1, 2, 4, 1}};
+
+  column_wrapper<int32_t> col1_0{{2, 2, 0, 4, 3}, {1, 1, 1, 0, 1}};
+  strcol_wrapper col1_1{{"s1", "s0", "s1", "s2", "s1"}};
+  column_wrapper<int32_t> col1_2{{1, 0, 1, 2, 1}};
+
+  CVector cols0, cols1;
+  cols0.push_back(col0_0.release());
+  cols0.push_back(col0_1.release());
+  cols0.push_back(col0_2.release());
+  cols1.push_back(col1_0.release());
+  cols1.push_back(col1_1.release());
+  cols1.push_back(col1_2.release());
+
+  Table t0(std::move(cols0));
+  Table t1(std::move(cols1));
+
+  auto result          = cudf::full_join(t0, t1, {0, 1}, {0, 1});
+  auto lmap_sort_order = cudf::sorted_order(cudf::table_view({result.first->view()}));
+  auto rmap_sort_order = cudf::sorted_order(cudf::table_view({result.second->view()}));
+  auto lmap_sorted     = cudf::gather(cudf::table_view({result.first->view()}), *lmap_sort_order);
+  auto rmap_sorted     = cudf::gather(cudf::table_view({result.second->view()}), *rmap_sort_order);
+
+  column_wrapper<int32_t> lmap_gold{{NoneValue, NoneValue, NoneValue, NoneValue, 0, 1, 2, 3}};
+  column_wrapper<int32_t> rmap_gold{{NoneValue, NoneValue, NoneValue, NoneValue, 0, 1, 2, 3}};
+
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(lmap_sorted->view().column(0), lmap_gold);
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(rmap_sorted->view().column(0), rmap_gold);
 }
