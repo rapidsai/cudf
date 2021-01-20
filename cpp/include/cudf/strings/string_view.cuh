@@ -37,7 +37,7 @@ using char_utf8 = uint32_t;  ///< UTF-8 characters are 1-4 bytes
 constexpr cudf::size_type UNKNOWN_STRING_LENGTH{-1};
 
 /**
- * @brief Tje char width is initialized to this value as a place-holder.
+ * @brief The char width is initialized to this value as a place-holder.
  *
  * The byte-width of the characters in a string is computed on-demand.
  */
