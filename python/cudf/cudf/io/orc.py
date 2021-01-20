@@ -1,4 +1,4 @@
-# Copyright (c) 2019-2020, NVIDIA CORPORATION.
+# Copyright (c) 2019-2021, NVIDIA CORPORATION.
 
 import datetime
 import warnings
@@ -113,7 +113,7 @@ def read_orc_statistics(
     )
     if not is_single_filepath_or_buffer:
         raise NotImplementedError(
-            "`read_orc_statistics` does not yet support reading multiple files"
+            "`read_orc_statistics` does not support reading multiple files"
         )
 
     filepath_or_buffer, compression = ioutils.get_filepath_or_buffer(
@@ -123,10 +123,11 @@ def read_orc_statistics(
         ValueError("URL content-encoding decompression is not supported")
 
     # Read in statistics and unpack
-    statistics = libcudf.orc.read_orc_statistics(filepath_or_buffer)
-    if not statistics:
-        return None
-    (column_names, raw_file_statistics, *raw_stripes_statistics,) = statistics
+    (
+        column_names,
+        raw_file_statistics,
+        raw_stripes_statistics,
+    ) = libcudf.orc.read_raw_orc_statistics(filepath_or_buffer)
 
     # Parse column names
     column_names = [
