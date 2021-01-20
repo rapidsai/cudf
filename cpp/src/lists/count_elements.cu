@@ -48,19 +48,18 @@ std::unique_ptr<column> count_elements(lists_column_view const& input,
   auto device_column = cudf::column_device_view::create(input.parent(), stream);
   auto d_column      = *device_column;
   // create output column
-  auto output   = make_fixed_width_column(data_type{type_to_id<size_type>()},
+  auto output = make_fixed_width_column(data_type{type_to_id<size_type>()},
                                         input.size(),
                                         copy_bitmask(input.parent()),
                                         input.null_count(),
                                         stream,
                                         mr);
-  auto d_output = output->mutable_view().data<size_type>();
 
-  // fill in the lengths
+  // fill in the sizes
   thrust::transform(rmm::exec_policy(stream),
                     thrust::make_counting_iterator<cudf::size_type>(0),
                     thrust::make_counting_iterator<cudf::size_type>(input.size()),
-                    d_output,
+                    output->mutable_view().begin<size_type>(),
                     [d_column] __device__(size_type idx) {
                       if (d_column.is_null(idx)) return size_type{0};
                       auto d_offsets =
