@@ -193,7 +193,8 @@ std::unique_ptr<column> groupby::replace_nulls(column_view const& value,
   if (not value.has_nulls()) { return std::make_unique<cudf::column>(value); }
 
   auto group_labels = helper().group_labels(rmm::cuda_stream_default);
-  CUDF_EXPECTS(static_cast<cudf::size_type>(group_labels.size()) == value.size(), "Size mismatch between group labels and value.");
+  CUDF_EXPECTS(static_cast<cudf::size_type>(group_labels.size()) == value.size(),
+               "Size mismatch between group labels and value.");
 
   return detail::group_replace_nulls(
     value, group_labels.begin(), replace_policy, rmm::cuda_stream_default, mr);
