@@ -1037,20 +1037,20 @@ struct rolling_window_launcher {
                                               mask_state::UNALLOCATED,
                                               stream,
                                               mr);
-    thrust::for_each_n( // Convert to transform().
+    thrust::transform(
         thrust::device,
         thrust::make_counting_iterator<size_type>(0),
-        per_row_mapping.size(),
+        thrust::make_counting_iterator<size_type>(per_row_mapping.size()),
+        gather_map->mutable_view().template begin<size_type>(),
         [d_offsets = child_offsets.template begin<size_type>(),   // E.g. [0,   2,     5,     8,     11, 13]
          d_groups  = per_row_mapping.template begin<size_type>(), // E.g. [0,0, 1,1,1, 2,2,2, 3,3,3, 4,4]
-         d_prev    = preceding_iter,
-         d_output  = gather_map->mutable_view().template begin<size_type>()]          
+         d_prev    = preceding_iter]          
         __device__(auto i) {
             auto group = d_groups[i];
             auto group_start_offset = d_offsets[group];
             auto relative_index = i - group_start_offset;
 
-            d_output[i] = (group - d_prev[group] + 1) + relative_index;
+            return (group - d_prev[group] + 1) + relative_index;
         }
     );
     return gather_map;
