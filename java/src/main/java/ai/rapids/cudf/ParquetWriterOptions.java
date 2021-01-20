@@ -59,18 +59,22 @@ public class ParquetWriterOptions extends CompressedMetadataWriterOptions {
 
     /**
      * Overwrite flattened precision values for all decimal columns that are expected to be in
-     * this Table. The number of `precisionValues` should be equal to the numbers of Decimal columns
-     * otherwise a CudfException will be thrown
+     * this Table. The list of precisions should be an in-order traversal of all Decimal columns,
+     * including nested columns. Please look at the example below.
      *
-     * NOTE: This overwrites values that were previously written using this method.
+     * NOTE: The number of `precisionValues` should be equal to the numbers of Decimal columns
+     * otherwise a CudfException will be thrown. Also note that the values will be overwritten
+     * every time this method is called
      *
      * Example:
      *  Table0 : c0[type: INT32]
      *           c1[type: Decimal32(3, 1)]
-     *           c2[type: Struct[col0[type: Decimal(2, 1)], col1[type: INT64]]
+     *           c2[type: Struct[col0[type: Decimal(2, 1)],
+     *                           col1[type: INT64],
+     *                           col2[type: Decimal(8, 6)]]
      *           c3[type: Decimal64(12, 5)]
      *
-     *  Flattened list of precision from the above example will be {3, 2, 12}
+     *  Flattened list of precision from the above example will be {3, 2, 8, 12}
      */
     public Builder withPrecisionValues(int... precisionValues) {
       this.precisionValues = precisionValues;
@@ -103,6 +107,7 @@ public class ParquetWriterOptions extends CompressedMetadataWriterOptions {
 
   /**
    * Return the flattened list of precisions if set otherwise empty array will be returned.
+   * For a definition of what `flattened` means please look at {@link Builder#withPrecisionValues}
    */
   public int[] getPrecisions() {
     return precisions;
