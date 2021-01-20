@@ -21,7 +21,7 @@
 #include <cudf/detail/aggregation/aggregation.hpp>
 #include <cudf/detail/gather.hpp>
 #include <cudf/detail/groupby.hpp>
-#include <cudf/detail/groupby/group_transforms.hpp>
+#include <cudf/detail/groupby/group_replace_nulls.hpp>
 #include <cudf/detail/groupby/sort_helper.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/dictionary/dictionary_column_view.hpp>
@@ -190,13 +190,13 @@ std::unique_ptr<column> groupby::replace_nulls(column_view const& value,
 {
   CUDF_FUNC_RANGE();
   if (value.is_empty()) { return cudf::empty_like(value); }
-  if (!value.has_nulls()) { return std::make_unique<cudf::column>(value); }
+  if (not value.has_nulls()) { return std::make_unique<cudf::column>(value); }
 
-  return detail::group_replace_nulls(value,
-                                     helper().group_labels(rmm::cuda_stream_default),
-                                     replace_policy,
-                                     rmm::cuda_stream_default,
-                                     mr);
+  auto group_labels = helper().group_labels(rmm::cuda_stream_default);
+  CUDF_EXPECTS(static_cast<cudf::size_type>(group_labels.size()) == value.size(), "Size mismatch between group labels and value.");
+
+  return detail::group_replace_nulls(
+    value, group_labels.begin(), replace_policy, rmm::cuda_stream_default, mr);
 }
 
 // Get the sort helper object

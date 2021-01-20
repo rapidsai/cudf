@@ -14,6 +14,8 @@
  * limitations under the License.
  */
 
+#pragma once
+
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_view.hpp>
 #include <cudf/detail/gather.cuh>
@@ -34,18 +36,27 @@
 #include <memory>
 
 namespace cudf {
-
 namespace groupby {
 namespace detail {
 
+/**
+ * @brief Internal API to replace nulls with preceding/following non-null values in @p value
+ *
+ * @tparam LabelIterator Iterator type for group labels
+ *
+ * @param[in] value A column whose null values will be replaced.
+ * @param[in] group_labels_begin Iterator to the start of group labels that each row belongs to
+ * @param[in] replace_policy Specify the position of replacement values relative to null values.
+ * @param stream CUDA stream used for device memory operations and kernel launches.
+ * @param[in] mr Device memory resource used to allocate device memory of the returned column.
+ */
+template <typename LabelIterator>
 std::unique_ptr<column> group_replace_nulls(cudf::column_view const& value,
-                                            rmm::device_vector<cudf::size_type> const& group_labels,
+                                            LabelIterator const& group_labels_begin,
                                             cudf::replace_policy replace_policy,
                                             rmm::cuda_stream_view stream,
                                             rmm::mr::device_memory_resource* mr)
 {
-  CUDF_EXPECTS(group_labels.size() == value.size(), "Size mismatch between group_label and value.");
-
   cudf::size_type size = value.size();
 
   auto device_in = cudf::column_device_view::create(value);
@@ -61,18 +72,18 @@ std::unique_ptr<column> group_replace_nulls(cudf::column_view const& value,
   thrust::equal_to<cudf::size_type> eq;
   if (replace_policy == cudf::replace_policy::PRECEDING) {
     thrust::inclusive_scan_by_key(rmm::exec_policy(stream),
-                                  group_labels.begin(),
-                                  group_labels.begin() + size,
+                                  group_labels_begin,
+                                  group_labels_begin + size,
                                   in_begin,
                                   gm_begin,
                                   eq,
                                   func);
   } else {
-    // auto gl_rbegin = thrust::make_reverse_iterator(group_labels.begin() + size);
-    // auto in_rbegin = thrust::make_reverse_iterator(in_begin + size);
-    // auto gm_rbegin = thrust::make_reverse_iterator(gm_begin + size);
-    // thrust::inclusive_scan_by_key(
-    //     rmm::exec_policy(stream), gl_rbegin, gl_rbegin + size, in_rbegin, gm_rbegin, func);
+    auto gl_rbegin = thrust::make_reverse_iterator(group_labels_begin + size);
+    auto in_rbegin = thrust::make_reverse_iterator(in_begin + size);
+    auto gm_rbegin = thrust::make_reverse_iterator(gm_begin + size);
+    thrust::inclusive_scan_by_key(
+      rmm::exec_policy(stream), gl_rbegin, gl_rbegin + size, in_rbegin, gm_rbegin, eq, func);
   }
 
   auto output = cudf::detail::gather(cudf::table_view({value}),
