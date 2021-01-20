@@ -862,7 +862,7 @@ JNIEXPORT long JNICALL Java_ai_rapids_cudf_Table_writeParquetBufferBegin(
     cudf::jni::native_jintArray precisions(env, j_precisions);
     std::vector<uint8_t> const v_precisions(
         precisions.data(), precisions.data() + precisions.size());
-   chunked_parquet_writer_options opts =
+    chunked_parquet_writer_options opts =
         chunked_parquet_writer_options::builder(sink)
             .nullable_metadata(&metadata)
             .compression(static_cast<compression_type>(j_compression))
@@ -919,7 +919,7 @@ JNIEXPORT long JNICALL Java_ai_rapids_cudf_Table_writeParquetFileBegin(
             .decimal_precision(v_precisions)
             .build();
 
-   std::shared_ptr<pq_chunked_state> state = write_parquet_chunked_begin(opts);
+    std::shared_ptr<pq_chunked_state> state = write_parquet_chunked_begin(opts);
     cudf::jni::native_parquet_writer_handle *ret =
         new cudf::jni::native_parquet_writer_handle(state);
     return reinterpret_cast<jlong>(ret);

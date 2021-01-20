@@ -1,6 +1,6 @@
 /*
  *
- *  Copyright (c) 2019, NVIDIA CORPORATION.
+ *  Copyright (c) 2020-2021, NVIDIA CORPORATION.
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -17,10 +17,6 @@
  */
 
 package ai.rapids.cudf;
-
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.List;
 
 /**
  * Settings for writing Parquet files.
@@ -46,7 +42,7 @@ public class ParquetWriterOptions extends CompressedMetadataWriterOptions {
   public static class Builder extends CMWriterBuilder<Builder> {
     private StatisticsFrequency statsGranularity = StatisticsFrequency.ROWGROUP;
     private boolean isTimestampTypeInt96 = false;
-    private List<Integer> precisionList = new ArrayList<>();
+    private int[] precisionValues = null;
 
     public Builder withStatisticsFrequency(StatisticsFrequency statsGranularity) {
       this.statsGranularity = statsGranularity;
@@ -62,10 +58,22 @@ public class ParquetWriterOptions extends CompressedMetadataWriterOptions {
     }
 
     /**
-     * Flattened precision values for all the decimal columns
+     * Overwrite flattened precision values for all decimal columns that are expected to be in
+     * this Table. The number of `precisionValues` should be equal to the numbers of Decimal columns
+     * otherwise a CudfException will be thrown
+     *
+     * NOTE: This overwrites values that were previously written using this method.
+     *
+     * Example:
+     *  Table0 : c0[type: INT32]
+     *           c1[type: Decimal32(3, 1)]
+     *           c2[type: Struct[col0[type: Decimal(2, 1)], col1[type: INT64]]
+     *           c3[type: Decimal64(12, 5)]
+     *
+     *  Flattened list of precision from the above example will be {3, 2, 12}
      */
     public Builder withPrecisionValues(int... precisionValues) {
-      Arrays.stream(precisionValues).forEach(i -> precisionList.add(i));
+      this.precisionValues = precisionValues;
       return this;
     }
 
@@ -86,13 +94,16 @@ public class ParquetWriterOptions extends CompressedMetadataWriterOptions {
     super(builder);
     this.statsGranularity = builder.statsGranularity;
     this.isTimestampTypeInt96 = builder.isTimestampTypeInt96;
-    this.precisions = builder.precisionList.stream().mapToInt(i->i).toArray();
+    this.precisions = builder.precisionValues;
   }
 
   public StatisticsFrequency getStatisticsFrequency() {
     return statsGranularity;
   }
 
+  /**
+   * Return the flattened list of precisions if set otherwise empty array will be returned.
+   */
   public int[] getPrecisions() {
     return precisions;
   }
