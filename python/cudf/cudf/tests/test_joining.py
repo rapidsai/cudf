@@ -1331,11 +1331,10 @@ def test_categorical_typecast_outer():
     # equal categories, neither ordered -> common dtype
     left = make_categorical_dataframe([1,2,3], ordered=False)
     right = make_categorical_dataframe([1,2,3], ordered=False)
-
     result = left.merge(right, on='key', how='outer')
 
     expect_dtype = CategoricalDtype(categories=[1,2,3], ordered=False)
-    expect_data = cudf.Series([1,2,3], dtype=expect_dtype)
+    expect_data = cudf.Series([1,2,3], dtype=expect_dtype, name='key')
 
     assert_eq(expect_data, result['key'])
 
@@ -1344,9 +1343,9 @@ def test_categorical_typecast_outer():
     right = make_categorical_dataframe([1,2,3], ordered=True)
 
     with pytest.raises(TypeError):
-        result = left.merge(right, how='outer', on='a')
+        result = left.merge(right, how='outer', on='key')
     with pytest.raises(TypeError):
-        result = right.merge(left, how='outer', on='a')
+        result = right.merge(left, how='outer', on='key')
 
     # unequal categories, neither ordered -> superset
     left = make_categorical_dataframe([1,2,3], ordered=False)
@@ -1355,7 +1354,7 @@ def test_categorical_typecast_outer():
     result = left.merge(right, on='key', how='outer')
 
     expect_dtype = CategoricalDtype(categories=[1,2,3,4], ordered=False)
-    expect_data = cudf.Series([1,2,3,4], dtype=expect_dtype)
+    expect_data = cudf.Series([1,2,3,4], dtype=expect_dtype, name='key')
 
     assert_eq(expect_data, result['key'])
 
@@ -1364,15 +1363,15 @@ def test_categorical_typecast_outer():
     right = make_categorical_dataframe([2,3,4], ordered=True)
 
     with pytest.raises(TypeError):
-        result = left.merge(right, how='outer', on='a')
+        result = left.merge(right, how='outer', on='key')
     with pytest.raises(TypeError):
-        result = right.merge(left, how='outer', on='a')
+        result = right.merge(left, how='outer', on='key')
 
     # unequal categories, both ordered -> error
     left = make_categorical_dataframe([1,2,3], ordered=True)
     right = make_categorical_dataframe([2,3,4], ordered=True)
     with pytest.raises(TypeError):
-        result = left.merge(right, how='outer', on='a')
+        result = left.merge(right, how='outer', on='key')
 
 
 @pytest.mark.parametrize(

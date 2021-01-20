@@ -561,7 +561,6 @@ class Merge(object):
 
         dtype_l = lcol.dtype
         dtype_r = rcol.dtype
-
         merge_return_type = None
         # we  currently only need to do this for categorical variables
         if isinstance(dtype_l, CategoricalDtype) and isinstance(
@@ -569,20 +568,12 @@ class Merge(object):
         ):
             if pd.api.types.is_dtype_equal(dtype_l, dtype_r):
                 if how in {"inner", "left"}:
-                    merge_return_type = dtype_l
-                elif how == "outer" and not (
-                    dtype_l.ordered or dtype_r.ordered
-                ):
-                    new_cats = cudf.concat(
-                        dtype_l.categories, dtype_r.categories
-                    ).unique()
-                    merge_return_type = cudf.core.dtypes.CategoricalDtype(
-                        categories=new_cats
-                    )
-            elif how == 'left':
-                return dtype_l
-            elif how == 'right':
+                    return dtype_l
+            if how == 'right':
                 return dtype_r
+            elif how == 'outer':
+                new_cats = cudf.concat([dtype_l.categories, dtype_r.categories]).unique()
+                return cudf.CategoricalDtype(categories=new_cats, ordered=False)
             else:
                 merge_return_type = "category"
         return merge_return_type
