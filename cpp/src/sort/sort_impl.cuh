@@ -40,7 +40,7 @@ namespace detail {
 template <bool stable = false>
 struct single_column_sort_fn {
   /**
-   * @brief Comparator functor needed for stable sort.
+   * @brief Comparator functor needed for stable sort and handling null elements.
    */
   template <typename T>
   struct comparator {
@@ -54,9 +54,8 @@ struct single_column_sort_fn {
           return (null_precedence == cudf::null_order::BEFORE ? !rhs_null : !lhs_null);
         }
       }
-      auto const lh_elem = d_column.element<T>(lhs);
-      auto const rh_elem = d_column.element<T>(rhs);
-      return ascending ? lh_elem < rh_elem : rh_elem < lh_elem;
+      return relational_compare(d_column.element<T>(lhs), d_column.element<T>(rhs)) ==
+             (ascending ? weak_ordering::LESS : weak_ordering::GREATER);
     }
     column_device_view const d_column;
     bool has_nulls;
@@ -65,93 +64,69 @@ struct single_column_sort_fn {
   };
 
   /**
-   * @brief Sorts numeric columns using the CUB Radix Sort.
+   * @brief Sorts fixed-width columns using faster thrust sort.
    *
    * @param input Column to sort
    * @param indices Output sorted indices
    * @param ascending True if sort order is ascending
    * @param stream CUDA stream used for device memory operations and kernel launches
    */
-  template <typename T, typename std::enable_if_t<cudf::is_numeric<T>()>* = nullptr>
-  void fast_numeric_sort(column_view const& input,
-                         mutable_column_view& indices,
-                         bool ascending,
-                         rmm::cuda_stream_view stream)
+  template <typename T, typename std::enable_if_t<cudf::is_fixed_width<T>()>* = nullptr>
+  void faster_sort(column_view const& input,
+                   mutable_column_view& indices,
+                   bool ascending,
+                   rmm::cuda_stream_view stream)
   {
-    // A non-stable sort on a numeric column with no nulls can use the radix sort but
-    // requires making a copy of the input data and the indices.
+    // A non-stable sort on a fixed-width column with no nulls will use a radix sort
+    // if using only the thrust::less or thrust::greater comparators but also
+    // requires making a copy of the input data.
     auto temp_col = column(input, stream);
     auto d_col    = temp_col.mutable_view();
-    auto temp_seq = column(indices, stream);
-    auto d_seq    = temp_seq.view();
+    using DeviceT = device_storage_type_t<T>;
     if (ascending) {
-      size_t tbytes = 0;
-      cub::DeviceRadixSort::SortPairs(nullptr,
-                                      tbytes,
-                                      input.begin<T>(),
-                                      d_col.begin<T>(),
-                                      d_seq.begin<size_type>(),
-                                      indices.begin<size_type>(),
-                                      input.size(),
-                                      0,
-                                      sizeof(T) * 8,
-                                      stream.value());
-      rmm::device_uvector<int8_t> buf(tbytes, stream);
-      cub::DeviceRadixSort::SortPairs(buf.data(),
-                                      tbytes,
-                                      input.begin<T>(),
-                                      d_col.begin<T>(),
-                                      d_seq.begin<size_type>(),
-                                      indices.begin<size_type>(),
-                                      input.size(),
-                                      0,
-                                      sizeof(T) * 8,
-                                      stream.value());
+      thrust::sort_by_key(rmm::exec_policy(stream),
+                          d_col.begin<DeviceT>(),
+                          d_col.end<DeviceT>(),
+                          indices.begin<size_type>(),
+                          thrust::less<DeviceT>());
     } else {
-      size_t tbytes = 0;
-      cub::DeviceRadixSort::SortPairsDescending(nullptr,
-                                                tbytes,
-                                                input.begin<T>(),
-                                                d_col.begin<T>(),
-                                                d_seq.begin<size_type>(),
-                                                indices.begin<size_type>(),
-                                                input.size(),
-                                                0,
-                                                sizeof(T) * 8,
-                                                stream.value());
-      rmm::device_uvector<int8_t> buf(tbytes, stream);
-      cub::DeviceRadixSort::SortPairsDescending(buf.data(),
-                                                tbytes,
-                                                input.begin<T>(),
-                                                d_col.begin<T>(),
-                                                d_seq.begin<size_type>(),
-                                                indices.begin<size_type>(),
-                                                input.size(),
-                                                0,
-                                                sizeof(T) * 8,
-                                                stream.value());
+      thrust::sort_by_key(rmm::exec_policy(stream),
+                          d_col.begin<DeviceT>(),
+                          d_col.end<DeviceT>(),
+                          indices.begin<size_type>(),
+                          thrust::greater<DeviceT>());
     }
   }
-  template <typename T, typename std::enable_if_t<!cudf::is_numeric<T>()>* = nullptr>
-  void fast_numeric_sort(column_view const&, mutable_column_view&, bool, rmm::cuda_stream_view)
+  template <typename T, typename std::enable_if_t<!cudf::is_fixed_width<T>()>* = nullptr>
+  void faster_sort(column_view const&, mutable_column_view&, bool, rmm::cuda_stream_view)
   {
-    CUDF_FAIL("Only numeric types are suitable for radix sorting");
+    CUDF_FAIL("Only fixed-width types are suitable for faster sorting");
   }
 
-  template <typename T, typename std::enable_if_t<cudf::is_numeric<T>()>* = nullptr>
-  void fast_numeric_stable_sort(column_view const& input,
-                                mutable_column_view& indices,
-                                rmm::cuda_stream_view stream)
+  /**
+   * @brief Stable sort of fixed-width columns using a thrust sort with no comparator.
+   *
+   * @param input Column to sort
+   * @param indices Output sorted indices
+   * @param stream CUDA stream used for device memory operations and kernel launches
+   */
+  template <typename T, typename std::enable_if_t<cudf::is_fixed_width<T>()>* = nullptr>
+  void faster_stable_sort(column_view const& input,
+                          mutable_column_view& indices,
+                          rmm::cuda_stream_view stream)
   {
     auto temp_col = column(input, stream);
     auto d_col    = temp_col.mutable_view();
-    thrust::stable_sort_by_key(
-      rmm::exec_policy(stream), d_col.begin<T>(), d_col.end<T>(), indices.begin<size_type>());
+    using DeviceT = device_storage_type_t<T>;
+    thrust::stable_sort_by_key(rmm::exec_policy(stream),
+                               d_col.begin<DeviceT>(),
+                               d_col.end<DeviceT>(),
+                               indices.begin<size_type>());
   }
-  template <typename T, typename std::enable_if_t<!cudf::is_numeric<T>()>* = nullptr>
-  void fast_numeric_stable_sort(column_view const&, mutable_column_view&, rmm::cuda_stream_view)
+  template <typename T, typename std::enable_if_t<!cudf::is_fixed_width<T>()>* = nullptr>
+  void faster_stable_sort(column_view const&, mutable_column_view&, rmm::cuda_stream_view)
   {
-    CUDF_FAIL("Only numeric types are suitable for radix sorting");
+    CUDF_FAIL("Only fixed-width types are suitable for faster stable sorting");
   }
 
   /**
@@ -174,26 +149,26 @@ struct single_column_sort_fn {
                   rmm::cuda_stream_view stream)
   {
     if (stable) {
-      if (!ascending || input.has_nulls() || !cudf::is_numeric<T>()) {
+      if (!ascending || input.has_nulls() || !cudf::is_fixed_width<T>()) {
         auto keys = column_device_view::create(input, stream);
         thrust::stable_sort(rmm::exec_policy(stream),
                             indices.begin<size_type>(),
                             indices.end<size_type>(),
                             comparator<T>{*keys, input.has_nulls(), ascending, null_precedence});
       } else {
-        fast_numeric_stable_sort<T>(input, indices, stream);
+        faster_stable_sort<T>(input, indices, stream);
       }
     } else {
-      // column with nulls or non-numeric column will also use a comparator
-      if (input.has_nulls() || !cudf::is_numeric<T>()) {
+      // column with nulls or non-fixed-width column will also use a comparator
+      if (input.has_nulls() || !cudf::is_fixed_width<T>()) {
         auto keys = column_device_view::create(input, stream);
         thrust::sort(rmm::exec_policy(stream),
                      indices.begin<size_type>(),
                      indices.end<size_type>(),
                      comparator<T>{*keys, input.has_nulls(), ascending, null_precedence});
       } else {
-        // wicked fast sort for a non-stable, non-null, numeric column
-        fast_numeric_sort<T>(input, indices, ascending, stream);
+        // wicked fast sort for a non-stable, non-null, fixed-width column types
+        faster_sort<T>(input, indices, ascending, stream);
       }
     }
   }
