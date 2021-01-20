@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2020, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -103,16 +103,31 @@ using device_storage_type_t =
 // clang-format on
 
 /**
+ * @brief Returns the corresponding `type_id` of type stored on device for a given `type_id`
+ *
+ * @param id   The given `type_id`
+ * @return     Corresponding `type_id` of type stored on device
+ */
+inline type_id device_storage_type_id(type_id id)
+{
+  switch (id) {
+    case type_id::DECIMAL32: return type_id::INT32;
+    case type_id::DECIMAL64: return type_id::INT64;
+    default: return id;
+  }
+}
+
+/**
  * @brief Checks if `fixed_point`-like types have template type `T` matching the column's
  * stored type id
  *
- * @tparam T The type that is stored on the device
- * @param id The `data_type::id` of the column
- * @return true If T matches the stored column type id
- * @return false If T does not match the stored column type id
+ * @tparam     T The type that is stored on the device
+ * @param id   The `data_type::id` of the column
+ * @return     `true` If T matches the stored column `type_id`
+ * @return     `false` If T does not match the stored column `type_id`
  */
 template <typename T>
-bool type_id_matches_device_storage_type(type_id const& id)
+bool type_id_matches_device_storage_type(type_id id)
 {
   return (id == type_id::DECIMAL32 && std::is_same<T, int32_t>::value) ||
          (id == type_id::DECIMAL64 && std::is_same<T, int64_t>::value) || id == type_to_id<T>();

@@ -306,8 +306,8 @@ class parquet_column_view {
         _decimal_scale  = -_leaf_col.type().scale();  // parquet and cudf disagree about scale signs
         CUDF_EXPECTS(decimal_precision.size() > decimal_precision_idx,
                      "Not enough decimal precision values passed for data!");
-        CUDF_EXPECTS(decimal_precision[decimal_precision_idx] > _decimal_scale,
-                     "Precision must be greater than scale!");
+        CUDF_EXPECTS(decimal_precision[decimal_precision_idx] >= _decimal_scale,
+                     "Precision must be equal to or greater than scale!");
         _decimal_precision = decimal_precision[decimal_precision_idx++];
         break;
       case cudf::type_id::DECIMAL64:
@@ -317,8 +317,8 @@ class parquet_column_view {
         _decimal_scale  = -_leaf_col.type().scale();  // parquet and cudf disagree about scale signs
         CUDF_EXPECTS(decimal_precision.size() > decimal_precision_idx,
                      "Not enough decimal precision values passed for data!");
-        CUDF_EXPECTS(decimal_precision[decimal_precision_idx] > _decimal_scale,
-                     "Precision must be greater than scale!");
+        CUDF_EXPECTS(decimal_precision[decimal_precision_idx] >= _decimal_scale,
+                     "Precision must be equal to or greater than scale!");
         _decimal_precision = decimal_precision[decimal_precision_idx++];
         break;
       default:
