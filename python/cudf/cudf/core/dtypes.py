@@ -249,11 +249,7 @@ class DecimalDtype(ExtensionDtype):
             13.0051 is representable with precision=6 and scale=4,
             and *not* representable with precision<6 or scale<4.
         """
-        if precision > self._MAX_PRECISION:
-            raise ValueError(
-                f"Cannot construct a {type(self).__name__}"
-                f" with precision > {self._MAX_PRECISION}"
-            )
+        self._validate(precision, scale)
         self._typ = pa.decimal128(precision, scale)
 
     @property
@@ -262,11 +258,7 @@ class DecimalDtype(ExtensionDtype):
 
     @precision.setter
     def precision(self, value):
-        if value > self._MAX_PRECISION:
-            raise ValueError(
-                f"Cannot construct a {type(self).__name__}"
-                f" with precision > {self._MAX_PRECISION}"
-            )
+        self._validate(value, self.scale)
         self._typ = pa.decimal128(precision=value, scale=self.scale)
 
     @property
@@ -297,3 +289,13 @@ class DecimalDtype(ExtensionDtype):
 
     def __hash__(self):
         return hash(self._typ)
+
+    @classmethod
+    def _validate(cls, precision, scale=0):
+        if precision > DecimalDtype._MAX_PRECISION:
+            raise ValueError(
+                f"Cannot construct a {cls.__name__}"
+                f" with precision > {cls._MAX_PRECISION}"
+            )
+        if abs(scale) > precision:
+            raise ValueError(f"scale={scale} exceeds precision={precision}")
