@@ -459,5 +459,38 @@ std::string infer_compression_type(
   const std::string& filename,
   const std::vector<std::pair<std::string, std::string>>& ext_to_comp_map);
 
+/**
+ * @brief Checks whether the given character is a whitespace character.
+ *
+ * @param[in] ch The character to check
+ *
+ * @return True if the input is whitespace, False otherwise
+ */
+__inline__ __device__ bool is_whitespace(char ch) { return ch == '\t' || ch == ' '; }
+
+/**
+ * @brief Adjusts the range to ignore starting/trailing whitespace and quotation characters.
+ *
+ * @param[in] begin Pointer to the first character in the parsing range
+ * @param[in] end pointer to the first character after the parsing range
+ * @param[in] quotechar The character used to denote quotes; '\0' if none
+ *
+ * @return Trimmed range
+ */
+__inline__ __device__ std::pair<char const*, char const*> trim_whitespaces_quotes(
+  char const* begin, char const* end, char quotechar = '\0')
+{
+  auto not_whitespace = [] __device__(auto c) { return !is_whitespace(c); };
+
+  begin = thrust::find_if(thrust::seq, begin, end, not_whitespace);
+  end   = thrust::find_if(thrust::seq,
+                        thrust::make_reverse_iterator(end),
+                        thrust::make_reverse_iterator(begin),
+                        not_whitespace)
+          .base();
+
+  return {(*begin == quotechar) ? ++begin : begin, (*(end - 1) == quotechar) ? end - 1 : end};
+}
+
 }  // namespace io
 }  // namespace cudf

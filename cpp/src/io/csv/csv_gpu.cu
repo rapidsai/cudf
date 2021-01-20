@@ -53,37 +53,6 @@ namespace gpu {
 constexpr uint32_t csvparse_block_dim = 128;
 
 /*
- * @brief Checks whether the given character is a whitespace character.
- *
- * @param ch The character to check
- *
- * @return True if the input is whitespace, False otherwise
- */
-__device__ __inline__ bool is_whitespace(char c) { return c == '\t' || c == ' '; }
-
-// TODO: replace with `trim_whitespaces_quotes` once `end` semantics is fixed
-/*
- * @brief Scans a character stream within a range, and adjusts the start and end
- * indices of the range to ignore whitespace and quotation characters.
- *
- * @param data The character stream to scan
- * @param start The start index to adjust
- * @param end The end index to adjust
- * @param quotechar The character used to denote quotes
- *
- * @return Adjusted or unchanged start_idx and end_idx
- */
-__device__ __inline__ void trim_field_start_end(const char **start,
-                                                const char **end,
-                                                char quotechar = '\0')
-{
-  while ((*start < *end) && is_whitespace(**start)) { (*start)++; }
-  if ((*start < *end) && **start == quotechar) { (*start)++; }
-  while ((*start <= *end) && is_whitespace(**end)) { (*end)--; }
-  if ((*start <= *end) && **end == quotechar) { (*end)--; }
-}
-
-/*
  * @brief Returns true is the input character is a valid digit.
  * Supports both decimal and hexadecimal digits (uppercase and lowercase).
  *
@@ -220,15 +189,13 @@ __global__ void __launch_bounds__(csvparse_block_dim)
     // Checking if this is a column that the user wants --- user can filter columns
     if (column_flags[col] & column_parse::enabled) {
       // points to last character in the field
-      auto field_end = next_delimiter - 1;
-      long field_len = next_delimiter - field_start;
-
+      auto const field_len = next_delimiter - field_start;
       if (serialized_trie_contains(opts.trie_na, field_start, field_len)) {
         atomicAdd(&d_columnData[actual_col].null_count, 1);
       } else if (serialized_trie_contains(opts.trie_true, field_start, field_len) ||
                  serialized_trie_contains(opts.trie_false, field_start, field_len)) {
         atomicAdd(&d_columnData[actual_col].bool_count, 1);
-      } else if (cudf::io::gpu::is_infinity(field_start, field_end)) {
+      } else if (cudf::io::gpu::is_infinity(field_start, next_delimiter)) {
         atomicAdd(&d_columnData[actual_col].float_count, 1);
       } else {
         long countNumber   = 0;
@@ -242,10 +209,10 @@ __global__ void __launch_bounds__(csvparse_block_dim)
 
         // Modify field_start & end to ignore whitespace and quotechars
         // This could possibly result in additional empty fields
-        trim_field_start_end(&field_start, &field_end);
-        field_len = field_end - field_start + 1;
+        auto const trimmed_field_range = trim_whitespaces_quotes(field_start, next_delimiter);
+        auto const trimmed_field_len   = trimmed_field_range.second - trimmed_field_range.first;
 
-        for (auto cur = field_start; cur <= field_end; cur++) {
+        for (auto cur = trimmed_field_range.first; cur < trimmed_field_range.second; ++cur) {
           if (is_digit(*cur)) {
             countNumber++;
             continue;
@@ -259,16 +226,18 @@ __global__ void __launch_bounds__(csvparse_block_dim)
             case ':': countColon++; break;
             case 'e':
             case 'E':
-              if (cur > field_start && cur < field_end) countExponent++;
+              if (cur > trimmed_field_range.first && cur < trimmed_field_range.second - 1)
+                countExponent++;
               break;
             default: countString++; break;
           }
         }
 
         // Integers have to have the length of the string
-        long int_req_number_cnt = field_len;
         // Off by one if they start with a minus sign
-        if ((*field_start == '-' || *field_start == '+') && field_len > 1) { --int_req_number_cnt; }
+        auto const int_req_number_cnt = trimmed_field_len - ((*trimmed_field_range.first == '-' ||
+                                                              *trimmed_field_range.first == '+') &&
+                                                             trimmed_field_len > 1);
 
         if (column_flags[col] & column_parse::as_datetime) {
           // PANDAS uses `object` dtype if the date is unparseable
@@ -278,13 +247,17 @@ __global__ void __launch_bounds__(csvparse_block_dim)
             atomicAdd(&d_columnData[actual_col].string_count, 1);
           }
         } else if (countNumber == int_req_number_cnt) {
-          bool is_negative       = (*field_start == '-');
-          char const *data_begin = field_start + (is_negative || (*field_start == '+'));
-          cudf::size_type *ptr   = cudf::io::gpu::infer_integral_field_counter(
+          bool const is_negative = (*trimmed_field_range.first == '-');
+          char const *data_begin =
+            trimmed_field_range.first + (is_negative || (*trimmed_field_range.first == '+'));
+          cudf::size_type *ptr = cudf::io::gpu::infer_integral_field_counter(
             data_begin, data_begin + countNumber, is_negative, d_columnData[actual_col]);
           atomicAdd(ptr, 1);
-        } else if (is_floatingpoint(
-                     field_len, countNumber, countDecimal, countDash + countPlus, countExponent)) {
+        } else if (is_floatingpoint(trimmed_field_len,
+                                    countNumber,
+                                    countDecimal,
+                                    countDash + countPlus,
+                                    countExponent)) {
           atomicAdd(&d_columnData[actual_col].float_count, 1);
         } else {
           atomicAdd(&d_columnData[actual_col].string_count, 1);
@@ -472,16 +445,16 @@ struct decode_op {
     static_cast<T *>(out_buffer)[row] = [&]() {
       // Check for user-specified true/false values first, where the output is
       // replaced with 1/0 respectively
-      const size_t field_len = end - begin + 1;
+      size_t const field_len = end - begin;
       if (serialized_trie_contains(opts.trie_true, begin, field_len)) {
         return static_cast<T>(1);
       } else if (serialized_trie_contains(opts.trie_false, begin, field_len)) {
         return static_cast<T>(0);
       } else {
         if (flags & column_parse::as_hexadecimal) {
-          return decode_value<T, 16>(begin, end + 1, opts);
+          return decode_value<T, 16>(begin, end, opts);
         } else {
-          return decode_value<T>(begin, end + 1, opts);
+          return decode_value<T>(begin, end, opts);
         }
       }
     }();
@@ -504,13 +477,13 @@ struct decode_op {
 
     // Check for user-specified true/false values first, where the output is
     // replaced with 1/0 respectively
-    const size_t field_len = end - begin + 1;
+    const size_t field_len = end - begin;
     if (serialized_trie_contains(opts.trie_true, begin, field_len)) {
       value = 1;
     } else if (serialized_trie_contains(opts.trie_false, begin, field_len)) {
       value = 0;
     } else {
-      value = decode_value<T>(begin, end + 1, opts);
+      value = decode_value<T>(begin, end, opts);
     }
     return true;
   }
@@ -529,7 +502,7 @@ struct decode_op {
   {
     auto &value{static_cast<T *>(out_buffer)[row]};
 
-    value = decode_value<T>(begin, end + 1, opts);
+    value = decode_value<T>(begin, end, opts);
     return !std::isnan(value);
   }
 
@@ -548,7 +521,7 @@ struct decode_op {
   {
     auto &value{static_cast<T *>(out_buffer)[row]};
 
-    value = decode_value<T>(begin, end + 1, opts);
+    value = decode_value<T>(begin, end, opts);
     return true;
   }
 };
@@ -604,9 +577,12 @@ __global__ void __launch_bounds__(csvparse_block_dim)
         !serialized_trie_contains(options.trie_na, field_start, next_delimiter - field_start);
 
       // Modify field_start & end to ignore whitespace and quotechars
-      auto field_end = next_delimiter - 1;
+      auto field_end = next_delimiter;
       if (is_valid && dtypes[actual_col].id() != cudf::type_id::STRING) {
-        trim_field_start_end(&field_start, &field_end, options.quotechar);
+        auto const trimmed_field =
+          trim_whitespaces_quotes(field_start, field_end, options.quotechar);
+        field_start = trimmed_field.first;
+        field_end   = trimmed_field.second;
       }
       if (is_valid) {
         // Type dispatcher does not handle STRING
