@@ -432,7 +432,7 @@ struct identity_initializer {
   template <typename T, aggregation::Kind k>
   static constexpr bool is_supported()
   {
-    // Note: !is_fixed_point<T>() means that aggregatations for fixed_point should happen on the
+    // Note: !is_fixed_point<T>() means that aggregations for fixed_point should happen on the
     //       underlying type (see device_storage_type_t), not that fixed_point is not supported
     return cudf::is_fixed_width<T>() && !is_fixed_point<T>() and
            (k == aggregation::SUM or k == aggregation::MIN or k == aggregation::MAX or
