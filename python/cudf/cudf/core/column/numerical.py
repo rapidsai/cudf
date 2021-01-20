@@ -1,4 +1,4 @@
-# Copyright (c) 2018-2020, NVIDIA CORPORATION.
+# Copyright (c) 2018-2021, NVIDIA CORPORATION.
 
 from numbers import Number
 
@@ -342,17 +342,9 @@ class NumericalColumn(column.ColumnBase):
         return cov / lhs_std / rhs_std
 
     def round(self, decimals=0):
-        if decimals < 0:
-            msg = "Decimal values < 0 are not yet supported."
-            raise NotImplementedError(msg)
-
-        if np.issubdtype(self.dtype, np.integer):
-            return self
-
-        data = Buffer(
-            cudautils.apply_round(self.data_array_view, decimals).view("|u1")
-        )
-        return column.build_column(data=data, dtype=self.dtype, mask=self.mask)
+        """Round the values in the Column to the given number of decimals.
+        """
+        return libcudf.round.round(self, decimal_places=decimals)
 
     def applymap(self, udf, out_dtype=None):
         """Apply an element-wise function to transform the values in the Column.
