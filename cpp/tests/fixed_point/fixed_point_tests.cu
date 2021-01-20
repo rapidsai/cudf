@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -34,6 +34,7 @@
 #include <numeric>
 #include <type_traits>
 #include <vector>
+#include "cudf/binaryop.hpp"
 
 using namespace numeric;
 
@@ -578,6 +579,42 @@ TYPED_TEST(FixedPointTestBothReps, SimpleFixedPointColumnWrapper)
   auto const b = cudf::test::fixed_point_column_wrapper<RepType>{{110, 220, 330}, scale_type{-2}};
 
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(a, b);
+}
+
+TEST_F(FixedPointTest, PositiveScaleWithValuesOutsideUnderlyingType32)
+{
+  using fp_wrapper = cudf::test::fixed_point_column_wrapper<int32_t>;
+
+  auto a = fp_wrapper{{100000000}, scale_type{6}};
+  auto b = fp_wrapper{{5000000}, scale_type{7}};
+  auto c = fp_wrapper{{2}, scale_type{0}};
+
+  auto expected1 = fp_wrapper{{150000000}, scale_type{6}};
+  auto expected2 = fp_wrapper{{50000000}, scale_type{6}};
+
+  auto result1 = cudf::binary_operation(a, b, cudf::binary_operator::ADD, {});
+  auto result2 = cudf::binary_operation(a, c, cudf::binary_operator::DIV, {});
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected1, result1->view());
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected2, result2->view());
+}
+
+TEST_F(FixedPointTest, PositiveScaleWithValuesOutsideUnderlyingType64)
+{
+  using fp_wrapper = cudf::test::fixed_point_column_wrapper<int64_t>;
+
+  auto a = fp_wrapper{{100000000}, scale_type{100}};
+  auto b = fp_wrapper{{5000000}, scale_type{101}};
+  auto c = fp_wrapper{{2}, scale_type{0}};
+
+  auto expected1 = fp_wrapper{{150000000}, scale_type{100}};
+  auto expected2 = fp_wrapper{{50000000}, scale_type{100}};
+
+  auto result1 = cudf::binary_operation(a, b, cudf::binary_operator::ADD, {});
+  auto result2 = cudf::binary_operation(a, c, cudf::binary_operator::DIV, {});
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected1, result1->view());
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected2, result2->view());
 }
 
 CUDF_TEST_PROGRAM_MAIN()
