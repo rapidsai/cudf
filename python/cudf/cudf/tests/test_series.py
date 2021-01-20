@@ -678,8 +678,9 @@ def test_series_round(arr, decimals):
 
     # with nulls, maintaining existing null mask
     arr = arr.astype("float64")  # for pandas nulls
-    mask = np.random.randint(0, 2, arr.shape[0])
-    arr[mask == 1] = np.nan
+    arr.ravel()[
+        np.random.choice(arr.shape[0], arr.shape[0] // 2, replace=False)
+    ] = np.nan
 
     pser = pd.Series(arr)
     ser = cudf.Series(arr)
@@ -703,8 +704,7 @@ def test_series_round(arr, decimals):
 @pytest.mark.parametrize("decimal", [0, 1, 2, 3])
 def test_round_nan_as_null_false(series, decimal):
     pser = series.to_pandas()
-    ser = cudf.Series(series)
-    result = ser.round(decimal)
+    result = series.round(decimal)
     expected = pser.round(decimal)
     assert_eq(result, expected, atol=1e-10)
 

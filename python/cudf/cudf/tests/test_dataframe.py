@@ -3288,8 +3288,7 @@ def test_dataframe_round(decimals):
     # with nulls, maintaining existing null mask
     for c in pdf.columns:
         arr = pdf[c].to_numpy().astype("float64")  # for pandas nulls
-        mask = np.random.randint(0, 2, 10)
-        arr[mask == 1] = np.nan
+        arr.ravel()[np.random.choice(10, 5, replace=False)] = np.nan
         pdf[c] = gdf[c] = arr
 
     result = gdf.round(decimals)
