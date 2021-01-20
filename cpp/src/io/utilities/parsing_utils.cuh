@@ -89,10 +89,10 @@ namespace gpu {
  * Also iterates over (one or more) delimiter characters after the field.
  * Function applies to formats with field delimiters and line terminators.
  *
- * @param[in] begin Beginning of the character string
- * @param[in] end End of the character string
- * @param[in] opts A set of parsing options
- * @param[in] escape_char A boolean value to signify whether to consider `\` as escape character or
+ * @param begin Pointer to the first element of the string
+ * @param end Pointer to the first element after the string
+ * @param opts A set of parsing options
+ * @param escape_char A boolean value to signify whether to consider `\` as escape character or
  * just a character.
  *
  * @return Pointer to the last character in the field, including the
@@ -191,33 +191,33 @@ __inline__ __device__ char to_lower(char const c)
 }
 
 /**
- * @brief Check if string is infinity, case insensitive with/without sign
+ * @brief Checks if string is infinity, case insensitive with/without sign
  * Valid infinity strings are inf, +inf, -inf, infinity, +infinity, -infinity
  * String comparison is case insensitive.
  *
- * @param start The pointer to character array to start parsing from
- * @param end The pointer to character array to end parsing
+ * @param begin Pointer to the first element of the string
+ * @param end Pointer to the first element after the string
  * @return true if string is valid infinity, else false.
  */
-__inline__ __device__ bool is_infinity(char const* start, char const* end)
+__inline__ __device__ bool is_infinity(char const* begin, char const* end)
 {
-  if (*start == '-' || *start == '+') start++;
+  if (*begin == '-' || *begin == '+') begin++;
   char const* cinf = "infinity";
-  auto index       = start;
-  while (index <= end) {
+  auto index       = begin;
+  while (index < end) {
     if (*cinf != to_lower(*index)) break;
     index++;
     cinf++;
   }
-  return ((index == start + 3 || index == start + 8) && index > end);
+  return ((index == begin + 3 || index == begin + 8) && index >= end);
 }
 
 /**
  * @brief Parses a character string and returns its numeric value.
  *
- * @param[in] begin Beginning of the character string
- * @param[in] end End of the character string
- * @param[in] opts The global parsing behavior options
+ * @param begin Pointer to the first element of the string
+ * @param end Pointer to the first element after the string
+ * @param opts The global parsing behavior options
  * @tparam base Base (radix) to use for conversion
  *
  * @return The parsed and converted value
@@ -240,11 +240,11 @@ __inline__ __device__ T parse_numeric(const char* begin,
   if (*begin == '-' || *begin == '+') begin++;
 
   // Skip over the "0x" prefix for hex notation
-  if (base == 16 && begin + 2 <= end && *begin == '0' && *(begin + 1) == 'x') { begin += 2; }
+  if (base == 16 && begin + 2 < end && *begin == '0' && *(begin + 1) == 'x') { begin += 2; }
 
   // Handle the whole part of the number
   // auto index = begin;
-  while (begin <= end) {
+  while (begin < end) {
     if (*begin == opts.decimal) {
       ++begin;
       break;
@@ -259,7 +259,7 @@ __inline__ __device__ T parse_numeric(const char* begin,
   if (std::is_floating_point<T>::value) {
     // Handle fractional part of the number if necessary
     double divisor = 1;
-    while (begin <= end) {
+    while (begin < end) {
       if (*begin == 'e' || *begin == 'E') {
         ++begin;
         break;
@@ -271,11 +271,11 @@ __inline__ __device__ T parse_numeric(const char* begin,
     }
 
     // Handle exponential part of the number if necessary
-    if (begin <= end) {
+    if (begin < end) {
       const int32_t exponent_sign = *begin == '-' ? -1 : 1;
       if (*begin == '-' || *begin == '+') { ++begin; }
       int32_t exponent = 0;
-      while (begin <= end) {
+      while (begin < end) {
         exponent = (exponent * 10) + decode_digit<T>(*(begin++), &all_digits_valid);
       }
       if (exponent != 0) { value *= exp10(double(exponent * exponent_sign)); }

@@ -315,7 +315,7 @@ struct ConvertFunctor {
       } else if (serialized_trie_contains(opts.trie_false, begin, end - begin)) {
         return 0;
       } else {
-        return decode_value<T>(begin, end - 1, opts);
+        return decode_value<T>(begin, end, opts);
       }
     }();
 
@@ -334,7 +334,7 @@ struct ConvertFunctor {
                                                       parse_options_view const &opts)
   {
     auto &value{static_cast<T *>(out_buffer)[row]};
-    value = decode_value<T>(begin, end - 1, opts);
+    value = decode_value<T>(begin, end, opts);
     return !std::isnan(value);
   }
 
@@ -352,7 +352,7 @@ struct ConvertFunctor {
                                                       const parse_options_view &opts)
   {
     T &value{static_cast<T *>(output_column)[row]};
-    value = decode_value<T>(begin, end - 1, opts);
+    value = decode_value<T>(begin, end, opts);
 
     return true;
   }

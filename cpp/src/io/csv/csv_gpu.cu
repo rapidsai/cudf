@@ -217,8 +217,7 @@ __global__ void __launch_bounds__(csvparse_block_dim)
   while (col < column_flags.size() && field_start <= row_end) {
     auto next_delimiter = cudf::io::gpu::seek_field_end(field_start, row_end, opts);
 
-    // Checking if this is a column that the user wants --- user can filter
-    // columns
+    // Checking if this is a column that the user wants --- user can filter columns
     if (column_flags[col] & column_parse::enabled) {
       // points to last character in the field
       auto field_end = next_delimiter - 1;
@@ -480,9 +479,9 @@ struct decode_op {
         return static_cast<T>(0);
       } else {
         if (flags & column_parse::as_hexadecimal) {
-          return decode_value<T, 16>(begin, end, opts);
+          return decode_value<T, 16>(begin, end + 1, opts);
         } else {
-          return decode_value<T>(begin, end, opts);
+          return decode_value<T>(begin, end + 1, opts);
         }
       }
     }();
@@ -511,7 +510,7 @@ struct decode_op {
     } else if (serialized_trie_contains(opts.trie_false, begin, field_len)) {
       value = 0;
     } else {
-      value = decode_value<T>(begin, end, opts);
+      value = decode_value<T>(begin, end + 1, opts);
     }
     return true;
   }
@@ -530,7 +529,7 @@ struct decode_op {
   {
     auto &value{static_cast<T *>(out_buffer)[row]};
 
-    value = decode_value<T>(begin, end, opts);
+    value = decode_value<T>(begin, end + 1, opts);
     return !std::isnan(value);
   }
 
@@ -549,7 +548,7 @@ struct decode_op {
   {
     auto &value{static_cast<T *>(out_buffer)[row]};
 
-    value = decode_value<T>(begin, end, opts);
+    value = decode_value<T>(begin, end + 1, opts);
     return true;
   }
 };
