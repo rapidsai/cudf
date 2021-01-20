@@ -43,6 +43,11 @@ def s3_base(worker_id):
     Fixture to set up moto server in separate process
     """
     with ensure_safe_environment_variables():
+        # Fake aws credentials exported to prevent botocore looking for
+        # system aws credentials, https://github.com/spulec/moto/issues/1793
+        os.environ.setdefault("AWS_ACCESS_KEY_ID", "foobar_key")
+        os.environ.setdefault("AWS_SECRET_ACCESS_KEY", "foobar_secret")
+
         # Launching moto in server mode, i.e., as a separate process
         # with an S3 endpoint on localhost
 
