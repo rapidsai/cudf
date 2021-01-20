@@ -2057,10 +2057,8 @@ class Frame(libcudf.table.Table):
         else:
             result = cudf_category_frame
 
-        # In a scenario where column is of type non pandas types,
-        # there will be no pandas metadata associated with
-        # given arrow table as those types can only originate from
-        # arrow.
+        # There are some special cases that need to be handled
+        # based on metadata.
         if pandas_dtypes:
             for name in result._data.names:
                 dtype = None
@@ -2068,27 +2066,32 @@ class Frame(libcudf.table.Table):
                     len(result._data[name]) == 0
                     and pandas_dtypes[name] == "categorical"
                 ):
-                    # Empty Categorical Column
+                    # When pandas_dtype is a categorical column and the size
+                    # of column is 0(i.e., empty) then we will have an
+                    # int8 column in result._data[name] returned by libcudf,
+                    # which needs to be type-casted to 'category' dtype.
                     dtype = "category"
                 elif (
                     pandas_dtypes[name] == "empty"
                     and np_dtypes[name] == "object"
                 ):
-                    # Column with all nulls and dtype is "object"
+                    # When a string column has all null values, pandas_dtype is
+                    # is specified as 'empty' and np_dtypes as 'object',
+                    # hence handling this special case to type-cast the empty
+                    # float column to str column.
                     dtype = np_dtypes[name]
                 elif pandas_dtypes[
                     name
                 ] == "object" and cudf.utils.dtypes.is_struct_dtype(
                     np_dtypes[name]
                 ):
-                    # Column is a Struct Column
+                    # Incase of struct column, libcudf is not aware of names of
+                    # struct fields, hence renaming the struct fields is
+                    # necessary by extracting the field names from arrow
+                    # struct types.
                     result._data[name] = result._data[name]._rename_fields(
                         [field.name for field in data[name].type]
                     )
-                else:
-                    # No special handling means the dtype already
-                    # exists in cudf, hence there is no need to type-cast.
-                    continue
 
                 if dtype is not None:
                     result._data[name] = result._data[name].astype(dtype)
