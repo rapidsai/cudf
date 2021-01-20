@@ -26,8 +26,6 @@
 #include <rmm/device_uvector.hpp>
 #include <rmm/exec_policy.hpp>
 
-#include <cub/cub.cuh>
-
 #include <thrust/sequence.h>
 #include <thrust/sort.h>
 
