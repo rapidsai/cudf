@@ -28,15 +28,16 @@ using idx_valid_pair_t = thrust::tuple<cudf::size_type, bool>;
  * @brief Functor used by `replace_nulls(replace_policy)` to determine the index to gather from in
  * the result column.
  *
- * Binary functor passed to `inclusive_scan` or `inclusive_scan_by_key`. Both parameter and return
- * type are a tuple of cudf::size_type and boolean. For parameter, the first of the tuple is the
- * index of the row, and the second is the validity of that row. For return value, the first is the
- * index in the gather map for the output column. If the current row in input is NULL, it is the
- * index accumulated along the iteration direction; if the current row in input is valid, it is the
- * index of current row. The second element of the return tuple is discarded.
+ * Binary functor passed to `inclusive_scan` or `inclusive_scan_by_key`. Arguments are a tuple of
+ * index and validity of a row. Returns a tuple of current index and a discarded boolean if current
+ * row is valid, otherwise a tuple of the nearest non-null row index and a discarded boolean.
  */
 struct replace_policy_functor {
-  __device__ idx_valid_pair_t operator()(idx_valid_pair_t const& lhs, idx_valid_pair_t const& rhs);
+  __device__ idx_valid_pair_t operator()(idx_valid_pair_t const& lhs, idx_valid_pair_t const& rhs)
+  {
+    return thrust::get<1>(rhs) ? thrust::make_tuple(thrust::get<0>(rhs), true)
+                               : thrust::make_tuple(thrust::get<0>(lhs), true);
+  }
 };
 
 }  // namespace detail
