@@ -1019,7 +1019,7 @@ class ColumnBase(Column, Serializable):
         elif is_interval_dtype(self.dtype):
             if not self.dtype == dtype:
                 raise NotImplementedError(
-                    "Casting list columns not currently supported"
+                    "Casting interval columns not currently supported"
                 )
             return self
         elif np.issubdtype(dtype, np.datetime64):
