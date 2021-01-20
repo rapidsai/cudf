@@ -66,6 +66,7 @@ test:
     - test -f $PREFIX/include/cudf/detail/gather.hpp
     - test -f $PREFIX/include/cudf/detail/groupby.hpp
     - test -f $PREFIX/include/cudf/detail/groupby/sort_helper.hpp
+    - test -f $PREFIX/include/cudf/detail/groupby/group_replace_nulls.hpp
     - test -f $PREFIX/include/cudf/detail/hashing.hpp
     - test -f $PREFIX/include/cudf/detail/interop.hpp
     - test -f $PREFIX/include/cudf/detail/null_mask.hpp
