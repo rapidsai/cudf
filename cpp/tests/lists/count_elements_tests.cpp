@@ -81,7 +81,7 @@ TYPED_TEST(ListsElementsNumericsTest, CountElementsNestedLists)
   using LCW = cudf::test::lists_column_wrapper<TypeParam>;
   LCW list({LCW{LCW{2, 3}, LCW{4, 5}},
             LCW{LCW{}},
-            LCW{LCW{6, 7, 8}, LCW{9, 10, 11}, LCW{12, 13, 14}},
+            LCW{LCW{6, 7, 8}, LCW{9, 10, 11}, LCW({12, 13, 14}, validity.begin())},
             LCW{LCW{15, 16}, LCW{17, 18}, LCW{19, 20}, LCW{21, 22}, LCW{23, 24}}},
            validity.begin());
 
