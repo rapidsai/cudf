@@ -333,7 +333,7 @@ __inline__ __device__ int64_t to_date_time(char const* begin, char const* end, b
  *
  * Moves the `begin` iterator past the parsed value.
  *
- * @param begin Pointer to the first element of the string
+ * @param begin[in, out] Pointer to the first element of the string
  * @param end Pointer to the last element of the string
  * @return The parsed and converted value
  */
@@ -358,10 +358,29 @@ __inline__ __device__ T parse_integer(char const** begin, char const* end)
 }
 
 /**
+ * @brief Parses the input string into an integral value of the given type if the delimiter is
+ * present.
+ *
+ * Moves the `begin` iterator past the parsed value.
+ *
+ * @param begin[in, out] Pointer to the first element of the string
+ * @param end Pointer to the last element of the string
+ * @return The parsed and converted value, zero is delimiter is not present
+ */
+template <typename T>
+__inline__ __device__ T parse_optional_integer(char const** begin, char const* end, char delimiter)
+{
+  if (**begin != delimiter) { return 0; }
+
+  ++(*begin);
+  return parse_integer<T>(begin, end);
+}
+
+/**
  * @brief Excludes the prefix from the input range if the string starts with the prefix.
  *
  * @tparam N length on the prefix, plus one
- * @param begin Pointer to the first element of the string
+ * @param begin[in, out] Pointer to the first element of the string
  * @param end Pointer to the first element after the string
  * @param prefix String we're searching for at the start of the input range
  * @return true if the input range starts with the given prefix
@@ -381,7 +400,7 @@ __inline__ __device__ bool skip_if_starts_with(char const** begin,
 /**
  * @brief Modifies the input range to exclude the leading space characters.
  *
- * @param begin Pointer to the first element of the string
+ * @param begin[in, out] Pointer to the first element of the string
  * @param end Pointer to the first element after the string
  */
 __inline__ __device__ void skip_spaces(char const** begin, char const* end)
@@ -423,17 +442,8 @@ __inline__ __device__ int64_t to_time_delta(char const* begin, char const* end)
     hour = value;
   }
 
-  int8_t minute{0};
-  //:%M:%S
-  if (*cur == sep) {
-    ++cur;
-    minute = parse_integer<int8_t>(&cur, end);
-  }
-  int8_t second{0};
-  if (*cur == sep) {
-    ++cur;
-    second = parse_integer<int8_t>(&cur, end);
-  }
+  auto const minute = parse_optional_integer<int8_t>(&cur, end, sep);
+  auto const second = parse_optional_integer<int8_t>(&cur, end, sep);
 
   int nanosecond = 0;
   if (std::is_same<T, cudf::duration_s>::value) {
