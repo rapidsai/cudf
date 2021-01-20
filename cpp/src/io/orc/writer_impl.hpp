@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2020, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -222,7 +222,7 @@ class writer::impl {
    * @param num_columns Total number of columns
    * @param num_rows Total number of rows
    * @param num_rowgroups Total number of row groups
-   * @param stripe_list List of stripe boundaries
+   * @param stripe_list Number of rowgroups in each stripe
    * @param stripes Stripe information
    * @param chunks List of column data chunks
    * @param stream CUDA stream used for device memory operations and kernel launches.
