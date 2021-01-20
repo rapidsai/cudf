@@ -37,34 +37,65 @@ struct CollectListTest : public cudf::test::BaseFixture {};
 template <typename T>
 struct TypedCollectListTest : public CollectListTest {};
 
-using TypesForTest = cudf::test::Concat<cudf::test::IntegralTypesNotBool,
-                                        cudf::test::FloatingPointTypes>;
+using TypesForTest = cudf::test::Concat<cudf::test::IntegralTypes,
+                                        cudf::test::FloatingPointTypes,
+                                        cudf::test::DurationTypes>;
 
 TYPED_TEST_CASE(TypedCollectListTest, TypesForTest);
 
-TYPED_TEST(TypedCollectListTest, NoNulls)
+TYPED_TEST(TypedCollectListTest, BasicRollingWindowNoNulls)
 {
   using namespace cudf;
   using namespace cudf::test;
 
   using T = TypeParam;
 
-  auto ints_column = fixed_width_column_wrapper<T, int32_t>{70,71,72,73,74}; 
+  auto input_column = fixed_width_column_wrapper<T, int32_t>{10,11,12,13,14}; 
 
   auto prev_column = fixed_width_column_wrapper<size_type>{1,2,2,2,2};
   auto foll_column = fixed_width_column_wrapper<size_type>{1,1,1,1,0};
 
   EXPECT_EQ(static_cast<column_view>(prev_column).size(), static_cast<column_view>(foll_column).size());
 
-  auto result = cudf::rolling_window(ints_column, prev_column, foll_column, 1, make_collect_aggregation());
+  auto result_column_based_window = rolling_window(input_column, prev_column, foll_column, 1, make_collect_aggregation());
 
-  auto expected_result = lists_column_wrapper<T>{
-    {70, 71},
-    {70, 71, 72},
-    {71, 72, 73},
-    {72, 73, 74},
-    {73, 74},
+  auto expected_result = lists_column_wrapper<T, int32_t>{
+    {10, 11},
+    {10, 11, 12},
+    {11, 12, 13},
+    {12, 13, 14},
+    {13, 14},
   }.release();
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected_result->view(), result_column_based_window->view());
+
+  auto result_fixed_window = rolling_window(input_column, 2, 1, 1, make_collect_aggregation());
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected_result->view(), result_fixed_window->view());
+}
+
+TYPED_TEST(TypedCollectListTest, BasicGroupedRollingWindowNoNulls)
+{
+  using namespace cudf;
+  using namespace cudf::test;
+
+  using T = TypeParam;
+
+  auto group_column = fixed_width_column_wrapper<int32_t>{    1, 1, 1, 1, 1,  2, 2, 2, 2};
+  auto input_column = fixed_width_column_wrapper<T, int32_t>{10,11,12,13,14, 20,21,22,23}; 
+
+  auto result = grouped_rolling_window(table_view{std::vector<column_view>{group_column}}, input_column, 2, 1, 1, make_collect_aggregation());
+
+  auto expected_result = lists_column_wrapper<T, int32_t>{
+    {10, 11},
+    {10, 11, 12},
+    {11, 12, 13},
+    {12, 13, 14},
+    {13, 14},
+    {20, 21},
+    {20, 21, 22},
+    {21, 22, 23},
+    {22, 23}
+   }.release();
 
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected_result->view(), result->view());
 }

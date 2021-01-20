@@ -946,7 +946,7 @@ struct rolling_window_launcher {
    *    and  following == [1,1,1,1,0],
    *  then, 
    *        collect result       == [ [A,B], [A,B,C], [B,C,D], [C,D,E], [D,E] ]
-   *  i.e.  result offset column == [0,2,5,8,11,13],
+   *   i.e. result offset column == [0,2,5,8,11,13],
    *    and result child  column == [A,B,A,B,C,B,C,D,C,D,E,D,E].
    *  Mapping back to `input`    == [0,1,0,1,2,1,2,3,2,3,4,3,4]
    */
@@ -1042,8 +1042,8 @@ struct rolling_window_launcher {
   std::enable_if_t<(op == aggregation::COLLECT), std::unique_ptr<column>>
   operator()(column_view const& input,
              column_view const& default_outputs,
-             PrecedingIter preceding_begin,
-             FollowingIter following_begin,
+             PrecedingIter preceding_begin_raw,
+             FollowingIter following_begin_raw,
              size_type min_periods,
              std::unique_ptr<aggregation> const& agg,
              rmm::cuda_stream_view stream,
@@ -1063,6 +1063,22 @@ struct rolling_window_launcher {
     using namespace cudf::detail;
 
     if (input.is_empty()) return empty_like(input);
+
+    // Fix up preceding/following iterators to respect column boundaries,
+    // similar to gpu_rolling().
+    // `rolling_window()` does not fix up preceding/following so as not to read past
+    // column boundaries. 
+    // `grouped_rolling_window()` and `time_range_based_grouped_rolling_window() do.
+    auto preceding_begin 
+      = thrust::make_transform_iterator(thrust::make_counting_iterator<size_type>(0),
+                                        [preceding_begin_raw] __device__(auto i) {
+                                          return thrust::min(preceding_begin_raw[i], i+1);
+                                        });
+    auto following_begin
+      = thrust::make_transform_iterator(thrust::make_counting_iterator<size_type>(0),
+                                        [following_begin_raw, size = input.size()] __device__(auto i) {
+                                          return thrust::min(following_begin_raw[i], size - i - 1);
+                                        });
 
     // Materialize collect list's offsets.
     auto offsets = get_collect_list_offsets(input, 
