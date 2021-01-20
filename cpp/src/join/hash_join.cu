@@ -653,19 +653,18 @@ join_result hash_join::hash_join_impl::compute_hash_join(cudf::table_view const 
 {
   auto join_indices =
     compute_hash_join_indices<JoinKind>(probe, probe_on, compare_nulls, stream, mr);
-  auto left_map  = cudf::column_view(cudf::data_type(type_to_id<cudf::size_type>()),
-                                    join_indices.first.size(),
-                                    join_indices.first.data(),
-                                    nullptr,
-                                    0);
-  auto right_map = cudf::column_view(cudf::data_type(type_to_id<cudf::size_type>()),
-                                     join_indices.second.size(),
-                                     join_indices.second.data(),
-                                     nullptr,
-                                     0);
-  auto left_buf  = std::make_unique<rmm::device_buffer>(join_indices.first.release());
-  auto right_buf = std::make_unique<rmm::device_buffer>(join_indices.second.release());
-  return join_result{left_map, right_map, std::move(left_buf), std::move(right_buf)};
+  auto join_size = join_indices.first.size();
+  auto left_map  = std::make_unique<cudf::column>(cudf::data_type(type_to_id<cudf::size_type>()),
+                                                 join_size,
+                                                 join_indices.first.release(),
+                                                 rmm::device_buffer{},
+                                                 0);
+  auto right_map = std::make_unique<cudf::column>(cudf::data_type(type_to_id<cudf::size_type>()),
+                                                  join_size,
+                                                  join_indices.second.release(),
+                                                  rmm::device_buffer{},
+                                                  0);
+  return join_result{std::move(left_map), std::move(right_map)};
 }
 
 template <cudf::detail::join_kind JoinKind>

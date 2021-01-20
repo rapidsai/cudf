@@ -1451,10 +1451,12 @@ TEST_F(JoinTest, InnerJoinNoNullsGathermap)
   Table t1(std::move(cols1));
 
   auto result          = cudf::inner_join(t0, t1, {0, 1}, {0, 1});
-  auto lmap_sort_order = cudf::sorted_order(cudf::table_view({result.left_indices}));
-  auto rmap_sort_order = cudf::sorted_order(cudf::table_view({result.right_indices}));
-  auto lmap_sorted     = cudf::gather(cudf::table_view({result.left_indices}), *lmap_sort_order);
-  auto rmap_sorted     = cudf::gather(cudf::table_view({result.right_indices}), *rmap_sort_order);
+  auto lmap_sort_order = cudf::sorted_order(cudf::table_view({result.left_indices->view()}));
+  auto rmap_sort_order = cudf::sorted_order(cudf::table_view({result.right_indices->view()}));
+  auto lmap_sorted =
+    cudf::gather(cudf::table_view({result.left_indices->view()}), *lmap_sort_order);
+  auto rmap_sorted =
+    cudf::gather(cudf::table_view({result.right_indices->view()}), *rmap_sort_order);
 
   column_wrapper<int32_t> lmap_gold{{0, 2, 4}};
   column_wrapper<int32_t> rmap_gold{{1, 1, 4}};

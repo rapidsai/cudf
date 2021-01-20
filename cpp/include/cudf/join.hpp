@@ -38,10 +38,8 @@ namespace cudf {
  * left and right gathermaps.
  */ // TODO: explain this better
 struct join_result {
-  column_view left_indices;   /// < The left gathermap
-  column_view right_indices;  /// < The right gathermap
-  std::unique_ptr<rmm::device_buffer> left_buf;
-  std::unique_ptr<rmm::device_buffer> right_buf;
+  std::unique_ptr<cudf::column> left_indices;   /// < The left gathermap
+  std::unique_ptr<cudf::column> right_indices;  /// < The left gathermap
 };
 
 /**
