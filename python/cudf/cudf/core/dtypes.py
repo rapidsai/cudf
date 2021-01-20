@@ -226,13 +226,13 @@ class DecimalDtype(ExtensionDtype):
     _metadata = ("precision", "scale")
     _MAX_PRECISION = np.floor(np.log10(np.iinfo("int64").max))
 
-    def __init__(self, precision, scale):
+    def __init__(self, precision, scale=0):
         """
         Parameters
         ----------
         precision : int
             The total number of digits in each value of this dtype
-        scale : int
+        scale : int, optional
             The scale of the DecimalDtype. See Notes below.
 
         Notes
