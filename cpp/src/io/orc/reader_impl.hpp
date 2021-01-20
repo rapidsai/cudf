@@ -127,7 +127,7 @@ class reader::impl {
  private:
   rmm::mr::device_memory_resource *_mr = nullptr;
   std::unique_ptr<datasource> _source;
-  std::unique_ptr<metadata> _metadata;
+  std::unique_ptr<cudf::io::orc::metadata> _metadata;
 
   std::vector<int> _selected_columns;
   bool _use_index                  = true;

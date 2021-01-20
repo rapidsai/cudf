@@ -204,7 +204,7 @@ std::shared_ptr<arrow::Array> dispatch_to_arrow::operator()<cudf::struct_view>(
   arrow::MemoryPool* ar_mr,
   rmm::cuda_stream_view stream)
 {
-  CUDF_EXPECTS(metadata.children_meta.size() == input.num_children(),
+  CUDF_EXPECTS(metadata.children_meta.size() == static_cast<std::size_t>(input.num_children()),
                "Number of field names and number of children doesn't match\n");
   std::unique_ptr<column> tmp_column = nullptr;
 
@@ -300,13 +300,12 @@ std::shared_ptr<arrow::Table> to_arrow(table_view input,
                                        rmm::cuda_stream_view stream,
                                        arrow::MemoryPool* ar_mr)
 {
-  CUDF_EXPECTS((metadata.size() == input.num_columns()),
+  CUDF_EXPECTS((metadata.size() == static_cast<std::size_t>(input.num_columns())),
                "columns' metadata should be equal to number of columns in table");
 
   std::vector<std::shared_ptr<arrow::Array>> arrays;
   std::vector<std::shared_ptr<arrow::Field>> fields;
 
-  size_type index = 0;
   std::transform(
     input.begin(),
     input.end(),

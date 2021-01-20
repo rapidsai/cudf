@@ -213,7 +213,7 @@ std::unique_ptr<cudf::column> edit_distance_matrix(cudf::strings_column_view con
   if (strings_count == 0) return cudf::make_empty_column(cudf::data_type{cudf::type_id::INT32});
   CUDF_EXPECTS(strings_count > 1, "the input strings must include at least 2 strings");
   CUDF_EXPECTS(static_cast<size_t>(strings_count) * static_cast<size_t>(strings_count) <
-                 std::numeric_limits<int32_t>().max(),
+                 static_cast<std::size_t>(std::numeric_limits<cudf::size_type>().max()),
                "too many strings to create the output column");
 
   // create device column of the input strings column
@@ -224,7 +224,7 @@ std::unique_ptr<cudf::column> edit_distance_matrix(cudf::strings_column_view con
   // We only need memory for half the size of the output matrix since the edit distance calculation
   // is commutative -- `distance(strings[i],strings[j]) == distance(strings[j],strings[i])`
   cudf::size_type n_upper = (strings_count * (strings_count - 1)) / 2;
-  rmm::device_uvector<cudf::size_type> offsets(n_upper, stream);
+  rmm::device_uvector<int32_t> offsets(n_upper, stream);
   auto d_offsets = offsets.data();
   CUDA_TRY(cudaMemsetAsync(d_offsets, 0, n_upper * sizeof(cudf::size_type), stream.value()));
   thrust::for_each_n(

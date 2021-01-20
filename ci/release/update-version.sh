@@ -49,8 +49,12 @@ function sed_runner() {
 # cpp update
 sed_runner 's/'"CUDA_DATAFRAME VERSION .* LANGUAGES"'/'"CUDA_DATAFRAME VERSION ${NEXT_FULL_TAG} LANGUAGES"'/g' cpp/CMakeLists.txt
 
+# doxyfile update
+sed_runner 's/PROJECT_NUMBER         = .*/PROJECT_NUMBER         = '${NEXT_FULL_TAG}'/g' cpp/doxygen/Doxyfile
+
 # RTD update
 sed_runner 's/version = .*/version = '"'${NEXT_SHORT_TAG}'"'/g' docs/cudf/source/conf.py
+sed_runner 's/release = .*/release = '"'${NEXT_FULL_TAG}'"'/g' docs/cudf/source/conf.py
 
 # bump rmm
 for FILE in conda/environments/*.yml; do

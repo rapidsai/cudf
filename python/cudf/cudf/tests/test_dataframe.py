@@ -1,4 +1,5 @@
-# Copyright (c) 2018-2020, NVIDIA CORPORATION.
+# Copyright (c) 2018-2021, NVIDIA CORPORATION.
+
 import array as arr
 import io
 import operator
@@ -2226,14 +2227,29 @@ def test_arrow_handle_no_index_name(pdf, gdf):
 @pytest.mark.parametrize("num_bins", [1, 2, 4, 20])
 @pytest.mark.parametrize("right", [True, False])
 @pytest.mark.parametrize("dtype", NUMERIC_TYPES + ["bool"])
-def test_series_digitize(num_rows, num_bins, right, dtype):
+@pytest.mark.parametrize("series_bins", [True, False])
+def test_series_digitize(num_rows, num_bins, right, dtype, series_bins):
     data = np.random.randint(0, 100, num_rows).astype(dtype)
     bins = np.unique(np.sort(np.random.randint(2, 95, num_bins).astype(dtype)))
     s = gd.Series(data)
-    indices = s.digitize(bins, right)
+    if series_bins:
+        s_bins = gd.Series(bins)
+        indices = s.digitize(s_bins, right)
+    else:
+        indices = s.digitize(bins, right)
     np.testing.assert_array_equal(
         np.digitize(data, bins, right), indices.to_array()
     )
+
+
+def test_series_digitize_invalid_bins():
+    s = gd.Series(np.random.randint(0, 30, 80), dtype="int32")
+    bins = gd.Series([2, None, None, 50, 90], dtype="int32")
+
+    with pytest.raises(
+        ValueError, match="`bins` cannot contain null entries."
+    ):
+        _ = s.digitize(bins)
 
 
 def test_pandas_non_contiguious():
@@ -8176,3 +8192,61 @@ def test_agg_for_dataframe_with_string_columns(aggs):
         ),
     ):
         gdf.agg(aggs)
+
+
+@pytest.mark.parametrize(
+    "gdf",
+    [
+        gd.DataFrame({"a": [[1], [2], [3]]}),
+        gd.DataFrame(
+            {
+                "left-a": [0, 1, 2],
+                "a": [[1], None, [3]],
+                "right-a": ["abc", "def", "ghi"],
+            }
+        ),
+        gd.DataFrame(
+            {
+                "left-a": [[], None, None],
+                "a": [[1], None, [3]],
+                "right-a": ["abc", "def", "ghi"],
+            }
+        ),
+    ],
+)
+def test_dataframe_roundtrip_arrow_list_dtype(gdf):
+    table = gdf.to_arrow()
+    expected = gd.DataFrame.from_arrow(table)
+
+    assert_eq(gdf, expected)
+
+
+@pytest.mark.parametrize(
+    "gdf",
+    [
+        gd.DataFrame({"a": [{"one": 3, "two": 4, "three": 10}]}),
+        gd.DataFrame(
+            {
+                "left-a": [0, 1, 2],
+                "a": [{"x": 0.23, "y": 43}, None, {"x": 23.9, "y": 4.3}],
+                "right-a": ["abc", "def", "ghi"],
+            }
+        ),
+        gd.DataFrame(
+            {
+                "left-a": [{"a": 1}, None, None],
+                "a": [
+                    {"one": 324, "two": 23432, "three": 324},
+                    None,
+                    {"one": 3.24, "two": 1, "three": 324},
+                ],
+                "right-a": ["abc", "def", "ghi"],
+            }
+        ),
+    ],
+)
+def test_dataframe_roundtrip_arrow_struct_dtype(gdf):
+    table = gdf.to_arrow()
+    expected = gd.DataFrame.from_arrow(table)
+
+    assert_eq(gdf, expected)

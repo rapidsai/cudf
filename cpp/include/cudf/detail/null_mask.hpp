@@ -28,7 +28,7 @@ namespace detail {
  * @copydoc cudf::create_null_mask(size_type, mask_state, rmm::mr::device_memory_resource*)
  *
  * @param stream CUDA stream used for device memory operations and kernel launches.
- **/
+ */
 rmm::device_buffer create_null_mask(
   size_type size,
   mask_state state,
@@ -39,7 +39,7 @@ rmm::device_buffer create_null_mask(
  * @copydoc cudf::set_null_mask(bitmask_type*, size_type, size_type, bool)
  *
  * @param stream CUDA stream used for device memory operations and kernel launches.
- **/
+ */
 void set_null_mask(bitmask_type *bitmask,
                    size_type begin_bit,
                    size_type end_bit,
@@ -69,7 +69,7 @@ std::vector<size_type> segmented_count_unset_bits(bitmask_type const *bitmask,
  *rmm::mr::device_memory_resource*)
  *
  * @param stream CUDA stream used for device memory operations and kernel launches.
- **/
+ */
 rmm::device_buffer copy_bitmask(
   bitmask_type const *mask,
   size_type begin_bit,
@@ -81,7 +81,7 @@ rmm::device_buffer copy_bitmask(
  * @copydoc cudf::copy_bitmask(column_view const& view, rmm::mr::device_memory_resource*)
  *
  * @param stream CUDA stream used for device memory operations and kernel launches.
- **/
+ */
 rmm::device_buffer copy_bitmask(
   column_view const &view,
   rmm::cuda_stream_view stream,

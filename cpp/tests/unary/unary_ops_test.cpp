@@ -203,8 +203,6 @@ TYPED_TEST(IsNAN, EmptyColumn)
 
 TYPED_TEST(IsNAN, NonFloatingColumn)
 {
-  using T = TypeParam;
-
   cudf::test::fixed_width_column_wrapper<int32_t> col{{1, 2, 5, 3, 5, 6, 7}, {1, 0, 1, 1, 0, 1, 1}};
 
   EXPECT_THROW(std::unique_ptr<cudf::column> got = cudf::is_nan(col), cudf::logic_error);
@@ -258,8 +256,6 @@ TYPED_TEST(IsNotNAN, EmptyColumn)
 
 TYPED_TEST(IsNotNAN, NonFloatingColumn)
 {
-  using T = TypeParam;
-
   cudf::test::fixed_width_column_wrapper<int64_t> col{{1, 2, 5, 3, 5, 6, 7}, {1, 0, 1, 1, 0, 1, 1}};
 
   EXPECT_THROW(std::unique_ptr<cudf::column> got = cudf::is_not_nan(col), cudf::logic_error);

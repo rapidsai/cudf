@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-20, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,13 +14,13 @@
  * limitations under the License.
  */
 
-#include "sort_impl.cuh"
-
 #include <cudf/column/column.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/sorting.hpp>
 #include <cudf/sorting.hpp>
 #include <cudf/table/table_view.hpp>
+
+#include <sort/sort_impl.cuh>
 
 #include <rmm/cuda_stream_view.hpp>
 

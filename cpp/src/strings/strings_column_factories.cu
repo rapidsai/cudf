@@ -54,7 +54,7 @@ std::unique_ptr<column> make_strings_column(
                                           size_checker,
                                           0,
                                           thrust::plus<size_t>());
-  CUDF_EXPECTS(bytes < std::numeric_limits<size_type>::max(),
+  CUDF_EXPECTS(bytes < static_cast<std::size_t>(std::numeric_limits<size_type>::max()),
                "total size of strings is too large for cudf column");
 
   // build offsets column from the strings sizes
@@ -152,11 +152,11 @@ std::unique_ptr<column> make_strings_column(const rmm::device_vector<char>& stri
   auto offsets_column = make_numeric_column(
     data_type{type_id::INT32}, num_strings + 1, mask_state::UNALLOCATED, stream, mr);
   auto offsets_view = offsets_column->mutable_view();
-  CUDA_TRY(cudaMemcpyAsync(offsets_view.data<int32_t>(),
-                           offsets.data().get(),
-                           (num_strings + 1) * sizeof(int32_t),
-                           cudaMemcpyDeviceToDevice,
-                           stream.value()));
+  thrust::transform(rmm::exec_policy(stream),
+                    offsets.begin(),
+                    offsets.end(),
+                    offsets_view.data<int32_t>(),
+                    [] __device__(auto offset) { return static_cast<int32_t>(offset); });
   // build null bitmask
   rmm::device_buffer null_mask{
     valid_mask.data().get(),

@@ -125,24 +125,35 @@ struct get_element_functor {
     CUDF_FAIL("get_element_functor not supported for list_view");
   }
 
-  template <typename T, std::enable_if_t<std::is_same<T, numeric::decimal32>::value> *p = nullptr>
+  template <typename T, std::enable_if_t<cudf::is_fixed_point<T>()> *p = nullptr>
   std::unique_ptr<scalar> operator()(
     column_view const &input,
     size_type index,
     rmm::cuda_stream_view stream,
     rmm::mr::device_memory_resource *mr = rmm::mr::get_current_device_resource())
   {
-    CUDF_FAIL("get_element_functor not supported for decimal32");
-  }
+    using Type = typename T::rep;
 
-  template <typename T, std::enable_if_t<std::is_same<T, numeric::decimal64>::value> *p = nullptr>
-  std::unique_ptr<scalar> operator()(
-    column_view const &input,
-    size_type index,
-    rmm::cuda_stream_view stream,
-    rmm::mr::device_memory_resource *mr = rmm::mr::get_current_device_resource())
-  {
-    CUDF_FAIL("get_element_functor not supported for decimal64");
+    auto device_col = column_device_view::create(input, stream);
+
+    rmm::device_scalar<Type> temp_data;
+    rmm::device_scalar<bool> temp_valid;
+
+    device_single_thread(
+      [buffer   = temp_data.data(),
+       validity = temp_valid.data(),
+       d_col    = *device_col,
+       index] __device__() mutable {
+        *buffer   = d_col.element<Type>(index);
+        *validity = d_col.is_valid(index);
+      },
+      stream);
+
+    return std::make_unique<fixed_point_scalar<T>>(std::move(temp_data),
+                                                   numeric::scale_type{input.type().scale()},
+                                                   temp_valid.value(stream),
+                                                   stream,
+                                                   mr);
   }
 
   template <typename T, std::enable_if_t<std::is_same<T, struct_view>::value> *p = nullptr>

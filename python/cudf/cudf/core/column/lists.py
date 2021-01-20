@@ -1,4 +1,4 @@
-# Copyright (c) 2020, NVIDIA CORPORATION.
+# Copyright (c) 2020-2021, NVIDIA CORPORATION.
 
 import pickle
 
@@ -113,7 +113,6 @@ class ListColumn(ColumnBase):
 
     def serialize(self):
         header = {}
-        frames = []
         header["type-serialized"] = pickle.dumps(type(self))
         header["dtype"] = pickle.dumps(self.dtype)
         header["null_count"] = self.null_count
@@ -192,7 +191,7 @@ class ListMethods(ColumnMethodsMixin):
         >>> a = cudf.Series([[[1, None], [3, 4]], None, [[5, 6]]])
         >>> a.list.leaves
         0       1
-        1    null
+        1    <NA>
         2       3
         3       4
         4       5

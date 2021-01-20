@@ -32,7 +32,6 @@ namespace ast {
  * @brief Enum of table references.
  *
  * This determines which table to use in cases with two tables (e.g. joins).
- *
  */
 enum class table_reference {
   LEFT,   // Column index in the left table
@@ -47,7 +46,6 @@ class expression;
 
 /**
  * @brief A literal value used in an abstract syntax tree.
- *
  */
 class literal : public detail::node {
   friend class detail::linearizer;
@@ -114,7 +112,6 @@ class literal : public detail::node {
 
 /**
  * @brief A node referring to data from a column in a table.
- *
  */
 class column_reference : public detail::node {
   friend class detail::linearizer;
@@ -194,7 +191,6 @@ class column_reference : public detail::node {
 
 /**
  * @brief An expression node holds an operator and zero or more operands.
- *
  */
 class expression : public detail::node {
   friend class detail::linearizer;

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2020, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -26,13 +26,14 @@
 #include <cudf/io/detail/parquet.hpp>
 #include <cudf/io/json.hpp>
 #include <cudf/io/orc.hpp>
+#include <cudf/io/orc_metadata.hpp>
 #include <cudf/io/parquet.hpp>
 #include <cudf/table/table.hpp>
 #include <cudf/utilities/error.hpp>
 
-#include "io/orc/orc.h"
-#include "orc/chunked_state.hpp"
-#include "parquet/chunked_state.hpp"
+#include <io/orc/orc.h>
+#include <io/orc/chunked_state.hpp>
+#include <io/parquet/chunked_state.hpp>
 
 namespace cudf {
 namespace io {
@@ -150,7 +151,6 @@ std::unique_ptr<writer> make_writer(sink_info const& sink,
 
 }  // namespace
 
-// Freeform API wraps the detail reader class API
 table_with_metadata read_avro(avro_reader_options const& opts, rmm::mr::device_memory_resource* mr)
 {
   namespace avro = cudf::io::detail::avro;
@@ -160,7 +160,6 @@ table_with_metadata read_avro(avro_reader_options const& opts, rmm::mr::device_m
   return reader->read(opts);
 }
 
-// Freeform API wraps the detail reader class API
 table_with_metadata read_json(json_reader_options const& opts, rmm::mr::device_memory_resource* mr)
 {
   namespace json = cudf::io::detail::json;
@@ -170,7 +169,6 @@ table_with_metadata read_json(json_reader_options const& opts, rmm::mr::device_m
   return reader->read(opts);
 }
 
-// Freeform API wraps the detail reader class API
 table_with_metadata read_csv(csv_reader_options const& options, rmm::mr::device_memory_resource* mr)
 {
   namespace csv = cudf::io::detail::csv;
@@ -193,8 +191,7 @@ void write_csv(csv_writer_options const& options, rmm::mr::device_memory_resourc
 
 namespace detail_orc = cudf::io::detail::orc;
 
-// Freeform API wraps the detail reader class API
-std::vector<std::vector<std::string>> read_orc_statistics(source_info const& src_info)
+raw_orc_statistics read_raw_orc_statistics(source_info const& src_info)
 {
   // Get source to read statistics from
   std::unique_ptr<datasource> source;
@@ -211,71 +208,138 @@ std::vector<std::vector<std::string>> read_orc_statistics(source_info const& src
     CUDF_FAIL("Unsupported source type");
   }
 
-  // Get size of file and size of postscript
-  const auto len         = source->size();
-  const auto max_ps_size = std::min(len, static_cast<size_t>(256));
-
-  // Read uncompressed postscript section (max 255 bytes + 1 byte for length)
-  auto buffer            = source->host_read(len - max_ps_size, max_ps_size);
-  const size_t ps_length = buffer->data()[max_ps_size - 1];
-  const uint8_t* ps_data = &buffer->data()[max_ps_size - ps_length - 1];
-  orc::ProtobufReader pb;
-  orc::PostScript ps;
-  pb.init(ps_data, ps_length);
-  CUDF_EXPECTS(pb.read(ps, ps_length), "Cannot read postscript");
-  CUDF_EXPECTS(ps.footerLength + ps_length < len, "Invalid footer length");
-
-  // If compression is used, all the rest of the metadata is compressed
-  // If no compressed is used, the decompressor is simply a pass-through
-  std::unique_ptr<orc::OrcDecompressor> decompressor =
-    std::make_unique<orc::OrcDecompressor>(ps.compression, ps.compressionBlockSize);
-
-  // Read compressed filefooter section
-  buffer           = source->host_read(len - ps_length - 1 - ps.footerLength, ps.footerLength);
-  size_t ff_length = 0;
-  auto ff_data     = decompressor->Decompress(buffer->data(), ps.footerLength, &ff_length);
-  orc::FileFooter ff;
-  pb.init(ff_data, ff_length);
-  CUDF_EXPECTS(pb.read(ff, ff_length), "Cannot read filefooter");
-  CUDF_EXPECTS(ff.types.size() > 0, "No columns found");
-
-  // Read compressed metadata section
-  buffer =
-    source->host_read(len - ps_length - 1 - ps.footerLength - ps.metadataLength, ps.metadataLength);
-  size_t md_length = 0;
-  auto md_data     = decompressor->Decompress(buffer->data(), ps.metadataLength, &md_length);
-  orc::Metadata md;
-  pb.init(md_data, md_length);
-  CUDF_EXPECTS(pb.read(md, md_length), "Cannot read metadata");
+  orc::metadata metadata(source.get());
 
   // Initialize statistics to return
-  std::vector<std::vector<std::string>> statistics_blobs;
+  raw_orc_statistics result;
 
   // Get column names
-  std::vector<std::string> column_names;
-  for (auto i = 0; i < ff.types.size(); i++) { column_names.push_back(ff.GetColumnName(i)); }
-  statistics_blobs.push_back(column_names);
+  for (auto i = 0; i < metadata.get_num_columns(); i++) {
+    result.column_names.push_back(metadata.get_column_name(i));
+  }
 
   // Get file-level statistics, statistics of each column of file
-  std::vector<std::string> file_column_statistics_blobs;
-  for (orc::ColumnStatistics stats : ff.statistics) {
-    file_column_statistics_blobs.push_back(std::string(stats.begin(), stats.end()));
+  for (auto const& stats : metadata.ff.statistics) {
+    result.file_stats.push_back(std::string(stats.cbegin(), stats.cend()));
   }
-  statistics_blobs.push_back(file_column_statistics_blobs);
 
   // Get stripe-level statistics
-  for (orc::StripeStatistics stripe_stats : md.stripeStats) {
-    std::vector<std::string> stripe_column_statistics_blobs;
-    for (orc::ColumnStatistics stats : stripe_stats.colStats) {
-      stripe_column_statistics_blobs.push_back(std::string(stats.begin(), stats.end()));
+  for (auto const& stripes_stats : metadata.md.stripeStats) {
+    result.stripes_stats.emplace_back();
+    for (auto const& stats : stripes_stats.colStats) {
+      result.stripes_stats.back().push_back(std::string(stats.cbegin(), stats.cend()));
     }
-    statistics_blobs.push_back(stripe_column_statistics_blobs);
   }
 
-  return statistics_blobs;
+  return result;
 }
 
-// Freeform API wraps the detail reader class API
+column_statistics::column_statistics(cudf::io::orc::column_statistics&& cs)
+{
+  _number_of_values = std::move(cs.number_of_values);
+  if (cs.int_stats.get()) {
+    _type                = statistics_type::INT;
+    _type_specific_stats = cs.int_stats.release();
+  } else if (cs.double_stats.get()) {
+    _type                = statistics_type::DOUBLE;
+    _type_specific_stats = cs.double_stats.release();
+  } else if (cs.string_stats.get()) {
+    _type                = statistics_type::STRING;
+    _type_specific_stats = cs.string_stats.release();
+  } else if (cs.bucket_stats.get()) {
+    _type                = statistics_type::BUCKET;
+    _type_specific_stats = cs.bucket_stats.release();
+  } else if (cs.decimal_stats.get()) {
+    _type                = statistics_type::DECIMAL;
+    _type_specific_stats = cs.decimal_stats.release();
+  } else if (cs.date_stats.get()) {
+    _type                = statistics_type::DATE;
+    _type_specific_stats = cs.date_stats.release();
+  } else if (cs.binary_stats.get()) {
+    _type                = statistics_type::BINARY;
+    _type_specific_stats = cs.binary_stats.release();
+  } else if (cs.timestamp_stats.get()) {
+    _type                = statistics_type::TIMESTAMP;
+    _type_specific_stats = cs.timestamp_stats.release();
+  }
+}
+
+column_statistics& column_statistics::operator=(column_statistics&& other) noexcept
+{
+  _number_of_values    = std::move(other._number_of_values);
+  _type                = other._type;
+  _type_specific_stats = other._type_specific_stats;
+
+  other._type                = statistics_type::NONE;
+  other._type_specific_stats = nullptr;
+
+  return *this;
+}
+
+column_statistics::column_statistics(column_statistics&& other) noexcept
+{
+  *this = std::move(other);
+}
+
+column_statistics::~column_statistics()
+{
+  switch (_type) {
+    case statistics_type::NONE:  // error state, but can't throw from a destructor.
+      break;
+    case statistics_type::INT: delete static_cast<integer_statistics*>(_type_specific_stats); break;
+    case statistics_type::DOUBLE:
+      delete static_cast<double_statistics*>(_type_specific_stats);
+      break;
+    case statistics_type::STRING:
+      delete static_cast<string_statistics*>(_type_specific_stats);
+      break;
+    case statistics_type::BUCKET:
+      delete static_cast<bucket_statistics*>(_type_specific_stats);
+      break;
+    case statistics_type::DECIMAL:
+      delete static_cast<decimal_statistics*>(_type_specific_stats);
+      break;
+    case statistics_type::DATE: delete static_cast<date_statistics*>(_type_specific_stats); break;
+    case statistics_type::BINARY:
+      delete static_cast<binary_statistics*>(_type_specific_stats);
+      break;
+    case statistics_type::TIMESTAMP:
+      delete static_cast<timestamp_statistics*>(_type_specific_stats);
+      break;
+  }
+}
+
+parsed_orc_statistics read_parsed_orc_statistics(source_info const& src_info)
+{
+  auto const raw_stats = read_raw_orc_statistics(src_info);
+
+  parsed_orc_statistics result;
+  result.column_names = raw_stats.column_names;
+
+  auto parse_column_statistics = [](auto const& raw_col_stats) {
+    orc::column_statistics stats_internal;
+    orc::ProtobufReader(reinterpret_cast<const uint8_t*>(raw_col_stats.c_str()),
+                        raw_col_stats.size())
+      .read(stats_internal);
+    return column_statistics(std::move(stats_internal));
+  };
+
+  std::transform(raw_stats.file_stats.cbegin(),
+                 raw_stats.file_stats.cend(),
+                 std::back_inserter(result.file_stats),
+                 parse_column_statistics);
+
+  for (auto const& raw_stripe_stats : raw_stats.stripes_stats) {
+    result.stripes_stats.emplace_back();
+    std::transform(raw_stripe_stats.cbegin(),
+                   raw_stripe_stats.cend(),
+                   std::back_inserter(result.stripes_stats.back()),
+                   parse_column_statistics);
+  }
+
+  return result;
+}
+
 table_with_metadata read_orc(orc_reader_options const& options, rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
@@ -295,8 +359,7 @@ void write_orc(orc_writer_options const& options, rmm::mr::device_memory_resourc
 
 /**
  * @copydoc cudf::io::write_orc_chunked_begin
- *
- **/
+ */
 std::shared_ptr<orc_chunked_state> write_orc_chunked_begin(chunked_orc_writer_options const& opts,
                                                            rmm::mr::device_memory_resource* mr)
 {
@@ -320,8 +383,7 @@ std::shared_ptr<orc_chunked_state> write_orc_chunked_begin(chunked_orc_writer_op
 
 /**
  * @copydoc cudf::io::write_orc_chunked
- *
- **/
+ */
 void write_orc_chunked(table_view const& table, std::shared_ptr<orc_chunked_state> state)
 {
   CUDF_FUNC_RANGE();
@@ -330,8 +392,7 @@ void write_orc_chunked(table_view const& table, std::shared_ptr<orc_chunked_stat
 
 /**
  * @copydoc cudf::io::write_orc_chunked_end
- *
- **/
+ */
 void write_orc_chunked_end(std::shared_ptr<orc_chunked_state>& state)
 {
   CUDF_FUNC_RANGE();
@@ -342,7 +403,6 @@ void write_orc_chunked_end(std::shared_ptr<orc_chunked_state>& state)
 using namespace cudf::io::detail::parquet;
 namespace detail_parquet = cudf::io::detail::parquet;
 
-// Freeform API wraps the detail reader class API
 table_with_metadata read_parquet(parquet_reader_options const& options,
                                  rmm::mr::device_memory_resource* mr)
 {
@@ -363,13 +423,12 @@ std::unique_ptr<std::vector<uint8_t>> write_parquet(parquet_writer_options const
                        options.get_metadata(),
                        options.is_enabled_return_filemetadata(),
                        options.get_column_chunks_file_path(),
-                       options.is_enabled_int96_timestamps());
+                       options.get_decimal_precision());
 }
 
 /**
  * @copydoc cudf::io::merge_rowgroup_metadata
- *
- **/
+ */
 std::unique_ptr<std::vector<uint8_t>> merge_rowgroup_metadata(
   const std::vector<std::unique_ptr<std::vector<uint8_t>>>& metadata_list)
 {
@@ -379,8 +438,7 @@ std::unique_ptr<std::vector<uint8_t>> merge_rowgroup_metadata(
 
 /**
  * @copydoc cudf::io::write_parquet_chunked_begin
- *
- **/
+ */
 std::shared_ptr<pq_chunked_state> write_parquet_chunked_begin(
   chunked_parquet_writer_options const& op, rmm::mr::device_memory_resource* mr)
 {
@@ -399,16 +457,16 @@ std::shared_ptr<pq_chunked_state> write_parquet_chunked_begin(
     state->user_metadata_with_nullability = *op.get_nullable_metadata();
     state->user_metadata                  = &state->user_metadata_with_nullability;
   }
-  state->int96_timestamps = op.is_enabled_int96_timestamps();
-  state->stream           = 0;
+  state->int96_timestamps   = op.is_enabled_int96_timestamps();
+  state->_decimal_precision = op.get_decimal_precision();
+  state->stream             = 0;
   state->wp->write_chunked_begin(*state);
   return state;
 }
 
 /**
  * @copydoc cudf::io::write_parquet_chunked
- *
- **/
+ */
 void write_parquet_chunked(table_view const& table, std::shared_ptr<pq_chunked_state> state)
 {
   CUDF_FUNC_RANGE();
@@ -417,8 +475,7 @@ void write_parquet_chunked(table_view const& table, std::shared_ptr<pq_chunked_s
 
 /**
  * @copydoc cudf::io::write_parquet_chunked_end
- *
- **/
+ */
 std::unique_ptr<std::vector<uint8_t>> write_parquet_chunked_end(
   std::shared_ptr<pq_chunked_state>& state,
   bool return_filemetadata,
