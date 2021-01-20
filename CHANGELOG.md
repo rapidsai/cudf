@@ -9,7 +9,6 @@
 - PR #6907 Add `replace_null` API with `replace_policy` parameter, `fixed_width` column support
 - PR #6885 Share `factorize` implementation with Index and cudf module
 - PR #6775 Implement cudf.DateOffset for months
-- PR #6715 Add Python DecimalColumn
 
 ## Improvements
 
