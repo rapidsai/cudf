@@ -19,6 +19,7 @@
 #include <cudf_test/column_wrapper.hpp>
 #include <cudf_test/type_lists.hpp>
 
+#include <cudf/binaryop.hpp>
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/utilities/cuda.cuh>
 #include <cudf/fixed_point/fixed_point.hpp>
@@ -34,7 +35,6 @@
 #include <numeric>
 #include <type_traits>
 #include <vector>
-#include "cudf/binaryop.hpp"
 
 using namespace numeric;
 
