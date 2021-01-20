@@ -958,22 +958,38 @@ struct rolling_window_launcher {
 
     auto size_data_type = data_type{type_to_id<size_type>()};
 
-    // First, scatter `1` to all offsets except the first and last,
+    // First, reduce offsets column by key, to identify the number of times
+    // an offset appears. 
+    // Next, scatter the count for each offset (except the first and last),
     // into a column of N `0`s, where N == number of child rows.
     // For the example above:
     //   offsets        == [0, 2, 5, 8, 11, 13]
     //   scatter result == [0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1, 0]
+    //
+    // If the above example had an empty list row at index 2,
+    // the same columns would look as follows:
+    //   offsets        == [0, 2, 5, 5, 8, 11, 13]
+    //   scatter result == [0, 0, 1, 0, 0, 2, 0, 0, 1, 0, 0, 1, 0]
 
     auto num_child_rows = get_num_child_rows(offsets);
+
     auto scatter_values = make_fixed_width_column(size_data_type, 
-                                                  offsets.size()-2, 
+                                                  offsets.size(), 
                                                   mask_state::UNALLOCATED, 
                                                   stream, 
                                                   mr);
-    thrust::fill_n(thrust::device, 
-                   scatter_values->mutable_view().template begin<size_type>(), 
-                   offsets.size()-2, 
-                   size_type{1}); // [1,1,1,1,...1]
+    auto scatter_keys   = make_fixed_width_column(size_data_type, 
+                                                  offsets.size(), 
+                                                  mask_state::UNALLOCATED, 
+                                                  stream, 
+                                                  mr);
+    auto reduced_by_key = thrust::reduce_by_key(thrust::device,
+                                                offsets.template begin<size_type>(),
+                                                offsets.template end<size_type>(),
+                                                thrust::make_constant_iterator<size_type>(1),
+                                                scatter_keys->mutable_view().template begin<size_type>(),
+                                                scatter_values->mutable_view().template begin<size_type>());
+    auto scatter_values_end = reduced_by_key.second;
     auto scatter_output = make_fixed_width_column(size_data_type, 
                                                   num_child_rows, 
                                                   mask_state::UNALLOCATED, 
@@ -984,15 +1000,19 @@ struct rolling_window_launcher {
                    num_child_rows, 
                    0); // [0,0,0,...0]
     thrust::scatter(thrust::device, 
-                    scatter_values->view().template begin<size_type>(), 
-                    scatter_values->view().template end<size_type>(), 
-                    offsets.template begin<size_type>() + 1,
+                    scatter_values->mutable_view().template begin<size_type>() + 1, 
+                    scatter_values_end,
+                    scatter_keys->view().template begin<size_type>() + 1,
                     scatter_output->mutable_view().template begin<size_type>()); // [0,0,1,0,0,1,...]
 
     // Next, generate mapping with inclusive_scan() on scatter() result.
     // For the example above:
     //   scatter result == [0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1, 0]
     //   inclusive_scan == [0, 0, 1, 1, 1, 2, 2, 2, 3, 3, 3, 4, 4]
+    //
+    // For the case with an empty list at index 3:
+    //   scatter result == [0, 0, 1, 0, 0, 2, 0, 0, 1, 0, 0, 1, 0]
+    //   inclusive_scan == [0, 0, 1, 1, 1, 3, 3, 3, 4, 4, 4, 5, 5]
     auto per_row_mapping = make_fixed_width_column(size_data_type, 
                                                    num_child_rows, 
                                                    mask_state::UNALLOCATED,

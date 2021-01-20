@@ -73,6 +73,35 @@ TYPED_TEST(TypedCollectListTest, BasicRollingWindowNoNulls)
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected_result->view(), result_fixed_window->view());
 }
 
+TEST_F(CollectListTest, RollingWindowWithEmptyLists)
+{
+  using namespace cudf;
+  using namespace cudf::test;
+
+  using TypeParam = int32_t;
+  using T = TypeParam;
+
+  auto input_column = fixed_width_column_wrapper<T, int32_t>{10,11,12,13,14,15}; 
+
+  auto prev_column = fixed_width_column_wrapper<size_type>{1,2,2,0,2,2};
+  auto foll_column = fixed_width_column_wrapper<size_type>{1,1,1,0,1,0};
+
+  EXPECT_EQ(static_cast<column_view>(prev_column).size(), static_cast<column_view>(foll_column).size());
+
+  auto result_column_based_window = rolling_window(input_column, prev_column, foll_column, 0, make_collect_aggregation());
+
+  auto expected_result = lists_column_wrapper<T, int32_t>{
+    {10, 11},
+    {10, 11, 12},
+    {11, 12, 13},
+    {},
+    {13, 14, 15},
+    {14, 15},
+  }.release();
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected_result->view(), result_column_based_window->view());
+}
+
 TYPED_TEST(TypedCollectListTest, BasicGroupedRollingWindowNoNulls)
 {
   using namespace cudf;
