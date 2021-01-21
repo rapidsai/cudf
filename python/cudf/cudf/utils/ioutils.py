@@ -931,7 +931,12 @@ index : bool, default True
 line_terminator : char, default '\\n'
 chunksize : int or None, default None
     Rows to write at a time
-
+encoding: str, default 'utf-8'
+    A string representing the encoding to use in the output file
+    Only ‘utf-8’ is currently supported
+compression: str, None
+    A string representing the compression scheme to use in the the output file
+    Compression while writing csv is not supported currently
 Returns
 -------
 None or str
