@@ -20,6 +20,11 @@
 
 namespace cudf {
 namespace lists {
+/**
+ * @addtogroup lists_contains
+ * @{
+ * @file
+ */
 
 /**
  * @brief Create a column of bool values indicating whether the specified scalar
@@ -69,5 +74,6 @@ std::unique_ptr<column> contains(
   cudf::column_view const& search_keys,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
+/** @} */  // end of group
 }  // namespace lists
 }  // namespace cudf

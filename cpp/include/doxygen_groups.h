@@ -143,6 +143,8 @@
  * @defgroup lists_apis Lists
  * @{
  *   @defgroup lists_extract Extracting
+ *   @defgroup lists_contains Searching
+ *   @defgroup lists_gather Gathering
  * @}
  * @defgroup nvtext_apis NVText
  * @{

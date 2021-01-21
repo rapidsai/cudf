@@ -21,10 +21,6 @@
 
 namespace cudf {
 
-namespace detail {
-
-}
-
 /**
  * @brief A non-owning, immutable view of device data that represents
  * a list of elements of arbitrary type (including further nested lists).
@@ -162,9 +158,11 @@ class list_device_view {
 
   /**
    * @brief pair accessor for elements in a `list_device_view`
+   *
    * This unary functor returns a pair of:
    *   1. data element at a specified index
    *   2. boolean validity flag for that element
+   *
    * @tparam T The element-type of the list row
    */
   template <typename T>
