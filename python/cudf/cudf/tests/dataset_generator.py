@@ -318,6 +318,9 @@ def rand_dataframe(dtypes_meta, rows, seed=random.randint(0, 2 ** 32 - 1)):
             nesting_depth = np.random.randint(1, nesting_max_depth)
 
             dtype = cudf.core.dtypes.ListDtype(value_type)
+
+            # Determining the `dtype` from the `value_type`
+            # and the nesting_depth
             i = 0
             while i < nesting_depth:
                 dtype = cudf.core.dtypes.ListDtype(dtype)
@@ -439,6 +442,9 @@ def rand_dataframe(dtypes_meta, rows, seed=random.randint(0, 2 ** 32 - 1)):
 
 
 def int_generator(dtype, size):
+    """
+    Generator for int data
+    """
     iinfo = np.iinfo(dtype)
     return lambda: np.random.randint(
         low=iinfo.min, high=iinfo.max, size=size, dtype=dtype,
@@ -446,6 +452,9 @@ def int_generator(dtype, size):
 
 
 def float_generator(dtype, size):
+    """
+    Generator for float data
+    """
     finfo = np.finfo(dtype)
     return (
         lambda: np.random.uniform(
@@ -456,6 +465,9 @@ def float_generator(dtype, size):
 
 
 def datetime_generator(dtype, size):
+    """
+    Generator for datetime data
+    """
     iinfo = np.iinfo("int64")
     return lambda: np.random.randint(
         low=np.datetime64(iinfo.min + 1, "ns").astype(dtype).astype("int"),
@@ -465,6 +477,9 @@ def datetime_generator(dtype, size):
 
 
 def timedelta_generator(dtype, size):
+    """
+    Generator for timedelta data
+    """
     iinfo = np.iinfo("int64")
     return lambda: np.random.randint(
         low=np.timedelta64(iinfo.min + 1, "ns").astype(dtype).astype("int"),
@@ -474,22 +489,29 @@ def timedelta_generator(dtype, size):
 
 
 def boolean_generator(size):
+    """
+    Generator for bool data
+    """
     return lambda: np.random.choice(a=[False, True], size=size)
 
 
 def get_nested_lists(dtype, nesting_depth, list_max_length):
+    """
+    Returns a list of nested lists with random nesting
+    depth and random nested lists length.
+    """
     n_values = np.random.randint(1, list_max_length)
 
     all_values = [
-        get_nested_list(
-            dtype=dtype,
-            nesting_depth=nesting_depth,
-            list_max_length=list_max_length,
+        get_values_for_nested_data(
+            dtype=dtype, list_max_length=list_max_length,
         )
         for _ in range(n_values)
     ]
 
     if nesting_depth > 1 and len(all_values) > 1:
+        # slicing the list of lists into two seprate parts randomly
+        # to create one more level of nesting
         values = [np.random.choice(all_values, int(n_values / 2)).tolist()] + [
             np.random.choice(all_values, int(n_values / 2)).tolist()
         ]
@@ -498,12 +520,17 @@ def get_nested_lists(dtype, nesting_depth, list_max_length):
         values = all_values
 
     while nesting_depth > 1:
+        # Padding the list of lists uniformly
+        # with extra nesting depth if the need be.
         values = [values]
         nesting_depth -= 1
     return values
 
 
-def get_nested_list(dtype, nesting_depth, list_max_length):
+def get_values_for_nested_data(dtype, list_max_length):
+    """
+    Returns list of values based on dtype.
+    """
     cardinality = np.random.randint(0, list_max_length)
     dtype = np.dtype(dtype)
     if dtype.kind in ("i", "u"):
@@ -528,11 +555,15 @@ def get_nested_list(dtype, nesting_depth, list_max_length):
     else:
         raise TypeError(f"Unsupported dtype: {dtype}")
 
+    # To ensure numpy arrays are not passed as input to
+    # list constructor, returning a python list object here.
     return values.tolist()
 
 
 def list_generator(dtype, size, nesting_depth, lists_max_length):
-
+    """
+    Generator for list data
+    """
     return lambda: [
         get_nested_lists(
             dtype=dtype,
