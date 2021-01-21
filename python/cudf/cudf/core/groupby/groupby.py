@@ -18,7 +18,7 @@ class GroupBy(Serializable):
     _MAX_GROUPS_BEFORE_WARN = 100
 
     def __init__(
-        self, obj, by=None, level=None, sort=True, as_index=True, dropna=True
+        self, obj, by=None, level=None, sort=False, as_index=True, dropna=True
     ):
         """
         Group a DataFrame or Series by a set of columns.
@@ -38,7 +38,7 @@ class GroupBy(Serializable):
             For objects with a MultiIndex, `level` can be used to specify
             grouping by one or more levels of the MultiIndex.
         sort : True, optional
-            If True (default), sort results by group9s). Note that
+            If True (default), sort results by groups). Note that
             unlike Pandas, this also sorts values within each group.
         as_index : bool, optional
             If as_index=True (default), the group names appear
@@ -694,7 +694,9 @@ class DataFrameGroupBy(GroupBy):
             raise
 
     def __getitem__(self, key):
-        return self.obj[key].groupby(self.grouping, dropna=self._dropna)
+        return self.obj[key].groupby(
+            self.grouping, dropna=self._dropna, sort=self._sort
+        )
 
     def nunique(self):
         """
