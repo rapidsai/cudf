@@ -14,6 +14,7 @@ import cudf
 from cudf.core.abc import Serializable
 from cudf.core.column import (
     CategoricalColumn,
+    IntervalColumn,
     ColumnBase,
     DatetimeColumn,
     NumericalColumn,
@@ -31,6 +32,7 @@ from cudf.utils.dtypes import (
     is_mixed_with_object_dtype,
     is_scalar,
     numeric_normalize_types,
+    is_interval_dtype,
 )
 from cudf.utils.utils import cached_property, search_range
 
@@ -2660,6 +2662,113 @@ class CategoricalIndex(GenericIndex):
         """
         return self._values.cat().categories
 
+
+class interval_range(GenericIndex):
+    '''
+    Returns a fixed frequency IntervalIndex.
+
+    Parameters
+    start : numeric, default None
+    Left bound for generating intervals.
+
+    end : numeric , default None
+    Right bound for generating intervals.
+
+    freq : numeric, default None
+    The length of each interval. Must be consistent with the type of start and end
+
+    name : str, default None
+    Name of the resulting IntervalIndex.
+
+    closed : {‘left’, ‘right’, ‘both’, ‘neither’}, default ‘right’
+    Whether the intervals are closed on the left-side, right-side, both or neither.
+
+    Returns
+    IntervalIndex   
+    '''
+
+    def __new__(
+        cls,
+        start=None,
+        end=None,
+        freq=None,
+        closed='right',
+        name =None,
+    ) -> "interval_range":
+        init = start #start
+        if freq:
+            freq = freq #freq if other than 1
+        else:
+            freq=1
+        sf = start #start+freq
+        ef = end+1 #end + 1
+        
+        arr = pd.arrays.IntervalArray.from_breaks([i for i in range(sf,ef,freq)], closed=closed)
+        new_arr = cudf.IntervalIndex(arr,closed=closed, dtype=arr.dtype, name=name)
+        
+        return new_arr
+
+
+class IntervalIndex(GenericIndex):
+    '''
+    Immutable index of intervals that are closed on the same side.
+
+    Parameters
+    data : array-like (1-dimensional)
+    Array-like containing Interval objects from which to build the IntervalIndex.
+
+    closed : {‘left’, ‘right’, ‘both’, ‘neither’}, default ‘right’
+    Whether the intervals are closed on the left-side, right-side, both or neither.
+
+    dtype : dtype or None, default None
+    If None, dtype will be inferred.
+
+    copy : bool, default False
+    Copy the input data.
+
+    name : object, optional
+    Name to be stored in the index.
+
+    Returns
+    IntervalIndex    
+    '''
+
+    def __new__(
+        cls,
+        data=None,
+        closed=None,
+        dtype=None,
+        copy=False,
+        name=None,
+    ) -> "IntervalIndex":
+        if copy:
+            data = column.as_column(data, dtype=dtype).copy(deep=True)
+        out = Frame.__new__(cls)
+        kwargs = _setdefault_name(data, name=name)
+        if isinstance(data, IntervalColumn):
+            data = data
+        elif isinstance(data, pd.Series) and (
+            is_interval_dtype(data.dtype)
+        ):
+            data = as_column(
+                    pa.Array.from_pandas(data),
+                    dtype=dtype,
+                )
+        elif isinstance(data, (pd._libs.interval.Interval, pd.IntervalIndex)):
+            data = as_column(
+                    data,
+                    dtype=dtype,
+                )
+        else:
+            data = column.as_column(
+                data, dtype='interval' if dtype is None else dtype
+            )
+            # dtype has already been taken care
+            dtype = None
+
+        out._initialize(data, **kwargs)
+
+        return out
 
 class StringIndex(GenericIndex):
     """String defined indices into another Column
