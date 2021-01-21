@@ -583,6 +583,10 @@ TYPED_TEST(FixedPointTestBothReps, SimpleFixedPointColumnWrapper)
 
 TEST_F(FixedPointTest, PositiveScaleWithValuesOutsideUnderlyingType32)
 {
+  // This is testing fixed_point values outside the range of its underlying type.
+  // For example, 100,000,000 with scale of 6 is 100,000,000,000,000 (100 trillion) and this is
+  // outside the range of a int32_t
+
   using fp_wrapper = cudf::test::fixed_point_column_wrapper<int32_t>;
 
   auto const a = fp_wrapper{{100000000}, scale_type{6}};
@@ -601,6 +605,10 @@ TEST_F(FixedPointTest, PositiveScaleWithValuesOutsideUnderlyingType32)
 
 TEST_F(FixedPointTest, PositiveScaleWithValuesOutsideUnderlyingType64)
 {
+  // This is testing fixed_point values outside the range of its underlying type.
+  // For example, 100,000,000 with scale of 100 is 10 ^ 108 and this is far outside the
+  // range of a int64_t
+
   using fp_wrapper = cudf::test::fixed_point_column_wrapper<int64_t>;
 
   auto const a = fp_wrapper{{100000000}, scale_type{100}};
@@ -619,6 +627,9 @@ TEST_F(FixedPointTest, PositiveScaleWithValuesOutsideUnderlyingType64)
 
 TYPED_TEST(FixedPointTestBothReps, ExtremelyLargeNegativeScale)
 {
+  // This is testing fixed_point values with an extremely large negative scale. The fixed_point
+  // implementation should be able to handle any scale representable by an int32_t
+
   using fp_wrapper = cudf::test::fixed_point_column_wrapper<TypeParam>;
 
   auto const a = fp_wrapper{{10}, scale_type{-201}};
