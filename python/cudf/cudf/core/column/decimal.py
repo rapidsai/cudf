@@ -14,6 +14,7 @@ from cudf.utils.utils import pa_mask_buffer_to_mask
 class DecimalColumn(ColumnBase):
     @classmethod
     def from_arrow(cls, data: pa.Array):
+        dtype = DecimalDtype.from_arrow(data.type)
         mask_buf = data.buffers()[0]
         mask = (
             mask_buf
@@ -25,7 +26,7 @@ class DecimalColumn(ColumnBase):
         return cls(
             data=Buffer(data_64.view("uint8")),
             size=len(data),
-            dtype=DecimalDtype.from_arrow(data.type),
+            dtype=dtype,
             mask=mask,
         )
 
