@@ -375,7 +375,7 @@ int32_t bz2_decompress_block(unbz_state_s *s)
       } while (--es);
     }
 
-    if (nextSym == EOB) break;
+    if (nextSym == static_cast<uint32_t>(EOB)) break;
 
     if (nblock >= nblockMAX) return BZ_DATA_ERROR;
     nn = nextSym - 1;

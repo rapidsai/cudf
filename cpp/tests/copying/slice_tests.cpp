@@ -273,7 +273,7 @@ TEST_F(SliceCornerCases, EmptyColumn)
   auto type_match_count = std::count_if(result.cbegin(), result.cend(), [](auto const& col) {
     return col.type().id() == cudf::type_id::EMPTY;
   });
-  EXPECT_EQ(type_match_count, expected);
+  EXPECT_EQ(static_cast<std::size_t>(type_match_count), expected);
 }
 
 TEST_F(SliceCornerCases, EmptyIndices)
