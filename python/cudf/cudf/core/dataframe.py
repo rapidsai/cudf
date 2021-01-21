@@ -6847,6 +6847,8 @@ class DataFrame(Frame, Serializable):
         index=True,
         line_terminator="\n",
         chunksize=None,
+        encoding=None,
+        compression=None,
         **kwargs,
     ):
         """{docstring}"""
@@ -6862,6 +6864,8 @@ class DataFrame(Frame, Serializable):
             index=index,
             line_terminator=line_terminator,
             chunksize=chunksize,
+            encoding=encoding,
+            compression=compression,
             **kwargs,
         )
 

@@ -1751,6 +1751,117 @@ class Frame(libcudf.table.Table):
             "consider using .to_arrow()"
         )
 
+    def round(self, decimals=0):
+        """
+        Round a DataFrame to a variable number of decimal places.
+
+        Parameters
+        ----------
+        decimals : int, dict, Series
+            Number of decimal places to round each column to. If an int is
+            given, round each column to the same number of places.
+            Otherwise dict and Series round to variable numbers of places.
+            Column names should be in the keys if `decimals` is a
+            dict-like, or in the index if `decimals` is a Series. Any
+            columns not included in `decimals` will be left as is. Elements
+            of `decimals` which are not columns of the input will be
+            ignored.
+
+        Returns
+        -------
+        DataFrame
+            A DataFrame with the affected columns rounded to the specified
+            number of decimal places.
+
+        Examples
+        --------
+        >>> df = cudf.DataFrame(
+                [(.21, .32), (.01, .67), (.66, .03), (.21, .18)],
+        ...     columns=['dogs', 'cats']
+        ... )
+        >>> df
+            dogs  cats
+        0  0.21  0.32
+        1  0.01  0.67
+        2  0.66  0.03
+        3  0.21  0.18
+
+        By providing an integer each column is rounded to the same number
+        of decimal places
+
+        >>> df.round(1)
+            dogs  cats
+        0   0.2   0.3
+        1   0.0   0.7
+        2   0.7   0.0
+        3   0.2   0.2
+
+        With a dict, the number of places for specific columns can be
+        specified with the column names as key and the number of decimal
+        places as value
+
+        >>> df.round({'dogs': 1, 'cats': 0})
+            dogs  cats
+        0   0.2   0.0
+        1   0.0   1.0
+        2   0.7   0.0
+        3   0.2   0.0
+
+        Using a Series, the number of places for specific columns can be
+        specified with the column names as index and the number of
+        decimal places as value
+
+        >>> decimals = cudf.Series([0, 1], index=['cats', 'dogs'])
+        >>> df.round(decimals)
+            dogs  cats
+        0   0.2   0.0
+        1   0.0   1.0
+        2   0.7   0.0
+        3   0.2   0.0
+        """
+
+        if isinstance(decimals, cudf.Series):
+            decimals = decimals.to_pandas()
+
+        if isinstance(decimals, (dict, pd.Series)):
+            if (
+                isinstance(decimals, pd.Series)
+                and not decimals.index.is_unique
+            ):
+                raise ValueError("Index of decimals must be unique")
+
+            cols = {
+                name: col.round(decimals[name])
+                if (
+                    name in decimals.keys()
+                    and pd.api.types.is_numeric_dtype(col.dtype)
+                )
+                else col.copy(deep=True)
+                for name, col in self._data.items()
+            }
+        elif isinstance(decimals, int):
+            cols = {
+                name: col.round(decimals)
+                if pd.api.types.is_numeric_dtype(col.dtype)
+                else col.copy(deep=True)
+                for name, col in self._data.items()
+            }
+        else:
+            raise TypeError(
+                "decimals must be an integer, a dict-like or a Series"
+            )
+
+        return self.__class__._from_table(
+            Frame(
+                data=cudf.core.column_accessor.ColumnAccessor(
+                    cols,
+                    multiindex=self._data.multiindex,
+                    level_names=self._data.level_names,
+                )
+            ),
+            index=self._index,
+        )
+
     @annotate("SAMPLE", color="orange", domain="cudf_python")
     def sample(
         self,

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2020, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -198,7 +198,7 @@ public:
 };
 
 typedef jni_table_writer_handle<cudf::io::pq_chunked_state> native_parquet_writer_handle;
-typedef jni_table_writer_handle<cudf::io::orc_chunked_state> native_orc_writer_handle;
+typedef jni_table_writer_handle<cudf::io::orc_chunked_writer> native_orc_writer_handle;
 
 class native_arrow_ipc_writer_handle final {
 public:
@@ -1032,9 +1032,9 @@ JNIEXPORT long JNICALL Java_ai_rapids_cudf_Table_writeORCBufferBegin(
                                           .compression(static_cast<compression_type>(j_compression))
                                           .enable_statistics(true)
                                           .build();
-    std::shared_ptr<orc_chunked_state> state = write_orc_chunked_begin(opts);
+    auto writer_ptr = std::make_shared<cudf::io::orc_chunked_writer>(opts);
     cudf::jni::native_orc_writer_handle *ret =
-        new cudf::jni::native_orc_writer_handle(state, data_sink);
+        new cudf::jni::native_orc_writer_handle(writer_ptr, data_sink);
     return reinterpret_cast<jlong>(ret);
   }
   CATCH_STD(env, 0)
@@ -1073,8 +1073,8 @@ JNIEXPORT long JNICALL Java_ai_rapids_cudf_Table_writeORCFileBegin(
                                           .compression(static_cast<compression_type>(j_compression))
                                           .enable_statistics(true)
                                           .build();
-    std::shared_ptr<orc_chunked_state> state = write_orc_chunked_begin(opts);
-    cudf::jni::native_orc_writer_handle *ret = new cudf::jni::native_orc_writer_handle(state);
+    auto writer_ptr = std::make_shared<cudf::io::orc_chunked_writer>(opts);
+    cudf::jni::native_orc_writer_handle *ret = new cudf::jni::native_orc_writer_handle(writer_ptr);
     return reinterpret_cast<jlong>(ret);
   }
   CATCH_STD(env, 0)
@@ -1096,7 +1096,7 @@ JNIEXPORT void JNICALL Java_ai_rapids_cudf_Table_writeORCChunk(JNIEnv *env, jcla
   }
   try {
     cudf::jni::auto_set_device(env);
-    write_orc_chunked(*tview, state->state);
+    state->state->write(*tview);
   }
   CATCH_STD(env, )
 }
@@ -1110,7 +1110,7 @@ JNIEXPORT void JNICALL Java_ai_rapids_cudf_Table_writeORCEnd(JNIEnv *env, jclass
   std::unique_ptr<cudf::jni::native_orc_writer_handle> make_sure_we_delete(state);
   try {
     cudf::jni::auto_set_device(env);
-    write_orc_chunked_end(state->state);
+    state->state->close();
   }
   CATCH_STD(env, )
 }
