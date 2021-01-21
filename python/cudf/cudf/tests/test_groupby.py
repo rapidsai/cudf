@@ -869,6 +869,27 @@ def test_groupby_sort(sort):
         check_like=not sort,
     )
 
+    ps = pd.Series([1, 2, 3, 4, 5, 6, 7, 8], index=[2, 2, 2, 3, 3, 1, 1, 1])
+    gs = cudf.from_pandas(ps)
+
+    assert_eq(
+        ps.groupby(level=0, sort=sort).sum().to_frame(),
+        gs.groupby(level=0, sort=sort).sum().to_frame(),
+        check_like=not sort,
+    )
+
+    ps = pd.Series(
+        [1, 2, 3, 4, 5, 6, 7, 8],
+        index=pd.MultiIndex.from_product([(1, 2), ("a", "b"), (42, 84)]),
+    )
+    gs = cudf.from_pandas(ps)
+
+    assert_eq(
+        ps.groupby(level=0, sort=sort).sum().to_frame(),
+        gs.groupby(level=0, sort=sort).sum().to_frame(),
+        check_like=not sort,
+    )
+
 
 def test_groupby_cat():
     pdf = pd.DataFrame(
