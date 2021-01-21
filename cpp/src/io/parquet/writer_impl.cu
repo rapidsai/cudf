@@ -24,7 +24,6 @@
 #include <io/parquet/compact_protocol_writer.hpp>
 
 #include <cudf/column/column_device_view.cuh>
-#include <cudf/detail/utilities/cuda.cuh>
 #include <cudf/lists/lists_column_view.hpp>
 #include <cudf/null_mask.hpp>
 #include <cudf/strings/strings_column_view.hpp>
@@ -97,7 +96,8 @@ std::vector<std::vector<bool>> get_per_column_nullability(table_view const &tabl
     } else {
       CUDF_EXPECTS(
         null_it + depth <= col_nullable.end(),
-        "Mismatch between size of column nullability passed in user_metadata_with_nullability and "
+        "Mismatch between size of column nullability passed in user_metadata_with_nullability "
+        "and "
         "number of null masks expected in table. Expected more values in passed metadata");
       per_column_nullability.emplace_back(null_it, null_it + depth);
       null_it += depth;
@@ -350,15 +350,14 @@ class parquet_column_view {
                 ? _leaf_col.head<uint8_t>() + leaf_col_offset * _type_width
                 : nullptr;
 
-      // Bring offset array to device
+      // Calculate nesting levels
       column_view curr_col = col;
-      std::vector<size_type const *> offsets_array;
+      _nesting_levels      = 0;
       while (curr_col.type().id() == type_id::LIST) {
         lists_column_view list_col(curr_col);
-        offsets_array.push_back(list_col.offsets().data<size_type>());
+        _nesting_levels++;
         curr_col = list_col.child();
       }
-      _offsets_array = offsets_array;
 
       // Update level nullability if no nullability was passed in.
       curr_col = col;
@@ -424,8 +423,7 @@ class parquet_column_view {
   // List related data
   column_view cudf_col() const noexcept { return _col; }
   column_view leaf_col() const noexcept { return _leaf_col; }
-  size_type const *const *nesting_offsets() const noexcept { return _offsets_array.data().get(); }
-  size_type nesting_levels() const noexcept { return _offsets_array.size(); }
+  size_type nesting_levels() const noexcept { return _nesting_levels; }
   size_type const *level_offsets() const noexcept { return _dremel_offsets.data(); }
   uint8_t const *repetition_levels() const noexcept { return _rep_level.data(); }
   uint8_t const *definition_levels() const noexcept { return _def_level.data(); }
@@ -492,16 +490,14 @@ class parquet_column_view {
   rmm::device_vector<uint32_t> _dict_index;
 
   // List-related members
-  // TODO (dm): convert to uvector
-  rmm::device_vector<size_type const *> _offsets_array;  ///< Array of pointers to offset columns at
-                                                         ///< each level of nesting O(nesting depth)
   rmm::device_uvector<size_type>
     _dremel_offsets;  ///< For each row, the absolute offset into the repetition and definition
                       ///< level vectors. O(num rows)
   rmm::device_uvector<uint8_t> _rep_level;
   rmm::device_uvector<uint8_t> _def_level;
   std::vector<bool> _nullability;
-  size_type _max_def_level = -1;
+  size_type _max_def_level  = -1;
+  size_type _nesting_levels = 0;
 
   // String-related members
   rmm::device_buffer _indexes;
@@ -524,7 +520,8 @@ class bridge_column {
             for (auto child_it = col.child_begin(); child_it < col.child_end(); child_it++) {
               auto unpacked_children = unpack_column(*child_it);
 
-              // wrap children in single column struct with current struct col's nullmask and insert
+              // wrap children in single column struct with current struct col's nullmask and
+insert
               // into the column of vectors to return
               std::transform(unpacked_children.begin(),
                              unpacked_children.end(),
@@ -593,7 +590,8 @@ class bridge_column {
       } else if (col.type().id() == type_id::LIST) {
         // if list, add two elements for current and recursively call for child.
         // Child has to be named "element"
-        // List schema is denoted by two levels for each nesting level and one final level for leaf.
+        // List schema is denoted by two levels for each nesting level and one final level for
+leaf.
         // The top level is the same name as the column name.
         // So e.g. List<List<int>> is denoted in the schema by
         // "col_name" : { "list" : { "element" : { "list" : { "element" } } } }
@@ -637,7 +635,8 @@ struct linked_column_view : public column_view {
   //       copy of this object. Options:
   // 1. Inherit from column_view_base. Only lose out on children vector. That is not needed.
   // 2. Don't inherit at all. make linked_column_view keep a reference wrapper to its column_view
-  // 3. OR, WAIT A SECOND! Why do we need to keep linked_column as children at all? We only need to
+  // 3. OR, WAIT A SECOND! Why do we need to keep linked_column as children at all? We only need
+  // to
   //    assign the linked column to leaf node of schema and go up from there?
   //    ANS: BECAUSE, we need to keep all the constructed linked columns somewhere anyway. leaf
   //    level linked_column will only have its parent info but its parent would also need to be
@@ -734,11 +733,10 @@ schema_tree_node construct_schema_for_column(linked_column_view const &col,
  */
 struct schema_tree_node : public SchemaElement {
   linked_column_view const *leaf_column;
-  // TODO: Think about making schema a class that holds a vector of schema_tree_nodes. The function
-  // construct_schema_tree could be its constructor.
-  // It can have method to get the per column nullability given a schema node index corresponding
-  // to a leaf schema.
-  // Much easier than that is a method to get path in schema, given a leaf node
+  // TODO: Think about making schema a class that holds a vector of schema_tree_nodes. The
+  // function construct_schema_tree could be its constructor. It can have method to get the per
+  // column nullability given a schema node index corresponding to a leaf schema. Much easier than
+  // that is a method to get path in schema, given a leaf node
 };
 
 std::vector<schema_tree_node> construct_schema_tree(
@@ -773,10 +771,10 @@ std::vector<schema_tree_node> construct_schema_tree(
       } else if (col.type().id() == type_id::LIST) {
         // if list, add two elements for current and recursively call for child.
         // TODO: Child has to be named "element"
-        // List schema is denoted by two levels for each nesting level and one final level for leaf.
-        // The top level is the same name as the column name.
-        // So e.g. List<List<int>> is denoted in the schema by
-        // "col_name" : { "list" : { "element" : { "list" : { "element" } } } }
+        // List schema is denoted by two levels for each nesting level and one final level for
+        // leaf. The top level is the same name as the column name. So e.g. List<List<int>> is
+        // denoted in the schema by "col_name" : { "list" : { "element" : { "list" : { "element" }
+        // } } }
 
         schema_tree_node list_schema_1{};
         // Use input schema to influence this
@@ -980,7 +978,8 @@ void schema_gen_megafunction(table_view const &table)
 
 void writer::impl::init_page_fragments(hostdevice_vector<gpu::PageFragment> &frag,
                                        hostdevice_vector<gpu::EncColumnDesc> &col_desc,
-                                       table_device_view *input_table_device_view,
+                                       const table_device_view &parent_table_device_view,
+                                       table_device_view &leaf_table_device_view,
                                        uint32_t num_columns,
                                        uint32_t num_fragments,
                                        uint32_t num_rows,
@@ -991,7 +990,8 @@ void writer::impl::init_page_fragments(hostdevice_vector<gpu::PageFragment> &fra
                            col_desc.memory_size(),
                            cudaMemcpyHostToDevice,
                            stream.value()));
-  gpu::InitColumnDeviceViews(col_desc.device_ptr(), input_table_device_view, stream);
+  gpu::InitColumnDeviceViews(
+    col_desc.device_ptr(), parent_table_device_view, leaf_table_device_view, stream);
   gpu::InitPageFragments(frag.device_ptr(),
                          col_desc.device_ptr(),
                          num_fragments,
@@ -1119,8 +1119,8 @@ void writer::impl::encode_pages(hostdevice_vector<gpu::EncColumnChunk> &chunks,
       break;
     default: break;
   }
-  // TBD: Not clear if the official spec actually allows dynamically turning off compression at the
-  // chunk-level
+  // TBD: Not clear if the official spec actually allows dynamically turning off compression at
+  // the chunk-level
   DecideCompression(chunks.device_ptr() + first_rowgroup * num_columns,
                     pages,
                     rowgroups_in_batch * num_columns,
@@ -1204,7 +1204,7 @@ void writer::impl::write(table_view const &table)
   CUDF_EXPECTS(not closed, "Data has already been flushed to out and closed");
 
   size_type num_columns = table.num_columns();
-  size_type num_rows    = 0;
+  size_type num_rows    = table.num_rows();
 
   // Wrapper around cudf columns to attach parquet-specific type info.
   // Note : I wish we could do this in the begin() function but since the
@@ -1214,10 +1214,10 @@ void writer::impl::write(table_view const &table)
   parquet_columns.reserve(num_columns);  // Avoids unnecessary re-allocation
 
   // because the repetition type is global (in the sense of, not per-rowgroup or per write_chunk()
-  // call) we cannot know up front if the user is going to end up passing tables with nulls/no nulls
-  // in the multiple write_chunk() case.  so we'll do some special handling.
-  // The user can pass in information about the nullability of a column to be enforced across
-  // write_chunk() calls, in a flattened bool vector. Figure out that per column.
+  // call) we cannot know up front if the user is going to end up passing tables with nulls/no
+  // nulls in the multiple write_chunk() case.  so we'll do some special handling. The user can
+  // pass in information about the nullability of a column to be enforced across write_chunk()
+  // calls, in a flattened bool vector. Figure out that per column.
   auto per_column_nullability =
     (single_write_mode)
       ? std::vector<std::vector<bool>>{}
@@ -1228,8 +1228,6 @@ void writer::impl::write(table_view const &table)
   for (auto it = table.begin(); it < table.end(); ++it) {
     const auto col        = *it;
     const auto current_id = parquet_columns.size();
-
-    num_rows = std::max<uint32_t>(num_rows, col.size());
 
     // if the user is explicitly saying "I am only calling this once", assume the columns in this
     // one table tell us everything we need to know about their nullability.
@@ -1247,8 +1245,6 @@ void writer::impl::write(table_view const &table)
                                  stream);
   }
 
-  // Early exit for empty table
-  if (num_rows == 0 || num_columns == 0) { return; }
   CUDF_EXPECTS(decimal_precision_idx == decimal_precision.size(),
                "Too many decimal precision values!");
 
@@ -1263,7 +1259,8 @@ void writer::impl::write(table_view const &table)
   // Make schema with current table
   std::vector<SchemaElement> this_table_schema;
   {
-    // Each level of nesting requires two levels of Schema. The leaf level needs one schema element
+    // Each level of nesting requires two levels of Schema. The leaf level needs one schema
+    // element
     this_table_schema.reserve(1 + num_columns + list_col_depths * 2);
     SchemaElement root{};
     root.type            = UNDEFINED_TYPE;
@@ -1358,10 +1355,10 @@ void writer::impl::write(table_view const &table)
     // increment num rows
     md.num_rows += num_rows;
   }
-
   // Create table_device_view so that corresponding column_device_view data
   // can be written into col_desc members
-  auto input_table_device_view = table_device_view::create(table);
+  auto parent_column_table_device_view = table_device_view::create(table);
+  auto leaf_column_table_device_view   = table_device_view::create(table);
 
   // Initialize column description
   hostdevice_vector<gpu::EncColumnDesc> col_desc(num_columns);
@@ -1371,13 +1368,13 @@ void writer::impl::write(table_view const &table)
   for (auto i = 0; i < num_columns; i++) {
     auto &col = parquet_columns[i];
     // GPU column description
-    auto *desc = &col_desc[i];
-    *desc      = gpu::EncColumnDesc{};  // Zero out all fields
-    // desc->column_data_base = col.data();
-    // desc->valid_map_base   = col.nulls();
-    // desc->column_offset    = col.offset();
-    desc->stats_dtype = col.stats_type();
-    desc->ts_scale    = col.ts_scale();
+    auto *desc             = &col_desc[i];
+    *desc                  = gpu::EncColumnDesc{};  // Zero out all fields
+    desc->column_data_base = col.data();
+    desc->valid_map_base   = col.nulls();
+    desc->column_offset    = col.offset();
+    desc->stats_dtype      = col.stats_type();
+    desc->ts_scale         = col.ts_scale();
     // TODO (dm): Enable dictionary for list after refactor
     if (col.physical_type() != BOOLEAN && col.physical_type() != UNDEFINED_TYPE && !col.is_list()) {
       col.alloc_dictionary(col.data_count());
@@ -1385,14 +1382,13 @@ void writer::impl::write(table_view const &table)
       desc->dict_data  = col.get_dict_data();
     }
     if (col.is_list()) {
-      desc->nesting_offsets = col.nesting_offsets();
-      desc->nesting_levels  = col.nesting_levels();
-      desc->level_offsets   = col.level_offsets();
-      desc->rep_values      = col.repetition_levels();
-      desc->def_values      = col.definition_levels();
+      desc->nesting_levels = col.nesting_levels();
+      desc->level_offsets  = col.level_offsets();
+      desc->rep_values     = col.repetition_levels();
+      desc->def_values     = col.definition_levels();
     }
-    desc->num_values = col.data_count();
-    // desc->num_rows       = col.row_count();
+    desc->num_values     = col.data_count();
+    desc->num_rows       = col.row_count();
     desc->physical_type  = static_cast<uint8_t>(col.physical_type());
     desc->converted_type = static_cast<uint8_t>(col.converted_type());
     auto count_bits      = [](uint16_t number) {
@@ -1420,16 +1416,17 @@ void writer::impl::write(table_view const &table)
   uint32_t num_fragments = (uint32_t)((num_rows + fragment_size - 1) / fragment_size);
   hostdevice_vector<gpu::PageFragment> fragments(num_columns * num_fragments);
 
-  CUDF_EXPECTS(fragments.size() != 0, "Fragment size cannot evaluate to 0 ");
-
-  // TODO : Add view to init_page_fragments and initialize col_desc column_device_view members
-  init_page_fragments(fragments,
-                      col_desc,
-                      input_table_device_view.get(),
-                      num_columns,
-                      num_fragments,
-                      num_rows,
-                      fragment_size);
+  if (fragments.size() != 0) {
+    init_page_fragments(fragments,
+                        col_desc,
+                        *parent_column_table_device_view,
+                        *leaf_column_table_device_view,
+                        num_columns,
+                        num_fragments,
+                        num_rows,
+                        fragment_size,
+                        state.stream);
+  }
 
   size_t global_rowgroup_base = md.row_groups.size();
 
