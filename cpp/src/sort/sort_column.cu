@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -33,10 +33,10 @@ struct column_sorted_order_fn {
    * @param stream CUDA stream used for device memory operations and kernel launches
    */
   template <typename T, typename std::enable_if_t<cudf::is_fixed_width<T>()>* = nullptr>
-  void faster_sort(column_view const& input,
-                   mutable_column_view& indices,
-                   bool ascending,
-                   rmm::cuda_stream_view stream)
+  void radix_sort(column_view const& input,
+                  mutable_column_view& indices,
+                  bool ascending,
+                  rmm::cuda_stream_view stream)
   {
     // A non-stable sort on a fixed-width column with no nulls will use a radix sort
     // if using only the thrust::less or thrust::greater comparators but also
@@ -59,7 +59,7 @@ struct column_sorted_order_fn {
     }
   }
   template <typename T, typename std::enable_if_t<!cudf::is_fixed_width<T>()>* = nullptr>
-  void faster_sort(column_view const&, mutable_column_view&, bool, rmm::cuda_stream_view)
+  void radix_sort(column_view const&, mutable_column_view&, bool, rmm::cuda_stream_view)
   {
     CUDF_FAIL("Only fixed-width types are suitable for faster sorting");
   }
@@ -91,8 +91,7 @@ struct column_sorted_order_fn {
                    indices.end<size_type>(),
                    simple_comparator<T>{*keys, input.has_nulls(), ascending, null_precedence});
     } else {
-      // wicked fast sort for a non-stable, non-null, fixed-width column types
-      faster_sort<T>(input, indices, ascending, stream);
+      radix_sort<T>(input, indices, ascending, stream);
     }
   }
 
@@ -107,14 +106,8 @@ struct column_sorted_order_fn {
 }  // namespace
 
 /**
- * @brief Sort indices of a single column.
- *
- * @param input Column to sort. The column data is not modified.
- * @param column_order Ascending or descending sort order
- * @param null_precedence How null rows are to be ordered
- * @param stream CUDA stream used for device memory operations and kernel launches
- * @param mr Device memory resource used to allocate the returned column's device memory
- * @return Sorted indices for the input column.
+ * @copydoc
+ * sorted_order(column_view&,order,null_order,rmm::cuda_stream_view,rmm::mr::device_memory_resource*)
  */
 template <>
 std::unique_ptr<column> sorted_order<false>(column_view const& input,

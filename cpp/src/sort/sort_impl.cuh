@@ -76,6 +76,12 @@ std::unique_ptr<column> sorted_order(column_view const& input,
                                      rmm::cuda_stream_view stream,
                                      rmm::mr::device_memory_resource* mr);
 
+/**
+ * @copydoc
+ * sorted_order(table_view&,std::vector<order>,std::vector<null_order>,rmm::mr::device_memory_resource*)
+ *
+ * @param stream CUDA stream used for device memory operations and kernel launches
+ */
 template <bool stable = false>
 std::unique_ptr<column> sorted_order(table_view input,
                                      std::vector<order> const& column_order,

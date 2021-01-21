@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -88,14 +88,8 @@ struct column_stable_sorted_order_fn {
 }  // namespace
 
 /**
- * @brief Stable sort indices of a single column.
- *
- * @param input Column to sort. The column data is not modified.
- * @param column_order Ascending or descending sort order
- * @param null_precedence How null rows are to be ordered
- * @param stream CUDA stream used for device memory operations and kernel launches
- * @param mr Device memory resource used to allocate the returned column's device memory
- * @return Sorted indices for the input column.
+ * @copydoc
+ * sorted_order(column_view&,order,null_order,rmm::cuda_stream_view,rmm::mr::device_memory_resource*)
  */
 template <>
 std::unique_ptr<column> sorted_order<true>(column_view const& input,
