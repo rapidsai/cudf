@@ -169,6 +169,7 @@ test:
     - test -f $PREFIX/include/cudf/strings/replace_re.hpp
     - test -f $PREFIX/include/cudf/strings/split/partition.hpp
     - test -f $PREFIX/include/cudf/strings/split/split.hpp
+    - test -f $PREFIX/include/cudf/strings/string_view.hpp
     - test -f $PREFIX/include/cudf/strings/strings_column_view.hpp
     - test -f $PREFIX/include/cudf/strings/strip.hpp
     - test -f $PREFIX/include/cudf/strings/substring.hpp
