@@ -15,7 +15,7 @@
  */
 
 #include <cudf/column/column_device_view.cuh>
-#include <cudf/detail/gather.cuh>
+#include <cudf/detail/gather.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/lists/lists_column_view.hpp>
 #include <cudf/reshape.hpp>
@@ -23,6 +23,7 @@
 #include <cudf/utilities/type_dispatcher.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
+#include <rmm/device_uvector.hpp>
 #include <rmm/exec_policy.hpp>
 
 #include <thrust/binary_search.h>
@@ -67,39 +68,41 @@ std::unique_ptr<table> explode_functor::operator()<list_view>(
    explode column. This unrolls the top level of lists. Then we need to insert the explode column
    back into the table and return it. */
   lists_column_view lc{input_table.column(explode_column_idx)};
-  rmm::device_uvector<size_type> gather_map_indices(lc.child().size(), stream, mr);
-  auto offsets = lc.offsets();
+  auto sliced_child = lc.get_sliced_child(stream);
+  rmm::device_uvector<size_type> gather_map_indices(sliced_child.size(), stream, mr);
 
-  auto offsets_minus_one = thrust::make_transform_iterator(offsets.begin<size_type>(),
-                                                           [] __device__(auto i) { return i - 1; });
-  auto counting_iter     = thrust::make_counting_iterator(0);
+  // sliced columns can make this a little tricky. We have to start iterating at the start of the
+  // offsets for this column, which could be > 0. Then we also have to handle rebasing the offsets
+  // as we go.
+  auto offsets           = lc.offsets().begin<size_type>() + lc.offset();
+  auto offsets_minus_one = thrust::make_transform_iterator(
+    offsets, [offsets] __device__(auto i) { return i - offsets[0] - 1; });
+  auto counting_iter = thrust::make_counting_iterator(0);
 
   thrust::lower_bound(rmm::exec_policy(stream),
-                      offsets_minus_one,
-                      offsets_minus_one + offsets.size(),
+                      offsets_minus_one + 1,
+                      offsets_minus_one + lc.offsets().size(),
                       counting_iter,
                       counting_iter + gather_map_indices.size(),
                       gather_map_indices.begin());
 
   auto select_iter = thrust::make_transform_iterator(
     thrust::make_counting_iterator(0),
-    [explode_column_idx](int i) { return i >= explode_column_idx ? i + 1 : i; });
-  std::vector<int> selected_columns(select_iter, select_iter + input_table.num_columns() - 1);
+    [explode_column_idx](size_type i) { return i >= explode_column_idx ? i + 1 : i; });
+  std::vector<size_type> selected_columns(select_iter, select_iter + input_table.num_columns() - 1);
 
-  auto gather_map_iter = thrust::make_transform_iterator(gather_map_indices.begin(),
-                                                         [] __device__(int i) { return i - 1; });
-
-  auto gathered_table = cudf::detail::gather(input_table.select(selected_columns),
-                                             gather_map_iter,
-                                             gather_map_iter + gather_map_indices.size(),
-                                             cudf::out_of_bounds_policy::DONT_CHECK,
-                                             stream,
-                                             mr);
+  auto gathered_table = cudf::detail::gather(
+    input_table.select(selected_columns),
+    column_view(data_type(type_to_id<size_type>()), sliced_child.size(), gather_map_indices.data()),
+    cudf::out_of_bounds_policy::DONT_CHECK,
+    cudf::detail::negative_index_policy::ALLOWED,
+    stream,
+    mr);
 
   std::vector<std::unique_ptr<column>> columns = gathered_table.release()->release();
 
   columns.insert(columns.begin() + explode_column_idx,
-                 std::make_unique<column>(column(lc.child(), stream, mr)));
+                 std::make_unique<column>(column(sliced_child, stream, mr)));
 
   return std::make_unique<table>(std::move(columns));
 }

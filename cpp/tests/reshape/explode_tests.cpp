@@ -15,11 +15,11 @@
  */
 
 #include <cudf/reshape.hpp>
+
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_wrapper.hpp>
-#include <cudf_test/type_lists.hpp>
-
 #include <cudf_test/table_utilities.hpp>
+#include <cudf_test/type_lists.hpp>
 
 using namespace cudf::test;
 
@@ -382,9 +382,6 @@ TYPED_TEST(ExplodeTypedTest, ListOfStructs)
 
   fixed_width_column_wrapper<int32_t> b{100, 200, 300, 400, 500};
 
-  cudf::test::print(a->view());
-  cudf::test::print(b);
-
   cudf::table_view t({a->view(), b});
   auto ret = cudf::explode(t, 0);
 
@@ -397,6 +394,51 @@ TYPED_TEST(ExplodeTypedTest, ListOfStructs)
   fixed_width_column_wrapper<int32_t> expected_b{100, 100, 200, 200, 300, 300, 400, 400, 500, 500};
 
   cudf::table_view expected({expected_a->view(), expected_b});
+
+  CUDF_TEST_EXPECT_TABLES_EQUAL(ret->view(), expected);
+}
+
+TEST_F(ExplodeTest, SlicedList)
+{
+  /*
+      a                     b
+      [[1, 2],[7, 6, 5]]    100
+      [[5, 6]]              200
+      [[0, 3],[5],[2, 1]]   300
+      [[8, 3],[4, 3, 1, 2]] 400
+      [[2, 3, 4],[9, 8]]    500
+
+      slicing the top 2 rows off
+  */
+
+  auto valids = cudf::test::make_counting_transform_iterator(
+    0, [](auto i) { return i % 2 == 0 ? true : false; });
+
+  lists_column_wrapper<int32_t> a(
+    {lists_column_wrapper<int32_t>{lists_column_wrapper<int32_t>({1, 2}, valids),
+                                   lists_column_wrapper<int32_t>{7, 6, 5}},
+     lists_column_wrapper<int32_t>{lists_column_wrapper<int32_t>{5, 6}},
+     lists_column_wrapper<int32_t>{lists_column_wrapper<int32_t>{0, 3},
+                                   lists_column_wrapper<int32_t>{5},
+                                   lists_column_wrapper<int32_t>({2, 1}, valids)},
+     lists_column_wrapper<int32_t>{lists_column_wrapper<int32_t>{8, 3},
+                                   lists_column_wrapper<int32_t>({4, 3, 1, 2}, valids)},
+     lists_column_wrapper<int32_t>{lists_column_wrapper<int32_t>{2, 3, 4},
+                                   lists_column_wrapper<int32_t>{9, 8}}});
+  fixed_width_column_wrapper<int32_t> b({100, 200, 300, 400, 500});
+
+  lists_column_wrapper<int32_t> expected_a{lists_column_wrapper<int32_t>{0, 3},
+                                           lists_column_wrapper<int32_t>{5},
+                                           lists_column_wrapper<int32_t>({2, 1}, valids),
+                                           lists_column_wrapper<int32_t>{8, 3},
+                                           lists_column_wrapper<int32_t>({4, 3, 1, 2}, valids)};
+  fixed_width_column_wrapper<int32_t> expected_b{300, 300, 300, 400, 400};
+
+  cudf::table_view t({a, b});
+  auto sliced_t = cudf::slice(t, {2, 4});
+  cudf::table_view expected({expected_a, expected_b});
+
+  auto ret = cudf::explode(sliced_t[0], 0);
 
   CUDF_TEST_EXPECT_TABLES_EQUAL(ret->view(), expected);
 }
