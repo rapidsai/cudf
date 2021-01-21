@@ -220,9 +220,9 @@ class alignas(16) column_device_view_base {
   __device__ bitmask_type get_mask_offset_word(size_type element_index) const noexcept
   {
     cudf::size_type begin_bit = offset() + element_index;
-    cudf::size_type end_bit = min(begin_bit + 32, _size);
+    cudf::size_type end_bit   = min(begin_bit + 32, _size);
     bitmask_type current_word = null_mask()[word_index(begin_bit)];
-    bitmask_type next_word = 0;
+    bitmask_type next_word    = 0;
     if (word_index(end_bit) > word_index(begin_bit)) {
       next_word = null_mask()[word_index(end_bit)];
     }

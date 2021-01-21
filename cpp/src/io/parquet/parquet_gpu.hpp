@@ -23,8 +23,8 @@
 #include <io/utilities/hostdevice_vector.hpp>
 
 #include <cudf/column/column_device_view.cuh>
-#include <cudf/table/table_device_view.cuh>
 #include <cudf/lists/lists_column_view.hpp>
+#include <cudf/table/table_device_view.cuh>
 #include <cudf/types.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
@@ -231,8 +231,9 @@ struct EncColumnDesc : stats_column_desc {
   uint8_t const *rep_values;       //!< Pre-calculated repetition level values
   uint8_t const *def_values;       //!< Pre-calculated definition level values
 
-  column_device_view * leaf_column;
-  column_device_view * parent_column;
+  column_device_view *leaf_column;
+  column_device_view *parent_column;
+  size_type leaf_column_offset;
 };
 
 constexpr int max_page_fragment_size = 5000;  //!< Max number of rows in a page fragment
@@ -300,6 +301,7 @@ inline uint32_t __device__ GetDtypeLogicalLen(column_device_view *col)
     default: return 4;
   }
 }
+
 /**
  * @brief Return worst-case compressed size of compressed data given the uncompressed size
  */
@@ -452,7 +454,7 @@ dremel_data get_dremel_data(column_view h_col,
  * @param[in] stream CUDA stream to use, default 0
  */
 void InitPageFragments(PageFragment *frag,
-                       EncColumnDesc *col_desc,
+                       const EncColumnDesc *col_desc,
                        int32_t num_fragments,
                        int32_t num_columns,
                        uint32_t fragment_size,
@@ -460,7 +462,8 @@ void InitPageFragments(PageFragment *frag,
                        rmm::cuda_stream_view stream);
 
 void InitColumnDeviceViews(EncColumnDesc *col_desc,
-                           const table_device_view &input_table_device_view,
+                           const table_device_view &parent_table_device_view,
+                           table_device_view &leaf_table_device_view,
                            rmm::cuda_stream_view stream);
 
 /**
