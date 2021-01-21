@@ -33,6 +33,7 @@
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/utilities/cuda.cuh>
 #include <cudf/detail/utilities/device_operators.cuh>
+#include <cudf/dictionary/dictionary_column_view.hpp>
 #include <cudf/rolling.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/bit.hpp>
@@ -623,10 +624,11 @@ struct rolling_window_launcher {
          rmm::cuda_stream_view stream,
          rmm::mr::device_memory_resource* mr)
   {
-    if (input.is_empty()) return empty_like(input);
-
-    auto output = make_fixed_width_column(
-      target_type(input.type(), op), input.size(), mask_state::UNINITIALIZED, stream, mr);
+    auto output_type = cudf::is_dictionary(input.type())
+                         ? target_type(data_type{type_to_id<T>()}, op)
+                         : target_type(input.type(), op);
+    auto output =
+      make_fixed_width_column(output_type, input.size(), mask_state::UNINITIALIZED, stream, mr);
 
     cudf::mutable_column_view output_view = output->mutable_view();
     auto valid_count =
@@ -663,8 +665,6 @@ struct rolling_window_launcher {
          rmm::cuda_stream_view stream,
          rmm::mr::device_memory_resource* mr)
   {
-    if (input.is_empty()) return empty_like(input);
-
     auto output = make_numeric_column(cudf::data_type{cudf::type_to_id<size_type>()},
                                       input.size(),
                                       cudf::mask_state::UNINITIALIZED,
@@ -755,8 +755,6 @@ struct rolling_window_launcher {
          rmm::cuda_stream_view stream,
          rmm::mr::device_memory_resource* mr)
   {
-    if (input.is_empty()) return empty_like(input);
-
     CUDF_EXPECTS(default_outputs.type().id() == input.type().id(),
                  "Defaults column type must match input column.");  // Because LEAD/LAG.
 
@@ -766,8 +764,11 @@ struct rolling_window_launcher {
       return std::make_unique<column>(input, stream, mr);
     }
 
-    auto output = make_fixed_width_column(
-      target_type(input.type(), op), input.size(), mask_state::UNINITIALIZED, stream, mr);
+    auto output_type = cudf::is_dictionary(input.type())
+                         ? target_type(data_type{type_to_id<T>()}, op)
+                         : target_type(input.type(), op);
+    auto output =
+      make_fixed_width_column(output_type, input.size(), mask_state::UNINITIALIZED, stream, mr);
 
     cudf::mutable_column_view output_view = output->mutable_view();
     auto valid_count =
@@ -1036,9 +1037,13 @@ std::unique_ptr<column> rolling_window(column_view const& input,
   static_assert(warp_size == cudf::detail::size_in_bits<cudf::bitmask_type>(),
                 "bitmask_type size does not match CUDA warp size");
 
+  if (input.is_empty()) return empty_like(input);
+
   min_periods = std::max(min_periods, 0);
 
-  return cudf::type_dispatcher(input.type(),
+  auto dispatch_type =
+    cudf::is_dictionary(input.type()) ? dictionary_column_view(input).keys().type() : input.type();
+  return cudf::type_dispatcher(dispatch_type,
                                dispatch_rolling{},
                                input,
                                default_outputs,
