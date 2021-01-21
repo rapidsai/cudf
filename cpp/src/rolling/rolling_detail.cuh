@@ -33,6 +33,7 @@
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/utilities/cuda.cuh>
 #include <cudf/detail/utilities/device_operators.cuh>
+#include <cudf/detail/valid_if.cuh>
 #include <cudf/rolling.hpp>
 #include <cudf/strings/detail/utilities.cuh>
 #include <cudf/types.hpp>
@@ -931,10 +932,34 @@ struct rolling_window_launcher {
                       preceding_begin + input.size(),
                       following_begin,
                       mutable_sizes.begin<size_type>(),
-                      [] __device__(auto preceding, auto following) { return preceding + following; }
-                      );
+                      [min_periods] __device__(auto preceding, auto following) { 
+                        return (preceding + following) < min_periods ? 0 : (preceding + following);
+                      });
     return strings::detail::make_offsets_child_column(sizes->view().begin<size_type>(),
                                                       sizes->view().end<size_type>(), stream, mr);
+  }
+
+  template <typename PrecedingIter, typename FollowingIter>
+  std::pair<rmm::device_buffer, size_type> get_collect_list_null_mask(column_view const& input,
+                             PrecedingIter preceding_iter,
+                             FollowingIter following_iter,
+                             size_type min_periods,
+                             rmm::cuda_stream_view stream,
+                             rmm::mr::device_memory_resource* mr)
+  {
+    rmm::device_buffer null_mask;
+    size_type null_count;
+    std::tie(null_mask, null_count) = valid_if(thrust::make_counting_iterator<size_type>(0),
+                                               thrust::make_counting_iterator<size_type>(input.size()),
+                                               [preceding_iter, following_iter, min_periods]
+                                               __device__(auto i) {
+                                                 return (preceding_iter[i] + following_iter[i]) >= min_periods;
+                                               },
+                                               stream,
+                                               mr);
+    return (null_count == 0)
+         ? std::make_pair(rmm::device_buffer{0, stream, mr}, size_type{0})
+         : std::make_pair(null_mask, null_count);
   }
 
   /**
@@ -984,7 +1009,7 @@ struct rolling_window_launcher {
                                                   stream, 
                                                   mr);
     auto reduced_by_key = thrust::reduce_by_key(thrust::device,
-                                                offsets.template begin<size_type>(),
+                                                offsets.template begin<size_type>() + 1, // Skip first 0 in offsets.
                                                 offsets.template end<size_type>(),
                                                 thrust::make_constant_iterator<size_type>(1),
                                                 scatter_keys->mutable_view().template begin<size_type>(),
@@ -1000,9 +1025,9 @@ struct rolling_window_launcher {
                    num_child_rows, 
                    0); // [0,0,0,...0]
     thrust::scatter(thrust::device, 
-                    scatter_values->mutable_view().template begin<size_type>() + 1, 
+                    scatter_values->mutable_view().template begin<size_type>(), 
                     scatter_values_end,
-                    scatter_keys->view().template begin<size_type>() + 1,
+                    scatter_keys->view().template begin<size_type>(),
                     scatter_output->mutable_view().template begin<size_type>()); // [0,0,1,0,0,1,...]
 
     // Next, generate mapping with inclusive_scan() on scatter() result.
@@ -1122,11 +1147,20 @@ struct rolling_window_launcher {
     // gather(), to construct child column.
     auto gather_output = cudf::gather(table_view{std::vector<column_view>{input}}, gather_map->view());
     
+    rmm::device_buffer null_mask;
+    size_type null_count;
+    std::tie(null_mask, null_count) = get_collect_list_null_mask(input, 
+                                                                 preceding_begin, 
+                                                                 following_begin, 
+                                                                 min_periods, 
+                                                                 stream, 
+                                                                 mr);
+
     return make_lists_column(input.size(),
                              std::move(offsets),
                              std::move(gather_output->release()[0]),
-                             0,
-                             {},
+                             null_count,
+                             std::move(null_mask),
                              stream,
                              mr);
   }

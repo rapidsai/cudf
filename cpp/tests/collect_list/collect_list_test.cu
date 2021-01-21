@@ -73,12 +73,11 @@ TYPED_TEST(TypedCollectListTest, BasicRollingWindowNoNulls)
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected_result->view(), result_fixed_window->view());
 }
 
-TEST_F(CollectListTest, RollingWindowWithEmptyLists)
+TYPED_TEST(TypedCollectListTest, RollingWindowWithEmptyLists)
 {
   using namespace cudf;
   using namespace cudf::test;
 
-  using TypeParam = int32_t;
   using T = TypeParam;
 
   auto input_column = fixed_width_column_wrapper<T, int32_t>{10,11,12,13,14,15}; 
@@ -100,6 +99,60 @@ TEST_F(CollectListTest, RollingWindowWithEmptyLists)
   }.release();
 
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected_result->view(), result_column_based_window->view());
+}
+
+TYPED_TEST(TypedCollectListTest, RollingWindowWithEmptyListsAtEnds)
+{
+  using namespace cudf;
+  using namespace cudf::test;
+
+  using T = TypeParam;
+
+  auto input_column = fixed_width_column_wrapper<T, int32_t>{0,1,2,3,4,5}; 
+  auto num_elements = static_cast<column_view>(input_column).size();
+
+  auto prev_column = fixed_width_column_wrapper<size_type>{0,2,2,2,2,0};
+  auto foll_column = fixed_width_column_wrapper<size_type>{0,1,1,1,1,0};
+
+  auto result = rolling_window(input_column, prev_column, foll_column, 0, make_collect_aggregation());
+
+  auto expected_result = lists_column_wrapper<T, int32_t>{
+    {},
+    {0, 1, 2},
+    {1, 2, 3},
+    {2, 3, 4},
+    {3, 4, 5},
+    {}
+  }.release();
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected_result->view(), result->view());
+}
+
+TYPED_TEST(TypedCollectListTest, RollingWindowWithNullLists)
+{
+  using namespace cudf;
+  using namespace cudf::test;
+
+  using T = TypeParam;
+
+  auto input_column = fixed_width_column_wrapper<T, int32_t>{0,1,2,3,4,5}; 
+  auto num_elements = static_cast<column_view>(input_column).size();
+
+  auto result = rolling_window(input_column, 2, 1, 3, make_collect_aggregation());
+
+  auto expected_result = lists_column_wrapper<T, int32_t>{
+    {
+      {},
+      {0, 1, 2},
+      {1, 2, 3},
+      {2, 3, 4},
+      {3, 4, 5},
+      {}
+    },
+    make_counting_transform_iterator(0, [num_elements](auto i) { return i != 0 && i != (num_elements - 1); })
+  }.release();
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected_result->view(), result->view());
 }
 
 TYPED_TEST(TypedCollectListTest, BasicGroupedRollingWindowNoNulls)
