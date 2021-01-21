@@ -3243,86 +3243,61 @@ def test_ndim():
 
 
 @pytest.mark.parametrize(
-    "arr",
+    "decimals",
     [
-        np.random.normal(-100, 100, 1000),
-        np.random.randint(-50, 50, 1000),
-        np.zeros(100),
-        np.repeat([-0.6459412758761901], 100),
-        np.repeat(np.nan, 100),
-        np.array([1.123, 2.343, np.nan, 0.0]),
-    ],
-)
-@pytest.mark.parametrize(
-    "decimal",
-    [
+        -3,
         0,
-        1,
-        2,
-        3,
-        4,
         5,
-        6,
-        7,
-        8,
-        9,
-        10,
-        11,
-        12,
-        13,
-        14,
-        15,
-        16,
-        17,
-        pytest.param(
-            -1,
-            marks=[
-                pytest.mark.xfail(reason="NotImplementedError: decimals < 0")
-            ],
-        ),
+        pd.Series([1, 4, 3, -6], index=["w", "x", "y", "z"]),
+        gd.Series([-4, -2, 12], index=["x", "y", "z"]),
+        {"w": -1, "x": 15, "y": 2},
     ],
 )
-def test_round(arr, decimal):
-    pser = pd.Series(arr)
-    ser = gd.Series(arr)
-    result = ser.round(decimal)
-    expected = pser.round(decimal)
+def test_dataframe_round(decimals):
+    pdf = pd.DataFrame(
+        {
+            "w": np.arange(0.5, 10.5, 1),
+            "x": np.random.normal(-100, 100, 10),
+            "y": np.array(
+                [
+                    14.123,
+                    2.343,
+                    np.nan,
+                    0.0,
+                    -8.302,
+                    np.nan,
+                    94.313,
+                    -112.236,
+                    -8.029,
+                    np.nan,
+                ]
+            ),
+            "z": np.repeat([-0.6459412758761901], 10),
+        }
+    )
+    gdf = gd.DataFrame.from_pandas(pdf)
 
+    if isinstance(decimals, gd.Series):
+        pdecimals = decimals.to_pandas()
+    else:
+        pdecimals = decimals
+
+    result = gdf.round(decimals)
+    expected = pdf.round(pdecimals)
     assert_eq(result, expected)
 
     # with nulls, maintaining existing null mask
-    arr = arr.astype("float64")  # for pandas nulls
-    mask = np.random.randint(0, 2, arr.shape[0])
-    arr[mask == 1] = np.nan
+    for c in pdf.columns:
+        arr = pdf[c].to_numpy().astype("float64")  # for pandas nulls
+        arr.ravel()[np.random.choice(10, 5, replace=False)] = np.nan
+        pdf[c] = gdf[c] = arr
 
-    pser = pd.Series(arr)
-    ser = gd.Series(arr)
-    result = ser.round(decimal)
-    expected = pser.round(decimal)
+    result = gdf.round(decimals)
+    expected = pdf.round(pdecimals)
 
     assert_eq(result, expected)
-    np.array_equal(ser.nullmask.to_array(), result.to_array())
-
-
-@pytest.mark.parametrize(
-    "series",
-    [
-        gd.Series([1.0, None, np.nan, 4.0], nan_as_null=False),
-        gd.Series([1.24430, None, np.nan, 4.423530], nan_as_null=False),
-        gd.Series([1.24430, np.nan, 4.423530], nan_as_null=False),
-        gd.Series([-1.24430, np.nan, -4.423530], nan_as_null=False),
-        gd.Series(np.repeat(np.nan, 100)),
-    ],
-)
-@pytest.mark.parametrize("decimal", [0, 1, 2, 3])
-def test_round_nan_as_null_false(series, decimal):
-    pser = series.to_pandas()
-    ser = gd.Series(series)
-    result = ser.round(decimal)
-    expected = pser.round(decimal)
-    np.testing.assert_array_almost_equal(
-        result.to_pandas(), expected, decimal=10
-    )
+    for c in gdf.columns:
+        np.array_equal(gdf[c].nullmask.to_array(), result[c].to_array())
 
 
 @pytest.mark.parametrize(
