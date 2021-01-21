@@ -307,17 +307,12 @@ struct ConvertFunctor {
   {
     T &value{static_cast<T *>(output_column)[row]};
 
-    // Check for user-specified true/false values first, where the output is
-    // replaced with 1/0 respectively
     value = [&opts, end, begin]() -> T {
+      // Check for user-specified true/false values
       auto const len = static_cast<size_t>(end - begin);
-      if (serialized_trie_contains(opts.trie_true, {begin, len})) {
-        return 1;
-      } else if (serialized_trie_contains(opts.trie_false, {begin, len})) {
-        return 0;
-      } else {
-        return decode_value<T>(begin, end, opts);
-      }
+      if (serialized_trie_contains(opts.trie_true, {begin, len})) { return 1; }
+      if (serialized_trie_contains(opts.trie_false, {begin, len})) { return 0; }
+      return decode_value<T>(begin, end, opts);
     }();
 
     return true;
@@ -334,8 +329,9 @@ struct ConvertFunctor {
                                                       size_t row,
                                                       parse_options_view const &opts)
   {
-    auto &value{static_cast<T *>(out_buffer)[row]};
-    value = decode_value<T>(begin, end, opts);
+    T const value                     = decode_value<T>(begin, end, opts);
+    static_cast<T *>(out_buffer)[row] = value;
+
     return !std::isnan(value);
   }
 
@@ -352,8 +348,7 @@ struct ConvertFunctor {
                                                       cudf::size_type row,
                                                       const parse_options_view &opts)
   {
-    T &value{static_cast<T *>(output_column)[row]};
-    value = decode_value<T>(begin, end, opts);
+    static_cast<T *>(output_column)[row] = decode_value<T>(begin, end, opts);
 
     return true;
   }

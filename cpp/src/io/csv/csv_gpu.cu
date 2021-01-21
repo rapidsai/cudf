@@ -442,11 +442,11 @@ struct decode_op {
                                                       parse_options_view const &opts,
                                                       column_parse::flags flags)
   {
-    static_cast<T *>(out_buffer)[row] = [&]() {
+    static_cast<T *>(out_buffer)[row] = [&flags, &opts, begin, end]() -> T {
       // Check for user-specified true/false values
       auto const field_len = static_cast<size_t>(end - begin);
-      if (serialized_trie_contains(opts.trie_true, {begin, field_len})) { return T{1}; }
-      if (serialized_trie_contains(opts.trie_false, {begin, field_len})) { return T{0}; }
+      if (serialized_trie_contains(opts.trie_true, {begin, field_len})) { return 1; }
+      if (serialized_trie_contains(opts.trie_false, {begin, field_len})) { return 0; }
       return flags & column_parse::as_hexadecimal ? decode_value<T, 16>(begin, end, opts)
                                                   : decode_value<T>(begin, end, opts);
     }();
@@ -465,7 +465,7 @@ struct decode_op {
                                                       parse_options_view const &opts,
                                                       column_parse::flags flags)
   {
-    static_cast<T *>(out_buffer)[row] = [&]() {
+    static_cast<T *>(out_buffer)[row] = [&opts, begin, end]() {
       // Check for user-specified true/false values
       auto const field_len = static_cast<size_t>(end - begin);
       if (serialized_trie_contains(opts.trie_true, {begin, field_len})) { return true; }
@@ -488,9 +488,9 @@ struct decode_op {
                                                       parse_options_view const &opts,
                                                       column_parse::flags flags)
   {
-    auto &value{static_cast<T *>(out_buffer)[row]};
+    T const value                     = decode_value<T>(begin, end, opts);
+    static_cast<T *>(out_buffer)[row] = value;
 
-    value = decode_value<T>(begin, end, opts);
     return !std::isnan(value);
   }
 
@@ -507,9 +507,8 @@ struct decode_op {
                                                       parse_options_view const &opts,
                                                       column_parse::flags flags)
   {
-    auto &value{static_cast<T *>(out_buffer)[row]};
+    static_cast<T *>(out_buffer)[row] = decode_value<T>(begin, end, opts);
 
-    value = decode_value<T>(begin, end, opts);
     return true;
   }
 };
