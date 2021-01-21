@@ -86,7 +86,7 @@ extern "C" {
 
 JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ContiguousTable_createPackedMetadata(
     JNIEnv *env, jclass, jlong j_table, jlong j_buffer_addr, jlong j_buffer_length) {
-  JNI_NULL_CHECK(env, j_table, "input table is null", NULL);
+  JNI_NULL_CHECK(env, j_table, "input table is null", 0);
   try {
     cudf::jni::auto_set_device(env);
     auto table = reinterpret_cast<cudf::table_view const *>(j_table);

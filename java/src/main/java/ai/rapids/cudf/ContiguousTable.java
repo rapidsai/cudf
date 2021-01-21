@@ -45,6 +45,7 @@ public final class ContiguousTable implements AutoCloseable {
   ContiguousTable(Table table, DeviceMemoryBuffer buffer) {
     this.metadataHandle = createPackedMetadata(table.getNativeView(),
             buffer.getAddress(), buffer.getLength());
+    this.table = table;
     this.buffer = buffer;
     this.rowCount = table.getRowCount();
   }
