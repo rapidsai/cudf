@@ -6794,6 +6794,15 @@ class DataFrame(Frame, Serializable):
         """{docstring}"""
         from cudf.io import parquet as pq
 
+        if any(
+            isinstance(col, cudf.core.column.StructColumn)
+            for col in self._data.columns
+        ):
+            raise NotImplementedError(
+                "Writing to parquet format is not yet supported "
+                "with Struct columns."
+            )
+
         return pq.to_parquet(self, path, *args, **kwargs)
 
     @ioutils.doc_to_feather()
@@ -6835,6 +6844,9 @@ class DataFrame(Frame, Serializable):
         index=True,
         line_terminator="\n",
         chunksize=None,
+        encoding=None,
+        compression=None,
+        **kwargs,
     ):
         """{docstring}"""
         from cudf.io import csv as csv
@@ -6849,6 +6861,9 @@ class DataFrame(Frame, Serializable):
             index=index,
             line_terminator=line_terminator,
             chunksize=chunksize,
+            encoding=encoding,
+            compression=compression,
+            **kwargs,
         )
 
     @ioutils.doc_to_orc()
