@@ -1866,7 +1866,7 @@ def as_column(arbitrary, nan_as_null=None, dtype=None, length=None):
                                 "Cannot create list column from given data"
                             )
                         return as_column(data, nan_as_null=nan_as_null)
-                    if isinstance(dtype, cudf.core.dtypes.DecimalDtype):
+                    if isinstance(dtype, cudf.core.dtypes.Decimal64Dtype):
                         data = pa.array(
                             arbitrary,
                             type=pa.decimal128(

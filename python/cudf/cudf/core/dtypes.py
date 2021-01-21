@@ -220,7 +220,7 @@ class StructDtype(ExtensionDtype):
         return hash(self._typ)
 
 
-class DecimalDtype(ExtensionDtype):
+class Decimal64Dtype(ExtensionDtype):
 
     name = "decimal"
     _metadata = ("precision", "scale")
@@ -233,7 +233,7 @@ class DecimalDtype(ExtensionDtype):
         precision : int
             The total number of digits in each value of this dtype
         scale : int, optional
-            The scale of the DecimalDtype. See Notes below.
+            The scale of the Decimal64Dtype. See Notes below.
 
         Notes
         -----
@@ -292,7 +292,7 @@ class DecimalDtype(ExtensionDtype):
 
     @classmethod
     def _validate(cls, precision, scale=0):
-        if precision > DecimalDtype._MAX_PRECISION:
+        if precision > Decimal64Dtype._MAX_PRECISION:
             raise ValueError(
                 f"Cannot construct a {cls.__name__}"
                 f" with precision > {cls._MAX_PRECISION}"

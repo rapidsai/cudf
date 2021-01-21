@@ -14,7 +14,7 @@ from cudf._lib.types cimport (
 )
 from cudf._lib.cpp.column.column_view cimport column_view
 from cudf._lib.cpp.lists.lists_column_view cimport lists_column_view
-from cudf.core.dtypes import ListDtype, StructDtype, DecimalDtype
+from cudf.core.dtypes import ListDtype, StructDtype, Decimal64Dtype
 
 cimport cudf._lib.cpp.types as libcudf_types
 
@@ -193,7 +193,7 @@ cdef dtype_from_structs_column_view(column_view cv):
 cdef dtype_from_decimal_column_view(column_view cv):
     scale = -cv.type().scale()
     precision = 18  # max of 64 bit integer
-    return DecimalDtype(precision=precision, scale=scale)
+    return Decimal64Dtype(precision=precision, scale=scale)
 
 cdef dtype_from_column_view(column_view cv):
     cdef libcudf_types.type_id tid = cv.type().id()

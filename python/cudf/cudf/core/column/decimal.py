@@ -7,14 +7,14 @@ import pyarrow as pa
 from cudf import _lib as libcudf
 from cudf.core.buffer import Buffer
 from cudf.core.column import ColumnBase
-from cudf.core.dtypes import DecimalDtype
+from cudf.core.dtypes import Decimal64Dtype
 from cudf.utils.utils import pa_mask_buffer_to_mask
 
 
 class DecimalColumn(ColumnBase):
     @classmethod
     def from_arrow(cls, data: pa.Array):
-        dtype = DecimalDtype.from_arrow(data.type)
+        dtype = Decimal64Dtype.from_arrow(data.type)
         mask_buf = data.buffers()[0]
         mask = (
             mask_buf
