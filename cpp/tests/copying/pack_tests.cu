@@ -34,8 +34,10 @@ struct PackUnpackTest : public BaseFixture {
     // verify pack_metadata itself works
     auto metadata = pack_metadata(
       unpacked, reinterpret_cast<uint8_t const*>(packed.gpu_data->data()), packed.gpu_data->size());
-    EXPECT_EQ(metadata.size(), packed.metadata->size());
-    EXPECT_EQ(std::equal(metadata.begin(), metadata.end(), packed.metadata->begin()), true);
+    EXPECT_EQ(metadata.size(), packed.metadata_->size());
+    EXPECT_EQ(
+      std::equal(metadata.data(), metadata.data() + metadata.size(), packed.metadata_->data()),
+      true);
   }
   void run_test(std::vector<column_view> const& t) { run_test(cudf::table_view{t}); }
 };

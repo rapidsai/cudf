@@ -108,13 +108,13 @@ void build_column_metadata(std::vector<serialized_column>& metadata,
   int64_t const null_mask_offset = null_mask_ptr ? null_mask_ptr - base_ptr : -1;
 
   // add metadata
-  metadata.push_back({col.type(),
-                      col.size(),
-                      UNKNOWN_NULL_COUNT,
-                      data_offset,
-                      null_mask_offset,
-                      col.num_children(),
-                      0});
+  metadata.emplace_back(serialized_column{col.type(),
+                                          col.size(),
+                                          UNKNOWN_NULL_COUNT,
+                                          data_offset,
+                                          null_mask_offset,
+                                          col.num_children(),
+                                          0});
 
   std::for_each(
     col.child_begin(), col.child_end(), [&metadata, &base_ptr, &data_size](column_view const& col) {
@@ -138,10 +138,10 @@ packed_columns pack(cudf::table_view const& input,
 }
 
 template <typename ColumnIter>
-std::vector<uint8_t> pack_metadata(ColumnIter begin,
-                                   ColumnIter end,
-                                   uint8_t const* contiguous_buffer,
-                                   size_t buffer_size)
+packed_columns::metadata pack_metadata(ColumnIter begin,
+                                       ColumnIter end,
+                                       uint8_t const* contiguous_buffer,
+                                       size_t buffer_size)
 {
   std::vector<serialized_column> metadata;
 
@@ -166,7 +166,7 @@ std::vector<uint8_t> pack_metadata(ColumnIter begin,
             metadata_begin + (metadata.size() * sizeof(serialized_column)),
             std::back_inserter(metadata_bytes));
 
-  return metadata_bytes;
+  return packed_columns::metadata{std::move(metadata_bytes)};
 }
 
 /**
@@ -178,7 +178,7 @@ table_view unpack(uint8_t const* metadata, uint8_t const* gpu_data)
   CUDF_EXPECTS(metadata != nullptr, "Encountered invalid packed column input");
   auto serialized_columns = reinterpret_cast<serialized_column const*>(metadata);
   uint8_t const* base_ptr = gpu_data;
-  // first entry is a stub where size == the total # of top level columns (see contiguous_split.cu)
+  // first entry is a stub where size == the total # of top level columns (see pack_metadata above)
   auto const num_columns = serialized_columns[0].size;
   size_t current_index   = 1;
 
@@ -214,9 +214,9 @@ packed_columns pack(cudf::table_view const& input, rmm::mr::device_memory_resour
 /**
  * @copydoc cudf::pack_metadata
  */
-std::vector<uint8_t> pack_metadata(table_view const& table,
-                                   uint8_t const* contiguous_buffer,
-                                   size_t buffer_size)
+packed_columns::metadata pack_metadata(table_view const& table,
+                                       uint8_t const* contiguous_buffer,
+                                       size_t buffer_size)
 {
   CUDF_FUNC_RANGE();
   return detail::pack_metadata(table.begin(), table.end(), contiguous_buffer, buffer_size);
@@ -228,7 +228,7 @@ std::vector<uint8_t> pack_metadata(table_view const& table,
 table_view unpack(packed_columns const& input)
 {
   CUDF_FUNC_RANGE();
-  return detail::unpack(input.metadata->data(),
+  return detail::unpack(input.metadata_->data(),
                         reinterpret_cast<uint8_t const*>(input.gpu_data->data()));
 }
 

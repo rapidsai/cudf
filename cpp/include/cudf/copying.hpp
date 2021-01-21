@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018-2020, NVIDIA CORPORATION.
+ * Copyright (c) 2018-2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -485,7 +485,21 @@ std::vector<table_view> split(table_view const& input, std::vector<size_type> co
  * table metadata and one on device which contains the table data.
  */
 struct packed_columns {
-  std::unique_ptr<std::vector<uint8_t>> metadata;
+  /**
+   * @brief Host-side metadata buffer used for reconstructing columns via unpack.
+   *
+   * @ingroup copy_split
+   */
+  struct metadata {
+    metadata(std::vector<uint8_t>&& v) : data_(v) {}
+    uint8_t const* data() const { return data_.data(); }
+    size_t size() const { return data_.size(); }
+
+   private:
+    std::vector<uint8_t> data_;
+  };
+
+  std::unique_ptr<metadata> metadata_;
   std::unique_ptr<rmm::device_buffer> gpu_data;
 };
 
@@ -582,9 +596,9 @@ packed_columns pack(cudf::table_view const& input,
  * @param buffer_size The size of `contiguous_buffer`.
  * @return Vector of bytes representing the metadata used to `unpack` a packed_columns struct.
  */
-std::vector<uint8_t> pack_metadata(table_view const& table,
-                                   uint8_t const* contiguous_buffer,
-                                   size_t buffer_size);
+packed_columns::metadata pack_metadata(table_view const& table,
+                                       uint8_t const* contiguous_buffer,
+                                       size_t buffer_size);
 
 /**
  * @brief Deserialize the result of `cudf::pack`
@@ -614,7 +628,9 @@ table_view unpack(packed_columns const& input);
  *
  * No new device memory is allocated in this function.
  *
- * @param input The packed columns to unpack
+ * @param metadata The host-side metadata buffer resulting from the initial pack() call
+ * @param gpu_data The device-side contiguous buffer storing the data that will be referenced by
+ * the resulting `table_view`
  * @return The unpacked `table_view`
  */
 table_view unpack(uint8_t const* metadata, uint8_t const* gpu_data);
