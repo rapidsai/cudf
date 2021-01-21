@@ -1,4 +1,5 @@
-# Copyright (c) 2018-2020, NVIDIA CORPORATION.
+# Copyright (c) 2018-2021, NVIDIA CORPORATION.
+
 import itertools
 
 import numpy as np
@@ -664,17 +665,8 @@ def get_dummies(
         if columns is None or len(columns) == 0:
             columns = df.select_dtypes(include=encode_fallback_dtypes).columns
 
-        def length_check(obj, name):
-            if cudf.utils.dtypes.is_list_like(obj):
-                if len(obj) != len(columns):
-                    raise ValueError(
-                        f"Length of '{name}' ({len(obj)}) did not match the "
-                        f"length of the columns being "
-                        f"encoded ({len(columns)})."
-                    )
-
-        length_check(prefix, "prefix")
-        length_check(prefix_sep, "prefix_sep")
+        _length_check_params(prefix, columns, "prefix")
+        _length_check_params(prefix_sep, columns, "prefix_sep")
 
         if prefix is None:
             prefix = columns
@@ -698,7 +690,9 @@ def get_dummies(
         if len(columns) == 0:
             return df.select_dtypes(exclude=encode_fallback_dtypes)
         else:
-            result_df = df.drop(columns=columns)
+            result_df = df.copy(deep=False)
+            result_df.drop(columns=columns, inplace=True)
+
             for name in columns:
                 unique = _get_unique(column=df._data[name], dummy_na=dummy_na)
 
@@ -728,9 +722,10 @@ def get_dummies(
             col_names = [f"{prefix}{prefix_sep}{cat}" for cat in col_names]
 
         newcols = ser.one_hot_encoding(cats=cats, dtype=dtype)
-        result_df = cudf.DataFrame(
-            dict(zip(col_names, newcols)), index=ser.index
-        )
+        result_df = cudf.DataFrame(index=ser.index)
+        for i, col in enumerate(newcols):
+            result_df._data[col_names[i]] = col
+
         return result_df
 
 
@@ -1044,6 +1039,10 @@ def unstack(df, level, fill_value=None):
 
 
 def _get_unique(column, dummy_na):
+    """
+    Returns unique values in a column, if
+    dummy_na is False, nan's are also dropped.
+    """
     if isinstance(column, cudf.core.column.CategoricalColumn):
         unique = column.categories
     else:
@@ -1053,3 +1052,13 @@ def _get_unique(column, dummy_na):
             unique = unique.nans_to_nulls()
         unique = unique.dropna()
     return unique
+
+
+def _length_check_params(obj, columns, name):
+    if cudf.utils.dtypes.is_list_like(obj):
+        if len(obj) != len(columns):
+            raise ValueError(
+                f"Length of '{name}' ({len(obj)}) did not match the "
+                f"length of the columns being "
+                f"encoded ({len(columns)})."
+            )
