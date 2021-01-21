@@ -5243,3 +5243,15 @@ def isclose(a, b, rtol=1e-05, atol=1e-08, equal_nan=False):
         result_col[equal_nulls] = True
 
     return Series(result_col, index=index)
+
+
+def _get_unique(df, dummy_na, name):
+    if isinstance(df[name]._column, cudf.core.column.CategoricalColumn):
+        unique = df[name]._column.categories
+    else:
+        unique = df[name].unique()
+    if not dummy_na:
+        if np.issubdtype(unique.dtype, np.floating):
+            unique = unique.nans_to_nulls()
+        unique = unique.dropna()
+    return unique
