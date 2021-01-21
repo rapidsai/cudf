@@ -1,4 +1,4 @@
-# Copyright (c) 2018-2020, NVIDIA CORPORATION.
+# Copyright (c) 2018-2021, NVIDIA CORPORATION.
 
 import csv
 import gzip
@@ -15,7 +15,7 @@ import pytest
 
 import cudf
 from cudf import read_csv
-from cudf.tests.utils import assert_eq
+from cudf.tests.utils import assert_eq, assert_exceptions_equal
 
 
 def make_numeric_dataframe(nrows, dtype):
@@ -1935,3 +1935,44 @@ def test_na_filter_empty_fields():
         StringIO(buffer), keep_default_na=False, na_values=test_na
     )
     assert_eq(pdf, gdf)
+
+
+def test_csv_sep_error():
+    pdf = pd.DataFrame({"a": [1, 2, 3]})
+    gdf = cudf.DataFrame({"a": [1, 2, 3]})
+    assert_exceptions_equal(
+        lfunc=pdf.to_csv,
+        rfunc=gdf.to_csv,
+        lfunc_args_and_kwargs=([], {"sep": "abc"}),
+        rfunc_args_and_kwargs=([], {"sep": "abc"}),
+        expected_error_message='"sep" must be a 1-character string',
+    )
+
+    assert_exceptions_equal(
+        lfunc=pdf.to_csv,
+        rfunc=gdf.to_csv,
+        lfunc_args_and_kwargs=([], {"sep": 1}),
+        rfunc_args_and_kwargs=([], {"sep": 1}),
+        expected_error_message='"sep" must be string, not int',
+    )
+
+
+def test_to_csv_encoding_error():
+    # TODO: Remove this test once following
+    # issue is fixed: https://github.com/rapidsai/cudf/issues/2957
+    df = cudf.DataFrame({"a": ["你好", "test"]})
+    encoding = "utf-8-sig"
+    error_message = (
+        f"Encoding {encoding} is not supported. "
+        + "Currently, only utf-8 encoding is supported."
+    )
+    with pytest.raises(NotImplementedError, match=re.escape(error_message)):
+        df.to_csv("test.csv", encoding=encoding)
+
+
+def test_to_csv_compression_error():
+    df = cudf.DataFrame({"a": ["test"]})
+    compression = "snappy"
+    error_message = "Writing compressed csv is not currently supported in cudf"
+    with pytest.raises(NotImplementedError, match=re.escape(error_message)):
+        df.to_csv("test.csv", compression=compression)

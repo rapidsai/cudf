@@ -1,4 +1,4 @@
-# Copyright (c) 2018-2020, NVIDIA CORPORATION.
+# Copyright (c) 2018-2021, NVIDIA CORPORATION.
 
 from numbers import Number
 
@@ -342,17 +342,9 @@ class NumericalColumn(column.ColumnBase):
         return cov / lhs_std / rhs_std
 
     def round(self, decimals=0):
-        if decimals < 0:
-            msg = "Decimal values < 0 are not yet supported."
-            raise NotImplementedError(msg)
-
-        if np.issubdtype(self.dtype, np.integer):
-            return self
-
-        data = Buffer(
-            cudautils.apply_round(self.data_array_view, decimals).view("|u1")
-        )
-        return column.build_column(data=data, dtype=self.dtype, mask=self.mask)
+        """Round the values in the Column to the given number of decimals.
+        """
+        return libcudf.round.round(self, decimal_places=decimals)
 
     def applymap(self, udf, out_dtype=None):
         """Apply an element-wise function to transform the values in the Column.
@@ -699,8 +691,9 @@ def digitize(column, bins, right=False):
     ----------
     column : Column
         Input column.
-    bins : np.array
-        1-D monotonically increasing array of bins with same type as `column`.
+    bins : Column-like
+        1-D column-like object of bins with same type as `column`, should be
+        monotonically increasing.
     right : bool
         Indicates whether interval contains the right or left bin edge.
 
@@ -708,9 +701,15 @@ def digitize(column, bins, right=False):
     -------
     A device array containing the indices
     """
-    assert column.dtype == bins.dtype
-    bins_buf = Buffer(bins.view("|u1"))
-    bin_col = NumericalColumn(data=bins_buf, dtype=bins.dtype)
+    if not column.dtype == bins.dtype:
+        raise ValueError(
+            "Digitize() expects bins and input column have the same dtype."
+        )
+
+    bin_col = as_column(bins, dtype=bins.dtype)
+    if bin_col.nullable:
+        raise ValueError("`bins` cannot contain null entries.")
+
     return as_column(
         libcudf.sort.digitize(column.as_frame(), bin_col.as_frame(), right)
     )

@@ -1,4 +1,4 @@
-# Copyright (c) 2019-2020, NVIDIA CORPORATION.
+# Copyright (c) 2019-2021, NVIDIA CORPORATION.
 
 import os
 import datetime
@@ -13,6 +13,8 @@ import pytest
 
 import cudf
 from cudf.tests.utils import assert_eq, supported_numpy_dtypes, gen_rand_series
+
+from cudf.io.orc import ORCWriter
 
 
 @pytest.fixture(scope="module")
@@ -385,6 +387,53 @@ def test_orc_writer(datadir, tmpdir, reference_file, columns, compression):
     assert_eq(expect, got)
 
 
+@pytest.mark.parametrize("compression", [None, "snappy"])
+@pytest.mark.parametrize(
+    "reference_file, columns",
+    [
+        (
+            "TestOrcFile.test1.orc",
+            [
+                "boolean1",
+                "byte1",
+                "short1",
+                "int1",
+                "long1",
+                "float1",
+                "double1",
+            ],
+        ),
+        ("TestOrcFile.demo-12-zlib.orc", ["_col1", "_col3", "_col5"]),
+    ],
+)
+def test_chunked_orc_writer(
+    datadir, tmpdir, reference_file, columns, compression
+):
+    pdf_fname = datadir / reference_file
+    gdf_fname = tmpdir.join("chunked_gdf.orc")
+
+    try:
+        orcfile = pa.orc.ORCFile(pdf_fname)
+    except Exception as excpr:
+        if type(excpr).__name__ == "ArrowIOError":
+            pytest.skip(".orc file is not found")
+        else:
+            print(type(excpr).__name__)
+
+    pdf = orcfile.read(columns=columns).to_pandas()
+    gdf = cudf.from_pandas(pdf)
+    expect = pd.concat([pdf, pdf]).reset_index(drop=True)
+
+    writer = ORCWriter(gdf_fname, compression=compression)
+    writer.write_table(gdf)
+    writer.write_table(gdf)
+    writer.close()
+
+    got = pa.orc.ORCFile(gdf_fname).read(columns=columns).to_pandas()
+
+    assert_eq(expect, got)
+
+
 @pytest.mark.parametrize(
     "dtypes",
     [
@@ -399,6 +448,31 @@ def test_orc_writer_strings(tmpdir, dtypes):
 
     expect = cudf.datasets.randomdata(nrows=10, dtypes=dtypes, seed=1)
     expect.to_orc(gdf_fname)
+    got = pa.orc.ORCFile(gdf_fname).read().to_pandas()
+
+    assert_eq(expect, got)
+
+
+@pytest.mark.parametrize(
+    "dtypes",
+    [
+        {"c": str, "a": int},
+        {"c": int, "a": str},
+        {"c": int, "a": str, "b": float},
+        {"c": str, "a": object},
+    ],
+)
+def test_chunked_orc_writer_strings(tmpdir, dtypes):
+    gdf_fname = tmpdir.join("chunked_gdf_strings.orc")
+
+    gdf = cudf.datasets.randomdata(nrows=10, dtypes=dtypes, seed=1)
+    pdf = gdf.to_pandas()
+    expect = pd.concat([pdf, pdf]).reset_index(drop=True)
+    writer = ORCWriter(gdf_fname)
+    writer.write_table(gdf)
+    writer.write_table(gdf)
+    writer.close()
+
     got = pa.orc.ORCFile(gdf_fname).read().to_pandas()
 
     assert_eq(expect, got)

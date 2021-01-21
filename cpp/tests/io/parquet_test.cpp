@@ -1356,6 +1356,13 @@ TEST_F(ParquetChunkedWriterTest, DecimalWrite)
   args.set_decimal_precision_data(precisions);
   EXPECT_THROW(cudf_io::parquet_chunked_writer(args).write(table), cudf::logic_error);
 
+  // verify sucess if equal precision is given
+  precisions = {7, 9};
+  args.set_decimal_precision_data(precisions);
+  state = cudf_io::write_parquet_chunked_begin(args);
+  cudf_io::write_parquet_chunked(table, state);
+  cudf_io::write_parquet_chunked_end(state);
+
   // verify failure if too many precisions given
   precisions = {7, 14, 11};
   args.set_decimal_precision_data(precisions);
@@ -1482,7 +1489,7 @@ class custom_test_memmap_sink : public cudf::io::data_sink {
 
   bool supports_device_write() const override { return supports_device_writes; }
 
-  void device_write(void const* gpu_data, size_t size, rmm::cuda_stream_view stream)
+  void device_write(void const* gpu_data, size_t size, rmm::cuda_stream_view stream) override
   {
     char* ptr = nullptr;
     CUDA_TRY(cudaMallocHost(&ptr, size));
@@ -2014,7 +2021,8 @@ TEST_F(ParquetReaderTest, DecimalRead)
       -9694494, -5343299, 3558393,  -8789072, 2697890,  -4454707, 8299309,  -6223703, -3112513,
       7537487,  825776,   -495683,  328299,   -4529727, 0,        -9999999, 9999999};
 
-    EXPECT_EQ(result.tbl->view().column(0).size(), sizeof(col0_data) / sizeof(col0_data[0]));
+    EXPECT_EQ(static_cast<std::size_t>(result.tbl->view().column(0).size()),
+              sizeof(col0_data) / sizeof(col0_data[0]));
     cudf::test::fixed_point_column_wrapper<int32_t> col0(
       std::begin(col0_data), std::end(col0_data), validity, numeric::scale_type{-4});
     cudf::test::expect_columns_equal(result.tbl->view().column(0), col0);
@@ -2038,7 +2046,8 @@ TEST_F(ParquetReaderTest, DecimalRead)
                            45844829680593,  71401416837149,  0,
                            -99999999999999, 99999999999999};
 
-    EXPECT_EQ(result.tbl->view().column(1).size(), sizeof(col1_data) / sizeof(col1_data[0]));
+    EXPECT_EQ(static_cast<std::size_t>(result.tbl->view().column(1).size()),
+              sizeof(col1_data) / sizeof(col1_data[0]));
     cudf::test::fixed_point_column_wrapper<int64_t> col1(
       std::begin(col1_data), std::end(col1_data), validity, numeric::scale_type{-5});
     cudf::test::expect_columns_equal(result.tbl->view().column(1), col1);
@@ -2153,7 +2162,8 @@ TEST_F(ParquetReaderTest, DecimalRead)
                            9913714, 901749,  7776938, 3186566, 4955569, 5131067, 98619,
                            2282579, 7521455, 4430706, 1937859, 4532040, 0};
 
-    EXPECT_EQ(result.tbl->view().column(0).size(), sizeof(col0_data) / sizeof(col0_data[0]));
+    EXPECT_EQ(static_cast<std::size_t>(result.tbl->view().column(0).size()),
+              sizeof(col0_data) / sizeof(col0_data[0]));
     cudf::test::fixed_point_column_wrapper<int64_t> col0(
       std::begin(col0_data), std::end(col0_data), validity_c0, numeric::scale_type{-3});
     cudf::test::expect_columns_equal(result.tbl->view().column(0), col0);
@@ -2181,7 +2191,8 @@ TEST_F(ParquetReaderTest, DecimalRead)
                            0,
                            363993164092};
 
-    EXPECT_EQ(result.tbl->view().column(1).size(), sizeof(col1_data) / sizeof(col1_data[0]));
+    EXPECT_EQ(static_cast<std::size_t>(result.tbl->view().column(1).size()),
+              sizeof(col1_data) / sizeof(col1_data[0]));
     cudf::test::fixed_point_column_wrapper<int64_t> col1(
       std::begin(col1_data), std::end(col1_data), validity_c1, numeric::scale_type{-11});
     cudf::test::expect_columns_equal(result.tbl->view().column(1), col1);
