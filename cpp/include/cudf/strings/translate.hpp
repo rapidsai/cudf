@@ -17,7 +17,7 @@
 
 #include <cudf/column/column.hpp>
 #include <cudf/scalar/scalar.hpp>
-#include <cudf/strings/string_view.cuh>
+#include <cudf/strings/string_view.hpp>
 #include <cudf/strings/strings_column_view.hpp>
 
 #include <rmm/mr/device/per_device_resource.hpp>

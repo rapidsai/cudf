@@ -17,7 +17,7 @@
 #pragma once
 
 #include <cudf/fixed_point/fixed_point.hpp>
-#include <cudf/strings/string_view.cuh>
+#include <cudf/strings/string_view.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/traits.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>

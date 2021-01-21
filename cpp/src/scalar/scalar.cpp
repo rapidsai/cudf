@@ -15,7 +15,7 @@
  */
 
 #include <cudf/scalar/scalar.hpp>
-#include <cudf/strings/string_view.cuh>
+#include <cudf/strings/string_view.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_buffer.hpp>
