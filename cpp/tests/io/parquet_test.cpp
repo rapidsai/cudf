@@ -1394,9 +1394,7 @@ TEST_F(ParquetChunkedWriterTest, DecimalWrite)
   // verify sucess if equal precision is given
   precisions = {7, 9};
   args.set_decimal_precision_data(precisions);
-  state = cudf_io::write_parquet_chunked_begin(args);
-  cudf_io::write_parquet_chunked(table, state);
-  cudf_io::write_parquet_chunked_end(state);
+  cudf_io::parquet_chunked_writer(args).write(table);
 
   // verify failure if too many precisions given
   precisions = {7, 14, 11};
