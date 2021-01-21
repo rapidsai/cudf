@@ -491,7 +491,7 @@ struct packed_columns {
    * @ingroup copy_split
    */
   struct metadata {
-    metadata(std::vector<uint8_t>&& v) : data_(v) {}
+    metadata(std::vector<uint8_t>&& v) : data_(std::move(v)) {}
     uint8_t const* data() const { return data_.data(); }
     size_t size() const { return data_.size(); }
 
