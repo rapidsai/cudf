@@ -198,7 +198,7 @@ public:
 };
 
 typedef jni_table_writer_handle<cudf::io::pq_chunked_state> native_parquet_writer_handle;
-typedef jni_table_writer_handle<cudf::io::orc_chunked_state> native_orc_writer_handle;
+typedef jni_table_writer_handle<cudf::io::orc_chunked_writer> native_orc_writer_handle;
 
 class native_arrow_ipc_writer_handle final {
 public:
@@ -865,7 +865,7 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_readParquet(
 JNIEXPORT long JNICALL Java_ai_rapids_cudf_Table_writeParquetBufferBegin(
     JNIEnv *env, jclass, jobjectArray j_col_names, jbooleanArray j_col_nullability,
     jobjectArray j_metadata_keys, jobjectArray j_metadata_values, jint j_compression,
-    jint j_stats_freq, jboolean j_isInt96, jobject consumer) {
+    jint j_stats_freq, jboolean j_isInt96, jintArray j_precisions, jobject consumer) {
   JNI_NULL_CHECK(env, j_col_names, "null columns", 0);
   JNI_NULL_CHECK(env, j_col_nullability, "null nullability", 0);
   JNI_NULL_CHECK(env, j_metadata_keys, "null metadata keys", 0);
@@ -891,13 +891,18 @@ JNIEXPORT long JNICALL Java_ai_rapids_cudf_Table_writeParquetBufferBegin(
     std::unique_ptr<cudf::jni::jni_writer_data_sink> data_sink(
         new cudf::jni::jni_writer_data_sink(env, consumer));
     sink_info sink{data_sink.get()};
+    cudf::jni::native_jintArray precisions(env, j_precisions);
+    std::vector<uint8_t> const v_precisions(
+        precisions.data(), precisions.data() + precisions.size());
     chunked_parquet_writer_options opts =
         chunked_parquet_writer_options::builder(sink)
             .nullable_metadata(&metadata)
             .compression(static_cast<compression_type>(j_compression))
             .stats_level(static_cast<statistics_freq>(j_stats_freq))
             .int96_timestamps(static_cast<bool>(j_isInt96))
+            .decimal_precision(v_precisions)
             .build();
+
     std::shared_ptr<pq_chunked_state> state = write_parquet_chunked_begin(opts);
     cudf::jni::native_parquet_writer_handle *ret =
         new cudf::jni::native_parquet_writer_handle(state, data_sink);
@@ -909,7 +914,7 @@ JNIEXPORT long JNICALL Java_ai_rapids_cudf_Table_writeParquetBufferBegin(
 JNIEXPORT long JNICALL Java_ai_rapids_cudf_Table_writeParquetFileBegin(
     JNIEnv *env, jclass, jobjectArray j_col_names, jbooleanArray j_col_nullability,
     jobjectArray j_metadata_keys, jobjectArray j_metadata_values, jint j_compression,
-    jint j_stats_freq, jstring j_output_path) {
+    jint j_stats_freq, jboolean j_isInt96, jintArray j_precisions, jstring j_output_path) {
   JNI_NULL_CHECK(env, j_col_names, "null columns", 0);
   JNI_NULL_CHECK(env, j_col_nullability, "null nullability", 0);
   JNI_NULL_CHECK(env, j_metadata_keys, "null metadata keys", 0);
@@ -932,14 +937,20 @@ JNIEXPORT long JNICALL Java_ai_rapids_cudf_Table_writeParquetFileBegin(
     for (size_t i = 0; i < meta_keys.size(); ++i) {
       metadata.user_data[meta_keys[i].get()] = meta_values[i].get();
     }
-
+    cudf::jni::native_jintArray precisions(env, j_precisions);
+    std::vector<uint8_t> v_precisions(
+        precisions.data(), precisions.data() + precisions.size());
+ 
     sink_info sink{output_path.get()};
     chunked_parquet_writer_options opts =
         chunked_parquet_writer_options::builder(sink)
             .nullable_metadata(&metadata)
             .compression(static_cast<compression_type>(j_compression))
             .stats_level(static_cast<statistics_freq>(j_stats_freq))
+            .int96_timestamps(static_cast<bool>(j_isInt96))
+            .decimal_precision(v_precisions)
             .build();
+
     std::shared_ptr<pq_chunked_state> state = write_parquet_chunked_begin(opts);
     cudf::jni::native_parquet_writer_handle *ret =
         new cudf::jni::native_parquet_writer_handle(state);
@@ -1064,9 +1075,9 @@ JNIEXPORT long JNICALL Java_ai_rapids_cudf_Table_writeORCBufferBegin(
                                           .compression(static_cast<compression_type>(j_compression))
                                           .enable_statistics(true)
                                           .build();
-    std::shared_ptr<orc_chunked_state> state = write_orc_chunked_begin(opts);
+    auto writer_ptr = std::make_shared<cudf::io::orc_chunked_writer>(opts);
     cudf::jni::native_orc_writer_handle *ret =
-        new cudf::jni::native_orc_writer_handle(state, data_sink);
+        new cudf::jni::native_orc_writer_handle(writer_ptr, data_sink);
     return reinterpret_cast<jlong>(ret);
   }
   CATCH_STD(env, 0)
@@ -1105,8 +1116,8 @@ JNIEXPORT long JNICALL Java_ai_rapids_cudf_Table_writeORCFileBegin(
                                           .compression(static_cast<compression_type>(j_compression))
                                           .enable_statistics(true)
                                           .build();
-    std::shared_ptr<orc_chunked_state> state = write_orc_chunked_begin(opts);
-    cudf::jni::native_orc_writer_handle *ret = new cudf::jni::native_orc_writer_handle(state);
+    auto writer_ptr = std::make_shared<cudf::io::orc_chunked_writer>(opts);
+    cudf::jni::native_orc_writer_handle *ret = new cudf::jni::native_orc_writer_handle(writer_ptr);
     return reinterpret_cast<jlong>(ret);
   }
   CATCH_STD(env, 0)
@@ -1128,7 +1139,7 @@ JNIEXPORT void JNICALL Java_ai_rapids_cudf_Table_writeORCChunk(JNIEnv *env, jcla
   }
   try {
     cudf::jni::auto_set_device(env);
-    write_orc_chunked(*tview, state->state);
+    state->state->write(*tview);
   }
   CATCH_STD(env, )
 }
@@ -1142,7 +1153,7 @@ JNIEXPORT void JNICALL Java_ai_rapids_cudf_Table_writeORCEnd(JNIEnv *env, jclass
   std::unique_ptr<cudf::jni::native_orc_writer_handle> make_sure_we_delete(state);
   try {
     cudf::jni::auto_set_device(env);
-    write_orc_chunked_end(state->state);
+    state->state->close();
   }
   CATCH_STD(env, )
 }
