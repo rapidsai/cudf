@@ -1,6 +1,6 @@
 /*
  *
- *  Copyright (c) 2019-2020, NVIDIA CORPORATION.
+ *  Copyright (c) 2019-2021, NVIDIA CORPORATION.
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -239,6 +239,9 @@ public final class Table implements AutoCloseable {
    * @param metadataValues  Metadata values corresponding to metadataKeys
    * @param compression     native compression codec ID
    * @param statsFreq       native statistics frequency ID
+   * @param isInt96         true if timestamp type is int96
+   * @param precisions      precision list containing all the precisions of the decimal types in
+   *                        the columns
    * @param filename        local output path
    * @return a handle that is used in later calls to writeParquetChunk and writeParquetEnd.
    */
@@ -248,6 +251,8 @@ public final class Table implements AutoCloseable {
                                                    String[] metadataValues,
                                                    int compression,
                                                    int statsFreq,
+                                                   boolean isInt96,
+                                                   int[] precisions,
                                                    String filename) throws CudfException;
 
   /**
@@ -259,6 +264,8 @@ public final class Table implements AutoCloseable {
    * @param compression     native compression codec ID
    * @param statsFreq       native statistics frequency ID
    * @param isInt96         true if timestamp type is int96
+   * @param precisions      precision list containing all the precisions of the decimal types in
+   *                        the columns
    * @param consumer        consumer of host buffers produced.
    * @return a handle that is used in later calls to writeParquetChunk and writeParquetEnd.
    */
@@ -269,6 +276,7 @@ public final class Table implements AutoCloseable {
                                                      int compression,
                                                      int statsFreq,
                                                      boolean isInt96,
+                                                     int[] precisions,
                                                      HostBufferConsumer consumer) throws CudfException;
 
   /**
@@ -778,6 +786,8 @@ public final class Table implements AutoCloseable {
           options.getMetadataValues(),
           options.getCompressionType().nativeId,
           options.getStatisticsFrequency().nativeId,
+          options.isTimestampTypeInt96(),
+          options.getPrecisions(),
           outputFile.getAbsolutePath());
     }
 
@@ -789,6 +799,7 @@ public final class Table implements AutoCloseable {
           options.getCompressionType().nativeId,
           options.getStatisticsFrequency().nativeId,
           options.isTimestampTypeInt96(),
+          options.getPrecisions(),
           consumer);
       this.consumer = consumer;
     }
