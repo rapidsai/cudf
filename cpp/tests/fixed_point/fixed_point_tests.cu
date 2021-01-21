@@ -585,15 +585,15 @@ TEST_F(FixedPointTest, PositiveScaleWithValuesOutsideUnderlyingType32)
 {
   using fp_wrapper = cudf::test::fixed_point_column_wrapper<int32_t>;
 
-  auto a = fp_wrapper{{100000000}, scale_type{6}};
-  auto b = fp_wrapper{{5000000}, scale_type{7}};
-  auto c = fp_wrapper{{2}, scale_type{0}};
+  auto const a = fp_wrapper{{100000000}, scale_type{6}};
+  auto const b = fp_wrapper{{5000000}, scale_type{7}};
+  auto const c = fp_wrapper{{2}, scale_type{0}};
 
-  auto expected1 = fp_wrapper{{150000000}, scale_type{6}};
-  auto expected2 = fp_wrapper{{50000000}, scale_type{6}};
+  auto const expected1 = fp_wrapper{{150000000}, scale_type{6}};
+  auto const expected2 = fp_wrapper{{50000000}, scale_type{6}};
 
-  auto result1 = cudf::binary_operation(a, b, cudf::binary_operator::ADD, {});
-  auto result2 = cudf::binary_operation(a, c, cudf::binary_operator::DIV, {});
+  auto const result1 = cudf::binary_operation(a, b, cudf::binary_operator::ADD, {});
+  auto const result2 = cudf::binary_operation(a, c, cudf::binary_operator::DIV, {});
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected1, result1->view());
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected2, result2->view());
@@ -603,15 +603,33 @@ TEST_F(FixedPointTest, PositiveScaleWithValuesOutsideUnderlyingType64)
 {
   using fp_wrapper = cudf::test::fixed_point_column_wrapper<int64_t>;
 
-  auto a = fp_wrapper{{100000000}, scale_type{100}};
-  auto b = fp_wrapper{{5000000}, scale_type{101}};
-  auto c = fp_wrapper{{2}, scale_type{0}};
+  auto const a = fp_wrapper{{100000000}, scale_type{100}};
+  auto const b = fp_wrapper{{5000000}, scale_type{101}};
+  auto const c = fp_wrapper{{2}, scale_type{0}};
 
-  auto expected1 = fp_wrapper{{150000000}, scale_type{100}};
-  auto expected2 = fp_wrapper{{50000000}, scale_type{100}};
+  auto const expected1 = fp_wrapper{{150000000}, scale_type{100}};
+  auto const expected2 = fp_wrapper{{50000000}, scale_type{100}};
 
-  auto result1 = cudf::binary_operation(a, b, cudf::binary_operator::ADD, {});
-  auto result2 = cudf::binary_operation(a, c, cudf::binary_operator::DIV, {});
+  auto const result1 = cudf::binary_operation(a, b, cudf::binary_operator::ADD, {});
+  auto const result2 = cudf::binary_operation(a, c, cudf::binary_operator::DIV, {});
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected1, result1->view());
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected2, result2->view());
+}
+
+TYPED_TEST(FixedPointTestBothReps, ExtremelyLargeNegativeScale)
+{
+  using fp_wrapper = cudf::test::fixed_point_column_wrapper<TypeParam>;
+
+  auto const a = fp_wrapper{{10}, scale_type{-201}};
+  auto const b = fp_wrapper{{50}, scale_type{-202}};
+  auto const c = fp_wrapper{{2}, scale_type{0}};
+
+  auto const expected1 = fp_wrapper{{150}, scale_type{-202}};
+  auto const expected2 = fp_wrapper{{5}, scale_type{-201}};
+
+  auto const result1 = cudf::binary_operation(a, b, cudf::binary_operator::ADD, {});
+  auto const result2 = cudf::binary_operation(a, c, cudf::binary_operator::DIV, {});
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected1, result1->view());
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected2, result2->view());
