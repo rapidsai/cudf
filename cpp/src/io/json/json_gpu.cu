@@ -310,9 +310,10 @@ struct ConvertFunctor {
     // Check for user-specified true/false values first, where the output is
     // replaced with 1/0 respectively
     value = [&opts, end, begin]() -> T {
-      if (serialized_trie_contains(opts.trie_true, begin, end - begin)) {
+      auto const len = static_cast<size_t>(end - begin);
+      if (serialized_trie_contains(opts.trie_true, {begin, len})) {
         return 1;
-      } else if (serialized_trie_contains(opts.trie_false, begin, end - begin)) {
+      } else if (serialized_trie_contains(opts.trie_false, {begin, len})) {
         return 0;
       } else {
         return decode_value<T>(begin, end, opts);
@@ -517,7 +518,7 @@ __global__ void convert_data_to_columns_kernel(parse_options_view opts,
     current = desc.value_end + 1;
 
     // Empty fields are not legal values
-    if (!serialized_trie_contains(opts.trie_na, desc.value_begin, value_len)) {
+    if (!serialized_trie_contains(opts.trie_na, {desc.value_begin, value_len})) {
       // Type dispatcher does not handle strings
       if (column_types[desc.column].id() == type_id::STRING) {
         auto str_list           = static_cast<string_pair *>(output_columns[desc.column]);
@@ -589,7 +590,7 @@ __global__ void detect_data_types_kernel(
     current = desc.value_end + 1;
 
     // Checking if the field is empty/valid
-    if (serialized_trie_contains(opts.trie_na, desc.value_begin, value_len)) {
+    if (serialized_trie_contains(opts.trie_na, {desc.value_begin, value_len})) {
       // Increase the null count for array rows, where the null count is initialized to zero.
       if (!are_rows_objects) { atomicAdd(&column_infos[desc.column].null_count, 1); }
       continue;
@@ -645,8 +646,8 @@ __global__ void detect_data_types_kernel(
     }
     // Off by one if they are a hexadecimal number
     if (maybe_hex) { --int_req_number_cnt; }
-    if (serialized_trie_contains(opts.trie_true, desc.value_begin, value_len) ||
-        serialized_trie_contains(opts.trie_false, desc.value_begin, value_len)) {
+    if (serialized_trie_contains(opts.trie_true, {desc.value_begin, value_len}) ||
+        serialized_trie_contains(opts.trie_false, {desc.value_begin, value_len})) {
       atomicAdd(&column_infos[desc.column].bool_count, 1);
     } else if (digit_count == int_req_number_cnt) {
       bool is_negative       = (*desc.value_begin == '-');

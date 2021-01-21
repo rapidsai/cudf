@@ -189,11 +189,11 @@ __global__ void __launch_bounds__(csvparse_block_dim)
     // Checking if this is a column that the user wants --- user can filter columns
     if (column_flags[col] & column_parse::enabled) {
       // points to last character in the field
-      auto const field_len = next_delimiter - field_start;
-      if (serialized_trie_contains(opts.trie_na, field_start, field_len)) {
+      auto const field_len = static_cast<size_t>(next_delimiter - field_start);
+      if (serialized_trie_contains(opts.trie_na, {field_start, field_len})) {
         atomicAdd(&d_columnData[actual_col].null_count, 1);
-      } else if (serialized_trie_contains(opts.trie_true, field_start, field_len) ||
-                 serialized_trie_contains(opts.trie_false, field_start, field_len)) {
+      } else if (serialized_trie_contains(opts.trie_true, {field_start, field_len}) ||
+                 serialized_trie_contains(opts.trie_false, {field_start, field_len})) {
         atomicAdd(&d_columnData[actual_col].bool_count, 1);
       } else if (cudf::io::gpu::is_infinity(field_start, next_delimiter)) {
         atomicAdd(&d_columnData[actual_col].float_count, 1);
@@ -247,8 +247,8 @@ __global__ void __launch_bounds__(csvparse_block_dim)
             atomicAdd(&d_columnData[actual_col].string_count, 1);
           }
         } else if (countNumber == int_req_number_cnt) {
-          bool const is_negative = (*trimmed_field_range.first == '-');
-          char const *data_begin =
+          auto const is_negative = (*trimmed_field_range.first == '-');
+          auto const data_begin =
             trimmed_field_range.first + (is_negative || (*trimmed_field_range.first == '+'));
           cudf::size_type *ptr = cudf::io::gpu::infer_integral_field_counter(
             data_begin, data_begin + countNumber, is_negative, d_columnData[actual_col]);
@@ -445,10 +445,10 @@ struct decode_op {
     static_cast<T *>(out_buffer)[row] = [&]() {
       // Check for user-specified true/false values first, where the output is
       // replaced with 1/0 respectively
-      size_t const field_len = end - begin;
-      if (serialized_trie_contains(opts.trie_true, begin, field_len)) {
+      auto const field_len = static_cast<size_t>(end - begin);
+      if (serialized_trie_contains(opts.trie_true, {begin, field_len})) {
         return static_cast<T>(1);
-      } else if (serialized_trie_contains(opts.trie_false, begin, field_len)) {
+      } else if (serialized_trie_contains(opts.trie_false, {begin, field_len})) {
         return static_cast<T>(0);
       } else {
         if (flags & column_parse::as_hexadecimal) {
@@ -478,9 +478,9 @@ struct decode_op {
     // Check for user-specified true/false values first, where the output is
     // replaced with 1/0 respectively
     const size_t field_len = end - begin;
-    if (serialized_trie_contains(opts.trie_true, begin, field_len)) {
+    if (serialized_trie_contains(opts.trie_true, {begin, field_len})) {
       value = 1;
-    } else if (serialized_trie_contains(opts.trie_false, begin, field_len)) {
+    } else if (serialized_trie_contains(opts.trie_false, {begin, field_len})) {
       value = 0;
     } else {
       value = decode_value<T>(begin, end, opts);
@@ -573,8 +573,8 @@ __global__ void __launch_bounds__(csvparse_block_dim)
 
     if (column_flags[col] & column_parse::enabled) {
       // check if the entire field is a NaN string - consistent with pandas
-      auto const is_valid =
-        !serialized_trie_contains(options.trie_na, field_start, next_delimiter - field_start);
+      auto const is_valid = !serialized_trie_contains(
+        options.trie_na, {field_start, static_cast<size_t>(next_delimiter - field_start)});
 
       // Modify field_start & end to ignore whitespace and quotechars
       auto field_end = next_delimiter;
