@@ -118,6 +118,11 @@ public final class Table implements AutoCloseable {
     return columns;
   }
 
+  /** Return the native table view handle for this table */
+  long getNativeView() {
+    return nativeHandle;
+  }
+
   /**
    * Return the {@link ColumnVector} at the specified index. If you want to keep a reference to
    * the column around past the life time of the table, you will need to increment the reference

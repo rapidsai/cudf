@@ -43,7 +43,8 @@ public final class ContiguousTable implements AutoCloseable {
 
   /** Construct a contiguous table instance given a table and the device buffer backing it. */
   ContiguousTable(Table table, DeviceMemoryBuffer buffer) {
-    this.table = table;
+    this.metadataHandle = createPackedMetadata(table.getNativeView(),
+            buffer.getAddress(), buffer.getLength());
     this.buffer = buffer;
     this.rowCount = table.getRowCount();
   }
@@ -116,6 +117,9 @@ public final class ContiguousTable implements AutoCloseable {
       buffer = null;
     }
   }
+
+  // create packed metadata for a table backed by a single data buffer
+  private static native long createPackedMetadata(long tableView, long dataAddress, long dataSize);
 
   // create a DirectByteBuffer for the packed table metadata
   private static native ByteBuffer createMetadataDirectBuffer(long metadataHandle);

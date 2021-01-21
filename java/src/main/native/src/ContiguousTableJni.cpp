@@ -84,6 +84,20 @@ native_jobjectArray<jobject> contiguous_table_array(JNIEnv *env, jsize length) {
 
 extern "C" {
 
+JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ContiguousTable_createPackedMetadata(
+    JNIEnv *env, jclass, jlong j_table, jlong j_buffer_addr, jlong j_buffer_length) {
+  JNI_NULL_CHECK(env, j_table, "input table is null", NULL);
+  try {
+    cudf::jni::auto_set_device(env);
+    auto table = reinterpret_cast<cudf::table_view const *>(j_table);
+    auto data_addr = reinterpret_cast<uint8_t const *>(j_buffer_addr);
+    auto data_size = static_cast<size_t>(j_buffer_length);
+    auto metadata_ptr = new std::vector<uint8_t>(cudf::pack_metadata(*table, data_addr, data_size));
+    return reinterpret_cast<jlong>(metadata_ptr);
+  }
+  CATCH_STD(env, 0);
+}
+
 JNIEXPORT jobject JNICALL Java_ai_rapids_cudf_ContiguousTable_createMetadataDirectBuffer(
     JNIEnv *env, jclass, jlong j_metadata_ptr) {
   JNI_NULL_CHECK(env, j_metadata_ptr, "metadata is null", nullptr);
