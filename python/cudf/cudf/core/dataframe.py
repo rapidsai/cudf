@@ -1483,7 +1483,7 @@ class DataFrame(Frame, Serializable):
 
         overwrite : {True, False}, default True
             How to handle non-NA values for overlapping keys:
-            True: overwrite original DataFrame’s values with values from other.
+            True: overwrite original DataFrame's values with values from other.
             False: only update values that are NA in the original DataFrame.
 
         filter_func : None
