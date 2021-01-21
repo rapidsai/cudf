@@ -709,9 +709,6 @@ void writer::impl::write_chunked_begin(pq_chunked_state &state)
 
 void writer::impl::write_chunk(table_view const &table, pq_chunked_state &state)
 {
-  // Early exit for empty table
-  if (table.num_rows() == 0 || table.num_columns() == 0) { return; }
-
   size_type num_columns = table.num_columns();
   size_type num_rows    = table.num_rows();
 
@@ -925,17 +922,17 @@ void writer::impl::write_chunk(table_view const &table, pq_chunked_state &state)
   uint32_t num_fragments = (uint32_t)((num_rows + fragment_size - 1) / fragment_size);
   hostdevice_vector<gpu::PageFragment> fragments(num_columns * num_fragments);
 
-  CUDF_EXPECTS(fragments.size() != 0, "Fragment size cannot evaluate to 0 ");
-
-  init_page_fragments(fragments,
-                      col_desc,
-                      *parent_column_table_device_view,
-                      *leaf_column_table_device_view,
-                      num_columns,
-                      num_fragments,
-                      num_rows,
-                      fragment_size,
-                      state.stream);
+  if (fragments.size() != 0) {
+    init_page_fragments(fragments,
+                        col_desc,
+                        *parent_column_table_device_view,
+                        *leaf_column_table_device_view,
+                        num_columns,
+                        num_fragments,
+                        num_rows,
+                        fragment_size,
+                        state.stream);
+  }
 
   size_t global_rowgroup_base = state.md.row_groups.size();
 
