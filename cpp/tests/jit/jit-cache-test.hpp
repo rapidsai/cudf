@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2020, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -45,7 +45,23 @@ struct JitCacheTest : public ::testing::Test, public cudf::jit::cudfJitCache {
   void purgeFileCache()
   {
 #if defined(JITIFY_USE_CACHE)
-    boost::filesystem::remove_all(cudf::jit::getCacheDir());
+    // In the multi-process test there are two processes repeatedly creating and deleting the cache.
+    // While deleting the cache, we cannot use `filesystem::remove_all(cudf::jit::getCacheDir())`
+    // because it would recursively remove all files within the cache directory and then finally
+    // remove the directory itself. A non-empty directory cannot be removed and throws an exception.
+    // On slower disks, there would be times when one process would be deleting the cache and the
+    // other would be creating it. So while the process that’s trying to delete is done deleting the
+    // contents of the directory, and is about to delete the directory itself, the other process
+    // would go ahead and create a cache file in that directory. Thus causing an exception to be
+    // thrown on the process trying to delete the now non-empty directory.
+
+    // By recursing the cache directory and only deleting cache files, we leave the directory alone.
+    // That way the aforementioned scenario doesn’t occur
+    std::vector<boost::filesystem::path> file_paths;
+    for (auto& path : boost::filesystem::recursive_directory_iterator(cudf::jit::getCacheDir())) {
+      if (boost::filesystem::is_regular_file(path)) { file_paths.push_back(path); }
+    }
+    for (auto& file_path : file_paths) { boost::filesystem::remove(file_path); }
 #endif
   }
 
@@ -108,7 +124,7 @@ struct JitCacheTest : public ::testing::Test, public cudf::jit::cudfJitCache {
 /**
  * @brief Similar to JitCacheTest but it doesn't run warmUp() test in SetUp and
  * purgeFileCache() in TearDown
- **/
+ */
 struct JitCacheMultiProcessTest : public JitCacheTest {
   virtual void SetUp() { purgeFileCache(); }
 

@@ -86,7 +86,6 @@ TYPED_TEST(PartitionTest, MapWithNullsThrows)
  *
  * The order of rows within each partition may be different, so each partition
  * is first sorted before being compared for equality.
- *
  */
 void expect_equal_partitions(cudf::table_view expected,
                              cudf::table_view actual,

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2020, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-/** --------------------------------------------------------------------------*
+/**
  * @brief provides column input iterator with nulls replaced with a specified value
  * @file iterator.cuh
  *
@@ -29,7 +29,7 @@
  * For non-null column, use
  * auto iter = column.begin<Element>();
  *
- * -------------------------------------------------------------------------**/
+ */
 
 #pragma once
 
@@ -39,7 +39,7 @@
 
 namespace cudf {
 namespace detail {
-/** -------------------------------------------------------------------------*
+/**
  * @brief value accessor of column with null bitmask
  * A unary functor returns scalar value at `id`.
  * `operator() (cudf::size_type id)` computes `element` and valid flag at `id`
@@ -52,17 +52,17 @@ namespace detail {
  * @throws cudf::logic_error if column datatype and Element type mismatch.
  *
  * @tparam Element The type of elements in the column
- * -------------------------------------------------------------------------**/
+ */
 template <typename Element>
 struct null_replaced_value_accessor {
   column_device_view const col;      ///< column view of column in device
   Element const null_replacement{};  ///< value returned when element is null
 
-  /** -------------------------------------------------------------------------*
+  /**
    * @brief constructor
    * @param[in] _col column device view of cudf column
    * @param[in] null_replacement The value to return for null elements
-   * -------------------------------------------------------------------------**/
+   */
   null_replaced_value_accessor(column_device_view const& _col, Element null_val)
     : col{_col}, null_replacement{null_val}
   {
@@ -78,21 +78,21 @@ struct null_replaced_value_accessor {
   }
 };
 
-/** -------------------------------------------------------------------------*
+/**
  * @brief validity accessor of column with null bitmask
  * A unary functor returns validity at `id`.
  * `operator() (cudf::size_type id)` computes validity flag at `id`
  * This functor is only allowed for nullable columns.
  *
  * @throws cudf::logic_error if the column is not nullable.
- * -------------------------------------------------------------------------**/
+ */
 struct validity_accessor {
   column_device_view const col;
 
-  /** -------------------------------------------------------------------------*
+  /**
    * @brief constructor
    * @param[in] _col column device view of cudf column
-   * -------------------------------------------------------------------------**/
+   */
   validity_accessor(column_device_view const& _col) : col{_col}
   {
     // verify valid is non-null, otherwise, is_valid() will crash

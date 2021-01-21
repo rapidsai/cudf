@@ -1303,9 +1303,6 @@ TEST_F(ListColumnWrapperTest, ListOfListOfBools)
 {
   using namespace cudf;
 
-  using T = int;
-  using L = test::lists_column_wrapper<T>;
-
   // List<List<bool>> 3 rows
   //
   // List<List<bool>>:
@@ -1360,7 +1357,7 @@ TEST_F(ListColumnWrapperTest, MismatchedHierarchies)
   // trying to build a column out of a List<List<int>> column, and a List<int> column
   // is not valid if the leaf lists are not empty.
   {
-    auto expect_failure = []() { test::lists_column_wrapper<T> list{{{1, 2, 3}}, {4, 5}}; };
+    auto expect_failure = []() { LCW list{{{1, 2, 3}}, {4, 5}}; };
     EXPECT_THROW(expect_failure(), cudf::logic_error);
   }
 }

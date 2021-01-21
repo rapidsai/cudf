@@ -31,3 +31,12 @@ span#strike_button {
        overflow: visible !important;
     }
  }
+
+
+table.io-supported-types-table {
+    text-align: center
+}
+
+table.io-supported-types-table thead{
+    text-align: center !important;
+}

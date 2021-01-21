@@ -51,7 +51,6 @@ namespace detail {
  * step 3, add base offsets to get the final sequence
  * [0, 1, 5, 6, 7, 8, 9]
  * @endcode
- *
  */
 struct list_gatherer {
   typedef size_type argument_type;
@@ -85,7 +84,6 @@ struct list_gatherer {
 
 /**
  * @copydoc cudf::lists::detail::gather_list_leaf
- *
  */
 std::unique_ptr<column> gather_list_leaf(column_view const& column,
                                          gather_data const& gd,
@@ -134,7 +132,6 @@ std::unique_ptr<column> gather_list_leaf(column_view const& column,
 
 /**
  * @copydoc cudf::lists::detail::gather_list_nested
- *
  */
 std::unique_ptr<column> gather_list_nested(cudf::lists_column_view const& list,
                                            gather_data& gd,

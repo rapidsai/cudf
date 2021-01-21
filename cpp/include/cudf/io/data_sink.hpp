@@ -30,21 +30,21 @@ namespace cudf {
 namespace io {
 /**
  * @brief Interface class for storing the output data from the writers
- **/
+ */
 class data_sink {
  public:
   /**
    * @brief Create a sink from a file path
    *
    * @param[in] filepath Path to the file to use
-   **/
+   */
   static std::unique_ptr<data_sink> create(const std::string& filepath);
 
   /**
    * @brief Create a sink from a std::vector
    *
    * @param[in,out] buffer Pointer to the output vector
-   **/
+   */
   static std::unique_ptr<data_sink> create(std::vector<char>* buffer);
 
   /**
@@ -53,7 +53,7 @@ class data_sink {
    * A useful code path for benchmarking, to eliminate physical
    * hardware randomness from profiling.
    *
-   **/
+   */
   static std::unique_ptr<data_sink> create();
 
   /**
@@ -65,12 +65,12 @@ class data_sink {
    * class that wraps the user pointer.  The principle is to allow the user to declare
    * a custom sink instance and use it across multiple write() calls.
    *
-   **/
+   */
   static std::unique_ptr<data_sink> create(cudf::io::data_sink* const user_sink);
 
   /**
    * @brief Base class destructor
-   **/
+   */
   virtual ~data_sink(){};
 
   /**
@@ -80,7 +80,7 @@ class data_sink {
    * @param[in] size Number of bytes to write
    *
    * @return void
-   **/
+   */
   virtual void host_write(void const* data, size_t size) = 0;
 
   /**
@@ -104,7 +104,7 @@ class data_sink {
    * write() calls as well.
    *
    * @return bool If this writer supports device_write() calls.
-   **/
+   */
   virtual bool supports_device_write() const { return false; }
 
   /**
@@ -114,7 +114,7 @@ class data_sink {
    * @param[in] size Number of bytes to write
    *
    * @return void
-   **/
+   */
   virtual void device_write(void const* gpu_data, size_t size, rmm::cuda_stream_view stream)
   {
     CUDF_FAIL("data_sink classes that support device_write must override this function.");
@@ -131,7 +131,7 @@ class data_sink {
    * @brief Returns the total number of bytes written into this sink
    *
    * @return size_t Total number of bytes written into this sink
-   **/
+   */
   virtual size_t bytes_written() = 0;
 };
 

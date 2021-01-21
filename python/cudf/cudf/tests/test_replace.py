@@ -453,13 +453,24 @@ def test_fillna_datetime(psr, fill_value, inplace):
         ),
         # Timedelta
         np.array(
-            [10, 100, 1000, None, None, 1000, 100, 10], dtype="datetime64[ns]"
+            [10, 100, 1000, None, None, 10, 100, 1000], dtype="datetime64[ns]"
         ),
         np.array(
-            [None, None, 1000, None, 1000, 100, 10], dtype="datetime64[ns]"
+            [None, None, 10, None, 1000, 100, 10], dtype="datetime64[ns]"
         ),
         np.array(
             [10, 100, None, None, 1000, None, None], dtype="datetime64[ns]"
+        ),
+        # String
+        np.array(
+            ["10", "100", "1000", None, None, "10", "100", "1000"],
+            dtype="object",
+        ),
+        np.array(
+            [None, None, "1000", None, "10", "100", "10"], dtype="object"
+        ),
+        np.array(
+            ["10", "100", None, None, "1000", None, None], dtype="object"
         ),
     ],
 )

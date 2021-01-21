@@ -148,7 +148,7 @@ __inline__ __device__ cudf::timestamp_D decode_value(const char *begin,
                                                      const char *end,
                                                      parse_options_view const &opts)
 {
-  return cudf::timestamp_D{cudf::duration_D{parseDateFormat(begin, end, opts.dayfirst)}};
+  return cudf::timestamp_D{cudf::duration_D{to_date(begin, end, opts.dayfirst)}};
 }
 
 /**
@@ -165,7 +165,7 @@ __inline__ __device__ cudf::timestamp_s decode_value(const char *begin,
                                                      const char *end,
                                                      parse_options_view const &opts)
 {
-  auto milli = parseDateTimeFormat(begin, end, opts.dayfirst);
+  auto milli = to_date_time(begin, end, opts.dayfirst);
   return cudf::timestamp_s{cudf::duration_s{milli / 1000}};
 }
 
@@ -183,7 +183,7 @@ __inline__ __device__ cudf::timestamp_ms decode_value(const char *begin,
                                                       const char *end,
                                                       parse_options_view const &opts)
 {
-  auto milli = parseDateTimeFormat(begin, end, opts.dayfirst);
+  auto milli = to_date_time(begin, end, opts.dayfirst);
   return cudf::timestamp_ms{cudf::duration_ms{milli}};
 }
 
@@ -201,7 +201,7 @@ __inline__ __device__ cudf::timestamp_us decode_value(const char *begin,
                                                       const char *end,
                                                       parse_options_view const &opts)
 {
-  auto milli = parseDateTimeFormat(begin, end, opts.dayfirst);
+  auto milli = to_date_time(begin, end, opts.dayfirst);
   return cudf::timestamp_us{cudf::duration_us{milli * 1000}};
 }
 
@@ -219,7 +219,7 @@ __inline__ __device__ cudf::timestamp_ns decode_value(const char *begin,
                                                       const char *end,
                                                       parse_options_view const &opts)
 {
-  auto milli = parseDateTimeFormat(begin, end, opts.dayfirst);
+  auto milli = to_date_time(begin, end, opts.dayfirst);
   return cudf::timestamp_ns{cudf::duration_ns{milli * 1000000}};
 }
 
@@ -229,7 +229,7 @@ __inline__ __device__ cudf::timestamp_ns decode_value(const char *begin,
   __inline__ __device__ Type decode_value(                              \
     const char *begin, const char *end, parse_options_view const &opts) \
   {                                                                     \
-    return Type{parseTimeDeltaFormat<Type>(begin, 0, end - begin)};     \
+    return Type{to_time_delta<Type>(begin, end)};                       \
   }
 #endif
 DURATION_DECODE_VALUE(duration_D)
@@ -545,12 +545,12 @@ __global__ void convert_data_to_columns_kernel(parse_options_view opts,
        input_field_index++) {
     auto const desc =
       next_field_descriptor(current, row_data_range.second, opts, input_field_index, col_map);
-    auto const value_len = desc.value_end - desc.value_begin;
+    auto const value_len = static_cast<size_t>(std::max(desc.value_end - desc.value_begin, 0L));
 
     current = desc.value_end + 1;
 
     // Empty fields are not legal values
-    if (value_len > 0 && !serialized_trie_contains(opts.trie_na, desc.value_begin, value_len)) {
+    if (!serialized_trie_contains(opts.trie_na, desc.value_begin, value_len)) {
       // Type dispatcher does not handle strings
       if (column_types[desc.column].id() == type_id::STRING) {
         auto str_list           = static_cast<string_pair *>(output_columns[desc.column]);
@@ -616,13 +616,13 @@ __global__ void detect_data_types_kernel(
        input_field_index++) {
     auto const desc =
       next_field_descriptor(current, row_data_range.second, opts, input_field_index, col_map);
-    auto const value_len = desc.value_end - desc.value_begin;
+    auto const value_len = static_cast<size_t>(std::max(desc.value_end - desc.value_begin, 0L));
 
     // Advance to the next field; +1 to skip the delimiter
     current = desc.value_end + 1;
 
     // Checking if the field is empty/valid
-    if (value_len <= 0 || serialized_trie_contains(opts.trie_na, desc.value_begin, value_len)) {
+    if (serialized_trie_contains(opts.trie_na, desc.value_begin, value_len)) {
       // Increase the null count for array rows, where the null count is initialized to zero.
       if (!are_rows_objects) { atomicAdd(&column_infos[desc.column].null_count, 1); }
       continue;
@@ -755,7 +755,6 @@ __device__ key_value_range get_next_key_value_range(char const *begin,
  * @param[in] row_offsets The offset of each row in the input
  * @param[out] keys_cnt Number of keys found in the file
  * @param[out] keys_info optional, information (offset, length, hash) for each found key
- *
  */
 __global__ void collect_keys_info_kernel(parse_options_view const options,
                                          device_span<char const> const data,
