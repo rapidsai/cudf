@@ -101,7 +101,7 @@ class GroupBy(Serializable):
                     len(self.obj), "int8", masked=False
                 )
             )
-            .groupby(self.grouping)
+            .groupby(self.grouping, sort=self._sort)
             .agg("size")
         )
 
@@ -591,7 +591,7 @@ class GroupBy(Serializable):
 
 class DataFrameGroupBy(GroupBy):
     def __init__(
-        self, obj, by=None, level=None, sort=True, as_index=True, dropna=True
+        self, obj, by=None, level=None, sort=False, as_index=True, dropna=True
     ):
         """
         Group DataFrame using a mapper or by a Series of columns.
@@ -689,7 +689,7 @@ class DataFrameGroupBy(GroupBy):
         except AttributeError:
             if key in self.obj:
                 return self.obj[key].groupby(
-                    self.grouping, dropna=self._dropna
+                    self.grouping, dropna=self._dropna, sort=self._sort
                 )
             raise
 
@@ -707,7 +707,7 @@ class DataFrameGroupBy(GroupBy):
 
 class SeriesGroupBy(GroupBy):
     def __init__(
-        self, obj, by=None, level=None, sort=True, as_index=True, dropna=True
+        self, obj, by=None, level=None, sort=False, as_index=True, dropna=True
     ):
         """
         Group Series using a mapper or by a Series of columns.

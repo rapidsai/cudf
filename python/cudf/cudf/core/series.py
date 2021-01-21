@@ -4154,7 +4154,7 @@ class Series(Frame, Serializable):
         axis=0,
         level=None,
         as_index=True,
-        sort=True,
+        sort=False,
         group_keys=True,
         squeeze=False,
         observed=False,
