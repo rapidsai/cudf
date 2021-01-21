@@ -995,6 +995,12 @@ struct rolling_window_launcher {
     // the same columns would look as follows:
     //   offsets        == [0, 2, 5, 5, 8, 11, 13]
     //   scatter result == [0, 0, 1, 0, 0, 2, 0, 0, 1, 0, 0, 1, 0]
+    // 
+    // Note: To correctly handle null list rows at the beginning of 
+    // the output column, care must be taken to skip the first `0`
+    // in the offsets column, when running `reduce_by_key()`.
+    // This accounts for the `0` added by default to the offsets
+    // column, marking the beginning of the column.
 
     auto num_child_rows = get_num_child_rows(offsets);
 
