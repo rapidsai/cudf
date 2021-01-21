@@ -443,20 +443,12 @@ struct decode_op {
                                                       column_parse::flags flags)
   {
     static_cast<T *>(out_buffer)[row] = [&]() {
-      // Check for user-specified true/false values first, where the output is
-      // replaced with 1/0 respectively
+      // Check for user-specified true/false values
       auto const field_len = static_cast<size_t>(end - begin);
-      if (serialized_trie_contains(opts.trie_true, {begin, field_len})) {
-        return static_cast<T>(1);
-      } else if (serialized_trie_contains(opts.trie_false, {begin, field_len})) {
-        return static_cast<T>(0);
-      } else {
-        if (flags & column_parse::as_hexadecimal) {
-          return decode_value<T, 16>(begin, end, opts);
-        } else {
-          return decode_value<T>(begin, end, opts);
-        }
-      }
+      if (serialized_trie_contains(opts.trie_true, {begin, field_len})) { return T{1}; }
+      if (serialized_trie_contains(opts.trie_false, {begin, field_len})) { return T{0}; }
+      return flags & column_parse::as_hexadecimal ? decode_value<T, 16>(begin, end, opts)
+                                                  : decode_value<T>(begin, end, opts);
     }();
 
     return true;
@@ -473,18 +465,14 @@ struct decode_op {
                                                       parse_options_view const &opts,
                                                       column_parse::flags flags)
   {
-    auto &value{static_cast<T *>(out_buffer)[row]};
+    static_cast<T *>(out_buffer)[row] = [&]() {
+      // Check for user-specified true/false values
+      auto const field_len = static_cast<size_t>(end - begin);
+      if (serialized_trie_contains(opts.trie_true, {begin, field_len})) { return true; }
+      if (serialized_trie_contains(opts.trie_false, {begin, field_len})) { return false; }
+      return decode_value<T>(begin, end, opts);
+    }();
 
-    // Check for user-specified true/false values first, where the output is
-    // replaced with 1/0 respectively
-    const size_t field_len = end - begin;
-    if (serialized_trie_contains(opts.trie_true, {begin, field_len})) {
-      value = 1;
-    } else if (serialized_trie_contains(opts.trie_false, {begin, field_len})) {
-      value = 0;
-    } else {
-      value = decode_value<T>(begin, end, opts);
-    }
     return true;
   }
 
