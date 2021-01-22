@@ -177,7 +177,7 @@ __global__ void __launch_bounds__(block_size, 1)
   dtype     = s->col.physical_type;
   dtype_len = (dtype == INT96) ? 12 : (dtype == INT64 || dtype == DOUBLE) ? 8 : 4;
   if (dtype == INT32) {
-    dtype_len_in = GetDtypeLogicalLen(s->col.converted_type);
+    dtype_len_in = GetDtypeLogicalLen(s->col.leaf_column);
   } else if (dtype == INT96) {
     dtype_len_in = 8;
   } else {
