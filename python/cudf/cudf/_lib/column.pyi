@@ -1,3 +1,5 @@
+# Copyright (c) 2021, NVIDIA CORPORATION.
+
 from typing import Tuple, Union, TypeVar, Optional
 
 from cudf._typing import DtypeObj, Dtype, ScalarLike
