@@ -1,4 +1,4 @@
-# Copyright (c) 2020, NVIDIA CORPORATION.
+# Copyright (c) 2020-2021, NVIDIA CORPORATION.
 
 import numpy as np
 import pandas as pd
@@ -8,9 +8,9 @@ import pytest
 import cudf
 from cudf.core.dtypes import (
     CategoricalDtype,
+    Decimal64Dtype,
     ListDtype,
     StructDtype,
-    DecimalDtype,
 )
 from cudf.tests.utils import assert_eq
 
@@ -136,6 +136,12 @@ def test_struct_dtype_fields(fields):
 
 
 def test_decimal_dtype():
-    dt = DecimalDtype(4, 2)
+    dt = Decimal64Dtype(4, 2)
     assert dt.to_arrow() == pa.decimal128(4, 2)
-    assert dt == DecimalDtype.from_arrow(pa.decimal128(4, 2))
+    assert dt == Decimal64Dtype.from_arrow(pa.decimal128(4, 2))
+
+
+def test_max_precision():
+    Decimal64Dtype(scale=0, precision=18)
+    with pytest.raises(ValueError):
+        Decimal64Dtype(scale=0, precision=19)
