@@ -13,7 +13,7 @@ from dask.dataframe.core import (
     new_dd_object,
     split_out_on_cols,
 )
-from dask.dataframe.groupby import DataFrameGroupBy
+from dask.dataframe.groupby import DataFrameGroupBy, SeriesGroupBy
 from dask.highlevelgraph import HighLevelGraph
 
 
@@ -22,6 +22,28 @@ class CudfDataFrameGroupBy(DataFrameGroupBy):
         self.sep = kwargs.pop("sep", "___")
         self.as_index = kwargs.pop("as_index", True)
         super().__init__(*args, **kwargs)
+
+    def __getitem__(self, key):
+        if isinstance(key, list):
+            g = CudfDataFrameGroupBy(
+                self.obj,
+                by=self.index,
+                slice=key,
+                sort=self.sort,
+                **self.dropna,
+            )
+        else:
+            g = CudfSeriesGroupBy(
+                self.obj,
+                by=self.index,
+                slice=key,
+                sort=self.sort,
+                **self.dropna,
+            )
+
+        # error is raised from pandas
+        g._meta = g._meta[key]
+        return g
 
     def aggregate(self, arg, split_every=None, split_out=1):
         if arg == "size":
@@ -47,6 +69,26 @@ class CudfDataFrameGroupBy(DataFrameGroupBy):
 
         return super().aggregate(
             arg, split_every=split_every, split_out=split_out
+        )
+
+
+class CudfSeriesGroupBy(SeriesGroupBy):
+    def __init__(self, *args, **kwargs):
+        self.sep = kwargs.pop("sep", "___")
+        self.as_index = kwargs.pop("as_index", True)
+        super().__init__(*args, **kwargs)
+
+    def mean(self, split_every=None, split_out=1):
+        return groupby_agg(
+            self.obj,
+            self.index,
+            {self._slice: "mean"},
+            split_every=split_every,
+            split_out=split_out,
+            dropna=self.dropna,
+            sep=self.sep,
+            sort=self.sort,
+            as_index=self.as_index,
         )
 
 
