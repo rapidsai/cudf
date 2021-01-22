@@ -103,6 +103,32 @@ class CudfSeriesGroupBy(SeriesGroupBy):
             as_index=self.as_index,
         )[self._slice]
 
+    def aggregate(self, arg, split_every=None, split_out=1):
+        if arg == "size":
+            return self.size()
+
+        _supported = {"count", "mean", "std", "var", "sum", "min", "max"}
+        if (
+            isinstance(self.obj, DaskDataFrame)
+            and isinstance(self.index, (str, list))
+            and _is_supported({self._slice: arg}, _supported)
+        ):
+            return groupby_agg(
+                self.obj,
+                self.index,
+                {self._slice: arg},
+                split_every=split_every,
+                split_out=split_out,
+                dropna=self.dropna,
+                sep=self.sep,
+                sort=self.sort,
+                as_index=self.as_index,
+            )
+
+        return super().aggregate(
+            arg, split_every=split_every, split_out=split_out
+        )
+
 
 def groupby_agg(
     ddf,
