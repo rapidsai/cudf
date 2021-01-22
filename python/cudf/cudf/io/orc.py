@@ -9,9 +9,7 @@ from pyarrow import orc as orc
 import cudf
 from cudf import _lib as libcudf
 from cudf.utils import ioutils
-from cudf.utils.metadata import (  # type: ignore
-    orc_column_statistics_pb2 as cs_pb2,
-)
+from cudf.utils.metadata import orc_column_statistics_pb2 as cs_pb2
 
 
 def _make_empty_df(filepath_or_buffer, columns):
