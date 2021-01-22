@@ -33,9 +33,11 @@ import cudf
 >>> gb3 = df.groupby(cudf.Series(['a', 'a', 'b', 'b', 'b']))  # grouping by an external column
 ```
 
-> :warning: **Important**: cuDF uses `sort=False` by default to achieve better performance
-> This deviates from Pandas default behavior as the result will not be sorted by key. Example:
+``` warning::
+   cuDF uses `sort=False` by default to achieve better performance, which provides no gaurentee to the group order in outputs. This deviates from Pandas default behavior.
+```
 
+For example:
 ```python
 >>> df = cudf.DataFrame({'a' : [2, 2, 1], 'b' : [42, 21, 11]})
 >>> df.groupby('a').sum()
@@ -174,7 +176,7 @@ Use the `GroupBy.rolling()` method to perform rolling window calculations on eac
 Rolling window sum on each group with a window size of 2:
 
 ```python
->>> df.groupby('a', sort=True).rolling(2).sum()
+>>> df.groupby('a').rolling(2).sum()
         a     b     c
 a
 1 0  <NA>  <NA>  <NA>
