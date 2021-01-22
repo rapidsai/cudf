@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -843,6 +843,18 @@ class chunked_parquet_writer_options_builder {
   chunked_parquet_writer_options_builder& stats_level(statistics_freq sf)
   {
     options._stats_level = sf;
+    return *this;
+  }
+
+  /**
+   * @brief Sets decimal precision data.
+   *
+   * @param v Vector of precision data flattened with exactly one entry per
+   *          decimal column.
+   */
+  chunked_parquet_writer_options_builder& decimal_precision(std::vector<uint8_t> const& v)
+  {
+    options._decimal_precision = v;
     return *this;
   }
 

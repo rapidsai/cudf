@@ -59,7 +59,7 @@ TYPED_TEST(TypedLeadLagWindowTest, LeadLagBasics)
 
   auto const input_col =
     fixed_width_column_wrapper<T>{0, 1, 2, 3, 4, 5, 0, 10, 20, 30, 40, 50}.release();
-  auto const input_size   = input_col->size();
+
   auto const grouping_key = fixed_width_column_wrapper<int32_t>{0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1};
   auto const grouping_keys = cudf::table_view{std::vector<cudf::column_view>{grouping_key}};
 
@@ -103,7 +103,7 @@ TYPED_TEST(TypedLeadLagWindowTest, LeadLagWithNulls)
   auto const input_col = fixed_width_column_wrapper<T>{{0, 1, 2, 3, 4, 5, 0, 10, 20, 30, 40, 50},
                                                        {1, 1, 0, 1, 1, 1, 1, 1, 0, 1, 1, 1}}
                            .release();
-  auto const input_size   = input_col->size();
+
   auto const grouping_key = fixed_width_column_wrapper<int32_t>{0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1};
   auto const grouping_keys = cudf::table_view{std::vector<cudf::column_view>{grouping_key}};
 
@@ -147,7 +147,7 @@ TYPED_TEST(TypedLeadLagWindowTest, TestLeadLagWithDefaults)
   auto const input_col = fixed_width_column_wrapper<T>{{0, 1, 2, 3, 4, 5, 0, 10, 20, 30, 40, 50},
                                                        {1, 1, 0, 1, 1, 1, 1, 1, 0, 1, 1, 1}}
                            .release();
-  auto const input_size   = input_col->size();
+
   auto const grouping_key = fixed_width_column_wrapper<int32_t>{0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1};
   auto const grouping_keys = cudf::table_view{std::vector<cudf::column_view>{grouping_key}};
 
@@ -196,7 +196,7 @@ TYPED_TEST(TypedLeadLagWindowTest, TestLeadLagWithDefaultsContainingNulls)
   auto const input_col = fixed_width_column_wrapper<T>{{0, 1, 2, 3, 4, 5, 0, 10, 20, 30, 40, 50},
                                                        {1, 1, 0, 1, 1, 1, 1, 1, 0, 1, 1, 1}}
                            .release();
-  auto const input_size   = input_col->size();
+
   auto const grouping_key = fixed_width_column_wrapper<int32_t>{0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1};
   auto const grouping_keys = cudf::table_view{std::vector<cudf::column_view>{grouping_key}};
 
@@ -246,7 +246,7 @@ TYPED_TEST(TypedLeadLagWindowTest, TestLeadLagWithOutOfRangeOffsets)
   auto const input_col = fixed_width_column_wrapper<T>{{0, 1, 2, 3, 4, 5, 0, 10, 20, 30, 40, 50},
                                                        {1, 1, 0, 1, 1, 1, 1, 1, 0, 1, 1, 1}}
                            .release();
-  auto const input_size   = input_col->size();
+
   auto const grouping_key = fixed_width_column_wrapper<int32_t>{0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1};
   auto const grouping_keys = cudf::table_view{std::vector<cudf::column_view>{grouping_key}};
 
@@ -295,7 +295,7 @@ TYPED_TEST(TypedLeadLagWindowTest, TestLeadLagWithZeroOffsets)
   auto const input_col = fixed_width_column_wrapper<T>{{0, 1, 2, 3, 4, 5, 0, 10, 20, 30, 40, 50},
                                                        {1, 1, 0, 1, 1, 1, 1, 1, 0, 1, 1, 1}}
                            .release();
-  auto const input_size   = input_col->size();
+
   auto const grouping_key = fixed_width_column_wrapper<int32_t>{0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1};
   auto const grouping_keys = cudf::table_view{std::vector<cudf::column_view>{grouping_key}};
 
@@ -330,7 +330,7 @@ TYPED_TEST(TypedLeadLagWindowTest, TestLeadLagWithNegativeOffsets)
   auto const input_col = fixed_width_column_wrapper<T>{{0, 1, 2, 3, 4, 5, 0, 10, 20, 30, 40, 50},
                                                        {1, 1, 0, 1, 1, 1, 1, 1, 0, 1, 1, 1}}
                            .release();
-  auto const input_size   = input_col->size();
+
   auto const grouping_key = fixed_width_column_wrapper<int32_t>{0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1};
   auto const grouping_keys = cudf::table_view{std::vector<cudf::column_view>{grouping_key}};
 
@@ -381,7 +381,7 @@ TYPED_TEST(TypedLeadLagWindowTest, TestLeadLagWithNoGrouping)
 
   auto const input_col =
     fixed_width_column_wrapper<T>{{0, 1, 2, 3, 4, 5}, {1, 1, 0, 1, 1, 1}}.release();
-  auto const input_size    = input_col->size();
+
   auto const grouping_keys = cudf::table_view{std::vector<cudf::column_view>{}};
 
   auto const default_value =
@@ -426,7 +426,7 @@ TYPED_TEST(TypedLeadLagWindowTest, TestLeadLagWithAllNullInput)
     {0, 1, 2, 3, 4, 5, 0, 10, 20, 30, 40, 50}, make_counting_transform_iterator(0, [](auto i) {
       return false;
     })}.release();
-  auto const input_size   = input_col->size();
+
   auto const grouping_key = fixed_width_column_wrapper<int32_t>{0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1};
   auto const grouping_keys = cudf::table_view{std::vector<cudf::column_view>{grouping_key}};
 
@@ -479,7 +479,7 @@ TYPED_TEST(TypedLeadLagWindowTest, DefaultValuesWithoutLeadLag)
     {0, 1, 2, 3, 4, 5}, make_counting_transform_iterator(0, [](auto i) {
       return true;
     })}.release();
-  auto const input_size    = input_col->size();
+
   auto const grouping_key  = fixed_width_column_wrapper<int32_t>{0, 0, 0, 0, 0, 0};
   auto const grouping_keys = cudf::table_view{std::vector<cudf::column_view>{grouping_key}};
 
@@ -515,7 +515,7 @@ TEST_F(LeadLagWindowTest, LeadLagWithoutFixedWidthInput)
     {"0", "1", "2", "3", "4", "5"}, make_counting_transform_iterator(0, [](auto i) {
       return false;
     })}.release();
-  auto const input_size    = input_col->size();
+
   auto const grouping_key  = fixed_width_column_wrapper<int32_t>{0, 0, 0, 0, 0, 0};
   auto const grouping_keys = cudf::table_view{std::vector<cudf::column_view>{grouping_key}};
 
