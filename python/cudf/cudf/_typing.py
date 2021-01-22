@@ -3,11 +3,10 @@
 from typing import TYPE_CHECKING, Any, TypeVar, Union
 
 import numpy as np
+from pandas import Period, Timedelta, Timestamp
+from pandas.api.extensions import ExtensionDtype
 
 if TYPE_CHECKING:
-    from pandas import Period, Timedelta, Timestamp
-    from pandas.api.extensions import ExtensionDtype
-
     import cudf
 
 # Many of these are from
