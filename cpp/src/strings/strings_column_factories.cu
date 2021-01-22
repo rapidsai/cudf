@@ -54,7 +54,7 @@ std::unique_ptr<column> make_strings_column(
                                           size_checker,
                                           0,
                                           thrust::plus<size_t>());
-  CUDF_EXPECTS(bytes < std::numeric_limits<size_type>::max(),
+  CUDF_EXPECTS(bytes < static_cast<std::size_t>(std::numeric_limits<size_type>::max()),
                "total size of strings is too large for cudf column");
 
   // build offsets column from the strings sizes

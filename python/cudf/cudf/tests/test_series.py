@@ -1,4 +1,4 @@
-# Copyright (c) 2020, NVIDIA CORPORATION.
+# Copyright (c) 2020-2021, NVIDIA CORPORATION.
 import operator
 import re
 from string import ascii_letters, digits
@@ -653,6 +653,60 @@ def test_series_mode(df, dropna):
     actual = df.mode(dropna=dropna)
 
     assert_eq(expected, actual, check_dtype=False)
+
+
+@pytest.mark.parametrize(
+    "arr",
+    [
+        np.random.normal(-100, 100, 1000),
+        np.random.randint(-50, 50, 1000),
+        np.zeros(100),
+        np.repeat([-0.6459412758761901], 100),
+        np.repeat(np.nan, 100),
+        np.array([1.123, 2.343, np.nan, 0.0]),
+        np.arange(-100.5, 101.5, 1),
+    ],
+)
+@pytest.mark.parametrize("decimals", [-5, -3, -1, 0, 1, 4, 12])
+def test_series_round(arr, decimals):
+    pser = pd.Series(arr)
+    ser = cudf.Series(arr)
+    result = ser.round(decimals)
+    expected = pser.round(decimals)
+
+    assert_eq(result, expected)
+
+    # with nulls, maintaining existing null mask
+    arr = arr.astype("float64")  # for pandas nulls
+    arr.ravel()[
+        np.random.choice(arr.shape[0], arr.shape[0] // 2, replace=False)
+    ] = np.nan
+
+    pser = pd.Series(arr)
+    ser = cudf.Series(arr)
+    result = ser.round(decimals)
+    expected = pser.round(decimals)
+
+    assert_eq(result, expected)
+    np.array_equal(ser.nullmask.to_array(), result.to_array())
+
+
+@pytest.mark.parametrize(
+    "series",
+    [
+        cudf.Series([1.0, None, np.nan, 4.0], nan_as_null=False),
+        cudf.Series([1.24430, None, np.nan, 4.423530], nan_as_null=False),
+        cudf.Series([1.24430, np.nan, 4.423530], nan_as_null=False),
+        cudf.Series([-1.24430, np.nan, -4.423530], nan_as_null=False),
+        cudf.Series(np.repeat(np.nan, 100)),
+    ],
+)
+@pytest.mark.parametrize("decimal", [0, 1, 2, 3])
+def test_round_nan_as_null_false(series, decimal):
+    pser = series.to_pandas()
+    result = series.round(decimal)
+    expected = pser.round(decimal)
+    assert_eq(result, expected, atol=1e-10)
 
 
 @pytest.mark.parametrize("ps", _series_na_data())
