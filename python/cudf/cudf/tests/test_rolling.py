@@ -321,6 +321,18 @@ def test_rolling_groupby_simple(agg):
         got = getattr(gdf.groupby("a").rolling(window_size), agg)().fillna(-1)
         assert_eq(expect, got, check_dtype=False)
 
+    pdf = pd.DataFrame(
+        {"a": [1, 1, 1, 2, 2], "b": [1, 1, 2, 2, 3], "c": [1, 2, 3, 4, 5]}
+    )
+    gdf = cudf.from_pandas(pdf)
+
+    for window_size in range(1, len(pdf) + 1):
+        expect = getattr(pdf.groupby("a").rolling(window_size), agg)().fillna(
+            -1
+        )
+        got = getattr(gdf.groupby("a").rolling(window_size), agg)().fillna(-1)
+        assert_eq(expect, got, check_dtype=False)
+
 
 @pytest.mark.parametrize("agg", ["sum", "min", "max", "mean", "count"])
 def test_rolling_groupby_multi(agg):

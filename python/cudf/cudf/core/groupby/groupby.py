@@ -126,7 +126,8 @@ class GroupBy(Serializable):
         Examples
         --------
         >>> import cudf
-        >>> a = cudf.DataFrame({'a': [1, 1, 2], 'b': [1, 2, 3], 'c': [2, 2, 1]})
+        >>> a = cudf.DataFrame(
+            {'a': [1, 1, 2], 'b': [1, 2, 3], 'c': [2, 2, 1]})
         >>> a.groupby('a').agg('sum')
            b
         a
