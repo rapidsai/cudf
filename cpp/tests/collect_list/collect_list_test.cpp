@@ -118,7 +118,6 @@ TYPED_TEST(TypedCollectListTest, RollingWindowWithEmptyListsAtEnds)
   using T = TypeParam;
 
   auto input_column = fixed_width_column_wrapper<T, int32_t>{0, 1, 2, 3, 4, 5};
-  auto num_elements = static_cast<column_view>(input_column).size();
 
   auto prev_column = fixed_width_column_wrapper<size_type>{0, 2, 2, 2, 2, 0};
   auto foll_column = fixed_width_column_wrapper<size_type>{0, 1, 1, 1, 1, 0};
@@ -249,8 +248,6 @@ TEST_F(CollectListTest, BasicGroupedTimeRangeRollingWindowOnStrings)
 {
   using namespace cudf;
   using namespace cudf::test;
-
-  using T = cudf::string_view;
 
   auto const time_column = fixed_width_column_wrapper<cudf::timestamp_D, cudf::timestamp_D::rep>{
     1, 1, 2, 2, 3, 1, 4, 5, 6};
@@ -386,8 +383,6 @@ TEST_F(CollectListTest, GroupedTimeRangeRollingWindowOnStringsWithMinPeriods)
   // i.e. output row is null when min_periods exceeds number of observations.
   using namespace cudf;
   using namespace cudf::test;
-
-  using T = cudf::string_view;
 
   auto const time_column = fixed_width_column_wrapper<cudf::timestamp_D, cudf::timestamp_D::rep>{
     1, 1, 2, 2, 3, 1, 4, 5, 6};
