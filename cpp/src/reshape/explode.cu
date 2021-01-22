@@ -76,12 +76,12 @@ std::unique_ptr<table> explode_functor::operator()<list_view>(
   // as we go.
   auto offsets           = lc.offsets().begin<size_type>() + lc.offset();
   auto offsets_minus_one = thrust::make_transform_iterator(
-    offsets, [offsets] __device__(auto i) { return i - offsets[0] - 1; });
+    offsets, [offsets] __device__(auto i) { return (i - offsets[0]) - 1; });
   auto counting_iter = thrust::make_counting_iterator(0);
 
   thrust::lower_bound(rmm::exec_policy(stream),
                       offsets_minus_one + 1,
-                      offsets_minus_one + lc.offsets().size(),
+                      offsets_minus_one + lc.size() + 1,
                       counting_iter,
                       counting_iter + gather_map_indices.size(),
                       gather_map_indices.begin());

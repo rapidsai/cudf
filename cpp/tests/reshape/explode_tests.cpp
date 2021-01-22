@@ -92,7 +92,8 @@ TEST_F(ExplodeTest, SingleNull)
       a                   b
       [1, 2, 7]           100
       [5, 6]              200
-      [0, 3]              300
+      []                  300
+      [0, 3]              400
   */
 
   auto first_invalid =
@@ -100,12 +101,13 @@ TEST_F(ExplodeTest, SingleNull)
 
   lists_column_wrapper<int32_t> a({lists_column_wrapper<int32_t>{1, 2, 7},
                                    lists_column_wrapper<int32_t>{5, 6},
+                                   lists_column_wrapper<int32_t>{},
                                    lists_column_wrapper<int32_t>{0, 3}},
                                   first_invalid);
-  fixed_width_column_wrapper<int32_t> b({100, 200, 300});
+  fixed_width_column_wrapper<int32_t> b({100, 200, 300, 400});
 
   fixed_width_column_wrapper<int32_t> expected_a{5, 6, 0, 3};
-  fixed_width_column_wrapper<int32_t> expected_b{200, 200, 300, 300};
+  fixed_width_column_wrapper<int32_t> expected_b{200, 200, 400, 400};
 
   cudf::table_view t({a, b});
   cudf::table_view expected({expected_a, expected_b});
@@ -151,7 +153,8 @@ TEST_F(ExplodeTest, NullsInList)
       a                   b
       [1, 2, 7]           100
       [5, 6, 0, 9]        200
-      [0, 3, 8]           300
+      []                  300
+      [0, 3, 8]           400
   */
 
   auto valids = cudf::test::make_counting_transform_iterator(
@@ -159,12 +162,13 @@ TEST_F(ExplodeTest, NullsInList)
 
   lists_column_wrapper<int32_t> a{lists_column_wrapper<int32_t>({1, 2, 7}, valids),
                                   lists_column_wrapper<int32_t>({5, 6, 0, 9}, valids),
+                                  lists_column_wrapper<int32_t>{},
                                   lists_column_wrapper<int32_t>({0, 3, 8}, valids)};
-  fixed_width_column_wrapper<int32_t> b{100, 200, 300};
+  fixed_width_column_wrapper<int32_t> b{100, 200, 300, 400};
 
   fixed_width_column_wrapper<int32_t> expected_a({1, 2, 7, 5, 6, 0, 9, 0, 3, 8},
                                                  {1, 0, 1, 1, 0, 1, 0, 1, 0, 1});
-  fixed_width_column_wrapper<int32_t> expected_b{100, 100, 100, 200, 200, 200, 200, 300, 300, 300};
+  fixed_width_column_wrapper<int32_t> expected_b{100, 100, 100, 200, 200, 200, 200, 400, 400, 400};
 
   cudf::table_view t({a, b});
   cudf::table_view expected({expected_a, expected_b});
@@ -177,10 +181,10 @@ TEST_F(ExplodeTest, NullsInList)
 TEST_F(ExplodeTest, Nested)
 {
   /*
-      a                   b
-      [[1, 2], [7, 6, 5]] 100
-      [[5, 6]]            200
-      [[0, 3],[5],[2, 1]] 300
+      a                      b
+      [[1, 2], [7, 6, 5]]    100
+      [[5, 6]]               200
+      [[0, 3],[],[5],[2, 1]] 300
   */
 
   lists_column_wrapper<int32_t> a{
@@ -188,6 +192,7 @@ TEST_F(ExplodeTest, Nested)
                                   lists_column_wrapper<int32_t>{7, 6, 5}},
     lists_column_wrapper<int32_t>{lists_column_wrapper<int32_t>{5, 6}},
     lists_column_wrapper<int32_t>{lists_column_wrapper<int32_t>{0, 3},
+                                  lists_column_wrapper<int32_t>{},
                                   lists_column_wrapper<int32_t>{5},
                                   lists_column_wrapper<int32_t>{2, 1}}};
   fixed_width_column_wrapper<int32_t> b{100, 200, 300};
@@ -196,9 +201,10 @@ TEST_F(ExplodeTest, Nested)
                                            lists_column_wrapper<int32_t>{7, 6, 5},
                                            lists_column_wrapper<int32_t>{5, 6},
                                            lists_column_wrapper<int32_t>{0, 3},
+                                           lists_column_wrapper<int32_t>{},
                                            lists_column_wrapper<int32_t>{5},
                                            lists_column_wrapper<int32_t>{2, 1}};
-  fixed_width_column_wrapper<int32_t> expected_b{100, 100, 200, 300, 300, 300};
+  fixed_width_column_wrapper<int32_t> expected_b{100, 100, 200, 300, 300, 300, 300};
 
   cudf::table_view t({a, b});
   cudf::table_view expected({expected_a, expected_b});
@@ -286,10 +292,10 @@ TEST_F(ExplodeTest, NullsInNested)
 TEST_F(ExplodeTest, NullsInNestedDoubleExplode)
 {
   /*
-      a                   b
-      [[1, 2], [7, 6, 5]] 100
-      [[5, 6]]            200
-      [[0, 3],[5],[2, 1]] 300
+      a                       b
+      [[1, 2], [], [7, 6, 5]] 100
+      [[5, 6]]                200
+      [[0, 3],[5],[2, 1]]     300
   */
 
   auto valids = cudf::test::make_counting_transform_iterator(
@@ -297,6 +303,7 @@ TEST_F(ExplodeTest, NullsInNestedDoubleExplode)
 
   lists_column_wrapper<int32_t> a{
     lists_column_wrapper<int32_t>{lists_column_wrapper<int32_t>({1, 2}, valids),
+                                  lists_column_wrapper<int32_t>{},
                                   lists_column_wrapper<int32_t>{7, 6, 5}},
     lists_column_wrapper<int32_t>{lists_column_wrapper<int32_t>{5, 6}},
     lists_column_wrapper<int32_t>{lists_column_wrapper<int32_t>{0, 3},
@@ -401,14 +408,14 @@ TYPED_TEST(ExplodeTypedTest, ListOfStructs)
 TEST_F(ExplodeTest, SlicedList)
 {
   /*
-      a                     b
-      [[1, 2],[7, 6, 5]]    100
-      [[5, 6]]              200
-      [[0, 3],[5],[2, 1]]   300
-      [[8, 3],[4, 3, 1, 2]] 400
-      [[2, 3, 4],[9, 8]]    500
+      a                        b
+      [[1, 2],[7, 6, 5]]       100
+      [[5, 6]]                 200
+      [[0, 3],[5],[2, 1]]      300
+      [[8, 3],[],[4, 3, 1, 2]] 400
+      [[2, 3, 4],[9, 8]]       500
 
-      slicing the top 2 rows off
+      slicing the top 2 rows and the bottom row off
   */
 
   auto valids = cudf::test::make_counting_transform_iterator(
@@ -422,6 +429,7 @@ TEST_F(ExplodeTest, SlicedList)
                                    lists_column_wrapper<int32_t>{5},
                                    lists_column_wrapper<int32_t>({2, 1}, valids)},
      lists_column_wrapper<int32_t>{lists_column_wrapper<int32_t>{8, 3},
+                                   lists_column_wrapper<int32_t>{},
                                    lists_column_wrapper<int32_t>({4, 3, 1, 2}, valids)},
      lists_column_wrapper<int32_t>{lists_column_wrapper<int32_t>{2, 3, 4},
                                    lists_column_wrapper<int32_t>{9, 8}}});
@@ -431,8 +439,9 @@ TEST_F(ExplodeTest, SlicedList)
                                            lists_column_wrapper<int32_t>{5},
                                            lists_column_wrapper<int32_t>({2, 1}, valids),
                                            lists_column_wrapper<int32_t>{8, 3},
+                                           lists_column_wrapper<int32_t>{},
                                            lists_column_wrapper<int32_t>({4, 3, 1, 2}, valids)};
-  fixed_width_column_wrapper<int32_t> expected_b{300, 300, 300, 400, 400};
+  fixed_width_column_wrapper<int32_t> expected_b{300, 300, 300, 400, 400, 400};
 
   cudf::table_view t({a, b});
   auto sliced_t = cudf::slice(t, {2, 4});
