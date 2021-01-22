@@ -33,6 +33,23 @@ import cudf
 >>> gb3 = df.groupby(cudf.Series(['a', 'a', 'b', 'b', 'b']))  # grouping by an external column
 ```
 
+> :warning: **Important**: cuDF uses `sort=False` by default to achieve better performance
+> This deviates from Pandas default behavior as the result will not be sorted by key. Example:
+
+```python
+>>> df = cudf.DataFrame({'a' : [2, 2, 1], 'b' : [42, 21, 11]})
+>>> df.groupby('a').sum()
+    b
+a    
+2  63
+1  11
+>>> df.to_pandas().groupby('a').sum()
+    b
+a    
+1  11
+2  63
+```
+
 ### Grouping by index levels
 
 You can also group by one or more levels of a MultiIndex:
@@ -66,7 +83,7 @@ b
 
 Aggregations on groups is supported via the `agg` method:
 
-```
+```python
 >>> df
    a  b  c
 0  1  1  1
@@ -157,7 +174,7 @@ Use the `GroupBy.rolling()` method to perform rolling window calculations on eac
 Rolling window sum on each group with a window size of 2:
 
 ```python
->>> df.groupby('a').rolling(2).sum()
+>>> df.groupby('a', sort=True).rolling(2).sum()
         a     b     c
 a
 1 0  <NA>  <NA>  <NA>
@@ -166,8 +183,3 @@ a
 2 3  <NA>  <NA>  <NA>
   4     4     5     9
 ```
-
-## Notes
-
-- By default, cudf uses `sort=False` for all groupby operations to achieve better performance.
-This deviates from Pandas groupby operation in that the result will not be sorted by group keys.
