@@ -220,8 +220,9 @@ std::unique_ptr<cudf::column> normalize_characters(cudf::strings_column_view con
     return normalizer.normalize(d_chars, d_offsets, strings.size(), stream);
   }();
 
-  CUDF_EXPECTS(result.first->size() <= std::numeric_limits<cudf::size_type>::max(),
-               "output too large for strings column");
+  CUDF_EXPECTS(
+    result.first->size() <= static_cast<std::size_t>(std::numeric_limits<cudf::size_type>::max()),
+    "output too large for strings column");
 
   // convert the result into a strings column
   // - the cp_chars are the new 4-byte code-point values for all the characters in the output

@@ -216,7 +216,8 @@ rmm::device_buffer make_elements(InputIterator begin, InputIterator end)
 {
   using namespace numeric;
   using RepType = typename ElementTo::rep;
-  auto to_rep   = [](ElementTo fp) { return static_cast<scaled_integer<RepType>>(fp).value; };
+
+  auto to_rep            = [](ElementTo fp) { return fp.value(); };
   auto transformer_begin = thrust::make_transform_iterator(begin, to_rep);
   auto const size        = cudf::distance(begin, end);
   auto const elements = thrust::host_vector<RepType>(transformer_begin, transformer_begin + size);
@@ -511,9 +512,9 @@ class fixed_point_column_wrapper : public detail::column_wrapper {
    *
    * Example:
    * @code{.cpp}
-   * // Creates a non-nullable column of INT32 elements with 5 elements: {0, 2, 4, 6, 8}
+   * // Creates a non-nullable column of DECIMAL32 elements with 5 elements: {0, 2, 4, 6, 8}
    * auto elements = make_counting_transform_iterator(0, [](auto i) { return i * 2;});
-   * auto w = fixed_width_column_wrapper<int32_t>(elements, elements + 5, scale_type{0});
+   * auto w = fixed_point_column_wrapper<int32_t>(elements, elements + 5, scale_type{0});
    * @endcode
    *
    * @tparam FixedPointRepIterator Iterator for fixed_point::rep
@@ -1052,6 +1053,16 @@ class dictionary_column_wrapper<std::string> : public detail::column_wrapper {
    * @brief Cast to dictionary_column_view
    */
   operator dictionary_column_view() const { return cudf::dictionary_column_view{wrapped->view()}; }
+
+  /**
+   * @brief Access keys column view
+   */
+  column_view keys() const { return cudf::dictionary_column_view{wrapped->view()}.keys(); }
+
+  /**
+   * @brief Access indices column view
+   */
+  column_view indices() const { return cudf::dictionary_column_view{wrapped->view()}.indices(); }
 
   /**
    * @brief Default constructor initializes an empty dictionary column of strings

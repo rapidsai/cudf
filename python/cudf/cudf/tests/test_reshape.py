@@ -1,3 +1,5 @@
+import re
+
 import numpy as np
 import pandas as pd
 import pytest
@@ -402,7 +404,7 @@ def test_pivot_multi_values():
         ),
     ],
 )
-def test_unstack(level):
+def test_unstack_multiindex(level):
     pdf = pd.DataFrame(
         {
             "foo": ["one", "one", "one", "two", "two", "two"],
@@ -415,6 +417,53 @@ def test_unstack(level):
     assert_eq(
         pdf.unstack(level=level), gdf.unstack(level=level), check_dtype=False,
     )
+
+
+@pytest.mark.parametrize(
+    "data",
+    [{"A": [1.0, 2.0, 3.0, 4.0, 5.0], "B": [11.0, 12.0, 13.0, 14.0, 15.0]}],
+)
+@pytest.mark.parametrize(
+    "index",
+    [
+        pd.Index(range(0, 5), name=None),
+        pd.Index(range(0, 5), name="row_index"),
+    ],
+)
+@pytest.mark.parametrize(
+    "col_idx",
+    [
+        pd.Index(["a", "b"], name=None),
+        pd.Index(["a", "b"], name="col_index"),
+        pd.MultiIndex.from_tuples([("c", 1), ("c", 2)], names=[None, None]),
+        pd.MultiIndex.from_tuples(
+            [("c", 1), ("c", 2)], names=["col_index1", "col_index2"]
+        ),
+    ],
+)
+def test_unstack_index(data, index, col_idx):
+    pdf = pd.DataFrame(data)
+    gdf = cudf.from_pandas(pdf)
+
+    pdf.index = index
+    pdf.columns = col_idx
+
+    gdf.index = cudf.from_pandas(index)
+    gdf.columns = cudf.from_pandas(col_idx)
+
+    assert_eq(pdf.unstack(), gdf.unstack())
+
+
+def test_unstack_index_invalid():
+    gdf = cudf.DataFrame({"a": [1, 2, 3], "b": ["a", "b", "c"]})
+    with pytest.raises(
+        ValueError,
+        match=re.escape(
+            "Calling unstack() on single index dataframe with "
+            "different column datatype is not supported."
+        ),
+    ):
+        gdf.unstack()
 
 
 def test_pivot_duplicate_error():
