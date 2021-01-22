@@ -79,6 +79,10 @@ std::unique_ptr<table> explode_functor::operator()<list_view>(
     offsets, [offsets] __device__(auto i) { return (i - offsets[0]) - 1; });
   auto counting_iter = thrust::make_counting_iterator(0);
 
+  // This looks like an off-by-one bug, but what is going on here is that we need to reduce each
+  // result from `lower_bound` by 1 to build the correct gather map. It was pointed out that
+  // this can be accomplished by simply skipping the first entry and using the result of
+  // `lower_bound` directly.
   thrust::lower_bound(rmm::exec_policy(stream),
                       offsets_minus_one + 1,
                       offsets_minus_one + lc.size() + 1,
