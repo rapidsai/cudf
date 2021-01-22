@@ -119,11 +119,12 @@ class CategoricalAccessor(ColumnMethodsMixin):
         """
         Return Series of codes as well as the index.
         """
-        assert self._parent is None or isinstance(self._parent, cudf.Series)
-        return cudf.Series(
-            self._column.codes,
-            index=self._parent.index if self._parent is not None else None,
+        index = (
+            self._parent.index
+            if isinstance(self._parent, cudf.Series)
+            else None
         )
+        return cudf.Series(self._column.codes, index=index)
 
     @property
     def ordered(self) -> bool:
