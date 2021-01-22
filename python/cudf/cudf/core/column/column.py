@@ -105,7 +105,7 @@ class ColumnBase(Column, Serializable):
         return self.size
 
     def to_pandas(
-        self, index=None, nullable: bool = False, **kwargs
+        self, index: ColumnLike = None, nullable: bool = False, **kwargs
     ) -> "pd.Series":
         if nullable and self.dtype in cudf_dtypes_to_pandas_dtypes:
             pandas_nullable_dtype = cudf_dtypes_to_pandas_dtypes[self.dtype]

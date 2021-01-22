@@ -1040,7 +1040,7 @@ class CategoricalColumn(column.ColumnBase):
         )
 
     def to_pandas(
-        self, index=ColumnLike, nullable: bool = False, **kwargs
+        self, index: ColumnLike = None, nullable: bool = False, **kwargs
     ) -> pd.Series:
         signed_dtype = min_signed_type(len(self.categories))
         codes = self.cat().codes.astype(signed_dtype).fillna(-1).to_array()
