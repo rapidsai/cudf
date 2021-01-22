@@ -41,7 +41,6 @@ class CudfDataFrameGroupBy(DataFrameGroupBy):
                 **self.dropna,
             )
 
-        # error is raised from pandas
         g._meta = g._meta[key]
         return g
 
@@ -89,7 +88,7 @@ class CudfSeriesGroupBy(SeriesGroupBy):
             sep=self.sep,
             sort=self.sort,
             as_index=self.as_index,
-        )
+        )[self._slice]
 
 
 def groupby_agg(
