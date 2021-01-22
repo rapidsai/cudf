@@ -20,15 +20,12 @@
 
 #pragma once
 
+#include <cudf/io/detail/utils.hpp>
 #include <cudf/io/types.hpp>
 #include <cudf/table/table_view.hpp>
-#include <cudf/types.hpp>
-#include <cudf/utilities/error.hpp>
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/mr/device/per_device_resource.hpp>
 
-#include <iostream>
-#include <memory>
 #include <string>
 #include <vector>
 
@@ -42,10 +39,6 @@ class chunked_parquet_writer_options;
 
 namespace detail {
 namespace parquet {
-/**
- * @brief Whether writer writes in chunks or at once
- */
-enum class SingleWriteMode : bool { YES, NO };
 
 /**
  * @brief Class to read Parquet dataset data into columns.
