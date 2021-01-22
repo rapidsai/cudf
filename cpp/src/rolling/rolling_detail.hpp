@@ -53,13 +53,13 @@ static constexpr bool is_rolling_supported()
   } else if (cudf::is_timestamp<ColumnType>()) {
     return (op == aggregation::MIN) or (op == aggregation::MAX) or
            (op == aggregation::COUNT_VALID) or (op == aggregation::COUNT_ALL) or
-           (op == aggregation::ROW_NUMBER) or (op == aggregation::LEAD) or (op == aggregation::LAG) or
-           (op == aggregation::COLLECT);
+           (op == aggregation::ROW_NUMBER) or (op == aggregation::LEAD) or
+           (op == aggregation::LAG) or (op == aggregation::COLLECT);
   } else if (cudf::is_fixed_point<ColumnType>()) {
     return (op == aggregation::SUM) or (op == aggregation::MIN) or (op == aggregation::MAX) or
            (op == aggregation::COUNT_VALID) or (op == aggregation::COUNT_ALL) or
-           (op == aggregation::ROW_NUMBER) or (op == aggregation::LEAD) or (op == aggregation::LAG) or
-           (op == aggregation::COLLECT);
+           (op == aggregation::ROW_NUMBER) or (op == aggregation::LEAD) or
+           (op == aggregation::LAG) or (op == aggregation::COLLECT);
   } else if (std::is_same<ColumnType, cudf::string_view>()) {
     return (op == aggregation::MIN) or (op == aggregation::MAX) or
            (op == aggregation::COUNT_VALID) or (op == aggregation::COUNT_ALL) or
@@ -71,8 +71,7 @@ static constexpr bool is_rolling_supported()
   } else if (std::is_same<ColumnType, cudf::struct_view>()) {
     // TODO: Add support for COUNT_VALID, COUNT_ALL, ROW_NUMBER.
     return op == aggregation::COLLECT;
-  }
-  else {
+  } else {
     return false;
   }
 }

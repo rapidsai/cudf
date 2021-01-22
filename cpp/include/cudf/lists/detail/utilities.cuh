@@ -29,7 +29,7 @@ namespace detail {
  * @return cudf::size_type The number of child rows in the lists column
  */
 static cudf::size_type get_num_child_rows(cudf::column_view const& list_offsets,
-                                   rmm::cuda_stream_view stream)
+                                          rmm::cuda_stream_view stream)
 {
   // Number of rows in child-column == last offset value.
   cudf::size_type num_child_rows{};
@@ -42,5 +42,5 @@ static cudf::size_type get_num_child_rows(cudf::column_view const& list_offsets,
   return num_child_rows;
 }
 
-} // namespace detail;
-} // namespace cudf;
+}  // namespace detail
+}  // namespace cudf
