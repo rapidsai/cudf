@@ -203,5 +203,8 @@ cdef dtype_from_column_view(column_view cv):
         return dtype_from_structs_column_view(cv)
     elif tid == libcudf_types.type_id.DECIMAL64:
         return dtype_from_decimal_column_view(cv)
+    elif tid == libcudf_types.type_id.DECIMAL32:
+        raise NotImplementedError("decimal32 types are not supported yet. "
+                                  "Use decimal64 instead")
     else:
         return cudf_to_np_types[<underlying_type_t_type_id>(tid)]
