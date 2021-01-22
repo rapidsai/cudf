@@ -37,9 +37,9 @@ class GroupBy(Serializable):
         level : int, level_name or list, optional
             For objects with a MultiIndex, `level` can be used to specify
             grouping by one or more levels of the MultiIndex.
-        sort : True, optional
-            If True (default), sort results by groups). Note that
-            unlike Pandas, this also sorts values within each group.
+        sort : bool, default False
+            Sort the result by group keys. Differ from Pandas, cudf defaults
+            to False for better performance.
         as_index : bool, optional
             If as_index=True (default), the group names appear
             as the keys of the resulting DataFrame.
@@ -734,11 +734,10 @@ class SeriesGroupBy(GroupBy):
             For aggregated output, return object with group labels as
             the index. Only relevant for DataFrame input.
             as_index=False is effectively “SQL-style” grouped output.
-        sort : bool, default True
-            Sort group keys. Get better performance by turning this off.
-            Note this does not influence the order of observations within each
-            group. Groupby preserves the order of rows within each group.
-
+        sort : bool, default False
+            Sort result by group key. Differ from Pandas, cudf defeults to
+            ``False`` for better performance.
+            
         Returns
         -------
             SeriesGroupBy
