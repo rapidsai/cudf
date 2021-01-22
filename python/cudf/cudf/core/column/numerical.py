@@ -105,14 +105,6 @@ class NumericalColumn(column.ColumnBase):
     def _apply_scan_op(self, op):
         return libcudf.reduce.scan(op, self, True)
 
-    @property
-    def nan_count(self):
-        if self.dtype.kind == "f":
-            s = cudf.Series(libcudf.unary.is_nan(self))
-            return len(s[s])
-        else:
-            return 0
-
     def normalize_binop_value(self, other):
         if other is None:
             return other
@@ -417,12 +409,15 @@ class NumericalColumn(column.ColumnBase):
             replaced, to_replace_col, replacement_col
         )
 
-    def fillna(self, fill_value=None, method=None):
+    def fillna(self, fill_value=None, method=None, fill_nan=True):
         """
         Fill null values with *fill_value*
         """
 
-        col = self.nans_to_nulls()
+        if fill_nan:
+            col = self.nans_to_nulls()
+        else:
+            col = self
 
         if method is not None:
             return super(NumericalColumn, col).fillna(fill_value, method)
@@ -595,15 +590,12 @@ class NumericalColumn(column.ColumnBase):
 
         # want to cast float to int:
         elif self.dtype.kind == "f" and to_dtype.kind in {"i", "u"}:
-            if libcudf.unary.is_nan(self).any():
-                return False
-
             info = np.iinfo(to_dtype)
             min_, max_ = info.min, info.max
+
             # best we can do is hope to catch it here and avoid compare
             if (self.min() >= min_) and (self.max() <= max_):
-
-                filled = self.fillna(0)
+                filled = self.fillna(0, fill_nan=False)
                 if (cudf.Series(filled) % 1 == 0).all():
                     return True
                 else:

@@ -1254,7 +1254,7 @@ class ColumnBase(Column, Serializable):
         )
 
     def nans_to_nulls(self):
-        if self.dtype.kind == "f" and libcudf.unary.is_nan(self).any():
+        if self.dtype.kind == "f":
             newmask = libcudf.transform.nans_to_nulls(self)
             return self.set_mask(newmask)
         else:

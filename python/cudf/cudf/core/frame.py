@@ -1517,11 +1517,8 @@ class Frame(libcudf.table.Table):
 
         for col in self._data.names:
             no_threshold_valid_count = (
-                (len(df[col]) - df[col].null_count) < thresh
-            ) or (
-                isinstance(df._data[col], cudf.core.column.NumericalColumn)
-                and ((len(df[col]) - df._data[col].nan_count) < thresh)
-            )
+                len(df[col]) - df[col].nans_to_nulls().null_count
+            ) < thresh
             if no_threshold_valid_count:
                 continue
             out_cols.append(col)
