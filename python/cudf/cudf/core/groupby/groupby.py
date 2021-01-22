@@ -126,12 +126,12 @@ class GroupBy(Serializable):
         Examples
         --------
         >>> import cudf
-        >>> a = cudf.DataFrame({'a': [1, 1, 2], 'b': [1, 2, 3]})
+        >>> a = cudf.DataFrame({'a': [1, 1, 2], 'b': [1, 2, 3], 'c': [2, 2, 1]})
         >>> a.groupby('a').agg('sum')
            b
         a
-        1  3
         2  3
+        1  3
 
         Specifying a list of aggregations to perform on each column.
 
@@ -139,8 +139,8 @@ class GroupBy(Serializable):
             b       c
           sum min sum min
         a
-        1   3   1   4   2
         2   3   3   1   1
+        1   3   1   4   2
 
         Using a dict to specify aggregations to perform per column.
 
@@ -148,8 +148,8 @@ class GroupBy(Serializable):
             a   b
           max min mean
         a
-        1   1   1  1.5
         2   2   3  3.0
+        1   1   1  1.5
 
         Using lambdas/callables to specify aggregations taking parameters.
 
@@ -671,8 +671,8 @@ class DataFrameGroupBy(GroupBy):
         >>> df.groupby(level="Type").mean()
                 Max Speed
         Type
-        Captive      210.0
         Wild         185.0
+        Captive      210.0
 
         """
         super().__init__(
