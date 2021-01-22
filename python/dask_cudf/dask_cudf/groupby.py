@@ -44,6 +44,19 @@ class CudfDataFrameGroupBy(DataFrameGroupBy):
         g._meta = g._meta[key]
         return g
 
+    def mean(self, split_every=None, split_out=1):
+        return groupby_agg(
+            self.obj,
+            self.index,
+            {c: "mean" for c in self.obj.columns if c not in self.index},
+            split_every=split_every,
+            split_out=split_out,
+            dropna=self.dropna,
+            sep=self.sep,
+            sort=self.sort,
+            as_index=self.as_index,
+        )
+
     def aggregate(self, arg, split_every=None, split_out=1):
         if arg == "size":
             return self.size()
