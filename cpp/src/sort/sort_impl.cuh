@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,6 +18,7 @@
 
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/gather.hpp>
+#include <cudf/strings/detail/sorting.cuh>
 #include <cudf/table/row_operators.cuh>
 #include <cudf/table/table_device_view.cuh>
 #include <cudf/utilities/error.hpp>
@@ -50,6 +51,16 @@ std::unique_ptr<column> sorted_order(table_view input,
   if (not null_precedence.empty()) {
     CUDF_EXPECTS(static_cast<std::size_t>(input.num_columns()) == null_precedence.size(),
                  "Mismatch between number of columns and null_precedence size.");
+  }
+
+  // fast-path for single strings column sort
+  if (input.num_columns() == 1 && input.column(0).type().id() == type_id::STRING) {
+    return cudf::strings::detail::sorted_order<stable>(
+      strings_column_view(input.column(0)),
+      column_order.empty() ? order::ASCENDING : column_order.front(),
+      null_precedence.empty() ? null_order::BEFORE : null_precedence.front(),
+      stream,
+      mr);
   }
 
   std::unique_ptr<column> sorted_indices = cudf::make_numeric_column(

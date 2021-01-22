@@ -1,4 +1,4 @@
-# Copyright (c) 2020, NVIDIA CORPORATION.
+# Copyright (c) 2020-2021, NVIDIA CORPORATION.
 import numpy as np
 
 from . import (
@@ -23,6 +23,7 @@ from . import (
     replace,
     reshape,
     rolling,
+    round,
     search,
     sort,
     stream_compaction,

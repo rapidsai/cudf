@@ -114,6 +114,7 @@ test:
     - test -f $PREFIX/include/cudf/io/detail/json.hpp
     - test -f $PREFIX/include/cudf/io/detail/orc.hpp
     - test -f $PREFIX/include/cudf/io/detail/parquet.hpp
+    - test -f $PREFIX/include/cudf/io/detail/utils.hpp
     - test -f $PREFIX/include/cudf/io/json.hpp
     - test -f $PREFIX/include/cudf/io/orc.hpp
     - test -f $PREFIX/include/cudf/io/parquet.hpp
@@ -167,7 +168,6 @@ test:
     - test -f $PREFIX/include/cudf/strings/padding.hpp
     - test -f $PREFIX/include/cudf/strings/replace.hpp
     - test -f $PREFIX/include/cudf/strings/replace_re.hpp
-    - test -f $PREFIX/include/cudf/strings/sorting.hpp
     - test -f $PREFIX/include/cudf/strings/split/partition.hpp
     - test -f $PREFIX/include/cudf/strings/split/split.hpp
     - test -f $PREFIX/include/cudf/strings/strings_column_view.hpp

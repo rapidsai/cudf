@@ -166,3 +166,8 @@ a
 2 3  <NA>  <NA>  <NA>
   4     4     5     9
 ```
+
+## Notes
+
+- By default, cudf uses `sort=False` for all groupby operations to achieve better performance.
+This deviates from Pandas groupby operation in that the result will not be sorted by group keys.

@@ -619,8 +619,10 @@ class DataFrameGroupBy(GroupBy):
             the index. Only relevant for DataFrame input.
             as_index=False is effectively “SQL-style” grouped output.
         sort : bool, default False
-            Sort result by group key. Differ from Pandas, cudf defeults to
-            ``False`` for better performance.
+            Sort result by group key. Differ from Pandas, cudf defaults to
+            ``False`` for better performance. Note this does not influence
+            the order of observations within each group. Groupby preserves
+            the order of rows within each group.
         dropna : bool, optional
             If True (default), do not include the "null" group.
 
@@ -734,8 +736,10 @@ class SeriesGroupBy(GroupBy):
             the index. Only relevant for DataFrame input.
             as_index=False is effectively “SQL-style” grouped output.
         sort : bool, default False
-            Sort result by group key. Differ from Pandas, cudf defeults to
-            ``False`` for better performance.
+            Sort result by group key. Differ from Pandas, cudf defaults to
+            ``False`` for better performance. Note this does not influence
+            the order of observations within each group. Groupby preserves
+            the order of rows within each group.
 
         Returns
         -------
