@@ -34,6 +34,7 @@
 #include <cudf/detail/utilities/cuda.cuh>
 #include <cudf/detail/utilities/device_operators.cuh>
 #include <cudf/detail/valid_if.cuh>
+#include <cudf/lists/detail/utilities.cuh>
 #include <cudf/rolling.hpp>
 #include <cudf/strings/detail/utilities.cuh>
 #include <cudf/types.hpp>
@@ -898,21 +899,6 @@ struct rolling_window_launcher {
       mr);
   }
 
-  // TODO: Move to lists/utilities.
-  cudf::size_type get_num_child_rows(cudf::column_view const& list_offsets,
-                                   rmm::cuda_stream_view stream = rmm::cuda_stream_default)
-  {
-    // Number of rows in child-column == last offset value.
-    cudf::size_type num_child_rows{};
-    CUDA_TRY(cudaMemcpyAsync(&num_child_rows,
-                            list_offsets.data<cudf::size_type>() + list_offsets.size() - 1,
-                            sizeof(cudf::size_type),
-                            cudaMemcpyDeviceToHost,
-                            stream.value()));
-    stream.synchronize();
-    return num_child_rows;
-  }
-
   template <typename PrecedingIter, typename FollowingIter>
   std::unique_ptr<column> get_collect_list_offsets(column_view const& input,
                                                    PrecedingIter preceding_begin,
@@ -975,7 +961,7 @@ struct rolling_window_launcher {
    *    and result child  column == [A,B,A,B,C,B,C,D,C,D,E,D,E].
    *  Mapping back to `input`    == [0,1,0,1,2,1,2,3,2,3,4,3,4]
    */
-  std::unique_ptr<column> get_list_child_to_input_mapping(cudf::column_view const& offsets, 
+  std::unique_ptr<column> get_list_child_to_list_row_mapping(cudf::column_view const& offsets, 
              rmm::cuda_stream_view stream,
              rmm::mr::device_memory_resource* mr)
   {
@@ -1002,7 +988,7 @@ struct rolling_window_launcher {
     // This accounts for the `0` added by default to the offsets
     // column, marking the beginning of the column.
 
-    auto num_child_rows = get_num_child_rows(offsets);
+    auto num_child_rows = get_num_child_rows(offsets, stream);
 
     auto scatter_values = make_fixed_width_column(size_data_type, 
                                                   offsets.size(), 
@@ -1103,13 +1089,6 @@ struct rolling_window_launcher {
     CUDF_EXPECTS(default_outputs.is_empty(),
                  "COLLECT window function does not support default values.");
 
-    // COLLECT() should be supported on all data types.
-    // Output column must be of type `list<T>`.
-
-    // FIXME: min_periods not yet supported:
-    //   1. Short term: Construct null-mask based on (list.size() >= min_periods)
-    //   2. Long  term: Reduce list sizes to zero, for null rows.
-
     using namespace cudf;
     using namespace cudf::detail;
 
@@ -1141,7 +1120,7 @@ struct rolling_window_launcher {
 
     // Map each element of the collect() result's child column
     // to the index where it appears in the input.
-    auto per_row_mapping = get_list_child_to_input_mapping(offsets->view(), stream, mr);
+    auto per_row_mapping = get_list_child_to_list_row_mapping(offsets->view(), stream, mr);
 
     // Generate gather map to produce the collect() result's child column.
     auto gather_map = get_gather_map_for_child_column(offsets->view(), 
