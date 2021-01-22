@@ -11,6 +11,9 @@ if TYPE_CHECKING:
 
 
 class ColumnMethodsMixin:
+    _column: "ColumnBase"
+    _parent: Optional[Union["cudf.Series", "cudf.Index"]]
+
     def __init__(
         self,
         column: "ColumnBase",
