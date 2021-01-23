@@ -1545,7 +1545,7 @@ class DataFrame(Frame, Serializable):
             if mask.all():
                 continue
 
-            self[col] = this.where(mask, that)
+            self[col].where(mask, that, inplace=True)
 
     def __add__(self, other):
         return self._apply_op("__add__", other)

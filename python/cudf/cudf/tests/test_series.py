@@ -1,4 +1,5 @@
 # Copyright (c) 2020-2021, NVIDIA CORPORATION.
+
 import operator
 import re
 from string import ascii_letters, digits
@@ -913,3 +914,39 @@ def test_series_pipe_error():
         lfunc_args_and_kwargs=([(custom_add_func, "val")], {"val": 11}),
         rfunc_args_and_kwargs=([(custom_add_func, "val")], {"val": 11}),
     )
+
+
+@pytest.mark.parametrize(
+    "data",
+    [cudf.Series([1, 2, 3]), cudf.Series([10, 11, 12], index=[1, 2, 3])],
+)
+@pytest.mark.parametrize(
+    "other",
+    [
+        cudf.Series([4, 5, 6]),
+        cudf.Series([4, 5, 6, 7, 8]),
+        cudf.Series([4, np.nan, 6], nan_as_null=False),
+        [4, np.nan, 6],
+        {1: 9},
+    ],
+)
+def test_series_update(data, other):
+    gs = data.copy(deep=True)
+    if isinstance(other, cudf.Series):
+        g_other = other.copy(deep=True)
+        p_other = g_other.to_pandas()
+    else:
+        g_other = other
+        p_other = other
+
+    ps = gs.to_pandas()
+
+    gs_column_before = gs._column
+    gs.update(g_other)
+    gs_column_after = gs._column
+
+    assert_eq(gs_column_before.to_array(), gs_column_after.to_array())
+
+    ps.update(p_other)
+
+    assert_eq(gs, ps)
