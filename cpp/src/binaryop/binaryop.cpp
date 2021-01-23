@@ -525,7 +525,7 @@ std::unique_ptr<column> fixed_point_binary_operation(column_view const& lhs,
 
   if (op == binary_operator::TRUE_DIV) {
     // Adjust columns so lhs has the scale needed to get desired output data_type (scale)
-    auto const diff   = lhs.type().scale() - scale;
+    auto const diff   = lhs.type().scale() - rhs.type().scale() - scale;
     auto const result = [&] {
       if (lhs.type().id() == type_id::DECIMAL32) {
         auto const factor = numeric::detail::ipow<int32_t, Radix::BASE_10>(diff);
@@ -624,7 +624,7 @@ std::unique_ptr<column> fixed_point_binary_operation(column_view const& lhs,
 
   if (op == binary_operator::TRUE_DIV) {
     // Adjust columns so lhs has the scale needed to get desired output data_type (scale)
-    auto const diff   = lhs.type().scale() - scale;
+    auto const diff   = lhs.type().scale() - rhs.type().scale() - scale;
     auto const result = [&] {
       if (lhs.type().id() == type_id::DECIMAL32) {
         auto const factor = numeric::detail::ipow<int32_t, Radix::BASE_10>(diff);
