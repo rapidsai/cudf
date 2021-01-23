@@ -51,18 +51,18 @@ TYPED_TEST(TypedCollectListTest, BasicRollingWindow)
 
   using T = TypeParam;
 
-  auto input_column = fixed_width_column_wrapper<T, int32_t>{10, 11, 12, 13, 14};
+  auto const input_column = fixed_width_column_wrapper<T, int32_t>{10, 11, 12, 13, 14};
 
-  auto prev_column = fixed_width_column_wrapper<size_type>{1, 2, 2, 2, 2};
-  auto foll_column = fixed_width_column_wrapper<size_type>{1, 1, 1, 1, 0};
+  auto const prev_column = fixed_width_column_wrapper<size_type>{1, 2, 2, 2, 2};
+  auto const foll_column = fixed_width_column_wrapper<size_type>{1, 1, 1, 1, 0};
 
   EXPECT_EQ(static_cast<column_view>(prev_column).size(),
             static_cast<column_view>(foll_column).size());
 
-  auto result_column_based_window =
+  auto const result_column_based_window =
     rolling_window(input_column, prev_column, foll_column, 1, make_collect_aggregation());
 
-  auto expected_result =
+  auto const expected_result =
     lists_column_wrapper<T, int32_t>{
       {10, 11},
       {10, 11, 12},
@@ -74,29 +74,30 @@ TYPED_TEST(TypedCollectListTest, BasicRollingWindow)
 
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected_result->view(), result_column_based_window->view());
 
-  auto result_fixed_window = rolling_window(input_column, 2, 1, 1, make_collect_aggregation());
+  auto const result_fixed_window =
+    rolling_window(input_column, 2, 1, 1, make_collect_aggregation());
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected_result->view(), result_fixed_window->view());
 }
 
-TYPED_TEST(TypedCollectListTest, RollingWindowWithEmptyLists)
+TYPED_TEST(TypedCollectListTest, RollingWindowWithEmptyOutputLists)
 {
   using namespace cudf;
   using namespace cudf::test;
 
   using T = TypeParam;
 
-  auto input_column = fixed_width_column_wrapper<T, int32_t>{10, 11, 12, 13, 14, 15};
+  auto const input_column = fixed_width_column_wrapper<T, int32_t>{10, 11, 12, 13, 14, 15};
 
-  auto prev_column = fixed_width_column_wrapper<size_type>{1, 2, 2, 0, 2, 2};
-  auto foll_column = fixed_width_column_wrapper<size_type>{1, 1, 1, 0, 1, 0};
+  auto const prev_column = fixed_width_column_wrapper<size_type>{1, 2, 2, 0, 2, 2};
+  auto const foll_column = fixed_width_column_wrapper<size_type>{1, 1, 1, 0, 1, 0};
 
   EXPECT_EQ(static_cast<column_view>(prev_column).size(),
             static_cast<column_view>(foll_column).size());
 
-  auto result_column_based_window =
+  auto const result_column_based_window =
     rolling_window(input_column, prev_column, foll_column, 0, make_collect_aggregation());
 
-  auto expected_result =
+  auto const expected_result =
     lists_column_wrapper<T, int32_t>{
       {10, 11},
       {10, 11, 12},
@@ -110,44 +111,47 @@ TYPED_TEST(TypedCollectListTest, RollingWindowWithEmptyLists)
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected_result->view(), result_column_based_window->view());
 }
 
-TYPED_TEST(TypedCollectListTest, RollingWindowWithEmptyListsAtEnds)
+TYPED_TEST(TypedCollectListTest, RollingWindowWithEmptyOutputListsAtEnds)
 {
   using namespace cudf;
   using namespace cudf::test;
 
   using T = TypeParam;
 
-  auto input_column = fixed_width_column_wrapper<T, int32_t>{0, 1, 2, 3, 4, 5};
+  auto const input_column = fixed_width_column_wrapper<T, int32_t>{0, 1, 2, 3, 4, 5};
 
-  auto prev_column = fixed_width_column_wrapper<size_type>{0, 2, 2, 2, 2, 0};
-  auto foll_column = fixed_width_column_wrapper<size_type>{0, 1, 1, 1, 1, 0};
+  auto const prev_column = fixed_width_column_wrapper<size_type>{0, 2, 2, 2, 2, 0};
+  auto foll_column       = fixed_width_column_wrapper<size_type>{0, 1, 1, 1, 1, 0};
 
-  auto result =
+  auto const result =
     rolling_window(input_column, prev_column, foll_column, 0, make_collect_aggregation());
 
-  auto expected_result =
+  auto const expected_result =
     lists_column_wrapper<T, int32_t>{{}, {0, 1, 2}, {1, 2, 3}, {2, 3, 4}, {3, 4, 5}, {}}.release();
 
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected_result->view(), result->view());
 }
 
-TYPED_TEST(TypedCollectListTest, RollingWindowWithNullLists)
+TYPED_TEST(TypedCollectListTest, RollingWindowHonoursMinPeriods)
 {
+  // Test that when the number of observations is fewer than min_periods,
+  // the result is null.
+
   using namespace cudf;
   using namespace cudf::test;
 
   using T = TypeParam;
 
-  auto input_column = fixed_width_column_wrapper<T, int32_t>{0, 1, 2, 3, 4, 5};
-  auto num_elements = static_cast<column_view>(input_column).size();
+  auto const input_column = fixed_width_column_wrapper<T, int32_t>{0, 1, 2, 3, 4, 5};
+  auto const num_elements = static_cast<column_view>(input_column).size();
 
   auto preceding   = 2;
   auto following   = 1;
   auto min_periods = 3;
-  auto result =
+  auto const result =
     rolling_window(input_column, preceding, following, min_periods, make_collect_aggregation());
 
-  auto expected_result = lists_column_wrapper<T, int32_t>{
+  auto const expected_result = lists_column_wrapper<T, int32_t>{
     {{}, {0, 1, 2}, {1, 2, 3}, {2, 3, 4}, {3, 4, 5}, {}},
     make_counting_transform_iterator(0, [num_elements](auto i) {
       return i != 0 && i != (num_elements - 1);
