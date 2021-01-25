@@ -278,6 +278,29 @@ class Decimal64Dtype(ExtensionDtype):
     def from_arrow(cls, typ):
         return cls(typ.precision, typ.scale)
 
+    @property
+    def itemsize(self):
+        return 8
+
+    def __repr__(self):
+        return (
+            f"{self.__class__.__name__}"
+            f"(precision={self.precision}, scale={self.scale})"
+        )
+
+    def __hash__(self):
+        return hash(self._typ)
+
+    @classmethod
+    def _validate(cls, precision, scale=0):
+        if precision > Decimal64Dtype._MAX_PRECISION:
+            raise ValueError(
+                f"Cannot construct a {cls.__name__}"
+                f" with precision > {cls._MAX_PRECISION}"
+            )
+        if abs(scale) > precision:
+            raise ValueError(f"scale={scale} exceeds precision={precision}")
+
 
 class IntervalDtype(StructDtype):
     name = "interval"
@@ -302,25 +325,4 @@ class IntervalDtype(StructDtype):
 
         return ArrowIntervalType(
             pa.from_numpy_dtype(self.subtype), self.closed
-    @property
-    def itemsize(self):
-        return 8
-
-    def __repr__(self):
-        return (
-            f"{self.__class__.__name__}"
-            f"(precision={self.precision}, scale={self.scale})"
         )
-
-    def __hash__(self):
-        return hash(self._typ)
-
-    @classmethod
-    def _validate(cls, precision, scale=0):
-        if precision > Decimal64Dtype._MAX_PRECISION:
-            raise ValueError(
-                f"Cannot construct a {cls.__name__}"
-                f" with precision > {cls._MAX_PRECISION}"
-            )
-        if abs(scale) > precision:
-            raise ValueError(f"scale={scale} exceeds precision={precision}")

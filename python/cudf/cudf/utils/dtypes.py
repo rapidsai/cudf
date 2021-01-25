@@ -239,17 +239,6 @@ def is_struct_dtype(obj):
     )
 
 
-<<<<<<< HEAD
-def is_interval_dtype(obj):
-    return (
-        isinstance(obj, cudf.core.dtypes.IntervalDtype)
-        or isinstance(obj, pd.core.dtypes.dtypes.IntervalDtype)
-        or obj is cudf.core.dtypes.IntervalDtype
-        or (
-            isinstance(obj, str) and obj == cudf.core.dtypes.IntervalDtype.name
-        )
-        or (hasattr(obj, "dtype") and is_interval_dtype(obj.dtype))
-=======
 def is_decimal_dtype(obj):
     return (
         type(obj) is cudf.core.dtypes.Decimal64Dtype
@@ -259,7 +248,18 @@ def is_decimal_dtype(obj):
             and obj == cudf.core.dtypes.Decimal64Dtype.name
         )
         or (hasattr(obj, "dtype") and is_decimal_dtype(obj.dtype))
->>>>>>> f4223911094fdc1b97a54843772ae473f0074a84
+    )
+
+
+def is_interval_dtype(obj):
+    return (
+        isinstance(obj, cudf.core.dtypes.IntervalDtype)
+        or isinstance(obj, pd.core.dtypes.dtypes.IntervalDtype)
+        or obj is cudf.core.dtypes.IntervalDtype
+        or (
+            isinstance(obj, str) and obj == cudf.core.dtypes.IntervalDtype.name
+        )
+        or (hasattr(obj, "dtype") and is_interval_dtype(obj.dtype))
     )
 
 

@@ -11,11 +11,7 @@ from cudf.core.dtypes import (
     Decimal64Dtype,
     ListDtype,
     StructDtype,
-<<<<<<< HEAD
-    DecimalDtype,
     IntervalDtype,
-=======
->>>>>>> f4223911094fdc1b97a54843772ae473f0074a84
 )
 from cudf.tests.utils import assert_eq
 
@@ -143,8 +139,13 @@ def test_struct_dtype_fields(fields):
 def test_decimal_dtype():
     dt = Decimal64Dtype(4, 2)
     assert dt.to_arrow() == pa.decimal128(4, 2)
-<<<<<<< HEAD
-    assert dt == DecimalDtype.from_arrow(pa.decimal128(4, 2))
+    assert dt == Decimal64Dtype.from_arrow(pa.decimal128(4, 2))
+
+
+def test_max_precision():
+    Decimal64Dtype(scale=0, precision=18)
+    with pytest.raises(ValueError):
+        Decimal64Dtype(scale=0, precision=19)
 
 
 @pytest.mark.parametrize("fields", ["int64", "int32"])
@@ -154,12 +155,3 @@ def test_interval_dtype_pyarrow_round_trip(fields, closed):
     expect = pa_array
     got = IntervalDtype.from_arrow(expect).to_arrow()
     assert expect.equals(got)
-=======
-    assert dt == Decimal64Dtype.from_arrow(pa.decimal128(4, 2))
-
-
-def test_max_precision():
-    Decimal64Dtype(scale=0, precision=18)
-    with pytest.raises(ValueError):
-        Decimal64Dtype(scale=0, precision=19)
->>>>>>> f4223911094fdc1b97a54843772ae473f0074a84
