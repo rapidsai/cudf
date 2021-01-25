@@ -123,6 +123,7 @@ test:
     - test -f $PREFIX/include/cudf/join.hpp
     - test -f $PREFIX/include/cudf/lists/detail/concatenate.hpp
     - test -f $PREFIX/include/cudf/lists/detail/copying.hpp
+    - test -f $PREFIX/include/cudf/lists/count_elements.hpp
     - test -f $PREFIX/include/cudf/lists/extract.hpp
     - test -f $PREFIX/include/cudf/lists/contains.hpp
     - test -f $PREFIX/include/cudf/lists/gather.hpp
