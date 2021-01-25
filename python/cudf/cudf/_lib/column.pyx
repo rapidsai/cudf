@@ -1,4 +1,4 @@
-# Copyright (c) 2020, NVIDIA CORPORATION.
+# Copyright (c) 2020-2021, NVIDIA CORPORATION.
 
 import cupy as cp
 import numpy as np
@@ -10,6 +10,7 @@ import cudf
 from cudf.core.buffer import Buffer
 from cudf.utils.dtypes import (
     is_categorical_dtype,
+    is_decimal_dtype,
     is_list_dtype,
     is_struct_dtype
 )
@@ -386,14 +387,19 @@ cdef class Column:
             tid = libcudf_types.type_id.LIST
         elif is_struct_dtype(self.dtype):
             tid = libcudf_types.type_id.STRUCT
+        elif is_decimal_dtype(self.dtype):
+            tid = libcudf_types.type_id.DECIMAL64
         else:
             tid = <libcudf_types.type_id> (
                 <underlying_type_t_type_id> (
                     np_to_cudf_types[np.dtype(data_dtype)]
                 )
             )
-
-        cdef libcudf_types.data_type dtype = libcudf_types.data_type(tid)
+        cdef libcudf_types.data_type dtype = (
+            libcudf_types.data_type(tid, -self.dtype.scale)
+            if tid == libcudf_types.type_id.DECIMAL64
+            else libcudf_types.data_type(tid)
+        )
         cdef libcudf_types.size_type offset = self.offset
         cdef vector[column_view] children
         cdef void* data

@@ -1,4 +1,4 @@
-# Copyright (c) 2018-2020, NVIDIA CORPORATION.
+# Copyright (c) 2018-2021, NVIDIA CORPORATION.
 import builtins
 import pickle
 import warnings
@@ -35,7 +35,7 @@ from cudf._lib.null_mask import (
 from cudf._lib.scalar import as_device_scalar
 from cudf._lib.stream_compaction import distinct_count as cpp_distinct_count
 from cudf._lib.transform import bools_to_mask
-from cudf._typing import ColumnLike, Dtype, ScalarLike
+from cudf._typing import BinaryOperand, ColumnLike, Dtype, ScalarLike
 from cudf.core.abc import Serializable
 from cudf.core.buffer import Buffer
 from cudf.core.dtypes import CategoricalDtype
@@ -46,6 +46,7 @@ from cudf.utils.dtypes import (
     cudf_dtypes_to_pandas_dtypes,
     get_time_unit,
     is_categorical_dtype,
+    is_decimal_dtype,
     is_list_dtype,
     is_numerical_dtype,
     is_scalar,
@@ -143,11 +144,6 @@ class ColumnBase(Column, Serializable):
             raise ValueError("Column must have no nulls.")
 
         return cupy.asarray(self.data_array_view)
-
-    def binary_operator(
-        self, binop: builtins.str, rhs, reflect: bool = False
-    ) -> "ColumnBase":
-        raise NotImplementedError()
 
     def find_and_replace(
         self: T,
@@ -292,8 +288,14 @@ class ColumnBase(Column, Serializable):
 
         return col
 
-    def dropna(self) -> "ColumnBase":
-        dropped_col = self.as_frame().dropna()._as_column()
+    def dropna(self, drop_nan: bool = False) -> "ColumnBase":
+        if drop_nan:
+            col = self.nans_to_nulls()
+        else:
+            col = self
+        dropped_col = (
+            col.as_frame()._drop_na_rows(drop_nan=drop_nan)._as_column()
+        )
         return dropped_col
 
     def to_arrow(self) -> pa.Array:
@@ -435,7 +437,7 @@ class ColumnBase(Column, Serializable):
         if fillna:
             return self.fillna(self.default_na_value()).data_array_view
         else:
-            return self.dropna().data_array_view
+            return self.dropna(drop_nan=False).data_array_view
 
     def to_array(self, fillna=None) -> "np.array":
         """Get a dense numpy array for the data.
@@ -1200,6 +1202,11 @@ class ColumnBase(Column, Serializable):
             mask = Buffer.deserialize(header["mask"], [frames[1]])
         return build_column(data=data, dtype=dtype, mask=mask)
 
+    def binary_operator(
+        self, op: builtins.str, other: BinaryOperand, reflect: bool = False
+    ) -> "ColumnBase":
+        raise NotImplementedError
+
     def min(self, skipna: bool = None, dtype: Dtype = None):
         result_col = self._process_for_reduction(skipna=skipna)
         if isinstance(result_col, ColumnBase):
@@ -1250,12 +1257,12 @@ class ColumnBase(Column, Serializable):
             f"cannot perform corr with types {self.dtype}, {other.dtype}"
         )
 
-    def nans_to_nulls(self) -> "ColumnBase":
+    def nans_to_nulls(self: T) -> T:
         if self.dtype.kind == "f":
-            col = self.fillna(np.nan)
-            newmask = libcudf.transform.nans_to_nulls(col)
-            self = self.set_mask(newmask)
-        return self
+            newmask = libcudf.transform.nans_to_nulls(self)
+            return self.set_mask(newmask)
+        else:
+            return self
 
     def _process_for_reduction(
         self, skipna: bool = None, min_count: int = 0
@@ -1504,6 +1511,15 @@ def build_column(
             data=data,
             dtype=dtype,
             size=size,
+            mask=mask,
+            null_count=null_count,
+            children=children,
+        )
+    elif is_decimal_dtype(dtype):
+        return cudf.core.column.DecimalColumn(
+            data=data,
+            size=size,
+            dtype=dtype,
             mask=mask,
             null_count=null_count,
             children=children,
@@ -1889,6 +1905,14 @@ def as_column(
                                 "Cannot create list column from given data"
                             )
                         return as_column(data, nan_as_null=nan_as_null)
+                    if isinstance(dtype, cudf.core.dtypes.Decimal64Dtype):
+                        data = pa.array(
+                            arbitrary,
+                            type=pa.decimal128(
+                                precision=dtype.precision, scale=dtype.scale
+                            ),
+                        )
+                        return cudf.core.column.DecimalColumn.from_arrow(data)
                     dtype = pd.api.types.pandas_dtype(dtype)
                     if is_categorical_dtype(dtype):
                         raise TypeError
