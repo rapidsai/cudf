@@ -61,14 +61,14 @@ namespace {
 __device__ std::pair<char const *, char const *> limit_range_to_brackets(char const *begin,
                                                                          char const *end)
 {
-  begin = thrust::find_if(
-    thrust::seq, begin, end, [] __device__(auto c) { return c == '[' || c == '{'; });
-  end = thrust::find_if(thrust::seq,
-                        thrust::make_reverse_iterator(end),
-                        thrust::make_reverse_iterator(++begin),
-                        [](auto c) { return c == ']' || c == '}'; })
-          .base();
-  return {begin, --end};
+  auto const data_begin = thrust::next(thrust::find_if(
+    thrust::seq, begin, end, [] __device__(auto c) { return c == '[' || c == '{'; }));
+  auto const data_end   = thrust::next(thrust::find_if(thrust::seq,
+                                                     thrust::make_reverse_iterator(end),
+                                                     thrust::make_reverse_iterator(data_begin),
+                                                     [](auto c) { return c == ']' || c == '}'; }))
+                          .base();
+  return {data_begin, data_end};
 }
 
 /**

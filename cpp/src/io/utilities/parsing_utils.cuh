@@ -469,6 +469,15 @@ std::string infer_compression_type(
 __inline__ __device__ bool is_whitespace(char ch) { return ch == '\t' || ch == ' '; }
 
 /**
+ * @brief Skips past the current character if it matches the given value.
+ */
+template <typename It>
+__inline__ __device__ It skip_character(It const& it, char ch)
+{
+  return it + (*it == ch);
+}
+
+/**
  * @brief Adjusts the range to ignore starting/trailing whitespace and quotation characters.
  *
  * @param[in] begin Pointer to the first character in the parsing range
@@ -482,14 +491,13 @@ __inline__ __device__ std::pair<char const*, char const*> trim_whitespaces_quote
 {
   auto not_whitespace = [] __device__(auto c) { return !is_whitespace(c); };
 
-  begin = thrust::find_if(thrust::seq, begin, end, not_whitespace);
-  end   = thrust::find_if(thrust::seq,
-                        thrust::make_reverse_iterator(end),
-                        thrust::make_reverse_iterator(begin),
-                        not_whitespace)
-          .base();
+  auto const trim_begin = thrust::find_if(thrust::seq, begin, end, not_whitespace);
+  auto const trim_end   = thrust::find_if(thrust::seq,
+                                        thrust::make_reverse_iterator(end),
+                                        thrust::make_reverse_iterator(trim_begin),
+                                        not_whitespace);
 
-  return {(*begin == quotechar) ? ++begin : begin, (*(end - 1) == quotechar) ? end - 1 : end};
+  return {skip_character(trim_begin, quotechar), skip_character(trim_end, quotechar).base()};
 }
 
 /**
