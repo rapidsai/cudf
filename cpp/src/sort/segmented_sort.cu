@@ -59,8 +59,7 @@ rmm::device_uvector<size_type> get_list_segment_indices(lists_column_view const&
   return std::move(segment_ids);
 }
 
-std::unique_ptr<column> segmented_sorted_order(table_view const& values,
-                                               table_view const& keys,
+std::unique_ptr<column> segmented_sorted_order(table_view const& keys,
                                                std::vector<order> const& column_order,
                                                std::vector<null_order> const& null_precedence,
                                                rmm::cuda_stream_view stream,
@@ -68,10 +67,6 @@ std::unique_ptr<column> segmented_sorted_order(table_view const& values,
 {
   CUDF_EXPECTS(std::all_of(keys.begin(),
                            keys.end(),
-                           [](column_view const& col) { return col.type().id() == type_id::LIST; }),
-               "segmented_sort only supports lists columns");
-  CUDF_EXPECTS(std::all_of(values.begin(),
-                           values.end(),
                            [](column_view const& col) { return col.type().id() == type_id::LIST; }),
                "segmented_sort only supports lists columns");
   // TODO check if all list sizes are equal. OR all offsets are equal (may be wrong).
@@ -104,7 +99,11 @@ std::unique_ptr<table> segmented_sort_by_key(table_view const& values,
                                              rmm::cuda_stream_view stream,
                                              rmm::mr::device_memory_resource* mr)
 {
-  auto sorted_order = segmented_sorted_order(values, keys, column_order, null_precedence, stream);
+  CUDF_EXPECTS(std::all_of(values.begin(),
+                           values.end(),
+                           [](column_view const& col) { return col.type().id() == type_id::LIST; }),
+               "segmented_sort only supports lists columns");
+  auto sorted_order = segmented_sorted_order(keys, column_order, null_precedence, stream);
   std::vector<column_view> child_columns(values.num_columns());
   std::transform(values.begin(), values.end(), child_columns.begin(), [stream](auto col) {
     return lists_column_view(col).get_sliced_child(stream);
@@ -141,7 +140,7 @@ std::unique_ptr<table> segmented_sort_by_key(table_view const& values,
 }
 }  // namespace detail
 
-std::unique_ptr<table> segmented_sort(table_view input,
+std::unique_ptr<table> segmented_sort(table_view const& input,
                                       std::vector<order> const& column_order,
                                       std::vector<null_order> const& null_precedence,
                                       rmm::mr::device_memory_resource* mr)

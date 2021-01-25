@@ -185,7 +185,7 @@ std::unique_ptr<column> rank(
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 std::unique_ptr<table> segmented_sort(
-  table_view input,
+  table_view const& input,
   std::vector<order> const& column_order         = {},
   std::vector<null_order> const& null_precedence = {},
   rmm::mr::device_memory_resource* mr            = rmm::mr::get_current_device_resource());
