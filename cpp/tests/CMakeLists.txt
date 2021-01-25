@@ -654,6 +654,7 @@ ConfigureTest(AST_TEST "${AST_TEST_SRC}")
 # - lists tests ----------------------------------------------------------------------------------
 
 set(LISTS_TEST_SRC
+    "${CMAKE_CURRENT_SOURCE_DIR}/lists/count_elements_tests.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/lists/extract_tests.cpp")
 
 ConfigureTest(LISTS_TEST "${LISTS_TEST_SRC}")
