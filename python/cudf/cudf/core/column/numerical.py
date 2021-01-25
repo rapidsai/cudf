@@ -439,7 +439,7 @@ class NumericalColumn(ColumnBase):
         fill_value: Any = None,
         method: str = None,
         dtype: Dtype = None,
-        fill_nan: bool = None,
+        fill_nan: bool = True,
     ) -> "NumericalColumn":
         """
         Fill null values with *fill_value*
