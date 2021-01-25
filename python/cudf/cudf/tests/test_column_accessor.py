@@ -1,6 +1,5 @@
 # Copyright (c) 2020, NVIDIA CORPORATION.
 
-from typing import no_type_check
 
 import pandas as pd
 import pytest
@@ -43,7 +42,6 @@ def mi_data(request):
     return request.param
 
 
-@no_type_check
 @pytest.fixture(params=simple_test_data + mi_test_data)
 def all_data(request):
     return request.param
