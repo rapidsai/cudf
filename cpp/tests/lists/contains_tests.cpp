@@ -25,11 +25,13 @@
 #include <cudf_test/column_wrapper.hpp>
 #include <cudf_test/type_lists.hpp>
 
-struct ContainsTest : public cudf::test::BaseFixture {
+using namespace cudf;
+using namespace cudf::test;
+
+struct ContainsTest : public BaseFixture {
 };
 
-using ContainsTestTypes = cudf::test::
-  Concat<cudf::test::IntegralTypesNotBool, cudf::test::FloatingPointTypes, cudf::test::ChronoTypes>;
+using ContainsTestTypes = Concat<IntegralTypesNotBool, FloatingPointTypes, ChronoTypes>;
 
 template <typename T>
 struct TypedContainsTest : public ContainsTest {
@@ -41,9 +43,6 @@ namespace {
 template <typename T, std::enable_if_t<cudf::is_numeric<T>(), void>* = nullptr>
 auto create_scalar_search_key(T const& value)
 {
-  using namespace cudf;
-  using namespace cudf::test;
-
   auto search_key = make_numeric_scalar(data_type{type_to_id<T>()});
   search_key->set_valid(true);
   static_cast<scalar_type_t<T>*>(search_key.get())->set_value(value);
@@ -53,18 +52,12 @@ auto create_scalar_search_key(T const& value)
 template <typename T, std::enable_if_t<std::is_same<T, std::string>::value, void>* = nullptr>
 auto create_scalar_search_key(std::string const& value)
 {
-  using namespace cudf;
-  using namespace cudf::test;
-
   return make_string_scalar(value);
 }
 
 template <typename T, std::enable_if_t<cudf::is_timestamp<T>(), void>* = nullptr>
 auto create_scalar_search_key(typename T::rep const& value)
 {
-  using namespace cudf;
-  using namespace cudf::test;
-
   auto search_key = make_timestamp_scalar(data_type{type_to_id<T>()});
   search_key->set_valid(true);
   static_cast<scalar_type_t<typename T::rep>*>(search_key.get())->set_value(value);
@@ -74,9 +67,6 @@ auto create_scalar_search_key(typename T::rep const& value)
 template <typename T, std::enable_if_t<cudf::is_duration<T>(), void>* = nullptr>
 auto create_scalar_search_key(typename T::rep const& value)
 {
-  using namespace cudf;
-  using namespace cudf::test;
-
   auto search_key = make_duration_scalar(data_type{type_to_id<T>()});
   search_key->set_valid(true);
   static_cast<scalar_type_t<typename T::rep>*>(search_key.get())->set_value(value);
@@ -86,9 +76,6 @@ auto create_scalar_search_key(typename T::rep const& value)
 template <typename T, std::enable_if_t<cudf::is_numeric<T>(), void>* = nullptr>
 auto create_null_search_key()
 {
-  using namespace cudf;
-  using namespace cudf::test;
-
   auto search_key = make_numeric_scalar(data_type{type_to_id<T>()});
   search_key->set_valid(false);
   return search_key;
@@ -97,9 +84,6 @@ auto create_null_search_key()
 template <typename T, std::enable_if_t<cudf::is_timestamp<T>(), void>* = nullptr>
 auto create_null_search_key()
 {
-  using namespace cudf;
-  using namespace cudf::test;
-
   auto search_key = make_timestamp_scalar(data_type{type_to_id<T>()});
   search_key->set_valid(false);
   return search_key;
@@ -108,9 +92,6 @@ auto create_null_search_key()
 template <typename T, std::enable_if_t<cudf::is_duration<T>(), void>* = nullptr>
 auto create_null_search_key()
 {
-  using namespace cudf;
-  using namespace cudf::test;
-
   auto search_key = make_duration_scalar(data_type{type_to_id<T>()});
   search_key->set_valid(false);
   return search_key;
@@ -120,9 +101,6 @@ auto create_null_search_key()
 
 TYPED_TEST(TypedContainsTest, ListContainsScalarWithNoNulls)
 {
-  using namespace cudf;
-  using namespace cudf::test;
-
   using T = TypeParam;
 
   auto search_space = lists_column_wrapper<T, int32_t>{
@@ -149,9 +127,6 @@ TYPED_TEST(TypedContainsTest, ListContainsScalarWithNoNulls)
 TYPED_TEST(TypedContainsTest, ListContainsScalarWithNullLists)
 {
   // Test List columns that have NULL list rows.
-
-  using namespace cudf;
-  using namespace cudf::test;
 
   using T = TypeParam;
 
@@ -185,9 +160,6 @@ TYPED_TEST(TypedContainsTest, ListContainsScalarWithNullLists)
 TYPED_TEST(TypedContainsTest, ListContainsScalarNonNullListsWithNullValues)
 {
   // Test List columns that have no NULL list rows, but NULL elements in some list rows.
-  using namespace cudf;
-  using namespace cudf::test;
-
   using T = TypeParam;
 
   auto numerals = fixed_width_column_wrapper<T>{
@@ -213,9 +185,6 @@ TYPED_TEST(TypedContainsTest, ListContainsScalarNonNullListsWithNullValues)
 
 TYPED_TEST(TypedContainsTest, ListContainsScalarWithNullsInLists)
 {
-  using namespace cudf;
-  using namespace cudf::test;
-
   using T = TypeParam;
 
   auto numerals = fixed_width_column_wrapper<T>{
@@ -243,9 +212,6 @@ TYPED_TEST(TypedContainsTest, ListContainsScalarWithNullsInLists)
 
 TEST_F(ContainsTest, BoolListContainsScalarWithNullsInLists)
 {
-  using namespace cudf;
-  using namespace cudf::test;
-
   using T = bool;
 
   auto numerals = fixed_width_column_wrapper<T>{
@@ -273,9 +239,6 @@ TEST_F(ContainsTest, BoolListContainsScalarWithNullsInLists)
 
 TEST_F(ContainsTest, StringListContainsScalarWithNullsInLists)
 {
-  using namespace cudf;
-  using namespace cudf::test;
-
   using T = std::string;
 
   auto strings = strings_column_wrapper{
@@ -303,9 +266,6 @@ TEST_F(ContainsTest, StringListContainsScalarWithNullsInLists)
 
 TYPED_TEST(TypedContainsTest, ContainsScalarNullSearchKey)
 {
-  using namespace cudf;
-  using namespace cudf::test;
-
   using T = TypeParam;
 
   auto search_space = lists_column_wrapper<T, int32_t>{
@@ -337,9 +297,6 @@ TYPED_TEST(TypedContainsTest, ContainsScalarNullSearchKey)
 
 TEST_F(ContainsTest, ScalarTypeRelatedExceptions)
 {
-  using namespace cudf;
-  using namespace cudf::test;
-
   {
     // Nested types unsupported.
     auto list_of_lists = lists_column_wrapper<int32_t>{
@@ -377,9 +334,6 @@ TYPED_TEST_CASE(TypedVectorContainsTest, VectorContainsTestTypes);
 
 TYPED_TEST(TypedVectorContainsTest, ListContainsVectorWithNoNulls)
 {
-  using namespace cudf;
-  using namespace cudf::test;
-
   using T = TypeParam;
 
   auto search_space = lists_column_wrapper<T, int32_t>{
@@ -406,9 +360,6 @@ TYPED_TEST(TypedVectorContainsTest, ListContainsVectorWithNoNulls)
 TYPED_TEST(TypedVectorContainsTest, ListContainsVectorWithNullLists)
 {
   // Test List columns that have NULL list rows.
-
-  using namespace cudf;
-  using namespace cudf::test;
 
   using T = TypeParam;
 
@@ -442,9 +393,6 @@ TYPED_TEST(TypedVectorContainsTest, ListContainsVectorWithNullLists)
 TYPED_TEST(TypedVectorContainsTest, ListContainsVectorNonNullListsWithNullValues)
 {
   // Test List columns that have no NULL list rows, but NULL elements in some list rows.
-  using namespace cudf;
-  using namespace cudf::test;
-
   using T = TypeParam;
 
   auto numerals = fixed_width_column_wrapper<T>{
@@ -470,9 +418,6 @@ TYPED_TEST(TypedVectorContainsTest, ListContainsVectorNonNullListsWithNullValues
 
 TYPED_TEST(TypedVectorContainsTest, ListContainsVectorWithNullsInLists)
 {
-  using namespace cudf;
-  using namespace cudf::test;
-
   using T = TypeParam;
 
   auto numerals = fixed_width_column_wrapper<T>{
@@ -500,9 +445,6 @@ TYPED_TEST(TypedVectorContainsTest, ListContainsVectorWithNullsInLists)
 
 TYPED_TEST(TypedVectorContainsTest, ListContainsVectorWithNullsInListsAndInSearchKeys)
 {
-  using namespace cudf;
-  using namespace cudf::test;
-
   using T = TypeParam;
 
   auto numerals = fixed_width_column_wrapper<T>{
@@ -531,9 +473,6 @@ TYPED_TEST(TypedVectorContainsTest, ListContainsVectorWithNullsInListsAndInSearc
 
 TEST_F(ContainsTest, BoolListContainsVectorWithNullsInListsAndInSearchKeys)
 {
-  using namespace cudf;
-  using namespace cudf::test;
-
   using T = bool;
 
   auto numerals = fixed_width_column_wrapper<T, int32_t>{
@@ -562,9 +501,6 @@ TEST_F(ContainsTest, BoolListContainsVectorWithNullsInListsAndInSearchKeys)
 
 TEST_F(ContainsTest, StringListContainsVectorWithNullsInListsAndInSearchKeys)
 {
-  using namespace cudf;
-  using namespace cudf::test;
-
   auto numerals = strings_column_wrapper{
     {"0", "1", "2", "3", "4", "5", "6", "7", "8", "9", "0", "1", "2", "3", "4"},
     make_counting_transform_iterator(0, [](auto i) -> bool { return i % 3; })};
@@ -592,9 +528,6 @@ TEST_F(ContainsTest, StringListContainsVectorWithNullsInListsAndInSearchKeys)
 
 TEST_F(ContainsTest, VectorTypeRelatedExceptions)
 {
-  using namespace cudf;
-  using namespace cudf::test;
-
   {
     // Nested types unsupported.
     auto list_of_lists = lists_column_wrapper<int32_t>{
