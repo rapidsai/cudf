@@ -6,7 +6,7 @@ cuDF (Python):
   - 'python/**'
   - 'notebooks/**'
   
-cpp:
+libcudf:
   - 'cpp/**'
 
 CMake:
@@ -16,7 +16,7 @@ CMake:
 cuDF (Java):
   - 'java/**'
 
-ci:
+gpuCI:
   - 'ci/**'
 
 conda:
