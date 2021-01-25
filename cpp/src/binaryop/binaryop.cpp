@@ -449,23 +449,21 @@ std::unique_ptr<column> fixed_point_binary_operation(scalar const& lhs,
 
   if (op == binary_operator::TRUE_DIV) {
     // Adjust scalar so lhs has the scale needed to get desired output data_type (scale)
-    auto const diff = lhs.type().scale() - rhs.type().scale() - scale;
+    auto const diff         = lhs.type().scale() - rhs.type().scale() - scale;
+    auto const scalar_scale = scale_type{rhs.type().scale() + scale};
     if (lhs.type().id() == type_id::DECIMAL32) {
       auto const factor = numeric::detail::ipow<int32_t, Radix::BASE_10>(diff);
       auto const val    = static_cast<fixed_point_scalar<decimal32> const&>(lhs).value();
-      auto const scalar = lhs.type().scale() < rhs.type().scale()
-                            ? make_fixed_point_scalar<decimal32>(val / factor, scale_type{scale})
-                            : make_fixed_point_scalar<decimal32>(val * factor, scale_type{scale});
-      printf("%i %i\n", factor, val);
+      auto const scalar = diff < 0 ? make_fixed_point_scalar<decimal32>(val / factor, scalar_scale)
+                                   : make_fixed_point_scalar<decimal32>(val * factor, scalar_scale);
       binops::jit::binary_operation(out_view, *scalar, rhs, binary_operator::DIV, stream);
       return out;
 
     } else {
       auto const factor = numeric::detail::ipow<int64_t, Radix::BASE_10>(diff);
       auto const val    = static_cast<fixed_point_scalar<decimal64> const&>(lhs).value();
-      auto const scalar = lhs.type().scale() < rhs.type().scale()
-                            ? make_fixed_point_scalar<decimal64>(val / factor, scale_type{scale})
-                            : make_fixed_point_scalar<decimal64>(val * factor, scale_type{scale});
+      auto const scalar = diff < 0 ? make_fixed_point_scalar<decimal64>(val / factor, scalar_scale)
+                                   : make_fixed_point_scalar<decimal64>(val * factor, scalar_scale);
       binops::jit::binary_operation(out_view, *scalar, rhs, binary_operator::DIV, stream);
       return out;
     }

@@ -2400,22 +2400,22 @@ TYPED_TEST(FixedPointTestBothReps, FixedPointBinaryOpTrueDiv6)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
 }
 
-// TYPED_TEST(FixedPointTestBothReps, FixedPointBinaryOpTrueDiv7)
-// {
-//   using namespace numeric;
-//   using decimalXX = TypeParam;
-//   using RepType   = device_storage_type_t<decimalXX>;
+TYPED_TEST(FixedPointTestBothReps, FixedPointBinaryOpTrueDiv7)
+{
+  using namespace numeric;
+  using decimalXX = TypeParam;
+  using RepType   = device_storage_type_t<decimalXX>;
 
-//   auto const lhs = make_fixed_point_scalar<decimalXX>(300, scale_type{-2});
-//   auto const rhs = fp_wrapper<RepType>{{10, 30, 50, 70}, scale_type{-1}};
+  auto const lhs = make_fixed_point_scalar<decimalXX>(300, scale_type{-2});
+  auto const rhs = fp_wrapper<RepType>{{10, 30, 50, 70}, scale_type{-1}};
 
-//   auto const expected = fp_wrapper<RepType>{{300, 100, 60, 42}, scale_type{-2}};
+  auto const expected = fp_wrapper<RepType>{{300, 100, 60, 42}, scale_type{-2}};
 
-//   auto const type   = data_type{type_to_id<decimalXX>(), -2};
-//   auto const result = cudf::binary_operation(*lhs, rhs, cudf::binary_operator::TRUE_DIV, type);
+  auto const type   = data_type{type_to_id<decimalXX>(), -2};
+  auto const result = cudf::binary_operation(*lhs, rhs, cudf::binary_operator::TRUE_DIV, type);
 
-//   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
-// }
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
+}
 
 TYPED_TEST(FixedPointTestBothReps, FixedPointBinaryOpTrueDiv8)
 {
