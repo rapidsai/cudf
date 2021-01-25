@@ -507,29 +507,26 @@ __inline__ __device__ std::pair<char const*, char const*> trim_whitespaces_quote
  * @param begin[in, out] Pointer to the first element of the string
  * @param end Pointer to the first element after the string
  * @param prefix String we're searching for at the start of the input range
- * @return true if the input range starts with the given prefix
  */
 template <int N>
-__inline__ __device__ bool skip_if_starts_with(char const** begin,
+__inline__ __device__ auto skip_if_starts_with(char const* begin,
                                                char const* end,
                                                const char (&prefix)[N])
 {
   static constexpr size_t prefix_len = N - 1;
-  if (end - *begin < prefix_len) return false;
-  auto const found = thrust::equal(thrust::seq, *begin, *begin + prefix_len, prefix);
-  if (found) (*begin) += prefix_len;
-  return found;
+  if (end - begin < prefix_len) return begin;
+  return thrust::equal(thrust::seq, begin, begin + prefix_len, prefix) ? begin + prefix_len : begin;
 }
 
 /**
- * @brief Modifies the input range to exclude the leading space characters.
+ * @brief Finds the first element after the leading space characters.
  *
- * @param begin[in, out] Pointer to the first element of the string
+ * @param begin Pointer to the first element of the string
  * @param end Pointer to the first element after the string
  */
-__inline__ __device__ void skip_spaces(char const** begin, char const* end)
+__inline__ __device__ auto skip_spaces(char const* begin, char const* end)
 {
-  *begin = thrust::find_if(thrust::seq, *begin, end, [](auto elem) { return elem != ' '; });
+  return thrust::find_if(thrust::seq, begin, end, [](auto elem) { return elem != ' '; });
 }
 
 }  // namespace io
