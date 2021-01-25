@@ -33,15 +33,30 @@ namespace {
  * and unpack.
  */
 struct serialized_column {
+  serialized_column(data_type _type,
+                    size_type _size,
+                    size_type _null_count,
+                    int64_t _data_offset,
+                    int64_t _null_mask_offset,
+                    size_type _num_children)
+    : type(_type),
+      size(_size),
+      null_count(_null_count),
+      data_offset(_data_offset),
+      null_mask_offset(_null_mask_offset),
+      num_children(_num_children),
+      pad(0)
+  {
+  }
+
   data_type type;
   size_type size;
   size_type null_count;
   int64_t data_offset;       // offset into contiguous data buffer, or -1 if column data is null
   int64_t null_mask_offset;  // offset into contiguous data buffer, or -1 if column data is null
   size_type num_children;
-  // padding explicitly so we can force initialize the value to 0, allowing us to do a byte-by-byte
-  // comparison between the output anonymized byte buffers for testing purposes.
-  // NOTE: if size_type ever grows (eg 64 bits), this field can be removed.
+  // Explicitly pad to avoid uninitialized padding bits, allowing `serialized_column` to be bit-wise
+  // comparable
   int pad;
 };
 
@@ -108,13 +123,8 @@ void build_column_metadata(std::vector<serialized_column>& metadata,
   int64_t const null_mask_offset = null_mask_ptr ? null_mask_ptr - base_ptr : -1;
 
   // add metadata
-  metadata.emplace_back(serialized_column{col.type(),
-                                          col.size(),
-                                          UNKNOWN_NULL_COUNT,
-                                          data_offset,
-                                          null_mask_offset,
-                                          col.num_children(),
-                                          0});
+  metadata.emplace_back(
+    col.type(), col.size(), UNKNOWN_NULL_COUNT, data_offset, null_mask_offset, col.num_children());
 
   std::for_each(
     col.child_begin(), col.child_end(), [&metadata, &base_ptr, &data_size](column_view const& col) {
@@ -147,13 +157,12 @@ packed_columns::metadata pack_metadata(ColumnIter begin,
 
   // first metadata entry is a stub indicating how many total (top level) columns
   // there are
-  metadata.push_back({data_type{type_id::EMPTY},
-                      static_cast<size_type>(std::distance(begin, end)),
-                      UNKNOWN_NULL_COUNT,
-                      -1,
-                      -1,
-                      0,
-                      0});
+  metadata.emplace_back(data_type{type_id::EMPTY},
+                        static_cast<size_type>(std::distance(begin, end)),
+                        UNKNOWN_NULL_COUNT,
+                        -1,
+                        -1,
+                        0);
 
   std::for_each(begin, end, [&metadata, &contiguous_buffer, &buffer_size](column_view const& col) {
     build_column_metadata(metadata, col, contiguous_buffer, buffer_size);
