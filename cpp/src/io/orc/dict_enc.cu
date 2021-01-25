@@ -116,12 +116,9 @@ __global__ void __launch_bounds__(block_size, 2)
   gpuInitDictionaryIndices(DictionaryChunk *chunks, uint32_t num_columns)
 {
   __shared__ __align__(16) dictinit_state_s state_g;
-  using warp_reduce      = cub::WarpReduce<uint32_t>;
-  using half_warp_reduce = cub::WarpReduce<uint32_t, 16>;
-  __shared__ union {
-    typename warp_reduce::TempStorage full[block_size / 32];
-    typename half_warp_reduce::TempStorage half[block_size / 32];
-  } temp_storage;
+
+  using block_reduce = cub::BlockReduce<uint32_t, block_size>;
+  __shared__ typename block_reduce::TempStorage temp_storage;
 
   dictinit_state_s *const s = &state_g;
   uint32_t col_id           = blockIdx.x;
@@ -157,13 +154,8 @@ __global__ void __launch_bounds__(block_size, 2)
       len    = static_cast<uint32_t>(ck_data[ck_row].count);
       hash   = nvstr_init_hash(ck_data[ck_row].ptr, len);
     }
-    len = half_warp_reduce(temp_storage.half[t / 32]).Sum(len);
-    if (!(t & 0xf)) { s->scratch_red[t >> 4] = len; }
-    __syncthreads();
-    if (t < 32) {
-      len = warp_reduce(temp_storage.full[t / 32]).Sum(s->scratch_red[t]);
-      if (t == 0) s->chunk.string_char_count += len;
-    }
+    len = block_reduce(temp_storage).Sum(len);
+    if (t == 0) s->chunk.string_char_count += len;
     if (i + t < nnz) {
       atomicAdd(&s->map.u32[hash >> 1], 1 << ((hash & 1) ? 16 : 0));
       dict_data[i + t] = start_row + ck_row;
@@ -275,13 +267,7 @@ __global__ void __launch_bounds__(block_size, 2)
       }
     }
   }
-  dict_char_count = warp_reduce(temp_storage.full[t / 32]).Sum(dict_char_count);
-  if (!(t & 0x1f)) { s->scratch_red[t >> 5] = dict_char_count; }
-  __syncthreads();
-  if (t < 32) {
-    dict_char_count =
-      half_warp_reduce(temp_storage.half[t / 32]).Sum((t < 16) ? s->scratch_red[t] : 0);
-  }
+  dict_char_count = block_reduce(temp_storage).Sum(dict_char_count);
   if (!t) {
     chunks[group_id * num_columns + col_id].num_strings       = nnz;
     chunks[group_id * num_columns + col_id].string_char_count = s->chunk.string_char_count;
@@ -362,8 +348,8 @@ __global__ void __launch_bounds__(block_size)
   gpuBuildStripeDictionaries(StripeDictionary *stripes, uint32_t num_columns)
 {
   __shared__ __align__(16) build_state_s state_g;
-  using warp_reduce = cub::WarpReduce<uint32_t>;
-  __shared__ typename warp_reduce::TempStorage temp_storage[block_size / 32];
+  using block_reduce = cub::BlockReduce<uint32_t, block_size>;
+  __shared__ typename block_reduce::TempStorage temp_storage;
 
   build_state_s *const s = &state_g;
   uint32_t col_id        = blockIdx.x;
@@ -415,10 +401,7 @@ __global__ void __launch_bounds__(block_size)
     }
     __syncthreads();
   }
-  dict_char_count = warp_reduce(temp_storage[t / 32]).Sum(dict_char_count);
-  if (!(t & 0x1f)) { s->scratch_red[t >> 5] = dict_char_count; }
-  __syncthreads();
-  if (t < 32) { dict_char_count = warp_reduce(temp_storage[t / 32]).Sum(s->scratch_red[t]); }
+  dict_char_count = block_reduce(temp_storage).Sum(dict_char_count);
   if (t == 0) {
     stripes[stripe_id * num_columns + col_id].num_strings     = num_strings - s->total_dupes;
     stripes[stripe_id * num_columns + col_id].dict_char_count = dict_char_count;

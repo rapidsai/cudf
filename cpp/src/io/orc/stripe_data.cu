@@ -1121,7 +1121,11 @@ __global__ void __launch_bounds__(block_size)
 {
   __shared__ __align__(16) orcdec_state_s state_g;
   using warp_reduce = cub::WarpReduce<uint32_t>;
-  __shared__ typename warp_reduce::TempStorage temp_storage[block_size / 32];
+  using block_reduce = cub::BlockReduce<uint32_t, block_size>;
+  __shared__ union {
+      typename warp_reduce::TempStorage wr_storage[block_size / 32];
+      typename block_reduce::TempStorage br_storage;
+  }temp_storage;
 
   orcdec_state_s *const s = &state_g;
   bool is_nulldec         = (blockIdx.y >= num_stripes);
@@ -1215,7 +1219,7 @@ __global__ void __launch_bounds__(block_size)
           if (i + 32 > skippedrows) { bits &= (1 << (skippedrows - i)) - 1; }
           skip_count += __popc(bits);
         }
-        skip_count = warp_reduce(temp_storage[t / 32]).Sum(skip_count);
+        skip_count = warp_reduce(temp_storage.wr_storage[t/32]).Sum(skip_count);
         if (t == 0) { s->chunk.skip_count += skip_count; }
       }
       __syncthreads();
@@ -1224,16 +1228,10 @@ __global__ void __launch_bounds__(block_size)
     }
     __syncthreads();
     // Sum up the valid counts and infer null_count
-    null_count = warp_reduce(temp_storage[t / 32]).Sum(null_count);
-    if (!(t & 0x1f)) { s->top.nulls.null_count[t >> 5] = null_count; }
-    __syncthreads();
-    if (t < 32) {
-      null_count = (t < num_warps) ? s->top.nulls.null_count[t] : 0;
-      null_count = warp_reduce(temp_storage[t / 32]).Sum(null_count);
-      if (t == 0) {
+    null_count = block_reduce(temp_storage.br_storage).Sum(null_count);
+    if (t == 0) {
         chunks[chunk_id].null_count = null_count;
         chunks[chunk_id].skip_count = s->chunk.skip_count;
-      }
     }
   } else {
     // Decode string dictionary
@@ -1297,7 +1295,8 @@ static __device__ void DecodeRowPositions(orcdec_state_s *s,
                                           int t,
                                           Storage &temp_storage)
 {
-  using warp_reduce = cub::WarpReduce<uint32_t>;
+  using block_reduce = cub::BlockReduce<uint32_t, block_size>;
+
   if (t == 0) {
     if (s->chunk.skip_count != 0) {
       s->u.rowdec.nz_count = min(min(s->chunk.skip_count, s->top.data.max_vals), blockDim.x);
@@ -1338,15 +1337,9 @@ static __device__ void DecodeRowPositions(orcdec_state_s *s,
       // TBD: Brute-forcing this, there might be a more efficient way to find the thread with the
       // last row
       last_row = (nz_count == s->u.rowdec.nz_count) ? row_plus1 : 0;
-      last_row = warp_reduce(temp_storage[t / 32]).Reduce(last_row, cub::Max());
-      if (!(t & 0x1f)) { *(volatile uint32_t *)&s->u.rowdec.last_row[t >> 5] = last_row; }
+      last_row = block_reduce(temp_storage).Reduce(last_row, cub::Max());
       nz_pos = (valid) ? nz_count : 0;
-      __syncthreads();
-      if (t < 32) {
-        last_row = (t < num_warps) ? *(volatile uint32_t *)&s->u.rowdec.last_row[t] : 0;
-        last_row = warp_reduce(temp_storage[t / 32]).Reduce(last_row, cub::Max());
-        if (t == 0) { s->top.data.nrows = last_row; }
-      }
+      if (t == 0) { s->top.data.nrows = last_row; }
       if (valid && nz_pos - 1 < s->u.rowdec.nz_count) { s->u.rowdec.row[nz_pos - 1] = row_plus1; }
       __syncthreads();
     } else {
@@ -1396,7 +1389,7 @@ __global__ void __launch_bounds__(block_size)
                          uint32_t rowidx_stride)
 {
   __shared__ __align__(16) orcdec_state_s state_g;
-  __shared__ typename cub::WarpReduce<uint32_t>::TempStorage temp_storage[block_size / 32];
+  __shared__ typename cub::BlockReduce<uint32_t, block_size>::TempStorage temp_storage;
 
   orcdec_state_s *const s = &state_g;
   uint32_t chunk_id;
