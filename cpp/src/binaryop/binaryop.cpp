@@ -452,7 +452,7 @@ std::unique_ptr<column> fixed_point_binary_operation(scalar const& lhs,
     auto const diff         = lhs.type().scale() - rhs.type().scale() - scale;
     auto const scalar_scale = scale_type{rhs.type().scale() + scale};
     if (lhs.type().id() == type_id::DECIMAL32) {
-      auto const factor = numeric::detail::ipow<int32_t, Radix::BASE_10>(diff);
+      auto const factor = numeric::detail::ipow<int32_t, Radix::BASE_10>(std::abs(diff));
       auto const val    = static_cast<fixed_point_scalar<decimal32> const&>(lhs).value();
       auto const scalar = diff < 0 ? make_fixed_point_scalar<decimal32>(val / factor, scalar_scale)
                                    : make_fixed_point_scalar<decimal32>(val * factor, scalar_scale);
@@ -460,7 +460,7 @@ std::unique_ptr<column> fixed_point_binary_operation(scalar const& lhs,
       return out;
 
     } else {
-      auto const factor = numeric::detail::ipow<int64_t, Radix::BASE_10>(diff);
+      auto const factor = numeric::detail::ipow<int64_t, Radix::BASE_10>(std::abs(diff));
       auto const val    = static_cast<fixed_point_scalar<decimal64> const&>(lhs).value();
       auto const scalar = diff < 0 ? make_fixed_point_scalar<decimal64>(val / factor, scalar_scale)
                                    : make_fixed_point_scalar<decimal64>(val * factor, scalar_scale);
