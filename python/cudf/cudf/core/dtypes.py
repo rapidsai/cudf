@@ -113,12 +113,12 @@ class CategoricalDtype(ExtensionDtype):
 
 
 class ListDtype(ExtensionDtype):
-
-    name = "list"  # type: str
+    _typ: pa.ListType
+    name: str = "list"
 
     def __init__(self, element_type: Any) -> None:
         if isinstance(element_type, ListDtype):
-            self._typ = pa.list_(element_type._typ)  # type: ignore
+            self._typ = pa.list_(element_type._typ)
         else:
             element_type = cudf.utils.dtypes.cudf_dtype_to_pa_type(
                 element_type

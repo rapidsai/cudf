@@ -7,7 +7,7 @@ import pyarrow as pa
 from pyarrow import orc as orc
 
 import cudf
-from cudf import _lib as libcudf
+from cudf._lib import orc as liborc
 from cudf.utils import ioutils
 from cudf.utils.metadata import (  # type: ignore
     orc_column_statistics_pb2 as cs_pb2,
@@ -129,7 +129,7 @@ def read_orc_statistics(
         column_names,
         raw_file_statistics,
         raw_stripes_statistics,
-    ) = libcudf.orc.read_raw_orc_statistics(filepath_or_buffer)
+    ) = liborc.read_raw_orc_statistics(filepath_or_buffer)
 
     # Parse column names
     column_names = [
@@ -259,7 +259,7 @@ def read_orc(
 
     if engine == "cudf":
         df = DataFrame._from_table(
-            libcudf.orc.read_orc(
+            liborc.read_orc(
                 filepath_or_buffer,
                 columns,
                 stripes,
@@ -326,9 +326,9 @@ def to_orc(df, fname, compression=None, enable_statistics=True, **kwargs):
     if ioutils.is_fsspec_open_file(path_or_buf):
         with path_or_buf as file_obj:
             file_obj = ioutils.get_IOBase_writer(file_obj)
-            libcudf.orc.write_orc(df, file_obj, compression, enable_statistics)
+            liborc.write_orc(df, file_obj, compression, enable_statistics)
     else:
-        libcudf.orc.write_orc(df, path_or_buf, compression, enable_statistics)
+        liborc.write_orc(df, path_or_buf, compression, enable_statistics)
 
 
-ORCWriter = libcudf.orc.ORCWriter  # type: ignore
+ORCWriter = liborc.ORCWriter
