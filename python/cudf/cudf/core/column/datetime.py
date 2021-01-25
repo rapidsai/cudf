@@ -407,7 +407,7 @@ def infer_format(element: str, **kwargs) -> str:
         second_parts.remove("Z")
         second_part = "".join(second_parts[1:])
 
-        if len(second_parts) > 1:
+        if len(second_part) > 1:
             # Only infer if second_parts is not an empty string.
             second_part = pd.core.tools.datetimes._guess_datetime_format(
                 second_part, **kwargs
