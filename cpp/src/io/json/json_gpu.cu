@@ -148,7 +148,7 @@ __inline__ __device__ cudf::timestamp_D decode_value(const char *begin,
                                                      const char *end,
                                                      parse_options_view const &opts)
 {
-  return cudf::timestamp_D{cudf::duration_D{parseDateFormat(begin, end, opts.dayfirst)}};
+  return cudf::timestamp_D{cudf::duration_D{to_date(begin, end, opts.dayfirst)}};
 }
 
 /**
@@ -165,7 +165,7 @@ __inline__ __device__ cudf::timestamp_s decode_value(const char *begin,
                                                      const char *end,
                                                      parse_options_view const &opts)
 {
-  auto milli = parseDateTimeFormat(begin, end, opts.dayfirst);
+  auto milli = to_date_time(begin, end, opts.dayfirst);
   return cudf::timestamp_s{cudf::duration_s{milli / 1000}};
 }
 
@@ -183,7 +183,7 @@ __inline__ __device__ cudf::timestamp_ms decode_value(const char *begin,
                                                       const char *end,
                                                       parse_options_view const &opts)
 {
-  auto milli = parseDateTimeFormat(begin, end, opts.dayfirst);
+  auto milli = to_date_time(begin, end, opts.dayfirst);
   return cudf::timestamp_ms{cudf::duration_ms{milli}};
 }
 
@@ -201,7 +201,7 @@ __inline__ __device__ cudf::timestamp_us decode_value(const char *begin,
                                                       const char *end,
                                                       parse_options_view const &opts)
 {
-  auto milli = parseDateTimeFormat(begin, end, opts.dayfirst);
+  auto milli = to_date_time(begin, end, opts.dayfirst);
   return cudf::timestamp_us{cudf::duration_us{milli * 1000}};
 }
 
@@ -219,7 +219,7 @@ __inline__ __device__ cudf::timestamp_ns decode_value(const char *begin,
                                                       const char *end,
                                                       parse_options_view const &opts)
 {
-  auto milli = parseDateTimeFormat(begin, end, opts.dayfirst);
+  auto milli = to_date_time(begin, end, opts.dayfirst);
   return cudf::timestamp_ns{cudf::duration_ns{milli * 1000000}};
 }
 
@@ -229,7 +229,7 @@ __inline__ __device__ cudf::timestamp_ns decode_value(const char *begin,
   __inline__ __device__ Type decode_value(                              \
     const char *begin, const char *end, parse_options_view const &opts) \
   {                                                                     \
-    return Type{parseTimeDeltaFormat<Type>(begin, 0, end - begin)};     \
+    return Type{to_time_delta<Type>(begin, end)};                       \
   }
 #endif
 DURATION_DECODE_VALUE(duration_D)
@@ -755,7 +755,6 @@ __device__ key_value_range get_next_key_value_range(char const *begin,
  * @param[in] row_offsets The offset of each row in the input
  * @param[out] keys_cnt Number of keys found in the file
  * @param[out] keys_info optional, information (offset, length, hash) for each found key
- *
  */
 __global__ void collect_keys_info_kernel(parse_options_view const options,
                                          device_span<char const> const data,

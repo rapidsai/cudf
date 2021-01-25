@@ -1,29 +1,37 @@
-# Copyright (c) 2020, NVIDIA CORPORATION.
+# Copyright (c) 2020-2021, NVIDIA CORPORATION.
+
+import cudf
 
 from libcpp cimport bool, int
-from libcpp.memory cimport unique_ptr
+from libcpp.memory cimport unique_ptr, make_unique
 from libcpp.string cimport string
 from libcpp.vector cimport vector
 from libcpp.utility cimport move
 from cudf._lib.cpp.column.column cimport column
 
 from cudf._lib.cpp.io.orc_metadata cimport (
-    read_orc_statistics as libcudf_read_orc_statistics
+    raw_orc_statistics,
+    read_raw_orc_statistics as libcudf_read_raw_orc_statistics
 )
 from cudf._lib.cpp.io.orc cimport (
     orc_reader_options,
     read_orc as libcudf_read_orc,
     orc_writer_options,
     write_orc as libcudf_write_orc,
+    chunked_orc_writer_options,
+    orc_chunked_writer
 )
 from cudf._lib.cpp.io.types cimport (
     compression_type,
+    data_sink,
     sink_info,
     source_info,
     table_metadata,
     table_with_metadata,
-    data_sink,
+    table_metadata_with_nullability
 )
+
+from cudf._lib.cpp.table.table_view cimport table_view
 from cudf._lib.cpp.types cimport (
     data_type, type_id, size_type
 )
@@ -34,16 +42,27 @@ from cudf._lib.types import np_to_cudf_types
 from cudf._lib.types cimport underlying_type_t_type_id
 import numpy as np
 
+from cudf._lib.utils cimport get_column_names
 
-cpdef vector[vector[string]] read_orc_statistics(filepath_or_buffer):
+from cudf._lib.utils import (
+    _index_level_name,
+    generate_pandas_metadata,
+)
+
+
+cpdef read_raw_orc_statistics(filepath_or_buffer):
     """
-    Cython function to call into libcudf API, see `read_orc_statistics`.
+    Cython function to call into libcudf API, see `read_raw_orc_statistics`.
 
     See Also
     --------
     cudf.io.orc.read_orc_statistics
     """
-    return libcudf_read_orc_statistics(make_source_info([filepath_or_buffer]))
+
+    cdef raw_orc_statistics raw = (
+        libcudf_read_raw_orc_statistics(make_source_info([filepath_or_buffer]))
+    )
+    return (raw.column_names, raw.file_stats, raw.stripes_stats)
 
 
 cpdef read_orc(object filepath_or_buffer,
@@ -92,6 +111,15 @@ cpdef read_orc(object filepath_or_buffer,
     return Table.from_unique_ptr(move(c_result.tbl), names)
 
 
+cdef compression_type _get_comp_type(object compression):
+    if compression is None or compression is False:
+        return compression_type.NONE
+    elif compression == "snappy":
+        return compression_type.SNAPPY
+    else:
+        raise ValueError(f"Unsupported `compression` type {compression}")
+
+
 cpdef write_orc(Table table,
                 object path_or_buf,
                 object compression=None,
@@ -103,16 +131,7 @@ cpdef write_orc(Table table,
     --------
     cudf.io.orc.read_orc
     """
-    cdef compression_type compression_ = compression_type.NONE
-    if compression is None or compression is False:
-        compression_ = compression_type.NONE
-    elif compression == "snappy":
-        compression_ = compression_type.SNAPPY
-    else:
-        raise ValueError(
-            "Unsupported compression type `{}`".format(compression)
-        )
-
+    cdef compression_type compression_ = _get_comp_type(compression)
     cdef table_metadata metadata_ = table_metadata()
     cdef unique_ptr[data_sink] data_sink_c
     cdef sink_info sink_info_c = make_sink_info(path_or_buf, data_sink_c)
@@ -179,3 +198,81 @@ cdef orc_reader_options make_orc_reader_options(
     )
 
     return opts
+
+
+cdef class ORCWriter:
+    """
+    ORCWriter lets you you incrementally write out a ORC file from a series
+    of cudf tables
+
+    See Also
+    --------
+    cudf.io.orc.to_orc
+    """
+    cdef bool initialized
+    cdef unique_ptr[orc_chunked_writer] writer
+    cdef sink_info sink
+    cdef unique_ptr[data_sink] _data_sink
+    cdef bool enable_stats
+    cdef compression_type comp_type
+    cdef object index
+
+    def __cinit__(self, object path, object index=None,
+                  object compression=None, bool enable_statistics=True):
+        self.sink = make_sink_info(path, self._data_sink)
+        self.enable_stats = enable_statistics
+        self.comp_type = _get_comp_type(compression)
+        self.index = index
+        self.initialized = False
+
+    def write_table(self, Table table):
+        """ Writes a single table to the file """
+        if not self.initialized:
+            self._initialize_chunked_state(table)
+
+        cdef table_view tv
+        if self.index is not False and (
+            table._index.name is not None or
+                isinstance(table._index, cudf.core.multiindex.MultiIndex)):
+            tv = table.view()
+        else:
+            tv = table.data_view()
+
+        with nogil:
+            self.writer.get()[0].write(tv)
+
+    def close(self):
+        if not self.initialized:
+            return
+
+        with nogil:
+            self.writer.get()[0].close()
+
+    def __dealloc__(self):
+        self.close()
+
+    def _initialize_chunked_state(self, Table table):
+        """
+        Prepare all the values required to build the
+        chunked_orc_writer_options anb creates a writer"""
+        cdef unique_ptr[table_metadata_with_nullability] tbl_meta
+        tbl_meta = make_unique[table_metadata_with_nullability]()
+
+        # Set the table_metadata
+        tbl_meta.get().column_names = get_column_names(table, self.index)
+        pandas_metadata = generate_pandas_metadata(table, self.index)
+        tbl_meta.get().user_data[str.encode("pandas")] = \
+            str.encode(pandas_metadata)
+
+        cdef chunked_orc_writer_options args
+        with nogil:
+            args = move(
+                chunked_orc_writer_options.builder(self.sink)
+                .metadata(tbl_meta.get())
+                .compression(self.comp_type)
+                .enable_statistics(self.enable_stats)
+                .build()
+            )
+            self.writer.reset(new orc_chunked_writer(args))
+
+        self.initialized = True

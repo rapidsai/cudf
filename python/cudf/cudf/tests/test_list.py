@@ -1,4 +1,4 @@
-# Copyright (c) 2020, NVIDIA CORPORATION.
+# Copyright (c) 2020-2021, NVIDIA CORPORATION.
 
 import pandas as pd
 import pyarrow as pa
@@ -70,3 +70,22 @@ def test_leaves(data):
     expect = cudf.Series(pa_array, dtype=dtype)
     got = cudf.Series(data).list.leaves
     assert_eq(expect, got)
+
+
+def test_list_to_pandas_nullable_true():
+    df = cudf.DataFrame({"a": cudf.Series([[1, 2, 3]])})
+    actual = df.to_pandas(nullable=True)
+    expected = pd.DataFrame({"a": pd.Series([[1, 2, 3]])})
+
+    assert_eq(actual, expected)
+
+
+def test_listdtype_hash():
+    a = cudf.core.dtypes.ListDtype("int64")
+    b = cudf.core.dtypes.ListDtype("int64")
+
+    assert hash(a) == hash(b)
+
+    c = cudf.core.dtypes.ListDtype("int32")
+
+    assert hash(a) != hash(c)

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2020, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -135,6 +135,27 @@ TYPED_TEST(groupby_sum_test, null_keys_and_values)
     test_single_agg(keys, vals, expect_keys, expect_vals, std::move(agg2), force_use_sort_impl::YES);
 }
 // clang-format on
+
+// These tests will not work until the following ptxas bug is fixed in 10.2
+// https://nvbugswb.nvidia.com/NvBugs5/SWBug.aspx?bugid=3186317&cp=
+TYPED_TEST(groupby_sum_test, DISABLED_dictionary)
+{
+  using K = int32_t;
+  using V = TypeParam;
+  using R = cudf::detail::target_type_t<V, aggregation::SUM>;
+
+  // clang-format off
+  fixed_width_column_wrapper<K>     keys{ 1, 2, 3, 1, 2, 2, 1, 3, 3, 2};
+  dictionary_column_wrapper<V, int> vals{ 0, 1, 2, 3, 4, 5, 6, 7, 8, 9};
+
+  fixed_width_column_wrapper<K>      expect_keys{ 1, 2,  3 };
+  fixed_width_column_wrapper<R, int> expect_vals{ 9, 19, 17};
+  // clang-format on
+
+  test_single_agg(keys, vals, expect_keys, expect_vals, cudf::make_sum_aggregation());
+  test_single_agg(
+    keys, vals, expect_keys, expect_vals, cudf::make_sum_aggregation(), force_use_sort_impl::YES);
+}
 
 }  // namespace test
 }  // namespace cudf

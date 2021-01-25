@@ -376,6 +376,7 @@ set(COPYING_TEST_SRC
     "${CMAKE_CURRENT_SOURCE_DIR}/copying/gather_tests.cu"
     "${CMAKE_CURRENT_SOURCE_DIR}/copying/gather_str_tests.cu"
     "${CMAKE_CURRENT_SOURCE_DIR}/copying/gather_list_tests.cu"
+    "${CMAKE_CURRENT_SOURCE_DIR}/copying/segmented_gather_list_tests.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/copying/gather_struct_tests.cu"
     "${CMAKE_CURRENT_SOURCE_DIR}/copying/detail_gather_tests.cu"
     "${CMAKE_CURRENT_SOURCE_DIR}/copying/scatter_tests.cpp"
@@ -515,6 +516,7 @@ ConfigureTest(SEARCH_TEST "${SEARCH_TEST_SRC}")
 
 set(RESHAPE_TEST_SRC
     "${CMAKE_CURRENT_SOURCE_DIR}/reshape/byte_cast_tests.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/reshape/explode_tests.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/reshape/interleave_columns_tests.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/reshape/tile_tests.cpp")
 
@@ -652,6 +654,7 @@ ConfigureTest(AST_TEST "${AST_TEST_SRC}")
 # - lists tests ----------------------------------------------------------------------------------
 
 set(LISTS_TEST_SRC
+    "${CMAKE_CURRENT_SOURCE_DIR}/lists/count_elements_tests.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/lists/extract_tests.cpp")
 
 ConfigureTest(LISTS_TEST "${LISTS_TEST_SRC}")

@@ -49,17 +49,17 @@ class CategoricalAccessor(ColumnMethodsMixin):
         dtype: category
         Categories (3, int64): [3, 2, 1]
         >>> s.cat.remove_categories([1])
-        0   null
-        1      2
-        2      3
+        0    <NA>
+        1       2
+        2       3
         dtype: category
         Categories (2, int64): [2, 3]
         >>> s.cat.set_categories(list('abcde'))
-        0   null
-        1   null
-        2   null
+        0    <NA>
+        1    <NA>
+        2    <NA>
         dtype: category
-        Categories (5, object): [a, b, c, d, e]
+        Categories (5, object): ['a', 'b', 'c', 'd', 'e']
         >>> s.cat.as_ordered()
         0    1
         1    2
@@ -360,13 +360,13 @@ class CategoricalAccessor(ColumnMethodsMixin):
         dtype: category
         Categories (3, int64): [1, 2, 10]
         >>> s.cat.remove_categories([1])
-        0     10
-        1   null
-        2   null
-        3      2
-        4     10
-        5      2
-        6     10
+        0      10
+        1    <NA>
+        2    <NA>
+        3       2
+        4      10
+        5       2
+        6      10
         dtype: category
         Categories (2, int64): [2, 10]
         >>> s
@@ -381,13 +381,13 @@ class CategoricalAccessor(ColumnMethodsMixin):
         Categories (3, int64): [1, 2, 10]
         >>> s.cat.remove_categories([10], inplace=True)
         >>> s
-        0   null
-        1      1
-        2      1
-        3      2
-        4   null
-        5      2
-        6   null
+        0    <NA>
+        1       1
+        2       1
+        3       2
+        4    <NA>
+        5       2
+        6    <NA>
         dtype: category
         Categories (2, int64): [1, 2]
         """
@@ -475,22 +475,22 @@ class CategoricalAccessor(ColumnMethodsMixin):
         dtype: category
         Categories (3, int64): [1, 2, 10]
         >>> s.cat.set_categories([1, 10])
-        0      1
-        1      1
-        2   null
-        3     10
-        4   null
-        5     10
+        0       1
+        1       1
+        2    <NA>
+        3      10
+        4    <NA>
+        5      10
         dtype: category
         Categories (2, int64): [1, 10]
         >>> s.cat.set_categories([1, 10], inplace=True)
         >>> s
-        0      1
-        1      1
-        2   null
-        3     10
-        4   null
-        5     10
+        0       1
+        1       1
+        2    <NA>
+        3      10
+        4    <NA>
+        5      10
         dtype: category
         Categories (2, int64): [1, 10]
         """

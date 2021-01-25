@@ -34,8 +34,7 @@
 /**
  * @file
  * @brief Type declarations for libcudf.
- *
- **/
+ */
 
 namespace bit_mask {
 using bit_mask_t = uint32_t;
@@ -112,12 +111,12 @@ size_type distance(T f, T l)
  *
  * Use this value when constructing any column-like object to indicate that
  * the null count should be computed on the first invocation of `null_count()`.
- **/
+ */
 static constexpr size_type UNKNOWN_NULL_COUNT{-1};
 
 /**
  * @brief Indicates the order in which elements should be sorted.
- **/
+ */
 enum class order : bool {
   ASCENDING,  ///< Elements ordered from small to large
   DESCENDING  ///< Elements ordered from large to small
@@ -149,7 +148,7 @@ enum class null_equality : bool {
 
 /**
  * @brief Indicates how null values compare against all other values.
- **/
+ */
 enum class null_order : bool {
   AFTER,  ///< NULL values ordered *after* all other values
   BEFORE  ///< NULL values ordered *before* all other values
@@ -162,7 +161,7 @@ enum class sorted : bool { NO, YES };
 
 /**
  * @brief Indicates how a collection of values has been ordered.
- **/
+ */
 struct order_info {
   sorted is_sorted;
   order ordering;
@@ -171,7 +170,7 @@ struct order_info {
 
 /**
  * @brief Controls the allocation/initialization of a null mask.
- **/
+ */
 enum class mask_state : int32_t {
   UNALLOCATED,    ///< Null mask not allocated, (all elements are valid)
   UNINITIALIZED,  ///< Null mask allocated, but not initialized
@@ -193,7 +192,7 @@ enum class interpolation : int32_t {
 
 /**
  * @brief Identifies a column's logical element type
- **/
+ */
 enum class type_id : int32_t {
   EMPTY,                   ///< Always null with no underlying data
   INT8,                    ///< 1 byte signed integer
@@ -232,7 +231,7 @@ enum class type_id : int32_t {
  *
  * Simple types can be be entirely described by their `id()`, but some types
  * require additional metadata to fully describe elements of that type.
- **/
+ */
 class data_type {
  public:
   data_type()                 = default;
@@ -246,7 +245,7 @@ class data_type {
    * @brief Construct a new `data_type` object
    *
    * @param id The type's identifier
-   **/
+   */
   explicit constexpr data_type(type_id id) : _id{id} {}
 
   /**
@@ -254,7 +253,7 @@ class data_type {
    *
    * @param id The `fixed_point`'s identifier
    * @param scale The `fixed_point`'s scale (see `fixed_point::_scale`)
-   **/
+   */
   explicit data_type(type_id id, int32_t scale) : _id{id}, _fixed_point_scale{scale}
   {
     assert(id == type_id::DECIMAL32 || id == type_id::DECIMAL64);
@@ -262,12 +261,12 @@ class data_type {
 
   /**
    * @brief Returns the type identifier
-   **/
+   */
   CUDA_HOST_DEVICE_CALLABLE type_id id() const noexcept { return _id; }
 
   /**
    * @brief Returns the scale (for fixed_point types)
-   **/
+   */
   CUDA_HOST_DEVICE_CALLABLE int32_t scale() const noexcept { return _fixed_point_scale; }
 
  private:
@@ -325,10 +324,11 @@ std::size_t size_of(data_type t);
  *  @brief Identifies the hash function to be used
  */
 enum class hash_id {
-  HASH_IDENTITY = 0,   ///< Identity hash function that simply returns the key to be hashed
-  HASH_MURMUR3,        ///< Murmur3 hash function
-  HASH_MD5,            ///< MD5 hash function
-  HASH_SERIAL_MURMUR3  ///< Serial Murmur3 hash function
+  HASH_IDENTITY = 0,    ///< Identity hash function that simply returns the key to be hashed
+  HASH_MURMUR3,         ///< Murmur3 hash function
+  HASH_MD5,             ///< MD5 hash function
+  HASH_SERIAL_MURMUR3,  ///< Serial Murmur3 hash function
+  HASH_SPARK_MURMUR3    ///< Spark Murmur3 hash function
 };
 
 /** @} */

@@ -1,4 +1,5 @@
-# Copyright (c) 2018-2020, NVIDIA CORPORATION.
+# Copyright (c) 2018-2021, NVIDIA CORPORATION.
+
 import pickle
 import warnings
 from collections import abc as abc
@@ -42,6 +43,7 @@ from cudf.utils import cudautils, docutils, ioutils, utils
 from cudf.utils.docutils import copy_docstring
 from cudf.utils.dtypes import (
     can_convert_to_column,
+    is_decimal_dtype,
     is_list_dtype,
     is_list_like,
     is_mixed_with_object_dtype,
@@ -254,7 +256,7 @@ class Series(Frame, Serializable):
         0    10.0
         1    20.0
         2    30.0
-        3    null
+        3    <NA>
         dtype: float64
         >>> cudf.Series.from_pandas(pds, nan_as_null=False)
         0    10.0
@@ -1054,7 +1056,7 @@ class Series(Frame, Serializable):
         --------
         >>> import cudf
         >>> ser = cudf.Series([4, 3, 2, 1, 0])
-        >>> print(ser.tail(2))
+        >>> ser.tail(2)
         3    1
         4    0
         """
@@ -1098,6 +1100,7 @@ class Series(Frame, Serializable):
                 preprocess._column, cudf.core.column.CategoricalColumn
             )
             and not is_list_dtype(preprocess.dtype)
+            and not is_decimal_dtype(preprocess.dtype)
         ) or isinstance(
             preprocess._column, cudf.core.column.timedelta.TimeDeltaColumn
         ):
@@ -1446,12 +1449,12 @@ class Series(Frame, Serializable):
         >>> s
         0      10
         1      20
-        2    null
+        2    <NA>
         dtype: int64
         >>> s.rfloordiv(200)
         0      20
         1      10
-        2    null
+        2    <NA>
         dtype: int64
         >>> s.rfloordiv(200, fill_value=2)
         0     20
@@ -1569,6 +1572,8 @@ class Series(Frame, Serializable):
             return other._column
         elif isinstance(other, Index):
             return Series(other)._column
+        elif other is cudf.NA:
+            return cudf.Scalar(other, dtype=self.dtype)
         else:
             return self._column.normalize_binop_value(other)
 
@@ -1868,7 +1873,7 @@ class Series(Frame, Serializable):
         >>> ser = cudf.Series(['', None, 'abc'])
         >>> ser
         0
-        1    None
+        1    <NA>
         2     abc
         dtype: object
         >>> ser.dropna()
@@ -2448,7 +2453,14 @@ class Series(Frame, Serializable):
 
         def encode(cat):
             if cat is None:
-                return self.isnull()
+                if self.dtype.kind == "f":
+                    # Need to ignore `np.nan` values incase
+                    # of a float column
+                    return self.__class__(
+                        libcudf.unary.is_null((self._column))
+                    )
+                else:
+                    return self.isnull()
             elif np.issubdtype(type(cat), np.floating) and np.isnan(cat):
                 return self.__class__(libcudf.unary.is_nan(self._column))
             else:
@@ -2576,13 +2588,7 @@ class Series(Frame, Serializable):
         1    c
         dtype: object
         """
-        cats = self.dropna().unique().astype(self.dtype)
-
-        name = self.name  # label_encoding mutates self.name
-        labels = self.label_encoding(cats=cats, na_sentinel=na_sentinel)
-        self.name = name
-
-        return labels, cats
+        return cudf.core.algorithms.factorize(self, na_sentinel=na_sentinel)
 
     # UDF related
 
@@ -3503,8 +3509,31 @@ class Series(Frame, Serializable):
         return Series(val_counts.index.sort_values(), name=self.name)
 
     def round(self, decimals=0):
-        """Round a Series to a configurable number of decimal places.
         """
+        Round each value in a Series to the given number of decimals.
+
+        Parameters
+        ----------
+        decimals : int, default 0
+            Number of decimal places to round to. If decimals is negative,
+            it specifies the number of positions to the left of the decimal
+            point.
+
+        Returns
+        -------
+        Series
+            Rounded values of the Series.
+
+        Examples
+        --------
+        >>> s = cudf.Series([0.1, 1.4, 2.9])
+        >>> s.round()
+        0    0.0
+        1    1.0
+        2    3.0
+        dtype: float64
+        """
+
         return Series(
             self._column.round(decimals=decimals),
             name=self.name,
@@ -5148,7 +5177,7 @@ def isclose(a, b, rtol=1e-05, atol=1e-08, equal_nan=False):
     0    1.9876543
     1    2.9876654
     2    3.9876543
-    3         null
+    3         <NA>
     4          9.9
     5          1.0
     dtype: float64
@@ -5156,9 +5185,9 @@ def isclose(a, b, rtol=1e-05, atol=1e-08, equal_nan=False):
     0    1.987654321
     1    2.987654321
     2    3.987654321
-    3           null
+    3           <NA>
     4           19.9
-    5           null
+    5           <NA>
     dtype: float64
     >>> cudf.isclose(s1, s2)
     0     True
@@ -5186,8 +5215,6 @@ def isclose(a, b, rtol=1e-05, atol=1e-08, equal_nan=False):
     dtype: bool
     """
 
-    index = None
-
     if not can_convert_to_column(a):
         raise TypeError(
             f"Parameter `a` is expected to be a "
@@ -5203,6 +5230,8 @@ def isclose(a, b, rtol=1e-05, atol=1e-08, equal_nan=False):
         a = Series.from_pandas(a)
     if isinstance(b, pd.Series):
         b = Series.from_pandas(b)
+
+    index = None
 
     if isinstance(a, cudf.Series) and isinstance(b, cudf.Series):
         b = b.reindex(a.index)

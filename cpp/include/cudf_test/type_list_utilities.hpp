@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2020, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -66,8 +66,7 @@
  *
  * @note WARNING: Abusing and overusing these utilities can lead to dramatically
  * increased compile-times. Use responsibly.
- *
- **/
+ */
 
 namespace cudf {
 namespace test {
@@ -111,7 +110,7 @@ struct GetTypeImpl<Types<ARGS...>, 0> {
  *
  * @tparam TUPLE The type list
  * @tparam D Index of the desired type
- **/
+ */
 template <class TUPLE, int D>
 using GetType = typename GetTypeImpl<TUPLE, D>::type;
 
@@ -131,7 +130,7 @@ struct GetSizeImpl<Types<TYPES...>> {
  * ```
  * GetSize< Types<int, float, double, void*> == 4
  * ```
- **/
+ */
 template <class TUPLE>
 constexpr auto GetSize = GetSizeImpl<TUPLE>::value;
 
@@ -177,7 +176,7 @@ struct ConcatImpl<> {
  * using MyTypes = Concat< Types<int, float>, Types<char, double>>
  * // MyTypes == Types<int, float, char, double>;
  * ```
- **/
+ */
 template <class... T>
 using Concat = typename ConcatImpl<T...>::type;
 
@@ -210,7 +209,7 @@ struct FlattenImpl<Types<Types<HEAD...>, TAIL...>> {
  *char> static_assert(std::is_same<Flatten<Types<Types<int, Types<double>>,
  *float>>, Types<int, double, float>>::value, "");
  * ```
- **/
+ */
 template <class T>
 using Flatten = typename FlattenImpl<T>::type;
 
@@ -278,7 +277,7 @@ struct CrossProductImpl<T, TAIL...> : CrossProductImpl<Types<T>, TAIL...> {
  * // Types == Types< Types<int, char>, Types<int, double>, Types<float, char>,
  * Types<float, double> >
  * ```
- **/
+ */
 template <class... ARGS>
 using CrossProduct = typename CrossProductImpl<ARGS...>::type;
 
@@ -322,7 +321,7 @@ struct AllSame<Types<ITEMS...>> : AllSame<ITEMS...> {
  * RemoveIf<AllSame, Types<Types<int, float, int>>> ==  Types<Types<int, float,
  *int>>
  * ```
- **/
+ */
 struct AllSame {
   template <class... ITEMS>
   using Call = detail::AllSame<ITEMS...>;
@@ -358,7 +357,7 @@ struct ExistsImpl<NEEDLE, Types<HEAD, TAIL...>> : ExistsImpl<NEEDLE, Types<TAIL.
  * ```
  * @tparam NEEDLE The type to search for
  * @tparam HAYSACK The list to search in
- **/
+ */
 template <class NEEDLE, class HAYSACK>
 constexpr bool Exists = ExistsImpl<NEEDLE, HAYSACK>::value;
 
@@ -383,14 +382,14 @@ constexpr bool Exists = ExistsImpl<NEEDLE, HAYSACK>::value;
  * ```
  *
  * @tparam HAYSACK The type list to search
- **/
+ */
 template <class HAYSACK>
 struct ContainedIn {
   /**
    * @brief Invoked as predicate for RemoveIf
    *
    * @tparam NEEDLE The type to search for
-   **/
+   */
   template <class NEEDLE>
   using Call = ExistsImpl<NEEDLE, HAYSACK>;
 };
@@ -430,7 +429,7 @@ struct RemoveIfImpl<PRED, Types<HEAD, TAIL...>> {
  *
  * @tparam PRED The predicate
  * @tparam TUPLE The list of types on which to apply the predicate
- **/
+ */
 template <class PRED, class TUPLE>
 using RemoveIf = typename RemoveIfImpl<PRED, TUPLE>::type;
 
@@ -458,7 +457,7 @@ struct TransformImpl<XFORM, Types<ITEMS...>> {
  *
  * @tparam XFORM The transformation to apply
  * @tparam TYPES The list of types to transform
- **/
+ */
 template <class XFORM, class TYPES>
 using Transform = typename TransformImpl<XFORM, TYPES>::type;
 
@@ -492,7 +491,7 @@ struct Repeat<T, 0, Types<ITEMS...>> {
  * ```
  *
  * @tparam N The number of times to repeat the type
- **/
+ */
 template <int N>
 struct Repeat {
   template <class T>
@@ -520,7 +519,7 @@ struct AppendImpl<Types<HEAD...>, TAIL...> {
  *
  * @tparam TYPES The type list to append to
  * @tparam ITEMS The types to append
- **/
+ */
 template <class TYPES, class... ITEMS>
 using Append = typename AppendImpl<TYPES, ITEMS...>::type;
 
@@ -565,7 +564,7 @@ struct RemoveImpl {
  *
  * @tparam TUPLE Type list to remove types from
  * @tparam IDXs Indices of types to remove
- **/
+ */
 template <class TUPLE, int... IDXs>
 using Remove = typename RemoveImpl<TUPLE, IDXs...>::type;
 
@@ -605,7 +604,7 @@ struct UniqueImpl<Types<ITEMS...>> {
  * ```
  *
  * @tparam TYPES The type list from which to remove duplicates
- **/
+ */
 template <class TYPES>
 using Unique = typename UniqueImpl<TYPES>::type;
 
