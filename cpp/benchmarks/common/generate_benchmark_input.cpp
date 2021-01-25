@@ -468,13 +468,13 @@ std::unique_ptr<cudf::column> create_random_column<cudf::list_view>(data_profile
   auto list_column = std::move(leaf_column);
   for (int lvl = 0; lvl < dist_params.max_depth; ++lvl) {
     // Generating the next level - offsets point into the current list column
-    auto current_child_column = std::move(list_column);
-    auto const num_rows       = current_child_column->size() / single_level_mean;
+    auto current_child_column      = std::move(list_column);
+    cudf::size_type const num_rows = current_child_column->size() / single_level_mean;
 
     std::vector<int32_t> offsets{0};
     offsets.reserve(num_rows + 1);
     std::vector<cudf::bitmask_type> null_mask(null_mask_size(num_rows), ~0);
-    for (int row = 1; row < num_rows + 1; ++row) {
+    for (cudf::size_type row = 1; row < num_rows + 1; ++row) {
       offsets.push_back(
         std::min<int32_t>(current_child_column->size(), offsets.back() + len_dist(engine)));
       if (!valid_dist(engine)) cudf::clear_bit_unsafe(null_mask.data(), row);
@@ -531,7 +531,7 @@ columns_vector create_random_columns(data_profile const& profile,
 std::vector<cudf::type_id> repeat_dtypes(std::vector<cudf::type_id> const& dtype_ids,
                                          cudf::size_type num_cols)
 {
-  if (dtype_ids.size() == num_cols) { return dtype_ids; }
+  if (dtype_ids.size() == static_cast<std::size_t>(num_cols)) { return dtype_ids; }
   std::vector<cudf::type_id> out_dtypes;
   out_dtypes.reserve(num_cols);
   for (cudf::size_type col = 0; col < num_cols; ++col)

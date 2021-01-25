@@ -122,8 +122,7 @@ struct fixed_point_unary_cast {
                                        cudf::is_fixed_point<TargetT>())>* = nullptr>
   CUDA_DEVICE_CALLABLE DeviceT operator()(SourceT const element)
   {
-    auto const fp = TargetT{element, scale};
-    return numeric::scaled_integer<DeviceT>{fp}.value;
+    return TargetT{element, scale}.value();
   }
 };
 

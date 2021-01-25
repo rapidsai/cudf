@@ -90,7 +90,7 @@ std::vector<cudf::table_view> slice(cudf::table_view const& input,
   size_t num_output_tables = indices.size() / 2;
   for (size_t i = 0; i < num_output_tables; i++) {
     std::vector<cudf::column_view> table_columns;
-    for (size_t j = 0; j < input.num_columns(); j++) {
+    for (size_type j = 0; j < input.num_columns(); j++) {
       table_columns.emplace_back(sliced_table[j][i]);
     }
     result.emplace_back(table_view{table_columns});
