@@ -1424,8 +1424,7 @@ void writer::impl::write(table_view const &table)
                         num_columns,
                         num_fragments,
                         num_rows,
-                        fragment_size,
-                        state.stream);
+                        fragment_size);
   }
 
   size_t global_rowgroup_base = md.row_groups.size();
