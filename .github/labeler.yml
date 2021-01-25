@@ -6,7 +6,7 @@ cuDF (Python):
   - 'python/**'
   - 'notebooks/**'
   
-libcudf:
+cpp:
   - 'cpp/**'
 
 CMake:
@@ -15,11 +15,9 @@ CMake:
   
 cuDF (Java):
   - 'java/**'
-  
-Ops:
-  - '.github/**'
+
+ci:
   - 'ci/**'
+
+conda:
   - 'conda/**'
-  - '**/Dockerfile'
-  - '**/.dockerignore'
-  - 'docker/**'
