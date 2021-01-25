@@ -120,7 +120,7 @@ void ASSERT_BINOP(column_view const& out,
     } else {
       auto out_valid = out_h.second;
       for (size_type i = 0; i < num_bitmask_words(out_data.size()); ++i) {
-        ASSERT_EQ(out_valid[i], 0);
+        ASSERT_EQ(out_valid[i], bitmask_type{0});
       }
     }
   }
@@ -167,7 +167,7 @@ void ASSERT_BINOP(column_view const& out,
     } else {
       auto out_valid = out_h.second;
       for (size_type i = 0; i < num_bitmask_words(out_data.size()); ++i) {
-        ASSERT_EQ(out_valid[i], 0);
+        ASSERT_EQ(out_valid[i], bitmask_type{0});
       }
     }
   }

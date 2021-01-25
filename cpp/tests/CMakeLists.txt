@@ -517,6 +517,7 @@ ConfigureTest(SEARCH_TEST "${SEARCH_TEST_SRC}")
 
 set(RESHAPE_TEST_SRC
     "${CMAKE_CURRENT_SOURCE_DIR}/reshape/byte_cast_tests.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/reshape/explode_tests.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/reshape/interleave_columns_tests.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/reshape/tile_tests.cpp")
 
@@ -654,6 +655,7 @@ ConfigureTest(AST_TEST "${AST_TEST_SRC}")
 # - lists tests ----------------------------------------------------------------------------------
 
 set(LISTS_TEST_SRC
+    "${CMAKE_CURRENT_SOURCE_DIR}/lists/count_elements_tests.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/lists/extract_tests.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/lists/segmented_sort_tests.cpp")
 

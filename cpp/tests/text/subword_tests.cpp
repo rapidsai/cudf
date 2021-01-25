@@ -83,7 +83,7 @@ TEST(TextSubwordTest, Tokenize)
     std::vector<uint32_t> base_data(
       {2023, 2003, 1037, 3231, 1012, 1037, 3231, 2023, 2003, 1012, 0, 0, 0, 0, 0, 0});
     std::vector<uint32_t> h_expected;
-    for (auto idx = 0; idx < nrows; ++idx)
+    for (uint32_t idx = 0; idx < nrows; ++idx)
       h_expected.insert(h_expected.end(), base_data.begin(), base_data.end());
     cudf::test::fixed_width_column_wrapper<uint32_t> expected(h_expected.begin(), h_expected.end());
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(result.tensor_token_ids->view(), expected);
@@ -92,7 +92,7 @@ TEST(TextSubwordTest, Tokenize)
   {
     std::vector<uint32_t> base_data({1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0});
     std::vector<uint32_t> h_expected;
-    for (auto idx = 0; idx < nrows; ++idx)
+    for (uint32_t idx = 0; idx < nrows; ++idx)
       h_expected.insert(h_expected.end(), base_data.begin(), base_data.end());
     cudf::test::fixed_width_column_wrapper<uint32_t> expected(h_expected.begin(), h_expected.end());
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(result.tensor_attention_mask->view(), expected);
@@ -100,7 +100,7 @@ TEST(TextSubwordTest, Tokenize)
 
   {
     std::vector<uint32_t> h_expected;
-    for (auto idx = 0; idx < nrows; ++idx) {
+    for (uint32_t idx = 0; idx < nrows; ++idx) {
       // 0,0,9,1,0,9,2,0,9,3,0,9,4,0,9,5,0,9,6,0,9,7,0,9,8,0,9,9,0,9,...
       h_expected.push_back(idx);
       h_expected.push_back(0);
@@ -129,7 +129,7 @@ TEST(TextSubwordTest, TokenizeMultiRow)
                                          false,  // do_truncate
                                          MAX_ROWS_TENSOR);
 
-  EXPECT_EQ(3, result.nrows_tensor);
+  EXPECT_EQ(uint32_t{3}, result.nrows_tensor);
   cudf::test::fixed_width_column_wrapper<uint32_t> expected_tokens(
     {2023, 2003, 1037, 3231, 1012, 0,    0,    0,    2023, 2003, 1037, 3231,
      1012, 2023, 2003, 1037, 2003, 1037, 3231, 1012, 0,    0,    0,    0});
@@ -158,7 +158,7 @@ TEST(TextSubwordTest, TokenizeMaxEqualsTokens)
                                          false,  // do_truncate
                                          MAX_ROWS_TENSOR);
 
-  EXPECT_EQ(1, result.nrows_tensor);
+  EXPECT_EQ(uint32_t{1}, result.nrows_tensor);
   cudf::test::fixed_width_column_wrapper<uint32_t> expected_tokens({2023, 2003, 1037, 3231, 1012});
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(result.tensor_token_ids->view(), expected_tokens);
   cudf::test::fixed_width_column_wrapper<uint32_t> expected_attn({1, 1, 1, 1, 1});
@@ -204,7 +204,7 @@ TEST(TextSubwordTest, EmptyStrings)
                                          true,   // do_lower_case
                                          false,  // do_truncate
                                          MAX_ROWS_TENSOR);
-  EXPECT_EQ(0, result.nrows_tensor);
+  EXPECT_EQ(uint32_t{0}, result.nrows_tensor);
   EXPECT_EQ(0, result.tensor_token_ids->size());
   EXPECT_EQ(0, result.tensor_attention_mask->size());
   EXPECT_EQ(0, result.tensor_metadata->size());
@@ -222,7 +222,7 @@ TEST(TextSubwordTest, AllNullStrings)
                                          true,   // do_lower_case
                                          false,  // do_truncate
                                          MAX_ROWS_TENSOR);
-  EXPECT_EQ(0, result.nrows_tensor);
+  EXPECT_EQ(uint32_t{0}, result.nrows_tensor);
   EXPECT_EQ(0, result.tensor_token_ids->size());
   EXPECT_EQ(0, result.tensor_attention_mask->size());
   EXPECT_EQ(0, result.tensor_metadata->size());
@@ -244,7 +244,7 @@ TEST(TextSubwordTest, TokenizeFromVocabStruct)
                                          true,  // do_truncate
                                          MAX_ROWS_TENSOR);
 
-  EXPECT_EQ(2, result.nrows_tensor);
+  EXPECT_EQ(uint32_t{2}, result.nrows_tensor);
   cudf::test::fixed_width_column_wrapper<uint32_t> expected_tokens(
     {2023, 2003, 1037, 3231, 1012, 0, 0, 0, 2023, 2003, 1037, 3231, 1012, 2023, 2003, 1037});
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(result.tensor_token_ids->view(), expected_tokens);
