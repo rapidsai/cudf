@@ -2691,23 +2691,17 @@ class interval_range(GenericIndex):
     """
 
     def __new__(
-        cls, start=None, end=None, freq=None, closed="right", name=None,
+        cls, start=None, end=None, freq=1, closed="right", name=None,
     ) -> "interval_range":
-        if freq:
-            freq = freq  # freq if other than 1
+        if end % 2 != 0:
+            left_col = cupy.arange(start, end - freq, freq)
         else:
-            freq = 1
-        sf = start  # start+freq
-        ef = end + 1  # end + 1
-
-        arr = pd.arrays.IntervalArray.from_breaks(
-            [i for i in range(sf, ef, freq)], closed=closed
+            left_col = cupy.arange(start, end, freq)
+        right_col = cupy.arange(start + freq, end + 1, freq)
+        interval_col = column.build_interval_column(
+            left_col, right_col, closed=closed
         )
-        new_arr = cudf.IntervalIndex(
-            arr, closed=closed, dtype=arr.dtype, name=name
-        )
-
-        return new_arr
+        return IntervalIndex(interval_col)
 
 
 class IntervalIndex(GenericIndex):
@@ -2757,7 +2751,6 @@ class IntervalIndex(GenericIndex):
             dtype = None
 
         out._initialize(data, **kwargs)
-
         return out
 
 

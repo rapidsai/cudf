@@ -25,6 +25,7 @@ from cudf._lib.transform import bools_to_mask
 from cudf.core.abc import Serializable
 from cudf.core.buffer import Buffer
 from cudf.core.dtypes import CategoricalDtype
+from cudf.core.dtypes import IntervalDtype
 from cudf.utils import ioutils, utils
 from cudf.utils.dtypes import (
     NUMERIC_TYPES,
@@ -1485,6 +1486,15 @@ def build_column(
             null_count=null_count,
             children=children,
         )
+    elif is_interval_dtype(dtype):
+        return cudf.core.column.IntervalColumn(
+            dtype=dtype,
+            mask=mask,
+            size=size,
+            offset=offset,
+            children=children,
+            null_count=null_count,
+        )
     elif is_struct_dtype(dtype):
         return cudf.core.column.StructColumn(
             data=data,
@@ -1493,15 +1503,6 @@ def build_column(
             mask=mask,
             null_count=null_count,
             children=children,
-        )
-    elif is_interval_dtype(dtype):
-        return cudf.core.column.IntervalColumn(
-            data=data,
-            dtype=dtype,
-            mask=mask,
-            size=size,
-            offset=offset,
-            null_count=null_count,
         )
     else:
         return cudf.core.column.NumericalColumn(
@@ -1554,6 +1555,48 @@ def build_categorical_column(
         offset=offset,
         null_count=null_count,
         children=(codes,),
+    )
+
+
+def build_interval_column(
+    left_col,
+    right_col,
+    mask=None,
+    size=None,
+    offset=0,
+    null_count=None,
+    closed="right",
+):
+    """
+    Build an IntervalColumn
+
+    Parameters
+    ----------
+    left_col : Column
+        Column of values representing the left of the interval
+    right_col : Column
+        Column of representing the right of the interval
+    mask : Buffer
+        Null mask
+    size : int, optional
+    offset : int, optional
+    closed : str
+        Indicates which side if any is closed in the interval set
+    """
+    left = as_column(left_col)
+    right = as_column(right_col)
+
+    dtype = IntervalDtype(left_col.dtype, closed)
+    size = len(left)
+    # breakpoint()
+    return build_column(
+        data=None,
+        dtype=dtype,
+        mask=mask,
+        size=size,
+        offset=offset,
+        null_count=null_count,
+        children=(left, right),
     )
 
 
