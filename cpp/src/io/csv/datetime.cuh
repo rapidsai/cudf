@@ -276,11 +276,7 @@ __inline__ __device__ int32_t to_date(char const* begin, char const* end, bool d
 {
   int day, month, year;
 
-  if (extract_date(begin, end, dayfirst, &year, &month, &day)) {
-    return days_since_epoch(year, month, day);
-  } else {
-    return -1;
-  }
+  return extract_date(begin, end, dayfirst, &year, &month, &day) ? days_since_epoch(year, month, day) : -1;
 }
 
 /**
