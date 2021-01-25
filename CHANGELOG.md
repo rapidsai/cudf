@@ -8,7 +8,6 @@
 - PR #6929 Add `Index.set_names` api
 - PR #6907 Add `replace_null` API with `replace_policy` parameter, `fixed_width` column support
 - PR #6885 Share `factorize` implementation with Index and cudf module
-
 - PR #6775 Implement cudf.DateOffset for months
 
 ## Improvements
@@ -23,6 +22,7 @@
 - PR #6512 Refactor rolling.cu to reduce compile time
 - PR #6982 Disable some pragma unroll statements in thrust `sort.h`
 - PR #7051 Verify decimal cast in java package
+- PR #7120 Verify window operations on decimal in java package
 
 ## Bug Fixes
 
@@ -227,6 +227,7 @@
 - PR #6855 Fix `.str.replace_with_backrefs` docs examples
 - PR #6853 Fix contiguous split of null string columns
 - PR #6861 Fix compile error in type_dispatch_benchmark.cu
+- PR #6864 Handle contiguous_split corner case for nested string columns with no children
 - PR #6869 Avoid dependency resolution failure in latest version of pip by explicitly specifying versions for dask and distributed
 - PR #6806 Force install of local conda artifacts
 - PR #6887 Fix typo and `0-d` numpy array handling in binary operation

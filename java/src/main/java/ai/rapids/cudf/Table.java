@@ -1,6 +1,6 @@
 /*
  *
- *  Copyright (c) 2019-2020, NVIDIA CORPORATION.
+ *  Copyright (c) 2019-2021, NVIDIA CORPORATION.
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -239,6 +239,9 @@ public final class Table implements AutoCloseable {
    * @param metadataValues  Metadata values corresponding to metadataKeys
    * @param compression     native compression codec ID
    * @param statsFreq       native statistics frequency ID
+   * @param isInt96         true if timestamp type is int96
+   * @param precisions      precision list containing all the precisions of the decimal types in
+   *                        the columns
    * @param filename        local output path
    * @return a handle that is used in later calls to writeParquetChunk and writeParquetEnd.
    */
@@ -248,6 +251,8 @@ public final class Table implements AutoCloseable {
                                                    String[] metadataValues,
                                                    int compression,
                                                    int statsFreq,
+                                                   boolean isInt96,
+                                                   int[] precisions,
                                                    String filename) throws CudfException;
 
   /**
@@ -259,6 +264,8 @@ public final class Table implements AutoCloseable {
    * @param compression     native compression codec ID
    * @param statsFreq       native statistics frequency ID
    * @param isInt96         true if timestamp type is int96
+   * @param precisions      precision list containing all the precisions of the decimal types in
+   *                        the columns
    * @param consumer        consumer of host buffers produced.
    * @return a handle that is used in later calls to writeParquetChunk and writeParquetEnd.
    */
@@ -269,6 +276,7 @@ public final class Table implements AutoCloseable {
                                                      int compression,
                                                      int statsFreq,
                                                      boolean isInt96,
+                                                     int[] precisions,
                                                      HostBufferConsumer consumer) throws CudfException;
 
   /**
@@ -492,6 +500,8 @@ public final class Table implements AutoCloseable {
   private static native long[] repeatColumnCount(long tableHandle,
                                                  long columnHandle,
                                                  boolean checkCount);
+
+  private static native long[] explode(long tableHandle, int index);
 
   private native long createCudfTableView(long[] nativeColumnViewHandles);
 
@@ -778,6 +788,8 @@ public final class Table implements AutoCloseable {
           options.getMetadataValues(),
           options.getCompressionType().nativeId,
           options.getStatisticsFrequency().nativeId,
+          options.isTimestampTypeInt96(),
+          options.getPrecisions(),
           outputFile.getAbsolutePath());
     }
 
@@ -789,6 +801,7 @@ public final class Table implements AutoCloseable {
           options.getCompressionType().nativeId,
           options.getStatisticsFrequency().nativeId,
           options.isTimestampTypeInt96(),
+          options.getPrecisions(),
           consumer);
       this.consumer = consumer;
     }
@@ -1604,6 +1617,47 @@ public final class Table implements AutoCloseable {
     return contiguousSplit(nativeHandle, indices);
   }
 
+  /**
+   * Explodes a list column's elements.
+   *
+   * Any list is exploded, which means the elements of the list in each row are expanded
+   * into new rows in the output. The corresponding rows for other columns in the input
+   * are duplicated.
+   *
+   * <code>
+   * Example:
+   * input:  [[5,10,15], 100],
+   *         [[20,25],   200],
+   *         [[30],      300],
+   * index: 0
+   * output: [5,         100],
+   *         [10,        100],
+   *         [15,        100],
+   *         [20,        200],
+   *         [25,        200],
+   *         [30,        300]
+   * </code>
+   *
+   * Nulls propagate in different ways depending on what is null.
+   * <code>
+   *     [[5,null,15], 100],
+   *     [null,        200]
+   * returns:
+   *     [5,           100],
+   *     [null,        100],
+   *     [15,          100]
+   * </code>
+   * Note that null lists are completely removed from the output
+   * and nulls inside lists are pulled out and remain.
+   *
+   * @param index Column index to explode inside the table.
+   * @return A new table with explode_col exploded.
+   */
+  public Table explode(int index) {
+    assert 0 <= index && index < columns.length : "Column index is out of range";
+    assert columns[index].getType().equals(DType.LIST) : "Column to explode must be of type LIST";
+    return new Table(explode(nativeHandle, index));
+  }
 
   /**
    * Gathers the rows of this table according to `gatherMap` such that row "i"
@@ -2647,11 +2701,15 @@ public final class Table implements AutoCloseable {
     }
 
     @SuppressWarnings("unchecked")
-    private static <T> ColumnVector fromLists(DataType dataType, Object[][] dataArray) {
+    private static <T> ColumnVector fromLists(DataType dataType, Object[] dataArray) {
       List[] dataLists = new List[dataArray.length];
       for (int i = 0; i < dataLists.length; ++i) {
-        Object[] dataList = dataArray[i];
-        dataLists[i] = dataList != null ? Arrays.asList(dataList) : null;
+        // The element in dataArray can be an array or list, because the below overloaded
+        // version accepts a List of Array as rows.
+        //  `public TestBuilder column(ListType dataType, List<?>... values)`
+        Object dataList = dataArray[i];
+        dataLists[i] = dataList == null ? null :
+            (dataList instanceof List ? (List)dataList : Arrays.asList((Object[])dataList));
       }
       return ColumnVector.fromLists(dataType, dataLists);
     }
@@ -2669,7 +2727,7 @@ public final class Table implements AutoCloseable {
           Object dataArray = typeErasedData.get(i);
           if (dtype.isNestedType()) {
             if (dtype.equals(DType.LIST)) {
-              columns.add(fromLists(dataType, (Object[][]) dataArray));
+              columns.add(fromLists(dataType, (Object[]) dataArray));
             } else if (dtype.equals(DType.STRUCT)) {
               columns.add(fromStructs(dataType, (StructData[]) dataArray));
             } else {

@@ -40,8 +40,8 @@ launcher::launcher(const std::string& hash,
 }
 
 launcher::launcher(launcher&& launcher)
-  : program{std::move(launcher.program)},
-    cache_instance{cudf::jit::cudfJitCache::Instance()},
+  : cache_instance{cudf::jit::cudfJitCache::Instance()},
+    program{std::move(launcher.program)},
     kernel_inst{std::move(launcher.kernel_inst)},
     stream{launcher.stream}
 {
