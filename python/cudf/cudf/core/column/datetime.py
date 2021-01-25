@@ -384,8 +384,8 @@ def infer_format(element: str, **kwargs) -> str:
 
     # There is possibility that the element is of following format
     # '00:00:03.333333 2016-01-01'
-    second_part = re.split(r"(\D+)", element_parts[1], maxsplit=1)
-    subsecond_fmt = ".%" + str(len(second_part[0])) + "f"
+    second_parts = re.split(r"(\D+)", element_parts[1], maxsplit=1)
+    subsecond_fmt = ".%" + str(len(second_parts[0])) + "f"
 
     first_part = pd.core.tools.datetimes._guess_datetime_format(
         element_parts[0], **kwargs
@@ -399,21 +399,21 @@ def infer_format(element: str, **kwargs) -> str:
     if first_part is None:
         raise ValueError("Unable to infer the timestamp format from the data")
 
-    if len(second_part) > 1:
+    if len(second_parts) > 1:
         # "Z" indicates Zulu time(widely used in aviation) - Which is
         # UTC timezone that currently cudf only supports. Having any other
         # unsuppported timezone will let the code fail below
         # with a ValueError.
-        second_part.remove("Z")
-        second_part = "".join(second_part[1:])  # type: ignore
+        second_parts.remove("Z")
+        second_part = "".join(second_parts[1:])
 
-        if len(second_part) > 1:
-            # Only infer if second_part is not an empty string.
+        if len(second_parts) > 1:
+            # Only infer if second_parts is not an empty string.
             second_part = pd.core.tools.datetimes._guess_datetime_format(
                 second_part, **kwargs
             )
     else:
-        second_part = ""  # type: ignore
+        second_part = ""
 
     try:
         fmt = first_part + subsecond_fmt + second_part
