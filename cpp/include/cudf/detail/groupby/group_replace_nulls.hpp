@@ -52,7 +52,7 @@ namespace detail {
  */
 template <typename LabelIterator>
 std::unique_ptr<column> group_replace_nulls(cudf::column_view const& value,
-                                            LabelIterator const& group_labels_begin,
+                                            LabelIterator group_labels_begin,
                                             cudf::replace_policy replace_policy,
                                             rmm::cuda_stream_view stream,
                                             rmm::mr::device_memory_resource* mr)
