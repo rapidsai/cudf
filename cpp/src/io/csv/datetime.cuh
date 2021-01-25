@@ -16,9 +16,13 @@
 
 #pragma once
 
-#include <cudf/wrappers/durations.hpp>
-
 #include "thrust/reduce.h"
+
+#include <cudf/wrappers/durations.hpp>
+#include <io/utilities/parsing_utils.cuh>
+
+namespace cudf {
+namespace io {
 
 /**
  * @brief Parses non-negative integral vales.
@@ -378,38 +382,6 @@ __inline__ __device__ T parse_optional_integer(char const** begin, char const* e
 }
 
 /**
- * @brief Excludes the prefix from the input range if the string starts with the prefix.
- *
- * @tparam N length on the prefix, plus one
- * @param begin[in, out] Pointer to the first element of the string
- * @param end Pointer to the first element after the string
- * @param prefix String we're searching for at the start of the input range
- * @return true if the input range starts with the given prefix
- */
-template <int N>
-__inline__ __device__ bool skip_if_starts_with(char const** begin,
-                                               char const* end,
-                                               const char (&prefix)[N])
-{
-  static constexpr size_t prefix_len = N - 1;
-  if (end - *begin < prefix_len) return false;
-  auto const found = thrust::equal(thrust::seq, *begin, *begin + prefix_len, prefix);
-  if (found) (*begin) += prefix_len;
-  return found;
-}
-
-/**
- * @brief Modifies the input range to exclude the leading space characters.
- *
- * @param begin[in, out] Pointer to the first element of the string
- * @param end Pointer to the first element after the string
- */
-__inline__ __device__ void skip_spaces(char const** begin, char const* end)
-{
-  *begin = thrust::find_if(thrust::seq, *begin, end, [](auto elem) { return elem != ' '; });
-}
-
-/**
  * @brief Parses the input string into a duration of the given type.
  *
  * @param begin Pointer to the first element of the string
@@ -462,3 +434,6 @@ __inline__ __device__ int64_t to_time_delta(char const* begin, char const* end)
            .count() +
          cuda::std::chrono::duration_cast<T>(cudf::duration_ns{nanosecond}).count();
 }
+
+}  // namespace io
+}  // namespace cudf
