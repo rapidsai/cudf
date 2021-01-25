@@ -35,7 +35,6 @@
 - PR #6942 Fix cudf::merge gtest for dictionary columns
 
 
-# cuDF 0.17.0 (Date TBD)
 # cuDF 0.17.0 (10 Dec 2020)
 
 ## New Features
@@ -264,7 +263,6 @@
 - PR #6315 Native code for string-map lookups, for cudf-java
 - PR #6302 Add custom dataframe accessors
 - PR #6301 Add JNI bindings to nvcomp
-- PR #6381 TEST
 - PR #6328 Java and JNI bindings for getMapValue/map_lookup
 - PR #6371 Use ColumnViewAccess on Host side
 - PR #6392 add hash based groupby mean aggregation
