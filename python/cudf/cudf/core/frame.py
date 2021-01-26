@@ -1616,9 +1616,8 @@ class Frame(libcudf.table.Table):
 
         source = self
         if numeric_only:
-            numeric_cols = filter(
-                lambda name: is_numerical_dtype(self._data[name]),
-                self._data.names,
+            numeric_cols = (
+                name for name in self._data.names if is_numerical_dtype(self._data[name])
             )
             source = self._get_columns_by_label(numeric_cols)
             if source.empty:
