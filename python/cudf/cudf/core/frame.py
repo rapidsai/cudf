@@ -16,7 +16,6 @@ from pandas.api.types import is_dict_like, is_dtype_equal
 import cudf
 from cudf import _lib as libcudf
 from cudf.core.column import as_column, build_categorical_column, column_empty
-from cudf.utils import utils
 from cudf.utils.dtypes import (
     is_categorical_dtype,
     is_column_like,
@@ -3676,65 +3675,6 @@ def _get_replacement_values_for_columns(to_replace, value, columns):
         all_nan_columns[i] = all_nan
 
     return all_nan_columns, to_replace_columns, values_columns
-
-
-def _get_replacement_values(to_replace, replacement, col_name, column):
-    all_nan = False
-    if (
-        is_dict_like(to_replace)
-        and not isinstance(to_replace, cudf.Series)
-        and replacement is None
-    ):
-        replacement = list(to_replace.values())
-        to_replace = list(to_replace.keys())
-    elif not is_scalar(to_replace):
-        if is_scalar(replacement):
-            all_nan = replacement is None
-            if all_nan:
-                replacement = [replacement] * len(to_replace)
-            # Do not broadcast numeric dtypes
-            elif pd.api.types.is_numeric_dtype(column.dtype):
-                if len(to_replace) > 0:
-                    replacement = [replacement]
-                else:
-                    # If to_replace is empty, replacement has to be empty.
-                    replacement = []
-            else:
-                replacement = utils.scalar_broadcast_to(
-                    replacement,
-                    (len(to_replace),),
-                    np.dtype(type(replacement)),
-                )
-        else:
-            # If both are non-scalar
-            if len(to_replace) != len(replacement):
-                raise ValueError(
-                    f"Replacement lists must be "
-                    f"of same length."
-                    f"Expected {len(to_replace)}, got {len(replacement)}."
-                )
-    else:
-        if not is_scalar(replacement):
-            raise TypeError(
-                f"Incompatible types '{type(to_replace).__name__}' "
-                f"and '{type(replacement).__name__}' "
-                f"for *to_replace* and *replacement*."
-            )
-        to_replace = [to_replace]
-        replacement = [replacement]
-
-    if is_dict_like(to_replace) and is_dict_like(replacement):
-        replacement = replacement[col_name]
-        to_replace = to_replace[col_name]
-
-        if is_scalar(replacement):
-            replacement = [replacement]
-        if is_scalar(to_replace):
-            to_replace = [to_replace]
-
-    if isinstance(replacement, list):
-        all_nan = replacement.count(None) == len(replacement)
-    return all_nan, replacement, to_replace
 
 
 # If the dictionary array is a string array and of length `0`
