@@ -1606,7 +1606,6 @@ def build_interval_column(
 
     dtype = IntervalDtype(left_col.dtype, closed)
     size = len(left)
-    # breakpoint()
     return build_column(
         data=None,
         dtype=dtype,
