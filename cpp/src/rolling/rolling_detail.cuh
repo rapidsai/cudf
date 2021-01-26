@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-21, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -911,7 +911,7 @@ struct rolling_window_launcher {
    * is set to `0` (since the result is `null`).
    */
   template <typename PrecedingIter, typename FollowingIter>
-  std::unique_ptr<column> create_collect_offsets(size_type const& input_size,
+  std::unique_ptr<column> create_collect_offsets(size_type input_size,
                                                  PrecedingIter preceding_begin,
                                                  FollowingIter following_begin,
                                                  size_type min_periods,
@@ -946,31 +946,6 @@ struct rolling_window_launcher {
     // Convert `sizes` to an offsets column, via inclusive_scan():
     return strings::detail::make_offsets_child_column(
       sizes->view().begin<size_type>(), sizes->view().end<size_type>(), stream, mr);
-  }
-
-  /**
-   * @brief Create null mask for result of `COLLECT` aggregation.
-   *
-   * Given an input column's size, the preceding/following window bounds, and `min_periods`,
-   * this function returns a null mask, and the count of the number of nulls.
-   */
-  template <typename PrecedingIter, typename FollowingIter>
-  std::pair<rmm::device_buffer, size_type> create_collect_null_mask(
-    size_type const& input_size,
-    PrecedingIter preceding_iter,
-    FollowingIter following_iter,
-    size_type min_periods,
-    rmm::cuda_stream_view stream,
-    rmm::mr::device_memory_resource* mr)
-  {
-    return valid_if(
-      thrust::make_counting_iterator<size_type>(0),
-      thrust::make_counting_iterator<size_type>(input_size),
-      [preceding_iter, following_iter, min_periods] __device__(auto i) {
-        return (preceding_iter[i] + following_iter[i]) >= min_periods;
-      },
-      stream,
-      mr);
   }
 
   /**
@@ -1140,8 +1115,14 @@ struct rolling_window_launcher {
 
     rmm::device_buffer null_mask;
     size_type null_count;
-    std::tie(null_mask, null_count) = create_collect_null_mask(
-      input.size(), preceding_begin, following_begin, min_periods, stream, mr);
+    std::tie(null_mask, null_count) = valid_if(
+      thrust::make_counting_iterator<size_type>(0),
+      thrust::make_counting_iterator<size_type>(input.size()),
+      [preceding_begin, following_begin, min_periods] __device__(auto i) {
+        return (preceding_begin[i] + following_begin[i]) >= min_periods;
+      },
+      stream,
+      mr);
 
     return make_lists_column(input.size(),
                              std::move(offsets),
