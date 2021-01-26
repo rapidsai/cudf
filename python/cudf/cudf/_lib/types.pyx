@@ -1,4 +1,4 @@
-# Copyright (c) 2020, NVIDIA CORPORATION.
+# Copyright (c) 2020-2021, NVIDIA CORPORATION.
 
 from enum import IntEnum
 
@@ -14,7 +14,7 @@ from cudf._lib.types cimport (
 )
 from cudf._lib.cpp.column.column_view cimport column_view
 from cudf._lib.cpp.lists.lists_column_view cimport lists_column_view
-from cudf.core.dtypes import ListDtype, StructDtype
+from cudf.core.dtypes import ListDtype, StructDtype, Decimal64Dtype
 
 cimport cudf._lib.cpp.types as libcudf_types
 
@@ -64,6 +64,8 @@ class TypeId(IntEnum):
     DURATION_NANOSECONDS = (
         <underlying_type_t_type_id> libcudf_types.type_id.DURATION_NANOSECONDS
     )
+    DECIMAL32 = <underlying_type_t_type_id> libcudf_types.type_id.DECIMAL32
+    DECIMAL64 = <underlying_type_t_type_id> libcudf_types.type_id.DECIMAL64
 
 
 np_to_cudf_types = {
@@ -188,12 +190,21 @@ cdef dtype_from_structs_column_view(column_view cv):
     }
     return StructDtype(fields)
 
+cdef dtype_from_decimal_column_view(column_view cv):
+    scale = -cv.type().scale()
+    precision = 18  # max of 64 bit integer
+    return Decimal64Dtype(precision=precision, scale=scale)
+
 cdef dtype_from_column_view(column_view cv):
     cdef libcudf_types.type_id tid = cv.type().id()
     if tid == libcudf_types.type_id.LIST:
-        dtype = dtype_from_lists_column_view(cv)
+        return dtype_from_lists_column_view(cv)
     elif tid == libcudf_types.type_id.STRUCT:
-        dtype = dtype_from_structs_column_view(cv)
+        return dtype_from_structs_column_view(cv)
+    elif tid == libcudf_types.type_id.DECIMAL64:
+        return dtype_from_decimal_column_view(cv)
+    elif tid == libcudf_types.type_id.DECIMAL32:
+        raise NotImplementedError("decimal32 types are not supported yet. "
+                                  "Use decimal64 instead")
     else:
-        dtype = cudf_to_np_types[<underlying_type_t_type_id>(tid)]
-    return dtype
+        return cudf_to_np_types[<underlying_type_t_type_id>(tid)]
