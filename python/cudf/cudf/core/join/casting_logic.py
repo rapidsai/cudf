@@ -147,7 +147,14 @@ def _input_to_libcudf_castrules_both_cat(lcol, rcol, how):
 
 
 def _input_to_libcudf_castrules_one_cat(lcol, rcol, how):
-    return 
+    l_is_cat = isinstance(lcol.dtype, CategoricalDtype)
+    r_is_cat = isinstance(rcol.dtype, CategoricalDtype)
+
+    if l_is_cat:
+        return lcol.dtype.categories.dtype
+    elif r_is_cat:
+        return rcol.dtype.categories.dtype
+
 
 
 def _input_to_libcudf_castrules_any_cat(lcol, rcol, how):
@@ -231,3 +238,40 @@ def _input_to_libcudf_casting_rules_any(lcol, rcol, how):
         ):
             libcudf_join_type = max(dtype_l, dtype_r)
     return libcudf_join_type
+
+def _libcudf_to_output_casting_rules(lcol, rcol, how):
+    """
+    Determine what dtype an output merge key column should be
+    cast to after it has been processed by libcudf. Determine
+    if a column should be promoted to a categorical datatype.
+    For inner merges between unordered categoricals, we get a
+    new categorical variable containing the intersection of 
+    the two source variables. For left or right joins, we get
+    the original categorical variable from whichever was the
+    major operand of the join, e.g. left for a left join or 
+    right for a right join. In the case of an outer join, the
+    result will be a new categorical variable with both sets 
+    of categories. Ordering is retained when using left/right
+    joins.  
+    """
+
+    dtype_l = lcol.dtype
+    dtype_r = rcol.dtype
+    merge_return_type = None
+    # we  currently only need to do this for categorical variables
+    if isinstance(dtype_l, CategoricalDtype) and isinstance(
+        dtype_r, CategoricalDtype
+    ):
+        if pd.api.types.is_dtype_equal(dtype_l, dtype_r):
+            if how == "inner":
+                return dtype_l
+        if how == 'left':
+            return dtype_l
+        if how == 'right':
+            return dtype_r
+        elif how == 'outer':
+            new_cats = cudf.concat([dtype_l.categories, dtype_r.categories]).unique()
+            return cudf.CategoricalDtype(categories=new_cats, ordered=False)
+        else:
+            merge_return_type = "category"
+    return merge_return_type
