@@ -901,12 +901,12 @@ struct rolling_window_launcher {
   }
 
   template <typename PrecedingIter, typename FollowingIter>
-  std::unique_ptr<column> get_collect_list_offsets(column_view const& input,
-                                                   PrecedingIter preceding_begin,
-                                                   FollowingIter following_begin,
-                                                   size_type min_periods,
-                                                   rmm::cuda_stream_view stream,
-                                                   rmm::mr::device_memory_resource* mr)
+  std::unique_ptr<column> create_collect_offsets(column_view const& input,
+                                                 PrecedingIter preceding_begin,
+                                                 FollowingIter following_begin,
+                                                 size_type min_periods,
+                                                 rmm::cuda_stream_view stream,
+                                                 rmm::mr::device_memory_resource* mr)
   {
     // Materialize offsets column.
     auto static constexpr size_data_type = data_type{type_to_id<size_type>()};
@@ -926,7 +926,7 @@ struct rolling_window_launcher {
   }
 
   template <typename PrecedingIter, typename FollowingIter>
-  std::pair<rmm::device_buffer, size_type> get_collect_list_null_mask(
+  std::pair<rmm::device_buffer, size_type> create_collect_null_mask(
     column_view const& input,
     PrecedingIter preceding_iter,
     FollowingIter following_iter,
@@ -934,9 +934,7 @@ struct rolling_window_launcher {
     rmm::cuda_stream_view stream,
     rmm::mr::device_memory_resource* mr)
   {
-    rmm::device_buffer null_mask;
-    size_type null_count;
-    std::tie(null_mask, null_count) = valid_if(
+    return valid_if(
       thrust::make_counting_iterator<size_type>(0),
       thrust::make_counting_iterator<size_type>(input.size()),
       [preceding_iter, following_iter, min_periods] __device__(auto i) {
@@ -944,8 +942,6 @@ struct rolling_window_launcher {
       },
       stream,
       mr);
-    return (null_count == 0) ? std::make_pair(rmm::device_buffer{0, stream, mr}, size_type{0})
-                             : std::make_pair(null_mask, null_count);
   }
 
   /**
@@ -1031,11 +1027,11 @@ struct rolling_window_launcher {
   }
 
   template <typename PrecedingIter>
-  std::unique_ptr<column> get_gather_map_for_child_column(column_view const& child_offsets,
-                                                          column_view const& per_row_mapping,
-                                                          PrecedingIter preceding_iter,
-                                                          rmm::cuda_stream_view stream,
-                                                          rmm::mr::device_memory_resource* mr)
+  std::unique_ptr<column> create_collect_gather_map(column_view const& child_offsets,
+                                                    column_view const& per_row_mapping,
+                                                    PrecedingIter preceding_iter,
+                                                    rmm::cuda_stream_view stream,
+                                                    rmm::mr::device_memory_resource* mr)
   {
     auto gather_map = make_fixed_width_column(data_type{type_to_id<size_type>()},
                                               per_row_mapping.size(),
@@ -1094,14 +1090,14 @@ struct rolling_window_launcher {
 
     // Materialize collect list's offsets.
     auto offsets =
-      get_collect_list_offsets(input, preceding_begin, following_begin, min_periods, stream, mr);
+      create_collect_offsets(input, preceding_begin, following_begin, min_periods, stream, mr);
 
     // Map each element of the collect() result's child column
     // to the index where it appears in the input.
     auto per_row_mapping = get_list_child_to_list_row_mapping(offsets->view(), stream, mr);
 
     // Generate gather map to produce the collect() result's child column.
-    auto gather_map = get_gather_map_for_child_column(
+    auto gather_map = create_collect_gather_map(
       offsets->view(), per_row_mapping->view(), preceding_begin, stream, mr);
 
     // gather(), to construct child column.
@@ -1111,7 +1107,7 @@ struct rolling_window_launcher {
     rmm::device_buffer null_mask;
     size_type null_count;
     std::tie(null_mask, null_count) =
-      get_collect_list_null_mask(input, preceding_begin, following_begin, min_periods, stream, mr);
+      create_collect_null_mask(input, preceding_begin, following_begin, min_periods, stream, mr);
 
     return make_lists_column(input.size(),
                              std::move(offsets),
