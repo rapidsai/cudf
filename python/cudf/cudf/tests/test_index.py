@@ -17,6 +17,7 @@ from cudf.core.index import (
     DatetimeIndex,
     GenericIndex,
     Int64Index,
+    IntervalIndex,
     RangeIndex,
     as_index,
 )
@@ -1345,6 +1346,27 @@ def test_categorical_index_basic(data, categories, dtype, ordered, name):
         dtype=dtype,
         ordered=ordered,
         name=name,
+    )
+
+    assert_eq(pindex, gindex)
+
+
+@pytest.mark.parametrize("closed", ['left', 'right'])
+@pytest.mark.parametrize("freq", [1, 2, 3])
+@pytest.mark.parametrize("start", [0, 1, 2,3])
+@pytest.mark.parametrize("end", [4,5,6,7])
+def test_interval_index_basic(start,end,freq,closed):
+    pindex = pd.interval_range(
+        start=start,
+        end=end,
+        freq=freq,
+        closed=closed
+    )
+    gindex = cudf.interval_range(
+        start=start,
+        end=end,
+        freq=freq,
+        closed=closed
     )
 
     assert_eq(pindex, gindex)
