@@ -1317,6 +1317,26 @@ class DataFrame(Frame, Serializable):
     def _repr_latex_(self):
         return self._get_renderable_dataframe().to_pandas()._repr_latex_()
 
+    def _get_columns_by_label(self, labels, downcast=False):
+        """
+        Return columns of dataframe by `labels`
+
+        If downcast is True, try and downcast from a DataFrame to a Series
+        """
+        new_data = super()._get_columns_by_label(labels)
+        if downcast:
+            if is_scalar(labels):
+                nlevels = 1
+            elif isinstance(labels, tuple):
+                nlevels = len(labels)
+            if self._data.multiindex is False or nlevels == self._data.nlevels:
+                return self._constructor_sliced(
+                    new_data, name=labels, index=self.index
+                )
+        return self._constructor(
+            new_data, columns=new_data.to_pandas_index(), index=self.index
+        )
+
     # unary, binary, rbinary, orderedcompare, unorderedcompare
     def _apply_op(self, fn, other=None, fill_value=None):
 

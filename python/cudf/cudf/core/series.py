@@ -404,6 +404,18 @@ class Series(Frame, Serializable):
         params.update(kwargs)
         return cls(**params)
 
+    def _get_columns_by_label(self, labels):
+        """
+        Return the column
+        """
+        new_data = super()._get_columns_by_label(labels)
+
+        return (
+            self._constructor(data=new_data, index=self.index)
+            if len(new_data) > 0
+            else Series(dtype=self.dtype, name=self.name)
+        )
+
     @classmethod
     def from_arrow(cls, array):
         """
