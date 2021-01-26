@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2020, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,7 +19,6 @@
 #include <cudf/fixed_point/fixed_point.hpp>
 #include <cudf/io/data_sink.hpp>
 #include <cudf/io/parquet.hpp>
-#include <cudf/strings/string_view.cuh>
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/table/table.hpp>
 #include <cudf/table/table_view.hpp>
@@ -1353,6 +1352,13 @@ TEST_F(ParquetChunkedWriterTest, DecimalWrite)
   args.set_decimal_precision_data(precisions);
   state = cudf_io::write_parquet_chunked_begin(args);
   EXPECT_THROW(cudf_io::write_parquet_chunked(table, state), cudf::logic_error);
+
+  // verify sucess if equal precision is given
+  precisions = {7, 9};
+  args.set_decimal_precision_data(precisions);
+  state = cudf_io::write_parquet_chunked_begin(args);
+  cudf_io::write_parquet_chunked(table, state);
+  cudf_io::write_parquet_chunked_end(state);
 
   // verify failure if too many precisions given
   precisions = {7, 14, 11};

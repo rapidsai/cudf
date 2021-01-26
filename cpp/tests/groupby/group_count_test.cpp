@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2020, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -145,7 +145,6 @@ TYPED_TEST(groupby_count_test, null_keys_and_values)
 
 }
 
-
 struct groupby_count_string_test : public cudf::test::BaseFixture {};
 
 TEST_F(groupby_count_string_test, basic)
@@ -167,6 +166,117 @@ TEST_F(groupby_count_string_test, basic)
     test_single_agg(keys, vals, expect_keys, expect_vals, std::move(agg1), force_use_sort_impl::YES);
 }
 // clang-format on
+
+template <typename T>
+struct FixedPointTestBothReps : public cudf::test::BaseFixture {
+};
+
+TYPED_TEST_CASE(FixedPointTestBothReps, cudf::test::FixedPointTypes);
+
+TYPED_TEST(FixedPointTestBothReps, GroupByCount)
+{
+  using namespace numeric;
+  using decimalXX  = TypeParam;
+  using RepType    = cudf::device_storage_type_t<decimalXX>;
+  using fp_wrapper = cudf::test::fixed_point_column_wrapper<RepType>;
+
+  using K = int32_t;
+  using V = decimalXX;
+  using R = cudf::detail::target_type_t<V, aggregation::COUNT_VALID>;
+
+  auto const scale = scale_type{-1};
+  auto const keys  = fixed_width_column_wrapper<K>{1, 2, 3, 1, 2, 2, 1, 3, 3, 2};
+  auto const vals  = fp_wrapper{{0, 1, 2, 3, 4, 5, 6, 7, 8, 9}, scale};
+
+  auto const expect_keys = fixed_width_column_wrapper<K>{1, 2, 3};
+  auto const expect_vals = fixed_width_column_wrapper<R, int>{3, 4, 3};
+
+  auto agg = cudf::make_count_aggregation();
+  test_single_agg(keys, vals, expect_keys, expect_vals, std::move(agg));
+
+  auto agg1 = cudf::make_count_aggregation();
+  test_single_agg(keys, vals, expect_keys, expect_vals, std::move(agg1), force_use_sort_impl::YES);
+
+  auto agg2 = cudf::make_count_aggregation(null_policy::INCLUDE);
+  test_single_agg(keys, vals, expect_keys, expect_vals, std::move(agg2));
+}
+
+TYPED_TEST(FixedPointTestBothReps, GroupBySumProductMinMaxDecimalAsValue)
+{
+  using namespace numeric;
+  using decimalXX    = TypeParam;
+  using RepType      = cudf::device_storage_type_t<decimalXX>;
+  using fp_wrapper   = cudf::test::fixed_point_column_wrapper<RepType>;
+  using fp64_wrapper = cudf::test::fixed_point_column_wrapper<int64_t>;
+  using K            = int32_t;
+
+  for (auto const i : {2, 1, 0, -1, -2}) {
+    auto const scale = scale_type{i};
+    auto const keys  = fixed_width_column_wrapper<K>{1, 2, 3, 1, 2, 2, 1, 3, 3, 2};
+    auto const vals  = fp_wrapper{{0, 1, 2, 3, 4, 5, 6, 7, 8, 9}, scale};
+
+    auto const expect_keys = fixed_width_column_wrapper<K>{1, 2, 3};
+
+    auto const expect_vals_sum = fp64_wrapper{{9, 19, 17}, scale};
+    auto const expect_vals_min = fp_wrapper{{0, 1, 2}, scale};
+    auto const expect_vals_max = fp_wrapper{{6, 9, 8}, scale};
+
+    auto agg1 = cudf::make_sum_aggregation();
+    test_single_agg(
+      keys, vals, expect_keys, expect_vals_sum, std::move(agg1), force_use_sort_impl::YES);
+
+    auto agg2 = cudf::make_min_aggregation();
+    test_single_agg(
+      keys, vals, expect_keys, expect_vals_min, std::move(agg2), force_use_sort_impl::YES);
+
+    auto agg3 = cudf::make_max_aggregation();
+    test_single_agg(
+      keys, vals, expect_keys, expect_vals_max, std::move(agg3), force_use_sort_impl::YES);
+
+    auto agg4 = cudf::make_product_aggregation();
+    EXPECT_THROW(
+      test_single_agg(keys, vals, expect_keys, {}, std::move(agg4), force_use_sort_impl::YES),
+      cudf::logic_error);
+  }
+}
+
+TYPED_TEST(FixedPointTestBothReps, GroupBySumProductMinMaxDecimalAsValueAndKey)
+{
+  using namespace numeric;
+  using decimalXX    = TypeParam;
+  using RepType      = cudf::device_storage_type_t<decimalXX>;
+  using fp_wrapper   = cudf::test::fixed_point_column_wrapper<RepType>;
+  using fp64_wrapper = cudf::test::fixed_point_column_wrapper<int64_t>;
+
+  for (auto const i : {2, 1, 0, -1, -2}) {
+    auto const scale = scale_type{i};
+    auto const keys  = fp_wrapper{{1, 2, 3, 1, 2, 2, 1, 3, 3, 2}, scale};
+    auto const vals  = fp_wrapper{{0, 1, 2, 3, 4, 5, 6, 7, 8, 9}, scale};
+
+    auto const expect_keys = fp_wrapper{{1, 2, 3}, scale};
+
+    auto const expect_vals_sum = fp64_wrapper{{9, 19, 17}, scale};
+    auto const expect_vals_min = fp_wrapper{{0, 1, 2}, scale};
+    auto const expect_vals_max = fp_wrapper{{6, 9, 8}, scale};
+
+    auto agg1 = cudf::make_sum_aggregation();
+    test_single_agg(
+      keys, vals, expect_keys, expect_vals_sum, std::move(agg1), force_use_sort_impl::YES);
+
+    auto agg2 = cudf::make_min_aggregation();
+    test_single_agg(
+      keys, vals, expect_keys, expect_vals_min, std::move(agg2), force_use_sort_impl::YES);
+
+    auto agg3 = cudf::make_max_aggregation();
+    test_single_agg(
+      keys, vals, expect_keys, expect_vals_max, std::move(agg3), force_use_sort_impl::YES);
+
+    auto agg4 = cudf::make_product_aggregation();
+    EXPECT_THROW(
+      test_single_agg(keys, vals, expect_keys, {}, std::move(agg4), force_use_sort_impl::YES),
+      cudf::logic_error);
+  }
+}
 
 struct groupby_dictionary_count_test : public cudf::test::BaseFixture {
 };

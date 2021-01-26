@@ -374,7 +374,7 @@ class RollingGroupby(Rolling):
         self._group_keys = groupby.grouping.keys.take(sort_order)
         obj = groupby.obj.take(sort_order)
 
-        gb_size = groupby.size()
+        gb_size = groupby.size().sort_index()
         self._group_starts = (
             gb_size.cumsum().shift(1).fillna(0).repeat(gb_size)
         )
