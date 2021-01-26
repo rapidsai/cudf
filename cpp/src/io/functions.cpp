@@ -426,10 +426,10 @@ std::unique_ptr<std::vector<uint8_t>> write_parquet(parquet_writer_options const
                                                     rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  namespace detail_pq = cudf::io::detail::parquet;
+  namespace io_detail = cudf::io::detail;
 
   auto writer = make_writer<detail_parquet::writer>(
-    options.get_sink(), options, detail_pq::SingleWriteMode::YES, mr, rmm::cuda_stream_default);
+    options.get_sink(), options, io_detail::SingleWriteMode::YES, mr, rmm::cuda_stream_default);
 
   writer->write(options.get_table());
   return writer->close(options.get_column_chunks_file_path());
@@ -441,9 +441,9 @@ std::unique_ptr<std::vector<uint8_t>> write_parquet(parquet_writer_options const
 parquet_chunked_writer::parquet_chunked_writer(chunked_parquet_writer_options const& op,
                                                rmm::mr::device_memory_resource* mr)
 {
-  namespace detail_pq = cudf::io::detail::parquet;
+  namespace io_detail = cudf::io::detail;
   writer              = make_writer<detail_parquet::writer>(
-    op.get_sink(), op, detail_pq::SingleWriteMode::NO, mr, rmm::cuda_stream_default);
+    op.get_sink(), op, io_detail::SingleWriteMode::NO, mr, rmm::cuda_stream_default);
 }
 
 /**

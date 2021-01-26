@@ -1,7 +1,8 @@
-# Copyright (c) 2018-2020, NVIDIA CORPORATION.
+# Copyright (c) 2018-2021, NVIDIA CORPORATION.
 
 from __future__ import division
 
+import decimal
 import operator
 import random
 from itertools import product
@@ -1567,3 +1568,161 @@ def test_binops_with_NA_consistent(dtype, op):
         assert (result == expect_all).all()
     elif dtype in DATETIME_TYPES & TIMEDELTA_TYPES:
         assert result._column.null_count == len(data)
+
+
+@pytest.mark.parametrize(
+    "args",
+    [
+        (
+            operator.add,
+            ["1.5", "2.0"],
+            cudf.Decimal64Dtype(scale=2, precision=2),
+            ["1.5", "2.0"],
+            cudf.Decimal64Dtype(scale=2, precision=2),
+            ["3.0", "4.0"],
+            cudf.Decimal64Dtype(scale=2, precision=3),
+        ),
+        (
+            operator.add,
+            ["1.5", "2.0"],
+            cudf.Decimal64Dtype(scale=2, precision=2),
+            ["2.25", "1.005"],
+            cudf.Decimal64Dtype(scale=3, precision=4),
+            ["3.75", "3.005"],
+            cudf.Decimal64Dtype(scale=3, precision=5),
+        ),
+        (
+            operator.add,
+            ["100", "200"],
+            cudf.Decimal64Dtype(scale=-2, precision=3),
+            ["0.1", "0.2"],
+            cudf.Decimal64Dtype(scale=3, precision=4),
+            ["100.1", "200.2"],
+            cudf.Decimal64Dtype(scale=3, precision=9),
+        ),
+        (
+            operator.sub,
+            ["1.5", "2.0"],
+            cudf.Decimal64Dtype(scale=2, precision=2),
+            ["2.25", "1.005"],
+            cudf.Decimal64Dtype(scale=3, precision=4),
+            ["-0.75", "0.995"],
+            cudf.Decimal64Dtype(scale=3, precision=5),
+        ),
+        (
+            operator.sub,
+            ["1.5", "2.0"],
+            cudf.Decimal64Dtype(scale=2, precision=2),
+            ["2.25", "1.005"],
+            cudf.Decimal64Dtype(scale=3, precision=4),
+            ["-0.75", "0.995"],
+            cudf.Decimal64Dtype(scale=3, precision=5),
+        ),
+        (
+            operator.sub,
+            ["100", "200"],
+            cudf.Decimal64Dtype(scale=-2, precision=3),
+            ["0.1", "0.2"],
+            cudf.Decimal64Dtype(scale=3, precision=4),
+            ["99.9", "199.8"],
+            cudf.Decimal64Dtype(scale=3, precision=9),
+        ),
+        (
+            operator.mul,
+            ["1.5", "2.0"],
+            cudf.Decimal64Dtype(scale=2, precision=2),
+            ["1.5", "3.0"],
+            cudf.Decimal64Dtype(scale=3, precision=4),
+            ["2.25", "6.0"],
+            cudf.Decimal64Dtype(scale=5, precision=7),
+        ),
+        (
+            operator.mul,
+            ["100", "200"],
+            cudf.Decimal64Dtype(scale=-2, precision=3),
+            ["0.1", "0.2"],
+            cudf.Decimal64Dtype(scale=3, precision=4),
+            ["10.0", "40.0"],
+            cudf.Decimal64Dtype(scale=1, precision=8),
+        ),
+        (
+            operator.mul,
+            ["1000", "2000"],
+            cudf.Decimal64Dtype(scale=-3, precision=4),
+            ["0.343", "0.500"],
+            cudf.Decimal64Dtype(scale=3, precision=3),
+            ["343.0", "1000.0"],
+            cudf.Decimal64Dtype(scale=0, precision=8),
+        ),
+        (
+            operator.add,
+            ["1.5", None, "2.0"],
+            cudf.Decimal64Dtype(scale=2, precision=2),
+            ["1.5", None, "2.0"],
+            cudf.Decimal64Dtype(scale=2, precision=2),
+            ["3.0", None, "4.0"],
+            cudf.Decimal64Dtype(scale=2, precision=3),
+        ),
+        (
+            operator.add,
+            ["1.5", None],
+            cudf.Decimal64Dtype(scale=2, precision=2),
+            ["2.25", "1.005"],
+            cudf.Decimal64Dtype(scale=3, precision=4),
+            ["3.75", None],
+            cudf.Decimal64Dtype(scale=3, precision=5),
+        ),
+        (
+            operator.sub,
+            ["1.5", None],
+            cudf.Decimal64Dtype(scale=2, precision=2),
+            ["2.25", None],
+            cudf.Decimal64Dtype(scale=3, precision=4),
+            ["-0.75", None],
+            cudf.Decimal64Dtype(scale=3, precision=5),
+        ),
+        (
+            operator.sub,
+            ["1.5", "2.0"],
+            cudf.Decimal64Dtype(scale=2, precision=2),
+            ["2.25", None],
+            cudf.Decimal64Dtype(scale=3, precision=4),
+            ["-0.75", None],
+            cudf.Decimal64Dtype(scale=3, precision=5),
+        ),
+        (
+            operator.mul,
+            ["1.5", None],
+            cudf.Decimal64Dtype(scale=2, precision=2),
+            ["1.5", None],
+            cudf.Decimal64Dtype(scale=3, precision=4),
+            ["2.25", None],
+            cudf.Decimal64Dtype(scale=5, precision=7),
+        ),
+        (
+            operator.mul,
+            ["100", "200"],
+            cudf.Decimal64Dtype(scale=-2, precision=3),
+            ["0.1", None],
+            cudf.Decimal64Dtype(scale=3, precision=4),
+            ["10.0", None],
+            cudf.Decimal64Dtype(scale=1, precision=8),
+        ),
+    ],
+)
+def test_binops_decimal(args):
+    op, lhs, l_dtype, rhs, r_dtype, expect, expect_dtype = args
+
+    def decimal_series(input, dtype):
+        return cudf.Series(
+            [x if x is None else decimal.Decimal(x) for x in input],
+            dtype=dtype,
+        )
+
+    a = decimal_series(lhs, l_dtype)
+    b = decimal_series(rhs, r_dtype)
+    expect = decimal_series(expect, expect_dtype)
+
+    got = op(a, b)
+    assert expect.dtype == got.dtype
+    utils.assert_eq(expect, got)

@@ -19,7 +19,6 @@
 #include <cudf/fixed_point/fixed_point.hpp>
 #include <cudf/io/data_sink.hpp>
 #include <cudf/io/parquet.hpp>
-#include <cudf/strings/string_view.cuh>
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/table/table.hpp>
 #include <cudf/table/table_view.hpp>

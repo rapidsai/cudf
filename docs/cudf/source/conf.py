@@ -21,6 +21,7 @@
 #
 import os
 import sys
+from recommonmark.transform import AutoStructify
 
 sys.path.insert(0, os.path.abspath("../.."))
 
@@ -200,8 +201,15 @@ numpydoc_class_members_toctree = False
 
 autoclass_content = "init"
 
+# Config AutoStructify
+github_doc_root = 'https://github.com/rtfd/recommonmark/tree/master/doc/'
 
 def setup(app):
     app.add_js_file("copybutton_pydocs.js")
     app.add_css_file("params.css")
     app.add_css_file("https://docs.rapids.ai/assets/css/custom.css")
+    app.add_config_value('recommonmark_config', {
+            'url_resolver': lambda url: github_doc_root + url,
+            'auto_toc_tree_section': 'Contents',
+            }, True)
+    app.add_transform(AutoStructify)

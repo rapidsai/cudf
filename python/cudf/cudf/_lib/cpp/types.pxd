@@ -47,32 +47,34 @@ cdef extern from "cudf/types.hpp" namespace "cudf" nogil:
         UNEQUAL "cudf::null_equality::UNEQUAL"
 
     ctypedef enum type_id "cudf::type_id":
-        EMPTY "cudf::type_id::EMPTY"
-        INT8  "cudf::type_id::INT8"
-        INT16 "cudf::type_id::INT16"
-        INT32 "cudf::type_id::INT32"
-        INT64 "cudf::type_id::INT64"
-        UINT8 "cudf::type_id::UINT8"
-        UINT16 "cudf::type_id::UINT16"
-        UINT32 "cudf::type_id::UINT32"
-        UINT64 "cudf::type_id::UINT64"
-        FLOAT32 "cudf::type_id::FLOAT32"
-        FLOAT64 "cudf::type_id::FLOAT64"
-        BOOL8 "cudf::type_id::BOOL8"
-        TIMESTAMP_DAYS "cudf::type_id::TIMESTAMP_DAYS"
-        TIMESTAMP_SECONDS "cudf::type_id::TIMESTAMP_SECONDS"
+        EMPTY                  "cudf::type_id::EMPTY"
+        INT8                   "cudf::type_id::INT8"
+        INT16                  "cudf::type_id::INT16"
+        INT32                  "cudf::type_id::INT32"
+        INT64                  "cudf::type_id::INT64"
+        UINT8                  "cudf::type_id::UINT8"
+        UINT16                 "cudf::type_id::UINT16"
+        UINT32                 "cudf::type_id::UINT32"
+        UINT64                 "cudf::type_id::UINT64"
+        FLOAT32                "cudf::type_id::FLOAT32"
+        FLOAT64                "cudf::type_id::FLOAT64"
+        BOOL8                  "cudf::type_id::BOOL8"
+        TIMESTAMP_DAYS         "cudf::type_id::TIMESTAMP_DAYS"
+        TIMESTAMP_SECONDS      "cudf::type_id::TIMESTAMP_SECONDS"
         TIMESTAMP_MILLISECONDS "cudf::type_id::TIMESTAMP_MILLISECONDS"
         TIMESTAMP_MICROSECONDS "cudf::type_id::TIMESTAMP_MICROSECONDS"
-        TIMESTAMP_NANOSECONDS "cudf::type_id::TIMESTAMP_NANOSECONDS"
-        DICTIONARY32 "cudf::type_id::DICTIONARY32"
-        STRING "cudf::type_id::STRING"
-        LIST "cudf::type_id::LIST"
-        STRUCT "cudf::type_id::STRUCT"
-        NUM_TYPE_IDS "cudf::type_id::NUM_TYPE_IDS"
-        DURATION_SECONDS "cudf::type_id::DURATION_SECONDS"
-        DURATION_MILLISECONDS "cudf::type_id::DURATION_MILLISECONDS"
-        DURATION_MICROSECONDS "cudf::type_id::DURATION_MICROSECONDS"
-        DURATION_NANOSECONDS "cudf::type_id::DURATION_NANOSECONDS"
+        TIMESTAMP_NANOSECONDS  "cudf::type_id::TIMESTAMP_NANOSECONDS"
+        DICTIONARY32           "cudf::type_id::DICTIONARY32"
+        STRING                 "cudf::type_id::STRING"
+        LIST                   "cudf::type_id::LIST"
+        STRUCT                 "cudf::type_id::STRUCT"
+        NUM_TYPE_IDS           "cudf::type_id::NUM_TYPE_IDS"
+        DURATION_SECONDS       "cudf::type_id::DURATION_SECONDS"
+        DURATION_MILLISECONDS  "cudf::type_id::DURATION_MILLISECONDS"
+        DURATION_MICROSECONDS  "cudf::type_id::DURATION_MICROSECONDS"
+        DURATION_NANOSECONDS   "cudf::type_id::DURATION_NANOSECONDS"
+        DECIMAL32              "cudf::type_id::DECIMAL32"
+        DECIMAL64              "cudf::type_id::DECIMAL64"
 
     ctypedef enum hash_id "cudf::hash_id":
         HASH_IDENTITY "cudf::hash_id::HASH_IDENTITY"
@@ -85,7 +87,9 @@ cdef extern from "cudf/types.hpp" namespace "cudf" nogil:
         data_type() except +
         data_type(const data_type&) except +
         data_type(type_id id) except +
+        data_type(type_id id, int32_t scale) except +
         type_id id() except +
+        int32_t scale() except +
 
 cdef extern from "cudf/types.hpp" namespace "cudf" nogil:
     ctypedef enum interpolation:
