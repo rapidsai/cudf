@@ -8,7 +8,6 @@ import numpy as np
 import pandas as pd
 
 import cudf
-from cudf.core.column import ColumnBase
 from cudf.utils.dtypes import is_categorical_dtype
 
 
@@ -92,7 +91,7 @@ def assert_column_equal(
     check_datetimelike_compat=False,
     check_categorical=True,
     check_category_order=True,
-    obj=ColumnBase,
+    obj="ColumnBase",
 ):
     """
     Check that left and right columns are equal
