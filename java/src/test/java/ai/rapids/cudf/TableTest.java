@@ -2466,9 +2466,9 @@ public class TableTest extends CudfTestBase {
     try (Table raw = new Table.TestBuilder()
              .column( 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1) // GBY Key
              .column( 1, 1, 1, 1, 2, 2, 2, 2, 3, 3, 3, 3) // GBY Key
-             .column( 1, 1, 2, 2, 3, 3, 4, 4, 5, 5, 6, 6) // OBY Key
+             .column( 1, 2, 3, 4, 1, 2, 3, 4, 5, 6, 7, 8) // OBY Key
              .column( 7, 5, 1, 9, 7, 9, 8, 2, 8, 0, 6, 6) // Agg Column of INT32
-             .column(nestedType, /* Agg Column of Struct */
+             .column(nestedType,                          // Agg Column of Struct
                  new StructData(1, "s1"), new StructData(2, "s2"), new StructData(3, "s3"),
                  new StructData(4, "s4"), new StructData(11, "s11"), new StructData(22, "s22"),
                  new StructData(33, "s33"), new StructData(44, "s44"), new StructData(111, "s111"),
