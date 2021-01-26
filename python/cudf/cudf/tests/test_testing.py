@@ -313,6 +313,7 @@ def test_range_index_and_int_index_eqaulity(index, exact):
             pd.Timestamp(np.datetime64(123456, "ns")),
         ),
         ("int64", np.dtype("int64")),
+        (np.nan, np.nan),
     ],
 )
 def test_basic_scalar_eqaulity(left, right):
