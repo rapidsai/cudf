@@ -458,7 +458,6 @@ std::unique_ptr<column> fixed_point_binary_operation(scalar const& lhs,
       auto const scalar       = make_fixed_point_scalar<decimal32>(scaled_value, unused_scale);
       binops::jit::binary_operation(out_view, *scalar, rhs, binary_operator::DIV, stream);
       return out;
-
     } else {
       auto const factor       = numeric::detail::ipow<int64_t, Radix::BASE_10>(std::abs(diff));
       auto const val          = static_cast<fixed_point_scalar<decimal64> const&>(lhs).value();

@@ -2403,6 +2403,39 @@ TYPED_TEST(FixedPointTestBothReps, FixedPointBinaryOpTrueDiv6)
   }
 }
 
+TYPED_TEST(FixedPointTestBothReps, FixedPointBinaryOpTrueDiv7)
+{
+  using namespace numeric;
+  using decimalXX = TypeParam;
+  using RepType   = device_storage_type_t<decimalXX>;
+
+  auto const lhs = make_fixed_point_scalar<decimalXX>(12000, scale_type{-1});
+  auto const rhs = fp_wrapper<RepType>{{100, 200, 300, 500, 600, 800, 1200, 1300}, scale_type{-2}};
+
+  auto const expected = fp_wrapper<RepType>{{12, 6, 4, 2, 2, 1, 1, 0}, scale_type{2}};
+
+  auto const type   = data_type{type_to_id<decimalXX>(), 2};
+  auto const result = cudf::binary_operation(*lhs, rhs, cudf::binary_operator::TRUE_DIV, type);
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
+}
+
+// TYPED_TEST(FixedPointTestBothReps, FixedPointBinaryOpTrueDiv8)
+// {
+//   using namespace numeric;
+//   using decimalXX = TypeParam;
+//   using RepType   = device_storage_type_t<decimalXX>;
+
+//   auto const lhs      = fp_wrapper<RepType>{{4000, 6000, 80000}, scale_type{-1}};
+//   auto const rhs      = make_fixed_point_scalar<decimalXX>(500, scale_type{-2});
+//   auto const expected = fp_wrapper<RepType>{{0, 1, 40}, scale_type{2}};
+
+//   auto const type   = data_type{type_to_id<decimalXX>(), 2};
+//   auto const result = cudf::binary_operation(lhs, *rhs, cudf::binary_operator::TRUE_DIV, type);
+
+//   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
+// }
+
 }  // namespace binop
 }  // namespace test
 }  // namespace cudf
