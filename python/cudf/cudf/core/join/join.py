@@ -470,6 +470,20 @@ class Merge(object):
                 # neither ordered, categories different
                 return major
 
+        elif how == 'outer':
+            if (ltype.ordered != rtype.ordered) or (ltype.ordered and rtype.ordered):
+                # One or both ordered
+                raise TypeError(
+                    "Outer join may only proceed when neither"
+                    " categorical variable is ordered"
+                )
+            else:
+                # neither ordered, so categories must be different
+                new_cats = cudf.concat([ltype.categories, rtype.categories]).unique()
+                return cudf.CategoricalDtype(categories=new_cats, ordered=False)
+            
+
+                
 
     def _input_to_libcudf_castrules_one_cat(self, lcol, rcol, how):
         return 
@@ -567,8 +581,10 @@ class Merge(object):
             dtype_r, CategoricalDtype
         ):
             if pd.api.types.is_dtype_equal(dtype_l, dtype_r):
-                if how in {"inner", "left"}:
+                if how == "inner":
                     return dtype_l
+            if how == 'left':
+                return dtype_l
             if how == 'right':
                 return dtype_r
             elif how == 'outer':

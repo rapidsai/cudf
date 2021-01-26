@@ -1350,13 +1350,12 @@ def test_categorical_typecast_outer():
     # unequal categories, neither ordered -> superset
     left = make_categorical_dataframe([1,2,3], ordered=False)
     right = make_categorical_dataframe([2,3,4], ordered=False)
-
     result = left.merge(right, on='key', how='outer')
 
     expect_dtype = CategoricalDtype(categories=[1,2,3,4], ordered=False)
     expect_data = cudf.Series([1,2,3,4], dtype=expect_dtype, name='key')
 
-    assert_eq(expect_data, result['key'])
+    assert_eq(expect_data, result['key'].sort_values().reset_index(drop=True))
 
     # unequal categories, one ordered -> error
     left = make_categorical_dataframe([1,2,3], ordered=False)
