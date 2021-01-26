@@ -3,6 +3,8 @@
 from cudf.core.dtypes import CategoricalDtype
 import pandas as pd
 import cudf
+import numpy as np
+import warnings
 
 def _input_to_libcudf_castrules_both_cat(lcol, rcol, how):
     '''
@@ -71,15 +73,12 @@ def _input_to_libcudf_castrules_both_cat(lcol, rcol, how):
         # two ways to fail:
         # 1. Equal categories, unequal ordering
         # 2. Unequal categories, either ordered
-        try:
-            if ltype.categories == rtype.categories: 
-                if ltype.ordered != rtype.ordered:
-                    raise TypeError(
-                        "Inner merge between an ordered and an"
-                        "unordered categorical variable is ambiguous."
-                    )
-        except:
-            breakpoint()
+        if len(ltype.categories) == len(rtype.categories) and ltype.categories == rtype.categories: 
+            if ltype.ordered != rtype.ordered:
+                raise TypeError(
+                    "Inner merge between an ordered and an"
+                    "unordered categorical variable is ambiguous."
+                )
         else:
             if ltype.ordered or rtype.ordered:
                 raise TypeError(
@@ -90,7 +89,7 @@ def _input_to_libcudf_castrules_both_cat(lcol, rcol, how):
 
         if not (ltype.ordered or rtype.ordered):
             # neiter ordered, so categories must be different
-            return input_to_libcudf_casting_rules(
+            return _input_to_libcudf_casting_rules_any(
                 ltype.categories,
                 rtype.categories,
                 how)
@@ -193,7 +192,7 @@ def _input_to_libcudf_casting_rules_any(lcol, rcol, how):
     elif how == "left":
         check_col = rcol.fillna(0)
         if not check_col.can_cast_safely(dtype_l):
-            libcudf_join_type = input_to_libcudf_casting_rules(
+            libcudf_join_type = _input_to_libcudf_casting_rules_any(
                 lcol, rcol, "inner"
             )
             warnings.warn(
@@ -206,7 +205,7 @@ def _input_to_libcudf_casting_rules_any(lcol, rcol, how):
     elif how == "right":
         check_col = lcol.fillna(0)
         if not check_col.can_cast_safely(dtype_r):
-            libcudf_join_type = input_to_libcudf_casting_rules(
+            libcudf_join_type = input_to_libcudf_casting_rules_any(
                 lcol, rcol, "inner"
             )
             warnings.warn(
