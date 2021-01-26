@@ -174,6 +174,115 @@ TYPED_TEST(TypedCollectListTest, RollingWindowHonoursMinPeriods)
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected_result_2->view(), result_2->view());
 }
 
+TEST_F(CollectListTest, RollingWindowHonoursMinPeriodsOnStrings)
+{
+  // Test that when the number of observations is fewer than min_periods,
+  // the result is null.
+
+  using namespace cudf;
+  using namespace cudf::test;
+
+  auto const input_column = strings_column_wrapper{"0", "1", "2", "3", "4", "5"};
+  auto const num_elements = static_cast<column_view>(input_column).size();
+
+  auto preceding   = 2;
+  auto following   = 1;
+  auto min_periods = 3;
+  auto const result =
+    rolling_window(input_column, preceding, following, min_periods, make_collect_aggregation());
+
+  auto const expected_result = lists_column_wrapper<string_view>{
+    {{}, {"0", "1", "2"}, {"1", "2", "3"}, {"2", "3", "4"}, {"3", "4", "5"}, {}},
+    make_counting_transform_iterator(0, [num_elements](auto i) {
+      return i != 0 && i != (num_elements - 1);
+    })}.release();
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected_result->view(), result->view());
+
+  preceding   = 2;
+  following   = 2;
+  min_periods = 4;
+
+  auto result_2 =
+    rolling_window(input_column, preceding, following, min_periods, make_collect_aggregation());
+  auto expected_result_2 = lists_column_wrapper<string_view>{
+    {{}, {"0", "1", "2", "3"}, {"1", "2", "3", "4"}, {"2", "3", "4", "5"}, {}, {}},
+    make_counting_transform_iterator(0, [num_elements](auto i) {
+      return i != 0 && i < 4;
+    })}.release();
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected_result_2->view(), result_2->view());
+}
+
+TEST_F(CollectListTest, RollingWindowHonoursMinPeriodsWithDecimal)
+{
+  // Test that when the number of observations is fewer than min_periods,
+  // the result is null.
+
+  using namespace cudf;
+  using namespace cudf::test;
+
+  auto const input_iter = make_counting_transform_iterator(0, thrust::identity<int32_t>{});
+  auto const input_column =
+    fixed_point_column_wrapper<int32_t>{input_iter, input_iter + 6, numeric::scale_type{0}};
+
+  {
+    // One result row at each end should be null.
+    auto preceding   = 2;
+    auto following   = 1;
+    auto min_periods = 3;
+    auto const result =
+      rolling_window(input_column, preceding, following, min_periods, make_collect_aggregation());
+
+    auto expected_result_child_values = std::vector<int32_t>{0, 1, 2, 1, 2, 3, 2, 3, 4, 3, 4, 5};
+    auto expected_result_child =
+      fixed_point_column_wrapper<int32_t>{expected_result_child_values.begin(),
+                                          expected_result_child_values.end(),
+                                          numeric::scale_type{0}};
+    auto expected_offsets  = fixed_width_column_wrapper<size_type>{0, 0, 3, 6, 9, 12, 12}.release();
+    auto expected_num_rows = expected_offsets->size() - 1;
+    auto null_mask_iter    = make_counting_transform_iterator(
+      size_type{0}, [expected_num_rows](auto i) { return i != 0 && i != (expected_num_rows - 1); });
+
+    auto expected_result = make_lists_column(
+      expected_num_rows,
+      std::move(expected_offsets),
+      expected_result_child.release(),
+      2,
+      cudf::test::detail::make_null_mask(null_mask_iter, null_mask_iter + expected_num_rows));
+
+    CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected_result->view(), result->view());
+  }
+
+  {
+    // First result row, and the last two result rows should be null.
+    auto preceding   = 2;
+    auto following   = 2;
+    auto min_periods = 4;
+    auto const result =
+      rolling_window(input_column, preceding, following, min_periods, make_collect_aggregation());
+
+    auto expected_result_child_values = std::vector<int32_t>{0, 1, 2, 3, 1, 2, 3, 4, 2, 3, 4, 5};
+    auto expected_result_child =
+      fixed_point_column_wrapper<int32_t>{expected_result_child_values.begin(),
+                                          expected_result_child_values.end(),
+                                          numeric::scale_type{0}};
+    auto expected_offsets = fixed_width_column_wrapper<size_type>{0, 0, 4, 8, 12, 12, 12}.release();
+    auto expected_num_rows = expected_offsets->size() - 1;
+    auto null_mask_iter    = make_counting_transform_iterator(
+      size_type{0}, [expected_num_rows](auto i) { return i > 0 && i < 4; });
+
+    auto expected_result = make_lists_column(
+      expected_num_rows,
+      std::move(expected_offsets),
+      expected_result_child.release(),
+      3,
+      cudf::test::detail::make_null_mask(null_mask_iter, null_mask_iter + expected_num_rows));
+
+    CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected_result->view(), result->view());
+  }
+}
+
 TYPED_TEST(TypedCollectListTest, BasicGroupedRollingWindow)
 {
   using namespace cudf;
