@@ -49,6 +49,8 @@ def parquet_reader_columns(
         parquet_buffer,
         columns=columns,
         use_pandas_metadata=use_pandas_metadata,
+        skiprows=skiprows,
+        num_rows=num_rows,
     )
 
     compare_dataframe(gdf, pdf)
