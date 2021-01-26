@@ -5,7 +5,6 @@ from __future__ import division, print_function
 import datetime
 import inspect
 from itertools import product
-from typing import Any, List
 
 import numpy as np
 import pandas as pd
@@ -16,7 +15,7 @@ from cudf.core import DataFrame
 from cudf.tests.utils import assert_eq
 from cudf.utils import queryutils
 
-_params_query_parser = []  # type: List[Any]
+_params_query_parser = []
 _params_query_parser.append(("a > @b", ("a", "__CUDF_ENVREF__b")))
 _params_query_parser.append(("(a + b) <= @c", ("a", "b", "__CUDF_ENVREF__c")))
 _params_query_parser.append(("a > b if a > 0 else b > a", ("a", "b")))

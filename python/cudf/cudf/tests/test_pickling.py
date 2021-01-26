@@ -14,7 +14,7 @@ if sys.version_info < (3, 8):
     try:
         import pickle5 as pickle
     except ImportError:
-        import pickle  # type: ignore
+        import pickle
 else:
     import pickle
 

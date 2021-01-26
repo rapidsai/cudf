@@ -73,7 +73,7 @@ def test_melt(nulls, num_id_vars, num_value_vars, num_rows, dtype):
 @pytest.mark.parametrize(
     "dtype",
     list(NUMERIC_TYPES + DATETIME_TYPES)
-    + [pytest.param("str", marks=pytest.mark.xfail())],  # type: ignore
+    + [pytest.param("str", marks=pytest.mark.xfail())],
 )
 @pytest.mark.parametrize("nulls", ["none", "some"])
 def test_df_stack(nulls, num_cols, num_rows, dtype):
