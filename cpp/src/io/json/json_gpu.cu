@@ -61,14 +61,14 @@ namespace {
 __device__ std::pair<char const *, char const *> limit_range_to_brackets(char const *begin,
                                                                          char const *end)
 {
-  begin = thrust::find_if(
-    thrust::seq, begin, end, [] __device__(auto c) { return c == '[' || c == '{'; });
-  end = thrust::find_if(thrust::seq,
-                        thrust::make_reverse_iterator(end),
-                        thrust::make_reverse_iterator(++begin),
-                        [](auto c) { return c == ']' || c == '}'; })
-          .base();
-  return {begin, --end};
+  auto const data_begin = thrust::next(thrust::find_if(
+    thrust::seq, begin, end, [] __device__(auto c) { return c == '[' || c == '{'; }));
+  auto const data_end   = thrust::next(thrust::find_if(thrust::seq,
+                                                     thrust::make_reverse_iterator(end),
+                                                     thrust::make_reverse_iterator(data_begin),
+                                                     [](auto c) { return c == ']' || c == '}'; }))
+                          .base();
+  return {data_begin, data_end};
 }
 
 /**
@@ -148,7 +148,7 @@ __inline__ __device__ cudf::timestamp_D decode_value(const char *begin,
                                                      const char *end,
                                                      parse_options_view const &opts)
 {
-  return cudf::timestamp_D{cudf::duration_D{parseDateFormat(begin, end, opts.dayfirst)}};
+  return cudf::timestamp_D{cudf::duration_D{to_date(begin, end, opts.dayfirst)}};
 }
 
 /**
@@ -165,7 +165,7 @@ __inline__ __device__ cudf::timestamp_s decode_value(const char *begin,
                                                      const char *end,
                                                      parse_options_view const &opts)
 {
-  auto milli = parseDateTimeFormat(begin, end, opts.dayfirst);
+  auto milli = to_date_time(begin, end, opts.dayfirst);
   return cudf::timestamp_s{cudf::duration_s{milli / 1000}};
 }
 
@@ -183,7 +183,7 @@ __inline__ __device__ cudf::timestamp_ms decode_value(const char *begin,
                                                       const char *end,
                                                       parse_options_view const &opts)
 {
-  auto milli = parseDateTimeFormat(begin, end, opts.dayfirst);
+  auto milli = to_date_time(begin, end, opts.dayfirst);
   return cudf::timestamp_ms{cudf::duration_ms{milli}};
 }
 
@@ -201,7 +201,7 @@ __inline__ __device__ cudf::timestamp_us decode_value(const char *begin,
                                                       const char *end,
                                                       parse_options_view const &opts)
 {
-  auto milli = parseDateTimeFormat(begin, end, opts.dayfirst);
+  auto milli = to_date_time(begin, end, opts.dayfirst);
   return cudf::timestamp_us{cudf::duration_us{milli * 1000}};
 }
 
@@ -219,7 +219,7 @@ __inline__ __device__ cudf::timestamp_ns decode_value(const char *begin,
                                                       const char *end,
                                                       parse_options_view const &opts)
 {
-  auto milli = parseDateTimeFormat(begin, end, opts.dayfirst);
+  auto milli = to_date_time(begin, end, opts.dayfirst);
   return cudf::timestamp_ns{cudf::duration_ns{milli * 1000000}};
 }
 
@@ -229,7 +229,7 @@ __inline__ __device__ cudf::timestamp_ns decode_value(const char *begin,
   __inline__ __device__ Type decode_value(                              \
     const char *begin, const char *end, parse_options_view const &opts) \
   {                                                                     \
-    return Type{parseTimeDeltaFormat<Type>(begin, 0, end - begin)};     \
+    return Type{to_time_delta<Type>(begin, end)};                       \
   }
 #endif
 DURATION_DECODE_VALUE(duration_D)
@@ -307,16 +307,12 @@ struct ConvertFunctor {
   {
     T &value{static_cast<T *>(output_column)[row]};
 
-    // Check for user-specified true/false values first, where the output is
-    // replaced with 1/0 respectively
     value = [&opts, end, begin]() -> T {
-      if (serialized_trie_contains(opts.trie_true, begin, end - begin)) {
-        return 1;
-      } else if (serialized_trie_contains(opts.trie_false, begin, end - begin)) {
-        return 0;
-      } else {
-        return decode_value<T>(begin, end - 1, opts);
-      }
+      // Check for user-specified true/false values
+      auto const len = static_cast<size_t>(end - begin);
+      if (serialized_trie_contains(opts.trie_true, {begin, len})) { return 1; }
+      if (serialized_trie_contains(opts.trie_false, {begin, len})) { return 0; }
+      return decode_value<T>(begin, end, opts);
     }();
 
     return true;
@@ -333,8 +329,9 @@ struct ConvertFunctor {
                                                       size_t row,
                                                       parse_options_view const &opts)
   {
-    auto &value{static_cast<T *>(out_buffer)[row]};
-    value = decode_value<T>(begin, end - 1, opts);
+    T const value                     = decode_value<T>(begin, end, opts);
+    static_cast<T *>(out_buffer)[row] = value;
+
     return !std::isnan(value);
   }
 
@@ -351,45 +348,11 @@ struct ConvertFunctor {
                                                       cudf::size_type row,
                                                       const parse_options_view &opts)
   {
-    T &value{static_cast<T *>(output_column)[row]};
-    value = decode_value<T>(begin, end - 1, opts);
+    static_cast<T *>(output_column)[row] = decode_value<T>(begin, end, opts);
 
     return true;
   }
 };
-
-/**
- * @brief Checks whether the given character is a whitespace character.
- *
- * @param[in] ch The character to check
- *
- * @return True if the input is whitespace, False otherwise
- */
-__inline__ __device__ bool is_whitespace(char ch) { return ch == '\t' || ch == ' '; }
-
-/**
- * @brief Adjusts the range to ignore starting/trailing whitespace and quotation characters.
- *
- * @param[in] begin Pointer to the first character in the parsing range
- * @param[in] end pointer to the first character after the parsing range
- * @param[in] quotechar The character used to denote quotes; '\0' if none
- *
- * @return Trimmed range
- */
-__inline__ __device__ std::pair<char const *, char const *> trim_whitespaces_quotes(
-  char const *begin, char const *end, char quotechar = '\0')
-{
-  auto not_whitespace = [] __device__(auto c) { return !is_whitespace(c); };
-
-  begin = thrust::find_if(thrust::seq, begin, end, not_whitespace);
-  end   = thrust::find_if(thrust::seq,
-                        thrust::make_reverse_iterator(end),
-                        thrust::make_reverse_iterator(begin),
-                        not_whitespace)
-          .base();
-
-  return {(*begin == quotechar) ? ++begin : begin, (*(end - 1) == quotechar) ? end - 1 : end};
-}
 
 /**
  * @brief Returns true is the input character is a valid digit.
@@ -550,7 +513,7 @@ __global__ void convert_data_to_columns_kernel(parse_options_view opts,
     current = desc.value_end + 1;
 
     // Empty fields are not legal values
-    if (!serialized_trie_contains(opts.trie_na, desc.value_begin, value_len)) {
+    if (!serialized_trie_contains(opts.trie_na, {desc.value_begin, value_len})) {
       // Type dispatcher does not handle strings
       if (column_types[desc.column].id() == type_id::STRING) {
         auto str_list           = static_cast<string_pair *>(output_columns[desc.column]);
@@ -622,7 +585,7 @@ __global__ void detect_data_types_kernel(
     current = desc.value_end + 1;
 
     // Checking if the field is empty/valid
-    if (serialized_trie_contains(opts.trie_na, desc.value_begin, value_len)) {
+    if (serialized_trie_contains(opts.trie_na, {desc.value_begin, value_len})) {
       // Increase the null count for array rows, where the null count is initialized to zero.
       if (!are_rows_objects) { atomicAdd(&column_infos[desc.column].null_count, 1); }
       continue;
@@ -678,8 +641,8 @@ __global__ void detect_data_types_kernel(
     }
     // Off by one if they are a hexadecimal number
     if (maybe_hex) { --int_req_number_cnt; }
-    if (serialized_trie_contains(opts.trie_true, desc.value_begin, value_len) ||
-        serialized_trie_contains(opts.trie_false, desc.value_begin, value_len)) {
+    if (serialized_trie_contains(opts.trie_true, {desc.value_begin, value_len}) ||
+        serialized_trie_contains(opts.trie_false, {desc.value_begin, value_len})) {
       atomicAdd(&column_infos[desc.column].bool_count, 1);
     } else if (digit_count == int_req_number_cnt) {
       bool is_negative       = (*desc.value_begin == '-');

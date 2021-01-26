@@ -168,8 +168,6 @@ TYPED_TEST(ScatterIndexTypeTests, ScatterScalarOutOfBounds)
 {
   using cudf::scalar_type_t;
   using cudf::test::fixed_width_column_wrapper;
-  using scalar_ptr    = std::unique_ptr<cudf::scalar>;
-  using scalar_vector = std::vector<scalar_ptr>;
 
   auto const source = scalar_type_t<TypeParam>(100, true);
   std::reference_wrapper<const cudf::scalar> slr_ref{source};
@@ -739,7 +737,7 @@ struct BooleanMaskScalarScatter : public cudf::test::BaseFixture {
     static_cast<ScalarType*>(scalar.get())->set_value(value);
     static_cast<ScalarType*>(scalar.get())->set_valid(validity);
 
-    return std::move(scalar);
+    return scalar;
   }
 };
 

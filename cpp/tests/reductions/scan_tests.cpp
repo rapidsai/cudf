@@ -469,3 +469,89 @@ TYPED_TEST(ScanTest, EmptyColumnskip_nulls)
   CUDF_TEST_EXPECT_COLUMN_PROPERTIES_EQUAL(expected_col_out2, col_out->view());
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_col_out2, col_out->view());
 }
+
+template <typename T>
+struct FixedPointTestBothReps : public cudf::test::BaseFixture {
+};
+
+TYPED_TEST_CASE(FixedPointTestBothReps, cudf::test::FixedPointTypes);
+
+TYPED_TEST(FixedPointTestBothReps, FixedPointScanSum)
+{
+  using namespace numeric;
+  using decimalXX  = TypeParam;
+  using RepType    = cudf::device_storage_type_t<decimalXX>;
+  using fp_wrapper = cudf::test::fixed_point_column_wrapper<RepType>;
+
+  for (auto const i : {0, -1, -2, -3}) {
+    auto const scale    = scale_type{i};
+    auto const column   = fp_wrapper{{1, 2, 3, 4}, scale};
+    auto const expected = fp_wrapper{{1, 3, 6, 10}, scale};
+    auto const result   = cudf::scan(column, cudf::make_sum_aggregation(), scan_type::INCLUSIVE);
+
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(result->view(), expected);
+  }
+}
+
+TYPED_TEST(FixedPointTestBothReps, FixedPointPreScanSum)
+{
+  using namespace numeric;
+  using decimalXX  = TypeParam;
+  using RepType    = cudf::device_storage_type_t<decimalXX>;
+  using fp_wrapper = cudf::test::fixed_point_column_wrapper<RepType>;
+
+  for (auto const i : {0, -1, -2, -3}) {
+    auto const scale    = scale_type{i};
+    auto const column   = fp_wrapper{{1, 2, 3, 4}, scale};
+    auto const expected = fp_wrapper{{0, 1, 3, 6}, scale};
+    auto const result   = cudf::scan(column, cudf::make_sum_aggregation(), scan_type::EXCLUSIVE);
+
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(result->view(), expected);
+  }
+}
+
+TYPED_TEST(FixedPointTestBothReps, FixedPointScanProduct)
+{
+  using namespace numeric;
+  using decimalXX  = TypeParam;
+  using RepType    = cudf::device_storage_type_t<decimalXX>;
+  using fp_wrapper = cudf::test::fixed_point_column_wrapper<RepType>;
+
+  auto const scale  = scale_type{0};
+  auto const column = fp_wrapper{{1, 2, 3, 4}, scale};
+  EXPECT_THROW(cudf::scan(column, cudf::make_product_aggregation(), scan_type::INCLUSIVE),
+               cudf::logic_error);
+}
+
+TYPED_TEST(FixedPointTestBothReps, FixedPointScanMin)
+{
+  using namespace numeric;
+  using decimalXX  = TypeParam;
+  using RepType    = cudf::device_storage_type_t<decimalXX>;
+  using fp_wrapper = cudf::test::fixed_point_column_wrapper<RepType>;
+
+  for (auto const i : {0, -1, -2, -3}) {
+    auto const scale    = scale_type{i};
+    auto const column   = fp_wrapper{{1, 2, 3, 4}, scale};
+    auto const expected = fp_wrapper{{1, 1, 1, 1}, scale};
+    auto const result   = cudf::scan(column, cudf::make_min_aggregation(), scan_type::INCLUSIVE);
+
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(result->view(), expected);
+  }
+}
+
+TYPED_TEST(FixedPointTestBothReps, FixedPointScanMax)
+{
+  using namespace numeric;
+  using decimalXX  = TypeParam;
+  using RepType    = cudf::device_storage_type_t<decimalXX>;
+  using fp_wrapper = cudf::test::fixed_point_column_wrapper<RepType>;
+
+  for (auto const i : {0, -1, -2, -3}) {
+    auto const scale  = scale_type{i};
+    auto const column = fp_wrapper{{1, 2, 3, 4}, scale};
+    auto const result = cudf::scan(column, cudf::make_max_aggregation(), scan_type::INCLUSIVE);
+
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(result->view(), column);
+  }
+}

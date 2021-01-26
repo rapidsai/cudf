@@ -1,4 +1,5 @@
-# Copyright (c) 2018-2020, NVIDIA CORPORATION.
+# Copyright (c) 2018-2021, NVIDIA CORPORATION.
+
 import itertools
 
 import numpy as np
@@ -575,8 +576,8 @@ def get_dummies(
 
     Parameters
     ----------
-    df : cudf.DataFrame
-        dataframe to encode
+    df : array-like, Series, or DataFrame
+        Data of which to get dummy indicators.
     prefix : str, dict, or sequence, optional
         prefix to append. Either a str (to apply a constant prefix), dict
         mapping column names to prefixes, or sequence of prefixes to apply with
@@ -633,6 +634,22 @@ def get_dummies(
     1      0      1      0       0
     2      0      0      1       0
     3      0      0      0       1
+
+    >>> series = cudf.Series([1, 2, None, 2, 4])
+    >>> series
+    0       1
+    1       2
+    2    <NA>
+    3       2
+    4       4
+    dtype: int64
+    >>> cudf.get_dummies(series, dummy_na=True)
+    null  1  2  4
+    0     0  1  0  0
+    1     0  0  1  0
+    2     1  0  0  0
+    3     0  0  1  0
+    4     0  0  0  1
     """
     if cats is None:
         cats = {}
@@ -642,66 +659,72 @@ def get_dummies(
     if drop_first:
         raise NotImplementedError("drop_first is not supported yet")
 
-    encode_fallback_dtypes = ["object", "category"]
+    if isinstance(df, cudf.DataFrame):
+        encode_fallback_dtypes = ["object", "category"]
 
-    if columns is None or len(columns) == 0:
-        columns = df.select_dtypes(include=encode_fallback_dtypes).columns
+        if columns is None or len(columns) == 0:
+            columns = df.select_dtypes(include=encode_fallback_dtypes).columns
 
-    def length_check(obj, name):
-        if cudf.utils.dtypes.is_list_like(obj):
-            if len(obj) != len(columns):
-                raise ValueError(
-                    f"Length of '{name}' ({len(obj)}) did not match the "
-                    f"length of the columns being encoded ({len(columns)})."
+        _length_check_params(prefix, columns, "prefix")
+        _length_check_params(prefix_sep, columns, "prefix_sep")
+
+        if prefix is None:
+            prefix = columns
+
+        if isinstance(prefix, str):
+            prefix_map = {}
+        elif isinstance(prefix, dict):
+            prefix_map = prefix
+        else:
+            prefix_map = dict(zip(columns, prefix))
+
+        if isinstance(prefix_sep, str):
+            prefix_sep_map = {}
+        elif isinstance(prefix_sep, dict):
+            prefix_sep_map = prefix_sep
+        else:
+            prefix_sep_map = dict(zip(columns, prefix_sep))
+
+        # If we have no columns to encode, we need to drop
+        # fallback columns(if any)
+        if len(columns) == 0:
+            return df.select_dtypes(exclude=encode_fallback_dtypes)
+        else:
+            result_df = df.copy(deep=False)
+            result_df.drop(columns=columns, inplace=True)
+
+            for name in columns:
+                unique = _get_unique(column=df._data[name], dummy_na=dummy_na)
+
+                col_enc_df = df.one_hot_encoding(
+                    name,
+                    prefix=prefix_map.get(name, prefix),
+                    cats=cats.get(name, unique),
+                    prefix_sep=prefix_sep_map.get(name, prefix_sep),
+                    dtype=dtype,
                 )
+                for col in col_enc_df.columns.difference(df._data.names):
+                    result_df[col] = col_enc_df._data[col]
 
-    length_check(prefix, "prefix")
-    length_check(prefix_sep, "prefix_sep")
-
-    if prefix is None:
-        prefix = columns
-
-    if isinstance(prefix, str):
-        prefix_map = {}
-    elif isinstance(prefix, dict):
-        prefix_map = prefix
+            return result_df
     else:
-        prefix_map = dict(zip(columns, prefix))
+        ser = cudf.Series(df)
+        unique = _get_unique(column=ser._column, dummy_na=dummy_na)
 
-    if isinstance(prefix_sep, str):
-        prefix_sep_map = {}
-    elif isinstance(prefix_sep, dict):
-        prefix_sep_map = prefix_sep
-    else:
-        prefix_sep_map = dict(zip(columns, prefix_sep))
+        if hasattr(unique, "to_arrow"):
+            cats = unique.to_arrow().to_pylist()
+        else:
+            cats = pd.Series(unique, dtype="object")
 
-    # If we have no columns to encode, we need to drop fallback columns(if any)
-    if len(columns) == 0:
-        return df.select_dtypes(exclude=encode_fallback_dtypes)
-    else:
-        result_df = df.drop(columns=columns)
-        for name in columns:
-            if isinstance(
-                df[name]._column, cudf.core.column.CategoricalColumn
-            ):
-                unique = df[name]._column.categories
-            else:
-                unique = df[name].unique()
+        col_names = ["null" if cat is None else cat for cat in cats]
 
-            if not dummy_na:
-                if np.issubdtype(unique.dtype, np.floating):
-                    unique = unique.nans_to_nulls()
-                unique = unique.dropna()
+        if prefix is not None:
+            col_names = [f"{prefix}{prefix_sep}{cat}" for cat in col_names]
 
-            col_enc_df = df.one_hot_encoding(
-                name,
-                prefix=prefix_map.get(name, prefix),
-                cats=cats.get(name, unique),
-                prefix_sep=prefix_sep_map.get(name, prefix_sep),
-                dtype=dtype,
-            )
-            for col in col_enc_df.columns.difference(df._data.names):
-                result_df[col] = col_enc_df._data[col]
+        newcols = ser.one_hot_encoding(cats=cats, dtype=dtype)
+        result_df = cudf.DataFrame(index=ser.index)
+        for i, col in enumerate(newcols):
+            result_df._data[col_names[i]] = col
 
         return result_df
 
@@ -902,6 +925,11 @@ def unstack(df, level, fill_value=None):
     Pivots the specified levels of the index labels of df to the innermost
     levels of the columns labels of the result.
 
+    * If the index of ``df`` has multiple levels, returns a ``Dataframe`` with
+      specified level of the index pivoted to the column levels.
+    * If the index of ``df`` has single level, returns a ``Series`` with all
+      column levels pivoted to the index levels.
+
     Parameters
     ----------
     df : DataFrame
@@ -913,7 +941,7 @@ def unstack(df, level, fill_value=None):
 
     Returns
     -------
-    DataFrame with specified index levels pivoted to column levels
+    Series or DataFrame
 
     Examples
     --------
@@ -964,7 +992,25 @@ def unstack(df, level, fill_value=None):
     a
     1     5  <NA>     6  <NA>     7
     2  <NA>     8  <NA>     9  <NA>
+
+    Unstacking single level index dataframe:
+
+    >>> df = cudf.DataFrame({('c', 1): [1, 2, 3], ('c', 2):[9, 8, 7]})
+    >>> df.unstack()
+    c  1  0    1
+          1    2
+          2    3
+       2  0    9
+          1    8
+          2    7
+    dtype: int64
     """
+    if not isinstance(df, cudf.DataFrame):
+        raise ValueError("`df` should be a cudf Dataframe object.")
+
+    if df.empty:
+        raise ValueError("Cannot unstack an empty dataframe.")
+
     if fill_value is not None:
         raise NotImplementedError("fill_value is not supported.")
     if pd.api.types.is_list_like(level):
@@ -972,10 +1018,17 @@ def unstack(df, level, fill_value=None):
             return df
     df = df.copy(deep=False)
     if not isinstance(df.index, cudf.MultiIndex):
-        raise NotImplementedError(
-            "Calling unstack() on a DataFrame without a MultiIndex "
-            "is not supported"
-        )
+        dtype = df._columns[0].dtype
+        for col in df._columns:
+            if not col.dtype == dtype:
+                raise ValueError(
+                    "Calling unstack() on single index dataframe"
+                    " with different column datatype is not supported."
+                )
+        res = df.T.stack(dropna=False)
+        # Result's index is a multiindex
+        res.index.names = tuple(df.columns.names) + df.index.names
+        return res
     else:
         columns = df.index._poplevels(level)
         index = df.index
@@ -983,3 +1036,29 @@ def unstack(df, level, fill_value=None):
     if result.index.nlevels == 1:
         result.index = result.index.get_level_values(result.index.names[0])
     return result
+
+
+def _get_unique(column, dummy_na):
+    """
+    Returns unique values in a column, if
+    dummy_na is False, nan's are also dropped.
+    """
+    if isinstance(column, cudf.core.column.CategoricalColumn):
+        unique = column.categories
+    else:
+        unique = column.unique()
+    if not dummy_na:
+        if np.issubdtype(unique.dtype, np.floating):
+            unique = unique.nans_to_nulls()
+        unique = unique.dropna()
+    return unique
+
+
+def _length_check_params(obj, columns, name):
+    if cudf.utils.dtypes.is_list_like(obj):
+        if len(obj) != len(columns):
+            raise ValueError(
+                f"Length of '{name}' ({len(obj)}) did not match the "
+                f"length of the columns being "
+                f"encoded ({len(columns)})."
+            )

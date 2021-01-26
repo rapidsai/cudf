@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2020, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,9 +18,11 @@
 #include <cudf/concatenate.hpp>
 #include <cudf/filling.hpp>
 #include <cudf/hashing.hpp>
+#include <cudf/reshape.hpp>
 #include <cudf/utilities/bit.hpp>
 #include <cudf/lists/detail/concatenate.hpp>
 #include <cudf/lists/lists_column_view.hpp>
+#include <cudf/scalar/scalar_factories.hpp>
 #include <cudf/structs/structs_column_view.hpp>
 
 #include "cudf_jni_apis.hpp"
@@ -44,6 +46,49 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_sequence(JNIEnv *env, j
       col = cudf::sequence(row_count, *initial_val);
     }
     return reinterpret_cast<jlong>(col.release());
+  }
+  CATCH_STD(env, 0);
+}
+
+JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_makeList(JNIEnv *env, jobject j_object,
+                                                                  jlongArray handles,
+                                                                  jlong j_type,
+                                                                  jint scale,
+                                                                  jlong row_count) {
+  using ScalarType = cudf::scalar_type_t<cudf::size_type>;
+  JNI_NULL_CHECK(env, handles, "native view handles are null", 0)
+  try {
+    cudf::jni::auto_set_device(env);
+    std::unique_ptr<cudf::column> ret;
+    cudf::jni::native_jpointerArray<cudf::column_view> children(env, handles);
+    std::vector<cudf::column_view> children_vector(children.size());
+    for (int i = 0; i < children.size(); i++) {
+      children_vector[i] = *children[i];
+    }
+    auto zero = cudf::make_numeric_scalar(cudf::data_type(cudf::type_id::INT32));
+    zero->set_valid(true);
+    static_cast<ScalarType *>(zero.get())->set_value(0);
+
+    if (children.size() == 0) {
+      // special case because cudf::interleave_columns does not support no columns
+      auto offsets = cudf::make_column_from_scalar(*zero, row_count + 1);
+      cudf::type_id n_type = static_cast<cudf::type_id>(j_type);
+      cudf::data_type n_data_type = cudf::jni::make_data_type(j_type, scale);
+      auto empty_col = cudf::make_empty_column(n_data_type);
+      ret = cudf::make_lists_column(row_count, std::move(offsets), std::move(empty_col),
+              0, rmm::device_buffer());
+    } else {
+      auto count = cudf::make_numeric_scalar(cudf::data_type(cudf::type_id::INT32));
+      count->set_valid(true);
+      static_cast<ScalarType *>(count.get())->set_value(children.size());
+
+      std::unique_ptr<cudf::column> offsets = cudf::sequence(row_count + 1, *zero, *count);
+      auto data_col = cudf::interleave_columns(cudf::table_view(children_vector));
+      ret = cudf::make_lists_column(row_count, std::move(offsets), std::move(data_col),
+              0, rmm::device_buffer());
+    }
+
+    return reinterpret_cast<jlong>(ret.release());
   }
   CATCH_STD(env, 0);
 }
