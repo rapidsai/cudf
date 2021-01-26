@@ -900,6 +900,16 @@ struct rolling_window_launcher {
       mr);
   }
 
+  /**
+   * @brief Creates the offsets child of the result of the `COLLECT` window aggregation
+   *
+   * Given the input column, the preceding/following window bounds, and `min_periods`,
+   * the sizes of each list row may be computed. These values can then be used to
+   * calculate the offsets for the result of `COLLECT`.
+   *
+   * Note: If `min_periods` exceeds the number of observations for a window, the size
+   * is set to `0` (since the result is `null`).
+   */
   template <typename PrecedingIter, typename FollowingIter>
   std::unique_ptr<column> create_collect_offsets(column_view const& input,
                                                  PrecedingIter preceding_begin,
@@ -913,6 +923,17 @@ struct rolling_window_launcher {
     auto sizes =
       make_fixed_width_column(size_data_type, input.size(), mask_state::UNALLOCATED, stream, mr);
     auto mutable_sizes = sizes->mutable_view();
+
+    // Consider the following preceding/following values:
+    //    preceding = [1,2,2,2,2]
+    //    following = [1,1,1,1,0]
+    // The sum of the vectors should yield the window sizes:
+    //  prec + foll = [2,3,3,3,2]
+    //
+    // If min_periods=2, all rows have at least `min_periods` observations.
+    // But if min_periods=3, rows at indices 0 and 4 have too few observations, and must return
+    // null. The sizes at these positions must be 0, i.e.
+    //  prec + foll = [0,3,3,3,0]
     thrust::transform(rmm::exec_policy(stream),
                       preceding_begin,
                       preceding_begin + input.size(),
@@ -921,10 +942,18 @@ struct rolling_window_launcher {
                       [min_periods] __device__(auto preceding, auto following) {
                         return (preceding + following) < min_periods ? 0 : (preceding + following);
                       });
+
+    // Convert `sizes` to an offsets column, via inclusive_scan():
     return strings::detail::make_offsets_child_column(
       sizes->view().begin<size_type>(), sizes->view().end<size_type>(), stream, mr);
   }
 
+  /**
+   * @brief Create null mask for result of `COLLECT` aggregation.
+   *
+   * Given an input column's size, the preceding/following window bounds, and `min_periods`,
+   * this function returns a null mask, and the count of the number of nulls.
+   */
   template <typename PrecedingIter, typename FollowingIter>
   std::pair<rmm::device_buffer, size_type> create_collect_null_mask(
     column_view const& input,
@@ -945,7 +974,8 @@ struct rolling_window_launcher {
   }
 
   /**
-   * @brief Generate collect() list child's mapping to input column.
+   * @brief Generate mapping of each row in the COLLECT result's child column
+   * to the index of the row it belongs to.
    *
    *  If
    *         input col == [A,B,C,D,E]
@@ -1026,6 +1056,10 @@ struct rolling_window_launcher {
     return per_row_mapping;
   }
 
+  /**
+   * @brief Create gather map to generate the child column of the result of
+   * the `COLLECT` window aggregation.
+   */
   template <typename PrecedingIter>
   std::unique_ptr<column> create_collect_gather_map(column_view const& child_offsets,
                                                     column_view const& per_row_mapping,
