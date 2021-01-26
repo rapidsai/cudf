@@ -2303,29 +2303,29 @@ class Frame(libcudf.table.Table):
 
     def replace(self, to_replace, replacement):
         copy_data = self._data.copy()
+        if not (to_replace is None and replacement is None):
+            (
+                all_nan_per_column,
+                to_replace_per_column,
+                replacements_per_column,
+            ) = _get_replacement_values_for_columns(
+                to_replace=to_replace,
+                value=replacement,
+                columns=self._data.names,
+            )
 
-        for name, col in copy_data.items():
-            if not (to_replace is None and replacement is None):
+            for name, col in copy_data.items():
                 try:
-                    (
-                        col_all_nan,
-                        col_replacement,
-                        col_to_replace,
-                    ) = _get_replacement_values(
-                        to_replace=to_replace,
-                        replacement=replacement,
-                        col_name=name,
-                        column=col,
-                    )
-
                     copy_data[name] = col.find_and_replace(
-                        col_to_replace, col_replacement, col_all_nan
+                        to_replace_per_column[name],
+                        replacements_per_column[name],
+                        all_nan_per_column[name],
                     )
                 except KeyError:
                     # Do not change the copy_data[name]
                     pass
 
-            result = self._from_table(Frame(copy_data, self._index))
+        result = self._from_table(Frame(copy_data, self._index))
 
         return result
 
@@ -3572,8 +3572,113 @@ class Frame(libcudf.table.Table):
         return self._mimic_inplace(result, inplace=inplace)
 
 
-def _get_replacement_values(to_replace, replacement, col_name, column):
+def _get_replacement_values_for_columns(to_replace, value, columns):
+    to_replace_columns = {}
+    values_columns = {}
+    all_nan_columns = {}
 
+    if is_scalar(to_replace) and is_scalar(value):
+        to_replace_columns = {col: [to_replace] for col in columns}
+        values_columns = {col: [value] for col in columns}
+    elif cudf.utils.dtypes.is_list_like(to_replace):
+        if is_scalar(value):
+            to_replace_columns = {col: to_replace for col in columns}
+            values_columns = {col: [value] for col in columns}
+        elif cudf.utils.dtypes.is_list_like(value):
+            if len(to_replace) != len(value):
+                raise ValueError(
+                    f"Replacement lists must be "
+                    f"of same length."
+                    f"Expected {len(to_replace)}, got {len(value)}."
+                )
+            else:
+                to_replace_columns = {col: to_replace for col in columns}
+                values_columns = {col: value for col in columns}
+        elif isinstance(value, cudf.Series):
+            to_replace_columns = {col: to_replace for col in columns}
+            values_columns = {col: value for col in columns}
+        else:
+            raise TypeError(
+                "value argument must be scalar, list-like or Series"
+            )
+    elif isinstance(to_replace, cudf.Series):
+        if value is None:
+            to_replace_columns = {col: to_replace.index for col in columns}
+            values_columns = {col: to_replace for col in columns}
+        elif is_dict_like(value):
+            to_replace_columns = {
+                col: to_replace[col] for col in columns if col in to_replace
+            }
+            values_columns = {
+                col: value[col] for col in to_replace_columns if col in value
+            }
+        elif is_scalar(value) or isinstance(value, cudf.Series):
+            to_replace_columns = {
+                col: to_replace[col] for col in columns if col in to_replace
+            }
+            values_columns = {
+                col: [value] if is_scalar(value) else value[col]
+                for col in to_replace_columns
+                if col in value
+            }
+        else:
+            raise ValueError(
+                "Series.replace cannot use dict-like to_replace and non-None "
+                "value"
+            )
+    elif is_dict_like(to_replace):
+        if value is None:
+            to_replace_columns = {
+                col: list(to_replace.keys()) for col in columns
+            }
+            values_columns = {
+                col: list(to_replace.values()) for col in columns
+            }
+        elif is_dict_like(value):
+            to_replace_columns = {
+                col: to_replace[col] for col in columns if col in to_replace
+            }
+            values_columns = {
+                col: value[col] for col in columns if col in value
+            }
+        elif is_scalar(value) or isinstance(value, cudf.Series):
+            to_replace_columns = {
+                col: to_replace[col] for col in columns if col in to_replace
+            }
+            values_columns = {
+                col: [value] if is_scalar(value) else value
+                for col in columns
+                if col in to_replace
+            }
+        else:
+            raise TypeError("value argument must be scalar, dict, or Series")
+    else:
+        raise TypeError(
+            "Expecting 'to_replace' to be either a scalar, array-like, "
+            "dict or None, got invalid type "
+            f"{type(to_replace).__name__}"
+        )
+
+    to_replace_columns = {
+        key: [value] if is_scalar(value) else value
+        for key, value in to_replace_columns.items()
+    }
+    values_columns = {
+        key: [value] if is_scalar(value) else value
+        for key, value in values_columns.items()
+    }
+
+    for i in to_replace_columns:
+        if isinstance(values_columns[i], list):
+            all_nan = values_columns[i].count(None) == len(values_columns[i])
+        else:
+            all_nan = False
+        all_nan_columns[i] = all_nan
+
+    return all_nan_columns, to_replace_columns, values_columns
+
+
+def _get_replacement_values(to_replace, replacement, col_name, column):
     all_nan = False
     if (
         is_dict_like(to_replace)

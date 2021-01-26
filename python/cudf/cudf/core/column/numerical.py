@@ -395,13 +395,15 @@ class NumericalColumn(column.ColumnBase):
             replacement_col = _normalize_find_and_replace_input(
                 self.dtype, replacement
             )
+        replaced = self.copy()
         if len(replacement_col) == 1 and len(to_replace_col) > 1:
             replacement_col = column.as_column(
                 utils.scalar_broadcast_to(
                     replacement[0], (len(to_replace_col),), self.dtype
                 )
             )
-        replaced = self.copy()
+        elif len(replacement_col) == 1 and len(to_replace_col) == 0:
+            return replaced
         to_replace_col, replacement_col, replaced = numeric_normalize_types(
             to_replace_col, replacement_col, replaced
         )

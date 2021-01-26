@@ -46,7 +46,7 @@ def test_series_replace():
 
     # Series input
     a8 = np.array([5, 5, 5, 3, 4])
-    sr8 = sr1.replace(sr1[:3], 5)
+    sr8 = sr1.replace(sr1[:3].to_array(), 5)
     assert_eq(a8, sr8.to_array())
 
     # large input containing null
@@ -90,7 +90,7 @@ def test_series_replace_with_nulls():
 
     # Series input
     a8 = np.array([-10, -10, -10, 3, 4, -10])
-    sr8 = sr1.replace(sr1[:3], None).fillna(-10)
+    sr8 = sr1.replace(cudf.Series([-10] * 3, index=sr1[:3]), None).fillna(-10)
     assert_eq(a8, sr8.to_array())
 
     a9 = np.array([-10, 6, 2, 3, 4, -10])
@@ -759,6 +759,7 @@ def test_numeric_series_replace_dtype(series_dtype, replacement):
     # to_replace is a list, replacement is a scalar
     if sr.dtype.type(replacement) != replacement:
         with pytest.raises(TypeError):
+
             sr.replace([2, 3], replacement)
     else:
         expect = psr.replace([2, 3], replacement).astype(psr.dtype)
