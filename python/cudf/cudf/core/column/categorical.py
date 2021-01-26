@@ -883,7 +883,7 @@ class CategoricalColumn(column.ColumnBase):
             buf.size = self.size * codes_column.dtype.itemsize
 
             codes_column = cast(
-                NumericalColumn,
+                cudf.core.column.NumericalColumn,
                 column.build_column(
                     data=buf, dtype=codes_column.dtype, size=self.size,
                 ),
@@ -894,7 +894,7 @@ class CategoricalColumn(column.ColumnBase):
     @property
     def as_numerical(self) -> NumericalColumn:
         return cast(
-            NumericalColumn,
+            cudf.core.column.NumericalColumn,
             column.build_column(
                 data=self.codes.data, dtype=self.codes.dtype, mask=self.mask
             ),
@@ -914,7 +914,7 @@ class CategoricalColumn(column.ColumnBase):
     def codes(self) -> NumericalColumn:
         if self._codes is None:
             self._codes = self.children[0].set_mask(self.mask)
-        return cast(NumericalColumn, self._codes)
+        return cast(cudf.core.column.NumericalColumn, self._codes)
 
     @property
     def ordered(self) -> bool:
