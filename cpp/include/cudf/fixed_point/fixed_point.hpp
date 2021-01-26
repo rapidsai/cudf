@@ -27,7 +27,6 @@
 #include <cassert>
 #include <cmath>
 #include <string>
-#include "cudf/utilities/error.hpp"
 
 //! `fixed_point` and supporting types
 namespace numeric {
@@ -91,7 +90,7 @@ template <typename Rep,
                                            is_supported_representation_type<Rep>())>* = nullptr>
 CUDA_HOST_DEVICE_CALLABLE Rep ipow(T exponent)
 {
-  assert(("integer power with negative exponent is not possible.", exponent >= 0));
+  assert(("integer exponentiation with negative exponent is not possible.", exponent >= 0));
   if (exponent == 0) return static_cast<Rep>(1);
   auto extra  = static_cast<Rep>(1);
   auto square = static_cast<Rep>(Base);
