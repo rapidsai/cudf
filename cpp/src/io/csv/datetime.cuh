@@ -403,7 +403,7 @@ __inline__ __device__ int64_t to_time_delta(char const* begin, char const* end)
   }
   // " days [+]"
   auto const after_days_sep     = skip_if_starts_with(cur, end, "days");
-  auto const has_days_seperator = after_days_sep == cur;
+  auto const has_days_seperator = (after_days_sep != cur);
   cur                           = skip_spaces(after_days_sep, end);
   cur += (*cur == '+');
   if (has_days_seperator) {
