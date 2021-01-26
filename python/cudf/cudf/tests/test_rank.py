@@ -35,8 +35,8 @@ def test_rank_all_arguments(
     if method == "first" and dtype == "O":
         # not supported by pandas
         return
-    
-    pdf = pdf.copy(deep=True) # for parallel pytest
+
+    pdf = pdf.copy(deep=True)  # for parallel pytest
     if numeric_only:
         pdf["str"] = np.array(
             ["a", "b", "c", "d", "e", "1", "2", "3", "4", "5"]
