@@ -2497,11 +2497,11 @@ public class TableTest extends CudfTestBase {
         expectedNestedData[2] = Arrays.asList(new StructData(2, "s2"),new StructData(3, "s3"),new StructData(4, "s4"));
         expectedNestedData[3] = Arrays.asList(new StructData(3, "s3"),new StructData(4, "s4"));
         expectedNestedData[4] = Arrays.asList(new StructData(11, "s11"),new StructData(22, "s22"));
-        expectedNestedData[4] = Arrays.asList(new StructData(11, "s11"),new StructData(22, "s22"),new StructData(33, "s33"));
-        expectedNestedData[5] = Arrays.asList(new StructData(22, "s22"),new StructData(33, "s33"), new StructData(44, "s44"));
-        expectedNestedData[5] = Arrays.asList(new StructData(33, "s33"), new StructData(44, "s44"));
+        expectedNestedData[5] = Arrays.asList(new StructData(11, "s11"),new StructData(22, "s22"),new StructData(33, "s33"));
+        expectedNestedData[6] = Arrays.asList(new StructData(22, "s22"),new StructData(33, "s33"), new StructData(44, "s44"));
+        expectedNestedData[7] = Arrays.asList(new StructData(33, "s33"), new StructData(44, "s44"));
         expectedNestedData[8] = Arrays.asList(new StructData(111, "s111"),new StructData(222, "s222"));
-        expectedNestedData[8] = Arrays.asList(new StructData(111, "s111"),new StructData(222, "s222"),new StructData(333, "s333"));
+        expectedNestedData[9] = Arrays.asList(new StructData(111, "s111"),new StructData(222, "s222"),new StructData(333, "s333"));
         expectedNestedData[10] = Arrays.asList(new StructData(222, "s222"),new StructData(333, "s333"),new StructData(444, "s444"));
         expectedNestedData[11] = Arrays.asList(new StructData(333, "s333"),new StructData(444, "s444"));
         try (Table windowAggResults = sorted.groupBy(0, 1)
