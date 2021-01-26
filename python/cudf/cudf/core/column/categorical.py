@@ -1,4 +1,6 @@
 # Copyright (c) 2018-2020, NVIDIA CORPORATION.
+from __future__ import annotations
+
 import pickle
 from typing import (
     TYPE_CHECKING,
@@ -45,7 +47,7 @@ ParentType = Union["cudf.Series", "cudf.Index"]
 
 
 class CategoricalAccessor(ColumnMethodsMixin):
-    _column: "CategoricalColumn"
+    _column: CategoricalColumn
 
     def __init__(self, column: Any, parent: ParentType = None):
         """
@@ -664,7 +666,7 @@ class CategoricalAccessor(ColumnMethodsMixin):
         return self._return_or_inplace(out_col, inplace=inplace)
 
     def _categories_equal(
-        self, new_categories: "ColumnBase", ordered=False
+        self, new_categories: ColumnBase, ordered=False
     ) -> bool:
         cur_categories = self._column.categories
         if len(new_categories) != len(cur_categories):
@@ -687,7 +689,7 @@ class CategoricalAccessor(ColumnMethodsMixin):
         new_categories: Any,
         is_unique: bool = False,
         ordered: bool = False,
-    ) -> "CategoricalColumn":
+    ) -> CategoricalColumn:
         """Returns a new CategoricalColumn with the categories set to the
         specified *new_categories*.
 
@@ -751,8 +753,8 @@ class CategoricalColumn(column.ColumnBase):
     """Implements operations for Columns of Categorical type
     """
 
-    _codes: Optional["NumericalColumn"]
-    _children: Tuple["NumericalColumn"]
+    _codes: Optional[NumericalColumn]
+    _children: Tuple[NumericalColumn]
 
     def __init__(
         self,
@@ -827,7 +829,7 @@ class CategoricalColumn(column.ColumnBase):
         return header, frames
 
     @classmethod
-    def deserialize(cls, header: dict, frames: list) -> "CategoricalColumn":
+    def deserialize(cls, header: dict, frames: list) -> CategoricalColumn:
         n_dtype_frames = header["dtype_frames_count"]
         dtype = CategoricalDtype.deserialize(
             header["dtype"], frames[:n_dtype_frames]
@@ -845,7 +847,7 @@ class CategoricalColumn(column.ColumnBase):
                 header["mask"], [frames[n_dtype_frames + n_data_frames]]
             )
         return cast(
-            "CategoricalColumn",
+            CategoricalColumn,
             column.build_column(
                 data=None,
                 dtype=dtype,
@@ -867,12 +869,12 @@ class CategoricalColumn(column.ColumnBase):
         super().set_base_mask(value)
         self._codes = None
 
-    def set_base_children(self, value: Tuple["ColumnBase", ...]):
+    def set_base_children(self, value: Tuple[ColumnBase, ...]):
         super().set_base_children(value)
         self._codes = None
 
     @property
-    def children(self) -> Tuple["NumericalColumn"]:
+    def children(self) -> Tuple[NumericalColumn]:
         if self._children is None:
             codes_column = self.base_children[0]
 
@@ -881,7 +883,7 @@ class CategoricalColumn(column.ColumnBase):
             buf.size = self.size * codes_column.dtype.itemsize
 
             codes_column = cast(
-                "NumericalColumn",
+                NumericalColumn,
                 column.build_column(
                     data=buf, dtype=codes_column.dtype, size=self.size,
                 ),
@@ -890,16 +892,16 @@ class CategoricalColumn(column.ColumnBase):
         return self._children
 
     @property
-    def as_numerical(self) -> "NumericalColumn":
+    def as_numerical(self) -> NumericalColumn:
         return cast(
-            "NumericalColumn",
+            NumericalColumn,
             column.build_column(
                 data=self.codes.data, dtype=self.codes.dtype, mask=self.mask
             ),
         )
 
     @property
-    def categories(self) -> "ColumnBase":
+    def categories(self) -> ColumnBase:
         return self.dtype.categories._values
 
     @categories.setter
@@ -909,10 +911,10 @@ class CategoricalColumn(column.ColumnBase):
         )
 
     @property
-    def codes(self) -> "NumericalColumn":
+    def codes(self) -> NumericalColumn:
         if self._codes is None:
             self._codes = self.children[0].set_mask(self.mask)
-        return cast("NumericalColumn", self._codes)
+        return cast(NumericalColumn, self._codes)
 
     @property
     def ordered(self) -> bool:
@@ -984,7 +986,7 @@ class CategoricalColumn(column.ColumnBase):
 
     def binary_operator(
         self, op: str, rhs, reflect: bool = False
-    ) -> "ColumnBase":
+    ) -> ColumnBase:
         if not (self.ordered and rhs.ordered) and op not in ("eq", "ne"):
             if op in ("lt", "gt", "le", "ge"):
                 raise TypeError(
@@ -998,7 +1000,7 @@ class CategoricalColumn(column.ColumnBase):
             raise TypeError("Categoricals can only compare with the same type")
         return self.as_numerical.binary_operator(op, rhs.as_numerical)
 
-    def normalize_binop_value(self, other: ScalarLike) -> "CategoricalColumn":
+    def normalize_binop_value(self, other: ScalarLike) -> CategoricalColumn:
 
         if isinstance(other, np.ndarray) and other.ndim == 0:
             other = other.item()
@@ -1016,7 +1018,7 @@ class CategoricalColumn(column.ColumnBase):
 
     def sort_by_values(
         self, ascending: bool = True, na_position="last"
-    ) -> Tuple["CategoricalColumn", "NumericalColumn"]:
+    ) -> Tuple[CategoricalColumn, NumericalColumn]:
         codes, inds = self.as_numerical.sort_by_values(ascending, na_position)
         col = column.build_categorical_column(
             categories=self.dtype.categories,
@@ -1073,7 +1075,7 @@ class CategoricalColumn(column.ColumnBase):
     def data_array_view(self) -> cuda.devicearray.DeviceNDArray:
         return self.codes.data_array_view
 
-    def unique(self) -> "CategoricalColumn":
+    def unique(self) -> CategoricalColumn:
         codes = self.as_numerical.unique()
         return column.build_categorical_column(
             categories=self.categories,
@@ -1084,15 +1086,15 @@ class CategoricalColumn(column.ColumnBase):
             ordered=self.ordered,
         )
 
-    def _encode(self, value) -> "ScalarLike":
+    def _encode(self, value) -> ScalarLike:
         return self.categories.find_first_value(value)
 
-    def _decode(self, value: int) -> "ScalarLike":
+    def _decode(self, value: int) -> ScalarLike:
         if value == self.default_na_value():
             return None
         return self.categories.element_indexing(value)
 
-    def default_na_value(self) -> "ScalarLike":
+    def default_na_value(self) -> ScalarLike:
         return -1
 
     def find_and_replace(
@@ -1100,7 +1102,7 @@ class CategoricalColumn(column.ColumnBase):
         to_replace: ColumnLike,
         replacement: ColumnLike,
         all_nan: bool = False,
-    ) -> "CategoricalColumn":
+    ) -> CategoricalColumn:
         """
         Return col with *to_replace* replaced with *replacement*.
         """
@@ -1167,7 +1169,7 @@ class CategoricalColumn(column.ColumnBase):
 
     def fillna(
         self, fill_value: Any = None, method: Any = None, dtype: Dtype = None
-    ) -> "CategoricalColumn":
+    ) -> CategoricalColumn:
         """
         Fill null values with *fill_value*
         """
@@ -1214,16 +1216,14 @@ class CategoricalColumn(column.ColumnBase):
         return result
 
     def find_first_value(
-        self, value: "ScalarLike", closest: bool = False
+        self, value: ScalarLike, closest: bool = False
     ) -> int:
         """
         Returns offset of first value that matches
         """
         return self.as_numerical.find_first_value(self._encode(value))
 
-    def find_last_value(
-        self, value: "ScalarLike", closest: bool = False
-    ) -> int:
+    def find_last_value(self, value: ScalarLike, closest: bool = False) -> int:
         """
         Returns offset of last value that matches
         """
@@ -1247,7 +1247,7 @@ class CategoricalColumn(column.ColumnBase):
 
     def as_categorical_column(
         self, dtype: Dtype, **kwargs
-    ) -> "CategoricalColumn":
+    ) -> CategoricalColumn:
         if isinstance(dtype, str) and dtype == "category":
             return self
         if (
@@ -1276,25 +1276,25 @@ class CategoricalColumn(column.ColumnBase):
             new_categories=dtype.categories, ordered=dtype.ordered
         )
 
-    def as_numerical_column(self, dtype: Dtype) -> "NumericalColumn":
+    def as_numerical_column(self, dtype: Dtype) -> NumericalColumn:
         return self._get_decategorized_column().as_numerical_column(dtype)
 
-    def as_string_column(self, dtype, format=None) -> "StringColumn":
+    def as_string_column(self, dtype, format=None) -> StringColumn:
         return self._get_decategorized_column().as_string_column(
             dtype, format=format
         )
 
-    def as_datetime_column(self, dtype, **kwargs) -> "DatetimeColumn":
+    def as_datetime_column(self, dtype, **kwargs) -> DatetimeColumn:
         return self._get_decategorized_column().as_datetime_column(
             dtype, **kwargs
         )
 
-    def as_timedelta_column(self, dtype, **kwargs) -> "TimeDeltaColumn":
+    def as_timedelta_column(self, dtype, **kwargs) -> TimeDeltaColumn:
         return self._get_decategorized_column().as_timedelta_column(
             dtype, **kwargs
         )
 
-    def _get_decategorized_column(self) -> "ColumnBase":
+    def _get_decategorized_column(self) -> ColumnBase:
         if self.null_count == len(self):
             # self.categories is empty; just return codes
             return self.cat().codes._column
@@ -1303,7 +1303,7 @@ class CategoricalColumn(column.ColumnBase):
         out = out.set_mask(self.mask)
         return out
 
-    def copy(self, deep: bool = True) -> "CategoricalColumn":
+    def copy(self, deep: bool = True) -> CategoricalColumn:
         if deep:
             copied_col = libcudf.copying.copy_column(self)
             copied_cat = libcudf.copying.copy_column(self.dtype._categories)
@@ -1346,22 +1346,22 @@ class CategoricalColumn(column.ColumnBase):
             )
 
     def _mimic_inplace(
-        self, other_col: "ColumnBase", inplace: bool = False
-    ) -> Optional["ColumnBase"]:
+        self, other_col: ColumnBase, inplace: bool = False
+    ) -> Optional[ColumnBase]:
         out = super()._mimic_inplace(other_col, inplace=inplace)
         if inplace and isinstance(other_col, CategoricalColumn):
             self._codes = other_col._codes
         return out
 
-    def view(self, dtype: Dtype) -> "ColumnBase":
+    def view(self, dtype: Dtype) -> ColumnBase:
         raise NotImplementedError(
             "Categorical column views are not currently supported"
         )
 
 
 def _create_empty_categorical_column(
-    categorical_column: "CategoricalColumn", dtype: "CategoricalDtype"
-) -> "CategoricalColumn":
+    categorical_column: CategoricalColumn, dtype: "CategoricalDtype"
+) -> CategoricalColumn:
     return column.build_categorical_column(
         categories=column.as_column(dtype.categories),
         codes=column.as_column(
@@ -1380,7 +1380,7 @@ def _create_empty_categorical_column(
 
 def pandas_categorical_as_column(
     categorical: ColumnLike, codes: ColumnLike = None
-) -> "CategoricalColumn":
+) -> CategoricalColumn:
 
     """Creates a CategoricalColumn from a pandas.Categorical
 

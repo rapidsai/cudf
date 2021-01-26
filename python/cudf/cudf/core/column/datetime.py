@@ -1,4 +1,6 @@
 # Copyright (c) 2019-2020, NVIDIA CORPORATION.
+from __future__ import annotations
+
 import datetime as dt
 import re
 from numbers import Number
@@ -90,31 +92,31 @@ class DatetimeColumn(column.ColumnBase):
         return self._time_unit
 
     @property
-    def year(self) -> "ColumnBase":
+    def year(self) -> ColumnBase:
         return self.get_dt_field("year")
 
     @property
-    def month(self) -> "ColumnBase":
+    def month(self) -> ColumnBase:
         return self.get_dt_field("month")
 
     @property
-    def day(self) -> "ColumnBase":
+    def day(self) -> ColumnBase:
         return self.get_dt_field("day")
 
     @property
-    def hour(self) -> "ColumnBase":
+    def hour(self) -> ColumnBase:
         return self.get_dt_field("hour")
 
     @property
-    def minute(self) -> "ColumnBase":
+    def minute(self) -> ColumnBase:
         return self.get_dt_field("minute")
 
     @property
-    def second(self) -> "ColumnBase":
+    def second(self) -> ColumnBase:
         return self.get_dt_field("second")
 
     @property
-    def weekday(self) -> "ColumnBase":
+    def weekday(self) -> ColumnBase:
         return self.get_dt_field("weekday")
 
     def to_pandas(
@@ -133,7 +135,7 @@ class DatetimeColumn(column.ColumnBase):
 
         return pd_series
 
-    def get_dt_field(self, field: str) -> "ColumnBase":
+    def get_dt_field(self, field: str) -> ColumnBase:
         return libcudf.datetime.extract_datetime_component(self, field)
 
     def normalize_binop_value(self, other: DatetimeLikeScalar) -> ScalarLike:
@@ -185,7 +187,7 @@ class DatetimeColumn(column.ColumnBase):
             ),
         )
 
-    def as_datetime_column(self, dtype: Dtype, **kwargs) -> "DatetimeColumn":
+    def as_datetime_column(self, dtype: Dtype, **kwargs) -> DatetimeColumn:
         dtype = np.dtype(dtype)
         if dtype == self.dtype:
             return self
@@ -235,7 +237,7 @@ class DatetimeColumn(column.ColumnBase):
 
     def quantile(
         self, q: Union[float, Sequence[float]], interpolation: str, exact: bool
-    ) -> "ColumnBase":
+    ) -> ColumnBase:
         result = self.as_numerical.quantile(
             q=q, interpolation=interpolation, exact=exact
         )
@@ -246,9 +248,9 @@ class DatetimeColumn(column.ColumnBase):
     def binary_operator(
         self,
         op: str,
-        rhs: Union["ColumnBase", "cudf.Scalar"],
+        rhs: Union[ColumnBase, "cudf.Scalar"],
         reflect: bool = False,
-    ) -> "ColumnBase":
+    ) -> ColumnBase:
         if isinstance(rhs, cudf.DateOffset):
             return binop_offset(self, rhs, op)
         lhs, rhs = self, rhs
@@ -280,7 +282,7 @@ class DatetimeColumn(column.ColumnBase):
 
     def fillna(
         self, fill_value: Any = None, method: str = None, dtype: Dtype = None
-    ) -> "DatetimeColumn":
+    ) -> DatetimeColumn:
         if fill_value is not None:
             if cudf.utils.utils.isnat(fill_value):
                 return _fillna_natwise(self)
@@ -348,12 +350,12 @@ class DatetimeColumn(column.ColumnBase):
 
 @annotate("BINARY_OP", color="orange", domain="cudf_python")
 def binop(
-    lhs: Union["ColumnBase", ScalarLike],
-    rhs: Union["ColumnBase", ScalarLike],
+    lhs: Union[ColumnBase, ScalarLike],
+    rhs: Union[ColumnBase, ScalarLike],
     op: str,
     out_dtype: Dtype,
     reflect: bool,
-) -> "ColumnBase":
+) -> ColumnBase:
     if reflect:
         lhs, rhs = rhs, lhs
     out = libcudf.binaryop.binaryop(lhs, rhs, op, out_dtype)

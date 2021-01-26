@@ -1,4 +1,6 @@
 # Copyright (c) 2020, NVIDIA CORPORATION.
+from __future__ import annotations
+
 import datetime as dt
 from numbers import Number
 from typing import Any, Sequence, Tuple, Union, cast
@@ -296,7 +298,7 @@ class TimeDeltaColumn(column.ColumnBase):
 
     def fillna(
         self, fill_value: Any = None, method: str = None, dtype: Dtype = None
-    ) -> "TimeDeltaColumn":
+    ) -> TimeDeltaColumn:
         if fill_value is not None:
             if cudf.utils.utils.isnat(fill_value):
                 return _fillna_natwise(self)
@@ -310,7 +312,7 @@ class TimeDeltaColumn(column.ColumnBase):
                     fill_value = cudf.Scalar(fill_value, dtype=dtype)
             else:
                 fill_value = column.as_column(fill_value, nan_as_null=False)
-            return cast("TimeDeltaColumn", ColumnBase.fillna(col, fill_value))
+            return cast(TimeDeltaColumn, ColumnBase.fillna(col, fill_value))
         else:
             return super().fillna(method=method)
 
@@ -345,7 +347,7 @@ class TimeDeltaColumn(column.ColumnBase):
                 column.column_empty(0, dtype="object", masked=False),
             )
 
-    def as_timedelta_column(self, dtype: Dtype, **kwargs) -> "TimeDeltaColumn":
+    def as_timedelta_column(self, dtype: Dtype, **kwargs) -> TimeDeltaColumn:
         dtype = np.dtype(dtype)
         if dtype == self.dtype:
             return self

@@ -1,4 +1,5 @@
 # Copyright (c) 2018-2021, NVIDIA CORPORATION.
+from __future__ import annotations
 
 from numbers import Number
 from typing import Any, Callable, Sequence, Union, cast
@@ -81,12 +82,12 @@ class NumericalColumn(ColumnBase):
             self, column.as_column([item], dtype=self.dtype)
         ).any()
 
-    def unary_operator(self, unaryop: str) -> "ColumnBase":
+    def unary_operator(self, unaryop: str) -> ColumnBase:
         return _numeric_column_unaryop(self, op=unaryop)
 
     def binary_operator(
         self, binop: str, rhs: BinaryOperand, reflect: bool = False,
-    ) -> "ColumnBase":
+    ) -> ColumnBase:
         int_dtypes = [
             np.dtype("int8"),
             np.dtype("int16"),
@@ -118,12 +119,12 @@ class NumericalColumn(ColumnBase):
             lhs=self, rhs=rhs, op=binop, out_dtype=out_dtype, reflect=reflect
         )
 
-    def _apply_scan_op(self, op: str) -> "ColumnBase":
+    def _apply_scan_op(self, op: str) -> ColumnBase:
         return libcudf.reduce.scan(op, self, True)
 
     def normalize_binop_value(
         self, other: ScalarLike
-    ) -> Union["ColumnBase", ScalarLike]:
+    ) -> Union[ColumnBase, ScalarLike]:
         if other is None:
             return other
         if isinstance(other, cudf.Scalar):
@@ -203,7 +204,7 @@ class NumericalColumn(ColumnBase):
             ),
         )
 
-    def as_numerical_column(self, dtype: Dtype) -> "NumericalColumn":
+    def as_numerical_column(self, dtype: Dtype) -> NumericalColumn:
         dtype = np.dtype(dtype)
         if dtype == self.dtype:
             return self
@@ -299,7 +300,7 @@ class NumericalColumn(ColumnBase):
 
     def quantile(
         self, q: Union[float, Sequence[float]], interpolation: str, exact: bool
-    ) -> "NumericalColumn":
+    ) -> NumericalColumn:
         if isinstance(q, Number) or cudf.utils.dtypes.is_list_like(q):
             np_array_q = np.asarray(q)
             if np.logical_or(np_array_q < 0, np_array_q > 1).any():
@@ -317,7 +318,7 @@ class NumericalColumn(ColumnBase):
             )
         return result
 
-    def median(self, skipna: bool = None) -> "NumericalColumn":
+    def median(self, skipna: bool = None) -> NumericalColumn:
         skipna = True if skipna is None else skipna
 
         if not skipna and self.has_nulls:
@@ -328,7 +329,7 @@ class NumericalColumn(ColumnBase):
 
     def _numeric_quantile(
         self, q: Union[float, Sequence[float]], interpolation: str, exact: bool
-    ) -> "NumericalColumn":
+    ) -> NumericalColumn:
         quant = [float(q)] if not isinstance(q, (Sequence, np.ndarray)) else q
         # get sorted indices and exclude nulls
         sorted_indices = self.as_frame()._get_sorted_inds(True, "first")
@@ -336,7 +337,7 @@ class NumericalColumn(ColumnBase):
 
         return cpp_quantile(self, quant, interpolation, sorted_indices, exact)
 
-    def cov(self, other: "ColumnBase") -> float:
+    def cov(self, other: ColumnBase) -> float:
         if (
             len(self) == 0
             or len(other) == 0
@@ -348,7 +349,7 @@ class NumericalColumn(ColumnBase):
         cov_sample = result.sum() / (len(self) - 1)
         return cov_sample
 
-    def corr(self, other: "ColumnBase") -> float:
+    def corr(self, other: ColumnBase) -> float:
         if len(self) == 0 or len(other) == 0:
             return cudf.utils.dtypes._get_nan_for_dtype(self.dtype)
 
@@ -359,14 +360,14 @@ class NumericalColumn(ColumnBase):
             return cudf.utils.dtypes._get_nan_for_dtype(self.dtype)
         return cov / lhs_std / rhs_std
 
-    def round(self, decimals: int = 0) -> "NumericalColumn":
+    def round(self, decimals: int = 0) -> NumericalColumn:
         """Round the values in the Column to the given number of decimals.
         """
         return libcudf.round.round(self, decimal_places=decimals)
 
     def applymap(
         self, udf: Callable[[ScalarLike], ScalarLike], out_dtype: Dtype = None
-    ) -> "ColumnBase":
+    ) -> ColumnBase:
         """Apply an element-wise function to transform the values in the Column.
 
         Parameters
@@ -407,7 +408,7 @@ class NumericalColumn(ColumnBase):
         to_replace: ColumnLike,
         replacement: ColumnLike,
         all_nan: bool = False,
-    ) -> "NumericalColumn":
+    ) -> NumericalColumn:
         """
         Return col with *to_replace* replaced with *value*.
         """
@@ -440,7 +441,7 @@ class NumericalColumn(ColumnBase):
         method: str = None,
         dtype: Dtype = None,
         fill_nan: bool = True,
-    ) -> "NumericalColumn":
+    ) -> NumericalColumn:
         """
         Fill null values with *fill_value*
         """
@@ -640,12 +641,12 @@ class NumericalColumn(ColumnBase):
 
 @annotate("BINARY_OP", color="orange", domain="cudf_python")
 def _numeric_column_binop(
-    lhs: Union["ColumnBase", ScalarLike],
-    rhs: Union["ColumnBase", ScalarLike],
+    lhs: Union[ColumnBase, ScalarLike],
+    rhs: Union[ColumnBase, ScalarLike],
     op: str,
     out_dtype: Dtype,
     reflect: bool = False,
-) -> "ColumnBase":
+) -> ColumnBase:
     if reflect:
         lhs, rhs = rhs, lhs
 
@@ -662,7 +663,7 @@ def _numeric_column_binop(
     return out
 
 
-def _numeric_column_unaryop(operand: "ColumnBase", op: str) -> "ColumnBase":
+def _numeric_column_unaryop(operand: ColumnBase, op: str) -> ColumnBase:
     if callable(op):
         return libcudf.transform.transform(operand, op)
 
@@ -670,7 +671,7 @@ def _numeric_column_unaryop(operand: "ColumnBase", op: str) -> "ColumnBase":
     return libcudf.unary.unary_operation(operand, op)
 
 
-def _safe_cast_to_int(col: "ColumnBase", dtype: DtypeObj) -> "ColumnBase":
+def _safe_cast_to_int(col: ColumnBase, dtype: DtypeObj) -> ColumnBase:
     """
     Cast given NumericalColumn to given integer dtype safely.
     """
@@ -690,8 +691,8 @@ def _safe_cast_to_int(col: "ColumnBase", dtype: DtypeObj) -> "ColumnBase":
 
 
 def _normalize_find_and_replace_input(
-    input_column_dtype: DtypeObj, col_to_normalize: Union["ColumnBase", list]
-) -> "ColumnBase":
+    input_column_dtype: DtypeObj, col_to_normalize: Union[ColumnBase, list]
+) -> ColumnBase:
     normalized_column = column.as_column(
         col_to_normalize,
         dtype=input_column_dtype if len(col_to_normalize) <= 0 else None,
@@ -734,8 +735,8 @@ def _normalize_find_and_replace_input(
 
 
 def digitize(
-    column: "ColumnBase", bins: np.ndarray, right: bool = False
-) -> "ColumnBase":
+    column: ColumnBase, bins: np.ndarray, right: bool = False
+) -> ColumnBase:
     """Return the indices of the bins to which each value in column belongs.
 
     Parameters

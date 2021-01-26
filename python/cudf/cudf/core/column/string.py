@@ -1,4 +1,6 @@
 # Copyright (c) 2019-2020, NVIDIA CORPORATION.
+from __future__ import annotations
+
 import builtins
 import pickle
 import warnings
@@ -4884,7 +4886,7 @@ class StringColumn(column.ColumnBase):
         format = "%D days %H:%M:%S"
         return self._as_datetime_or_timedelta_column(out_dtype, format)
 
-    def as_string_column(self, dtype: Dtype, format=None) -> "StringColumn":
+    def as_string_column(self, dtype: Dtype, format=None) -> StringColumn:
         return self
 
     @property
@@ -4957,7 +4959,7 @@ class StringColumn(column.ColumnBase):
         return header, frames
 
     @classmethod
-    def deserialize(cls, header: dict, frames: list) -> "StringColumn":
+    def deserialize(cls, header: dict, frames: list) -> StringColumn:
         size = header["size"]
         if not isinstance(size, int):
             size = pickle.loads(size)
@@ -4975,7 +4977,7 @@ class StringColumn(column.ColumnBase):
             children.append(column_type.deserialize(h, [b]))
 
         col = cast(
-            "StringColumn",
+            StringColumn,
             column.build_column(
                 data=None,
                 dtype="str",
@@ -5003,7 +5005,7 @@ class StringColumn(column.ColumnBase):
         to_replace: ColumnLike,
         replacement: ColumnLike,
         all_nan: bool = False,
-    ) -> "StringColumn":
+    ) -> StringColumn:
         """
         Return col with *to_replace* replaced with *value*
         """
@@ -5016,7 +5018,7 @@ class StringColumn(column.ColumnBase):
         fill_value: Any = None,
         method: builtins.str = None,
         dtype: Dtype = None,
-    ) -> "StringColumn":
+    ) -> StringColumn:
         if fill_value is not None:
             if not is_scalar(fill_value):
                 fill_value = column.as_column(fill_value, dtype=self.dtype)

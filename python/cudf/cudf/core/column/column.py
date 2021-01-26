@@ -1,4 +1,6 @@
 # Copyright (c) 2018-2021, NVIDIA CORPORATION.
+from __future__ import annotations
+
 import builtins
 import pickle
 import warnings
@@ -153,10 +155,10 @@ class ColumnBase(Column, Serializable):
     ) -> T:
         raise NotImplementedError
 
-    def clip(self, lo: ScalarLike, hi: ScalarLike) -> "ColumnBase":
+    def clip(self, lo: ScalarLike, hi: ScalarLike) -> ColumnBase:
         return libcudf.replace.clip(self, lo, hi)
 
-    def equals(self, other: "ColumnBase", check_dtypes: bool = False) -> bool:
+    def equals(self, other: ColumnBase, check_dtypes: bool = False) -> bool:
         if self is other:
             return True
         if other is None or len(self) != len(other):
@@ -191,7 +193,7 @@ class ColumnBase(Column, Serializable):
     @classmethod
     def _concat(
         cls, objs: "MutableSequence[ColumnBase]", dtype: Dtype = None
-    ) -> "ColumnBase":
+    ) -> ColumnBase:
         if len(objs) == 0:
             dtype = pd.api.types.pandas_dtype(dtype)
             if is_categorical_dtype(dtype):
@@ -288,7 +290,7 @@ class ColumnBase(Column, Serializable):
 
         return col
 
-    def dropna(self, drop_nan: bool = False) -> "ColumnBase":
+    def dropna(self, drop_nan: bool = False) -> ColumnBase:
         if drop_nan:
             col = self.nans_to_nulls()
         else:
@@ -347,7 +349,7 @@ class ColumnBase(Column, Serializable):
         )["None"].chunk(0)
 
     @classmethod
-    def from_arrow(cls, array: pa.Array) -> "ColumnBase":
+    def from_arrow(cls, array: pa.Array) -> ColumnBase:
         """
         Convert PyArrow Array/ChunkedArray to column
 
@@ -409,7 +411,7 @@ class ColumnBase(Column, Serializable):
             "None"
         ]
 
-    def _get_mask_as_column(self) -> "ColumnBase":
+    def _get_mask_as_column(self) -> ColumnBase:
         return libcudf.transform.mask_to_bools(
             self.base_mask, self.offset, self.offset + len(self)
         )
@@ -464,7 +466,7 @@ class ColumnBase(Column, Serializable):
         begin: int,
         end: int,
         inplace: bool = False,
-    ) -> Optional["ColumnBase"]:
+    ) -> Optional[ColumnBase]:
         if end <= begin or begin >= self.size:
             return self if inplace else self.copy()
 
@@ -495,7 +497,7 @@ class ColumnBase(Column, Serializable):
         libcudf.filling.fill_in_place(result.codes, begin, end, fill_scalar)
         return result
 
-    def shift(self, offset: int, fill_value: ScalarLike) -> "ColumnBase":
+    def shift(self, offset: int, fill_value: ScalarLike) -> ColumnBase:
         return libcudf.copying.shift(self, offset, fill_value)
 
     @property
@@ -512,7 +514,7 @@ class ColumnBase(Column, Serializable):
         else:
             raise ValueError("Column has no null mask")
 
-    def copy(self, deep: bool = True) -> "ColumnBase":
+    def copy(self, deep: bool = True) -> ColumnBase:
         """Columns are immutable, so a deep copy produces a copy of the
         underlying data and mask and a shallow copy creates a new column and
         copies the references of the data and mask.
@@ -529,7 +531,7 @@ class ColumnBase(Column, Serializable):
                 children=self.base_children,
             )
 
-    def view(self, dtype: Dtype) -> "ColumnBase":
+    def view(self, dtype: Dtype) -> ColumnBase:
         """
         View the data underlying a column as different dtype.
         The source column must divide evenly into the size of
@@ -598,7 +600,7 @@ class ColumnBase(Column, Serializable):
 
         return libcudf.copying.get_element(self, index).value
 
-    def slice(self, start: int, stop: int, stride: int = None) -> "ColumnBase":
+    def slice(self, start: int, stop: int, stride: int = None) -> ColumnBase:
         if start < 0:
             start = start + len(self)
         if stop < 0:
@@ -615,7 +617,7 @@ class ColumnBase(Column, Serializable):
             )
             return self.take(gather_map)
 
-    def __getitem__(self, arg) -> Union[ScalarLike, "ColumnBase"]:
+    def __getitem__(self, arg) -> Union[ScalarLike, ColumnBase]:
         if is_scalar(arg):
             return self.element_indexing(int(arg))
         elif isinstance(arg, slice):
@@ -728,7 +730,7 @@ class ColumnBase(Column, Serializable):
             input_col=self, replacement=value, method=method, dtype=dtype
         )
 
-    def isnull(self) -> "ColumnBase":
+    def isnull(self) -> ColumnBase:
         """Identify missing values in a Column.
         """
         result = libcudf.unary.is_null(self)
@@ -740,12 +742,12 @@ class ColumnBase(Column, Serializable):
 
         return result
 
-    def isna(self) -> "ColumnBase":
+    def isna(self) -> ColumnBase:
         """Identify missing values in a Column. Alias for isnull.
         """
         return self.isnull()
 
-    def notnull(self) -> "ColumnBase":
+    def notnull(self) -> ColumnBase:
         """Identify non-missing values in a Column.
         """
         result = libcudf.unary.is_valid(self)
@@ -757,7 +759,7 @@ class ColumnBase(Column, Serializable):
 
         return result
 
-    def notna(self) -> "ColumnBase":
+    def notna(self) -> ColumnBase:
         """Identify non-missing values in a Column. Alias for notnull.
         """
         return self.notnull()
@@ -786,7 +788,7 @@ class ColumnBase(Column, Serializable):
             raise ValueError("value not found")
         return indices[-1]
 
-    def append(self, other: "ColumnBase") -> "ColumnBase":
+    def append(self, other: ColumnBase) -> ColumnBase:
         return ColumnBase._concat([self, as_column(other)])
 
     def quantile(
@@ -794,13 +796,13 @@ class ColumnBase(Column, Serializable):
         q: Union[float, Sequence[float]],
         interpolation: builtins.str,
         exact: bool,
-    ) -> "ColumnBase":
+    ) -> ColumnBase:
         raise TypeError(f"cannot perform quantile with type {self.dtype}")
 
     def median(self, skipna: bool = None) -> ScalarLike:
         raise TypeError(f"cannot perform median with type {self.dtype}")
 
-    def take(self: T, indices: "ColumnBase", keep_index: bool = True) -> T:
+    def take(self: T, indices: ColumnBase, keep_index: bool = True) -> T:
         """Return Column by taking values from the corresponding *indices*.
         """
         # Handle zero size
@@ -819,7 +821,7 @@ class ColumnBase(Column, Serializable):
                 ) from e
             raise
 
-    def isin(self, values: Sequence) -> "ColumnBase":
+    def isin(self, values: Sequence) -> ColumnBase:
         """Check whether values are contained in the Column.
 
         Parameters
@@ -884,7 +886,7 @@ class ColumnBase(Column, Serializable):
 
         return res
 
-    def as_mask(self) -> "Buffer":
+    def as_mask(self) -> Buffer:
         """Convert booleans to bitmask
 
         Returns
@@ -963,10 +965,10 @@ class ColumnBase(Column, Serializable):
             raise ValueError(f"Invalid value for side: {side}")
 
     def sort_by_values(
-        self: "ColumnBase",
+        self: ColumnBase,
         ascending: bool = True,
         na_position: builtins.str = "last",
-    ) -> Tuple["ColumnBase", "cudf.core.column.NumericalColumn"]:
+    ) -> Tuple[ColumnBase, "cudf.core.column.NumericalColumn"]:
         col_inds = self.as_frame()._get_sorted_inds(ascending, na_position)
         col_keys = self.take(col_inds)
         return col_keys, col_inds
@@ -979,7 +981,7 @@ class ColumnBase(Column, Serializable):
             raise NotImplementedError(msg)
         return cpp_distinct_count(self, ignore_nulls=dropna)
 
-    def astype(self, dtype: Dtype, **kwargs) -> "ColumnBase":
+    def astype(self, dtype: Dtype, **kwargs) -> ColumnBase:
         if is_categorical_dtype(dtype):
             return self.as_categorical_column(dtype, **kwargs)
         elif pd.api.types.pandas_dtype(dtype).type in {
@@ -1001,7 +1003,7 @@ class ColumnBase(Column, Serializable):
         else:
             return self.as_numerical_column(dtype)
 
-    def as_categorical_column(self, dtype, **kwargs) -> "ColumnBase":
+    def as_categorical_column(self, dtype, **kwargs) -> ColumnBase:
         if "ordered" in kwargs:
             ordered = kwargs["ordered"]
         else:
@@ -1064,7 +1066,7 @@ class ColumnBase(Column, Serializable):
     ) -> "cudf.core.column.StringColumn":
         raise NotImplementedError
 
-    def apply_boolean_mask(self, mask) -> "ColumnBase":
+    def apply_boolean_mask(self, mask) -> ColumnBase:
         mask = as_column(mask, dtype="bool")
         result = (
             self.as_frame()._apply_boolean_mask(boolean_mask=mask)._as_column()
@@ -1073,7 +1075,7 @@ class ColumnBase(Column, Serializable):
 
     def argsort(
         self, ascending: bool = True, na_position: builtins.str = "last"
-    ) -> "ColumnBase":
+    ) -> ColumnBase:
 
         sorted_indices = self.as_frame()._get_sorted_inds(
             ascending=ascending, na_position=na_position
@@ -1164,7 +1166,7 @@ class ColumnBase(Column, Serializable):
             values, side, ascending=ascending, na_position=na_position
         )
 
-    def unique(self) -> "ColumnBase":
+    def unique(self) -> ColumnBase:
         """
         Get unique values in the data
         """
@@ -1194,7 +1196,7 @@ class ColumnBase(Column, Serializable):
         return header, frames
 
     @classmethod
-    def deserialize(cls, header: dict, frames: list) -> "ColumnBase":
+    def deserialize(cls, header: dict, frames: list) -> ColumnBase:
         dtype = header["dtype"]
         data = Buffer.deserialize(header["data"], [frames[0]])
         mask = None
@@ -1204,7 +1206,7 @@ class ColumnBase(Column, Serializable):
 
     def binary_operator(
         self, op: builtins.str, other: BinaryOperand, reflect: bool = False
-    ) -> "ColumnBase":
+    ) -> ColumnBase:
         raise NotImplementedError
 
     def min(self, skipna: bool = None, dtype: Dtype = None):
@@ -1246,13 +1248,13 @@ class ColumnBase(Column, Serializable):
     def skew(self, skipna: bool = None):
         raise TypeError(f"cannot perform skew with type {self.dtype}")
 
-    def cov(self, other: "ColumnBase"):
+    def cov(self, other: ColumnBase):
         raise TypeError(
             f"cannot perform covarience with types {self.dtype}, "
             f"{other.dtype}"
         )
 
-    def corr(self, other: "ColumnBase"):
+    def corr(self, other: ColumnBase):
         raise TypeError(
             f"cannot perform corr with types {self.dtype}, {other.dtype}"
         )
@@ -1266,7 +1268,7 @@ class ColumnBase(Column, Serializable):
 
     def _process_for_reduction(
         self, skipna: bool = None, min_count: int = 0
-    ) -> Union["ColumnBase", ScalarLike]:
+    ) -> Union[ColumnBase, ScalarLike]:
         skipna = True if skipna is None else skipna
 
         if skipna:
@@ -1292,8 +1294,8 @@ class ColumnBase(Column, Serializable):
 
     def scatter_to_table(
         self,
-        row_indices: "ColumnBase",
-        column_indices: "ColumnBase",
+        row_indices: ColumnBase,
+        column_indices: ColumnBase,
         names: List[Any],
         nrows: int = None,
         ncols: int = None,
@@ -1343,11 +1345,11 @@ class ColumnBase(Column, Serializable):
 
 
 def column_empty_like(
-    column: "ColumnBase",
+    column: ColumnBase,
     dtype: Dtype = None,
     masked: bool = False,
     newsize: int = None,
-) -> "ColumnBase":
+) -> ColumnBase:
     """Allocate a new column like the given *column*
     """
     if dtype is None:
@@ -1373,8 +1375,8 @@ def column_empty_like(
 
 
 def column_empty_like_same_mask(
-    column: "ColumnBase", dtype: Dtype
-) -> "ColumnBase":
+    column: ColumnBase, dtype: Dtype
+) -> ColumnBase:
     """Create a new empty Column with the same length and the same mask.
 
     Parameters
@@ -1390,7 +1392,7 @@ def column_empty_like_same_mask(
 
 def column_empty(
     row_count: int, dtype: Dtype = "object", masked: bool = False
-) -> "ColumnBase":
+) -> ColumnBase:
     """Allocate a new column like the given row_count and dtype.
     """
     dtype = pd.api.types.pandas_dtype(dtype)
@@ -1435,7 +1437,7 @@ def build_column(
     offset: int = 0,
     null_count: int = None,
     children: Tuple[ColumnBase, ...] = (),
-) -> "ColumnBase":
+) -> ColumnBase:
     """
     Build a Column of the appropriate type from the given parameters
 
@@ -1537,9 +1539,9 @@ def build_column(
 
 
 def build_categorical_column(
-    categories: "ColumnBase",
-    codes: "ColumnBase",
-    mask: "Buffer" = None,
+    categories: ColumnBase,
+    codes: ColumnBase,
+    mask: Buffer = None,
     size: int = None,
     offset: int = 0,
     null_count: int = None,
@@ -1960,9 +1962,9 @@ def as_column(
 
 def column_applymap(
     udf: Callable[[ScalarLike], ScalarLike],
-    column: "ColumnBase",
+    column: ColumnBase,
     out_dtype: Dtype,
-) -> "ColumnBase":
+) -> ColumnBase:
     """Apply an element-wise function to transform the values in the Column.
 
     Parameters
@@ -2010,7 +2012,7 @@ def column_applymap(
     return as_column(results)
 
 
-def _data_from_cuda_array_interface_desc(obj) -> "Buffer":
+def _data_from_cuda_array_interface_desc(obj) -> Buffer:
     desc = obj.__cuda_array_interface__
     ptr = desc["data"][0]
     nelem = desc["shape"][0] if len(desc["shape"]) > 0 else 1
@@ -2020,7 +2022,7 @@ def _data_from_cuda_array_interface_desc(obj) -> "Buffer":
     return data
 
 
-def _mask_from_cuda_array_interface_desc(obj) -> Union["Buffer", None]:
+def _mask_from_cuda_array_interface_desc(obj) -> Union[Buffer, None]:
     desc = obj.__cuda_array_interface__
     mask = desc.get("mask", None)
 
@@ -2070,9 +2072,7 @@ def serialize_columns(columns) -> Tuple[List[dict], List]:
     return headers, frames
 
 
-def deserialize_columns(
-    headers: List[dict], frames: List
-) -> List["ColumnBase"]:
+def deserialize_columns(headers: List[dict], frames: List) -> List[ColumnBase]:
     """
     Construct a list of Columns from a list of headers
     and frames.
@@ -2095,7 +2095,7 @@ def arange(
     stop: Union[int, float] = None,
     step: Union[int, float] = 1,
     dtype=None,
-) -> "ColumnBase":
+) -> ColumnBase:
     """
     Returns a column with evenly spaced values within a given interval.
 
@@ -2148,9 +2148,7 @@ def arange(
     )
 
 
-def full(
-    size: int, fill_value: ScalarLike, dtype: Dtype = None
-) -> "ColumnBase":
+def full(size: int, fill_value: ScalarLike, dtype: Dtype = None) -> ColumnBase:
     """
     Returns a column of given size and dtype, filled with a given value.
 

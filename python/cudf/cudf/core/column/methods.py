@@ -1,5 +1,7 @@
 # Copyright (c) 2020, NVIDIA CORPORATION.
 
+from __future__ import annotations
+
 from typing import TYPE_CHECKING, Optional, Union, overload
 
 from typing_extensions import Literal
@@ -11,12 +13,12 @@ if TYPE_CHECKING:
 
 
 class ColumnMethodsMixin:
-    _column: "ColumnBase"
+    _column: ColumnBase
     _parent: Optional[Union["cudf.Series", "cudf.Index"]]
 
     def __init__(
         self,
-        column: "ColumnBase",
+        column: ColumnBase,
         parent: Union["cudf.Series", "cudf.Index"] = None,
     ):
         self._column = column

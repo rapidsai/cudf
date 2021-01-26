@@ -1,5 +1,6 @@
 # Copyright (c) 2021, NVIDIA CORPORATION.
 
+from __future__ import annotations
 from typing import Tuple, Union, TypeVar, Optional
 
 from cudf._typing import DtypeObj, Dtype, ScalarLike
@@ -17,8 +18,8 @@ class Column:
     _dtype: DtypeObj
     _offset: int
     _null_count: int
-    _children: Tuple["ColumnBase", ...]
-    _base_children: Tuple["ColumnBase", ...]
+    _children: Tuple[ColumnBase, ...]
+    _base_children: Tuple[ColumnBase, ...]
 
     def __init__(
         self,
@@ -28,7 +29,7 @@ class Column:
         mask: Optional[Buffer] = None,
         offset: int = None,
         null_count: int = None,
-        children: Tuple["ColumnBase", ...] = (),
+        children: Tuple[ColumnBase, ...] = (),
     ) -> None:
         ...
 
@@ -102,22 +103,22 @@ class Column:
         ...
 
     @property
-    def base_children(self) -> Tuple["ColumnBase", ...]:
+    def base_children(self) -> Tuple[ColumnBase, ...]:
         ...
 
     @property
-    def children(self) -> Tuple["ColumnBase", ...]:
+    def children(self) -> Tuple[ColumnBase, ...]:
         ...
 
-    def set_base_children(self, value: Tuple["ColumnBase", ...]) -> None:
+    def set_base_children(self, value: Tuple[ColumnBase, ...]) -> None:
         ...
 
-    def _mimic_inplace(self, other_col: "ColumnBase", inplace=False) -> Optional["ColumnBase"]:
+    def _mimic_inplace(self, other_col: ColumnBase, inplace=False) -> Optional[ColumnBase]:
         ...
 
     @staticmethod
     def from_scalar(
         val: ScalarLike,
         size: int
-    ) -> "ColumnBase":  # TODO: This should be Scalar, not ScalarLike
+    ) -> ColumnBase:  # TODO: This should be Scalar, not ScalarLike
         ...

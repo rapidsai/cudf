@@ -1,5 +1,5 @@
 # Copyright (c) 2018-2020, NVIDIA CORPORATION.
-from __future__ import division, print_function
+from __future__ import annotations, division, print_function
 
 import pickle
 from numbers import Number
@@ -134,7 +134,7 @@ class Index(Frame, Serializable):
         pass
 
     @cached_property
-    def _values(self) -> "ColumnBase":
+    def _values(self) -> ColumnBase:
         raise NotImplementedError
 
     def __getitem__(self, key):

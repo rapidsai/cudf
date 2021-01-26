@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import itertools
 from collections import OrderedDict
 from collections.abc import MutableMapping
@@ -25,7 +27,7 @@ class ColumnAccessor(MutableMapping):
 
     def __init__(
         self,
-        data: Union[MutableMapping, "ColumnAccessor"] = None,
+        data: Union[MutableMapping, ColumnAccessor] = None,
         multiindex: bool = False,
         level_names=None,
     ):
@@ -59,7 +61,7 @@ class ColumnAccessor(MutableMapping):
     def __iter__(self):
         return self._data.__iter__()
 
-    def __getitem__(self, key: Any) -> "ColumnBase":
+    def __getitem__(self, key: Any) -> ColumnBase:
         return self._data[key]
 
     def __setitem__(self, key: Any, value: Any):
@@ -118,7 +120,7 @@ class ColumnAccessor(MutableMapping):
         return tuple(self.keys())
 
     @cached_property
-    def columns(self) -> Tuple["ColumnBase", ...]:
+    def columns(self) -> Tuple[ColumnBase, ...]:
         return tuple(self.values())
 
     @cached_property
@@ -194,7 +196,7 @@ class ColumnAccessor(MutableMapping):
             self._data = self._data.__class__(zip(new_keys, new_values))
         self._clear_cache()
 
-    def copy(self, deep=False) -> "ColumnAccessor":
+    def copy(self, deep=False) -> ColumnAccessor:
         """
         Make a copy of this ColumnAccessor.
         """
@@ -210,7 +212,7 @@ class ColumnAccessor(MutableMapping):
             level_names=self.level_names,
         )
 
-    def select_by_label(self, key: Any) -> "ColumnAccessor":
+    def select_by_label(self, key: Any) -> ColumnAccessor:
         """
         Return a subset of this column accessor,
         composed of the keys specified by `key`.
@@ -233,7 +235,7 @@ class ColumnAccessor(MutableMapping):
                     return self._select_by_label_with_wildcard(key)
             return self._select_by_label_grouped(key)
 
-    def select_by_index(self, index: Any) -> "ColumnAccessor":
+    def select_by_index(self, index: Any) -> ColumnAccessor:
         """
         Return a ColumnAccessor composed of the columns
         specified by index.
@@ -271,14 +273,14 @@ class ColumnAccessor(MutableMapping):
         self._data[key] = value
         self._clear_cache()
 
-    def _select_by_label_list_like(self, key: Any) -> "ColumnAccessor":
+    def _select_by_label_list_like(self, key: Any) -> ColumnAccessor:
         return self.__class__(
             to_flat_dict({k: self._grouped_data[k] for k in key}),
             multiindex=self.multiindex,
             level_names=self.level_names,
         )
 
-    def _select_by_label_grouped(self, key: Any) -> "ColumnAccessor":
+    def _select_by_label_grouped(self, key: Any) -> ColumnAccessor:
         result = self._grouped_data[key]
         if isinstance(result, cudf.core.column.ColumnBase):
             return self.__class__({key: result})
@@ -292,7 +294,7 @@ class ColumnAccessor(MutableMapping):
                 level_names=self.level_names[len(key) :],
             )
 
-    def _select_by_label_slice(self, key: slice) -> "ColumnAccessor":
+    def _select_by_label_slice(self, key: slice) -> ColumnAccessor:
         start, stop = key.start, key.stop
         if key.step is not None:
             raise TypeError("Label slicing with step is not supported")
@@ -318,7 +320,7 @@ class ColumnAccessor(MutableMapping):
             level_names=self.level_names,
         )
 
-    def _select_by_label_with_wildcard(self, key: Any) -> "ColumnAccessor":
+    def _select_by_label_with_wildcard(self, key: Any) -> ColumnAccessor:
         key = self._pad_key(key, slice(None))
         return self.__class__(
             {k: self._data[k] for k in self._data if _compare_keys(k, key)},
