@@ -1,16 +1,16 @@
 # Copyright (c) 2020-2021, NVIDIA CORPORATION.
 import itertools
-import warnings
 
-import numpy as np
 import pandas as pd
 
 import cudf
 from cudf import _lib as libcudf
 from cudf._lib.join import compute_result_col_names
-from cudf.core.dtypes import CategoricalDtype
+from cudf.core.join.casting_logic import (
+    _input_to_libcudf_castrules_any,
+    _libcudf_to_output_castrules,
+)
 
-from cudf.core.join.casting_logic import _input_to_libcudf_castrules_any_cat, _input_to_libcudf_casting_rules_any, _input_to_libcudf_castrules_one_cat, _libcudf_to_output_casting_rules
 
 class Merge(object):
     def __init__(
@@ -321,7 +321,7 @@ class Merge(object):
             lhs_keys, rhs_keys, lhs_cols, rhs_cols
         ):
             for l_key, r_key in zip(l_key_grp, r_key_grp):
-                to_dtype = _input_to_libcudf_casting_rules_any(
+                to_dtype = _input_to_libcudf_castrules_any(
                     l_col_grp._data[l_key], r_col_grp._data[r_key], self.how
                 )
                 l_col_grp._data[l_key] = l_col_grp._data[l_key].astype(
@@ -375,13 +375,13 @@ class Merge(object):
 
         if self.left_index or self.right_index:
             for i in range(len(self.lhs.index._data.items())):
-                index_dtypes[i] = _libcudf_to_output_casting_rules(
+                index_dtypes[i] = _libcudf_to_output_castrules(
                     l_idx_join_cols[i], r_idx_join_cols[i], self.how
                 )
 
         for name in itertools.chain(self.left_on, self.right_on):
             if name in self.left_on and name in self.right_on:
-                data_dtypes[name] = _libcudf_to_output_casting_rules(
+                data_dtypes[name] = _libcudf_to_output_castrules(
                     l_data_join_cols[name], r_data_join_cols[name], self.how
                 )
         return (index_dtypes, data_dtypes)
@@ -416,11 +416,6 @@ class Merge(object):
         return output
 
     def _build_output_col(self, col, dtype):
-        # problem:
-        # equal dtypes, merge performed in int8 land via codes
-        # then build_categorical_column works with those codes
-        # unequal dtypes, merge performed in resolved dtype between both categories
-        # now the resulting data is not codes indexed into categories
         if isinstance(
             dtype, (cudf.core.dtypes.CategoricalDtype, pd.CategoricalDtype)
         ):
