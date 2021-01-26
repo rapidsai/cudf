@@ -908,14 +908,12 @@ struct rolling_window_launcher {
                                                    rmm::cuda_stream_view stream,
                                                    rmm::mr::device_memory_resource* mr)
   {
-    using namespace cudf;
-
     // Materialize offsets column.
-    auto size_data_type = data_type{type_to_id<size_type>()};
+    auto static constexpr size_data_type = data_type{type_to_id<size_type>()};
     auto sizes =
       make_fixed_width_column(size_data_type, input.size(), mask_state::UNALLOCATED, stream, mr);
     auto mutable_sizes = sizes->mutable_view();
-    thrust::transform(thrust::device,
+    thrust::transform(rmm::exec_policy(stream),
                       preceding_begin,
                       preceding_begin + input.size(),
                       following_begin,
@@ -967,9 +965,7 @@ struct rolling_window_launcher {
                                                              rmm::cuda_stream_view stream,
                                                              rmm::mr::device_memory_resource* mr)
   {
-    using namespace cudf;
-
-    auto size_data_type = data_type{type_to_id<size_type>()};
+    auto static constexpr size_data_type = data_type{type_to_id<size_type>()};
 
     // First, reduce offsets column by key, to identify the number of times
     // an offset appears.
@@ -997,7 +993,7 @@ struct rolling_window_launcher {
     auto scatter_keys =
       make_fixed_width_column(size_data_type, offsets.size(), mask_state::UNALLOCATED, stream, mr);
     auto reduced_by_key =
-      thrust::reduce_by_key(thrust::device,
+      thrust::reduce_by_key(rmm::exec_policy(stream),
                             offsets.template begin<size_type>() + 1,  // Skip first 0 in offsets.
                             offsets.template end<size_type>(),
                             thrust::make_constant_iterator<size_type>(1),
@@ -1006,12 +1002,12 @@ struct rolling_window_launcher {
     auto scatter_values_end = reduced_by_key.second;
     auto scatter_output =
       make_fixed_width_column(size_data_type, num_child_rows, mask_state::UNALLOCATED, stream, mr);
-    thrust::fill_n(thrust::device,
+    thrust::fill_n(rmm::exec_policy(stream),
                    scatter_output->mutable_view().template begin<size_type>(),
                    num_child_rows,
                    0);  // [0,0,0,...0]
     thrust::scatter(
-      thrust::device,
+      rmm::exec_policy(stream),
       scatter_values->mutable_view().template begin<size_type>(),
       scatter_values_end,
       scatter_keys->view().template begin<size_type>(),
@@ -1027,7 +1023,7 @@ struct rolling_window_launcher {
     //   inclusive_scan == [0, 0, 1, 1, 1, 3, 3, 3, 4, 4, 4, 5, 5]
     auto per_row_mapping =
       make_fixed_width_column(size_data_type, num_child_rows, mask_state::UNALLOCATED, stream, mr);
-    thrust::inclusive_scan(thrust::device,
+    thrust::inclusive_scan(rmm::exec_policy(stream),
                            scatter_output->view().template begin<size_type>(),
                            scatter_output->view().template end<size_type>(),
                            per_row_mapping->mutable_view().template begin<size_type>());
@@ -1047,7 +1043,7 @@ struct rolling_window_launcher {
                                               stream,
                                               mr);
     thrust::transform(
-      thrust::device,
+      rmm::exec_policy(stream),
       thrust::make_counting_iterator<size_type>(0),
       thrust::make_counting_iterator<size_type>(per_row_mapping.size()),
       gather_map->mutable_view().template begin<size_type>(),
@@ -1078,9 +1074,6 @@ struct rolling_window_launcher {
   {
     CUDF_EXPECTS(default_outputs.is_empty(),
                  "COLLECT window function does not support default values.");
-
-    using namespace cudf;
-    using namespace cudf::detail;
 
     if (input.is_empty()) return empty_like(input);
 
