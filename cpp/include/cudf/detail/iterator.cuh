@@ -175,6 +175,21 @@ auto inline make_validity_iterator(column_device_view const& column)
 }
 
 /**
+ * @brief Constructs a constant device iterator over a scalar's validity.
+ *
+ * Dereferencing the returned iterator returns a `bool`.
+ *
+ * For `p = *(iter + i)`, `p` is the validity of the scalar.
+ *
+ * @param scalar_value The scalar to iterate
+ * @return auto Iterator that returns scalar validity
+ */
+auto inline make_validity_iterator(scalar const& scalar_value)
+{
+  return thrust::make_constant_iterator(scalar_value.is_valid());
+}
+
+/**
  * @brief value accessor for scalar with valid data.
  * The unary functor returns data of Element type of the scalar.
  *

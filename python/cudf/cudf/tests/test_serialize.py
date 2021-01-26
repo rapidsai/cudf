@@ -146,7 +146,7 @@ def test_serialize_groupby_df():
     df["key_1"] = np.random.randint(0, 20, 100)
     df["key_2"] = np.random.randint(0, 20, 100)
     df["val"] = np.arange(100, dtype=np.float32)
-    gb = df.groupby(["key_1", "key_2"])
+    gb = df.groupby(["key_1", "key_2"], sort=True)
     outgb = gb.deserialize(*gb.serialize())
     expect = gb.mean()
     got = outgb.mean()

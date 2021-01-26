@@ -74,6 +74,19 @@ boost::filesystem::path getCacheDir()
   // empty, to disallow use of file cache at runtime.
   if (not kernel_cache_path.empty()) {
     kernel_cache_path /= std::string{CUDF_STRINGIFY(CUDF_VERSION)};
+
+    // Make per device cache based on compute capability. This is to avoid multiple devices of
+    // different compute capability to access the same kernel cache.
+    int device;
+    int cc_major;
+    int cc_minor;
+    CUDA_TRY(cudaGetDevice(&device));
+    CUDA_TRY(cudaDeviceGetAttribute(&cc_major, cudaDevAttrComputeCapabilityMajor, device));
+    CUDA_TRY(cudaDeviceGetAttribute(&cc_minor, cudaDevAttrComputeCapabilityMinor, device));
+    int cc = cc_major * 10 + cc_minor;
+
+    kernel_cache_path /= std::to_string(cc);
+
     try {
       // `mkdir -p` the kernel cache path if it doesn't exist
       boost::filesystem::create_directories(kernel_cache_path);
