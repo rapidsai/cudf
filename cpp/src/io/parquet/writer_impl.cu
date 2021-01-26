@@ -991,7 +991,7 @@ void writer::impl::init_page_fragments(hostdevice_vector<gpu::PageFragment> &fra
                            cudaMemcpyHostToDevice,
                            stream.value()));
   gpu::InitColumnDeviceViews(
-    col_desc.device_ptr(), parent_table_device_view, leaf_table_device_view, stream);
+    col_desc.device_ptr(), leaf_table_device_view, parent_table_device_view, stream);
   gpu::InitPageFragments(frag.device_ptr(),
                          col_desc.device_ptr(),
                          num_fragments,
@@ -1382,10 +1382,9 @@ void writer::impl::write(table_view const &table)
       desc->dict_data  = col.get_dict_data();
     }
     if (col.is_list()) {
-      desc->nesting_levels = col.nesting_levels();
-      desc->level_offsets  = col.level_offsets();
-      desc->rep_values     = col.repetition_levels();
-      desc->def_values     = col.definition_levels();
+      desc->level_offsets = col.level_offsets();
+      desc->rep_values    = col.repetition_levels();
+      desc->def_values    = col.definition_levels();
     }
     desc->num_values     = col.data_count();
     desc->num_rows       = col.row_count();

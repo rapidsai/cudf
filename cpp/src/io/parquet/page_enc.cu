@@ -962,7 +962,6 @@ __global__ void __launch_bounds__(128, 8) gpuEncodePages(EncPage *pages,
   if (s->page.page_type != PageType::DICTIONARY_PAGE && s->col.level_bits != 0 &&
       s->col.parent_column == nullptr) {
     // Calculate definition levels from validity
-    // const uint32_t *valid = s->col.valid_map_base;
     uint32_t def_lvl_bits = s->col.level_bits & 0xf;
     if (def_lvl_bits != 0) {
       if (!t) {
@@ -1998,9 +1997,17 @@ void InitPageFragments(PageFragment *frag,
     frag, col_desc, num_fragments, num_columns, fragment_size, num_rows);
 }
 
+/**
+ * @brief Set column_device_view pointers in column description array
+ *
+ * @param[out] col_desc Column description array [column_id]
+ * @param[out] leaf_table_device_view Table device view to store leaf columns
+ * @param[in] parent_table_device_view Table device view containing parent columns
+ * @param[in] stream CUDA stream to use, default 0
+ */
 void InitColumnDeviceViews(EncColumnDesc *col_desc,
-                           const table_device_view &parent_column_table_device_view,
                            table_device_view &leaf_column_table_device_view,
+                           const table_device_view &parent_column_table_device_view,
                            rmm::cuda_stream_view stream)
 {
   cudf::detail::device_single_thread(
