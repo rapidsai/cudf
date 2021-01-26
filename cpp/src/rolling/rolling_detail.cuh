@@ -911,7 +911,7 @@ struct rolling_window_launcher {
    * is set to `0` (since the result is `null`).
    */
   template <typename PrecedingIter, typename FollowingIter>
-  std::unique_ptr<column> create_collect_offsets(column_view const& input,
+  std::unique_ptr<column> create_collect_offsets(size_type const& input_size,
                                                  PrecedingIter preceding_begin,
                                                  FollowingIter following_begin,
                                                  size_type min_periods,
@@ -921,7 +921,7 @@ struct rolling_window_launcher {
     // Materialize offsets column.
     auto static constexpr size_data_type = data_type{type_to_id<size_type>()};
     auto sizes =
-      make_fixed_width_column(size_data_type, input.size(), mask_state::UNALLOCATED, stream, mr);
+      make_fixed_width_column(size_data_type, input_size, mask_state::UNALLOCATED, stream, mr);
     auto mutable_sizes = sizes->mutable_view();
 
     // Consider the following preceding/following values:
@@ -936,7 +936,7 @@ struct rolling_window_launcher {
     //  prec + foll = [0,3,3,3,0]
     thrust::transform(rmm::exec_policy(stream),
                       preceding_begin,
-                      preceding_begin + input.size(),
+                      preceding_begin + input_size,
                       following_begin,
                       mutable_sizes.begin<size_type>(),
                       [min_periods] __device__(auto preceding, auto following) {
@@ -956,7 +956,7 @@ struct rolling_window_launcher {
    */
   template <typename PrecedingIter, typename FollowingIter>
   std::pair<rmm::device_buffer, size_type> create_collect_null_mask(
-    column_view const& input,
+    size_type const& input_size,
     PrecedingIter preceding_iter,
     FollowingIter following_iter,
     size_type min_periods,
@@ -965,7 +965,7 @@ struct rolling_window_launcher {
   {
     return valid_if(
       thrust::make_counting_iterator<size_type>(0),
-      thrust::make_counting_iterator<size_type>(input.size()),
+      thrust::make_counting_iterator<size_type>(input_size),
       [preceding_iter, following_iter, min_periods] __device__(auto i) {
         return (preceding_iter[i] + following_iter[i]) >= min_periods;
       },
@@ -1123,8 +1123,8 @@ struct rolling_window_launcher {
       });
 
     // Materialize collect list's offsets.
-    auto offsets =
-      create_collect_offsets(input, preceding_begin, following_begin, min_periods, stream, mr);
+    auto offsets = create_collect_offsets(
+      input.size(), preceding_begin, following_begin, min_periods, stream, mr);
 
     // Map each element of the collect() result's child column
     // to the index where it appears in the input.
@@ -1140,8 +1140,8 @@ struct rolling_window_launcher {
 
     rmm::device_buffer null_mask;
     size_type null_count;
-    std::tie(null_mask, null_count) =
-      create_collect_null_mask(input, preceding_begin, following_begin, min_periods, stream, mr);
+    std::tie(null_mask, null_count) = create_collect_null_mask(
+      input.size(), preceding_begin, following_begin, min_periods, stream, mr);
 
     return make_lists_column(input.size(),
                              std::move(offsets),
