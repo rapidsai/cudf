@@ -2928,7 +2928,6 @@ public class ColumnVectorTest extends CudfTestBase {
     }
   }
 
-
   @Test
   void testListContainsStringCol() {
     List<String> list1 = Arrays.asList("Héllo there", "thésé");
