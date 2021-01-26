@@ -150,7 +150,7 @@ def test_serialize_groupby_df():
     outgb = gb.deserialize(*gb.serialize())
     expect = gb.mean()
     got = outgb.mean()
-    assert_eq(got, expect)
+    assert_eq(got.sort_index(), expect.sort_index())
 
 
 def test_serialize_groupby_external():
