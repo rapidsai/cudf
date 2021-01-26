@@ -10,6 +10,7 @@
 - PR #6984 Add `interval` dtype to cudf
 - PR #6885 Share `factorize` implementation with Index and cudf module
 - PR #6775 Implement cudf.DateOffset for months
+- PR #7039 Support contains() on lists of primitives
 
 ## Improvements
 
