@@ -1622,7 +1622,6 @@ class Frame(libcudf.table.Table):
             )
             source = self._get_columns_by_label(numeric_cols)
             if source.empty:
-                print(source)
                 return source.astype("float64")
 
         out_rank_table = libcudf.sort.rank_columns(
