@@ -450,20 +450,20 @@ std::unique_ptr<column> fixed_point_binary_operation(scalar const& lhs,
   if (op == binary_operator::TRUE_DIV) {
     // Adjust scalar so lhs has the scale needed to get desired output data_type (scale)
     auto const diff         = lhs.type().scale() - rhs.type().scale() - scale;
-    auto const scalar_scale = scale_type{rhs.type().scale() + scale};
+    auto const unused_scale = scale_type{0};  // scale of out_view already set
     if (lhs.type().id() == type_id::DECIMAL32) {
-      auto const factor = numeric::detail::ipow<int32_t, Radix::BASE_10>(std::abs(diff));
-      auto const val    = static_cast<fixed_point_scalar<decimal32> const&>(lhs).value();
-      auto const scalar = diff < 0 ? make_fixed_point_scalar<decimal32>(val / factor, scalar_scale)
-                                   : make_fixed_point_scalar<decimal32>(val * factor, scalar_scale);
+      auto const factor       = numeric::detail::ipow<int32_t, Radix::BASE_10>(std::abs(diff));
+      auto const val          = static_cast<fixed_point_scalar<decimal32> const&>(lhs).value();
+      auto const scaled_value = diff < 0 ? val / factor : val * factor;
+      auto const scalar       = make_fixed_point_scalar<decimal32>(scaled_value, unused_scale);
       binops::jit::binary_operation(out_view, *scalar, rhs, binary_operator::DIV, stream);
       return out;
 
     } else {
-      auto const factor = numeric::detail::ipow<int64_t, Radix::BASE_10>(std::abs(diff));
-      auto const val    = static_cast<fixed_point_scalar<decimal64> const&>(lhs).value();
-      auto const scalar = diff < 0 ? make_fixed_point_scalar<decimal64>(val / factor, scalar_scale)
-                                   : make_fixed_point_scalar<decimal64>(val * factor, scalar_scale);
+      auto const factor       = numeric::detail::ipow<int64_t, Radix::BASE_10>(std::abs(diff));
+      auto const val          = static_cast<fixed_point_scalar<decimal64> const&>(lhs).value();
+      auto const scaled_value = diff < 0 ? val / factor : val * factor;
+      auto const scalar       = make_fixed_point_scalar<decimal64>(scaled_value, unused_scale);
       binops::jit::binary_operation(out_view, *scalar, rhs, binary_operator::DIV, stream);
       return out;
     }
