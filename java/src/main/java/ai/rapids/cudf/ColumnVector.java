@@ -314,6 +314,8 @@ public final class ColumnVector extends ColumnView {
    * Create a ColumnVector from the off heap Apache Arrow buffers passed in.
    * Any of the buffers not used for that datatype should be set to 0 for the
    * address and size.
+   * This only supports primitive types and Strings, Decimals and nested types
+   * such as list and struct are not supported.
    * @param type - type of the column
    * @param numRows - Number of rows in the arrow column
    * @param nullCount - Null count

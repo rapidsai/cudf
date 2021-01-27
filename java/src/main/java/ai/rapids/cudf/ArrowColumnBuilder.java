@@ -19,8 +19,6 @@
 package ai.rapids.cudf;
 
 import java.util.ArrayList;
-import java.util.List;
-import java.util.StringJoiner;
 
 /**
  * Column builder from Arrow data. This builder takes in pointers to the Arrow off heap
@@ -28,17 +26,19 @@ import java.util.StringJoiner;
  * The caller can add multiple batches where each batch corresponds to Arrow data
  * and those batches get concatenated together after being converted to CUDF
  * ColumnVectors.
+ * This currently only supports primitive types and Strings, Decimals and nested types
+ * such as list and struct are not supported.
  */
 public final class ArrowColumnBuilder implements AutoCloseable {
     private DType type;
-    private ArrayList<Long> data = new ArrayList<>();
-    private ArrayList<Long> dataLength = new ArrayList<>();
-    private ArrayList<Long> validity = new ArrayList<>();
-    private ArrayList<Long> validityLength = new ArrayList<>();
-    private ArrayList<Long> offsets = new ArrayList<>();
-    private ArrayList<Long> offsetsLength = new ArrayList<>();
-    private ArrayList<Long> nullCount = new ArrayList<>();
-    private ArrayList<Long> rows = new ArrayList<>();
+    private final ArrayList<Long> data = new ArrayList<>();
+    private final ArrayList<Long> dataLength = new ArrayList<>();
+    private final ArrayList<Long> validity = new ArrayList<>();
+    private final ArrayList<Long> validityLength = new ArrayList<>();
+    private final ArrayList<Long> offsets = new ArrayList<>();
+    private final ArrayList<Long> offsetsLength = new ArrayList<>();
+    private final ArrayList<Long> nullCount = new ArrayList<>();
+    private final ArrayList<Long> rows = new ArrayList<>();
 
     public ArrowColumnBuilder(HostColumnVector.DataType type) {
       this.type = type.getType();
@@ -50,6 +50,8 @@ public final class ArrowColumnBuilder implements AutoCloseable {
      * Note, this takes all data, validity, and offsets buffers, but they may not all
      * be needed based on the data type. The buffer and length should be set to 0
      * if they aren't used for that type.
+     * This api only supports primitive types and Strings, Decimals and nested types
+     * such as list and struct are not supported.
      * @param rows - number of rows in this Arrow buffer
      * @param nullCount - number of null values in this Arrow buffer
      * @param data - memory address of the Arrow data buffer
@@ -110,7 +112,6 @@ public final class ArrowColumnBuilder implements AutoCloseable {
 
     @Override
     public String toString() {
-      StringJoiner sj = new StringJoiner(",");
       return "ArrowColumnBuilder{" +
           "type=" + type +
           ", data=" + data +
