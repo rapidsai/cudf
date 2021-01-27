@@ -12,7 +12,8 @@ from cudf._lib.cpp.table.table_view cimport table_view
 
 from cudf._lib.cpp.reshape cimport (
     interleave_columns as cpp_interleave_columns,
-    tile as cpp_tile
+    tile as cpp_tile,
+    explode as cpp_explode
 )
 
 
@@ -40,4 +41,19 @@ def tile(Table source_table, size_type count):
         move(c_result),
         column_names=source_table._column_names,
         index_names=source_table._index_names
+    )
+
+
+def explode(Table source_table, size_type idx):
+    cdef size_type c_idx = idx
+    cdef table_view c_view = source_table.view()
+    cdef unique_ptr[table] c_result
+
+    with nogil:
+        c_result = move(cpp_explode(c_view, c_idx))
+
+    return Table.from_unique_ptr(
+        move(c_result), #unique pointer
+        column_names = source_table._column_names,
+        index_names = source_table._index_names
     )
