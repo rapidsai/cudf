@@ -1,5 +1,11 @@
+# Copyright (c) 2021, NVIDIA CORPORATION.
+
+from __future__ import annotations
+
 import itertools
+from collections import OrderedDict
 from collections.abc import MutableMapping
+from typing import TYPE_CHECKING, Any, Tuple, Union
 
 import pandas as pd
 
@@ -11,9 +17,22 @@ from cudf.utils.utils import (
     to_nested_dict,
 )
 
+if TYPE_CHECKING:
+    from cudf.core.column import ColumnBase
+
 
 class ColumnAccessor(MutableMapping):
-    def __init__(self, data=None, multiindex=False, level_names=None):
+
+    _data: "OrderedDict[Any, ColumnBase]"
+    multiindex: bool
+    _level_names: Tuple[Any, ...]
+
+    def __init__(
+        self,
+        data: Union[MutableMapping, ColumnAccessor] = None,
+        multiindex: bool = False,
+        level_names=None,
+    ):
         """
         Parameters
         ----------
@@ -33,7 +52,7 @@ class ColumnAccessor(MutableMapping):
         if isinstance(data, ColumnAccessor):
             multiindex = multiindex or data.multiindex
             level_names = level_names or data.level_names
-            self._data = data
+            self._data = data._data
             self.multiindex = multiindex
             self._level_names = level_names
 
@@ -44,21 +63,21 @@ class ColumnAccessor(MutableMapping):
     def __iter__(self):
         return self._data.__iter__()
 
-    def __getitem__(self, key):
+    def __getitem__(self, key: Any) -> ColumnBase:
         return self._data[key]
 
-    def __setitem__(self, key, value):
+    def __setitem__(self, key: Any, value: Any):
         self.set_by_label(key, value)
         self._clear_cache()
 
-    def __delitem__(self, key):
+    def __delitem__(self, key: Any):
         self._data.__delitem__(key)
         self._clear_cache()
 
-    def __len__(self):
+    def __len__(self) -> int:
         return len(self._data)
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         data_repr = self._data.__repr__()
         multiindex_repr = self.multiindex.__repr__()
         level_names_repr = self.level_names.__repr__()
@@ -70,14 +89,14 @@ class ColumnAccessor(MutableMapping):
         )
 
     @property
-    def level_names(self):
+    def level_names(self) -> Tuple[Any, ...]:
         if self._level_names is None or len(self._level_names) == 0:
             return tuple((None,) * max(1, self.nlevels))
         else:
             return self._level_names
 
     @property
-    def nlevels(self):
+    def nlevels(self) -> int:
         if len(self._data) == 0:
             return 0
         if not self.multiindex:
@@ -86,28 +105,28 @@ class ColumnAccessor(MutableMapping):
             return len(next(iter(self.keys())))
 
     @property
-    def name(self):
+    def name(self) -> Any:
         if len(self._data) == 0:
             return None
         return self.level_names[-1]
 
     @property
-    def nrows(self):
+    def nrows(self) -> int:
         if len(self._data) == 0:
             return 0
         else:
             return len(next(iter(self.values())))
 
     @cached_property
-    def names(self):
+    def names(self) -> Tuple[Any, ...]:
         return tuple(self.keys())
 
     @cached_property
-    def columns(self):
+    def columns(self) -> Tuple[ColumnBase, ...]:
         return tuple(self.values())
 
     @cached_property
-    def _grouped_data(self):
+    def _grouped_data(self) -> MutableMapping:
         """
         If self.multiindex is True,
         return the underlying mapping as a nested mapping.
@@ -125,7 +144,7 @@ class ColumnAccessor(MutableMapping):
             except AttributeError:
                 pass
 
-    def to_pandas_index(self):
+    def to_pandas_index(self) -> pd.Index:
         """"
         Convert the keys of the ColumnAccessor to a Pandas Index object.
         """
@@ -142,7 +161,7 @@ class ColumnAccessor(MutableMapping):
             result = pd.Index(self.names, name=self.name, tupleize_cols=False)
         return result
 
-    def insert(self, name, value, loc=-1):
+    def insert(self, name: Any, value: Any, loc: int = -1):
         """
         Insert column into the ColumnAccessor at the specified location.
 
@@ -176,10 +195,10 @@ class ColumnAccessor(MutableMapping):
         else:
             new_keys = self.names[:loc] + (name,) + self.names[loc:]
             new_values = self.columns[:loc] + (value,) + self.columns[loc:]
-            self._data = self._data.__class__(zip(new_keys, new_values),)
+            self._data = self._data.__class__(zip(new_keys, new_values))
         self._clear_cache()
 
-    def copy(self, deep=False):
+    def copy(self, deep=False) -> ColumnAccessor:
         """
         Make a copy of this ColumnAccessor.
         """
@@ -195,7 +214,7 @@ class ColumnAccessor(MutableMapping):
             level_names=self.level_names,
         )
 
-    def select_by_label(self, key):
+    def select_by_label(self, key: Any) -> ColumnAccessor:
         """
         Return a subset of this column accessor,
         composed of the keys specified by `key`.
@@ -218,7 +237,7 @@ class ColumnAccessor(MutableMapping):
                     return self._select_by_label_with_wildcard(key)
             return self._select_by_label_grouped(key)
 
-    def select_by_index(self, index):
+    def select_by_index(self, index: Any) -> ColumnAccessor:
         """
         Return a ColumnAccessor composed of the columns
         specified by index.
@@ -243,7 +262,7 @@ class ColumnAccessor(MutableMapping):
             data, multiindex=self.multiindex, level_names=self.level_names,
         )
 
-    def set_by_label(self, key, value):
+    def set_by_label(self, key: Any, value: Any):
         """
         Add (or modify) column by name.
 
@@ -256,14 +275,14 @@ class ColumnAccessor(MutableMapping):
         self._data[key] = value
         self._clear_cache()
 
-    def _select_by_label_list_like(self, key):
+    def _select_by_label_list_like(self, key: Any) -> ColumnAccessor:
         return self.__class__(
             to_flat_dict({k: self._grouped_data[k] for k in key}),
             multiindex=self.multiindex,
             level_names=self.level_names,
         )
 
-    def _select_by_label_grouped(self, key):
+    def _select_by_label_grouped(self, key: Any) -> ColumnAccessor:
         result = self._grouped_data[key]
         if isinstance(result, cudf.core.column.ColumnBase):
             return self.__class__({key: result})
@@ -277,7 +296,7 @@ class ColumnAccessor(MutableMapping):
                 level_names=self.level_names[len(key) :],
             )
 
-    def _select_by_label_slice(self, key):
+    def _select_by_label_slice(self, key: slice) -> ColumnAccessor:
         start, stop = key.start, key.stop
         if key.step is not None:
             raise TypeError("Label slicing with step is not supported")
@@ -303,7 +322,7 @@ class ColumnAccessor(MutableMapping):
             level_names=self.level_names,
         )
 
-    def _select_by_label_with_wildcard(self, key):
+    def _select_by_label_with_wildcard(self, key: Any) -> ColumnAccessor:
         key = self._pad_key(key, slice(None))
         return self.__class__(
             {k: self._data[k] for k in self._data if _compare_keys(k, key)},
@@ -311,7 +330,7 @@ class ColumnAccessor(MutableMapping):
             level_names=self.level_names,
         )
 
-    def _pad_key(self, key, pad_value=""):
+    def _pad_key(self, key: Any, pad_value="") -> Any:
         """
         Pad the provided key to a length equal to the number
         of levels.
@@ -323,7 +342,7 @@ class ColumnAccessor(MutableMapping):
         return key + (pad_value,) * (self.nlevels - len(key))
 
 
-def _compare_keys(target, key):
+def _compare_keys(target: Any, key: Any) -> bool:
     """
     Compare `key` to `target`.
 
