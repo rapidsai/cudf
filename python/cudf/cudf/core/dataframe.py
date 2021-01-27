@@ -1,5 +1,5 @@
 # Copyright (c) 2018-2020, NVIDIA CORPORATION.
-from __future__ import division, annotations
+from __future__ import annotations, division
 
 import inspect
 import itertools
@@ -9,7 +9,7 @@ import sys
 import warnings
 from collections import OrderedDict, defaultdict
 from collections.abc import Iterable, Mapping, Sequence
-from typing import Any, Set, Union, Tuple
+from typing import Any, Set, Tuple, Union
 
 import cupy
 import numpy as np
@@ -7274,6 +7274,9 @@ class DataFrame(Frame, Serializable):
     def explode(
         self, column: Union[str, Tuple[str, ...]], ignore_index: bool = False
     ) -> DataFrame:
+        """
+        Expand all list columns in the DataFrame.
+        """
         pass
 
     _accessors = set()  # type: Set[Any]
