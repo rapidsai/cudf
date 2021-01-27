@@ -119,12 +119,8 @@ __global__ void __launch_bounds__(block_size) gpuInitPageFragments(PageFragment 
 {
   __shared__ __align__(16) frag_init_state_s state_g;
 
-  using warp_reduce      = cub::WarpReduce<uint32_t>;
-  using half_warp_reduce = cub::WarpReduce<uint32_t, 16>;
-  __shared__ union {
-    typename warp_reduce::TempStorage full[block_size / 32];
-    typename half_warp_reduce::TempStorage half;
-  } temp_storage;
+  using block_reduce = cub::BlockReduce<uint32_t, block_size>;
+  __shared__ typename block_reduce::TempStorage temp_storage;
 
   frag_init_state_s *const s = &state_g;
   uint32_t t                 = threadIdx.x;
@@ -229,16 +225,12 @@ __global__ void __launch_bounds__(block_size) gpuInitPageFragments(PageFragment 
 
     nz_pos =
       s->frag.non_nulls + __popc(valid_warp & (0x7fffffffu >> (0x1fu - ((uint32_t)t & 0x1f))));
-    len = warp_reduce(temp_storage.full[t / 32]).Sum(len);
-    if (!(t & 0x1f)) {
-      s->scratch_red[(t >> 5) + 0]  = __popc(valid_warp);
-      s->scratch_red[(t >> 5) + 16] = len;
-    }
+    len = block_reduce(temp_storage).Sum(len);
+    if (!(t & 0x1f)) { s->scratch_red[(t >> 5) + 0] = __popc(valid_warp); }
     __syncthreads();
     if (t < 32) {
       uint32_t warp_pos  = WarpReducePos16((t < 16) ? s->scratch_red[t] : 0, t);
       uint32_t non_nulls = shuffle(warp_pos, 0xf);
-      len = half_warp_reduce(temp_storage.half).Sum((t < 16) ? s->scratch_red[t + 16] : 0);
       if (t < 16) { s->scratch_red[t] = warp_pos; }
       if (!t) {
         s->frag.non_nulls = s->frag.non_nulls + non_nulls;
@@ -391,15 +383,10 @@ __global__ void __launch_bounds__(block_size) gpuInitPageFragments(PageFragment 
       }
     }
     __syncthreads();
-    dupe_data_size = warp_reduce(temp_storage.full[t / 32]).Sum(dupe_data_size);
-    if (!(t & 0x1f)) { s->scratch_red[t >> 5] = dupe_data_size; }
-    __syncthreads();
-    if (t < 32) {
-      dupe_data_size = half_warp_reduce(temp_storage.half).Sum((t < 16) ? s->scratch_red[t] : 0);
-      if (!t) {
-        s->frag.dict_data_size = s->frag.fragment_data_size - dupe_data_size;
-        s->frag.num_dict_vals  = s->frag.non_nulls - s->total_dupes;
-      }
+    dupe_data_size = block_reduce(temp_storage).Sum(dupe_data_size);
+    if (!t) {
+      s->frag.dict_data_size = s->frag.fragment_data_size - dupe_data_size;
+      s->frag.num_dict_vals  = s->frag.non_nulls - s->total_dupes;
     }
   }
   __syncthreads();

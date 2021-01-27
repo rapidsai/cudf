@@ -152,8 +152,8 @@ __global__ void __launch_bounds__(block_size, 1)
   gpuBuildChunkDictionaries(EncColumnChunk *chunks, uint32_t *dev_scratch)
 {
   __shared__ __align__(8) dict_state_s state_g;
-  using warp_reduce = cub::WarpReduce<uint32_t>;
-  __shared__ typename warp_reduce::TempStorage temp_storage[block_size / 32];
+  using block_reduce = cub::BlockReduce<uint32_t, block_size>;
+  __shared__ typename block_reduce::TempStorage temp_storage;
 
   dict_state_s *const s = &state_g;
   uint32_t t            = threadIdx.x;
@@ -257,15 +257,11 @@ __global__ void __launch_bounds__(block_size, 1)
         }
       }
       // Count the non-duplicate entries
-      frag_dict_size = warp_reduce(temp_storage[t / 32]).Sum((is_valid && !is_dupe) ? len : 0);
-      if (!(t & 0x1f)) { s->scratch_red[t >> 5] = frag_dict_size; }
+      frag_dict_size   = block_reduce(temp_storage).Sum((is_valid && !is_dupe) ? len : 0);
       new_dict_entries = __syncthreads_count(is_valid && !is_dupe);
-      if (t < 32) {
-        frag_dict_size = warp_reduce(temp_storage[t / 32]).Sum(s->scratch_red[t]);
-        if (t == 0) {
-          s->frag_dict_size += frag_dict_size;
-          s->num_dict_entries += new_dict_entries;
-        }
+      if (t == 0) {
+        s->frag_dict_size += frag_dict_size;
+        s->num_dict_entries += new_dict_entries;
       }
       if (is_valid) {
         if (!is_dupe) {
