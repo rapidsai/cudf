@@ -48,7 +48,7 @@ public final class ArrowColumnBuilder implements AutoCloseable {
      * Add an Arrow buffer. This api allows you to add multiple if you want them
      * combined into a single ColumnVector.
      * Note, this takes all data, validity, and offsets buffers, but they may not all
-     * be used based on the data type. The buffer and length should just be set to 0
+     * be needed based on the data type. The buffer and length should be set to 0
      * if they aren't used for that type.
      * @param rows - number of rows in this Arrow buffer
      * @param nullCount - number of null values in this Arrow buffer

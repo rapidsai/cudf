@@ -312,6 +312,8 @@ public final class ColumnVector extends ColumnView {
 
   /**
    * Create a ColumnVector from the off heap Apache Arrow buffers passed in.
+   * Any of the buffers not used for that datatype should be set to 0 for the
+   * address and size.
    * @param type - type of the column
    * @param numRows - Number of rows in the arrow column
    * @param nullCount - Null count
