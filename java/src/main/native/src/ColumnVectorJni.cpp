@@ -57,7 +57,7 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_fromArrow(JNIEnv *env, 
                                                                    jint j_type,
                                                                    jlong j_col_length,
                                                                    jlong j_null_count,
-								   jobject j_data_obj,
+                                                                   jobject j_data_obj,
                                                                    jobject j_validity_obj,
                                                                    jobject j_offsets_obj) {
   try {
