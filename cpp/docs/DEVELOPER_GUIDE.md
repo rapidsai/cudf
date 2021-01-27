@@ -207,6 +207,12 @@ A `column` may have nested (child) columns, depending on the data type of the co
 `cudf::column_view` is a core non-owning data structure in libcudf. It is an immutable, 
 non-owning view of device memory as a column. Most libcudf public APIs take views as inputs.
 
+A `column_view` may be a view of a "slice" of a column. For example, it might view rows 75-150 of a 
+column with 1000 rows. The `size()` of this `column_view` would be `75`, and accessing index `0` of 
+the view would return the element at index `75` of the owning `column`. Internally, this is 
+implemented by storing in the view a pointer, an offset, and a size. `column_view::data<T>()` 
+returns a pointer iterator to `column_view::head<T>() + offset`.
+
 ### `cudf::mutable_column_view`
 
 A *mutable*, non-owning view of device memory as a column. Used for detail APIs and (rare) public
