@@ -24,7 +24,8 @@ This section defines terminology used within libcudf
 A column is an array of data of a single type. Along with Tables, columns are the fundamental data 
 structures used in libcudf. Most libcudf algorithms operate on columns. Columns may have a validity
 mask representing whether each element is valid or null (invalid). Columns of nested types are 
-supported, meaning that a column may have child columns.
+supported, meaning that a column may have child columns. A column is the C++ equivalent to a cuDF
+Python [series](https://docs.rapids.ai/api/cudf/stable/api.html#series)
 
 ### Element
 
@@ -36,7 +37,8 @@ A type representing a single element of a data type.
 
 ### Table
 
-A table is a collection of columns. It is also known as a dataframe.
+A table is a collection of columns. A table is the C++ equivalent to a cuDF Python
+[data frame](https://docs.rapids.ai/api/cudf/stable/api.html#dataframe).
 
 ### View
 
@@ -74,7 +76,7 @@ execution policy (always `rmm::exec_policy` in libcudf).
 ## Code and Documentation Style and Formatting
 
 libcudf code uses [snake_case](https://en.wikipedia.org/wiki/Snake_case) for all names except in a 
-two cases: template parameters and unit tests and test case names may use Pascal case, aka 
+few cases: template parameters, unit tests and test case names may use Pascal case, aka 
 [UpperCamelCase](https://en.wikipedia.org/wiki/Camel_case). We do not use [Hungarian notation](https://en.wikipedia.org/wiki/Hungarian_notation), except sometimes when naming device data variables and their corresponding
 host copies. Private member variables are typically prefixed with an underscore.
 
@@ -217,7 +219,7 @@ a `string_scalar` holds a single string. The data for the stored value resides i
 |-|-|-|
 |fixed-width|`fixed_width_scalar<T>`| `T` can be any fixed-width type|
 |numeric|`numeric_scalar<T>` | `T` can be `int8_t`, `int16_t`, `int32_t`, `int_64_t`, `float` or `double`|
-|fixed-point|`fixed_point_scalar<T> | `T` can be `cudf::numeric::decimal32` or `cudf::numeric::decimal64`|
+|fixed-point|`fixed_point_scalar<T> | `T` can be `numeric::decimal32` or `numeric::decimal64`|
 |timestamp|`timestamp_scalar<T>` | `T` can be `timestamp_D`, `timestamp_s`, etc.|
 |duration|`duration_scalar<T>` | `T` can be `duration_D`, `duration_s`, etc.|
 |string|`string_scalar`| This class object is immutable|
@@ -401,7 +403,7 @@ int host_value = int_scalar.value();
 Allocates a specified number of elements of the specified type. If no initialization value is 
 provided, all elements are default initialized (this incurs a kernel launch).
 
-(*) Note: `rmm::device_vector<T>` is not yet updated to use `device_memory_resource`s, but support 
+**Note**: `rmm::device_vector<T>` is not yet updated to use `device_memory_resource`s, but support 
 is forthcoming. Likewise, `device_vector` operations cannot be stream ordered.
 
 #### `rmm::device_uvector<T>`
@@ -494,7 +496,7 @@ Increasingly, libcudf is moving toward internal (`detail`) APIs with iterator pa
 than explicit `column`/`table`/`scalar` parameters. As with STL, iterators enable generic 
 algorithms to be applied to arbitrary containers. A good example of this is `cudf::copy_if_else`. 
 This function takes two inputs, and a Boolean mask. It copies the corresponding element from the 
-first or second input depending on whether the mask at that index is true or false. Implementing
+first or second input depending on whether the mask at that index is `true` or `false`. Implementing
 `copy_if_else` for all combinations of `column` and `scalar` parameters is simplified by using
 iterators in the `detail` API.
 
@@ -520,12 +522,12 @@ value and validity. `cudf::detail::make_pair_iterator` can be used to create a p
 
 ### Null-replacement iterator
 
-This iterator replaces the null/validity value for each element with a specified constant (true or
-false). Created using `cudf::detail::make_null_replacement_iterator`.
+This iterator replaces the null/validity value for each element with a specified constant (`true` or
+`false`). Created using `cudf::detail::make_null_replacement_iterator`.
 
 ### Validity iterator
 
-This iterator returns the validity of the underlying element (true or false). Created using 
+This iterator returns the validity of the underlying element (`true` or `false`). Created using 
 `cudf::detail::make_validity_iterator`.
 
 ### Index-normalizing iterators
@@ -563,7 +565,7 @@ thrust::lower_bound(rmm::exec_policy(stream),
 ## Namespaces
 
 ### External
-All public libcudf APIs should be placed in the `cudf` namespace*. Example:
+All public libcudf APIs should be placed in the `cudf` namespace. Example:
 ```c++
 namespace cudf{
    void public_function(...);
