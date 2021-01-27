@@ -47,7 +47,7 @@ public final class ArrowColumnBuilder implements AutoCloseable {
      * combined into a single ColumnVector.
      * Note, this takes all data, validity, and offsets buffers, but they may not all
      * be needed based on the data type. The buffer should be null if its not used
-     * used for that type.
+     * for that type.
      * This api only supports primitive types and Strings, Decimals and nested types
      * such as list and struct are not supported.
      * @param rows - number of rows in this Arrow buffer
