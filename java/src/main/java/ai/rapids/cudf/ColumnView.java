@@ -2336,12 +2336,6 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    */
   public final ColumnVector listContains(Scalar key) {
     assert type.equals(DType.LIST) : "column type must be a LIST";
-    try (ColumnView childCv = this.getChildColumnView(0)) {
-      assert childCv != null;
-      assert key.getType() == childCv.getType() :
-          "List child column data type "+ childCv.getType()
-              + " does not match the scalar key's data type " + key.getType();
-    }
     return new ColumnVector(listContains(getNativeView(), key.getScalarHandle()));
   }
 
@@ -2357,12 +2351,6 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    */
   public final ColumnVector listContainsColumn(ColumnView key) {
     assert type.equals(DType.LIST) : "column type must be a LIST";
-    try (ColumnView childCv = this.getChildColumnView(0)) {
-      assert childCv != null;
-      assert key.getType() == childCv.getType() :
-          "List child column data type "+ childCv.getType()
-              + " does not match the key column's data type " + key.getType();
-    }
     return new ColumnVector(listContainsColumn(getNativeView(), key.getNativeView()));
   }
 
