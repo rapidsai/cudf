@@ -15,6 +15,32 @@ from cudf.tests.utils import (
 )
 
 
+@pytest.mark.parametrize(
+    "psr",
+    [
+        pd.Series([5, 1, 2, 3, 4]),
+        pd.Series(["one", "two", "three"], dtype="category"),
+        pd.Series(list(range(400)) + [None]),
+    ],
+)
+@pytest.mark.parametrize(
+    "to_replace,value",
+    [
+        (0, 5),
+        ("one", "two"),
+        ("one", "five"),
+        ([0, 1], [5, 6]),
+        ([22, 323, 27, 0], -1),
+    ],
+)
+def test_series_replace_all(psr, to_replace, value):
+    gsr = cudf.from_pandas(psr)
+    expected = psr.replace(to_replace=to_replace, value=value)
+    actual = gsr.replace(to_replace=to_replace, value=value)
+
+    assert_eq(expected, actual)
+
+
 def test_series_replace():
     a1 = np.array([0, 1, 2, 3, 4])
 
@@ -98,41 +124,45 @@ def test_series_replace_with_nulls():
     assert_eq(a9, sr9.to_array())
 
 
-def test_dataframe_replace():
-    # numerical
-    pdf1 = pd.DataFrame({"a": [0, 1, 2, 3], "b": [0, 1, 2, 3]})
-    gdf1 = DataFrame.from_pandas(pdf1)
-    pdf2 = pdf1.replace(0, 4)
-    gdf2 = gdf1.replace(0, 4)
-    assert_eq(gdf2, pdf2)
+@pytest.mark.parametrize(
+    "df",
+    [
+        pd.DataFrame(
+            {
+                "a": [0, 1, 2, 3],
+                "b": [3, 2, 2, 3],
+                "c": ["abc", "def", ".", None],
+            }
+        ),
+        pd.DataFrame(
+            {"a": ["one", "two", "three"], "b": ["one", "two", "three"]},
+            dtype="category",
+        ),
+    ],
+)
+@pytest.mark.parametrize(
+    "to_replace,value",
+    [
+        (0, 4),
+        ([0, 1], [4, 5]),
+        ([0, 1], 4),
+        ({"a": 0, "b": 0}, {"a": 4, "b": 5}),
+        ({"a": 0}, {"a": 4}),
+        ("abc", "---"),
+        ([".", "gh"], "hi"),
+        ([".", "def"], ["_", None]),
+        ({"c": 0}, {"a": 4, "b": 5}),
+        ({"a": 2}, {"c": "a"}),
+        ("two", "three"),
+    ],
+)
+def test_dataframe_replace(df, to_replace, value):
+    gdf = cudf.from_pandas(df)
 
-    # categorical
-    pdf4 = pd.DataFrame(
-        {"a": ["one", "two", "three"], "b": ["one", "two", "three"]},
-        dtype="category",
-    )
-    gdf4 = DataFrame.from_pandas(pdf4)
-    pdf5 = pdf4.replace("two", "three")
-    gdf5 = gdf4.replace("two", "three")
-    assert_eq(gdf5, pdf5)
+    expected = df.replace(to_replace=to_replace, value=value)
+    actual = gdf.replace(to_replace=to_replace, value=value)
 
-    # list input
-    pdf6 = pdf1.replace([0, 1], [4, 5])
-    gdf6 = gdf1.replace([0, 1], [4, 5])
-    assert_eq(gdf6, pdf6)
-
-    pdf7 = pdf1.replace([0, 1], 4)
-    gdf7 = gdf1.replace([0, 1], 4)
-    assert_eq(gdf7, pdf7)
-
-    # dict input:
-    pdf8 = pdf1.replace({"a": 0, "b": 0}, {"a": 4, "b": 5})
-    gdf8 = gdf1.replace({"a": 0, "b": 0}, {"a": 4, "b": 5})
-    assert_eq(gdf8, pdf8)
-
-    pdf9 = pdf1.replace({"a": 0}, {"a": 4})
-    gdf9 = gdf1.replace({"a": 0}, {"a": 4})
-    assert_eq(gdf9, pdf9)
+    assert_eq(expected, actual)
 
 
 def test_dataframe_replace_with_nulls():

@@ -4915,9 +4915,20 @@ class StringColumn(column.ColumnBase):
         """
         Return col with *to_replace* replaced with *value*
         """
-        to_replace = column.as_column(to_replace, dtype=self.dtype)
-        replacement = column.as_column(replacement, dtype=self.dtype)
-        return libcudf.replace.replace(self, to_replace, replacement)
+        to_replace_col = column.as_column(to_replace)
+        if to_replace_col.null_count == len(to_replace_col):
+            to_replace_col = to_replace_col.astype(self.dtype)
+        replacement_col = column.as_column(replacement)
+        if replacement_col.null_count == len(replacement_col):
+            replacement_col = replacement_col.astype(self.dtype)
+
+        if (
+            to_replace_col.dtype != self.dtype
+            or replacement_col.dtype != self.dtype
+        ):
+            return self.copy()
+
+        return libcudf.replace.replace(self, to_replace_col, replacement_col)
 
     def fillna(self, fill_value=None, method=None):
         if fill_value is not None:

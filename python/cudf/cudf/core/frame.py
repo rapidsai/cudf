@@ -2320,7 +2320,7 @@ class Frame(libcudf.table.Table):
                         replacements_per_column[name],
                         all_nan_per_column[name],
                     )
-                except KeyError:
+                except (KeyError, TypeError):
                     # Do not change the copy_data[name]
                     pass
 
@@ -3582,7 +3582,12 @@ def _get_replacement_values_for_columns(to_replace, value, columns):
     elif cudf.utils.dtypes.is_list_like(to_replace):
         if is_scalar(value):
             to_replace_columns = {col: to_replace for col in columns}
-            values_columns = {col: [value] for col in columns}
+            values_columns = {
+                col: cudf.utils.utils.scalar_broadcast_to(
+                    value, (len(to_replace),), np.dtype(type(value)),
+                )
+                for col in columns
+            }
         elif cudf.utils.dtypes.is_list_like(value):
             if len(to_replace) != len(value):
                 raise ValueError(
@@ -3668,11 +3673,14 @@ def _get_replacement_values_for_columns(to_replace, value, columns):
     }
 
     for i in to_replace_columns:
-        if isinstance(values_columns[i], list):
-            all_nan = values_columns[i].count(None) == len(values_columns[i])
-        else:
-            all_nan = False
-        all_nan_columns[i] = all_nan
+        if i in values_columns:
+            if isinstance(values_columns[i], list):
+                all_nan = values_columns[i].count(None) == len(
+                    values_columns[i]
+                )
+            else:
+                all_nan = False
+            all_nan_columns[i] = all_nan
 
     return all_nan_columns, to_replace_columns, values_columns
 
