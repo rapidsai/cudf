@@ -312,6 +312,22 @@ public final class ColumnVector extends ColumnView {
   }
 
   /**
+   * Ensures the ByteBuffer passed in is a direct byte buffer.
+   * If it is not then it creates one and copies the data in
+   * the byte buffer passed in to the direct byte buffer
+   * it created and returns it.
+   */
+  private static ByteBuffer bufferAsDirect(ByteBuffer buf) {
+    ByteBuffer bufferOut = buf;
+    if (bufferOut != null && !bufferOut.isDirect()) {
+      bufferOut = ByteBuffer.allocateDirect(buf.remaining());
+      bufferOut.put(buf);
+      bufferOut.flip();
+    }
+    return bufferOut;
+  }
+
+  /**
    * Create a ColumnVector from the Apache Arrow byte buffers passed in.
    * Any of the buffers not used for that datatype should be set to null.
    * The buffers are expected to be off heap buffers, but if they are not,
@@ -333,26 +349,8 @@ public final class ColumnVector extends ColumnView {
       ByteBuffer data,
       ByteBuffer validity,
       ByteBuffer offsets) {
-    ByteBuffer dataBuffer = data;
-    if (dataBuffer != null && !dataBuffer.isDirect()) {
-      dataBuffer = ByteBuffer.allocateDirect(data.remaining());
-      dataBuffer.put(data);
-      dataBuffer.flip();
-    }
-    ByteBuffer validityBuffer = validity;
-    if (validityBuffer != null && !validityBuffer.isDirect()) {
-      validityBuffer = ByteBuffer.allocateDirect(validity.remaining());
-      validityBuffer.put(validity);
-      validityBuffer.flip();
-    }
-    ByteBuffer offsetsBuffer = offsets;
-    if (offsetsBuffer != null && !offsetsBuffer.isDirect()) {
-      offsetsBuffer = ByteBuffer.allocateDirect(offsets.remaining());
-      offsetsBuffer.put(offsets);
-      offsetsBuffer.flip();
-    }
     long columnHandle = fromArrow(type.typeId.getNativeId(), numRows, nullCount,
-      dataBuffer, validityBuffer, offsetsBuffer);
+      bufferAsDirect(data), bufferAsDirect(validity), bufferAsDirect(offsets));
     ColumnVector vec = new ColumnVector(columnHandle);
     return vec;
   }

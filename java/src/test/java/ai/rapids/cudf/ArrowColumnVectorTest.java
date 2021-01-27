@@ -86,8 +86,7 @@ public class ArrowColumnVectorTest extends CudfTestBase {
   void testArrowLong() {
     ArrowColumnBuilder builder = new ArrowColumnBuilder(new HostColumnVector.BasicType(true, DType.INT64));
     BufferAllocator allocator = new RootAllocator(Long.MAX_VALUE);
-    BigIntVector vector = new BigIntVector("vec", allocator);
-    try {
+    try (BigIntVector vector = new BigIntVector("vec", allocator)) {
       ArrayList<Long> expectedArr = new ArrayList<Long>();
       int count = 10000;
       for (int i = 0; i < count; i++) {
@@ -102,8 +101,6 @@ public class ArrowColumnVectorTest extends CudfTestBase {
       assertEquals(cv.getType(), DType.INT64);
       ColumnVector expected = ColumnVector.fromBoxedLongs(expectedArr.toArray(new Long[0]));
       assertColumnsAreEqual(expected, cv, "Longs");
-    } finally {
-      vector.close();
     }
   }
 
@@ -111,8 +108,7 @@ public class ArrowColumnVectorTest extends CudfTestBase {
   void testArrowLongOnHeap() {
     ArrowColumnBuilder builder = new ArrowColumnBuilder(new HostColumnVector.BasicType(true, DType.INT64));
     BufferAllocator allocator = new RootAllocator(Long.MAX_VALUE);
-    BigIntVector vector = new BigIntVector("vec", allocator);
-    try {
+    try (BigIntVector vector = new BigIntVector("vec", allocator)) {
       ArrayList<Long> expectedArr = new ArrayList<Long>();
       int count = 10000;
       for (int i = 0; i < count; i++) {
@@ -134,8 +130,6 @@ public class ArrowColumnVectorTest extends CudfTestBase {
       assertEquals(cv.getType(), DType.INT64);
       ColumnVector expected = ColumnVector.fromBoxedLongs(expectedArr.toArray(new Long[0]));
       assertColumnsAreEqual(expected, cv, "Longs");
-    } finally {
-      vector.close();
     }
   }
 
@@ -143,8 +137,7 @@ public class ArrowColumnVectorTest extends CudfTestBase {
   void testArrowDouble() {
     ArrowColumnBuilder builder = new ArrowColumnBuilder(new HostColumnVector.BasicType(true, DType.FLOAT64));
     BufferAllocator allocator = new RootAllocator(Long.MAX_VALUE);
-    Float8Vector vector = new Float8Vector("vec", allocator);
-    try {
+    try (Float8Vector vector = new Float8Vector("vec", allocator)) {
       ArrayList<Double> expectedArr = new ArrayList<Double>();
       int count = 10000;
       for (int i = 0; i < count; i++) {
@@ -160,8 +153,6 @@ public class ArrowColumnVectorTest extends CudfTestBase {
       double[] array = expectedArr.stream().mapToDouble(i->i).toArray();
       ColumnVector expected = ColumnVector.fromDoubles(array);
       assertColumnsAreEqual(expected, cv, "doubles");
-    } finally {
-      vector.close();
     }
   }
 
@@ -169,8 +160,7 @@ public class ArrowColumnVectorTest extends CudfTestBase {
   void testArrowFloat() {
     ArrowColumnBuilder builder = new ArrowColumnBuilder(new HostColumnVector.BasicType(true, DType.FLOAT32));
     BufferAllocator allocator = new RootAllocator(Long.MAX_VALUE);
-    Float4Vector vector = new Float4Vector("vec", allocator);
-    try {
+    try (Float4Vector vector = new Float4Vector("vec", allocator)) {
       ArrayList<Float> expectedArr = new ArrayList<Float>();
       int count = 10000;
       for (int i = 0; i < count; i++) {
@@ -190,8 +180,6 @@ public class ArrowColumnVectorTest extends CudfTestBase {
       }
       ColumnVector expected = ColumnVector.fromFloats(floatArray);
       assertColumnsAreEqual(expected, cv, "floats");
-    } finally {
-      vector.close();
     }
   }
 
@@ -199,8 +187,7 @@ public class ArrowColumnVectorTest extends CudfTestBase {
   void testArrowString() {
     ArrowColumnBuilder builder = new ArrowColumnBuilder(new HostColumnVector.BasicType(true, DType.STRING));
     BufferAllocator allocator = new RootAllocator(Long.MAX_VALUE);
-    VarCharVector vector = new VarCharVector("vec", allocator);
-    try {
+    try (VarCharVector vector = new VarCharVector("vec", allocator)) {
       ArrayList<String> expectedArr = new ArrayList<String>();
       int count = 10000;
       for (int i = 0; i < count; i++) {
@@ -217,8 +204,6 @@ public class ArrowColumnVectorTest extends CudfTestBase {
       assertEquals(cv.getType(), DType.STRING);
       ColumnVector expected = ColumnVector.fromStrings(expectedArr.toArray(new String[0]));
       assertColumnsAreEqual(expected, cv, "Strings");
-    } finally {
-      vector.close();
     }
   }
 
@@ -226,8 +211,7 @@ public class ArrowColumnVectorTest extends CudfTestBase {
   void testArrowStringOnHeap() {
     ArrowColumnBuilder builder = new ArrowColumnBuilder(new HostColumnVector.BasicType(true, DType.STRING));
     BufferAllocator allocator = new RootAllocator(Long.MAX_VALUE);
-    VarCharVector vector = new VarCharVector("vec", allocator);
-    try {
+    try (VarCharVector vector = new VarCharVector("vec", allocator)) {
       ArrayList<String> expectedArr = new ArrayList<String>();
       int count = 10000;
       for (int i = 0; i < count; i++) {
@@ -253,8 +237,6 @@ public class ArrowColumnVectorTest extends CudfTestBase {
       assertEquals(cv.getType(), DType.STRING);
       ColumnVector expected = ColumnVector.fromStrings(expectedArr.toArray(new String[0]));
       assertColumnsAreEqual(expected, cv, "Strings");
-    } finally {
-      vector.close();
     }
   }
 
@@ -262,8 +244,7 @@ public class ArrowColumnVectorTest extends CudfTestBase {
   void testArrowDays() {
     ArrowColumnBuilder builder = new ArrowColumnBuilder(new HostColumnVector.BasicType(true, DType.TIMESTAMP_DAYS));
     BufferAllocator allocator = new RootAllocator(Long.MAX_VALUE);
-    DateDayVector vector = new DateDayVector("vec", allocator);
-    try {
+    try (DateDayVector vector = new DateDayVector("vec", allocator)) {
       ArrayList<Integer> expectedArr = new ArrayList<Integer>();
       int count = 10000;
       for (int i = 0; i < count; i++) {
@@ -279,16 +260,13 @@ public class ArrowColumnVectorTest extends CudfTestBase {
       int[] array = expectedArr.stream().mapToInt(i->i).toArray();
       ColumnVector expected = ColumnVector.daysFromInts(array);
       assertColumnsAreEqual(expected, cv, "timestamp days");
-    } finally {
-      vector.close();
     }
   }
 
   @Test
   void testArrowDecimalThrows() {
     BufferAllocator allocator = new RootAllocator(Long.MAX_VALUE);
-    DecimalVector vector = new DecimalVector("vec", allocator, 7, 3);
-    try {
+    try (DecimalVector vector = new DecimalVector("vec", allocator, 7, 3)) {
       ArrowColumnBuilder builder = new ArrowColumnBuilder(new HostColumnVector.BasicType(true, DType.create(DType.DTypeEnum.DECIMAL32, 3)));
       ((DecimalVector) vector).setSafe(0, -3);
       ((DecimalVector) vector).setSafe(1, 1);
@@ -303,16 +281,13 @@ public class ArrowColumnVectorTest extends CudfTestBase {
       assertThrows(IllegalArgumentException.class, () -> {
         builder.buildAndPutOnDevice();
       });
-    } finally {
-      vector.close();
     }
   }
 
   @Test
   void testArrowDecimal64Throws() {
     BufferAllocator allocator = new RootAllocator(Long.MAX_VALUE);
-    DecimalVector vector = new DecimalVector("vec", allocator, 18, 0);
-    try {
+    try (DecimalVector vector = new DecimalVector("vec", allocator, 18, 0)) {
       ArrowColumnBuilder builder = new ArrowColumnBuilder(new HostColumnVector.BasicType(true, DType.create(DType.DTypeEnum.DECIMAL64, -11)));
       ((DecimalVector) vector).setSafe(0, -3);
       ((DecimalVector) vector).setSafe(1, 1);
@@ -324,40 +299,32 @@ public class ArrowColumnVectorTest extends CudfTestBase {
       assertThrows(IllegalArgumentException.class, () -> {
         builder.buildAndPutOnDevice();
       });
-    } finally {
-      vector.close();
     }
   }
 
   @Test
   void testArrowListThrows() {
     BufferAllocator allocator = new RootAllocator(Long.MAX_VALUE);
-    ListVector vector = ListVector.empty("list", allocator);
-    try {
+    try (ListVector vector = ListVector.empty("list", allocator)) {
       ArrowColumnBuilder builder = new ArrowColumnBuilder(new ListType(true, new HostColumnVector.BasicType(true, DType.STRING)));
       // buffer don't matter as we expect it to throw anyway
       builder.addBatch(vector.getValueCount(), vector.getNullCount(), null, null, null);
       assertThrows(IllegalArgumentException.class, () -> {
         builder.buildAndPutOnDevice();
       });
-    } finally {
-      vector.close();
     }
   }
 
   @Test
   void testArrowStructThrows() {
     BufferAllocator allocator = new RootAllocator(Long.MAX_VALUE);
-    StructVector vector = StructVector.empty("struct", allocator);
-    try {
+    try (StructVector vector = StructVector.empty("struct", allocator)) {
       ArrowColumnBuilder builder = new ArrowColumnBuilder(new StructType(true, new HostColumnVector.BasicType(true, DType.STRING)));
       // buffer don't matter as we expect it to throw anyway
       builder.addBatch(vector.getValueCount(), vector.getNullCount(), null, null, null);
       assertThrows(IllegalArgumentException.class, () -> {
         builder.buildAndPutOnDevice();
       });
-    } finally {
-      vector.close();
     }
   }
 }
