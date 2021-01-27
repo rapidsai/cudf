@@ -151,12 +151,8 @@ struct SortPairs {
     auto keys = [&]() {
       if (child.nullable()) {
         rmm::device_uvector<T> keys(child.size(), stream);
-        auto null_replace_T =
-          column_order == order::ASCENDING
-            ? (null_precedence == null_order::AFTER ? std::numeric_limits<T>::max()
-                                                    : std::numeric_limits<T>::min())
-            : (null_precedence == null_order::BEFORE ? std::numeric_limits<T>::max()
-                                                     : std::numeric_limits<T>::min());
+        auto null_replace_T = null_precedence == null_order::AFTER ? std::numeric_limits<T>::max()
+                                                                   : std::numeric_limits<T>::min();
         auto device_child = column_device_view::create(child, stream);
         auto keys_in =
           cudf::detail::make_null_replacement_iterator<T>(*device_child, null_replace_T);

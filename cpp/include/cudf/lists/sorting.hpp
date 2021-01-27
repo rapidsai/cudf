@@ -30,18 +30,18 @@ namespace lists {
 /**
  * @brief Segmented sort of the elements within a list in each row of a list column.
  *
- * `source_column` with depth 1 is only supported. This uses segmented radix sort.
+ * `source_column` with depth 1 is only supported.
  *
  * * @code{.pseudo}
  * source_column            : [{4, 2, 3, 1}, {1, 2, NULL, 4}, {-10, 10, 0}]
  *
  * Ascending,  Null After   : [{1, 2, 3, 4}, {1, 2, 4, NULL}, {-10, 0, 10}]
  * Ascending,  Null Before  : [{1, 2, 3, 4}, {NULL, 1, 2, 4}, {-10, 0, 10}]
- * Descending, Null After   : [{4, 3, 2, 1}, {4, 2, 1, NULL}, {10, 0, -10}]
- * Descending, Null Before  : [{4, 3, 2, 1}, {NULL, 4, 2, 1}, {10, 0, -10}]
+ * Descending, Null After   : [{4, 3, 2, 1}, {NULL, 4, 2, 1}, {10, 0, -10}]
+ * Descending, Null Before  : [{4, 3, 2, 1}, {4, 2, 1, NULL}, {10, 0, -10}]
  * @endcode
  *
- * @param source_column View into the list column of numeric types to gather from
+ * @param source_column View of the list column of numeric types to sort
  * @param column_order The desired sort order
  * @param null_precedence The desired order of null compared to other elements in the list
  * @param mr Device memory resource to allocate any returned objects

@@ -95,8 +95,8 @@ TYPED_TEST(SegmentedSort, Null)
 
   // Descending
   // LCW<int>  order{{3, 0, 1, 2}, {0}, {0, 1, 2},  {1, 0}};
-  LCW<T> expected3{{{3, 2, 1, 4}, valids_a.begin()}, {5}, {10, 9, 8}, {7, 6}};
-  LCW<T> expected4{{{4, 3, 2, 1}, valids_b.begin()}, {5}, {10, 9, 8}, {7, 6}};
+  LCW<T> expected3{{{4, 3, 2, 1}, valids_b.begin()}, {5}, {10, 9, 8}, {7, 6}};
+  LCW<T> expected4{{{3, 2, 1, 4}, valids_a.begin()}, {5}, {10, 9, 8}, {7, 6}};
   results = segmented_sort(lists_column_view{list}, order::DESCENDING, null_order::AFTER);
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(results->view(), expected3);
 
