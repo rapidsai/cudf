@@ -827,6 +827,34 @@ of any type. Note also that not only is each list nullable (using the null mask 
 each list element may be nullable. So you may have a lists column with null row 3, and also null
 element 2 of row 4.
 
+The underlying data for a lists column is always bundled into a single leaf column at the very 
+bottom of the hierarchy (ignoring structs, which conceptually "reset" the root of the hierarchy), 
+regardless of the level of nesting. So a `List<List<List<List<int>>>>>` column has a single `int` 
+column at the very bottom. The following is a visual representation of this.
+
+```
+lists_column = { {{{1, 2}, {3, 4}}, NULL}, {{{10, 20}, {30, 40}}, {{50, 60, 70}, {0}}} }
+
+   List<List<List<int>>>  (2 rows):
+   Length : 2
+   Offsets : 0, 2, 4
+   Children :
+      List<List<int>>:
+      Length : 4
+      Offsets : 0, 2, 2, 4, 6
+      Null count: 1
+        1101
+      Children :
+        List<int>:
+        Length : 6
+        Offsets : 0, 2, 4, 6, 8, 11, 12
+        Children :
+          Column of ints
+          1, 2, 3, 4, 10, 20, 30, 40, 50, 60, 70, 0
+```
+
+This is related to [Arrow's "Variable-Size List" memory layout](https://arrow.apache.org/docs/format/Columnar.html?highlight=nested%20types#physical-memory-layout).
+
 ## Strings columns
 
 Strings are represented in much the same way as lists, except that the data child column is always 
