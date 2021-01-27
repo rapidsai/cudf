@@ -68,6 +68,8 @@ struct column_property_comparator {
     EXPECT_EQ(lhs.null_count(), rhs.null_count());
     if (lhs.size() > 0 && check_exact_equality) { EXPECT_EQ(lhs.nullable(), rhs.nullable()); }
 
+    EXPECT_EQ(lhs.null_count(), rhs.null_count());
+
     // equivalent, but not exactly equal columns can have a different number of children if their
     // sizes are both 0. Specifically, empty string columns may or may not have children.
     if (check_exact_equality || lhs.size() > 0) {
