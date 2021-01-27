@@ -2323,6 +2323,37 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
     return makeStructView(columns[0].rows, columns);
   }
 
+  /**
+   * Create a column of bool values indicating whether the specified scalar
+   * is an element of each row of a list column.
+   * Output `column[i]` is set to null if one or more of the following are true:
+   * 1. The key is null
+   * 2. The column vector list value is null
+   * 3. The list row does not contain the key, and contains at least
+   *    one null.
+   * @param key the scalar to look up
+   * @return a Boolean ColumnVector with the result of the lookup
+   */
+  public final ColumnVector listContains(Scalar key) {
+    assert type.equals(DType.LIST) : "column type must be a LIST";
+    return new ColumnVector(listContains(getNativeView(), key.getScalarHandle()));
+  }
+
+  /**
+   * Create a column of bool values indicating whether the list rows of the first
+   * column contain the corresponding values in the second column.
+   * 1. The key value is null
+   * 2. The column vector list value is null
+   * 3. The list row does not contain the key, and contains at least
+   *    one null.
+   * @param key the ColumnVector with look up values
+   * @return a Boolean ColumnVector with the result of the lookup
+   */
+  public final ColumnVector listContainsColumn(ColumnView key) {
+    assert type.equals(DType.LIST) : "column type must be a LIST";
+    return new ColumnVector(listContainsColumn(getNativeView(), key.getNativeView()));
+  }
+
   /////////////////////////////////////////////////////////////////////////////
   // INTERNAL/NATIVE ACCESS
   /////////////////////////////////////////////////////////////////////////////
@@ -2557,6 +2588,22 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
   private static native long byteCount(long viewHandle) throws CudfException;
 
   private static native long extractListElement(long nativeView, int index);
+
+  /**
+   * Native method for list lookup
+   * @param nativeView the column view handle of the list
+   * @param key the scalar key handle
+   * @return column handle of the resultant
+   */
+  private static native long listContains(long nativeView, long key);
+
+  /**
+   * Native method for list lookup
+   * @param nativeView the column view handle of the list
+   * @param keyColumn the column handle of look up keys
+   * @return column handle of the resultant
+   */
+  private static native long listContainsColumn(long nativeView, long keyColumn);
 
   private static native long castTo(long nativeHandle, int type, int scale);
 
