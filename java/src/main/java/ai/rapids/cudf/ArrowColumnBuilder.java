@@ -74,13 +74,13 @@ public final class ArrowColumnBuilder implements AutoCloseable {
       if (this.numBatches == 1) {
         vecRet = allVecs.get(0);
       } else if (this.numBatches > 1) {
-	try {
-          vecRet = ColumnVector.concatenate(allVecs.toArray(new ColumnVector[0]));
-	} finally {
+        try {
+         vecRet = ColumnVector.concatenate(allVecs.toArray(new ColumnVector[0]));
+        } finally {
           for (ColumnVector cv : allVecs) {
             cv.close();
           }
-	}
+        }
       } else {
         throw new IllegalStateException("Can't build a ColumnVector when no Arrow batches specified");
       }
