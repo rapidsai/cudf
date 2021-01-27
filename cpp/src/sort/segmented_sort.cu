@@ -140,14 +140,15 @@ std::unique_ptr<table> segmented_sort_by_key(table_view const& values,
 }
 }  // namespace detail
 
-std::unique_ptr<table> segmented_sort(table_view const& input,
-                                      std::vector<order> const& column_order,
-                                      std::vector<null_order> const& null_precedence,
-                                      rmm::mr::device_memory_resource* mr)
+std::unique_ptr<table> segmented_sort_by_key(table_view const& values,
+                                             table_view const& keys,
+                                             std::vector<order> const& column_order,
+                                             std::vector<null_order> const& null_precedence,
+                                             rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
   return detail::segmented_sort_by_key(
-    input, input, column_order, null_precedence, rmm::cuda_stream_default, mr);
+    values, keys, column_order, null_precedence, rmm::cuda_stream_default, mr);
 }
 
 }  // namespace cudf
