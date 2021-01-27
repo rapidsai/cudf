@@ -316,7 +316,7 @@ public final class ColumnVector extends ColumnView {
    * Any of the buffers not used for that datatype should be set to null.
    * The buffers are expected to be off heap buffers, but if they are not,
    * it will handle copying them to direct byte buffers.
-   * This only supports primitive types and Strings, Decimals and nested types
+   * This only supports primitive types. Strings, Decimals and nested types
    * such as list and struct are not supported.
    * @param type - type of the column
    * @param numRows - Number of rows in the arrow column
