@@ -57,20 +57,34 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_fromArrow(JNIEnv *env, 
                                                                    jint j_type,
                                                                    jlong j_col_length,
                                                                    jlong j_null_count,
-                                                                   jlong j_data,
-                                                                   jlong j_data_size,
-                                                                   jlong j_validity,
-                                                                   jlong j_validity_size,
-                                                                   jlong j_offsets,
-                                                                   jlong j_offsets_size) {
+								   jobject j_data_obj,
+                                                                   jobject j_validity_obj,
+                                                                   jobject j_offsets_obj) {
   try {
     cudf::jni::auto_set_device(env);
     cudf::type_id n_type = static_cast<cudf::type_id>(j_type);
-
-    auto data_buffer = arrow::Buffer::Wrap(reinterpret_cast<const char *>(j_data), static_cast<int>(j_data_size));
-    auto null_buffer = arrow::Buffer::Wrap(reinterpret_cast<const char *>(j_validity), static_cast<int>(j_validity_size));
-    // offsets buffer only used for certain types, can be 0
-    auto offsets_buffer = arrow::Buffer::Wrap(reinterpret_cast<const char *>(j_offsets), static_cast<int>(j_offsets_size));
+    // not all the buffers are used for all types
+    void const *data_address = 0;
+    int data_length = 0;
+    if (j_data_obj != 0) {
+      data_address = env->GetDirectBufferAddress(j_data_obj);
+      data_length = env->GetDirectBufferCapacity(j_data_obj);
+    }
+    void const *validity_address = 0;
+    int validity_length = 0;
+    if (j_validity_obj != 0) {
+      validity_address = env->GetDirectBufferAddress(j_validity_obj);
+      validity_length = env->GetDirectBufferCapacity(j_validity_obj);
+    }
+    void const *offsets_address = 0;
+    int offsets_length = 0;
+    if (j_offsets_obj != 0) {
+      offsets_address = env->GetDirectBufferAddress(j_offsets_obj);
+      offsets_length = env->GetDirectBufferCapacity(j_offsets_obj);
+    }
+    auto data_buffer = arrow::Buffer::Wrap(static_cast<const char *>(data_address), static_cast<int>(data_length));
+    auto null_buffer = arrow::Buffer::Wrap(static_cast<const char *>(validity_address), static_cast<int>(validity_length));
+    auto offsets_buffer = arrow::Buffer::Wrap(static_cast<const char *>(offsets_address), static_cast<int>(offsets_length));
 
     cudf::jni::native_jlongArray outcol_handles(env, 1);
     std::shared_ptr<arrow::Array> arrow_array;

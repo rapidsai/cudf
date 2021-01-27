@@ -25,6 +25,7 @@ import org.slf4j.LoggerFactory;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
@@ -312,33 +313,26 @@ public final class ColumnVector extends ColumnView {
 
   /**
    * Create a ColumnVector from the off heap Apache Arrow buffers passed in.
-   * Any of the buffers not used for that datatype should be set to 0 for the
-   * address and size.
+   * Any of the buffers not used for that datatype should be set to null.
    * This only supports primitive types and Strings, Decimals and nested types
    * such as list and struct are not supported.
    * @param type - type of the column
    * @param numRows - Number of rows in the arrow column
    * @param nullCount - Null count
-   * @param data - address of the Arrow data buffer
-   * @param dataLength - size of the Arrow data buffer
-   * @param validity - address of the Arrow validity buffer
-   * @param validityLength - size of the Arrow validity buffer
-   * @param offsets - address of the Arrow offsets buffer
-   * @param offsetsLength - size of the Arrow offsets buffer
+   * @param data - ByteBuffer of the Arrow data buffer
+   * @param validity - ByteBuffer of the Arrow validity buffer
+   * @param offsets - ByteBuffer of the Arrow offsets buffer
    * @return - new ColumnVector
    */
   public static ColumnVector fromArrow(
       DType type,
       long numRows,
       long nullCount,
-      long data,
-      long dataLength,
-      long validity,
-      long validityLength,
-      long offsets,
-      long offsetsLength) {
+      ByteBuffer data,
+      ByteBuffer validity,
+      ByteBuffer offsets) {
     long columnHandle = fromArrow(type.typeId.getNativeId(), numRows, nullCount, data,
-         dataLength, validity, validityLength, offsets, offsetsLength);
+      validity, offsets);
     ColumnVector vec = new ColumnVector(columnHandle);
     return vec;
   }
@@ -649,8 +643,8 @@ public final class ColumnVector extends ColumnView {
   private static native long sequence(long initialValue, long step, int rows);
 
   private static native long fromArrow(int type, long col_length,
-      long null_count, long data, long data_size, long validity, long validity_size,
-      long offsets, long offsets_size) throws CudfException;
+      long null_count, ByteBuffer data, ByteBuffer validity,
+      ByteBuffer offsets) throws CudfException;
 
   private static native long fromScalar(long scalarHandle, int rowCount) throws CudfException;
 
