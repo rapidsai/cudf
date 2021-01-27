@@ -775,6 +775,13 @@ template<cudf::type_id t> struct always_int{ using type = int32_t; }
 cudf::type_dispatcher<always_int>(data_type, f);
 ```
 
+## Avoid Multiple Type Dispatch
+
+Avoid multiple type-dispatch if possible. The compiler creates a code path for every type 
+dispatched, so a second-level type dispatch results in quadratic growth in compilation time and 
+object code size. As a large library with many types and functions, we are constantly working to
+reduce compilation time and code size.
+
 ## Specializing Type-Dispatched Code Paths
 
 It is often necessary to customize the dispatched `operator()` for different types. This can be 
