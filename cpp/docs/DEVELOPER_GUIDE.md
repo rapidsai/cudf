@@ -108,10 +108,28 @@ machine to use the `cudf/cpp/.clang-format` configuration file, and run `clang-f
 changed code before committing it. The easiest way to do this is to configure your editor to 
 "format on save".
 
-Aspects of code style not discussed above and not automatically enforceable are typically caught
-during code review, or not enforced.
+Aspects of code style not discussed in this document and not automatically enforceable are typically
+caught during code review, or not enforced.
 
 Documentation is discussed in the [Documentation Guide](DOCUMENTATION.md).
+
+### Includes
+
+The following guidelines apply to organizing `#include` lines.
+
+ * Group includes by library (e.g. cuDF, RMM, Thrust, STL). `clang-format` will respect the 
+   groupings and sort the individual includes within a group lexicographically.
+ * Separate groups by a blank line.
+ * Order the groups from "nearest" to "farthest". In other words, local includes, then includes 
+   from other RAPIDS libraries, then includes from related libraries, like `<thrust/...>`, then 
+   includes from dependencies installed with cuDF, and then standard headers (for example `<string>`, 
+   `<iostream>`).
+ * Use <> instead of "" unless the header is in the same directory as the source file.
+ * Tools like `clangd` often auto-insert includes when they can, but they usually get the grouping
+   and brackets wrong.
+ * Always check that includes are only necessary for the file in which they are included. 
+   Try to avoid excessive including especially in header files. Double check this when you remove 
+   code.
 
 # libcudf Data Structures
 
@@ -804,7 +822,7 @@ structs.
    in each row.
  * `list`: A list of elements of any type, so a column of lists of integers has rows with a list of 
    integers, possibly of a different length, in each row. 
- * `struct`: In a colum of structs, each row is a structure comprising one or more fields. These
+ * `struct`: In a column of structs, each row is a structure comprising one or more fields. These
    fields are stored in structure-of-arrays format, so that the column of structs has a nested
    column for each field of the structure. 
 
