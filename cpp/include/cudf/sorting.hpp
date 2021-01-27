@@ -128,7 +128,7 @@ std::unique_ptr<table> sort(
  * @param values The table to reorder
  * @param keys The table that determines the ordering
  * @param column_order The desired order for each column in `keys`. Size must be
- * equal to `input.num_columns()` or empty. If empty, all columns are sorted in
+ * equal to `keys.num_columns()` or empty. If empty, all columns are sorted in
  * ascending order.
  * @param null_precedence The desired order of a null element compared to other
  * elements for each column in `keys`. Size must be equal to
@@ -184,8 +184,30 @@ std::unique_ptr<column> rank(
   bool percentage,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
-std::unique_ptr<table> segmented_sort(
-  table_view const& input,
+/**
+ * @brief Performs a lexicographic segmented sort of the list in each row of a table of list columns
+ *
+ * `keys` with list columns of depth 1 is only supported.
+ * @throws cudf::logic_error if `values.num_rows() != keys.num_rows()`.
+ * @throws cudf::logic_error if any list sizes of corresponding row in each column are not equal.
+ * @throws cudf::logic_error if any column of `keys` or `values` is not a list column.
+ *
+ * @param values The table to reorder
+ * @param keys The table that determines the ordering
+ * @param column_order The desired order for each column in `keys`. Size must be
+ * equal to `keys.num_columns()` or empty. If empty, all columns are sorted in
+ * ascending order.
+ * @param null_precedence The desired order of a null element compared to other
+ * elements for each column in `keys`. Size must be equal to
+ * `keys.num_columns()` or empty. If empty, all columns will be sorted with
+ * `null_order::BEFORE`.
+ * @param mr Device memory resource to allocate any returned objects
+ * @return table with list columns with elements in each list sorted.
+ *
+ */
+std::unique_ptr<table> segmented_sort_by_key(
+  table_view const& values,
+  table_view const& keys,
   std::vector<order> const& column_order         = {},
   std::vector<null_order> const& null_precedence = {},
   rmm::mr::device_memory_resource* mr            = rmm::mr::get_current_device_resource());
