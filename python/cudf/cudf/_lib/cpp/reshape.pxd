@@ -14,3 +14,6 @@ cdef extern from "cudf/reshape.hpp" namespace "cudf" nogil:
     cdef unique_ptr[table] tile(
         table_view source_table, size_type count
     ) except +
+    cdef unique_ptr[table] explode(
+        table_view source_table, size_type idx
+    ) except +
