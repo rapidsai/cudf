@@ -111,6 +111,20 @@ changed code before committing it. The easiest way to do this is to configure yo
 Aspects of code style not discussed in this document and not automatically enforceable are typically
 caught during code review, or not enforced.
 
+### C++ Guidelines
+
+In general, we recommend following 
+[C++ Core Guidelines](https://isocpp.github.io/CppCoreGuidelines/CppCoreGuidelines). We also 
+recommend watching Sean Parent's [C++ Seasoning talk](https://www.youtube.com/watch?v=W2tWOdzgXHA), 
+and we try to follow his rules: "No raw loops. No raw pointers. No raw synchronization primitives." 
+
+ * Prefer algorithms from STL and Thrust to raw loops.
+ * Prefer libcudf and RMM [owning data structures and views](libcudf-data-tructures) to raw pointers
+   and raw memory allocation.
+ * libcudf doesn't have a lot of CPU-thread concurrency, but there is some. And currently libcudf
+   does use raw synchronization primitives. So we should revisit Parent's third rule and improve 
+   here.
+
 Documentation is discussed in the [Documentation Guide](DOCUMENTATION.md).
 
 ### Includes
