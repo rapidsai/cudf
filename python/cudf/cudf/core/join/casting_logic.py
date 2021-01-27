@@ -103,9 +103,7 @@ def _input_to_libcudf_castrules_both_cat(lcol, rcol, how):
         return rtype
 
     elif how == "outer":
-        new_cats = cudf.concat(
-            [ltype.categories, rtype.categories]
-        ).unique()
+        new_cats = cudf.concat([ltype.categories, rtype.categories]).unique()
         return cudf.CategoricalDtype(categories=new_cats, ordered=False)
 
 
@@ -144,53 +142,53 @@ def _input_to_libcudf_castrules_any(lcol, rcol, how):
         " {} to {}, upcasting to {}"
     )
 
-    dtype_l = lcol.dtype
-    dtype_r = rcol.dtype
+    ltype = lcol.dtype
+    rtype = rcol.dtype
 
     # if either side is categorical, different logic
-    if isinstance(dtype_l, CategoricalDtype) or isinstance(
-        dtype_r, CategoricalDtype
+    if isinstance(ltype, CategoricalDtype) or isinstance(
+        rtype, CategoricalDtype
     ):
         return _input_to_libcudf_castrules_any_cat(lcol, rcol, how)
 
     libcudf_join_type = None
-    if pd.api.types.is_dtype_equal(dtype_l, dtype_r):
-        libcudf_join_type = dtype_l
+    if pd.api.types.is_dtype_equal(ltype, rtype):
+        libcudf_join_type = ltype
     elif how == "left":
         check_col = rcol.fillna(0)
-        if not check_col.can_cast_safely(dtype_l):
+        if not check_col.can_cast_safely(ltype):
             libcudf_join_type = _input_to_libcudf_castrules_any(
                 lcol, rcol, "inner"
             )
             warnings.warn(
-                cast_warn.format("right", dtype_r, dtype_l, libcudf_join_type)
+                cast_warn.format("right", rtype, ltype, libcudf_join_type)
             )
         else:
-            libcudf_join_type = dtype_l
+            libcudf_join_type = ltype
     elif how == "right":
         check_col = lcol.fillna(0)
-        if not check_col.can_cast_safely(dtype_r):
+        if not check_col.can_cast_safely(rtype):
             libcudf_join_type = _input_to_libcudf_castrules_any(
                 lcol, rcol, "inner"
             )
             warnings.warn(
-                cast_warn.format("left", dtype_l, dtype_r, libcudf_join_type)
+                cast_warn.format("left", ltype, rtype, libcudf_join_type)
             )
         else:
-            libcudf_join_type = dtype_r
+            libcudf_join_type = rtype
     elif how in {"inner", "outer"}:
-        if (np.issubdtype(dtype_l, np.number)) and (
-            np.issubdtype(dtype_r, np.number)
+        if (np.issubdtype(ltype, np.number)) and (
+            np.issubdtype(rtype, np.number)
         ):
-            if dtype_l.kind == dtype_r.kind:
+            if ltype.kind == rtype.kind:
                 # both ints or both floats
-                libcudf_join_type = max(dtype_l, dtype_r)
+                libcudf_join_type = max(ltype, rtype)
             else:
-                libcudf_join_type = np.find_common_type([], [dtype_l, dtype_r])
-        elif np.issubdtype(dtype_l, np.datetime64) and np.issubdtype(
-            dtype_r, np.datetime64
+                libcudf_join_type = np.find_common_type([], [ltype, rtype])
+        elif np.issubdtype(ltype, np.datetime64) and np.issubdtype(
+            rtype, np.datetime64
         ):
-            libcudf_join_type = max(dtype_l, dtype_r)
+            libcudf_join_type = max(ltype, rtype)
     return libcudf_join_type
 
 
@@ -210,23 +208,23 @@ def _libcudf_to_output_castrules(lcol, rcol, how):
     joins.
     """
 
-    dtype_l = lcol.dtype
-    dtype_r = rcol.dtype
+    ltype = lcol.dtype
+    rtype = rcol.dtype
     merge_return_type = None
     # we  currently only need to do this for categorical variables
-    if isinstance(dtype_l, CategoricalDtype) and isinstance(
-        dtype_r, CategoricalDtype
+    if isinstance(ltype, CategoricalDtype) and isinstance(
+        rtype, CategoricalDtype
     ):
-        if pd.api.types.is_dtype_equal(dtype_l, dtype_r):
+        if pd.api.types.is_dtype_equal(ltype, rtype):
             if how == "inner":
-                return dtype_l
+                return ltype
         if how == "left":
-            return dtype_l
+            return ltype
         if how == "right":
-            return dtype_r
+            return rtype
         elif how == "outer":
             new_cats = cudf.concat(
-                [dtype_l.categories, dtype_r.categories]
+                [ltype.categories, rtype.categories]
             ).unique()
             return cudf.CategoricalDtype(categories=new_cats, ordered=False)
         else:
