@@ -108,6 +108,38 @@ public class ArrowColumnVectorTest extends CudfTestBase {
   }
 
   @Test
+  void testArrowLongOnHeap() {
+    ArrowColumnBuilder builder = new ArrowColumnBuilder(new HostColumnVector.BasicType(true, DType.INT64));
+    BufferAllocator allocator = new RootAllocator(Long.MAX_VALUE);
+    BigIntVector vector = new BigIntVector("vec", allocator);
+    try {
+      ArrayList<Long> expectedArr = new ArrayList<Long>();
+      int count = 10000;
+      for (int i = 0; i < count; i++) {
+        expectedArr.add(new Long(i));
+        ((BigIntVector) vector).setSafe(i, i);
+      }
+      vector.setValueCount(count);
+      // test that we handle convert buffer to direct byte buffer if its on the heap
+      ByteBuffer data = vector.getDataBuffer().nioBuffer();
+      ByteBuffer dataOnHeap = ByteBuffer.allocate(data.remaining());
+      dataOnHeap.put(data);
+      dataOnHeap.flip();
+      ByteBuffer valid = vector.getValidityBuffer().nioBuffer();
+      ByteBuffer validOnHeap = ByteBuffer.allocate(valid.remaining());
+      validOnHeap.put(data);
+      validOnHeap.flip();
+      builder.addBatch(vector.getValueCount(), vector.getNullCount(), dataOnHeap, validOnHeap, null);
+      ColumnVector cv = builder.buildAndPutOnDevice();
+      assertEquals(cv.getType(), DType.INT64);
+      ColumnVector expected = ColumnVector.fromBoxedLongs(expectedArr.toArray(new Long[0]));
+      assertColumnsAreEqual(expected, cv, "Longs");
+    } finally {
+      vector.close();
+    }
+  }
+
+  @Test
   void testArrowDouble() {
     ArrowColumnBuilder builder = new ArrowColumnBuilder(new HostColumnVector.BasicType(true, DType.FLOAT64));
     BufferAllocator allocator = new RootAllocator(Long.MAX_VALUE);
@@ -181,6 +213,42 @@ public class ArrowColumnVectorTest extends CudfTestBase {
       ByteBuffer valid = vector.getValidityBuffer().nioBuffer();
       ByteBuffer offsets = vector.getOffsetBuffer().nioBuffer();
       builder.addBatch(vector.getValueCount(), vector.getNullCount(), data, valid, offsets);
+      ColumnVector cv = builder.buildAndPutOnDevice();
+      assertEquals(cv.getType(), DType.STRING);
+      ColumnVector expected = ColumnVector.fromStrings(expectedArr.toArray(new String[0]));
+      assertColumnsAreEqual(expected, cv, "Strings");
+    } finally {
+      vector.close();
+    }
+  }
+
+  @Test
+  void testArrowStringOnHeap() {
+    ArrowColumnBuilder builder = new ArrowColumnBuilder(new HostColumnVector.BasicType(true, DType.STRING));
+    BufferAllocator allocator = new RootAllocator(Long.MAX_VALUE);
+    VarCharVector vector = new VarCharVector("vec", allocator);
+    try {
+      ArrayList<String> expectedArr = new ArrayList<String>();
+      int count = 10000;
+      for (int i = 0; i < count; i++) {
+        String toAdd = i + "testString";
+        expectedArr.add(toAdd);
+        ((VarCharVector) vector).setSafe(i, new Text(toAdd));
+      }
+      vector.setValueCount(count);
+      ByteBuffer data = vector.getDataBuffer().nioBuffer();
+      ByteBuffer valid = vector.getValidityBuffer().nioBuffer();
+      ByteBuffer offsets = vector.getOffsetBuffer().nioBuffer();
+      ByteBuffer dataOnHeap = ByteBuffer.allocate(data.remaining());
+      dataOnHeap.put(data);
+      dataOnHeap.flip();
+      ByteBuffer validOnHeap = ByteBuffer.allocate(valid.remaining());
+      validOnHeap.put(data);
+      validOnHeap.flip();
+      ByteBuffer offsetsOnHeap = ByteBuffer.allocate(offsets.remaining());
+      offsetsOnHeap.put(offsets);
+      offsetsOnHeap.flip();
+      builder.addBatch(vector.getValueCount(), vector.getNullCount(), dataOnHeap, validOnHeap, offsetsOnHeap);
       ColumnVector cv = builder.buildAndPutOnDevice();
       assertEquals(cv.getType(), DType.STRING);
       ColumnVector expected = ColumnVector.fromStrings(expectedArr.toArray(new String[0]));
