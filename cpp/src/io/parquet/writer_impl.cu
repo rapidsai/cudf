@@ -27,6 +27,7 @@
 #include <cudf/lists/lists_column_view.hpp>
 #include <cudf/null_mask.hpp>
 #include <cudf/strings/strings_column_view.hpp>
+#include <cudf/table/table_device_view.cuh>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_buffer.hpp>
@@ -348,15 +349,14 @@ class parquet_column_view {
                 ? _leaf_col.head<uint8_t>() + leaf_col_offset * _type_width
                 : nullptr;
 
-      // Bring offset array to device
+      // Calculate nesting levels
       column_view curr_col = col;
-      std::vector<size_type const *> offsets_array;
+      _nesting_levels      = 0;
       while (curr_col.type().id() == type_id::LIST) {
         lists_column_view list_col(curr_col);
-        offsets_array.push_back(list_col.offsets().data<size_type>());
+        _nesting_levels++;
         curr_col = list_col.child();
       }
-      _offsets_array = offsets_array;
 
       // Update level nullability if no nullability was passed in.
       curr_col = col;
@@ -422,8 +422,7 @@ class parquet_column_view {
   // List related data
   column_view cudf_col() const noexcept { return _col; }
   column_view leaf_col() const noexcept { return _leaf_col; }
-  size_type const *const *nesting_offsets() const noexcept { return _offsets_array.data().get(); }
-  size_type nesting_levels() const noexcept { return _offsets_array.size(); }
+  size_type nesting_levels() const noexcept { return _nesting_levels; }
   size_type const *level_offsets() const noexcept { return _dremel_offsets.data(); }
   uint8_t const *repetition_levels() const noexcept { return _rep_level.data(); }
   uint8_t const *definition_levels() const noexcept { return _def_level.data(); }
@@ -490,16 +489,14 @@ class parquet_column_view {
   rmm::device_vector<uint32_t> _dict_index;
 
   // List-related members
-  // TODO (dm): convert to uvector
-  rmm::device_vector<size_type const *> _offsets_array;  ///< Array of pointers to offset columns at
-                                                         ///< each level of nesting O(nesting depth)
   rmm::device_uvector<size_type>
     _dremel_offsets;  ///< For each row, the absolute offset into the repetition and definition
                       ///< level vectors. O(num rows)
   rmm::device_uvector<uint8_t> _rep_level;
   rmm::device_uvector<uint8_t> _def_level;
   std::vector<bool> _nullability;
-  size_type _max_def_level = -1;
+  size_type _max_def_level  = -1;
+  size_type _nesting_levels = 0;
 
   // String-related members
   rmm::device_buffer _indexes;
@@ -978,6 +975,8 @@ void schema_gen_megafunction(table_view const &table)
 
 void writer::impl::init_page_fragments(hostdevice_vector<gpu::PageFragment> &frag,
                                        hostdevice_vector<gpu::EncColumnDesc> &col_desc,
+                                       const table_device_view &parent_table_device_view,
+                                       table_device_view &leaf_table_device_view,
                                        uint32_t num_columns,
                                        uint32_t num_fragments,
                                        uint32_t num_rows,
@@ -988,6 +987,8 @@ void writer::impl::init_page_fragments(hostdevice_vector<gpu::PageFragment> &fra
                            col_desc.memory_size(),
                            cudaMemcpyHostToDevice,
                            stream.value()));
+  gpu::InitColumnDeviceViews(
+    col_desc.device_ptr(), leaf_table_device_view, parent_table_device_view, stream);
   gpu::InitPageFragments(frag.device_ptr(),
                          col_desc.device_ptr(),
                          num_fragments,
@@ -1199,7 +1200,7 @@ void writer::impl::write(table_view const &table)
   CUDF_EXPECTS(not closed, "Data has already been flushed to out and closed");
 
   size_type num_columns = table.num_columns();
-  size_type num_rows    = 0;
+  size_type num_rows    = table.num_rows();
 
   // Wrapper around cudf columns to attach parquet-specific type info.
   // Note : I wish we could do this in the begin() function but since the
@@ -1223,8 +1224,6 @@ void writer::impl::write(table_view const &table)
   for (auto it = table.begin(); it < table.end(); ++it) {
     const auto col        = *it;
     const auto current_id = parquet_columns.size();
-
-    num_rows = std::max<uint32_t>(num_rows, col.size());
 
     // if the user is explicitly saying "I am only calling this once", assume the columns in this
     // one table tell us everything we need to know about their nullability.
@@ -1351,6 +1350,10 @@ void writer::impl::write(table_view const &table)
     // increment num rows
     md.num_rows += num_rows;
   }
+  // Create table_device_view so that corresponding column_device_view data
+  // can be written into col_desc members
+  auto parent_column_table_device_view = table_device_view::create(table);
+  auto leaf_column_table_device_view   = table_device_view::create(table);
 
   // Initialize column description
   hostdevice_vector<gpu::EncColumnDesc> col_desc(num_columns);
@@ -1374,11 +1377,9 @@ void writer::impl::write(table_view const &table)
       desc->dict_data  = col.get_dict_data();
     }
     if (col.is_list()) {
-      desc->nesting_offsets = col.nesting_offsets();
-      desc->nesting_levels  = col.nesting_levels();
-      desc->level_offsets   = col.level_offsets();
-      desc->rep_values      = col.repetition_levels();
-      desc->def_values      = col.definition_levels();
+      desc->level_offsets = col.level_offsets();
+      desc->rep_values    = col.repetition_levels();
+      desc->def_values    = col.definition_levels();
     }
     desc->num_values     = col.data_count();
     desc->num_rows       = col.row_count();
@@ -1408,8 +1409,16 @@ void writer::impl::write(table_view const &table)
 
   uint32_t num_fragments = (uint32_t)((num_rows + fragment_size - 1) / fragment_size);
   hostdevice_vector<gpu::PageFragment> fragments(num_columns * num_fragments);
+
   if (fragments.size() != 0) {
-    init_page_fragments(fragments, col_desc, num_columns, num_fragments, num_rows, fragment_size);
+    init_page_fragments(fragments,
+                        col_desc,
+                        *parent_column_table_device_view,
+                        *leaf_column_table_device_view,
+                        num_columns,
+                        num_fragments,
+                        num_rows,
+                        fragment_size);
   }
 
   size_t global_rowgroup_base = md.row_groups.size();
