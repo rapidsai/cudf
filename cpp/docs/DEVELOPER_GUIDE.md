@@ -41,7 +41,7 @@ A table is a collection of columns. It is also known as a dataframe.
 ### View
 
 A view is a non-owning object that provides zero-copy access (possibly with slicing or offsets) data 
-owned by another object. Examples are column views and table views. 
+owned by another object. Examples are column views and table views.
 
 # Directory Structure and File Naming
 
@@ -1000,6 +1000,6 @@ struct, and therefore `cudf::struct_view` is the data type of a `cudf::column` o
 # cuIO: file reading and writing
 
 cuIO is a component of libcudf that provides GPU-accelerated reading and writing of data file 
-formats commonly used in data analytics, including CSV, Parquet, ORC, and Avro.
+formats commonly used in data analytics, including CSV, Parquet, ORC, Avro, and JSON_Lines.
 
 // TODO: add more detail and move to a separate file.
