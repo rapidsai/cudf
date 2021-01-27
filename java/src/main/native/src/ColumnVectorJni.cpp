@@ -54,16 +54,15 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_sequence(JNIEnv *env, j
 }
 
 JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_fromArrow(JNIEnv *env, jclass,
-                                                                        jint j_type,
-                                                                        jstring j_col_name,
-                                                                        jlong j_col_length,
-                                                                        jlong j_null_count,
-                                                                        jlong j_data,
-                                                                        jlong j_data_size,
-                                                                        jlong j_validity,
-                                                                        jlong j_validity_size,
-                                                                        jlong j_offsets,
-                                                                        jlong j_offsets_size) {
+                                                                   jint j_type,
+                                                                   jlong j_col_length,
+                                                                   jlong j_null_count,
+                                                                   jlong j_data,
+                                                                   jlong j_data_size,
+                                                                   jlong j_validity,
+                                                                   jlong j_validity_size,
+                                                                   jlong j_offsets,
+                                                                   jlong j_offsets_size) {
   try {
     cudf::jni::auto_set_device(env);
     cudf::type_id n_type = static_cast<cudf::type_id>(j_type);
@@ -98,9 +97,7 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_fromArrow(JNIEnv *env, 
         // this handles the primitive types
         arrow_array = cudf::detail::to_arrow_array(n_type, j_col_length, data_buffer, null_buffer, j_null_count);
     }
-    cudf::jni::native_jstring col_name(env, j_col_name);
-    auto struct_meta = cudf::column_metadata{col_name.get()};
-    auto name_and_type = arrow::field(struct_meta.name, arrow_array->type());
+    auto name_and_type = arrow::field("col", arrow_array->type());
     std::vector<std::shared_ptr<arrow::Field>> fields = {name_and_type};
     std::shared_ptr<arrow::Schema> schema = std::make_shared<arrow::Schema>(fields);
     auto arrow_table = arrow::Table::Make(schema, std::vector<std::shared_ptr<arrow::Array>>{arrow_array});

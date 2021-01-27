@@ -47,7 +47,7 @@ public class ArrowColumnVectorTest extends CudfTestBase {
 
   @Test
   void testArrowIntMultiBatches() {
-    ArrowColumnBuilder builder = new ArrowColumnBuilder(new HostColumnVector.BasicType(true, DType.INT32) , "col1");
+    ArrowColumnBuilder builder = new ArrowColumnBuilder(new HostColumnVector.BasicType(true, DType.INT32));
     BufferAllocator allocator = new RootAllocator(Long.MAX_VALUE);
     int numVecs = 4;
     IntVector[] vectors = new IntVector[numVecs];
@@ -67,9 +67,9 @@ public class ArrowColumnVectorTest extends CudfTestBase {
         vector.setValueCount(count);
         vectors[j] = vector;
         long data = vector.getDataBuffer().memoryAddress();
-        long dataLen = vector.getDataBuffer().getActualMemoryConsumed();
+        long dataLen = vector.getDataBuffer().capacity();
         long valid = vector.getValidityBuffer().memoryAddress();
-        long validLen = vector.getValidityBuffer().getActualMemoryConsumed();
+        long validLen = vector.getValidityBuffer().capacity();
         builder.addBatch(vector.getValueCount(), vector.getNullCount(), data, dataLen, valid, validLen, 0, 0);
       }
       ColumnVector cv = builder.buildAndPutOnDevice();
@@ -85,7 +85,7 @@ public class ArrowColumnVectorTest extends CudfTestBase {
 
   @Test
   void testArrowLong() {
-    ArrowColumnBuilder builder = new ArrowColumnBuilder(new HostColumnVector.BasicType(true, DType.INT64) , "col1");
+    ArrowColumnBuilder builder = new ArrowColumnBuilder(new HostColumnVector.BasicType(true, DType.INT64));
     BufferAllocator allocator = new RootAllocator(Long.MAX_VALUE);
     BigIntVector vector = new BigIntVector("vec", allocator);
     try {
@@ -97,9 +97,9 @@ public class ArrowColumnVectorTest extends CudfTestBase {
       }
       vector.setValueCount(count);
       long data = vector.getDataBuffer().memoryAddress();
-      long dataLen = vector.getDataBuffer().getActualMemoryConsumed();
+      long dataLen = vector.getDataBuffer().capacity();
       long valid = vector.getValidityBuffer().memoryAddress();
-      long validLen = vector.getValidityBuffer().getActualMemoryConsumed();
+      long validLen = vector.getValidityBuffer().capacity();
       builder.addBatch(vector.getValueCount(), vector.getNullCount(), data, dataLen, valid, validLen, 0, 0);
       ColumnVector cv = builder.buildAndPutOnDevice();
       assertEquals(cv.getType(), DType.INT64);
@@ -112,7 +112,7 @@ public class ArrowColumnVectorTest extends CudfTestBase {
 
   @Test
   void testArrowDouble() {
-    ArrowColumnBuilder builder = new ArrowColumnBuilder(new HostColumnVector.BasicType(true, DType.FLOAT64) , "col1");
+    ArrowColumnBuilder builder = new ArrowColumnBuilder(new HostColumnVector.BasicType(true, DType.FLOAT64));
     BufferAllocator allocator = new RootAllocator(Long.MAX_VALUE);
     Float8Vector vector = new Float8Vector("vec", allocator);
     try {
@@ -124,9 +124,9 @@ public class ArrowColumnVectorTest extends CudfTestBase {
       }
       vector.setValueCount(count);
       long data = vector.getDataBuffer().memoryAddress();
-      long dataLen = vector.getDataBuffer().getActualMemoryConsumed();
+      long dataLen = vector.getDataBuffer().capacity();
       long valid = vector.getValidityBuffer().memoryAddress();
-      long validLen = vector.getValidityBuffer().getActualMemoryConsumed();
+      long validLen = vector.getValidityBuffer().capacity();
       builder.addBatch(vector.getValueCount(), vector.getNullCount(), data, dataLen, valid, validLen, 0, 0);
       ColumnVector cv = builder.buildAndPutOnDevice();
       assertEquals(cv.getType(), DType.FLOAT64);
@@ -140,7 +140,7 @@ public class ArrowColumnVectorTest extends CudfTestBase {
 
   @Test
   void testArrowFloat() {
-    ArrowColumnBuilder builder = new ArrowColumnBuilder(new HostColumnVector.BasicType(true, DType.FLOAT32) , "col1");
+    ArrowColumnBuilder builder = new ArrowColumnBuilder(new HostColumnVector.BasicType(true, DType.FLOAT32));
     BufferAllocator allocator = new RootAllocator(Long.MAX_VALUE);
     Float4Vector vector = new Float4Vector("vec", allocator);
     try {
@@ -152,9 +152,9 @@ public class ArrowColumnVectorTest extends CudfTestBase {
       }
       vector.setValueCount(count);
       long data = vector.getDataBuffer().memoryAddress();
-      long dataLen = vector.getDataBuffer().getActualMemoryConsumed();
+      long dataLen = vector.getDataBuffer().capacity();
       long valid = vector.getValidityBuffer().memoryAddress();
-      long validLen = vector.getValidityBuffer().getActualMemoryConsumed();
+      long validLen = vector.getValidityBuffer().capacity();
       builder.addBatch(vector.getValueCount(), vector.getNullCount(), data, dataLen, valid, validLen, 0, 0);
       ColumnVector cv = builder.buildAndPutOnDevice();
       assertEquals(cv.getType(), DType.FLOAT32);
@@ -172,7 +172,7 @@ public class ArrowColumnVectorTest extends CudfTestBase {
 
   @Test
   void testArrowString() {
-    ArrowColumnBuilder builder = new ArrowColumnBuilder(new HostColumnVector.BasicType(true, DType.STRING) , "col1");
+    ArrowColumnBuilder builder = new ArrowColumnBuilder(new HostColumnVector.BasicType(true, DType.STRING));
     BufferAllocator allocator = new RootAllocator(Long.MAX_VALUE);
     VarCharVector vector = new VarCharVector("vec", allocator);
     try {
@@ -185,11 +185,11 @@ public class ArrowColumnVectorTest extends CudfTestBase {
       }
       vector.setValueCount(count);
       long data = vector.getDataBuffer().memoryAddress();
-      long dataLen = vector.getDataBuffer().getActualMemoryConsumed();
+      long dataLen = vector.getDataBuffer().capacity();
       long valid = vector.getValidityBuffer().memoryAddress();
-      long validLen = vector.getValidityBuffer().getActualMemoryConsumed();
+      long validLen = vector.getValidityBuffer().capacity();
       long offsets = vector.getOffsetBuffer().memoryAddress();
-      long offsetsLen = vector.getOffsetBuffer().getActualMemoryConsumed();
+      long offsetsLen = vector.getOffsetBuffer().capacity();
       builder.addBatch(vector.getValueCount(), vector.getNullCount(), data, dataLen, valid, validLen, offsets, offsetsLen);
       ColumnVector cv = builder.buildAndPutOnDevice();
       assertEquals(cv.getType(), DType.STRING);
@@ -202,7 +202,7 @@ public class ArrowColumnVectorTest extends CudfTestBase {
 
   @Test
   void testArrowDays() {
-    ArrowColumnBuilder builder = new ArrowColumnBuilder(new HostColumnVector.BasicType(true, DType.TIMESTAMP_DAYS) , "col1");
+    ArrowColumnBuilder builder = new ArrowColumnBuilder(new HostColumnVector.BasicType(true, DType.TIMESTAMP_DAYS));
     BufferAllocator allocator = new RootAllocator(Long.MAX_VALUE);
     DateDayVector vector = new DateDayVector("vec", allocator);
     try {
@@ -214,9 +214,9 @@ public class ArrowColumnVectorTest extends CudfTestBase {
       }
       vector.setValueCount(count);
       long data = vector.getDataBuffer().memoryAddress();
-      long dataLen = vector.getDataBuffer().getActualMemoryConsumed();
+      long dataLen = vector.getDataBuffer().capacity();
       long valid = vector.getValidityBuffer().memoryAddress();
-      long validLen = vector.getValidityBuffer().getActualMemoryConsumed();
+      long validLen = vector.getValidityBuffer().capacity();
       builder.addBatch(vector.getValueCount(), vector.getNullCount(), data, dataLen, valid, validLen, 0, 0);
       ColumnVector cv = builder.buildAndPutOnDevice();
       assertEquals(cv.getType(), DType.TIMESTAMP_DAYS);
@@ -233,7 +233,7 @@ public class ArrowColumnVectorTest extends CudfTestBase {
     BufferAllocator allocator = new RootAllocator(Long.MAX_VALUE);
     DecimalVector vector = new DecimalVector("vec", allocator, 7, 3);
     try {
-      ArrowColumnBuilder builder = new ArrowColumnBuilder(new HostColumnVector.BasicType(true, DType.create(DType.DTypeEnum.DECIMAL32, 3)) , "col1");
+      ArrowColumnBuilder builder = new ArrowColumnBuilder(new HostColumnVector.BasicType(true, DType.create(DType.DTypeEnum.DECIMAL32, 3)));
       ((DecimalVector) vector).setSafe(0, -3);
       ((DecimalVector) vector).setSafe(1, 1);
       ((DecimalVector) vector).setSafe(2, 2);
@@ -242,9 +242,9 @@ public class ArrowColumnVectorTest extends CudfTestBase {
       ((DecimalVector) vector).setSafe(5, 5);
       vector.setValueCount(6);
       long data = vector.getDataBuffer().memoryAddress();
-      long dataLen = vector.getDataBuffer().getActualMemoryConsumed();
+      long dataLen = vector.getDataBuffer().capacity();
       long valid = vector.getValidityBuffer().memoryAddress();
-      long validLen = vector.getValidityBuffer().getActualMemoryConsumed();
+      long validLen = vector.getValidityBuffer().capacity();
 
       builder.addBatch(vector.getValueCount(), vector.getNullCount(), data, dataLen, valid, validLen, 0, 0);
       assertThrows(IllegalArgumentException.class, () -> {
@@ -260,15 +260,15 @@ public class ArrowColumnVectorTest extends CudfTestBase {
     BufferAllocator allocator = new RootAllocator(Long.MAX_VALUE);
     DecimalVector vector = new DecimalVector("vec", allocator, 18, 0);
     try {
-      ArrowColumnBuilder builder = new ArrowColumnBuilder(new HostColumnVector.BasicType(true, DType.create(DType.DTypeEnum.DECIMAL64, -11)) , "col1");
+      ArrowColumnBuilder builder = new ArrowColumnBuilder(new HostColumnVector.BasicType(true, DType.create(DType.DTypeEnum.DECIMAL64, -11)));
       ((DecimalVector) vector).setSafe(0, -3);
       ((DecimalVector) vector).setSafe(1, 1);
       ((DecimalVector) vector).setSafe(2, 2);
       vector.setValueCount(3);
       long data = vector.getDataBuffer().memoryAddress();
-      long dataLen = vector.getDataBuffer().getActualMemoryConsumed();
+      long dataLen = vector.getDataBuffer().capacity();
       long valid = vector.getValidityBuffer().memoryAddress();
-      long validLen = vector.getValidityBuffer().getActualMemoryConsumed();
+      long validLen = vector.getValidityBuffer().capacity();
 
       builder.addBatch(vector.getValueCount(), vector.getNullCount(), data, dataLen, valid, validLen, 0, 0);
       assertThrows(IllegalArgumentException.class, () -> {
@@ -284,13 +284,13 @@ public class ArrowColumnVectorTest extends CudfTestBase {
     BufferAllocator allocator = new RootAllocator(Long.MAX_VALUE);
     ListVector vector = ListVector.empty("list", allocator);
     try {
-      ArrowColumnBuilder builder = new ArrowColumnBuilder(new ListType(true, new HostColumnVector.BasicType(true, DType.STRING)) , "col1");
+      ArrowColumnBuilder builder = new ArrowColumnBuilder(new ListType(true, new HostColumnVector.BasicType(true, DType.STRING)));
       long data = 0;
       long dataLen = 0;
       long valid = vector.getValidityBuffer().memoryAddress();
-      long validLen = vector.getValidityBuffer().getActualMemoryConsumed();
+      long validLen = vector.getValidityBuffer().capacity();
       long offsets = vector.getOffsetBuffer().memoryAddress();
-      long offsetsLen = vector.getOffsetBuffer().getActualMemoryConsumed();
+      long offsetsLen = vector.getOffsetBuffer().capacity();
 
       builder.addBatch(vector.getValueCount(), vector.getNullCount(), data, dataLen, valid, validLen, offsets, offsetsLen);
       assertThrows(IllegalArgumentException.class, () -> {
@@ -306,11 +306,11 @@ public class ArrowColumnVectorTest extends CudfTestBase {
     BufferAllocator allocator = new RootAllocator(Long.MAX_VALUE);
     StructVector vector = StructVector.empty("struct", allocator);
     try {
-      ArrowColumnBuilder builder = new ArrowColumnBuilder(new StructType(true, new HostColumnVector.BasicType(true, DType.STRING)) , "col1");
+      ArrowColumnBuilder builder = new ArrowColumnBuilder(new StructType(true, new HostColumnVector.BasicType(true, DType.STRING)));
       long data = 0;
       long dataLen = 0;
       long valid = vector.getValidityBuffer().memoryAddress();
-      long validLen = vector.getValidityBuffer().getActualMemoryConsumed();
+      long validLen = vector.getValidityBuffer().capacity();
 
       builder.addBatch(vector.getValueCount(), vector.getNullCount(), data, dataLen, valid, validLen, 0, 0);
       assertThrows(IllegalArgumentException.class, () -> {

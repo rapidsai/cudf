@@ -24,7 +24,7 @@ import java.util.StringJoiner;
 
 /**
  * Column builder from Arrow data. This builder takes in pointers to the Arrow off heap
- * memory and allows efficient building of CUDF ColumnVectors from that arrow data.
+ * memory and allows efficient building of CUDF ColumnVectors from that Arrow data.
  * The caller can add multiple batches where each batch corresponds to Arrow data
  * and those batches get concatenated together after being converted to CUDF
  * ColumnVectors.
@@ -39,49 +39,62 @@ public final class ArrowColumnBuilder implements AutoCloseable {
     private ArrayList<Long> offsetsLength = new ArrayList<>();
     private ArrayList<Long> nullCount = new ArrayList<>();
     private ArrayList<Long> rows = new ArrayList<>();
-    private int numBatches = 0;
-    private String colName;
 
-    public ArrowColumnBuilder(HostColumnVector.DataType type, String name) {
+    public ArrowColumnBuilder(HostColumnVector.DataType type) {
       this.type = type.getType();
-      this.colName = name;
     }
 
-    public void addBatch(long rows, long nullCount, long data, long dataLength, long valid,
-                         long validLength, long offsets, long offsetsLength) {
-      this.numBatches += 1;
+    /**
+     * Add an Arrow buffer. This api allows you to add multiple if you want them
+     * combined into a single ColumnVector.
+     * Note, this takes all data, validity, and offsets buffers, but they may not all
+     * be used based on the data type. The buffer and length should just be set to 0
+     * if they aren't used for that type.
+     * @param rows - number of rows in this Arrow buffer
+     * @param nullCount - number of null values in this Arrow buffer
+     * @param data - memory address of the Arrow data buffer
+     * @param dataLength - size of the Arrow data buffer in bytes
+     * @param validity - memory address of the Arrow validity buffer
+     * @param validLength - size of the Arrow validity buffer in bytes
+     * @param offsets - memory address of the Arrow offsets buffer
+     * @param offsetsLenght - size of the Arrow offsets buffer in bytes
+     */
+    public void addBatch(long rows, long nullCount, long data, long dataLength, long validity,
+                         long validityLength, long offsets, long offsetsLength) {
       this.rows.add(rows);
       this.nullCount.add(nullCount);
       this.data.add(data);
       this.dataLength.add(dataLength);
-      this.validity.add(valid);
-      this.validityLength.add(validLength);
+      this.validity.add(validity);
+      this.validityLength.add(validityLength);
       this.offsets.add(offsets);
       this.offsetsLength.add(offsetsLength);
     }
 
     /**
      * Create the immutable ColumnVector, copied to the device based on the Arrow data.
+     * @return - new ColumnVector
      */
     public final ColumnVector buildAndPutOnDevice() {
-      ArrayList<ColumnVector> allVecs = new ArrayList<>(this.numBatches);
+      int numBatches = rows.size();
+      ArrayList<ColumnVector> allVecs = new ArrayList<>(numBatches);
       ColumnVector vecRet;
       try {
-        for (int i = 0; i < this.numBatches; i++) {
-          allVecs.add(ColumnVector.fromArrow(type, colName, rows.get(i), nullCount.get(i),
-            data.get(i), dataLength.get(i), validity.get(i), validityLength.get(i),
-            offsets.get(i), offsetsLength.get(i)));
+        for (int i = 0; i < numBatches; i++) {
+          allVecs.add(ColumnVector.fromArrow(type, rows.get(i), nullCount.get(i),
+          data.get(i), dataLength.get(i), validity.get(i), validityLength.get(i),
+          offsets.get(i), offsetsLength.get(i)));
         }
-        if (this.numBatches == 1) {
+        if (numBatches == 1) {
           vecRet = allVecs.get(0);
-        } else if (this.numBatches > 1) {
+        } else if (numBatches > 1) {
           vecRet = ColumnVector.concatenate(allVecs.toArray(new ColumnVector[0]));
         } else {
           throw new IllegalStateException("Can't build a ColumnVector when no Arrow batches specified");
         }
       } finally {
         // close the vectors that were concatenated
-        if (this.numBatches > 1) {
+        if (numBatches > 1) {
           for (ColumnVector cv : allVecs) {
             cv.close();
           }
