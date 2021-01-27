@@ -16,48 +16,19 @@ def _input_to_libcudf_castrules_both_cat(lcol, rcol, how):
     proceed. This function handles categorical variables.
     Categorical variable typecasting logic depends on both `how`
     and the specifics of the categorical variables to be merged.
-    For `inner` joins:
-        - If the left and right dtypes have equal categories and
-        equal ordering, the join will proceed and the libcudf
-        cython code will automatically forward the op to children
-        - If the the left and right dtypes have equal categories
-        but unequal ordering, the join can not proceed.
-        - If the left and right dtypes have unequal categories
-        and neither are ordered, the underlying dtype of the
-        categories from both sides are fed to the non-categorical
-        casting rules, and a new unordered categorical is later
-        generated from the factorized subset of keys in the result
-        - If the left and right dtypes have unequal categories and
-        either side is ordered, the output type is ambiguous and
-        the join can not proceed.
-    For `left`, `right`, `semi` and `anti` joins:
-        - If the left and right dtypes have equal categories and
-        equal ordering, the join will proceed as in `inner`.
-        - If the left and right dtypes have equal categories and
-        unequal ordering, the join will proceed and the ordering
-        from the major operand will take precedence.
-        - If the left and right dtypes have unequal categories and
-        neither are ordered, the join will proceed, and the major
-        operands dtype will be retained in the output.
-        - If the left and right dtypes have unequal categories and
-        only one is ordered, the join will proceed and the major
-        operands ordering will take precedence.
-        - If the left and right dtypes have unequal categories and
-        both are ordered, the join can not proceed.
-    for `outer` joins:
-        - If the left and right dtypes have equal categories and
-        equal ordering, the join will proceed as in `inner`.
-        - If the left and right dtypes have equal categories and
-        unequal ordering, the join can not proceed.
-        - If the left and right dtypes have unequal categories
-        and neither are ordered, the underlying dtype of the
-        categories from both sides are fed to the non-categorical
-        casting rules, and a new unordered categorical is later
-        generated from the deduped union of both source categories
-        - If the left and right dtypes have unequal categories and
-        either one or both are ordered, the join can not proceed.
-
-
+    Merging categorical variables when only one side is ordered
+    is ambiguous and not allowed. Merging when both categoricals
+    are ordered is allowed, but only when the categories are
+    exactly equal and have equal ordering, and will result in the
+    common dtype.
+    When both sides are unordered, the result categorical depends
+    on the kind of join:
+    - For inner joins, the result will be the intersection of the
+    categories
+    - For left or right joins, the result will be the the left or
+    right dtype respectively. This extends to semi and anti joins.
+    - For outer joins, the result will be the union of categories
+    from both sides.
 
     """
     ltype = lcol.dtype
