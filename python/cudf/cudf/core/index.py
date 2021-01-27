@@ -2696,10 +2696,10 @@ class interval_range(GenericIndex):
         left_col = cupy.arange(start, end, freq)
         right_col = cupy.arange(start + freq, end + 1, freq)
         if len(left_col) != len(right_col):
-            left_col = cupy.arange(start,end-freq ,freq)
+            left_col = cupy.arange(start, end - freq, freq)
         if len(right_col) == 0 or len(left_col) == 0:
             return pd.IntervalIndex([], closed=closed)
-            
+
         interval_col = column.build_interval_column(
             left_col, right_col, closed=closed
         )
