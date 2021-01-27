@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2020, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,7 +17,6 @@
 #pragma once
 
 #include <cudf/lists/list_view.cuh>
-#include <cudf/strings/string_view.cuh>
 #include <cudf/structs/struct_view.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
@@ -504,6 +503,8 @@ constexpr inline bool is_fixed_width(data_type type)
 {
   return cudf::type_dispatcher(type, is_fixed_width_impl{});
 }
+
+class string_view;
 
 /**
  * @brief Indicates whether the type `T` is a compound type.

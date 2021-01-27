@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,6 +16,7 @@
 
 #pragma once
 
+#include <cudf/io/detail/parquet.hpp>
 #include <cudf/io/types.hpp>
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
@@ -395,8 +396,6 @@ class parquet_writer_options {
   table_view _table;
   // Optional associated metadata
   const table_metadata* _metadata = nullptr;
-  // Optionally return the raw parquet file metadata output
-  bool _return_filemetadata = false;
   // Parquet writes can write INT96 or TIMESTAMP_MICROS. Defaults to TIMESTAMP_MICROS.
   bool _write_timestamps_as_int96 = false;
   // Column chunks file path to be set in the raw output metadata
@@ -474,11 +473,6 @@ class parquet_writer_options {
   bool is_enabled_int96_timestamps() const { return _write_timestamps_as_int96; }
 
   /**
-   * @brief Returns `true` if metadata is required, `false` otherwise.
-   */
-  bool is_enabled_return_filemetadata() const { return _return_filemetadata; }
-
-  /**
    * @brief Returns Column chunks file path to be set in the raw output metadata.
    */
   std::string get_column_chunks_file_path() const { return _column_chunks_file_path; }
@@ -508,13 +502,6 @@ class parquet_writer_options {
    * @param compression The compression type to use.
    */
   void set_compression(compression_type compression) { _compression = compression; }
-
-  /**
-   * @brief Sets whether filemetadata is required or not.
-   *
-   * @param req Boolean value to enable/disable return of file metadata.
-   */
-  void enable_return_filemetadata(bool req) { _return_filemetadata = req; }
 
   /**
    * @brief Sets timestamp writing preferences. INT96 timestamps will be written
@@ -595,18 +582,6 @@ class parquet_writer_options_builder {
   parquet_writer_options_builder& compression(compression_type compression)
   {
     options._compression = compression;
-    return *this;
-  }
-
-  /**
-   * @brief Sets whether filemetadata is required or not in parquet_writer_options.
-   *
-   * @param req Boolean value to enable/disable return of file metadata.
-   * @return this for chaining.
-   */
-  parquet_writer_options_builder& return_filemetadata(bool req)
-  {
-    options._return_filemetadata = req;
     return *this;
   }
 
@@ -847,6 +822,18 @@ class chunked_parquet_writer_options_builder {
   }
 
   /**
+   * @brief Sets decimal precision data.
+   *
+   * @param v Vector of precision data flattened with exactly one entry per
+   *          decimal column.
+   */
+  chunked_parquet_writer_options_builder& decimal_precision(std::vector<uint8_t> const& v)
+  {
+    options._decimal_precision = v;
+    return *this;
+  }
+
+  /**
    * @brief Sets compression type to chunked_parquet_writer_options.
    *
    * compression The compression type to use.
@@ -887,72 +874,6 @@ class chunked_parquet_writer_options_builder {
 };
 
 /**
- * @brief Forward declaration of anonymous chunked-writer state struct.
- */
-struct pq_chunked_state;
-
-/**
- * @brief Begin the process of writing a parquet file in a chunked/stream form.
- *
- * The intent of the write_parquet_chunked_ path is to allow writing of an
- * arbitrarily large / arbitrary number of rows to a parquet file in multiple passes.
- *
- * The following code snippet demonstrates how to write a single parquet file containing
- * one logical table by writing a series of individual cudf::tables.
- * @code
- *  ...
- *  std::string filepath = "dataset.parquet";
- *  cudf::io::chunked_parquet_writer_options options =
- *  cudf::io::chunked_parquet_writer_options::builder(cudf::sink_info(filepath), table->view());
- *  ...
- *  auto state = cudf::write_parquet_chunked_begin(options);
- *    cudf::write_parquet_chunked(table0, state);
- *    cudf::write_parquet_chunked(table1, state);
- *    ...
- *  cudf_write_parquet_chunked_end(state);
- * @endcode
- *
- * @param[in] options Settings for controlling writing behavior.
- * @param[in] mr Device memory resource to use for device memory allocation.
- *
- * @return pointer to an anonymous state structure storing information about the chunked write.
- * this pointer must be passed to all subsequent write_parquet_chunked() and
- * write_parquet_chunked_end() calls.
- */
-std::shared_ptr<pq_chunked_state> write_parquet_chunked_begin(
-  chunked_parquet_writer_options const& options,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
-
-/**
- * @brief Write a single table as a subtable of a larger logical parquet file/table.
- *
- * All tables passed into multiple calls of this function must contain the same # of columns and
- * have columns of the same type.
- *
- * @param[in] table The table data to be written.
- * @param[in] state Opaque state information about the writer process. Must be the same pointer
- * returned from write_parquet_chunked_begin().
- * @param[in] int96_timestamps Write out timestamps as INT96 type
- */
-void write_parquet_chunked(table_view const& table, std::shared_ptr<pq_chunked_state> state);
-
-/**
- * @brief Finish writing a chunked/stream parquet file.
- *
- * @param[in] state Opaque state information about the writer process. Must be the same pointer
- * returned from write_parquet_chunked_begin().
- * @param[in] return_filemetadata If true, return the raw file metadata.
- * @param[in] column_chunks_file_path Column chunks file path to be set in the raw output metadata.
- *
- * @return A blob that contains the file metadata (parquet FileMetadata thrift message) if
- *         requested in parquet_writer_options (empty blob otherwise).
- */
-std::unique_ptr<std::vector<uint8_t>> write_parquet_chunked_end(
-  std::shared_ptr<pq_chunked_state>& state,
-  bool return_filemetadata                   = false,
-  const std::string& column_chunks_file_path = "");
-
-/**
  * @brief Merges multiple raw metadata blobs that were previously created by write_parquet
  * into a single metadata blob
  *
@@ -963,6 +884,67 @@ std::unique_ptr<std::vector<uint8_t>> write_parquet_chunked_end(
  */
 std::unique_ptr<std::vector<uint8_t>> merge_rowgroup_metadata(
   const std::vector<std::unique_ptr<std::vector<uint8_t>>>& metadata_list);
+
+/**
+ * @brief chunked parquet writer class to handle options and write tables in chunks.
+ *
+ * The intent of the parquet_chunked_writer is to allow writing of an
+ * arbitrarily large / arbitrary number of rows to a parquet file in multiple passes.
+ *
+ * The following code snippet demonstrates how to write a single parquet file containing
+ * one logical table by writing a series of individual cudf::tables.
+ *
+ * @code
+ *  ...
+ *  std::string filepath = "dataset.parquet";
+ *  cudf::io::chunked_parquet_writer_options options =
+ *  cudf::io::chunked_parquet_writer_options::builder(cudf::sink_info(filepath), table->view());
+ *  ...
+ *  cudf::io::parquet_chunked_writer writer(options)
+ *  writer.write(table0)
+ *  writer.write(table1)
+ *  ...
+ *  writer.close()
+ *  @endcode
+ */
+class parquet_chunked_writer {
+ public:
+  /**
+   * @brief Default constructor, this should never be used.
+   *        This is added just to satisfy cython.
+   */
+  parquet_chunked_writer() = default;
+
+  /**
+   * @brief Constructor with chunked writer options
+   *
+   * @param[in] op options used to write table
+   * @param[in] mr Device memory resource to use for device memory allocation
+   */
+  parquet_chunked_writer(
+    chunked_parquet_writer_options const& op,
+    rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+
+  /**
+   * @brief Writes table to output.
+   *
+   * @param[in] table Table that needs to be written
+   * @return returns reference of the class object
+   */
+  parquet_chunked_writer& write(table_view const& table);
+
+  /**
+   * @brief Finishes the chunked/streamed write process.
+   *
+   * @param[in] column_chunks_file_path Column chunks file path to be set in the raw output metadata
+   * @return A parquet-compatible blob that contains the data for all rowgroups in the list only if
+   * `column_chunks_file_path` is provided, else null.
+   */
+  std::unique_ptr<std::vector<uint8_t>> close(std::string const& column_chunks_file_path = "");
+
+  // Unique pointer to impl writer class
+  std::unique_ptr<cudf::io::detail::parquet::writer> writer;
+};
 
 /** @} */  // end of group
 }  // namespace io

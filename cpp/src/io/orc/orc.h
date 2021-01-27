@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2020, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -27,6 +27,7 @@
 
 #include <io/comp/io_uncomp.h>
 #include <cudf/io/datasource.hpp>
+#include <cudf/io/orc_metadata.hpp>
 #include "orc_common.h"
 
 namespace cudf {
@@ -64,7 +65,7 @@ struct UserMetadataItem {
   std::string value;  // the user defined binary value as string
 };
 
-typedef std::vector<uint8_t> ColStatsBlob;  // Column statistics blob
+using ColStatsBlob = std::vector<uint8_t>;  // Column statistics blob
 
 struct FileFooter {
   uint64_t headerLength  = 0;              // the length of the file header in bytes (always 3)
@@ -94,6 +95,24 @@ struct StripeFooter {
   std::string writerTimezone = "";      // time zone of the writer
 };
 
+/**
+ * @brief Contains per-column ORC statistics.
+ *
+ * At most one of the `***_statistics` members has a non-null value.
+ */
+struct column_statistics {
+  std::unique_ptr<uint64_t> number_of_values;
+  std::unique_ptr<integer_statistics> int_stats;
+  std::unique_ptr<double_statistics> double_stats;
+  std::unique_ptr<string_statistics> string_stats;
+  std::unique_ptr<bucket_statistics> bucket_stats;
+  std::unique_ptr<decimal_statistics> decimal_stats;
+  std::unique_ptr<date_statistics> date_stats;
+  std::unique_ptr<binary_statistics> binary_stats;
+  std::unique_ptr<timestamp_statistics> timestamp_stats;
+  // TODO: hasNull (issue #7087)
+};
+
 struct StripeStatistics {
   std::vector<ColStatsBlob> colStats;  // Column statistics blobs
 };
@@ -102,12 +121,9 @@ struct Metadata {
   std::vector<StripeStatistics> stripeStats;
 };
 
-// Minimal protobuf reader for orc metadata
-
 /**
  * @brief Class for parsing Orc's Protocol Buffers encoded metadata
  */
-
 class ProtobufReader {
  public:
   ProtobufReader(const uint8_t *base, size_t len) : m_base(base), m_cur(base), m_end(base + len) {}
@@ -125,6 +141,15 @@ class ProtobufReader {
   void read(StripeFooter &, size_t maxlen);
   void read(Stream &, size_t maxlen);
   void read(ColumnEncoding &, size_t maxlen);
+  void read(integer_statistics &, size_t maxlen);
+  void read(double_statistics &, size_t maxlen);
+  void read(string_statistics &, size_t maxlen);
+  void read(bucket_statistics &, size_t maxlen);
+  void read(decimal_statistics &, size_t maxlen);
+  void read(date_statistics &, size_t maxlen);
+  void read(binary_statistics &, size_t maxlen);
+  void read(timestamp_statistics &, size_t maxlen);
+  void read(column_statistics &, size_t maxlen);
   void read(StripeStatistics &, size_t maxlen);
   void read(Metadata &, size_t maxlen);
 
@@ -146,20 +171,60 @@ class ProtobufReader {
   template <typename T, typename... Operator>
   void function_builder(T &s, size_t maxlen, std::tuple<Operator...> &op);
 
-  template <
-    typename T,
-    typename std::enable_if_t<!std::is_integral<T>::value and !std::is_enum<T>::value> * = nullptr>
-  int static constexpr encode_field_number(int field_number) noexcept
+  template <typename base_t,
+            typename std::enable_if_t<!std::is_arithmetic<base_t>::value and
+                                      !std::is_enum<base_t>::value> * = nullptr>
+  int static constexpr encode_field_number_base(int field_number) noexcept
   {
     return (field_number * 8) + PB_TYPE_FIXEDLEN;
   }
 
-  template <
-    typename T,
-    typename std::enable_if_t<std::is_integral<T>::value or std::is_enum<T>::value> * = nullptr>
-  int static constexpr encode_field_number(int field_number) noexcept
+  template <typename base_t,
+            typename std::enable_if_t<std::is_integral<base_t>::value or
+                                      std::is_enum<base_t>::value> * = nullptr>
+  int static constexpr encode_field_number_base(int field_number) noexcept
   {
     return (field_number * 8) + PB_TYPE_VARINT;
+  }
+
+  template <typename base_t,
+            typename std::enable_if_t<std::is_same<base_t, float>::value> * = nullptr>
+  int static constexpr encode_field_number_base(int field_number) noexcept
+  {
+    return (field_number * 8) + PB_TYPE_FIXED32;
+  }
+
+  template <typename base_t,
+            typename std::enable_if_t<std::is_same<base_t, double>::value> * = nullptr>
+  int static constexpr encode_field_number_base(int field_number) noexcept
+  {
+    return (field_number * 8) + PB_TYPE_FIXED64;
+  }
+
+  template <typename T,
+            typename std::enable_if_t<!std::is_class<T>::value or
+                                      std::is_same<T, std::string>::value> * = nullptr>
+  int static constexpr encode_field_number(int field_number) noexcept
+  {
+    return encode_field_number_base<T>(field_number);
+  }
+
+  // containters change the field number encoding
+  template <typename T,
+            typename std::enable_if_t<std::is_same<T, std::vector<typename T::value_type>>::value>
+              * = nullptr>
+  int static constexpr encode_field_number(int field_number) noexcept
+  {
+    return encode_field_number_base<T>(field_number);
+  }
+
+  // optional fields don't change the field number encoding
+  template <typename T,
+            typename std::enable_if_t<
+              std::is_same<T, std::unique_ptr<typename T::element_type>>::value> * = nullptr>
+  int static constexpr encode_field_number(int field_number) noexcept
+  {
+    return encode_field_number_base<typename T::element_type>(field_number);
   }
 
   uint32_t read_field_size(const uint8_t *end);
@@ -202,6 +267,30 @@ class ProtobufReader {
     auto const size = read_field_size(end);
     value.emplace_back();
     read(value.back(), size);
+  }
+
+  template <typename T,
+            typename std::enable_if_t<
+              std::is_same<T, std::unique_ptr<typename T::element_type>>::value> * = nullptr>
+  void read_field(T &value, const uint8_t *end)
+  {
+    typename T::element_type contained_value;
+    read_field(contained_value, end);
+    value = std::make_unique<typename T::element_type>(std::move(contained_value));
+  }
+
+  template <typename T>
+  auto read_field(T &value, const uint8_t *end) -> decltype(read(value, 0))
+  {
+    auto const size = read_field_size(end);
+    read(value, size);
+  }
+
+  template <typename T, typename std::enable_if_t<std::is_floating_point<T>::value> * = nullptr>
+  void read_field(T &value, const uint8_t *end)
+  {
+    memcpy(&value, m_cur, sizeof(T));
+    m_cur += sizeof(T);
   }
 
   template <typename T>
@@ -274,7 +363,8 @@ class ProtobufReader {
 
  public:
   /**
-   * @brief Returns a field reader object of correct type, based on the `field_value` type.
+   * @brief Returns a field reader object of correct type, based on the `field_value`
+   * type.
    *
    * @tparam Type of the field (inferred from `field_value` type)
    * @param field_number The field number of the field to be read

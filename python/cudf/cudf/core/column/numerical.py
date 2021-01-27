@@ -1,4 +1,4 @@
-# Copyright (c) 2018-2020, NVIDIA CORPORATION.
+# Copyright (c) 2018-2021, NVIDIA CORPORATION.
 
 from numbers import Number
 
@@ -342,17 +342,9 @@ class NumericalColumn(column.ColumnBase):
         return cov / lhs_std / rhs_std
 
     def round(self, decimals=0):
-        if decimals < 0:
-            msg = "Decimal values < 0 are not yet supported."
-            raise NotImplementedError(msg)
-
-        if np.issubdtype(self.dtype, np.integer):
-            return self
-
-        data = Buffer(
-            cudautils.apply_round(self.data_array_view, decimals).view("|u1")
-        )
-        return column.build_column(data=data, dtype=self.dtype, mask=self.mask)
+        """Round the values in the Column to the given number of decimals.
+        """
+        return libcudf.round.round(self, decimal_places=decimals)
 
     def applymap(self, udf, out_dtype=None):
         """Apply an element-wise function to transform the values in the Column.
@@ -417,36 +409,43 @@ class NumericalColumn(column.ColumnBase):
             replaced, to_replace_col, replacement_col
         )
 
-    def fillna(self, fill_value=None, method=None):
+    def fillna(self, fill_value=None, method=None, fill_nan=True):
         """
         Fill null values with *fill_value*
         """
+
+        if fill_nan:
+            col = self.nans_to_nulls()
+        else:
+            col = self
+
         if method is not None:
-            return super().fillna(fill_value, method)
+            return super(NumericalColumn, col).fillna(fill_value, method)
 
         if (
             isinstance(fill_value, cudf.Scalar)
-            and fill_value.dtype == self.dtype
+            and fill_value.dtype == col.dtype
         ):
-            return super().fillna(fill_value, method)
+            return super(NumericalColumn, col).fillna(fill_value, method)
+
         if np.isscalar(fill_value):
             # castsafely to the same dtype as self
-            fill_value_casted = self.dtype.type(fill_value)
+            fill_value_casted = col.dtype.type(fill_value)
             if not np.isnan(fill_value) and (fill_value_casted != fill_value):
                 raise TypeError(
                     f"Cannot safely cast non-equivalent "
-                    f"{type(fill_value).__name__} to {self.dtype.name}"
+                    f"{type(fill_value).__name__} to {col.dtype.name}"
                 )
             fill_value = cudf.Scalar(fill_value_casted)
         else:
             fill_value = column.as_column(fill_value, nan_as_null=False)
             # cast safely to the same dtype as self
-            if is_integer_dtype(self.dtype):
-                fill_value = _safe_cast_to_int(fill_value, self.dtype)
+            if is_integer_dtype(col.dtype):
+                fill_value = _safe_cast_to_int(fill_value, col.dtype)
             else:
-                fill_value = fill_value.astype(self.dtype)
+                fill_value = fill_value.astype(col.dtype)
 
-        return super().fillna(fill_value, method)
+        return super(NumericalColumn, col).fillna(fill_value, method)
 
     def find_first_value(self, value, closest=False):
         """
@@ -593,10 +592,10 @@ class NumericalColumn(column.ColumnBase):
         elif self.dtype.kind == "f" and to_dtype.kind in {"i", "u"}:
             info = np.iinfo(to_dtype)
             min_, max_ = info.min, info.max
+
             # best we can do is hope to catch it here and avoid compare
             if (self.min() >= min_) and (self.max() <= max_):
-
-                filled = self.fillna(0)
+                filled = self.fillna(0, fill_nan=False)
                 if (cudf.Series(filled) % 1 == 0).all():
                     return True
                 else:

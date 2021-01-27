@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# Copyright (c) 2019, NVIDIA CORPORATION.
+# Copyright (c) 2019-2021, NVIDIA CORPORATION.
 
 # cuDF build script
 
@@ -37,7 +37,7 @@ HELP="$0 [clean] [libcudf] [cudf] [dask_cudf] [benchmarks] [tests] [libcudf_kafk
    --disable_nvtx       - disable inserting NVTX profiling ranges
    --show_depr_warn     - show cmake deprecation warnings
    --ptds               - enable per-thread default stream
-   -h                   - print this text
+   -h | --h[elp]        - print this text
 
    default action (no args) is to build and install 'libcudf' then 'cudf'
    then 'dask_cudf' targets
@@ -75,7 +75,7 @@ function buildAll {
     ((${NUMARGS} == 0 )) || !(echo " ${ARGS} " | grep -q " [^-]\+ ")
 }
 
-if hasArg -h; then
+if hasArg -h || hasArg --h || hasArg --help; then
     echo "${HELP}"
     exit 0
 fi

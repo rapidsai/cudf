@@ -1,4 +1,4 @@
-# Copyright (c) 2019-2020, NVIDIA CORPORATION.
+# Copyright (c) 2019-2021, NVIDIA CORPORATION.
 
 # cython: boundscheck = False
 
@@ -22,9 +22,16 @@ from cudf.utils.dtypes import (
     is_list_dtype,
     is_struct_dtype
 )
+
+from cudf._lib.utils cimport get_column_names
+from cudf._lib.utils import (
+    _index_level_name,
+    generate_pandas_metadata,
+)
+
 from libc.stdlib cimport free
 from libc.stdint cimport uint8_t
-from libcpp.memory cimport shared_ptr, unique_ptr, make_unique
+from libcpp.memory cimport unique_ptr, make_unique
 from libcpp.string cimport string
 from libcpp.map cimport map
 from libcpp.vector cimport vector
@@ -43,13 +50,10 @@ from cudf._lib.cpp.io.parquet cimport (
     parquet_reader_options,
     parquet_writer_options,
     write_parquet as parquet_writer,
+    parquet_chunked_writer as cpp_parquet_chunked_writer,
     chunked_parquet_writer_options,
     chunked_parquet_writer_options_builder,
-    write_parquet_chunked_begin,
-    write_parquet_chunked,
-    write_parquet_chunked_end,
     merge_rowgroup_metadata as parquet_merge_metadata,
-    pq_chunked_state
 )
 from cudf._lib.column cimport Column
 from cudf._lib.io.utils cimport (
@@ -98,74 +102,6 @@ cdef class BufferArrayFromVector:
 
     def __releasebuffer__(self, Py_buffer *buffer):
         pass
-
-cpdef generate_pandas_metadata(Table table, index):
-    col_names = []
-    types = []
-    index_levels = []
-    index_descriptors = []
-
-    # Columns
-    for name, col in table._data.items():
-        col_names.append(name)
-        if is_categorical_dtype(col):
-            raise ValueError(
-                "'category' column dtypes are currently not "
-                + "supported by the gpu accelerated parquet writer"
-            )
-        elif is_list_dtype(col):
-            types.append(col.dtype.to_arrow())
-        else:
-            types.append(np_to_pa_dtype(col.dtype))
-
-    # Indexes
-    if index is not False:
-        for level, name in enumerate(table._index.names):
-            if isinstance(table._index, cudf.core.multiindex.MultiIndex):
-                idx = table.index.get_level_values(level)
-            else:
-                idx = table.index
-
-            if isinstance(idx, cudf.core.index.RangeIndex):
-                descr = {
-                    "kind": "range",
-                    "name": table.index.name,
-                    "start": table.index.start,
-                    "stop": table.index.stop,
-                    "step": table.index.step,
-                }
-            else:
-                descr = _index_level_name(idx.name, level, col_names)
-                if is_categorical_dtype(idx):
-                    raise ValueError(
-                        "'category' column dtypes are currently not "
-                        + "supported by the gpu accelerated parquet writer"
-                    )
-                elif is_list_dtype(idx):
-                    types.append(col.dtype.to_arrow())
-                else:
-                    types.append(np_to_pa_dtype(idx.dtype))
-                index_levels.append(idx)
-            col_names.append(name)
-            index_descriptors.append(descr)
-
-    metadata = pa.pandas_compat.construct_metadata(
-        table,
-        col_names,
-        index_levels,
-        index_descriptors,
-        index,
-        types,
-    )
-
-    md_dict = json.loads(metadata[b"pandas"])
-
-    # correct metadata for list and struct types
-    for col_meta in md_dict["columns"]:
-        if col_meta["numpy_type"] in ("list", "struct"):
-            col_meta["numpy_type"] = "object"
-
-    return json.dumps(md_dict)
 
 
 cpdef read_parquet(filepaths_or_buffers, columns=None, row_groups=None,
@@ -384,11 +320,9 @@ cpdef write_parquet(
     cdef parquet_writer_options args
     cdef unique_ptr[vector[uint8_t]] out_metadata_c
     cdef string c_column_chunks_file_path
-    cdef bool return_filemetadata = False
     cdef bool _int96_timestamps = int96_timestamps
     if metadata_file_path is not None:
         c_column_chunks_file_path = str.encode(metadata_file_path)
-        return_filemetadata = True
 
     # Perform write
     with nogil:
@@ -398,7 +332,6 @@ cpdef write_parquet(
             .compression(comp_type)
             .stats_level(stat_freq)
             .column_chunks_file_path(c_column_chunks_file_path)
-            .return_filemetadata(return_filemetadata)
             .int96_timestamps(_int96_timestamps)
             .build()
         )
@@ -422,7 +355,8 @@ cdef class ParquetWriter:
     --------
     cudf.io.parquet.write_parquet
     """
-    cdef shared_ptr[pq_chunked_state] state
+    cdef bool initialized
+    cdef unique_ptr[cpp_parquet_chunked_writer] writer
     cdef cudf_io_types.sink_info sink
     cdef unique_ptr[cudf_io_types.data_sink] _data_sink
     cdef cudf_io_types.statistics_freq stat_freq
@@ -435,43 +369,39 @@ cdef class ParquetWriter:
         self.stat_freq = _get_stat_freq(statistics)
         self.comp_type = _get_comp_type(compression)
         self.index = index
+        self.initialized = False
 
     def write_table(self, Table table):
         """ Writes a single table to the file """
-        if not self.state:
+        if not self.initialized:
             self._initialize_chunked_state(table)
 
-        cdef table_view tv = table.data_view()
-        if self.index is not False:
-            if isinstance(table._index, cudf.core.multiindex.MultiIndex) \
-                    or table._index.name is not None:
-                tv = table.view()
+        cdef table_view tv
+        if self.index is not False and (
+            table._index.name is not None or
+                isinstance(table._index, cudf.core.multiindex.MultiIndex)):
+            tv = table.view()
+        else:
+            tv = table.data_view()
 
         with nogil:
-            write_parquet_chunked(tv, self.state)
+            self.writer.get()[0].write(tv)
 
     def close(self, object metadata_file_path=None):
         cdef unique_ptr[vector[uint8_t]] out_metadata_c
-        cdef bool return_meta
         cdef string column_chunks_file_path
 
-        if not self.state:
+        if not self.initialized:
             return None
 
         # Update metadata-collection options
         if metadata_file_path is not None:
             column_chunks_file_path = str.encode(metadata_file_path)
-            return_meta = True
-        else:
-            return_meta = False
 
         with nogil:
             out_metadata_c = move(
-                write_parquet_chunked_end(
-                    self.state, return_meta, column_chunks_file_path
-                )
+                self.writer.get()[0].close(column_chunks_file_path)
             )
-            self.state.reset()
 
         if metadata_file_path is not None:
             out_metadata_py = BufferArrayFromVector.from_unique_ptr(
@@ -484,18 +414,17 @@ cdef class ParquetWriter:
         self.close()
 
     def _initialize_chunked_state(self, Table table):
-        """ Wraps write_parquet_chunked_begin. This is called lazily on the first
-        call to write, so that we can get metadata from the first table """
+        """ Prepares all the values required to build the
+        chunked_parquet_writer_options and creates a writer"""
         cdef unique_ptr[cudf_io_types.table_metadata_with_nullability] tbl_meta
         tbl_meta = make_unique[cudf_io_types.table_metadata_with_nullability]()
 
         # Set the table_metadata
-        tbl_meta.get().column_names = _get_column_names(table, self.index)
+        tbl_meta.get().column_names = get_column_names(table, self.index)
         pandas_metadata = generate_pandas_metadata(table, self.index)
         tbl_meta.get().user_data[str.encode("pandas")] = \
             str.encode(pandas_metadata)
 
-        # call write_parquet_chunked_begin
         cdef chunked_parquet_writer_options args
         with nogil:
             args = move(
@@ -505,7 +434,8 @@ cdef class ParquetWriter:
                 .stats_level(self.stat_freq)
                 .build()
             )
-            self.state = write_parquet_chunked_begin(args)
+            self.writer.reset(new cpp_parquet_chunked_writer(args))
+        self.initialized = True
 
 
 cpdef merge_filemetadata(object filemetadata_list):
@@ -552,22 +482,6 @@ cdef cudf_io_types.compression_type _get_comp_type(object compression):
         raise ValueError("Unsupported `compression` type")
 
 
-cdef vector[string] _get_column_names(Table table, object index):
-    cdef vector[string] column_names
-    if index is not False:
-        if isinstance(table._index, cudf.core.multiindex.MultiIndex):
-            for idx_name in table._index.names:
-                column_names.push_back(str.encode(idx_name))
-        else:
-            if table._index.name is not None:
-                column_names.push_back(str.encode(table._index.name))
-
-    for col_name in table._column_names:
-        column_names.push_back(str.encode(col_name))
-
-    return column_names
-
-
 cdef _update_struct_field_names(
     Table table,
     vector[cudf_io_types.column_name_info]& schema_info
@@ -600,23 +514,3 @@ cdef Column _update_column_struct_field_names(
             )
         col.set_base_children(tuple(children))
     return col
-
-
-def _index_level_name(index_name, level, column_names):
-    """
-    Return the name of an index level or a default name
-    if `index_name` is None or is already a column name.
-
-    Parameters
-    ----------
-    index_name : name of an Index object
-    level : level of the Index object
-
-    Returns
-    -------
-    name : str
-    """
-    if index_name is not None and index_name not in column_names:
-        return index_name
-    else:
-        return f"__index_level_{level}__"

@@ -185,6 +185,53 @@ class MultiIndex(Index):
         assert len(value) == self.nlevels
         self._names = pd.core.indexes.frozen.FrozenList(value)
 
+    def rename(self, names, inplace=False):
+        """
+        Alter MultiIndex level names
+
+        Parameters
+        ----------
+        names : list of label
+            Names to set, length must be the same as number of levels
+        inplace : bool, default False
+            If True, modifies objects directly, otherwise returns a new
+            ``MultiIndex`` instance
+
+        Returns
+        --------
+        None or MultiIndex
+
+        Examples
+        --------
+        Renaming each levels of a MultiIndex to specified name:
+
+        >>> midx = cudf.MultiIndex.from_product(
+                [('A', 'B'), (2020, 2021)], names=['c1', 'c2'])
+        >>> midx.rename(['lv1', 'lv2'])
+        MultiIndex([('A', 2020),
+                    ('A', 2021),
+                    ('B', 2020),
+                    ('B', 2021)],
+                names=['lv1', 'lv2'])
+        >>> midx.rename(['lv1', 'lv2'], inplace=True)
+        >>> midx
+        MultiIndex([('A', 2020),
+                    ('A', 2021),
+                    ('B', 2020),
+                    ('B', 2021)],
+                names=['lv1', 'lv2'])
+
+        ``names`` argument must be a list, and must have same length as
+        ``MultiIndex.levels``:
+
+        >>> midx.rename(['lv0'])
+        Traceback (most recent call last):
+        ValueError: Length of names must match number of levels in MultiIndex.
+
+        """
+
+        return self.set_names(names, level=None, inplace=inplace)
+
     def set_names(self, names, level=None, inplace=False):
         if (
             level is not None

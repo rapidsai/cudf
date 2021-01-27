@@ -216,18 +216,50 @@ class StructDtype(ExtensionDtype):
     def __repr__(self):
         return f"StructDtype({self.fields})"
 
+    def __hash__(self):
+        return hash(self._typ)
 
-class DecimalDtype(ExtensionDtype):
+
+class Decimal64Dtype(ExtensionDtype):
 
     name = "decimal"
     _metadata = ("precision", "scale")
+    _MAX_PRECISION = np.floor(np.log10(np.iinfo("int64").max))
 
-    def __init__(self, precision, scale):
+    def __init__(self, precision, scale=0):
+        """
+        Parameters
+        ----------
+        precision : int
+            The total number of digits in each value of this dtype
+        scale : int, optional
+            The scale of the Decimal64Dtype. See Notes below.
+
+        Notes
+        -----
+            When the scale is positive:
+              - numbers with fractional parts (e.g., 0.0042) can be represented
+              - the scale is the total number of digits to the right of the
+                decimal point
+            When the scale is negative:
+              - only multiples of powers of 10 (including 10**0) can be
+                represented (e.g., 1729, 4200, 1000000)
+              - the scale represents the number of trailing zeros in the value.
+            For example, 42 is representable with precision=2 and scale=0.
+            13.0051 is representable with precision=6 and scale=4,
+            and *not* representable with precision<6 or scale<4.
+        """
+        self._validate(precision, scale)
         self._typ = pa.decimal128(precision, scale)
 
     @property
     def precision(self):
         return self._typ.precision
+
+    @precision.setter
+    def precision(self, value):
+        self._validate(value, self.scale)
+        self._typ = pa.decimal128(precision=value, scale=self.scale)
 
     @property
     def scale(self):
@@ -244,3 +276,26 @@ class DecimalDtype(ExtensionDtype):
     @classmethod
     def from_arrow(cls, typ):
         return cls(typ.precision, typ.scale)
+
+    @property
+    def itemsize(self):
+        return 8
+
+    def __repr__(self):
+        return (
+            f"{self.__class__.__name__}"
+            f"(precision={self.precision}, scale={self.scale})"
+        )
+
+    def __hash__(self):
+        return hash(self._typ)
+
+    @classmethod
+    def _validate(cls, precision, scale=0):
+        if precision > Decimal64Dtype._MAX_PRECISION:
+            raise ValueError(
+                f"Cannot construct a {cls.__name__}"
+                f" with precision > {cls._MAX_PRECISION}"
+            )
+        if abs(scale) > precision:
+            raise ValueError(f"scale={scale} exceeds precision={precision}")
