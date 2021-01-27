@@ -18,9 +18,6 @@
 
 package ai.rapids.cudf;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
 import java.util.ArrayList;
 import java.util.List;
 import java.util.StringJoiner;
@@ -33,8 +30,6 @@ import java.util.StringJoiner;
  * ColumnVectors.
  */
 public final class ArrowColumnBuilder implements AutoCloseable {
-    private static final Logger log = LoggerFactory.getLogger(ArrowColumnBuilder.class);
-
     private DType type;
     private ArrayList<Long> data = new ArrayList<>();
     private ArrayList<Long> dataLength = new ArrayList<>();
@@ -69,8 +64,7 @@ public final class ArrowColumnBuilder implements AutoCloseable {
      * Create the immutable ColumnVector, copied to the device based on the Arrow data.
      */
     public final ColumnVector buildAndPutOnDevice() {
-      log.warn("buildAndPutOnDevice type before is: " + type + " name is: " + colName + " num batches is: " + this.numBatches);
-      ArrayList<ColumnVector> allVecs = new ArrayList<>();
+      ArrayList<ColumnVector> allVecs = new ArrayList<>(this.numBatches);
       for (int i = 0; i < this.numBatches; i++) {
         allVecs.add(ColumnVector.fromArrow(type, colName, rows.get(i), nullCount.get(i),
           data.get(i), dataLength.get(i), validity.get(i), validityLength.get(i),
@@ -80,7 +74,13 @@ public final class ArrowColumnBuilder implements AutoCloseable {
       if (this.numBatches == 1) {
         vecRet = allVecs.get(0);
       } else if (this.numBatches > 1) {
-        vecRet = ColumnVector.concatenate(allVecs.toArray(new ColumnVector[0]));
+	try {
+          vecRet = ColumnVector.concatenate(allVecs.toArray(new ColumnVector[0]));
+	} finally {
+          for (ColumnVector cv : allVecs) {
+            cv.close();
+          }
+	}
       } else {
         throw new IllegalStateException("Can't build a ColumnVector when no Arrow batches specified");
       }
