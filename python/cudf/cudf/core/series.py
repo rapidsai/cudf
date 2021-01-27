@@ -415,7 +415,7 @@ class Series(Frame, Serializable):
         return (
             self._constructor(data=new_data, index=self.index)
             if len(new_data) > 0
-            else Series(dtype=self.dtype, name=self.name)
+            else self._constructor(dtype=self.dtype, name=self.name)
         )
 
     @classmethod
