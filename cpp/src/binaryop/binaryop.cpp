@@ -432,8 +432,8 @@ std::unique_ptr<column> fixed_point_binary_operation(scalar const& lhs,
 
   CUDF_EXPECTS(is_supported_fixed_point_binop(op), "Unsupported fixed_point binary operation");
   CUDF_EXPECTS(lhs.type().id() == rhs.type().id(), "Data type mismatch");
-  CUDF_EXPECTS(op != binary_operator::TRUE_DIV || output_type.has_value(),
-               "TRUE_DIV requires result_type.");
+  if (op == binary_operator::TRUE_DIV)
+    CUDF_EXPECTS(output_type.has_value(), "TRUE_DIV requires result_type.");
 
   auto const scale = op == binary_operator::TRUE_DIV
                        ? output_type.value().scale()
@@ -450,7 +450,7 @@ std::unique_ptr<column> fixed_point_binary_operation(scalar const& lhs,
 
   if (op == binary_operator::TRUE_DIV) {
     // Adjust scalar so lhs has the scale needed to get desired output data_type (scale)
-    auto const diff         = lhs.type().scale() - rhs.type().scale() - scale;
+    auto const diff         = (lhs.type().scale() - rhs.type().scale()) - scale;
     auto const unused_scale = scale_type{0};  // scale of out_view already set
     if (lhs.type().id() == type_id::DECIMAL32) {
       auto const factor       = numeric::detail::ipow<int32_t, Radix::BASE_10>(std::abs(diff));
@@ -533,8 +533,8 @@ std::unique_ptr<column> fixed_point_binary_operation(column_view const& lhs,
 
   CUDF_EXPECTS(is_supported_fixed_point_binop(op), "Unsupported fixed_point binary operation");
   CUDF_EXPECTS(lhs.type().id() == rhs.type().id(), "Data type mismatch");
-  CUDF_EXPECTS(op != binary_operator::TRUE_DIV || output_type.has_value(),
-               "TRUE_DIV requires result_type.");
+  if (op == binary_operator::TRUE_DIV)
+    CUDF_EXPECTS(output_type.has_value(), "TRUE_DIV requires result_type.");
 
   auto const scale = op == binary_operator::TRUE_DIV
                        ? output_type.value().scale()
@@ -551,7 +551,7 @@ std::unique_ptr<column> fixed_point_binary_operation(column_view const& lhs,
 
   if (op == binary_operator::TRUE_DIV) {
     // Adjust columns so lhs has the scale needed to get desired output data_type (scale)
-    auto const diff         = lhs.type().scale() - rhs.type().scale() - scale;
+    auto const diff         = (lhs.type().scale() - rhs.type().scale()) - scale;
     auto const interim_op   = diff < 0 ? binary_operator::DIV : binary_operator::MUL;
     auto const scalar_scale = scale_type{rhs.type().scale() + scale};
     auto const result       = [&] {
@@ -634,8 +634,8 @@ std::unique_ptr<column> fixed_point_binary_operation(column_view const& lhs,
 
   CUDF_EXPECTS(is_supported_fixed_point_binop(op), "Unsupported fixed_point binary operation");
   CUDF_EXPECTS(lhs.type().id() == rhs.type().id(), "Data type mismatch");
-  CUDF_EXPECTS(op != binary_operator::TRUE_DIV || output_type.has_value(),
-               "TRUE_DIV requires result_type.");
+  if (op == binary_operator::TRUE_DIV)
+    CUDF_EXPECTS(output_type.has_value(), "TRUE_DIV requires result_type.");
 
   auto const scale = op == binary_operator::TRUE_DIV
                        ? output_type.value().scale()
@@ -652,7 +652,7 @@ std::unique_ptr<column> fixed_point_binary_operation(column_view const& lhs,
 
   if (op == binary_operator::TRUE_DIV) {
     // Adjust columns so lhs has the scale needed to get desired output data_type (scale)
-    auto const diff         = lhs.type().scale() - rhs.type().scale() - scale;
+    auto const diff         = (lhs.type().scale() - rhs.type().scale()) - scale;
     auto const interim_op   = diff < 0 ? binary_operator::DIV : binary_operator::MUL;
     auto const scalar_scale = scale_type{rhs.type().scale() + scale};
     auto const result       = [&] {
