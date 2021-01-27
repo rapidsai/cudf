@@ -312,8 +312,10 @@ public final class ColumnVector extends ColumnView {
   }
 
   /**
-   * Create a ColumnVector from the off heap Apache Arrow buffers passed in.
+   * Create a ColumnVector from the Apache Arrow byte buffers passed in.
    * Any of the buffers not used for that datatype should be set to null.
+   * The buffers are expected to be off heap buffers, but if they are not,
+   * it will handle copying them to direct byte buffers.
    * This only supports primitive types and Strings, Decimals and nested types
    * such as list and struct are not supported.
    * @param type - type of the column
@@ -331,8 +333,26 @@ public final class ColumnVector extends ColumnView {
       ByteBuffer data,
       ByteBuffer validity,
       ByteBuffer offsets) {
-    long columnHandle = fromArrow(type.typeId.getNativeId(), numRows, nullCount, data,
-      validity, offsets);
+    ByteBuffer dataBuffer = data;
+    if (dataBuffer != null && !dataBuffer.isDirect()) {
+      dataBuffer = ByteBuffer.allocateDirect(data.remaining());
+      dataBuffer.put(data);
+      dataBuffer.flip();
+    }
+    ByteBuffer validityBuffer = validity;
+    if (validityBuffer != null && !validityBuffer.isDirect()) {
+      validityBuffer = ByteBuffer.allocateDirect(validity.remaining());
+      validityBuffer.put(validity);
+      validityBuffer.flip();
+    }
+    ByteBuffer offsetsBuffer = offsets;
+    if (offsetsBuffer != null && !offsetsBuffer.isDirect()) {
+      offsetsBuffer = ByteBuffer.allocateDirect(offsets.remaining());
+      offsetsBuffer.put(offsets);
+      offsetsBuffer.flip();
+    }
+    long columnHandle = fromArrow(type.typeId.getNativeId(), numRows, nullCount,
+      dataBuffer, validityBuffer, offsetsBuffer);
     ColumnVector vec = new ColumnVector(columnHandle);
     return vec;
   }
