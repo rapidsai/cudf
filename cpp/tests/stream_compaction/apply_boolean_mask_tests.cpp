@@ -249,7 +249,7 @@ TEST_F(ApplyBooleanMask, NoNullInput)
 
 TEST_F(ApplyBooleanMask, CorrectNullCount)
 {
-  cudf::size_type inputRows = 75000;
+  cudf::size_type inputRows = 471234;
 
   auto seq1       = cudf::test::make_counting_transform_iterator(0, [](auto i) { return i; });
   auto valid_seq1 = cudf::test::make_counting_transform_iterator(0, [](auto row) { return true; });
