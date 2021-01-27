@@ -6,6 +6,41 @@ Unit tests in libcudf are written using
 **Important:** Instead of including `gtest/gtest.h` directly, use 
 `#include <cudf_test/cudf_gtest.hpp>`.
 
+## Best Practices: What Should We Test?
+
+In general we should test to make sure all code paths are covered. This is not always easy or 
+possible. But generally this means we test all supported combinations of algorithms and data types,
+and all operators supported by algorithms that support multiple operators (e.g. reductions, 
+groupby).  Here are some other guidelines.
+
+ * In general empty input is not an error in libcudf. Typically empty input results in empty output.
+   Tests should verify this.
+
+ * Anything that involves manipulating bitmasks (especially hand-rolled kernels) should have tests 
+   that check varying number of rows, especially around boundaries like the warp size (32). So, test
+   fewer than 32 rows, more than 32 rows, exactly 32 rows, and greater than 64 rows.
+
+ * Most algorithms should have one or more tests exercising inputs with a large enough number of 
+   rows to require launching multiple thread blocks, especially when values are ultimately 
+   communicated between blocks (e.g. reductions). This is especially important for custom kernels 
+   but also applies to Thrust and CUB algorithm calls with lambdas / functors. 
+
+ * For anything involving strings or lists, test exhaustive combinations of empty strings/lists,
+   null strings/lists and strings/lists with null elements.
+
+ * Test sliced columns as input (that is, columns that have a nonzero `offset`). This is an easy to
+   forget case.
+
+ * Tests that verify various forms of "degenerate" column inputs, for example: empty 
+   string columns that have no children (not many paths in cudf can generate these but it 
+   does happen); columns with zero size but that somehow have non-null data pointers; and struct 
+   columns with no children.
+
+ * Decimal types are not included in the `NumericTypes` type list, but are included in 
+   `FixedWidthTypes`, so be careful that tests either include or exclude decimal types as 
+   appropriate.
+
+
 ## Directory and File Naming
 
 The naming of unit test directories and source files should be consistent with the feature being 
@@ -35,9 +70,11 @@ class MyTestFiture : public cudf::test::BaseFixture {...};
 
 ## Typed Tests
 
-libcudf features must work across all of the supported types. In order to automate the process of 
-running the same tests across multiple types, we use GTest's [Typed Tests](https://github.com/google/googletest/blob/master/googletest/docs/advanced.md#typed-tests). Typed tests allow you to write a test once 
-and run it across a list of types.
+In general, libcudf features must work across all of the supported types (there are exceptions e.g.
+not all binary operations are supported for all types). In order to automate the process of running
+the same tests across multiple types, we use GTest's 
+[Typed Tests](https://github.com/google/googletest/blob/master/googletest/docs/advanced.md#typed-tests).
+Typed tests allow you to write a test once and run it across a list of types.
 
 For example:
 ```c++
@@ -384,8 +421,10 @@ types, recursively verifies the equivalence of type, and equality of size of all
 ignoring nullability.
 
 Note "equivalent type". Most types are equivalent if and only they are equal. `fixed_point` types
-are the exception. They are equivalent if the representation type is equal, even if they have 
-different scales.
+are one exception. They are equivalent if the representation type is equal, even if they have 
+different scales. Nested type columns can be equivalent in the case where they both have zero size, 
+but one has children (also empty) and the other does not. For columns with nonzero size, both equals 
+and equivalent expect equal number of children.
 
 #### `expect_columns_equal`
 
