@@ -97,9 +97,7 @@ public final class ArrowColumnBuilder implements AutoCloseable {
       } finally {
         // close the vectors that were concatenated
         if (numBatches > 1) {
-          for (ColumnVector cv : allVecs) {
-            cv.close();
-          }
+          allVecs.forEach(cv -> cv.close());
         }
       }
       return vecRet;
