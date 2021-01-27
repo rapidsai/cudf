@@ -404,11 +404,13 @@ class Series(Frame, Serializable):
         params.update(kwargs)
         return cls(**params)
 
-    def _get_columns_by_label(self, labels):
+    def _get_columns_by_label(self, labels, downcast=False):
+        """Return the column specified by `labels`
+
+        For cudf.Series, either the column, or an empty series is returned.
+        Parameter `downcast` does not have effects.
         """
-        Return the column
-        """
-        new_data = super()._get_columns_by_label(labels)
+        new_data = super()._get_columns_by_label(labels, downcast)
 
         return (
             self._constructor(data=new_data, index=self.index)

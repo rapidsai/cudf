@@ -1323,7 +1323,7 @@ class DataFrame(Frame, Serializable):
 
         If downcast is True, try and downcast from a DataFrame to a Series
         """
-        new_data = super()._get_columns_by_label(labels)
+        new_data = super()._get_columns_by_label(labels, downcast)
         if downcast:
             if is_scalar(labels):
                 nlevels = 1

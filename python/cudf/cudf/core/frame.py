@@ -467,7 +467,7 @@ class Frame(libcudf.table.Table):
         else:
             return self._index.equals(other._index)
 
-    def _get_columns_by_label(self, labels):
+    def _get_columns_by_label(self, labels, downcast):
         """
         Returns columns of the Frame specified by `labels`
 
@@ -1617,7 +1617,9 @@ class Frame(libcudf.table.Table):
         source = self
         if numeric_only:
             numeric_cols = (
-                name for name in self._data.names if is_numerical_dtype(self._data[name])
+                name
+                for name in self._data.names
+                if is_numerical_dtype(self._data[name])
             )
             source = self._get_columns_by_label(numeric_cols)
             if source.empty:
