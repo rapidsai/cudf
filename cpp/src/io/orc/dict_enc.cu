@@ -267,6 +267,8 @@ __global__ void __launch_bounds__(block_size, 2)
       }
     }
   }
+  // temp_storage is being used twice, so make sure there is `__syncthreads()` between them
+  // while making any future changes.
   dict_char_count = block_reduce(temp_storage).Sum(dict_char_count);
   if (!t) {
     chunks[group_id * num_columns + col_id].num_strings       = nnz;

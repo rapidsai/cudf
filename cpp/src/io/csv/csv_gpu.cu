@@ -900,12 +900,8 @@ __global__ void __launch_bounds__(rowofs_block_dim)
 {
   auto start = data.begin();
   __shared__ __align__(8) uint64_t ctxtree[rowofs_block_dim * 2];
-  using warp_reduce      = typename cub::WarpReduce<uint32_t>;
-  using half_warp_reduce = typename cub::WarpReduce<uint32_t, 16>;
-  __shared__ union {
-    typename warp_reduce::TempStorage full;
-    typename half_warp_reduce::TempStorage half[rowofs_block_dim / 32];
-  } temp_storage;
+  using block_reduce = typename cub::BlockReduce<uint32_t, rowofs_block_dim>;
+  __shared__ typename block_reduce::TempStorage temp_storage;
 
   const char *end = start + (min(parse_pos + chunk_size, data_size) - start_offset);
   uint32_t t      = threadIdx.x;
@@ -999,14 +995,8 @@ __global__ void __launch_bounds__(rowofs_block_dim)
       rowmap >>= pos;
     }
     // Return the number of rows out of range
-    rows_out_of_range = half_warp_reduce(temp_storage.half[t / 32]).Sum(rows_out_of_range);
-    __syncthreads();
-    if (!(t & 0xf)) { ctxtree[t >> 4] = rows_out_of_range; }
-    __syncthreads();
-    if (t < 32) {
-      rows_out_of_range = warp_reduce(temp_storage.full).Sum(static_cast<uint32_t>(ctxtree[t]));
-      if (t == 0) { row_ctx[blockIdx.x] = rows_out_of_range; }
-    }
+    rows_out_of_range = block_reduce(temp_storage).Sum(rows_out_of_range);
+    if (t == 0) { row_ctx[blockIdx.x] = rows_out_of_range; }
   } else {
     // Just store the row counts and output contexts
     if (t == 0) { row_ctx[blockIdx.x] = ctxtree[1]; }

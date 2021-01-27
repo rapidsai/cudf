@@ -37,7 +37,6 @@ struct stats_state_s {
   statistics_chunk ck;                   ///< Output statistics chunk
   volatile statistics_val warp_min[32];  ///< Min reduction scratch
   volatile statistics_val warp_max[32];  ///< Max reduction scratch
-  volatile statistics_val warp_sum[32];  ///< Sum reduction scratch
 };
 
 /**
@@ -49,9 +48,6 @@ struct merge_state_s {
   statistics_chunk ck;                   ///< Resulting statistics chunk
   volatile statistics_val warp_min[32];  ///< Min reduction scratch
   volatile statistics_val warp_max[32];  ///< Max reduction scratch
-  volatile statistics_val warp_sum[32];  ///< Sum reduction scratch
-  volatile uint32_t warp_non_nulls[32];  ///< Non-nulls reduction scratch
-  volatile uint32_t warp_nulls[32];      ///< Nulls reduction scratch
 };
 
 /**
@@ -150,7 +146,7 @@ inline __device__ string_stats WarpReduceMaxString(const char *smax, uint32_t lm
  * @param s shared block state
  * @param dtype data type
  * @param t thread id
- * @param storage temporary storage for warp reduction
+ * @param storage temporary storage for reduction
  */
 template <typename Storage>
 void __device__
@@ -236,7 +232,7 @@ gatherIntColumnStats(stats_state_s *s, statistics_dtype dtype, uint32_t t, Stora
  * @param s shared block state
  * @param dtype data type
  * @param t thread id
- * @param storage temporary storage for warp reduction
+ * @param storage temporary storage for reduction
  */
 template <typename Storage>
 void __device__
@@ -313,7 +309,7 @@ struct nvstrdesc_s {
  *
  * @param s shared block state
  * @param t thread id
- * @param storage temporary storage for warp reduction
+ * @param storage temporary storage for reduction
  */
 template <typename Storage>
 void __device__ gatherStringColumnStats(stats_state_s *s, uint32_t t, Storage &storage)
@@ -450,7 +446,7 @@ __global__ void __launch_bounds__(block_size, 1)
  * @param ck_in pointer to first statistic chunk
  * @param num_chunks number of statistic chunks to merge
  * @param t thread id
- * @param storage temporary storage for warp reduction
+ * @param storage temporary storage for reduction
  */
 template <typename Storage>
 void __device__ mergeIntColumnStats(merge_state_s *s,
@@ -521,7 +517,7 @@ void __device__ mergeIntColumnStats(merge_state_s *s,
  * @param ck_in pointer to first statistic chunk
  * @param num_chunks number of statistic chunks to merge
  * @param t thread id
- * @param storage temporary storage for warp reduction
+ * @param storage temporary storage for reduction
  */
 template <typename Storage>
 void __device__ mergeFloatColumnStats(merge_state_s *s,
@@ -592,7 +588,7 @@ void __device__ mergeFloatColumnStats(merge_state_s *s,
  * @param ck_in pointer to first statistic chunk
  * @param num_chunks number of statistic chunks to merge
  * @param t thread id
- * @param storage temporary storage for warp reduction
+ * @param storage temporary storage for reduction
  */
 template <typename Storage>
 void __device__ mergeStringColumnStats(merge_state_s *s,
