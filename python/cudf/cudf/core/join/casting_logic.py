@@ -80,48 +80,33 @@ def _input_to_libcudf_castrules_both_cat(lcol, rcol, how):
             "Merging on categorical variables with mismatched"
             " ordering is ambiguous"
         )
+    elif ltype.ordered and rtype.ordered:
+        # if we get to here, categories must be what causes the
+        # dtype equality check to fail. And we can never merge
+        # two ordered categoricals with different categories
+        raise TypeError(
+            f"{how} merge between categoricals with "
+            "different categories is only valid when "
+            "neither side is ordered"
+        )
 
     elif how == "inner":
-        if not (ltype.ordered or rtype.ordered):
-            # neiter ordered, so categories must be different
-            # demote to underlying types
-            return _input_to_libcudf_castrules_any(
-                ltype.categories, rtype.categories, how
-            )
-        else:
-            raise TypeError(
-                "Inner merge between categoricals with "
-                "different categories is only valid when "
-                "neither side is ordered"
-            )
+        # neiter ordered, so categories must be different
+        # demote to underlying types
+        return _input_to_libcudf_castrules_any(
+            ltype.categories, rtype.categories, how
+        )
 
-    elif how in {"left", "right"}:
-        if not (ltype.ordered or rtype.ordered):
-            if how == "left":
-                return ltype
-            elif how == "right":
-                return rtype
-        else:
-            raise TypeError(
-                f"{how} merge between categoricals with "
-                "different categories is only valid when "
-                "neither side is ordered"
-            )
-
+    elif how == "left":
+        return ltype
+    elif how == "right":
+        return rtype
 
     elif how == "outer":
-        if not (ltype.ordered or rtype.ordered):
-            # neither ordered, so categories must be different
-            new_cats = cudf.concat(
-                [ltype.categories, rtype.categories]
-            ).unique()
-            return cudf.CategoricalDtype(categories=new_cats, ordered=False)
-        else:
-            raise TypeError(
-                f"{how} merge between categoricals with "
-                "different categories is only valid when "
-                "neither side is ordered"
-            )
+        new_cats = cudf.concat(
+            [ltype.categories, rtype.categories]
+        ).unique()
+        return cudf.CategoricalDtype(categories=new_cats, ordered=False)
 
 
 def _input_to_libcudf_castrules_one_cat(lcol, rcol, how):
