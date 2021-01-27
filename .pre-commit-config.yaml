@@ -32,6 +32,15 @@ repos:
                 language: system
                 files: \.(cu|cuh|h|hpp|cpp|inl)$
                 args: ['-fallback-style=none']
+      - repo: local
+        hooks:
+              - id: mypy
+                name: mypy
+                description: mypy
+                pass_filenames: false
+                entry: mypy --config-file=python/cudf/setup.cfg python/cudf/cudf
+                language: system
+                types: [python]
 
 default_language_version:
       python: python3
