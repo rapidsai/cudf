@@ -20,7 +20,6 @@
 #include "compiled/binary_ops.hpp"
 #include "jit/code/code.h"
 #include "jit/util.hpp"
-#include "thrust/optional.h"
 
 #include <jit/launcher.h>
 #include <jit/parser.h>
@@ -49,6 +48,8 @@
 #include <rmm/cuda_stream_view.hpp>
 
 #include <string>
+
+#include <thrust/optional.h>
 
 namespace cudf {
 
