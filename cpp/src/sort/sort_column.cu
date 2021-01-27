@@ -25,6 +25,17 @@ namespace {
  */
 struct column_sorted_order_fn {
   /**
+   * @brief Compile time check for allowing radix sort for column type.
+   *
+   * Floating point is removed here for special handling of NaNs.
+   */
+  template <typename T>
+  static constexpr bool is_radix_sort_supported()
+  {
+    return cudf::is_fixed_width<T>() && !cudf::is_floating_point<T>();
+  }
+
+  /**
    * @brief Sorts fixed-width columns using faster thrust sort.
    *
    * @param input Column to sort
@@ -32,15 +43,15 @@ struct column_sorted_order_fn {
    * @param ascending True if sort order is ascending
    * @param stream CUDA stream used for device memory operations and kernel launches
    */
-  template <typename T, typename std::enable_if_t<cudf::is_fixed_width<T>()>* = nullptr>
+  template <typename T, typename std::enable_if_t<is_radix_sort_supported<T>()>* = nullptr>
   void radix_sort(column_view const& input,
                   mutable_column_view& indices,
                   bool ascending,
                   rmm::cuda_stream_view stream)
   {
-    // A non-stable sort on a fixed-width column with no nulls will use a radix sort
-    // if using only the thrust::less or thrust::greater comparators but also
-    // requires making a copy of the input data.
+    // A non-stable sort on a column of arithmetic type with no nulls will use a radix sort
+    // if specifying only the `thrust::less` or `thrust::greater` comparators.
+    // But this also requires making a copy of the input data.
     auto temp_col = column(input, stream);
     auto d_col    = temp_col.mutable_view();
     using DeviceT = device_storage_type_t<T>;
@@ -58,7 +69,7 @@ struct column_sorted_order_fn {
                           thrust::greater<DeviceT>());
     }
   }
-  template <typename T, typename std::enable_if_t<!cudf::is_fixed_width<T>()>* = nullptr>
+  template <typename T, typename std::enable_if_t<!is_radix_sort_supported<T>()>* = nullptr>
   void radix_sort(column_view const&, mutable_column_view&, bool, rmm::cuda_stream_view)
   {
     CUDF_FAIL("Only fixed-width types are suitable for faster sorting");
@@ -83,8 +94,8 @@ struct column_sorted_order_fn {
                   null_order null_precedence,
                   rmm::cuda_stream_view stream)
   {
-    // column with nulls or non-fixed-width column will also use a comparator
-    if (input.has_nulls() || !cudf::is_fixed_width<T>()) {
+    // column with nulls or non-supported types will also use a comparator
+    if (input.has_nulls() || !is_radix_sort_supported<T>()) {
       auto keys = column_device_view::create(input, stream);
       thrust::sort(rmm::exec_policy(stream),
                    indices.begin<size_type>(),

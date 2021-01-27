@@ -1,5 +1,7 @@
 # Copyright (c) 2020, NVIDIA CORPORATION.
 
+from __future__ import annotations
+
 from typing import Union
 
 import numpy as np

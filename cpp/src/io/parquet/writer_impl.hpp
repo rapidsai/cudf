@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2020, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,8 +20,6 @@
  */
 
 #pragma once
-
-#include "chunked_state.hpp"
 
 #include <io/parquet/parquet.hpp>
 #include <io/parquet/parquet_gpu.hpp>
@@ -68,57 +66,57 @@ class writer::impl {
    *
    * @param filepath Filepath if storing dataset to a file
    * @param options Settings for controlling behavior
+   * @param mode Option to write at once or in chunks
    * @param mr Device memory resource to use for device memory allocation
+   * @param stream CUDA stream used for device memory operations and kernel launches.
    */
   explicit impl(std::unique_ptr<data_sink> sink,
                 parquet_writer_options const& options,
-                rmm::mr::device_memory_resource* mr);
+                SingleWriteMode mode,
+                rmm::mr::device_memory_resource* mr,
+                rmm::cuda_stream_view stream);
 
   /**
-   * @brief Write an entire dataset to parquet format.
+   * @brief Constructor with chunked writer options.
    *
-   * @param table The set of columns
-   * @param metadata The metadata associated with the table
-   * @param return_filemetadata If true, return the raw parquet file metadata
-   * @param column_chunks_file_path Column chunks file path to be set in the raw output metadata
-   * @param stream CUDA stream used for device memory operations and kernel launches.
-   * @return unique_ptr to FileMetadata thrift message if requested
+   * @param filepath Filepath if storing dataset to a file
+   * @param options Settings for controlling behavior
+   * @param mode Option to write at once or in chunks
+   * @param mr Device memory resource to use for device memory allocation
+   * @param stream CUDA stream used for device memory operations and kernel launches
    */
-  std::unique_ptr<std::vector<uint8_t>> write(table_view const& table,
-                                              const table_metadata* metadata,
-                                              bool return_filemetadata,
-                                              const std::string& column_chunks_file_path,
-                                              std::vector<uint8_t> const& decimal_precisions,
-                                              rmm::cuda_stream_view stream);
+  explicit impl(std::unique_ptr<data_sink> sink,
+                chunked_parquet_writer_options const& options,
+                SingleWriteMode mode,
+                rmm::mr::device_memory_resource* mr,
+                rmm::cuda_stream_view stream);
 
   /**
-   * @brief Begins the chunked/streamed write process.
-   *
-   * @param[in] pq_chunked_state Internal state maintained between chunks.
+   * @brief Destructor to complete any incomplete write and release resources.
    */
-  void write_chunked_begin(pq_chunked_state& state);
+  ~impl();
 
   /**
-   * @brief Writes a single subtable as part of a larger parquet file/table write.
+   * @brief Initializes the states before writing.
+   */
+  void init_state();
+
+  /**
+   * @brief Writes a single subtable as part of a larger parquet file/table write,
+   * normally used for chunked writing.
    *
    * @param[in] table The table information to be written
-   * @param[in] pq_chunked_state Internal state maintained between chunks.
-   * boundaries.
    */
-  void write_chunk(table_view const& table, pq_chunked_state& state);
+  void write(table_view const& table);
 
   /**
    * @brief Finishes the chunked/streamed write process.
    *
-   * @param[in] pq_chunked_state Internal state maintained between chunks.
-   * @param return_filemetadata If true, return the raw parquet file metadata
-   * @param column_chunks_file_path Column chunks file path to be set in the raw output metadata
-   * @return unique_ptr to FileMetadata thrift message if requested
+   * @param[in] column_chunks_file_path Column chunks file path to be set in the raw output metadata
+   * @return A parquet-compatible blob that contains the data for all rowgroups in the list only if
+   * `column_chunks_file_path` is provided, else null.
    */
-  std::unique_ptr<std::vector<uint8_t>> write_chunked_end(
-    pq_chunked_state& state,
-    bool return_filemetadata                   = false,
-    const std::string& column_chunks_file_path = "");
+  std::unique_ptr<std::vector<uint8_t>> close(std::string const& column_chunks_file_path = "");
 
  private:
   /**
@@ -130,15 +128,13 @@ class writer::impl {
    * @param num_fragments Total number of fragments per column
    * @param num_rows Total number of rows
    * @param fragment_size Number of rows per fragment
-   * @param stream CUDA stream used for device memory operations and kernel launches.
    */
   void init_page_fragments(hostdevice_vector<gpu::PageFragment>& frag,
                            hostdevice_vector<gpu::EncColumnDesc>& col_desc,
                            uint32_t num_columns,
                            uint32_t num_fragments,
                            uint32_t num_rows,
-                           uint32_t fragment_size,
-                           rmm::cuda_stream_view stream);
+                           uint32_t fragment_size);
   /**
    * @brief Gather per-fragment statistics
    *
@@ -148,15 +144,13 @@ class writer::impl {
    * @param num_columns Total number of columns
    * @param num_fragments Total number of fragments per column
    * @param fragment_size Number of rows per fragment
-   * @param stream CUDA stream used for device memory operations and kernel launches.
    */
   void gather_fragment_statistics(statistics_chunk* dst_stats,
                                   hostdevice_vector<gpu::PageFragment>& frag,
                                   hostdevice_vector<gpu::EncColumnDesc>& col_desc,
                                   uint32_t num_columns,
                                   uint32_t num_fragments,
-                                  uint32_t fragment_size,
-                                  rmm::cuda_stream_view stream);
+                                  uint32_t fragment_size);
   /**
    * @brief Build per-chunk dictionaries and count data pages
    *
@@ -165,14 +159,12 @@ class writer::impl {
    * @param num_rowgroups Total number of rowgroups
    * @param num_columns Total number of columns
    * @param num_dictionaries Total number of dictionaries
-   * @param stream CUDA stream used for device memory operations and kernel launches.
    */
   void build_chunk_dictionaries(hostdevice_vector<gpu::EncColumnChunk>& chunks,
                                 hostdevice_vector<gpu::EncColumnDesc>& col_desc,
                                 uint32_t num_rowgroups,
                                 uint32_t num_columns,
-                                uint32_t num_dictionaries,
-                                rmm::cuda_stream_view stream);
+                                uint32_t num_dictionaries);
   /**
    * @brief Initialize encoder pages
    *
@@ -183,7 +175,6 @@ class writer::impl {
    * @param num_columns Total number of columns
    * @param num_pages Total number of pages
    * @param num_stats_bfr Number of statistics buffers
-   * @param stream CUDA stream used for device memory operations and kernel launches.
    */
   void init_encoder_pages(hostdevice_vector<gpu::EncColumnChunk>& chunks,
                           hostdevice_vector<gpu::EncColumnDesc>& col_desc,
@@ -193,8 +184,7 @@ class writer::impl {
                           uint32_t num_rowgroups,
                           uint32_t num_columns,
                           uint32_t num_pages,
-                          uint32_t num_stats_bfr,
-                          rmm::cuda_stream_view stream);
+                          uint32_t num_stats_bfr);
   /**
    * @brief Encode a batch pages
    *
@@ -209,7 +199,6 @@ class writer::impl {
    * @param comp_out compressor status array
    * @param page_stats optional page-level statistics (nullptr if none)
    * @param chunk_stats optional chunk-level statistics (nullptr if none)
-   * @param stream CUDA stream used for device memory operations and kernel launches.
    */
   void encode_pages(hostdevice_vector<gpu::EncColumnChunk>& chunks,
                     gpu::EncPage* pages,
@@ -221,12 +210,13 @@ class writer::impl {
                     gpu_inflate_input_s* comp_in,
                     gpu_inflate_status_s* comp_out,
                     const statistics_chunk* page_stats,
-                    const statistics_chunk* chunk_stats,
-                    rmm::cuda_stream_view stream);
+                    const statistics_chunk* chunk_stats);
 
  private:
   // TODO : figure out if we want to keep this. It is currently unused.
   rmm::mr::device_memory_resource* _mr = nullptr;
+  // Cuda stream to be used
+  rmm::cuda_stream_view stream = rmm::cuda_stream_default;
 
   size_t max_rowgroup_size_          = DEFAULT_ROWGROUP_MAXSIZE;
   size_t max_rowgroup_rows_          = DEFAULT_ROWGROUP_MAXROWS;
@@ -234,6 +224,23 @@ class writer::impl {
   Compression compression_           = Compression::UNCOMPRESSED;
   statistics_freq stats_granularity_ = statistics_freq::STATISTICS_NONE;
   bool int96_timestamps              = false;
+  // Overall file metadata.  Filled in during the process and written during write_chunked_end()
+  cudf::io::parquet::FileMetaData md;
+  // optional user metadata
+  table_metadata_with_nullability user_metadata_with_nullability;
+  // only used in the write_chunked() case. copied from the (optionally) user supplied
+  // argument to write()
+  table_metadata const* user_metadata = nullptr;
+  // to track if the output has been written to sink
+  bool closed = false;
+  // vector of precision values for decimal writing. Exactly one entry
+  // per decimal column.
+  std::vector<uint8_t> decimal_precision;
+  // current write position for rowgroups/chunks
+  std::size_t current_chunk_offset;
+  // special parameter only used by detail::write() to indicate that we are guaranteeing
+  // a single table write.  this enables some internal optimizations.
+  bool const single_write_mode = true;
 
   std::vector<uint8_t> buffer_;
   std::unique_ptr<data_sink> out_sink_;
