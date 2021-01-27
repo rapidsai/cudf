@@ -65,7 +65,6 @@ struct column_property_comparator {
 
     EXPECT_EQ(lhs.size(), rhs.size());
 
-    EXPECT_EQ(lhs.null_count(), rhs.null_count());
     if (lhs.size() > 0 && check_exact_equality) { EXPECT_EQ(lhs.nullable(), rhs.nullable()); }
 
     EXPECT_EQ(lhs.null_count(), rhs.null_count());
