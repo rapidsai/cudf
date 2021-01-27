@@ -311,6 +311,37 @@ public final class ColumnVector extends ColumnView {
   }
 
   /**
+   * Create a ColumnVector from the off heap Apache Arrow buffers passed in.
+   * @param type - type of the column
+   * @param colName - Name of the column
+   * @param numRows - Number of rows in the arrow column
+   * @param nullCount - Null count
+   * @param data - address of the Arrow data buffer
+   * @param dataLength - size of the Arrow data buffer
+   * @param validity - address of the Arrow validity buffer
+   * @param validityLength - size of the Arrow validity buffer
+   * @param offsets - address of the Arrow offsets buffer
+   * @param offsetsLength - size of the Arrow offsets buffer
+   * @return - new ColumnVector
+   */
+  public static ColumnVector fromArrow(
+      DType type,
+      String colName,
+      long numRows,
+      long nullCount,
+      long data,
+      long dataLength,
+      long validity,
+      long validityLength,
+      long offsets,
+      long offsetsLength) {
+    long columnHandle = fromArrow(type.typeId.getNativeId(), colName, numRows, nullCount, data,
+         dataLength, validity, validityLength, offsets, offsetsLength);
+    ColumnVector vec = new ColumnVector(columnHandle);
+    return vec;
+  }
+
+  /**
    * Create a new vector of length rows, where each row is filled with the Scalar's
    * value
    * @param scalar - Scalar to use to fill rows
@@ -614,6 +645,10 @@ public final class ColumnVector extends ColumnView {
   /////////////////////////////////////////////////////////////////////////////
 
   private static native long sequence(long initialValue, long step, int rows);
+
+  private static native long fromArrow(int type, String col_name, long col_length,
+      long null_count, long data, long data_size, long validity, long validity_size,
+      long offsets, long offsets_size) throws CudfException;
 
   private static native long fromScalar(long scalarHandle, int rowCount) throws CudfException;
 
