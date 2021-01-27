@@ -1,5 +1,5 @@
 # Copyright (c) 2018-2020, NVIDIA CORPORATION.
-from __future__ import division
+from __future__ import division, annotations
 
 import inspect
 import itertools
@@ -9,7 +9,7 @@ import sys
 import warnings
 from collections import OrderedDict, defaultdict
 from collections.abc import Iterable, Mapping, Sequence
-from typing import Any, Set
+from typing import Any, Set, Union, Tuple
 
 import cupy
 import numpy as np
@@ -7270,6 +7270,11 @@ class DataFrame(Frame, Serializable):
             if self_name != other_name:
                 return False
         return super().equals(other)
+
+    def explode(
+        self, column: Union[str, Tuple[str, ...]], ignore_index: bool = False
+    ) -> DataFrame:
+        pass
 
     _accessors = set()  # type: Set[Any]
 
