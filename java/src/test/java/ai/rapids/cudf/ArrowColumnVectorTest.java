@@ -54,18 +54,18 @@ public class ArrowColumnVectorTest extends CudfTestBase {
     try {
       ArrayList<Integer> expectedArr = new ArrayList<Integer>();
       for (int j = 0; j < numVecs; j++) {
-	int pos = 0;
-	int count = 10000;
+        int pos = 0;
+        int count = 10000;
         IntVector vector = new IntVector("intVec", allocator);
         int start = count * j;
         int end = count * (j + 1);
         for (int i = start; i < end; i++) {
           expectedArr.add(i);
           ((IntVector) vector).setSafe(pos, i);
-	  pos++;
+          pos++;
         }
         vector.setValueCount(count);
-	vectors[j] = vector;
+        vectors[j] = vector;
         long data = vector.getDataBuffer().memoryAddress();
         long dataLen = vector.getDataBuffer().getActualMemoryConsumed();
         long valid = vector.getValidityBuffer().memoryAddress();

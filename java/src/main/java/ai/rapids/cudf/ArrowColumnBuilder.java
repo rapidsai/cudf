@@ -65,24 +65,27 @@ public final class ArrowColumnBuilder implements AutoCloseable {
      */
     public final ColumnVector buildAndPutOnDevice() {
       ArrayList<ColumnVector> allVecs = new ArrayList<>(this.numBatches);
-      for (int i = 0; i < this.numBatches; i++) {
-        allVecs.add(ColumnVector.fromArrow(type, colName, rows.get(i), nullCount.get(i),
-          data.get(i), dataLength.get(i), validity.get(i), validityLength.get(i),
-          offsets.get(i), offsetsLength.get(i)));
-      }
       ColumnVector vecRet;
-      if (this.numBatches == 1) {
-        vecRet = allVecs.get(0);
-      } else if (this.numBatches > 1) {
-        try {
-         vecRet = ColumnVector.concatenate(allVecs.toArray(new ColumnVector[0]));
-        } finally {
+      try {
+        for (int i = 0; i < this.numBatches; i++) {
+          allVecs.add(ColumnVector.fromArrow(type, colName, rows.get(i), nullCount.get(i),
+            data.get(i), dataLength.get(i), validity.get(i), validityLength.get(i),
+            offsets.get(i), offsetsLength.get(i)));
+        }
+        if (this.numBatches == 1) {
+          vecRet = allVecs.get(0);
+        } else if (this.numBatches > 1) {
+          vecRet = ColumnVector.concatenate(allVecs.toArray(new ColumnVector[0]));
+        } else {
+          throw new IllegalStateException("Can't build a ColumnVector when no Arrow batches specified");
+        }
+      } finally {
+        // close the vectors that were concatenated
+        if (this.numBatches > 1) {
           for (ColumnVector cv : allVecs) {
             cv.close();
           }
         }
-      } else {
-        throw new IllegalStateException("Can't build a ColumnVector when no Arrow batches specified");
       }
       return vecRet;
     }
