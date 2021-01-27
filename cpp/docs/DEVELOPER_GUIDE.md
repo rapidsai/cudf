@@ -295,7 +295,7 @@ void external_function(...){
 }
 ```
 
-**Note:** It's important to synchronize the stream if *and only if* it is necessary. For example,
+**Note:** It is important to synchronize the stream if *and only if* it is necessary. For example,
 when a non-pointer value is returned from the API that is the result of an asynchronous 
 device-to-host copy, the stream used for the copy should be synchronized before returning. However,
 when a column is returned, the stream should not be synchronized because doing so will break 
@@ -308,10 +308,10 @@ asynchrony if and when we add an asynchronous API to libcudf.
 
 There may be times in implementing libcudf features where it would be advantageous to use streams 
 *internally*, i.e., to accomplish overlap in implementing an algorithm. However, dynamically 
-creating a stream can be expensive. RMM has recently added a stream pool for this situation to 
-avoid dynamic stream creation. However, this is not yet exposed in libcudf, so for the time being, 
-libcudf features should avoid creating streams (even if it is slightly less efficient). It is a 
-good idea to leave a `// TODO:` note indicating where using a stream would be beneficial.
+creating a stream can be expensive. RMM has a stream pool class to help avoid dynamic stream 
+creation. However, this is not yet exposed in libcudf, so for the time being, libcudf features 
+should avoid creating streams (even if it is slightly less efficient). It is a good idea to leave a
+`// TODO:` note indicating where using a stream would be beneficial.
 
 ## Memory Allocation
 
@@ -518,7 +518,8 @@ libcudf as well as Thrust algorithms. Most are defined in `include/detail/iterat
 
 The pair iterator is used to access elements of nullable columns as a pair containing an element's 
 value and validity. `cudf::detail::make_pair_iterator` can be used to create a pair iterator from a 
-`column_device_view` or a `cudf::scalar`.
+`column_device_view` or a `cudf::scalar`. `make_pair_iterator` is not available for 
+`mutable_column_device_view`.
 
 ### Null-replacement iterator
 
@@ -794,17 +795,21 @@ There are a number of traits defined in `include/cudf/utilities/traits.hpp` that
 partial specialization of dispatched function objects. For example `is_numeric<T>()` can be used to 
 specialize for any numeric type.
 
-# Nested Data Types
+# Variable-Size and Nested Data Types
 
-libcudf supports a number of nested data types, including strings, lists, and structs. A string is 
-simply a character string, but a column of strings may have a different-length string in each row.
-A list is a list of elements of any type, so a column of lists of integers has rows with a list of 
-integers, possibly of a different length, in each row. In a colum of structs, each row is a 
-structure comprising one or more fields. These fields are stored in structure-of-arrays format, so 
-that the column of structs has a nested column for each field of the structure. 
+libcudf supports a number of variable-size and nested data types, including strings, lists, and 
+structs. 
+ 
+ * `string`: Simply a character string, but a column of strings may have a different-length string 
+   in each row.
+ * `list`: A list of elements of any type, so a column of lists of integers has rows with a list of 
+   integers, possibly of a different length, in each row. 
+ * `struct`: In a colum of structs, each row is a structure comprising one or more fields. These
+   fields are stored in structure-of-arrays format, so that the column of structs has a nested
+   column for each field of the structure. 
 
-As the heading implies, these column types may be nested arbitrarily. One may create a column of 
-lists of structs, where the fields of the struct may be of any type, including strings, lists and 
+As the heading implies, list and struct columns may be nested arbitrarily. One may create a column 
+of lists of structs, where the fields of the struct may be of any type, including strings, lists and 
 structs. Thinking about deeply nested data types can be confusing for column-based data, even with 
 experience. Therefore it is important to carefully write algorithms, and to test and document them
 well.
