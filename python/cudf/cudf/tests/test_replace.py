@@ -1,5 +1,4 @@
-# Copyright (c) 2020, NVIDIA CORPORATION.
-
+# Copyright (c) 2020-2021, NVIDIA CORPORATION.
 
 import numpy as np
 import pandas as pd
@@ -16,11 +15,11 @@ from cudf.tests.utils import (
 
 
 @pytest.mark.parametrize(
-    "psr",
+    "gsr",
     [
-        pd.Series([5, 1, 2, 3, 4]),
-        pd.Series(["one", "two", "three"], dtype="category"),
-        pd.Series(list(range(400)) + [None]),
+        cudf.Series([5, 1, 2, 3, None, 243, None, 4]),
+        cudf.Series(["one", "two", "three", None, "one"], dtype="category"),
+        cudf.Series(list(range(400)) + [None]),
     ],
 )
 @pytest.mark.parametrize(
@@ -29,14 +28,31 @@ from cudf.tests.utils import (
         (0, 5),
         ("one", "two"),
         ("one", "five"),
+        ("abc", "hello"),
         ([0, 1], [5, 6]),
         ([22, 323, 27, 0], -1),
+        ([1, 2, 3], cudf.Series([10, 11, 12])),
+        (cudf.Series([1, 2, 3]), None),
+        ({1: 10, 2: 22}, None),
     ],
 )
-def test_series_replace_all(psr, to_replace, value):
-    gsr = cudf.from_pandas(psr)
-    expected = psr.replace(to_replace=to_replace, value=value)
-    actual = gsr.replace(to_replace=to_replace, value=value)
+def test_series_replace_all(gsr, to_replace, value):
+    psr = gsr.to_pandas()
+
+    gd_to_replace = to_replace
+    if isinstance(to_replace, cudf.Series):
+        pd_to_replace = to_replace.to_pandas()
+    else:
+        pd_to_replace = to_replace
+
+    gd_value = value
+    if isinstance(value, cudf.Series):
+        pd_value = value.to_pandas()
+    else:
+        pd_value = value
+
+    actual = gsr.replace(to_replace=gd_to_replace, value=gd_value)
+    expected = psr.replace(to_replace=pd_to_replace, value=pd_value)
 
     assert_eq(expected, actual)
 
@@ -127,16 +143,26 @@ def test_series_replace_with_nulls():
 @pytest.mark.parametrize(
     "df",
     [
-        pd.DataFrame(
+        cudf.DataFrame(
             {
-                "a": [0, 1, 2, 3],
-                "b": [3, 2, 2, 3],
-                "c": ["abc", "def", ".", None],
+                "a": [0, 1, None, 2, 3],
+                "b": [3, 2, 2, 3, None],
+                "c": ["abc", "def", ".", None, None],
             }
         ),
-        pd.DataFrame(
-            {"a": ["one", "two", "three"], "b": ["one", "two", "three"]},
+        cudf.DataFrame(
+            {
+                "a": ["one", "two", None, "three"],
+                "b": ["one", None, "two", "three"],
+            },
             dtype="category",
+        ),
+        cudf.DataFrame(
+            {
+                "col one": [None, 10, 11, None, 1000, 500, 600],
+                "col two": ["abc", "def", "ghi", None, "pp", None, "a"],
+                "a": [0.324, 0.234, 324.342, 23.32, 9.9, None, None],
+            }
         ),
     ],
 )
@@ -154,13 +180,47 @@ def test_series_replace_with_nulls():
         ({"c": 0}, {"a": 4, "b": 5}),
         ({"a": 2}, {"c": "a"}),
         ("two", "three"),
+        ([1, 2], pd.Series([10, 11])),
+        (pd.Series([10, 11], index=[3, 2]), None),
+        (
+            pd.Series(["a+", "+c", "p", "---"], index=["abc", "gh", "l", "z"]),
+            None,
+        ),
+        (
+            pd.Series([10, 11], index=[3, 2]),
+            {"a": [-10, -30], "l": [-111, -222]},
+        ),
+        (pd.Series([10, 11], index=[3, 2]), 555),
+        (
+            pd.Series([10, 11], index=["a", "b"]),
+            pd.Series([555, 1111], index=["a", "b"]),
+        ),
+        ({"a": "2", "b": "3", "zzz": "hi"}, None),
+        ({"a": 2, "b": 3, "zzz": "hi"}, 324353),
+        (
+            {"a": 2, "b": 3, "zzz": "hi"},
+            pd.Series([5, 6, 10], index=["a", "b", "col one"]),
+        ),
     ],
 )
 def test_dataframe_replace(df, to_replace, value):
-    gdf = cudf.from_pandas(df)
+    gdf = df
+    pdf = gdf.to_pandas()
 
-    expected = df.replace(to_replace=to_replace, value=value)
-    actual = gdf.replace(to_replace=to_replace, value=value)
+    pd_value = value
+    if isinstance(value, pd.Series):
+        gd_value = cudf.from_pandas(value)
+    else:
+        gd_value = value
+
+    pd_to_replace = to_replace
+    if isinstance(to_replace, pd.Series):
+        gd_to_replace = cudf.from_pandas(to_replace)
+    else:
+        gd_to_replace = to_replace
+
+    expected = pdf.replace(to_replace=pd_to_replace, value=pd_value)
+    actual = gdf.replace(to_replace=gd_to_replace, value=gd_value)
 
     assert_eq(expected, actual)
 
@@ -190,12 +250,6 @@ def test_dataframe_replace_with_nulls():
     gdf1 = DataFrame({"a": [0, 1, 2, 3], "b": [0, 1, 2, None]})
     gdf9 = gdf1.replace([0, 1], [4, 5]).fillna(3)
     assert_eq(gdf9, pdf6)
-
-
-def test_replace_strings():
-    pdf = pd.Series(["a", "b", "c", "d"])
-    gdf = Series(["a", "b", "c", "d"])
-    assert_eq(pdf.replace("a", "e"), gdf.replace("a", "e"))
 
 
 @pytest.mark.parametrize(

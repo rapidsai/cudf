@@ -2326,7 +2326,9 @@ class Frame(libcudf.table.Table):
             ) = _get_replacement_values_for_columns(
                 to_replace=to_replace,
                 value=replacement,
-                columns=self._data.names,
+                columns={
+                    col: copy_data._data[col].dtype for col in copy_data._data
+                },
             )
 
             for name, col in copy_data.items():
@@ -2336,7 +2338,7 @@ class Frame(libcudf.table.Table):
                         replacements_per_column[name],
                         all_nan_per_column[name],
                     )
-                except (KeyError, TypeError):
+                except KeyError:
                     # Do not change the copy_data[name]
                     pass
 
@@ -3595,13 +3597,15 @@ def _get_replacement_values_for_columns(to_replace, value, columns):
     if is_scalar(to_replace) and is_scalar(value):
         to_replace_columns = {col: [to_replace] for col in columns}
         values_columns = {col: [value] for col in columns}
-    elif cudf.utils.dtypes.is_list_like(to_replace):
+    elif cudf.utils.dtypes.is_list_like(to_replace) or isinstance(
+        to_replace, cudf.core.column.ColumnBase
+    ):
         if is_scalar(value):
             to_replace_columns = {col: to_replace for col in columns}
             values_columns = {
-                col: cudf.utils.utils.scalar_broadcast_to(
-                    value, (len(to_replace),), np.dtype(type(value)),
-                )
+                col: [value]
+                if pd.api.types.is_numeric_dtype(columns[col])
+                else [value] * len(to_replace)
                 for col in columns
             }
         elif cudf.utils.dtypes.is_list_like(value):
@@ -3623,7 +3627,9 @@ def _get_replacement_values_for_columns(to_replace, value, columns):
             )
     elif isinstance(to_replace, cudf.Series):
         if value is None:
-            to_replace_columns = {col: to_replace.index for col in columns}
+            to_replace_columns = {
+                col: as_column(to_replace.index) for col in columns
+            }
             values_columns = {col: to_replace for col in columns}
         elif is_dict_like(value):
             to_replace_columns = {

@@ -1,4 +1,5 @@
 # Copyright (c) 2018-2021, NVIDIA CORPORATION.
+
 from __future__ import annotations
 
 from numbers import Number
@@ -412,6 +413,14 @@ class NumericalColumn(ColumnBase):
         """
         Return col with *to_replace* replaced with *value*.
         """
+        to_replace_col = as_column(to_replace)
+        replacement_col = as_column(replacement)
+
+        if not isinstance(to_replace_col, NumericalColumn) or not isinstance(
+            replacement_col, NumericalColumn
+        ):
+            return self
+
         to_replace_col = _normalize_find_and_replace_input(
             self.dtype, to_replace
         )
@@ -421,7 +430,7 @@ class NumericalColumn(ColumnBase):
             replacement_col = _normalize_find_and_replace_input(
                 self.dtype, replacement
             )
-        replaced = self.copy()
+        replaced = self
         if len(replacement_col) == 1 and len(to_replace_col) > 1:
             replacement_col = column.as_column(
                 utils.scalar_broadcast_to(

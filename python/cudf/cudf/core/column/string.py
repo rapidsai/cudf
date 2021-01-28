@@ -1,4 +1,5 @@
-# Copyright (c) 2019-2020, NVIDIA CORPORATION.
+# Copyright (c) 2019-2021, NVIDIA CORPORATION.
+
 from __future__ import annotations
 
 import builtins
@@ -5009,9 +5010,11 @@ class StringColumn(column.ColumnBase):
         """
         Return col with *to_replace* replaced with *value*
         """
+
         to_replace_col = column.as_column(to_replace)
         if to_replace_col.null_count == len(to_replace_col):
             to_replace_col = to_replace_col.astype(self.dtype)
+
         replacement_col = column.as_column(replacement)
         if replacement_col.null_count == len(replacement_col):
             replacement_col = replacement_col.astype(self.dtype)
@@ -5020,7 +5023,7 @@ class StringColumn(column.ColumnBase):
             to_replace_col.dtype != self.dtype
             or replacement_col.dtype != self.dtype
         ):
-            return self.copy()
+            return self
 
         return libcudf.replace.replace(self, to_replace_col, replacement_col)
 

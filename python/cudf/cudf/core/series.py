@@ -2418,6 +2418,12 @@ class Series(Frame, Serializable):
                 "method parameter is not implemented yet"
             )
 
+        if is_dict_like(to_replace) and value is not None:
+            raise ValueError(
+                "Series.replace cannot use dict-like to_replace and non-None "
+                "value"
+            )
+
         result = super().replace(to_replace=to_replace, replacement=value)
 
         return self._mimic_inplace(result, inplace=inplace)
