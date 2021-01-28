@@ -341,7 +341,13 @@ struct elementwise_aggregator {
                              column_device_view source,
                              size_type source_index) const noexcept
   {
+#if (__CUDACC_VER_MAJOR__ == 10) and (__CUDACC_VER_MINOR__ == 2)
+    release_assert(not cudf::is_fixed_point<Source>() &&
+                   "CUDA 10.2 does not support decimal32 or decimal64 hash groupby.");
+    using DeviceType = Source;
+#else
     using DeviceType = device_storage_type_t<Source>;
+#endif
     update_target_element<DeviceType, k, target_has_nulls, source_has_nulls>{}(
       target, target_index, source, source_index);
   }
