@@ -64,7 +64,7 @@ std::unique_ptr<column> group_replace_nulls(cudf::column_view const& value,
   auto valid_it  = cudf::detail::make_validity_iterator(*device_in);
   auto in_begin  = thrust::make_zip_iterator(thrust::make_tuple(index, valid_it));
 
-  rmm::device_uvector<cudf::size_type> gather_map(size, stream, mr);
+  rmm::device_uvector<cudf::size_type> gather_map(size, stream);
   auto gm_begin = thrust::make_zip_iterator(
     thrust::make_tuple(gather_map.begin(), thrust::make_discard_iterator()));
 
