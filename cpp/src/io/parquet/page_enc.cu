@@ -151,17 +151,19 @@ __global__ void __launch_bounds__(block_size) gpuInitPageFragments(PageFragment 
     // off_11 = off[i], off_12 = off[i+50]
     // off_21 = child.off[off_11], off_22 = child.off[off_12]
     // etc...
-    s->start_value_idx      = start_row;
     size_type end_value_idx = start_row + s->frag.num_rows;
-    if (s->col.parent_column != nullptr) {
-      auto col = *(s->col.parent_column);
+    if (s->col.parent_column == nullptr) {
+      s->start_value_idx = start_row;
+    } else {
+      auto col                     = *(s->col.parent_column);
+      auto current_start_value_idx = start_row;
       while (col.type().id() == type_id::LIST) {
-        auto offset_col    = col.child(lists_column_view::offsets_column_index);
-        s->start_value_idx = offset_col.element<size_type>(s->start_value_idx);
-        end_value_idx      = offset_col.element<size_type>(end_value_idx);
-        col                = col.child(lists_column_view::child_column_index);
+        auto offset_col         = col.child(lists_column_view::offsets_column_index);
+        current_start_value_idx = offset_col.element<size_type>(current_start_value_idx);
+        end_value_idx           = offset_col.element<size_type>(end_value_idx);
+        col                     = col.child(lists_column_view::child_column_index);
       }
-      s->start_value_idx += s->col.leaf_column_offset;
+      s->start_value_idx = current_start_value_idx + s->col.leaf_column_offset;
       end_value_idx += s->col.leaf_column_offset;
     }
     s->frag.start_value_idx = s->start_value_idx;
@@ -979,11 +981,10 @@ __global__ void __launch_bounds__(128, 8) gpuEncodePages(EncPage *pages,
         uint32_t row         = s->page.start_row + rle_numvals + t + s->col.leaf_column_offset;
         // Definition level encodes validity. Checks the valid map and if it is valid, then sets the
         // def_lvl accordingly and sets it in s->vals which is then given to RleEncode to encode
+        // Note: Non-list leaf column does not require taking into account leaf_column_offset
         uint32_t def_lvl = (rle_numvals + t < s->page.num_rows && row < s->col.num_rows)
                              ? s->col.leaf_column->is_valid(row)
                              : 0;
-        // Non-list leaf column does not require taking into account
-        // leaf_column_offset
         s->vals[(rle_numvals + t) & (rle_buffer_size - 1)] = def_lvl;
         __syncthreads();
         rle_numvals += nrows;
@@ -1066,11 +1067,11 @@ __global__ void __launch_bounds__(128, 8) gpuEncodePages(EncPage *pages,
     }
     s->page_start_val = s->page.start_row;
     if (s->col.parent_column != nullptr) {
-      auto col = *(s->col.parent_column);
+      auto col                    = *(s->col.parent_column);
       auto current_page_start_val = s->page_start_val;
       while (col.type().id() == type_id::LIST) {
-        current_page_start_val =
-          col.child(lists_column_view::offsets_column_index).element<size_type>(current_page_start_val);
+        current_page_start_val = col.child(lists_column_view::offsets_column_index)
+                                   .element<size_type>(current_page_start_val);
         col = col.child(lists_column_view::child_column_index);
       }
       s->page_start_val = current_page_start_val;

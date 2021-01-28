@@ -212,8 +212,7 @@ __global__ void __launch_bounds__(block_size, 1)
           next_addr = &s->hashmap[hash];
           while ((next = atomicCAS(next_addr, 0, row + 1)) != 0) {
             auto const current = next + s->col.leaf_column_offset - 1;
-            auto str2 =
-              s->col.leaf_column->element<string_view>(current);
+            auto str2          = s->col.leaf_column->element<string_view>(current);
             if (str1 == str2) {
               is_dupe = 1;
               break;
@@ -237,13 +236,13 @@ __global__ void __launch_bounds__(block_size, 1)
           next_addr = &s->hashmap[hash];
           while ((next = atomicCAS(next_addr, 0, row + 1)) != 0) {
             auto const current = next + s->col.leaf_column_offset - 1;
-            uint64_t val2 =
-              (dtype_len_in == 8)
-                ? s->col.leaf_column->element<uint64_t>(current)
-                : (dtype_len_in == 4)
-                    ? s->col.leaf_column->element<uint32_t>(current)
-                    : (dtype_len_in == 2) ? s->col.leaf_column->element<uint16_t>(current)
-                                          : s->col.leaf_column->element<uint8_t>(current);
+            uint64_t val2      = (dtype_len_in == 8)
+                              ? s->col.leaf_column->element<uint64_t>(current)
+                              : (dtype_len_in == 4)
+                                  ? s->col.leaf_column->element<uint32_t>(current)
+                                  : (dtype_len_in == 2)
+                                      ? s->col.leaf_column->element<uint16_t>(current)
+                                      : s->col.leaf_column->element<uint8_t>(current);
             if (val2 == val) {
               is_dupe = 1;
               break;
