@@ -120,7 +120,10 @@ class _SeriesLocIndexer(object):
     def __getitem__(self, arg: Any) -> Union[ScalarLike, DataFrameOrSeries]:
         if isinstance(arg, pd.MultiIndex):
             arg = cudf.from_pandas(arg)
-        elif isinstance(self._sr.index, cudf.MultiIndex):
+
+        if isinstance(self._sr.index, cudf.MultiIndex) and not isinstance(
+            arg, cudf.MultiIndex
+        ):
             result = self._sr.index._get_row_major(self._sr, arg)
             if (
                 isinstance(arg, tuple)
