@@ -259,7 +259,7 @@ a `string_scalar` holds a single string. The data for the stored value resides i
 |-|-|-|
 |fixed-width|`fixed_width_scalar<T>`| `T` can be any fixed-width type|
 |numeric|`numeric_scalar<T>` | `T` can be `int8_t`, `int16_t`, `int32_t`, `int_64_t`, `float` or `double`|
-|fixed-point|`fixed_point_scalar<T> | `T` can be `numeric::decimal32` or `numeric::decimal64`|
+|fixed-point|`fixed_point_scalar<T>` | `T` can be `numeric::decimal32` or `numeric::decimal64`|
 |timestamp|`timestamp_scalar<T>` | `T` can be `timestamp_D`, `timestamp_s`, etc.|
 |duration|`duration_scalar<T>` | `T` can be `duration_D`, `duration_s`, etc.|
 |string|`string_scalar`| This class object is immutable|
@@ -503,8 +503,8 @@ The preferred style for how inputs are passed in and outputs are returned is the
 ### Multiple Return Values
 
 Sometimes it is necessary for functions to have multiple outputs. There are a few ways this can be 
-done in C++ (including creating a  `struct`  for the output). One convenient way to do this is 
-using `std::tie`  and  `std::make_pair`. Note that objects passed to `std::make_pair` will invoke 
+done in C++ (including creating a `struct` for the output). One convenient way to do this is 
+using `std::tie`  and `std::make_pair`. Note that objects passed to `std::make_pair` will invoke 
 either the copy constructor or the move constructor of the object, and it may be preferable to move 
 non-trivially copyable objects (and required for types with deleted copy constructors, like 
 `std::unique_ptr`).
@@ -526,7 +526,7 @@ std::tie(out0, out1) = cudf::return_two_outputs();
 ```
 
 Note:  `std::tuple`  _could_  be used if not for the fact that Cython does not support 
-`std::tuple`. Therefore, libcudf APIs must use  `std::pair`, and are therefore limited to return 
+`std::tuple`. Therefore, libcudf APIs must use `std::pair`, and are therefore limited to return 
 only two objects of different types. Multiple objects of the same type may be returned via a 
 `std::vector<T>`.
 
