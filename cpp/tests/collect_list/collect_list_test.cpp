@@ -393,6 +393,42 @@ TYPED_TEST(TypedCollectListTest, BasicGroupedRollingWindow)
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected_result->view(), result->view());
 }
 
+TYPED_TEST(TypedCollectListTest, BasicGroupedRollingWindowWithNulls)
+{
+  using namespace cudf;
+  using namespace cudf::test;
+
+  using T = TypeParam;
+
+  auto const group_column = fixed_width_column_wrapper<int32_t>{1, 1, 1, 1, 1, 2, 2, 2, 2};
+  auto const input_column = fixed_width_column_wrapper<T, int32_t>{
+    {10, 11, 12, 13, 14, 20, 21, 22, 23}, {1, 0, 1, 1, 1, 1, 0, 1, 1}};
+
+  auto const preceding   = 2;
+  auto const following   = 1;
+  auto const min_periods = 1;
+  auto const result = grouped_rolling_window(table_view{std::vector<column_view>{group_column}},
+                                             input_column,
+                                             preceding,
+                                             following,
+                                             min_periods,
+                                             make_collect_aggregation());
+
+  auto expected_child = fixed_width_column_wrapper<T, int32_t>{
+    {10, 11, 10, 11, 12, 11, 12, 13, 12, 13, 14, 13, 14, 20, 21, 20, 21, 22, 21, 22, 23, 22, 23},
+    {1, 0, 1, 0, 1, 0, 1, 1, 1, 1, 1, 1, 1, 1, 0, 1, 0, 1, 0, 1, 1, 1, 1}};
+
+  auto expected_offsets = fixed_width_column_wrapper<int32_t>{0, 2, 5, 8, 11, 13, 15, 18, 21, 23};
+
+  auto expected_result = make_lists_column(static_cast<column_view>(group_column).size(),
+                                           expected_offsets.release(),
+                                           expected_child.release(),
+                                           0,
+                                           {});
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected_result->view(), result->view());
+}
+
 TYPED_TEST(TypedCollectListTest, BasicGroupedTimeRangeRollingWindow)
 {
   using namespace cudf;
