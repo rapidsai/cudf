@@ -1,6 +1,6 @@
 /*
  *
- *  Copyright (c) 2019-2020, NVIDIA CORPORATION.
+ *  Copyright (c) 2019-2021, NVIDIA CORPORATION.
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -525,6 +525,7 @@ public final class Scalar implements AutoCloseable, BinaryOperable {
     case INT32:
     case UINT32:
     case TIMESTAMP_DAYS:
+    case DECIMAL32:
       return getInt() == other.getInt();
     case FLOAT32:
       return getFloat() == other.getFloat();
@@ -536,15 +537,10 @@ public final class Scalar implements AutoCloseable, BinaryOperable {
     case TIMESTAMP_MILLISECONDS:
     case TIMESTAMP_MICROSECONDS:
     case TIMESTAMP_NANOSECONDS:
+    case DECIMAL64:
       return getLong() == other.getLong();
     case STRING:
       return Arrays.equals(getUTF8(), other.getUTF8());
-    case DECIMAL32:
-      return getInt() == other.getInt() &&
-          getType().getScale() == other.getType().getScale();
-    case DECIMAL64:
-      return getLong() == other.getLong() &&
-          getType().getScale() == other.getType().getScale();
     default:
       throw new IllegalStateException("Unexpected type: " + type);
     }
