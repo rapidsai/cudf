@@ -114,7 +114,10 @@ class _SeriesLocIndexer(object):
         self._sr = sr
 
     def __getitem__(self, arg):
-        if isinstance(self._sr.index, cudf.MultiIndex):
+        if isinstance(arg, (cudf.MultiIndex, pd.MultiIndex)):
+            if isinstance(arg, pd.MultiIndex):
+                arg = cudf.from_pandas(arg)
+        elif isinstance(self._sr.index, cudf.MultiIndex):
             result = self._sr.index._get_row_major(self._sr, arg)
             if (
                 isinstance(arg, tuple)
