@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2020, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,8 +18,50 @@
 #include <cudf/dictionary/dictionary_column_view.hpp>
 #include <reductions/simple.cuh>
 
+#include <thrust/logical.h>
+
 namespace cudf {
 namespace reduction {
+namespace detail {
+namespace {
+
+/**
+ * @brief Compute reduction any() for dictionary columns.
+ *
+ * This compiles 10x faster than using the cudf::simple::reduction::detail::reduce
+ * utility. It also can execute faster for very large columns.
+ */
+struct any_fn {
+  template <typename T, std::enable_if_t<std::is_arithmetic<T>::value>* = nullptr>
+  std::unique_ptr<scalar> operator()(column_view const& input,
+                                     rmm::cuda_stream_view stream,
+                                     rmm::mr::device_memory_resource* mr)
+  {
+    auto const d_dict = cudf::column_device_view::create(input, stream);
+    auto const iter   = [&] {
+      auto null_iter =
+        cudf::reduction::op::max{}.template get_null_replacing_element_transformer<bool>();
+      auto pair_iter =
+        cudf::dictionary::detail::make_dictionary_pair_iterator<T>(*d_dict, input.has_nulls());
+      return thrust::make_transform_iterator(pair_iter, null_iter);
+    }();
+    return std::make_unique<numeric_scalar<bool>>(
+      thrust::any_of(rmm::exec_policy(stream), iter, iter + input.size(), thrust::identity<bool>()),
+      true,
+      stream,
+      mr);
+  }
+  template <typename T, std::enable_if_t<!std::is_arithmetic<T>::value>* = nullptr>
+  std::unique_ptr<scalar> operator()(column_view const&,
+                                     rmm::cuda_stream_view,
+                                     rmm::mr::device_memory_resource*)
+  {
+    CUDF_FAIL("Unexpected key type for dictionary in reduction any()");
+  }
+};
+
+}  // namespace
+}  // namespace detail
 
 std::unique_ptr<cudf::scalar> any(column_view const& col,
                                   cudf::data_type const output_dtype,
@@ -28,9 +70,12 @@ std::unique_ptr<cudf::scalar> any(column_view const& col,
 {
   CUDF_EXPECTS(output_dtype == cudf::data_type(cudf::type_id::BOOL8),
                "any() operation can be applied with output type `bool8` only");
-  auto const dispatch_type =
-    cudf::is_dictionary(col.type()) ? dictionary_column_view(col).keys().type() : col.type();
-  return cudf::type_dispatcher(dispatch_type,
+  if (cudf::is_dictionary(col.type())) {
+    return cudf::type_dispatcher(
+      dictionary_column_view(col).keys().type(), detail::any_fn{}, col, stream, mr);
+  }
+  // dispatch for non-dictionary types
+  return cudf::type_dispatcher(col.type(),
                                simple::bool_result_element_dispatcher<cudf::reduction::op::max>{},
                                col,
                                stream,
