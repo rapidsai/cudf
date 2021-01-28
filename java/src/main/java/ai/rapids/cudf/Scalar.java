@@ -536,9 +536,15 @@ public final class Scalar implements AutoCloseable, BinaryOperable {
     case TIMESTAMP_MILLISECONDS:
     case TIMESTAMP_MICROSECONDS:
     case TIMESTAMP_NANOSECONDS:
-      return getLong() == getLong();
+      return getLong() == other.getLong();
     case STRING:
       return Arrays.equals(getUTF8(), other.getUTF8());
+    case DECIMAL32:
+      return getInt() == other.getInt() &&
+          getType().getScale() == other.getType().getScale();
+    case DECIMAL64:
+      return getLong() == other.getLong() &&
+          getType().getScale() == other.getType().getScale();
     default:
       throw new IllegalStateException("Unexpected type: " + type);
     }
@@ -566,6 +572,7 @@ public final class Scalar implements AutoCloseable, BinaryOperable {
       case INT32:
       case UINT32:
       case TIMESTAMP_DAYS:
+      case DECIMAL32:
         valueHash = getInt();
         break;
       case INT64:
@@ -574,6 +581,7 @@ public final class Scalar implements AutoCloseable, BinaryOperable {
       case TIMESTAMP_MILLISECONDS:
       case TIMESTAMP_MICROSECONDS:
       case TIMESTAMP_NANOSECONDS:
+      case DECIMAL64:
         valueHash = Long.hashCode(getLong());
         break;
       case FLOAT32:
@@ -641,6 +649,11 @@ public final class Scalar implements AutoCloseable, BinaryOperable {
         sb.append('"');
         sb.append(getJavaString());
         sb.append('"');
+        break;
+      case DECIMAL32:
+        // FALL THROUGH
+      case DECIMAL64:
+        sb.append(getBigDecimal());
         break;
       default:
         throw new IllegalArgumentException("Unknown scalar type: " + type);
