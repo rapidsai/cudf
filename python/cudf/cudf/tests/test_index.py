@@ -1363,17 +1363,18 @@ def test_interval_range_basic(start, end, freq, closed):
 
     assert_eq(pindex, gindex)
 
+
 @pytest.mark.parametrize("closed", ["right"])
 @pytest.mark.parametrize(
     "data",
     [
-        [pd.Interval(0,3),pd.Interval(1,7)],
-        [pd.Interval(0,6),pd.Interval(1,2)],
+        [pd.Interval(0, 3), pd.Interval(1, 7)],
+        [pd.Interval(0, 6), pd.Interval(1, 2)],
     ],
 )
 def test_interval_index_basic(data, closed):
     pindex = pd.IntervalIndex(data, closed=closed)
-    gindex = cudf.IntervalIndex(data, closed=closed)
+    gindex = IntervalIndex(data, closed=closed)
 
     assert_eq(pindex, gindex)
 
