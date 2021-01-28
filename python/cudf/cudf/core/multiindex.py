@@ -9,9 +9,11 @@ import cupy
 import numpy as np
 import pandas as pd
 from pandas._config import get_option
+from tying import List, Tuple, Union
 
 import cudf
 from cudf import _lib as libcudf
+from cudf._typing import DataFrameOrSeries
 from cudf.core.column import column
 from cudf.core.frame import Frame
 from cudf.core.index import Index, as_index
@@ -833,7 +835,11 @@ class MultiIndex(Index):
             result = result.set_index(index)
         return result
 
-    def _get_row_major(self, df, row_tuple):
+    def _get_row_major(
+        self,
+        df: DataFrameOrSeries,
+        row_tuple: Union[Tuple[...], List[Tuple[...]]],
+    ) -> DataFrameOrSeries:
         if pd.api.types.is_bool_dtype(
             list(row_tuple) if isinstance(row_tuple, tuple) else row_tuple
         ):

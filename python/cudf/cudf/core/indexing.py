@@ -1,10 +1,13 @@
 # Copyright (c) 2020, NVIDIA CORPORATION.
+from typing import Any, Union
+
 import numpy as np
 import pandas as pd
 from nvtx import annotate
 
 import cudf
 from cudf._lib.scalar import _is_null_host_scalar
+from cudf._typing import DataFrameOrSeries, ScalarLike
 from cudf.utils.dtypes import (
     is_categorical_dtype,
     is_column_like,
@@ -113,7 +116,7 @@ class _SeriesLocIndexer(object):
     def __init__(self, sr):
         self._sr = sr
 
-    def __getitem__(self, arg):
+    def __getitem__(self, arg: Any) -> Union[ScalarLike, DataFrameOrSeries]:
         if isinstance(arg, (cudf.MultiIndex, pd.MultiIndex)):
             if isinstance(arg, pd.MultiIndex):
                 arg = cudf.from_pandas(arg)
