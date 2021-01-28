@@ -20,7 +20,7 @@ namespace cudf {
 namespace io {
 namespace detail {
 /**
- * @brief Whether writer writes in chunks or at once
+ * @brief Whether writer writes in chunks or all at once
  */
 enum class SingleWriteMode : bool { YES, NO };
 }  // namespace detail

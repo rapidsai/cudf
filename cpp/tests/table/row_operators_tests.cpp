@@ -65,3 +65,25 @@ TEST_F(RowOperatorTestForNAN, NANSorting)
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected2, got2->view());
 }
+
+TEST_F(RowOperatorTestForNAN, NANSortingNonNull)
+{
+  cudf::test::fixed_width_column_wrapper<double> input{
+    {0.,
+     double(NAN),
+     -1.,
+     7.,
+     std::numeric_limits<double>::infinity(),
+     1.,
+     -1 * std::numeric_limits<double>::infinity()}};
+
+  cudf::table_view input_table{{input}};
+
+  auto result = cudf::sorted_order(input_table, {cudf::order::ASCENDING});
+  cudf::test::fixed_width_column_wrapper<int32_t> expected_asc{{6, 2, 0, 5, 3, 4, 1}};
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_asc, result->view());
+
+  result = cudf::sorted_order(input_table, {cudf::order::DESCENDING});
+  cudf::test::fixed_width_column_wrapper<int32_t> expected_desc{{1, 4, 3, 5, 0, 2, 6}};
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_desc, result->view());
+}

@@ -9,6 +9,7 @@ import sys
 import warnings
 from collections import OrderedDict, defaultdict
 from collections.abc import Iterable, Mapping, Sequence
+from typing import Any, Set
 
 import cupy
 import numpy as np
@@ -1317,6 +1318,26 @@ class DataFrame(Frame, Serializable):
     def _repr_latex_(self):
         return self._get_renderable_dataframe().to_pandas()._repr_latex_()
 
+    def _get_columns_by_label(self, labels, downcast=False):
+        """
+        Return columns of dataframe by `labels`
+
+        If downcast is True, try and downcast from a DataFrame to a Series
+        """
+        new_data = super()._get_columns_by_label(labels, downcast)
+        if downcast:
+            if is_scalar(labels):
+                nlevels = 1
+            elif isinstance(labels, tuple):
+                nlevels = len(labels)
+            if self._data.multiindex is False or nlevels == self._data.nlevels:
+                return self._constructor_sliced(
+                    new_data, name=labels, index=self.index
+                )
+        return self._constructor(
+            new_data, columns=new_data.to_pandas_index(), index=self.index
+        )
+
     # unary, binary, rbinary, orderedcompare, unorderedcompare
     def _apply_op(self, fn, other=None, fill_value=None):
 
@@ -2364,7 +2385,7 @@ class DataFrame(Frame, Serializable):
         for k in self:
             yield (k, self[k])
 
-    @property
+    @property  # type: ignore
     @annotate("DATAFRAME_LOC", color="blue", domain="cudf_python")
     def loc(self):
         """
@@ -2535,14 +2556,14 @@ class DataFrame(Frame, Serializable):
         """
         return self.loc
 
-    @property
+    @property  # type: ignore
     @annotate("DATAFRAME_COLUMNS_GETTER", color="yellow", domain="cudf_python")
     def columns(self):
         """Returns a tuple of columns
         """
         return self._data.to_pandas_index()
 
-    @columns.setter
+    @columns.setter  # type: ignore
     @annotate("DATAFRAME_COLUMNS_SETTER", color="yellow", domain="cudf_python")
     def columns(self, columns):
         if isinstance(columns, (cudf.MultiIndex, cudf.Index)):
@@ -4229,14 +4250,13 @@ class DataFrame(Frame, Serializable):
         )
         return df
 
-    @copy_docstring(DataFrameGroupBy.__init__)
     def groupby(
         self,
         by=None,
         axis=0,
         level=None,
         as_index=True,
-        sort=True,
+        sort=False,
         group_keys=True,
         squeeze=False,
         observed=False,
@@ -4274,7 +4294,6 @@ class DataFrame(Frame, Serializable):
             sort=sort,
         )
 
-    @copy_docstring(Rolling)
     def rolling(
         self, window, min_periods=None, center=False, axis=0, win_type=None
     ):
@@ -7272,7 +7291,7 @@ class DataFrame(Frame, Serializable):
                 return False
         return super().equals(other)
 
-    _accessors = set()
+    _accessors = set()  # type: Set[Any]
 
 
 def from_pandas(obj, nan_as_null=None):

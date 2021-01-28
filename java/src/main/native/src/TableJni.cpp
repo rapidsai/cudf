@@ -186,18 +186,19 @@ private:
   long alloc_size = MINIMUM_WRITE_BUFFER_SIZE;
 };
 
-template <typename STATE> class jni_table_writer_handle final {
+template <typename WRITER> class jni_table_writer_handle final {
 public:
-  explicit jni_table_writer_handle(std::shared_ptr<STATE> &state) : state(state), sink() {}
-  jni_table_writer_handle(std::shared_ptr<STATE> &state,
-                          std::unique_ptr<jni_writer_data_sink> &sink)
-      : state(state), sink(std::move(sink)) {}
+  explicit jni_table_writer_handle(std::unique_ptr<WRITER> writer)
+      : writer(std::move(writer)), sink() {}
+  jni_table_writer_handle(std::unique_ptr<WRITER> writer,
+                          std::unique_ptr<jni_writer_data_sink> sink)
+      : writer(std::move(writer)), sink(std::move(sink)) {}
 
-  std::shared_ptr<STATE> state;
+  std::unique_ptr<WRITER> writer;
   std::unique_ptr<jni_writer_data_sink> sink;
 };
 
-typedef jni_table_writer_handle<cudf::io::pq_chunked_state> native_parquet_writer_handle;
+typedef jni_table_writer_handle<cudf::io::parquet_chunked_writer> native_parquet_writer_handle;
 typedef jni_table_writer_handle<cudf::io::orc_chunked_writer> native_orc_writer_handle;
 
 class native_arrow_ipc_writer_handle final {
@@ -871,9 +872,9 @@ JNIEXPORT long JNICALL Java_ai_rapids_cudf_Table_writeParquetBufferBegin(
             .decimal_precision(v_precisions)
             .build();
 
-    std::shared_ptr<pq_chunked_state> state = write_parquet_chunked_begin(opts);
+    auto writer_ptr = std::make_unique<cudf::io::parquet_chunked_writer>(opts);
     cudf::jni::native_parquet_writer_handle *ret =
-        new cudf::jni::native_parquet_writer_handle(state, data_sink);
+        new cudf::jni::native_parquet_writer_handle(std::move(writer_ptr), std::move(data_sink));
     return reinterpret_cast<jlong>(ret);
   }
   CATCH_STD(env, 0)
@@ -919,9 +920,9 @@ JNIEXPORT long JNICALL Java_ai_rapids_cudf_Table_writeParquetFileBegin(
             .decimal_precision(v_precisions)
             .build();
 
-    std::shared_ptr<pq_chunked_state> state = write_parquet_chunked_begin(opts);
+    auto writer_ptr = std::make_unique<cudf::io::parquet_chunked_writer>(opts);
     cudf::jni::native_parquet_writer_handle *ret =
-        new cudf::jni::native_parquet_writer_handle(state);
+        new cudf::jni::native_parquet_writer_handle(std::move(writer_ptr));
     return reinterpret_cast<jlong>(ret);
   }
   CATCH_STD(env, 0)
@@ -944,7 +945,7 @@ JNIEXPORT void JNICALL Java_ai_rapids_cudf_Table_writeParquetChunk(JNIEnv *env, 
   }
   try {
     cudf::jni::auto_set_device(env);
-    write_parquet_chunked(*tview, state->state);
+    state->writer->write(*tview);
   }
   CATCH_STD(env, )
 }
@@ -959,7 +960,7 @@ JNIEXPORT void JNICALL Java_ai_rapids_cudf_Table_writeParquetEnd(JNIEnv *env, jc
   std::unique_ptr<cudf::jni::native_parquet_writer_handle> make_sure_we_delete(state);
   try {
     cudf::jni::auto_set_device(env);
-    write_parquet_chunked_end(state->state);
+    state->writer->close();
   }
   CATCH_STD(env, )
 }
@@ -1043,9 +1044,9 @@ JNIEXPORT long JNICALL Java_ai_rapids_cudf_Table_writeORCBufferBegin(
                                           .compression(static_cast<compression_type>(j_compression))
                                           .enable_statistics(true)
                                           .build();
-    auto writer_ptr = std::make_shared<cudf::io::orc_chunked_writer>(opts);
+    auto writer_ptr = std::make_unique<cudf::io::orc_chunked_writer>(opts);
     cudf::jni::native_orc_writer_handle *ret =
-        new cudf::jni::native_orc_writer_handle(writer_ptr, data_sink);
+        new cudf::jni::native_orc_writer_handle(std::move(writer_ptr), std::move(data_sink));
     return reinterpret_cast<jlong>(ret);
   }
   CATCH_STD(env, 0)
@@ -1084,8 +1085,9 @@ JNIEXPORT long JNICALL Java_ai_rapids_cudf_Table_writeORCFileBegin(
                                           .compression(static_cast<compression_type>(j_compression))
                                           .enable_statistics(true)
                                           .build();
-    auto writer_ptr = std::make_shared<cudf::io::orc_chunked_writer>(opts);
-    cudf::jni::native_orc_writer_handle *ret = new cudf::jni::native_orc_writer_handle(writer_ptr);
+    auto writer_ptr = std::make_unique<cudf::io::orc_chunked_writer>(opts);
+    cudf::jni::native_orc_writer_handle *ret =
+        new cudf::jni::native_orc_writer_handle(std::move(writer_ptr));
     return reinterpret_cast<jlong>(ret);
   }
   CATCH_STD(env, 0)
@@ -1107,7 +1109,7 @@ JNIEXPORT void JNICALL Java_ai_rapids_cudf_Table_writeORCChunk(JNIEnv *env, jcla
   }
   try {
     cudf::jni::auto_set_device(env);
-    state->state->write(*tview);
+    state->writer->write(*tview);
   }
   CATCH_STD(env, )
 }
@@ -1121,7 +1123,7 @@ JNIEXPORT void JNICALL Java_ai_rapids_cudf_Table_writeORCEnd(JNIEnv *env, jclass
   std::unique_ptr<cudf::jni::native_orc_writer_handle> make_sure_we_delete(state);
   try {
     cudf::jni::auto_set_device(env);
-    state->state->close();
+    state->writer->close();
   }
   CATCH_STD(env, )
 }
@@ -1948,6 +1950,20 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_timeRangeRollingWindowAgg
     return cudf::jni::convert_table_for_return(env, result_table);
   }
   CATCH_STD(env, NULL);
+}
+
+JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_explode(JNIEnv *env, jclass,
+                                                               jlong input_jtable,
+                                                               jint column_index) {
+  JNI_NULL_CHECK(env, input_jtable, "explode: input table is null", 0);
+  try {
+    cudf::jni::auto_set_device(env);
+    cudf::table_view *input_table = reinterpret_cast<cudf::table_view *>(input_jtable);
+    cudf::size_type col_index = static_cast<cudf::size_type>(column_index);
+    std::unique_ptr<cudf::table> exploded = cudf::explode(*input_table, col_index);
+    return cudf::jni::convert_table_for_return(env, exploded);
+  }
+  CATCH_STD(env, 0);
 }
 
 } // extern "C"
