@@ -28,7 +28,7 @@ namespace cudf {
 namespace io {
 /**
  * @brief shared state for statistics gather kernel
- **/
+ */
 struct stats_state_s {
   stats_column_desc col;                 ///< Column information
   statistics_group group;                ///< Group description
@@ -40,7 +40,7 @@ struct stats_state_s {
 
 /**
  * @brief shared state for statistics merge kernel
- **/
+ */
 struct merge_state_s {
   stats_column_desc col;                 ///< Column information
   statistics_merge_group group;          ///< Group description
@@ -54,7 +54,7 @@ struct merge_state_s {
 
 /**
  * Custom addition functor to ignore NaN inputs
- **/
+ */
 struct IgnoreNaNSum {
   __device__ __forceinline__ double operator()(const double &a, const double &b)
   {
@@ -66,7 +66,7 @@ struct IgnoreNaNSum {
 
 /**
  * Warp-wide Min reduction for string types
- **/
+ */
 inline __device__ string_stats WarpReduceMinString(const char *smin, uint32_t lmin)
 {
   uint32_t len = shuffle_xor(lmin, 1);
@@ -105,7 +105,7 @@ inline __device__ string_stats WarpReduceMinString(const char *smin, uint32_t lm
 
 /**
  * Warp-wide Max reduction for string types
- **/
+ */
 inline __device__ string_stats WarpReduceMaxString(const char *smax, uint32_t lmax)
 {
   uint32_t len = shuffle_xor(lmax, 1);
@@ -149,7 +149,7 @@ inline __device__ string_stats WarpReduceMaxString(const char *smax, uint32_t lm
  * @param dtype data type
  * @param t thread id
  * @param storage temporary storage for warp reduction
- **/
+ */
 template <typename Storage>
 void __device__
 gatherIntColumnStats(stats_state_s *s, statistics_dtype dtype, uint32_t t, Storage &storage)
@@ -166,7 +166,10 @@ gatherIntColumnStats(stats_state_s *s, statistics_dtype dtype, uint32_t t, Stora
     uint32_t row              = r + s->group.start_row;
     const uint32_t *valid_map = s->col.valid_map_base;
     uint32_t is_valid         = (r < s->group.num_rows && row < s->col.num_values)
-                          ? (valid_map) ? (valid_map[row >> 5] >> (row & 0x1f)) & 1 : 1
+                          ? (valid_map) ? (valid_map[(row + s->col.column_offset) / 32] >>
+                                           ((row + s->col.column_offset) % 32)) &
+                                            1
+                                        : 1
                           : 0;
     if (is_valid) {
       switch (dtype) {
@@ -234,7 +237,7 @@ gatherIntColumnStats(stats_state_s *s, statistics_dtype dtype, uint32_t t, Stora
  * @param dtype data type
  * @param t thread id
  * @param storage temporary storage for warp reduction
- **/
+ */
 template <typename Storage>
 void __device__
 gatherFloatColumnStats(stats_state_s *s, statistics_dtype dtype, uint32_t t, Storage &storage)
@@ -251,7 +254,10 @@ gatherFloatColumnStats(stats_state_s *s, statistics_dtype dtype, uint32_t t, Sto
     uint32_t row              = r + s->group.start_row;
     const uint32_t *valid_map = s->col.valid_map_base;
     uint32_t is_valid         = (r < s->group.num_rows && row < s->col.num_values)
-                          ? (valid_map) ? (valid_map[row >> 5] >> (row & 0x1f)) & 1 : 1
+                          ? (valid_map) ? (valid_map[(row + s->col.column_offset) >> 5] >>
+                                           ((row + s->col.column_offset) & 0x1f)) &
+                                            1
+                                        : 1
                           : 0;
     if (is_valid) {
       if (dtype == dtype_float64) {
@@ -312,7 +318,7 @@ struct nvstrdesc_s {
  * @param s shared block state
  * @param t thread id
  * @param storage temporary storage for warp reduction
- **/
+ */
 template <typename Storage>
 void __device__ gatherStringColumnStats(stats_state_s *s, uint32_t t, Storage &storage)
 {
@@ -331,7 +337,10 @@ void __device__ gatherStringColumnStats(stats_state_s *s, uint32_t t, Storage &s
     uint32_t row              = r + s->group.start_row;
     const uint32_t *valid_map = s->col.valid_map_base;
     uint32_t is_valid         = (r < s->group.num_rows && row < s->col.num_values)
-                          ? (valid_map) ? (valid_map[row >> 5] >> (row & 0x1f)) & 1 : 1
+                          ? (valid_map) ? (valid_map[(row + s->col.column_offset) >> 5] >>
+                                           ((row + s->col.column_offset) & 0x1f)) &
+                                            1
+                                        : 1
                           : 0;
     if (is_valid) {
       const nvstrdesc_s *str_col = static_cast<const nvstrdesc_s *>(s->col.column_data_base);
@@ -396,7 +405,7 @@ void __device__ gatherStringColumnStats(stats_state_s *s, uint32_t t, Storage &s
  *
  * @param chunks Destination statistics results
  * @param groups Statistics source information
- **/
+ */
 template <int block_size>
 __global__ void __launch_bounds__(block_size, 1)
   gpuGatherColumnStatistics(statistics_chunk *chunks, const statistics_group *groups)
@@ -447,7 +456,7 @@ __global__ void __launch_bounds__(block_size, 1)
  * @param num_chunks number of statistic chunks to merge
  * @param t thread id
  * @param storage temporary storage for warp reduction
- **/
+ */
 template <typename Storage>
 void __device__ mergeIntColumnStats(merge_state_s *s,
                                     statistics_dtype dtype,
@@ -530,7 +539,7 @@ void __device__ mergeIntColumnStats(merge_state_s *s,
  * @param num_chunks number of statistic chunks to merge
  * @param t thread id
  * @param storage temporary storage for warp reduction
- **/
+ */
 template <typename Storage>
 void __device__ mergeFloatColumnStats(merge_state_s *s,
                                       const statistics_chunk *ck_in,
@@ -613,7 +622,7 @@ void __device__ mergeFloatColumnStats(merge_state_s *s,
  * @param num_chunks number of statistic chunks to merge
  * @param t thread id
  * @param storage temporary storage for warp reduction
- **/
+ */
 template <typename Storage>
 void __device__ mergeStringColumnStats(merge_state_s *s,
                                        const statistics_chunk *ck_in,
@@ -706,7 +715,7 @@ void __device__ mergeStringColumnStats(merge_state_s *s,
  * @param chunks_out Destination statistic chunks
  * @param chunks_in Source statistic chunks
  * @param groups Statistic chunk grouping information
- **/
+ */
 template <int block_size>
 __global__ void __launch_bounds__(block_size, 1)
   gpuMergeColumnStatistics(statistics_chunk *chunks_out,

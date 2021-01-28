@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2020, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -171,7 +171,7 @@ std::unique_ptr<table> repeat(
  * @param step Increment value
  * @param mr Device memory resource used to allocate the returned column's device memory
  * @return std::unique_ptr<column> The result table containing the sequence
- **/
+ */
 std::unique_ptr<column> sequence(
   size_type size,
   scalar const& init,
@@ -197,7 +197,7 @@ std::unique_ptr<column> sequence(
  * @param init First value in the sequence
  * @param mr Device memory resource used to allocate the returned column's device memory
  * @return std::unique_ptr<column> The result table containing the sequence
- **/
+ */
 std::unique_ptr<column> sequence(
   size_type size,
   scalar const& init,

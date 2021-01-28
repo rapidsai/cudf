@@ -30,7 +30,7 @@ namespace detail {
  *rmm::mr::get_current_device_resource())
  *
  * @param stream CUDA stream used for device memory operations and kernel launches.
- **/
+ */
 std::unique_ptr<column> sequence(
   size_type size,
   scalar const& init,
@@ -44,7 +44,7 @@ std::unique_ptr<column> sequence(
  rmm::mr::get_current_device_resource())
  *
  * @param stream CUDA stream used for device memory operations and kernel launches.
- **/
+ */
 std::unique_ptr<column> sequence(
   size_type size,
   scalar const& init,

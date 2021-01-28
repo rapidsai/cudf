@@ -175,7 +175,7 @@ namespace {
  * @param[in] first_bit_index The index (inclusive) of the first bit to count
  * @param[in] last_bit_index The index (inclusive) of the last bit to count
  * @param[out] global_count The number of non-zero bits in the specified range
- **/
+ */
 template <size_type block_size>
 __global__ void count_set_bits_kernel(bitmask_type const *bitmask,
                                       size_type first_bit_index,
@@ -222,28 +222,6 @@ __global__ void count_set_bits_kernel(bitmask_type const *bitmask,
   size_type block_count{BlockReduce(temp_storage).Sum(thread_count)};
 
   if (threadIdx.x == 0) { atomicAdd(global_count, block_count); }
-}
-
-/**
- * @brief Convenience function to get offset word from a bitmask
- *
- * @see copy_offset_bitmask
- * @see offset_bitmask_and
- */
-__device__ bitmask_type get_mask_offset_word(bitmask_type const *__restrict__ source,
-                                             size_type destination_word_index,
-                                             size_type source_begin_bit,
-                                             size_type source_end_bit)
-{
-  size_type source_word_index = destination_word_index + word_index(source_begin_bit);
-  bitmask_type curr_word      = source[source_word_index];
-  bitmask_type next_word      = 0;
-  if (word_index(source_end_bit) >
-      word_index(source_begin_bit +
-                 destination_word_index * detail::size_in_bits<bitmask_type>())) {
-    next_word = source[source_word_index + 1];
-  }
-  return __funnelshift_r(curr_word, next_word, source_begin_bit);
 }
 
 /**
@@ -321,7 +299,7 @@ __global__ void subtract_set_bits_range_boundaries_kerenel(bitmask_type const *b
  * @param source_begin_bit The offset into `source` from which to begin the copy
  * @param source_end_bit   The offset into `source` till which copying is done
  * @param number_of_mask_words The number of `cudf::bitmask_type` words to copy
- **/
+ */
 // TODO: Also make binops test that uses offset in column_view
 __global__ void copy_offset_bitmask(bitmask_type *__restrict__ destination,
                                     bitmask_type const *__restrict__ source,
@@ -332,8 +310,8 @@ __global__ void copy_offset_bitmask(bitmask_type *__restrict__ destination,
   for (size_type destination_word_index = threadIdx.x + blockIdx.x * blockDim.x;
        destination_word_index < number_of_mask_words;
        destination_word_index += blockDim.x * gridDim.x) {
-    destination[destination_word_index] =
-      get_mask_offset_word(source, destination_word_index, source_begin_bit, source_end_bit);
+    destination[destination_word_index] = detail::get_mask_offset_word(
+      source, destination_word_index, source_begin_bit, source_end_bit);
   }
 }
 
@@ -360,7 +338,7 @@ __global__ void offset_bitmask_and(bitmask_type *__restrict__ destination,
        destination_word_index += blockDim.x * gridDim.x) {
     bitmask_type destination_word = ~bitmask_type{0};  // All bits 1
     for (size_type i = 0; i < num_sources; i++) {
-      destination_word &= get_mask_offset_word(
+      destination_word &= detail::get_mask_offset_word(
         source[i], destination_word_index, begin_bit[i], begin_bit[i] + source_size);
     }
 

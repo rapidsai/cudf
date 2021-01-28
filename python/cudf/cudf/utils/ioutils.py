@@ -188,7 +188,7 @@ Parameters
 path : str
     File path or Root Directory path. Will be used as Root Directory path
     while writing a partitioned dataset.
-compression : {'snappy', 'gzip', 'brotli', None}, default 'snappy'
+compression : {'snappy', None}, default 'snappy'
     Name of the compression to use. Use ``None`` for no compression.
 index : bool, default None
     If ``True``, include the dataframe's index(es) in the file output. If
@@ -256,7 +256,7 @@ Examples
 --------
 >>> import cudf
 >>> num_rows, stripes, names = cudf.io.read_orc_metadata(filename)
->>> df = [cudf.read_orc(fname, stripe=i) for i in range(stripes)]
+>>> df = [cudf.read_orc(fname, stripes=i) for i in range(stripes)]
 >>> df = cudf.concat(df)
 >>> df
   num1                datetime text
@@ -931,7 +931,12 @@ index : bool, default True
 line_terminator : char, default '\\n'
 chunksize : int or None, default None
     Rows to write at a time
-
+encoding: str, default 'utf-8'
+    A string representing the encoding to use in the output file
+    Only ‘utf-8’ is currently supported
+compression: str, None
+    A string representing the compression scheme to use in the the output file
+    Compression while writing csv is not supported currently
 Returns
 -------
 None or str

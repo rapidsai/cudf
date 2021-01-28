@@ -17,11 +17,10 @@
 #ifndef DEVICE_OPERATORS_CUH
 #define DEVICE_OPERATORS_CUH
 
-/** ---------------------------------------------------------------------------*
+/**
  * @brief definition of the device operators
  * @file device_operators.cuh
- *
- * ---------------------------------------------------------------------------**/
+ */
 
 #include <cudf/scalar/scalar.hpp>
 #include <cudf/types.hpp>
@@ -94,7 +93,6 @@ struct DeviceCount {
  * character. This serves as identity value for maximum operator on string
  * values. Also, this char pointer serves as valid device pointer of identity
  * value for minimum operator on string values.
- *
  */
 __constant__ char max_string_sentinel[5]{"\xF7\xBF\xBF\xBF"};
 

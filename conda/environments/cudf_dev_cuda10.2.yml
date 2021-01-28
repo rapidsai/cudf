@@ -1,3 +1,5 @@
+# Copyright (c) 2021, NVIDIA CORPORATION.
+
 name: cudf_dev
 channels:
   - rapidsai
@@ -23,6 +25,7 @@ dependencies:
   - fsspec>=0.6.0
   - pytest
   - pytest-benchmark
+  - pytest-xdist
   - sphinx
   - sphinx_rtd_theme
   - sphinxcontrib-websupport
@@ -37,6 +40,8 @@ dependencies:
   - flake8=3.8.3
   - black=19.10
   - isort=5.0.7
+  - mypy=0.782
+  - typing_extensions
   - pre_commit
   - dask>=2.22.0
   - distributed>=2.22.0
@@ -59,3 +64,4 @@ dependencies:
       - git+https://github.com/dask/dask.git@master
       - git+https://github.com/dask/distributed.git@master
       - git+https://github.com/python-streamz/streamz.git
+      - pyorc

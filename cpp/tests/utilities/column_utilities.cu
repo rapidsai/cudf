@@ -67,6 +67,8 @@ struct column_property_comparator {
 
     if (lhs.size() > 0 && check_exact_equality) { EXPECT_EQ(lhs.nullable(), rhs.nullable()); }
 
+    EXPECT_EQ(lhs.null_count(), rhs.null_count());
+
     // equivalent, but not exactly equal columns can have a different number of children if their
     // sizes are both 0. Specifically, empty string columns may or may not have children.
     if (check_exact_equality || lhs.size() > 0) {
@@ -373,7 +375,6 @@ struct column_comparator {
 
 /**
  * @copydoc cudf::test::expect_column_properties_equal
- *
  */
 void expect_column_properties_equal(column_view const& lhs, column_view const& rhs)
 {
@@ -382,7 +383,6 @@ void expect_column_properties_equal(column_view const& lhs, column_view const& r
 
 /**
  * @copydoc cudf::test::expect_column_properties_equivalent
- *
  */
 void expect_column_properties_equivalent(column_view const& lhs, column_view const& rhs)
 {
@@ -391,7 +391,6 @@ void expect_column_properties_equivalent(column_view const& lhs, column_view con
 
 /**
  * @copydoc cudf::test::expect_columns_equal
- *
  */
 void expect_columns_equal(cudf::column_view const& lhs,
                           cudf::column_view const& rhs,
@@ -402,7 +401,6 @@ void expect_columns_equal(cudf::column_view const& lhs,
 
 /**
  * @copydoc cudf::test::expect_columns_equivalent
- *
  */
 void expect_columns_equivalent(cudf::column_view const& lhs,
                                cudf::column_view const& rhs,
@@ -413,7 +411,6 @@ void expect_columns_equivalent(cudf::column_view const& lhs,
 
 /**
  * @copydoc cudf::test::expect_equal_buffers
- *
  */
 void expect_equal_buffers(void const* lhs, void const* rhs, std::size_t size_bytes)
 {
@@ -428,7 +425,6 @@ void expect_equal_buffers(void const* lhs, void const* rhs, std::size_t size_byt
 
 /**
  * @copydoc cudf::test::bitmask_to_host
- *
  */
 std::vector<bitmask_type> bitmask_to_host(cudf::column_view const& c)
 {
@@ -735,7 +731,6 @@ namespace detail {
 
 /**
  * @copydoc cudf::test::detail::to_strings
- *
  */
 std::vector<std::string> to_strings(cudf::column_view const& col, std::string const& indent)
 {
@@ -787,7 +782,6 @@ std::string to_string(std::vector<bitmask_type> const& null_mask,
 
 /**
  * @copydoc cudf::test::to_strings
- *
  */
 std::vector<std::string> to_strings(cudf::column_view const& col)
 {
@@ -796,7 +790,6 @@ std::vector<std::string> to_strings(cudf::column_view const& col)
 
 /**
  * @copydoc cudf::test::to_string(cudf::column_view, std::string)
- *
  */
 std::string to_string(cudf::column_view const& col, std::string const& delimiter)
 {
@@ -805,7 +798,6 @@ std::string to_string(cudf::column_view const& col, std::string const& delimiter
 
 /**
  * @copydoc cudf::test::to_string(std::vector<bitmask_type>, size_type)
- *
  */
 std::string to_string(std::vector<bitmask_type> const& null_mask, size_type null_mask_size)
 {
@@ -814,7 +806,6 @@ std::string to_string(std::vector<bitmask_type> const& null_mask, size_type null
 
 /**
  * @copydoc cudf::test::print
- *
  */
 void print(cudf::column_view const& col, std::ostream& os, std::string const& delimiter)
 {
@@ -823,7 +814,6 @@ void print(cudf::column_view const& col, std::ostream& os, std::string const& de
 
 /**
  * @copydoc cudf::test::validate_host_masks
- *
  */
 bool validate_host_masks(std::vector<bitmask_type> const& expected_mask,
                          std::vector<bitmask_type> const& got_mask,
