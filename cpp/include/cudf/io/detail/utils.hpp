@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2020, NVIDIA CORPORATION.
+ * Copyright (c) 2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,19 +16,13 @@
 
 #pragma once
 
-#include <cudf/scalar/scalar.hpp>
-
 namespace cudf {
-namespace test {
+namespace io {
+namespace detail {
 /**
- * @brief Verifies the equality of two scalars.
- *
- * Treats invalid scalars as equivalent.
- *
- * @param lhs                   The first scalar
- * @param rhs                   The second scalar
+ * @brief Whether writer writes in chunks or all at once
  */
-void expect_scalars_equal(cudf::scalar const& lhs, cudf::scalar const& rhs);
-
-}  // namespace test
+enum class SingleWriteMode : bool { YES, NO };
+}  // namespace detail
+}  // namespace io
 }  // namespace cudf

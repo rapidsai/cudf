@@ -458,7 +458,8 @@ void InitPageFragments(PageFragment *frag,
  * @param[in] stream CUDA stream to use, default 0
  */
 void InitColumnDeviceViews(EncColumnDesc *col_desc,
-                           table_device_view &leaf_table_device_view,
+                           column_device_view *leaf_column_views,
+                           //table_device_view &leaf_table_device_view,
                            const table_device_view &parent_table_device_view,
                            rmm::cuda_stream_view stream);
 

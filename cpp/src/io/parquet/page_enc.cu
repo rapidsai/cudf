@@ -161,6 +161,8 @@ __global__ void __launch_bounds__(block_size) gpuInitPageFragments(PageFragment 
         end_value_idx      = offset_col.element<size_type>(end_value_idx);
         col                = col.child(lists_column_view::child_column_index);
       }
+      s->start_value_idx += s->col.leaf_column_offset;
+      end_value_idx += s->col.leaf_column_offset;
     }
     s->frag.start_value_idx = s->start_value_idx;
     s->frag.num_leaf_values = end_value_idx - s->start_value_idx;
@@ -195,7 +197,7 @@ __global__ void __launch_bounds__(block_size) gpuInitPageFragments(PageFragment 
   size_type start_value_idx = s->start_value_idx;
 
   for (uint32_t i = 0; i < nvals; i += block_size) {
-    uint32_t val_idx  = start_value_idx + i + t + s->col.leaf_column_offset;
+    uint32_t val_idx  = start_value_idx + i + t;
     uint32_t is_valid = (i + t < nvals && val_idx < s->col.leaf_column->size())
                           ? s->col.leaf_column->is_valid(val_idx)
                           : 0;
@@ -2006,14 +2008,15 @@ void InitPageFragments(PageFragment *frag,
  * @param[in] stream CUDA stream to use, default 0
  */
 void InitColumnDeviceViews(EncColumnDesc *col_desc,
-                           table_device_view &leaf_column_table_device_view,
+                           //table_device_view &leaf_column_table_device_view,
+                           column_device_view *leaf_column_views,
                            const table_device_view &parent_column_table_device_view,
                            rmm::cuda_stream_view stream)
 {
   cudf::detail::device_single_thread(
     [col_desc,
      parent_col_view = parent_column_table_device_view,
-     leaf_column_table_device_view] __device__() mutable {
+     leaf_column_views] __device__() mutable {
       for (size_type i = 0; i < parent_col_view.num_columns(); ++i) {
         column_device_view col = parent_col_view.column(i);
         // leaf_column_offset is required to store the offset of the
@@ -2035,7 +2038,7 @@ void InitColumnDeviceViews(EncColumnDesc *col_desc,
           col                = col.child(lists_column_view::child_column_index);
         }
         // Store leaf_column to device storage
-        column_device_view *leaf_col_ptr = leaf_column_table_device_view.begin() + i;
+        column_device_view *leaf_col_ptr = leaf_column_views + i;
         *leaf_col_ptr                    = col;
         col_desc[i].leaf_column          = leaf_col_ptr;
         col_desc[i].leaf_column_offset   = leaf_column_offset;

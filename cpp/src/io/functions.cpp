@@ -14,10 +14,12 @@
  * limitations under the License.
  */
 
+#include <io/orc/orc.h>
 #include <algorithm>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/io/avro.hpp>
 #include <cudf/io/csv.hpp>
+#include <cudf/io/data_sink.hpp>
 #include <cudf/io/datasource.hpp>
 #include <cudf/io/detail/avro.hpp>
 #include <cudf/io/detail/csv.hpp>
@@ -30,10 +32,6 @@
 #include <cudf/io/parquet.hpp>
 #include <cudf/table/table.hpp>
 #include <cudf/utilities/error.hpp>
-
-#include <io/orc/orc.h>
-#include <io/orc/chunked_state.hpp>
-#include <io/parquet/chunked_state.hpp>
 
 namespace cudf {
 namespace io {
@@ -129,22 +127,23 @@ std::unique_ptr<reader> make_reader(source_info const& src_info,
   return std::make_unique<reader>(std::move(datasources), options, mr);
 }
 
-template <typename writer, typename writer_options>
-std::unique_ptr<writer> make_writer(sink_info const& sink,
-                                    writer_options const& options,
-                                    rmm::mr::device_memory_resource* mr)
+template <typename writer, typename... Ts>
+std::unique_ptr<writer> make_writer(sink_info const& sink, Ts&&... args)
 {
   if (sink.type == io_type::FILEPATH) {
-    return std::make_unique<writer>(cudf::io::data_sink::create(sink.filepath), options, mr);
+    return std::make_unique<writer>(cudf::io::data_sink::create(sink.filepath),
+                                    std::forward<Ts>(args)...);
   }
   if (sink.type == io_type::HOST_BUFFER) {
-    return std::make_unique<writer>(cudf::io::data_sink::create(sink.buffer), options, mr);
+    return std::make_unique<writer>(cudf::io::data_sink::create(sink.buffer),
+                                    std::forward<Ts>(args)...);
   }
   if (sink.type == io_type::VOID) {
-    return std::make_unique<writer>(cudf::io::data_sink::create(), options, mr);
+    return std::make_unique<writer>(cudf::io::data_sink::create(), std::forward<Ts>(args)...);
   }
   if (sink.type == io_type::USER_IMPLEMENTED) {
-    return std::make_unique<writer>(cudf::io::data_sink::create(sink.user_sink), options, mr);
+    return std::make_unique<writer>(cudf::io::data_sink::create(sink.user_sink),
+                                    std::forward<Ts>(args)...);
   }
   CUDF_FAIL("Unsupported sink type");
 }
@@ -340,6 +339,9 @@ parsed_orc_statistics read_parsed_orc_statistics(source_info const& src_info)
   return result;
 }
 
+/**
+ * @copydoc cudf::io::read_orc
+ */
 table_with_metadata read_orc(orc_reader_options const& options, rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
@@ -348,56 +350,51 @@ table_with_metadata read_orc(orc_reader_options const& options, rmm::mr::device_
   return reader->read(options);
 }
 
-// Freeform API wraps the detail writer class API
+/**
+ * @copydoc cudf::io::write_orc
+ */
 void write_orc(orc_writer_options const& options, rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  auto writer = make_writer<detail_orc::writer>(options.get_sink(), options, mr);
 
-  writer->write(options.get_table(), options.get_metadata());
+  namespace io_detail = cudf::io::detail;
+  auto writer         = make_writer<detail_orc::writer>(
+    options.get_sink(), options, io_detail::SingleWriteMode::YES, mr);
+
+  writer->write(options.get_table());
 }
 
 /**
- * @copydoc cudf::io::write_orc_chunked_begin
+ * @copydoc cudf::io::orc_chunked_writer::orc_chunked_writer
  */
-std::shared_ptr<orc_chunked_state> write_orc_chunked_begin(chunked_orc_writer_options const& opts,
-                                                           rmm::mr::device_memory_resource* mr)
+orc_chunked_writer::orc_chunked_writer(chunked_orc_writer_options const& op,
+                                       rmm::mr::device_memory_resource* mr)
 {
-  CUDF_FUNC_RANGE();
-  orc_writer_options options;
-  options.set_compression(opts.get_compression());
-  options.enable_statistics(opts.enable_statistics());
-  auto state = std::make_shared<orc_chunked_state>();
-  state->wp  = make_writer<detail_orc::writer>(opts.get_sink(), options, mr);
-
-  // have to make a copy of the metadata here since we can't really
-  // guarantee the lifetime of the incoming pointer
-  if (opts.get_metadata() != nullptr) {
-    state->user_metadata_with_nullability = *opts.get_metadata();
-    state->user_metadata                  = &state->user_metadata_with_nullability;
-  }
-  state->stream = 0;
-  state->wp->write_chunked_begin(*state);
-  return state;
+  namespace io_detail = cudf::io::detail;
+  writer              = make_writer<detail_orc::writer>(
+    op.get_sink(), op, io_detail::SingleWriteMode::NO, mr, rmm::cuda_stream_default);
 }
 
 /**
- * @copydoc cudf::io::write_orc_chunked
+ * @copydoc cudf::io::orc_chunked_writer::write
  */
-void write_orc_chunked(table_view const& table, std::shared_ptr<orc_chunked_state> state)
+orc_chunked_writer& orc_chunked_writer::write(table_view const& table)
 {
   CUDF_FUNC_RANGE();
-  state->wp->write_chunk(table, *state);
+
+  writer->write(table);
+
+  return *this;
 }
 
 /**
- * @copydoc cudf::io::write_orc_chunked_end
+ * @copydoc cudf::io::orc_chunked_writer::close
  */
-void write_orc_chunked_end(std::shared_ptr<orc_chunked_state>& state)
+void orc_chunked_writer::close()
 {
   CUDF_FUNC_RANGE();
-  state->wp->write_chunked_end(*state);
-  state.reset();
+
+  writer->close();
 }
 
 using namespace cudf::io::detail::parquet;
@@ -412,20 +409,6 @@ table_with_metadata read_parquet(parquet_reader_options const& options,
   return reader->read(options);
 }
 
-// Freeform API wraps the detail writer class API
-std::unique_ptr<std::vector<uint8_t>> write_parquet(parquet_writer_options const& options,
-                                                    rmm::mr::device_memory_resource* mr)
-{
-  CUDF_FUNC_RANGE();
-  auto writer = make_writer<detail_parquet::writer>(options.get_sink(), options, mr);
-
-  return writer->write(options.get_table(),
-                       options.get_metadata(),
-                       options.is_enabled_return_filemetadata(),
-                       options.get_column_chunks_file_path(),
-                       options.get_decimal_precision());
-}
-
 /**
  * @copydoc cudf::io::merge_rowgroup_metadata
  */
@@ -437,54 +420,52 @@ std::unique_ptr<std::vector<uint8_t>> merge_rowgroup_metadata(
 }
 
 /**
- * @copydoc cudf::io::write_parquet_chunked_begin
+ * @copydoc cudf::io::write_parquet
  */
-std::shared_ptr<pq_chunked_state> write_parquet_chunked_begin(
-  chunked_parquet_writer_options const& op, rmm::mr::device_memory_resource* mr)
+std::unique_ptr<std::vector<uint8_t>> write_parquet(parquet_writer_options const& options,
+                                                    rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  parquet_writer_options options = parquet_writer_options::builder()
-                                     .compression(op.get_compression())
-                                     .stats_level(op.get_stats_level())
-                                     .int96_timestamps(op.is_enabled_int96_timestamps());
+  namespace io_detail = cudf::io::detail;
 
-  auto state = std::make_shared<pq_chunked_state>();
-  state->wp  = make_writer<detail_parquet::writer>(op.get_sink(), options, mr);
+  auto writer = make_writer<detail_parquet::writer>(
+    options.get_sink(), options, io_detail::SingleWriteMode::YES, mr, rmm::cuda_stream_default);
 
-  // have to make a copy of the metadata here since we can't really
-  // guarantee the lifetime of the incoming pointer
-  if (op.get_nullable_metadata() != nullptr) {
-    state->user_metadata_with_nullability = *op.get_nullable_metadata();
-    state->user_metadata                  = &state->user_metadata_with_nullability;
-  }
-  state->int96_timestamps   = op.is_enabled_int96_timestamps();
-  state->_decimal_precision = op.get_decimal_precision();
-  state->stream             = 0;
-  state->wp->write_chunked_begin(*state);
-  return state;
+  writer->write(options.get_table());
+  return writer->close(options.get_column_chunks_file_path());
 }
 
 /**
- * @copydoc cudf::io::write_parquet_chunked
+ * @copydoc cudf::io::parquet_chunked_writer::parquet_chunked_writer
  */
-void write_parquet_chunked(table_view const& table, std::shared_ptr<pq_chunked_state> state)
+parquet_chunked_writer::parquet_chunked_writer(chunked_parquet_writer_options const& op,
+                                               rmm::mr::device_memory_resource* mr)
 {
-  CUDF_FUNC_RANGE();
-  state->wp->write_chunk(table, *state);
+  namespace io_detail = cudf::io::detail;
+  writer              = make_writer<detail_parquet::writer>(
+    op.get_sink(), op, io_detail::SingleWriteMode::NO, mr, rmm::cuda_stream_default);
 }
 
 /**
- * @copydoc cudf::io::write_parquet_chunked_end
+ * @copydoc cudf::io::parquet_chunked_writer::write
  */
-std::unique_ptr<std::vector<uint8_t>> write_parquet_chunked_end(
-  std::shared_ptr<pq_chunked_state>& state,
-  bool return_filemetadata,
-  const std::string& column_chunks_file_path)
+parquet_chunked_writer& parquet_chunked_writer::write(table_view const& table)
 {
   CUDF_FUNC_RANGE();
-  auto meta = state->wp->write_chunked_end(*state, return_filemetadata, column_chunks_file_path);
-  state.reset();
-  return meta;
+
+  writer->write(table);
+
+  return *this;
+}
+
+/**
+ * @copydoc cudf::io::parquet_chunked_writer::close
+ */
+std::unique_ptr<std::vector<uint8_t>> parquet_chunked_writer::close(
+  std::string const& column_chunks_file_path)
+{
+  CUDF_FUNC_RANGE();
+  return writer->close(column_chunks_file_path);
 }
 
 }  // namespace io
