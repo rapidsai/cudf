@@ -483,25 +483,12 @@ class Frame(libcudf.table.Table):
         else:
             return self._index.equals(other._index)
 
-    def _get_columns_by_label(self, labels, downcast=False):
+    def _get_columns_by_label(self, labels, downcast):
         """
         Returns columns of the Frame specified by `labels`
 
-        If downcast is True, try and downcast from a DataFrame to a Series
         """
-        new_data = self._data.select_by_label(labels)
-        if downcast:
-            if is_scalar(labels):
-                nlevels = 1
-            elif isinstance(labels, tuple):
-                nlevels = len(labels)
-            if self._data.multiindex is False or nlevels == self._data.nlevels:
-                return self._constructor_sliced(
-                    new_data, name=labels, index=self.index
-                )
-        return self._constructor(
-            new_data, columns=new_data.to_pandas_index(), index=self.index
-        )
+        return self._data.select_by_label(labels)
 
     def _get_columns_by_index(self, indices):
         """
@@ -1643,10 +1630,16 @@ class Frame(libcudf.table.Table):
                 "na_option must be one of 'keep', 'top', or 'bottom'"
             )
 
-        # TODO code for selecting numeric columns
         source = self
         if numeric_only:
-            warnings.warn("numeric_only=True is not implemented yet")
+            numeric_cols = (
+                name
+                for name in self._data.names
+                if is_numerical_dtype(self._data[name])
+            )
+            source = self._get_columns_by_label(numeric_cols)
+            if source.empty:
+                return source.astype("float64")
 
         out_rank_table = libcudf.sort.rank_columns(
             source, method_enum, na_option, ascending, pct
