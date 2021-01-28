@@ -424,6 +424,11 @@ class Series(_Frame, dd.core.Series):
                 result.divisions = (min(self.columns), max(self.columns))
             return handle_out(out, result)
 
+    def groupby(self, *args, **kwargs):
+        from .groupby import CudfSeriesGroupBy
+
+        return CudfSeriesGroupBy(self, *args, **kwargs)
+
 
 class Index(Series, dd.core.Index):
     _partition_type = cudf.Index

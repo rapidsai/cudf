@@ -135,24 +135,22 @@ inline thrust::host_vector<SerialTrieNode> createSerializedTrie(
  * @return Boolean value, true if string is found, false otherwise
  */
 __host__ __device__ inline bool serialized_trie_contains(device_span<SerialTrieNode const> trie,
-                                                         char const *key,
-                                                         size_t key_len)
+                                                         device_span<char const> key)
 {
   if (trie.data() == nullptr || trie.empty()) return false;
-  if (key_len == 0) return trie[0].is_leaf;
-  int curr_node = 1;
-  for (size_t i = 0; i < key_len; ++i) {
+  if (key.empty()) return trie.front().is_leaf;
+  auto curr_node = trie.begin() + 1;
+  for (auto curr_key = key.begin(); curr_key < key.end(); ++curr_key) {
     // Don't jump away from root node
-    if (i != 0) { curr_node += trie[curr_node].children_offset; }
+    if (curr_key != key.begin()) { curr_node += curr_node->children_offset; }
     // Search for the next character in the array of children nodes
     // Nodes are sorted - terminate search if the node is larger or equal
-    while (trie[curr_node].character != trie_terminating_character &&
-           trie[curr_node].character < key[i]) {
+    while (curr_node->character != trie_terminating_character && curr_node->character < *curr_key) {
       ++curr_node;
     }
     // Could not find the next character, done with the search
-    if (trie[curr_node].character != key[i]) { return false; }
+    if (curr_node->character != *curr_key) { return false; }
   }
   // Even if the node is present, return true only if that node is at the end of a word
-  return trie[curr_node].is_leaf;
+  return curr_node->is_leaf;
 }
