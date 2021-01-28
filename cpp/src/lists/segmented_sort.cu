@@ -203,11 +203,11 @@ struct SortPairs {
   }
 };
 
-std::unique_ptr<column> segmented_sort(lists_column_view const& input,
-                                       order column_order,
-                                       null_order null_precedence,
-                                       rmm::cuda_stream_view stream,
-                                       rmm::mr::device_memory_resource* mr)
+std::unique_ptr<column> sort_lists(lists_column_view const& input,
+                                   order column_order,
+                                   null_order null_precedence,
+                                   rmm::cuda_stream_view stream,
+                                   rmm::mr::device_memory_resource* mr)
 {
   if (input.size() == 0) return {};
 
@@ -233,13 +233,13 @@ std::unique_ptr<column> segmented_sort(lists_column_view const& input,
 }
 }  // namespace detail
 
-std::unique_ptr<column> segmented_sort(lists_column_view const& input,
-                                       order column_order,
-                                       null_order null_precedence,
-                                       rmm::mr::device_memory_resource* mr)
+std::unique_ptr<column> sort_lists(lists_column_view const& input,
+                                   order column_order,
+                                   null_order null_precedence,
+                                   rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::segmented_sort(input, column_order, null_precedence, rmm::cuda_stream_default, mr);
+  return detail::sort_lists(input, column_order, null_precedence, rmm::cuda_stream_default, mr);
 }
 
 }  // namespace lists

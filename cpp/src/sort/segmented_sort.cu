@@ -123,12 +123,12 @@ std::unique_ptr<column> segmented_sorted_order(table_view const& keys,
   return detail::sorted_order(child_keys, child_column_order, child_null_precedence, stream, mr);
 }
 
-std::unique_ptr<table> segmented_sort_by_key(table_view const& values,
-                                             table_view const& keys,
-                                             std::vector<order> const& column_order,
-                                             std::vector<null_order> const& null_precedence,
-                                             rmm::cuda_stream_view stream,
-                                             rmm::mr::device_memory_resource* mr)
+std::unique_ptr<table> sort_lists(table_view const& values,
+                                  table_view const& keys,
+                                  std::vector<order> const& column_order,
+                                  std::vector<null_order> const& null_precedence,
+                                  rmm::cuda_stream_view stream,
+                                  rmm::mr::device_memory_resource* mr)
 {
   std::vector<column_view> key_value_columns;
   key_value_columns.reserve(keys.num_columns() + values.num_columns());
@@ -170,14 +170,14 @@ std::unique_ptr<table> segmented_sort_by_key(table_view const& values,
 }
 }  // namespace detail
 
-std::unique_ptr<table> segmented_sort_by_key(table_view const& values,
-                                             table_view const& keys,
-                                             std::vector<order> const& column_order,
-                                             std::vector<null_order> const& null_precedence,
-                                             rmm::mr::device_memory_resource* mr)
+std::unique_ptr<table> sort_lists(table_view const& values,
+                                  table_view const& keys,
+                                  std::vector<order> const& column_order,
+                                  std::vector<null_order> const& null_precedence,
+                                  rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::segmented_sort_by_key(
+  return detail::sort_lists(
     values, keys, column_order, null_precedence, rmm::cuda_stream_default, mr);
 }
 

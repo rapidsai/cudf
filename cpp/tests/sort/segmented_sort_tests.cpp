@@ -56,41 +56,39 @@ TEST_F(SegmentedSortInt, Errors)
   table_view input4{{col4}};
   table_view input5{{col1, col4}};
   // Valid
-  CUDF_EXPECT_NO_THROW(cudf::segmented_sort_by_key(input1, input1, {}, {}));
+  CUDF_EXPECT_NO_THROW(cudf::sort_lists(input1, input1, {}, {}));
   // Non-List keys
-  CUDF_EXPECT_THROW_MESSAGE(cudf::segmented_sort_by_key(input2, input1, {}, {}),
+  CUDF_EXPECT_THROW_MESSAGE(cudf::sort_lists(input2, input1, {}, {}),
                             "segmented_sort only supports lists columns");
   // Non-List values
-  CUDF_EXPECT_THROW_MESSAGE(cudf::segmented_sort_by_key(input1, input2, {}, {}),
+  CUDF_EXPECT_THROW_MESSAGE(cudf::sort_lists(input1, input2, {}, {}),
                             "segmented_sort only supports lists columns");
   // Both
-  CUDF_EXPECT_THROW_MESSAGE(cudf::segmented_sort_by_key(input2, input2, {}, {}),
+  CUDF_EXPECT_THROW_MESSAGE(cudf::sort_lists(input2, input2, {}, {}),
                             "segmented_sort only supports lists columns");
-  CUDF_EXPECT_THROW_MESSAGE(cudf::segmented_sort_by_key(input2, input3, {}, {}),
+  CUDF_EXPECT_THROW_MESSAGE(cudf::sort_lists(input2, input3, {}, {}),
                             "segmented_sort only supports lists columns");
-  CUDF_EXPECT_THROW_MESSAGE(cudf::segmented_sort_by_key(input3, input3, {}, {}),
+  CUDF_EXPECT_THROW_MESSAGE(cudf::sort_lists(input3, input3, {}, {}),
                             "segmented_sort only supports lists columns");
   // List sizes mismatch key
-  CUDF_EXPECT_THROW_MESSAGE(cudf::segmented_sort_by_key(input5, input4, {}, {}),
+  CUDF_EXPECT_THROW_MESSAGE(cudf::sort_lists(input5, input4, {}, {}),
                             "size of each list in a row of table should be same");
   // List sizes mismatch value
-  CUDF_EXPECT_THROW_MESSAGE(cudf::segmented_sort_by_key(input1, input5, {}, {}),
+  CUDF_EXPECT_THROW_MESSAGE(cudf::sort_lists(input1, input5, {}, {}),
                             "size of each list in a row of table should be same");
   // List sizes mismatch between key-value
-  CUDF_EXPECT_THROW_MESSAGE(cudf::segmented_sort_by_key(input1, input4, {}, {}),
+  CUDF_EXPECT_THROW_MESSAGE(cudf::sort_lists(input1, input4, {}, {}),
                             "size of each list in a row of table should be same");
 
   // Mismatch order sizes
-  EXPECT_THROW(
-    cudf::segmented_sort_by_key(input1, input1, {order::ASCENDING, order::ASCENDING}, {}),
-    logic_error);
+  EXPECT_THROW(cudf::sort_lists(input1, input1, {order::ASCENDING, order::ASCENDING}, {}),
+               logic_error);
   // Mismatch null precedence sizes
-  EXPECT_THROW(
-    cudf::segmented_sort_by_key(input1, input1, {}, {null_order::AFTER, null_order::AFTER}),
-    logic_error);
+  EXPECT_THROW(cudf::sort_lists(input1, input1, {}, {null_order::AFTER, null_order::AFTER}),
+               logic_error);
   // Both
   EXPECT_THROW(
-    cudf::segmented_sort_by_key(
+    cudf::sort_lists(
       input1, input1, {order::ASCENDING, order::ASCENDING}, {null_order::AFTER, null_order::AFTER}),
     logic_error);
 }
@@ -109,11 +107,11 @@ TYPED_TEST(SegmentedSort, NoNull)
   LCW<T> expected1{{1, 2, 3, 4, 4, 4}, {5}, {8, 9, 9}, {6, 7}};
   LCW<T> expected2{{2, 1, 3, 1, 2, 3}, {0}, {9, 9, 10}, {6, 7}};
   table_view expected_table1{{expected1, expected2}};
-  auto results = cudf::segmented_sort_by_key(
+  auto results = cudf::sort_lists(
     input, input, {order::ASCENDING, order::ASCENDING}, {null_order::AFTER, null_order::AFTER});
   CUDF_TEST_EXPECT_TABLES_EQUAL(results->view(), expected_table1);
 
-  results = cudf::segmented_sort_by_key(
+  results = cudf::sort_lists(
     input, input, {order::ASCENDING, order::ASCENDING}, {null_order::BEFORE, null_order::BEFORE});
   CUDF_TEST_EXPECT_TABLES_EQUAL(results->view(), expected_table1);
 
@@ -122,11 +120,11 @@ TYPED_TEST(SegmentedSort, NoNull)
   LCW<T> expected3{{4, 4, 4, 3, 2, 1}, {5}, {9, 9, 8}, {7, 6}};
   LCW<T> expected4{{3, 2, 1, 3, 1, 2}, {0}, {10, 9, 9}, {7, 6}};
   table_view expected_table2{{expected3, expected4}};
-  results = cudf::segmented_sort_by_key(
+  results = cudf::sort_lists(
     input, input, {order::DESCENDING, order::DESCENDING}, {null_order::AFTER, null_order::AFTER});
   CUDF_TEST_EXPECT_TABLES_EQUAL(results->view(), expected_table2);
 
-  results = cudf::segmented_sort_by_key(
+  results = cudf::sort_lists(
     input, input, {order::DESCENDING, order::DESCENDING}, {null_order::BEFORE, null_order::BEFORE});
   CUDF_TEST_EXPECT_TABLES_EQUAL(results->view(), expected_table2);
 }
@@ -152,7 +150,7 @@ TYPED_TEST(SegmentedSort, Nulls)
   LCW<T> expected1a{{{1, 2, 3, 4, 4, 4}, valids1a.begin()}, {5}, {8, 9, 9}, {6, 7}};
   LCW<T> expected2a{{2, 1, 3, 1, 3, 2}, {0}, {{9, 10, 9}, valids2.begin()}, {6, 7}};
   table_view expected_table1a{{expected1a, expected2a}};
-  auto results = cudf::segmented_sort_by_key(
+  auto results = cudf::sort_lists(
     input, input, {order::ASCENDING, order::ASCENDING}, {null_order::AFTER, null_order::AFTER});
   CUDF_TEST_EXPECT_TABLES_EQUAL(results->view(), expected_table1a);
 
@@ -160,7 +158,7 @@ TYPED_TEST(SegmentedSort, Nulls)
   LCW<T> expected1b{{{4, 1, 2, 3, 4, 4}, valids1a.rbegin()}, {5}, {8, 9, 9}, {6, 7}};
   LCW<T> expected2b{{2, 2, 1, 3, 1, 3}, {0}, {{9, 9, 10}, valids2b.begin()}, {6, 7}};
   table_view expected_table1b{{expected1b, expected2b}};
-  results = cudf::segmented_sort_by_key(
+  results = cudf::sort_lists(
     input, input, {order::ASCENDING, order::ASCENDING}, {null_order::BEFORE, null_order::BEFORE});
   CUDF_TEST_EXPECT_TABLES_EQUAL(results->view(), expected_table1b);
 
@@ -168,14 +166,14 @@ TYPED_TEST(SegmentedSort, Nulls)
   LCW<T> expected3a{{{4, 4, 4, 3, 2, 1}, valids1a.rbegin()}, {5}, {9, 9, 8}, {7, 6}};
   LCW<T> expected4a{{2, 3, 1, 3, 1, 2}, {0}, {{9, 10, 9}, valids2.rbegin()}, {7, 6}};
   table_view expected_table2a{{expected3a, expected4a}};
-  results = cudf::segmented_sort_by_key(
+  results = cudf::sort_lists(
     input, input, {order::DESCENDING, order::DESCENDING}, {null_order::AFTER, null_order::AFTER});
   CUDF_TEST_EXPECT_TABLES_EQUAL(results->view(), expected_table2a);
 
   LCW<T> expected3b{{{4, 4, 3, 2, 1, 4}, valids1a.begin()}, {5}, {9, 9, 8}, {7, 6}};
   LCW<T> expected4b{{3, 1, 3, 1, 2, 2}, {0}, {{10, 9, 9}, valids2b.begin()}, {7, 6}};
   table_view expected_table2b{{expected3b, expected4b}};
-  results = cudf::segmented_sort_by_key(
+  results = cudf::sort_lists(
     input, input, {order::DESCENDING, order::DESCENDING}, {null_order::BEFORE, null_order::BEFORE});
   CUDF_TEST_EXPECT_TABLES_EQUAL(results->view(), expected_table2b);
 }

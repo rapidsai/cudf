@@ -48,7 +48,7 @@ namespace lists {
  * @return list column with elements in each list sorted.
  *
  */
-std::unique_ptr<column> segmented_sort(
+std::unique_ptr<column> sort_lists(
   lists_column_view const& source_column,
   order column_order,
   null_order null_precedence,
