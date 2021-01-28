@@ -208,8 +208,8 @@ __global__ void __launch_bounds__(block_size) gpuInitPageFragments(PageFragment 
       if (dtype != BOOLEAN) {
         if (dtype == BYTE_ARRAY) {
           auto str = s->col.leaf_column->element<string_view>(val_idx);
-          len += str.length();
-          hash = nvstr_init_hash(reinterpret_cast<const uint8_t *>(str.data()), str.length());
+          len += str.size_bytes();
+          hash = nvstr_init_hash(reinterpret_cast<const uint8_t *>(str.data()), str.size_bytes());
         } else if (dtype_len_in == 8) {
           hash = uint64_init_hash(s->col.leaf_column->element<uint64_t>(val_idx));
         } else {
@@ -338,7 +338,7 @@ __global__ void __launch_bounds__(block_size) gpuInitPageFragments(PageFragment 
             auto str1 = s->col.leaf_column->element<string_view>(ck_row);
             auto str2 = s->col.leaf_column->element<string_view>(ck_row_ref);
             is_dupe   = (str1 == str2);
-            dupe_data_size += (is_dupe) ? 4 + str1.length() : 0;
+            dupe_data_size += (is_dupe) ? 4 + str1.size_bytes() : 0;
           } else {
             if (dtype_len_in == 8) {
               auto v1 = s->col.leaf_column->element<uint64_t>(ck_row);
@@ -1067,11 +1067,13 @@ __global__ void __launch_bounds__(128, 8) gpuEncodePages(EncPage *pages,
     s->page_start_val = s->page.start_row;
     if (s->col.parent_column != nullptr) {
       auto col = *(s->col.parent_column);
+      auto current_page_start_val = s->page_start_val;
       while (col.type().id() == type_id::LIST) {
-        s->page_start_val =
-          col.child(lists_column_view::offsets_column_index).element<size_type>(s->page_start_val);
+        current_page_start_val =
+          col.child(lists_column_view::offsets_column_index).element<size_type>(current_page_start_val);
         col = col.child(lists_column_view::child_column_index);
       }
+      s->page_start_val = current_page_start_val;
     }
   }
   __syncthreads();
@@ -1133,7 +1135,7 @@ __global__ void __launch_bounds__(128, 8) gpuEncodePages(EncPage *pages,
       if (is_valid) {
         len = dtype_len_out;
         if (dtype == BYTE_ARRAY) {
-          len += s->col.leaf_column->element<string_view>(access_id).length();
+          len += s->col.leaf_column->element<string_view>(access_id).size_bytes();
         }
       } else {
         len = 0;
@@ -2003,12 +2005,11 @@ void InitPageFragments(PageFragment *frag,
  * @brief Set column_device_view pointers in column description array
  *
  * @param[out] col_desc Column description array [column_id]
- * @param[out] leaf_table_device_view Table device view to store leaf columns
+ * @param[out] leaf_column_views Device vector to store leaf columns
  * @param[in] parent_table_device_view Table device view containing parent columns
  * @param[in] stream CUDA stream to use, default 0
  */
 void InitColumnDeviceViews(EncColumnDesc *col_desc,
-                           //table_device_view &leaf_column_table_device_view,
                            column_device_view *leaf_column_views,
                            const table_device_view &parent_column_table_device_view,
                            rmm::cuda_stream_view stream)

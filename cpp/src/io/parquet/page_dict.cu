@@ -206,14 +206,15 @@ __global__ void __launch_bounds__(block_size, 1)
         len                = dtype_len;
         if (dtype == BYTE_ARRAY) {
           auto str1 = s->col.leaf_column->element<string_view>(access_id);
-          len += str1.length();
-          hash = nvstr_hash16(reinterpret_cast<const uint8_t *>(str1.data()), str1.length());
+          len += str1.size_bytes();
+          hash = nvstr_hash16(reinterpret_cast<const uint8_t *>(str1.data()), str1.size_bytes());
           // Walk the list of rows with the same hash
           next_addr = &s->hashmap[hash];
           while ((next = atomicCAS(next_addr, 0, row + 1)) != 0) {
+            auto const current = next + s->col.leaf_column_offset - 1;
             auto str2 =
-              s->col.leaf_column->element<string_view>(next + s->col.leaf_column_offset - 1);
-            if (str1.length() == str2.length() && str1 == str2) {
+              s->col.leaf_column->element<string_view>(current);
+            if (str1 == str2) {
               is_dupe = 1;
               break;
             }
@@ -235,15 +236,14 @@ __global__ void __launch_bounds__(block_size, 1)
           // Walk the list of rows with the same hash
           next_addr = &s->hashmap[hash];
           while ((next = atomicCAS(next_addr, 0, row + 1)) != 0) {
+            auto const current = next + s->col.leaf_column_offset - 1;
             uint64_t val2 =
               (dtype_len_in == 8)
-                ? s->col.leaf_column->element<uint64_t>(next + s->col.leaf_column_offset - 1)
+                ? s->col.leaf_column->element<uint64_t>(current)
                 : (dtype_len_in == 4)
-                    ? s->col.leaf_column->element<uint32_t>(next + s->col.leaf_column_offset - 1)
-                    : (dtype_len_in == 2) ? s->col.leaf_column->element<uint16_t>(
-                                              next + s->col.leaf_column_offset - 1)
-                                          : s->col.leaf_column->element<uint8_t>(
-                                              next + s->col.leaf_column_offset - 1);
+                    ? s->col.leaf_column->element<uint32_t>(current)
+                    : (dtype_len_in == 2) ? s->col.leaf_column->element<uint16_t>(current)
+                                          : s->col.leaf_column->element<uint8_t>(current);
             if (val2 == val) {
               is_dupe = 1;
               break;

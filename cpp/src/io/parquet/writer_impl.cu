@@ -499,7 +499,6 @@ void writer::impl::init_page_fragments(hostdevice_vector<gpu::PageFragment> &fra
                                        hostdevice_vector<gpu::EncColumnDesc> &col_desc,
                                        const table_device_view &parent_table_device_view,
                                        rmm::device_uvector<column_device_view> &leaf_column_views,
-                                       //table_device_view &leaf_table_device_view,
                                        uint32_t num_columns,
                                        uint32_t num_fragments,
                                        uint32_t num_rows,
@@ -876,8 +875,6 @@ void writer::impl::write(table_view const &table)
   // Create table_device_view so that corresponding column_device_view data
   // can be written into col_desc members
   auto parent_column_table_device_view = table_device_view::create(table);
-  auto leaf_column_table_device_view   = table_device_view::create(table);
-
   rmm::device_uvector<column_device_view> leaf_column_views(num_columns, rmm::cuda_stream_default);
 
   // Initialize column description
@@ -940,7 +937,6 @@ void writer::impl::write(table_view const &table)
                         col_desc,
                         *parent_column_table_device_view,
                         leaf_column_views,
-                        //*leaf_column_table_device_view,
                         num_columns,
                         num_fragments,
                         num_rows,

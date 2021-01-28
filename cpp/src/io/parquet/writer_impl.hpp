@@ -124,6 +124,8 @@ class writer::impl {
    *
    * @param frag Destination page fragments
    * @param col_desc column description array
+   * @param parent_table_device_view Table device view containing parent columns
+   * @param leaf_column_views Device vector to store leaf columns
    * @param num_columns Total number of columns
    * @param num_fragments Total number of fragments per column
    * @param num_rows Total number of rows
@@ -133,7 +135,6 @@ class writer::impl {
                            hostdevice_vector<gpu::EncColumnDesc>& col_desc,
                            const table_device_view& parent_table_device_view,
                            rmm::device_uvector<column_device_view> &leaf_column_views,
-                           //table_device_view& leaf_table_device_view,
                            uint32_t num_columns,
                            uint32_t num_fragments,
                            uint32_t num_rows,
