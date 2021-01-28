@@ -21,7 +21,6 @@
 #include <cudf_test/type_lists.hpp>
 
 #include <cudf/column/column_factories.hpp>
-//#include <cudf/detail/sorting.hpp>
 #include <cudf/fixed_point/fixed_point.hpp>
 #include <cudf/sorting.hpp>
 #include <cudf/table/table_view.hpp>
@@ -43,6 +42,58 @@ struct SegmentedSort : public BaseFixture {
 
 // using NumericTypesNotBool = Concat<IntegralTypesNotBool, FloatingPointTypes>;
 TYPED_TEST_CASE(SegmentedSort, NumericTypes);
+
+using SegmentedSortInt = SegmentedSort<int>;
+TEST_F(SegmentedSortInt, Errors)
+{
+  LCW<int> col1{{3, 1, 2}, {1}, {2}, {0}, {10, 9, 9}, {6, 7}};
+  fixed_width_column_wrapper<int> col2{{5, 4, 3, 5, 8, 5}, {1, 1, 0, 1, 1, 1}};
+  strings_column_wrapper col3({"d", "e", "a", "d", "k", "d"}, {1, 1, 0, 1, 1, 1});
+  LCW<int> col4{{3, 1, 2}, {1}, {2}, {0}, {10, 9, 9, 4}, {6, 7}};
+  table_view input1{{col1}};
+  table_view input2{{col1, col2}};
+  table_view input3{{col2, col3}};
+  table_view input4{{col4}};
+  table_view input5{{col1, col4}};
+  // Valid
+  CUDF_EXPECT_NO_THROW(cudf::segmented_sort_by_key(input1, input1, {}, {}));
+  // Non-List keys
+  CUDF_EXPECT_THROW_MESSAGE(cudf::segmented_sort_by_key(input2, input1, {}, {}),
+                            "segmented_sort only supports lists columns");
+  // Non-List values
+  CUDF_EXPECT_THROW_MESSAGE(cudf::segmented_sort_by_key(input1, input2, {}, {}),
+                            "segmented_sort only supports lists columns");
+  // Both
+  CUDF_EXPECT_THROW_MESSAGE(cudf::segmented_sort_by_key(input2, input2, {}, {}),
+                            "segmented_sort only supports lists columns");
+  CUDF_EXPECT_THROW_MESSAGE(cudf::segmented_sort_by_key(input2, input3, {}, {}),
+                            "segmented_sort only supports lists columns");
+  CUDF_EXPECT_THROW_MESSAGE(cudf::segmented_sort_by_key(input3, input3, {}, {}),
+                            "segmented_sort only supports lists columns");
+  // List sizes mismatch key
+  CUDF_EXPECT_THROW_MESSAGE(cudf::segmented_sort_by_key(input5, input4, {}, {}),
+                            "size of each list in a row of table should be same");
+  // List sizes mismatch value
+  CUDF_EXPECT_THROW_MESSAGE(cudf::segmented_sort_by_key(input1, input5, {}, {}),
+                            "size of each list in a row of table should be same");
+  // List sizes mismatch between key-value
+  CUDF_EXPECT_THROW_MESSAGE(cudf::segmented_sort_by_key(input1, input4, {}, {}),
+                            "size of each list in a row of table should be same");
+
+  // Mismatch order sizes
+  EXPECT_THROW(
+    cudf::segmented_sort_by_key(input1, input1, {order::ASCENDING, order::ASCENDING}, {}),
+    logic_error);
+  // Mismatch null precedence sizes
+  EXPECT_THROW(
+    cudf::segmented_sort_by_key(input1, input1, {}, {null_order::AFTER, null_order::AFTER}),
+    logic_error);
+  // Both
+  EXPECT_THROW(
+    cudf::segmented_sort_by_key(
+      input1, input1, {order::ASCENDING, order::ASCENDING}, {null_order::AFTER, null_order::AFTER}),
+    logic_error);
+}
 
 TYPED_TEST(SegmentedSort, NoNull)
 {
