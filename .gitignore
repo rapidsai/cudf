@@ -159,5 +159,3 @@ dask-worker-space/
 
 # protobuf
 **/*_pb2.py
-
-rmm_log.txt
