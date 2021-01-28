@@ -4,12 +4,12 @@ import pickle
 import warnings
 from collections import OrderedDict
 from collections.abc import Sequence
+from typing import Any, List, Tuple, Union
 
 import cupy
 import numpy as np
 import pandas as pd
 from pandas._config import get_option
-from tying import List, Tuple, Union
 
 import cudf
 from cudf import _lib as libcudf
@@ -838,7 +838,7 @@ class MultiIndex(Index):
     def _get_row_major(
         self,
         df: DataFrameOrSeries,
-        row_tuple: Union[Tuple[...], List[Tuple[...]]],
+        row_tuple: Union[slice, Tuple[Any, ...], List[Tuple[Any, ...]]],
     ) -> DataFrameOrSeries:
         if pd.api.types.is_bool_dtype(
             list(row_tuple) if isinstance(row_tuple, tuple) else row_tuple
