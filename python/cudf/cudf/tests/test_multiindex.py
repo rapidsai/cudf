@@ -316,6 +316,21 @@ def test_multiindex_loc_slice(pdf, gdf, pdfIndex, arg):
     assert_eq(pdf.loc[arg], gdf.loc[arg])
 
 
+def test_multiindex_loc_errors(pdf, gdf, pdfIndex):
+    gdf = cudf.from_pandas(pdf)
+    gdfIndex = cudf.from_pandas(pdfIndex)
+    gdf.index = gdfIndex
+
+    with pytest.raises(KeyError):
+        gdf.loc[("a", "store", "clouds", "foo")]
+    with pytest.raises(IndexError):
+        gdf.loc[
+            ("a", "store", "clouds", "fire", "x", "y")
+        ]  # too many indexers
+    with pytest.raises(IndexError):
+        gdf.loc[slice(None, ("a", "store", "clouds", "fire", "x", "y"))]
+
+
 def test_multiindex_loc_then_column(pdf, gdf, pdfIndex):
     gdfIndex = cudf.from_pandas(pdfIndex)
     assert_eq(pdfIndex, gdfIndex)
