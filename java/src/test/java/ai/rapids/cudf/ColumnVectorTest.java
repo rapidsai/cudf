@@ -2939,8 +2939,8 @@ public class ColumnVectorTest extends CudfTestBase {
     try (ColumnVector v = ColumnVector.fromLists(new HostColumnVector.ListType(true,
         new HostColumnVector.BasicType(true, DType.STRING)), list1, list2, list3, list4, list5, list6);
          ColumnVector expected = ColumnVector.fromBoxedBooleans(true, true, true, true, null, null);
-         ColumnVector result = v.listContainsColumn(
-             ColumnVector.fromStrings("thésé", "", "test", "test", "iotA", null))) {
+         ColumnVector strCol = ColumnVector.fromStrings("thésé", "", "test", "test", "iotA", null);
+         ColumnVector result = v.listContainsColumn(strCol)) {
       assertColumnsAreEqual(expected, result);
     }
   }
@@ -2955,7 +2955,8 @@ public class ColumnVectorTest extends CudfTestBase {
     try (ColumnVector v = ColumnVector.fromLists(new HostColumnVector.ListType(true,
         new HostColumnVector.BasicType(true, DType.INT32)), list1, list2, list3, list4, list5);
          ColumnVector expected = ColumnVector.fromBoxedBooleans(true, false, true, null, null);
-         ColumnVector result = v.listContainsColumn(ColumnVector.fromBoxedInts(3, 3, 8, 3, null))) {
+         ColumnVector intCol = ColumnVector.fromBoxedInts(3, 3, 8, 3, null);
+         ColumnVector result = v.listContainsColumn(intCol)) {
       assertColumnsAreEqual(expected, result);
     }
   }
