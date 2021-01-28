@@ -2423,10 +2423,10 @@ class Series(Frame, Serializable):
         TypeError
             - If ``to_replace`` is not a scalar, array-like, dict, or None
             - If ``to_replace`` is a dict and value is not a list, dict,
-            or Series
+              or Series
         ValueError
             - If a list is passed to ``to_replace`` and ``value`` but they
-            are not the same length.
+              are not the same length.
 
         Returns
         -------
