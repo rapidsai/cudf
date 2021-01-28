@@ -114,6 +114,15 @@ class _SeriesLocIndexer(object):
         self._sr = sr
 
     def __getitem__(self, arg):
+        if isinstance(self._sr.index, cudf.MultiIndex):
+            result = self._sr.index._get_row_major(self._sr, arg)
+            if (
+                isinstance(arg, tuple)
+                and len(arg) == self._sr._index.nlevels
+                and not any((isinstance(x, slice) for x in arg))
+            ):
+                result = result.iloc[0]
+            return result
         try:
             arg = self._loc_to_iloc(arg)
         except (TypeError, KeyError, IndexError, ValueError):

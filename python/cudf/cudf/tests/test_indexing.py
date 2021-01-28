@@ -1345,7 +1345,16 @@ def test_loc_zero_dim_array():
     assert_eq(psr[np.array([0])[0]], gsr[np.array([0])[0]])
 
 
-@pytest.mark.parametrize("arg", [slice(None), (1, 1), (1, slice(None))])
+@pytest.mark.parametrize(
+    "arg",
+    [
+        slice(None),
+        slice((1, 2), None),
+        slice(None, (1, 2)),
+        (1, 1),
+        (1, slice(None)),
+    ],
+)
 def test_loc_series_multiindex(arg):
     gsr = cudf.DataFrame(
         {"a": [1, 1, 2], "b": [1, 2, 3], "c": ["a", "b", "c"]}

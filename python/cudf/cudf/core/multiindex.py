@@ -834,12 +834,15 @@ class MultiIndex(Index):
         return result
 
     def _get_row_major(self, df, row_tuple):
-
         if pd.api.types.is_bool_dtype(
             list(row_tuple) if isinstance(row_tuple, tuple) else row_tuple
         ):
             return df[row_tuple]
-
+        if isinstance(row_tuple, slice):
+            if row_tuple.start is None:
+                row_tuple = slice(self[0], row_tuple.stop, row_tuple.step)
+            if row_tuple.stop is None:
+                row_tuple = slice(row_tuple.start, self[-1], row_tuple.step)
         valid_indices = self._get_valid_indices_by_tuple(
             df.index, row_tuple, len(df.index)
         )
