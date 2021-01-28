@@ -23,6 +23,7 @@
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/sorting.hpp>
 #include <cudf/lists/lists_column_view.hpp>
+#include <cudf/table/table_device_view.cuh>
 
 #include <cub/device/device_segmented_radix_sort.cuh>
 #include <iterator>
@@ -35,6 +36,7 @@
 #include <thrust/binary_search.h>
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/iterator/transform_iterator.h>
+#include <thrust/logical.h>
 
 namespace cudf {
 namespace detail {
@@ -59,18 +61,47 @@ rmm::device_uvector<size_type> get_list_segment_indices(lists_column_view const&
   return std::move(segment_ids);
 }
 
+// same as count_elements(list). TODO: DRY.
+struct list_size_functor {
+  column_device_view const& d_column;
+  __device__ size_type operator()(size_type idx)
+  {
+    if (d_column.is_null(idx)) return size_type{0};
+    auto d_offsets =
+      d_column.child(lists_column_view::offsets_column_index).data<size_type>() + d_column.offset();
+    return d_offsets[idx + 1] - d_offsets[idx];
+  }
+};
+
+void validate_list_columns(table_view const& keys, rmm::cuda_stream_view stream)
+{
+  CUDF_EXPECTS(std::all_of(keys.begin(),
+                           keys.end(),
+                           [](column_view const& col) { return col.type().id() == type_id::LIST; }),
+               "segmented_sort only supports lists columns");
+  // check if all list sizes are equal.
+  auto table_device  = table_device_view::create(keys, stream);
+  auto counting_iter = thrust::make_counting_iterator<size_type>(0);
+  CUDF_EXPECTS(
+    thrust::all_of(rmm::exec_policy(stream),
+                   counting_iter,
+                   counting_iter + keys.num_rows(),
+                   [d_keys = *table_device] __device__(size_type idx) {
+                     auto size = list_size_functor{d_keys.column(0)}(idx);
+                     return thrust::all_of(
+                       thrust::seq, d_keys.begin(), d_keys.end(), [&](auto const& d_column) {
+                         return list_size_functor{d_column}(idx) == size;
+                       });
+                   }),
+    "size of each list in a row of table should be same");
+}
+
 std::unique_ptr<column> segmented_sorted_order(table_view const& keys,
                                                std::vector<order> const& column_order,
                                                std::vector<null_order> const& null_precedence,
                                                rmm::cuda_stream_view stream,
                                                rmm::mr::device_memory_resource* mr)
 {
-  CUDF_EXPECTS(std::all_of(keys.begin(),
-                           keys.end(),
-                           [](column_view const& col) { return col.type().id() == type_id::LIST; }),
-               "segmented_sort only supports lists columns");
-  // TODO check if all list sizes are equal. OR all offsets are equal (may be wrong).
-
   auto segment_ids = get_list_segment_indices(lists_column_view{keys.column(0)}, stream);
   // insert segment id before all child columns.
   std::vector<column_view> child_key_columns(keys.num_columns() + 1);
@@ -88,7 +119,7 @@ std::unique_ptr<column> segmented_sorted_order(table_view const& keys,
   if (not null_precedence.empty())
     child_null_precedence.insert(child_null_precedence.begin(), null_order::AFTER);
 
-  // create table_view of child columns
+  // return sorted order of child columns
   return detail::sorted_order(child_keys, child_column_order, child_null_precedence, stream, mr);
 }
 
@@ -99,17 +130,18 @@ std::unique_ptr<table> segmented_sort_by_key(table_view const& values,
                                              rmm::cuda_stream_view stream,
                                              rmm::mr::device_memory_resource* mr)
 {
-  CUDF_EXPECTS(std::all_of(values.begin(),
-                           values.end(),
-                           [](column_view const& col) { return col.type().id() == type_id::LIST; }),
-               "segmented_sort only supports lists columns");
+  std::vector<column_view> key_value_columns;
+  key_value_columns.reserve(keys.num_columns() + values.num_columns());
+  key_value_columns.insert(key_value_columns.end(), keys.begin(), keys.end());
+  key_value_columns.insert(key_value_columns.end(), values.begin(), values.end());
+  validate_list_columns(table_view{key_value_columns}, stream);
+
   auto sorted_order = segmented_sorted_order(keys, column_order, null_precedence, stream);
+
   std::vector<column_view> child_columns(values.num_columns());
   std::transform(values.begin(), values.end(), child_columns.begin(), [stream](auto col) {
     return lists_column_view(col).get_sliced_child(stream);
   });
-  // return std::unique_ptr<table>(new table{table_view{std::vector<column_view>{*sorted_order}}});
-  // TODO build the list columns from returned table! and packit into table!
   auto child_result = detail::gather(table_view{child_columns},
                                      sorted_order->view(),
                                      out_of_bounds_policy::DONT_CHECK,
@@ -119,24 +151,22 @@ std::unique_ptr<table> segmented_sort_by_key(table_view const& values,
                         ->release();
 
   std::vector<std::unique_ptr<column>> list_columns;
-  std::transform(  // thrust::host,
-    values.begin(),
-    values.end(),
-    std::make_move_iterator(child_result.begin()),
-    std::back_inserter(list_columns),
-    [&stream, &mr](auto& input_list, auto&& sorted_child) {
-      auto output_offset =
-        std::make_unique<column>(lists_column_view(input_list).offsets(), stream, mr);
-      auto null_mask = cudf::detail::copy_bitmask(input_list, stream, mr);
-      // Assemble list column & return
-      return make_lists_column(input_list.size(),
-                               std::move(output_offset),
-                               std::move(sorted_child),
-                               input_list.null_count(),
-                               std::move(null_mask));
-    });
+  std::transform(values.begin(),
+                 values.end(),
+                 std::make_move_iterator(child_result.begin()),
+                 std::back_inserter(list_columns),
+                 [&stream, &mr](auto& input_list, auto&& sorted_child) {
+                   auto output_offset =
+                     std::make_unique<column>(lists_column_view(input_list).offsets(), stream, mr);
+                   auto null_mask = cudf::detail::copy_bitmask(input_list, stream, mr);
+                   // Assemble list column & return
+                   return make_lists_column(input_list.size(),
+                                            std::move(output_offset),
+                                            std::move(sorted_child),
+                                            input_list.null_count(),
+                                            std::move(null_mask));
+                 });
   return std::make_unique<table>(std::move(list_columns));
-  // TODO write tests and verify */
 }
 }  // namespace detail
 
