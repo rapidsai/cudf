@@ -63,8 +63,7 @@ struct quantile_functor {
 
     auto const type =
       is_fixed_point(input.type()) ? input.type() : data_type{type_to_id<StorageResult>()};
-    auto output =
-      make_fixed_width_column(type, q.size(), mask_state::UNALLOCATED, stream.value(), mr);
+    auto output = make_fixed_width_column(type, q.size(), mask_state::UNALLOCATED, stream, mr);
 
     if (output->size() == 0) { return output; }
 

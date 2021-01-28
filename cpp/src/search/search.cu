@@ -243,7 +243,7 @@ struct multi_contains_dispatch {
       return result;
     }
 
-    auto hash_set = cudf::detail::unordered_multiset<Element>::create(needles, stream.value());
+    auto hash_set        = cudf::detail::unordered_multiset<Element>::create(needles, stream);
     auto device_hash_set = hash_set.to_device();
 
     auto d_haystack_ptr = column_device_view::create(haystack, stream);

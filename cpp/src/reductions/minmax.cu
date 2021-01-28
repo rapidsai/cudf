@@ -193,7 +193,7 @@ struct minmax_functor {
     auto maximum     = new ScalarType(T{}, true, stream, mr);
     // copy dev_result to the output scalars
     device_single_thread(assign_min_max<T>{dev_result.data(), minimum->data(), maximum->data()},
-                         stream.value());
+                         stream);
     return {std::unique_ptr<scalar>(minimum), std::unique_ptr<scalar>(maximum)};
   }
 

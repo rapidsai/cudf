@@ -183,7 +183,7 @@ std::unique_ptr<column> dispatch_to_cudf_column::operator()<bool>(
   auto out_col = mask_to_bools(static_cast<bitmask_type*>(data.data()),
                                array.offset(),
                                array.offset() + array.length(),
-                               stream.value(),
+                               stream,
                                mr);
 
   auto const has_nulls = skip_mask ? false : array.null_bitmap_data() != nullptr;
