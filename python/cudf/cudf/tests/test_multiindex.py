@@ -299,15 +299,21 @@ def test_multiindex_loc(pdf, gdf, pdfIndex, key_tuple):
     assert_eq(pdf.loc[key_tuple], gdf.loc[key_tuple])
 
 
-def test_multiindex_loc_slice(pdf, gdf, pdfIndex):
+@pytest.mark.parametrize(
+    "arg",
+    [
+        slice(("a", "store"), ("b", "house")),
+        slice(None, ("b", "house")),
+        slice(("a", "store"), None),
+        slice(None),
+    ],
+)
+def test_multiindex_loc_slice(pdf, gdf, pdfIndex, arg):
     gdf = cudf.from_pandas(pdf)
     gdfIndex = cudf.from_pandas(pdfIndex)
     pdf.index = pdfIndex
     gdf.index = gdfIndex
-    assert_eq(
-        pdf.loc[("a", "store"):("b", "house")],
-        gdf.loc[("a", "store"):("b", "house")],
-    )
+    assert_eq(pdf.loc[arg], gdf.loc[arg])
 
 
 def test_multiindex_loc_then_column(pdf, gdf, pdfIndex):
