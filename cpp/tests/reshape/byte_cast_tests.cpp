@@ -114,7 +114,7 @@ TEST_F(ByteCastTest, int32ValuesWithNulls)
     5,
     std::move(fixed_width_column_wrapper<cudf::size_type>{0, 4, 8, 12, 16, 20}.release()),
     std::move(int32_data.release()),
-    3,
+    2,
     detail::make_null_mask(even_validity, even_validity + 5));
 
   auto const output_int32 = cudf::byte_cast(int32_col, cudf::flip_endianness::YES);
