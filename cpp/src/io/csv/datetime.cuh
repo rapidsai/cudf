@@ -16,9 +16,13 @@
 
 #pragma once
 
-#include <cudf/wrappers/durations.hpp>
-
 #include "thrust/reduce.h"
+
+#include <cudf/wrappers/durations.hpp>
+#include <io/utilities/parsing_utils.cuh>
+
+namespace cudf {
+namespace io {
 
 /**
  * @brief Parses non-negative integral vales.
@@ -27,7 +31,7 @@
  * character string is expected to be well-formed.
  *
  * @param begin Pointer to the first element of the string
- * @param end Pointer to the last element of the string
+ * @param end Pointer to the first element after the string
  * @return The parsed and converted value
  */
 template <typename T>
@@ -35,7 +39,7 @@ __inline__ __device__ T to_non_negative_integer(char const* begin, char const* e
 {
   T value = 0;
 
-  for (; begin <= end; ++begin) {
+  for (; begin < end; ++begin) {
     if (*begin >= '0' && *begin <= '9') {
       value *= 10;
       value += *begin - '0';
@@ -130,7 +134,7 @@ __inline__ __device__ constexpr int64_t seconds_since_epoch(
  * @brief Extracts the Day, Month, and Year from a string.
  *
  * @param[in] begin Pointer to the first element of the string
- * @param[in] end Pointer to the last element of the string
+ * @param[in] end Pointer to the first element after the string
  * @param[in] dayfirst Flag indicating that first field is the day
  * @param[out] year
  * @param[out] month
@@ -153,7 +157,7 @@ __inline__ __device__ bool extract_date(
 
   //--- is year the first filed?
   if ((sep_pos - begin) == 4) {
-    *year = to_non_negative_integer<int>(begin, (sep_pos - 1));
+    *year = to_non_negative_integer<int>(begin, sep_pos);
 
     // Month
     auto s2 = sep_pos + 1;
@@ -165,23 +169,23 @@ __inline__ __device__ bool extract_date(
       *day   = 1;
 
     } else {
-      *month = to_non_negative_integer<int>(s2, (sep_pos - 1));
+      *month = to_non_negative_integer<int>(s2, sep_pos);
       *day   = to_non_negative_integer<int>((sep_pos + 1), end);
     }
 
   } else {
     //--- if the dayfirst flag is set, then restricts the format options
     if (dayfirst) {
-      *day = to_non_negative_integer<int>(begin, (sep_pos - 1));
+      *day = to_non_negative_integer<int>(begin, sep_pos);
 
       auto s2 = sep_pos + 1;
       sep_pos = thrust::find(thrust::seq, s2, end, sep);
 
-      *month = to_non_negative_integer<int>(s2, (sep_pos - 1));
+      *month = to_non_negative_integer<int>(s2, sep_pos);
       *year  = to_non_negative_integer<int>((sep_pos + 1), end);
 
     } else {
-      *month = to_non_negative_integer<int>(begin, (sep_pos - 1));
+      *month = to_non_negative_integer<int>(begin, sep_pos);
 
       auto s2 = sep_pos + 1;
       sep_pos = thrust::find(thrust::seq, s2, end, sep);
@@ -192,7 +196,7 @@ __inline__ __device__ bool extract_date(
         *day  = 1;
 
       } else {
-        *day  = to_non_negative_integer<int>(s2, (sep_pos - 1));
+        *day  = to_non_negative_integer<int>(s2, sep_pos);
         *year = to_non_negative_integer<int>((sep_pos + 1), end);
       }
     }
@@ -211,7 +215,7 @@ __inline__ __device__ bool extract_date(
  * at the end.
  *
  * @param[in] begin Pointer to the first element of the string
- * @param[in] end Pointer to the last element of the string
+ * @param[in] end Pointer to the first element after the string
  * @param[out] hour The hour value
  * @param[out] minute The minute value
  * @param[out] second The second value (0 if not present)
@@ -224,15 +228,17 @@ __inline__ __device__ void extract_time(
 
   // Adjust for AM/PM and any whitespace before
   int hour_adjust = 0;
-  if (*end == 'M' || *end == 'm') {
-    if (*(end - 1) == 'P' || *(end - 1) == 'p') { hour_adjust = 12; }
-    end = end - 2;
-    while (*end == ' ') { --end; }
+  auto last       = end - 1;
+  if (*last == 'M' || *last == 'm') {
+    if (*(last - 1) == 'P' || *(last - 1) == 'p') { hour_adjust = 12; }
+    last = last - 2;
+    while (*last == ' ') { --last; }
   }
+  end = last + 1;
 
   // Find hour-minute separator
   const auto hm_sep = thrust::find(thrust::seq, begin, end, sep);
-  *hour             = to_non_negative_integer<int>(begin, hm_sep - 1) + hour_adjust;
+  *hour             = to_non_negative_integer<int>(begin, hm_sep) + hour_adjust;
 
   // Find minute-second separator (if present)
   const auto ms_sep = thrust::find(thrust::seq, hm_sep + 1, end, sep);
@@ -241,7 +247,7 @@ __inline__ __device__ void extract_time(
     *second      = 0;
     *millisecond = 0;
   } else {
-    *minute = to_non_negative_integer<int>(hm_sep + 1, ms_sep - 1);
+    *minute = to_non_negative_integer<int>(hm_sep + 1, ms_sep);
 
     // Find second-millisecond separator (if present)
     const auto sms_sep = thrust::find(thrust::seq, ms_sep + 1, end, '.');
@@ -249,7 +255,7 @@ __inline__ __device__ void extract_time(
       *second      = to_non_negative_integer<int>(ms_sep + 1, end);
       *millisecond = 0;
     } else {
-      *second      = to_non_negative_integer<int>(ms_sep + 1, sms_sep - 1);
+      *second      = to_non_negative_integer<int>(ms_sep + 1, sms_sep);
       *millisecond = to_non_negative_integer<int>(sms_sep + 1, end);
     }
   }
@@ -262,20 +268,17 @@ __inline__ __device__ void extract_time(
  * Acceptable formats are a combination of `MM/YYYY` and `MM/DD/YYYY`.
  *
  * @param[in] begin Pointer to the first element of the string
- * @param[in] end Pointer to the last element of the string
+ * @param[in] end Pointer to the first element after the string
  * @param[in] dayfirst Flag to indicate that day is the first field - `DD/MM/YYYY`
  * @return Number of days since epoch
  */
 __inline__ __device__ int32_t to_date(char const* begin, char const* end, bool dayfirst)
 {
   int day, month, year;
-  int32_t e = -1;
 
-  bool status = extract_date(begin, end, dayfirst, &year, &month, &day);
-
-  if (status) e = days_since_epoch(year, month, day);
-
-  return e;
+  return extract_date(begin, end, dayfirst, &year, &month, &day)
+           ? days_since_epoch(year, month, day)
+           : -1;
 }
 
 /**
@@ -284,9 +287,9 @@ __inline__ __device__ int32_t to_date(char const* begin, char const* end, bool d
  * This function takes a string and produces a `date32` representation.
  * Acceptable formats are a combination of `MM/YYYY` and `MM/DD/YYYY`.
  *
- * @param[in] begin Pointer to the first element of the string
- * @param[in] end Pointer to the last element of the string
- * @param[in] dayfirst Flag to indicate day/month or month/day order
+ * @param begin Pointer to the first element of the string
+ * @param end Pointer to the first element after the string
+ * @param dayfirst Flag to indicate day/month or month/day order
  * @return Milliseconds since epoch
  */
 __inline__ __device__ int64_t to_date_time(char const* begin, char const* end, bool dayfirst)
@@ -303,7 +306,7 @@ __inline__ __device__ int64_t to_date_time(char const* begin, char const* end, b
     // Attempt to locate the position between date and time, ignore premature space separators
     // around the day/month/year portions
     int count = 0;
-    for (auto i = begin; i <= end; ++i) {
+    for (auto i = begin; i < end; ++i) {
       if (count == 3 && *i == ' ') {
         sep_pos = i;
         break;
@@ -315,7 +318,7 @@ __inline__ __device__ int64_t to_date_time(char const* begin, char const* end, b
 
   // There is only date if there's no separator, otherwise it's malformed
   if (sep_pos != end) {
-    if (extract_date(begin, sep_pos - 1, dayfirst, &year, &month, &day)) {
+    if (extract_date(begin, sep_pos, dayfirst, &year, &month, &day)) {
       extract_time(sep_pos + 1, end, &hour, &minute, &second, &millisecond);
       answer = seconds_since_epoch(year, month, day, hour, minute, second) * 1000 + millisecond;
     }
@@ -334,7 +337,7 @@ __inline__ __device__ int64_t to_date_time(char const* begin, char const* end, b
  * Moves the `begin` iterator past the parsed value.
  *
  * @param begin[in, out] Pointer to the first element of the string
- * @param end Pointer to the last element of the string
+ * @param end Pointer to the first element after the string
  * @return The parsed and converted value
  */
 template <typename T>
@@ -364,7 +367,7 @@ __inline__ __device__ T parse_integer(char const** begin, char const* end)
  * Moves the `begin` iterator past the parsed value.
  *
  * @param begin[in, out] Pointer to the first element of the string
- * @param end Pointer to the last element of the string
+ * @param end Pointer to the first element after the string
  * @return The parsed and converted value, zero is delimiter is not present
  */
 template <typename T>
@@ -377,48 +380,15 @@ __inline__ __device__ T parse_optional_integer(char const** begin, char const* e
 }
 
 /**
- * @brief Excludes the prefix from the input range if the string starts with the prefix.
- *
- * @tparam N length on the prefix, plus one
- * @param begin[in, out] Pointer to the first element of the string
- * @param end Pointer to the first element after the string
- * @param prefix String we're searching for at the start of the input range
- * @return true if the input range starts with the given prefix
- */
-template <int N>
-__inline__ __device__ bool skip_if_starts_with(char const** begin,
-                                               char const* end,
-                                               const char (&prefix)[N])
-{
-  static constexpr size_t prefix_len = N - 1;
-  if (end - *begin < prefix_len) return false;
-  auto const found = thrust::equal(thrust::seq, *begin, *begin + prefix_len, prefix);
-  if (found) (*begin) += prefix_len;
-  return found;
-}
-
-/**
- * @brief Modifies the input range to exclude the leading space characters.
- *
- * @param begin[in, out] Pointer to the first element of the string
- * @param end Pointer to the first element after the string
- */
-__inline__ __device__ void skip_spaces(char const** begin, char const* end)
-{
-  *begin = thrust::find_if(thrust::seq, *begin, end, [](auto elem) { return elem != ' '; });
-}
-
-/**
  * @brief Parses the input string into a duration of the given type.
  *
  * @param begin Pointer to the first element of the string
- * @param end Pointer to the last element of the string
+ * @param end Pointer to the first element after the string
  * @return The parsed duration
  */
 template <typename T>
 __inline__ __device__ int64_t to_time_delta(char const* begin, char const* end)
 {
-  ++end;
   // %d days [+]%H:%M:%S.n => %d days, %d days [+]%H:%M:%S,  %H:%M:%S.n, %H:%M:%S, %value.
   constexpr char sep = ':';
 
@@ -427,13 +397,14 @@ __inline__ __device__ int64_t to_time_delta(char const* begin, char const* end)
   // single pass to parse days, hour, minute, seconds, nanosecond
   auto cur         = begin;
   auto const value = parse_integer<int32_t>(&cur, end);
-  skip_spaces(&cur, end + 1);
+  cur              = skip_spaces(cur, end);
   if (std::is_same<T, cudf::duration_D>::value || cur >= end) {  // %value
     return value;
   }
   // " days [+]"
-  bool const has_days_seperator = skip_if_starts_with(&cur, end + 1, "days");
-  skip_spaces(&cur, end + 1);
+  auto const after_days_sep     = skip_if_starts_with(cur, end, "days");
+  auto const has_days_seperator = (after_days_sep != cur);
+  cur                           = skip_spaces(after_days_sep, end);
   cur += (*cur == '+');
   if (has_days_seperator) {
     days = value;
@@ -462,3 +433,6 @@ __inline__ __device__ int64_t to_time_delta(char const* begin, char const* end)
            .count() +
          cuda::std::chrono::duration_cast<T>(cudf::duration_ns{nanosecond}).count();
 }
+
+}  // namespace io
+}  // namespace cudf

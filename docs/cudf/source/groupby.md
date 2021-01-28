@@ -33,6 +33,37 @@ import cudf
 >>> gb3 = df.groupby(cudf.Series(['a', 'a', 'b', 'b', 'b']))  # grouping by an external column
 ```
 
+``` warning::
+   cuDF uses `sort=False` by default to achieve better performance, which provides no gaurentee to the group order in outputs. This deviates from Pandas default behavior.
+
+   For example:
+
+   .. code-block:: python
+   
+      >>> df = cudf.DataFrame({'a' : [2, 2, 1], 'b' : [42, 21, 11]})
+      >>> df.groupby('a').sum()
+         b
+      a    
+      2  63
+      1  11
+      >>> df.to_pandas().groupby('a').sum()
+         b
+      a    
+      1  11
+      2  63
+   
+   Setting `sort=True` will produce Pandas-like output, but with some performance penalty:
+
+   .. code-block:: python
+   
+      >>> df.groupby('a', sort=True).sum()
+         b
+      a    
+      1  11
+      2  63
+
+```
+
 ### Grouping by index levels
 
 You can also group by one or more levels of a MultiIndex:
@@ -66,7 +97,7 @@ b
 
 Aggregations on groups is supported via the `agg` method:
 
-```
+```python
 >>> df
    a  b  c
 0  1  1  1
