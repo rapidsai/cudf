@@ -736,8 +736,6 @@ TEST_F(ParquetWriterTest, Struct)
                 "Detritus",
                 "Mr Slant"};
 
-  auto num_rows{std::distance(names.begin(), names.end())};
-
   // `Name` column has all valid values.
   auto names_col = cudf::test::strings_column_wrapper{names.begin(), names.end()};
 
