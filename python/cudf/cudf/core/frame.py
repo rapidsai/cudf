@@ -3584,7 +3584,7 @@ class Frame(libcudf.table.Table):
 
 def _get_replacement_values_for_columns(
     to_replace: Any, value: Any, columns: Dict[Any, Any]
-) -> Tuple[Dict[Any, Any], Dict[Any, Any], Dict[Any, Any]]:
+) -> Tuple[Dict[Any, bool], Dict[Any, Any], Dict[Any, Any]]:
     """
     Returns a per column mapping for the values to be replaced, new
     values to be replaced with and if all the values are empty.
