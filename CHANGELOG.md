@@ -7,8 +7,9 @@
 - PR #6814 Implement `cudf::reduce` for `decimal32` and `decimal64` (part 1)
 - PR #6929 Add `Index.set_names` api
 - PR #6907 Add `replace_null` API with `replace_policy` parameter, `fixed_width` column support
-
+- PR #6885 Share `factorize` implementation with Index and cudf module
 - PR #6775 Implement cudf.DateOffset for months
+- PR #7039 Support contains() on lists of primitives
 
 ## Improvements
 
@@ -16,12 +17,17 @@
 - PR #6275 Update to official libcu++ on Github
 - PR #6838 Fix `columns` & `index` handling in dataframe constructor
 - PR #6750 Remove **kwargs from string/categorical methods
+- PR #6585 Add dictionary support to libcudf groupby functions
 - PR #6909 Support reading byte array backed decimal columns from parquet files
 - PR #6939 Use simplified `rmm::exec_policy`
+- PR #6512 Refactor rolling.cu to reduce compile time
 - PR #6982 Disable some pragma unroll statements in thrust `sort.h`
+- PR #7051 Verify decimal cast in java package
+- PR #7120 Verify window operations on decimal in java package
 
 ## Bug Fixes
 
+- PR #6884 Correct the sampling range when sampling with replacement
 - PR #6903 Add null count test for apply_boolean_mask
 - PR #6922 Fix N/A detection for empty fields in CSV reader
 - PR #6912 Fix rmm_mode=managed parameter for gtests
@@ -221,6 +227,7 @@
 - PR #6855 Fix `.str.replace_with_backrefs` docs examples
 - PR #6853 Fix contiguous split of null string columns
 - PR #6861 Fix compile error in type_dispatch_benchmark.cu
+- PR #6864 Handle contiguous_split corner case for nested string columns with no children
 - PR #6869 Avoid dependency resolution failure in latest version of pip by explicitly specifying versions for dask and distributed
 - PR #6806 Force install of local conda artifacts
 - PR #6887 Fix typo and `0-d` numpy array handling in binary operation

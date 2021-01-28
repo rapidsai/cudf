@@ -9,6 +9,7 @@ import sys
 import warnings
 from collections import OrderedDict, defaultdict
 from collections.abc import Iterable, Mapping, Sequence
+from typing import Any, Set
 
 import cupy
 import numpy as np
@@ -142,8 +143,8 @@ class DataFrame(Frame, Serializable):
         >>> df = cudf.DataFrame()
         >>> df['key'] = [0, 1, 2, 3, 4]
         >>> df['val'] = [float(i + 10) for i in range(5)]  # insert column
-        >>> print(df)
-        key   val
+        >>> df
+           key   val
         0    0  10.0
         1    1  11.0
         2    2  12.0
@@ -152,16 +153,14 @@ class DataFrame(Frame, Serializable):
 
         Build DataFrame via dict of columns:
 
-        >>> import cudf
         >>> import numpy as np
         >>> from datetime import datetime, timedelta
-
         >>> t0 = datetime.strptime('2018-10-07 12:00:00', '%Y-%m-%d %H:%M:%S')
         >>> n = 5
         >>> df = cudf.DataFrame({
-        ... 'id': np.arange(n),
-        ... 'datetimes': np.array(
-        ... [(t0+ timedelta(seconds=x)) for x in range(n)])
+        ...     'id': np.arange(n),
+        ...     'datetimes': np.array(
+        ...     [(t0+ timedelta(seconds=x)) for x in range(n)])
         ... })
         >>> df
             id                datetimes
@@ -173,30 +172,34 @@ class DataFrame(Frame, Serializable):
 
         Build DataFrame via list of rows as tuples:
 
-        >>> import cudf
         >>> df = cudf.DataFrame([
-        ... (5, "cats", "jump", np.nan),
-        ... (2, "dogs", "dig", 7.5),
-        ... (3, "cows", "moo", -2.1, "occasionally"),
+        ...     (5, "cats", "jump", np.nan),
+        ...     (2, "dogs", "dig", 7.5),
+        ...     (3, "cows", "moo", -2.1, "occasionally"),
         ... ])
         >>> df
-        0     1     2     3             4
-        0  5  cats  jump  null          None
-        1  2  dogs   dig   7.5          None
+           0     1     2     3             4
+        0  5  cats  jump  <NA>          <NA>
+        1  2  dogs   dig   7.5          <NA>
         2  3  cows   moo  -2.1  occasionally
 
         Convert from a Pandas DataFrame:
 
         >>> import pandas as pd
-        >>> import cudf
         >>> pdf = pd.DataFrame({'a': [0, 1, 2, 3],'b': [0.1, 0.2, None, 0.3]})
+        >>> pdf
+           a    b
+        0  0  0.1
+        1  1  0.2
+        2  2  NaN
+        3  3  0.3
         >>> df = cudf.from_pandas(pdf)
         >>> df
-        a b
-        0 0 0.1
-        1 1 0.2
-        2 2 nan
-        3 3 0.3
+           a     b
+        0  0   0.1
+        1  1   0.2
+        2  2  <NA>
+        3  3   0.3
         """
         super().__init__()
 
@@ -646,20 +649,20 @@ class DataFrame(Frame, Serializable):
         >>> df = DataFrame([('a', list(range(20))),
         ...                 ('b', list(range(20))),
         ...                 ('c', list(range(20)))])
-        >>> print(df[:4])    # get first 4 rows of all columns
+        >>> df[:4]    # get first 4 rows of all columns
            a  b  c
         0  0  0  0
         1  1  1  1
         2  2  2  2
         3  3  3  3
-        >>> print(df[-5:])  # get last 5 rows of all columns
+        >>> df[-5:]  # get last 5 rows of all columns
             a   b   c
         15  15  15  15
         16  16  16  16
         17  17  17  17
         18  18  18  18
         19  19  19  19
-        >>> print(df[['a', 'c']]) # get columns a and c
+        >>> df[['a', 'c']] # get columns a and c
            a  c
         0  0  0
         1  1  1
@@ -671,7 +674,7 @@ class DataFrame(Frame, Serializable):
         7  7  7
         8  8  8
         9  9  9
-        >>> print(df[[True, False, True, False]]) # mask the entire dataframe,
+        >>> df[[True, False, True, False]] # mask the entire dataframe,
         # returning the rows specified in the boolean mask
         """
         if is_scalar(arg) or isinstance(arg, tuple):
@@ -976,7 +979,7 @@ class DataFrame(Frame, Serializable):
         >>> import cudf
         >>> df = cudf.DataFrame()
         >>> df = df.assign(a=[0, 1, 2], b=[3, 4, 5])
-        >>> print(df)
+        >>> df
            a  b
         0  0  3
         1  1  4
@@ -997,7 +1000,7 @@ class DataFrame(Frame, Serializable):
         >>> df = cudf.DataFrame()
         >>> df['key'] = [0, 1, 2, 3, 4]
         >>> df['val'] = [float(i + 10) for i in range(5)]  # insert column
-        >>> print(df.head(2))
+        >>> df.head(2)
            key   val
         0    0  10.0
         1    1  11.0
@@ -1014,7 +1017,7 @@ class DataFrame(Frame, Serializable):
         >>> df = cudf.DataFrame()
         >>> df['key'] = [0, 1, 2, 3, 4]
         >>> df['val'] = [float(i + 10) for i in range(5)]  # insert column
-        >>> print(df.tail(2))
+        >>> df.tail(2)
            key   val
         3    3  13.0
         4    4  14.0
@@ -1315,6 +1318,26 @@ class DataFrame(Frame, Serializable):
     def _repr_latex_(self):
         return self._get_renderable_dataframe().to_pandas()._repr_latex_()
 
+    def _get_columns_by_label(self, labels, downcast=False):
+        """
+        Return columns of dataframe by `labels`
+
+        If downcast is True, try and downcast from a DataFrame to a Series
+        """
+        new_data = super()._get_columns_by_label(labels, downcast)
+        if downcast:
+            if is_scalar(labels):
+                nlevels = 1
+            elif isinstance(labels, tuple):
+                nlevels = len(labels)
+            if self._data.multiindex is False or nlevels == self._data.nlevels:
+                return self._constructor_sliced(
+                    new_data, name=labels, index=self.index
+                )
+        return self._constructor(
+            new_data, columns=new_data.to_pandas_index(), index=self.index
+        )
+
     # unary, binary, rbinary, orderedcompare, unorderedcompare
     def _apply_op(self, fn, other=None, fill_value=None):
 
@@ -1453,6 +1476,97 @@ class DataFrame(Frame, Serializable):
             raise NotImplementedError("level parameter is not supported yet.")
 
         return self._apply_op("add", other, fill_value)
+
+    def update(
+        self,
+        other,
+        join="left",
+        overwrite=True,
+        filter_func=None,
+        errors="ignore",
+    ):
+        """
+        Modify a DataFrame in place using non-NA values from another DataFrame.
+
+        Aligns on indices. There is no return value.
+
+        Parameters
+        ----------
+        other : DataFrame, or object coercible into a DataFrame
+            Should have at least one matching index/column label with the
+            original DataFrame. If a Series is passed, its name attribute must
+            be set, and that will be used as the column name to align with the
+            original DataFrame.
+
+        join : {'left'}, default 'left'
+            Only left join is implemented, keeping the index and
+            columns of the original object.
+
+        overwrite : {True, False}, default True
+            How to handle non-NA values for overlapping keys:
+            True: overwrite original DataFrame's values with values from other.
+            False: only update values that are NA in the original DataFrame.
+
+        filter_func : None
+            filter_func is not supported yet
+            Return True for values that should be updated.S
+
+        errors : {'raise', 'ignore'}, default 'ignore'
+            If 'raise', will raise a ValueError if the DataFrame and other
+            both contain non-NA data in the same place.
+
+
+        Returns
+        -------
+        None : method directly changes calling object
+
+        Raises
+        -------
+        ValueError
+            - When ``errors`` = 'raise' and there's overlapping non-NA data.
+            - When ``errors`` is not either 'ignore' or 'raise'
+
+        NotImplementedError
+            - If ``join`` != 'left'
+        """
+        # TODO: Support other joins
+        if join != "left":
+            raise NotImplementedError("Only left join is supported")
+        if errors not in {"ignore", "raise"}:
+            raise ValueError(
+                "The parameter errors must be either 'ignore' or 'raise'"
+            )
+        if filter_func is not None:
+            raise NotImplementedError("filter_func is not supported yet")
+
+        if not isinstance(other, DataFrame):
+            other = DataFrame(other)
+
+        if not self.columns.equals(other.columns):
+            other = other.reindex(self.columns, axis=1)
+        if not self.index.equals(other.index):
+            other = other.reindex(self.index, axis=0)
+
+        for col in self.columns:
+            this = self[col]
+            that = other[col]
+
+            if errors == "raise":
+                mask_this = that.notna()
+                mask_that = this.notna()
+                if (mask_this & mask_that).any():
+                    raise ValueError("Data overlaps.")
+
+            if overwrite:
+                mask = that.isna()
+            else:
+                mask = this.notna()
+
+            # don't overwrite columns unnecessarily
+            if mask.all():
+                continue
+
+            self[col] = this.where(mask, that)
 
     def __add__(self, other):
         return self._apply_op("__add__", other)
@@ -1664,13 +1778,13 @@ class DataFrame(Frame, Serializable):
         >>> df = cudf.DataFrame({'angles': [0, 3, 4],
         ...                    'degrees': [360, 180, 360]},
         ...                   index=['circle', 'triangle', 'rectangle'])
-        >>> other = pd.DataFrame({'angles': [0, 3, 4]},
+        >>> other = cudf.DataFrame({'angles': [0, 3, 4]},
         ...                      index=['circle', 'triangle', 'rectangle'])
         >>> df * other
-                angles degrees
-        circle          0    null
-        triangle        9    null
-        rectangle      16    null
+                   angles degrees
+        circle          0    <NA>
+        triangle        9    <NA>
+        rectangle      16    <NA>
         >>> df.mul(other, fill_value=0)
                 angles  degrees
         circle          0        0
@@ -1722,15 +1836,15 @@ class DataFrame(Frame, Serializable):
         >>> df = cudf.DataFrame({'angles': [0, 3, 4],
         ...                    'degrees': [360, 180, 360]},
         ...                   index=['circle', 'triangle', 'rectangle'])
-        >>> other = pd.DataFrame({'angles': [0, 3, 4]},
+        >>> other = cudf.DataFrame({'angles': [0, 3, 4]},
         ...                      index=['circle', 'triangle', 'rectangle'])
         >>> other * df
-                angles degrees
-        circle          0    null
-        triangle        9    null
-        rectangle      16    null
+                   angles degrees
+        circle          0    <NA>
+        triangle        9    <NA>
+        rectangle      16    <NA>
         >>> df.rmul(other, fill_value=0)
-                angles  degrees
+                   angles  degrees
         circle          0        0
         triangle        9        0
         rectangle      16        0
@@ -1781,12 +1895,12 @@ class DataFrame(Frame, Serializable):
         ...                    'degrees': [360, 180, 360]},
         ...                   index=['circle', 'triangle', 'rectangle'])
         >>> df % 100
-                angles  degrees
+                   angles  degrees
         circle          0       60
         triangle        3       80
         rectangle       4       60
         >>> df.mod(100)
-                angles  degrees
+                   angles  degrees
         circle          0       60
         triangle        3       80
         rectangle       4       60
@@ -1837,12 +1951,12 @@ class DataFrame(Frame, Serializable):
         ...                    'degrees': [360, 180, 360]},
         ...                   index=['circle', 'triangle', 'rectangle'])
         >>> 100 % df
-                angles  degrees
+                   angles  degrees
         circle          0      100
         triangle        1      100
         rectangle       0      100
         >>> df.rmod(100)
-                angles  degrees
+                   angles  degrees
         circle          0      100
         triangle        1      100
         rectangle       0      100
@@ -1893,12 +2007,12 @@ class DataFrame(Frame, Serializable):
         ...                    'degrees': [360, 180, 360]},
         ...                   index=['circle', 'triangle', 'rectangle'])
         >>> df ** 2
-                angles  degrees
+                   angles  degrees
         circle          0   129600
         triangle        9    32400
         rectangle      16   129600
         >>> df.pow(2)
-                angles  degrees
+                   angles  degrees
         circle          0   129600
         triangle        9    32400
         rectangle      16   129600
@@ -1949,12 +2063,12 @@ class DataFrame(Frame, Serializable):
         ...                    'degrees': [360, 180, 360]},
         ...                   index=['circle', 'triangle', 'rectangle'])
         >>> 1 ** df
-                angles  degrees
+                   angles  degrees
         circle          1        1
         triangle        1        1
         rectangle       1        1
         >>> df.rpow(1)
-                angles  degrees
+                   angles  degrees
         circle          1        1
         triangle        1        1
         rectangle       1        1
@@ -2005,12 +2119,12 @@ class DataFrame(Frame, Serializable):
         ...                    'degrees': [360, 180, 360]},
         ...                   index=['circle', 'triangle', 'rectangle'])
         >>> df.floordiv(2)
-                angles  degrees
+                   angles  degrees
         circle          0      180
         triangle        1       90
         rectangle       2      180
         >>> df // 2
-                angles  degrees
+                   angles  degrees
         circle          0      180
         triangle        1       90
         rectangle       2      180
@@ -2127,17 +2241,17 @@ class DataFrame(Frame, Serializable):
         ...                    'degrees': [360, 180, 360]},
         ...                   index=['circle', 'triangle', 'rectangle'])
         >>> df.truediv(10)
-                    angles  degrees
+                   angles  degrees
         circle        0.0     36.0
         triangle      0.3     18.0
         rectangle     0.4     36.0
         >>> df.div(10)
-                    angles  degrees
+                   angles  degrees
         circle        0.0     36.0
         triangle      0.3     18.0
         rectangle     0.4     36.0
         >>> df / 10
-                    angles  degrees
+                   angles  degrees
         circle        0.0     36.0
         triangle      0.3     18.0
         rectangle     0.4     36.0
@@ -2271,7 +2385,7 @@ class DataFrame(Frame, Serializable):
         for k in self:
             yield (k, self[k])
 
-    @property
+    @property  # type: ignore
     @annotate("DATAFRAME_LOC", color="blue", domain="cudf_python")
     def loc(self):
         """
@@ -2282,7 +2396,7 @@ class DataFrame(Frame, Serializable):
 
         DataFrame with string index.
 
-        >>> print(df)
+        >>> df
            a  b
         a  0  5
         b  1  6
@@ -2292,14 +2406,14 @@ class DataFrame(Frame, Serializable):
 
         Select a single row by label.
 
-        >>> print(df.loc['a'])
+        >>> df.loc['a']
         a    0
         b    5
         Name: a, dtype: int64
 
         Select multiple rows and a single column.
 
-        >>> print(df.loc[['a', 'c', 'e'], 'b'])
+        >>> df.loc[['a', 'c', 'e'], 'b']
         a    5
         c    7
         e    9
@@ -2307,7 +2421,7 @@ class DataFrame(Frame, Serializable):
 
         Selection by boolean mask.
 
-        >>> print(df.loc[df.a > 2])
+        >>> df.loc[df.a > 2]
            a  b
         d  3  8
         e  4  9
@@ -2315,7 +2429,7 @@ class DataFrame(Frame, Serializable):
         Setting values using loc.
 
         >>> df.loc[['a', 'c', 'e'], 'a'] = 0
-        >>> print(df)
+        >>> df
            a  b
         a  0  5
         b  1  6
@@ -2357,14 +2471,15 @@ class DataFrame(Frame, Serializable):
 
         Select a single row using an integer index.
 
-        >>> print(df.iloc[1])
+        >>> df.iloc[1]
         a    1
         b    1
         c    1
+        Name: 1, dtype: int64
 
         Select multiple rows using a list of integers.
 
-        >>> print(df.iloc[[0, 2, 9, 18]])
+        >>> df.iloc[[0, 2, 9, 18]]
               a    b    c
          0    0    0    0
          2    2    2    2
@@ -2373,7 +2488,7 @@ class DataFrame(Frame, Serializable):
 
         Select rows using a slice.
 
-        >>> print(df.iloc[3:10:2])
+        >>> df.iloc[3:10:2]
              a    b    c
         3    3    3    3
         5    5    5    5
@@ -2382,7 +2497,7 @@ class DataFrame(Frame, Serializable):
 
         Select both rows and columns.
 
-        >>> print(df.iloc[[1, 3, 5, 7], 2])
+        >>> df.iloc[[1, 3, 5, 7], 2]
         1    1
         3    3
         5    5
@@ -2392,7 +2507,7 @@ class DataFrame(Frame, Serializable):
         Setting values in a column using iloc.
 
         >>> df.iloc[:4] = 0
-        >>> print(df)
+        >>> df
            a  b  c
         0  0  0  0
         1  0  0  0
@@ -2441,14 +2556,14 @@ class DataFrame(Frame, Serializable):
         """
         return self.loc
 
-    @property
+    @property  # type: ignore
     @annotate("DATAFRAME_COLUMNS_GETTER", color="yellow", domain="cudf_python")
     def columns(self):
         """Returns a tuple of columns
         """
         return self._data.to_pandas_index()
 
-    @columns.setter
+    @columns.setter  # type: ignore
     @annotate("DATAFRAME_COLUMNS_SETTER", color="yellow", domain="cudf_python")
     def columns(self, columns):
         if isinstance(columns, (cudf.MultiIndex, cudf.Index)):
@@ -2558,14 +2673,14 @@ class DataFrame(Frame, Serializable):
         >>> df['val'] = [float(i + 10) for i in range(5)]
         >>> df_new = df.reindex(index=[0, 3, 4, 5],
         ...                     columns=['key', 'val', 'sum'])
-        >>> print(df)
+        >>> df
            key   val
         0    0  10.0
         1    1  11.0
         2    2  12.0
         3    3  13.0
         4    4  14.0
-        >>> print(df_new)
+        >>> df_new
            key   val  sum
         0    0  10.0  NaN
         3    3  13.0  NaN
@@ -2648,9 +2763,11 @@ class DataFrame(Frame, Serializable):
 
         Examples
         --------
-        >>> df = cudf.DataFrame({"a": [1, 2, 3, 4, 5],
-        ... "b": ["a", "b", "c", "d","e"],
-        ... "c": [1.0, 2.0, 3.0, 4.0, 5.0]})
+        >>> df = cudf.DataFrame({
+        ...     "a": [1, 2, 3, 4, 5],
+        ...     "b": ["a", "b", "c", "d","e"],
+        ...     "c": [1.0, 2.0, 3.0, 4.0, 5.0]
+        ... })
         >>> df
            a  b    c
         0  1  a  1.0
@@ -2823,23 +2940,23 @@ class DataFrame(Frame, Serializable):
         ...                   index=['falcon', 'parrot', 'lion', 'monkey'],
         ...                   columns=('class', 'max_speed'))
         >>> df
-                class max_speed
+                 class max_speed
         falcon    bird     389.0
         parrot    bird      24.0
         lion    mammal      80.5
-        monkey  mammal      null
+        monkey  mammal      <NA>
         >>> df.reset_index()
             index   class max_speed
         0  falcon    bird     389.0
         1  parrot    bird      24.0
         2    lion  mammal      80.5
-        3  monkey  mammal      null
+        3  monkey  mammal      <NA>
         >>> df.reset_index(drop=True)
             class max_speed
         0    bird     389.0
         1    bird      24.0
         2  mammal      80.5
-        3  mammal      null
+        3  mammal      <NA>
         """
         if level is not None:
             raise NotImplementedError("level parameter is not supported yet.")
@@ -3695,7 +3812,7 @@ class DataFrame(Frame, Serializable):
         >>> a = ('a', [0, 1, 2])
         >>> b = ('b', [-3, 2, 0])
         >>> df = cudf.DataFrame([a, b])
-        >>> print(df.sort_values('b'))
+        >>> df.sort_values('b')
            a  b
         0  0 -3
         2  2  0
@@ -4133,14 +4250,13 @@ class DataFrame(Frame, Serializable):
         )
         return df
 
-    @copy_docstring(DataFrameGroupBy.__init__)
     def groupby(
         self,
         by=None,
         axis=0,
         level=None,
         as_index=True,
-        sort=True,
+        sort=False,
         group_keys=True,
         squeeze=False,
         observed=False,
@@ -4178,7 +4294,6 @@ class DataFrame(Frame, Serializable):
             sort=sort,
         )
 
-    @copy_docstring(Rolling)
     def rolling(
         self, window, min_periods=None, center=False, axis=0, win_type=None
     ):
@@ -4225,7 +4340,7 @@ class DataFrame(Frame, Serializable):
         >>> b = ('b', [3, 4, 5])
         >>> df = cudf.DataFrame([a, b])
         >>> expr = "(a == 2 and b == 4) or (b == 3)"
-        >>> print(df.query(expr))
+        >>> df.query(expr)
            a  b
         0  1  3
         1  2  4
@@ -4238,7 +4353,7 @@ class DataFrame(Frame, Serializable):
         >>> data = np.array(['2018-10-07', '2018-10-08'], dtype='datetime64')
         >>> df['datetimes'] = data
         >>> search_date = datetime.datetime.strptime('2018-10-08', '%Y-%m-%d')
-        >>> print(df.query('datetimes==@search_date'))
+        >>> df.query('datetimes==@search_date')
                         datetimes
         1 2018-10-08T00:00:00.000
 
@@ -4250,8 +4365,8 @@ class DataFrame(Frame, Serializable):
         >>> data = np.array(['2018-10-07', '2018-10-08'], dtype='datetime64')
         >>> df['datetimes'] = data
         >>> search_date2 = datetime.datetime.strptime('2018-10-08', '%Y-%m-%d')
-        >>> print(df.query('datetimes==@search_date',
-        >>>         local_dict={'search_date':search_date2}))
+        >>> df.query('datetimes==@search_date',
+        ...         local_dict={'search_date':search_date2})
                         datetimes
         1 2018-10-08T00:00:00.000
         """
@@ -4519,17 +4634,17 @@ class DataFrame(Frame, Serializable):
         Examples
         --------
         >>> import cudf
-        >>> gdf = cudf.DataFrame()
-        >>> gdf['id']= [0, 1, 2, -1, 4, -1, 6]
-        >>> gdf['id']= gdf['id'].replace(-1, None)
-        >>> gdf
+        >>> df = cudf.DataFrame()
+        >>> df['id']= [0, 1, 2, -1, 4, -1, 6]
+        >>> df['id']= df['id'].replace(-1, None)
+        >>> df
              id
         0     0
         1     1
         2     2
-        3  null
+        3  <NA>
         4     4
-        5  null
+        5  <NA>
         6     6
 
         Notes
@@ -6789,6 +6904,15 @@ class DataFrame(Frame, Serializable):
         """{docstring}"""
         from cudf.io import parquet as pq
 
+        if any(
+            isinstance(col, cudf.core.column.StructColumn)
+            for col in self._data.columns
+        ):
+            raise NotImplementedError(
+                "Writing to parquet format is not yet supported "
+                "with Struct columns."
+            )
+
         return pq.to_parquet(self, path, *args, **kwargs)
 
     @ioutils.doc_to_feather()
@@ -6830,6 +6954,9 @@ class DataFrame(Frame, Serializable):
         index=True,
         line_terminator="\n",
         chunksize=None,
+        encoding=None,
+        compression=None,
+        **kwargs,
     ):
         """{docstring}"""
         from cudf.io import csv as csv
@@ -6844,6 +6971,9 @@ class DataFrame(Frame, Serializable):
             index=index,
             line_terminator=line_terminator,
             chunksize=chunksize,
+            encoding=encoding,
+            compression=compression,
+            **kwargs,
         )
 
     @ioutils.doc_to_orc()
@@ -7161,7 +7291,7 @@ class DataFrame(Frame, Serializable):
                 return False
         return super().equals(other)
 
-    _accessors = set()
+    _accessors = set()  # type: Set[Any]
 
 
 def from_pandas(obj, nan_as_null=None):
@@ -7248,23 +7378,15 @@ def from_pandas(obj, nan_as_null=None):
                 (3, 2),
                 (4, 2),
                 (5, 1)],
-            names=['x', 'y'])
+               names=['x', 'y'])
     >>> gmidx = cudf.from_pandas(pmidx)
     >>> gmidx
-    MultiIndex(levels=[0    1
-    1    3
-    2    4
-    3    5
-    dtype: int64, 0    1
-    1    2
-    2    5
-    dtype: int64],
-    codes=   x  y
-    0  0  0
-    1  0  2
-    2  1  1
-    3  2  1
-    4  3  0)
+    MultiIndex([(1, 1),
+                (1, 5),
+                (3, 2),
+                (4, 2),
+                (5, 1)],
+               names=['x', 'y'])
     >>> type(gmidx)
     <class 'cudf.core.multiindex.MultiIndex'>
     >>> type(pmidx)

@@ -52,7 +52,7 @@ namespace cudf {
  * @param[in] agg The rolling window aggregation type (SUM, MAX, MIN, etc.)
  *
  * @returns   A nullable output column containing the rolling window results
- **/
+ */
 std::unique_ptr<column> rolling_window(
   column_view const& input,
   size_type preceding_window,
@@ -188,7 +188,7 @@ struct window_bounds {
  * @param[in] aggr The rolling window aggregation type (SUM, MAX, MIN, etc.)
  *
  * @returns   A nullable output column containing the rolling window results
- **/
+ */
 std::unique_ptr<column> grouped_rolling_window(
   table_view const& group_keys,
   column_view const& input,

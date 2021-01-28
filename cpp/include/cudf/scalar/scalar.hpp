@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -330,8 +330,7 @@ class fixed_point_scalar : public scalar {
                      bool is_valid                       = true,
                      rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
                      rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
-    : scalar{data_type{type_to_id<T>(), _type.scale()}, is_valid, stream, mr},
-      _data{numeric::scaled_integer<rep_type>{value}.value}
+    : scalar{data_type{type_to_id<T>(), value.scale()}, is_valid, stream, mr}, _data{value.value()}
   {
   }
 
@@ -431,11 +430,7 @@ class string_scalar : public scalar {
   string_scalar(value_type const& source,
                 bool is_valid                       = true,
                 rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
-                rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
-    : scalar(data_type(type_id::STRING), is_valid),
-      _data(source.data(), source.size_bytes(), stream, mr)
-  {
-  }
+                rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
   /**
    * @brief Construct a new string scalar object from string_view in device memory
@@ -449,10 +444,7 @@ class string_scalar : public scalar {
   string_scalar(rmm::device_scalar<value_type>& data,
                 bool is_valid                       = true,
                 rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
-                rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
-    : string_scalar(data.value(stream), is_valid, stream, mr)
-  {
-  }
+                rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
   /**
    * @brief Implicit conversion operator to get the value of the scalar in a host std::string
@@ -471,10 +463,7 @@ class string_scalar : public scalar {
    *
    * @param stream CUDA stream used for device memory operations.
    */
-  value_type value(rmm::cuda_stream_view stream = rmm::cuda_stream_default) const
-  {
-    return value_type{data(), size()};
-  }
+  value_type value(rmm::cuda_stream_view stream = rmm::cuda_stream_default) const;
 
   /**
    * @brief Returns the size of the string in bytes

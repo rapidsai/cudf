@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2020, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -49,13 +49,13 @@ using namespace cudf::io;
 namespace {
 /**
  * @brief Helper for pinned host memory
- **/
+ */
 template <typename T>
 using pinned_buffer = std::unique_ptr<T, decltype(&cudaFreeHost)>;
 
 /**
  * @brief Function that translates GDF compression to parquet compression
- **/
+ */
 parquet::Compression to_parquet_compression(compression_type compression)
 {
   switch (compression) {
@@ -124,7 +124,7 @@ column_view get_leaf_col(column_view col)
  * @brief Helper kernel for converting string data/offsets into nvstrdesc
  * REMOVEME: Once we eliminate the legacy readers/writers, the kernels could be
  * made to use the native offset+data layout.
- **/
+ */
 __global__ void stringdata_to_nvstrdesc(gpu::nvstrdesc_s *dst,
                                         const size_type *offsets,
                                         const char *strdata,
@@ -152,18 +152,20 @@ __global__ void stringdata_to_nvstrdesc(gpu::nvstrdesc_s *dst,
 
 /**
  * @brief Helper class that adds parquet-specific column info
- **/
+ */
 class parquet_column_view {
  public:
   /**
    * @brief Constructor that extracts out the string position + length pairs
    * for building dictionaries for string columns
-   **/
+   */
   explicit parquet_column_view(size_t id,
                                column_view const &col,
                                std::vector<bool> const &nullability,
                                const table_metadata *metadata,
                                bool int96_timestamps,
+                               std::vector<uint8_t> const &decimal_precision,
+                               uint &decimal_precision_idx,
                                rmm::cuda_stream_view stream)
     : _col(col),
       _leaf_col(get_leaf_col(col)),
@@ -295,6 +297,28 @@ class parquet_column_view {
         _converted_type = ConvertedType::UTF8;
         _stats_dtype    = statistics_dtype::dtype_string;
         break;
+      case cudf::type_id::DECIMAL32:
+        _physical_type  = Type::INT32;
+        _converted_type = ConvertedType::DECIMAL;
+        _stats_dtype    = statistics_dtype::dtype_int32;
+        _decimal_scale  = -_leaf_col.type().scale();  // parquet and cudf disagree about scale signs
+        CUDF_EXPECTS(decimal_precision.size() > decimal_precision_idx,
+                     "Not enough decimal precision values passed for data!");
+        CUDF_EXPECTS(decimal_precision[decimal_precision_idx] >= _decimal_scale,
+                     "Precision must be equal to or greater than scale!");
+        _decimal_precision = decimal_precision[decimal_precision_idx++];
+        break;
+      case cudf::type_id::DECIMAL64:
+        _physical_type  = Type::INT64;
+        _converted_type = ConvertedType::DECIMAL;
+        _stats_dtype    = statistics_dtype::dtype_decimal64;
+        _decimal_scale  = -_leaf_col.type().scale();  // parquet and cudf disagree about scale signs
+        CUDF_EXPECTS(decimal_precision.size() > decimal_precision_idx,
+                     "Not enough decimal precision values passed for data!");
+        CUDF_EXPECTS(decimal_precision[decimal_precision_idx] >= _decimal_scale,
+                     "Precision must be equal to or greater than scale!");
+        _decimal_precision = decimal_precision[decimal_precision_idx++];
+        break;
       default:
         _physical_type = UNDEFINED_TYPE;
         _stats_dtype   = dtype_none;
@@ -381,6 +405,8 @@ class parquet_column_view {
   uint32_t const *nulls() const noexcept { return _nulls; }
   size_type offset() const noexcept { return _offset; }
   bool level_nullable(size_t level) const { return _nullability[level]; }
+  int32_t decimal_scale() const noexcept { return _decimal_scale; }
+  uint8_t decimal_precision() const noexcept { return _decimal_precision; }
 
   // List related data
   column_view cudf_col() const noexcept { return _col; }
@@ -466,6 +492,10 @@ class parquet_column_view {
 
   // String-related members
   rmm::device_buffer _indexes;
+
+  // Decimal-related members
+  int32_t _decimal_scale     = 0;
+  uint8_t _decimal_precision = 0;
 };
 
 void writer::impl::init_page_fragments(hostdevice_vector<gpu::PageFragment> &frag,
@@ -473,8 +503,7 @@ void writer::impl::init_page_fragments(hostdevice_vector<gpu::PageFragment> &fra
                                        uint32_t num_columns,
                                        uint32_t num_fragments,
                                        uint32_t num_rows,
-                                       uint32_t fragment_size,
-                                       rmm::cuda_stream_view stream)
+                                       uint32_t fragment_size)
 {
   col_desc.host_to_device(stream);
   gpu::InitPageFragments(frag.device_ptr(),
@@ -492,8 +521,7 @@ void writer::impl::gather_fragment_statistics(statistics_chunk *frag_stats_chunk
                                               hostdevice_vector<gpu::EncColumnDesc> &col_desc,
                                               uint32_t num_columns,
                                               uint32_t num_fragments,
-                                              uint32_t fragment_size,
-                                              rmm::cuda_stream_view stream)
+                                              uint32_t fragment_size)
 {
   rmm::device_vector<statistics_group> frag_stats_group(num_fragments * num_columns);
 
@@ -513,8 +541,7 @@ void writer::impl::build_chunk_dictionaries(hostdevice_vector<gpu::EncColumnChun
                                             hostdevice_vector<gpu::EncColumnDesc> &col_desc,
                                             uint32_t num_rowgroups,
                                             uint32_t num_columns,
-                                            uint32_t num_dictionaries,
-                                            rmm::cuda_stream_view stream)
+                                            uint32_t num_dictionaries)
 {
   size_t dict_scratch_size = (size_t)num_dictionaries * gpu::kDictScratchSize;
   rmm::device_vector<uint32_t> dict_scratch(dict_scratch_size / sizeof(uint32_t));
@@ -543,8 +570,7 @@ void writer::impl::init_encoder_pages(hostdevice_vector<gpu::EncColumnChunk> &ch
                                       uint32_t num_rowgroups,
                                       uint32_t num_columns,
                                       uint32_t num_pages,
-                                      uint32_t num_stats_bfr,
-                                      rmm::cuda_stream_view stream)
+                                      uint32_t num_stats_bfr)
 {
   rmm::device_vector<statistics_merge_group> page_stats_mrg(num_stats_bfr);
   chunks.host_to_device(stream);
@@ -579,8 +605,7 @@ void writer::impl::encode_pages(hostdevice_vector<gpu::EncColumnChunk> &chunks,
                                 gpu_inflate_input_s *comp_in,
                                 gpu_inflate_status_s *comp_out,
                                 const statistics_chunk *page_stats,
-                                const statistics_chunk *chunk_stats,
-                                rmm::cuda_stream_view stream)
+                                const statistics_chunk *chunk_stats)
 {
   gpu::EncodePages(
     pages, chunks.device_ptr(), pages_in_batch, first_page_in_batch, comp_in, comp_out, stream);
@@ -620,41 +645,59 @@ void writer::impl::encode_pages(hostdevice_vector<gpu::EncColumnChunk> &chunks,
 
 writer::impl::impl(std::unique_ptr<data_sink> sink,
                    parquet_writer_options const &options,
-                   rmm::mr::device_memory_resource *mr)
+                   SingleWriteMode mode,
+                   rmm::mr::device_memory_resource *mr,
+                   rmm::cuda_stream_view stream)
   : _mr(mr),
+    stream(stream),
     compression_(to_parquet_compression(options.get_compression())),
     stats_granularity_(options.get_stats_level()),
     int96_timestamps(options.is_enabled_int96_timestamps()),
+    out_sink_(std::move(sink)),
+    decimal_precision(options.get_decimal_precision()),
+    single_write_mode(mode == SingleWriteMode::YES),
+    user_metadata(options.get_metadata())
+{
+  init_state();
+}
+
+writer::impl::impl(std::unique_ptr<data_sink> sink,
+                   chunked_parquet_writer_options const &options,
+                   SingleWriteMode mode,
+                   rmm::mr::device_memory_resource *mr,
+                   rmm::cuda_stream_view stream)
+  : _mr(mr),
+    stream(stream),
+    compression_(to_parquet_compression(options.get_compression())),
+    stats_granularity_(options.get_stats_level()),
+    int96_timestamps(options.is_enabled_int96_timestamps()),
+    decimal_precision(options.get_decimal_precision()),
+    single_write_mode(mode == SingleWriteMode::YES),
     out_sink_(std::move(sink))
 {
+  if (options.get_nullable_metadata() != nullptr) {
+    user_metadata_with_nullability = *options.get_nullable_metadata();
+    user_metadata                  = &user_metadata_with_nullability;
+  }
+
+  init_state();
 }
 
-std::unique_ptr<std::vector<uint8_t>> writer::impl::write(
-  table_view const &table,
-  const table_metadata *metadata,
-  bool return_filemetadata,
-  const std::string &column_chunks_file_path,
-  bool int96_timestamps,
-  rmm::cuda_stream_view stream)
-{
-  pq_chunked_state state{metadata, SingleWriteMode::YES, int96_timestamps, stream};
+writer::impl::~impl() { close(); }
 
-  write_chunked_begin(state);
-  write_chunk(table, state);
-  return write_chunked_end(state, return_filemetadata, column_chunks_file_path);
-}
-
-void writer::impl::write_chunked_begin(pq_chunked_state &state)
+void writer::impl::init_state()
 {
   // Write file header
   file_header_s fhdr;
   fhdr.magic = parquet_magic;
   out_sink_->host_write(&fhdr, sizeof(fhdr));
-  state.current_chunk_offset = sizeof(file_header_s);
+  current_chunk_offset = sizeof(file_header_s);
 }
 
-void writer::impl::write_chunk(table_view const &table, pq_chunked_state &state)
+void writer::impl::write(table_view const &table)
 {
+  CUDF_EXPECTS(not closed, "Data has already been flushed to out and closed");
+
   size_type num_columns = table.num_columns();
   size_type num_rows    = 0;
 
@@ -671,9 +714,11 @@ void writer::impl::write_chunk(table_view const &table, pq_chunked_state &state)
   // The user can pass in information about the nullability of a column to be enforced across
   // write_chunk() calls, in a flattened bool vector. Figure out that per column.
   auto per_column_nullability =
-    (state.single_write_mode)
+    (single_write_mode)
       ? std::vector<std::vector<bool>>{}
-      : get_per_column_nullability(table, state.user_metadata_with_nullability.column_nullable);
+      : get_per_column_nullability(table, user_metadata_with_nullability.column_nullable);
+
+  uint decimal_precision_idx = 0;
 
   for (auto it = table.begin(); it < table.end(); ++it) {
     const auto col        = *it;
@@ -685,15 +730,20 @@ void writer::impl::write_chunk(table_view const &table, pq_chunked_state &state)
     // one table tell us everything we need to know about their nullability.
     // Empty nullability means the writer figures out the nullability from the cudf columns.
     auto const &this_column_nullability =
-      (state.single_write_mode) ? std::vector<bool>{} : per_column_nullability[current_id];
+      (single_write_mode) ? std::vector<bool>{} : per_column_nullability[current_id];
 
     parquet_columns.emplace_back(current_id,
                                  col,
                                  this_column_nullability,
-                                 state.user_metadata,
-                                 state.int96_timestamps,
-                                 state.stream);
+                                 user_metadata,
+                                 int96_timestamps,
+                                 decimal_precision,
+                                 decimal_precision_idx,
+                                 stream);
   }
+
+  CUDF_EXPECTS(decimal_precision_idx == decimal_precision.size(),
+               "Too many decimal precision values!");
 
   // first call. setup metadata. num_rows will get incremented as write_chunk is
   // called multiple times.
@@ -745,7 +795,9 @@ void writer::impl::write_chunk(table_view const &table, pq_chunked_state &state)
         list_schema[nesting_depth * 2].type = physical_type;
         list_schema[nesting_depth * 2].converted_type =
           physical_type == parquet::Type::INT96 ? ConvertedType::UNKNOWN : col.converted_type();
-        list_schema[nesting_depth * 2].num_children = 0;
+        list_schema[nesting_depth * 2].num_children      = 0;
+        list_schema[nesting_depth * 2].decimal_precision = col.decimal_precision();
+        list_schema[nesting_depth * 2].decimal_scale     = col.decimal_scale();
 
         std::vector<std::string> path_in_schema;
         std::transform(
@@ -763,40 +815,41 @@ void writer::impl::write_chunk(table_view const &table, pq_chunked_state &state)
           physical_type == parquet::Type::INT96 ? ConvertedType::UNKNOWN : col.converted_type();
 
         col_schema.repetition_type =
-          (col.max_def_level() == 1 ||
-           (state.single_write_mode && col.row_count() < (size_t)num_rows))
+          (col.max_def_level() == 1 || (single_write_mode && col.row_count() < (size_t)num_rows))
             ? OPTIONAL
             : REQUIRED;
 
-        col_schema.name         = col.name();
-        col_schema.num_children = 0;  // Leaf node
+        col_schema.name              = col.name();
+        col_schema.num_children      = 0;  // Leaf node
+        col_schema.decimal_precision = col.decimal_precision();
+        col_schema.decimal_scale     = col.decimal_scale();
 
         this_table_schema.push_back(std::move(col_schema));
       }
     }
   }
 
-  if (state.md.version == 0) {
-    state.md.version  = 1;
-    state.md.num_rows = num_rows;
-    state.md.column_order_listsize =
+  if (md.version == 0) {
+    md.version  = 1;
+    md.num_rows = num_rows;
+    md.column_order_listsize =
       (stats_granularity_ != statistics_freq::STATISTICS_NONE) ? num_columns : 0;
-    if (state.user_metadata != nullptr) {
-      std::transform(state.user_metadata->user_data.begin(),
-                     state.user_metadata->user_data.end(),
-                     std::back_inserter(state.md.key_value_metadata),
+    if (user_metadata != nullptr) {
+      std::transform(user_metadata->user_data.begin(),
+                     user_metadata->user_data.end(),
+                     std::back_inserter(md.key_value_metadata),
                      [](auto const &kv) {
                        return KeyValue{kv.first, kv.second};
                      });
     }
-    state.md.schema = this_table_schema;
+    md.schema = this_table_schema;
   } else {
     // verify the user isn't passing mismatched tables
-    CUDF_EXPECTS(state.md.schema == this_table_schema,
+    CUDF_EXPECTS(md.schema == this_table_schema,
                  "Mismatch in schema between multiple calls to write_chunk");
 
     // increment num rows
-    state.md.num_rows += num_rows;
+    md.num_rows += num_rows;
   }
 
   // Initialize column description
@@ -856,11 +909,10 @@ void writer::impl::write_chunk(table_view const &table, pq_chunked_state &state)
   uint32_t num_fragments = (uint32_t)((num_rows + fragment_size - 1) / fragment_size);
   hostdevice_vector<gpu::PageFragment> fragments(num_columns * num_fragments);
   if (fragments.size() != 0) {
-    init_page_fragments(
-      fragments, col_desc, num_columns, num_fragments, num_rows, fragment_size, state.stream);
+    init_page_fragments(fragments, col_desc, num_columns, num_fragments, num_rows, fragment_size);
   }
 
-  size_t global_rowgroup_base = state.md.row_groups.size();
+  size_t global_rowgroup_base = md.row_groups.size();
 
   // Decide row group boundaries based on uncompressed data size
   size_t rowgroup_size   = 0;
@@ -875,8 +927,8 @@ void writer::impl::write_chunk(table_view const &table, pq_chunked_state &state)
     if (f > rowgroup_start && (rowgroup_size + fragment_data_size > max_rowgroup_size_ ||
                                (f + 1 - rowgroup_start) * fragment_size > max_rowgroup_rows_)) {
       // update schema
-      state.md.row_groups.resize(state.md.row_groups.size() + 1);
-      state.md.row_groups[global_r++].num_rows = (f - rowgroup_start) * fragment_size;
+      md.row_groups.resize(md.row_groups.size() + 1);
+      md.row_groups[global_r++].num_rows = (f - rowgroup_start) * fragment_size;
       num_rowgroups++;
       rowgroup_start = f;
       rowgroup_size  = 0;
@@ -884,8 +936,8 @@ void writer::impl::write_chunk(table_view const &table, pq_chunked_state &state)
     rowgroup_size += fragment_data_size;
     if (f + 1 == num_fragments) {
       // update schema
-      state.md.row_groups.resize(state.md.row_groups.size() + 1);
-      state.md.row_groups[global_r++].num_rows = num_rows - rowgroup_start * fragment_size;
+      md.row_groups.resize(md.row_groups.size() + 1);
+      md.row_groups[global_r++].num_rows = num_rows - rowgroup_start * fragment_size;
       num_rowgroups++;
     }
   }
@@ -895,13 +947,8 @@ void writer::impl::write_chunk(table_view const &table, pq_chunked_state &state)
   if (stats_granularity_ != statistics_freq::STATISTICS_NONE) {
     frag_stats.resize(num_fragments * num_columns);
     if (frag_stats.size() != 0) {
-      gather_fragment_statistics(frag_stats.data().get(),
-                                 fragments,
-                                 col_desc,
-                                 num_columns,
-                                 num_fragments,
-                                 fragment_size,
-                                 state.stream);
+      gather_fragment_statistics(
+        frag_stats.data().get(), fragments, col_desc, num_columns, num_fragments, fragment_size);
     }
   }
   // Initialize row groups and column chunks
@@ -911,9 +958,9 @@ void writer::impl::write_chunk(table_view const &table, pq_chunked_state &state)
   for (uint32_t r = 0, global_r = global_rowgroup_base, f = 0, start_row = 0; r < num_rowgroups;
        r++, global_r++) {
     uint32_t fragments_in_chunk =
-      (uint32_t)((state.md.row_groups[global_r].num_rows + fragment_size - 1) / fragment_size);
-    state.md.row_groups[global_r].total_byte_size = 0;
-    state.md.row_groups[global_r].columns.resize(num_columns);
+      (uint32_t)((md.row_groups[global_r].num_rows + fragment_size - 1) / fragment_size);
+    md.row_groups[global_r].total_byte_size = 0;
+    md.row_groups[global_r].columns.resize(num_columns);
     for (int i = 0; i < num_columns; i++) {
       gpu::EncColumnChunk *ck = &chunks[r * num_columns + i];
       bool dict_enable        = false;
@@ -927,7 +974,7 @@ void writer::impl::write_chunk(table_view const &table, pq_chunked_state &state)
       ck->stats =
         (frag_stats.size() != 0) ? frag_stats.data().get() + i * num_fragments + f : nullptr;
       ck->start_row      = start_row;
-      ck->num_rows       = (uint32_t)state.md.row_groups[global_r].num_rows;
+      ck->num_rows       = (uint32_t)md.row_groups[global_r].num_rows;
       ck->first_fragment = i * num_fragments + f;
       ck->num_values =
         std::accumulate(fragments.host_ptr(i * num_fragments + f),
@@ -956,21 +1003,20 @@ void writer::impl::write_chunk(table_view const &table, pq_chunked_state &state)
           num_dictionaries++;
         }
       }
-      ck->has_dictionary                                      = dict_enable;
-      state.md.row_groups[global_r].columns[i].meta_data.type = parquet_columns[i].physical_type();
-      state.md.row_groups[global_r].columns[i].meta_data.encodings = {Encoding::PLAIN,
-                                                                      Encoding::RLE};
+      ck->has_dictionary                                     = dict_enable;
+      md.row_groups[global_r].columns[i].meta_data.type      = parquet_columns[i].physical_type();
+      md.row_groups[global_r].columns[i].meta_data.encodings = {Encoding::PLAIN, Encoding::RLE};
       if (dict_enable) {
-        state.md.row_groups[global_r].columns[i].meta_data.encodings.push_back(
+        md.row_groups[global_r].columns[i].meta_data.encodings.push_back(
           Encoding::PLAIN_DICTIONARY);
       }
-      state.md.row_groups[global_r].columns[i].meta_data.path_in_schema =
+      md.row_groups[global_r].columns[i].meta_data.path_in_schema =
         parquet_columns[i].get_path_in_schema();
-      state.md.row_groups[global_r].columns[i].meta_data.codec      = UNCOMPRESSED;
-      state.md.row_groups[global_r].columns[i].meta_data.num_values = ck->num_values;
+      md.row_groups[global_r].columns[i].meta_data.codec      = UNCOMPRESSED;
+      md.row_groups[global_r].columns[i].meta_data.num_values = ck->num_values;
     }
     f += fragments_in_chunk;
-    start_row += (uint32_t)state.md.row_groups[global_r].num_rows;
+    start_row += (uint32_t)md.row_groups[global_r].num_rows;
   }
 
   // Free unused dictionaries
@@ -978,8 +1024,7 @@ void writer::impl::write_chunk(table_view const &table, pq_chunked_state &state)
 
   // Build chunk dictionaries and count pages
   if (num_chunks != 0) {
-    build_chunk_dictionaries(
-      chunks, col_desc, num_rowgroups, num_columns, num_dictionaries, state.stream);
+    build_chunk_dictionaries(chunks, col_desc, num_rowgroups, num_columns, num_dictionaries);
   }
 
   // Initialize batches of rowgroups to encode (mainly to limit peak memory usage)
@@ -1028,8 +1073,8 @@ void writer::impl::write_chunk(table_view const &table, pq_chunked_state &state)
     (compression_ != parquet::Compression::UNCOMPRESSED) ? max_pages_in_batch : 0;
   uint32_t num_stats_bfr =
     (stats_granularity_ != statistics_freq::STATISTICS_NONE) ? num_pages + num_chunks : 0;
-  rmm::device_buffer uncomp_bfr(max_uncomp_bfr_size, state.stream);
-  rmm::device_buffer comp_bfr(max_comp_bfr_size, state.stream);
+  rmm::device_buffer uncomp_bfr(max_uncomp_bfr_size, stream);
+  rmm::device_buffer comp_bfr(max_comp_bfr_size, stream);
   rmm::device_vector<gpu_inflate_input_s> comp_in(max_comp_pages);
   rmm::device_vector<gpu_inflate_status_s> comp_out(max_comp_pages);
   rmm::device_vector<gpu::EncPage> pages(num_pages);
@@ -1057,8 +1102,7 @@ void writer::impl::write_chunk(table_view const &table, pq_chunked_state &state)
                        num_rowgroups,
                        num_columns,
                        num_pages,
-                       num_stats_bfr,
-                       state.stream);
+                       num_stats_bfr);
   }
 
   auto host_bfr = [&]() {
@@ -1096,33 +1140,31 @@ void writer::impl::write_chunk(table_view const &table, pq_chunked_state &state)
       comp_out.data().get(),
       (stats_granularity_ == statistics_freq::STATISTICS_PAGE) ? page_stats.data().get() : nullptr,
       (stats_granularity_ != statistics_freq::STATISTICS_NONE) ? page_stats.data().get() + num_pages
-                                                               : nullptr,
-      state.stream);
+                                                               : nullptr);
     for (; r < rnext; r++, global_r++) {
       for (auto i = 0; i < num_columns; i++) {
         gpu::EncColumnChunk *ck = &chunks[r * num_columns + i];
         uint8_t *dev_bfr;
         if (ck->is_compressed) {
-          state.md.row_groups[global_r].columns[i].meta_data.codec = compression_;
-          dev_bfr                                                  = ck->compressed_bfr;
+          md.row_groups[global_r].columns[i].meta_data.codec = compression_;
+          dev_bfr                                            = ck->compressed_bfr;
         } else {
           dev_bfr = ck->uncompressed_bfr;
         }
 
         if (out_sink_->supports_device_write()) {
           // let the writer do what it wants to retrieve the data from the gpu.
-          out_sink_->device_write(dev_bfr + ck->ck_stat_size, ck->compressed_size, state.stream);
+          out_sink_->device_write(dev_bfr + ck->ck_stat_size, ck->compressed_size, stream);
           // we still need to do a (much smaller) memcpy for the statistics.
           if (ck->ck_stat_size != 0) {
-            state.md.row_groups[global_r].columns[i].meta_data.statistics_blob.resize(
-              ck->ck_stat_size);
-            CUDA_TRY(cudaMemcpyAsync(
-              state.md.row_groups[global_r].columns[i].meta_data.statistics_blob.data(),
-              dev_bfr,
-              ck->ck_stat_size,
-              cudaMemcpyDeviceToHost,
-              state.stream.value()));
-            state.stream.synchronize();
+            md.row_groups[global_r].columns[i].meta_data.statistics_blob.resize(ck->ck_stat_size);
+            CUDA_TRY(
+              cudaMemcpyAsync(md.row_groups[global_r].columns[i].meta_data.statistics_blob.data(),
+                              dev_bfr,
+                              ck->ck_stat_size,
+                              cudaMemcpyDeviceToHost,
+                              stream.value()));
+            stream.synchronize();
           }
         } else {
           // copy the full data
@@ -1130,54 +1172,54 @@ void writer::impl::write_chunk(table_view const &table, pq_chunked_state &state)
                                    dev_bfr,
                                    ck->ck_stat_size + ck->compressed_size,
                                    cudaMemcpyDeviceToHost,
-                                   state.stream.value()));
-          state.stream.synchronize();
+                                   stream.value()));
+          stream.synchronize();
           out_sink_->host_write(host_bfr.get() + ck->ck_stat_size, ck->compressed_size);
           if (ck->ck_stat_size != 0) {
-            state.md.row_groups[global_r].columns[i].meta_data.statistics_blob.resize(
-              ck->ck_stat_size);
-            memcpy(state.md.row_groups[global_r].columns[i].meta_data.statistics_blob.data(),
+            md.row_groups[global_r].columns[i].meta_data.statistics_blob.resize(ck->ck_stat_size);
+            memcpy(md.row_groups[global_r].columns[i].meta_data.statistics_blob.data(),
                    host_bfr.get(),
                    ck->ck_stat_size);
           }
         }
-        state.md.row_groups[global_r].total_byte_size += ck->compressed_size;
-        state.md.row_groups[global_r].columns[i].meta_data.data_page_offset =
-          state.current_chunk_offset + ((ck->has_dictionary) ? ck->dictionary_size : 0);
-        state.md.row_groups[global_r].columns[i].meta_data.dictionary_page_offset =
-          (ck->has_dictionary) ? state.current_chunk_offset : 0;
-        state.md.row_groups[global_r].columns[i].meta_data.total_uncompressed_size = ck->bfr_size;
-        state.md.row_groups[global_r].columns[i].meta_data.total_compressed_size =
-          ck->compressed_size;
-        state.current_chunk_offset += ck->compressed_size;
+        md.row_groups[global_r].total_byte_size += ck->compressed_size;
+        md.row_groups[global_r].columns[i].meta_data.data_page_offset =
+          current_chunk_offset + ((ck->has_dictionary) ? ck->dictionary_size : 0);
+        md.row_groups[global_r].columns[i].meta_data.dictionary_page_offset =
+          (ck->has_dictionary) ? current_chunk_offset : 0;
+        md.row_groups[global_r].columns[i].meta_data.total_uncompressed_size = ck->bfr_size;
+        md.row_groups[global_r].columns[i].meta_data.total_compressed_size   = ck->compressed_size;
+        current_chunk_offset += ck->compressed_size;
       }
     }
   }
 }
 
-std::unique_ptr<std::vector<uint8_t>> writer::impl::write_chunked_end(
-  pq_chunked_state &state, bool return_filemetadata, const std::string &column_chunks_file_path)
+std::unique_ptr<std::vector<uint8_t>> writer::impl::close(
+  std::string const &column_chunks_file_path)
 {
+  if (closed) { return nullptr; }
+  closed = true;
   CompactProtocolWriter cpw(&buffer_);
   file_ender_s fendr;
   buffer_.resize(0);
-  fendr.footer_len = static_cast<uint32_t>(cpw.write(state.md));
+  fendr.footer_len = static_cast<uint32_t>(cpw.write(md));
   fendr.magic      = parquet_magic;
   out_sink_->host_write(buffer_.data(), buffer_.size());
   out_sink_->host_write(&fendr, sizeof(fendr));
   out_sink_->flush();
 
   // Optionally output raw file metadata with the specified column chunk file path
-  if (return_filemetadata) {
+  if (column_chunks_file_path.length() > 0) {
     file_header_s fhdr = {parquet_magic};
     buffer_.resize(0);
     buffer_.insert(buffer_.end(),
                    reinterpret_cast<const uint8_t *>(&fhdr),
                    reinterpret_cast<const uint8_t *>(&fhdr) + sizeof(fhdr));
-    for (auto &rowgroup : state.md.row_groups) {
+    for (auto &rowgroup : md.row_groups) {
       for (auto &col : rowgroup.columns) { col.file_path = column_chunks_file_path; }
     }
-    fendr.footer_len = static_cast<uint32_t>(cpw.write(state.md));
+    fendr.footer_len = static_cast<uint32_t>(cpw.write(md));
     buffer_.insert(buffer_.end(),
                    reinterpret_cast<const uint8_t *>(&fendr),
                    reinterpret_cast<const uint8_t *>(&fendr) + sizeof(fendr));
@@ -1190,8 +1232,19 @@ std::unique_ptr<std::vector<uint8_t>> writer::impl::write_chunked_end(
 // Forward to implementation
 writer::writer(std::unique_ptr<data_sink> sink,
                parquet_writer_options const &options,
-               rmm::mr::device_memory_resource *mr)
-  : _impl(std::make_unique<impl>(std::move(sink), options, mr))
+               SingleWriteMode mode,
+               rmm::mr::device_memory_resource *mr,
+               rmm::cuda_stream_view stream)
+  : _impl(std::make_unique<impl>(std::move(sink), options, mode, mr, stream))
+{
+}
+
+writer::writer(std::unique_ptr<data_sink> sink,
+               chunked_parquet_writer_options const &options,
+               SingleWriteMode mode,
+               rmm::mr::device_memory_resource *mr,
+               rmm::cuda_stream_view stream)
+  : _impl(std::make_unique<impl>(std::move(sink), options, mode, mr, stream))
 {
 }
 
@@ -1199,34 +1252,12 @@ writer::writer(std::unique_ptr<data_sink> sink,
 writer::~writer() = default;
 
 // Forward to implementation
-std::unique_ptr<std::vector<uint8_t>> writer::write(table_view const &table,
-                                                    const table_metadata *metadata,
-                                                    bool return_filemetadata,
-                                                    const std::string column_chunks_file_path,
-                                                    bool int96_timestamps,
-                                                    rmm::cuda_stream_view stream)
-{
-  return _impl->write(
-    table, metadata, return_filemetadata, column_chunks_file_path, int96_timestamps, stream);
-}
+void writer::write(table_view const &table) { _impl->write(table); }
 
 // Forward to implementation
-void writer::write_chunked_begin(pq_chunked_state &state)
+std::unique_ptr<std::vector<uint8_t>> writer::close(std::string const &column_chunks_file_path)
 {
-  return _impl->write_chunked_begin(state);
-}
-
-// Forward to implementation
-void writer::write_chunk(table_view const &table, pq_chunked_state &state)
-{
-  _impl->write_chunk(table, state);
-}
-
-// Forward to implementation
-std::unique_ptr<std::vector<uint8_t>> writer::write_chunked_end(
-  pq_chunked_state &state, bool return_filemetadata, const std::string &column_chunks_file_path)
-{
-  return _impl->write_chunked_end(state, return_filemetadata, column_chunks_file_path);
+  return _impl->close(column_chunks_file_path);
 }
 
 std::unique_ptr<std::vector<uint8_t>> writer::merge_rowgroup_metadata(

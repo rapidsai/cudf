@@ -931,7 +931,6 @@ struct dispatch_unary_operator_types {
 
 /**
  * @brief Functor performing a type dispatch for a unary operator.
- *
  */
 struct type_dispatch_unary_op {
   template <ast_operator op, typename F, typename... Ts>
@@ -968,7 +967,6 @@ CUDA_HOST_DEVICE_CALLABLE constexpr void unary_operator_dispatcher(ast_operator 
 
 /**
  * @brief Functor to determine the return type of an operator from its input types.
- *
  */
 struct return_type_functor {
   /**
@@ -1057,7 +1055,6 @@ inline cudf::data_type ast_operator_return_type(ast_operator op,
 
 /**
  * @brief Functor to determine the arity (number of operands) of an operator.
- *
  */
 struct arity_functor {
   template <ast_operator op>

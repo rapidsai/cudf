@@ -17,7 +17,7 @@
 /**
  * @file reader_impl.cu
  * @brief cuDF-IO Avro reader class implementation
- **/
+ */
 
 #include "reader_impl.hpp"
 
@@ -45,7 +45,7 @@ using namespace cudf::io;
 namespace {
 /**
  * @brief Function that translates Avro data kind to cuDF type enum
- **/
+ */
 type_id to_type_id(const avro::schema_entry *col)
 {
   switch (col->kind) {
@@ -66,7 +66,7 @@ type_id to_type_id(const avro::schema_entry *col)
 /**
  * @brief A helper wrapper for Avro file metadata. Provides some additional
  * convenience methods for initializing and accessing the metadata and schema
- **/
+ */
 class metadata : public file_metadata {
  public:
   explicit metadata(datasource *const src) : source(src) {}
@@ -76,7 +76,7 @@ class metadata : public file_metadata {
    *
    * @param[in,out] row_start Starting row of the selection
    * @param[in,out] row_count Total number of rows selected
-   **/
+   */
   void init_and_select_rows(int &row_start, int &row_count)
   {
     const auto buffer = source->host_read(0, source->size());
@@ -92,7 +92,7 @@ class metadata : public file_metadata {
    * @param[in] use_names List of column names to select
    *
    * @return List of column names
-   **/
+   */
   auto select_columns(std::vector<std::string> use_names)
   {
     std::vector<std::pair<int, std::string>> selection;

@@ -114,6 +114,7 @@ test:
     - test -f $PREFIX/include/cudf/io/detail/json.hpp
     - test -f $PREFIX/include/cudf/io/detail/orc.hpp
     - test -f $PREFIX/include/cudf/io/detail/parquet.hpp
+    - test -f $PREFIX/include/cudf/io/detail/utils.hpp
     - test -f $PREFIX/include/cudf/io/json.hpp
     - test -f $PREFIX/include/cudf/io/orc.hpp
     - test -f $PREFIX/include/cudf/io/parquet.hpp
@@ -122,7 +123,10 @@ test:
     - test -f $PREFIX/include/cudf/join.hpp
     - test -f $PREFIX/include/cudf/lists/detail/concatenate.hpp
     - test -f $PREFIX/include/cudf/lists/detail/copying.hpp
+    - test -f $PREFIX/include/cudf/lists/count_elements.hpp
     - test -f $PREFIX/include/cudf/lists/extract.hpp
+    - test -f $PREFIX/include/cudf/lists/contains.hpp
+    - test -f $PREFIX/include/cudf/lists/gather.hpp
     - test -f $PREFIX/include/cudf/lists/lists_column_view.hpp
     - test -f $PREFIX/include/cudf/merge.hpp
     - test -f $PREFIX/include/cudf/null_mask.hpp
@@ -166,9 +170,9 @@ test:
     - test -f $PREFIX/include/cudf/strings/padding.hpp
     - test -f $PREFIX/include/cudf/strings/replace.hpp
     - test -f $PREFIX/include/cudf/strings/replace_re.hpp
-    - test -f $PREFIX/include/cudf/strings/sorting.hpp
     - test -f $PREFIX/include/cudf/strings/split/partition.hpp
     - test -f $PREFIX/include/cudf/strings/split/split.hpp
+    - test -f $PREFIX/include/cudf/strings/string_view.hpp
     - test -f $PREFIX/include/cudf/strings/strings_column_view.hpp
     - test -f $PREFIX/include/cudf/strings/strip.hpp
     - test -f $PREFIX/include/cudf/strings/substring.hpp
@@ -199,7 +203,6 @@ test:
     - test -f $PREFIX/include/cudf_test/cudf_gtest.hpp
     - test -f $PREFIX/include/cudf_test/cxxopts.hpp
     - test -f $PREFIX/include/cudf_test/file_utilities.hpp
-    - test -f $PREFIX/include/cudf_test/scalar_utilities.hpp
     - test -f $PREFIX/include/cudf_test/table_utilities.hpp
     - test -f $PREFIX/include/cudf_test/timestamp_utilities.cuh
     - test -f $PREFIX/include/cudf_test/type_list_utilities.hpp

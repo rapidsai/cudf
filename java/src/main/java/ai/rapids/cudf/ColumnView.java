@@ -1,6 +1,6 @@
 /*
  *
- *  Copyright (c) 2020, NVIDIA CORPORATION.
+ *  Copyright (c) 2020-2021, NVIDIA CORPORATION.
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -2287,6 +2287,73 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
     return new ColumnVector(mapLookup(getNativeView(), key.getScalarHandle()));
   }
 
+
+  /**
+   * Create a new struct column view of existing column views. Note that this will NOT copy
+   * the contents of the input columns to make a new vector, but makes a view that must not
+   * outlive the child views that it references. The resulting column cannot be null.
+   * @param rows the number of rows in the struct column. This is needed if no columns
+   *             are provided.
+   * @param columns the columns to add to the struct in the order they should be added
+   * @return the new column view. It is the responsibility of the caller to close this.
+   */
+  public static ColumnView makeStructView(long rows, ColumnView... columns) {
+    long[] handles = new long[columns.length];
+    for (int i = 0; i < columns.length; i++) {
+      ColumnView cv = columns[i];
+      if (rows != cv.getRowCount()) {
+        throw new IllegalArgumentException("All columns must have the same number of rows");
+      }
+      handles[i] = cv.getNativeView();
+    }
+    return new ColumnView(makeStructView(handles, rows));
+  }
+
+  /**
+   * Create a new struct column view of existing column views. Note that this will NOT copy
+   * the contents of the input columns to make a new vector, but makes a view that must not
+   * outlive the child views that it references. The resulting column cannot be null.
+   * @param columns the columns to add to the struct in the order they should be added
+   * @return the new column view. It is the responsibility of the caller to close this.
+   */
+  public static ColumnView makeStructView(ColumnView... columns) {
+    if (columns.length <= 0) {
+      throw new IllegalArgumentException("At least one column is needed to get the row count");
+    }
+    return makeStructView(columns[0].rows, columns);
+  }
+
+  /**
+   * Create a column of bool values indicating whether the specified scalar
+   * is an element of each row of a list column.
+   * Output `column[i]` is set to null if one or more of the following are true:
+   * 1. The key is null
+   * 2. The column vector list value is null
+   * 3. The list row does not contain the key, and contains at least
+   *    one null.
+   * @param key the scalar to look up
+   * @return a Boolean ColumnVector with the result of the lookup
+   */
+  public final ColumnVector listContains(Scalar key) {
+    assert type.equals(DType.LIST) : "column type must be a LIST";
+    return new ColumnVector(listContains(getNativeView(), key.getScalarHandle()));
+  }
+
+  /**
+   * Create a column of bool values indicating whether the list rows of the first
+   * column contain the corresponding values in the second column.
+   * 1. The key value is null
+   * 2. The column vector list value is null
+   * 3. The list row does not contain the key, and contains at least
+   *    one null.
+   * @param key the ColumnVector with look up values
+   * @return a Boolean ColumnVector with the result of the lookup
+   */
+  public final ColumnVector listContainsColumn(ColumnView key) {
+    assert type.equals(DType.LIST) : "column type must be a LIST";
+    return new ColumnVector(listContainsColumn(getNativeView(), key.getNativeView()));
+  }
+
   /////////////////////////////////////////////////////////////////////////////
   // INTERNAL/NATIVE ACCESS
   /////////////////////////////////////////////////////////////////////////////
@@ -2522,6 +2589,22 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
 
   private static native long extractListElement(long nativeView, int index);
 
+  /**
+   * Native method for list lookup
+   * @param nativeView the column view handle of the list
+   * @param key the scalar key handle
+   * @return column handle of the resultant
+   */
+  private static native long listContains(long nativeView, long key);
+
+  /**
+   * Native method for list lookup
+   * @param nativeView the column view handle of the list
+   * @param keyColumn the column handle of look up keys
+   * @return column handle of the resultant
+   */
+  private static native long listContainsColumn(long nativeView, long keyColumn);
+
   private static native long castTo(long nativeHandle, int type, int scale);
 
   private static native long logicalCastTo(long nativeHandle, int type, int scale);
@@ -2620,7 +2703,9 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
   private static native long clamper(long nativeView, long loScalarHandle, long loScalarReplaceHandle,
                                      long hiScalarHandle, long hiScalarReplaceHandle);
 
-  protected native long title(long handle);
+  protected static native long title(long handle);
+
+  private static native long makeStructView(long[] handles, long rowCount);
 
   private static native long isTimestamp(long nativeView, String format);
   /**
@@ -2755,7 +2840,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
         mainOffsetsDevBuff.copyFromHostBuffer(mainColOffsets, 0, offsetsLen);
       }
       List<DeviceMemoryBuffer> toClose = new ArrayList<>();
-      long[] childHandles = (devChildren.isEmpty()) ? null : new long[devChildren.size()];
+      long[] childHandles = new long[devChildren.size()];
       for (ColumnView.NestedColumnVector ncv : devChildren) {
         toClose.addAll(ncv.getBuffersToClose());
       }

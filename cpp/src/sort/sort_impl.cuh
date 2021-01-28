@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -23,14 +23,65 @@
 #include <cudf/utilities/error.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
-#include <rmm/device_vector.hpp>
+#include <rmm/device_uvector.hpp>
 #include <rmm/exec_policy.hpp>
 
 #include <thrust/sequence.h>
+#include <thrust/sort.h>
 
 namespace cudf {
 namespace detail {
-// Create permuted row indices that would materialize sorted order
+
+/**
+ * @brief Comparator functor needed for single column sort.
+ *
+ * @tparam Column element type.
+ */
+template <typename T>
+struct simple_comparator {
+  __device__ bool operator()(size_type lhs, size_type rhs)
+  {
+    if (has_nulls) {
+      bool lhs_null{d_column.is_null(lhs)};
+      bool rhs_null{d_column.is_null(rhs)};
+      if (lhs_null || rhs_null) {
+        if (!ascending) thrust::swap(lhs_null, rhs_null);
+        return (null_precedence == cudf::null_order::BEFORE ? !rhs_null : !lhs_null);
+      }
+    }
+    return relational_compare(d_column.element<T>(lhs), d_column.element<T>(rhs)) ==
+           (ascending ? weak_ordering::LESS : weak_ordering::GREATER);
+  }
+  column_device_view const d_column;
+  bool has_nulls;
+  bool ascending;
+  null_order null_precedence{};
+};
+
+/**
+ * @brief Sort indices of a single column.
+ *
+ * @param input Column to sort. The column data is not modified.
+ * @param column_order Ascending or descending sort order
+ * @param null_precedence How null rows are to be ordered
+ * @param stable True if sort should be stable
+ * @param stream CUDA stream used for device memory operations and kernel launches
+ * @param mr Device memory resource used to allocate the returned column's device memory
+ * @return Sorted indices for the input column.
+ */
+template <bool stable>
+std::unique_ptr<column> sorted_order(column_view const& input,
+                                     order column_order,
+                                     null_order null_precedence,
+                                     rmm::cuda_stream_view stream,
+                                     rmm::mr::device_memory_resource* mr);
+
+/**
+ * @copydoc
+ * sorted_order(table_view&,std::vector<order>,std::vector<null_order>,rmm::mr::device_memory_resource*)
+ *
+ * @param stream CUDA stream used for device memory operations and kernel launches
+ */
 template <bool stable = false>
 std::unique_ptr<column> sorted_order(table_view input,
                                      std::vector<order> const& column_order,
@@ -54,16 +105,22 @@ std::unique_ptr<column> sorted_order(table_view input,
 
   std::unique_ptr<column> sorted_indices = cudf::make_numeric_column(
     data_type(type_to_id<size_type>()), input.num_rows(), mask_state::UNALLOCATED, stream, mr);
-
   mutable_column_view mutable_indices_view = sorted_indices->mutable_view();
-
-  auto device_table = table_device_view::create(input, stream);
-
   thrust::sequence(rmm::exec_policy(stream),
                    mutable_indices_view.begin<size_type>(),
                    mutable_indices_view.end<size_type>(),
                    0);
 
+  // fast-path for single column sort
+  if (input.num_columns() == 1) {
+    auto const single_col = input.column(0);
+    auto const col_order  = column_order.empty() ? order::ASCENDING : column_order.front();
+    auto const null_prec  = null_precedence.empty() ? null_order::BEFORE : null_precedence.front();
+    return stable ? sorted_order<true>(single_col, col_order, null_prec, stream, mr)
+                  : sorted_order<false>(single_col, col_order, null_prec, stream, mr);
+  }
+
+  auto device_table = table_device_view::create(input, stream);
   rmm::device_vector<order> d_column_order(column_order);
 
   if (has_nulls(input)) {

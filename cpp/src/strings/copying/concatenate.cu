@@ -119,7 +119,7 @@ __global__ void fused_concatenate_string_offset_kernel(column_device_view const*
                                                        size_t const* partition_offsets,
                                                        size_type const num_input_views,
                                                        size_type const output_size,
-                                                       size_type* output_data,
+                                                       int32_t* output_data,
                                                        bitmask_type* output_mask,
                                                        size_type* out_valid_count)
 {
@@ -221,9 +221,9 @@ std::unique_ptr<column> concatenate(std::vector<column_view> const& columns,
 
   if (strings_count == 0) { return make_empty_strings_column(stream, mr); }
 
-  CUDF_EXPECTS(offsets_count <= std::numeric_limits<size_type>::max(),
+  CUDF_EXPECTS(offsets_count <= static_cast<std::size_t>(std::numeric_limits<size_type>::max()),
                "total number of strings is too large for cudf column");
-  CUDF_EXPECTS(total_bytes <= std::numeric_limits<size_type>::max(),
+  CUDF_EXPECTS(total_bytes <= static_cast<std::size_t>(std::numeric_limits<size_type>::max()),
                "total size of strings is too large for cudf column");
 
   bool const has_nulls =

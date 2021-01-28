@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2020, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -49,13 +49,13 @@ struct row_group_index_info {
 namespace {
 /**
  * @brief Helper for pinned host memory
- **/
+ */
 template <typename T>
 using pinned_buffer = std::unique_ptr<T, decltype(&cudaFreeHost)>;
 
 /**
  * @brief Function that translates GDF compression to ORC compression
- **/
+ */
 orc::CompressionKind to_orc_compression(compression_type compression)
 {
   switch (compression) {
@@ -68,7 +68,7 @@ orc::CompressionKind to_orc_compression(compression_type compression)
 
 /**
  * @brief Function that translates GDF dtype to ORC datatype
- **/
+ */
 constexpr orc::TypeKind to_orc_type(cudf::type_id id)
 {
   switch (id) {
@@ -91,7 +91,7 @@ constexpr orc::TypeKind to_orc_type(cudf::type_id id)
 
 /**
  * @brief Function that translates time unit to nanoscale multiple
- **/
+ */
 template <typename T>
 constexpr T to_clockscale(cudf::type_id timestamp_id)
 {
@@ -110,7 +110,7 @@ constexpr T to_clockscale(cudf::type_id timestamp_id)
  * @brief Helper kernel for converting string data/offsets into nvstrdesc
  * REMOVEME: Once we eliminate the legacy readers/writers, the kernels could be
  * made to use the native offset+data layout.
- **/
+ */
 __global__ void stringdata_to_nvstrdesc(gpu::nvstrdesc_s *dst,
                                         const size_type *offsets,
                                         const char *strdata,
@@ -141,13 +141,13 @@ __global__ void stringdata_to_nvstrdesc(gpu::nvstrdesc_s *dst,
 
 /**
  * @brief Helper class that adds ORC-specific column info
- **/
+ */
 class orc_column_view {
  public:
   /**
    * @brief Constructor that extracts out the string position + length pairs
    * for building dictionaries for string columns
-   **/
+   */
   explicit orc_column_view(size_t id,
                            size_t str_id,
                            column_view const &col,
@@ -194,7 +194,7 @@ class orc_column_view {
 
   /**
    * @brief Function that associates an existing dictionary chunk allocation
-   **/
+   */
   void attach_dict_chunk(gpu::DictionaryChunk *host_dict, gpu::DictionaryChunk *dev_dict)
   {
     dict   = host_dict;
@@ -209,7 +209,7 @@ class orc_column_view {
 
   /**
    * @brief Function that associates an existing stripe dictionary allocation
-   **/
+   */
   void attach_stripe_dict(gpu::StripeDictionary *host_stripe_dict,
                           gpu::StripeDictionary *dev_stripe_dict)
   {
@@ -270,8 +270,7 @@ void writer::impl::init_dictionaries(orc_column_view *columns,
                                      std::vector<int> const &str_col_ids,
                                      uint32_t *dict_data,
                                      uint32_t *dict_index,
-                                     hostdevice_vector<gpu::DictionaryChunk> &dict,
-                                     rmm::cuda_stream_view stream)
+                                     hostdevice_vector<gpu::DictionaryChunk> &dict)
 {
   const size_t num_rowgroups = dict.size() / str_col_ids.size();
 
@@ -309,8 +308,7 @@ void writer::impl::build_dictionaries(orc_column_view *columns,
                                       std::vector<uint32_t> const &stripe_list,
                                       hostdevice_vector<gpu::DictionaryChunk> const &dict,
                                       uint32_t *dict_index,
-                                      hostdevice_vector<gpu::StripeDictionary> &stripe_dict,
-                                      rmm::cuda_stream_view stream)
+                                      hostdevice_vector<gpu::StripeDictionary> &stripe_dict)
 {
   const auto num_rowgroups = dict.size() / str_col_ids.size();
 
@@ -363,8 +361,7 @@ std::vector<Stream> writer::impl::gather_streams(orc_column_view *columns,
                                                  size_t num_columns,
                                                  size_t num_rows,
                                                  std::vector<uint32_t> const &stripe_list,
-                                                 std::vector<int32_t> &strm_ids,
-                                                 const orc_chunked_state &state)
+                                                 std::vector<int32_t> &strm_ids)
 {
   // First n + 1 streams are row index streams, including 'column 0'
   std::vector<Stream> streams;
@@ -385,11 +382,11 @@ std::vector<Stream> writer::impl::gather_streams(orc_column_view *columns,
     int64_t dict_stream_size    = 0;
     bool is_nullable;
 
-    if (state.single_write_mode) {
+    if (single_write_mode) {
       is_nullable = (columns[i].nullable() || columns[i].data_count() < num_rows);
     } else {
-      is_nullable = (i < state.user_metadata_with_nullability.column_nullable.size())
-                      ? state.user_metadata_with_nullability.column_nullable[i]
+      is_nullable = (i < user_metadata_with_nullability.column_nullable.size())
+                      ? user_metadata_with_nullability.column_nullable[i]
                       : true;
     }
     if (is_nullable) {
@@ -527,8 +524,7 @@ rmm::device_buffer writer::impl::encode_columns(orc_column_view *columns,
                                                 std::vector<uint32_t> const &stripe_list,
                                                 std::vector<Stream> const &streams,
                                                 std::vector<int32_t> const &strm_ids,
-                                                hostdevice_vector<gpu::EncChunk> &chunks,
-                                                rmm::cuda_stream_view stream)
+                                                hostdevice_vector<gpu::EncChunk> &chunks)
 {
   // Allocate combined buffer for RLE data and string data output
   std::vector<size_t> strm_offsets(streams.size());
@@ -658,8 +654,7 @@ std::vector<StripeInformation> writer::impl::gather_stripes(
   size_t num_data_streams,
   std::vector<uint32_t> const &stripe_list,
   hostdevice_vector<gpu::EncChunk> &chunks,
-  hostdevice_vector<gpu::StripeStream> &strm_desc,
-  rmm::cuda_stream_view stream)
+  hostdevice_vector<gpu::StripeStream> &strm_desc)
 {
   std::vector<StripeInformation> stripes(stripe_list.size());
   size_t group        = 0;
@@ -706,8 +701,7 @@ std::vector<std::vector<uint8_t>> writer::impl::gather_statistic_blobs(
   size_t num_rowgroups,
   std::vector<uint32_t> const &stripe_list,
   std::vector<StripeInformation> const &stripes,
-  hostdevice_vector<gpu::EncChunk> &chunks,
-  rmm::cuda_stream_view stream)
+  hostdevice_vector<gpu::EncChunk> &chunks)
 {
   size_t num_stat_blobs = (1 + stripe_list.size()) * num_columns;
   size_t num_chunks     = chunks.size();
@@ -899,8 +893,7 @@ void writer::impl::write_data_stream(gpu::StripeStream const &strm_desc,
                                      uint8_t const *compressed_data,
                                      uint8_t *stream_out,
                                      StripeInformation &stripe,
-                                     std::vector<Stream> &streams,
-                                     rmm::cuda_stream_view stream)
+                                     std::vector<Stream> &streams)
 {
   const auto length                                    = strm_desc.stream_size;
   streams[chunk.strm_id[strm_desc.stream_type]].length = length;
@@ -938,47 +931,62 @@ void writer::impl::add_uncompressed_block_headers(std::vector<uint8_t> &v)
 
 writer::impl::impl(std::unique_ptr<data_sink> sink,
                    orc_writer_options const &options,
-                   rmm::mr::device_memory_resource *mr)
+                   SingleWriteMode mode,
+                   rmm::mr::device_memory_resource *mr,
+                   rmm::cuda_stream_view stream)
   : compression_kind_(to_orc_compression(options.get_compression())),
     enable_statistics_(options.enable_statistics()),
     out_sink_(std::move(sink)),
+    single_write_mode(mode == SingleWriteMode::YES),
+    user_metadata(options.get_metadata()),
+    stream(stream),
     _mr(mr)
 {
+  init_state();
 }
 
-void writer::impl::write(table_view const &table,
-                         const table_metadata *metadata,
-                         rmm::cuda_stream_view stream)
+writer::impl::impl(std::unique_ptr<data_sink> sink,
+                   chunked_orc_writer_options const &options,
+                   SingleWriteMode mode,
+                   rmm::mr::device_memory_resource *mr,
+                   rmm::cuda_stream_view stream)
+  : compression_kind_(to_orc_compression(options.get_compression())),
+    enable_statistics_(options.enable_statistics()),
+    out_sink_(std::move(sink)),
+    single_write_mode(mode == SingleWriteMode::YES),
+    stream(stream),
+    _mr(mr)
 {
-  orc_chunked_state state;
-  state.user_metadata     = metadata;
-  state.stream            = stream;
-  state.single_write_mode = true;
+  if (options.get_metadata() != nullptr) {
+    user_metadata_with_nullability = *options.get_metadata();
+    user_metadata                  = &user_metadata_with_nullability;
+  }
 
-  write_chunked_begin(state);
-  write_chunk(table, state);
-  write_chunked_end(state);
+  init_state();
 }
 
-void writer::impl::write_chunked_begin(orc_chunked_state &state)
+writer::impl::~impl() { close(); }
+
+void writer::impl::init_state()
 {
   // Write file header
   out_sink_->host_write(MAGIC, std::strlen(MAGIC));
 }
 
-void writer::impl::write_chunk(table_view const &table, orc_chunked_state &state)
+void writer::impl::write(table_view const &table)
 {
+  CUDF_EXPECTS(not closed, "Data has already been flushed to out and closed");
   size_type num_columns = table.num_columns();
   size_type num_rows    = 0;
 
   // Mapping of string columns for quick look-up
   std::vector<int> str_col_ids;
 
-  if (state.user_metadata_with_nullability.column_nullable.size() > 0) {
-    CUDF_EXPECTS(state.user_metadata_with_nullability.column_nullable.size() ==
-                   static_cast<size_t>(num_columns),
-                 "When passing values in user_metadata_with_nullability, data for all columns must "
-                 "be specified");
+  if (user_metadata_with_nullability.column_nullable.size() > 0) {
+    CUDF_EXPECTS(
+      user_metadata_with_nullability.column_nullable.size() == static_cast<size_t>(num_columns),
+      "When passing values in user_metadata_with_nullability, data for all columns must "
+      "be specified");
   }
 
   // Wrapper around cudf columns to attach ORC-specific type info
@@ -990,7 +998,7 @@ void writer::impl::write_chunk(table_view const &table, orc_chunked_state &state
     const auto current_str_id = str_col_ids.size();
 
     num_rows = std::max<uint32_t>(num_rows, col.size());
-    orc_columns.emplace_back(current_id, current_str_id, col, state.user_metadata, state.stream);
+    orc_columns.emplace_back(current_id, current_str_id, col, user_metadata, stream);
     if (orc_columns.back().is_string()) { str_col_ids.push_back(current_id); }
   }
 
@@ -1007,8 +1015,7 @@ void writer::impl::write_chunk(table_view const &table, orc_chunked_state &state
                       str_col_ids,
                       dict_data.data().get(),
                       dict_index.data().get(),
-                      dict,
-                      state.stream);
+                      dict);
   }
 
   // Decide stripe boundaries early on, based on uncompressed size
@@ -1047,14 +1054,13 @@ void writer::impl::write_chunk(table_view const &table, orc_chunked_state &state
                        stripe_list,
                        dict,
                        dict_index.data().get(),
-                       stripe_dict,
-                       state.stream);
+                       stripe_dict);
   }
 
   // Initialize streams
   std::vector<int32_t> strm_ids(num_columns * gpu::CI_NUM_STREAMS, -1);
   auto streams =
-    gather_streams(orc_columns.data(), orc_columns.size(), num_rows, stripe_list, strm_ids, state);
+    gather_streams(orc_columns.data(), orc_columns.size(), num_rows, stripe_list, strm_ids);
 
   // Encode column data chunks
   const auto num_chunks = num_rowgroups * num_columns;
@@ -1067,34 +1073,21 @@ void writer::impl::write_chunk(table_view const &table, orc_chunked_state &state
                                stripe_list,
                                streams,
                                strm_ids,
-                               chunks,
-                               state.stream);
+                               chunks);
 
   // Assemble individual disparate column chunks into contiguous data streams
   const auto num_index_streams  = (num_columns + 1);
   const auto num_data_streams   = streams.size() - num_index_streams;
   const auto num_stripe_streams = stripe_list.size() * num_data_streams;
   hostdevice_vector<gpu::StripeStream> strm_desc(num_stripe_streams);
-  auto stripes = gather_stripes(num_columns,
-                                num_rows,
-                                num_index_streams,
-                                num_data_streams,
-                                stripe_list,
-                                chunks,
-                                strm_desc,
-                                state.stream);
+  auto stripes = gather_stripes(
+    num_columns, num_rows, num_index_streams, num_data_streams, stripe_list, chunks, strm_desc);
 
   // Gather column statistics
   std::vector<std::vector<uint8_t>> column_stats;
   if (enable_statistics_ && num_columns > 0 && num_rows > 0) {
-    column_stats = gather_statistic_blobs(orc_columns.data(),
-                                          num_columns,
-                                          num_rows,
-                                          num_rowgroups,
-                                          stripe_list,
-                                          stripes,
-                                          chunks,
-                                          state.stream);
+    column_stats = gather_statistic_blobs(
+      orc_columns.data(), num_columns, num_rows, num_rowgroups, stripe_list, stripes, chunks);
   }
 
   // Allocate intermediate output stream buffer
@@ -1130,7 +1123,7 @@ void writer::impl::write_chunk(table_view const &table, orc_chunked_state &state
   }();
 
   // Compress the data streams
-  rmm::device_buffer compressed_data(compressed_bfr_size, state.stream);
+  rmm::device_buffer compressed_data(compressed_bfr_size, stream);
   hostdevice_vector<gpu_inflate_status_s> comp_out(num_compressed_blocks);
   hostdevice_vector<gpu_inflate_input_s> comp_in(num_compressed_blocks);
   if (compression_kind_ != NONE) {
@@ -1186,8 +1179,7 @@ void writer::impl::write_chunk(table_view const &table, orc_chunked_state &state
                         static_cast<uint8_t *>(compressed_data.data()),
                         stream_output.get(),
                         stripes[stripe_id],
-                        streams,
-                        state.stream);
+                        streams);
     }
 
     // Write stripefooter consisting of stream information
@@ -1220,83 +1212,80 @@ void writer::impl::write_chunk(table_view const &table, orc_chunked_state &state
   if (column_stats.size() != 0) {
     // File-level statistics
     // NOTE: Excluded from chunked write mode to avoid the need for merging stats across calls
-    if (state.single_write_mode) {
-      state.ff.statistics.resize(1 + num_columns);
+    if (single_write_mode) {
+      ff.statistics.resize(1 + num_columns);
       // First entry contains total number of rows
       buffer_.resize(0);
       pbw_.putb(1 * 8 + PB_TYPE_VARINT);
       pbw_.put_uint(num_rows);
-      state.ff.statistics[0] = std::move(buffer_);
+      ff.statistics[0] = std::move(buffer_);
       for (int i = 0; i < num_columns; i++) {
         size_t idx = stripe_list.size() * num_columns + i;
-        if (idx < column_stats.size()) {
-          state.ff.statistics[1 + i] = std::move(column_stats[idx]);
-        }
+        if (idx < column_stats.size()) { ff.statistics[1 + i] = std::move(column_stats[idx]); }
       }
     }
     // Stripe-level statistics
-    size_t first_stripe = state.md.stripeStats.size();
-    state.md.stripeStats.resize(first_stripe + stripe_list.size());
+    size_t first_stripe = md.stripeStats.size();
+    md.stripeStats.resize(first_stripe + stripe_list.size());
     for (size_t stripe_id = 0; stripe_id < stripe_list.size(); stripe_id++) {
-      state.md.stripeStats[first_stripe + stripe_id].colStats.resize(1 + num_columns);
+      md.stripeStats[first_stripe + stripe_id].colStats.resize(1 + num_columns);
       buffer_.resize(0);
       pbw_.putb(1 * 8 + PB_TYPE_VARINT);
       pbw_.put_uint(stripes[stripe_id].numberOfRows);
-      state.md.stripeStats[first_stripe + stripe_id].colStats[0] = std::move(buffer_);
+      md.stripeStats[first_stripe + stripe_id].colStats[0] = std::move(buffer_);
       for (int i = 0; i < num_columns; i++) {
         size_t idx = stripe_list.size() * i + stripe_id;
         if (idx < column_stats.size()) {
-          state.md.stripeStats[first_stripe + stripe_id].colStats[1 + i] =
-            std::move(column_stats[idx]);
+          md.stripeStats[first_stripe + stripe_id].colStats[1 + i] = std::move(column_stats[idx]);
         }
       }
     }
   }
-  if (state.ff.headerLength == 0) {
+  if (ff.headerLength == 0) {
     // First call
-    state.ff.headerLength   = std::strlen(MAGIC);
-    state.ff.rowIndexStride = row_index_stride_;
-    state.ff.types.resize(1 + num_columns);
-    state.ff.types[0].kind = STRUCT;
-    state.ff.types[0].subtypes.resize(num_columns);
-    state.ff.types[0].fieldNames.resize(num_columns);
+    ff.headerLength   = std::strlen(MAGIC);
+    ff.rowIndexStride = row_index_stride_;
+    ff.types.resize(1 + num_columns);
+    ff.types[0].kind = STRUCT;
+    ff.types[0].subtypes.resize(num_columns);
+    ff.types[0].fieldNames.resize(num_columns);
     for (int i = 0; i < num_columns; ++i) {
-      state.ff.types[1 + i].kind      = orc_columns[i].orc_kind();
-      state.ff.types[0].subtypes[i]   = 1 + i;
-      state.ff.types[0].fieldNames[i] = orc_columns[i].orc_name();
+      ff.types[1 + i].kind      = orc_columns[i].orc_kind();
+      ff.types[0].subtypes[i]   = 1 + i;
+      ff.types[0].fieldNames[i] = orc_columns[i].orc_name();
     }
   } else {
     // verify the user isn't passing mismatched tables
-    CUDF_EXPECTS(state.ff.types.size() == 1 + orc_columns.size(),
-                 "Mismatch in table structure between multiple calls to write_chunk");
+    CUDF_EXPECTS(ff.types.size() == 1 + orc_columns.size(),
+                 "Mismatch in table structure between multiple calls to write");
     for (auto i = 0; i < num_columns; i++) {
-      CUDF_EXPECTS(state.ff.types[1 + i].kind == orc_columns[i].orc_kind(),
-                   "Mismatch in column types between multiple calls to write_chunk");
+      CUDF_EXPECTS(ff.types[1 + i].kind == orc_columns[i].orc_kind(),
+                   "Mismatch in column types between multiple calls to write");
     }
   }
-  state.ff.stripes.insert(state.ff.stripes.end(),
-                          std::make_move_iterator(stripes.begin()),
-                          std::make_move_iterator(stripes.end()));
-  state.ff.numberOfRows += num_rows;
+  ff.stripes.insert(ff.stripes.end(),
+                    std::make_move_iterator(stripes.begin()),
+                    std::make_move_iterator(stripes.end()));
+  ff.numberOfRows += num_rows;
 }
 
-void writer::impl::write_chunked_end(orc_chunked_state &state)
+void writer::impl::close()
 {
+  if (closed) { return; }
+  closed = true;
   ProtobufWriter pbw_(&buffer_);
   PostScript ps;
 
-  state.ff.contentLength = out_sink_->bytes_written();
-  if (state.user_metadata) {
-    for (auto it = state.user_metadata->user_data.begin();
-         it != state.user_metadata->user_data.end();
-         it++) {
-      state.ff.metadata.push_back({it->first, it->second});
+  ff.contentLength = out_sink_->bytes_written();
+  if (user_metadata) {
+    for (auto it = user_metadata->user_data.begin(); it != user_metadata->user_data.end(); it++) {
+      ff.metadata.push_back({it->first, it->second});
     }
   }
   // Write statistics metadata
-  if (state.md.stripeStats.size() != 0) {
+  if (md.stripeStats.size() != 0) {
     buffer_.resize((compression_kind_ != NONE) ? 3 : 0);
-    pbw_.write(state.md);
+    pbw_.write(md);
     add_uncompressed_block_headers(buffer_);
     ps.metadataLength = buffer_.size();
     out_sink_->host_write(buffer_.data(), buffer_.size());
@@ -1304,7 +1293,7 @@ void writer::impl::write_chunked_end(orc_chunked_state &state)
     ps.metadataLength = 0;
   }
   buffer_.resize((compression_kind_ != NONE) ? 3 : 0);
-  pbw_.write(state.ff);
+  pbw_.write(ff);
   add_uncompressed_block_headers(buffer_);
 
   // Write postscript metadata
@@ -1322,8 +1311,20 @@ void writer::impl::write_chunked_end(orc_chunked_state &state)
 // Forward to implementation
 writer::writer(std::unique_ptr<data_sink> sink,
                orc_writer_options const &options,
-               rmm::mr::device_memory_resource *mr)
-  : _impl(std::make_unique<impl>(std::move(sink), options, mr))
+               SingleWriteMode mode,
+               rmm::mr::device_memory_resource *mr,
+               rmm::cuda_stream_view stream)
+  : _impl(std::make_unique<impl>(std::move(sink), options, mode, mr, stream))
+{
+}
+
+// Forward to implementation
+writer::writer(std::unique_ptr<data_sink> sink,
+               chunked_orc_writer_options const &options,
+               SingleWriteMode mode,
+               rmm::mr::device_memory_resource *mr,
+               rmm::cuda_stream_view stream)
+  : _impl(std::make_unique<impl>(std::move(sink), options, mode, mr, stream))
 {
 }
 
@@ -1331,24 +1332,10 @@ writer::writer(std::unique_ptr<data_sink> sink,
 writer::~writer() = default;
 
 // Forward to implementation
-void writer::write(table_view const &table,
-                   const table_metadata *metadata,
-                   rmm::cuda_stream_view stream)
-{
-  _impl->write(table, metadata, stream);
-}
+void writer::write(table_view const &table) { _impl->write(table); }
 
 // Forward to implementation
-void writer::write_chunked_begin(orc_chunked_state &state) { _impl->write_chunked_begin(state); }
-
-// Forward to implementation
-void writer::write_chunk(table_view const &table, orc_chunked_state &state)
-{
-  _impl->write_chunk(table, state);
-}
-
-// Forward to implementation
-void writer::write_chunked_end(orc_chunked_state &state) { _impl->write_chunked_end(state); }
+void writer::close() { _impl->close(); }
 
 }  // namespace orc
 }  // namespace detail
