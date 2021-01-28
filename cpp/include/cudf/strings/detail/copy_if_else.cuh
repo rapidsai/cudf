@@ -112,7 +112,7 @@ std::unique_ptr<cudf::column> copy_if_else(
                              std::move(chars_column),
                              null_count,
                              std::move(null_mask),
-                             stream.value(),
+                             stream,
                              mr);
 }
 
