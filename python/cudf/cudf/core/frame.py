@@ -5,7 +5,7 @@ import functools
 import operator
 import warnings
 from collections import OrderedDict, abc as abc
-from typing import overload
+from typing import Any, Dict, Tuple, overload
 
 import cupy
 import numpy as np
@@ -2309,7 +2309,7 @@ class Frame(libcudf.table.Table):
         result._postprocess_columns(self)
         return result
 
-    def replace(self, to_replace, replacement):
+    def replace(self, to_replace: Any, replacement: Any) -> "Frame":
         copy_data = self._data.copy()
         if not (to_replace is None and replacement is None):
             (
@@ -3582,10 +3582,36 @@ class Frame(libcudf.table.Table):
         return self._mimic_inplace(result, inplace=inplace)
 
 
-def _get_replacement_values_for_columns(to_replace, value, columns):
-    to_replace_columns = {}
-    values_columns = {}
-    all_nan_columns = {}
+def _get_replacement_values_for_columns(
+    to_replace: Any, value: Any, columns: Dict[Any, Any]
+) -> Tuple[Dict[Any, Any], Dict[Any, Any], Dict[Any, Any]]:
+    """
+    Returns a per column mapping for the values to be replaced, new
+    values to be replaced with and if all the values are empty.
+
+    Parameters
+    ----------
+    to_replace : numeric, str, list-like or dict
+        Contains the values to be replaced.
+    value : numeric, str, list-like, or dict
+        Contains the values to replace `to_replace` with.
+    columns : dict
+        A column to dtype mapping representing dtype of columns.
+
+    Returns
+    -------
+    all_nan_columns : dict
+        A dict mapping of all columns if they contain all na values
+    to_replace_columns : dict
+        A dict mapping of all columns and the existing values that
+        have to be replaced.
+    values_columns : dict
+        A dict mapping of all columns and the corresponding values
+        to be replaced with.
+    """
+    to_replace_columns: Dict[Any, Any] = {}
+    values_columns: Dict[Any, Any] = {}
+    all_nan_columns: Dict[Any, Any] = {}
 
     if is_scalar(to_replace) and is_scalar(value):
         to_replace_columns = {col: [to_replace] for col in columns}

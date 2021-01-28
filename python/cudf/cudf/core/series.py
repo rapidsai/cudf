@@ -2494,6 +2494,34 @@ class Series(Frame, Serializable):
         3       b
         4    <NA>
         dtype: object
+
+        If there is a mimatch in types of the values in
+        ``to_replace`` & ``value`` with the actual series, then
+        cudf exhibits different behaviour with respect to pandas
+        and the pairs are ignored silently:
+
+        >>> s = cudf.Series(['b', 'a', 'a', 'b', 'a'])
+        >>> s
+        0    b
+        1    a
+        2    a
+        3    b
+        4    a
+        dtype: object
+        >>> s.replace('a', 1)
+        0    b
+        1    a
+        2    a
+        3    b
+        4    a
+        dtype: object
+        >>> s.replace(['a', 'c'], [1, 2])
+        0    b
+        1    a
+        2    a
+        3    b
+        4    a
+        dtype: object
         """
         if limit is not None:
             raise NotImplementedError("limit parameter is not implemented yet")
