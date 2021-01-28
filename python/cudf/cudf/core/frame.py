@@ -1,4 +1,5 @@
 # Copyright (c) 2020-2021, NVIDIA CORPORATION.
+from __future__ import annotations
 
 import copy
 import functools
@@ -40,21 +41,19 @@ class Frame(libcudf.table.Table):
     """
 
     @classmethod
-    def _from_table(cls, table: "Frame"):
+    def _from_table(cls, table: Frame):
         return cls(table._data, index=table._index)
 
     @overload
-    def _mimic_inplace(self, result: "Frame") -> "Frame":
+    def _mimic_inplace(self, result: Frame) -> Frame:
         ...
 
     @overload
-    def _mimic_inplace(self, result: "Frame", inplace: Literal[True]):
+    def _mimic_inplace(self, result: Frame, inplace: Literal[True]):
         ...
 
     @overload
-    def _mimic_inplace(
-        self, result: "Frame", inplace: Literal[False]
-    ) -> "Frame":
+    def _mimic_inplace(self, result: Frame, inplace: Literal[False]) -> Frame:
         ...
 
     def _mimic_inplace(self, result, inplace=False):
@@ -2309,11 +2308,11 @@ class Frame(libcudf.table.Table):
         result._postprocess_columns(self)
         return result
 
-    def replace(self, to_replace: Any, replacement: Any) -> "Frame":
+    def replace(self, to_replace: Any, replacement: Any) -> Frame:
         copy_data = self._data.copy()
         if not (to_replace is None and replacement is None):
             (
-                all_nan_per_column,
+                all_na_per_column,
                 to_replace_per_column,
                 replacements_per_column,
             ) = _get_replacement_values_for_columns(
@@ -2329,7 +2328,7 @@ class Frame(libcudf.table.Table):
                     copy_data[name] = col.find_and_replace(
                         to_replace_per_column[name],
                         replacements_per_column[name],
-                        all_nan_per_column[name],
+                        all_na_per_column[name],
                     )
                 except KeyError:
                     # Do not change the copy_data[name]
@@ -3600,7 +3599,7 @@ def _get_replacement_values_for_columns(
 
     Returns
     -------
-    all_nan_columns : dict
+    all_na_columns : dict
         A dict mapping of all columns if they contain all na values
     to_replace_columns : dict
         A dict mapping of all columns and the existing values that
@@ -3611,7 +3610,7 @@ def _get_replacement_values_for_columns(
     """
     to_replace_columns: Dict[Any, Any] = {}
     values_columns: Dict[Any, Any] = {}
-    all_nan_columns: Dict[Any, Any] = {}
+    all_na_columns: Dict[Any, Any] = {}
 
     if is_scalar(to_replace) and is_scalar(value):
         to_replace_columns = {col: [to_replace] for col in columns}
@@ -3716,14 +3715,14 @@ def _get_replacement_values_for_columns(
     for i in to_replace_columns:
         if i in values_columns:
             if isinstance(values_columns[i], list):
-                all_nan = values_columns[i].count(None) == len(
+                all_na = values_columns[i].count(None) == len(
                     values_columns[i]
                 )
             else:
-                all_nan = False
-            all_nan_columns[i] = all_nan
+                all_na = False
+            all_na_columns[i] = all_na
 
-    return all_nan_columns, to_replace_columns, values_columns
+    return all_na_columns, to_replace_columns, values_columns
 
 
 # If the dictionary array is a string array and of length `0`
