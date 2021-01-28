@@ -99,7 +99,7 @@ struct sort_groupby_helper {
   /**
    * @brief Groups a column of values according to `keys`
    *
-   * The order of values within each group is undefined.
+   * The values within each group maintains their original order.
    *
    * @throw cudf::logic_error if `values.size() != keys.num_rows()`
    *

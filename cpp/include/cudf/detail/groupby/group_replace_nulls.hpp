@@ -51,15 +51,15 @@ namespace detail {
  * @param[in] mr Device memory resource used to allocate device memory of the returned column.
  */
 template <typename LabelIterator>
-std::unique_ptr<column> group_replace_nulls(cudf::column_view const& value,
+std::unique_ptr<column> group_replace_nulls(cudf::column_view const& grouped_value,
                                             LabelIterator group_labels_begin,
                                             cudf::replace_policy replace_policy,
                                             rmm::cuda_stream_view stream,
                                             rmm::mr::device_memory_resource* mr)
 {
-  cudf::size_type size = value.size();
+  cudf::size_type size = grouped_value.size();
 
-  auto device_in = cudf::column_device_view::create(value);
+  auto device_in = cudf::column_device_view::create(grouped_value);
   auto index     = thrust::make_counting_iterator<cudf::size_type>(0);
   auto valid_it  = cudf::detail::make_validity_iterator(*device_in);
   auto in_begin  = thrust::make_zip_iterator(thrust::make_tuple(index, valid_it));
@@ -86,7 +86,7 @@ std::unique_ptr<column> group_replace_nulls(cudf::column_view const& value,
       rmm::exec_policy(stream), gl_rbegin, gl_rbegin + size, in_rbegin, gm_rbegin, eq, func);
   }
 
-  auto output = cudf::detail::gather(cudf::table_view({value}),
+  auto output = cudf::detail::gather(cudf::table_view({grouped_value}),
                                      gather_map.begin(),
                                      gather_map.end(),
                                      cudf::out_of_bounds_policy::DONT_CHECK);

@@ -71,6 +71,23 @@ struct aggregation_result {
 };
 
 /**
+ * @brief The result of a scan aggregation
+ *
+ * A `scan_result` contains the result of a groupby scan operation, currently
+ * only `groupby::replace_nulls` is supported under this category. `result`
+ * holds the result column that contains scanned result with each values in
+ * their sorted groups. `key_sort_order` holds sort order of the input values,
+ * useful for users to reconstruct the original order of the values from `result`.
+ *
+ * TODO: when `groupby::scan` expands to take multiple requests, this struct should
+ * be refactored to take multiple results per requests.
+ */
+struct scan_result {
+  std::unique_ptr<column> result;
+  std::unique_ptr<column> key_sort_order;
+};
+
+/**
  * @brief Groups values by keys and computes aggregations on those groups.
  */
 class groupby {
@@ -198,43 +215,39 @@ class groupby {
                     rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
   /**
-   * @brief Replace null values with first preceding/following non-null value with the same group
-   * key
+   * @brief Performs grouped replace nulls on @p value
    *
-   * Similar to cudf::replace_nulls with `replace_policy` parameter, except that the replacement
-   * value is looked up from each group, not globally.
+   * For each `value[i] == NULL` in group `j`, `value[i]` is replaced with the first non-null value
+   * in group `j` that precedes or follows `value[i]`. If a non-null value is not found in the
+   * specified direction, `value[i]` is left NULL.
    *
-   * If `input[i]` is NULL, then `output[i]` will contain the first non-null value that has the
-   * same group key as `input[i]`, where the non-null value may precede or follow `input[i]`,
-   * based on `replace_policy`.
+   * The returned pair contains a column of the sorted keys and a `scan_result`.
+   *
+   * The `scan_result` contains the result column in which each group is sorted by its key, and all
+   * values of the same group is located in a contiguous memory. `scan_result` also provides a
+   * column containing the sort order of each value, which can be used to reconstruct the original
+   * order of the values.
    *
    * Example:
    * @code{.pseudo}
    *
    * //Inputs:
-   * gbobj = groupby({0,  1,  1,    0});
-   * value = column ({42, 21, NULL, NULL});
-   * policy = PRECEDING;
-   *
-   * //Groups:
-   * group 0: {42, NULL}
-   * group 1: {21, NULL}
+   * keys:    {2, 1, 2, 1}
+   * values:  {3, 4, NULL, NULL}
    *
    * //Outputs:
-   * res = gbobj.replace_nulls(value, policy);
-   * group 0 is now {42, 42}
-   * group 1 is now {21, 21}
-   * res is now {42, 21, 21, 42}
-   *
+   * sorted_keys:     {1, 1, 2, 2}
+   * result:          {4, 4, 3, 3}
+   * key_sort_order:  {2, 0, 3, 1}
    * @endcode
    *
    * @param[in] value A column whose null values will be replaced.
    * @param[in] replace_policy Specify the position of replacement values relative to null values.
    * @param[in] mr Device memory resource used to allocate device memory of the returned column.
    *
-   * @return Copy of `value` with null values replaced based on `replace_policy`.
+   * @return
    */
-  std::unique_ptr<cudf::column> replace_nulls(
+  std::pair<std::unique_ptr<table>, scan_result> replace_nulls(
     column_view const& value,
     cudf::replace_policy const& replace_policy,
     rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
