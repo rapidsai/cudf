@@ -18,7 +18,6 @@
 #include <cudf/types.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
-#include <rmm/device_vector.hpp>
 
 #include <memory>
 #include <utility>
