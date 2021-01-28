@@ -1,9 +1,11 @@
-# Copyright (c) 2020, NVIDIA CORPORATION.
+# Copyright (c) 2020-2021, NVIDIA CORPORATION.
+
 import copy
 import functools
 import operator
 import warnings
 from collections import OrderedDict, abc as abc
+from typing import overload
 
 import cupy
 import numpy as np
@@ -11,6 +13,7 @@ import pandas as pd
 import pyarrow as pa
 from nvtx import annotate
 from pandas.api.types import is_dict_like, is_dtype_equal
+from typing_extensions import Literal
 
 import cudf
 from cudf import _lib as libcudf
@@ -38,8 +41,22 @@ class Frame(libcudf.table.Table):
     """
 
     @classmethod
-    def _from_table(cls, table):
+    def _from_table(cls, table: "Frame"):
         return cls(table._data, index=table._index)
+
+    @overload
+    def _mimic_inplace(self, result: "Frame") -> "Frame":
+        ...
+
+    @overload
+    def _mimic_inplace(self, result: "Frame", inplace: Literal[True]):
+        ...
+
+    @overload
+    def _mimic_inplace(
+        self, result: "Frame", inplace: Literal[False]
+    ) -> "Frame":
+        ...
 
     def _mimic_inplace(self, result, inplace=False):
         if inplace:
@@ -466,25 +483,12 @@ class Frame(libcudf.table.Table):
         else:
             return self._index.equals(other._index)
 
-    def _get_columns_by_label(self, labels, downcast=False):
+    def _get_columns_by_label(self, labels, downcast):
         """
         Returns columns of the Frame specified by `labels`
 
-        If downcast is True, try and downcast from a DataFrame to a Series
         """
-        new_data = self._data.select_by_label(labels)
-        if downcast:
-            if is_scalar(labels):
-                nlevels = 1
-            elif isinstance(labels, tuple):
-                nlevels = len(labels)
-            if self._data.multiindex is False or nlevels == self._data.nlevels:
-                return self._constructor_sliced(
-                    new_data, name=labels, index=self.index
-                )
-        return self._constructor(
-            new_data, columns=new_data.to_pandas_index(), index=self.index
-        )
+        return self._data.select_by_label(labels)
 
     def _get_columns_by_index(self, indices):
         """
@@ -1295,7 +1299,9 @@ class Frame(libcudf.table.Table):
         0  Alfred  Batmobile 1940-04-25
         """
         if axis == 0:
-            result = self._drop_na_rows(how=how, subset=subset, thresh=thresh)
+            result = self._drop_na_rows(
+                how=how, subset=subset, thresh=thresh, drop_nan=True
+            )
         else:
             result = self._drop_na_columns(
                 how=how, subset=subset, thresh=thresh
@@ -1442,7 +1448,9 @@ class Frame(libcudf.table.Table):
 
         return self._mimic_inplace(result, inplace=inplace)
 
-    def _drop_na_rows(self, how="any", subset=None, thresh=None):
+    def _drop_na_rows(
+        self, how="any", subset=None, thresh=None, drop_nan=False
+    ):
         """
         Drops null rows from `self`.
 
@@ -1474,12 +1482,23 @@ class Frame(libcudf.table.Table):
         ]
         if len(subset_cols) == 0:
             return self.copy(deep=True)
-        result = self.__class__._from_table(
+
+        frame = self.copy(deep=False)
+        if drop_nan:
+            for name, col in frame._data.items():
+                if name in subset and isinstance(
+                    col, cudf.core.column.NumericalColumn
+                ):
+                    frame._data[name] = col.nans_to_nulls()
+                else:
+                    frame._data[name] = col
+
+        result = frame.__class__._from_table(
             libcudf.stream_compaction.drop_nulls(
-                self, how=how, keys=subset, thresh=thresh
+                frame, how=how, keys=subset, thresh=thresh
             )
         )
-        result._postprocess_columns(self)
+        result._postprocess_columns(frame)
         return result
 
     def _drop_na_columns(self, how="any", subset=None, thresh=None):
@@ -1500,7 +1519,10 @@ class Frame(libcudf.table.Table):
                 thresh = len(df)
 
         for col in self._data.names:
-            if (len(df[col]) - df[col].null_count) < thresh:
+            no_threshold_valid_count = (
+                len(df[col]) - df[col].nans_to_nulls().null_count
+            ) < thresh
+            if no_threshold_valid_count:
                 continue
             out_cols.append(col)
 
@@ -1608,10 +1630,16 @@ class Frame(libcudf.table.Table):
                 "na_option must be one of 'keep', 'top', or 'bottom'"
             )
 
-        # TODO code for selecting numeric columns
         source = self
         if numeric_only:
-            warnings.warn("numeric_only=True is not implemented yet")
+            numeric_cols = (
+                name
+                for name in self._data.names
+                if is_numerical_dtype(self._data[name])
+            )
+            source = self._get_columns_by_label(numeric_cols)
+            if source.empty:
+                return source.astype("float64")
 
         out_rank_table = libcudf.sort.rank_columns(
             source, method_enum, na_option, ascending, pct
@@ -1748,6 +1776,117 @@ class Frame(libcudf.table.Table):
             "Implicit conversion to a host PyArrow Array via __arrow_array__ "
             "is not allowed, To explicitly construct a PyArrow Array, "
             "consider using .to_arrow()"
+        )
+
+    def round(self, decimals=0):
+        """
+        Round a DataFrame to a variable number of decimal places.
+
+        Parameters
+        ----------
+        decimals : int, dict, Series
+            Number of decimal places to round each column to. If an int is
+            given, round each column to the same number of places.
+            Otherwise dict and Series round to variable numbers of places.
+            Column names should be in the keys if `decimals` is a
+            dict-like, or in the index if `decimals` is a Series. Any
+            columns not included in `decimals` will be left as is. Elements
+            of `decimals` which are not columns of the input will be
+            ignored.
+
+        Returns
+        -------
+        DataFrame
+            A DataFrame with the affected columns rounded to the specified
+            number of decimal places.
+
+        Examples
+        --------
+        >>> df = cudf.DataFrame(
+                [(.21, .32), (.01, .67), (.66, .03), (.21, .18)],
+        ...     columns=['dogs', 'cats']
+        ... )
+        >>> df
+            dogs  cats
+        0  0.21  0.32
+        1  0.01  0.67
+        2  0.66  0.03
+        3  0.21  0.18
+
+        By providing an integer each column is rounded to the same number
+        of decimal places
+
+        >>> df.round(1)
+            dogs  cats
+        0   0.2   0.3
+        1   0.0   0.7
+        2   0.7   0.0
+        3   0.2   0.2
+
+        With a dict, the number of places for specific columns can be
+        specified with the column names as key and the number of decimal
+        places as value
+
+        >>> df.round({'dogs': 1, 'cats': 0})
+            dogs  cats
+        0   0.2   0.0
+        1   0.0   1.0
+        2   0.7   0.0
+        3   0.2   0.0
+
+        Using a Series, the number of places for specific columns can be
+        specified with the column names as index and the number of
+        decimal places as value
+
+        >>> decimals = cudf.Series([0, 1], index=['cats', 'dogs'])
+        >>> df.round(decimals)
+            dogs  cats
+        0   0.2   0.0
+        1   0.0   1.0
+        2   0.7   0.0
+        3   0.2   0.0
+        """
+
+        if isinstance(decimals, cudf.Series):
+            decimals = decimals.to_pandas()
+
+        if isinstance(decimals, (dict, pd.Series)):
+            if (
+                isinstance(decimals, pd.Series)
+                and not decimals.index.is_unique
+            ):
+                raise ValueError("Index of decimals must be unique")
+
+            cols = {
+                name: col.round(decimals[name])
+                if (
+                    name in decimals.keys()
+                    and pd.api.types.is_numeric_dtype(col.dtype)
+                )
+                else col.copy(deep=True)
+                for name, col in self._data.items()
+            }
+        elif isinstance(decimals, int):
+            cols = {
+                name: col.round(decimals)
+                if pd.api.types.is_numeric_dtype(col.dtype)
+                else col.copy(deep=True)
+                for name, col in self._data.items()
+            }
+        else:
+            raise TypeError(
+                "decimals must be an integer, a dict-like or a Series"
+            )
+
+        return self.__class__._from_table(
+            Frame(
+                data=cudf.core.column_accessor.ColumnAccessor(
+                    cols,
+                    multiindex=self._data.multiindex,
+                    level_names=self._data.level_names,
+                )
+            ),
+            index=self._index,
         )
 
     @annotate("SAMPLE", color="orange", domain="cudf_python")
@@ -2056,20 +2195,44 @@ class Frame(libcudf.table.Table):
         else:
             result = cudf_category_frame
 
-        # In a scenario where column is of type list/other non
-        # pandas types, there will be no pandas metadata associated with
-        # given arrow table as those types can only originate from
-        # arrow.
+        # There are some special cases that need to be handled
+        # based on metadata.
         if pandas_dtypes:
             for name in result._data.names:
-                if pandas_dtypes[name] == "categorical":
+                dtype = None
+                if (
+                    len(result._data[name]) == 0
+                    and pandas_dtypes[name] == "categorical"
+                ):
+                    # When pandas_dtype is a categorical column and the size
+                    # of column is 0(i.e., empty) then we will have an
+                    # int8 column in result._data[name] returned by libcudf,
+                    # which needs to be type-casted to 'category' dtype.
                     dtype = "category"
-                elif pandas_dtypes[name] == "bool":
-                    dtype = pandas_dtypes[name]
-                else:
+                elif (
+                    pandas_dtypes[name] == "empty"
+                    and np_dtypes[name] == "object"
+                ):
+                    # When a string column has all null values, pandas_dtype is
+                    # is specified as 'empty' and np_dtypes as 'object',
+                    # hence handling this special case to type-cast the empty
+                    # float column to str column.
                     dtype = np_dtypes[name]
+                elif pandas_dtypes[
+                    name
+                ] == "object" and cudf.utils.dtypes.is_struct_dtype(
+                    np_dtypes[name]
+                ):
+                    # Incase of struct column, libcudf is not aware of names of
+                    # struct fields, hence renaming the struct fields is
+                    # necessary by extracting the field names from arrow
+                    # struct types.
+                    result._data[name] = result._data[name]._rename_fields(
+                        [field.name for field in data[name].type]
+                    )
 
-                result._data[name] = result._data[name].astype(dtype)
+                if dtype is not None:
+                    result._data[name] = result._data[name].astype(dtype)
 
         result = libcudf.table.Table(
             result._data.select_by_label(column_names)

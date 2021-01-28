@@ -1,4 +1,4 @@
-# Copyright (c) 2018, NVIDIA CORPORATION.
+# Copyright (c) 2018-2021, NVIDIA CORPORATION.
 from functools import lru_cache
 
 import cupy
@@ -6,7 +6,7 @@ import numpy as np
 from numba import cuda
 
 import cudf
-from cudf.utils.utils import check_equals_float, check_equals_int, rint
+from cudf.utils.utils import check_equals_float, check_equals_int
 
 try:
     # Numba >= 0.49
@@ -67,25 +67,6 @@ def gpu_diff(in_col, out_col, out_mask, N):
             out_mask[i] = True
         if i >= (in_col.size + N) and i < in_col.size:
             out_mask[i] = False
-
-
-@cuda.jit
-def gpu_round(in_col, out_col, decimal):
-    i = cuda.grid(1)
-    f = 10 ** decimal
-
-    if i < in_col.size:
-        ret = in_col[i] * f
-        ret = rint(ret)
-        tmp = ret / f
-        out_col[i] = tmp
-
-
-def apply_round(data, decimal):
-    output_dary = cuda.device_array_like(data)
-    if output_dary.size > 0:
-        gpu_round.forall(output_dary.size)(data, output_dary, decimal)
-    return output_dary
 
 
 # Find segments

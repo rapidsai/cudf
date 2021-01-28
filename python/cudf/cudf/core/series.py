@@ -1,9 +1,11 @@
-# Copyright (c) 2018-2020, NVIDIA CORPORATION.
+# Copyright (c) 2018-2021, NVIDIA CORPORATION.
+
 import pickle
 import warnings
 from collections import abc as abc
 from numbers import Number
 from shutil import get_terminal_size
+from typing import Any, Set
 from uuid import uuid4
 
 import cupy
@@ -42,6 +44,7 @@ from cudf.utils import cudautils, docutils, ioutils, utils
 from cudf.utils.docutils import copy_docstring
 from cudf.utils.dtypes import (
     can_convert_to_column,
+    is_decimal_dtype,
     is_list_dtype,
     is_list_like,
     is_mixed_with_object_dtype,
@@ -401,6 +404,20 @@ class Series(Frame, Serializable):
         cls = type(self)
         params.update(kwargs)
         return cls(**params)
+
+    def _get_columns_by_label(self, labels, downcast=False):
+        """Return the column specified by `labels`
+
+        For cudf.Series, either the column, or an empty series is returned.
+        Parameter `downcast` does not have effects.
+        """
+        new_data = super()._get_columns_by_label(labels, downcast)
+
+        return (
+            self._constructor(data=new_data, index=self.index)
+            if len(new_data) > 0
+            else self._constructor(dtype=self.dtype, name=self.name)
+        )
 
     @classmethod
     def from_arrow(cls, array):
@@ -1098,6 +1115,7 @@ class Series(Frame, Serializable):
                 preprocess._column, cudf.core.column.CategoricalColumn
             )
             and not is_list_dtype(preprocess.dtype)
+            and not is_decimal_dtype(preprocess.dtype)
         ) or isinstance(
             preprocess._column, cudf.core.column.timedelta.TimeDeltaColumn
         ):
@@ -1569,6 +1587,8 @@ class Series(Frame, Serializable):
             return other._column
         elif isinstance(other, Index):
             return Series(other)._column
+        elif other is cudf.NA:
+            return cudf.Scalar(other, dtype=self.dtype)
         else:
             return self._column.normalize_binop_value(other)
 
@@ -1702,17 +1722,17 @@ class Series(Frame, Serializable):
         """
         return self.__mul__(-1)
 
-    @copy_docstring(CategoricalAccessor.__init__)
+    @copy_docstring(CategoricalAccessor.__init__)  # type: ignore
     @property
     def cat(self):
         return CategoricalAccessor(column=self._column, parent=self)
 
-    @copy_docstring(StringMethods.__init__)
+    @copy_docstring(StringMethods.__init__)  # type: ignore
     @property
     def str(self):
         return StringMethods(column=self._column, parent=self)
 
-    @copy_docstring(ListMethods.__init__)
+    @copy_docstring(ListMethods.__init__)  # type: ignore
     @property
     def list(self):
         return ListMethods(column=self._column, parent=self)
@@ -2448,7 +2468,14 @@ class Series(Frame, Serializable):
 
         def encode(cat):
             if cat is None:
-                return self.isnull()
+                if self.dtype.kind == "f":
+                    # Need to ignore `np.nan` values incase
+                    # of a float column
+                    return self.__class__(
+                        libcudf.unary.is_null((self._column))
+                    )
+                else:
+                    return self.isnull()
             elif np.issubdtype(type(cat), np.floating) and np.isnan(cat):
                 return self.__class__(libcudf.unary.is_nan(self._column))
             else:
@@ -3497,8 +3524,31 @@ class Series(Frame, Serializable):
         return Series(val_counts.index.sort_values(), name=self.name)
 
     def round(self, decimals=0):
-        """Round a Series to a configurable number of decimal places.
         """
+        Round each value in a Series to the given number of decimals.
+
+        Parameters
+        ----------
+        decimals : int, default 0
+            Number of decimal places to round to. If decimals is negative,
+            it specifies the number of positions to the left of the decimal
+            point.
+
+        Returns
+        -------
+        Series
+            Rounded values of the Series.
+
+        Examples
+        --------
+        >>> s = cudf.Series([0.1, 1.4, 2.9])
+        >>> s.round()
+        0    0.0
+        1    1.0
+        2    3.0
+        dtype: float64
+        """
+
         return Series(
             self._column.round(decimals=decimals),
             name=self.name,
@@ -4147,7 +4197,7 @@ class Series(Frame, Serializable):
         axis=0,
         level=None,
         as_index=True,
-        sort=True,
+        sort=False,
         group_keys=True,
         squeeze=False,
         observed=False,
@@ -4409,7 +4459,7 @@ class Series(Frame, Serializable):
         """
         return self.index
 
-    _accessors = set()
+    _accessors = set()  # type: Set[Any]
 
 
 truediv_int_dtype_corrections = {

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2020, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -21,6 +21,7 @@
 #include <cudf_test/type_lists.hpp>
 
 #include <cudf/detail/aggregation/aggregation.hpp>
+#include <cudf/dictionary/update_keys.hpp>
 
 namespace cudf {
 namespace test {
@@ -168,6 +169,32 @@ TEST_F(groupby_max_string_test, zero_valid_values)
     test_single_agg(keys, vals, expect_keys, expect_vals, std::move(agg2), force_use_sort_impl::YES);
 }
 // clang-format on
+
+struct groupby_dictionary_max_test : public cudf::test::BaseFixture {
+};
+
+TEST_F(groupby_dictionary_max_test, basic)
+{
+  using K = int32_t;
+  using V = std::string;
+
+  // clang-format off
+  fixed_width_column_wrapper<K> keys{     1,     2,    3,     1,     2,     2,     1,    3,    3,    2 };
+  dictionary_column_wrapper<V>  vals{ "año", "bit", "₹1", "aaa", "zit", "bat", "aaa", "$1", "₹1", "wut"};
+  fixed_width_column_wrapper<K> expect_keys   {     1,     2,    3 };
+  dictionary_column_wrapper<V>  expect_vals_w({ "año", "zit", "₹1" });
+  // clang-format on
+
+  auto expect_vals = cudf::dictionary::set_keys(expect_vals_w, vals.keys());
+
+  test_single_agg(keys, vals, expect_keys, expect_vals->view(), cudf::make_max_aggregation());
+  test_single_agg(keys,
+                  vals,
+                  expect_keys,
+                  expect_vals->view(),
+                  cudf::make_max_aggregation(),
+                  force_use_sort_impl::YES);
+}
 
 }  // namespace test
 }  // namespace cudf
