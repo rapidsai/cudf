@@ -9,6 +9,7 @@ import sys
 import warnings
 from collections import OrderedDict, defaultdict
 from collections.abc import Iterable, Mapping, Sequence
+from typing import Any, Set
 
 import cupy
 import numpy as np
@@ -2364,7 +2365,7 @@ class DataFrame(Frame, Serializable):
         for k in self:
             yield (k, self[k])
 
-    @property
+    @property  # type: ignore
     @annotate("DATAFRAME_LOC", color="blue", domain="cudf_python")
     def loc(self):
         """
@@ -2535,14 +2536,14 @@ class DataFrame(Frame, Serializable):
         """
         return self.loc
 
-    @property
+    @property  # type: ignore
     @annotate("DATAFRAME_COLUMNS_GETTER", color="yellow", domain="cudf_python")
     def columns(self):
         """Returns a tuple of columns
         """
         return self._data.to_pandas_index()
 
-    @columns.setter
+    @columns.setter  # type: ignore
     @annotate("DATAFRAME_COLUMNS_SETTER", color="yellow", domain="cudf_python")
     def columns(self, columns):
         if isinstance(columns, (cudf.MultiIndex, cudf.Index)):
@@ -4229,14 +4230,13 @@ class DataFrame(Frame, Serializable):
         )
         return df
 
-    @copy_docstring(DataFrameGroupBy.__init__)
     def groupby(
         self,
         by=None,
         axis=0,
         level=None,
         as_index=True,
-        sort=True,
+        sort=False,
         group_keys=True,
         squeeze=False,
         observed=False,
@@ -4274,7 +4274,6 @@ class DataFrame(Frame, Serializable):
             sort=sort,
         )
 
-    @copy_docstring(Rolling)
     def rolling(
         self, window, min_periods=None, center=False, axis=0, win_type=None
     ):
@@ -7272,7 +7271,7 @@ class DataFrame(Frame, Serializable):
                 return False
         return super().equals(other)
 
-    _accessors = set()
+    _accessors = set()  # type: Set[Any]
 
 
 def from_pandas(obj, nan_as_null=None):

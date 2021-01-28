@@ -5,6 +5,7 @@ import warnings
 from collections import abc as abc
 from numbers import Number
 from shutil import get_terminal_size
+from typing import Any, Set
 from uuid import uuid4
 
 import cupy
@@ -43,6 +44,7 @@ from cudf.utils import cudautils, docutils, ioutils, utils
 from cudf.utils.docutils import copy_docstring
 from cudf.utils.dtypes import (
     can_convert_to_column,
+    is_decimal_dtype,
     is_list_dtype,
     is_list_like,
     is_mixed_with_object_dtype,
@@ -1099,6 +1101,7 @@ class Series(Frame, Serializable):
                 preprocess._column, cudf.core.column.CategoricalColumn
             )
             and not is_list_dtype(preprocess.dtype)
+            and not is_decimal_dtype(preprocess.dtype)
         ) or isinstance(
             preprocess._column, cudf.core.column.timedelta.TimeDeltaColumn
         ):
@@ -1705,17 +1708,17 @@ class Series(Frame, Serializable):
         """
         return self.__mul__(-1)
 
-    @copy_docstring(CategoricalAccessor.__init__)
+    @copy_docstring(CategoricalAccessor.__init__)  # type: ignore
     @property
     def cat(self):
         return CategoricalAccessor(column=self._column, parent=self)
 
-    @copy_docstring(StringMethods.__init__)
+    @copy_docstring(StringMethods.__init__)  # type: ignore
     @property
     def str(self):
         return StringMethods(column=self._column, parent=self)
 
-    @copy_docstring(ListMethods.__init__)
+    @copy_docstring(ListMethods.__init__)  # type: ignore
     @property
     def list(self):
         return ListMethods(column=self._column, parent=self)
@@ -4180,7 +4183,7 @@ class Series(Frame, Serializable):
         axis=0,
         level=None,
         as_index=True,
-        sort=True,
+        sort=False,
         group_keys=True,
         squeeze=False,
         observed=False,
@@ -4442,7 +4445,7 @@ class Series(Frame, Serializable):
         """
         return self.index
 
-    _accessors = set()
+    _accessors = set()  # type: Set[Any]
 
 
 truediv_int_dtype_corrections = {

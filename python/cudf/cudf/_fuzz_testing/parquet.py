@@ -1,4 +1,4 @@
-# Copyright (c) 2020, NVIDIA CORPORATION.
+# Copyright (c) 2020-2021, NVIDIA CORPORATION.
 
 
 import logging
@@ -95,6 +95,10 @@ class ParquetReader(IOFuzz):
                 col_size = self._rand(len(self._df.columns))
                 params_dict[param] = list(
                     np.unique(np.random.choice(self._df.columns, col_size))
+                )
+            elif param in ("skiprows", "num_rows"):
+                params_dict[param] = np.random.choice(
+                    [None, self._rand(len(self._df))]
                 )
             else:
                 params_dict[param] = np.random.choice(values)
