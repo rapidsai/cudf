@@ -136,7 +136,8 @@ std::unique_ptr<table> sort_lists(table_view const& values,
   key_value_columns.insert(key_value_columns.end(), values.begin(), values.end());
   validate_list_columns(table_view{key_value_columns}, stream);
 
-  auto sorted_order = segmented_sorted_order(keys, column_order, null_precedence, stream);
+  auto sorted_order = segmented_sorted_order(
+    keys, column_order, null_precedence, stream, rmm::mr::get_current_device_resource());
 
   std::vector<column_view> child_columns(values.num_columns());
   std::transform(values.begin(), values.end(), child_columns.begin(), [stream](auto col) {
