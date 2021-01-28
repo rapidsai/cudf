@@ -430,6 +430,8 @@ std::unique_ptr<column> fixed_point_binary_operation(scalar const& lhs,
 {
   using namespace numeric;
 
+  CUDF_EXPECTS(is_fixed_point(lhs.type()), "Input must have fixed_point data_type.");
+  CUDF_EXPECTS(is_fixed_point(rhs.type()), "Input must have fixed_point data_type.");
   CUDF_EXPECTS(is_supported_fixed_point_binop(op), "Unsupported fixed_point binary operation");
   CUDF_EXPECTS(lhs.type().id() == rhs.type().id(), "Data type mismatch");
   if (op == binary_operator::TRUE_DIV)
@@ -531,6 +533,8 @@ std::unique_ptr<column> fixed_point_binary_operation(column_view const& lhs,
 {
   using namespace numeric;
 
+  CUDF_EXPECTS(is_fixed_point(lhs.type()), "Input must have fixed_point data_type.");
+  CUDF_EXPECTS(is_fixed_point(rhs.type()), "Input must have fixed_point data_type.");
   CUDF_EXPECTS(is_supported_fixed_point_binop(op), "Unsupported fixed_point binary operation");
   CUDF_EXPECTS(lhs.type().id() == rhs.type().id(), "Data type mismatch");
   if (op == binary_operator::TRUE_DIV)
@@ -632,6 +636,8 @@ std::unique_ptr<column> fixed_point_binary_operation(column_view const& lhs,
 {
   using namespace numeric;
 
+  CUDF_EXPECTS(is_fixed_point(lhs.type()), "Input must have fixed_point data_type.");
+  CUDF_EXPECTS(is_fixed_point(rhs.type()), "Input must have fixed_point data_type.");
   CUDF_EXPECTS(is_supported_fixed_point_binop(op), "Unsupported fixed_point binary operation");
   CUDF_EXPECTS(lhs.type().id() == rhs.type().id(), "Data type mismatch");
   if (op == binary_operator::TRUE_DIV)
