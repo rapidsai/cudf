@@ -41,20 +41,20 @@
 namespace cudf {
 namespace detail {
 
-// returns row index for each element of the row in list column.
-rmm::device_uvector<size_type> get_list_segment_indices(lists_column_view const& lc,
-                                                        rmm::cuda_stream_view stream)
+// returns segment indices for each element for all segments.
+rmm::device_uvector<size_type> get_segment_indices(size_type num_rows,
+                                                   column_view const& offsets,
+                                                   rmm::cuda_stream_view stream)
 {
-  auto sliced_child = lc.get_sliced_child(stream);
-  rmm::device_uvector<size_type> segment_ids(sliced_child.size(), stream);
+  rmm::device_uvector<size_type> segment_ids(num_rows, stream);
 
-  auto offsets           = lc.offsets().begin<size_type>() + lc.offset();
+  auto offset_begin = offsets.begin<size_type>();  // assumes already offset column contains offset.
   auto offsets_minus_one = thrust::make_transform_iterator(
-    offsets, [offsets] __device__(auto i) { return i - offsets[0] - 1; });
+    offset_begin, [offset_begin] __device__(auto i) { return i - offset_begin[0] - 1; });
   auto counting_iter = thrust::make_counting_iterator<size_type>(0);
   thrust::lower_bound(rmm::exec_policy(stream),
                       offsets_minus_one + 1,
-                      offsets_minus_one + lc.size() + 1,
+                      offsets_minus_one + offsets.size(),
                       counting_iter,
                       counting_iter + segment_ids.size(),
                       segment_ids.begin());
@@ -97,20 +97,22 @@ void validate_list_columns(table_view const& keys, rmm::cuda_stream_view stream)
 }
 
 std::unique_ptr<column> segmented_sorted_order(table_view const& keys,
+                                               column_view const& segment_offsets,
                                                std::vector<order> const& column_order,
                                                std::vector<null_order> const& null_precedence,
                                                rmm::cuda_stream_view stream,
                                                rmm::mr::device_memory_resource* mr)
 {
-  auto segment_ids = get_list_segment_indices(lists_column_view{keys.column(0)}, stream);
-  // insert segment id before all child columns.
-  std::vector<column_view> child_key_columns(keys.num_columns() + 1);
-  child_key_columns[0] =
-    column_view(data_type(type_to_id<size_type>()), segment_ids.size(), segment_ids.data());
-  std::transform(keys.begin(), keys.end(), child_key_columns.begin() + 1, [stream](auto col) {
-    return lists_column_view(col).get_sliced_child(stream);
-  });
-  auto child_keys = table_view(child_key_columns);
+  // Get segment id of each element in all segments.
+  auto segment_ids = get_segment_indices(keys.num_rows(), segment_offsets, stream);
+
+  // insert segment id before all columns.
+  std::vector<column_view> keys_with_segid;
+  keys_with_segid.reserve(keys.num_columns() + 1);
+  keys_with_segid.push_back(
+    column_view(data_type(type_to_id<size_type>()), segment_ids.size(), segment_ids.data()));
+  keys_with_segid.insert(keys_with_segid.end(), keys.begin(), keys.end());
+  auto segid_keys = table_view(keys_with_segid);
 
   std::vector<order> child_column_order(column_order);
   if (not column_order.empty())
@@ -120,7 +122,7 @@ std::unique_ptr<column> segmented_sorted_order(table_view const& keys,
     child_null_precedence.insert(child_null_precedence.begin(), null_order::AFTER);
 
   // return sorted order of child columns
-  return detail::sorted_order(child_keys, child_column_order, child_null_precedence, stream, mr);
+  return detail::sorted_order(segid_keys, child_column_order, child_null_precedence, stream, mr);
 }
 
 std::unique_ptr<table> sort_lists(table_view const& values,
@@ -135,10 +137,29 @@ std::unique_ptr<table> sort_lists(table_view const& values,
   key_value_columns.insert(key_value_columns.end(), keys.begin(), keys.end());
   key_value_columns.insert(key_value_columns.end(), values.begin(), values.end());
   validate_list_columns(table_view{key_value_columns}, stream);
+  CUDF_EXPECTS(keys.num_rows() > 0, "keys table should have atleast one list column");
 
-  auto sorted_order = segmented_sorted_order(
-    keys, column_order, null_precedence, stream, rmm::mr::get_current_device_resource());
+  // Get sorted order of child key columns
+  auto child_key_columns = thrust::make_transform_iterator(
+    keys.begin(), [stream](auto col) { return lists_column_view(col).get_sliced_child(stream); });
 
+  auto lc             = lists_column_view{keys.column(0)};
+  auto offset         = lc.offsets();
+  auto segment_offset = column_view(offset.type(),
+                                    offset.size(),
+                                    offset.head(),
+                                    offset.null_mask(),
+                                    offset.null_count(),
+                                    offset.offset() + lc.offset());
+  auto sorted_order   = segmented_sorted_order(
+    table_view{std::vector<column_view>(child_key_columns, child_key_columns + keys.num_columns())},
+    segment_offset,
+    column_order,
+    null_precedence,
+    stream,
+    rmm::mr::get_current_device_resource());
+
+  // Gather segmented sort of child value columns
   std::vector<column_view> child_columns(values.num_columns());
   std::transform(values.begin(), values.end(), child_columns.begin(), [stream](auto col) {
     return lists_column_view(col).get_sliced_child(stream);
@@ -151,6 +172,7 @@ std::unique_ptr<table> sort_lists(table_view const& values,
                                      mr)
                         ->release();
 
+  // Construct list columns from gathered child columns & return
   std::vector<std::unique_ptr<column>> list_columns;
   std::transform(values.begin(),
                  values.end(),
