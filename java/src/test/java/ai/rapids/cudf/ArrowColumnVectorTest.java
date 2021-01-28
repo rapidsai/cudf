@@ -71,10 +71,11 @@ public class ArrowColumnVectorTest extends CudfTestBase {
         ByteBuffer valid = vector.getValidityBuffer().nioBuffer();
         builder.addBatch(vector.getValueCount(), vector.getNullCount(), data, valid, null);
       }
-      ColumnVector cv = builder.buildAndPutOnDevice();
-      ColumnVector expected = ColumnVector.fromBoxedInts(expectedArr.toArray(new Integer[0]));
-      assertEquals(cv.getType(), DType.INT32);
-      assertColumnsAreEqual(expected, cv, "ints");
+      try (ColumnVector cv = builder.buildAndPutOnDevice();
+           ColumnVector expected = ColumnVector.fromBoxedInts(expectedArr.toArray(new Integer[0]))) {
+        assertEquals(cv.getType(), DType.INT32);
+        assertColumnsAreEqual(expected, cv, "ints");
+      }
     } finally {
       for (int i = 0; i < numVecs; i++) {
         vectors[i].close();
@@ -97,10 +98,11 @@ public class ArrowColumnVectorTest extends CudfTestBase {
       ByteBuffer data = vector.getDataBuffer().nioBuffer();
       ByteBuffer valid = vector.getValidityBuffer().nioBuffer();
       builder.addBatch(vector.getValueCount(), vector.getNullCount(), data, valid, null);
-      ColumnVector cv = builder.buildAndPutOnDevice();
-      assertEquals(cv.getType(), DType.INT64);
-      ColumnVector expected = ColumnVector.fromBoxedLongs(expectedArr.toArray(new Long[0]));
-      assertColumnsAreEqual(expected, cv, "Longs");
+      try (ColumnVector cv = builder.buildAndPutOnDevice();
+           ColumnVector expected = ColumnVector.fromBoxedLongs(expectedArr.toArray(new Long[0]))) {
+        assertEquals(cv.getType(), DType.INT64);
+        assertColumnsAreEqual(expected, cv, "Longs");
+      }
     }
   }
 
@@ -126,10 +128,11 @@ public class ArrowColumnVectorTest extends CudfTestBase {
       validOnHeap.put(data);
       validOnHeap.flip();
       builder.addBatch(vector.getValueCount(), vector.getNullCount(), dataOnHeap, validOnHeap, null);
-      ColumnVector cv = builder.buildAndPutOnDevice();
-      assertEquals(cv.getType(), DType.INT64);
-      ColumnVector expected = ColumnVector.fromBoxedLongs(expectedArr.toArray(new Long[0]));
-      assertColumnsAreEqual(expected, cv, "Longs");
+      try (ColumnVector cv = builder.buildAndPutOnDevice();
+           ColumnVector expected = ColumnVector.fromBoxedLongs(expectedArr.toArray(new Long[0]))) {
+        assertEquals(cv.getType(), DType.INT64);
+        assertColumnsAreEqual(expected, cv, "Longs");
+      }
     }
   }
 
@@ -148,11 +151,12 @@ public class ArrowColumnVectorTest extends CudfTestBase {
       ByteBuffer data = vector.getDataBuffer().nioBuffer();
       ByteBuffer valid = vector.getValidityBuffer().nioBuffer();
       builder.addBatch(vector.getValueCount(), vector.getNullCount(), data, valid, null);
-      ColumnVector cv = builder.buildAndPutOnDevice();
-      assertEquals(cv.getType(), DType.FLOAT64);
       double[] array = expectedArr.stream().mapToDouble(i->i).toArray();
-      ColumnVector expected = ColumnVector.fromDoubles(array);
-      assertColumnsAreEqual(expected, cv, "doubles");
+      try (ColumnVector cv = builder.buildAndPutOnDevice();
+           ColumnVector expected = ColumnVector.fromDoubles(array)) {
+        assertEquals(cv.getType(), DType.FLOAT64);
+        assertColumnsAreEqual(expected, cv, "doubles");
+      }
     }
   }
 
@@ -171,15 +175,16 @@ public class ArrowColumnVectorTest extends CudfTestBase {
       ByteBuffer data = vector.getDataBuffer().nioBuffer();
       ByteBuffer valid = vector.getValidityBuffer().nioBuffer();
       builder.addBatch(vector.getValueCount(), vector.getNullCount(), data, valid, null);
-      ColumnVector cv = builder.buildAndPutOnDevice();
-      assertEquals(cv.getType(), DType.FLOAT32);
       float[] floatArray = new float[expectedArr.size()];
       int i = 0;
       for (Float f : expectedArr) {
         floatArray[i++] = (f != null ? f : Float.NaN); // Or whatever default you want.
       }
-      ColumnVector expected = ColumnVector.fromFloats(floatArray);
-      assertColumnsAreEqual(expected, cv, "floats");
+      try (ColumnVector cv = builder.buildAndPutOnDevice();
+           ColumnVector expected = ColumnVector.fromFloats(floatArray)) {
+        assertEquals(cv.getType(), DType.FLOAT32);
+        assertColumnsAreEqual(expected, cv, "floats");
+      }
     }
   }
 
@@ -200,10 +205,11 @@ public class ArrowColumnVectorTest extends CudfTestBase {
       ByteBuffer valid = vector.getValidityBuffer().nioBuffer();
       ByteBuffer offsets = vector.getOffsetBuffer().nioBuffer();
       builder.addBatch(vector.getValueCount(), vector.getNullCount(), data, valid, offsets);
-      ColumnVector cv = builder.buildAndPutOnDevice();
-      assertEquals(cv.getType(), DType.STRING);
-      ColumnVector expected = ColumnVector.fromStrings(expectedArr.toArray(new String[0]));
-      assertColumnsAreEqual(expected, cv, "Strings");
+      try (ColumnVector cv = builder.buildAndPutOnDevice();
+           ColumnVector expected = ColumnVector.fromStrings(expectedArr.toArray(new String[0]))) {
+        assertEquals(cv.getType(), DType.STRING);
+        assertColumnsAreEqual(expected, cv, "Strings");
+      }
     }
   }
 
@@ -233,10 +239,11 @@ public class ArrowColumnVectorTest extends CudfTestBase {
       offsetsOnHeap.put(offsets);
       offsetsOnHeap.flip();
       builder.addBatch(vector.getValueCount(), vector.getNullCount(), dataOnHeap, validOnHeap, offsetsOnHeap);
-      ColumnVector cv = builder.buildAndPutOnDevice();
-      assertEquals(cv.getType(), DType.STRING);
-      ColumnVector expected = ColumnVector.fromStrings(expectedArr.toArray(new String[0]));
-      assertColumnsAreEqual(expected, cv, "Strings");
+      try (ColumnVector cv = builder.buildAndPutOnDevice();
+           ColumnVector expected = ColumnVector.fromStrings(expectedArr.toArray(new String[0]));) {
+        assertEquals(cv.getType(), DType.STRING);
+        assertColumnsAreEqual(expected, cv, "Strings");
+      }
     }
   }
 
@@ -255,11 +262,12 @@ public class ArrowColumnVectorTest extends CudfTestBase {
       ByteBuffer data = vector.getDataBuffer().nioBuffer();
       ByteBuffer valid = vector.getValidityBuffer().nioBuffer();
       builder.addBatch(vector.getValueCount(), vector.getNullCount(), data, valid, null);
-      ColumnVector cv = builder.buildAndPutOnDevice();
-      assertEquals(cv.getType(), DType.TIMESTAMP_DAYS);
       int[] array = expectedArr.stream().mapToInt(i->i).toArray();
-      ColumnVector expected = ColumnVector.daysFromInts(array);
-      assertColumnsAreEqual(expected, cv, "timestamp days");
+      try (ColumnVector cv = builder.buildAndPutOnDevice();
+           ColumnVector expected = ColumnVector.daysFromInts(array);) {
+        assertEquals(cv.getType(), DType.TIMESTAMP_DAYS);
+        assertColumnsAreEqual(expected, cv, "timestamp days");
+      }
     }
   }
 
