@@ -113,9 +113,8 @@ __device__ void GenerateDictionaryIndices(dict_state_s *s, uint32_t t)
 
   for (uint32_t i = 0; i < s->row_cnt; i += 1024) {
     uint32_t row       = s->ck.start_row + i + t;
-    uint32_t access_id = row + s->col.leaf_column_offset;
     uint32_t is_valid =
-      (i + t < s->row_cnt && row < s->col.num_rows) ? s->col.leaf_column->is_valid(access_id) : 0;
+      (i + t < s->row_cnt && row < s->col.num_rows) ? s->col.leaf_column->is_valid(row) : 0;
     uint32_t dict_idx = (is_valid) ? dict_index[row] : 0;
     uint32_t is_unique =
       (is_valid &&
@@ -202,16 +201,15 @@ __global__ void __launch_bounds__(block_size, 1)
 
       if (is_valid) {
         row                = frag_start_row + s->frag_dict[i + t];
-        uint32_t access_id = row + s->col.leaf_column_offset;
         len                = dtype_len;
         if (dtype == BYTE_ARRAY) {
-          auto str1 = s->col.leaf_column->element<string_view>(access_id);
+          auto str1 = s->col.leaf_column->element<string_view>(row);
           len += str1.size_bytes();
           hash = nvstr_hash16(reinterpret_cast<const uint8_t *>(str1.data()), str1.size_bytes());
           // Walk the list of rows with the same hash
           next_addr = &s->hashmap[hash];
           while ((next = atomicCAS(next_addr, 0, row + 1)) != 0) {
-            auto const current = next + s->col.leaf_column_offset - 1;
+            auto const current = next - 1;
             auto str2          = s->col.leaf_column->element<string_view>(current);
             if (str1 == str2) {
               is_dupe = 1;
@@ -223,19 +221,19 @@ __global__ void __launch_bounds__(block_size, 1)
           uint64_t val;
 
           if (dtype_len_in == 8) {
-            val  = s->col.leaf_column->element<uint64_t>(access_id);
+            val  = s->col.leaf_column->element<uint64_t>(row);
             hash = uint64_hash16(val);
           } else {
             val = (dtype_len_in == 4)
-                    ? s->col.leaf_column->element<uint32_t>(access_id)
-                    : (dtype_len_in == 2) ? s->col.leaf_column->element<uint16_t>(access_id)
-                                          : s->col.leaf_column->element<uint8_t>(access_id);
+                    ? s->col.leaf_column->element<uint32_t>(row)
+                    : (dtype_len_in == 2) ? s->col.leaf_column->element<uint16_t>(row)
+                                          : s->col.leaf_column->element<uint8_t>(row);
             hash = uint32_hash16(val);
           }
           // Walk the list of rows with the same hash
           next_addr = &s->hashmap[hash];
           while ((next = atomicCAS(next_addr, 0, row + 1)) != 0) {
-            auto const current = next + s->col.leaf_column_offset - 1;
+            auto const current = next - 1;
             uint64_t val2      = (dtype_len_in == 8)
                               ? s->col.leaf_column->element<uint64_t>(current)
                               : (dtype_len_in == 4)

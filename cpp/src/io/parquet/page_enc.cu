@@ -159,12 +159,11 @@ __global__ void __launch_bounds__(block_size) gpuInitPageFragments(PageFragment 
       auto current_start_value_idx = start_row;
       while (col.type().id() == type_id::LIST) {
         auto offset_col         = col.child(lists_column_view::offsets_column_index);
-        current_start_value_idx = offset_col.element<size_type>(current_start_value_idx);
-        end_value_idx           = offset_col.element<size_type>(end_value_idx);
+        current_start_value_idx = offset_col.element<size_type>(current_start_value_idx + col.offset());
+        end_value_idx           = offset_col.element<size_type>(end_value_idx + col.offset());
         col                     = col.child(lists_column_view::child_column_index);
       }
-      s->start_value_idx = current_start_value_idx + s->col.leaf_column_offset;
-      end_value_idx += s->col.leaf_column_offset;
+      s->start_value_idx = current_start_value_idx;
     }
     s->frag.start_value_idx = s->start_value_idx;
     s->frag.num_leaf_values = end_value_idx - s->start_value_idx;
@@ -978,10 +977,9 @@ __global__ void __launch_bounds__(128, 8) gpuEncodePages(EncPage *pages,
       while (s->rle_numvals < s->page.num_rows) {
         uint32_t rle_numvals = s->rle_numvals;
         uint32_t nrows       = min(s->page.num_rows - rle_numvals, 128);
-        uint32_t row         = s->page.start_row + rle_numvals + t + s->col.leaf_column_offset;
+        uint32_t row         = s->page.start_row + rle_numvals + t;
         // Definition level encodes validity. Checks the valid map and if it is valid, then sets the
         // def_lvl accordingly and sets it in s->vals which is then given to RleEncode to encode
-        // Note: Non-list leaf column does not require taking into account leaf_column_offset
         uint32_t def_lvl = (rle_numvals + t < s->page.num_rows && row < s->col.num_rows)
                              ? s->col.leaf_column->is_valid(row)
                              : 0;
@@ -1071,7 +1069,7 @@ __global__ void __launch_bounds__(128, 8) gpuEncodePages(EncPage *pages,
       auto current_page_start_val = s->page_start_val;
       while (col.type().id() == type_id::LIST) {
         current_page_start_val = col.child(lists_column_view::offsets_column_index)
-                                   .element<size_type>(current_page_start_val);
+                                   .element<size_type>(current_page_start_val + col.offset());
         col = col.child(lists_column_view::child_column_index);
       }
       s->page_start_val = current_page_start_val;
@@ -1081,18 +1079,15 @@ __global__ void __launch_bounds__(128, 8) gpuEncodePages(EncPage *pages,
   for (uint32_t cur_val_idx = 0; cur_val_idx < s->page.num_leaf_values;) {
     uint32_t nvals   = min(s->page.num_leaf_values - cur_val_idx, 128);
     uint32_t val_idx = s->page_start_val + cur_val_idx + t;
-    uint32_t access_id;
     uint32_t is_valid, warp_valids, len, pos;
 
     if (s->page.page_type == PageType::DICTIONARY_PAGE) {
       is_valid  = (cur_val_idx + t < s->page.num_leaf_values);
       val_idx   = (is_valid) ? s->col.dict_data[val_idx] : val_idx;
-      access_id = val_idx + s->col.leaf_column_offset;
     } else {
-      access_id = val_idx + s->col.leaf_column_offset;
       is_valid =
-        (access_id < s->col.leaf_column->size() && cur_val_idx + t < s->page.num_leaf_values)
-          ? s->col.leaf_column->is_valid(access_id)
+        (val_idx < s->col.leaf_column->size() && cur_val_idx + t < s->page.num_leaf_values)
+          ? s->col.leaf_column->is_valid(val_idx)
           : 0;
     }
     warp_valids = ballot(is_valid);
@@ -1112,7 +1107,7 @@ __global__ void __launch_bounds__(128, 8) gpuEncodePages(EncPage *pages,
         if (is_valid) {
           uint32_t v;
           if (dtype == BOOLEAN) {
-            v = s->col.leaf_column->element<uint8_t>(access_id);
+            v = s->col.leaf_column->element<uint8_t>(val_idx);
           } else {
             v = s->col.dict_index[val_idx];
           }
@@ -1136,7 +1131,7 @@ __global__ void __launch_bounds__(128, 8) gpuEncodePages(EncPage *pages,
       if (is_valid) {
         len = dtype_len_out;
         if (dtype == BYTE_ARRAY) {
-          len += s->col.leaf_column->element<string_view>(access_id).size_bytes();
+          len += s->col.leaf_column->element<string_view>(val_idx).size_bytes();
         }
       } else {
         len = 0;
@@ -1154,18 +1149,18 @@ __global__ void __launch_bounds__(128, 8) gpuEncodePages(EncPage *pages,
           case FLOAT: {
             int32_t v;
             if (dtype_len_in == 4)
-              v = s->col.leaf_column->element<int32_t>(access_id);
+              v = s->col.leaf_column->element<int32_t>(val_idx);
             else if (dtype_len_in == 2)
-              v = s->col.leaf_column->element<int16_t>(access_id);
+              v = s->col.leaf_column->element<int16_t>(val_idx);
             else
-              v = s->col.leaf_column->element<int8_t>(access_id);
+              v = s->col.leaf_column->element<int8_t>(val_idx);
             dst[pos + 0] = v;
             dst[pos + 1] = v >> 8;
             dst[pos + 2] = v >> 16;
             dst[pos + 3] = v >> 24;
           } break;
           case INT64: {
-            int64_t v        = s->col.leaf_column->element<int64_t>(access_id);
+            int64_t v        = s->col.leaf_column->element<int64_t>(val_idx);
             int32_t ts_scale = s->col.ts_scale;
             if (ts_scale != 0) {
               if (ts_scale < 0) {
@@ -1184,7 +1179,7 @@ __global__ void __launch_bounds__(128, 8) gpuEncodePages(EncPage *pages,
             dst[pos + 7] = v >> 56;
           } break;
           case INT96: {
-            int64_t v        = s->col.leaf_column->element<int64_t>(access_id);
+            int64_t v        = s->col.leaf_column->element<int64_t>(val_idx);
             int32_t ts_scale = s->col.ts_scale;
             if (ts_scale != 0) {
               if (ts_scale < 0) {
@@ -1226,11 +1221,11 @@ __global__ void __launch_bounds__(128, 8) gpuEncodePages(EncPage *pages,
           } break;
 
           case DOUBLE: {
-            auto v = s->col.leaf_column->element<double>(access_id);
+            auto v = s->col.leaf_column->element<double>(val_idx);
             memcpy(dst + pos, &v, 8);
           } break;
           case BYTE_ARRAY: {
-            auto str     = s->col.leaf_column->element<string_view>(access_id);
+            auto str     = s->col.leaf_column->element<string_view>(val_idx);
             uint32_t v   = len - 4;  // string length
             dst[pos + 0] = v;
             dst[pos + 1] = v >> 8;
@@ -2021,29 +2016,20 @@ void InitColumnDeviceViews(EncColumnDesc *col_desc,
      leaf_column_views] __device__() mutable {
       for (size_type i = 0; i < parent_col_view.num_columns(); ++i) {
         column_device_view col = parent_col_view.column(i);
-        // leaf_column_offset is required to store the offset of the
-        // leaf column if the column type is LIST. This is done because
-        // the element accessor of a leaf column device view does not
-        // take into account the offset of the parent column.
-        // Therefore this offset is selectively applied only for list columns
-        size_type leaf_column_offset = 0;
         if (col.type().id() == type_id::LIST) {
           col_desc[i].parent_column = parent_col_view.begin() + i;
-          leaf_column_offset        = col.offset();
         } else {
           col_desc[i].parent_column = nullptr;
         }
         // traverse till leaf column
         while (col.type().id() == type_id::LIST) {
           auto offset_col    = col.child(lists_column_view::offsets_column_index);
-          leaf_column_offset = offset_col.element<size_type>(leaf_column_offset);
           col                = col.child(lists_column_view::child_column_index);
         }
         // Store leaf_column to device storage
         column_device_view *leaf_col_ptr = leaf_column_views + i;
         *leaf_col_ptr                    = col;
         col_desc[i].leaf_column          = leaf_col_ptr;
-        col_desc[i].leaf_column_offset   = leaf_column_offset;
       }
     },
     stream);

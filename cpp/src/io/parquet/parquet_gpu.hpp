@@ -230,9 +230,8 @@ struct EncColumnDesc : stats_column_desc {
   uint8_t const *rep_values;       //!< Pre-calculated repetition level values
   uint8_t const *def_values;       //!< Pre-calculated definition level values
 
-  column_device_view *leaf_column;
-  column_device_view *parent_column;
-  size_type leaf_column_offset;
+  column_device_view *leaf_column;   //!< Pointer to leaf column
+  column_device_view *parent_column; //!< Pointer to parent column. Is nullptr if not list type.
 };
 
 constexpr int max_page_fragment_size = 5000;  //!< Max number of rows in a page fragment
