@@ -3629,7 +3629,9 @@ def _get_replacement_values_for_columns(
             values_columns = {
                 col: [value]
                 if pd.api.types.is_numeric_dtype(columns_dtype_map[col])
-                else [value] * len(to_replace)
+                else cudf.utils.utils.scalar_broadcast_to(
+                    value, (len(to_replace),), np.dtype(type(value)),
+                )
                 for col in columns_dtype_map
             }
         elif cudf.utils.dtypes.is_list_like(value):
@@ -3644,7 +3646,7 @@ def _get_replacement_values_for_columns(
                     col: to_replace for col in columns_dtype_map
                 }
                 values_columns = {col: value for col in columns_dtype_map}
-        elif isinstance(value, cudf.Series):
+        elif cudf.utils.dtypes.is_column_like(value):
             to_replace_columns = {col: to_replace for col in columns_dtype_map}
             values_columns = {col: value for col in columns_dtype_map}
         else:
