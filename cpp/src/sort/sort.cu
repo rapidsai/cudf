@@ -55,6 +55,53 @@ std::unique_ptr<table> sort_by_key(table_view const& values,
                         mr);
 }
 
+struct inplace_column_sort_fn {
+  template <typename T, typename std::enable_if_t<cudf::is_fixed_width<T>()>* = nullptr>
+  void operator()(mutable_column_view& col, bool ascending, rmm::cuda_stream_view stream) const
+  {
+    CUDF_EXPECTS(!col.has_nulls(), "Nulls not supported for in-place sort");
+    using DeviceT = device_storage_type_t<T>;
+    if (ascending) {
+      thrust::sort(rmm::exec_policy(stream),
+                   col.begin<DeviceT>(),
+                   col.end<DeviceT>(),
+                   thrust::less<DeviceT>());
+    } else {
+      thrust::sort(rmm::exec_policy(stream),
+                   col.begin<DeviceT>(),
+                   col.end<DeviceT>(),
+                   thrust::greater<DeviceT>());
+    }
+  }
+
+  template <typename T, typename std::enable_if_t<!cudf::is_fixed_width<T>()>* = nullptr>
+  void operator()(mutable_column_view&, bool, rmm::cuda_stream_view) const
+  {
+    CUDF_FAIL("Column type must be relationally comparable and fixed-width");
+  }
+};
+
+std::unique_ptr<table> sort(table_view input,
+                            std::vector<order> const& column_order,
+                            std::vector<null_order> const& null_precedence,
+                            rmm::cuda_stream_view stream,
+                            rmm::mr::device_memory_resource* mr)
+{
+  CUDF_FUNC_RANGE();
+  if (input.num_columns() == 1 && !input.column(0).has_nulls() &&
+      cudf::is_fixed_width(input.column(0).type())) {
+    auto output    = std::make_unique<column>(input.column(0), stream, mr);
+    auto view      = output->mutable_view();
+    bool ascending = (column_order.empty() ? true : column_order.front() == order::ASCENDING);
+    cudf::type_dispatcher(output->type(), inplace_column_sort_fn{}, view, ascending, stream);
+    std::vector<std::unique_ptr<column>> columns;
+    columns.emplace_back(std::move(output));
+    return std::make_unique<table>(std::move(columns));
+  }
+  return detail::sort_by_key(
+    input, input, column_order, null_precedence, rmm::cuda_stream_default, mr);
+}
+
 }  // namespace detail
 
 std::unique_ptr<column> sorted_order(table_view input,
@@ -72,8 +119,7 @@ std::unique_ptr<table> sort(table_view input,
                             rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::sort_by_key(
-    input, input, column_order, null_precedence, rmm::cuda_stream_default, mr);
+  return detail::sort(input, column_order, null_precedence, rmm::cuda_stream_default, mr);
 }
 
 std::unique_ptr<table> sort_by_key(table_view const& values,
