@@ -3653,7 +3653,7 @@ def _get_replacement_values_for_columns(
             raise TypeError(
                 "value argument must be scalar, list-like or Series"
             )
-    elif isinstance(to_replace, cudf.Series):
+    elif _is_series(to_replace):
         if value is None:
             to_replace_columns = {
                 col: as_column(to_replace.index) for col in columns_dtype_map
@@ -3668,7 +3668,7 @@ def _get_replacement_values_for_columns(
             values_columns = {
                 col: value[col] for col in to_replace_columns if col in value
             }
-        elif is_scalar(value) or isinstance(value, cudf.Series):
+        elif is_scalar(value) or _is_series(value):
             to_replace_columns = {
                 col: to_replace[col]
                 for col in columns_dtype_map
@@ -3701,7 +3701,7 @@ def _get_replacement_values_for_columns(
             values_columns = {
                 col: value[col] for col in columns_dtype_map if col in value
             }
-        elif is_scalar(value) or isinstance(value, cudf.Series):
+        elif is_scalar(value) or _is_series(value):
             to_replace_columns = {
                 col: to_replace[col]
                 for col in columns_dtype_map
@@ -3848,3 +3848,11 @@ def _reassign_categories(categories, cols, col_idxs):
                 offset=cols[name].offset,
                 size=cols[name].size,
             )
+
+
+def _is_series(obj):
+    """
+    Checks if the `obj` is of type `cudf.Series`
+    instead of checking for isinstance(obj, cudf.Series)
+    """
+    return isinstance(obj, Frame) and obj.ndim == 1 and obj._index is not None
