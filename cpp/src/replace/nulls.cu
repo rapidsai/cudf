@@ -387,7 +387,7 @@ std::unique_ptr<cudf::column> replace_nulls_policy_impl(cudf::column_view const&
   auto valid_it  = cudf::detail::make_validity_iterator(*device_in);
   auto in_begin  = thrust::make_zip_iterator(thrust::make_tuple(index, valid_it));
 
-  rmm::device_vector<cudf::size_type> gather_map(input.size());
+  rmm::device_uvector<cudf::size_type> gather_map(input.size(), stream);
   auto gm_begin = thrust::make_zip_iterator(
     thrust::make_tuple(gather_map.begin(), thrust::make_discard_iterator()));
 
