@@ -10,6 +10,7 @@ import warnings
 from collections import OrderedDict, defaultdict
 from collections.abc import Iterable, Mapping, Sequence
 from typing import Any, Set, Tuple, Union
+from cudf._lib.reshape import explode
 
 import cupy
 import numpy as np
@@ -7277,7 +7278,9 @@ class DataFrame(Frame, Serializable):
         """
         Expand all list columns in the DataFrame.
         """
-        pass
+        idx = self.index.nlevels + self._column_names.index(column)
+        return DataFrame._from_table(explode(self, idx))
+        
 
     _accessors = set()  # type: Set[Any]
 
