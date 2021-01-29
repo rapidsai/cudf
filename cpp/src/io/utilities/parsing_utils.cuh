@@ -89,10 +89,10 @@ namespace gpu {
  * Also iterates over (one or more) delimiter characters after the field.
  * Function applies to formats with field delimiters and line terminators.
  *
- * @param[in] begin Beginning of the character string
- * @param[in] end End of the character string
- * @param[in] opts A set of parsing options
- * @param[in] escape_char A boolean value to signify whether to consider `\` as escape character or
+ * @param begin Pointer to the first element of the string
+ * @param end Pointer to the first element after the string
+ * @param opts A set of parsing options
+ * @param escape_char A boolean value to signify whether to consider `\` as escape character or
  * just a character.
  *
  * @return Pointer to the last character in the field, including the
@@ -191,33 +191,33 @@ __inline__ __device__ char to_lower(char const c)
 }
 
 /**
- * @brief Check if string is infinity, case insensitive with/without sign
+ * @brief Checks if string is infinity, case insensitive with/without sign
  * Valid infinity strings are inf, +inf, -inf, infinity, +infinity, -infinity
  * String comparison is case insensitive.
  *
- * @param start The pointer to character array to start parsing from
- * @param end The pointer to character array to end parsing
+ * @param begin Pointer to the first element of the string
+ * @param end Pointer to the first element after the string
  * @return true if string is valid infinity, else false.
  */
-__inline__ __device__ bool is_infinity(char const* start, char const* end)
+__inline__ __device__ bool is_infinity(char const* begin, char const* end)
 {
-  if (*start == '-' || *start == '+') start++;
+  if (*begin == '-' || *begin == '+') begin++;
   char const* cinf = "infinity";
-  auto index       = start;
-  while (index <= end) {
+  auto index       = begin;
+  while (index < end) {
     if (*cinf != to_lower(*index)) break;
     index++;
     cinf++;
   }
-  return ((index == start + 3 || index == start + 8) && index > end);
+  return ((index == begin + 3 || index == begin + 8) && index >= end);
 }
 
 /**
  * @brief Parses a character string and returns its numeric value.
  *
- * @param[in] begin Beginning of the character string
- * @param[in] end End of the character string
- * @param[in] opts The global parsing behavior options
+ * @param begin Pointer to the first element of the string
+ * @param end Pointer to the first element after the string
+ * @param opts The global parsing behavior options
  * @tparam base Base (radix) to use for conversion
  *
  * @return The parsed and converted value
@@ -240,11 +240,11 @@ __inline__ __device__ T parse_numeric(const char* begin,
   if (*begin == '-' || *begin == '+') begin++;
 
   // Skip over the "0x" prefix for hex notation
-  if (base == 16 && begin + 2 <= end && *begin == '0' && *(begin + 1) == 'x') { begin += 2; }
+  if (base == 16 && begin + 2 < end && *begin == '0' && *(begin + 1) == 'x') { begin += 2; }
 
   // Handle the whole part of the number
   // auto index = begin;
-  while (begin <= end) {
+  while (begin < end) {
     if (*begin == opts.decimal) {
       ++begin;
       break;
@@ -259,7 +259,7 @@ __inline__ __device__ T parse_numeric(const char* begin,
   if (std::is_floating_point<T>::value) {
     // Handle fractional part of the number if necessary
     double divisor = 1;
-    while (begin <= end) {
+    while (begin < end) {
       if (*begin == 'e' || *begin == 'E') {
         ++begin;
         break;
@@ -271,11 +271,11 @@ __inline__ __device__ T parse_numeric(const char* begin,
     }
 
     // Handle exponential part of the number if necessary
-    if (begin <= end) {
+    if (begin < end) {
       const int32_t exponent_sign = *begin == '-' ? -1 : 1;
       if (*begin == '-' || *begin == '+') { ++begin; }
       int32_t exponent = 0;
-      while (begin <= end) {
+      while (begin < end) {
         exponent = (exponent * 10) + decode_digit<T>(*(begin++), &all_digits_valid);
       }
       if (exponent != 0) { value *= exp10(double(exponent * exponent_sign)); }
@@ -458,6 +458,76 @@ std::string infer_compression_type(
   const compression_type& compression_arg,
   const std::string& filename,
   const std::vector<std::pair<std::string, std::string>>& ext_to_comp_map);
+
+/**
+ * @brief Checks whether the given character is a whitespace character.
+ *
+ * @param[in] ch The character to check
+ *
+ * @return True if the input is whitespace, False otherwise
+ */
+__inline__ __device__ bool is_whitespace(char ch) { return ch == '\t' || ch == ' '; }
+
+/**
+ * @brief Skips past the current character if it matches the given value.
+ */
+template <typename It>
+__inline__ __device__ It skip_character(It const& it, char ch)
+{
+  return it + (*it == ch);
+}
+
+/**
+ * @brief Adjusts the range to ignore starting/trailing whitespace and quotation characters.
+ *
+ * @param[in] begin Pointer to the first character in the parsing range
+ * @param[in] end pointer to the first character after the parsing range
+ * @param[in] quotechar The character used to denote quotes; '\0' if none
+ *
+ * @return Trimmed range
+ */
+__inline__ __device__ std::pair<char const*, char const*> trim_whitespaces_quotes(
+  char const* begin, char const* end, char quotechar = '\0')
+{
+  auto not_whitespace = [] __device__(auto c) { return !is_whitespace(c); };
+
+  auto const trim_begin = thrust::find_if(thrust::seq, begin, end, not_whitespace);
+  auto const trim_end   = thrust::find_if(thrust::seq,
+                                        thrust::make_reverse_iterator(end),
+                                        thrust::make_reverse_iterator(trim_begin),
+                                        not_whitespace);
+
+  return {skip_character(trim_begin, quotechar), skip_character(trim_end, quotechar).base()};
+}
+
+/**
+ * @brief Excludes the prefix from the input range if the string starts with the prefix.
+ *
+ * @tparam N length on the prefix, plus one
+ * @param begin[in, out] Pointer to the first element of the string
+ * @param end Pointer to the first element after the string
+ * @param prefix String we're searching for at the start of the input range
+ */
+template <int N>
+__inline__ __device__ auto skip_if_starts_with(char const* begin,
+                                               char const* end,
+                                               const char (&prefix)[N])
+{
+  static constexpr size_t prefix_len = N - 1;
+  if (end - begin < prefix_len) return begin;
+  return thrust::equal(thrust::seq, begin, begin + prefix_len, prefix) ? begin + prefix_len : begin;
+}
+
+/**
+ * @brief Finds the first element after the leading space characters.
+ *
+ * @param begin Pointer to the first element of the string
+ * @param end Pointer to the first element after the string
+ */
+__inline__ __device__ auto skip_spaces(char const* begin, char const* end)
+{
+  return thrust::find_if(thrust::seq, begin, end, [](auto elem) { return elem != ' '; });
+}
 
 }  // namespace io
 }  // namespace cudf
