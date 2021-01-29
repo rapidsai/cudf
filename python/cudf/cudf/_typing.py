@@ -26,3 +26,5 @@ ColumnLike = Any
 
 # binary operation
 BinaryOperand = Union["cudf.Scalar", "cudf.core.column.ColumnBase"]
+
+DataFrameOrSeries = Union["cudf.Series", "cudf.DataFrame"]
