@@ -212,21 +212,26 @@ struct mark_special_tokens {
 
     // check for matching end bracket
     uint32_t const start_pos = start_index + 2;  // after the space delimiter
+    // search for next start-word and then check it is a ']'
     uint32_t const end_index = [&] {
-      auto const begin = code_points + start_pos;
+      auto const begin = start_word_indices + start_pos;
       auto const width =
-        std::min(static_cast<size_t>(MAX_ST_WIDTH + 2), (num_code_points - start_pos));
-      auto const end  = begin + width;
-      auto const iter = thrust::find(thrust::seq, begin, end, static_cast<uint32_t>(']'));
-      return iter == end ? start_index : static_cast<uint32_t>(iter - code_points);
+        std::min(static_cast<size_t>(MAX_ST_WIDTH + 1), (num_code_points - start_pos));
+      auto const end = begin + width;
+      // checking the next start-word is more reliable than arbitrarily searching for ']'
+      // in case the text is split across string rows
+      auto const iter = thrust::find_if(thrust::seq, begin + 1, end, [](auto swi) {
+        return swi != std::numeric_limits<uint32_t>::max();
+      });
+      return iter == end ? start_index : static_cast<uint32_t>(iter - start_word_indices);
     }();
     if (code_points[end_index] != ']') return;
 
     // check for special token
     auto const size = static_cast<cudf::size_type>(end_index - start_pos);
     if (!is_special_token(code_points + start_pos, size)) return;
-    // special token found
 
+    // special token found
     // adjust code-points
     auto const end_pos = end_index - 2;
     // change _[_ttt_]_ to _[TTT]_
