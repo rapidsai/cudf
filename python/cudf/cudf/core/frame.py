@@ -2309,8 +2309,8 @@ class Frame(libcudf.table.Table):
         return result
 
     def replace(self, to_replace: Any, replacement: Any) -> Frame:
-        copy_data = self._data.copy(deep=False)
         if not (to_replace is None and replacement is None):
+            copy_data = self._data.copy(deep=False)
             (
                 all_na_per_column,
                 to_replace_per_column,
@@ -2337,6 +2337,8 @@ class Frame(libcudf.table.Table):
                     # `all_na_per_column` don't contain the `name`
                     # that exists in `copy_data`
                     copy_data[name] = col.copy(deep=True)
+        else:
+            copy_data = self._data.copy(deep=True)
 
         result = self._from_table(Frame(copy_data, self._index))
 
