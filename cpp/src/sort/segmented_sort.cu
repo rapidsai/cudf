@@ -75,6 +75,7 @@ struct list_size_functor {
 
 void validate_list_columns(table_view const& keys, rmm::cuda_stream_view stream)
 {
+  // check if all are list columns
   CUDF_EXPECTS(std::all_of(keys.begin(),
                            keys.end(),
                            [](column_view const& col) { return col.type().id() == type_id::LIST; }),
@@ -156,12 +157,12 @@ std::unique_ptr<table> sort_lists(table_view const& values,
                                   rmm::cuda_stream_view stream,
                                   rmm::mr::device_memory_resource* mr)
 {
+  CUDF_EXPECTS(keys.num_columns() > 0, "keys table should have atleast one list column");
   std::vector<column_view> key_value_columns;
   key_value_columns.reserve(keys.num_columns() + values.num_columns());
   key_value_columns.insert(key_value_columns.end(), keys.begin(), keys.end());
   key_value_columns.insert(key_value_columns.end(), values.begin(), values.end());
   validate_list_columns(table_view{key_value_columns}, stream);
-  CUDF_EXPECTS(keys.num_rows() > 0, "keys table should have atleast one list column");
 
   // child columns of keys
   auto child_key_columns = thrust::make_transform_iterator(
@@ -189,6 +190,7 @@ std::unique_ptr<table> sort_lists(table_view const& values,
     segmented_sort(
       child_values, child_keys, segment_offsets, column_order, null_precedence, stream, mr)
       ->release();
+
   // Construct list columns from gathered child columns & return
   std::vector<std::unique_ptr<column>> list_columns;
   std::transform(values.begin(),

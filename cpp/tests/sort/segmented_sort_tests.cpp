@@ -37,14 +37,14 @@ namespace cudf {
 namespace test {
 
 template <typename T>
-struct SegmentedSortLists : public BaseFixture {
+struct SortLists : public BaseFixture {
 };
 
 // using NumericTypesNotBool = Concat<IntegralTypesNotBool, FloatingPointTypes>;
-TYPED_TEST_CASE(SegmentedSortLists, NumericTypes);
+TYPED_TEST_CASE(SortLists, NumericTypes);
 
-using SegmentedSortListsInt = SegmentedSortLists<int>;
-TEST_F(SegmentedSortListsInt, ErrorsTableSizes)
+using SortListsInt = SortLists<int>;
+TEST_F(SortListsInt, ErrorsTableSizes)
 {
   LCW<int> col1{{3, 1, 2}, {1}, {2}, {0}, {10, 9, 9}, {6, 7}};
   fixed_width_column_wrapper<int> col2{{5, 4, 3, 5, 8, 5}, {1, 1, 0, 1, 1, 1}};
@@ -81,7 +81,7 @@ TEST_F(SegmentedSortListsInt, ErrorsTableSizes)
                             "size of each list in a row of table should be same");
 }
 
-TEST_F(SegmentedSortListsInt, ErrorsMismatchArgSizes)
+TEST_F(SortListsInt, ErrorsMismatchArgSizes)
 {
   LCW<int> col1{{3, 1, 2}, {1}, {2}, {0}, {10, 9, 9}, {6, 7}};
   table_view input1{{col1}};
@@ -99,7 +99,7 @@ TEST_F(SegmentedSortListsInt, ErrorsMismatchArgSizes)
     logic_error);
 }
 
-TYPED_TEST(SegmentedSortLists, NoNull)
+TYPED_TEST(SortLists, NoNull)
 {
   using T = TypeParam;
 
@@ -135,7 +135,7 @@ TYPED_TEST(SegmentedSortLists, NoNull)
   CUDF_TEST_EXPECT_TABLES_EQUAL(results->view(), expected_table2);
 }
 
-TYPED_TEST(SegmentedSortLists, Nulls)
+TYPED_TEST(SortLists, Nulls)
 {
   using T = TypeParam;
   if (std::is_same<T, bool>::value) return;
@@ -184,7 +184,7 @@ TYPED_TEST(SegmentedSortLists, Nulls)
   CUDF_TEST_EXPECT_TABLES_EQUAL(results->view(), expected_table2b);
 }
 
-TEST_F(SegmentedSortListsInt, KeyValues)
+TEST_F(SortListsInt, KeyValues)
 {
   using T      = int;
   using LCWstr = cudf::test::lists_column_wrapper<cudf::string_view>;
