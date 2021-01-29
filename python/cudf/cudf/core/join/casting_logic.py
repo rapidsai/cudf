@@ -191,7 +191,9 @@ def _libcudf_to_output_castrules(lcol, rcol, how):
             new_cats = cudf.concat(
                 [ltype.categories, rtype.categories]
             ).unique()
-            return cudf.CategoricalDtype(categories=new_cats, ordered=False)
+            return cudf.CategoricalDtype(
+                categories=new_cats, ordered=ltype.ordered
+            )
         else:
             merge_return_type = "category"
     return merge_return_type
