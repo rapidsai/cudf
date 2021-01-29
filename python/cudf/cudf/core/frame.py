@@ -3639,7 +3639,7 @@ def _get_replacement_values_for_columns(
                 raise ValueError(
                     f"Replacement lists must be "
                     f"of same length."
-                    f"Expected {len(to_replace)}, got {len(value)}."
+                    f" Expected {len(to_replace)}, got {len(value)}."
                 )
             else:
                 to_replace_columns = {
@@ -3718,7 +3718,7 @@ def _get_replacement_values_for_columns(
         raise TypeError(
             "Expecting 'to_replace' to be either a scalar, array-like, "
             "dict or None, got invalid type "
-            f"{type(to_replace).__name__}"
+            f"'{type(to_replace).__name__}'"
         )
 
     to_replace_columns = {

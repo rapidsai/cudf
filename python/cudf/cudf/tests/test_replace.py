@@ -1138,8 +1138,8 @@ def test_series_fillna_error():
 
 
 def test_series_replace_errors():
-    psr = pd.Series([1, 2, None, 3, None])
-    gsr = cudf.from_pandas(psr)
+    gsr = cudf.Series([1, 2, None, 3, None])
+    psr = gsr.to_pandas()
 
     with pytest.raises(
         TypeError,
@@ -1161,3 +1161,30 @@ def test_series_replace_errors():
         ),
     ):
         gsr.replace([1, 2], ["a", "b"])
+
+    assert_exceptions_equal(
+        psr.replace, gsr.replace, ([{"a": 1}, 1],), ([{"a": 1}, 1],),
+    )
+
+    assert_exceptions_equal(
+        lfunc=psr.replace,
+        rfunc=gsr.replace,
+        lfunc_args_and_kwargs=([[1, 2], [1]],),
+        rfunc_args_and_kwargs=([[1, 2], [1]],),
+        expected_error_message="Replacement lists must be of same length. "
+        "Expected 2, got 1.",
+    )
+
+    assert_exceptions_equal(
+        lfunc=psr.replace,
+        rfunc=gsr.replace,
+        lfunc_args_and_kwargs=([object(), [1]],),
+        rfunc_args_and_kwargs=([object(), [1]],),
+    )
+
+    assert_exceptions_equal(
+        lfunc=psr.replace,
+        rfunc=gsr.replace,
+        lfunc_args_and_kwargs=([{"a": 1}, object()],),
+        rfunc_args_and_kwargs=([{"a": 1}, object()],),
+    )
