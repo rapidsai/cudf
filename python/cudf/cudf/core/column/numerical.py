@@ -416,7 +416,14 @@ class NumericalColumn(ColumnBase):
         to_replace_col = as_column(to_replace)
         replacement_col = as_column(replacement)
 
-        if not isinstance(to_replace_col, NumericalColumn) or not isinstance(
+        if type(to_replace_col) != type(replacement_col):
+            raise TypeError(
+                f"to_replace and value should be of same types,"
+                f"got to_replace dtype: {to_replace_col.dtype} and "
+                f"value dtype: {replacement_col.dtype} "
+            )
+
+        if not isinstance(to_replace_col, NumericalColumn) and not isinstance(
             replacement_col, NumericalColumn
         ):
             return self.copy()

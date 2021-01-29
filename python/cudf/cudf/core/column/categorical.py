@@ -1106,6 +1106,15 @@ class CategoricalColumn(column.ColumnBase):
         """
         Return col with *to_replace* replaced with *replacement*.
         """
+        to_replace_col = column.as_column(to_replace)
+        replacement_col = column.as_column(replacement)
+
+        if type(to_replace_col) != type(replacement_col):
+            raise TypeError(
+                f"to_replace and value should be of same types,"
+                f"got to_replace dtype: {to_replace_col.dtype} and "
+                f"value dtype: {replacement_col.dtype} "
+            )
 
         # create a dataframe containing the pre-replacement categories
         # and a copy of them to work with. The index of this dataframe
@@ -1116,16 +1125,18 @@ class CategoricalColumn(column.ColumnBase):
 
         # Create a column with the appropriate labels replaced
         old_cats["cats_replace"] = old_cats["cats"].replace(
-            to_replace, replacement
+            to_replace_col, replacement_col
         )
 
         # Construct the new categorical labels
         # If a category is being replaced by an existing one, we
         # want to map it to None. If it's totally new, we want to
         # map it to the new label it is to be replaced by
-        dtype_replace = cudf.Series(replacement)
+        dtype_replace = cudf.Series(replacement_col)
         dtype_replace[dtype_replace.isin(old_cats["cats"])] = None
-        new_cats["cats"] = new_cats["cats"].replace(to_replace, dtype_replace)
+        new_cats["cats"] = new_cats["cats"].replace(
+            to_replace_col, dtype_replace
+        )
 
         # anything we mapped to None, we want to now filter out since
         # those categories don't exist anymore

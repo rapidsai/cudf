@@ -5027,9 +5027,16 @@ class StringColumn(column.ColumnBase):
             # to self.dtype.
             replacement_col = replacement_col.astype(self.dtype)
 
+        if type(to_replace_col) != type(replacement_col):
+            raise TypeError(
+                f"to_replace and value should be of same types,"
+                f"got to_replace dtype: {to_replace_col.dtype} and "
+                f"value dtype: {replacement_col.dtype} "
+            )
+
         if (
             to_replace_col.dtype != self.dtype
-            or replacement_col.dtype != self.dtype
+            and replacement_col.dtype != self.dtype
         ):
             return self.copy()
 
