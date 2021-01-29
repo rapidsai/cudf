@@ -78,16 +78,6 @@ def _input_to_libcudf_castrules_both_cat(lcol, rcol, how):
         return cudf.CategoricalDtype(categories=new_cats, ordered=False)
 
 
-def _input_to_libcudf_castrules_one_cat(lcol, rcol, how):
-    l_is_cat = isinstance(lcol.dtype, CategoricalDtype)
-    r_is_cat = isinstance(rcol.dtype, CategoricalDtype)
-
-    if l_is_cat:
-        return lcol.dtype.categories.dtype
-    elif r_is_cat:
-        return rcol.dtype.categories.dtype
-
-
 def _input_to_libcudf_castrules_any_cat(lcol, rcol, how):
 
     l_is_cat = isinstance(lcol.dtype, CategoricalDtype)
@@ -96,7 +86,11 @@ def _input_to_libcudf_castrules_any_cat(lcol, rcol, how):
     if l_is_cat and r_is_cat:
         return _input_to_libcudf_castrules_both_cat(lcol, rcol, how)
     elif l_is_cat or r_is_cat:
-        return _input_to_libcudf_castrules_one_cat(lcol, rcol, how)
+        return (
+            lcol.dtype.categories.dtype
+            if l_is_cat
+            else rcol.dtype.categories.dtype
+        )
     else:
         raise ValueError("Neither operand is categorical")
 
