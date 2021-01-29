@@ -3295,11 +3295,6 @@ class DataFrame(Frame, Serializable):
                 "Only errors='ignore' is currently supported"
             )
 
-        if level:
-            raise NotImplementedError(
-                "Only level=False is currently supported"
-            )
-
         if mapper is None and index is None and columns is None:
             return self.copy(deep=copy)
 
@@ -3307,7 +3302,7 @@ class DataFrame(Frame, Serializable):
         columns = (
             mapper if columns is None and axis in (1, "columns") else columns
         )
-
+ 
         if index:
             if (
                 any(type(item) == str for item in index.values())
@@ -3317,13 +3312,23 @@ class DataFrame(Frame, Serializable):
                     "Implicit conversion of index to "
                     "mixed type is not yet supported."
                 )
-            out = DataFrame(
-                index=self.index.replace(
-                    to_replace=list(index.keys()),
-                    replacement=list(index.values()),
+
+            if level and isinstance(self.index, cudf.core.multiindex.MultiIndex):
+                out = DataFrame(
+                    index=self.index._source_data[level].replace(
+                        to_replace=list(index.keys()),
+                        value=list(index.values()),
+                        inplace=True
+                    )
                 )
-            )
-        else:
+            else:
+                out = DataFrame(
+                    index=self.index.replace(
+                        to_replace =list(index.keys()),
+                        replacement=list(index.values()),
+                    )
+                )           
+        else: 
             out = DataFrame(index=self.index)
 
         if columns:
@@ -3353,7 +3358,6 @@ class DataFrame(Frame, Serializable):
             self._data = out._data
         else:
             return out.copy(deep=copy)
-        #change email and username 
 
     def nans_to_nulls(self):
         """

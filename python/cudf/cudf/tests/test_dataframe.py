@@ -8225,3 +8225,26 @@ def test_dataframe_roundtrip_arrow_struct_dtype(gdf):
     expected = gd.DataFrame.from_arrow(table)
 
     assert_eq(gdf, expected)
+
+
+@pytest.mark.parametrize(
+    "data",
+    [{"A": [1, 2, 3], "B": [4, 5, 6], "C": [7,8,9]},]
+)
+@pytest.mark.parametrize(
+    "index",
+    [{3:9,2:5,5:8}],
+) 
+@pytest.mark.parametrize(
+    "level", ["z"],   
+) 
+def test_dataframe_MI_for_level(data,index,level):
+    pdf= pd.DataFrame(data,
+                      index=pd.MultiIndex.from_tuples([(1,2,3),(2,5,2),(3,4,5)]))
+    pdf.index.names=["x","y","z"]
+    gdf=gd.from_pandas(pdf)
+
+    expect=pdf.rename(index=index,level=level)
+    got=gdf.rename(index=index,level=level)
+
+    assert_eq(expect,got)
