@@ -42,12 +42,12 @@ namespace cudf {
 namespace test {
 
 template <typename T>
-struct SegmentedSortLists : public BaseFixture {
+struct SortLists : public BaseFixture {
 };
 
-TYPED_TEST_CASE(SegmentedSortLists, NumericTypes);
+TYPED_TEST_CASE(SortLists, NumericTypes);
 
-TYPED_TEST(SegmentedSortLists, NoNull)
+TYPED_TEST(SortLists, NoNull)
 {
   using T = TypeParam;
 
@@ -73,7 +73,7 @@ TYPED_TEST(SegmentedSortLists, NoNull)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(results->view(), expected2);
 }
 
-TYPED_TEST(SegmentedSortLists, Null)
+TYPED_TEST(SortLists, Null)
 {
   using T = TypeParam;
   if (std::is_same<T, bool>::value) return;
