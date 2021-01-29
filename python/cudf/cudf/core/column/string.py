@@ -5013,17 +5013,25 @@ class StringColumn(column.ColumnBase):
 
         to_replace_col = column.as_column(to_replace)
         if to_replace_col.null_count == len(to_replace_col):
+            # If all of `to_replace` are `None`, dtype of `to_replace_col`
+            # is inferred as `float64`, but this is a valid
+            # string column too, Hence we will need to type-cast
+            # to self.dtype.
             to_replace_col = to_replace_col.astype(self.dtype)
 
         replacement_col = column.as_column(replacement)
         if replacement_col.null_count == len(replacement_col):
+            # If all of `replacement` are `None`, dtype of `replacement_col`
+            # is inferred as `float64`, but this is a valid
+            # string column too, Hence we will need to type-cast
+            # to self.dtype.
             replacement_col = replacement_col.astype(self.dtype)
 
         if (
             to_replace_col.dtype != self.dtype
             or replacement_col.dtype != self.dtype
         ):
-            return self
+            return self.copy()
 
         return libcudf.replace.replace(self, to_replace_col, replacement_col)
 

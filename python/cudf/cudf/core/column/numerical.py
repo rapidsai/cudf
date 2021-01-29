@@ -419,7 +419,7 @@ class NumericalColumn(ColumnBase):
         if not isinstance(to_replace_col, NumericalColumn) or not isinstance(
             replacement_col, NumericalColumn
         ):
-            return self
+            return self.copy()
 
         to_replace_col = _normalize_find_and_replace_input(
             self.dtype, to_replace
@@ -430,7 +430,7 @@ class NumericalColumn(ColumnBase):
             replacement_col = _normalize_find_and_replace_input(
                 self.dtype, replacement
             )
-        replaced = self
+        replaced = self.copy()
         if len(replacement_col) == 1 and len(to_replace_col) > 1:
             replacement_col = column.as_column(
                 utils.scalar_broadcast_to(

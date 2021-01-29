@@ -2309,7 +2309,7 @@ class Frame(libcudf.table.Table):
         return result
 
     def replace(self, to_replace: Any, replacement: Any) -> Frame:
-        copy_data = self._data.copy()
+        copy_data = self._data.copy(deep=True)
         if not (to_replace is None and replacement is None):
             (
                 all_na_per_column,
