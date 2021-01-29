@@ -1127,7 +1127,7 @@ void writer::impl::write(table_view const &table)
   hostdevice_vector<gpu_inflate_status_s> comp_out(num_compressed_blocks);
   hostdevice_vector<gpu_inflate_input_s> comp_in(num_compressed_blocks);
   if (compression_kind_ != NONE) {
-    strm_desc.host_to_device(state.stream);
+    strm_desc.host_to_device(stream);
     gpu::CompressOrcDataStreams(static_cast<uint8_t *>(compressed_data.data()),
                                 strm_desc.device_ptr(),
                                 chunks.device_ptr(),
@@ -1137,9 +1137,9 @@ void writer::impl::write(table_view const &table)
                                 num_compressed_blocks,
                                 compression_kind_,
                                 compression_blocksize_,
-                                state.stream);
-    strm_desc.device_to_host(state.stream);
-    comp_out.device_to_host(state.stream, true);
+                                stream);
+    strm_desc.device_to_host(stream);
+    comp_out.device_to_host(stream, true);
   }
 
   ProtobufWriter pbw_(&buffer_);
