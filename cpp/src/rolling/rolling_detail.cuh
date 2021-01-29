@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020, NVIDIA CORPORATION.
+ * Copyright (c) 2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -33,6 +33,8 @@
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/utilities/cuda.cuh>
 #include <cudf/detail/utilities/device_operators.cuh>
+#include <cudf/dictionary/dictionary_column_view.hpp>
+#include <cudf/dictionary/dictionary_factories.hpp>
 #include <cudf/rolling.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/bit.hpp>
@@ -623,8 +625,6 @@ struct rolling_window_launcher {
          rmm::cuda_stream_view stream,
          rmm::mr::device_memory_resource* mr)
   {
-    if (input.is_empty()) return empty_like(input);
-
     auto output = make_fixed_width_column(
       target_type(input.type(), op), input.size(), mask_state::UNINITIALIZED, stream, mr);
 
@@ -663,8 +663,6 @@ struct rolling_window_launcher {
          rmm::cuda_stream_view stream,
          rmm::mr::device_memory_resource* mr)
   {
-    if (input.is_empty()) return empty_like(input);
-
     auto output = make_numeric_column(cudf::data_type{cudf::type_to_id<size_type>()},
                                       input.size(),
                                       cudf::mask_state::UNINITIALIZED,
@@ -755,8 +753,6 @@ struct rolling_window_launcher {
          rmm::cuda_stream_view stream,
          rmm::mr::device_memory_resource* mr)
   {
-    if (input.is_empty()) return empty_like(input);
-
     CUDF_EXPECTS(default_outputs.type().id() == input.type().id(),
                  "Defaults column type must match input column.");  // Because LEAD/LAG.
 
@@ -1036,18 +1032,52 @@ std::unique_ptr<column> rolling_window(column_view const& input,
   static_assert(warp_size == cudf::detail::size_in_bits<cudf::bitmask_type>(),
                 "bitmask_type size does not match CUDA warp size");
 
+  if (input.is_empty()) return empty_like(input);
+
+  if (cudf::is_dictionary(input.type()))
+    CUDF_EXPECTS(agg->kind == aggregation::COUNT_ALL || agg->kind == aggregation::COUNT_VALID ||
+                   agg->kind == aggregation::ROW_NUMBER || agg->kind == aggregation::MIN ||
+                   agg->kind == aggregation::MAX || agg->kind == aggregation::LEAD ||
+                   agg->kind == aggregation::LAG,
+                 "Invalid aggregation for dictionary column");
+
   min_periods = std::max(min_periods, 0);
 
-  return cudf::type_dispatcher(input.type(),
-                               dispatch_rolling{},
-                               input,
-                               default_outputs,
-                               preceding_window_begin,
-                               following_window_begin,
-                               min_periods,
-                               agg,
-                               stream,
-                               mr);
+  auto input_col = cudf::is_dictionary(input.type())
+                     ? dictionary_column_view(input).get_indices_annotated()
+                     : input;
+  auto output = cudf::type_dispatcher(input_col.type(),
+                                      dispatch_rolling{},
+                                      input_col,
+                                      default_outputs,
+                                      preceding_window_begin,
+                                      following_window_begin,
+                                      min_periods,
+                                      agg,
+                                      stream,
+                                      mr);
+  if (!cudf::is_dictionary(input.type())) return output;
+
+  // dictionary column post processing
+  if (agg->kind == aggregation::COUNT_ALL || agg->kind == aggregation::COUNT_VALID ||
+      agg->kind == aggregation::ROW_NUMBER)
+    return output;
+
+  // output is new dictionary indices (including nulls)
+  auto keys = std::make_unique<column>(dictionary_column_view(input).keys(), stream, mr);
+  auto const indices_type = output->type();        // capture these
+  auto const output_size  = output->size();        // before calling
+  auto const null_count   = output->null_count();  // release()
+  auto contents           = output->release();
+  // create indices column from output column data
+  auto indices = std::make_unique<column>(indices_type,
+                                          output_size,
+                                          std::move(*(contents.data.release())),
+                                          rmm::device_buffer{0, stream, mr},
+                                          0);
+  // create dictionary from keys and indices
+  return make_dictionary_column(
+    std::move(keys), std::move(indices), std::move(*(contents.null_mask.release())), null_count);
 }
 
 }  // namespace detail
