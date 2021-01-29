@@ -1,5 +1,7 @@
 # Copyright (c) 2020-2021, NVIDIA CORPORATION.
 
+import re
+
 import numpy as np
 import pandas as pd
 import pytest
@@ -1133,3 +1135,24 @@ def test_series_fillna_error():
         ([pd.DataFrame({"a": [1, 2, 3]})],),
         ([cudf.DataFrame({"a": [1, 2, 3]})],),
     )
+
+    with pytest.raises(
+        TypeError,
+        match=re.escape(
+            "to_replace and value should be of same types,"
+            "got to_replace dtype: int64 and "
+            "value dtype: object"
+        ),
+    ):
+        gsr.replace(1, "a")
+
+    gsr = cudf.Series(["a", "b", "c"])
+    with pytest.raises(
+        TypeError,
+        match=re.escape(
+            "to_replace and value should be of same types,"
+            "got to_replace dtype: int64 and "
+            "value dtype: object"
+        ),
+    ):
+        gsr.replace([1, 2], ["a", "b"])

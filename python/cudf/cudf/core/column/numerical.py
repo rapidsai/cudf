@@ -420,7 +420,7 @@ class NumericalColumn(ColumnBase):
             raise TypeError(
                 f"to_replace and value should be of same types,"
                 f"got to_replace dtype: {to_replace_col.dtype} and "
-                f"value dtype: {replacement_col.dtype} "
+                f"value dtype: {replacement_col.dtype}"
             )
 
         if not isinstance(to_replace_col, NumericalColumn) and not isinstance(
