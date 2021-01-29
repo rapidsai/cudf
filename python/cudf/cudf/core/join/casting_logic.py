@@ -62,7 +62,7 @@ def _input_to_libcudf_castrules_both_cat(lcol, rcol, how):
         )
 
     elif how == "inner":
-        # neiter ordered, so categories must be different
+        # neither ordered, so categories must be different
         # demote to underlying types
         return _input_to_libcudf_castrules_any(
             ltype.categories, rtype.categories, how
