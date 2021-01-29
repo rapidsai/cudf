@@ -4047,6 +4047,24 @@ class DataFrame(Frame, Serializable):
         1    2    12.0    11.0
         4    3    13.0
         2    4    14.0    12.0
+
+        **Merging on categorical variables is only allowed in certain cases**
+
+        Categorical variable typecasting logic depends on both `how`
+        and the specifics of the categorical variables to be merged.
+        Merging categorical variables when only one side is ordered
+        is ambiguous and not allowed. Merging when both categoricals
+        are ordered is allowed, but only when the categories are
+        exactly equal and have equal ordering, and will result in the
+        common dtype.
+        When both sides are unordered, the result categorical depends
+        on the kind of join:
+        - For inner joins, the result will be the intersection of the
+        categories
+        - For left or right joins, the result will be the the left or
+        right dtype respectively. This extends to semi and anti joins.
+        - For outer joins, the result will be the union of categories
+        from both sides.
         """
         if indicator:
             raise NotImplementedError(
