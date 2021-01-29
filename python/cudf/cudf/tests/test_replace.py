@@ -1136,6 +1136,11 @@ def test_series_fillna_error():
         ([cudf.DataFrame({"a": [1, 2, 3]})],),
     )
 
+
+def test_series_replace_errors():
+    psr = pd.Series([1, 2, None, 3, None])
+    gsr = cudf.from_pandas(psr)
+
     with pytest.raises(
         TypeError,
         match=re.escape(
