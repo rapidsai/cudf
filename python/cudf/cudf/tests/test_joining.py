@@ -1328,6 +1328,16 @@ def test_categorical_typecast_outer():
 
     assert_eq(expect_data, result["key"])
 
+    # equal categories, both ordered -> common dtype
+    left = make_categorical_dataframe([1, 2, 3], ordered=True)
+    right = make_categorical_dataframe([1, 2, 3], ordered=True)
+    result = left.merge(right, on="key", how="outer")
+
+    expect_dtype = CategoricalDtype(categories=[1, 2, 3], ordered=True)
+    expect_data = cudf.Series([1, 2, 3], dtype=expect_dtype, name="key")
+
+    assert_eq(expect_data, result["key"])
+
     # equal categories, one ordered -> error
     left = make_categorical_dataframe([1, 2, 3], ordered=False)
     right = make_categorical_dataframe([1, 2, 3], ordered=True)
