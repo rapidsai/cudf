@@ -245,7 +245,7 @@ class groupby {
    * @param[in] replace_policy Specify the position of replacement values relative to null values.
    * @param[in] mr Device memory resource used to allocate device memory of the returned column.
    *
-   * @return
+   * @return Pair that contains a table with the sorted keys and a `scan_result`
    */
   std::pair<std::unique_ptr<table>, scan_result> replace_nulls(
     column_view const& value,
