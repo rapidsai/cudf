@@ -301,7 +301,8 @@ TEST(TextSubwordTest, TokenizeWithSpecialTokens)
     "[BOS]This is a tést.[eos]",
     "[CLS]A test[SEP]this is.",
     "[PAD] [A][MASK]",
-    "test this"};
+    "test this [CL",
+    "S] is a ."};
   // clang-format on
   cudf::test::strings_column_wrapper strings(h_strings.begin(), h_strings.end());
   auto vocab  = nvtext::load_vocabulary_file(hash_file);
@@ -313,23 +314,26 @@ TEST(TextSubwordTest, TokenizeWithSpecialTokens)
                                          true,  // do_truncate
                                          MAX_ROWS_TENSOR);
 
-  EXPECT_EQ(uint32_t{4}, result.nrows_tensor);
+  EXPECT_EQ(static_cast<uint32_t>(h_strings.size()), result.nrows_tensor);
   // clang-format off
   cudf::test::fixed_width_column_wrapper<uint32_t> expected_tokens(
     { 5, 7,  8, 9, 10, 12,  6, 0,
       2, 9, 10, 3,  7,  8, 12, 0,
       0, 1,  9, 1,  4,  0,  0, 0,
-     10, 7,  0, 0,  0,  0,  0, 0});
+     10, 7,  1, 1,  0,  0,  0, 0,
+      1, 1,  8, 9, 12,  0,  0, 0});
   cudf::test::fixed_width_column_wrapper<uint32_t> expected_attn(
     {1, 1, 1, 1, 1, 1, 1, 0,
      1, 1, 1, 1, 1, 1, 1, 0,
      1, 1, 1, 1, 1, 0, 0, 0,
-     1, 1, 0, 0, 0, 0, 0, 0});
+     1, 1, 1, 1, 0, 0, 0, 0,
+     1, 1, 1, 1, 1, 0, 0, 0});
   cudf::test::fixed_width_column_wrapper<uint32_t> expected_metadata(
     {0, 0, 6,
      1, 0, 6,
      2, 0, 4,
-     3, 0, 1});
+     3, 0, 3,
+     4, 0, 4});
   // clang-format on
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(result.tensor_token_ids->view(), expected_tokens);
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(result.tensor_attention_mask->view(), expected_attn);
