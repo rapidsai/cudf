@@ -112,7 +112,7 @@ __device__ void GenerateDictionaryIndices(dict_state_s *s, uint32_t t)
   uint32_t num_dict_entries = 0;
 
   for (uint32_t i = 0; i < s->row_cnt; i += 1024) {
-    uint32_t row       = s->ck.start_row + i + t;
+    uint32_t row = s->ck.start_row + i + t;
     uint32_t is_valid =
       (i + t < s->row_cnt && row < s->col.num_rows) ? s->col.leaf_column->is_valid(row) : 0;
     uint32_t dict_idx = (is_valid) ? dict_index[row] : 0;
@@ -200,8 +200,8 @@ __global__ void __launch_bounds__(block_size, 1)
       uint32_t new_dict_entries;
 
       if (is_valid) {
-        row                = frag_start_row + s->frag_dict[i + t];
-        len                = dtype_len;
+        row = frag_start_row + s->frag_dict[i + t];
+        len = dtype_len;
         if (dtype == BYTE_ARRAY) {
           auto str1 = s->col.leaf_column->element<string_view>(row);
           len += str1.size_bytes();

@@ -158,10 +158,11 @@ __global__ void __launch_bounds__(block_size) gpuInitPageFragments(PageFragment 
       auto col                     = *(s->col.parent_column);
       auto current_start_value_idx = start_row;
       while (col.type().id() == type_id::LIST) {
-        auto offset_col         = col.child(lists_column_view::offsets_column_index);
-        current_start_value_idx = offset_col.element<size_type>(current_start_value_idx + col.offset());
-        end_value_idx           = offset_col.element<size_type>(end_value_idx + col.offset());
-        col                     = col.child(lists_column_view::child_column_index);
+        auto offset_col = col.child(lists_column_view::offsets_column_index);
+        current_start_value_idx =
+          offset_col.element<size_type>(current_start_value_idx + col.offset());
+        end_value_idx = offset_col.element<size_type>(end_value_idx + col.offset());
+        col           = col.child(lists_column_view::child_column_index);
       }
       s->start_value_idx = current_start_value_idx;
     }
@@ -1082,13 +1083,12 @@ __global__ void __launch_bounds__(128, 8) gpuEncodePages(EncPage *pages,
     uint32_t is_valid, warp_valids, len, pos;
 
     if (s->page.page_type == PageType::DICTIONARY_PAGE) {
-      is_valid  = (cur_val_idx + t < s->page.num_leaf_values);
-      val_idx   = (is_valid) ? s->col.dict_data[val_idx] : val_idx;
+      is_valid = (cur_val_idx + t < s->page.num_leaf_values);
+      val_idx  = (is_valid) ? s->col.dict_data[val_idx] : val_idx;
     } else {
-      is_valid =
-        (val_idx < s->col.leaf_column->size() && cur_val_idx + t < s->page.num_leaf_values)
-          ? s->col.leaf_column->is_valid(val_idx)
-          : 0;
+      is_valid = (val_idx < s->col.leaf_column->size() && cur_val_idx + t < s->page.num_leaf_values)
+                   ? s->col.leaf_column->is_valid(val_idx)
+                   : 0;
     }
     warp_valids = ballot(is_valid);
     cur_val_idx += nvals;
@@ -2023,8 +2023,8 @@ void InitColumnDeviceViews(EncColumnDesc *col_desc,
         }
         // traverse till leaf column
         while (col.type().id() == type_id::LIST) {
-          auto offset_col    = col.child(lists_column_view::offsets_column_index);
-          col                = col.child(lists_column_view::child_column_index);
+          auto offset_col = col.child(lists_column_view::offsets_column_index);
+          col             = col.child(lists_column_view::child_column_index);
         }
         // Store leaf_column to device storage
         column_device_view *leaf_col_ptr = leaf_column_views + i;
