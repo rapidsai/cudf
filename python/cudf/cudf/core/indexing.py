@@ -1,10 +1,14 @@
-# Copyright (c) 2020, NVIDIA CORPORATION.
+# Copyright (c) 2020-2021, NVIDIA CORPORATION.
+
+from typing import Any, Union
+
 import numpy as np
 import pandas as pd
 from nvtx import annotate
 
 import cudf
 from cudf._lib.scalar import _is_null_host_scalar
+from cudf._typing import DataFrameOrSeries, ScalarLike
 from cudf.utils.dtypes import (
     is_categorical_dtype,
     is_column_like,
@@ -113,7 +117,21 @@ class _SeriesLocIndexer(object):
     def __init__(self, sr):
         self._sr = sr
 
-    def __getitem__(self, arg):
+    def __getitem__(self, arg: Any) -> Union[ScalarLike, DataFrameOrSeries]:
+        if isinstance(arg, pd.MultiIndex):
+            arg = cudf.from_pandas(arg)
+
+        if isinstance(self._sr.index, cudf.MultiIndex) and not isinstance(
+            arg, cudf.MultiIndex
+        ):
+            result = self._sr.index._get_row_major(self._sr, arg)
+            if (
+                isinstance(arg, tuple)
+                and len(arg) == self._sr._index.nlevels
+                and not any((isinstance(x, slice) for x in arg))
+            ):
+                result = result.iloc[0]
+            return result
         try:
             arg = self._loc_to_iloc(arg)
         except (TypeError, KeyError, IndexError, ValueError):
