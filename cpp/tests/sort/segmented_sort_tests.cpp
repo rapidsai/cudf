@@ -44,7 +44,7 @@ struct SegmentedSortLists : public BaseFixture {
 TYPED_TEST_CASE(SegmentedSortLists, NumericTypes);
 
 using SegmentedSortListsInt = SegmentedSortLists<int>;
-TEST_F(SegmentedSortListsInt, Errors)
+TEST_F(SegmentedSortListsInt, ErrorsTableSizes)
 {
   LCW<int> col1{{3, 1, 2}, {1}, {2}, {0}, {10, 9, 9}, {6, 7}};
   fixed_width_column_wrapper<int> col2{{5, 4, 3, 5, 8, 5}, {1, 1, 0, 1, 1, 1}};
@@ -79,6 +79,12 @@ TEST_F(SegmentedSortListsInt, Errors)
   // List sizes mismatch between key-value
   CUDF_EXPECT_THROW_MESSAGE(cudf::sort_lists(input1, input4, {}, {}),
                             "size of each list in a row of table should be same");
+}
+
+TEST_F(SegmentedSortListsInt, ErrorsMismatchArgSizes)
+{
+  LCW<int> col1{{3, 1, 2}, {1}, {2}, {0}, {10, 9, 9}, {6, 7}};
+  table_view input1{{col1}};
 
   // Mismatch order sizes
   EXPECT_THROW(cudf::sort_lists(input1, input1, {order::ASCENDING, order::ASCENDING}, {}),
@@ -176,6 +182,37 @@ TYPED_TEST(SegmentedSortLists, Nulls)
   results = cudf::sort_lists(
     input, input, {order::DESCENDING, order::DESCENDING}, {null_order::BEFORE, null_order::BEFORE});
   CUDF_TEST_EXPECT_TABLES_EQUAL(results->view(), expected_table2b);
+}
+
+TEST_F(SegmentedSortListsInt, KeyValues)
+{
+  using T      = int;
+  using LCWstr = cudf::test::lists_column_wrapper<cudf::string_view>;
+
+  // List<T>
+  LCW<T> a{{21, 22, 23, 22}, {22, 21, 23, 22}};
+  LCW<T> b{{13, 14, 12, 11}, {14, 13, 12, 11}};
+  LCWstr c{{"a", "b", "c", "d"}, {"a", "b", "c", "d"}};
+
+  // Ascending {a}
+  // LCW<T> order{{0, 1, 3, 2}, {1, 0, 3, 2}};
+  LCW<T> sorted_a1{{21, 22, 22, 23}, {21, 22, 22, 23}};
+  LCW<T> sorted_b1{{13, 14, 11, 12}, {13, 14, 11, 12}};
+  LCWstr sorted_c1{{"a", "b", "d", "c"}, {"b", "a", "d", "c"}};
+  auto results = cudf::sort_lists(table_view{{a, b, c}}, table_view{{a}}, {}, {});
+  table_view expected_table1{{sorted_a1, sorted_b1, sorted_c1}};
+  CUDF_TEST_EXPECT_TABLES_EQUAL(results->view(), expected_table1);
+
+  // Ascending {a,b}
+  // LCW<int>  order{{0, 3, 1, 2}, {1, 3, 0, 2}};
+  LCW<T> sorted_a2{{21, 22, 22, 23}, {21, 22, 22, 23}};
+  LCW<T> sorted_b2{{13, 11, 14, 12}, {13, 11, 14, 12}};
+  LCWstr sorted_c2{{"a", "d", "b", "c"}, {"b", "d", "a", "c"}};
+  table_view expected_table2{{sorted_a2, sorted_b2, sorted_c2}};
+  table_view keys{{a, b}};
+  table_view values{{a, b, c}};
+  results = cudf::sort_lists(values, keys, {}, {});
+  CUDF_TEST_EXPECT_TABLES_EQUAL(results->view(), expected_table2);
 }
 
 }  // namespace test
