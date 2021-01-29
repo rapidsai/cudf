@@ -2318,7 +2318,7 @@ class Frame(libcudf.table.Table):
             ) = _get_replacement_values_for_columns(
                 to_replace=to_replace,
                 value=replacement,
-                columns={
+                columns_dtype_map={
                     col: copy_data._data[col].dtype for col in copy_data._data
                 },
             )
@@ -3582,7 +3582,7 @@ class Frame(libcudf.table.Table):
 
 
 def _get_replacement_values_for_columns(
-    to_replace: Any, value: Any, columns: Dict[Any, Any]
+    to_replace: Any, value: Any, columns_dtype_map: Dict[Any, Any]
 ) -> Tuple[Dict[Any, bool], Dict[Any, Any], Dict[Any, Any]]:
     """
     Returns a per column mapping for the values to be replaced, new
@@ -3594,7 +3594,7 @@ def _get_replacement_values_for_columns(
         Contains the values to be replaced.
     value : numeric, str, list-like, or dict
         Contains the values to replace `to_replace` with.
-    columns : dict
+    columns_dtype_map : dict
         A column to dtype mapping representing dtype of columns.
 
     Returns
@@ -3613,18 +3613,18 @@ def _get_replacement_values_for_columns(
     all_na_columns: Dict[Any, Any] = {}
 
     if is_scalar(to_replace) and is_scalar(value):
-        to_replace_columns = {col: [to_replace] for col in columns}
-        values_columns = {col: [value] for col in columns}
+        to_replace_columns = {col: [to_replace] for col in columns_dtype_map}
+        values_columns = {col: [value] for col in columns_dtype_map}
     elif cudf.utils.dtypes.is_list_like(to_replace) or isinstance(
         to_replace, cudf.core.column.ColumnBase
     ):
         if is_scalar(value):
-            to_replace_columns = {col: to_replace for col in columns}
+            to_replace_columns = {col: to_replace for col in columns_dtype_map}
             values_columns = {
                 col: [value]
-                if pd.api.types.is_numeric_dtype(columns[col])
+                if pd.api.types.is_numeric_dtype(columns_dtype_map[col])
                 else [value] * len(to_replace)
-                for col in columns
+                for col in columns_dtype_map
             }
         elif cudf.utils.dtypes.is_list_like(value):
             if len(to_replace) != len(value):
@@ -3634,11 +3634,13 @@ def _get_replacement_values_for_columns(
                     f"Expected {len(to_replace)}, got {len(value)}."
                 )
             else:
-                to_replace_columns = {col: to_replace for col in columns}
-                values_columns = {col: value for col in columns}
+                to_replace_columns = {
+                    col: to_replace for col in columns_dtype_map
+                }
+                values_columns = {col: value for col in columns_dtype_map}
         elif isinstance(value, cudf.Series):
-            to_replace_columns = {col: to_replace for col in columns}
-            values_columns = {col: value for col in columns}
+            to_replace_columns = {col: to_replace for col in columns_dtype_map}
+            values_columns = {col: value for col in columns_dtype_map}
         else:
             raise TypeError(
                 "value argument must be scalar, list-like or Series"
@@ -3646,19 +3648,23 @@ def _get_replacement_values_for_columns(
     elif isinstance(to_replace, cudf.Series):
         if value is None:
             to_replace_columns = {
-                col: as_column(to_replace.index) for col in columns
+                col: as_column(to_replace.index) for col in columns_dtype_map
             }
-            values_columns = {col: to_replace for col in columns}
+            values_columns = {col: to_replace for col in columns_dtype_map}
         elif is_dict_like(value):
             to_replace_columns = {
-                col: to_replace[col] for col in columns if col in to_replace
+                col: to_replace[col]
+                for col in columns_dtype_map
+                if col in to_replace
             }
             values_columns = {
                 col: value[col] for col in to_replace_columns if col in value
             }
         elif is_scalar(value) or isinstance(value, cudf.Series):
             to_replace_columns = {
-                col: to_replace[col] for col in columns if col in to_replace
+                col: to_replace[col]
+                for col in columns_dtype_map
+                if col in to_replace
             }
             values_columns = {
                 col: [value] if is_scalar(value) else value[col]
@@ -3673,25 +3679,29 @@ def _get_replacement_values_for_columns(
     elif is_dict_like(to_replace):
         if value is None:
             to_replace_columns = {
-                col: list(to_replace.keys()) for col in columns
+                col: list(to_replace.keys()) for col in columns_dtype_map
             }
             values_columns = {
-                col: list(to_replace.values()) for col in columns
+                col: list(to_replace.values()) for col in columns_dtype_map
             }
         elif is_dict_like(value):
             to_replace_columns = {
-                col: to_replace[col] for col in columns if col in to_replace
+                col: to_replace[col]
+                for col in columns_dtype_map
+                if col in to_replace
             }
             values_columns = {
-                col: value[col] for col in columns if col in value
+                col: value[col] for col in columns_dtype_map if col in value
             }
         elif is_scalar(value) or isinstance(value, cudf.Series):
             to_replace_columns = {
-                col: to_replace[col] for col in columns if col in to_replace
+                col: to_replace[col]
+                for col in columns_dtype_map
+                if col in to_replace
             }
             values_columns = {
                 col: [value] if is_scalar(value) else value
-                for col in columns
+                for col in columns_dtype_map
                 if col in to_replace
             }
         else:
