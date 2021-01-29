@@ -125,6 +125,30 @@ std::unique_ptr<column> segmented_sorted_order(table_view const& keys,
   return detail::sorted_order(segid_keys, child_column_order, child_null_precedence, stream, mr);
 }
 
+std::unique_ptr<table> segmented_sort(table_view const& values,
+                                      table_view const& keys,
+                                      column_view const& segment_offsets,
+                                      std::vector<order> const& column_order,
+                                      std::vector<null_order> const& null_precedence,
+                                      rmm::cuda_stream_view stream,
+                                      rmm::mr::device_memory_resource* mr)
+{
+  auto sorted_order = segmented_sorted_order(keys,
+                                             segment_offsets,
+                                             column_order,
+                                             null_precedence,
+                                             stream,
+                                             rmm::mr::get_current_device_resource());
+
+  // Gather segmented sort of child value columns`
+  return detail::gather(values,
+                        sorted_order->view(),
+                        out_of_bounds_policy::DONT_CHECK,
+                        detail::negative_index_policy::NOT_ALLOWED,
+                        stream,
+                        mr);
+}
+
 std::unique_ptr<table> sort_lists(table_view const& values,
                                   table_view const& keys,
                                   std::vector<order> const& column_order,
@@ -139,39 +163,32 @@ std::unique_ptr<table> sort_lists(table_view const& values,
   validate_list_columns(table_view{key_value_columns}, stream);
   CUDF_EXPECTS(keys.num_rows() > 0, "keys table should have atleast one list column");
 
-  // Get sorted order of child key columns
+  // child columns of keys
   auto child_key_columns = thrust::make_transform_iterator(
     keys.begin(), [stream](auto col) { return lists_column_view(col).get_sliced_child(stream); });
+  auto child_keys =
+    table_view{std::vector<column_view>(child_key_columns, child_key_columns + keys.num_columns())};
 
-  auto lc             = lists_column_view{keys.column(0)};
-  auto offset         = lc.offsets();
-  auto segment_offset = column_view(offset.type(),
-                                    offset.size(),
-                                    offset.head(),
-                                    offset.null_mask(),
-                                    offset.null_count(),
-                                    offset.offset() + lc.offset());
-  auto sorted_order   = segmented_sorted_order(
-    table_view{std::vector<column_view>(child_key_columns, child_key_columns + keys.num_columns())},
-    segment_offset,
-    column_order,
-    null_precedence,
-    stream,
-    rmm::mr::get_current_device_resource());
+  // segment offsets from first list column
+  auto lc              = lists_column_view{keys.column(0)};
+  auto offset          = lc.offsets();
+  auto segment_offsets = column_view(offset.type(),
+                                     offset.size(),
+                                     offset.head(),
+                                     offset.null_mask(),
+                                     offset.null_count(),
+                                     offset.offset() + lc.offset());
+  // child columns of values
+  auto child_value_columns = thrust::make_transform_iterator(
+    values.begin(), [stream](auto col) { return lists_column_view(col).get_sliced_child(stream); });
+  auto child_values = table_view{
+    std::vector<column_view>(child_value_columns, child_value_columns + values.num_columns())};
 
-  // Gather segmented sort of child value columns
-  std::vector<column_view> child_columns(values.num_columns());
-  std::transform(values.begin(), values.end(), child_columns.begin(), [stream](auto col) {
-    return lists_column_view(col).get_sliced_child(stream);
-  });
-  auto child_result = detail::gather(table_view{child_columns},
-                                     sorted_order->view(),
-                                     out_of_bounds_policy::DONT_CHECK,
-                                     detail::negative_index_policy::NOT_ALLOWED,
-                                     stream,
-                                     mr)
-                        ->release();
-
+  // Get segment sorted child columns of list columns
+  auto child_result =
+    segmented_sort(
+      child_values, child_keys, segment_offsets, column_order, null_precedence, stream, mr)
+      ->release();
   // Construct list columns from gathered child columns & return
   std::vector<std::unique_ptr<column>> list_columns;
   std::transform(values.begin(),
@@ -187,7 +204,9 @@ std::unique_ptr<table> sort_lists(table_view const& values,
                                             std::move(output_offset),
                                             std::move(sorted_child),
                                             input_list.null_count(),
-                                            std::move(null_mask));
+                                            std::move(null_mask),
+                                            stream,
+                                            mr);
                  });
   return std::make_unique<table>(std::move(list_columns));
 }
