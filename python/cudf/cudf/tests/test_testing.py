@@ -316,7 +316,7 @@ def test_range_index_and_int_index_eqaulity(index, exact):
         (np.nan, np.nan),
     ],
 )
-def test_basic_scalar_eqaulity(left, right):
+def test_basic_scalar_equality(left, right):
     assert_eq(left, right)
 
 
@@ -334,6 +334,6 @@ def test_basic_scalar_eqaulity(left, right):
         ("int64", np.dtype("int32")),
     ],
 )
-def test_basic_scalar_ineqaulity(left, right):
+def test_basic_scalar_inequality(left, right):
     with pytest.raises(AssertionError, match=r".*not (almost )?equal.*"):
         assert_eq(left, right)
