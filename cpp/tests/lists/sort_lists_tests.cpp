@@ -27,11 +27,10 @@
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
+#include <cudf/lists/sorting.hpp>
 
 #include <type_traits>
 #include <vector>
-
-#include <cudf/lists/sorting.hpp>
 
 template <typename T>
 using LCW = cudf::test::lists_column_wrapper<T, int32_t>;

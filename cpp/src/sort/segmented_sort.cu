@@ -24,19 +24,19 @@
 #include <cudf/lists/lists_column_view.hpp>
 #include <cudf/table/table_device_view.cuh>
 
-#include <algorithm>
-#include <iterator>
-#include <memory>
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_buffer.hpp>
 #include <rmm/device_uvector.hpp>
 #include <rmm/exec_policy.hpp>
 
-//#include <cub/device/device_segmented_radix_sort.cuh>
 #include <thrust/binary_search.h>
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/iterator/transform_iterator.h>
 #include <thrust/logical.h>
+
+#include <algorithm>
+#include <iterator>
+#include <memory>
 
 namespace cudf {
 namespace detail {

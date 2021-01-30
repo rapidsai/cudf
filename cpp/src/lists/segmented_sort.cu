@@ -27,12 +27,14 @@
 #include <cudf/utilities/error.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
 
-#include <thrust/copy.h>
-#include <cub/device/device_segmented_radix_sort.cuh>
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_buffer.hpp>
 #include <rmm/device_uvector.hpp>
 #include <rmm/exec_policy.hpp>
+
+#include <thrust/copy.h>
+
+#include <cub/device/device_segmented_radix_sort.cuh>
 
 namespace cudf {
 namespace lists {
@@ -151,8 +153,8 @@ struct SortPairs {
     auto keys = [&]() {
       if (child.nullable()) {
         rmm::device_uvector<T> keys(child.size(), stream);
-        auto null_replace_T = null_precedence == null_order::AFTER ? std::numeric_limits<T>::max()
-                                                                   : std::numeric_limits<T>::min();
+        auto const null_replace_T = null_precedence == null_order::AFTER ? std::numeric_limits<T>::max()
+                                                                         : std::numeric_limits<T>::min();
         auto device_child = column_device_view::create(child, stream);
         auto keys_in =
           cudf::detail::make_null_replacement_iterator<T>(*device_child, null_replace_T);
@@ -190,8 +192,7 @@ struct SortPairs {
                           offsets.begin<size_type>(),
                           offsets.begin<size_type>() + 1,
                           stream);
-    std::vector<std::unique_ptr<column>> output_cols;
-    output_cols.push_back(std::move(output));
+    std::vector<std::unique_ptr<column>> output_cols{std::move(output)};
     // rearrange the null_mask.
     cudf::detail::gather_bitmask(cudf::table_view{{child}},
                                  mutable_indices_view.begin<size_type>(),
@@ -209,7 +210,7 @@ std::unique_ptr<column> sort_lists(lists_column_view const& input,
                                    rmm::cuda_stream_view stream,
                                    rmm::mr::device_memory_resource* mr)
 {
-  if (input.size() == 0) return {};
+  if (input.is_empty()) return {};
 
   auto output_child = type_dispatcher(input.child().type(),
                                       SortPairs{},
