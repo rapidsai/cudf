@@ -12,6 +12,7 @@ import pytest
 
 import cudf
 from cudf.io.orc import ORCWriter
+from cudf._lib.null_mask import bitmask_allocation_size_bytes
 from cudf.tests.utils import assert_eq, gen_rand_series, supported_numpy_dtypes
 
 
@@ -571,6 +572,9 @@ def normalized_equals(value1, value2):
 @pytest.mark.parametrize("nrows", [1, 100, 6000000])
 def test_orc_write_statistics(tmpdir, datadir, nrows):
     supported_stat_types = supported_numpy_dtypes + ["str"]
+    # Can't write random bool columns until issue #6763 is fixed
+    if nrows == 6000000:
+        supported_stat_types.remove("bool")
 
     # Make a dataframe
     gdf = cudf.DataFrame(
@@ -670,3 +674,28 @@ def test_orc_reader_gmt_timestamps(datadir):
     pdf = orcfile.read().to_pandas()
     gdf = cudf.read_orc(path, engine="cudf").to_pandas()
     assert_eq(pdf, gdf)
+
+
+def random_bool_column(size):
+    sz = bitmask_allocation_size_bytes(size)
+    data = np.random.randint(0, 255, dtype="u1", size=sz)
+    arr = np.random.randint(low=0, high=2, size=size).astype(np.bool)
+    return cudf.Series.from_masked_array(arr, data.view("i1"))
+
+
+def test_orc_bit_offsets():
+    np.random.seed(0)
+
+    gdf = cudf.DataFrame({"col_bool": random_bool_column(600000)})
+
+    # Boolean encoding leads to incomplete bytes and incorrect values
+    # when read by other libraries
+    with pytest.raises(RuntimeError):
+        gdf.to_orc("should_throw.orc")
+
+    # Boolean encoding is correct with a single row group
+    fname = "single_row_group.orc"
+    gdf[0:10000].to_orc(fname)
+
+    pdf = pa.orc.ORCFile(fname).read().to_pandas()
+    assert_eq(gdf[0:10000], pdf)
