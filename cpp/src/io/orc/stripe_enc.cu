@@ -365,8 +365,8 @@ static __device__ uint32_t IntegerRLE(orcenc_state_s *s,
                                       Storage &temp_storage)
 {
   using block_reduce = cub::BlockReduce<T, block_size>;
-  uint8_t *dst           = s->chunk.streams[cid] + s->strm_pos[cid];
-  uint32_t out_cnt       = 0;
+  uint8_t *dst       = s->chunk.streams[cid] + s->strm_pos[cid];
+  uint32_t out_cnt   = 0;
 
   while (numvals > 0) {
     T v0               = (t < numvals) ? inbuf[(inpos + t) & inmask] : 0;
@@ -418,50 +418,50 @@ static __device__ uint32_t IntegerRLE(orcenc_state_s *s,
       vmin = block_reduce(temp_storage).Reduce(vmin, cub::Min());
       __syncthreads();
       vmax = block_reduce(temp_storage).Reduce(vmax, cub::Max());
-        if (t == 0) {
-          uint32_t mode1_w, mode2_w;
-          typename std::make_unsigned<T>::type vrange_mode1, vrange_mode2;
-          s->u.intrle.scratch = (uint64_t)vmin;
-          if (sizeof(T) > 4) {
-            vrange_mode1 = (is_signed) ? max(zigzag(vmin), zigzag(vmax)) : vmax;
-            vrange_mode2 = vmax - vmin;
-            mode1_w      = 8 - min(CountLeadingBytes64(vrange_mode1), 7);
-            mode2_w      = 8 - min(CountLeadingBytes64(vrange_mode2), 7);
-          } else {
-            vrange_mode1 = (is_signed) ? max(zigzag(vmin), zigzag(vmax)) : vmax;
-            vrange_mode2 = vmax - vmin;
-            mode1_w      = 4 - min(CountLeadingBytes32(vrange_mode1), 3);
-            mode2_w      = 4 - min(CountLeadingBytes32(vrange_mode2), 3);
-          }
-          // Decide between mode1 & mode2 (also mode3 for length=2 repeat)
-          if (vrange_mode2 == 0 && mode1_w > 1) {
-            // Should only occur if literal_run==2 (otherwise would have resulted in repeat_run >=
-            // 3)
-            uint32_t bytecnt = 2;
-            dst[0]           = 0xC0 + ((literal_run - 1) >> 8);
-            dst[1]           = (literal_run - 1) & 0xff;
-            bytecnt += StoreVarint(dst + 2, vrange_mode1);
-            dst[bytecnt++]           = 0;  // Zero delta
-            s->u.intrle.literal_mode = 3;
-            s->u.intrle.literal_w    = bytecnt;
-          } else {
-            uint32_t range, w;
-            if (mode1_w > mode2_w && (literal_run - 1) * (mode1_w - mode2_w) > 4) {
-              s->u.intrle.literal_mode = 2;
-              w                        = mode2_w;
-              range                    = (uint32_t)vrange_mode2;
-            } else {
-              s->u.intrle.literal_mode = 1;
-              w                        = mode1_w;
-              range                    = (uint32_t)vrange_mode1;
-            }
-            if (w == 1)
-              w = (range >= 16) ? w << 3 : (range >= 4) ? 4 : (range >= 2) ? 2 : 1;
-            else
-              w <<= 3;  // bytes -> bits
-            s->u.intrle.literal_w = w;
-          }
+      if (t == 0) {
+        uint32_t mode1_w, mode2_w;
+        typename std::make_unsigned<T>::type vrange_mode1, vrange_mode2;
+        s->u.intrle.scratch = (uint64_t)vmin;
+        if (sizeof(T) > 4) {
+          vrange_mode1 = (is_signed) ? max(zigzag(vmin), zigzag(vmax)) : vmax;
+          vrange_mode2 = vmax - vmin;
+          mode1_w      = 8 - min(CountLeadingBytes64(vrange_mode1), 7);
+          mode2_w      = 8 - min(CountLeadingBytes64(vrange_mode2), 7);
+        } else {
+          vrange_mode1 = (is_signed) ? max(zigzag(vmin), zigzag(vmax)) : vmax;
+          vrange_mode2 = vmax - vmin;
+          mode1_w      = 4 - min(CountLeadingBytes32(vrange_mode1), 3);
+          mode2_w      = 4 - min(CountLeadingBytes32(vrange_mode2), 3);
         }
+        // Decide between mode1 & mode2 (also mode3 for length=2 repeat)
+        if (vrange_mode2 == 0 && mode1_w > 1) {
+          // Should only occur if literal_run==2 (otherwise would have resulted in repeat_run >=
+          // 3)
+          uint32_t bytecnt = 2;
+          dst[0]           = 0xC0 + ((literal_run - 1) >> 8);
+          dst[1]           = (literal_run - 1) & 0xff;
+          bytecnt += StoreVarint(dst + 2, vrange_mode1);
+          dst[bytecnt++]           = 0;  // Zero delta
+          s->u.intrle.literal_mode = 3;
+          s->u.intrle.literal_w    = bytecnt;
+        } else {
+          uint32_t range, w;
+          if (mode1_w > mode2_w && (literal_run - 1) * (mode1_w - mode2_w) > 4) {
+            s->u.intrle.literal_mode = 2;
+            w                        = mode2_w;
+            range                    = (uint32_t)vrange_mode2;
+          } else {
+            s->u.intrle.literal_mode = 1;
+            w                        = mode1_w;
+            range                    = (uint32_t)vrange_mode1;
+          }
+          if (w == 1)
+            w = (range >= 16) ? w << 3 : (range >= 4) ? 4 : (range >= 2) ? 2 : 1;
+          else
+            w <<= 3;  // bytes -> bits
+          s->u.intrle.literal_w = w;
+        }
+      }
       __syncthreads();
       vmin         = (T)s->u.intrle.scratch;
       literal_mode = s->u.intrle.literal_mode;
@@ -844,23 +844,13 @@ __global__ void __launch_bounds__(block_size)
           case SHORT:
           case INT:
           case DATE:
-            n = IntegerRLE<CI_DATA, int32_t, true, 0x3ff, block_size>(s,
-                                                          s->vals.i32,
-                                                          s->nnz - s->numvals,
-                                                          s->numvals,
-                                                          flush,
-                                                          t,
-                                                          temp_storage.i32);
+            n = IntegerRLE<CI_DATA, int32_t, true, 0x3ff, block_size>(
+              s, s->vals.i32, s->nnz - s->numvals, s->numvals, flush, t, temp_storage.i32);
             break;
           case LONG:
           case TIMESTAMP:
-            n = IntegerRLE<CI_DATA, int64_t, true, 0x3ff, block_size>(s,
-                                                          s->vals.i64,
-                                                          s->nnz - s->numvals,
-                                                          s->numvals,
-                                                          flush,
-                                                          t,
-                                                          temp_storage.i64);
+            n = IntegerRLE<CI_DATA, int64_t, true, 0x3ff, block_size>(
+              s, s->vals.i64, s->nnz - s->numvals, s->numvals, flush, t, temp_storage.i64);
             break;
           case BYTE:
             n = ByteRLE<CI_DATA, 0x3ff>(s, s->vals.u8, s->nnz - s->numvals, s->numvals, flush, t);
@@ -885,13 +875,8 @@ __global__ void __launch_bounds__(block_size)
             break;
           case STRING:
             if (s->chunk.encoding_kind == DICTIONARY_V2) {
-              n = IntegerRLE<CI_DATA, uint32_t, false, 0x3ff, block_size>(s,
-                                                              s->vals.u32,
-                                                              s->nnz - s->numvals,
-                                                              s->numvals,
-                                                              flush,
-                                                              t,
-                                                              temp_storage.u32);
+              n = IntegerRLE<CI_DATA, uint32_t, false, 0x3ff, block_size>(
+                s, s->vals.u32, s->nnz - s->numvals, s->numvals, flush, t, temp_storage.u32);
             } else {
               n = s->numvals;
             }
@@ -907,13 +892,8 @@ __global__ void __launch_bounds__(block_size)
         switch (s->chunk.type_kind) {
           case TIMESTAMP:
           case STRING:
-            n = IntegerRLE<CI_DATA2, uint32_t, false, 0x3ff, block_size>(s,
-                                                             s->lengths.u32,
-                                                             s->nnz - s->numlengths,
-                                                             s->numlengths,
-                                                             flush,
-                                                             t,
-                                                             temp_storage.u32);
+            n = IntegerRLE<CI_DATA2, uint32_t, false, 0x3ff, block_size>(
+              s, s->lengths.u32, s->nnz - s->numlengths, s->numlengths, flush, t, temp_storage.u32);
             break;
           default: n = s->numlengths; break;
         }
@@ -997,13 +977,8 @@ __global__ void __launch_bounds__(block_size)
       __syncthreads();
       if (s->numlengths + numvals > 0) {
         uint32_t flush = (s->cur_row + numvals == s->nrows) ? 1 : 0;
-        uint32_t n     = IntegerRLE<CI_DATA2, uint32_t, false, 0x3ff, block_size>(s,
-                                                                  s->lengths.u32,
-                                                                  s->cur_row,
-                                                                  s->numlengths + numvals,
-                                                                  flush,
-                                                                  t,
-                                                                  temp_storage);
+        uint32_t n     = IntegerRLE<CI_DATA2, uint32_t, false, 0x3ff, block_size>(
+          s, s->lengths.u32, s->cur_row, s->numlengths + numvals, flush, t, temp_storage);
         __syncthreads();
         if (!t) {
           s->numlengths += numvals;

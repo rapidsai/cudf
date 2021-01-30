@@ -105,8 +105,11 @@ __device__ void FetchDictionaryFragment(dict_state_s *s,
 }
 
 /// Generate dictionary indices in ascending row order
+template <int block_size>
 __device__ void GenerateDictionaryIndices(dict_state_s *s, uint32_t t)
 {
+  using block_scan = cub::BlockScan<uint32_t, block_size>;
+  __shared__ typename block_scan::TempStorage temp_storage;
   uint32_t *dict_index      = s->col.dict_index;
   uint32_t *dict_data       = s->col.dict_data + s->ck.start_row;
   const uint32_t *valid_map = s->col.valid_map_base;
@@ -122,13 +125,11 @@ __device__ void GenerateDictionaryIndices(dict_state_s *s, uint32_t t)
       (is_valid &&
        dict_idx ==
          row);  // Any value that doesn't have bit31 set should have dict_idx=row at this point
-    uint32_t umask = ballot(is_unique);
-    uint32_t pos   = num_dict_entries + __popc(umask & ((1 << (t & 0x1f)) - 1));
-    if (!(t & 0x1f)) { s->scratch_red[t >> 5] = __popc(umask); }
-    num_dict_entries += __syncthreads_count(is_unique);
-    if (t < 32) { s->scratch_red[t] = WarpReducePos32(s->scratch_red[t], t); }
-    __syncthreads();
-    if (t >= 32) { pos += s->scratch_red[(t - 32) >> 5]; }
+    uint32_t tmp_num_dict_entries;
+    uint32_t pos;
+    block_scan(temp_storage).ExclusiveSum(is_unique, pos, tmp_num_dict_entries);
+    pos += num_dict_entries;
+    num_dict_entries += tmp_num_dict_entries;
     if (is_valid && is_unique) {
       dict_data[pos]  = row;
       dict_index[row] = pos;
@@ -312,7 +313,7 @@ __global__ void __launch_bounds__(block_size, 1)
     __syncthreads();
   }
   __syncthreads();
-  GenerateDictionaryIndices(s, t);
+  GenerateDictionaryIndices<block_size>(s, t);
   if (!t) {
     chunks[blockIdx.x].num_dict_fragments = s->ck.num_dict_fragments;
     chunks[blockIdx.x].dictionary_size    = s->dictionary_size;
