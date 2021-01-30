@@ -124,7 +124,7 @@ void build_column_metadata(std::vector<serialized_column>& metadata,
 
   // add metadata
   metadata.emplace_back(
-    col.type(), col.size(), UNKNOWN_NULL_COUNT, data_offset, null_mask_offset, col.num_children());
+    col.type(), col.size(), col.null_count(), data_offset, null_mask_offset, col.num_children());
 
   std::for_each(
     col.child_begin(), col.child_end(), [&metadata, &base_ptr, &data_size](column_view const& col) {
