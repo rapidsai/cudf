@@ -1062,6 +1062,72 @@ struct rolling_window_launcher {
     return gather_map;
   }
 
+  /**
+   * @brief Purge entries for null inputs from gather_map, and adjust offsets.
+   */
+  void purge_null_entries(column_view const& input,
+                          std::unique_ptr<column>& gather_map,
+                          std::unique_ptr<column>& offsets,
+                          rmm::cuda_stream_view stream,
+                          rmm::mr::device_memory_resource* mr)
+  {
+    auto input_device_view = column_device_view::create(input, stream);
+
+    auto input_row_is_null = [d_input = *input_device_view] __device__(auto i) {
+      return d_input.is_null_nocheck(i);
+    };
+    auto input_row_not_null = [d_input = *input_device_view] __device__(auto i) {
+      return d_input.is_valid_nocheck(i);
+    };
+
+    auto num_child_nulls = thrust::count_if(rmm::exec_policy(stream),
+                                            gather_map->view().template begin<size_type>(),
+                                            gather_map->view().template end<size_type>(),
+                                            input_row_is_null);
+
+    if (num_child_nulls == 0) {
+      return;  // No child nulls. Nothing to recompute.
+    }
+
+    // Purge entries in gather_map that correspond to null input.
+    auto new_gather_map = make_fixed_width_column(data_type{type_to_id<size_type>()},
+                                                  gather_map->size() - num_child_nulls,
+                                                  mask_state::UNALLOCATED,
+                                                  stream,
+                                                  mr);
+    thrust::copy_if(rmm::exec_policy(stream),
+                    gather_map->view().template begin<size_type>(),
+                    gather_map->view().template end<size_type>(),
+                    new_gather_map->mutable_view().template begin<size_type>(),
+                    input_row_not_null);
+
+    // Recalculate offsets after null entries are purged.
+    auto new_sizes = make_fixed_width_column(
+      data_type{type_to_id<size_type>()}, input.size(), mask_state::UNALLOCATED, stream, mr);
+
+    thrust::transform(rmm::exec_policy(stream),
+                      thrust::make_counting_iterator<size_type>(0),
+                      thrust::make_counting_iterator<size_type>(input.size()),
+                      new_sizes->mutable_view().template begin<size_type>(),
+                      [d_gather_map  = gather_map->view().template begin<size_type>(),
+                       d_old_offsets = offsets->view().template begin<size_type>(),
+                       input_row_not_null] __device__(auto i) {
+                        return thrust::count_if(thrust::seq,
+                                                d_gather_map + d_old_offsets[i],
+                                                d_gather_map + d_old_offsets[i + 1],
+                                                input_row_not_null);
+                      });
+
+    auto new_offsets =
+      strings::detail::make_offsets_child_column(new_sizes->view().template begin<size_type>(),
+                                                 new_sizes->view().template end<size_type>(),
+                                                 stream,
+                                                 mr);
+
+    gather_map = std::move(new_gather_map);
+    offsets    = std::move(new_offsets);
+  }
+
   template <aggregation::Kind op, typename PrecedingIter, typename FollowingIter>
   std::enable_if_t<(op == aggregation::COLLECT), std::unique_ptr<column>> operator()(
     column_view const& input,
@@ -1104,6 +1170,13 @@ struct rolling_window_launcher {
     // Generate gather map to produce the collect() result's child column.
     auto gather_map = create_collect_gather_map(
       offsets->view(), per_row_mapping->view(), preceding_begin, stream, mr);
+
+    // If gather_map collects null elements, and null_policy == EXCLUDE,
+    // those elements must be filtered out, and offsets recomputed.
+    auto null_handling = static_cast<collect_list_aggregation*>(agg.get())->_null_handling;
+    if (null_handling == null_policy::EXCLUDE && input.has_nulls()) {
+      purge_null_entries(input, gather_map, offsets, stream, mr);
+    }
 
     // gather(), to construct child column.
     auto gather_output =
