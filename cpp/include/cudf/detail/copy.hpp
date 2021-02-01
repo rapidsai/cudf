@@ -105,7 +105,7 @@ std::vector<packed_table> contiguous_split(
  * @param stream Optional CUDA stream on which to execute kernels
  **/
 packed_columns pack(cudf::table_view const& input,
-                    cudaStream_t stream                 = 0,
+                    rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
                     rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**

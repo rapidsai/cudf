@@ -138,7 +138,7 @@ void build_column_metadata(std::vector<serialized_column>& metadata,
  * @copydoc cudf::detail::pack
  */
 packed_columns pack(cudf::table_view const& input,
-                    cudaStream_t stream,
+                    rmm::cuda_stream_view stream,
                     rmm::mr::device_memory_resource* mr)
 {
   // do a contiguous_split with no splits to get the memory for the table
