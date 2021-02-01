@@ -185,6 +185,36 @@ std::unique_ptr<column> rank(
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
+ * @brief Performs a lexicographic segmented sort of a table
+ *
+ * If segment_offsets contains values larger than number of rows, behaviour is undefined.
+ * @throws cudf::logic_error if `values.num_rows() != keys.num_rows()`.
+ * @throws cudf::logic_error if `segment_offsets` is not `size_type` column.
+ *
+ * @param values The table to reorder
+ * @param keys The table that determines the ordering of elements in each segment
+ * @param segment_offsets The column of `size_type` type containing start offset index for each
+ * contiguous segment.
+ * @param column_order The desired order for each column in `keys`. Size must be
+ * equal to `keys.num_columns()` or empty. If empty, all columns are sorted in
+ * ascending order.
+ * @param null_precedence The desired order of a null element compared to other
+ * elements for each column in `keys`. Size must be equal to
+ * `keys.num_columns()` or empty. If empty, all columns will be sorted with
+ * `null_order::BEFORE`.
+ * @param mr Device memory resource to allocate any returned objects
+ * @return table with elements in each segment sorted.
+ *
+ */
+std::unique_ptr<table> segmented_sort(
+  table_view const& values,
+  table_view const& keys,
+  column_view const& segment_offsets,
+  std::vector<order> const& column_order         = {},
+  std::vector<null_order> const& null_precedence = {},
+  rmm::mr::device_memory_resource* mr            = rmm::mr::get_current_device_resource());
+
+/**
  * @brief Performs a lexicographic segmented sort of the list in each row of a table of list columns
  *
  * `keys` with list columns of depth 1 is only supported.
