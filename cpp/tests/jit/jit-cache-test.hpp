@@ -123,10 +123,10 @@ struct JitCacheTest : public ::testing::Test, public cudf::jit::cudfJitCache {
 
 /**
  * @brief Similar to JitCacheTest but it doesn't run warmUp() test in SetUp and
- * purgeFileCache() in TearDown
+ * purgeFileCache() in SetUp and TearDown
  */
 struct JitCacheMultiProcessTest : public JitCacheTest {
-  virtual void SetUp() { purgeFileCache(); }
+  virtual void SetUp() {}
 
   virtual void TearDown() {}
 };

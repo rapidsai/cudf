@@ -132,6 +132,12 @@
             <version>2.25.0</version>
             <scope>test</scope>
         </dependency>
+        <dependency>
+            <groupId>org.apache.arrow</groupId>
+            <artifactId>arrow-vector</artifactId>
+            <version>${arrow.version}</version>
+           <scope>test</scope>
+        </dependency>
     </dependencies>
 
     <properties>
@@ -151,6 +157,7 @@
         <GPU_ARCHS>ALL</GPU_ARCHS>
         <native.build.path>${project.build.directory}/cmake-build</native.build.path>
         <slf4j.version>1.7.30</slf4j.version>
+        <arrow.version>0.15.1</arrow.version>
     </properties>
 
     <profiles>
