@@ -1,11 +1,12 @@
 # Copyright (c) 2020-2021, NVIDIA CORPORATION.
+from __future__ import annotations
 
 import copy
 import functools
 import operator
 import warnings
 from collections import OrderedDict, abc as abc
-from typing import overload
+from typing import TYPE_CHECKING, overload
 
 import cupy
 import numpy as np
@@ -27,6 +28,9 @@ from cudf.utils.dtypes import (
     min_scalar_type,
 )
 
+if TYPE_CHECKING:
+    from cudf.core.column_accessor import ColumnAccessor
+
 
 class Frame(libcudf.table.Table):
     """
@@ -39,6 +43,8 @@ class Frame(libcudf.table.Table):
     index : Table
         A Frame representing the (optional) index columns.
     """
+
+    _data: "ColumnAccessor"
 
     @classmethod
     def _from_table(cls, table: "Frame"):
@@ -2338,82 +2344,24 @@ class Frame(libcudf.table.Table):
 
         return result
 
-    def _copy_categories(self, other, include_index=True):
-        """
-        Utility that copies category information from `other`
-        to `self`.
-        """
+    def _postprocess_columns(
+        self, other: Frame, include_index: bool = True
+    ) -> Frame:
         for name, col, other_col in zip(
             self._data.keys(), self._data.values(), other._data.values()
         ):
-            if isinstance(
-                other_col, cudf.core.column.CategoricalColumn
-            ) and not isinstance(col, cudf.core.column.CategoricalColumn):
-                self._data[name] = build_categorical_column(
-                    categories=other_col.categories,
-                    codes=as_column(col.base_data, dtype=col.dtype),
-                    mask=col.base_mask,
-                    ordered=other_col.ordered,
-                    size=col.size,
-                    offset=col.offset,
-                    null_count=col.null_count,
-                )
-        if include_index:
-            # include_index will still behave as False
-            # incase of self._index being a RangeIndex
-            if (
-                self._index is not None
-                and not isinstance(self._index, cudf.core.index.RangeIndex)
-                and isinstance(
-                    other._index,
-                    (cudf.core.index.CategoricalIndex, cudf.MultiIndex),
-                )
-            ):
-                self._index._postprocess_columns(
-                    other._index, include_index=False
-                )
-                # When other._index is a CategoricalIndex, there is
-                # possibility that corresposing self._index be GenericIndex
-                # with codes. So to update even the class signature, we
-                # have to reconstruct self._index:
-                if isinstance(
-                    other._index, cudf.core.index.CategoricalIndex
-                ) and not isinstance(
-                    self._index, cudf.core.index.CategoricalIndex
-                ):
-                    self._index = cudf.core.index.Index._from_table(
-                        self._index
-                    )
-        return self
-
-    def _copy_struct_names(self, other, include_index=True):
-        """
-        Utility that copies struct field names.
-        """
-        for name, col, other_col in zip(
-            self._data.keys(), self._data.values(), other._data.values()
-        ):
-            if isinstance(other_col, cudf.core.column.StructColumn):
-                self._data[name] = col._rename_fields(
-                    other_col.dtype.fields.keys()
-                )
+            self._data[name] = other_col._copy_type_metadata(col)
 
         if include_index and self._index is not None:
+            assert other._index is not None
             for name, col, other_col in zip(
                 self._index._data.keys(),
                 self._index._data.values(),
                 other._index._data.values(),
             ):
-                if isinstance(other_col, cudf.core.column.StructColumn):
-                    self._index._data[name] = col._rename_fields(
-                        other_col.dtype.fields.keys()
-                    )
+                self._index._data[name] = other_col._copy_type_metadata(col)
 
         return self
-
-    def _postprocess_columns(self, other, include_index=True):
-        self._copy_categories(other, include_index=include_index)
-        self._copy_struct_names(other, include_index=include_index)
 
     def _unaryop(self, op):
         data_columns = (col.unary_operator(op) for col in self._columns)
