@@ -42,6 +42,7 @@ namespace cudf {
 namespace detail {
 
 // returns segment indices for each element for all segments.
+// first segment begin index = 0, last segment end index = num_rows.
 rmm::device_uvector<size_type> get_segment_indices(size_type num_rows,
                                                    column_view const& offsets,
                                                    rmm::cuda_stream_view stream)
@@ -50,10 +51,10 @@ rmm::device_uvector<size_type> get_segment_indices(size_type num_rows,
 
   auto offset_begin = offsets.begin<size_type>();  // assumes already offset column contains offset.
   auto offsets_minus_one = thrust::make_transform_iterator(
-    offset_begin, [offset_begin] __device__(auto i) { return i - offset_begin[0] - 1; });
+    offset_begin, [offset_begin] __device__(auto i) { return i - 1; });
   auto counting_iter = thrust::make_counting_iterator<size_type>(0);
   thrust::lower_bound(rmm::exec_policy(stream),
-                      offsets_minus_one + 1,
+                      offsets_minus_one,
                       offsets_minus_one + offsets.size(),
                       counting_iter,
                       counting_iter + segment_ids.size(),
@@ -136,6 +137,8 @@ std::unique_ptr<table> segmented_sort(table_view const& values,
                                       rmm::cuda_stream_view stream,
                                       rmm::mr::device_memory_resource* mr)
 {
+  CUDF_EXPECTS(values.num_rows() == keys.num_rows(),
+               "Mismatch in number of rows for values and keys");
   auto sorted_order = segmented_sorted_order(keys,
                                              segment_offsets,
                                              column_order,
