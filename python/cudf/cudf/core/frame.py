@@ -553,7 +553,7 @@ class Frame(libcudf.table.Table):
         result._postprocess_columns(self, include_index=keep_index)
         return result
 
-    def _slice(self, arg):
+    def _slice(self, arg: slice) -> "cudf.Frame":
         """
        _slice : slice the frame as per the arg
 
@@ -579,9 +579,11 @@ class Frame(libcudf.table.Table):
                 return result
             keep_index = False
 
+        # For decreasing slices, terminal at before-the-zero
+        # position is preserved.
         if start < 0:
             start = start + num_rows
-        if stop < 0:
+        if stop < 0 and not (stride < 0 and stop == -1):
             stop = stop + num_rows
 
         if start > stop and (stride is None or stride == 1):
