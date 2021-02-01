@@ -2703,8 +2703,13 @@ class interval_range(GenericIndex):
     """
 
     def __new__(
-        cls, start=None, end=None, freq=1, closed="right", name=None,
-    ) -> "interval_range":
+        cls,
+        start: int = None,
+        end: int = None,
+        freq: int = 1,
+        closed: str = "right",
+        name: str = None,
+    ) -> "IntervalIndex":
         left_col = cupy.arange(start, end, freq)
         right_col = cupy.arange(start + freq, end + 1, freq)
         # sometimes the left col overlaps with the right col,
