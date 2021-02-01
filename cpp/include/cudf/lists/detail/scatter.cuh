@@ -20,7 +20,7 @@
 #include <cudf/column/column_factories.hpp>
 #include <cudf/copying.hpp>
 #include <cudf/detail/valid_if.cuh>
-#include <cudf/lists/detail/utilities.cuh>
+#include <cudf/lists/detail/utilities.hpp>
 #include <cudf/lists/list_device_view.cuh>
 #include <cudf/null_mask.hpp>
 #include <cudf/strings/detail/utilities.cuh>

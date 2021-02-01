@@ -15,8 +15,8 @@
  */
 
 #include <cudf/column/column_view.hpp>
-#include <cudf/lists/detail/utilities.cuh>
-#include <cudf/utilities/error.hpp>
+#include <cudf/detail/get_value.cuh>
+#include <cudf/lists/detail/utilities.hpp>
 
 namespace cudf {
 namespace detail {
@@ -32,14 +32,7 @@ cudf::size_type get_num_child_rows(cudf::column_view const& list_offsets,
                                    rmm::cuda_stream_view stream)
 {
   // Number of rows in child-column == last offset value.
-  cudf::size_type num_child_rows{};
-  CUDA_TRY(cudaMemcpyAsync(&num_child_rows,
-                           list_offsets.data<cudf::size_type>() + list_offsets.size() - 1,
-                           sizeof(cudf::size_type),
-                           cudaMemcpyDeviceToHost,
-                           stream.value()));
-  stream.synchronize();
-  return num_child_rows;
+  return get_value<size_type>(list_offsets, list_offsets.size() - 1, stream);
 }
 
 }  // namespace detail
