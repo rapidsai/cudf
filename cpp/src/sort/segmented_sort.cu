@@ -21,6 +21,7 @@
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/sorting.hpp>
+#include <cudf/lists/list_device_view.cuh>
 #include <cudf/lists/lists_column_view.hpp>
 #include <cudf/table/table_device_view.cuh>
 
@@ -61,18 +62,6 @@ rmm::device_uvector<size_type> get_segment_indices(size_type num_rows,
                       segment_ids.begin());
   return std::move(segment_ids);
 }
-
-// same as count_elements(list). TODO: DRY.
-struct list_size_functor {
-  column_device_view const& d_column;
-  __device__ size_type operator()(size_type idx)
-  {
-    if (d_column.is_null(idx)) return size_type{0};
-    auto d_offsets =
-      d_column.child(lists_column_view::offsets_column_index).data<size_type>() + d_column.offset();
-    return d_offsets[idx + 1] - d_offsets[idx];
-  }
-};
 
 void validate_list_columns(table_view const& keys, rmm::cuda_stream_view stream)
 {

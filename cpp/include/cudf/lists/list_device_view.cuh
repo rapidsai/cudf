@@ -190,4 +190,19 @@ class list_device_view {
   };
 };
 
+/**
+ * @brief returns size of the list by row index
+ *
+ */
+struct list_size_functor {
+  column_device_view const d_column;
+  CUDA_DEVICE_CALLABLE size_type operator()(size_type idx)
+  {
+    if (d_column.is_null(idx)) return size_type{0};
+    auto d_offsets =
+      d_column.child(lists_column_view::offsets_column_index).data<size_type>() + d_column.offset();
+    return d_offsets[idx + 1] - d_offsets[idx];
+  }
+};
+
 }  // namespace cudf
