@@ -983,7 +983,8 @@ struct rolling_window_launcher {
     // This accounts for the `0` added by default to the offsets
     // column, marking the beginning of the column.
 
-    auto const num_child_rows{cudf::detail::get_value<size_type>(offsets, offsets.size() - 1, stream)};
+    auto const num_child_rows{
+      cudf::detail::get_value<size_type>(offsets, offsets.size() - 1, stream)};
 
     auto scatter_values =
       make_fixed_width_column(size_data_type, offsets.size(), mask_state::UNALLOCATED, stream, mr);
