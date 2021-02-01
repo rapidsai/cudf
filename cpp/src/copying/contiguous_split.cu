@@ -128,7 +128,7 @@ constexpr size_type copy_block_size = 512;
  * @param value_shift Shift incoming 4-byte offset values down by this amount
  * @param bit_shift Shift incoming data right by this many bits
  * @param num_rows Number of rows being copied
- * @param valid_count Optional pointer to a value to store count of unset bits.
+ * @param valid_count Optional pointer to a value to store count of set bits
  */
 __device__ void copy_buffer(uint8_t* __restrict__ dst,
                             uint8_t* __restrict__ src,
