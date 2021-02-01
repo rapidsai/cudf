@@ -653,7 +653,6 @@ rmm::device_buffer writer::impl::encode_columns(orc_column_view *columns,
 
   for (auto &cnt_in : validity_check_inputs) {
     auto const valid_counts = segmented_count_set_bits(cnt_in.second.mask, cnt_in.second.indices);
-    for (auto &a : valid_counts) std::cout << a << ' ';
     CUDF_EXPECTS(std::none_of(valid_counts.cbegin(),
                               valid_counts.cend(),
                               [](auto valid_count) { return valid_count % 8; }),

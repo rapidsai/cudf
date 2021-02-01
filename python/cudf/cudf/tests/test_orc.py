@@ -676,26 +676,28 @@ def test_orc_reader_gmt_timestamps(datadir):
     assert_eq(pdf, gdf)
 
 
-def random_bool_column(size):
-    sz = bitmask_allocation_size_bytes(size)
-    data = np.random.randint(0, 255, dtype="u1", size=sz)
-    arr = np.random.randint(low=0, high=2, size=size).astype(np.bool)
-    return cudf.Series.from_masked_array(arr, data.view("i1"))
 
-
-def test_orc_bit_offsets():
+def test_orc_bool_encode_fail():
     np.random.seed(0)
 
-    gdf = cudf.DataFrame({"col_bool": random_bool_column(600000)})
+    # Generate a boolean column longer than a single stripe
+    fail_df = cudf.DataFrame({ "col": gen_rand_series("bool", 600000)})
+    # Invalidate the first row in the second stripe to break encoding
+    fail_df["col"][500000] = None
 
-    # Boolean encoding leads to incomplete bytes and incorrect values
-    # when read by other libraries
+    # Should throw instead of generating a file that is incompatible
+    # with other readers (see issue #6763)
     with pytest.raises(RuntimeError):
-        gdf.to_orc("should_throw.orc")
+        fail_df.to_orc("should_throw.orc")
 
-    # Boolean encoding is correct with a single row group
-    fname = "single_row_group.orc"
-    gdf[0:10000].to_orc(fname)
+    # Generate a boolean column that fits into a single stripe
+    okay_df = cudf.DataFrame({ "col": gen_rand_series("bool", 500000)})
+    okay_df["col"][500000-1] = None
+    fname = "single_stripe.orc"
+    # Invalid row is in the last row group of the stripe;
+    # encoding is assumed to be correct
+    okay_df.to_orc(fname)
 
+    # Also validate data
     pdf = pa.orc.ORCFile(fname).read().to_pandas()
-    assert_eq(gdf[0:10000], pdf)
+    assert_eq(okay_df, pdf)
