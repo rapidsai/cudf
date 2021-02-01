@@ -553,13 +553,13 @@ class Frame(libcudf.table.Table):
         result._postprocess_columns(self, include_index=keep_index)
         return result
 
-    def _slice(self, arg: slice) -> "cudf.Frame":
+    def _slice(self: T, arg: slice) -> T:
         """
        _slice : slice the frame as per the arg
 
        Parameters
        ----------
-       arg : should always be of type slice and doesn't handle step
+       arg : should always be of type slice
 
        """
         from cudf.core.index import RangeIndex
