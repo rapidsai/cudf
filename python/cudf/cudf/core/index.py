@@ -1,8 +1,9 @@
 # Copyright (c) 2018-2020, NVIDIA CORPORATION.
-from __future__ import division, print_function
+from __future__ import annotations, division, print_function
 
 import pickle
 from numbers import Number
+from typing import Any, Dict, Set, Type
 
 import cupy
 import numpy as np
@@ -134,6 +135,13 @@ class Index(Frame, Serializable):
                   names=['a', 'b'])
         """
         pass
+
+    @cached_property
+    def _values(self) -> ColumnBase:
+        raise NotImplementedError
+
+    def __getitem__(self, key):
+        raise NotImplementedError()
 
     def drop_duplicates(self, keep="first"):
         """
@@ -1488,7 +1496,11 @@ class Index(Frame, Serializable):
         else:
             return as_index(table)
 
-    _accessors = set()
+    _accessors = set()  # type: Set[Any]
+
+    @property
+    def _constructor_expanddim(self):
+        return cudf.MultiIndex
 
 
 class RangeIndex(Index):
@@ -1776,7 +1788,7 @@ class RangeIndex(Index):
 
         return begin, end
 
-    @copy_docstring(_to_frame)
+    @copy_docstring(_to_frame)  # type: ignore
     def to_frame(self, index=True, name=None):
         return _to_frame(self, index, name)
 
@@ -2031,7 +2043,7 @@ class GenericIndex(Index):
         else:
             return res
 
-    @copy_docstring(_to_frame)
+    @copy_docstring(_to_frame)  # type: ignore
     def to_frame(self, index=True, name=None):
         return _to_frame(self, index, name)
 
@@ -2803,14 +2815,10 @@ class StringIndex(GenericIndex):
             + ")"
         )
 
-    @copy_docstring(StringMethods.__init__)
+    @copy_docstring(StringMethods.__init__)  # type: ignore
     @property
     def str(self):
         return StringMethods(column=self._values, parent=self)
-
-    @property
-    def _constructor_expanddim(self):
-        return cudf.MultiIndex
 
     def _clean_nulls_from_index(self):
         """
@@ -2823,7 +2831,7 @@ class StringIndex(GenericIndex):
             return self
 
 
-def as_index(arbitrary, **kwargs):
+def as_index(arbitrary, **kwargs) -> Index:
     """Create an Index from an arbitrary object
 
     Currently supported inputs are:
@@ -2892,7 +2900,7 @@ _dtype_to_index = {
     np.uint64: UInt64Index,
     np.float32: Float32Index,
     np.float64: Float64Index,
-}
+}  # type: Dict[Any, Type[Index]]
 
 _index_to_dtype = {
     Int8Index: np.int8,
