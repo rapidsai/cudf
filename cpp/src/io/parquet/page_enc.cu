@@ -352,13 +352,8 @@ __global__ void __launch_bounds__(block_size) gpuInitPageFragments(PageFragment 
           }
         }
       }
-      uint32_t dupes_cur;
-      block_scan(temp_storage.scan_storage).InclusiveSum(is_dupe, dupes_before, dupes_cur);
-      dupes_before += s->total_dupes;
-      if (!t) { s->total_dupes += dupes_cur; }
-#if 0
-      uint32_t dupe_mask    = ballot(is_dupe);
-      dupes_before = s->total_dupes + __popc(dupe_mask & ((2 << (t & 0x1f)) - 1));
+      uint32_t dupe_mask = ballot(is_dupe);
+      dupes_before       = s->total_dupes + __popc(dupe_mask & ((2 << (t & 0x1f)) - 1));
       if (!(t & 0x1f)) { s->scratch_red[t >> 5] = __popc(dupe_mask); }
       __syncthreads();
       if (t < 32) {
@@ -367,13 +362,10 @@ __global__ void __launch_bounds__(block_size) gpuInitPageFragments(PageFragment 
         if (t == 0xf) { s->total_dupes += warp_pos; }
         if (t < 16) { s->scratch_red[t] = warp_pos - warp_dupes; }
       }
-#endif
       __syncthreads();
       if (i + t < nnz) {
         if (!is_dupe) {
-#if 0
           dupes_before += s->scratch_red[t >> 5];
-#endif
           s->col.dict_data[start_row + i + t - dupes_before] = ck_row;
         } else {
           s->col.dict_index[ck_row] = ck_row_ref | (1u << 31);
