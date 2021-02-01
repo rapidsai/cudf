@@ -196,6 +196,14 @@ class list_device_view {
  */
 struct list_size_functor {
   column_device_view const d_column;
+  CUDA_HOST_DEVICE_CALLABLE list_size_functor(column_device_view const& d_col) : d_column(d_col)
+  {
+#if defined(__CUDA_ARCH__)
+    release_assert(d_col.type().id() == type_id::LIST && "Only list type column is supported");
+#else
+    CUDF_EXPECTS(d_col.type().id() == type_id::LIST, "Only list type column is supported");
+#endif
+  }
   CUDA_DEVICE_CALLABLE size_type operator()(size_type idx)
   {
     if (d_column.is_null(idx)) return size_type{0};

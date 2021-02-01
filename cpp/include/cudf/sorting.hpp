@@ -206,7 +206,7 @@ std::unique_ptr<column> rank(
  * @return table with elements in each segment sorted.
  *
  */
-std::unique_ptr<table> segmented_sort(
+std::unique_ptr<table> segmented_sort_by_key(
   table_view const& values,
   table_view const& keys,
   column_view const& segment_offsets,
@@ -215,9 +215,9 @@ std::unique_ptr<table> segmented_sort(
   rmm::mr::device_memory_resource* mr            = rmm::mr::get_current_device_resource());
 
 /**
- * @brief Performs a lexicographic segmented sort of the list in each row of a table of list columns
+ * @brief Performs a lexicographic sort of lists in each row of a table.
  *
- * `keys` with list columns of depth 1 is only supported.
+ * `keys` and `values` with list columns of depth 1 is only supported.
  * @throws cudf::logic_error if `values.num_rows() != keys.num_rows()`.
  * @throws cudf::logic_error if any list sizes of corresponding row in each column are not equal.
  * @throws cudf::logic_error if any column of `keys` or `values` is not a list column.

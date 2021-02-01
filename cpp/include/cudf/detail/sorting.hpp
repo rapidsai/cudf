@@ -64,11 +64,11 @@ std::unique_ptr<table> sort_by_key(
   rmm::mr::device_memory_resource* mr            = rmm::mr::get_current_device_resource());
 
 /**
- * @copydoc cudf::segmented_sort
+ * @copydoc cudf::segmented_sort_by_key
  *
  * @param[in] stream CUDA stream used for device memory operations and kernel launches.
  */
-std::unique_ptr<table> segmented_sort(
+std::unique_ptr<table> segmented_sort_by_key(
   table_view const& values,
   table_view const& keys,
   column_view const& segment_offsets,

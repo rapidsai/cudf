@@ -17,6 +17,7 @@
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_factories.hpp>
+#include <cudf/copying.hpp>
 #include <cudf/detail/copy.hpp>
 #include <cudf/detail/gather.cuh>
 #include <cudf/detail/iterator.cuh>
@@ -212,7 +213,7 @@ std::unique_ptr<column> sort_lists(lists_column_view const& input,
                                    rmm::cuda_stream_view stream,
                                    rmm::mr::device_memory_resource* mr)
 {
-  if (input.is_empty()) return {};
+  if (input.is_empty()) return empty_like(input.parent());
 
   auto output_child = type_dispatcher(input.child().type(),
                                       SortPairs{},
