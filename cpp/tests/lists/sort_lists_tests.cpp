@@ -24,10 +24,10 @@
 #include <cudf/copying.hpp>
 #include <cudf/fixed_point/fixed_point.hpp>
 #include <cudf/lists/lists_column_view.hpp>
+#include <cudf/lists/sorting.hpp>
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
-#include <cudf/lists/sorting.hpp>
 
 #include <type_traits>
 #include <vector>
