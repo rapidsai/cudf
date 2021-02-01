@@ -1,6 +1,5 @@
 # Copyright (c) 2020-2021, NVIDIA CORPORATION.
 
-
 import logging
 import random
 
@@ -29,12 +28,16 @@ class ParquetReader(IOFuzz):
         max_rows=100_000,
         max_columns=1000,
         max_string_length=None,
+        max_lists_length=None,
+        max_lists_nesting_depth=None,
     ):
         super().__init__(
             dirs=dirs,
             max_rows=max_rows,
             max_columns=max_columns,
             max_string_length=max_string_length,
+            max_lists_length=max_lists_length,
+            max_lists_nesting_depth=max_lists_nesting_depth,
         )
         self._df = None
 
@@ -55,6 +58,7 @@ class ParquetReader(IOFuzz):
                 # https://github.com/pandas-dev/pandas/issues/37327
                 - {"uint32"}
             )
+            dtypes_list.extend(["list"])
             dtypes_meta, num_rows, num_cols = _generate_rand_meta(
                 self, dtypes_list
             )
@@ -112,12 +116,16 @@ class ParquetWriter(IOFuzz):
         max_rows=100_000,
         max_columns=1000,
         max_string_length=None,
+        max_lists_length=None,
+        max_lists_nesting_depth=None,
     ):
         super().__init__(
             dirs=dirs,
             max_rows=max_rows,
             max_columns=max_columns,
             max_string_length=max_string_length,
+            max_lists_length=max_lists_length,
+            max_lists_nesting_depth=max_lists_nesting_depth,
         )
 
     def generate_input(self):
@@ -138,6 +146,7 @@ class ParquetWriter(IOFuzz):
                 # https://github.com/pandas-dev/pandas/issues/37327
                 - {"uint32"}
             )
+            dtypes_list.extend(["list"])
             dtypes_meta, num_rows, num_cols = _generate_rand_meta(
                 self, dtypes_list
             )
