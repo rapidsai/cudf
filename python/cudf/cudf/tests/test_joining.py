@@ -1209,7 +1209,7 @@ def test_typecast_on_join_categorical(dtype_l, dtype_r):
 
 def make_categorical_dataframe(categories, ordered=False):
     dtype = CategoricalDtype(categories=categories, ordered=ordered)
-    data = cudf.Series(categories, dtype=dtype)
+    data = cudf.Series(categories).astype(dtype)
     return cudf.DataFrame({"key": data})
 
 
@@ -1371,6 +1371,42 @@ def test_categorical_typecast_outer():
     right = make_categorical_dataframe([2, 3, 4], ordered=True)
     with pytest.raises(TypeError):
         result = left.merge(right, how="outer", on="key")
+
+
+@pytest.mark.parametrize("dtype", NUMERIC_TYPES + ["object"])
+def test_categorical_typecast_inner_one_cat(dtype):
+
+    data = np.array([1, 2, 3], dtype=dtype)
+
+    left = make_categorical_dataframe(data)
+    right = left.astype(left["key"].dtype.categories)
+
+    result = left.merge(right, on="key", how="inner")
+    assert result["key"].dtype == left["key"].dtype.categories.dtype
+
+
+@pytest.mark.parametrize("dtype", NUMERIC_TYPES + ["object"])
+def test_categorical_typecast_left_one_cat(dtype):
+
+    data = np.array([1, 2, 3], dtype=dtype)
+
+    left = make_categorical_dataframe(data)
+    right = left.astype(left["key"].dtype.categories)
+
+    result = left.merge(right, on="key", how="left")
+    assert result["key"].dtype == left["key"].dtype
+
+
+@pytest.mark.parametrize("dtype", NUMERIC_TYPES + ["object"])
+def test_categorical_typecast_outer_one_cat(dtype):
+
+    data = np.array([1, 2, 3], dtype=dtype)
+
+    left = make_categorical_dataframe(data)
+    right = left.astype(left["key"].dtype.categories)
+
+    result = left.merge(right, on="key", how="outer")
+    assert result["key"].dtype == left["key"].dtype.categories.dtype
 
 
 @pytest.mark.parametrize(

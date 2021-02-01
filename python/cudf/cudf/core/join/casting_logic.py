@@ -86,6 +86,10 @@ def _input_to_libcudf_castrules_any_cat(lcol, rcol, how):
     if l_is_cat and r_is_cat:
         return _input_to_libcudf_castrules_both_cat(lcol, rcol, how)
     elif l_is_cat or r_is_cat:
+        if l_is_cat and how == "left":
+            return lcol.dtype
+        if r_is_cat and how == "right":
+            return rcol.dtype
         return (
             lcol.dtype.categories.dtype
             if l_is_cat
@@ -169,31 +173,35 @@ def _libcudf_to_output_castrules(lcol, rcol, how):
     major operand of the join, e.g. left for a left join or
     right for a right join. In the case of an outer join, the
     result will be a new categorical variable with both sets
-    of categories. Ordering is retained when using left/right
-    joins.
+    of categories.
     """
+    merge_return_type = None
 
     ltype = lcol.dtype
     rtype = rcol.dtype
-    merge_return_type = None
+
+    if pd.api.types.is_dtype_equal(ltype, rtype):
+        return ltype
+
+    l_is_cat = isinstance(ltype, CategoricalDtype)
+    r_is_cat = isinstance(rtype, CategoricalDtype)
+
     # we  currently only need to do this for categorical variables
-    if isinstance(ltype, CategoricalDtype) and isinstance(
-        rtype, CategoricalDtype
-    ):
-        if pd.api.types.is_dtype_equal(ltype, rtype):
-            if how == "inner":
-                return ltype
-        if how == "left":
-            return ltype
-        if how == "right":
-            return rtype
-        elif how == "outer":
+    if how == "inner":
+        if l_is_cat and r_is_cat:
+            merge_return_type = "category"
+    elif how == "left":
+        if l_is_cat:
+            merge_return_type = ltype
+    elif how == "right":
+        if r_is_cat:
+            merge_return_type = rtype
+    elif how == "outer":
+        if l_is_cat and r_is_cat:
             new_cats = cudf.concat(
                 [ltype.categories, rtype.categories]
             ).unique()
-            return cudf.CategoricalDtype(
+            merge_return_type = cudf.CategoricalDtype(
                 categories=new_cats, ordered=ltype.ordered
             )
-        else:
-            merge_return_type = "category"
     return merge_return_type
