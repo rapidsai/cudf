@@ -794,16 +794,13 @@ std::vector<packed_table> contiguous_split(cudf::table_view const& input,
     std::vector<packed_table> result;
     result.reserve(num_partitions);
     auto iter = thrust::make_counting_iterator(0);
-    std::transform(iter,
-                   iter + num_partitions,
-                   std::back_inserter(result),
-                   [&input, num_root_columns](int partition_index) {
-                     return packed_table{
-                       input,
-                       packed_columns{std::make_unique<packed_columns::metadata>(pack_metadata(
-                                        input, static_cast<uint8_t const*>(nullptr), 0)),
-                                      std::make_unique<rmm::device_buffer>()}};
-                   });
+    std::transform(
+      iter, iter + num_partitions, std::back_inserter(result), [&input](int partition_index) {
+        return packed_table{input,
+                            packed_columns{std::make_unique<packed_columns::metadata>(pack_metadata(
+                                             input, static_cast<uint8_t const*>(nullptr), 0)),
+                                           std::make_unique<rmm::device_buffer>()}};
+      });
 
     return result;
   }

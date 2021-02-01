@@ -587,7 +587,7 @@ packed_columns pack(cudf::table_view const& input,
  * @brief Produce the metadata used for packing a table stored in a contiguous buffer.
  *
  * The metadata from the `table_view` is copied into a host vector of bytes which can be used to
- * construct a packed_columns or packed_table structure.  The caller is responsible for
+ * construct a `packed_columns` or `packed_table` structure.  The caller is responsible for
  * guaranteeing that that all of the columns in the table point into `contiguous_buffer`.
  *
  * @param input View of the table to pack

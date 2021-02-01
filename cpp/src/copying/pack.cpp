@@ -76,11 +76,12 @@ column_view deserialize_column(serialized_column serial_column,
                                std::vector<column_view> const& children,
                                uint8_t const* base_ptr)
 {
-  auto const data_ptr = serial_column.data_offset != -1 ? base_ptr + serial_column.data_offset : 0;
+  auto const data_ptr =
+    serial_column.data_offset != -1 ? base_ptr + serial_column.data_offset : nullptr;
   auto const null_mask_ptr =
     serial_column.null_mask_offset != -1
       ? reinterpret_cast<bitmask_type const*>(base_ptr + serial_column.null_mask_offset)
-      : 0;
+      : nullptr;
 
   return column_view(serial_column.type,
                      serial_column.size,
