@@ -17,6 +17,7 @@ from typing_extensions import Literal
 
 import cudf
 from cudf import _lib as libcudf
+from typing import TypeVar
 from cudf.core.column import as_column, build_categorical_column, column_empty
 from cudf.utils import utils
 from cudf.utils.dtypes import (
@@ -26,6 +27,8 @@ from cudf.utils.dtypes import (
     is_scalar,
     min_scalar_type,
 )
+
+T = TypeVar("T", bound="Frame")
 
 
 class Frame(libcudf.table.Table):
