@@ -193,7 +193,8 @@ struct SortPairs {
                           offsets.begin<size_type>(),
                           offsets.begin<size_type>() + 1,
                           stream);
-    std::vector<std::unique_ptr<column>> output_cols{std::move(output)};
+    std::vector<std::unique_ptr<column>> output_cols;
+    output_cols.push_back(std::move(output));
     // rearrange the null_mask.
     cudf::detail::gather_bitmask(cudf::table_view{{child}},
                                  mutable_indices_view.begin<size_type>(),
