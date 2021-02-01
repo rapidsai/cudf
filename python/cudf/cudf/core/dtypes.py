@@ -327,3 +327,4 @@ class IntervalDtype(StructDtype):
 
         return ArrowIntervalType(
             pa.from_numpy_dtype(self.subtype), self.closed
+        )

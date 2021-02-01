@@ -11,7 +11,6 @@ from cudf.core.dtypes import (
     Decimal64Dtype,
     ListDtype,
     StructDtype,
-    DecimalDtype,
     IntervalDtype,
 )
 from cudf.tests.utils import assert_eq
