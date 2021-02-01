@@ -297,18 +297,9 @@ void writer::impl::init_dictionaries(orc_column_view *columns,
     }
   }
 
-  CUDA_TRY(cudaMemcpyAsync(dict.device_ptr(),
-                           dict.host_ptr(),
-                           dict.memory_size(),
-                           cudaMemcpyHostToDevice,
-                           stream.value()));
+  dict.host_to_device(stream);
   gpu::InitDictionaryIndices(dict.device_ptr(), str_col_ids.size(), num_rowgroups, stream);
-  CUDA_TRY(cudaMemcpyAsync(dict.host_ptr(),
-                           dict.device_ptr(),
-                           dict.memory_size(),
-                           cudaMemcpyDeviceToHost,
-                           stream.value()));
-  stream.synchronize();
+  dict.device_to_host(stream, true);
 }
 
 void writer::impl::build_dictionaries(orc_column_view *columns,
@@ -355,11 +346,7 @@ void writer::impl::build_dictionaries(orc_column_view *columns,
     }
   }
 
-  CUDA_TRY(cudaMemcpyAsync(stripe_dict.device_ptr(),
-                           stripe_dict.host_ptr(),
-                           stripe_dict.memory_size(),
-                           cudaMemcpyHostToDevice,
-                           stream.value()));
+  stripe_dict.host_to_device(stream);
   gpu::BuildStripeDictionaries(stripe_dict.device_ptr(),
                                stripe_dict.host_ptr(),
                                dict.device_ptr(),
@@ -367,12 +354,7 @@ void writer::impl::build_dictionaries(orc_column_view *columns,
                                num_rowgroups,
                                str_col_ids.size(),
                                stream);
-  CUDA_TRY(cudaMemcpyAsync(stripe_dict.host_ptr(),
-                           stripe_dict.device_ptr(),
-                           stripe_dict.memory_size(),
-                           cudaMemcpyDeviceToHost,
-                           stream.value()));
-  stream.synchronize();
+  stripe_dict.device_to_host(stream, true);
 }
 
 std::vector<Stream> writer::impl::gather_streams(orc_column_view *columns,
@@ -649,11 +631,7 @@ rmm::device_buffer writer::impl::encode_columns(orc_column_view *columns,
     }
   }
 
-  CUDA_TRY(cudaMemcpyAsync(chunks.device_ptr(),
-                           chunks.host_ptr(),
-                           chunks.memory_size(),
-                           cudaMemcpyHostToDevice,
-                           stream.value()));
+  chunks.host_to_device(stream);
   if (!str_col_ids.empty()) {
     auto d_stripe_dict = columns[str_col_ids[0]].device_stripe_dict();
     gpu::EncodeStripeDictionaries(d_stripe_dict,
@@ -707,24 +685,11 @@ std::vector<StripeInformation> writer::impl::gather_stripes(
     stripe_start            = stripe_end;
   }
 
-  CUDA_TRY(cudaMemcpyAsync(strm_desc.device_ptr(),
-                           strm_desc.host_ptr(),
-                           strm_desc.memory_size(),
-                           cudaMemcpyHostToDevice,
-                           stream.value()));
+  strm_desc.host_to_device(stream);
   gpu::CompactOrcDataStreams(
     strm_desc.device_ptr(), chunks.device_ptr(), strm_desc.size(), num_columns, stream);
-  CUDA_TRY(cudaMemcpyAsync(strm_desc.host_ptr(),
-                           strm_desc.device_ptr(),
-                           strm_desc.memory_size(),
-                           cudaMemcpyDeviceToHost,
-                           stream.value()));
-  CUDA_TRY(cudaMemcpyAsync(chunks.host_ptr(),
-                           chunks.device_ptr(),
-                           chunks.memory_size(),
-                           cudaMemcpyDeviceToHost,
-                           stream.value()));
-  stream.synchronize();
+  strm_desc.device_to_host(stream);
+  chunks.device_to_host(stream, true);
 
   return stripes;
 }
@@ -813,9 +778,7 @@ std::vector<std::vector<uint8_t>> writer::impl::gather_statistic_blobs(
                         stream);
   gpu::orc_init_statistics_buffersize(
     stat_merge.device_ptr(), stat_chunks.data().get() + num_chunks, num_stat_blobs, stream);
-
-  stat_merge.device_to_host(stream);
-  stream.synchronize();
+  stat_merge.device_to_host(stream, true);
 
   hostdevice_vector<uint8_t> blobs(stat_merge[num_stat_blobs - 1].start_chunk +
                                    stat_merge[num_stat_blobs - 1].num_chunks);
@@ -824,10 +787,8 @@ std::vector<std::vector<uint8_t>> writer::impl::gather_statistic_blobs(
                              stat_chunks.data().get() + num_chunks,
                              num_stat_blobs,
                              stream);
-
   stat_merge.device_to_host(stream);
-  blobs.device_to_host(stream);
-  stream.synchronize();
+  blobs.device_to_host(stream, true);
 
   for (size_t i = 0; i < num_stat_blobs; i++) {
     const uint8_t *stat_begin = blobs.host_ptr(stat_merge[i].start_chunk);
@@ -1166,11 +1127,7 @@ void writer::impl::write(table_view const &table)
   hostdevice_vector<gpu_inflate_status_s> comp_out(num_compressed_blocks);
   hostdevice_vector<gpu_inflate_input_s> comp_in(num_compressed_blocks);
   if (compression_kind_ != NONE) {
-    CUDA_TRY(cudaMemcpyAsync(strm_desc.device_ptr(),
-                             strm_desc.host_ptr(),
-                             strm_desc.memory_size(),
-                             cudaMemcpyHostToDevice,
-                             stream.value()));
+    strm_desc.host_to_device(stream);
     gpu::CompressOrcDataStreams(static_cast<uint8_t *>(compressed_data.data()),
                                 strm_desc.device_ptr(),
                                 chunks.device_ptr(),
@@ -1181,17 +1138,8 @@ void writer::impl::write(table_view const &table)
                                 compression_kind_,
                                 compression_blocksize_,
                                 stream);
-    CUDA_TRY(cudaMemcpyAsync(strm_desc.host_ptr(),
-                             strm_desc.device_ptr(),
-                             strm_desc.memory_size(),
-                             cudaMemcpyDeviceToHost,
-                             stream.value()));
-    CUDA_TRY(cudaMemcpyAsync(comp_out.host_ptr(),
-                             comp_out.device_ptr(),
-                             comp_out.memory_size(),
-                             cudaMemcpyDeviceToHost,
-                             stream.value()));
-    stream.synchronize();
+    strm_desc.device_to_host(stream);
+    comp_out.device_to_host(stream, true);
   }
 
   ProtobufWriter pbw_(&buffer_);
