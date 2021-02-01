@@ -88,8 +88,10 @@ std::unique_ptr<table> sort(table_view input,
                             rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
+  // fast-path sort conditions: single, non-floating-point, fixed-width column with no nulls
   if (input.num_columns() == 1 && !input.column(0).has_nulls() &&
-      cudf::is_fixed_width(input.column(0).type())) {
+      cudf::is_fixed_width(input.column(0).type()) &&
+      !cudf::is_floating_point(input.column(0).type())) {
     auto output    = std::make_unique<column>(input.column(0), stream, mr);
     auto view      = output->mutable_view();
     bool ascending = (column_order.empty() ? true : column_order.front() == order::ASCENDING);
