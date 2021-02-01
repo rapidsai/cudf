@@ -151,16 +151,20 @@ __global__ void __launch_bounds__(block_size) gpuInitPageFragments(PageFragment 
     // off_11 = off[i], off_12 = off[i+50]
     // off_21 = child.off[off_11], off_22 = child.off[off_12]
     // etc...
-    s->start_value_idx      = start_row;
     size_type end_value_idx = start_row + s->frag.num_rows;
-    if (s->col.parent_column != nullptr) {
-      auto col = *(s->col.parent_column);
+    if (s->col.parent_column == nullptr) {
+      s->start_value_idx = start_row;
+    } else {
+      auto col                     = *(s->col.parent_column);
+      auto current_start_value_idx = start_row;
       while (col.type().id() == type_id::LIST) {
-        auto offset_col    = col.child(lists_column_view::offsets_column_index);
-        s->start_value_idx = offset_col.element<size_type>(s->start_value_idx);
-        end_value_idx      = offset_col.element<size_type>(end_value_idx);
-        col                = col.child(lists_column_view::child_column_index);
+        auto offset_col = col.child(lists_column_view::offsets_column_index);
+        current_start_value_idx =
+          offset_col.element<size_type>(current_start_value_idx + col.offset());
+        end_value_idx = offset_col.element<size_type>(end_value_idx + col.offset());
+        col           = col.child(lists_column_view::child_column_index);
       }
+      s->start_value_idx = current_start_value_idx;
     }
     s->frag.start_value_idx = s->start_value_idx;
     s->frag.num_leaf_values = end_value_idx - s->start_value_idx;
@@ -195,7 +199,7 @@ __global__ void __launch_bounds__(block_size) gpuInitPageFragments(PageFragment 
   size_type start_value_idx = s->start_value_idx;
 
   for (uint32_t i = 0; i < nvals; i += block_size) {
-    uint32_t val_idx  = start_value_idx + i + t + s->col.leaf_column_offset;
+    uint32_t val_idx  = start_value_idx + i + t;
     uint32_t is_valid = (i + t < nvals && val_idx < s->col.leaf_column->size())
                           ? s->col.leaf_column->is_valid(val_idx)
                           : 0;
@@ -206,8 +210,8 @@ __global__ void __launch_bounds__(block_size) gpuInitPageFragments(PageFragment 
       if (dtype != BOOLEAN) {
         if (dtype == BYTE_ARRAY) {
           auto str = s->col.leaf_column->element<string_view>(val_idx);
-          len += str.length();
-          hash = nvstr_init_hash(reinterpret_cast<const uint8_t *>(str.data()), str.length());
+          len += str.size_bytes();
+          hash = nvstr_init_hash(reinterpret_cast<const uint8_t *>(str.data()), str.size_bytes());
         } else if (dtype_len_in == 8) {
           hash = uint64_init_hash(s->col.leaf_column->element<uint64_t>(val_idx));
         } else {
@@ -336,7 +340,7 @@ __global__ void __launch_bounds__(block_size) gpuInitPageFragments(PageFragment 
             auto str1 = s->col.leaf_column->element<string_view>(ck_row);
             auto str2 = s->col.leaf_column->element<string_view>(ck_row_ref);
             is_dupe   = (str1 == str2);
-            dupe_data_size += (is_dupe) ? 4 + str1.length() : 0;
+            dupe_data_size += (is_dupe) ? 4 + str1.size_bytes() : 0;
           } else {
             if (dtype_len_in == 8) {
               auto v1 = s->col.leaf_column->element<uint64_t>(ck_row);
@@ -974,14 +978,12 @@ __global__ void __launch_bounds__(128, 8) gpuEncodePages(EncPage *pages,
       while (s->rle_numvals < s->page.num_rows) {
         uint32_t rle_numvals = s->rle_numvals;
         uint32_t nrows       = min(s->page.num_rows - rle_numvals, 128);
-        uint32_t row         = s->page.start_row + rle_numvals + t + s->col.leaf_column_offset;
+        uint32_t row         = s->page.start_row + rle_numvals + t;
         // Definition level encodes validity. Checks the valid map and if it is valid, then sets the
         // def_lvl accordingly and sets it in s->vals which is then given to RleEncode to encode
         uint32_t def_lvl = (rle_numvals + t < s->page.num_rows && row < s->col.num_rows)
                              ? s->col.leaf_column->is_valid(row)
                              : 0;
-        // Non-list leaf column does not require taking into account
-        // leaf_column_offset
         s->vals[(rle_numvals + t) & (rle_buffer_size - 1)] = def_lvl;
         __syncthreads();
         rle_numvals += nrows;
@@ -1064,31 +1066,29 @@ __global__ void __launch_bounds__(128, 8) gpuEncodePages(EncPage *pages,
     }
     s->page_start_val = s->page.start_row;
     if (s->col.parent_column != nullptr) {
-      auto col = *(s->col.parent_column);
+      auto col                    = *(s->col.parent_column);
+      auto current_page_start_val = s->page_start_val;
       while (col.type().id() == type_id::LIST) {
-        s->page_start_val =
-          col.child(lists_column_view::offsets_column_index).element<size_type>(s->page_start_val);
+        current_page_start_val = col.child(lists_column_view::offsets_column_index)
+                                   .element<size_type>(current_page_start_val + col.offset());
         col = col.child(lists_column_view::child_column_index);
       }
+      s->page_start_val = current_page_start_val;
     }
   }
   __syncthreads();
   for (uint32_t cur_val_idx = 0; cur_val_idx < s->page.num_leaf_values;) {
     uint32_t nvals   = min(s->page.num_leaf_values - cur_val_idx, 128);
     uint32_t val_idx = s->page_start_val + cur_val_idx + t;
-    uint32_t access_id;
     uint32_t is_valid, warp_valids, len, pos;
 
     if (s->page.page_type == PageType::DICTIONARY_PAGE) {
-      is_valid  = (cur_val_idx + t < s->page.num_leaf_values);
-      val_idx   = (is_valid) ? s->col.dict_data[val_idx] : val_idx;
-      access_id = val_idx + s->col.leaf_column_offset;
+      is_valid = (cur_val_idx + t < s->page.num_leaf_values);
+      val_idx  = (is_valid) ? s->col.dict_data[val_idx] : val_idx;
     } else {
-      access_id = val_idx + s->col.leaf_column_offset;
-      is_valid =
-        (access_id < s->col.leaf_column->size() && cur_val_idx + t < s->page.num_leaf_values)
-          ? s->col.leaf_column->is_valid(access_id)
-          : 0;
+      is_valid = (val_idx < s->col.leaf_column->size() && cur_val_idx + t < s->page.num_leaf_values)
+                   ? s->col.leaf_column->is_valid(val_idx)
+                   : 0;
     }
     warp_valids = ballot(is_valid);
     cur_val_idx += nvals;
@@ -1107,7 +1107,7 @@ __global__ void __launch_bounds__(128, 8) gpuEncodePages(EncPage *pages,
         if (is_valid) {
           uint32_t v;
           if (dtype == BOOLEAN) {
-            v = s->col.leaf_column->element<uint8_t>(access_id);
+            v = s->col.leaf_column->element<uint8_t>(val_idx);
           } else {
             v = s->col.dict_index[val_idx];
           }
@@ -1131,7 +1131,7 @@ __global__ void __launch_bounds__(128, 8) gpuEncodePages(EncPage *pages,
       if (is_valid) {
         len = dtype_len_out;
         if (dtype == BYTE_ARRAY) {
-          len += s->col.leaf_column->element<string_view>(access_id).length();
+          len += s->col.leaf_column->element<string_view>(val_idx).size_bytes();
         }
       } else {
         len = 0;
@@ -1149,18 +1149,18 @@ __global__ void __launch_bounds__(128, 8) gpuEncodePages(EncPage *pages,
           case FLOAT: {
             int32_t v;
             if (dtype_len_in == 4)
-              v = s->col.leaf_column->element<int32_t>(access_id);
+              v = s->col.leaf_column->element<int32_t>(val_idx);
             else if (dtype_len_in == 2)
-              v = s->col.leaf_column->element<int16_t>(access_id);
+              v = s->col.leaf_column->element<int16_t>(val_idx);
             else
-              v = s->col.leaf_column->element<int8_t>(access_id);
+              v = s->col.leaf_column->element<int8_t>(val_idx);
             dst[pos + 0] = v;
             dst[pos + 1] = v >> 8;
             dst[pos + 2] = v >> 16;
             dst[pos + 3] = v >> 24;
           } break;
           case INT64: {
-            int64_t v        = s->col.leaf_column->element<int64_t>(access_id);
+            int64_t v        = s->col.leaf_column->element<int64_t>(val_idx);
             int32_t ts_scale = s->col.ts_scale;
             if (ts_scale != 0) {
               if (ts_scale < 0) {
@@ -1179,7 +1179,7 @@ __global__ void __launch_bounds__(128, 8) gpuEncodePages(EncPage *pages,
             dst[pos + 7] = v >> 56;
           } break;
           case INT96: {
-            int64_t v        = s->col.leaf_column->element<int64_t>(access_id);
+            int64_t v        = s->col.leaf_column->element<int64_t>(val_idx);
             int32_t ts_scale = s->col.ts_scale;
             if (ts_scale != 0) {
               if (ts_scale < 0) {
@@ -1221,11 +1221,11 @@ __global__ void __launch_bounds__(128, 8) gpuEncodePages(EncPage *pages,
           } break;
 
           case DOUBLE: {
-            auto v = s->col.leaf_column->element<double>(access_id);
+            auto v = s->col.leaf_column->element<double>(val_idx);
             memcpy(dst + pos, &v, 8);
           } break;
           case BYTE_ARRAY: {
-            auto str     = s->col.leaf_column->element<string_view>(access_id);
+            auto str     = s->col.leaf_column->element<string_view>(val_idx);
             uint32_t v   = len - 4;  // string length
             dst[pos + 0] = v;
             dst[pos + 1] = v >> 8;
@@ -1998,47 +1998,36 @@ void InitPageFragments(PageFragment *frag,
 }
 
 /**
- * @brief Set column_device_view pointers in column description array
- *
- * @param[out] col_desc Column description array [column_id]
- * @param[out] leaf_table_device_view Table device view to store leaf columns
- * @param[in] parent_table_device_view Table device view containing parent columns
- * @param[in] stream CUDA stream to use, default 0
+ * @copydoc void init_column_device_views(EncColumnDesc *col_desc,
+ *            column_device_view *leaf_column_views,
+ *            const table_device_view &parent_table_device_view,
+ *            rmm::cuda_stream_view stream)
  */
-void InitColumnDeviceViews(EncColumnDesc *col_desc,
-                           table_device_view &leaf_column_table_device_view,
-                           const table_device_view &parent_column_table_device_view,
-                           rmm::cuda_stream_view stream)
+void init_column_device_views(EncColumnDesc *col_desc,
+                              column_device_view *leaf_column_views,
+                              const table_device_view &parent_column_table_device_view,
+                              rmm::cuda_stream_view stream)
 {
   cudf::detail::device_single_thread(
     [col_desc,
      parent_col_view = parent_column_table_device_view,
-     leaf_column_table_device_view] __device__() mutable {
+     leaf_column_views] __device__() mutable {
       for (size_type i = 0; i < parent_col_view.num_columns(); ++i) {
         column_device_view col = parent_col_view.column(i);
-        // leaf_column_offset is required to store the offset of the
-        // leaf column if the column type is LIST. This is done because
-        // the element accessor of a leaf column device view does not
-        // take into account the offset of the parent column.
-        // Therefore this offset is selectively applied only for list columns
-        size_type leaf_column_offset = 0;
         if (col.type().id() == type_id::LIST) {
           col_desc[i].parent_column = parent_col_view.begin() + i;
-          leaf_column_offset        = col.offset();
         } else {
           col_desc[i].parent_column = nullptr;
         }
         // traverse till leaf column
         while (col.type().id() == type_id::LIST) {
-          auto offset_col    = col.child(lists_column_view::offsets_column_index);
-          leaf_column_offset = offset_col.element<size_type>(leaf_column_offset);
-          col                = col.child(lists_column_view::child_column_index);
+          auto offset_col = col.child(lists_column_view::offsets_column_index);
+          col             = col.child(lists_column_view::child_column_index);
         }
         // Store leaf_column to device storage
-        column_device_view *leaf_col_ptr = leaf_column_table_device_view.begin() + i;
+        column_device_view *leaf_col_ptr = leaf_column_views + i;
         *leaf_col_ptr                    = col;
         col_desc[i].leaf_column          = leaf_col_ptr;
-        col_desc[i].leaf_column_offset   = leaf_column_offset;
       }
     },
     stream);
