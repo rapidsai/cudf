@@ -1998,17 +1998,15 @@ void InitPageFragments(PageFragment *frag,
 }
 
 /**
- * @brief Set column_device_view pointers in column description array
- *
- * @param[out] col_desc Column description array [column_id]
- * @param[out] leaf_column_views Device vector to store leaf columns
- * @param[in] parent_table_device_view Table device view containing parent columns
- * @param[in] stream CUDA stream to use, default 0
+ * @copydoc void init_column_device_views(EncColumnDesc *col_desc,
+ *            column_device_view *leaf_column_views,
+ *            const table_device_view &parent_table_device_view,
+ *            rmm::cuda_stream_view stream)
  */
-void InitColumnDeviceViews(EncColumnDesc *col_desc,
-                           column_device_view *leaf_column_views,
-                           const table_device_view &parent_column_table_device_view,
-                           rmm::cuda_stream_view stream)
+void init_column_device_views(EncColumnDesc *col_desc,
+                              column_device_view *leaf_column_views,
+                              const table_device_view &parent_column_table_device_view,
+                              rmm::cuda_stream_view stream)
 {
   cudf::detail::device_single_thread(
     [col_desc,

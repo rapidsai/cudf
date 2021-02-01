@@ -495,18 +495,24 @@ class parquet_column_view {
   uint8_t _decimal_precision = 0;
 };
 
+rmm::device_uvector<column_device_view> writer::impl::create_leaf_column_device_views(
+  hostdevice_vector<gpu::EncColumnDesc> &col_desc,
+  const table_device_view &parent_table_device_view)
+{
+  rmm::device_uvector<column_device_view> leaf_column_views(parent_table_device_view.num_columns(),
+                                                            stream);
+  gpu::init_column_device_views(
+    col_desc.device_ptr(), leaf_column_views.data(), parent_table_device_view, stream);
+  return leaf_column_views;
+}
+
 void writer::impl::init_page_fragments(hostdevice_vector<gpu::PageFragment> &frag,
                                        hostdevice_vector<gpu::EncColumnDesc> &col_desc,
-                                       const table_device_view &parent_table_device_view,
-                                       rmm::device_uvector<column_device_view> &leaf_column_views,
                                        uint32_t num_columns,
                                        uint32_t num_fragments,
                                        uint32_t num_rows,
                                        uint32_t fragment_size)
 {
-  col_desc.host_to_device(stream);
-  gpu::InitColumnDeviceViews(
-    col_desc.device_ptr(), leaf_column_views.data(), parent_table_device_view, stream);
   gpu::InitPageFragments(frag.device_ptr(),
                          col_desc.device_ptr(),
                          num_fragments,
@@ -853,10 +859,10 @@ void writer::impl::write(table_view const &table)
   // Create table_device_view so that corresponding column_device_view data
   // can be written into col_desc members
   auto parent_column_table_device_view = table_device_view::create(table);
-  rmm::device_uvector<column_device_view> leaf_column_views(num_columns, rmm::cuda_stream_default);
+  rmm::device_uvector<column_device_view> leaf_column_views(0, stream);
 
   // Initialize column description
-  hostdevice_vector<gpu::EncColumnDesc> col_desc(num_columns);
+  hostdevice_vector<gpu::EncColumnDesc> col_desc(num_columns, stream);
 
   // setup gpu column description.
   // applicable to only this _write_chunk() call
@@ -908,17 +914,14 @@ void writer::impl::write(table_view const &table)
                 "fragment size cannot be greater than max_page_fragment_size");
 
   uint32_t num_fragments = (uint32_t)((num_rows + fragment_size - 1) / fragment_size);
-  hostdevice_vector<gpu::PageFragment> fragments(num_columns * num_fragments);
+  hostdevice_vector<gpu::PageFragment> fragments(num_columns * num_fragments, stream);
 
   if (fragments.size() != 0) {
-    init_page_fragments(fragments,
-                        col_desc,
-                        *parent_column_table_device_view,
-                        leaf_column_views,
-                        num_columns,
-                        num_fragments,
-                        num_rows,
-                        fragment_size);
+    // Move column info to device
+    col_desc.host_to_device(stream);
+    leaf_column_views = create_leaf_column_device_views(col_desc, *parent_column_table_device_view);
+
+    init_page_fragments(fragments, col_desc, num_columns, num_fragments, num_rows, fragment_size);
   }
 
   size_t global_rowgroup_base = md.row_groups.size();
@@ -962,7 +965,7 @@ void writer::impl::write(table_view const &table)
   }
   // Initialize row groups and column chunks
   uint32_t num_chunks = num_rowgroups * num_columns;
-  hostdevice_vector<gpu::EncColumnChunk> chunks(num_chunks);
+  hostdevice_vector<gpu::EncColumnChunk> chunks(num_chunks, stream);
   uint32_t num_dictionaries = 0;
   for (uint32_t r = 0, global_r = global_rowgroup_base, f = 0, start_row = 0; r < num_rowgroups;
        r++, global_r++) {

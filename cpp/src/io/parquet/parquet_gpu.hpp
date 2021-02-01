@@ -456,10 +456,10 @@ void InitPageFragments(PageFragment *frag,
  * @param[in] parent_table_device_view Table device view containing parent columns
  * @param[in] stream CUDA stream to use, default 0
  */
-void InitColumnDeviceViews(EncColumnDesc *col_desc,
-                           column_device_view *leaf_column_views,
-                           const table_device_view &parent_table_device_view,
-                           rmm::cuda_stream_view stream);
+void init_column_device_views(EncColumnDesc *col_desc,
+                              column_device_view *leaf_column_views,
+                              const table_device_view &parent_table_device_view,
+                              rmm::cuda_stream_view stream);
 
 /**
  * @brief Launches kernel for initializing fragment statistics groups
