@@ -1,5 +1,6 @@
-# Copyright (c) 2020, NVIDIA CORPORATION.
+# Copyright (c) 2020-2021, NVIDIA CORPORATION.
 
+import re
 
 import numpy as np
 import pandas as pd
@@ -13,6 +14,49 @@ from cudf.tests.utils import (
     assert_eq,
     assert_exceptions_equal,
 )
+
+
+@pytest.mark.parametrize(
+    "gsr",
+    [
+        cudf.Series([5, 1, 2, 3, None, 243, None, 4]),
+        cudf.Series(["one", "two", "three", None, "one"], dtype="category"),
+        cudf.Series(list(range(400)) + [None]),
+    ],
+)
+@pytest.mark.parametrize(
+    "to_replace,value",
+    [
+        (0, 5),
+        ("one", "two"),
+        ("one", "five"),
+        ("abc", "hello"),
+        ([0, 1], [5, 6]),
+        ([22, 323, 27, 0], -1),
+        ([1, 2, 3], cudf.Series([10, 11, 12])),
+        (cudf.Series([1, 2, 3]), None),
+        ({1: 10, 2: 22}, None),
+    ],
+)
+def test_series_replace_all(gsr, to_replace, value):
+    psr = gsr.to_pandas()
+
+    gd_to_replace = to_replace
+    if isinstance(to_replace, cudf.Series):
+        pd_to_replace = to_replace.to_pandas()
+    else:
+        pd_to_replace = to_replace
+
+    gd_value = value
+    if isinstance(value, cudf.Series):
+        pd_value = value.to_pandas()
+    else:
+        pd_value = value
+
+    actual = gsr.replace(to_replace=gd_to_replace, value=gd_value)
+    expected = psr.replace(to_replace=pd_to_replace, value=pd_value)
+
+    assert_eq(expected, actual)
 
 
 def test_series_replace():
@@ -46,7 +90,7 @@ def test_series_replace():
 
     # Series input
     a8 = np.array([5, 5, 5, 3, 4])
-    sr8 = sr1.replace(sr1[:3], 5)
+    sr8 = sr1.replace(sr1[:3].to_array(), 5)
     assert_eq(a8, sr8.to_array())
 
     # large input containing null
@@ -90,7 +134,7 @@ def test_series_replace_with_nulls():
 
     # Series input
     a8 = np.array([-10, -10, -10, 3, 4, -10])
-    sr8 = sr1.replace(sr1[:3], None).fillna(-10)
+    sr8 = sr1.replace(cudf.Series([-10] * 3, index=sr1[:3]), None).fillna(-10)
     assert_eq(a8, sr8.to_array())
 
     a9 = np.array([-10, 6, 2, 3, 4, -10])
@@ -98,41 +142,89 @@ def test_series_replace_with_nulls():
     assert_eq(a9, sr9.to_array())
 
 
-def test_dataframe_replace():
-    # numerical
-    pdf1 = pd.DataFrame({"a": [0, 1, 2, 3], "b": [0, 1, 2, 3]})
-    gdf1 = DataFrame.from_pandas(pdf1)
-    pdf2 = pdf1.replace(0, 4)
-    gdf2 = gdf1.replace(0, 4)
-    assert_eq(gdf2, pdf2)
+@pytest.mark.parametrize(
+    "df",
+    [
+        cudf.DataFrame(
+            {
+                "a": [0, 1, None, 2, 3],
+                "b": [3, 2, 2, 3, None],
+                "c": ["abc", "def", ".", None, None],
+            }
+        ),
+        cudf.DataFrame(
+            {
+                "a": ["one", "two", None, "three"],
+                "b": ["one", None, "two", "three"],
+            },
+            dtype="category",
+        ),
+        cudf.DataFrame(
+            {
+                "col one": [None, 10, 11, None, 1000, 500, 600],
+                "col two": ["abc", "def", "ghi", None, "pp", None, "a"],
+                "a": [0.324, 0.234, 324.342, 23.32, 9.9, None, None],
+            }
+        ),
+    ],
+)
+@pytest.mark.parametrize(
+    "to_replace,value",
+    [
+        (0, 4),
+        ([0, 1], [4, 5]),
+        ([0, 1], 4),
+        ({"a": 0, "b": 0}, {"a": 4, "b": 5}),
+        ({"a": 0}, {"a": 4}),
+        ("abc", "---"),
+        ([".", "gh"], "hi"),
+        ([".", "def"], ["_", None]),
+        ({"c": 0}, {"a": 4, "b": 5}),
+        ({"a": 2}, {"c": "a"}),
+        ("two", "three"),
+        ([1, 2], pd.Series([10, 11])),
+        (pd.Series([10, 11], index=[3, 2]), None),
+        (
+            pd.Series(["a+", "+c", "p", "---"], index=["abc", "gh", "l", "z"]),
+            None,
+        ),
+        (
+            pd.Series([10, 11], index=[3, 2]),
+            {"a": [-10, -30], "l": [-111, -222]},
+        ),
+        (pd.Series([10, 11], index=[3, 2]), 555),
+        (
+            pd.Series([10, 11], index=["a", "b"]),
+            pd.Series([555, 1111], index=["a", "b"]),
+        ),
+        ({"a": "2", "b": "3", "zzz": "hi"}, None),
+        ({"a": 2, "b": 3, "zzz": "hi"}, 324353),
+        (
+            {"a": 2, "b": 3, "zzz": "hi"},
+            pd.Series([5, 6, 10], index=["a", "b", "col one"]),
+        ),
+    ],
+)
+def test_dataframe_replace(df, to_replace, value):
+    gdf = df
+    pdf = gdf.to_pandas()
 
-    # categorical
-    pdf4 = pd.DataFrame(
-        {"a": ["one", "two", "three"], "b": ["one", "two", "three"]},
-        dtype="category",
-    )
-    gdf4 = DataFrame.from_pandas(pdf4)
-    pdf5 = pdf4.replace("two", "three")
-    gdf5 = gdf4.replace("two", "three")
-    assert_eq(gdf5, pdf5)
+    pd_value = value
+    if isinstance(value, pd.Series):
+        gd_value = cudf.from_pandas(value)
+    else:
+        gd_value = value
 
-    # list input
-    pdf6 = pdf1.replace([0, 1], [4, 5])
-    gdf6 = gdf1.replace([0, 1], [4, 5])
-    assert_eq(gdf6, pdf6)
+    pd_to_replace = to_replace
+    if isinstance(to_replace, pd.Series):
+        gd_to_replace = cudf.from_pandas(to_replace)
+    else:
+        gd_to_replace = to_replace
 
-    pdf7 = pdf1.replace([0, 1], 4)
-    gdf7 = gdf1.replace([0, 1], 4)
-    assert_eq(gdf7, pdf7)
+    expected = pdf.replace(to_replace=pd_to_replace, value=pd_value)
+    actual = gdf.replace(to_replace=gd_to_replace, value=gd_value)
 
-    # dict input:
-    pdf8 = pdf1.replace({"a": 0, "b": 0}, {"a": 4, "b": 5})
-    gdf8 = gdf1.replace({"a": 0, "b": 0}, {"a": 4, "b": 5})
-    assert_eq(gdf8, pdf8)
-
-    pdf9 = pdf1.replace({"a": 0}, {"a": 4})
-    gdf9 = gdf1.replace({"a": 0}, {"a": 4})
-    assert_eq(gdf9, pdf9)
+    assert_eq(expected, actual)
 
 
 def test_dataframe_replace_with_nulls():
@@ -160,12 +252,6 @@ def test_dataframe_replace_with_nulls():
     gdf1 = DataFrame({"a": [0, 1, 2, 3], "b": [0, 1, 2, None]})
     gdf9 = gdf1.replace([0, 1], [4, 5]).fillna(3)
     assert_eq(gdf9, pdf6)
-
-
-def test_replace_strings():
-    pdf = pd.Series(["a", "b", "c", "d"])
-    gdf = Series(["a", "b", "c", "d"])
-    assert_eq(pdf.replace("a", "e"), gdf.replace("a", "e"))
 
 
 @pytest.mark.parametrize(
@@ -759,6 +845,7 @@ def test_numeric_series_replace_dtype(series_dtype, replacement):
     # to_replace is a list, replacement is a scalar
     if sr.dtype.type(replacement) != replacement:
         with pytest.raises(TypeError):
+
             sr.replace([2, 3], replacement)
     else:
         expect = psr.replace([2, 3], replacement).astype(psr.dtype)
@@ -1047,4 +1134,58 @@ def test_series_fillna_error():
         gsr.fillna,
         ([pd.DataFrame({"a": [1, 2, 3]})],),
         ([cudf.DataFrame({"a": [1, 2, 3]})],),
+    )
+
+
+def test_series_replace_errors():
+    gsr = cudf.Series([1, 2, None, 3, None])
+    psr = gsr.to_pandas()
+
+    with pytest.raises(
+        TypeError,
+        match=re.escape(
+            "to_replace and value should be of same types,"
+            "got to_replace dtype: int64 and "
+            "value dtype: object"
+        ),
+    ):
+        gsr.replace(1, "a")
+
+    gsr = cudf.Series(["a", "b", "c"])
+    with pytest.raises(
+        TypeError,
+        match=re.escape(
+            "to_replace and value should be of same types,"
+            "got to_replace dtype: int64 and "
+            "value dtype: object"
+        ),
+    ):
+        gsr.replace([1, 2], ["a", "b"])
+
+    assert_exceptions_equal(
+        psr.replace, gsr.replace, ([{"a": 1}, 1],), ([{"a": 1}, 1],),
+    )
+
+    assert_exceptions_equal(
+        lfunc=psr.replace,
+        rfunc=gsr.replace,
+        lfunc_args_and_kwargs=([[1, 2], [1]],),
+        rfunc_args_and_kwargs=([[1, 2], [1]],),
+        expected_error_message=re.escape(
+            "Replacement lists must be of same length. " "Expected 2, got 1."
+        ),
+    )
+
+    assert_exceptions_equal(
+        lfunc=psr.replace,
+        rfunc=gsr.replace,
+        lfunc_args_and_kwargs=([object(), [1]],),
+        rfunc_args_and_kwargs=([object(), [1]],),
+    )
+
+    assert_exceptions_equal(
+        lfunc=psr.replace,
+        rfunc=gsr.replace,
+        lfunc_args_and_kwargs=([{"a": 1}, object()],),
+        rfunc_args_and_kwargs=([{"a": 1}, object()],),
     )
