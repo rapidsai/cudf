@@ -471,7 +471,7 @@ class DateOffset(pd.DateOffset, metaclass=_UndoOffsetMeta):
         super().__init__(n=n, normalize=normalize, **kwds)
 
         kwds = self._combine_months_and_years(**kwds)
-        kwds = self._combine_timedeltas_to_nanos(**kwds)
+        kwds = self._combine_timedeltas_to_widest(**kwds)
 
         scalars = {}
         for k, v in kwds.items():
@@ -499,16 +499,32 @@ class DateOffset(pd.DateOffset, metaclass=_UndoOffsetMeta):
         )
         return kwargs
 
-    def _combine_timedeltas_to_nanos(self, **kwargs):
-        weeks = kwargs.pop("weeks", 0)
-        days = kwargs.pop("days", 0) + 7 * weeks
-        hours = kwargs.pop("hours", 0) + days * 24
-        minutes = kwargs.pop("minutes", 0) + hours * 60
-        seconds = kwargs.pop("seconds", 0) + minutes * 60
-        milliseconds = kwargs.pop("milliseconds", 0) + seconds * 1000
-        microseconds = kwargs.pop("microseconds", 0) + milliseconds * 1000
-        nanoseconds = kwargs.pop("nanoseconds", 0) + microseconds * 1000
-        kwargs["nanoseconds"] = nanoseconds
+    def _combine_timedeltas_to_widest(self, **kwargs):
+        """
+        Combine the provided timedeltas in kwargs to the widest resolution.
+        kwargs = {"years": 5, "months": 2, "seconds": 1000}
+        """
+        out = np.timedelta(0, "W")
+
+        max_unit = "week"
+
+        units_to_codes = {
+            "weeks": "W",
+            "days": "D",
+            "hours": "h",
+            "minutes": "m",
+            "seconds": "s",
+            "milliseconds": "ms",
+            "microseconds": "us",
+            "nanoseconds": "ns",
+        }
+
+        for unit, code in units_to_codes.items():
+            if unit in kwargs:
+                max_unit = unit
+                out += np.timedelta64(kwargs[unit], code)
+
+        kwargs[max_unit] = out
         return kwargs
 
     def _datetime_binop(self, datetime_col, op, reflect=False):
