@@ -206,20 +206,7 @@ class DataFrame(Frame, Serializable):
         if isinstance(columns, (Series, cudf.Index)):
             columns = columns.to_pandas()
 
-        if isinstance(data, ColumnAccessor):
-            if index is None:
-                index = as_index(range(data.nrows))
-            else:
-                index = as_index(index)
-            self._index = index
-
-            if columns is not None:
-                self._data = data
-                self._reindex(columns=columns, deep=True, inplace=True)
-            else:
-                self._data = data
-
-        elif isinstance(data, (DataFrame, pd.DataFrame)):
+        if isinstance(data, (DataFrame, pd.DataFrame)):
             if isinstance(data, pd.DataFrame):
                 data = self.from_pandas(data)
 
@@ -249,7 +236,6 @@ class DataFrame(Frame, Serializable):
             else:
                 self._index = as_index(index)
             if columns is not None:
-
                 self._data = ColumnAccessor(
                     OrderedDict.fromkeys(
                         columns,
@@ -1331,12 +1317,16 @@ class DataFrame(Frame, Serializable):
             elif isinstance(labels, tuple):
                 nlevels = len(labels)
             if self._data.multiindex is False or nlevels == self._data.nlevels:
-                return self._constructor_sliced(
-                    new_data, name=labels, index=self.index
-                )
-        return self._constructor(
-            new_data, columns=new_data.to_pandas_index(), index=self.index
-        )
+                out = self._constructor_sliced()
+                out._data = new_data
+                out._index = self.index
+                out.name = labels
+                return out
+        out = self._constructor()
+        out._data = new_data
+        out._index = self.index
+        out.columns = new_data.to_pandas_index()
+        return out
 
     # unary, binary, rbinary, orderedcompare, unorderedcompare
     def _apply_op(self, fn, other=None, fill_value=None):
