@@ -12,7 +12,6 @@ import pytest
 
 import cudf
 from cudf.io.orc import ORCWriter
-from cudf._lib.null_mask import bitmask_allocation_size_bytes
 from cudf.tests.utils import assert_eq, gen_rand_series, supported_numpy_dtypes
 
 
@@ -676,12 +675,11 @@ def test_orc_reader_gmt_timestamps(datadir):
     assert_eq(pdf, gdf)
 
 
-
 def test_orc_bool_encode_fail():
     np.random.seed(0)
 
     # Generate a boolean column longer than a single stripe
-    fail_df = cudf.DataFrame({ "col": gen_rand_series("bool", 600000)})
+    fail_df = cudf.DataFrame({"col": gen_rand_series("bool", 600000)})
     # Invalidate the first row in the second stripe to break encoding
     fail_df["col"][500000] = None
 
@@ -691,8 +689,8 @@ def test_orc_bool_encode_fail():
         fail_df.to_orc("should_throw.orc")
 
     # Generate a boolean column that fits into a single stripe
-    okay_df = cudf.DataFrame({ "col": gen_rand_series("bool", 500000)})
-    okay_df["col"][500000-1] = None
+    okay_df = cudf.DataFrame({"col": gen_rand_series("bool", 500000)})
+    okay_df["col"][500000 - 1] = None
     fname = "single_stripe.orc"
     # Invalid row is in the last row group of the stripe;
     # encoding is assumed to be correct
