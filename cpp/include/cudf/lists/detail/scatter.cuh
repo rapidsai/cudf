@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,6 +20,7 @@
 #include <cudf/column/column_factories.hpp>
 #include <cudf/copying.hpp>
 #include <cudf/detail/valid_if.cuh>
+#include <cudf/lists/detail/utilities.cuh>
 #include <cudf/lists/list_device_view.cuh>
 #include <cudf/null_mask.hpp>
 #include <cudf/strings/detail/utilities.cuh>
@@ -158,28 +159,6 @@ rmm::device_uvector<unbound_list_view> list_vector_from_column(
                     });
 
   return vector;
-}
-
-/**
- * @brief Fetch the number of rows in a lists column's child given its offsets column.
- *
- * @param list_offsets Offsets child of a lists column
- * @param stream The cuda-stream to synchronize on, when reading from device memory
- * @return cudf::size_type The last element in the list_offsets column, indicating
- *         the number of rows in the lists-column's child.
- */
-cudf::size_type get_num_child_rows(cudf::column_view const& list_offsets,
-                                   rmm::cuda_stream_view stream)
-{
-  // Number of rows in child-column == last offset value.
-  cudf::size_type num_child_rows{};
-  CUDA_TRY(cudaMemcpyAsync(&num_child_rows,
-                           list_offsets.data<cudf::size_type>() + list_offsets.size() - 1,
-                           sizeof(cudf::size_type),
-                           cudaMemcpyDeviceToHost,
-                           stream.value()));
-  stream.synchronize();
-  return num_child_rows;
 }
 
 /**

@@ -1,4 +1,5 @@
-# Copyright (c) 2018-2020, NVIDIA CORPORATION.
+# Copyright (c) 2018-2021, NVIDIA CORPORATION.
+
 from __future__ import division
 
 import inspect
@@ -1317,6 +1318,26 @@ class DataFrame(Frame, Serializable):
 
     def _repr_latex_(self):
         return self._get_renderable_dataframe().to_pandas()._repr_latex_()
+
+    def _get_columns_by_label(self, labels, downcast=False):
+        """
+        Return columns of dataframe by `labels`
+
+        If downcast is True, try and downcast from a DataFrame to a Series
+        """
+        new_data = super()._get_columns_by_label(labels, downcast)
+        if downcast:
+            if is_scalar(labels):
+                nlevels = 1
+            elif isinstance(labels, tuple):
+                nlevels = len(labels)
+            if self._data.multiindex is False or nlevels == self._data.nlevels:
+                return self._constructor_sliced(
+                    new_data, name=labels, index=self.index
+                )
+        return self._constructor(
+            new_data, columns=new_data.to_pandas_index(), index=self.index
+        )
 
     # unary, binary, rbinary, orderedcompare, unorderedcompare
     def _apply_op(self, fn, other=None, fill_value=None):
@@ -4139,6 +4160,24 @@ class DataFrame(Frame, Serializable):
         1    2    12.0    11.0
         4    3    13.0
         2    4    14.0    12.0
+
+        **Merging on categorical variables is only allowed in certain cases**
+
+        Categorical variable typecasting logic depends on both `how`
+        and the specifics of the categorical variables to be merged.
+        Merging categorical variables when only one side is ordered
+        is ambiguous and not allowed. Merging when both categoricals
+        are ordered is allowed, but only when the categories are
+        exactly equal and have equal ordering, and will result in the
+        common dtype.
+        When both sides are unordered, the result categorical depends
+        on the kind of join:
+        - For inner joins, the result will be the intersection of the
+        categories
+        - For left or right joins, the result will be the the left or
+        right dtype respectively. This extends to semi and anti joins.
+        - For outer joins, the result will be the union of categories
+        from both sides.
         """
         if indicator:
             raise NotImplementedError(
@@ -4580,24 +4619,24 @@ class DataFrame(Frame, Serializable):
         Parameters
         ----------
         to_replace : numeric, str, list-like or dict
-            Value(s) to replace.
+            Value(s) that will be replaced.
 
             * numeric or str:
-
                 - values equal to *to_replace* will be replaced
                   with *replacement*
-
             * list of numeric or str:
-
                 - If *replacement* is also list-like,
                   *to_replace* and *replacement* must be of same length.
-
             * dict:
-
                 - Dicts can be used to replace different values in different
                   columns. For example, `{'a': 1, 'z': 2}` specifies that the
                   value 1 in column `a` and the value 2 in column `z` should be
                   replaced with replacement*.
+                - Dicts can be used to specify different replacement values for
+                  different existing values. For example, {'a': 'b', 'y': 'z'}
+                  replaces the value ‘a’ with ‘b’ and ‘y’ with ‘z’.
+                  To use a dict in this way the value parameter should be None.
+
         value : numeric, str, list-like, or dict
             Value(s) to replace `to_replace` with. If a dict is provided, then
             its keys must match the keys in *to_replace*, and corresponding
@@ -4606,6 +4645,16 @@ class DataFrame(Frame, Serializable):
         inplace : bool, default False
             If True, in place.
 
+        Raises
+        ------
+        TypeError
+            - If ``to_replace`` is not a scalar, array-like, dict, or None
+            - If ``to_replace`` is a dict and value is not a list, dict,
+              or Series
+        ValueError
+            - If a list is passed to ``to_replace`` and ``value`` but they
+              are not the same length.
+
         Returns
         -------
         result : DataFrame
@@ -4613,19 +4662,61 @@ class DataFrame(Frame, Serializable):
 
         Examples
         --------
+
+        Scalar ``to_replace`` and ``value``
+
         >>> import cudf
-        >>> df = cudf.DataFrame()
-        >>> df['id']= [0, 1, 2, -1, 4, -1, 6]
-        >>> df['id']= df['id'].replace(-1, None)
+        >>> df = cudf.DataFrame({'A': [0, 1, 2, 3, 4],
+        ...                    'B': [5, 6, 7, 8, 9],
+        ...                    'C': ['a', 'b', 'c', 'd', 'e']})
         >>> df
-             id
-        0     0
-        1     1
-        2     2
-        3  <NA>
-        4     4
-        5  <NA>
-        6     6
+           A  B  C
+        0  0  5  a
+        1  1  6  b
+        2  2  7  c
+        3  3  8  d
+        4  4  9  e
+        >>> df.replace(0, 5)
+           A  B  C
+        0  5  5  a
+        1  1  6  b
+        2  2  7  c
+        3  3  8  d
+        4  4  9  e
+
+        List-like ``to_replace``
+
+        >>> df.replace([0, 1, 2, 3], 4)
+           A  B  C
+        0  4  5  a
+        1  4  6  b
+        2  4  7  c
+        3  4  8  d
+        4  4  9  e
+        >>> df.replace([0, 1, 2, 3], [4, 3, 2, 1])
+           A  B  C
+        0  4  5  a
+        1  3  6  b
+        2  2  7  c
+        3  1  8  d
+        4  4  9  e
+
+        dict-like ``to_replace``
+
+        >>> df.replace({0: 10, 1: 100})
+             A  B  C
+        0   10  5  a
+        1  100  6  b
+        2    2  7  c
+        3    3  8  d
+        4    4  9  e
+        >>> df.replace({'A': 0, 'B': 5}, 100)
+             A    B  C
+        0  100  100  a
+        1    1    6  b
+        2    2    7  c
+        3    3    8  d
+        4    4    9  e
 
         Notes
         -----
