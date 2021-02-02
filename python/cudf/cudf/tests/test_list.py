@@ -100,6 +100,8 @@ def test_listdtype_hash():
         [[1, 2, 3], None, [4, 5]],
         [[None, None], [None]],
         [[[[[[1, 2, 3]]]]]],
+        cudf.Series([[1, 2]]).iloc[0:0],
+        cudf.Series([None, [1, 2]]).iloc[0:1],
     ],
 )
 def test_len(data):
