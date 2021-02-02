@@ -1,5 +1,5 @@
 ﻿#=============================================================================
-# Copyright (c) 2018-2020, NVIDIA CORPORATION.
+# Copyright (c) 2018-2021, NVIDIA CORPORATION.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -39,7 +39,6 @@ endif("$ENV{CONDA_BUILD}" STREQUAL "1")
 add_library(cudftestutil STATIC
             "${CMAKE_CURRENT_SOURCE_DIR}/utilities/base_fixture.cpp"
             "${CMAKE_CURRENT_SOURCE_DIR}/utilities/column_utilities.cu"
-            "${CMAKE_CURRENT_SOURCE_DIR}/utilities/scalar_utilities.cu"
             "${CMAKE_CURRENT_SOURCE_DIR}/utilities/table_utilities.cu"
             "${CMAKE_CURRENT_SOURCE_DIR}/strings/utilities.cu")
 
@@ -494,6 +493,14 @@ set(LEAD_LAG_TEST_SRC
 ConfigureTest(LEAD_LAG_TEST "${LEAD_LAG_TEST_SRC}")
 
 ###################################################################################################
+# - collect_list rolling tests ---------------------------------------------------------------------------------
+
+set(COLLECT_LIST_SRC
+    "${CMAKE_CURRENT_SOURCE_DIR}/collect_list/collect_list_test.cpp")
+
+ConfigureTest(COLLECT_LIST_TEST "${COLLECT_LIST_SRC}")
+
+###################################################################################################
 # - filling test ----------------------------------------------------------------------------------
 
 set(FILLING_TEST_SRC
@@ -654,6 +661,7 @@ ConfigureTest(AST_TEST "${AST_TEST_SRC}")
 # - lists tests ----------------------------------------------------------------------------------
 
 set(LISTS_TEST_SRC
+    "${CMAKE_CURRENT_SOURCE_DIR}/lists/contains_tests.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/lists/count_elements_tests.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/lists/extract_tests.cpp")
 

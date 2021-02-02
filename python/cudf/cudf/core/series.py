@@ -5,6 +5,7 @@ import warnings
 from collections import abc as abc
 from numbers import Number
 from shutil import get_terminal_size
+from typing import Any, Set
 from uuid import uuid4
 
 import cupy
@@ -403,6 +404,20 @@ class Series(Frame, Serializable):
         cls = type(self)
         params.update(kwargs)
         return cls(**params)
+
+    def _get_columns_by_label(self, labels, downcast=False):
+        """Return the column specified by `labels`
+
+        For cudf.Series, either the column, or an empty series is returned.
+        Parameter `downcast` does not have effects.
+        """
+        new_data = super()._get_columns_by_label(labels, downcast)
+
+        return (
+            self._constructor(data=new_data, index=self.index)
+            if len(new_data) > 0
+            else self._constructor(dtype=self.dtype, name=self.name)
+        )
 
     @classmethod
     def from_arrow(cls, array):
@@ -1707,17 +1722,17 @@ class Series(Frame, Serializable):
         """
         return self.__mul__(-1)
 
-    @copy_docstring(CategoricalAccessor.__init__)
+    @copy_docstring(CategoricalAccessor.__init__)  # type: ignore
     @property
     def cat(self):
         return CategoricalAccessor(column=self._column, parent=self)
 
-    @copy_docstring(StringMethods.__init__)
+    @copy_docstring(StringMethods.__init__)  # type: ignore
     @property
     def str(self):
         return StringMethods(column=self._column, parent=self)
 
-    @copy_docstring(ListMethods.__init__)
+    @copy_docstring(ListMethods.__init__)  # type: ignore
     @property
     def list(self):
         return ListMethods(column=self._column, parent=self)
@@ -2387,14 +2402,31 @@ class Series(Frame, Serializable):
             * list of numeric or str:
                 - If ``value`` is also list-like, ``to_replace`` and
                   ``value`` must be of same length.
-        value : numeric, str, list-like, or dict
-            Value(s) to replace ``to_replace`` with.
+            * dict:
+                - Dicts can be used to specify different replacement values
+                  for different existing values. For example, {'a': 'b',
+                  'y': 'z'} replaces the value ‘a’ with ‘b’ and
+                  ‘y’ with ‘z’.
+                  To use a dict in this way the ``value`` parameter should
+                  be ``None``.
+        value : scalar, dict, list-like, str, default None
+            Value to replace any values matching ``to_replace`` with.
         inplace : bool, default False
             If True, in place.
 
         See also
         --------
         Series.fillna
+
+        Raises
+        ------
+        TypeError
+            - If ``to_replace`` is not a scalar, array-like, dict, or None
+            - If ``to_replace`` is a dict and value is not a list, dict,
+              or Series
+        ValueError
+            - If a list is passed to ``to_replace`` and ``value`` but they
+              are not the same length.
 
         Returns
         -------
@@ -2405,6 +2437,91 @@ class Series(Frame, Serializable):
         -----
         Parameters that are currently not supported are: `limit`, `regex`,
         `method`
+
+        Examples
+        --------
+
+        Scalar ``to_replace`` and ``value``
+
+        >>> import cudf
+        >>> s = cudf.Series([0, 1, 2, 3, 4])
+        >>> s
+        0    0
+        1    1
+        2    2
+        3    3
+        4    4
+        dtype: int64
+        >>> s.replace(0, 5)
+        0    5
+        1    1
+        2    2
+        3    3
+        4    4
+        dtype: int64
+
+        List-like ``to_replace``
+
+        >>> s.replace([1, 2], 10)
+        0     0
+        1    10
+        2    10
+        3     3
+        4     4
+        dtype: int64
+
+        dict-like ``to_replace``
+
+        >>> s.replace({1:5, 3:50})
+        0     0
+        1     5
+        2     2
+        3    50
+        4     4
+        dtype: int64
+        >>> s = cudf.Series(['b', 'a', 'a', 'b', 'a'])
+        >>> s
+        0     b
+        1     a
+        2     a
+        3     b
+        4     a
+        dtype: object
+        >>> s.replace({'a': None})
+        0       b
+        1    <NA>
+        2    <NA>
+        3       b
+        4    <NA>
+        dtype: object
+
+        If there is a mimatch in types of the values in
+        ``to_replace`` & ``value`` with the actual series, then
+        cudf exhibits different behaviour with respect to pandas
+        and the pairs are ignored silently:
+
+        >>> s = cudf.Series(['b', 'a', 'a', 'b', 'a'])
+        >>> s
+        0    b
+        1    a
+        2    a
+        3    b
+        4    a
+        dtype: object
+        >>> s.replace('a', 1)
+        0    b
+        1    a
+        2    a
+        3    b
+        4    a
+        dtype: object
+        >>> s.replace(['a', 'c'], [1, 2])
+        0    b
+        1    a
+        2    a
+        3    b
+        4    a
+        dtype: object
         """
         if limit is not None:
             raise NotImplementedError("limit parameter is not implemented yet")
@@ -2415,6 +2532,12 @@ class Series(Frame, Serializable):
         if method not in ("pad", None):
             raise NotImplementedError(
                 "method parameter is not implemented yet"
+            )
+
+        if is_dict_like(to_replace) and value is not None:
+            raise ValueError(
+                "Series.replace cannot use dict-like to_replace and non-None "
+                "value"
             )
 
         result = super().replace(to_replace=to_replace, replacement=value)
@@ -4444,7 +4567,7 @@ class Series(Frame, Serializable):
         """
         return self.index
 
-    _accessors = set()
+    _accessors = set()  # type: Set[Any]
 
 
 truediv_int_dtype_corrections = {

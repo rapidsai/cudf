@@ -60,14 +60,14 @@ cdef class Column:
     The *dtype* indicates the Column's element type.
     """
     def __init__(
-            self,
-            object data,
-            int size,
-            object dtype,
-            object mask=None,
-            int offset=0,
-            object null_count=None,
-            object children=()
+        self,
+        object data,
+        int size,
+        object dtype,
+        object mask=None,
+        int offset=0,
+        object null_count=None,
+        object children=()
     ):
 
         self._size = size
@@ -247,10 +247,10 @@ cdef class Column:
             )
 
         return cudf.core.column.build_column(
-            self.data,
-            self.dtype,
-            mask,
-            self.size,
+            data=self.data,
+            dtype=self.dtype,
+            mask=mask,
+            size=self.size,
             offset=0,
             children=self.children
         )
@@ -561,25 +561,22 @@ cdef class Column:
         children = tuple(children)
 
         result = cudf.core.column.build_column(
-            data,
-            dtype,
-            mask,
-            size,
-            offset,
-            null_count,
-            tuple(children)
+            data=data,
+            dtype=dtype,
+            mask=mask,
+            size=size,
+            offset=offset,
+            null_count=null_count,
+            children=tuple(children)
         )
 
         return result
 
-
-def make_column_from_scalar(object py_val, size_type size):
-
-    cdef DeviceScalar val = py_val.device_value
-
-    cdef const scalar* c_val = val.get_raw_ptr()
-    cdef unique_ptr[column] c_result
-    with nogil:
-        c_result = move(cpp_make_column_from_scalar(c_val[0], size))
-
-    return Column.from_unique_ptr(move(c_result))
+    @staticmethod
+    def from_scalar(py_val, size_type size):
+        cdef DeviceScalar val = py_val.device_value
+        cdef const scalar* c_val = val.get_raw_ptr()
+        cdef unique_ptr[column] c_result
+        with nogil:
+            c_result = move(cpp_make_column_from_scalar(c_val[0], size))
+        return Column.from_unique_ptr(move(c_result))

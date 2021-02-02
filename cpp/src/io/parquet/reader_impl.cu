@@ -669,7 +669,11 @@ class aggregate_metadata {
       for (const auto &use_name : local_use_names) {
         for (size_t schema_idx = 1; schema_idx < pfm.schema.size(); schema_idx++) {
           auto const &schema = pfm.schema[schema_idx];
-          if (use_name == schema.name) { output_column_schemas.push_back(schema_idx); }
+          // We select only top level columns by name. Selecting nested columns by name is not
+          // supported. Top level columns are identified by their parent being the root (idx == 0)
+          if (use_name == schema.name and schema.parent_idx == 0) {
+            output_column_schemas.push_back(schema_idx);
+          }
         }
       }
     }
@@ -1009,11 +1013,7 @@ rmm::device_buffer reader::impl::decompress_page_data(
 
   // Update the page information in device memory with the updated value of
   // page_data; it now points to the uncompressed data buffer
-  CUDA_TRY(cudaMemcpyAsync(pages.device_ptr(),
-                           pages.host_ptr(),
-                           pages.memory_size(),
-                           cudaMemcpyHostToDevice,
-                           stream.value()));
+  pages.host_to_device(stream);
 
   return decomp_pages;
 }
