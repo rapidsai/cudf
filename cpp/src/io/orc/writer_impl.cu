@@ -653,10 +653,12 @@ rmm::device_buffer writer::impl::encode_columns(orc_column_view *columns,
 
   for (auto &cnt_in : validity_check_inputs) {
     auto const valid_counts = segmented_count_set_bits(cnt_in.second.mask, cnt_in.second.indices);
-    CUDF_EXPECTS(std::none_of(valid_counts.cbegin(),
-                              valid_counts.cend(),
-                              [](auto valid_count) { return valid_count % 8; }),
-                 "Boolean column can't be encoded correctly. Please convert to int8.");
+    CUDF_EXPECTS(
+      std::none_of(valid_counts.cbegin(),
+                   valid_counts.cend(),
+                   [](auto valid_count) { return valid_count % 8; }),
+      "There's currently a bug in encoding boolean columns. Suggested workaround is to convert to "
+      "int8 type. Please see https://github.com/rapidsai/cudf/issues/6763 for more information.");
   }
 
   chunks.host_to_device(stream);
