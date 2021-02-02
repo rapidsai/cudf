@@ -40,7 +40,7 @@ CPMFindPackage(NAME benchmark
     OPTIONS         "BENCHMARK_ENABLE_TESTING OFF"
                     "BENCHMARK_ENABLE_INSTALL OFF")
 
-add_library(cudf_datagen STATIC "${CUDF_SOURCE_DIR}/benchmarks/common/generate_benchmark_input.cpp")
+add_library(cudf_datagen STATIC common/generate_benchmark_input.cpp)
 
 target_compile_options(cudf_datagen
             PRIVATE "$<$<COMPILE_LANGUAGE:CXX>:${CUDF_CXX_FLAGS}>"
@@ -68,9 +68,9 @@ target_include_directories(cudf_datagen
 function(ConfigureBench CMAKE_BENCH_NAME CMAKE_BENCH_SRC)
     add_executable(${CMAKE_BENCH_NAME}
                    ${CMAKE_BENCH_SRC}
-                   "${CMAKE_CURRENT_SOURCE_DIR}/synchronization/synchronization.cpp"
                    "${CUDF_SOURCE_DIR}/tests/utilities/base_fixture.cpp"
-                   "${CUDF_SOURCE_DIR}/benchmarks/io/cuio_benchmark_common.cpp")
+                   synchronization/synchronization.cpp
+                   io/cuio_benchmark_common.cpp)
     target_compile_options(${CMAKE_BENCH_NAME}
                 PRIVATE "$<$<COMPILE_LANGUAGE:CXX>:${CUDF_CXX_FLAGS}>"
                         "$<$<COMPILE_LANGUAGE:CUDA>:${CUDF_CUDA_FLAGS}>"
