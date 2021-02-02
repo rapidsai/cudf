@@ -37,7 +37,7 @@ class NumericalColumn(ColumnBase):
         data: Buffer,
         dtype: DtypeObj,
         mask: Buffer = None,
-        size: int = None,
+        size: int = None,  # TODO: make this non-optional
         offset: int = 0,
         null_count: int = None,
     ):

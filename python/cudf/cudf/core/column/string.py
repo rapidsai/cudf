@@ -4646,7 +4646,7 @@ class StringColumn(column.ColumnBase):
     def __init__(
         self,
         mask: Buffer = None,
-        size: int = None,
+        size: int = None,  # TODO: make non-optional
         offset: int = 0,
         null_count: int = None,
         children: Tuple["column.ColumnBase", ...] = (),

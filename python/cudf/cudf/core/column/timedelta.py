@@ -38,7 +38,7 @@ class TimeDeltaColumn(column.ColumnBase):
         self,
         data: Buffer,
         dtype: Dtype,
-        size: int = None,
+        size: int = None,  # TODO: make non-optional
         mask: Buffer = None,
         offset: int = 0,
         null_count: int = None,
