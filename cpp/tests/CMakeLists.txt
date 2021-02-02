@@ -585,7 +585,8 @@ set(STRINGS_TEST_SRC
     "${CMAKE_CURRENT_SOURCE_DIR}/strings/strip_tests.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/strings/substring_tests.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/strings/translate_tests.cpp"
-    "${CMAKE_CURRENT_SOURCE_DIR}/strings/urls_tests.cpp")
+    "${CMAKE_CURRENT_SOURCE_DIR}/strings/urls_tests.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/strings/json_tests.cpp")
 
 ConfigureTest(STRINGS_TEST "${STRINGS_TEST_SRC}")
 
