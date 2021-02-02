@@ -421,7 +421,7 @@ endif()
 
 # Instruct jitify to use the kernel JIT cache
 if(JITIFY_USE_CACHE)
-    target_compile_definitions(cudf PUBLIC JITIFY_USE_CACHE "CUDF_VERSION=${CMAKE_PROJECT_VERSION}")
+    target_compile_definitions(cudf PUBLIC JITIFY_USE_CACHE "CUDF_VERSION=${PROJECT_VERSION}")
 endif()
 
 # Per-thread default stream
