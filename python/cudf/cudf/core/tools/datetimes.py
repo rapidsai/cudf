@@ -498,7 +498,7 @@ class DateOffset:
                 " are not yet supported."
             )
 
-        if any(val != int(val) for val in kwds.values()):
+        if any(val != int(val) for val in (kwds.get("months", 0), kwds.get("years", 0))):
             raise ValueError(
                 "Non-integer periods not supported"
             )
@@ -542,7 +542,7 @@ class DateOffset:
         seconds += kwargs.pop("hours", 0) * 3600
         seconds += kwargs.pop("minutes", 0) * 60
         seconds += kwargs.pop("seconds", 0)
-
+        
         if seconds > np.iinfo("int64").max:
             raise OverflowError(
                 "Total days + weeks + hours + minutes + seconds can not exceed"
@@ -551,7 +551,6 @@ class DateOffset:
 
         if seconds != 0:
             kwargs["seconds"] = seconds
-
         return kwargs
 
     def _datetime_binop(self, datetime_col, op, reflect=False):
@@ -565,17 +564,17 @@ class DateOffset:
                 f"{op} not supported between {type(self).__name__}"
                 f" and {type(datetime_col).__name__}"
             )
-        if self._is_no_op:
-            return datetime_col
-        else:
+        if not self._is_no_op:
             if "months" in self._scalars:
                 rhs = self._generate_months_column(len(datetime_col), op)
                 datetime_col = libcudf.datetime.add_months(datetime_col, rhs)
-            if "nanoseconds" in self._scalars:
-                datetime_col = datetime_col + self._generate_nanos_column(
-                    len(datetime_col), op
-                )
-            return datetime_col
+
+            for unit, value in self._scalars.items():
+                if unit != "months":
+                    value = -value if op == "sub" else value
+                    datetime_col += cudf.core.column.as_column(value, length=len(datetime_col))
+            
+        return datetime_col
 
     def _generate_months_column(self, size, op):
         months = self._scalars["months"]
@@ -584,11 +583,6 @@ class DateOffset:
         # https://github.com/rapidsai/cudf/issues/6990
         col = cudf.core.column.as_column(months, length=size)
         return col
-
-    def _generate_nanos_column(self, size, op):
-        nanos = self._scalars["nanoseconds"]
-        nanos = -nanos if op == "sub" else nanos
-        return cudf.core.column.as_column(nanos, length=size)
 
     @property
     def _is_no_op(self):
@@ -599,3 +593,14 @@ class DateOffset:
     def __neg__(self):
         new_scalars = {k: -v for k, v in self.kwds.items()}
         return DateOffset(**new_scalars)
+
+    def __repr__(self):
+        includes = []
+        for unit in sorted(self._UNITS_TO_CODES):
+            val = self.kwds.get(unit, None)
+            if val is not None:
+                includes.append(f"{unit}={val}")
+        unit_data = ", ".join(includes)
+        repr_str = f"<{self.__class__.__name__}: {unit_data}>"
+
+        return repr_str
