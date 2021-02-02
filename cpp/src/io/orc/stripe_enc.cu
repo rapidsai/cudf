@@ -49,7 +49,6 @@ struct intrle_enc_state_s {
   uint32_t hdr_bytes;
   uint32_t pl_bytes;
   volatile uint32_t delta_map[(512 / 32) + 1];
-  volatile uint64_t scratch;
 };
 
 struct strdata_enc_state_s {
@@ -367,6 +366,7 @@ static __device__ uint32_t IntegerRLE(orcenc_state_s *s,
   using block_reduce = cub::BlockReduce<T, block_size>;
   uint8_t *dst       = s->chunk.streams[cid] + s->strm_pos[cid];
   uint32_t out_cnt   = 0;
+  __shared__ volatile uint64_t scratch;
 
   while (numvals > 0) {
     T v0               = (t < numvals) ? inbuf[(inpos + t) & inmask] : 0;
@@ -421,7 +421,7 @@ static __device__ uint32_t IntegerRLE(orcenc_state_s *s,
       if (t == 0) {
         uint32_t mode1_w, mode2_w;
         typename std::make_unsigned<T>::type vrange_mode1, vrange_mode2;
-        s->u.intrle.scratch = (uint64_t)vmin;
+        scratch = (uint64_t)vmin;
         if (sizeof(T) > 4) {
           vrange_mode1 = (is_signed) ? max(zigzag(vmin), zigzag(vmax)) : vmax;
           vrange_mode2 = vmax - vmin;
@@ -463,7 +463,7 @@ static __device__ uint32_t IntegerRLE(orcenc_state_s *s,
         }
       }
       __syncthreads();
-      vmin         = (T)s->u.intrle.scratch;
+      vmin         = (T)scratch;
       literal_mode = s->u.intrle.literal_mode;
       literal_w    = s->u.intrle.literal_w;
       if (literal_mode == 1) {
