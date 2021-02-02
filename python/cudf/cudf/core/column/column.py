@@ -1475,7 +1475,8 @@ def build_column(
             children=children,
         )
     elif dtype.type is np.datetime64:
-        assert data is not None
+        if data is None:
+            raise TypeError("Must specify data buffer")
         return cudf.core.column.DatetimeColumn(
             data=data,
             dtype=dtype,
@@ -1485,7 +1486,8 @@ def build_column(
             null_count=null_count,
         )
     elif dtype.type is np.timedelta64:
-        assert data is not None
+        if data is None:
+            raise TypeError("Must specify data buffer")
         return cudf.core.column.TimeDeltaColumn(
             data=data,
             dtype=dtype,
@@ -1512,7 +1514,8 @@ def build_column(
             children=children,
         )
     elif is_struct_dtype(dtype):
-        assert size is not None
+        if size is None:
+            raise TypeError("Must specify size")
         return cudf.core.column.StructColumn(
             data=data,
             dtype=dtype,
@@ -1522,7 +1525,8 @@ def build_column(
             children=children,
         )
     elif is_decimal_dtype(dtype):
-        assert size is not None
+        if size is None:
+            raise TypeError("Must specify size")
         return cudf.core.column.DecimalColumn(
             data=data,
             size=size,
