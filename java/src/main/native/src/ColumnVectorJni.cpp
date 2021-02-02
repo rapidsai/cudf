@@ -14,12 +14,15 @@
  * limitations under the License.
  */
 
+#include <arrow/api.h>
 #include <cudf/column/column_factories.hpp>
 #include <cudf/concatenate.hpp>
 #include <cudf/filling.hpp>
+#include <cudf/interop.hpp>
 #include <cudf/hashing.hpp>
 #include <cudf/reshape.hpp>
 #include <cudf/utilities/bit.hpp>
+#include <cudf/detail/interop.hpp>
 #include <cudf/lists/detail/concatenate.hpp>
 #include <cudf/lists/lists_column_view.hpp>
 #include <cudf/scalar/scalar_factories.hpp>
@@ -46,6 +49,78 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_sequence(JNIEnv *env, j
       col = cudf::sequence(row_count, *initial_val);
     }
     return reinterpret_cast<jlong>(col.release());
+  }
+  CATCH_STD(env, 0);
+}
+
+JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_fromArrow(JNIEnv *env, jclass,
+                                                                   jint j_type,
+                                                                   jlong j_col_length,
+                                                                   jlong j_null_count,
+                                                                   jobject j_data_obj,
+                                                                   jobject j_validity_obj,
+                                                                   jobject j_offsets_obj) {
+  try {
+    cudf::jni::auto_set_device(env);
+    cudf::type_id n_type = static_cast<cudf::type_id>(j_type);
+    // not all the buffers are used for all types
+    void const *data_address = 0;
+    int data_length = 0;
+    if (j_data_obj != 0) {
+      data_address = env->GetDirectBufferAddress(j_data_obj);
+      data_length = env->GetDirectBufferCapacity(j_data_obj);
+    }
+    void const *validity_address = 0;
+    int validity_length = 0;
+    if (j_validity_obj != 0) {
+      validity_address = env->GetDirectBufferAddress(j_validity_obj);
+      validity_length = env->GetDirectBufferCapacity(j_validity_obj);
+    }
+    void const *offsets_address = 0;
+    int offsets_length = 0;
+    if (j_offsets_obj != 0) {
+      offsets_address = env->GetDirectBufferAddress(j_offsets_obj);
+      offsets_length = env->GetDirectBufferCapacity(j_offsets_obj);
+    }
+    auto data_buffer = arrow::Buffer::Wrap(static_cast<const char *>(data_address), static_cast<int>(data_length));
+    auto null_buffer = arrow::Buffer::Wrap(static_cast<const char *>(validity_address), static_cast<int>(validity_length));
+    auto offsets_buffer = arrow::Buffer::Wrap(static_cast<const char *>(offsets_address), static_cast<int>(offsets_length));
+
+    cudf::jni::native_jlongArray outcol_handles(env, 1);
+    std::shared_ptr<arrow::Array> arrow_array;
+    switch (n_type) {
+      case cudf::type_id::DECIMAL32:
+        JNI_THROW_NEW(env, cudf::jni::ILLEGAL_ARG_CLASS, "Don't support converting DECIMAL32 yet", 0);
+        break;
+      case cudf::type_id::DECIMAL64:
+        JNI_THROW_NEW(env, cudf::jni::ILLEGAL_ARG_CLASS, "Don't support converting DECIMAL64 yet", 0);
+        break;
+      case cudf::type_id::STRUCT:
+        JNI_THROW_NEW(env, cudf::jni::ILLEGAL_ARG_CLASS, "Don't support converting STRUCT yet", 0);
+        break;
+      case cudf::type_id::LIST:
+        JNI_THROW_NEW(env, cudf::jni::ILLEGAL_ARG_CLASS, "Don't support converting LIST yet", 0);
+        break;
+      case cudf::type_id::DICTIONARY32:
+        JNI_THROW_NEW(env, cudf::jni::ILLEGAL_ARG_CLASS, "Don't support converting DICTIONARY32 yet", 0);
+        break;
+      case cudf::type_id::STRING:
+        arrow_array = std::make_shared<arrow::StringArray>(j_col_length, offsets_buffer, data_buffer, null_buffer, j_null_count);
+        break;
+      default:
+        // this handles the primitive types
+        arrow_array = cudf::detail::to_arrow_array(n_type, j_col_length, data_buffer, null_buffer, j_null_count);
+    }
+    auto name_and_type = arrow::field("col", arrow_array->type());
+    std::vector<std::shared_ptr<arrow::Field>> fields = {name_and_type};
+    std::shared_ptr<arrow::Schema> schema = std::make_shared<arrow::Schema>(fields);
+    auto arrow_table = arrow::Table::Make(schema, std::vector<std::shared_ptr<arrow::Array>>{arrow_array});
+    std::unique_ptr<cudf::table> table_result = cudf::from_arrow(*(arrow_table));
+    std::vector<std::unique_ptr<cudf::column>> retCols = table_result->release();
+    if (retCols.size() != 1) {
+      JNI_THROW_NEW(env, "java/lang/IllegalArgumentException", "Must result in one column", 0);
+    }
+    return reinterpret_cast<jlong>(retCols[0].release());
   }
   CATCH_STD(env, 0);
 }

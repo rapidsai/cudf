@@ -1,9 +1,11 @@
 # Copyright (c) 2019-2020, NVIDIA CORPORATION.
+import itertools
 import numbers
 import pickle
 import warnings
 from collections import OrderedDict
 from collections.abc import Sequence
+from typing import Any, List, Tuple, Union
 
 import cupy
 import numpy as np
@@ -12,6 +14,7 @@ from pandas._config import get_option
 
 import cudf
 from cudf import _lib as libcudf
+from cudf._typing import DataFrameOrSeries
 from cudf.core.column import column
 from cudf.core.frame import Frame
 from cudf.core.index import Index, as_index
@@ -746,7 +749,6 @@ class MultiIndex(Index):
         return result
 
     def _get_valid_indices_by_tuple(self, index, row_tuple, max_length):
-
         # Instructions for Slicing
         # if tuple, get first and last elements of tuple
         # if open beginning tuple, get 0 to highest valid_index
@@ -833,13 +835,23 @@ class MultiIndex(Index):
             result = result.set_index(index)
         return result
 
-    def _get_row_major(self, df, row_tuple):
-
+    def _get_row_major(
+        self,
+        df: DataFrameOrSeries,
+        row_tuple: Union[
+            numbers.Number, slice, Tuple[Any, ...], List[Tuple[Any, ...]]
+        ],
+    ) -> DataFrameOrSeries:
         if pd.api.types.is_bool_dtype(
             list(row_tuple) if isinstance(row_tuple, tuple) else row_tuple
         ):
             return df[row_tuple]
-
+        if isinstance(row_tuple, slice):
+            if row_tuple.start is None:
+                row_tuple = slice(self[0], row_tuple.stop, row_tuple.step)
+            if row_tuple.stop is None:
+                row_tuple = slice(row_tuple.start, self[-1], row_tuple.step)
+        self._validate_indexer(row_tuple)
         valid_indices = self._get_valid_indices_by_tuple(
             df.index, row_tuple, len(df.index)
         )
@@ -847,6 +859,32 @@ class MultiIndex(Index):
         result = df.take(indices)
         final = self._index_and_downcast(result, result.index, row_tuple)
         return final
+
+    def _validate_indexer(
+        self,
+        indexer: Union[
+            numbers.Number, slice, Tuple[Any, ...], List[Tuple[Any, ...]]
+        ],
+    ):
+        if isinstance(indexer, numbers.Number):
+            return
+        if isinstance(indexer, tuple):
+            # drop any slice(None) from the end:
+            indexer = tuple(
+                itertools.dropwhile(
+                    lambda x: x == slice(None), reversed(indexer)
+                )
+            )[::-1]
+
+            # now check for size
+            if len(indexer) > self.nlevels:
+                raise IndexError("Indexer size exceeds number of levels")
+        elif isinstance(indexer, slice):
+            self._validate_indexer(indexer.start)
+            self._validate_indexer(indexer.stop)
+        else:
+            for i in indexer:
+                self._validate_indexer(i)
 
     def _split_tuples(self, tuples):
         if len(tuples) == 1:

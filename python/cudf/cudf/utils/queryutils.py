@@ -2,6 +2,7 @@
 
 import ast
 import datetime as dt
+from typing import Any, Dict
 
 import numpy as np
 import six
@@ -101,7 +102,7 @@ def _check_error(tree):
         raise QuerySyntaxError("too many expressions")
 
 
-_cache = {}
+_cache = {}  # type: Dict[Any, Any]
 
 
 def query_compile(expr):

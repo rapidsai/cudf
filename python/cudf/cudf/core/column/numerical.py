@@ -1,6 +1,9 @@
 # Copyright (c) 2018-2021, NVIDIA CORPORATION.
 
+from __future__ import annotations
+
 from numbers import Number
+from typing import Any, Callable, Sequence, Union, cast
 
 import numpy as np
 import pandas as pd
@@ -10,8 +13,15 @@ from pandas.api.types import is_integer_dtype
 import cudf
 from cudf import _lib as libcudf
 from cudf._lib.quantiles import quantile as cpp_quantile
+from cudf._typing import BinaryOperand, ColumnLike, Dtype, DtypeObj, ScalarLike
 from cudf.core.buffer import Buffer
-from cudf.core.column import as_column, build_column, column, string
+from cudf.core.column import (
+    ColumnBase,
+    as_column,
+    build_column,
+    column,
+    string,
+)
 from cudf.utils import cudautils, utils
 from cudf.utils.dtypes import (
     min_column_type,
@@ -21,9 +31,15 @@ from cudf.utils.dtypes import (
 )
 
 
-class NumericalColumn(column.ColumnBase):
+class NumericalColumn(ColumnBase):
     def __init__(
-        self, data, dtype, mask=None, size=None, offset=0, null_count=None
+        self,
+        data: Buffer,
+        dtype: DtypeObj,
+        mask: Buffer = None,
+        size: int = None,
+        offset: int = 0,
+        null_count: int = None,
     ):
         """
         Parameters
@@ -39,6 +55,7 @@ class NumericalColumn(column.ColumnBase):
         if size is None:
             size = data.size // dtype.itemsize
             size = size - offset
+
         super().__init__(
             data,
             size=size,
@@ -48,7 +65,7 @@ class NumericalColumn(column.ColumnBase):
             null_count=null_count,
         )
 
-    def __contains__(self, item):
+    def __contains__(self, item: ScalarLike) -> bool:
         """
         Returns True if column contains item, else False.
         """
@@ -66,10 +83,12 @@ class NumericalColumn(column.ColumnBase):
             self, column.as_column([item], dtype=self.dtype)
         ).any()
 
-    def unary_operator(self, unaryop):
+    def unary_operator(self, unaryop: str) -> ColumnBase:
         return _numeric_column_unaryop(self, op=unaryop)
 
-    def binary_operator(self, binop, rhs, reflect=False):
+    def binary_operator(
+        self, binop: str, rhs: BinaryOperand, reflect: bool = False,
+    ) -> ColumnBase:
         int_dtypes = [
             np.dtype("int8"),
             np.dtype("int16"),
@@ -80,32 +99,33 @@ class NumericalColumn(column.ColumnBase):
             np.dtype("uint32"),
             np.dtype("uint64"),
         ]
-        tmp = rhs
-        if reflect:
-            tmp = self
-        if isinstance(rhs, (NumericalColumn, cudf.Scalar)) or np.isscalar(rhs):
+        if rhs is None:
+            out_dtype = self.dtype
+        else:
+            if not (
+                isinstance(rhs, (NumericalColumn, cudf.Scalar,),)
+                or np.isscalar(rhs)
+            ):
+                msg = "{!r} operator not supported between {} and {}"
+                raise TypeError(msg.format(binop, type(self), type(rhs)))
             out_dtype = np.result_type(self.dtype, rhs.dtype)
             if binop in ["mod", "floordiv"]:
+                tmp = self if reflect else rhs
                 if (tmp.dtype in int_dtypes) and (
                     (np.isscalar(tmp) and (0 == tmp))
                     or ((isinstance(tmp, NumericalColumn)) and (0.0 in tmp))
                 ):
                     out_dtype = np.dtype("float64")
-        elif rhs is None:
-            out_dtype = self.dtype
-        else:
-            raise TypeError(
-                f"'{binop}' operator not supported between "
-                f"{type(self).__name__} and {type(rhs).__name__}"
-            )
         return _numeric_column_binop(
             lhs=self, rhs=rhs, op=binop, out_dtype=out_dtype, reflect=reflect
         )
 
-    def _apply_scan_op(self, op):
+    def _apply_scan_op(self, op: str) -> ColumnBase:
         return libcudf.reduce.scan(op, self, True)
 
-    def normalize_binop_value(self, other):
+    def normalize_binop_value(
+        self, other: ScalarLike
+    ) -> Union[ColumnBase, ScalarLike]:
         if other is None:
             return other
         if isinstance(other, cudf.Scalar):
@@ -122,8 +142,8 @@ class NumericalColumn(column.ColumnBase):
                 return other
             other_dtype = np.promote_types(self.dtype, other_dtype)
             if other_dtype == np.dtype("float16"):
-                other = np.dtype("float32").type(other)
-                other_dtype = other.dtype
+                other_dtype = np.dtype("float32")
+                other = other_dtype.type(other)
             if self.dtype.kind == "b":
                 other_dtype = min_signed_type(other)
             if np.isscalar(other):
@@ -134,104 +154,110 @@ class NumericalColumn(column.ColumnBase):
                     other, size=len(self), dtype=other_dtype
                 )
                 return column.build_column(
-                    data=Buffer.from_array_like(ary),
-                    dtype=ary.dtype,
-                    mask=self.mask,
+                    data=Buffer(ary), dtype=ary.dtype, mask=self.mask,
                 )
         else:
             raise TypeError(f"cannot broadcast {type(other)}")
 
-    def int2ip(self):
+    def int2ip(self) -> "cudf.core.column.StringColumn":
         if self.dtype != np.dtype("int64"):
             raise TypeError("Only int64 type can be converted to ip")
 
         return libcudf.string_casting.int2ip(self)
 
-    def as_string_column(self, dtype, **kwargs):
+    def as_string_column(
+        self, dtype: Dtype, format=None
+    ) -> "cudf.core.column.StringColumn":
         if len(self) > 0:
             return string._numeric_to_str_typecast_functions[
                 np.dtype(self.dtype)
             ](self)
         else:
-            return as_column([], dtype="object")
+            return cast(
+                "cudf.core.column.StringColumn", as_column([], dtype="object")
+            )
 
-    def as_datetime_column(self, dtype, **kwargs):
-
-        return build_column(
-            data=self.astype("int64").base_data,
-            dtype=dtype,
-            mask=self.base_mask,
-            offset=self.offset,
-            size=self.size,
+    def as_datetime_column(
+        self, dtype: Dtype, **kwargs
+    ) -> "cudf.core.column.DatetimeColumn":
+        return cast(
+            "cudf.core.column.DatetimeColumn",
+            build_column(
+                data=self.astype("int64").base_data,
+                dtype=dtype,
+                mask=self.base_mask,
+                offset=self.offset,
+                size=self.size,
+            ),
         )
 
-    def as_timedelta_column(self, dtype, **kwargs):
-
-        return build_column(
-            data=self.astype("int64").base_data,
-            dtype=dtype,
-            mask=self.base_mask,
-            offset=self.offset,
-            size=self.size,
+    def as_timedelta_column(
+        self, dtype: Dtype, **kwargs
+    ) -> "cudf.core.column.TimeDeltaColumn":
+        return cast(
+            "cudf.core.column.TimeDeltaColumn",
+            build_column(
+                data=self.astype("int64").base_data,
+                dtype=dtype,
+                mask=self.base_mask,
+                offset=self.offset,
+                size=self.size,
+            ),
         )
 
-    def as_numerical_column(self, dtype):
+    def as_numerical_column(self, dtype: Dtype) -> NumericalColumn:
         dtype = np.dtype(dtype)
         if dtype == self.dtype:
             return self
         return libcudf.unary.cast(self, dtype)
 
-    def sum(self, skipna=None, dtype=None, min_count=0):
-        result_col = self._process_for_reduction(
+    def reduce(self, op: str, skipna: bool = None, **kwargs) -> float:
+        min_count = kwargs.pop("min_count", 0)
+        preprocessed = self._process_for_reduction(
             skipna=skipna, min_count=min_count
         )
-        if isinstance(result_col, cudf.core.column.ColumnBase):
-            return libcudf.reduce.reduce("sum", result_col, dtype=dtype)
+        if isinstance(preprocessed, ColumnBase):
+            return libcudf.reduce.reduce(op, preprocessed, **kwargs)
         else:
-            return result_col
+            return cast(float, preprocessed)
 
-    def product(self, skipna=None, dtype=None, min_count=0):
-        result_col = self._process_for_reduction(
-            skipna=skipna, min_count=min_count
+    def sum(
+        self, skipna: bool = None, dtype: Dtype = None, min_count: int = 0
+    ) -> float:
+        return self.reduce(
+            "sum", skipna=skipna, dtype=dtype, min_count=min_count
         )
-        if isinstance(result_col, cudf.core.column.ColumnBase):
-            return libcudf.reduce.reduce("product", result_col, dtype=dtype)
-        else:
-            return result_col
 
-    def mean(self, skipna=None, dtype=np.float64):
-        result_col = self._process_for_reduction(skipna=skipna)
-        if isinstance(result_col, cudf.core.column.ColumnBase):
-            return libcudf.reduce.reduce("mean", result_col, dtype=dtype)
-        else:
-            return result_col
+    def product(
+        self, skipna: bool = None, dtype: Dtype = None, min_count: int = 0
+    ) -> float:
+        return self.reduce(
+            "product", skipna=skipna, dtype=dtype, min_count=min_count
+        )
 
-    def var(self, skipna=None, ddof=1, dtype=np.float64):
-        result = self._process_for_reduction(skipna=skipna)
-        if isinstance(result, cudf.core.column.ColumnBase):
-            return libcudf.reduce.reduce("var", result, dtype=dtype, ddof=ddof)
-        else:
-            return result
+    def mean(self, skipna: bool = None, dtype: Dtype = np.float64) -> float:
+        return self.reduce("mean", skipna=skipna, dtype=dtype)
 
-    def std(self, skipna=None, ddof=1, dtype=np.float64):
-        result_col = self._process_for_reduction(skipna=skipna)
-        if isinstance(result_col, cudf.core.column.ColumnBase):
-            return libcudf.reduce.reduce(
-                "std", result_col, dtype=dtype, ddof=ddof
-            )
-        else:
-            return result_col
+    def var(
+        self, skipna: bool = None, ddof: int = 1, dtype: Dtype = np.float64
+    ) -> float:
+        return self.reduce("var", skipna=skipna, dtype=dtype, ddof=ddof)
 
-    def sum_of_squares(self, dtype=None):
+    def std(
+        self, skipna: bool = None, ddof: int = 1, dtype: Dtype = np.float64
+    ) -> float:
+        return self.reduce("std", skipna=skipna, dtype=dtype, ddof=ddof)
+
+    def sum_of_squares(self, dtype: Dtype = None) -> float:
         return libcudf.reduce.reduce("sum_of_squares", self, dtype=dtype)
 
-    def kurtosis(self, skipna=None):
+    def kurtosis(self, skipna: bool = None) -> float:
         skipna = True if skipna is None else skipna
 
         if len(self) == 0 or (not skipna and self.has_nulls):
             return cudf.utils.dtypes._get_nan_for_dtype(self.dtype)
 
-        self = self.nans_to_nulls().dropna()
+        self = self.nans_to_nulls().dropna()  # type: ignore
 
         if len(self) < 4:
             return cudf.utils.dtypes._get_nan_for_dtype(self.dtype)
@@ -250,13 +276,13 @@ class NumericalColumn(column.ColumnBase):
         kurt = term_one_section_one * term_one_section_two - 3 * term_two
         return kurt
 
-    def skew(self, skipna=None):
+    def skew(self, skipna: bool = None) -> ScalarLike:
         skipna = True if skipna is None else skipna
 
         if len(self) == 0 or (not skipna and self.has_nulls):
             return cudf.utils.dtypes._get_nan_for_dtype(self.dtype)
 
-        self = self.nans_to_nulls().dropna()
+        self = self.nans_to_nulls().dropna()  # type: ignore
 
         if len(self) < 3:
             return cudf.utils.dtypes._get_nan_for_dtype(self.dtype)
@@ -273,7 +299,9 @@ class NumericalColumn(column.ColumnBase):
         skew = unbiased_coef * m3 / (m2 ** (3 / 2))
         return skew
 
-    def quantile(self, q, interpolation, exact):
+    def quantile(
+        self, q: Union[float, Sequence[float]], interpolation: str, exact: bool
+    ) -> NumericalColumn:
         if isinstance(q, Number) or cudf.utils.dtypes.is_list_like(q):
             np_array_q = np.asarray(q)
             if np.logical_or(np_array_q < 0, np_array_q > 1).any():
@@ -284,15 +312,14 @@ class NumericalColumn(column.ColumnBase):
         # will only have values in range [0, 1]
         result = self._numeric_quantile(q, interpolation, exact)
         if isinstance(q, Number):
-            result = result[0]
             return (
                 cudf.utils.dtypes._get_nan_for_dtype(self.dtype)
-                if result is cudf.NA
-                else result
+                if result[0] is cudf.NA
+                else result[0]
             )
         return result
 
-    def median(self, skipna=None):
+    def median(self, skipna: bool = None) -> NumericalColumn:
         skipna = True if skipna is None else skipna
 
         if not skipna and self.has_nulls:
@@ -301,24 +328,17 @@ class NumericalColumn(column.ColumnBase):
         # enforce linear in case the default ever changes
         return self.quantile(0.5, interpolation="linear", exact=True)
 
-    def _numeric_quantile(self, q, interpolation, exact):
-        is_number = isinstance(q, Number)
-
-        if is_number:
-            quant = [float(q)]
-        elif isinstance(q, list) or isinstance(q, np.ndarray):
-            quant = q
-        else:
-            msg = "`q` must be either a single element, list or numpy array"
-            raise TypeError(msg)
-
+    def _numeric_quantile(
+        self, q: Union[float, Sequence[float]], interpolation: str, exact: bool
+    ) -> NumericalColumn:
+        quant = [float(q)] if not isinstance(q, (Sequence, np.ndarray)) else q
         # get sorted indices and exclude nulls
         sorted_indices = self.as_frame()._get_sorted_inds(True, "first")
         sorted_indices = sorted_indices[self.null_count :]
 
         return cpp_quantile(self, quant, interpolation, sorted_indices, exact)
 
-    def cov(self, other):
+    def cov(self, other: ColumnBase) -> float:
         if (
             len(self) == 0
             or len(other) == 0
@@ -330,7 +350,7 @@ class NumericalColumn(column.ColumnBase):
         cov_sample = result.sum() / (len(self) - 1)
         return cov_sample
 
-    def corr(self, other):
+    def corr(self, other: ColumnBase) -> float:
         if len(self) == 0 or len(other) == 0:
             return cudf.utils.dtypes._get_nan_for_dtype(self.dtype)
 
@@ -341,12 +361,14 @@ class NumericalColumn(column.ColumnBase):
             return cudf.utils.dtypes._get_nan_for_dtype(self.dtype)
         return cov / lhs_std / rhs_std
 
-    def round(self, decimals=0):
+    def round(self, decimals: int = 0) -> NumericalColumn:
         """Round the values in the Column to the given number of decimals.
         """
         return libcudf.round.round(self, decimal_places=decimals)
 
-    def applymap(self, udf, out_dtype=None):
+    def applymap(
+        self, udf: Callable[[ScalarLike], ScalarLike], out_dtype: Dtype = None
+    ) -> ColumnBase:
         """Apply an element-wise function to transform the values in the Column.
 
         Parameters
@@ -367,7 +389,7 @@ class NumericalColumn(column.ColumnBase):
         out = column.column_applymap(udf=udf, column=self, out_dtype=out_dtype)
         return out
 
-    def default_na_value(self):
+    def default_na_value(self) -> ScalarLike:
         """Returns the default NA value for this column
         """
         dkind = self.dtype.kind
@@ -382,10 +404,30 @@ class NumericalColumn(column.ColumnBase):
         else:
             raise TypeError(f"numeric column of {self.dtype} has no NaN value")
 
-    def find_and_replace(self, to_replace, replacement, all_nan):
+    def find_and_replace(
+        self,
+        to_replace: ColumnLike,
+        replacement: ColumnLike,
+        all_nan: bool = False,
+    ) -> NumericalColumn:
         """
         Return col with *to_replace* replaced with *value*.
         """
+        to_replace_col = as_column(to_replace)
+        replacement_col = as_column(replacement)
+
+        if type(to_replace_col) != type(replacement_col):
+            raise TypeError(
+                f"to_replace and value should be of same types,"
+                f"got to_replace dtype: {to_replace_col.dtype} and "
+                f"value dtype: {replacement_col.dtype}"
+            )
+
+        if not isinstance(to_replace_col, NumericalColumn) and not isinstance(
+            replacement_col, NumericalColumn
+        ):
+            return self.copy()
+
         to_replace_col = _normalize_find_and_replace_input(
             self.dtype, to_replace
         )
@@ -395,13 +437,15 @@ class NumericalColumn(column.ColumnBase):
             replacement_col = _normalize_find_and_replace_input(
                 self.dtype, replacement
             )
+        replaced = self.copy()
         if len(replacement_col) == 1 and len(to_replace_col) > 1:
             replacement_col = column.as_column(
                 utils.scalar_broadcast_to(
                     replacement[0], (len(to_replace_col),), self.dtype
                 )
             )
-        replaced = self.copy()
+        elif len(replacement_col) == 1 and len(to_replace_col) == 0:
+            return replaced
         to_replace_col, replacement_col, replaced = numeric_normalize_types(
             to_replace_col, replacement_col, replaced
         )
@@ -409,11 +453,16 @@ class NumericalColumn(column.ColumnBase):
             replaced, to_replace_col, replacement_col
         )
 
-    def fillna(self, fill_value=None, method=None, fill_nan=True):
+    def fillna(
+        self,
+        fill_value: Any = None,
+        method: str = None,
+        dtype: Dtype = None,
+        fill_nan: bool = True,
+    ) -> NumericalColumn:
         """
         Fill null values with *fill_value*
         """
-
         if fill_nan:
             col = self.nans_to_nulls()
         else:
@@ -447,7 +496,9 @@ class NumericalColumn(column.ColumnBase):
 
         return super(NumericalColumn, col).fillna(fill_value, method)
 
-    def find_first_value(self, value, closest=False):
+    def find_first_value(
+        self, value: ScalarLike, closest: bool = False
+    ) -> int:
         """
         Returns offset of first value that matches. For monotonic
         columns, returns the offset of the first larger value
@@ -476,7 +527,7 @@ class NumericalColumn(column.ColumnBase):
             raise ValueError("value not found")
         return found
 
-    def find_last_value(self, value, closest=False):
+    def find_last_value(self, value: ScalarLike, closest: bool = False) -> int:
         """
         Returns offset of last value that matches. For monotonic
         columns, returns the offset of the last smaller value
@@ -505,7 +556,7 @@ class NumericalColumn(column.ColumnBase):
             raise ValueError("value not found")
         return found
 
-    def can_cast_safely(self, to_dtype):
+    def can_cast_safely(self, to_dtype: DtypeObj) -> bool:
         """
         Returns true if all the values in self can be
         safely cast to dtype
@@ -603,9 +654,17 @@ class NumericalColumn(column.ColumnBase):
             else:
                 return False
 
+        return False
+
 
 @annotate("BINARY_OP", color="orange", domain="cudf_python")
-def _numeric_column_binop(lhs, rhs, op, out_dtype, reflect=False):
+def _numeric_column_binop(
+    lhs: Union[ColumnBase, ScalarLike],
+    rhs: Union[ColumnBase, ScalarLike],
+    op: str,
+    out_dtype: Dtype,
+    reflect: bool = False,
+) -> ColumnBase:
     if reflect:
         lhs, rhs = rhs, lhs
 
@@ -622,7 +681,7 @@ def _numeric_column_binop(lhs, rhs, op, out_dtype, reflect=False):
     return out
 
 
-def _numeric_column_unaryop(operand, op):
+def _numeric_column_unaryop(operand: ColumnBase, op: str) -> ColumnBase:
     if callable(op):
         return libcudf.transform.transform(operand, op)
 
@@ -630,7 +689,7 @@ def _numeric_column_unaryop(operand, op):
     return libcudf.unary.unary_operation(operand, op)
 
 
-def _safe_cast_to_int(col, dtype):
+def _safe_cast_to_int(col: ColumnBase, dtype: DtypeObj) -> ColumnBase:
     """
     Cast given NumericalColumn to given integer dtype safely.
     """
@@ -649,7 +708,9 @@ def _safe_cast_to_int(col, dtype):
         )
 
 
-def _normalize_find_and_replace_input(input_column_dtype, col_to_normalize):
+def _normalize_find_and_replace_input(
+    input_column_dtype: DtypeObj, col_to_normalize: Union[ColumnBase, list]
+) -> ColumnBase:
     normalized_column = column.as_column(
         col_to_normalize,
         dtype=input_column_dtype if len(col_to_normalize) <= 0 else None,
@@ -691,7 +752,9 @@ def _normalize_find_and_replace_input(input_column_dtype, col_to_normalize):
     return normalized_column.astype(input_column_dtype)
 
 
-def digitize(column, bins, right=False):
+def digitize(
+    column: ColumnBase, bins: np.ndarray, right: bool = False
+) -> ColumnBase:
     """Return the indices of the bins to which each value in column belongs.
 
     Parameters
@@ -706,7 +769,7 @@ def digitize(column, bins, right=False):
 
     Returns
     -------
-    A device array containing the indices
+    A column containing the indices
     """
     if not column.dtype == bins.dtype:
         raise ValueError(

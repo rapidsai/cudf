@@ -1117,8 +1117,8 @@ def test_string_groupby_key_index():
     pdf["b"] = other_data
     gdf["b"] = other_data
 
-    expect = pdf.groupby("a").count()
-    got = gdf.groupby("a").count()
+    expect = pdf.groupby("a", sort=True).count()
+    got = gdf.groupby("a", sort=True).count()
 
     assert_eq(expect, got, check_dtype=False)
 
