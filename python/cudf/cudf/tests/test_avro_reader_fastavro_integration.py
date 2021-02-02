@@ -1,4 +1,4 @@
-# Copyright (c) 2020, NVIDIA CORPORATION.
+# Copyright (c) 2021, NVIDIA CORPORATION.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -115,11 +115,11 @@ def test_can_detect_dtype_from_avro_type_nested(
         ("long", "int64", 1234, 1234),
         ("float", "float32", 12.34, 12.34),
         ("double", "float64", 12.34, 12.34),
-        ("string", "str", "hey", "hey"),
-        # ('bytes', 'str', 'hey', 'hey'),
+        ("string", "str", "heyϴ", "heyϴ"),
+        # ("bytes", "str", "heyϴ", "heyϴ"),
     ],
 )
-def test_can_parse_values(avro_type, cudf_type, avro_val, cudf_val):
+def test_can_parse_single_value(avro_type, cudf_type, avro_val, cudf_val):
 
     schema_root = {
         "name": "root",
@@ -129,57 +129,52 @@ def test_can_parse_values(avro_type, cudf_type, avro_val, cudf_val):
 
     records = [
         {"prop": avro_val},
-        {"prop": None},
     ]
 
     actual = cudf_from_avro_util(schema_root, records)
 
     expected = cudf.DataFrame(
-        {"prop": cudf.Series(data=[cudf_val, None], dtype=cudf_type)}
+        {"prop": cudf.Series(data=[cudf_val], dtype=cudf_type)}
     )
 
     assert_eq(expected, actual)
 
 
-# @pytest.mark.parametrize("avro_type, cudf_type", avro_type_params)
-# def test_can_parse_single_null(avro_type, cudf_type):
+@pytest.mark.parametrize("avro_type, cudf_type", avro_type_params)
+def test_can_parse_single_null(avro_type, cudf_type):
 
-#     schema_root = {
-#         'name': 'root',
-#         'type': 'record',
-#         'fields': [ { 'name': 'prop', 'type': ['null', avro_type] } ],
-#     }
+    schema_root = {
+        "name": "root",
+        "type": "record",
+        "fields": [{"name": "prop", "type": ["null", avro_type]}],
+    }
 
-#     records = [
-#         {u'prop': None}
-#     ]
+    records = [{"prop": None}]
 
-#     actual = cudf_from_avro_util(schema_root, records)
+    actual = cudf_from_avro_util(schema_root, records)
 
-#     expected = cudf.DataFrame({
-#         'prop': cudf.Series(data=[None], dtype=cudf_type)
-#     })
+    expected = cudf.DataFrame(
+        {"prop": cudf.Series(data=[None], dtype=cudf_type)}
+    )
 
-#     assert_eq(expected, actual)
+    assert_eq(expected, actual)
 
-# @pytest.mark.parametrize("avro_type, cudf_type", avro_type_params)
-# def test_can_parse_multiple_values(avro_type, cudf_type):
 
-#     schema_root = {
-#         'name': 'root',
-#         'type': 'record',
-#         'fields': [ { 'name': 'prop', 'type': ['null', avro_type] } ],
-#     }
+@pytest.mark.xfail(
+    reason="cudf avro reader is unable to parse zero-field metadata."
+)
+def test_can_parse_empty_dataframe():
 
-#     records = [
-#         {u'prop': None}
-#         {u'prop': None}
-#     ]
+    schema_root = {
+        "name": "root",
+        "type": "record",
+        "fields": [],
+    }
 
-#     actual = cudf_from_avro_util(schema_root, records)
+    records = []
 
-#     expected = cudf.DataFrame({
-#         'prop': cudf.Series(data=[None], dtype=cudf_type)
-#     })
+    actual = cudf_from_avro_util(schema_root, records)
 
-#     assert_eq(expected, actual)
+    expected = cudf.DataFrame()
+
+    assert_eq(expected, actual)
