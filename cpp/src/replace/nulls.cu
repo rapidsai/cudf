@@ -405,7 +405,8 @@ std::unique_ptr<cudf::column> replace_nulls_policy_impl(cudf::column_view const&
   auto output = cudf::detail::gather(cudf::table_view({input}),
                                      gather_map.begin(),
                                      gather_map.end(),
-                                     cudf::out_of_bounds_policy::DONT_CHECK);
+                                     cudf::out_of_bounds_policy::DONT_CHECK,
+                                     stream);
 
   return std::move(output->release()[0]);
 }
