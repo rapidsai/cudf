@@ -495,10 +495,10 @@ class DateOffset:
         if unsupported_kwds:
             raise NotImplementedError(
                 f"Keyword arguments '{','.join(list(unsupported_kwds))}'"
-                " are not yet supported in cuDF DateOffsets"
+                " are not yet supported."
             )
 
-        if any([val != int(val) for val in kwds.values()]):
+        if any(val != int(val) for val in kwds.values()):
             raise ValueError(
                 "Non-integer periods not supported"
             )
