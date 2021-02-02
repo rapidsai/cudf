@@ -59,12 +59,7 @@ if("$ENV{CONDA_BUILD}" STREQUAL "1")
     set(CONDA_INCLUDE_DIRS "$ENV{BUILD_PREFIX}/include" "$ENV{PREFIX}/include")
     set(CONDA_LINK_DIRS "$ENV{BUILD_PREFIX}/lib" "$ENV{PREFIX}/lib")
     message(STATUS "Conda build detected, CMAKE_SYSTEM_PREFIX_PATH set to: ${CMAKE_SYSTEM_PREFIX_PATH}")
-elseif(DEFINED ENV{CONDA_PREFIX})
-    set(CMAKE_SYSTEM_PREFIX_PATH "$ENV{CONDA_PREFIX};${CMAKE_SYSTEM_PREFIX_PATH}")
-    set(CONDA_INCLUDE_DIRS "$ENV{CONDA_PREFIX}/include")
-    set(CONDA_LINK_DIRS "$ENV{CONDA_PREFIX}/lib")
-    message(STATUS "Conda environment detected, CMAKE_SYSTEM_PREFIX_PATH set to: ${CMAKE_SYSTEM_PREFIX_PATH}")
-endif("$ENV{CONDA_BUILD}" STREQUAL "1")
+endif()
 
 ###################################################################################################
 # - compiler function -----------------------------------------------------------------------------
