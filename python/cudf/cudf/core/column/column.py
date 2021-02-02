@@ -1512,6 +1512,7 @@ def build_column(
             children=children,
         )
     elif is_struct_dtype(dtype):
+        assert size is not None
         return cudf.core.column.StructColumn(
             data=data,
             dtype=dtype,
@@ -1521,6 +1522,7 @@ def build_column(
             children=children,
         )
     elif is_decimal_dtype(dtype):
+        assert size is not None
         return cudf.core.column.DecimalColumn(
             data=data,
             size=size,
