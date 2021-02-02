@@ -71,21 +71,6 @@ class StructColumn(ColumnBase):
             result = result._rename_fields(self.dtype.fields.keys())
         return result
 
-    def as_interval_column(self, closed="right"):
-        from cudf.core.column import IntervalColumn
-
-        return IntervalColumn(
-            size=self.size,
-            dtype=cudf.core.dtypes.IntervalDtype(
-                self.dtype.fields["left"], closed
-            ),
-            mask=self.mask,
-            offset=self.offset,
-            null_count=self.null_count,
-            children=self.children,
-            closed=closed,
-        )
-
     def _rename_fields(self, names):
         """
         Return a StructColumn with the same field values as this StructColumn,

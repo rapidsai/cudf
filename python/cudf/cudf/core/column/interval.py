@@ -1,3 +1,4 @@
+# Copyright (c) 2018-2021, NVIDIA CORPORATION.
 import pyarrow as pa
 import cudf
 from cudf.core.column import StructColumn
@@ -24,7 +25,15 @@ class IntervalColumn(StructColumn):
             null_count=null_count,
             children=children,
         )
-        self.closed = closed
+        self._closed = closed
+
+    @property
+    def closed(self) -> str:
+        if self._closed in ['left', 'right','neither','both']:
+            return self._closed
+        else:
+            raise ValueError("closed value is not valid")
+
 
     @classmethod
     def from_arrow(self, data):
@@ -54,5 +63,30 @@ class IntervalColumn(StructColumn):
         typ = self.dtype.to_arrow()
         return pa.ExtensionArray.from_storage(typ, super().to_arrow())
 
+    def from_struct_column(self,closed='right'):
+        return IntervalColumn(
+            size=self.size,
+            dtype=cudf.core.dtypes.IntervalDtype(
+                self.dtype.fields["left"], closed
+            ),
+            mask=self.mask,
+            offset=self.offset,
+            null_count=self.null_count,
+            children=self.children,
+            closed=closed,
+        )
+
     def copy(self, deep=True):
-        return super().copy(deep=deep).as_interval_column(self.closed)
+        closed = self.closed
+        struct_copy = super().copy(deep=deep)
+        return IntervalColumn(
+            size=struct_copy.size,
+            dtype=cudf.core.dtypes.IntervalDtype(
+                struct_copy.dtype.fields["left"], closed
+            ),
+            mask=struct_copy.mask,
+            offset=struct_copy.offset,
+            null_count=struct_copy.null_count,
+            children=struct_copy.children,
+            closed=closed,
+        )

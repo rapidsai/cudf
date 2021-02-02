@@ -1548,6 +1548,7 @@ def build_column(
             size=size,
             offset=offset,
             null_count=null_count,
+            children=children
         )
     else:
         assert data is not None
@@ -1855,18 +1856,19 @@ def as_column(
                 mask=mask,
                 dtype=arbitrary.dtype,
             )
+        elif arb_dtype.kind in ("O") and isinstance(arbitrary[0], pd._libs.interval.Interval):
+            # changing from pd array to series,possible arrow bug
+            interval_series = pd.Series(arbitrary)
+            data = as_column(
+                pa.Array.from_pandas(interval_series),
+                dtype=arbitrary.dtype,
+            )
+            if dtype is not None:
+                data = data.astype(dtype)
         elif arb_dtype.kind in ("O", "U"):
-            if isinstance(arbitrary[0], pd._libs.interval.Interval):
-                # changing from pd array to series,possible arrow bug
-                interval_series = pd.Series(arbitrary)
-                data = as_column(
-                    pa.Array.from_pandas(interval_series),
-                    dtype=arbitrary.dtype,
-                )
-            else:
-                data = as_column(
-                    pa.Array.from_pandas(arbitrary), dtype=arbitrary.dtype
-                )
+            data = as_column(
+                pa.Array.from_pandas(arbitrary), dtype=arbitrary.dtype
+            )
             # There is no cast operation available for pa.Array from int to
             # str, Hence instead of handling in pa.Array block, we
             # will have to type-cast here.
@@ -1893,14 +1895,13 @@ def as_column(
                 arb_dtype = check_cast_unsupported_dtype(arbitrary.dtype)
                 if arb_dtype != arbitrary.dtype.numpy_dtype:
                     arbitrary = arbitrary.astype(arb_dtype)
-        if arb_dtype.kind in ("O", "U"):
-            if isinstance(arbitrary[0], pd._libs.interval.Interval):
+        if arb_dtype.kind in ("O") and isinstance(arbitrary[0], pd._libs.interval.Interval):
                 # changing from pd array to series,possible arrow bug
                 interval_series = pd.Series(arbitrary)
                 data = as_column(
                     pa.Array.from_pandas(interval_series), dtype=arb_dtype
                 )
-            else:
+        elif arb_dtype.kind in ("O", "U"):
                 data = as_column(
                     pa.Array.from_pandas(arbitrary), dtype=arb_dtype
                 )

@@ -2416,7 +2416,8 @@ class Frame(libcudf.table.Table):
             self._data.keys(), self._data.values(), other._data.values()
         ):
             if isinstance(other_col, cudf.core.column.IntervalColumn):
-                self._data[name] = col.as_interval_column()
+                self._data[name] = cudf.core.column.IntervalColumn(col)
+                #col.as_interval_column()
 
     def _postprocess_columns(self, other, include_index=True):
         self._copy_categories(other, include_index=include_index)
