@@ -215,6 +215,16 @@ class ListMethods(ColumnMethodsMixin):
 
         Examples
         --------
-        # TODO
+        >>> s = cudf.Series([[1, 2, 3], None, [4, 5]])
+        >>> s
+        0    [1, 2, 3]
+        1         None
+        2       [4, 5]
+        dtype: list
+        >>> s.list.len()
+        0       3
+        1    <NA>
+        2       2
+        dtype: int32
         """
         return self._return_or_inplace(count_elements(self._column))

@@ -91,11 +91,22 @@ def test_listdtype_hash():
     assert hash(a) != hash(c)
 
 
-def test_len():
-    gsr = cudf.Series([[1, 2, 3], [4, 5]])
+@pytest.mark.parametrize(
+    "data",
+    [
+        [[]],
+        [[1, 2, 3], [4, 5]],
+        [[1, 2, 3], [], [4, 5]],
+        [[1, 2, 3], None, [4, 5]],
+        [[None, None], [None]],
+        [[[[[[1, 2, 3]]]]]],
+    ],
+)
+def test_len(data):
+    gsr = cudf.Series(data)
     psr = gsr.to_pandas()
 
-    expect = psr.map(len)
+    expect = psr.map(lambda x: len(x) if x is not None else None)
     got = gsr.list.len()
 
     assert_eq(expect, got, check_dtype=False)
