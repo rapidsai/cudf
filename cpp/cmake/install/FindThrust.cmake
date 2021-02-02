@@ -29,8 +29,6 @@ if(Thrust_FOUND)
   return()
 endif()
 
-cmake_minimum_required(VERSION 3.17..3.18 FATAL_ERROR)
-
 find_dependency(CUDAToolkit)
 
 find_path(
