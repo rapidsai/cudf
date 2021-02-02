@@ -15,10 +15,9 @@
  */
 
 #include <cudf/detail/reduction_functions.hpp>
+#include <cudf/detail/utilities/device_atomics.cuh>
 #include <cudf/dictionary/dictionary_column_view.hpp>
 #include <reductions/simple.cuh>
-
-#include <thrust/logical.h>
 
 namespace cudf {
 namespace reduction {
@@ -28,10 +27,22 @@ namespace {
 /**
  * @brief Compute reduction any() for dictionary columns.
  *
- * This compiles 10x faster than using the cudf::simple::reduction::detail::reduce
- * utility. It also can execute faster for very large columns.
+ * This compiles 10x faster than using thrust::reduce or the
+ * cudf::simple::reduction::detail::reduce utility.
+ * Both of these use the CUB DeviceReduce which aggressively inlines
+ * the input iterator logic.
  */
 struct any_fn {
+  template <typename Iterator>
+  struct any_true_fn {
+    __device__ void operator()(size_type idx)
+    {
+      if (!*d_result && (iter[idx] != *d_result)) atomicOr(d_result, true);
+    }
+    Iterator iter;
+    bool* d_result;
+  };
+
   template <typename T, std::enable_if_t<std::is_arithmetic<T>::value>* = nullptr>
   std::unique_ptr<scalar> operator()(column_view const& input,
                                      rmm::cuda_stream_view stream,
@@ -45,11 +56,12 @@ struct any_fn {
         cudf::dictionary::detail::make_dictionary_pair_iterator<T>(*d_dict, input.has_nulls());
       return thrust::make_transform_iterator(pair_iter, null_iter);
     }();
-    return std::make_unique<numeric_scalar<bool>>(
-      thrust::any_of(rmm::exec_policy(stream), iter, iter + input.size(), thrust::identity<bool>()),
-      true,
-      stream,
-      mr);
+    auto result = std::make_unique<numeric_scalar<bool>>(false, true, stream, mr);
+    thrust::for_each_n(rmm::exec_policy(stream),
+                       thrust::make_counting_iterator<size_type>(0),
+                       input.size(),
+                       any_true_fn<decltype(iter)>{iter, result->data()});
+    return result;
   }
   template <typename T, std::enable_if_t<!std::is_arithmetic<T>::value>* = nullptr>
   std::unique_ptr<scalar> operator()(column_view const&,
@@ -70,6 +82,7 @@ std::unique_ptr<cudf::scalar> any(column_view const& col,
 {
   CUDF_EXPECTS(output_dtype == cudf::data_type(cudf::type_id::BOOL8),
                "any() operation can be applied with output type `bool8` only");
+
   if (cudf::is_dictionary(col.type())) {
     return cudf::type_dispatcher(
       dictionary_column_view(col).keys().type(), detail::any_fn{}, col, stream, mr);
