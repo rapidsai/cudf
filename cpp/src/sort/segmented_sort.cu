@@ -39,6 +39,7 @@
 #include <algorithm>
 #include <iterator>
 #include <memory>
+#include <type_traits>
 
 namespace cudf {
 namespace detail {
@@ -64,22 +65,29 @@ rmm::device_uvector<size_type> get_segment_indices(size_type num_rows,
   return std::move(segment_ids);
 }
 
-void validate_list_columns(table_view const& keys, rmm::cuda_stream_view stream)
+void validate_key_value_list_columns(table_view const& keys,
+                                     table_view const& values,
+                                     rmm::cuda_stream_view stream)
 {
+  std::vector<column_view> key_value_columns;
+  key_value_columns.reserve(keys.num_columns() + values.num_columns());
+  key_value_columns.insert(key_value_columns.end(), keys.begin(), keys.end());
+  key_value_columns.insert(key_value_columns.end(), values.begin(), values.end());
+  table_view key_vals{key_value_columns};
   // check if all are list columns
-  CUDF_EXPECTS(std::all_of(keys.begin(),
-                           keys.end(),
+  CUDF_EXPECTS(std::all_of(key_vals.begin(),
+                           key_vals.end(),
                            [](column_view const& col) { return col.type().id() == type_id::LIST; }),
                "segmented_sort_by_key only supports lists columns");
   // check if all list sizes are equal.
-  auto table_device  = table_device_view::create(keys, stream);
+  auto table_device  = table_device_view::create(key_vals, stream);
   auto counting_iter = thrust::make_counting_iterator<size_type>(0);
   CUDF_EXPECTS(
     thrust::all_of(rmm::exec_policy(stream),
                    counting_iter,
-                   counting_iter + keys.num_rows(),
+                   counting_iter + key_vals.num_rows(),
                    [d_keys = *table_device] __device__(size_type idx) {
-                     auto size = list_size_functor{d_keys.column(0)}(idx);
+                     auto const size = list_size_functor{d_keys.column(0)}(idx);
                      return thrust::all_of(
                        thrust::seq, d_keys.begin(), d_keys.end(), [&](auto const& d_column) {
                          return list_size_functor{d_column}(idx) == size;
@@ -108,13 +116,16 @@ std::unique_ptr<column> segmented_sorted_order(table_view const& keys,
   keys_with_segid.insert(keys_with_segid.end(), keys.begin(), keys.end());
   auto segid_keys = table_view(keys_with_segid);
 
-  std::vector<order> child_column_order(column_order);
-  if (not column_order.empty())
-    child_column_order.insert(child_column_order.begin(), order::ASCENDING);
-  std::vector<null_order> child_null_precedence(null_precedence);
-  if (not null_precedence.empty())
-    child_null_precedence.insert(child_null_precedence.begin(), null_order::AFTER);
-
+  auto prepend_default = [](auto const& vector, auto default_value) {
+    if (vector.empty()) return vector;
+    std::remove_cv_t<std::remove_reference_t<decltype(vector)>> pre_vector;
+    pre_vector.reserve(pre_vector.size() + 1);
+    pre_vector.push_back(default_value);
+    pre_vector.insert(pre_vector.end(), vector.begin(), vector.end());
+    return pre_vector;
+  };
+  auto child_column_order    = prepend_default(column_order, order::ASCENDING);
+  auto child_null_precedence = prepend_default(null_precedence, null_order::AFTER);
   // return sorted order of child columns
   return detail::sorted_order(segid_keys, child_column_order, child_null_precedence, stream, mr);
 }
@@ -153,11 +164,7 @@ std::unique_ptr<table> sort_lists(table_view const& values,
                                   rmm::mr::device_memory_resource* mr)
 {
   CUDF_EXPECTS(keys.num_columns() > 0, "keys table should have atleast one list column");
-  std::vector<column_view> key_value_columns;
-  key_value_columns.reserve(keys.num_columns() + values.num_columns());
-  key_value_columns.insert(key_value_columns.end(), keys.begin(), keys.end());
-  key_value_columns.insert(key_value_columns.end(), values.begin(), values.end());
-  validate_list_columns(table_view{key_value_columns}, stream);
+  validate_key_value_list_columns(keys, values, stream);
 
   // child columns of keys
   auto child_key_columns = thrust::make_transform_iterator(

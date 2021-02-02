@@ -54,17 +54,17 @@ TEST_F(SortListsInt, ErrorsTableSizes)
   CUDF_EXPECT_NO_THROW(cudf::sort_lists(input1, input1, {}, {}));
   // Non-List keys
   CUDF_EXPECT_THROW_MESSAGE(cudf::sort_lists(input2, input1, {}, {}),
-                            "segmented_sort only supports lists columns");
+                            "segmented_sort_by_key only supports lists columns");
   // Non-List values
   CUDF_EXPECT_THROW_MESSAGE(cudf::sort_lists(input1, input2, {}, {}),
-                            "segmented_sort only supports lists columns");
+                            "segmented_sort_by_key only supports lists columns");
   // Both
   CUDF_EXPECT_THROW_MESSAGE(cudf::sort_lists(input2, input2, {}, {}),
-                            "segmented_sort only supports lists columns");
+                            "segmented_sort_by_key only supports lists columns");
   CUDF_EXPECT_THROW_MESSAGE(cudf::sort_lists(input2, input3, {}, {}),
-                            "segmented_sort only supports lists columns");
+                            "segmented_sort_by_key only supports lists columns");
   CUDF_EXPECT_THROW_MESSAGE(cudf::sort_lists(input3, input3, {}, {}),
-                            "segmented_sort only supports lists columns");
+                            "segmented_sort_by_key only supports lists columns");
   // List sizes mismatch key
   CUDF_EXPECT_THROW_MESSAGE(cudf::sort_lists(input5, input4, {}, {}),
                             "size of each list in a row of table should be same");
