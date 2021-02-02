@@ -1374,7 +1374,9 @@ def test_loc_series_multiindex(arg):
         slice(4, -1, -3),
     ],
 )
-@pytest.mark.parametrize("pobj", [pd.DataFrame({"a": [1, 2, 3, 4, 5]})])
+@pytest.mark.parametrize(
+    "pobj", [pd.DataFrame({"a": [1, 2, 3, 4, 5]}), pd.Series([1, 2, 3, 4, 5])]
+)
 def test_iloc_before_zero_terminate(arg, pobj):
     gobj = cudf.from_pandas(pobj)
 

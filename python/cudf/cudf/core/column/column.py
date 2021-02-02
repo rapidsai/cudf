@@ -603,9 +603,9 @@ class ColumnBase(Column, Serializable):
     def slice(self, start: int, stop: int, stride: int = None) -> ColumnBase:
         if start < 0:
             start = start + len(self)
-        if stop < 0:
+        if stop < 0 and not (stride < 0 and stop == -1):
             stop = stop + len(self)
-        if start >= stop:
+        if (stride > 0 and start >= stop) or (stride < 0 and start <= stop):
             return column_empty(0, self.dtype, masked=True)
         # compute mask slice
         if stride == 1 or stride is None:
