@@ -43,8 +43,6 @@ endif(NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
 # - compiler options ------------------------------------------------------------------------------
 
 set(CMAKE_CXX_STANDARD 14)
-set(CMAKE_C_COMPILER $ENV{CC})
-set(CMAKE_CXX_COMPILER $ENV{CXX})
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 # To apply RUNPATH to transitive dependencies (this is a temporary solution)
