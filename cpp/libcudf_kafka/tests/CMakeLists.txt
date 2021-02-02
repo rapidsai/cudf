@@ -108,7 +108,6 @@ endif(CONDA_LINK_DIRS)
 
 ###################################################################################################
 # - create tests ----------------------------------------------------------------------------------
-
-ConfigureTest(CUDF_KAFKA_HOST_READ  "${CMAKE_CURRENT_SOURCE_DIR}/kafka_consumer_tests.cpp")
+ConfigureTest(CUDF_KAFKA_HOST_READ  kafka_consumer_tests.cpp)
 
 enable_testing()
