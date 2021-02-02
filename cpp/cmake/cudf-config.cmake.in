@@ -3,8 +3,7 @@
 cmake_minimum_required(VERSION 3.18)
 
 # make the bundled find modules in this directory available
-set(_save_CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH})
-list(INSERT CMAKE_MODULE_PATH 0 "${CMAKE_CURRENT_LIST_DIR}")
+list(PREPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_LIST_DIR}")
 
 include(CMakeFindDependencyMacro)
 
@@ -23,7 +22,7 @@ find_dependency(libcudacxx @CUDF_MIN_VERSION_libcudacxx@)
 
 thrust_create_target(cudf::Thrust FROM_OPTIONS)
 
-set(CMAKE_MODULE_PATH ${_save_CMAKE_MODULE_PATH})
+list(POP_FRONT CMAKE_MODULE_PATH)
 
 include("${CMAKE_CURRENT_LIST_DIR}/cudf-targets.cmake")
 include("${CMAKE_CURRENT_LIST_DIR}/cudf-config-version.cmake")
