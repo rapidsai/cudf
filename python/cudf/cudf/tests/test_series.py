@@ -971,3 +971,16 @@ def test_fillna_with_nan(data, nan_as_null, fill_value):
     actual = gs.fillna(fill_value)
 
     assert_eq(expected, actual)
+
+
+def test_series_mask_mixed_dtypes_error():
+    s = cudf.Series(["a", "b", "c"])
+    with pytest.raises(
+        TypeError,
+        match=re.escape(
+            "cudf does not support mixed types, please type-cast "
+            "the column of dataframe/series and other "
+            "to same dtypes."
+        ),
+    ):
+        s.where([True, False, True], [1, 2, 3])

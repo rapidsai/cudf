@@ -554,11 +554,11 @@ def copy_if_else(object lhs, object rhs, Column boolean_mask):
             return _copy_if_else_column_column(lhs, rhs, boolean_mask)
         else:
             return _copy_if_else_column_scalar(
-                lhs, as_device_scalar(rhs, lhs.dtype), boolean_mask)
+                lhs, as_device_scalar(rhs), boolean_mask)
     else:
         if isinstance(rhs, Column):
             return _copy_if_else_scalar_column(
-                as_device_scalar(lhs, rhs.dtype), rhs, boolean_mask)
+                as_device_scalar(lhs), rhs, boolean_mask)
         else:
             if lhs is None and rhs is None:
                 return lhs

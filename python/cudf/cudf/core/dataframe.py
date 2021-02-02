@@ -1547,8 +1547,9 @@ class DataFrame(Frame, Serializable):
         if not self.index.equals(other.index):
             other = other.reindex(self.index, axis=0)
 
-        for col in self.columns:
-            this = self[col]
+        source_df = self.copy(deep=False)
+        for col in source_df.columns:
+            this = source_df[col]
             that = other[col]
 
             if errors == "raise":
@@ -1565,8 +1566,9 @@ class DataFrame(Frame, Serializable):
             # don't overwrite columns unnecessarily
             if mask.all():
                 continue
+            source_df[col] = source_df[col].where(mask, that)
 
-            self[col].where(mask, that, inplace=True)
+        self._mimic_inplace(source_df, inplace=True)
 
     def __add__(self, other):
         return self._apply_op("__add__", other)

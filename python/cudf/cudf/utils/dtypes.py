@@ -318,7 +318,7 @@ def to_cudf_compatible_scalar(val, dtype=None):
     if not is_scalar(val):
         raise ValueError(
             f"Cannot convert value of type {type(val).__name__} "
-            " to cudf scalar"
+            "to cudf scalar"
         )
 
     if isinstance(val, (np.ndarray, cp.ndarray)) and val.ndim == 0:
@@ -624,7 +624,12 @@ def find_common_type(dtypes):
         dtypes = dtypes - td_dtypes
         dtypes.add(np.result_type(*td_dtypes))
 
-    return np.find_common_type(list(dtypes), [])
+    common_dtype = np.find_common_type(list(dtypes), [])
+    if common_dtype == np.dtype("float16"):
+        # cuDF does not support float16 dtype
+        return np.dtype("float32")
+    else:
+        return common_dtype
 
 
 # Type dispatch loops similar to what are found in `np.add.types`
