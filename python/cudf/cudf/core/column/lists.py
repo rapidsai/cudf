@@ -5,6 +5,7 @@ import pickle
 import pyarrow as pa
 
 import cudf
+from cudf._lib.lists import count_elements
 from cudf.core.buffer import Buffer
 from cudf.core.column import ColumnBase, column
 from cudf.core.column.methods import ColumnMethodsMixin
@@ -203,3 +204,17 @@ class ListMethods(ColumnMethodsMixin):
             return self._return_or_inplace(
                 self._column.elements, retain_index=False
             )
+
+    def len(self):
+        """
+        Computes the length of each element in the Series/Index.
+
+        Returns
+        -------
+        Series or Index
+
+        Examples
+        --------
+        # TODO
+        """
+        return self._return_or_inplace(count_elements(self._column))

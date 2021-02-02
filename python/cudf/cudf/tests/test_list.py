@@ -89,3 +89,13 @@ def test_listdtype_hash():
     c = cudf.core.dtypes.ListDtype("int32")
 
     assert hash(a) != hash(c)
+
+
+def test_len():
+    gsr = cudf.Series([[1, 2, 3], [4, 5]])
+    psr = gsr.to_pandas()
+
+    expect = psr.map(len)
+    got = gsr.list.len()
+
+    assert_eq(expect, got, check_dtype=False)
