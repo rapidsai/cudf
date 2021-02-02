@@ -16,6 +16,7 @@ class Column:
     _base_data: Optional[Buffer]
     _base_mask: Optional[Buffer]
     _dtype: DtypeObj
+    _size: int
     _offset: int
     _null_count: int
     _children: Tuple[ColumnBase, ...]
@@ -24,7 +25,7 @@ class Column:
     def __init__(
         self,
         data: Optional[Buffer],
-        size,
+        size: int,
         dtype: Dtype,
         mask: Optional[Buffer] = None,
         offset: int = None,
