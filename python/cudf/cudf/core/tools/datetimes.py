@@ -361,7 +361,7 @@ class _UndoOffsetMeta(pd._libs.tslibs.offsets.OffsetMeta):
         return type.__subclasscheck__(cls, obj)
 
 
-class DateOffset(pd.DateOffset, metaclass=_UndoOffsetMeta):
+class DateOffset:
 
     _UNITS_TO_CODES = {
         "nanoseconds": "ns",
@@ -373,7 +373,7 @@ class DateOffset(pd.DateOffset, metaclass=_UndoOffsetMeta):
         "days": "D",
         "weeks": "W",
         "months": "M",
-        "years": "Y"
+        "years": "Y",
     }
 
     def __init__(self, n=1, normalize=False, **kwds):
@@ -448,7 +448,7 @@ class DateOffset(pd.DateOffset, metaclass=_UndoOffsetMeta):
                 "normalize not yet supported for DateOffset"
             )
 
-        all_possible_kwargs = {
+        all_possible_units = {
             "years",
             "months",
             "weeks",
@@ -470,7 +470,7 @@ class DateOffset(pd.DateOffset, metaclass=_UndoOffsetMeta):
             "nanosecond",
         }
 
-        supported_kwargs = {
+        supported_units = {
             "years",
             "months",
             "weeks",
@@ -482,21 +482,29 @@ class DateOffset(pd.DateOffset, metaclass=_UndoOffsetMeta):
             "nanoseconds",
         }
 
-        super().__init__(n=n, normalize=normalize, **kwds)
+        unsupported_units = all_possible_units - supported_units
 
-        wrong_kwargs = set(kwds.keys()).difference(supported_kwargs)
-        if len(wrong_kwargs) > 0:
+        invalid_kwds = set(kwds) - supported_units - unsupported_units
+        if invalid_kwds:
+            raise TypeError(
+                f"Keyword arguments '{','.join(list(invalid_kwds))}'"
+                " are not recognized"
+            )
+
+        unsupported_kwds = set(kwds) & unsupported_units
+        if unsupported_kwds:
             raise NotImplementedError(
-                f"Keyword arguments '{','.join(list(wrong_kwargs))}'"
+                f"Keyword arguments '{','.join(list(unsupported_kwds))}'"
                 " are not yet supported in cuDF DateOffsets"
             )
 
+        self.kwds = kwds
         kwds = self._combine_months_and_years(**kwds)
         kwds = self._combine_kwargs_to_seconds(**kwds)
 
         scalars = {}
         for k, v in kwds.items():
-            if k in all_possible_kwargs:
+            if k in all_possible_units:
                 # Months must be int16
                 if k == "months":
                     # TODO: throw for oob int16 vals
@@ -507,6 +515,9 @@ class DateOffset(pd.DateOffset, metaclass=_UndoOffsetMeta):
                 scalars[k] = cudf.Scalar(v, dtype=dtype)
 
         self._scalars = _DateOffsetScalars(scalars)
+
+    def __repr__(self):
+        return f"{self.__class__.__name__}({self.kwds}.__repr__())"
 
     def _combine_months_and_years(self, **kwargs):
         # TODO: if months is zero, don't do a binop
@@ -520,9 +531,6 @@ class DateOffset(pd.DateOffset, metaclass=_UndoOffsetMeta):
         Combine days, weeks, hours and minutes to a single
         scalar representing the total seconds
         """
-
-        # {"months":4, "years":2, "weeks": 4, "days": 2, "hours":8, "minutes:5", "seconds:12"}
-
         seconds = 0
         seconds += kwargs.pop("weeks", 0) * 604800
         seconds += kwargs.pop("days", 0) * 86400
@@ -530,7 +538,7 @@ class DateOffset(pd.DateOffset, metaclass=_UndoOffsetMeta):
         seconds += kwargs.pop("minutes", 0) * 60
         seconds += kwargs.pop("seconds", 0)
 
-        if seconds > np.iinfo('int64').max:
+        if seconds > np.iinfo("int64").max:
             raise OverflowError(
                 "Total days + weeks + hours + minutes + seconds can not exceed"
                 f" {np.iinfo('int64').max} seconds"
@@ -538,8 +546,6 @@ class DateOffset(pd.DateOffset, metaclass=_UndoOffsetMeta):
 
         if seconds != 0:
             kwargs["seconds"] = seconds
-
-        # {"months":4, "years" :2, "seconds:234234"}
 
         return kwargs
 
@@ -584,12 +590,6 @@ class DateOffset(pd.DateOffset, metaclass=_UndoOffsetMeta):
         # some logic could be implemented here for more complex cases
         # such as +1 year, -12 months
         return all([i == 0 for i in self.kwds.values()])
-
-    def __setattr__(self, name, value):
-        if not isinstance(value, _DateOffsetScalars):
-            raise AttributeError("DateOffset objects are immutable.")
-        else:
-            object.__setattr__(self, name, value)
 
     def __neg__(self):
         new_scalars = {k: -v for k, v in self.kwds.items()}
