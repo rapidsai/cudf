@@ -35,17 +35,17 @@ option(CUDA_ENABLE_LINEINFO "Enable the -lineinfo option for nvcc (useful for cu
 # cudart can be statically linked or dynamically linked. The python ecosystem wants dynamic linking
 option(CUDA_STATIC_RUNTIME "Statically link the CUDA runtime" OFF)
 
-message(STATUS "CUDF: Build with NVTX support: ${USE_NVTX}")
-message(STATUS "CUDF: Configure CMake to build tests: ${BUILD_TESTS}")
-message(STATUS "CUDF: Configure CMake to build (google) benchmarks: ${BUILD_BENCHMARKS}")
-message(STATUS "CUDF: Build cuDF shared libraries: ${BUILD_SHARED_LIBS}")
-message(STATUS "CUDF: Use a file cache for JIT compiled kernels: ${JITIFY_USE_CACHE}")
-message(STATUS "CUDF: Build and statically link Arrow libraries: ${ARROW_STATIC_LIB}")
-message(STATUS "CUDF: Build with per-thread default stream: ${PER_THREAD_DEFAULT_STREAM}")
-message(STATUS "CUDF: Auto-detect CUDA architectures to build from the GPUs on the current system: ${AUTO_DETECT_CUDA_ARCHITECTURES}")
-message(STATUS "CUDF: Disable warnings generated from deprecated declarations: ${DISABLE_DEPRECATION_WARNING}")
-message(STATUS "CUDF: Enable the -lineinfo option for nvcc (useful for cuda-memcheck / profiler: ${CUDA_ENABLE_LINEINFO}")
-message(STATUS "CUDF: Statically link the CUDA runtime: ${CUDA_STATIC_RUNTIME}")
+message(VERBOSE "CUDF: Build with NVTX support: ${USE_NVTX}")
+message(VERBOSE "CUDF: Configure CMake to build tests: ${BUILD_TESTS}")
+message(VERBOSE "CUDF: Configure CMake to build (google) benchmarks: ${BUILD_BENCHMARKS}")
+message(VERBOSE "CUDF: Build cuDF shared libraries: ${BUILD_SHARED_LIBS}")
+message(VERBOSE "CUDF: Use a file cache for JIT compiled kernels: ${JITIFY_USE_CACHE}")
+message(VERBOSE "CUDF: Build and statically link Arrow libraries: ${ARROW_STATIC_LIB}")
+message(VERBOSE "CUDF: Build with per-thread default stream: ${PER_THREAD_DEFAULT_STREAM}")
+message(VERBOSE "CUDF: Auto-detect CUDA architectures to build from the GPUs on the current system: ${AUTO_DETECT_CUDA_ARCHITECTURES}")
+message(VERBOSE "CUDF: Disable warnings generated from deprecated declarations: ${DISABLE_DEPRECATION_WARNING}")
+message(VERBOSE "CUDF: Enable the -lineinfo option for nvcc (useful for cuda-memcheck / profiler: ${CUDA_ENABLE_LINEINFO}")
+message(VERBOSE "CUDF: Statically link the CUDA runtime: ${CUDA_STATIC_RUNTIME}")
 
 # Set a default build type if none was specified
 set(DEFAULT_BUILD_TYPE "Release")
@@ -58,7 +58,7 @@ set(CUDF_CXX_DEFINITIONS "")
 set(CUDF_CUDA_DEFINITIONS "")
 
 if(NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
-    message(STATUS "CUDF: Setting build type to '${DEFAULT_BUILD_TYPE}' since none specified.")
+    message(VERBOSE "CUDF: Setting build type to '${DEFAULT_BUILD_TYPE}' since none specified.")
     set(CMAKE_BUILD_TYPE "${DEFAULT_BUILD_TYPE}" CACHE STRING  "Choose the type of build." FORCE)
     # Set the possible values of build type for cmake-gui
     set_property(CACHE CMAKE_BUILD_TYPE PROPERTY STRINGS "Debug" "Release" "MinSizeRel" "RelWithDebInfo")
@@ -67,7 +67,7 @@ endif(NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
 # Set RMM logging level
 set(RMM_LOGGING_LEVEL "INFO" CACHE STRING "Choose the logging level.")
 set_property(CACHE RMM_LOGGING_LEVEL PROPERTY STRINGS "TRACE" "DEBUG" "INFO" "WARN" "ERROR" "CRITICAL" "OFF")
-message(STATUS "CUDF: RMM_LOGGING_LEVEL = '${RMM_LOGGING_LEVEL}'.")
+message(VERBOSE "CUDF: RMM_LOGGING_LEVEL = '${RMM_LOGGING_LEVEL}'.")
 
 if (NOT CUDF_GENERATED_INCLUDE_DIR)
     set(CUDF_GENERATED_INCLUDE_DIR ${CUDF_BINARY_DIR})

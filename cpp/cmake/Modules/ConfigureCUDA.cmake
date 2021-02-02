@@ -18,8 +18,8 @@
 find_package(CUDAToolkit REQUIRED)
 
 message(STATUS "CUDF: CUDAToolkit_VERSION: ${CUDAToolkit_VERSION}")
-message(STATUS "CUDF: CUDAToolkit_VERSION_MAJOR: ${CUDAToolkit_VERSION_MAJOR}")
-message(STATUS "CUDF: CUDAToolkit_VERSION_MINOR: ${CUDAToolkit_VERSION_MINOR}")
+message(VERBOSE "CUDF: CUDAToolkit_VERSION_MAJOR: ${CUDAToolkit_VERSION_MAJOR}")
+message(VERBOSE "CUDF: CUDAToolkit_VERSION_MINOR: ${CUDAToolkit_VERSION_MINOR}")
 
 # Auto-detect available GPU compute architectures
 
@@ -59,6 +59,6 @@ endif()
 
 # Debug options
 if(CMAKE_BUILD_TYPE MATCHES Debug)
-    message(STATUS "CUDF: Building with debugging flags")
+    message(VERBOSE "CUDF: Building with debugging flags")
     list(APPEND CUDF_CUDA_FLAGS -G -Xcompiler=-rdynamic)
 endif()

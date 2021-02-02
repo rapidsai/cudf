@@ -25,14 +25,14 @@ set(Boost_NO_BOOST_CMAKE ON)
 
 find_package(Boost ${CUDF_MIN_VERSION_Boost} QUIET MODULE COMPONENTS filesystem)
 
-message(STATUS "CUDF: Boost_FOUND: ${Boost_FOUND}")
+message(VERBOSE "CUDF: Boost_FOUND: ${Boost_FOUND}")
 
 if(NOT Boost_FOUND)
     message(FATAL_ERROR "CUDF: Boost not found, please check your settings.")
 endif()
 
-message(STATUS "CUDF: Boost_LIBRARIES: ${Boost_LIBRARIES}")
-message(STATUS "CUDF: Boost_INCLUDE_DIRS: ${Boost_INCLUDE_DIRS}")
+message(VERBOSE "CUDF: Boost_LIBRARIES: ${Boost_LIBRARIES}")
+message(VERBOSE "CUDF: Boost_INCLUDE_DIRS: ${Boost_INCLUDE_DIRS}")
 
 list(APPEND CUDF_CXX_DEFINITIONS BOOST_NO_CXX14_CONSTEXPR)
 list(APPEND CUDF_CUDA_DEFINITIONS BOOST_NO_CXX14_CONSTEXPR)

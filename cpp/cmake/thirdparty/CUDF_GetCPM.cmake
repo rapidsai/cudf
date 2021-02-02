@@ -9,7 +9,7 @@ else()
 endif()
 
 if(NOT (EXISTS ${CPM_DOWNLOAD_LOCATION}))
-  message(STATUS "CUDF: Downloading CPM.cmake to ${CPM_DOWNLOAD_LOCATION}")
+  message(VERBOSE "CUDF: Downloading CPM.cmake to ${CPM_DOWNLOAD_LOCATION}")
   file(
     DOWNLOAD
     https://raw.githubusercontent.com/TheLartians/CPM.cmake/${CPM_DOWNLOAD_VERSION}/cmake/CPM.cmake

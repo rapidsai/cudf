@@ -56,7 +56,7 @@ option(BUILD_TESTS "Configure CMake to build tests" ON)
 ###################################################################################################
 # - cmake modules ---------------------------------------------------------------------------------
 
-message(STATUS "CMAKE_CURRENT_SOURCE_DIR: ${CMAKE_CURRENT_SOURCE_DIR}")
+message(VERBOSE "CMAKE_CURRENT_SOURCE_DIR: ${CMAKE_CURRENT_SOURCE_DIR}")
 set(CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake/Modules/" ${CMAKE_MODULE_PATH})
 
 include(FeatureSummary)
@@ -88,7 +88,7 @@ if(BUILD_TESTS)
     include(ConfigureGoogleTest)
 
     if(GTEST_FOUND)
-        message(STATUS "Google C++ Testing Framework (Google Test) found in ${GTEST_ROOT}")
+        message(VERBOSE "Google C++ Testing Framework (Google Test) found in ${GTEST_ROOT}")
         include_directories(${GTEST_INCLUDE_DIR})
         add_subdirectory(${CMAKE_SOURCE_DIR}/tests)
     else()
@@ -96,7 +96,7 @@ if(BUILD_TESTS)
     endif(GTEST_FOUND)
 endif(BUILD_TESTS)
         
-message(STATUS "CUDF_KAFKA_TEST_LIST set to: ${CUDF_KAFKA_TEST_LIST}")
+message(VERBOSE "CUDF_KAFKA_TEST_LIST set to: ${CUDF_KAFKA_TEST_LIST}")
 
 ###################################################################################################
 # - include paths ---------------------------------------------------------------------------------
@@ -146,8 +146,8 @@ include_directories("${CMAKE_SOURCE_DIR}/include"
 find_path(RDKAFKA_INCLUDE "librdkafka" HINTS "$ENV{RDKAFKA_ROOT}/include")
 find_library(RDKAFKA++_LIBRARY "rdkafka++" HINTS "$ENV{RDKAFKA_ROOT}/lib" "$ENV{RDKAFKA_ROOT}/build")
 
-message(STATUS "RDKAFKA: RDKAFKA++_LIBRARY set to ${RDKAFKA++_LIBRARY}")
-message(STATUS "RDKAFKA: RDKAFKA_INCLUDE set to ${RDKAFKA_INCLUDE}")
+message(VERBOSE "RDKAFKA: RDKAFKA++_LIBRARY set to ${RDKAFKA++_LIBRARY}")
+message(VERBOSE "RDKAFKA: RDKAFKA_INCLUDE set to ${RDKAFKA_INCLUDE}")
 
 target_link_libraries(cudf_kafka ${RDKAFKA++_LIBRARY})
 include_directories("${RDKAFKA_INCLUDE}")
