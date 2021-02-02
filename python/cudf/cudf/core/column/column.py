@@ -514,7 +514,7 @@ class ColumnBase(Column, Serializable):
         else:
             raise ValueError("Column has no null mask")
 
-    def copy(self, deep: bool = True) -> ColumnBase:
+    def copy(self: T, deep: bool = True) -> T:
         """Columns are immutable, so a deep copy produces a copy of the
         underlying data and mask and a shallow copy creates a new column and
         copies the references of the data and mask.
@@ -522,13 +522,16 @@ class ColumnBase(Column, Serializable):
         if deep:
             return libcudf.copying.copy_column(self)
         else:
-            return build_column(
-                self.base_data,
-                self.dtype,
-                mask=self.base_mask,
-                size=self.size,
-                offset=self.offset,
-                children=self.base_children,
+            return cast(
+                T,
+                build_column(
+                    self.base_data,
+                    self.dtype,
+                    mask=self.base_mask,
+                    size=self.size,
+                    offset=self.offset,
+                    children=self.base_children,
+                ),
             )
 
     def view(self, dtype: Dtype) -> ColumnBase:
