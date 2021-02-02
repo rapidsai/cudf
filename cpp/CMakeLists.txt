@@ -474,26 +474,19 @@ include(GNUInstallDirs)
 set(INSTALL_CONFIGDIR ${CMAKE_INSTALL_LIBDIR}/cmake/cudf)
 set(CMAKE_INSTALL_DEFAULT_COMPONENT_NAME cudf)
 
-# install target for cudf_base
-install(TARGETS cudf
+# install target for cudf_base and the proxy libcudf.so
+install(TARGETS cudf ${CUDF_PROXY_NAME}
         DESTINATION lib
         EXPORT cudf-targets)
 
-# install target for the proxy libcudf.so
-install(TARGETS ${CUDF_PROXY_NAME}
-        DESTINATION lib
-        EXPORT cudf-targets)
-
-install(DIRECTORY ${CUDF_SOURCE_DIR}/include/cudf
+install(DIRECTORY
+            ${CUDF_SOURCE_DIR}/include/cudf
+            ${CUDF_SOURCE_DIR}/include/cudf_test
         DESTINATION ${CMAKE_INSTALL_INCLUDEDIR})
 
-install(DIRECTORY ${CUDF_SOURCE_DIR}/include/cudf_test
-        DESTINATION ${CMAKE_INSTALL_INCLUDEDIR})
-
-install(DIRECTORY ${CUDF_GENERATED_INCLUDE_DIR}/include/libcxx
-        DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/libcudf)
-
-install(DIRECTORY ${CUDF_GENERATED_INCLUDE_DIR}/include/libcudacxx
+install(DIRECTORY
+            ${CUDF_GENERATED_INCLUDE_DIR}/include/libcxx
+            ${CUDF_GENERATED_INCLUDE_DIR}/include/libcudacxx
         DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/libcudf)
 
 include(CMakePackageConfigHelpers)
