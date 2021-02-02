@@ -17,6 +17,8 @@ def count_elements(Column col):
     if not isinstance(col.dtype, ListDtype):
         raise TypeError("col is not a list column.")
 
+    # shared_ptr required because lists_column_view has no default
+    # ctor
     cdef shared_ptr[lists_column_view] list_view = make_shared[lists_column_view](
         col.view()
     )
