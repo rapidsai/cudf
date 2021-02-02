@@ -4686,9 +4686,9 @@ class StringColumn(column.ColumnBase):
             children = (offsets, chars)
 
         super().__init__(
-            None,
-            size,
-            dtype,
+            data=None,
+            size=size,
+            dtype=dtype,
             mask=mask,
             offset=offset,
             null_count=null_count,

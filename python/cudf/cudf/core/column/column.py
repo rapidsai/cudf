@@ -441,7 +441,7 @@ class ColumnBase(Column, Serializable):
         else:
             return self.dropna(drop_nan=False).data_array_view
 
-    def to_array(self, fillna=None) -> "np.array":
+    def to_array(self, fillna=None) -> np.ndarray:
         """Get a dense numpy array for the data.
 
         Parameters
@@ -595,13 +595,13 @@ class ColumnBase(Column, Serializable):
         ------
         ``IndexError`` if out-of-bound
         """
-        index = np.int32(index)
-        if index < 0:
-            index = len(self) + index
-        if index > len(self) - 1 or index < 0:
+        idx = np.int32(index)
+        if idx < 0:
+            idx = len(self) + idx
+        if idx > len(self) - 1 or idx < 0:
             raise IndexError("single positional indexer is out-of-bounds")
 
-        return libcudf.copying.get_element(self, index).value
+        return libcudf.copying.get_element(self, idx).value
 
     def slice(self, start: int, stop: int, stride: int = None) -> ColumnBase:
         if start < 0:
@@ -1713,7 +1713,7 @@ def as_column(
             return as_column(arbitrary.array)
         if is_categorical_dtype(arbitrary):
             data = as_column(pa.array(arbitrary, from_pandas=True))
-        elif arbitrary.dtype == np.bool:
+        elif arbitrary.dtype == np.bool_:
             data = as_column(cupy.asarray(arbitrary), dtype=arbitrary.dtype)
         elif arbitrary.dtype.kind in ("f"):
             arb_dtype = check_cast_unsupported_dtype(arbitrary.dtype)

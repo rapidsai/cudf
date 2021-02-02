@@ -478,7 +478,8 @@ class NumericalColumn(ColumnBase):
             return super(NumericalColumn, col).fillna(fill_value, method)
 
         if np.isscalar(fill_value):
-            # castsafely to the same dtype as self
+            assert fill_value is not None
+            # cast safely to the same dtype as self
             fill_value_casted = col.dtype.type(fill_value)
             if not np.isnan(fill_value) and (fill_value_casted != fill_value):
                 raise TypeError(

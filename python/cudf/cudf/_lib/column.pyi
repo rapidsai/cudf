@@ -24,8 +24,8 @@ class Column:
     def __init__(
         self,
         data: Optional[Buffer],
+        size,
         dtype: Dtype,
-        size: int = None,
         mask: Optional[Buffer] = None,
         offset: int = None,
         null_count: int = None,

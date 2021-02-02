@@ -128,8 +128,11 @@ class TimeDeltaColumn(column.ColumnBase):
             lhs = lhs.astype(common_dtype).astype("float64")
             if isinstance(rhs, cudf.Scalar):
                 if rhs.is_valid:
-                    rhs = np.timedelta64(rhs.value)
-                    rhs = rhs.astype(common_dtype).astype("float64")
+                    rhs = cudf.Scalar(
+                        np.timedelta64(rhs.value)
+                        .astype(common_dtype)
+                        .astype("float64")
+                    )
                 else:
                     rhs = cudf.Scalar(None, "float64")
             else:
@@ -169,7 +172,7 @@ class TimeDeltaColumn(column.ColumnBase):
 
     def _binary_op_eq_ne(self, rhs: BinaryOperand) -> DtypeObj:
         if pd.api.types.is_timedelta64_dtype(rhs.dtype):
-            out_dtype = np.bool
+            out_dtype = np.bool_
         else:
             raise TypeError(
                 f"Equality of {self.dtype} with {rhs.dtype} "
@@ -179,7 +182,7 @@ class TimeDeltaColumn(column.ColumnBase):
 
     def _binary_op_lt_gt_le_ge(self, rhs: BinaryOperand) -> DtypeObj:
         if pd.api.types.is_timedelta64_dtype(rhs.dtype):
-            return np.bool
+            return np.bool_
         else:
             raise TypeError(
                 f"Invalid comparison between dtype={self.dtype}"

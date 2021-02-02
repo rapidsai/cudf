@@ -255,7 +255,7 @@ class DatetimeColumn(column.ColumnBase):
             return binop_offset(self, rhs, op)
         lhs, rhs = self, rhs
         if op in ("eq", "ne", "lt", "gt", "le", "ge"):
-            out_dtype = np.bool
+            out_dtype = np.dtype(np.bool_)  # type: Dtype
         elif op == "add" and pd.api.types.is_timedelta64_dtype(rhs.dtype):
             out_dtype = cudf.core.column.timedelta._timedelta_add_result_dtype(
                 rhs, lhs

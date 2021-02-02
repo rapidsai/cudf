@@ -1359,7 +1359,10 @@ def test_timedelta_std(data, dtype, ddof):
         assert True
     else:
         np.testing.assert_allclose(
-            expected.to_numpy(), actual.to_numpy(), rtol=1e-5, atol=0
+            expected.to_numpy().astype("float64"),
+            actual.to_numpy().astype("float64"),
+            rtol=1e-5,
+            atol=0,
         )
 
 

@@ -129,7 +129,7 @@ class CategoricalAccessor(ColumnMethodsMixin):
         return cudf.Series(self._column.codes, index=index)
 
     @property
-    def ordered(self) -> bool:
+    def ordered(self) -> Optional[bool]:
         """
         Whether the categories have an ordered relationship.
         """
@@ -753,6 +753,7 @@ class CategoricalColumn(column.ColumnBase):
     """Implements operations for Columns of Categorical type
     """
 
+    dtype: cudf.core.dtypes.CategoricalDtype
     _codes: Optional[NumericalColumn]
     _children: Tuple[NumericalColumn]
 
@@ -917,7 +918,7 @@ class CategoricalColumn(column.ColumnBase):
         return cast(cudf.core.column.NumericalColumn, self._codes)
 
     @property
-    def ordered(self) -> bool:
+    def ordered(self) -> Optional[bool]:
         return self.dtype.ordered
 
     @ordered.setter
@@ -1009,7 +1010,7 @@ class CategoricalColumn(column.ColumnBase):
             self._encode(other), size=len(self), dtype=self.codes.dtype
         )
         col = column.build_categorical_column(
-            categories=self.dtype.categories,
+            categories=self.dtype.categories._values,
             codes=column.as_column(ary),
             mask=self.base_mask,
             ordered=self.dtype.ordered,
@@ -1021,7 +1022,7 @@ class CategoricalColumn(column.ColumnBase):
     ) -> Tuple[CategoricalColumn, NumericalColumn]:
         codes, inds = self.as_numerical.sort_by_values(ascending, na_position)
         col = column.build_categorical_column(
-            categories=self.dtype.categories,
+            categories=self.dtype.categories._values,
             codes=column.as_column(codes.base_data, dtype=codes.dtype),
             mask=codes.base_mask,
             size=codes.size,
@@ -1216,7 +1217,7 @@ class CategoricalColumn(column.ColumnBase):
         result = super().fillna(value=fill_value, method=method)
 
         result = column.build_categorical_column(
-            categories=self.dtype.categories,
+            categories=self.dtype.categories._values,
             codes=column.as_column(result.base_data, dtype=result.dtype),
             offset=result.offset,
             size=result.size,
@@ -1244,7 +1245,8 @@ class CategoricalColumn(column.ColumnBase):
     def is_monotonic_increasing(self) -> bool:
         if not hasattr(self, "_is_monotonic_increasing"):
             self._is_monotonic_increasing = (
-                self.ordered and self.as_numerical.is_monotonic_increasing
+                bool(self.ordered)
+                and self.as_numerical.is_monotonic_increasing
             )
         return self._is_monotonic_increasing
 
@@ -1252,7 +1254,8 @@ class CategoricalColumn(column.ColumnBase):
     def is_monotonic_decreasing(self) -> bool:
         if not hasattr(self, "_is_monotonic_decreasing"):
             self._is_monotonic_decreasing = (
-                self.ordered and self.as_numerical.is_monotonic_decreasing
+                bool(self.ordered)
+                and self.as_numerical.is_monotonic_decreasing
             )
         return self._is_monotonic_decreasing
 
@@ -1331,7 +1334,7 @@ class CategoricalColumn(column.ColumnBase):
             )
         else:
             return column.build_categorical_column(
-                categories=self.dtype.categories,
+                categories=self.dtype.categories._values,
                 codes=column.as_column(
                     self.codes.base_data, dtype=self.codes.dtype
                 ),
