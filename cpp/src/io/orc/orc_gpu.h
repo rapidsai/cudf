@@ -21,6 +21,7 @@
 #include <io/comp/gpuinflate.h>
 #include <io/orc/orc_common.h>
 #include <io/statistics/column_stats.h>
+#include <cudf/types.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 
@@ -67,7 +68,7 @@ enum StreamIndexType {
 
 /**
  * @brief Struct to describe the output of a string datatype
- **/
+ */
 struct nvstrdesc_s {
   const char *ptr;
   size_t count;
@@ -75,7 +76,7 @@ struct nvstrdesc_s {
 
 /**
  * @brief Struct to describe a single entry in the global dictionary
- **/
+ */
 struct DictionaryEntry {
   uint32_t pos;  // Position in data stream
   uint32_t len;  // Length in data stream
@@ -83,12 +84,12 @@ struct DictionaryEntry {
 
 /**
  * @brief Mask to indicate conversion from decimals to float64
- **/
+ */
 constexpr int orc_decimal2float64_scale = 0x80;
 
 /**
  * @brief Struct to describe per stripe's column information
- **/
+ */
 struct ColumnDesc {
   const uint8_t *streams[CI_NUM_STREAMS];  // ptr to data stream index
   uint32_t strm_id[CI_NUM_STREAMS];        // stream ids
@@ -112,7 +113,7 @@ struct ColumnDesc {
 
 /**
  * @brief Struct to describe a groups of row belonging to a column stripe
- **/
+ */
 struct RowGroup {
   uint32_t chunk_id;        // Column chunk this entry belongs to
   uint32_t strm_offset[2];  // Index offset for CI_DATA and CI_DATA2 streams
@@ -121,12 +122,13 @@ struct RowGroup {
 
 /**
  * @brief Struct to describe an encoder data chunk
- **/
+ */
 struct EncChunk {
   uint8_t *streams[CI_NUM_STREAMS];   // encoded output
   int32_t strm_id[CI_NUM_STREAMS];    // stream id or -1 if not present
   uint32_t strm_len[CI_NUM_STREAMS];  // in: max length, out: actual length
   const uint32_t *valid_map_base;     // base ptr of input valid bit map
+  size_type column_offset;            // index of the first element relative to the base memory
   const void *column_data_base;       // base ptr of input column data
   uint32_t start_row;                 // start row of this chunk
   uint32_t num_rows;                  // number of rows in this chunk
@@ -139,7 +141,7 @@ struct EncChunk {
 
 /**
  * @brief Struct to describe a column stream within a stripe
- **/
+ */
 struct StripeStream {
   size_t bfr_offset;        // Offset of this stream in compressed buffer
   uint32_t stream_size;     // Size of stream in bytes
@@ -153,9 +155,10 @@ struct StripeStream {
 
 /**
  * @brief Struct to describe a dictionary chunk
- **/
+ */
 struct DictionaryChunk {
   const uint32_t *valid_map_base;  // base ptr of input valid bit map
+  size_type column_offset;         // index of the first element relative to the base memory
   const void *column_data_base;    // base ptr of column data (ptr,len pair)
   uint32_t *dict_data;             // dictionary data (index of non-null rows)
   uint32_t *dict_index;  // row indices of corresponding string (row from dictionary index)
@@ -170,7 +173,7 @@ struct DictionaryChunk {
 
 /**
  * @brief Struct to describe a dictionary
- **/
+ */
 struct StripeDictionary {
   const void *column_data_base;  // base ptr of column data (ptr,len pair)
   uint32_t *dict_data;           // row indices of corresponding string (row from dictionary index)

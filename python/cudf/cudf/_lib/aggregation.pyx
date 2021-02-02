@@ -121,6 +121,18 @@ cdef class _AggregationFactory:
         return agg
 
     @classmethod
+    def idxmin(cls):
+        cdef Aggregation agg = Aggregation.__new__(Aggregation)
+        agg.c_obj = move(libcudf_aggregation.make_argmin_aggregation())
+        return agg
+
+    @classmethod
+    def idxmax(cls):
+        cdef Aggregation agg = Aggregation.__new__(Aggregation)
+        agg.c_obj = move(libcudf_aggregation.make_argmax_aggregation())
+        return agg
+
+    @classmethod
     def mean(cls):
         cdef Aggregation agg = Aggregation.__new__(Aggregation)
         agg.c_obj = move(libcudf_aggregation.make_mean_aggregation())

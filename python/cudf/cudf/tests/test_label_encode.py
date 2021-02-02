@@ -123,8 +123,3 @@ def test_label_encode_dtype(ncats, cat_dtype):
     cats = s.unique().astype(s.dtype)
     encoded_col = s.label_encoding(cats=cats)
     np.testing.assert_equal(encoded_col.dtype, cat_dtype)
-
-
-if __name__ == "__main__":
-    test_label_encode()
-    test_label_encode_drop_one()

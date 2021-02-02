@@ -16,10 +16,10 @@
 
 #include <cudf/column/column_factories.hpp>
 #include <cudf/copying.hpp>
-#include <cudf/detail/binaryop.hpp>
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/round.hpp>
+#include <cudf/detail/unary.hpp>
 #include <cudf/fixed_point/fixed_point.hpp>
 #include <cudf/round.hpp>
 #include <cudf/scalar/scalar.hpp>
@@ -181,7 +181,8 @@ struct half_even_negative {
     auto const down_over_n = e / n;            // use this to determine HALF_EVEN case
     auto const down        = down_over_n * n;  // result from rounding down
     auto const diff        = generic_abs(e - down);
-    auto const adjustment  = (diff > n / 2) or (diff == n / 2 && down_over_n % 2 == 1) ? n : 0;
+    auto const adjustment =
+      (diff > n / 2) or (diff == n / 2 && generic_abs(down_over_n) % 2 == 1) ? n : 0;
     return down + generic_sign(e) * adjustment;
   }
 };
@@ -237,17 +238,14 @@ std::unique_ptr<column> round_with(column_view const& input,
   using Type                   = device_storage_type_t<T>;
   using FixedPointRoundFunctor = RoundFunctor<Type>;
 
-  // if rounding to more precision than fixed_point is capable of, just need to rescale
-  // note: decimal_places has the opposite sign of numeric::scale_type (therefore have to negate)
-  if (input.type().scale() > -decimal_places) {
-    // TODO replace this cudf::binary_operation with a cudf::cast or cudf::rescale when available
-    auto const diff   = input.type().scale() - (-decimal_places);
-    auto const scalar = cudf::make_fixed_point_scalar<T>(std::pow(10, diff), scale_type{-diff});
-    return cudf::detail::binary_operation(
-      input, *scalar, cudf::binary_operator::MUL, {}, stream, mr);
-  }
+  if (input.type().scale() == -decimal_places)
+    return std::make_unique<cudf::column>(input, stream, mr);
 
   auto const result_type = data_type{input.type().id(), scale_type{-decimal_places}};
+
+  // if rounding to more precision than fixed_point is capable of, just need to rescale
+  // note: decimal_places has the opposite sign of numeric::scale_type (therefore have to negate)
+  if (input.type().scale() > -decimal_places) return cudf::detail::cast(input, result_type);
 
   auto result = cudf::make_fixed_width_column(
     result_type, input.size(), copy_bitmask(input, stream, mr), input.null_count(), stream, mr);

@@ -17,7 +17,7 @@
 /**
  * @file reader_impl.cu
  * @brief cuDF-IO CSV reader class implementation
- **/
+ */
 
 #include "reader_impl.hpp"
 
@@ -62,7 +62,7 @@ using namespace cudf::io;
  * @param[in] num_columns Number of columns in the CSV file (optional)
  *
  * @return Estimated maximum size of a row, in bytes
- **/
+ */
 constexpr size_t calculateMaxRowSize(int num_columns = 0) noexcept
 {
   constexpr size_t max_row_bytes = 16 * 1024;  // 16KB

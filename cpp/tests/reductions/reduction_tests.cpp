@@ -155,8 +155,6 @@ TYPED_TEST(MinMaxReductionTest, MinMax)
 
   // test with some nulls
   cudf::test::fixed_width_column_wrapper<T> col_nulls = construct_null_column(v, host_bools);
-  cudf::size_type valid_count =
-    cudf::column_view(col_nulls).size() - cudf::column_view(col_nulls).null_count();
 
   auto r_min = replace_nulls(v, host_bools, std::numeric_limits<T>::max());
   auto r_max = replace_nulls(v, host_bools, std::numeric_limits<T>::lowest());
@@ -177,9 +175,8 @@ TYPED_TEST(MinMaxReductionTest, MinMax)
   EXPECT_EQ(min_null_result->value(), expected_min_null_result);
   EXPECT_EQ(max_null_result->value(), expected_max_null_result);
 
-  // test with some nulls
+  // test with all null
   cudf::test::fixed_width_column_wrapper<T> col_all_nulls = construct_null_column(v, all_null);
-  cudf::size_type all_null_valid_count                    = 0;
 
   auto all_null_r_min = replace_nulls(v, all_null, std::numeric_limits<T>::max());
   auto all_null_r_max = replace_nulls(v, all_null, std::numeric_limits<T>::lowest());
@@ -231,10 +228,8 @@ TYPED_TEST(SumReductionTest, Sum)
 
   // test with nulls
   cudf::test::fixed_width_column_wrapper<T> col_nulls = construct_null_column(v, host_bools);
-  cudf::size_type valid_count =
-    cudf::column_view(col_nulls).size() - cudf::column_view(col_nulls).null_count();
-  auto r                = replace_nulls(v, host_bools, T{0});
-  T expected_null_value = std::accumulate(r.begin(), r.end(), T{0});
+  auto r                                              = replace_nulls(v, host_bools, T{0});
+  T expected_null_value                               = std::accumulate(r.begin(), r.end(), T{0});
 
   this->reduction_test(
     col_nulls, expected_null_value, this->ret_non_arithmetic, cudf::make_sum_aggregation());
@@ -264,10 +259,8 @@ TYPED_TEST(ReductionTest, Product)
 
   // test with nulls
   cudf::test::fixed_width_column_wrapper<T> col_nulls = construct_null_column(v, host_bools);
-  cudf::size_type valid_count =
-    cudf::column_view(col_nulls).size() - cudf::column_view(col_nulls).null_count();
-  auto r                        = replace_nulls(v, host_bools, T{1});
-  TypeParam expected_null_value = calc_prod(r);
+  auto r                                              = replace_nulls(v, host_bools, T{1});
+  TypeParam expected_null_value                       = calc_prod(r);
 
   this->reduction_test(
     col_nulls, expected_null_value, this->ret_non_arithmetic, cudf::make_product_aggregation());
@@ -294,10 +287,8 @@ TYPED_TEST(ReductionTest, SumOfSquare)
 
   // test with nulls
   cudf::test::fixed_width_column_wrapper<T> col_nulls = construct_null_column(v, host_bools);
-  cudf::size_type valid_count =
-    cudf::column_view(col_nulls).size() - cudf::column_view(col_nulls).null_count();
-  auto r                = replace_nulls(v, host_bools, T{0});
-  T expected_null_value = calc_reduction(r);
+  auto r                                              = replace_nulls(v, host_bools, T{0});
+  T expected_null_value                               = calc_reduction(r);
 
   this->reduction_test(col_nulls,
                        expected_null_value,
@@ -1068,11 +1059,31 @@ TYPED_TEST(FixedPointTestBothReps, FixedPointReductionProduct)
   using RepType    = cudf::device_storage_type_t<decimalXX>;
   using fp_wrapper = cudf::test::fixed_point_column_wrapper<RepType>;
 
-  for (int i = -1; i <= 0; ++i) {
+  for (auto const i : {0, -1}) {
     auto const scale    = scale_type{i};
     auto const column   = fp_wrapper{{1, 2, 3, 1, 2, 3}, scale};
     auto const out_type = static_cast<cudf::column_view>(column).type();
     auto const expected = decimalXX{scaled_integer<RepType>{36, scale_type{i * 6}}};
+
+    auto const result        = cudf::reduce(column, cudf::make_product_aggregation(), out_type);
+    auto const result_scalar = static_cast<cudf::scalar_type_t<decimalXX> *>(result.get());
+
+    EXPECT_EQ(result_scalar->fixed_point_value(), expected);
+  }
+}
+
+TYPED_TEST(FixedPointTestBothReps, FixedPointReductionProductWithNulls)
+{
+  using namespace numeric;
+  using decimalXX  = TypeParam;
+  using RepType    = cudf::device_storage_type_t<decimalXX>;
+  using fp_wrapper = cudf::test::fixed_point_column_wrapper<RepType>;
+
+  for (auto const i : {0, -1}) {
+    auto const scale    = scale_type{i};
+    auto const column   = fp_wrapper{{1, 2, 3, 1, 2, 3}, {1, 1, 1, 0, 0, 0}, scale};
+    auto const out_type = static_cast<cudf::column_view>(column).type();
+    auto const expected = decimalXX{scaled_integer<RepType>{6, scale_type{i * 3}}};
 
     auto const result        = cudf::reduce(column, cudf::make_product_aggregation(), out_type);
     auto const result_scalar = static_cast<cudf::scalar_type_t<decimalXX> *>(result.get());
@@ -1088,7 +1099,7 @@ TYPED_TEST(FixedPointTestBothReps, FixedPointReductionSum)
   using RepType    = cudf::device_storage_type_t<decimalXX>;
   using fp_wrapper = cudf::test::fixed_point_column_wrapper<RepType>;
 
-  for (int i = -3; i <= 0; ++i) {
+  for (auto const i : {0, -1, -2, -3}) {
     auto const scale = scale_type{i};
 
     auto const column   = fp_wrapper{{1, 2, 3, 4}, scale};
@@ -1133,7 +1144,7 @@ TYPED_TEST(FixedPointTestBothReps, FixedPointReductionSumFractional)
   using RepType    = cudf::device_storage_type_t<decimalXX>;
   using fp_wrapper = cudf::test::fixed_point_column_wrapper<RepType>;
 
-  for (int i = -3; i <= 0; ++i) {
+  for (auto const i : {0, -1, -2, -3}) {
     auto const scale    = scale_type{i};
     auto const column   = fp_wrapper{{111, 222, 333}, scale};
     auto const out_type = static_cast<cudf::column_view>(column).type();
@@ -1153,7 +1164,7 @@ TYPED_TEST(FixedPointTestBothReps, FixedPointReductionSumLarge)
   using RepType    = cudf::device_storage_type_t<decimalXX>;
   using fp_wrapper = cudf::test::fixed_point_column_wrapper<RepType>;
 
-  for (int i = -2; i <= 0; ++i) {
+  for (auto const i : {0, -1, -2}) {
     auto const scale          = scale_type{i};
     auto f                    = thrust::make_counting_iterator(0);
     auto const values         = std::vector<RepType>(f, f + 1000);
@@ -1176,7 +1187,7 @@ TYPED_TEST(FixedPointTestBothReps, FixedPointReductionMin)
   using RepType    = cudf::device_storage_type_t<decimalXX>;
   using fp_wrapper = cudf::test::fixed_point_column_wrapper<RepType>;
 
-  for (int i = -3; i <= 0; ++i) {
+  for (auto const i : {0, -1, -2, -3}) {
     auto const scale    = scale_type{i};
     auto const ONE      = decimalXX{scaled_integer<RepType>{1, scale}};
     auto const column   = fp_wrapper{{1, 2, 3, 4}, scale};
@@ -1196,7 +1207,7 @@ TYPED_TEST(FixedPointTestBothReps, FixedPointReductionMinLarge)
   using RepType    = cudf::device_storage_type_t<decimalXX>;
   using fp_wrapper = cudf::test::fixed_point_column_wrapper<RepType>;
 
-  for (int i = -3; i <= 0; ++i) {
+  for (auto const i : {0, -1, -2, -3}) {
     auto const scale = scale_type{i};
     auto f = cudf::test::make_counting_transform_iterator(0, [](auto e) { return e % 43; });
     auto const column   = fp_wrapper{f, f + 5000, scale};
@@ -1217,7 +1228,7 @@ TYPED_TEST(FixedPointTestBothReps, FixedPointReductionMax)
   using RepType    = cudf::device_storage_type_t<decimalXX>;
   using fp_wrapper = cudf::test::fixed_point_column_wrapper<RepType>;
 
-  for (int i = -3; i <= 0; ++i) {
+  for (auto const i : {0, -1, -2, -3}) {
     auto const scale    = scale_type{i};
     auto const FOUR     = decimalXX{scaled_integer<RepType>{4, scale}};
     auto const column   = fp_wrapper{{1, 2, 3, 4}, scale};
@@ -1237,7 +1248,7 @@ TYPED_TEST(FixedPointTestBothReps, FixedPointReductionMaxLarge)
   using RepType    = cudf::device_storage_type_t<decimalXX>;
   using fp_wrapper = cudf::test::fixed_point_column_wrapper<RepType>;
 
-  for (int i = -3; i <= 0; ++i) {
+  for (auto const i : {0, -1, -2, -3}) {
     auto const scale = scale_type{i};
     auto f = cudf::test::make_counting_transform_iterator(0, [](auto e) { return e % 43; });
     auto const column   = fp_wrapper{f, f + 5000, scale};
@@ -1258,7 +1269,7 @@ TYPED_TEST(FixedPointTestBothReps, FixedPointReductionNUnique)
   using RepType    = cudf::device_storage_type_t<decimalXX>;
   using fp_wrapper = cudf::test::fixed_point_column_wrapper<RepType>;
 
-  for (int i = -3; i <= 0; ++i) {
+  for (auto const i : {0, -1, -2, -3}) {
     auto const scale    = scale_type{i};
     auto const column   = fp_wrapper{{1, 1, 2, 2, 3, 3, 4, 4}, scale};
     auto const out_type = static_cast<cudf::column_view>(column).type();
@@ -1267,6 +1278,111 @@ TYPED_TEST(FixedPointTestBothReps, FixedPointReductionNUnique)
     auto const result_scalar = static_cast<cudf::scalar_type_t<cudf::size_type> *>(result.get());
 
     EXPECT_EQ(result_scalar->value(), 4);
+  }
+}
+
+TYPED_TEST(FixedPointTestBothReps, FixedPointReductionSumOfSquares)
+{
+  using namespace numeric;
+  using decimalXX  = TypeParam;
+  using RepType    = cudf::device_storage_type_t<decimalXX>;
+  using fp_wrapper = cudf::test::fixed_point_column_wrapper<RepType>;
+
+  for (auto const i : {0, -1, -2}) {
+    auto const scale    = scale_type{i};
+    auto const column   = fp_wrapper{{1, 2, 3, 4}, scale};
+    auto const out_type = static_cast<cudf::column_view>(column).type();
+    auto const expected = decimalXX{scaled_integer<RepType>{30, scale_type{i * 2}}};
+
+    auto const result = cudf::reduce(column, cudf::make_sum_of_squares_aggregation(), out_type);
+    auto const result_scalar = static_cast<cudf::scalar_type_t<decimalXX> *>(result.get());
+
+    EXPECT_EQ(result_scalar->fixed_point_value(), expected);
+  }
+}
+
+TYPED_TEST(FixedPointTestBothReps, FixedPointReductionMedianOddNumberOfElements)
+{
+  using namespace numeric;
+  using decimalXX  = TypeParam;
+  using RepType    = cudf::device_storage_type_t<decimalXX>;
+  using fp_wrapper = cudf::test::fixed_point_column_wrapper<RepType>;
+
+  for (auto const i : {0, -1, -2, -3, -4}) {
+    auto const scale    = scale_type{i};
+    auto const column   = fp_wrapper{{1, 2, 2, 3, 4}, scale};
+    auto const out_type = static_cast<cudf::column_view>(column).type();
+    auto const expected = decimalXX{scaled_integer<RepType>{2, scale}};
+
+    auto const result        = cudf::reduce(column, cudf::make_median_aggregation(), out_type);
+    auto const result_scalar = static_cast<cudf::scalar_type_t<decimalXX> *>(result.get());
+
+    EXPECT_EQ(result_scalar->fixed_point_value(), expected);
+  }
+}
+
+TYPED_TEST(FixedPointTestBothReps, FixedPointReductionMedianEvenNumberOfElements)
+{
+  using namespace numeric;
+  using decimalXX  = TypeParam;
+  using RepType    = cudf::device_storage_type_t<decimalXX>;
+  using fp_wrapper = cudf::test::fixed_point_column_wrapper<RepType>;
+
+  for (auto const i : {0, -1, -2, -3, -4}) {
+    auto const scale    = scale_type{i};
+    auto const column   = fp_wrapper{{10, 20, 20, 30, 30, 40}, scale};
+    auto const out_type = static_cast<cudf::column_view>(column).type();
+    auto const expected = decimalXX{scaled_integer<RepType>{25, scale}};
+
+    auto const result        = cudf::reduce(column, cudf::make_median_aggregation(), out_type);
+    auto const result_scalar = static_cast<cudf::scalar_type_t<decimalXX> *>(result.get());
+
+    EXPECT_EQ(result_scalar->fixed_point_value(), expected);
+  }
+}
+
+TYPED_TEST(FixedPointTestBothReps, FixedPointReductionQuantile)
+{
+  using namespace numeric;
+  using decimalXX  = TypeParam;
+  using RepType    = cudf::device_storage_type_t<decimalXX>;
+  using fp_wrapper = cudf::test::fixed_point_column_wrapper<RepType>;
+
+  for (auto const i : {0, -1, -2, -3, -4}) {
+    auto const scale    = scale_type{i};
+    auto const column   = fp_wrapper{{1, 2, 3, 4, 5}, scale};
+    auto const out_type = static_cast<cudf::column_view>(column).type();
+
+    for (auto const i : {0, 1, 2, 3, 4}) {
+      auto const expected = decimalXX{scaled_integer<RepType>{i + 1, scale}};
+      auto const result   = cudf::reduce(
+        column, cudf::make_quantile_aggregation({i / 4.0}, cudf::interpolation::LINEAR), out_type);
+      auto const result_scalar = static_cast<cudf::scalar_type_t<decimalXX> *>(result.get());
+      EXPECT_EQ(result_scalar->fixed_point_value(), expected);
+    }
+  }
+}
+
+TYPED_TEST(FixedPointTestBothReps, FixedPointReductionNthElement)
+{
+  using namespace numeric;
+  using decimalXX  = TypeParam;
+  using RepType    = cudf::device_storage_type_t<decimalXX>;
+  using fp_wrapper = cudf::test::fixed_point_column_wrapper<RepType>;
+
+  for (auto const i : {0, -1, -2, -3, -4}) {
+    auto const scale    = scale_type{i};
+    auto const values   = std::vector<RepType>{4104, 42, 1729, 55};
+    auto const column   = fp_wrapper{values.cbegin(), values.cend(), scale};
+    auto const out_type = static_cast<cudf::column_view>(column).type();
+
+    for (auto const i : {0, 1, 2, 3}) {
+      auto const expected = decimalXX{scaled_integer<RepType>{values[i], scale}};
+      auto const result   = cudf::reduce(
+        column, cudf::make_nth_element_aggregation(i, cudf::null_policy::INCLUDE), out_type);
+      auto const result_scalar = static_cast<cudf::scalar_type_t<decimalXX> *>(result.get());
+      EXPECT_EQ(result_scalar->fixed_point_value(), expected);
+    }
   }
 }
 
@@ -1626,7 +1742,7 @@ TYPED_TEST(DictionaryReductionTest, NthElement)
   // test with nulls
   std::vector<bool> validity({1, 1, 0, 1, 1, 1, 0, 1});
   cudf::test::dictionary_column_wrapper<T> col_nulls(v.begin(), v.end(), validity.begin());
-  cudf::size_type valid_count = std::count(validity.begin(), validity.end(), true);
+
   this->reduction_test(col_nulls,
                        v[n],  // expected_value,
                        true,

@@ -331,7 +331,6 @@ struct column_gatherer_impl<list_view, MapItRoot> {
 /**
  * @brief Function object for gathering a type-erased
  * column. To be used with the cudf::type_dispatcher.
- *
  */
 struct column_gatherer {
   /**
