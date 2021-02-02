@@ -498,6 +498,11 @@ class DateOffset:
                 " are not yet supported in cuDF DateOffsets"
             )
 
+        if any([val != int(val) for val in kwds.values()]):
+            raise ValueError(
+                "Non-integer periods not supported"
+            )
+
         self.kwds = kwds
         kwds = self._combine_months_and_years(**kwds)
         kwds = self._combine_kwargs_to_seconds(**kwds)
