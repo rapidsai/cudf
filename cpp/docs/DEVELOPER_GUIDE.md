@@ -37,8 +37,8 @@ A type representing a single element of a data type.
 
 ### Table
 
-A table is a collection of columns. A table is the C++ equivalent to a cuDF Python
-[data frame](https://docs.rapids.ai/api/cudf/stable/api.html#dataframe).
+A table is a collection of columns with equal number of elements. A table is the C++ equivalent to 
+a cuDF Python [data frame](https://docs.rapids.ai/api/cudf/stable/api.html#dataframe).
 
 ### View
 
@@ -941,6 +941,40 @@ has `N + 1` children, where `N` is the number of fields in the struct.
    
 With this representation, `child[0][offsets[i]]` is the first field of struct `i`, 
 `child[1][offsets[i]]` is the second field of struct `i`, etc.
+
+As defined in the [Apache Arrow specification](https://arrow.apache.org/docs/format/Columnar.html#struct-layout),
+in addition to the struct column's null mask, each struct field column has its own optional null
+mask. A struct field's validity can vary independently from the corresponding struct row. For
+instance, a non-null struct row might have a null field. However, the fields of a null struct row
+are deemed to be null as well. For example, consider a struct column of type 
+`STRUCT<FLOAT32, INT32>`. If the contents are `[ {1.0, 2}, {4.0, 5}, null, {8.0, null} ]`, the
+struct column's layout is as follows. (Note that null masks should be read from right to left.)
+
+```
+{
+  type = STRUCT
+  null_mask = [1, 1, 0, 1]
+  null_count = 1
+  children = {
+    {   
+      type = FLOAT32
+      data =       [1.0, 4.0, X, 8.0]
+      null_mask  = [  1,   1, 0,   1]
+      null_count = 1
+    },  
+    {   
+      type = INT32
+      data =       [2, 5, X, X]
+      null_mask  = [1, 1, 0, 0]
+      null_count = 2
+    }  
+  }   
+}
+```
+
+The last struct row (index 3) is not null, but has a null value in the INT32 field. Also, row 2 of 
+the struct column is null, making its corresponding fields also null. Therefore, bit 2 is unset in 
+the null masks of both struct fields.
 
 ## Dictionary columns
 

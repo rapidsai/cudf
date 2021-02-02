@@ -26,7 +26,9 @@ groupby).  Here are some other guidelines.
    but also applies to Thrust and CUB algorithm calls with lambdas / functors. 
 
  * For anything involving strings or lists, test exhaustive combinations of empty strings/lists,
-   null strings/lists and strings/lists with null elements.
+   null strings/lists and strings/lists with null elements. 
+   
+ * Strings tests should include a mixture of non-ASCII UTF-8 characters like `é` in test data.
 
  * Test sliced columns as input (that is, columns that have a nonzero `offset`). This is an easy to
    forget case.
