@@ -362,6 +362,20 @@ class _UndoOffsetMeta(pd._libs.tslibs.offsets.OffsetMeta):
 
 
 class DateOffset(pd.DateOffset, metaclass=_UndoOffsetMeta):
+
+    _UNITS_TO_CODES = {
+        "nanoseconds": "ns",
+        "microseconds": "us",
+        "milliseconds": "ms",
+        "seconds": "s",
+        "minutes": "m",
+        "hours": "h",
+        "days": "D",
+        "weeks": "W",
+        "months": "M",
+        "years": "Y"
+    }
+
     def __init__(self, n=1, normalize=False, **kwds):
         """
         An object used for binary ops where calendrical arithmetic
@@ -470,61 +484,63 @@ class DateOffset(pd.DateOffset, metaclass=_UndoOffsetMeta):
 
         super().__init__(n=n, normalize=normalize, **kwds)
 
-        kwds = self._combine_months_and_years(**kwds)
-        kwds = self._combine_timedeltas_to_widest(**kwds)
-
-        scalars = {}
-        for k, v in kwds.items():
-            if k in all_possible_kwargs:
-                # Months must be int16
-                if k == "months":
-                    dtype = "int16"
-                elif k == "nanoseconds":
-                    dtype = "timedelta64[ns]"
-                else:
-                    dtype = None
-                scalars[k] = cudf.Scalar(v, dtype=dtype)
-
         wrong_kwargs = set(kwds.keys()).difference(supported_kwargs)
         if len(wrong_kwargs) > 0:
             raise NotImplementedError(
                 f"Keyword arguments '{','.join(list(wrong_kwargs))}'"
                 " are not yet supported in cuDF DateOffsets"
             )
+
+        kwds = self._combine_months_and_years(**kwds)
+        kwds = self._combine_kwargs_to_seconds(**kwds)
+
+        scalars = {}
+        for k, v in kwds.items():
+            if k in all_possible_kwargs:
+                # Months must be int16
+                if k == "months":
+                    # TODO: throw for oob int16 vals
+                    dtype = "int16"
+                else:
+                    unit = self._UNITS_TO_CODES[k]
+                    dtype = np.dtype(f"timedelta64[{unit}]")
+                scalars[k] = cudf.Scalar(v, dtype=dtype)
+
         self._scalars = _DateOffsetScalars(scalars)
 
     def _combine_months_and_years(self, **kwargs):
+        # TODO: if months is zero, don't do a binop
         kwargs["months"] = kwargs.pop("years", 0) * 12 + kwargs.pop(
             "months", 0
         )
         return kwargs
 
-    def _combine_timedeltas_to_widest(self, **kwargs):
+    def _combine_kwargs_to_seconds(self, **kwargs):
         """
-        Combine the provided timedeltas in kwargs to the widest resolution.
-        kwargs = {"years": 5, "months": 2, "seconds": 1000}
+        Combine days, weeks, hours and minutes to a single
+        scalar representing the total seconds
         """
-        out = np.timedelta(0, "W")
 
-        max_unit = "week"
+        # {"months":4, "years":2, "weeks": 4, "days": 2, "hours":8, "minutes:5", "seconds:12"}
 
-        units_to_codes = {
-            "weeks": "W",
-            "days": "D",
-            "hours": "h",
-            "minutes": "m",
-            "seconds": "s",
-            "milliseconds": "ms",
-            "microseconds": "us",
-            "nanoseconds": "ns",
-        }
+        seconds = 0
+        seconds += kwargs.pop("weeks", 0) * 604800
+        seconds += kwargs.pop("days", 0) * 86400
+        seconds += kwargs.pop("hours", 0) * 3600
+        seconds += kwargs.pop("minutes", 0) * 60
+        seconds += kwargs.pop("seconds", 0)
 
-        for unit, code in units_to_codes.items():
-            if unit in kwargs:
-                max_unit = unit
-                out += np.timedelta64(kwargs[unit], code)
+        if seconds > np.iinfo('int64').max:
+            raise OverflowError(
+                "Total days + weeks + hours + minutes + seconds can not exceed"
+                f" {np.iinfo('int64').max} seconds"
+            )
 
-        kwargs[max_unit] = out
+        if seconds != 0:
+            kwargs["seconds"] = seconds
+
+        # {"months":4, "years" :2, "seconds:234234"}
+
         return kwargs
 
     def _datetime_binop(self, datetime_col, op, reflect=False):
