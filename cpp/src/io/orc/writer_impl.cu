@@ -593,7 +593,7 @@ rmm::device_buffer writer::impl::encode_columns(orc_column_view *columns,
           // add new object
           std::tie(curr_cnt_in, unused) = validity_check_inputs.insert({i, {columns[i].nulls()}});
         }
-        // appand row group start and end to existing object
+        // append row group start and end to existing object
         curr_cnt_in->second.indices.push_back(ck->start_row);
         curr_cnt_in->second.indices.push_back(ck->start_row + ck->num_rows);
       }
