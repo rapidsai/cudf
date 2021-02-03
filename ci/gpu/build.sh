@@ -206,7 +206,7 @@ gpuci_logger "Test notebooks"
 ${WORKSPACE}/ci/gpu/test-notebooks.sh 2>&1 | tee nbtest.log
 python ${WORKSPACE}/ci/utils/nbtestlog2junitxml.py nbtest.log
 
-if [ -n "\${CODECOV_TOKEN}" ]; then
+if [ -n "${CODECOV_TOKEN}" ]; then
     codecov -t $CODECOV_TOKEN
 fi
 
