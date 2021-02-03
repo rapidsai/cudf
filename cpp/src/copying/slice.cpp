@@ -23,9 +23,9 @@
 
 #include <rmm/cuda_stream_view.hpp>
 
+#include <cudf_test/column_wrapper.hpp> // TODO replace with cudf header
+
 #include <algorithm>
-#include "cudf_test/column_wrapper.hpp"
-#include "thrust/iterator/transform_iterator.h"
 
 namespace cudf {
 namespace detail {
@@ -38,9 +38,7 @@ std::vector<column_view> slice(column_view const& input,
   if (indices.empty()) return {};
 
   auto null_counts = cudf::detail::segmented_count_unset_bits(input.null_mask(), indices, stream);
-
-  auto f = cudf::test::make_counting_transform_iterator(0, [&](auto i) { return input.child(i); });
-  auto const children = std::vector<column_view>(f, f + input.num_children());
+  auto const children = std::vector<column_view>(input.child_begin(), input.child_end());
 
   auto op = [&](auto i) {
     auto begin = indices[2 * i];
