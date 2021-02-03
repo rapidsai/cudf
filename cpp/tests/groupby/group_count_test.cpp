@@ -240,7 +240,6 @@ TYPED_TEST(FixedPointTestBothReps, GroupBySumProductMinMaxDecimalAsValue)
       test_single_agg(keys, vals, expect_keys, {}, std::move(agg4), force_use_sort_impl::YES),
       cudf::logic_error);
 
-
     // group_by hash tests
 
     // auto agg5 = cudf::make_sum_aggregation();
@@ -255,7 +254,6 @@ TYPED_TEST(FixedPointTestBothReps, GroupBySumProductMinMaxDecimalAsValue)
     // auto agg8 = cudf::make_product_aggregation();
     // EXPECT_THROW(test_single_agg(keys, vals, expect_keys, {}, std::move(agg8)),
     // cudf::logic_error);
-
   }
 }
 
