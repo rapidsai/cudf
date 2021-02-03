@@ -1,8 +1,7 @@
 # Copyright (c) 2019-2021, NVIDIA CORPORATION.
 
-import os
 import datetime
-import math
+import os
 from io import BytesIO
 
 import numpy as np
@@ -12,9 +11,8 @@ import pyarrow.orc
 import pytest
 
 import cudf
-from cudf.tests.utils import assert_eq, supported_numpy_dtypes, gen_rand_series
-
 from cudf.io.orc import ORCWriter
+from cudf.tests.utils import assert_eq, gen_rand_series, supported_numpy_dtypes
 
 
 @pytest.fixture(scope="module")
@@ -565,7 +563,7 @@ def normalized_equals(value1, value2):
 
     # Compare integers with floats now
     if isinstance(value1, float) or isinstance(value2, float):
-        return math.isclose(value1, value2)
+        return np.isclose(value1, value2)
 
     return value1 == value2
 

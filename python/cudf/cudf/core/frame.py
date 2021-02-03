@@ -1,10 +1,12 @@
 # Copyright (c) 2020-2021, NVIDIA CORPORATION.
+from __future__ import annotations
 
 import copy
 import functools
 import operator
 import warnings
 from collections import OrderedDict, abc as abc
+from typing import Any, Dict, Tuple, overload
 
 import cupy
 import numpy as np
@@ -12,11 +14,11 @@ import pandas as pd
 import pyarrow as pa
 from nvtx import annotate
 from pandas.api.types import is_dict_like, is_dtype_equal
+from typing_extensions import Literal
 
 import cudf
 from cudf import _lib as libcudf
 from cudf.core.column import as_column, build_categorical_column, column_empty
-from cudf.utils import utils
 from cudf.utils.dtypes import (
     is_categorical_dtype,
     is_column_like,
@@ -39,8 +41,20 @@ class Frame(libcudf.table.Table):
     """
 
     @classmethod
-    def _from_table(cls, table):
+    def _from_table(cls, table: Frame):
         return cls(table._data, index=table._index)
+
+    @overload
+    def _mimic_inplace(self, result: Frame) -> Frame:
+        ...
+
+    @overload
+    def _mimic_inplace(self, result: Frame, inplace: Literal[True]):
+        ...
+
+    @overload
+    def _mimic_inplace(self, result: Frame, inplace: Literal[False]) -> Frame:
+        ...
 
     def _mimic_inplace(self, result, inplace=False):
         if inplace:
@@ -467,25 +481,12 @@ class Frame(libcudf.table.Table):
         else:
             return self._index.equals(other._index)
 
-    def _get_columns_by_label(self, labels, downcast=False):
+    def _get_columns_by_label(self, labels, downcast):
         """
         Returns columns of the Frame specified by `labels`
 
-        If downcast is True, try and downcast from a DataFrame to a Series
         """
-        new_data = self._data.select_by_label(labels)
-        if downcast:
-            if is_scalar(labels):
-                nlevels = 1
-            elif isinstance(labels, tuple):
-                nlevels = len(labels)
-            if self._data.multiindex is False or nlevels == self._data.nlevels:
-                return self._constructor_sliced(
-                    new_data, name=labels, index=self.index
-                )
-        return self._constructor(
-            new_data, columns=new_data.to_pandas_index(), index=self.index
-        )
+        return self._data.select_by_label(labels)
 
     def _get_columns_by_index(self, indices):
         """
@@ -1296,7 +1297,9 @@ class Frame(libcudf.table.Table):
         0  Alfred  Batmobile 1940-04-25
         """
         if axis == 0:
-            result = self._drop_na_rows(how=how, subset=subset, thresh=thresh)
+            result = self._drop_na_rows(
+                how=how, subset=subset, thresh=thresh, drop_nan=True
+            )
         else:
             result = self._drop_na_columns(
                 how=how, subset=subset, thresh=thresh
@@ -1443,7 +1446,9 @@ class Frame(libcudf.table.Table):
 
         return self._mimic_inplace(result, inplace=inplace)
 
-    def _drop_na_rows(self, how="any", subset=None, thresh=None):
+    def _drop_na_rows(
+        self, how="any", subset=None, thresh=None, drop_nan=False
+    ):
         """
         Drops null rows from `self`.
 
@@ -1475,12 +1480,23 @@ class Frame(libcudf.table.Table):
         ]
         if len(subset_cols) == 0:
             return self.copy(deep=True)
-        result = self.__class__._from_table(
+
+        frame = self.copy(deep=False)
+        if drop_nan:
+            for name, col in frame._data.items():
+                if name in subset and isinstance(
+                    col, cudf.core.column.NumericalColumn
+                ):
+                    frame._data[name] = col.nans_to_nulls()
+                else:
+                    frame._data[name] = col
+
+        result = frame.__class__._from_table(
             libcudf.stream_compaction.drop_nulls(
-                self, how=how, keys=subset, thresh=thresh
+                frame, how=how, keys=subset, thresh=thresh
             )
         )
-        result._postprocess_columns(self)
+        result._postprocess_columns(frame)
         return result
 
     def _drop_na_columns(self, how="any", subset=None, thresh=None):
@@ -1501,7 +1517,10 @@ class Frame(libcudf.table.Table):
                 thresh = len(df)
 
         for col in self._data.names:
-            if (len(df[col]) - df[col].null_count) < thresh:
+            no_threshold_valid_count = (
+                len(df[col]) - df[col].nans_to_nulls().null_count
+            ) < thresh
+            if no_threshold_valid_count:
                 continue
             out_cols.append(col)
 
@@ -1609,10 +1628,16 @@ class Frame(libcudf.table.Table):
                 "na_option must be one of 'keep', 'top', or 'bottom'"
             )
 
-        # TODO code for selecting numeric columns
         source = self
         if numeric_only:
-            warnings.warn("numeric_only=True is not implemented yet")
+            numeric_cols = (
+                name
+                for name in self._data.names
+                if is_numerical_dtype(self._data[name])
+            )
+            source = self._get_columns_by_label(numeric_cols)
+            if source.empty:
+                return source.astype("float64")
 
         out_rank_table = libcudf.sort.rank_columns(
             source, method_enum, na_option, ascending, pct
@@ -2283,31 +2308,39 @@ class Frame(libcudf.table.Table):
         result._postprocess_columns(self)
         return result
 
-    def replace(self, to_replace, replacement):
-        copy_data = self._data.copy()
+    def replace(self, to_replace: Any, replacement: Any) -> Frame:
+        if not (to_replace is None and replacement is None):
+            copy_data = self._data.copy(deep=False)
+            (
+                all_na_per_column,
+                to_replace_per_column,
+                replacements_per_column,
+            ) = _get_replacement_values_for_columns(
+                to_replace=to_replace,
+                value=replacement,
+                columns_dtype_map={
+                    col: copy_data._data[col].dtype for col in copy_data._data
+                },
+            )
 
-        for name, col in copy_data.items():
-            if not (to_replace is None and replacement is None):
+            for name, col in copy_data.items():
                 try:
-                    (
-                        col_all_nan,
-                        col_replacement,
-                        col_to_replace,
-                    ) = _get_replacement_values(
-                        to_replace=to_replace,
-                        replacement=replacement,
-                        col_name=name,
-                        column=col,
-                    )
-
                     copy_data[name] = col.find_and_replace(
-                        col_to_replace, col_replacement, col_all_nan
+                        to_replace_per_column[name],
+                        replacements_per_column[name],
+                        all_na_per_column[name],
                     )
                 except KeyError:
-                    # Do not change the copy_data[name]
-                    pass
+                    # We need to create a deep copy if `find_and_replace`
+                    # was not successful or any of
+                    # `to_replace_per_column`, `replacements_per_column`,
+                    # `all_na_per_column` don't contain the `name`
+                    # that exists in `copy_data`
+                    copy_data[name] = col.copy(deep=True)
+        else:
+            copy_data = self._data.copy(deep=True)
 
-            result = self._from_table(Frame(copy_data, self._index))
+        result = self._from_table(Frame(copy_data, self._index))
 
         return result
 
@@ -3554,64 +3587,160 @@ class Frame(libcudf.table.Table):
         return self._mimic_inplace(result, inplace=inplace)
 
 
-def _get_replacement_values(to_replace, replacement, col_name, column):
+def _get_replacement_values_for_columns(
+    to_replace: Any, value: Any, columns_dtype_map: Dict[Any, Any]
+) -> Tuple[Dict[Any, bool], Dict[Any, Any], Dict[Any, Any]]:
+    """
+    Returns a per column mapping for the values to be replaced, new
+    values to be replaced with and if all the values are empty.
 
-    all_nan = False
-    if (
-        is_dict_like(to_replace)
-        and not isinstance(to_replace, cudf.Series)
-        and replacement is None
+    Parameters
+    ----------
+    to_replace : numeric, str, list-like or dict
+        Contains the values to be replaced.
+    value : numeric, str, list-like, or dict
+        Contains the values to replace `to_replace` with.
+    columns_dtype_map : dict
+        A column to dtype mapping representing dtype of columns.
+
+    Returns
+    -------
+    all_na_columns : dict
+        A dict mapping of all columns if they contain all na values
+    to_replace_columns : dict
+        A dict mapping of all columns and the existing values that
+        have to be replaced.
+    values_columns : dict
+        A dict mapping of all columns and the corresponding values
+        to be replaced with.
+    """
+    to_replace_columns: Dict[Any, Any] = {}
+    values_columns: Dict[Any, Any] = {}
+    all_na_columns: Dict[Any, Any] = {}
+
+    if is_scalar(to_replace) and is_scalar(value):
+        to_replace_columns = {col: [to_replace] for col in columns_dtype_map}
+        values_columns = {col: [value] for col in columns_dtype_map}
+    elif cudf.utils.dtypes.is_list_like(to_replace) or isinstance(
+        to_replace, cudf.core.column.ColumnBase
     ):
-        replacement = list(to_replace.values())
-        to_replace = list(to_replace.keys())
-    elif not is_scalar(to_replace):
-        if is_scalar(replacement):
-            all_nan = replacement is None
-            if all_nan:
-                replacement = [replacement] * len(to_replace)
-            # Do not broadcast numeric dtypes
-            elif pd.api.types.is_numeric_dtype(column.dtype):
-                if len(to_replace) > 0:
-                    replacement = [replacement]
-                else:
-                    # If to_replace is empty, replacement has to be empty.
-                    replacement = []
-            else:
-                replacement = utils.scalar_broadcast_to(
-                    replacement,
-                    (len(to_replace),),
-                    np.dtype(type(replacement)),
+        if is_scalar(value):
+            to_replace_columns = {col: to_replace for col in columns_dtype_map}
+            values_columns = {
+                col: [value]
+                if pd.api.types.is_numeric_dtype(columns_dtype_map[col])
+                else cudf.utils.utils.scalar_broadcast_to(
+                    value, (len(to_replace),), np.dtype(type(value)),
                 )
-        else:
-            # If both are non-scalar
-            if len(to_replace) != len(replacement):
+                for col in columns_dtype_map
+            }
+        elif cudf.utils.dtypes.is_list_like(value):
+            if len(to_replace) != len(value):
                 raise ValueError(
                     f"Replacement lists must be "
                     f"of same length."
-                    f"Expected {len(to_replace)}, got {len(replacement)}."
+                    f" Expected {len(to_replace)}, got {len(value)}."
                 )
-    else:
-        if not is_scalar(replacement):
+            else:
+                to_replace_columns = {
+                    col: to_replace for col in columns_dtype_map
+                }
+                values_columns = {col: value for col in columns_dtype_map}
+        elif cudf.utils.dtypes.is_column_like(value):
+            to_replace_columns = {col: to_replace for col in columns_dtype_map}
+            values_columns = {col: value for col in columns_dtype_map}
+        else:
             raise TypeError(
-                f"Incompatible types '{type(to_replace).__name__}' "
-                f"and '{type(replacement).__name__}' "
-                f"for *to_replace* and *replacement*."
+                "value argument must be scalar, list-like or Series"
             )
-        to_replace = [to_replace]
-        replacement = [replacement]
+    elif _is_series(to_replace):
+        if value is None:
+            to_replace_columns = {
+                col: as_column(to_replace.index) for col in columns_dtype_map
+            }
+            values_columns = {col: to_replace for col in columns_dtype_map}
+        elif is_dict_like(value):
+            to_replace_columns = {
+                col: to_replace[col]
+                for col in columns_dtype_map
+                if col in to_replace
+            }
+            values_columns = {
+                col: value[col] for col in to_replace_columns if col in value
+            }
+        elif is_scalar(value) or _is_series(value):
+            to_replace_columns = {
+                col: to_replace[col]
+                for col in columns_dtype_map
+                if col in to_replace
+            }
+            values_columns = {
+                col: [value] if is_scalar(value) else value[col]
+                for col in to_replace_columns
+                if col in value
+            }
+        else:
+            raise ValueError(
+                "Series.replace cannot use dict-like to_replace and non-None "
+                "value"
+            )
+    elif is_dict_like(to_replace):
+        if value is None:
+            to_replace_columns = {
+                col: list(to_replace.keys()) for col in columns_dtype_map
+            }
+            values_columns = {
+                col: list(to_replace.values()) for col in columns_dtype_map
+            }
+        elif is_dict_like(value):
+            to_replace_columns = {
+                col: to_replace[col]
+                for col in columns_dtype_map
+                if col in to_replace
+            }
+            values_columns = {
+                col: value[col] for col in columns_dtype_map if col in value
+            }
+        elif is_scalar(value) or _is_series(value):
+            to_replace_columns = {
+                col: to_replace[col]
+                for col in columns_dtype_map
+                if col in to_replace
+            }
+            values_columns = {
+                col: [value] if is_scalar(value) else value
+                for col in columns_dtype_map
+                if col in to_replace
+            }
+        else:
+            raise TypeError("value argument must be scalar, dict, or Series")
+    else:
+        raise TypeError(
+            "Expecting 'to_replace' to be either a scalar, array-like, "
+            "dict or None, got invalid type "
+            f"'{type(to_replace).__name__}'"
+        )
 
-    if is_dict_like(to_replace) and is_dict_like(replacement):
-        replacement = replacement[col_name]
-        to_replace = to_replace[col_name]
+    to_replace_columns = {
+        key: [value] if is_scalar(value) else value
+        for key, value in to_replace_columns.items()
+    }
+    values_columns = {
+        key: [value] if is_scalar(value) else value
+        for key, value in values_columns.items()
+    }
 
-        if is_scalar(replacement):
-            replacement = [replacement]
-        if is_scalar(to_replace):
-            to_replace = [to_replace]
+    for i in to_replace_columns:
+        if i in values_columns:
+            if isinstance(values_columns[i], list):
+                all_na = values_columns[i].count(None) == len(
+                    values_columns[i]
+                )
+            else:
+                all_na = False
+            all_na_columns[i] = all_na
 
-    if isinstance(replacement, list):
-        all_nan = replacement.count(None) == len(replacement)
-    return all_nan, replacement, to_replace
+    return all_na_columns, to_replace_columns, values_columns
 
 
 # If the dictionary array is a string array and of length `0`
@@ -3719,3 +3848,11 @@ def _reassign_categories(categories, cols, col_idxs):
                 offset=cols[name].offset,
                 size=cols[name].size,
             )
+
+
+def _is_series(obj):
+    """
+    Checks if the `obj` is of type `cudf.Series`
+    instead of checking for isinstance(obj, cudf.Series)
+    """
+    return isinstance(obj, Frame) and obj.ndim == 1 and obj._index is not None

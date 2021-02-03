@@ -164,8 +164,8 @@ ConfigureBench(SEARCH_BENCH "${SEARCH_BENCH_SRC}")
 # - sort benchmark --------------------------------------------------------------------------------
 
 set(SORT_BENCH_SRC
-  "${CMAKE_CURRENT_SOURCE_DIR}/sort/sort_benchmark.cu"
-  "${CMAKE_CURRENT_SOURCE_DIR}/sort/sort_strings_benchmark.cu")
+  "${CMAKE_CURRENT_SOURCE_DIR}/sort/sort_benchmark.cpp"
+  "${CMAKE_CURRENT_SOURCE_DIR}/sort/sort_strings_benchmark.cpp")
 
 ConfigureBench(SORT_BENCH "${SORT_BENCH_SRC}")
 

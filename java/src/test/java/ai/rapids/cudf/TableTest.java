@@ -4454,4 +4454,55 @@ public class TableTest extends CudfTestBase {
       }
     }
   }
+
+  @Test
+  void testExplode() {
+    // Child is primitive type
+    try (Table t1 = new Table.TestBuilder()
+            .column(new ListType(true, new BasicType(true, DType.INT32)),
+                Arrays.asList(1, 2, 3),
+                Arrays.asList(4, 5),
+                Arrays.asList(6),
+                null)
+            .column("s1", "s2", "s3", "s4")
+            .column(   1,    3,    5,    7)
+            .column(12.0, 14.0, 13.0, 11.0)
+            .build();
+         Table expected = new Table.TestBuilder()
+            .column(   1,    2,    3,    4,    5,    6)
+            .column("s1", "s1", "s1", "s2", "s2", "s3")
+            .column(   1,    1,    1,    3,    3,    5)
+            .column(12.0, 12.0, 12.0, 14.0, 14.0, 13.0)
+            .build()) {
+      try (Table exploded = t1.explode(0)) {
+        assertTablesAreEqual(expected, exploded);
+      }
+    }
+
+    // Child is nested type
+    StructType nestedType = new StructType(false,
+        new BasicType(false, DType.INT32), new BasicType(false, DType.STRING));
+    try (Table t1 = new Table.TestBuilder()
+            .column(new ListType(false, nestedType),
+                Arrays.asList(struct(1, "k1"), struct(2, "k2"), struct(3, "k3")),
+                Arrays.asList(struct(4, "k4"), struct(5, "k5")),
+                Arrays.asList(struct(6, "k6")))
+            .column("s1", "s2", "s3")
+            .column(   1,    3,    5)
+            .column(12.0, 14.0, 13.0)
+            .build();
+         Table expected = new Table.TestBuilder()
+            .column(nestedType,
+                struct(1, "k1"), struct(2, "k2"), struct(3, "k3"),
+                struct(4, "k4"), struct(5, "k5"), struct(6, "k6"))
+            .column("s1", "s1", "s1", "s2", "s2", "s3")
+            .column(   1,    1,    1,    3,    3,    5)
+            .column(12.0, 12.0, 12.0, 14.0, 14.0, 13.0)
+            .build()) {
+      try (Table exploded = t1.explode(0)) {
+        assertTablesAreEqual(expected, exploded);
+      }
+    }
+  }
+
 }
