@@ -23,6 +23,7 @@
 #include <cudf/detail/iterator.cuh>
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
+#include <cudf/detail/sorting.hpp>
 #include <cudf/lists/lists_column_view.hpp>
 #include <cudf/lists/sorting.hpp>
 #include <cudf/utilities/error.hpp>
@@ -41,7 +42,7 @@ namespace cudf {
 namespace lists {
 namespace detail {
 
-struct SortPairs {
+struct SegmentedSortColumn {
   template <typename KeyT, typename ValueT, typename OffsetIteratorT>
   void SortPairsAscending(KeyT const* keys_in,
                           KeyT* keys_out,
@@ -127,17 +128,26 @@ struct SortPairs {
                                                        sizeof(KeyT) * 8,
                                                        stream.value());
   }
+
   template <typename T>
   std::enable_if_t<not is_numeric<T>(), std::unique_ptr<column>> operator()(
     column_view const& child,
-    column_view const& offsets,
+    column_view const& segment_offsets,
     order column_order,
     null_order null_precedence,
     rmm::cuda_stream_view stream,
     rmm::mr::device_memory_resource* mr)
   {
-    CUDF_FAIL("segmented sort is not supported for non-numeric list types");
+    auto child_table = segmented_sort_by_key(table_view{{child}},
+                                             table_view{{child}},
+                                             segment_offsets,
+                                             {column_order},
+                                             {null_precedence},
+                                             stream,
+                                             mr);
+    return std::move(child_table->release().front());
   }
+
   template <typename T>
   std::enable_if_t<is_numeric<T>(), std::unique_ptr<column>> operator()(
     column_view const& child,
@@ -214,18 +224,22 @@ std::unique_ptr<column> sort_lists(lists_column_view const& input,
                                    rmm::mr::device_memory_resource* mr)
 {
   if (input.is_empty()) return empty_like(input.parent());
+  auto segment_offsets =
+    cudf::detail::slice(input.offsets(), {input.offset(), input.offsets().size()}, stream)[0];
 
+  // for numeric columns, calls Faster segmented radix sort path
+  // for non-numeric columns, calls segmented_sort_by_key.
   auto output_child = type_dispatcher(input.child().type(),
-                                      SortPairs{},
+                                      SegmentedSortColumn{},
                                       input.get_sliced_child(stream),
-                                      input.offsets(),
+                                      segment_offsets,
                                       column_order,
                                       null_precedence,
                                       stream,
                                       mr);
 
-  // Copy list offsets.
-  auto output_offset = std::make_unique<column>(input.offsets(), stream, mr);
+  // Copy list offsets.   // TODO check offset[0] value
+  auto output_offset = std::make_unique<column>(segment_offsets, stream, mr);
   auto null_mask     = cudf::detail::copy_bitmask(input.parent(), stream, mr);
 
   // Assemble list column & return

@@ -185,6 +185,33 @@ std::unique_ptr<column> rank(
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
+ * @brief Returns sorted order after sorting each segment in the table.
+ *
+ * If segment_offsets contains values larger than number of rows, behaviour is undefined.
+ * @throws cudf::logic_error if `segment_offsets` is not `size_type` column.
+ *
+ * @param keys The table that determines the ordering of elements in each segment
+ * @param segment_offsets The column of `size_type` type containing start offset index for each
+ * contiguous segment.
+ * @param column_order The desired order for each column in `keys`. Size must be
+ * equal to `keys.num_columns()` or empty. If empty, all columns are sorted in
+ * ascending order.
+ * @param null_precedence The desired order of a null element compared to other
+ * elements for each column in `keys`. Size must be equal to
+ * `keys.num_columns()` or empty. If empty, all columns will be sorted with
+ * `null_order::BEFORE`.
+ * @param mr Device memory resource to allocate any returned objects
+ * @return sorted order of the segment sorted table .
+ *
+ */
+std::unique_ptr<column> segmented_sorted_order(
+  table_view const& keys,
+  column_view const& segment_offsets,
+  std::vector<order> const& column_order         = {},
+  std::vector<null_order> const& null_precedence = {},
+  rmm::mr::device_memory_resource* mr            = rmm::mr::get_current_device_resource());
+
+/**
  * @brief Performs a lexicographic segmented sort of a table
  *
  * If segment_offsets contains values larger than number of rows, behaviour is undefined.
