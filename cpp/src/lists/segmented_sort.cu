@@ -226,21 +226,27 @@ std::unique_ptr<column> sort_lists(lists_column_view const& input,
   if (input.is_empty()) return empty_like(input.parent());
   auto segment_offsets =
     cudf::detail::slice(input.offsets(), {input.offset(), input.offsets().size()}, stream)[0];
-
+  // Copy list offsets.
+  auto output_offset = allocate_like(segment_offsets, mask_allocation_policy::RETAIN, mr);
+  thrust::transform(rmm::exec_policy(stream),
+                    segment_offsets.begin<size_type>(),
+                    segment_offsets.end<size_type>(),
+                    output_offset->mutable_view().begin<size_type>(),
+                    [first = segment_offsets.begin<size_type>()] __device__(auto offset_index) {
+                      return offset_index - *first;
+                    });
   // for numeric columns, calls Faster segmented radix sort path
   // for non-numeric columns, calls segmented_sort_by_key.
   auto output_child = type_dispatcher(input.child().type(),
                                       SegmentedSortColumn{},
                                       input.get_sliced_child(stream),
-                                      segment_offsets,
+                                      output_offset->view(),
                                       column_order,
                                       null_precedence,
                                       stream,
                                       mr);
 
-  // Copy list offsets.   // TODO check offset[0] value
-  auto output_offset = std::make_unique<column>(segment_offsets, stream, mr);
-  auto null_mask     = cudf::detail::copy_bitmask(input.parent(), stream, mr);
+  auto null_mask = cudf::detail::copy_bitmask(input.parent(), stream, mr);
 
   // Assemble list column & return
   return make_lists_column(input.size(),

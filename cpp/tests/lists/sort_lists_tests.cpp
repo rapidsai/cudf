@@ -29,6 +29,7 @@
 #include <cudf/types.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
 
+#include <exception>
 #include <type_traits>
 #include <vector>
 
@@ -45,7 +46,23 @@ struct SortLists : public BaseFixture {
 };
 
 TYPED_TEST_CASE(SortLists, NumericTypes);
+using SortListsInt = SortLists<int>;
 
+/*
+empty case
+  empty list
+  single row with empty list
+  multi row with empty lists
+single case
+  single list with single element
+  single list with multi element
+normal case without nulls
+Null cases
+  null rows
+  null elements in list.
+Error:
+  depth>1
+*/
 TYPED_TEST(SortLists, NoNull)
 {
   using T = TypeParam;
@@ -100,6 +117,65 @@ TYPED_TEST(SortLists, Null)
 
   results = sort_lists(lists_column_view{list}, order::DESCENDING, null_order::BEFORE);
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(results->view(), expected4);
+}
+
+TEST_F(SortListsInt, Empty)
+{
+  using T = int;
+  LCW<T> l1{};
+  LCW<T> l2{LCW<T>{}};
+  LCW<T> l3{LCW<T>{}, LCW<T>{}};
+
+  auto results = sort_lists(lists_column_view{l1}, {}, {});
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(results->view(), l1);
+  results = sort_lists(lists_column_view{l2}, {}, {});
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(results->view(), l2);
+  results = sort_lists(lists_column_view{l3}, {}, {});
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(results->view(), l3);
+}
+
+TEST_F(SortListsInt, Single)
+{
+  using T = int;
+  LCW<T> l1{{1}};
+  LCW<T> l2{{1, 2, 3}};
+
+  auto results = sort_lists(lists_column_view{l1}, {}, {});
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(results->view(), l1);
+  results = sort_lists(lists_column_view{l2}, {}, {});
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(results->view(), l2);
+}
+
+TEST_F(SortListsInt, NullRows)
+{
+  using T = int;
+  std::vector<int> valids{0, 1, 0};
+  LCW<T> l1{{{1, 2, 3}, {4, 5, 6}, {7}}, valids.begin()};  // offset 0, 0, 3, 3
+
+  auto results = sort_lists(lists_column_view{l1}, {}, {});
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(results->view(), l1);
+}
+
+/*
+// Disabling this test.
+// Reason: After this exception "cudaErrorAssert device-side assert triggered", further tests fail
+TEST_F(SortListsInt, Depth)
+{
+  using T = int;
+  LCW<T> l1{LCW<T>{{1, 2}, {3}}, LCW<T>{{4, 5}}};
+  // device exception
+  EXPECT_THROW(sort_lists(lists_column_view{l1}, {}, {}), std::exception);
+}
+*/
+
+TEST_F(SortListsInt, Sliced)
+{
+  using T = int;
+  LCW<T> l1{{1, 2, 3, 4}, {5, 6, 7}, {8, 9}, {10}};
+  auto sliced_list = cudf::slice(l1, {1, 4})[0];
+
+  auto results = sort_lists(lists_column_view{sliced_list}, {}, {});
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(results->view(), sliced_list);
 }
 
 }  // namespace test
