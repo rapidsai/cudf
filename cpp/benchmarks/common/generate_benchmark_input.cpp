@@ -347,14 +347,24 @@ void copy_string(cudf::size_type src_idx,
 template <typename Char_gen>
 void append_string(Char_gen& char_gen, bool valid, uint32_t length, string_column_data& column_data)
 {
-  auto const idx = column_data.offsets.size() - 1;
-  column_data.offsets.push_back(column_data.offsets.back() + length);
-  std::generate_n(std::back_inserter(column_data.chars),
-                  column_data.offsets[idx + 1] - column_data.offsets[idx],
-                  [&]() { return char_gen(); });
-
-  // TODO: use empty string for invalid fields?
-  if (!valid) { cudf::clear_bit_unsafe(column_data.null_mask.data(), idx); }
+  if (!valid) {
+    auto const idx = column_data.offsets.size() - 1;
+    cudf::clear_bit_unsafe(column_data.null_mask.data(), idx);
+    // duplicate the offset value to indicate an empty row
+    column_data.offsets.push_back(column_data.offsets.back());
+    return;
+  }
+  std::vector<char> chars;
+  std::generate_n(std::back_inserter(chars), length, [&]() mutable {
+    auto ch = char_gen();
+    if (ch < '\x7F') return static_cast<char>(ch);
+    // x7F is at the top edge of ASCII;
+    // the next set of characters are assigned two bytes
+    chars.push_back('\xC4');
+    return static_cast<char>(ch + 1);
+  });
+  column_data.chars.insert(column_data.chars.end(), chars.begin(), chars.end());
+  column_data.offsets.push_back(column_data.offsets.back() + chars.size());
 }
 
 /**
@@ -371,7 +381,8 @@ std::unique_ptr<cudf::column> create_random_column<cudf::string_view>(data_profi
                                                                       std::mt19937& engine,
                                                                       cudf::size_type num_rows)
 {
-  auto char_dist = [&engine, dist = std::uniform_int_distribution<char>{'!', '~'}]() mutable {
+  auto char_dist = [&engine,  // range 32-127 is ASCII; 127-136 will be multi-byte UTF-8
+                    dist = std::uniform_int_distribution<unsigned char>{32, 137}]() mutable {
     return dist(engine);
   };
   auto len_dist =
