@@ -22,6 +22,7 @@ from cudf.utils.dtypes import (
     INTEGER_TYPES,
     NUMERIC_TYPES,
     TIMEDELTA_TYPES,
+    ALL_TYPES
 )
 
 STRING_TYPES = {"str"}
@@ -204,6 +205,36 @@ def test_series_compare(cmpop, obj_class, dtype):
     np.testing.assert_equal(result1.to_array(), cmpop(arr1, arr1))
     np.testing.assert_equal(result2.to_array(), cmpop(arr2, arr2))
     np.testing.assert_equal(result3.to_array(), cmpop(arr1, arr2))
+
+def _series_compare_nulls_typegen():
+    tests = []
+    tests += list(product(DATETIME_TYPES, DATETIME_TYPES))
+    tests += list(product(TIMEDELTA_TYPES, TIMEDELTA_TYPES))
+    tests += list(product(NUMERIC_TYPES, NUMERIC_TYPES))
+    tests += list(product(STRING_TYPES, STRING_TYPES))
+
+    return tests
+
+@pytest.mark.parametrize("cmpop", _cmpops)
+@pytest.mark.parametrize("dtypes", _series_compare_nulls_typegen())
+def test_series_compare_nulls(cmpop, dtypes):
+    ltype, rtype = dtypes
+
+    ldata = [1, 2, None, None, 5]
+    rdata = [2, 1, None, 4, None]
+
+    lser = Series(ldata, dtype=ltype)
+    rser = Series(rdata, dtype=rtype)
+
+    lmask = ~lser.isnull()
+    rmask = ~rser.isnull()
+    
+    expect_mask = np.logical_and(lmask, rmask)
+    expect = cudf.Series([None] * 5, dtype='bool')
+    expect[expect_mask] = cmpop(lser[expect_mask], rser[expect_mask])
+    
+    got = cmpop(lser, rser)
+    utils.assert_eq(expect, got)
 
 
 @pytest.mark.parametrize(
