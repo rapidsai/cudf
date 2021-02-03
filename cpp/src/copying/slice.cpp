@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2020, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -21,6 +21,8 @@
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/utilities/error.hpp>
 
+#include <rmm/cuda_stream_view.hpp>
+
 #include <algorithm>
 #include "cudf_test/column_wrapper.hpp"
 #include "thrust/iterator/transform_iterator.h"
@@ -29,7 +31,7 @@ namespace cudf {
 namespace detail {
 std::vector<column_view> slice(column_view const& input,
                                std::vector<size_type> const& indices,
-                               cudaStream_t stream)
+                               rmm::cuda_stream_view stream)
 {
   CUDF_EXPECTS(indices.size() % 2 == 0, "indices size must be even");
 
@@ -64,7 +66,7 @@ std::vector<cudf::column_view> slice(cudf::column_view const& input,
                                      std::vector<size_type> const& indices)
 {
   CUDF_FUNC_RANGE();
-  return detail::slice(input, indices, 0);
+  return detail::slice(input, indices, rmm::cuda_stream_default);
 }
 
 std::vector<cudf::table_view> slice(cudf::table_view const& input,
@@ -86,7 +88,7 @@ std::vector<cudf::table_view> slice(cudf::table_view const& input,
   size_t num_output_tables = indices.size() / 2;
   for (size_t i = 0; i < num_output_tables; i++) {
     std::vector<cudf::column_view> table_columns;
-    for (size_t j = 0; j < input.num_columns(); j++) {
+    for (size_type j = 0; j < input.num_columns(); j++) {
       table_columns.emplace_back(sliced_table[j][i]);
     }
     result.emplace_back(table_view{table_columns});

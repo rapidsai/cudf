@@ -21,6 +21,8 @@
 #include <cudf/detail/concatenate.hpp>
 #include <cudf/table/table_view.hpp>
 
+#include <rmm/cuda_stream_view.hpp>
+
 #include <vector>
 
 namespace cudf {
@@ -36,7 +38,7 @@ void concatenate_masks(rmm::device_vector<column_device_view> const& d_views,
                        rmm::device_vector<size_t> const& d_offsets,
                        bitmask_type* dest_mask,
                        size_type output_size,
-                       cudaStream_t stream);
+                       rmm::cuda_stream_view stream);
 
 /**
  * @copydoc cudf::concatenate_masks(std::vector<column_view> const&,bitmask_type*)
@@ -45,7 +47,7 @@ void concatenate_masks(rmm::device_vector<column_device_view> const& d_views,
  */
 void concatenate_masks(std::vector<column_view> const& views,
                        bitmask_type* dest_mask,
-                       cudaStream_t stream);
+                       rmm::cuda_stream_view stream);
 
 }  // namespace detail
 }  // namespace cudf

@@ -45,6 +45,11 @@ struct rep_type_impl<T, std::enable_if_t<cudf::is_duration<T>()>> {
 };
 
 template <typename T>
+struct rep_type_impl<T, std::enable_if_t<cudf::is_fixed_point<T>()>> {
+  using type = typename T::rep;
+};
+
+template <typename T>
 using rep_type_t = typename rep_type_impl<T>::type;
 
 template <typename T>
@@ -54,23 +59,29 @@ struct ColumnViewAllTypesTests : public cudf::test::BaseFixture {
 TYPED_TEST_CASE(ColumnViewAllTypesTests, cudf::test::FixedWidthTypes);
 
 template <typename FromType, typename ToType, typename Iterator>
-void do_logical_cast(cudf::column_view const& input, Iterator begin, Iterator end)
+void do_logical_cast(cudf::column_view const& column_view, Iterator begin, Iterator end)
 {
+  auto mutable_column_view = reinterpret_cast<cudf::mutable_column_view const&>(column_view);
   if (std::is_same<FromType, ToType>::value) {
     // Cast to same type
-    auto output = cudf::logical_cast(input, input.type());
-    cudf::test::expect_columns_equal(output, input);
+    auto output  = cudf::logical_cast(column_view, column_view.type());
+    auto output1 = cudf::logical_cast(mutable_column_view, mutable_column_view.type());
+    cudf::test::expect_columns_equal(output, column_view);
+    cudf::test::expect_columns_equal(output1, mutable_column_view);
   } else if (std::is_same<rep_type_t<FromType>, ToType>::value ||
              std::is_same<FromType, rep_type_t<ToType>>::value) {
     // Cast integer to timestamp or vice versa
     cudf::data_type type{cudf::type_to_id<ToType>()};
-    auto output = cudf::logical_cast(input, type);
+    auto output  = cudf::logical_cast(column_view, type);
+    auto output1 = cudf::logical_cast(mutable_column_view, type);
     cudf::test::fixed_width_column_wrapper<ToType, cudf::size_type> expected(begin, end);
     cudf::test::expect_columns_equal(output, expected);
+    cudf::test::expect_columns_equal(output1, expected);
   } else {
     // Other casts not allowed
     cudf::data_type type{cudf::type_to_id<ToType>()};
-    EXPECT_THROW(cudf::logical_cast(input, type), cudf::logic_error);
+    EXPECT_THROW(cudf::logical_cast(column_view, type), cudf::logic_error);
+    EXPECT_THROW(cudf::logical_cast(mutable_column_view, type), cudf::logic_error);
   }
 }
 

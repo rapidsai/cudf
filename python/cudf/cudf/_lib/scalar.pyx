@@ -43,10 +43,9 @@ from cudf._lib.cpp.scalar.scalar cimport (
 )
 cimport cudf._lib.cpp.types as libcudf_types
 
+cdef class DeviceScalar:
 
-cdef class Scalar:
-
-    def __init__(self, value, dtype=None):
+    def __init__(self, value, dtype):
         """
         cudf.Scalar: Type representing a scalar value on the device
 
@@ -61,24 +60,18 @@ cdef class Scalar:
             A NumPy dtype.
         """
 
-        value = cudf.utils.dtypes.to_cudf_compatible_scalar(value, dtype=dtype)
+        self._set_value(value, dtype)
 
-        valid = value is not None
-
-        if dtype is None:
-            if value is None:
-                raise TypeError(
-                    "dtype required when constructing a null scalar"
-                )
-            else:
-                dtype = value.dtype
-
-        dtype = np.dtype(dtype)
+    def _set_value(self, value, dtype):
+        valid = not _is_null_host_scalar(value)
 
         if pd.api.types.is_string_dtype(dtype):
             _set_string_from_np_string(self.c_value, value, valid)
         elif pd.api.types.is_numeric_dtype(dtype):
-            _set_numeric_from_np_scalar(self.c_value, value, dtype, valid)
+            _set_numeric_from_np_scalar(self.c_value,
+                                        value,
+                                        dtype,
+                                        valid)
         elif pd.api.types.is_datetime64_dtype(dtype):
             _set_datetime64_from_np_scalar(
                 self.c_value, value, dtype, valid
@@ -93,13 +86,28 @@ cdef class Scalar:
                 f"{type(value).__name__} to cudf scalar"
             )
 
+    def _to_host_scalar(self):
+        if pd.api.types.is_string_dtype(self.dtype):
+            result = _get_py_string_from_string(self.c_value)
+        elif pd.api.types.is_numeric_dtype(self.dtype):
+            result = _get_np_scalar_from_numeric(self.c_value)
+        elif pd.api.types.is_datetime64_dtype(self.dtype):
+            result = _get_np_scalar_from_timestamp64(self.c_value)
+        elif pd.api.types.is_timedelta64_dtype(self.dtype):
+            result = _get_np_scalar_from_timedelta64(self.c_value)
+        else:
+            raise ValueError(
+                "Could not convert cudf::scalar to a Python value"
+            )
+        return result
+
     @property
     def dtype(self):
         """
         The NumPy dtype corresponding to the data type of the underlying
         device scalar.
         """
-        cdef libcudf_types.data_type cdtype = self.c_value.get()[0].type()
+        cdef libcudf_types.data_type cdtype = self.get_raw_ptr()[0].type()
         return cudf_to_np_types[<underlying_type_t_type_id>(cdtype.id())]
 
     @property
@@ -107,38 +115,31 @@ cdef class Scalar:
         """
         Returns a host copy of the underlying device scalar.
         """
-        if pd.api.types.is_string_dtype(self.dtype):
-            return _get_py_string_from_string(self.c_value)
-        elif pd.api.types.is_numeric_dtype(self.dtype):
-            return _get_np_scalar_from_numeric(self.c_value)
-        elif pd.api.types.is_datetime64_dtype(self.dtype):
-            return _get_np_scalar_from_timestamp64(self.c_value)
-        elif pd.api.types.is_timedelta64_dtype(self.dtype):
-            return _get_np_scalar_from_timedelta64(self.c_value)
-        else:
-            raise ValueError(
-                "Could not convert cudf::scalar to a Python value"
-            )
+        return self._to_host_scalar()
+
+    cdef const scalar* get_raw_ptr(self) except *:
+        return self.c_value.get()
 
     cpdef bool is_valid(self):
         """
         Returns if the Scalar is valid or not(i.e., <NA>).
         """
-        return self.c_value.get()[0].is_valid()
+        return self.get_raw_ptr()[0].is_valid()
 
     def __repr__(self):
-        if self.value is None:
+        if self.value is cudf.NA:
             return f"Scalar({self.value}, {self.dtype.__repr__()})"
         else:
             return f"Scalar({self.value.__repr__()})"
 
     @staticmethod
-    cdef Scalar from_unique_ptr(unique_ptr[scalar] ptr):
+    cdef DeviceScalar from_unique_ptr(unique_ptr[scalar] ptr):
         """
         Construct a Scalar object from a unique_ptr<cudf::scalar>.
         """
-        cdef Scalar s = Scalar.__new__(Scalar)
+        cdef DeviceScalar s = DeviceScalar.__new__(DeviceScalar)
         s.c_value = move(ptr)
+
         return s
 
 
@@ -232,14 +233,14 @@ cdef _set_timedelta64_from_np_scalar(unique_ptr[scalar]& s,
 
 cdef _get_py_string_from_string(unique_ptr[scalar]& s):
     if not s.get()[0].is_valid():
-        return None
+        return cudf.NA
     return (<string_scalar*>s.get())[0].to_string().decode()
 
 
 cdef _get_np_scalar_from_numeric(unique_ptr[scalar]& s):
     cdef scalar* s_ptr = s.get()
     if not s_ptr[0].is_valid():
-        return None
+        return cudf.NA
 
     cdef libcudf_types.data_type cdtype = s_ptr[0].type()
 
@@ -274,7 +275,7 @@ cdef _get_np_scalar_from_timestamp64(unique_ptr[scalar]& s):
     cdef scalar* s_ptr = s.get()
 
     if not s_ptr[0].is_valid():
-        return None
+        return cudf.NA
 
     cdef libcudf_types.data_type cdtype = s_ptr[0].type()
 
@@ -351,11 +352,40 @@ cdef _get_np_scalar_from_timedelta64(unique_ptr[scalar]& s):
         raise ValueError("Could not convert cudf::scalar to numpy scalar")
 
 
-def as_scalar(val, dtype=None):
-    if isinstance(val, Scalar):
-        if (dtype is None or dtype == val.dtype):
-            return val
+def as_device_scalar(val, dtype=None):
+    if dtype:
+        if isinstance(val, (cudf.Scalar, DeviceScalar)):
+            raise TypeError("Can't update dtype of existing GPU scalar")
         else:
-            return Scalar(val.value, dtype)
+            return cudf.Scalar(value=val, dtype=dtype).device_value
     else:
-        return Scalar(value=val, dtype=dtype)
+        if isinstance(val, DeviceScalar):
+            return val
+        if isinstance(val, cudf.Scalar):
+            return val.device_value
+        else:
+            return cudf.Scalar(val).device_value
+
+
+def _is_null_host_scalar(slr):
+    if slr is None or slr is cudf.NA:
+        return True
+    elif isinstance(slr, (np.datetime64, np.timedelta64)) and np.isnat(slr):
+        return True
+    else:
+        return False
+
+
+def _create_proxy_nat_scalar(dtype):
+    cdef DeviceScalar result = DeviceScalar.__new__(DeviceScalar)
+
+    dtype = np.dtype(dtype)
+    if dtype.char in 'mM':
+        nat = dtype.type('NaT').astype(dtype)
+        if dtype.type == np.datetime64:
+            _set_datetime64_from_np_scalar(result.c_value, nat, dtype, True)
+        elif dtype.type == np.timedelta64:
+            _set_timedelta64_from_np_scalar(result.c_value, nat, dtype, True)
+        return result
+    else:
+        raise TypeError('NAT only valid for datetime and timedelta')

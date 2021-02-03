@@ -3,6 +3,7 @@
 from io import BytesIO
 
 import fastavro as fa
+import numpy as np
 import pandas as pd
 import pytest
 
@@ -70,3 +71,38 @@ def test_avro_reader_basic(datadir, inputfile, columns, engine):
     # fastavro appears to return columns in reverse order
     # (actual order may depend on pandas/python version)
     assert_eq(expect, got[expect.columns], check_categorical=False)
+
+
+def test_empty_dataframe(tmpdir):
+    filepath = tmpdir + "empty.avro"
+    # write empty dataframe
+    with open(filepath, "wb") as out:
+        fa.writer(out, [], [])
+
+    df = cudf.read_avro(filepath)
+    assert_eq(df, cudf.DataFrame())
+
+
+def test_no_data(tmpdir):
+    filepath = tmpdir + "no_data.avro"
+    schema = {
+        "name": "Weather",
+        "type": "record",
+        "fields": [
+            {"name": "station", "type": "string"},
+            {"name": "time", "type": "long"},
+            {"name": "temp", "type": "int"},
+        ],
+    }
+    parsed_schema = fa.parse_schema(schema)
+    with open(filepath, "wb") as out:
+        fa.writer(out, parsed_schema, [])
+
+    df = cudf.read_avro(filepath)
+
+    # fastavro returns an empty dataframe, need to verify manually
+    assert_eq(df.shape, (0, 3))
+    dtypes = df.dtypes.values.tolist()
+    assert_eq(dtypes, [np.dtype("O"), np.dtype("int64"), np.dtype("int32")])
+    col_names = df.columns.tolist()
+    assert_eq(col_names, ["station", "time", "temp"])

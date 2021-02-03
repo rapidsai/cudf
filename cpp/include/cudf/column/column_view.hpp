@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2020, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -42,8 +42,7 @@ namespace detail {
  * To enable zero-copy slicing, a `column_view_base` has an `offset` that
  *indicates the index of the first element in the column relative to the base
  *device memory allocation. By default, `offset()` is zero.
- *
- **/
+ */
 class column_view_base {
  public:
   /**
@@ -58,7 +57,7 @@ class column_view_base {
    *
    * @tparam The type to cast to
    * @return T const* Typed pointer to underlying data
-   **/
+   */
   template <typename T = void>
   T const* head() const noexcept
   {
@@ -75,7 +74,7 @@ class column_view_base {
    *
    * @tparam T The type to cast to
    * @return T const* Typed pointer to underlying data, including the offset
-   **/
+   */
   template <typename T>
   T const* data() const noexcept
   {
@@ -88,7 +87,7 @@ class column_view_base {
    *
    * @tparam T The desired type
    * @return T const* Pointer to the first element after casting
-   **/
+   */
   template <typename T>
   T const* begin() const noexcept
   {
@@ -101,7 +100,7 @@ class column_view_base {
    *
    * @tparam T The desired type
    * @return T const* Pointer to one past the last element after casting
-   **/
+   */
   template <typename T>
   T const* end() const noexcept
   {
@@ -110,17 +109,17 @@ class column_view_base {
 
   /**
    * @brief Returns the number of elements in the column
-   **/
+   */
   size_type size() const noexcept { return _size; }
 
   /**
    * @brief Returns true if `size()` returns zero, or false otherwise
-   **/
+   */
   size_type is_empty() const noexcept { return size() == 0; }
 
   /**
    * @brief Returns the element `data_type`
-   **/
+   */
   data_type type() const noexcept { return _type; }
 
   /**
@@ -131,7 +130,7 @@ class column_view_base {
    *
    * @return true The bitmask is allocated
    * @return false The bitmask is not allocated
-   **/
+   */
   bool nullable() const noexcept { return nullptr != _null_mask; }
 
   /**
@@ -141,7 +140,7 @@ class column_view_base {
    * point `set_null_count(UNKNOWN_NULL_COUNT)` was invoked, then the
    * first invocation of `null_count()` will compute and store the count of null
    * elements indicated by the `null_mask` (if it exists).
-   **/
+   */
   size_type null_count() const;
 
   /**
@@ -156,7 +155,7 @@ class column_view_base {
    *
    * @param[in] begin The starting index of the range (inclusive).
    * @param[in] end The index of the last element in the range (exclusive).
-   **/
+   */
   size_type null_count(size_type begin, size_type end) const;
 
   /**
@@ -165,7 +164,7 @@ class column_view_base {
    *
    * @return true One or more elements are null
    * @return false All elements are valid
-   **/
+   */
   bool has_nulls() const { return null_count() > 0; }
 
   /**
@@ -188,13 +187,13 @@ class column_view_base {
    * @note This function does *not* account for the `offset()`.
    *
    * @note If `null_count() == 0`, this may return `nullptr`.
-   **/
+   */
   bitmask_type const* null_mask() const noexcept { return _null_mask; }
 
   /**
    * @brief Returns the index of the first element relative to the base memory
    * allocation, i.e., what is returned from `head<T>()`.
-   **/
+   */
   size_type offset() const noexcept { return _offset; }
 
  protected:
@@ -278,14 +277,23 @@ class mutable_column_view_base : public column_view_base {
  * To enable zero-copy slicing, a `column_view` has an `offset` that indicates
  * the index of the first element in the column relative to the base device
  * memory allocation. By default, `offset()` is zero.
- *
- **/
+ */
 class column_view : public detail::column_view_base {
  public:
-  column_view()                   = default;
-  ~column_view()                  = default;
-  column_view(column_view const&) = default;
-  column_view(column_view&&)      = default;
+  column_view() = default;
+
+  // these pragmas work around the nvcc issue where if a column_view is used
+  // inside of a __device__ code path, these functions will end up being created
+  // as __host__ __device__ because they are explicitly defaulted.  However, if
+  // they then end up being called by a simple __host__ function
+  // (eg std::vector destructor) you get a compile error because you're trying to
+  // call a __host__ __device__ function from a __host__ function.
+#pragma nv_exec_check_disable
+  ~column_view() = default;
+#pragma nv_exec_check_disable
+  column_view(column_view const& c) = default;
+
+  column_view(column_view&&) = default;
   column_view& operator=(column_view const&) = default;
   column_view& operator=(column_view&&) = default;
 
@@ -337,7 +345,7 @@ class column_view : public detail::column_view_base {
 
   /**
    * @brief Returns the number of child columns.
-   **/
+   */
   size_type num_children() const noexcept { return _children.size(); }
 
   /**
@@ -376,8 +384,7 @@ class column_view : public detail::column_view_base {
  * To enable zero-copy slicing, a `mutable_column_view` has an `offset` that
  * indicates the index of the first element in the column relative to the base
  * device memory allocation. By default, `offset()` is zero.
- *
- **/
+ */
 class mutable_column_view : public detail::column_view_base {
  public:
   mutable_column_view() = default;
@@ -438,7 +445,7 @@ class mutable_column_view : public detail::column_view_base {
    *
    * @tparam The type to cast to
    * @return T* Typed pointer to underlying data
-   **/
+   */
   template <typename T = void>
   T* head() const noexcept
   {
@@ -455,7 +462,7 @@ class mutable_column_view : public detail::column_view_base {
    *
    * @tparam T The type to cast to
    * @return T* Typed pointer to underlying data, including the offset
-   **/
+   */
   template <typename T>
   T* data() const noexcept
   {
@@ -468,7 +475,7 @@ class mutable_column_view : public detail::column_view_base {
    *
    * @tparam T The desired type
    * @return T* Pointer to the first element after casting
-   **/
+   */
   template <typename T>
   T* begin() const noexcept
   {
@@ -481,7 +488,7 @@ class mutable_column_view : public detail::column_view_base {
    *
    * @tparam T The desired type
    * @return T* Pointer to one past the last element after casting
-   **/
+   */
   template <typename T>
   T* end() const noexcept
   {
@@ -506,7 +513,7 @@ class mutable_column_view : public detail::column_view_base {
    * @throws cudf::logic_error if `new_null_count > 0` and `nullable() == false`
    *
    * @param new_null_count The new null count
-   **/
+   */
   void set_null_count(size_type new_null_count);
 
   /**
@@ -522,17 +529,29 @@ class mutable_column_view : public detail::column_view_base {
 
   /**
    * @brief Returns the number of child columns.
-   **/
+   */
   size_type num_children() const noexcept { return mutable_children.size(); }
+
+  /**
+   * @brief Returns iterator to the beginning of the ordered sequence of child column-views.
+   */
+  auto child_begin() const noexcept { return mutable_children.begin(); }
+
+  /**
+   * @brief Returns iterator to the end of the ordered sequence of child column-views.
+   */
+  auto child_end() const noexcept { return mutable_children.end(); }
 
   /**
    * @brief Converts a mutable view into an immutable view
    *
    * @return column_view An immutable view of the mutable view's elements
-   **/
+   */
   operator column_view() const;
 
  private:
+  friend mutable_column_view logical_cast(mutable_column_view const& input, data_type type);
+
   std::vector<mutable_column_view> mutable_children;
 };
 
@@ -541,7 +560,7 @@ class mutable_column_view : public detail::column_view_base {
  *
  * @param parent The parent whose descendants will be counted
  * @return size_type The number of descendants of the parent
- **/
+ */
 size_type count_descendants(column_view parent);
 
 /**
@@ -555,8 +574,7 @@ size_type count_descendants(column_view parent);
  * duration count. However, an INT32 column cannot be logically cast to INT64 as the sizes differ,
  * nor can an INT32 columm be logically cast to a FLOAT32 since what the bits represent differs.
  *
- * The validity of the conversion can be checked with `cudf::is_logically_castable()`. For other
- * conversions between fixed-width types which require a copy, see `cudf::cast()`.
+ * The validity of the conversion can be checked with `cudf::is_logically_castable()`.
  *
  * @throws cudf::logic_error if the specified cast is not possible, i.e.,
  * `is_logically_castable(input.type(), type)` is false.
@@ -566,5 +584,27 @@ size_type count_descendants(column_view parent);
  * @return New `column_view` wrapping the same data as `input` but cast to `type`
  */
 column_view logical_cast(column_view const& input, data_type type);
+
+/**
+ * @brief Zero-copy cast between types with the same underlying representation.
+ *
+ * This is similar to `reinterpret_cast` or `bit_cast` in that it gives a view of the same raw bits
+ * as a different type. Unlike `reinterpret_cast` however, this cast is only allowed on types that
+ * have the same width and underlying representation. For example, the way timestamp types are laid
+ * out in memory is equivalent to an integer representing a duration since a fixed epoch; logically
+ * casting to the same integer type (INT32 for days, INT64 for others) results in a raw view of the
+ * duration count. However, an INT32 column cannot be logically cast to INT64 as the sizes differ,
+ * nor can an INT32 columm be logically cast to a FLOAT32 since what the bits represent differs.
+ *
+ * The validity of the conversion can be checked with `cudf::is_logically_castable()`.
+ *
+ * @throws cudf::logic_error if the specified cast is not possible, i.e.,
+ * `is_logically_castable(input.type(), type)` is false.
+ *
+ * @param input The `mutable_column_view` to cast from
+ * @param type The `data_type` to cast to
+ * @return New `mutable_column_view` wrapping the same data as `input` but cast to `type`
+ */
+mutable_column_view logical_cast(mutable_column_view const& input, data_type type);
 
 }  // namespace cudf

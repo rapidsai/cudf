@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2017-2019, NVIDIA CORPORATION.
+ * Copyright (c) 2017-2020, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,6 +17,8 @@
 #ifndef HELPER_FUNCTIONS_CUH
 #define HELPER_FUNCTIONS_CUH
 
+#include <cudf/types.hpp>
+
 #include <thrust/pair.h>
 
 constexpr int64_t DEFAULT_HASH_TABLE_OCCUPANCY = 50;
@@ -33,7 +35,7 @@ constexpr int64_t DEFAULT_HASH_TABLE_OCCUPANCY = 50;
  * 50% occupancy
  * @return size_t The size of the hash table that will satisfy the desired
  * occupancy for the specified number of insertions
- **/
+ */
 inline size_t compute_hash_table_size(cudf::size_type num_keys_to_insert,
                                       uint32_t desired_occupancy = DEFAULT_HASH_TABLE_OCCUPANCY)
 {

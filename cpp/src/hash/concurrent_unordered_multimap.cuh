@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2017-2018, NVIDIA CORPORATION.
+ * Copyright (c) 2017-2020, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -25,6 +25,8 @@
 #include <cudf/detail/utilities/device_atomics.cuh>
 #include <cudf/detail/utilities/hash_functions.cuh>
 #include <cudf/utilities/error.hpp>
+
+#include <rmm/cuda_stream_view.hpp>
 
 #include <thrust/pair.h>
 
@@ -91,20 +93,20 @@ class concurrent_unordered_multimap {
    * responsibility to synchronize or use the same stream to access the map.
    *
    * @param capacity The maximum number of pairs the map may hold.
+   * @param stream CUDA stream used for device memory operations and kernel launches.
    * @param init Indicates if the map should be initialized with the unused
    * key/values
    * @param hash_function The hash function to use for hashing keys
    * @param equal The equality comparison function for comparing if two keys are
    * equal
    * @param allocator The allocator to use for allocation of the map's storage
-   * @param stream CUDA stream used for device memory operations and kernel launches.
-   **/
+   */
   static auto create(size_type capacity,
+                     rmm::cuda_stream_view stream    = rmm::cuda_stream_default,
                      const bool init                 = true,
                      const Hasher& hash_function     = hasher(),
                      const Equality& equal           = key_equal(),
-                     const allocator_type& allocator = allocator_type(),
-                     cudaStream_t stream             = 0)
+                     const allocator_type& allocator = allocator_type())
   {
     CUDF_FUNC_RANGE();
     using Self = concurrent_unordered_multimap<Key,
@@ -132,8 +134,8 @@ class concurrent_unordered_multimap {
    * from the `create()` factory function.
    *
    * @param stream CUDA stream used for device memory operations and kernel launches.
-   **/
-  void destroy(cudaStream_t stream = 0)
+   */
+  void destroy(rmm::cuda_stream_view stream = rmm::cuda_stream_default)
   {
     m_allocator.deallocate(m_hashtbl_values, m_hashtbl_capacity, stream);
     delete this;
@@ -150,7 +152,7 @@ class concurrent_unordered_multimap {
    * should be appropriately synchronized with the creating stream.
    *
    * @returns iterator to the first element in the map.
-   **/
+   */
   __host__ __device__ iterator begin()
   {
     return iterator(m_hashtbl_values, m_hashtbl_values + m_hashtbl_size, m_hashtbl_values);
@@ -167,7 +169,7 @@ class concurrent_unordered_multimap {
    * should be appropriately synchronized with the creating stream.
    *
    * @returns constant iterator to the first element in the map.
-   **/
+   */
   __host__ __device__ const_iterator begin() const
   {
     return const_iterator(m_hashtbl_values, m_hashtbl_values + m_hashtbl_size, m_hashtbl_values);
@@ -184,7 +186,7 @@ class concurrent_unordered_multimap {
    * should be appropriately synchronized with the creating stream.
    *
    * @returns iterator to the one past the last element in the map.
-   **/
+   */
   __host__ __device__ iterator end()
   {
     return iterator(
@@ -202,7 +204,7 @@ class concurrent_unordered_multimap {
    * should be appropriately synchronized with the creating stream.
    *
    * @returns constant iterator to the one past the last element in the map.
-   **/
+   */
   __host__ __device__ const_iterator end() const
   {
     return const_iterator(
@@ -214,7 +216,6 @@ class concurrent_unordered_multimap {
     return unused_key;
   }
 
-  /* --------------------------------------------------------------------------*/
   /**
    * @brief Computes a hash value for a key
    *
@@ -223,14 +224,12 @@ class concurrent_unordered_multimap {
    *
    * @returns   The hash value for the key
    */
-  /* ----------------------------------------------------------------------------*/
   template <typename hash_value_type = typename Hasher::result_type>
   __forceinline__ __host__ __device__ hash_value_type get_hash(const key_type& the_key) const
   {
     return m_hf(the_key);
   }
 
-  /* --------------------------------------------------------------------------*/
   /**
    * @brief Computes the destination hash map partition for a key
    *
@@ -246,7 +245,6 @@ class concurrent_unordered_multimap {
    *
    * @returns   The destination hash table partition for the specified key
    */
-  /* ----------------------------------------------------------------------------*/
   template <typename hash_value_type = typename Hasher::result_type>
   __forceinline__ __host__ __device__ int get_partition(
     const key_type& the_key,
@@ -279,7 +277,6 @@ class concurrent_unordered_multimap {
     return dest_part;
   }
 
-  /* --------------------------------------------------------------------------*/
   /**
    * @brief  Inserts a (key, value) pair into the hash map
    *
@@ -296,7 +293,6 @@ class concurrent_unordered_multimap {
    *
    * @returns An iterator to the newly inserted (key, value) pair
    */
-  /* ----------------------------------------------------------------------------*/
   template <typename hash_value_type = typename Hasher::result_type,
             typename comparison_type = key_equal>
   __forceinline__ __device__ iterator insert(const value_type& x,
@@ -366,7 +362,6 @@ class concurrent_unordered_multimap {
     return iterator(m_hashtbl_values, m_hashtbl_values + hashtbl_size, it);
   }
 
-  /* --------------------------------------------------------------------------*/
   /**
    * @brief  Inserts a (key, value) pair into the hash map partition. This
    * is useful when building the hash table in multiple passes, one
@@ -389,7 +384,6 @@ class concurrent_unordered_multimap {
    *
    * @returns An iterator to the newly inserted (key, value) pair
    */
-  /* ----------------------------------------------------------------------------*/
   template <typename hash_value_type = typename Hasher::result_type,
             typename comparison_type = key_equal>
   __forceinline__ __device__ iterator insert_part(const value_type& x,
@@ -421,7 +415,6 @@ class concurrent_unordered_multimap {
       return insert(x, true, hash_value, keys_are_equal);
   }
 
-  /* --------------------------------------------------------------------------*/
   /**
    * @brief Searches for a key in the hash map and returns an iterator to the
    * first instance of the key in the map.
@@ -439,7 +432,6 @@ class concurrent_unordered_multimap {
    *
    * @returns   An iterator to the first instance of the key in the map
    */
-  /* ----------------------------------------------------------------------------*/
   template <typename hash_value_type = typename Hasher::result_type,
             typename comparison_type = key_equal>
   __forceinline__ __host__ __device__ const_iterator
@@ -483,7 +475,8 @@ class concurrent_unordered_multimap {
     return const_iterator(m_hashtbl_values, m_hashtbl_values + m_hashtbl_size, begin_ptr);
   }
 
-  void assign_async(const concurrent_unordered_multimap& other, cudaStream_t stream = 0)
+  void assign_async(const concurrent_unordered_multimap& other,
+                    rmm::cuda_stream_view stream = rmm::cuda_stream_default)
   {
     m_collisions = other.m_collisions;
     if (other.m_hashtbl_size <= m_hashtbl_capacity) {
@@ -499,13 +492,13 @@ class concurrent_unordered_multimap {
                              other.m_hashtbl_values,
                              m_hashtbl_size * sizeof(value_type),
                              cudaMemcpyDefault,
-                             stream));
+                             stream.value()));
   }
 
-  void clear_async(cudaStream_t stream = 0)
+  void clear_async(rmm::cuda_stream_view stream = rmm::cuda_stream_default)
   {
     constexpr int block_size = 128;
-    init_hashtbl<<<((m_hashtbl_size - 1) / block_size) + 1, block_size, 0, stream>>>(
+    init_hashtbl<<<((m_hashtbl_size - 1) / block_size) + 1, block_size, 0, stream.value()>>>(
       m_hashtbl_values, m_hashtbl_size, unused_key, unused_element);
     if (count_collisions) m_collisions = 0;
   }
@@ -520,14 +513,14 @@ class concurrent_unordered_multimap {
     }
   }
 
-  void prefetch(const int dev_id, cudaStream_t stream = 0)
+  void prefetch(const int dev_id, rmm::cuda_stream_view stream = rmm::cuda_stream_default)
   {
     cudaPointerAttributes hashtbl_values_ptr_attributes;
     cudaError_t status = cudaPointerGetAttributes(&hashtbl_values_ptr_attributes, m_hashtbl_values);
 
     if (cudaSuccess == status && isPtrManaged(hashtbl_values_ptr_attributes)) {
       CUDA_TRY(cudaMemPrefetchAsync(
-        m_hashtbl_values, m_hashtbl_size * sizeof(value_type), dev_id, stream));
+        m_hashtbl_values, m_hashtbl_size * sizeof(value_type), dev_id, stream.value()));
     }
   }
 
@@ -561,11 +554,11 @@ class concurrent_unordered_multimap {
    * @param[in] stream CUDA stream used for device memory operations and kernel launches.
    */
   explicit concurrent_unordered_multimap(size_type n,
-                                         const bool init             = true,
-                                         const Hasher& hash_function = hasher(),
-                                         const Equality& equal       = key_equal(),
-                                         const allocator_type& a     = allocator_type(),
-                                         cudaStream_t stream         = 0)
+                                         const bool init              = true,
+                                         const Hasher& hash_function  = hasher(),
+                                         const Equality& equal        = key_equal(),
+                                         const allocator_type& a      = allocator_type(),
+                                         rmm::cuda_stream_view stream = rmm::cuda_stream_default)
     : m_hf(hash_function),
       m_equal(equal),
       m_allocator(a),
@@ -584,12 +577,12 @@ class concurrent_unordered_multimap {
         int dev_id = 0;
         CUDA_TRY(cudaGetDevice(&dev_id));
         CUDA_TRY(cudaMemPrefetchAsync(
-          m_hashtbl_values, m_hashtbl_size * sizeof(value_type), dev_id, stream));
+          m_hashtbl_values, m_hashtbl_size * sizeof(value_type), dev_id, stream.value()));
       }
     }
 
     if (init) {
-      init_hashtbl<<<((m_hashtbl_size - 1) / block_size) + 1, block_size, 0, stream>>>(
+      init_hashtbl<<<((m_hashtbl_size - 1) / block_size) + 1, block_size, 0, stream.value()>>>(
         m_hashtbl_values, m_hashtbl_size, unused_key, unused_element);
       CUDA_TRY(cudaGetLastError());
     }

@@ -17,11 +17,10 @@
 #ifndef DEVICE_OPERATORS_CUH
 #define DEVICE_OPERATORS_CUH
 
-/** ---------------------------------------------------------------------------*
+/**
  * @brief definition of the device operators
  * @file device_operators.cuh
- *
- * ---------------------------------------------------------------------------**/
+ */
 
 #include <cudf/scalar/scalar.hpp>
 #include <cudf/types.hpp>
@@ -94,7 +93,6 @@ struct DeviceCount {
  * character. This serves as identity value for maximum operator on string
  * values. Also, this char pointer serves as valid device pointer of identity
  * value for minimum operator on string values.
- *
  */
 __constant__ char max_string_sentinel[5]{"\xF7\xBF\xBF\xBF"};
 
@@ -106,9 +104,10 @@ struct DeviceMin {
     return std::min(lhs, rhs);
   }
 
-  template <typename T,
-            typename std::enable_if_t<!std::is_same<T, cudf::string_view>::value &&
-                                      !cudf::is_fixed_point<T>()>* = nullptr>
+  template <
+    typename T,
+    typename std::enable_if_t<!std::is_same<T, cudf::string_view>::value &&
+                              !cudf::is_dictionary<T>() && !cudf::is_fixed_point<T>()>* = nullptr>
   static constexpr T identity()
   {
     return std::numeric_limits<T>::max();
@@ -134,6 +133,12 @@ struct DeviceMin {
 #endif
     return T(psentinel, 4);
   }
+
+  template <typename T, typename std::enable_if_t<cudf::is_dictionary<T>()>* = nullptr>
+  static constexpr T identity()
+  {
+    return static_cast<T>(T::max_value());
+  }
 };
 
 /* @brief binary `max` operator */
@@ -144,9 +149,10 @@ struct DeviceMax {
     return std::max(lhs, rhs);
   }
 
-  template <typename T,
-            typename std::enable_if_t<!std::is_same<T, cudf::string_view>::value &&
-                                      !cudf::is_fixed_point<T>()>* = nullptr>
+  template <
+    typename T,
+    typename std::enable_if_t<!std::is_same<T, cudf::string_view>::value &&
+                              !cudf::is_dictionary<T>() && !cudf::is_fixed_point<T>()>* = nullptr>
   static constexpr T identity()
   {
     return std::numeric_limits<T>::lowest();
@@ -170,6 +176,12 @@ struct DeviceMax {
     CUDA_TRY(cudaGetSymbolAddress((void**)&psentinel, max_string_sentinel));
 #endif
     return T(psentinel, 0);
+  }
+
+  template <typename T, typename std::enable_if_t<cudf::is_dictionary<T>()>* = nullptr>
+  static constexpr T identity()
+  {
+    return static_cast<T>(T::lowest_value());
   }
 };
 

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -15,18 +15,44 @@
  */
 
 #include <cudf/scalar/scalar.hpp>
+#include <cudf/strings/string_view.hpp>
 
+#include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_buffer.hpp>
 
 #include <string>
 
 namespace cudf {
-std::string string_scalar::to_string(cudaStream_t stream) const
+
+string_scalar::string_scalar(rmm::device_scalar<value_type>& data,
+                             bool is_valid,
+                             rmm::cuda_stream_view stream,
+                             rmm::mr::device_memory_resource* mr)
+  : string_scalar(data.value(stream), is_valid, stream, mr)
+{
+}
+
+string_scalar::string_scalar(value_type const& source,
+                             bool is_valid,
+                             rmm::cuda_stream_view stream,
+                             rmm::mr::device_memory_resource* mr)
+  : scalar(data_type(type_id::STRING), is_valid),
+    _data(source.data(), source.size_bytes(), stream, mr)
+{
+}
+
+string_scalar::value_type string_scalar::value(rmm::cuda_stream_view stream) const
+{
+  return value_type{data(), size()};
+}
+
+std::string string_scalar::to_string(rmm::cuda_stream_view stream) const
 {
   std::string result;
   result.resize(_data.size());
-  CUDA_TRY(cudaMemcpyAsync(&result[0], _data.data(), _data.size(), cudaMemcpyDeviceToHost, stream));
-  CUDA_TRY(cudaStreamSynchronize(stream));
+  CUDA_TRY(cudaMemcpyAsync(
+    &result[0], _data.data(), _data.size(), cudaMemcpyDeviceToHost, stream.value()));
+  stream.synchronize();
   return result;
 }
 

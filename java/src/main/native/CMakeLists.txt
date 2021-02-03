@@ -146,7 +146,10 @@ endif(CUDA_STATIC_RUNTIME)
 ###################################################################################################
 # - cmake modules ---------------------------------------------------------------------------------
 
-set(CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake/Modules/" ${CMAKE_MODULE_PATH})
+set(CMAKE_MODULE_PATH
+    "${CMAKE_CURRENT_SOURCE_DIR}/cmake/Modules/"
+    "${PROJECT_SOURCE_DIR}/../../../../cpp/cmake/Modules/"
+    ${CMAKE_MODULE_PATH})
 
 include(FeatureSummary)
 include(CheckIncludeFiles)
@@ -165,7 +168,7 @@ find_path(CUB_INCLUDE "cub"
           "${CUDF_CPP_BUILD_DIR}/_deps/thrust-src"
           "$ENV{CONDA_PREFIX}/include")
 
-find_path(LIBCUDACXX_INCLUDE "simt"
+find_path(LIBCUDACXX_INCLUDE "cuda"
     HINTS "$ENV{CUDF_ROOT}/_deps/libcudacxx-src/include"
           "${CUDF_CPP_BUILD_DIR}/_deps/libcudacxx-src/include")
 
@@ -180,20 +183,33 @@ find_path(SPDLOG_INCLUDE "spdlog"
 set(CUDF_INCLUDE "${PROJECT_SOURCE_DIR}/../../../../cpp/include"
                  "${PROJECT_SOURCE_DIR}/../../../../cpp/src/")
 
-find_library(CUDF_LIBRARY "cudf"
+set(CUDF_LIBS_HINTS
     HINTS "$ENV{CUDF_ROOT}"
           "$ENV{CUDF_ROOT}/lib"
           "$ENV{CONDA_PREFIX}/lib"
           "${CUDF_CPP_BUILD_DIR}")
 
-message(STATUS "CUDF: CUDF_LIBRARY set to ${CUDF_LIBRARY}")
-message(STATUS "CUDF: CUDF_INCLUDE set to ${CUDF_INCLUDE}")
+# This list of cudf libraries needs to be kept in sync with the lists
+# in pom.xml and NativeDepsLoader.java
+set(CUDF_LIB_BASES
+  "cudf_ast"
+  "cudf_base"
+  "cudf_comms"
+  "cudf_hash"
+  "cudf_interop"
+  "cudf_io"
+  "cudf_join"
+  "cudf_merge"
+  "cudf_partitioning"
+  "cudf_reductions"
+  "cudf_replace"
+  "cudf_rolling")
 
-add_library(cudf SHARED IMPORTED ${CUDF_LIBRARY})
-if (CUDF_INCLUDE AND CUDF_LIBRARY)
-    set_target_properties(cudf PROPERTIES IMPORTED_LOCATION ${CUDF_LIBRARY})
-endif (CUDF_INCLUDE AND CUDF_LIBRARY)
-
+set(CUDF_LIBS "")
+foreach(CUDF_LIB_BASE ${CUDF_LIB_BASES})
+    find_library(LIB_${CUDF_LIB_BASE} ${CUDF_LIB_BASE} REQUIRED HINTS ${CUDF_LIBS_HINTS})
+    list(APPEND CUDF_LIBS ${LIB_${CUDF_LIB_BASE}})
+endforeach()
 
 ###################################################################################################
 # - RMM -------------------------------------------------------------------------------------------
@@ -250,6 +266,15 @@ endif(NVCOMP_FOUND)
 add_library(nvcomp STATIC IMPORTED ${NVCOMP_LIB})
 
 ###################################################################################################
+# - GDS/cufile ------------------------------------------------------------------------------------
+
+option(USE_GDS "Build with GPUDirect Storage (GDS)/cuFile support" OFF)
+if(USE_GDS)
+    message(STATUS "Building with GPUDirect Storage (GDS)/cuFile support")
+    find_package(cuFile REQUIRED)
+endif(USE_GDS)
+
+###################################################################################################
 # - include paths ---------------------------------------------------------------------------------
 
 include_directories("${THRUST_INCLUDE}"
@@ -270,18 +295,19 @@ include_directories("${THRUST_INCLUDE}"
 # - library paths ---------------------------------------------------------------------------------
 
 link_directories("${CMAKE_CUDA_IMPLICIT_LINK_DIRECTORIES}" # CMAKE_CUDA_IMPLICIT_LINK_DIRECTORIES is an undocumented/unsupported variable containing the link directories for nvcc
-                 "${CMAKE_BINARY_DIR}/lib"
-                 "${CUDF_LIBRARY}")
+                 "${CMAKE_BINARY_DIR}/lib")
 
 
 ###################################################################################################
 # - library targets -------------------------------------------------------------------------------
 
 set(SOURCE_FILES
+    "src/row_conversion.cu"
     "src/AggregationJni.cpp"
     "src/CudfJni.cpp"
     "src/CudaJni.cpp"
     "src/ColumnVectorJni.cpp"
+    "src/ColumnViewJni.cpp"
     "src/HostMemoryBufferNativeUtilsJni.cpp"
     "src/NvcompJni.cpp"
     "src/NvtxRangeJni.cpp"
@@ -293,6 +319,12 @@ add_library(cudfjni SHARED ${SOURCE_FILES})
 
 #Override RPATH for cudfjni
 SET_TARGET_PROPERTIES(cudfjni PROPERTIES BUILD_RPATH "\$ORIGIN")
+
+if(USE_GDS)
+    add_library(cufilejni SHARED "src/CuFileJni.cpp")
+    target_include_directories(cufilejni PRIVATE "${cuFile_INCLUDE_DIRS}")
+    target_link_libraries(cufilejni PRIVATE "${cuFile_LIBRARIES}")
+endif(USE_GDS)
 
 ###################################################################################################
 # - build options ---------------------------------------------------------------------------------
@@ -325,4 +357,4 @@ target_compile_definitions(cudfjni PUBLIC SPDLOG_ACTIVE_LEVEL=SPDLOG_LEVEL_${RMM
 ###################################################################################################
 # - link libraries --------------------------------------------------------------------------------
 
-target_link_libraries(cudfjni cudf ${ARROW_LIBRARY} ${NVCOMP_LIB} ${CUDART_LIBRARY} cuda nvrtc)
+target_link_libraries(cudfjni ${CUDF_LIBS} ${ARROW_LIBRARY} ${NVCOMP_LIB} ${CUDART_LIBRARY} cuda nvrtc)

@@ -4725,7 +4725,6 @@ namespace detail {
  *
  * special_case_mapping, g_special_case_mappings, and special_case_prime can be regenerated with
  * cudf::strings::detail::generate_special_mapping_hash_table
- *
  */
 
 struct special_case_mapping {

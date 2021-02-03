@@ -25,6 +25,8 @@
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
 
+#include <rmm/cuda_stream_view.hpp>
+
 #include <cstring>
 #include <numeric>
 
@@ -74,7 +76,7 @@ struct unary_row_output : public row_output {
                              detail::device_data_reference output) const
   {
     using OperatorFunctor = detail::operator_functor<op>;
-    using Out             = simt::std::invoke_result_t<OperatorFunctor, Input>;
+    using Out             = cuda::std::invoke_result_t<OperatorFunctor, Input>;
     resolve_output<Out>(output, row_index, OperatorFunctor{}(input));
   }
 
@@ -102,7 +104,7 @@ struct binary_row_output : public row_output {
                              detail::device_data_reference output) const
   {
     using OperatorFunctor = detail::operator_functor<op>;
-    using Out             = simt::std::invoke_result_t<OperatorFunctor, LHS, RHS>;
+    using Out             = cuda::std::invoke_result_t<OperatorFunctor, LHS, RHS>;
     resolve_output<Out>(output, row_index, OperatorFunctor{}(lhs, rhs));
   }
 
@@ -124,7 +126,6 @@ struct binary_row_output : public row_output {
  * This class is designed for n-ary transform evaluation. Currently this class assumes that there's
  * only one relevant "row index" in its methods, which corresponds to a row in a single input table
  * and the same row index in an output column.
- *
  */
 struct row_evaluator {
   friend struct row_output;
@@ -369,7 +370,7 @@ struct ast_plan {
 std::unique_ptr<column> compute_column(
   table_view const table,
   expression const& expr,
-  cudaStream_t stream                 = 0,
+  rmm::cuda_stream_view stream,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 }  // namespace detail
 

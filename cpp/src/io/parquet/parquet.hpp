@@ -22,26 +22,125 @@
 #include <stdint.h>
 #include <algorithm>
 #include <string>
+#include <tuple>
 #include <vector>
 
 namespace cudf {
 namespace io {
 namespace parquet {
-#define PARQUET_MAGIC (('P' << 0) | ('A' << 8) | ('R' << 16) | ('1' << 24))
+constexpr uint32_t parquet_magic = (('P' << 0) | ('A' << 8) | ('R' << 16) | ('1' << 24));
 
 /**
  * @brief Struct that describes the Parquet file data header
- **/
+ */
 struct file_header_s {
   uint32_t magic;
 };
 
 /**
  * @brief Struct that describes the Parquet file data postscript
- **/
+ */
 struct file_ender_s {
   uint32_t footer_len;
   uint32_t magic;
+};
+
+// thrift generated code simplified.
+struct StringType {
+};
+struct MapType {
+};
+struct ListType {
+};
+struct EnumType {
+};
+struct DecimalType {
+  int32_t scale     = 0;
+  int32_t precision = 0;
+};
+struct DateType {
+};
+
+struct MilliSeconds {
+};
+struct MicroSeconds {
+};
+typedef struct TimeUnit_isset {
+  TimeUnit_isset() : MILLIS(false), MICROS(false) {}
+  bool MILLIS;
+  bool MICROS;
+} TimeUnit_isset;
+
+struct TimeUnit {
+  TimeUnit_isset isset;
+  MilliSeconds MILLIS;
+  MicroSeconds MICROS;
+};
+
+struct TimeType {
+  bool isAdjustedToUTC = false;
+  TimeUnit unit;
+};
+struct TimestampType {
+  bool isAdjustedToUTC = false;
+  TimeUnit unit;
+};
+struct IntType {
+  int8_t bitWidth = 0;
+  bool isSigned   = false;
+};
+struct NullType {
+};
+struct JsonType {
+};
+struct BsonType {
+};
+
+// thrift generated code simplified.
+typedef struct LogicalType_isset {
+  LogicalType_isset()
+    : STRING(false),
+      MAP(false),
+      LIST(false),
+      ENUM(false),
+      DECIMAL(false),
+      DATE(false),
+      TIME(false),
+      TIMESTAMP(false),
+      INTEGER(false),
+      UNKNOWN(false),
+      JSON(false),
+      BSON(false)
+  {
+  }
+  bool STRING;
+  bool MAP;
+  bool LIST;
+  bool ENUM;
+  bool DECIMAL;
+  bool DATE;
+  bool TIME;
+  bool TIMESTAMP;
+  bool INTEGER;
+  bool UNKNOWN;
+  bool JSON;
+  bool BSON;
+} LogicalType_isset;
+
+struct LogicalType {
+  LogicalType_isset isset;
+  StringType STRING;
+  MapType MAP;
+  ListType LIST;
+  EnumType ENUM;
+  DecimalType DECIMAL;
+  DateType DATE;
+  TimeType TIME;
+  TimestampType TIMESTAMP;
+  IntType INTEGER;
+  NullType UNKNOWN;
+  JsonType JSON;
+  BsonType BSON;
 };
 
 /**
@@ -53,6 +152,7 @@ struct file_ender_s {
 struct SchemaElement {
   Type type                    = UNDEFINED_TYPE;
   ConvertedType converted_type = UNKNOWN;
+  LogicalType logical_type;
   int32_t type_length =
     0;  // Byte length of FIXED_LENGTH_BYTE_ARRAY elements, or maximum bit length for other types
   FieldRepetitionType repetition_type = REQUIRED;
@@ -109,7 +209,7 @@ struct SchemaElement {
 
 /**
  * @brief Thrift-derived struct describing a column chunk
- **/
+ */
 struct ColumnChunkMetaData {
   Type type = BOOLEAN;
   std::vector<Encoding> encodings;
@@ -134,7 +234,7 @@ struct ColumnChunkMetaData {
  * Each column chunk lives in a particular row group and are guaranteed to be
  * contiguous in the file. Any mssing or corrupted chunks can be skipped during
  * reading.
- **/
+ */
 struct ColumnChunk {
   std::string file_path = "";
   int64_t file_offset   = 0;
@@ -153,7 +253,7 @@ struct ColumnChunk {
  *
  * There may be one or more row groups within a dataset, with each row group
  * consisting of a column chunk for each column.
- **/
+ */
 struct RowGroup {
   int64_t total_byte_size = 0;
   std::vector<ColumnChunk> columns;
@@ -162,7 +262,7 @@ struct RowGroup {
 
 /**
  * @brief Thrift-derived struct describing a key-value pair, for user metadata
- **/
+ */
 struct KeyValue {
   std::string key;
   std::string value;
@@ -174,7 +274,7 @@ struct KeyValue {
  * The additional information stored in the key_value_metadata can be used
  * during reading to reconstruct the output data to the exact original dataset
  * prior to conversion to Parquet.
- **/
+ */
 struct FileMetaData {
   int32_t version = 0;
   std::vector<SchemaElement> schema;
@@ -187,20 +287,20 @@ struct FileMetaData {
 
 /**
  * @brief Thrift-derived struct describing the header for a data page
- **/
+ */
 struct DataPageHeader {
   int32_t num_values                 = 0;  // Number of values, including NULLs, in this data page.
-  Encoding encoding                  = PLAIN;  // Encoding used for this data page
-  Encoding definition_level_encoding = PLAIN;  // Encoding used for definition levels
-  Encoding repetition_level_encoding = PLAIN;  // Encoding used for repetition levels
+  Encoding encoding                  = Encoding::PLAIN;  // Encoding used for this data page
+  Encoding definition_level_encoding = Encoding::PLAIN;  // Encoding used for definition levels
+  Encoding repetition_level_encoding = Encoding::PLAIN;  // Encoding used for repetition levels
 };
 
 /**
  * @brief Thrift-derived struct describing the header for a dictionary page
- **/
+ */
 struct DictionaryPageHeader {
-  int32_t num_values = 0;      // Number of values in the dictionary
-  Encoding encoding  = PLAIN;  // Encoding using this dictionary page
+  int32_t num_values = 0;                // Number of values in the dictionary
+  Encoding encoding  = Encoding::PLAIN;  // Encoding using this dictionary page
 };
 
 /**
@@ -211,7 +311,7 @@ struct DictionaryPageHeader {
  * can be multiple page types interleaved in a column chunk, and each page is
  * individually compressed and encoded. Any missing or corrupted pages can be
  * skipped during reading.
- **/
+ */
 struct PageHeader {
   PageType type =
     PageType::DATA_PAGE;  // the type of the page: indicates which of the *_header fields is set
@@ -223,16 +323,12 @@ struct PageHeader {
 
 /**
  * @brief Count the number of leading zeros in an unsigned integer
- **/
+ */
 static inline int CountLeadingZeros32(uint32_t value)
 {
 #if defined(__clang__) || defined(__GNUC__)
   if (value == 0) return 32;
   return static_cast<int>(__builtin_clz(value));
-#elif defined(_MSC_VER)
-  unsigned long index;
-  return (_BitScanReverse(&index, static_cast<unsigned long>(value))) ? 31 - static_cast<int>(index)
-                                                                      : 32;
 #else
   int bitpos = 0;
   while (value != 0) {
@@ -254,7 +350,7 @@ static inline int CountLeadingZeros32(uint32_t value)
  *
  * The parser handles both V1 and V2 Parquet datasets, although not all
  * compression codecs are supported yet.
- **/
+ */
 class CompactProtocolReader {
  protected:
   static const uint8_t g_list2struct[16];
@@ -316,17 +412,21 @@ class CompactProtocolReader {
 
  public:
   // Generate Thrift structure parsing routines
-#define DECL_PARQUET_STRUCT(st) bool read(st *)
-  DECL_PARQUET_STRUCT(FileMetaData);
-  DECL_PARQUET_STRUCT(SchemaElement);
-  DECL_PARQUET_STRUCT(RowGroup);
-  DECL_PARQUET_STRUCT(ColumnChunk);
-  DECL_PARQUET_STRUCT(ColumnChunkMetaData);
-  DECL_PARQUET_STRUCT(PageHeader);
-  DECL_PARQUET_STRUCT(DataPageHeader);
-  DECL_PARQUET_STRUCT(DictionaryPageHeader);
-  DECL_PARQUET_STRUCT(KeyValue);
-#undef DECL_PARQUET_STRUCT
+  bool read(FileMetaData *f);
+  bool read(SchemaElement *s);
+  bool read(LogicalType *l);
+  bool read(DecimalType *d);
+  bool read(TimeType *t);
+  bool read(TimeUnit *u);
+  bool read(TimestampType *t);
+  bool read(IntType *t);
+  bool read(RowGroup *r);
+  bool read(ColumnChunk *c);
+  bool read(ColumnChunkMetaData *c);
+  bool read(PageHeader *p);
+  bool read(DataPageHeader *d);
+  bool read(DictionaryPageHeader *d);
+  bool read(KeyValue *k);
 
  public:
   static int NumRequiredBits(uint32_t max_level) noexcept
@@ -346,6 +446,375 @@ class CompactProtocolReader {
   const uint8_t *m_base = nullptr;
   const uint8_t *m_cur  = nullptr;
   const uint8_t *m_end  = nullptr;
+
+  friend class ParquetFieldBool;
+  friend class ParquetFieldInt8;
+  friend class ParquetFieldInt32;
+  friend class ParquetFieldInt64;
+  template <typename T>
+  friend class ParquetFieldStructListFunctor;
+  friend class ParquetFieldString;
+  template <typename T>
+  friend class ParquetFieldStructFunctor;
+  template <typename T, bool>
+  friend class ParquetFieldUnionFunctor;
+  template <typename T>
+  friend class ParquetFieldEnum;
+  template <typename T>
+  friend class ParquetFieldEnumListFunctor;
+  friend class ParquetFieldStringList;
+  friend class ParquetFieldStructBlob;
+};
+
+/**
+ * @brief Functor to set value to bool read from CompactProtocolReader
+ *
+ * @return True if field type is not bool
+ */
+class ParquetFieldBool {
+  int field_val;
+  bool &val;
+
+ public:
+  ParquetFieldBool(int f, bool &v) : field_val(f), val(v) {}
+
+  inline bool operator()(CompactProtocolReader *cpr, int field_type)
+  {
+    return (field_type != ST_FLD_TRUE && field_type != ST_FLD_FALSE) ||
+           !(val = (field_type == ST_FLD_TRUE), true);
+  }
+
+  int field() { return field_val; }
+};
+
+/**
+ * @brief Functor to set value to 8 bit integer read from CompactProtocolReader
+ *
+ * @return True if field type is not int8
+ */
+class ParquetFieldInt8 {
+  int field_val;
+  int8_t &val;
+
+ public:
+  ParquetFieldInt8(int f, int8_t &v) : field_val(f), val(v) {}
+
+  inline bool operator()(CompactProtocolReader *cpr, int field_type)
+  {
+    val = cpr->getb();
+    return (field_type != ST_FLD_BYTE);
+  }
+
+  int field() { return field_val; }
+};
+
+/**
+ * @brief Functor to set value to 32 bit integer read from CompactProtocolReader
+ *
+ * @return True if field type is not int32
+ */
+class ParquetFieldInt32 {
+  int field_val;
+  int32_t &val;
+
+ public:
+  ParquetFieldInt32(int f, int32_t &v) : field_val(f), val(v) {}
+
+  inline bool operator()(CompactProtocolReader *cpr, int field_type)
+  {
+    val = cpr->get_i32();
+    return (field_type != ST_FLD_I32);
+  }
+
+  int field() { return field_val; }
+};
+
+/**
+ * @brief Functor to set value to 64 bit integer read from CompactProtocolReader
+ *
+ * @return True if field type is not int32 or int64
+ */
+class ParquetFieldInt64 {
+  int field_val;
+  int64_t &val;
+
+ public:
+  ParquetFieldInt64(int f, int64_t &v) : field_val(f), val(v) {}
+
+  inline bool operator()(CompactProtocolReader *cpr, int field_type)
+  {
+    val = cpr->get_i64();
+    return (field_type < ST_FLD_I16 || field_type > ST_FLD_I64);
+  }
+
+  int field() { return field_val; }
+};
+
+/**
+ * @brief Functor to read a vector of structures from CompactProtocolReader
+ *
+ * @return True if field types mismatch or if the process of reading a
+ * struct fails
+ */
+template <typename T>
+class ParquetFieldStructListFunctor {
+  int field_val;
+  std::vector<T> &val;
+
+ public:
+  ParquetFieldStructListFunctor(int f, std::vector<T> &v) : field_val(f), val(v) {}
+
+  inline bool operator()(CompactProtocolReader *cpr, int field_type)
+  {
+    if (field_type != ST_FLD_LIST) return true;
+
+    int current_byte = cpr->getb();
+    if ((current_byte & 0xf) != ST_FLD_STRUCT) return true;
+    int n = current_byte >> 4;
+    if (n == 0xf) n = cpr->get_u32();
+    val.resize(n);
+    for (int32_t i = 0; i < n; i++) {
+      if (!(cpr->read(&val[i]))) { return true; }
+    }
+
+    return false;
+  }
+
+  int field() { return field_val; }
+};
+
+template <typename T>
+ParquetFieldStructListFunctor<T> ParquetFieldStructList(int f, std::vector<T> &v)
+{
+  return ParquetFieldStructListFunctor<T>(f, v);
+}
+
+/**
+ * @brief Functor to read a string from CompactProtocolReader
+ *
+ * @return True if field type mismatches or if size of string exceeds bounds
+ * of the CompactProtocolReader
+ */
+class ParquetFieldString {
+  int field_val;
+  std::string &val;
+
+ public:
+  ParquetFieldString(int f, std::string &v) : field_val(f), val(v) {}
+
+  inline bool operator()(CompactProtocolReader *cpr, int field_type)
+  {
+    if (field_type != ST_FLD_BINARY) return true;
+    uint32_t n = cpr->get_u32();
+    if (n < (size_t)(cpr->m_end - cpr->m_cur)) {
+      val.assign((const char *)cpr->m_cur, n);
+      cpr->m_cur += n;
+      return false;
+    } else {
+      return true;
+    }
+  }
+
+  int field() { return field_val; }
+};
+
+/**
+ * @brief Functor to read a structure from CompactProtocolReader
+ *
+ * @return True if field types mismatch or if the process of reading a
+ * struct fails
+ */
+template <typename T>
+class ParquetFieldStructFunctor {
+  int field_val;
+  T &val;
+
+ public:
+  ParquetFieldStructFunctor(int f, T &v) : field_val(f), val(v) {}
+
+  inline bool operator()(CompactProtocolReader *cpr, int field_type)
+  {
+    return (field_type != ST_FLD_STRUCT || !(cpr->read(&val)));
+  }
+
+  int field() { return field_val; }
+};
+
+template <typename T>
+ParquetFieldStructFunctor<T> ParquetFieldStruct(int f, T &v)
+{
+  return ParquetFieldStructFunctor<T>(f, v);
+}
+
+/**
+ * @brief Functor to read a union member from CompactProtocolReader
+ *
+ * @tparam is_empty True if tparam `T` type is empty type, else false.
+ *
+ * @return True if field types mismatch or if the process of reading a
+ * union member fails
+ */
+template <typename T, bool is_empty = false>
+class ParquetFieldUnionFunctor {
+  int field_val;
+  bool &is_set;
+  T &val;
+
+ public:
+  ParquetFieldUnionFunctor(int f, bool &b, T &v) : field_val(f), is_set(b), val(v) {}
+
+  inline bool operator()(CompactProtocolReader *cpr, int field_type)
+  {
+    if (field_type != ST_FLD_STRUCT) {
+      return true;
+    } else {
+      is_set = true;
+      return !cpr->read(&val);
+    }
+  }
+
+  int field() { return field_val; }
+};
+
+template <typename T>
+struct ParquetFieldUnionFunctor<T, true> {
+  int field_val;
+  bool &is_set;
+  T &val;
+
+ public:
+  ParquetFieldUnionFunctor(int f, bool &b, T &v) : field_val(f), is_set(b), val(v) {}
+
+  inline bool operator()(CompactProtocolReader *cpr, int field_type)
+  {
+    if (field_type != ST_FLD_STRUCT) {
+      return true;
+    } else {
+      is_set = true;
+      cpr->skip_struct_field(field_type);
+      return false;
+    }
+  }
+
+  int field() { return field_val; }
+};
+
+template <typename T>
+ParquetFieldUnionFunctor<T, std::is_empty<T>::value> ParquetFieldUnion(int f, bool &b, T &v)
+{
+  return ParquetFieldUnionFunctor<T, std::is_empty<T>::value>(f, b, v);
+}
+
+/**
+ * @brief Functor to set value to enum read from CompactProtocolReader
+ *
+ * @return True if field type is not int32
+ */
+template <typename Enum>
+class ParquetFieldEnum {
+  int field_val;
+  Enum &val;
+
+ public:
+  ParquetFieldEnum(int f, Enum &v) : field_val(f), val(v) {}
+  inline bool operator()(CompactProtocolReader *cpr, int field_type)
+  {
+    val = static_cast<Enum>(cpr->get_i32());
+    return (field_type != ST_FLD_I32);
+  }
+
+  int field() { return field_val; }
+};
+
+/**
+ * @brief Functor to read a vector of enums from CompactProtocolReader
+ *
+ * @return True if field types mismatch or if the process of reading an
+ * enum fails
+ */
+template <typename Enum>
+class ParquetFieldEnumListFunctor {
+  int field_val;
+  std::vector<Enum> &val;
+
+ public:
+  ParquetFieldEnumListFunctor(int f, std::vector<Enum> &v) : field_val(f), val(v) {}
+  inline bool operator()(CompactProtocolReader *cpr, int field_type)
+  {
+    if (field_type != ST_FLD_LIST) return true;
+    int current_byte = cpr->getb();
+    if ((current_byte & 0xf) != ST_FLD_I32) return true;
+    int n = current_byte >> 4;
+    if (n == 0xf) n = cpr->get_u32();
+    val.resize(n);
+    for (int32_t i = 0; i < n; i++) { val[i] = static_cast<Enum>(cpr->get_i32()); }
+    return false;
+  }
+
+  int field() { return field_val; }
+};
+
+template <typename T>
+ParquetFieldEnumListFunctor<T> ParquetFieldEnumList(int field, std::vector<T> &v)
+{
+  return ParquetFieldEnumListFunctor<T>(field, v);
+}
+
+/**
+ * @brief Functor to read a vector of strings from CompactProtocolReader
+ *
+ * @return True if field types mismatch or if the process of reading a
+ * string fails
+ */
+class ParquetFieldStringList {
+  int field_val;
+  std::vector<std::string> &val;
+
+ public:
+  ParquetFieldStringList(int f, std::vector<std::string> &v) : field_val(f), val(v) {}
+  inline bool operator()(CompactProtocolReader *cpr, int field_type)
+  {
+    if (field_type != ST_FLD_LIST) return true;
+    int current_byte = cpr->getb();
+    if ((current_byte & 0xf) != ST_FLD_BINARY) return true;
+    int n = current_byte >> 4;
+    if (n == 0xf) n = cpr->get_u32();
+    val.resize(n);
+    for (int32_t i = 0; i < n; i++) {
+      uint32_t l = cpr->get_u32();
+      if (l < (size_t)(cpr->m_end - cpr->m_cur)) {
+        val[i].assign((const char *)cpr->m_cur, l);
+        cpr->m_cur += l;
+      } else
+        return true;
+    }
+    return false;
+  }
+
+  int field() { return field_val; }
+};
+
+/**
+ * @brief Functor to read a struct from CompactProtocolReader
+ *
+ * @return True if field type mismatches
+ */
+class ParquetFieldStructBlob {
+  int field_val;
+  std::vector<uint8_t> &val;
+
+ public:
+  ParquetFieldStructBlob(int f, std::vector<uint8_t> &v) : field_val(f), val(v) {}
+  inline bool operator()(CompactProtocolReader *cpr, int field_type)
+  {
+    if (field_type != ST_FLD_STRUCT) return true;
+    const uint8_t *start = cpr->m_cur;
+    cpr->skip_struct_field(field_type);
+    if (cpr->m_cur > start) { val.assign(start, cpr->m_cur - 1); }
+    return false;
+  }
+
+  int field() { return field_val; }
 };
 
 }  // namespace parquet

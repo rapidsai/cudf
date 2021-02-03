@@ -18,6 +18,8 @@
 
 #include <cudf/io/csv.hpp>
 
+#include <rmm/cuda_stream_view.hpp>
+
 namespace cudf {
 namespace io {
 namespace detail {
@@ -65,7 +67,7 @@ class reader {
    *
    * @return The set of columns along with table metadata
    */
-  table_with_metadata read(cudaStream_t stream = 0);
+  table_with_metadata read(rmm::cuda_stream_view stream = rmm::cuda_stream_default);
 };
 
 class writer {
@@ -104,7 +106,7 @@ class writer {
    */
   void write(table_view const &table,
              const table_metadata *metadata = nullptr,
-             cudaStream_t stream            = 0);
+             rmm::cuda_stream_view stream   = rmm::cuda_stream_default);
 };
 }  // namespace csv
 }  // namespace detail

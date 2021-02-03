@@ -25,6 +25,10 @@ import java.util.Arrays;
  * since in all types of aggregation operations.
  */
 public abstract class Aggregation {
+    static {
+        NativeDepsLoader.loadNativeDeps();
+    }
+
     /*
      * This should be kept in sync with AggregationJni.cpp.  Note that the nativeId here is not the
      * same as the C++ cudf::aggregation::Kind.  They are very closely related, but both are

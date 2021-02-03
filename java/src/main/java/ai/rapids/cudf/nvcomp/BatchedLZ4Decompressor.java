@@ -178,6 +178,8 @@ public class BatchedLZ4Decompressor {
     public void close() {
       if (!closed) {
         cleaner.delRef();
+        cleaner.clean(false);
+        closed = true;
       } else {
         cleaner.logRefCountDebug("double free " + this);
         throw new IllegalStateException("Close called too many times " + this);

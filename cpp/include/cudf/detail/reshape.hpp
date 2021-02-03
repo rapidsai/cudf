@@ -18,6 +18,8 @@
 
 #include <cudf/types.hpp>
 
+#include <rmm/cuda_stream_view.hpp>
+
 #include <memory>
 
 namespace cudf {
@@ -30,7 +32,7 @@ namespace detail {
 std::unique_ptr<table> tile(
   table_view const& input,
   size_type count,
-  cudaStream_t stream                 = 0,
+  rmm::cuda_stream_view               = rmm::cuda_stream_default,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 }  // namespace detail
 }  // namespace cudf

@@ -1,7 +1,8 @@
+# Copyright (c) 2020, NVIDIA CORPORATION.
+
 from __future__ import division, print_function
 
 import random
-import re
 from itertools import product
 
 import numpy as np
@@ -172,13 +173,9 @@ def test_datetime_unsupported_reductions(op):
     gsr = cudf.Series([1, 2, 3, None], dtype="datetime64[ns]")
     psr = gsr.to_pandas()
 
-    try:
-        getattr(psr, op)()
-    except Exception as e:
-        with pytest.raises(
-            type(e), match=re.escape(str(e)),
-        ):
-            getattr(gsr, op)()
+    utils.assert_exceptions_equal(
+        lfunc=getattr(psr, op), rfunc=getattr(gsr, op),
+    )
 
 
 @pytest.mark.parametrize("op", ["product", "var", "kurt", "kurtosis", "skew"])
@@ -186,11 +183,7 @@ def test_timedelta_unsupported_reductions(op):
     gsr = cudf.Series([1, 2, 3, None], dtype="timedelta64[ns]")
     psr = gsr.to_pandas()
 
-    try:
-        getattr(psr, op)()
-    except Exception as e:
-        with pytest.raises(type(e), match=re.escape(str(e))):
-            getattr(gsr, op)()
+    utils.assert_exceptions_equal(getattr(psr, op), getattr(gsr, op))
 
 
 @pytest.mark.parametrize("op", ["sum", "product", "std", "var"])
@@ -198,8 +191,6 @@ def test_categorical_reductions(op):
     gsr = cudf.Series([1, 2, 3, None], dtype="category")
     psr = gsr.to_pandas()
 
-    try:
-        getattr(psr, op)()
-    except Exception as e:
-        with pytest.raises(type(e)):
-            getattr(gsr, op)()
+    utils.assert_exceptions_equal(
+        getattr(psr, op), getattr(gsr, op), compare_error_message=False
+    )

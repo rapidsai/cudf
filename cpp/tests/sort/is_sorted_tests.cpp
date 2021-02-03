@@ -176,8 +176,6 @@ TYPED_TEST_CASE(IsSortedTest, ComparableTypes);
 
 TYPED_TEST(IsSortedTest, NoColumns)
 {
-  using T = TypeParam;
-
   cudf::table_view in{std::vector<cudf::table_view>{}};
   std::vector<cudf::order> order{};
   std::vector<cudf::null_order> null_precedence{};

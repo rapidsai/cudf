@@ -21,6 +21,8 @@ namespace {
 /** The CUDA device that should be used by all threads using cudf */
 int Cudf_device{cudaInvalidDeviceId};
 
+thread_local int Thread_device = cudaInvalidDeviceId;
+
 } // anonymous namespace
 
 namespace cudf {
@@ -37,12 +39,10 @@ void set_cudf_device(int device) {
  */
 void auto_set_device(JNIEnv *env) {
   if (Cudf_device != cudaInvalidDeviceId) {
-    int device;
-    cudaError_t cuda_status = cudaGetDevice(&device);
-    jni_cuda_check(env, cuda_status);
-    if (device != Cudf_device) {
-      cuda_status = cudaSetDevice(Cudf_device);
+    if (Thread_device != Cudf_device) {
+      cudaError_t cuda_status = cudaSetDevice(Cudf_device);
       jni_cuda_check(env, cuda_status);
+      Thread_device = Cudf_device;
     }
   }
 }

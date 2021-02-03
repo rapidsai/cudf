@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018, NVIDIA CORPORATION.
+ * Copyright (c) 2018-2020, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,19 +14,20 @@
  * limitations under the License.
  */
 
+#include <hash/concurrent_unordered_multimap.cuh>
+
 #include <cudf_test/base_fixture.hpp>
+
+#include <rmm/cuda_stream_view.hpp>
 
 #include <thrust/device_vector.h>
 
-#include <hash/concurrent_unordered_multimap.cuh>
-
 #include <gtest/gtest.h>
 
+#include <cstdlib>
 #include <iostream>
 #include <limits>
 #include <vector>
-
-#include <cstdlib>
 
 // This is necessary to do a parametrized typed-test over multiple template
 // arguments
@@ -61,7 +62,7 @@ class MultimapTest : public cudf::test::BaseFixture {
   MultimapTest(const size_type hash_table_size = 100)
     : the_map(multimap_type::create(hash_table_size)), size(hash_table_size)
   {
-    CUDA_TRY(cudaStreamSynchronize(0));
+    rmm::cuda_stream_default.synchronize();
   }
 
   ~MultimapTest() {}

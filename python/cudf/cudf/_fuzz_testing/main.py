@@ -1,4 +1,4 @@
-# Copyright (c) 2020, NVIDIA CORPORATION.
+# Copyright (c) 2020-2021, NVIDIA CORPORATION.
 
 from cudf._fuzz_testing import fuzzer
 
@@ -18,6 +18,11 @@ class PythonFuzz(object):
             runs=kwargs.get("runs", -1),
             max_string_length=kwargs.get("max_string_length", None),
             params=params,
+            write_data_on_failure=kwargs.get("write_data_on_failure", True),
+            max_lists_length=kwargs.get("max_lists_length", None),
+            max_lists_nesting_depth=kwargs.get(
+                "max_lists_nesting_depth", None
+            ),
         )
 
     def __call__(self, *args, **kwargs):

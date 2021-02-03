@@ -30,7 +30,7 @@ namespace cudf {
  * @{
  */
 
-class structs_column_view : private column_view {
+class structs_column_view : public column_view {
  public:
   // Foundation members:
   structs_column_view(structs_column_view const&) = default;
@@ -46,9 +46,21 @@ class structs_column_view : private column_view {
   using column_view::has_nulls;
   using column_view::null_count;
   using column_view::null_mask;
+  using column_view::num_children;
   using column_view::offset;
   using column_view::size;
 
+  /**
+   * @brief Returns the internal child column, applying any offset from the root.
+   *
+   * Slice/split offset values are only stored at the root level of a struct column.
+   * So when doing computations on them, we need to apply that offset to
+   * the child columns when recursing.  Most functions operating in a recursive manner
+   * on struct columns should be using `get_sliced_child()` instead of `child()`.
+   *
+   * @throw cudf::logic error if this is an empty column
+   */
+  column_view get_sliced_child(int index) const;
 };         // class structs_column_view;
 /** @} */  // end of group
 }  // namespace cudf

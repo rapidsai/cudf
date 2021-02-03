@@ -15,6 +15,8 @@
  */
 #pragma once
 
+#include <cstdint>
+
 constexpr uint32_t NEW_CP_MASK = 0x1fffff;
 
 constexpr uint32_t MULTICHAR_SHIFT = 23;

@@ -1,9 +1,13 @@
-# Copyright (c) 2018-20, NVIDIA CORPORATION.
+# Copyright (c) 2018-2021, NVIDIA CORPORATION.
+
 from io import BytesIO, StringIO
+
 from nvtx import annotate
 
+import cudf
 from cudf import _lib as libcudf
 from cudf.utils import ioutils
+from cudf.utils.dtypes import is_scalar
 
 
 @annotate("READ_CSV", color="purple", domain="cudf_python")
@@ -45,12 +49,24 @@ def read_csv(
 ):
     """{docstring}"""
 
+    is_single_filepath_or_buffer = ioutils.ensure_single_filepath_or_buffer(
+        path_or_data=filepath_or_buffer, **kwargs,
+    )
+    if not is_single_filepath_or_buffer:
+        raise NotImplementedError(
+            "`read_csv` does not yet support reading multiple files"
+        )
+
     filepath_or_buffer, compression = ioutils.get_filepath_or_buffer(
         path_or_data=filepath_or_buffer,
         compression=compression,
         iotypes=(BytesIO, StringIO),
         **kwargs,
     )
+
+    if na_values is not None and is_scalar(na_values):
+        na_values = [na_values]
+
     return libcudf.csv.read_csv(
         filepath_or_buffer,
         lineterminator=lineterminator,
@@ -99,9 +115,27 @@ def to_csv(
     index=True,
     line_terminator="\n",
     chunksize=None,
+    encoding=None,
+    compression=None,
     **kwargs,
 ):
     """{docstring}"""
+
+    if not isinstance(sep, str):
+        raise TypeError(f'"sep" must be string, not {type(sep).__name__}')
+    elif len(sep) > 1:
+        raise TypeError('"sep" must be a 1-character string')
+
+    if encoding and encoding != "utf-8":
+        error_msg = (
+            f"Encoding {encoding} is not supported. "
+            + "Currently, only utf-8 encoding is supported."
+        )
+        raise NotImplementedError(error_msg)
+
+    if compression:
+        error_msg = "Writing compressed csv is not currently supported in cudf"
+        raise NotImplementedError(error_msg)
 
     return_as_string = False
     if path_or_buf is None:
@@ -112,17 +146,6 @@ def to_csv(
         path_or_data=path_or_buf, mode="w", **kwargs
     )
 
-    if index:
-        from cudf import MultiIndex
-
-        if not isinstance(df.index, MultiIndex):
-            if df.index.name is None:
-                df.index.name = ""
-            if columns is not None:
-                columns = columns.copy()
-                columns.insert(0, df.index.name)
-        df = df.reset_index()
-
     if columns is not None:
         try:
             df = df[columns]
@@ -130,6 +153,34 @@ def to_csv(
             raise NameError(
                 "Dataframe doesn't have the labels provided in columns"
             )
+
+    for col in df._data.columns:
+        if isinstance(col, cudf.core.column.ListColumn):
+            raise NotImplementedError(
+                "Writing to csv format is not yet supported with "
+                "list columns."
+            )
+        elif isinstance(col, cudf.core.column.StructColumn):
+            raise NotImplementedError(
+                "Writing to csv format is not yet supported with "
+                "Struct columns."
+            )
+
+    # TODO: Need to typecast categorical columns to the underlying
+    # categories dtype to write the actual data to csv. Remove this
+    # workaround once following issue is fixed:
+    # https://github.com/rapidsai/cudf/issues/6661
+    if any(
+        isinstance(col, cudf.core.column.CategoricalColumn)
+        for col in df._data.columns
+    ) or isinstance(df.index, cudf.CategoricalIndex):
+        df = df.copy(deep=False)
+        for col_name, col in df._data.items():
+            if isinstance(col, cudf.core.column.CategoricalColumn):
+                df._data[col_name] = col.astype(col.cat().categories.dtype)
+
+        if isinstance(df.index, cudf.CategoricalIndex):
+            df.index = df.index.astype(df.index.categories.dtype)
 
     rows_per_chunk = chunksize if chunksize else len(df)
 
@@ -144,6 +195,7 @@ def to_csv(
                 header=header,
                 line_terminator=line_terminator,
                 rows_per_chunk=rows_per_chunk,
+                index=index,
             )
     else:
         libcudf.csv.write_csv(
@@ -154,6 +206,7 @@ def to_csv(
             header=header,
             line_terminator=line_terminator,
             rows_per_chunk=rows_per_chunk,
+            index=index,
         )
 
     if return_as_string:

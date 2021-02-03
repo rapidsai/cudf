@@ -1,9 +1,11 @@
-# Copyright (c) 2018-2020, NVIDIA CORPORATION.
+# Copyright (c) 2018-2021, NVIDIA CORPORATION.
+
 import pickle
 import warnings
 from collections import abc as abc
 from numbers import Number
 from shutil import get_terminal_size
+from typing import Any, Set
 from uuid import uuid4
 
 import cupy
@@ -21,9 +23,11 @@ from cudf.core.column import (
     ColumnBase,
     DatetimeColumn,
     TimeDeltaColumn,
+    arange,
     as_column,
     column,
     column_empty_like,
+    full,
 )
 from cudf.core.column.categorical import (
     CategoricalAccessor as CategoricalAccessor,
@@ -40,6 +44,7 @@ from cudf.utils import cudautils, docutils, ioutils, utils
 from cudf.utils.docutils import copy_docstring
 from cudf.utils.dtypes import (
     can_convert_to_column,
+    is_decimal_dtype,
     is_list_dtype,
     is_list_like,
     is_mixed_with_object_dtype,
@@ -47,6 +52,10 @@ from cudf.utils.dtypes import (
     is_string_dtype,
     min_scalar_type,
     numeric_normalize_types,
+)
+from cudf.utils.utils import (
+    get_appropriate_dispatched_func,
+    get_relevant_submodule,
 )
 
 
@@ -248,7 +257,7 @@ class Series(Frame, Serializable):
         0    10.0
         1    20.0
         2    30.0
-        3    null
+        3    <NA>
         dtype: float64
         >>> cudf.Series.from_pandas(pds, nan_as_null=False)
         0    10.0
@@ -395,6 +404,20 @@ class Series(Frame, Serializable):
         cls = type(self)
         params.update(kwargs)
         return cls(**params)
+
+    def _get_columns_by_label(self, labels, downcast=False):
+        """Return the column specified by `labels`
+
+        For cudf.Series, either the column, or an empty series is returned.
+        Parameter `downcast` does not have effects.
+        """
+        new_data = super()._get_columns_by_label(labels, downcast)
+
+        return (
+            self._constructor(data=new_data, index=self.index)
+            if len(new_data) > 0
+            else self._constructor(dtype=self.dtype, name=self.name)
+        )
 
     @classmethod
     def from_arrow(cls, array):
@@ -559,7 +582,7 @@ class Series(Frame, Serializable):
 
         See Also
         --------
-        cudf.concat : General function to concatenate DataFrame or
+        cudf.core.reshape.concat : General function to concatenate DataFrame or
             Series objects.
 
         Examples
@@ -781,39 +804,132 @@ class Series(Frame, Serializable):
         return len(self._column)
 
     def __array_ufunc__(self, ufunc, method, *inputs, **kwargs):
-        if method == "__call__" and hasattr(cudf, ufunc.__name__):
-            func = getattr(cudf, ufunc.__name__)
-            return func(*inputs)
+        if method == "__call__":
+            return get_appropriate_dispatched_func(
+                cudf, cudf.Series, cupy, ufunc, inputs, kwargs
+            )
         else:
             return NotImplemented
 
     def __array_function__(self, func, types, args, kwargs):
-
-        cudf_series_module = Series
-        for submodule in func.__module__.split(".")[1:]:
-            # point cudf to the correct submodule
-            if hasattr(cudf_series_module, submodule):
-                cudf_series_module = getattr(cudf_series_module, submodule)
-            else:
-                return NotImplemented
-
-        fname = func.__name__
-
-        handled_types = [cudf_series_module]
+        handled_types = [cudf.Series]
         for t in types:
             if t not in handled_types:
                 return NotImplemented
 
-        if hasattr(cudf_series_module, fname):
-            cudf_func = getattr(cudf_series_module, fname)
-            # Handle case if cudf_func is same as numpy function
-            if cudf_func is func:
-                return NotImplemented
-            else:
-                return cudf_func(*args, **kwargs)
+        cudf_submodule = get_relevant_submodule(func, cudf)
+        cudf_ser_submodule = get_relevant_submodule(func, cudf.Series)
+        cupy_submodule = get_relevant_submodule(func, cupy)
 
+        return get_appropriate_dispatched_func(
+            cudf_submodule,
+            cudf_ser_submodule,
+            cupy_submodule,
+            func,
+            args,
+            kwargs,
+        )
+
+    def map(self, arg, na_action=None) -> "Series":
+        """
+        Map values of Series according to input correspondence.
+
+        Used for substituting each value in a Series with another value,
+        that may be derived from a function, a ``dict`` or
+        a :class:`Series`.
+
+        Parameters
+        ----------
+        arg : function, collections.abc.Mapping subclass or Series
+            Mapping correspondence.
+        na_action : {None, 'ignore'}, default None
+            If 'ignore', propagate NaN values, without passing them to the
+            mapping correspondence.
+
+        Returns
+        -------
+        Series
+            Same index as caller.
+
+        Examples
+        --------
+        >>> s = cudf.Series(['cat', 'dog', np.nan, 'rabbit'])
+        >>> s
+        0      cat
+        1      dog
+        2     <NA>
+        3   rabbit
+        dtype: object
+
+        ``map`` accepts a ``dict`` or a ``Series``. Values that are not found
+        in the ``dict`` are converted to ``NaN``, default values in dicts are
+        currently not supported.:
+
+        >>> s.map({'cat': 'kitten', 'dog': 'puppy'})
+        0   kitten
+        1    puppy
+        2     <NA>
+        3     <NA>
+        dtype: object
+
+        It also accepts numeric functions:
+
+        >>> s = cudf.Series([1, 2, 3, 4, np.nan])
+        >>> s.map(lambda x: x ** 2)
+        0       1
+        1       4
+        2       9
+        3       16
+        4     <NA>
+        dtype: int64
+
+        Notes
+        -----
+        Please note map currently only supports fixed-width numeric
+        type functions.
+        """
+        if isinstance(arg, dict):
+            if hasattr(arg, "__missing__"):
+                raise NotImplementedError(
+                    "default values in dicts are currently not supported."
+                )
+            lhs = cudf.DataFrame({"x": self, "orig_order": arange(len(self))})
+            rhs = cudf.DataFrame(
+                {
+                    "x": arg.keys(),
+                    "s": arg.values(),
+                    "bool": full(len(arg), True, dtype=self.dtype),
+                }
+            )
+            res = lhs.merge(rhs, on="x", how="left").sort_values(
+                by="orig_order"
+            )
+            result = res["s"]
+            result.name = self.name
+            result.index = self.index
+        elif isinstance(arg, cudf.Series):
+            if not arg.index.is_unique:
+                raise ValueError(
+                    "Reindexing only valid with"
+                    " uniquely valued Index objects"
+                )
+            lhs = cudf.DataFrame({"x": self, "orig_order": arange(len(self))})
+            rhs = cudf.DataFrame(
+                {
+                    "x": arg.keys(),
+                    "s": arg,
+                    "bool": full(len(arg), True, dtype=self.dtype),
+                }
+            )
+            res = lhs.merge(rhs, on="x", how="left").sort_values(
+                by="orig_order"
+            )
+            result = res["s"]
+            result.name = self.name
+            result.index = self.index
         else:
-            return NotImplemented
+            result = self.applymap(arg)
+        return result
 
     def __getitem__(self, arg):
         if isinstance(arg, slice):
@@ -855,7 +971,7 @@ class Series(Frame, Serializable):
         """Always raise TypeError when converting a Series
         into a boolean.
         """
-        raise TypeError("can't compute boolean for {!r}".format(type(self)))
+        raise TypeError(f"can't compute boolean for {type(self)}")
 
     def values_to_string(self, nrows=None):
         """Returns a list of string for each element.
@@ -955,7 +1071,7 @@ class Series(Frame, Serializable):
         --------
         >>> import cudf
         >>> ser = cudf.Series([4, 3, 2, 1, 0])
-        >>> print(ser.tail(2))
+        >>> ser.tail(2)
         3    1
         4    0
         """
@@ -999,6 +1115,7 @@ class Series(Frame, Serializable):
                 preprocess._column, cudf.core.column.CategoricalColumn
             )
             and not is_list_dtype(preprocess.dtype)
+            and not is_decimal_dtype(preprocess.dtype)
         ) or isinstance(
             preprocess._column, cudf.core.column.timedelta.TimeDeltaColumn
         ):
@@ -1071,6 +1188,12 @@ class Series(Frame, Serializable):
 
         result_name = utils.get_result_name(self, other)
         if isinstance(other, Series):
+            if fn in cudf.utils.utils._EQUALITY_OPS:
+                if not self.index.equals(other.index):
+                    raise ValueError(
+                        "Can only compare identically-labeled "
+                        "Series objects"
+                    )
             lhs, rhs = _align_indices([self, other], allow_non_unique=True)
         else:
             lhs, rhs = self, other
@@ -1341,12 +1464,12 @@ class Series(Frame, Serializable):
         >>> s
         0      10
         1      20
-        2    null
+        2    <NA>
         dtype: int64
         >>> s.rfloordiv(200)
         0      20
         1      10
-        2    null
+        2    <NA>
         dtype: int64
         >>> s.rfloordiv(200, fill_value=2)
         0     20
@@ -1464,6 +1587,8 @@ class Series(Frame, Serializable):
             return other._column
         elif isinstance(other, Index):
             return Series(other)._column
+        elif other is cudf.NA:
+            return cudf.Scalar(other, dtype=self.dtype)
         else:
             return self._column.normalize_binop_value(other)
 
@@ -1597,17 +1722,17 @@ class Series(Frame, Serializable):
         """
         return self.__mul__(-1)
 
-    @copy_docstring(CategoricalAccessor.__init__)
+    @copy_docstring(CategoricalAccessor.__init__)  # type: ignore
     @property
     def cat(self):
         return CategoricalAccessor(column=self._column, parent=self)
 
-    @copy_docstring(StringMethods.__init__)
+    @copy_docstring(StringMethods.__init__)  # type: ignore
     @property
     def str(self):
         return StringMethods(column=self._column, parent=self)
 
-    @copy_docstring(ListMethods.__init__)
+    @copy_docstring(ListMethods.__init__)  # type: ignore
     @property
     def list(self):
         return ListMethods(column=self._column, parent=self)
@@ -1763,7 +1888,7 @@ class Series(Frame, Serializable):
         >>> ser = cudf.Series(['', None, 'abc'])
         >>> ser
         0
-        1    None
+        1    <NA>
         2     abc
         dtype: object
         >>> ser.dropna()
@@ -1791,7 +1916,9 @@ class Series(Frame, Serializable):
     def fill(self, fill_value, begin=0, end=-1, inplace=False):
         return self._fill([fill_value], begin, end, inplace)
 
-    def fillna(self, value, method=None, axis=None, inplace=False, limit=None):
+    def fillna(
+        self, value=None, method=None, axis=None, inplace=False, limit=None
+    ):
         if isinstance(value, pd.Series):
             value = Series.from_pandas(value)
 
@@ -1956,7 +2083,7 @@ class Series(Frame, Serializable):
         """
         return self._column.to_gpu_array(fillna=fillna)
 
-    def to_pandas(self, index=True, **kwargs):
+    def to_pandas(self, index=True, nullable=False, **kwargs):
         """
         Convert to a Pandas Series.
 
@@ -1967,6 +2094,15 @@ class Series(Frame, Serializable):
             and sets it to the pandas.Series. If ``index`` is ``False``,
             no index conversion is performed and pandas.Series will assign
             a default index.
+        nullable : Boolean, Default False
+            If ``nullable`` is ``True``, the resulting series will be
+            having a corresponding nullable Pandas dtype. If ``nullable``
+            is ``False``, the resulting series will either convert null
+            values to ``np.nan`` or ``None`` depending on the dtype.
+
+        Returns
+        -------
+        out : Pandas Series
 
         Examples
         --------
@@ -1980,11 +2116,34 @@ class Series(Frame, Serializable):
         dtype: int64
         >>> type(pds)
         <class 'pandas.core.series.Series'>
+
+        ``nullable`` parameter can be used to control
+        whether dtype can be Pandas Nullable or not:
+
+        >>> ser = cudf.Series([10, 20, None, 30])
+        >>> ser
+        0      10
+        1      20
+        2    <NA>
+        3      30
+        dtype: int64
+        >>> ser.to_pandas(nullable=True)
+        0      10
+        1      20
+        2    <NA>
+        3      30
+        dtype: Int64
+        >>> ser.to_pandas(nullable=False)
+        0    10.0
+        1    20.0
+        2     NaN
+        3    30.0
+        dtype: float64
         """
 
         if index is True:
             index = self.index.to_pandas()
-        s = self._column.to_pandas(index=index)
+        s = self._column.to_pandas(index=index, nullable=nullable)
         s.name = self.name
         return s
 
@@ -2243,14 +2402,31 @@ class Series(Frame, Serializable):
             * list of numeric or str:
                 - If ``value`` is also list-like, ``to_replace`` and
                   ``value`` must be of same length.
-        value : numeric, str, list-like, or dict
-            Value(s) to replace ``to_replace`` with.
+            * dict:
+                - Dicts can be used to specify different replacement values
+                  for different existing values. For example, {'a': 'b',
+                  'y': 'z'} replaces the value ‘a’ with ‘b’ and
+                  ‘y’ with ‘z’.
+                  To use a dict in this way the ``value`` parameter should
+                  be ``None``.
+        value : scalar, dict, list-like, str, default None
+            Value to replace any values matching ``to_replace`` with.
         inplace : bool, default False
             If True, in place.
 
         See also
         --------
         Series.fillna
+
+        Raises
+        ------
+        TypeError
+            - If ``to_replace`` is not a scalar, array-like, dict, or None
+            - If ``to_replace`` is a dict and value is not a list, dict,
+              or Series
+        ValueError
+            - If a list is passed to ``to_replace`` and ``value`` but they
+              are not the same length.
 
         Returns
         -------
@@ -2261,6 +2437,91 @@ class Series(Frame, Serializable):
         -----
         Parameters that are currently not supported are: `limit`, `regex`,
         `method`
+
+        Examples
+        --------
+
+        Scalar ``to_replace`` and ``value``
+
+        >>> import cudf
+        >>> s = cudf.Series([0, 1, 2, 3, 4])
+        >>> s
+        0    0
+        1    1
+        2    2
+        3    3
+        4    4
+        dtype: int64
+        >>> s.replace(0, 5)
+        0    5
+        1    1
+        2    2
+        3    3
+        4    4
+        dtype: int64
+
+        List-like ``to_replace``
+
+        >>> s.replace([1, 2], 10)
+        0     0
+        1    10
+        2    10
+        3     3
+        4     4
+        dtype: int64
+
+        dict-like ``to_replace``
+
+        >>> s.replace({1:5, 3:50})
+        0     0
+        1     5
+        2     2
+        3    50
+        4     4
+        dtype: int64
+        >>> s = cudf.Series(['b', 'a', 'a', 'b', 'a'])
+        >>> s
+        0     b
+        1     a
+        2     a
+        3     b
+        4     a
+        dtype: object
+        >>> s.replace({'a': None})
+        0       b
+        1    <NA>
+        2    <NA>
+        3       b
+        4    <NA>
+        dtype: object
+
+        If there is a mimatch in types of the values in
+        ``to_replace`` & ``value`` with the actual series, then
+        cudf exhibits different behaviour with respect to pandas
+        and the pairs are ignored silently:
+
+        >>> s = cudf.Series(['b', 'a', 'a', 'b', 'a'])
+        >>> s
+        0    b
+        1    a
+        2    a
+        3    b
+        4    a
+        dtype: object
+        >>> s.replace('a', 1)
+        0    b
+        1    a
+        2    a
+        3    b
+        4    a
+        dtype: object
+        >>> s.replace(['a', 'c'], [1, 2])
+        0    b
+        1    a
+        2    a
+        3    b
+        4    a
+        dtype: object
         """
         if limit is not None:
             raise NotImplementedError("limit parameter is not implemented yet")
@@ -2271,6 +2532,12 @@ class Series(Frame, Serializable):
         if method not in ("pad", None):
             raise NotImplementedError(
                 "method parameter is not implemented yet"
+            )
+
+        if is_dict_like(to_replace) and value is not None:
+            raise ValueError(
+                "Series.replace cannot use dict-like to_replace and non-None "
+                "value"
             )
 
         result = super().replace(to_replace=to_replace, replacement=value)
@@ -2309,7 +2576,14 @@ class Series(Frame, Serializable):
 
         def encode(cat):
             if cat is None:
-                return self.isnull()
+                if self.dtype.kind == "f":
+                    # Need to ignore `np.nan` values incase
+                    # of a float column
+                    return self.__class__(
+                        libcudf.unary.is_null((self._column))
+                    )
+                else:
+                    return self.isnull()
             elif np.issubdtype(type(cat), np.floating) and np.isnan(cat):
                 return self.__class__(libcudf.unary.is_nan(self._column))
             else:
@@ -2437,13 +2711,7 @@ class Series(Frame, Serializable):
         1    c
         dtype: object
         """
-        cats = self.dropna().unique().astype(self.dtype)
-
-        name = self.name  # label_encoding mutates self.name
-        labels = self.label_encoding(cats=cats, na_sentinel=na_sentinel)
-        self.name = name
-
-        return labels, cats
+        return cudf.core.algorithms.factorize(self, na_sentinel=na_sentinel)
 
     # UDF related
 
@@ -2471,7 +2739,7 @@ class Series(Frame, Serializable):
             The mask and index are preserved.
 
         Notes
-        --------
+        -----
         The supported Python features are listed in
 
           https://numba.pydata.org/numba-doc/dev/cuda/cudapysupported.html
@@ -3364,8 +3632,31 @@ class Series(Frame, Serializable):
         return Series(val_counts.index.sort_values(), name=self.name)
 
     def round(self, decimals=0):
-        """Round a Series to a configurable number of decimal places.
         """
+        Round each value in a Series to the given number of decimals.
+
+        Parameters
+        ----------
+        decimals : int, default 0
+            Number of decimal places to round to. If decimals is negative,
+            it specifies the number of positions to the left of the decimal
+            point.
+
+        Returns
+        -------
+        Series
+            Rounded values of the Series.
+
+        Examples
+        --------
+        >>> s = cudf.Series([0.1, 1.4, 2.9])
+        >>> s.round()
+        0    0.0
+        1    1.0
+        2    3.0
+        dtype: float64
+        """
+
         return Series(
             self._column.round(decimals=decimals),
             name=self.name,
@@ -4011,21 +4302,41 @@ class Series(Frame, Serializable):
     def groupby(
         self,
         by=None,
-        group_series=None,
+        axis=0,
         level=None,
-        sort=True,
+        as_index=True,
+        sort=False,
         group_keys=True,
-        as_index=None,
+        squeeze=False,
+        observed=False,
         dropna=True,
     ):
+        if axis not in (0, "index"):
+            raise NotImplementedError("axis parameter is not yet implemented")
+
         if group_keys is not True:
             raise NotImplementedError(
                 "The group_keys keyword is not yet implemented"
             )
-        else:
-            return SeriesGroupBy(
-                self, by=by, level=level, dropna=dropna, sort=sort
+
+        if squeeze is not False:
+            raise NotImplementedError(
+                "squeeze parameter is not yet implemented"
             )
+
+        if observed is not False:
+            raise NotImplementedError(
+                "observed parameter is not yet implemented"
+            )
+
+        if by is None and level is None:
+            raise TypeError(
+                "groupby() requires either by or level to be specified."
+            )
+
+        return SeriesGroupBy(
+            self, by=by, level=level, dropna=dropna, sort=sort
+        )
 
     @copy_docstring(Rolling)
     def rolling(
@@ -4256,7 +4567,7 @@ class Series(Frame, Serializable):
         """
         return self.index
 
-    _accessors = set()
+    _accessors = set()  # type: Set[Any]
 
 
 truediv_int_dtype_corrections = {
@@ -4989,7 +5300,7 @@ def isclose(a, b, rtol=1e-05, atol=1e-08, equal_nan=False):
     0    1.9876543
     1    2.9876654
     2    3.9876543
-    3         null
+    3         <NA>
     4          9.9
     5          1.0
     dtype: float64
@@ -4997,9 +5308,9 @@ def isclose(a, b, rtol=1e-05, atol=1e-08, equal_nan=False):
     0    1.987654321
     1    2.987654321
     2    3.987654321
-    3           null
+    3           <NA>
     4           19.9
-    5           null
+    5           <NA>
     dtype: float64
     >>> cudf.isclose(s1, s2)
     0     True
@@ -5027,8 +5338,6 @@ def isclose(a, b, rtol=1e-05, atol=1e-08, equal_nan=False):
     dtype: bool
     """
 
-    index = None
-
     if not can_convert_to_column(a):
         raise TypeError(
             f"Parameter `a` is expected to be a "
@@ -5044,6 +5353,8 @@ def isclose(a, b, rtol=1e-05, atol=1e-08, equal_nan=False):
         a = Series.from_pandas(a)
     if isinstance(b, pd.Series):
         b = Series.from_pandas(b)
+
+    index = None
 
     if isinstance(a, cudf.Series) and isinstance(b, cudf.Series):
         b = b.reindex(a.index)
@@ -5063,10 +5374,10 @@ def isclose(a, b, rtol=1e-05, atol=1e-08, equal_nan=False):
     if a_col.null_count and b_col.null_count:
         a_nulls = a_col.isna()
         b_nulls = b_col.isna()
-        null_values = a_nulls.binary_operator("or", b_nulls)
+        null_values = a_nulls | b_nulls
 
         if equal_nan is True:
-            equal_nulls = a_nulls.binary_operator("and", b_nulls)
+            equal_nulls = a_nulls & b_nulls
 
         del a_nulls, b_nulls
     elif a_col.null_count:

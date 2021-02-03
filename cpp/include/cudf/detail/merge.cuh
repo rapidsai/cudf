@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018-2019, NVIDIA CORPORATION.
+ * Copyright (c) 2018-2020, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -33,6 +33,11 @@ enum class side : bool { LEFT, RIGHT };
 using index_type = thrust::tuple<side, cudf::size_type>;
 
 /**
+ * @brief Vector of `index_type` values.
+ */
+using index_vector = rmm::device_vector<index_type>;
+
+/**
  * @brief tagged_element_relational_comparator uses element_relational_comparator to provide
  * "tagged-index" comparison logic.
  *
@@ -62,7 +67,6 @@ using index_type = thrust::tuple<side, cudf::size_type>;
  * As a result, a special comparison logic is necessary whereby the index is "tagged" with side
  * information and consequently comparator functors (predicates) must operate on these tagged
  * indices rather than on raw indices.
- *
  */
 template <bool has_nulls = true>
 struct tagged_element_relational_comparator {

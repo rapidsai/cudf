@@ -143,4 +143,16 @@ column_view logical_cast(column_view const& input, data_type type)
                      input._children};
 }
 
+mutable_column_view logical_cast(mutable_column_view const& input, data_type type)
+{
+  CUDF_EXPECTS(is_logically_castable(input._type, type), "types are not logically castable");
+  return mutable_column_view{type,
+                             input._size,
+                             const_cast<void*>(input._data),
+                             const_cast<cudf::bitmask_type*>(input._null_mask),
+                             input._null_count,
+                             input._offset,
+                             input.mutable_children};
+}
+
 }  // namespace cudf

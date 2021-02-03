@@ -19,13 +19,15 @@
 #include <cudf/column/column_factories.hpp>
 #include <cudf/column/column_view.hpp>
 #include <cudf/datetime.hpp>
+#include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/null_mask.hpp>
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/traits.hpp>
 
-#include <rmm/thrust_rmm_allocator.h>
+#include <rmm/cuda_stream_view.hpp>
+#include <rmm/exec_policy.hpp>
 
 namespace cudf {
 namespace datetime {
@@ -46,7 +48,7 @@ struct extract_component_operator {
   template <typename Timestamp>
   CUDA_DEVICE_CALLABLE int16_t operator()(Timestamp const ts) const
   {
-    using namespace simt::std::chrono;
+    using namespace cuda::std::chrono;
 
     auto days_since_epoch = floor<days>(ts);
 
@@ -81,7 +83,7 @@ static __device__ int16_t const days_until_month[2][13] = {
   {0, 31, 60, 91, 121, 152, 182, 213, 244, 274, 305, 335, 366}   // For leap years
 };
 
-CUDA_DEVICE_CALLABLE uint8_t days_in_month(simt::std::chrono::month mon, bool is_leap_year)
+CUDA_DEVICE_CALLABLE uint8_t days_in_month(cuda::std::chrono::month mon, bool is_leap_year)
 {
   return days_until_month[is_leap_year][unsigned{mon}] -
          days_until_month[is_leap_year][unsigned{mon} - 1];
@@ -93,7 +95,7 @@ struct extract_last_day_of_month {
   template <typename Timestamp>
   CUDA_DEVICE_CALLABLE timestamp_D operator()(Timestamp const ts) const
   {
-    using namespace simt::std::chrono;
+    using namespace cuda::std::chrono;
     // IDEAL: does not work with CUDA10.0 due to nvcc compiler bug
     // cannot invoke ym_last_day.day()
     // const year_month_day orig_ymd(floor<days>(ts));
@@ -114,7 +116,7 @@ struct extract_day_num_of_year {
   template <typename Timestamp>
   CUDA_DEVICE_CALLABLE int16_t operator()(Timestamp const ts) const
   {
-    using namespace simt::std::chrono;
+    using namespace cuda::std::chrono;
 
     // Only has the days - time component is chopped off, which is what we want
     auto const days_since_epoch = floor<days>(ts);
@@ -135,16 +137,16 @@ struct launch_functor {
 
   template <typename Element>
   typename std::enable_if_t<!cudf::is_timestamp_t<Element>::value, void> operator()(
-    cudaStream_t stream) const
+    rmm::cuda_stream_view stream) const
   {
     CUDF_FAIL("Cannot extract datetime component from non-timestamp column.");
   }
 
   template <typename Timestamp>
   typename std::enable_if_t<cudf::is_timestamp_t<Timestamp>::value, void> operator()(
-    cudaStream_t stream) const
+    rmm::cuda_stream_view stream) const
   {
-    thrust::transform(rmm::exec_policy(stream)->on(stream),
+    thrust::transform(rmm::exec_policy(stream),
                       input.begin<Timestamp>(),
                       input.end<Timestamp>(),
                       output.begin<OutputColT>(),
@@ -155,7 +157,7 @@ struct launch_functor {
 // Create an output column by applying the functor to every element from the input column
 template <typename TransformFunctor, cudf::type_id OutputColCudfT>
 std::unique_ptr<column> apply_datetime_op(column_view const& column,
-                                          cudaStream_t stream,
+                                          rmm::cuda_stream_view stream,
                                           rmm::mr::device_memory_resource* mr)
 {
   CUDF_EXPECTS(is_timestamp(column.type()), "Column type should be timestamp");
@@ -165,8 +167,12 @@ std::unique_ptr<column> apply_datetime_op(column_view const& column,
   // Return an empty column if source column is empty
   if (size == 0) return make_empty_column(output_col_type);
 
-  auto output = make_fixed_width_column(
-    output_col_type, size, copy_bitmask(column, stream, mr), column.null_count(), stream, mr);
+  auto output = make_fixed_width_column(output_col_type,
+                                        size,
+                                        cudf::detail::copy_bitmask(column, stream, mr),
+                                        column.null_count(),
+                                        stream,
+                                        mr);
   auto launch =
     launch_functor<TransformFunctor, typename cudf::id_to_type_impl<OutputColCudfT>::type>{
       column, static_cast<mutable_column_view>(*output)};
@@ -189,9 +195,9 @@ struct add_calendrical_months_functor {
   // std chrono implementation is copied here due to nvcc bug 2909685
   // https://howardhinnant.github.io/date_algorithms.html#days_from_civil
   static CUDA_DEVICE_CALLABLE timestamp_D
-  compute_sys_days(simt::std::chrono::year_month_day const& ymd)
+  compute_sys_days(cuda::std::chrono::year_month_day const& ymd)
   {
-    const int yr = static_cast<int>(ymd.year()) - (ymd.month() <= simt::std::chrono::month{2});
+    const int yr = static_cast<int>(ymd.year()) - (ymd.month() <= cuda::std::chrono::month{2});
     const unsigned mth = static_cast<unsigned>(ymd.month());
     const unsigned dy  = static_cast<unsigned>(ymd.day());
 
@@ -204,22 +210,22 @@ struct add_calendrical_months_functor {
 
   template <typename Element>
   typename std::enable_if_t<!cudf::is_timestamp_t<Element>::value, void> operator()(
-    cudaStream_t stream) const
+    rmm::cuda_stream_view stream) const
   {
     CUDF_FAIL("Cannot extract datetime component from non-timestamp column.");
   }
 
   template <typename Timestamp>
   typename std::enable_if_t<cudf::is_timestamp_t<Timestamp>::value, void> operator()(
-    cudaStream_t stream) const
+    rmm::cuda_stream_view stream) const
   {
-    thrust::transform(rmm::exec_policy(stream)->on(stream),
+    thrust::transform(rmm::exec_policy(stream),
                       timestamp_column.begin<Timestamp>(),
                       timestamp_column.end<Timestamp>(),
                       months_column.begin<int16_t>(),
                       output.begin<Timestamp>(),
                       [] __device__(auto time_val, auto months_val) {
-                        using namespace simt::std::chrono;
+                        using namespace cuda::std::chrono;
                         using duration_m = duration<int32_t, months::period>;
 
                         // Get the days component from the input
@@ -246,7 +252,7 @@ struct add_calendrical_months_functor {
 
 std::unique_ptr<column> add_calendrical_months(column_view const& timestamp_column,
                                                column_view const& months_column,
-                                               cudaStream_t stream,
+                                               rmm::cuda_stream_view stream,
                                                rmm::mr::device_memory_resource* mr)
 {
   CUDF_EXPECTS(is_timestamp(timestamp_column.type()), "Column type should be timestamp");
@@ -260,8 +266,9 @@ std::unique_ptr<column> add_calendrical_months(column_view const& timestamp_colu
   // Return an empty column if source column is empty
   if (size == 0) return make_empty_column(output_col_type);
 
-  auto output_col_mask = bitmask_and(table_view({timestamp_column, months_column}), mr, stream);
-  auto output          = make_fixed_width_column(
+  auto output_col_mask =
+    cudf::detail::bitmask_and(table_view({timestamp_column, months_column}), stream, mr);
+  auto output = make_fixed_width_column(
     output_col_type, size, std::move(output_col_mask), cudf::UNKNOWN_NULL_COUNT, stream, mr);
 
   auto launch = add_calendrical_months_functor{

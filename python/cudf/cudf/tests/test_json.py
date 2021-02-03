@@ -1,4 +1,4 @@
-# Copyright (c) 2018, NVIDIA CORPORATION.
+# Copyright (c) 2018-2020, NVIDIA CORPORATION.
 
 import copy
 import itertools
@@ -275,7 +275,7 @@ def test_json_engine_selection():
 
     # should raise an exception
     with pytest.raises(ValueError):
-        df = cudf.read_json(json, lines=False, engine="cudf")
+        cudf.read_json(json, lines=False, engine="cudf")
 
 
 def test_json_bool_values():
@@ -375,3 +375,88 @@ def test_json_corner_case_with_escape_and_double_quote_char_with_strings():
     for col_name in df._data:
         for i in range(num_rows):
             assert expected[col_name][i] == df[col_name][i]
+
+
+@pytest.mark.parametrize(
+    "gdf,pdf",
+    [
+        (
+            cudf.DataFrame(
+                {
+                    "int col": cudf.Series(
+                        [1, 2, None, 2, 2323, 234, None], dtype="int64"
+                    )
+                }
+            ),
+            pd.DataFrame(
+                {
+                    "int col": pd.Series(
+                        [1, 2, None, 2, 2323, 234, None], dtype=pd.Int64Dtype()
+                    )
+                }
+            ),
+        ),
+        (
+            cudf.DataFrame(
+                {
+                    "int64 col": cudf.Series(
+                        [1, 2, None, 2323, None], dtype="int64"
+                    ),
+                    "string col": cudf.Series(
+                        ["abc", "a", None, "", None], dtype="str"
+                    ),
+                    "float col": cudf.Series(
+                        [0.234, None, 234234.2343, None, 0.0], dtype="float64"
+                    ),
+                    "bool col": cudf.Series(
+                        [None, True, False, None, True], dtype="bool"
+                    ),
+                    "categorical col": cudf.Series(
+                        [1, 2, 1, None, 2], dtype="category"
+                    ),
+                    "datetime col": cudf.Series(
+                        [1231233, None, 2323234, None, 1],
+                        dtype="datetime64[ns]",
+                    ),
+                    "timedelta col": cudf.Series(
+                        [None, 34687236, 2323234, 1, None],
+                        dtype="timedelta64[ns]",
+                    ),
+                }
+            ),
+            pd.DataFrame(
+                {
+                    "int64 col": pd.Series(
+                        [1, 2, None, 2323, None], dtype=pd.Int64Dtype()
+                    ),
+                    "string col": pd.Series(
+                        ["abc", "a", None, "", None], dtype=pd.StringDtype()
+                    ),
+                    "float col": pd.Series(
+                        [0.234, None, 234234.2343, None, 0.0], dtype="float64"
+                    ),
+                    "bool col": pd.Series(
+                        [None, True, False, None, True],
+                        dtype=pd.BooleanDtype(),
+                    ),
+                    "categorical col": pd.Series(
+                        [1, 2, 1, None, 2], dtype="category"
+                    ),
+                    "datetime col": pd.Series(
+                        [1231233, None, 2323234, None, 1],
+                        dtype="datetime64[ns]",
+                    ),
+                    "timedelta col": pd.Series(
+                        [None, 34687236, 2323234, 1, None],
+                        dtype="timedelta64[ns]",
+                    ),
+                }
+            ),
+        ),
+    ],
+)
+def test_json_to_json_compare_contents(gdf, pdf):
+    expected_json = pdf.to_json(lines=True, orient="records")
+    actual_json = gdf.to_json(lines=True, orient="records")
+
+    assert expected_json == actual_json

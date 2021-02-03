@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2020, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -32,12 +32,14 @@
 #include <cudf/utilities/traits.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
 
+#include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_buffer.hpp>
 #include <rmm/device_scalar.hpp>
 #include <rmm/device_uvector.hpp>
 
-#include <algorithm>
 #include <cub/cub.cuh>
+
+#include <algorithm>
 
 namespace {
 // Compute the count of elements that pass the mask within each block
@@ -97,7 +99,6 @@ __launch_bounds__(block_size) __global__
 {
   T* __restrict__ output_data                   = output_view.data<T>();
   cudf::bitmask_type* __restrict__ output_valid = output_view.null_mask();
-  constexpr cudf::size_type leader_lane{0};
   static_assert(block_size <= 1024, "Maximum thread block size exceeded");
 
   int tid                      = threadIdx.x + per_thread * block_size * blockIdx.x;
@@ -107,8 +108,8 @@ __launch_bounds__(block_size) __global__
   __shared__ bool temp_valids[has_validity ? block_size + cudf::detail::warp_size : 1];
   __shared__ T temp_data[block_size];
 
-  cudf::size_type warp_valid_counts{0};
-  cudf::size_type block_sum = 0;
+  cudf::size_type warp_valid_counts{0};  // total valid sum over the `per_thread` loop below
+  cudf::size_type block_sum = 0;         // count passing filter over the `per_thread` loop below
 
   // Note that since the maximum gridDim.x on all supported GPUs is as big as
   // cudf::size_type, this loop is sufficient to cover our maximum column size
@@ -158,6 +159,8 @@ __launch_bounds__(block_size) __global__
       const int wid        = threadIdx.x / cudf::detail::warp_size;
       const int lane       = threadIdx.x % cudf::detail::warp_size;
 
+      cudf::size_type tmp_warp_valid_counts{0};
+
       if (tmp_block_sum > 0 && wid <= last_warp) {
         int valid_index = (block_offset / cudf::detail::warp_size) + wid;
 
@@ -166,9 +169,8 @@ __launch_bounds__(block_size) __global__
 
         // Note the atomicOr's below assume that output_valid has been set to
         // all zero before the kernel
-
         if (lane == 0 && valid_warp != 0) {
-          warp_valid_counts = __popc(valid_warp);
+          tmp_warp_valid_counts = __popc(valid_warp);
           if (wid > 0 && wid < last_warp)
             output_valid[valid_index] = valid_warp;
           else {
@@ -180,46 +182,70 @@ __launch_bounds__(block_size) __global__
         if ((wid == 0) && (last_warp == num_warps)) {
           uint32_t valid_warp = __ballot_sync(0xffffffff, temp_valids[block_size + threadIdx.x]);
           if (lane == 0 && valid_warp != 0) {
-            warp_valid_counts += __popc(valid_warp);
+            tmp_warp_valid_counts += __popc(valid_warp);
             atomicOr(&output_valid[valid_index + num_warps], valid_warp);
           }
         }
       }
+      warp_valid_counts += tmp_warp_valid_counts;
     }
 
     block_offset += tmp_block_sum;
     tid += block_size;
   }
   // Compute total null_count for this block and add it to global count
+  constexpr cudf::size_type leader_lane{0};
   cudf::size_type block_valid_count =
     cudf::detail::single_lane_block_sum_reduce<block_size, leader_lane>(warp_valid_counts);
+
   if (threadIdx.x == 0) {  // one thread computes and adds to null count
     atomicAdd(output_null_count, block_sum - block_valid_count);
   }
 }
 
+template <typename T, typename Enable = void>
+struct DeviceType {
+  using type = T;
+};
+
+template <typename T>
+struct DeviceType<T, std::enable_if_t<cudf::is_timestamp<T>()>> {
+  using type = typename T::rep;
+};
+
+template <typename T>
+struct DeviceType<T, std::enable_if_t<std::is_same<numeric::decimal32, T>::value>> {
+  using type = typename cudf::device_storage_type_t<T>;
+};
+
+template <typename T>
+struct DeviceType<T, std::enable_if_t<std::is_same<numeric::decimal64, T>::value>> {
+  using type = typename cudf::device_storage_type_t<T>;
+};
+
 // Dispatch functor which performs the scatter for fixed column types and gather for other
 template <typename Filter, int block_size>
 struct scatter_gather_functor {
-  template <typename T,
-            std::enable_if_t<cudf::is_fixed_width<T>() and !cudf::is_fixed_point<T>()>* = nullptr>
+  template <typename T, std::enable_if_t<cudf::is_fixed_width<T>()>* = nullptr>
   std::unique_ptr<cudf::column> operator()(
     cudf::column_view const& input,
     cudf::size_type const& output_size,
     cudf::size_type const* block_offsets,
     Filter filter,
     cudf::size_type per_thread,
-    rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource(),
-    cudaStream_t stream                 = 0)
+    rmm::cuda_stream_view stream,
+    rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
   {
     auto output_column = cudf::detail::allocate_like(
-      input, output_size, cudf::mask_allocation_policy::RETAIN, mr, stream);
+      input, output_size, cudf::mask_allocation_policy::RETAIN, stream, mr);
     auto output = output_column->mutable_view();
 
     bool has_valid = input.nullable();
 
-    auto scatter = (has_valid) ? scatter_kernel<T, Filter, block_size, true>
-                               : scatter_kernel<T, Filter, block_size, false>;
+    using Type = typename DeviceType<T>::type;
+
+    auto scatter = (has_valid) ? scatter_kernel<Type, Filter, block_size, true>
+                               : scatter_kernel<Type, Filter, block_size, false>;
 
     cudf::detail::grid_1d grid{input.size(), block_size, per_thread};
 
@@ -230,18 +256,18 @@ struct scatter_gather_functor {
       CUDA_TRY(cudaMemsetAsync(static_cast<void*>(output.null_mask()),
                                0,
                                cudf::bitmask_allocation_size_bytes(output.size()),
-                               stream));
+                               stream.value()));
     }
 
     auto output_device_view = cudf::mutable_column_device_view::create(output, stream);
     auto input_device_view  = cudf::column_device_view::create(input, stream);
-    scatter<<<grid.num_blocks, block_size, 0, stream>>>(*output_device_view,
-                                                        null_count.data(),
-                                                        *input_device_view,
-                                                        block_offsets,
-                                                        input.size(),
-                                                        per_thread,
-                                                        filter);
+    scatter<<<grid.num_blocks, block_size, 0, stream.value()>>>(*output_device_view,
+                                                                null_count.data(),
+                                                                *input_device_view,
+                                                                block_offsets,
+                                                                input.size(),
+                                                                per_thread,
+                                                                filter);
 
     if (has_valid) { output_column->set_null_count(null_count.value(stream)); }
     return output_column;
@@ -255,35 +281,26 @@ struct scatter_gather_functor {
     cudf::size_type const* block_offsets,
     Filter filter,
     cudf::size_type per_thread,
-    rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource(),
-    cudaStream_t stream                 = 0)
+    rmm::cuda_stream_view stream,
+    rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
   {
     rmm::device_uvector<cudf::size_type> indices(output_size, stream);
 
-    thrust::copy_if(rmm::exec_policy(stream)->on(stream),
+    thrust::copy_if(rmm::exec_policy(stream),
                     thrust::counting_iterator<cudf::size_type>(0),
                     thrust::counting_iterator<cudf::size_type>(input.size()),
                     indices.begin(),
                     filter);
 
-    auto output_table = cudf::detail::gather(
-      cudf::table_view{{input}}, indices.begin(), indices.end(), false, mr, stream);
+    auto output_table = cudf::detail::gather(cudf::table_view{{input}},
+                                             indices.begin(),
+                                             indices.end(),
+                                             cudf::out_of_bounds_policy::DONT_CHECK,
+                                             stream,
+                                             mr);
 
     // There will be only one column
     return std::make_unique<cudf::column>(std::move(output_table->get_column(0)));
-  }
-
-  template <typename T, std::enable_if_t<cudf::is_fixed_point<T>()>* = nullptr>
-  std::unique_ptr<cudf::column> operator()(
-    cudf::column_view const& input,
-    cudf::size_type const& output_size,
-    cudf::size_type const* block_offsets,
-    Filter filter,
-    cudf::size_type per_thread,
-    rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource(),
-    cudaStream_t stream                 = 0)
-  {
-    CUDF_FAIL("fixed_point type not supported for this operation yet");
   }
 };
 
@@ -308,8 +325,8 @@ template <typename Filter>
 std::unique_ptr<table> copy_if(
   table_view const& input,
   Filter filter,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource(),
-  cudaStream_t stream                 = 0)
+  rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
 {
   CUDF_FUNC_RANGE();
 
@@ -325,12 +342,12 @@ std::unique_ptr<table> copy_if(
   rmm::device_uvector<cudf::size_type> block_offsets(grid.num_blocks + 1, stream);
 
   // 1. Find the count of elements in each block that "pass" the mask
-  compute_block_counts<Filter, block_size><<<grid.num_blocks, block_size, 0, stream>>>(
+  compute_block_counts<Filter, block_size><<<grid.num_blocks, block_size, 0, stream.value()>>>(
     block_counts.begin(), input.num_rows(), per_thread, filter);
 
   // initialize just the first element of block_offsets to 0 since the InclusiveSum below
   // starts at the second element.
-  CUDA_TRY(cudaMemsetAsync(block_offsets.begin(), 0, sizeof(cudf::size_type), stream));
+  CUDA_TRY(cudaMemsetAsync(block_offsets.begin(), 0, sizeof(cudf::size_type), stream.value()));
 
   // 2. Find the offset for each block's output using a scan of block counts
   if (grid.num_blocks > 1) {
@@ -341,7 +358,7 @@ std::unique_ptr<table> copy_if(
                                   block_counts.begin(),
                                   block_offsets.begin() + 1,
                                   grid.num_blocks,
-                                  stream);
+                                  stream.value());
     rmm::device_buffer d_temp_storage(temp_storage_bytes, stream);
 
     // Run exclusive prefix sum
@@ -350,7 +367,7 @@ std::unique_ptr<table> copy_if(
                                   block_counts.begin(),
                                   block_offsets.begin() + 1,
                                   grid.num_blocks,
-                                  stream);
+                                  stream.value());
   }
 
   // As it is InclusiveSum, last value in block_offsets will be output_size
@@ -361,9 +378,9 @@ std::unique_ptr<table> copy_if(
     grid.num_blocks > 1 ? block_offsets.begin() + grid.num_blocks : block_counts.begin(),
     sizeof(cudf::size_type),
     cudaMemcpyDefault,
-    stream));
+    stream.value()));
 
-  CUDA_TRY(cudaStreamSynchronize(stream));
+  stream.synchronize();
 
   if (output_size == input.num_rows()) {
     return std::make_unique<table>(input, stream, mr);
@@ -377,8 +394,8 @@ std::unique_ptr<table> copy_if(
                                    block_offsets.begin(),
                                    filter,
                                    per_thread,
-                                   mr,
-                                   stream);
+                                   stream,
+                                   mr);
     });
 
     return std::make_unique<table>(std::move(out_columns));

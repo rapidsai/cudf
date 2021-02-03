@@ -24,6 +24,7 @@
 #include <cudf_test/column_utilities.hpp>
 #include <cudf_test/column_wrapper.hpp>
 
+#include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_buffer.hpp>
 
 #include <future>
@@ -120,11 +121,11 @@ struct random_value_fn<T, typename std::enable_if_t<cudf::is_chrono<T>()>> {
 
   random_value_fn(distribution_params<T> params)
   {
-    using simt::std::chrono::duration_cast;
+    using cuda::std::chrono::duration_cast;
 
     std::pair<cudf::duration_s, cudf::duration_s> const range_s = {
-      duration_cast<simt::std::chrono::seconds>(typename T::duration{params.lower_bound}),
-      duration_cast<simt::std::chrono::seconds>(typename T::duration{params.upper_bound})};
+      duration_cast<cuda::std::chrono::seconds>(typename T::duration{params.lower_bound}),
+      duration_cast<cuda::std::chrono::seconds>(typename T::duration{params.upper_bound})};
     if (range_s.first != range_s.second) {
       seconds_gen =
         make_distribution<int64_t>(params.id, range_s.first.count(), range_s.second.count());
@@ -148,7 +149,7 @@ struct random_value_fn<T, typename std::enable_if_t<cudf::is_chrono<T>()>> {
     auto const timestamp_ns =
       cudf::duration_s{seconds_gen(engine)} + cudf::duration_ns{nanoseconds_gen(engine)};
     // Return value in the type's precision
-    return T(simt::std::chrono::duration_cast<typename T::duration>(timestamp_ns));
+    return T(cuda::std::chrono::duration_cast<typename T::duration>(timestamp_ns));
   }
 };
 
@@ -296,9 +297,9 @@ std::unique_ptr<cudf::column> create_random_column(data_profile const& profile,
   return std::make_unique<cudf::column>(
     cudf::data_type{cudf::type_to_id<T>()},
     num_rows,
-    rmm::device_buffer(data.data(), num_rows * sizeof(stored_Type), cudaStream_t(0)),
+    rmm::device_buffer(data.data(), num_rows * sizeof(stored_Type), rmm::cuda_stream_default),
     rmm::device_buffer(
-      null_mask.data(), null_mask.size() * sizeof(cudf::bitmask_type), cudaStream_t(0)));
+      null_mask.data(), null_mask.size() * sizeof(cudf::bitmask_type), rmm::cuda_stream_default));
 }
 
 /**
@@ -306,7 +307,7 @@ std::unique_ptr<cudf::column> create_random_column(data_profile const& profile,
  */
 struct string_column_data {
   std::vector<char> chars;
-  std::vector<int32_t> offsets;
+  std::vector<cudf::size_type> offsets;
   std::vector<cudf::bitmask_type> null_mask;
   explicit string_column_data(cudf::size_type rows, cudf::size_type size)
   {
@@ -467,13 +468,13 @@ std::unique_ptr<cudf::column> create_random_column<cudf::list_view>(data_profile
   auto list_column = std::move(leaf_column);
   for (int lvl = 0; lvl < dist_params.max_depth; ++lvl) {
     // Generating the next level - offsets point into the current list column
-    auto current_child_column = std::move(list_column);
-    auto const num_rows       = current_child_column->size() / single_level_mean;
+    auto current_child_column      = std::move(list_column);
+    cudf::size_type const num_rows = current_child_column->size() / single_level_mean;
 
     std::vector<int32_t> offsets{0};
     offsets.reserve(num_rows + 1);
     std::vector<cudf::bitmask_type> null_mask(null_mask_size(num_rows), ~0);
-    for (int row = 1; row < num_rows + 1; ++row) {
+    for (cudf::size_type row = 1; row < num_rows + 1; ++row) {
       offsets.push_back(
         std::min<int32_t>(current_child_column->size(), offsets.back() + len_dist(engine)));
       if (!valid_dist(engine)) cudf::clear_bit_unsafe(null_mask.data(), row);
@@ -483,7 +484,8 @@ std::unique_ptr<cudf::column> create_random_column<cudf::list_view>(data_profile
     auto offsets_column = std::make_unique<cudf::column>(
       cudf::data_type{cudf::type_id::INT32},
       offsets.size(),
-      rmm::device_buffer(offsets.data(), offsets.size() * sizeof(int32_t), cudaStream_t(0)));
+      rmm::device_buffer(
+        offsets.data(), offsets.size() * sizeof(int32_t), rmm::cuda_stream_default));
 
     list_column = cudf::make_lists_column(
       num_rows,
@@ -491,7 +493,7 @@ std::unique_ptr<cudf::column> create_random_column<cudf::list_view>(data_profile
       std::move(current_child_column),
       cudf::UNKNOWN_NULL_COUNT,
       rmm::device_buffer(
-        null_mask.data(), null_mask.size() * sizeof(cudf::bitmask_type), cudaStream_t(0)));
+        null_mask.data(), null_mask.size() * sizeof(cudf::bitmask_type), rmm::cuda_stream_default));
   }
   return list_column;  // return the top-level column
 }
@@ -529,7 +531,7 @@ columns_vector create_random_columns(data_profile const& profile,
 std::vector<cudf::type_id> repeat_dtypes(std::vector<cudf::type_id> const& dtype_ids,
                                          cudf::size_type num_cols)
 {
-  if (dtype_ids.size() == num_cols) { return dtype_ids; }
+  if (dtype_ids.size() == static_cast<std::size_t>(num_cols)) { return dtype_ids; }
   std::vector<cudf::type_id> out_dtypes;
   out_dtypes.reserve(num_cols);
   for (cudf::size_type col = 0; col < num_cols; ++col)
@@ -630,4 +632,14 @@ std::vector<cudf::type_id> get_type_or_group(int32_t id)
     if (type != cudf::type_id::EMPTY && fn(cudf::data_type(type))) types.push_back(type);
   }
   return types;
+}
+
+std::vector<cudf::type_id> get_type_or_group(std::vector<int32_t> const& ids)
+{
+  std::vector<cudf::type_id> all_type_ids;
+  for (auto& id : ids) {
+    auto const type_ids = get_type_or_group(id);
+    all_type_ids.insert(std::end(all_type_ids), std::cbegin(type_ids), std::cend(type_ids));
+  }
+  return all_type_ids;
 }

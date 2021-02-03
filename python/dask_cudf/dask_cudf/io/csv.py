@@ -1,6 +1,10 @@
+# Copyright (c) 2020, NVIDIA CORPORATION.
+
 import os
 from glob import glob
 from warnings import warn
+
+from fsspec.utils import infer_compression
 
 from dask import dataframe as dd
 from dask.base import tokenize
@@ -30,7 +34,7 @@ def _internal_read_csv(path, chunksize="256 MiB", **kwargs):
     elif hasattr(path, "__fspath__"):
         filenames = sorted(glob(path.__fspath__()))
     else:
-        raise TypeError("Path type not understood:{}".format(type(path)))
+        raise TypeError(f"Path type not understood:{type(path)}")
 
     if not filenames:
         msg = f"A file in: {filenames} does not exist."
@@ -40,7 +44,12 @@ def _internal_read_csv(path, chunksize="256 MiB", **kwargs):
         path, tokenize, **kwargs
     )  # TODO: get last modified time
 
-    compression = kwargs.get("compression", False)
+    compression = kwargs.get("compression", "infer")
+
+    if compression == "infer":
+        # Infer compression from first path by default
+        compression = infer_compression(filenames[0])
+
     if compression and chunksize:
         # compressed CSVs reading must read the entire file
         kwargs.pop("byte_range", None)
@@ -102,7 +111,7 @@ def read_csv_without_chunksize(path, **kwargs):
     elif hasattr(path, "__fspath__"):
         filenames = sorted(glob(path.__fspath__()))
     else:
-        raise TypeError("Path type not understood:{}".format(type(path)))
+        raise TypeError(f"Path type not understood:{type(path)}")
 
     name = "read-csv-" + tokenize(path, **kwargs)
 

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2020, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -27,8 +27,9 @@
 #include <cudf/utilities/traits.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
 
-#include <cub/cub.cuh>
 #include <rmm/device_scalar.hpp>
+
+#include <cub/cub.cuh>
 
 namespace cudf {
 namespace detail {
@@ -150,6 +151,7 @@ __launch_bounds__(block_size) __global__
  * @param rhs         Begin iterator of rhs range
  * @param filter      Function of type `FilterFn` which determines for index `i` where to get the
  *                    corresponding output value from
+ * @param out_type    `cudf::data_type` of the returned column
  * @param mr          Device memory resource used to allocate the returned column's device memory
  * @param stream      CUDA stream used for device memory operations and kernel launches.
  * @return            A new column that contains the values from either `lhs` or `rhs` as determined
@@ -162,8 +164,9 @@ std::unique_ptr<column> copy_if_else(
   LeftIter lhs_end,
   RightIter rhs,
   FilterFn filter,
-  rmm::mr::device_memory_resource *mr = rmm::mr::get_current_device_resource(),
-  cudaStream_t stream                 = 0)
+  cudf::data_type output_type,
+  rmm::cuda_stream_view stream,
+  rmm::mr::device_memory_resource *mr = rmm::mr::get_current_device_resource())
 {
   using Element =
     typename thrust::tuple_element<0, typename thrust::iterator_traits<LeftIter>::value_type>::type;
@@ -174,10 +177,10 @@ std::unique_ptr<column> copy_if_else(
   cudf::detail::grid_1d grid{num_els, block_size, 1};
 
   std::unique_ptr<column> out =
-    make_fixed_width_column(data_type(type_to_id<Element>()),
+    make_fixed_width_column(output_type,
                             size,
                             nullable ? mask_state::UNINITIALIZED : mask_state::UNALLOCATED,
-                            stream,
+                            stream.value(),
                             mr);
 
   auto out_v = mutable_column_device_view::create(*out);
@@ -188,14 +191,14 @@ std::unique_ptr<column> copy_if_else(
 
     // call the kernel
     copy_if_else_kernel<block_size, Element, LeftIter, RightIter, FilterFn, true>
-      <<<grid.num_blocks, block_size, 0, stream>>>(
+      <<<grid.num_blocks, block_size, 0, stream.value()>>>(
         lhs_begin, rhs, filter, *out_v, valid_count.data());
 
     out->set_null_count(size - valid_count.value());
   } else {
     // call the kernel
     copy_if_else_kernel<block_size, Element, LeftIter, RightIter, FilterFn, false>
-      <<<grid.num_blocks, block_size, 0, stream>>>(lhs_begin, rhs, filter, *out_v, nullptr);
+      <<<grid.num_blocks, block_size, 0, stream.value()>>>(lhs_begin, rhs, filter, *out_v, nullptr);
   }
 
   return out;

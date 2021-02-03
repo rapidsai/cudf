@@ -1,4 +1,4 @@
-# Copyright (c) 2018, NVIDIA CORPORATION.
+# Copyright (c) 2018-2020, NVIDIA CORPORATION.
 
 from itertools import product
 
@@ -8,7 +8,12 @@ import pytest
 
 from cudf.core import DataFrame, Series
 from cudf.core.column import NumericalColumn
-from cudf.tests.utils import DATETIME_TYPES, NUMERIC_TYPES, assert_eq
+from cudf.tests.utils import (
+    DATETIME_TYPES,
+    NUMERIC_TYPES,
+    assert_eq,
+    assert_exceptions_equal,
+)
 
 sort_nelem_args = [2, 257]
 sort_dtype_args = [
@@ -118,9 +123,13 @@ def test_series_nlargest(data, n):
     assert_eq(sr.nlargest(n), psr.nlargest(n))
     assert_eq(sr.nlargest(n, keep="last"), psr.nlargest(n, keep="last"))
 
-    with pytest.raises(ValueError) as raises:
-        sr.nlargest(3, keep="what")
-    assert raises.match('keep must be either "first", "last"')
+    assert_exceptions_equal(
+        lfunc=psr.nlargest,
+        rfunc=sr.nlargest,
+        lfunc_args_and_kwargs=([], {"n": 3, "keep": "what"}),
+        rfunc_args_and_kwargs=([], {"n": 3, "keep": "what"}),
+        expected_error_message='keep must be either "first", "last"',
+    )
 
 
 @pytest.mark.parametrize("data", [[0, 1, 1, 2, 2, 2, 3, 3], [0], [1, 2, 3]])
@@ -133,9 +142,13 @@ def test_series_nsmallest(data, n):
     assert_eq(sr.nsmallest(n), psr.nsmallest(n))
     assert_eq(sr.nsmallest(n, keep="last"), psr.nsmallest(n, keep="last"))
 
-    with pytest.raises(ValueError) as raises:
-        sr.nsmallest(3, keep="what")
-    assert raises.match('keep must be either "first", "last"')
+    assert_exceptions_equal(
+        lfunc=psr.nsmallest,
+        rfunc=sr.nsmallest,
+        lfunc_args_and_kwargs=([], {"n": 3, "keep": "what"}),
+        rfunc_args_and_kwargs=([], {"n": 3, "keep": "what"}),
+        expected_error_message='keep must be either "first", "last"',
+    )
 
 
 @pytest.mark.parametrize("nelem,n", [(1, 1), (100, 100), (10, 5), (100, 10)])

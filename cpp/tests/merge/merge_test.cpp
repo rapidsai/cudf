@@ -14,29 +14,24 @@
  * limitations under the License.
  */
 
+#include <cudf/column/column_factories.hpp>
+#include <cudf/merge.hpp>
+#include <cudf/sorting.hpp>
 #include <cudf/table/table.hpp>
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
-#include <cudf_test/base_fixture.hpp>
-
-#include <rmm/thrust_rmm_allocator.h>
-#include <cudf/column/column_factories.hpp>
-#include <cudf/merge.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
+
+#include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_utilities.hpp>
 #include <cudf_test/column_wrapper.hpp>
 #include <cudf_test/cudf_gtest.hpp>
 #include <cudf_test/table_utilities.hpp>
 #include <cudf_test/type_lists.hpp>
 
-#include <algorithm>
-#include <cassert>
-#include <initializer_list>
-#include <limits>
-#include <memory>
-#include <vector>
+#include <rmm/thrust_rmm_allocator.h>
 
-#include <gtest/gtest.h>
+#include <vector>
 
 template <typename T>
 class MergeTest_ : public cudf::test::BaseFixture {
@@ -693,6 +688,43 @@ TYPED_TEST(MergeTest_, NMerge1KeyColumns)
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_column_view1, output_column_view1);
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_column_view2, output_column_view2);
+}
+
+class MergeTest : public cudf::test::BaseFixture {
+};
+
+TEST_F(MergeTest, KeysWithNulls)
+{
+  cudf::size_type nrows = 13200;  // Ensures that thrust::merge uses more than one tile/block
+  auto data_iter        = thrust::make_counting_iterator<int32_t>(0);
+  auto valids1          = cudf::test::make_counting_transform_iterator(
+    0, [](auto row) { return (row % 10 == 0) ? false : true; });
+  cudf::test::fixed_width_column_wrapper<int32_t> data1(data_iter, data_iter + nrows, valids1);
+  auto valids2 = cudf::test::make_counting_transform_iterator(
+    0, [](auto row) { return (row % 15 == 0) ? false : true; });
+  cudf::test::fixed_width_column_wrapper<int32_t> data2(data_iter, data_iter + nrows, valids2);
+  auto all_data = cudf::concatenate({data1, data2});
+
+  std::vector<cudf::order> column_orders{cudf::order::ASCENDING, cudf::order::DESCENDING};
+  std::vector<cudf::null_order> null_precedences{cudf::null_order::AFTER, cudf::null_order::BEFORE};
+
+  for (auto co : column_orders)
+    for (auto np : null_precedences) {
+      std::vector<cudf::order> column_order{co};
+      std::vector<cudf::null_order> null_precedence{np};
+      auto sorted1 =
+        cudf::sort(cudf::table_view({data1}), column_order, null_precedence)->release();
+      auto col1 = sorted1.front()->view();
+      auto sorted2 =
+        cudf::sort(cudf::table_view({data2}), column_order, null_precedence)->release();
+      auto col2 = sorted2.front()->view();
+
+      auto result = cudf::merge(
+        {cudf::table_view({col1}), cudf::table_view({col2})}, {0}, column_order, null_precedence);
+      auto sorted_all =
+        cudf::sort(cudf::table_view({all_data->view()}), column_order, null_precedence);
+      CUDF_TEST_EXPECT_COLUMNS_EQUAL(sorted_all->view().column(0), result->view().column(0));
+    }
 }
 
 CUDF_TEST_PROGRAM_MAIN()

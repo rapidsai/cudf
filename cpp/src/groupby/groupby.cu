@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2020, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -23,11 +23,14 @@
 #include <cudf/detail/groupby.hpp>
 #include <cudf/detail/groupby/sort_helper.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
+#include <cudf/dictionary/dictionary_column_view.hpp>
 #include <cudf/groupby.hpp>
 #include <cudf/table/table.hpp>
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/error.hpp>
+
+#include <rmm/cuda_stream_view.hpp>
 
 #include <thrust/copy.h>
 
@@ -53,7 +56,7 @@ groupby::groupby(table_view const& keys,
 // Select hash vs. sort groupby implementation
 std::pair<std::unique_ptr<table>, std::vector<aggregation_result>> groupby::dispatch_aggregation(
   std::vector<aggregation_request> const& requests,
-  cudaStream_t stream,
+  rmm::cuda_stream_view stream,
   rmm::mr::device_memory_resource* mr)
 {
   // If sort groupby has been called once on this groupby object, then
@@ -101,17 +104,39 @@ auto empty_results(std::vector<aggregation_request> const& requests)
 /// Verifies the agg requested on the request's values is valid
 void verify_valid_requests(std::vector<aggregation_request> const& requests)
 {
-  CUDF_EXPECTS(std::all_of(requests.begin(),
-                           requests.end(),
-                           [](auto const& request) {
-                             return std::all_of(request.aggregations.begin(),
-                                                request.aggregations.end(),
-                                                [&request](auto const& agg) {
-                                                  return cudf::detail::is_valid_aggregation(
-                                                    request.values.type(), agg->kind);
-                                                });
-                           }),
-               "Invalid type/aggregation combination.");
+  CUDF_EXPECTS(
+    std::all_of(
+      requests.begin(),
+      requests.end(),
+      [](auto const& request) {
+        return std::all_of(
+          request.aggregations.begin(), request.aggregations.end(), [&request](auto const& agg) {
+            auto values_type = cudf::is_dictionary(request.values.type())
+                                 ? cudf::dictionary_column_view(request.values).keys().type()
+                                 : request.values.type();
+            return cudf::detail::is_valid_aggregation(values_type, agg->kind);
+          });
+      }),
+    "Invalid type/aggregation combination.");
+
+// The aggregations listed in the lambda below will not work with a values column of type
+// dictionary if this is compiled with nvcc/ptxas 10.2.
+// https://nvbugswb.nvidia.com/NvBugs5/SWBug.aspx?bugid=3186317&cp=
+#if (__CUDACC_VER_MAJOR__ == 10) and (__CUDACC_VER_MINOR__ == 2)
+  CUDF_EXPECTS(
+    std::all_of(
+      requests.begin(),
+      requests.end(),
+      [](auto const& request) {
+        return std::all_of(
+          request.aggregations.begin(), request.aggregations.end(), [&request](auto const& agg) {
+            return (!cudf::is_dictionary(request.values.type()) ||
+                    !(agg->kind == aggregation::SUM or agg->kind == aggregation::MEAN or
+                      agg->kind == aggregation::STD or agg->kind == aggregation::VARIANCE));
+          });
+      }),
+    "dictionary type not supported for this aggregation");
+#endif
 }
 
 }  // namespace
@@ -137,7 +162,7 @@ std::pair<std::unique_ptr<table>, std::vector<aggregation_result>> groupby::aggr
 groupby::groups groupby::get_groups(table_view values, rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  auto grouped_keys = helper().sorted_keys(mr, 0);
+  auto grouped_keys = helper().sorted_keys(rmm::cuda_stream_default, mr);
 
   auto group_offsets = helper().group_offsets(0);
   std::vector<size_type> group_offsets_vector(group_offsets.size());
@@ -147,8 +172,9 @@ groupby::groups groupby::get_groups(table_view values, rmm::mr::device_memory_re
   if (values.num_columns()) {
     grouped_values = cudf::detail::gather(values,
                                           helper().key_sort_order(),
-                                          cudf::detail::out_of_bounds_policy::NULLIFY,
+                                          cudf::out_of_bounds_policy::DONT_CHECK,
                                           cudf::detail::negative_index_policy::NOT_ALLOWED,
+                                          rmm::cuda_stream_default,
                                           mr);
     return groupby::groups{
       std::move(grouped_keys), std::move(group_offsets_vector), std::move(grouped_values)};

@@ -88,15 +88,12 @@ __global__ void host_dispatching_kernel(mutable_column_device_view source_column
 template <FunctorType functor_type>
 struct ColumnHandle {
   template <typename ColumnType>
-  void operator()(mutable_column_device_view source_column,
-                  int work_per_thread,
-                  cudaStream_t stream = 0)
+  void operator()(mutable_column_device_view source_column, int work_per_thread)
   {
     cudf::detail::grid_1d grid_config{source_column.size(), block_size};
     int grid_size = grid_config.num_blocks;
     // Launch the kernel.
-    host_dispatching_kernel<functor_type, ColumnType>
-      <<<grid_size, block_size, 0, stream>>>(source_column);
+    host_dispatching_kernel<functor_type, ColumnType><<<grid_size, block_size>>>(source_column);
   }
 };
 
@@ -160,7 +157,7 @@ void launch_kernel(mutable_table_view input, T** d_ptr, int work_per_thread)
 }
 
 template <class TypeParam, FunctorType functor_type, DispatchingType dispatching_type>
-void type_dispatcher_benchmark(benchmark::State& state)
+void type_dispatcher_benchmark(::benchmark::State& state)
 {
   const cudf::size_type source_size = static_cast<cudf::size_type>(state.range(1));
 

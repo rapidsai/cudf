@@ -1,4 +1,4 @@
-# Copyright (c) 2020, NVIDIA CORPORATION.
+# Copyright (c) 2020-2021, NVIDIA CORPORATION.
 
 import sys
 
@@ -6,10 +6,13 @@ import numpy as np
 import pandas as pd
 
 import cudf
-from cudf.testing.main import pythonfuzz
-from cudf.testing.parquet import ParquetReader, ParquetWriter
-from cudf.testing.utils import run_test
-from cudf.tests.utils import assert_eq
+from cudf._fuzz_testing.main import pythonfuzz
+from cudf._fuzz_testing.parquet import ParquetReader, ParquetWriter
+from cudf._fuzz_testing.utils import (
+    ALL_POSSIBLE_VALUES,
+    compare_dataframe,
+    run_test,
+)
 
 
 @pythonfuzz(data_handle=ParquetReader)
@@ -17,26 +20,40 @@ def parquet_reader_test(parquet_buffer):
     pdf = pd.read_parquet(parquet_buffer)
     gdf = cudf.read_parquet(parquet_buffer)
 
-    assert_eq(gdf, pdf)
+    compare_dataframe(gdf, pdf)
 
 
 @pythonfuzz(
     data_handle=ParquetReader,
-    params={"columns": None, "use_pandas_metadata": [True, False]},
+    params={
+        "columns": ALL_POSSIBLE_VALUES,
+        "use_pandas_metadata": [True, False],
+        "skiprows": ALL_POSSIBLE_VALUES,
+        "num_rows": ALL_POSSIBLE_VALUES,
+    },
 )
-def parquet_reader_columns(parquet_buffer, columns, use_pandas_metadata):
+def parquet_reader_columns(
+    parquet_buffer, columns, use_pandas_metadata, skiprows, num_rows
+):
     pdf = pd.read_parquet(
         parquet_buffer,
         columns=columns,
         use_pandas_metadata=use_pandas_metadata,
     )
+
+    pdf = pdf.iloc[skiprows:]
+    if num_rows is not None:
+        pdf = pdf.head(num_rows)
+
     gdf = cudf.read_parquet(
         parquet_buffer,
         columns=columns,
         use_pandas_metadata=use_pandas_metadata,
+        skiprows=skiprows,
+        num_rows=num_rows,
     )
 
-    assert_eq(gdf, pdf)
+    compare_dataframe(gdf, pdf)
 
 
 @pythonfuzz(data_handle=ParquetWriter)
@@ -51,17 +68,17 @@ def parquet_writer_test(pdf):
 
     actual = cudf.read_parquet(gd_file_name)
     expected = pd.read_parquet(pd_file_name)
-    assert_eq(actual, expected)
+    compare_dataframe(actual, expected)
 
     actual = cudf.read_parquet(pd_file_name)
     expected = pd.read_parquet(gd_file_name)
-    assert_eq(actual, expected)
+    compare_dataframe(actual, expected)
 
 
 @pythonfuzz(
     data_handle=ParquetWriter,
     params={
-        "row_group_size": np.random.random_integers(0, 10000, 100),
+        "row_group_size": np.random.random_integers(1, 10000, 100),
         "compression": ["snappy", None],
     },
 )
@@ -82,11 +99,11 @@ def parquet_writer_test_rowgroup_index_compression(
 
     actual = cudf.read_parquet(gd_file_name)
     expected = pd.read_parquet(pd_file_name)
-    assert_eq(actual, expected)
+    compare_dataframe(actual, expected)
 
     actual = cudf.read_parquet(pd_file_name)
     expected = pd.read_parquet(gd_file_name)
-    assert_eq(actual, expected)
+    compare_dataframe(actual, expected, nullable=False)
 
 
 if __name__ == "__main__":

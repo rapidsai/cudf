@@ -19,91 +19,98 @@
 
 namespace cudf {
 namespace io {
-#if (__CUDACC_VER_MAJOR__ >= 9)
-#define SHFL0(v) __shfl_sync(~0, v, 0)
-#define SHFL(v, t) __shfl_sync(~0, v, t)
-#define SHFL_XOR(v, m) __shfl_xor_sync(~0, v, m)
-#define SYNCWARP() __syncwarp()
-#define BALLOT(v) __ballot_sync(~0, v)
-#else
-#define SHFL0(v) __shfl(v, 0)
-#define SHFL(v, t) __shfl(v, t)
-#define SHFL_XOR(v, m) __shfl_xor(v, m)
-#define SYNCWARP()
-#define BALLOT(v) __ballot(v)
-#endif
 
+template <typename T>
+inline __device__ T shuffle(T var, int lane = 0)
+{
+  return __shfl_sync(~0, var, lane);
+}
+
+template <typename T>
+inline __device__ T shuffle_xor(T var, uint32_t delta)
+{
+  return __shfl_xor_sync(~0, var, delta);
+}
+
+inline __device__ void syncwarp(void) { __syncwarp(); }
+
+inline __device__ uint32_t ballot(int pred) { return __ballot_sync(~0, pred); }
+
+template <typename T>
+inline __device__ void nanosleep(T d)
+{
 #if (__CUDA_ARCH__ >= 700)
-#define NANOSLEEP(d) __nanosleep(d)
+  __nanosleep(d);
 #else
-#define NANOSLEEP(d) clock()
+  clock();
 #endif
+}
 
 // Warp reduction helpers
 template <typename T>
 inline __device__ T WarpReduceSum2(T acc)
 {
-  return acc + SHFL_XOR(acc, 1);
+  return acc + shuffle_xor(acc, 1);
 }
 template <typename T>
 inline __device__ T WarpReduceSum4(T acc)
 {
   acc = WarpReduceSum2(acc);
-  return acc + SHFL_XOR(acc, 2);
+  return acc + shuffle_xor(acc, 2);
 }
 template <typename T>
 inline __device__ T WarpReduceSum8(T acc)
 {
   acc = WarpReduceSum4(acc);
-  return acc + SHFL_XOR(acc, 4);
+  return acc + shuffle_xor(acc, 4);
 }
 template <typename T>
 inline __device__ T WarpReduceSum16(T acc)
 {
   acc = WarpReduceSum8(acc);
-  return acc + SHFL_XOR(acc, 8);
+  return acc + shuffle_xor(acc, 8);
 }
 template <typename T>
 inline __device__ T WarpReduceSum32(T acc)
 {
   acc = WarpReduceSum16(acc);
-  return acc + SHFL_XOR(acc, 16);
+  return acc + shuffle_xor(acc, 16);
 }
 
 template <typename T>
 inline __device__ T WarpReduceOr2(T acc)
 {
-  return acc | SHFL_XOR(acc, 1);
+  return acc | shuffle_xor(acc, 1);
 }
 template <typename T>
 inline __device__ T WarpReduceOr4(T acc)
 {
   acc = WarpReduceOr2(acc);
-  return acc | SHFL_XOR(acc, 2);
+  return acc | shuffle_xor(acc, 2);
 }
 template <typename T>
 inline __device__ T WarpReduceOr8(T acc)
 {
   acc = WarpReduceOr4(acc);
-  return acc | SHFL_XOR(acc, 4);
+  return acc | shuffle_xor(acc, 4);
 }
 template <typename T>
 inline __device__ T WarpReduceOr16(T acc)
 {
   acc = WarpReduceOr8(acc);
-  return acc | SHFL_XOR(acc, 8);
+  return acc | shuffle_xor(acc, 8);
 }
 template <typename T>
 inline __device__ T WarpReduceOr32(T acc)
 {
   acc = WarpReduceOr16(acc);
-  return acc | SHFL_XOR(acc, 16);
+  return acc | shuffle_xor(acc, 16);
 }
 
 template <typename T>
 inline __device__ T WarpReducePos2(T pos, uint32_t t)
 {
-  T tmp = SHFL(pos, t & 0x1e);
+  T tmp = shuffle(pos, t & 0x1e);
   pos += (t & 1) ? tmp : 0;
   return pos;
 }
@@ -112,7 +119,7 @@ inline __device__ T WarpReducePos4(T pos, uint32_t t)
 {
   T tmp;
   pos = WarpReducePos2(pos, t);
-  tmp = SHFL(pos, (t & 0x1c) | 1);
+  tmp = shuffle(pos, (t & 0x1c) | 1);
   pos += (t & 2) ? tmp : 0;
   return pos;
 }
@@ -121,7 +128,7 @@ inline __device__ T WarpReducePos8(T pos, uint32_t t)
 {
   T tmp;
   pos = WarpReducePos4(pos, t);
-  tmp = SHFL(pos, (t & 0x18) | 3);
+  tmp = shuffle(pos, (t & 0x18) | 3);
   pos += (t & 4) ? tmp : 0;
   return pos;
 }
@@ -130,7 +137,7 @@ inline __device__ T WarpReducePos16(T pos, uint32_t t)
 {
   T tmp;
   pos = WarpReducePos8(pos, t);
-  tmp = SHFL(pos, (t & 0x10) | 7);
+  tmp = shuffle(pos, (t & 0x10) | 7);
   pos += (t & 8) ? tmp : 0;
   return pos;
 }
@@ -139,7 +146,7 @@ inline __device__ T WarpReducePos32(T pos, uint32_t t)
 {
   T tmp;
   pos = WarpReducePos16(pos, t);
-  tmp = SHFL(pos, 0xf);
+  tmp = shuffle(pos, 0xf);
   pos += (t & 16) ? tmp : 0;
   return pos;
 }

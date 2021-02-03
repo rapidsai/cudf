@@ -229,7 +229,7 @@ struct base_indexalator {
  * @code
  *  auto begin = indexalator_factory::create_input_iterator(gather_map);
  *  auto end   = begin + gather_map.size();
- *  auto result = detail::gather( source, begin, end, IGNORE, mr, stream );
+ *  auto result = detail::gather( source, begin, end, IGNORE, stream, mr );
  * @endcode
  *
  * @code
@@ -314,7 +314,7 @@ struct input_indexalator : base_indexalator<input_indexalator> {
  * Example output iterator usage.
  * @code
  *  auto result_itr = indexalator_factory::create_output_iterator(indices->mutable_view());
- *  thrust::lower_bound(rmm::exec_policy(stream)->on(stream),
+ *  thrust::lower_bound(rmm::exec_policy(stream),
  *                      input->begin<Element>(),
  *                      input->end<Element>(),
  *                      values->begin<Element>(),

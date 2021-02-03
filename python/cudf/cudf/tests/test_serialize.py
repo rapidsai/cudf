@@ -1,5 +1,7 @@
 # Copyright (c) 2018, NVIDIA CORPORATION.
 
+import pickle
+
 import msgpack
 import numpy as np
 import pandas as pd
@@ -144,11 +146,11 @@ def test_serialize_groupby_df():
     df["key_1"] = np.random.randint(0, 20, 100)
     df["key_2"] = np.random.randint(0, 20, 100)
     df["val"] = np.arange(100, dtype=np.float32)
-    gb = df.groupby(["key_1", "key_2"])
+    gb = df.groupby(["key_1", "key_2"], sort=True)
     outgb = gb.deserialize(*gb.serialize())
     expect = gb.mean()
     got = outgb.mean()
-    assert_eq(got, expect)
+    assert_eq(got.sort_index(), expect.sort_index())
 
 
 def test_serialize_groupby_external():
@@ -158,7 +160,7 @@ def test_serialize_groupby_external():
     outgb = gb.deserialize(*gb.serialize())
     expect = gb.mean()
     got = outgb.mean()
-    assert_eq(got, expect)
+    assert_eq(got.sort_index(), expect.sort_index())
 
 
 def test_serialize_groupby_level():
@@ -169,7 +171,7 @@ def test_serialize_groupby_level():
     expect = gb.mean()
     outgb = gb.deserialize(*gb.serialize())
     got = outgb.mean()
-    assert_eq(expect, got)
+    assert_eq(expect.sort_index(), got.sort_index())
 
 
 def test_serialize_groupby_sr():
@@ -178,7 +180,7 @@ def test_serialize_groupby_sr():
     outgb = gb.deserialize(*gb.serialize())
     got = gb.mean()
     expect = outgb.mean()
-    assert_eq(got, expect)
+    assert_eq(got.sort_index(), expect.sort_index())
 
 
 def test_serialize_datetime():
@@ -265,3 +267,32 @@ def test_serialize_string_check_buffer_sizes():
     header, frames = df.serialize()
     got = sum(b.nbytes for b in frames)
     assert expect == got
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        {"a": [[]]},
+        {"a": [[1, 2, None, 4]]},
+        {"a": [["cat", None, "dog"]]},
+        {
+            "a": [[1, 2, 3, None], [4, None, 5]],
+            "b": [None, ["fish", "bird"]],
+            "c": [[], []],
+        },
+        {"a": [[1, 2, 3, None], [4, None, 5], None, [6, 7]]},
+    ],
+)
+def test_serialize_list_columns(data):
+    df = cudf.DataFrame(data)
+    recreated = df.__class__.deserialize(*df.serialize())
+    assert_eq(recreated, df)
+
+
+def test_deserialize_cudf_0_16(datadir):
+    fname = datadir / "pkl" / "stringColumnWithRangeIndex_cudf_0.16.pkl"
+
+    expected = cudf.DataFrame({"a": ["hi", "hello", "world", None]})
+    actual = pickle.load(open(fname, "rb"))
+
+    assert_eq(expected, actual)

@@ -27,6 +27,14 @@ def read_json(
     if engine == "auto":
         engine = "cudf" if lines else "pandas"
 
+    is_single_filepath_or_buffer = ioutils.ensure_single_filepath_or_buffer(
+        path_or_data=path_or_buf, **kwargs,
+    )
+    if not is_single_filepath_or_buffer:
+        raise NotImplementedError(
+            "`read_json` does not yet support reading multiple files"
+        )
+
     path_or_buf, compression = ioutils.get_filepath_or_buffer(
         path_or_data=path_or_buf,
         compression=compression,
@@ -74,5 +82,5 @@ def to_json(cudf_val, path_or_buf=None, *args, **kwargs):
         "Using CPU via Pandas to write JSON dataset, this may "
         "be GPU accelerated in the future"
     )
-    pd_value = cudf_val.to_pandas()
+    pd_value = cudf_val.to_pandas(nullable=True)
     return pd.io.json.to_json(path_or_buf, pd_value, *args, **kwargs)

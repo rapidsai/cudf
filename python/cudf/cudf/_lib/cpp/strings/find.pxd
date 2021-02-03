@@ -13,6 +13,10 @@ cdef extern from "cudf/strings/find.hpp" namespace "cudf::strings" nogil:
         column_view source_strings,
         string_scalar target) except +
 
+    cdef unique_ptr[column] contains(
+        column_view source_strings,
+        column_view target_strings) except +
+
     cdef unique_ptr[column] ends_with(
         column_view source_strings,
         string_scalar target) except +

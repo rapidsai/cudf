@@ -17,33 +17,33 @@ ctypedef int32_t underlying_type_t_unary_op
 
 cdef extern from "cudf/unary.hpp" namespace "cudf" nogil:
 
-    ctypedef enum unary_op:
-        SIN "cudf::unary_op::SIN"
-        COS "cudf::unary_op::COS"
-        TAN "cudf::unary_op::TAN"
-        ARCSIN "cudf::unary_op::ARCSIN"
-        ARCCOS "cudf::unary_op::ARCCOS"
-        ARCTAN "cudf::unary_op::ARCTAN"
-        SINH "cudf::unary_op::SINH"
-        COSH "cudf::unary_op::COSH"
-        TANH "cudf::unary_op::TANH"
-        ARCSINH "cudf::unary_op::ARCSINH"
-        ARCCOSH "cudf::unary_op::ARCCOSH"
-        ARCTANH "cudf::unary_op::ARCTANH"
-        EXP "cudf::unary_op::EXP"
-        LOG "cudf::unary_op::LOG"
-        SQRT "cudf::unary_op::SQRT"
-        CBRT "cudf::unary_op::CBRT"
-        CEIL "cudf::unary_op::CEIL"
-        FLOOR "cudf::unary_op::FLOOR"
-        ABS "cudf::unary_op::ABS"
-        RINT "cudf::unary_op::RINT"
-        BIT_INVERT "cudf::unary_op::BIT_INVERT"
-        NOT "cudf::unary_op::NOT"
+    ctypedef enum unary_operator:
+        SIN "cudf::unary_operator::SIN"
+        COS "cudf::unary_operator::COS"
+        TAN "cudf::unary_operator::TAN"
+        ARCSIN "cudf::unary_operator::ARCSIN"
+        ARCCOS "cudf::unary_operator::ARCCOS"
+        ARCTAN "cudf::unary_operator::ARCTAN"
+        SINH "cudf::unary_operator::SINH"
+        COSH "cudf::unary_operator::COSH"
+        TANH "cudf::unary_operator::TANH"
+        ARCSINH "cudf::unary_operator::ARCSINH"
+        ARCCOSH "cudf::unary_operator::ARCCOSH"
+        ARCTANH "cudf::unary_operator::ARCTANH"
+        EXP "cudf::unary_operator::EXP"
+        LOG "cudf::unary_operator::LOG"
+        SQRT "cudf::unary_operator::SQRT"
+        CBRT "cudf::unary_operator::CBRT"
+        CEIL "cudf::unary_operator::CEIL"
+        FLOOR "cudf::unary_operator::FLOOR"
+        ABS "cudf::unary_operator::ABS"
+        RINT "cudf::unary_operator::RINT"
+        BIT_INVERT "cudf::unary_operator::BIT_INVERT"
+        NOT "cudf::unary_operator::NOT"
 
     cdef extern unique_ptr[column] unary_operation(
         column_view input,
-        unary_op op) except +
+        unary_operator op) except +
 
     cdef extern unique_ptr[column] is_null(column_view input) except +
     cdef extern unique_ptr[column] is_valid(column_view input) except +

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2020, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -25,14 +25,16 @@
 #include <cudf/utilities/traits.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
 
+#include <rmm/cuda_stream_view.hpp>
+
 namespace cudf {
 namespace detail {
 std::pair<std::unique_ptr<rmm::device_buffer>, cudf::size_type> bools_to_mask(
-  column_view const& input, rmm::mr::device_memory_resource* mr, cudaStream_t stream)
+  column_view const& input, rmm::cuda_stream_view stream, rmm::mr::device_memory_resource* mr)
 {
   CUDF_EXPECTS(input.type().id() == type_id::BOOL8, "Input is not of type bool");
 
-  if (input.size() == 0) { return std::make_pair(std::make_unique<rmm::device_buffer>(), 0); }
+  if (input.is_empty()) { return std::make_pair(std::make_unique<rmm::device_buffer>(), 0); }
 
   auto input_device_view_ptr = column_device_view::create(input, stream);
   auto input_device_view     = *input_device_view_ptr;
@@ -58,7 +60,7 @@ std::pair<std::unique_ptr<rmm::device_buffer>, cudf::size_type> bools_to_mask(
   column_view const& input, rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::bools_to_mask(input, mr);
+  return detail::bools_to_mask(input, rmm::cuda_stream_default, mr);
 }
 
 }  // namespace cudf

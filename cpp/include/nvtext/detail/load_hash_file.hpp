@@ -15,8 +15,11 @@
  */
 #pragma once
 
-#include <cudf/column/column.hpp>
 #include <nvtext/subword_tokenize.hpp>
+
+#include <cudf/column/column.hpp>
+
+#include <rmm/cuda_stream_view.hpp>
 
 #include <stdint.h>
 #include <string.h>
@@ -38,7 +41,7 @@ namespace detail {
  * @return vocabulary hash-table elements
  */
 hashed_vocabulary load_vocabulary_file(std::string const& filename_hashed_vocabulary,
-                                       cudaStream_t stream,
+                                       rmm::cuda_stream_view stream,
                                        rmm::mr::device_memory_resource* mr);
 
 }  // namespace detail

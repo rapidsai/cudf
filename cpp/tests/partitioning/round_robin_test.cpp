@@ -14,15 +14,14 @@
  * limitations under the License.
  */
 
+#include <cudf/column/column_factories.hpp>
+#include <cudf/partitioning.hpp>
 #include <cudf/table/table.hpp>
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
-#include <cudf_test/base_fixture.hpp>
-
-#include <rmm/thrust_rmm_allocator.h>
-#include <cudf/column/column_factories.hpp>
-#include <cudf/partitioning.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
+
+#include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_utilities.hpp>
 #include <cudf_test/column_wrapper.hpp>
 #include <cudf_test/cudf_gtest.hpp>
@@ -102,7 +101,7 @@ TYPED_TEST(RoundRobinTest, RoundRobinPartitions13_3)
     }
 
     std::vector<cudf::size_type> expected_partition_offsets{0, 5, 9};
-    EXPECT_EQ(num_partitions, expected_partition_offsets.size());
+    EXPECT_EQ(static_cast<std::size_t>(num_partitions), expected_partition_offsets.size());
 
     EXPECT_EQ(expected_partition_offsets, result.second);
   }
@@ -140,7 +139,7 @@ TYPED_TEST(RoundRobinTest, RoundRobinPartitions13_3)
     }
 
     std::vector<cudf::size_type> expected_partition_offsets{0, 4, 9};
-    EXPECT_EQ(num_partitions, expected_partition_offsets.size());
+    EXPECT_EQ(static_cast<std::size_t>(num_partitions), expected_partition_offsets.size());
 
     EXPECT_EQ(expected_partition_offsets, result.second);
   }
@@ -178,7 +177,7 @@ TYPED_TEST(RoundRobinTest, RoundRobinPartitions13_3)
     }
 
     std::vector<cudf::size_type> expected_partition_offsets{0, 4, 8};
-    EXPECT_EQ(num_partitions, expected_partition_offsets.size());
+    EXPECT_EQ(static_cast<std::size_t>(num_partitions), expected_partition_offsets.size());
 
     EXPECT_EQ(expected_partition_offsets, result.second);
   }
@@ -237,7 +236,7 @@ TYPED_TEST(RoundRobinTest, RoundRobinPartitions11_3)
     }
 
     std::vector<cudf::size_type> expected_partition_offsets{0, 4, 8};
-    EXPECT_EQ(num_partitions, expected_partition_offsets.size());
+    EXPECT_EQ(static_cast<std::size_t>(num_partitions), expected_partition_offsets.size());
 
     EXPECT_EQ(expected_partition_offsets, result.second);
   }
@@ -274,7 +273,7 @@ TYPED_TEST(RoundRobinTest, RoundRobinPartitions11_3)
     }
 
     std::vector<cudf::size_type> expected_partition_offsets{0, 3, 7};
-    EXPECT_EQ(num_partitions, expected_partition_offsets.size());
+    EXPECT_EQ(static_cast<std::size_t>(num_partitions), expected_partition_offsets.size());
 
     EXPECT_EQ(expected_partition_offsets, result.second);
   }
@@ -311,7 +310,7 @@ TYPED_TEST(RoundRobinTest, RoundRobinPartitions11_3)
     }
 
     std::vector<cudf::size_type> expected_partition_offsets{0, 4, 7};
-    EXPECT_EQ(num_partitions, expected_partition_offsets.size());
+    EXPECT_EQ(static_cast<std::size_t>(num_partitions), expected_partition_offsets.size());
 
     EXPECT_EQ(expected_partition_offsets, result.second);
   }
@@ -371,7 +370,7 @@ TYPED_TEST(RoundRobinTest, RoundRobinDegeneratePartitions11_15)
 
     std::vector<cudf::size_type> expected_partition_offsets{
       0, 0, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 11};
-    EXPECT_EQ(num_partitions, expected_partition_offsets.size());
+    EXPECT_EQ(static_cast<std::size_t>(num_partitions), expected_partition_offsets.size());
 
     EXPECT_EQ(expected_partition_offsets, result.second);
   }
@@ -409,7 +408,7 @@ TYPED_TEST(RoundRobinTest, RoundRobinDegeneratePartitions11_15)
 
     std::vector<cudf::size_type> expected_partition_offsets{
       0, 1, 2, 3, 4, 5, 6, 6, 6, 6, 6, 7, 8, 9, 10};
-    EXPECT_EQ(num_partitions, expected_partition_offsets.size());
+    EXPECT_EQ(static_cast<std::size_t>(num_partitions), expected_partition_offsets.size());
 
     EXPECT_EQ(expected_partition_offsets, result.second);
   }
@@ -447,7 +446,7 @@ TYPED_TEST(RoundRobinTest, RoundRobinDegeneratePartitions11_15)
 
     std::vector<cudf::size_type> expected_partition_offsets{
       0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 10, 10, 10, 10};
-    EXPECT_EQ(num_partitions, expected_partition_offsets.size());
+    EXPECT_EQ(static_cast<std::size_t>(num_partitions), expected_partition_offsets.size());
 
     EXPECT_EQ(expected_partition_offsets, result.second);
   }
@@ -506,7 +505,7 @@ TYPED_TEST(RoundRobinTest, RoundRobinDegeneratePartitions11_11)
     }
 
     std::vector<cudf::size_type> expected_partition_offsets{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10};
-    EXPECT_EQ(num_partitions, expected_partition_offsets.size());
+    EXPECT_EQ(static_cast<std::size_t>(num_partitions), expected_partition_offsets.size());
 
     EXPECT_EQ(expected_partition_offsets, result.second);
   }
@@ -584,7 +583,7 @@ TYPED_TEST(RoundRobinTest, RoundRobinNPartitionsDivideNRows)
     }
 
     std::vector<cudf::size_type> expected_partition_offsets{0, 7, 14};
-    EXPECT_EQ(num_partitions, expected_partition_offsets.size());
+    EXPECT_EQ(static_cast<std::size_t>(num_partitions), expected_partition_offsets.size());
 
     EXPECT_EQ(expected_partition_offsets, result.second);
   }
@@ -631,7 +630,7 @@ TYPED_TEST(RoundRobinTest, RoundRobinNPartitionsDivideNRows)
     }
 
     std::vector<cudf::size_type> expected_partition_offsets{0, 7, 14};
-    EXPECT_EQ(num_partitions, expected_partition_offsets.size());
+    EXPECT_EQ(static_cast<std::size_t>(num_partitions), expected_partition_offsets.size());
 
     EXPECT_EQ(expected_partition_offsets, result.second);
   }
@@ -688,7 +687,7 @@ TYPED_TEST(RoundRobinTest, RoundRobinSinglePartition)
   }
 
   std::vector<cudf::size_type> expected_partition_offsets{0};
-  EXPECT_EQ(num_partitions, expected_partition_offsets.size());
+  EXPECT_EQ(static_cast<std::size_t>(num_partitions), expected_partition_offsets.size());
   EXPECT_EQ(expected_partition_offsets, result.second);
 }
 

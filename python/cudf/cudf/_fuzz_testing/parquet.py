@@ -1,5 +1,4 @@
-# Copyright (c) 2020, NVIDIA CORPORATION.
-
+# Copyright (c) 2020-2021, NVIDIA CORPORATION.
 
 import logging
 import random
@@ -8,7 +7,11 @@ import numpy as np
 
 import cudf
 from cudf._fuzz_testing.io import IOFuzz
-from cudf._fuzz_testing.utils import _generate_rand_meta, pyarrow_to_pandas
+from cudf._fuzz_testing.utils import (
+    ALL_POSSIBLE_VALUES,
+    _generate_rand_meta,
+    pyarrow_to_pandas,
+)
 from cudf.tests import dataset_generator as dg
 
 logging.basicConfig(
@@ -25,12 +28,16 @@ class ParquetReader(IOFuzz):
         max_rows=100_000,
         max_columns=1000,
         max_string_length=None,
+        max_lists_length=None,
+        max_lists_nesting_depth=None,
     ):
         super().__init__(
             dirs=dirs,
             max_rows=max_rows,
             max_columns=max_columns,
             max_string_length=max_string_length,
+            max_lists_length=max_lists_length,
+            max_lists_nesting_depth=max_lists_nesting_depth,
         )
         self._df = None
 
@@ -47,7 +54,11 @@ class ParquetReader(IOFuzz):
                 cudf.utils.dtypes.ALL_TYPES
                 - {"category", "datetime64[ns]"}
                 - cudf.utils.dtypes.TIMEDELTA_TYPES
+                # TODO: Remove uint32 below after this bug is fixed
+                # https://github.com/pandas-dev/pandas/issues/37327
+                - {"uint32"}
             )
+            dtypes_list.extend(["list"])
             dtypes_meta, num_rows, num_cols = _generate_rand_meta(
                 self, dtypes_list
             )
@@ -81,18 +92,21 @@ class ParquetReader(IOFuzz):
             with open(file_name + "_crash.parquet", "wb") as crash_dataset:
                 crash_dataset.write(self._current_buffer)
 
-    def get_rand_params(self, params):
+    def set_rand_params(self, params):
         params_dict = {}
         for param, values in params.items():
-            if param == "columns" and values is None:
+            if param == "columns" and values == ALL_POSSIBLE_VALUES:
                 col_size = self._rand(len(self._df.columns))
                 params_dict[param] = list(
                     np.unique(np.random.choice(self._df.columns, col_size))
                 )
+            elif param in ("skiprows", "num_rows"):
+                params_dict[param] = np.random.choice(
+                    [None, self._rand(len(self._df))]
+                )
             else:
                 params_dict[param] = np.random.choice(values)
-        self._current_params["test_kwargs"] = params_dict
-        return params_dict
+        self._current_params["test_kwargs"] = self.process_kwargs(params_dict)
 
 
 class ParquetWriter(IOFuzz):
@@ -102,12 +116,16 @@ class ParquetWriter(IOFuzz):
         max_rows=100_000,
         max_columns=1000,
         max_string_length=None,
+        max_lists_length=None,
+        max_lists_nesting_depth=None,
     ):
         super().__init__(
             dirs=dirs,
             max_rows=max_rows,
             max_columns=max_columns,
             max_string_length=max_string_length,
+            max_lists_length=max_lists_length,
+            max_lists_nesting_depth=max_lists_nesting_depth,
         )
 
     def generate_input(self):
@@ -124,7 +142,11 @@ class ParquetWriter(IOFuzz):
             dtypes_list = list(
                 cudf.utils.dtypes.ALL_TYPES
                 - {"category", "timedelta64[ns]", "datetime64[ns]"}
+                # TODO: Remove uint32 below after this bug is fixed
+                # https://github.com/pandas-dev/pandas/issues/37327
+                - {"uint32"}
             )
+            dtypes_list.extend(["list"])
             dtypes_meta, num_rows, num_cols = _generate_rand_meta(
                 self, dtypes_list
             )
