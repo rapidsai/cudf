@@ -146,11 +146,11 @@ def test_serialize_groupby_df():
     df["key_1"] = np.random.randint(0, 20, 100)
     df["key_2"] = np.random.randint(0, 20, 100)
     df["val"] = np.arange(100, dtype=np.float32)
-    gb = df.groupby(["key_1", "key_2"])
+    gb = df.groupby(["key_1", "key_2"], sort=True)
     outgb = gb.deserialize(*gb.serialize())
     expect = gb.mean()
     got = outgb.mean()
-    assert_eq(got, expect)
+    assert_eq(got.sort_index(), expect.sort_index())
 
 
 def test_serialize_groupby_external():
@@ -160,7 +160,7 @@ def test_serialize_groupby_external():
     outgb = gb.deserialize(*gb.serialize())
     expect = gb.mean()
     got = outgb.mean()
-    assert_eq(got, expect)
+    assert_eq(got.sort_index(), expect.sort_index())
 
 
 def test_serialize_groupby_level():
@@ -171,7 +171,7 @@ def test_serialize_groupby_level():
     expect = gb.mean()
     outgb = gb.deserialize(*gb.serialize())
     got = outgb.mean()
-    assert_eq(expect, got)
+    assert_eq(expect.sort_index(), got.sort_index())
 
 
 def test_serialize_groupby_sr():
@@ -180,7 +180,7 @@ def test_serialize_groupby_sr():
     outgb = gb.deserialize(*gb.serialize())
     got = gb.mean()
     expect = outgb.mean()
-    assert_eq(got, expect)
+    assert_eq(got.sort_index(), expect.sort_index())
 
 
 def test_serialize_datetime():

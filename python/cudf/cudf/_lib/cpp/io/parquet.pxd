@@ -1,4 +1,4 @@
-# Copyright (c) 2020, NVIDIA CORPORATION.
+# Copyright (c) 2020-2021, NVIDIA CORPORATION.
 
 from libcpp cimport bool
 from libcpp.string cimport string
@@ -71,7 +71,6 @@ cdef extern from "cudf/io/parquet.hpp" namespace "cudf::io" nogil:
         cudf_io_types.statistics_freq get_stats_level() except +
         cudf_table_view.table_view get_table() except +
         const cudf_io_types.table_metadata get_metadata() except +
-        bool is_enabled_return_filemetadata() except +
         string get_column_chunks_file_path() except+
 
         void set_metadata(
@@ -82,9 +81,6 @@ cdef extern from "cudf/io/parquet.hpp" namespace "cudf::io" nogil:
         ) except +
         void set_compression(
             cudf_io_types.compression_type compression
-        ) except +
-        void enable_return_filemetadata(
-            bool req
         ) except +
         void set_column_chunks_file_path(
             string column_chunks_file_path
@@ -111,9 +107,6 @@ cdef extern from "cudf/io/parquet.hpp" namespace "cudf::io" nogil:
         ) except +
         parquet_writer_options_builder& compression(
             cudf_io_types.compression_type compression
-        ) except +
-        parquet_writer_options_builder& return_filemetadata(
-            bool req
         ) except +
         parquet_writer_options_builder& column_chunks_file_path(
             string column_chunks_file_path
@@ -168,21 +161,15 @@ cdef extern from "cudf/io/parquet.hpp" namespace "cudf::io" nogil:
 
         chunked_parquet_writer_options build() except +
 
-    cdef shared_ptr[pq_chunked_state] write_parquet_chunked_begin(
-        chunked_parquet_writer_options args
-    ) except +
-
-    cdef void write_parquet_chunked(cudf_table_view.table_view table_,
-                                    shared_ptr[pq_chunked_state]) except +
-
-    cdef unique_ptr[vector[uint8_t]] write_parquet_chunked_end(
-        shared_ptr[pq_chunked_state],
-        bool return_meta,
-        string column_chunks_file_path,
-    ) except +
-
-    cdef cppclass pq_chunked_state:
-        pass
+    cdef cppclass parquet_chunked_writer:
+        parquet_chunked_writer() except+
+        parquet_chunked_writer(chunked_parquet_writer_options args) except+
+        parquet_chunked_writer& write(
+            cudf_table_view.table_view table_,
+        ) except+
+        unique_ptr[vector[uint8_t]] close(
+            string column_chunks_file_path,
+        ) except+
 
     cdef unique_ptr[vector[uint8_t]] merge_rowgroup_metadata(
         const vector[unique_ptr[vector[uint8_t]]]& metadata_list

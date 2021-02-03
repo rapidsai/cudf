@@ -1,4 +1,4 @@
-# Copyright (c) 2020, NVIDIA CORPORATION.
+# Copyright (c) 2020-2021, NVIDIA CORPORATION.
 
 import datetime as dt
 import numbers
@@ -234,10 +234,20 @@ def is_struct_dtype(obj):
     return (
         type(obj) is cudf.core.dtypes.StructDtype
         or obj is cudf.core.dtypes.StructDtype
-        # or type(obj) is cudf.core.column.StructColumn
-        # or obj is cudf.core.column.StructColumn
         or (isinstance(obj, str) and obj == cudf.core.dtypes.StructDtype.name)
         or (hasattr(obj, "dtype") and is_struct_dtype(obj.dtype))
+    )
+
+
+def is_decimal_dtype(obj):
+    return (
+        type(obj) is cudf.core.dtypes.Decimal64Dtype
+        or obj is cudf.core.dtypes.Decimal64Dtype
+        or (
+            isinstance(obj, str)
+            and obj == cudf.core.dtypes.Decimal64Dtype.name
+        )
+        or (hasattr(obj, "dtype") and is_decimal_dtype(obj.dtype))
     )
 
 
