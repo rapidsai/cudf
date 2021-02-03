@@ -1006,7 +1006,6 @@ __global__ void __launch_bounds__(128, 8) gpuEncodePages(EncPage *pages,
             return 0u;
           }
         }();
-        printf("t %d, def %d\n", t, def_lvl);
         // Non-list leaf column does not require taking into account
         // leaf_column_offset
         s->vals[(rle_numvals + t) & (rle_buffer_size - 1)] = def_lvl;
@@ -2019,13 +2018,9 @@ void InitPageFragments(PageFragment *frag,
                        uint32_t num_rows,
                        rmm::cuda_stream_view stream)
 {
-  std::cout << "about to init frags" << std::endl;
   dim3 dim_grid(num_columns, num_fragments);  // 1 threadblock per fragment
   gpuInitPageFragments<512><<<dim_grid, 512, 0, stream.value()>>>(
     frag, col_desc, num_fragments, num_columns, fragment_size, num_rows);
-  cudaStreamSynchronize(stream.value());
-  cudaGetLastError();
-  std::cout << "frags init done" << std::endl;
 }
 
 /**
@@ -2039,24 +2034,13 @@ void init_column_device_views(EncColumnDesc *col_desc,
                               const table_device_view &parent_column_table_device_view,
                               rmm::cuda_stream_view stream)
 {
-  cudaStreamSynchronize(stream.value());
-  cudaGetLastError();
-  std::cout << "About to init cols" << std::endl;
   cudf::detail::device_single_thread(
     [col_desc,
      parent_col_view = parent_column_table_device_view,
      leaf_column_views] __device__() mutable {
-      printf("num cols %d\n", parent_col_view.num_columns());
       for (size_type i = 0; i < parent_col_view.num_columns(); ++i) {
-        column_device_view col = parent_col_view.column(i);
-        printf("col type %d\n", col.type().id());
-        if (col.type().id() == type_id::LIST or col.type().id() == type_id::STRUCT) {
-          printf("was nested\n");
-          col_desc[i].parent_column = parent_col_view.begin() + i;
-        } else {
-          printf("was NOT nested\n");
-          col_desc[i].parent_column = nullptr;
-        }
+        col_desc[i].parent_column = parent_col_view.begin() + i;
+        column_device_view col    = parent_col_view.column(i);
         // traverse till leaf column
         while (col.type().id() == type_id::LIST or col.type().id() == type_id::STRUCT) {
           if (col.type().id() == type_id::LIST) {
@@ -2065,7 +2049,7 @@ void init_column_device_views(EncColumnDesc *col_desc,
           } else if (col.type().id() == type_id::STRUCT) {
             col = col.child(0);
           } else {
-            release_assert("Unsupported nested type");
+            release_assert(false and "Unsupported nested type");
           }
         }
         // Store leaf_column to device storage
@@ -2075,9 +2059,6 @@ void init_column_device_views(EncColumnDesc *col_desc,
       }
     },
     stream);
-  cudaStreamSynchronize(stream.value());
-  cudaGetLastError();
-  std::cout << "cols initted" << std::endl;
 }
 
 /**
