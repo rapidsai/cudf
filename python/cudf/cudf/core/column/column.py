@@ -1952,21 +1952,37 @@ def as_column(
                     sr = pd.Series(arbitrary, dtype="str")
                     data = as_column(sr, nan_as_null=nan_as_null)
                 else:
-                    native_dtype = dtype
-                    if dtype is None and pd.api.types.infer_dtype(
-                        arbitrary
-                    ) in ("mixed", "mixed-integer"):
-                        native_dtype = "object"
-                    data = np.asarray(
-                        arbitrary,
-                        dtype=native_dtype
-                        if native_dtype is None
-                        else np.dtype(native_dtype),
-                    )
                     data = as_column(
-                        data, dtype=dtype, nan_as_null=nan_as_null
+                        _construct_array(arbitrary, dtype),
+                        dtype=dtype,
+                        nan_as_null=nan_as_null,
                     )
     return data
+
+
+def _construct_array(
+    arbitrary: Any, dtype: Optional[Dtype]
+) -> Union[np.ndarray, cupy.ndarray]:
+    """
+    Construct a CuPy or NumPy array from `arbitrary`
+    """
+    try:
+        dtype = dtype if dtype is None else np.dtype(dtype)
+        arbitrary = cupy.asarray(arbitrary, dtype=dtype)
+    except (TypeError, ValueError):
+        native_dtype = dtype
+        if dtype is None and pd.api.types.infer_dtype(arbitrary) in (
+            "mixed",
+            "mixed-integer",
+        ):
+            native_dtype = "object"
+        arbitrary = np.asarray(
+            arbitrary,
+            dtype=native_dtype
+            if native_dtype is None
+            else np.dtype(native_dtype),
+        )
+    return arbitrary
 
 
 def column_applymap(
