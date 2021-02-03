@@ -240,12 +240,11 @@ TYPED_TEST(FixedPointTestBothReps, GroupBySumProductMinMaxDecimalAsValue)
       test_single_agg(keys, vals, expect_keys, {}, std::move(agg4), force_use_sort_impl::YES),
       cudf::logic_error);
 
-#if !((__CUDACC_VER_MAJOR__ == 10) and (__CUDACC_VER_MINOR__ == 2))
 
     // group_by hash tests
 
-    auto agg5 = cudf::make_sum_aggregation();
-    test_single_agg(keys, vals, expect_keys, expect_vals_sum, std::move(agg5));
+    // auto agg5 = cudf::make_sum_aggregation();
+    // test_single_agg(keys, vals, expect_keys, expect_vals_sum, std::move(agg5));
 
     // auto agg6 = cudf::make_min_aggregation();
     // test_single_agg(keys, vals, expect_keys, expect_vals_min, std::move(agg6));
@@ -257,7 +256,6 @@ TYPED_TEST(FixedPointTestBothReps, GroupBySumProductMinMaxDecimalAsValue)
     // EXPECT_THROW(test_single_agg(keys, vals, expect_keys, {}, std::move(agg8)),
     // cudf::logic_error);
 
-#endif
   }
 }
 

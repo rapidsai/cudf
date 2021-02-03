@@ -131,6 +131,34 @@ struct update_target_element<
 };
 
 template <typename Source, bool target_has_nulls, bool source_has_nulls>
+struct update_target_element<Source,
+                             aggregation::MIN,
+                             target_has_nulls,
+                             source_has_nulls,
+                             std::enable_if_t<is_fixed_point<Source>()>> {
+  __device__ void operator()(mutable_column_device_view target,
+                             size_type target_index,
+                             column_device_view source,
+                             size_type source_index) const noexcept
+  {
+#if (__CUDACC_VER_MAJOR__ != 10) or (__CUDACC_VER_MINOR__ != 2)
+
+    if (source_has_nulls and source.is_null(source_index)) { return; }
+
+    using Target       = target_type_t<Source, aggregation::MIN>;
+    using DeviceTarget = device_storage_type_t<Target>;
+    using DeviceSource = device_storage_type_t<Source>;
+
+    atomicMin(&target.element<DeviceTarget>(target_index),
+              static_cast<DeviceTarget>(source.element<DeviceSource>(source_index)));
+
+    if (target_has_nulls and target.is_null(target_index)) { target.set_valid(target_index); }
+
+#endif
+  }
+};
+
+template <typename Source, bool target_has_nulls, bool source_has_nulls>
 struct update_target_element<
   Source,
   aggregation::MAX,
@@ -154,10 +182,39 @@ struct update_target_element<
 
 template <typename Source, bool target_has_nulls, bool source_has_nulls>
 struct update_target_element<Source,
-                             aggregation::SUM,
+                             aggregation::MAX,
                              target_has_nulls,
                              source_has_nulls,
-                             std::enable_if_t<is_fixed_width<Source>()>> {
+                             std::enable_if_t<is_fixed_point<Source>()>> {
+  __device__ void operator()(mutable_column_device_view target,
+                             size_type target_index,
+                             column_device_view source,
+                             size_type source_index) const noexcept
+  {
+#if (__CUDACC_VER_MAJOR__ != 10) or (__CUDACC_VER_MINOR__ != 2)
+
+    if (source_has_nulls and source.is_null(source_index)) { return; }
+
+    using Target       = target_type_t<Source, aggregation::MAX>;
+    using DeviceTarget = device_storage_type_t<Target>;
+    using DeviceSource = device_storage_type_t<Source>;
+
+    atomicMax(&target.element<DeviceTarget>(target_index),
+              static_cast<DeviceTarget>(source.element<DeviceSource>(source_index)));
+
+    if (target_has_nulls and target.is_null(target_index)) { target.set_valid(target_index); }
+
+#endif
+  }
+};
+
+template <typename Source, bool target_has_nulls, bool source_has_nulls>
+struct update_target_element<
+  Source,
+  aggregation::SUM,
+  target_has_nulls,
+  source_has_nulls,
+  std::enable_if_t<is_fixed_width<Source>() && !is_fixed_point<Source>()>> {
   __device__ void operator()(mutable_column_device_view target,
                              size_type target_index,
                              column_device_view source,
@@ -166,23 +223,37 @@ struct update_target_element<Source,
     if (source_has_nulls and source.is_null(source_index)) { return; }
 
     using Target = target_type_t<Source, aggregation::SUM>;
+    atomicAdd(&target.element<Target>(target_index),
+              static_cast<Target>(source.element<Source>(source_index)));
 
-    // #if (__CUDACC_VER_MAJOR__ != 10) or (__CUDACC_VER_MINOR__ != 2)
+    if (target_has_nulls and target.is_null(target_index)) { target.set_valid(target_index); }
+  }
+};
 
+template <typename Source, bool target_has_nulls, bool source_has_nulls>
+struct update_target_element<Source,
+                             aggregation::SUM,
+                             target_has_nulls,
+                             source_has_nulls,
+                             std::enable_if_t<is_fixed_point<Source>()>> {
+  __device__ void operator()(mutable_column_device_view target,
+                             size_type target_index,
+                             column_device_view source,
+                             size_type source_index) const noexcept
+  {
+#if (__CUDACC_VER_MAJOR__ != 10) or (__CUDACC_VER_MINOR__ != 2)
+
+    if (source_has_nulls and source.is_null(source_index)) { return; }
+
+    using Target       = target_type_t<Source, aggregation::SUM>;
     using DeviceTarget = device_storage_type_t<Target>;
     using DeviceSource = device_storage_type_t<Source>;
-
-    // #else
-
-    // using DeviceTarget = Target;
-    // using DeviceSource = Source;
-
-    // #endif
 
     atomicAdd(&target.element<DeviceTarget>(target_index),
               static_cast<DeviceTarget>(source.element<DeviceSource>(source_index)));
 
     if (target_has_nulls and target.is_null(target_index)) { target.set_valid(target_index); }
+#endif
   }
 };
 
