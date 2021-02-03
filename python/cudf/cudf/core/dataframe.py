@@ -3026,21 +3026,6 @@ class DataFrame(Frame, Serializable):
         out.columns = self.columns
         return out
 
-    @annotate("DATAFRAME_COPY", color="cyan", domain="cudf_python")
-    def copy(self, deep=True):
-        """
-        Returns a copy of this dataframe
-
-        Parameters
-        ----------
-        deep: bool
-           Make a full copy of Series columns and Index at the GPU level, or
-           create a new allocation with references.
-        """
-        out = DataFrame(data=self._data.copy(deep=deep))
-        out.index = self.index.copy(deep=deep)
-        return out
-
     def __copy__(self):
         return self.copy(deep=True)
 

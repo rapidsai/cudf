@@ -289,7 +289,10 @@ class MultiIndex(Index):
 
     @property
     def _source_data(self):
-        return cudf.DataFrame(self._data)
+        out = cudf.DataFrame()
+        out._data = self._data
+        out._index = cudf.Index(range(self._data.nrows))
+        return out
 
     @_source_data.setter
     def _source_data(self, value):
@@ -452,7 +455,7 @@ class MultiIndex(Index):
             )
             preprocess = self.take(indices)
         else:
-            preprocess = self
+            preprocess = self.copy(deep=False)
 
         cols_nulls = [
             preprocess._source_data._data[col].has_nulls
