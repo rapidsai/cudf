@@ -20,6 +20,7 @@ from typing_extensions import Literal
 import cudf
 from cudf import _lib as libcudf
 from cudf.core.column import as_column, build_categorical_column, column_empty
+from cudf.core.internals import where as where_internals
 from cudf.utils.dtypes import (
     is_categorical_dtype,
     is_column_like,
@@ -737,88 +738,6 @@ class Frame(libcudf.table.Table):
 
         return self._mimic_inplace(output, inplace=inplace)
 
-    def _normalize_columns_and_scalars_type(self, other, inplace=False):
-        """
-        Try to normalize the other's dtypes as per self.
-
-        Parameters
-        ----------
-
-        self : Can be a DataFrame or Series or Index
-        other : Can be a DataFrame, Series, Index, Array
-            like object or a scalar value
-
-            if self is DataFrame, other can be only a
-            scalar or array like with size of number of columns
-            in DataFrame or a DataFrame with same dimension
-
-            if self is Series, other can be only a scalar or
-            a series like with same length as self
-
-        Returns:
-        --------
-        A dataframe/series/list/scalar form of normalized other
-        """
-        if isinstance(self, cudf.DataFrame) and isinstance(
-            other, cudf.DataFrame
-        ):
-            source_df = self.copy()
-            other_df = other.copy()
-            for self_col in source_df._data.names:
-                source_col, other_col = _check_and_cast_columns(
-                    source_col=source_df._data[self_col],
-                    other_col=other_df._data[self_col],
-                    inplace=inplace,
-                )
-                source_df._data[self_col] = source_col
-                other_df._data[self_col] = other_col
-            return source_df, other_df
-
-        elif isinstance(self, (cudf.Series, cudf.Index)) and not is_scalar(
-            other
-        ):
-            other = as_column(other)
-            input_col = self._data[self.name]
-            return _check_and_cast_columns(
-                source_col=input_col, other_col=other, inplace=inplace
-            )
-        else:
-            # Handles scalar or list/array like scalars
-            if isinstance(self, (cudf.Series, cudf.Index)) and is_scalar(
-                other
-            ):
-                input_col = self._data[self.name]
-                return _check_and_cast_columns_with_scalar(
-                    source_col=self._data[self.name],
-                    other_scalar=other,
-                    inplace=inplace,
-                )
-
-            elif isinstance(self, cudf.DataFrame):
-                if is_scalar(other):
-                    other = [other for i in range(len(self._data.names))]
-
-                source_df = self.copy()
-                others = []
-                for col_name, other_sclr in zip(self._data.names, other):
-
-                    (
-                        source_col,
-                        other_scalar,
-                    ) = _check_and_cast_columns_with_scalar(
-                        source_col=source_df._data[col_name],
-                        other_scalar=other_sclr,
-                        inplace=inplace,
-                    )
-                    source_df._data[col_name] = source_col
-                    others.append(other_scalar)
-                return source_df, others
-            else:
-                raise ValueError(
-                    f"Inappropriate input {type(self)} "
-                    f"and other {type(other)} combination"
-                )
-
     def where(self, cond, other=None, inplace=False):
         """
         Replace values where the condition is False.
@@ -897,7 +816,12 @@ class Frame(libcudf.table.Table):
                 # as `cond` has no column names.
                 cond.columns = self.columns
 
-            source_df, others = self._normalize_columns_and_scalars_type(other)
+            (
+                source_df,
+                others,
+            ) = where_internals._normalize_columns_and_scalars_type(
+                self, other
+            )
             if isinstance(other, Frame):
                 others = others._data.columns
 
@@ -971,8 +895,11 @@ class Frame(libcudf.table.Table):
             if cond.all():
                 result = input_col
             else:
-                input_col, other = self._normalize_columns_and_scalars_type(
-                    other, inplace
+                (
+                    input_col,
+                    other,
+                ) = where_internals._normalize_columns_and_scalars_type(
+                    self, other, inplace
                 )
 
                 if isinstance(input_col, cudf.core.column.CategoricalColumn):
@@ -2725,7 +2652,6 @@ class Frame(libcudf.table.Table):
         array([4, 4, 4, 0], dtype=int32)
         """
         # Call libcudf++ search_sorted primitive
-        from cudf.utils.dtypes import is_scalar
 
         scalar_flag = None
         if is_scalar(values):
@@ -3860,100 +3786,6 @@ def _reassign_categories(categories, cols, col_idxs):
                 offset=cols[name].offset,
                 size=cols[name].size,
             )
-
-
-def _normalize_scalars(col, other):
-    """
-    Try to normalizes scalar values as per col dtype
-    """
-    if (
-        other is not None
-        and (isinstance(other, float) and not np.isnan(other))
-    ) and (col.dtype.type(other) != other):
-        raise TypeError(
-            f"Cannot safely cast non-equivalent "
-            f"{type(other).__name__} to {col.dtype.name}"
-        )
-
-    return (
-        col.dtype.type(other)
-        if (
-            other is not None
-            and (isinstance(other, float) and not np.isnan(other))
-        )
-        else other
-    )
-
-
-def _check_and_cast_columns(source_col, other_col, inplace):
-    """
-    Returns type-casted columns of `source_col` & `other_col`
-    based on `inplace` parameter.
-    """
-    if cudf.utils.dtypes.is_categorical_dtype(source_col.dtype):
-        return source_col, other_col
-    elif cudf.utils.dtypes.is_mixed_with_object_dtype(source_col, other_col):
-        raise TypeError(
-            "cudf does not support mixed types, please type-cast "
-            "the column of dataframe/series and other "
-            "to same dtypes."
-        )
-    if inplace:
-        if not source_col.can_cast_safely(other_col.dtype):
-            warnings.warn(
-                f"Type-casting from {other_col.dtype} "
-                f"to {source_col.dtype}, there could be potential data loss"
-            )
-        return source_col, other_col.astype(source_col.dtype)
-    else:
-        common_dtype = cudf.utils.dtypes.find_common_type(
-            [source_col.dtype, other_col.dtype]
-        )
-        return source_col.astype(common_dtype), other_col.astype(common_dtype)
-
-
-def _check_and_cast_columns_with_scalar(source_col, other_scalar, inplace):
-    """
-    Returns type-casted column `source_col` & scalar `other_scalar`
-    based on `inplace` parameter.
-    """
-    if cudf.utils.dtypes.is_categorical_dtype(source_col.dtype):
-        return source_col, other_scalar
-
-    device_scalar = cudf.Scalar(
-        _normalize_scalars(source_col, other_scalar),
-        dtype=source_col.dtype if other_scalar is None else None,
-    )
-
-    if other_scalar is None:
-        return source_col, device_scalar
-    elif cudf.utils.dtypes.is_mixed_with_object_dtype(
-        device_scalar, source_col
-    ):
-        raise TypeError(
-            "cudf does not support mixed types, please type-cast "
-            "the column of dataframe/series and other "
-            "to same dtypes."
-        )
-    if inplace:
-        if not np.can_cast(device_scalar, source_col.dtype):
-            warnings.warn(
-                f"Type-casting from {device_scalar.dtype} "
-                f"to {source_col.dtype}, there could be potential data loss"
-            )
-        return source_col, device_scalar.astype(source_col.dtype)
-    else:
-        if pd.api.types.is_numeric_dtype(source_col.dtype) and np.can_cast(
-            other_scalar, source_col.dtype
-        ):
-            common_dtype = source_col.dtype
-        else:
-            common_dtype = cudf.utils.dtypes.find_common_type(
-                [source_col.dtype, np.min_scalar_type(other_scalar)]
-            )
-
-        source_col = source_col.astype(common_dtype)
-        return source_col, cudf.Scalar(other_scalar, dtype=common_dtype)
 
 
 def _is_series(obj):
