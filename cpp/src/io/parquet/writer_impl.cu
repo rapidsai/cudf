@@ -1318,8 +1318,8 @@ void writer::impl::write(table_view const &table)
 {
   CUDF_EXPECTS(not closed, "Data has already been flushed to out and closed");
 
-  size_type num_columns = table.num_columns();
-  size_type num_rows    = table.num_rows();
+  // size_type num_columns = table.num_columns();
+  size_type num_rows = table.num_rows();
   /*
     // Wrapper around cudf columns to attach parquet-specific type info.
     // Note : I wish we could do this in the begin() function but since the
@@ -1456,7 +1456,7 @@ void writer::impl::write(table_view const &table)
   std::vector<column_view> cudf_cols;
   for (auto const &parq_col : parquet_columns) { cudf_cols.push_back(parq_col.cudf_col); }
   table_view single_streams_table(cudf_cols);
-  auto d_table = table_device_view::create(single_streams_table);
+  size_type num_columns = single_streams_table.num_columns();
 
   // TODO: See if we need to Change table_device_view to following single allocation for vector of
   // columns.
@@ -1491,7 +1491,7 @@ void writer::impl::write(table_view const &table)
   }
   // Create table_device_view so that corresponding column_device_view data
   // can be written into col_desc members
-  auto parent_column_table_device_view = table_device_view::create(table);
+  auto parent_column_table_device_view = table_device_view::create(single_streams_table);
   rmm::device_uvector<column_device_view> leaf_column_views(0, stream);
 
   // Initialize column description
@@ -1524,6 +1524,7 @@ void writer::impl::write(table_view const &table)
 
     init_page_fragments(fragments, col_desc, num_columns, num_fragments, num_rows, fragment_size);
   }
+  std::cout << "frags initted" << std::endl;
 
   size_t global_rowgroup_base = md.row_groups.size();
 
@@ -1564,6 +1565,7 @@ void writer::impl::write(table_view const &table)
         frag_stats.data().get(), fragments, col_desc, num_columns, num_fragments, fragment_size);
     }
   }
+  std::cout << "frags gathered" << std::endl;
   // Initialize row groups and column chunks
   uint32_t num_chunks = num_rowgroups * num_columns;
   hostdevice_vector<gpu::EncColumnChunk> chunks(num_chunks, stream);
@@ -1631,6 +1633,7 @@ void writer::impl::write(table_view const &table)
     f += fragments_in_chunk;
     start_row += (uint32_t)md.row_groups[global_r].num_rows;
   }
+  std::cout << "dicts allotted" << std::endl;
 
   // Free unused dictionaries
   for (auto &col : parquet_columns) { col.check_dictionary_used(); }

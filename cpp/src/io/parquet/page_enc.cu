@@ -963,8 +963,8 @@ __global__ void __launch_bounds__(128, 8) gpuEncodePages(EncPage *pages,
   __syncthreads();
 
   // Encode Repetition and Definition levels
-  if (s->page.page_type != PageType::DICTIONARY_PAGE && s->col.level_bits != 0 &&
-      s->col.parent_column == nullptr) {
+  if (s->page.page_type != PageType::DICTIONARY_PAGE && s->col.level_bits != 0 /* &&
+      s->col.parent_column == nullptr */) {
     // Calculate definition levels from validity
     uint32_t def_lvl_bits = s->col.level_bits & 0xf;
     if (def_lvl_bits != 0) {
@@ -981,9 +981,34 @@ __global__ void __launch_bounds__(128, 8) gpuEncodePages(EncPage *pages,
         uint32_t row         = s->page.start_row + rle_numvals + t;
         // Definition level encodes validity. Checks the valid map and if it is valid, then sets the
         // def_lvl accordingly and sets it in s->vals which is then given to RleEncode to encode
-        uint32_t def_lvl = (rle_numvals + t < s->page.num_rows && row < s->col.num_rows)
-                             ? s->col.leaf_column->is_valid(row)
-                             : 0;
+        // uint32_t def_lvl = (rle_numvals + t < s->page.num_rows && row < s->col.num_rows)
+        //                      ? s->col.leaf_column->is_valid(row)
+        //                      : 0;
+        // Brace yourself for new def level calculation:
+        uint32_t def_lvl = [&]() {
+          if (rle_numvals + t < s->page.num_rows && row < s->col.num_rows) {
+            uint32_t def       = 0;
+            bool is_col_nested = false;
+            auto col           = *s->col.parent_column;
+            do {
+              if (col.nullable()) {
+                if (col.is_valid(row)) {
+                  ++def;
+                } else {
+                  break;
+                }
+              }
+              is_col_nested = (col.type().id() == type_id::STRUCT);
+              if (is_col_nested) { col = col.child(0); }
+            } while (is_col_nested);
+            return def;
+          } else {
+            return 0u;
+          }
+        }();
+        printf("t %d, def %d\n", t, def_lvl);
+        // Non-list leaf column does not require taking into account
+        // leaf_column_offset
         s->vals[(rle_numvals + t) & (rle_buffer_size - 1)] = def_lvl;
         __syncthreads();
         rle_numvals += nrows;
@@ -1002,6 +1027,8 @@ __global__ void __launch_bounds__(128, 8) gpuEncodePages(EncPage *pages,
       }
     }
   } else if (s->page.page_type != PageType::DICTIONARY_PAGE && s->col.parent_column != nullptr) {
+    // TODO: Consolidate this with the one above. The difference is only i how the def level is
+    // obtained.
     auto encode_levels = [&](uint8_t const *lvl_val_data, uint32_t nbits) {
       // For list types, the repetition and definition levels are pre-calculated. We just need to
       // encode and write them now.
@@ -1992,9 +2019,13 @@ void InitPageFragments(PageFragment *frag,
                        uint32_t num_rows,
                        rmm::cuda_stream_view stream)
 {
+  std::cout << "about to init frags" << std::endl;
   dim3 dim_grid(num_columns, num_fragments);  // 1 threadblock per fragment
   gpuInitPageFragments<512><<<dim_grid, 512, 0, stream.value()>>>(
     frag, col_desc, num_fragments, num_columns, fragment_size, num_rows);
+  cudaStreamSynchronize(stream.value());
+  cudaGetLastError();
+  std::cout << "frags init done" << std::endl;
 }
 
 /**
@@ -2008,21 +2039,34 @@ void init_column_device_views(EncColumnDesc *col_desc,
                               const table_device_view &parent_column_table_device_view,
                               rmm::cuda_stream_view stream)
 {
+  cudaStreamSynchronize(stream.value());
+  cudaGetLastError();
+  std::cout << "About to init cols" << std::endl;
   cudf::detail::device_single_thread(
     [col_desc,
      parent_col_view = parent_column_table_device_view,
      leaf_column_views] __device__() mutable {
+      printf("num cols %d\n", parent_col_view.num_columns());
       for (size_type i = 0; i < parent_col_view.num_columns(); ++i) {
         column_device_view col = parent_col_view.column(i);
-        if (col.type().id() == type_id::LIST) {
+        printf("col type %d\n", col.type().id());
+        if (col.type().id() == type_id::LIST or col.type().id() == type_id::STRUCT) {
+          printf("was nested\n");
           col_desc[i].parent_column = parent_col_view.begin() + i;
         } else {
+          printf("was NOT nested\n");
           col_desc[i].parent_column = nullptr;
         }
         // traverse till leaf column
-        while (col.type().id() == type_id::LIST) {
-          auto offset_col = col.child(lists_column_view::offsets_column_index);
-          col             = col.child(lists_column_view::child_column_index);
+        while (col.type().id() == type_id::LIST or col.type().id() == type_id::STRUCT) {
+          if (col.type().id() == type_id::LIST) {
+            auto offset_col = col.child(lists_column_view::offsets_column_index);
+            col             = col.child(lists_column_view::child_column_index);
+          } else if (col.type().id() == type_id::STRUCT) {
+            col = col.child(0);
+          } else {
+            release_assert("Unsupported nested type");
+          }
         }
         // Store leaf_column to device storage
         column_device_view *leaf_col_ptr = leaf_column_views + i;
@@ -2031,6 +2075,9 @@ void init_column_device_views(EncColumnDesc *col_desc,
       }
     },
     stream);
+  cudaStreamSynchronize(stream.value());
+  cudaGetLastError();
+  std::cout << "cols initted" << std::endl;
 }
 
 /**

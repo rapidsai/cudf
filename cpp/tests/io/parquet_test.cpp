@@ -729,15 +729,17 @@ TEST_F(ParquetWriterTest, Struct)
 {
   // Struct<is_human:bool, Struct<names:string, ages:int>>
 
-  auto names = {"Samuel Vimes",
-                "Carrot Ironfoundersson",
-                "Angua von Uberwald",
-                "Cheery Littlebottom",
-                "Detritus",
-                "Mr Slant"};
+  // auto names = {"Samuel Vimes",
+  //               "Carrot Ironfoundersson",
+  //               "Angua von Uberwald",
+  //               "Cheery Littlebottom",
+  //               "Detritus",
+  //               "Mr Slant"};
 
-  // `Name` column has all valid values.
-  auto names_col = cudf::test::strings_column_wrapper{names.begin(), names.end()};
+  // // `Name` column has all valid values.
+  // auto names_col = cudf::test::strings_column_wrapper{names.begin(), names.end()};
+
+  auto names_col = cudf::test::fixed_width_column_wrapper<float>{1.1, 2.4, 5.3, 8.0, 9.6, 6.9};
 
   auto ages_col =
     cudf::test::fixed_width_column_wrapper<int32_t>{{48, 27, 25, 31, 351, 351}, {1, 1, 1, 1, 1, 0}};
@@ -752,10 +754,14 @@ TEST_F(ParquetWriterTest, Struct)
 
   auto expected = table_view({*struct_2});
 
-  auto filepath = temp_env->get_temp_filepath("Struct.parquet");
+  auto filepath = ("Struct.parquet");
   cudf_io::parquet_writer_options args =
     cudf_io::parquet_writer_options::builder(cudf_io::sink_info{filepath}, expected);
   cudf_io::write_parquet(args);
+
+  cudf_io::parquet_reader_options read_args =
+    cudf_io::parquet_reader_options::builder(cudf_io::source_info(filepath));
+  cudf_io::read_parquet(read_args);
 }
 
 // custom data sink that supports device writes. uses plain file io.
