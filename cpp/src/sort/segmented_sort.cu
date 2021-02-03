@@ -65,37 +65,6 @@ rmm::device_uvector<size_type> get_segment_indices(size_type num_rows,
   return std::move(segment_ids);
 }
 
-void validate_key_value_list_columns(table_view const& keys,
-                                     table_view const& values,
-                                     rmm::cuda_stream_view stream)
-{
-  std::vector<column_view> key_value_columns;
-  key_value_columns.reserve(keys.num_columns() + values.num_columns());
-  key_value_columns.insert(key_value_columns.end(), keys.begin(), keys.end());
-  key_value_columns.insert(key_value_columns.end(), values.begin(), values.end());
-  table_view key_vals{key_value_columns};
-  // check if all are list columns
-  CUDF_EXPECTS(std::all_of(key_vals.begin(),
-                           key_vals.end(),
-                           [](column_view const& col) { return col.type().id() == type_id::LIST; }),
-               "segmented_sort_by_key only supports lists columns");
-  // check if all list sizes are equal.
-  auto table_device  = table_device_view::create(key_vals, stream);
-  auto counting_iter = thrust::make_counting_iterator<size_type>(0);
-  CUDF_EXPECTS(
-    thrust::all_of(rmm::exec_policy(stream),
-                   counting_iter,
-                   counting_iter + key_vals.num_rows(),
-                   [d_keys = *table_device] __device__(size_type idx) {
-                     auto const size = list_size_functor{d_keys.column(0)}(idx);
-                     return thrust::all_of(
-                       thrust::seq, d_keys.begin(), d_keys.end(), [&](auto const& d_column) {
-                         return list_size_functor{d_column}(idx) == size;
-                       });
-                   }),
-    "size of each list in a row of table should be same");
-}
-
 std::unique_ptr<column> segmented_sorted_order(table_view const& keys,
                                                column_view const& segment_offsets,
                                                std::vector<order> const& column_order,
@@ -155,60 +124,6 @@ std::unique_ptr<table> segmented_sort_by_key(table_view const& values,
                         stream,
                         mr);
 }
-
-std::unique_ptr<table> sort_lists(table_view const& values,
-                                  table_view const& keys,
-                                  std::vector<order> const& column_order,
-                                  std::vector<null_order> const& null_precedence,
-                                  rmm::cuda_stream_view stream,
-                                  rmm::mr::device_memory_resource* mr)
-{
-  CUDF_EXPECTS(keys.num_columns() > 0, "keys table should have atleast one list column");
-  validate_key_value_list_columns(keys, values, stream);
-
-  // child columns of keys
-  auto child_key_columns = thrust::make_transform_iterator(
-    keys.begin(), [stream](auto col) { return lists_column_view(col).get_sliced_child(stream); });
-  auto child_keys =
-    table_view{std::vector<column_view>(child_key_columns, child_key_columns + keys.num_columns())};
-
-  // segment offsets from first list column
-  auto lc              = lists_column_view{keys.column(0)};
-  auto offset          = lc.offsets();
-  auto segment_offsets = cudf::detail::slice(offset, {lc.offset(), offset.size()}, stream)[0];
-  // child columns of values
-  auto child_value_columns = thrust::make_transform_iterator(
-    values.begin(), [stream](auto col) { return lists_column_view(col).get_sliced_child(stream); });
-  auto child_values = table_view{
-    std::vector<column_view>(child_value_columns, child_value_columns + values.num_columns())};
-
-  // Get segment sorted child columns of list columns
-  auto child_result =
-    segmented_sort_by_key(
-      child_values, child_keys, segment_offsets, column_order, null_precedence, stream, mr)
-      ->release();
-
-  // Construct list columns from gathered child columns & return
-  std::vector<std::unique_ptr<column>> list_columns;
-  std::transform(values.begin(),
-                 values.end(),
-                 std::make_move_iterator(child_result.begin()),
-                 std::back_inserter(list_columns),
-                 [&stream, &mr](auto& input_list, auto&& sorted_child) {
-                   auto output_offset =
-                     std::make_unique<column>(lists_column_view(input_list).offsets(), stream, mr);
-                   auto null_mask = cudf::detail::copy_bitmask(input_list, stream, mr);
-                   // Assemble list column & return
-                   return make_lists_column(input_list.size(),
-                                            std::move(output_offset),
-                                            std::move(sorted_child),
-                                            input_list.null_count(),
-                                            std::move(null_mask),
-                                            stream,
-                                            mr);
-                 });
-  return std::make_unique<table>(std::move(list_columns));
-}
 }  // namespace detail
 
 std::unique_ptr<table> segmented_sort_by_key(table_view const& values,
@@ -221,16 +136,6 @@ std::unique_ptr<table> segmented_sort_by_key(table_view const& values,
   CUDF_FUNC_RANGE();
   return detail::segmented_sort_by_key(
     values, keys, segment_offsets, column_order, null_precedence, rmm::cuda_stream_default, mr);
-}
-std::unique_ptr<table> sort_lists(table_view const& values,
-                                  table_view const& keys,
-                                  std::vector<order> const& column_order,
-                                  std::vector<null_order> const& null_precedence,
-                                  rmm::mr::device_memory_resource* mr)
-{
-  CUDF_FUNC_RANGE();
-  return detail::sort_lists(
-    values, keys, column_order, null_precedence, rmm::cuda_stream_default, mr);
 }
 
 }  // namespace cudf
