@@ -3250,65 +3250,15 @@ class DataFrame(Frame, Serializable):
                weight    1.0    0.8
         """
 
-        if labels is not None:
-            if index is not None or columns is not None:
-                raise ValueError(
-                    "Cannot specify both 'labels' and 'index'/'columns'"
-                )
-            target = labels
-        elif index is not None:
-            target = index
-            axis = 0
-        elif columns is not None:
-            target = columns
-            axis = 1
-        else:
-            raise ValueError(
-                "Need to specify at least one of 'labels', "
-                "'index' or 'columns'"
-            )
-
-        if inplace:
-            outdf = self
-        else:
-            outdf = self.copy()
-
-        if axis in (1, "columns"):
-            target = _get_host_unique(target)
-
-            _drop_columns(outdf, target, errors)
-        elif axis in (0, "index"):
-            if not isinstance(target, (cudf.Series, cudf.Index)):
-                target = column.as_column(target)
-
-            if isinstance(self._index, cudf.MultiIndex):
-                if level is None:
-                    level = 0
-
-                levels_index = outdf.index.get_level_values(level)
-                if errors == "raise" and not target.isin(levels_index).all():
-                    raise KeyError("One or more values not found in axis")
-
-                # TODO : Could use anti-join as a future optimization
-                sliced_df = outdf.take(~levels_index.isin(target))
-                sliced_df._index.names = self._index.names
-            else:
-                if errors == "raise" and not target.isin(outdf.index).all():
-                    raise KeyError("One or more values not found in axis")
-
-                sliced_df = outdf.join(
-                    cudf.DataFrame(index=target), how="leftanti"
-                )
-
-            if columns is not None:
-                columns = _get_host_unique(columns)
-                _drop_columns(sliced_df, columns, errors)
-
-            outdf._data = sliced_df._data
-            outdf._index = sliced_df._index
-
-        if not inplace:
-            return outdf
+        return super().drop(
+            labels=labels,
+            axis=axis,
+            index=index,
+            columns=columns,
+            level=level,
+            inplace=inplace,
+            errors=errors,
+        )
 
     def _drop_column(self, name):
         """Drop a column by *name*
@@ -7606,25 +7556,3 @@ def _get_union_of_series_names(series_list):
         names_list = [*range(len(series_list))]
 
     return names_list
-
-
-def _drop_columns(df, columns, errors):
-    for c in columns:
-        try:
-            df._drop_column(c)
-        except KeyError as e:
-            if errors == "ignore":
-                pass
-            else:
-                raise e
-
-
-def _get_host_unique(array):
-    if isinstance(
-        array, (cudf.Series, cudf.Index, cudf.core.column.ColumnBase)
-    ):
-        return array.unique.to_pandas()
-    elif isinstance(array, (str, numbers.Number)):
-        return [array]
-    else:
-        return set(array)

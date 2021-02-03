@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import copy
 import functools
+import numbers
 import operator
 import warnings
 from collections import OrderedDict, abc as abc
@@ -1192,6 +1193,79 @@ class Frame(libcudf.table.Table):
         tables = self._partition(map_index, map_size, keep_index)
 
         return tables
+
+    def drop(
+        self,
+        labels=None,
+        axis=0,
+        index=None,
+        columns=None,
+        level=None,
+        inplace=False,
+        errors="raise",
+    ):
+        """
+        """
+
+        if labels is not None:
+            if index is not None or columns is not None:
+                raise ValueError(
+                    "Cannot specify both 'labels' and 'index'/'columns'"
+                )
+            target = labels
+        elif index is not None:
+            target = index
+            axis = 0
+        elif columns is not None:
+            target = columns
+            axis = 1
+        else:
+            raise ValueError(
+                "Need to specify at least one of 'labels', "
+                "'index' or 'columns'"
+            )
+
+        if inplace:
+            outdf = self
+        else:
+            outdf = self.copy()
+
+        if axis in (1, "columns"):
+            target = _get_host_unique(target)
+
+            _drop_columns(outdf, target, errors)
+        elif axis in (0, "index"):
+            if not isinstance(target, (cudf.Series, cudf.Index)):
+                target = as_column(target)
+
+            if isinstance(self._index, cudf.MultiIndex):
+                if level is None:
+                    level = 0
+
+                levels_index = outdf.index.get_level_values(level)
+                if errors == "raise" and not target.isin(levels_index).all():
+                    raise KeyError("One or more values not found in axis")
+
+                # TODO : Could use anti-join as a future optimization
+                sliced_df = outdf.take(~levels_index.isin(target))
+                sliced_df._index.names = self._index.names
+            else:
+                if errors == "raise" and not target.isin(outdf.index).all():
+                    raise KeyError("One or more values not found in axis")
+
+                sliced_df = outdf.join(
+                    cudf.DataFrame(index=target), how="leftanti"
+                )
+
+            if columns is not None:
+                columns = _get_host_unique(columns)
+                _drop_columns(sliced_df, columns, errors)
+
+            outdf._data = sliced_df._data
+            outdf._index = sliced_df._index
+
+        if not inplace:
+            return outdf
 
     def dropna(
         self, axis=0, how="any", thresh=None, subset=None, inplace=False
@@ -3856,3 +3930,25 @@ def _is_series(obj):
     instead of checking for isinstance(obj, cudf.Series)
     """
     return isinstance(obj, Frame) and obj.ndim == 1 and obj._index is not None
+
+
+def _get_host_unique(array):
+    if isinstance(
+        array, (cudf.Series, cudf.Index, cudf.core.column.ColumnBase)
+    ):
+        return array.unique.to_pandas()
+    elif isinstance(array, (str, numbers.Number)):
+        return [array]
+    else:
+        return set(array)
+
+
+def _drop_columns(df, columns, errors):
+    for c in columns:
+        try:
+            df._drop_column(c)
+        except KeyError as e:
+            if errors == "ignore":
+                pass
+            else:
+                raise e
