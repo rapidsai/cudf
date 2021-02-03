@@ -2021,8 +2021,7 @@ void init_column_device_views(EncColumnDesc *col_desc,
         }
         // traverse till leaf column
         while (col.type().id() == type_id::LIST) {
-          auto offset_col = col.child(lists_column_view::offsets_column_index);
-          col             = col.child(lists_column_view::child_column_index);
+          col = col.child(lists_column_view::child_column_index);
         }
         // Store leaf_column to device storage
         column_device_view *leaf_col_ptr = leaf_column_views + i;
