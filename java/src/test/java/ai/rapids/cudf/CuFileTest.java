@@ -5,13 +5,12 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
 import java.io.File;
+import java.io.IOException;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.*;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 public class CuFileTest extends CudfTestBase {
-  @TempDir File tempDir;
-
   @AfterEach
   void tearDown() {
     if (PinnedMemoryPool.isInitialized()) {
@@ -20,9 +19,38 @@ public class CuFileTest extends CudfTestBase {
   }
 
   @Test
-  public void testCopyToFile() {
+  public void testCopyToFile(@TempDir File tempDir) {
     assumeTrue(CuFile.libraryLoaded());
     File tempFile = new File(tempDir, "tempFile");
+    assertFalse(tempFile.exists());
+    verifyCopyToFile(tempFile);
+  }
+
+  @Test
+  public void testCopyToExistingFile(@TempDir File tempDir) throws IOException {
+    assumeTrue(CuFile.libraryLoaded());
+    File tempFile = new File(tempDir, "tempFile");
+    assertTrue(tempFile.createNewFile());
+    verifyCopyToFile(tempFile);
+  }
+
+  @Test
+  public void testAppendToFile(@TempDir File tempDir) {
+    assumeTrue(CuFile.libraryLoaded());
+    File tempFile = new File(tempDir, "tempFile");
+    assertFalse(tempFile.exists());
+    verifyAppendToFile(tempFile);
+  }
+
+  @Test
+  public void testAppendToExistingFile(@TempDir File tempDir) throws IOException {
+    assumeTrue(CuFile.libraryLoaded());
+    File tempFile = new File(tempDir, "tempFile");
+    assertTrue(tempFile.createNewFile());
+    verifyAppendToFile(tempFile);
+  }
+
+  private void verifyCopyToFile(File tempFile) {
     try (HostMemoryBuffer orig = HostMemoryBuffer.allocate(16);
          DeviceMemoryBuffer from = DeviceMemoryBuffer.allocate(16);
          DeviceMemoryBuffer to = DeviceMemoryBuffer.allocate(16);
@@ -36,10 +64,7 @@ public class CuFileTest extends CudfTestBase {
     }
   }
 
-  @Test
-  public void testAppendToFile() {
-    assumeTrue(CuFile.libraryLoaded());
-    File tempFile = new File(tempDir, "tempFile");
+  private void verifyAppendToFile(File tempFile) {
     try (HostMemoryBuffer orig = HostMemoryBuffer.allocate(16);
          DeviceMemoryBuffer from = DeviceMemoryBuffer.allocate(16);
          DeviceMemoryBuffer to = DeviceMemoryBuffer.allocate(16);
