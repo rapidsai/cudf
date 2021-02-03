@@ -62,4 +62,4 @@ int main(int argc, char** argv) {
     ERROR_FILE ${error_file})
     message(VERBOSE "CUDF: Auto detection of gpu-archs: ${__gpu_archs}")
   set(${gpu_archs} ${__gpu_archs} PARENT_SCOPE)
-endfunction(evaluate_gpu_archs)
+endfunction()
