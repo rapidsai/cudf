@@ -494,6 +494,14 @@ set(LEAD_LAG_TEST_SRC
 ConfigureTest(LEAD_LAG_TEST "${LEAD_LAG_TEST_SRC}")
 
 ###################################################################################################
+# - collect_list rolling tests ---------------------------------------------------------------------------------
+
+set(COLLECT_LIST_SRC
+    "${CMAKE_CURRENT_SOURCE_DIR}/collect_list/collect_list_test.cpp")
+
+ConfigureTest(COLLECT_LIST_TEST "${COLLECT_LIST_SRC}")
+
+###################################################################################################
 # - filling test ----------------------------------------------------------------------------------
 
 set(FILLING_TEST_SRC

@@ -35,7 +35,9 @@
 - PR #6943 Fix join with nulls not equal performance
 - PR #6945 Fix groupby agg/apply behaviour when no key columns are provided 
 - PR #6942 Fix cudf::merge gtest for dictionary columns
+# 0.18.0
 
+Please see https://github.com/rapidsai/cudf/releases/tag/branch-0.18-latest for the latest changes to this development branch.
 
 # cuDF 0.17.0 (10 Dec 2020)
 

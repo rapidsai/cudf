@@ -1,4 +1,4 @@
-# Copyright (c) 2020, NVIDIA CORPORATION.
+# Copyright (c) 2020-2021, NVIDIA CORPORATION.
 
 import random
 from collections import OrderedDict
@@ -85,6 +85,22 @@ def _generate_rand_meta(obj, dtypes_list, null_frequency_override=None):
                 )
             else:
                 meta["max_string_length"] = obj._max_string_length
+        elif dtype == "list":
+            if obj._max_lists_length is None:
+                meta["lists_max_length"] = np.random.randint(0, 2000000000)
+            else:
+                meta["lists_max_length"] = obj._max_lists_length
+
+            if obj._max_lists_nesting_depth is None:
+                meta["nesting_max_depth"] = np.random.randint(
+                    1, np.iinfo("int64").max
+                )
+            else:
+                meta["nesting_max_depth"] = obj._max_lists_nesting_depth
+
+            meta["value_type"] = random.choice(
+                list(cudf.utils.dtypes.ALL_TYPES - {"category"})
+            )
 
         meta["dtype"] = dtype
         meta["null_frequency"] = null_frequency

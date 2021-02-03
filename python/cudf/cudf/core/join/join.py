@@ -1,14 +1,15 @@
-# Copyright (c) 2020, NVIDIA CORPORATION.
+# Copyright (c) 2020-2021, NVIDIA CORPORATION.
 import itertools
-import warnings
 
-import numpy as np
 import pandas as pd
 
 import cudf
 from cudf import _lib as libcudf
 from cudf._lib.join import compute_result_col_names
-from cudf.core.dtypes import CategoricalDtype
+from cudf.core.join.casting_logic import (
+    _input_to_libcudf_castrules_any,
+    _libcudf_to_output_castrules,
+)
 
 
 class Merge(object):
@@ -320,7 +321,7 @@ class Merge(object):
             lhs_keys, rhs_keys, lhs_cols, rhs_cols
         ):
             for l_key, r_key in zip(l_key_grp, r_key_grp):
-                to_dtype = self.input_to_libcudf_casting_rules(
+                to_dtype = _input_to_libcudf_castrules_any(
                     l_col_grp._data[l_key], r_col_grp._data[r_key], self.how
                 )
                 l_col_grp._data[l_key] = l_col_grp._data[l_key].astype(
@@ -329,116 +330,6 @@ class Merge(object):
                 r_col_grp._data[r_key] = r_col_grp._data[r_key].astype(
                     to_dtype
                 )
-
-    def input_to_libcudf_casting_rules(self, lcol, rcol, how):
-        """
-        Determine what dtype the left and right hand
-        input columns must be cast to for a libcudf
-        join to proceed.
-        """
-
-        cast_warn = (
-            "can't safely cast column from {} with type"
-            " {} to {}, upcasting to {}"
-        )
-        ctgry_err = (
-            "can't implicitly cast column {0} to categories"
-            " from {1} during {1} join"
-        )
-
-        dtype_l = lcol.dtype
-        dtype_r = rcol.dtype
-        libcudf_join_type = None
-        if pd.api.types.is_dtype_equal(dtype_l, dtype_r):
-            # if categorical and equal, children passed to libcudf
-            libcudf_join_type = dtype_l
-        elif isinstance(dtype_l, CategoricalDtype) and isinstance(
-            dtype_r, CategoricalDtype
-        ):
-            # categories are not equal
-            libcudf_join_type = np.dtype("O")
-        elif how == "left":
-            check_col = rcol.fillna(0)
-            if not check_col.can_cast_safely(dtype_l):
-                libcudf_join_type = self.input_to_libcudf_casting_rules(
-                    lcol, rcol, "inner"
-                )
-                warnings.warn(
-                    cast_warn.format(
-                        "right", dtype_r, dtype_l, libcudf_join_type
-                    )
-                )
-            else:
-                libcudf_join_type = dtype_l
-        elif how == "right":
-            check_col = lcol.fillna(0)
-            if not check_col.can_cast_safely(dtype_r):
-                libcudf_join_type = self.input_to_libcudf_casting_rules(
-                    lcol, rcol, "inner"
-                )
-                warnings.warn(
-                    cast_warn.format(
-                        "left", dtype_l, dtype_r, libcudf_join_type
-                    )
-                )
-            else:
-                libcudf_join_type = dtype_r
-
-        elif isinstance(dtype_l, CategoricalDtype):
-            if how == "right":
-                raise ValueError(ctgry_err.format(rcol, "right"))
-            libcudf_join_type = lcol.cat().categories.dtype
-        elif isinstance(dtype_r, CategoricalDtype):
-            if how == "left":
-                raise ValueError(ctgry_err.format(lcol, "left"))
-            libcudf_join_type = rcol.cat().categories.dtype
-        elif how in {"inner", "outer"}:
-            if (np.issubdtype(dtype_l, np.number)) and (
-                np.issubdtype(dtype_r, np.number)
-            ):
-                if dtype_l.kind == dtype_r.kind:
-                    # both ints or both floats
-                    libcudf_join_type = max(dtype_l, dtype_r)
-                else:
-                    libcudf_join_type = np.find_common_type(
-                        [], [dtype_l, dtype_r]
-                    )
-            elif np.issubdtype(dtype_l, np.datetime64) and np.issubdtype(
-                dtype_r, np.datetime64
-            ):
-                libcudf_join_type = max(dtype_l, dtype_r)
-        return libcudf_join_type
-
-    def libcudf_to_output_casting_rules(self, lcol, rcol, how):
-        """
-        Determine what dtype an output merge key column should be
-        cast to after it has been processed by libcudf. Determine
-        if a column should be promoted to a categorical datatype.
-        """
-
-        dtype_l = lcol.dtype
-        dtype_r = rcol.dtype
-
-        merge_return_type = None
-        # we  currently only need to do this for categorical variables
-        if isinstance(dtype_l, CategoricalDtype) and isinstance(
-            dtype_r, CategoricalDtype
-        ):
-            if pd.api.types.is_dtype_equal(dtype_l, dtype_r):
-                if how in {"inner", "left"}:
-                    merge_return_type = dtype_l
-                elif how == "outer" and not (
-                    dtype_l.ordered or dtype_r.ordered
-                ):
-                    new_cats = cudf.concat(
-                        dtype_l.categories, dtype_r.categories
-                    ).unique()
-                    merge_return_type = cudf.core.dtypes.CategoricalDtype(
-                        categories=new_cats
-                    )
-            else:
-                merge_return_type = "category"
-        return merge_return_type
 
     def compute_output_dtypes(self):
         """
@@ -484,13 +375,13 @@ class Merge(object):
 
         if self.left_index or self.right_index:
             for i in range(len(self.lhs.index._data.items())):
-                index_dtypes[i] = self.libcudf_to_output_casting_rules(
+                index_dtypes[i] = _libcudf_to_output_castrules(
                     l_idx_join_cols[i], r_idx_join_cols[i], self.how
                 )
 
         for name in itertools.chain(self.left_on, self.right_on):
             if name in self.left_on and name in self.right_on:
-                data_dtypes[name] = self.libcudf_to_output_casting_rules(
+                data_dtypes[name] = _libcudf_to_output_castrules(
                     l_data_join_cols[name], r_data_join_cols[name], self.how
                 )
         return (index_dtypes, data_dtypes)
@@ -525,7 +416,6 @@ class Merge(object):
         return output
 
     def _build_output_col(self, col, dtype):
-
         if isinstance(
             dtype, (cudf.core.dtypes.CategoricalDtype, pd.CategoricalDtype)
         ):
