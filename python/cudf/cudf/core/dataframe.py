@@ -1329,10 +1329,9 @@ class DataFrame(Frame, Serializable):
             elif isinstance(labels, tuple):
                 nlevels = len(labels)
             if self._data.multiindex is False or nlevels == self._data.nlevels:
-                out = self._constructor_sliced()
-                out._data = new_data
-                out._index = self.index
-                out.name = labels
+                out = self._constructor_sliced()._from_data(
+                    new_data, index=self.index, name=labels
+                )
                 return out
         out = self._constructor()._from_data(
             new_data, index=self.index, columns=new_data.to_pandas_index()
