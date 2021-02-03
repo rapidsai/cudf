@@ -1,4 +1,5 @@
 # Copyright (c) 2018-2021, NVIDIA CORPORATION.
+
 from __future__ import annotations
 
 from numbers import Number
@@ -36,7 +37,7 @@ class NumericalColumn(ColumnBase):
         data: Buffer,
         dtype: DtypeObj,
         mask: Buffer = None,
-        size: int = None,
+        size: int = None,  # TODO: make this non-optional
         offset: int = 0,
         null_count: int = None,
     ):
@@ -412,6 +413,21 @@ class NumericalColumn(ColumnBase):
         """
         Return col with *to_replace* replaced with *value*.
         """
+        to_replace_col = as_column(to_replace)
+        replacement_col = as_column(replacement)
+
+        if type(to_replace_col) != type(replacement_col):
+            raise TypeError(
+                f"to_replace and value should be of same types,"
+                f"got to_replace dtype: {to_replace_col.dtype} and "
+                f"value dtype: {replacement_col.dtype}"
+            )
+
+        if not isinstance(to_replace_col, NumericalColumn) and not isinstance(
+            replacement_col, NumericalColumn
+        ):
+            return self.copy()
+
         to_replace_col = _normalize_find_and_replace_input(
             self.dtype, to_replace
         )
@@ -421,13 +437,15 @@ class NumericalColumn(ColumnBase):
             replacement_col = _normalize_find_and_replace_input(
                 self.dtype, replacement
             )
+        replaced = self.copy()
         if len(replacement_col) == 1 and len(to_replace_col) > 1:
             replacement_col = column.as_column(
                 utils.scalar_broadcast_to(
                     replacement[0], (len(to_replace_col),), self.dtype
                 )
             )
-        replaced = self.copy()
+        elif len(replacement_col) == 1 and len(to_replace_col) == 0:
+            return replaced
         to_replace_col, replacement_col, replaced = numeric_normalize_types(
             to_replace_col, replacement_col, replaced
         )
@@ -453,6 +471,9 @@ class NumericalColumn(ColumnBase):
         if method is not None:
             return super(NumericalColumn, col).fillna(fill_value, method)
 
+        if fill_value is None:
+            raise ValueError("Must specify either 'fill_value' or 'method'")
+
         if (
             isinstance(fill_value, cudf.Scalar)
             and fill_value.dtype == col.dtype
@@ -460,7 +481,7 @@ class NumericalColumn(ColumnBase):
             return super(NumericalColumn, col).fillna(fill_value, method)
 
         if np.isscalar(fill_value):
-            # castsafely to the same dtype as self
+            # cast safely to the same dtype as self
             fill_value_casted = col.dtype.type(fill_value)
             if not np.isnan(fill_value) and (fill_value_casted != fill_value):
                 raise TypeError(

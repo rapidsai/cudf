@@ -441,7 +441,7 @@ class ColumnBase(Column, Serializable):
         else:
             return self.dropna(drop_nan=False).data_array_view
 
-    def to_array(self, fillna=None) -> "np.array":
+    def to_array(self, fillna=None) -> np.ndarray:
         """Get a dense numpy array for the data.
 
         Parameters
@@ -514,7 +514,7 @@ class ColumnBase(Column, Serializable):
         else:
             raise ValueError("Column has no null mask")
 
-    def copy(self, deep: bool = True) -> ColumnBase:
+    def copy(self: T, deep: bool = True) -> T:
         """Columns are immutable, so a deep copy produces a copy of the
         underlying data and mask and a shallow copy creates a new column and
         copies the references of the data and mask.
@@ -522,13 +522,16 @@ class ColumnBase(Column, Serializable):
         if deep:
             return libcudf.copying.copy_column(self)
         else:
-            return build_column(
-                self.base_data,
-                self.dtype,
-                mask=self.base_mask,
-                size=self.size,
-                offset=self.offset,
-                children=self.base_children,
+            return cast(
+                T,
+                build_column(
+                    self.base_data,
+                    self.dtype,
+                    mask=self.base_mask,
+                    size=self.size,
+                    offset=self.offset,
+                    children=self.base_children,
+                ),
             )
 
     def view(self, dtype: Dtype) -> ColumnBase:
@@ -592,13 +595,13 @@ class ColumnBase(Column, Serializable):
         ------
         ``IndexError`` if out-of-bound
         """
-        index = np.int32(index)
-        if index < 0:
-            index = len(self) + index
-        if index > len(self) - 1 or index < 0:
+        idx = np.int32(index)
+        if idx < 0:
+            idx = len(self) + idx
+        if idx > len(self) - 1 or idx < 0:
             raise IndexError("single positional indexer is out-of-bounds")
 
-        return libcudf.copying.get_element(self, index).value
+        return libcudf.copying.get_element(self, idx).value
 
     def slice(self, start: int, stop: int, stride: int = None) -> ColumnBase:
         if start < 0:
@@ -1472,7 +1475,8 @@ def build_column(
             children=children,
         )
     elif dtype.type is np.datetime64:
-        assert data is not None
+        if data is None:
+            raise TypeError("Must specify data buffer")
         return cudf.core.column.DatetimeColumn(
             data=data,
             dtype=dtype,
@@ -1482,7 +1486,8 @@ def build_column(
             null_count=null_count,
         )
     elif dtype.type is np.timedelta64:
-        assert data is not None
+        if data is None:
+            raise TypeError("Must specify data buffer")
         return cudf.core.column.TimeDeltaColumn(
             data=data,
             dtype=dtype,
@@ -1509,6 +1514,8 @@ def build_column(
             children=children,
         )
     elif is_struct_dtype(dtype):
+        if size is None:
+            raise TypeError("Must specify size")
         return cudf.core.column.StructColumn(
             data=data,
             dtype=dtype,
@@ -1518,6 +1525,8 @@ def build_column(
             children=children,
         )
     elif is_decimal_dtype(dtype):
+        if size is None:
+            raise TypeError("Must specify size")
         return cudf.core.column.DecimalColumn(
             data=data,
             size=size,
@@ -1710,7 +1719,7 @@ def as_column(
             return as_column(arbitrary.array)
         if is_categorical_dtype(arbitrary):
             data = as_column(pa.array(arbitrary, from_pandas=True))
-        elif arbitrary.dtype == np.bool:
+        elif arbitrary.dtype == np.bool_:
             data = as_column(cupy.asarray(arbitrary), dtype=arbitrary.dtype)
         elif arbitrary.dtype.kind in ("f"):
             arb_dtype = check_cast_unsupported_dtype(arbitrary.dtype)
@@ -1943,21 +1952,37 @@ def as_column(
                     sr = pd.Series(arbitrary, dtype="str")
                     data = as_column(sr, nan_as_null=nan_as_null)
                 else:
-                    native_dtype = dtype
-                    if dtype is None and pd.api.types.infer_dtype(
-                        arbitrary
-                    ) in ("mixed", "mixed-integer"):
-                        native_dtype = "object"
-                    data = np.asarray(
-                        arbitrary,
-                        dtype=native_dtype
-                        if native_dtype is None
-                        else np.dtype(native_dtype),
-                    )
                     data = as_column(
-                        data, dtype=dtype, nan_as_null=nan_as_null
+                        _construct_array(arbitrary, dtype),
+                        dtype=dtype,
+                        nan_as_null=nan_as_null,
                     )
     return data
+
+
+def _construct_array(
+    arbitrary: Any, dtype: Optional[Dtype]
+) -> Union[np.ndarray, cupy.ndarray]:
+    """
+    Construct a CuPy or NumPy array from `arbitrary`
+    """
+    try:
+        dtype = dtype if dtype is None else np.dtype(dtype)
+        arbitrary = cupy.asarray(arbitrary, dtype=dtype)
+    except (TypeError, ValueError):
+        native_dtype = dtype
+        if dtype is None and pd.api.types.infer_dtype(arbitrary) in (
+            "mixed",
+            "mixed-integer",
+        ):
+            native_dtype = "object"
+        arbitrary = np.asarray(
+            arbitrary,
+            dtype=native_dtype
+            if native_dtype is None
+            else np.dtype(native_dtype),
+        )
+    return arbitrary
 
 
 def column_applymap(
