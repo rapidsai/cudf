@@ -488,6 +488,17 @@ class DataFrame(Frame, Serializable):
         out._index = index
         return out
 
+    @classmethod
+    def _from_data(cls, data, index=None, columns=None):
+        out = cls()
+        out._data = data
+        if index is None:
+            index = cudf.Index(range(data.nrows))
+        out._index = index
+        if columns is not None:
+            out.columns = columns
+        return out
+
     @staticmethod
     def _align_input_series_indices(data, index):
         data = data.copy()
@@ -1323,10 +1334,9 @@ class DataFrame(Frame, Serializable):
                 out._index = self.index
                 out.name = labels
                 return out
-        out = self._constructor()
-        out._data = new_data
-        out._index = self.index
-        out.columns = new_data.to_pandas_index()
+        out = self._constructor()._from_data(
+            new_data, index=self.index, columns=new_data.to_pandas_index()
+        )
         return out
 
     # unary, binary, rbinary, orderedcompare, unorderedcompare

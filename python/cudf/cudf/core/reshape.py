@@ -831,9 +831,9 @@ def _pivot(df, index, columns):
                 )
             )._data
         )
-    out = cudf.DataFrame()
-    out._data = result
-    out._index = cudf.Index(index_labels, name=index.name)
+    out = cudf.DataFrame._from_data(
+        result, index=cudf.Index(index_labels, name=index.name)
+    )
     return out
 
 

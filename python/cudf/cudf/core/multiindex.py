@@ -289,9 +289,7 @@ class MultiIndex(Index):
 
     @property
     def _source_data(self):
-        out = cudf.DataFrame()
-        out._data = self._data
-        out._index = cudf.Index(range(self._data.nrows))
+        out = cudf.DataFrame._from_data(data=self._data)
         return out
 
     @_source_data.setter
