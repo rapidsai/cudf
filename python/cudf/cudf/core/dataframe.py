@@ -3425,14 +3425,14 @@ class DataFrame(Frame, Serializable):
                     "mixed type is not yet supported."
                 )
 
-            if level and isinstance(self.index, cudf.core.multiindex.MultiIndex):
-                out = DataFrame(
-                    index=self.index._source_data[level].replace(
-                        to_replace=list(index.keys()),
-                        value=list(index.values()),
-                        inplace=True
-                    )
+            if level is not None and isinstance(self.index, cudf.core.multiindex.MultiIndex):
+                out_index=self.index.copy()
+                out_index.get_level_values(level).to_frame().replace(
+                    to_replace=list(index.keys()),
+                    value=list(index.values()),
+                    inplace=True
                 )
+                out = DataFrame(index=out_index)
             else:
                 out = DataFrame(
                     index=self.index.replace(

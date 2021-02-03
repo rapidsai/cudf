@@ -8332,14 +8332,14 @@ def test_dataframe_roundtrip_arrow_struct_dtype(gdf):
 )
 @pytest.mark.parametrize(
     "index",
-    [{3:9,2:5,5:8}],
+    [{0:1,1:2,2:3}],
 ) 
 @pytest.mark.parametrize(
-    "level", ["z"],   
+    "level",["x",0],   
 ) 
 def test_dataframe_MI_for_level(data,index,level):
     pdf= pd.DataFrame(data,
-                      index=pd.MultiIndex.from_tuples([(1,2,3),(2,5,2),(3,4,5)]))
+                      index=pd.MultiIndex.from_tuples([(0,1,2),(1,2,3),(2,3,4)]))
     pdf.index.names=["x","y","z"]
     gdf=gd.from_pandas(pdf)
 
