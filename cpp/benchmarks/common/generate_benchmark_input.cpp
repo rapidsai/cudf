@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -354,17 +354,15 @@ void append_string(Char_gen& char_gen, bool valid, uint32_t length, string_colum
     column_data.offsets.push_back(column_data.offsets.back());
     return;
   }
-  std::vector<char> chars;
-  std::generate_n(std::back_inserter(chars), length, [&]() mutable {
+  std::generate_n(std::back_inserter(column_data.chars), length, [&]() mutable {
     auto ch = char_gen();
     if (ch < '\x7F') return static_cast<char>(ch);
     // x7F is at the top edge of ASCII;
     // the next set of characters are assigned two bytes
-    chars.push_back('\xC4');
+    column_data.chars.push_back('\xC4');
     return static_cast<char>(ch + 1);
   });
-  column_data.chars.insert(column_data.chars.end(), chars.begin(), chars.end());
-  column_data.offsets.push_back(column_data.offsets.back() + chars.size());
+  column_data.offsets.push_back(column_data.chars.size());
 }
 
 /**
