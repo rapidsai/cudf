@@ -1359,7 +1359,7 @@ class ColumnBase(Column, Serializable):
         * when `self` and `other` are nested columns of the same type,
           recursively apply this function on the children of `self` to the
           and the children of `other`.
-        * otherwise, return `other` without any changes
+        * if none of the above, return `other` without any changes
         """
         if isinstance(self, cudf.core.column.CategoricalColumn) and not (
             isinstance(other, cudf.core.column.CategoricalColumn)
@@ -1374,10 +1374,12 @@ class ColumnBase(Column, Serializable):
                 null_count=other.null_count,
             )
 
-        if type(self) is type(other):
-            if isinstance(other, cudf.core.column.StructColumn):
-                other = other._rename_fields(self.dtype.fields.keys())
+        if isinstance(other, cudf.core.column.StructColumn) and isinstance(
+            self, cudf.core.column.StructColumn
+        ):
+            other = other._rename_fields(self.dtype.fields.keys())
 
+        if type(self) is type(other):
             if self.base_children and other.base_children:
                 base_children = tuple(
                     self.base_children[i]._copy_type_metadata(
