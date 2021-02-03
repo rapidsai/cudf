@@ -221,9 +221,9 @@ std::unique_ptr<column> concatenate(std::vector<column_view> const& columns,
 
   if (strings_count == 0) { return make_empty_strings_column(stream, mr); }
 
-  CUDF_EXPECTS(offsets_count <= std::numeric_limits<size_type>::max(),
+  CUDF_EXPECTS(offsets_count <= static_cast<std::size_t>(std::numeric_limits<size_type>::max()),
                "total number of strings is too large for cudf column");
-  CUDF_EXPECTS(total_bytes <= std::numeric_limits<size_type>::max(),
+  CUDF_EXPECTS(total_bytes <= static_cast<std::size_t>(std::numeric_limits<size_type>::max()),
                "total size of strings is too large for cudf column");
 
   bool const has_nulls =

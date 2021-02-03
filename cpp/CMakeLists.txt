@@ -16,7 +16,7 @@
 
 cmake_minimum_required(VERSION 3.18 FATAL_ERROR)
 
-project(CUDF VERSION 0.18.0 LANGUAGES C CXX)
+project(CUDF VERSION 0.19.0 LANGUAGES C CXX)
 
 ###################################################################################################
 # - build options ---------------------------------------------------------------------------------
