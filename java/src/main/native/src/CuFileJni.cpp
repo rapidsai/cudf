@@ -17,6 +17,7 @@
 #include <limits>
 
 #include <cufile.h>
+#include <errno.h>
 #include <fcntl.h>
 #include <unistd.h>
 
