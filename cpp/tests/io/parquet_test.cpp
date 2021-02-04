@@ -427,7 +427,7 @@ TEST_F(ParquetWriterTest, MultiColumnWithNulls)
 TEST_F(ParquetWriterTest, Strings)
 {
   std::vector<const char*> strings{
-    "Monday", "Monday", "Friday", "Monday", "Friday", "Friday", "Friday", "Funday"};
+    "Monday", "Wȅdnȅsday", "Friday", "Monday", "Friday", "Friday", "Friday", "Funday"};
   const auto num_rows = strings.size();
 
   auto seq_col0 = random_values<int>(num_rows);
@@ -469,7 +469,7 @@ TEST_F(ParquetWriterTest, SlicedTable)
   // This test checks for writing zero copy, offseted views into existing cudf tables
 
   std::vector<const char*> strings{
-    "Monday", "Monday", "Friday", "Monday", "Friday", "Friday", "Friday", "Funday"};
+    "Monday", "Wȅdnȅsday", "Friday", "Monday", "Friday", "Friday", "Friday", "Funday"};
   const auto num_rows = strings.size();
 
   auto seq_col0 = random_values<int>(num_rows);
