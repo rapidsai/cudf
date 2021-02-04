@@ -183,8 +183,7 @@ public:
    * @return std::unique_ptr<cufile_file> for writing.
    */
   static auto make_writer(char const *path) {
-    // NOTE: 0664 is what Spark disk block manager uses.
-    auto const file_descriptor = open(path, O_CREAT | O_WRONLY | O_DIRECT, 0664);
+    auto const file_descriptor = open(path, O_CREAT | O_WRONLY | O_DIRECT, S_IRUSR | S_IWUSR);
     if (file_descriptor < 0) {
       CUDF_FAIL("Failed to open file to write: " + cuFileGetErrorString(errno));
     }
