@@ -490,7 +490,7 @@ class DataFrame(Frame, Serializable):
 
     @classmethod
     def _from_data(cls, data, index=None, columns=None):
-        out = cls()
+        out = cls.__new__(cls)
         out._data = data
         if index is None:
             index = cudf.Index(range(data.nrows))
