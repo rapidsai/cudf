@@ -521,41 +521,48 @@ struct segmented_valid_cnt_input {
   std::vector<size_type> indices;
 };
 
-rmm::device_buffer writer::impl::encode_columns(orc_column_view *columns,
-                                                size_t num_columns,
-                                                size_t num_rows,
-                                                size_t num_rowgroups,
-                                                std::vector<int> const &str_col_ids,
-                                                std::vector<uint32_t> const &stripe_list,
-                                                std::vector<Stream> const &streams,
-                                                std::vector<int32_t> const &strm_ids,
-                                                hostdevice_vector<gpu::EncChunk> &chunks)
+streams_desc compute_stream_offsets(orc_column_view *columns,
+                                    size_t num_rowgroups,
+                                    std::vector<Stream> const &streams)
 {
-  // Allocate combined buffer for RLE data and string data output
   std::vector<size_t> strm_offsets(streams.size());
   size_t str_data_size = 0;
-  auto output          = [&]() {
-    size_t rle_data_size = 0;
-    for (size_t i = 0; i < streams.size(); ++i) {
-      const auto &stream = streams[i];
-      const auto &column = columns[stream.column - 1];
+  size_t rle_data_size = 0;
+  for (size_t i = 0; i < streams.size(); ++i) {
+    const auto &stream = streams[i];
+    const auto &column = columns[stream.column - 1];
 
-      if (((stream.kind == DICTIONARY_DATA || stream.kind == LENGTH) &&
-           (column.orc_encoding() == DICTIONARY_V2)) ||
-          ((stream.kind == DATA) &&
-           (column.orc_kind() == TypeKind::STRING && column.orc_encoding() == DIRECT_V2))) {
-        strm_offsets[i] = str_data_size;
-        str_data_size += stream.length;
-      } else {
-        strm_offsets[i] = rle_data_size;
-        rle_data_size += (stream.length * num_rowgroups + 7) & ~7;
-      }
+    if (((stream.kind == DICTIONARY_DATA || stream.kind == LENGTH) &&
+         (column.orc_encoding() == DICTIONARY_V2)) ||
+        ((stream.kind == DATA) &&
+         (column.orc_kind() == TypeKind::STRING && column.orc_encoding() == DIRECT_V2))) {
+      strm_offsets[i] = str_data_size;
+      str_data_size += stream.length;
+    } else {
+      strm_offsets[i] = rle_data_size;
+      rle_data_size += (stream.length * num_rowgroups + 7) & ~7;
     }
-    str_data_size = (str_data_size + 7) & ~7;
+  }
+  str_data_size = (str_data_size + 7) & ~7;
 
-    return rmm::device_buffer(rle_data_size + str_data_size, stream);
-  }();
-  auto dst_base = static_cast<uint8_t *>(output.data());
+  return {std::move(strm_offsets), str_data_size, rle_data_size};
+}
+
+hostdevice_vector<gpu::EncChunk> writer::impl::initialize_chunks(
+  orc_column_view *columns,
+  size_t num_columns,
+  size_t num_rows,
+  size_t num_rowgroups,
+  void *output,
+  std::vector<int> const &str_col_ids,
+  std::vector<uint32_t> const &stripe_list,
+  std::vector<Stream> const &streams,
+  streams_desc const &strm_desc,
+  std::vector<int32_t> const &strm_ids)
+{
+  auto const dst_base = static_cast<uint8_t *>(output);
+
+  hostdevice_vector<gpu::EncChunk> chunks(num_rowgroups * num_columns);
 
   // Initialize column chunks' descriptions
   size_t stripe_start = 0;
@@ -612,7 +619,7 @@ rmm::device_buffer writer::impl::encode_columns(orc_column_view *columns,
                                   ? stripe->dict_char_count
                                   : (((stripe->num_strings + 0x1ff) >> 9) * (512 * 4 + 2));
               if (stripe_id == 0) {
-                ck->streams[k] = dst_base + strm_offsets[strm_id];
+                ck->streams[k] = dst_base + strm_desc.offsets[strm_id];
               } else {
                 const auto *ck_up = &chunks[stripe[-dict_stride].start_chunk * num_columns + i];
                 ck->streams[k]    = ck_up->streams[k] + ck_up->strm_len[k];
@@ -625,7 +632,7 @@ rmm::device_buffer writer::impl::encode_columns(orc_column_view *columns,
                      ck->encoding_kind == DIRECT_V2) {
             ck->strm_len[k] = columns[i].host_dict_chunk(j)->string_char_count;
             ck->streams[k]  = (j == 0)
-                               ? dst_base + strm_offsets[strm_id]
+                               ? dst_base + strm_desc.offsets[strm_id]
                                : (ck[-num_columns].streams[k] + ck[-num_columns].strm_len[k]);
           } else if (k == gpu::CI_DATA && streams[strm_id].length == 0 &&
                      (ck->type_kind == DOUBLE || ck->type_kind == FLOAT)) {
@@ -634,8 +641,8 @@ rmm::device_buffer writer::impl::encode_columns(orc_column_view *columns,
             ck->streams[k]  = nullptr;
           } else {
             ck->strm_len[k] = streams[strm_id].length;
-            ck->streams[k] =
-              dst_base + str_data_size + strm_offsets[strm_id] + streams[strm_id].length * j;
+            ck->streams[k]  = dst_base + strm_desc.str_data_size + strm_desc.offsets[strm_id] +
+                             streams[strm_id].length * j;
           }
         } else {
           ck->strm_len[k] = 0;
@@ -660,6 +667,18 @@ rmm::device_buffer writer::impl::encode_columns(orc_column_view *columns,
   }
 
   chunks.host_to_device(stream);
+
+  return chunks;
+}
+
+void writer::impl::encode_columns(orc_column_view *columns,
+                                  size_t num_columns,
+                                  size_t num_rows,
+                                  size_t num_rowgroups,
+                                  std::vector<int> const &str_col_ids,
+                                  std::vector<uint32_t> const &stripe_list,
+                                  hostdevice_vector<gpu::EncChunk> &chunks)
+{
   if (!str_col_ids.empty()) {
     auto d_stripe_dict = columns[str_col_ids[0]].device_stripe_dict();
     gpu::EncodeStripeDictionaries(d_stripe_dict,
@@ -671,8 +690,6 @@ rmm::device_buffer writer::impl::encode_columns(orc_column_view *columns,
   }
   gpu::EncodeOrcColumnData(chunks.device_ptr(), num_columns, num_rowgroups, stream);
   stream.synchronize();
-
-  return output;
 }
 
 std::vector<StripeInformation> writer::impl::gather_stripes(
@@ -723,23 +740,21 @@ std::vector<StripeInformation> writer::impl::gather_stripes(
 }
 
 std::vector<std::vector<uint8_t>> writer::impl::gather_statistic_blobs(
-  orc_column_view const *columns,
-  size_t num_columns,
+  host_span<orc_column_view const> columns,
   size_t num_rows,
   size_t num_rowgroups,
   std::vector<uint32_t> const &stripe_list,
-  std::vector<StripeInformation> const &stripes,
-  hostdevice_vector<gpu::EncChunk> &chunks)
+  std::vector<StripeInformation> const &stripes)
 {
-  size_t num_stat_blobs = (1 + stripe_list.size()) * num_columns;
-  size_t num_chunks     = chunks.size();
+  size_t num_stat_blobs = (1 + stripe_list.size()) * columns.size();
+  size_t num_chunks     = num_rowgroups * columns.size();
   std::vector<std::vector<uint8_t>> stat_blobs(num_stat_blobs);
-  hostdevice_vector<stats_column_desc> stat_desc(num_columns);
+  hostdevice_vector<stats_column_desc> stat_desc(columns.size());
   hostdevice_vector<statistics_merge_group> stat_merge(num_stat_blobs);
   rmm::device_vector<statistics_chunk> stat_chunks(num_chunks + num_stat_blobs);
   rmm::device_vector<statistics_group> stat_groups(num_chunks);
 
-  for (size_t i = 0; i < num_columns; i++) {
+  for (size_t i = 0; i < columns.size(); i++) {
     stats_column_desc *desc = &stat_desc[i];
     switch (columns[i].orc_kind()) {
       case TypeKind::BYTE: desc->stats_dtype = dtype_int8; break;
@@ -778,7 +793,7 @@ std::vector<std::vector<uint8_t>> writer::impl::gather_statistic_blobs(
       grp->num_chunks             = stripe_list[k];
       c += stripe_list[k];
     }
-    statistics_merge_group *col_stats = &stat_merge[stripe_list.size() * num_columns + i];
+    statistics_merge_group *col_stats = &stat_merge[stripe_list.size() * columns.size() + i];
     col_stats->col                    = stat_desc.device_ptr(i);
     col_stats->start_chunk            = static_cast<uint32_t>(i * stripe_list.size());
     col_stats->num_chunks             = static_cast<uint32_t>(stripe_list.size());
@@ -787,7 +802,7 @@ std::vector<std::vector<uint8_t>> writer::impl::gather_statistic_blobs(
   stat_merge.host_to_device(stream);
   gpu::orc_init_statistics_groups(stat_groups.data().get(),
                                   stat_desc.device_ptr(),
-                                  num_columns,
+                                  columns.size(),
                                   num_rowgroups,
                                   row_index_stride_,
                                   stream);
@@ -796,13 +811,13 @@ std::vector<std::vector<uint8_t>> writer::impl::gather_statistic_blobs(
   MergeColumnStatistics(stat_chunks.data().get() + num_chunks,
                         stat_chunks.data().get(),
                         stat_merge.device_ptr(),
-                        stripe_list.size() * num_columns,
+                        stripe_list.size() * columns.size(),
                         stream);
 
-  MergeColumnStatistics(stat_chunks.data().get() + num_chunks + stripe_list.size() * num_columns,
+  MergeColumnStatistics(stat_chunks.data().get() + num_chunks + stripe_list.size() * columns.size(),
                         stat_chunks.data().get() + num_chunks,
-                        stat_merge.device_ptr(stripe_list.size() * num_columns),
-                        num_columns,
+                        stat_merge.device_ptr(stripe_list.size() * columns.size()),
+                        columns.size(),
                         stream);
   gpu::orc_init_statistics_buffersize(
     stat_merge.device_ptr(), stat_chunks.data().get() + num_chunks, num_stat_blobs, stream);
@@ -1091,17 +1106,20 @@ void writer::impl::write(table_view const &table)
     gather_streams(orc_columns.data(), orc_columns.size(), num_rows, stripe_list, strm_ids);
 
   // Encode column data chunks
-  const auto num_chunks = num_rowgroups * num_columns;
-  hostdevice_vector<gpu::EncChunk> chunks(num_chunks);
-  auto output = encode_columns(orc_columns.data(),
-                               num_columns,
-                               num_rows,
-                               num_rowgroups,
-                               str_col_ids,
-                               stripe_list,
-                               streams,
-                               strm_ids,
-                               chunks);
+  auto const strm_offs = compute_stream_offsets(orc_columns.data(), num_rowgroups, streams);
+  rmm::device_buffer encoded_data(strm_offs.data_size(), stream);
+  auto chunks = initialize_chunks(orc_columns.data(),
+                                  num_columns,
+                                  num_rows,
+                                  num_rowgroups,
+                                  encoded_data.data(),
+                                  str_col_ids,
+                                  stripe_list,
+                                  streams,
+                                  strm_offs,
+                                  strm_ids);
+  encode_columns(
+    orc_columns.data(), num_columns, num_rows, num_rowgroups, str_col_ids, stripe_list, chunks);
 
   // Assemble individual disparate column chunks into contiguous data streams
   const auto num_index_streams  = (num_columns + 1);
@@ -1114,8 +1132,8 @@ void writer::impl::write(table_view const &table)
   // Gather column statistics
   std::vector<std::vector<uint8_t>> column_stats;
   if (enable_statistics_ && num_columns > 0 && num_rows > 0) {
-    column_stats = gather_statistic_blobs(
-      orc_columns.data(), num_columns, num_rows, num_rowgroups, stripe_list, stripes, chunks);
+    column_stats =
+      gather_statistic_blobs(orc_columns, num_rows, num_rowgroups, stripe_list, stripes);
   }
 
   // Allocate intermediate output stream buffer

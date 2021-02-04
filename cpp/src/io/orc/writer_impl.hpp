@@ -44,6 +44,13 @@ class orc_column_view;
 using namespace cudf::io::orc;
 using namespace cudf::io;
 
+struct streams_desc {
+  std::vector<size_t> offsets;
+  size_t str_data_size;
+  size_t rle_data_size;
+  auto data_size() const { return str_data_size + rle_data_size; }
+};
+
 /**
  * @brief Implementation for ORC writer
  */
@@ -164,6 +171,17 @@ class writer::impl {
                                      std::vector<uint32_t> const& stripe_list,
                                      std::vector<int32_t>& strm_ids);
 
+  hostdevice_vector<gpu::EncChunk> initialize_chunks(orc_column_view* columns,
+                                                     size_t num_columns,
+                                                     size_t num_rows,
+                                                     size_t num_rowgroups,
+                                                     void* output,
+                                                     std::vector<int> const& str_col_ids,
+                                                     std::vector<uint32_t> const& stripe_list,
+                                                     std::vector<Stream> const& streams,
+                                                     streams_desc const& strm_desc,
+                                                     std::vector<int32_t> const& strm_ids);
+
   /**
    * @brief Encodes the streams as a series of column data chunks
    *
@@ -176,18 +194,14 @@ class writer::impl {
    * @param streams List of columns' index and data streams
    * @param strm_ids List of unique stream identifiers
    * @param chunks List of column data chunks
-   *
-   * @return Device buffer containing encoded data
    */
-  rmm::device_buffer encode_columns(orc_column_view* columns,
-                                    size_t num_columns,
-                                    size_t num_rows,
-                                    size_t num_rowgroups,
-                                    std::vector<int> const& str_col_ids,
-                                    std::vector<uint32_t> const& stripe_list,
-                                    std::vector<Stream> const& streams,
-                                    std::vector<int32_t> const& strm_ids,
-                                    hostdevice_vector<gpu::EncChunk>& chunks);
+  void encode_columns(orc_column_view* columns,
+                      size_t num_columns,
+                      size_t num_rows,
+                      size_t num_rowgroups,
+                      std::vector<int> const& str_col_ids,
+                      std::vector<uint32_t> const& stripe_list,
+                      hostdevice_vector<gpu::EncChunk>& chunks);
 
   /**
    * @brief Returns stripe information after compacting columns' individual data
@@ -216,7 +230,6 @@ class writer::impl {
    * in ORC protobuf format
    *
    * @param columns List of columns
-   * @param num_columns Total number of columns
    * @param num_rows Total number of rows
    * @param num_rowgroups Total number of row groups
    * @param stripe_list Number of rowgroups in each stripe
@@ -226,13 +239,11 @@ class writer::impl {
    * @return The statistic blobs
    */
   std::vector<std::vector<uint8_t>> gather_statistic_blobs(
-    orc_column_view const* columns,
-    size_t num_columns,
+    host_span<orc_column_view const>,
     size_t num_rows,
     size_t num_rowgroups,
     std::vector<uint32_t> const& stripe_list,
-    std::vector<StripeInformation> const& stripes,
-    hostdevice_vector<gpu::EncChunk>& chunks);
+    std::vector<StripeInformation> const& stripes);
 
   /**
    * @brief Write the specified column's row index stream
