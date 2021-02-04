@@ -7344,8 +7344,8 @@ class DataFrame(Frame, Serializable):
         return super().equals(other)
 
     def _drop_rows_by_labels(
-        self: cudf.DataFrame, labels: ColumnLike
-    ) -> cudf.DataFrame:
+        self: "cudf.DataFrame", labels: ColumnLike
+    ) -> "cudf.DataFrame":
         """Delete rows specified by `label` parameter. In `DataFrame`, this can
         be achieved efficiently by a left-anti join operation
 
