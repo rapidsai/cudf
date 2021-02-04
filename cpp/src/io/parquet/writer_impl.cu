@@ -566,7 +566,7 @@ struct schema_tree_node : public SchemaElement {
 };
 
 std::vector<schema_tree_node> construct_schema_tree(
-  std::vector<linked_column_view> const &linked_columns)
+  std::vector<linked_column_view> const &linked_columns, table_metadata const &metadata)
 {
   std::vector<schema_tree_node> schema;
   schema_tree_node root{};
@@ -578,23 +578,27 @@ std::vector<schema_tree_node> construct_schema_tree(
   schema.push_back(std::move(root));
 
   // TODO: handle single_write_mode
-  std::function<void(linked_column_view const &, size_t)> add_schema =
-    [&](linked_column_view const &col, size_t parent_idx) {
+  std::function<void(linked_column_view const &, column_name_info const &, size_t)> add_schema =
+    [&](linked_column_view const &col, column_name_info const &col_meta, size_t parent_idx) {
       if (col.type().id() == type_id::STRUCT) {
         // if struct, add current and recursively call for all children
         schema_tree_node struct_schema{};
         // Use input schema to influence this
         struct_schema.repetition_type =
           col.nullable() ? FieldRepetitionType::OPTIONAL : FieldRepetitionType::REQUIRED;
-        // Depends on input schema as well as whether parent is list
-        struct_schema.name         = "";
+
+        // TODO: Depends on input schema as well as whether parent is list
+        struct_schema.name         = col_meta.name;
         struct_schema.num_children = col.num_children();
         struct_schema.parent_idx   = parent_idx;
         schema.push_back(std::move(struct_schema));
 
         auto struct_node_index = schema.size() - 1;
-        for (auto child_it = col.children.begin(); child_it < col.children.end(); child_it++) {
-          add_schema(*child_it, struct_node_index);
+        // for (auto child_it = col.children.begin(); child_it < col.children.end(); child_it++) {
+        //   add_schema(*child_it, struct_node_index);
+        // }
+        for (size_t i = 0; i < col.children.size(); ++i) {
+          add_schema(col.children[i], col_meta.children[i], struct_node_index);
         }
       } else if (col.type().id() == type_id::LIST) {
         // if list, add two elements for current and recursively call for child.
@@ -621,7 +625,9 @@ std::vector<schema_tree_node> construct_schema_tree(
         list_schema_2.parent_idx      = schema.size() - 1;  // Parent is list_schema_1, last added.
         schema.push_back(std::move(list_schema_2));
 
-        add_schema(col.children[lists_column_view::child_column_index], schema.size() - 1);
+        add_schema(col.children[lists_column_view::child_column_index],
+                   col_meta.children[0],
+                   schema.size() - 1);
       } else {
         // if leaf, add current
         schema_tree_node col_schema{};
@@ -768,6 +774,8 @@ std::vector<schema_tree_node> construct_schema_tree(
             col_schema.stats_dtype = dtype_none;
             break;
         }
+
+        col_schema.name = col_meta.name;
         // TODO: Use input schema to influence this
         col_schema.repetition_type = col.nullable() ? OPTIONAL : REQUIRED;
         // TODO: name using input schema
@@ -778,7 +786,10 @@ std::vector<schema_tree_node> construct_schema_tree(
     };
 
   // Add all linked_columns to schema using parent_idx = 0 (root)
-  for (auto const &col : linked_columns) { add_schema(col, 0); }
+  // for (auto const &col : linked_columns) { add_schema(col, 0); }
+  for (size_t i = 0; i < linked_columns.size(); ++i) {
+    add_schema(linked_columns[i], metadata.schema_info[i], 0);
+  }
 
   return schema;
 }
@@ -1264,7 +1275,7 @@ void writer::impl::write(table_view const &table)
    */
 
   auto vec         = input_table_to_linked_columns(table);
-  auto schema_tree = construct_schema_tree(vec);
+  auto schema_tree = construct_schema_tree(vec, *user_metadata);
   // Construct parquet_column_views from the schema tree leaf nodes.
   std::vector<new_parquet_column_view> parquet_columns;
 
@@ -1272,7 +1283,7 @@ void writer::impl::write(table_view const &table)
     if (schema_node.leaf_column) {
       // Calculate level nullability from schema and pass to new_parquet_column
       // Construct path in schema for this leaf node and pass in
-      parquet_columns.emplace_back(schema_node, schema_tree);
+      parquet_columns.emplace_back(schema_node, schema_tree, stream);
     }
   }
 

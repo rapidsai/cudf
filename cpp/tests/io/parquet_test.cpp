@@ -739,6 +739,13 @@ TEST_F(ParquetWriterTest, Struct)
   // // `Name` column has all valid values.
   // auto names_col = cudf::test::strings_column_wrapper{names.begin(), names.end()};
 
+  cudf_io::table_metadata expected_metadata;
+  expected_metadata.schema_info.emplace_back("being");
+  expected_metadata.schema_info.back().children.emplace_back("human?");
+  expected_metadata.schema_info.back().children.emplace_back("particulars");
+  expected_metadata.schema_info.back().children.back().children.emplace_back("weight");
+  expected_metadata.schema_info.back().children.back().children.emplace_back("age");
+
   auto names_col = cudf::test::fixed_width_column_wrapper<float>{1.1, 2.4, 5.3, 8.0, 9.6, 6.9};
 
   auto ages_col =
@@ -756,7 +763,8 @@ TEST_F(ParquetWriterTest, Struct)
 
   auto filepath = ("Struct.parquet");
   cudf_io::parquet_writer_options args =
-    cudf_io::parquet_writer_options::builder(cudf_io::sink_info{filepath}, expected);
+    cudf_io::parquet_writer_options::builder(cudf_io::sink_info{filepath}, expected)
+      .metadata(&expected_metadata);
   cudf_io::write_parquet(args);
 
   cudf_io::parquet_reader_options read_args =
