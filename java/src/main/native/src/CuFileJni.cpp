@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 #include <cstring>
+#include <limits>
 
 #include <cufile.h>
 #include <fcntl.h>
@@ -163,31 +164,55 @@ public:
   }
 
   /**
-   * @brief Factory method to create a file wrapper for reading.
+   * @brief Read a file into a device buffer.
    *
    * @param path Absolute path of the file to read from.
-   * @return std::unique_ptr<cufile_file> for reading.
+   * @param buffer Device buffer to read the file content into.
+   * @param file_offset Starting offset from which to read the file.
    */
-  static auto make_reader(char const *path) {
+  static void read(char const *path, cufile_buffer const &buffer, std::size_t file_offset) {
     auto const file_descriptor = open(path, O_RDONLY | O_DIRECT);
     if (file_descriptor < 0) {
-      CUDF_FAIL("Failed to open file to read: " + cuFileGetErrorString(errno));
+      CUDF_FAIL("Failed to open file " + std::string(path) + ": " + cuFileGetErrorString(errno));
     }
-    return std::make_unique<cufile_file>(file_descriptor);
+
+    cufile_file file{file_descriptor};
+    auto const status =
+        cuFileRead(file.cufile_handle_, buffer.device_pointer(), buffer.size(), file_offset, 0);
+
+    if (status < 0) {
+      if (IS_CUFILE_ERR(status)) {
+        CUDF_FAIL("Failed to read file " + std::string(path) +
+                  " into buffer: " + cuFileGetErrorString(status));
+      } else {
+        CUDF_FAIL("Failed to read file " + std::string(path) +
+                  " into buffer: " + cuFileGetErrorString(errno));
+      }
+    }
+
+    CUDF_EXPECTS(status == buffer.size(), "Size of bytes read is different from buffer size");
   }
 
   /**
-   * @brief Factory method to create a file wrapper for writing.
+   * @brief Write a device buffer to a file.
    *
    * @param path Absolute path of the file to write to.
-   * @return std::unique_ptr<cufile_file> for writing.
+   * @param buffer The device buffer to write.
+   * @param file_offset Starting offset from which to write the file.
    */
-  static auto make_writer(char const *path) {
-    auto const file_descriptor = open(path, O_CREAT | O_WRONLY | O_DIRECT, S_IRUSR | S_IWUSR);
-    if (file_descriptor < 0) {
-      CUDF_FAIL("Failed to open file to write: " + cuFileGetErrorString(errno));
-    }
-    return std::make_unique<cufile_file>(file_descriptor);
+  static void write(char const *path, cufile_buffer const &buffer, std::size_t file_offset) {
+    do_write(path, buffer, file_offset);
+  }
+
+  /**
+   * @brief Append a device buffer to a file.
+   *
+   * @param path Absolute path of the file to append to.
+   * @param buffer The device buffer to append.
+   * @return The file offset from which the buffer was appended.
+   */
+  static std::size_t append(char const *path, cufile_buffer const &buffer) {
+    return do_write(path, buffer);
   }
 
   // Disable copy (and move) semantics.
@@ -200,67 +225,65 @@ public:
     close(file_descriptor_);
   }
 
+private:
   /**
-   * @brief Read the file into a device buffer.
+   * @brief Write a device buffer to a file.
    *
-   * @param buffer Device buffer to read the file content into.
-   * @param file_offset Starting offset from which to read the file.
-   */
-  void read(cufile_buffer const &buffer, std::size_t file_offset) const {
-    auto const status =
-        cuFileRead(cufile_handle_, buffer.device_pointer(), buffer.size(), file_offset, 0);
-
-    if (status < 0) {
-      if (IS_CUFILE_ERR(status)) {
-        CUDF_FAIL("Failed to read file into buffer: " + cuFileGetErrorString(status));
-      } else {
-        CUDF_FAIL("Failed to read file into buffer: " + cuFileGetErrorString(errno));
-      }
-    }
-
-    CUDF_EXPECTS(status == buffer.size(), "Size of bytes read is different from buffer size");
-  }
-
-  /**
-   * @brief Write a device buffer to the file.
-   *
+   * @param path Absolute path of the file to write to.
    * @param buffer The device buffer to write.
-   * @param file_offset Starting offset from which to write the file.
-   */
-  void write(cufile_buffer const &buffer, std::size_t file_offset) {
-    auto const status =
-        cuFileWrite(cufile_handle_, buffer.device_pointer(), buffer.size(), file_offset, 0);
-
-    if (status < 0) {
-      if (IS_CUFILE_ERR(status)) {
-        CUDF_FAIL("Failed to write buffer to file: " + cuFileGetErrorString(status));
-      } else {
-        CUDF_FAIL("Failed to write buffer to file: " + cuFileGetErrorString(errno));
-      }
-    }
-
-    CUDF_EXPECTS(status == buffer.size(), "Size of bytes written is different from buffer size");
-  }
-
-  /**
-   * @brief Append a device buffer to the file.
-   *
-   * @param buffer The device buffer to write.
+   * @param file_offset Starting offset from which to write the file. If set to max std::size_t,
+   * append to the file.
    * @return The file offset from which the buffer was appended.
    */
-  std::size_t append(cufile_buffer const &buffer) {
-    struct stat stat_buffer;
-    auto const status = fstat(file_descriptor_, &stat_buffer);
-    if (status < 0) {
-      CUDF_FAIL("Failed to get file status for appending: " + cuFileGetErrorString(errno));
+  static std::size_t do_write(char const *path, cufile_buffer const &buffer,
+                              std::size_t file_offset = std::numeric_limits<std::size_t>::max()) {
+    auto file_descriptor = open(path, O_CREAT | O_WRONLY | O_DIRECT, S_IRUSR | S_IWUSR);
+    if (file_descriptor < 0) {
+      CUDF_FAIL("Failed to open file " + std::string(path) + ": " + cuFileGetErrorString(errno));
     }
 
-    auto const file_offset = static_cast<std::size_t>(stat_buffer.st_size);
-    write(buffer, file_offset);
-    return file_offset;
+    while (true) {
+      cufile_file file{file_descriptor};
+
+      if (file_offset == std::numeric_limits<std::size_t>::max()) {
+        struct stat stat_buffer;
+        auto const stat_status = fstat(file_descriptor, &stat_buffer);
+        if (stat_status < 0) {
+          CUDF_FAIL("Failed to get file status for " + std::string(path) + ": " +
+                    cuFileGetErrorString(errno));
+        }
+        file_offset = static_cast<std::size_t>(stat_buffer.st_size);
+      }
+
+      auto const status =
+          cuFileWrite(file.cufile_handle_, buffer.device_pointer(), buffer.size(), file_offset, 0);
+
+      if (status == EEXIST) {
+        file_descriptor = open(path, O_WRONLY | O_DIRECT);
+        if (file_descriptor < 0) {
+          CUDF_FAIL("Failed to open file " + std::string(path) + ": " +
+                    cuFileGetErrorString(errno));
+        }
+        file_offset = std::numeric_limits<std::size_t>::max();
+        continue;
+      }
+
+      if (status < 0) {
+        if (IS_CUFILE_ERR(status)) {
+          CUDF_FAIL("Failed to append buffer to file " + std::string(path) + ": " +
+                    cuFileGetErrorString(status));
+        } else {
+          CUDF_FAIL("Failed to append buffer to file " + std::string(path) + ": " +
+                    cuFileGetErrorString(errno));
+        }
+      }
+
+      CUDF_EXPECTS(status == buffer.size(), "Size of bytes written is different from buffer size");
+
+      return file_offset;
+    }
   }
 
-private:
   /// The underlying file descriptor.
   int file_descriptor_;
   /// The registered cuFile handle.
@@ -315,8 +338,7 @@ JNIEXPORT void JNICALL Java_ai_rapids_cudf_CuFile_writeToFile(JNIEnv *env, jclas
                                                               jlong device_pointer, jlong size) {
   try {
     cufile_buffer buffer{reinterpret_cast<void *>(device_pointer), static_cast<std::size_t>(size)};
-    auto writer = cufile_file::make_writer(env->GetStringUTFChars(path, nullptr));
-    writer->write(buffer, file_offset);
+    cufile_file::write(env->GetStringUTFChars(path, nullptr), buffer, file_offset);
   }
   CATCH_STD(env, );
 }
@@ -333,8 +355,7 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_CuFile_appendToFile(JNIEnv *env, jcl
                                                                 jlong device_pointer, jlong size) {
   try {
     cufile_buffer buffer{reinterpret_cast<void *>(device_pointer), static_cast<std::size_t>(size)};
-    auto writer = cufile_file::make_writer(env->GetStringUTFChars(path, nullptr));
-    return writer->append(buffer);
+    return cufile_file::append(env->GetStringUTFChars(path, nullptr), buffer);
   }
   CATCH_STD(env, -1);
 }
@@ -353,8 +374,7 @@ JNIEXPORT void JNICALL Java_ai_rapids_cudf_CuFile_readFromFile(JNIEnv *env, jcla
                                                                jstring path, jlong file_offset) {
   try {
     cufile_buffer buffer{reinterpret_cast<void *>(device_pointer), static_cast<std::size_t>(size)};
-    auto const reader = cufile_file::make_reader(env->GetStringUTFChars(path, nullptr));
-    reader->read(buffer, file_offset);
+    cufile_file::read(env->GetStringUTFChars(path, nullptr), buffer, file_offset);
   }
   CATCH_STD(env, );
 }
