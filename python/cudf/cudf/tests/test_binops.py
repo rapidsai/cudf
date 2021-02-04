@@ -238,11 +238,11 @@ def test_series_compare_nulls(cmpop, dtypes):
 
 
 @pytest.mark.parametrize(
-    "obj", [pd.Series(["a", "b", None, "d", "e", None]), "a"]
+    "obj", [pd.Series(["a", "b", None, "d", "e", None], dtype='string'), "a"]
 )
 @pytest.mark.parametrize("cmpop", _cmpops)
 @pytest.mark.parametrize(
-    "cmp_obj", [pd.Series(["b", "a", None, "d", "f", None]), "a"]
+    "cmp_obj", [pd.Series(["b", "a", None, "d", "f", None], dtype='string'), "a"]
 )
 def test_string_series_compare(obj, cmpop, cmp_obj):
 
@@ -252,9 +252,11 @@ def test_string_series_compare(obj, cmpop, cmp_obj):
     g_cmp_obj = cmp_obj
     if isinstance(g_cmp_obj, pd.Series):
         g_cmp_obj = Series.from_pandas(g_cmp_obj)
-
     got = cmpop(g_obj, g_cmp_obj)
     expected = cmpop(obj, cmp_obj)
+
+    if isinstance(expected, pd.Series):
+        expected = cudf.from_pandas(expected)
 
     utils.assert_eq(expected, got)
 
