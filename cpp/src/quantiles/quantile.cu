@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2020, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -63,8 +63,7 @@ struct quantile_functor {
 
     auto const type =
       is_fixed_point(input.type()) ? input.type() : data_type{type_to_id<StorageResult>()};
-    auto output =
-      make_fixed_width_column(type, q.size(), mask_state::UNALLOCATED, stream.value(), mr);
+    auto output = make_fixed_width_column(type, q.size(), mask_state::UNALLOCATED, stream, mr);
 
     if (output->size() == 0) { return output; }
 

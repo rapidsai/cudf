@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2020, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -143,7 +143,7 @@ column_view get_unique_ordered_indices(cudf::table_view const& keys,
                                      rmm::mr::get_current_device_resource());
 
   // extract unique indices
-  auto device_input_table = cudf::table_device_view::create(keys, stream.value());
+  auto device_input_table = cudf::table_device_view::create(keys, stream);
 
   if (cudf::has_nulls(keys)) {
     auto comp = row_equality_comparator<true>(

@@ -35,6 +35,7 @@ import java.io.FileInputStream;
 import java.io.IOException;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.util.ArrayList;
@@ -1672,9 +1673,13 @@ public class TableTest extends CudfTestBase {
         .build()) {
       splits = t1.contiguousSplit(2, 5, 9);
       assertEquals(4, splits.length);
+      assertEquals(2, splits[0].getRowCount());
       assertEquals(2, splits[0].getTable().getRowCount());
+      assertEquals(3, splits[1].getRowCount());
       assertEquals(3, splits[1].getTable().getRowCount());
+      assertEquals(4, splits[2].getRowCount());
       assertEquals(4, splits[2].getTable().getRowCount());
+      assertEquals(1, splits[3].getRowCount());
       assertEquals(1, splits[3].getTable().getRowCount());
     } finally {
       if (splits != null) {
@@ -1697,9 +1702,13 @@ public class TableTest extends CudfTestBase {
         .build()) {
       splits = t1.contiguousSplit(2, 5, 9);
       assertEquals(4, splits.length);
+      assertEquals(2, splits[0].getRowCount());
       assertEquals(2, splits[0].getTable().getRowCount());
+      assertEquals(3, splits[1].getRowCount());
       assertEquals(3, splits[1].getTable().getRowCount());
+      assertEquals(4, splits[2].getRowCount());
       assertEquals(4, splits[2].getTable().getRowCount());
+      assertEquals(1, splits[3].getRowCount());
       assertEquals(1, splits[3].getTable().getRowCount());
     } finally {
       if (splits != null) {
@@ -2159,6 +2168,25 @@ public class TableTest extends CudfTestBase {
           JCudfSerialization.TableAndRowCountPair tp = JCudfSerialization.readTableFrom(bin);
           assertNull(tp.getTable());
           assertNull(tp.getContiguousTable());
+        }
+      }
+    }
+  }
+
+  @Test
+  void testSerializationReconstructFromMetadata() throws IOException {
+    try (Table t = buildTestTable()) {
+      ByteArrayOutputStream bout = new ByteArrayOutputStream();
+      JCudfSerialization.writeToStream(t, bout, 0, t.getRowCount());
+      ByteArrayInputStream bin = new ByteArrayInputStream(bout.toByteArray());
+      try (JCudfSerialization.TableAndRowCountPair trcp = JCudfSerialization.readTableFrom(bin)) {
+        ContiguousTable contigTable = trcp.getContiguousTable();
+        DeviceMemoryBuffer oldbuf = contigTable.getBuffer();
+        try (DeviceMemoryBuffer newbuf = oldbuf.sliceWithCopy(0, oldbuf.getLength())) {
+          ByteBuffer metadata = contigTable.getMetadataDirectBuffer();
+          try (Table newTable = Table.fromPackedTable(metadata, newbuf)) {
+            assertTablesAreEqual(t, newTable);
+          }
         }
       }
     }
