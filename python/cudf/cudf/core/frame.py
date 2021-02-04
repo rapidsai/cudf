@@ -6,7 +6,7 @@ import functools
 import operator
 import warnings
 from collections import OrderedDict, abc as abc
-from typing import Any, Dict, Tuple, overload
+from typing import Any, Dict, Tuple, Union, overload
 
 import cupy
 import numpy as np
@@ -18,6 +18,7 @@ from typing_extensions import Literal
 
 import cudf
 from cudf import _lib as libcudf
+from cudf._typing import ColumnLike
 from cudf.core.column import as_column, build_categorical_column, column_empty
 from cudf.utils.dtypes import (
     is_categorical_dtype,
@@ -3858,8 +3859,14 @@ def _is_series(obj):
     return isinstance(obj, Frame) and obj.ndim == 1 and obj._index is not None
 
 
-def _drop_rows_by_labels(obj, labels, level, errors):
-    """Remove rows specified by labels
+def _drop_rows_by_labels(
+    obj: Union[cudf.DataFrame, cudf.Series],
+    labels: Union[ColumnLike, abc.Iterable, str],
+    level: Union[int, str],
+    errors: str,
+) -> Union[cudf.DataFrame, cudf.Series]:
+    """Remove rows specified by `labels`. If `errors=True`, an error is raised
+    if some items in `labels` do not exist in `obj._index`.
 
     Parameter `level` is ignored if `obj._index` is not `MultiIndex`
     """

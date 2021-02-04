@@ -26,6 +26,7 @@ from pandas.io.formats.printing import pprint_thing
 import cudf
 from cudf import _lib as libcudf
 from cudf._lib.null_mask import MaskState, create_null_mask
+from cudf._typing import ColumnLike
 from cudf.core import column, reshape
 from cudf.core.abc import Serializable
 from cudf.core.column import as_column, column_empty
@@ -7342,7 +7343,9 @@ class DataFrame(Frame, Serializable):
                 return False
         return super().equals(other)
 
-    def _drop_rows_by_labels(self, labels):
+    def _drop_rows_by_labels(
+        self: cudf.DataFrame, labels: ColumnLike
+    ) -> cudf.DataFrame:
         """Delete rows specified by `label` parameter. In `DataFrame`, this can
         be achieved efficiently by a left-anti join operation
 
@@ -7607,7 +7610,7 @@ def _get_host_unique(array):
         return set(array)
 
 
-def _drop_columns(df, columns, errors):
+def _drop_columns(df: DataFrame, columns: Iterable, errors: str):
     for c in columns:
         try:
             df._drop_column(c)
