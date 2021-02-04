@@ -20,6 +20,7 @@
 #include <cudf/column/column_factories.hpp>
 #include <cudf/concatenate.hpp>
 #include <cudf/copying.hpp>
+#include <cudf/detail/iterator.cuh>
 #include <cudf/dictionary/encode.hpp>
 #include <cudf/fixed_point/fixed_point.hpp>
 #include <cudf/lists/lists_column_view.hpp>
@@ -1451,7 +1452,8 @@ class lists_column_wrapper : public detail::column_wrapper {
   void build_from_nested(std::initializer_list<lists_column_wrapper<T, SourceElementT>> elements,
                          std::vector<bool> const& v)
   {
-    auto const valids = v.empty() ? std::vector<bool>(elements.size(), true) : v;
+    auto valids = cudf::detail::make_counting_transform_iterator(
+      0, [&v](auto i) { return v.empty() ? true : v[i]; });
 
     // compute the expected hierarchy and depth
     auto const hierarchy_and_depth = std::accumulate(
