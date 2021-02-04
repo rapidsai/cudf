@@ -218,32 +218,5 @@ TYPED_TEST(FixedPointTestBothReps, DISABLED_GroupByHashSumDecimalAsValue)
   }
 }
 
-TYPED_TEST(FixedPointTestBothReps, GroupBySortSumDecimalAsValueAndKey)
-{
-  using namespace numeric;
-  using decimalXX    = TypeParam;
-  using RepType      = cudf::device_storage_type_t<decimalXX>;
-  using fp_wrapper   = cudf::test::fixed_point_column_wrapper<RepType>;
-  using fp64_wrapper = cudf::test::fixed_point_column_wrapper<int64_t>;
-
-  for (auto const i : {2, 1, 0, -1, -2}) {
-    auto const scale = scale_type{i};
-    auto const keys  = fp_wrapper{{1, 2, 3, 1, 2, 2, 1, 3, 3, 2}, scale};
-    auto const vals  = fp_wrapper{{0, 1, 2, 3, 4, 5, 6, 7, 8, 9}, scale};
-
-    auto const expect_keys     = fp_wrapper{{1, 2, 3}, scale};
-    auto const expect_vals_sum = fp64_wrapper{{9, 19, 17}, scale};
-
-    auto agg1 = cudf::make_sum_aggregation();
-    test_single_agg(
-      keys, vals, expect_keys, expect_vals_sum, std::move(agg1), force_use_sort_impl::YES);
-
-    auto agg4 = cudf::make_product_aggregation();
-    EXPECT_THROW(
-      test_single_agg(keys, vals, expect_keys, {}, std::move(agg4), force_use_sort_impl::YES),
-      cudf::logic_error);
-  }
-}
-
 }  // namespace test
 }  // namespace cudf
