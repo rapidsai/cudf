@@ -258,22 +258,21 @@ private:
       auto const status =
           cuFileWrite(file.cufile_handle_, buffer.device_pointer(), buffer.size(), file_offset, 0);
 
-      if (status == EEXIST) {
-        file_descriptor = open(path, O_WRONLY | O_DIRECT);
-        if (file_descriptor < 0) {
-          CUDF_FAIL("Failed to open file " + std::string(path) + ": " +
-                    cuFileGetErrorString(errno));
-        }
-        file_offset = std::numeric_limits<std::size_t>::max();
-        continue;
-      }
-
       if (status < 0) {
+        if (errno == EEXIST) {
+          file_descriptor = open(path, O_WRONLY | O_DIRECT);
+          if (file_descriptor < 0) {
+            CUDF_FAIL("Failed to open file " + std::string(path) + ": " +
+                      cuFileGetErrorString(errno));
+          }
+          file_offset = std::numeric_limits<std::size_t>::max();
+          continue;
+        }
         if (IS_CUFILE_ERR(status)) {
-          CUDF_FAIL("Failed to append buffer to file " + std::string(path) + ": " +
+          CUDF_FAIL("Failed to write buffer to file " + std::string(path) + ": " +
                     cuFileGetErrorString(status));
         } else {
-          CUDF_FAIL("Failed to append buffer to file " + std::string(path) + ": " +
+          CUDF_FAIL("Failed to write buffer to file " + std::string(path) + ": " +
                     cuFileGetErrorString(errno));
         }
       }
