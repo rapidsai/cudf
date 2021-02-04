@@ -1476,7 +1476,7 @@ class lists_column_wrapper : public detail::column_wrapper {
     std::vector<size_type> offsetv;
     std::transform(cols.cbegin(),
                    cols.cend(),
-                   valids.begin(),
+                   valids,
                    std::back_inserter(offsetv),
                    [&](cudf::column_view const& col, bool valid) {
                      // nulls are represented as a repeated offset
@@ -1493,7 +1493,7 @@ class lists_column_wrapper : public detail::column_wrapper {
     std::vector<column_view> children;
     thrust::copy_if(std::cbegin(cols),
                     std::cend(cols),
-                    valids.begin(),  // stencil
+                    valids,  // stencil
                     std::back_inserter(children),
                     thrust::identity<bool>{});
 
