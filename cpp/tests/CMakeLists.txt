@@ -362,6 +362,7 @@ ConfigureTest(JSON_TEST "${JSON_TEST_SRC}")
 # - sort tests ------------------------------------------------------------------------------------
 
 set(SORT_TEST_SRC
+    "${CMAKE_CURRENT_SOURCE_DIR}/sort/segmented_sort_tests.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/sort/sort_test.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/sort/rank_test.cpp")
 
@@ -664,7 +665,8 @@ ConfigureTest(AST_TEST "${AST_TEST_SRC}")
 set(LISTS_TEST_SRC
     "${CMAKE_CURRENT_SOURCE_DIR}/lists/contains_tests.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/lists/count_elements_tests.cpp"
-    "${CMAKE_CURRENT_SOURCE_DIR}/lists/extract_tests.cpp")
+    "${CMAKE_CURRENT_SOURCE_DIR}/lists/extract_tests.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/lists/sort_lists_tests.cpp")
 
 ConfigureTest(LISTS_TEST "${LISTS_TEST_SRC}")
 
