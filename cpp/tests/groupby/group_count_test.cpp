@@ -240,6 +240,7 @@ TYPED_TEST(FixedPointTestBothReps, GroupBySumProductMinMaxDecimalAsValue)
       test_single_agg(keys, vals, expect_keys, {}, std::move(agg4), force_use_sort_impl::YES),
       cudf::logic_error);
 
+    // commented out until we drop support for CUDA 10.2
     // group_by hash tests
 
     // auto agg5 = cudf::make_sum_aggregation();
