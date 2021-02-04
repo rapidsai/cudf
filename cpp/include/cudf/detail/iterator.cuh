@@ -37,6 +37,10 @@
 #include <cudf/scalar/scalar.hpp>
 #include <cudf/scalar/scalar_device_view.cuh>
 
+#include <thrust/iterator/constant_iterator.h>
+// #include <thrust/iterator/counting_iterator.h>
+// #include <thrust/iterator/transform_iterator.h>
+
 namespace cudf {
 namespace detail {
 /**
@@ -314,6 +318,32 @@ auto inline make_pair_iterator(scalar const& scalar_value)
                "the data type mismatch");
   return thrust::make_transform_iterator(thrust::make_constant_iterator<size_type>(0),
                                          scalar_pair_accessor<Element>{scalar_value});
+}
+
+/**
+ * @brief Convenience wrapper for creating a `thrust::transform_iterator` over a
+ * `thrust::counting_iterator`.
+ *
+ * Example:
+ * @code{.cpp}
+ * // Returns square of the value of the counting iterator
+ * auto iter = make_counting_transform_iterator(0, [](auto i){ return (i * i);});
+ * iter[0] == 0
+ * iter[1] == 1
+ * iter[2] == 4
+ * ...
+ * iter[n] == n * n
+ * @endcode
+ *
+ * @param start The starting value of the counting iterator
+ * @param f The unary function to apply to the counting iterator.
+ * This should be a host function and not a device function.
+ * @return auto A transform iterator that applies `f` to a counting iterator
+ */
+template <typename UnaryFunction>
+auto make_counting_transform_iterator(cudf::size_type start, UnaryFunction f)
+{
+  return thrust::make_transform_iterator(thrust::make_counting_iterator(start), f);
 }
 
 }  // namespace detail

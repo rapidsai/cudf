@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2020, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2021, NVIDIA CORPORATION.
  *
  * Copyright 2018-2019 BlazingDB, Inc.
  *     Copyright 2018 Christian Noboa Mardini <christian@blazingdb.com>
@@ -16,6 +16,8 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
+#include <cudf/detail/iterator.cuh>
 
 #include <cudf/binaryop.hpp>
 
@@ -35,13 +37,13 @@ struct BinaryOperationNullTest : public BinaryOperationTest {
     switch (state) {
       case mask_state::ALL_NULL: {
         auto validity_iter =
-          cudf::test::make_counting_transform_iterator(0, [](auto row) { return false; });
+          cudf::detail::make_counting_transform_iterator(0, [](auto row) { return false; });
         return cudf::test::fixed_width_column_wrapper<T>(
           data_iter, data_iter + size, validity_iter);
       }
       case mask_state::ALL_VALID: {
         auto validity_iter =
-          cudf::test::make_counting_transform_iterator(0, [](auto row) { return true; });
+          cudf::detail::make_counting_transform_iterator(0, [](auto row) { return true; });
         return cudf::test::fixed_width_column_wrapper<T>(
           data_iter, data_iter + size, validity_iter);
       }

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2020, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -15,6 +15,8 @@
  */
 #pragma once
 
+#include <cudf/utilities/bit.hpp>
+
 #include <algorithm>
 #include <cudf/column/column_view.hpp>
 #include <cudf/detail/utilities/alignment.hpp>
@@ -24,7 +26,6 @@
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/structs/struct_view.hpp>
 #include <cudf/types.hpp>
-#include <cudf/utilities/bit.hpp>
 #include <cudf/utilities/traits.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
 
@@ -592,6 +593,7 @@ class alignas(16) mutable_column_device_view : public detail::column_device_view
     return d_children[child_index];
   }
 
+#ifdef __CUDACC__  // because set_bit in bit.hpp is wrapped with __CUDACC__
   /**
    * @brief Updates the null mask to indicate that the specified element is
    * valid
@@ -628,6 +630,8 @@ class alignas(16) mutable_column_device_view : public detail::column_device_view
   {
     return clear_bit(null_mask(), element_index);
   }
+
+#endif
 
   /**
    * @brief Updates the specified bitmask word in the `null_mask()` with a
@@ -795,6 +799,8 @@ __device__ inline numeric::decimal64 const column_device_view::element<numeric::
 
 namespace detail {
 
+#ifdef __CUDACC__  // because set_bit in bit.hpp is wrapped with __CUDACC__
+
 /**
  * @brief Convenience function to get offset word from a bitmask
  *
@@ -816,6 +822,8 @@ __device__ inline bitmask_type get_mask_offset_word(bitmask_type const* __restri
   }
   return __funnelshift_r(curr_word, next_word, source_begin_bit);
 }
+
+#endif
 
 /**
  * @brief value accessor of column without null bitmask
