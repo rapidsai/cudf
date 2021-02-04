@@ -198,7 +198,7 @@ struct cast_numeric_scalar_fn {
     auto result   = std::make_unique<numeric_scalar<ResultType>>(ResultType{}, true, stream, mr);
     auto d_output = cudf::get_scalar_device_view(*result);
     cudf::detail::device_single_thread(assign_scalar_fn<InputType, ResultType>{d_input, d_output},
-                                       stream.value());
+                                       stream);
     return result;
   }
 

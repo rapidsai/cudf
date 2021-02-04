@@ -24,6 +24,7 @@
 
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/lists/lists_column_view.hpp>
+#include <cudf/table/table_device_view.cuh>
 #include <cudf/types.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
@@ -224,11 +225,13 @@ struct EncColumnDesc : stats_column_desc {
                        //!< levels
   size_type const *const
     *nesting_offsets;  //!< If column is a nested type, contains offset array of each nesting level
-  size_type nesting_levels;  //!< Number of nesting levels in column. 0 means no nesting.
 
   size_type const *level_offsets;  //!< Offset array for per-row pre-calculated rep/def level values
   uint8_t const *rep_values;       //!< Pre-calculated repetition level values
   uint8_t const *def_values;       //!< Pre-calculated definition level values
+
+  column_device_view *leaf_column;    //!< Pointer to leaf column
+  column_device_view *parent_column;  //!< Pointer to parent column. Is nullptr if not list type.
 };
 
 constexpr int max_page_fragment_size = 5000;  //!< Max number of rows in a page fragment
@@ -275,13 +278,13 @@ constexpr size_t kDictScratchSize    = (1 << kDictHashBits) * sizeof(uint32_t);
 /**
  * @brief Return the byte length of parquet dtypes that are physically represented by INT32
  */
-inline uint32_t __device__ GetDtypeLogicalLen(uint8_t parquet_dtype)
+inline uint32_t __device__ GetDtypeLogicalLen(column_device_view *col)
 {
-  switch (parquet_dtype) {
-    case INT_8:
-    case UINT_8: return 1;
-    case INT_16:
-    case UINT_16: return 2;
+  switch (col->type().id()) {
+    case cudf::type_id::INT8:
+    case cudf::type_id::UINT8: return 1;
+    case cudf::type_id::INT16:
+    case cudf::type_id::UINT16: return 2;
     default: return 4;
   }
 }
@@ -444,6 +447,19 @@ void InitPageFragments(PageFragment *frag,
                        uint32_t fragment_size,
                        uint32_t num_rows,
                        rmm::cuda_stream_view stream);
+
+/**
+ * @brief Set column_device_view pointers in column description array
+ *
+ * @param[out] col_desc Column description array [column_id]
+ * @param[out] leaf_column_views Device array to store leaf columns
+ * @param[in] parent_table_device_view Table device view containing parent columns
+ * @param[in] stream CUDA stream to use, default 0
+ */
+void init_column_device_views(EncColumnDesc *col_desc,
+                              column_device_view *leaf_column_views,
+                              const table_device_view &parent_table_device_view,
+                              rmm::cuda_stream_view stream);
 
 /**
  * @brief Launches kernel for initializing fragment statistics groups
