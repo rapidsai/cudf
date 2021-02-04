@@ -7,7 +7,6 @@ import operator
 import warnings
 from collections import OrderedDict, abc as abc
 from typing import TYPE_CHECKING, Any, Dict, Tuple, TypeVar, overload
-from typing import Any, Dict, Tuple, overload
 
 import cupy
 import numpy as np
