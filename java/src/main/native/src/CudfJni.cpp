@@ -78,10 +78,10 @@ static void release_contiguous_table_jni(JNIEnv *env) {
   }
 }
 
-jobject contiguous_table_from(JNIEnv *env, cudf::contiguous_split_result &split) {
-  jlong address = reinterpret_cast<jlong>(split.all_data->data());
-  jlong size = static_cast<jlong>(split.all_data->size());
-  jlong buff_address = reinterpret_cast<jlong>(split.all_data.get());
+jobject contiguous_table_from(JNIEnv *env, cudf::packed_table &split) {
+  jlong address = reinterpret_cast<jlong>(split.data.gpu_data->data());
+  jlong size = static_cast<jlong>(split.data.gpu_data->size());
+  jlong buff_address = reinterpret_cast<jlong>(split.data.gpu_data.get());
   int num_columns = split.table.num_columns();
   cudf::jni::native_jlongArray views(env, num_columns);
   for (int i = 0; i < num_columns; i++) {
@@ -103,7 +103,7 @@ jobject contiguous_table_from(JNIEnv *env, cudf::contiguous_split_result &split)
                                             views.get_jArray(), address, size, buff_address);
 
   if (ret != nullptr) {
-    split.all_data.release();
+    split.data.gpu_data.release();
   }
   return ret;
 }

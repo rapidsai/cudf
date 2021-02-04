@@ -1817,7 +1817,7 @@ JNIEXPORT jobjectArray JNICALL Java_ai_rapids_cudf_Table_contiguousSplit(JNIEnv 
     std::vector<cudf::size_type> indices(n_split_indices.data(),
                                          n_split_indices.data() + n_split_indices.size());
 
-    std::vector<cudf::contiguous_split_result> result = cudf::contiguous_split(*n_table, indices);
+    std::vector<cudf::packed_table> result = cudf::contiguous_split(*n_table, indices);
     cudf::jni::native_jobjectArray<jobject> n_result =
         cudf::jni::contiguous_table_array(env, result.size());
     for (int i = 0; i < result.size(); i++) {

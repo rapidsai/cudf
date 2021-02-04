@@ -24,7 +24,7 @@ namespace cudf {
 namespace jni {
 
 
-jobject contiguous_table_from(JNIEnv *env, cudf::contiguous_split_result &split);
+jobject contiguous_table_from(JNIEnv *env, cudf::packed_table &split);
 
 native_jobjectArray<jobject> contiguous_table_array(JNIEnv *env, jsize length);
 
