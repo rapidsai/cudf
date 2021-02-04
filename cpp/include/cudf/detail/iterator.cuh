@@ -38,8 +38,8 @@
 #include <cudf/scalar/scalar_device_view.cuh>
 
 #include <thrust/iterator/constant_iterator.h>
-// #include <thrust/iterator/counting_iterator.h>
-// #include <thrust/iterator/transform_iterator.h>
+#include <thrust/iterator/counting_iterator.h>
+#include <thrust/iterator/transform_iterator.h>
 
 namespace cudf {
 namespace detail {

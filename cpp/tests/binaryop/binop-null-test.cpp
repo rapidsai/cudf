@@ -17,9 +17,8 @@
  * limitations under the License.
  */
 
-#include <cudf/detail/iterator.cuh>
-
 #include <cudf/binaryop.hpp>
+#include <cudf/detail/iterator.cuh>
 
 #include <tests/binaryop/assert-binops.h>
 #include <tests/binaryop/binop-fixture.hpp>
