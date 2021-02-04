@@ -627,7 +627,7 @@ CUDA_HOST_DEVICE_CALLABLE fixed_point<Rep1, Rad1> operator+(fixed_point<Rep1, Ra
 #if defined(__CUDACC_DEBUG__)
 
   assert(!addition_overflow<Rep1>(lhs.rescaled(scale)._value, rhs.rescaled(scale)._value) &&
-                 "fixed_point overflow");
+         "fixed_point overflow");
 
 #endif
 
@@ -644,9 +644,8 @@ CUDA_HOST_DEVICE_CALLABLE fixed_point<Rep1, Rad1> operator-(fixed_point<Rep1, Ra
 
 #if defined(__CUDACC_DEBUG__)
 
-  assert(
-    !subtraction_overflow<Rep1>(lhs.rescaled(scale)._value, rhs.rescaled(scale)._value) &&
-    "fixed_point overflow");
+  assert(!subtraction_overflow<Rep1>(lhs.rescaled(scale)._value, rhs.rescaled(scale)._value) &&
+         "fixed_point overflow");
 
 #endif
 
