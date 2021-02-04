@@ -341,7 +341,7 @@ auto inline make_pair_iterator(scalar const& scalar_value)
  * @return auto A transform iterator that applies `f` to a counting iterator
  */
 template <typename UnaryFunction>
-auto make_counting_transform_iterator(cudf::size_type start, UnaryFunction f)
+inline auto make_counting_transform_iterator(cudf::size_type start, UnaryFunction f)
 {
   return thrust::make_transform_iterator(thrust::make_counting_iterator(start), f);
 }
