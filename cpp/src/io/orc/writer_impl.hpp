@@ -158,21 +158,21 @@ class writer::impl {
    * @brief Returns stream information for each column
    *
    * @param columns List of columns
-   * @param num_columns Total number of columns
    * @param num_rows Total number of rows
    * @param stripe_list List of stripe boundaries
    * @param strm_ids List of unique stream identifiers
    *
    * @return The streams
    */
-  std::vector<Stream> gather_streams(orc_column_view* columns,
-                                     size_t num_columns,
+  std::vector<Stream> gather_streams(host_span<orc_column_view> columns,
                                      size_t num_rows,
                                      std::vector<uint32_t> const& stripe_list,
                                      std::vector<int32_t>& strm_ids);
 
-  hostdevice_vector<gpu::EncChunk> initialize_chunks(orc_column_view* columns,
-                                                     size_t num_columns,
+  /**
+   * @brief TODO
+   */
+  hostdevice_vector<gpu::EncChunk> initialize_chunks(host_span<orc_column_view const> columns,
                                                      size_t num_rows,
                                                      size_t num_rowgroups,
                                                      void* output,
@@ -186,7 +186,6 @@ class writer::impl {
    * @brief Encodes the streams as a series of column data chunks
    *
    * @param columns List of columns
-   * @param num_columns Total number of columns
    * @param num_rows Total number of rows
    * @param num_rowgroups Total number of row groups
    * @param str_col_ids List of columns that are strings type
@@ -195,8 +194,7 @@ class writer::impl {
    * @param strm_ids List of unique stream identifiers
    * @param chunks List of column data chunks
    */
-  void encode_columns(orc_column_view* columns,
-                      size_t num_columns,
+  void encode_columns(host_span<orc_column_view const> columns,
                       size_t num_rows,
                       size_t num_rowgroups,
                       std::vector<int> const& str_col_ids,
