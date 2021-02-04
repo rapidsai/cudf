@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -65,9 +65,9 @@ std::unique_ptr<column> merge_offsets(std::vector<lists_column_view> const& colu
   std::for_each(columns.begin(), columns.end(), [&](lists_column_view const& c) {
     if (c.size() > 0) {
       // handle sliced columns
-      int const local_shift = shift - (c.offset() > 0 ? cudf::detail::get_value<size_type>(
-                                                          c.offsets(), c.offset(), stream.value())
-                                                      : 0);
+      int const local_shift =
+        shift -
+        (c.offset() > 0 ? cudf::detail::get_value<size_type>(c.offsets(), c.offset(), stream) : 0);
       column_device_view offsets(c.offsets(), nullptr, nullptr);
       thrust::transform(
         rmm::exec_policy(stream),
@@ -76,7 +76,7 @@ std::unique_ptr<column> merge_offsets(std::vector<lists_column_view> const& colu
         d_merged_offsets.begin<size_type>() + count,
         [local_shift] __device__(size_type offset) { return offset + local_shift; });
 
-      shift += c.get_sliced_child(stream.value()).size();
+      shift += c.get_sliced_child(stream).size();
       count += c.size();
     }
   });
@@ -110,7 +110,7 @@ std::unique_ptr<column> concatenate(
                 [&total_list_count, &children, stream](lists_column_view const& l) {
                   // count total # of lists
                   total_list_count += l.size();
-                  children.push_back(l.get_sliced_child(stream.value()));
+                  children.push_back(l.get_sliced_child(stream));
                 });
   auto data = cudf::detail::concatenate(children, stream, mr);
 

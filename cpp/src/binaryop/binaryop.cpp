@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2020, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2021, NVIDIA CORPORATION.
  *
  * Copyright 2018-2019 BlazingDB, Inc.
  *     Copyright 2018 Christian Noboa Mardini <christian@blazingdb.com>
@@ -112,7 +112,7 @@ void binary_operation(mutable_column_view& out,
 {
   if (is_null_dependent(op)) {
     cudf::jit::launcher(
-      hash, code::kernel, header_names, cudf::jit::compiler_flags, headers_code, stream.value())
+      hash, code::kernel, header_names, cudf::jit::compiler_flags, headers_code, stream)
       .set_kernel_inst("kernel_v_s_with_validity",             // name of the kernel we are
                                                                // launching
                        {cudf::jit::get_type_name(out.type()),  // list of template arguments
@@ -129,7 +129,7 @@ void binary_operation(mutable_column_view& out,
               lhs.is_valid());
   } else {
     cudf::jit::launcher(
-      hash, code::kernel, header_names, cudf::jit::compiler_flags, headers_code, stream.value())
+      hash, code::kernel, header_names, cudf::jit::compiler_flags, headers_code, stream)
       .set_kernel_inst("kernel_v_s",                           // name of the kernel we are
                                                                // launching
                        {cudf::jit::get_type_name(out.type()),  // list of template arguments
@@ -151,7 +151,7 @@ void binary_operation(mutable_column_view& out,
 {
   if (is_null_dependent(op)) {
     cudf::jit::launcher(
-      hash, code::kernel, header_names, cudf::jit::compiler_flags, headers_code, stream.value())
+      hash, code::kernel, header_names, cudf::jit::compiler_flags, headers_code, stream)
       .set_kernel_inst("kernel_v_s_with_validity",             // name of the kernel we are
                                                                // launching
                        {cudf::jit::get_type_name(out.type()),  // list of template arguments
@@ -168,7 +168,7 @@ void binary_operation(mutable_column_view& out,
               rhs.is_valid());
   } else {
     cudf::jit::launcher(
-      hash, code::kernel, header_names, cudf::jit::compiler_flags, headers_code, stream.value())
+      hash, code::kernel, header_names, cudf::jit::compiler_flags, headers_code, stream)
       .set_kernel_inst("kernel_v_s",                           // name of the kernel we are
                                                                // launching
                        {cudf::jit::get_type_name(out.type()),  // list of template arguments
@@ -190,7 +190,7 @@ void binary_operation(mutable_column_view& out,
 {
   if (is_null_dependent(op)) {
     cudf::jit::launcher(
-      hash, code::kernel, header_names, cudf::jit::compiler_flags, headers_code, stream.value())
+      hash, code::kernel, header_names, cudf::jit::compiler_flags, headers_code, stream)
       .set_kernel_inst("kernel_v_v_with_validity",             // name of the kernel we are
                                                                // launching
                        {cudf::jit::get_type_name(out.type()),  // list of template arguments
@@ -208,7 +208,7 @@ void binary_operation(mutable_column_view& out,
               rhs.offset());
   } else {
     cudf::jit::launcher(
-      hash, code::kernel, header_names, cudf::jit::compiler_flags, headers_code, stream.value())
+      hash, code::kernel, header_names, cudf::jit::compiler_flags, headers_code, stream)
       .set_kernel_inst("kernel_v_v",                           // name of the kernel we are
                                                                // launching
                        {cudf::jit::get_type_name(out.type()),  // list of template arguments
@@ -237,7 +237,7 @@ void binary_operation(mutable_column_view& out,
     cudf::jit::parse_single_function_ptx(ptx, "GENERIC_BINARY_OP", output_type_name) + code::kernel;
 
   cudf::jit::launcher(
-    ptx_hash, cuda_source, header_names, cudf::jit::compiler_flags, headers_code, stream.value())
+    ptx_hash, cuda_source, header_names, cudf::jit::compiler_flags, headers_code, stream)
     .set_kernel_inst("kernel_v_v",       // name of the kernel
                                          // we are launching
                      {output_type_name,  // list of template arguments

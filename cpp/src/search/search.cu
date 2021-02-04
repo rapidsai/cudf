@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2020, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -243,7 +243,7 @@ struct multi_contains_dispatch {
       return result;
     }
 
-    auto hash_set = cudf::detail::unordered_multiset<Element>::create(needles, stream.value());
+    auto hash_set        = cudf::detail::unordered_multiset<Element>::create(needles, stream);
     auto device_hash_set = hash_set.to_device();
 
     auto d_haystack_ptr = column_device_view::create(haystack, stream);
