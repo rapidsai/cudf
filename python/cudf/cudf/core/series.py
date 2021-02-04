@@ -554,6 +554,28 @@ class Series(Frame, Serializable):
             result.index = self.index.copy(deep=deep)
         return result
 
+    def drop(
+        self,
+        labels=None,
+        axis=0,
+        index=None,
+        columns=None,
+        level=None,
+        inplace=False,
+        errors="raise",
+    ):
+        """
+        """
+        return super()._drop(
+            labels=labels,
+            axis=axis,
+            index=index,
+            columns=columns,
+            level=level,
+            inplace=inplace,
+            errors=errors,
+        )
+
     def __copy__(self, deep=True):
         return self.copy(deep)
 
@@ -4566,6 +4588,18 @@ class Series(Frame, Serializable):
         StringIndex(['a' 'b' 'c'], dtype='object')
         """
         return self.index
+
+    def _drop_rows_by_labels(self, labels):
+        """Delete rows specified by `label` parameter. Resort to the efficient
+        implementation in `cudf.DataFrame`
+
+        labels: a list of labels specifying the rows to drop
+        """
+        df = self.to_frame(name="tmp")
+        dropped = df._drop_rows_by_labels(labels)["tmp"]
+        dropped.name = self.name
+
+        return dropped
 
     _accessors = set()  # type: Set[Any]
 

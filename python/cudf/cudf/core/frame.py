@@ -1194,7 +1194,7 @@ class Frame(libcudf.table.Table):
 
         return tables
 
-    def drop(
+    def _drop(
         self,
         labels=None,
         axis=0,
@@ -1253,9 +1253,7 @@ class Frame(libcudf.table.Table):
                 if errors == "raise" and not target.isin(outdf.index).all():
                     raise KeyError("One or more values not found in axis")
 
-                sliced_df = outdf.join(
-                    cudf.DataFrame(index=target), how="leftanti"
-                )
+                sliced_df = self._drop_rows_by_labels(target)
 
             if columns is not None:
                 columns = _get_host_unique(columns)
@@ -3659,6 +3657,9 @@ class Frame(libcudf.table.Table):
         )
 
         return self._mimic_inplace(result, inplace=inplace)
+
+    def _drop_rows_by_labels(self, labels):
+        raise NotImplementedError
 
 
 def _get_replacement_values_for_columns(

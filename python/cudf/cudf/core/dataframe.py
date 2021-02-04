@@ -3250,7 +3250,7 @@ class DataFrame(Frame, Serializable):
                weight    1.0    0.8
         """
 
-        return super().drop(
+        return super()._drop(
             labels=labels,
             axis=axis,
             index=index,
@@ -7311,6 +7311,14 @@ class DataFrame(Frame, Serializable):
             if self_name != other_name:
                 return False
         return super().equals(other)
+
+    def _drop_rows_by_labels(self, labels):
+        """Delete rows specified by `label` parameter. In `DataFrame`, this can
+        be achieved efficiently by a left-anti join operation
+
+        labels: a list of labels specifying the rows to drop
+        """
+        return self.join(cudf.DataFrame(index=labels), how="leftanti")
 
     _accessors = set()  # type: Set[Any]
 
