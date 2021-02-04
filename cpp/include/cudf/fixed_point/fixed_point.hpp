@@ -550,22 +550,6 @@ class fixed_point {
   }
 };  // namespace numeric
 
-/** @brief Function that converts Rep to `std::string`
- *
- * @tparam Rep Representation type
- * @return String-ified Rep
- */
-template <typename Rep>
-std::string print_rep()
-{
-  if (cuda::std::is_same<Rep, int32_t>::value)
-    return "int32_t";
-  else if (cuda::std::is_same<Rep, int64_t>::value)
-    return "int64_t";
-  else
-    return "unknown type";
-}
-
 /** @brief Function for identifying integer overflow when adding
  *
  * @tparam Rep Type of integer to check for overflow on
@@ -642,7 +626,7 @@ CUDA_HOST_DEVICE_CALLABLE fixed_point<Rep1, Rad1> operator+(fixed_point<Rep1, Ra
 #if defined(__CUDACC_DEBUG__)
 
   release_assert(!addition_overflow<Rep1>(lhs.rescaled(scale)._value, rhs.rescaled(scale)._value) &&
-                 "fixed_point overflow of underlying representation type " + print_rep<Rep1>());
+                 "fixed_point overflow");
 
 #endif
 
@@ -661,7 +645,7 @@ CUDA_HOST_DEVICE_CALLABLE fixed_point<Rep1, Rad1> operator-(fixed_point<Rep1, Ra
 
   release_assert(
     !subtraction_overflow<Rep1>(lhs.rescaled(scale)._value, rhs.rescaled(scale)._value) &&
-    "fixed_point overflow of underlying representation type " + print_rep<Rep1>());
+    "fixed_point overflow");
 
 #endif
 
@@ -675,8 +659,7 @@ CUDA_HOST_DEVICE_CALLABLE fixed_point<Rep1, Rad1> operator*(fixed_point<Rep1, Ra
 {
 #if defined(__CUDACC_DEBUG__)
 
-  release_assert(!multiplication_overflow<Rep1>(lhs._value, rhs._value) &&
-                 "fixed_point overflow of underlying representation type " + print_rep<Rep1>());
+  release_assert(!multiplication_overflow<Rep1>(lhs._value, rhs._value) && "fixed_point overflow");
 
 #endif
 
@@ -691,8 +674,7 @@ CUDA_HOST_DEVICE_CALLABLE fixed_point<Rep1, Rad1> operator/(fixed_point<Rep1, Ra
 {
 #if defined(__CUDACC_DEBUG__)
 
-  release_assert(!division_overflow<Rep1>(lhs._value, rhs._value) &&
-                 "fixed_point overflow of underlying representation type " + print_rep<Rep1>());
+  release_assert(!division_overflow<Rep1>(lhs._value, rhs._value) && "fixed_point overflow");
 
 #endif
 
