@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,6 +16,7 @@
 
 #pragma once
 
+#include <cudf/detail/utilities/release_assert.cuh>
 #include <cudf/types.hpp>
 
 // Note: The <cuda/std/*> versions are used in order for Jitify to work with our fixed_point type.
@@ -90,6 +91,7 @@ template <typename Rep,
                                            is_supported_representation_type<Rep>())>* = nullptr>
 CUDA_HOST_DEVICE_CALLABLE Rep ipow(T exponent)
 {
+  release_assert(exponent >= 0 && "integer exponentiation with negative exponent is not possible.");
   if (exponent == 0) return static_cast<Rep>(1);
   auto extra  = static_cast<Rep>(1);
   auto square = static_cast<Rep>(Base);
@@ -549,22 +551,6 @@ class fixed_point {
   }
 };  // namespace numeric
 
-/** @brief Function that converts Rep to `std::string`
- *
- * @tparam Rep Representation type
- * @return String-ified Rep
- */
-template <typename Rep>
-std::string print_rep()
-{
-  if (cuda::std::is_same<Rep, int32_t>::value)
-    return "int32_t";
-  else if (cuda::std::is_same<Rep, int64_t>::value)
-    return "int64_t";
-  else
-    return "unknown type";
-}
-
 /** @brief Function for identifying integer overflow when adding
  *
  * @tparam Rep Type of integer to check for overflow on
@@ -640,8 +626,8 @@ CUDA_HOST_DEVICE_CALLABLE fixed_point<Rep1, Rad1> operator+(fixed_point<Rep1, Ra
 
 #if defined(__CUDACC_DEBUG__)
 
-  assert(("fixed_point overflow of underlying representation type " + print_rep<Rep1>(),
-          !addition_overflow<Rep1>(lhs.rescaled(scale)._value, rhs.rescaled(scale)._value)));
+  assert(!addition_overflow<Rep1>(lhs.rescaled(scale)._value, rhs.rescaled(scale)._value) &&
+         "fixed_point overflow");
 
 #endif
 
@@ -658,8 +644,8 @@ CUDA_HOST_DEVICE_CALLABLE fixed_point<Rep1, Rad1> operator-(fixed_point<Rep1, Ra
 
 #if defined(__CUDACC_DEBUG__)
 
-  assert(("fixed_point overflow of underlying representation type " + print_rep<Rep1>(),
-          !subtraction_overflow<Rep1>(lhs.rescaled(scale)._value, rhs.rescaled(scale)._value)));
+  assert(!subtraction_overflow<Rep1>(lhs.rescaled(scale)._value, rhs.rescaled(scale)._value) &&
+         "fixed_point overflow");
 
 #endif
 
@@ -673,8 +659,7 @@ CUDA_HOST_DEVICE_CALLABLE fixed_point<Rep1, Rad1> operator*(fixed_point<Rep1, Ra
 {
 #if defined(__CUDACC_DEBUG__)
 
-  assert(("fixed_point overflow of underlying representation type " + print_rep<Rep1>(),
-          !multiplication_overflow<Rep1>(lhs._value, rhs._value)));
+  assert(!multiplication_overflow<Rep1>(lhs._value, rhs._value) && "fixed_point overflow");
 
 #endif
 
@@ -689,8 +674,7 @@ CUDA_HOST_DEVICE_CALLABLE fixed_point<Rep1, Rad1> operator/(fixed_point<Rep1, Ra
 {
 #if defined(__CUDACC_DEBUG__)
 
-  assert(("fixed_point overflow of underlying representation type " + print_rep<Rep1>(),
-          !division_overflow<Rep1>(lhs._value, rhs._value)));
+  assert(!division_overflow<Rep1>(lhs._value, rhs._value) && "fixed_point overflow");
 
 #endif
 
