@@ -1,4 +1,5 @@
-# Copyright (c) 2018-2020, NVIDIA CORPORATION.
+# Copyright (c) 2018-2021, NVIDIA CORPORATION.
+
 from __future__ import annotations
 
 import pickle
@@ -129,7 +130,7 @@ class CategoricalAccessor(ColumnMethodsMixin):
         return cudf.Series(self._column.codes, index=index)
 
     @property
-    def ordered(self) -> bool:
+    def ordered(self) -> Optional[bool]:
         """
         Whether the categories have an ordered relationship.
         """
@@ -753,6 +754,7 @@ class CategoricalColumn(column.ColumnBase):
     """Implements operations for Columns of Categorical type
     """
 
+    dtype: cudf.core.dtypes.CategoricalDtype
     _codes: Optional[NumericalColumn]
     _children: Tuple[NumericalColumn]
 
@@ -917,7 +919,7 @@ class CategoricalColumn(column.ColumnBase):
         return cast(cudf.core.column.NumericalColumn, self._codes)
 
     @property
-    def ordered(self) -> bool:
+    def ordered(self) -> Optional[bool]:
         return self.dtype.ordered
 
     @ordered.setter
@@ -1009,7 +1011,7 @@ class CategoricalColumn(column.ColumnBase):
             self._encode(other), size=len(self), dtype=self.codes.dtype
         )
         col = column.build_categorical_column(
-            categories=self.dtype.categories,
+            categories=self.dtype.categories._values,
             codes=column.as_column(ary),
             mask=self.base_mask,
             ordered=self.dtype.ordered,
@@ -1021,7 +1023,7 @@ class CategoricalColumn(column.ColumnBase):
     ) -> Tuple[CategoricalColumn, NumericalColumn]:
         codes, inds = self.as_numerical.sort_by_values(ascending, na_position)
         col = column.build_categorical_column(
-            categories=self.dtype.categories,
+            categories=self.dtype.categories._values,
             codes=column.as_column(codes.base_data, dtype=codes.dtype),
             mask=codes.base_mask,
             size=codes.size,
@@ -1106,6 +1108,15 @@ class CategoricalColumn(column.ColumnBase):
         """
         Return col with *to_replace* replaced with *replacement*.
         """
+        to_replace_col = column.as_column(to_replace)
+        replacement_col = column.as_column(replacement)
+
+        if type(to_replace_col) != type(replacement_col):
+            raise TypeError(
+                f"to_replace and value should be of same types,"
+                f"got to_replace dtype: {to_replace_col.dtype} and "
+                f"value dtype: {replacement_col.dtype}"
+            )
 
         # create a dataframe containing the pre-replacement categories
         # and a copy of them to work with. The index of this dataframe
@@ -1116,16 +1127,18 @@ class CategoricalColumn(column.ColumnBase):
 
         # Create a column with the appropriate labels replaced
         old_cats["cats_replace"] = old_cats["cats"].replace(
-            to_replace, replacement
+            to_replace_col, replacement_col
         )
 
         # Construct the new categorical labels
         # If a category is being replaced by an existing one, we
         # want to map it to None. If it's totally new, we want to
         # map it to the new label it is to be replaced by
-        dtype_replace = cudf.Series(replacement)
+        dtype_replace = cudf.Series(replacement_col)
         dtype_replace[dtype_replace.isin(old_cats["cats"])] = None
-        new_cats["cats"] = new_cats["cats"].replace(to_replace, dtype_replace)
+        new_cats["cats"] = new_cats["cats"].replace(
+            to_replace_col, dtype_replace
+        )
 
         # anything we mapped to None, we want to now filter out since
         # those categories don't exist anymore
@@ -1205,7 +1218,7 @@ class CategoricalColumn(column.ColumnBase):
         result = super().fillna(value=fill_value, method=method)
 
         result = column.build_categorical_column(
-            categories=self.dtype.categories,
+            categories=self.dtype.categories._values,
             codes=column.as_column(result.base_data, dtype=result.dtype),
             offset=result.offset,
             size=result.size,
@@ -1233,7 +1246,8 @@ class CategoricalColumn(column.ColumnBase):
     def is_monotonic_increasing(self) -> bool:
         if not hasattr(self, "_is_monotonic_increasing"):
             self._is_monotonic_increasing = (
-                self.ordered and self.as_numerical.is_monotonic_increasing
+                bool(self.ordered)
+                and self.as_numerical.is_monotonic_increasing
             )
         return self._is_monotonic_increasing
 
@@ -1241,7 +1255,8 @@ class CategoricalColumn(column.ColumnBase):
     def is_monotonic_decreasing(self) -> bool:
         if not hasattr(self, "_is_monotonic_decreasing"):
             self._is_monotonic_decreasing = (
-                self.ordered and self.as_numerical.is_monotonic_decreasing
+                bool(self.ordered)
+                and self.as_numerical.is_monotonic_decreasing
             )
         return self._is_monotonic_decreasing
 
@@ -1320,7 +1335,7 @@ class CategoricalColumn(column.ColumnBase):
             )
         else:
             return column.build_categorical_column(
-                categories=self.dtype.categories,
+                categories=self.dtype.categories._values,
                 codes=column.as_column(
                     self.codes.base_data, dtype=self.codes.dtype
                 ),

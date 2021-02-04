@@ -234,22 +234,13 @@ rmm::device_buffer reader::impl::decompress_stripe_data(
       static_cast<const uint8_t *>(stripe_data[info.stripe_idx].data()) + info.dst_pos,
       info.length));
   }
-  CUDA_TRY(cudaMemcpyAsync(compinfo.device_ptr(),
-                           compinfo.host_ptr(),
-                           compinfo.memory_size(),
-                           cudaMemcpyHostToDevice,
-                           stream.value()));
+  compinfo.host_to_device(stream);
   gpu::ParseCompressedStripeData(compinfo.device_ptr(),
                                  compinfo.size(),
                                  decompressor->GetBlockSize(),
                                  decompressor->GetLog2MaxCompressionRatio(),
                                  stream);
-  CUDA_TRY(cudaMemcpyAsync(compinfo.host_ptr(),
-                           compinfo.device_ptr(),
-                           compinfo.memory_size(),
-                           cudaMemcpyDeviceToHost,
-                           stream.value()));
-  stream.synchronize();
+  compinfo.device_to_host(stream, true);
 
   // Count the exact number of compressed blocks
   size_t num_compressed_blocks   = 0;
@@ -283,11 +274,7 @@ rmm::device_buffer reader::impl::decompress_stripe_data(
     start_pos += compinfo[i].num_compressed_blocks;
     start_pos_uncomp += compinfo[i].num_uncompressed_blocks;
   }
-  CUDA_TRY(cudaMemcpyAsync(compinfo.device_ptr(),
-                           compinfo.host_ptr(),
-                           compinfo.memory_size(),
-                           cudaMemcpyHostToDevice,
-                           stream.value()));
+  compinfo.host_to_device(stream);
   gpu::ParseCompressedStripeData(compinfo.device_ptr(),
                                  compinfo.size(),
                                  decompressor->GetBlockSize(),
@@ -319,12 +306,7 @@ rmm::device_buffer reader::impl::decompress_stripe_data(
   // have in stream_info[], but using the gpu results also updates
   // max_uncompressed_size to the actual uncompressed size, or zero if
   // decompression failed.
-  CUDA_TRY(cudaMemcpyAsync(compinfo.host_ptr(),
-                           compinfo.device_ptr(),
-                           compinfo.memory_size(),
-                           cudaMemcpyDeviceToHost,
-                           stream.value()));
-  stream.synchronize();
+  compinfo.device_to_host(stream, true);
 
   const size_t num_columns = chunks.size() / num_stripes;
 
@@ -341,11 +323,7 @@ rmm::device_buffer reader::impl::decompress_stripe_data(
   }
 
   if (not row_groups.empty()) {
-    CUDA_TRY(cudaMemcpyAsync(chunks.device_ptr(),
-                             chunks.host_ptr(),
-                             chunks.memory_size(),
-                             cudaMemcpyHostToDevice,
-                             stream.value()));
+    chunks.host_to_device(stream);
     gpu::ParseRowGroupIndex(row_groups.data().get(),
                             compinfo.device_ptr(),
                             chunks.device_ptr(),
@@ -384,11 +362,7 @@ void reader::impl::decode_stream_data(hostdevice_vector<gpu::ColumnDesc> &chunks
   // Allocate global dictionary for deserializing
   rmm::device_vector<gpu::DictionaryEntry> global_dict(num_dicts);
 
-  CUDA_TRY(cudaMemcpyAsync(chunks.device_ptr(),
-                           chunks.host_ptr(),
-                           chunks.memory_size(),
-                           cudaMemcpyHostToDevice,
-                           stream.value()));
+  chunks.host_to_device(stream);
   gpu::DecodeNullsAndStringDictionaries(chunks.device_ptr(),
                                         global_dict.data().get(),
                                         num_columns,
@@ -407,12 +381,7 @@ void reader::impl::decode_stream_data(hostdevice_vector<gpu::ColumnDesc> &chunks
                            row_groups.size() / num_columns,
                            row_index_stride,
                            stream);
-  CUDA_TRY(cudaMemcpyAsync(chunks.host_ptr(),
-                           chunks.device_ptr(),
-                           chunks.memory_size(),
-                           cudaMemcpyDeviceToHost,
-                           stream.value()));
-  stream.synchronize();
+  chunks.device_to_host(stream, true);
 
   for (size_t i = 0; i < num_stripes; ++i) {
     for (size_t j = 0; j < num_columns; ++j) {
@@ -595,11 +564,7 @@ table_with_metadata reader::impl::read(size_type skip_rows,
         stripe_data.push_back(std::move(decomp_data));
       } else {
         if (not row_groups.empty()) {
-          CUDA_TRY(cudaMemcpyAsync(chunks.device_ptr(),
-                                   chunks.host_ptr(),
-                                   chunks.memory_size(),
-                                   cudaMemcpyHostToDevice,
-                                   stream.value()));
+          chunks.host_to_device(stream);
           gpu::ParseRowGroupIndex(row_groups.data().get(),
                                   nullptr,
                                   chunks.device_ptr(),

@@ -6,43 +6,9 @@
 
 ## Bug Fixes
 
-# cuDF 0.18.0 (Date TBD)
+# 0.18.0
 
-## New Features
-- PR #6856 Add groupby idxmin, idxmax aggregation
-- PR #6847 Add a cmake find module for cuFile in JNI code
-- PR #6902 Implement `DataFrame.quantile` for `datetime` and `timedelta` data types
-- PR #6814 Implement `cudf::reduce` for `decimal32` and `decimal64` (part 1)
-- PR #6929 Add `Index.set_names` api
-- PR #6907 Add `replace_null` API with `replace_policy` parameter, `fixed_width` column support
-- PR #6885 Share `factorize` implementation with Index and cudf module
-- PR #6775 Implement cudf.DateOffset for months
-- PR #7039 Support contains() on lists of primitives
-
-## Improvements
-
-- PR #6938 Pass numeric scalars of the same dtype through numeric binops
-- PR #6275 Update to official libcu++ on Github
-- PR #6838 Fix `columns` & `index` handling in dataframe constructor
-- PR #6750 Remove **kwargs from string/categorical methods
-- PR #6585 Add dictionary support to libcudf groupby functions
-- PR #6909 Support reading byte array backed decimal columns from parquet files
-- PR #6939 Use simplified `rmm::exec_policy`
-- PR #6512 Refactor rolling.cu to reduce compile time
-- PR #6982 Disable some pragma unroll statements in thrust `sort.h`
-- PR #7051 Verify decimal cast in java package
-- PR #7120 Verify window operations on decimal in java package
-
-## Bug Fixes
-
-- PR #6884 Correct the sampling range when sampling with replacement
-- PR #6903 Add null count test for apply_boolean_mask
-- PR #6922 Fix N/A detection for empty fields in CSV reader
-- PR #6912 Fix rmm_mode=managed parameter for gtests
-- PR #6943 Fix join with nulls not equal performance
-- PR #6945 Fix groupby agg/apply behaviour when no key columns are provided 
-- PR #6942 Fix cudf::merge gtest for dictionary columns
-
+Please see https://github.com/rapidsai/cudf/releases/tag/branch-0.18-latest for the latest changes to this development branch.
 
 # cuDF 0.17.0 (10 Dec 2020)
 
@@ -234,6 +200,7 @@
 - PR #6854 Fix the parameter order of writeParquetBufferBegin
 - PR #6855 Fix `.str.replace_with_backrefs` docs examples
 - PR #6853 Fix contiguous split of null string columns
+- PR #6860 Move codecov upload to build script
 - PR #6861 Fix compile error in type_dispatch_benchmark.cu
 - PR #6864 Handle contiguous_split corner case for nested string columns with no children
 - PR #6869 Avoid dependency resolution failure in latest version of pip by explicitly specifying versions for dask and distributed
