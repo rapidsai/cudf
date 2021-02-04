@@ -27,6 +27,7 @@ import ai.rapids.cudf.HostColumnVector.StructType;
 import java.io.File;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
@@ -115,6 +116,11 @@ public final class Table implements AutoCloseable {
    */
   ColumnVector[] getColumns() {
     return columns;
+  }
+
+  /** Return the native table view handle for this table */
+  long getNativeView() {
+    return nativeHandle;
   }
 
   /**
@@ -503,7 +509,9 @@ public final class Table implements AutoCloseable {
 
   private static native long[] explode(long tableHandle, int index);
 
-  private native long createCudfTableView(long[] nativeColumnViewHandles);
+  private static native long createCudfTableView(long[] nativeColumnViewHandles);
+
+  private static native long[] columnViewsFromPacked(ByteBuffer metadata, long dataAddress);
 
   /////////////////////////////////////////////////////////////////////////////
   // TABLE CREATION APIs
@@ -1794,6 +1802,50 @@ public final class Table implements AutoCloseable {
 
     }
     return new Table(convertFromRows(vec.getNativeView(), types, scale));
+  }
+
+  /**
+   * Construct a table from a packed representation.
+   * @param metadata host-based metadata for the table
+   * @param data GPU data buffer for the table
+   * @return table which is zero-copy reconstructed from the packed-form
+   */
+  public static Table fromPackedTable(ByteBuffer metadata, DeviceMemoryBuffer data) {
+    // Ensure the metadata buffer is direct so it can be passed to JNI
+    ByteBuffer directBuffer = metadata;
+    if (!directBuffer.isDirect()) {
+      directBuffer = ByteBuffer.allocateDirect(metadata.remaining());
+      directBuffer.put(metadata);
+      directBuffer.flip();
+    }
+
+    long[] columnViewAddresses = columnViewsFromPacked(directBuffer, data.getAddress());
+    ColumnVector[] columns = new ColumnVector[columnViewAddresses.length];
+    Table result = null;
+    try {
+      for (int i = 0; i < columns.length; i++) {
+        columns[i] = ColumnVector.fromViewWithContiguousAllocation(columnViewAddresses[i], data);
+        columnViewAddresses[i] = 0;
+      }
+      result = new Table(columns);
+    } catch (Throwable t) {
+      for (int i = 0; i < columns.length; i++) {
+        if (columns[i] != null) {
+          columns[i].close();
+        }
+        if (columnViewAddresses[i] != 0) {
+          ColumnView.deleteColumnView(columnViewAddresses[i]);
+        }
+      }
+      throw t;
+    }
+
+    // close columns to leave the resulting table responsible for freeing underlying columns
+    for (ColumnVector column : columns) {
+      column.close();
+    }
+
+    return result;
   }
 
   /////////////////////////////////////////////////////////////////////////////
