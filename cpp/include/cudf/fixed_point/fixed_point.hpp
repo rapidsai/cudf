@@ -27,6 +27,7 @@
 #include <algorithm>
 #include <cmath>
 #include <string>
+#include <cassert>
 
 //! `fixed_point` and supporting types
 namespace numeric {
@@ -625,7 +626,7 @@ CUDA_HOST_DEVICE_CALLABLE fixed_point<Rep1, Rad1> operator+(fixed_point<Rep1, Ra
 
 #if defined(__CUDACC_DEBUG__)
 
-  release_assert(!addition_overflow<Rep1>(lhs.rescaled(scale)._value, rhs.rescaled(scale)._value) &&
+  assert(!addition_overflow<Rep1>(lhs.rescaled(scale)._value, rhs.rescaled(scale)._value) &&
                  "fixed_point overflow");
 
 #endif
@@ -643,7 +644,7 @@ CUDA_HOST_DEVICE_CALLABLE fixed_point<Rep1, Rad1> operator-(fixed_point<Rep1, Ra
 
 #if defined(__CUDACC_DEBUG__)
 
-  release_assert(
+  assert(
     !subtraction_overflow<Rep1>(lhs.rescaled(scale)._value, rhs.rescaled(scale)._value) &&
     "fixed_point overflow");
 
@@ -659,7 +660,7 @@ CUDA_HOST_DEVICE_CALLABLE fixed_point<Rep1, Rad1> operator*(fixed_point<Rep1, Ra
 {
 #if defined(__CUDACC_DEBUG__)
 
-  release_assert(!multiplication_overflow<Rep1>(lhs._value, rhs._value) && "fixed_point overflow");
+  assert(!multiplication_overflow<Rep1>(lhs._value, rhs._value) && "fixed_point overflow");
 
 #endif
 
@@ -674,7 +675,7 @@ CUDA_HOST_DEVICE_CALLABLE fixed_point<Rep1, Rad1> operator/(fixed_point<Rep1, Ra
 {
 #if defined(__CUDACC_DEBUG__)
 
-  release_assert(!division_overflow<Rep1>(lhs._value, rhs._value) && "fixed_point overflow");
+  assert(!division_overflow<Rep1>(lhs._value, rhs._value) && "fixed_point overflow");
 
 #endif
 
