@@ -109,14 +109,12 @@ __device__ void GenerateDictionaryIndices(dict_state_s *s, uint32_t t)
 {
   uint32_t *dict_index      = s->col.dict_index;
   uint32_t *dict_data       = s->col.dict_data + s->ck.start_row;
-  const uint32_t *valid_map = s->col.valid_map_base;
   uint32_t num_dict_entries = 0;
 
   for (uint32_t i = 0; i < s->row_cnt; i += 1024) {
-    uint32_t row      = s->ck.start_row + i + t;
-    uint32_t is_valid = (i + t < s->row_cnt && row < s->col.num_rows)
-                          ? (valid_map) ? (valid_map[row >> 5] >> (row & 0x1f)) & 1 : 1
-                          : 0;
+    uint32_t row = s->ck.start_row + i + t;
+    uint32_t is_valid =
+      (i + t < s->row_cnt && row < s->col.num_rows) ? s->col.leaf_column->is_valid(row) : 0;
     uint32_t dict_idx = (is_valid) ? dict_index[row] : 0;
     uint32_t is_unique =
       (is_valid &&
@@ -178,7 +176,7 @@ __global__ void __launch_bounds__(block_size, 1)
   dtype     = s->col.physical_type;
   dtype_len = (dtype == INT96) ? 12 : (dtype == INT64 || dtype == DOUBLE) ? 8 : 4;
   if (dtype == INT32) {
-    dtype_len_in = GetDtypeLogicalLen(s->col.converted_type);
+    dtype_len_in = GetDtypeLogicalLen(s->col.leaf_column);
   } else if (dtype == INT96) {
     dtype_len_in = 8;
   } else {
@@ -205,19 +203,15 @@ __global__ void __launch_bounds__(block_size, 1)
         row = frag_start_row + s->frag_dict[i + t];
         len = dtype_len;
         if (dtype == BYTE_ARRAY) {
-          const char *ptr = static_cast<const nvstrdesc_s *>(s->col.column_data_base)[row].ptr;
-          uint32_t count  = static_cast<uint32_t>(
-            static_cast<const nvstrdesc_s *>(s->col.column_data_base)[row].count);
-          len += count;
-          hash = nvstr_hash16(reinterpret_cast<const uint8_t *>(ptr), count);
+          auto str1 = s->col.leaf_column->element<string_view>(row);
+          len += str1.size_bytes();
+          hash = nvstr_hash16(reinterpret_cast<const uint8_t *>(str1.data()), str1.size_bytes());
           // Walk the list of rows with the same hash
           next_addr = &s->hashmap[hash];
           while ((next = atomicCAS(next_addr, 0, row + 1)) != 0) {
-            const char *ptr2 =
-              static_cast<const nvstrdesc_s *>(s->col.column_data_base)[next - 1].ptr;
-            uint32_t count2 =
-              static_cast<const nvstrdesc_s *>(s->col.column_data_base)[next - 1].count;
-            if (count2 == count && nvstr_is_equal(ptr, count, ptr2, count2)) {
+            auto const current = next - 1;
+            auto str2          = s->col.leaf_column->element<string_view>(current);
+            if (str1 == str2) {
               is_dupe = 1;
               break;
             }
@@ -227,27 +221,26 @@ __global__ void __launch_bounds__(block_size, 1)
           uint64_t val;
 
           if (dtype_len_in == 8) {
-            val  = static_cast<const uint64_t *>(s->col.column_data_base)[row];
+            val  = s->col.leaf_column->element<uint64_t>(row);
             hash = uint64_hash16(val);
           } else {
             val = (dtype_len_in == 4)
-                    ? static_cast<const uint32_t *>(s->col.column_data_base)[row]
-                    : (dtype_len_in == 2)
-                        ? static_cast<const uint16_t *>(s->col.column_data_base)[row]
-                        : static_cast<const uint8_t *>(s->col.column_data_base)[row];
+                    ? s->col.leaf_column->element<uint32_t>(row)
+                    : (dtype_len_in == 2) ? s->col.leaf_column->element<uint16_t>(row)
+                                          : s->col.leaf_column->element<uint8_t>(row);
             hash = uint32_hash16(val);
           }
           // Walk the list of rows with the same hash
           next_addr = &s->hashmap[hash];
           while ((next = atomicCAS(next_addr, 0, row + 1)) != 0) {
-            uint64_t val2 =
-              (dtype_len_in == 8)
-                ? static_cast<const uint64_t *>(s->col.column_data_base)[next - 1]
-                : (dtype_len_in == 4)
-                    ? static_cast<const uint32_t *>(s->col.column_data_base)[next - 1]
-                    : (dtype_len_in == 2)
-                        ? static_cast<const uint16_t *>(s->col.column_data_base)[next - 1]
-                        : static_cast<const uint8_t *>(s->col.column_data_base)[next - 1];
+            auto const current = next - 1;
+            uint64_t val2      = (dtype_len_in == 8)
+                              ? s->col.leaf_column->element<uint64_t>(current)
+                              : (dtype_len_in == 4)
+                                  ? s->col.leaf_column->element<uint32_t>(current)
+                                  : (dtype_len_in == 2)
+                                      ? s->col.leaf_column->element<uint16_t>(current)
+                                      : s->col.leaf_column->element<uint8_t>(current);
             if (val2 == val) {
               is_dupe = 1;
               break;

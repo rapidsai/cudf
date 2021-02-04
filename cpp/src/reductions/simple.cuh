@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2020, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -204,7 +204,7 @@ struct cast_numeric_scalar_fn {
     auto result   = std::make_unique<numeric_scalar<ResultType>>(ResultType{}, true, stream, mr);
     auto d_output = cudf::get_scalar_device_view(*result);
     cudf::detail::device_single_thread(assign_scalar_fn<InputType, ResultType>{d_input, d_output},
-                                       stream.value());
+                                       stream);
     return result;
   }
 
