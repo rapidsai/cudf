@@ -35,7 +35,7 @@ from cudf.core.column.categorical import (
 from cudf.core.column.lists import ListMethods
 from cudf.core.column.string import StringMethods
 from cudf.core.column_accessor import ColumnAccessor
-from cudf.core.frame import Frame
+from cudf.core.frame import Frame, _drop_rows_by_labels
 from cudf.core.groupby.groupby import SeriesGroupBy
 from cudf.core.index import Index, RangeIndex, as_index
 from cudf.core.indexing import _SeriesIlocIndexer, _SeriesLocIndexer
@@ -566,17 +566,36 @@ class Series(Frame, Serializable):
     ):
         """
         """
-        columns = [] if columns is not None else columns
+        if labels is not None:
+            if index is not None or columns is not None:
+                raise ValueError(
+                    "Cannot specify both 'labels' and 'index'/'columns'"
+                )
+            if axis == 1:
+                raise ValueError("No axis named 1 for object type Series")
+            target = labels
+        elif index is not None:
+            target = index
+        elif columns is not None:
+            target = []  # Ignore parameter columns
+        else:
+            raise ValueError(
+                "Need to specify at least one of 'labels', "
+                "'index' or 'columns'"
+            )
 
-        return super()._drop(
-            labels=labels,
-            axis=axis,
-            index=index,
-            columns=columns,
-            level=level,
-            inplace=inplace,
-            errors=errors,
-        )
+        if inplace:
+            out = self
+        else:
+            out = self.copy()
+
+        dropped = _drop_rows_by_labels(out, target, level, errors)
+
+        out._data = dropped._data
+        out._index = dropped._index
+
+        if not inplace:
+            return out
 
     def __copy__(self, deep=True):
         return self.copy(deep)

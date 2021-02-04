@@ -30,7 +30,7 @@ from cudf.core import column, reshape
 from cudf.core.abc import Serializable
 from cudf.core.column import as_column, column_empty
 from cudf.core.column_accessor import ColumnAccessor
-from cudf.core.frame import Frame
+from cudf.core.frame import Frame, _drop_rows_by_labels
 from cudf.core.groupby.groupby import DataFrameGroupBy
 from cudf.core.index import Index, RangeIndex, as_index
 from cudf.core.indexing import _DataFrameIlocIndexer, _DataFrameLocIndexer
@@ -3250,15 +3250,45 @@ class DataFrame(Frame, Serializable):
                weight    1.0    0.8
         """
 
-        return super()._drop(
-            labels=labels,
-            axis=axis,
-            index=index,
-            columns=columns,
-            level=level,
-            inplace=inplace,
-            errors=errors,
-        )
+        if labels is not None:
+            if index is not None or columns is not None:
+                raise ValueError(
+                    "Cannot specify both 'labels' and 'index'/'columns'"
+                )
+            target = labels
+        elif index is not None:
+            target = index
+            axis = 0
+        elif columns is not None:
+            target = columns
+            axis = 1
+        else:
+            raise ValueError(
+                "Need to specify at least one of 'labels', "
+                "'index' or 'columns'"
+            )
+
+        if inplace:
+            out = self
+        else:
+            out = self.copy()
+
+        if axis in (1, "columns"):
+            target = _get_host_unique(target)
+
+            _drop_columns(out, target, errors)
+        elif axis in (0, "index"):
+            dropped = _drop_rows_by_labels(out, target, level, errors)
+
+            if columns is not None:
+                columns = _get_host_unique(columns)
+                _drop_columns(dropped, columns, errors)
+
+            out._data = dropped._data
+            out._index = dropped._index
+
+        if not inplace:
+            return out
 
     def _drop_column(self, name):
         """Drop a column by *name*
@@ -7564,3 +7594,25 @@ def _get_union_of_series_names(series_list):
         names_list = [*range(len(series_list))]
 
     return names_list
+
+
+def _get_host_unique(array):
+    if isinstance(
+        array, (cudf.Series, cudf.Index, cudf.core.column.ColumnBase)
+    ):
+        return array.unique.to_pandas()
+    elif isinstance(array, (str, numbers.Number)):
+        return [array]
+    else:
+        return set(array)
+
+
+def _drop_columns(df, columns, errors):
+    for c in columns:
+        try:
+            df._drop_column(c)
+        except KeyError as e:
+            if errors == "ignore":
+                pass
+            else:
+                raise e

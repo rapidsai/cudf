@@ -1078,6 +1078,14 @@ def test_series_drop_edge_inputs():
         expected_error_message="Need to specify at least one",
     )
 
+    assert_exceptions_equal(
+        lfunc=ps.drop,
+        rfunc=gs.drop,
+        lfunc_args_and_kwargs=(["b"], {"axis": 1}),
+        rfunc_args_and_kwargs=(["b"], {"axis": 1}),
+        expected_error_message="No axis named 1",
+    )
+
 
 def test_series_drop_raises():
     gs = cudf.Series([10, 20, 30], index=["x", "y", "z"], name="c")
