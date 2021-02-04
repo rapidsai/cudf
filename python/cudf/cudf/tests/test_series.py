@@ -1054,73 +1054,44 @@ def test_series_drop_multiindex(ps, index, level, inplace):
     assert_eq(expected, actual)
 
 
-# def test_series_drop_error():
-#     gs = cudf.Series([42], name="a")
-#     ps = gs.to_pandas()
+def test_series_drop_edge_inputs():
+    gs = cudf.Series([42], name="a")
+    ps = gs.to_pandas()
 
-#     assert_exceptions_equal(
-#         lfunc=ps.drop,
-#         rfunc=df.drop,
-#         lfunc_args_and_kwargs=([], {"columns": "d"}),
-#         rfunc_args_and_kwargs=([], {"columns": "d"}),
-#         expected_error_message="column 'd' does not exist",
-#     )
+    assert_eq(ps.drop(columns=["b"]), gs.drop(columns=["b"]))
 
-#     assert_exceptions_equal(
-#         lfunc=pdf.drop,
-#         rfunc=df.drop,
-#         lfunc_args_and_kwargs=([], {"columns": ["a", "d", "b"]}),
-#         rfunc_args_and_kwargs=([], {"columns": ["a", "d", "b"]}),
-#         expected_error_message="column 'd' does not exist",
-#     )
+    assert_eq(ps.drop(columns="b"), gs.drop(columns="b"))
 
-#     assert_exceptions_equal(
-#         lfunc=pdf.drop,
-#         rfunc=df.drop,
-#         lfunc_args_and_kwargs=(["a"], {"columns": "a", "axis": 1}),
-#         rfunc_args_and_kwargs=(["a"], {"columns": "a", "axis": 1}),
-#         expected_error_message="Cannot specify both",
-#     )
+    assert_exceptions_equal(
+        lfunc=ps.drop,
+        rfunc=gs.drop,
+        lfunc_args_and_kwargs=(["a"], {"columns": "a", "axis": 1}),
+        rfunc_args_and_kwargs=(["a"], {"columns": "a", "axis": 1}),
+        expected_error_message="Cannot specify both",
+    )
 
-# def test_series_drop_raises():
-#     gs = cudf.DataFrame([10, 20, 30], index=["x", "y", "z"], name="c")
-#     ps = gs.to_pandas()
+    assert_exceptions_equal(
+        lfunc=ps.drop,
+        rfunc=gs.drop,
+        lfunc_args_and_kwargs=([], {}),
+        rfunc_args_and_kwargs=([], {}),
+        expected_error_message="Need to specify at least one",
+    )
 
-#     assert_exceptions_equal(
-#         lfunc=ps.drop,
-#         rfunc=gs.drop,
-#         lfunc_args_and_kwargs=(["p"],),
-#         rfunc_args_and_kwargs=(["p"],),
-#         expected_error_message="One or more values not found in axis",
-#     )
 
-#     expect = ps.drop("p", errors="ignore")
-#     actual = gs.drop("p", errors="ignore")
+def test_series_drop_raises():
+    gs = cudf.Series([10, 20, 30], index=["x", "y", "z"], name="c")
+    ps = gs.to_pandas()
 
-#     assert_eq(actual, expect)
+    assert_exceptions_equal(
+        lfunc=ps.drop,
+        rfunc=gs.drop,
+        lfunc_args_and_kwargs=(["p"],),
+        rfunc_args_and_kwargs=(["p"],),
+        expected_error_message="One or more values not found in axis",
+    )
 
-#     assert_exceptions_equal(
-#         lfunc=ps.drop,
-#         rfunc=gs.drop,
-#         lfunc_args_and_kwargs=([], {"columns": "p"}),
-#         rfunc_args_and_kwargs=([], {"columns": "p"}),
-#         expected_error_message="column 'p' does not exist",
-#     )
+    expect = ps.drop("p", errors="ignore")
+    actual = gs.drop("p", errors="ignore")
 
-#     expect = ps.drop(columns="p", errors="ignore")
-#     actual = gs.drop(columns="p", errors="ignore")
-
-#     assert_eq(actual, expect)
-
-#     assert_exceptions_equal(
-#         lfunc=ps.drop,
-#         rfunc=gs.drop,
-#         lfunc_args_and_kwargs=([], {"labels": "p", "axis": 1}),
-#         rfunc_args_and_kwargs=([], {"labels": "p", "axis": 1}),
-#         expected_error_message="column 'p' does not exist",
-#     )
-
-#     expect = ps.drop(labels="p", axis=1, errors="ignore")
-#     actual = gs.drop(labels="p", axis=1, errors="ignore")
-
-#     assert_eq(actual, expect)
+    assert_eq(actual, expect)

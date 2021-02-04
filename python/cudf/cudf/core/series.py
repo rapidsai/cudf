@@ -566,6 +566,8 @@ class Series(Frame, Serializable):
     ):
         """
         """
+        columns = [] if columns is not None else columns
+
         return super()._drop(
             labels=labels,
             axis=axis,
