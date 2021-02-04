@@ -675,9 +675,6 @@ def _numeric_column_binop(
 
     out = libcudf.binaryop.binaryop(lhs, rhs, op, out_dtype)
 
-    if is_op_comparison:
-        out = out.fillna(op == "ne")
-
     return out
 
 
