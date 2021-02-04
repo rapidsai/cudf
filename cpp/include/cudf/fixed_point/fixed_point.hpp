@@ -25,9 +25,9 @@
 #include <cuda/std/type_traits>  // add cuda namespace
 
 #include <algorithm>
+#include <cassert>
 #include <cmath>
 #include <string>
-#include <cassert>
 
 //! `fixed_point` and supporting types
 namespace numeric {
