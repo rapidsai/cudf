@@ -675,7 +675,7 @@ def test_orc_reader_gmt_timestamps(datadir):
     assert_eq(pdf, gdf)
 
 
-def test_orc_bool_encode_fail():
+def test_orc_bool_encode_fail(tmpdir):
     np.random.seed(0)
 
     # Generate a boolean column longer than a single stripe
@@ -686,12 +686,12 @@ def test_orc_bool_encode_fail():
     # Should throw instead of generating a file that is incompatible
     # with other readers (see issue #6763)
     with pytest.raises(RuntimeError):
-        fail_df.to_orc("should_throw.orc")
+        fail_df.to_orc(tmpdir.join("should_throw.orc"))
 
     # Generate a boolean column that fits into a single stripe
     okay_df = cudf.DataFrame({"col": gen_rand_series("bool", 500000)})
     okay_df["col"][500000 - 1] = None
-    fname = "single_stripe.orc"
+    fname = tmpdir.join("single_stripe.orc")
     # Invalid row is in the last row group of the stripe;
     # encoding is assumed to be correct
     okay_df.to_orc(fname)
