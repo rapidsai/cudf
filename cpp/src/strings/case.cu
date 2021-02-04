@@ -68,13 +68,10 @@ struct upper_lower_fn {
     auto const count  = IS_LOWER(flag) ? m.num_upper_chars : m.num_lower_chars;
     auto const* chars = IS_LOWER(flag) ? m.upper : m.lower;
     for (uint16_t idx = 0; idx < count; idx++) {
-      if (!d_buffer) {
-        bytes += detail::bytes_in_char_utf8(detail::codepoint_to_utf8(chars[idx]));
-      } else {
-        bytes += detail::from_char_utf8(detail::codepoint_to_utf8(chars[idx]), d_buffer + bytes);
-      }
+      bytes += d_buffer
+                 ? detail::from_char_utf8(detail::codepoint_to_utf8(chars[idx]), d_buffer + bytes)
+                 : detail::bytes_in_char_utf8(detail::codepoint_to_utf8(chars[idx]));
     }
-    // if (d_buffer != nullptr) { d_buffer += bytes; }
     return bytes;
   }
 
