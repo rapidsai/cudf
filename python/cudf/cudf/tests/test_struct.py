@@ -23,3 +23,14 @@ def test_create_struct_series(data):
     expect = pd.Series(data)
     got = cudf.Series(data)
     assert_eq(expect, got, check_dtype=False)
+
+
+def test_struct_of_struct_copy():
+    sr = cudf.Series([{"a": {"b": 1}}])
+    assert_eq(sr, sr.copy())
+
+
+def test_struct_of_struct_loc():
+    df = cudf.DataFrame({"col": [{"a": {"b": 1}}]})
+    expect = cudf.Series([{"a": {"b": 1}}], name="col")
+    assert_eq(expect, df["col"])
