@@ -239,6 +239,7 @@ ConfigureTest(JSON_TEST io/json_test.cpp)
 ###################################################################################################
 # - sort tests ------------------------------------------------------------------------------------
 ConfigureTest(SORT_TEST
+    sort/segmented_sort_tests.cpp
     sort/sort_test.cpp
     sort/rank_test.cpp)
 
@@ -261,7 +262,8 @@ ConfigureTest(COPYING_TEST
     copying/shift_tests.cpp
     copying/get_value_tests.cpp
     copying/sample_tests.cpp
-    copying/concatenate_tests.cu)
+    copying/concatenate_tests.cu
+    copying/pack_tests.cu)
 
 ###################################################################################################
 # - utilities tests -------------------------------------------------------------------------------
@@ -446,7 +448,8 @@ ConfigureTest(AST_TEST ast/transform_tests.cpp)
 ConfigureTest(LISTS_TEST
     lists/contains_tests.cpp
     lists/count_elements_tests.cpp
-    lists/extract_tests.cpp)
+    lists/extract_tests.cpp
+    lists/sort_lists_tests.cpp)
 
 ###################################################################################################
 ### enable testing ################################################################################

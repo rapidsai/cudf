@@ -191,7 +191,7 @@ struct create_column_from_view {
   std::unique_ptr<column> operator()()
   {
     cudf::strings_column_view sview(view);
-    return cudf::strings::detail::copy_slice(sview, 0, view.size(), 1, stream.value(), mr);
+    return cudf::strings::detail::copy_slice(sview, 0, view.size(), 1, stream, mr);
   }
 
   template <typename ColumnType,
@@ -244,7 +244,7 @@ struct create_column_from_view {
   std::unique_ptr<column> operator()()
   {
     auto lists_view = lists_column_view(view);
-    return cudf::lists::detail::copy_slice(lists_view, 0, view.size(), stream.value(), mr);
+    return cudf::lists::detail::copy_slice(lists_view, 0, view.size(), stream, mr);
   }
 
   template <typename ColumnType,
@@ -272,7 +272,7 @@ struct create_column_from_view {
                                std::move(children),
                                view.null_count(),
                                cudf::detail::copy_bitmask(view.null_mask(), begin, end, stream, mr),
-                               stream.value(),
+                               stream,
                                mr);
   }
 };

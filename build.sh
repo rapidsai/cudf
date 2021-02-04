@@ -51,7 +51,7 @@ CUSTREAMZ_BUILD_DIR=${REPODIR}/python/custreamz/build
 BUILD_DIRS="${LIB_BUILD_DIR} ${CUDF_BUILD_DIR} ${DASK_CUDF_BUILD_DIR} ${KAFKA_LIB_BUILD_DIR} ${CUDF_KAFKA_BUILD_DIR} ${CUSTREAMZ_BUILD_DIR}"
 
 # Set defaults for vars modified by flags to this script
-VERBOSE=""
+VERBOSE_FLAG=""
 BUILD_TYPE=Release
 INSTALL_TARGET=install
 BUILD_BENCHMARKS=OFF
@@ -92,7 +92,7 @@ fi
 
 # Process flags
 if hasArg -v; then
-    VERBOSE=1
+    VERBOSE_FLAG="-v"
 fi
 if hasArg -g; then
     BUILD_TYPE=Debug
@@ -146,26 +146,22 @@ fi
 # Configure, build, and install libcudf
 
 if buildAll || hasArg libcudf; then
-    mkdir -p ${LIB_BUILD_DIR}
-    cd ${LIB_BUILD_DIR}
-    cmake -DCMAKE_INSTALL_PREFIX=${INSTALL_PREFIX} \
+    cmake -S $REPODIR/cpp -B ${LIB_BUILD_DIR} \
+          -DCMAKE_INSTALL_PREFIX=${INSTALL_PREFIX} \
           ${CUDF_CMAKE_CUDA_ARCHITECTURES} \
           -DUSE_NVTX=${BUILD_NVTX} \
           -DBUILD_TESTS=${BUILD_TESTS} \
           -DBUILD_BENCHMARKS=${BUILD_BENCHMARKS} \
           -DDISABLE_DEPRECATION_WARNING=${BUILD_DISABLE_DEPRECATION_WARNING} \
           -DPER_THREAD_DEFAULT_STREAM=${BUILD_PER_THREAD_DEFAULT_STREAM} \
-          -DCMAKE_BUILD_TYPE=${BUILD_TYPE} $REPODIR/cpp
-fi
-
-if buildAll || hasArg libcudf; then
+          -DCMAKE_BUILD_TYPE=${BUILD_TYPE}
 
     cd ${LIB_BUILD_DIR}
 
-    make -j${PARALLEL_LEVEL} cudf VERBOSE=${VERBOSE}
+    cmake --build . -j${PARALLEL_LEVEL} cudf ${VERBOSE_FLAG}
 
     if [[ ${INSTALL_TARGET} != "" ]]; then
-        make -j${PARALLEL_LEVEL} install VERBOSE=${VERBOSE}
+        cmake --build . -j${PARALLEL_LEVEL} install ${VERBOSE_FLAG}
     fi
 fi
 
@@ -195,19 +191,19 @@ fi
 
 # Build libcudf_kafka library
 if hasArg libcudf_kafka; then
-    mkdir -p ${KAFKA_LIB_BUILD_DIR}
-    cd ${KAFKA_LIB_BUILD_DIR}
-    cmake -DCMAKE_INSTALL_PREFIX=${INSTALL_PREFIX} \
-          -DCMAKE_BUILD_TYPE=${BUILD_TYPE} $REPODIR/cpp/libcudf_kafka
+    cmake -S $REPODIR/cpp/libcudf_kafka -B ${KAFKA_LIB_BUILD_DIR} \
+          -DCMAKE_INSTALL_PREFIX=${INSTALL_PREFIX} \
+          -DCMAKE_BUILD_TYPE=${BUILD_TYPE}
 
+    cd ${KAFKA_LIB_BUILD_DIR}
     if [[ ${INSTALL_TARGET} != "" ]]; then
-        make -j${PARALLEL_LEVEL} install VERBOSE=${VERBOSE}
+        cmake --build . -j${PARALLEL_LEVEL} --target install ${VERBOSE_FLAG}
     else
-        make -j${PARALLEL_LEVEL} libcudf_kafka VERBOSE=${VERBOSE}
+        cmake --build . -j${PARALLEL_LEVEL} --target  libcudf_kafka ${VERBOSE_FLAG}
     fi
 
     if [[ ${BUILD_TESTS} == "ON" ]]; then
-        make -j${PARALLEL_LEVEL} build_tests_libcudf_kafka VERBOSE=${VERBOSE}
+        cmake --build . -j${PARALLEL_LEVEL} --target  build_tests_libcudf_kafka ${VERBOSE_FLAG}
     fi
 fi
 

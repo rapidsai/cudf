@@ -21,7 +21,7 @@
 
     <groupId>ai.rapids</groupId>
     <artifactId>cudf</artifactId>
-    <version>0.18-SNAPSHOT</version>
+    <version>0.19-SNAPSHOT</version>
 
     <name>cudfjni</name>
     <description>
@@ -330,7 +330,7 @@
                         <dependency>
                             <groupId>org.junit.jupiter</groupId>
                             <artifactId>junit-jupiter-engine</artifactId>
-                            <version>5.2.0</version>
+                            <version>5.4.2</version>
                         </dependency>
                     </dependencies>
                 </plugin>
