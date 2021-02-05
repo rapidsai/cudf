@@ -3848,9 +3848,11 @@ def _drop_rows_by_labels(
 ) -> DataFrameOrSeries:
     """Remove rows specified by `labels`. If `errors=True`, an error is raised
     if some items in `labels` do not exist in `obj._index`.
+
+    Will raise if level(int) is greater or equal to index nlevels
     """
     if isinstance(level, int):
-        if obj._index is not None and level > obj._index.nlevels:
+        if obj._index is not None and level >= obj._index.nlevels:
             raise ValueError("Param level out of bounds.")
 
     if not isinstance(labels, (cudf.Series, cudf.Index)):
