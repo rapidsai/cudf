@@ -1,8 +1,7 @@
-# Copyright (c) 2019-2020, NVIDIA CORPORATION.
+# Copyright (c) 2019-2021, NVIDIA CORPORATION.
 
-import os
 import datetime
-import math
+import os
 from io import BytesIO
 
 import numpy as np
@@ -12,7 +11,8 @@ import pyarrow.orc
 import pytest
 
 import cudf
-from cudf.tests.utils import assert_eq, supported_numpy_dtypes, gen_rand_series
+from cudf.io.orc import ORCWriter
+from cudf.tests.utils import assert_eq, gen_rand_series, supported_numpy_dtypes
 
 
 @pytest.fixture(scope="module")
@@ -385,6 +385,53 @@ def test_orc_writer(datadir, tmpdir, reference_file, columns, compression):
     assert_eq(expect, got)
 
 
+@pytest.mark.parametrize("compression", [None, "snappy"])
+@pytest.mark.parametrize(
+    "reference_file, columns",
+    [
+        (
+            "TestOrcFile.test1.orc",
+            [
+                "boolean1",
+                "byte1",
+                "short1",
+                "int1",
+                "long1",
+                "float1",
+                "double1",
+            ],
+        ),
+        ("TestOrcFile.demo-12-zlib.orc", ["_col1", "_col3", "_col5"]),
+    ],
+)
+def test_chunked_orc_writer(
+    datadir, tmpdir, reference_file, columns, compression
+):
+    pdf_fname = datadir / reference_file
+    gdf_fname = tmpdir.join("chunked_gdf.orc")
+
+    try:
+        orcfile = pa.orc.ORCFile(pdf_fname)
+    except Exception as excpr:
+        if type(excpr).__name__ == "ArrowIOError":
+            pytest.skip(".orc file is not found")
+        else:
+            print(type(excpr).__name__)
+
+    pdf = orcfile.read(columns=columns).to_pandas()
+    gdf = cudf.from_pandas(pdf)
+    expect = pd.concat([pdf, pdf]).reset_index(drop=True)
+
+    writer = ORCWriter(gdf_fname, compression=compression)
+    writer.write_table(gdf)
+    writer.write_table(gdf)
+    writer.close()
+
+    got = pa.orc.ORCFile(gdf_fname).read(columns=columns).to_pandas()
+
+    assert_eq(expect, got)
+
+
 @pytest.mark.parametrize(
     "dtypes",
     [
@@ -399,6 +446,31 @@ def test_orc_writer_strings(tmpdir, dtypes):
 
     expect = cudf.datasets.randomdata(nrows=10, dtypes=dtypes, seed=1)
     expect.to_orc(gdf_fname)
+    got = pa.orc.ORCFile(gdf_fname).read().to_pandas()
+
+    assert_eq(expect, got)
+
+
+@pytest.mark.parametrize(
+    "dtypes",
+    [
+        {"c": str, "a": int},
+        {"c": int, "a": str},
+        {"c": int, "a": str, "b": float},
+        {"c": str, "a": object},
+    ],
+)
+def test_chunked_orc_writer_strings(tmpdir, dtypes):
+    gdf_fname = tmpdir.join("chunked_gdf_strings.orc")
+
+    gdf = cudf.datasets.randomdata(nrows=10, dtypes=dtypes, seed=1)
+    pdf = gdf.to_pandas()
+    expect = pd.concat([pdf, pdf]).reset_index(drop=True)
+    writer = ORCWriter(gdf_fname)
+    writer.write_table(gdf)
+    writer.write_table(gdf)
+    writer.close()
+
     got = pa.orc.ORCFile(gdf_fname).read().to_pandas()
 
     assert_eq(expect, got)
@@ -491,7 +563,7 @@ def normalized_equals(value1, value2):
 
     # Compare integers with floats now
     if isinstance(value1, float) or isinstance(value2, float):
-        return math.isclose(value1, value2)
+        return np.isclose(value1, value2)
 
     return value1 == value2
 
@@ -499,6 +571,9 @@ def normalized_equals(value1, value2):
 @pytest.mark.parametrize("nrows", [1, 100, 6000000])
 def test_orc_write_statistics(tmpdir, datadir, nrows):
     supported_stat_types = supported_numpy_dtypes + ["str"]
+    # Can't write random bool columns until issue #6763 is fixed
+    if nrows == 6000000:
+        supported_stat_types.remove("bool")
 
     # Make a dataframe
     gdf = cudf.DataFrame(
@@ -598,3 +673,29 @@ def test_orc_reader_gmt_timestamps(datadir):
     pdf = orcfile.read().to_pandas()
     gdf = cudf.read_orc(path, engine="cudf").to_pandas()
     assert_eq(pdf, gdf)
+
+
+def test_orc_bool_encode_fail():
+    np.random.seed(0)
+    buffer = BytesIO()
+
+    # Generate a boolean column longer than a single stripe
+    fail_df = cudf.DataFrame({"col": gen_rand_series("bool", 600000)})
+    # Invalidate the first row in the second stripe to break encoding
+    fail_df["col"][500000] = None
+
+    # Should throw instead of generating a file that is incompatible
+    # with other readers (see issue #6763)
+    with pytest.raises(RuntimeError):
+        fail_df.to_orc(buffer)
+
+    # Generate a boolean column that fits into a single stripe
+    okay_df = cudf.DataFrame({"col": gen_rand_series("bool", 500000)})
+    okay_df["col"][500000 - 1] = None
+    # Invalid row is in the last row group of the stripe;
+    # encoding is assumed to be correct
+    okay_df.to_orc(buffer)
+
+    # Also validate data
+    pdf = pa.orc.ORCFile(buffer).read().to_pandas()
+    assert_eq(okay_df, pdf)

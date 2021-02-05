@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2020, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -56,6 +56,7 @@
 #include <cudf/transform.hpp>
 #include <cudf/unary.hpp>
 #include <cudf/utilities/bit.hpp>
+#include <cudf/lists/contains.hpp>
 #include <cudf/lists/lists_column_view.hpp>
 #include <cudf/structs/structs_column_view.hpp>
 #include <map_lookup.hpp>
@@ -324,6 +325,40 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_extractListElement(JNIEnv
     cudf::lists_column_view lcv(*cv);
 
     std::unique_ptr<cudf::column> ret = cudf::lists::extract_list_element(lcv, index);
+    return reinterpret_cast<jlong>(ret.release());
+  }
+  CATCH_STD(env, 0);
+}
+
+JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_listContains(JNIEnv *env, jclass,
+                                                                    jlong column_view,
+                                                                    jlong lookup_key) {
+  JNI_NULL_CHECK(env, column_view, "column is null", 0);
+  JNI_NULL_CHECK(env, lookup_key, "lookup scalar is null", 0);
+  try {
+    cudf::jni::auto_set_device(env);
+    cudf::column_view *cv = reinterpret_cast<cudf::column_view *>(column_view);
+    cudf::lists_column_view lcv(*cv);
+    cudf::scalar *lookup_scalar = reinterpret_cast<cudf::scalar *>(lookup_key);
+
+    std::unique_ptr<cudf::column> ret = cudf::lists::contains(lcv, *lookup_scalar);
+    return reinterpret_cast<jlong>(ret.release());
+  }
+  CATCH_STD(env, 0);
+}
+
+JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_listContainsColumn(JNIEnv *env, jclass,
+                                                                    jlong column_view,
+                                                                    jlong lookup_key_cv) {
+  JNI_NULL_CHECK(env, column_view, "column is null", 0);
+  JNI_NULL_CHECK(env, lookup_key_cv, "lookup column is null", 0);
+  try {
+    cudf::jni::auto_set_device(env);
+    cudf::column_view *cv = reinterpret_cast<cudf::column_view *>(column_view);
+    cudf::lists_column_view lcv(*cv);
+    cudf::column_view *lookup_cv = reinterpret_cast<cudf::column_view *>(lookup_key_cv);
+
+    std::unique_ptr<cudf::column> ret = cudf::lists::contains(lcv, *lookup_cv);
     return reinterpret_cast<jlong>(ret.release());
   }
   CATCH_STD(env, 0);
@@ -1252,6 +1287,7 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_bitwiseMergeAndSetValidit
   JNI_NULL_CHECK(env, base_column, "base column native handle is null", 0);
   JNI_NULL_CHECK(env, column_handles, "array of column handles is null", 0);
   try {
+    cudf::jni::auto_set_device(env);
     cudf::column_view *original_column = reinterpret_cast<cudf::column_view *>(base_column);
     std::unique_ptr<cudf::column> copy(new cudf::column(*original_column));
     cudf::jni::native_jpointerArray<cudf::column_view> n_cudf_columns(env, column_handles);
@@ -1333,7 +1369,7 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_makeCudfColumnView(JNIEnv
       ret.reset(new cudf::column_view(cudf::data_type{cudf::type_id::LIST}, size, nullptr, valid,
         j_null_count, 0, {offsets_column, *children[0]}));
    } else if (n_type == cudf::type_id::STRUCT) {
-     JNI_NULL_CHECK(env, j_children, "children of a list are null", 0);
+     JNI_NULL_CHECK(env, j_children, "children of a struct are null", 0);
      cudf::jni::native_jpointerArray<cudf::column_view> children(env, j_children);
      std::vector<column_view> children_vector(children.size());
      for (int i = 0; i < children.size(); i++) {
@@ -1633,6 +1669,27 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_title(JNIEnv *env, jobjec
     cudf::column_view *view = reinterpret_cast<cudf::column_view *>(handle);
     std::unique_ptr<cudf::column> result = cudf::strings::title(*view);
     return reinterpret_cast<jlong>(result.release());
+  }
+  CATCH_STD(env, 0);
+}
+
+JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_makeStructView(JNIEnv *env, jobject j_object,
+                                                                      jlongArray handles,
+                                                                      jlong row_count) {
+
+  JNI_NULL_CHECK(env, handles, "native view handles are null", 0)
+  try {
+    cudf::jni::auto_set_device(env);
+    std::unique_ptr<cudf::column_view> ret;
+    cudf::jni::native_jpointerArray<cudf::column_view> children(env, handles);
+    std::vector<cudf::column_view> children_vector(children.size());
+    for (int i = 0; i < children.size(); i++) {
+      children_vector[i] = *children[i];
+    }
+    ret.reset(new cudf::column_view(cudf::data_type{cudf::type_id::STRUCT}, row_count, nullptr,
+                nullptr, 0, 0, children_vector));
+
+    return reinterpret_cast<jlong>(ret.release());
   }
   CATCH_STD(env, 0);
 }

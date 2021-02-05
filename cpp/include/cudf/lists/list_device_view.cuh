@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -112,12 +112,105 @@ class list_device_view {
    */
   CUDA_DEVICE_CALLABLE lists_column_device_view const& get_column() const { return lists_column; }
 
+  template <typename T>
+  struct pair_accessor;
+
+  template <typename T>
+  using const_pair_iterator =
+    thrust::transform_iterator<pair_accessor<T>, thrust::counting_iterator<cudf::size_type>>;
+
+  /**
+   * @brief Fetcher for a pair iterator to the first element in the list_device_view.
+   *
+   * Dereferencing the returned iterator yields a `thrust::pair<T, bool>`.
+   *
+   * If the element at index `i` is valid, then for `p = iter[i]`,
+   *   1. `p.first` is the value of the element at `i`
+   *   2. `p.second == true`
+   *
+   * If the element at index `i` is null,
+   *   1. `p.first` is undefined
+   *   2. `p.second == false`
+   */
+  template <typename T>
+  CUDA_DEVICE_CALLABLE const_pair_iterator<T> pair_begin() const
+  {
+    return const_pair_iterator<T>{thrust::counting_iterator<size_type>(0), pair_accessor<T>{*this}};
+  }
+
+  /**
+   * @brief Fetcher for a pair iterator to one position past the last element in the
+   * list_device_view.
+   */
+  template <typename T>
+  CUDA_DEVICE_CALLABLE const_pair_iterator<T> pair_end() const
+  {
+    return const_pair_iterator<T>{thrust::counting_iterator<size_type>(size()),
+                                  pair_accessor<T>{*this}};
+  }
+
  private:
   lists_column_device_view const& lists_column;
   size_type _row_index{};  // Row index in the Lists column vector.
   size_type _size{};       // Number of elements in *this* list row.
 
   size_type begin_offset;  // Offset in list_column_device_view where this list begins.
+
+  /**
+   * @brief pair accessor for elements in a `list_device_view`
+   *
+   * This unary functor returns a pair of:
+   *   1. data element at a specified index
+   *   2. boolean validity flag for that element
+   *
+   * @tparam T The element-type of the list row
+   */
+  template <typename T>
+  struct pair_accessor {
+    list_device_view const& list;
+
+    /**
+     * @brief constructor
+     *
+     * @param _list The `list_device_view` whose rows are being accessed.
+     */
+    explicit CUDA_HOST_DEVICE_CALLABLE pair_accessor(list_device_view const& _list) : list{_list} {}
+
+    /**
+     * @brief Accessor for the {data, validity} pair at the specified index
+     *
+     * @param i Index into the list_device_view
+     * @return A pair of data element and its validity flag.
+     */
+    CUDA_DEVICE_CALLABLE
+    thrust::pair<T, bool> operator()(cudf::size_type i) const
+    {
+      return {list.element<T>(i), !list.is_null(i)};
+    }
+  };
+};
+
+/**
+ * @brief returns size of the list by row index
+ *
+ */
+struct list_size_functor {
+  column_device_view const d_column;
+  CUDA_HOST_DEVICE_CALLABLE list_size_functor(column_device_view const& d_col) : d_column(d_col)
+  {
+#if defined(__CUDA_ARCH__)
+    release_assert(d_col.type().id() == type_id::LIST && "Only list type column is supported");
+#else
+    CUDF_EXPECTS(d_col.type().id() == type_id::LIST, "Only list type column is supported");
+#endif
+  }
+  CUDA_DEVICE_CALLABLE size_type operator()(size_type idx)
+  {
+    if (d_column.is_null(idx)) return size_type{0};
+    auto d_offsets =
+      d_column.child(lists_column_view::offsets_column_index).data<size_type>() + d_column.offset();
+    return d_offsets[idx + 1] - d_offsets[idx];
+  }
 };
 
 }  // namespace cudf

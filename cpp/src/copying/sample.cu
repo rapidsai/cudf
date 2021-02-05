@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -62,8 +62,8 @@ std::unique_ptr<table> sample(table_view const& input,
 
     return detail::gather(input, begin, end, out_of_bounds_policy::DONT_CHECK, stream, mr);
   } else {
-    auto gather_map = make_numeric_column(
-      data_type{type_id::INT32}, num_rows, mask_state::UNALLOCATED, stream.value());
+    auto gather_map =
+      make_numeric_column(data_type{type_id::INT32}, num_rows, mask_state::UNALLOCATED, stream);
     auto gather_map_mutable_view = gather_map->mutable_view();
     // Shuffle all the row indices
     thrust::shuffle_copy(rmm::exec_policy(stream),

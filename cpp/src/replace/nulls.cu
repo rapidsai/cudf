@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -393,7 +393,8 @@ std::unique_ptr<cudf::column> replace_nulls_policy_impl(cudf::column_view const&
   auto output = cudf::detail::gather(cudf::table_view({input}),
                                      gather_map.begin(),
                                      gather_map.end(),
-                                     cudf::out_of_bounds_policy::DONT_CHECK);
+                                     cudf::out_of_bounds_policy::DONT_CHECK,
+                                     stream);
 
   return std::move(output->release()[0]);
 }

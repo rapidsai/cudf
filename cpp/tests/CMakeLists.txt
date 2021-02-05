@@ -1,5 +1,5 @@
 ﻿#=============================================================================
-# Copyright (c) 2018-2020, NVIDIA CORPORATION.
+# Copyright (c) 2018-2021, NVIDIA CORPORATION.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -39,7 +39,6 @@ endif("$ENV{CONDA_BUILD}" STREQUAL "1")
 add_library(cudftestutil STATIC
             "${CMAKE_CURRENT_SOURCE_DIR}/utilities/base_fixture.cpp"
             "${CMAKE_CURRENT_SOURCE_DIR}/utilities/column_utilities.cu"
-            "${CMAKE_CURRENT_SOURCE_DIR}/utilities/scalar_utilities.cu"
             "${CMAKE_CURRENT_SOURCE_DIR}/utilities/table_utilities.cu"
             "${CMAKE_CURRENT_SOURCE_DIR}/strings/utilities.cu")
 
@@ -363,6 +362,7 @@ ConfigureTest(JSON_TEST "${JSON_TEST_SRC}")
 # - sort tests ------------------------------------------------------------------------------------
 
 set(SORT_TEST_SRC
+    "${CMAKE_CURRENT_SOURCE_DIR}/sort/segmented_sort_tests.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/sort/sort_test.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/sort/rank_test.cpp")
 
@@ -376,6 +376,7 @@ set(COPYING_TEST_SRC
     "${CMAKE_CURRENT_SOURCE_DIR}/copying/gather_tests.cu"
     "${CMAKE_CURRENT_SOURCE_DIR}/copying/gather_str_tests.cu"
     "${CMAKE_CURRENT_SOURCE_DIR}/copying/gather_list_tests.cu"
+    "${CMAKE_CURRENT_SOURCE_DIR}/copying/segmented_gather_list_tests.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/copying/gather_struct_tests.cu"
     "${CMAKE_CURRENT_SOURCE_DIR}/copying/detail_gather_tests.cu"
     "${CMAKE_CURRENT_SOURCE_DIR}/copying/scatter_tests.cpp"
@@ -387,7 +388,8 @@ set(COPYING_TEST_SRC
     "${CMAKE_CURRENT_SOURCE_DIR}/copying/shift_tests.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/copying/get_value_tests.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/copying/sample_tests.cpp"
-    "${CMAKE_CURRENT_SOURCE_DIR}/copying/concatenate_tests.cu")
+    "${CMAKE_CURRENT_SOURCE_DIR}/copying/concatenate_tests.cu"
+    "${CMAKE_CURRENT_SOURCE_DIR}/copying/pack_tests.cu")
 
 ConfigureTest(COPYING_TEST "${COPYING_TEST_SRC}")
 
@@ -493,6 +495,14 @@ set(LEAD_LAG_TEST_SRC
 ConfigureTest(LEAD_LAG_TEST "${LEAD_LAG_TEST_SRC}")
 
 ###################################################################################################
+# - collect_list rolling tests ---------------------------------------------------------------------------------
+
+set(COLLECT_LIST_SRC
+    "${CMAKE_CURRENT_SOURCE_DIR}/collect_list/collect_list_test.cpp")
+
+ConfigureTest(COLLECT_LIST_TEST "${COLLECT_LIST_SRC}")
+
+###################################################################################################
 # - filling test ----------------------------------------------------------------------------------
 
 set(FILLING_TEST_SRC
@@ -515,6 +525,7 @@ ConfigureTest(SEARCH_TEST "${SEARCH_TEST_SRC}")
 
 set(RESHAPE_TEST_SRC
     "${CMAKE_CURRENT_SOURCE_DIR}/reshape/byte_cast_tests.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/reshape/explode_tests.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/reshape/interleave_columns_tests.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/reshape/tile_tests.cpp")
 
@@ -652,7 +663,10 @@ ConfigureTest(AST_TEST "${AST_TEST_SRC}")
 # - lists tests ----------------------------------------------------------------------------------
 
 set(LISTS_TEST_SRC
-    "${CMAKE_CURRENT_SOURCE_DIR}/lists/extract_tests.cpp")
+    "${CMAKE_CURRENT_SOURCE_DIR}/lists/contains_tests.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/lists/count_elements_tests.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/lists/extract_tests.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/lists/sort_lists_tests.cpp")
 
 ConfigureTest(LISTS_TEST "${LISTS_TEST_SRC}")
 

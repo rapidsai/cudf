@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2020, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,6 +17,7 @@
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_view.hpp>
 #include <cudf/copying.hpp>
+#include <cudf/detail/copy.hpp>
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/utilities/cuda.cuh>
@@ -95,7 +96,10 @@ struct dst_buf_info {
   int dst_offset;     // my offset into the per-partition allocation
   int value_shift;    // amount to shift values down by (for offset buffers)
   int bit_shift;      // # of bits to shift right by (for validity buffers)
+  size_type valid_count;
 };
+
+constexpr size_type copy_block_size = 512;
 
 /**
  * @brief Copy a single buffer of column data, shifting values (for offset columns),
@@ -123,6 +127,8 @@ struct dst_buf_info {
  * @param stride Size of the kernel block
  * @param value_shift Shift incoming 4-byte offset values down by this amount
  * @param bit_shift Shift incoming data right by this many bits
+ * @param num_rows Number of rows being copied
+ * @param valid_count Optional pointer to a value to store count of set bits
  */
 __device__ void copy_buffer(uint8_t* __restrict__ dst,
                             uint8_t* __restrict__ src,
@@ -132,9 +138,13 @@ __device__ void copy_buffer(uint8_t* __restrict__ dst,
                             int src_row_index,
                             uint32_t stride,
                             int value_shift,
-                            int bit_shift)
+                            int bit_shift,
+                            int num_rows,
+                            size_type* valid_count)
 {
   src += (src_row_index * element_size);
+
+  size_type thread_valid_count = 0;
 
   // handle misalignment. read 16 bytes in 4 byte reads. write in a single 16 byte store.
   const size_t num_bytes = num_elements * element_size;
@@ -157,12 +167,25 @@ __device__ void copy_buffer(uint8_t* __restrict__ dst,
     v.z -= value_shift;
     v.w -= value_shift;
     reinterpret_cast<uint4*>(dst)[pos / 16] = v;
+    if (valid_count) {
+      thread_valid_count += (__popc(v.x) + __popc(v.y) + __popc(v.z) + __popc(v.w));
+    }
     pos += stride;
   }
 
   // copy trailing bytes
   if (t == 0) {
-    size_t remainder = num_bytes < 16 ? num_bytes : 16 + (num_bytes % 16);
+    size_t remainder;
+    if (num_bytes < 16) {
+      remainder = num_bytes;
+    } else {
+      size_t last_bracket = (num_bytes / 16) * 16;
+      remainder           = num_bytes - last_bracket;
+      if (remainder < 4) {
+        // we had less than 20 bytes for the last possible 16 byte copy, so copy 16 + the extra
+        remainder += 16;
+      }
+    }
 
     // if we're performing a value shift (offsets), or a bit shift (validity) the # of bytes and
     // alignment must be a multiple of 4. value shifting and bit shifting are mututally exclusive
@@ -173,15 +196,42 @@ __device__ void copy_buffer(uint8_t* __restrict__ dst,
       while (remainder) {
         uint32_t next =
           remainder > 0 ? (reinterpret_cast<uint32_t*>(src)[idx + 1] - value_shift) : 0;
-        reinterpret_cast<uint32_t*>(dst)[idx] = (v >> bit_shift) | (next << (32 - bit_shift));
+        uint32_t val = (v >> bit_shift) | (next << (32 - bit_shift));
+        if (valid_count) { thread_valid_count += __popc(val); }
+        reinterpret_cast<uint32_t*>(dst)[idx] = val;
         v                                     = next;
         idx++;
         remainder -= 4;
       }
     } else {
       while (remainder) {
-        int idx                              = num_bytes - remainder--;
-        reinterpret_cast<uint8_t*>(dst)[idx] = reinterpret_cast<uint8_t*>(src)[idx];
+        int idx      = num_bytes - remainder--;
+        uint32_t val = reinterpret_cast<uint8_t*>(src)[idx];
+        if (valid_count) { thread_valid_count += __popc(val); }
+        reinterpret_cast<uint8_t*>(dst)[idx] = val;
+      }
+    }
+  }
+
+  if (valid_count) {
+    if (num_bytes == 0) {
+      if (!t) { *valid_count = 0; }
+    } else {
+      using BlockReduce = cub::BlockReduce<size_type, copy_block_size>;
+      __shared__ typename BlockReduce::TempStorage temp_storage;
+      size_type block_valid_count{BlockReduce(temp_storage).Sum(thread_valid_count)};
+      if (!t) {
+        // we may have copied more bits than there are actual rows in the output.
+        // so we need to subtract off the count of any bits that shouldn't have been
+        // considered during the copy step.
+        int max_row     = (num_bytes * 8);
+        int slack_bits  = max_row > num_rows ? max_row - num_rows : 0;
+        auto slack_mask = set_most_significant_bits(slack_bits);
+        if (slack_mask > 0) {
+          uint32_t last_word = reinterpret_cast<uint32_t*>(dst + (num_bytes - 4))[0];
+          block_valid_count -= __popc(last_word & slack_mask);
+        }
+        *valid_count = block_valid_count;
       }
     }
   }
@@ -222,7 +272,9 @@ __global__ void copy_partition(int num_src_bufs,
               buf_info[buf_index].src_row_index,
               blockDim.x,
               buf_info[buf_index].value_shift,
-              buf_info[buf_index].bit_shift);
+              buf_info[buf_index].bit_shift,
+              buf_info[buf_index].num_rows,
+              buf_info[buf_index].valid_count > 0 ? &buf_info[buf_index].valid_count : nullptr);
 }
 
 // The block of functions below are all related:
@@ -271,7 +323,7 @@ template <typename InputIter>
 size_t compute_offset_stack_size(InputIter begin, InputIter end, int offset_depth = 0)
 {
   return std::accumulate(begin, end, 0, [offset_depth](auto stack_size, column_view const& col) {
-    auto const num_buffers = (col.head() != nullptr ? 1 : 0) + (col.nullable() ? 1 : 0);
+    auto const num_buffers = 1 + (col.nullable() ? 1 : 0);
     return stack_size + (offset_depth * num_buffers) +
            compute_offset_stack_size(
              col.child_begin(), col.child_end(), offset_depth + is_offset_type(col.type().id()));
@@ -300,11 +352,11 @@ OutputIter setup_src_buf_data(InputIter begin, InputIter end, OutputIter out_buf
       out_buf++;
     }
     // NOTE: we're always returning the base pointer here.  column-level offset is accounted
-    // for later.
-    if (col.head() != nullptr) {
-      *out_buf = const_cast<uint8_t*>(col.head<uint8_t>());
-      out_buf++;
-    }
+    // for later. Also, for some column types (string, list, struct) this pointer will be null
+    // because there is no associated data with the root column.
+    *out_buf = const_cast<uint8_t*>(col.head<uint8_t>());
+    out_buf++;
+
     out_buf = setup_src_buf_data(col.child_begin(), col.child_end(), out_buf);
   });
   return out_buf;
@@ -329,8 +381,7 @@ template <typename InputIter>
 size_type count_src_bufs(InputIter begin, InputIter end)
 {
   auto buf_iter = thrust::make_transform_iterator(begin, [](column_view const& col) {
-    return (col.head() != nullptr ? 1 : 0) + (col.nullable() ? 1 : 0) +
-           count_src_bufs(col.child_begin(), col.child_end());
+    return 1 + (col.nullable() ? 1 : 0) + count_src_bufs(col.child_begin(), col.child_end());
   });
   return std::accumulate(buf_iter, buf_iter + std::distance(begin, end), 0);
 }
@@ -417,38 +468,53 @@ std::pair<src_buf_info*, size_type> buf_info_functor::operator()<cudf::string_vi
   int parent_offset_index,
   int offset_depth)
 {
-  strings_column_view scv(col);
-
   if (col.nullable()) {
     std::tie(current, offset_stack_pos) =
       add_null_buffer(col, current, offset_stack_pos, parent_offset_index, offset_depth);
   }
 
-  auto offset_col = current;
+  // string columns hold no actual data, but we need to keep a record
+  // of it so we know it's size when we are constructing the output columns
+  *current = src_buf_info(
+    type_id::STRING, nullptr, offset_stack_pos, parent_offset_index, false, col.offset());
+  current++;
+  offset_stack_pos += offset_depth;
 
-  // info for the offsets buffer
-  *current = src_buf_info(type_id::INT32,
-                          scv.offsets().begin<cudf::id_to_type<type_id::INT32>>(),
-                          offset_stack_pos,
-                          parent_offset_index,
-                          false,
-                          col.offset());
+  // string columns don't necessarily have children
+  if (col.num_children() > 0) {
+    CUDF_EXPECTS(col.num_children() == 2, "Encountered malformed string column");
+    strings_column_view scv(col);
 
-  // prevent appending buf_info for non-exist chars buffer
-  if (scv.chars_size() > 0) {
+    // info for the offsets buffer
+    auto offset_col = current;
+    CUDF_EXPECTS(scv.offsets().nullable() == false, "Encountered nullable string offsets column");
+    *current = src_buf_info(type_id::INT32,
+                            // note: offsets can be null in the case where the string column
+                            // has been created with empty_like().
+                            scv.offsets().begin<cudf::id_to_type<type_id::INT32>>(),
+                            offset_stack_pos,
+                            parent_offset_index,
+                            false,
+                            col.offset());
+
     current++;
     offset_stack_pos += offset_depth;
 
-    // since we are crossing an offset boundary, our offset_depth and parent_offset_index go up.
+    // since we are crossing an offset boundary, calculate our new depth and parent offset index.
     offset_depth++;
     parent_offset_index = offset_col - head;
+
+    // prevent appending buf_info for non-existent chars buffer
+    CUDF_EXPECTS(scv.chars().nullable() == false, "Encountered nullable string chars column");
 
     // info for the chars buffer
     *current = src_buf_info(
       type_id::INT8, nullptr, offset_stack_pos, parent_offset_index, false, col.offset());
+    current++;
+    offset_stack_pos += offset_depth;
   }
 
-  return {current + 1, offset_stack_pos + offset_depth};
+  return {current, offset_stack_pos};
 }
 
 template <>
@@ -466,10 +532,20 @@ std::pair<src_buf_info*, size_type> buf_info_functor::operator()<cudf::list_view
       add_null_buffer(col, current, offset_stack_pos, parent_offset_index, offset_depth);
   }
 
-  auto offset_col = current;
+  // list columns hold no actual data, but we need to keep a record
+  // of it so we know it's size when we are constructing the output columns
+  *current = src_buf_info(
+    type_id::LIST, nullptr, offset_stack_pos, parent_offset_index, false, col.offset());
+  current++;
+  offset_stack_pos += offset_depth;
+
+  CUDF_EXPECTS(col.num_children() == 2, "Encountered malformed list column");
 
   // info for the offsets buffer
-  *current = src_buf_info(type_id::INT32,
+  auto offset_col = current;
+  *current        = src_buf_info(type_id::INT32,
+                          // note: offsets can be null in the case where the lists column
+                          // has been created with empty_like().
                           lcv.offsets().begin<cudf::id_to_type<type_id::INT32>>(),
                           offset_stack_pos,
                           parent_offset_index,
@@ -478,7 +554,7 @@ std::pair<src_buf_info*, size_type> buf_info_functor::operator()<cudf::list_view
   current++;
   offset_stack_pos += offset_depth;
 
-  // since we are crossing an offset boundary, our offset_depth and parent_offset_index go up.
+  // since we are crossing an offset boundary, calculate our new depth and parent offset index.
   offset_depth++;
   parent_offset_index = offset_col - head;
 
@@ -503,6 +579,13 @@ std::pair<src_buf_info*, size_type> buf_info_functor::operator()<cudf::struct_vi
     std::tie(current, offset_stack_pos) =
       add_null_buffer(col, current, offset_stack_pos, parent_offset_index, offset_depth);
   }
+
+  // struct columns hold no actual data, but we need to keep a record
+  // of it so we know it's size when we are constructing the output columns
+  *current = src_buf_info(
+    type_id::STRUCT, nullptr, offset_stack_pos, parent_offset_index, false, col.offset());
+  current++;
+  offset_stack_pos += offset_depth;
 
   // recurse on children
   return setup_source_buf_info(col.child_begin(),
@@ -580,35 +663,32 @@ BufInfo build_output_columns(InputIter begin,
     size_type null_count;
     std::tie(bitmask_ptr, null_count) = [&]() {
       if (src.nullable()) {
-        auto const ptr = reinterpret_cast<bitmask_type const*>(base_ptr + current_info->dst_offset);
+        auto const ptr =
+          current_info->num_elements == 0
+            ? nullptr
+            : reinterpret_cast<bitmask_type const*>(base_ptr + current_info->dst_offset);
+        auto const null_count = current_info->num_elements == 0
+                                  ? 0
+                                  : (current_info->num_rows - current_info->valid_count);
         ++current_info;
-        return std::make_pair(ptr, UNKNOWN_NULL_COUNT);
+        return std::make_pair(ptr, null_count);
       }
       return std::make_pair(static_cast<bitmask_type const*>(nullptr), 0);
     }();
-    uint8_t const* data_ptr;
-    size_type size;
-    std::tie(data_ptr, size) = [&]() {
-      if (src.head()) {
-        auto const ptr = base_ptr + current_info->dst_offset;
-        // if we have data, num_elements will always be the correct size.
-        // we don't want to use num_rows because if we are an offset column, num_rows
-        // represents the # of rows of our owning parent. num_elements always represents
-        // the proper size for this column
-        auto const size = current_info->num_elements;
-        ++current_info;
-        return std::make_pair(ptr, size);
-      }
-      // Parent columns w/o data (e.g., strings, lists) don't have an associated `dst_buf_info`,
-      // therefore, use the first child's info if it has at least one child. Their num_rows value
-      // will be correct (also see comment above)
-      auto const size = (src.num_children() == 0) ? 0 : current_info->num_rows;
-      return std::make_pair(static_cast<uint8_t const*>(nullptr), size);
-    }();
+
+    // size/data pointer for the column
+    auto const size = current_info->num_elements;
+    uint8_t const* data_ptr =
+      size == 0 || src.head() == nullptr ? nullptr : base_ptr + current_info->dst_offset;
+    ++current_info;
+
+    // children
     auto children = std::vector<column_view>{};
     children.reserve(src.num_children());
+
     current_info = build_output_columns(
       src.child_begin(), src.child_end(), current_info, std::back_inserter(children), base_ptr);
+
     return column_view{src.type(), size, data_ptr, bitmask_ptr, null_count, 0, std::move(children)};
   });
 
@@ -684,10 +764,10 @@ struct size_of_helper {
 
 namespace detail {
 
-std::vector<contiguous_split_result> contiguous_split(cudf::table_view const& input,
-                                                      std::vector<size_type> const& splits,
-                                                      rmm::cuda_stream_view stream,
-                                                      rmm::mr::device_memory_resource* mr)
+std::vector<packed_table> contiguous_split(cudf::table_view const& input,
+                                           std::vector<size_type> const& splits,
+                                           rmm::cuda_stream_view stream,
+                                           rmm::mr::device_memory_resource* mr)
 {
   if (input.num_columns() == 0) { return {}; }
   if (splits.size() > 0) {
@@ -705,23 +785,25 @@ std::vector<contiguous_split_result> contiguous_split(cudf::table_view const& in
     }
   }
 
-  size_t const num_partitions = splits.size() + 1;
+  size_t const num_partitions   = splits.size() + 1;
+  size_t const num_root_columns = input.num_columns();
 
   // if inputs are empty, just return num_partitions empty tables
   if (input.column(0).size() == 0) {
-    std::vector<contiguous_split_result> result;
+    // build the empty results
+    std::vector<packed_table> result;
     result.reserve(num_partitions);
-
     auto iter = thrust::make_counting_iterator(0);
     std::transform(
       iter, iter + num_partitions, std::back_inserter(result), [&input](int partition_index) {
-        return contiguous_split_result{input, std::make_unique<rmm::device_buffer>()};
+        return packed_table{input,
+                            packed_columns{std::make_unique<packed_columns::metadata>(pack_metadata(
+                                             input, static_cast<uint8_t const*>(nullptr), 0)),
+                                           std::make_unique<rmm::device_buffer>()}};
       });
 
     return result;
   }
-
-  size_t const num_root_columns = input.num_columns();
 
   // compute # of source buffers (column data, validity, children), # of partitions
   // and total # of buffers
@@ -819,8 +901,13 @@ std::vector<contiguous_split_result> contiguous_split(cudf::table_view const& in
       int row_end   = d_indices[split_index + 1] + src_info.column_offset;
       while (stack_size > 0) {
         stack_size--;
-        row_start = d_src_buf_info[offset_stack[stack_size]].offsets[row_start];
-        row_end   = d_src_buf_info[offset_stack[stack_size]].offsets[row_end];
+        auto const offsets = d_src_buf_info[offset_stack[stack_size]].offsets;
+        // this case can happen when you have empty string or list columns constructed with
+        // empty_like()
+        if (offsets != nullptr) {
+          row_start = offsets[row_start];
+          row_end   = offsets[row_end];
+        }
       }
 
       // final row indices and row count
@@ -832,7 +919,7 @@ std::vector<contiguous_split_result> contiguous_split(cudf::table_view const& in
       int const bit_shift = src_info.is_validity ? row_start % 32 : 0;
       // # of rows isn't necessarily the same as # of elements to be copied.
       auto const num_elements = [&]() {
-        if (src_info.offsets != nullptr) {
+        if (src_info.offsets != nullptr && num_rows > 0) {
           return num_rows + 1;
         } else if (src_info.is_validity) {
           return (num_rows + 31) / 32;
@@ -848,7 +935,8 @@ std::vector<contiguous_split_result> contiguous_split(cudf::table_view const& in
                           out_row_index,
                           0,
                           value_shift,
-                          bit_shift};
+                          bit_shift,
+                          src_info.is_validity ? 1 : 0};
     });
 
   // compute total size of each partition
@@ -931,39 +1019,47 @@ std::vector<contiguous_split_result> contiguous_split(cudf::table_view const& in
 
   // copy.  1 block per buffer
   {
-    constexpr int block_size = 512;
-    copy_partition<<<num_bufs, block_size, 0, stream.value()>>>(
+    copy_partition<<<num_bufs, copy_block_size, 0, stream.value()>>>(
       num_src_bufs, num_partitions, d_src_bufs, d_dst_bufs, d_dst_buf_info);
   }
 
+  // DtoH dst info (to retrieve null counts)
+  CUDA_TRY(cudaMemcpyAsync(
+    h_dst_buf_info, d_dst_buf_info, dst_buf_info_size, cudaMemcpyDeviceToHost, stream.value()));
+
+  stream.synchronize();
+
   // build the output.
-  std::vector<contiguous_split_result> result;
+  std::vector<packed_table> result;
   result.reserve(num_partitions);
   std::vector<column_view> cols;
   cols.reserve(num_root_columns);
   auto cur_dst_buf_info = h_dst_buf_info;
   for (size_t idx = 0; idx < num_partitions; idx++) {
+    // traverse the buffers and build the columns.
     cur_dst_buf_info = build_output_columns(
       input.begin(), input.end(), cur_dst_buf_info, std::back_inserter(cols), h_dst_bufs[idx]);
-    result.push_back(contiguous_split_result{
-      cudf::table_view{cols}, std::make_unique<rmm::device_buffer>(std::move(out_buffers[idx]))});
+
+    // pack the columns
+    cudf::table_view t{cols};
+    result.push_back(packed_table{
+      t,
+      packed_columns{
+        std::make_unique<packed_columns::metadata>(cudf::pack_metadata(
+          t, reinterpret_cast<uint8_t const*>(out_buffers[idx].data()), out_buffers[idx].size())),
+        std::make_unique<rmm::device_buffer>(std::move(out_buffers[idx]))}});
+
     cols.clear();
   }
-
-  // we need to synchronize, as the HtoD memcpy before the copy kernel could still be in-flight as
-  // we exit the function and our stack frame disappears. also of note : we're overlapping
-  // construction of the output columns on the cpu while the data they point to is still being
-  // copied. this can be a significant time savings.
-  stream.synchronize();
 
   return result;
 }
 
 };  // namespace detail
 
-std::vector<contiguous_split_result> contiguous_split(cudf::table_view const& input,
-                                                      std::vector<size_type> const& splits,
-                                                      rmm::mr::device_memory_resource* mr)
+std::vector<packed_table> contiguous_split(cudf::table_view const& input,
+                                           std::vector<size_type> const& splits,
+                                           rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
   return cudf::detail::contiguous_split(input, splits, rmm::cuda_stream_default, mr);

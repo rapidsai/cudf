@@ -1,4 +1,4 @@
-# Copyright (c) 2018-2020, NVIDIA CORPORATION.
+# Copyright (c) 2018-2021, NVIDIA CORPORATION.
 
 from io import BytesIO, StringIO
 
@@ -115,9 +115,27 @@ def to_csv(
     index=True,
     line_terminator="\n",
     chunksize=None,
+    encoding=None,
+    compression=None,
     **kwargs,
 ):
     """{docstring}"""
+
+    if not isinstance(sep, str):
+        raise TypeError(f'"sep" must be string, not {type(sep).__name__}')
+    elif len(sep) > 1:
+        raise TypeError('"sep" must be a 1-character string')
+
+    if encoding and encoding != "utf-8":
+        error_msg = (
+            f"Encoding {encoding} is not supported. "
+            + "Currently, only utf-8 encoding is supported."
+        )
+        raise NotImplementedError(error_msg)
+
+    if compression:
+        error_msg = "Writing compressed csv is not currently supported in cudf"
+        raise NotImplementedError(error_msg)
 
     return_as_string = False
     if path_or_buf is None:
@@ -134,6 +152,18 @@ def to_csv(
         except KeyError:
             raise NameError(
                 "Dataframe doesn't have the labels provided in columns"
+            )
+
+    for col in df._data.columns:
+        if isinstance(col, cudf.core.column.ListColumn):
+            raise NotImplementedError(
+                "Writing to csv format is not yet supported with "
+                "list columns."
+            )
+        elif isinstance(col, cudf.core.column.StructColumn):
+            raise NotImplementedError(
+                "Writing to csv format is not yet supported with "
+                "Struct columns."
             )
 
     # TODO: Need to typecast categorical columns to the underlying

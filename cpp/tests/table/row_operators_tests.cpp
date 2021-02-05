@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -15,6 +15,7 @@
  */
 
 #include <cudf/column/column_view.hpp>
+#include <cudf/copying.hpp>
 #include <cudf/sorting.hpp>
 #include <cudf/table/table_view.hpp>
 #include <cudf_test/base_fixture.hpp>
@@ -64,4 +65,34 @@ TEST_F(RowOperatorTestForNAN, NANSorting)
   auto got2 = cudf::sorted_order(input_table, column_order, null_precedence_2);
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected2, got2->view());
+}
+
+TEST_F(RowOperatorTestForNAN, NANSortingNonNull)
+{
+  cudf::test::fixed_width_column_wrapper<double> input{
+    {0.,
+     double(NAN),
+     -1.,
+     7.,
+     std::numeric_limits<double>::infinity(),
+     1.,
+     -1 * std::numeric_limits<double>::infinity()}};
+
+  cudf::table_view input_table{{input}};
+
+  auto result = cudf::sorted_order(input_table, {cudf::order::ASCENDING});
+  cudf::test::fixed_width_column_wrapper<int32_t> expected_asc{{6, 2, 0, 5, 3, 4, 1}};
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_asc, result->view());
+  auto sorted_result = cudf::sort(input_table, {cudf::order::ASCENDING});
+  auto gather_result = cudf::gather(input_table, result->view());
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(sorted_result->view().column(0),
+                                      gather_result->view().column(0));
+
+  result = cudf::sorted_order(input_table, {cudf::order::DESCENDING});
+  cudf::test::fixed_width_column_wrapper<int32_t> expected_desc{{1, 4, 3, 5, 0, 2, 6}};
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_desc, result->view());
+  sorted_result = cudf::sort(input_table, {cudf::order::DESCENDING});
+  gather_result = cudf::gather(input_table, result->view());
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(sorted_result->view().column(0),
+                                      gather_result->view().column(0));
 }

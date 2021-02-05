@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020, NVIDIA CORPORATION.
+ * Copyright (c) 2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -143,6 +143,9 @@
  * @defgroup lists_apis Lists
  * @{
  *   @defgroup lists_extract Extracting
+ *   @defgroup lists_contains Searching
+ *   @defgroup lists_gather Gathering
+ *   @defgroup lists_elements Counting
  * @}
  * @defgroup nvtext_apis NVText
  * @{

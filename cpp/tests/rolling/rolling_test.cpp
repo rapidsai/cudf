@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2020, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -22,6 +22,7 @@
 
 #include <cudf/aggregation.hpp>
 #include <cudf/detail/aggregation/aggregation.hpp>
+#include <cudf/dictionary/encode.hpp>
 #include <cudf/rolling.hpp>
 #include <cudf/utilities/bit.hpp>
 #include <src/rolling/rolling_detail.hpp>
@@ -1005,13 +1006,15 @@ TYPED_TEST(FixedPointTests, MinMaxCountLagLeadNulls)
 {
   using namespace numeric;
   using namespace cudf;
-  using decimalXX  = TypeParam;
-  using RepType    = cudf::device_storage_type_t<decimalXX>;
-  using fp_wrapper = cudf::test::fixed_point_column_wrapper<RepType>;
-  using fw_wrapper = cudf::test::fixed_width_column_wrapper<size_type>;
+  using decimalXX    = TypeParam;
+  using RepType      = cudf::device_storage_type_t<decimalXX>;
+  using fp_wrapper   = cudf::test::fixed_point_column_wrapper<RepType>;
+  using fp64_wrapper = cudf::test::fixed_point_column_wrapper<int64_t>;
+  using fw_wrapper   = cudf::test::fixed_width_column_wrapper<size_type>;
 
   auto const scale              = scale_type{-1};
   auto const input              = fp_wrapper{{42, 1729, 55, 343, 1, 2}, {1, 0, 1, 0, 1, 1}, scale};
+  auto const expected_sum       = fp64_wrapper{{42, 97, 55, 56, 3, 3}, {1, 1, 1, 1, 1, 1}, scale};
   auto const expected_min       = fp_wrapper{{42, 42, 55, 1, 1, 1}, {1, 1, 1, 1, 1, 1}, scale};
   auto const expected_max       = fp_wrapper{{42, 55, 55, 55, 2, 2}, {1, 1, 1, 1, 1, 1}, scale};
   auto const expected_lag       = fp_wrapper{{0, 42, 1729, 55, 343, 1}, {0, 1, 0, 1, 0, 1}, scale};
@@ -1020,6 +1023,7 @@ TYPED_TEST(FixedPointTests, MinMaxCountLagLeadNulls)
   auto const expected_count_all = fw_wrapper{{2, 3, 3, 3, 3, 2}, {1, 1, 1, 1, 1, 1}};
   auto const expected_rowno     = fw_wrapper{{1, 2, 2, 2, 2, 2}, {1, 1, 1, 1, 1, 1}};
 
+  auto const sum   = rolling_window(input, 2, 1, 1, make_sum_aggregation());
   auto const min   = rolling_window(input, 2, 1, 1, make_min_aggregation());
   auto const max   = rolling_window(input, 2, 1, 1, make_max_aggregation());
   auto const lag   = rolling_window(input, 2, 1, 1, make_lag_aggregation(1));
@@ -1028,6 +1032,7 @@ TYPED_TEST(FixedPointTests, MinMaxCountLagLeadNulls)
   auto const all   = rolling_window(input, 2, 1, 1, make_count_aggregation(null_policy::INCLUDE));
   auto const rowno = rolling_window(input, 2, 1, 1, make_row_number_aggregation());
 
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_sum, sum->view());
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_min, min->view());
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_max, max->view());
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_lag, lag->view());
@@ -1035,6 +1040,80 @@ TYPED_TEST(FixedPointTests, MinMaxCountLagLeadNulls)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_count_val, valid->view());
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_count_all, all->view());
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_rowno, rowno->view());
+
+  EXPECT_THROW(rolling_window(input, 2, 1, 1, make_product_aggregation()), cudf::logic_error);
+  EXPECT_THROW(rolling_window(input, 2, 1, 1, make_mean_aggregation()), cudf::logic_error);
+  EXPECT_THROW(rolling_window(input, 2, 1, 1, make_variance_aggregation()), cudf::logic_error);
+  EXPECT_THROW(rolling_window(input, 2, 1, 1, make_std_aggregation()), cudf::logic_error);
+  EXPECT_THROW(rolling_window(input, 2, 1, 1, make_sum_of_squares_aggregation()),
+               cudf::logic_error);
+}
+
+class RollingDictionaryTest : public cudf::test::BaseFixture {
+};
+
+TEST_F(RollingDictionaryTest, Count)
+{
+  cudf::test::dictionary_column_wrapper<std::string> input(
+    {"This", "is", "rolling", "test", "being", "operated", "on", "string", "column"},
+    {1, 0, 0, 1, 0, 1, 1, 1, 0});
+  fixed_width_column_wrapper<size_type> expected_count_val({1, 2, 1, 2, 3, 3, 3, 2, 1},
+                                                           {1, 1, 1, 1, 1, 1, 1, 1, 1});
+  fixed_width_column_wrapper<size_type> expected_count_all({3, 4, 4, 4, 4, 4, 4, 3, 2},
+                                                           {1, 1, 1, 1, 1, 1, 1, 1, 1});
+  fixed_width_column_wrapper<size_type> expected_row_number({1, 2, 2, 2, 2, 2, 2, 2, 2},
+                                                            {1, 1, 1, 1, 1, 1, 1, 1, 1});
+
+  auto got_count_valid = cudf::rolling_window(input, 2, 2, 1, cudf::make_count_aggregation());
+  auto got_count_all =
+    cudf::rolling_window(input, 2, 2, 1, cudf::make_count_aggregation(cudf::null_policy::INCLUDE));
+  auto got_row_number = cudf::rolling_window(input, 2, 2, 1, cudf::make_row_number_aggregation());
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_count_val, got_count_valid->view());
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_count_all, got_count_all->view());
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_row_number, got_row_number->view());
+}
+
+TEST_F(RollingDictionaryTest, MinMax)
+{
+  cudf::test::dictionary_column_wrapper<std::string> input(
+    {"This", "is", "rolling", "test", "being", "operated", "on", "string", "column"},
+    {1, 0, 0, 1, 0, 1, 1, 1, 0});
+  cudf::test::strings_column_wrapper expected_min(
+    {"This", "This", "test", "operated", "on", "on", "on", "on", "string"},
+    {1, 1, 1, 1, 1, 1, 1, 1, 1});
+  cudf::test::strings_column_wrapper expected_max(
+    {"This", "test", "test", "test", "test", "string", "string", "string", "string"},
+    {1, 1, 1, 1, 1, 1, 1, 1, 1});
+
+  auto got_min_dict = cudf::rolling_window(input, 2, 2, 1, cudf::make_min_aggregation());
+  auto got_min      = cudf::dictionary::decode(cudf::dictionary_column_view(got_min_dict->view()));
+
+  auto got_max_dict = cudf::rolling_window(input, 2, 2, 1, cudf::make_max_aggregation());
+  auto got_max      = cudf::dictionary::decode(cudf::dictionary_column_view(got_max_dict->view()));
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_min, got_min->view());
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_max, got_max->view());
+}
+
+TEST_F(RollingDictionaryTest, LeadLag)
+{
+  cudf::test::dictionary_column_wrapper<std::string> input(
+    {"This", "is", "rolling", "test", "being", "operated", "on", "string", "column"},
+    {1, 0, 0, 1, 0, 1, 1, 1, 0});
+  cudf::test::strings_column_wrapper expected_lead(
+    {"", "", "test", "", "operated", "on", "string", "", ""}, {0, 0, 1, 0, 1, 1, 1, 0, 0});
+  cudf::test::strings_column_wrapper expected_lag(
+    {"", "This", "", "", "test", "", "operated", "on", "string"}, {0, 1, 0, 0, 1, 0, 1, 1, 1});
+
+  auto got_lead_dict = cudf::rolling_window(input, 2, 1, 1, cudf::make_lead_aggregation(1));
+  auto got_lead = cudf::dictionary::decode(cudf::dictionary_column_view(got_lead_dict->view()));
+
+  auto got_lag_dict = cudf::rolling_window(input, 2, 2, 1, cudf::make_lag_aggregation(1));
+  auto got_lag      = cudf::dictionary::decode(cudf::dictionary_column_view(got_lag_dict->view()));
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_lead, got_lead->view());
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_lag, got_lag->view());
 }
 
 CUDF_TEST_PROGRAM_MAIN()
