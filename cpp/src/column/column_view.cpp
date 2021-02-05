@@ -127,7 +127,7 @@ mutable_column_view::operator column_view() const
 
 size_type count_descendants(column_view parent)
 {
-  auto descendants = [&](auto const& child) { return count_descendants(child); };
+  auto descendants = [](auto const& child) { return count_descendants(child); };
   auto begin       = thrust::make_transform_iterator(parent.child_begin(), descendants);
   return std::accumulate(begin, begin + parent.num_children(), size_type{parent.num_children()});
 }
