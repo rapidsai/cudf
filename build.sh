@@ -158,7 +158,7 @@ if buildAll || hasArg libcudf; then
 
     cd ${LIB_BUILD_DIR}
 
-    cmake --build . -j${PARALLEL_LEVEL} cudf ${VERBOSE_FLAG}
+    cmake --build . -j${PARALLEL_LEVEL} all ${VERBOSE_FLAG}
 
     if [[ ${INSTALL_TARGET} != "" ]]; then
         cmake --build . -j${PARALLEL_LEVEL} install ${VERBOSE_FLAG}
