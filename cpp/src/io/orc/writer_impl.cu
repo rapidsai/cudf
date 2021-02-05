@@ -26,7 +26,7 @@
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_buffer.hpp>
-#include <rmm/device_vector.hpp>
+#include <rmm/device_uvector.hpp>
 
 #include <algorithm>
 #include <cstring>
@@ -656,14 +656,6 @@ hostdevice_vector<gpu::EncChunk> writer::impl::initialize_chunks(
 
   for (auto &cnt_in : validity_check_inputs) {
     auto const valid_counts = segmented_count_set_bits(cnt_in.second.mask, cnt_in.second.indices);
-    CUDF_EXPECTS(std::none_of(valid_counts.cbegin(),
-                              valid_counts.cend(),
-                              [](auto valid_count) { return valid_count % 8; }),
-                 "Boolean column can't be encoded correctly. Please convert to int8.");
-  }
-
-  for (auto &cnt_in : validity_check_inputs) {
-    auto const valid_counts = segmented_count_set_bits(cnt_in.second.mask, cnt_in.second.indices);
     CUDF_EXPECTS(
       std::none_of(valid_counts.cbegin(),
                    valid_counts.cend(),
@@ -747,8 +739,8 @@ std::vector<std::vector<uint8_t>> writer::impl::gather_statistic_blobs(
   std::vector<std::vector<uint8_t>> stat_blobs(num_stat_blobs);
   hostdevice_vector<stats_column_desc> stat_desc(columns.size());
   hostdevice_vector<statistics_merge_group> stat_merge(num_stat_blobs);
-  rmm::device_vector<statistics_chunk> stat_chunks(num_chunks + num_stat_blobs);
-  rmm::device_vector<statistics_group> stat_groups(num_chunks);
+  rmm::device_uvector<statistics_chunk> stat_chunks(num_chunks + num_stat_blobs, stream);
+  rmm::device_uvector<statistics_group> stat_groups(num_chunks, stream);
 
   for (size_t i = 0; i < columns.size(); i++) {
     stats_column_desc *desc = &stat_desc[i];
@@ -795,35 +787,34 @@ std::vector<std::vector<uint8_t>> writer::impl::gather_statistic_blobs(
   }
   stat_desc.host_to_device(stream);
   stat_merge.host_to_device(stream);
-  gpu::orc_init_statistics_groups(stat_groups.data().get(),
+  gpu::orc_init_statistics_groups(stat_groups.data(),
                                   stat_desc.device_ptr(),
                                   columns.size(),
                                   num_rowgroups,
                                   row_index_stride_,
                                   stream);
 
-  GatherColumnStatistics(stat_chunks.data().get(), stat_groups.data().get(), num_chunks, stream);
-  MergeColumnStatistics(stat_chunks.data().get() + num_chunks,
-                        stat_chunks.data().get(),
+  GatherColumnStatistics(stat_chunks.data(), stat_groups.data(), num_chunks, stream);
+  MergeColumnStatistics(stat_chunks.data() + num_chunks,
+                        stat_chunks.data(),
                         stat_merge.device_ptr(),
                         stripe_bounds.size() * columns.size(),
                         stream);
 
-  MergeColumnStatistics(
-    stat_chunks.data().get() + num_chunks + stripe_bounds.size() * columns.size(),
-    stat_chunks.data().get() + num_chunks,
-    stat_merge.device_ptr(stripe_bounds.size() * columns.size()),
-    columns.size(),
-    stream);
+  MergeColumnStatistics(stat_chunks.data() + num_chunks + stripe_bounds.size() * columns.size(),
+                        stat_chunks.data() + num_chunks,
+                        stat_merge.device_ptr(stripe_bounds.size() * columns.size()),
+                        columns.size(),
+                        stream);
   gpu::orc_init_statistics_buffersize(
-    stat_merge.device_ptr(), stat_chunks.data().get() + num_chunks, num_stat_blobs, stream);
+    stat_merge.device_ptr(), stat_chunks.data() + num_chunks, num_stat_blobs, stream);
   stat_merge.device_to_host(stream, true);
 
   hostdevice_vector<uint8_t> blobs(stat_merge[num_stat_blobs - 1].start_chunk +
                                    stat_merge[num_stat_blobs - 1].num_chunks);
   gpu::orc_encode_statistics(blobs.device_ptr(),
                              stat_merge.device_ptr(),
-                             stat_chunks.data().get() + num_chunks,
+                             stat_chunks.data() + num_chunks,
                              num_stat_blobs,
                              stream);
   stat_merge.device_to_host(stream);
@@ -1080,20 +1071,16 @@ void writer::impl::write(table_view const &table)
     if (orc_columns.back().is_string()) { str_col_ids.push_back(current_id); }
   }
 
-  rmm::device_vector<uint32_t> dict_index(str_col_ids.size() * num_rows);
-  rmm::device_vector<uint32_t> dict_data(str_col_ids.size() * num_rows);
+  rmm::device_uvector<uint32_t> dict_index(str_col_ids.size() * num_rows, stream);
+  rmm::device_uvector<uint32_t> dict_data(str_col_ids.size() * num_rows, stream);
 
   // Build per-column dictionary indices
   const auto num_rowgroups   = div_by_rowgroups<size_t>(num_rows);
   const auto num_dict_chunks = num_rowgroups * str_col_ids.size();
   hostdevice_vector<gpu::DictionaryChunk> dict(num_dict_chunks);
   if (str_col_ids.size() != 0) {
-    init_dictionaries(orc_columns.data(),
-                      num_rows,
-                      str_col_ids,
-                      dict_data.data().get(),
-                      dict_index.data().get(),
-                      dict);
+    init_dictionaries(
+      orc_columns.data(), num_rows, str_col_ids, dict_data.data(), dict_index.data(), dict);
   }
 
   // Decide stripe boundaries early on, based on uncompressed size
@@ -1109,7 +1096,7 @@ void writer::impl::write(table_view const &table)
                        str_col_ids,
                        stripe_bounds,
                        dict,
-                       dict_index.data().get(),
+                       dict_index.data(),
                        stripe_dict);
   }
 
