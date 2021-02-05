@@ -118,6 +118,21 @@ class writer::impl {
   void close();
 
  private:
+  struct stripe_boundaries {
+    std::vector<uint32_t> sizes;
+    std::vector<uint32_t> offsets;
+
+    stripe_boundaries(std::vector<uint32_t> sizes);
+    auto size() const { return sizes.size(); }
+  };
+
+  /**
+   * @brief TODO
+   */
+  stripe_boundaries compute_stripe_boundaries(host_span<orc_column_view const> columns,
+                                              size_t num_rowgroups,
+                                              bool are_string_columns_present);
+
   /**
    * @brief Builds up column dictionaries indices
    *
@@ -141,7 +156,7 @@ class writer::impl {
    * @param columns List of columns
    * @param num_rows Total number of rows
    * @param str_col_ids List of columns that are strings type
-   * @param stripe_list List of stripe boundaries
+   * @param stripe_bounds List of stripe boundaries
    * @param dict List of dictionary chunks
    * @param dict_index List of dictionary indices
    * @param stripe_dict List of stripe dictionaries
@@ -149,7 +164,7 @@ class writer::impl {
   void build_dictionaries(orc_column_view* columns,
                           size_t num_rows,
                           std::vector<int> const& str_col_ids,
-                          std::vector<uint32_t> const& stripe_list,
+                          stripe_boundaries const& stripe_bounds,
                           hostdevice_vector<gpu::DictionaryChunk> const& dict,
                           uint32_t* dict_index,
                           hostdevice_vector<gpu::StripeDictionary>& stripe_dict);
@@ -159,14 +174,14 @@ class writer::impl {
    *
    * @param columns List of columns
    * @param num_rows Total number of rows
-   * @param stripe_list List of stripe boundaries
+   * @param stripe_bounds List of stripe boundaries
    * @param strm_ids List of unique stream identifiers
    *
    * @return The streams
    */
   std::vector<Stream> gather_streams(host_span<orc_column_view> columns,
                                      size_t num_rows,
-                                     std::vector<uint32_t> const& stripe_list,
+                                     stripe_boundaries const& stripe_bounds,
                                      std::vector<int32_t>& strm_ids);
 
   /**
@@ -177,7 +192,7 @@ class writer::impl {
                                                      size_t num_rowgroups,
                                                      void* output,
                                                      std::vector<int> const& str_col_ids,
-                                                     std::vector<uint32_t> const& stripe_list,
+                                                     stripe_boundaries const& stripe_bounds,
                                                      std::vector<Stream> const& streams,
                                                      streams_desc const& strm_desc,
                                                      std::vector<int32_t> const& strm_ids);
@@ -189,16 +204,14 @@ class writer::impl {
    * @param num_rows Total number of rows
    * @param num_rowgroups Total number of row groups
    * @param str_col_ids List of columns that are strings type
-   * @param stripe_list List of stripe boundaries
-   * @param streams List of columns' index and data streams
-   * @param strm_ids List of unique stream identifiers
+   * @param num_stripes TODO
    * @param chunks List of column data chunks
    */
   void encode_columns(host_span<orc_column_view const> columns,
                       size_t num_rows,
                       size_t num_rowgroups,
                       std::vector<int> const& str_col_ids,
-                      std::vector<uint32_t> const& stripe_list,
+                      uint32_t num_stripes,
                       hostdevice_vector<gpu::EncChunk>& chunks);
 
   /**
@@ -209,7 +222,7 @@ class writer::impl {
    * @param num_rows Total number of rows
    * @param num_index_streams Total number of index streams
    * @param num_data_streams Total number of data streams
-   * @param stripe_list List of stripe boundaries
+   * @param stripe_bounds List of stripe boundaries
    * @param chunks List of column data chunks
    * @param strm_desc List of stream descriptors
    *
@@ -219,7 +232,7 @@ class writer::impl {
                                                 size_t num_rows,
                                                 size_t num_index_streams,
                                                 size_t num_data_streams,
-                                                std::vector<uint32_t> const& stripe_list,
+                                                stripe_boundaries const& stripe_bounds,
                                                 hostdevice_vector<gpu::EncChunk>& chunks,
                                                 hostdevice_vector<gpu::StripeStream>& strm_desc);
 
@@ -230,7 +243,7 @@ class writer::impl {
    * @param columns List of columns
    * @param num_rows Total number of rows
    * @param num_rowgroups Total number of row groups
-   * @param stripe_list Number of rowgroups in each stripe
+   * @param stripe_bounds List of stripe boundaries
    * @param stripes Stripe information
    * @param chunks List of column data chunks
    *
@@ -240,7 +253,7 @@ class writer::impl {
     host_span<orc_column_view const>,
     size_t num_rows,
     size_t num_rowgroups,
-    std::vector<uint32_t> const& stripe_list,
+    stripe_boundaries const& stripe_bounds,
     std::vector<StripeInformation> const& stripes);
 
   /**

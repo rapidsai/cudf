@@ -30,6 +30,7 @@
 
 #include <algorithm>
 #include <cstring>
+#include <numeric>
 #include <utility>
 
 namespace cudf {
@@ -305,7 +306,7 @@ void writer::impl::init_dictionaries(orc_column_view *columns,
 void writer::impl::build_dictionaries(orc_column_view *columns,
                                       size_t num_rows,
                                       std::vector<int> const &str_col_ids,
-                                      std::vector<uint32_t> const &stripe_list,
+                                      stripe_boundaries const &stripe_bounds,
                                       hostdevice_vector<gpu::DictionaryChunk> const &dict,
                                       uint32_t *dict_index,
                                       hostdevice_vector<gpu::StripeDictionary> &stripe_dict)
@@ -317,30 +318,28 @@ void writer::impl::build_dictionaries(orc_column_view *columns,
     auto &str_column = columns[str_col_ids[i]];
     str_column.attach_stripe_dict(stripe_dict.host_ptr(), stripe_dict.device_ptr());
 
-    for (size_t j = 0, g = 0; j < stripe_list.size(); j++) {
-      const auto num_chunks = stripe_list[j];
+    for (size_t j = 0; j < stripe_bounds.size(); j++) {
+      const auto num_chunks = stripe_bounds.sizes[j];
       auto *sd              = &stripe_dict[j * str_col_ids.size() + i];
       sd->column_data_base  = str_column.host_dict_chunk(0)->column_data_base;
-      sd->dict_data         = str_column.host_dict_chunk(g)->dict_data;
+      sd->dict_data         = str_column.host_dict_chunk(stripe_bounds.offsets[j])->dict_data;
       sd->dict_index        = dict_index + i * num_rows;  // Indexed by abs row
       sd->column_id         = str_col_ids[i];
-      sd->start_chunk       = (uint32_t)g;
+      sd->start_chunk       = stripe_bounds.offsets[j];
       sd->num_chunks        = num_chunks;
       sd->num_strings       = 0;
       sd->dict_char_count   = 0;
-      for (size_t k = g; k < g + num_chunks; k++) {
+      for (size_t k = stripe_bounds.offsets[j]; k < stripe_bounds.offsets[j] + num_chunks; k++) {
         const auto &dt = dict[k * str_col_ids.size() + i];
         sd->num_strings += dt.num_dict_strings;
         direct_cost += dt.string_char_count;
         dict_cost += dt.dict_char_count + dt.num_dict_strings;
       }
-
-      g += num_chunks;
     }
 
     // Early disable of dictionary if it doesn't look good at the chunk level
     if (enable_dictionary_ && dict_cost >= direct_cost) {
-      for (size_t j = 0; j < stripe_list.size(); j++) {
+      for (size_t j = 0; j < stripe_bounds.size(); j++) {
         stripe_dict[j * str_col_ids.size() + i].dict_data = nullptr;
       }
     }
@@ -350,7 +349,7 @@ void writer::impl::build_dictionaries(orc_column_view *columns,
   gpu::BuildStripeDictionaries(stripe_dict.device_ptr(),
                                stripe_dict.host_ptr(),
                                dict.device_ptr(),
-                               stripe_list.size(),
+                               stripe_bounds.size(),
                                num_rowgroups,
                                str_col_ids.size(),
                                stream);
@@ -359,7 +358,7 @@ void writer::impl::build_dictionaries(orc_column_view *columns,
 
 std::vector<Stream> writer::impl::gather_streams(host_span<orc_column_view> columns,
                                                  size_t num_rows,
-                                                 std::vector<uint32_t> const &stripe_list,
+                                                 stripe_boundaries const &stripe_bounds,
                                                  std::vector<int32_t> &strm_ids)
 {
   // First n + 1 streams are row index streams, including 'column 0'
@@ -435,7 +434,7 @@ std::vector<Stream> writer::impl::gather_streams(host_span<orc_column_view> colu
         size_t dict_data_size      = 0;
         size_t dict_strings        = 0;
         size_t dict_lengths_div512 = 0;
-        for (size_t stripe = 0, g = 0; stripe < stripe_list.size(); stripe++) {
+        for (size_t stripe = 0; stripe < stripe_bounds.size(); stripe++) {
           const auto sd = columns[i].host_stripe_dict(stripe);
           enable_dict   = (enable_dict && sd->dict_data != nullptr);
           if (enable_dict) {
@@ -444,8 +443,10 @@ std::vector<Stream> writer::impl::gather_streams(host_span<orc_column_view> colu
             dict_data_size += sd->dict_char_count;
           }
 
-          for (uint32_t k = 0; k < stripe_list[stripe]; k++, g++) {
-            direct_data_size += columns[i].host_dict_chunk(g)->string_char_count;
+          for (uint32_t rg = stripe_bounds.offsets[stripe];
+               rg < stripe_bounds.offsets[stripe] + stripe_bounds.sizes[stripe];
+               ++rg) {
+            direct_data_size += columns[i].host_dict_chunk(rg)->string_char_count;
           }
         }
         if (enable_dict) {
@@ -553,7 +554,7 @@ hostdevice_vector<gpu::EncChunk> writer::impl::initialize_chunks(
   size_t num_rowgroups,
   void *output,
   std::vector<int> const &str_col_ids,
-  std::vector<uint32_t> const &stripe_list,
+  stripe_boundaries const &stripe_bounds,
   std::vector<Stream> const &streams,
   streams_desc const &strm_desc,
   std::vector<int32_t> const &strm_ids)
@@ -564,8 +565,7 @@ hostdevice_vector<gpu::EncChunk> writer::impl::initialize_chunks(
   hostdevice_vector<gpu::EncChunk> chunks(num_rowgroups * num_columns);
 
   // Initialize column chunks' descriptions
-  size_t stripe_start = 0;
-  size_t stripe_id    = 0;
+  size_t stripe_id = 0;
   std::map<size_type, segmented_valid_cnt_input> validity_check_inputs;
   for (size_t j = 0; j < num_rowgroups; j++) {
     for (size_t i = 0; i < num_columns; i++) {
@@ -592,7 +592,7 @@ hostdevice_vector<gpu::EncChunk> writer::impl::initialize_chunks(
 
       // Only need to check row groups that end within the stripe
       if (ck->type_kind == TypeKind::BOOLEAN && columns[i].nullable() &&
-          j + 1 != stripe_start + stripe_list[stripe_id]) {
+          j + 1 != stripe_bounds.offsets[stripe_id] + stripe_bounds.sizes[stripe_id]) {
         auto curr_cnt_in = validity_check_inputs.find(i);
         if (curr_cnt_in == validity_check_inputs.end()) {
           bool unused;
@@ -611,7 +611,7 @@ hostdevice_vector<gpu::EncChunk> writer::impl::initialize_chunks(
         if (strm_id >= 0) {
           if ((k == gpu::CI_DICTIONARY) ||
               (k == gpu::CI_DATA2 && ck->encoding_kind == DICTIONARY_V2)) {
-            if (j == stripe_start) {
+            if (j == stripe_bounds.offsets[stripe_id]) {
               const int32_t dict_stride = columns[i].get_dict_stride();
               const auto stripe         = columns[i].host_stripe_dict(stripe_id);
               ck->strm_len[k]           = (k == gpu::CI_DICTIONARY)
@@ -651,10 +651,7 @@ hostdevice_vector<gpu::EncChunk> writer::impl::initialize_chunks(
     }
 
     // Track the current stripe this rowgroup chunk belongs
-    if (j + 1 == stripe_start + stripe_list[stripe_id]) {
-      stripe_start = j + 1;
-      stripe_id++;
-    }
+    if (j + 1 == stripe_bounds.offsets[stripe_id] + stripe_bounds.sizes[stripe_id]) { ++stripe_id; }
   }
 
   for (auto &cnt_in : validity_check_inputs) {
@@ -674,17 +671,13 @@ void writer::impl::encode_columns(host_span<orc_column_view const> columns,
                                   size_t num_rows,
                                   size_t num_rowgroups,
                                   std::vector<int> const &str_col_ids,
-                                  std::vector<uint32_t> const &stripe_list,
+                                  uint32_t num_stripes,
                                   hostdevice_vector<gpu::EncChunk> &chunks)
 {
   if (!str_col_ids.empty()) {
     auto d_stripe_dict = columns[str_col_ids[0]].device_stripe_dict();
-    gpu::EncodeStripeDictionaries(d_stripe_dict,
-                                  chunks.device_ptr(),
-                                  str_col_ids.size(),
-                                  columns.size(),
-                                  stripe_list.size(),
-                                  stream);
+    gpu::EncodeStripeDictionaries(
+      d_stripe_dict, chunks.device_ptr(), str_col_ids.size(), columns.size(), num_stripes, stream);
   }
   gpu::EncodeOrcColumnData(chunks.device_ptr(), columns.size(), num_rowgroups, stream);
   stream.synchronize();
@@ -695,18 +688,14 @@ std::vector<StripeInformation> writer::impl::gather_stripes(
   size_t num_rows,
   size_t num_index_streams,
   size_t num_data_streams,
-  std::vector<uint32_t> const &stripe_list,
+  stripe_boundaries const &stripe_bounds,
   hostdevice_vector<gpu::EncChunk> &chunks,
   hostdevice_vector<gpu::StripeStream> &strm_desc)
 {
-  std::vector<StripeInformation> stripes(stripe_list.size());
-  size_t group        = 0;
-  size_t stripe_start = 0;
-  for (size_t s = 0; s < stripe_list.size(); s++) {
-    size_t stripe_group_end = group + stripe_list[s];
-
+  std::vector<StripeInformation> stripes(stripe_bounds.size());
+  for (size_t s = 0; s < stripe_bounds.size(); s++) {
     for (size_t i = 0; i < num_columns; i++) {
-      const auto *ck = &chunks[group * num_columns + i];
+      const auto *ck = &chunks[stripe_bounds.offsets[s] * num_columns + i];
 
       // Assign stream data of column data stream(s)
       for (int k = 0; k < gpu::CI_INDEX; k++) {
@@ -714,18 +703,17 @@ std::vector<StripeInformation> writer::impl::gather_stripes(
         if (stream_id != -1) {
           auto *ss           = &strm_desc[s * num_data_streams + stream_id - num_index_streams];
           ss->stream_size    = 0;
-          ss->first_chunk_id = (group * num_columns + i);
-          ss->num_chunks     = (stripe_group_end - group);
+          ss->first_chunk_id = (stripe_bounds.offsets[s] * num_columns + i);
+          ss->num_chunks     = stripe_bounds.sizes[s];
           ss->column_id      = i;
           ss->stream_type    = k;
         }
       }
     }
 
-    group                   = stripe_group_end;
-    size_t stripe_end       = std::min(group * row_index_stride_, num_rows);
-    stripes[s].numberOfRows = stripe_end - stripe_start;
-    stripe_start            = stripe_end;
+    auto const stripe_group_end = stripe_bounds.offsets[s] + stripe_bounds.sizes[s];
+    auto const stripe_end       = std::min(stripe_group_end * row_index_stride_, num_rows);
+    stripes[s].numberOfRows     = stripe_end - stripe_bounds.offsets[s] * row_index_stride_;
   }
 
   strm_desc.host_to_device(stream);
@@ -741,10 +729,10 @@ std::vector<std::vector<uint8_t>> writer::impl::gather_statistic_blobs(
   host_span<orc_column_view const> columns,
   size_t num_rows,
   size_t num_rowgroups,
-  std::vector<uint32_t> const &stripe_list,
+  stripe_boundaries const &stripe_bounds,
   std::vector<StripeInformation> const &stripes)
 {
-  size_t num_stat_blobs = (1 + stripe_list.size()) * columns.size();
+  size_t num_stat_blobs = (1 + stripe_bounds.size()) * columns.size();
   size_t num_chunks     = num_rowgroups * columns.size();
   std::vector<std::vector<uint8_t>> stat_blobs(num_stat_blobs);
   hostdevice_vector<stats_column_desc> stat_desc(columns.size());
@@ -784,17 +772,16 @@ std::vector<std::vector<uint8_t>> writer::impl::gather_statistic_blobs(
     } else {
       desc->ts_scale = 0;
     }
-    for (size_t k = 0, c = 0; k < stripe_list.size(); k++) {
-      statistics_merge_group *grp = &stat_merge[i * stripe_list.size() + k];
+    for (size_t k = 0; k < stripe_bounds.size(); k++) {
+      statistics_merge_group *grp = &stat_merge[i * stripe_bounds.size() + k];
       grp->col                    = stat_desc.device_ptr(i);
-      grp->start_chunk            = static_cast<uint32_t>(i * num_rowgroups + c);
-      grp->num_chunks             = stripe_list[k];
-      c += stripe_list[k];
+      grp->start_chunk = static_cast<uint32_t>(i * num_rowgroups + stripe_bounds.offsets[k]);
+      grp->num_chunks  = stripe_bounds.sizes[k];
     }
-    statistics_merge_group *col_stats = &stat_merge[stripe_list.size() * columns.size() + i];
+    statistics_merge_group *col_stats = &stat_merge[stripe_bounds.size() * columns.size() + i];
     col_stats->col                    = stat_desc.device_ptr(i);
-    col_stats->start_chunk            = static_cast<uint32_t>(i * stripe_list.size());
-    col_stats->num_chunks             = static_cast<uint32_t>(stripe_list.size());
+    col_stats->start_chunk            = static_cast<uint32_t>(i * stripe_bounds.size());
+    col_stats->num_chunks             = static_cast<uint32_t>(stripe_bounds.size());
   }
   stat_desc.host_to_device(stream);
   stat_merge.host_to_device(stream);
@@ -809,14 +796,15 @@ std::vector<std::vector<uint8_t>> writer::impl::gather_statistic_blobs(
   MergeColumnStatistics(stat_chunks.data().get() + num_chunks,
                         stat_chunks.data().get(),
                         stat_merge.device_ptr(),
-                        stripe_list.size() * columns.size(),
+                        stripe_bounds.size() * columns.size(),
                         stream);
 
-  MergeColumnStatistics(stat_chunks.data().get() + num_chunks + stripe_list.size() * columns.size(),
-                        stat_chunks.data().get() + num_chunks,
-                        stat_merge.device_ptr(stripe_list.size() * columns.size()),
-                        columns.size(),
-                        stream);
+  MergeColumnStatistics(
+    stat_chunks.data().get() + num_chunks + stripe_bounds.size() * columns.size(),
+    stat_chunks.data().get() + num_chunks,
+    stat_merge.device_ptr(stripe_bounds.size() * columns.size()),
+    columns.size(),
+    stream);
   gpu::orc_init_statistics_buffersize(
     stat_merge.device_ptr(), stat_chunks.data().get() + num_chunks, num_stat_blobs, stream);
   stat_merge.device_to_host(stream, true);
@@ -1014,6 +1002,45 @@ void writer::impl::init_state()
   out_sink_->host_write(MAGIC, std::strlen(MAGIC));
 }
 
+writer::impl::stripe_boundaries::stripe_boundaries(std::vector<uint32_t> ssizes)
+  : sizes{std::move(ssizes)}
+{
+  offsets.reserve(sizes.size());
+
+  thrust::exclusive_scan(
+    thrust::host, sizes.cbegin(), sizes.cend(), std::back_inserter(offsets), 0u);
+}
+
+writer::impl::stripe_boundaries writer::impl::compute_stripe_boundaries(
+  host_span<orc_column_view const> columns, size_t num_rowgroups, bool are_string_columns_present)
+{
+  std::vector<uint32_t> stripe_sizes;
+  for (size_t g = 0, stripe_start = 0, stripe_size = 0; g < num_rowgroups; g++) {
+    auto const rowgroup_size =
+      std::accumulate(columns.begin(), columns.end(), 0ul, [&](size_t total_size, auto const &col) {
+        if (col.is_string()) {
+          const auto dt = col.host_dict_chunk(g);
+          return total_size + row_index_stride_ + dt->string_char_count;
+        } else {
+          return total_size + col.type_width() * row_index_stride_;
+        }
+      });
+
+    // Apply rows per stripe limit to limit string dictionaries
+    const size_t max_stripe_rows = are_string_columns_present ? 1000000 : 5000000;
+    if ((g > stripe_start) && (stripe_size + rowgroup_size > max_stripe_size_ ||
+                               (g + 1 - stripe_start) * row_index_stride_ > max_stripe_rows)) {
+      stripe_sizes.push_back(g - stripe_start);
+      stripe_start = g;
+      stripe_size  = 0;
+    }
+    stripe_size += rowgroup_size;
+    if (g + 1 == num_rowgroups) { stripe_sizes.push_back(num_rowgroups - stripe_start); }
+  }
+
+  return stripe_boundaries{stripe_sizes};
+}
+
 void writer::impl::write(table_view const &table)
 {
   CUDF_EXPECTS(not closed, "Data has already been flushed to out and closed");
@@ -1060,39 +1087,17 @@ void writer::impl::write(table_view const &table)
   }
 
   // Decide stripe boundaries early on, based on uncompressed size
-  std::vector<uint32_t> stripe_list;
-  for (size_t g = 0, stripe_start = 0, stripe_size = 0; g < num_rowgroups; g++) {
-    size_t rowgroup_size = 0;
-    for (int i = 0; i < num_columns; i++) {
-      if (orc_columns[i].is_string()) {
-        const auto dt = orc_columns[i].host_dict_chunk(g);
-        rowgroup_size += 1 * row_index_stride_;
-        rowgroup_size += dt->string_char_count;
-      } else {
-        rowgroup_size += orc_columns[i].type_width() * row_index_stride_;
-      }
-    }
-
-    // Apply rows per stripe limit to limit string dictionaries
-    const size_t max_stripe_rows = !str_col_ids.empty() ? 1000000 : 5000000;
-    if ((g > stripe_start) && (stripe_size + rowgroup_size > max_stripe_size_ ||
-                               (g + 1 - stripe_start) * row_index_stride_ > max_stripe_rows)) {
-      stripe_list.push_back(g - stripe_start);
-      stripe_start = g;
-      stripe_size  = 0;
-    }
-    stripe_size += rowgroup_size;
-    if (g + 1 == num_rowgroups) { stripe_list.push_back(num_rowgroups - stripe_start); }
-  }
+  auto const stripe_bounds =
+    compute_stripe_boundaries(orc_columns, num_rowgroups, !str_col_ids.empty());
 
   // Build stripe-level dictionaries
-  const auto num_stripe_dict = stripe_list.size() * str_col_ids.size();
+  const auto num_stripe_dict = stripe_bounds.size() * str_col_ids.size();
   hostdevice_vector<gpu::StripeDictionary> stripe_dict(num_stripe_dict);
   if (str_col_ids.size() != 0) {
     build_dictionaries(orc_columns.data(),
                        num_rows,
                        str_col_ids,
-                       stripe_list,
+                       stripe_bounds,
                        dict,
                        dict_index.data().get(),
                        stripe_dict);
@@ -1100,7 +1105,7 @@ void writer::impl::write(table_view const &table)
 
   // Initialize streams
   std::vector<int32_t> strm_ids(num_columns * gpu::CI_NUM_STREAMS, -1);
-  auto streams = gather_streams(orc_columns, num_rows, stripe_list, strm_ids);
+  auto streams = gather_streams(orc_columns, num_rows, stripe_bounds, strm_ids);
 
   // Encode column data chunks
   auto const strm_offs = compute_stream_offsets(orc_columns, num_rowgroups, streams);
@@ -1110,25 +1115,25 @@ void writer::impl::write(table_view const &table)
                                   num_rowgroups,
                                   encoded_data.data(),
                                   str_col_ids,
-                                  stripe_list,
+                                  stripe_bounds,
                                   streams,
                                   strm_offs,
                                   strm_ids);
-  encode_columns(orc_columns, num_rows, num_rowgroups, str_col_ids, stripe_list, chunks);
+  encode_columns(orc_columns, num_rows, num_rowgroups, str_col_ids, stripe_bounds.size(), chunks);
 
   // Assemble individual disparate column chunks into contiguous data streams
   const auto num_index_streams  = (num_columns + 1);
   const auto num_data_streams   = streams.size() - num_index_streams;
-  const auto num_stripe_streams = stripe_list.size() * num_data_streams;
+  const auto num_stripe_streams = stripe_bounds.size() * num_data_streams;
   hostdevice_vector<gpu::StripeStream> strm_desc(num_stripe_streams);
   auto stripes = gather_stripes(
-    num_columns, num_rows, num_index_streams, num_data_streams, stripe_list, chunks, strm_desc);
+    num_columns, num_rows, num_index_streams, num_data_streams, stripe_bounds, chunks, strm_desc);
 
   // Gather column statistics
   std::vector<std::vector<uint8_t>> column_stats;
   if (enable_statistics_ && num_columns > 0 && num_rows > 0) {
     column_stats =
-      gather_statistic_blobs(orc_columns, num_rows, num_rowgroups, stripe_list, stripes);
+      gather_statistic_blobs(orc_columns, num_rows, num_rowgroups, stripe_bounds, stripes);
   }
 
   // Allocate intermediate output stream buffer
@@ -1137,7 +1142,7 @@ void writer::impl::write(table_view const &table)
   auto stream_output           = [&]() {
     size_t max_stream_size = 0;
 
-    for (size_t stripe_id = 0; stripe_id < stripe_list.size(); stripe_id++) {
+    for (size_t stripe_id = 0; stripe_id < stripe_bounds.size(); stripe_id++) {
       for (size_t i = 0; i < num_data_streams; i++) {
         gpu::StripeStream *ss = &strm_desc[stripe_id * num_data_streams + i];
         size_t stream_size    = ss->stream_size;
@@ -1261,21 +1266,21 @@ void writer::impl::write(table_view const &table)
       pbw_.put_uint(num_rows);
       ff.statistics[0] = std::move(buffer_);
       for (int i = 0; i < num_columns; i++) {
-        size_t idx = stripe_list.size() * num_columns + i;
+        size_t idx = stripe_bounds.size() * num_columns + i;
         if (idx < column_stats.size()) { ff.statistics[1 + i] = std::move(column_stats[idx]); }
       }
     }
     // Stripe-level statistics
     size_t first_stripe = md.stripeStats.size();
-    md.stripeStats.resize(first_stripe + stripe_list.size());
-    for (size_t stripe_id = 0; stripe_id < stripe_list.size(); stripe_id++) {
+    md.stripeStats.resize(first_stripe + stripe_bounds.size());
+    for (size_t stripe_id = 0; stripe_id < stripe_bounds.size(); stripe_id++) {
       md.stripeStats[first_stripe + stripe_id].colStats.resize(1 + num_columns);
       buffer_.resize(0);
       pbw_.putb(1 * 8 + PB_TYPE_VARINT);
       pbw_.put_uint(stripes[stripe_id].numberOfRows);
       md.stripeStats[first_stripe + stripe_id].colStats[0] = std::move(buffer_);
       for (int i = 0; i < num_columns; i++) {
-        size_t idx = stripe_list.size() * i + stripe_id;
+        size_t idx = stripe_bounds.size() * i + stripe_id;
         if (idx < column_stats.size()) {
           md.stripeStats[first_stripe + stripe_id].colStats[1 + i] = std::move(column_stats[idx]);
         }
