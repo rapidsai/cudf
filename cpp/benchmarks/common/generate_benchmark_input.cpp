@@ -355,7 +355,7 @@ void append_string(Char_gen& char_gen, bool valid, uint32_t length, string_colum
     return;
   }
   std::generate_n(std::back_inserter(column_data.chars), length, [&]() mutable {
-    auto ch = char_gen();
+    auto const ch = char_gen();
     if (ch < '\x7F') return static_cast<char>(ch);
     // x7F is at the top edge of ASCII;
     // the next set of characters are assigned two bytes
