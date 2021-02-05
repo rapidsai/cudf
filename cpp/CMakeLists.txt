@@ -158,6 +158,7 @@ add_library(cudf
     src/copying/copy_range.cu
     src/copying/gather.cu
     src/copying/get_element.cu
+    src/copying/pack.cpp
     src/copying/sample.cu
     src/copying/scatter.cu
     src/copying/shift.cu
@@ -253,6 +254,7 @@ add_library(cudf
     src/lists/extract.cu
     src/lists/lists_column_factories.cu
     src/lists/lists_column_view.cu
+    src/lists/segmented_sort.cu
     src/merge/merge.cu
     src/partitioning/partitioning.cu
     src/partitioning/round_robin.cu
@@ -290,6 +292,7 @@ add_library(cudf
     src/search/search.cu
     src/sort/is_sorted.cu
     src/sort/rank.cu
+    src/sort/segmented_sort.cu
     src/sort/sort_column.cu
     src/sort/sort.cu
     src/sort/stable_sort_column.cu
