@@ -354,14 +354,12 @@ void append_string(Char_gen& char_gen, bool valid, uint32_t length, string_colum
     column_data.offsets.push_back(column_data.offsets.back());
     return;
   }
-  std::generate_n(std::back_inserter(column_data.chars), length, [&]() mutable {
+  for (uint32_t idx = 0; idx < length; ++idx) {
     auto const ch = char_gen();
-    if (ch < '\x7F') return static_cast<char>(ch);
-    // x7F is at the top edge of ASCII;
-    // the next set of characters are assigned two bytes
-    column_data.chars.push_back('\xC4');
-    return static_cast<char>(ch + 1);
-  });
+    if (ch >= '\x7F')                       // x7F is at the top edge of ASCII
+      column_data.chars.push_back('\xC4');  // these characters are assigned two bytes
+    column_data.chars.push_back(static_cast<char>(ch + (ch >= '\x7F')));
+  }
   column_data.offsets.push_back(column_data.chars.size());
 }
 
