@@ -1,6 +1,6 @@
 # Copyright (c) 2018-2021, NVIDIA CORPORATION.
 
-from __future__ import division
+from __future__ import annotations, division
 
 import inspect
 import itertools
@@ -7389,9 +7389,7 @@ class DataFrame(Frame, Serializable):
                 return False
         return super().equals(other)
 
-    def _drop_rows_by_labels(
-        self: "cudf.DataFrame", labels: ColumnLike
-    ) -> "cudf.DataFrame":
+    def _drop_rows_by_labels(self, labels: ColumnLike) -> "cudf.DataFrame":
         """Delete rows specified by `label` parameter. In `DataFrame`, this can
         be achieved efficiently by a left-anti join operation
 

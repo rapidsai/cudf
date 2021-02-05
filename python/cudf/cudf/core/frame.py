@@ -6,7 +6,7 @@ import functools
 import operator
 import warnings
 from collections import OrderedDict, abc as abc
-from typing import TYPE_CHECKING, Any, Dict, Tuple, TypeVar, overload
+from typing import TYPE_CHECKING, Any, Dict, Tuple, TypeVar, Union, overload
 
 import cupy
 import numpy as np
@@ -27,7 +27,6 @@ from cudf.utils.dtypes import (
     is_scalar,
     min_scalar_type,
 )
-
 
 T = TypeVar("T", bound="Frame")
 
