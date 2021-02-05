@@ -20,9 +20,10 @@
 #include <cudf/utilities/error.hpp>
 #include <cudf/utilities/traits.hpp>
 
-#include <cudf_test/column_wrapper.hpp>
+#include <thrust/iterator/transform_iterator.h>
 
 #include <exception>
+#include <numeric>
 #include <vector>
 
 namespace cudf {

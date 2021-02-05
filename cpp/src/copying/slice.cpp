@@ -17,13 +17,12 @@
 #include <cudf/column/column_view.hpp>
 #include <cudf/copying.hpp>
 #include <cudf/detail/copy.hpp>
+#include <cudf/detail/iterator.cuh>
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/utilities/error.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
-
-#include <cudf_test/column_wrapper.hpp> // TODO replace with cudf header
 
 #include <algorithm>
 
@@ -54,7 +53,7 @@ std::vector<column_view> slice(column_view const& input,
                        input.offset() + begin,
                        children};
   };
-  auto begin = cudf::test::make_counting_transform_iterator(0, op);
+  auto begin = cudf::detail::make_counting_transform_iterator(0, op);
   return {begin, begin + indices.size() / 2};
 }
 

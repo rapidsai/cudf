@@ -29,7 +29,6 @@
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/mr/device/per_device_resource.hpp>
-#include "cudf_test/column_wrapper.hpp"
 
 namespace cudf {
 namespace detail {
