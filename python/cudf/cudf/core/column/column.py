@@ -605,14 +605,15 @@ class ColumnBase(Column, Serializable):
         return libcudf.copying.get_element(self, idx).value
 
     def slice(self, start: int, stop: int, stride: int = None) -> ColumnBase:
+        stride = 1 if stride is None else stride
         if start < 0:
             start = start + len(self)
-        if stop < 0:
+        if stop < 0 and not (stride < 0 and stop == -1):
             stop = stop + len(self)
-        if start >= stop:
+        if (stride > 0 and start >= stop) or (stride < 0 and start <= stop):
             return column_empty(0, self.dtype, masked=True)
         # compute mask slice
-        if stride == 1 or stride is None:
+        if stride == 1:
             return libcudf.copying.column_slice(self, [start, stop])[0]
         else:
             # Need to create a gather map for given slice with stride

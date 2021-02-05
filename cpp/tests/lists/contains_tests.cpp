@@ -16,6 +16,7 @@
  */
 
 #include <cudf/column/column_factories.hpp>
+#include <cudf/detail/iterator.cuh>
 #include <cudf/lists/contains.hpp>
 #include <cudf/scalar/scalar_factories.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
@@ -142,7 +143,7 @@ TYPED_TEST(TypedContainsTest, ListContainsScalarWithNullLists)
      {},
      {1, 2, 3},
      {}},
-    make_counting_transform_iterator(0, [](auto i) {
+    cudf::detail::make_counting_transform_iterator(0, [](auto i) {
       return (i != 3) && (i != 10);
     })}.release();
 
@@ -150,9 +151,10 @@ TYPED_TEST(TypedContainsTest, ListContainsScalarWithNullLists)
 
   auto actual_result = lists::contains(search_space->view(), *search_key_one);
 
-  auto expected_result = fixed_width_column_wrapper<bool>{
-    {1, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0},
-    make_counting_transform_iterator(0, [](auto i) { return (i != 3) && (i != 10); })};
+  auto expected_result =
+    fixed_width_column_wrapper<bool>{{1, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0},
+                                     cudf::detail::make_counting_transform_iterator(
+                                       0, [](auto i) { return (i != 3) && (i != 10); })};
 
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected_result, *actual_result);
 }
@@ -164,7 +166,7 @@ TYPED_TEST(TypedContainsTest, ListContainsScalarNonNullListsWithNullValues)
 
   auto numerals = fixed_width_column_wrapper<T>{
     {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 0, 1, 2, 3, 4},
-    make_counting_transform_iterator(0, [](auto i) -> bool { return i % 3; })};
+    cudf::detail::make_counting_transform_iterator(0, [](auto i) -> bool { return i % 3; })};
 
   auto search_space =
     make_lists_column(8,
@@ -189,9 +191,10 @@ TYPED_TEST(TypedContainsTest, ListContainsScalarWithNullsInLists)
 
   auto numerals = fixed_width_column_wrapper<T>{
     {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 0, 1, 2, 3, 4},
-    make_counting_transform_iterator(0, [](auto i) -> bool { return i % 3; })};
+    cudf::detail::make_counting_transform_iterator(0, [](auto i) -> bool { return i % 3; })};
 
-  auto input_null_mask_iter = make_counting_transform_iterator(0, [](auto i) { return i != 4; });
+  auto input_null_mask_iter =
+    cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i != 4; });
 
   auto search_space = make_lists_column(
     8,
@@ -216,9 +219,10 @@ TEST_F(ContainsTest, BoolListContainsScalarWithNullsInLists)
 
   auto numerals = fixed_width_column_wrapper<T>{
     {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 0, 1, 2, 3, 4},
-    make_counting_transform_iterator(0, [](auto i) -> bool { return i % 3; })};
+    cudf::detail::make_counting_transform_iterator(0, [](auto i) -> bool { return i % 3; })};
 
-  auto input_null_mask_iter = make_counting_transform_iterator(0, [](auto i) { return i != 4; });
+  auto input_null_mask_iter =
+    cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i != 4; });
 
   auto search_space = make_lists_column(
     8,
@@ -243,9 +247,10 @@ TEST_F(ContainsTest, StringListContainsScalarWithNullsInLists)
 
   auto strings = strings_column_wrapper{
     {"0", "1", "2", "3", "4", "5", "6", "7", "8", "9", "0", "1", "2", "3", "4"},
-    make_counting_transform_iterator(0, [](auto i) -> bool { return i % 3; })};
+    cudf::detail::make_counting_transform_iterator(0, [](auto i) -> bool { return i % 3; })};
 
-  auto input_null_mask_iter = make_counting_transform_iterator(0, [](auto i) { return i != 4; });
+  auto input_null_mask_iter =
+    cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i != 4; });
 
   auto search_space = make_lists_column(
     8,
@@ -280,7 +285,7 @@ TYPED_TEST(TypedContainsTest, ContainsScalarNullSearchKey)
      {},
      {1, 2, 3},
      {}},
-    make_counting_transform_iterator(0, [](auto i) {
+    cudf::detail::make_counting_transform_iterator(0, [](auto i) {
       return (i != 3) && (i != 10);
     })}.release();
 
@@ -290,7 +295,7 @@ TYPED_TEST(TypedContainsTest, ContainsScalarNullSearchKey)
 
   auto expected_result = fixed_width_column_wrapper<bool>{
     {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
-    make_counting_transform_iterator(0, [](auto i) { return false; })};
+    cudf::detail::make_counting_transform_iterator(0, [](auto i) { return false; })};
 
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected_result, *actual_result);
 }
@@ -375,7 +380,7 @@ TYPED_TEST(TypedVectorContainsTest, ListContainsVectorWithNullLists)
      {},
      {1, 2, 3},
      {}},
-    make_counting_transform_iterator(0, [](auto i) {
+    cudf::detail::make_counting_transform_iterator(0, [](auto i) {
       return (i != 3) && (i != 10);
     })}.release();
 
@@ -383,9 +388,10 @@ TYPED_TEST(TypedVectorContainsTest, ListContainsVectorWithNullLists)
 
   auto actual_result = lists::contains(search_space->view(), search_keys);
 
-  auto expected_result = fixed_width_column_wrapper<bool>{
-    {1, 0, 0, 0, 0, 1, 0, 0, 0, 1, 0},
-    make_counting_transform_iterator(0, [](auto i) { return (i != 3) && (i != 10); })};
+  auto expected_result =
+    fixed_width_column_wrapper<bool>{{1, 0, 0, 0, 0, 1, 0, 0, 0, 1, 0},
+                                     cudf::detail::make_counting_transform_iterator(
+                                       0, [](auto i) { return (i != 3) && (i != 10); })};
 
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected_result, *actual_result);
 }
@@ -397,7 +403,7 @@ TYPED_TEST(TypedVectorContainsTest, ListContainsVectorNonNullListsWithNullValues
 
   auto numerals = fixed_width_column_wrapper<T>{
     {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 0, 1, 2, 3, 4},
-    make_counting_transform_iterator(0, [](auto i) -> bool { return i % 3; })};
+    cudf::detail::make_counting_transform_iterator(0, [](auto i) -> bool { return i % 3; })};
 
   auto search_space =
     make_lists_column(8,
@@ -422,9 +428,10 @@ TYPED_TEST(TypedVectorContainsTest, ListContainsVectorWithNullsInLists)
 
   auto numerals = fixed_width_column_wrapper<T>{
     {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 0, 1, 2, 3, 4},
-    make_counting_transform_iterator(0, [](auto i) -> bool { return i % 3; })};
+    cudf::detail::make_counting_transform_iterator(0, [](auto i) -> bool { return i % 3; })};
 
-  auto input_null_mask_iter = make_counting_transform_iterator(0, [](auto i) { return i != 4; });
+  auto input_null_mask_iter =
+    cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i != 4; });
 
   auto search_space = make_lists_column(
     8,
@@ -449,9 +456,10 @@ TYPED_TEST(TypedVectorContainsTest, ListContainsVectorWithNullsInListsAndInSearc
 
   auto numerals = fixed_width_column_wrapper<T>{
     {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 0, 1, 2, 3, 4},
-    make_counting_transform_iterator(0, [](auto i) -> bool { return i % 3; })};
+    cudf::detail::make_counting_transform_iterator(0, [](auto i) -> bool { return i % 3; })};
 
-  auto input_null_mask_iter = make_counting_transform_iterator(0, [](auto i) { return i != 4; });
+  auto input_null_mask_iter =
+    cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i != 4; });
 
   auto search_space = make_lists_column(
     8,
@@ -461,7 +469,8 @@ TYPED_TEST(TypedVectorContainsTest, ListContainsVectorWithNullsInListsAndInSearc
     cudf::test::detail::make_null_mask(input_null_mask_iter, input_null_mask_iter + 8));
 
   auto search_keys = fixed_width_column_wrapper<T, int32_t>{
-    {1, 2, 3, 1, 2, 3, 1, 3}, make_counting_transform_iterator(0, [](auto i) { return i != 6; })};
+    {1, 2, 3, 1, 2, 3, 1, 3},
+    cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i != 6; })};
 
   auto actual_result = lists::contains(search_space->view(), search_keys);
 
@@ -477,9 +486,10 @@ TEST_F(ContainsTest, BoolListContainsVectorWithNullsInListsAndInSearchKeys)
 
   auto numerals = fixed_width_column_wrapper<T, int32_t>{
     {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 0, 1, 2, 3, 4},
-    make_counting_transform_iterator(0, [](auto i) -> bool { return i % 3; })};
+    cudf::detail::make_counting_transform_iterator(0, [](auto i) -> bool { return i % 3; })};
 
-  auto input_null_mask_iter = make_counting_transform_iterator(0, [](auto i) { return i != 4; });
+  auto input_null_mask_iter =
+    cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i != 4; });
 
   auto search_space = make_lists_column(
     8,
@@ -489,7 +499,8 @@ TEST_F(ContainsTest, BoolListContainsVectorWithNullsInListsAndInSearchKeys)
     cudf::test::detail::make_null_mask(input_null_mask_iter, input_null_mask_iter + 8));
 
   auto search_keys = fixed_width_column_wrapper<T, int32_t>{
-    {0, 1, 0, 1, 0, 0, 1, 1}, make_counting_transform_iterator(0, [](auto i) { return i != 6; })};
+    {0, 1, 0, 1, 0, 0, 1, 1},
+    cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i != 6; })};
 
   auto actual_result = lists::contains(search_space->view(), search_keys);
 
@@ -503,9 +514,10 @@ TEST_F(ContainsTest, StringListContainsVectorWithNullsInListsAndInSearchKeys)
 {
   auto numerals = strings_column_wrapper{
     {"0", "1", "2", "3", "4", "5", "6", "7", "8", "9", "0", "1", "2", "3", "4"},
-    make_counting_transform_iterator(0, [](auto i) -> bool { return i % 3; })};
+    cudf::detail::make_counting_transform_iterator(0, [](auto i) -> bool { return i % 3; })};
 
-  auto input_null_mask_iter = make_counting_transform_iterator(0, [](auto i) { return i != 4; });
+  auto input_null_mask_iter =
+    cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i != 4; });
 
   auto search_space = make_lists_column(
     8,
@@ -514,9 +526,9 @@ TEST_F(ContainsTest, StringListContainsVectorWithNullsInListsAndInSearchKeys)
     1,
     cudf::test::detail::make_null_mask(input_null_mask_iter, input_null_mask_iter + 8));
 
-  auto search_keys =
-    strings_column_wrapper{{"1", "2", "3", "1", "2", "3", "1", "3"},
-                           make_counting_transform_iterator(0, [](auto i) { return i != 6; })};
+  auto search_keys = strings_column_wrapper{
+    {"1", "2", "3", "1", "2", "3", "1", "3"},
+    cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i != 6; })};
 
   auto actual_result = lists::contains(search_space->view(), search_keys);
 

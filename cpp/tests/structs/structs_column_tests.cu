@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,32 +14,36 @@
  * limitations under the License.
  */
 
-#include <cudf/copying.hpp>
-#include <cudf/lists/lists_column_view.hpp>
-#include <cudf/table/table.hpp>
-
-#include <thrust/host_vector.h>
-#include <thrust/iterator/counting_iterator.h>
-#include <thrust/scan.h>
-#include <thrust/sequence.h>
-#include <algorithm>
 #include <cudf/column/column_factories.hpp>
+#include <cudf/copying.hpp>
+#include <cudf/detail/iterator.cuh>
 #include <cudf/detail/utilities/device_operators.cuh>
+#include <cudf/lists/lists_column_view.hpp>
 #include <cudf/null_mask.hpp>
 #include <cudf/structs/structs_column_view.hpp>
+#include <cudf/table/table.hpp>
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/error.hpp>
+
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_utilities.hpp>
 #include <cudf_test/column_wrapper.hpp>
 #include <cudf_test/cudf_gtest.hpp>
 #include <cudf_test/type_lists.hpp>
+
+#include <thrust/host_vector.h>
+#include <thrust/iterator/counting_iterator.h>
+#include <thrust/scan.h>
+#include <thrust/sequence.h>
+
+#include <rmm/device_buffer.hpp>
+
+#include <algorithm>
 #include <functional>
 #include <initializer_list>
 #include <iterator>
 #include <memory>
-#include <rmm/device_buffer.hpp>
 
 using vector_of_columns = std::vector<std::unique_ptr<cudf::column>>;
 using cudf::size_type;
@@ -192,7 +196,7 @@ TYPED_TEST(TypedStructColumnWrapperTest, TestStructsContainingLists)
 
   // For `Name` member, indices 4 and 5 are null.
   auto expected_names_col = cudf::test::strings_column_wrapper{
-    names.begin(), names.end(), cudf::test::make_counting_transform_iterator(0, [](auto i) {
+    names.begin(), names.end(), cudf::detail::make_counting_transform_iterator(0, [](auto i) {
       return i < 4;
     })}.release();
 
@@ -214,7 +218,7 @@ TYPED_TEST(TypedStructColumnWrapperTest, TestStructsContainingLists)
       {7, 8},  // Null.
       {9}      // Null.
     },
-    cudf::test::make_counting_transform_iterator(0, [](auto i) {
+    cudf::detail::make_counting_transform_iterator(0, [](auto i) {
       return i == 0;
     })}.release();
 
@@ -256,7 +260,7 @@ TYPED_TEST(TypedStructColumnWrapperTest, StructOfStructs)
     cudf::test::strings_column_wrapper(
       names.begin(),
       names.end(),
-      cudf::test::make_counting_transform_iterator(0, [](auto i) { return i != 0 && i != 4; }))
+      cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i != 0 && i != 4; }))
       .release();
 
   cudf::test::expect_columns_equivalent(*expected_names_col, struct_2->child(1).child(0));
@@ -331,7 +335,7 @@ TYPED_TEST(TypedStructColumnWrapperTest, TestNullMaskPropagationForNonNullStruct
     cudf::test::strings_column_wrapper(
       names.begin(),
       names.end(),
-      cudf::test::make_counting_transform_iterator(0, [](auto i) { return i != 0; }))
+      cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i != 0; }))
       .release();
 
   cudf::test::expect_columns_equivalent(*expected_names_col, struct_2->child(1).child(0));
@@ -436,7 +440,7 @@ TYPED_TEST(TypedStructColumnWrapperTest, ListOfStructOfList)
 
   auto list_col = lists_column_wrapper<TypeParam, int32_t>{
     {{0}, {1}, {}, {3}, {4}, {5, 5}, {6}, {}, {8}, {9}},
-    cudf::test::make_counting_transform_iterator(0, [](auto i) { return i % 2; })};
+    cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i % 2; })};
 
   // TODO: Struct<List> cannot be compared with expect_columns_equal(),
   // if the struct has null values. After lists support "equivalence"
@@ -444,7 +448,7 @@ TYPED_TEST(TypedStructColumnWrapperTest, ListOfStructOfList)
   auto struct_of_lists_col = structs_column_wrapper{{list_col}}.release();
 
   auto list_of_struct_of_list_validity =
-    make_counting_transform_iterator(0, [](auto i) { return i % 3; });
+    cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i % 3; });
   auto list_of_struct_of_list = cudf::make_lists_column(
     5,
     std::move(fixed_width_column_wrapper<size_type>{0, 2, 4, 6, 8, 10}.release()),
@@ -456,7 +460,7 @@ TYPED_TEST(TypedStructColumnWrapperTest, ListOfStructOfList)
 
   auto expected_level0_list = lists_column_wrapper<TypeParam, int32_t>{
     {{}, {1}, {}, {3}, {}, {5, 5}, {}, {}, {}, {9}},
-    make_counting_transform_iterator(0, [](auto i) { return i % 2; })};
+    cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i % 2; })};
 
   auto expected_level2_struct = structs_column_wrapper{{expected_level0_list}}.release();
 
@@ -479,17 +483,19 @@ TYPED_TEST(TypedStructColumnWrapperTest, StructOfListOfStruct)
 
   auto ints_col = fixed_width_column_wrapper<TypeParam, int32_t>{
     {0, 1, 2, 3, 4, 5, 6, 7, 8, 9},
-    make_counting_transform_iterator(0, [](auto i) { return i % 2; })};
+    cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i % 2; })};
 
   auto structs_col =
     structs_column_wrapper{
       {ints_col},
-      make_counting_transform_iterator(0, [](auto i) { return i < 6; })  // Last 4 structs are null.
+      cudf::detail::make_counting_transform_iterator(
+        0, [](auto i) { return i < 6; })  // Last 4 structs are null.
     }
       .release();
 
-  auto list_validity = make_counting_transform_iterator(0, [](auto i) { return i % 3; });
-  auto lists_col     = cudf::make_lists_column(
+  auto list_validity =
+    cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i % 3; });
+  auto lists_col = cudf::make_lists_column(
     5,
     std::move(fixed_width_column_wrapper<size_type>{0, 2, 4, 6, 8, 10}.release()),
     std::move(structs_col),
@@ -594,11 +600,11 @@ TYPED_TEST(TypedStructColumnWrapperTest, CopyColumnFromView)
 
   auto lists_column = lists_column_wrapper<T, int32_t>{
     {{0, 0}, {1, 1}, {2, 2}, {3, 3}, {4, 4}, {5, 5}},
-    make_counting_transform_iterator(0, [](auto i) { return i != 4; })};
+    cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i != 4; })};
 
-  auto structs_column =
-    structs_column_wrapper{{numeric_column, lists_column},
-                           make_counting_transform_iterator(0, [](auto i) { return i != 3; })};
+  auto structs_column = structs_column_wrapper{
+    {numeric_column, lists_column},
+    cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i != 3; })};
 
   auto clone_structs_column = cudf::column(structs_column);
 

@@ -16,7 +16,7 @@
 
 auto strings_to_string_views(std::vector<std::string>& input_strings)
 {
-  auto all_valid = cudf::test::make_counting_transform_iterator(0, [](auto i) { return true; });
+  auto all_valid = cudf::detail::make_counting_transform_iterator(0, [](auto i) { return true; });
   std::vector<char> chars;
   std::vector<int32_t> offsets;
   std::tie(chars, offsets) = cudf::test::detail::make_chars_and_offsets(
