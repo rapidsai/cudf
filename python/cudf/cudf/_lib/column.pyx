@@ -48,6 +48,7 @@ from cudf._lib.scalar cimport DeviceScalar
 cimport cudf._lib.cpp.types as libcudf_types
 cimport cudf._lib.cpp.unary as libcudf_unary
 
+
 cdef class Column:
     """
     A Column stores columnar data in device memory.

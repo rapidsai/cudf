@@ -1,4 +1,5 @@
-# Copyright (c) 2019-2020, NVIDIA CORPORATION.
+# Copyright (c) 2019-2021, NVIDIA CORPORATION.
+
 from __future__ import annotations
 
 import builtins
@@ -485,7 +486,7 @@ class StringMethods(ColumnMethodsMixin):
         pat : str
             Regular expression pattern with capturing groups.
         expand : bool, default True
-            If True, return DataFrame with on column per capture group.
+            If True, return DataFrame with one column per capture group.
             If False, return a Series/Index if there is one capture group or
             DataFrame if there are multiple capture groups.
 
@@ -4645,7 +4646,7 @@ class StringColumn(column.ColumnBase):
     def __init__(
         self,
         mask: Buffer = None,
-        size: int = None,
+        size: int = None,  # TODO: make non-optional
         offset: int = 0,
         null_count: int = None,
         children: Tuple["column.ColumnBase", ...] = (),
@@ -4685,9 +4686,9 @@ class StringColumn(column.ColumnBase):
             children = (offsets, chars)
 
         super().__init__(
-            None,
-            size,
-            dtype,
+            data=None,
+            size=size,
+            dtype=dtype,
             mask=mask,
             offset=offset,
             null_count=null_count,
@@ -5009,9 +5010,37 @@ class StringColumn(column.ColumnBase):
         """
         Return col with *to_replace* replaced with *value*
         """
-        to_replace = column.as_column(to_replace, dtype=self.dtype)
-        replacement = column.as_column(replacement, dtype=self.dtype)
-        return libcudf.replace.replace(self, to_replace, replacement)
+
+        to_replace_col = column.as_column(to_replace)
+        if to_replace_col.null_count == len(to_replace_col):
+            # If all of `to_replace` are `None`, dtype of `to_replace_col`
+            # is inferred as `float64`, but this is a valid
+            # string column too, Hence we will need to type-cast
+            # to self.dtype.
+            to_replace_col = to_replace_col.astype(self.dtype)
+
+        replacement_col = column.as_column(replacement)
+        if replacement_col.null_count == len(replacement_col):
+            # If all of `replacement` are `None`, dtype of `replacement_col`
+            # is inferred as `float64`, but this is a valid
+            # string column too, Hence we will need to type-cast
+            # to self.dtype.
+            replacement_col = replacement_col.astype(self.dtype)
+
+        if type(to_replace_col) != type(replacement_col):
+            raise TypeError(
+                f"to_replace and value should be of same types,"
+                f"got to_replace dtype: {to_replace_col.dtype} and "
+                f"value dtype: {replacement_col.dtype}"
+            )
+
+        if (
+            to_replace_col.dtype != self.dtype
+            and replacement_col.dtype != self.dtype
+        ):
+            return self.copy()
+
+        return libcudf.replace.replace(self, to_replace_col, replacement_col)
 
     def fillna(
         self,

@@ -137,7 +137,6 @@ __global__ void __launch_bounds__(block_size) gpuInitPageFragments(PageFragment 
   __syncthreads();
   start_row = blockIdx.y * fragment_size;
   if (!t) {
-    s->col.num_rows = min(s->col.num_rows, max_num_rows);
     // frag.num_rows = fragment_size except for the last page fragment which can be smaller.
     // num_rows is fixed but fragment size could be larger if the data is strings or nested.
     s->frag.num_rows           = min(fragment_size, max_num_rows - min(start_row, max_num_rows));
@@ -152,16 +151,25 @@ __global__ void __launch_bounds__(block_size) gpuInitPageFragments(PageFragment 
     // off_11 = off[i], off_12 = off[i+50]
     // off_21 = child.off[off_11], off_22 = child.off[off_12]
     // etc...
-    s->start_value_idx      = start_row;
     size_type end_value_idx = start_row + s->frag.num_rows;
-    for (size_type i = 0; i < s->col.nesting_levels; i++) {
-      s->start_value_idx = s->col.nesting_offsets[i][s->start_value_idx];
-      end_value_idx      = s->col.nesting_offsets[i][end_value_idx];
+    if (s->col.parent_column == nullptr) {
+      s->start_value_idx = start_row;
+    } else {
+      auto col                     = *(s->col.parent_column);
+      auto current_start_value_idx = start_row;
+      while (col.type().id() == type_id::LIST) {
+        auto offset_col = col.child(lists_column_view::offsets_column_index);
+        current_start_value_idx =
+          offset_col.element<size_type>(current_start_value_idx + col.offset());
+        end_value_idx = offset_col.element<size_type>(end_value_idx + col.offset());
+        col           = col.child(lists_column_view::child_column_index);
+      }
+      s->start_value_idx = current_start_value_idx;
     }
     s->frag.start_value_idx = s->start_value_idx;
     s->frag.num_leaf_values = end_value_idx - s->start_value_idx;
 
-    if (s->col.nesting_levels > 0) {
+    if (s->col.level_offsets != nullptr) {
       // For nested schemas, the number of values in a fragment is not directly related to the
       // number of encoded data elements or the number of rows.  It is simply the number of
       // repetition/definition values which together encode validity and nesting information.
@@ -176,7 +184,7 @@ __global__ void __launch_bounds__(block_size) gpuInitPageFragments(PageFragment 
   dtype_len =
     (dtype == INT96) ? 12 : (dtype == INT64 || dtype == DOUBLE) ? 8 : (dtype == BOOLEAN) ? 1 : 4;
   if (dtype == INT32) {
-    dtype_len_in = GetDtypeLogicalLen(s->col.converted_type);
+    dtype_len_in = GetDtypeLogicalLen(s->col.leaf_column);
   } else if (dtype == INT96) {
     // cudf doesn't support INT96 internally and uses INT64, so treat INT96 as an INT64 for
     // computing dictionary hash values and reading the data, but we do treat it as 12 bytes for
@@ -190,37 +198,28 @@ __global__ void __launch_bounds__(block_size) gpuInitPageFragments(PageFragment 
   size_type nvals           = s->frag.num_leaf_values;
   size_type start_value_idx = s->start_value_idx;
 
-  size_type validity_offset = (s->col.nesting_offsets == nullptr) ? s->col.column_offset : 0;
   for (uint32_t i = 0; i < nvals; i += block_size) {
-    const uint32_t *valid = s->col.valid_map_base;
-    uint32_t val_idx      = start_value_idx + i + t;
-    uint32_t is_valid =
-      (i + t < nvals && val_idx < s->col.num_values)
-        ? (valid)
-            ? (valid[(val_idx + validity_offset) / 32] >> ((val_idx + validity_offset) % 32)) & 1
-            : 1
-        : 0;
+    uint32_t val_idx  = start_value_idx + i + t;
+    uint32_t is_valid = (i + t < nvals && val_idx < s->col.leaf_column->size())
+                          ? s->col.leaf_column->is_valid(val_idx)
+                          : 0;
     uint32_t valid_warp = ballot(is_valid);
     uint32_t len, nz_pos, hash;
     if (is_valid) {
       len = dtype_len;
       if (dtype != BOOLEAN) {
         if (dtype == BYTE_ARRAY) {
-          const char *ptr = static_cast<const nvstrdesc_s *>(s->col.column_data_base)[val_idx].ptr;
-          uint32_t count =
-            (uint32_t) reinterpret_cast<const nvstrdesc_s *>(s->col.column_data_base)[val_idx]
-              .count;
-          len += count;
-          hash = nvstr_init_hash(reinterpret_cast<const uint8_t *>(ptr), count);
+          auto str = s->col.leaf_column->element<string_view>(val_idx);
+          len += str.size_bytes();
+          hash = nvstr_init_hash(reinterpret_cast<const uint8_t *>(str.data()), str.size_bytes());
         } else if (dtype_len_in == 8) {
-          hash = uint64_init_hash(static_cast<const uint64_t *>(s->col.column_data_base)[val_idx]);
+          hash = uint64_init_hash(s->col.leaf_column->element<uint64_t>(val_idx));
         } else {
-          hash = uint32_init_hash(
-            (dtype_len_in == 4)
-              ? static_cast<const uint32_t *>(s->col.column_data_base)[val_idx]
-              : (dtype_len_in == 2)
-                  ? static_cast<const uint16_t *>(s->col.column_data_base)[val_idx]
-                  : static_cast<const uint8_t *>(s->col.column_data_base)[val_idx]);
+          hash = uint32_init_hash((dtype_len_in == 4)
+                                    ? s->col.leaf_column->element<uint32_t>(val_idx)
+                                    : (dtype_len_in == 2)
+                                        ? s->col.leaf_column->element<uint16_t>(val_idx)
+                                        : s->col.leaf_column->element<uint8_t>(val_idx));
         }
       }
     } else {
@@ -330,7 +329,6 @@ __global__ void __launch_bounds__(block_size) gpuInitPageFragments(PageFragment 
     // map, the position of the first entry can be inferred from the hash map counts
     uint32_t dupe_data_size = 0;
     for (uint32_t i = 0; i < nnz; i += block_size) {
-      const void *col_data = s->col.column_data_base;
       uint32_t ck_row = 0, ck_row_ref = 0, is_dupe = 0, dupe_mask, dupes_before;
       if (i + t < nnz) {
         uint32_t dict_val = s->dict[i + t];
@@ -339,30 +337,27 @@ __global__ void __launch_bounds__(block_size) gpuInitPageFragments(PageFragment 
         ck_row_ref = start_row + (s->dict[(hash > 0) ? s->map.u16[hash - 1] : 0] >> init_hash_bits);
         if (ck_row_ref != ck_row) {
           if (dtype == BYTE_ARRAY) {
-            const nvstrdesc_s *ck_data = static_cast<const nvstrdesc_s *>(col_data);
-            const char *str1           = ck_data[ck_row].ptr;
-            uint32_t len1              = (uint32_t)ck_data[ck_row].count;
-            const char *str2           = ck_data[ck_row_ref].ptr;
-            uint32_t len2              = (uint32_t)ck_data[ck_row_ref].count;
-            is_dupe                    = nvstr_is_equal(str1, len1, str2, len2);
-            dupe_data_size += (is_dupe) ? 4 + len1 : 0;
+            auto str1 = s->col.leaf_column->element<string_view>(ck_row);
+            auto str2 = s->col.leaf_column->element<string_view>(ck_row_ref);
+            is_dupe   = (str1 == str2);
+            dupe_data_size += (is_dupe) ? 4 + str1.size_bytes() : 0;
           } else {
             if (dtype_len_in == 8) {
-              uint64_t v1 = static_cast<const uint64_t *>(col_data)[ck_row];
-              uint64_t v2 = static_cast<const uint64_t *>(col_data)[ck_row_ref];
-              is_dupe     = (v1 == v2);
+              auto v1 = s->col.leaf_column->element<uint64_t>(ck_row);
+              auto v2 = s->col.leaf_column->element<uint64_t>(ck_row_ref);
+              is_dupe = (v1 == v2);
               dupe_data_size += (is_dupe) ? 8 : 0;
             } else {
               uint32_t v1, v2;
               if (dtype_len_in == 4) {
-                v1 = static_cast<const uint32_t *>(col_data)[ck_row];
-                v2 = static_cast<const uint32_t *>(col_data)[ck_row_ref];
+                v1 = s->col.leaf_column->element<uint32_t>(ck_row);
+                v2 = s->col.leaf_column->element<uint32_t>(ck_row_ref);
               } else if (dtype_len_in == 2) {
-                v1 = static_cast<const uint16_t *>(col_data)[ck_row];
-                v2 = static_cast<const uint16_t *>(col_data)[ck_row_ref];
+                v1 = s->col.leaf_column->element<uint16_t>(ck_row);
+                v2 = s->col.leaf_column->element<uint16_t>(ck_row_ref);
               } else {
-                v1 = static_cast<const uint8_t *>(col_data)[ck_row];
-                v2 = static_cast<const uint8_t *>(col_data)[ck_row_ref];
+                v1 = s->col.leaf_column->element<uint8_t>(ck_row);
+                v2 = s->col.leaf_column->element<uint8_t>(ck_row_ref);
               }
               is_dupe = (v1 == v2);
               dupe_data_size += (is_dupe) ? 4 : 0;
@@ -967,12 +962,10 @@ __global__ void __launch_bounds__(128, 8) gpuEncodePages(EncPage *pages,
   }
   __syncthreads();
 
-  size_type validity_offset = (s->col.nesting_offsets == nullptr) ? s->col.column_offset : 0;
   // Encode Repetition and Definition levels
   if (s->page.page_type != PageType::DICTIONARY_PAGE && s->col.level_bits != 0 &&
-      s->col.nesting_levels == 0) {
+      s->col.parent_column == nullptr) {
     // Calculate definition levels from validity
-    const uint32_t *valid = s->col.valid_map_base;
     uint32_t def_lvl_bits = s->col.level_bits & 0xf;
     if (def_lvl_bits != 0) {
       if (!t) {
@@ -988,12 +981,9 @@ __global__ void __launch_bounds__(128, 8) gpuEncodePages(EncPage *pages,
         uint32_t row         = s->page.start_row + rle_numvals + t;
         // Definition level encodes validity. Checks the valid map and if it is valid, then sets the
         // def_lvl accordingly and sets it in s->vals which is then given to RleEncode to encode
-        uint32_t def_lvl =
-          (rle_numvals + t < s->page.num_rows && row < s->col.num_rows)
-            ? (valid != nullptr)
-                ? (valid[(row + validity_offset) / 32] >> ((row + validity_offset) % 32)) & 1
-                : 1
-            : 0;
+        uint32_t def_lvl = (rle_numvals + t < s->page.num_rows && row < s->col.num_rows)
+                             ? s->col.leaf_column->is_valid(row)
+                             : 0;
         s->vals[(rle_numvals + t) & (rle_buffer_size - 1)] = def_lvl;
         __syncthreads();
         rle_numvals += nrows;
@@ -1011,7 +1001,7 @@ __global__ void __launch_bounds__(128, 8) gpuEncodePages(EncPage *pages,
         if (t == 0) { s->cur = rle_out; }
       }
     }
-  } else if (s->page.page_type != PageType::DICTIONARY_PAGE && s->col.nesting_levels > 0) {
+  } else if (s->page.page_type != PageType::DICTIONARY_PAGE && s->col.parent_column != nullptr) {
     auto encode_levels = [&](uint8_t const *lvl_val_data, uint32_t nbits) {
       // For list types, the repetition and definition levels are pre-calculated. We just need to
       // encode and write them now.
@@ -1057,7 +1047,7 @@ __global__ void __launch_bounds__(128, 8) gpuEncodePages(EncPage *pages,
   dtype_len_out =
     (dtype == INT96) ? 12 : (dtype == INT64 || dtype == DOUBLE) ? 8 : (dtype == BOOLEAN) ? 1 : 4;
   if (dtype == INT32) {
-    dtype_len_in = GetDtypeLogicalLen(s->col.converted_type);
+    dtype_len_in = GetDtypeLogicalLen(s->col.leaf_column);
   } else if (dtype == INT96) {
     dtype_len_in = 8;
   } else {
@@ -1075,8 +1065,15 @@ __global__ void __launch_bounds__(128, 8) gpuEncodePages(EncPage *pages,
       s->rle_out = dst + 1;
     }
     s->page_start_val = s->page.start_row;
-    for (size_type i = 0; i < s->col.nesting_levels; i++) {
-      s->page_start_val = s->col.nesting_offsets[i][s->page_start_val];
+    if (s->col.parent_column != nullptr) {
+      auto col                    = *(s->col.parent_column);
+      auto current_page_start_val = s->page_start_val;
+      while (col.type().id() == type_id::LIST) {
+        current_page_start_val = col.child(lists_column_view::offsets_column_index)
+                                   .element<size_type>(current_page_start_val + col.offset());
+        col = col.child(lists_column_view::child_column_index);
+      }
+      s->page_start_val = current_page_start_val;
     }
   }
   __syncthreads();
@@ -1089,13 +1086,9 @@ __global__ void __launch_bounds__(128, 8) gpuEncodePages(EncPage *pages,
       is_valid = (cur_val_idx + t < s->page.num_leaf_values);
       val_idx  = (is_valid) ? s->col.dict_data[val_idx] : val_idx;
     } else {
-      const uint32_t *valid = s->col.valid_map_base;
-      is_valid =
-        (val_idx < s->col.num_values && cur_val_idx + t < s->page.num_leaf_values)
-          ? (valid != nullptr)
-              ? (valid[(val_idx + validity_offset) / 32] >> ((val_idx + validity_offset) % 32)) & 1
-              : 1
-          : 0;
+      is_valid = (val_idx < s->col.leaf_column->size() && cur_val_idx + t < s->page.num_leaf_values)
+                   ? s->col.leaf_column->is_valid(val_idx)
+                   : 0;
     }
     warp_valids = ballot(is_valid);
     cur_val_idx += nvals;
@@ -1114,7 +1107,7 @@ __global__ void __launch_bounds__(128, 8) gpuEncodePages(EncPage *pages,
         if (is_valid) {
           uint32_t v;
           if (dtype == BOOLEAN) {
-            v = reinterpret_cast<const uint8_t *>(s->col.column_data_base)[val_idx];
+            v = s->col.leaf_column->element<uint8_t>(val_idx);
           } else {
             v = s->col.dict_index[val_idx];
           }
@@ -1138,8 +1131,7 @@ __global__ void __launch_bounds__(128, 8) gpuEncodePages(EncPage *pages,
       if (is_valid) {
         len = dtype_len_out;
         if (dtype == BYTE_ARRAY) {
-          len += (uint32_t) reinterpret_cast<const nvstrdesc_s *>(s->col.column_data_base)[val_idx]
-                   .count;
+          len += s->col.leaf_column->element<string_view>(val_idx).size_bytes();
         }
       } else {
         len = 0;
@@ -1152,25 +1144,23 @@ __global__ void __launch_bounds__(128, 8) gpuEncodePages(EncPage *pages,
       if (t == 0) { s->cur = dst + s->scratch_red[3]; }
       pos = pos + ((t >= 32) ? s->scratch_red[(t - 32) >> 5] : 0) - len;
       if (is_valid) {
-        const uint8_t *src8 = reinterpret_cast<const uint8_t *>(s->col.column_data_base) +
-                              val_idx * (size_t)dtype_len_in;
         switch (dtype) {
           case INT32:
           case FLOAT: {
             int32_t v;
             if (dtype_len_in == 4)
-              v = *reinterpret_cast<const int32_t *>(src8);
+              v = s->col.leaf_column->element<int32_t>(val_idx);
             else if (dtype_len_in == 2)
-              v = *reinterpret_cast<const int16_t *>(src8);
+              v = s->col.leaf_column->element<int16_t>(val_idx);
             else
-              v = *reinterpret_cast<const int8_t *>(src8);
+              v = s->col.leaf_column->element<int8_t>(val_idx);
             dst[pos + 0] = v;
             dst[pos + 1] = v >> 8;
             dst[pos + 2] = v >> 16;
             dst[pos + 3] = v >> 24;
           } break;
           case INT64: {
-            int64_t v        = *reinterpret_cast<const int64_t *>(src8);
+            int64_t v        = s->col.leaf_column->element<int64_t>(val_idx);
             int32_t ts_scale = s->col.ts_scale;
             if (ts_scale != 0) {
               if (ts_scale < 0) {
@@ -1189,7 +1179,7 @@ __global__ void __launch_bounds__(128, 8) gpuEncodePages(EncPage *pages,
             dst[pos + 7] = v >> 56;
           } break;
           case INT96: {
-            int64_t v        = *reinterpret_cast<const int64_t *>(src8);
+            int64_t v        = s->col.leaf_column->element<int64_t>(val_idx);
             int32_t ts_scale = s->col.ts_scale;
             if (ts_scale != 0) {
               if (ts_scale < 0) {
@@ -1230,15 +1220,18 @@ __global__ void __launch_bounds__(128, 8) gpuEncodePages(EncPage *pages,
             dst[pos + 11] = w >> 24;
           } break;
 
-          case DOUBLE: memcpy(dst + pos, src8, 8); break;
+          case DOUBLE: {
+            auto v = s->col.leaf_column->element<double>(val_idx);
+            memcpy(dst + pos, &v, 8);
+          } break;
           case BYTE_ARRAY: {
-            const char *str_data = reinterpret_cast<const nvstrdesc_s *>(src8)->ptr;
-            uint32_t v           = len - 4;  // string length
-            dst[pos + 0]         = v;
-            dst[pos + 1]         = v >> 8;
-            dst[pos + 2]         = v >> 16;
-            dst[pos + 3]         = v >> 24;
-            if (v != 0) memcpy(dst + pos + 4, str_data, v);
+            auto str     = s->col.leaf_column->element<string_view>(val_idx);
+            uint32_t v   = len - 4;  // string length
+            dst[pos + 0] = v;
+            dst[pos + 1] = v >> 8;
+            dst[pos + 2] = v >> 16;
+            dst[pos + 3] = v >> 24;
+            if (v != 0) memcpy(dst + pos + 4, str.data(), v);
           } break;
         }
       }
@@ -2002,6 +1995,41 @@ void InitPageFragments(PageFragment *frag,
   dim3 dim_grid(num_columns, num_fragments);  // 1 threadblock per fragment
   gpuInitPageFragments<512><<<dim_grid, 512, 0, stream.value()>>>(
     frag, col_desc, num_fragments, num_columns, fragment_size, num_rows);
+}
+
+/**
+ * @copydoc void init_column_device_views(EncColumnDesc *col_desc,
+ *            column_device_view *leaf_column_views,
+ *            const table_device_view &parent_table_device_view,
+ *            rmm::cuda_stream_view stream)
+ */
+void init_column_device_views(EncColumnDesc *col_desc,
+                              column_device_view *leaf_column_views,
+                              const table_device_view &parent_column_table_device_view,
+                              rmm::cuda_stream_view stream)
+{
+  cudf::detail::device_single_thread(
+    [col_desc,
+     parent_col_view = parent_column_table_device_view,
+     leaf_column_views] __device__() mutable {
+      for (size_type i = 0; i < parent_col_view.num_columns(); ++i) {
+        column_device_view col = parent_col_view.column(i);
+        if (col.type().id() == type_id::LIST) {
+          col_desc[i].parent_column = parent_col_view.begin() + i;
+        } else {
+          col_desc[i].parent_column = nullptr;
+        }
+        // traverse till leaf column
+        while (col.type().id() == type_id::LIST) {
+          col = col.child(lists_column_view::child_column_index);
+        }
+        // Store leaf_column to device storage
+        column_device_view *leaf_col_ptr = leaf_column_views + i;
+        *leaf_col_ptr                    = col;
+        col_desc[i].leaf_column          = leaf_col_ptr;
+      }
+    },
+    stream);
 }
 
 /**
