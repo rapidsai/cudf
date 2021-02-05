@@ -34,7 +34,7 @@ void BM_reduction_dictionary(benchmark::State& state, std::unique_ptr<cudf::aggr
 
   cudf::test::UniformRandomGenerator<long> rand_gen(
     (agg->kind == cudf::aggregation::ALL ? 1 : 0), (agg->kind == cudf::aggregation::ANY ? 0 : 100));
-  auto data_it = cudf::test::make_counting_transform_iterator(
+  auto data_it = cudf::detail::make_counting_transform_iterator(
     0, [&rand_gen](cudf::size_type row) { return rand_gen.generate(); });
   cudf::test::dictionary_column_wrapper<T, typename decltype(data_it)::value_type> values(
     data_it, data_it + column_size);
