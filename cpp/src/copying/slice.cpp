@@ -54,7 +54,7 @@ std::vector<column_view> slice(column_view const& input,
                        children};
   };
   auto begin = cudf::detail::make_counting_transform_iterator(0, op);
-  return {begin, begin + indices.size() / 2};
+  return std::vector<column_view>{begin, begin + indices.size() / 2};
 }
 
 }  // namespace detail
