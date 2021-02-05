@@ -352,20 +352,13 @@ __global__ void __launch_bounds__(block_size) gpuInitPageFragments(PageFragment 
           }
         }
       }
-      uint32_t dupe_mask = ballot(is_dupe);
-      dupes_before       = s->total_dupes + __popc(dupe_mask & ((2 << (t & 0x1f)) - 1));
-      if (!(t & 0x1f)) { s->scratch_red[t >> 5] = __popc(dupe_mask); }
+      uint32_t tmp_dupes;
+      block_scan(temp_storage.scan_storage).InclusiveSum(is_dupe, dupes_before, tmp_dupes);
+      dupes_before += s->total_dupes;
       __syncthreads();
-      if (t < 32) {
-        uint32_t warp_dupes = (t < 16) ? s->scratch_red[t] : 0;
-        uint32_t warp_pos   = WarpReducePos16(warp_dupes, t);
-        if (t == 0xf) { s->total_dupes += warp_pos; }
-        if (t < 16) { s->scratch_red[t] = warp_pos - warp_dupes; }
-      }
-      __syncthreads();
+      if (t == 0) { s->total_dupes += tmp_dupes; }
       if (i + t < nnz) {
         if (!is_dupe) {
-          dupes_before += s->scratch_red[t >> 5];
           s->col.dict_data[start_row + i + t - dupes_before] = ck_row;
         } else {
           s->col.dict_index[ck_row] = ck_row_ref | (1u << 31);
