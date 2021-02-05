@@ -1,4 +1,4 @@
-# Copyright (c) 2020, NVIDIA CORPORATION.
+# Copyright (c) 2020-2021, NVIDIA CORPORATION.
 
 import sys
 from io import StringIO
@@ -40,7 +40,7 @@ def csv_writer_test(pdf):
 @pythonfuzz(
     data_handle=CSVWriter,
     params={
-        "sep": list([",", "|", "\t", "\t\t", "~"]),
+        "sep": list([",", "|", "\t", "\r", "~"]),
         "header": [True, False],
         "na_rep": [
             "",

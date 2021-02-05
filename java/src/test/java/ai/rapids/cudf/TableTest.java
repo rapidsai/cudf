@@ -35,6 +35,7 @@ import java.io.FileInputStream;
 import java.io.IOException;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.util.ArrayList;
@@ -1672,9 +1673,13 @@ public class TableTest extends CudfTestBase {
         .build()) {
       splits = t1.contiguousSplit(2, 5, 9);
       assertEquals(4, splits.length);
+      assertEquals(2, splits[0].getRowCount());
       assertEquals(2, splits[0].getTable().getRowCount());
+      assertEquals(3, splits[1].getRowCount());
       assertEquals(3, splits[1].getTable().getRowCount());
+      assertEquals(4, splits[2].getRowCount());
       assertEquals(4, splits[2].getTable().getRowCount());
+      assertEquals(1, splits[3].getRowCount());
       assertEquals(1, splits[3].getTable().getRowCount());
     } finally {
       if (splits != null) {
@@ -1697,9 +1702,13 @@ public class TableTest extends CudfTestBase {
         .build()) {
       splits = t1.contiguousSplit(2, 5, 9);
       assertEquals(4, splits.length);
+      assertEquals(2, splits[0].getRowCount());
       assertEquals(2, splits[0].getTable().getRowCount());
+      assertEquals(3, splits[1].getRowCount());
       assertEquals(3, splits[1].getTable().getRowCount());
+      assertEquals(4, splits[2].getRowCount());
       assertEquals(4, splits[2].getTable().getRowCount());
+      assertEquals(1, splits[3].getRowCount());
       assertEquals(1, splits[3].getTable().getRowCount());
     } finally {
       if (splits != null) {
@@ -2165,6 +2174,25 @@ public class TableTest extends CudfTestBase {
   }
 
   @Test
+  void testSerializationReconstructFromMetadata() throws IOException {
+    try (Table t = buildTestTable()) {
+      ByteArrayOutputStream bout = new ByteArrayOutputStream();
+      JCudfSerialization.writeToStream(t, bout, 0, t.getRowCount());
+      ByteArrayInputStream bin = new ByteArrayInputStream(bout.toByteArray());
+      try (JCudfSerialization.TableAndRowCountPair trcp = JCudfSerialization.readTableFrom(bin)) {
+        ContiguousTable contigTable = trcp.getContiguousTable();
+        DeviceMemoryBuffer oldbuf = contigTable.getBuffer();
+        try (DeviceMemoryBuffer newbuf = oldbuf.sliceWithCopy(0, oldbuf.getLength())) {
+          ByteBuffer metadata = contigTable.getMetadataDirectBuffer();
+          try (Table newTable = Table.fromPackedTable(metadata, newbuf)) {
+            assertTablesAreEqual(t, newTable);
+          }
+        }
+      }
+    }
+  }
+
+  @Test
   void testValidityFill() {
     byte[] buff = new byte[2];
     buff[0] = 0;
@@ -2452,6 +2480,65 @@ public class TableTest extends CudfTestBase {
           assertColumnsAreEqual(expectAggResult, decWindowAggResults.getColumn(0));
         }
        }
+    }
+  }
+
+  @Test
+  void testWindowingCollect() {
+    Aggregation aggCollect = Aggregation.collect();
+    WindowOptions winOpts = WindowOptions.builder()
+                                         .minPeriods(1)
+                                         .window(2, 1).build();
+    StructType nestedType = new StructType(false,
+        new BasicType(false, DType.INT32), new BasicType(false, DType.STRING));
+    try (Table raw = new Table.TestBuilder()
+             .column( 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1) // GBY Key
+             .column( 1, 1, 1, 1, 2, 2, 2, 2, 3, 3, 3, 3) // GBY Key
+             .column( 1, 2, 3, 4, 1, 2, 3, 4, 5, 6, 7, 8) // OBY Key
+             .column( 7, 5, 1, 9, 7, 9, 8, 2, 8, 0, 6, 6) // Agg Column of INT32
+             .column(nestedType,                          // Agg Column of Struct
+                 new StructData(1, "s1"), new StructData(2, "s2"), new StructData(3, "s3"),
+                 new StructData(4, "s4"), new StructData(11, "s11"), new StructData(22, "s22"),
+                 new StructData(33, "s33"), new StructData(44, "s44"), new StructData(111, "s111"),
+                 new StructData(222, "s222"), new StructData(333, "s333"), new StructData(444, "s444")
+              ).build();
+         ColumnVector expectSortedAggColumn = ColumnVector.fromBoxedInts(7, 5, 1, 9, 7, 9, 8, 2, 8, 0, 6, 6)) {
+      try (Table sorted = raw.orderBy(Table.asc(0), Table.asc(1), Table.asc(2))) {
+        ColumnVector sortedAggColumn = sorted.getColumn(3);
+        assertColumnsAreEqual(expectSortedAggColumn, sortedAggColumn);
+
+        // Primitive type: INT32
+        try (Table windowAggResults = sorted.groupBy(0, 1)
+                 .aggregateWindows(aggCollect.onColumn(3).overWindow(winOpts));
+             ColumnVector expected = ColumnVector.fromLists(
+                 new ListType(false, new BasicType(false, DType.INT32)),
+                 Arrays.asList(7,5), Arrays.asList(7,5,1), Arrays.asList(5,1,9), Arrays.asList(1,9),
+                 Arrays.asList(7,9), Arrays.asList(7,9,8), Arrays.asList(9,8,2), Arrays.asList(8,2),
+                 Arrays.asList(8,0), Arrays.asList(8,0,6), Arrays.asList(0,6,6), Arrays.asList(6,6))) {
+          assertColumnsAreEqual(expected, windowAggResults.getColumn(0));
+        }
+
+        // Nested type: Struct
+        List<StructData>[] expectedNestedData = new List[12];
+        expectedNestedData[0] = Arrays.asList(new StructData(1, "s1"),new StructData(2, "s2"));
+        expectedNestedData[1] = Arrays.asList(new StructData(1, "s1"),new StructData(2, "s2"),new StructData(3, "s3"));
+        expectedNestedData[2] = Arrays.asList(new StructData(2, "s2"),new StructData(3, "s3"),new StructData(4, "s4"));
+        expectedNestedData[3] = Arrays.asList(new StructData(3, "s3"),new StructData(4, "s4"));
+        expectedNestedData[4] = Arrays.asList(new StructData(11, "s11"),new StructData(22, "s22"));
+        expectedNestedData[5] = Arrays.asList(new StructData(11, "s11"),new StructData(22, "s22"),new StructData(33, "s33"));
+        expectedNestedData[6] = Arrays.asList(new StructData(22, "s22"),new StructData(33, "s33"), new StructData(44, "s44"));
+        expectedNestedData[7] = Arrays.asList(new StructData(33, "s33"), new StructData(44, "s44"));
+        expectedNestedData[8] = Arrays.asList(new StructData(111, "s111"),new StructData(222, "s222"));
+        expectedNestedData[9] = Arrays.asList(new StructData(111, "s111"),new StructData(222, "s222"),new StructData(333, "s333"));
+        expectedNestedData[10] = Arrays.asList(new StructData(222, "s222"),new StructData(333, "s333"),new StructData(444, "s444"));
+        expectedNestedData[11] = Arrays.asList(new StructData(333, "s333"),new StructData(444, "s444"));
+        try (Table windowAggResults = sorted.groupBy(0, 1)
+                 .aggregateWindows(aggCollect.onColumn(4).overWindow(winOpts));
+             ColumnVector expected = ColumnVector.fromLists(
+                 new ListType(false, nestedType), expectedNestedData)) {
+          assertColumnsAreEqual(expected, windowAggResults.getColumn(0));
+        }
+      }
     }
   }
 

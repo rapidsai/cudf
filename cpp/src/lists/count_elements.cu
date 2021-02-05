@@ -20,6 +20,7 @@
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/lists/count_elements.hpp>
+#include <cudf/lists/list_device_view.cuh>
 #include <cudf/lists/lists_column_view.hpp>
 #include <cudf/utilities/error.hpp>
 
@@ -60,13 +61,7 @@ std::unique_ptr<column> count_elements(lists_column_view const& input,
                     thrust::make_counting_iterator<cudf::size_type>(0),
                     thrust::make_counting_iterator<cudf::size_type>(input.size()),
                     output->mutable_view().begin<size_type>(),
-                    [d_column] __device__(size_type idx) {
-                      if (d_column.is_null(idx)) return size_type{0};
-                      auto d_offsets =
-                        d_column.child(lists_column_view::offsets_column_index).data<size_type>() +
-                        d_column.offset();
-                      return d_offsets[idx + 1] - d_offsets[idx];
-                    });
+                    list_size_functor{d_column});
 
   output->set_null_count(input.null_count());  // reset null count
   return output;

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -128,14 +128,14 @@ std::unique_ptr<column> compute_column(table_view const table,
     reinterpret_cast<const cudf::size_type*>(device_data_buffer_ptr + buffer_offsets[3]);
 
   // Create table device view
-  auto table_device         = table_device_view::create(table, stream.value());
+  auto table_device         = table_device_view::create(table, stream);
   auto const table_num_rows = table.num_rows();
 
   // Prepare output column
   auto output_column = cudf::make_fixed_width_column(
-    expr_data_type, table_num_rows, mask_state::UNALLOCATED, stream.value(), mr);
+    expr_data_type, table_num_rows, mask_state::UNALLOCATED, stream, mr);
   auto mutable_output_device =
-    cudf::mutable_column_device_view::create(output_column->mutable_view(), stream.value());
+    cudf::mutable_column_device_view::create(output_column->mutable_view(), stream);
 
   // Configure kernel parameters
   auto const num_intermediates     = expr_linearizer.get_intermediate_count();

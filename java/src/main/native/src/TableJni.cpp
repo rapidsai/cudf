@@ -606,6 +606,38 @@ JNIEXPORT void JNICALL Java_ai_rapids_cudf_Table_deleteCudfTable(JNIEnv *env, jc
   CATCH_STD(env, );
 }
 
+JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_columnViewsFromPacked(JNIEnv *env, jclass,
+                                                                             jobject buffer_obj,
+                                                                             jlong j_data_address) {
+  // The GPU data address can be null when the table is empty, so it is not null-checked here.
+  JNI_NULL_CHECK(env, buffer_obj, "metadata is null", nullptr);
+  try {
+    cudf::jni::auto_set_device(env);
+    void const *metadata_address = env->GetDirectBufferAddress(buffer_obj);
+    JNI_NULL_CHECK(env, metadata_address, "metadata buffer address is null", nullptr);
+    cudf::table_view table = cudf::unpack(static_cast<uint8_t const *>(metadata_address),
+                                          reinterpret_cast<uint8_t const *>(j_data_address));
+    cudf::jni::native_jlongArray views(env, table.num_columns());
+    for (int i = 0; i < table.num_columns(); i++) {
+      // TODO Exception handling is not ideal, if no exceptions are thrown ownership of the new cv
+      // is passed to Java. If an exception is thrown we need to free it, but this needs to be
+      // coordinated with the Java side because one column may have changed ownership while
+      // another may not have. We don't want to double free the view so for now we just let it
+      // leak because it should be a small amount of host memory.
+      //
+      // In the ideal case we would keep the view where it is at, and pass in a pointer to it
+      // That pointer would then be copied when Java takes ownership of it, but that adds an
+      // extra JNI call that I would like to avoid for performance reasons.
+      cudf::column_view *cv = new cudf::column_view(table.column(i));
+      views[i] = reinterpret_cast<jlong>(cv);
+    }
+    views.commit();
+
+    return views.get_jArray();
+  }
+  CATCH_STD(env, nullptr);
+}
+
 JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_orderBy(JNIEnv *env, jclass j_class_object,
                                                                jlong j_input_table,
                                                                jlongArray j_sort_keys_columns,
@@ -1817,11 +1849,12 @@ JNIEXPORT jobjectArray JNICALL Java_ai_rapids_cudf_Table_contiguousSplit(JNIEnv 
     std::vector<cudf::size_type> indices(n_split_indices.data(),
                                          n_split_indices.data() + n_split_indices.size());
 
-    std::vector<cudf::contiguous_split_result> result = cudf::contiguous_split(*n_table, indices);
+    std::vector<cudf::packed_table> result = cudf::contiguous_split(*n_table, indices);
     cudf::jni::native_jobjectArray<jobject> n_result =
         cudf::jni::contiguous_table_array(env, result.size());
     for (int i = 0; i < result.size(); i++) {
-      n_result.set(i, cudf::jni::contiguous_table_from(env, result[i]));
+      n_result.set(i, cudf::jni::contiguous_table_from(env, result[i].data,
+                                                       result[i].table.num_rows()));
     }
     return n_result.wrapped();
   }

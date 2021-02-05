@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,6 +19,7 @@
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_factories.hpp>
 #include <cudf/copying.hpp>
+#include <cudf/detail/get_value.cuh>
 #include <cudf/detail/valid_if.cuh>
 #include <cudf/lists/list_device_view.cuh>
 #include <cudf/null_mask.hpp>
@@ -158,28 +159,6 @@ rmm::device_uvector<unbound_list_view> list_vector_from_column(
                     });
 
   return vector;
-}
-
-/**
- * @brief Fetch the number of rows in a lists column's child given its offsets column.
- *
- * @param list_offsets Offsets child of a lists column
- * @param stream The cuda-stream to synchronize on, when reading from device memory
- * @return cudf::size_type The last element in the list_offsets column, indicating
- *         the number of rows in the lists-column's child.
- */
-cudf::size_type get_num_child_rows(cudf::column_view const& list_offsets,
-                                   rmm::cuda_stream_view stream)
-{
-  // Number of rows in child-column == last offset value.
-  cudf::size_type num_child_rows{};
-  CUDA_TRY(cudaMemcpyAsync(&num_child_rows,
-                           list_offsets.data<cudf::size_type>() + list_offsets.size() - 1,
-                           sizeof(cudf::size_type),
-                           cudaMemcpyDeviceToHost,
-                           stream.value()));
-  stream.synchronize();
-  return num_child_rows;
 }
 
 /**
@@ -354,7 +333,8 @@ struct list_child_constructor {
     auto source_lists = cudf::detail::lists_column_device_view(*source_column_device_view);
     auto target_lists = cudf::detail::lists_column_device_view(*target_column_device_view);
 
-    auto const num_child_rows{get_num_child_rows(list_offsets, stream)};
+    auto const num_child_rows{
+      cudf::detail::get_value<size_type>(list_offsets, list_offsets.size() - 1, stream)};
 
     auto const child_null_mask =
       source_lists_column_view.child().nullable() || target_lists_column_view.child().nullable()
@@ -375,7 +355,7 @@ struct list_child_constructor {
                                                       num_child_rows,
                                                       child_null_mask.first,
                                                       child_null_mask.second,
-                                                      stream.value(),
+                                                      stream,
                                                       mr);
 
     auto copy_child_values_for_list_index = [d_scattered_lists =
@@ -448,7 +428,8 @@ struct list_child_constructor {
     auto source_lists = cudf::detail::lists_column_device_view(*source_column_device_view);
     auto target_lists = cudf::detail::lists_column_device_view(*target_column_device_view);
 
-    int32_t num_child_rows{get_num_child_rows(list_offsets, stream)};
+    auto const num_child_rows{
+      cudf::detail::get_value<size_type>(list_offsets, list_offsets.size() - 1, stream)};
 
     auto string_views = rmm::device_vector<string_view>(num_child_rows);
 
@@ -514,7 +495,7 @@ struct list_child_constructor {
                                      std::move(string_chars),
                                      child_null_mask.second,            // Null count.
                                      std::move(child_null_mask.first),  // Null mask.
-                                     stream.value(),
+                                     stream,
                                      mr);
   }
 
@@ -537,7 +518,8 @@ struct list_child_constructor {
     auto source_lists = cudf::detail::lists_column_device_view(*source_column_device_view);
     auto target_lists = cudf::detail::lists_column_device_view(*target_column_device_view);
 
-    auto num_child_rows = get_num_child_rows(list_offsets, stream);
+    auto const num_child_rows{
+      cudf::detail::get_value<size_type>(list_offsets, list_offsets.size() - 1, stream)};
 
     auto child_list_views = rmm::device_uvector<unbound_list_view>(num_child_rows, stream, mr);
 
@@ -616,7 +598,7 @@ struct list_child_constructor {
                                    std::move(child_column),
                                    child_null_mask.second,            // Null count
                                    std::move(child_null_mask.first),  // Null mask
-                                   stream.value(),
+                                   stream,
                                    mr);
   }
 
@@ -642,7 +624,8 @@ struct list_child_constructor {
     auto const source_structs = source_lists_column_view.child();
     auto const target_structs = target_lists_column_view.child();
 
-    auto const num_child_rows = get_num_child_rows(list_offsets, stream);
+    auto const num_child_rows{
+      cudf::detail::get_value<size_type>(list_offsets, list_offsets.size() - 1, stream)};
 
     auto const num_struct_members =
       std::distance(source_structs.child_begin(), source_structs.child_end());
@@ -710,7 +693,7 @@ struct list_child_constructor {
                                      std::move(child_columns),
                                      child_null_mask.second,
                                      std::move(child_null_mask.first),
-                                     stream.value(),
+                                     stream,
                                      mr);
   }
 };
@@ -814,7 +797,7 @@ std::unique_ptr<column> scatter(
                                  std::move(child_column),
                                  cudf::UNKNOWN_NULL_COUNT,
                                  std::move(null_mask),
-                                 stream.value(),
+                                 stream,
                                  mr);
 }
 
