@@ -831,10 +831,10 @@ def _pivot(df, index, columns):
                 )
             )._data
         )
-
-    return cudf.DataFrame(
+    out = cudf.DataFrame._from_data(
         result, index=cudf.Index(index_labels, name=index.name)
     )
+    return out
 
 
 def pivot(data, index=None, columns=None, values=None):
