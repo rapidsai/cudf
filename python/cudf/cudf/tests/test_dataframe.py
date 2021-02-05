@@ -8057,15 +8057,6 @@ def test_dataframe_constructor_columns(df, columns, index):
 
     assert_local_eq(actual, df, expected, host_columns)
 
-    expected = pd.DataFrame(df, columns=host_columns)
-    actual = gd.DataFrame(gdf._data, columns=columns, index=index)
-    if index is not None:
-        if df.shape == (0, 0):
-            expected = pd.DataFrame(columns=host_columns, index=index)
-        else:
-            expected.index = index
-    assert_local_eq(actual, df, expected, host_columns)
-
 
 @pytest.mark.parametrize(
     "data",
