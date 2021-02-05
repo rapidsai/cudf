@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2020, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 
+#include <cudf/detail/iterator.cuh>
 #include <cudf/dictionary/encode.hpp>
 #include <cudf/replace.hpp>
 #include <cudf/scalar/scalar_factories.hpp>
@@ -622,7 +623,7 @@ TYPED_TEST(FixedPointTest, LargeTest)
 
   auto begin          = thrust::make_counting_iterator(-1000);
   auto clamp          = [](int e) { return e < 1000 ? 1000 : e > 2000 ? 2000 : e; };
-  auto begin2         = cudf::test::make_counting_transform_iterator(-1000, clamp);
+  auto begin2         = cudf::detail::make_counting_transform_iterator(-1000, clamp);
   auto const input    = fp_wrapper{begin, begin + 5000, scale};
   auto const expected = fp_wrapper{begin2, begin2 + 5000, scale};
   auto const result   = cudf::clamp(input, *lo, *hi);

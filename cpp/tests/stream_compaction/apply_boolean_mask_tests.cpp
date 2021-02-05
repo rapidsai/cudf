@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -15,6 +15,7 @@
  */
 
 #include <cudf/copying.hpp>
+#include <cudf/detail/iterator.cuh>
 #include <cudf/stream_compaction.hpp>
 #include <cudf/table/table.hpp>
 #include <cudf/table/table_view.hpp>
@@ -251,15 +252,16 @@ TEST_F(ApplyBooleanMask, CorrectNullCount)
 {
   cudf::size_type inputRows = 471234;
 
-  auto seq1       = cudf::test::make_counting_transform_iterator(0, [](auto i) { return i; });
-  auto valid_seq1 = cudf::test::make_counting_transform_iterator(0, [](auto row) { return true; });
+  auto seq1 = cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i; });
+  auto valid_seq1 =
+    cudf::detail::make_counting_transform_iterator(0, [](auto row) { return true; });
   cudf::test::fixed_width_column_wrapper<int64_t, typename decltype(seq1)::value_type> col1(
     seq1, seq1 + inputRows, valid_seq1);
 
   cudf::table_view input{{col1}};
 
   auto seq3 =
-    cudf::test::make_counting_transform_iterator(0, [](auto i) { return (i % 277) == 0; });
+    cudf::detail::make_counting_transform_iterator(0, [](auto i) { return (i % 277) == 0; });
   cudf::test::fixed_width_column_wrapper<bool> boolean_mask(seq3, seq3 + inputRows);
 
   auto got                 = cudf::apply_boolean_mask(input, boolean_mask);
@@ -344,7 +346,7 @@ TEST_F(ApplyBooleanMask, StructOfListsFiltering)
 
   auto lists_column = lists_column_wrapper<int32_t>{
     {{0, 0}, {1, 1}, {2, 2}, {3, 3}, {4, 4}},
-    make_counting_transform_iterator(0, [](auto i) { return i != 2; })};
+    cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i != 2; })};
 
   auto structs_column = structs_column_wrapper{{lists_column}};
 
@@ -356,7 +358,8 @@ TEST_F(ApplyBooleanMask, StructOfListsFiltering)
   // Compare against expected values;
 
   auto expected_lists_column = lists_column_wrapper<int32_t>{
-    {{0, 0}, {2, 2}, {4, 4}}, make_counting_transform_iterator(0, [](auto i) { return i != 1; })};
+    {{0, 0}, {2, 2}, {4, 4}},
+    cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i != 1; })};
 
   auto expected_structs_column = structs_column_wrapper{{expected_lists_column}};
 

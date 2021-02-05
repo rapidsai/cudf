@@ -34,7 +34,7 @@ void BM_reduction_anyall(benchmark::State& state, std::unique_ptr<cudf::aggregat
   const cudf::size_type column_size{static_cast<cudf::size_type>(state.range(0))};
 
   cudf::test::UniformRandomGenerator<long> rand_gen(0, 100);
-  auto data_it = cudf::test::make_counting_transform_iterator(
+  auto data_it = cudf::detail::make_counting_transform_iterator(
     0, [&rand_gen](cudf::size_type row) { return rand_gen.generate(); });
   cudf::test::fixed_width_column_wrapper<type, typename decltype(data_it)::value_type> values(
     data_it, data_it + column_size);

@@ -46,10 +46,10 @@ static void BM_sort(benchmark::State& state, bool nulls)
   std::vector<column_wrapper> columns;
   columns.reserve(n_cols);
   std::generate_n(std::back_inserter(columns), n_cols, [&, n_rows]() {
-    auto elements = cudf::test::make_counting_transform_iterator(
+    auto elements = cudf::detail::make_counting_transform_iterator(
       0, [&](auto row) { return distribution(generator); });
     if (!nulls) return column_wrapper(elements, elements + n_rows);
-    auto valids = cudf::test::make_counting_transform_iterator(
+    auto valids = cudf::detail::make_counting_transform_iterator(
       0, [](auto i) { return i % 100 == 0 ? false : true; });
     return column_wrapper(elements, elements + n_rows, valids);
   });
