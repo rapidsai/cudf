@@ -341,7 +341,22 @@ class ColumnAccessor(MutableMapping):
             key = (key,)
         return key + (pad_value,) * (self.nlevels - len(key))
 
+    def replace_level_values(self, mapping: dict, level: int):
+        """
+        Returns a new ColumnAccessor with values in the keys replaced according to the given mapping and level.
+        """
+        col_names, columns = list(self.keys()), list(self.values())
+        new_names = col_names
 
+        if self.multiindex == True:
+            pass
+        else:
+            new_names[level] = mapping
+            ca = ColumnAccessor(dict(zip(new_names,columns)))
+            self = ca
+        
+        return self
+        
 def _compare_keys(target: Any, key: Any) -> bool:
     """
     Compare `key` to `target`.

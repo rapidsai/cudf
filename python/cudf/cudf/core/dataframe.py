@@ -3445,25 +3445,7 @@ class DataFrame(Frame, Serializable):
             out = DataFrame(index=self.index)
 
         if columns:
-            postfix = 1
-            if isinstance(columns, Mapping):
-                # It is possible for DataFrames with a MultiIndex columns
-                # object to have columns with the same name. The following
-                # use of _cols.items and ("_1", "_2"... allows the use of
-                # rename in this case
-                for key, col in self._data.items():
-                    if key in columns:
-                        if columns[key] in out._data:
-                            out_column = columns[key] + "_" + str(postfix)
-                            postfix += 1
-                        else:
-                            out_column = columns[key]
-                        out[out_column] = col
-                    else:
-                        out[key] = col
-            elif callable(columns):
-                for key, col in self._data.items():
-                    out[columns(key)] = col
+            out._data = self._data.replace_level_values(mapping=columns, level=level) 
         else:
             out._data = self._data.copy(deep=copy)
 

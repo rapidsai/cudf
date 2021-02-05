@@ -8337,13 +8337,36 @@ def test_dataframe_roundtrip_arrow_struct_dtype(gdf):
 @pytest.mark.parametrize(
     "level",["x",0],   
 ) 
-def test_dataframe_MI_for_level(data,index,level):
-    pdf= pd.DataFrame(data,
+def test_dataframe_MI_for_level(data, index, level):
+    pdf = pd.DataFrame(data,
                       index=pd.MultiIndex.from_tuples([(0,1,2),(1,2,3),(2,3,4)]))
     pdf.index.names=["x","y","z"]
-    gdf=gd.from_pandas(pdf)
+    gdf = gd.from_pandas(pdf)
 
-    expect=pdf.rename(index=index,level=level)
-    got=gdf.rename(index=index,level=level)
+    expect = pdf.rename(index=index,level=level)
+    got = gdf.rename(index=index,level=level)
+
+    assert_eq(expect,got)
+
+
+@pytest.mark.parametrize(
+    "data",
+    [{"A": [1, 2, 3], "B": [4, 5, 6], "C": [7,8,9]},]
+)
+@pytest.mark.parametrize(
+    "columns",
+    [{'a':'f'}],
+) 
+@pytest.mark.parametrize(
+    "level",[0],   
+) 
+def test_dataframe_MC_for_level(data, columns, level):
+    gdf = gd.DataFrame(data)
+    gdf.columns = pd.MultiIndex.from_tuples([('a',1),('a',2),('b',1)])
+
+    pdf = gdf.to_pandas()
+    
+    expect = pdf.rename(columns=columns, level=level)
+    got = gdf.rename(columns=columns, level=level)
 
     assert_eq(expect,got)
