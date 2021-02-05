@@ -73,18 +73,14 @@ struct aggregation_result {
 /**
  * @brief The result of a scan aggregation
  *
- * A `scan_result` contains the result of a groupby scan operation, currently
- * only `groupby::replace_nulls` is supported under this category. `result`
- * holds the result column that contains scanned result with each values in
- * their sorted groups. `key_sort_order` holds sort order of the input values,
- * useful for users to reconstruct the original order of the values from `result`.
+ * A `scan_result` contains the result of a groupby scan operation. `result`
+ * holds the result column that contains scanned result with each value in
+ * their sorted groups. Values of the same group locate in contiguous memory,
+ * whose order is stable. Order of groups is unguaranteed.
  *
- * TODO: when `groupby::scan` expands to take multiple requests, this struct should
- * be refactored to take multiple results per requests.
  */
-struct scan_result {
-  std::unique_ptr<column> result;
-  std::unique_ptr<column> key_sort_order;
+struct scan_aggregation_result {
+  std::unique_ptr<column> result{};
 };
 
 /**
@@ -221,12 +217,10 @@ class groupby {
    * in group `j` that precedes or follows `value[i]`. If a non-null value is not found in the
    * specified direction, `value[i]` is left NULL.
    *
-   * The returned pair contains a column of the sorted keys and a `scan_result`.
+   * The returned pair contains a column of the sorted keys and a `scan_aggregation_result`.
    *
-   * The `scan_result` contains the result column in which each group is sorted by its key, and all
-   * values of the same group is located in a contiguous memory. `scan_result` also provides a
-   * column containing the sort order of each value, which can be used to reconstruct the original
-   * order of the values.
+   * `scan_aggregation_result` contains the result column in which values of the same group is
+   * located in a contiguous memory.
    *
    * Example:
    * @code{.pseudo}
@@ -238,16 +232,15 @@ class groupby {
    * //Outputs:
    * sorted_keys:     {1, 1, 2, 2}
    * result:          {4, 4, 3, 3}
-   * key_sort_order:  {2, 0, 3, 1}
    * @endcode
    *
    * @param[in] value A column whose null values will be replaced.
    * @param[in] replace_policy Specify the position of replacement values relative to null values.
    * @param[in] mr Device memory resource used to allocate device memory of the returned column.
    *
-   * @return Pair that contains a table with the sorted keys and a `scan_result`
+   * @return Pair that contains a table with the sorted keys and a `scan_aggregation_result`
    */
-  std::pair<std::unique_ptr<table>, scan_result> replace_nulls(
+  std::pair<std::unique_ptr<table>, scan_aggregation_result> replace_nulls(
     column_view const& value,
     cudf::replace_policy const& replace_policy,
     rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());

@@ -184,7 +184,7 @@ groupby::groups groupby::get_groups(table_view values, rmm::mr::device_memory_re
   }
 }
 
-std::pair<std::unique_ptr<table>, scan_result> groupby::replace_nulls(
+std::pair<std::unique_ptr<table>, scan_aggregation_result> groupby::replace_nulls(
   column_view const& value,
   cudf::replace_policy const& replace_policy,
   rmm::mr::device_memory_resource* mr)
@@ -195,26 +195,22 @@ std::pair<std::unique_ptr<table>, scan_result> groupby::replace_nulls(
 
   if (value.is_empty()) {
     return std::make_pair(empty_like(_keys),
-                          scan_result{make_empty_column(value.type()),
-                                      make_empty_column(data_type(type_to_id<cudf::size_type>()))});
+                          scan_aggregation_result{make_empty_column(value.type())});
   }
 
   auto sorted_keys    = helper().sorted_keys(rmm::cuda_stream_default, mr);
-  auto key_sort_order = std::make_unique<column>(
-    helper().key_sort_order(rmm::cuda_stream_default), rmm::cuda_stream_default, mr);
   auto grouped_values = helper().grouped_values(value, rmm::cuda_stream_default);
 
   if (not value.has_nulls()) {
     return std::make_pair(std::move(sorted_keys),
-                          scan_result{std::move(grouped_values), std::move(key_sort_order)});
+                          scan_aggregation_result{std::move(grouped_values)});
   }
 
   auto group_labels = helper().group_labels(rmm::cuda_stream_default);
   auto result       = detail::group_replace_nulls(
     *grouped_values, group_labels.begin(), replace_policy, rmm::cuda_stream_default, mr);
 
-  return std::make_pair(std::move(sorted_keys),
-                        scan_result{std::move(result), std::move(key_sort_order)});
+  return std::make_pair(std::move(sorted_keys), scan_aggregation_result{std::move(result)});
 }
 
 // Get the sort helper object

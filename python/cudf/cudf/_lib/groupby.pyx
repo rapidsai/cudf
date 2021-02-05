@@ -175,7 +175,7 @@ cdef class GroupBy:
     def replace_nulls(self, Column values, object method):
         cdef column_view val_view = values.view()
         cdef pair[unique_ptr[table],
-                  libcudf_groupby.scan_result] c_result
+                  libcudf_groupby.scan_aggregation_result] c_result
         cdef cpp_replace_policy policy = (
             cpp_replace_policy.PRECEDING
             if method == 'ffill'
@@ -192,11 +192,7 @@ cdef class GroupBy:
             column_names=self.keys._column_names
         )
         grouped_result = Column.from_unique_ptr(move(c_result.second.result))
-        key_sort_order = (
-            Column.from_unique_ptr(move(c_result.second.key_sort_order))
-        )
 
-        # TODO: Decide what to return here
         result = Table(data=grouped_result, index=sorted_keys)
         return result
 
