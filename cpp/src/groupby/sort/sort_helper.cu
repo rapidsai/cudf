@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2020, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -162,7 +162,7 @@ sort_groupby_helper::index_vector const& sort_groupby_helper::group_offsets(
 
   _group_offsets = std::make_unique<index_vector>(num_keys(stream) + 1);
 
-  auto device_input_table = table_device_view::create(_keys, stream.value());
+  auto device_input_table = table_device_view::create(_keys, stream);
   auto sorted_order       = key_sort_order().data<size_type>();
   decltype(_group_offsets->begin()) result_end;
 

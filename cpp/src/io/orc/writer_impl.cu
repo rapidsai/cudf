@@ -599,7 +599,7 @@ hostdevice_vector<gpu::EncChunk> writer::impl::initialize_chunks(
           // add new object
           std::tie(curr_cnt_in, unused) = validity_check_inputs.insert({i, {columns[i].nulls()}});
         }
-        // appand row group start and end to existing object
+        // append row group start and end to existing object
         curr_cnt_in->second.indices.push_back(ck->start_row);
         curr_cnt_in->second.indices.push_back(ck->start_row + ck->num_rows);
       }
@@ -660,6 +660,16 @@ hostdevice_vector<gpu::EncChunk> writer::impl::initialize_chunks(
                               valid_counts.cend(),
                               [](auto valid_count) { return valid_count % 8; }),
                  "Boolean column can't be encoded correctly. Please convert to int8.");
+  }
+
+  for (auto &cnt_in : validity_check_inputs) {
+    auto const valid_counts = segmented_count_set_bits(cnt_in.second.mask, cnt_in.second.indices);
+    CUDF_EXPECTS(
+      std::none_of(valid_counts.cbegin(),
+                   valid_counts.cend(),
+                   [](auto valid_count) { return valid_count % 8; }),
+      "There's currently a bug in encoding boolean columns. Suggested workaround is to convert to "
+      "int8 type. Please see https://github.com/rapidsai/cudf/issues/6763 for more information.");
   }
 
   chunks.host_to_device(stream);

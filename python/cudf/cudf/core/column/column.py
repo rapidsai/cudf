@@ -520,7 +520,8 @@ class ColumnBase(Column, Serializable):
         copies the references of the data and mask.
         """
         if deep:
-            return libcudf.copying.copy_column(self)
+            result = libcudf.copying.copy_column(self)
+            return cast(T, self._copy_type_metadata(result))
         else:
             return cast(
                 T,
@@ -1345,6 +1346,50 @@ class ColumnBase(Column, Serializable):
                 for name, f in zip(names, result_frames)
             }
         )
+
+    def _copy_type_metadata(self: T, other: ColumnBase) -> ColumnBase:
+        """
+        Copies type metadata from self onto other, returning a new column.
+
+        * when `self` is a CategoricalColumn and `other` is not, we assume
+          other is a column of codes, and return a CategoricalColumn composed
+          of `other`  and the categories of `self`.
+        * when both `self` and `other` are StructColumns, rename the fields
+          of `other` to the field names of `self`.
+        * when `self` and `other` are nested columns of the same type,
+          recursively apply this function on the children of `self` to the
+          and the children of `other`.
+        * if none of the above, return `other` without any changes
+        """
+        if isinstance(self, cudf.core.column.CategoricalColumn) and not (
+            isinstance(other, cudf.core.column.CategoricalColumn)
+        ):
+            other = build_categorical_column(
+                categories=self.categories,
+                codes=as_column(other.base_data, dtype=other.dtype),
+                mask=other.base_mask,
+                ordered=self.ordered,
+                size=other.size,
+                offset=other.offset,
+                null_count=other.null_count,
+            )
+
+        if isinstance(other, cudf.core.column.StructColumn) and isinstance(
+            self, cudf.core.column.StructColumn
+        ):
+            other = other._rename_fields(self.dtype.fields.keys())
+
+        if type(self) is type(other):
+            if self.base_children and other.base_children:
+                base_children = tuple(
+                    self.base_children[i]._copy_type_metadata(
+                        other.base_children[i]
+                    )
+                    for i in range(len(self.base_children))
+                )
+                other.set_base_children(base_children)
+
+        return other
 
 
 def column_empty_like(
