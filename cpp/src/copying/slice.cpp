@@ -17,6 +17,7 @@
 #include <cudf/column/column_view.hpp>
 #include <cudf/copying.hpp>
 #include <cudf/detail/copy.hpp>
+#include <cudf/detail/iterator.cuh>
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/utilities/error.hpp>
