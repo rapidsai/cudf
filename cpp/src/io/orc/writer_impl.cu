@@ -266,6 +266,42 @@ class orc_column_view {
   gpu::StripeDictionary *d_stripe_dict     = nullptr;
 };
 
+stripe_boundaries::stripe_boundaries(host_span<orc_column_view const> columns,
+                                     size_t num_rowgroups,
+                                     size_t max_stripe_size,
+                                     size_t row_index_stride)
+{
+  auto const is_any_column_string =
+    std::any_of(columns.begin(), columns.end(), [](auto const &col) { return col.is_string(); });
+  // Apply rows per stripe limit to limit string dictionaries
+  size_t const max_stripe_rows = is_any_column_string ? 1000000 : 5000000;
+
+  for (size_t g = 0, stripe_start = 0, stripe_size = 0; g < num_rowgroups; g++) {
+    auto const rowgroup_size =
+      std::accumulate(columns.begin(), columns.end(), 0ul, [&](size_t total_size, auto const &col) {
+        if (col.is_string()) {
+          const auto dt = col.host_dict_chunk(g);
+          return total_size + row_index_stride + dt->string_char_count;
+        } else {
+          return total_size + col.type_width() * row_index_stride;
+        }
+      });
+
+    if ((g > stripe_start) && (stripe_size + rowgroup_size > max_stripe_size ||
+                               (g + 1 - stripe_start) * row_index_stride > max_stripe_rows)) {
+      sizes.push_back(g - stripe_start);
+      stripe_start = g;
+      stripe_size  = 0;
+    }
+    stripe_size += rowgroup_size;
+    if (g + 1 == num_rowgroups) { sizes.push_back(num_rowgroups - stripe_start); }
+  }
+
+  offsets.reserve(sizes.size());
+  thrust::exclusive_scan(
+    thrust::host, sizes.cbegin(), sizes.cend(), std::back_inserter(offsets), 0u);
+}
+
 void writer::impl::init_dictionaries(orc_column_view *columns,
                                      size_t num_rows,
                                      std::vector<int> const &str_col_ids,
@@ -682,7 +718,7 @@ void writer::impl::encode_columns(host_span<orc_column_view const> columns,
       d_stripe_dict, chunks.device_ptr(), str_col_ids.size(), columns.size(), num_stripes, stream);
   }
   gpu::EncodeOrcColumnData(chunks.device_ptr(), columns.size(), num_rowgroups, stream);
-  stream.synchronize();
+  stream.synchronize();  // TODO required?
 }
 
 std::vector<StripeInformation> writer::impl::gather_stripes(
@@ -1003,45 +1039,6 @@ void writer::impl::init_state()
   out_sink_->host_write(MAGIC, std::strlen(MAGIC));
 }
 
-writer::impl::stripe_boundaries::stripe_boundaries(std::vector<uint32_t> ssizes)
-  : sizes{std::move(ssizes)}
-{
-  offsets.reserve(sizes.size());
-
-  thrust::exclusive_scan(
-    thrust::host, sizes.cbegin(), sizes.cend(), std::back_inserter(offsets), 0u);
-}
-
-writer::impl::stripe_boundaries writer::impl::compute_stripe_boundaries(
-  host_span<orc_column_view const> columns, size_t num_rowgroups, bool are_string_columns_present)
-{
-  std::vector<uint32_t> stripe_sizes;
-  for (size_t g = 0, stripe_start = 0, stripe_size = 0; g < num_rowgroups; g++) {
-    auto const rowgroup_size =
-      std::accumulate(columns.begin(), columns.end(), 0ul, [&](size_t total_size, auto const &col) {
-        if (col.is_string()) {
-          const auto dt = col.host_dict_chunk(g);
-          return total_size + row_index_stride_ + dt->string_char_count;
-        } else {
-          return total_size + col.type_width() * row_index_stride_;
-        }
-      });
-
-    // Apply rows per stripe limit to limit string dictionaries
-    const size_t max_stripe_rows = are_string_columns_present ? 1000000 : 5000000;
-    if ((g > stripe_start) && (stripe_size + rowgroup_size > max_stripe_size_ ||
-                               (g + 1 - stripe_start) * row_index_stride_ > max_stripe_rows)) {
-      stripe_sizes.push_back(g - stripe_start);
-      stripe_start = g;
-      stripe_size  = 0;
-    }
-    stripe_size += rowgroup_size;
-    if (g + 1 == num_rowgroups) { stripe_sizes.push_back(num_rowgroups - stripe_start); }
-  }
-
-  return stripe_boundaries{stripe_sizes};
-}
-
 void writer::impl::write(table_view const &table)
 {
   CUDF_EXPECTS(not closed, "Data has already been flushed to out and closed");
@@ -1078,19 +1075,19 @@ void writer::impl::write(table_view const &table)
   const auto num_rowgroups   = div_by_rowgroups<size_t>(num_rows);
   const auto num_dict_chunks = num_rowgroups * str_col_ids.size();
   hostdevice_vector<gpu::DictionaryChunk> dict(num_dict_chunks);
-  if (str_col_ids.size() != 0) {
+  if (!str_col_ids.empty()) {
     init_dictionaries(
       orc_columns.data(), num_rows, str_col_ids, dict_data.data(), dict_index.data(), dict);
   }
 
   // Decide stripe boundaries early on, based on uncompressed size
   auto const stripe_bounds =
-    compute_stripe_boundaries(orc_columns, num_rowgroups, !str_col_ids.empty());
+    stripe_boundaries{orc_columns, num_rowgroups, max_stripe_size_, row_index_stride_};
 
   // Build stripe-level dictionaries
   const auto num_stripe_dict = stripe_bounds.size() * str_col_ids.size();
   hostdevice_vector<gpu::StripeDictionary> stripe_dict(num_stripe_dict);
-  if (str_col_ids.size() != 0) {
+  if (!str_col_ids.empty()) {
     build_dictionaries(orc_columns.data(),
                        num_rows,
                        str_col_ids,

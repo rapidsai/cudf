@@ -51,6 +51,18 @@ struct streams_desc {
   auto data_size() const { return str_data_size + rle_data_size; }
 };
 
+struct stripe_boundaries {
+  std::vector<uint32_t> sizes;
+  std::vector<uint32_t> offsets;
+
+  stripe_boundaries(host_span<orc_column_view const> columns,
+                    size_t num_rowgroups,
+                    size_t max_stripe_size,
+                    size_t row_index_stride);
+
+  auto size() const { return sizes.size(); }
+};
+
 /**
  * @brief Implementation for ORC writer
  */
@@ -118,21 +130,6 @@ class writer::impl {
   void close();
 
  private:
-  struct stripe_boundaries {
-    std::vector<uint32_t> sizes;
-    std::vector<uint32_t> offsets;
-
-    stripe_boundaries(std::vector<uint32_t> sizes);
-    auto size() const { return sizes.size(); }
-  };
-
-  /**
-   * @brief TODO
-   */
-  stripe_boundaries compute_stripe_boundaries(host_span<orc_column_view const> columns,
-                                              size_t num_rowgroups,
-                                              bool are_string_columns_present);
-
   /**
    * @brief Builds up column dictionaries indices
    *
