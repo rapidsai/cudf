@@ -232,7 +232,7 @@ __global__ void __launch_bounds__(block_size) gpuInitPageFragments(PageFragment 
     __syncthreads();
     len = block_reduce(temp_storage.reduce_storage).Sum(len);
     if (!t) {
-      s->frag.non_nulls = s->frag.non_nulls + non_nulls;
+      s->frag.non_nulls += non_nulls;
       s->frag.fragment_data_size += len;
     }
     __syncthreads();

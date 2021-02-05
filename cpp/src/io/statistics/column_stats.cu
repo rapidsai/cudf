@@ -365,7 +365,6 @@ void __device__ gatherStringColumnStats(stats_state_s *s, uint32_t t, Storage &s
   }
   has_minmax = __syncthreads_or(smin != nullptr);
   len_sum    = block_reduce(storage.block_string_stats).Sum(len_sum);
-  __syncthreads();
   if (t < 32 * 1) {
     minval = WarpReduceMinString(s->warp_min[t].str_val.ptr, s->warp_min[t].str_val.length);
     if (!(t & 0x1f)) {

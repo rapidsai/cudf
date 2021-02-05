@@ -95,8 +95,8 @@ static __device__ void LoadNonNullIndices(volatile dictinit_state_s *s,
     cub::BlockScan<uint32_t, block_size, cub::BLOCK_SCAN_WARP_SCANS>(temp_storage)
       .ExclusiveSum(is_valid, nz_pos, tmp_nnz);
     nz_pos += s->nnz;
-    if (!t) { s->nnz += tmp_nnz; }
     __syncthreads();
+    if (!t) { s->nnz += tmp_nnz; }
     if (is_valid) { s->dict[nz_pos] = i + t; }
     __syncthreads();
   }
@@ -246,8 +246,8 @@ __global__ void __launch_bounds__(block_size, 2)
     uint32_t tmp_dupes;
     block_scan(temp_storage.scan_storage).InclusiveSum(is_dupe, dupes_before, tmp_dupes);
     dupes_before += s->total_dupes;
-    if (!t) { s->total_dupes += tmp_dupes; }
     __syncthreads();
+    if (!t) { s->total_dupes += tmp_dupes; }
     if (i + t < nnz) {
       if (!is_dupe) {
         dict_data[i + t - dupes_before] = ck_row + start_row;
@@ -381,7 +381,8 @@ __global__ void __launch_bounds__(block_size)
     uint32_t tmp_dupes;
     block_scan(temp_storage.scan_storage).InclusiveSum(is_dupe, dupes_before, tmp_dupes);
     dupes_before += s->total_dupes;
-    if (!t) { s->total_dupes = tmp_dupes; }
+    __syncthreads();
+    if (!t) { s->total_dupes += tmp_dupes; }
     if (i + t < num_strings) {
       dict_index[cur] = i + t - dupes_before;
       if (!is_dupe && dupes_before != 0) { dict_data[i + t - dupes_before] = cur; }
