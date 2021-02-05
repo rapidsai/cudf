@@ -48,4 +48,4 @@ static void BM_case(benchmark::State& state)
     ->UseManualTime()                        \
     ->Unit(benchmark::kMillisecond);
 
-SORT_BENCHMARK_DEFINE(strings)
+SORT_BENCHMARK_DEFINE(to_lower)
