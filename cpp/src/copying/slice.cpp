@@ -78,7 +78,8 @@ std::vector<cudf::table_view> slice(cudf::table_view const& input,
   auto op = [&indices](auto const& c) { return cudf::slice(c, indices); };
   auto f  = thrust::make_transform_iterator(input.begin(), op);
 
-  auto sliced_table = std::vector<std::vector<cudf::column_view>>(f, f + indices.size() + 1);
+  auto sliced_table = std::vector<std::vector<cudf::column_view>>(f, f + input.num_columns());
+  sliced_table.reserve(indices.size() + 1);
 
   std::vector<cudf::table_view> result{};
   // distribute columns into outgoing table_views
