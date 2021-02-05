@@ -486,7 +486,7 @@ class StringMethods(ColumnMethodsMixin):
         pat : str
             Regular expression pattern with capturing groups.
         expand : bool, default True
-            If True, return DataFrame with on column per capture group.
+            If True, return DataFrame with one column per capture group.
             If False, return a Series/Index if there is one capture group or
             DataFrame if there are multiple capture groups.
 
