@@ -18,7 +18,7 @@ from typing_extensions import Literal
 
 import cudf
 from cudf import _lib as libcudf
-from cudf._typing import ColumnLike
+from cudf._typing import ColumnLike, DataFrameOrSeries
 from cudf.core.column import as_column, build_categorical_column, column_empty
 from cudf.utils.dtypes import (
     is_categorical_dtype,
@@ -3841,11 +3841,11 @@ def _is_series(obj):
 
 
 def _drop_rows_by_labels(
-    obj: Union[cudf.DataFrame, cudf.Series],
+    obj: DataFrameOrSeries,
     labels: Union[ColumnLike, abc.Iterable, str],
     level: Union[int, str],
     errors: str,
-) -> Union[cudf.DataFrame, cudf.Series]:
+) -> DataFrameOrSeries:
     """Remove rows specified by `labels`. If `errors=True`, an error is raised
     if some items in `labels` do not exist in `obj._index`.
 
