@@ -886,7 +886,7 @@ class DataFrame(Frame, Serializable):
                     )[0]
                 )
 
-                result._postprocess_columns(self, include_index=keep_index)
+                result._copy_type_metadata(self, include_index=keep_index)
                 # Adding index of type RangeIndex back to
                 # result
                 if keep_index is False and self.index is not None:
