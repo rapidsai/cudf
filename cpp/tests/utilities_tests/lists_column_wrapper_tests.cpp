@@ -1534,8 +1534,8 @@ TYPED_TEST(ListColumnWrapperTestTyped, LargeListsOfStructsWithValidity)
     thrust::make_counting_iterator(num_struct_rows),
     cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i % 2 == 1; })};
 
-  auto bool_iterator = thrust::make_transform_iterator(thrust::make_counting_iterator(0),
-                                                       [](auto i) { return i % 3 == 0; });
+  auto bool_iterator =
+    cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i % 3 == 0; });
   auto bool_column =
     test::fixed_width_column_wrapper<bool>(bool_iterator, bool_iterator + num_struct_rows);
 

@@ -17,6 +17,7 @@
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_factories.hpp>
 #include <cudf/copying.hpp>
+#include <cudf/detail/iterator.cuh>
 #include <cudf/scalar/scalar.hpp>
 #include <cudf/sorting.hpp>
 #include <cudf/strings/copying.hpp>
@@ -32,6 +33,7 @@
 #include <cudf_test/column_wrapper.hpp>
 
 #include <thrust/iterator/constant_iterator.h>
+
 #include <vector>
 
 struct StringsColumnTest : public cudf::test::BaseFixture {
@@ -211,8 +213,8 @@ TEST_F(StringsColumnTest, Scatter)
   scatter_map.push_back(1);
 
   auto source_column = cudf::column_device_view::create(source.parent());
-  auto begin = thrust::make_transform_iterator(thrust::make_counting_iterator<cudf::size_type>(0),
-                                               column_to_string_view_vector{*source_column});
+  auto begin =
+    cudf::detail::make_counting_transform_iterator(0, column_to_string_view_vector{*source_column});
 
   auto results =
     cudf::strings::detail::scatter(begin, begin + source.size(), scatter_map.begin(), target);

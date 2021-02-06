@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,6 +19,7 @@
 #include <cudf/column/column_factories.hpp>
 #include <cudf/column/column_view.hpp>
 #include <cudf/detail/get_value.cuh>
+#include <cudf/detail/iterator.cuh>
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/strings/detail/utilities.hpp>
@@ -170,9 +171,8 @@ std::unique_ptr<cudf::column> normalize_spaces(
   rmm::device_buffer null_mask = cudf::detail::copy_bitmask(strings.parent(), stream, mr);
 
   // create offsets by calculating size of each string for output
-  auto offsets_transformer_itr =
-    thrust::make_transform_iterator(thrust::make_counting_iterator<int32_t>(0),
-                                    normalize_spaces_fn{d_strings});  // this does size-only calc
+  auto offsets_transformer_itr = cudf::detail::make_counting_transform_iterator(
+    0, normalize_spaces_fn{d_strings});  // this does size-only calc
   auto offsets_column = cudf::strings::detail::make_offsets_child_column(
     offsets_transformer_itr, offsets_transformer_itr + strings_count, stream, mr);
   auto d_offsets = offsets_column->view().data<int32_t>();
@@ -232,9 +232,8 @@ std::unique_ptr<cudf::column> normalize_characters(cudf::strings_column_view con
   auto strings_column       = cudf::column_device_view::create(strings.parent(), stream);
 
   // build the output offsets column: compute the output size of each string
-  auto offsets_transformer_itr =
-    thrust::make_transform_iterator(thrust::make_counting_iterator<int32_t>(0),
-                                    codepoint_to_utf8_fn{*strings_column, cp_chars, cp_offsets});
+  auto offsets_transformer_itr = cudf::detail::make_counting_transform_iterator(
+    0, codepoint_to_utf8_fn{*strings_column, cp_chars, cp_offsets});
   auto offsets_column = cudf::strings::detail::make_offsets_child_column(
     offsets_transformer_itr, offsets_transformer_itr + strings_count, stream, mr);
   auto d_offsets = offsets_column->view().data<int32_t>();

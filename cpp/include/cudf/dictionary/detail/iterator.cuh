@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -15,6 +15,7 @@
  */
 
 #include <cudf/column/column_device_view.cuh>
+#include <cudf/detail/iterator.cuh>
 #include <cudf/dictionary/dictionary_column_view.hpp>
 
 namespace cudf {
@@ -58,8 +59,8 @@ auto make_dictionary_iterator(column_device_view const& dictionary_column)
 {
   CUDF_EXPECTS(is_dictionary(dictionary_column.type()),
                "Dictionary iterator is only for dictionary columns");
-  return thrust::make_transform_iterator(thrust::make_counting_iterator<size_type>(0),
-                                         dictionary_access_fn<KeyType>{dictionary_column});
+  return cudf::detail::make_counting_transform_iterator(
+    size_type{0}, dictionary_access_fn<KeyType>{dictionary_column});
 }
 
 /**
@@ -110,9 +111,8 @@ auto make_dictionary_pair_iterator(column_device_view const& dictionary_column)
 {
   CUDF_EXPECTS(is_dictionary(dictionary_column.type()),
                "Dictionary iterator is only for dictionary columns");
-  return thrust::make_transform_iterator(
-    thrust::make_counting_iterator<size_type>(0),
-    dictionary_access_pair_fn<KeyType, has_nulls>{dictionary_column});
+  return cudf::detail::make_counting_transform_iterator(
+    size_type{0}, dictionary_access_pair_fn<KeyType, has_nulls>{dictionary_column});
 }
 
 }  // namespace detail
