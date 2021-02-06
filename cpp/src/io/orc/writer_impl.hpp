@@ -68,13 +68,14 @@ class orc_streams {
   std::vector<Stream> streams;
   std::vector<int32_t> ids;
 
-  // orc_streams(size_t num_rows, bool single_write_mode, stripe_boundaries const& stripe_bounds);
-
   Stream const& operator[](int idx) const { return streams[idx]; }
+  Stream& operator[](int idx) { return streams[idx]; }
   auto id(int idx) const { return ids[idx]; }
   auto size() const { return streams.size(); }
   orc_stream_offsets compute_offsets(host_span<orc_column_view const> columns,
                                      size_t num_rowgroups) const;
+
+  operator std::vector<Stream>() const { return streams; }
 };
 
 /**
@@ -284,8 +285,8 @@ class writer::impl {
                           hostdevice_vector<gpu::EncChunk> const& chunks,
                           hostdevice_vector<gpu::StripeStream> const& strm_desc,
                           hostdevice_vector<gpu_inflate_status_s> const& comp_out,
-                          StripeInformation& stripe,
-                          std::vector<Stream>& streams,
+                          StripeInformation* stripe,
+                          orc_streams* streams,
                           ProtobufWriter* pbw);
 
   /**
@@ -302,8 +303,8 @@ class writer::impl {
                          gpu::EncChunk const& chunk,
                          uint8_t const* compressed_data,
                          uint8_t* stream_out,
-                         StripeInformation& stripe,
-                         std::vector<Stream>& streams);
+                         StripeInformation* stripe,
+                         orc_streams* streams);
 
   /**
    * @brief Insert 3-byte uncompressed block headers in a byte vector

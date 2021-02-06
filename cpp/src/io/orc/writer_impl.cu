@@ -868,8 +868,8 @@ void writer::impl::write_index_stream(int32_t stripe_id,
                                       hostdevice_vector<gpu::EncChunk> const &chunks,
                                       hostdevice_vector<gpu::StripeStream> const &strm_desc,
                                       hostdevice_vector<gpu_inflate_status_s> const &comp_out,
-                                      StripeInformation &stripe,
-                                      std::vector<Stream> &streams,
+                                      StripeInformation *stripe,
+                                      orc_streams *streams,
                                       ProtobufWriter *pbw)
 {
   row_group_index_info present;
@@ -936,26 +936,26 @@ void writer::impl::write_index_stream(int32_t stripe_id,
     }
   }
 
-  streams[stream_id].length = buffer_.size();
+  (*streams)[stream_id].length = buffer_.size();
   if (compression_kind_ != NONE) {
-    uint32_t uncomp_ix_len = (uint32_t)(streams[stream_id].length - 3) * 2 + 1;
+    uint32_t uncomp_ix_len = (uint32_t)((*streams)[stream_id].length - 3) * 2 + 1;
     buffer_[0]             = static_cast<uint8_t>(uncomp_ix_len >> 0);
     buffer_[1]             = static_cast<uint8_t>(uncomp_ix_len >> 8);
     buffer_[2]             = static_cast<uint8_t>(uncomp_ix_len >> 16);
   }
   out_sink_->host_write(buffer_.data(), buffer_.size());
-  stripe.indexLength += buffer_.size();
+  stripe->indexLength += buffer_.size();
 }
 
 void writer::impl::write_data_stream(gpu::StripeStream const &strm_desc,
                                      gpu::EncChunk const &chunk,
                                      uint8_t const *compressed_data,
                                      uint8_t *stream_out,
-                                     StripeInformation &stripe,
-                                     std::vector<Stream> &streams)
+                                     StripeInformation *stripe,
+                                     orc_streams *streams)
 {
-  const auto length                                    = strm_desc.stream_size;
-  streams[chunk.strm_id[strm_desc.stream_type]].length = length;
+  const auto length                                       = strm_desc.stream_size;
+  (*streams)[chunk.strm_id[strm_desc.stream_type]].length = length;
   if (length != 0) {
     const auto *stream_in = (compression_kind_ == NONE) ? chunk.streams[strm_desc.stream_type]
                                                         : (compressed_data + strm_desc.bfr_offset);
@@ -965,7 +965,7 @@ void writer::impl::write_data_stream(gpu::StripeStream const &strm_desc,
 
     out_sink_->host_write(stream_out, length);
   }
-  stripe.dataLength += length;
+  stripe->dataLength += length;
 }
 
 void writer::impl::add_uncompressed_block_headers(std::vector<uint8_t> &v)
@@ -1190,8 +1190,8 @@ void writer::impl::write(table_view const &table)
                          chunks.chunks,
                          strm_desc,
                          comp_out,
-                         stripes[stripe_id],
-                         streams.streams,
+                         &stripes[stripe_id],
+                         &streams,
                          &pbw_);
     }
 
@@ -1205,13 +1205,13 @@ void writer::impl::write(table_view const &table)
                         ck,
                         static_cast<uint8_t *>(compressed_data.data()),
                         stream_output.get(),
-                        stripes[stripe_id],
-                        streams.streams);
+                        &stripes[stripe_id],
+                        &streams);
     }
 
     // Write stripefooter consisting of stream information
     StripeFooter sf;
-    sf.streams = streams.streams;
+    sf.streams = streams;
     sf.columns.resize(num_columns + 1);
     sf.columns[0].kind           = DIRECT;
     sf.columns[0].dictionarySize = 0;
