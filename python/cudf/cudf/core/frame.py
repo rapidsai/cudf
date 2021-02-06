@@ -3851,9 +3851,8 @@ def _drop_rows_by_labels(
 
     Will raise if level(int) is greater or equal to index nlevels
     """
-    if isinstance(level, int):
-        if obj._index is not None and level >= obj._index.nlevels:
-            raise ValueError("Param level out of bounds.")
+    if isinstance(level, int) and level >= obj.index.nlevels:
+        raise ValueError("Param level out of bounds.")
 
     if not isinstance(labels, (cudf.Series, cudf.Index)):
         labels = as_column(labels)
@@ -3866,9 +3865,8 @@ def _drop_rows_by_labels(
         if errors == "raise" and not labels.isin(levels_index).all():
             raise KeyError("One or more values not found in axis")
 
-        # TODO : Could use anti-join as a future optimization
-        sliced_df = obj.take(~levels_index.isin(labels))
-        sliced_df._index.names = obj._index.names
+        sliced_df = obj._drop_rows_by_labels(labels, level)
+
     else:
         if errors == "raise" and not labels.isin(obj.index).all():
             raise KeyError("One or more values not found in axis")

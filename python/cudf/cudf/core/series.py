@@ -6,7 +6,7 @@ import warnings
 from collections import abc as abc
 from numbers import Number
 from shutil import get_terminal_size
-from typing import Any, Optional, Set
+from typing import Any, Optional, Set, Union
 from uuid import uuid4
 
 import cupy
@@ -4626,16 +4626,46 @@ class Series(Frame, Serializable):
         """
         return self.index
 
-    def _drop_rows_by_labels(self, labels: ColumnLike) -> "cudf.Series":
+    def _drop_rows_by_labels(
+        self, labels: ColumnLike, level: Union[int, __builtins__.str] = None
+    ) -> "cudf.Series":
         """Delete rows specified by `label` parameter. Resort to the efficient
         implementation in `cudf.DataFrame`
 
         labels: a list of labels specifying the rows to drop
         """
-        df = self.to_frame(name="tmp")
-        dropped = df._drop_rows_by_labels(labels)["tmp"]
-        dropped.name = self.name
 
+        if isinstance(self._index, cudf.MultiIndex):
+            if isinstance(level, int):
+                ilevel = level
+            else:
+                ilevel = self._index.names.index(level)
+
+            idx_nlv = self._index.nlevels
+            working_df = self._index._source_data
+            # TODO: figure out what __unique__ should be
+            working_df["__unique__"] = self._column
+            working_df = working_df.set_index(level)
+
+            # TODO: replace with Brandon's suggestion
+            to_join = cudf.DataFrame(index=cudf.Index(labels, name=level))
+            join_res = working_df.join(to_join, how="leftanti")
+            join_res.insert(
+                ilevel, name=join_res._index.name, value=join_res._index
+            )
+            join_res = join_res.reset_index(drop=True)
+
+            midx = cudf.MultiIndex.from_frame(
+                join_res.iloc[:, 0:idx_nlv], names=self._index.names
+            )
+
+            dropped = join_res["__unique__"]
+            dropped = dropped.set_index(midx)
+        else:
+            df = self.to_frame(name="tmp")
+            dropped = df._drop_rows_by_labels(labels)["tmp"]
+
+        dropped.name = self.name
         return dropped
 
     _accessors = set()  # type: Set[Any]

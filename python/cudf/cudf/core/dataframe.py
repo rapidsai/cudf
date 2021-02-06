@@ -10,7 +10,7 @@ import sys
 import warnings
 from collections import OrderedDict, defaultdict
 from collections.abc import Iterable, Mapping, Sequence
-from typing import Any, Set, TypeVar
+from typing import Any, Set, TypeVar, Union
 
 import cupy
 import numpy as np
@@ -7389,13 +7389,47 @@ class DataFrame(Frame, Serializable):
                 return False
         return super().equals(other)
 
-    def _drop_rows_by_labels(self, labels: ColumnLike) -> "cudf.DataFrame":
+    def _drop_rows_by_labels(
+        self, labels: ColumnLike, level: Union[int, str] = None
+    ) -> "cudf.DataFrame":
         """Delete rows specified by `label` parameter. In `DataFrame`, this can
         be achieved efficiently by a left-anti join operation
 
         labels: a list of labels specifying the rows to drop
         """
-        return self.join(cudf.DataFrame(index=labels), how="leftanti")
+
+        if isinstance(self._index, cudf.MultiIndex):
+            if isinstance(level, int):
+                ilevel = level
+            else:
+                ilevel = self._index.names.index(level)
+
+            idx_nlv = self._index.nlevels
+            working_df = self._index._source_data
+            # TODO: figure out what __unique__ should be
+            for col in self.columns:
+                working_df["__unique__" + str(col)] = self[col]._column
+            working_df = working_df.set_index(level)
+
+            # TODO: replace with Brandon's suggestion
+            to_join = cudf.DataFrame(index=cudf.Index(labels, name=level))
+            join_res = working_df.join(to_join, how="leftanti")
+            join_res.insert(
+                ilevel, name=join_res._index.name, value=join_res._index
+            )
+            join_res = join_res.reset_index(drop=True)
+
+            midx = cudf.MultiIndex.from_frame(
+                join_res.iloc[:, 0:idx_nlv], names=self._index.names
+            )
+
+            dropped = join_res.iloc[:, idx_nlv:]
+            dropped = dropped.set_index(midx)
+            dropped.columns = self.columns
+        else:
+            dropped = self.join(cudf.DataFrame(index=labels), how="leftanti")
+
+        return dropped
 
     _accessors = set()  # type: Set[Any]
 
