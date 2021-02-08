@@ -1099,6 +1099,15 @@ def test_series_drop_raises():
         expected_error_message="One or more values not found in axis",
     )
 
+    # dtype specified mismatch
+    assert_exceptions_equal(
+        lfunc=ps.drop,
+        rfunc=gs.drop,
+        lfunc_args_and_kwargs=([3],),
+        rfunc_args_and_kwargs=([3],),
+        expected_error_message="One or more values not found in axis",
+    )
+
     expect = ps.drop("p", errors="ignore")
     actual = gs.drop("p", errors="ignore")
 

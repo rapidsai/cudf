@@ -3883,7 +3883,7 @@ def _drop_rows_by_labels(
         working_df = working_df.set_index(level)
 
         # 3. Use "leftanti" join to drop
-        # TODO: replace with Brandon's suggestion
+        # TODO: update to internal join API to bypass logic checks
         to_join = cudf.DataFrame(index=cudf.Index(labels, name=level))
         join_res = working_df.join(to_join, how="leftanti")
 
