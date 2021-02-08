@@ -62,6 +62,7 @@ static inline __device__ uint32_t nvstr_init_hash(char const *ptr, uint32_t len)
  *
  * @param[in,out] s dictionary builder state
  * @param[in] t thread id
+ * @param[in] temp_storage shared memory storage to scan non-null positions
  */
 template <int block_size, typename Storage>
 static __device__ void LoadNonNullIndices(volatile dictinit_state_s *s,
