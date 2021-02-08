@@ -162,10 +162,11 @@ std::unique_ptr<column> replace_re(
 
   // copy all the reprog_device instances to a device memory array
   rmm::device_buffer progs_buffer{sizeof(reprog_device) * progs.size()};
-  cudaMemcpy(progs_buffer.data(),
-             progs.data(),
-             progs.size() * sizeof(reprog_device),
-             cudaMemcpyHostToDevice);
+  CUDA_TRY(cudaMemcpyAsync(progs_buffer.data(),
+                           progs.data(),
+                           progs.size() * sizeof(reprog_device),
+                           cudaMemcpyHostToDevice,
+                           stream.value()));
   reprog_device* d_progs = reinterpret_cast<reprog_device*>(progs_buffer.data());
 
   // create working buffer for ranges pairs
