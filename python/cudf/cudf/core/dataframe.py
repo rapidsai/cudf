@@ -10,7 +10,7 @@ import sys
 import warnings
 from collections import OrderedDict, defaultdict
 from collections.abc import Iterable, Mapping, Sequence
-from typing import Any, Set, TypeVar, Union
+from typing import Any, Optional, Set, TypeVar
 
 import cupy
 import numpy as np
@@ -492,7 +492,12 @@ class DataFrame(Frame, Serializable):
         return out
 
     @classmethod
-    def _from_data(cls, data, index=None, columns=None):
+    def _from_data(
+        cls,
+        data: ColumnAccessor,
+        index: Optional[Index] = None,
+        columns: Any = None,
+    ) -> DataFrame:
         out = cls.__new__(cls)
         out._data = data
         if index is None:
@@ -7389,52 +7394,14 @@ class DataFrame(Frame, Serializable):
                 return False
         return super().equals(other)
 
-    def _drop_rows_by_labels(
-        self, labels: ColumnLike, level: Union[int, str] = None
-    ) -> "cudf.DataFrame":
+    def _drop_rows_by_labels(self, labels: ColumnLike) -> "cudf.DataFrame":
         """Delete rows specified by `label` parameter. In `DataFrame`, this can
         be achieved efficiently by a left-anti join operation
 
         labels: a list of labels specifying the rows to drop
         """
 
-        if isinstance(self._index, cudf.MultiIndex):
-            if isinstance(level, int):
-                ilevel = level
-            else:
-                ilevel = self._index.names.index(level)
-
-            # 1. Merge Index df and data df along column axis:
-            # | id | ._index df | original df |
-            idx_nlv = self._index.nlevels
-            working_df = self._index._source_data
-            working_df.columns = [i for i in range(idx_nlv)]
-            for i, col in enumerate(self.columns):
-                working_df[idx_nlv + i] = self[col]._column
-            # 2. Set `level` as common index:
-            # | level | ._index df w/o level | original df
-            working_df = working_df.set_index(level)
-
-            # 3. Use "leftanti" join to drop
-            # TODO: replace with Brandon's suggestion
-            to_join = cudf.DataFrame(index=cudf.Index(labels, name=level))
-            join_res = working_df.join(to_join, how="leftanti")
-
-            # 4. Reconstruct original layout, and rename
-            join_res.insert(
-                ilevel, name=join_res._index.name, value=join_res._index
-            )
-            join_res = join_res.reset_index(drop=True)
-
-            midx = cudf.MultiIndex.from_frame(
-                join_res.iloc[:, 0:idx_nlv], names=self._index.names
-            )
-
-            dropped = join_res.iloc[:, idx_nlv:]
-            dropped = dropped.set_index(midx)
-            dropped.columns = self.columns
-        else:
-            dropped = self.join(cudf.DataFrame(index=labels), how="leftanti")
+        dropped = self.join(cudf.DataFrame(index=labels), how="leftanti")
 
         return dropped
 

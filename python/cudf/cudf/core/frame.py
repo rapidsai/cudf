@@ -3857,6 +3857,7 @@ def _drop_rows_by_labels(
     if not isinstance(labels, (cudf.Series, cudf.Index)):
         labels = as_column(labels)
 
+    res: DataFrameOrSeries
     if isinstance(obj._index, cudf.MultiIndex):
         if level is None:
             level = 0
@@ -3865,12 +3866,52 @@ def _drop_rows_by_labels(
         if errors == "raise" and not labels.isin(levels_index).all():
             raise KeyError("One or more values not found in axis")
 
-        sliced_df = obj._drop_rows_by_labels(labels, level)
+        if isinstance(level, int):
+            ilevel = level
+        else:
+            ilevel = obj._index.names.index(level)
+
+        # 1. Merge Index df and data df along column axis:
+        # | id | ._index df | data column(s) |
+        idx_nlv = obj._index.nlevels
+        working_df = obj._index._source_data
+        working_df.columns = [i for i in range(idx_nlv)]
+        for i, col in enumerate(obj._data):
+            working_df[idx_nlv + i] = obj._data[col]
+        # 2. Set `level` as common index:
+        # | level | ._index df w/o level | data column(s) |
+        working_df = working_df.set_index(level)
+
+        # 3. Use "leftanti" join to drop
+        # TODO: replace with Brandon's suggestion
+        to_join = cudf.DataFrame(index=cudf.Index(labels, name=level))
+        join_res = working_df.join(to_join, how="leftanti")
+
+        # 4. Reconstruct original layout, and rename
+        join_res.insert(
+            ilevel, name=join_res._index.name, value=join_res._index
+        )
+        join_res = join_res.reset_index(drop=True)
+
+        midx = cudf.MultiIndex.from_frame(
+            join_res.iloc[:, 0:idx_nlv], names=obj._index.names
+        )
+
+        if isinstance(obj, cudf.Series):
+            res = obj.__class__._from_data(
+                join_res.iloc[:, idx_nlv:]._data, index=midx, name=obj.name
+            )
+        else:
+            res = obj.__class__._from_data(
+                join_res.iloc[:, idx_nlv:]._data,
+                index=midx,
+                columns=obj.columns,
+            )
 
     else:
         if errors == "raise" and not labels.isin(obj.index).all():
             raise KeyError("One or more values not found in axis")
 
-        sliced_df = obj._drop_rows_by_labels(labels)
+        res = obj._drop_rows_by_labels(labels)
 
-    return sliced_df
+    return res

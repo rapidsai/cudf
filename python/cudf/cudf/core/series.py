@@ -6,7 +6,7 @@ import warnings
 from collections import abc as abc
 from numbers import Number
 from shutil import get_terminal_size
-from typing import Any, Optional, Set, Union
+from typing import Any, Optional, Set
 from uuid import uuid4
 
 import cupy
@@ -4626,53 +4626,17 @@ class Series(Frame, Serializable):
         """
         return self.index
 
-    def _drop_rows_by_labels(
-        self, labels: ColumnLike, level: Union[int, __builtins__.str] = None
-    ) -> "cudf.Series":
+    def _drop_rows_by_labels(self, labels: ColumnLike) -> "cudf.Series":
         """Delete rows specified by `label` parameter. Resort to the efficient
         implementation in `cudf.DataFrame`
 
         labels: a list of labels specifying the rows to drop
         """
 
-        if isinstance(self._index, cudf.MultiIndex):
-            if isinstance(level, int):
-                ilevel = level
-            else:
-                ilevel = self._index.names.index(level)
-
-            # 1. Merge Index df and data column along column axis:
-            # | id | ._index df | data column |
-            idx_nlv = self._index.nlevels
-            working_df = self._index._source_data
-            working_df.columns = [i for i in range(idx_nlv)]
-            working_df[idx_nlv] = self._column
-            # 2. Set `level` as common index:
-            # | level | ._index df w/o level | data column
-            working_df = working_df.set_index(ilevel)
-
-            # 3. Use "leftanti" join to drop
-            # TODO: replace with Brandon's suggestion
-            to_join = cudf.DataFrame(index=cudf.Index(labels, name=level))
-            join_res = working_df.join(to_join, how="leftanti")
-
-            # 4. Reconstruct original layout, and rename
-            join_res.insert(
-                ilevel, name=join_res._index.name, value=join_res._index
-            )
-            join_res = join_res.reset_index(drop=True)
-
-            midx = cudf.MultiIndex.from_frame(
-                join_res.iloc[:, 0:idx_nlv], names=self._index.names
-            )
-
-            dropped = join_res[idx_nlv]
-            dropped = dropped.set_index(midx)
-        else:
-            df = self.to_frame(name="tmp")
-            dropped = df._drop_rows_by_labels(labels)["tmp"]
-
+        df = self.to_frame(name="tmp")
+        dropped = df._drop_rows_by_labels(labels)["tmp"]
         dropped.name = self.name
+
         return dropped
 
     _accessors = set()  # type: Set[Any]
