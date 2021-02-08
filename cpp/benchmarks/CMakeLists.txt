@@ -182,6 +182,7 @@ ConfigureBench(TYPE_DISPATCHER_BENCH "${TD_BENCH_SRC}")
 
 set(REDUCTION_BENCH_SRC
   "${CMAKE_CURRENT_SOURCE_DIR}/reduction/anyall_benchmark.cpp"
+  "${CMAKE_CURRENT_SOURCE_DIR}/reduction/dictionary_benchmark.cpp"
   "${CMAKE_CURRENT_SOURCE_DIR}/reduction/reduce_benchmark.cpp"
   "${CMAKE_CURRENT_SOURCE_DIR}/reduction/minmax_benchmark.cpp")
 
