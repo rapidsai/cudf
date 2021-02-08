@@ -638,6 +638,62 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_columnViewsFromPacked(JNI
   CATCH_STD(env, nullptr);
 }
 
+JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Table_sortOrder(JNIEnv *env, jclass j_class_object,
+                                                            jlong j_input_table,
+                                                            jlongArray j_sort_keys_columns,
+                                                            jbooleanArray j_is_descending,
+                                                            jbooleanArray j_are_nulls_smallest) {
+
+  // input validations & verifications
+  JNI_NULL_CHECK(env, j_input_table, "input table is null", 0);
+  JNI_NULL_CHECK(env, j_sort_keys_columns, "sort keys columns is null", 0);
+  JNI_NULL_CHECK(env, j_is_descending, "sort order array is null", 0);
+  JNI_NULL_CHECK(env, j_are_nulls_smallest, "null order array is null", 0);
+
+  try {
+    cudf::jni::auto_set_device(env);
+    cudf::jni::native_jpointerArray<cudf::column_view> n_sort_keys_columns(env,
+                                                                           j_sort_keys_columns);
+    jsize num_columns = n_sort_keys_columns.size();
+    const cudf::jni::native_jbooleanArray n_is_descending(env, j_is_descending);
+    jsize num_columns_is_desc = n_is_descending.size();
+
+    if (num_columns_is_desc != num_columns) {
+      JNI_THROW_NEW(env, "java/lang/IllegalArgumentException",
+                    "columns and is_descending lengths don't match", 0);
+    }
+
+    const cudf::jni::native_jbooleanArray n_are_nulls_smallest(env, j_are_nulls_smallest);
+    jsize num_columns_null_smallest = n_are_nulls_smallest.size();
+
+    if (num_columns_null_smallest != num_columns) {
+      JNI_THROW_NEW(env, "java/lang/IllegalArgumentException",
+                    "columns and areNullsSmallest lengths don't match", 0);
+    }
+
+    std::vector<cudf::order> order(n_is_descending.size());
+    for (int i = 0; i < n_is_descending.size(); i++) {
+      order[i] = n_is_descending[i] ? cudf::order::DESCENDING : cudf::order::ASCENDING;
+    }
+    std::vector<cudf::null_order> null_order(n_are_nulls_smallest.size());
+    for (int i = 0; i < n_are_nulls_smallest.size(); i++) {
+      null_order[i] = n_are_nulls_smallest[i] ? cudf::null_order::BEFORE : cudf::null_order::AFTER;
+    }
+
+    std::vector<cudf::column_view> columns;
+    columns.reserve(num_columns);
+    for (int i = 0; i < num_columns; i++) {
+      columns.push_back(*n_sort_keys_columns[i]);
+    }
+    cudf::table_view keys(columns);
+
+    auto sorted_col = cudf::sorted_order(keys, order, null_order);
+    return reinterpret_cast<jlong>(sorted_col.release());
+  }
+  CATCH_STD(env, 0);
+}
+
+
 JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_orderBy(JNIEnv *env, jclass j_class_object,
                                                                jlong j_input_table,
                                                                jlongArray j_sort_keys_columns,
@@ -646,7 +702,7 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_orderBy(JNIEnv *env, jcla
 
   // input validations & verifications
   JNI_NULL_CHECK(env, j_input_table, "input table is null", NULL);
-  JNI_NULL_CHECK(env, j_sort_keys_columns, "input table is null", NULL);
+  JNI_NULL_CHECK(env, j_sort_keys_columns, "sort keys columns is null", NULL);
   JNI_NULL_CHECK(env, j_is_descending, "sort order array is null", NULL);
   JNI_NULL_CHECK(env, j_are_nulls_smallest, "null order array is null", NULL);
 
