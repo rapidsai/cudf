@@ -32,6 +32,8 @@
 #include <cudf/utilities/traits.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
 
+#include <thrust/iterator/transform_iterator.h>
+
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_buffer.hpp>
 
@@ -221,10 +223,9 @@ struct create_column_from_view {
   template <typename ColumnType, std::enable_if_t<cudf::is_fixed_width<ColumnType>()> * = nullptr>
   std::unique_ptr<column> operator()()
   {
-    std::vector<std::unique_ptr<column>> children;
-    for (size_type i = 0; i < view.num_children(); ++i) {
-      children.emplace_back(std::make_unique<column>(view.child(i), stream, mr));
-    }
+    auto op       = [&](auto const &child) { return std::make_unique<column>(child, stream, mr); };
+    auto begin    = thrust::make_transform_iterator(view.child_begin(), op);
+    auto children = std::vector<std::unique_ptr<column>>(begin, begin + view.num_children());
 
     return std::make_unique<column>(
       view.type(),

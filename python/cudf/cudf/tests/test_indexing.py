@@ -1361,3 +1361,23 @@ def test_loc_series_multiindex(arg):
     ).set_index(["a", "b"])["c"]
     psr = gsr.to_pandas()
     assert_eq(psr.loc[arg], gsr.loc[arg])
+
+
+@pytest.mark.parametrize(
+    "arg",
+    [
+        slice(None, None, -1),
+        slice(None, -1, -1),
+        slice(4, -1, -1),
+        slice(None, None, -3),
+        slice(None, -1, -3),
+        slice(4, -1, -3),
+    ],
+)
+@pytest.mark.parametrize(
+    "pobj", [pd.DataFrame({"a": [1, 2, 3, 4, 5]}), pd.Series([1, 2, 3, 4, 5])]
+)
+def test_iloc_before_zero_terminate(arg, pobj):
+    gobj = cudf.from_pandas(pobj)
+
+    assert_eq(pobj.iloc[arg], gobj.iloc[arg])
