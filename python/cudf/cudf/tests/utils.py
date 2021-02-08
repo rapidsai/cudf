@@ -286,3 +286,70 @@ def gen_rand_series(dtype, size, **kwargs):
 @contextmanager
 def does_not_raise():
     yield
+
+class NullableFloatSeriesCompare(object):
+    """
+    class to be used in testing, since pandas does not
+    support nullable float dtypes, this class should 
+    correctly apply binary operation logic in a slow 
+    loop 
+    """
+    def __init__(self, data, dtype):
+        self._data = list(data)
+        self._dtype = np.dtype(dtype)
+
+    def __len__(self):
+        return len(self._data)
+
+    def __getitem__(self, item):
+        return self._data[item]
+
+    def binary_operator(self, other, op, fill_value=None):
+        if not hasattr(other, "__len__") or len(other) != len(self):
+            raise ValueError(
+                "Must compare to a list-like of equal length"
+            )
+        result = [None] * len(self)
+        for i in range(len(self)):
+            lhs = self[i]
+            rhs = other[i]
+
+            if lhs is np.nan or rhs is np.nan:
+                this_result = False
+            elif lhs is None or rhs is None:
+                this_result = None
+            else:
+                this_result = getattr(lhs, op)(rhs)
+
+            result[i] = this_result
+        if fill_value is not None:
+            fill_value = np.bool(fill_value)
+            result = [val if val is not None else fill_value for val in result]
+
+        return pd.Series(result, dtype='boolean')
+
+    def eq(self, other, fill_value=None):
+        return self.binary_operator(other, "__eq__", fill_value=fill_value)
+    def ne(self, other, fill_value=None):
+        return self.binary_operator(other, "__ne__", fill_value=fill_value)
+    def lt(self, other, fill_value=None):
+        return self.binary_operator(other, "__lt__", fill_value=fill_value)
+    def gt(self, other, fill_value=None):
+        return self.binary_operator(other, "__gt__", fill_value=fill_value)
+    def le(self, other, fill_value=None):
+        return self.binary_operator(other, "__le__", fill_value=fill_value)
+    def ge(self, other, fill_value=None):
+        return self.binary_operator(other, "__ge__", fill_value=fill_value)
+
+    def __eq__(self, other):
+        return self.binary_operator(other, "__eq__")
+    def __ne__(self, other):
+        return self.binary_operator(other, "__ne__")
+    def __lt__(self, other):
+        return self.binary_operator(other, "__lt__")
+    def __gt__(self, other):
+        return self.binary_operator(other, "__gt__")
+    def __ne__(self, other):
+        return self.binary_operator(other, "__ne__")
+    def __ge__(self, other):
+        return self.binary_operator(other, "__ge__")
