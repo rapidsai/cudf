@@ -55,6 +55,7 @@ struct stripe_boundaries {
                     size_t row_index_stride);
 
   auto size() const { return sizes.size(); }
+  auto num_rowgroups() const { return offsets.back() + sizes.back(); }
 };
 struct orc_stream_offsets {
   std::vector<size_t> offsets;
@@ -76,6 +77,24 @@ class orc_streams {
                                      size_t num_rowgroups) const;
 
   operator std::vector<Stream>() const { return streams; }
+};
+
+struct encoder_chunks {
+  rmm::device_uvector<uint8_t> encoded_data;
+  hostdevice_vector<gpu::EncChunk> chunks;
+
+  /**
+   * @brief Encodes the streams as a series of column data chunks
+   *
+   * @param columns List of columns
+   * @param num_rowgroups Total number of row groups
+   * @param str_col_ids List of columns that are strings type
+   */
+  void encode(host_span<orc_column_view const> columns,
+              uint32_t num_stripes,
+              size_t num_rowgroups,
+              std::vector<int> const& str_col_ids,
+              rmm::cuda_stream_view stream);
 };
 
 /**
@@ -181,41 +200,16 @@ class writer::impl {
                           uint32_t* dict_index,
                           hostdevice_vector<gpu::StripeDictionary>& stripe_dict);
 
-  orc_streams gather_streams(host_span<orc_column_view> columns,
+  orc_streams create_streams(host_span<orc_column_view> columns,
                              size_t num_rows,
                              stripe_boundaries const& stripe_bounds);
-
-  struct encode_chunks {
-    rmm::device_uvector<uint8_t> encoded_data;
-    hostdevice_vector<gpu::EncChunk> chunks;
-  };
 
   /**
    * @brief TODO
    */
-  encode_chunks initialize_chunks(host_span<orc_column_view const> columns,
-                                  size_t num_rows,
-                                  size_t num_rowgroups,
-                                  std::vector<int> const& str_col_ids,
-                                  stripe_boundaries const& stripe_bounds,
-                                  orc_streams const& streams);
-
-  /**
-   * @brief Encodes the streams as a series of column data chunks
-   *
-   * @param columns List of columns
-   * @param num_rows Total number of rows
-   * @param num_rowgroups Total number of row groups
-   * @param str_col_ids List of columns that are strings type
-   * @param num_stripes TODO
-   * @param chunks List of column data chunks
-   */
-  void encode_columns(host_span<orc_column_view const> columns,
-                      size_t num_rows,
-                      size_t num_rowgroups,
-                      std::vector<int> const& str_col_ids,
-                      uint32_t num_stripes,
-                      hostdevice_vector<gpu::EncChunk>& chunks);
+  encoder_chunks create_chunks(host_span<orc_column_view const> columns,
+                               stripe_boundaries const& stripe_bounds,
+                               orc_streams const& streams);
 
   /**
    * @brief Returns stripe information after compacting columns' individual data
@@ -244,20 +238,12 @@ class writer::impl {
    * in ORC protobuf format
    *
    * @param columns List of columns
-   * @param num_rows Total number of rows
-   * @param num_rowgroups Total number of row groups
    * @param stripe_bounds List of stripe boundaries
-   * @param stripes Stripe information
-   * @param chunks List of column data chunks
    *
    * @return The statistic blobs
    */
-  std::vector<std::vector<uint8_t>> gather_statistic_blobs(
-    host_span<orc_column_view const>,
-    size_t num_rows,
-    size_t num_rowgroups,
-    stripe_boundaries const& stripe_bounds,
-    std::vector<StripeInformation> const& stripes);
+  std::vector<std::vector<uint8_t>> gather_statistic_blobs(host_span<orc_column_view const> columns,
+                                                           stripe_boundaries const& stripe_bounds);
 
   /**
    * @brief Write the specified column's row index stream

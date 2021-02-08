@@ -392,7 +392,7 @@ void writer::impl::build_dictionaries(orc_column_view *columns,
   stripe_dict.device_to_host(stream, true);
 }
 
-orc_streams writer::impl::gather_streams(host_span<orc_column_view> columns,
+orc_streams writer::impl::create_streams(host_span<orc_column_view> columns,
                                          size_t num_rows,
                                          stripe_boundaries const &stripe_bounds)
 {
@@ -580,28 +580,24 @@ struct segmented_valid_cnt_input {
   std::vector<size_type> indices;
 };
 
-writer::impl::encode_chunks writer::impl::initialize_chunks(
-  host_span<orc_column_view const> columns,
-  size_t num_rows,
-  size_t num_rowgroups,
-  std::vector<int> const &str_col_ids,
-  stripe_boundaries const &stripe_bounds,
-  orc_streams const &streams)
+encoder_chunks writer::impl::create_chunks(host_span<orc_column_view const> columns,
+                                           stripe_boundaries const &stripe_bounds,
+                                           orc_streams const &streams)
 {
   auto const num_columns = columns.size();
 
-  hostdevice_vector<gpu::EncChunk> chunks(num_rowgroups * num_columns);
-  auto const stream_offsets = streams.compute_offsets(columns, num_rowgroups);
+  hostdevice_vector<gpu::EncChunk> chunks(stripe_bounds.num_rowgroups() * num_columns);
+  auto const stream_offsets = streams.compute_offsets(columns, stripe_bounds.num_rowgroups());
   rmm::device_uvector<uint8_t> encoded_data(stream_offsets.data_size(), stream);
 
   // Initialize column chunks' descriptions
   size_t stripe_id = 0;
   std::map<size_type, segmented_valid_cnt_input> validity_check_inputs;
-  for (size_t j = 0; j < num_rowgroups; j++) {
+  for (size_t j = 0; j < stripe_bounds.num_rowgroups(); j++) {
     for (size_t i = 0; i < num_columns; i++) {
-      auto *ck          = &chunks[j * num_columns + i];
-      ck->start_row     = (j * row_index_stride_);
-      ck->num_rows      = std::min<uint32_t>(row_index_stride_, num_rows - ck->start_row);
+      auto *ck      = &chunks[j * num_columns + i];
+      ck->start_row = (j * row_index_stride_);
+      ck->num_rows = std::min<uint32_t>(row_index_stride_, columns[i].data_count() - ck->start_row);
       ck->valid_rows    = columns[i].data_count();
       ck->encoding_kind = columns[i].orc_encoding();
       ck->type_kind     = columns[i].orc_kind();
@@ -699,12 +695,11 @@ writer::impl::encode_chunks writer::impl::initialize_chunks(
   return {std::move(encoded_data), std::move(chunks)};
 }
 
-void writer::impl::encode_columns(host_span<orc_column_view const> columns,
-                                  size_t num_rows,
-                                  size_t num_rowgroups,
-                                  std::vector<int> const &str_col_ids,
-                                  uint32_t num_stripes,
-                                  hostdevice_vector<gpu::EncChunk> &chunks)
+void encoder_chunks::encode(host_span<orc_column_view const> columns,
+                            uint32_t num_stripes,
+                            size_t num_rowgroups,
+                            std::vector<int> const &str_col_ids,
+                            rmm::cuda_stream_view stream)
 {
   if (!str_col_ids.empty()) {
     auto d_stripe_dict = columns[str_col_ids[0]].device_stripe_dict();
@@ -757,14 +752,10 @@ std::vector<StripeInformation> writer::impl::gather_stripes(
 }
 
 std::vector<std::vector<uint8_t>> writer::impl::gather_statistic_blobs(
-  host_span<orc_column_view const> columns,
-  size_t num_rows,
-  size_t num_rowgroups,
-  stripe_boundaries const &stripe_bounds,
-  std::vector<StripeInformation> const &stripes)
+  host_span<orc_column_view const> columns, stripe_boundaries const &stripe_bounds)
 {
   size_t num_stat_blobs = (1 + stripe_bounds.size()) * columns.size();
-  size_t num_chunks     = num_rowgroups * columns.size();
+  size_t num_chunks     = stripe_bounds.num_rowgroups() * columns.size();
   std::vector<std::vector<uint8_t>> stat_blobs(num_stat_blobs);
   hostdevice_vector<stats_column_desc> stat_desc(columns.size());
   hostdevice_vector<statistics_merge_group> stat_merge(num_stat_blobs);
@@ -806,8 +797,9 @@ std::vector<std::vector<uint8_t>> writer::impl::gather_statistic_blobs(
     for (size_t k = 0; k < stripe_bounds.size(); k++) {
       statistics_merge_group *grp = &stat_merge[i * stripe_bounds.size() + k];
       grp->col                    = stat_desc.device_ptr(i);
-      grp->start_chunk = static_cast<uint32_t>(i * num_rowgroups + stripe_bounds.offsets[k]);
-      grp->num_chunks  = stripe_bounds.sizes[k];
+      grp->start_chunk =
+        static_cast<uint32_t>(i * stripe_bounds.num_rowgroups() + stripe_bounds.offsets[k]);
+      grp->num_chunks = stripe_bounds.sizes[k];
     }
     statistics_merge_group *col_stats = &stat_merge[stripe_bounds.size() * columns.size() + i];
     col_stats->col                    = stat_desc.device_ptr(i);
@@ -819,7 +811,7 @@ std::vector<std::vector<uint8_t>> writer::impl::gather_statistic_blobs(
   gpu::orc_init_statistics_groups(stat_groups.data(),
                                   stat_desc.device_ptr(),
                                   columns.size(),
-                                  num_rowgroups,
+                                  stripe_bounds.num_rowgroups(),
                                   row_index_stride_,
                                   stream);
 
@@ -1090,12 +1082,10 @@ void writer::impl::write(table_view const &table)
                        stripe_dict);
   }
 
-  auto streams = gather_streams(orc_columns, num_rows, stripe_bounds);
+  auto streams = create_streams(orc_columns, num_rows, stripe_bounds);
 
-  auto chunks =
-    initialize_chunks(orc_columns, num_rows, num_rowgroups, str_col_ids, stripe_bounds, streams);
-  encode_columns(
-    orc_columns, num_rows, num_rowgroups, str_col_ids, stripe_bounds.size(), chunks.chunks);
+  auto chunks = create_chunks(orc_columns, stripe_bounds, streams);
+  chunks.encode(orc_columns, stripe_bounds.size(), num_rowgroups, str_col_ids, stream);
 
   // Assemble individual disparate column chunks into contiguous data streams
   const auto num_index_streams  = (num_columns + 1);
@@ -1113,8 +1103,7 @@ void writer::impl::write(table_view const &table)
   // Gather column statistics
   std::vector<std::vector<uint8_t>> column_stats;
   if (enable_statistics_ && num_columns > 0 && num_rows > 0) {
-    column_stats =
-      gather_statistic_blobs(orc_columns, num_rows, num_rowgroups, stripe_bounds, stripes);
+    column_stats = gather_statistic_blobs(orc_columns, stripe_bounds);
   }
 
   // Allocate intermediate output stream buffer
