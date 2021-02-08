@@ -916,6 +916,7 @@ convert_nanoseconds(cuda::std::chrono::sys_time<cuda::std::chrono::nanoseconds> 
 }
 
 // blockDim(128, 1, 1)
+template <int block_size>
 __global__ void __launch_bounds__(128, 8) gpuEncodePages(EncPage *pages,
                                                          const EncColumnChunk *chunks,
                                                          gpu_inflate_input_s *comp_in,
@@ -923,6 +924,8 @@ __global__ void __launch_bounds__(128, 8) gpuEncodePages(EncPage *pages,
                                                          uint32_t start_page)
 {
   __shared__ __align__(8) page_enc_state_s state_g;
+  using block_scan = cub::BlockScan<uint32_t, block_size>;
+  __shared__ typename block_scan::TempStorage temp_storage;
 
   page_enc_state_s *const s = &state_g;
   uint32_t t                = threadIdx.x;
@@ -1074,12 +1077,9 @@ __global__ void __launch_bounds__(128, 8) gpuEncodePages(EncPage *pages,
       if (dict_bits > 0) {
         uint32_t rle_numvals;
 
-        pos = __popc(warp_valids & ((1 << (t & 0x1f)) - 1));
-        if (!(t & 0x1f)) { s->scratch_red[t >> 5] = __popc(warp_valids); }
-        __syncthreads();
-        if (t < 32) { s->scratch_red[t] = WarpReducePos4((t < 4) ? s->scratch_red[t] : 0, t); }
-        __syncthreads();
-        pos         = pos + ((t >= 32) ? s->scratch_red[(t - 32) >> 5] : 0);
+        // pos = __popc(warp_valids & ((1 << (t & 0x1f)) - 1));
+        uint32_t tmp_rle_numvals = 0;
+        block_scan(temp_storage).ExclusiveSum(is_valid, pos, tmp_rle_numvals);
         rle_numvals = s->rle_numvals;
         if (is_valid) {
           uint32_t v;
@@ -1090,7 +1090,7 @@ __global__ void __launch_bounds__(128, 8) gpuEncodePages(EncPage *pages,
           }
           s->vals[(rle_numvals + pos) & (rle_buffer_size - 1)] = v;
         }
-        rle_numvals += s->scratch_red[3];
+        rle_numvals += tmp_rle_numvals;
         __syncthreads();
         if ((!enable_bool_rle) && (dtype == BOOLEAN)) {
           PlainBoolEncode(s, rle_numvals, (cur_val_idx == s->page.num_leaf_values), t);
@@ -1114,13 +1114,10 @@ __global__ void __launch_bounds__(128, 8) gpuEncodePages(EncPage *pages,
       } else {
         len = 0;
       }
-      pos = WarpReducePos32(len, t);
-      if ((t & 0x1f) == 0x1f) { s->scratch_red[t >> 5] = pos; }
+      uint32_t total_len = 0;
+      block_scan(temp_storage).ExclusiveSum(len, pos, total_len);
       __syncthreads();
-      if (t < 32) { s->scratch_red[t] = WarpReducePos4((t < 4) ? s->scratch_red[t] : 0, t); }
-      __syncthreads();
-      if (t == 0) { s->cur = dst + s->scratch_red[3]; }
-      pos = pos + ((t >= 32) ? s->scratch_red[(t - 32) >> 5] : 0) - len;
+      if (t == 0) { s->cur = dst + total_len; }
       if (is_valid) {
         const uint8_t *src8 = reinterpret_cast<const uint8_t *>(s->col.column_data_base) +
                               val_idx * (size_t)dtype_len_in;
@@ -2045,8 +2042,8 @@ void EncodePages(EncPage *pages,
 {
   // A page is part of one column. This is launching 1 block per page. 1 block will exclusively
   // deal with one datatype.
-  gpuEncodePages<<<num_pages, 128, 0, stream.value()>>>(
-    pages, chunks, comp_in, comp_out, start_page);
+  gpuEncodePages<128>
+    <<<num_pages, 128, 0, stream.value()>>>(pages, chunks, comp_in, comp_out, start_page);
 }
 
 /**
