@@ -60,7 +60,6 @@ namespace detail {
  *
  * @param start The starting value of the counting iterator
  * @param f The unary function to apply to the counting iterator.
- * This should be a host function and not a device function.
  * @return A transform iterator that applies `f` to a counting iterator
  */
 template <typename UnaryFunction>
