@@ -4641,15 +4641,22 @@ class Series(Frame, Serializable):
             else:
                 ilevel = self._index.names.index(level)
 
+            # 1. Merge Index df and data column along column axis:
+            # | id | ._index df | data column |
             idx_nlv = self._index.nlevels
             working_df = self._index._source_data
             working_df.columns = [i for i in range(idx_nlv)]
             working_df[idx_nlv] = self._column
+            # 2. Set `level` as common index:
+            # | level | ._index df w/o level | data column
             working_df = working_df.set_index(ilevel)
 
+            # 3. Use "leftanti" join to drop
             # TODO: replace with Brandon's suggestion
             to_join = cudf.DataFrame(index=cudf.Index(labels, name=level))
             join_res = working_df.join(to_join, how="leftanti")
+
+            # 4. Reconstruct original layout, and rename
             join_res.insert(
                 ilevel, name=join_res._index.name, value=join_res._index
             )
