@@ -28,7 +28,8 @@ template <typename V>
 struct groupby_keys_test : public cudf::test::BaseFixture {
 };
 
-using supported_types = cudf::test::Types<int8_t, int16_t, int32_t, int64_t, float, double>;
+using supported_types = cudf::test::
+  Types<int8_t, int16_t, int32_t, int64_t, float, double, numeric::decimal32, numeric::decimal64>;
 
 TYPED_TEST_CASE(groupby_keys_test, supported_types);
 

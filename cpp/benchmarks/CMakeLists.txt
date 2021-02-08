@@ -139,6 +139,7 @@ ConfigureBench(TYPE_DISPATCHER_BENCH type_dispatcher/type_dispatcher_benchmark.c
 # - reduction benchmark ---------------------------------------------------------------------------
 ConfigureBench(REDUCTION_BENCH
   reduction/anyall_benchmark.cpp
+  reduction/dictionary_benchmark.cpp
   reduction/reduce_benchmark.cpp
   reduction/minmax_benchmark.cpp)
 
@@ -201,5 +202,5 @@ ConfigureBench(BINARYOP_BENCH binaryop/binaryop_benchmark.cu)
 ConfigureBench(SUBWORD_TOKENIZER_BENCH text/subword_benchmark.cpp)
 
 ###################################################################################################
-# - convert to string benchmark -------------------------------------------------------------------
-ConfigureBench(DURATION_TO_STRING_BENCH string/convert_durations_benchmark.cpp)
+# - strings benchmark -------------------------------------------------------------------
+ConfigureBench(STRINGS_BENCH string/convert_durations_benchmark.cpp)

@@ -208,3 +208,11 @@ def test_cuda_array_interface_pytorch():
 
     with pytest.raises(TypeError):
         cat_series.__cuda_array_interface__
+
+
+def test_cai_after_indexing():
+    df = cudf.DataFrame({"a": [1, 2, 3]})
+    cai1 = df["a"].__cuda_array_interface__
+    df[["a"]]
+    cai2 = df["a"].__cuda_array_interface__
+    assert cai1 == cai2
