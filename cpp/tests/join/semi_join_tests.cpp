@@ -20,6 +20,7 @@
 #include <cudf/join.hpp>
 #include <cudf/table/table.hpp>
 #include <cudf/table/table_view.hpp>
+#include <cudf/types.hpp>
 
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_utilities.hpp>
@@ -476,7 +477,8 @@ TEST_F(JoinTest, LeftSemiJoin_empty_result)
   cudf::table table_a(std::move(column_a));
   cudf::table table_b(std::move(column_b));
 
-  auto join_table = cudf::left_semi_join(table_a, table_b, {0, 1, 3}, {0, 1, 3}, {});
+  auto join_table =
+    cudf::left_semi_join(table_a, table_b, {0, 1, 3}, {0, 1, 3}, std::vector<cudf::size_type>{});
 
   EXPECT_EQ(join_table->num_columns(), 0);
   EXPECT_EQ(join_table->num_rows(), 0);
@@ -540,7 +542,8 @@ TEST_F(JoinTest, LeftAntiJoin_empty_result)
   cudf::table table_a(std::move(column_a));
   cudf::table table_b(std::move(column_b));
 
-  auto join_table = cudf::left_anti_join(table_a, table_b, {0, 1, 3}, {0, 1, 3}, {});
+  auto join_table =
+    cudf::left_anti_join(table_a, table_b, {0, 1, 3}, {0, 1, 3}, std::vector<cudf::size_type>{});
 
   EXPECT_EQ(join_table->num_columns(), 0);
   EXPECT_EQ(join_table->num_rows(), 0);

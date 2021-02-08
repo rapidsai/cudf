@@ -328,6 +328,15 @@ std::unique_ptr<cudf::table> left_semi_join(
   null_equality compare_nulls         = null_equality::EQUAL,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
+/** TODO: document */
+std::unique_ptr<cudf::column> left_semi_join(
+  cudf::table_view const& left,
+  cudf::table_view const& right,
+  std::vector<cudf::size_type> const& left_on,
+  std::vector<cudf::size_type> const& right_on,
+  null_equality compare_nulls         = null_equality::EQUAL,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+
 /**
  * @brief Performs a left anti join on the specified columns of two
  * tables (`left`, `right`)
@@ -381,6 +390,15 @@ std::unique_ptr<cudf::table> left_anti_join(
   std::vector<cudf::size_type> const& left_on,
   std::vector<cudf::size_type> const& right_on,
   std::vector<cudf::size_type> const& return_columns,
+  null_equality compare_nulls         = null_equality::EQUAL,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+
+/** TODO: document */
+std::unique_ptr<cudf::column> left_anti_join(
+  cudf::table_view const& left,
+  cudf::table_view const& right,
+  std::vector<cudf::size_type> const& left_on,
+  std::vector<cudf::size_type> const& right_on,
   null_equality compare_nulls         = null_equality::EQUAL,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
