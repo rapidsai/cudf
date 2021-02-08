@@ -7406,9 +7406,9 @@ class DataFrame(Frame, Serializable):
 
             idx_nlv = self._index.nlevels
             working_df = self._index._source_data
-            # TODO: figure out what __unique__ should be
-            for col in self.columns:
-                working_df["__unique__" + str(col)] = self[col]._column
+            working_df.columns = [i for i in range(idx_nlv)]
+            for i, col in enumerate(self.columns):
+                working_df[idx_nlv + i] = self[col]._column
             working_df = working_df.set_index(level)
 
             # TODO: replace with Brandon's suggestion

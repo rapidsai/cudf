@@ -4643,9 +4643,9 @@ class Series(Frame, Serializable):
 
             idx_nlv = self._index.nlevels
             working_df = self._index._source_data
-            # TODO: figure out what __unique__ should be
-            working_df["__unique__"] = self._column
-            working_df = working_df.set_index(level)
+            working_df.columns = [i for i in range(idx_nlv)]
+            working_df[idx_nlv] = self._column
+            working_df = working_df.set_index(ilevel)
 
             # TODO: replace with Brandon's suggestion
             to_join = cudf.DataFrame(index=cudf.Index(labels, name=level))
@@ -4659,7 +4659,7 @@ class Series(Frame, Serializable):
                 join_res.iloc[:, 0:idx_nlv], names=self._index.names
             )
 
-            dropped = join_res["__unique__"]
+            dropped = join_res[idx_nlv]
             dropped = dropped.set_index(midx)
         else:
             df = self.to_frame(name="tmp")
