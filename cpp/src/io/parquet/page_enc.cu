@@ -963,8 +963,8 @@ __global__ void __launch_bounds__(128, 8) gpuEncodePages(EncPage *pages,
   __syncthreads();
 
   // Encode Repetition and Definition levels
-  if (s->page.page_type != PageType::DICTIONARY_PAGE && s->col.level_bits != 0 /* &&
-      s->col.parent_column == nullptr */) {
+  if (s->page.page_type != PageType::DICTIONARY_PAGE && s->col.level_bits != 0 &&
+      s->col.level_bits >> 4 == 0) {
     // Calculate definition levels from validity
     uint32_t def_lvl_bits = s->col.level_bits & 0xf;
     if (def_lvl_bits != 0) {

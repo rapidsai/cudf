@@ -588,7 +588,7 @@ std::vector<schema_tree_node> construct_schema_tree(
           col.nullable() ? FieldRepetitionType::OPTIONAL : FieldRepetitionType::REQUIRED;
 
         // TODO: Depends on input schema as well as whether parent is list
-        struct_schema.name         = col_meta.name;
+        struct_schema.name = (schema[parent_idx].name == "list") ? "element" : col_meta.name;
         struct_schema.num_children = col.num_children();
         struct_schema.parent_idx   = parent_idx;
         schema.push_back(std::move(struct_schema));
@@ -609,11 +609,12 @@ std::vector<schema_tree_node> construct_schema_tree(
         // "col_name" : { "list" : { "element" : { "list" : { "element" } } } }
 
         schema_tree_node list_schema_1{};
+        list_schema_1.converted_type = ConvertedType::LIST;
         // TODO: Use input schema to influence this
         list_schema_1.repetition_type =
           col.nullable() ? FieldRepetitionType::OPTIONAL : FieldRepetitionType::REQUIRED;
         // Depends on input schema as well as whether parent is list
-        list_schema_1.name         = "";
+        list_schema_1.name = (schema[parent_idx].name == "list") ? "element" : col_meta.name;
         list_schema_1.num_children = 1;
         list_schema_1.parent_idx   = parent_idx;
         schema.push_back(std::move(list_schema_1));
@@ -775,10 +776,9 @@ std::vector<schema_tree_node> construct_schema_tree(
             break;
         }
 
-        col_schema.name = col_meta.name;
         // TODO: Use input schema to influence this
         col_schema.repetition_type = col.nullable() ? OPTIONAL : REQUIRED;
-        // TODO: name using input schema
+        col_schema.name        = (schema[parent_idx].name == "list") ? "element" : col_meta.name;
         col_schema.parent_idx  = parent_idx;
         col_schema.leaf_column = &col;
         schema.push_back(col_schema);
@@ -796,8 +796,13 @@ std::vector<schema_tree_node> construct_schema_tree(
 
 struct new_parquet_column_view {
   new_parquet_column_view(schema_tree_node const &schema_node,
-                          std::vector<schema_tree_node> const &schema_tree)
-    : schema_node(schema_node)
+                          std::vector<schema_tree_node> const &schema_tree,
+                          rmm::cuda_stream_view stream)
+    : schema_node(schema_node),
+      string_views(0, stream),
+      _dremel_offsets(0, stream),
+      _rep_level(0, stream),
+      _def_level(0, stream)
   {
     // Construct single inheritance column_view from linked_column_view
     auto curr_col                           = schema_node.leaf_column;
@@ -836,19 +841,40 @@ struct new_parquet_column_view {
     path_in_schema = std::vector<std::string>(path.cbegin(), path.cend());
 
     // Calculate max definition level by counting the number of levels that are optional (nullable)
+    // and max repetition level by counting the number of REPEATED levels in this column's heirarchy
     _max_def_level   = 0;
+    _max_rep_level   = 0;
     curr_schema_node = schema_node;
     while (curr_schema_node.parent_idx != -1) {
-      if (not curr_schema_node.is_stub() and
+      if (curr_schema_node.repetition_type == parquet::REPEATED or
           curr_schema_node.repetition_type == parquet::OPTIONAL) {
         ++_max_def_level;
       }
+      if (curr_schema_node.repetition_type == parquet::REPEATED) { ++_max_rep_level; }
       curr_schema_node = schema_tree[curr_schema_node.parent_idx];
     }
-  }
 
+    _is_list = (_max_rep_level > 0) ? true : false;
+
+    if (_is_list) {
+      // Top level column's offsets are not applied to all children. Get the effective offset and
+      // size of the leaf column
+      // Calculate row offset into dremel data (repetition/definition values) and the respective
+      // definition and repetition levels
+      gpu::dremel_data dremel = gpu::get_dremel_data(cudf_col, _nullability, stream);
+      _dremel_offsets         = std::move(dremel.dremel_offsets);
+      _rep_level              = std::move(dremel.rep_level);
+      _def_level              = std::move(dremel.def_level);
+      // Needed for constructing string view vector for statistics calc
+      // leaf_col_offset         = dremel.leaf_col_offset;
+      // Needed for knowing what size dictionary to allocate
+      _data_count = dremel.leaf_data_size;
+
+      stream.synchronize();
+    }
+
+  column_view cudf_column_view() const { return cudf_col; }
   parquet::Type physical_type() const { return schema_node.type; }
-  uint8_t max_def_level() const noexcept { return _max_def_level; }
 
   column_view leaf_column() const
   {
@@ -867,31 +893,34 @@ struct new_parquet_column_view {
   {
     column_view col = leaf_column();
     auto desc       = gpu::EncColumnDesc{};  // Zero out all fields
-    auto type_width = (col.type().id() == type_id::STRING || col.type().id() == type_id::LIST)
-                        ? 0
-                        : cudf::size_of(col.type());
+    auto type_width = (col.type().id() == type_id::STRING) ? 0 : cudf::size_of(col.type());
+
+    // TODO: Remove during statistics refactor. No other code uses these
+    // TODO: List stats would be broken until then. Need to fix column_data_base and num_values for
+    // offseted list case.
     desc.column_data_base = col.head<uint8_t>() + col.offset() * type_width;
     desc.valid_map_base   = col.null_mask();
     desc.column_offset    = col.offset();
-    desc.stats_dtype      = schema_node.stats_dtype;
-    desc.ts_scale         = schema_node.ts_scale;
+    desc.num_values = col.size();  // TODO: NOOO, This has to be data count because leaf size is not
+                                   // the same as data count. What if we have offset in the parent
+                                   // column? Actual size of leaf data we have to view is lesser
+
+    desc.stats_dtype = schema_node.stats_dtype;
+    desc.ts_scale    = schema_node.ts_scale;
 
     // TODO: Remember to re-enable dictionary support
     // TODO (dm): Enable dictionary for list after refactor
-    if (physical_type() != BOOLEAN && physical_type() != UNDEFINED_TYPE /* && !is_list() */) {
-      alloc_dictionary(col.size());
+    if (physical_type() != BOOLEAN && physical_type() != UNDEFINED_TYPE && !is_list()) {
+      alloc_dictionary(col.size());  // TODO: This also has to be data count. Reason above.
       desc.dict_index = get_dict_index();
       desc.dict_data  = get_dict_data();
     }
 
-    // TODO: re-add support for list
-    // if (col.is_list()) {
-    //   desc.nesting_levels = col.nesting_levels();
-    //   desc.level_offsets  = col.level_offsets();
-    //   desc.rep_values     = col.repetition_levels();
-    //   desc.def_values     = col.definition_levels();
-    // }
-    desc.num_values    = col.size();
+    if (is_list()) {
+      desc.level_offsets = _dremel_offsets.data();
+      desc.rep_values    = _rep_level.data();
+      desc.def_values    = _def_level.data();
+    }
     desc.num_rows      = cudf_col.size();
     desc.physical_type = static_cast<uint8_t>(physical_type());
     auto count_bits    = [](uint16_t number) {
@@ -902,27 +931,19 @@ struct new_parquet_column_view {
       }
       return nbits;
     };
-    desc.level_bits = /* count_bits(col.nesting_levels()) << 4 | */ count_bits(max_def_level());
+    desc.level_bits = count_bits(max_rep_level()) << 4 | count_bits(max_def_level());
     return desc;
   }
 
-  // TODO: Need a way to traverse upwards given a leaf schema node
-  schema_tree_node schema_node;
-  uint8_t _max_def_level;
-
-  column_view cudf_col;
-
-  std::vector<bool> level_nullable;
-
-  std::vector<std::string> path_in_schema;
   std::vector<std::string> get_path_in_schema() { return path_in_schema; }
 
-  // Dictionary related members
-  // TODO: These shouldn't exist in this class. Remove them in dictionary encoding refactor
-  bool _dictionary_used = false;
-  rmm::device_vector<uint32_t> _dict_data;
-  rmm::device_vector<uint32_t> _dict_index;
+  // LIST related member functions
+  // TODO: Maybe they can be removed
+  uint8_t max_def_level() const noexcept { return _max_def_level; }
+  uint8_t max_rep_level() const noexcept { return _max_rep_level; }
+  bool is_list() const noexcept { return _is_list; }
 
+  // Dictionary related member functions
   uint32_t *get_dict_data() { return (_dict_data.size()) ? _dict_data.data().get() : nullptr; }
   uint32_t *get_dict_index() { return (_dict_index.size()) ? _dict_index.data().get() : nullptr; }
   void use_dictionary(bool use_dict) { _dictionary_used = use_dict; }
@@ -941,6 +962,32 @@ struct new_parquet_column_view {
     }
     return _dictionary_used;
   }
+
+ private:
+  // Schema related members
+  // TODO: Need a way to traverse upwards given a leaf schema node
+  schema_tree_node schema_node;
+  std::vector<std::string> path_in_schema;
+  uint8_t _max_def_level;
+  uint8_t _max_rep_level;
+
+  column_view cudf_col;
+
+  // List-related members
+  bool _is_list;
+  rmm::device_uvector<size_type>
+    _dremel_offsets;  ///< For each row, the absolute offset into the repetition and definition
+                      ///< level vectors. O(num rows)
+  rmm::device_uvector<uint8_t> _rep_level;
+  rmm::device_uvector<uint8_t> _def_level;
+  std::vector<bool> _nullability;
+  size_type _data_count;
+
+  // Dictionary related members
+  // TODO: These shouldn't exist in this class. Remove them in dictionary encoding refactor
+  bool _dictionary_used = false;
+  rmm::device_vector<uint32_t> _dict_data;
+  rmm::device_vector<uint32_t> _dict_index;
 };
 
 rmm::device_uvector<column_device_view> writer::impl::create_leaf_column_device_views(
@@ -1155,124 +1202,6 @@ void writer::impl::write(table_view const &table)
 
   // size_type num_columns = table.num_columns();
   size_type num_rows = table.num_rows();
-  /*
-    // Wrapper around cudf columns to attach parquet-specific type info.
-    // Note : I wish we could do this in the begin() function but since the
-    // metadata is optional we would have no way of knowing how many columns
-    // we actually have.
-    std::vector<parquet_column_view> parquet_columns;
-    parquet_columns.reserve(num_columns);  // Avoids unnecessary re-allocation
-
-    // because the repetition type is global (in the sense of, not per-rowgroup or per write_chunk()
-    // call) we cannot know up front if the user is going to end up passing tables with nulls/no
-    // nulls in the multiple write_chunk() case.  so we'll do some special handling. The user can
-    // pass in information about the nullability of a column to be enforced across write_chunk()
-    // calls, in a flattened bool vector. Figure out that per column.
-    auto per_column_nullability =
-      (single_write_mode)
-        ? std::vector<std::vector<bool>>{}
-        : get_per_column_nullability(table, user_metadata_with_nullability.column_nullable);
-
-    uint decimal_precision_idx = 0;
-
-    for (auto it = table.begin(); it < table.end(); ++it) {
-      const auto col        = *it;
-      const auto current_id = parquet_columns.size();
-
-      // if the user is explicitly saying "I am only calling this once", assume the columns in this
-      // one table tell us everything we need to know about their nullability.
-      // Empty nullability means the writer figures out the nullability from the cudf columns.
-      auto const &this_column_nullability =
-        (single_write_mode) ? std::vector<bool>{} : per_column_nullability[current_id];
-
-      parquet_columns.emplace_back(current_id,
-                                   col,
-                                   this_column_nullability,
-                                   user_metadata,
-                                   int96_timestamps,
-                                   decimal_precision,
-                                   decimal_precision_idx,
-                                   stream);
-    }
-
-    CUDF_EXPECTS(decimal_precision_idx == decimal_precision.size(),
-                 "Too many decimal precision values!");
-
-    // first call. setup metadata. num_rows will get incremented as write_chunk is
-    // called multiple times.
-
-    // Make schema with current table
-    std::vector<SchemaElement> this_table_schema;
-    {
-      // Each level of nesting requires two levels of Schema. The leaf level needs one schema
-    element SchemaElement root{}; root.type            = UNDEFINED_TYPE; root.repetition_type =
-    NO_REPETITION_TYPE; root.name            = "schema"; root.num_children    = num_columns;
-      this_table_schema.push_back(std::move(root));
-      for (auto i = 0; i < num_columns; i++) {
-        auto &col = parquet_columns[i];
-        if (col.is_list()) {
-          size_type nesting_depth = col.nesting_levels();
-          // Each level of nesting requires two levels of Schema. The leaf level needs one schema
-          // element
-          std::vector<SchemaElement> list_schema(nesting_depth * 2 + 1);
-          for (size_type j = 0; j < nesting_depth; j++) {
-            // List schema is denoted by two levels for each nesting level and one final level for
-            // leaf. The top level is the same name as the column name.
-            // So e.g. List<List<int>> is denoted in the schema by
-            // "col_name" : { "list" : { "element" : { "list" : { "element" } } } }
-            auto const group_idx = 2 * j;
-            auto const list_idx  = 2 * j + 1;
-
-            list_schema[group_idx].name            = (j == 0) ? col.name() : "element";
-            list_schema[group_idx].repetition_type = (col.level_nullable(j)) ? OPTIONAL : REQUIRED;
-            list_schema[group_idx].converted_type  = ConvertedType::LIST;
-            list_schema[group_idx].num_children    = 1;
-
-            list_schema[list_idx].name            = "list";
-            list_schema[list_idx].repetition_type = REPEATED;
-            list_schema[list_idx].num_children    = 1;
-          }
-          list_schema[nesting_depth * 2].name = "element";
-          list_schema[nesting_depth * 2].repetition_type =
-            col.level_nullable(nesting_depth) ? OPTIONAL : REQUIRED;
-          auto const &physical_type           = col.physical_type();
-          list_schema[nesting_depth * 2].type = physical_type;
-          list_schema[nesting_depth * 2].converted_type =
-            physical_type == parquet::Type::INT96 ? ConvertedType::UNKNOWN : col.converted_type();
-          list_schema[nesting_depth * 2].num_children      = 0;
-          list_schema[nesting_depth * 2].decimal_precision = col.decimal_precision();
-          list_schema[nesting_depth * 2].decimal_scale     = col.decimal_scale();
-
-          std::vector<std::string> path_in_schema;
-          std::transform(
-            list_schema.cbegin(), list_schema.cend(), std::back_inserter(path_in_schema), [](auto s)
-    { return s.name;
-            });
-          col.set_path_in_schema(path_in_schema);
-          this_table_schema.insert(this_table_schema.end(), list_schema.begin(), list_schema.end());
-        } else {
-          SchemaElement col_schema{};
-          // Column metadata
-          auto const &physical_type = col.physical_type();
-          col_schema.type           = physical_type;
-          col_schema.converted_type =
-            physical_type == parquet::Type::INT96 ? ConvertedType::UNKNOWN : col.converted_type();
-
-          col_schema.repetition_type =
-            (col.max_def_level() == 1 || (single_write_mode && col.row_count() < (size_t)num_rows))
-              ? OPTIONAL
-              : REQUIRED;
-
-          col_schema.name              = col.name();
-          col_schema.num_children      = 0;  // Leaf node
-          col_schema.decimal_precision = col.decimal_precision();
-          col_schema.decimal_scale     = col.decimal_scale();
-
-          this_table_schema.push_back(std::move(col_schema));
-        }
-      }
-    }
-   */
 
   auto vec         = input_table_to_linked_columns(table);
   auto schema_tree = construct_schema_tree(vec, *user_metadata);
@@ -1289,7 +1218,7 @@ void writer::impl::write(table_view const &table)
 
   // Mass allocation of column_device_views for each new_parquet_column_view
   std::vector<column_view> cudf_cols;
-  for (auto const &parq_col : parquet_columns) { cudf_cols.push_back(parq_col.cudf_col); }
+  for (auto const &parq_col : parquet_columns) { cudf_cols.push_back(parq_col.cudf_column_view()); }
   table_view single_streams_table(cudf_cols);
   size_type num_columns = single_streams_table.num_columns();
 

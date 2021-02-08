@@ -126,7 +126,9 @@ struct ParquetWriterChronoTypeTest : public ParquetWriterTest {
 // TODO: Replace with `NumericTypes` when unsigned support is added. Issue #5352
 using SupportedTypes = cudf::test::Types<int8_t, int16_t, int32_t, int64_t, bool, float, double>;
 TYPED_TEST_CASE(ParquetWriterNumericTypeTest, SupportedTypes);
-using SupportedChronoTypes = cudf::test::Concat<cudf::test::ChronoTypes, cudf::test::DurationTypes>;
+// using SupportedChronoTypes = cudf::test::Concat<cudf::test::ChronoTypes,
+// cudf::test::DurationTypes>;
+using SupportedChronoTypes = cudf::test::DurationTypes;
 TYPED_TEST_CASE(ParquetWriterChronoTypeTest, SupportedChronoTypes);
 
 // Base test fixture for chunked writer tests
@@ -615,6 +617,47 @@ TEST_F(ParquetWriterTest, ListColumn)
   table_view expected({col0, col1, col2, col3, /* col4, */ col5, col6, col7});
 
   auto filepath = temp_env->get_temp_filepath("ListColumn.parquet");
+  auto out_opts = cudf_io::parquet_writer_options::builder(cudf_io::sink_info{filepath}, expected)
+                    .metadata(&expected_metadata)
+                    .compression(cudf_io::compression_type::NONE);
+
+  cudf_io::write_parquet(out_opts);
+
+  auto in_opts = cudf_io::parquet_reader_options::builder(cudf_io::source_info{filepath});
+  auto result  = cudf_io::read_parquet(in_opts);
+
+  CUDF_TEST_EXPECT_TABLES_EQUAL(expected, result.tbl->view());
+  EXPECT_EQ(expected_metadata.column_names, result.metadata.column_names);
+}
+
+TEST_F(ParquetWriterTest, ListColumn2)
+{
+  auto valids  = cudf::test::make_counting_transform_iterator(0, [](auto i) { return i % 2; });
+  auto valids2 = cudf::test::make_counting_transform_iterator(0, [](auto i) { return i != 3; });
+
+  using lcw = cudf::test::lists_column_wrapper<int32_t>;
+
+  // [NULL, 2, NULL]
+  // []
+  // [4, 5]
+  // NULL
+  lcw col0{{{{1, 2, 3}, valids}, {}, {4, 5}, {}}, valids2};
+
+  // [[1, 2, 3], [], [4, 5], [], [0, 6, 0]]
+  // [[7, 8]]
+  // []
+  // [[]]
+  // lcw col1{{{1, 2, 3}, {}, {4, 5}, {}, {0, 6, 0}}, {{7, 8}}, lcw{}, lcw{lcw{}}};
+
+  cudf_io::table_metadata expected_metadata;
+  expected_metadata.column_names.emplace_back("col_list_int_0");
+  expected_metadata.schema_info.emplace_back("col_list_int_0");
+  // expected_metadata.column_names.emplace_back("col_list_list_int_1");
+  // expected_metadata.schema_info.emplace_back("col_list_list_int_1");
+
+  table_view expected({col0 /* , col1 */});
+
+  auto filepath = ("ListColumn.parquet");
   auto out_opts = cudf_io::parquet_writer_options::builder(cudf_io::sink_info{filepath}, expected)
                     .metadata(&expected_metadata)
                     .compression(cudf_io::compression_type::NONE);
