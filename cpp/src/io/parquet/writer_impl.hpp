@@ -135,6 +135,19 @@ class writer::impl {
                            uint32_t num_fragments,
                            uint32_t num_rows,
                            uint32_t fragment_size);
+
+  /**
+   * @brief Create column_device_view pointers from leaf columns
+   *
+   * @param col_desc Column description array
+   * @param parent_table_device_view Table device view containing parent columns
+   *
+   * @return Device array containing leaf column device views
+   */
+  rmm::device_uvector<column_device_view> create_leaf_column_device_views(
+    hostdevice_vector<gpu::EncColumnDesc>& col_desc,
+    const table_device_view& parent_table_device_view);
+
   /**
    * @brief Gather per-fragment statistics
    *
