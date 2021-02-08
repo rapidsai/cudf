@@ -355,7 +355,7 @@ struct list_child_constructor {
                                                       num_child_rows,
                                                       child_null_mask.first,
                                                       child_null_mask.second,
-                                                      stream.value(),
+                                                      stream,
                                                       mr);
 
     auto copy_child_values_for_list_index = [d_scattered_lists =
@@ -495,7 +495,7 @@ struct list_child_constructor {
                                      std::move(string_chars),
                                      child_null_mask.second,            // Null count.
                                      std::move(child_null_mask.first),  // Null mask.
-                                     stream.value(),
+                                     stream,
                                      mr);
   }
 
@@ -598,7 +598,7 @@ struct list_child_constructor {
                                    std::move(child_column),
                                    child_null_mask.second,            // Null count
                                    std::move(child_null_mask.first),  // Null mask
-                                   stream.value(),
+                                   stream,
                                    mr);
   }
 
@@ -693,7 +693,7 @@ struct list_child_constructor {
                                      std::move(child_columns),
                                      child_null_mask.second,
                                      std::move(child_null_mask.first),
-                                     stream.value(),
+                                     stream,
                                      mr);
   }
 };
@@ -797,7 +797,7 @@ std::unique_ptr<column> scatter(
                                  std::move(child_column),
                                  cudf::UNKNOWN_NULL_COUNT,
                                  std::move(null_mask),
-                                 stream.value(),
+                                 stream,
                                  mr);
 }
 

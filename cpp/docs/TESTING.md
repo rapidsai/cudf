@@ -400,7 +400,7 @@ string_column_wrapper child_string_col_wrapper {"All", "the", "leaves", "are", "
 
 struct_column_wrapper struct_column_wrapper{
   {child_int_col_wrapper, child_string_col_wrapper}
-  cudf::test::make_counting_transform_iterator(0, [](auto i){ return i%2; }) // Validity
+  cudf::detail::make_counting_transform_iterator(0, [](auto i){ return i%2; }) // Validity
 };
 
 auto struct_col {struct_column_wrapper.release()};

@@ -18,6 +18,7 @@
  */
 
 #include <cudf/binaryop.hpp>
+#include <cudf/detail/iterator.cuh>
 #include <cudf/fixed_point/fixed_point.hpp>
 #include <cudf/scalar/scalar_factories.hpp>
 #include <cudf/types.hpp>
@@ -655,7 +656,7 @@ TEST_F(BinaryOperationIntegrationTest, Greater_Vector_Vector_B8_TSMS_TSS)
   using GREATER = cudf::library::operation::Greater<TypeOut, TypeLhs, TypeRhs>;
 
   cudf::test::UniformRandomGenerator<long> rand_gen(1, 10);
-  auto itr = cudf::test::make_counting_transform_iterator(
+  auto itr = cudf::detail::make_counting_transform_iterator(
     0, [&rand_gen](auto row) { return rand_gen.generate() * 1000; });
 
   cudf::test::fixed_width_column_wrapper<TypeLhs, typename decltype(itr)::value_type> lhs(
@@ -1018,7 +1019,7 @@ TEST_F(BinaryOperationIntegrationTest, LogBase_Vector_Scalar_SI32_SI32_float)
   using LOG_BASE = cudf::library::operation::LogBase<TypeOut, TypeLhs, TypeRhs>;
 
   // Make sure there are no zeros. The log value is purposefully cast to int for easy comparison
-  auto elements = make_counting_transform_iterator(1, [](auto i) { return i + 10; });
+  auto elements = cudf::detail::make_counting_transform_iterator(1, [](auto i) { return i + 10; });
   fixed_width_column_wrapper<TypeLhs> lhs(elements, elements + 100);
   // Find log to the base 10
   auto rhs = numeric_scalar<TypeRhs>(10);
@@ -1037,7 +1038,7 @@ TEST_F(BinaryOperationIntegrationTest, LogBase_Scalar_Vector_float_SI32)
   using LOG_BASE = cudf::library::operation::LogBase<TypeOut, TypeLhs, TypeRhs>;
 
   // Make sure there are no zeros
-  auto elements = make_counting_transform_iterator(1, [](auto i) { return i + 30; });
+  auto elements = cudf::detail::make_counting_transform_iterator(1, [](auto i) { return i + 30; });
   fixed_width_column_wrapper<TypeRhs> rhs(elements, elements + 100);
   // Find log to the base 2
   auto lhs = numeric_scalar<TypeLhs>(2);
@@ -1056,11 +1057,12 @@ TEST_F(BinaryOperationIntegrationTest, LogBase_Vector_Vector_double_SI64_SI32)
   using LOG_BASE = cudf::library::operation::LogBase<TypeOut, TypeLhs, TypeRhs>;
 
   // Make sure there are no zeros
-  auto elements = make_counting_transform_iterator(1, [](auto i) { return std::pow(2, i); });
+  auto elements =
+    cudf::detail::make_counting_transform_iterator(1, [](auto i) { return std::pow(2, i); });
   fixed_width_column_wrapper<TypeLhs> lhs(elements, elements + 50);
 
   // Find log to the base 7
-  auto rhs_elements = make_counting_transform_iterator(0, [](auto) { return 7; });
+  auto rhs_elements = cudf::detail::make_counting_transform_iterator(0, [](auto) { return 7; });
   fixed_width_column_wrapper<TypeRhs> rhs(rhs_elements, rhs_elements + 50);
   auto out = cudf::binary_operation(
     lhs, rhs, cudf::binary_operator::LOG_BASE, data_type(type_to_id<TypeOut>()));
@@ -2024,7 +2026,7 @@ TYPED_TEST(FixedPointTestBothReps, FixedPointBinaryOpAdd)
 
   auto const sz = std::size_t{1000};
 
-  auto begin      = make_counting_transform_iterator(1, [](auto i) {
+  auto begin      = cudf::detail::make_counting_transform_iterator(1, [](auto i) {
     return decimalXX{i, scale_type{0}};
   });
   auto const vec1 = std::vector<decimalXX>(begin, begin + sz);
@@ -2053,7 +2055,7 @@ TYPED_TEST(FixedPointTestBothReps, FixedPointBinaryOpMultiply)
 
   auto const sz = std::size_t{1000};
 
-  auto begin      = make_counting_transform_iterator(1, [](auto i) {
+  auto begin      = cudf::detail::make_counting_transform_iterator(1, [](auto i) {
     return decimalXX{i, scale_type{0}};
   });
   auto const vec1 = std::vector<decimalXX>(begin, begin + sz);
@@ -2144,8 +2146,9 @@ TYPED_TEST(FixedPointTestBothReps, FixedPointBinaryOpDiv4)
   using decimalXX = TypeParam;
   using RepType   = device_storage_type_t<decimalXX>;
 
-  auto begin          = make_counting_transform_iterator(0, [](auto i) { return i * 11; });
-  auto result_begin   = make_counting_transform_iterator(0, [](auto i) { return (i * 11) / 12; });
+  auto begin = cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i * 11; });
+  auto result_begin =
+    cudf::detail::make_counting_transform_iterator(0, [](auto i) { return (i * 11) / 12; });
   auto const lhs      = fp_wrapper<RepType>(begin, begin + 1000, scale_type{-1});
   auto const rhs      = make_fixed_point_scalar<decimalXX>(12, scale_type{-1});
   auto const expected = fp_wrapper<RepType>(result_begin, result_begin + 1000, scale_type{0});
@@ -2241,7 +2244,7 @@ TYPED_TEST(FixedPointTestBothReps, FixedPointBinaryOpEqualLessGreater)
 
   // TESTING binary op ADD
 
-  auto begin      = make_counting_transform_iterator(1, [](auto e) { return e * 1000; });
+  auto begin = cudf::detail::make_counting_transform_iterator(1, [](auto e) { return e * 1000; });
   auto const vec1 = std::vector<RepType>(begin, begin + sz);
   auto const vec2 = std::vector<RepType>(sz, 0);
 
