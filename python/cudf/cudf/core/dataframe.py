@@ -777,7 +777,16 @@ class DataFrame(Frame, Serializable):
                     self.insert(len(self._data), arg, value)
 
         elif isinstance(
-            arg, (list, np.ndarray, pd.Series, Series, Index, pd.Index)
+            arg,
+            (
+                list,
+                np.ndarray,
+                cupy.ndarray,
+                pd.Series,
+                Series,
+                Index,
+                pd.Index,
+            ),
         ):
             mask = arg
             if isinstance(mask, list):
