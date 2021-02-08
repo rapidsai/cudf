@@ -61,7 +61,7 @@ namespace detail {
  * @param start The starting value of the counting iterator
  * @param f The unary function to apply to the counting iterator.
  * This should be a host function and not a device function.
- * @return auto A transform iterator that applies `f` to a counting iterator
+ * @return A transform iterator that applies `f` to a counting iterator
  */
 template <typename UnaryFunction>
 inline auto make_counting_transform_iterator(cudf::size_type start, UnaryFunction f)
