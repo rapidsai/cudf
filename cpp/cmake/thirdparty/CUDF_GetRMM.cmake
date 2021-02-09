@@ -41,6 +41,6 @@ function(find_and_configure_rmm VERSION)
     )
 endfunction()
 
-set(CUDF_MIN_VERSION_rmm "${CMAKE_PROJECT_VERSION_MAJOR}.${CMAKE_PROJECT_VERSION_MINOR}")
+set(CUDF_MIN_VERSION_rmm "${CUDF_VERSION_MAJOR}.${CUDF_VERSION_MINOR}")
 
 find_and_configure_rmm(${CUDF_MIN_VERSION_rmm} "$ENV{RMM_HOME}" "$ENV{RMM_ROOT}")

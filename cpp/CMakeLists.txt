@@ -524,14 +524,14 @@ install(DIRECTORY
 
 include(CMakePackageConfigHelpers)
 
-configure_package_config_file(cmake/cudf-config.cmake.in "${CUDF_BINARY_DIR}/cudf-config.cmake"
+configure_package_config_file(cmake/cudf-config.cmake.in "${CUDF_BINARY_DIR}/cmake/cudf-config.cmake"
                               INSTALL_DESTINATION "${INSTALL_CONFIGDIR}")
 
-write_basic_package_version_file("${CUDF_BINARY_DIR}/cudf-config-version.cmake"
+write_basic_package_version_file("${CUDF_BINARY_DIR}/cmake/cudf-config-version.cmake"
                                  COMPATIBILITY SameMinorVersion)
 
-install(FILES   "${CUDF_BINARY_DIR}/cudf-config.cmake"
-                "${CUDF_BINARY_DIR}/cudf-config-version.cmake"
+install(FILES   "${CUDF_BINARY_DIR}/cmake/cudf-config.cmake"
+                "${CUDF_BINARY_DIR}/cmake/cudf-config-version.cmake"
                 "${CUDF_SOURCE_DIR}/cmake/install/FindThrust.cmake"
     DESTINATION "${INSTALL_CONFIGDIR}")
 
@@ -539,6 +539,24 @@ install(EXPORT  cudf-targets
     FILE        cudf-targets.cmake
     NAMESPACE   cudf::
     DESTINATION "${INSTALL_CONFIGDIR}")
+
+################################################################################################
+# - build export -------------------------------------------------------------------------------
+configure_package_config_file(cmake/cudf-build-config.cmake.in ${CUDF_BINARY_DIR}/cudf-config.cmake
+                              INSTALL_DESTINATION ${CUDF_BINARY_DIR})
+
+write_basic_package_version_file(${CUDF_BINARY_DIR}/cudf-config-version.cmake
+                                 COMPATIBILITY SameMinorVersion)
+
+if(TARGET arrow_shared)
+    export(TARGETS arrow_shared arrow_cuda_shared
+        FILE ${CUDF_BINARY_DIR}/cudf-arrow-targets.cmake
+        NAMESPACE   cudf::)
+endif()
+export(EXPORT cudf-targets
+    FILE ${CUDF_BINARY_DIR}/cudf-targets.cmake
+    NAMESPACE   cudf::)
+
 
 ###################################################################################################
 # - make documentation ----------------------------------------------------------------------------

@@ -2,12 +2,17 @@
 
 cmake_minimum_required(VERSION 3.18)
 
+set(CUDF_VERSION @CUDF_VERSION@)
+set(CUDF_VERSION_MAJOR @CUDF_VERSION_MAJOR@)
+set(CUDF_VERSION_MINOR @CUDF_VERSION_MINOR@)
+
 # make the bundled find modules in this directory available
 list(PREPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_LIST_DIR}")
 
 include(CMakeFindDependencyMacro)
 
 find_dependency(CUDAToolkit)
+find_dependency(Threads)
 find_dependency(ZLIB)
 
 find_dependency(Arrow @CUDF_VERSION_Arrow@)

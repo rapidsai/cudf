@@ -1,0 +1,55 @@
+@PACKAGE_INIT@
+
+cmake_minimum_required(VERSION 3.18)
+
+set(CUDF_VERSION @CUDF_VERSION@)
+set(CUDF_VERSION_MAJOR @CUDF_VERSION_MAJOR@)
+set(CUDF_VERSION_MINOR @CUDF_VERSION_MINOR@)
+set(CUDF_SOURCE_DIR "@CUDF_SOURCE_DIR@")
+
+include(CMakeFindDependencyMacro)
+
+# make the src tree find modules available
+list(PREPEND CMAKE_MODULE_PATH "@CUDF_SOURCE_DIR@/cmake/install/")
+set(rmm_DIR "@rmm_DIR@")
+
+# * find CUDAToolkit package
+# * determine GPU architectures
+# * enable the CMake CUDA language
+# * set other CUDA compilation flags
+include(@CUDF_SOURCE_DIR@/cmake/Modules/ConfigureCUDA.cmake)
+
+###################################################################################################
+# - dependencies ----------------------------------------------------------------------------------
+
+
+find_dependency(Threads)
+find_dependency(ZLIB)
+
+# add third party dependencies using CPM
+include(@CUDF_SOURCE_DIR@/cmake/thirdparty/CUDF_GetCPM.cmake)
+# find boost
+include(@CUDF_SOURCE_DIR@/cmake/thirdparty/CUDF_FindBoost.cmake)
+# find jitify
+include(@CUDF_SOURCE_DIR@/cmake/thirdparty/CUDF_GetJitify.cmake)
+# find thrust/cub
+include(@CUDF_SOURCE_DIR@/cmake/thirdparty/CUDF_GetThrust.cmake)
+# find rmm
+set(CUDF_MIN_VERSION_rmm "${CUDF_VERSION_MAJOR}.${CUDF_VERSION_MINOR}")
+include(@CUDF_SOURCE_DIR@/cmake/thirdparty/CUDF_GetRMM.cmake)
+
+list(POP_FRONT CMAKE_MODULE_PATH)
+
+if(EXISTS "${CMAKE_CURRENT_LIST_DIR}/cudf-arrow-targets.cmake")
+  include("${CMAKE_CURRENT_LIST_DIR}/cudf-arrow-targets.cmake")
+endif()
+include("${CMAKE_CURRENT_LIST_DIR}/cudf-targets.cmake")
+include("${CMAKE_CURRENT_LIST_DIR}/cudf-config-version.cmake")
+
+
+check_required_components(cudf)
+
+set(${CMAKE_FIND_PACKAGE_NAME}_CONFIG "${CMAKE_CURRENT_LIST_FILE}")
+
+include(FindPackageHandleStandardArgs)
+find_package_handle_standard_args(${CMAKE_FIND_PACKAGE_NAME} CONFIG_MODE)
