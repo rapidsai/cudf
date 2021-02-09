@@ -320,13 +320,12 @@ def test_orc_read_rows(datadir, skiprows, num_rows):
 
 
 def test_orc_read_skiprows(tmpdir):
-    fname = tmpdir.join("TestOrcFile.skiprows.orc")
+    buff = BytesIO()
     df = pd.DataFrame(
         {"a": [1, 0, 1, 0, None, 1, 1, 1, 0, None, 0, 0, 1, 1, 1, 1]},
         dtype=pd.BooleanDtype(),
     )
-    output = open(fname, "wb")
-    writer = pyorc.Writer(output, pyorc.Struct(a=pyorc.Boolean()))
+    writer = pyorc.Writer(buff, pyorc.Struct(a=pyorc.Boolean()))
     tuples = list(
         map(
             lambda x: (None,) if x[0] is pd.NA else x,
@@ -338,8 +337,8 @@ def test_orc_read_skiprows(tmpdir):
 
     skiprows = 10
 
-    expected = cudf.read_orc(fname)[skiprows::].reset_index(drop=True)
-    got = cudf.read_orc(fname, skiprows=skiprows)
+    expected = cudf.read_orc(buff)[skiprows::].reset_index(drop=True)
+    got = cudf.read_orc(buff, skiprows=skiprows)
 
     assert_eq(expected, got)
 
