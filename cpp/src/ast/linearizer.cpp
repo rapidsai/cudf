@@ -23,6 +23,8 @@
 #include <cudf/utilities/error.hpp>
 #include <cudf/utilities/traits.hpp>
 
+#include <thrust/iterator/transform_iterator.h>
+
 #include <algorithm>
 #include <functional>
 #include <iterator>
@@ -64,10 +66,10 @@ cudf::size_type linearizer::intermediate_counter::take()
 
 void linearizer::intermediate_counter::give(cudf::size_type value)
 {
+  // TODO: add comment
   auto const lower_bound = std::lower_bound(used_values.cbegin(), used_values.cend(), value);
-  if ((*lower_bound == value) && (lower_bound != used_values.cend())) {
+  if ((lower_bound != used_values.cend()) && (*lower_bound == value))
     used_values.erase(lower_bound);
-  }
 }
 
 /**
@@ -83,22 +85,13 @@ void linearizer::intermediate_counter::give(cudf::size_type value)
  */
 cudf::size_type linearizer::intermediate_counter::find_first_missing() const
 {
-  if ((used_values.empty()) || (used_values.front() != 0)) {
-    // Handle cases where the container is empty or first value is non-zero.
-    return 0;
-  } else {
-    // Search for the first non-contiguous pair of elements.
-    auto found = std::adjacent_find(used_values.cbegin(),
-                                    used_values.cend(),
-                                    [](auto const& a, auto const& b) { return a != b - 1; });
-    if (found != used_values.cend()) {
-      // A missing value was found and is returned.
-      return *found + 1;
-    } else {
-      // No missing elements. Return the next element in the sequence.
-      return used_values.size();
-    }
-  }
+  if (used_values.empty() || (used_values.front() != 0)) { return 0; }
+  // Search for the first non-contiguous pair of elements.
+  auto diff_not_one = [](auto a, auto b) { return a != b - 1; };
+  auto it           = std::adjacent_find(used_values.cbegin(), used_values.cend(), diff_not_one);
+  return it != used_values.cend()
+           ? *it + 1              // A missing value was found and is returned.
+           : used_values.size();  // No missing elements. Return the next element in the sequence.
 }
 
 cudf::size_type linearizer::visit(literal const& expr)
@@ -137,24 +130,23 @@ cudf::size_type linearizer::visit(expression const& expr)
   // Increment the node index
   auto const node_index = node_count++;
   // Visit children (operands) of this node
-  auto const operand_data_reference_indices = visit_operands(expr.get_operands());
+  auto const operand_data_ref_indices = visit_operands(expr.get_operands());
   // Resolve operand types
-  auto operand_types = std::vector<cudf::data_type>(operand_data_reference_indices.size());
-  std::transform(operand_data_reference_indices.cbegin(),
-                 operand_data_reference_indices.cend(),
-                 operand_types.begin(),
-                 [this](auto const& data_reference_index) -> cudf::data_type {
-                   return get_data_references()[data_reference_index].data_type;
-                 });
+  auto data_ref = [this](auto const& index) { return get_data_references()[index].data_type; };
+  auto begin     = thrust::make_transform_iterator(operand_data_ref_indices.cbegin(), data_ref);
+  auto end       = begin + operand_data_ref_indices.size();
+  auto const operand_types = std::vector<cudf::data_type>(begin, end);
+
   // Validate types of operand data references match
   if (std::adjacent_find(operand_types.cbegin(), operand_types.cend(), std::not_equal_to<>()) !=
       operand_types.cend()) {
     CUDF_FAIL("An AST expression was provided non-matching operand types.");
   }
+
   // Give back intermediate storage locations that are consumed by this operation
   std::for_each(
-    operand_data_reference_indices.cbegin(),
-    operand_data_reference_indices.cend(),
+    operand_data_ref_indices.cbegin(),
+    operand_data_ref_indices.cend(),
     [this](auto const& data_reference_index) {
       auto const operand_source = get_data_references()[data_reference_index];
       if (operand_source.reference_type == detail::device_data_reference_type::INTERMEDIATE) {
@@ -165,7 +157,6 @@ cudf::size_type linearizer::visit(expression const& expr)
   // Resolve node type
   auto const op        = expr.get_operator();
   auto const data_type = cudf::ast::detail::ast_operator_return_type(op, operand_types);
-  // Push operator
   operators.push_back(op);
   // Push data reference
   auto const output = [&]() {
@@ -189,8 +180,8 @@ cudf::size_type linearizer::visit(expression const& expr)
   auto const index = add_data_reference(output);
   // Insert source indices from all operands (sources) and this operator (destination)
   operator_source_indices.insert(operator_source_indices.end(),
-                                 operand_data_reference_indices.cbegin(),
-                                 operand_data_reference_indices.cend());
+                                 operand_data_ref_indices.cbegin(),
+                                 operand_data_ref_indices.cend());
   operator_source_indices.push_back(index);
   return index;
 }
