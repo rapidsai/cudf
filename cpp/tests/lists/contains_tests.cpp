@@ -624,15 +624,25 @@ TYPED_TEST(TypedContainsNaNsTest, ListWithNaNsContainsScalar)
 
 TYPED_TEST(TypedContainsNaNsTest, ListWithNaNsContainsVector)
 {
+  // Test that different bit representations of NaN values
+  // are recognized as NaN.
+  // Also checks that a null handling is not broken by the
+  // presence of NaN values:
+  //   1. If the search key is null, null is still returned.
+  //   2. If the list contains a null, and the non-null search
+  //      key is not found, null is returned.
   using T = TypeParam;
 
   auto nan_1 = get_nan<T>("1");
   auto nan_2 = get_nan<T>("2");
   auto nan_3 = get_nan<T>("3");
 
+  auto null_at_index_2 =
+    cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i != 2; });
+
   auto search_space = lists_column_wrapper<T>{
     {0.0, 1.0, 2.0},
-    {3, 4, 5},
+    {{3, 4, 5}, null_at_index_2},  // i.e. {3, 4, ∅}.
     {6, 7, 8},
     {9, 0, 1},
     {nan_1, 3.0, 4.0},
@@ -644,20 +654,39 @@ TYPED_TEST(TypedContainsNaNsTest, ListWithNaNsContainsVector)
 
   auto search_key_values = std::vector<T>{1.0, 2.0, 3.0, nan_3, nan_3, nan_3, 0.0, nan_3, 2.0, 0.0};
 
-  auto null_at_index_2 =
-    cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i != 2; });
+  {
+    // With nulls in the search key rows. (At index 2.)
+    auto search_keys =
+      fixed_width_column_wrapper<T>{
+        search_key_values.begin(), search_key_values.end(), null_at_index_2}
+        .release();
 
-  auto search_keys =
-    fixed_width_column_wrapper<T>{
-      search_key_values.begin(), search_key_values.end(), null_at_index_2}
-      .release();
+    auto actual_result = lists::contains(search_space->view(), search_keys->view());
 
-  auto actual_result = lists::contains(search_space->view(), search_keys->view());
+    auto null_at_index_1_and_2 =
+      cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i != 1 && i != 2; });
 
-  auto expected_result =
-    fixed_width_column_wrapper<bool>{{1, 0, 0, 0, 1, 0, 1, 0, 1, 0}, null_at_index_2};
+    auto expected_result =
+      fixed_width_column_wrapper<bool>{{1, 0, 0, 0, 1, 0, 1, 0, 1, 0}, null_at_index_1_and_2};
 
-  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected_result, *actual_result);
+    CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected_result, *actual_result);
+  }
+
+  {
+    // No nulls in the search key rows.
+    auto search_keys =
+      fixed_width_column_wrapper<T>(search_key_values.begin(), search_key_values.end()).release();
+
+    auto actual_result = lists::contains(search_space->view(), search_keys->view());
+
+    auto null_at_index_1 =
+      cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i != 1; });
+
+    auto expected_result =
+      fixed_width_column_wrapper<bool>{{1, 0, 0, 0, 1, 0, 1, 0, 1, 0}, null_at_index_1};
+
+    CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected_result, *actual_result);
+  }
 }
 
 template <typename T>
