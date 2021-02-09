@@ -1,8 +1,5 @@
 # Copyright (c) 2020-2021, NVIDIA CORPORATION.
-import itertools
-from collections import namedtuple
-
-import pandas as pd
+from collections import OrderedDict, namedtuple
 
 import cudf
 from cudf import _lib as libcudf
@@ -38,6 +35,11 @@ class JoinKey:
             )
         else:
             return self.obj.index.names.index(self.index)
+
+    @property
+    def is_index_level(self):
+        # True if this is an index column
+        return self.index is not MISSING
 
     @property
     def name(self):
@@ -217,15 +219,18 @@ class Merge(object):
         Potentially also cast the output back to categorical.
         """
         self.match_key_dtypes(_input_to_libcudf_castrules_any)
+
+        left_key_indices = [key.get_numeric_index() for key in self._keys.left]
+        right_key_indices = [
+            key.get_numeric_index() for key in self._keys.right
+        ]
+        breakpoint()
         left_rows, right_rows = libcudf.join.join(
             self.lhs,
             self.rhs,
-            self.how,
-            self.method,
-            left_on=self.left_on,
-            right_on=self.right_on,
-            left_index=self.left_index,
-            right_index=self.right_index,
+            left_on=left_key_indices,
+            right_on=right_key_indices,
+            how=self.how,
         )
         return self.construct_result(left_rows, right_rows)
 
@@ -234,14 +239,53 @@ class Merge(object):
 
         # first construct the index:
         if self.left_index and not self.right_index:
-            out_index = self.rhs.index.iloc[right_rows]
+            # TODO: only gather on index columns:
+            out_index = self.rhs.index._gather(right_rows)
         elif self.right_index and not self.left_index:
-            out_index = self.lhs.index.iloc[left_rows]
+            # TODO: only gather on index columns:
+            out_index = self.lhs.index._gather(left_rows)
         else:
             out_index = None
 
         # now construct the data:
-        return out_index
+        data = cudf.core.column_accessor.ColumnAccessor()
+        left_names, right_names = self.output_column_names()
+
+        for lcol in left_names:
+            data[left_names[lcol]] = self.lhs[lcol].iloc[left_rows]
+        for rcol in right_names:
+            data[right_names[rcol]] = self.rhs[rcol].iloc[right_rows]
+        return cudf.DataFrame._from_data(data, index=out_index)
+
+    def output_column_names(self):
+        # Return mappings of input column names to (possibly) suffixed
+        # result column names
+        left_names = OrderedDict(
+            zip(self.lhs._data.keys(), self.lhs._data.keys())
+        )
+        right_names = OrderedDict(
+            zip(self.rhs._data.keys(), self.rhs._data.keys())
+        )
+        common_names = set(left_names) & set(right_names)
+
+        if self.on:
+            key_columns_with_same_name = self.on
+        else:
+            key_columns_with_same_name = []
+            for lkey, rkey in zip(self._keys.left, self._keys.right):
+                if (lkey.is_index_level, rkey.is_index_level) == (
+                    False,
+                    False,
+                ):
+                    if lkey.name == rkey.name:
+                        key_columns_with_same_name.append(lkey.name)
+        for name in common_names:
+            if name not in key_columns_with_same_name:
+                left_names[name] = f"{name}{self.lsuffix}"
+                right_names[name] = f"{name}{self.rsuffix}"
+            else:
+                del right_names[name]
+        return left_names, right_names
 
     @staticmethod
     def validate_merge_params(
@@ -305,111 +349,11 @@ class Merge(object):
                     )
 
     def match_key_dtypes(self, match_func):
-        """
-        Check each pair of join keys in the left and right hand
-        operands and apply casting rules to match their types
-        before passing the result to libcudf.
-        """
+        # match the dtypes of the key columns in
+        # self.lhs and self.rhs according to the matching
+        # function `match_func`
         for left_key, right_key in zip(self._keys.left, self._keys.right):
             lcol, rcol = left_key.value, right_key.value
             dtype = match_func(lcol, rcol, how=self.how)
             left_key.set_value(lcol.astype(dtype))
             right_key.set_value(rcol.astype(dtype))
-
-    def compute_output_dtypes(self):
-        """
-        Determine what datatypes should be applied to the result
-        of a libcudf join, baesd on the original left and right
-        frames.
-        """
-
-        index_dtypes = {}
-        l_data_join_cols = {}
-        r_data_join_cols = {}
-
-        data_dtypes = {
-            name: col.dtype
-            for name, col in itertools.chain(
-                self.lhs._data.items(), self.rhs._data.items()
-            )
-        }
-
-        if self.left_index and self.right_index:
-            l_idx_join_cols = list(self.lhs.index._data.values())
-            r_idx_join_cols = list(self.rhs.index._data.values())
-        elif self.left_on and self.right_index:
-            # Keep the orignal dtypes in the LEFT index if possible
-            # should trigger a bunch of no-ops
-            l_idx_join_cols = list(self.lhs.index._data.values())
-            r_idx_join_cols = list(self.lhs.index._data.values())
-            for i, name in enumerate(self.left_on):
-                l_data_join_cols[name] = self.lhs._data[name]
-                r_data_join_cols[name] = list(self.rhs.index._data.values())[i]
-
-        elif self.left_index and self.right_on:
-            # see above
-            l_idx_join_cols = list(self.rhs.index._data.values())
-            r_idx_join_cols = list(self.rhs.index._data.values())
-            for i, name in enumerate(self.right_on):
-                l_data_join_cols[name] = list(self.lhs.index._data.values())[i]
-                r_data_join_cols[name] = self.rhs._data[name]
-
-        if self.left_on and self.right_on:
-            l_data_join_cols = self.lhs._data
-            r_data_join_cols = self.rhs._data
-
-        if self.left_index or self.right_index:
-            for i in range(len(self.lhs.index._data.items())):
-                index_dtypes[i] = _libcudf_to_output_castrules(
-                    l_idx_join_cols[i], r_idx_join_cols[i], self.how
-                )
-
-        for name in itertools.chain(self.left_on, self.right_on):
-            if name in self.left_on and name in self.right_on:
-                data_dtypes[name] = _libcudf_to_output_castrules(
-                    l_data_join_cols[name], r_data_join_cols[name], self.how
-                )
-        return (index_dtypes, data_dtypes)
-
-    def typecast_libcudf_to_output(self, output, output_dtypes):
-        """
-        Apply precomputed output index and data column data types
-        to the output of a libcudf join.
-        """
-
-        index_dtypes, data_dtypes = output_dtypes
-        if output._index and len(index_dtypes) > 0:
-            for index_dtype, index_col_lbl, index_col in zip(
-                index_dtypes.values(),
-                output._index._data.keys(),
-                output._index._data.values(),
-            ):
-                if index_dtype:
-                    output._index._data[
-                        index_col_lbl
-                    ] = self._build_output_col(index_col, index_dtype)
-            # reconstruct the Index object as the underlying data types
-            # have changed:
-            output._index = cudf.core.index.Index._from_table(output._index)
-
-        for data_col_lbl, data_col in output._data.items():
-            data_dtype = data_dtypes[data_col_lbl]
-            if data_dtype:
-                output._data[data_col_lbl] = self._build_output_col(
-                    data_col, data_dtype
-                )
-        return output
-
-    def _build_output_col(self, col, dtype):
-        if isinstance(
-            dtype, (cudf.core.dtypes.CategoricalDtype, pd.CategoricalDtype)
-        ):
-            outcol = cudf.core.column.build_categorical_column(
-                categories=dtype.categories,
-                codes=col.set_mask(None),
-                mask=col.base_mask,
-                ordered=dtype.ordered,
-            )
-        else:
-            outcol = col.astype(dtype)
-        return outcol
