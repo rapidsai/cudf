@@ -58,6 +58,18 @@ PANDAS_TO_ORC_TYPES = {
     np.dtype("<M8[us]"): pyorc.Timestamp(),
 }
 
+ORC_TO_PANDAS_TYPES = {
+    pyorc.TinyInt().name: pd.Int8Dtype(),
+    pyorc.Int().name: pd.Int32Dtype(),
+    pyorc.Boolean().name: pd.BooleanDtype(),
+    pyorc.SmallInt().name: pd.Int16Dtype(),
+    pyorc.BigInt().name: pd.Int64Dtype(),
+    pyorc.String().name: np.dtype("O"),
+    pyorc.Float().name: np.dtype("float32"),
+    pyorc.Double().name: np.dtype("float64"),
+    pyorc.Timestamp().name: np.dtype("<M8[ns]"),
+}
+
 
 def _generate_rand_meta(obj, dtypes_list, null_frequency_override=None):
     obj._current_params = {}
@@ -73,7 +85,7 @@ def _generate_rand_meta(obj, dtypes_list, null_frequency_override=None):
             if null_frequency_override is None
             else null_frequency_override
         )
-        cardinality = obj._rand(obj._max_rows)
+        cardinality = max(1, obj._rand(obj._max_rows))
         meta = dict()
         if dtype == "str":
             # We want to operate near the limits of string column
@@ -190,7 +202,8 @@ def get_avro_schema(df):
 
 def get_orc_schema(df):
     ordered_dict = OrderedDict(
-        (col_name, col_dtype) for col_name, col_dtype in df.dtypes.items()
+        (col_name, get_orc_dtype_info(col_dtype))
+        for col_name, col_dtype in df.dtypes.items()
     )
 
     schema = pyorc.Struct(**ordered_dict)
@@ -288,6 +301,11 @@ def orc_to_pandas(file_name=None, file_io_obj=None, stripes=None):
 
     reader = pyorc.Reader(f)
 
+    dtypes = {
+        col: ORC_TO_PANDAS_TYPES[pyorc_type.name]
+        for col, pyorc_type in reader.schema.fields.items()
+    }
+
     if stripes is None:
         df = pd.DataFrame.from_records(
             reader, columns=reader.schema.fields.keys()
@@ -299,6 +317,7 @@ def orc_to_pandas(file_name=None, file_io_obj=None, stripes=None):
         df = pd.DataFrame.from_records(
             records, columns=reader.schema.fields.keys()
         )
+    df = df.astype(dtypes)
 
     return df
 
