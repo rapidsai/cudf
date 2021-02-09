@@ -31,6 +31,8 @@ def orc_reader_test(input_tuple, columns, skiprows, num_rows, use_index):
     if skiprows is not None or num_rows is not None:
         expected_pdf.reset_index(drop=True, inplace=True)
     if columns is not None and len(columns) > 0:
+        # ORC reader picks columns if only
+        # there are any elements in `columns` only
         expected_pdf = expected_pdf[columns]
     if use_index is False:
         expected_pdf.reset_index(drop=True, inplace=True)
@@ -57,6 +59,8 @@ def orc_reader_stripes_test(input_tuple, columns, stripes):
     )
 
     if columns is not None and len(columns) > 0:
+        # ORC reader picks columns if only
+        # there are any elements in `columns` only
         expected_pdf = expected_pdf[columns]
 
     gdf = cudf.read_orc(
