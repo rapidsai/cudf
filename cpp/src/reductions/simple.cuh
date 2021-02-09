@@ -139,17 +139,11 @@ std::unique_ptr<scalar> dictionary_reduction(column_view const& col,
   auto simple_op = Op{};
 
   auto result = [&] {
-    if (col.has_nulls()) {
-      auto f  = simple_op.template get_null_replacing_element_transformer<ResultType>();
-      auto p  = cudf::dictionary::detail::make_dictionary_pair_iterator<ElementType, true>(*dcol);
-      auto it = thrust::make_transform_iterator(p, f);
-      return detail::reduce(it, col.size(), simple_op, stream, mr);
-    } else {
-      auto f  = simple_op.template get_element_transformer<ResultType>();
-      auto p  = cudf::dictionary::detail::make_dictionary_iterator<ElementType>(*dcol);
-      auto it = thrust::make_transform_iterator(p, f);
-      return detail::reduce(it, col.size(), simple_op, stream, mr);
-    }
+    auto f = simple_op.template get_null_replacing_element_transformer<ResultType>();
+    auto p =
+      cudf::dictionary::detail::make_dictionary_pair_iterator<ElementType>(*dcol, col.has_nulls());
+    auto it = thrust::make_transform_iterator(p, f);
+    return detail::reduce(it, col.size(), simple_op, stream, mr);
   }();
 
   // set scalar is valid
@@ -232,9 +226,7 @@ struct bool_result_element_dispatcher {
                                      rmm::cuda_stream_view stream,
                                      rmm::mr::device_memory_resource* mr)
   {
-    return cudf::is_dictionary(col.type())
-             ? dictionary_reduction<ElementType, bool, Op>(col, stream, mr)
-             : simple_reduction<ElementType, bool, Op>(col, stream, mr);
+    return simple_reduction<ElementType, bool, Op>(col, stream, mr);
   }
 
   template <typename ElementType,

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -15,6 +15,7 @@
  */
 
 #include <cudf/column/column_factories.hpp>
+#include <cudf/detail/iterator.cuh>
 #include <cudf/partitioning.hpp>
 #include <cudf/table/table.hpp>
 #include <cudf/table/table_view.hpp>
@@ -54,7 +55,7 @@ TYPED_TEST(RoundRobinTest, RoundRobinPartitions13_3)
 
   cudf::size_type inputRows = static_cast<cudf::column_view const&>(rrColWrap1).size();
 
-  auto sequence_l = cudf::test::make_counting_transform_iterator(0, [](auto row) {
+  auto sequence_l = cudf::detail::make_counting_transform_iterator(0, [](auto row) {
     if (cudf::type_to_id<TypeParam>() == cudf::type_id::BOOL8) {
       return (row % 2 == 0) ? 1 : 0;
     } else
@@ -190,7 +191,7 @@ TYPED_TEST(RoundRobinTest, RoundRobinPartitions11_3)
 
   cudf::size_type inputRows = static_cast<cudf::column_view const&>(rrColWrap1).size();
 
-  auto sequence_l = cudf::test::make_counting_transform_iterator(0, [](auto row) {
+  auto sequence_l = cudf::detail::make_counting_transform_iterator(0, [](auto row) {
     if (cudf::type_to_id<TypeParam>() == cudf::type_id::BOOL8) {
       return (row % 2 == 0) ? 1 : 0;
     } else
@@ -323,7 +324,7 @@ TYPED_TEST(RoundRobinTest, RoundRobinDegeneratePartitions11_15)
 
   cudf::size_type inputRows = static_cast<cudf::column_view const&>(rrColWrap1).size();
 
-  auto sequence_l = cudf::test::make_counting_transform_iterator(0, [](auto row) {
+  auto sequence_l = cudf::detail::make_counting_transform_iterator(0, [](auto row) {
     if (cudf::type_to_id<TypeParam>() == cudf::type_id::BOOL8) {
       return (row % 2 == 0) ? 1 : 0;
     } else
@@ -459,7 +460,7 @@ TYPED_TEST(RoundRobinTest, RoundRobinDegeneratePartitions11_11)
 
   cudf::size_type inputRows = static_cast<cudf::column_view const&>(rrColWrap1).size();
 
-  auto sequence_l = cudf::test::make_counting_transform_iterator(0, [](auto row) {
+  auto sequence_l = cudf::detail::make_counting_transform_iterator(0, [](auto row) {
     if (cudf::type_to_id<TypeParam>() == cudf::type_id::BOOL8) {
       return (row % 2 == 0) ? 1 : 0;
     } else
@@ -527,7 +528,7 @@ TYPED_TEST(RoundRobinTest, RoundRobinNPartitionsDivideNRows)
 
   cudf::size_type inputRows = static_cast<cudf::column_view const&>(rrColWrap1).size();
 
-  auto sequence_l = cudf::test::make_counting_transform_iterator(0, [](auto row) {
+  auto sequence_l = cudf::detail::make_counting_transform_iterator(0, [](auto row) {
     if (cudf::type_to_id<TypeParam>() == cudf::type_id::BOOL8) {
       return (row % 2 == 0) ? 1 : 0;
     } else
@@ -643,7 +644,7 @@ TYPED_TEST(RoundRobinTest, RoundRobinSinglePartition)
 
   cudf::size_type inputRows = static_cast<cudf::column_view const&>(rrColWrap1).size();
 
-  auto sequence_l = cudf::test::make_counting_transform_iterator(0, [](auto row) {
+  auto sequence_l = cudf::detail::make_counting_transform_iterator(0, [](auto row) {
     if (cudf::type_to_id<TypeParam>() == cudf::type_id::BOOL8) {
       return (row % 2 == 0) ? 1 : 0;
     } else
@@ -698,7 +699,7 @@ TYPED_TEST(RoundRobinTest, RoundRobinIncorrectNumPartitions)
 
   cudf::size_type inputRows = static_cast<cudf::column_view const&>(rrColWrap1).size();
 
-  auto sequence_l = cudf::test::make_counting_transform_iterator(0, [](auto row) {
+  auto sequence_l = cudf::detail::make_counting_transform_iterator(0, [](auto row) {
     if (cudf::type_to_id<TypeParam>() == cudf::type_id::BOOL8) {
       return (row % 2 == 0) ? 1 : 0;
     } else
@@ -724,7 +725,7 @@ TYPED_TEST(RoundRobinTest, RoundRobinIncorrectStartPartition)
 
   cudf::size_type inputRows = static_cast<cudf::column_view const&>(rrColWrap1).size();
 
-  auto sequence_l = cudf::test::make_counting_transform_iterator(0, [](auto row) {
+  auto sequence_l = cudf::detail::make_counting_transform_iterator(0, [](auto row) {
     if (cudf::type_to_id<TypeParam>() == cudf::type_id::BOOL8) {
       return (row % 2 == 0) ? 1 : 0;
     } else
