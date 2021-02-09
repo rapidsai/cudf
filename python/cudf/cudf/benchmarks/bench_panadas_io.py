@@ -8,7 +8,6 @@ import pytest
 
 from bench_cudf_io import get_dtypes
 from conftest import option
-from cudf._fuzz_testing import utils
 from get_datasets import create_dataset
 
 datatype = ["float32", "float64", "int32", "int64", "str", "datetime64[s]"]
@@ -23,6 +22,7 @@ null_frequency = [0.1, 0.4, 0.8]
 @pytest.mark.parametrize("dtype", datatype)
 @pytest.mark.parametrize("null_frequency", null_frequency)
 def bench_to_csv(benchmark, dtype, null_frequency, run_bench):
+    from cudf._fuzz_testing import utils
     table, file_path = create_dataset(
         dtype, file_type="csv", only_file=False, null_frequency=null_frequency
     )
@@ -79,6 +79,7 @@ def bench_read_orc(benchmark, use_buffer, dtype, run_bench):
 @pytest.mark.parametrize("dtype", datatype)
 @pytest.mark.parametrize("null_frequency", null_frequency)
 def bench_to_parquet(benchmark, dtype, null_frequency, run_bench):
+    from cudf._fuzz_testing import utils
     table, file_path = create_dataset(
         dtype, file_type="csv", only_file=False, null_frequency=null_frequency
     )
