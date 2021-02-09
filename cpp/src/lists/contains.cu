@@ -25,6 +25,7 @@
 #include <cudf/lists/lists_column_view.hpp>
 #include <cudf/scalar/scalar.hpp>
 #include <cudf/scalar/scalar_device_view.cuh>
+#include <cudf/table/row_operators.cuh>
 #include <cudf/utilities/type_dispatcher.hpp>
 #include <rmm/exec_policy.hpp>
 #include <type_traits>
@@ -64,16 +65,17 @@ template <bool search_keys_have_nulls>
 struct lookup_functor {
   template <typename ElementType>
   struct is_supported {
-    static constexpr bool value = cudf::is_numeric<ElementType>() ||
-                                  cudf::is_chrono<ElementType>() ||
-                                  std::is_same<ElementType, cudf::string_view>::value;
+    static constexpr bool value =
+      cudf::is_numeric<ElementType>() || cudf::is_chrono<ElementType>() ||
+      cudf::is_fixed_point<ElementType>() || std::is_same<ElementType, cudf::string_view>::value;
   };
 
   template <typename ElementType, typename... Args>
   std::enable_if_t<!is_supported<ElementType>::value, std::unique_ptr<column>> operator()(
     Args&&...) const
   {
-    CUDF_FAIL("lists::contains() is only supported on numeric types, chrono types, and strings.");
+    CUDF_FAIL(
+      "lists::contains() is only supported on numeric types, decimals, chrono types, and strings.");
   }
 
   std::pair<rmm::device_buffer, size_type> construct_null_mask(lists_column_view const& input_lists,
@@ -124,14 +126,15 @@ struct lookup_functor {
           return;
         }
 
-        auto search_key    = search_key_and_validity.first;
-        d_bools[row_index] = thrust::find_if(thrust::seq,
-                                             list.pair_begin<ElementType>(),
-                                             list.pair_end<ElementType>(),
-                                             [search_key] __device__(auto element_and_validity) {
-                                               return element_and_validity.second &&
-                                                      (element_and_validity.first == search_key);
-                                             }) != list.pair_end<ElementType>();
+        auto search_key = search_key_and_validity.first;
+        d_bools[row_index] =
+          thrust::find_if(thrust::seq,
+                          list.pair_begin<ElementType>(),
+                          list.pair_end<ElementType>(),
+                          [search_key] __device__(auto element_and_validity) {
+                            return element_and_validity.second &&
+                                   equality_compare(element_and_validity.first, search_key);
+                          }) != list.pair_end<ElementType>();
         d_validity[row_index] =
           d_bools[row_index] ||
           thrust::none_of(thrust::seq,
@@ -153,8 +156,8 @@ struct lookup_functor {
 
     CUDF_EXPECTS(!cudf::is_nested(lists.child().type()),
                  "Nested types not supported in lists::contains()");
-    CUDF_EXPECTS(lists.child().type().id() == search_key.type().id(),
-                 "Type of search key does not match list column element type.");
+    CUDF_EXPECTS(lists.child().type() == search_key.type(),
+                 "Type/Scale of search key does not match list column element type.");
     CUDF_EXPECTS(search_key.type().id() != type_id::EMPTY, "Type cannot be empty.");
 
     auto constexpr search_key_is_scalar = std::is_same<SearchKeyType, cudf::scalar>::value;
