@@ -96,27 +96,22 @@ cudf::size_type linearizer::intermediate_counter::find_first_missing() const
 
 cudf::size_type linearizer::visit(literal const& expr)
 {
-  // Increment the node index
-  node_count++;
-  // Resolve node type
-  auto const data_type = expr.get_data_type();
-  // Construct a scalar device view
-  auto device_view = expr.get_value();
-  // Push literal
-  auto const literal_index = cudf::size_type(literals.size());
-  literals.push_back(device_view);
-  // Push data reference
+  _node_count++;                                                 // Increment the node index
+  auto const data_type     = expr.get_data_type();               // Resolve node type
+  auto device_view         = expr.get_value();                   // Construct a scalar device view
+  auto const literal_index = cudf::size_type(_literals.size());  // Push literal
+  _literals.push_back(device_view);
   auto const source = detail::device_data_reference(
-    detail::device_data_reference_type::LITERAL, data_type, literal_index);
+    detail::device_data_reference_type::LITERAL, data_type, literal_index);  // Push data reference
   return add_data_reference(source);
 }
 
 cudf::size_type linearizer::visit(column_reference const& expr)
 {
   // Increment the node index
-  node_count++;
+  _node_count++;
   // Resolve node type
-  auto const data_type = expr.get_data_type(table);
+  auto const data_type = expr.get_data_type(_table);
   // Push data reference
   auto const source = detail::device_data_reference(detail::device_data_reference_type::COLUMN,
                                                     data_type,
@@ -128,13 +123,13 @@ cudf::size_type linearizer::visit(column_reference const& expr)
 cudf::size_type linearizer::visit(expression const& expr)
 {
   // Increment the node index
-  auto const node_index = node_count++;
+  auto const node_index = _node_count++;
   // Visit children (operands) of this node
   auto const operand_data_ref_indices = visit_operands(expr.get_operands());
   // Resolve operand types
-  auto data_ref = [this](auto const& index) { return get_data_references()[index].data_type; };
-  auto begin     = thrust::make_transform_iterator(operand_data_ref_indices.cbegin(), data_ref);
-  auto end       = begin + operand_data_ref_indices.size();
+  auto data_ref = [this](auto const& index) { return data_references()[index].data_type; };
+  auto begin    = thrust::make_transform_iterator(operand_data_ref_indices.cbegin(), data_ref);
+  auto end      = begin + operand_data_ref_indices.size();
   auto const operand_types = std::vector<cudf::data_type>(begin, end);
 
   // Validate types of operand data references match
@@ -148,16 +143,16 @@ cudf::size_type linearizer::visit(expression const& expr)
     operand_data_ref_indices.cbegin(),
     operand_data_ref_indices.cend(),
     [this](auto const& data_reference_index) {
-      auto const operand_source = get_data_references()[data_reference_index];
+      auto const operand_source = data_references()[data_reference_index];
       if (operand_source.reference_type == detail::device_data_reference_type::INTERMEDIATE) {
         auto const intermediate_index = operand_source.data_index;
-        intermediate_counter.give(intermediate_index);
+        _intermediate_counter.give(intermediate_index);
       }
     });
   // Resolve node type
   auto const op        = expr.get_operator();
   auto const data_type = cudf::ast::detail::ast_operator_return_type(op, operand_types);
-  operators.push_back(op);
+  _operators.push_back(op);
   // Push data reference
   auto const output = [&]() {
     if (node_index == 0) {
@@ -174,24 +169,24 @@ cudf::size_type linearizer::visit(expression const& expr)
         CUDF_FAIL("The output data type is too large to be stored in an intermediate.");
       }
       return detail::device_data_reference(
-        detail::device_data_reference_type::INTERMEDIATE, data_type, intermediate_counter.take());
+        detail::device_data_reference_type::INTERMEDIATE, data_type, _intermediate_counter.take());
     }
   }();
   auto const index = add_data_reference(output);
   // Insert source indices from all operands (sources) and this operator (destination)
-  operator_source_indices.insert(operator_source_indices.end(),
-                                 operand_data_ref_indices.cbegin(),
-                                 operand_data_ref_indices.cend());
-  operator_source_indices.push_back(index);
+  _operator_source_indices.insert(_operator_source_indices.end(),
+                                  operand_data_ref_indices.cbegin(),
+                                  operand_data_ref_indices.cend());
+  _operator_source_indices.push_back(index);
   return index;
 }
 
-cudf::data_type linearizer::get_root_data_type() const
+cudf::data_type linearizer::root_data_type() const
 {
-  if (get_data_references().empty()) {
+  if (data_references().empty()) {
     return cudf::data_type(cudf::type_id::EMPTY);
   } else {
-    return get_data_references().back().data_type;
+    return data_references().back().data_type;
   }
 }
 
@@ -210,12 +205,12 @@ cudf::size_type linearizer::add_data_reference(detail::device_data_reference dat
 {
   // If an equivalent data reference already exists, return its index. Otherwise add this data
   // reference and return the new index.
-  auto const it = std::find(data_references.cbegin(), data_references.cend(), data_ref);
-  if (it != data_references.cend()) {
-    return std::distance(data_references.cbegin(), it);
+  auto const it = std::find(_data_references.cbegin(), _data_references.cend(), data_ref);
+  if (it != _data_references.cend()) {
+    return std::distance(_data_references.cbegin(), it);
   } else {
-    data_references.push_back(data_ref);
-    return data_references.size() - 1;
+    _data_references.push_back(data_ref);
+    return _data_references.size() - 1;
   }
 }
 

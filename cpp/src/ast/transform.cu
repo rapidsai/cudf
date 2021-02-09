@@ -94,12 +94,12 @@ std::unique_ptr<column> compute_column(table_view const table,
 {
   // Linearize the AST
   auto const expr_linearizer         = linearizer(expr, table);
-  auto const data_references         = expr_linearizer.get_data_references();
-  auto const literals                = expr_linearizer.get_literals();
-  auto const operators               = expr_linearizer.get_operators();
+  auto const data_references         = expr_linearizer.data_references();
+  auto const literals                = expr_linearizer.literals();
+  auto const operators               = expr_linearizer.operators();
   auto const num_operators           = cudf::size_type(operators.size());
-  auto const operator_source_indices = expr_linearizer.get_operator_source_indices();
-  auto const expr_data_type          = expr_linearizer.get_root_data_type();
+  auto const operator_source_indices = expr_linearizer.operator_source_indices();
+  auto const expr_data_type          = expr_linearizer.root_data_type();
 
   // Create ast_plan and device buffer
   auto plan = ast_plan();
@@ -138,7 +138,7 @@ std::unique_ptr<column> compute_column(table_view const table,
     cudf::mutable_column_device_view::create(output_column->mutable_view(), stream);
 
   // Configure kernel parameters
-  auto const num_intermediates     = expr_linearizer.get_intermediate_count();
+  auto const num_intermediates     = expr_linearizer.intermediate_count();
   auto const shmem_size_per_thread = static_cast<int>(sizeof(std::int64_t) * num_intermediates);
   int device_id;
   CUDA_TRY(cudaGetDevice(&device_id));
