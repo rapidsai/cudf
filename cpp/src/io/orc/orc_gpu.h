@@ -124,19 +124,22 @@ struct RowGroup {
  * @brief Struct to describe an encoder data chunk
  */
 struct EncChunk {
+  const uint32_t *valid_map_base;  // base ptr of input valid bit map
+  size_type column_offset;         // index of the first element relative to the base memory
+  const void *column_data_base;    // base ptr of input column data
+  uint32_t start_row;              // start row of this chunk
+  uint32_t num_rows;               // number of rows in this chunk
+  uint32_t valid_rows;             // max number of valid rows
+  uint8_t encoding_kind;           // column encoding kind (orc::ColumnEncodingKind)
+  uint8_t type_kind;               // column data type (orc::TypeKind)
+  uint8_t dtype_len;               // data type length
+  uint8_t scale;                   // scale for decimals or timestamps
+};
+
+struct EncStream {
   uint8_t *streams[CI_NUM_STREAMS];   // encoded output
   int32_t strm_id[CI_NUM_STREAMS];    // stream id or -1 if not present
   uint32_t strm_len[CI_NUM_STREAMS];  // in: max length, out: actual length
-  const uint32_t *valid_map_base;     // base ptr of input valid bit map
-  size_type column_offset;            // index of the first element relative to the base memory
-  const void *column_data_base;       // base ptr of input column data
-  uint32_t start_row;                 // start row of this chunk
-  uint32_t num_rows;                  // number of rows in this chunk
-  uint32_t valid_rows;                // max number of valid rows
-  uint8_t encoding_kind;              // column encoding kind (orc::ColumnEncodingKind)
-  uint8_t type_kind;                  // column data type (orc::TypeKind)
-  uint8_t dtype_len;                  // data type length
-  uint8_t scale;                      // scale for decimals or timestamps
 };
 
 /**
@@ -288,6 +291,7 @@ void DecodeOrcColumnData(ColumnDesc *chunks,
  * @param[in] stream CUDA stream to use, default 0
  */
 void EncodeOrcColumnData(EncChunk *chunks,
+                         EncStream *streams,
                          uint32_t num_columns,
                          uint32_t num_rowgroups,
                          rmm::cuda_stream_view stream = rmm::cuda_stream_default);
@@ -304,6 +308,7 @@ void EncodeOrcColumnData(EncChunk *chunks,
  */
 void EncodeStripeDictionaries(StripeDictionary *stripes,
                               EncChunk *chunks,
+                              EncStream *streams,
                               uint32_t num_string_columns,
                               uint32_t num_columns,
                               uint32_t num_stripes,
@@ -313,13 +318,13 @@ void EncodeStripeDictionaries(StripeDictionary *stripes,
  * @brief Launches kernel for compacting chunked column data prior to compression
  *
  * @param[in] strm_desc StripeStream device array [stripe][stream]
- * @param[in] chunks EncChunk device array [rowgroup][column]
+ * @param[in] TODO
  * @param[in] num_stripe_streams Total number of streams
  * @param[in] num_columns Number of columns
  * @param[in] stream CUDA stream to use, default 0
  */
 void CompactOrcDataStreams(StripeStream *strm_desc,
-                           EncChunk *chunks,
+                           EncStream *streams,
                            uint32_t num_stripe_streams,
                            uint32_t num_columns,
                            rmm::cuda_stream_view stream = rmm::cuda_stream_default);
@@ -339,7 +344,7 @@ void CompactOrcDataStreams(StripeStream *strm_desc,
  */
 void CompressOrcDataStreams(uint8_t *compressed_data,
                             StripeStream *strm_desc,
-                            EncChunk *chunks,
+                            EncStream *enc_streams,
                             gpu_inflate_input_s *comp_in,
                             gpu_inflate_status_s *comp_out,
                             uint32_t num_stripe_streams,

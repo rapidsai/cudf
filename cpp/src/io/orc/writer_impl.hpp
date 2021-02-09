@@ -79,22 +79,15 @@ class orc_streams {
   operator std::vector<Stream>() const { return streams; }
 };
 
-struct encoder_chunks {
+struct encoded_streams {
   rmm::device_uvector<uint8_t> encoded_data;
-  hostdevice_vector<gpu::EncChunk> chunks;
+  hostdevice_vector<gpu::EncStream> descs;
+};
 
-  /**
-   * @brief Encodes the streams as a series of column data chunks
-   *
-   * @param columns List of columns
-   * @param num_rowgroups Total number of row groups
-   * @param str_col_ids List of columns that are strings type
-   */
-  void encode(host_span<orc_column_view const> columns,
-              uint32_t num_stripes,
-              size_t num_rowgroups,
-              std::vector<int> const& str_col_ids,
-              rmm::cuda_stream_view stream);
+struct encoder_chunks {
+  hostdevice_vector<gpu::EncChunk> chunks;
+  // TODO add accessors/iterators
+  // TODO separate out redundant column info?
 };
 
 /**
@@ -207,9 +200,10 @@ class writer::impl {
   /**
    * @brief TODO
    */
-  encoder_chunks create_chunks(host_span<orc_column_view const> columns,
-                               stripe_boundaries const& stripe_bounds,
-                               orc_streams const& streams);
+  encoded_streams encode_data(host_span<orc_column_view const> columns,
+                              std::vector<int> const& str_col_ids,
+                              stripe_boundaries const& stripe_bounds,
+                              orc_streams const& streams);
 
   /**
    * @brief Returns stripe information after compacting columns' individual data
@@ -230,7 +224,7 @@ class writer::impl {
                                                 size_t num_index_streams,
                                                 size_t num_data_streams,
                                                 stripe_boundaries const& stripe_bounds,
-                                                hostdevice_vector<gpu::EncChunk>& chunks,
+                                                hostdevice_vector<gpu::EncStream>& streams,
                                                 hostdevice_vector<gpu::StripeStream>& strm_desc);
 
   /**
@@ -255,7 +249,7 @@ class writer::impl {
    * @param num_data_streams Total number of data streams
    * @param group Starting row group in the stripe
    * @param groups_in_stripe Number of row groups in the stripe
-   * @param chunks List of all column chunks
+   * @param TODO
    * @param strm_desc List of stream descriptors
    * @param comp_out Output status for compressed streams
    * @param streams List of all streams
@@ -268,7 +262,7 @@ class writer::impl {
                           size_t num_data_streams,
                           size_t group,
                           size_t groups_in_stripe,
-                          hostdevice_vector<gpu::EncChunk> const& chunks,
+                          hostdevice_vector<gpu::EncStream> const& enc_streams,
                           hostdevice_vector<gpu::StripeStream> const& strm_desc,
                           hostdevice_vector<gpu_inflate_status_s> const& comp_out,
                           StripeInformation* stripe,
@@ -286,7 +280,7 @@ class writer::impl {
    * @param streams List of all streams
    */
   void write_data_stream(gpu::StripeStream const& strm_desc,
-                         gpu::EncChunk const& chunk,
+                         gpu::EncStream const& enc_stream,
                          uint8_t const* compressed_data,
                          uint8_t* stream_out,
                          StripeInformation* stripe,
