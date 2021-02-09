@@ -334,10 +334,6 @@ def get_units(value):
     return value
 
 
-class _DateOffsetScalars(dict):
-    pass
-
-
 class DateOffset:
 
     _UNITS_TO_CODES = {
@@ -481,7 +477,7 @@ class DateOffset:
         if any(val != int(val) for val in kwds.values()):
             raise ValueError("Non-integer periods not supported")
 
-        self.kwds = kwds
+        self._kwds = kwds
         kwds = self._combine_months_and_years(**kwds)
         kwds = self._combine_kwargs_to_seconds(**kwds)
 
@@ -497,7 +493,11 @@ class DateOffset:
                     dtype = np.dtype(f"timedelta64[{unit}]")
                 scalars[k] = cudf.Scalar(v, dtype=dtype)
 
-        self._scalars = _DateOffsetScalars(scalars)
+        self._scalars = scalars
+
+    @property
+    def kwds(self):
+        return self._kwds
 
     def _combine_months_and_years(self, **kwargs):
         # TODO: if months is zero, don't do a binop
@@ -565,16 +565,16 @@ class DateOffset:
     def _is_no_op(self):
         # some logic could be implemented here for more complex cases
         # such as +1 year, -12 months
-        return all([i == 0 for i in self.kwds.values()])
+        return all([i == 0 for i in self._kwds.values()])
 
     def __neg__(self):
-        new_scalars = {k: -v for k, v in self.kwds.items()}
+        new_scalars = {k: -v for k, v in self._kwds.items()}
         return DateOffset(**new_scalars)
 
     def __repr__(self):
         includes = []
         for unit in sorted(self._UNITS_TO_CODES):
-            val = self.kwds.get(unit, None)
+            val = self._kwds.get(unit, None)
             if val is not None:
                 includes.append(f"{unit}={val}")
         unit_data = ", ".join(includes)
@@ -584,6 +584,10 @@ class DateOffset:
 
     @classmethod
     def _from_freqstr(cls, freqstr):
+        """
+        Parse a string and return a DateOffset object
+        expects strings of the form 3D, 25W, 10ms, 42ns, etc.
+        """
         numeric_part = ""
         freq_part = ""
 
