@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 
+#include <cudf/detail/iterator.cuh>
 #include <cudf/unary.hpp>
 #include "rolling_detail.cuh"
 
@@ -169,10 +170,8 @@ std::unique_ptr<column> grouped_rolling_window(table_view const& group_keys,
     return cudf::detail::rolling_window(
       input,
       default_outputs,
-      thrust::make_transform_iterator(thrust::make_counting_iterator<size_type>(0),
-                                      preceding_calculator),
-      thrust::make_transform_iterator(thrust::make_counting_iterator<size_type>(0),
-                                      following_calculator),
+      cudf::detail::make_counting_transform_iterator(0, preceding_calculator),
+      cudf::detail::make_counting_transform_iterator(0, following_calculator),
       min_periods,
       aggr,
       stream,
@@ -264,7 +263,7 @@ std::unique_ptr<column> expand_to_column(Calculator const& calc,
   auto window_column = cudf::make_fixed_width_column(
     cudf::data_type{type_id::INT32}, num_rows, cudf::mask_state::UNALLOCATED, stream, mr);
 
-  auto begin = thrust::make_transform_iterator(thrust::make_counting_iterator<size_type>(0), calc);
+  auto begin = cudf::detail::make_counting_transform_iterator(0, calc);
 
   thrust::copy_n(
     rmm::exec_policy(stream), begin, num_rows, window_column->mutable_view().data<size_type>());

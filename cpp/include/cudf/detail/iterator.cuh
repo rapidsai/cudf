@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2020, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -43,6 +43,31 @@
 
 namespace cudf {
 namespace detail {
+/**
+ * @brief Convenience wrapper for creating a `thrust::transform_iterator` over a
+ * `thrust::counting_iterator`.
+ *
+ * Example:
+ * @code{.cpp}
+ * // Returns square of the value of the counting iterator
+ * auto iter = make_counting_transform_iterator(0, [](auto i){ return (i * i);});
+ * iter[0] == 0
+ * iter[1] == 1
+ * iter[2] == 4
+ * ...
+ * iter[n] == n * n
+ * @endcode
+ *
+ * @param start The starting value of the counting iterator
+ * @param f The unary function to apply to the counting iterator.
+ * @return A transform iterator that applies `f` to a counting iterator
+ */
+template <typename UnaryFunction>
+inline auto make_counting_transform_iterator(cudf::size_type start, UnaryFunction f)
+{
+  return thrust::make_transform_iterator(thrust::make_counting_iterator(start), f);
+}
+
 /**
  * @brief value accessor of column with null bitmask
  * A unary functor returns scalar value at `id`.
@@ -128,9 +153,8 @@ template <typename Element>
 auto make_null_replacement_iterator(column_device_view const& column,
                                     Element const null_replacement = Element{0})
 {
-  return thrust::make_transform_iterator(
-    thrust::counting_iterator<cudf::size_type>{0},
-    null_replaced_value_accessor<Element>{column, null_replacement});
+  return make_counting_transform_iterator(
+    0, null_replaced_value_accessor<Element>{column, null_replacement});
 }
 
 /**
@@ -174,8 +198,7 @@ auto make_pair_iterator(column_device_view const& column)
  */
 auto inline make_validity_iterator(column_device_view const& column)
 {
-  return thrust::make_transform_iterator(thrust::counting_iterator<cudf::size_type>{0},
-                                         validity_accessor{column});
+  return make_counting_transform_iterator(cudf::size_type{0}, validity_accessor{column});
 }
 
 /**
@@ -318,32 +341,6 @@ auto inline make_pair_iterator(scalar const& scalar_value)
                "the data type mismatch");
   return thrust::make_transform_iterator(thrust::make_constant_iterator<size_type>(0),
                                          scalar_pair_accessor<Element>{scalar_value});
-}
-
-/**
- * @brief Convenience wrapper for creating a `thrust::transform_iterator` over a
- * `thrust::counting_iterator`.
- *
- * Example:
- * @code{.cpp}
- * // Returns square of the value of the counting iterator
- * auto iter = make_counting_transform_iterator(0, [](auto i){ return (i * i);});
- * iter[0] == 0
- * iter[1] == 1
- * iter[2] == 4
- * ...
- * iter[n] == n * n
- * @endcode
- *
- * @param start The starting value of the counting iterator
- * @param f The unary function to apply to the counting iterator.
- * This should be a host function and not a device function.
- * @return auto A transform iterator that applies `f` to a counting iterator
- */
-template <typename UnaryFunction>
-inline auto make_counting_transform_iterator(cudf::size_type start, UnaryFunction f)
-{
-  return thrust::make_transform_iterator(thrust::make_counting_iterator(start), f);
 }
 
 }  // namespace detail
