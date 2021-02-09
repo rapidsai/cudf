@@ -647,19 +647,22 @@ TEST_F(ParquetWriterTest, ListColumn2)
   // [[7, 8]]
   // []
   // [[]]
-  // lcw col1{{{1, 2, 3}, {}, {4, 5}, {}, {0, 6, 0}}, {{7, 8}}, lcw{}, lcw{lcw{}}};
+  lcw col1{{{1, 2, 3}, {}, {4, 5}, {}, {0, 6, 0}}, {{7, 8}}, lcw{}, lcw{lcw{}}};
 
-  cudf_io::table_metadata expected_metadata;
-  expected_metadata.column_names.emplace_back("col_list_int_0");
-  expected_metadata.schema_info.emplace_back("col_list_int_0");
+  // cudf_io::table_metadata expected_metadata;
+  // expected_metadata.column_names.emplace_back("col_list_int_0");
+  // expected_metadata.schema_info.emplace_back("col_list_int_0");
   // expected_metadata.column_names.emplace_back("col_list_list_int_1");
   // expected_metadata.schema_info.emplace_back("col_list_list_int_1");
 
-  table_view expected({col0 /* , col1 */});
+  table_view expected({col0, col1});
+  cudf_io::table_input_metadata expected_metadata(expected);
+  expected_metadata.column_metadata[0].name = "col_list_int_0";
+  expected_metadata.column_metadata[1].name = "col_list_list_int_1";
 
   auto filepath = ("ListColumn.parquet");
   auto out_opts = cudf_io::parquet_writer_options::builder(cudf_io::sink_info{filepath}, expected)
-                    .metadata(&expected_metadata)
+                    .input_schema(&expected_metadata)
                     .compression(cudf_io::compression_type::NONE);
 
   cudf_io::write_parquet(out_opts);
@@ -668,7 +671,7 @@ TEST_F(ParquetWriterTest, ListColumn2)
   auto result  = cudf_io::read_parquet(in_opts);
 
   CUDF_TEST_EXPECT_TABLES_EQUAL(expected, result.tbl->view());
-  EXPECT_EQ(expected_metadata.column_names, result.metadata.column_names);
+  // EXPECT_EQ(expected_metadata.column_names, result.metadata.column_names);
 }
 
 TEST_F(ParquetWriterTest, MultiIndex)

@@ -417,7 +417,7 @@ class parquet_writer_options {
   const table_metadata* _metadata = nullptr;
 
   // TODO: Docs
-  table_input_metadata const* _table_meta;
+  table_input_metadata const* _table_meta = nullptr;
   // Parquet writes can write INT96 or TIMESTAMP_MICROS. Defaults to TIMESTAMP_MICROS.
   bool _write_timestamps_as_int96 = false;
   // Column chunks file path to be set in the raw output metadata
