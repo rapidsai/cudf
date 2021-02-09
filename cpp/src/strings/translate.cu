@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2020, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,6 +19,7 @@
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_factories.hpp>
+#include <cudf/detail/iterator.cuh>
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/strings/detail/utilities.hpp>
@@ -99,9 +100,8 @@ std::unique_ptr<column> translate(
   // create null mask
   rmm::device_buffer null_mask = cudf::detail::copy_bitmask(strings.parent(), stream, mr);
   // create offsets column
-  auto offsets_transformer_itr =
-    thrust::make_transform_iterator(thrust::make_counting_iterator<int32_t>(0),
-                                    translate_fn{d_strings, table.begin(), table.end()});
+  auto offsets_transformer_itr = cudf::detail::make_counting_transform_iterator(
+    0, translate_fn{d_strings, table.begin(), table.end()});
   auto offsets_column = make_offsets_child_column(
     offsets_transformer_itr, offsets_transformer_itr + strings_count, stream, mr);
   auto d_offsets = offsets_column->view().data<int32_t>();
