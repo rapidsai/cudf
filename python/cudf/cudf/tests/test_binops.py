@@ -727,10 +727,10 @@ _permu_values = [0, 1, None, np.nan]
 def test_operator_func_between_series_logical(
     dtype, func, scalar_a, scalar_b, fill_value
 ):
-    gdf_series_a = Series([scalar_a]).astype(dtype)
-    gdf_series_b = Series([scalar_b]).astype(dtype)
-    pdf_series_a = gdf_series_a.to_pandas()
-    pdf_series_b = gdf_series_b.to_pandas()
+    gdf_series_a = Series([scalar_a], nan_as_null=False).astype(dtype)
+    gdf_series_b = Series([scalar_b], nan_as_null=False).astype(dtype)
+    pdf_series_a = utils.NullableFloatSeriesCompare([scalar_a], dtype=dtype)
+    pdf_series_b = utils.NullableFloatSeriesCompare([scalar_b], dtype=dtype)
 
     gdf_series_result = getattr(gdf_series_a, func)(
         gdf_series_b, fill_value=fill_value
@@ -738,16 +738,7 @@ def test_operator_func_between_series_logical(
     pdf_series_result = getattr(pdf_series_a, func)(
         pdf_series_b, fill_value=fill_value
     )
-
-    if scalar_a in [None, np.nan] and scalar_b in [None, np.nan]:
-        # cudf binary operations will return `None` when both left- and right-
-        # side values are `None`. It will return `np.nan` when either side is
-        # `np.nan`. As a consequence, when we convert our gdf => pdf during
-        # assert_eq, we get a pdf with dtype='object' (all inputs are none).
-        # to account for this, we use fillna.
-        gdf_series_result.fillna(func == "ne", inplace=True)
-
-    utils.assert_eq(pdf_series_result, gdf_series_result)
+    utils.assert_eq(pdf_series_result, gdf_series_result.to_pandas(nullable=True))
 
 
 @pytest.mark.parametrize("dtype", ["float32", "float64"])

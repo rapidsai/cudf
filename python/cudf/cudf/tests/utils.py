@@ -305,6 +305,9 @@ class NullableFloatSeriesCompare(object):
         return self._data[item]
 
     def binary_operator(self, other, op, fill_value=None):
+        """
+        Fake what a nullable series is supposed to do
+        """
         if not hasattr(other, "__len__") or len(other) != len(self):
             raise ValueError(
                 "Must compare to a list-like of equal length"
@@ -313,19 +316,23 @@ class NullableFloatSeriesCompare(object):
         for i in range(len(self)):
             lhs = self[i]
             rhs = other[i]
+            breakpoint()
+            if lhs is None or rhs is None:
+                if not (lhs is None and rhs is None):
+                    if fill_value is not None:
+                        if lhs is None:
+                            lhs = fill_value
+                        if rhs is None:
+                            rhs = fill_value
+            
 
-            if lhs is np.nan or rhs is np.nan:
-                this_result = False
-            elif lhs is None or rhs is None:
+            if lhs is None or rhs is None:
                 this_result = None
+            elif lhs is np.nan or rhs is np.nan and op != "ne":
+                this_result = False
             else:
                 this_result = getattr(lhs, op)(rhs)
-
             result[i] = this_result
-        if fill_value is not None:
-            fill_value = np.bool(fill_value)
-            result = [val if val is not None else fill_value for val in result]
-
         return pd.Series(result, dtype='boolean')
 
     def eq(self, other, fill_value=None):
