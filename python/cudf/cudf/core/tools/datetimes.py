@@ -339,28 +339,6 @@ class _DateOffsetScalars(dict):
     pass
 
 
-class _UndoOffsetMeta(pd._libs.tslibs.offsets.OffsetMeta):
-    """
-    For backward compatibility reasons, `pd.DateOffset` is defined
-    with a metaclass `OffsetMeta`, which makes it such that any
-    subclass of `pd._libs.tslibs.offset.BaseOffset` is reported as
-    a subclass of `pd.DateOffset`.
-
-    Because we subclass `pd.DateOffset`, we inherit this behaviour,
-    but don't want to. This metaclass inherits from `OffsetMeta`
-    and restores normal instance and subclass checking to any
-    classes that use it.
-    """
-
-    @classmethod
-    def __instancecheck__(cls, obj) -> bool:
-        return type.__instancecheck__(cls, obj)
-
-    @classmethod
-    def __subclasscheck__(cls, obj) -> bool:
-        return type.__subclasscheck__(cls, obj)
-
-
 class DateOffset:
 
     _UNITS_TO_CODES = {
@@ -478,6 +456,7 @@ class DateOffset:
             "hours",
             "minutes",
             "seconds",
+            "milliseconds",
             "microseconds",
             "nanoseconds",
         }
@@ -498,10 +477,11 @@ class DateOffset:
                 " are not yet supported."
             )
 
-        if any(val != int(val) for val in (kwds.get("months", 0), kwds.get("years", 0))):
-            raise ValueError(
-                "Non-integer periods not supported"
-            )
+        if any(
+            val != int(val)
+            for val in (kwds.get("months", 0), kwds.get("years", 0))
+        ):
+            raise ValueError("Non-integer periods not supported")
 
         self.kwds = kwds
         kwds = self._combine_months_and_years(**kwds)
@@ -521,9 +501,6 @@ class DateOffset:
 
         self._scalars = _DateOffsetScalars(scalars)
 
-    def __repr__(self):
-        return f"{self.__class__.__name__}({self.kwds}.__repr__())"
-
     def _combine_months_and_years(self, **kwargs):
         # TODO: if months is zero, don't do a binop
         kwargs["months"] = kwargs.pop("years", 0) * 12 + kwargs.pop(
@@ -542,7 +519,7 @@ class DateOffset:
         seconds += kwargs.pop("hours", 0) * 3600
         seconds += kwargs.pop("minutes", 0) * 60
         seconds += kwargs.pop("seconds", 0)
-        
+
         if seconds > np.iinfo("int64").max:
             raise OverflowError(
                 "Total days + weeks + hours + minutes + seconds can not exceed"
@@ -572,8 +549,10 @@ class DateOffset:
             for unit, value in self._scalars.items():
                 if unit != "months":
                     value = -value if op == "sub" else value
-                    datetime_col += cudf.core.column.as_column(value, length=len(datetime_col))
-            
+                    datetime_col += cudf.core.column.as_column(
+                        value, length=len(datetime_col)
+                    )
+
         return datetime_col
 
     def _generate_months_column(self, size, op):
