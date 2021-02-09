@@ -8318,7 +8318,7 @@ def test_dataframe_roundtrip_arrow_struct_dtype(gdf):
 
 
 @pytest.mark.parametrize(
-    "data", [{"a": [1, 2, 3], "b": [4, 5, 6], "c": [7, 8, 9]},]
+    "data", [{"a": [1, 2, 3], "b": [4, 5, 6], "c": [7, 8, 9]}]
 )
 @pytest.mark.parametrize(
     "index", [{0: 1, 1: 2, 2: 3}],
@@ -8341,13 +8341,13 @@ def test_dataframe_MI_for_level(data, index, level):
 
 
 @pytest.mark.parametrize(
-    "data", [{"a": [1, 2, 3], "b": [4, 5, 6], "c": [7, 8, 9]},]
+    "data", [{"a": [1, 2, 3], "b": [4, 5, 6], "c": [7, 8, 9]}]
 )
 @pytest.mark.parametrize(
-    "columns", [{"a": "f", "b":"g"}],
+    "columns", [{"a": "f", "b": "g"}],
 )
 @pytest.mark.parametrize(
-    "level", [0,1],
+    "level", [0, 1],
 )
 def test_dataframe_with_MC_for_level(data, columns, level):
     gdf = gd.DataFrame(data)

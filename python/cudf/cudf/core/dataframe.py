@@ -9,7 +9,7 @@ import pickle
 import sys
 import warnings
 from collections import OrderedDict, defaultdict
-from collections.abc import Iterable, Mapping, Sequence
+from collections.abc import Iterable, Sequence
 from typing import Any, Set, TypeVar
 
 import cupy

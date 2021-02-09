@@ -343,30 +343,44 @@ class ColumnAccessor(MutableMapping):
 
     def replace_level_values(self, mapping: dict, level: int or None):
         """
-        Returns a new ColumnAccessor with values in the keys replaced according to the given mapping and level.
+        Returns a new ColumnAccessor with values in the keys replaced according
+        to the given mapping and level.
         """
         col_names, columns = list(self.keys()), list(self.values())
-        
-        if self.multiindex == True:
+
+        if self.multiindex:
             cols_list = [list(col) for col in col_names]
-            new_names=[]
+            new_names = []
             for col_name in cols_list:
-                col_name[level]=mapping.get(col_name[level], col_name[level])
+                col_name[level] = mapping.get(col_name[level], col_name[level])
                 new_names.append(tuple(col_name))
-            ca = ColumnAccessor(dict(zip(new_names, columns)), level_names=self.level_names, multiindex=self.multiindex)
+            ca = ColumnAccessor(
+                dict(zip(new_names, columns)),
+                level_names=self.level_names,
+                multiindex=self.multiindex,
+            )
             self = ca
-        
+
         else:
             if level not in [0, None]:
-                raise IndexError(f"Too many levels: Index has only 1 level, not {level+1}")
-            else: 
+                raise IndexError(
+                    f"Too many levels: Index has only 1 level, not {level+1}"
+                )
+            else:
                 cols_list = col_names
-                new_names = [mapping.get(col_name, col_name) for col_name in cols_list]
-                ca = ColumnAccessor(dict(zip(new_names, columns)), level_names=self.level_names, multiindex=self.multiindex)
+                new_names = [
+                    mapping.get(col_name, col_name) for col_name in cols_list
+                ]
+                ca = ColumnAccessor(
+                    dict(zip(new_names, columns)),
+                    level_names=self.level_names,
+                    multiindex=self.multiindex,
+                )
                 self = ca
-        
+
         return self
-        
+
+
 def _compare_keys(target: Any, key: Any) -> bool:
     """
     Compare `key` to `target`.
