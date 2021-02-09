@@ -37,9 +37,12 @@ struct url_string_generator {
   std::bernoulli_distribution dist;
 
   url_string_generator(size_t num_chars, double esc_seq_chance)
-    : num_chars{num_chars}, dist{esc_seq_chance} {}
+    : num_chars{num_chars}, dist{esc_seq_chance}
+  {
+  }
 
-  std::string operator()(std::mt19937& engine) {
+  std::string operator()(std::mt19937& engine)
+  {
     std::string str;
     str.reserve(num_chars);
     while (str.size() < num_chars) {
@@ -55,14 +58,13 @@ struct url_string_generator {
 
 cudf::test::strings_column_wrapper generate_column(cudf::size_type num_rows,
                                                    cudf::size_type chars_per_row,
-                                                   double esc_seq_chance) {
+                                                   double esc_seq_chance)
+{
   std::mt19937 engine(1);
   url_string_generator url_gen(chars_per_row, esc_seq_chance);
   std::vector<std::string> strings;
   strings.reserve(num_rows);
-  std::generate_n(std::back_inserter(strings), num_rows, [&]() {
-    return url_gen(engine);
-  });
+  std::generate_n(std::back_inserter(strings), num_rows, [&]() { return url_gen(engine); });
   return cudf::test::strings_column_wrapper(strings.begin(), strings.end());
 }
 
@@ -73,10 +75,10 @@ class UrlDecode : public cudf::benchmark {
 template <int esc_seq_pct>
 void BM_url_decode(benchmark::State& state)
 {
-  cudf::size_type const num_rows = state.range(0);
+  cudf::size_type const num_rows      = state.range(0);
   cudf::size_type const chars_per_row = state.range(1);
 
-  auto column = generate_column(num_rows, chars_per_row, esc_seq_pct / 100.0);
+  auto column       = generate_column(num_rows, chars_per_row, esc_seq_pct / 100.0);
   auto strings_view = cudf::strings_column_view(column);
 
   for (auto _ : state) {
@@ -84,16 +86,17 @@ void BM_url_decode(benchmark::State& state)
     auto result = cudf::strings::url_decode(strings_view);
   }
 
-  state.SetBytesProcessed(state.iterations() * num_rows * (chars_per_row + sizeof(cudf::size_type)));
+  state.SetBytesProcessed(state.iterations() * num_rows *
+                          (chars_per_row + sizeof(cudf::size_type)));
 }
 
-#define URLD_BENCHMARK_DEFINE(name, esc_seq_pct)                          \
-  BENCHMARK_TEMPLATE_DEFINE_F(UrlDecode, name, esc_seq_pct)               \
-  (::benchmark::State & state) { BM_url_decode<esc_seq_pct>(state); }     \
-  BENCHMARK_REGISTER_F(UrlDecode, name)                                   \
-    ->RangeMultiplier(10)                                                 \
-    ->Ranges({{100, 100000}, {10, 10000}})                                \
-    ->Unit(benchmark::kMillisecond)                                       \
+#define URLD_BENCHMARK_DEFINE(name, esc_seq_pct)                      \
+  BENCHMARK_TEMPLATE_DEFINE_F(UrlDecode, name, esc_seq_pct)           \
+  (::benchmark::State & state) { BM_url_decode<esc_seq_pct>(state); } \
+  BENCHMARK_REGISTER_F(UrlDecode, name)                               \
+    ->RangeMultiplier(10)                                             \
+    ->Ranges({{100, 100000}, {10, 10000}})                            \
+    ->Unit(benchmark::kMillisecond)                                   \
     ->UseManualTime();
 
 URLD_BENCHMARK_DEFINE(url_decode_10pct, 10)
