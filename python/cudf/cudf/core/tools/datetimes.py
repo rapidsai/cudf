@@ -353,6 +353,8 @@ class DateOffset:
         "years": "Y",
     }
 
+    _CODES_TO_UNITS = {v: k for k, v in _UNITS_TO_CODES.items()}
+
     def __init__(self, n=1, normalize=False, **kwds):
         """
         An object used for binary ops where calendrical arithmetic
@@ -579,3 +581,22 @@ class DateOffset:
         repr_str = f"<{self.__class__.__name__}: {unit_data}>"
 
         return repr_str
+
+    @classmethod
+    def _from_freqstr(cls, freqstr):
+        numeric_part = ""
+        freq_part = ""
+
+        for x in freqstr:
+            if x.isdigit():
+                numeric_part += x
+            else:
+                freq_part += x
+
+        if (
+            freq_part not in cls._CODES_TO_UNITS
+            or not numeric_part + freq_part == freqstr
+        ):
+            raise ValueError(f"Cannot interpret frequency str: {freqstr}")
+
+        return cls(**{cls._CODES_TO_UNITS[freq_part]: int(numeric_part)})
