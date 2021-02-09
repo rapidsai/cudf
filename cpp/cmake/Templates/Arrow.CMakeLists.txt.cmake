@@ -14,6 +14,8 @@
 # limitations under the License.
 #=============================================================================
 
+cmake_minimum_required(VERSION 3.14...3.17 FATAL_ERROR)
+
 project(cudf-Arrow)
 
 include(ExternalProject)
