@@ -3,6 +3,7 @@
 import numpy as np
 import pytest
 from cudf import DateOffset
+import re
 
 INT64MAX = np.iinfo("int64").max
 
@@ -28,3 +29,24 @@ def test_construct_max_offset(unit):
 def test_offset_construction_overflow(kwargs):
     with pytest.raises(OverflowError):
         off = DateOffset(**kwargs)
+
+@pytest.mark.parametrize("unit", [
+    "years",
+    "months",
+    "weeks",
+    "days",
+    "hours",
+    "minutes",
+    "seconds",
+    "milliseconds",
+    "microseconds",
+    "nanoseconds"
+])
+@pytest.mark.parametrize("period", [
+    0.5,
+    -0.5,
+    0.71
+])
+def test_offset_no_fractional_periods(unit, period):
+    with pytest.raises(ValueError, match=re.escape("Non-integer periods not supported")):
+        DateOffset(**{unit: period})

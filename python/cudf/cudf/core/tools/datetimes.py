@@ -479,7 +479,7 @@ class DateOffset:
 
         if any(
             val != int(val)
-            for val in (kwds.get("months", 0), kwds.get("years", 0))
+            for val in kwds.values()
         ):
             raise ValueError("Non-integer periods not supported")
 
@@ -513,6 +513,7 @@ class DateOffset:
         Combine days, weeks, hours and minutes to a single
         scalar representing the total seconds
         """
+        breakpoint()
         seconds = 0
         seconds += kwargs.pop("weeks", 0) * 604800
         seconds += kwargs.pop("days", 0) * 86400
