@@ -100,4 +100,4 @@ void BM_url_decode(benchmark::State& state)
     ->UseManualTime();
 
 URLD_BENCHMARK_DEFINE(url_decode_10pct, 10)
-URLD_BENCHMARK_DEFINE(url_decode_20pct, 20)
+URLD_BENCHMARK_DEFINE(url_decode_50pct, 50)

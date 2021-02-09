@@ -189,17 +189,27 @@ __device__ bool is_hex_digit(char ch)
 // It returns true for a character index corresponding to the start of an
 // escape sequence, i.e.: '%' followed by two hexadecimal digits.
 struct url_decode_escape_detector {
-  size_type num_rows;
-  size_type const* d_offsets{};
+  size_type num_chars_total;
   char const* d_chars{};
 
   __device__ bool operator()(size_type char_idx)
   {
-    size_type const* next_row_idx_ptr =
-      thrust::upper_bound(thrust::seq, d_offsets, d_offsets + num_rows, char_idx);
-    size_type end_char_idx = *next_row_idx_ptr;
-    return (char_idx + 2 < end_char_idx) && d_chars[char_idx] == '%' &&
+    return (char_idx + 2 < num_chars_total) && d_chars[char_idx] == '%' &&
            is_hex_digit(d_chars[char_idx + 1]) && is_hex_digit(d_chars[char_idx + 2]);
+  }
+};
+
+// Functor for filtering out escape sequence positions that cross a string boundary.
+struct url_decode_esc_position_filter {
+  size_type const num_offsets;
+  size_type const* d_offsets{};
+
+  __device__ bool operator()(size_type esc_pos_idx)
+  {
+    // find the end offset of the current string
+    size_type const* offset_ptr =
+      thrust::upper_bound(thrust::seq, d_offsets, d_offsets + num_offsets, esc_pos_idx);
+    return esc_pos_idx + 2 < *offset_ptr;
   }
 };
 
@@ -287,27 +297,46 @@ std::unique_ptr<column> url_decode(
   }
   size_type chars_end = chars_start + chars_bytes;
 
-  url_decode_escape_detector esc_detector{strings.size(), d_offsets, d_in_chars};
+  url_decode_escape_detector esc_detector{chars_end, d_in_chars};
 
-  // count the number of URL escape sequences across all strings
-  size_type esc_count = thrust::count_if(rmm::exec_policy(stream),
-                                         thrust::make_counting_iterator<size_type>(chars_start),
-                                         thrust::make_counting_iterator<size_type>(chars_end),
-                                         esc_detector);
+  // Count the number of URL escape sequences across all strings, ignoring string boundaries.
+  // This may count more sequences than actually are there since string boundaries are ignored.
+  size_type potential_esc_count =
+    thrust::count_if(rmm::exec_policy(stream),
+                     thrust::make_counting_iterator<size_type>(chars_start),
+                     thrust::make_counting_iterator<size_type>(chars_end),
+                     esc_detector);
+
+  if (potential_esc_count == 0) {
+    // nothing to replace, so just copy the input column
+    return std::make_unique<cudf::column>(strings.parent());
+  }
+
+  // create a vector of potential escape sequence positions
+  rmm::device_uvector<size_type> potential_esc_positions(potential_esc_count, stream);
+  auto d_potential_esc_positions = potential_esc_positions.data();
+  thrust::copy_if(rmm::exec_policy(stream),
+                  thrust::make_counting_iterator<size_t>(chars_start),
+                  thrust::make_counting_iterator<size_t>(chars_end),
+                  d_potential_esc_positions,
+                  esc_detector);
+
+  // Filter potential escape positions to actual positions by checking string boundaries.
+  // Skip counting the actual number to compute the optimal output buffer size since it is not
+  // expected to be significantly smaller in practice.
+  rmm::device_uvector<size_type> esc_positions(potential_esc_count, stream);
+  auto d_esc_positions = potential_esc_positions.data();
+  auto esc_pos_end     = thrust::copy_if(rmm::exec_policy(stream),
+                                     d_potential_esc_positions,
+                                     d_potential_esc_positions + potential_esc_count,
+                                     d_esc_positions,
+                                     url_decode_esc_position_filter{strings.size() + 1, d_offsets});
+  size_type esc_count  = esc_pos_end - d_esc_positions;
 
   if (esc_count == 0) {
     // nothing to replace, so just copy the input column
     return std::make_unique<cudf::column>(strings.parent());
   }
-
-  // create a vector of escape sequence positions
-  rmm::device_uvector<size_type> esc_positions(esc_count, stream);
-  auto d_esc_positions = esc_positions.data();
-  auto esc_pos_end     = thrust::copy_if(rmm::exec_policy(stream),
-                                     thrust::make_counting_iterator<size_t>(chars_start),
-                                     thrust::make_counting_iterator<size_t>(chars_end),
-                                     d_esc_positions,
-                                     esc_detector);
 
   // build offsets column
   auto offsets_column = make_numeric_column(
