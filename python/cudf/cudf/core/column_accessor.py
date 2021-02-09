@@ -341,19 +341,35 @@ class ColumnAccessor(MutableMapping):
             key = (key,)
         return key + (pad_value,) * (self.nlevels - len(key))
 
-    def replace_level_values(self, mapping: dict, level: int):
+    def replace_level_values(self, mapping: dict, level: int or None):
         """
         Returns a new ColumnAccessor with values in the keys replaced according to the given mapping and level.
         """
         col_names, columns = list(self.keys()), list(self.values())
-        new_names = col_names
-
+        
+        
         if self.multiindex == True:
-            pass
+            names_list = [list(col) for col in col_names]
+            #n = [len(name) for name in names_list]
+            #if level > n :
+               # raise IndexError(f"Too many levels: Index has only {n} levels, not {n+1}")
+            #else:
+
+            ca_lst=[]
+            for name in names_list:
+                new_names = mapping.get(name[level], name[level])
+                ca = ColumnAccessor(dict(zip(new_names,columns)))
+                ca_lst.append(ca)
+                #self = ca_lst
+                breakpoint()
         else:
-            new_names[level] = mapping
-            ca = ColumnAccessor(dict(zip(new_names,columns)))
-            self = ca
+            if level not in [0, None]:
+                raise IndexError(f"Too many levels: Index has only 1 level, not {level+1}")
+            else: 
+                names_list = col_names
+                new_names = [mapping.get(name, name) for name in new_names]
+                ca = ColumnAccessor(dict(zip(new_names,columns)))
+                self = ca
         
         return self
         

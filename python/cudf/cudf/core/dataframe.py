@@ -3461,7 +3461,7 @@ class DataFrame(Frame, Serializable):
         columns = (
             mapper if columns is None and axis in (1, "columns") else columns
         )
- 
+
         if index:
             if (
                 any(type(item) == str for item in index.values())
@@ -3472,26 +3472,30 @@ class DataFrame(Frame, Serializable):
                     "mixed type is not yet supported."
                 )
 
-            if level is not None and isinstance(self.index, cudf.core.multiindex.MultiIndex):
-                out_index=self.index.copy()
+            if level is not None and isinstance(
+                self.index, cudf.core.multiindex.MultiIndex
+            ):
+                out_index = self.index.copy()
                 out_index.get_level_values(level).to_frame().replace(
                     to_replace=list(index.keys()),
                     value=list(index.values()),
-                    inplace=True
+                    inplace=True,
                 )
                 out = DataFrame(index=out_index)
             else:
                 out = DataFrame(
                     index=self.index.replace(
-                        to_replace =list(index.keys()),
+                        to_replace=list(index.keys()),
                         replacement=list(index.values()),
                     )
-                )           
-        else: 
+                )
+        else:
             out = DataFrame(index=self.index)
 
         if columns:
-            out._data = self._data.replace_level_values(mapping=columns, level=level) 
+            out._data = self._data.replace_level_values(
+                mapping=columns, level=level
+            )
         else:
             out._data = self._data.copy(deep=copy)
 

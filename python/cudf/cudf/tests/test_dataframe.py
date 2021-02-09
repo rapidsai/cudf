@@ -8318,46 +8318,54 @@ def test_dataframe_roundtrip_arrow_struct_dtype(gdf):
 
 
 @pytest.mark.parametrize(
-    "data",
-    [{"A": [1, 2, 3], "B": [4, 5, 6], "C": [7,8,9]},]
+    "data", [{"a": [1, 2, 3], "b": [4, 5, 6], "c": [7, 8, 9]},]
 )
 @pytest.mark.parametrize(
-    "index",
-    [{0:1,1:2,2:3}],
-) 
+    "index", [{0: 1, 1: 2, 2: 3}],
+)
 @pytest.mark.parametrize(
-    "level",["x",0],   
-) 
+    "level", ["x", 0],
+)
 def test_dataframe_MI_for_level(data, index, level):
-    pdf = pd.DataFrame(data,
-                      index=pd.MultiIndex.from_tuples([(0,1,2),(1,2,3),(2,3,4)]))
-    pdf.index.names=["x","y","z"]
+    pdf = pd.DataFrame(
+        data,
+        index=pd.MultiIndex.from_tuples([(0, 1, 2), (1, 2, 3), (2, 3, 4)]),
+    )
+    pdf.index.names = ["x", "y", "z"]
     gdf = gd.from_pandas(pdf)
 
-    expect = pdf.rename(index=index,level=level)
-    got = gdf.rename(index=index,level=level)
+    expect = pdf.rename(index=index, level=level)
+    got = gdf.rename(index=index, level=level)
 
-    assert_eq(expect,got)
+    assert_eq(expect, got)
 
 
 @pytest.mark.parametrize(
-    "data",
-    [{"A": [1, 2, 3], "B": [4, 5, 6], "C": [7,8,9]},]
+    "data", [{"a": [1, 2, 3], "b": [4, 5, 6], "c": [7, 8, 9]},]
 )
 @pytest.mark.parametrize(
-    "columns",
-    [{'a':'f'}],
-) 
+    "columns", [{"a": "f", "b":"g"}],
+)
 @pytest.mark.parametrize(
-    "level",[0],   
-) 
-def test_dataframe_MC_for_level(data, columns, level):
+    "level", [0,1,2],
+)
+def test_dataframe_with_MC_for_level(data, columns, level):
     gdf = gd.DataFrame(data)
-    gdf.columns = pd.MultiIndex.from_tuples([('a',1),('a',2),('b',1)])
+    gdf.columns = pd.MultiIndex.from_tuples([("a", 1), ("a", 2), ("b", 1)])
 
     pdf = gdf.to_pandas()
-    
+
     expect = pdf.rename(columns=columns, level=level)
     got = gdf.rename(columns=columns, level=level)
 
-    assert_eq(expect,got)
+    assert_eq(expect, got)
+
+
+def test_dataframe_with_RI_for_level():
+    gdf = gd.DataFrame({"a": [1, 2, 3], "b": [4, 5, 6], "c": [7, 8, 9]})
+    pdf = gdf.to_pandas()
+
+    expect = pdf.rename(columns={"a": "f"}, level=0)
+    got = gdf.rename(columns={"a": "f"}, level=0)
+
+    assert_eq(expect, got)
