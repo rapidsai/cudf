@@ -347,28 +347,22 @@ class ColumnAccessor(MutableMapping):
         """
         col_names, columns = list(self.keys()), list(self.values())
         
-        
         if self.multiindex == True:
-            names_list = [list(col) for col in col_names]
-            #n = [len(name) for name in names_list]
-            #if level > n :
-               # raise IndexError(f"Too many levels: Index has only {n} levels, not {n+1}")
-            #else:
-
-            ca_lst=[]
-            for name in names_list:
-                new_names = mapping.get(name[level], name[level])
-                ca = ColumnAccessor(dict(zip(new_names,columns)))
-                ca_lst.append(ca)
-                #self = ca_lst
-                breakpoint()
+            cols_list = [list(col) for col in col_names]
+            new_names=[]
+            for col_name in cols_list:
+                col_name[level]=mapping.get(col_name[level], col_name[level])
+                new_names.append(tuple(col_name))
+            ca = ColumnAccessor(dict(zip(new_names, columns)), level_names=self.level_names, multiindex=self.multiindex)
+            self = ca
+        
         else:
             if level not in [0, None]:
                 raise IndexError(f"Too many levels: Index has only 1 level, not {level+1}")
             else: 
-                names_list = col_names
-                new_names = [mapping.get(name, name) for name in new_names]
-                ca = ColumnAccessor(dict(zip(new_names,columns)))
+                cols_list = col_names
+                new_names = [mapping.get(col_name, col_name) for col_name in cols_list]
+                ca = ColumnAccessor(dict(zip(new_names, columns)), level_names=self.level_names, multiindex=self.multiindex)
                 self = ca
         
         return self

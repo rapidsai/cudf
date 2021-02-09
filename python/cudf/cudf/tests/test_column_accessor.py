@@ -283,5 +283,5 @@ def test_replace_level_values_MC():
         multiindex=True,
     )
 
-    got = ca.replace_level_values(mapping={"a": "f"}, level=0)
+    got = ca.replace_level_values(mapping={"a": "f"}, level=2)
     check_ca_equal(expect, got)

@@ -8347,7 +8347,7 @@ def test_dataframe_MI_for_level(data, index, level):
     "columns", [{"a": "f", "b":"g"}],
 )
 @pytest.mark.parametrize(
-    "level", [0,1,2],
+    "level", [0,1],
 )
 def test_dataframe_with_MC_for_level(data, columns, level):
     gdf = gd.DataFrame(data)
