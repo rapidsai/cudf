@@ -377,6 +377,25 @@ table_with_metadata read_parquet(
  * @file
  */
 
+struct column_in_metadata {
+  std::string name = "";
+  thrust::optional<bool> nullable;              // Input only. Can be output also but will be
+                                                // redundant with actual info in column_view
+  bool list_column_is_map  = false;             // Group only.
+  bool use_int96_timestamp = false;             // Input, Primitive only.
+  bool output_as_binary    = false;             // Primitive only.
+  thrust::optional<uint8_t> decimal_precision;  // Primitive only.
+  std::vector<column_in_metadata> children_metadata;
+};
+
+struct table_input_metadata {
+  // TODO: Should we have a constructor that accepts a moved user_data?
+  table_input_metadata(table_view const& table);
+
+  std::vector<column_in_metadata> column_metadata;
+  std::map<std::string, std::string> user_data;  //!< Format-dependent metadata as key-values pairs
+};
+
 /**
  * @brief Class to build `parquet_writer_options`.
  */
@@ -396,6 +415,9 @@ class parquet_writer_options {
   table_view _table;
   // Optional associated metadata
   const table_metadata* _metadata = nullptr;
+
+  // TODO: Docs
+  table_input_metadata const* _table_meta;
   // Parquet writes can write INT96 or TIMESTAMP_MICROS. Defaults to TIMESTAMP_MICROS.
   bool _write_timestamps_as_int96 = false;
   // Column chunks file path to be set in the raw output metadata
@@ -466,6 +488,8 @@ class parquet_writer_options {
    * @brief Returns associated metadata.
    */
   table_metadata const* get_metadata() const { return _metadata; }
+
+  table_input_metadata const* get_table_metadata() const { return _table_meta; }
 
   /**
    * @brief Returns `true` if timestamps will be written as INT96
@@ -558,6 +582,12 @@ class parquet_writer_options_builder {
   parquet_writer_options_builder& metadata(table_metadata const* metadata)
   {
     options._metadata = metadata;
+    return *this;
+  }
+
+  parquet_writer_options_builder& input_schema(table_input_metadata const* metadata)
+  {
+    options._table_meta = metadata;
     return *this;
   }
 

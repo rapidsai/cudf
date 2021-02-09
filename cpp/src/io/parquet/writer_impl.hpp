@@ -239,6 +239,9 @@ class writer::impl {
   bool int96_timestamps              = false;
   // Overall file metadata.  Filled in during the process and written during write_chunked_end()
   cudf::io::parquet::FileMetaData md;
+
+  // TODO: docs
+  table_input_metadata const* table_meta;
   // optional user metadata
   table_metadata_with_nullability user_metadata_with_nullability;
   // only used in the write_chunked() case. copied from the (optionally) user supplied

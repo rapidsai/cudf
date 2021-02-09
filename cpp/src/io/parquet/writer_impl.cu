@@ -566,7 +566,7 @@ struct schema_tree_node : public SchemaElement {
 };
 
 std::vector<schema_tree_node> construct_schema_tree(
-  std::vector<linked_column_view> const &linked_columns, table_metadata const &metadata)
+  std::vector<linked_column_view> const &linked_columns, table_input_metadata const &metadata)
 {
   std::vector<schema_tree_node> schema;
   schema_tree_node root{};
@@ -578,14 +578,27 @@ std::vector<schema_tree_node> construct_schema_tree(
   schema.push_back(std::move(root));
 
   // TODO: handle single_write_mode
-  std::function<void(linked_column_view const &, column_name_info const &, size_t)> add_schema =
-    [&](linked_column_view const &col, column_name_info const &col_meta, size_t parent_idx) {
+  std::function<void(linked_column_view const &, column_in_metadata const &, size_t)> add_schema =
+    [&](linked_column_view const &col, column_in_metadata const &col_meta, size_t parent_idx) {
+      bool col_nullable = [&]() {
+        if (col_meta.nullable.has_value()) {
+          if (col_meta.nullable.value() == false) {
+            CUDF_EXPECTS(
+              col.nullable() == false,
+              "Mismatch in metadata prescribed nullability and input column nullability. "
+              "Metadata for nullable input column cannot prescribe nullability = false");
+          }
+          return col_meta.nullable.value();
+        } else {
+          return col.nullable();
+        }
+      }();
+
       if (col.type().id() == type_id::STRUCT) {
         // if struct, add current and recursively call for all children
         schema_tree_node struct_schema{};
-        // Use input schema to influence this
         struct_schema.repetition_type =
-          col.nullable() ? FieldRepetitionType::OPTIONAL : FieldRepetitionType::REQUIRED;
+          col_nullable ? FieldRepetitionType::OPTIONAL : FieldRepetitionType::REQUIRED;
 
         // TODO: Depends on input schema as well as whether parent is list
         struct_schema.name = (schema[parent_idx].name == "list") ? "element" : col_meta.name;
@@ -597,8 +610,10 @@ std::vector<schema_tree_node> construct_schema_tree(
         // for (auto child_it = col.children.begin(); child_it < col.children.end(); child_it++) {
         //   add_schema(*child_it, struct_node_index);
         // }
+        CUDF_EXPECTS(col.num_children() == static_cast<int>(col_meta.children_metadata.size()),
+                     "Mismatch in number of child columns between input table and metadata");
         for (size_t i = 0; i < col.children.size(); ++i) {
-          add_schema(col.children[i], col_meta.children[i], struct_node_index);
+          add_schema(col.children[i], col_meta.children_metadata[i], struct_node_index);
         }
       } else if (col.type().id() == type_id::LIST) {
         // if list, add two elements for current and recursively call for child.
@@ -610,9 +625,8 @@ std::vector<schema_tree_node> construct_schema_tree(
 
         schema_tree_node list_schema_1{};
         list_schema_1.converted_type = ConvertedType::LIST;
-        // TODO: Use input schema to influence this
         list_schema_1.repetition_type =
-          col.nullable() ? FieldRepetitionType::OPTIONAL : FieldRepetitionType::REQUIRED;
+          col_nullable ? FieldRepetitionType::OPTIONAL : FieldRepetitionType::REQUIRED;
         // Depends on input schema as well as whether parent is list
         list_schema_1.name = (schema[parent_idx].name == "list") ? "element" : col_meta.name;
         list_schema_1.num_children = 1;
@@ -627,7 +641,7 @@ std::vector<schema_tree_node> construct_schema_tree(
         schema.push_back(std::move(list_schema_2));
 
         add_schema(col.children[lists_column_view::child_column_index],
-                   col_meta.children[0],
+                   col_meta.children_metadata[lists_column_view::child_column_index],
                    schema.size() - 1);
       } else {
         // if leaf, add current
@@ -777,7 +791,7 @@ std::vector<schema_tree_node> construct_schema_tree(
         }
 
         // TODO: Use input schema to influence this
-        col_schema.repetition_type = col.nullable() ? OPTIONAL : REQUIRED;
+        col_schema.repetition_type = col_nullable ? OPTIONAL : REQUIRED;
         col_schema.name        = (schema[parent_idx].name == "list") ? "element" : col_meta.name;
         col_schema.parent_idx  = parent_idx;
         col_schema.leaf_column = &col;
@@ -788,7 +802,7 @@ std::vector<schema_tree_node> construct_schema_tree(
   // Add all linked_columns to schema using parent_idx = 0 (root)
   // for (auto const &col : linked_columns) { add_schema(col, 0); }
   for (size_t i = 0; i < linked_columns.size(); ++i) {
-    add_schema(linked_columns[i], metadata.schema_info[i], 0);
+    add_schema(linked_columns[i], metadata.column_metadata[i], 0);
   }
 
   return schema;
@@ -1158,6 +1172,7 @@ writer::impl::impl(std::unique_ptr<data_sink> sink,
     out_sink_(std::move(sink)),
     decimal_precision(options.get_decimal_precision()),
     single_write_mode(mode == SingleWriteMode::YES),
+    table_meta(options.get_table_metadata()),
     user_metadata(options.get_metadata())
 {
   init_state();
@@ -1203,8 +1218,16 @@ void writer::impl::write(table_view const &table)
   // size_type num_columns = table.num_columns();
   size_type num_rows = table.num_rows();
 
+  auto tbl_meta = (table_meta == nullptr) ? table_input_metadata(table) : *table_meta;
+  // Fill unnamed columns' names in tbl_meta
+  for (size_t i = 0; i < tbl_meta.column_metadata.size(); ++i) {
+    if (tbl_meta.column_metadata[i].name.empty()) {
+      tbl_meta.column_metadata[i].name = "_col" + std::to_string(i);
+    }
+  }
+
   auto vec         = input_table_to_linked_columns(table);
-  auto schema_tree = construct_schema_tree(vec, *user_metadata);
+  auto schema_tree = construct_schema_tree(vec, tbl_meta);
   // Construct parquet_column_views from the schema tree leaf nodes.
   std::vector<new_parquet_column_view> parquet_columns;
 
