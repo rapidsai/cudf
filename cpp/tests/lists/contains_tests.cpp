@@ -582,13 +582,13 @@ struct TypedContainsNaNsTest : public ContainsTest {
 TYPED_TEST_CASE(TypedContainsNaNsTest, FloatingPointTypes);
 
 template <typename T>
-T get_nan(const char* const nan_contents)
+T get_nan(const char* nan_contents)
 {
   return std::nan(nan_contents);
 }
 
 template <>
-float get_nan<float>(const char* const nan_contents)
+float get_nan<float>(const char* nan_contents)
 {
   return std::nanf(nan_contents);
 }
