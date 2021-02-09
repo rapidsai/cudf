@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,6 +20,8 @@
 #include <unistd.h>
 
 #include <cudf/utilities/error.hpp>
+#include <sys/stat.h>
+#include <sys/types.h>
 
 #include "jni_utils.hpp"
 
@@ -247,12 +249,13 @@ public:
    * @return The file offset from which the buffer was appended.
    */
   std::size_t append(cufile_buffer const &buffer) {
-    auto const status = lseek(file_descriptor_, 0, SEEK_END);
+    struct stat stat_buffer;
+    auto const status = fstat(file_descriptor_, &stat_buffer);
     if (status < 0) {
-      CUDF_FAIL("Failed to seek end of file: " + cuFileGetErrorString(errno));
+      CUDF_FAIL("Failed to get file status for appending: " + cuFileGetErrorString(errno));
     }
 
-    auto const file_offset = static_cast<std::size_t>(status);
+    auto const file_offset = static_cast<std::size_t>(stat_buffer.st_size);
     write(buffer, file_offset);
     return file_offset;
   }

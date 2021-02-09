@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2020, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,6 +20,7 @@
 
 #include <cudf/copying.hpp>
 #include <cudf/detail/aggregation/aggregation.hpp>
+#include <cudf/detail/iterator.cuh>
 #include <cudf/dictionary/encode.hpp>
 #include <cudf/fixed_point/fixed_point.hpp>
 #include <cudf/reduction.hpp>
@@ -1209,7 +1210,7 @@ TYPED_TEST(FixedPointTestBothReps, FixedPointReductionMinLarge)
 
   for (auto const i : {0, -1, -2, -3}) {
     auto const scale = scale_type{i};
-    auto f = cudf::test::make_counting_transform_iterator(0, [](auto e) { return e % 43; });
+    auto f = cudf::detail::make_counting_transform_iterator(0, [](auto e) { return e % 43; });
     auto const column   = fp_wrapper{f, f + 5000, scale};
     auto const out_type = static_cast<cudf::column_view>(column).type();
     auto const expected = decimalXX{0, scale};
@@ -1250,7 +1251,7 @@ TYPED_TEST(FixedPointTestBothReps, FixedPointReductionMaxLarge)
 
   for (auto const i : {0, -1, -2, -3}) {
     auto const scale = scale_type{i};
-    auto f = cudf::test::make_counting_transform_iterator(0, [](auto e) { return e % 43; });
+    auto f = cudf::detail::make_counting_transform_iterator(0, [](auto e) { return e % 43; });
     auto const column   = fp_wrapper{f, f + 5000, scale};
     auto const out_type = static_cast<cudf::column_view>(column).type();
     auto const expected = decimalXX{scaled_integer<RepType>{42, scale}};

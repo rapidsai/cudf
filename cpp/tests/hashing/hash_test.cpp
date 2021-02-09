@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2020, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -13,7 +13,10 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
+#include <cudf/detail/iterator.cuh>
 #include <cudf/hashing.hpp>
+
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_utilities.hpp>
 #include <cudf_test/column_wrapper.hpp>
@@ -389,7 +392,7 @@ TEST_F(MD5HashTest, MultiValueNulls)
 
 TEST_F(MD5HashTest, StringListsNulls)
 {
-  auto validity = make_counting_transform_iterator(0, [](auto i) { return i != 0; });
+  auto validity = cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i != 0; });
 
   strings_column_wrapper const strings_col(
     {"",
@@ -464,7 +467,7 @@ TEST_F(MD5HashTest, TestBoolListsWithNulls)
   fixed_width_column_wrapper<bool> const col3({0, 255, 255, 64, 49, 42, 5, 6, 102},
                                               {1, 0, 0, 1, 1, 0, 0, 0, 1});
 
-  auto validity = make_counting_transform_iterator(0, [](auto i) { return i != 1; });
+  auto validity = cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i != 1; });
   lists_column_wrapper<bool> const list_col(
     {{0, 0, 0}, {1}, {}, {{1, 1, 1}, validity}, {1, 1}, {1, 1}, {1}, {1}, {1}}, validity);
 
@@ -496,7 +499,7 @@ TYPED_TEST(MD5HashListTestTyped, TestListsWithNulls)
   fixed_width_column_wrapper<T> const col3({0, 255, 255, 64, 49, 42, 5, 6, 102},
                                            {1, 0, 0, 1, 1, 0, 0, 0, 1});
 
-  auto validity = make_counting_transform_iterator(0, [](auto i) { return i != 1; });
+  auto validity = cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i != 1; });
   lists_column_wrapper<T> const list_col(
     {{0, 0, 0}, {127}, {}, {{32, 127, 64}, validity}, {27, 49}, {18, 68}, {100}, {101}, {102}},
     validity);
