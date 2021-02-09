@@ -3,7 +3,6 @@
 import warnings
 
 import numpy as np
-import pandas as pd
 from pandas.core.tools.datetimes import _unit_map
 
 import cudf
@@ -477,10 +476,7 @@ class DateOffset:
                 " are not yet supported."
             )
 
-        if any(
-            val != int(val)
-            for val in kwds.values()
-        ):
+        if any(val != int(val) for val in kwds.values()):
             raise ValueError("Non-integer periods not supported")
 
         self.kwds = kwds
