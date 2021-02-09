@@ -18,6 +18,7 @@
 #include <cudf/column/column_view.hpp>
 #include <cudf/copying.hpp>
 #include <cudf/detail/copy.hpp>
+#include <cudf/detail/iterator.cuh>
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/utilities/cuda.cuh>
@@ -943,10 +944,10 @@ std::vector<packed_table> contiguous_split(cudf::table_view const& input,
   // compute total size of each partition
   {
     // key is split index
-    auto keys   = thrust::make_transform_iterator(thrust::make_counting_iterator(0),
-                                                split_key_functor{static_cast<int>(num_src_bufs)});
-    auto values = thrust::make_transform_iterator(thrust::make_counting_iterator(0),
-                                                  buf_size_functor{d_dst_buf_info});
+    auto keys = cudf::detail::make_counting_transform_iterator(
+      0, split_key_functor{static_cast<int>(num_src_bufs)});
+    auto values =
+      cudf::detail::make_counting_transform_iterator(0, buf_size_functor{d_dst_buf_info});
 
     thrust::reduce_by_key(rmm::exec_policy(stream),
                           keys,
@@ -958,10 +959,11 @@ std::vector<packed_table> contiguous_split(cudf::table_view const& input,
 
   // compute start offset for each output buffer
   {
-    auto keys   = thrust::make_transform_iterator(thrust::make_counting_iterator(0),
-                                                split_key_functor{static_cast<int>(num_src_bufs)});
-    auto values = thrust::make_transform_iterator(thrust::make_counting_iterator(0),
-                                                  buf_size_functor{d_dst_buf_info});
+    auto keys = cudf::detail::make_counting_transform_iterator(
+      0, split_key_functor{static_cast<int>(num_src_bufs)});
+    auto values =
+      cudf::detail::make_counting_transform_iterator(0, buf_size_functor{d_dst_buf_info});
+
     thrust::exclusive_scan_by_key(rmm::exec_policy(stream),
                                   keys,
                                   keys + num_bufs,

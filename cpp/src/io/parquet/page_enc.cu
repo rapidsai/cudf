@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2020, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,6 +16,7 @@
 #include <io/parquet/parquet_gpu.hpp>
 #include <io/utilities/block_utils.cuh>
 
+#include <cudf/detail/iterator.cuh>
 #include <cudf/detail/utilities/cuda.cuh>
 
 #include <rmm/cuda_stream_view.hpp>
@@ -1839,10 +1840,10 @@ dremel_data get_dremel_data(column_view h_col,
     curr_rep_values_size = ends.second - output_zip_it;
 
     // Scan to get distance by which each offset value is shifted due to the insertion of empties
-    auto scan_it =
-      thrust::make_transform_iterator(thrust::make_counting_iterator(column_offsets[level]),
-                                      [off = lcv.offsets().data<size_type>()] __device__(
-                                        auto i) -> int { return off[i] == off[i + 1]; });
+    auto scan_it = cudf::detail::make_counting_transform_iterator(
+      column_offsets[level], [off = lcv.offsets().data<size_type>()] __device__(auto i) -> int {
+        return off[i] == off[i + 1];
+      });
     rmm::device_uvector<size_type> scan_out(offset_size_at_level, stream);
     thrust::exclusive_scan(
       rmm::exec_policy(stream), scan_it, scan_it + offset_size_at_level, scan_out.begin());
@@ -1927,10 +1928,10 @@ dremel_data get_dremel_data(column_view h_col,
 
     // Scan to get distance by which each offset value is shifted due to the insertion of dremel
     // level value fof an empty list
-    auto scan_it =
-      thrust::make_transform_iterator(thrust::make_counting_iterator(column_offsets[level]),
-                                      [off = lcv.offsets().data<size_type>()] __device__(
-                                        auto i) -> int { return off[i] == off[i + 1]; });
+    auto scan_it = cudf::detail::make_counting_transform_iterator(
+      column_offsets[level], [off = lcv.offsets().data<size_type>()] __device__(auto i) -> int {
+        return off[i] == off[i + 1];
+      });
     rmm::device_uvector<size_type> scan_out(offset_size_at_level, stream);
     thrust::exclusive_scan(
       rmm::exec_policy(stream), scan_it, scan_it + offset_size_at_level, scan_out.begin());
