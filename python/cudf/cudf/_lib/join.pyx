@@ -41,9 +41,9 @@ cpdef join(Table lhs, Table rhs, left_on, right_on, how=None):
             c_right_on,
         ))
     elif how == "outer":
-        c_result = move(cpp_join.outer_join(
+        c_result = move(cpp_join.full_join(
             c_lhs,
-            c_rhs
+            c_rhs,
             c_left_on,
             c_right_on
         ))
