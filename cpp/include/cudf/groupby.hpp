@@ -73,14 +73,13 @@ struct aggregation_result {
 /**
  * @brief The result of a scan aggregation
  *
- * A `scan_result` contains the result of a groupby scan operation. `result`
- * holds the result column that contains scanned result with each value in
- * their sorted groups. Values of the same group locate in contiguous memory,
- * whose order is stable. Order of groups is unguaranteed.
- *
+ * A `scan_aggregation_result` contains the results of multiple scan aggregations.
+ * `results` holds a vector of scanned results. In each result column, values of
+ * the same group locate in contiguous memory, whose order is stable. The order
+ * of groups is unguaranteed.
  */
 struct scan_aggregation_result {
-  std::unique_ptr<column> result{};
+  std::vector<std::unique_ptr<column>> results{};
 };
 
 /**
