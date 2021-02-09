@@ -183,11 +183,8 @@ cudf::size_type linearizer::visit(expression const& expr)
 
 cudf::data_type linearizer::root_data_type() const
 {
-  if (data_references().empty()) {
-    return cudf::data_type(cudf::type_id::EMPTY);
-  } else {
-    return data_references().back().data_type;
-  }
+  return data_references().empty() ? cudf::data_type(cudf::type_id::EMPTY)
+                                   : data_references().back().data_type;
 }
 
 std::vector<cudf::size_type> linearizer::visit_operands(
