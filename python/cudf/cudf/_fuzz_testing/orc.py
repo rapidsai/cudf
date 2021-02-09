@@ -67,18 +67,6 @@ class OrcReader(IOFuzz):
             dtypes_meta, num_rows, num_cols = _generate_rand_meta(
                 self, dtypes_list
             )
-            if num_cols == 0:
-                """
-                If a dataframe has no columns, then pyorc writer will throw
-                the following error:
-                ValueError: Struct type must contain at least one sub type.
-                Hence this is a work-around to skip generating an empty
-                dataframe.
-                """
-                while num_cols == 0:
-                    dtypes_meta, num_rows, num_cols = _generate_rand_meta(
-                        self, dtypes_list
-                    )
 
             self._current_params["dtypes_meta"] = dtypes_meta
             seed = random.randint(0, 2 ** 32 - 1)

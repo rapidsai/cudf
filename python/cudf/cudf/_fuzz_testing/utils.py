@@ -282,13 +282,11 @@ def pandas_to_orc(df, file_name=None, file_io_obj=None, stripe_size=67108864):
 
     if file_name is not None:
         with open(file_name, "wb") as data:
-            with pyorc.Writer(
-                data, str(schema), stripe_size=stripe_size
-            ) as writer:
+            with pyorc.Writer(data, schema, stripe_size=stripe_size) as writer:
                 writer.writerows(tuple_list)
     elif file_io_obj is not None:
         with pyorc.Writer(
-            file_io_obj, str(schema), stripe_size=stripe_size
+            file_io_obj, schema, stripe_size=stripe_size
         ) as writer:
             writer.writerows(tuple_list)
 
