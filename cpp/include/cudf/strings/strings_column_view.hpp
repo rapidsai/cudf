@@ -78,8 +78,8 @@ class strings_column_view : private column_view {
   /**
    * @brief Returns the number of bytes in the chars child column.
    *
-   * This accounts for empty columns but DOES NOT handle a sliced column
-   * view properly (i.e.: non-zero offset or reduced row count).
+   * This accounts for empty columns but does not reflect a sliced parent column
+   * view  (i.e.: non-zero offset or reduced row count).
    */
   size_type chars_size() const noexcept;
 };
