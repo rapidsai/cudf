@@ -239,10 +239,10 @@ class Merge(object):
         # first construct the index:
         if self.left_index and not self.right_index:
             # TODO: only gather on index columns:
-            out_index = self.rhs.index._gather(right_rows)
+            out_index = self.rhs.index._gather(right_rows, nullify=True)
         elif self.right_index and not self.left_index:
             # TODO: only gather on index columns:
-            out_index = self.lhs.index._gather(left_rows)
+            out_index = self.lhs.index._gather(left_rows, nullify=True)
         else:
             out_index = None
 
@@ -251,9 +251,13 @@ class Merge(object):
         left_names, right_names = self.output_column_names()
 
         for lcol in left_names:
-            data[left_names[lcol]] = self.lhs[lcol].iloc[left_rows]
+            data[left_names[lcol]] = self.lhs[lcol]._gather(
+                left_rows, nullify=True
+            )
         for rcol in right_names:
-            data[right_names[rcol]] = self.rhs[rcol].iloc[right_rows]
+            data[right_names[rcol]] = self.rhs[rcol]._gather(
+                right_rows, nullify=True
+            )
         return cudf.DataFrame._from_data(data, index=out_index)
 
     def output_column_names(self):

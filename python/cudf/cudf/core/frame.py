@@ -27,7 +27,6 @@ from cudf.utils.dtypes import (
     min_scalar_type,
 )
 
-
 T = TypeVar("T", bound="Frame")
 
 if TYPE_CHECKING:
@@ -587,12 +586,15 @@ class Frame(libcudf.table.Table):
             data, columns=data.to_pandas_index(), index=self.index
         )
 
-    def _gather(self, gather_map, keep_index=True):
+    def _gather(self, gather_map, keep_index=True, nullify=False):
         if not pd.api.types.is_integer_dtype(gather_map.dtype):
             gather_map = gather_map.astype("int32")
         result = self.__class__._from_table(
             libcudf.copying.gather(
-                self, as_column(gather_map), keep_index=keep_index
+                self,
+                as_column(gather_map),
+                keep_index=keep_index,
+                nullify=nullify,
             )
         )
         result._copy_type_metadata(self)
