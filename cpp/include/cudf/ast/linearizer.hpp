@@ -25,7 +25,6 @@
 #include <cudf/utilities/error.hpp>
 
 namespace cudf {
-
 namespace ast {
 
 /**

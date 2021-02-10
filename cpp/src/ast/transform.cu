@@ -40,9 +40,7 @@
 #include <type_traits>
 
 namespace cudf {
-
 namespace ast {
-
 namespace detail {
 
 /**
