@@ -25,9 +25,6 @@ cdef extern from "cudf/groupby.hpp" \
     cdef cppclass aggregation_result:
         vector[unique_ptr[column]] results
 
-    cdef cppclass scan_aggregation_result:
-        unique_ptr[column] result
-
     cdef cppclass groups \
             "cudf::groupby::groupby::groups" nogil:
         unique_ptr[table] keys
@@ -72,7 +69,7 @@ cdef extern from "cudf/groupby.hpp" \
         groups get_groups() except +
         groups get_groups(table_view values) except +
 
-        pair[unique_ptr[table], scan_aggregation_result] replace_nulls(
+        pair[unique_ptr[table], unique_ptr[column]] replace_nulls(
             const column_view& value,
             const replace_policy& replace_policy
         ) except +

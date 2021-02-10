@@ -45,7 +45,7 @@ void TestReplaceNullsGroupby(cudf::test::fixed_width_column_wrapper<K> key,
   auto p = gb_obj.replace_nulls(input, policy);
 
   CUDF_TEST_EXPECT_TABLES_EQUAL(*p.first, cudf::table_view({expected_key}));
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*p.second.results[0], expected_val);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*p.second, expected_val);
 }
 
 TYPED_TEST(GroupbyReplaceNullsTest, PrecedingFill)

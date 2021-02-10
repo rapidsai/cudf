@@ -22,6 +22,7 @@
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
 
+#include <memory>
 #include <rmm/cuda_stream_view.hpp>
 
 #include <utility>
@@ -67,18 +68,6 @@ struct aggregation_request {
  */
 struct aggregation_result {
   /// Columns of results from an `aggregation_request`
-  std::vector<std::unique_ptr<column>> results{};
-};
-
-/**
- * @brief The result of a scan aggregation
- *
- * A `scan_aggregation_result` contains the results of multiple scan aggregations.
- * `results` holds a vector of scanned results. In each result column, values of
- * the same group locate in contiguous memory, whose order is stable. The order
- * of groups is unguaranteed.
- */
-struct scan_aggregation_result {
   std::vector<std::unique_ptr<column>> results{};
 };
 
@@ -239,7 +228,7 @@ class groupby {
    *
    * @return Pair that contains a table with the sorted keys and a `scan_aggregation_result`
    */
-  std::pair<std::unique_ptr<table>, scan_aggregation_result> replace_nulls(
+  std::pair<std::unique_ptr<table>, std::unique_ptr<column>> replace_nulls(
     column_view const& value,
     cudf::replace_policy const& replace_policy,
     rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
