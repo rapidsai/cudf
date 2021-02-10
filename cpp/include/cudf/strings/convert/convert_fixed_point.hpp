@@ -37,9 +37,7 @@ namespace strings {
  * for that string and the current digits are converted into a fixed-point value.
  *
  * Overflow of the resulting value type is not checked.
- * Each string is converted using an int64 type and then cast to the
- * target type before storing it into the output column.
- * The decimal point is used only for determing the output scale value.
+ * The decimal point is used only for determining the output scale value.
  *
  * @throw cudf::logic_error if output_type is not a fixed-point type.
  *
@@ -83,7 +81,7 @@ std::unique_ptr<column> from_fixed_point(
  * @code{.pseudo}
  * Example:
  * s = ['123', '-456', '', '1.2.3', '+17E30', '12.34' '.789']
- * b = s.is_hex(s)
+ * b = s.is_fixed_point(s)
  * b is [true, false, false, false, false, true, true]
  * @endcode
  *
