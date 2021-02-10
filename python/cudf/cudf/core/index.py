@@ -1493,6 +1493,10 @@ class Index(Frame, Serializable):
         else:
             return as_index(table)
 
+    @classmethod
+    def _from_data(cls, data, index=None):
+        return cls._from_table(Frame(data=data))
+
     _accessors = set()  # type: Set[Any]
 
     @property

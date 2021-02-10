@@ -1,4 +1,6 @@
 # Copyright (c) 2019-2020, NVIDIA CORPORATION.
+from __future__ import annotations
+
 import itertools
 import numbers
 import pickle
@@ -16,6 +18,7 @@ import cudf
 from cudf import _lib as libcudf
 from cudf._typing import DataFrameOrSeries
 from cudf.core.column import column
+from cudf.core.column_accessor import ColumnAccessor
 from cudf.core.frame import Frame
 from cudf.core.index import Index, as_index
 
@@ -232,7 +235,6 @@ class MultiIndex(Index):
         ValueError: Length of names must match number of levels in MultiIndex.
 
         """
-
         return self.set_names(names, level=None, inplace=inplace)
 
     def set_names(self, names, level=None, inplace=False):
@@ -275,6 +277,10 @@ class MultiIndex(Index):
         names = existing_names
 
         return self._set_names(names=names, inplace=inplace)
+
+    @classmethod
+    def _from_data(cls, data: ColumnAccessor, index=None) -> MultiIndex:
+        return cls.from_frame(cudf.DataFrame._from_data(data))
 
     @classmethod
     def _from_table(cls, table, names=None):

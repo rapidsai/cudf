@@ -16,8 +16,8 @@ class _MISSING_TYPE:
 MISSING = _MISSING_TYPE()
 
 
-class JoinKey:
-    # A JoinKey represents one column of a Series
+class ColumnView:
+    # A ColumnView represents one column of a Series
     # or DataFrame - either an index column or a
     # data column
 
@@ -30,9 +30,10 @@ class JoinKey:
     def get_numeric_index(self):
         # get the position of the column (including any index columns)
         if self.index is MISSING:
-            return len(self.obj.index.names) + self.obj.columns.get_loc(
-                self.column
+            index_nlevels = (
+                self.obj.index.nlevels if self.obj._index is not None else 0
             )
+            return index_nlevels + tuple(self.obj._data).index(self.column)
         else:
             return self.obj.index.names.index(self.index)
 
@@ -158,6 +159,14 @@ class Merge(object):
         self.rsuffix = rsuffix
         self.suffixes = suffixes
 
+        self.out_class = cudf.DataFrame
+        if isinstance(self.lhs, cudf.MultiIndex) or isinstance(
+            self.rhs, cudf.MultiIndex
+        ):
+            self.out_class = cudf.MultiIndex
+        elif isinstance(self.lhs, cudf.Index):
+            self.out_class = self.lhs.__class__
+
         self.compute_join_keys()
 
     def compute_join_keys(self):
@@ -170,24 +179,24 @@ class Merge(object):
         ):
             if self.left_index:
                 left_keys = [
-                    JoinKey(obj=self.lhs, index=on)
+                    ColumnView(obj=self.lhs, index=on)
                     for on in self.lhs.index.names
                 ]
             else:
                 # TODO: require left_on or left_index to be specified
                 left_keys = [
-                    JoinKey(obj=self.lhs, column=on)
+                    ColumnView(obj=self.lhs, column=on)
                     for on in _coerce_to_tuple(self.left_on)
                 ]
             if self.right_index:
                 right_keys = [
-                    JoinKey(obj=self.rhs, index=on)
+                    ColumnView(obj=self.rhs, index=on)
                     for on in self.rhs.index.names
                 ]
             else:
                 # TODO: require right_on or right_index to be specified
                 right_keys = [
-                    JoinKey(obj=self.rhs, column=on)
+                    ColumnView(obj=self.rhs, column=on)
                     for on in _coerce_to_tuple(self.right_on)
                 ]
         else:
@@ -198,8 +207,12 @@ class Merge(object):
                 if self.on is not None
                 else set(self.lhs._data.keys()) & set(self.rhs._data.keys())
             )
-            left_keys = [JoinKey(obj=self.lhs, column=on) for on in on_names]
-            right_keys = [JoinKey(obj=self.rhs, column=on) for on in on_names]
+            left_keys = [
+                ColumnView(obj=self.lhs, column=on) for on in on_names
+            ]
+            right_keys = [
+                ColumnView(obj=self.rhs, column=on) for on in on_names
+            ]
 
         if len(left_keys) != len(right_keys):
             raise ValueError(
@@ -252,20 +265,20 @@ class Merge(object):
         left_names, right_names = self.output_column_names()
 
         for lcol in left_names:
-            data[left_names[lcol]] = self.lhs[lcol]._gather(
+            data[left_names[lcol]] = self.lhs._data[lcol].take(
                 left_rows, nullify=True
             )
         for rcol in right_names:
-            data[right_names[rcol]] = self.rhs[rcol]._gather(
+            data[right_names[rcol]] = self.rhs._data[rcol].take(
                 right_rows, nullify=True
             )
 
-        result = cudf.DataFrame._from_data(data, index=out_index)
+        result = self.out_class._from_data(data, index=out_index)
 
         # if outer join, key columns are combine:
         for lkey, rkey in zip(*self._keys):
             # get the key column as it appears in the result:
-            out_key = JoinKey(result, column=lkey.column, index=lkey.index)
+            out_key = ColumnView(result, column=lkey.column, index=lkey.index)
 
             # fill nulls in the key column with values from the RHS
             out_key.set_value(
