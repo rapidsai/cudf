@@ -842,3 +842,22 @@ TEST_F(JoinDictionaryTest, LeftAntiJoinWithNulls)
   auto expected = cudf::left_anti_join(expect_a, expect_b, {0, 1, 3}, {0, 1, 3}, {0, 1, 2, 3});
   CUDF_TEST_EXPECT_TABLES_EQUIVALENT(cudf::table_view(result_decoded), *expected);
 }
+
+TEST_F(JoinTest, LeftSemiSimple)
+{
+  column_wrapper<int32_t> a_0{1, 9, 0};
+  column_wrapper<int32_t> a_1{1, 2, 3};
+  auto table_a = cudf::table_view({a_0, a_1});
+
+  column_wrapper<int32_t> b_0{0, 1};
+  column_wrapper<int32_t> b_1{1, 2};
+  auto table_b = cudf::table_view({b_0, b_1});
+
+  auto result      = cudf::left_anti_join(table_a, table_b, {0}, {0}, {0, 1});
+  auto result_view = result->view();
+
+  column_wrapper<int32_t> expect_0{9};
+  column_wrapper<int32_t> expect_1{2};
+  auto expect = cudf::table_view({expect_0, expect_1});
+  CUDF_TEST_EXPECT_TABLES_EQUIVALENT(result_view, expect);
+}
