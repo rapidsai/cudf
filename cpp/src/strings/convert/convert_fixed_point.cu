@@ -41,9 +41,7 @@ namespace strings {
 namespace detail {
 namespace {
 /**
- * @brief Converts strings into an integers and records decimal point.
- *
- * Used by the dispatch method to convert to different fixed-point types.
+ * @brief Converts strings into an integers and records decimal places.
  */
 template <typename DecimalType>
 struct string_to_decimal_fn {
@@ -55,9 +53,11 @@ struct string_to_decimal_fn {
   {
     values[idx] = DecimalType{0};
     scales[idx] = numeric::scale_type{0};
+
     if (d_strings.is_null(idx)) return;
     auto const d_str = d_strings.element<string_view>(idx);
     if (d_str.empty()) return;
+
     auto const sign = [&] {
       auto const first = d_str.data();
       if (*first == '-') return -1;
@@ -78,30 +78,67 @@ struct string_to_decimal_fn {
       else
         break;
     }
+
     values[idx] = static_cast<DecimalType>(value * (sign == 0 ? 1 : sign));
   }
 };
 
+/**
+ * @brief This only checks the string format for valid decimal characters.
+ */
 template <typename DecimalType>
-struct rescale_decimals_fn {
+struct string_to_decimal_check_fn {
   column_device_view const d_strings;
-  int32_t const max_scale;
-  int32_t const* scales;
-  DecimalType* values;
 
-  __device__ void operator()(size_type idx)
+  __device__ bool operator()(size_type idx)
   {
-    if (d_strings.is_null(idx)) return;
-    numeric::scaled_integer<DecimalType> si{values[idx], numeric::scale_type{scales[idx]}};
-    numeric::fixed_point<DecimalType, numeric::Radix::BASE_10> fp{si};
-    values[idx] = fp.rescaled(numeric::scale_type{max_scale}).value();
+    if (d_strings.is_null(idx)) return false;
+    auto const d_str = d_strings.element<string_view>(idx);
+    if (d_str.empty()) return false;
+
+    auto iter = d_str.begin() + (d_str.data()[0] == '-' || d_str.data()[0] == '+');
+
+    DecimalType value  = 0;
+    bool decimal_found = false;
+    while (iter != d_str.end()) {
+      auto const chr = *iter++;
+      if (chr == '.' && !decimal_found) {
+        decimal_found = true;
+        continue;
+      }
+      if (chr < '0' || chr > '9') return false;
+      auto const digit     = static_cast<DecimalType>(chr - '0');
+      auto const max_check = (std::numeric_limits<DecimalType>::max() - digit) / DecimalType{10};
+      if (value > max_check) return false;
+      value = (value * DecimalType{10}) + digit;
+    }
+    return true;
   }
 };
 
 /**
- * @brief The dispatch functions for converting strings.
- *
- * The output_column is expected to be one of the integer types only.
+ * @brief Uses the max_scale to rescale all the integer values.
+ */
+template <typename DecimalType>
+struct rescale_decimals_fn {
+  column_device_view const d_strings;
+  int32_t const new_scale;
+  int32_t const* scales;  // original scales
+  DecimalType* values;    // values to rescale
+
+  __device__ void operator()(size_type idx)
+  {
+    if (d_strings.is_null(idx)) return;
+
+    auto const fp = numeric::fixed_point<DecimalType, numeric::Radix::BASE_10>{
+      numeric::scaled_integer<DecimalType>{values[idx], numeric::scale_type{scales[idx]}}};
+
+    values[idx] = fp.rescaled(numeric::scale_type{new_scale}).value();
+  }
+};
+
+/**
+ * @brief The dispatch function for converting strings column to fixed-point column.
  */
 struct dispatch_to_fixed_point_fn {
   template <typename T, std::enable_if_t<cudf::is_fixed_point<T>()>* = nullptr>
@@ -118,11 +155,11 @@ struct dispatch_to_fixed_point_fn {
       thrust::make_counting_iterator<size_type>(0),
       input.size(),
       string_to_decimal_fn<DecimalType>{*d_column, d_values.data(), d_scales.data()});
-    // find the maximum scale size -- min is used since all scale values will be <= 0
+    // find the largest scale size -- min is used since all scale values will be <= 0
     auto const min_elem =
       thrust::min_element(rmm::exec_policy(stream), d_scales.begin(), d_scales.end());
     auto const scale = d_scales.element(thrust::distance(d_scales.begin(), min_elem), stream);
-    // re-scale all the values to the max scale
+    // re-scale all the values to the new scale
     thrust::for_each_n(
       rmm::exec_policy(stream),
       thrust::make_counting_iterator<size_type>(0),
@@ -135,13 +172,13 @@ struct dispatch_to_fixed_point_fn {
                                     cudf::detail::copy_bitmask(input.parent(), stream, mr),
                                     input.null_count());
   }
-  // non-integral types throw an exception
+
   template <typename T, std::enable_if_t<not cudf::is_fixed_point<T>()>* = nullptr>
   std::unique_ptr<column> operator()(strings_column_view const&,
                                      rmm::cuda_stream_view,
                                      rmm::mr::device_memory_resource*) const
   {
-    CUDF_FAIL("Output for to_fixed_point must be an fixed-point type.");
+    CUDF_FAIL("Output for to_fixed_point must be a decimal type.");
   }
 };
 
@@ -279,7 +316,6 @@ struct dispatch_from_fixed_point_fn {
                                mr);
   }
 
-  // non-integral types throw an exception
   template <typename T, std::enable_if_t<not cudf::is_fixed_point<T>()>* = nullptr>
   std::unique_ptr<column> operator()(column_view const&,
                                      rmm::cuda_stream_view,
@@ -291,26 +327,83 @@ struct dispatch_from_fixed_point_fn {
 
 }  // namespace
 
-// This will convert all integer column types into a strings column.
-std::unique_ptr<column> from_fixed_point(column_view const& integers,
+std::unique_ptr<column> from_fixed_point(column_view const& input,
                                          rmm::cuda_stream_view stream,
                                          rmm::mr::device_memory_resource* mr)
 {
-  size_type strings_count = integers.size();
-  if (strings_count == 0) return detail::make_empty_strings_column(stream, mr);
-
-  return type_dispatcher(integers.type(), dispatch_from_fixed_point_fn{}, integers, stream, mr);
+  if (input.is_empty()) return detail::make_empty_strings_column(stream, mr);
+  return type_dispatcher(input.type(), dispatch_from_fixed_point_fn{}, input, stream, mr);
 }
 
 }  // namespace detail
 
 // external API
 
-std::unique_ptr<column> from_fixed_point(column_view const& integers,
+std::unique_ptr<column> from_fixed_point(column_view const& input,
                                          rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::from_fixed_point(integers, rmm::cuda_stream_default, mr);
+  return detail::from_fixed_point(input, rmm::cuda_stream_default, mr);
+}
+
+namespace detail {
+namespace {
+
+struct dispatch_is_fixed_point_fn {
+  template <typename T, std::enable_if_t<cudf::is_fixed_point<T>()>* = nullptr>
+  std::unique_ptr<column> operator()(strings_column_view const& input,
+                                     rmm::cuda_stream_view stream,
+                                     rmm::mr::device_memory_resource* mr) const
+  {
+    using DecimalType = device_storage_type_t<T>;
+    auto d_column     = column_device_view::create(input.parent(), stream);
+
+    // create output column
+    auto results   = make_numeric_column(data_type{type_id::BOOL8},
+                                       input.size(),
+                                       cudf::detail::copy_bitmask(input.parent(), stream, mr),
+                                       input.null_count(),
+                                       stream,
+                                       mr);
+    auto d_results = results->mutable_view().data<bool>();
+
+    // check strings for valid fixed-point chars
+    thrust::transform(rmm::exec_policy(stream),
+                      thrust::make_counting_iterator<size_type>(0),
+                      thrust::make_counting_iterator<size_type>(input.size()),
+                      d_results,
+                      string_to_decimal_check_fn<DecimalType>{*d_column});
+    results->set_null_count(input.null_count());
+    return results;
+  }
+
+  template <typename T, std::enable_if_t<not cudf::is_fixed_point<T>()>* = nullptr>
+  std::unique_ptr<column> operator()(strings_column_view const&,
+                                     rmm::cuda_stream_view,
+                                     rmm::mr::device_memory_resource*) const
+  {
+    CUDF_FAIL("is_fixed_point is expecting a decimal type");
+  }
+};
+
+}  // namespace
+
+std::unique_ptr<column> is_fixed_point(strings_column_view const& input,
+                                       data_type decimal_type,
+                                       rmm::cuda_stream_view stream,
+                                       rmm::mr::device_memory_resource* mr)
+{
+  if (input.is_empty()) return cudf::make_empty_column(data_type{type_id::BOOL8});
+  return type_dispatcher(decimal_type, dispatch_is_fixed_point_fn{}, input, stream, mr);
+}
+}  // namespace detail
+
+std::unique_ptr<column> is_fixed_point(strings_column_view const& input,
+                                       data_type decimal_type,
+                                       rmm::mr::device_memory_resource* mr)
+{
+  CUDF_FUNC_RANGE();
+  return detail::is_fixed_point(input, decimal_type, rmm::cuda_stream_default, mr);
 }
 
 }  // namespace strings

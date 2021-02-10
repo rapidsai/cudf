@@ -88,18 +88,20 @@ TYPED_TEST(StringsFixedPointConvertTest, FromFixedPoint)
 
 TEST_F(StringsConvertTest, ZeroSizeStringsColumnFixedPoint)
 {
-  cudf::column_view zero_size_column(
-    cudf::data_type{cudf::type_id::DECIMAL32}, 0, nullptr, nullptr, 0);
-  auto results = cudf::strings::from_fixed_point(zero_size_column);
+  auto zero_size_column = cudf::make_empty_column(cudf::data_type{cudf::type_id::DECIMAL32});
+
+  auto results = cudf::strings::from_fixed_point(zero_size_column->view());
   cudf::test::expect_strings_empty(results->view());
 }
 
 TEST_F(StringsConvertTest, ZeroSizeFixedPointColumn)
 {
-  cudf::column_view zero_size_column(
-    cudf::data_type{cudf::type_id::STRING}, 0, nullptr, nullptr, 0);
-  auto results =
-    cudf::strings::to_fixed_point(zero_size_column, cudf::data_type{cudf::type_id::DECIMAL32});
+  auto zero_size_column = cudf::make_empty_column(cudf::data_type{cudf::type_id::STRING});
+
+  auto results = cudf::strings::to_fixed_point(zero_size_column->view(),
+                                               cudf::data_type{cudf::type_id::DECIMAL32});
+  EXPECT_EQ(0, results->size());
+  results = cudf::strings::is_fixed_point(zero_size_column->view());
   EXPECT_EQ(0, results->size());
 }
 
@@ -110,5 +112,35 @@ TEST_F(StringsConvertTest, FromToFixedPointError)
   EXPECT_THROW(cudf::strings::from_fixed_point(column->view()), cudf::logic_error);
 
   cudf::test::strings_column_wrapper strings{"this string intentionally left blank"};
-  EXPECT_THROW(cudf::strings::to_fixed_point(column->view(), dtype), cudf::logic_error);
+  cudf::strings_column_view strings_view(strings);
+  EXPECT_THROW(cudf::strings::to_fixed_point(strings_view, dtype), cudf::logic_error);
+  EXPECT_THROW(cudf::strings::is_fixed_point(strings_view, dtype), cudf::logic_error);
+}
+
+TEST_F(StringsConvertTest, IsFixedPoint)
+{
+  cudf::test::strings_column_wrapper strings(
+    {"1234", "+876", "543.2", "-00.120", "1E34", "1.0.02", "", "-0.0"});
+  auto results        = cudf::strings::is_fixed_point(cudf::strings_column_view(strings));
+  auto const expected = cudf::test::fixed_width_column_wrapper<bool>(
+    {true, true, true, true, false, false, false, true});
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*results, expected);
+
+  cudf::test::strings_column_wrapper big_numbers({"2147483647",
+                                                  "-2147483647",
+                                                  "2147483648",
+                                                  "9223372036854775807",
+                                                  "-9223372036854775807",
+                                                  "9223372036854775808"});
+  results = cudf::strings::is_fixed_point(cudf::strings_column_view(big_numbers),
+                                          cudf::data_type{cudf::type_id::DECIMAL32});
+  auto const expected32 =
+    cudf::test::fixed_width_column_wrapper<bool>({true, true, false, false, false, false});
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*results, expected32);
+
+  results = cudf::strings::is_fixed_point(cudf::strings_column_view(big_numbers),
+                                          cudf::data_type{cudf::type_id::DECIMAL64});
+  auto const expected64 =
+    cudf::test::fixed_width_column_wrapper<bool>({true, true, true, true, true, false});
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*results, expected64);
 }
