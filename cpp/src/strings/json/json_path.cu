@@ -7,6 +7,8 @@
 #include <cudf/types.hpp>
 #include <cudf/utilities/error.hpp>
 
+#include <io/utilities/parsing_utils.cuh>
+
 #include <rmm/exec_policy.hpp>
 
 #include <cudf_test/column_wrapper.hpp>
@@ -18,6 +20,108 @@ namespace detail {
 namespace {
 
 using namespace cudf;
+
+CUDA_HOST_DEVICE_CALLABLE char to_lower(char const c)
+{
+  return c >= 'A' && c <= 'Z' ? c + ('a' - 'A') : c;
+}
+
+template <typename T, typename std::enable_if_t<std::is_integral<T>::value>* = nullptr>
+CUDA_HOST_DEVICE_CALLABLE uint8_t decode_digit(char c, bool* valid_flag)
+{
+  if (c >= '0' && c <= '9') return c - '0';
+  if (c >= 'a' && c <= 'f') return c - 'a' + 10;
+  if (c >= 'A' && c <= 'F') return c - 'A' + 10;
+
+  *valid_flag = false;
+  return 0;
+}
+
+template <typename T, typename std::enable_if_t<!std::is_integral<T>::value>* = nullptr>
+CUDA_HOST_DEVICE_CALLABLE uint8_t decode_digit(char c, bool* valid_flag)
+{
+  if (c >= '0' && c <= '9') return c - '0';
+
+  *valid_flag = false;
+  return 0;
+}
+
+CUDA_HOST_DEVICE_CALLABLE bool is_infinity(char const* begin, char const* end)
+{
+  if (*begin == '-' || *begin == '+') begin++;
+  char const* cinf = "infinity";
+  auto index       = begin;
+  while (index < end) {
+    if (*cinf != to_lower(*index)) break;
+    index++;
+    cinf++;
+  }
+  return ((index == begin + 3 || index == begin + 8) && index >= end);
+}
+
+template <typename T, int base = 10>
+CUDA_HOST_DEVICE_CALLABLE T parse_numeric(const char* begin,
+                                          const char* end,
+                                          cudf::io::parse_options_view const& opts)
+{
+  T value{};
+  bool all_digits_valid = true;
+
+  // Handle negative values if necessary
+  int32_t sign = (*begin == '-') ? -1 : 1;
+
+  // Handle infinity
+  if (std::is_floating_point<T>::value && is_infinity(begin, end)) {
+    return sign * std::numeric_limits<T>::infinity();
+  }
+  if (*begin == '-' || *begin == '+') begin++;
+
+  // Skip over the "0x" prefix for hex notation
+  if (base == 16 && begin + 2 < end && *begin == '0' && *(begin + 1) == 'x') { begin += 2; }
+
+  // Handle the whole part of the number
+  // auto index = begin;
+  while (begin < end) {
+    if (*begin == opts.decimal) {
+      ++begin;
+      break;
+    } else if (base == 10 && (*begin == 'e' || *begin == 'E')) {
+      break;
+    } else if (*begin != opts.thousands && *begin != '+') {
+      value = (value * base) + decode_digit<T>(*begin, &all_digits_valid);
+    }
+    ++begin;
+  }
+
+  if (std::is_floating_point<T>::value) {
+    // Handle fractional part of the number if necessary
+    double divisor = 1;
+    while (begin < end) {
+      if (*begin == 'e' || *begin == 'E') {
+        ++begin;
+        break;
+      } else if (*begin != opts.thousands && *begin != '+') {
+        divisor /= base;
+        value += decode_digit<T>(*begin, &all_digits_valid) * divisor;
+      }
+      ++begin;
+    }
+
+    // Handle exponential part of the number if necessary
+    if (begin < end) {
+      const int32_t exponent_sign = *begin == '-' ? -1 : 1;
+      if (*begin == '-' || *begin == '+') { ++begin; }
+      int32_t exponent = 0;
+      while (begin < end) {
+        exponent = (exponent * 10) + decode_digit<T>(*(begin++), &all_digits_valid);
+      }
+      if (exponent != 0) { value *= exp10(double(exponent * exponent_sign)); }
+    }
+  }
+  if (!all_digits_valid) { return std::numeric_limits<T>::quiet_NaN(); }
+
+  return value * sign;
+}
 
 CUDA_HOST_DEVICE_CALLABLE bool device_strncmp(const char* str1, const char* str2, size_t num_chars)
 {
@@ -56,11 +160,35 @@ struct json_string {
   }
 };
 
-enum json_element_type {
-  NONE,
-  OBJECT,
-  ARRAY,
+enum class parse_result {
+  ERROR,
+  SUCCESS,
+  EMPTY,
 };
+
+enum json_element_type { NONE, OBJECT, ARRAY, VALUE };
+
+struct json_output {
+  size_t output_max_len;
+  size_t output_len;
+  char* output;
+
+  CUDA_HOST_DEVICE_CALLABLE void add_output(const char* str, size_t len)
+  {
+    if (output != nullptr) {
+      // assert output_len + len < output_max_len
+      memcpy(output + output_len, str, len);
+    }
+    output_len += len;
+  }
+
+  CUDA_HOST_DEVICE_CALLABLE void add_output(json_string str) { add_output(str.str, str.len); }
+};
+
+CUDA_HOST_DEVICE_CALLABLE bool is_whitespace(char c)
+{
+  return c == ' ' || c == '\r' || c == '\n' || c == '\t' ? true : false;
+}
 
 class parser {
  protected:
@@ -71,11 +199,13 @@ class parser {
     parse_whitespace();
   }
 
+  CUDA_HOST_DEVICE_CALLABLE bool eof(const char* p) { return p - input >= input_len; }
+  CUDA_HOST_DEVICE_CALLABLE bool eof() { return eof(pos); }
+
   CUDA_HOST_DEVICE_CALLABLE bool parse_whitespace()
   {
     while (!eof()) {
-      char c = *pos;
-      if (c == ' ' || c == '\r' || c == '\n' || c == '\t') {
+      if (is_whitespace(*pos)) {
         pos++;
       } else {
         return true;
@@ -84,37 +214,73 @@ class parser {
     return false;
   }
 
-  CUDA_HOST_DEVICE_CALLABLE bool eof(const char* p) { return p - input >= input_len; }
-
-  CUDA_HOST_DEVICE_CALLABLE bool eof() { return eof(pos); }
-
-  CUDA_HOST_DEVICE_CALLABLE bool parse_name(json_string& name, json_string& terminators)
+  CUDA_HOST_DEVICE_CALLABLE parse_result parse_string(json_string& str,
+                                                      bool can_be_empty,
+                                                      char quote)
   {
-    char c = *pos;
-    switch (c) {
-      case '*':
-        name.str = pos;
-        name.len = 1;
-        pos++;
-        return true;
+    str.str = nullptr;
+    str.len = 0;
 
-      default: {
-        size_t const chars_left = input_len - (pos - input);
-        char const* end         = device_strpbrk(pos, chars_left, terminators.str, terminators.len);
-        if (end) {
-          name.str = pos;
-          name.len = end - pos;
-          pos      = end;
-        } else {
-          name.str = pos;
-          name.len = chars_left;
-          pos      = input + input_len;
+    if (parse_whitespace()) {
+      if (*pos == quote) {
+        const char* start = ++pos;
+        while (!eof()) {
+          if (*pos == quote) {
+            str.str = start;
+            str.len = pos - start;
+            pos++;
+            return parse_result::SUCCESS;
+          }
+          pos++;
         }
-        return true;
-      } break;
+      }
     }
 
-    return false;
+    return can_be_empty ? parse_result::EMPTY : parse_result::ERROR;
+  }
+
+  // a name means:
+  // - a string followed by a :
+  // - no string
+  CUDA_HOST_DEVICE_CALLABLE parse_result parse_name(json_string& name,
+                                                    bool can_be_empty,
+                                                    char quote)
+  {
+    if (parse_string(name, can_be_empty, quote) == parse_result::ERROR) {
+      return parse_result::ERROR;
+    }
+
+    // if we got a real string, the next char must be a :
+    if (name.len > 0) {
+      if (!parse_whitespace()) { return parse_result::ERROR; }
+      if (*pos == ':') {
+        pos++;
+        return parse_result::SUCCESS;
+      }
+    }
+    return parse_result::EMPTY;
+  }
+
+  // this function is not particularly strong
+  CUDA_HOST_DEVICE_CALLABLE parse_result parse_number(json_string& val)
+  {
+    if (!parse_whitespace()) { return parse_result::ERROR; }
+
+    // parse to the end of the number (does not do any error checking on whether
+    // the number is reasonably formed or not)
+    char const* start = pos;
+    char const* end   = start;
+    while (!eof(end)) {
+      char c = *end;
+      if (c == ',' || is_whitespace(c)) { break; }
+      end++;
+    }
+    pos = end;
+
+    val.str = start;
+    val.len = {end - start};
+
+    return parse_result::SUCCESS;
   }
 
  protected:
@@ -134,89 +300,153 @@ class json_state : private parser {
   {
   }
 
-  CUDA_HOST_DEVICE_CALLABLE bool next_match(json_string& str, json_state& child)
-  {
-    json_string name;
-    if (!parse_string(name, true)) { return false; }
-    if ((str.len == 1 && str.str[0] == '*') || str == name) {
-      // if this isn't an empty string, parse out the :
-      if (name.len > 0) {
-        if (!parse_whitespace() || *pos != ':') { return false; }
-        pos++;
-      }
+  CUDA_HOST_DEVICE_CALLABLE json_state(json_state const& j) { *this = j; }
 
-      // we have a match on the name, so advance to the beginning of the next element
-      if (parse_whitespace()) {
-        switch (*pos) {
-          case '[': element = ARRAY; break;
-
-          case '{': element = OBJECT; break;
-
-          default: return false;
-        }
-        cur_el_start = pos++;
-
-        // success
-        child = *this;
-        return true;
-      }
-    }
-    return false;
-  }
-
-  CUDA_HOST_DEVICE_CALLABLE json_string extract_element()
+  CUDA_HOST_DEVICE_CALLABLE parse_result extract_element(json_output* output)
   {
     // collapse the current element into a json_string
-    int obj_count = 0;
-    int arr_count = 0;
 
     char const* start = cur_el_start;
     char const* end   = start;
-    while (!eof(end)) {
-      char c = *end++;
-      switch (c) {
-        case '{': obj_count++; break;
-        case '}': obj_count--; break;
-        case '[': arr_count++; break;
-        case ']': arr_count--; break;
-        default: break;
-      }
-      if (obj_count == 0 && arr_count == 0) { break; }
-    }
-    pos = end;
 
-    return {start, end - start};
+    // if we're a value type, do a simple value parse.
+    if (cur_el_type == VALUE) {
+      pos = cur_el_start;
+      if (parse_value() != parse_result::SUCCESS) { return parse_result::ERROR; }
+      end = pos;
+    }
+    // otherwise, march through everything inside
+    else {
+      int obj_count = 0;
+      int arr_count = 0;
+
+      while (!eof(end)) {
+        char c = *end++;
+        // could do some additional checks here. we know our current
+        // element type, so we could be more strict on what kinds of
+        // characters we expect to see.
+        switch (c) {
+          case '{': obj_count++; break;
+          case '}': obj_count--; break;
+          case '[': arr_count++; break;
+          case ']': arr_count--; break;
+          default: break;
+        }
+        if (obj_count == 0 && arr_count == 0) { break; }
+      }
+      pos = end;
+    }
+
+    // parse trailing ,
+    if (parse_whitespace()) {
+      if (*pos == ',') { pos++; }
+    }
+
+    if (output != nullptr) {
+      // seems like names are never included with JSONPath unless
+      // they are nested within the element being returned.
+      /*
+      if(cur_el_name.len > 0){
+        output->add_output({"\"", 1});
+        output->add_output(cur_el_name);
+        output->add_output({"\"", 1});
+        output->add_output({":", 1});
+      }
+      */
+      output->add_output({start, end - start});
+    }
+    return parse_result::SUCCESS;
   }
+
+  CUDA_HOST_DEVICE_CALLABLE parse_result skip_element() { return extract_element(nullptr); }
 
   json_element_type element;
 
- private:
-  CUDA_HOST_DEVICE_CALLABLE bool parse_string(json_string& str, bool can_be_empty)
+  CUDA_HOST_DEVICE_CALLABLE parse_result next_element() { return next_element_internal(false); }
+
+  CUDA_HOST_DEVICE_CALLABLE parse_result child_element() { return next_element_internal(true); }
+
+  CUDA_HOST_DEVICE_CALLABLE parse_result next_matching_element(json_string const& name,
+                                                               bool inclusive)
   {
-    str.str = nullptr;
-    str.len = 0;
-
-    if (parse_whitespace()) {
-      if (*pos == '\"') {
-        const char* start = ++pos;
-        while (!eof()) {
-          if (*pos == '\"') {
-            str.str = start;
-            str.len = pos - start;
-            pos++;
-            return true;
-          }
-          pos++;
-        }
-      }
+    // if we're not including the current element, skip it
+    if (!inclusive) {
+      parse_result result = next_element_internal(false);
+      if (result != parse_result::SUCCESS) { return result; }
     }
+    // loop until we find a match or there's nothing left
+    do {
+      // wildcard matches anything
+      if (name.len == 1 && name.str[0] == '*') {
+        return parse_result::SUCCESS;
+      } else if (cur_el_name == name) {
+        return parse_result::SUCCESS;
+      }
 
-    return can_be_empty ? true : false;
+      // next
+      parse_result result = next_element_internal(false);
+      if (result != parse_result::SUCCESS) { return result; }
+    } while (1);
+
+    return parse_result::ERROR;
   }
+
+ private:
+  CUDA_HOST_DEVICE_CALLABLE parse_result parse_value()
+  {
+    if (!parse_whitespace()) { return parse_result::ERROR; }
+
+    // string or number?
+    json_string unused;
+    return *pos == '\"' ? parse_string(unused, false, '\"') : parse_number(unused);
+  }
+
+  CUDA_HOST_DEVICE_CALLABLE parse_result next_element_internal(bool child)
+  {
+    // if we're not getting a child element, skip the current element.
+    // this will leave pos as the first character -after- the close of
+    // the current element
+    if (!child && cur_el_start != nullptr) {
+      if (skip_element() == parse_result::ERROR) { return parse_result::ERROR; }
+      cur_el_start = nullptr;
+    }
+    // otherwise pos will be at the first character within the current element
+
+    // what's next
+    if (!parse_whitespace()) { return parse_result::EMPTY; }
+    // if we're closing off a parent element, we're done
+    char c = *pos;
+    if (c == ']' || c == '}') { return parse_result::EMPTY; }
+
+    // element name, if any
+    if (parse_name(cur_el_name, true, '\"') == parse_result::ERROR) { return parse_result::ERROR; }
+
+    // element type
+    if (!parse_whitespace()) { return parse_result::EMPTY; }
+    switch (*pos) {
+      case '[': cur_el_type = ARRAY; break;
+      case '{': cur_el_type = OBJECT; break;
+
+      case ',':
+      case ':':
+      case '\'': return parse_result::ERROR;
+
+      // value type
+      default: cur_el_type = VALUE; break;
+    }
+    pos++;
+
+    // the start of the current element is always at the value, not the name
+    cur_el_start = pos - 1;
+    return parse_result::SUCCESS;
+  }
+
   const char* cur_el_start;
+  json_string cur_el_name;
+  json_element_type cur_el_type;
 };
 
-enum path_operator_type { ROOT, CHILD, CHILD_WILDCARD, CHILD_INDEX, ERROR, END };
+enum class path_operator_type { ROOT, CHILD, CHILD_WILDCARD, CHILD_INDEX, ERROR, END };
 
 // constexpr max_name_len    (63)
 struct path_operator {
@@ -233,23 +463,24 @@ class path_state : private parser {
     : parser(_path, _path_len)
   {
   }
+  CUDA_HOST_DEVICE_CALLABLE path_state(path_state const& p) { *this = p; }
 
   CUDA_HOST_DEVICE_CALLABLE path_operator get_next_operator()
   {
-    if (eof()) { return {END}; }
+    if (eof()) { return {path_operator_type::END}; }
 
-    char c = parse_char();
+    char c = *pos++;
     switch (c) {
-      case '$': return {ROOT};
+      case '$': return {path_operator_type::ROOT};
 
       case '.': {
         path_operator op;
         json_string term{".[", 2};
-        if (parse_name(op.name, term)) {
+        if (parse_path_name(op.name, term)) {
           if (op.name.len == 1 && op.name.str[0] == '*') {
-            op.type = CHILD_WILDCARD;
+            op.type = path_operator_type::CHILD_WILDCARD;
           } else {
-            op.type = CHILD;
+            op.type = path_operator_type::CHILD;
           }
           return op;
         }
@@ -262,13 +493,18 @@ class path_state : private parser {
       case '[': {
         path_operator op;
         json_string term{"]", 1};
-        if (parse_name(op.name, term)) {
+        bool is_string = *pos == '\'' ? true : false;
+        if (parse_path_name(op.name, term)) {
           pos++;
           if (op.name.len == 1 && op.name.str[0] == '*') {
-            op.type = CHILD_WILDCARD;
+            op.type = path_operator_type::CHILD_WILDCARD;
           } else {
-            // unhandled cases
-            break;
+            if (is_string) {
+              op.type = path_operator_type::CHILD;
+            } else {
+              op.type  = path_operator_type::CHILD_INDEX;
+              op.index = parse_numeric<int>(op.name.str, op.name.str + op.name.len, json_opts);
+            }
           }
           return op;
         }
@@ -276,76 +512,135 @@ class path_state : private parser {
 
       default: break;
     }
-    return {ERROR};
+    return {path_operator_type::ERROR};
   }
 
  private:
-  CUDA_HOST_DEVICE_CALLABLE char parse_char() { return *pos++; }
-};
+  cudf::io::parse_options_view json_opts{',', '\n', '\"', '.'};
 
-struct json_output {
-  size_t output_max_len;
-  size_t output_len;
-  char* output;
-
-  CUDA_HOST_DEVICE_CALLABLE void add_output(const char* str, size_t len)
+  CUDA_HOST_DEVICE_CALLABLE bool parse_path_name(json_string& name, json_string& terminators)
   {
-    if (output != nullptr) {
-      // assert output_len + len < output_max_len
-      memcpy(output + output_len, str, len);
-    }
-    output_len += len;
-  }
+    char c = *pos;
+    switch (c) {
+      case '*':
+        name.str = pos;
+        name.len = 1;
+        pos++;
+        break;
 
-  CUDA_HOST_DEVICE_CALLABLE void add_output(json_string str) { add_output(str.str, str.len); }
+      case '\'':
+        if (parse_string(name, false, '\'') != parse_result::SUCCESS) { return false; }
+        break;
+
+      default: {
+        size_t const chars_left = input_len - (pos - input);
+        char const* end         = device_strpbrk(pos, chars_left, terminators.str, terminators.len);
+        if (end) {
+          name.str = pos;
+          name.len = end - pos;
+          pos      = end;
+        } else {
+          name.str = pos;
+          name.len = chars_left;
+          pos      = input + input_len;
+        }
+        return true;
+      }
+    }
+
+    // must end in one of the terminators
+    size_t const chars_left = input_len - (pos - input);
+    char const* end         = device_strpbrk(pos, chars_left, terminators.str, terminators.len);
+    if (!end) { return false; }
+    pos = end;
+    return true;
+  }
 };
 
-CUDA_HOST_DEVICE_CALLABLE void parse_json_path(json_state& j_state,
-                                               path_state p_state,
-                                               json_output& output)
+CUDA_HOST_DEVICE_CALLABLE parse_result parse_json_path(json_state& j_state,
+                                                       path_state p_state,
+                                                       json_output& output,
+                                                       bool list_element = false)
 {
   path_operator op = p_state.get_next_operator();
 
   switch (op.type) {
     // whatever the first object is
-    case ROOT: {
-      json_state child;
-      json_string wildcard{"*", 1};
-      if (j_state.next_match(wildcard, child)) { parse_json_path(child, p_state, output); }
-    } break;
+    case path_operator_type::ROOT:
+      if (j_state.next_element() != parse_result::ERROR) {
+        return parse_json_path(j_state, p_state, output);
+      }
+      break;
 
     // .name
     // ['name']
     // [1]
     // will return a single thing
-    case CHILD: {
-      json_state child;
-      if (j_state.next_match(op.name, child)) { parse_json_path(child, p_state, output); }
+    case path_operator_type::CHILD: {
+      parse_result res = j_state.child_element();
+      if (res != parse_result::SUCCESS) { return res; }
+      res = j_state.next_matching_element(op.name, true);
+      if (res != parse_result::SUCCESS) { return res; }
+      return parse_json_path(j_state, p_state, output, list_element);
     } break;
 
     // .*
     // [*]
     // will return an array of things
-    case CHILD_WILDCARD: {
+    case path_operator_type::CHILD_WILDCARD: {
       output.add_output("[\n", 2);
 
-      json_state child;
-      int count = 0;
-      while (j_state.next_match(op.name, child)) {
-        if (count > 0) { output.add_output(",\n", 2); }
-        parse_json_path(child, p_state, output);
-        j_state = child;
-        count++;
+      parse_result res = j_state.child_element();
+      if (res == parse_result::ERROR) { return parse_result::ERROR; }
+      if (res == parse_result::EMPTY) {
+        output.add_output("]\n", 2);
+        return parse_result::SUCCESS;
       }
+
+      res       = j_state.next_matching_element(op.name, true);
+      int count = 0;
+      while (res == parse_result::SUCCESS) {
+        json_state j_sub(j_state);
+        path_state p_sub(p_state);
+        parse_result sub_res = parse_json_path(j_sub, p_sub, output, count > 0 ? true : false);
+        if (sub_res == parse_result::ERROR) { return parse_result::ERROR; }
+        if (sub_res != parse_result::EMPTY) { count++; }
+        res = j_state.next_matching_element(op.name, false);
+      }
+
+      if (res == parse_result::ERROR) { return parse_result::ERROR; }
+
       output.add_output("]\n", 2);
+      return parse_result::SUCCESS;
+    } break;
+
+    // [0]
+    // [1]
+    // etc
+    // returns a single thing
+    case path_operator_type::CHILD_INDEX: {
+      parse_result res = j_state.child_element();
+      if (res != parse_result::SUCCESS) { return res; }
+      json_string any{"*", 1};
+      res = j_state.next_matching_element(any, true);
+      if (res != parse_result::SUCCESS) { return res; }
+      for (int idx = 1; idx <= op.index; idx++) {
+        res = j_state.next_matching_element(any, false);
+        if (res != parse_result::SUCCESS) { return res; }
+      }
+      return parse_json_path(j_state, p_state, output, list_element);
     } break;
 
     // some sort of error.
-    case ERROR: break;
+    case path_operator_type::ERROR: return parse_result::ERROR; break;
 
     // END case
-    default: output.add_output(j_state.extract_element()); break;
+    default: {
+      if (list_element) { output.add_output({",\n", 2}); }
+      if (j_state.extract_element(&output) == parse_result::ERROR) { return parse_result::ERROR; }
+    } break;
   }
+  return parse_result::SUCCESS;
 }
 
 CUDA_HOST_DEVICE_CALLABLE json_output get_json_object_single(char const* input,
@@ -393,7 +688,7 @@ std::unique_ptr<cudf::column> get_json_object(cudf::strings_column_view const& c
 {
   size_t stack_size;
   cudaDeviceGetLimit(&stack_size, cudaLimitStackSize);
-  cudaDeviceSetLimit(cudaLimitStackSize, 2048);
+  cudaDeviceSetLimit(cudaLimitStackSize, 4096);
 
   auto offsets = cudf::make_fixed_width_column(
     data_type{type_id::INT32}, col.size() + 1, mask_state::UNALLOCATED, stream, mr);
