@@ -24,11 +24,11 @@
 
 #include <random>
 
-class Reduction : public cudf::benchmark {
+class ReductionDictionary : public cudf::benchmark {
 };
 
-template <typename type>
-void BM_reduction_anyall(benchmark::State& state, std::unique_ptr<cudf::aggregation> const& agg)
+template <typename T>
+void BM_reduction_dictionary(benchmark::State& state, std::unique_ptr<cudf::aggregation> const& agg)
 {
   const cudf::size_type column_size{static_cast<cudf::size_type>(state.range(0))};
 
@@ -36,10 +36,15 @@ void BM_reduction_anyall(benchmark::State& state, std::unique_ptr<cudf::aggregat
     (agg->kind == cudf::aggregation::ALL ? 1 : 0), (agg->kind == cudf::aggregation::ANY ? 0 : 100));
   auto data_it = cudf::detail::make_counting_transform_iterator(
     0, [&rand_gen](cudf::size_type row) { return rand_gen.generate(); });
-  cudf::test::fixed_width_column_wrapper<type, typename decltype(data_it)::value_type> values(
+  cudf::test::dictionary_column_wrapper<T, typename decltype(data_it)::value_type> values(
     data_it, data_it + column_size);
 
-  cudf::data_type output_dtype{cudf::type_id::BOOL8};
+  cudf::data_type output_dtype = [&] {
+    if (agg->kind == cudf::aggregation::ANY || agg->kind == cudf::aggregation::ALL)
+      return cudf::data_type{cudf::type_id::BOOL8};
+    if (agg->kind == cudf::aggregation::MEAN) return cudf::data_type{cudf::type_id::FLOAT64};
+    return cudf::data_type{cudf::type_to_id<T>()};
+  }();
 
   for (auto _ : state) {
     cuda_event_timer timer(state, true);
@@ -51,27 +56,29 @@ void BM_reduction_anyall(benchmark::State& state, std::unique_ptr<cudf::aggregat
 #define get_agg(op) concat(cudf::make_, op, _aggregation())
 
 // TYPE, OP
-#define RBM_BENCHMARK_DEFINE(name, type, aggregation)             \
-  BENCHMARK_DEFINE_F(Reduction, name)(::benchmark::State & state) \
-  {                                                               \
-    BM_reduction_anyall<type>(state, get_agg(aggregation));       \
-  }                                                               \
-  BENCHMARK_REGISTER_F(Reduction, name)                           \
-    ->UseManualTime()                                             \
-    ->Arg(10000)      /* 10k */                                   \
-    ->Arg(100000)     /* 100k */                                  \
-    ->Arg(1000000)    /* 1M */                                    \
-    ->Arg(10000000)   /* 10M */                                   \
+#define RBM_BENCHMARK_DEFINE(name, type, aggregation)                       \
+  BENCHMARK_DEFINE_F(ReductionDictionary, name)(::benchmark::State & state) \
+  {                                                                         \
+    BM_reduction_dictionary<type>(state, get_agg(aggregation));             \
+  }                                                                         \
+  BENCHMARK_REGISTER_F(ReductionDictionary, name)                           \
+    ->UseManualTime()                                                       \
+    ->Arg(10000)      /* 10k */                                             \
+    ->Arg(100000)     /* 100k */                                            \
+    ->Arg(1000000)    /* 1M */                                              \
+    ->Arg(10000000)   /* 10M */                                             \
     ->Arg(100000000); /* 100M */
 
 #define REDUCE_BENCHMARK_DEFINE(type, aggregation) \
   RBM_BENCHMARK_DEFINE(concat(type, _, aggregation), type, aggregation)
 
-REDUCE_BENCHMARK_DEFINE(bool, all);
-REDUCE_BENCHMARK_DEFINE(int8_t, all);
 REDUCE_BENCHMARK_DEFINE(int32_t, all);
 REDUCE_BENCHMARK_DEFINE(float, all);
-REDUCE_BENCHMARK_DEFINE(bool, any);
-REDUCE_BENCHMARK_DEFINE(int8_t, any);
 REDUCE_BENCHMARK_DEFINE(int32_t, any);
 REDUCE_BENCHMARK_DEFINE(float, any);
+REDUCE_BENCHMARK_DEFINE(int32_t, min);
+REDUCE_BENCHMARK_DEFINE(float, min);
+REDUCE_BENCHMARK_DEFINE(int32_t, max);
+REDUCE_BENCHMARK_DEFINE(float, max);
+REDUCE_BENCHMARK_DEFINE(int32_t, mean);
+REDUCE_BENCHMARK_DEFINE(float, mean);

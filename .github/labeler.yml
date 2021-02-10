@@ -1,0 +1,21 @@
+# Documentation for config - https://github.com/actions/labeler#common-examples
+
+cuDF (Python):
+  - 'python/**'
+  - 'notebooks/**'
+  
+libcudf:
+  - 'cpp/**'
+
+CMake:
+  - '**/CMakeLists.txt'
+  - '**/cmake/**'
+  
+cuDF (Java):
+  - 'java/**'
+
+gpuCI:
+  - 'ci/**'
+
+conda:
+  - 'conda/**'
