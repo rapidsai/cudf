@@ -22,7 +22,6 @@
 #include <cudf_test/column_utilities.hpp>
 #include <cudf_test/column_wrapper.hpp>
 #include <cudf_test/cudf_gtest.hpp>
-#include <cudf_test/type_list_utilities.hpp>
 #include <cudf_test/type_lists.hpp>
 
 #include <thrust/iterator/counting_iterator.h>
@@ -62,8 +61,10 @@ template <typename FromType, typename ToType, typename Iterator>
 void do_logical_cast(cudf::column_view const& column_view, Iterator begin, Iterator end)
 {
   auto mutable_column_view = reinterpret_cast<cudf::mutable_column_view const&>(column_view);
+  cudf::data_type to_type{cudf::type_to_id<ToType>()};
+
   if (std::is_same<FromType, ToType>::value) {
-    // Cast to same type
+    // Cast to same to_type
     auto output  = cudf::logical_cast(column_view, column_view.type());
     auto output1 = cudf::logical_cast(mutable_column_view, mutable_column_view.type());
     cudf::test::expect_columns_equal(output, column_view);
@@ -71,17 +72,38 @@ void do_logical_cast(cudf::column_view const& column_view, Iterator begin, Itera
   } else if (std::is_same<rep_type_t<FromType>, ToType>::value ||
              std::is_same<FromType, rep_type_t<ToType>>::value) {
     // Cast integer to timestamp or vice versa
-    cudf::data_type type{cudf::type_to_id<ToType>()};
-    auto output  = cudf::logical_cast(column_view, type);
-    auto output1 = cudf::logical_cast(mutable_column_view, type);
+    auto output  = cudf::logical_cast(column_view, to_type);
+    auto output1 = cudf::logical_cast(mutable_column_view, to_type);
     cudf::test::fixed_width_column_wrapper<ToType, cudf::size_type> expected(begin, end);
     cudf::test::expect_columns_equal(output, expected);
     cudf::test::expect_columns_equal(output1, expected);
   } else {
-    // Other casts not allowed
-    cudf::data_type type{cudf::type_to_id<ToType>()};
-    EXPECT_THROW(cudf::logical_cast(column_view, type), cudf::logic_error);
-    EXPECT_THROW(cudf::logical_cast(mutable_column_view, type), cudf::logic_error);
+    if (cuda::std::is_trivially_copyable_v<FromType> &&
+        cuda::std::is_trivially_copyable_v<ToType>) {
+      constexpr auto from_size = sizeof(cudf::device_storage_type_t<FromType>);
+      constexpr auto to_size   = sizeof(cudf::device_storage_type_t<ToType>);
+      if (from_size == to_size) {
+        // Cast from FromType to ToType
+        auto output1         = cudf::logical_cast(column_view, to_type);
+        auto output1_mutable = cudf::logical_cast(mutable_column_view, to_type);
+
+        // Cast back from ToType to FromType
+        cudf::data_type from_type{cudf::type_to_id<FromType>()};
+        auto output2         = cudf::logical_cast(output1, from_type);
+        auto output2_mutable = cudf::logical_cast(output1_mutable, from_type);
+
+        cudf::test::expect_columns_equal(output2, column_view);
+        cudf::test::expect_columns_equal(output2_mutable, mutable_column_view);
+      } else {
+        // Not allow to cast if sizes are mismatched
+        EXPECT_THROW(cudf::logical_cast(column_view, to_type), cudf::logic_error);
+        EXPECT_THROW(cudf::logical_cast(mutable_column_view, to_type), cudf::logic_error);
+      }
+    } else {
+      // Not allow to cast if any of from/to types is not trivially copyable
+      EXPECT_THROW(cudf::logical_cast(column_view, to_type), cudf::logic_error);
+      EXPECT_THROW(cudf::logical_cast(mutable_column_view, to_type), cudf::logic_error);
+    }
   }
 }
 
