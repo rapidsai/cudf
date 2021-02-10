@@ -295,8 +295,17 @@ class NullableFloatSeriesCompare(object):
     loop 
     """
     def __init__(self, data, dtype):
-        self._data = list(data)
-        self._dtype = np.dtype(dtype)
+        self.dtype = dtype
+        
+        _data = []
+        for item in data:
+            if item is None:
+                append = item
+            else:
+                append = np.dtype(dtype).type(item)
+            _data.append(item)
+
+        self._data = data
 
     def __len__(self):
         return len(self._data)
@@ -312,11 +321,13 @@ class NullableFloatSeriesCompare(object):
             raise ValueError(
                 "Must compare to a list-like of equal length"
             )
-        result = [None] * len(self)
-        for i in range(len(self)):
-            lhs = self[i]
-            rhs = other[i]
 
+        result = [None] * len(self)
+        for i, (lhs, rhs) in enumerate(zip(self, other)):
+            # fill_value is used in place of LHS or RHS if 
+            # either is None, except when both are None, 
+            # in which case fill_value has no effect and the
+            # result is still None
             if lhs is None or rhs is None:
                 if not (lhs is None and rhs is None):
                     if fill_value is not None:
@@ -325,15 +336,21 @@ class NullableFloatSeriesCompare(object):
                         if rhs is None:
                             rhs = fill_value
             
-
+            # after fill_value logic is applied, if either
+            # side is None, result will be None
             if lhs is None or rhs is None:
                 this_result = None
+
+            # NaN comparisons always return false, except
+            # when the op is "not equal" in which case it
+            # always returns True
             elif lhs is np.nan or rhs is np.nan:
                 if op in {"ne", "__ne__"}:
                     this_result = True
                 else:
                     this_result = False
             else:
+                # dispatch to a bonafide numerical comparison
                 this_result = getattr(lhs, op)(rhs)
             result[i] = this_result
         return pd.Series(result, dtype='boolean')
