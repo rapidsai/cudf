@@ -153,6 +153,7 @@ class Merge(object):
         self.left_index = left_index
         self.right_index = right_index
         self.how = how
+        self.sort = sort
         self.lsuffix = lsuffix
         self.rsuffix = rsuffix
         self.suffixes = suffixes
@@ -160,11 +161,6 @@ class Merge(object):
         self.compute_join_keys()
 
     def compute_join_keys(self):
-        def _coerce_to_tuple(obj):
-            if hasattr(obj, "__iter__") and not isinstance(obj, str):
-                return tuple(obj)
-            else:
-                return (obj,)
 
         if (
             self.left_index
@@ -276,6 +272,25 @@ class Merge(object):
                 out_key.value.fillna(rkey.value.take(right_rows, nullify=True))
             )
 
+        return self.sort_result(result)
+
+    def sort_result(self, result):
+        # If sort=True, Pandas sorts on the key columns in the
+        # same order as given in 'on'. If the indices are used as
+        # keys, the index will be sorted. If one index is specified,
+        # the key columns on the other side will be used to sort.
+        if self.sort:
+            if self.on:
+                return result.sort_values(
+                    _coerce_to_list(self.on), ignore_index=True
+                )
+            elif self.left_index and self.right_index:
+                return result.sort_index()
+            elif self.left_index:
+                return result.sort_values(_coerce_to_list(self.right_on))
+            else:
+                # self.right_index and self.left_on
+                return result.sort_values(_coerce_to_list(self.left_on))
         return result
 
     def output_column_names(self):
@@ -378,3 +393,14 @@ class Merge(object):
             dtype = match_func(lcol, rcol, how=self.how)
             left_key.set_value(lcol.astype(dtype))
             right_key.set_value(rcol.astype(dtype))
+
+
+def _coerce_to_tuple(obj):
+    if hasattr(obj, "__iter__") and not isinstance(obj, str):
+        return tuple(obj)
+    else:
+        return (obj,)
+
+
+def _coerce_to_list(obj):
+    return list(_coerce_to_tuple(obj))

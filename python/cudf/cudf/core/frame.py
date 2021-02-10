@@ -3421,39 +3421,7 @@ class Frame(libcudf.table.Table):
             indicator,
             suffixes,
         )
-        to_return = mergeop.perform_merge()
-
-        # If sort=True, Pandas would sort on the key columns in the
-        # same order as given in 'on'. If the indices are used as
-        # keys, the index will be sorted. If one index is specified,
-        # the key column on the other side will be used to sort.
-        # If no index is specified, return a new RangeIndex
-        if sort:
-            to_sort = cudf.DataFrame()
-            if left_index and right_index:
-                by = list(to_return._index._data.columns)
-                if left_on and right_on:
-                    by.extend(to_return[mergeop.left_on]._data.columns)
-            elif left_index:
-                by = list(to_return[mergeop.right_on]._data.columns)
-            elif right_index:
-                by = list(to_return[mergeop.left_on]._data.columns)
-            else:
-                # left_on == right_on, or different names but same columns
-                # in both cases we can sort by either
-                by = [to_return._data[name] for name in mergeop.left_on]
-            for i, col in enumerate(by):
-                to_sort[i] = col
-            inds = to_sort.argsort()
-            if isinstance(to_return, cudf.Index):
-                to_return = to_return.take(inds)
-            else:
-                to_return = to_return.take(
-                    inds, keep_index=(left_index or right_index)
-                )
-            return to_return
-        else:
-            return to_return
+        return mergeop.perform_merge()
 
     def _is_sorted(self, ascending=None, null_position=None):
         """
