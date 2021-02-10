@@ -65,11 +65,10 @@ TYPED_TEST(StringsFixedPointConvertTest, FromFixedPoint)
   using RepType     = cudf::device_storage_type_t<DecimalType>;
   using fp_wrapper  = cudf::test::fixed_point_column_wrapper<RepType>;
 
-  auto const negative_scale =
-    fp_wrapper{{110, 222, 3330, 4444, -550, -6666}, numeric::scale_type{-2}};
-  auto results = cudf::strings::from_fixed_point(negative_scale);
+  auto const negative_scale = fp_wrapper{{110, 222, 3330, 4444, -550, -6}, numeric::scale_type{-2}};
+  auto results              = cudf::strings::from_fixed_point(negative_scale);
   cudf::test::strings_column_wrapper negative_expected(
-    {"1.10", "2.22", "33.30", "44.44", "-5.50", "-66.66"});
+    {"1.10", "2.22", "33.30", "44.44", "-5.50", "-0.06"});
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*results, negative_expected);
 
   auto const positive_scale =
