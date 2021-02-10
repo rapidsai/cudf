@@ -17,15 +17,14 @@
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/get_value.cuh>
+#include <cudf/detail/iterator.cuh>
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
-#include <cudf/detail/utilities/integer_utils.hpp>
 #include <cudf/strings/convert/convert_fixed_point.hpp>
 #include <cudf/strings/detail/converters.hpp>
 #include <cudf/strings/detail/utilities.hpp>
 #include <cudf/strings/string_view.cuh>
 #include <cudf/strings/strings_column_view.hpp>
-#include <cudf/utilities/traits.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
 
 #include <strings/convert/utilities.cuh>
@@ -36,7 +35,6 @@
 #include <rmm/exec_policy.hpp>
 
 #include <thrust/extrema.h>
-#include <thrust/iterator/counting_iterator.h>
 
 namespace cudf {
 namespace strings {
@@ -254,11 +252,8 @@ struct dispatch_from_fixed_point_fn {
     auto d_column     = column_device_view::create(input, stream);
 
     // build offsets column
-    // !!!!!!!!!!!!!!!!!!!! use cudf::detail::make-something-iterator
-    auto offsets_transformer_itr =
-      thrust::make_transform_iterator(thrust::make_counting_iterator<int32_t>(0),
-                                      decimal_to_string_size_fn<DecimalType>{*d_column});
-    // !!!!!!!!!!!!!!!!!!!!
+    auto offsets_transformer_itr = cudf::detail::make_counting_transform_iterator(
+      0, decimal_to_string_size_fn<DecimalType>{*d_column});
     auto offsets_column = detail::make_offsets_child_column(
       offsets_transformer_itr, offsets_transformer_itr + input.size(), stream, mr);
     auto d_offsets = offsets_column->view().template data<int32_t>();
