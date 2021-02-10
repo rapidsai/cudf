@@ -224,7 +224,6 @@ class Merge(object):
         right_key_indices = [
             key.get_numeric_index() for key in self._keys.right
         ]
-        breakpoint()
         left_rows, right_rows = libcudf.join.join(
             self.lhs,
             self.rhs,
