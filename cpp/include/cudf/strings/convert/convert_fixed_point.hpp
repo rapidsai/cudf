@@ -36,6 +36,13 @@ namespace strings {
  * are recognized. When any other character is encountered, the parsing ends
  * for that string and the current digits are converted into a fixed-point value.
  *
+ * @code{.pseudo}
+ * Example:
+ * s = ['123', '-876', '543.2', '-0.12']
+ * fp = to_fixed_point(s)
+ * fp is [123400, -87600, 54320, -12] with scale = -2
+ * @endcode
+ *
  * Overflow of the resulting value type is not checked.
  * The decimal point is used only for determining the output scale value.
  *
@@ -61,6 +68,13 @@ std::unique_ptr<column> to_fixed_point(
  * Negative numbers will include a '-' prefix.
  * The column's scale value is used to place the decimal point.
  *
+ * @code{.pseudo}
+ * Example:
+ * fp is [110, 222, 3330, -440, -1] with scale = -2
+ * s = from_fixed_point(fp)
+ * s is now ['1.10', '2.22', '33.30', '-4.40', '-0.01']
+ * @endcode
+ *
  * @throw cudf::logic_error if the input column is not a fixed-point type.
  *
  * @param input Fixed-point column to convert.
@@ -80,9 +94,9 @@ std::unique_ptr<column> from_fixed_point(
  *
  * @code{.pseudo}
  * Example:
- * s = ['123', '-456', '', '1.2.3', '+17E30', '12.34' '.789']
- * b = s.is_fixed_point(s)
- * b is [true, false, false, false, false, true, true]
+ * s = ['123', '-456', '', '1.2.3', '+17E30', '12.34' '.789', '-0.005]
+ * b = is_fixed_point(s)
+ * b is [true, true, false, false, false, true, true, true]
  * @endcode
  *
  * Any null row results in a null entry for that row in the output column.
