@@ -14,8 +14,6 @@
  * limitations under the License.
  */
 
-//#ifdef NDEBUG  // currently groupby variance tests are not supported. See groupstd.cu
-
 #include <tests/groupby/groupby_test_util.hpp>
 
 #include <cudf_test/base_fixture.hpp>
@@ -149,5 +147,3 @@ TYPED_TEST(groupby_sum_of_squares_test, DISABLED_dictionary)
 
 }  // namespace test
 }  // namespace cudf
-
-//#endif  // NDEBUG
