@@ -1213,7 +1213,9 @@ __global__ void __launch_bounds__(block_size)
         for (uint32_t i = t * 32; i < skippedrows; i += 32 * 32) {
           uint32_t bits = (i + 32 <= skippedrows)
                             ? s->vals.u32[i >> 5]
-                            : (rle8_read_bool32(s->vals.u32, i) & ((1 << (skippedrows - i)) - 1));
+                            : (__brev(__byte_perm(s->vals.u32[i >> 5], 0, 0x0123)) &
+                               ((1 << (skippedrows - i)) -
+                                1));  // Need to arrange the bits to apply mask properly.
           skip_count += __popc(bits);
         }
         skip_count = warp_reduce(temp_storage[t / 32]).Sum(skip_count);
