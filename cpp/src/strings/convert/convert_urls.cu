@@ -24,7 +24,6 @@
 #include <cudf/strings/string_view.cuh>
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/utilities/span.hpp>
-#include <cudf/utilities/type_dispatcher.hpp>
 #include <strings/utilities.cuh>
 
 #include <rmm/cuda_stream_view.hpp>
@@ -217,7 +216,7 @@ struct url_decode_escape_detector {
  * @brief Functor for detecting escape sequence positions that cross a string boundary.
  */
 struct url_decode_esc_position_filter {
-  device_span<size_type const> const d_offsets{};
+  device_span<int32_t const> const d_offsets{};
 
   /**
    * @brief Detects if an escape sequence crosses a string boundary
@@ -250,7 +249,7 @@ struct url_decode_char_replacer {
   device_span<size_type const> const d_esc_positions{};
   char const* const d_in_chars{};
   char* const d_out_chars{};
-  size_type const first_input_char_offset = 0;
+  int32_t const first_input_char_offset = 0;
 
   /**
    * @brief Copy an input character to the output, decoding escape sequences
@@ -299,7 +298,7 @@ struct url_decode_char_replacer {
  */
 struct url_decode_offsets_updater {
   device_span<size_type const> const d_esc_positions{};
-  size_type const first_input_offset = 0;
+  int32_t const first_input_offset = 0;
 
   /**
    * @brief Convert input offsets into output offsets
@@ -310,7 +309,7 @@ struct url_decode_offsets_updater {
    * @param offset An original offset value from the input string column
    * @return Adjusted offset value
    */
-  __device__ size_type operator()(size_type offset) const
+  __device__ int32_t operator()(int32_t offset) const
   {
     // determine the number of escape sequences occurring before this offset
     size_type const* next_esc_pos_ptr =
@@ -337,11 +336,11 @@ std::unique_ptr<column> url_decode(
   auto d_in_chars   = strings.chars().data<char>();
   // determine index of first character in base column
   size_type chars_start = (strings.offset() == 0) ? 0
-                                                  : cudf::detail::get_value<size_type>(
+                                                  : cudf::detail::get_value<int32_t>(
                                                       strings.offsets(), strings.offset(), stream);
   size_type chars_end = (offset_count == strings.offsets().size())
                           ? strings.chars_size()
-                          : cudf::detail::get_value<size_type>(
+                          : cudf::detail::get_value<int32_t>(
                               strings.offsets(), strings.offset() + strings_count, stream);
   size_type chars_bytes = chars_end - chars_start;
 
@@ -369,7 +368,7 @@ std::unique_ptr<column> url_decode(
                   esc_detector);
 
   // In-place remove any escape positions that crossed string boundaries.
-  device_span<size_type const> d_offsets_span(d_offsets, offset_count);
+  device_span<int32_t const> d_offsets_span(d_offsets, offset_count);
   auto esc_pos_end = thrust::remove_if(rmm::exec_policy(stream),
                                        d_esc_positions,
                                        d_esc_positions + esc_count,
@@ -386,7 +385,7 @@ std::unique_ptr<column> url_decode(
 
   // build offsets column
   auto offsets_column = make_numeric_column(
-    data_type{type_to_id<size_type>()}, offset_count, mask_state::UNALLOCATED, stream, mr);
+    data_type{type_id::INT32}, offset_count, mask_state::UNALLOCATED, stream, mr);
   auto offsets_view = offsets_column->mutable_view();
   thrust::transform(rmm::exec_policy(stream),
                     d_offsets_span.begin(),
