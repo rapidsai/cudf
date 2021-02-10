@@ -263,6 +263,7 @@ struct url_decode_char_replacer {
 struct url_decode_offsets_updater {
   size_type num_esc_pos;
   size_type const* d_esc_positions{};
+  size_type first_offset;
 
   __device__ size_type operator()(size_type offset)
   {
@@ -271,7 +272,7 @@ struct url_decode_offsets_updater {
       thrust::lower_bound(thrust::seq, d_esc_positions, d_esc_positions + num_esc_pos, offset);
     size_type num_prev_esc = next_esc_pos_ptr - d_esc_positions;
     // every escape that occurs before this one replaces 3 characters with 1
-    return offset - (num_prev_esc * 2);
+    return offset - first_offset - (num_prev_esc * 2);
   }
 };
 
@@ -286,16 +287,18 @@ std::unique_ptr<column> url_decode(
   size_type strings_count = strings.size();
   if (strings_count == 0) return make_empty_strings_column(stream, mr);
 
-  auto d_offsets = strings.offsets().data<size_type>();
-  // use indices relative to the base column data so they can be compared to offset values
-  auto d_in_chars  = strings.chars().head<char>();
-  auto chars_bytes = strings.chars_size();
+  auto d_offsets  = strings.offsets().data<size_type>() + strings.offset();
+  auto d_in_chars = strings.chars().data<char>();
   // determine index of first character in base column
   size_type chars_start = 0;
   if (strings.offset() != 0) {
-    chars_start = cudf::detail::get_value<size_type>(strings.offsets(), 0, stream);
+    chars_start = cudf::detail::get_value<size_type>(strings.offsets(), strings.offset(), stream);
   }
-  size_type chars_end = chars_start + chars_bytes;
+  // Unfortunately we cannot determine whether the column_view size matches the underlying
+  // column size, so we need to fetch the ending offset value in case the column view is a slice.
+  size_type chars_end =
+    cudf::detail::get_value<size_type>(strings.offsets(), strings.offset() + strings_count, stream);
+  size_type chars_bytes = chars_end - chars_start;
 
   url_decode_escape_detector esc_detector{chars_end, d_in_chars};
 
@@ -330,7 +333,7 @@ std::unique_ptr<column> url_decode(
                                      d_potential_esc_positions,
                                      d_potential_esc_positions + potential_esc_count,
                                      d_esc_positions,
-                                     url_decode_esc_position_filter{strings.size() + 1, d_offsets});
+                                     url_decode_esc_position_filter{strings_count + 1, d_offsets});
   size_type esc_count  = esc_pos_end - d_esc_positions;
 
   if (esc_count == 0) {
@@ -343,10 +346,10 @@ std::unique_ptr<column> url_decode(
     data_type{type_id::INT32}, strings_count + 1, mask_state::UNALLOCATED, stream, mr);
   auto offsets_view = offsets_column->mutable_view();
   thrust::transform(rmm::exec_policy(stream),
-                    strings.offsets().begin<size_type>(),
-                    strings.offsets().end<size_type>(),
+                    d_offsets,
+                    d_offsets + strings_count + 1,
                     offsets_view.begin<size_type>(),
-                    url_decode_offsets_updater{esc_count, d_esc_positions});
+                    url_decode_offsets_updater{esc_count, d_esc_positions, chars_start});
 
   // create the chars column
   auto chars_column =
@@ -358,7 +361,7 @@ std::unique_ptr<column> url_decode(
   auto d_out_chars = chars_column->mutable_view().data<char>();
   thrust::for_each_n(
     rmm::exec_policy(stream),
-    thrust::make_counting_iterator<size_type>(0),
+    thrust::make_counting_iterator<size_type>(chars_start),
     chars_bytes,
     url_decode_char_replacer{chars_start, esc_count, d_esc_positions, d_in_chars, d_out_chars});
 
