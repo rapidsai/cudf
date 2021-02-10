@@ -17,6 +17,8 @@
 #include <hash/concurrent_unordered_map.cuh>
 #include <join/join_common_utils.hpp>
 
+#include <thrust/distance.h>
+
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/gather.cuh>
 #include <cudf/detail/nvtx/ranges.hpp>
@@ -100,7 +102,8 @@ std::unique_ptr<cudf::column> left_semi_anti_join(
       return (pos != hash_table.end()) == join_type_boolean;
     });
 
-  auto join_size = std::distance(gather_map.begin(), gather_map_end);
+  auto join_size = thrust::distance(gather_map.begin(), gather_map_end);
+  std::cout << join_size << std::endl;
   return std::make_unique<cudf::column>(cudf::data_type(type_to_id<cudf::size_type>()),
                                         join_size,
                                         gather_map.release(),

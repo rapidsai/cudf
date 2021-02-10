@@ -55,7 +55,7 @@ cpdef join(Table lhs, Table rhs, left_on, right_on, how=None):
     )
 
 
-cpdef join_semi_anti(Table lhs, Table rhs, left_on, right_on, how=None):
+cpdef semi_join(Table lhs, Table rhs, left_on, right_on, how=None):
     # left-semi and left-anti joins
     cdef vector[int] c_left_on = left_on
     cdef vector[int] c_right_on = right_on
@@ -63,14 +63,14 @@ cpdef join_semi_anti(Table lhs, Table rhs, left_on, right_on, how=None):
     cdef table_view c_lhs = lhs.view()
     cdef table_view c_rhs = rhs.view()
 
-    if how == "semi":
+    if how == "leftsemi":
         c_result = move(cpp_join.left_semi_join(
             c_lhs,
             c_rhs,
             c_left_on,
             c_right_on
         ))
-    elif how == "anti":
+    elif how == "leftanti":
         c_result = move(cpp_join.left_anti_join(
             c_lhs,
             c_rhs,
@@ -79,3 +79,4 @@ cpdef join_semi_anti(Table lhs, Table rhs, left_on, right_on, how=None):
         ))
     else:
         raise ValueError(f"Invalid join type {how}")
+    return Column.from_unique_ptr(move(c_result))

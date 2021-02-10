@@ -69,7 +69,59 @@ class ColumnView:
 JoinKeys = namedtuple("JoinKeys", ["left", "right"])
 
 
-class Merge(object):
+def Merge(
+    lhs,
+    rhs,
+    on=None,
+    left_on=None,
+    right_on=None,
+    left_index=False,
+    right_index=False,
+    how="inner",
+    sort=False,
+    lsuffix="_x",
+    rsuffix="_y",
+    method=None,
+    indicator=None,
+    suffixes=None,
+):
+    if how not in {"leftsemi", "leftanti"}:
+        return MergeBase(
+            lhs,
+            rhs,
+            on=on,
+            left_on=left_on,
+            right_on=right_on,
+            left_index=left_index,
+            right_index=right_index,
+            how=how,
+            sort=sort,
+            lsuffix=lsuffix,
+            rsuffix=rsuffix,
+            method=method,
+            indicator=indicator,
+            suffixes=suffixes,
+        )
+    else:
+        return MergeSemi(
+            lhs,
+            rhs,
+            on=on,
+            left_on=left_on,
+            right_on=right_on,
+            left_index=left_index,
+            right_index=right_index,
+            how=how,
+            sort=sort,
+            lsuffix=lsuffix,
+            rsuffix=rsuffix,
+            method=method,
+            indicator=indicator,
+            suffixes=suffixes,
+        )
+
+
+class MergeBase(object):
     def __init__(
         self,
         lhs,
@@ -222,11 +274,6 @@ class Merge(object):
         self._keys = JoinKeys(left=left_keys, right=right_keys)
 
     def perform_merge(self):
-        """
-        Call libcudf to perform a merge between the operands. If
-        necessary, cast the input key columns to compatible types.
-        Potentially also cast the output back to categorical.
-        """
         self.match_key_dtypes(_input_to_libcudf_castrules_any)
 
         left_key_indices = [key.get_numeric_index() for key in self._keys.left]
@@ -276,14 +323,19 @@ class Merge(object):
         result = self.out_class._from_data(data, index=out_index)
 
         # if outer join, key columns are combine:
-        for lkey, rkey in zip(*self._keys):
-            # get the key column as it appears in the result:
-            out_key = ColumnView(result, column=lkey.column, index=lkey.index)
+        if self.how == "outer":
+            for lkey, rkey in zip(*self._keys):
+                # get the key column as it appears in the result:
+                out_key = ColumnView(
+                    result, column=lkey.column, index=lkey.index
+                )
 
-            # fill nulls in the key column with values from the RHS
-            out_key.set_value(
-                out_key.value.fillna(rkey.value.take(right_rows, nullify=True))
-            )
+                # fill nulls in the key column with values from the RHS
+                out_key.set_value(
+                    out_key.value.fillna(
+                        rkey.value.take(right_rows, nullify=True)
+                    )
+                )
 
         return self.sort_result(result)
 
@@ -406,6 +458,28 @@ class Merge(object):
             dtype = match_func(lcol, rcol, how=self.how)
             left_key.set_value(lcol.astype(dtype))
             right_key.set_value(rcol.astype(dtype))
+
+
+class MergeSemi(MergeBase):
+    def perform_merge(self):
+        self.match_key_dtypes(_input_to_libcudf_castrules_any)
+
+        left_key_indices = [key.get_numeric_index() for key in self._keys.left]
+        right_key_indices = [
+            key.get_numeric_index() for key in self._keys.right
+        ]
+        left_rows = libcudf.join.semi_join(
+            self.lhs,
+            self.rhs,
+            left_on=left_key_indices,
+            right_on=right_key_indices,
+            how=self.how,
+        )
+        return self.construct_result(left_rows, cudf.core.column.as_column([]))
+
+    def output_column_names(self):
+        left_names, _ = super().output_column_names()
+        return left_names, {}
 
 
 def _coerce_to_tuple(obj):
