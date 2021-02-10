@@ -90,7 +90,7 @@ std::unique_ptr<column> from_fixed_point(
  * characters are valid for conversion to fixed-point.
  *
  * The output row entry will be set to `true` if the corresponding string element
- * has at least one character in [+-0-9.].
+ * has at least one character in [+-0123456789.].
  *
  * @code{.pseudo}
  * Example:
@@ -101,12 +101,14 @@ std::unique_ptr<column> from_fixed_point(
  *
  * Any null row results in a null entry for that row in the output column.
  *
- * @param strings Strings instance for this operation.
+ * @param input Strings instance for this operation.
+ * @param decimal_type Fixed-point type used only for checking overflow
  * @param mr Device memory resource used to allocate the returned column's device memory.
  * @return New column of boolean results for each string.
  */
 std::unique_ptr<column> is_fixed_point(
   strings_column_view const& input,
+  data_type decimal_type              = data_type{type_id::DECIMAL64},
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /** @} */  // end of doxygen group
