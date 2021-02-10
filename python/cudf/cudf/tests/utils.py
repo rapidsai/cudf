@@ -316,7 +316,7 @@ class NullableFloatSeriesCompare(object):
         for i in range(len(self)):
             lhs = self[i]
             rhs = other[i]
-            breakpoint()
+
             if lhs is None or rhs is None:
                 if not (lhs is None and rhs is None):
                     if fill_value is not None:
@@ -328,8 +328,11 @@ class NullableFloatSeriesCompare(object):
 
             if lhs is None or rhs is None:
                 this_result = None
-            elif lhs is np.nan or rhs is np.nan and op != "ne":
-                this_result = False
+            elif lhs is np.nan or rhs is np.nan:
+                if op in {"ne", "__ne__"}:
+                    this_result = True
+                else:
+                    this_result = False
             else:
                 this_result = getattr(lhs, op)(rhs)
             result[i] = this_result
