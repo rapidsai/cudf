@@ -22,7 +22,8 @@ from cudf.tests.utils import assert_eq
 
 
 def cudf_from_avro_util(schema, records):
-    schema = fastavro.parse_schema(schema)
+
+    schema = [] if schema is None else fastavro.parse_schema(schema)
     buffer = io.BytesIO()
     fastavro.writer(buffer, schema, records)
     buffer.seek(0)
@@ -160,10 +161,29 @@ def test_can_parse_single_null(avro_type, cudf_type):
     assert_eq(expected, actual)
 
 
+@pytest.mark.parametrize("avro_type, cudf_type", avro_type_params)
+def test_can_parse_no_data(avro_type, cudf_type):
+
+    schema_root = {
+        "name": "root",
+        "type": "record",
+        "fields": [{"name": "prop", "type": ["null", avro_type]}],
+    }
+
+    records = []
+
+    actual = cudf_from_avro_util(schema_root, records)
+
+    expected = cudf.DataFrame({"prop": cudf.Series(data=[], dtype=cudf_type)})
+
+    assert_eq(expected, actual)
+
+
 @pytest.mark.xfail(
     reason="cudf avro reader is unable to parse zero-field metadata."
 )
-def test_can_parse_empty_dataframe():
+@pytest.mark.parametrize("avro_type, cudf_type", avro_type_params)
+def test_can_parse_no_fields(avro_type, cudf_type):
 
     schema_root = {
         "name": "root",
@@ -177,4 +197,13 @@ def test_can_parse_empty_dataframe():
 
     expected = cudf.DataFrame()
 
+    assert_eq(expected, actual)
+
+
+def test_can_parse_no_schema():
+
+    schema_root = None
+    records = []
+    actual = cudf_from_avro_util(schema_root, records)
+    expected = cudf.DataFrame()
     assert_eq(expected, actual)
