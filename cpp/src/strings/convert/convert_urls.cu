@@ -24,6 +24,7 @@
 #include <cudf/strings/string_view.cuh>
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/utilities/span.hpp>
+#include <cudf/utilities/type_dispatcher.hpp>
 #include <strings/utilities.cuh>
 
 #include <rmm/cuda_stream_view.hpp>
@@ -175,7 +176,7 @@ namespace detail {
 namespace {
 
 // utility to convert a hex char into a single byte
-__device__ uint8_t hex_char_to_byte(char ch)
+constexpr uint8_t hex_char_to_byte(char ch)
 {
   if (ch >= '0' && ch <= '9') return (ch - '0');
   if (ch >= 'A' && ch <= 'F') return (ch - 'A' + 10);  // in hex A=10,B=11,...,F=15
@@ -205,12 +206,13 @@ struct url_decode_escape_detector {
 struct url_decode_esc_position_filter {
   device_span<size_type const> const d_offsets{};
 
+  // Return true if the escape sequence at the specified position crosses as string boundary
   __device__ bool operator()(size_type esc_pos_idx) const
   {
     // find the end offset of the current string
     size_type const* offset_ptr =
       thrust::upper_bound(thrust::seq, d_offsets.begin(), d_offsets.end(), esc_pos_idx);
-    return esc_pos_idx + 2 < *offset_ptr;
+    return esc_pos_idx + 2 >= *offset_ptr;
   }
 };
 
@@ -286,13 +288,14 @@ std::unique_ptr<column> url_decode(
   size_type strings_count = strings.size();
   if (strings_count == 0) return make_empty_strings_column(stream, mr);
 
-  auto d_offsets  = strings.offsets().data<size_type>() + strings.offset();
-  auto d_in_chars = strings.chars().data<char>();
+  auto offset_count = strings_count + 1;
+  auto d_offsets    = strings.offsets().data<size_type>() + strings.offset();
+  auto d_in_chars   = strings.chars().data<char>();
   // determine index of first character in base column
   size_type chars_start = (strings.offset() == 0) ? 0
                                                   : cudf::detail::get_value<size_type>(
                                                       strings.offsets(), strings.offset(), stream);
-  size_type chars_end = (strings_count + 1 == strings.offsets().size())
+  size_type chars_end = (offset_count == strings.offsets().size())
                           ? strings.chars_size()
                           : cudf::detail::get_value<size_type>(
                               strings.offsets(), strings.offset() + strings_count, stream);
@@ -302,39 +305,34 @@ std::unique_ptr<column> url_decode(
 
   // Count the number of URL escape sequences across all strings, ignoring string boundaries.
   // This may count more sequences than actually are there since string boundaries are ignored.
-  size_type potential_esc_count =
-    thrust::count_if(rmm::exec_policy(stream),
-                     thrust::make_counting_iterator<size_type>(chars_start),
-                     thrust::make_counting_iterator<size_type>(chars_end),
-                     esc_detector);
+  size_type esc_count = thrust::count_if(rmm::exec_policy(stream),
+                                         thrust::make_counting_iterator<size_type>(chars_start),
+                                         thrust::make_counting_iterator<size_type>(chars_end),
+                                         esc_detector);
 
-  if (potential_esc_count == 0) {
+  if (esc_count == 0) {
     // nothing to replace, so just copy the input column
     return std::make_unique<cudf::column>(strings.parent());
   }
 
-  // create a vector of potential escape sequence positions
-  rmm::device_uvector<size_type> potential_esc_positions(potential_esc_count, stream);
-  auto d_potential_esc_positions = potential_esc_positions.data();
+  // create a vector of the potential escape sequence positions
+  rmm::device_uvector<size_type> esc_positions(esc_count, stream);
+  auto d_esc_positions = esc_positions.data();
   thrust::copy_if(rmm::exec_policy(stream),
                   thrust::make_counting_iterator<size_t>(chars_start),
                   thrust::make_counting_iterator<size_t>(chars_end),
-                  d_potential_esc_positions,
+                  d_esc_positions,
                   esc_detector);
 
-  // Filter potential escape positions to actual positions by checking string boundaries.
-  // Skip counting the actual number to compute the optimal output buffer size since it is not
-  // expected to be significantly smaller in practice.
-  rmm::device_uvector<size_type> esc_positions(potential_esc_count, stream);
-  auto d_esc_positions = potential_esc_positions.data();
-  auto esc_pos_end     = thrust::copy_if(
-    rmm::exec_policy(stream),
-    d_potential_esc_positions,
-    d_potential_esc_positions + potential_esc_count,
-    d_esc_positions,
-    url_decode_esc_position_filter{device_span<size_type const>(d_offsets, strings_count + 1)});
-  size_type esc_count = esc_pos_end - d_esc_positions;
+  // In-place remove any escape positions that crossed string boundaries.
+  device_span<size_type const> d_offsets_span(d_offsets, offset_count);
+  auto esc_pos_end = thrust::remove_if(rmm::exec_policy(stream),
+                                       d_esc_positions,
+                                       d_esc_positions + esc_count,
+                                       url_decode_esc_position_filter{d_offsets_span});
 
+  // update count in case any were filtered
+  esc_count = esc_pos_end - d_esc_positions;
   if (esc_count == 0) {
     // nothing to replace, so just copy the input column
     return std::make_unique<cudf::column>(strings.parent());
@@ -344,11 +342,11 @@ std::unique_ptr<column> url_decode(
 
   // build offsets column
   auto offsets_column = make_numeric_column(
-    data_type{type_id::INT32}, strings_count + 1, mask_state::UNALLOCATED, stream, mr);
+    data_type{type_to_id<size_type>()}, offset_count, mask_state::UNALLOCATED, stream, mr);
   auto offsets_view = offsets_column->mutable_view();
   thrust::transform(rmm::exec_policy(stream),
-                    d_offsets,
-                    d_offsets + strings_count + 1,
+                    d_offsets_span.begin(),
+                    d_offsets_span.end(),
                     offsets_view.begin<size_type>(),
                     url_decode_offsets_updater{d_esc_positions_span, chars_start});
 
@@ -365,6 +363,9 @@ std::unique_ptr<column> url_decode(
     thrust::make_counting_iterator<size_type>(chars_start),
     chars_bytes,
     url_decode_char_replacer{d_esc_positions_span, d_in_chars, d_out_chars, chars_start});
+
+  // free the escape positions buffer as it is no longer needed
+  (void)esc_positions.release();
 
   // copy null mask
   rmm::device_buffer null_mask = cudf::detail::copy_bitmask(strings.parent(), stream, mr);

@@ -103,8 +103,8 @@ TEST_F(StringsConvertTest, UrlDecodeNop)
   std::vector<const char*> h_strings{"www.nvidia.com/rapids/abc123",
                                      "/_file-1234567890.txt",
                                      "abcdefghijklmnopqrstuvwxyz",
-                                     "ABCDEFGHIJKLMNOPQRSTUVWXYZ",
-                                     "01234567890",
+                                     "ABCDEFGHIJKLMNOPQRSTUVWXYZ%",
+                                     "0123456789%0",
                                      nullptr,
                                      ""};
   cudf::test::strings_column_wrapper strings(
@@ -121,11 +121,11 @@ TEST_F(StringsConvertTest, UrlDecodeNop)
 
 TEST_F(StringsConvertTest, UrlDecodeSliced)
 {
-  std::vector<const char*> h_strings{"www.nvidia.com/rapids/%3Fp%3D%C3%A9",
-                                     "/_file-1234567890.txt",
+  std::vector<const char*> h_strings{"www.nvidia.com/rapids/%3Fp%3D%C3%A9%",
+                                     "01/_file-1234567890.txt",
                                      "a%20b%2Bc~defghijklmnopqrstuvwxyz",
                                      "%25-accent%c3%a9d",
-                                     "ABCDEFGHIJKLMNOPQRSTUVWXYZ",
+                                     "ABCDEFGHIJKLMNOPQRSTUVWXYZ%0",
                                      "01234567890",
                                      nullptr,
                                      ""};
@@ -135,11 +135,11 @@ TEST_F(StringsConvertTest, UrlDecodeSliced)
     thrust::make_transform_iterator(h_strings.cbegin(),
                                     [](auto const str) { return str != nullptr; }));
 
-  std::vector<const char*> h_expected{"www.nvidia.com/rapids/?p=é",
-                                      "/_file-1234567890.txt",
+  std::vector<const char*> h_expected{"www.nvidia.com/rapids/?p=é%",
+                                      "01/_file-1234567890.txt",
                                       "a b+c~defghijklmnopqrstuvwxyz",
                                       "%-accentéd",
-                                      "ABCDEFGHIJKLMNOPQRSTUVWXYZ",
+                                      "ABCDEFGHIJKLMNOPQRSTUVWXYZ%0",
                                       "01234567890",
                                       nullptr,
                                       ""};
