@@ -205,10 +205,9 @@ class groupby {
    * in group `j` that precedes or follows `value[i]`. If a non-null value is not found in the
    * specified direction, `value[i]` is left NULL.
    *
-   * The returned pair contains a column of the sorted keys and a `scan_aggregation_result`.
-   *
-   * `scan_aggregation_result` contains the result column in which values of the same group is
-   * located in a contiguous memory.
+   * The returned pair contains a column of the sorted keys and the result column. In result column,
+   * values of the same group are in contiguous memory. In each group, the order of values maintain
+   * their original order. The order of groups are not gaurenteed.
    *
    * Example:
    * @code{.pseudo}
@@ -217,7 +216,7 @@ class groupby {
    * keys:    {2, 1, 2, 1}
    * values:  {3, 4, NULL, NULL}
    *
-   * //Outputs:
+   * //(Possible) Outputs:
    * sorted_keys:     {1, 1, 2, 2}
    * result:          {4, 4, 3, 3}
    * @endcode
@@ -226,7 +225,7 @@ class groupby {
    * @param[in] replace_policy Specify the position of replacement values relative to null values.
    * @param[in] mr Device memory resource used to allocate device memory of the returned column.
    *
-   * @return Pair that contains a table with the sorted keys and a `scan_aggregation_result`
+   * @return Pair that contains a table with the sorted keys and the result column
    */
   std::pair<std::unique_ptr<table>, std::unique_ptr<column>> replace_nulls(
     column_view const& value,
