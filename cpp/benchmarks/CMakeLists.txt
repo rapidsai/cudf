@@ -306,6 +306,7 @@ ConfigureBench(SUBWORD_TOKENIZER_BENCH "${SUBWORD_TOKENIZER_BENCH_SRC}")
 
 set(STRINGS_BENCH_SRC
   "${CMAKE_CURRENT_SOURCE_DIR}/string/case_benchmark.cpp"
+  "${CMAKE_CURRENT_SOURCE_DIR}/string/contains_benchmark.cpp"
   "${CMAKE_CURRENT_SOURCE_DIR}/string/convert_durations_benchmark.cpp")
 
 ConfigureBench(STRINGS_BENCH "${STRINGS_BENCH_SRC}")
