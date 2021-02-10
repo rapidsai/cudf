@@ -189,12 +189,23 @@ constexpr bool is_hex_digit(char ch)
   return (ch >= '0' && ch <= '9') || (ch >= 'A' && ch <= 'F') || (ch >= 'a' && ch <= 'f');
 }
 
-// Functor for detecting character escape sequences in URL-encoded strings.
-// It returns true for a character index corresponding to the start of an
-// escape sequence, i.e.: '%' followed by two hexadecimal digits.
+/**
+ * @brief Functor for detecting character escape sequences in URL-encoded strings.
+ */
 struct url_decode_escape_detector {
   device_span<char const> const d_chars{};
 
+  /**
+   * @brief Detects if an escape sequence is at the specified character position.
+   *
+   * Returns true for a character index corresponding to the start of an escape
+   * sequence, i.e.: '%' followed by two hexadecimal digits. This does not check
+   * against string boundaries and therefore can produce false-positives.
+   *
+   * @param char_idx Character position to examine
+   * @return true An escape sequence was detected at the character position
+   * @return false No escape sequence at the character position
+   */
   __device__ bool operator()(size_type char_idx) const
   {
     return (char_idx + 2 < d_chars.size()) && d_chars[char_idx] == '%' &&
@@ -202,11 +213,21 @@ struct url_decode_escape_detector {
   }
 };
 
-// Functor for filtering out escape sequence positions that cross a string boundary.
+/**
+ * @brief Functor for detecting escape sequence positions that cross a string boundary.
+ */
 struct url_decode_esc_position_filter {
   device_span<size_type const> const d_offsets{};
 
-  // Return true if the escape sequence at the specified position crosses as string boundary
+  /**
+   * @brief Detects if an escape sequence crosses a string boundary
+   *
+   * Returns true for an escape sequence that straddles a boundary between two strings.
+   *
+   * @param esc_pos_idx Character position corresponding to the start of an escape sequence
+   * @return true The escape sequence crosses a string boundary
+   * @return false The escape sequence does not cross a string boundary
+   */
   __device__ bool operator()(size_type esc_pos_idx) const
   {
     // find the end offset of the current string
@@ -216,18 +237,32 @@ struct url_decode_esc_position_filter {
   }
 };
 
-// Functor for replacing character escape sequences in URL-encoded strings.
-// Each escape sequence interprets the following 2 characters as hex values to create the output
-// byte. For example, the sequence '%20' is converted into byte (0x20) which is a single space
-// character. Another example converts '%C3%A9' into 2 sequential bytes (0xc3 and 0xa9
-// respectively). Overall, 3 characters are converted into one byte whenever a '%' character
-// is encountered in the string.
+/**
+ * @brief Functor for replacing character escape sequences in URL-encoded strings.
+ *
+ * Each escape sequence interprets the following 2 characters as hex values to create the output
+ * byte. For example, the sequence '%20' is converted into byte (0x20) which is a single space
+ * character. Another example converts '%C3%A9' into 2 sequential bytes (0xc3 and 0xa9
+ * respectively). Overall, 3 characters are converted into one byte whenever a '%' character
+ * is encountered in the string.
+ */
 struct url_decode_char_replacer {
   device_span<size_type const> const d_esc_positions{};
   char const* const d_in_chars{};
   char* const d_out_chars{};
   size_type const first_input_char_offset = 0;
 
+  /**
+   * @brief Copy an input character to the output, decoding escape sequences
+   *
+   * Each character position is examined against the list of known escape sequence positions.
+   * If the position is not within an escape sequence then the input character is copied to the
+   * output. If the position is the start of an escape sequence then the sequence is decoded to
+   * produce the character copied to the output. Any characters after the start of an escape
+   * sequence but still within the escape sequence are discarded.
+   *
+   * @param input_idx The input character position to process
+   */
   __device__ void operator()(size_type input_idx) const
   {
     char ch = d_in_chars[input_idx];
@@ -259,13 +294,22 @@ struct url_decode_char_replacer {
   }
 };
 
-// Functor to update the string column offsets.
-// Each offset is reduced by 2 for every escape sequence that occurs in the entire string column
-// character data before the offset, as 3 characters are replaced with 1 for each escape.
+/**
+ * @brief Functor to update the string column offsets.
+ */
 struct url_decode_offsets_updater {
   device_span<size_type const> const d_esc_positions{};
   size_type const first_input_offset = 0;
 
+  /**
+   * @brief Convert input offsets into output offsets
+   *
+   * Each offset is reduced by 2 for every escape sequence that occurs in the entire string column
+   * character data before the offset, as 3 characters are replaced with 1 for each escape.
+   *
+   * @param offset An original offset value from the input string column
+   * @return Adjusted offset value
+   */
   __device__ size_type operator()(size_type offset) const
   {
     // determine the number of escape sequences occurring before this offset
