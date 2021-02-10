@@ -236,11 +236,18 @@ class Merge(object):
     def construct_result(self, left_rows, right_rows):
         self.match_key_dtypes(_libcudf_to_output_castrules)
 
-        # first construct the index:
-        if self.left_index:
-            out_index = self.lhs.index._gather(left_rows, nullify=True)
-        elif self.right_index:
+        # first construct the index.
+        if self.left_index and self.right_index:
+            if self.how == "right":
+                out_index = self.rhs.index._gather(left_rows, nullify=True)
+            else:
+                out_index = self.lhs.index._gather(left_rows, nullify=True)
+        elif self.left_index:
+            # left_index and right_on
             out_index = self.rhs.index._gather(right_rows, nullify=True)
+        elif self.right_index:
+            # right_index and left_on
+            out_index = self.lhs.index._gather(left_rows, nullify=True)
         else:
             out_index = None
 
