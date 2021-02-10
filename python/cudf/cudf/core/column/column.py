@@ -807,7 +807,12 @@ class ColumnBase(Column, Serializable):
     def median(self, skipna: bool = None) -> ScalarLike:
         raise TypeError(f"cannot perform median with type {self.dtype}")
 
-    def take(self: T, indices: ColumnBase, keep_index: bool = True) -> T:
+    def take(
+        self: T,
+        indices: ColumnBase,
+        keep_index: bool = True,
+        nullify: bool = False,
+    ) -> T:
         """Return Column by taking values from the corresponding *indices*.
         """
         # Handle zero size
@@ -816,7 +821,7 @@ class ColumnBase(Column, Serializable):
         try:
             return (
                 self.as_frame()
-                ._gather(indices, keep_index=keep_index)
+                ._gather(indices, keep_index=keep_index, nullify=nullify)
                 ._as_column()
             )
         except RuntimeError as e:

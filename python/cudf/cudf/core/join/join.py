@@ -237,12 +237,10 @@ class Merge(object):
         self.match_key_dtypes(_libcudf_to_output_castrules)
 
         # first construct the index:
-        if self.left_index and not self.right_index:
-            # TODO: only gather on index columns:
-            out_index = self.rhs.index._gather(right_rows, nullify=True)
-        elif self.right_index and not self.left_index:
-            # TODO: only gather on index columns:
+        if self.left_index:
             out_index = self.lhs.index._gather(left_rows, nullify=True)
+        elif self.right_index:
+            out_index = self.rhs.index._gather(right_rows, nullify=True)
         else:
             out_index = None
 
@@ -258,7 +256,20 @@ class Merge(object):
             data[right_names[rcol]] = self.rhs[rcol]._gather(
                 right_rows, nullify=True
             )
-        return cudf.DataFrame._from_data(data, index=out_index)
+
+        result = cudf.DataFrame._from_data(data, index=out_index)
+
+        # if outer join, key columns are combine:
+        for lkey, rkey in zip(*self._keys):
+            # get the key column as it appears in the result:
+            out_key = JoinKey(result, column=lkey.column, index=lkey.index)
+
+            # fill nulls in the key column with values from the RHS
+            out_key.set_value(
+                out_key.value.fillna(rkey.value.take(right_rows, nullify=True))
+            )
+
+        return result
 
     def output_column_names(self):
         # Return mappings of input column names to (possibly) suffixed
@@ -275,7 +286,7 @@ class Merge(object):
             key_columns_with_same_name = self.on
         else:
             key_columns_with_same_name = []
-            for lkey, rkey in zip(self._keys.left, self._keys.right):
+            for lkey, rkey in zip(*self._keys):
                 if (lkey.is_index_level, rkey.is_index_level) == (
                     False,
                     False,
@@ -355,7 +366,7 @@ class Merge(object):
         # match the dtypes of the key columns in
         # self.lhs and self.rhs according to the matching
         # function `match_func`
-        for left_key, right_key in zip(self._keys.left, self._keys.right):
+        for left_key, right_key in zip(*self._keys):
             lcol, rcol = left_key.value, right_key.value
             dtype = match_func(lcol, rcol, how=self.how)
             left_key.set_value(lcol.astype(dtype))
