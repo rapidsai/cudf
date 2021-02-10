@@ -318,9 +318,12 @@ class NullableFloatSeriesCompare(object):
         Fake what a nullable series is supposed to do
         """
         if not hasattr(other, "__len__") or len(other) != len(self):
-            raise ValueError(
-                "Must compare to a list-like of equal length"
-            )
+            if not np.isscalar(other):
+                raise ValueError(
+                    "Must compare to a list-like of equal length"
+                )
+            else:
+                other = [other] * len(self)
 
         result = [None] * len(self)
         for i, (lhs, rhs) in enumerate(zip(self, other)):
