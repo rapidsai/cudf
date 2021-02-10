@@ -123,11 +123,11 @@ __device__ void GenerateDictionaryIndices(dict_state_s *s, uint32_t t)
       (is_valid &&
        dict_idx ==
          row);  // Any value that doesn't have bit31 set should have dict_idx=row at this point
-    uint32_t tmp_num_dict_entries;
+    uint32_t block_num_dict_entries;
     uint32_t pos;
-    block_scan(temp_storage).ExclusiveSum(is_unique, pos, tmp_num_dict_entries);
+    block_scan(temp_storage).ExclusiveSum(is_unique, pos, block_num_dict_entries);
     pos += num_dict_entries;
-    num_dict_entries += tmp_num_dict_entries;
+    num_dict_entries += block_num_dict_entries;
     if (is_valid && is_unique) {
       dict_data[pos]  = row;
       dict_index[row] = pos;

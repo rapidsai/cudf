@@ -259,18 +259,16 @@ __global__ void __launch_bounds__(block_size) gpuInitPageFragments(PageFragment 
     uint32_t sum23   = count23 + (count23 << 16);
     uint32_t sum45   = count45 + (count45 << 16);
     uint32_t sum67   = count67 + (count67 << 16);
-    uint32_t sum_w;
     sum23 += (sum01 >> 16) * 0x10001;
     sum45 += (sum23 >> 16) * 0x10001;
     sum67 += (sum45 >> 16) * 0x10001;
-    sum_w = sum67 >> 16;
+    uint32_t sum_w = sum67 >> 16;
     block_scan(temp_storage.scan_storage).InclusiveSum(sum_w, sum_w);
     sum_w                 = (sum_w - (sum67 >> 16)) * 0x10001;
     s->map.u32[t * 4 + 0] = sum_w + sum01 - count01;
     s->map.u32[t * 4 + 1] = sum_w + sum23 - count23;
     s->map.u32[t * 4 + 2] = sum_w + sum45 - count45;
     s->map.u32[t * 4 + 3] = sum_w + sum67 - count67;
-    __syncthreads();
   }
   __syncthreads();
   // Put the indices back in hash order
@@ -311,7 +309,7 @@ __global__ void __launch_bounds__(block_size) gpuInitPageFragments(PageFragment 
     // map, the position of the first entry can be inferred from the hash map counts
     uint32_t dupe_data_size = 0;
     for (uint32_t i = 0; i < nnz; i += block_size) {
-      uint32_t ck_row = 0, ck_row_ref = 0, is_dupe = 0, dupes_before;
+      uint32_t ck_row = 0, ck_row_ref = 0, is_dupe = 0;
       if (i + t < nnz) {
         uint32_t dict_val = s->dict[i + t];
         uint32_t hash     = dict_val & ((1 << init_hash_bits) - 1);
@@ -347,11 +345,12 @@ __global__ void __launch_bounds__(block_size) gpuInitPageFragments(PageFragment 
           }
         }
       }
-      uint32_t tmp_dupes;
-      block_scan(temp_storage.scan_storage).InclusiveSum(is_dupe, dupes_before, tmp_dupes);
+      uint32_t dupes_in_block;
+      uint32_t dupes_before;
+      block_scan(temp_storage.scan_storage).InclusiveSum(is_dupe, dupes_before, dupes_in_block);
       dupes_before += s->total_dupes;
       __syncthreads();
-      if (t == 0) { s->total_dupes += tmp_dupes; }
+      if (t == 0) { s->total_dupes += dupes_in_block; }
       if (i + t < nnz) {
         if (!is_dupe) {
           s->col.dict_data[start_row + i + t - dupes_before] = ck_row;
@@ -1068,8 +1067,8 @@ __global__ void __launch_bounds__(128, 8) gpuEncodePages(EncPage *pages,
       // Dictionary encoding
       if (dict_bits > 0) {
         uint32_t rle_numvals;
-        uint32_t tmp_rle_numvals = 0;
-        block_scan(temp_storage).ExclusiveSum(is_valid, pos, tmp_rle_numvals);
+        uint32_t rle_numvals_in_block;
+        block_scan(temp_storage).ExclusiveSum(is_valid, pos, rle_numvals_in_block);
         rle_numvals = s->rle_numvals;
         if (is_valid) {
           uint32_t v;
@@ -1080,7 +1079,7 @@ __global__ void __launch_bounds__(128, 8) gpuEncodePages(EncPage *pages,
           }
           s->vals[(rle_numvals + pos) & (rle_buffer_size - 1)] = v;
         }
-        rle_numvals += tmp_rle_numvals;
+        rle_numvals += rle_numvals_in_block;
         __syncthreads();
         if ((!enable_bool_rle) && (dtype == BOOLEAN)) {
           PlainBoolEncode(s, rle_numvals, (cur_val_idx == s->page.num_leaf_values), t);

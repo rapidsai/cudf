@@ -122,7 +122,6 @@ __global__ void __launch_bounds__(buffersize_threads_per_block, 1)
     uint32_t tmp_stats_size;
     block_scan(temp_storage).ExclusiveSum(stats_len, stats_pos, tmp_stats_size);
     stats_pos += stats_size;
-    __syncthreads();
     stats_size += tmp_stats_size;
     if (idx < statistics_count) {
       groups[idx].start_chunk = stats_pos;

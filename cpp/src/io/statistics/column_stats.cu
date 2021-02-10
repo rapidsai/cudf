@@ -213,7 +213,7 @@ gatherIntColumnStats(stats_state_s *s, statistics_dtype dtype, uint32_t t, Stora
     vmin = warp_reduce(storage.integer_stats[t / 32]).Reduce(s->warp_min[t].i_val, cub::Min());
     if (!(t & 0x1f)) {
       s->ck.min_value.i_val = vmin;
-      s->ck.has_minmax      = (has_minmax);
+      s->ck.has_minmax      = has_minmax;
       s->ck.sum.i_val       = vsum;
       // TODO: For now, don't set the sum flag with 64-bit values so we don't have to check for
       // 64-bit sum overflow
@@ -287,9 +287,9 @@ gatherFloatColumnStats(stats_state_s *s, statistics_dtype dtype, uint32_t t, Sto
     vmin = warp_reduce(storage.float_stats[t / 32]).Reduce(s->warp_min[t].fp_val, cub::Min());
     if (!(t & 0x1f)) {
       s->ck.min_value.fp_val = (vmin != 0.0) ? vmin : CUDART_NEG_ZERO;
-      s->ck.has_minmax       = (has_minmax);
+      s->ck.has_minmax       = has_minmax;
       s->ck.sum.fp_val       = vsum;
-      s->ck.has_sum          = (has_minmax);  // Implies sum is valid as well
+      s->ck.has_sum          = has_minmax;  // Implies sum is valid as well
     }
   } else if (t < 32 * 2) {
     vmax =
@@ -493,7 +493,7 @@ void __device__ mergeIntColumnStats(merge_state_s *s,
     vmin = cub::WarpReduce<int64_t>(storage.i64[t / 32]).Reduce(s->warp_min[t].i_val, cub::Min());
     if (!(t & 0x1f)) {
       s->ck.min_value.i_val = vmin;
-      s->ck.has_minmax      = (has_minmax);
+      s->ck.has_minmax      = has_minmax;
       s->ck.non_nulls       = non_nulls;
       s->ck.null_count      = null_count;
       s->ck.sum.i_val       = vsum;
@@ -567,11 +567,11 @@ void __device__ mergeFloatColumnStats(merge_state_s *s,
     vmin = cub::WarpReduce<double>(storage.f64[t / 32]).Reduce(s->warp_min[t].fp_val, cub::Min());
     if (!(t & 0x1f)) {
       s->ck.min_value.fp_val = (vmin != 0.0) ? vmin : CUDART_NEG_ZERO;
-      s->ck.has_minmax       = (has_minmax);
+      s->ck.has_minmax       = has_minmax;
       s->ck.non_nulls        = non_nulls;
       s->ck.null_count       = null_count;
       s->ck.sum.fp_val       = vsum;
-      s->ck.has_sum          = (has_minmax);  // Implies sum is valid as well
+      s->ck.has_sum          = has_minmax;  // Implies sum is valid as well
     }
   } else if (t < 32 * 2) {
     vmax =

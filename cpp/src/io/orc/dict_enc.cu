@@ -178,11 +178,10 @@ __global__ void __launch_bounds__(block_size, 2)
     uint32_t sum23   = count23 + (count23 << 16);
     uint32_t sum45   = count45 + (count45 << 16);
     uint32_t sum67   = count67 + (count67 << 16);
-    uint32_t sum_w;
     sum23 += (sum01 >> 16) * 0x10001;
     sum45 += (sum23 >> 16) * 0x10001;
     sum67 += (sum45 >> 16) * 0x10001;
-    sum_w = sum67 >> 16;
+    uint32_t sum_w = sum67 >> 16;
     block_scan(temp_storage.scan_storage).InclusiveSum(sum_w, sum_w);
     __syncthreads();
     sum_w                 = (sum_w - (sum67 >> 16)) * 0x10001;
@@ -228,7 +227,7 @@ __global__ void __launch_bounds__(block_size, 2)
   // map, the position of the first string can be inferred from the hash map counts
   dict_char_count = 0;
   for (uint32_t i = 0; i < nnz; i += block_size) {
-    uint32_t ck_row = 0, ck_row_ref = 0, is_dupe = 0, dupes_before;
+    uint32_t ck_row = 0, ck_row_ref = 0, is_dupe = 0;
     if (i + t < nnz) {
       const char *str1, *str2;
       uint32_t len1, len2, hash;
@@ -244,11 +243,12 @@ __global__ void __launch_bounds__(block_size, 2)
         dict_char_count += (is_dupe) ? 0 : len1;
       }
     }
-    uint32_t tmp_dupes;
-    block_scan(temp_storage.scan_storage).InclusiveSum(is_dupe, dupes_before, tmp_dupes);
+    uint32_t dupes_in_block;
+    uint32_t dupes_before;
+    block_scan(temp_storage.scan_storage).InclusiveSum(is_dupe, dupes_before, dupes_in_block);
     dupes_before += s->total_dupes;
     __syncthreads();
-    if (!t) { s->total_dupes += tmp_dupes; }
+    if (!t) { s->total_dupes += dupes_in_block; }
     if (i + t < nnz) {
       if (!is_dupe) {
         dict_data[i + t - dupes_before] = ck_row + start_row;
@@ -366,8 +366,8 @@ __global__ void __launch_bounds__(block_size)
   str_data        = static_cast<const nvstrdesc_s *>(s->stripe.column_data_base);
   dict_char_count = 0;
   for (uint32_t i = 0; i < num_strings; i += block_size) {
-    uint32_t cur = (i + t < num_strings) ? dict_data[i + t] : 0;
-    uint32_t dupes_before, cur_len = 0;
+    uint32_t cur     = (i + t < num_strings) ? dict_data[i + t] : 0;
+    uint32_t cur_len = 0;
     const char *cur_ptr;
     bool is_dupe = false;
     if (i + t < num_strings) {
@@ -379,11 +379,12 @@ __global__ void __launch_bounds__(block_size)
       is_dupe       = nvstr_is_equal(cur_ptr, cur_len, str_data[prev].ptr, str_data[prev].count);
     }
     dict_char_count += (is_dupe) ? 0 : cur_len;
-    uint32_t tmp_dupes;
-    block_scan(temp_storage.scan_storage).InclusiveSum(is_dupe, dupes_before, tmp_dupes);
+    uint32_t dupes_in_block;
+    uint32_t dupes_before;
+    block_scan(temp_storage.scan_storage).InclusiveSum(is_dupe, dupes_before, dupes_in_block);
     dupes_before += s->total_dupes;
     __syncthreads();
-    if (!t) { s->total_dupes += tmp_dupes; }
+    if (!t) { s->total_dupes += dupes_in_block; }
     if (i + t < num_strings) {
       dict_index[cur] = i + t - dupes_before;
       if (!is_dupe && dupes_before != 0) { dict_data[i + t - dupes_before] = cur; }

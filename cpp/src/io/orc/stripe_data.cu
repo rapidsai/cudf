@@ -96,10 +96,6 @@ struct orc_strdict_state_s {
   uint32_t dict_len;
 };
 
-struct orc_nulldec_state_s {
-  uint32_t row;
-};
-
 struct orc_datadec_state_s {
   uint32_t cur_row;         // starting row of current batch
   uint32_t end_row;         // ending row of this chunk (start_row + num_rows)
@@ -117,7 +113,7 @@ struct orcdec_state_s {
   int is_string;
   union {
     orc_strdict_state_s dict;
-    orc_nulldec_state_s nulls;
+    uint32_t nulls_desc_row;  // number of rows processed for nulls.
     orc_datadec_state_s data;
   } top;
   union {
@@ -1138,8 +1134,8 @@ __global__ void __launch_bounds__(block_size)
     uint32_t null_count = 0;
     // Decode NULLs
     if (t == 0) {
-      s->chunk.skip_count = 0;
-      s->top.nulls.row    = 0;
+      s->chunk.skip_count   = 0;
+      s->top.nulls_desc_row = 0;
       bytestream_init(&s->bs, s->chunk.streams[CI_PRESENT], s->chunk.strm_len[CI_PRESENT]);
     }
     __syncthreads();
@@ -1147,8 +1143,8 @@ __global__ void __launch_bounds__(block_size)
       // No present stream: all rows are valid
       s->vals.u32[t] = ~0;
     }
-    while (s->top.nulls.row < s->chunk.num_rows) {
-      uint32_t nrows_max = min(s->chunk.num_rows - s->top.nulls.row, blockDim.x * 32);
+    while (s->top.nulls_desc_row < s->chunk.num_rows) {
+      uint32_t nrows_max = min(s->chunk.num_rows - s->top.nulls_desc_row, blockDim.x * 32);
       uint32_t nrows;
       size_t row_in;
 
@@ -1166,7 +1162,7 @@ __global__ void __launch_bounds__(block_size)
         nrows = nrows_max;
       }
       __syncthreads();
-      row_in = s->chunk.start_row + s->top.nulls.row;
+      row_in = s->chunk.start_row + s->top.nulls_desc_row;
       if (row_in + nrows > first_row && row_in < first_row + max_num_rows &&
           s->chunk.valid_map_base != NULL) {
         int64_t dst_row   = row_in - first_row;
@@ -1221,7 +1217,7 @@ __global__ void __launch_bounds__(block_size)
         if (t == 0) { s->chunk.skip_count += skip_count; }
       }
       __syncthreads();
-      if (t == 0) { s->top.nulls.row += nrows; }
+      if (t == 0) { s->top.nulls_desc_row += nrows; }
       __syncthreads();
     }
     __syncthreads();
@@ -1285,7 +1281,7 @@ __global__ void __launch_bounds__(block_size)
  * @param[in,out] s Column chunk decoder state
  * @param[in] first_row crop all rows below first rows
  * @param[in] t thread id
- * @param[in] temp_storage shared memory storage to performance block reduce
+ * @param[in] temp_storage shared memory storage to perform block reduce
  */
 template <typename Storage>
 static __device__ void DecodeRowPositions(orcdec_state_s *s,

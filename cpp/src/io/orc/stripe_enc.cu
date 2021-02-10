@@ -75,7 +75,7 @@ struct orcenc_state_s {
     StripeDictionary dict_stripe;
   } u;
   union {
-    uint8_t u8[scratch_buffer_size];  // general scratch buffer
+    uint8_t u8[scratch_buffer_size];  // gblock_vminscratch buffer
     uint32_t u32[scratch_buffer_size / 4];
   } buf;
   union {
@@ -345,7 +345,7 @@ static inline __device__ void StoreBitsBigEndian(
  * @param[in] numvals max number of values to encode
  * @param[in] flush encode all remaining values if nonzero
  * @param[in] t thread id
- * @param[in] temp_storage shared memory storage to performance block reduce
+ * @param[in] temp_storage shared memory storage to perform block reduce
  *
  * @return number of input values encoded
  */
@@ -366,7 +366,7 @@ static __device__ uint32_t IntegerRLE(orcenc_state_s *s,
   using block_reduce = cub::BlockReduce<T, block_size>;
   uint8_t *dst       = s->chunk.streams[cid] + s->strm_pos[cid];
   uint32_t out_cnt   = 0;
-  __shared__ volatile uint64_t scratch;
+  __shared__ volatile uint64_t block_vmin;
 
   while (numvals > 0) {
     T v0               = (t < numvals) ? inbuf[(inpos + t) & inmask] : 0;
@@ -421,7 +421,7 @@ static __device__ uint32_t IntegerRLE(orcenc_state_s *s,
       if (t == 0) {
         uint32_t mode1_w, mode2_w;
         typename std::make_unsigned<T>::type vrange_mode1, vrange_mode2;
-        scratch = (uint64_t)vmin;
+        block_vmin = static_cast<uint64_t>(vmin);
         if (sizeof(T) > 4) {
           vrange_mode1 = (is_signed) ? max(zigzag(vmin), zigzag(vmax)) : vmax;
           vrange_mode2 = vmax - vmin;
@@ -463,7 +463,7 @@ static __device__ uint32_t IntegerRLE(orcenc_state_s *s,
         }
       }
       __syncthreads();
-      vmin         = (T)scratch;
+      vmin         = static_cast<T>(block_vmin);
       literal_mode = s->u.intrle.literal_mode;
       literal_w    = s->u.intrle.literal_w;
       if (literal_mode == 1) {
