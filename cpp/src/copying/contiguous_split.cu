@@ -18,6 +18,7 @@
 #include <cudf/column/column_view.hpp>
 #include <cudf/copying.hpp>
 #include <cudf/detail/copy.hpp>
+#include <cudf/detail/iterator.cuh>
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/utilities/cuda.cuh>
@@ -99,8 +100,6 @@ struct dst_buf_info {
   size_type valid_count;
 };
 
-constexpr size_type copy_block_size = 512;
-
 /**
  * @brief Copy a single buffer of column data, shifting values (for offset columns),
  * and validity (for validity buffers) as necessary.
@@ -130,6 +129,7 @@ constexpr size_type copy_block_size = 512;
  * @param num_rows Number of rows being copied
  * @param valid_count Optional pointer to a value to store count of set bits
  */
+template <int block_size>
 __device__ void copy_buffer(uint8_t* __restrict__ dst,
                             uint8_t* __restrict__ src,
                             int t,
@@ -217,7 +217,7 @@ __device__ void copy_buffer(uint8_t* __restrict__ dst,
     if (num_bytes == 0) {
       if (!t) { *valid_count = 0; }
     } else {
-      using BlockReduce = cub::BlockReduce<size_type, copy_block_size>;
+      using BlockReduce = cub::BlockReduce<size_type, block_size>;
       __shared__ typename BlockReduce::TempStorage temp_storage;
       size_type block_valid_count{BlockReduce(temp_storage).Sum(thread_valid_count)};
       if (!t) {
@@ -253,6 +253,7 @@ __device__ void copy_buffer(uint8_t* __restrict__ dst,
  * @param dst_bufs Desination buffers (N*M)
  * @param buf_info Information on the range of values to be copied for each destination buffer.
  */
+template <int block_size>
 __global__ void copy_partition(int num_src_bufs,
                                int num_partitions,
                                uint8_t** src_bufs,
@@ -264,17 +265,18 @@ __global__ void copy_partition(int num_src_bufs,
   size_t const buf_index    = (partition_index * num_src_bufs) + src_buf_index;
 
   // copy, shifting offsets and validity bits as needed
-  copy_buffer(dst_bufs[partition_index] + buf_info[buf_index].dst_offset,
-              src_bufs[src_buf_index],
-              threadIdx.x,
-              buf_info[buf_index].num_elements,
-              buf_info[buf_index].element_size,
-              buf_info[buf_index].src_row_index,
-              blockDim.x,
-              buf_info[buf_index].value_shift,
-              buf_info[buf_index].bit_shift,
-              buf_info[buf_index].num_rows,
-              buf_info[buf_index].valid_count > 0 ? &buf_info[buf_index].valid_count : nullptr);
+  copy_buffer<block_size>(
+    dst_bufs[partition_index] + buf_info[buf_index].dst_offset,
+    src_bufs[src_buf_index],
+    threadIdx.x,
+    buf_info[buf_index].num_elements,
+    buf_info[buf_index].element_size,
+    buf_info[buf_index].src_row_index,
+    blockDim.x,
+    buf_info[buf_index].value_shift,
+    buf_info[buf_index].bit_shift,
+    buf_info[buf_index].num_rows,
+    buf_info[buf_index].valid_count > 0 ? &buf_info[buf_index].valid_count : nullptr);
 }
 
 // The block of functions below are all related:
@@ -942,10 +944,10 @@ std::vector<packed_table> contiguous_split(cudf::table_view const& input,
   // compute total size of each partition
   {
     // key is split index
-    auto keys   = thrust::make_transform_iterator(thrust::make_counting_iterator(0),
-                                                split_key_functor{static_cast<int>(num_src_bufs)});
-    auto values = thrust::make_transform_iterator(thrust::make_counting_iterator(0),
-                                                  buf_size_functor{d_dst_buf_info});
+    auto keys = cudf::detail::make_counting_transform_iterator(
+      0, split_key_functor{static_cast<int>(num_src_bufs)});
+    auto values =
+      cudf::detail::make_counting_transform_iterator(0, buf_size_functor{d_dst_buf_info});
 
     thrust::reduce_by_key(rmm::exec_policy(stream),
                           keys,
@@ -957,10 +959,11 @@ std::vector<packed_table> contiguous_split(cudf::table_view const& input,
 
   // compute start offset for each output buffer
   {
-    auto keys   = thrust::make_transform_iterator(thrust::make_counting_iterator(0),
-                                                split_key_functor{static_cast<int>(num_src_bufs)});
-    auto values = thrust::make_transform_iterator(thrust::make_counting_iterator(0),
-                                                  buf_size_functor{d_dst_buf_info});
+    auto keys = cudf::detail::make_counting_transform_iterator(
+      0, split_key_functor{static_cast<int>(num_src_bufs)});
+    auto values =
+      cudf::detail::make_counting_transform_iterator(0, buf_size_functor{d_dst_buf_info});
+
     thrust::exclusive_scan_by_key(rmm::exec_policy(stream),
                                   keys,
                                   keys + num_bufs,
@@ -1019,7 +1022,8 @@ std::vector<packed_table> contiguous_split(cudf::table_view const& input,
 
   // copy.  1 block per buffer
   {
-    copy_partition<<<num_bufs, copy_block_size, 0, stream.value()>>>(
+    constexpr size_type block_size = 512;
+    copy_partition<block_size><<<num_bufs, block_size, 0, stream.value()>>>(
       num_src_bufs, num_partitions, d_src_bufs, d_dst_bufs, d_dst_buf_info);
   }
 

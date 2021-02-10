@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,10 +16,12 @@
 #pragma once
 
 #include <cudf/column/column_device_view.cuh>
+#include <cudf/detail/iterator.cuh>
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/strings/detail/utilities.hpp>
 #include <cudf/strings/string_view.cuh>
 #include <cudf/strings/strings_column_view.hpp>
+
 #include <strings/utilities.cuh>
 
 #include <rmm/cuda_stream_view.hpp>
@@ -71,9 +73,8 @@ std::unique_ptr<column> modify_strings(strings_column_view const& strings,
   device_probe_functor d_probe_fctr{d_column, std::forward<Types>(args)...};
 
   // build offsets column -- calculate the size of each output string
-  auto offsets_transformer_itr =
-    thrust::make_transform_iterator(thrust::make_counting_iterator<size_type>(0), d_probe_fctr);
-  auto offsets_column = detail::make_offsets_child_column(
+  auto offsets_transformer_itr = cudf::detail::make_counting_transform_iterator(0, d_probe_fctr);
+  auto offsets_column          = detail::make_offsets_child_column(
     offsets_transformer_itr, offsets_transformer_itr + strings_count, stream, mr);
   auto offsets_view = offsets_column->view();
   auto d_new_offsets =
