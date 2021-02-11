@@ -81,7 +81,7 @@ class orc_streams {
 
 struct encoded_streams {
   rmm::device_uvector<uint8_t> encoded_data;
-  hostdevice_vector<gpu::EncStream> descs;
+  hostdevice_vector<gpu::encoder_chunk_streams> descs;
 };
 
 struct encoder_chunks {
@@ -224,7 +224,7 @@ class writer::impl {
                                                 size_t num_index_streams,
                                                 size_t num_data_streams,
                                                 stripe_boundaries const& stripe_bounds,
-                                                hostdevice_vector<gpu::EncStream>& streams,
+                                                hostdevice_vector<gpu::encoder_chunk_streams>& streams,
                                                 hostdevice_vector<gpu::StripeStream>& strm_desc);
 
   /**
@@ -262,7 +262,7 @@ class writer::impl {
                           size_t num_data_streams,
                           size_t group,
                           size_t groups_in_stripe,
-                          hostdevice_vector<gpu::EncStream> const& enc_streams,
+                          hostdevice_vector<gpu::encoder_chunk_streams> const& enc_streams,
                           hostdevice_vector<gpu::StripeStream> const& strm_desc,
                           hostdevice_vector<gpu_inflate_status_s> const& comp_out,
                           StripeInformation* stripe,
@@ -280,7 +280,7 @@ class writer::impl {
    * @param streams List of all streams
    */
   void write_data_stream(gpu::StripeStream const& strm_desc,
-                         gpu::EncStream const& enc_stream,
+                         gpu::encoder_chunk_streams const& enc_stream,
                          uint8_t const* compressed_data,
                          uint8_t* stream_out,
                          StripeInformation* stripe,

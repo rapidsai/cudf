@@ -69,7 +69,7 @@ struct orcenc_state_s {
   uint32_t numvals;       // # of non-zero values in current batch (<=nrows)
   uint32_t numlengths;    // # of non-zero values in DATA2 batch
   uint32_t nnz;           // Running count of non-null values
-  EncStream stream;
+  encoder_chunk_streams stream;
   EncChunk chunk;
   uint32_t strm_pos[CI_NUM_STREAMS];
   uint8_t valid_buf[512];  // valid map bits
@@ -127,7 +127,7 @@ template <StreamIndexType cid, uint32_t inmask>
 static __device__ void StoreBytes(
   orcenc_state_s *s, const uint8_t *inbuf, uint32_t inpos, uint32_t count, int t)
 {
-  uint8_t *dst = s->stream.streams[cid] + s->strm_pos[cid];
+  uint8_t *dst = s->stream.data_ptrs[cid] + s->strm_pos[cid];
   while (count > 0) {
     uint32_t n = min(count, 512);
     if (t < n) { dst[t] = inbuf[(inpos + t) & inmask]; }
@@ -136,7 +136,7 @@ static __device__ void StoreBytes(
     count -= n;
   }
   __syncthreads();
-  if (!t) { s->strm_pos[cid] = static_cast<uint32_t>(dst - s->stream.streams[cid]); }
+  if (!t) { s->strm_pos[cid] = static_cast<uint32_t>(dst - s->stream.data_ptrs[cid]); }
 }
 
 /**
@@ -158,7 +158,7 @@ template <StreamIndexType cid, uint32_t inmask>
 static __device__ uint32_t ByteRLE(
   orcenc_state_s *s, const uint8_t *inbuf, uint32_t inpos, uint32_t numvals, uint32_t flush, int t)
 {
-  uint8_t *dst     = s->stream.streams[cid] + s->strm_pos[cid];
+  uint8_t *dst     = s->stream.data_ptrs[cid] + s->strm_pos[cid];
   uint32_t out_cnt = 0;
 
   while (numvals > 0) {
@@ -257,7 +257,7 @@ static __device__ uint32_t ByteRLE(
       }
     }
   }
-  if (!t) { s->strm_pos[cid] = static_cast<uint32_t>(dst - s->stream.streams[cid]); }
+  if (!t) { s->strm_pos[cid] = static_cast<uint32_t>(dst - s->stream.data_ptrs[cid]); }
   __syncthreads();
   return out_cnt;
 }
@@ -372,7 +372,7 @@ static __device__ uint32_t IntegerRLE(orcenc_state_s *s,
 {
   using warp_reduce      = cub::WarpReduce<T>;
   using half_warp_reduce = cub::WarpReduce<T, 16>;
-  uint8_t *dst           = s->stream.streams[cid] + s->strm_pos[cid];
+  uint8_t *dst           = s->stream.data_ptrs[cid] + s->strm_pos[cid];
   uint32_t out_cnt       = 0;
 
   while (numvals > 0) {
@@ -584,7 +584,7 @@ static __device__ uint32_t IntegerRLE(orcenc_state_s *s,
       out_cnt += delta_run;
     }
   }
-  if (!t) { s->strm_pos[cid] = static_cast<uint32_t>(dst - s->stream.streams[cid]); }
+  if (!t) { s->strm_pos[cid] = static_cast<uint32_t>(dst - s->stream.data_ptrs[cid]); }
   __syncthreads();
   return out_cnt;
 }
@@ -662,7 +662,7 @@ static const __device__ __constant__ int32_t kTimeScale[10] = {
 // blockDim {512,1,1}
 template <int block_size>
 __global__ void __launch_bounds__(block_size) gpuEncodeOrcColumnData(EncChunk *chunks,
-                                                                     EncStream *streams,
+                                                                     encoder_chunk_streams *streams,
                                                                      uint32_t num_columns,
                                                                      uint32_t num_rowgroups)
 {
@@ -695,8 +695,8 @@ __global__ void __launch_bounds__(block_size) gpuEncodeOrcColumnData(EncChunk *c
     s->nnz          = 0;
     // Dictionary data is encoded in a separate kernel
     if (s->chunk.encoding_kind == DICTIONARY_V2) {
-      s->strm_pos[CI_DATA2]      = s->stream.strm_len[CI_DATA2];
-      s->strm_pos[CI_DICTIONARY] = s->stream.strm_len[CI_DICTIONARY];
+      s->strm_pos[CI_DATA2]      = s->stream.lengths[CI_DATA2];
+      s->strm_pos[CI_DICTIONARY] = s->stream.lengths[CI_DICTIONARY];
     }
   }
   __syncthreads();
@@ -736,7 +736,7 @@ __global__ void __launch_bounds__(block_size) gpuEncodeOrcColumnData(EncChunk *c
         s->present_out;  // Should always be a multiple of 8 except at the end of the last row group
       if (nrows_out > ((present_rows < s->chunk.num_rows) ? 130 * 8 : 0)) {
         uint32_t present_out = s->present_out;
-        if (s->stream.strm_id[CI_PRESENT] >= 0) {
+        if (s->stream.ids[CI_PRESENT] >= 0) {
           uint32_t flush = (present_rows < s->chunk.num_rows) ? 0 : 7;
           nrows_out      = (nrows_out + flush) >> 3;
           nrows_out =
@@ -750,7 +750,7 @@ __global__ void __launch_bounds__(block_size) gpuEncodeOrcColumnData(EncChunk *c
       __syncthreads();
     }
     // Fetch non-null values
-    if (!s->stream.streams[CI_DATA]) {
+    if (!s->stream.data_ptrs[CI_DATA]) {
       // Pass-through
       __syncthreads();
       if (!t) {
@@ -834,7 +834,7 @@ __global__ void __launch_bounds__(block_size) gpuEncodeOrcColumnData(EncChunk *c
         uint32_t nz     = s->buf.u32[511];
         uint32_t nz_idx = (s->nnz + t) & 0x3ff;
         uint32_t len    = (t < nz && s->u.strenc.str_data[t]) ? s->lengths.u32[nz_idx] : 0;
-        StoreStringData(s->stream.streams[CI_DATA] + s->strm_pos[CI_DATA], &s->u.strenc, len, t);
+        StoreStringData(s->stream.data_ptrs[CI_DATA] + s->strm_pos[CI_DATA], &s->u.strenc, len, t);
         if (!t) { s->strm_pos[CI_DATA] += s->u.strenc.char_count; }
         __syncthreads();
       } else if (s->chunk.type_kind == BOOLEAN) {
@@ -956,11 +956,11 @@ __global__ void __launch_bounds__(block_size) gpuEncodeOrcColumnData(EncChunk *c
     __syncthreads();
   }
   __syncthreads();
-  if (t <= CI_PRESENT && s->stream.strm_id[t] >= 0) {
+  if (t <= CI_PRESENT && s->stream.ids[t] >= 0) {
     // Update actual compressed length
-    streams[group_id * num_columns + col_id].strm_len[t] = s->strm_pos[t];
-    if (!s->stream.streams[t]) {
-      streams[group_id * num_columns + col_id].streams[t] =
+    streams[group_id * num_columns + col_id].lengths[t] = s->strm_pos[t];
+    if (!s->stream.data_ptrs[t]) {
+      streams[group_id * num_columns + col_id].data_ptrs[t] =
         static_cast<uint8_t *>(const_cast<void *>(s->chunk.column_data_base)) +
         s->chunk.start_row * s->chunk.dtype_len;
     }
@@ -978,7 +978,7 @@ __global__ void __launch_bounds__(block_size) gpuEncodeOrcColumnData(EncChunk *c
 template <int block_size>
 __global__ void __launch_bounds__(block_size) gpuEncodeStringDictionaries(StripeDictionary *stripes,
                                                                           EncChunk *chunks,
-                                                                          EncStream *streams,
+                                                                          encoder_chunk_streams *streams,
                                                                           uint32_t num_columns)
 {
   __shared__ __align__(16) orcenc_state_s state_g;
@@ -1022,7 +1022,7 @@ __global__ void __launch_bounds__(block_size) gpuEncodeStringDictionaries(Stripe
       const char *ptr = (t < numvals) ? str_desc[string_idx].ptr : 0;
       uint32_t count  = (t < numvals) ? static_cast<uint32_t>(str_desc[string_idx].count) : 0;
       s->u.strenc.str_data[t] = ptr;
-      StoreStringData(s->stream.streams[CI_DICTIONARY] + s->strm_pos[CI_DICTIONARY],
+      StoreStringData(s->stream.data_ptrs[CI_DICTIONARY] + s->strm_pos[CI_DICTIONARY],
                       &s->u.strenc,
                       (ptr) ? count : 0,
                       t);
@@ -1053,7 +1053,7 @@ __global__ void __launch_bounds__(block_size) gpuEncodeStringDictionaries(Stripe
     if (t == 0) { s->cur_row += numvals; }
     __syncthreads();
   }
-  if (t == 0) { streams[chunk_id].strm_len[cid] = s->strm_pos[cid]; }
+  if (t == 0) { streams[chunk_id].lengths[cid] = s->strm_pos[cid]; }
 }
 
 /**
@@ -1066,10 +1066,10 @@ __global__ void __launch_bounds__(block_size) gpuEncodeStringDictionaries(Stripe
  */
 // blockDim {1024,1,1}
 __global__ void __launch_bounds__(1024)
-  gpuCompactOrcDataStreams(StripeStream *strm_desc, EncStream *streams, uint32_t num_columns)
+  gpuCompactOrcDataStreams(StripeStream *strm_desc, encoder_chunk_streams *streams, uint32_t num_columns)
 {
   __shared__ __align__(16) StripeStream ss;
-  __shared__ __align__(16) EncStream strm0;
+  __shared__ __align__(16) encoder_chunk_streams strm0;
   __shared__ uint8_t *volatile ck_curptr_g;
   __shared__ uint32_t volatile ck_curlen_g;
 
@@ -1083,14 +1083,14 @@ __global__ void __launch_bounds__(1024)
   __syncthreads();
   auto const strm0_id = ss.first_chunk_id;
   auto const cid      = ss.stream_type;
-  auto dst_ptr        = strm0.streams[cid] + strm0.strm_len[cid];
+  auto dst_ptr        = strm0.data_ptrs[cid] + strm0.lengths[cid];
   for (uint32_t g = 1; g < ss.num_chunks; g++) {
     uint8_t *src_ptr;
     uint32_t len;
     if (t == 0) {
-      src_ptr = streams[strm0_id + g * num_columns].streams[cid];
-      len     = streams[strm0_id + g * num_columns].strm_len[cid];
-      if (src_ptr != dst_ptr) { streams[strm0_id + g * num_columns].streams[cid] = dst_ptr; }
+      src_ptr = streams[strm0_id + g * num_columns].data_ptrs[cid];
+      len     = streams[strm0_id + g * num_columns].lengths[cid];
+      if (src_ptr != dst_ptr) { streams[strm0_id + g * num_columns].data_ptrs[cid] = dst_ptr; }
       ck_curptr_g = src_ptr;
       ck_curlen_g = len;
     }
@@ -1107,7 +1107,7 @@ __global__ void __launch_bounds__(1024)
     dst_ptr += len;
     __syncthreads();
   }
-  if (!t) { strm_desc[strm_id].stream_size = dst_ptr - strm0.streams[cid]; }
+  if (!t) { strm_desc[strm_id].stream_size = dst_ptr - strm0.data_ptrs[cid]; }
 }
 
 /**
@@ -1122,7 +1122,7 @@ __global__ void __launch_bounds__(1024)
  */
 // blockDim {256,1,1}
 __global__ void __launch_bounds__(256) gpuInitCompressionBlocks(StripeStream *strm_desc,
-                                                                EncStream *streams,
+                                                                encoder_chunk_streams *streams,
                                                                 gpu_inflate_input_s *comp_in,
                                                                 gpu_inflate_status_s *comp_out,
                                                                 uint8_t *compressed_bfr,
@@ -1138,7 +1138,7 @@ __global__ void __launch_bounds__(256) gpuInitCompressionBlocks(StripeStream *st
 
   if (t == 0) {
     ss            = strm_desc[strm_id];
-    uncomp_base_g = streams[ss.first_chunk_id].streams[ss.stream_type];
+    uncomp_base_g = streams[ss.first_chunk_id].data_ptrs[ss.stream_type];
   }
   __syncthreads();
   src        = uncomp_base_g;
@@ -1246,7 +1246,7 @@ __global__ void __launch_bounds__(1024) gpuCompactCompressedBlocks(StripeStream 
  * @param[in] stream CUDA stream to use, default 0
  */
 void EncodeOrcColumnData(EncChunk *chunks,
-                         EncStream *streams,
+                         encoder_chunk_streams *streams,
                          uint32_t num_columns,
                          uint32_t num_rowgroups,
                          rmm::cuda_stream_view stream)
@@ -1269,7 +1269,7 @@ void EncodeOrcColumnData(EncChunk *chunks,
  */
 void EncodeStripeDictionaries(StripeDictionary *stripes,
                               EncChunk *chunks,
-                              EncStream *streams,
+                              encoder_chunk_streams *streams,
                               uint32_t num_string_columns,
                               uint32_t num_columns,
                               uint32_t num_stripes,
@@ -1291,7 +1291,7 @@ void EncodeStripeDictionaries(StripeDictionary *stripes,
  * @param[in] stream CUDA stream to use, default 0
  */
 void CompactOrcDataStreams(StripeStream *strm_desc,
-                           EncStream *streams,
+                           encoder_chunk_streams *streams,
                            uint32_t num_stripe_streams,
                            uint32_t num_columns,
                            rmm::cuda_stream_view stream)
@@ -1318,7 +1318,7 @@ void CompactOrcDataStreams(StripeStream *strm_desc,
  */
 void CompressOrcDataStreams(uint8_t *compressed_data,
                             StripeStream *strm_desc,
-                            EncStream *enc_streams,
+                            encoder_chunk_streams *enc_streams,
                             gpu_inflate_input_s *comp_in,
                             gpu_inflate_status_s *comp_out,
                             uint32_t num_stripe_streams,

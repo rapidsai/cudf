@@ -136,10 +136,10 @@ struct EncChunk {
   uint8_t scale;                   // scale for decimals or timestamps
 };
 
-struct EncStream {
-  uint8_t *streams[CI_NUM_STREAMS];   // encoded output
-  int32_t strm_id[CI_NUM_STREAMS];    // stream id or -1 if not present
-  uint32_t strm_len[CI_NUM_STREAMS];  // in: max length, out: actual length
+struct encoder_chunk_streams {
+  uint8_t *data_ptrs[CI_NUM_STREAMS];   // encoded output
+  int32_t ids[CI_NUM_STREAMS];    // stream id or -1 if not present
+  uint32_t lengths[CI_NUM_STREAMS];  // in: max length, out: actual length (TODO: separate)
 };
 
 /**
@@ -291,7 +291,7 @@ void DecodeOrcColumnData(ColumnDesc *chunks,
  * @param[in] stream CUDA stream to use, default 0
  */
 void EncodeOrcColumnData(EncChunk *chunks,
-                         EncStream *streams,
+                         encoder_chunk_streams *streams,
                          uint32_t num_columns,
                          uint32_t num_rowgroups,
                          rmm::cuda_stream_view stream = rmm::cuda_stream_default);
@@ -308,7 +308,7 @@ void EncodeOrcColumnData(EncChunk *chunks,
  */
 void EncodeStripeDictionaries(StripeDictionary *stripes,
                               EncChunk *chunks,
-                              EncStream *streams,
+                              encoder_chunk_streams *streams,
                               uint32_t num_string_columns,
                               uint32_t num_columns,
                               uint32_t num_stripes,
@@ -324,7 +324,7 @@ void EncodeStripeDictionaries(StripeDictionary *stripes,
  * @param[in] stream CUDA stream to use, default 0
  */
 void CompactOrcDataStreams(StripeStream *strm_desc,
-                           EncStream *streams,
+                           encoder_chunk_streams *streams,
                            uint32_t num_stripe_streams,
                            uint32_t num_columns,
                            rmm::cuda_stream_view stream = rmm::cuda_stream_default);
@@ -344,7 +344,7 @@ void CompactOrcDataStreams(StripeStream *strm_desc,
  */
 void CompressOrcDataStreams(uint8_t *compressed_data,
                             StripeStream *strm_desc,
-                            EncStream *enc_streams,
+                            encoder_chunk_streams *enc_streams,
                             gpu_inflate_input_s *comp_in,
                             gpu_inflate_status_s *comp_out,
                             uint32_t num_stripe_streams,
