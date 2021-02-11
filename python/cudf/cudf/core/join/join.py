@@ -322,20 +322,21 @@ class MergeBase(object):
 
         result = self.out_class._from_data(data, index=out_index)
 
-        # if outer join, key columns are combine:
+        # if outer join, key columns with the same name are combined:
         if self.how == "outer":
             for lkey, rkey in zip(*self._keys):
-                # get the key column as it appears in the result:
-                out_key = ColumnView(
-                    result, column=lkey.column, index=lkey.index
-                )
-
-                # fill nulls in the key column with values from the RHS
-                out_key.set_value(
-                    out_key.value.fillna(
-                        rkey.value.take(right_rows, nullify=True)
+                if lkey.name == rkey.name:
+                    # get the key column as it appears in the result:
+                    out_key = ColumnView(
+                        result, column=lkey.column, index=lkey.index
                     )
-                )
+
+                    # fill nulls in the key column with values from the RHS
+                    out_key.set_value(
+                        out_key.value.fillna(
+                            rkey.value.take(right_rows, nullify=True)
+                        )
+                    )
 
         return self.sort_result(result)
 
