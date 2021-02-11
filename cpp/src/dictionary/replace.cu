@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,6 +17,7 @@
 #include <cudf/detail/copy.hpp>
 #include <cudf/detail/copy_if_else.cuh>
 #include <cudf/detail/indexalator.cuh>
+#include <cudf/detail/iterator.cuh>
 #include <cudf/detail/unary.hpp>
 #include <cudf/dictionary/detail/encode.hpp>
 #include <cudf/dictionary/detail/replace.hpp>
@@ -74,8 +75,7 @@ struct nullable_index_accessor {
 template <bool has_nulls>
 auto make_nullable_index_iterator(column_view const& col)
 {
-  return thrust::make_transform_iterator(thrust::make_counting_iterator<size_type>(0),
-                                         nullable_index_accessor<has_nulls>{col});
+  return cudf::detail::make_counting_transform_iterator(0, nullable_index_accessor<has_nulls>{col});
 }
 
 /**

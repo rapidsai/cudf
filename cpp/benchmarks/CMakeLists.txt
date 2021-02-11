@@ -203,4 +203,6 @@ ConfigureBench(SUBWORD_TOKENIZER_BENCH text/subword_benchmark.cpp)
 
 ###################################################################################################
 # - strings benchmark -------------------------------------------------------------------
-ConfigureBench(STRINGS_BENCH string/convert_durations_benchmark.cpp)
+ConfigureBench(STRINGS_BENCH
+  string/case_benchmark.cpp
+  string/convert_durations_benchmark.cpp)
