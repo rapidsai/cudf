@@ -201,17 +201,17 @@ gatherIntColumnStats(stats_state_s *s, statistics_dtype dtype, uint32_t t, Stora
   vmax = block_reduce(storage.integer_stats).Reduce(vmax, cub::Max());
   if (!t) { has_minmax = (vmin <= vmax); }
   __syncthreads();
-  if (has_minmax) {
-    vsum = block_reduce(storage.integer_stats).Sum(vsum);
-    if (!t) {
+  if (has_minmax) { vsum = block_reduce(storage.integer_stats).Sum(vsum); }
+  if (!t) {
+    if (has_minmax) {
       s->ck.min_value.i_val = vmin;
       s->ck.max_value.i_val = vmax;
-      s->ck.has_minmax      = has_minmax;
       s->ck.sum.i_val       = vsum;
-      // TODO: For now, don't set the sum flag with 64-bit values so we don't have to check for
-      // 64-bit sum overflow
-      s->ck.has_sum = (dtype <= dtype_int32 && has_minmax);
     }
+    s->ck.has_minmax = has_minmax;
+    // TODO: For now, don't set the sum flag with 64-bit values so we don't have to check for
+    // 64-bit sum overflow
+    s->ck.has_sum = (dtype <= dtype_int32 && has_minmax);
   }
 }
 
@@ -265,15 +265,15 @@ gatherFloatColumnStats(stats_state_s *s, statistics_dtype dtype, uint32_t t, Sto
   vmax = block_reduce(storage.float_stats).Reduce(vmax, cub::Max());
   if (!t) { has_minmax = (vmin <= vmax); }
   __syncthreads();
-  if (has_minmax) {
-    vsum = block_reduce(storage.float_stats).Reduce(vsum, IgnoreNaNSum());
-    if (!t) {
+  if (has_minmax) { vsum = block_reduce(storage.float_stats).Reduce(vsum, IgnoreNaNSum()); }
+  if (!t) {
+    if (has_minmax) {
       s->ck.min_value.fp_val = (vmin != 0.0) ? vmin : CUDART_NEG_ZERO;
       s->ck.max_value.fp_val = (vmax != 0.0) ? vmax : CUDART_ZERO;
-      s->ck.has_minmax       = has_minmax;
       s->ck.sum.fp_val       = vsum;
-      s->ck.has_sum          = has_minmax;  // Implies sum is valid as well
     }
+    s->ck.has_minmax = has_minmax;
+    s->ck.has_sum    = has_minmax;  // Implies sum is valid as well
   }
 }
 
@@ -343,17 +343,19 @@ void __device__ gatherStringColumnStats(stats_state_s *s, uint32_t t, Storage &s
     s->warp_max[t >> 5].str_val.length = maxval.length;
   }
   has_minmax = __syncthreads_or(smin != nullptr);
-  len_sum    = block_reduce(storage.string_stats).Sum(len_sum);
+  if (has_minmax) { len_sum = block_reduce(storage.string_stats).Sum(len_sum); }
   if (t < 32 * 1) {
     minval = WarpReduceMinString(s->warp_min[t].str_val.ptr, s->warp_min[t].str_val.length);
     if (!(t & 0x1f)) {
-      s->ck.min_value.str_val.ptr    = minval.ptr;
-      s->ck.min_value.str_val.length = minval.length;
-      s->ck.has_minmax               = has_minmax;
-      s->ck.sum.i_val                = len_sum;
-      s->ck.has_sum                  = has_minmax;
+      if (has_minmax) {
+        s->ck.min_value.str_val.ptr    = minval.ptr;
+        s->ck.min_value.str_val.length = minval.length;
+        s->ck.sum.i_val                = len_sum;
+      }
+      s->ck.has_minmax = has_minmax;
+      s->ck.has_sum    = has_minmax;
     }
-  } else if (t < 32 * 2) {
+  } else if (t < 32 * 2 and has_minmax) {
     maxval =
       WarpReduceMaxString(s->warp_max[t & 0x1f].str_val.ptr, s->warp_max[t & 0x1f].str_val.length);
     if (!(t & 0x1f)) {
@@ -436,6 +438,7 @@ void __device__ mergeIntColumnStats(merge_state_s *s,
   int64_t vsum        = 0;
   uint32_t non_nulls  = 0;
   uint32_t null_count = 0;
+  __shared__ volatile bool has_minmax;
   for (uint32_t i = t; i < num_chunks; i += block_size) {
     const statistics_chunk *ck = &ck_in[i];
     if (ck->has_minmax) {
@@ -449,24 +452,26 @@ void __device__ mergeIntColumnStats(merge_state_s *s,
   vmin = cub::BlockReduce<int64_t, block_size>(storage.i64).Reduce(vmin, cub::Min());
   __syncthreads();
   vmax = cub::BlockReduce<int64_t, block_size>(storage.i64).Reduce(vmax, cub::Max());
+  if (!t) { has_minmax = (vmin <= vmax); }
   __syncthreads();
   non_nulls = cub::BlockReduce<uint32_t, block_size>(storage.u32).Sum(non_nulls);
   __syncthreads();
   null_count = cub::BlockReduce<uint32_t, block_size>(storage.u32).Sum(null_count);
   __syncthreads();
-  vsum = cub::BlockReduce<int64_t, block_size>(storage.i64).Sum(vsum);
+  if (has_minmax) { vsum = cub::BlockReduce<int64_t, block_size>(storage.i64).Sum(vsum); }
 
   if (!t) {
-    bool has_minmax       = (vmin <= vmax);
-    s->ck.min_value.i_val = vmin;
-    s->ck.max_value.i_val = vmax;
-    s->ck.has_minmax      = has_minmax;
-    s->ck.non_nulls       = non_nulls;
-    s->ck.null_count      = null_count;
-    s->ck.sum.i_val       = vsum;
+    if (has_minmax) {
+      s->ck.min_value.i_val = vmin;
+      s->ck.max_value.i_val = vmax;
+      s->ck.sum.i_val       = vsum;
+    }
+    s->ck.has_minmax = has_minmax;
     // TODO: For now, don't set the sum flag with 64-bit values so we don't have to check for
     // 64-bit sum overflow
-    s->ck.has_sum = (dtype <= dtype_int32 && has_minmax);
+    s->ck.has_sum    = (dtype <= dtype_int32 && has_minmax);
+    s->ck.non_nulls  = non_nulls;
+    s->ck.null_count = null_count;
   }
 }
 
@@ -492,6 +497,7 @@ void __device__ mergeFloatColumnStats(merge_state_s *s,
   double vsum         = 0;
   uint32_t non_nulls  = 0;
   uint32_t null_count = 0;
+  __shared__ volatile bool has_minmax;
   for (uint32_t i = t; i < num_chunks; i += block_size) {
     const statistics_chunk *ck = &ck_in[i];
     if (ck->has_minmax) {
@@ -508,22 +514,26 @@ void __device__ mergeFloatColumnStats(merge_state_s *s,
   vmin = cub::BlockReduce<double, block_size>(storage.f64).Reduce(vmin, cub::Min());
   __syncthreads();
   vmax = cub::BlockReduce<double, block_size>(storage.f64).Reduce(vmax, cub::Max());
+  if (!t) { has_minmax = (vmin <= vmax); }
   __syncthreads();
   non_nulls = cub::BlockReduce<uint32_t, block_size>(storage.u32).Sum(non_nulls);
   __syncthreads();
   null_count = cub::BlockReduce<uint32_t, block_size>(storage.u32).Sum(null_count);
   __syncthreads();
-  vsum = cub::BlockReduce<double, block_size>(storage.f64).Reduce(vsum, IgnoreNaNSum());
+  if (has_minmax) {
+    vsum = cub::BlockReduce<double, block_size>(storage.f64).Reduce(vsum, IgnoreNaNSum());
+  }
 
   if (!t) {
-    bool has_minmax        = (vmin <= vmax);
-    s->ck.min_value.fp_val = (vmin != 0.0) ? vmin : CUDART_NEG_ZERO;
-    s->ck.max_value.fp_val = (vmax != 0.0) ? vmax : CUDART_ZERO;
-    s->ck.has_minmax       = has_minmax;
-    s->ck.non_nulls        = non_nulls;
-    s->ck.null_count       = null_count;
-    s->ck.sum.fp_val       = vsum;
-    s->ck.has_sum          = has_minmax;  // Implies sum is valid as well
+    if (has_minmax) {
+      s->ck.min_value.fp_val = (vmin != 0.0) ? vmin : CUDART_NEG_ZERO;
+      s->ck.max_value.fp_val = (vmax != 0.0) ? vmax : CUDART_ZERO;
+      s->ck.sum.fp_val       = vsum;
+    }
+    s->ck.has_minmax = has_minmax;
+    s->ck.has_sum    = has_minmax;  // Implies sum is valid as well
+    s->ck.non_nulls  = non_nulls;
+    s->ck.null_count = null_count;
   }
 }
 
@@ -587,22 +597,24 @@ void __device__ mergeStringColumnStats(merge_state_s *s,
   __syncthreads();
   null_count = cub::BlockReduce<uint32_t, block_size>(storage.u32).Sum(null_count);
   __syncthreads();
-  len_sum = cub::BlockReduce<uint32_t, block_size>(storage.u32).Sum(len_sum);
+  if (has_minmax) { len_sum = cub::BlockReduce<uint32_t, block_size>(storage.u32).Sum(len_sum); }
   if (t < 32 * 1) {
     minval = WarpReduceMinString(s->warp_min[t].str_val.ptr, s->warp_min[t].str_val.length);
     if (!(t & 0x1f)) {
-      s->ck.min_value.str_val.ptr    = minval.ptr;
-      s->ck.min_value.str_val.length = minval.length;
-      s->ck.has_minmax               = has_minmax;
-      s->ck.sum.i_val                = len_sum;
-      s->ck.has_sum                  = has_minmax;
-      s->ck.non_nulls                = non_nulls;
-      s->ck.null_count               = null_count;
+      if (has_minmax) {
+        s->ck.min_value.str_val.ptr    = minval.ptr;
+        s->ck.min_value.str_val.length = minval.length;
+        s->ck.sum.i_val                = len_sum;
+      }
+      s->ck.has_minmax = has_minmax;
+      s->ck.has_sum    = has_minmax;
+      s->ck.non_nulls  = non_nulls;
+      s->ck.null_count = null_count;
     }
   } else if (t < 32 * 2) {
     maxval =
       WarpReduceMaxString(s->warp_max[t & 0x1f].str_val.ptr, s->warp_max[t & 0x1f].str_val.length);
-    if (!(t & 0x1f)) {
+    if (!((t & 0x1f) and has_minmax)) {
       s->ck.max_value.str_val.ptr    = maxval.ptr;
       s->ck.max_value.str_val.length = maxval.length;
     }
