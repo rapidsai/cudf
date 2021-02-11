@@ -23,6 +23,8 @@
 #include <cudf/strings/replace.hpp>
 #include <cudf/strings/strings_column_view.hpp>
 
+#include <limits>
+
 class StringReplaceScalar : public cudf::benchmark {
 };
 
@@ -47,12 +49,30 @@ static void BM_replace_scalar(benchmark::State& state)
   state.SetBytesProcessed(state.iterations() * input.chars_size());
 }
 
+static void generate_bench_args(benchmark::internal::Benchmark* b)
+{
+  int const min_rows   = 1 << 12;
+  int const max_rows   = 1 << 24;
+  int const row_mult   = 8;
+  int const min_rowlen = 1 << 5;
+  int const max_rowlen = 1 << 13;
+  int const len_mult   = 4;
+  for (int row_count = min_rows; row_count <= max_rows; row_count *= row_mult) {
+    for (int rowlen = min_rowlen; rowlen <= max_rowlen; rowlen *= len_mult) {
+      // avoid generating combinations that exceed the cudf column limit
+      size_t total_chars = static_cast<size_t>(row_count) * rowlen;
+      if (total_chars < std::numeric_limits<cudf::size_type>::max()) {
+        b->Args({row_count, rowlen});
+      }
+    }
+  }
+}
+
 #define STRINGS_BENCHMARK_DEFINE(name)                 \
   BENCHMARK_DEFINE_F(StringReplaceScalar, name)        \
   (::benchmark::State & st) { BM_replace_scalar(st); } \
   BENCHMARK_REGISTER_F(StringReplaceScalar, name)      \
-    ->RangeMultiplier(8)                               \
-    ->Ranges({{1 << 12, 1 << 18}, {1 << 5, 1 << 13}})  \
+    ->Apply(generate_bench_args)                       \
     ->UseManualTime()                                  \
     ->Unit(benchmark::kMillisecond);
 
