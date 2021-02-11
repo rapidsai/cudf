@@ -37,32 +37,29 @@ namespace detail {
 
 template <join_kind JoinKind>
 std::unique_ptr<cudf::column> left_semi_anti_join(
-  cudf::table_view const& left,
-  cudf::table_view const& right,
-  std::vector<cudf::size_type> const& left_on,
-  std::vector<cudf::size_type> const& right_on,
+  cudf::table_view const& left_keys,
+  cudf::table_view const& right_keys,
   null_equality compare_nulls,
   rmm::cuda_stream_view stream,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
 {
-  CUDF_EXPECTS(0 != left.num_columns(), "Left table is empty");
-  CUDF_EXPECTS(0 != right.num_columns(), "Right table is empty");
-  CUDF_EXPECTS(left_on.size() == right_on.size(), "Mismatch in number of columns to be joined on");
+  CUDF_EXPECTS(0 != left_keys.num_columns(), "Left table is empty");
+  CUDF_EXPECTS(0 != right_keys.num_columns(), "Right table is empty");
 
-  auto const left_num_rows  = left.num_rows();
-  auto const right_num_rows = right.num_rows();
+  auto const left_num_rows  = left_keys.num_rows();
+  auto const right_num_rows = right_keys.num_rows();
 
   // Only care about existence, so we'll use an unordered map (other joins need a multimap)
   using hash_table_type = concurrent_unordered_map<cudf::size_type, bool, row_hash, row_equality>;
 
   // Create hash table containing all keys found in right table
-  auto right_rows_d            = table_device_view::create(right, stream);
+  auto right_rows_d            = table_device_view::create(right_keys, stream);
   size_t const hash_table_size = compute_hash_table_size(right_num_rows);
   row_hash hash_build{*right_rows_d};
   row_equality equality_build{*right_rows_d, *right_rows_d, compare_nulls == null_equality::EQUAL};
 
   // Going to join it with left table
-  auto left_rows_d = table_device_view::create(left, stream);
+  auto left_rows_d = table_device_view::create(left_keys, stream);
   row_hash hash_probe{*left_rows_d};
   row_equality equality_probe{*left_rows_d, *right_rows_d, compare_nulls == null_equality::EQUAL};
 
@@ -103,7 +100,6 @@ std::unique_ptr<cudf::column> left_semi_anti_join(
     });
 
   auto join_size = thrust::distance(gather_map.begin(), gather_map_end);
-  std::cout << join_size << std::endl;
   return std::make_unique<cudf::column>(cudf::data_type(type_to_id<cudf::size_type>()),
                                         join_size,
                                         gather_map.release(),
@@ -160,6 +156,8 @@ std::unique_ptr<cudf::table> left_semi_anti_join(
   rmm::cuda_stream_view stream,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
 {
+  CUDF_EXPECTS(left_on.size() == right_on.size(), "Mismatch in number of columns to be joined on");
+
   if (0 == return_columns.size()) { return empty_like(left.select(return_columns)); }
 
   if (is_trivial_join(left, right, left_on, right_on, JoinKind)) {
@@ -181,8 +179,8 @@ std::unique_ptr<cudf::table> left_semi_anti_join(
   auto const left_selected  = matched.second.front();
   auto const right_selected = matched.second.back();
 
-  auto gather_map = left_semi_anti_join<JoinKind>(
-    left_selected, right_selected, left_on, right_on, compare_nulls, stream);
+  auto gather_map =
+    left_semi_anti_join<JoinKind>(left_selected, right_selected, compare_nulls, stream);
 
   auto const left_updated = scatter_columns(left_selected, left_on, left);
   return cudf::detail::gather(left_updated.select(return_columns),
@@ -217,7 +215,7 @@ std::unique_ptr<cudf::column> left_semi_join(cudf::table_view const& left,
 {
   CUDF_FUNC_RANGE();
   return detail::left_semi_anti_join<detail::join_kind::LEFT_SEMI_JOIN>(
-    left, right, left_on, right_on, compare_nulls, rmm::cuda_stream_default, mr);
+    left.select(left_on), right.select(right_on), compare_nulls, rmm::cuda_stream_default, mr);
 }
 
 std::unique_ptr<cudf::table> left_anti_join(cudf::table_view const& left,
@@ -242,7 +240,7 @@ std::unique_ptr<cudf::column> left_anti_join(cudf::table_view const& left,
 {
   CUDF_FUNC_RANGE();
   return detail::left_semi_anti_join<detail::join_kind::LEFT_ANTI_JOIN>(
-    left, right, left_on, right_on, compare_nulls, rmm::cuda_stream_default, mr);
+    left.select(left_on), right.select(right_on), compare_nulls, rmm::cuda_stream_default, mr);
 }
 
 }  // namespace cudf
