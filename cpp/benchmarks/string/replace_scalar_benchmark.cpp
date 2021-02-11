@@ -28,8 +28,8 @@ class StringReplaceScalar : public cudf::benchmark {
 
 static void BM_replace_scalar(benchmark::State& state)
 {
-  cudf::size_type const n_rows{(cudf::size_type)state.range(0)};
-  cudf::size_type const max_str_length{(cudf::size_type)state.range(1)};
+  cudf::size_type const n_rows{static_cast<cudf::size_type>(state.range(0))};
+  cudf::size_type const max_str_length{static_cast<cudf::size_type>(state.range(1))};
   data_profile table_profile;
   table_profile.set_distribution_params(
     cudf::type_id::STRING, distribution_id::NORMAL, 0, max_str_length);
