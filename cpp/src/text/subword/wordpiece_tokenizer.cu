@@ -157,7 +157,7 @@ struct mark_special_tokens {
    * @brief Check given code-point array to the list of known
    * special tokens.
    */
-  __device__ bool is_special_token(uint32_t const* token, cudf::size_type size)
+  __device__ bool is_special_token(uint32_t const* token, cudf::size_type size) const
   {
     if (size < MIN_ST_WIDTH || size > MAX_ST_WIDTH) return false;
     char str_token[MAX_ST_WIDTH];
@@ -202,7 +202,7 @@ struct mark_special_tokens {
    * The `start_word_indices` and `end_word_indices` are updated to
    * identify the token and to ignore the extra trailing `]` character.
    */
-  __device__ void operator()(size_t idx)
+  __device__ void operator()(size_t idx) const
   {
     uint32_t const start_index = start_word_indices[idx];
     if ((start_index == std::numeric_limits<uint32_t>::max()) ||
@@ -255,9 +255,9 @@ struct mark_special_tokens {
     end_word_indices[end_pos] = end_pos + 1;
   }
 
-  uint32_t* code_points;
-  uint32_t* start_word_indices;
-  uint32_t* end_word_indices;
+  uint32_t* const code_points;
+  uint32_t* const start_word_indices;
+  uint32_t* const end_word_indices;
   size_t const num_code_points;
 };
 
@@ -468,7 +468,7 @@ void wordpiece_tokenizer::tokenize(uvector_pair& cps_and_offsets, rmm::cuda_stre
   // check for special tokens and adjust indices
   thrust::for_each_n(
     rmm::exec_policy(stream),
-    thrust::make_counting_iterator<uint32_t>(0),
+    thrust::make_counting_iterator<size_t>(0),
     num_code_points,
     mark_special_tokens{
       device_code_points, device_start_word_indices, device_end_word_indices, num_code_points});
