@@ -486,7 +486,7 @@ class StringMethods(ColumnMethodsMixin):
         pat : str
             Regular expression pattern with capturing groups.
         expand : bool, default True
-            If True, return DataFrame with on column per capture group.
+            If True, return DataFrame with one column per capture group.
             If False, return a Series/Index if there is one capture group or
             DataFrame if there are multiple capture groups.
 
@@ -4646,7 +4646,7 @@ class StringColumn(column.ColumnBase):
     def __init__(
         self,
         mask: Buffer = None,
-        size: int = None,
+        size: int = None,  # TODO: make non-optional
         offset: int = 0,
         null_count: int = None,
         children: Tuple["column.ColumnBase", ...] = (),
@@ -4686,9 +4686,9 @@ class StringColumn(column.ColumnBase):
             children = (offsets, chars)
 
         super().__init__(
-            None,
-            size,
-            dtype,
+            data=None,
+            size=size,
+            dtype=dtype,
             mask=mask,
             offset=offset,
             null_count=null_count,

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2020, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -119,12 +119,12 @@ std::unique_ptr<table> findall_re(
   rmm::cuda_stream_view stream        = rmm::cuda_stream_default)
 {
   auto strings_count  = strings.size();
-  auto strings_column = column_device_view::create(strings.parent(), stream.value());
+  auto strings_column = column_device_view::create(strings.parent(), stream);
   auto d_strings      = *strings_column;
 
   auto d_flags = detail::get_character_flags_table();
   // compile regex into device object
-  auto prog       = reprog_device::create(pattern, d_flags, strings_count, stream.value());
+  auto prog       = reprog_device::create(pattern, d_flags, strings_count, stream);
   auto d_prog     = *prog;
   int regex_insts = prog->insts_counts();
 
@@ -187,7 +187,7 @@ std::unique_ptr<table> findall_re(
                         d_indices,
                         findall_fn<RX_STACK_LARGE>{d_strings, d_prog, column_index, d_find_counts});
     //
-    results.emplace_back(make_strings_column(indices, stream.value(), mr));
+    results.emplace_back(make_strings_column(indices, stream, mr));
   }
   return std::make_unique<table>(std::move(results));
 }
