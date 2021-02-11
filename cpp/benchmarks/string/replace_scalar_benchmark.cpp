@@ -39,7 +39,7 @@ static void BM_replace_scalar(benchmark::State& state)
     create_random_table({cudf::type_id::STRING}, 1, row_count{n_rows}, table_profile);
   cudf::strings_column_view input(table->view().column(0));
   cudf::string_scalar target("+");
-  cudf::string_scalar repl(" ");
+  cudf::string_scalar repl("");
 
   for (auto _ : state) {
     cuda_event_timer raii(state, true, 0);
