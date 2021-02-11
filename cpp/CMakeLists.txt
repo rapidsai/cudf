@@ -552,7 +552,12 @@ if(TARGET arrow_shared)
     export(TARGETS arrow_shared arrow_cuda_shared
         FILE ${CUDF_BINARY_DIR}/cudf-arrow-targets.cmake
         NAMESPACE   cudf::)
+elseif(TARGET arrow_static)
+    export(TARGETS arrow_static arrow_cuda_static
+        FILE ${CUDF_BINARY_DIR}/cudf-arrow-targets.cmake
+        NAMESPACE   cudf::)
 endif()
+
 export(EXPORT cudf-targets
     FILE ${CUDF_BINARY_DIR}/cudf-targets.cmake
     NAMESPACE   cudf::)
