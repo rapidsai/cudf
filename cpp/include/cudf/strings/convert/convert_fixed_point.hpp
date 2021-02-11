@@ -44,9 +44,9 @@ namespace strings {
  * @endcode
  *
  * Overflow of the resulting value type is not checked.
- * The decimal point is used only for determining the output scale value.
+ * The decimal point is used for determining the output scale value.
  *
- * @throw cudf::logic_error if output_type is not a fixed-point type.
+ * @throw cudf::logic_error if output_type is not a fixed-point decimal type.
  *
  * @param strings Strings instance for this operation.
  * @param output_type Type of fixed-point column to return.
@@ -59,14 +59,15 @@ std::unique_ptr<column> to_fixed_point(
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
- * @brief Returns a new strings column converting the fixed-point values from the
- * provided column into strings.
+ * @brief Returns a new strings column converting the fixed-point values
+ * into a strings column.
  *
  * Any null entries will result in corresponding null entries in the output column.
  *
  * For each value, a string is created in base-10 decimal.
  * Negative numbers will include a '-' prefix.
  * The column's scale value is used to place the decimal point.
+ * A negative scale value may add padded zeros after the decimal point.
  *
  * @code{.pseudo}
  * Example:
@@ -75,7 +76,7 @@ std::unique_ptr<column> to_fixed_point(
  * s is now ['1.10', '2.22', '33.30', '-4.40', '-0.01']
  * @endcode
  *
- * @throw cudf::logic_error if the input column is not a fixed-point type.
+ * @throw cudf::logic_error if the input column is not a fixed-point decimal type.
  *
  * @param input Fixed-point column to convert.
  * @param mr Device memory resource used to allocate the returned column's device memory.
@@ -90,7 +91,10 @@ std::unique_ptr<column> from_fixed_point(
  * characters are valid for conversion to fixed-point.
  *
  * The output row entry will be set to `true` if the corresponding string element
- * has at least one character in [+-0123456789.].
+ * has at least one character in [+-0123456789.]. The optional sign character
+ * must only be in the first position. The decimal point may only appear once.
+ * Also, the integer component must fit within the size limits of the
+ * underlying fixed-point storage type.
  *
  * @code{.pseudo}
  * Example:
@@ -101,8 +105,10 @@ std::unique_ptr<column> from_fixed_point(
  *
  * Any null row results in a null entry for that row in the output column.
  *
+ * @throw cudf::logic_error if the `decimal_type` is not a fixed-point decimal type.
+ *
  * @param input Strings instance for this operation.
- * @param decimal_type Fixed-point type used only for checking overflow
+ * @param decimal_type Fixed-point type used only for checking overflow.
  * @param mr Device memory resource used to allocate the returned column's device memory.
  * @return New column of boolean results for each string.
  */
