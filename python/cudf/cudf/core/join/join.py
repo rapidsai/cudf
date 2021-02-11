@@ -360,13 +360,27 @@ class MergeBase(object):
                 return result.sort_values(
                     _coerce_to_list(self.on), ignore_index=True
                 )
-            elif self.left_index and self.right_index:
-                return result.sort_index()
-            elif self.left_index:
-                return result.sort_values(_coerce_to_list(self.right_on))
-            else:
-                # self.right_index and self.left_on
-                return result.sort_values(_coerce_to_list(self.left_on))
+            by = []
+            if self.left_index and self.right_index:
+                by.extend(result.index._data.columns)
+            if self.left_on:
+                by.extend(
+                    [
+                        result._data[col]
+                        for col in _coerce_to_list(self.left_on)
+                    ]
+                )
+            if self.right_on:
+                by.extend(
+                    [
+                        result._data[col]
+                        for col in _coerce_to_list(self.right_on)
+                    ]
+                )
+            if by:
+                to_sort = cudf.DataFrame._from_columns(by)
+                sort_order = to_sort.argsort()
+                result = result.take(sort_order)
         return result
 
     def output_column_names(self):
