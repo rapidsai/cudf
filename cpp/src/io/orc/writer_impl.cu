@@ -588,7 +588,8 @@ encoded_streams writer::impl::encode_data(host_span<orc_column_view const> colum
   auto const num_columns = columns.size();
 
   hostdevice_vector<gpu::EncChunk> chunks(stripe_bounds.num_rowgroups() * num_columns);
-  hostdevice_vector<gpu::encoder_chunk_streams> encoded_streams(stripe_bounds.num_rowgroups() * num_columns);
+  hostdevice_vector<gpu::encoder_chunk_streams> chunk_streams(stripe_bounds.num_rowgroups() *
+                                                              num_columns);
   auto const stream_offsets = streams.compute_offsets(columns, stripe_bounds.num_rowgroups());
   rmm::device_uvector<uint8_t> encoded_data(stream_offsets.data_size(), stream);
 
@@ -596,6 +597,7 @@ encoded_streams writer::impl::encode_data(host_span<orc_column_view const> colum
   size_t stripe_id = 0;
   std::map<size_type, segmented_valid_cnt_input> validity_check_inputs;
   for (size_t j = 0; j < stripe_bounds.num_rowgroups(); j++) {
+    if (j == stripe_bounds.offsets[stripe_id] + stripe_bounds.sizes[stripe_id]) { ++stripe_id; }
     for (size_t i = 0; i < num_columns; i++) {
       auto *ck      = &chunks[j * num_columns + i];
       ck->start_row = (j * row_index_stride_);
@@ -631,8 +633,16 @@ encoded_streams writer::impl::encode_data(host_span<orc_column_view const> colum
         curr_cnt_in->second.indices.push_back(ck->start_row);
         curr_cnt_in->second.indices.push_back(ck->start_row + ck->num_rows);
       }
+    }
+  }
 
-      auto *strm = &encoded_streams[j * num_columns + i];
+  stripe_id = 0;
+  for (size_t j = 0; j < stripe_bounds.num_rowgroups(); j++) {
+    // Track the current stripe this rowgroup chunk belongs
+    if (j == stripe_bounds.offsets[stripe_id] + stripe_bounds.sizes[stripe_id]) { ++stripe_id; }
+    for (size_t i = 0; i < num_columns; i++) {
+      auto *ck   = &chunks[j * num_columns + i];
+      auto *strm = &chunk_streams[j * num_columns + i];
       for (int k = 0; k < gpu::CI_NUM_STREAMS; k++) {
         auto const strm_id = streams.id(i * gpu::CI_NUM_STREAMS + k);
 
@@ -643,45 +653,42 @@ encoded_streams writer::impl::encode_data(host_span<orc_column_view const> colum
             if (j == stripe_bounds.offsets[stripe_id]) {
               const int32_t dict_stride = columns[i].get_dict_stride();
               const auto stripe         = columns[i].host_stripe_dict(stripe_id);
-              strm->lengths[k]         = (k == gpu::CI_DICTIONARY)
-                                    ? stripe->dict_char_count
-                                    : (((stripe->num_strings + 0x1ff) >> 9) * (512 * 4 + 2));
+              strm->lengths[k]          = (k == gpu::CI_DICTIONARY)
+                                   ? stripe->dict_char_count
+                                   : (((stripe->num_strings + 0x1ff) >> 9) * (512 * 4 + 2));
               if (stripe_id == 0) {
                 strm->data_ptrs[k] = encoded_data.data() + stream_offsets.offsets[strm_id];
               } else {
                 const auto *strm_up =
-                  &encoded_streams[stripe[-dict_stride].start_chunk * num_columns + i];
+                  &chunk_streams[stripe[-dict_stride].start_chunk * num_columns + i];
                 strm->data_ptrs[k] = strm_up->data_ptrs[k] + strm_up->lengths[k];
               }
             } else {
-              strm->lengths[k] = 0;
-              strm->data_ptrs[k]  = strm[-num_columns].data_ptrs[k];
+              strm->lengths[k]   = 0;
+              strm->data_ptrs[k] = strm[-num_columns].data_ptrs[k];
             }
           } else if (k == gpu::CI_DATA && ck->type_kind == TypeKind::STRING &&
                      ck->encoding_kind == DIRECT_V2) {
             strm->lengths[k] = columns[i].host_dict_chunk(j)->string_char_count;
-            strm->data_ptrs[k]  = (j == 0)
-                                 ? encoded_data.data() + stream_offsets.offsets[strm_id]
-                                 : (strm[-num_columns].data_ptrs[k] + strm[-num_columns].lengths[k]);
+            strm->data_ptrs[k] =
+              (j == 0) ? encoded_data.data() + stream_offsets.offsets[strm_id]
+                       : (strm[-num_columns].data_ptrs[k] + strm[-num_columns].lengths[k]);
           } else if (k == gpu::CI_DATA && streams[strm_id].length == 0 &&
                      (ck->type_kind == DOUBLE || ck->type_kind == FLOAT)) {
             // Pass-through
-            strm->lengths[k] = ck->num_rows * ck->dtype_len;
-            strm->data_ptrs[k]  = nullptr;
+            strm->lengths[k]   = ck->num_rows * ck->dtype_len;
+            strm->data_ptrs[k] = nullptr;
           } else {
-            strm->lengths[k] = streams[strm_id].length;
-            strm->data_ptrs[k]  = encoded_data.data() + stream_offsets.str_data_size +
-                               stream_offsets.offsets[strm_id] + streams[strm_id].length * j;
+            strm->lengths[k]   = streams[strm_id].length;
+            strm->data_ptrs[k] = encoded_data.data() + stream_offsets.str_data_size +
+                                 stream_offsets.offsets[strm_id] + streams[strm_id].length * j;
           }
         } else {
-          strm->lengths[k] = 0;
-          strm->data_ptrs[k]  = nullptr;
+          strm->lengths[k]   = 0;
+          strm->data_ptrs[k] = nullptr;
         }
       }
     }
-
-    // Track the current stripe this rowgroup chunk belongs
-    if (j + 1 == stripe_bounds.offsets[stripe_id] + stripe_bounds.sizes[stripe_id]) { ++stripe_id; }
   }
 
   for (auto &cnt_in : validity_check_inputs) {
@@ -695,13 +702,13 @@ encoded_streams writer::impl::encode_data(host_span<orc_column_view const> colum
   }
 
   chunks.host_to_device(stream);
-  encoded_streams.host_to_device(stream);
+  chunk_streams.host_to_device(stream);
 
   if (!str_col_ids.empty()) {
     auto d_stripe_dict = columns[str_col_ids[0]].device_stripe_dict();
     gpu::EncodeStripeDictionaries(d_stripe_dict,
                                   chunks.device_ptr(),
-                                  encoded_streams.device_ptr(),
+                                  chunk_streams.device_ptr(),
                                   str_col_ids.size(),
                                   columns.size(),
                                   stripe_bounds.size(),
@@ -709,13 +716,13 @@ encoded_streams writer::impl::encode_data(host_span<orc_column_view const> colum
   }
 
   gpu::EncodeOrcColumnData(chunks.device_ptr(),
-                           encoded_streams.device_ptr(),
+                           chunk_streams.device_ptr(),
                            columns.size(),
                            stripe_bounds.num_rowgroups(),
                            stream);
   stream.synchronize();
 
-  return {std::move(encoded_data), std::move(encoded_streams)};
+  return {std::move(encoded_data), std::move(chunk_streams)};
 }
 
 std::vector<StripeInformation> writer::impl::gather_stripes(
@@ -859,26 +866,28 @@ std::vector<std::vector<uint8_t>> writer::impl::gather_statistic_blobs(
   return stat_blobs;
 }
 
-void writer::impl::write_index_stream(int32_t stripe_id,
-                                      int32_t stream_id,
-                                      orc_column_view *columns,
-                                      size_t num_columns,
-                                      size_t num_data_streams,
-                                      size_t group,
-                                      size_t groups_in_stripe,
-                                      hostdevice_vector<gpu::encoder_chunk_streams> const &enc_streams,
-                                      hostdevice_vector<gpu::StripeStream> const &strm_desc,
-                                      hostdevice_vector<gpu_inflate_status_s> const &comp_out,
-                                      StripeInformation *stripe,
-                                      orc_streams *streams,
-                                      ProtobufWriter *pbw)
+void writer::impl::write_index_stream(
+  int32_t stripe_id,
+  int32_t stream_id,
+  orc_column_view *columns,
+  size_t num_columns,
+  size_t num_data_streams,
+  size_t group,
+  size_t groups_in_stripe,
+  hostdevice_vector<gpu::encoder_chunk_streams> const &enc_streams,
+  hostdevice_vector<gpu::StripeStream> const &strm_desc,
+  hostdevice_vector<gpu_inflate_status_s> const &comp_out,
+  StripeInformation *stripe,
+  orc_streams *streams,
+  ProtobufWriter *pbw)
 {
   row_group_index_info present;
   row_group_index_info data;
   row_group_index_info data2;
   auto kind = TypeKind::STRUCT;
 
-  auto find_record = [=, &strm_desc](gpu::encoder_chunk_streams const &stream, gpu::StreamIndexType type) {
+  auto find_record = [=, &strm_desc](gpu::encoder_chunk_streams const &stream,
+                                     gpu::StreamIndexType type) {
     row_group_index_info record;
     if (stream.ids[type] > 0) {
       record.pos = 0;
@@ -955,11 +964,12 @@ void writer::impl::write_data_stream(gpu::StripeStream const &strm_desc,
                                      StripeInformation *stripe,
                                      orc_streams *streams)
 {
-  const auto length                                            = strm_desc.stream_size;
+  const auto length                                        = strm_desc.stream_size;
   (*streams)[enc_stream.ids[strm_desc.stream_type]].length = length;
   if (length != 0) {
-    const auto *stream_in = (compression_kind_ == NONE) ? enc_stream.data_ptrs[strm_desc.stream_type]
-                                                        : (compressed_data + strm_desc.bfr_offset);
+    const auto *stream_in = (compression_kind_ == NONE)
+                              ? enc_stream.data_ptrs[strm_desc.stream_type]
+                              : (compressed_data + strm_desc.bfr_offset);
     CUDA_TRY(
       cudaMemcpyAsync(stream_out, stream_in, length, cudaMemcpyDeviceToHost, stream.value()));
     stream.synchronize();
