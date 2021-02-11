@@ -32,11 +32,11 @@ endif()
 find_dependency(CUDAToolkit)
 
 find_path(
-  Thrust_INCLUDE_DIRS
+  Thrust_INCLUDE_DIR
   NAMES thrust/version.h
   HINTS ${CUDAToolkit_INCLUDE_DIRS})
 
-file(READ ${Thrust_INCLUDE_DIRS}/thrust/version.h _version_header)
+file(READ ${Thrust_INCLUDE_DIR}/thrust/version.h _version_header)
 string(REGEX MATCH "#define THRUST_VERSION ([0-9]*)" _match "${_version_header}")
 math(EXPR major "${CMAKE_MATCH_1} / 100000")
 math(EXPR minor "(${CMAKE_MATCH_1} / 100) % 1000")
@@ -45,10 +45,11 @@ set(Thrust_VERSION "${major}.${minor}.${subminor}")
 
 find_package_handle_standard_args(
   Thrust
-  REQUIRED_VARS Thrust_INCLUDE_DIRS
+  REQUIRED_VARS Thrust_INCLUDE_DIR
   VERSION_VAR Thrust_VERSION)
 
 if(Thrust_FOUND)
+  set(Thrust_INCLUDE_DIRS "${Thrust_INCLUDE_DIR}")
   # Create wrapper function to handle situation where we can't use a regular IMPORTED INTERFACE
   # target since that'll use -isystem, leading to the wrong search order with nvcc
   function(thrust_create_target tgt)
