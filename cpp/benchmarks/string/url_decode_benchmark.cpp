@@ -15,7 +15,10 @@
  */
 
 #include <benchmark/benchmark.h>
+#include <benchmarks/fixture/benchmark_fixture.hpp>
+#include <benchmarks/synchronization/synchronization.hpp>
 
+#include <cudf/column/column_view.hpp>
 #include <cudf/strings/convert/convert_urls.hpp>
 #include <cudf/types.hpp>
 
@@ -26,11 +29,6 @@
 
 #include <algorithm>
 #include <random>
-
-#include "../fixture/benchmark_fixture.hpp"
-#include "../synchronization/synchronization.hpp"
-#include "cudf/column/column_view.hpp"
-#include "cudf/wrappers/durations.hpp"
 
 struct url_string_generator {
   size_t num_chars;

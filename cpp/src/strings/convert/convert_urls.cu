@@ -332,7 +332,7 @@ std::unique_ptr<column> url_decode(
   if (strings_count == 0) return make_empty_strings_column(stream, mr);
 
   auto offset_count = strings_count + 1;
-  auto d_offsets    = strings.offsets().data<size_type>() + strings.offset();
+  auto d_offsets    = strings.offsets().data<int32_t>() + strings.offset();
   auto d_in_chars   = strings.chars().data<char>();
   // determine index of first character in base column
   size_type chars_start = (strings.offset() == 0) ? 0
@@ -390,7 +390,7 @@ std::unique_ptr<column> url_decode(
   thrust::transform(rmm::exec_policy(stream),
                     d_offsets_span.begin(),
                     d_offsets_span.end(),
-                    offsets_view.begin<size_type>(),
+                    offsets_view.begin<int32_t>(),
                     url_decode_offsets_updater{d_esc_positions_span, chars_start});
 
   // create the chars column
