@@ -355,9 +355,14 @@ public final class ColumnVector extends ColumnView {
     return vec;
   }
 
-  public static long[] toArrowPrimitive(ColumnVector vec) {
-    long[] handles = toArrowPrimitive(vec.getNativeView());
-    return handles;
+  public static ArrowColumnInfo toArrowPrimitive(ColumnVector vec) {
+    long[] res = toArrowPrimitive(vec.getNativeView());
+    return new ArrowColumnInfo(res[0], res[1], res[2], res[3], res[4], res[5]);
+  }
+
+  public static ArrowColumnInfo toArrowString(ColumnVector vec) {
+    long[] res = toArrowString(vec.getNativeView());
+    return new ArrowColumnInfo(res[0], res[1], res[2], res[3], res[4], res[5], res[6], res[7]);
   }
 
   /**
@@ -670,6 +675,7 @@ public final class ColumnVector extends ColumnView {
       ByteBuffer offsets) throws CudfException;
 
   private static native long[] toArrowPrimitive(long handle) throws CudfException;
+  private static native long[] toArrowString(long handle) throws CudfException;
 
   private static native long fromScalar(long scalarHandle, int rowCount) throws CudfException;
 
