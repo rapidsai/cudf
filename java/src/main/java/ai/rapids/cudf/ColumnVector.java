@@ -355,6 +355,11 @@ public final class ColumnVector extends ColumnView {
     return vec;
   }
 
+  public static long[] toArrowPrimitive(ColumnVector vec) {
+    long[] handles = toArrowPrimitive(vec.getNativeView());
+    return handles;
+  }
+
   /**
    * Create a new vector of length rows, where each row is filled with the Scalar's
    * value
@@ -663,6 +668,8 @@ public final class ColumnVector extends ColumnView {
   private static native long fromArrow(int type, long col_length,
       long null_count, ByteBuffer data, ByteBuffer validity,
       ByteBuffer offsets) throws CudfException;
+
+  private static native long[] toArrowPrimitive(long handle) throws CudfException;
 
   private static native long fromScalar(long scalarHandle, int rowCount) throws CudfException;
 

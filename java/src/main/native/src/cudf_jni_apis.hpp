@@ -15,6 +15,7 @@
  */
 #pragma once
 
+#include <arrow/api.h>
 #include <cudf/copying.hpp>
 #include <cudf/detail/aggregation/aggregation.hpp>
 
@@ -24,6 +25,8 @@ namespace cudf {
 namespace jni {
 
 jlongArray convert_table_for_return(JNIEnv *env, std::unique_ptr<cudf::table> &table_result);
+
+std::shared_ptr<arrow::Array> toArrowArray(JNIEnv *env, jlong handle);
 
 //
 // ContiguousTable APIs

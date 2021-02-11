@@ -31,6 +31,37 @@
 #include "cudf_jni_apis.hpp"
 #include "dtype_utils.hpp"
 
+namespace cudf {
+namespace jni {
+
+std::shared_ptr<arrow::Array> toArrowArray(JNIEnv *env, jlong handle) {
+    cudf::column_view *column = reinterpret_cast<cudf::column_view *>(handle);
+    auto table_view = cudf::table_view({*column});
+
+    std::unique_ptr<std::shared_ptr<arrow::Table>> result(
+      new std::shared_ptr<arrow::Table>(nullptr));
+    auto column_metadata = std::vector<cudf::column_metadata>{cudf::column_metadata{"col1"}};
+    *result = cudf::to_arrow(table_view, column_metadata);
+    if (!result->get()) {
+      return 0;
+    }
+    if (result->get()->num_columns() != 1) {
+      cudf::jni::throw_java_exception(env, "java/lang/IllegalArgumentException",
+        "Must result in one column");
+    }
+    // cudf puts everything into 1 chunk, validate that
+    // TODO - perhaps we should handle if not?
+    std::shared_ptr<arrow::ChunkedArray> chunked_array = result->get()->column(0);
+    if (chunked_array->chunks().size() > 1) {
+      cudf::jni::throw_java_exception(env, "java/lang/IllegalArgumentException",
+        "Should only have 1 chunk");
+    }
+    result.release();
+  return chunked_array->chunk(0);
+}
+
+}
+}
 
 extern "C" {
 
@@ -124,49 +155,26 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_fromArrow(JNIEnv *env, 
   CATCH_STD(env, 0);
 }
 
-static std::shared_ptr<arrow::Array> toArrowArray(JNIEnv *env, jlong handle) {
-  cudf::jni::auto_set_device(env);
-  cudf::column_view *column = reinterpret_cast<cudf::column_view *>(handle);
-  auto table_view = cudf::table_view({*column});
-
-  std::unique_ptr<std::shared_ptr<arrow::Table>> result(
-      new std::shared_ptr<arrow::Table>(nullptr));
-  auto column_metadata = std::vector<cudf::column_metadata>{cudf::column_metadata{"col1"}};
-  *result = cudf::to_arrow(table_view, column_metadata);
-  if (!result->get()) {
-    return 0;
-  }
-  // now just get the single column returned
-  if (result.columns.size() != 1) {
-    JNI_THROW_NEW(env, "java/lang/IllegalArgumentException", "Must result in one column", 0);
-  }
-  // cudf to_arrow only uses a single array underneath, that gets converted to ChunkedArray
-  // by arrow::Table::Make so no actual chunking going on
-  std::shared_ptr<ChunkedArray> chunked_array = result.column(0);
-  // TODO - do we just want to handle concat in case changes?
-  if (chunked_array.length() > 1) {
-    JNI_THROW_NEW(env, "java/lang/IllegalArgumentException", "Should only have 1 chunk", 0);
-  }
-  return chunked_array.chunk(0);
-}
-
 JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_ColumnVector_toArrowPrimitive(JNIEnv *env, jclass, jlong handle) {
   JNI_NULL_CHECK(env, handle, "null column view", 0);
   try {
     cudf::jni::auto_set_device(env);
-    std::shared_ptr<arrow::Array> array = toArrowArray(env, handle);
-
-    auto data_buffer = array.data()->buffers[1];
-    const uint8_t* data_address = reinterpret_cast<const uint8_t*>(data_buffer->address());
-    size_type const num_rows = array.length();
+    std::shared_ptr<arrow::Array> array = cudf::jni::toArrowArray(env, handle);
+    auto data_buffer = array->data()->buffers[1];
+    const uint8_t* data_address = reinterpret_cast<uint8_t*>(data_buffer->address());
     const uint8_t* validity_address = nullptr;
-    if (array.null_bitmap_data() != nullptr) {
-      validity_address = reinterpret_cast<const uint8_t*>(array.null_bitmap()->address());
+    int64_t validity_size = 0;
+    if (array->null_bitmap_data() != nullptr) {
+      validity_address = reinterpret_cast<const uint8_t*>(array->null_bitmap()->address());
+      validity_size = array->null_bitmap()->size();
     }
-    cudf::jni::native_jlongArray array_handles(env, 3);
+    cudf::jni::native_jlongArray array_handles(env, 6);
     array_handles[0] = reinterpret_cast<jlong>(data_address);
-    array_handles[1] = reinterpret_cast<jlong>(num_rows);
-    array_handles[2] = reinterpret_cast<jlong>(validity_address);
+    array_handles[1] = reinterpret_cast<jlong>(static_cast<long>(data_buffer->size()));
+    array_handles[2] = reinterpret_cast<jlong>(static_cast<long>(array->length()));
+    array_handles[3] = reinterpret_cast<jlong>(validity_address);
+    array_handles[4] = reinterpret_cast<jlong>(static_cast<long>(validity_size));
+    array_handles[5] = reinterpret_cast<jlong>(static_cast<long>(array->null_count()));
     return array_handles.get_jArray();
   }
   CATCH_STD(env, nullptr);
