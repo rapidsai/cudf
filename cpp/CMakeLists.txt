@@ -508,7 +508,7 @@ set(INSTALL_CONFIGDIR ${CMAKE_INSTALL_LIBDIR}/cmake/cudf)
 set(CMAKE_INSTALL_DEFAULT_COMPONENT_NAME cudf)
 
 # install target for cudf_base and the proxy libcudf.so
-install(TARGETS cudf ${CUDF_PROXY_NAME}
+install(TARGETS cudf
         DESTINATION lib
         EXPORT cudf-targets)
 

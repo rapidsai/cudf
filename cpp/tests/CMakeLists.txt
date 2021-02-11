@@ -44,7 +44,7 @@ target_include_directories(cudftestutil
 
 install(TARGETS cudftestutil
         DESTINATION lib
-        COMPONENT cudf)
+        EXPORT cudf-targets)
 
 ###################################################################################################
 # - compiler function -----------------------------------------------------------------------------
