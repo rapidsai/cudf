@@ -158,6 +158,7 @@ gatherIntColumnStats(stats_state_s *s, statistics_dtype dtype, uint32_t t, Stora
   int64_t vsum       = 0;
   int64_t v;
   uint32_t nn_cnt = 0;
+  __shared__ volatile bool has_minmax;
   for (uint32_t i = 0; i < s->group.num_rows; i += block_size) {
     uint32_t r                = i + t;
     uint32_t row              = r + s->group.start_row;
@@ -198,18 +199,19 @@ gatherIntColumnStats(stats_state_s *s, statistics_dtype dtype, uint32_t t, Stora
   vmin = block_reduce(storage.integer_stats).Reduce(vmin, cub::Min());
   __syncthreads();
   vmax = block_reduce(storage.integer_stats).Reduce(vmax, cub::Max());
+  if (!t) { has_minmax = (vmin <= vmax); }
   __syncthreads();
-  vsum = block_reduce(storage.integer_stats).Sum(vsum);
-
-  if (!t) {
-    bool has_minmax       = (vmin <= vmax);
-    s->ck.min_value.i_val = vmin;
-    s->ck.max_value.i_val = vmax;
-    s->ck.has_minmax      = has_minmax;
-    s->ck.sum.i_val       = vsum;
-    // TODO: For now, don't set the sum flag with 64-bit values so we don't have to check for
-    // 64-bit sum overflow
-    s->ck.has_sum = (dtype <= dtype_int32 && has_minmax);
+  if (has_minmax) {
+    vsum = block_reduce(storage.integer_stats).Sum(vsum);
+    if (!t) {
+      s->ck.min_value.i_val = vmin;
+      s->ck.max_value.i_val = vmax;
+      s->ck.has_minmax      = has_minmax;
+      s->ck.sum.i_val       = vsum;
+      // TODO: For now, don't set the sum flag with 64-bit values so we don't have to check for
+      // 64-bit sum overflow
+      s->ck.has_sum = (dtype <= dtype_int32 && has_minmax);
+    }
   }
 }
 
@@ -231,6 +233,7 @@ gatherFloatColumnStats(stats_state_s *s, statistics_dtype dtype, uint32_t t, Sto
   double vsum        = 0;
   double v;
   uint32_t nn_cnt = 0;
+  __shared__ volatile bool has_minmax;
   for (uint32_t i = 0; i < s->group.num_rows; i += block_size) {
     uint32_t r                = i + t;
     uint32_t row              = r + s->group.start_row;
@@ -260,15 +263,17 @@ gatherFloatColumnStats(stats_state_s *s, statistics_dtype dtype, uint32_t t, Sto
   vmin = block_reduce(storage.float_stats).Reduce(vmin, cub::Min());
   __syncthreads();
   vmax = block_reduce(storage.float_stats).Reduce(vmax, cub::Max());
+  if (!t) { has_minmax = (vmin <= vmax); }
   __syncthreads();
-  vsum = block_reduce(storage.float_stats).Reduce(vsum, IgnoreNaNSum());
-  if (!t) {
-    bool has_minmax        = (vmin <= vmax);
-    s->ck.min_value.fp_val = (vmin != 0.0) ? vmin : CUDART_NEG_ZERO;
-    s->ck.max_value.fp_val = (vmax != 0.0) ? vmax : CUDART_ZERO;
-    s->ck.has_minmax       = has_minmax;
-    s->ck.sum.fp_val       = vsum;
-    s->ck.has_sum          = has_minmax;  // Implies sum is valid as well
+  if (has_minmax) {
+    vsum = block_reduce(storage.float_stats).Reduce(vsum, IgnoreNaNSum());
+    if (!t) {
+      s->ck.min_value.fp_val = (vmin != 0.0) ? vmin : CUDART_NEG_ZERO;
+      s->ck.max_value.fp_val = (vmax != 0.0) ? vmax : CUDART_ZERO;
+      s->ck.has_minmax       = has_minmax;
+      s->ck.sum.fp_val       = vsum;
+      s->ck.has_sum          = has_minmax;  // Implies sum is valid as well
+    }
   }
 }
 

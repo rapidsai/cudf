@@ -66,8 +66,7 @@ __global__ void __launch_bounds__(init_threads_per_block)
  * @param[in] statistics_count Number of statistics buffers
  */
 constexpr unsigned int buffersize_reduction_dim = 32;
-constexpr unsigned int buffersize_threads_per_block =
-  buffersize_reduction_dim * buffersize_reduction_dim;
+constexpr unsigned int block_size        = buffersize_reduction_dim * buffersize_reduction_dim;
 constexpr unsigned int pb_fld_hdrlen     = 1;
 constexpr unsigned int pb_fld_hdrlen16   = 2;  // > 127-byte length
 constexpr unsigned int pb_fld_hdrlen32   = 5;  // > 16KB length
@@ -78,7 +77,7 @@ constexpr unsigned int pb_fldlen_bucket1 = 1 + pb_fldlen_int64;
 constexpr unsigned int pb_fldlen_common  = 2 * pb_fld_hdrlen + pb_fldlen_int64;
 
 template <unsigned int block_size>
-__global__ void __launch_bounds__(buffersize_threads_per_block, 1)
+__global__ void __launch_bounds__(block_size, 1)
   gpu_init_statistics_buffersize(statistics_merge_group *groups,
                                  const statistics_chunk *chunks,
                                  uint32_t statistics_count)
@@ -88,7 +87,7 @@ __global__ void __launch_bounds__(buffersize_threads_per_block, 1)
   volatile uint32_t stats_size = 0;
   uint32_t t                   = threadIdx.x;
   __syncthreads();
-  for (uint32_t start = 0; start < statistics_count; start += buffersize_threads_per_block) {
+  for (uint32_t start = 0; start < statistics_count; start += block_size) {
     uint32_t stats_len = 0, stats_pos;
     uint32_t idx       = start + t;
     if (idx < statistics_count) {
@@ -400,8 +399,8 @@ void orc_init_statistics_buffersize(statistics_merge_group *groups,
                                     uint32_t statistics_count,
                                     rmm::cuda_stream_view stream)
 {
-  gpu_init_statistics_buffersize<buffersize_threads_per_block>
-    <<<1, buffersize_threads_per_block, 0, stream.value()>>>(groups, chunks, statistics_count);
+  gpu_init_statistics_buffersize<block_size>
+    <<<1, block_size, 0, stream.value()>>>(groups, chunks, statistics_count);
 }
 
 /**
