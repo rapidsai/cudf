@@ -229,28 +229,38 @@ class MergeBase(object):
             or self.left_on
             or self.right_on
         ):
+            left_keys = []
+            right_keys = []
             if self.left_index:
-                left_keys = [
-                    ColumnView(obj=self.lhs, index=on)
-                    for on in self.lhs.index.names
-                ]
-            else:
+                left_keys.extend(
+                    [
+                        ColumnView(obj=self.lhs, index=on)
+                        for on in self.lhs.index.names
+                    ]
+                )
+            if self.left_on:
                 # TODO: require left_on or left_index to be specified
-                left_keys = [
-                    ColumnView(obj=self.lhs, column=on)
-                    for on in _coerce_to_tuple(self.left_on)
-                ]
+                left_keys.extend(
+                    [
+                        ColumnView(obj=self.lhs, column=on)
+                        for on in _coerce_to_tuple(self.left_on)
+                    ]
+                )
             if self.right_index:
-                right_keys = [
-                    ColumnView(obj=self.rhs, index=on)
-                    for on in self.rhs.index.names
-                ]
-            else:
+                right_keys.extend(
+                    [
+                        ColumnView(obj=self.rhs, index=on)
+                        for on in self.rhs.index.names
+                    ]
+                )
+            if self.right_on:
                 # TODO: require right_on or right_index to be specified
-                right_keys = [
-                    ColumnView(obj=self.rhs, column=on)
-                    for on in _coerce_to_tuple(self.right_on)
-                ]
+                right_keys.extend(
+                    [
+                        ColumnView(obj=self.rhs, column=on)
+                        for on in _coerce_to_tuple(self.right_on)
+                    ]
+                )
         else:
             # Use `on` if provided. Otherwise,
             # implicitly use identically named columns as the key columns:
