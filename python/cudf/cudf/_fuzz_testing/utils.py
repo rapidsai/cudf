@@ -85,7 +85,7 @@ def _generate_rand_meta(obj, dtypes_list, null_frequency_override=None):
             if null_frequency_override is None
             else null_frequency_override
         )
-        # `cardinality` has to be atleast 1.
+        # `cardinality` has to be at least 1.
         cardinality = max(1, obj._rand(obj._max_rows))
         meta = dict()
         if dtype == "str":
