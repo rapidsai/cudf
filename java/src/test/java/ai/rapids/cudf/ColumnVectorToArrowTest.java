@@ -57,14 +57,13 @@ public class ColumnVectorToArrowTest extends CudfTestBase {
   @Test
   void testArrowInt() {
     BufferAllocator allocator = new RootAllocator(Long.MAX_VALUE);
-    int numVecs = 4;
     try (IntVector vector = new IntVector("vec", allocator)) {
       ArrayList<Integer> expectedArr = new ArrayList<Integer>();
       int count = 10000;
       for (int i = 0; i < count; i++) {
         if (i == 3) {
           // add a null in there somewhere
-          vector.setNull(3);
+          vector.setNull(i);
           expectedArr.add(null);
         } else {
           expectedArr.add(i);
@@ -198,30 +197,49 @@ public class ColumnVectorToArrowTest extends CudfTestBase {
     }
   }
 
+  */
+
   @Test
   void testArrowString() {
-    ArrowColumnBuilder builder = new ArrowColumnBuilder(new HostColumnVector.BasicType(true, DType.STRING));
     BufferAllocator allocator = new RootAllocator(Long.MAX_VALUE);
     try (VarCharVector vector = new VarCharVector("vec", allocator)) {
       ArrayList<String> expectedArr = new ArrayList<String>();
       int count = 10000;
       for (int i = 0; i < count; i++) {
-        String toAdd = i + "testString";
-        expectedArr.add(toAdd);
-        ((VarCharVector) vector).setSafe(i, new Text(toAdd));
+        if (i == 3) {
+          // add a null in there somewhere
+          vector.setNull(i);
+          expectedArr.add(null);
+        } else {
+          String toAdd = i + "testString";
+          expectedArr.add(toAdd);
+          ((VarCharVector) vector).setSafe(i, new Text(toAdd));
+        }
       }
       vector.setValueCount(count);
-      ByteBuffer data = vector.getDataBuffer().nioBuffer();
-      ByteBuffer valid = vector.getValidityBuffer().nioBuffer();
-      ByteBuffer offsets = vector.getOffsetBuffer().nioBuffer();
-      builder.addBatch(vector.getValueCount(), vector.getNullCount(), data, valid, offsets);
-      try (ColumnVector cv = builder.buildAndPutOnDevice();
-           ColumnVector expected = ColumnVector.fromStrings(expectedArr.toArray(new String[0]))) {
-        assertEquals(cv.getType(), DType.STRING);
-        assertColumnsAreEqual(expected, cv, "Strings");
+      try (ColumnVector toConvert = ColumnVector.fromStrings(expectedArr.toArray(new String[0]))) {
+        assertEquals(toConvert.getNullCount(), 1);
+        ArrowColumnInfo res = ColumnVector.toArrowString(toConvert);
+        ArrowBuf validityBuf = null;
+        if (res.getValidityBufferAddress() != 0) {
+          validityBuf = new ArrowBuf(ReferenceManager.NO_OP, null,
+            (int)res.getValidityBufferSize(), res.getValidityBufferAddress(), false);
+        }
+        ArrowBuf dataBuf = new ArrowBuf(ReferenceManager.NO_OP, null, (int)res.getDataBufferSize(),
+          res.getDataBufferAddress(), false);
+        ArrowBuf offsetsBuf = new ArrowBuf(ReferenceManager.NO_OP, null, (int)res.getOffsetsBufferSize(),
+          res.getOffsetsBufferAddress(), false);
+        ArrowFieldNode fieldNode = new ArrowFieldNode((int)res.getNumRows(), (int)res.getNullCount());
+        VarCharVector v1 = new VarCharVector("col1", allocator);
+        v1.loadFieldBuffers(fieldNode, Stream.of(validityBuf, offsetsBuf, dataBuf).collect(Collectors.toList()));
+        assertEquals(v1.getNullCount(), 1);
+        assertEquals(vector.getNullCount(), 1);
+        assertEquals(v1.getObject(0).toString(), "0testString");
+        assertTrue(VectorEqualsVisitor.vectorEquals(v1, vector));
       }
     }
   }
+  /*
 
   @Test
   void testArrowStringOnHeap() {

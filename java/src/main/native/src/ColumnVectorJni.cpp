@@ -185,17 +185,17 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_ColumnVector_toArrowString(JNIE
   try {
     cudf::jni::auto_set_device(env);
     std::shared_ptr<arrow::Array> array = cudf::jni::toArrowArray(env, handle);
-    auto data_buffer = array->data()->buffers[1];
+    auto str_array = std::static_pointer_cast<arrow::StringArray>(array);
+    auto data_buffer = str_array->value_data();
     const uint8_t* validity_address = nullptr;
     int64_t validity_size = 0;
     if (array->null_bitmap_data() != nullptr) {
       validity_address = reinterpret_cast<const uint8_t*>(array->null_bitmap()->address());
       validity_size = array->null_bitmap()->size();
     }
-    auto str_array = std::static_pointer_cast<arrow::StringArray>(array);
     auto offsets_addr = str_array->value_offsets()->address();
     auto offsets_size = str_array->value_offsets()->size();
-    cudf::jni::native_jlongArray array_handles(env, 7);
+    cudf::jni::native_jlongArray array_handles(env, 8);
     array_handles[0] = static_cast<jlong>(data_buffer->address());
     array_handles[1] = static_cast<jlong>(data_buffer->size());
     array_handles[2] = static_cast<jlong>(array->length());
