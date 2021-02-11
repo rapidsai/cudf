@@ -46,10 +46,10 @@ namespace {
 template <typename DecimalType>
 struct string_to_decimal_fn {
   column_device_view const d_strings;
-  DecimalType* values;
-  int32_t* scales;
+  DecimalType* const values;
+  int32_t* const scales;
 
-  __device__ void operator()(size_type idx)
+  __device__ void operator()(size_type idx) const
   {
     values[idx] = DecimalType{0};
     scales[idx] = numeric::scale_type{0};
@@ -90,7 +90,7 @@ template <typename DecimalType>
 struct string_to_decimal_check_fn {
   column_device_view const d_strings;
 
-  __device__ bool operator()(size_type idx)
+  __device__ bool operator()(size_type idx) const
   {
     if (d_strings.is_null(idx)) return false;
     auto const d_str = d_strings.element<string_view>(idx);
@@ -123,10 +123,10 @@ template <typename DecimalType>
 struct rescale_decimals_fn {
   column_device_view const d_strings;
   int32_t const new_scale;
-  int32_t const* scales;  // original scales
-  DecimalType* values;    // values to rescale
+  int32_t const* scales;      // original scales
+  DecimalType* const values;  // values to rescale
 
-  __device__ void operator()(size_type idx)
+  __device__ void operator()(size_type idx) const
   {
     if (d_strings.is_null(idx)) return;
 
@@ -147,25 +147,30 @@ struct dispatch_to_fixed_point_fn {
                                      rmm::mr::device_memory_resource* mr) const
   {
     using DecimalType = device_storage_type_t<T>;
-    rmm::device_uvector<int32_t> d_scales(input.size(), stream);
-    rmm::device_uvector<DecimalType> d_values(input.size(), stream, mr);
-    auto d_column = column_device_view::create(input.parent(), stream);
+
+    auto d_scales = rmm::device_uvector<int32_t>(input.size(), stream);
+    auto d_values = rmm::device_uvector<DecimalType>(input.size(), stream, mr);
+
+    auto const d_column = column_device_view::create(input.parent(), stream);
+    // compute the integer component values and count the decimal places
     thrust::for_each_n(
       rmm::exec_policy(stream),
       thrust::make_counting_iterator<size_type>(0),
       input.size(),
       string_to_decimal_fn<DecimalType>{*d_column, d_values.data(), d_scales.data()});
+
     // find the largest scale size -- min is used since all scale values will be <= 0
     auto const min_elem =
       thrust::min_element(rmm::exec_policy(stream), d_scales.begin(), d_scales.end());
     auto const scale = d_scales.element(thrust::distance(d_scales.begin(), min_elem), stream);
+
     // re-scale all the values to the new scale
     thrust::for_each_n(
       rmm::exec_policy(stream),
       thrust::make_counting_iterator<size_type>(0),
       input.size(),
       rescale_decimals_fn<DecimalType>{*d_column, scale, d_scales.data(), d_values.data()});
-    // build output column
+
     return std::make_unique<column>(data_type{type_to_id<T>(), scale},
                                     input.size(),
                                     d_values.release(),
@@ -210,6 +215,8 @@ namespace {
 /**
  * @brief Calculate the size of the each string required for
  * converting each value in base-10 format.
+ *
+ * ouput format is [-]integer.fraction
  */
 template <typename DecimalType>
 struct decimal_to_string_size_fn {
@@ -226,15 +233,19 @@ struct decimal_to_string_size_fn {
     auto const abs_value = std::abs(value);
     auto const exp_ten   = static_cast<int32_t>(exp10(static_cast<double>(-scale)));
     auto const num_zeros = std::max(0, (-scale - count_digits(abs_value % exp_ten)));
-    return static_cast<int32_t>(value < 0) + count_digits(abs_value / exp_ten) + 1 + num_zeros +
-           count_digits(abs_value % exp_ten);
+    return static_cast<int32_t>(value < 0) +    // sign if negative
+           count_digits(abs_value / exp_ten) +  // integer
+           1 +                                  // decimal point
+           num_zeros +                          // zeros padding
+           count_digits(abs_value % exp_ten);   // fraction
   }
 };
 
 /**
  * @brief Convert each value into a string.
  *
- * The value is converted into base-10 using only characters [0-9].
+ * The value is converted into base-10 digits [0-9]
+ * plus the decimal point and a negative sign prefix.
  */
 template <typename DecimalType>
 struct decimal_to_string_fn {
@@ -286,22 +297,22 @@ struct dispatch_from_fixed_point_fn {
                                      rmm::mr::device_memory_resource* mr) const
   {
     using DecimalType = device_storage_type_t<T>;  // underlying value type
-    auto d_column     = column_device_view::create(input, stream);
+
+    auto const d_column = column_device_view::create(input, stream);
 
     // build offsets column
     auto offsets_transformer_itr = cudf::detail::make_counting_transform_iterator(
       0, decimal_to_string_size_fn<DecimalType>{*d_column});
     auto offsets_column = detail::make_offsets_child_column(
       offsets_transformer_itr, offsets_transformer_itr + input.size(), stream, mr);
-    auto d_offsets = offsets_column->view().template data<int32_t>();
+    auto const d_offsets = offsets_column->view().template data<int32_t>();
 
     // build chars column
     auto const bytes =
       cudf::detail::get_value<int32_t>(offsets_column->view(), input.size(), stream);
     auto chars_column =
       detail::create_chars_child_column(input.size(), input.null_count(), bytes, stream, mr);
-    auto chars_view = chars_column->mutable_view();
-    auto d_chars    = chars_view.template data<char>();
+    auto d_chars = chars_column->mutable_view().template data<char>();
     thrust::for_each_n(rmm::exec_policy(stream),
                        thrust::make_counting_iterator<size_type>(0),
                        input.size(),
@@ -356,7 +367,8 @@ struct dispatch_is_fixed_point_fn {
                                      rmm::mr::device_memory_resource* mr) const
   {
     using DecimalType = device_storage_type_t<T>;
-    auto d_column     = column_device_view::create(input.parent(), stream);
+
+    auto const d_column = column_device_view::create(input.parent(), stream);
 
     // create output column
     auto results   = make_numeric_column(data_type{type_id::BOOL8},
