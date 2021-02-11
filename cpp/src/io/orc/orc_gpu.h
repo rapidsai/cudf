@@ -137,9 +137,9 @@ struct EncChunk {
 };
 
 struct encoder_chunk_streams {
-  uint8_t *data_ptrs[CI_NUM_STREAMS];   // encoded output
-  int32_t ids[CI_NUM_STREAMS];    // stream id or -1 if not present
-  uint32_t lengths[CI_NUM_STREAMS];  // in: max length, out: actual length (TODO: separate)
+  uint8_t *data_ptrs[CI_NUM_STREAMS];  // encoded output
+  int32_t ids[CI_NUM_STREAMS];         // stream id or -1 if not present
+  uint32_t lengths[CI_NUM_STREAMS];    // in: max length, out: actual length (TODO: separate)
 };
 
 /**
@@ -311,6 +311,7 @@ void EncodeStripeDictionaries(StripeDictionary *stripes,
                               encoder_chunk_streams *streams,
                               uint32_t num_string_columns,
                               uint32_t num_columns,
+                              uint32_t num_rowgroups,
                               uint32_t num_stripes,
                               rmm::cuda_stream_view stream = rmm::cuda_stream_default);
 

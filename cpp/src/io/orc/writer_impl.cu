@@ -599,7 +599,7 @@ encoded_streams writer::impl::encode_data(host_span<orc_column_view const> colum
   for (size_t j = 0; j < stripe_bounds.num_rowgroups(); j++) {
     if (j == stripe_bounds.offsets[stripe_id] + stripe_bounds.sizes[stripe_id]) { ++stripe_id; }
     for (size_t i = 0; i < num_columns; i++) {
-      auto *ck      = &chunks[j * num_columns + i];
+      auto *ck      = &chunks[i * stripe_bounds.num_rowgroups() + j];
       ck->start_row = (j * row_index_stride_);
       ck->num_rows = std::min<uint32_t>(row_index_stride_, columns[i].data_count() - ck->start_row);
       ck->valid_rows    = columns[i].data_count();
@@ -641,7 +641,7 @@ encoded_streams writer::impl::encode_data(host_span<orc_column_view const> colum
     // Track the current stripe this rowgroup chunk belongs
     if (j == stripe_bounds.offsets[stripe_id] + stripe_bounds.sizes[stripe_id]) { ++stripe_id; }
     for (size_t i = 0; i < num_columns; i++) {
-      auto *ck   = &chunks[j * num_columns + i];
+      auto *ck   = &chunks[i * stripe_bounds.num_rowgroups() + j];
       auto *strm = &chunk_streams[j * num_columns + i];
       for (int k = 0; k < gpu::CI_NUM_STREAMS; k++) {
         auto const strm_id = streams.id(i * gpu::CI_NUM_STREAMS + k);
@@ -711,6 +711,7 @@ encoded_streams writer::impl::encode_data(host_span<orc_column_view const> colum
                                   chunk_streams.device_ptr(),
                                   str_col_ids.size(),
                                   columns.size(),
+                                  stripe_bounds.num_rowgroups(),
                                   stripe_bounds.size(),
                                   stream);
   }

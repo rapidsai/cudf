@@ -681,7 +681,7 @@ __global__ void __launch_bounds__(block_size) gpuEncodeOrcColumnData(EncChunk *c
   uint32_t group_id       = blockIdx.y;
   int t                   = threadIdx.x;
   if (t == 0) {
-    s->chunk  = chunks[group_id * num_columns + col_id];
+    s->chunk  = chunks[group_id + col_id * num_rowgroups];
     s->stream = streams[group_id * num_columns + col_id];
   }
   if (t < CI_NUM_STREAMS) { s->strm_pos[t] = 0; }
@@ -976,10 +976,12 @@ __global__ void __launch_bounds__(block_size) gpuEncodeOrcColumnData(EncChunk *c
  */
 // blockDim {512,1,1}
 template <int block_size>
-__global__ void __launch_bounds__(block_size) gpuEncodeStringDictionaries(StripeDictionary *stripes,
-                                                                          EncChunk *chunks,
-                                                                          encoder_chunk_streams *streams,
-                                                                          uint32_t num_columns)
+__global__ void __launch_bounds__(block_size)
+  gpuEncodeStringDictionaries(StripeDictionary *stripes,
+                              EncChunk *chunks,
+                              encoder_chunk_streams *streams,
+                              uint32_t num_columns,
+                              uint32_t num_rowgroups)
 {
   __shared__ __align__(16) orcenc_state_s state_g;
   __shared__ union {
@@ -990,18 +992,18 @@ __global__ void __launch_bounds__(block_size) gpuEncodeStringDictionaries(Stripe
   orcenc_state_s *const s = &state_g;
   uint32_t stripe_id      = blockIdx.x;
   uint32_t cid            = (blockIdx.y) ? CI_DICTIONARY : CI_DATA2;
-  uint32_t chunk_id;
-  int t = threadIdx.x;
+  int t                   = threadIdx.x;
   const nvstrdesc_s *str_desc;
   const uint32_t *dict_data;
 
   if (t == 0) s->u.dict_stripe = stripes[stripe_id];
 
   __syncthreads();
-  chunk_id = s->u.dict_stripe.start_chunk * num_columns + s->u.dict_stripe.column_id;
+  auto const chunk_id  = s->u.dict_stripe.start_chunk + s->u.dict_stripe.column_id * num_rowgroups;
+  auto const stream_id = s->u.dict_stripe.start_chunk * num_columns + s->u.dict_stripe.column_id;
   if (t == 0) {
     s->chunk         = chunks[chunk_id];
-    s->stream        = streams[chunk_id];
+    s->stream        = streams[stream_id];
     s->strm_pos[cid] = 0;
     s->numlengths    = 0;
     s->nrows         = s->u.dict_stripe.num_strings;
@@ -1053,7 +1055,7 @@ __global__ void __launch_bounds__(block_size) gpuEncodeStringDictionaries(Stripe
     if (t == 0) { s->cur_row += numvals; }
     __syncthreads();
   }
-  if (t == 0) { streams[chunk_id].lengths[cid] = s->strm_pos[cid]; }
+  if (t == 0) { streams[stream_id].lengths[cid] = s->strm_pos[cid]; }
 }
 
 /**
@@ -1065,8 +1067,9 @@ __global__ void __launch_bounds__(block_size) gpuEncodeStringDictionaries(Stripe
  * @param[in] num_columns Number of columns
  */
 // blockDim {1024,1,1}
-__global__ void __launch_bounds__(1024)
-  gpuCompactOrcDataStreams(StripeStream *strm_desc, encoder_chunk_streams *streams, uint32_t num_columns)
+__global__ void __launch_bounds__(1024) gpuCompactOrcDataStreams(StripeStream *strm_desc,
+                                                                 encoder_chunk_streams *streams,
+                                                                 uint32_t num_columns)
 {
   __shared__ __align__(16) StripeStream ss;
   __shared__ __align__(16) encoder_chunk_streams strm0;
@@ -1272,13 +1275,14 @@ void EncodeStripeDictionaries(StripeDictionary *stripes,
                               encoder_chunk_streams *streams,
                               uint32_t num_string_columns,
                               uint32_t num_columns,
+                              uint32_t num_rowgroups,
                               uint32_t num_stripes,
                               rmm::cuda_stream_view stream)
 {
   dim3 dim_block(512, 1);  // 512 threads per dictionary
   dim3 dim_grid(num_string_columns * num_stripes, 2);
-  gpuEncodeStringDictionaries<512>
-    <<<dim_grid, dim_block, 0, stream.value()>>>(stripes, chunks, streams, num_columns);
+  gpuEncodeStringDictionaries<512><<<dim_grid, dim_block, 0, stream.value()>>>(
+    stripes, chunks, streams, num_columns, num_rowgroups);
 }
 
 /**
