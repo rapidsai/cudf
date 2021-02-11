@@ -219,13 +219,14 @@ class writer::impl {
    *
    * @return The stripes' information
    */
-  std::vector<StripeInformation> gather_stripes(size_t num_columns,
-                                                size_t num_rows,
-                                                size_t num_index_streams,
-                                                size_t num_data_streams,
-                                                stripe_boundaries const& stripe_bounds,
-                                                hostdevice_vector<gpu::encoder_chunk_streams>& streams,
-                                                hostdevice_vector<gpu::StripeStream>& strm_desc);
+  std::vector<StripeInformation> gather_stripes(
+    size_t num_columns,
+    size_t num_rows,
+    size_t num_index_streams,
+    size_t num_data_streams,
+    stripe_boundaries const& stripe_bounds,
+    hostdevice_vector<gpu::encoder_chunk_streams>& streams,
+    hostdevice_vector<gpu::StripeStream>& strm_desc);
 
   /**
    * @brief Returns per-stripe and per-file column statistics encoded
@@ -243,7 +244,7 @@ class writer::impl {
    * @brief Write the specified column's row index stream
    *
    * @param stripe_id Stripe's identifier
-   * @param stream_id Stream's identifier
+   * @param col_id Column's identifier
    * @param columns List of columns
    * @param num_columns Total number of columns
    * @param num_data_streams Total number of data streams
@@ -256,9 +257,10 @@ class writer::impl {
    * @param pbw Protobuf writer
    */
   void write_index_stream(int32_t stripe_id,
-                          int32_t stream_id,
+                          int32_t col_id,
                           orc_column_view* columns,
                           size_t num_columns,
+                          size_t num_rowgroups,
                           size_t num_data_streams,
                           size_t group,
                           size_t groups_in_stripe,
