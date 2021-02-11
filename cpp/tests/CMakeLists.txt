@@ -17,6 +17,8 @@
 ###################################################################################################
 # - common test utils -----------------------------------------------------------------------------
 
+find_package(Threads REQUIRED)
+
 add_library(cudftestutil STATIC
             utilities/base_fixture.cpp
             utilities/column_utilities.cu
@@ -35,7 +37,7 @@ target_link_libraries(cudftestutil
                       GTest::gtest
                       GTest::gmock_main
                       GTest::gtest_main
-                      pthread
+                      Threads::Threads
                       cudf)
 
 target_include_directories(cudftestutil

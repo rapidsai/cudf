@@ -14,6 +14,8 @@
 # limitations under the License.
 #=============================================================================
 
+find_package(Threads REQUIRED)
+
 add_library(cudf_datagen STATIC common/generate_benchmark_input.cpp)
 target_compile_features(cudf_datagen PUBLIC cxx_std_14 cuda_std_14)
 
@@ -28,7 +30,7 @@ target_link_libraries(cudf_datagen
                       GTest::gtest_main
                       benchmark::benchmark
                       benchmark::benchmark_main
-                      pthread
+                      Threads::Threads
                       cudf)
 
 target_include_directories(cudf_datagen
