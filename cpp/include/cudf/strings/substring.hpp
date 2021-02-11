@@ -213,7 +213,7 @@ std::unique_ptr<column> slice_strings(
  */
 std::unique_ptr<cudf::column> get_json_object(
   cudf::strings_column_view const& col,
-  cudf::string_scalar const& json_path,
+  std::string const& json_path,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /** @} */  // end of doxygen group

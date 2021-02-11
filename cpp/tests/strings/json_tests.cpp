@@ -122,7 +122,7 @@ TEST_F(JsonTests, GetJsonObject)
 
   {
     cudf::test::strings_column_wrapper input{json_string};
-    cudf::string_scalar json_path("$");
+    std::string json_path("$");
     auto result = cudf::strings::get_json_object(cudf::strings_column_view(input), json_path);
 
     cudf::test::print(*result);
@@ -130,7 +130,7 @@ TEST_F(JsonTests, GetJsonObject)
 
   {
     cudf::test::strings_column_wrapper input{json_string};
-    cudf::string_scalar json_path("$.store");
+    std::string json_path("$.store");
     auto result = cudf::strings::get_json_object(cudf::strings_column_view(input), json_path);
 
     cudf::test::print(*result);
@@ -138,7 +138,7 @@ TEST_F(JsonTests, GetJsonObject)
 
   {
     cudf::test::strings_column_wrapper input{json_string};
-    cudf::string_scalar json_path("$.store.book");
+    std::string json_path("$.store.book");
     auto result = cudf::strings::get_json_object(cudf::strings_column_view(input), json_path);
 
     cudf::test::print(*result);
@@ -146,7 +146,7 @@ TEST_F(JsonTests, GetJsonObject)
 
   {
     cudf::test::strings_column_wrapper input{json_string};
-    cudf::string_scalar json_path("$.store.*");
+    std::string json_path("$.store.*");
     auto result = cudf::strings::get_json_object(cudf::strings_column_view(input), json_path);
 
     cudf::test::print(*result);
@@ -154,7 +154,7 @@ TEST_F(JsonTests, GetJsonObject)
 
   {
     cudf::test::strings_column_wrapper input{json_string};
-    cudf::string_scalar json_path("$.store.book[*]");
+    std::string json_path("$.store.book[*]");
     auto result = cudf::strings::get_json_object(cudf::strings_column_view(input), json_path);
 
     cudf::test::print(*result);
@@ -162,7 +162,7 @@ TEST_F(JsonTests, GetJsonObject)
 
   {
     cudf::test::strings_column_wrapper input{json_string};
-    cudf::string_scalar json_path("$.store.book[*].category");
+    std::string json_path("$.store.book[*].category");
     auto result = cudf::strings::get_json_object(cudf::strings_column_view(input), json_path);
 
     cudf::test::print(*result);
@@ -170,7 +170,7 @@ TEST_F(JsonTests, GetJsonObject)
 
   {
     cudf::test::strings_column_wrapper input{json_string};
-    cudf::string_scalar json_path("$.store.book[*].title");
+    std::string json_path("$.store.book[*].title");
     auto result = cudf::strings::get_json_object(cudf::strings_column_view(input), json_path);
 
     cudf::test::print(*result);
@@ -178,7 +178,7 @@ TEST_F(JsonTests, GetJsonObject)
 
   {
     cudf::test::strings_column_wrapper input{json_string};
-    cudf::string_scalar json_path("$.store['bicycle']");
+    std::string json_path("$.store['bicycle']");
     auto result = cudf::strings::get_json_object(cudf::strings_column_view(input), json_path);
 
     cudf::test::print(*result);
@@ -186,7 +186,7 @@ TEST_F(JsonTests, GetJsonObject)
 
   {
     cudf::test::strings_column_wrapper input{json_string};
-    cudf::string_scalar json_path("$.store.book[*]['isbn']");
+    std::string json_path("$.store.book[*]['isbn']");
     auto result = cudf::strings::get_json_object(cudf::strings_column_view(input), json_path);
 
     cudf::test::print(*result);
@@ -194,7 +194,7 @@ TEST_F(JsonTests, GetJsonObject)
 
   {
     cudf::test::strings_column_wrapper input{json_string};
-    cudf::string_scalar json_path("$.store.book[2]");
+    std::string json_path("$.store.book[2]");
     auto result = cudf::strings::get_json_object(cudf::strings_column_view(input), json_path);
 
     cudf::test::print(*result);

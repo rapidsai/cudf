@@ -9,6 +9,7 @@
 
 #include <io/utilities/parsing_utils.cuh>
 
+#include <rmm/device_uvector.hpp>
 #include <rmm/exec_policy.hpp>
 
 #include <cudf_test/column_wrapper.hpp>
@@ -448,11 +449,19 @@ class json_state : private parser {
 
 enum class path_operator_type { ROOT, CHILD, CHILD_WILDCARD, CHILD_INDEX, ERROR, END };
 
-// constexpr max_name_len    (63)
 struct path_operator {
+  CUDA_HOST_DEVICE_CALLABLE path_operator() : type(path_operator_type::ERROR), index(-1) {}
+  CUDA_HOST_DEVICE_CALLABLE path_operator(path_operator_type _type) : type(_type), index(-1) {}
+
   path_operator_type type;
   json_string name;
   int index;
+};
+struct command_buffer {
+  rmm::device_uvector<path_operator> commands;
+  // used as backing memory for the name fields inside the
+  // path_operator objects
+  string_scalar json_path;
 };
 
 // current state of the JSONPath
@@ -548,27 +557,50 @@ class path_state : private parser {
       }
     }
 
-    // must end in one of the terminators
-    size_t const chars_left = input_len - (pos - input);
-    char const* end         = device_strpbrk(pos, chars_left, terminators.str, terminators.len);
-    if (!end) { return false; }
-    pos = end;
     return true;
   }
 };
 
+command_buffer build_command_buffer(std::string const& json_path, rmm::cuda_stream_view stream)
+{
+  path_state p_state(json_path.data(), static_cast<size_type>(json_path.size()));
+
+  std::vector<path_operator> h_operators;
+  cudf::string_scalar d_json_path(json_path);
+
+  path_operator op;
+  do {
+    op = p_state.get_next_operator();
+    if (op.type == path_operator_type::ERROR) {
+      CUDF_FAIL("Encountered invalid JSONPath input string");
+    }
+    // convert pointer to device pointer
+    if (op.name.len > 0) { op.name.str = d_json_path.data() + (op.name.str - json_path.data()); }
+    h_operators.push_back(op);
+  } while (op.type != path_operator_type::END);
+
+  rmm::device_uvector<path_operator> d_operators(h_operators.size(), stream);
+  cudaMemcpyAsync(d_operators.data(),
+                  h_operators.data(),
+                  sizeof(path_operator) * h_operators.size(),
+                  cudaMemcpyHostToDevice,
+                  stream.value());
+
+  return {std::move(d_operators), std::move(d_json_path)};
+}
+
 CUDA_HOST_DEVICE_CALLABLE parse_result parse_json_path(json_state& j_state,
-                                                       path_state p_state,
+                                                       path_operator const* commands,
                                                        json_output& output,
                                                        bool list_element = false)
 {
-  path_operator op = p_state.get_next_operator();
+  path_operator op = *commands;
 
   switch (op.type) {
     // whatever the first object is
     case path_operator_type::ROOT:
       if (j_state.next_element() != parse_result::ERROR) {
-        return parse_json_path(j_state, p_state, output);
+        return parse_json_path(j_state, commands + 1, output);
       }
       break;
 
@@ -581,7 +613,7 @@ CUDA_HOST_DEVICE_CALLABLE parse_result parse_json_path(json_state& j_state,
       if (res != parse_result::SUCCESS) { return res; }
       res = j_state.next_matching_element(op.name, true);
       if (res != parse_result::SUCCESS) { return res; }
-      return parse_json_path(j_state, p_state, output, list_element);
+      return parse_json_path(j_state, commands + 1, output, list_element);
     } break;
 
     // .*
@@ -601,8 +633,8 @@ CUDA_HOST_DEVICE_CALLABLE parse_result parse_json_path(json_state& j_state,
       int count = 0;
       while (res == parse_result::SUCCESS) {
         json_state j_sub(j_state);
-        path_state p_sub(p_state);
-        parse_result sub_res = parse_json_path(j_sub, p_sub, output, count > 0 ? true : false);
+        parse_result sub_res =
+          parse_json_path(j_sub, commands + 1, output, count > 0 ? true : false);
         if (sub_res == parse_result::ERROR) { return parse_result::ERROR; }
         if (sub_res != parse_result::EMPTY) { count++; }
         res = j_state.next_matching_element(op.name, false);
@@ -628,7 +660,7 @@ CUDA_HOST_DEVICE_CALLABLE parse_result parse_json_path(json_state& j_state,
         res = j_state.next_matching_element(any, false);
         if (res != parse_result::SUCCESS) { return res; }
       }
-      return parse_json_path(j_state, p_state, output, list_element);
+      return parse_json_path(j_state, commands + 1, output, list_element);
     } break;
 
     // some sort of error.
@@ -645,47 +677,43 @@ CUDA_HOST_DEVICE_CALLABLE parse_result parse_json_path(json_state& j_state,
 
 CUDA_HOST_DEVICE_CALLABLE json_output get_json_object_single(char const* input,
                                                              size_t input_len,
-                                                             char const* path,
-                                                             size_t path_len,
+                                                             path_operator const* commands,
                                                              char* out_buf,
                                                              size_t out_buf_size)
 {
   // TODO: add host-side code to verify path is a valid string.
   json_state j_state(input, input_len);
-  path_state p_state(path, path_len);
   json_output output{out_buf_size, 0, out_buf};
 
-  parse_json_path(j_state, p_state, output);
+  parse_json_path(j_state, commands, output);
 
   return output;
 }
 
 __global__ void get_json_object_kernel(char const* chars,
                                        size_type const* offsets,
-                                       char const* json_path,
-                                       size_t json_path_len,
+                                       path_operator const* commands,
                                        size_type* output_offsets,
                                        char* out_buf,
                                        size_t out_buf_size)
 {
   uint64_t const tid = threadIdx.x + (blockDim.x * blockIdx.x);
 
-  json_output out = get_json_object_single(chars + offsets[tid],
-                                           offsets[tid + 1] - offsets[tid],
-                                           json_path,
-                                           json_path_len,
-                                           out_buf,
-                                           out_buf_size);
+  json_output out = get_json_object_single(
+    chars + offsets[tid], offsets[tid + 1] - offsets[tid], commands, out_buf, out_buf_size);
 
   // filled in only during the precompute step
   if (output_offsets != nullptr) { output_offsets[tid] = static_cast<size_type>(out.output_len); }
 }
 
 std::unique_ptr<cudf::column> get_json_object(cudf::strings_column_view const& col,
-                                              cudf::string_scalar const& json_path,
+                                              std::string const& json_path,
                                               rmm::cuda_stream_view stream,
                                               rmm::mr::device_memory_resource* mr)
 {
+  // preprocess the json_path into a command buffer
+  command_buffer cmd_buf = build_command_buffer(json_path, stream);
+
   size_t stack_size;
   cudaDeviceGetLimit(&stack_size, cudaLimitStackSize);
   cudaDeviceSetLimit(cudaLimitStackSize, 4096);
@@ -700,8 +728,7 @@ std::unique_ptr<cudf::column> get_json_object(cudf::strings_column_view const& c
   get_json_object_kernel<<<grid.num_blocks, grid.num_threads_per_block, 0, stream.value()>>>(
     col.chars().head<char>(),
     col.offsets().head<size_type>(),
-    json_path.data(),
-    json_path.size(),
+    cmd_buf.commands.data(),
     offsets_view.head<size_type>(),
     nullptr,
     0);
@@ -723,8 +750,7 @@ std::unique_ptr<cudf::column> get_json_object(cudf::strings_column_view const& c
   get_json_object_kernel<<<grid.num_blocks, grid.num_threads_per_block, 0, stream.value()>>>(
     col.chars().head<char>(),
     col.offsets().head<size_type>(),
-    json_path.data(),
-    json_path.size(),
+    cmd_buf.commands.data(),
     nullptr,
     chars_view.head<char>(),
     output_size);
@@ -745,7 +771,7 @@ std::unique_ptr<cudf::column> get_json_object(cudf::strings_column_view const& c
 }  // namespace detail
 
 std::unique_ptr<cudf::column> get_json_object(cudf::strings_column_view const& col,
-                                              cudf::string_scalar const& json_path,
+                                              std::string const& json_path,
                                               rmm::mr::device_memory_resource* mr)
 {
   return detail::get_json_object(col, json_path, 0, mr);
