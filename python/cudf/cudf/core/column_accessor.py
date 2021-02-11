@@ -359,8 +359,7 @@ class ColumnAccessor(MutableMapping):
                 level_names=self.level_names,
                 multiindex=self.multiindex,
             )
-            self = ca
-
+        
         else:
             if level not in [0, None]:
                 raise IndexError(
@@ -376,9 +375,8 @@ class ColumnAccessor(MutableMapping):
                     level_names=self.level_names,
                     multiindex=self.multiindex,
                 )
-                self = ca
 
-        return self
+        return ca
 
 
 def _compare_keys(target: Any, key: Any) -> bool:
