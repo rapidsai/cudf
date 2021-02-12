@@ -94,7 +94,7 @@ struct fixed_width_type_converter {
   template <typename FromT                                                        = From,
             typename ToT                                                          = To,
             typename std::enable_if<std::is_same<FromT, ToT>::value, void>::type* = nullptr>
-  ToT operator()(FromT element) const
+  __host__ __device__ ToT operator()(FromT element) const
   {
     return element;
   }
@@ -106,7 +106,7 @@ struct fixed_width_type_converter {
                                       (cudf::is_convertible<FromT, ToT>::value ||
                                        std::is_constructible<ToT, FromT>::value),
                                     void>::type* = nullptr>
-  ToT operator()(FromT element) const
+  __host__ __device__ ToT operator()(FromT element) const
   {
     return static_cast<ToT>(element);
   }
@@ -117,7 +117,7 @@ struct fixed_width_type_converter {
     typename ToT                         = To,
     typename std::enable_if<std::is_integral<FromT>::value && cudf::is_timestamp_t<ToT>::value,
                             void>::type* = nullptr>
-  ToT operator()(FromT element) const
+  __host__ __device__ ToT operator()(FromT element) const
   {
     return ToT{typename ToT::duration{element}};
   }
