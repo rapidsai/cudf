@@ -52,11 +52,55 @@ auto get_pair_iterator(cudf::column_device_view const& d_search_keys)
   return d_search_keys.pair_begin<ElementType, has_nulls>();
 }
 
-template <typename ElementType, bool>
+template <typename ElementType,
+          bool,
+          std::enable_if_t<!cudf::is_fixed_point<ElementType>(), void>* = nullptr>
 auto get_pair_iterator(cudf::scalar const& search_key)
 {
   return cudf::detail::make_pair_iterator<ElementType>(search_key);
 }
+
+template <typename ElementType,
+          bool,
+          std::enable_if_t<cudf::is_fixed_point<ElementType>(), void>* = nullptr>
+auto get_pair_iterator(cudf::scalar const& search_key)
+{
+  return cudf::detail::make_counting_transform_iterator(
+    0, cudf::detail::scalar_representation_pair_accessor<ElementType>{search_key});
+}
+
+/**
+ * @brief Custom equality comparator for lists::contains().
+ *
+ * Special handling for fixed_point types. Ignores scale values and compares
+ * only their representation. (Scales have already been normalized by this point.)
+ * For non-fixed_point types, comparisons are delegated to `cudf::equality_compare`.
+ */
+struct equality_comparator {
+  // For non-fixed_width types.
+  template <typename ElementType,
+            std::enable_if_t<!cudf::is_fixed_point<ElementType>(), void>* = nullptr>
+  __device__ bool operator()(ElementType const& lhs, ElementType const& rhs) const
+  {
+    return equality_compare(lhs, rhs);
+  }
+
+  // Fixed_width comparisons for column_views.
+  template <typename ElementType,
+            std::enable_if_t<cudf::is_fixed_point<ElementType>(), void>* = nullptr>
+  __device__ bool operator()(ElementType const& lhs, ElementType const& rhs) const
+  {
+    return lhs.value() == rhs.value();
+  }
+
+  // Fixed_width comparisons for column_view vs scalar.
+  template <typename ElementType,
+            std::enable_if_t<cudf::is_fixed_point<ElementType>(), void>* = nullptr>
+  __device__ bool operator()(ElementType const& lhs, typename ElementType::rep const& rhs) const
+  {
+    return lhs.value() == rhs;
+  }
+};
 
 /**
  * @brief Functor to search each list row for the specified search keys.
@@ -133,7 +177,7 @@ struct lookup_functor {
                           list.pair_end<ElementType>(),
                           [search_key] __device__(auto element_and_validity) {
                             return element_and_validity.second &&
-                                   equality_compare(element_and_validity.first, search_key);
+                                   equality_comparator{}(element_and_validity.first, search_key);
                           }) != list.pair_end<ElementType>();
         d_validity[row_index] =
           d_bools[row_index] ||

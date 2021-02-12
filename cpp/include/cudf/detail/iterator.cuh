@@ -314,6 +314,40 @@ struct scalar_pair_accessor : public scalar_value_accessor<Element> {
 };
 
 /**
+ * @brief Pair accessor for scalar's representation value and validity.
+ *
+ * @tparam Element The type of element in the scalar.
+ */
+template <typename Element>
+struct scalar_representation_pair_accessor : public scalar_value_accessor<Element> {
+  using super_t    = scalar_value_accessor<Element>;
+  using rep_type   = typename Element::rep;
+  using value_type = thrust::pair<rep_type, bool>;
+
+  scalar_representation_pair_accessor(scalar const& scalar_value)
+    : scalar_value_accessor<Element>(scalar_value)
+  {
+  }
+
+  /**
+   * @brief returns a pair with representative value and validity of the scalar.
+   *
+   * @throw `cudf::logic_error` if this function is called in host.
+   *
+   * @return a pair with representative value and validity of the scalar.
+   */
+  CUDA_HOST_DEVICE_CALLABLE
+  const value_type operator()(size_type) const
+  {
+#if defined(__CUDA_ARCH__)
+    return {super_t::dscalar.rep(), super_t::dscalar.is_valid()};
+#else
+    CUDF_FAIL("unsupported device scalar iterator operation");
+#endif
+  }
+};
+
+/**
  * @brief Constructs a constant device pair iterator over a scalar's value and its validity.
  *
  * Dereferencing the returned iterator returns a `thrust::pair<Element, bool>`.
