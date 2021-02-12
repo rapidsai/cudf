@@ -125,7 +125,7 @@ uint32_t str_to_uint32(std::string const& str, uint64_t line_no)
 {
   try {
     return std::stoi(str);  // there is no std::stoui
-  } catch (std::exception exc) {
+  } catch (std::exception const& exc) {
     std::string message("Line ");
     message += std::to_string(line_no) + ": ";
     message += "cannot convert integer from '";
@@ -147,7 +147,7 @@ uint64_t str_to_uint64(std::string const& str, uint64_t line_no)
 {
   try {
     return std::stoul(str);
-  } catch (std::exception exc) {
+  } catch (std::exception const& exc) {
     std::string message("Line ");
     message += std::to_string(line_no) + ": ";
     message += "cannot convert integer from '";
