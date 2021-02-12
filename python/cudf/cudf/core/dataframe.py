@@ -7401,6 +7401,8 @@ class DataFrame(Frame, Serializable):
         labels: a list of labels specifying the rows to drop
         """
 
+        # TODO: use internal API with "leftanti" and specify left and right
+        # join keys to bypass logic check
         dropped = self.join(cudf.DataFrame(index=labels), how="leftanti")
 
         return dropped
