@@ -186,7 +186,7 @@ def _libcudf_to_output_castrules(lcol, rcol, how):
     l_is_cat = isinstance(ltype, CategoricalDtype)
     r_is_cat = isinstance(rtype, CategoricalDtype)
 
-    # we  currently only need to do this for categorical variables
+    # we currently only need to do this for categorical variables
     if how == "inner":
         if l_is_cat and r_is_cat:
             merge_return_type = "category"
