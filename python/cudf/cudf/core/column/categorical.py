@@ -1204,6 +1204,12 @@ class CategoricalColumn(column.ColumnBase):
                         raise ValueError(err_msg) from err
             else:
                 fill_value = column.as_column(fill_value, nan_as_null=False)
+                if isinstance(fill_value, CategoricalColumn):
+                    if self.dtype != fill_value.dtype:
+                        raise ValueError(
+                            "Cannot set a Categorical with another, "
+                            "without identical categories"
+                        )
                 # TODO: only required if fill_value has a subset of the
                 # categories:
                 fill_value = fill_value.cat()._set_categories(

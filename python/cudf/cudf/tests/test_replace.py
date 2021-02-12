@@ -333,7 +333,7 @@ def test_fillna_method_numerical(data, container, data_dtype, method, inplace):
 
 
 @pytest.mark.parametrize(
-    "psr",
+    "psr_data",
     [
         pd.Series(["a", "b", "a", None, "c", None], dtype="category"),
         pd.Series(
@@ -373,8 +373,8 @@ def test_fillna_method_numerical(data, container, data_dtype, method, inplace):
     ],
 )
 @pytest.mark.parametrize("inplace", [True, False])
-def test_fillna_categorical(psr, fill_value, inplace):
-
+def test_fillna_categorical(psr_data, fill_value, inplace):
+    psr = psr_data.copy()
     gsr = Series.from_pandas(psr)
 
     if isinstance(fill_value, pd.Series):
@@ -382,14 +382,25 @@ def test_fillna_categorical(psr, fill_value, inplace):
     else:
         fill_value_cudf = fill_value
 
-    expected = psr.fillna(fill_value, inplace=inplace)
-    got = gsr.fillna(fill_value_cudf, inplace=inplace)
+    if (
+        isinstance(fill_value_cudf, cudf.Series)
+        and gsr.dtype != fill_value_cudf.dtype
+    ):
+        assert_exceptions_equal(
+            lfunc=psr.fillna,
+            rfunc=gsr.fillna,
+            lfunc_args_and_kwargs=([fill_value], {"inplace": inplace}),
+            rfunc_args_and_kwargs=([fill_value_cudf], {"inplace": inplace}),
+        )
+    else:
+        expected = psr.fillna(fill_value, inplace=inplace)
+        got = gsr.fillna(fill_value_cudf, inplace=inplace)
 
-    if inplace:
-        expected = psr
-        got = gsr
+        if inplace:
+            expected = psr
+            got = gsr
 
-    assert_eq(expected, got)
+        assert_eq(expected, got)
 
 
 @pytest.mark.parametrize(

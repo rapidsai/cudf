@@ -1182,7 +1182,7 @@ def test_datetime_stats(data, dtype, stat):
         assert_eq(expected, actual)
 
 
-@pytest.mark.parametrize("op", ["max", "min"])
+@pytest.mark.parametrize("op", ["max", "min", "std", "median"])
 @pytest.mark.parametrize(
     "data",
     [
@@ -1201,10 +1201,14 @@ def test_datetime_reductions(data, op, dtype):
     actual = getattr(sr, op)()
     expected = getattr(psr, op)()
 
-    if np.isnat(expected.to_numpy()) and np.isnat(actual):
+    if (
+        expected is pd.NaT
+        and actual is pd.NaT
+        or (np.isnat(expected.to_numpy()) and np.isnat(actual))
+    ):
         assert True
     else:
-        assert_eq(expected.to_numpy(), actual)
+        assert_eq(expected, actual)
 
 
 @pytest.mark.parametrize(

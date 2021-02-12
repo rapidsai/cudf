@@ -2843,7 +2843,7 @@ def test_string_product():
         lfunc=psr.product,
         rfunc=sr.product,
         expected_error_message=re.escape(
-            f"cannot perform prod with type {sr.dtype}"
+            f"cannot perform product with type {sr.dtype}"
         ),
     )
 

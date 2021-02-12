@@ -3,6 +3,7 @@
 from __future__ import division, print_function
 
 import random
+import re
 from itertools import product
 
 import numpy as np
@@ -166,15 +167,20 @@ def test_date_minmax():
 
 
 @pytest.mark.parametrize(
-    "op",
-    ["sum", "product", "std", "var", "median", "kurt", "kurtosis", "skew"],
+    "op", ["sum", "product", "var", "kurt", "kurtosis", "skew"],
 )
 def test_datetime_unsupported_reductions(op):
     gsr = cudf.Series([1, 2, 3, None], dtype="datetime64[ns]")
     psr = gsr.to_pandas()
 
     utils.assert_exceptions_equal(
-        lfunc=getattr(psr, op), rfunc=getattr(gsr, op),
+        lfunc=getattr(psr, op),
+        rfunc=getattr(gsr, op),
+        expected_error_message=re.escape(
+            "cannot perform "
+            + ("kurtosis" if op == "kurt" else op)
+            + " with type datetime64[ns]"
+        ),
     )
 
 
@@ -183,7 +189,15 @@ def test_timedelta_unsupported_reductions(op):
     gsr = cudf.Series([1, 2, 3, None], dtype="timedelta64[ns]")
     psr = gsr.to_pandas()
 
-    utils.assert_exceptions_equal(getattr(psr, op), getattr(gsr, op))
+    utils.assert_exceptions_equal(
+        lfunc=getattr(psr, op),
+        rfunc=getattr(gsr, op),
+        expected_error_message=re.escape(
+            "cannot perform "
+            + ("kurtosis" if op == "kurt" else op)
+            + " with type timedelta64[ns]"
+        ),
+    )
 
 
 @pytest.mark.parametrize("op", ["sum", "product", "std", "var"])

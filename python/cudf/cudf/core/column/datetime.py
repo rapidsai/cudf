@@ -13,10 +13,16 @@ from nvtx import annotate
 import cudf
 from cudf import _lib as libcudf
 from cudf._typing import DatetimeLikeScalar, Dtype, DtypeObj, ScalarLike
+from cudf.core._compat import PANDAS_GE_120
 from cudf.core.buffer import Buffer
 from cudf.core.column import ColumnBase, column, string
 from cudf.utils.dtypes import is_scalar
 from cudf.utils.utils import _fillna_natwise
+
+if PANDAS_GE_120:
+    _guess_datetime_format = pd.core.tools.datetimes.guess_datetime_format
+else:
+    _guess_datetime_format = pd.core.tools.datetimes._guess_datetime_format
 
 # nanoseconds per time_unit
 _numpy_to_pandas_conversion = {
@@ -235,6 +241,19 @@ class DatetimeColumn(column.ColumnBase):
             unit=self.time_unit,
         )
 
+    def std(
+        self, skipna: bool = None, ddof: int = 1, dtype: Dtype = np.float64
+    ) -> pd.Timedelta:
+        return pd.Timedelta(
+            self.as_numerical.std(skipna=skipna, ddof=ddof, dtype=dtype)
+            * _numpy_to_pandas_conversion[self.time_unit],
+        )
+
+    def median(self, skipna: bool = None) -> pd.Timestamp:
+        return pd.Timestamp(
+            self.as_numerical.median(skipna=skipna), unit=self.time_unit
+        )
+
     def quantile(
         self, q: Union[float, Sequence[float]], interpolation: str, exact: bool
     ) -> ColumnBase:
@@ -375,7 +394,7 @@ def infer_format(element: str, **kwargs) -> str:
     """
     Infers datetime format from a string, also takes cares for `ms` and `ns`
     """
-    fmt = pd.core.tools.datetimes._guess_datetime_format(element, **kwargs)
+    fmt = _guess_datetime_format(element, **kwargs)
 
     if fmt is not None:
         return fmt
@@ -389,15 +408,11 @@ def infer_format(element: str, **kwargs) -> str:
     second_parts = re.split(r"(\D+)", element_parts[1], maxsplit=1)
     subsecond_fmt = ".%" + str(len(second_parts[0])) + "f"
 
-    first_part = pd.core.tools.datetimes._guess_datetime_format(
-        element_parts[0], **kwargs
-    )
+    first_part = _guess_datetime_format(element_parts[0], **kwargs)
     # For the case where first_part is '00:00:03'
     if first_part is None:
         tmp = "1970-01-01 " + element_parts[0]
-        first_part = pd.core.tools.datetimes._guess_datetime_format(
-            tmp, **kwargs
-        ).split(" ", 1)[1]
+        first_part = _guess_datetime_format(tmp, **kwargs).split(" ", 1)[1]
     if first_part is None:
         raise ValueError("Unable to infer the timestamp format from the data")
 
@@ -411,9 +426,7 @@ def infer_format(element: str, **kwargs) -> str:
 
         if len(second_part) > 1:
             # Only infer if second_parts is not an empty string.
-            second_part = pd.core.tools.datetimes._guess_datetime_format(
-                second_part, **kwargs
-            )
+            second_part = _guess_datetime_format(second_part, **kwargs)
     else:
         second_part = ""
 

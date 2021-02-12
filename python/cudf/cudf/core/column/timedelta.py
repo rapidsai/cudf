@@ -380,15 +380,12 @@ class TimeDeltaColumn(column.ColumnBase):
     def sum(
         self, skipna: bool = None, dtype: Dtype = None, min_count=0
     ) -> pd.Timedelta:
-        if len(self) == 0:
-            return pd.Timedelta(None, unit=self.time_unit)
-        else:
-            return pd.Timedelta(
-                self.as_numerical.sum(
-                    skipna=skipna, dtype=dtype, min_count=min_count
-                ),
-                unit=self.time_unit,
-            )
+        return pd.Timedelta(
+            self.as_numerical.sum(
+                skipna=skipna, dtype=dtype, min_count=min_count
+            ),
+            unit=self.time_unit,
+        )
 
     def std(
         self, skipna: bool = None, ddof: int = 1, dtype: Dtype = np.float64

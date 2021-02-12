@@ -1236,7 +1236,7 @@ class ColumnBase(Column, Serializable):
     def product(
         self, skipna: bool = None, dtype: Dtype = None, min_count: int = 0
     ):
-        raise TypeError(f"cannot perform prod with type {self.dtype}")
+        raise TypeError(f"cannot perform product with type {self.dtype}")
 
     def mean(self, skipna: bool = None, dtype: Dtype = None):
         raise TypeError(f"cannot perform mean with type {self.dtype}")
@@ -1248,7 +1248,7 @@ class ColumnBase(Column, Serializable):
         raise TypeError(f"cannot perform var with type {self.dtype}")
 
     def kurtosis(self, skipna: bool = None):
-        raise TypeError(f"cannot perform kurt with type {self.dtype}")
+        raise TypeError(f"cannot perform kurtosis with type {self.dtype}")
 
     def skew(self, skipna: bool = None):
         raise TypeError(f"cannot perform skew with type {self.dtype}")

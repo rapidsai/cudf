@@ -72,7 +72,13 @@ def test_init_via_list_of_empty_tuples(rows):
     pdf = pd.DataFrame(data)
     gdf = gd.DataFrame(data)
 
-    assert_eq(pdf, gdf, check_like=True)
+    assert_eq(
+        pdf,
+        gdf,
+        check_like=True,
+        check_column_type=False,
+        check_index_type=False,
+    )
 
 
 @pytest.mark.parametrize(
