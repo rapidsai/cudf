@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -26,11 +26,21 @@ namespace strings {
 namespace detail {
 
 /**
+ * @brief The type of algorithm to use for a replace operation.
+ */
+enum class replace_algorithm {
+  AUTO,          ///< Automatically choose the algorithm based on heuristics
+  ROW_PARALLEL,  ///< Row-level parallelism
+  CHAR_PARALLEL  ///< Character-level parallelism
+};
+
+/**
  * @copydoc cudf::strings::replace(strings_column_view const&, string_scalar const&,
  * string_scalar const&, int32_t, rmm::mr::device_memory_resource*)
  *
  * @param[in] stream CUDA stream used for device memory operations and kernel launches.
  */
+template <replace_algorithm alg = replace_algorithm::AUTO>
 std::unique_ptr<column> replace(
   strings_column_view const& strings,
   string_scalar const& target,

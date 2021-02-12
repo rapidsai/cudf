@@ -20,15 +20,19 @@
 #include <benchmarks/synchronization/synchronization.hpp>
 
 #include <cudf/scalar/scalar.hpp>
+#include <cudf/strings/detail/replace.hpp>
 #include <cudf/strings/replace.hpp>
 #include <cudf/strings/strings_column_view.hpp>
 
 #include <limits>
 
+using algorithm = cudf::strings::detail::replace_algorithm;
+
 class StringReplaceScalar : public cudf::benchmark {
 };
 
-static void BM_replace_scalar(benchmark::State& state)
+template <algorithm alg>
+static void BM_replace_scalar(benchmark::State& state, int target_size, int32_t maxrepl)
 {
   cudf::size_type const n_rows{static_cast<cudf::size_type>(state.range(0))};
   cudf::size_type const max_str_length{static_cast<cudf::size_type>(state.range(1))};
@@ -38,12 +42,12 @@ static void BM_replace_scalar(benchmark::State& state)
   auto const table =
     create_random_table({cudf::type_id::STRING}, 1, row_count{n_rows}, table_profile);
   cudf::strings_column_view input(table->view().column(0));
-  cudf::string_scalar target("+");
+  cudf::string_scalar target(std::string(target_size, '+'));
   cudf::string_scalar repl("");
 
   for (auto _ : state) {
     cuda_event_timer raii(state, true, 0);
-    cudf::strings::replace(input, target, repl);
+    cudf::strings::detail::replace<alg>(input, target, repl, maxrepl);
   }
 
   state.SetBytesProcessed(state.iterations() * input.chars_size());
@@ -68,12 +72,25 @@ static void generate_bench_args(benchmark::internal::Benchmark* b)
   }
 }
 
-#define STRINGS_BENCHMARK_DEFINE(name)                 \
-  BENCHMARK_DEFINE_F(StringReplaceScalar, name)        \
-  (::benchmark::State & st) { BM_replace_scalar(st); } \
-  BENCHMARK_REGISTER_F(StringReplaceScalar, name)      \
-    ->Apply(generate_bench_args)                       \
-    ->UseManualTime()                                  \
+#define STRINGS_BENCHMARK_DEFINE(name, alg, tsize, maxrepl)                 \
+  BENCHMARK_DEFINE_F(StringReplaceScalar, name)                             \
+  (::benchmark::State & st) { BM_replace_scalar<alg>(st, tsize, maxrepl); } \
+  BENCHMARK_REGISTER_F(StringReplaceScalar, name)                           \
+    ->Apply(generate_bench_args)                                            \
+    ->UseManualTime()                                                       \
     ->Unit(benchmark::kMillisecond);
 
-STRINGS_BENCHMARK_DEFINE(replace_scalar)
+STRINGS_BENCHMARK_DEFINE(replace_scalar_autoalg_single, algorithm::AUTO, 1, -1)
+STRINGS_BENCHMARK_DEFINE(replace_scalar_autoalg_single_max1, algorithm::AUTO, 1, 1)
+STRINGS_BENCHMARK_DEFINE(replace_scalar_autoalg_multi, algorithm::AUTO, 2, -1)
+STRINGS_BENCHMARK_DEFINE(replace_scalar_autoalg_multi_max1, algorithm::AUTO, 2, 1)
+
+// Useful for tuning the automatic algorithm heuristic
+STRINGS_BENCHMARK_DEFINE(replace_scalar_charalg_single, algorithm::CHAR_PARALLEL, 1, -1)
+STRINGS_BENCHMARK_DEFINE(replace_scalar_charalg_single_max1, algorithm::CHAR_PARALLEL, 1, 1)
+STRINGS_BENCHMARK_DEFINE(replace_scalar_charalg_multi, algorithm::CHAR_PARALLEL, 2, -1)
+STRINGS_BENCHMARK_DEFINE(replace_scalar_charalg_multi_max1, algorithm::CHAR_PARALLEL, 2, 1)
+STRINGS_BENCHMARK_DEFINE(replace_scalar_rowalg_single, algorithm::ROW_PARALLEL, 1, -1)
+STRINGS_BENCHMARK_DEFINE(replace_scalar_rowalg_single_max1, algorithm::ROW_PARALLEL, 1, 1)
+STRINGS_BENCHMARK_DEFINE(replace_scalar_rowalg_multi, algorithm::ROW_PARALLEL, 2, -1)
+STRINGS_BENCHMARK_DEFINE(replace_scalar_rowalg_multi_max1, algorithm::ROW_PARALLEL, 2, 1)
