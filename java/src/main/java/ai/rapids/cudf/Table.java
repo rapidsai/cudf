@@ -1251,7 +1251,8 @@ public final class Table implements AutoCloseable {
   }
 
   /**
-   * Given a sorted table return the lower bound.
+   * Find smallest indices in a sorted table where values should be inserted to maintain order.
+   * <pre>
    * Example:
    *
    *  Single column:
@@ -1269,14 +1270,11 @@ public final class Table implements AutoCloseable {
    *                      { .7 },
    *                      { 61 }}
    *   result          = {  3 }
-   * NaNs in column values produce incorrect results.
+   * </pre>
    * The input table and the values table need to be non-empty (row count > 0)
-   * The column data types of the tables' have to match in order.
-   * Strings and String categories do not work for this method. If the input table is
-   * unsorted the results are wrong. Types of columns can be of mixed data types.
-   * @param areNullsSmallest true if nulls are assumed smallest
-   * @param valueTable the table of values that need to be inserted
-   * @param descFlags indicates the ordering of the column(s), true if descending
+   * @param areNullsSmallest per column, true if nulls are assumed smallest
+   * @param valueTable the table of values to find insertion locations for
+   * @param descFlags per column indicates the ordering, true if descending.
    * @return ColumnVector with lower bound indices for all rows in valueTable
    */
   public ColumnVector lowerBound(boolean[] areNullsSmallest,
@@ -1287,9 +1285,11 @@ public final class Table implements AutoCloseable {
   }
 
   /**
-   * Given a sorted table return the lower bound.
-   * @param valueTable the table of values that would be inserted.
-   * @param args the sort order used to sort the table.
+   * Find smallest indices in a sorted table where values should be inserted to maintain order.
+   * This is a convenience method. It pulls out the columns indicated by the args and sets up the
+   * ordering properly to call `lowerBound`.
+   * @param valueTable the table of values to find insertion locations for
+   * @param args the sort order used to sort this table.
    * @return ColumnVector with lower bound indices for all rows in valueTable
    */
   public ColumnVector lowerBound(Table valueTable, OrderByArg... args) {
@@ -1310,7 +1310,9 @@ public final class Table implements AutoCloseable {
   }
 
   /**
+   * Find largest indices in a sorted table where values should be inserted to maintain order.
    * Given a sorted table return the upper bound.
+   * <pre>
    * Example:
    *
    *  Single column:
@@ -1328,14 +1330,11 @@ public final class Table implements AutoCloseable {
    *                      { .7 },
    *                      { 61 }}
    *   result          = {  5 }
-   * NaNs in column values produce incorrect results.
+   * </pre>
    * The input table and the values table need to be non-empty (row count > 0)
-   * The column data types of the tables' have to match in order.
-   * Strings and String categories do not work for this method. If the input table is
-   * unsorted the results are wrong. Types of columns can be of mixed data types.
-   * @param areNullsSmallest true if nulls are assumed smallest
-   * @param valueTable the table of values that need to be inserted
-   * @param descFlags indicates the ordering of the column(s), true if descending
+   * @param areNullsSmallest per column, true if nulls are assumed smallest
+   * @param valueTable the table of values to find insertion locations for
+   * @param descFlags per column indicates the ordering, true if descending.
    * @return ColumnVector with upper bound indices for all rows in valueTable
    */
   public ColumnVector upperBound(boolean[] areNullsSmallest,
@@ -1346,9 +1345,11 @@ public final class Table implements AutoCloseable {
   }
 
   /**
-   * Given a sorted table return the upper bound.
-   * @param valueTable the table of values that would be inserted.
-   * @param args the sort order used to sort the table.
+   * Find largest indices in a sorted table where values should be inserted to maintain order.
+   * This is a convenience method. It pulls out the columns indicated by the args and sets up the
+   * ordering properly to call `upperBound`.
+   * @param valueTable the table of values to find insertion locations for
+   * @param args the sort order used to sort this table.
    * @return ColumnVector with upper bound indices for all rows in valueTable
    */
   public ColumnVector upperBound(Table valueTable, OrderByArg... args) {
