@@ -1860,6 +1860,9 @@ def test_dataframe_min_count_ops(data, ops, skipna, min_count):
     psr = pd.DataFrame(data)
     gsr = gd.DataFrame(data)
 
+    if psr.shape[0] * psr.shape[1] < min_count:
+        pytest.xfail("https://github.com/pandas-dev/pandas/issues/39738")
+
     assert_eq(
         getattr(psr, ops)(skipna=skipna, min_count=min_count),
         getattr(gsr, ops)(skipna=skipna, min_count=min_count),
@@ -4294,16 +4297,11 @@ def test_isin_dataframe(data, values):
             rfunc_args_and_kwargs=([values],),
         )
     else:
-        try:
-            expected = pdf.isin(values)
-        except ValueError as e:
-            if str(e) == "Lengths must match.":
-                # xref https://github.com/pandas-dev/pandas/issues/34256
-                pytest.xfail(
-                    "https://github.com/pandas-dev/pandas/issues/34256"
-                )
+        expected = pdf.isin(values)
+
         if isinstance(values, (pd.DataFrame, pd.Series)):
             values = gd.from_pandas(values)
+
         got = gdf.isin(values)
         assert_eq(got, expected)
 
@@ -4907,17 +4905,13 @@ def test_rowwise_ops_datetime_dtypes_2(data, op, skipna):
     ],
 )
 def test_rowwise_ops_datetime_dtypes_pdbug(data):
-    """
-    Pandas bug: https://github.com/pandas-dev/pandas/issues/36907
-    """
     pdf = pd.DataFrame(data)
     gdf = gd.from_pandas(pdf)
 
     expected = pdf.max(axis=1, skipna=False)
     got = gdf.max(axis=1, skipna=False)
 
-    with pytest.raises(AssertionError, match="numpy array are different"):
-        assert_eq(got, expected)
+    assert_eq(got, expected)
 
 
 @pytest.mark.parametrize(

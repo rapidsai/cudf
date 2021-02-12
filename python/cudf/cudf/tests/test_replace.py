@@ -374,7 +374,7 @@ def test_fillna_method_numerical(data, container, data_dtype, method, inplace):
 )
 @pytest.mark.parametrize("inplace", [True, False])
 def test_fillna_categorical(psr_data, fill_value, inplace):
-    psr = psr_data.copy()
+    psr = psr_data.copy(deep=True)
     gsr = Series.from_pandas(psr)
 
     if isinstance(fill_value, pd.Series):
@@ -404,7 +404,7 @@ def test_fillna_categorical(psr_data, fill_value, inplace):
 
 
 @pytest.mark.parametrize(
-    "psr",
+    "psr_data",
     [
         pd.Series(pd.date_range("2010-01-01", "2020-01-10", freq="1y")),
         pd.Series(["2010-01-01", None, "2011-10-10"], dtype="datetime64[ns]"),
@@ -486,7 +486,8 @@ def test_fillna_categorical(psr_data, fill_value, inplace):
     ],
 )
 @pytest.mark.parametrize("inplace", [True, False])
-def test_fillna_datetime(psr, fill_value, inplace):
+def test_fillna_datetime(psr_data, fill_value, inplace):
+    psr = psr_data.copy(deep=True)
     gsr = cudf.from_pandas(psr)
 
     if isinstance(fill_value, pd.Series):
@@ -645,7 +646,7 @@ def test_fillna_dataframe(df, value, inplace):
 
 
 @pytest.mark.parametrize(
-    "psr",
+    "ps_data",
     [
         pd.Series(["a", "b", "c", "d"]),
         pd.Series([None] * 4, dtype="object"),
@@ -666,7 +667,8 @@ def test_fillna_dataframe(df, value, inplace):
     ],
 )
 @pytest.mark.parametrize("inplace", [True, False])
-def test_fillna_string(psr, fill_value, inplace):
+def test_fillna_string(ps_data, fill_value, inplace):
+    psr = ps_data.copy(deep=True)
     gsr = cudf.from_pandas(psr)
 
     if isinstance(fill_value, pd.Series):

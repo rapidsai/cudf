@@ -114,7 +114,7 @@ def test_series_set_item(psr, arg):
     ],
 )
 def test_setitem_dataframe_series_inplace(df):
-    pdf = df
+    pdf = df.copy(deep=True)
     gdf = cudf.from_pandas(pdf)
 
     pdf["a"].replace(1, 500, inplace=True)

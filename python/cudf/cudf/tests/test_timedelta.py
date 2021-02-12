@@ -434,19 +434,7 @@ def test_timedelta_dataframe_ops(df, op):
 )
 @pytest.mark.parametrize("dtype", utils.TIMEDELTA_TYPES)
 @pytest.mark.parametrize(
-    "op",
-    [
-        "add",
-        "sub",
-        "truediv",
-        "mod",
-        pytest.param(
-            "floordiv",
-            marks=pytest.mark.xfail(
-                reason="https://github.com/pandas-dev/pandas/issues/35529"
-            ),
-        ),
-    ],
+    "op", ["add", "sub", "truediv", "mod", "floordiv"],
 )
 def test_timedelta_series_ops_with_scalars(data, other_scalars, dtype, op):
     gsr = cudf.Series(data=data, dtype=dtype)
@@ -534,19 +522,7 @@ def test_timedelta_series_ops_with_scalars(data, other_scalars, dtype, op):
 )
 @pytest.mark.parametrize("dtype", utils.TIMEDELTA_TYPES)
 @pytest.mark.parametrize(
-    "op",
-    [
-        "add",
-        "sub",
-        "truediv",
-        "mod",
-        pytest.param(
-            "floordiv",
-            marks=pytest.mark.xfail(
-                reason="https://github.com/pandas-dev/pandas/issues/35529"
-            ),
-        ),
-    ],
+    "op", ["add", "sub", "truediv", "mod", "floordiv"],
 )
 def test_timedelta_series_ops_with_cudf_scalars(data, cpu_scalar, dtype, op):
     gpu_scalar = cudf.Scalar(cpu_scalar)
