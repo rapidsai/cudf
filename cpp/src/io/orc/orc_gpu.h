@@ -21,6 +21,8 @@
 #include <io/comp/gpuinflate.h>
 #include <io/orc/orc_common.h>
 #include <io/statistics/column_stats.h>
+#include <io/utilities/hostdevice_matrix.hpp>
+
 #include <cudf/types.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
@@ -29,6 +31,9 @@ namespace cudf {
 namespace io {
 namespace orc {
 namespace gpu {
+
+using cudf::detail::matrix_device_view;
+
 struct CompressedStreamInfo {
   CompressedStreamInfo() = default;
   explicit constexpr CompressedStreamInfo(const uint8_t *compressed_data_, size_t compressed_size_)
@@ -290,7 +295,7 @@ void DecodeOrcColumnData(ColumnDesc *chunks,
  * @param[in] num_rowgroups Number of row groups
  * @param[in] stream CUDA stream to use, default 0
  */
-void EncodeOrcColumnData(EncChunk *chunks,
+void EncodeOrcColumnData(matrix_device_view<EncChunk const> chunks,
                          encoder_chunk_streams *streams,
                          uint32_t num_columns,
                          uint32_t num_rowgroups,
@@ -307,7 +312,7 @@ void EncodeOrcColumnData(EncChunk *chunks,
  * @param[in] stream CUDA stream to use, default 0
  */
 void EncodeStripeDictionaries(StripeDictionary *stripes,
-                              EncChunk *chunks,
+                              matrix_device_view<EncChunk const> chunks,
                               encoder_chunk_streams *streams,
                               uint32_t num_string_columns,
                               uint32_t num_columns,
