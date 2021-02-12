@@ -406,7 +406,7 @@ template <join_kind JoinKind>
 std::pair<std::unique_ptr<table>, std::unique_ptr<table>> construct_join_output_df(
   table_view const &probe,
   table_view const &build,
-  VectorPair &joined_indices,
+  std::pair<cudf::column_view, cudf::column_view> &joined_indices,
   std::vector<std::pair<size_type, size_type>> const &columns_in_common,
   cudf::hash_join::common_columns_output_side common_columns_output_side,
   rmm::cuda_stream_view stream,
@@ -433,26 +433,28 @@ std::pair<std::unique_ptr<table>, std::unique_ptr<table>> construct_join_output_
   // Construct the joined columns
   if (join_kind::FULL_JOIN == JoinKind) {
     if (not columns_in_common.empty()) {
-      auto common_from_build = detail::gather(build.select(build_common_col),
-                                              joined_indices.second.begin() + probe.num_rows(),
-                                              joined_indices.second.end(),
-                                              bounds_policy,
-                                              stream,
-                                              rmm::mr::get_current_device_resource());
-      auto common_from_probe = detail::gather(probe.select(probe_common_col),
-                                              joined_indices.first.begin(),
-                                              joined_indices.first.begin() + probe.num_rows(),
-                                              bounds_policy,
-                                              stream,
-                                              rmm::mr::get_current_device_resource());
-      common_table           = cudf::detail::concatenate(
+      auto common_from_build =
+        detail::gather(build.select(build_common_col),
+                       joined_indices.second.begin<size_type>() + probe.num_rows(),
+                       joined_indices.second.end<size_type>(),
+                       bounds_policy,
+                       stream,
+                       rmm::mr::get_current_device_resource());
+      auto common_from_probe =
+        detail::gather(probe.select(probe_common_col),
+                       joined_indices.first.begin<size_type>(),
+                       joined_indices.first.begin<size_type>() + probe.num_rows(),
+                       bounds_policy,
+                       stream,
+                       rmm::mr::get_current_device_resource());
+      common_table = cudf::detail::concatenate(
         {common_from_probe->view(), common_from_build->view()}, stream, mr);
     }
   } else {
     if (not columns_in_common.empty()) {
       common_table = detail::gather(probe.select(probe_common_col),
-                                    joined_indices.first.begin(),
-                                    joined_indices.first.end(),
+                                    joined_indices.first.begin<size_type>(),
+                                    joined_indices.first.end<size_type>(),
                                     bounds_policy,
                                     stream,
                                     mr);
@@ -461,15 +463,15 @@ std::pair<std::unique_ptr<table>, std::unique_ptr<table>> construct_join_output_
 
   // Construct the probe non common columns
   std::unique_ptr<table> probe_table = detail::gather(probe.select(probe_noncommon_col),
-                                                      joined_indices.first.begin(),
-                                                      joined_indices.first.end(),
+                                                      joined_indices.first.begin<size_type>(),
+                                                      joined_indices.first.end<size_type>(),
                                                       bounds_policy,
                                                       stream,
                                                       mr);
 
   std::unique_ptr<table> build_table = detail::gather(build.select(build_noncommon_col),
-                                                      joined_indices.second.begin(),
-                                                      joined_indices.second.end(),
+                                                      joined_indices.second.begin<size_type>(),
+                                                      joined_indices.second.end<size_type>(),
                                                       bounds_policy,
                                                       stream,
                                                       mr);
@@ -688,15 +690,17 @@ hash_join::hash_join_impl::compute_hash_join(
                            }),
                "Invalid values passed to columns_in_common");
 
-  auto joined_indices =
-    compute_hash_join_indices<JoinKind>(probe, probe_on, compare_nulls, stream, mr);
+  auto joined_indices = compute_hash_join<JoinKind>(probe, probe_on, compare_nulls, stream, mr);
 
   if (is_trivial_join(probe, _build, probe_on, _build_on, JoinKind)) {
     return get_empty_joined_table(probe, _build, columns_in_common, common_columns_output_side);
   }
 
+  auto joined_indices_view = std::make_pair<cudf::column_view, cudf::column_view>(
+    joined_indices.first->view(), joined_indices.second->view());
+
   return cudf::detail::construct_join_output_df<JoinKind>(
-    probe, _build, joined_indices, columns_in_common, common_columns_output_side, stream, mr);
+    probe, _build, joined_indices_view, columns_in_common, common_columns_output_side, stream, mr);
 }
 
 template <cudf::detail::join_kind JoinKind>
