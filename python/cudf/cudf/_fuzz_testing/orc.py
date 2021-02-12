@@ -67,6 +67,7 @@ class OrcReader(IOFuzz):
             dtypes_meta, num_rows, num_cols = _generate_rand_meta(
                 self, dtypes_list
             )
+
             self._current_params["dtypes_meta"] = dtypes_meta
             seed = random.randint(0, 2 ** 32 - 1)
             self._current_params["seed"] = seed
@@ -106,7 +107,6 @@ class OrcReader(IOFuzz):
                 elif param == "stripes":
                     f = io.BytesIO(self._current_buffer)
                     reader = pyorc.Reader(f)
-                    print("READ: ", reader.num_of_stripes)
                     stripes = [i for i in range(reader.num_of_stripes)]
                     params_dict[param] = np.random.choice(
                         [
@@ -125,10 +125,10 @@ class OrcReader(IOFuzz):
                     )
                 elif param == "use_index":
                     params_dict[param] = np.random.choice([True, False])
-            elif param in ("skiprows", "num_rows"):
-                params_dict[param] = np.random.choice(
-                    [None, self._rand(len(self._df))]
-                )
+                elif param in ("skiprows", "num_rows"):
+                    params_dict[param] = np.random.choice(
+                        [None, self._rand(len(self._df))]
+                    )
             else:
                 if not isinstance(values, list):
                     raise TypeError("values must be of type list")
@@ -143,12 +143,16 @@ class OrcWriter(IOFuzz):
         max_rows=100_000,
         max_columns=1000,
         max_string_length=None,
+        max_lists_length=None,
+        max_lists_nesting_depth=None,
     ):
         super().__init__(
             dirs=dirs,
             max_rows=max_rows,
             max_columns=max_columns,
             max_string_length=max_string_length,
+            max_lists_length=max_lists_length,
+            max_lists_nesting_depth=max_lists_nesting_depth,
         )
         self._df = None
 
@@ -163,11 +167,18 @@ class OrcWriter(IOFuzz):
         else:
             dtypes_list = list(
                 cudf.utils.dtypes.ALL_TYPES
-                - {"category"}
+                # TODO: Remove "bool" from below
+                # list after following issue is fixed:
+                # https://github.com/rapidsai/cudf/issues/6763
+                - {"category", "bool"}
                 # Following dtypes are not supported by orc
                 # https://orc.apache.org/specification/ORCv0/
                 - cudf.utils.dtypes.TIMEDELTA_TYPES
                 - cudf.utils.dtypes.UNSIGNED_TYPES
+                # TODO: Remove `DATETIME_TYPES` once
+                # following bug is fixed:
+                # https://github.com/rapidsai/cudf/issues/7355
+                - cudf.utils.dtypes.DATETIME_TYPES
             )
 
             dtypes_meta, num_rows, num_cols = _generate_rand_meta(
