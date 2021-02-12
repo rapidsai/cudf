@@ -540,36 +540,6 @@ class hash_join {
     rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource()) const;
 
   /**
-   * @brief Performs a left join by probing in the internal hash table.
-   *
-   * More details please @see cudf::left_join().
-   *
-   * @param probe The probe table, from which the tuples are probed.
-   * @param probe_on The column indices from `probe` to join on.
-   * @param columns_in_common is a vector of pairs of column indices into
-   * `probe` and `build`, respectively, that are "in common". For "common"
-   * columns, only a single output column will be produced, which is gathered
-   * from `probe_on` columns. Else, for every column in `probe_on` and `build_on`,
-   * an output column will be produced. For each of these pairs (P, B), P
-   * should exist in `probe_on` and B should exist in `build_on`.
-   * @param compare_nulls Controls whether null join-key values should match or not.
-   * @param mr Device memory resource used to allocate the returned table and columns' device
-   * memory.
-   * @param stream CUDA stream used for device memory operations and kernel launches
-   *
-   * @return Result of joining `build` and `probe` tables on the columns
-   * specified by `build_on` and `probe_on`. The resulting table will be joined columns of
-   * `probe(including common columns)+build(excluding common columns)`.
-   */
-  std::unique_ptr<cudf::table> left_join(
-    cudf::table_view const& probe,
-    std::vector<size_type> const& probe_on,
-    std::vector<std::pair<cudf::size_type, cudf::size_type>> const& columns_in_common,
-    null_equality compare_nulls         = null_equality::EQUAL,
-    rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
-    rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource()) const;
-
-  /**
    * @brief Performs a full join on the specified columns of two
    * tables (`left`, `right`), and returns the row indices corresponding
    * to the result.

@@ -41,8 +41,8 @@ namespace detail {
  * @return vector A vector containing only the indices which are not present in
  * `common_column_indices`
  */
-auto non_common_column_indices(size_type num_columns,
-                               std::vector<size_type> const &common_column_indices)
+std::vector<size_type> non_common_column_indices(
+  size_type num_columns, std::vector<size_type> const &common_column_indices)
 {
   CUDF_EXPECTS(common_column_indices.size() <= static_cast<uint64_t>(num_columns),
                "Too many columns in common");
@@ -402,89 +402,6 @@ std::pair<std::unique_ptr<table>, std::unique_ptr<table>> combine_join_columns(
  * `common_columns_output_side` is `PROBE`, or (`probe(excluding common columns)`,
  * `build(including common columns)`) if `common_columns_output_side` is `BUILD`.
  */
-template <join_kind JoinKind>
-std::pair<std::unique_ptr<table>, std::unique_ptr<table>> construct_join_output_df(
-  table_view const &probe,
-  table_view const &build,
-  std::pair<cudf::column_view, cudf::column_view> &joined_indices,
-  std::vector<std::pair<size_type, size_type>> const &columns_in_common,
-  cudf::hash_join::common_columns_output_side common_columns_output_side,
-  rmm::cuda_stream_view stream,
-  rmm::mr::device_memory_resource *mr)
-{
-  std::vector<size_type> probe_common_col;
-  probe_common_col.reserve(columns_in_common.size());
-  std::vector<size_type> build_common_col;
-  build_common_col.reserve(columns_in_common.size());
-  for (const auto &c : columns_in_common) {
-    probe_common_col.push_back(c.first);
-    build_common_col.push_back(c.second);
-  }
-  std::vector<size_type> probe_noncommon_col =
-    non_common_column_indices(probe.num_columns(), probe_common_col);
-  std::vector<size_type> build_noncommon_col =
-    non_common_column_indices(build.num_columns(), build_common_col);
-
-  out_of_bounds_policy const bounds_policy = JoinKind != join_kind::INNER_JOIN
-                                               ? out_of_bounds_policy::NULLIFY
-                                               : out_of_bounds_policy::DONT_CHECK;
-
-  std::unique_ptr<table> common_table = std::make_unique<table>();
-  // Construct the joined columns
-  if (join_kind::FULL_JOIN == JoinKind) {
-    if (not columns_in_common.empty()) {
-      auto common_from_build =
-        detail::gather(build.select(build_common_col),
-                       joined_indices.second.begin<size_type>() + probe.num_rows(),
-                       joined_indices.second.end<size_type>(),
-                       bounds_policy,
-                       stream,
-                       rmm::mr::get_current_device_resource());
-      auto common_from_probe =
-        detail::gather(probe.select(probe_common_col),
-                       joined_indices.first.begin<size_type>(),
-                       joined_indices.first.begin<size_type>() + probe.num_rows(),
-                       bounds_policy,
-                       stream,
-                       rmm::mr::get_current_device_resource());
-      common_table = cudf::detail::concatenate(
-        {common_from_probe->view(), common_from_build->view()}, stream, mr);
-    }
-  } else {
-    if (not columns_in_common.empty()) {
-      common_table = detail::gather(probe.select(probe_common_col),
-                                    joined_indices.first.begin<size_type>(),
-                                    joined_indices.first.end<size_type>(),
-                                    bounds_policy,
-                                    stream,
-                                    mr);
-    }
-  }
-
-  // Construct the probe non common columns
-  std::unique_ptr<table> probe_table = detail::gather(probe.select(probe_noncommon_col),
-                                                      joined_indices.first.begin<size_type>(),
-                                                      joined_indices.first.end<size_type>(),
-                                                      bounds_policy,
-                                                      stream,
-                                                      mr);
-
-  std::unique_ptr<table> build_table = detail::gather(build.select(build_noncommon_col),
-                                                      joined_indices.second.begin<size_type>(),
-                                                      joined_indices.second.end<size_type>(),
-                                                      bounds_policy,
-                                                      stream,
-                                                      mr);
-
-  return combine_join_columns(probe_table->release(),
-                              probe_noncommon_col,
-                              probe_common_col,
-                              build_table->release(),
-                              build_noncommon_col,
-                              build_common_col,
-                              common_table->release(),
-                              common_columns_output_side);
-}
 
 std::unique_ptr<cudf::table> combine_table_pair(std::unique_ptr<cudf::table> &&left,
                                                 std::unique_ptr<cudf::table> &&right)
@@ -557,27 +474,6 @@ hash_join::hash_join_impl::left_join(cudf::table_view const &probe,
   CUDF_FUNC_RANGE();
   return compute_hash_join<cudf::detail::join_kind::LEFT_JOIN>(
     probe, probe_on, compare_nulls, stream, mr);
-}
-
-std::unique_ptr<cudf::table> hash_join::hash_join_impl::left_join(
-  cudf::table_view const &probe,
-  std::vector<size_type> const &probe_on,
-  std::vector<std::pair<cudf::size_type, cudf::size_type>> const &columns_in_common,
-  null_equality compare_nulls,
-  rmm::cuda_stream_view stream,
-  rmm::mr::device_memory_resource *mr) const
-{
-  CUDF_FUNC_RANGE();
-  auto probe_build_pair =
-    compute_hash_join<cudf::detail::join_kind::LEFT_JOIN>(probe,
-                                                          probe_on,
-                                                          columns_in_common,
-                                                          common_columns_output_side::PROBE,
-                                                          compare_nulls,
-                                                          stream,
-                                                          mr);
-  return cudf::detail::combine_table_pair(std::move(probe_build_pair.first),
-                                          std::move(probe_build_pair.second));
 }
 
 std::pair<std::unique_ptr<cudf::column>, std::unique_ptr<cudf::column>>
