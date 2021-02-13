@@ -29,6 +29,7 @@
 #include <cudf/detail/aggregation/aggregation.hpp>
 #include <cudf/detail/copy.hpp>
 #include <cudf/detail/gather.hpp>
+#include <cudf/detail/get_value.cuh>
 #include <cudf/detail/groupby/sort_helper.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/utilities/cuda.cuh>
@@ -36,7 +37,6 @@
 #include <cudf/detail/valid_if.cuh>
 #include <cudf/dictionary/dictionary_column_view.hpp>
 #include <cudf/dictionary/dictionary_factories.hpp>
-#include <cudf/lists/detail/utilities.cuh>
 #include <cudf/rolling.hpp>
 #include <cudf/strings/detail/utilities.cuh>
 #include <cudf/types.hpp>
@@ -983,7 +983,8 @@ struct rolling_window_launcher {
     // This accounts for the `0` added by default to the offsets
     // column, marking the beginning of the column.
 
-    auto num_child_rows = get_num_child_rows(offsets, stream);
+    auto const num_child_rows{
+      cudf::detail::get_value<size_type>(offsets, offsets.size() - 1, stream)};
 
     auto scatter_values =
       make_fixed_width_column(size_data_type, offsets.size(), mask_state::UNALLOCATED, stream, mr);

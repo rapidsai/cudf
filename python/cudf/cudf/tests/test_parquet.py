@@ -602,6 +602,15 @@ def test_parquet_reader_mixedcompression(datadir):
     assert_eq(expect, got)
 
 
+def test_parquet_reader_select_columns(datadir):
+    fname = datadir / "nested_column_map.parquet"
+
+    expect = cudf.read_parquet(fname).to_pandas()[["value"]]
+    got = cudf.read_parquet(fname, columns=["value"])
+
+    assert_eq(expect, got)
+
+
 def test_parquet_reader_invalids(tmpdir):
     test_pdf = make_pdf(nrows=1000, nvalids=1000 // 4, dtype=np.int64)
 

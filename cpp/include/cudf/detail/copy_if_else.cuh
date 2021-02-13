@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2020, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -176,12 +176,8 @@ std::unique_ptr<column> copy_if_else(
   constexpr int block_size = 256;
   cudf::detail::grid_1d grid{num_els, block_size, 1};
 
-  std::unique_ptr<column> out =
-    make_fixed_width_column(output_type,
-                            size,
-                            nullable ? mask_state::UNINITIALIZED : mask_state::UNALLOCATED,
-                            stream.value(),
-                            mr);
+  std::unique_ptr<column> out = make_fixed_width_column(
+    output_type, size, nullable ? mask_state::UNINITIALIZED : mask_state::UNALLOCATED, stream, mr);
 
   auto out_v = mutable_column_device_view::create(*out);
 

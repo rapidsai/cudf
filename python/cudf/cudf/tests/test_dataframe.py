@@ -8057,15 +8057,6 @@ def test_dataframe_constructor_columns(df, columns, index):
 
     assert_local_eq(actual, df, expected, host_columns)
 
-    expected = pd.DataFrame(df, columns=host_columns)
-    actual = gd.DataFrame(gdf._data, columns=columns, index=index)
-    if index is not None:
-        if df.shape == (0, 0):
-            expected = pd.DataFrame(columns=host_columns, index=index)
-        else:
-            expected.index = index
-    assert_local_eq(actual, df, expected, host_columns)
-
 
 @pytest.mark.parametrize(
     "data",
@@ -8324,3 +8315,15 @@ def test_dataframe_roundtrip_arrow_struct_dtype(gdf):
     expected = gd.DataFrame.from_arrow(table)
 
     assert_eq(gdf, expected)
+
+
+def test_dataframe_setitem_cupy_array():
+    np.random.seed(0)
+    pdf = pd.DataFrame(np.random.randn(10, 2))
+    gdf = gd.from_pandas(pdf)
+
+    gpu_array = cupy.array([True, False] * 5)
+    pdf[gpu_array.get()] = 1.5
+    gdf[gpu_array] = 1.5
+
+    assert_eq(pdf, gdf)

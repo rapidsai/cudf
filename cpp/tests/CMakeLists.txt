@@ -153,6 +153,7 @@ set(GROUPBY_TEST_SRC
     "${CMAKE_CURRENT_SOURCE_DIR}/groupby/group_sum_test.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/groupby/group_min_test.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/groupby/group_max_test.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/groupby/group_sum_of_squares_test.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/groupby/group_mean_test.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/groupby/group_var_test.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/groupby/group_std_test.cpp"
@@ -362,6 +363,7 @@ ConfigureTest(JSON_TEST "${JSON_TEST_SRC}")
 # - sort tests ------------------------------------------------------------------------------------
 
 set(SORT_TEST_SRC
+    "${CMAKE_CURRENT_SOURCE_DIR}/sort/segmented_sort_tests.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/sort/sort_test.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/sort/rank_test.cpp")
 
@@ -387,7 +389,8 @@ set(COPYING_TEST_SRC
     "${CMAKE_CURRENT_SOURCE_DIR}/copying/shift_tests.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/copying/get_value_tests.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/copying/sample_tests.cpp"
-    "${CMAKE_CURRENT_SOURCE_DIR}/copying/concatenate_tests.cu")
+    "${CMAKE_CURRENT_SOURCE_DIR}/copying/concatenate_tests.cu"
+    "${CMAKE_CURRENT_SOURCE_DIR}/copying/pack_tests.cu")
 
 ConfigureTest(COPYING_TEST "${COPYING_TEST_SRC}")
 
@@ -663,7 +666,8 @@ ConfigureTest(AST_TEST "${AST_TEST_SRC}")
 set(LISTS_TEST_SRC
     "${CMAKE_CURRENT_SOURCE_DIR}/lists/contains_tests.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/lists/count_elements_tests.cpp"
-    "${CMAKE_CURRENT_SOURCE_DIR}/lists/extract_tests.cpp")
+    "${CMAKE_CURRENT_SOURCE_DIR}/lists/extract_tests.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/lists/sort_lists_tests.cpp")
 
 ConfigureTest(LISTS_TEST "${LISTS_TEST_SRC}")
 

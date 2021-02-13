@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 
+#include <cudf/detail/iterator.cuh>
 #include <cudf/reshape.hpp>
 
 #include <cudf_test/base_fixture.hpp>
@@ -97,7 +98,7 @@ TEST_F(ExplodeTest, SingleNull)
   */
 
   auto first_invalid =
-    cudf::test::make_counting_transform_iterator(0, [](auto i) { return i == 0 ? false : true; });
+    cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i == 0 ? false : true; });
 
   lists_column_wrapper<int32_t> a({lists_column_wrapper<int32_t>{1, 2, 7},
                                    lists_column_wrapper<int32_t>{5, 6},
@@ -126,9 +127,10 @@ TEST_F(ExplodeTest, Nulls)
       [0, 3]              300
   */
 
-  auto valids = cudf::test::make_counting_transform_iterator(
+  auto valids = cudf::detail::make_counting_transform_iterator(
     0, [](auto i) { return i % 2 == 0 ? true : false; });
-  auto always_valid = cudf::test::make_counting_transform_iterator(0, [](auto i) { return true; });
+  auto always_valid =
+    cudf::detail::make_counting_transform_iterator(0, [](auto i) { return true; });
 
   lists_column_wrapper<int32_t> a({lists_column_wrapper<int32_t>{1, 2, 7},
                                    lists_column_wrapper<int32_t>{5, 6},
@@ -157,7 +159,7 @@ TEST_F(ExplodeTest, NullsInList)
       [0, 3, 8]           400
   */
 
-  auto valids = cudf::test::make_counting_transform_iterator(
+  auto valids = cudf::detail::make_counting_transform_iterator(
     0, [](auto i) { return i % 2 == 0 ? true : false; });
 
   lists_column_wrapper<int32_t> a{lists_column_wrapper<int32_t>({1, 2, 7}, valids),
@@ -223,9 +225,10 @@ TEST_F(ExplodeTest, NestedNulls)
       [[0, 3],[5],[2, 1]] 300
   */
 
-  auto valids = cudf::test::make_counting_transform_iterator(
+  auto valids = cudf::detail::make_counting_transform_iterator(
     0, [](auto i) { return i % 2 == 0 ? true : false; });
-  auto always_valid = cudf::test::make_counting_transform_iterator(0, [](auto i) { return true; });
+  auto always_valid =
+    cudf::detail::make_counting_transform_iterator(0, [](auto i) { return true; });
 
   lists_column_wrapper<int32_t> a(
     {lists_column_wrapper<int32_t>{lists_column_wrapper<int32_t>{1, 2},
@@ -261,7 +264,7 @@ TEST_F(ExplodeTest, NullsInNested)
       [[0, 3],[5],[2, 1]] 300
   */
 
-  auto valids = cudf::test::make_counting_transform_iterator(
+  auto valids = cudf::detail::make_counting_transform_iterator(
     0, [](auto i) { return i % 2 == 0 ? true : false; });
 
   lists_column_wrapper<int32_t> a(
@@ -298,7 +301,7 @@ TEST_F(ExplodeTest, NullsInNestedDoubleExplode)
       [[0, 3],[5],[2, 1]]     300
   */
 
-  auto valids = cudf::test::make_counting_transform_iterator(
+  auto valids = cudf::detail::make_counting_transform_iterator(
     0, [](auto i) { return i % 2 == 0 ? true : false; });
 
   lists_column_wrapper<int32_t> a{
@@ -334,7 +337,7 @@ TEST_F(ExplodeTest, NestedStructs)
       [[0, 3],[5],[2, 1]] {300, "300"}
   */
 
-  auto valids = cudf::test::make_counting_transform_iterator(
+  auto valids = cudf::detail::make_counting_transform_iterator(
     0, [](auto i) { return i % 2 == 0 ? true : false; });
 
   lists_column_wrapper<int32_t> a(
@@ -418,7 +421,7 @@ TEST_F(ExplodeTest, SlicedList)
       slicing the top 2 rows and the bottom row off
   */
 
-  auto valids = cudf::test::make_counting_transform_iterator(
+  auto valids = cudf::detail::make_counting_transform_iterator(
     0, [](auto i) { return i % 2 == 0 ? true : false; });
 
   lists_column_wrapper<int32_t> a(

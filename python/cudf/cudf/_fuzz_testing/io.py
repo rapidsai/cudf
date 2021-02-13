@@ -1,4 +1,4 @@
-# Copyright (c) 2020, NVIDIA CORPORATION.
+# Copyright (c) 2020-2021, NVIDIA CORPORATION.
 
 import copy
 import json
@@ -23,12 +23,16 @@ class IOFuzz(object):
         max_rows=100_000,
         max_columns=1000,
         max_string_length=None,
+        max_lists_length=None,
+        max_lists_nesting_depth=None,
     ):
         dirs = [] if dirs is None else dirs
         self._inputs = []
         self._max_rows = max_rows
         self._max_columns = max_columns
         self._max_string_length = max_string_length
+        self._max_lists_length = max_lists_length
+        self._max_lists_nesting_depth = max_lists_nesting_depth
 
         for i, path in enumerate(dirs):
             if i == 0 and not os.path.exists(path):

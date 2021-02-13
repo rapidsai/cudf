@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -23,16 +23,18 @@
 #include <cudf/column/column.hpp>
 #include <cudf/concatenate.hpp>
 #include <cudf/copying.hpp>
+#include <cudf/detail/iterator.cuh>
 #include <cudf/dictionary/dictionary_column_view.hpp>
 #include <cudf/dictionary/encode.hpp>
 #include <cudf/fixed_point/fixed_point.hpp>
 #include <cudf/table/table.hpp>
-#include <string>
 
 #include <rmm/device_uvector.hpp>
 
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/sequence.h>
+
+#include <string>
 
 template <typename T>
 using column_wrapper = cudf::test::fixed_width_column_wrapper<T>;
@@ -721,7 +723,7 @@ TEST_F(ListsColumnTest, ConcatenateEmptyLists)
 
 TEST_F(ListsColumnTest, ConcatenateListsWithNulls)
 {
-  auto valids = cudf::test::make_counting_transform_iterator(
+  auto valids = cudf::detail::make_counting_transform_iterator(
     0, [](auto i) { return i % 2 == 0 ? true : false; });
 
   // nulls in the leaves
@@ -821,7 +823,7 @@ TEST_F(ListsColumnTest, ConcatenateNestedEmptyLists)
 
 TEST_F(ListsColumnTest, ConcatenateNestedListsWithNulls)
 {
-  auto valids = cudf::test::make_counting_transform_iterator(
+  auto valids = cudf::detail::make_counting_transform_iterator(
     0, [](auto i) { return i % 2 == 0 ? true : false; });
 
   // nulls in the lists
@@ -991,7 +993,8 @@ TEST_F(ListsColumnTest, SlicedColumnsWithNulls)
 {
   using LCW = cudf::test::lists_column_wrapper<int>;
 
-  auto valids = cudf::test::make_counting_transform_iterator(0, [](auto i) { return i % 2 == 0; });
+  auto valids =
+    cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i % 2 == 0; });
 
   {
     cudf::test::lists_column_wrapper<int> a{{{{1, 1, 1}, valids}, {2, 2}, {{3, 3}, valids}},
@@ -1178,7 +1181,8 @@ TYPED_TEST(FixedPointTestBothReps, FixedPointConcatentate)
   using decimalXX  = TypeParam;
   using fw_wrapper = cudf::test::fixed_width_column_wrapper<decimalXX>;
 
-  auto begin = cudf::test::make_counting_transform_iterator(0, [](auto i) { return decimalXX{i}; });
+  auto begin =
+    cudf::detail::make_counting_transform_iterator(0, [](auto i) { return decimalXX{i}; });
   auto const vec = std::vector<decimalXX>(begin, begin + 1000);
 
   auto const a = fw_wrapper(vec.begin(), /***/ vec.begin() + 300);

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2020, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2021, NVIDIA CORPORATION.
  *
  * Copyright 2018-2019 BlazingDB, Inc.
  *     Copyright 2018 Christian Noboa Mardini <christian@blazingdb.com>
@@ -19,6 +19,7 @@
 
 #pragma once
 
+#include <cudf/detail/iterator.cuh>
 #include <cudf/utilities/type_dispatcher.hpp>
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_wrapper.hpp>
@@ -36,7 +37,7 @@ struct BinaryOperationTest : public cudf::test::BaseFixture {
   template <typename T>
   auto make_data_iter(cudf::test::UniformRandomGenerator<T>& rand_gen)
   {
-    return cudf::test::make_counting_transform_iterator(
+    return cudf::detail::make_counting_transform_iterator(
       0, [&](auto row) { return rand_gen.generate(); });
   }
 
@@ -44,7 +45,7 @@ struct BinaryOperationTest : public cudf::test::BaseFixture {
   {
     cudf::test::UniformRandomGenerator<uint8_t> rand_gen(r_min, r_max);
     uint8_t mod_base = rand_gen.generate();
-    return cudf::test::make_counting_transform_iterator(
+    return cudf::detail::make_counting_transform_iterator(
       0, [mod_base](auto row) { return (row % mod_base) > 0; });
   }
 

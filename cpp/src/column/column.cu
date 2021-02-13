@@ -32,6 +32,8 @@
 #include <cudf/utilities/traits.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
 
+#include <thrust/iterator/transform_iterator.h>
+
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_buffer.hpp>
 
@@ -191,7 +193,7 @@ struct create_column_from_view {
   std::unique_ptr<column> operator()()
   {
     cudf::strings_column_view sview(view);
-    return cudf::strings::detail::copy_slice(sview, 0, view.size(), 1, stream.value(), mr);
+    return cudf::strings::detail::copy_slice(sview, 0, view.size(), 1, stream, mr);
   }
 
   template <typename ColumnType,
@@ -221,10 +223,9 @@ struct create_column_from_view {
   template <typename ColumnType, std::enable_if_t<cudf::is_fixed_width<ColumnType>()> * = nullptr>
   std::unique_ptr<column> operator()()
   {
-    std::vector<std::unique_ptr<column>> children;
-    for (size_type i = 0; i < view.num_children(); ++i) {
-      children.emplace_back(std::make_unique<column>(view.child(i), stream, mr));
-    }
+    auto op       = [&](auto const &child) { return std::make_unique<column>(child, stream, mr); };
+    auto begin    = thrust::make_transform_iterator(view.child_begin(), op);
+    auto children = std::vector<std::unique_ptr<column>>(begin, begin + view.num_children());
 
     return std::make_unique<column>(
       view.type(),
@@ -244,7 +245,7 @@ struct create_column_from_view {
   std::unique_ptr<column> operator()()
   {
     auto lists_view = lists_column_view(view);
-    return cudf::lists::detail::copy_slice(lists_view, 0, view.size(), stream.value(), mr);
+    return cudf::lists::detail::copy_slice(lists_view, 0, view.size(), stream, mr);
   }
 
   template <typename ColumnType,
@@ -272,7 +273,7 @@ struct create_column_from_view {
                                std::move(children),
                                view.null_count(),
                                cudf::detail::copy_bitmask(view.null_mask(), begin, end, stream, mr),
-                               stream.value(),
+                               stream,
                                mr);
   }
 };

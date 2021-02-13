@@ -14,6 +14,7 @@ Welcome to cuDF's documentation!
    10min-cudf-cupy.ipynb
    guide-to-udfs.ipynb
    internals.md
+   Working-with-missing-data.ipynb
 
 Indices and tables
 ==================
