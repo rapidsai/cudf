@@ -18,6 +18,7 @@
 #include <cudf_test/column_utilities.hpp>
 #include <cudf_test/column_wrapper.hpp>
 #include <cudf_test/cudf_gtest.hpp>
+#include <cudf_test/iterator_utilities.hpp>
 #include <cudf_test/type_lists.hpp>
 
 #include <cudf/aggregation.hpp>
@@ -677,22 +678,20 @@ TYPED_TEST(TypedCollectListTest, GroupedTimeRangeRollingWindowWithNulls)
                                       min_periods,
                                       make_collect_aggregation());
 
-  auto null_at = [](auto null_idx) {
-    return cudf::detail::make_counting_transform_iterator(
-      0, [null_idx](auto i) { return i != null_idx; });
-  };
+  auto null_at_0 = iterator_with_null_at(0);
+  auto null_at_1 = iterator_with_null_at(1);
 
   // In the results, `11` and `21` should be nulls.
   auto const expected_result = lists_column_wrapper<T, int32_t>{
-    {{10, 11, 12, 13}, null_at(1)},
-    {{10, 11, 12, 13}, null_at(1)},
-    {{10, 11, 12, 13, 14}, null_at(1)},
-    {{10, 11, 12, 13, 14}, null_at(1)},
-    {{10, 11, 12, 13, 14}, null_at(1)},
-    {{20}, null_at(1)},
-    {{21, 22}, null_at(0)},
-    {{21, 22, 23}, null_at(0)},
-    {{21, 22, 23}, null_at(0)}}.release();
+    {{10, 11, 12, 13}, null_at_1},
+    {{10, 11, 12, 13}, null_at_1},
+    {{10, 11, 12, 13, 14}, null_at_1},
+    {{10, 11, 12, 13, 14}, null_at_1},
+    {{10, 11, 12, 13, 14}, null_at_1},
+    {{20}, null_at_1},
+    {{21, 22}, null_at_0},
+    {{21, 22, 23}, null_at_0},
+    {{21, 22, 23}, null_at_0}}.release();
 
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected_result->view(), result->view());
 
@@ -794,23 +793,21 @@ TEST_F(CollectListTest, GroupedTimeRangeRollingWindowOnStringsWithNulls)
                                       min_periods,
                                       make_collect_aggregation());
 
-  auto null_at = [](auto null_idx) {
-    return cudf::detail::make_counting_transform_iterator(
-      0, [null_idx](auto i) { return i != null_idx; });
-  };
+  auto null_at_0 = iterator_with_null_at(0);
+  auto null_at_1 = iterator_with_null_at(1);
 
   // In the results, `11` and `21` should be nulls.
   auto const expected_result = lists_column_wrapper<cudf::string_view>{
-    {{"10", "11", "12", "13"}, null_at(1)},
-    {{"10", "11", "12", "13"}, null_at(1)},
-    {{"10", "11", "12", "13", "14"}, null_at(1)},
-    {{"10", "11", "12", "13", "14"}, null_at(1)},
-    {{"10", "11", "12", "13", "14"}, null_at(1)},
+    {{"10", "11", "12", "13"}, null_at_1},
+    {{"10", "11", "12", "13"}, null_at_1},
+    {{"10", "11", "12", "13", "14"}, null_at_1},
+    {{"10", "11", "12", "13", "14"}, null_at_1},
+    {{"10", "11", "12", "13", "14"}, null_at_1},
     {"20"},
-    {{"21", "22"}, null_at(0)},
-    {{"21", "22", "23"}, null_at(0)},
+    {{"21", "22"}, null_at_0},
+    {{"21", "22", "23"}, null_at_0},
     {{"21", "22", "23"},
-     null_at(0)}}.release();
+     null_at_0}}.release();
 
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected_result->view(), result->view());
 
@@ -987,18 +984,15 @@ TYPED_TEST(TypedCollectListTest, GroupedTimeRangeRollingWindowWithNullsAndMinPer
                                       min_periods,
                                       make_collect_aggregation());
 
-  auto null_at = [](auto null_idx) {
-    return cudf::detail::make_counting_transform_iterator(
-      0, [null_idx](auto i) { return i != null_idx; });
-  };
+  auto null_at_1 = iterator_with_null_at(1);
 
   // In the results, `11` and `21` should be nulls.
   auto const expected_result = lists_column_wrapper<T, int32_t>{
-    {{{10, 11, 12, 13}, null_at(1)},
-     {{10, 11, 12, 13}, null_at(1)},
-     {{10, 11, 12, 13, 14}, null_at(1)},
-     {{10, 11, 12, 13, 14}, null_at(1)},
-     {{10, 11, 12, 13, 14}, null_at(1)},
+    {{{10, 11, 12, 13}, null_at_1},
+     {{10, 11, 12, 13}, null_at_1},
+     {{10, 11, 12, 13, 14}, null_at_1},
+     {{10, 11, 12, 13, 14}, null_at_1},
+     {{10, 11, 12, 13, 14}, null_at_1},
      {},
      {},
      {},
@@ -1116,18 +1110,15 @@ TEST_F(CollectListTest, GroupedTimeRangeRollingWindowOnStringsWithNullsAndMinPer
                                       min_periods,
                                       make_collect_aggregation());
 
-  auto null_at = [](auto null_idx) {
-    return cudf::detail::make_counting_transform_iterator(
-      0, [null_idx](auto i) { return i != null_idx; });
-  };
+  auto null_at_1 = iterator_with_null_at(1);
 
   // In the results, `11` and `21` should be nulls.
   auto const expected_result = lists_column_wrapper<cudf::string_view>{
-    {{{"10", "11", "12", "13"}, null_at(1)},
-     {{"10", "11", "12", "13"}, null_at(1)},
-     {{"10", "11", "12", "13", "14"}, null_at(1)},
-     {{"10", "11", "12", "13", "14"}, null_at(1)},
-     {{"10", "11", "12", "13", "14"}, null_at(1)},
+    {{{"10", "11", "12", "13"}, null_at_1},
+     {{"10", "11", "12", "13"}, null_at_1},
+     {{"10", "11", "12", "13", "14"}, null_at_1},
+     {{"10", "11", "12", "13", "14"}, null_at_1},
+     {{"10", "11", "12", "13", "14"}, null_at_1},
      {},
      {},
      {},
