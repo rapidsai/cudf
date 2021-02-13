@@ -160,45 +160,6 @@ class corresponding_rows_not_equivalent {
   }
 };
 
-std::string differences_message(thrust::device_vector<int> const& differences,
-                                column_view const& lhs,
-                                column_view const& rhs,
-                                bool all_differences,
-                                int depth)
-{
-  CUDF_EXPECTS(not differences.empty(), "Shouldn't enter this function if `differences` is empty");
-
-  std::string const depth_str = depth > 0 ? "depth " + std::to_string(depth) + '\n' : "";
-
-  if (all_differences) {
-    std::ostringstream buffer;
-    buffer << depth_str << "differences:" << std::endl;
-
-    auto source_table = cudf::table_view({lhs, rhs});
-    auto diff_column  = fixed_width_column_wrapper<int32_t>(differences.begin(), differences.end());
-    auto diff_table   = cudf::gather(source_table, diff_column);
-
-    //  Need to pull back the differences
-    auto const h_left_strings  = to_strings(diff_table->get_column(0));
-    auto const h_right_strings = to_strings(diff_table->get_column(1));
-
-    for (size_t i = 0; i < differences.size(); ++i)
-      buffer << depth_str << "lhs[" << differences[i] << "] = " << h_left_strings[i] << ", rhs["
-             << differences[i] << "] = " << h_right_strings[i] << std::endl;
-
-    return buffer.str();
-  } else {
-    int index = differences[0];  // only stringify first difference
-
-    auto diff_lhs = cudf::detail::slice(lhs, index, index + 1);
-    auto diff_rhs = cudf::detail::slice(rhs, index, index + 1);
-
-    return depth_str + "first difference: " + "lhs[" + std::to_string(index) +
-           "] = " + to_string(diff_lhs, "") + ", rhs[" + std::to_string(index) +
-           "] = " + to_string(diff_rhs, "");
-  }
-}
-
 // non-nested column types
 template <typename T, bool check_exact_equality>
 struct column_comparator_impl {
@@ -372,6 +333,45 @@ struct column_comparator {
 };
 
 }  // namespace
+
+/**
+ * @copydoc cudf::test::differences_message
+ */
+std::string differences_message(thrust::device_vector<int> const& differences,
+                                column_view const& lhs,
+                                column_view const& rhs,
+                                bool all_differences,
+                                int depth)
+{
+  CUDF_EXPECTS(not differences.empty(), "Shouldn't enter this function if `differences` is empty");
+  std::string const depth_str = depth > 0 ? "depth " + std::to_string(depth) + '\n' : "";
+  if (all_differences) {
+    std::ostringstream buffer;
+    buffer << depth_str << "differences:" << std::endl;
+
+    // thrust may crash if a device_vector is passed to fixed_width_column_wrapper,
+    // thus we construct fixed_width_column_wrapper from a host_vector instead
+    thrust::host_vector<int> h_differences(differences);
+    auto source_table = cudf::table_view({lhs, rhs});
+    auto diff_column =
+      fixed_width_column_wrapper<int32_t>(h_differences.begin(), h_differences.end());
+    auto diff_table = cudf::gather(source_table, diff_column);
+    //  Need to pull back the differences
+    auto const h_left_strings  = to_strings(diff_table->get_column(0));
+    auto const h_right_strings = to_strings(diff_table->get_column(1));
+    for (size_t i = 0; i < h_differences.size(); ++i)
+      buffer << depth_str << "lhs[" << h_differences[i] << "] = " << h_left_strings[i] << ", rhs["
+             << h_differences[i] << "] = " << h_right_strings[i] << std::endl;
+    return buffer.str();
+  } else {
+    int index     = differences[0];  // only stringify first difference
+    auto diff_lhs = cudf::detail::slice(lhs, index, index + 1);
+    auto diff_rhs = cudf::detail::slice(rhs, index, index + 1);
+    return depth_str + "first difference: " + "lhs[" + std::to_string(index) +
+           "] = " + to_string(diff_lhs, "") + ", rhs[" + std::to_string(index) +
+           "] = " + to_string(diff_rhs, "");
+  }
+}
 
 /**
  * @copydoc cudf::test::expect_column_properties_equal

@@ -216,6 +216,21 @@ inline std::pair<thrust::host_vector<std::string>, std::vector<bitmask_type>> to
   return {host_data, bitmask_to_host(c)};
 }
 
+/**
+ * @brief Print the different values between two columns
+ *
+ * @param differences contains indices of the different values
+ * @param lhs and rhs are the two input columns
+ * @param all_differences set to true will print all the different values and false will print only
+ * the first value
+ * @param depth the depth level of column data
+ */
+std::string differences_message(thrust::device_vector<int> const& differences,
+                                column_view const& lhs,
+                                column_view const& rhs,
+                                bool all_differences,
+                                int depth);
+
 }  // namespace test
 }  // namespace cudf
 

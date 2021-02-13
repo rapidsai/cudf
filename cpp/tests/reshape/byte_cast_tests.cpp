@@ -26,6 +26,22 @@ using namespace cudf::test;
 class ByteCastTest : public cudf::test::BaseFixture {
 };
 
+// Previously, there was a bug that causes thrust to crash
+// This test is to make sure that bug does not pop up again
+// If this test fails, the program will crash
+TEST_F(ByteCastTest, thurstTest)
+{
+  cudf::test::fixed_width_column_wrapper<int> a{0, 1, 2, 3};
+  cudf::test::fixed_width_column_wrapper<int> b{0, 1, 2, 4};
+  cudf::test::fixed_width_column_wrapper<int> c{10, 11, 12, 13};
+
+  thrust::device_vector<int> diff_ab = std::vector<int>{3};
+  thrust::device_vector<int> diff_ac = std::vector<int>{0, 1, 2, 3};
+
+  cudf::test::differences_message(diff_ab, a, b, true, 0);
+  cudf::test::differences_message(diff_ac, a, c, true, 0);
+}
+
 TEST_F(ByteCastTest, int16ValuesWithSplit)
 {
   using limits = std::numeric_limits<int16_t>;
