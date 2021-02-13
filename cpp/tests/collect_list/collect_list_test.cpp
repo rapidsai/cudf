@@ -269,7 +269,7 @@ TYPED_TEST(TypedCollectListTest, RollingWindowWithNullInputsHonoursMinPeriods)
       expected_result_child_values.begin(), expected_result_child_values.end());
     auto expected_offsets  = fixed_width_column_wrapper<size_type>{0, 0, 2, 4, 6, 8, 8}.release();
     auto expected_num_rows = expected_offsets->size() - 1;
-    auto null_mask_iter    = make_counting_transform_iterator(
+    auto null_mask_iter    = cudf::detail::make_counting_transform_iterator(
       size_type{0}, [expected_num_rows](auto i) { return i != 0 && i != (expected_num_rows - 1); });
 
     auto expected_result = make_lists_column(
@@ -330,7 +330,7 @@ TYPED_TEST(TypedCollectListTest, RollingWindowWithNullInputsHonoursMinPeriods)
 
     auto expected_offsets  = fixed_width_column_wrapper<size_type>{0, 0, 3, 5, 8, 8, 8}.release();
     auto expected_num_rows = expected_offsets->size() - 1;
-    auto null_mask_iter    = make_counting_transform_iterator(
+    auto null_mask_iter    = cudf::detail::make_counting_transform_iterator(
       size_type{0}, [expected_num_rows](auto i) { return i > 0 && i < 4; });
 
     auto expected_result = make_lists_column(
@@ -678,7 +678,8 @@ TYPED_TEST(TypedCollectListTest, GroupedTimeRangeRollingWindowWithNulls)
                                       make_collect_aggregation());
 
   auto null_at = [](auto null_idx) {
-    return make_counting_transform_iterator(0, [null_idx](auto i) { return i != null_idx; });
+    return cudf::detail::make_counting_transform_iterator(
+      0, [null_idx](auto i) { return i != null_idx; });
   };
 
   // In the results, `11` and `21` should be nulls.
@@ -794,7 +795,8 @@ TEST_F(CollectListTest, GroupedTimeRangeRollingWindowOnStringsWithNulls)
                                       make_collect_aggregation());
 
   auto null_at = [](auto null_idx) {
-    return make_counting_transform_iterator(0, [null_idx](auto i) { return i != null_idx; });
+    return cudf::detail::make_counting_transform_iterator(
+      0, [null_idx](auto i) { return i != null_idx; });
   };
 
   // In the results, `11` and `21` should be nulls.
@@ -986,7 +988,8 @@ TYPED_TEST(TypedCollectListTest, GroupedTimeRangeRollingWindowWithNullsAndMinPer
                                       make_collect_aggregation());
 
   auto null_at = [](auto null_idx) {
-    return make_counting_transform_iterator(0, [null_idx](auto i) { return i != null_idx; });
+    return cudf::detail::make_counting_transform_iterator(
+      0, [null_idx](auto i) { return i != null_idx; });
   };
 
   // In the results, `11` and `21` should be nulls.
@@ -1000,7 +1003,7 @@ TYPED_TEST(TypedCollectListTest, GroupedTimeRangeRollingWindowWithNullsAndMinPer
      {},
      {},
      {}},
-    make_counting_transform_iterator(0, [](auto i) {
+    cudf::detail::make_counting_transform_iterator(0, [](auto i) {
       return i < 5;
     })}.release();
 
@@ -1027,7 +1030,7 @@ TYPED_TEST(TypedCollectListTest, GroupedTimeRangeRollingWindowWithNullsAndMinPer
      {},
      {},
      {}},
-    make_counting_transform_iterator(
+    cudf::detail::make_counting_transform_iterator(
       0, [](auto i) { return i < 5; })}.release();
 
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected_result_with_nulls_excluded->view(),
@@ -1114,7 +1117,8 @@ TEST_F(CollectListTest, GroupedTimeRangeRollingWindowOnStringsWithNullsAndMinPer
                                       make_collect_aggregation());
 
   auto null_at = [](auto null_idx) {
-    return make_counting_transform_iterator(0, [null_idx](auto i) { return i != null_idx; });
+    return cudf::detail::make_counting_transform_iterator(
+      0, [null_idx](auto i) { return i != null_idx; });
   };
 
   // In the results, `11` and `21` should be nulls.
@@ -1128,7 +1132,7 @@ TEST_F(CollectListTest, GroupedTimeRangeRollingWindowOnStringsWithNullsAndMinPer
      {},
      {},
      {}},
-    make_counting_transform_iterator(0, [](auto i) {
+    cudf::detail::make_counting_transform_iterator(0, [](auto i) {
       return i < 5;
     })}.release();
 
@@ -1155,7 +1159,7 @@ TEST_F(CollectListTest, GroupedTimeRangeRollingWindowOnStringsWithNullsAndMinPer
      {},
      {},
      {}},
-    make_counting_transform_iterator(
+    cudf::detail::make_counting_transform_iterator(
       0, [](auto i) { return i < 5; })}.release();
 
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected_result_with_nulls_excluded->view(),
