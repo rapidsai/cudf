@@ -1064,31 +1064,40 @@ struct rolling_window_launcher {
   }
 
   /**
-   * @brief Purge entries for null inputs from gather_map, and adjust offsets.
+   * @brief Count null entries in result of COLLECT.
    */
-  void purge_null_entries(column_view const& input,
-                          std::unique_ptr<column>& gather_map,
-                          std::unique_ptr<column>& offsets,
-                          rmm::cuda_stream_view stream,
-                          rmm::mr::device_memory_resource* mr)
+  size_type count_child_nulls(column_view const& input,
+                              std::unique_ptr<column> const& gather_map,
+                              rmm::cuda_stream_view stream)
   {
     auto input_device_view = column_device_view::create(input, stream);
 
     auto input_row_is_null = [d_input = *input_device_view] __device__(auto i) {
       return d_input.is_null_nocheck(i);
     };
+
+    return thrust::count_if(rmm::exec_policy(stream),
+                            gather_map->view().template begin<size_type>(),
+                            gather_map->view().template end<size_type>(),
+                            input_row_is_null);
+  }
+
+  /**
+   * @brief Purge entries for null inputs from gather_map, and adjust offsets.
+   */
+  std::pair<std::unique_ptr<column>, std::unique_ptr<column>> purge_null_entries(
+    column_view const& input,
+    std::unique_ptr<column> const& gather_map,
+    std::unique_ptr<column> const& offsets,
+    size_type num_child_nulls,
+    rmm::cuda_stream_view stream,
+    rmm::mr::device_memory_resource* mr)
+  {
+    auto input_device_view = column_device_view::create(input, stream);
+
     auto input_row_not_null = [d_input = *input_device_view] __device__(auto i) {
       return d_input.is_valid_nocheck(i);
     };
-
-    auto num_child_nulls = thrust::count_if(rmm::exec_policy(stream),
-                                            gather_map->view().template begin<size_type>(),
-                                            gather_map->view().template end<size_type>(),
-                                            input_row_is_null);
-
-    if (num_child_nulls == 0) {
-      return;  // No child nulls. Nothing to recompute.
-    }
 
     // Purge entries in gather_map that correspond to null input.
     auto new_gather_map = make_fixed_width_column(data_type{type_to_id<size_type>()},
@@ -1125,8 +1134,8 @@ struct rolling_window_launcher {
                                                  stream,
                                                  mr);
 
-    gather_map = std::move(new_gather_map);
-    offsets    = std::move(new_offsets);
+    return std::make_pair<std::unique_ptr<column>, std::unique_ptr<column>>(
+      std::move(new_gather_map), std::move(new_offsets));
   }
 
   template <aggregation::Kind op, typename PrecedingIter, typename FollowingIter>
@@ -1176,7 +1185,13 @@ struct rolling_window_launcher {
     // those elements must be filtered out, and offsets recomputed.
     auto null_handling = static_cast<collect_list_aggregation*>(agg.get())->_null_handling;
     if (null_handling == null_policy::EXCLUDE && input.has_nulls()) {
-      purge_null_entries(input, gather_map, offsets, stream, mr);
+      auto num_child_nulls = count_child_nulls(input, gather_map, stream);
+      if (num_child_nulls != 0) {
+        auto new_gather_map_and_offsets =
+          purge_null_entries(input, gather_map, offsets, num_child_nulls, stream, mr);
+        gather_map = std::move(new_gather_map_and_offsets.first);
+        offsets    = std::move(new_gather_map_and_offsets.second);
+      }
     }
 
     // gather(), to construct child column.
