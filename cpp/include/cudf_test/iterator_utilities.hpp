@@ -21,8 +21,6 @@
 
 #include <thrust/iterator/transform_iterator.h>
 
-#include <set>
-
 namespace cudf {
 namespace test {
 
