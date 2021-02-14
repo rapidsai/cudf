@@ -38,8 +38,9 @@ TEST_F(ByteCastTest, thurstTest)
   thrust::device_vector<int> diff_ab = std::vector<int>{3};
   thrust::device_vector<int> diff_ac = std::vector<int>{0, 1, 2, 3};
 
-  cudf::test::differences_message(diff_ab, a, b, true, 0);
-  cudf::test::differences_message(diff_ac, a, c, true, 0);
+  // Prevent the compiler to optimize away the calls to differences_message
+  volatile auto str1 = cudf::test::differences_message(diff_ab, a, b, true, 0);
+  volatile auto str2 = cudf::test::differences_message(diff_ac, a, c, true, 0);
 }
 
 TEST_F(ByteCastTest, int16ValuesWithSplit)
