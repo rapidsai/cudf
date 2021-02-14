@@ -336,14 +336,10 @@ struct scalar_representation_pair_accessor : public scalar_value_accessor<Elemen
    *
    * @return a pair with representative value and validity of the scalar.
    */
-  CUDA_HOST_DEVICE_CALLABLE
+  CUDA_DEVICE_CALLABLE
   const value_type operator()(size_type) const
   {
-#if defined(__CUDA_ARCH__)
     return {super_t::dscalar.rep(), super_t::dscalar.is_valid()};
-#else
-    CUDF_FAIL("unsupported device scalar iterator operation");
-#endif
   }
 };
 
@@ -375,6 +371,41 @@ auto inline make_pair_iterator(scalar const& scalar_value)
                "the data type mismatch");
   return thrust::make_transform_iterator(thrust::make_constant_iterator<size_type>(0),
                                          scalar_pair_accessor<Element>{scalar_value});
+}
+
+/**
+ * @brief Constructs a constant device pair iterator over a scalar's representative value
+ *        and its validity.
+ *
+ * Dereferencing the returned iterator returns a `thrust::pair<Element::rep, bool>`.
+ * E.g. For a valid `decimal32` row, a `thrust::pair<int32_t, bool>` is returned,
+ * with the value set to the `int32_t` representative value of the decimal,
+ * and validity `true`, indicating that the row is valid.
+ *
+ * If scalar is valid, then for `p = *(iter + i)`, `p.first` contains
+ * the representative value of the scalar and `p.second == true`.
+ *
+ * Else, if the scalar is null, then the value of `p.first` is undefined and `p.second == false`.
+ *
+ * The behaviour is undefined if the scalar is destroyed before iterator dereferencing.
+ *
+ * @throws cudf::logic_error if scalar datatype and Element type mismatch.
+ * @throws cudf::logic_error if the returned iterator is dereferenced in host
+ *
+ * @tparam Element The type of elements in the scalar
+ * @tparam bool unused. This template parameter exists to enforce same
+ * template interface as @ref make_pair_iterator(column_device_view const&).
+ * @param scalar_value The scalar to iterate
+ * @return auto Iterator that returns scalar's representative value,
+ *         and validity of the scalar in a pair
+ */
+template <typename Element, bool = false>
+auto inline make_pair_rep_iterator(scalar const& scalar_value)
+{
+  CUDF_EXPECTS(type_id_matches_device_storage_type<Element>(scalar_value.type().id()),
+               "the data type mismatch");
+  return cudf::detail::make_counting_transform_iterator(
+    0, scalar_representation_pair_accessor<Element>{scalar_value});
 }
 
 }  // namespace detail

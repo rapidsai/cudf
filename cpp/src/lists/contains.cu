@@ -65,8 +65,7 @@ template <typename ElementType,
           std::enable_if_t<cudf::is_fixed_point<ElementType>(), void>* = nullptr>
 auto get_pair_iterator(cudf::scalar const& search_key)
 {
-  return cudf::detail::make_counting_transform_iterator(
-    0, cudf::detail::scalar_representation_pair_accessor<ElementType>{search_key});
+  return cudf::detail::make_pair_rep_iterator<ElementType>(search_key);
 }
 
 /**
