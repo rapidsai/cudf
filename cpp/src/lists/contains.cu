@@ -46,10 +46,31 @@ auto get_search_keys_device_iterable_view(cudf::scalar const& search_key, rmm::c
   return &search_key;
 }
 
-template <typename ElementType, bool has_nulls>
+// Extracts the ElementType::rep from decimals,
+// (e.g. to convert pair<decimal32, bool> => pair<int32_t, bool>).
+template <typename ElementType>
+struct transform_to_rep {
+  auto __device__ operator()(thrust::pair<ElementType, bool> element_and_validity) const
+  {
+    return thrust::make_pair(element_and_validity.first.value(), element_and_validity.second);
+  }
+};
+
+template <typename ElementType,
+          bool has_nulls,
+          std::enable_if_t<!cudf::is_fixed_point<ElementType>(), void>* = nullptr>
 auto get_pair_iterator(cudf::column_device_view const& d_search_keys)
 {
   return d_search_keys.pair_begin<ElementType, has_nulls>();
+}
+
+template <typename ElementType,
+          bool has_nulls,
+          std::enable_if_t<cudf::is_fixed_point<ElementType>(), void>* = nullptr>
+auto get_pair_iterator(cudf::column_device_view const& d_search_keys)
+{
+  return thrust::make_transform_iterator(d_search_keys.pair_begin<ElementType, has_nulls>(),
+                                         transform_to_rep<ElementType>{});
 }
 
 template <typename ElementType,
@@ -68,38 +89,19 @@ auto get_pair_iterator(cudf::scalar const& search_key)
   return cudf::detail::make_pair_rep_iterator<ElementType>(search_key);
 }
 
-/**
- * @brief Custom equality comparator for lists::contains().
- *
- * Special handling for fixed_point types. Ignores scale values and compares
- * only their representation. (Scales have already been normalized by this point.)
- * For non-fixed_point types, comparisons are delegated to `cudf::equality_compare`.
- */
-struct equality_comparator {
-  // For non-fixed_width types.
-  template <typename ElementType,
-            std::enable_if_t<!cudf::is_fixed_point<ElementType>(), void>* = nullptr>
-  __device__ bool operator()(ElementType const& lhs, ElementType const& rhs) const
-  {
-    return equality_compare(lhs, rhs);
-  }
+template <typename ElementType,
+          std::enable_if_t<!cudf::is_fixed_point<ElementType>(), void>* = nullptr>
+__device__ auto get_list_iter(cudf::list_device_view::const_pair_iterator<ElementType> const& iter)
+{
+  return iter;
+}
 
-  // Fixed_width comparisons for column_views.
-  template <typename ElementType,
-            std::enable_if_t<cudf::is_fixed_point<ElementType>(), void>* = nullptr>
-  __device__ bool operator()(ElementType const& lhs, ElementType const& rhs) const
-  {
-    return lhs.value() == rhs.value();
-  }
-
-  // Fixed_width comparisons for column_view vs scalar.
-  template <typename ElementType,
-            std::enable_if_t<cudf::is_fixed_point<ElementType>(), void>* = nullptr>
-  __device__ bool operator()(ElementType const& lhs, typename ElementType::rep const& rhs) const
-  {
-    return lhs.value() == rhs;
-  }
-};
+template <typename ElementType,
+          std::enable_if_t<cudf::is_fixed_point<ElementType>(), void>* = nullptr>
+__device__ auto get_list_iter(cudf::list_device_view::const_pair_iterator<ElementType> const& iter)
+{
+  return thrust::make_transform_iterator(iter, transform_to_rep<ElementType>{});
+}
 
 /**
  * @brief Functor to search each list row for the specified search keys.
@@ -169,15 +171,18 @@ struct lookup_functor {
           return;
         }
 
+        auto list_pair_begin = get_list_iter<ElementType>(list.pair_begin<ElementType>());
+        auto list_pair_end   = list_pair_begin + list.size();
+
         auto search_key = search_key_and_validity.first;
         d_bools[row_index] =
           thrust::find_if(thrust::seq,
-                          list.pair_begin<ElementType>(),
-                          list.pair_end<ElementType>(),
+                          list_pair_begin,
+                          list_pair_end,
                           [search_key] __device__(auto element_and_validity) {
                             return element_and_validity.second &&
-                                   equality_comparator{}(element_and_validity.first, search_key);
-                          }) != list.pair_end<ElementType>();
+                                   cudf::equality_compare(element_and_validity.first, search_key);
+                          }) != list_pair_end;
         d_validity[row_index] =
           d_bools[row_index] ||
           thrust::none_of(thrust::seq,
