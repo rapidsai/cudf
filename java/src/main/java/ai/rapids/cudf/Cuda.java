@@ -114,7 +114,7 @@ public class Cuda {
     }
 
     @Override
-    public void close() {
+    public synchronized void close() {
       if (cleaner != null) {
         cleaner.delRef();
       }
@@ -233,7 +233,7 @@ public class Cuda {
     }
 
     @Override
-    public void close() {
+    public synchronized void close() {
       cleaner.delRef();
       if (closed) {
         cleaner.logRefCountDebug("double free " + this);
