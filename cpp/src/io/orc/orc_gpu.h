@@ -296,7 +296,7 @@ void DecodeOrcColumnData(ColumnDesc *chunks,
  * @param[in] stream CUDA stream to use, default 0
  */
 void EncodeOrcColumnData(matrix_device_view<EncChunk const> chunks,
-                         encoder_chunk_streams *streams,
+                         matrix_device_view<encoder_chunk_streams> streams,
                          uint32_t num_columns,
                          uint32_t num_rowgroups,
                          rmm::cuda_stream_view stream = rmm::cuda_stream_default);
@@ -313,7 +313,7 @@ void EncodeOrcColumnData(matrix_device_view<EncChunk const> chunks,
  */
 void EncodeStripeDictionaries(StripeDictionary *stripes,
                               matrix_device_view<EncChunk const> chunks,
-                              encoder_chunk_streams *streams,
+                              matrix_device_view<encoder_chunk_streams> streams,
                               uint32_t num_string_columns,
                               uint32_t num_columns,
                               uint32_t num_rowgroups,
@@ -330,7 +330,7 @@ void EncodeStripeDictionaries(StripeDictionary *stripes,
  * @param[in] stream CUDA stream to use, default 0
  */
 void CompactOrcDataStreams(StripeStream *strm_desc,
-                           encoder_chunk_streams *streams,
+                           matrix_device_view<encoder_chunk_streams> streams,
                            uint32_t num_stripe_streams,
                            uint32_t num_columns,
                            rmm::cuda_stream_view stream = rmm::cuda_stream_default);
@@ -350,7 +350,7 @@ void CompactOrcDataStreams(StripeStream *strm_desc,
  */
 void CompressOrcDataStreams(uint8_t *compressed_data,
                             StripeStream *strm_desc,
-                            encoder_chunk_streams const *enc_streams,
+                            matrix_device_view<encoder_chunk_streams> enc_streams,
                             gpu_inflate_input_s *comp_in,
                             gpu_inflate_status_s *comp_out,
                             uint32_t num_stripe_streams,

@@ -19,6 +19,7 @@
 #include "orc.h"
 #include "orc_gpu.h"
 
+#include <io/utilities/hostdevice_matrix.hpp>
 #include <io/utilities/hostdevice_vector.hpp>
 
 #include <cudf/detail/utilities/integer_utils.hpp>
@@ -44,6 +45,7 @@ class orc_column_view;
 
 using namespace cudf::io::orc;
 using namespace cudf::io;
+using cudf::detail::hostdevice_matrix;
 
 struct stripe_boundaries {
   std::vector<uint32_t> sizes;
@@ -79,9 +81,9 @@ class orc_streams {
   operator std::vector<Stream>() const { return streams; }
 };
 
-struct encoded_streams {
-  rmm::device_uvector<uint8_t> encoded_data;
-  hostdevice_vector<gpu::encoder_chunk_streams> descs;
+struct encoded_data {
+  rmm::device_uvector<uint8_t> data;
+  hostdevice_matrix<gpu::encoder_chunk_streams> streams;
 };
 
 struct encoder_chunks {
@@ -200,7 +202,7 @@ class writer::impl {
   /**
    * @brief TODO
    */
-  encoded_streams encode_data(host_span<orc_column_view const> columns,
+  encoded_data encode_columns(host_span<orc_column_view const> columns,
                               std::vector<int> const& str_col_ids,
                               stripe_boundaries const& stripe_bounds,
                               orc_streams const& streams);
@@ -225,7 +227,7 @@ class writer::impl {
     size_t num_index_streams,
     size_t num_data_streams,
     stripe_boundaries const& stripe_bounds,
-    hostdevice_vector<gpu::encoder_chunk_streams>& streams,
+    hostdevice_matrix<gpu::encoder_chunk_streams>& streams,
     hostdevice_vector<gpu::StripeStream>& strm_desc);
 
   /**
@@ -264,7 +266,7 @@ class writer::impl {
                           size_t num_data_streams,
                           size_t group,
                           size_t groups_in_stripe,
-                          hostdevice_vector<gpu::encoder_chunk_streams> const& enc_streams,
+                          hostdevice_matrix<gpu::encoder_chunk_streams> const& enc_streams,
                           hostdevice_vector<gpu::StripeStream> const& strm_desc,
                           hostdevice_vector<gpu_inflate_status_s> const& comp_out,
                           StripeInformation* stripe,
