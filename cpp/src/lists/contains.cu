@@ -171,7 +171,7 @@ struct lookup_functor {
           return;
         }
 
-        auto list_pair_begin = get_list_iter<ElementType>(list.pair_begin<ElementType>());
+        auto list_pair_begin = get_list_iter(list.pair_begin<ElementType>());
         auto list_pair_end   = list_pair_begin + list.size();
 
         auto search_key = search_key_and_validity.first;
