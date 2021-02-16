@@ -67,10 +67,21 @@ if(CMAKE_CUDA_ARCHITECTURES STREQUAL "")
   evaluate_gpu_archs(CMAKE_CUDA_ARCHITECTURES)
 endif()
 
-# CMake architecture list of "80" means to build both compute and sm for
-# that version. What we want is for the newest arch to build that way,
-# and the rest built on for sm.
-list(SORT CMAKE_CUDA_ARCHITECTURES ORDER ASCENDING)
-list(POP_BACK CMAKE_CUDA_ARCHITECTURES latest_arch)
-list(TRANSFORM CMAKE_CUDA_ARCHITECTURES APPEND "-real")
-list(APPEND CMAKE_CUDA_ARCHITECTURES ${latest_arch})
+
+if (CMAKE_VERSION VERSION_GREATER_EQUAL 3.18)
+  # CMake architecture list entry of "80" means to build compute and sm.
+  # What we want is for the newest arch only to build that way
+  # while the rest built only for sm.
+  list(SORT CMAKE_CUDA_ARCHITECTURES ORDER ASCENDING)
+  list(POP_BACK CMAKE_CUDA_ARCHITECTURES latest_arch)
+  list(TRANSFORM CMAKE_CUDA_ARCHITECTURES APPEND "-real")
+  list(APPEND CMAKE_CUDA_ARCHITECTURES ${latest_arch})
+else()
+  foreach(arch IN LISTS CMAKE_CUDA_ARCHITECTURES)
+    string(APPEND CMAKE_CUDA_FLAGS " -gencode=arch=compute_${arch},code=sm_${arch}")
+  endforeach()
+
+  list(GET CMAKE_CUDA_ARCHITECTURES -1 ptx)
+  string(APPEND CMAKE_CUDA_FLAGS " -gencode=arch=compute_${ptx},code=compute_${ptx}")
+  unset(CMAKE_CUDA_ARCHITECTURES)
+endif()
