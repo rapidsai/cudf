@@ -257,12 +257,13 @@ struct decimal_to_string_size_fn {
 
     auto const abs_value = std::abs(value);
     auto const exp_ten   = static_cast<int32_t>(exp10(static_cast<double>(-scale)));
-    auto const num_zeros = std::max(0, (-scale - count_digits(abs_value % exp_ten)));
+    auto const fraction  = count_digits(abs_value % exp_ten);
+    auto const num_zeros = std::max(0, (-scale - fraction));
     return static_cast<int32_t>(value < 0) +    // sign if negative
            count_digits(abs_value / exp_ten) +  // integer
            1 +                                  // decimal point
            num_zeros +                          // zeros padding
-           count_digits(abs_value % exp_ten);   // fraction
+           fraction;                            // size of fraction
   }
 };
 
@@ -286,8 +287,7 @@ struct decimal_to_string_fn {
     char* d_buffer   = d_chars + d_offsets[idx];
 
     if (scale >= 0) {
-      integer_to_string(value, d_buffer);
-      d_buffer += count_digits(value);
+      d_buffer += integer_to_string(value, d_buffer);
       thrust::generate_n(thrust::seq, d_buffer, scale, []() { return '0'; });  // add zeros
       return;
     }
@@ -301,9 +301,8 @@ struct decimal_to_string_fn {
     auto const exp_ten   = static_cast<int32_t>(exp10(static_cast<double>(-scale)));
     auto const num_zeros = std::max(0, (-scale - count_digits(abs_value % exp_ten)));
 
-    integer_to_string(abs_value / exp_ten, d_buffer);  // add the integer part
-    d_buffer += count_digits(abs_value / exp_ten);
-    *d_buffer++ = '.';  // add decimal point
+    d_buffer += integer_to_string(abs_value / exp_ten, d_buffer);  // add the integer part
+    *d_buffer++ = '.';                                             // add decimal point
 
     thrust::generate_n(thrust::seq, d_buffer, num_zeros, []() { return '0'; });  // add zeros
     d_buffer += num_zeros;
