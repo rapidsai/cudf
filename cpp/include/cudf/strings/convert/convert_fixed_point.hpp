@@ -39,17 +39,18 @@ namespace strings {
  * @code{.pseudo}
  * Example:
  * s = ['123', '-876', '543.2', '-0.12']
- * fp = to_fixed_point(s)
- * fp is [123400, -87600, 54320, -12] with scale = -2
+ * dt = {DECIMAL32, scale=-2}
+ * fp = to_fixed_point(s, dt)
+ * fp is [123400, -87600, 54320, -12]
  * @endcode
  *
  * Overflow of the resulting value type is not checked.
- * The decimal point is used for determining the output scale value.
+ * The scale in the `output_type` is used for setting the integer component.
  *
  * @throw cudf::logic_error if output_type is not a fixed-point decimal type.
  *
  * @param strings Strings instance for this operation.
- * @param output_type Type of fixed-point column to return.
+ * @param output_type Type of fixed-point column to return including the scale value.
  * @param mr Device memory resource used to allocate the returned column's device memory.
  * @return New column of `output_type`.
  */
@@ -94,7 +95,8 @@ std::unique_ptr<column> from_fixed_point(
  * has at least one character in [+-0123456789.]. The optional sign character
  * must only be in the first position. The decimal point may only appear once.
  * Also, the integer component must fit within the size limits of the
- * underlying fixed-point storage type.
+ * underlying fixed-point storage type. The value of the integer component
+ * is based on the scale of the `decimal_type` provided.
  *
  * @code{.pseudo}
  * Example:
@@ -108,7 +110,7 @@ std::unique_ptr<column> from_fixed_point(
  * @throw cudf::logic_error if the `decimal_type` is not a fixed-point decimal type.
  *
  * @param input Strings instance for this operation.
- * @param decimal_type Fixed-point type used only for checking overflow.
+ * @param decimal_type Fixed-point type (with scale) used only for checking overflow.
  * @param mr Device memory resource used to allocate the returned column's device memory.
  * @return New column of boolean results for each string.
  */

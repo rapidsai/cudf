@@ -43,7 +43,7 @@ namespace {
  * @brief Converts strings into an integers and records decimal places.
  *
  * The conversion uses the provided scale to build the resulting
- * integer. This can minimize overflow for strings with many digits.
+ * integer. This can prevent overflow for strings with many digits.
  */
 template <typename DecimalType>
 struct string_to_decimal_fn {
@@ -57,9 +57,8 @@ struct string_to_decimal_fn {
     if (d_str.empty()) return 0;
 
     auto const sign = [&] {
-      auto const first = d_str.data();
-      if (*first == '-') return -1;
-      if (*first == '+') return 1;
+      if (d_str.data()[0] == '-') return -1;
+      if (d_str.data()[0] == '+') return 1;
       return 0;
     }();
     auto iter = d_str.data() + (sign != 0);
@@ -108,8 +107,8 @@ struct string_to_decimal_fn {
 /**
  * @brief This only checks the string format for valid decimal characters.
  *
- * This follows closely the logic above but mainly ensures there are valid
- * characters for conversion.
+ * This follows closely the logic above but just ensures there are valid
+ * characters for conversion and the integer component does not overflow.
  */
 template <typename DecimalType>
 struct string_to_decimal_check_fn {
@@ -124,13 +123,13 @@ struct string_to_decimal_check_fn {
 
     auto iter = d_str.data() + static_cast<int>((d_str.data()[0] == '-' || d_str.data()[0] == '+'));
 
-    // These identify 3 possible locations in the decimal string
+    // The following variables identify 3 possible locations in the decimal string
     //     +123456789.09876543
     //            ^  ^        ^
     //      check-^  ^        ^- end
     //               ^- decimal
     // The iter_check value will be unique when scale > 0 and
-    // the number of digits left of the decimal is larger than the scale.
+    // the number of digits left of the decimal point is larger than the scale.
     auto const iter_end     = d_str.data() + d_str.size_bytes();
     auto const iter_decimal = thrust::find(thrust::seq, iter, iter_end, '.');
     auto const iter_check =
@@ -138,7 +137,7 @@ struct string_to_decimal_check_fn {
         ? iter_decimal
         : iter + std::max(0, static_cast<int32_t>(thrust::distance(iter, iter_decimal)) - scale);
 
-    DecimalType value  = 0;      // running value for overflow check
+    DecimalType value  = 0;      // used for overflow checking
     bool decimal_found = false;  // mainly for checking duplicate decimal points
     int32_t curr_scale = scale;  // running scale for scale < 0 case
     while (iter != iter_end) {   // check all bytes for valid characters
@@ -150,6 +149,7 @@ struct string_to_decimal_check_fn {
       if (chr < '0' || chr > '9') return false;            // invalid character check
       if (iter > iter_check && curr_scale >= 0) continue;  // overflow checking no longer needed
 
+      // check for overflow in the integer component
       auto const digit     = static_cast<DecimalType>(chr - '0');
       auto const max_check = (std::numeric_limits<DecimalType>::max() - digit) / DecimalType{10};
       if (value > max_check) return false;
@@ -284,11 +284,11 @@ struct decimal_to_string_fn {
     auto const value = d_column.element<DecimalType>(idx);
     auto const scale = d_column.type().scale();
     char* d_buffer   = d_chars + d_offsets[idx];
+
     if (scale >= 0) {
       integer_to_string(value, d_buffer);
       d_buffer += count_digits(value);
-      // add zeros
-      thrust::generate_n(thrust::seq, d_buffer, scale, []() { return '0'; });
+      thrust::generate_n(thrust::seq, d_buffer, scale, []() { return '0'; });  // add zeros
       return;
     }
 
@@ -300,15 +300,15 @@ struct decimal_to_string_fn {
     if (value < 0) *d_buffer++ = '-';  // add sign
     auto const exp_ten   = static_cast<int32_t>(exp10(static_cast<double>(-scale)));
     auto const num_zeros = std::max(0, (-scale - count_digits(abs_value % exp_ten)));
-    // add the integer part
-    integer_to_string(abs_value / exp_ten, d_buffer);
+
+    integer_to_string(abs_value / exp_ten, d_buffer);  // add the integer part
     d_buffer += count_digits(abs_value / exp_ten);
     *d_buffer++ = '.';  // add decimal point
-    // add zeros
-    thrust::generate_n(thrust::seq, d_buffer, num_zeros, []() { return '0'; });
+
+    thrust::generate_n(thrust::seq, d_buffer, num_zeros, []() { return '0'; });  // add zeros
     d_buffer += num_zeros;
-    // add the fraction part
-    integer_to_string(abs_value % exp_ten, d_buffer);
+
+    integer_to_string(abs_value % exp_ten, d_buffer);  // add the fraction part
   }
 };
 
