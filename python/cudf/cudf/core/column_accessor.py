@@ -5,7 +5,7 @@ from __future__ import annotations
 import itertools
 from collections import OrderedDict
 from collections.abc import MutableMapping
-from typing import TYPE_CHECKING, Any, Tuple, Union
+from typing import TYPE_CHECKING, Any, Tuple, Union, Mapping, Callable, Optional
 
 import pandas as pd
 
@@ -342,20 +342,41 @@ class ColumnAccessor(MutableMapping):
         return key + (pad_value,) * (self.nlevels - len(key))
 
     def replace_level_values(
-        self, mapping: dict or callable, level: int or None
-    ):
+        self, mapper: Union[Mapping[Any, Any], Callable], level: Optional[int]
+    ) -> ColumnAccessor:
         """
-        Returns a new ColumnAccessor with values in the keys replaced according
-        to the given mapping and level.
+        Parameters
+        ----------
+        self : ColumnAccessor of a given dataframe
+
+        mapper : dict-like or function transformations to apply to
+            the column label values depending on selected ``level``.
+
+            If dict-like, only replace the specified level of the ColumnAccessor's keys 
+            (that match the mapper's keys) with mapper's values
+
+            If callable, the function is applied only to the specified level
+            of the ColumnAccessor's keys.
+
+        level : int
+            In case of RangeIndex, only supported level is [0, None].
+            In case of a MultiColumn, only the column labels in the specified level
+            of the ColumnAccessor's keys will be transformed.
+
+        Returns
+        -------
+        A new ColumnAccessor with values in the keys replaced according
+        to the given mapper and level.
+
         """
         col_names, columns = list(self.keys()), list(self.values())
 
         if self.multiindex:
-            if isinstance(mapping, dict):
+            if isinstance(mapper, dict):
                 cols_list = [list(col) for col in col_names]
                 new_names = []
                 for col_name in cols_list:
-                    col_name[level] = mapping.get(
+                    col_name[level] = mapper.get(
                         col_name[level], col_name[level]
                     )
                     new_names.append(tuple(col_name))
@@ -364,11 +385,11 @@ class ColumnAccessor(MutableMapping):
                     level_names=self.level_names,
                     multiindex=self.multiindex,
                 )
-            elif callable(mapping):
+            elif callable(mapper):
                 cols_list = [list(col) for col in col_names]
                 new_names = []
                 for col_name in cols_list:
-                    col_name[level] = mapping(col_name[level])
+                    col_name[level] = mapper(col_name[level])
                     new_names.append(tuple(col_name))
                 ca = ColumnAccessor(
                     dict(zip(new_names, columns)),
@@ -383,7 +404,7 @@ class ColumnAccessor(MutableMapping):
             else:
                 cols_list = col_names
                 new_names = [
-                    mapping.get(col_name, col_name) for col_name in cols_list
+                    mapper.get(col_name, col_name) for col_name in cols_list
                 ]
                 ca = ColumnAccessor(
                     dict(zip(new_names, columns)),
@@ -391,7 +412,7 @@ class ColumnAccessor(MutableMapping):
                     multiindex=self.multiindex,
                 )
 
-        return ca
+        return self.__class__(ca)
 
 
 def _compare_keys(target: Any, key: Any) -> bool:

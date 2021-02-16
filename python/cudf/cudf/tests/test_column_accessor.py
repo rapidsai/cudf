@@ -257,7 +257,7 @@ def test_select_by_index_empty():
     check_ca_equal(expect, got)
 
 
-def test_replace_level_values_RI():
+def test_replace_level_values_RangeIndex():
     ca = ColumnAccessor(
         {("a"): [1, 2, 3], ("b"): [2, 3, 4], ("c"): [3, 4, 5]},
         multiindex=False,
@@ -268,11 +268,11 @@ def test_replace_level_values_RI():
         multiindex=False,
     )
 
-    got = ca.replace_level_values(mapping={"a": "f"}, level=None)
+    got = ca.replace_level_values(mapper={"a": "f"}, level=None)
     check_ca_equal(expect, got)
 
 
-def test_replace_level_values_MC():
+def test_replace_level_values_MultiColumn():
     ca = ColumnAccessor(
         {("a", 1): [1, 2, 3], ("a", 2): [2, 3, 4], ("b", 1): [3, 4, 5]},
         multiindex=True,
@@ -283,5 +283,5 @@ def test_replace_level_values_MC():
         multiindex=True,
     )
 
-    got = ca.replace_level_values(mapping={"a": "f"}, level=2)
+    got = ca.replace_level_values(mapper={"a": "f"}, level=0)
     check_ca_equal(expect, got)

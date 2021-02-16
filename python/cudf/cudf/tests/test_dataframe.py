@@ -8326,11 +8326,11 @@ def test_dataframe_roundtrip_arrow_struct_dtype(gdf):
 @pytest.mark.parametrize(
     "level", ["x", 0],
 )
-def test_rename_for_level_multiindex_dataframe(data, index, level):
+def test_rename_for_level_MultiIndex_dataframe(data, index, level):
     pdf = pd.DataFrame(
         data,
         index=pd.MultiIndex.from_tuples([(0, 1, 2), (1, 2, 3), (2, 3, 4)]),
-    )
+    ) 
     pdf.index.names = ["x", "y", "z"]
     gdf = gd.from_pandas(pdf)
 
@@ -8349,7 +8349,7 @@ def test_rename_for_level_multiindex_dataframe(data, index, level):
 @pytest.mark.parametrize(
     "level", [0, 1],
 )
-def test_rename_for_level_multicolumn_dataframe(data, columns, level):
+def test_rename_for_level_MultiColumn_dataframe(data, columns, level):
     gdf = gd.DataFrame(data)
     gdf.columns = pd.MultiIndex.from_tuples([("a", 1), ("a", 2), ("b", 1)])
 
