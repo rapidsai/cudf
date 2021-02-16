@@ -66,3 +66,11 @@ if(CMAKE_CUDA_ARCHITECTURES STREQUAL "")
   include(${CUDA_DATAFRAME_SOURCE_DIR}/cmake/EvalGpuArchs.cmake)
   evaluate_gpu_archs(CMAKE_CUDA_ARCHITECTURES)
 endif()
+
+# CMake architecture list of "80" means to build both compute and sm for
+# that version. What we want is for the newest arch to build that way,
+# and the rest built on for sm.
+list(SORT CMAKE_CUDA_ARCHITECTURES ORDER ASCENDING)
+list(POP_BACK CMAKE_CUDA_ARCHITECTURES latest_arch)
+list(TRANSFORM CMAKE_CUDA_ARCHITECTURES APPEND "-real")
+list(APPEND CMAKE_CUDA_ARCHITECTURES ${latest_arch})
