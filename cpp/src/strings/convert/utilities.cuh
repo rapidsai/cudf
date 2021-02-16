@@ -58,11 +58,11 @@ __device__ inline int64_t string_to_integer(string_view const& d_str)
  * @param d_buffer character buffer to store the converted string
  */
 template <typename IntegerType>
-__device__ inline void integer_to_string(IntegerType value, char* d_buffer)
+__device__ inline size_type integer_to_string(IntegerType value, char* d_buffer)
 {
   if (value == 0) {
     *d_buffer = '0';
-    return;
+    return 1;
   }
   bool is_negative = std::is_signed<IntegerType>::value ? (value < 0) : false;
   //
@@ -76,10 +76,13 @@ __device__ inline void integer_to_string(IntegerType value, char* d_buffer)
     // next digit
     value = value / base;
   }
+  size_type const bytes = digits_idx + static_cast<size_type>(is_negative);
+
   char* ptr = d_buffer;
   if (is_negative) *ptr++ = '-';
   // digits are backwards, reverse the string into the output
   while (digits_idx-- > 0) *ptr++ = digits[digits_idx];
+  return bytes;
 }
 
 /**
@@ -90,7 +93,7 @@ __device__ inline void integer_to_string(IntegerType value, char* d_buffer)
  * @return size_type number of digits in input value
  */
 template <typename IntegerType>
-__device__ inline size_type count_digits(IntegerType value)
+constexpr size_type count_digits(IntegerType value)
 {
   if (value == 0) return 1;
   bool is_negative = std::is_signed<IntegerType>::value ? (value < 0) : false;
