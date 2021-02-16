@@ -371,7 +371,6 @@
                         <phase>validate</phase>
                         <configuration>
                             <tasks>
-                                <mkdir dir="${native.build.path}"/>
                                 <exec dir="${native.build.path}"
                                       failonerror="true"
                                       executable="cmake">
@@ -384,11 +383,13 @@
                                     <arg value="-DCMAKE_EXPORT_COMPILE_COMMANDS=${CMAKE_EXPORT_COMPILE_COMMANDS}"/>
                                     <arg value="-DCUDF_CPP_BUILD_DIR=${CUDF_CPP_BUILD_DIR}"/>
                                     <arg value="-DGPU_ARCHS=${GPU_ARCHS}"/>
+                                    <arg value="-DCMAKE_CUDA_ARCHITECTURES=${GPU_ARCHS}"/>
                                 </exec>
                                 <exec dir="${native.build.path}"
                                       failonerror="true"
-                                      executable="make">
-                                    <arg value="-j"/>
+                                      executable="cmake">
+                                    <arg line="--build ."/>
+                                    <arg line="-j ${env.PARALLEL_LEVEL}"/>
                                 </exec>
                                 <mkdir dir="${project.build.directory}/extra-resources"/>
                                 <exec executable="bash" output="${project.build.directory}/extra-resources/cudf-java-version-info.properties">
