@@ -341,7 +341,9 @@ class ColumnAccessor(MutableMapping):
             key = (key,)
         return key + (pad_value,) * (self.nlevels - len(key))
 
-    def replace_level_values(self, mapping: dict, level: int or None):
+    def replace_level_values(
+        self, mapping: dict or callable, level: int or None
+    ):
         """
         Returns a new ColumnAccessor with values in the keys replaced according
         to the given mapping and level.
@@ -349,17 +351,30 @@ class ColumnAccessor(MutableMapping):
         col_names, columns = list(self.keys()), list(self.values())
 
         if self.multiindex:
-            cols_list = [list(col) for col in col_names]
-            new_names = []
-            for col_name in cols_list:
-                col_name[level] = mapping.get(col_name[level], col_name[level])
-                new_names.append(tuple(col_name))
-            ca = ColumnAccessor(
-                dict(zip(new_names, columns)),
-                level_names=self.level_names,
-                multiindex=self.multiindex,
-            )
-        
+            if isinstance(mapping, dict):
+                cols_list = [list(col) for col in col_names]
+                new_names = []
+                for col_name in cols_list:
+                    col_name[level] = mapping.get(
+                        col_name[level], col_name[level]
+                    )
+                    new_names.append(tuple(col_name))
+                ca = ColumnAccessor(
+                    dict(zip(new_names, columns)),
+                    level_names=self.level_names,
+                    multiindex=self.multiindex,
+                )
+            elif callable(mapping):
+                cols_list = [list(col) for col in col_names]
+                new_names = []
+                for col_name in cols_list:
+                    col_name[level] = mapping(col_name[level])
+                    new_names.append(tuple(col_name))
+                ca = ColumnAccessor(
+                    dict(zip(new_names, columns)),
+                    level_names=self.level_names,
+                    multiindex=self.multiindex,
+                )
         else:
             if level not in [0, None]:
                 raise IndexError(

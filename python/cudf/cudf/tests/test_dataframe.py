@@ -8321,7 +8321,7 @@ def test_dataframe_roundtrip_arrow_struct_dtype(gdf):
     "data", [{"a": [1, 2, 3], "b": [4, 5, 6], "c": [7, 8, 9]}]
 )
 @pytest.mark.parametrize(
-    "index", [{0: 123, 1:4, 2:6}],
+    "index", [{0: 123, 1: 4, 2: 6}],
 )
 @pytest.mark.parametrize(
     "level", ["x", 0],
@@ -8344,7 +8344,7 @@ def test_rename_for_level_multiindex_dataframe(data, index, level):
     "data", [{"a": [1, 2, 3], "b": [4, 5, 6], "c": [7, 8, 9]}]
 )
 @pytest.mark.parametrize(
-    "columns", [{"a": "f", "b": "g"}, {1:3, 2:4}],
+    "columns", [{"a": "f", "b": "g"}, {1: 3, 2: 4}, lambda s: 2 * s],
 )
 @pytest.mark.parametrize(
     "level", [0, 1],
@@ -8365,7 +8365,7 @@ def test_rename_for_level_RangeIndex_dataframe():
     gdf = gd.DataFrame({"a": [1, 2, 3], "b": [4, 5, 6], "c": [7, 8, 9]})
     pdf = gdf.to_pandas()
 
-    expect = pdf.rename(columns={"a": "f"}, index={0:3,1:4}, level=0)
-    got = gdf.rename(columns={"a": "f"},index={0:3, 1:4}, level=0)
+    expect = pdf.rename(columns={"a": "f"}, index={0: 3, 1: 4}, level=0)
+    got = gdf.rename(columns={"a": "f"}, index={0: 3, 1: 4}, level=0)
 
     assert_eq(expect, got)

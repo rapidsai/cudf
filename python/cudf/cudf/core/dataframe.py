@@ -3495,8 +3495,7 @@ class DataFrame(Frame, Serializable):
         if columns:
             out._data = self._data.replace_level_values(
                 mapping=columns, level=level
-                )
-
+            )
         else:
             out._data = self._data.copy(deep=copy)
 
