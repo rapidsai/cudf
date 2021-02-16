@@ -5007,9 +5007,9 @@ def test_df_sr_binop(gsr, colnames, op):
     data = dict(zip(colnames, data))
 
     gdf = gd.DataFrame(data)
-    pdf = pd.DataFrame.from_dict(data)
+    pdf = gdf.to_pandas(nullable=True)
 
-    psr = gsr.to_pandas()
+    psr = gsr.to_pandas(nullable=True)
 
     expect = op(pdf, psr)
     got = op(gdf, gsr)
