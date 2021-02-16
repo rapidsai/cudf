@@ -1548,7 +1548,7 @@ def build_column(
             size=size,
             offset=offset,
             null_count=null_count,
-            children=children
+            children=children,
         )
     else:
         assert data is not None
@@ -1856,12 +1856,15 @@ def as_column(
                 mask=mask,
                 dtype=arbitrary.dtype,
             )
-        elif len(arbitrary)>0 and arb_dtype.kind in ("O") and isinstance(arbitrary[0], pd._libs.interval.Interval):
+        elif (
+            len(arbitrary) > 0
+            and arb_dtype.kind in ("O")
+            and isinstance(arbitrary[0], pd._libs.interval.Interval)
+        ):
             # changing from pd array to series,possible arrow bug
             interval_series = pd.Series(arbitrary)
             data = as_column(
-                pa.Array.from_pandas(interval_series),
-                dtype=arbitrary.dtype,
+                pa.Array.from_pandas(interval_series), dtype=arbitrary.dtype,
             )
             if dtype is not None:
                 data = data.astype(dtype)
@@ -1895,16 +1898,18 @@ def as_column(
                 arb_dtype = check_cast_unsupported_dtype(arbitrary.dtype)
                 if arb_dtype != arbitrary.dtype.numpy_dtype:
                     arbitrary = arbitrary.astype(arb_dtype)
-        if len(arbitrary)>0 and isinstance(arbitrary[0], pd._libs.interval.Interval) and arb_dtype.kind in ("O"):
-                # changing from pd array to series,possible arrow bug
-                interval_series = pd.Series(arbitrary)
-                data = as_column(
-                    pa.Array.from_pandas(interval_series), dtype=arb_dtype
-                )
+        if (
+            len(arbitrary) > 0
+            and isinstance(arbitrary[0], pd._libs.interval.Interval)
+            and arb_dtype.kind in ("O")
+        ):
+            # changing from pd array to series,possible arrow bug
+            interval_series = pd.Series(arbitrary)
+            data = as_column(
+                pa.Array.from_pandas(interval_series), dtype=arb_dtype
+            )
         elif arb_dtype.kind in ("O", "U"):
-                data = as_column(
-                    pa.Array.from_pandas(arbitrary), dtype=arb_dtype
-                )
+            data = as_column(pa.Array.from_pandas(arbitrary), dtype=arb_dtype)
         else:
             data = as_column(
                 pa.array(

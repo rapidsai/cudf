@@ -318,9 +318,9 @@ class IntervalDtype(StructDtype):
     @property
     def subtype(self):
         return self.fields["left"]
-    
+
     def __repr__(self):
-            return f"interval[{self.fields['left']}]"
+        return f"interval[{self.fields['left']}]"
 
     @classmethod
     def from_arrow(cls, typ):
@@ -331,6 +331,3 @@ class IntervalDtype(StructDtype):
         return ArrowIntervalType(
             pa.from_numpy_dtype(self.subtype), self.closed
         )
-
-    #Should we have a __repr__ that shows it as interval[int64] or interval[int32] for example? 
-    #I imagine we don't intend to support cases where the left and right dtypes are different?

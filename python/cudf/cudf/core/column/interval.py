@@ -29,11 +29,10 @@ class IntervalColumn(StructColumn):
 
     @property
     def closed(self):
-        if self._closed in ['left', 'right','neither','both']:
+        if self._closed in ["left", "right", "neither", "both"]:
             return self._closed
         else:
             raise ValueError("closed value is not valid")
-
 
     @classmethod
     def from_arrow(self, data):
@@ -63,7 +62,7 @@ class IntervalColumn(StructColumn):
         typ = self.dtype.to_arrow()
         return pa.ExtensionArray.from_storage(typ, super().to_arrow())
 
-    def from_struct_column(self,closed='right'):
+    def from_struct_column(self, closed="right"):
         return IntervalColumn(
             size=self.size,
             dtype=cudf.core.dtypes.IntervalDtype(
