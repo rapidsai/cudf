@@ -5016,7 +5016,7 @@ def test_df_sr_binop(gsr, colnames, op):
     assert_eq(expect.astype(float), got.astype(float))
 
     expect = op(psr, pdf)
-    got = op(psr, pdf)
+    got = op(gsr, gdf)
     assert_eq(expect.astype(float), got.astype(float))
 
 
