@@ -28,7 +28,7 @@ class IntervalColumn(StructColumn):
         self._closed = closed
 
     @property
-    def closed(self) -> str:
+    def closed(self):
         if self._closed in ['left', 'right','neither','both']:
             return self._closed
         else:
