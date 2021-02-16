@@ -63,8 +63,8 @@ struct sort_groupby_helper {
                       sorted keys_pre_sorted        = sorted::NO)
     : _keys(keys),
       _num_keys(-1),
-      _include_null_keys(include_null_keys),
-      _keys_pre_sorted(keys_pre_sorted)
+      _keys_pre_sorted(keys_pre_sorted),
+      _include_null_keys(include_null_keys)
   {
     if (keys_pre_sorted == sorted::YES and include_null_keys == null_policy::EXCLUDE and
         has_nulls(keys)) {
