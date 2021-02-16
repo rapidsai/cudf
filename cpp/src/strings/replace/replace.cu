@@ -62,12 +62,13 @@ struct replace_fn {
 
     size_type last_pos = 0;
     while ((position >= 0) && (max_n > 0)) {
-      bytes += d_repl.size_bytes() - d_target.size_bytes();
       if (out_ptr) {
         auto const curr_pos = d_str.byte_offset(position);
         out_ptr = copy_and_increment(out_ptr, in_ptr + last_pos, curr_pos - last_pos);  // copy left
         out_ptr = copy_string(out_ptr, d_repl);                                         // copy repl
         last_pos = curr_pos + d_target.size_bytes();
+      } else {
+        bytes += d_repl.size_bytes() - d_target.size_bytes();
       }
       position = d_str.find(d_target, position + d_target.size_bytes());
       --max_n;
@@ -141,7 +142,6 @@ struct replace_slice_fn {
     char const* in_ptr = d_str.data();
     auto const begin   = d_str.byte_offset(((start < 0) || (start > length) ? length : start));
     auto const end     = d_str.byte_offset(((stop < 0) || (stop > length) ? length : stop));
-    auto const bytes   = d_str.size_bytes() + d_repl.size_bytes() - (end - begin);
 
     if (d_chars) {
       char* out_ptr = d_chars + d_offsets[idx];
@@ -152,7 +152,7 @@ struct replace_slice_fn {
                                    in_ptr + end,
                                    d_str.size_bytes() - end);
     } else {
-      d_offsets[idx] = bytes;
+      d_offsets[idx] = d_str.size_bytes() + d_repl.size_bytes() - (end - begin);
     }
   }
 };
