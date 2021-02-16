@@ -1,0 +1,65 @@
+name: Mark stale and rotten issues and pull requests
+
+on:
+  schedule:
+    - cron: "0 * * * *"
+
+jobs:
+  mark-stale-issues:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Mark Issues as Stale
+        uses: actions/stale@v3
+        with:
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+          stale-issue-message: >
+            This issue has been marked stale due to no recent activity in the past 30d.
+            Please close this issue if no further response or action is needed.
+            Otherwise, please respond with a comment indicating any updates or changes to the original issue and/or confirm this issue still needs to be addressed.
+            This issue will be marked rotten if there is no activity in the next 60d.
+          stale-issue-label: "stale"
+          days-before-issue-stale: 30
+          days-before-issue-close: -1
+  mark-stale-prs:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Mark PRs as Stale
+        uses: actions/stale@v3
+        with:
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+          stale-pr-message: >
+            This PR has been marked stale due to no recent activity in the past 30d.
+            Please close this PR if it is no longer required.
+            Otherwise, please respond with a comment indicating any updates.
+            This PR will be marked rotten if there is no activity in the next 60d.
+          stale-pr-label: "stale"
+          days-before-pr-stale: 30
+          days-before-pr-close: -1
+  mark-rotten-issues:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Mark Issues as Rotten
+        uses: actions/stale@v3
+        with:
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+          stale-issue-message: >
+            This issue has been marked rotten due to no recent activity in the past 90d.
+            Please close this issue if no further response or action is needed.
+            Otherwise, please respond with a comment indicating any updates or changes to the original issue and/or confirm this issue still needs to be addressed.
+          stale-issue-label: "rotten"
+          days-before-issue-stale: 90
+          days-before-issue-close: -1
+  mark-rotten-prs:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Mark PRs as Rotten
+        uses: actions/stale@v3
+        with:
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+          stale-pr-message: >
+            This PR has been marked rotten due to no recent activity in the past 90d.
+            Please close this PR if it is no longer required.
+            Otherwise, please respond with a comment indicating any updates.
+          stale-pr-label: "rotten"
+          days-before-pr-stale: 90
+          days-before-pr-close: -1
