@@ -231,6 +231,11 @@ class groupby {
     std::vector<aggregation_request> const& requests,
     rmm::cuda_stream_view stream,
     rmm::mr::device_memory_resource* mr);
+
+  std::pair<std::unique_ptr<table>, std::vector<aggregation_result>> sort_scan(
+    std::vector<aggregation_request> const& requests,
+    rmm::cuda_stream_view stream,
+    rmm::mr::device_memory_resource* mr);
 };
 /** @} */
 }  // namespace groupby
