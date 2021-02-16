@@ -29,6 +29,7 @@
 #include <cudf/table/table.hpp>
 #include <cudf/utilities/error.hpp>
 
+#include <thrust/iterator/counting_iterator.h>
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_uvector.hpp>
 
@@ -47,17 +48,12 @@ using namespace cudf::io::orc;
 using namespace cudf::io;
 using cudf::detail::hostdevice_matrix;
 
-struct stripe_boundaries {
-  std::vector<uint32_t> sizes;
-  std::vector<uint32_t> offsets;
-
-  stripe_boundaries(host_span<orc_column_view const> columns,
-                    size_t num_rowgroups,
-                    size_t max_stripe_size,
-                    size_t row_index_stride);
-
-  auto size() const { return sizes.size(); }
-  auto num_rowgroups() const { return offsets.back() + sizes.back(); }
+struct stripe_rowgroups {
+  uint32_t first;
+  uint32_t size;
+  stripe_rowgroups(uint32_t first, uint32_t size) : first{first}, size{size} {}
+  auto cbegin() const { return thrust::make_counting_iterator(first); }
+  auto cend() const { return thrust::make_counting_iterator(first + size); }
 };
 struct orc_stream_offsets {
   std::vector<size_t> offsets;
@@ -190,21 +186,23 @@ class writer::impl {
   void build_dictionaries(orc_column_view* columns,
                           size_t num_rows,
                           std::vector<int> const& str_col_ids,
-                          stripe_boundaries const& stripe_bounds,
+                          host_span<stripe_rowgroups const> stripe_bounds,
                           hostdevice_vector<gpu::DictionaryChunk> const& dict,
                           uint32_t* dict_index,
                           hostdevice_vector<gpu::StripeDictionary>& stripe_dict);
 
   orc_streams create_streams(host_span<orc_column_view> columns,
                              size_t num_rows,
-                             stripe_boundaries const& stripe_bounds);
+                             host_span<stripe_rowgroups const> stripe_bounds);
 
+  std::vector<stripe_rowgroups> gather_stripe_info(host_span<orc_column_view const> columns,
+                                                   size_t num_rowgroups);
   /**
    * @brief TODO
    */
   encoded_data encode_columns(host_span<orc_column_view const> columns,
                               std::vector<int> const& str_col_ids,
-                              stripe_boundaries const& stripe_bounds,
+                              host_span<stripe_rowgroups const> stripe_bounds,
                               orc_streams const& streams);
 
   /**
@@ -226,7 +224,7 @@ class writer::impl {
     size_t num_rows,
     size_t num_index_streams,
     size_t num_data_streams,
-    stripe_boundaries const& stripe_bounds,
+    host_span<stripe_rowgroups const> stripe_bounds,
     hostdevice_matrix<gpu::encoder_chunk_streams>& streams,
     hostdevice_vector<gpu::StripeStream>& strm_desc);
 
@@ -239,8 +237,8 @@ class writer::impl {
    *
    * @return The statistic blobs
    */
-  std::vector<std::vector<uint8_t>> gather_statistic_blobs(host_span<orc_column_view const> columns,
-                                                           stripe_boundaries const& stripe_bounds);
+  std::vector<std::vector<uint8_t>> gather_statistic_blobs(
+    host_span<orc_column_view const> columns, host_span<stripe_rowgroups const> stripe_bounds);
 
   /**
    * @brief Write the specified column's row index stream
