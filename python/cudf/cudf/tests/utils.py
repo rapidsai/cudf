@@ -317,6 +317,18 @@ class NullableFloatSeriesCompare(object):
         """
         Fake what a nullable series is supposed to do
         """
+
+        import operator
+        ops = {
+            "__eq__": operator.eq,
+            "__ne__": operator.ne,
+            "__lt__": operator.lt,
+            "__le__": operator.le,
+            "__gt__": operator.gt,
+            "__ge__": operator.ge,
+        }
+        op = ops[op]
+
         if not hasattr(other, "__len__") or len(other) != len(self):
             if not np.isscalar(other):
                 raise ValueError(
@@ -348,13 +360,13 @@ class NullableFloatSeriesCompare(object):
             # when the op is "not equal" in which case it
             # always returns True
             elif lhs is np.nan or rhs is np.nan:
-                if op in {"ne", "__ne__"}:
+                if op is operator.ne:
                     this_result = True
                 else:
                     this_result = False
             else:
                 # dispatch to a bonafide numerical comparison
-                this_result = getattr(lhs, op)(rhs)
+                this_result = op(lhs, rhs)
             result[i] = this_result
         return pd.Series(result, dtype='boolean')
 
