@@ -47,7 +47,7 @@ namespace strings {
  * Overflow of the resulting value type is not checked.
  * The scale in the `output_type` is used for setting the integer component.
  *
- * @throw cudf::logic_error if output_type is not a fixed-point decimal type.
+ * @throw cudf::logic_error if `output_type` is not a fixed-point decimal type.
  *
  * @param strings Strings instance for this operation.
  * @param output_type Type of fixed-point column to return including the scale value.
@@ -77,7 +77,7 @@ std::unique_ptr<column> to_fixed_point(
  * s is now ['1.10', '2.22', '33.30', '-4.40', '-0.01']
  * @endcode
  *
- * @throw cudf::logic_error if the input column is not a fixed-point decimal type.
+ * @throw cudf::logic_error if the `input` column is not a fixed-point decimal type.
  *
  * @param input Fixed-point column to convert.
  * @param mr Device memory resource used to allocate the returned column's device memory.
