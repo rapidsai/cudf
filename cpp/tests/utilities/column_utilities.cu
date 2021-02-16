@@ -175,11 +175,16 @@ std::string differences_message(thrust::device_vector<int> const& differences,
     buffer << depth_str << "differences:" << std::endl;
 
     auto source_table = cudf::table_view({lhs, rhs});
-    auto diff_column  = fixed_width_column_wrapper<int32_t>(differences.begin(), differences.end());
-    auto diff_table   = cudf::gather(source_table, diff_column);
+
+    std::cout << "1\n";
+    auto diff_column = fixed_width_column_wrapper<int32_t>(differences.begin(), differences.end());
+
+    std::cout << "2\n";
+    auto diff_table = cudf::gather(source_table, diff_column);
 
     //  Need to pull back the differences
-    auto const h_left_strings  = to_strings(diff_table->get_column(0));
+    auto const h_left_strings = to_strings(diff_table->get_column(0));
+
     auto const h_right_strings = to_strings(diff_table->get_column(1));
 
     for (size_t i = 0; i < differences.size(); ++i)

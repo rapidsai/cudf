@@ -20,90 +20,21 @@
 #include <cudf/detail/valid_if.cuh>
 #include <cudf/strings/detail/utilities.hpp>
 #include <cudf/utilities/error.hpp>
+#include <cudf/utilities/span.hpp>
 #include <strings/utilities.cuh>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_vector.hpp>
 #include <rmm/exec_policy.hpp>
+#include "thrust/iterator/zip_iterator.h"
 
 #include <thrust/for_each.h>
+#include <thrust/iterator/counting_iterator.h>
 #include <thrust/transform_reduce.h>
 
 namespace cudf {
 
-// Create a strings-type column from vector of pointer/size pairs
-std::unique_ptr<column> make_strings_column(
-  const rmm::device_vector<thrust::pair<const char*, size_type>>& strings,
-  rmm::cuda_stream_view stream,
-  rmm::mr::device_memory_resource* mr)
-{
-  CUDF_FUNC_RANGE();
-  size_type strings_count = strings.size();
-  if (strings_count == 0) return strings::detail::make_empty_strings_column(stream, mr);
-
-  auto d_strings = strings.data().get();
-
-  // check total size is not too large for cudf column
-  auto size_checker = [d_strings] __device__(size_t idx) {
-    auto item = d_strings[idx];
-    return (item.first != nullptr) ? item.second : 0;
-  };
-  size_t bytes = thrust::transform_reduce(rmm::exec_policy(stream),
-                                          thrust::make_counting_iterator<size_t>(0),
-                                          thrust::make_counting_iterator<size_t>(strings_count),
-                                          size_checker,
-                                          0,
-                                          thrust::plus<size_t>());
-  CUDF_EXPECTS(bytes < static_cast<std::size_t>(std::numeric_limits<size_type>::max()),
-               "total size of strings is too large for cudf column");
-
-  // build offsets column from the strings sizes
-  auto offsets_transformer = [d_strings] __device__(size_type idx) {
-    thrust::pair<const char*, size_type> item = d_strings[idx];
-    return (item.first != nullptr ? static_cast<int32_t>(item.second) : 0);
-  };
-  auto offsets_transformer_itr = thrust::make_transform_iterator(
-    thrust::make_counting_iterator<size_type>(0), offsets_transformer);
-  auto offsets_column = strings::detail::make_offsets_child_column(
-    offsets_transformer_itr, offsets_transformer_itr + strings_count, stream, mr);
-  auto offsets_view = offsets_column->view();
-  auto d_offsets    = offsets_view.data<int32_t>();
-
-  // create null mask
-  auto new_nulls = detail::valid_if(
-    thrust::make_counting_iterator<size_type>(0),
-    thrust::make_counting_iterator<size_type>(strings_count),
-    [d_strings] __device__(size_type idx) { return d_strings[idx].first != nullptr; },
-    stream,
-    mr);
-  auto null_count = new_nulls.second;
-  rmm::device_buffer null_mask{0, stream, mr};
-  if (null_count > 0) null_mask = std::move(new_nulls.first);
-
-  // build chars column
-  auto chars_column =
-    strings::detail::create_chars_child_column(strings_count, null_count, bytes, stream, mr);
-  auto chars_view = chars_column->mutable_view();
-  auto d_chars    = chars_view.data<char>();
-  thrust::for_each_n(rmm::exec_policy(stream),
-                     thrust::make_counting_iterator<size_type>(0),
-                     strings_count,
-                     [d_strings, d_offsets, d_chars] __device__(size_type idx) {
-                       // place individual strings
-                       auto item = d_strings[idx];
-                       if (item.first != nullptr)
-                         memcpy(d_chars + d_offsets[idx], item.first, item.second);
-                     });
-
-  return make_strings_column(strings_count,
-                             std::move(offsets_column),
-                             std::move(chars_column),
-                             null_count,
-                             std::move(null_mask),
-                             stream,
-                             mr);
-}
-
+namespace {
 struct string_view_to_pair {
   string_view null_placeholder;
   string_view_to_pair(string_view n) : null_placeholder(n) {}
@@ -115,17 +46,107 @@ struct string_view_to_pair {
   }
 };
 
-// Create a strings-type column from vector of string_view
-std::unique_ptr<column> make_strings_column(const rmm::device_vector<string_view>& string_views,
+}  // namespace
+
+namespace detail {
+
+template <typename StringPairIterator>
+std::unique_ptr<column> make_strings_column(StringPairIterator begin,
+                                            StringPairIterator end,
+                                            rmm::cuda_stream_view stream,
+                                            rmm::mr::device_memory_resource* mr)
+{
+  using string_pair = thrust::pair<const char*, size_type>;
+
+  CUDF_FUNC_RANGE();
+  size_type strings_count = std::distance(begin, end);
+  if (strings_count == 0) return strings::detail::make_empty_strings_column(stream, mr);
+
+  // auto d_strings = strings.data();
+
+  // check total size is not too large for cudf column
+  auto size_checker = [] __device__(string_pair const& item) {
+    return (item.first != nullptr) ? item.second : 0;
+  };
+  size_t bytes = thrust::transform_reduce(
+    rmm::exec_policy(stream), begin, end, size_checker, 0, thrust::plus<size_t>());
+  CUDF_EXPECTS(bytes < static_cast<std::size_t>(std::numeric_limits<size_type>::max()),
+               "total size of strings is too large for cudf column");
+
+  // build offsets column from the strings sizes
+  auto offsets_transformer = [] __device__(string_pair const& item) {
+    return (item.first != nullptr ? static_cast<int32_t>(item.second) : 0);
+  };
+  auto offsets_begin = thrust::make_transform_iterator(begin, offsets_transformer);
+  auto offsets_end   = thrust::make_transform_iterator(end, offsets_transformer);
+  auto offsets_column =
+    strings::detail::make_offsets_child_column(offsets_begin, offsets_end, stream, mr);
+  auto offsets_view = offsets_column->view();
+  auto d_offsets    = offsets_view.template data<int32_t>();
+
+  // create null mask
+  auto new_nulls = detail::valid_if(
+    begin, end, [] __device__(string_pair item) { return item.first != nullptr; }, stream, mr);
+  auto null_count = new_nulls.second;
+  auto null_mask =
+    (null_count > 0) ? std::move(new_nulls.first) : rmm::device_buffer{0, stream, mr};
+
+  // build chars column
+  auto chars_column =
+    strings::detail::create_chars_child_column(strings_count, null_count, bytes, stream, mr);
+  auto chars_view = chars_column->mutable_view();
+  auto d_chars    = chars_view.data<char>();
+  thrust::for_each_n(rmm::exec_policy(stream),
+                     thrust::make_zip_iterator(thrust::make_tuple(begin, offsets_begin)),
+                     strings_count,
+                     [d_chars] __device__(auto item) {
+                       string_pair str  = thrust::get<0>(item);
+                       size_type offset = thrust::get<1>(item);
+                       if (str.first != nullptr) memcpy(d_chars + offset, str.first, str.second);
+                     });
+
+  return make_strings_column(strings_count,
+                             std::move(offsets_column),
+                             std::move(chars_column),
+                             null_count,
+                             std::move(null_mask),
+                             stream,
+                             mr);
+}
+
+std::unique_ptr<column> make_strings_column(const device_span<string_view>& string_views,
                                             const string_view null_placeholder,
                                             rmm::cuda_stream_view stream,
                                             rmm::mr::device_memory_resource* mr)
 {
   auto it_pair =
     thrust::make_transform_iterator(string_views.begin(), string_view_to_pair{null_placeholder});
-  const rmm::device_vector<thrust::pair<const char*, size_type>> dev_strings(
-    it_pair, it_pair + string_views.size());
-  return make_strings_column(dev_strings, stream, mr);
+  return make_strings_column(it_pair, it_pair + string_views.size(), stream, mr);
+}
+
+}  // namespace detail
+
+// Create a strings-type column from vector of pointer/size pairs
+std::unique_ptr<column> make_strings_column(
+  const rmm::device_vector<thrust::pair<const char*, size_type>>& strings,
+  rmm::cuda_stream_view stream,
+  rmm::mr::device_memory_resource* mr)
+{
+  return detail::make_strings_column(strings.begin(), strings.end(), stream, mr);
+}
+
+// Create a strings-type column from vector of string_view
+std::unique_ptr<column> make_strings_column(const rmm::device_vector<string_view>& string_views,
+                                            const string_view null_placeholder,
+                                            rmm::cuda_stream_view stream,
+                                            rmm::mr::device_memory_resource* mr)
+{
+  return detail::make_strings_column(
+    detail::device_span<string_view>(const_cast<string_view*>(string_views.data().get()),
+                                     string_views.size()),
+    null_placeholder,
+    stream,
+    mr);
 }
 
 // Create a strings-type column from device vector of chars and vector of offsets.
