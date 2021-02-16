@@ -1856,7 +1856,7 @@ def as_column(
                 mask=mask,
                 dtype=arbitrary.dtype,
             )
-        elif arb_dtype.kind in ("O") and isinstance(arbitrary[0], pd._libs.interval.Interval):
+        elif len(arbitrary)>0 and arb_dtype.kind in ("O") and isinstance(arbitrary[0], pd._libs.interval.Interval):
             # changing from pd array to series,possible arrow bug
             interval_series = pd.Series(arbitrary)
             data = as_column(
@@ -1895,7 +1895,7 @@ def as_column(
                 arb_dtype = check_cast_unsupported_dtype(arbitrary.dtype)
                 if arb_dtype != arbitrary.dtype.numpy_dtype:
                     arbitrary = arbitrary.astype(arb_dtype)
-        if arb_dtype.kind in ("O") and isinstance(arbitrary[0], pd._libs.interval.Interval):
+        if len(arbitrary)>0 and isinstance(arbitrary[0], pd._libs.interval.Interval) and arb_dtype.kind in ("O"):
                 # changing from pd array to series,possible arrow bug
                 interval_series = pd.Series(arbitrary)
                 data = as_column(
