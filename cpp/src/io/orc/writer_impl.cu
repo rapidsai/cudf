@@ -289,12 +289,14 @@ std::vector<stripe_rowgroups> writer::impl::gather_stripe_info(
 
     if ((g > stripe_start) && (stripe_size + rowgroup_size > max_stripe_size_ ||
                                (g + 1 - stripe_start) * row_index_stride_ > max_stripe_rows)) {
-      infos.emplace_back(stripe_start, g - stripe_start);
+      infos.emplace_back(infos.size(), stripe_start, g - stripe_start);
       stripe_start = g;
       stripe_size  = 0;
     }
     stripe_size += rowgroup_size;
-    if (g + 1 == num_rowgroups) { infos.emplace_back(stripe_start, num_rowgroups - stripe_start); }
+    if (g + 1 == num_rowgroups) {
+      infos.emplace_back(infos.size(), stripe_start, num_rowgroups - stripe_start);
+    }
   }
 
   return infos;
@@ -599,52 +601,68 @@ encoded_data writer::impl::encode_columns(host_span<orc_column_view const> colum
   rmm::device_uvector<uint8_t> encoded_data(stream_offsets.data_size(), stream);
 
   // Initialize column chunks' descriptions
-  uint32_t stripe_id = 0;
   std::map<size_type, segmented_valid_cnt_input> validity_check_inputs;
 
   for (size_t col_idx = 0; col_idx < num_columns; col_idx++) {
-    for (size_t rg_idx = 0; rg_idx < num_rowgroups; rg_idx++) {
-      if (rg_idx == stripe_bounds[stripe_id].first + stripe_bounds[stripe_id].size) { ++stripe_id; }
-      auto const &column = columns[col_idx];
-      auto &ck           = chunks[col_idx][rg_idx];
+    auto const &column = columns[col_idx];
+    for (auto const &stripe : stripe_bounds) {
+      for (auto rg_idx_it = stripe.cbegin(); rg_idx_it < stripe.cend(); ++rg_idx_it) {
+        auto const rg_idx = *rg_idx_it;
+        auto &ck          = chunks[col_idx][rg_idx];
 
-      ck.start_row     = (rg_idx * row_index_stride_);
-      ck.num_rows      = std::min<uint32_t>(row_index_stride_, column.data_count() - ck.start_row);
-      ck.valid_rows    = column.data_count();
-      ck.encoding_kind = column.orc_encoding();
-      ck.type_kind     = column.orc_kind();
-      if (ck.type_kind == TypeKind::STRING) {
-        ck.valid_map_base   = column.nulls();
-        ck.column_offset    = column.column_offset();
-        ck.column_data_base = (ck.encoding_kind == DICTIONARY_V2)
-                                ? column.host_stripe_dict(stripe_id)->dict_index
-                                : column.data();
-        ck.dtype_len = 1;
-      } else {
-        ck.valid_map_base   = column.nulls();
-        ck.column_offset    = column.column_offset();
-        ck.column_data_base = column.data();
-        ck.dtype_len        = column.type_width();
-      }
-      ck.scale = column.clockscale();
-
-      // Only need to check row groups that end within the stripe
-      if (ck.type_kind == TypeKind::BOOLEAN && column.nullable() &&
-          rg_idx + 1 != stripe_bounds[stripe_id].first + stripe_bounds[stripe_id].size) {
-        auto curr_cnt_in = validity_check_inputs.find(col_idx);
-        if (curr_cnt_in == validity_check_inputs.end()) {
-          bool unused;
-          // add new object
-          std::tie(curr_cnt_in, unused) = validity_check_inputs.insert({col_idx, {column.nulls()}});
+        ck.start_row  = (rg_idx * row_index_stride_);
+        ck.num_rows   = std::min<uint32_t>(row_index_stride_, column.data_count() - ck.start_row);
+        ck.valid_rows = column.data_count();
+        ck.encoding_kind = column.orc_encoding();
+        ck.type_kind     = column.orc_kind();
+        if (ck.type_kind == TypeKind::STRING) {
+          ck.valid_map_base   = column.nulls();
+          ck.column_offset    = column.column_offset();
+          ck.column_data_base = (ck.encoding_kind == DICTIONARY_V2)
+                                  ? column.host_stripe_dict(stripe.id)->dict_index
+                                  : column.data();
+          ck.dtype_len = 1;
+        } else {
+          ck.valid_map_base   = column.nulls();
+          ck.column_offset    = column.column_offset();
+          ck.column_data_base = column.data();
+          ck.dtype_len        = column.type_width();
         }
-        // append row group start and end to existing object
-        curr_cnt_in->second.indices.push_back(ck.start_row);
-        curr_cnt_in->second.indices.push_back(ck.start_row + ck.num_rows);
+        ck.scale = column.clockscale();
+        // Only need to check row groups that end within the stripe
       }
     }
   }
 
-  stripe_id = 0;
+  auto validity_check_indices = [&](size_t col_idx) {
+    std::vector<size_type> indices;
+    for (auto const &stripe : stripe_bounds) {
+      for (auto rg_idx_it = stripe.cbegin(); rg_idx_it < stripe.cend() - 1; ++rg_idx_it) {
+        auto const &chunk = chunks[col_idx][*rg_idx_it];
+        indices.push_back(chunk.start_row);
+        indices.push_back(chunk.start_row + chunk.num_rows);
+      }
+    }
+    return indices;
+  };
+  for (size_t col_idx = 0; col_idx < num_columns; col_idx++) {
+    if (columns[col_idx].orc_kind() == TypeKind::BOOLEAN && columns[col_idx].nullable()) {
+      validity_check_inputs[col_idx] = {columns[col_idx].nulls(), validity_check_indices(col_idx)};
+    }
+  }
+  for (auto &cnt_in : validity_check_inputs) {
+    auto const valid_counts = segmented_count_set_bits(cnt_in.second.mask, cnt_in.second.indices);
+    CUDF_EXPECTS(std::none_of(valid_counts.cbegin(),
+                              valid_counts.cend(),
+                              [](auto valid_count) { return valid_count % 8; }),
+                 "There's currently a bug in encoding boolean columns. Suggested workaround "
+                 "is to convert "
+                 "to "
+                 "int8 type. Please see https://github.com/rapidsai/cudf/issues/6763 for "
+                 "more information.");
+  }
+
+  uint32_t stripe_id = 0;
   for (size_t rg_idx = 0; rg_idx < num_rowgroups; rg_idx++) {
     // Track the current stripe this rowgroup chunk belongs
     if (rg_idx == stripe_bounds[stripe_id].first + stripe_bounds[stripe_id].size) { ++stripe_id; }
@@ -699,17 +717,6 @@ encoded_data writer::impl::encode_columns(host_span<orc_column_view const> colum
         }
       }
     }
-  }
-
-  for (auto &cnt_in : validity_check_inputs) {
-    auto const valid_counts = segmented_count_set_bits(cnt_in.second.mask, cnt_in.second.indices);
-    CUDF_EXPECTS(
-      std::none_of(valid_counts.cbegin(),
-                   valid_counts.cend(),
-                   [](auto valid_count) { return valid_count % 8; }),
-      "There's currently a bug in encoding boolean columns. Suggested workaround is to convert "
-      "to "
-      "int8 type. Please see https://github.com/rapidsai/cudf/issues/6763 for more information.");
   }
 
   chunks.host_to_device(stream);

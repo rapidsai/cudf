@@ -49,9 +49,10 @@ using namespace cudf::io;
 using cudf::detail::hostdevice_matrix;
 
 struct stripe_rowgroups {
+  uint32_t id;
   uint32_t first;
   uint32_t size;
-  stripe_rowgroups(uint32_t first, uint32_t size) : first{first}, size{size} {}
+  stripe_rowgroups(uint32_t id, uint32_t first, uint32_t size) : id{id}, first{first}, size{size} {}
   auto cbegin() const { return thrust::make_counting_iterator(first); }
   auto cend() const { return thrust::make_counting_iterator(first + size); }
 };
