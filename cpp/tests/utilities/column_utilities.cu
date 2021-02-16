@@ -185,7 +185,8 @@ struct column_comparator_impl {
     differences.resize(thrust::distance(differences.begin(), diff_iter));  // shrink back down
 
     if (not differences.empty())
-      GTEST_FAIL() << differences_message(differences, lhs, rhs, print_all_differences, depth);
+      GTEST_FAIL() << stringify_column_differences(
+        differences, lhs, rhs, print_all_differences, depth);
   }
 };
 
@@ -276,7 +277,8 @@ struct column_comparator_impl<list_view, check_exact_equality> {
     differences.resize(thrust::distance(differences.begin(), diff_iter));  // shrink back down
 
     if (not differences.empty())
-      GTEST_FAIL() << differences_message(differences, lhs, rhs, print_all_differences, depth);
+      GTEST_FAIL() << stringify_column_differences(
+        differences, lhs, rhs, print_all_differences, depth);
 
     // recurse
     auto lhs_child = lhs_l.get_sliced_child(0);
@@ -335,17 +337,17 @@ struct column_comparator {
 }  // namespace
 
 /**
- * @copydoc cudf::test::differences_message
+ * @copydoc cudf::test::stringify_column_differences
  */
-std::string differences_message(thrust::device_vector<int> const& differences,
-                                column_view const& lhs,
-                                column_view const& rhs,
-                                bool all_differences,
-                                int depth)
+std::string stringify_column_differences(thrust::device_vector<int> const& differences,
+                                         column_view const& lhs,
+                                         column_view const& rhs,
+                                         bool print_all_differences,
+                                         int depth)
 {
   CUDF_EXPECTS(not differences.empty(), "Shouldn't enter this function if `differences` is empty");
   std::string const depth_str = depth > 0 ? "depth " + std::to_string(depth) + '\n' : "";
-  if (all_differences) {
+  if (print_all_differences) {
     std::ostringstream buffer;
     buffer << depth_str << "differences:" << std::endl;
 
