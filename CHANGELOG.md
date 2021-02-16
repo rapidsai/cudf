@@ -43,7 +43,9 @@
 - PR #6943 Fix join with nulls not equal performance
 - PR #6945 Fix groupby agg/apply behaviour when no key columns are provided 
 - PR #6942 Fix cudf::merge gtest for dictionary columns
+# 0.18.0
 
+Please see https://github.com/rapidsai/cudf/releases/tag/branch-0.18-latest for the latest changes to this development branch.
 
 # cuDF 0.17.0 (10 Dec 2020)
 
@@ -235,6 +237,7 @@
 - PR #6854 Fix the parameter order of writeParquetBufferBegin
 - PR #6855 Fix `.str.replace_with_backrefs` docs examples
 - PR #6853 Fix contiguous split of null string columns
+- PR #6860 Move codecov upload to build script
 - PR #6861 Fix compile error in type_dispatch_benchmark.cu
 - PR #6864 Handle contiguous_split corner case for nested string columns with no children
 - PR #6869 Avoid dependency resolution failure in latest version of pip by explicitly specifying versions for dask and distributed

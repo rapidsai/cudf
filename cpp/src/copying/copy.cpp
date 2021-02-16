@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2020, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -25,6 +25,8 @@
 #include <cudf/utilities/traits.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
+
+#include <thrust/iterator/transform_iterator.h>
 
 #include <algorithm>
 
@@ -58,11 +60,9 @@ std::unique_ptr<column> allocate_like(column_view const& input,
   CUDF_EXPECTS(is_fixed_width(input.type()), "Expects only fixed-width type column");
   mask_state allocate_mask = should_allocate_mask(mask_alloc, input.nullable());
 
-  std::vector<std::unique_ptr<column>> children{};
-  children.reserve(input.num_children());
-  for (size_type index = 0; index < input.num_children(); index++) {
-    children.emplace_back(allocate_like(input.child(index), size, mask_alloc, stream, mr));
-  }
+  auto op = [&](auto const& child) { return allocate_like(child, size, mask_alloc, stream, mr); };
+  auto begin = thrust::make_transform_iterator(input.child_begin(), op);
+  std::vector<std::unique_ptr<column>> children(begin, begin + input.num_children());
 
   return std::make_unique<column>(input.type(),
                                   size,

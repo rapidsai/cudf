@@ -165,7 +165,7 @@ void type_dispatcher_benchmark(::benchmark::State& state)
 
   const cudf::size_type work_per_thread = static_cast<cudf::size_type>(state.range(2));
 
-  auto data = cudf::test::make_counting_transform_iterator(0, [](auto i) { return i; });
+  auto data = cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i; });
 
   std::vector<cudf::test::fixed_width_column_wrapper<TypeParam>> source_column_wrappers;
   std::vector<cudf::mutable_column_view> source_columns;

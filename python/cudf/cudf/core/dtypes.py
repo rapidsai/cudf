@@ -2,7 +2,7 @@
 
 import decimal
 import pickle
-from typing import Any
+from typing import Any, Optional
 
 import numpy as np
 import pandas as pd
@@ -15,6 +15,9 @@ from cudf._typing import Dtype
 
 
 class CategoricalDtype(ExtensionDtype):
+
+    ordered: Optional[bool]
+
     def __init__(self, categories=None, ordered: bool = None) -> None:
         """
         dtype similar to pd.CategoricalDtype with the categories
