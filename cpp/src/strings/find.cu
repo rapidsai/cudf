@@ -315,7 +315,8 @@ std::unique_ptr<column> starts_with(
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
 {
   auto pfn = [] __device__(string_view d_string, string_view d_target) {
-    return d_target.compare(d_string.data(), d_target.size_bytes()) == 0;
+    return (d_target.size_bytes() <= d_string.size_bytes()) &&
+           (d_target.compare(d_string.data(), d_target.size_bytes()) == 0);
   };
   return contains_fn(strings, target, pfn, stream, mr);
 }
@@ -327,7 +328,8 @@ std::unique_ptr<column> starts_with(
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
 {
   auto pfn = [] __device__(string_view d_string, string_view d_target) {
-    return d_target.compare(d_string.data(), d_target.size_bytes()) == 0;
+    return (d_target.size_bytes() <= d_string.size_bytes()) &&
+           (d_target.compare(d_string.data(), d_target.size_bytes()) == 0);
   };
   return contains_fn(strings, targets, pfn, stream, mr);
 }
@@ -341,8 +343,8 @@ std::unique_ptr<column> ends_with(
   auto pfn = [] __device__(string_view d_string, string_view d_target) {
     auto const str_size = d_string.size_bytes();
     auto const tgt_size = d_target.size_bytes();
-    if (str_size < tgt_size) return false;
-    return d_target.compare(d_string.data() + str_size - tgt_size, tgt_size) == 0;
+    return (tgt_size <= str_size) &&
+           (d_target.compare(d_string.data() + str_size - tgt_size, tgt_size) == 0);
   };
 
   return contains_fn(strings, target, pfn, stream, mr);
@@ -357,8 +359,8 @@ std::unique_ptr<column> ends_with(
   auto pfn = [] __device__(string_view d_string, string_view d_target) {
     auto const str_size = d_string.size_bytes();
     auto const tgt_size = d_target.size_bytes();
-    if (str_size < tgt_size) return false;
-    return d_target.compare(d_string.data() + str_size - tgt_size, tgt_size) == 0;
+    return (tgt_size <= str_size) &&
+           (d_target.compare(d_string.data() + str_size - tgt_size, tgt_size) == 0);
   };
 
   return contains_fn(strings, targets, pfn, stream, mr);
