@@ -32,8 +32,11 @@ namespace strings {
  *
  * Any null entries result in corresponding null entries in the output column.
  *
- * The expected format is [-+][0-9].[0-9] for each string. An invalid data format
- * result in undefined behavior in the corresponding output row result.
+ * The expected format is `[sign][integer][.][fraction]`, where the sign is either
+ * not present, `-` or `+`, The decimal point `[.]` may or may not be present, and
+ * `integer` and `fraction` are comprised of zero or more digits in [0-9].
+ * An invalid data format results in undefined behavior in the corresponding
+ * output row result.
  *
  * @code{.pseudo}
  * Example:
