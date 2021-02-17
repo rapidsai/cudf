@@ -216,21 +216,6 @@ inline std::pair<thrust::host_vector<std::string>, std::vector<bitmask_type>> to
   return {host_data, bitmask_to_host(c)};
 }
 
-/**
- * @brief Stringify the inconsistent values resulted from the comparison of two columns element-wise
- *
- * @param differences stores the indices at which the given columns have different values
- * @param lhs and rhs are the two input columns
- * @param print_all_differences true: print all differing values; false: print only the first
- * differing value
- * @param depth the nested level of the differing values in the given columns
- */
-std::string stringify_column_differences(thrust::device_vector<int> const& differences,
-                                         column_view const& lhs,
-                                         column_view const& rhs,
-                                         bool print_all_differences,
-                                         int depth);
-
 }  // namespace test
 }  // namespace cudf
 
