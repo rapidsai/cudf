@@ -77,12 +77,9 @@ std::unique_ptr<column> make_strings_column(StringPairIterator begin,
   auto offsets_transformer = [] __device__(string_pair const& item) {
     return (item.first != nullptr ? static_cast<int32_t>(item.second) : 0);
   };
-  auto offsets_begin = thrust::make_transform_iterator(begin, offsets_transformer);
-  auto offsets_end   = thrust::make_transform_iterator(end, offsets_transformer);
-  auto offsets_column =
-    strings::detail::make_offsets_child_column(offsets_begin, offsets_end, stream, mr);
-  auto offsets_view = offsets_column->view();
-  auto d_offsets    = offsets_view.template data<int32_t>();
+  auto offsets_transformer_itr = thrust::make_transform_iterator(begin, offsets_transformer);
+  auto offsets_column          = strings::detail::make_offsets_child_column(
+    offsets_transformer_itr, offsets_transformer_itr + strings_count, stream, mr);
 
   // create null mask
   auto new_nulls = detail::valid_if(
@@ -97,7 +94,8 @@ std::unique_ptr<column> make_strings_column(StringPairIterator begin,
   auto chars_view = chars_column->mutable_view();
   auto d_chars    = chars_view.data<char>();
   thrust::for_each_n(rmm::exec_policy(stream),
-                     thrust::make_zip_iterator(thrust::make_tuple(begin, offsets_begin)),
+                     thrust::make_zip_iterator(
+                       thrust::make_tuple(begin, offsets_column->view().template begin<int32_t>())),
                      strings_count,
                      [d_chars] __device__(auto item) {
                        string_pair str  = thrust::get<0>(item);
