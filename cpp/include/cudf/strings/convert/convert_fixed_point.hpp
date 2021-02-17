@@ -30,17 +30,16 @@ namespace strings {
  * @brief Returns a new fixed-point column parsing decimal values from the
  * provided strings column.
  *
- * Any null entries will result in corresponding null entries in the output column.
+ * Any null entries result in corresponding null entries in the output column.
  *
- * Only characters [0-9] plus a prefix '-' and '+' and a single decimal point
- * are recognized. When any other character is encountered, the parsing ends
- * for that string and the current digits are converted into a fixed-point value.
+ * The expected format is [-+][0-9].[0-9] for each string. An invalid data format
+ * result in undefined behavior in the corresponding output row result.
  *
  * @code{.pseudo}
  * Example:
  * s = ['123', '-876', '543.2', '-0.12']
- * dt = {DECIMAL32, scale=-2}
- * fp = to_fixed_point(s, dt)
+ * datatype = {DECIMAL32, scale=-2}
+ * fp = to_fixed_point(s, datatype)
  * fp is [123400, -87600, 54320, -12]
  * @endcode
  *
@@ -63,10 +62,10 @@ std::unique_ptr<column> to_fixed_point(
  * @brief Returns a new strings column converting the fixed-point values
  * into a strings column.
  *
- * Any null entries will result in corresponding null entries in the output column.
+ * Any null entries result in corresponding null entries in the output column.
  *
  * For each value, a string is created in base-10 decimal.
- * Negative numbers will include a '-' prefix.
+ * Negative numbers include a '-' prefix in the output string.
  * The column's scale value is used to place the decimal point.
  * A negative scale value may add padded zeros after the decimal point.
  *
@@ -91,7 +90,7 @@ std::unique_ptr<column> from_fixed_point(
  * @brief Returns a boolean column identifying strings in which all
  * characters are valid for conversion to fixed-point.
  *
- * The output row entry will be set to `true` if the corresponding string element
+ * The output row entry is set to `true` if the corresponding string element
  * has at least one character in [+-0123456789.]. The optional sign character
  * must only be in the first position. The decimal point may only appear once.
  * Also, the integer component must fit within the size limits of the
@@ -105,7 +104,7 @@ std::unique_ptr<column> from_fixed_point(
  * b is [true, true, false, false, false, true, true, true]
  * @endcode
  *
- * Any null row results in a null entry for that row in the output column.
+ * Any null entries result in corresponding null entries in the output column.
  *
  * @throw cudf::logic_error if the `decimal_type` is not a fixed-point decimal type.
  *
