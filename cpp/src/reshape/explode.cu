@@ -69,9 +69,10 @@ std::unique_ptr<table> explode_functor::operator()<list_view>(
   rmm::device_uvector<size_type> gather_map_indices(sliced_child.size(), stream);
 
   // Sliced columns may require rebasing of the offsets.
-  auto offsets           = lc.offsets_begin();
+  auto offsets = lc.offsets_begin();
+  // offsets + 1 here to skip the 0th offset, which removes a - 1 operation later.
   auto offsets_minus_one = thrust::make_transform_iterator(
-    offsets, [offsets] __device__(auto i) { return (i - offsets[0]) - 1; });
+    offsets + 1, [offsets] __device__(auto i) { return (i - offsets[0]) - 1; });
   auto counting_iter = thrust::make_counting_iterator(0);
 
   rmm::device_uvector<size_type> pos(include_pos ? sliced_child.size() : 0, stream, mr);
@@ -87,17 +88,16 @@ std::unique_ptr<table> explode_functor::operator()<list_view>(
       gather_map_indices.begin(),
       [position_array = pos.data(), offsets_minus_one, offsets, offset_size = lc.size()] __device__(
         auto idx) -> size_type {
-        auto lb_idx =
-          thrust::lower_bound(
-            thrust::seq, offsets_minus_one + 1, offsets_minus_one + offset_size + 1, idx) -
-          (offsets_minus_one + 1);
+        auto lb_idx = thrust::lower_bound(
+                        thrust::seq, offsets_minus_one, offsets_minus_one + offset_size, idx) -
+                      offsets_minus_one;
         position_array[idx] = idx - (offsets[lb_idx] - offsets[0]);
         return lb_idx;
       });
   } else {
     thrust::lower_bound(rmm::exec_policy(stream),
-                        offsets_minus_one + 1,
-                        offsets_minus_one + lc.size() + 1,
+                        offsets_minus_one,
+                        offsets_minus_one + lc.size(),
                         counting_iter,
                         counting_iter + gather_map_indices.size(),
                         gather_map_indices.begin());

@@ -93,14 +93,19 @@ class lists_column_view : private column_view {
    *
    * @return int32_t const* Pointer to the first offset
    */
-  auto const* offsets_begin() const noexcept { return offsets().begin<int32_t>() + offset(); }
+  using offset_type     = int32_t;
+  using offset_iterator = offset_type const*;
+  offset_iterator offsets_begin() const noexcept
+  {
+    return offsets().begin<offset_type>() + offset();
+  }
 
   /**
    * @brief Return one past the last offset
    *
    * @return int32_t const* Pointer to one past the last offset
    */
-  auto const* offsets_end() const noexcept { return offsets_begin() + size(); }
+  offset_iterator offsets_end() const noexcept { return offsets_begin() + size(); }
 };
 /** @} */  // end of group
 }  // namespace cudf
