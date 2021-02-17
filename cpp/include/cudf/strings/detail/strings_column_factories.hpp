@@ -9,6 +9,11 @@ namespace cudf {
 namespace detail {
 
 std::unique_ptr<column> make_strings_column(
+  device_span<thrust::pair<char const*, size_type>> const& strings,
+  rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+
+std::unique_ptr<column> make_strings_column(
   device_span<string_view> const& string_views,
   string_view const null_placeholder,
   rmm::cuda_stream_view stream        = rmm::cuda_stream_default,

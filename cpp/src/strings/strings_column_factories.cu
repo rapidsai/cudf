@@ -50,6 +50,14 @@ struct string_view_to_pair {
 
 namespace detail {
 
+std::unique_ptr<column> make_strings_column(
+  const device_span<thrust::pair<const char*, size_type>>& strings,
+  rmm::cuda_stream_view stream,
+  rmm::mr::device_memory_resource* mr)
+{
+  return cudf::strings::detail::make_strings_column(strings.begin(), strings.end(), stream, mr);
+}
+
 std::unique_ptr<column> make_strings_column(const device_span<string_view>& string_views,
                                             const string_view null_placeholder,
                                             rmm::cuda_stream_view stream,
