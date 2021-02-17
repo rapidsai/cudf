@@ -125,8 +125,8 @@ std::unique_ptr<column> byte_cast(
  * [null,        100],
  * [15,          100],
  * ```
- * Note that null lists are completely removed from the output
- * and nulls and empty lists inside lists are pulled out and remain.
+ * Note that null lists are not included in the resulting table, but nulls inside
+ * lists and empty lists will be represented with a null entry for that column in that row.
  *
  * @param input_table Table to explode.
  * @param explode_column_idx Column index to explode inside the table.
@@ -168,8 +168,8 @@ std::unique_ptr<table> explode(
  * [null, 1,     100],
  * [15,   2,     100],
  * ```
- * Note that null lists are completely removed from the output
- * and nulls and empty lists inside lists are pulled out and remain.
+ * Note that null lists are not included in the resulting table, but nulls inside
+ * lists and empty lists will be represented with a null entry for that column in that row.
  *
  * @param input_table Table to explode.
  * @param explode_column_idx Column index to explode inside the table.
