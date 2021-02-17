@@ -19,13 +19,6 @@
 include(${CUDA_DATAFRAME_SOURCE_DIR}/cmake/Modules/SetGPUArchs.cmake)
 message(STATUS "CUDF: Building CUDF for GPU architectures: ${CMAKE_CUDA_ARCHITECTURES}")
 
-# Only enable the CUDA language after including SetGPUArchs.cmake
-enable_language(CUDA)
-
-if(NOT CMAKE_CUDA_COMPILER)
-    message(SEND_ERROR "CUDF: CMake cannot locate a CUDA compiler")
-endif()
-
 if(CMAKE_CUDA_COMPILER_VERSION)
   # Compute the version. from  CMAKE_CUDA_COMPILER_VERSION
   string(REGEX REPLACE "([0-9]+)\\.([0-9]+).*" "\\1" CUDA_VERSION_MAJOR ${CMAKE_CUDA_COMPILER_VERSION})
