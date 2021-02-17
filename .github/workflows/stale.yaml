@@ -5,7 +5,7 @@ on:
     - cron: "0 * * * *"
 
 jobs:
-  mark-inactive-30d-issues:
+  mark-inactive-30d:
     runs-on: ubuntu-latest
     steps:
       - name: Mark 30 day inactive issues
@@ -21,13 +21,6 @@ jobs:
           exempt-issue-labels: "0 - Blocked,0 - Backlog,good first issue"
           days-before-issue-stale: 30
           days-before-issue-close: -1
-  mark-inactive-30d-prs:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Mark 30 day inactive PRs
-        uses: actions/stale@v3
-        with:
-          repo-token: ${{ secrets.GITHUB_TOKEN }}
           stale-pr-message: >
             This PR has been labeled `inactive-30d` due to no recent activity in the past 30 days.
             Please close this PR if it is no longer required.
@@ -37,7 +30,8 @@ jobs:
           exempt-pr-labels: "0 - Blocked,0 - Backlog,good first issue"
           days-before-pr-stale: 30
           days-before-pr-close: -1
-  mark-inactive-90d-issues:
+          operations-per-run: 50
+  mark-inactive-90d:
     runs-on: ubuntu-latest
     steps:
       - name: Mark 90 day inactive issues
@@ -52,13 +46,6 @@ jobs:
           exempt-issue-labels: "0 - Blocked,0 - Backlog,good first issue"
           days-before-issue-stale: 90
           days-before-issue-close: -1
-  mark-inactive-90d-prs:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Mark 90 day inactive PRs
-        uses: actions/stale@v3
-        with:
-          repo-token: ${{ secrets.GITHUB_TOKEN }}
           stale-pr-message: >
             This PR has been labeled `inactive-90d` due to no recent activity in the past 90 days.
             Please close this PR if it is no longer required.
@@ -67,3 +54,4 @@ jobs:
           exempt-pr-labels: "0 - Blocked,0 - Backlog,good first issue"
           days-before-pr-stale: 90
           days-before-pr-close: -1
+          operations-per-run: 50
