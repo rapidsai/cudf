@@ -1,65 +1,69 @@
-name: Mark stale and rotten issues and pull requests
+name: Mark inactive issues and pull requests
 
 on:
   schedule:
     - cron: "0 * * * *"
 
 jobs:
-  mark-stale-issues:
+  mark-inactive-30d-issues:
     runs-on: ubuntu-latest
     steps:
-      - name: Mark Issues as Stale
+      - name: Mark 30 day inactive issues
         uses: actions/stale@v3
         with:
           repo-token: ${{ secrets.GITHUB_TOKEN }}
           stale-issue-message: >
-            This issue has been marked stale due to no recent activity in the past 30d.
+            This issue has been labeled `inactive-30d` due to no recent activity in the past 30 days.
             Please close this issue if no further response or action is needed.
             Otherwise, please respond with a comment indicating any updates or changes to the original issue and/or confirm this issue still needs to be addressed.
-            This issue will be marked rotten if there is no activity in the next 60d.
-          stale-issue-label: "stale"
+            This issue will be labeled `inactive-90d` if there is no activity in the next 60 days.
+          stale-issue-label: "inactive-30d"
+          exempt-issue-labels: "0 - Blocked,0 - Backlog,good first issue"
           days-before-issue-stale: 30
           days-before-issue-close: -1
-  mark-stale-prs:
+  mark-inactive-30d-prs:
     runs-on: ubuntu-latest
     steps:
-      - name: Mark PRs as Stale
+      - name: Mark 30 day inactive PRs
         uses: actions/stale@v3
         with:
           repo-token: ${{ secrets.GITHUB_TOKEN }}
           stale-pr-message: >
-            This PR has been marked stale due to no recent activity in the past 30d.
+            This PR has been labeled `inactive-30d` due to no recent activity in the past 30 days.
             Please close this PR if it is no longer required.
             Otherwise, please respond with a comment indicating any updates.
-            This PR will be marked rotten if there is no activity in the next 60d.
-          stale-pr-label: "stale"
+            This PR will be labeled `inactive-90d` if there is no activity in the next 60 days.
+          stale-pr-label: "inactive-30d"
+          exempt-pr-labels: "0 - Blocked,0 - Backlog,good first issue"
           days-before-pr-stale: 30
           days-before-pr-close: -1
-  mark-rotten-issues:
+  mark-inactive-90d-issues:
     runs-on: ubuntu-latest
     steps:
-      - name: Mark Issues as Rotten
+      - name: Mark 90 day inactive issues
         uses: actions/stale@v3
         with:
           repo-token: ${{ secrets.GITHUB_TOKEN }}
           stale-issue-message: >
-            This issue has been marked rotten due to no recent activity in the past 90d.
+            This issue has been labeled `inactive-90d` due to no recent activity in the past 90 days.
             Please close this issue if no further response or action is needed.
             Otherwise, please respond with a comment indicating any updates or changes to the original issue and/or confirm this issue still needs to be addressed.
-          stale-issue-label: "rotten"
+          stale-issue-label: "inactive-90d"
+          exempt-issue-labels: "0 - Blocked,0 - Backlog,good first issue"
           days-before-issue-stale: 90
           days-before-issue-close: -1
-  mark-rotten-prs:
+  mark-inactive-90d-prs:
     runs-on: ubuntu-latest
     steps:
-      - name: Mark PRs as Rotten
+      - name: Mark 90 day inactive PRs
         uses: actions/stale@v3
         with:
           repo-token: ${{ secrets.GITHUB_TOKEN }}
           stale-pr-message: >
-            This PR has been marked rotten due to no recent activity in the past 90d.
+            This PR has been labeled `inactive-90d` due to no recent activity in the past 90 days.
             Please close this PR if it is no longer required.
             Otherwise, please respond with a comment indicating any updates.
-          stale-pr-label: "rotten"
+          stale-pr-label: "inactive-90d"
+          exempt-pr-labels: "0 - Blocked,0 - Backlog,good first issue"
           days-before-pr-stale: 90
           days-before-pr-close: -1
