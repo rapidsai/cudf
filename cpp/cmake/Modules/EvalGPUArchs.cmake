@@ -60,6 +60,6 @@ int main(int argc, char** argv) {
     OUTPUT_VARIABLE __gpu_archs
     OUTPUT_STRIP_TRAILING_WHITESPACE
     ERROR_FILE ${error_file})
-    message(VERBOSE "CUDF: Auto detection of gpu-archs: ${__gpu_archs}")
+  message(VERBOSE "CUDF: Auto detection of gpu-archs: ${__gpu_archs}")
   set(${gpu_archs} ${__gpu_archs} PARENT_SCOPE)
 endfunction()
