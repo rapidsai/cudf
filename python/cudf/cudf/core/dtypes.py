@@ -314,9 +314,16 @@ class IntervalDtype(StructDtype):
         """
         subtype: str, np.dtype
             The dtype of the Interval bounds.
+        closed: {‘right’, ‘left’, ‘both’, ‘neither’}, default ‘right’
+            Whether the interval is closed on the left-side, right-side,
+            both or neither. See the Notes for more detailed explanation.
         """
         super().__init__(fields={"left": subtype, "right": subtype})
-        self.closed = closed
+
+        if closed in ["left", "right", "neither", "both"]:
+            self.closed = closed
+        else:
+            raise ValueError("closed value is not valid")
 
     @property
     def subtype(self):

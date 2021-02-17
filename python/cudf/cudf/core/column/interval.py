@@ -25,14 +25,14 @@ class IntervalColumn(StructColumn):
             null_count=null_count,
             children=children,
         )
-        self._closed = closed
+        if closed in ["left", "right", "neither", "both"]:
+            self._closed = closed
+        else:
+            raise ValueError("closed value is not valid")
 
     @property
     def closed(self):
-        if self._closed in ["left", "right", "neither", "both"]:
-            return self._closed
-        else:
-            raise ValueError("closed value is not valid")
+        return self._closed
 
     @classmethod
     def from_arrow(self, data):
