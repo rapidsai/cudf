@@ -7,6 +7,7 @@ import cupy
 from numba import cuda
 
 import rmm
+from rmm._cuda.stream import DEFAULT_STREAM
 
 from cudf import core, datasets, testing
 from cudf._version import get_versions
@@ -82,5 +83,7 @@ from cudf.utils.utils import set_allocator
 cuda.set_memory_manager(rmm.RMMNumbaManager)
 cupy.cuda.set_allocator(rmm.rmm_cupy_allocator)
 
+_CURRENT_STREAM = rmm._cuda.stream.DEFAULT_STREAM
 __version__ = get_versions()["version"]
+
 del get_versions

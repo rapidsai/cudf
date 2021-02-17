@@ -1,9 +1,14 @@
 # Copyright (c) 2018-2021, NVIDIA CORPORATION.
+import itertools
 from functools import lru_cache
 
 import cupy
 import numpy as np
 from numba import cuda
+
+import rmm
+from rmm._cuda.event import Event
+from rmm._cuda.stream import Stream
 
 import cudf
 from cudf.utils.utils import check_equals_float, check_equals_int
@@ -271,3 +276,39 @@ def compile_udf(udf, type_signature):
     )
     output_type = numpy_support.as_dtype(return_type)
     return (ptx_code, output_type.type)
+
+
+def get_current_stream():
+    return cudf._CURRENT_STREAM
+
+
+def set_current_stream(stream):
+    if not isinstance(stream, rmm._lib.stream.Stream):
+        raise ValueError("Must provide a rmm._lib.stream.Stream object")
+    cudf._CURRENT_STREAM = stream
+
+
+class StreamPoolExecutor:
+    def __init__(self, n):
+        self._n = n
+        self._streams = [Stream() for i in range(n)]
+
+    def map(self, func, *iterables):
+        global_stream = get_current_stream()
+        event = Event()
+        global_stream.record_event(event)
+        worker_events = [Event() for _ in range(self._n)]
+        stream_cycle = itertools.cycle(self._streams)
+        events_cycle = itertools.cycle(worker_events)
+
+        results = []
+        for it in enumerate(zip(iterables)):
+            worker_stream = next(stream_cycle)
+            worker_event = next(events_cycle)
+            worker_stream.wait_on(event)
+            set_current_stream(worker_stream)
+            results.append(func(*it))
+            worker_stream.record_event(worker_event)
+            global_stream.wait_on(worker_event)
+        set_current_stream(global_stream)
+        return results
