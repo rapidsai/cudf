@@ -45,7 +45,7 @@ struct explode_functor {
    */
   template <typename T>
   std::unique_ptr<table> operator()(table_view const& input_table,
-                                    int const explode_column_idx,
+                                    size_type const explode_column_idx,
                                     bool include_pos,
                                     rmm::cuda_stream_view stream,
                                     rmm::mr::device_memory_resource* mr) const
@@ -59,7 +59,7 @@ struct explode_functor {
 template <>
 std::unique_ptr<table> explode_functor::operator()<list_view>(
   table_view const& input_table,
-  int const explode_column_idx,
+  size_type const explode_column_idx,
   bool include_pos,
   rmm::cuda_stream_view stream,
   rmm::mr::device_memory_resource* mr) const
@@ -69,7 +69,7 @@ std::unique_ptr<table> explode_functor::operator()<list_view>(
   rmm::device_uvector<size_type> gather_map_indices(sliced_child.size(), stream);
 
   // Sliced columns may require rebasing of the offsets.
-  auto offsets           = lc.offsets().begin<int32_t>() + lc.offset();
+  auto offsets           = lc.offsets_begin();
   auto offsets_minus_one = thrust::make_transform_iterator(
     offsets, [offsets] __device__(auto i) { return (i - offsets[0]) - 1; });
   auto counting_iter = thrust::make_counting_iterator(0);
@@ -165,11 +165,11 @@ std::unique_ptr<table> explode(table_view const& input_table,
 }
 
 /**
- * @copydoc cudf::pos_explode(input_table,explode_column_idx,rmm::mr::device_memory_resource)
+ * @copydoc cudf::explode_position(input_table,explode_column_idx,rmm::mr::device_memory_resource)
  */
-std::unique_ptr<table> pos_explode(table_view const& input_table,
-                                   size_type explode_column_idx,
-                                   rmm::mr::device_memory_resource* mr)
+std::unique_ptr<table> explode_position(table_view const& input_table,
+                                        size_type explode_column_idx,
+                                        rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
   return detail::explode(input_table, explode_column_idx, true, rmm::cuda_stream_default, mr);

@@ -87,6 +87,20 @@ class lists_column_view : private column_view {
    * @throw cudf::logic error if this is an empty column
    */
   column_view get_sliced_child(rmm::cuda_stream_view stream) const;
+
+  /**
+   * @brief Return first offset (accounting for column offset)
+   *
+   * @return int32_t const* Pointer to the first offset
+   */
+  auto const* offsets_begin() const noexcept { return offsets().begin<int32_t>() + offset(); }
+
+  /**
+   * @brief Return one past the last offset
+   *
+   * @return int32_t const* Pointer to one past the last offset
+   */
+  auto const* offsets_end() const noexcept { return offsets_begin() + size(); }
 };
 /** @} */  // end of group
 }  // namespace cudf

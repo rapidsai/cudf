@@ -144,7 +144,7 @@ std::unique_ptr<table> explode(
  *
  * Any list is exploded, which means the elements of the list in each row are expanded into new rows
  * in the output. The corresponding rows for other columns in the input are duplicated. A position
- *column is added that has the index inside the original list for each row. Example:
+ * column is added that has the index inside the original list for each row. Example:
  * ```
  * [[5,10,15], 100],
  * [[20,25],   200],
@@ -177,7 +177,7 @@ std::unique_ptr<table> explode(
  *
  * @return A new table with explode_col exploded.
  */
-std::unique_ptr<table> pos_explode(
+std::unique_ptr<table> explode_position(
   table_view const& input_table,
   size_type explode_column_idx,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
