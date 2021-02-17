@@ -8316,6 +8316,7 @@ def test_dataframe_roundtrip_arrow_struct_dtype(gdf):
 
     assert_eq(gdf, expected)
 
+
 def test_dataframe_setitem_cupy_array():
     np.random.seed(0)
     pdf = pd.DataFrame(np.random.randn(10, 2))
@@ -8326,8 +8327,8 @@ def test_dataframe_setitem_cupy_array():
     gdf[gpu_array] = 1.5
 
     assert_eq(pdf, gdf)
-    
-   
+
+
 @pytest.mark.parametrize(
     "data", [{"a": [1, 2, 3], "b": [4, 5, 6], "c": [7, 8, 9]}]
 )
@@ -8380,4 +8381,3 @@ def test_rename_for_level_RangeIndex_dataframe():
     got = gdf.rename(columns={"a": "f"}, index={0: 3, 1: 4}, level=0)
 
     assert_eq(expect, got)
-
