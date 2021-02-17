@@ -221,3 +221,8 @@ ${WORKSPACE}/ci/gpu/test-notebooks.sh 2>&1 | tee nbtest.log
 python ${WORKSPACE}/ci/utils/nbtestlog2junitxml.py nbtest.log
 
 return ${EXITCODE}
+
+if [ -n "${CODECOV_TOKEN}" ]; then
+    codecov -t $CODECOV_TOKEN
+fi
+

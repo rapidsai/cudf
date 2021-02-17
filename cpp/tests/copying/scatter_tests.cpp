@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,8 +14,10 @@
  * limitations under the License.
  */
 #include <cudf/copying.hpp>
+#include <cudf/detail/iterator.cuh>
 #include <cudf/scalar/scalar_factories.hpp>
 #include <cudf/stream_compaction.hpp>
+
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_utilities.hpp>
 #include <cudf_test/column_wrapper.hpp>
@@ -487,19 +489,20 @@ TYPED_TEST(ScatterDataTypeTests, ScatterScalarBothNulls)
 
 TYPED_TEST(ScatterDataTypeTests, ScatterSourceNullsLarge)
 {
+  using cudf::detail::make_counting_transform_iterator;
   using cudf::test::fixed_width_column_wrapper;
-  using cudf::test::make_counting_transform_iterator;
 
   constexpr cudf::size_type N{513};
 
   fixed_width_column_wrapper<TypeParam, int32_t> source({0, 0, 0, 0}, {0, 0, 0, 0});
   fixed_width_column_wrapper<int32_t> scatter_map({0, 1, 2, 3});
-  auto target_data = make_counting_transform_iterator(0, [](auto i) { return i; });
+  auto target_data = cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i; });
   cudf::test::fixed_width_column_wrapper<TypeParam, typename decltype(target_data)::value_type>
     target(target_data, target_data + N);
 
-  auto expect_data  = make_counting_transform_iterator(0, [](auto i) { return i; });
-  auto expect_valid = make_counting_transform_iterator(0, [](auto i) { return i > 3; });
+  auto expect_data = cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i; });
+  auto expect_valid =
+    cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i > 3; });
   fixed_width_column_wrapper<TypeParam, typename decltype(expect_data)::value_type> expected(
     expect_data, expect_data + N, expect_valid);
 
