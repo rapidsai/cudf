@@ -5,7 +5,15 @@ from __future__ import annotations
 import itertools
 from collections import OrderedDict
 from collections.abc import MutableMapping
-from typing import TYPE_CHECKING, Any, Tuple, Union, Mapping, Callable, Optional
+from typing import (
+    TYPE_CHECKING,
+    Any,
+    Tuple,
+    Union,
+    Mapping,
+    Callable,
+    Optional,
+)
 
 import pandas as pd
 
@@ -352,16 +360,17 @@ class ColumnAccessor(MutableMapping):
         mapper : dict-like or function transformations to apply to
             the column label values depending on selected ``level``.
 
-            If dict-like, only replace the specified level of the ColumnAccessor's keys 
-            (that match the mapper's keys) with mapper's values
+            If dict-like, only replace the specified level of the
+            ColumnAccessor's keys (that match the mapper's keys) with
+            mapper's values
 
             If callable, the function is applied only to the specified level
             of the ColumnAccessor's keys.
 
         level : int
             In case of RangeIndex, only supported level is [0, None].
-            In case of a MultiColumn, only the column labels in the specified level
-            of the ColumnAccessor's keys will be transformed.
+            In case of a MultiColumn, only the column labels in the specified
+            level of the ColumnAccessor's keys will be transformed.
 
         Returns
         -------

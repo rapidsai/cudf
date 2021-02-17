@@ -8330,7 +8330,7 @@ def test_rename_for_level_MultiIndex_dataframe(data, index, level):
     pdf = pd.DataFrame(
         data,
         index=pd.MultiIndex.from_tuples([(0, 1, 2), (1, 2, 3), (2, 3, 4)]),
-    ) 
+    )
     pdf.index.names = ["x", "y", "z"]
     gdf = gd.from_pandas(pdf)
 
