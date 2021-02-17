@@ -64,7 +64,7 @@ __device__ inline size_type integer_to_string(IntegerType value, char* d_buffer)
     *d_buffer = '0';
     return 1;
   }
-  bool is_negative = std::is_signed<IntegerType>::value ? (value < 0) : false;
+  bool const is_negative = std::is_signed<IntegerType>::value ? (value < 0) : false;
   //
   constexpr IntegerType base = 10;
   constexpr int MAX_DIGITS   = 20;  // largest 64-bit integer is 20 digits
