@@ -12,7 +12,6 @@ from typing import (
     Union,
     Mapping,
     Callable,
-    Optional,
 )
 
 import pandas as pd
@@ -350,7 +349,7 @@ class ColumnAccessor(MutableMapping):
         return key + (pad_value,) * (self.nlevels - len(key))
 
     def replace_level_values(
-        self, mapper: Union[Mapping[Any, Any], Callable], level: Optional[int]
+        self, mapper: Union[Mapping[Any, Any], Callable], level: int = None
     ) -> ColumnAccessor:
         """
         Parameters
