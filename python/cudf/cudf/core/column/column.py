@@ -1597,7 +1597,6 @@ def build_column(
         )
     elif is_interval_dtype(dtype):
         return cudf.core.column.IntervalColumn(
-            data=data,
             dtype=dtype,
             mask=mask,
             size=size,
