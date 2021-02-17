@@ -181,4 +181,6 @@ ConfigureBench(SUBWORD_TOKENIZER_BENCH text/subword_benchmark.cpp)
 # - strings benchmark -------------------------------------------------------------------
 ConfigureBench(STRINGS_BENCH
   string/case_benchmark.cpp
-  string/convert_durations_benchmark.cpp)
+  string/convert_durations_benchmark.cpp
+  string/replace_scalar_benchmark.cpp
+  string/url_decode_benchmark.cpp)

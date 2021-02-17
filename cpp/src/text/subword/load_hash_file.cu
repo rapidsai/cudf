@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -114,6 +114,52 @@ const aux_codepoint_data_type* get_aux_codepoint_data(rmm::cuda_stream_view stre
   });
 }
 
+namespace {
+/**
+ * @brief Convert string to uint32.
+ *
+ * This just wraps the std::stoi but provides a nice error message
+ * in case the hash file format is incorrect.
+ */
+uint32_t str_to_uint32(std::string const& str, uint64_t line_no)
+{
+  try {
+    return std::stoi(str);  // there is no std::stoui
+  } catch (std::exception const& exc) {
+    std::string message("Line ");
+    message += std::to_string(line_no) + ": ";
+    message += "cannot convert integer from '";
+    message += str;
+    message += "': ";
+    message += exc.what();
+    std::cerr << message << std::endl;
+    throw;
+  }
+}
+
+/**
+ * @brief Convert string to uint64.
+ *
+ * This just wraps the std::stoul but provides a nice error message
+ * in case the hash file format is incorrect.
+ */
+uint64_t str_to_uint64(std::string const& str, uint64_t line_no)
+{
+  try {
+    return std::stoul(str);
+  } catch (std::exception const& exc) {
+    std::string message("Line ");
+    message += std::to_string(line_no) + ": ";
+    message += "cannot convert integer from '";
+    message += str;
+    message += "': ";
+    message += exc.what();
+    std::cerr << message << std::endl;
+    throw;
+  }
+}
+}  // namespace
+
 /**
  * @brief Loads a text file representing the hashed vocabulary into hashed_vocabulary struct.
  *
@@ -145,15 +191,16 @@ hashed_vocabulary load_vocabulary_file(std::string const& filename_hashed_vocabu
   std::ifstream hash_file(filename_hashed_vocabulary);
   CUDF_EXPECTS(hash_file.good(), "Could not open " + filename_hashed_vocabulary);
 
+  uint64_t line_no = 1;
   std::string line;
   std::getline(hash_file, line);
-  result.outer_hash_a = std::stoi(line);
+  result.outer_hash_a = str_to_uint32(line, line_no++);
 
   std::getline(hash_file, line);
-  result.outer_hash_b = std::stoi(line);
+  result.outer_hash_b = str_to_uint32(line, line_no++);
 
   std::getline(hash_file, line);
-  result.num_bins = std::stoi(line);
+  result.num_bins = str_to_uint32(line, line_no++);
 
   std::vector<uint64_t> bin_coefficients(result.num_bins);
   std::vector<uint16_t> bin_offsets(result.num_bins);
@@ -161,32 +208,34 @@ hashed_vocabulary load_vocabulary_file(std::string const& filename_hashed_vocabu
   for (int i = 0; i < result.num_bins; ++i) {
     std::getline(hash_file, line);
     size_t loc_of_space = line.find(" ");
+    CUDF_EXPECTS(loc_of_space != line.npos, "invalid hash file format");
 
     std::string first_num  = line.substr(0, loc_of_space);
     std::string second_num = line.substr(loc_of_space + 1, line.length());
 
-    bin_coefficients[i] = std::stoull(first_num);
-    bin_offsets[i]      = std::stoull(second_num);
+    bin_coefficients[i] = str_to_uint64(first_num, line_no);
+    bin_offsets[i]      = str_to_uint32(second_num, line_no);
+    ++line_no;
   }
 
   std::getline(hash_file, line);
-  uint64_t hash_table_length = std::stoull(line);
+  uint64_t hash_table_length = str_to_uint64(line, line_no++);
   std::vector<uint64_t> table(hash_table_length);
 
-  std::generate(table.begin(), table.end(), [&hash_file]() {
+  std::generate(table.begin(), table.end(), [&hash_file, &line_no]() {
     std::string line;
     std::getline(hash_file, line);
-    return std::stoull(line);
+    return str_to_uint64(line, line_no++);
   });
 
   std::getline(hash_file, line);
-  result.unknown_token_id = std::stoi(line);
+  result.unknown_token_id = str_to_uint32(line, line_no++);
 
   std::getline(hash_file, line);
-  result.first_token_id = std::stoi(line);
+  result.first_token_id = str_to_uint32(line, line_no++);
 
   std::getline(hash_file, line);
-  result.separator_token_id = std::stoi(line);
+  result.separator_token_id = str_to_uint32(line, line_no++);
 
   // Transfer hash table to columns
   result.table = cudf::make_numeric_column(cudf::data_type{cudf::type_id::UINT64},
