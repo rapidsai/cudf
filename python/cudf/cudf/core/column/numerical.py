@@ -113,9 +113,14 @@ class NumericalColumn(ColumnBase):
                 tmp = self if reflect else rhs
                 if (tmp.dtype in int_dtypes) and (
                     (np.isscalar(tmp) and (0 == tmp))
-                    or ((isinstance(tmp, NumericalColumn)) and (0.0 in tmp))
+                    or ((isinstance(tmp, NumericalColumn)) and (0 in tmp))
                 ):
+                    if binop == "floordiv":
+                        raise ValueError(
+                            "Integer floor division by zero is undefined."
+                        )
                     out_dtype = np.dtype("float64")
+        
         return _numeric_column_binop(
             lhs=self, rhs=rhs, op=binop, out_dtype=out_dtype, reflect=reflect
         )
