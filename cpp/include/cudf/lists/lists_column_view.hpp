@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -56,6 +56,8 @@ class lists_column_view : private column_view {
   using column_view::null_mask;
   using column_view::offset;
   using column_view::size;
+  using offset_type     = int32_t;
+  using offset_iterator = offset_type const*;
 
   /**
    * @brief Returns the parent column.
@@ -93,8 +95,6 @@ class lists_column_view : private column_view {
    *
    * @return int32_t const* Pointer to the first offset
    */
-  using offset_type     = int32_t;
-  using offset_iterator = offset_type const*;
   offset_iterator offsets_begin() const noexcept
   {
     return offsets().begin<offset_type>() + offset();
