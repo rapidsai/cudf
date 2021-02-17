@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2020, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -21,8 +21,8 @@
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_factories.hpp>
+#include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
-#include <cudf/null_mask.hpp>
 #include <cudf/strings/detail/utilities.hpp>
 #include <cudf/strings/replace_re.hpp>
 #include <cudf/strings/string_view.cuh>
@@ -97,13 +97,12 @@ struct replace_multi_regex_fn {
       }
       // all the ranges have been updated from each regex match;
       // look for any that match at this character position (ch_pos)
-      auto itr = thrust::find_if(
-        thrust::seq, d_ranges, d_ranges + number_of_patterns, [ch_pos] __device__(auto range) {
+      auto itr =
+        thrust::find_if(thrust::seq, d_ranges, d_ranges + number_of_patterns, [ch_pos](auto range) {
           return range.first == ch_pos;
         });
-      if (itr !=
-          d_ranges +
-            number_of_patterns) {  // match found, compute and replace the string in the output
+      if (itr != d_ranges + number_of_patterns) {
+        // match found, compute and replace the string in the output
         size_type ptn_idx  = static_cast<size_type>(itr - d_ranges);
         size_type begin    = d_ranges[ptn_idx].first;
         size_type end      = d_ranges[ptn_idx].second;
@@ -149,22 +148,27 @@ std::unique_ptr<column> replace_re(
   auto repls_column   = column_device_view::create(repls.parent(), stream);
   auto d_repls        = *repls_column;
   auto d_flags        = get_character_flags_table();
+
   // compile regexes into device objects
   size_type regex_insts = 0;
   std::vector<std::unique_ptr<reprog_device, std::function<void(reprog_device*)>>> h_progs;
-  rmm::device_vector<reprog_device> progs;
+  thrust::host_vector<reprog_device> progs;
   for (auto itr = patterns.begin(); itr != patterns.end(); ++itr) {
-    auto prog  = reprog_device::create(*itr, d_flags, strings_count, stream);
-    auto insts = prog->insts_counts();
-    if (insts > regex_insts) regex_insts = insts;
+    auto prog   = reprog_device::create(*itr, d_flags, strings_count, stream);
+    regex_insts = std::max(regex_insts, prog->insts_counts());
     progs.push_back(*prog);
     h_progs.emplace_back(std::move(prog));
   }
-  auto d_progs = progs.data().get();
 
-  // copy null mask
-  auto null_mask  = copy_bitmask(strings.parent());
-  auto null_count = strings.null_count();
+  // copy all the reprog_device instances to a device memory array
+  rmm::device_buffer progs_buffer{sizeof(reprog_device) * progs.size()};
+  CUDA_TRY(cudaMemcpyAsync(progs_buffer.data(),
+                           progs.data(),
+                           progs.size() * sizeof(reprog_device),
+                           cudaMemcpyHostToDevice,
+                           stream.value()));
+  reprog_device* d_progs = reinterpret_cast<reprog_device*>(progs_buffer.data());
+
   // create working buffer for ranges pairs
   rmm::device_vector<found_range> found_ranges(patterns.size() * strings_count);
   auto d_found_ranges = found_ranges.data().get();
@@ -178,7 +182,7 @@ std::unique_ptr<column> replace_re(
       replace_multi_regex_fn<RX_STACK_SMALL>{
         d_strings, d_progs, static_cast<size_type>(progs.size()), d_found_ranges, d_repls},
       strings_count,
-      null_count,
+      strings.null_count(),
       stream,
       mr);
   else if (regex_insts <= RX_MEDIUM_INSTS)
@@ -186,7 +190,7 @@ std::unique_ptr<column> replace_re(
       replace_multi_regex_fn<RX_STACK_MEDIUM>{
         d_strings, d_progs, static_cast<size_type>(progs.size()), d_found_ranges, d_repls},
       strings_count,
-      null_count,
+      strings.null_count(),
       stream,
       mr);
   else
@@ -194,15 +198,15 @@ std::unique_ptr<column> replace_re(
       replace_multi_regex_fn<RX_STACK_LARGE>{
         d_strings, d_progs, static_cast<size_type>(progs.size()), d_found_ranges, d_repls},
       strings_count,
-      null_count,
+      strings.null_count(),
       stream,
       mr);
 
   return make_strings_column(strings_count,
                              std::move(children.first),
                              std::move(children.second),
-                             null_count,
-                             std::move(null_mask),
+                             strings.null_count(),
+                             cudf::detail::copy_bitmask(strings.parent(), stream, mr),
                              stream,
                              mr);
 }

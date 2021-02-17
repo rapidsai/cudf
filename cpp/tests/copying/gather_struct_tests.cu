@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -22,6 +22,7 @@
 
 #include <cudf/column/column_factories.hpp>
 #include <cudf/copying.hpp>
+#include <cudf/detail/iterator.cuh>
 #include <cudf/detail/utilities/device_operators.cuh>
 #include <cudf/lists/lists_column_view.hpp>
 #include <cudf/null_mask.hpp>
@@ -94,15 +95,15 @@ auto get_expected_column(std::vector<SourceElementT> const& input_values,
     };
 
   auto expected_row_count{gather_map.size()};
-  auto gather_iter =
-    cudf::test::make_counting_transform_iterator(0, [is_valid, &input_values, &gather_map](auto i) {
+  auto gather_iter = cudf::detail::make_counting_transform_iterator(
+    0, [is_valid, &input_values, &gather_map](auto i) {
       return is_valid(i) ? input_values[gather_map[i]] : SourceElementT{};
     });
 
   return column_wrapper_constructor<ElementTo, SourceElementT>()(
            gather_iter,
            gather_iter + expected_row_count,
-           cudf::test::make_counting_transform_iterator(0, is_valid))
+           cudf::detail::make_counting_transform_iterator(0, is_valid))
     .release();
 }
 }  // namespace
@@ -185,7 +186,7 @@ TYPED_TEST(TypedStructGatherTest, TestGatherStructOfLists)
   auto lists_column_exemplar = []() {
     return lists_column_wrapper<TypeParam, int32_t>{
       {{5}, {10, 15}, {20, 25, 30}, {35, 40, 45, 50}, {55, 60, 65}, {70, 75}, {80}, {}, {}},
-      make_counting_transform_iterator(0, [](auto i) { return !(i % 3); })};
+      cudf::detail::make_counting_transform_iterator(0, [](auto i) { return !(i % 3); })};
   };
 
   auto lists_column = std::make_unique<cudf::column>(cudf::column(lists_column_exemplar(), 0));
@@ -238,7 +239,7 @@ TYPED_TEST(TypedStructGatherTest, TestGatherStructOfListsOfLists)
        {{80, 80}},
        {},
        {}},
-      make_counting_transform_iterator(0, [](auto i) { return !(i % 3); })};
+      cudf::detail::make_counting_transform_iterator(0, [](auto i) { return !(i % 3); })};
   };
 
   auto lists_column = std::make_unique<cudf::column>(cudf::column(lists_column_exemplar(), 0));
@@ -283,7 +284,7 @@ TYPED_TEST(TypedStructGatherTest, TestGatherStructOfStructs)
   auto const numeric_column_exemplar = []() {
     return fixed_width_column_wrapper<TypeParam, int32_t>{
       {5, 10, 15, 20, 25, 30, 35, 45, 50, 55, 60, 65, 70, 75},
-      make_counting_transform_iterator(0, [](auto i) { return !(i % 3); })};
+      cudf::detail::make_counting_transform_iterator(0, [](auto i) { return !(i % 3); })};
   };
 
   auto numeric_column = numeric_column_exemplar();
@@ -382,7 +383,7 @@ TYPED_TEST(TypedStructGatherTest, TestGatherStructOfStructsWithValidity)
   auto const numeric_column_exemplar = [](nvstd::function<bool(size_type)> pred) {
     return fixed_width_column_wrapper<TypeParam, int32_t>{
       {5, 10, 15, 20, 25, 30, 35, 45, 50, 55, 60, 65, 70, 75},
-      make_counting_transform_iterator(0, [=](auto i) { return pred(i); })};
+      cudf::detail::make_counting_transform_iterator(0, [=](auto i) { return pred(i); })};
   };
 
   // Validity predicates.
@@ -392,7 +393,7 @@ TYPED_TEST(TypedStructGatherTest, TestGatherStructOfStructsWithValidity)
   // Construct struct-of-struct-of-numerics.
   auto numeric_column = numeric_column_exemplar(every_3rd_element_null);
   auto structs_column = structs_column_wrapper{
-    {numeric_column}, make_counting_transform_iterator(0, twelfth_element_null)};
+    {numeric_column}, cudf::detail::make_counting_transform_iterator(0, twelfth_element_null)};
   auto struct_of_structs_column = structs_column_wrapper{{structs_column}}.release();
 
   // Gather to new struct column.

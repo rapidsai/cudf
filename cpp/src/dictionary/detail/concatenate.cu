@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,6 +17,7 @@
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/concatenate.cuh>
 #include <cudf/detail/indexalator.cuh>
+#include <cudf/detail/iterator.cuh>
 #include <cudf/detail/stream_compaction.hpp>
 #include <cudf/dictionary/detail/concatenate.hpp>
 #include <cudf/dictionary/dictionary_column_view.hpp>
@@ -231,10 +232,10 @@ std::unique_ptr<column> concatenate(std::vector<column_view> const& columns,
   // build a vector of values to map the old indices to the concatenated keys
   auto children_offsets = child_offsets_fn.create_children_offsets(stream);
   rmm::device_uvector<size_type> map_to_keys(indices_size, stream);
-  auto indices_itr = thrust::make_transform_iterator(thrust::make_counting_iterator<size_type>(1),
-                                                     [] __device__(size_type idx) {
-                                                       return offsets_pair{0, idx};
-                                                     });
+  auto indices_itr =
+    cudf::detail::make_counting_transform_iterator(1, [] __device__(size_type idx) {
+      return offsets_pair{0, idx};
+    });
   // the indices offsets (pair.second) are for building the map
   thrust::lower_bound(
     rmm::exec_policy(stream),

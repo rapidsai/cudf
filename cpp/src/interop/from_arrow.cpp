@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -183,7 +183,7 @@ std::unique_ptr<column> dispatch_to_cudf_column::operator()<bool>(
   auto out_col = mask_to_bools(static_cast<bitmask_type*>(data.data()),
                                array.offset(),
                                array.offset() + array.length(),
-                               stream.value(),
+                               stream,
                                mr);
 
   auto const has_nulls = skip_mask ? false : array.null_bitmap_data() != nullptr;

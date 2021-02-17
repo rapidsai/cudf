@@ -47,7 +47,7 @@ void BM_pre_sorted_nth(benchmark::State& state)
   // const cudf::size_type num_columns{(cudf::size_type)state.range(0)};
   const cudf::size_type column_size{(cudf::size_type)state.range(0)};
 
-  auto data_it = cudf::test::make_counting_transform_iterator(
+  auto data_it = cudf::detail::make_counting_transform_iterator(
     0, [=](cudf::size_type row) { return random_int(0, 100); });
 
   wrapper keys(data_it, data_it + column_size);

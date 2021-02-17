@@ -66,8 +66,7 @@ __global__ void __launch_bounds__(init_threads_per_block)
  * @param[in] statistics_count Number of statistics buffers
  */
 constexpr unsigned int buffersize_reduction_dim = 32;
-constexpr unsigned int buffersize_threads_per_block =
-  buffersize_reduction_dim * buffersize_reduction_dim;
+constexpr unsigned int block_size        = buffersize_reduction_dim * buffersize_reduction_dim;
 constexpr unsigned int pb_fld_hdrlen     = 1;
 constexpr unsigned int pb_fld_hdrlen16   = 2;  // > 127-byte length
 constexpr unsigned int pb_fld_hdrlen32   = 5;  // > 16KB length
@@ -77,19 +76,18 @@ constexpr unsigned int pb_fldlen_decimal = 40;  // Assume decimal2string fits in
 constexpr unsigned int pb_fldlen_bucket1 = 1 + pb_fldlen_int64;
 constexpr unsigned int pb_fldlen_common  = 2 * pb_fld_hdrlen + pb_fldlen_int64;
 
-__global__ void __launch_bounds__(buffersize_threads_per_block, 1)
+template <unsigned int block_size>
+__global__ void __launch_bounds__(block_size, 1)
   gpu_init_statistics_buffersize(statistics_merge_group *groups,
                                  const statistics_chunk *chunks,
                                  uint32_t statistics_count)
 {
-  __shared__ volatile uint32_t scratch_red[buffersize_reduction_dim];
-  __shared__ volatile uint32_t stats_size;
-  uint32_t tx = threadIdx.x;
-  uint32_t ty = threadIdx.y;
-  uint32_t t  = ty * buffersize_reduction_dim + tx;
-  if (!t) { stats_size = 0; }
+  using block_scan = cub::BlockScan<uint32_t, block_size, cub::BLOCK_SCAN_WARP_SCANS>;
+  __shared__ typename block_scan::TempStorage temp_storage;
+  volatile uint32_t stats_size = 0;
+  uint32_t t                   = threadIdx.x;
   __syncthreads();
-  for (uint32_t start = 0; start < statistics_count; start += buffersize_threads_per_block) {
+  for (uint32_t start = 0; start < statistics_count; start += block_size) {
     uint32_t stats_len = 0, stats_pos;
     uint32_t idx       = start + t;
     if (idx < statistics_count) {
@@ -120,19 +118,15 @@ __global__ void __launch_bounds__(buffersize_threads_per_block, 1)
         default: break;
       }
     }
-    stats_pos = WarpReducePos32(stats_len, tx);
-    if (tx == buffersize_reduction_dim - 1) { scratch_red[ty] = stats_pos; }
-    __syncthreads();
-    if (ty == 0) { scratch_red[tx] = WarpReducePos32(scratch_red[tx], tx); }
-    __syncthreads();
-    if (ty != 0) { stats_pos += scratch_red[ty - 1]; }
+    uint32_t tmp_stats_size;
+    block_scan(temp_storage).ExclusiveSum(stats_len, stats_pos, tmp_stats_size);
     stats_pos += stats_size;
+    stats_size += tmp_stats_size;
     if (idx < statistics_count) {
-      groups[idx].start_chunk = stats_pos - stats_len;
+      groups[idx].start_chunk = stats_pos;
       groups[idx].num_chunks  = stats_len;
     }
     __syncthreads();
-    if (t == buffersize_threads_per_block - 1) { stats_size = stats_pos; }
   }
 }
 
@@ -405,9 +399,8 @@ void orc_init_statistics_buffersize(statistics_merge_group *groups,
                                     uint32_t statistics_count,
                                     rmm::cuda_stream_view stream)
 {
-  dim3 dim_block(buffersize_reduction_dim, buffersize_reduction_dim);
-  gpu_init_statistics_buffersize<<<1, dim_block, 0, stream.value()>>>(
-    groups, chunks, statistics_count);
+  gpu_init_statistics_buffersize<block_size>
+    <<<1, block_size, 0, stream.value()>>>(groups, chunks, statistics_count);
 }
 
 /**
