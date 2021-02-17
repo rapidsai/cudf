@@ -18,8 +18,11 @@
 
 #include <cudf/detail/iterator.cuh>
 #include <cudf/types.hpp>
+#include <cudf/utilities/span.hpp>
 
 #include <thrust/iterator/transform_iterator.h>
+
+#include <iterator>
 
 namespace cudf {
 namespace test {
@@ -38,15 +41,43 @@ namespace test {
  * iter[9] == false; // i.e. Invalid row at index 9.
  * @endcode
  *
- * @param indices The collection of indices for which the validity iterator
- *                must return `false` (i.e. null)
+ * @tparam Iter Iterator type
+ * @param index_start Iterator to start of indices for which the validity iterator
+ *                    must return `false` (i.e. null)
+ * @param index_end   Iterator to end of indices for the validity iterator
  * @return auto Validity iterator
  */
-static auto iterator_with_null_at(std::vector<cudf::size_type> const& indices)
+template <typename Iter>
+static auto iterator_with_null_at(Iter index_start, Iter index_end)
 {
-  return cudf::detail::make_counting_transform_iterator(0, [indices](auto i) {
-    return std::find(indices.begin(), indices.end(), i) == indices.cend();
-  });
+  using index_type = typename std::iterator_traits<Iter>::value_type;
+
+  return cudf::detail::make_counting_transform_iterator(
+    0, [indices = std::vector<index_type>{index_start, index_end}](auto i) {
+      return std::find(indices.cbegin(), indices.cend(), i) == indices.cend();
+    });
+}
+
+/**
+ * @brief Bool iterator for marking (possibly multiple) null elements in a column_wrapper.
+ *
+ * The returned iterator yields `false` (to mark `null`) at all the specified indices,
+ * and yields `true` (to mark valid rows) for all other indices. E.g.
+ *
+ * @code
+ * auto iter = iterator_with_null_at(std::vector<size_type>{8,9});
+ * iter[6] == true;  // i.e. Valid row at index 6.
+ * iter[7] == true;  // i.e. Valid row at index 7.
+ * iter[8] == false; // i.e. Invalid row at index 8.
+ * iter[9] == false; // i.e. Invalid row at index 9.
+ * @endcode
+ *
+ * @param indices The indices for which the validity iterator must return `false` (i.e. null)
+ * @return auto Validity iterator
+ */
+static auto iterator_with_null_at(cudf::detail::host_span<cudf::size_type const> const& indices)
+{
+  return iterator_with_null_at(indices.begin(), indices.end());
 }
 
 /**
@@ -66,7 +97,7 @@ static auto iterator_with_null_at(std::vector<cudf::size_type> const& indices)
  */
 static auto iterator_with_null_at(cudf::size_type const& index)
 {
-  return iterator_with_null_at(std::vector<cudf::size_type>{index});
+  return iterator_with_null_at(std::vector<size_type>{index});
 }
 
 }  // namespace test
