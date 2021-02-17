@@ -349,7 +349,7 @@ class ColumnAccessor(MutableMapping):
         return key + (pad_value,) * (self.nlevels - len(key))
 
     def replace_level_values(
-        self, mapper: Union[Mapping[Any, Any], Callable], level: int = None
+        self, mapper: Union[Mapping[Any, Any], Callable], level: int
     ) -> ColumnAccessor:
         """
         Parameters
