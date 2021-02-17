@@ -1911,7 +1911,7 @@ def as_column(
                 dtype=arbitrary.dtype,
             )
         elif (
-            len(arbitrary) > 0
+            arbitrary.size != 0
             and arb_dtype.kind in ("O")
             and isinstance(arbitrary[0], pd._libs.interval.Interval)
         ):
@@ -1953,7 +1953,7 @@ def as_column(
                 if arb_dtype != arbitrary.dtype.numpy_dtype:
                     arbitrary = arbitrary.astype(arb_dtype)
         if (
-            len(arbitrary) > 0
+            arbitrary.size != 0
             and isinstance(arbitrary[0], pd._libs.interval.Interval)
             and arb_dtype.kind in ("O")
         ):
