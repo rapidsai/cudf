@@ -22,13 +22,11 @@
  * @file device_operators.cuh
  */
 
+#include <cudf/fixed_point/fixed_point.hpp>
 #include <cudf/scalar/scalar.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/error.hpp>
 #include <cudf/utilities/traits.hpp>
-
-// will fail to compile if grouped with the includes above
-#include <cudf/fixed_point/fixed_point.hpp>
 
 #include <type_traits>
 
