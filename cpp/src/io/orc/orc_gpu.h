@@ -145,6 +145,7 @@ struct encoder_chunk_streams {
   uint8_t *data_ptrs[CI_NUM_STREAMS];  // encoded output
   int32_t ids[CI_NUM_STREAMS];         // stream id or -1 if not present
   uint32_t lengths[CI_NUM_STREAMS];    // in: max length, out: actual length (TODO: separate)
+  encoder_chunk_streams() : data_ptrs{}, lengths{} {}
 };
 
 /**

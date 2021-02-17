@@ -355,10 +355,8 @@ void writer::impl::build_dictionaries(orc_column_view *columns,
     auto &str_column   = columns[str_col_ids[col_idx]];
     str_column.attach_stripe_dict(stripe_dict.host_ptr(), stripe_dict.device_ptr());
 
-    for (size_t stripe_id = 0; stripe_id < stripe_bounds.size(); ++stripe_id) {
-      auto const &stripe = stripe_bounds[stripe_id];
-
-      auto *sd             = &stripe_dict[stripe_id * str_col_ids.size() + col_idx];
+    for (auto const &stripe : stripe_bounds) {
+      auto *sd             = &stripe_dict[stripe.id * str_col_ids.size() + col_idx];
       sd->column_data_base = str_column.host_dict_chunk(0)->column_data_base;
       sd->dict_data        = str_column.host_dict_chunk(stripe.first)->dict_data;
       sd->dict_index       = dict_index + col_idx * num_rows;  // Indexed by abs row
@@ -385,8 +383,8 @@ void writer::impl::build_dictionaries(orc_column_view *columns,
 
     // Early disable of dictionary if it doesn't look good at the chunk level
     if (enable_dictionary_ && dict_cost >= direct_cost) {
-      for (size_t stripe_id = 0; stripe_id < stripe_bounds.size(); ++stripe_id) {
-        stripe_dict[stripe_id * str_col_ids.size() + col_idx].dict_data = nullptr;
+      for (auto const &stripe : stripe_bounds) {
+        stripe_dict[stripe.id * str_col_ids.size() + col_idx].dict_data = nullptr;
       }
     }
   }
@@ -477,10 +475,9 @@ orc_streams writer::impl::create_streams(host_span<orc_column_view> columns,
         size_t dict_data_size      = 0;
         size_t dict_strings        = 0;
         size_t dict_lengths_div512 = 0;
-        for (size_t stripe_idx = 0; stripe_idx < stripe_bounds.size(); ++stripe_idx) {
-          auto const &stripe = stripe_bounds[stripe_idx];
-          const auto sd      = column.host_stripe_dict(stripe_idx);
-          enable_dict        = (enable_dict && sd->dict_data != nullptr);
+        for (auto const &stripe : stripe_bounds) {
+          const auto sd = column.host_stripe_dict(stripe.id);
+          enable_dict   = (enable_dict && sd->dict_data != nullptr);
           if (enable_dict) {
             dict_strings += sd->num_strings;
             dict_lengths_div512 += (sd->num_strings + 0x1ff) >> 9;
@@ -662,58 +659,59 @@ encoded_data writer::impl::encode_columns(host_span<orc_column_view const> colum
                  "more information.");
   }
 
-  uint32_t stripe_id = 0;
-  for (size_t rg_idx = 0; rg_idx < num_rowgroups; rg_idx++) {
-    // Track the current stripe this rowgroup chunk belongs
-    if (rg_idx == stripe_bounds[stripe_id].first + stripe_bounds[stripe_id].size) { ++stripe_id; }
-    for (size_t col_idx = 0; col_idx < num_columns; col_idx++) {
-      auto const &column = columns[col_idx];
-      auto &ck           = chunks[col_idx][rg_idx];
-      auto &strm         = chunk_streams[col_idx][rg_idx];
+  for (size_t col_idx = 0; col_idx < num_columns; col_idx++) {
+    auto const &column = columns[col_idx];
+    auto col_streams   = chunk_streams[col_idx];
+    for (auto const &stripe : stripe_bounds) {
+      for (auto rg_idx_it = stripe.cbegin(); rg_idx_it < stripe.cend(); ++rg_idx_it) {
+        auto const rg_idx = *rg_idx_it;
+        auto const &ck    = chunks[col_idx][rg_idx];
+        auto &strm        = col_streams[rg_idx];
 
-      for (int k = 0; k < gpu::CI_NUM_STREAMS; k++) {
-        auto const strm_id = streams.id(col_idx * gpu::CI_NUM_STREAMS + k);
+        for (int strm_type = 0; strm_type < gpu::CI_NUM_STREAMS; ++strm_type) {
+          auto const strm_id = streams.id(col_idx * gpu::CI_NUM_STREAMS + strm_type);
 
-        strm.ids[k] = strm_id;
-        if (strm_id >= 0) {
-          if ((k == gpu::CI_DICTIONARY) ||
-              (k == gpu::CI_DATA2 && ck.encoding_kind == DICTIONARY_V2)) {
-            if (rg_idx == stripe_bounds[stripe_id].first) {
-              const int32_t dict_stride = column.get_dict_stride();
-              const auto stripe         = column.host_stripe_dict(stripe_id);
-              strm.lengths[k]           = (k == gpu::CI_DICTIONARY)
-                                  ? stripe->dict_char_count
-                                  : (((stripe->num_strings + 0x1ff) >> 9) * (512 * 4 + 2));
-              if (stripe_id == 0) {
-                strm.data_ptrs[k] = encoded_data.data() + stream_offsets.offsets[strm_id];
+          strm.ids[strm_type] = strm_id;
+          if (strm_id >= 0) {
+            if ((strm_type == gpu::CI_DICTIONARY) ||
+                (strm_type == gpu::CI_DATA2 && ck.encoding_kind == DICTIONARY_V2)) {
+              if (rg_idx_it == stripe.cbegin()) {
+                const int32_t dict_stride = column.get_dict_stride();
+                const auto stripe_dict    = column.host_stripe_dict(stripe.id);
+                strm.lengths[strm_type] =
+                  (strm_type == gpu::CI_DICTIONARY)
+                    ? stripe_dict->dict_char_count
+                    : (((stripe_dict->num_strings + 0x1ff) >> 9) * (512 * 4 + 2));
+                if (stripe.id == 0) {
+                  strm.data_ptrs[strm_type] = encoded_data.data() + stream_offsets.offsets[strm_id];
+                } else {
+                  auto const &strm_up = col_streams[stripe_dict[-dict_stride].start_chunk];
+                  strm.data_ptrs[strm_type] =
+                    strm_up.data_ptrs[strm_type] + strm_up.lengths[strm_type];
+                }
               } else {
-                auto const &strm_up = chunk_streams[col_idx][stripe[-dict_stride].start_chunk];
-                strm.data_ptrs[k]   = strm_up.data_ptrs[k] + strm_up.lengths[k];
+                strm.lengths[strm_type]   = 0;
+                strm.data_ptrs[strm_type] = col_streams[rg_idx - 1].data_ptrs[strm_type];
               }
+            } else if (strm_type == gpu::CI_DATA && ck.type_kind == TypeKind::STRING &&
+                       ck.encoding_kind == DIRECT_V2) {
+              strm.lengths[strm_type] = column.host_dict_chunk(rg_idx)->string_char_count;
+              auto const &prev_strm   = col_streams[rg_idx - 1];
+              strm.data_ptrs[strm_type] =
+                (rg_idx == 0) ? encoded_data.data() + stream_offsets.offsets[strm_id]
+                              : (prev_strm.data_ptrs[strm_type] + prev_strm.lengths[strm_type]);
+            } else if (strm_type == gpu::CI_DATA && streams[strm_id].length == 0 &&
+                       (ck.type_kind == DOUBLE || ck.type_kind == FLOAT)) {
+              // Pass-through
+              strm.lengths[strm_type]   = ck.num_rows * ck.dtype_len;
+              strm.data_ptrs[strm_type] = nullptr;
             } else {
-              strm.lengths[k]   = 0;
-              strm.data_ptrs[k] = chunk_streams[col_idx][rg_idx - 1].data_ptrs[k];
+              strm.lengths[strm_type]   = streams[strm_id].length;
+              strm.data_ptrs[strm_type] = encoded_data.data() + stream_offsets.str_data_size +
+                                          stream_offsets.offsets[strm_id] +
+                                          streams[strm_id].length * rg_idx;
             }
-          } else if (k == gpu::CI_DATA && ck.type_kind == TypeKind::STRING &&
-                     ck.encoding_kind == DIRECT_V2) {
-            strm.lengths[k]       = column.host_dict_chunk(rg_idx)->string_char_count;
-            auto const &prev_strm = chunk_streams[col_idx][rg_idx - 1];
-            strm.data_ptrs[k]     = (rg_idx == 0)
-                                  ? encoded_data.data() + stream_offsets.offsets[strm_id]
-                                  : (prev_strm.data_ptrs[k] + prev_strm.lengths[k]);
-          } else if (k == gpu::CI_DATA && streams[strm_id].length == 0 &&
-                     (ck.type_kind == DOUBLE || ck.type_kind == FLOAT)) {
-            // Pass-through
-            strm.lengths[k]   = ck.num_rows * ck.dtype_len;
-            strm.data_ptrs[k] = nullptr;
-          } else {
-            strm.lengths[k]   = streams[strm_id].length;
-            strm.data_ptrs[k] = encoded_data.data() + stream_offsets.str_data_size +
-                                stream_offsets.offsets[strm_id] + streams[strm_id].length * rg_idx;
           }
-        } else {
-          strm.lengths[k]   = 0;
-          strm.data_ptrs[k] = nullptr;
         }
       }
     }
@@ -750,8 +748,7 @@ std::vector<StripeInformation> writer::impl::gather_stripes(
   hostdevice_vector<gpu::StripeStream> &strm_desc)
 {
   std::vector<StripeInformation> stripes(stripe_bounds.size());
-  for (size_t stripe_idx = 0; stripe_idx < stripe_bounds.size(); ++stripe_idx) {
-    auto const &stripe = stripe_bounds[stripe_idx];
+  for (auto const &stripe : stripe_bounds) {
     for (size_t col_idx = 0; col_idx < num_columns; col_idx++) {
       const auto &strm = enc_streams[col_idx][stripe.first];
 
@@ -759,7 +756,7 @@ std::vector<StripeInformation> writer::impl::gather_stripes(
       for (int k = 0; k < gpu::CI_INDEX; k++) {
         const auto stream_id = strm.ids[k];
         if (stream_id != -1) {
-          auto *ss = &strm_desc[stripe_idx * num_data_streams + stream_id - num_index_streams];
+          auto *ss = &strm_desc[stripe.id * num_data_streams + stream_id - num_index_streams];
           ss->stream_size    = 0;
           ss->first_chunk_id = stripe.first;
           ss->num_chunks     = stripe.size;
@@ -769,9 +766,9 @@ std::vector<StripeInformation> writer::impl::gather_stripes(
       }
     }
 
-    auto const stripe_group_end      = *stripe.cend();
-    auto const stripe_end            = std::min(stripe_group_end * row_index_stride_, num_rows);
-    stripes[stripe_idx].numberOfRows = stripe_end - stripe.first * row_index_stride_;
+    auto const stripe_group_end     = *stripe.cend();
+    auto const stripe_end           = std::min(stripe_group_end * row_index_stride_, num_rows);
+    stripes[stripe.id].numberOfRows = stripe_end - stripe.first * row_index_stride_;
   }
 
   strm_desc.host_to_device(stream);
@@ -828,12 +825,11 @@ std::vector<std::vector<uint8_t>> writer::impl::gather_statistic_blobs(
     } else {
       desc->ts_scale = 0;
     }
-    for (size_t stripe_idx = 0; stripe_idx < stripe_bounds.size(); ++stripe_idx) {
-      auto const &stripe = stripe_bounds[stripe_idx];
-      auto grp           = &stat_merge[col_idx * stripe_bounds.size() + stripe_idx];
-      grp->col           = stat_desc.device_ptr(col_idx);
-      grp->start_chunk   = static_cast<uint32_t>(col_idx * num_rowgroups + stripe.first);
-      grp->num_chunks    = stripe.size;
+    for (auto const &stripe : stripe_bounds) {
+      auto grp         = &stat_merge[col_idx * stripe_bounds.size() + stripe.id];
+      grp->col         = stat_desc.device_ptr(col_idx);
+      grp->start_chunk = static_cast<uint32_t>(col_idx * num_rowgroups + stripe.first);
+      grp->num_chunks  = stripe.size;
     }
     statistics_merge_group *col_stats =
       &stat_merge[stripe_bounds.size() * columns.size() + col_idx];
