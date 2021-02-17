@@ -29,65 +29,11 @@
 namespace cudf {
 namespace detail {
 
-/**
- * @brief Returns a vector with non-common indices which is set difference
- * between `[0, num_columns)` and index values in common_column_indices
- *
- * @param num_columns The number of columns, which represents column indices
- * from `[0, num_columns)` in a table
- * @param common_column_indices A vector of common indices which needs to be
- * excluded from `[0, num_columns)`
- *
- * @return vector A vector containing only the indices which are not present in
- * `common_column_indices`
- */
-std::vector<size_type> non_common_column_indices(
-  size_type num_columns, std::vector<size_type> const &common_column_indices)
-{
-  CUDF_EXPECTS(common_column_indices.size() <= static_cast<uint64_t>(num_columns),
-               "Too many columns in common");
-  std::vector<size_type> all_column_indices(num_columns);
-  std::iota(std::begin(all_column_indices), std::end(all_column_indices), 0);
-  std::vector<size_type> sorted_common_column_indices{common_column_indices};
-  std::sort(std::begin(sorted_common_column_indices), std::end(sorted_common_column_indices));
-  std::vector<size_type> non_common_column_indices(num_columns - common_column_indices.size());
-  std::set_difference(std::cbegin(all_column_indices),
-                      std::cend(all_column_indices),
-                      std::cbegin(sorted_common_column_indices),
-                      std::cend(sorted_common_column_indices),
-                      std::begin(non_common_column_indices));
-  return non_common_column_indices;
-}
-
 std::pair<std::unique_ptr<table>, std::unique_ptr<table>> get_empty_joined_table(
-  table_view const &probe,
-  table_view const &build,
-  std::vector<std::pair<size_type, size_type>> const &columns_in_common,
-  cudf::hash_join::common_columns_output_side common_columns_output_side)
+  table_view const &probe, table_view const &build)
 {
-  std::vector<size_type> columns_to_exclude(columns_in_common.size());
-  std::transform(columns_in_common.begin(),
-                 columns_in_common.end(),
-                 columns_to_exclude.begin(),
-                 [common_columns_output_side](auto &col) {
-                   return common_columns_output_side == hash_join::common_columns_output_side::PROBE
-                            ? col.second
-                            : col.first;
-                 });
-  std::vector<size_type> non_common_indices = non_common_column_indices(
-    common_columns_output_side == hash_join::common_columns_output_side::PROBE
-      ? build.num_columns()
-      : probe.num_columns(),
-    columns_to_exclude);
   std::unique_ptr<table> empty_probe = empty_like(probe);
   std::unique_ptr<table> empty_build = empty_like(build);
-  if (common_columns_output_side == hash_join::common_columns_output_side::PROBE) {
-    table_view empty_build_view = empty_build->select(non_common_indices);
-    empty_build                 = std::make_unique<table>(empty_build_view);
-  } else {
-    table_view empty_probe_view = empty_probe->select(non_common_indices);
-    empty_probe                 = std::make_unique<table>(empty_probe_view);
-  }
   return std::make_pair(std::move(empty_probe), std::move(empty_build));
 }
 
@@ -201,8 +147,6 @@ get_left_join_indices_complement(rmm::device_uvector<size_type> &right_indices,
  * @throw cudf::logic_error if the number of columns in `build` table is 0.
  * @throw cudf::logic_error if the number of rows in `build` table is 0.
  * @throw cudf::logic_error if insertion to the hash table fails.
- * @throw std::out_of_range if elements of `build_on` exceed the number of columns in the `build`
- * table.
  *
  * @param build Table of columns used to build join hash.
  * @param compare_nulls Controls whether null join-key values should match or not.
@@ -321,88 +265,6 @@ std::pair<rmm::device_uvector<size_type>, rmm::device_uvector<size_type>> probe_
   return std::make_pair(std::move(left_indices), std::move(right_indices));
 }
 
-/**
- * @brief  Combines the non common probe, common probe, non common build and common build
- * columns in the correct order according to `common_columns_output_side` to form the joined
- * (`probe`, `build`) table pair.
- *
- * @param probe_noncommon_cols Columns obtained by gathering non common probe columns.
- * @param probe_noncommon_col_indices Output locations of non common probe columns in the probe
- * portion.
- * @param probe_common_col_indices Output locations of common probe columns in the probe portion.
- * @param build_noncommon_cols Columns obtained by gathering non common build columns.
- * @param build_noncommon_col_indices Output locations of non common build columns in the build
- * portion.
- * @param build_common_col_indices Output locations of common build columns in the build portion.
- * @param common_cols Columns obtained by gathering common columns from `probe` and `build` tables
- * in the build portion.
- * @param common_columns_output_side @see cudf::hash_join::common_columns_output_side.
- *
- * @return Table pair of (`probe`, `build`).
- */
-std::pair<std::unique_ptr<table>, std::unique_ptr<table>> combine_join_columns(
-  std::vector<std::unique_ptr<column>> &&probe_noncommon_cols,
-  std::vector<size_type> const &probe_noncommon_col_indices,
-  std::vector<size_type> const &probe_common_col_indices,
-  std::vector<std::unique_ptr<column>> &&build_noncommon_cols,
-  std::vector<size_type> const &build_noncommon_col_indices,
-  std::vector<size_type> const &build_common_col_indices,
-  std::vector<std::unique_ptr<column>> &&common_cols,
-  cudf::hash_join::common_columns_output_side common_columns_output_side)
-{
-  if (common_columns_output_side == cudf::hash_join::common_columns_output_side::PROBE) {
-    std::vector<std::unique_ptr<column>> probe_cols(probe_noncommon_cols.size() +
-                                                    common_cols.size());
-    for (size_t i = 0; i < probe_noncommon_cols.size(); ++i) {
-      probe_cols.at(probe_noncommon_col_indices.at(i)) = std::move(probe_noncommon_cols.at(i));
-    }
-    for (size_t i = 0; i < common_cols.size(); ++i) {
-      probe_cols.at(probe_common_col_indices.at(i)) = std::move(common_cols.at(i));
-    }
-    return std::make_pair(std::make_unique<cudf::table>(std::move(probe_cols)),
-                          std::make_unique<cudf::table>(std::move(build_noncommon_cols)));
-  } else {
-    std::vector<std::unique_ptr<column>> build_cols(build_noncommon_cols.size() +
-                                                    common_cols.size());
-    for (size_t i = 0; i < build_noncommon_cols.size(); ++i) {
-      build_cols.at(build_noncommon_col_indices.at(i)) = std::move(build_noncommon_cols.at(i));
-    }
-    for (size_t i = 0; i < common_cols.size(); ++i) {
-      build_cols.at(build_common_col_indices.at(i)) = std::move(common_cols.at(i));
-    }
-    return std::make_pair(std::make_unique<cudf::table>(std::move(probe_noncommon_cols)),
-                          std::make_unique<cudf::table>(std::move(build_cols)));
-  }
-}
-
-/**
- * @brief  Gathers rows from `probe` and `build` table and returns a (`probe`, `build`) table pair,
- * which contains the probe and build portions of the logical joined table respectively.
- *
- * @tparam JoinKind The type of join to be performed
- *
- * @param probe Probe side table
- * @param build build side table
- * @param joined_indices Pair of vectors containing row indices from which
- * `probe` and `build` tables are gathered. If any row index is out of bounds,
- * the contribution in the output `table` will be NULL.
- * @param columns_in_common is a vector of pairs of column indices
- * from tables `probe` and `build` respectively, that are "in common".
- * For "common" columns, only a single output column will be produced.
- * For an inner or left join, the result will be gathered from the column in
- * `probe`. For a full join, the result will be gathered from both common
- * columns in `probe` and `build` and concatenated to form a single column.
- * @param common_columns_output_side @see cudf::hash_join::common_columns_output_side.
- *
- * @return Table pair of (`probe`, `build`) containing the rows from `probe` and
- * `build` specified by `joined_indices`.
- * Columns in `columns_in_common` will be included in either `probe` or `build` portion as
- * `common_columns_output_side` indicates. Final form would look like
- * (`probe(including common columns)`, `build(excluding common columns)`) if
- * `common_columns_output_side` is `PROBE`, or (`probe(excluding common columns)`,
- * `build(including common columns)`) if `common_columns_output_side` is `BUILD`.
- */
-
 std::unique_ptr<cudf::table> combine_table_pair(std::unique_ptr<cudf::table> &&left,
                                                 std::unique_ptr<cudf::table> &&right)
 {
@@ -419,100 +281,53 @@ std::unique_ptr<cudf::table> combine_table_pair(std::unique_ptr<cudf::table> &&l
 hash_join::hash_join_impl::~hash_join_impl() = default;
 
 hash_join::hash_join_impl::hash_join_impl(cudf::table_view const &build,
-                                          std::vector<size_type> const &build_on,
                                           null_equality compare_nulls,
                                           rmm::cuda_stream_view stream)
-  : _build(build),
-    _build_selected(build.select(build_on)),
-    _build_on(build_on),
-    _hash_table(nullptr)
+  : _build(build), _hash_table(nullptr)
 {
   CUDF_FUNC_RANGE();
   CUDF_EXPECTS(0 != _build.num_columns(), "Hash join build table is empty");
   CUDF_EXPECTS(_build.num_rows() < cudf::detail::MAX_JOIN_SIZE,
                "Build column size is too big for hash join");
 
-  if (_build_on.empty() || 0 == build.num_rows()) { return; }
+  if (0 == build.num_rows()) { return; }
 
-  _hash_table = build_join_hash_table(_build_selected, compare_nulls, stream);
+  _hash_table = build_join_hash_table(_build, compare_nulls, stream);
 }
 
 std::pair<std::unique_ptr<cudf::column>, std::unique_ptr<cudf::column>>
 hash_join::hash_join_impl::inner_join(cudf::table_view const &probe,
-                                      std::vector<size_type> const &probe_on,
                                       null_equality compare_nulls,
                                       rmm::cuda_stream_view stream,
                                       rmm::mr::device_memory_resource *mr) const
 {
   CUDF_FUNC_RANGE();
-  return compute_hash_join<cudf::detail::join_kind::INNER_JOIN>(
-    probe, probe_on, compare_nulls, stream, mr);
-}
-
-std::pair<std::unique_ptr<cudf::table>, std::unique_ptr<cudf::table>>
-hash_join::hash_join_impl::inner_join(
-  cudf::table_view const &probe,
-  std::vector<size_type> const &probe_on,
-  std::vector<std::pair<cudf::size_type, cudf::size_type>> const &columns_in_common,
-  common_columns_output_side common_columns_output_side,
-  null_equality compare_nulls,
-  rmm::cuda_stream_view stream,
-  rmm::mr::device_memory_resource *mr) const
-{
-  CUDF_FUNC_RANGE();
-  return compute_hash_join<cudf::detail::join_kind::INNER_JOIN>(
-    probe, probe_on, columns_in_common, common_columns_output_side, compare_nulls, stream, mr);
+  return compute_hash_join<cudf::detail::join_kind::INNER_JOIN>(probe, compare_nulls, stream, mr);
 }
 
 std::pair<std::unique_ptr<cudf::column>, std::unique_ptr<cudf::column>>
 hash_join::hash_join_impl::left_join(cudf::table_view const &probe,
-                                     std::vector<size_type> const &probe_on,
                                      null_equality compare_nulls,
                                      rmm::cuda_stream_view stream,
                                      rmm::mr::device_memory_resource *mr) const
 {
   CUDF_FUNC_RANGE();
-  return compute_hash_join<cudf::detail::join_kind::LEFT_JOIN>(
-    probe, probe_on, compare_nulls, stream, mr);
+  return compute_hash_join<cudf::detail::join_kind::LEFT_JOIN>(probe, compare_nulls, stream, mr);
 }
 
 std::pair<std::unique_ptr<cudf::column>, std::unique_ptr<cudf::column>>
 hash_join::hash_join_impl::full_join(cudf::table_view const &probe,
-                                     std::vector<size_type> const &probe_on,
                                      null_equality compare_nulls,
                                      rmm::cuda_stream_view stream,
                                      rmm::mr::device_memory_resource *mr) const
 {
   CUDF_FUNC_RANGE();
-  return compute_hash_join<cudf::detail::join_kind::FULL_JOIN>(
-    probe, probe_on, compare_nulls, stream, mr);
-}
-
-std::unique_ptr<cudf::table> hash_join::hash_join_impl::full_join(
-  cudf::table_view const &probe,
-  std::vector<size_type> const &probe_on,
-  std::vector<std::pair<cudf::size_type, cudf::size_type>> const &columns_in_common,
-  null_equality compare_nulls,
-  rmm::cuda_stream_view stream,
-  rmm::mr::device_memory_resource *mr) const
-{
-  CUDF_FUNC_RANGE();
-  auto probe_build_pair =
-    compute_hash_join<cudf::detail::join_kind::FULL_JOIN>(probe,
-                                                          probe_on,
-                                                          columns_in_common,
-                                                          common_columns_output_side::PROBE,
-                                                          compare_nulls,
-                                                          stream,
-                                                          mr);
-  return cudf::detail::combine_table_pair(std::move(probe_build_pair.first),
-                                          std::move(probe_build_pair.second));
+  return compute_hash_join<cudf::detail::join_kind::FULL_JOIN>(probe, compare_nulls, stream, mr);
 }
 
 template <cudf::detail::join_kind JoinKind>
 std::pair<rmm::device_uvector<size_type>, rmm::device_uvector<size_type>>
 hash_join::hash_join_impl::compute_hash_join_indices(cudf::table_view const &probe,
-                                                     std::vector<size_type> const &probe_on,
                                                      null_equality compare_nulls,
                                                      rmm::cuda_stream_view stream,
                                                      rmm::mr::device_memory_resource *mr) const
@@ -520,83 +335,45 @@ hash_join::hash_join_impl::compute_hash_join_indices(cudf::table_view const &pro
   CUDF_EXPECTS(0 != probe.num_columns(), "Hash join probe table is empty");
   CUDF_EXPECTS(probe.num_rows() < cudf::detail::MAX_JOIN_SIZE,
                "Probe column size is too big for hash join");
-  CUDF_EXPECTS(_build_on.size() == probe_on.size(),
+  CUDF_EXPECTS(_build.num_columns() == probe.num_columns(),
                "Mismatch in number of columns to be joined on");
 
-  if (is_trivial_join(probe, _build, probe_on, _build_on, JoinKind)) {
+  if (is_trivial_join(probe, _build, JoinKind)) {
     return std::make_pair(rmm::device_uvector<size_type>{0, stream},
                           rmm::device_uvector<size_type>{0, stream});
   }
 
-  auto probe_selected = probe.select(probe_on);
-  CUDF_EXPECTS(std::equal(std::cbegin(_build_selected),
-                          std::cend(_build_selected),
-                          std::cbegin(probe_selected),
-                          std::cend(probe_selected),
+  CUDF_EXPECTS(std::equal(std::cbegin(_build),
+                          std::cend(_build),
+                          std::cbegin(probe),
+                          std::cend(probe),
                           [](const auto &b, const auto &p) { return b.type() == p.type(); }),
                "Mismatch in joining column data types");
 
-  return probe_join_indices<JoinKind>(probe_selected, compare_nulls, stream);
+  return probe_join_indices<JoinKind>(probe, compare_nulls, stream);
 }
 
 template <cudf::detail::join_kind JoinKind>
 std::pair<std::unique_ptr<cudf::column>, std::unique_ptr<cudf::column>>
 hash_join::hash_join_impl::compute_hash_join(cudf::table_view const &probe,
-                                             std::vector<size_type> const &probe_on,
                                              null_equality compare_nulls,
                                              rmm::cuda_stream_view stream,
                                              rmm::mr::device_memory_resource *mr) const
 {
-  auto join_indices =
-    compute_hash_join_indices<JoinKind>(probe, probe_on, compare_nulls, stream, mr);
-  auto join_size = join_indices.first.size();
-  auto left_map  = std::make_unique<cudf::column>(cudf::data_type(type_to_id<cudf::size_type>()),
+  auto join_indices = compute_hash_join_indices<JoinKind>(probe, compare_nulls, stream, mr);
+  auto join_size    = join_indices.first.size();
+  auto left_map     = std::make_unique<cudf::column>(cudf::data_type(type_to_id<cudf::size_type>()),
                                                  join_size,
                                                  join_indices.first.release(),
                                                  rmm::device_buffer{},
                                                  0);
-  auto right_map = std::make_unique<cudf::column>(cudf::data_type(type_to_id<cudf::size_type>()),
+  auto right_map    = std::make_unique<cudf::column>(cudf::data_type(type_to_id<cudf::size_type>()),
                                                   join_size,
                                                   join_indices.second.release(),
                                                   rmm::device_buffer{},
                                                   0);
   return std::make_pair<std::unique_ptr<cudf::column>, std::unique_ptr<cudf::column>>(
     std::move(left_map), std::move(right_map));
-}
-
-template <cudf::detail::join_kind JoinKind>
-std::pair<std::unique_ptr<cudf::table>, std::unique_ptr<cudf::table>>
-hash_join::hash_join_impl::compute_hash_join(
-  cudf::table_view const &probe,
-  std::vector<size_type> const &probe_on,
-  std::vector<std::pair<cudf::size_type, cudf::size_type>> const &columns_in_common,
-  common_columns_output_side common_columns_output_side,
-  null_equality compare_nulls,
-  rmm::cuda_stream_view stream,
-  rmm::mr::device_memory_resource *mr) const
-{
-  CUDF_EXPECTS(std::all_of(columns_in_common.begin(),
-                           columns_in_common.end(),
-                           [this, &probe_on](auto pair) {
-                             size_t p = std::find(probe_on.begin(), probe_on.end(), pair.first) -
-                                        probe_on.begin();
-                             size_t b = std::find(_build_on.begin(), _build_on.end(), pair.second) -
-                                        _build_on.begin();
-                             return (p != probe_on.size()) && (b != _build_on.size()) && (p == b);
-                           }),
-               "Invalid values passed to columns_in_common");
-
-  auto joined_indices = compute_hash_join<JoinKind>(probe, probe_on, compare_nulls, stream, mr);
-
-  if (is_trivial_join(probe, _build, probe_on, _build_on, JoinKind)) {
-    return get_empty_joined_table(probe, _build, columns_in_common, common_columns_output_side);
-  }
-
-  auto joined_indices_view = std::make_pair<cudf::column_view, cudf::column_view>(
-    joined_indices.first->view(), joined_indices.second->view());
-
-  return cudf::detail::construct_join_output_df<JoinKind>(
-    probe, _build, joined_indices_view, columns_in_common, common_columns_output_side, stream, mr);
 }
 
 template <cudf::detail::join_kind JoinKind>
@@ -612,7 +389,7 @@ hash_join::hash_join_impl::probe_join_indices(cudf::table_view const &probe,
 
   CUDF_EXPECTS(_hash_table, "Hash table of hash join is null.");
 
-  auto build_table = cudf::table_device_view::create(_build_selected, stream);
+  auto build_table = cudf::table_device_view::create(_build, stream);
   auto probe_table = cudf::table_device_view::create(probe, stream);
 
   constexpr cudf::detail::join_kind ProbeJoinKind = (JoinKind == cudf::detail::join_kind::FULL_JOIN)
