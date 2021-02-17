@@ -83,7 +83,7 @@ struct scan_functor {
     auto valuesview = column_device_view::create(values, stream);
 
     using Operator = cudf::detail::corresponding_operator_t<K>;
-    thrust::inclusive_scan_by_key(rmm::exec_policy(stream),
+    thrust::exclusive_scan_by_key(rmm::exec_policy(stream),
                                   group_labels.begin(),
                                   group_labels.end(),
                                   values.begin<T>(),

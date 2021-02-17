@@ -159,6 +159,24 @@ std::pair<std::unique_ptr<table>, std::vector<aggregation_result>> groupby::aggr
   return dispatch_aggregation(requests, 0, mr);
 }
 
+// Compute scan requests
+std::pair<std::unique_ptr<table>, std::vector<aggregation_result>> groupby::scan(
+  std::vector<aggregation_request> const& requests, rmm::mr::device_memory_resource* mr)
+{
+  CUDF_FUNC_RANGE();
+  CUDF_EXPECTS(
+    std::all_of(requests.begin(),
+                requests.end(),
+                [this](auto const& request) { return request.values.size() == _keys.num_rows(); }),
+    "Size mismatch between request values and groupby keys.");
+
+  verify_valid_requests(requests);
+
+  if (_keys.num_rows() == 0) { return std::make_pair(empty_like(_keys), empty_results(requests)); }
+
+  return sort_scan(requests, rmm::cuda_stream_default, mr);
+}
+
 groupby::groups groupby::get_groups(table_view values, rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
