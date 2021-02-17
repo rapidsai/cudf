@@ -549,13 +549,19 @@ write_basic_package_version_file(${CUDF_BINARY_DIR}/cudf-config-version.cmake
                                  COMPATIBILITY SameMinorVersion)
 
 if(TARGET arrow_shared)
-    export(TARGETS arrow_shared arrow_cuda_shared
-        FILE ${CUDF_BINARY_DIR}/cudf-arrow-targets.cmake
-        NAMESPACE   cudf::)
+    get_target_property(arrow_is_imported arrow_shared IMPORTED)
+    if(NOT arrow_is_imported)
+        export(TARGETS arrow_shared arrow_cuda_shared
+            FILE ${CUDF_BINARY_DIR}/cudf-arrow-targets.cmake
+            NAMESPACE   cudf::)
+    endif()
 elseif(TARGET arrow_static)
-    export(TARGETS arrow_static arrow_cuda_static
-        FILE ${CUDF_BINARY_DIR}/cudf-arrow-targets.cmake
-        NAMESPACE   cudf::)
+    get_target_property(arrow_is_imported arrow_static IMPORTED)
+    if(NOT arrow_is_imported)
+        export(TARGETS arrow_static arrow_cuda_static
+            FILE ${CUDF_BINARY_DIR}/cudf-arrow-targets.cmake
+            NAMESPACE   cudf::)
+    endif()
 endif()
 
 export(EXPORT cudf-targets
