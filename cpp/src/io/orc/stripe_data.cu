@@ -1209,8 +1209,10 @@ __global__ void __launch_bounds__(block_size)
         uint32_t skippedrows = min(static_cast<uint32_t>(first_row - row_in), nrows);
         uint32_t skip_count  = 0;
         for (uint32_t i = t * 32; i < skippedrows; i += 32 * 32) {
-          uint32_t bits = s->vals.u32[i >> 5];
-          if (i + 32 > skippedrows) { bits &= (1 << (skippedrows - i)) - 1; }
+          // Need to arrange the bytes to apply mask properly.
+          uint32_t bits = (i + 32 <= skippedrows) ? s->vals.u32[i >> 5]
+                                                  : (__byte_perm(s->vals.u32[i >> 5], 0, 0x0123) &
+                                                     (0xffffffffu << (0x20 - skippedrows + i)));
           skip_count += __popc(bits);
         }
         skip_count = warp_reduce(temp_storage.wr_storage[t / 32]).Sum(skip_count);

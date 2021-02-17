@@ -394,6 +394,24 @@ public class TableTest extends CudfTestBase {
   }
 
   @Test
+  void testSortOrderSimple() {
+    try (Table table = new Table.TestBuilder()
+        .column(5, 3, 3, 1, 1)
+        .column(5, 3, 4, 1, 2)
+        .column(1, 3, 5, 7, 9)
+        .build();
+         Table expected = new Table.TestBuilder()
+             .column(1, 1, 3, 3, 5)
+             .column(2, 1, 4, 3, 5)
+             .column(9, 7, 5, 3, 1)
+             .build();
+         ColumnVector gatherMap = table.sortOrder(Table.asc(0), Table.desc(1));
+         Table sortedTable = table.gather(gatherMap)) {
+      assertTablesAreEqual(expected, sortedTable);
+    }
+  }
+
+  @Test
   void testOrderByDD() {
     try (Table table = new Table.TestBuilder()
         .column(5, 3, 3, 1, 1)
