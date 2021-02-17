@@ -5,14 +5,7 @@ from __future__ import annotations
 import itertools
 from collections import OrderedDict
 from collections.abc import MutableMapping
-from typing import (
-    TYPE_CHECKING,
-    Any,
-    Tuple,
-    Union,
-    Mapping,
-    Callable,
-)
+from typing import TYPE_CHECKING, Any, Callable, Mapping, Tuple, Union
 
 import pandas as pd
 
@@ -380,7 +373,7 @@ class ColumnAccessor(MutableMapping):
         col_names, columns = list(self.keys()), list(self.values())
 
         if self.multiindex:
-            if isinstance(mapper, dict):
+            if isinstance(mapper, Mapping):
                 cols_list = [list(col) for col in col_names]
                 new_names = []
                 for col_name in cols_list:
@@ -393,7 +386,7 @@ class ColumnAccessor(MutableMapping):
                     level_names=self.level_names,
                     multiindex=self.multiindex,
                 )
-            elif callable(mapper):
+            else:
                 cols_list = [list(col) for col in col_names]
                 new_names = []
                 for col_name in cols_list:
@@ -405,20 +398,24 @@ class ColumnAccessor(MutableMapping):
                     multiindex=self.multiindex,
                 )
         else:
-            if level not in [0, None]:
+            if level != 0:
                 raise IndexError(
                     f"Too many levels: Index has only 1 level, not {level+1}"
                 )
-            else:
-                cols_list = col_names
+
+            cols_list = col_names
+            if isinstance(mapper, Mapping):
                 new_names = [
                     mapper.get(col_name, col_name) for col_name in cols_list
                 ]
-                ca = ColumnAccessor(
-                    dict(zip(new_names, columns)),
-                    level_names=self.level_names,
-                    multiindex=self.multiindex,
-                )
+            else:
+                new_names = [mapper(col_name) for col_name in cols_list]
+
+            ca = ColumnAccessor(
+                dict(zip(new_names, columns)),
+                level_names=self.level_names,
+                multiindex=self.multiindex,
+            )
 
         return self.__class__(ca)
 
