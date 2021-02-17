@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -99,7 +99,7 @@ struct sort_groupby_helper {
   /**
    * @brief Groups a column of values according to `keys`
    *
-   * The order of values within each group is undefined.
+   * The values within each group maintain their original order.
    *
    * @throw cudf::logic_error if `values.size() != keys.num_rows()`
    *
