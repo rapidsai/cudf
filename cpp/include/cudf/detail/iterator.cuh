@@ -41,6 +41,8 @@
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/iterator/transform_iterator.h>
 
+#include <utility>
+
 namespace cudf {
 namespace detail {
 /**
@@ -314,29 +316,6 @@ struct scalar_pair_accessor : public scalar_value_accessor<Element> {
 };
 
 /**
- * @brief Utility to fetch representation data type of specified Element type.
- *
- * By default, rep_type_impl<Element>::type == Element.
- */
-template <typename Element, typename Ignore = void>
-struct rep_type_impl {
-  using type = Element;
-};
-
-/**
- * @brief Utility to fetch representation data type of specified Element type.
- *
- * For fixed_point types, rep_type_impl<Element>::type == Element::rep.
- */
-template <typename Element>
-struct rep_type_impl<Element, std::enable_if_t<cudf::is_fixed_point<Element>(), void>> {
-  using type = typename Element::rep;
-};
-
-template <typename Element>
-using rep_type_t = typename rep_type_impl<Element>::type;
-
-/**
  * @brief Pair accessor for scalar's representation value and validity.
  *
  * @tparam Element The type of element in the scalar.
@@ -344,7 +323,7 @@ using rep_type_t = typename rep_type_impl<Element>::type;
 template <typename Element>
 struct scalar_representation_pair_accessor : public scalar_value_accessor<Element> {
   using super_t    = scalar_value_accessor<Element>;
-  using rep_type   = rep_type_t<Element>;
+  using rep_type   = device_storage_type_t<Element>;
   using value_type = thrust::pair<rep_type, bool>;
 
   scalar_representation_pair_accessor(scalar const& scalar_value)
