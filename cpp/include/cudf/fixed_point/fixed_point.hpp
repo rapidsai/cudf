@@ -537,9 +537,9 @@ class fixed_point {
   explicit operator std::string() const
   {
     if (_scale < 0) {
-      auto const av = std::abs(_value);
-      int const n   = std::pow(10, -_scale);
-      int const f   = av % n;
+      auto const av   = std::abs(_value);
+      int64_t const n = std::pow(10, -_scale);
+      int64_t const f = av % n;
       auto const num_zeros =
         std::max(0, (-_scale - static_cast<int32_t>(std::to_string(f).size())));
       auto const zeros = std::string(num_zeros, '0');

@@ -256,7 +256,7 @@ struct decimal_to_string_size_fn {
     if (scale >= 0) return count_digits(value) + scale;
 
     auto const abs_value = std::abs(value);
-    auto const exp_ten   = static_cast<int32_t>(exp10(static_cast<double>(-scale)));
+    auto const exp_ten   = static_cast<int64_t>(exp10(static_cast<double>(-scale)));
     auto const fraction  = count_digits(abs_value % exp_ten);
     auto const num_zeros = std::max(0, (-scale - fraction));
     return static_cast<int32_t>(value < 0) +    // sign if negative
@@ -298,7 +298,7 @@ struct decimal_to_string_fn {
     //       fraction = abs(value) % (10^abs(scale))
     auto const abs_value = std::abs(value);
     if (value < 0) *d_buffer++ = '-';  // add sign
-    auto const exp_ten   = static_cast<int32_t>(exp10(static_cast<double>(-scale)));
+    auto const exp_ten   = static_cast<int64_t>(exp10(static_cast<double>(-scale)));
     auto const num_zeros = std::max(0, (-scale - count_digits(abs_value % exp_ten)));
 
     d_buffer += integer_to_string(abs_value / exp_ten, d_buffer);  // add the integer part
