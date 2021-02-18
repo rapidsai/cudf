@@ -43,18 +43,18 @@ TYPED_TEST(StringsFixedPointConvertTest, ToFixedPoint)
   using fp_wrapper  = cudf::test::fixed_point_column_wrapper<RepType>;
 
   cudf::test::strings_column_wrapper strings(
-    {"1234", "-876", "543.2", "-0.12", ".25", "-.002", "", "-0.0"});
+    {"1234", "-876", "543.2", "-0.12", ".25", "-.002", "-.0027", "", "-0.0"});
   auto results = cudf::strings::to_fixed_point(
     cudf::strings_column_view(strings),
     cudf::data_type{cudf::type_to_id<DecimalType>(), numeric::scale_type{-3}});
   auto const expected =
-    fp_wrapper{{1234000, -876000, 543200, -120, 250, -2, 0, 0}, numeric::scale_type{-3}};
+    fp_wrapper{{1234000, -876000, 543200, -120, 250, -2, -2, 0, 0}, numeric::scale_type{-3}};
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*results, expected);
 
   results = cudf::strings::to_fixed_point(
     cudf::strings_column_view(strings),
     cudf::data_type{cudf::type_to_id<DecimalType>(), numeric::scale_type{2}});
-  auto const expected_scaled = fp_wrapper{{12, -8, 5, 0, 0, 0, 0, 0}, numeric::scale_type{2}};
+  auto const expected_scaled = fp_wrapper{{12, -8, 5, 0, 0, 0, 0, 0, 0}, numeric::scale_type{2}};
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*results, expected_scaled);
 
   cudf::test::strings_column_wrapper strings_nulls(
@@ -64,6 +64,47 @@ TYPED_TEST(StringsFixedPointConvertTest, ToFixedPoint)
   auto const expected_nulls = fp_wrapper{
     {1234, -876, 543, 900000, 2500000, 0, 0}, {1, 1, 1, 1, 1, 1, 0}, numeric::scale_type{0}};
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*results, expected_nulls);
+}
+
+TYPED_TEST(StringsFixedPointConvertTest, ToFixedPointVeryLarge)
+{
+  using DecimalType  = TypeParam;
+  using RepType      = cudf::device_storage_type_t<DecimalType>;
+  using fp_wrapper   = cudf::test::fixed_point_column_wrapper<RepType>;
+  auto const strings = cudf::test::strings_column_wrapper({"1234000000000000000000",
+                                                           "-876000000000000000000",
+                                                           "543200000000000000000",
+                                                           "-120000000000000000",
+                                                           "250000000000000000",
+                                                           "-2800000000000000",
+                                                           "",
+                                                           "-0.0"});
+  auto const results = cudf::strings::to_fixed_point(
+    cudf::strings_column_view(strings),
+    cudf::data_type{cudf::type_to_id<DecimalType>(), numeric::scale_type{20}});
+  auto const expected = fp_wrapper{{12, -8, 5, 0, 0, 0, 0, 0}, numeric::scale_type{20}};
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*results, expected);
+}
+
+TYPED_TEST(StringsFixedPointConvertTest, ToFixedPointVerySmall)
+{
+  using DecimalType  = TypeParam;
+  using RepType      = cudf::device_storage_type_t<DecimalType>;
+  using fp_wrapper   = cudf::test::fixed_point_column_wrapper<RepType>;
+  auto const strings = cudf::test::strings_column_wrapper({"0.00000000000000001234",
+                                                           "-0.0000000000000000876",
+                                                           ".000000000000000005432",
+                                                           "-.000000000000000012",
+                                                           "+.000000000000000025",
+                                                           "-.00000000002147483647",
+                                                           "",
+                                                           "+0.0"});
+  auto const results = cudf::strings::to_fixed_point(
+    cudf::strings_column_view(strings),
+    cudf::data_type{cudf::type_to_id<DecimalType>(), numeric::scale_type{-20}});
+  auto const expected =
+    fp_wrapper{{1234, -8760, 543, -1200, 2500, -2147483647, 0, 0}, numeric::scale_type{-20}};
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*results, expected);
 }
 
 TYPED_TEST(StringsFixedPointConvertTest, FromFixedPoint)
