@@ -14,36 +14,26 @@ from cudf._lib.cpp.table.table_view cimport table_view
 
 cdef extern from "cudf/join.hpp" namespace "cudf" nogil:
     cdef pair[unique_ptr[column], unique_ptr[column]] inner_join(
-        const table_view left,
-        const table_view right,
-        const vector[int] left_on,
-        const vector[int] right_on
+        const table_view left_keys,
+        const table_view right_keys,
     ) except +
 
     cdef pair[unique_ptr[column], unique_ptr[column]] left_join(
-        const table_view left,
-        const table_view right,
-        const vector[int] left_on,
-        const vector[int] right_on
+        const table_view left_keys,
+        const table_view right_keys,
     ) except +
 
     cdef pair[unique_ptr[column], unique_ptr[column]] full_join(
-        const table_view left,
-        const table_view right,
-        const vector[int] left_on,
-        const vector[int] right_on
+        const table_view left_keys,
+        const table_view right_keys,
     ) except +
 
     cdef unique_ptr[column] left_semi_join(
-        const table_view left,
-        const table_view right,
-        const vector[int] left_on,
-        const vector[int] right_on,
+        const table_view left_keys,
+        const table_view right_keys,
     ) except +
 
     cdef unique_ptr[column] left_anti_join(
-        const table_view left,
-        const table_view right,
-        const vector[int] left_on,
-        const vector[int] right_on,
+        const table_view left_keys,
+        const table_view right_keys,
     ) except +
