@@ -259,7 +259,7 @@ class writer::impl {
                           size_t groups_in_stripe,
                           host_2dspan<gpu::encoder_chunk_streams const> enc_streams,
                           host_2dspan<gpu::StripeStream const> strm_desc,
-                          hostdevice_vector<gpu_inflate_status_s> const& comp_out,
+                          host_span<gpu_inflate_status_s const> comp_out,
                           StripeInformation* stripe,
                           orc_streams* streams,
                           ProtobufWriter* pbw);

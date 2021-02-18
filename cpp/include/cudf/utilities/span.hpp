@@ -215,38 +215,42 @@ class base_2dspan {
 
 template <typename T>
 class host_2dspan : public base_2dspan<T> {
+  using base = base_2dspan<T>;
+  using base::base;
+
  public:
-  host_2dspan(T* ptr, std::pair<size_t, size_t> size) : base_2dspan<T>{ptr, size} {}
+  host_2dspan(T* ptr, std::pair<size_t, size_t> size) : base{ptr, size} {}
 
   constexpr host_span<T> operator[](size_t row)
   {
-    return {this->_data_ptr + base_2dspan<T>::flatten_index(row, 0, this->_size),
-            this->_size.second};
+    return {this->_data_ptr + base::flatten_index(row, 0, this->_size), this->_size.second};
   }
 
   template <
     typename OtherT,
     typename std::enable_if<std::is_convertible<OtherT(*), T(*)>::value, void>::type* = nullptr>
   constexpr host_2dspan(const host_2dspan<OtherT>& other) noexcept
-    : base_2dspan<T>(other.data(), other.size())
+    : base(other.data(), other.size())
   {
   }
 };
 template <typename T>
 class device_2dspan : public base_2dspan<T> {
+  using base = base_2dspan<T>;
+  using base::base;
+
  public:
-  device_2dspan(T* ptr, std::pair<size_t, size_t> size) : base_2dspan<T>{ptr, size} {}
+  device_2dspan(T* ptr, std::pair<size_t, size_t> size) : base{ptr, size} {}
 
   constexpr device_span<T> operator[](size_t row)
   {
-    return {this->_data_ptr + base_2dspan<T>::flatten_index(row, 0, this->_size),
-            this->_size.second};
+    return {this->_data_ptr + base::flatten_index(row, 0, this->_size), this->_size.second};
   }
   template <
     typename OtherT,
     typename std::enable_if<std::is_convertible<OtherT(*), T(*)>::value, void>::type* = nullptr>
   constexpr device_2dspan(const device_2dspan<OtherT>& other) noexcept
-    : base_2dspan<T>(other.data(), other.size())
+    : base(other.data(), other.size())
   {
   }
 };

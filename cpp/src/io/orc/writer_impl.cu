@@ -875,13 +875,13 @@ std::vector<std::vector<uint8_t>> writer::impl::gather_statistic_blobs(
 }
 
 void writer::impl::write_index_stream(int32_t stripe_id,
-                                      int32_t col_id,
+                                      int32_t stream_id,
                                       host_span<orc_column_view const> columns,
                                       size_t group,
                                       size_t groups_in_stripe,
                                       host_2dspan<gpu::encoder_chunk_streams const> enc_streams,
                                       host_2dspan<gpu::StripeStream const> strm_desc,
-                                      hostdevice_vector<gpu_inflate_status_s> const &comp_out,
+                                      host_span<gpu_inflate_status_s const> comp_out,
                                       StripeInformation *stripe,
                                       orc_streams *streams,
                                       ProtobufWriter *pbw)
@@ -890,7 +890,7 @@ void writer::impl::write_index_stream(int32_t stripe_id,
   row_group_index_info data;
   row_group_index_info data2;
   auto kind            = TypeKind::STRUCT;
-  auto const stream_id = col_id - 1;
+  auto const column_id = stream_id - 1;
 
   auto find_record = [=, &strm_desc](gpu::encoder_chunk_streams const &stream,
                                      gpu::StreamIndexType type) {
@@ -923,15 +923,15 @@ void writer::impl::write_index_stream(int32_t stripe_id,
   };
 
   // TBD: Not sure we need an empty index stream for column 0
-  if (col_id != 0) {
-    const auto &strm = enc_streams[stream_id][0];
+  if (stream_id != 0) {
+    const auto &strm = enc_streams[column_id][0];
     present          = find_record(strm, gpu::CI_PRESENT);
     data             = find_record(strm, gpu::CI_DATA);
     data2            = find_record(strm, gpu::CI_DATA2);
 
     // Change string dictionary to int from index point of view
-    kind = columns[stream_id].orc_kind();
-    if (kind == TypeKind::STRING && columns[stream_id].orc_encoding() == DICTIONARY_V2) {
+    kind = columns[column_id].orc_kind();
+    if (kind == TypeKind::STRING && columns[column_id].orc_encoding() == DICTIONARY_V2) {
       kind = TypeKind::INT;
     }
   }
@@ -943,17 +943,17 @@ void writer::impl::write_index_stream(int32_t stripe_id,
     pbw->put_row_index_entry(
       present.comp_pos, present.pos, data.comp_pos, data.pos, data2.comp_pos, data2.pos, kind);
 
-    if (col_id != 0) {
-      const auto &strm = enc_streams[stream_id][g];
+    if (stream_id != 0) {
+      const auto &strm = enc_streams[column_id][g];
       scan_record(strm, gpu::CI_PRESENT, present);
       scan_record(strm, gpu::CI_DATA, data);
       scan_record(strm, gpu::CI_DATA2, data2);
     }
   }
 
-  (*streams)[col_id].length = buffer_.size();
+  (*streams)[stream_id].length = buffer_.size();
   if (compression_kind_ != NONE) {
-    uint32_t uncomp_ix_len = (uint32_t)((*streams)[col_id].length - 3) * 2 + 1;
+    uint32_t uncomp_ix_len = (uint32_t)((*streams)[stream_id].length - 3) * 2 + 1;
     buffer_[0]             = static_cast<uint8_t>(uncomp_ix_len >> 0);
     buffer_[1]             = static_cast<uint8_t>(uncomp_ix_len >> 8);
     buffer_[2]             = static_cast<uint8_t>(uncomp_ix_len >> 16);
