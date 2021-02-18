@@ -136,23 +136,24 @@ std::unique_ptr<column> compute_column(table_view const table,
     cudf::mutable_column_device_view::create(output_column->mutable_view(), stream);
 
   // Configure kernel parameters
-  auto const num_intermediates = expr_linearizer.intermediate_count();
-  // size_per_thread/block, limit_per_block are for shmem (shared memory)
-  auto const size_per_thread = static_cast<int>(sizeof(std::int64_t) * num_intermediates);
+  auto const num_intermediates     = expr_linearizer.intermediate_count();
+  auto const shmem_size_per_thread = static_cast<int>(sizeof(std::int64_t) * num_intermediates);
   int device_id;
   CUDA_TRY(cudaGetDevice(&device_id));
-  int limit_per_block;
-  CUDA_TRY(cudaDeviceGetAttribute(&limit_per_block, cudaDevAttrMaxSharedMemoryPerBlock, device_id));
+  int shmem_limit_per_block;
+  CUDA_TRY(
+    cudaDeviceGetAttribute(&shmem_limit_per_block, cudaDevAttrMaxSharedMemoryPerBlock, device_id));
   auto constexpr MAX_BLOCK_SIZE = 128;
-  auto const block_size         = size_per_thread != 0
-                            ? std::min(MAX_BLOCK_SIZE, limit_per_block / size_per_thread)
-                            : MAX_BLOCK_SIZE;
-  auto const config         = cudf::detail::grid_1d{table_num_rows, block_size};
-  auto const size_per_block = size_per_thread * config.num_threads_per_block;
+  auto const block_size =
+    shmem_size_per_thread != 0
+      ? std::min(MAX_BLOCK_SIZE, shmem_limit_per_block / shmem_size_per_thread)
+      : MAX_BLOCK_SIZE;
+  auto const config               = cudf::detail::grid_1d{table_num_rows, block_size};
+  auto const shmem_size_per_block = shmem_size_per_thread * config.num_threads_per_block;
 
   // Execute the kernel
   cudf::ast::detail::compute_column_kernel<MAX_BLOCK_SIZE>
-    <<<config.num_blocks, config.num_threads_per_block, size_per_block, stream.value()>>>(
+    <<<config.num_blocks, config.num_threads_per_block, shmem_size_per_block, stream.value()>>>(
       *table_device,
       device_literals,
       *mutable_output_device,
