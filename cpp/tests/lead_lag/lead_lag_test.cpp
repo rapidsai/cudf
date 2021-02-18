@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,27 +14,32 @@
  * limitations under the License.
  */
 
-#include <thrust/iterator/counting_iterator.h>
-#include <thrust/iterator/transform_iterator.h>
-#include <algorithm>
 #include <cudf/aggregation.hpp>
 #include <cudf/column/column_factories.hpp>
+#include <cudf/detail/iterator.cuh>
 #include <cudf/detail/utilities/device_operators.cuh>
 #include <cudf/null_mask.hpp>
 #include <cudf/rolling.hpp>
 #include <cudf/scalar/scalar_factories.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/error.hpp>
+
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_utilities.hpp>
 #include <cudf_test/column_wrapper.hpp>
 #include <cudf_test/cudf_gtest.hpp>
 #include <cudf_test/type_lists.hpp>
+
+#include <rmm/device_buffer.hpp>
+
+#include <thrust/iterator/counting_iterator.h>
+#include <thrust/iterator/transform_iterator.h>
+
+#include <algorithm>
 #include <functional>
 #include <initializer_list>
 #include <iterator>
 #include <memory>
-#include <rmm/device_buffer.hpp>
 
 using cudf::size_type;
 using namespace cudf::test;
@@ -423,7 +428,8 @@ TYPED_TEST(TypedLeadLagWindowTest, TestLeadLagWithAllNullInput)
   using T = TypeParam;
 
   auto const input_col = fixed_width_column_wrapper<T>{
-    {0, 1, 2, 3, 4, 5, 0, 10, 20, 30, 40, 50}, make_counting_transform_iterator(0, [](auto i) {
+    {0, 1, 2, 3, 4, 5, 0, 10, 20, 30, 40, 50},
+    cudf::detail::make_counting_transform_iterator(0, [](auto i) {
       return false;
     })}.release();
 
@@ -476,7 +482,7 @@ TYPED_TEST(TypedLeadLagWindowTest, DefaultValuesWithoutLeadLag)
   using T = TypeParam;
 
   auto const input_col = fixed_width_column_wrapper<T>{
-    {0, 1, 2, 3, 4, 5}, make_counting_transform_iterator(0, [](auto i) {
+    {0, 1, 2, 3, 4, 5}, cudf::detail::make_counting_transform_iterator(0, [](auto i) {
       return true;
     })}.release();
 
@@ -512,7 +518,7 @@ TEST_F(LeadLagWindowTest, LeadLagWithoutFixedWidthInput)
   // Check that Lead/Lag aren't supported for non-fixed-width types.
 
   auto const input_col = strings_column_wrapper{
-    {"0", "1", "2", "3", "4", "5"}, make_counting_transform_iterator(0, [](auto i) {
+    {"0", "1", "2", "3", "4", "5"}, cudf::detail::make_counting_transform_iterator(0, [](auto i) {
       return false;
     })}.release();
 

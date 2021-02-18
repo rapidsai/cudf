@@ -1,4 +1,5 @@
 # Copyright (c) 2020, NVIDIA CORPORATION.
+from __future__ import annotations
 
 import pyarrow as pa
 
@@ -7,6 +8,8 @@ from cudf.core.column import ColumnBase
 
 
 class StructColumn(ColumnBase):
+    dtype: cudf.core.dtypes.StructDtype
+
     @property
     def base_size(self):
         if not self.base_children:
@@ -70,21 +73,6 @@ class StructColumn(ColumnBase):
         if deep:
             result = result._rename_fields(self.dtype.fields.keys())
         return result
-
-    def as_interval_column(self, closed="right"):
-        from cudf.core.column import IntervalColumn
-
-        return IntervalColumn(
-            size=self.size,
-            dtype=cudf.core.dtypes.IntervalDtype(
-                self.dtype.fields["left"], closed
-            ),
-            mask=self.mask,
-            offset=self.offset,
-            null_count=self.null_count,
-            children=self.children,
-            closed=closed,
-        )
 
     def _rename_fields(self, names):
         """

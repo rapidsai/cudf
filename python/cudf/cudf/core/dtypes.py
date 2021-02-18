@@ -2,7 +2,7 @@
 
 import decimal
 import pickle
-from typing import Any
+from typing import Any, Optional
 
 import numpy as np
 import pandas as pd
@@ -15,6 +15,9 @@ from cudf._typing import Dtype
 
 
 class CategoricalDtype(ExtensionDtype):
+
+    ordered: Optional[bool]
+
     def __init__(self, categories=None, ordered: bool = None) -> None:
         """
         dtype similar to pd.CategoricalDtype with the categories
@@ -311,13 +314,23 @@ class IntervalDtype(StructDtype):
         """
         subtype: str, np.dtype
             The dtype of the Interval bounds.
+        closed: {‘right’, ‘left’, ‘both’, ‘neither’}, default ‘right’
+            Whether the interval is closed on the left-side, right-side,
+            both or neither. See the Notes for more detailed explanation.
         """
         super().__init__(fields={"left": subtype, "right": subtype})
-        self.closed = closed
+
+        if closed in ["left", "right", "neither", "both"]:
+            self.closed = closed
+        else:
+            raise ValueError("closed value is not valid")
 
     @property
     def subtype(self):
         return self.fields["left"]
+
+    def __repr__(self):
+        return f"interval[{self.fields['left']}]"
 
     @classmethod
     def from_arrow(cls, typ):

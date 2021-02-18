@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -188,6 +188,29 @@ class list_device_view {
       return {list.element<T>(i), !list.is_null(i)};
     }
   };
+};
+
+/**
+ * @brief returns size of the list by row index
+ *
+ */
+struct list_size_functor {
+  column_device_view const d_column;
+  CUDA_HOST_DEVICE_CALLABLE list_size_functor(column_device_view const& d_col) : d_column(d_col)
+  {
+#if defined(__CUDA_ARCH__)
+    release_assert(d_col.type().id() == type_id::LIST && "Only list type column is supported");
+#else
+    CUDF_EXPECTS(d_col.type().id() == type_id::LIST, "Only list type column is supported");
+#endif
+  }
+  CUDA_DEVICE_CALLABLE size_type operator()(size_type idx)
+  {
+    if (d_column.is_null(idx)) return size_type{0};
+    auto d_offsets =
+      d_column.child(lists_column_view::offsets_column_index).data<size_type>() + d_column.offset();
+    return d_offsets[idx + 1] - d_offsets[idx];
+  }
 };
 
 }  // namespace cudf

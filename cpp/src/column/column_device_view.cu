@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2020, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -15,6 +15,7 @@
  */
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_view.hpp>
+#include <cudf/detail/iterator.cuh>
 #include <cudf/types.hpp>
 #include <cudf/utilities/error.hpp>
 
@@ -44,12 +45,10 @@ std::unique_ptr<ColumnDeviceView, std::function<void(ColumnDeviceView*)>>
 create_device_view_from_view(ColumnView const& source, rmm::cuda_stream_view stream)
 {
   size_type num_children = source.num_children();
-  // First calculate the size of memory needed to hold the
-  // child columns. This is done by calling extent()
-  // for each of the children.
-  auto get_extent = thrust::make_transform_iterator(
-    thrust::make_counting_iterator(0),
-    [&source](auto i) { return ColumnDeviceView::extent(source.child(i)); });
+  // First calculate the size of memory needed to hold the child columns. This is done by calling
+  // extent() for each of the children.
+  auto get_extent = cudf::detail::make_counting_transform_iterator(
+    0, [&source](auto i) { return ColumnDeviceView::extent(source.child(i)); });
 
   // pad the allocation for aligning the first pointer
   auto const descendant_storage_bytes = std::accumulate(
