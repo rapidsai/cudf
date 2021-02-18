@@ -49,24 +49,25 @@ namespace {
  *
  * This function will also handle scientific notation format.
  */
-__device__ inline double stod(string_view const& d_str)
+template <class FloatType>
+__device__ inline FloatType stof(string_view const& d_str)
 {
   const char* in_ptr = d_str.data();
   const char* end    = in_ptr + d_str.size_bytes();
   if (end == in_ptr) return 0.0;
   // special strings
-  if (d_str.compare("NaN", 3) == 0) return std::numeric_limits<double>::quiet_NaN();
-  if (d_str.compare("Inf", 3) == 0) return std::numeric_limits<double>::infinity();
-  if (d_str.compare("-Inf", 4) == 0) return -std::numeric_limits<double>::infinity();
-  double sign = 1.0;
+  if (d_str.compare("NaN", 3) == 0) return std::numeric_limits<FloatType>::quiet_NaN();
+  if (d_str.compare("Inf", 3) == 0) return std::numeric_limits<FloatType>::infinity();
+  if (d_str.compare("-Inf", 4) == 0) return -std::numeric_limits<FloatType>::infinity();
+  FloatType sign{1.0};
   if (*in_ptr == '-' || *in_ptr == '+') {
     sign = (*in_ptr == '-' ? -1 : 1);
     ++in_ptr;
   }
-  unsigned long max_mantissa = 0x0FFFFFFFFFFFFF;
-  unsigned long digits       = 0;
-  int exp_off                = 0;
-  bool decimal               = false;
+  constexpr uint64_t max_holding = (std::numeric_limits<uint64_t>::max() - 9L) / 10L;
+  uint64_t digits                = 0;
+  int exp_off                    = 0;
+  bool decimal                   = false;
   while (in_ptr < end) {
     char ch = *in_ptr;
     if (ch == '.') {
@@ -75,11 +76,11 @@ __device__ inline double stod(string_view const& d_str)
       continue;
     }
     if (ch < '0' || ch > '9') break;
-    if (digits > max_mantissa)
+    if (digits > max_holding)
       exp_off += (int)!decimal;
     else {
-      digits = (digits * 10L) + (unsigned long)(ch - '0');
-      if (digits > max_mantissa) {
+      digits = (digits * 10L) + static_cast<uint64_t>(ch - '0');
+      if (digits > max_holding) {
         digits = digits / 10L;
         exp_off += (int)!decimal;
       } else
@@ -109,14 +110,14 @@ __device__ inline double stod(string_view const& d_str)
   }
   exp_ten *= exp_sign;
   exp_ten += exp_off;
-  if (exp_ten > 308)
-    return sign > 0 ? std::numeric_limits<double>::infinity()
-                    : -std::numeric_limits<double>::infinity();
-  else if (exp_ten < -308)
-    return 0.0;
+  if (exp_ten > std::numeric_limits<FloatType>::max_exponent10)
+    return sign > 0 ? std::numeric_limits<FloatType>::infinity()
+                    : -std::numeric_limits<FloatType>::infinity();
+  else if (exp_ten < std::numeric_limits<FloatType>::min_exponent10)
+    return FloatType{0};
   // using exp10() since the pow(10.0,exp_ten) function is
   // very inaccurate in 10.2: http://nvbugs/2971187
-  double value = static_cast<double>(digits) * exp10(static_cast<double>(exp_ten));
+  const FloatType value = static_cast<FloatType>(digits) * exp10(static_cast<FloatType>(exp_ten));
   return (value * sign);
 }
 
@@ -132,9 +133,7 @@ struct string_to_float_fn {
   __device__ FloatType operator()(size_type idx)
   {
     if (strings_column.is_null(idx)) return static_cast<FloatType>(0);
-    // the cast to FloatType will create predictable results
-    // for floats that are larger than the FloatType can hold
-    return static_cast<FloatType>(stod(strings_column.element<string_view>(idx)));
+    return stof<FloatType>(strings_column.element<string_view>(idx));
   }
 };
 
