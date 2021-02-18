@@ -19,7 +19,6 @@
 #include "orc.h"
 #include "orc_gpu.h"
 
-#include <io/utilities/hostdevice_matrix.hpp>
 #include <io/utilities/hostdevice_vector.hpp>
 
 #include <cudf/detail/utilities/integer_utils.hpp>
@@ -46,7 +45,7 @@ class orc_column_view;
 
 using namespace cudf::io::orc;
 using namespace cudf::io;
-using cudf::detail::hostdevice_matrix;
+using cudf::detail::hostdevice_2dvector;
 
 struct stripe_rowgroups {
   uint32_t id;
@@ -80,7 +79,7 @@ class orc_streams {
 
 struct encoded_data {
   rmm::device_uvector<uint8_t> data;
-  hostdevice_matrix<gpu::encoder_chunk_streams> streams;
+  hostdevice_2dvector<gpu::encoder_chunk_streams> streams;
 };
 
 struct encoder_chunks {
@@ -226,7 +225,7 @@ class writer::impl {
     size_t num_index_streams,
     size_t num_data_streams,
     host_span<stripe_rowgroups const> stripe_bounds,
-    hostdevice_matrix<gpu::encoder_chunk_streams>& streams,
+    hostdevice_2dvector<gpu::encoder_chunk_streams>& streams,
     hostdevice_vector<gpu::StripeStream>& strm_desc);
 
   /**
@@ -265,7 +264,7 @@ class writer::impl {
                           size_t num_data_streams,
                           size_t group,
                           size_t groups_in_stripe,
-                          hostdevice_matrix<gpu::encoder_chunk_streams> const& enc_streams,
+                          hostdevice_2dvector<gpu::encoder_chunk_streams> const& enc_streams,
                           hostdevice_vector<gpu::StripeStream> const& strm_desc,
                           hostdevice_vector<gpu_inflate_status_s> const& comp_out,
                           StripeInformation* stripe,

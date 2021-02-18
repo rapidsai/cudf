@@ -26,6 +26,9 @@ namespace cudf {
 namespace io {
 namespace orc {
 namespace gpu {
+
+using detail::device_2dspan;
+
 constexpr int scratch_buffer_size = 512 * 4;
 
 // Apache ORC reader does not handle zero-length patch lists for RLEv2 mode2
@@ -642,8 +645,8 @@ static const __device__ __constant__ int32_t kTimeScale[10] = {
 // blockDim {512,1,1}
 template <int block_size>
 __global__ void __launch_bounds__(block_size)
-  gpuEncodeOrcColumnData(matrix_device_view<EncChunk const> chunks,
-                         matrix_device_view<encoder_chunk_streams> streams,
+  gpuEncodeOrcColumnData(device_2dspan<EncChunk const> chunks,
+                         device_2dspan<encoder_chunk_streams> streams,
                          uint32_t num_columns,
                          uint32_t num_rowgroups)
 {
@@ -932,8 +935,8 @@ __global__ void __launch_bounds__(block_size)
 template <int block_size>
 __global__ void __launch_bounds__(block_size)
   gpuEncodeStringDictionaries(StripeDictionary *stripes,
-                              matrix_device_view<EncChunk const> chunks,
-                              matrix_device_view<encoder_chunk_streams> streams,
+                              device_2dspan<EncChunk const> chunks,
+                              device_2dspan<encoder_chunk_streams> streams,
                               uint32_t num_columns,
                               uint32_t num_rowgroups)
 {
@@ -997,10 +1000,7 @@ __global__ void __launch_bounds__(block_size)
     if (t == 0) { s->cur_row += numvals; }
     __syncthreads();
   }
-  if (t == 0) {
-    strm_ptr->lengths[cid] =
-      s->strm_pos[cid];
-  }
+  if (t == 0) { strm_ptr->lengths[cid] = s->strm_pos[cid]; }
 }
 
 /**
@@ -1014,7 +1014,7 @@ __global__ void __launch_bounds__(block_size)
 // blockDim {1024,1,1}
 __global__ void __launch_bounds__(1024)
   gpuCompactOrcDataStreams(StripeStream *strm_desc,
-                           matrix_device_view<encoder_chunk_streams> streams,
+                           device_2dspan<encoder_chunk_streams> streams,
                            uint32_t num_columns)  // TODO unused
 {
   __shared__ __align__(16) StripeStream ss;
@@ -1055,9 +1055,7 @@ __global__ void __launch_bounds__(1024)
     dst_ptr += len;
     __syncthreads();
   }
-  if (!t) {
-    strm_desc[strm_id].stream_size = dst_ptr - strm0.data_ptrs[cid];
-  }
+  if (!t) { strm_desc[strm_id].stream_size = dst_ptr - strm0.data_ptrs[cid]; }
 }
 
 /**
@@ -1073,7 +1071,7 @@ __global__ void __launch_bounds__(1024)
 // blockDim {256,1,1}
 __global__ void __launch_bounds__(256)
   gpuInitCompressionBlocks(StripeStream const *strm_desc,
-                           matrix_device_view<encoder_chunk_streams> streams,
+                           device_2dspan<encoder_chunk_streams> streams,
                            gpu_inflate_input_s *comp_in,
                            gpu_inflate_status_s *comp_out,
                            uint8_t *compressed_bfr,
@@ -1196,8 +1194,8 @@ __global__ void __launch_bounds__(1024) gpuCompactCompressedBlocks(StripeStream 
  * @param[in] num_rowgroups Number of row groups
  * @param[in] stream CUDA stream to use, default 0
  */
-void EncodeOrcColumnData(matrix_device_view<EncChunk const> chunks,
-                         matrix_device_view<encoder_chunk_streams> streams,
+void EncodeOrcColumnData(device_2dspan<EncChunk const> chunks,
+                         device_2dspan<encoder_chunk_streams> streams,
                          uint32_t num_columns,
                          uint32_t num_rowgroups,
                          rmm::cuda_stream_view stream)
@@ -1206,7 +1204,7 @@ void EncodeOrcColumnData(matrix_device_view<EncChunk const> chunks,
   dim3 dim_grid(num_columns, num_rowgroups);
   gpuEncodeOrcColumnData<512>
     <<<dim_grid, dim_block, 0, stream.value()>>>(chunks, streams, num_columns, num_rowgroups);
-  }
+}
 
 /**
  * @brief Launches kernel for encoding column dictionaries
@@ -1219,8 +1217,8 @@ void EncodeOrcColumnData(matrix_device_view<EncChunk const> chunks,
  * @param[in] stream CUDA stream to use, default 0
  */
 void EncodeStripeDictionaries(StripeDictionary *stripes,
-                              matrix_device_view<EncChunk const> chunks,
-                              matrix_device_view<encoder_chunk_streams> streams,
+                              device_2dspan<EncChunk const> chunks,
+                              device_2dspan<encoder_chunk_streams> streams,
                               uint32_t num_string_columns,
                               uint32_t num_columns,
                               uint32_t num_rowgroups,
@@ -1243,7 +1241,7 @@ void EncodeStripeDictionaries(StripeDictionary *stripes,
  * @param[in] stream CUDA stream to use, default 0
  */
 void CompactOrcDataStreams(StripeStream *strm_desc,
-                           matrix_device_view<encoder_chunk_streams> streams,
+                           device_2dspan<encoder_chunk_streams> streams,
                            uint32_t num_stripe_streams,
                            uint32_t num_columns,
                            rmm::cuda_stream_view stream)
@@ -1270,7 +1268,7 @@ void CompactOrcDataStreams(StripeStream *strm_desc,
  */
 void CompressOrcDataStreams(uint8_t *compressed_data,
                             StripeStream *strm_desc,
-                            matrix_device_view<encoder_chunk_streams> enc_streams,
+                            device_2dspan<encoder_chunk_streams> enc_streams,
                             gpu_inflate_input_s *comp_in,
                             gpu_inflate_status_s *comp_out,
                             uint32_t num_stripe_streams,

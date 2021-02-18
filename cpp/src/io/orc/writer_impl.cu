@@ -39,7 +39,6 @@ namespace detail {
 namespace orc {
 using namespace cudf::io::orc;
 using namespace cudf::io;
-using cudf::detail::hostdevice_matrix;
 
 struct row_group_index_info {
   int32_t pos       = -1;  // Position
@@ -592,8 +591,8 @@ encoded_data writer::impl::encode_columns(host_span<orc_column_view const> colum
 {
   auto const num_columns   = columns.size();
   auto const num_rowgroups = *stripe_bounds.back().cend();
-  hostdevice_matrix<gpu::EncChunk> chunks(num_columns, num_rowgroups);
-  hostdevice_matrix<gpu::encoder_chunk_streams> chunk_streams(num_columns, num_rowgroups);
+  hostdevice_2dvector<gpu::EncChunk> chunks(num_columns, num_rowgroups);
+  hostdevice_2dvector<gpu::encoder_chunk_streams> chunk_streams(num_columns, num_rowgroups);
   auto const stream_offsets = streams.compute_offsets(columns, num_rowgroups);
   rmm::device_uvector<uint8_t> encoded_data(stream_offsets.data_size(), stream);
 
@@ -711,6 +710,9 @@ encoded_data writer::impl::encode_columns(host_span<orc_column_view const> colum
                                           stream_offsets.offsets[strm_id] +
                                           streams[strm_id].length * rg_idx;
             }
+          } else {
+            strm.lengths[strm_type]   = 0;
+            strm.data_ptrs[strm_type] = nullptr;
           }
         }
       }
@@ -744,7 +746,7 @@ std::vector<StripeInformation> writer::impl::gather_stripes(
   size_t num_index_streams,
   size_t num_data_streams,
   host_span<stripe_rowgroups const> stripe_bounds,
-  hostdevice_matrix<gpu::encoder_chunk_streams> &enc_streams,
+  hostdevice_2dvector<gpu::encoder_chunk_streams> &enc_streams,
   hostdevice_vector<gpu::StripeStream> &strm_desc)
 {
   std::vector<StripeInformation> stripes(stripe_bounds.size());
@@ -890,7 +892,7 @@ void writer::impl::write_index_stream(
   size_t num_data_streams,
   size_t group,
   size_t groups_in_stripe,
-  hostdevice_matrix<gpu::encoder_chunk_streams> const &enc_streams,
+  hostdevice_2dvector<gpu::encoder_chunk_streams> const &enc_streams,
   hostdevice_vector<gpu::StripeStream> const &strm_desc,
   hostdevice_vector<gpu_inflate_status_s> const &comp_out,
   StripeInformation *stripe,

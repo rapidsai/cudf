@@ -21,7 +21,6 @@
 #include <io/comp/gpuinflate.h>
 #include <io/orc/orc_common.h>
 #include <io/statistics/column_stats.h>
-#include <io/utilities/hostdevice_matrix.hpp>
 
 #include <cudf/types.hpp>
 
@@ -31,8 +30,6 @@ namespace cudf {
 namespace io {
 namespace orc {
 namespace gpu {
-
-using cudf::detail::matrix_device_view;
 
 struct CompressedStreamInfo {
   CompressedStreamInfo() = default;
@@ -145,7 +142,6 @@ struct encoder_chunk_streams {
   uint8_t *data_ptrs[CI_NUM_STREAMS];  // encoded output
   int32_t ids[CI_NUM_STREAMS];         // stream id or -1 if not present
   uint32_t lengths[CI_NUM_STREAMS];    // in: max length, out: actual length (TODO: separate)
-  encoder_chunk_streams() : data_ptrs{}, lengths{} {}
 };
 
 /**
@@ -296,8 +292,8 @@ void DecodeOrcColumnData(ColumnDesc *chunks,
  * @param[in] num_rowgroups Number of row groups
  * @param[in] stream CUDA stream to use, default 0
  */
-void EncodeOrcColumnData(matrix_device_view<EncChunk const> chunks,
-                         matrix_device_view<encoder_chunk_streams> streams,
+void EncodeOrcColumnData(detail::device_2dspan<EncChunk const> chunks,
+                         detail::device_2dspan<encoder_chunk_streams> streams,
                          uint32_t num_columns,
                          uint32_t num_rowgroups,
                          rmm::cuda_stream_view stream = rmm::cuda_stream_default);
@@ -313,8 +309,8 @@ void EncodeOrcColumnData(matrix_device_view<EncChunk const> chunks,
  * @param[in] stream CUDA stream to use, default 0
  */
 void EncodeStripeDictionaries(StripeDictionary *stripes,
-                              matrix_device_view<EncChunk const> chunks,
-                              matrix_device_view<encoder_chunk_streams> streams,
+                              detail::device_2dspan<EncChunk const> chunks,
+                              detail::device_2dspan<encoder_chunk_streams> streams,
                               uint32_t num_string_columns,
                               uint32_t num_columns,
                               uint32_t num_rowgroups,
@@ -331,7 +327,7 @@ void EncodeStripeDictionaries(StripeDictionary *stripes,
  * @param[in] stream CUDA stream to use, default 0
  */
 void CompactOrcDataStreams(StripeStream *strm_desc,
-                           matrix_device_view<encoder_chunk_streams> streams,
+                           detail::device_2dspan<encoder_chunk_streams> streams,
                            uint32_t num_stripe_streams,
                            uint32_t num_columns,
                            rmm::cuda_stream_view stream = rmm::cuda_stream_default);
@@ -351,7 +347,7 @@ void CompactOrcDataStreams(StripeStream *strm_desc,
  */
 void CompressOrcDataStreams(uint8_t *compressed_data,
                             StripeStream *strm_desc,
-                            matrix_device_view<encoder_chunk_streams> enc_streams,
+                            detail::device_2dspan<encoder_chunk_streams> enc_streams,
                             gpu_inflate_input_s *comp_in,
                             gpu_inflate_status_s *comp_out,
                             uint32_t num_stripe_streams,

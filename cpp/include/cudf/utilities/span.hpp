@@ -173,5 +173,46 @@ struct device_span : public span_base<T, Extent, device_span<T, Extent>> {
   }
 };
 
+template <typename T>
+class base_2dspan {
+ public:
+  base_2dspan(T* ptr, std::pair<size_t, size_t> size) : _data_ptr{ptr}, _size(size) {}
+
+  constexpr auto size() { return _size; }
+
+  static constexpr size_t flatten_index(size_t row,
+                                        size_t column,
+                                        std::pair<size_t, size_t> size) noexcept
+  {
+    return row * size.second + column;
+  }
+
+ protected:
+  T* _data_ptr;
+  std::pair<size_t, size_t> _size;
+};
+
+template <typename T>
+class device_2dspan : public base_2dspan<T> {
+ public:
+  device_2dspan(T* ptr, std::pair<size_t, size_t> size) : base_2dspan<T>{ptr, size} {}
+  constexpr device_span<T> operator[](size_t row)
+  {
+    return {this->_data_ptr + base_2dspan<T>::flatten_index(row, 0, this->_size),
+            this->_size.second};
+  }
+};
+
+template <typename T>
+class host_2dspan : public base_2dspan<T> {
+ public:
+  host_2dspan(T* ptr, std::pair<size_t, size_t> size) : base_2dspan<T>{ptr, size} {}
+  constexpr host_span<T> operator[](size_t row)
+  {
+    return {this->_data_ptr + base_2dspan<T>::flatten_index(row, 0, this->_size),
+            this->_size.second};
+  }
+};
+
 }  // namespace detail
 }  // namespace cudf

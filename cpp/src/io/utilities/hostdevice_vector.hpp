@@ -17,6 +17,7 @@
 #pragma once
 
 #include <cudf/utilities/error.hpp>
+#include <cudf/utilities/span.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_buffer.hpp>
@@ -125,3 +126,48 @@ class hostdevice_vector {
   T *h_data{};
   rmm::device_buffer d_data{};
 };
+
+namespace cudf {
+namespace detail {
+
+template <typename T>
+class hostdevice_2dvector {
+ public:
+  hostdevice_2dvector(size_t rows,
+                      size_t columns,
+                      rmm::cuda_stream_view stream = rmm::cuda_stream_default)
+    : _size{rows, columns}, _data{rows * columns, stream}
+  {
+  }
+  operator device_2dspan<T>() { return {_data.device_ptr(), _size}; }
+  operator device_2dspan<T const>() const { return {_data.device_ptr(), _size}; }
+
+  host_span<T> operator[](size_t row)
+  {
+    return {_data.host_ptr() + base_2dspan<T>::flatten_index(row, 0, _size), _size.second};
+  }
+
+  host_span<T const> operator[](size_t row) const
+  {
+    return {_data.host_ptr() + base_2dspan<T>::flatten_index(row, 0, _size), _size.second};
+  }
+
+  auto size() { return _size; }
+
+  void host_to_device(rmm::cuda_stream_view stream, bool synchronize = false)
+  {
+    _data.host_to_device(stream, synchronize);
+  }
+
+  void device_to_host(rmm::cuda_stream_view stream, bool synchronize = false)
+  {
+    _data.device_to_host(stream, synchronize);
+  }
+
+ private:
+  std::pair<size_t, size_t> _size;
+  hostdevice_vector<T> _data;
+};
+
+}  // namespace detail
+}  // namespace cudf
