@@ -68,7 +68,7 @@ class IntervalColumn(StructColumn):
             dtype=cudf.core.dtypes.IntervalDtype(
                 self.dtype.fields["left"], closed
             ),
-            mask=self.bas_mask,
+            mask=self.base_mask,
             offset=self.offset,
             null_count=self.null_count,
             children=self.base_children,
