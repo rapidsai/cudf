@@ -2706,19 +2706,26 @@ class interval_range(GenericIndex):
         cls,
         start: int = None,
         end: int = None,
+        periods: int = None,
         freq: int = 1,
         closed: str = "right",
         name: str = None,
     ) -> "IntervalIndex":
-        left_col = cupy.arange(start, end, freq)
-        right_col = cupy.arange(start + freq, end + 1, freq)
-        # sometimes the left col overlaps with the right col,
-        # seems to occur with even freq and odd end, and in other places too
-        if len(left_col) != len(right_col):
-            left_col = cupy.arange(start, end - freq, freq)
-        if len(right_col) == 0 or len(left_col) == 0:
-            # I get an error passing to cudf IntervalIndex
-            return pd.IntervalIndex([], closed=closed)
+        if freq:
+            left_col = cupy.arange(start, end, freq)
+            right_col = cupy.arange(start + freq, end + 1, freq)
+            # sometimes the left col overlaps with the right col,
+            # seems to occur with even freq and odd end, and in other places too
+            if len(left_col) != len(right_col):
+                left_col = cupy.arange(start, end - freq, freq)
+            if len(right_col) == 0 or len(left_col) == 0:
+                # I get an error passing to cudf IntervalIndex
+                return pd.IntervalIndex([], closed=closed)
+        if periods:
+            periods_array = cupy.asarray(cupy.arange(start,end+1))
+            hist, bin_edges = cupy.histogram(periods_array,periods)
+            left_col= bin_edges[:-1]
+            right_col= bin_edges[1:]
 
         interval_col = column.build_interval_column(
             left_col, right_col, closed=closed
