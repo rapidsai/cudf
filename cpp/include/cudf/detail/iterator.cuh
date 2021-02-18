@@ -316,6 +316,31 @@ struct scalar_pair_accessor : public scalar_value_accessor<Element> {
 };
 
 /**
+ * @brief Utility to discard template type arguments.
+ *
+ * Substitute for std::void_t.
+ *
+ * @tparam T Ignored template parameter
+ */
+template <typename... T>
+using void_t = void;
+
+/**
+ * @brief Compile-time reflection to check if `Element` type has a `rep()` member.
+ */
+template <typename Element, typename = void>
+struct has_rep_member {
+  static constexpr bool value = false;
+};
+
+template <typename Element>
+struct has_rep_member<Element, void_t<decltype(std::declval<Element>().rep())>> {
+  // static_assert(std::is_same<device_storage_type_t<Element>,
+  // decltype(std::declval<Element>().rep())>::value);
+  static constexpr bool value = true;
+};
+
+/**
  * @brief Pair accessor for scalar's representation value and validity.
  *
  * @tparam Element The type of element in the scalar.
@@ -341,20 +366,22 @@ struct scalar_representation_pair_accessor : public scalar_value_accessor<Elemen
   CUDA_DEVICE_CALLABLE
   const value_type operator()(size_type) const
   {
-    return {get_rep<Element>(), super_t::dscalar.is_valid()};
+    return {get_rep(super_t::dscalar), super_t::dscalar.is_valid()};
   }
 
  private:
-  template <typename E, std::enable_if_t<std::is_same<E, rep_type>::value, void>* = nullptr>
-  CUDA_DEVICE_CALLABLE E get_rep() const
+  template <typename DeviceScalar,
+            std::enable_if_t<!has_rep_member<DeviceScalar>::value, void>* = nullptr>
+  CUDA_DEVICE_CALLABLE rep_type get_rep(DeviceScalar const& dscalar) const
   {
-    return super_t::dscalar.value();
+    return dscalar.value();
   }
 
-  template <typename E, std::enable_if_t<!std::is_same<E, rep_type>::value, void>* = nullptr>
-  CUDA_DEVICE_CALLABLE rep_type get_rep() const
+  template <typename DeviceScalar,
+            std::enable_if_t<has_rep_member<DeviceScalar>::value, void>* = nullptr>
+  CUDA_DEVICE_CALLABLE rep_type get_rep(DeviceScalar const& dscalar) const
   {
-    return super_t::dscalar.rep();
+    return dscalar.rep();
   }
 };
 
@@ -415,11 +442,11 @@ auto inline make_pair_iterator(scalar const& scalar_value)
  *         and validity of the scalar in a pair
  */
 template <typename Element, bool = false>
-auto inline make_pair_rep_iterator(scalar const& scalar_value)
+auto make_pair_rep_iterator(scalar const& scalar_value)
 {
   CUDF_EXPECTS(type_id_matches_device_storage_type<Element>(scalar_value.type().id()),
                "the data type mismatch");
-  return cudf::detail::make_counting_transform_iterator(
+  return make_counting_transform_iterator(
     0, scalar_representation_pair_accessor<Element>{scalar_value});
 }
 

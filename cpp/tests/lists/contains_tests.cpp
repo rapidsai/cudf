@@ -115,11 +115,8 @@ TYPED_TEST(TypedContainsTest, ListContainsScalarWithNoNulls)
     {},
     {1, 2, 3},
     {}}.release();
-
   auto search_key_one = create_scalar_search_key<T>(1);
-
   auto actual_result = lists::contains(search_space->view(), *search_key_one);
-
   auto expected_result = fixed_width_column_wrapper<bool>{1, 0, 0, 1, 0, 0, 0, 0, 1, 0};
 
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected_result, *actual_result);
@@ -148,9 +145,7 @@ TYPED_TEST(TypedContainsTest, ListContainsScalarWithNullLists)
     })}.release();
 
   auto search_key_one = create_scalar_search_key<T>(1);
-
   auto actual_result = lists::contains(search_space->view(), *search_key_one);
-
   auto expected_result =
     fixed_width_column_wrapper<bool>{{1, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0},
                                      cudf::detail::make_counting_transform_iterator(
@@ -176,9 +171,7 @@ TYPED_TEST(TypedContainsTest, ListContainsScalarNonNullListsWithNullValues)
                       {});
 
   auto search_key_one = create_scalar_search_key<T>(1);
-
   auto actual_result = lists::contains(search_space->view(), *search_key_one);
-
   auto expected_result =
     fixed_width_column_wrapper<bool>{{0, 1, 0, 0, 0, 0, 0, 1}, {0, 1, 0, 1, 1, 0, 1, 1}};
 
@@ -204,9 +197,7 @@ TYPED_TEST(TypedContainsTest, ListContainsScalarWithNullsInLists)
     cudf::test::detail::make_null_mask(input_null_mask_iter, input_null_mask_iter + 8));
 
   auto search_key_one = create_scalar_search_key<T>(1);
-
   auto actual_result = lists::contains(search_space->view(), *search_key_one);
-
   auto expected_result =
     fixed_width_column_wrapper<bool>{{0, 1, 0, 0, 0, 0, 0, 1}, {0, 1, 0, 1, 0, 0, 1, 1}};
 
@@ -232,9 +223,7 @@ TEST_F(ContainsTest, BoolListContainsScalarWithNullsInLists)
     cudf::test::detail::make_null_mask(input_null_mask_iter, input_null_mask_iter + 8));
 
   auto search_key_one = create_scalar_search_key<T>(1);
-
   auto actual_result = lists::contains(search_space->view(), *search_key_one);
-
   auto expected_result =
     fixed_width_column_wrapper<bool>{{0, 1, 1, 0, 0, 1, 0, 1}, {0, 1, 1, 1, 0, 1, 1, 1}};
 
@@ -260,9 +249,7 @@ TEST_F(ContainsTest, StringListContainsScalarWithNullsInLists)
     cudf::test::detail::make_null_mask(input_null_mask_iter, input_null_mask_iter + 8));
 
   auto search_key_one = create_scalar_search_key<T>("1");
-
   auto actual_result = lists::contains(search_space->view(), *search_key_one);
-
   auto expected_result =
     fixed_width_column_wrapper<bool>{{0, 1, 0, 0, 0, 0, 0, 1}, {0, 1, 0, 1, 0, 0, 1, 1}};
 
@@ -290,9 +277,7 @@ TYPED_TEST(TypedContainsTest, ContainsScalarNullSearchKey)
     })}.release();
 
   auto search_key_null = create_null_search_key<T>();
-
   auto actual_result = lists::contains(search_space->view(), *search_key_null);
-
   auto expected_result = fixed_width_column_wrapper<bool>{
     {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
     cudf::detail::make_counting_transform_iterator(0, [](auto i) { return false; })};
@@ -354,9 +339,7 @@ TYPED_TEST(TypedVectorContainsTest, ListContainsVectorWithNoNulls)
     {}}.release();
 
   auto search_key = fixed_width_column_wrapper<T, int32_t>{1, 2, 3, 1, 2, 3, 1, 2, 3, 1};
-
   auto actual_result = lists::contains(search_space->view(), search_key);
-
   auto expected_result = fixed_width_column_wrapper<bool>{1, 0, 0, 1, 1, 0, 0, 0, 1, 0};
 
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected_result, *actual_result);
@@ -385,9 +368,7 @@ TYPED_TEST(TypedVectorContainsTest, ListContainsVectorWithNullLists)
     })}.release();
 
   auto search_keys = fixed_width_column_wrapper<T, int32_t>{1, 2, 3, 1, 2, 3, 1, 2, 3, 1, 2};
-
   auto actual_result = lists::contains(search_space->view(), search_keys);
-
   auto expected_result =
     fixed_width_column_wrapper<bool>{{1, 0, 0, 0, 0, 1, 0, 0, 0, 1, 0},
                                      cudf::detail::make_counting_transform_iterator(
@@ -413,9 +394,7 @@ TYPED_TEST(TypedVectorContainsTest, ListContainsVectorNonNullListsWithNullValues
                       {});
 
   auto search_keys = fixed_width_column_wrapper<T, int32_t>{1, 2, 3, 1, 2, 3, 1, 3};
-
   auto actual_result = lists::contains(search_space->view(), search_keys);
-
   auto expected_result =
     fixed_width_column_wrapper<bool>{{0, 1, 0, 0, 0, 0, 1, 1}, {0, 1, 0, 1, 1, 0, 1, 1}};
 
@@ -441,9 +420,7 @@ TYPED_TEST(TypedVectorContainsTest, ListContainsVectorWithNullsInLists)
     cudf::test::detail::make_null_mask(input_null_mask_iter, input_null_mask_iter + 8));
 
   auto search_keys = fixed_width_column_wrapper<T, int32_t>{1, 2, 3, 1, 2, 3, 1, 3};
-
   auto actual_result = lists::contains(search_space->view(), search_keys);
-
   auto expected_result =
     fixed_width_column_wrapper<bool>{{0, 1, 0, 0, 0, 0, 1, 1}, {0, 1, 0, 1, 0, 0, 1, 1}};
 
@@ -473,7 +450,6 @@ TYPED_TEST(TypedVectorContainsTest, ListContainsVectorWithNullsInListsAndInSearc
     cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i != 6; })};
 
   auto actual_result = lists::contains(search_space->view(), search_keys);
-
   auto expected_result =
     fixed_width_column_wrapper<bool>{{0, 1, 0, 0, 0, 0, 0, 1}, {0, 1, 0, 1, 0, 0, 0, 1}};
 
@@ -503,7 +479,6 @@ TEST_F(ContainsTest, BoolListContainsVectorWithNullsInListsAndInSearchKeys)
     cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i != 6; })};
 
   auto actual_result = lists::contains(search_space->view(), search_keys);
-
   auto expected_result =
     fixed_width_column_wrapper<bool>{{0, 1, 0, 0, 0, 0, 0, 1}, {0, 1, 0, 1, 0, 0, 0, 1}};
 
@@ -531,7 +506,6 @@ TEST_F(ContainsTest, StringListContainsVectorWithNullsInListsAndInSearchKeys)
     cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i != 6; })};
 
   auto actual_result = lists::contains(search_space->view(), search_keys);
-
   auto expected_result =
     fixed_width_column_wrapper<bool>{{0, 1, 0, 0, 0, 0, 0, 1}, {0, 1, 0, 1, 0, 0, 0, 1}};
 
@@ -614,9 +588,7 @@ TYPED_TEST(TypedContainsNaNsTest, ListWithNaNsContainsScalar)
     {}}.release();
 
   auto search_key_nan = create_scalar_search_key<T>(nan_3);
-
   auto actual_result = lists::contains(search_space->view(), *search_key_nan);
-
   auto expected_result = fixed_width_column_wrapper<bool>{0, 0, 0, 0, 1, 0, 1, 0, 0, 0};
 
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected_result, *actual_result);
@@ -662,7 +634,6 @@ TYPED_TEST(TypedContainsNaNsTest, ListWithNaNsContainsVector)
         .release();
 
     auto actual_result = lists::contains(search_space->view(), search_keys->view());
-
     auto null_at_index_1_and_2 =
       cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i != 1 && i != 2; });
 
@@ -678,7 +649,6 @@ TYPED_TEST(TypedContainsNaNsTest, ListWithNaNsContainsVector)
       fixed_width_column_wrapper<T>(search_key_values.begin(), search_key_values.end()).release();
 
     auto actual_result = lists::contains(search_space->view(), search_keys->view());
-
     auto null_at_index_1 =
       cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i != 1; });
 
@@ -710,9 +680,7 @@ TYPED_TEST(TypedContainsDecimalsTest, ListContainsScalar)
     make_lists_column(10, list_offsets.release(), decimals.release(), 0, {});
 
   auto search_key_one = make_fixed_point_scalar<T>(typename T::rep{1}, numeric::scale_type{0});
-
   auto actual_result = lists::contains(search_space->view(), *search_key_one);
-
   auto expected_result = fixed_width_column_wrapper<bool>{1, 0, 0, 1, 0, 0, 0, 0, 1, 0};
 
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected_result, *actual_result);
@@ -738,7 +706,6 @@ TYPED_TEST(TypedContainsDecimalsTest, ListContainsVector)
       0}}.release();
 
   auto actual_result = lists::contains(search_space->view(), search_key->view());
-
   auto expected_result = fixed_width_column_wrapper<bool>{1, 0, 0, 1, 1, 0, 0, 0, 1, 0};
 
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected_result, *actual_result);
