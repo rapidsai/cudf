@@ -1305,10 +1305,16 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_bitwiseMergeAndSetValidit
     cudf::table_view *input_table = new cudf::table_view(column_views);
 
     cudf::binary_operator op = static_cast<cudf::binary_operator>(bin_op);
-    if(op == cudf::binary_operator::BITWISE_AND) {
-      copy->set_null_mask(cudf::bitmask_and(*input_table));
+    switch(op) {
+      case cudf::binary_operator::BITWISE_AND:
+        copy->set_null_mask(cudf::bitmask_and(*input_table));
+        break;
+      case cudf::binary_operator::BITWISE_OR:
+        copy->set_null_mask(cudf::bitmask_or(*input_table));
+        break;
+      default:
+        JNI_THROW_NEW(env, "java/lang/IllegalArgumentException", "Unsupported merge operation", 0);
     }
-
     return reinterpret_cast<jlong>(copy.release());
   }
   CATCH_STD(env, 0);

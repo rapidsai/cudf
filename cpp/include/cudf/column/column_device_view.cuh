@@ -805,7 +805,7 @@ namespace detail {
  * @brief Convenience function to get offset word from a bitmask
  *
  * @see copy_offset_bitmask
- * @see offset_bitmask_and
+ * @see offset_bitmask_binop
  */
 __device__ inline bitmask_type get_mask_offset_word(bitmask_type const* __restrict__ source,
                                                     size_type destination_word_index,

@@ -88,6 +88,21 @@ rmm::device_buffer copy_bitmask(
   rmm::mr::device_memory_resource *mr = rmm::mr::get_current_device_resource());
 
 /**
+ * @copydoc bitmask_binop(Binop op, std::vector<bitmask_type const*>, std::vector<size_type> const&,
+ * size_type, rmm::mr::device_memory_resource *)
+ *
+ * @param stream CUDA stream used for device memory operations and kernel launches
+ */
+template <typename Binop>
+rmm::device_buffer bitmask_binop(
+  Binop op,
+  std::vector<bitmask_type const *> const &masks,
+  std::vector<size_type> const &begin_bits,
+  size_type mask_size,
+  rmm::cuda_stream_view stream,
+  rmm::mr::device_memory_resource *mr = rmm::mr::get_current_device_resource());
+
+/**
  * @copydoc bitmask_and(std::vector<bitmask_type const*>, std::vector<size_type> const&, size_type,
  * rmm::mr::device_memory_resource *)
  *
@@ -101,12 +116,47 @@ rmm::device_buffer bitmask_and(
   rmm::mr::device_memory_resource *mr = rmm::mr::get_current_device_resource());
 
 /**
+ * @copydoc cudf::bitmask_binop
+ *
+ * @param[in] stream CUDA stream used for device memory operations and kernel launches.
+ */
+template <typename Binop>
+rmm::device_buffer bitmask_binop(
+  Binop op,
+  table_view const &view,
+  rmm::cuda_stream_view stream,
+  rmm::mr::device_memory_resource *mr = rmm::mr::get_current_device_resource());
+
+/**
  * @copydoc cudf::bitmask_and
  *
  * @param[in] stream CUDA stream used for device memory operations and kernel launches.
  */
 rmm::device_buffer bitmask_and(
   table_view const &view,
+  rmm::cuda_stream_view stream,
+  rmm::mr::device_memory_resource *mr = rmm::mr::get_current_device_resource());
+
+/**
+ * @brief Performs a merger of the specified bitmasks using the binary operator
+ *        provided, and writes in place to destination
+ *
+ * @param op The binary operator used to combine the bitmasks
+ * @param dest_mask Destination to which the AND result is written
+ * @param masks The list of data pointers of the bitmasks to be ANDed
+ * @param begin_bits The bit offsets from which each mask is to be ANDed
+ * @param mask_size The number of bits to be ANDed in each mask
+ * @param stream CUDA stream used for device memory operations and kernel launches
+ * @param mr Device memory resource used to allocate the returned device_buffer
+ * @return rmm::device_buffer Output bitmask
+ */
+template <typename Binop>
+void inplace_bitmask_binop(
+  Binop op,
+  bitmask_type *dest_mask,
+  std::vector<bitmask_type const *> const &masks,
+  std::vector<size_type> const &begin_bits,
+  size_type mask_size,
   rmm::cuda_stream_view stream,
   rmm::mr::device_memory_resource *mr = rmm::mr::get_current_device_resource());
 

@@ -520,7 +520,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * @return the new ColumnVector with merged null mask.
    */
   public final ColumnVector mergeAndSetValidity(BinaryOp mergeOp, ColumnView... columns) {
-    assert mergeOp == BinaryOp.BITWISE_AND : "Only BITWISE_AND supported right now";
+    assert mergeOp == BinaryOp.BITWISE_AND || mergeOp == BinaryOp.BITWISE_OR : "Only BITWISE_AND and BITWISE_OR supported right now";
     long[] columnViews = new long[columns.length];
     long size = getRowCount();
 

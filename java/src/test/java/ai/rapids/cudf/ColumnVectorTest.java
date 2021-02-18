@@ -571,7 +571,7 @@ public class ColumnVectorTest extends CudfTestBase {
   }
 
   @Test
-  void testNullReconfigureNulls() {
+  void testAndNullReconfigureNulls() {
     try (ColumnVector v0 = ColumnVector.fromBoxedInts(0, 100, null, null, Integer.MIN_VALUE, null);
          ColumnVector v1 = ColumnVector.fromBoxedInts(0, 100, 1, 2, Integer.MIN_VALUE, null);
          ColumnVector intResult = v1.mergeAndSetValidity(BinaryOp.BITWISE_AND, v0);
@@ -580,6 +580,25 @@ public class ColumnVectorTest extends CudfTestBase {
          ColumnVector stringExpected = ColumnVector.fromStrings("0", "100", null, null, "MIN_VALUE", null);
          ColumnVector noMaskResult = v2.mergeAndSetValidity(BinaryOp.BITWISE_AND)) {
       assertColumnsAreEqual(v0, intResult);
+      assertColumnsAreEqual(stringExpected, stringResult);
+      assertColumnsAreEqual(v2, noMaskResult);
+    }
+  }
+
+  @Test
+  void testOrNullReconfigureNulls() {
+    try (ColumnVector v0 = ColumnVector.fromBoxedInts(0, 100, null, null, Integer.MIN_VALUE, null);
+         ColumnVector v1 = ColumnVector.fromBoxedInts(0, 100, 1, 2, Integer.MIN_VALUE, null);
+         ColumnVector intResultV0 = v1.mergeAndSetValidity(BinaryOp.BITWISE_OR, v0);
+         ColumnVector intResultV0V1 = v1.mergeAndSetValidity(BinaryOp.BITWISE_OR, v0, v1);
+         ColumnVector intResultMulti = v1.mergeAndSetValidity(BinaryOp.BITWISE_OR, v0, v0, v1, v1, v0, v1, v0);
+         ColumnVector v2 = ColumnVector.fromStrings("0", "100", "1", "2", "MIN_VALUE", "3");
+         ColumnVector stringResult = v2.mergeAndSetValidity(BinaryOp.BITWISE_OR, v0, v1);
+         ColumnVector stringExpected = ColumnVector.fromStrings("0", "100", "1", "2", "MIN_VALUE", null);
+         ColumnVector noMaskResult = v2.mergeAndSetValidity(BinaryOp.BITWISE_OR)) {
+      assertColumnsAreEqual(v0, intResultV0);
+      assertColumnsAreEqual(v1, intResultV0V1);
+      assertColumnsAreEqual(v1, intResultMulti);
       assertColumnsAreEqual(stringExpected, stringResult);
       assertColumnsAreEqual(v2, noMaskResult);
     }
