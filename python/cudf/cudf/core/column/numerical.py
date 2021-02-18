@@ -109,17 +109,21 @@ class NumericalColumn(ColumnBase):
                 msg = "{!r} operator not supported between {} and {}"
                 raise TypeError(msg.format(binop, type(self), type(rhs)))
             out_dtype = np.result_type(self.dtype, rhs.dtype)
-            if binop in ["mod", "floordiv"]:
-                tmp = self if reflect else rhs
-                if (tmp.dtype in int_dtypes) and (
-                    (np.isscalar(tmp) and (0 == tmp))
-                    or ((isinstance(tmp, NumericalColumn)) and (0 in tmp))
-                ):
-                    if binop == "floordiv":
-                        raise ValueError(
-                            "Integer floor division by zero is undefined."
-                        )
-                    out_dtype = np.dtype("float64")
+
+            # Special cases for mod and floordiv
+            if binop in {"mod", "floordiv"}:
+                dnom = self if reflect else rhs # denominator
+                numr = rhs if reflect else self # numerator
+                # check for zeroes in the denominator
+                if dnom.dtype.kind in "ui":
+                    # Denominator either zero, or zero is contained therein
+                    if (np.isscalar(dnom) and dnom == 0) or (isinstance(dnom, NumericalColumn) and 0 in dnom):
+                        if numr.dtype.kind in "ui" and op == "floordiv":
+                            # this is integer division by zero
+                            raise ValueError(
+                                "Integer floor division by zero is undefined."
+                            )
+                        out_dtype = np.dtype("float64")
         
         return _numeric_column_binop(
             lhs=self, rhs=rhs, op=binop, out_dtype=out_dtype, reflect=reflect
