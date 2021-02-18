@@ -213,20 +213,18 @@ class writer::impl {
    *
    * @param num_rows Total number of rows
    * @param num_index_streams Total number of index streams
-   * @param num_data_streams Total number of data streams
    * @param stripe_bounds List of stripe boundaries
-   * @param chunks List of column data chunks
-   * @param strm_desc List of stream descriptors
+   * @param streams List of encoder chunk streams [column][rowgroup]
+   * @param strm_desc List of stream descriptors [stripe][data_stream]
    *
    * @return The stripes' information
    */
   std::vector<StripeInformation> gather_stripes(
     size_t num_rows,
     size_t num_index_streams,
-    size_t num_data_streams,
     host_span<stripe_rowgroups const> stripe_bounds,
-    hostdevice_2dvector<gpu::encoder_chunk_streams>* streams,
-    hostdevice_vector<gpu::StripeStream>* strm_desc);
+    hostdevice_2dvector<gpu::encoder_chunk_streams>* enc_streams,
+    hostdevice_2dvector<gpu::StripeStream>* strm_desc);
 
   /**
    * @brief Returns per-stripe and per-file column statistics encoded
@@ -246,7 +244,6 @@ class writer::impl {
    * @param stripe_id Stripe's identifier
    * @param col_id Column's identifier
    * @param columns List of columns
-   * @param num_data_streams Total number of data streams
    * @param group Starting row group in the stripe
    * @param groups_in_stripe Number of row groups in the stripe
    * @param TODO
@@ -258,11 +255,10 @@ class writer::impl {
   void write_index_stream(int32_t stripe_id,
                           int32_t col_id,
                           host_span<orc_column_view const> columns,
-                          size_t num_data_streams,
                           size_t group,
                           size_t groups_in_stripe,
                           host_2dspan<gpu::encoder_chunk_streams const> enc_streams,
-                          hostdevice_vector<gpu::StripeStream> const& strm_desc,
+                          host_2dspan<gpu::StripeStream const> strm_desc,
                           hostdevice_vector<gpu_inflate_status_s> const& comp_out,
                           StripeInformation* stripe,
                           orc_streams* streams,

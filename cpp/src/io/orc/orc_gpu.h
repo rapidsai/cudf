@@ -320,9 +320,8 @@ void EncodeStripeDictionaries(StripeDictionary *stripes,
  * @param[in] num_stripe_streams Total number of streams
  * @param[in] stream CUDA stream to use, default 0
  */
-void CompactOrcDataStreams(StripeStream *strm_desc,
+void CompactOrcDataStreams(detail::device_2dspan<StripeStream> strm_desc,
                            detail::device_2dspan<encoder_chunk_streams> streams,
-                           uint32_t num_stripe_streams,
                            rmm::cuda_stream_view stream = rmm::cuda_stream_default);
 
 /**
@@ -339,11 +338,10 @@ void CompactOrcDataStreams(StripeStream *strm_desc,
  * @param[in] stream CUDA stream to use, default 0
  */
 void CompressOrcDataStreams(uint8_t *compressed_data,
-                            StripeStream *strm_desc,
+                            detail::device_2dspan<StripeStream> strm_desc,
                             detail::device_2dspan<encoder_chunk_streams> enc_streams,
                             gpu_inflate_input_s *comp_in,
                             gpu_inflate_status_s *comp_out,
-                            uint32_t num_stripe_streams,
                             uint32_t num_compressed_blocks,
                             CompressionKind compression,
                             uint32_t comp_blk_size,
