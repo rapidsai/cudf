@@ -153,6 +153,7 @@ set(GROUPBY_TEST_SRC
     "${CMAKE_CURRENT_SOURCE_DIR}/groupby/group_sum_test.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/groupby/group_min_test.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/groupby/group_max_test.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/groupby/group_sum_of_squares_test.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/groupby/group_mean_test.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/groupby/group_var_test.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/groupby/group_std_test.cpp"

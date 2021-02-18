@@ -120,11 +120,11 @@ __global__ void __launch_bounds__(block_size) gpuInitPageFragments(PageFragment 
 {
   __shared__ __align__(16) frag_init_state_s state_g;
 
-  using warp_reduce      = cub::WarpReduce<uint32_t>;
-  using half_warp_reduce = cub::WarpReduce<uint32_t, 16>;
+  using block_reduce = cub::BlockReduce<uint32_t, block_size>;
+  using block_scan   = cub::BlockScan<uint32_t, block_size>;
   __shared__ union {
-    typename warp_reduce::TempStorage full[block_size / 32];
-    typename half_warp_reduce::TempStorage half;
+    typename block_reduce::TempStorage reduce_storage;
+    typename block_scan::TempStorage scan_storage;
   } temp_storage;
 
   frag_init_state_s *const s = &state_g;
@@ -204,7 +204,6 @@ __global__ void __launch_bounds__(block_size) gpuInitPageFragments(PageFragment 
     uint32_t is_valid = (i + t < nvals && val_idx < s->col.leaf_column->size())
                           ? s->col.leaf_column->is_valid(val_idx)
                           : 0;
-    uint32_t valid_warp = ballot(is_valid);
     uint32_t len, nz_pos, hash;
     if (is_valid) {
       len = dtype_len;
@@ -227,28 +226,18 @@ __global__ void __launch_bounds__(block_size) gpuInitPageFragments(PageFragment 
       len = 0;
     }
 
-    nz_pos =
-      s->frag.non_nulls + __popc(valid_warp & (0x7fffffffu >> (0x1fu - ((uint32_t)t & 0x1f))));
-    len = warp_reduce(temp_storage.full[t / 32]).Sum(len);
-    if (!(t & 0x1f)) {
-      s->scratch_red[(t >> 5) + 0]  = __popc(valid_warp);
-      s->scratch_red[(t >> 5) + 16] = len;
-    }
+    uint32_t non_nulls;
+    block_scan(temp_storage.scan_storage).ExclusiveSum(is_valid, nz_pos, non_nulls);
+    nz_pos += s->frag.non_nulls;
     __syncthreads();
-    if (t < 32) {
-      uint32_t warp_pos  = WarpReducePos16((t < 16) ? s->scratch_red[t] : 0, t);
-      uint32_t non_nulls = shuffle(warp_pos, 0xf);
-      len = half_warp_reduce(temp_storage.half).Sum((t < 16) ? s->scratch_red[t + 16] : 0);
-      if (t < 16) { s->scratch_red[t] = warp_pos; }
-      if (!t) {
-        s->frag.non_nulls = s->frag.non_nulls + non_nulls;
-        s->frag.fragment_data_size += len;
-      }
+    len = block_reduce(temp_storage.reduce_storage).Sum(len);
+    if (!t) {
+      s->frag.non_nulls += non_nulls;
+      s->frag.fragment_data_size += len;
     }
     __syncthreads();
     if (is_valid && dtype != BOOLEAN) {
       uint32_t *dict_index = s->col.dict_index;
-      if (t >= 32) { nz_pos += s->scratch_red[(t - 32) >> 5]; }
       if (dict_index) {
         atomicAdd(&s->map.u32[hash >> 1], (hash & 1) ? 1 << 16 : 1);
         dict_index[start_value_idx + nz_pos] =
@@ -271,27 +260,18 @@ __global__ void __launch_bounds__(block_size) gpuInitPageFragments(PageFragment 
     uint32_t sum23   = count23 + (count23 << 16);
     uint32_t sum45   = count45 + (count45 << 16);
     uint32_t sum67   = count67 + (count67 << 16);
-    uint32_t sum_w, tmp;
     sum23 += (sum01 >> 16) * 0x10001;
     sum45 += (sum23 >> 16) * 0x10001;
     sum67 += (sum45 >> 16) * 0x10001;
-    sum_w = sum67 >> 16;
-    sum_w = WarpReducePos16(sum_w, t);
-    if ((t & 0xf) == 0xf) { s->scratch_red[t >> 4] = sum_w; }
-    __syncthreads();
-    if (t < 32) {
-      uint32_t sum_b    = WarpReducePos32(s->scratch_red[t], t);
-      s->scratch_red[t] = sum_b;
-    }
-    __syncthreads();
-    tmp                   = (t >= 16) ? s->scratch_red[(t >> 4) - 1] : 0;
-    sum_w                 = (sum_w - (sum67 >> 16) + tmp) * 0x10001;
+    uint32_t sum_w = sum67 >> 16;
+    block_scan(temp_storage.scan_storage).InclusiveSum(sum_w, sum_w);
+    sum_w                 = (sum_w - (sum67 >> 16)) * 0x10001;
     s->map.u32[t * 4 + 0] = sum_w + sum01 - count01;
     s->map.u32[t * 4 + 1] = sum_w + sum23 - count23;
     s->map.u32[t * 4 + 2] = sum_w + sum45 - count45;
     s->map.u32[t * 4 + 3] = sum_w + sum67 - count67;
-    __syncthreads();
   }
+  __syncthreads();
   // Put the indices back in hash order
   if (s->col.dict_index) {
     uint32_t *dict_index = s->col.dict_index + start_row;
@@ -330,7 +310,7 @@ __global__ void __launch_bounds__(block_size) gpuInitPageFragments(PageFragment 
     // map, the position of the first entry can be inferred from the hash map counts
     uint32_t dupe_data_size = 0;
     for (uint32_t i = 0; i < nnz; i += block_size) {
-      uint32_t ck_row = 0, ck_row_ref = 0, is_dupe = 0, dupe_mask, dupes_before;
+      uint32_t ck_row = 0, ck_row_ref = 0, is_dupe = 0;
       if (i + t < nnz) {
         uint32_t dict_val = s->dict[i + t];
         uint32_t hash     = dict_val & ((1 << init_hash_bits) - 1);
@@ -366,20 +346,14 @@ __global__ void __launch_bounds__(block_size) gpuInitPageFragments(PageFragment 
           }
         }
       }
-      dupe_mask    = ballot(is_dupe);
-      dupes_before = s->total_dupes + __popc(dupe_mask & ((2 << (t & 0x1f)) - 1));
-      if (!(t & 0x1f)) { s->scratch_red[t >> 5] = __popc(dupe_mask); }
+      uint32_t dupes_in_block;
+      uint32_t dupes_before;
+      block_scan(temp_storage.scan_storage).InclusiveSum(is_dupe, dupes_before, dupes_in_block);
+      dupes_before += s->total_dupes;
       __syncthreads();
-      if (t < 32) {
-        uint32_t warp_dupes = (t < 16) ? s->scratch_red[t] : 0;
-        uint32_t warp_pos   = WarpReducePos16(warp_dupes, t);
-        if (t == 0xf) { s->total_dupes += warp_pos; }
-        if (t < 16) { s->scratch_red[t] = warp_pos - warp_dupes; }
-      }
-      __syncthreads();
+      if (t == 0) { s->total_dupes += dupes_in_block; }
       if (i + t < nnz) {
         if (!is_dupe) {
-          dupes_before += s->scratch_red[t >> 5];
           s->col.dict_data[start_row + i + t - dupes_before] = ck_row;
         } else {
           s->col.dict_index[ck_row] = ck_row_ref | (1u << 31);
@@ -387,15 +361,10 @@ __global__ void __launch_bounds__(block_size) gpuInitPageFragments(PageFragment 
       }
     }
     __syncthreads();
-    dupe_data_size = warp_reduce(temp_storage.full[t / 32]).Sum(dupe_data_size);
-    if (!(t & 0x1f)) { s->scratch_red[t >> 5] = dupe_data_size; }
-    __syncthreads();
-    if (t < 32) {
-      dupe_data_size = half_warp_reduce(temp_storage.half).Sum((t < 16) ? s->scratch_red[t] : 0);
-      if (!t) {
-        s->frag.dict_data_size = s->frag.fragment_data_size - dupe_data_size;
-        s->frag.num_dict_vals  = s->frag.non_nulls - s->total_dupes;
-      }
+    dupe_data_size = block_reduce(temp_storage.reduce_storage).Sum(dupe_data_size);
+    if (!t) {
+      s->frag.dict_data_size = s->frag.fragment_data_size - dupe_data_size;
+      s->frag.num_dict_vals  = s->frag.non_nulls - s->total_dupes;
     }
   }
   __syncthreads();
@@ -942,6 +911,7 @@ convert_nanoseconds(cuda::std::chrono::sys_time<cuda::std::chrono::nanoseconds> 
 }
 
 // blockDim(128, 1, 1)
+template <int block_size>
 __global__ void __launch_bounds__(128, 8) gpuEncodePages(EncPage *pages,
                                                          const EncColumnChunk *chunks,
                                                          gpu_inflate_input_s *comp_in,
@@ -949,6 +919,8 @@ __global__ void __launch_bounds__(128, 8) gpuEncodePages(EncPage *pages,
                                                          uint32_t start_page)
 {
   __shared__ __align__(8) page_enc_state_s state_g;
+  using block_scan = cub::BlockScan<uint32_t, block_size>;
+  __shared__ typename block_scan::TempStorage temp_storage;
 
   page_enc_state_s *const s = &state_g;
   uint32_t t                = threadIdx.x;
@@ -1081,7 +1053,7 @@ __global__ void __launch_bounds__(128, 8) gpuEncodePages(EncPage *pages,
   for (uint32_t cur_val_idx = 0; cur_val_idx < s->page.num_leaf_values;) {
     uint32_t nvals   = min(s->page.num_leaf_values - cur_val_idx, 128);
     uint32_t val_idx = s->page_start_val + cur_val_idx + t;
-    uint32_t is_valid, warp_valids, len, pos;
+    uint32_t is_valid, len, pos;
 
     if (s->page.page_type == PageType::DICTIONARY_PAGE) {
       is_valid = (cur_val_idx + t < s->page.num_leaf_values);
@@ -1091,19 +1063,13 @@ __global__ void __launch_bounds__(128, 8) gpuEncodePages(EncPage *pages,
                    ? s->col.leaf_column->is_valid(val_idx)
                    : 0;
     }
-    warp_valids = ballot(is_valid);
     cur_val_idx += nvals;
     if (dict_bits >= 0) {
       // Dictionary encoding
       if (dict_bits > 0) {
         uint32_t rle_numvals;
-
-        pos = __popc(warp_valids & ((1 << (t & 0x1f)) - 1));
-        if (!(t & 0x1f)) { s->scratch_red[t >> 5] = __popc(warp_valids); }
-        __syncthreads();
-        if (t < 32) { s->scratch_red[t] = WarpReducePos4((t < 4) ? s->scratch_red[t] : 0, t); }
-        __syncthreads();
-        pos         = pos + ((t >= 32) ? s->scratch_red[(t - 32) >> 5] : 0);
+        uint32_t rle_numvals_in_block;
+        block_scan(temp_storage).ExclusiveSum(is_valid, pos, rle_numvals_in_block);
         rle_numvals = s->rle_numvals;
         if (is_valid) {
           uint32_t v;
@@ -1114,7 +1080,7 @@ __global__ void __launch_bounds__(128, 8) gpuEncodePages(EncPage *pages,
           }
           s->vals[(rle_numvals + pos) & (rle_buffer_size - 1)] = v;
         }
-        rle_numvals += s->scratch_red[3];
+        rle_numvals += rle_numvals_in_block;
         __syncthreads();
         if ((!enable_bool_rle) && (dtype == BOOLEAN)) {
           PlainBoolEncode(s, rle_numvals, (cur_val_idx == s->page.num_leaf_values), t);
@@ -1137,13 +1103,10 @@ __global__ void __launch_bounds__(128, 8) gpuEncodePages(EncPage *pages,
       } else {
         len = 0;
       }
-      pos = WarpReducePos32(len, t);
-      if ((t & 0x1f) == 0x1f) { s->scratch_red[t >> 5] = pos; }
+      uint32_t total_len = 0;
+      block_scan(temp_storage).ExclusiveSum(len, pos, total_len);
       __syncthreads();
-      if (t < 32) { s->scratch_red[t] = WarpReducePos4((t < 4) ? s->scratch_red[t] : 0, t); }
-      __syncthreads();
-      if (t == 0) { s->cur = dst + s->scratch_red[3]; }
-      pos = pos + ((t >= 32) ? s->scratch_red[(t - 32) >> 5] : 0) - len;
+      if (t == 0) { s->cur = dst + total_len; }
       if (is_valid) {
         switch (dtype) {
           case INT32:
@@ -2104,8 +2067,8 @@ void EncodePages(EncPage *pages,
 {
   // A page is part of one column. This is launching 1 block per page. 1 block will exclusively
   // deal with one datatype.
-  gpuEncodePages<<<num_pages, 128, 0, stream.value()>>>(
-    pages, chunks, comp_in, comp_out, start_page);
+  gpuEncodePages<128>
+    <<<num_pages, 128, 0, stream.value()>>>(pages, chunks, comp_in, comp_out, start_page);
 }
 
 /**
