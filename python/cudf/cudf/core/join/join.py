@@ -9,61 +9,37 @@ from cudf.core.join.casting_logic import (
 )
 
 
-class _MISSING_TYPE:
-    pass
-
-
-MISSING = _MISSING_TYPE()
-
-
 class ColumnView:
-    # A ColumnView represents one column of a Series
-    # or DataFrame - either an index column or a
-    # data column
-
-    # we need a different sentinel value than `None`
-    # because `None` is totally a valid index/column name
-    def __init__(self, obj, column=MISSING, index=MISSING):
-        self.obj = obj
+    def __init__(self, name, column=False, index=False):
+        self.name = name
         self.column, self.index = column, index
 
-    def get_numeric_index(self):
+    def get_numeric_index(self, obj):
         # get the position of the column (including any index columns)
-        if self.index is MISSING:
-            index_nlevels = (
-                self.obj.index.nlevels if self.obj._index is not None else 0
-            )
-            return index_nlevels + tuple(self.obj._data).index(self.column)
+        if self.column:
+            index_nlevels = obj.index.nlevels if obj._index is not None else 0
+            return index_nlevels + tuple(obj._data).index(self.name)
         else:
-            return self.obj.index.names.index(self.index)
+            return obj.index.names.index(self.name)
 
     @property
     def is_index_level(self):
         # True if this is an index column
-        return self.index is not MISSING
+        return self.index
 
-    @property
-    def name(self):
-        # get the name of the column
-        if self.index is MISSING:
-            return self.column
-        else:
-            return self.index
-
-    @property
-    def value(self):
+    def value(self, obj):
         # get the column
-        if self.index is MISSING:
-            return self.obj._data[self.name]
+        if self.column:
+            return obj._data[self.name]
         else:
-            return self.obj._index._data[self.name]
+            return obj._index._data[self.name]
 
-    def set_value(self, value):
+    def set_value(self, obj, value):
         # set the colum
-        if self.index is MISSING:
-            self.obj._data[self.name] = value
+        if self.column:
+            obj._data[self.name] = value
         else:
-            self.obj._index._data[self.name] = value
+            obj._index._data[self.name] = value
 
 
 JoinKeys = namedtuple("JoinKeys", ["left", "right"])
@@ -234,7 +210,7 @@ class MergeBase(object):
             if self.left_index:
                 left_keys.extend(
                     [
-                        ColumnView(obj=self.lhs, index=on)
+                        ColumnView(name=on, index=True)
                         for on in self.lhs.index.names
                     ]
                 )
@@ -242,14 +218,14 @@ class MergeBase(object):
                 # TODO: require left_on or left_index to be specified
                 left_keys.extend(
                     [
-                        ColumnView(obj=self.lhs, column=on)
+                        ColumnView(name=on, column=True)
                         for on in _coerce_to_tuple(self.left_on)
                     ]
                 )
             if self.right_index:
                 right_keys.extend(
                     [
-                        ColumnView(obj=self.rhs, index=on)
+                        ColumnView(name=on, index=True)
                         for on in self.rhs.index.names
                     ]
                 )
@@ -257,7 +233,7 @@ class MergeBase(object):
                 # TODO: require right_on or right_index to be specified
                 right_keys.extend(
                     [
-                        ColumnView(obj=self.rhs, column=on)
+                        ColumnView(name=on, column=True)
                         for on in _coerce_to_tuple(self.right_on)
                     ]
                 )
@@ -269,12 +245,8 @@ class MergeBase(object):
                 if self.on is not None
                 else set(self.lhs._data.keys()) & set(self.rhs._data.keys())
             )
-            left_keys = [
-                ColumnView(obj=self.lhs, column=on) for on in on_names
-            ]
-            right_keys = [
-                ColumnView(obj=self.rhs, column=on) for on in on_names
-            ]
+            left_keys = [ColumnView(name=on, column=True) for on in on_names]
+            right_keys = [ColumnView(name=on, column=True) for on in on_names]
 
         if len(left_keys) != len(right_keys):
             raise ValueError(
@@ -284,36 +256,42 @@ class MergeBase(object):
         self._keys = JoinKeys(left=left_keys, right=right_keys)
 
     def perform_merge(self):
-        self.match_key_dtypes(_input_to_libcudf_castrules_any)
+        lhs, rhs = self.match_key_dtypes(
+            self.lhs, self.rhs, _input_to_libcudf_castrules_any
+        )
 
-        left_key_indices = [key.get_numeric_index() for key in self._keys.left]
+        left_key_indices = [
+            key.get_numeric_index(lhs) for key in self._keys.left
+        ]
         right_key_indices = [
-            key.get_numeric_index() for key in self._keys.right
+            key.get_numeric_index(rhs) for key in self._keys.right
         ]
         left_rows, right_rows = libcudf.join.join(
-            self.lhs,
-            self.rhs,
+            lhs,
+            rhs,
             left_on=left_key_indices,
             right_on=right_key_indices,
             how=self.how,
         )
-        return self.construct_result(left_rows, right_rows)
+        return self.construct_result(lhs, rhs, left_rows, right_rows)
 
-    def construct_result(self, left_rows, right_rows):
-        self.match_key_dtypes(_libcudf_to_output_castrules)
+    def construct_result(self, lhs, rhs, left_rows, right_rows):
+        lhs, rhs = self.match_key_dtypes(
+            lhs, rhs, _libcudf_to_output_castrules
+        )
 
         # first construct the index.
         if self.left_index and self.right_index:
             if self.how == "right":
-                out_index = self.rhs.index._gather(left_rows, nullify=True)
+                out_index = rhs.index._gather(left_rows, nullify=True)
             else:
-                out_index = self.lhs.index._gather(left_rows, nullify=True)
+                out_index = lhs.index._gather(left_rows, nullify=True)
         elif self.left_index:
             # left_index and right_on
-            out_index = self.rhs.index._gather(right_rows, nullify=True)
+            out_index = rhs.index._gather(right_rows, nullify=True)
         elif self.right_index:
             # right_index and left_on
-            out_index = self.lhs.index._gather(left_rows, nullify=True)
+            out_index = lhs.index._gather(left_rows, nullify=True)
         else:
             out_index = None
 
@@ -322,11 +300,11 @@ class MergeBase(object):
         left_names, right_names = self.output_column_names()
 
         for lcol in left_names:
-            data[left_names[lcol]] = self.lhs._data[lcol].take(
+            data[left_names[lcol]] = lhs._data[lcol].take(
                 left_rows, nullify=True
             )
         for rcol in right_names:
-            data[right_names[rcol]] = self.rhs._data[rcol].take(
+            data[right_names[rcol]] = rhs._data[rcol].take(
                 right_rows, nullify=True
             )
 
@@ -336,16 +314,12 @@ class MergeBase(object):
         if self.how == "outer":
             for lkey, rkey in zip(*self._keys):
                 if lkey.name == rkey.name:
-                    # get the key column as it appears in the result:
-                    out_key = ColumnView(
-                        result, column=lkey.column, index=lkey.index
-                    )
-
                     # fill nulls in the key column with values from the RHS
-                    out_key.set_value(
-                        out_key.value.fillna(
-                            rkey.value.take(right_rows, nullify=True)
-                        )
+                    lkey.set_value(
+                        result,
+                        lkey.value(result).fillna(
+                            rkey.value(rhs).take(right_rows, nullify=True)
+                        ),
                     )
 
         return self.sort_result(result)
@@ -474,33 +448,42 @@ class MergeBase(object):
                         "lsuffix and rsuffix are not defined"
                     )
 
-    def match_key_dtypes(self, match_func):
+    def match_key_dtypes(self, lhs, rhs, match_func):
+        out_lhs = lhs.copy(deep=False)
+        out_rhs = rhs.copy(deep=False)
         # match the dtypes of the key columns in
         # self.lhs and self.rhs according to the matching
         # function `match_func`
         for left_key, right_key in zip(*self._keys):
-            lcol, rcol = left_key.value, right_key.value
+            lcol, rcol = left_key.value(lhs), right_key.value(rhs)
             dtype = match_func(lcol, rcol, how=self.how)
-            left_key.set_value(lcol.astype(dtype))
-            right_key.set_value(rcol.astype(dtype))
+            left_key.set_value(out_lhs, lcol.astype(dtype))
+            right_key.set_value(out_rhs, rcol.astype(dtype))
+        return out_lhs, out_rhs
 
 
 class MergeSemi(MergeBase):
     def perform_merge(self):
-        self.match_key_dtypes(_input_to_libcudf_castrules_any)
+        lhs, rhs = self.match_key_dtypes(
+            self.lhs, self.rhs, _input_to_libcudf_castrules_any
+        )
 
-        left_key_indices = [key.get_numeric_index() for key in self._keys.left]
+        left_key_indices = [
+            key.get_numeric_index(lhs) for key in self._keys.left
+        ]
         right_key_indices = [
-            key.get_numeric_index() for key in self._keys.right
+            key.get_numeric_index(rhs) for key in self._keys.right
         ]
         left_rows = libcudf.join.semi_join(
-            self.lhs,
-            self.rhs,
+            lhs,
+            rhs,
             left_on=left_key_indices,
             right_on=right_key_indices,
             how=self.how,
         )
-        return self.construct_result(left_rows, cudf.core.column.as_column([]))
+        return self.construct_result(
+            lhs, rhs, left_rows, cudf.core.column.as_column([])
+        )
 
     def output_column_names(self):
         left_names, _ = super().output_column_names()
