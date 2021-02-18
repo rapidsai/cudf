@@ -724,41 +724,34 @@ encoded_data writer::impl::encode_columns(host_span<orc_column_view const> colum
 
   if (!str_col_ids.empty()) {
     auto d_stripe_dict = columns[str_col_ids[0]].device_stripe_dict();
-    gpu::EncodeStripeDictionaries(d_stripe_dict,
-                                  chunks,
-                                  chunk_streams,
-                                  str_col_ids.size(),
-                                  columns.size(),
-                                  num_rowgroups,
-                                  stripe_bounds.size(),
-                                  stream);
+    gpu::EncodeStripeDictionaries(
+      d_stripe_dict, chunks, chunk_streams, str_col_ids.size(), stripe_bounds.size(), stream);
   }
 
-  gpu::EncodeOrcColumnData(chunks, chunk_streams, columns.size(), num_rowgroups, stream);
+  gpu::EncodeOrcColumnData(chunks, chunk_streams, stream);
   stream.synchronize();
 
   return {std::move(encoded_data), std::move(chunk_streams)};
 }
 
 std::vector<StripeInformation> writer::impl::gather_stripes(
-  size_t num_columns,
   size_t num_rows,
   size_t num_index_streams,
   size_t num_data_streams,
   host_span<stripe_rowgroups const> stripe_bounds,
-  hostdevice_2dvector<gpu::encoder_chunk_streams> &enc_streams,
-  hostdevice_vector<gpu::StripeStream> &strm_desc)
+  hostdevice_2dvector<gpu::encoder_chunk_streams> *enc_streams,
+  hostdevice_vector<gpu::StripeStream> *strm_desc)
 {
   std::vector<StripeInformation> stripes(stripe_bounds.size());
   for (auto const &stripe : stripe_bounds) {
-    for (size_t col_idx = 0; col_idx < num_columns; col_idx++) {
-      const auto &strm = enc_streams[col_idx][stripe.first];
+    for (size_t col_idx = 0; col_idx < enc_streams->size().first; col_idx++) {
+      const auto &strm = (*enc_streams)[col_idx][stripe.first];
 
       // Assign stream data of column data stream(s)
       for (int k = 0; k < gpu::CI_INDEX; k++) {
         const auto stream_id = strm.ids[k];
         if (stream_id != -1) {
-          auto *ss = &strm_desc[stripe.id * num_data_streams + stream_id - num_index_streams];
+          auto *ss = &(*strm_desc)[stripe.id * num_data_streams + stream_id - num_index_streams];
           ss->stream_size    = 0;
           ss->first_chunk_id = stripe.first;
           ss->num_chunks     = stripe.size;
@@ -773,11 +766,10 @@ std::vector<StripeInformation> writer::impl::gather_stripes(
     stripes[stripe.id].numberOfRows = stripe_end - stripe.first * row_index_stride_;
   }
 
-  strm_desc.host_to_device(stream);
-  gpu::CompactOrcDataStreams(
-    strm_desc.device_ptr(), enc_streams, strm_desc.size(), num_columns, stream);
-  strm_desc.device_to_host(stream);
-  enc_streams.device_to_host(stream, true);
+  strm_desc->host_to_device(stream);
+  gpu::CompactOrcDataStreams(strm_desc->device_ptr(), *enc_streams, strm_desc->size(), stream);
+  strm_desc->device_to_host(stream);
+  enc_streams->device_to_host(stream, true);
 
   return stripes;
 }
@@ -883,21 +875,18 @@ std::vector<std::vector<uint8_t>> writer::impl::gather_statistic_blobs(
   return stat_blobs;
 }
 
-void writer::impl::write_index_stream(
-  int32_t stripe_id,
-  int32_t col_id,
-  orc_column_view *columns,
-  size_t num_columns,
-  size_t num_rowgroups,
-  size_t num_data_streams,
-  size_t group,
-  size_t groups_in_stripe,
-  hostdevice_2dvector<gpu::encoder_chunk_streams> const &enc_streams,
-  hostdevice_vector<gpu::StripeStream> const &strm_desc,
-  hostdevice_vector<gpu_inflate_status_s> const &comp_out,
-  StripeInformation *stripe,
-  orc_streams *streams,
-  ProtobufWriter *pbw)
+void writer::impl::write_index_stream(int32_t stripe_id,
+                                      int32_t col_id,
+                                      host_span<orc_column_view const> columns,
+                                      size_t num_data_streams,
+                                      size_t group,
+                                      size_t groups_in_stripe,
+                                      host_2dspan<gpu::encoder_chunk_streams const> enc_streams,
+                                      hostdevice_vector<gpu::StripeStream> const &strm_desc,
+                                      hostdevice_vector<gpu_inflate_status_s> const &comp_out,
+                                      StripeInformation *stripe,
+                                      orc_streams *streams,
+                                      ProtobufWriter *pbw)
 {
   row_group_index_info present;
   row_group_index_info data;
@@ -912,7 +901,7 @@ void writer::impl::write_index_stream(
       record.pos = 0;
       if (compression_kind_ != NONE) {
         const auto *ss =
-          &strm_desc[stripe_id * num_data_streams + stream.ids[type] - (num_columns + 1)];
+          &strm_desc[stripe_id * num_data_streams + stream.ids[type] - (columns.size() + 1)];
         record.blk_pos   = ss->first_block;
         record.comp_pos  = 0;
         record.comp_size = ss->stream_size;
@@ -1121,18 +1110,14 @@ void writer::impl::write(table_view const &table)
 
   auto streams  = create_streams(orc_columns, num_rows, stripe_bounds);
   auto enc_data = encode_columns(orc_columns, str_col_ids, stripe_bounds, streams);
+
   // Assemble individual disparate column chunks into contiguous data streams
   const auto num_index_streams  = (num_columns + 1);
   const auto num_data_streams   = streams.size() - num_index_streams;
   const auto num_stripe_streams = stripe_bounds.size() * num_data_streams;
   hostdevice_vector<gpu::StripeStream> strm_desc(num_stripe_streams);
-  auto stripes = gather_stripes(num_columns,
-                                num_rows,
-                                num_index_streams,
-                                num_data_streams,
-                                stripe_bounds,
-                                enc_data.streams,
-                                strm_desc);
+  auto stripes = gather_stripes(
+    num_rows, num_index_streams, num_data_streams, stripe_bounds, &enc_data.streams, &strm_desc);
 
   // Gather column statistics
   std::vector<std::vector<uint8_t>> column_stats;
@@ -1205,9 +1190,7 @@ void writer::impl::write(table_view const &table)
     for (size_t col_id = 0; col_id <= (size_t)num_columns; col_id++) {
       write_index_stream(stripe_id,
                          col_id,
-                         orc_columns.data(),
-                         num_columns,
-                         num_rowgroups,
+                         orc_columns,
                          num_data_streams,
                          group,
                          groups_in_stripe,

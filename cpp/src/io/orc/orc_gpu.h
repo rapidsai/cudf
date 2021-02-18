@@ -287,33 +287,28 @@ void DecodeOrcColumnData(ColumnDesc *chunks,
 /**
  * @brief Launches kernel for encoding column data
  *
- * @param[in] chunks EncChunk device array [rowgroup][column]
- * @param[in] num_columns Number of columns
- * @param[in] num_rowgroups Number of row groups
+ * @param[in] chunks  encoder chunk device array [column][rowgroup]
+ * @param[in, out] streams chunk streams device array [column][rowgroup]
  * @param[in] stream CUDA stream to use, default 0
  */
 void EncodeOrcColumnData(detail::device_2dspan<EncChunk const> chunks,
                          detail::device_2dspan<encoder_chunk_streams> streams,
-                         uint32_t num_columns,
-                         uint32_t num_rowgroups,
                          rmm::cuda_stream_view stream = rmm::cuda_stream_default);
 
 /**
  * @brief Launches kernel for encoding column dictionaries
  *
  * @param[in] stripes Stripe dictionaries device array [stripe][string_column]
- * @param[in] chunks EncChunk device array [rowgroup][column]
+ * @param[in] chunks  encoder chunk device array [column][rowgroup]
+ * @param[in, out] streams chunk streams device array [column][rowgroup]
  * @param[in] num_string_columns Number of string columns
- * @param[in] num_columns Number of columns
  * @param[in] num_stripes Number of stripes
- * @param[in] stream CUDA stream to use, default 0
+ * @param[in] stream CUDA stream to use, default rmm::cuda_stream_default
  */
 void EncodeStripeDictionaries(StripeDictionary *stripes,
                               detail::device_2dspan<EncChunk const> chunks,
                               detail::device_2dspan<encoder_chunk_streams> streams,
                               uint32_t num_string_columns,
-                              uint32_t num_columns,
-                              uint32_t num_rowgroups,
                               uint32_t num_stripes,
                               rmm::cuda_stream_view stream = rmm::cuda_stream_default);
 
@@ -321,15 +316,13 @@ void EncodeStripeDictionaries(StripeDictionary *stripes,
  * @brief Launches kernel for compacting chunked column data prior to compression
  *
  * @param[in] strm_desc StripeStream device array [stripe][stream]
- * @param[in] TODO
+ * @param[in] streams
  * @param[in] num_stripe_streams Total number of streams
- * @param[in] num_columns Number of columns
  * @param[in] stream CUDA stream to use, default 0
  */
 void CompactOrcDataStreams(StripeStream *strm_desc,
                            detail::device_2dspan<encoder_chunk_streams> streams,
                            uint32_t num_stripe_streams,
-                           uint32_t num_columns,
                            rmm::cuda_stream_view stream = rmm::cuda_stream_default);
 
 /**
@@ -337,7 +330,7 @@ void CompactOrcDataStreams(StripeStream *strm_desc,
  *
  * @param[in] compressed_data Output compressed blocks
  * @param[in] strm_desc StripeStream device array [stripe][stream]
- * @param[in] chunks EncChunk device array [rowgroup][column]
+ * @param[in] enc_streams Encoded streams device array [rowgroup][column]
  * @param[out] comp_in Per-block compression input parameters
  * @param[out] comp_out Per-block compression status
  * @param[in] num_stripe_streams Total number of streams

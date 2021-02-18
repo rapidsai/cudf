@@ -45,6 +45,8 @@ class orc_column_view;
 
 using namespace cudf::io::orc;
 using namespace cudf::io;
+using cudf::detail::device_2dspan;
+using cudf::detail::host_2dspan;
 using cudf::detail::hostdevice_2dvector;
 
 struct stripe_rowgroups {
@@ -209,7 +211,6 @@ class writer::impl {
    * @brief Returns stripe information after compacting columns' individual data
    * chunks into contiguous data streams
    *
-   * @param num_columns Total number of columns
    * @param num_rows Total number of rows
    * @param num_index_streams Total number of index streams
    * @param num_data_streams Total number of data streams
@@ -220,13 +221,12 @@ class writer::impl {
    * @return The stripes' information
    */
   std::vector<StripeInformation> gather_stripes(
-    size_t num_columns,
     size_t num_rows,
     size_t num_index_streams,
     size_t num_data_streams,
     host_span<stripe_rowgroups const> stripe_bounds,
-    hostdevice_2dvector<gpu::encoder_chunk_streams>& streams,
-    hostdevice_vector<gpu::StripeStream>& strm_desc);
+    hostdevice_2dvector<gpu::encoder_chunk_streams>* streams,
+    hostdevice_vector<gpu::StripeStream>* strm_desc);
 
   /**
    * @brief Returns per-stripe and per-file column statistics encoded
@@ -246,7 +246,6 @@ class writer::impl {
    * @param stripe_id Stripe's identifier
    * @param col_id Column's identifier
    * @param columns List of columns
-   * @param num_columns Total number of columns
    * @param num_data_streams Total number of data streams
    * @param group Starting row group in the stripe
    * @param groups_in_stripe Number of row groups in the stripe
@@ -258,13 +257,11 @@ class writer::impl {
    */
   void write_index_stream(int32_t stripe_id,
                           int32_t col_id,
-                          orc_column_view* columns,
-                          size_t num_columns,
-                          size_t num_rowgroups,
+                          host_span<orc_column_view const> columns,
                           size_t num_data_streams,
                           size_t group,
                           size_t groups_in_stripe,
-                          hostdevice_2dvector<gpu::encoder_chunk_streams> const& enc_streams,
+                          host_2dspan<gpu::encoder_chunk_streams const> enc_streams,
                           hostdevice_vector<gpu::StripeStream> const& strm_desc,
                           hostdevice_vector<gpu_inflate_status_s> const& comp_out,
                           StripeInformation* stripe,

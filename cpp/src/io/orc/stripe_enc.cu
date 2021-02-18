@@ -638,17 +638,14 @@ static const __device__ __constant__ int32_t kTimeScale[10] = {
 /**
  * @brief Encode column data
  *
- * @param[in] chunks EncChunk device array [rowgroup][column]
- * @param[in] num_columns Number of columns
- * @param[in] num_rowgroups Number of row groups
+ * @param[in] chunks encoder chunks device array [column][rowgroup]
+ * @param[in, out] chunks cunk streams device array [column][rowgroup]
  */
 // blockDim {512,1,1}
 template <int block_size>
 __global__ void __launch_bounds__(block_size)
   gpuEncodeOrcColumnData(device_2dspan<EncChunk const> chunks,
-                         device_2dspan<encoder_chunk_streams> streams,
-                         uint32_t num_columns,
-                         uint32_t num_rowgroups)
+                         device_2dspan<encoder_chunk_streams> streams)
 {
   __shared__ __align__(16) orcenc_state_s state_g;
   __shared__ union {
@@ -936,9 +933,7 @@ template <int block_size>
 __global__ void __launch_bounds__(block_size)
   gpuEncodeStringDictionaries(StripeDictionary *stripes,
                               device_2dspan<EncChunk const> chunks,
-                              device_2dspan<encoder_chunk_streams> streams,
-                              uint32_t num_columns,
-                              uint32_t num_rowgroups)
+                              device_2dspan<encoder_chunk_streams> streams)
 {
   __shared__ __align__(16) orcenc_state_s state_g;
   __shared__ typename cub::BlockReduce<uint32_t, block_size>::TempStorage temp_storage;
@@ -1007,15 +1002,11 @@ __global__ void __launch_bounds__(block_size)
  * @brief Merge chunked column data into a single contiguous stream
  *
  * @param[in] strm_desc StripeStream device array [stripe][stream]
- * @param[in] TODO
- * @param[in] num_stripe_streams Total number of streams
- * @param[in] num_columns Number of columns
+ * @param[in] streams TODO
  */
 // blockDim {1024,1,1}
 __global__ void __launch_bounds__(1024)
-  gpuCompactOrcDataStreams(StripeStream *strm_desc,
-                           device_2dspan<encoder_chunk_streams> streams,
-                           uint32_t num_columns)  // TODO unused
+  gpuCompactOrcDataStreams(StripeStream *strm_desc, device_2dspan<encoder_chunk_streams> streams)
 {
   __shared__ __align__(16) StripeStream ss;
   __shared__ __align__(16) encoder_chunk_streams strm0;
@@ -1186,86 +1177,38 @@ __global__ void __launch_bounds__(1024) gpuCompactCompressedBlocks(StripeStream 
   }
 }
 
-/**
- * @brief Launches kernel for encoding column data
- *
- * @param[in] chunks EncChunk device array [rowgroup][column]
- * @param[in] num_columns Number of columns
- * @param[in] num_rowgroups Number of row groups
- * @param[in] stream CUDA stream to use, default 0
- */
 void EncodeOrcColumnData(device_2dspan<EncChunk const> chunks,
                          device_2dspan<encoder_chunk_streams> streams,
-                         uint32_t num_columns,
-                         uint32_t num_rowgroups,
                          rmm::cuda_stream_view stream)
 {
   dim3 dim_block(512, 1);  // 512 threads per chunk
-  dim3 dim_grid(num_columns, num_rowgroups);
-  gpuEncodeOrcColumnData<512>
-    <<<dim_grid, dim_block, 0, stream.value()>>>(chunks, streams, num_columns, num_rowgroups);
+  dim3 dim_grid(chunks.size().first, chunks.size().second);
+  gpuEncodeOrcColumnData<512><<<dim_grid, dim_block, 0, stream.value()>>>(chunks, streams);
 }
 
-/**
- * @brief Launches kernel for encoding column dictionaries
- *
- * @param[in] stripes Stripe dictionaries device array [stripe][string_column]
- * @param[in] chunks EncChunk device array [rowgroup][column]
- * @param[in] num_string_columns Number of string columns
- * @param[in] num_columns Number of columns
- * @param[in] num_stripes Number of stripes
- * @param[in] stream CUDA stream to use, default 0
- */
 void EncodeStripeDictionaries(StripeDictionary *stripes,
                               device_2dspan<EncChunk const> chunks,
                               device_2dspan<encoder_chunk_streams> streams,
                               uint32_t num_string_columns,
-                              uint32_t num_columns,
-                              uint32_t num_rowgroups,
                               uint32_t num_stripes,
                               rmm::cuda_stream_view stream)
 {
   dim3 dim_block(512, 1);  // 512 threads per dictionary
   dim3 dim_grid(num_string_columns * num_stripes, 2);
-  gpuEncodeStringDictionaries<512><<<dim_grid, dim_block, 0, stream.value()>>>(
-    stripes, chunks, streams, num_columns, num_rowgroups);
+  gpuEncodeStringDictionaries<512>
+    <<<dim_grid, dim_block, 0, stream.value()>>>(stripes, chunks, streams);
 }
 
-/**
- * @brief Launches kernel for compacting chunked column data prior to compression
- *
- * @param[in] strm_desc StripeStream device array [stripe][stream]
- * @param[in] TODO
- * @param[in] num_stripe_streams Total number of streams
- * @param[in] num_columns Number of columns
- * @param[in] stream CUDA stream to use, default 0
- */
 void CompactOrcDataStreams(StripeStream *strm_desc,
                            device_2dspan<encoder_chunk_streams> streams,
                            uint32_t num_stripe_streams,
-                           uint32_t num_columns,
                            rmm::cuda_stream_view stream)
 {
   dim3 dim_block(1024, 1);
   dim3 dim_grid(num_stripe_streams, 1);
-  gpuCompactOrcDataStreams<<<dim_grid, dim_block, 0, stream.value()>>>(
-    strm_desc, streams, num_columns);
+  gpuCompactOrcDataStreams<<<dim_grid, dim_block, 0, stream.value()>>>(strm_desc, streams);
 }
 
-/**
- * @brief Launches kernel(s) for compressing data streams
- *
- * @param[in] compressed_data Output compressed blocks
- * @param[in] strm_desc StripeStream device array [stripe][stream]
- * @param[in] enc_streams TODO
- * @param[out] comp_in Per-block compression input parameters
- * @param[out] comp_out Per-block compression status
- * @param[in] num_stripe_streams Total number of streams
- * @param[in] num_compressed_blocks Total number of compressed blocks
- * @param[in] compression Type of compression
- * @param[in] comp_blk_size Compression block size
- * @param[in] stream CUDA stream to use, default 0
- */
 void CompressOrcDataStreams(uint8_t *compressed_data,
                             StripeStream *strm_desc,
                             device_2dspan<encoder_chunk_streams> enc_streams,
