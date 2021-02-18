@@ -127,8 +127,8 @@ class corresponding_rows_not_equivalent {
       column_device_view const& lhs, column_device_view const& rhs, size_type index)
     {
       if (lhs.is_valid(index) and rhs.is_valid(index)) {
-        const T x = lhs.element<T>(index);
-        const T y = rhs.element<T>(index);
+        T const x = lhs.element<T>(index);
+        T const y = rhs.element<T>(index);
 
         // Must handle inf and nan separately
         if (std::isinf(x) || std::isinf(y)) {
@@ -137,7 +137,7 @@ class corresponding_rows_not_equivalent {
           return std::isnan(x) ^ std::isnan(y);  // comparison of (nan==nan) returns false
         } else {
           constexpr int ulp     = 4;  // ulp = unit of least precision, value taken from google test
-          const T abs_x_minus_y = std::abs(x - y);
+          T const abs_x_minus_y = std::abs(x - y);
           return abs_x_minus_y >= std::numeric_limits<T>::min() &&
                  abs_x_minus_y > std::numeric_limits<T>::epsilon() * std::abs(x + y) * ulp;
         }
