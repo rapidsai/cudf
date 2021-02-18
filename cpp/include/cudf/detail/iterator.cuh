@@ -335,8 +335,6 @@ struct has_rep_member {
 
 template <typename Element>
 struct has_rep_member<Element, void_t<decltype(std::declval<Element>().rep())>> {
-  // static_assert(std::is_same<device_storage_type_t<Element>,
-  // decltype(std::declval<Element>().rep())>::value);
   static constexpr bool value = true;
 };
 
