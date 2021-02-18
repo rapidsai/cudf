@@ -28,16 +28,10 @@ cpdef join(Table lhs, Table rhs, left_on, right_on, how=None):
     cdef table_view c_rhs = rhs.view().select(c_right_on)
 
     if how == "inner":
-        if c_lhs.num_rows() < c_rhs.num_rows():
-            c_result = move(cpp_join.inner_join(
-                c_rhs,
-                c_lhs
-            ))
-        else:
-            c_result = move(cpp_join.inner_join(
-                c_lhs,
-                c_rhs
-            ))
+        c_result = move(cpp_join.inner_join(
+            c_lhs,
+            c_rhs
+        ))
     elif how == "left":
         c_result = move(cpp_join.left_join(
             c_lhs,
