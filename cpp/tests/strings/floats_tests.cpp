@@ -128,7 +128,8 @@ TEST_F(StringsConvertTest, ToFloats64)
                                      "456e",
                                      "-1.78e+5",
                                      "-122.33644782",
-                                     "12e+309"};
+                                     "12e+309",
+                                     "1.7976931348623159E308"};
   cudf::test::strings_column_wrapper strings(
     h_strings.begin(),
     h_strings.end(),
@@ -152,6 +153,7 @@ TEST_F(StringsConvertTest, ToFloats64)
                                  456.0,
                                  -178000.0,
                                  -122.33644781999999,
+                                 infval,
                                  infval};
 
   auto strings_view = cudf::strings_column_view(strings);
