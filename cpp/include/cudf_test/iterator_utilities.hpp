@@ -34,7 +34,8 @@ namespace test {
  * and yields `true` (to mark valid rows) for all other indices. E.g.
  *
  * @code
- * auto iter = iterator_with_null_at(std::vector<size_type>{8,9});
+ * auto indices = std::vector<size_type>{8,9};
+ * auto iter = iterator_with_null_at(indices.cbegin(), indices.end());
  * iter[6] == true;  // i.e. Valid row at index 6.
  * iter[7] == true;  // i.e. Valid row at index 7.
  * iter[8] == false; // i.e. Invalid row at index 8.
@@ -65,7 +66,8 @@ static auto iterator_with_null_at(Iter index_start, Iter index_end)
  * and yields `true` (to mark valid rows) for all other indices. E.g.
  *
  * @code
- * auto iter = iterator_with_null_at(std::vector<size_type>{8,9});
+ * using host_span = cudf::detail::host_span<cudf::size_type const>;
+ * auto iter = iterator_with_null_at(host_span{std::vector<size_type>{8,9}});
  * iter[6] == true;  // i.e. Valid row at index 6.
  * iter[7] == true;  // i.e. Valid row at index 7.
  * iter[8] == false; // i.e. Invalid row at index 8.
