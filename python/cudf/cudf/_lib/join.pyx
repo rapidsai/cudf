@@ -43,7 +43,7 @@ cpdef join(Table lhs, Table rhs, left_on, right_on, how=None):
             c_rhs
         ))
     else:
-        raise ValueError(f"Unkown join type {how}")
+        raise ValueError(f"Invalid join type {how}")
     return (
         Column.from_unique_ptr(move(c_result.first)),
         Column.from_unique_ptr(move(c_result.second))
