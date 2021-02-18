@@ -14,6 +14,8 @@
 
 #include <cudf_test/column_wrapper.hpp>
 
+// #include "db_test.cuh"
+
 namespace cudf {
 namespace strings {
 namespace detail {
@@ -590,7 +592,7 @@ command_buffer build_command_buffer(std::string const& json_path, rmm::cuda_stre
 }
 
 CUDA_HOST_DEVICE_CALLABLE parse_result parse_json_path(json_state& j_state,
-                                                       path_operator const* commands,
+                                                       path_operator const* const commands,
                                                        json_output& output,
                                                        bool list_element = false)
 {
@@ -677,7 +679,7 @@ CUDA_HOST_DEVICE_CALLABLE parse_result parse_json_path(json_state& j_state,
 
 CUDA_HOST_DEVICE_CALLABLE json_output get_json_object_single(char const* input,
                                                              size_t input_len,
-                                                             path_operator const* commands,
+                                                             path_operator const* const commands,
                                                              char* out_buf,
                                                              size_t out_buf_size)
 {
@@ -692,18 +694,23 @@ CUDA_HOST_DEVICE_CALLABLE json_output get_json_object_single(char const* input,
 
 __global__ void get_json_object_kernel(char const* chars,
                                        size_type const* offsets,
-                                       path_operator const* commands,
+                                       path_operator const* const commands,
                                        size_type* output_offsets,
                                        char* out_buf,
-                                       size_t out_buf_size)
+                                       size_type num_rows)
 {
   uint64_t const tid = threadIdx.x + (blockDim.x * blockIdx.x);
 
+  if (tid >= num_rows) { return; }
+
+  char* dst       = out_buf ? out_buf + output_offsets[tid] : nullptr;
+  size_t dst_size = out_buf ? output_offsets[tid + 1] - output_offsets[tid] : 0;
+
   json_output out = get_json_object_single(
-    chars + offsets[tid], offsets[tid + 1] - offsets[tid], commands, out_buf, out_buf_size);
+    chars + offsets[tid], offsets[tid + 1] - offsets[tid], commands, dst, dst_size);
 
   // filled in only during the precompute step
-  if (output_offsets != nullptr) { output_offsets[tid] = static_cast<size_type>(out.output_len); }
+  if (!out_buf) { output_offsets[tid] = static_cast<size_type>(out.output_len); }
 }
 
 std::unique_ptr<cudf::column> get_json_object(cudf::strings_column_view const& col,
@@ -722,7 +729,7 @@ std::unique_ptr<cudf::column> get_json_object(cudf::strings_column_view const& c
     data_type{type_id::INT32}, col.size() + 1, mask_state::UNALLOCATED, stream, mr);
   cudf::mutable_column_view offsets_view(*offsets);
 
-  cudf::detail::grid_1d const grid{1, col.size()};
+  cudf::detail::grid_1d const grid{col.size(), 512};
 
   // preprocess sizes
   get_json_object_kernel<<<grid.num_blocks, grid.num_threads_per_block, 0, stream.value()>>>(
@@ -731,7 +738,7 @@ std::unique_ptr<cudf::column> get_json_object(cudf::strings_column_view const& c
     cmd_buf.commands.data(),
     offsets_view.head<size_type>(),
     nullptr,
-    0);
+    col.size());
 
   // convert sizes to offsets
   thrust::exclusive_scan(rmm::exec_policy(stream),
@@ -751,9 +758,9 @@ std::unique_ptr<cudf::column> get_json_object(cudf::strings_column_view const& c
     col.chars().head<char>(),
     col.offsets().head<size_type>(),
     cmd_buf.commands.data(),
-    nullptr,
+    offsets_view.head<size_type>(),
     chars_view.head<char>(),
-    output_size);
+    col.size());
 
   // reset back to original stack size
   cudaDeviceSetLimit(cudaLimitStackSize, stack_size);

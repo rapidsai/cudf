@@ -309,3 +309,11 @@ set(STRINGS_BENCH_SRC
   "${CMAKE_CURRENT_SOURCE_DIR}/string/convert_durations_benchmark.cpp")
 
 ConfigureBench(STRINGS_BENCH "${STRINGS_BENCH_SRC}")
+
+###################################################################################################
+# - json benchmark -------------------------------------------------------------------
+
+set(JSON_BENCH_SRC
+  "${CMAKE_CURRENT_SOURCE_DIR}/string/json_benchmark.cpp")
+
+ConfigureBench(JSON_BENCH "${JSON_BENCH_SRC}")
