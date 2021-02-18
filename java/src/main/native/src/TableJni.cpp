@@ -578,7 +578,7 @@ bool valid_window_parameters(native_jintArray const &values, native_jintArray co
 extern "C" {
 
 JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Table_createCudfTableView(JNIEnv *env,
-                                                                      jclass class_object,
+                                                                      jclass,
                                                                       jlongArray j_cudf_columns) {
   JNI_NULL_CHECK(env, j_cudf_columns, "columns are null", 0);
 
@@ -596,7 +596,7 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Table_createCudfTableView(JNIEnv *en
   CATCH_STD(env, 0);
 }
 
-JNIEXPORT void JNICALL Java_ai_rapids_cudf_Table_deleteCudfTable(JNIEnv *env, jclass class_object,
+JNIEXPORT void JNICALL Java_ai_rapids_cudf_Table_deleteCudfTable(JNIEnv *env, jclass,
                                                                  jlong j_cudf_table_view) {
   JNI_NULL_CHECK(env, j_cudf_table_view, "table view handle is null", );
   try {
@@ -638,7 +638,58 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_columnViewsFromPacked(JNI
   CATCH_STD(env, nullptr);
 }
 
-JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_orderBy(JNIEnv *env, jclass j_class_object,
+JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Table_sortOrder(JNIEnv *env, jclass,
+                                                            jlong j_input_table,
+                                                            jlongArray j_sort_keys_columns,
+                                                            jbooleanArray j_is_descending,
+                                                            jbooleanArray j_are_nulls_smallest) {
+
+  // input validations & verifications
+  JNI_NULL_CHECK(env, j_input_table, "input table is null", 0);
+  JNI_NULL_CHECK(env, j_sort_keys_columns, "sort keys columns is null", 0);
+  JNI_NULL_CHECK(env, j_is_descending, "sort order array is null", 0);
+  JNI_NULL_CHECK(env, j_are_nulls_smallest, "null order array is null", 0);
+
+  try {
+    cudf::jni::auto_set_device(env);
+    cudf::jni::native_jpointerArray<cudf::column_view> n_sort_keys_columns(env,
+                                                                           j_sort_keys_columns);
+    jsize num_columns = n_sort_keys_columns.size();
+    const cudf::jni::native_jbooleanArray n_is_descending(env, j_is_descending);
+    jsize num_columns_is_desc = n_is_descending.size();
+
+    JNI_ARG_CHECK(env, num_columns_is_desc == num_columns,
+            "columns and is_descending lengths don't match", 0);
+
+    const cudf::jni::native_jbooleanArray n_are_nulls_smallest(env, j_are_nulls_smallest);
+    jsize num_columns_null_smallest = n_are_nulls_smallest.size();
+
+    JNI_ARG_CHECK(env, num_columns_null_smallest == num_columns,
+            "columns and is_descending lengths don't match", 0);
+
+    std::vector<cudf::order> order(n_is_descending.size());
+    for (int i = 0; i < n_is_descending.size(); i++) {
+      order[i] = n_is_descending[i] ? cudf::order::DESCENDING : cudf::order::ASCENDING;
+    }
+    std::vector<cudf::null_order> null_order(n_are_nulls_smallest.size());
+    for (int i = 0; i < n_are_nulls_smallest.size(); i++) {
+      null_order[i] = n_are_nulls_smallest[i] ? cudf::null_order::BEFORE : cudf::null_order::AFTER;
+    }
+
+    std::vector<cudf::column_view> columns(num_columns);
+    for (int i = 0; i < num_columns; i++) {
+      columns[i] = *n_sort_keys_columns[i];
+    }
+    cudf::table_view keys(columns);
+
+    auto sorted_col = cudf::sorted_order(keys, order, null_order);
+    return reinterpret_cast<jlong>(sorted_col.release());
+  }
+  CATCH_STD(env, 0);
+}
+
+
+JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_orderBy(JNIEnv *env, jclass,
                                                                jlong j_input_table,
                                                                jlongArray j_sort_keys_columns,
                                                                jbooleanArray j_is_descending,
@@ -646,7 +697,7 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_orderBy(JNIEnv *env, jcla
 
   // input validations & verifications
   JNI_NULL_CHECK(env, j_input_table, "input table is null", NULL);
-  JNI_NULL_CHECK(env, j_sort_keys_columns, "input table is null", NULL);
+  JNI_NULL_CHECK(env, j_sort_keys_columns, "sort keys columns is null", NULL);
   JNI_NULL_CHECK(env, j_is_descending, "sort order array is null", NULL);
   JNI_NULL_CHECK(env, j_are_nulls_smallest, "null order array is null", NULL);
 
@@ -658,18 +709,14 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_orderBy(JNIEnv *env, jcla
     const cudf::jni::native_jbooleanArray n_is_descending(env, j_is_descending);
     jsize num_columns_is_desc = n_is_descending.size();
 
-    if (num_columns_is_desc != num_columns) {
-      JNI_THROW_NEW(env, "java/lang/IllegalArgumentException",
-                    "columns and is_descending lengths don't match", NULL);
-    }
+    JNI_ARG_CHECK(env, num_columns_is_desc == num_columns,
+            "columns and is_descending lengths don't match", 0);
 
     const cudf::jni::native_jbooleanArray n_are_nulls_smallest(env, j_are_nulls_smallest);
     jsize num_columns_null_smallest = n_are_nulls_smallest.size();
 
-    if (num_columns_null_smallest != num_columns) {
-      JNI_THROW_NEW(env, "java/lang/IllegalArgumentException",
-                    "columns and areNullsSmallest lengths don't match", NULL);
-    }
+    JNI_ARG_CHECK(env, num_columns_null_smallest == num_columns,
+            "columns and areNullsSmallest lengths don't match", 0);
 
     std::vector<cudf::order> order(n_is_descending.size());
     for (int i = 0; i < n_is_descending.size(); i++) {
@@ -680,10 +727,9 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_orderBy(JNIEnv *env, jcla
       null_order[i] = n_are_nulls_smallest[i] ? cudf::null_order::BEFORE : cudf::null_order::AFTER;
     }
 
-    std::vector<cudf::column_view> columns;
-    columns.reserve(num_columns);
+    std::vector<cudf::column_view> columns(num_columns);
     for (int i = 0; i < num_columns; i++) {
-      columns.push_back(*n_sort_keys_columns[i]);
+      columns[i] = *n_sort_keys_columns[i];
     }
     cudf::table_view keys(columns);
 
@@ -696,7 +742,7 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_orderBy(JNIEnv *env, jcla
   CATCH_STD(env, NULL);
 }
 
-JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_merge(JNIEnv *env, jclass j_class_object,
+JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_merge(JNIEnv *env, jclass,
                                                              jlongArray j_table_handles,
                                                              jintArray j_sort_key_indexes,
                                                              jbooleanArray j_is_descending,
@@ -717,18 +763,14 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_merge(JNIEnv *env, jclass
     const cudf::jni::native_jbooleanArray n_is_descending(env, j_is_descending);
     jsize num_columns_is_desc = n_is_descending.size();
 
-    if (num_columns_is_desc != num_columns) {
-      JNI_THROW_NEW(env, "java/lang/IllegalArgumentException",
-                    "columns and is_descending lengths don't match", NULL);
-    }
+    JNI_ARG_CHECK(env, num_columns_is_desc == num_columns,
+            "columns and is_descending lengths don't match", NULL);
 
     const cudf::jni::native_jbooleanArray n_are_nulls_smallest(env, j_are_nulls_smallest);
     jsize num_columns_null_smallest = n_are_nulls_smallest.size();
 
-    if (num_columns_null_smallest != num_columns) {
-      JNI_THROW_NEW(env, "java/lang/IllegalArgumentException",
-                    "columns and areNullsSmallest lengths don't match", NULL);
-    }
+    JNI_ARG_CHECK(env, num_columns_null_smallest == num_columns,
+            "columns and areNullsSmallest lengths don't match", NULL);
 
     std::vector<int> indexes(n_sort_key_indexes.size());
     for (int i = 0; i < n_sort_key_indexes.size(); i++) {
@@ -757,7 +799,7 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_merge(JNIEnv *env, jclass
 }
 
 JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_readCSV(
-    JNIEnv *env, jclass j_class_object, jobjectArray col_names, jobjectArray data_types,
+    JNIEnv *env, jclass, jobjectArray col_names, jobjectArray data_types,
     jobjectArray filter_col_names, jstring inputfilepath, jlong buffer, jlong buffer_length,
     jint header_row, jbyte delim, jbyte quote, jbyte comment, jobjectArray null_values,
     jobjectArray true_values, jobjectArray false_values) {
@@ -819,7 +861,7 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_readCSV(
 }
 
 JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_readParquet(
-    JNIEnv *env, jclass j_class_object, jobjectArray filter_col_names, jstring inputfilepath,
+    JNIEnv *env, jclass, jobjectArray filter_col_names, jstring inputfilepath,
     jlong buffer, jlong buffer_length, jint unit, jboolean strict_decimal_types) {
   bool read_buffer = true;
   if (buffer == 0) {
@@ -998,7 +1040,7 @@ JNIEXPORT void JNICALL Java_ai_rapids_cudf_Table_writeParquetEnd(JNIEnv *env, jc
 }
 
 JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_readORC(
-    JNIEnv *env, jclass j_class_object, jobjectArray filter_col_names, jstring inputfilepath,
+    JNIEnv *env, jclass, jobjectArray filter_col_names, jstring inputfilepath,
     jlong buffer, jlong buffer_length, jboolean usingNumPyTypes, jint unit) {
   bool read_buffer = true;
   if (buffer == 0) {
@@ -1352,7 +1394,7 @@ JNIEXPORT void JNICALL Java_ai_rapids_cudf_Table_readArrowIPCEnd(JNIEnv *env, jc
 }
 
 JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_leftJoin(
-    JNIEnv *env, jclass clazz, jlong left_table, jintArray left_col_join_indices, jlong right_table,
+    JNIEnv *env, jclass, jlong left_table, jintArray left_col_join_indices, jlong right_table,
     jintArray right_col_join_indices, jboolean compare_nulls_equal) {
   JNI_NULL_CHECK(env, left_table, "left_table is null", NULL);
   JNI_NULL_CHECK(env, left_col_join_indices, "left_col_join_indices is null", NULL);
@@ -1388,7 +1430,7 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_leftJoin(
 }
 
 JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_innerJoin(
-    JNIEnv *env, jclass clazz, jlong left_table, jintArray left_col_join_indices, jlong right_table,
+    JNIEnv *env, jclass, jlong left_table, jintArray left_col_join_indices, jlong right_table,
     jintArray right_col_join_indices, jboolean compare_nulls_equal) {
   JNI_NULL_CHECK(env, left_table, "left_table is null", NULL);
   JNI_NULL_CHECK(env, left_col_join_indices, "left_col_join_indices is null", NULL);
@@ -1424,7 +1466,7 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_innerJoin(
 }
 
 JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_fullJoin(
-    JNIEnv *env, jclass clazz, jlong left_table, jintArray left_col_join_indices, jlong right_table,
+    JNIEnv *env, jclass, jlong left_table, jintArray left_col_join_indices, jlong right_table,
     jintArray right_col_join_indices, jboolean compare_nulls_equal) {
   JNI_NULL_CHECK(env, left_table, "left_table is null", NULL);
   JNI_NULL_CHECK(env, left_col_join_indices, "left_col_join_indices is null", NULL);
@@ -1525,7 +1567,7 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_leftAntiJoin(
   CATCH_STD(env, NULL);
 }
 
-JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_crossJoin(JNIEnv *env, jclass clazz,
+JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_crossJoin(JNIEnv *env, jclass,
                                                                  jlong left_table,
                                                                  jlong right_table) {
   JNI_NULL_CHECK(env, left_table, "left_table is null", NULL);
@@ -1556,7 +1598,7 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Table_interleaveColumns(JNIEnv *env,
   CATCH_STD(env, 0);
 }
 
-JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_concatenate(JNIEnv *env, jclass clazz,
+JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_concatenate(JNIEnv *env, jclass,
                                                                    jlongArray table_handles) {
   JNI_NULL_CHECK(env, table_handles, "input tables are null", NULL);
   try {
@@ -1578,7 +1620,7 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_concatenate(JNIEnv *env, 
   CATCH_STD(env, NULL);
 }
 
-JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_hashPartition(JNIEnv *env, jclass clazz,
+JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_hashPartition(JNIEnv *env, jclass,
                                                                      jlong input_table,
                                                                      jintArray columns_to_hash,
                                                                      jint number_of_partitions,
@@ -1641,7 +1683,7 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_roundRobinPartition(
 }
 
 JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_groupByAggregate(
-    JNIEnv *env, jclass clazz, jlong input_table, jintArray keys,
+    JNIEnv *env, jclass, jlong input_table, jintArray keys,
     jintArray aggregate_column_indices, jlongArray agg_instances, jboolean ignore_null_keys) {
   JNI_NULL_CHECK(env, input_table, "input table is null", NULL);
   JNI_NULL_CHECK(env, keys, "input keys are null", NULL);
@@ -1726,7 +1768,7 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_gather(JNIEnv *env, jclas
   CATCH_STD(env, 0);
 }
 
-JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_convertToRows(JNIEnv *env, jclass clazz,
+JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_convertToRows(JNIEnv *env, jclass,
                                                                      jlong input_table) {
   JNI_NULL_CHECK(env, input_table, "input table is null", 0);
 
@@ -1744,7 +1786,7 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_convertToRows(JNIEnv *env
   CATCH_STD(env, 0);
 }
 
-JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_convertFromRows(JNIEnv *env, jclass clazz,
+JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_convertFromRows(JNIEnv *env, jclass,
                                                                        jlong input_column,
                                                                        jintArray types,
                                                                        jintArray scale) {
@@ -1835,7 +1877,7 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Table_bound(JNIEnv *env, jclass, jlo
   CATCH_STD(env, 0);
 }
 
-JNIEXPORT jobjectArray JNICALL Java_ai_rapids_cudf_Table_contiguousSplit(JNIEnv *env, jclass clazz,
+JNIEXPORT jobjectArray JNICALL Java_ai_rapids_cudf_Table_contiguousSplit(JNIEnv *env, jclass,
                                                                          jlong input_table,
                                                                          jintArray split_indices) {
   JNI_NULL_CHECK(env, input_table, "native handle is null", 0);
@@ -1862,7 +1904,7 @@ JNIEXPORT jobjectArray JNICALL Java_ai_rapids_cudf_Table_contiguousSplit(JNIEnv 
 }
 
 JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_rollingWindowAggregate(
-    JNIEnv *env, jclass clazz, jlong j_input_table, jintArray j_keys, jlongArray j_default_output,
+    JNIEnv *env, jclass, jlong j_input_table, jintArray j_keys, jlongArray j_default_output,
     jintArray j_aggregate_column_indices, jlongArray j_agg_instances, jintArray j_min_periods,
     jintArray j_preceding, jintArray j_following, jboolean ignore_null_keys) {
 
@@ -1918,7 +1960,7 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_rollingWindowAggregate(
 }
 
 JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_timeRangeRollingWindowAggregate(
-    JNIEnv *env, jclass clazz, jlong j_input_table, jintArray j_keys,
+    JNIEnv *env, jclass, jlong j_input_table, jintArray j_keys,
     jintArray j_timestamp_column_indices, jbooleanArray j_is_timestamp_ascending,
     jintArray j_aggregate_column_indices, jlongArray j_agg_instances, jintArray j_min_periods,
     jintArray j_preceding, jintArray j_following, 
