@@ -576,7 +576,7 @@ std::unique_ptr<column> replace<replace_algorithm::AUTO>(strings_column_view con
                               strings.offsets(), strings.offset() + strings_count, stream);
   size_type chars_bytes = chars_end - chars_start;
 
-  auto avg_bytes_per_row = chars_bytes / (strings_count - strings.null_count());
+  auto avg_bytes_per_row = chars_bytes / std::max(strings_count - strings.null_count(), 1);
   return (avg_bytes_per_row < BYTES_PER_VALID_ROW_THRESHOLD)
            ? replace_row_parallel(strings, d_target, d_repl, maxrepl, stream, mr)
            : replace_char_parallel(

@@ -181,6 +181,27 @@ TEST_F(StringsReplaceTest, ReplaceTargetOverlapsStrings)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, strings);
 }
 
+TEST_F(StringsReplaceTest, ReplaceNullInput)
+{
+  std::vector<const char*> h_null_strings(128);
+  auto strings = cudf::test::strings_column_wrapper(
+    h_null_strings.begin(),
+    h_null_strings.end(),
+    thrust::make_constant_iterator(false));
+  auto strings_view = cudf::strings_column_view(strings);
+  // replace all occurrences of '+' with ''
+  // should not replace anything as input is all null
+  auto results =
+    cudf::strings::replace(strings_view, cudf::string_scalar("+"), cudf::string_scalar(""));
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, strings);
+  results = cudf::strings::detail::replace<algorithm::CHAR_PARALLEL>(
+    strings_view, cudf::string_scalar("+"), cudf::string_scalar(""));
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, strings);
+  results = cudf::strings::detail::replace<algorithm::ROW_PARALLEL>(
+    strings_view, cudf::string_scalar("+"), cudf::string_scalar(""));
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, strings);
+}
+
 TEST_F(StringsReplaceTest, ReplaceSlice)
 {
   std::vector<const char*> h_strings{"Héllo", "thesé", nullptr, "ARE THE", "tést strings", ""};
