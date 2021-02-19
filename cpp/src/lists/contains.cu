@@ -73,17 +73,7 @@ auto get_pair_iterator(cudf::column_device_view const& d_search_keys)
                                          transform_to_rep<ElementType>{});
 }
 
-template <typename ElementType,
-          bool,
-          std::enable_if_t<!cudf::is_fixed_point<ElementType>(), void>* = nullptr>
-auto get_pair_iterator(cudf::scalar const& search_key)
-{
-  return cudf::detail::make_pair_iterator<ElementType>(search_key);
-}
-
-template <typename ElementType,
-          bool,
-          std::enable_if_t<cudf::is_fixed_point<ElementType>(), void>* = nullptr>
+template <typename ElementType, bool>
 auto get_pair_iterator(cudf::scalar const& search_key)
 {
   return cudf::detail::make_pair_rep_iterator<ElementType>(search_key);

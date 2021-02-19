@@ -329,13 +329,11 @@ using void_t = void;
  * @brief Compile-time reflection to check if `Element` type has a `rep()` member.
  */
 template <typename Element, typename = void>
-struct has_rep_member {
-  static constexpr bool value = false;
+struct has_rep_member : std::false_type {
 };
 
 template <typename Element>
-struct has_rep_member<Element, void_t<decltype(std::declval<Element>().rep())>> {
-  static constexpr bool value = true;
+struct has_rep_member<Element, void_t<decltype(std::declval<Element>().rep())>> : std::true_type {
 };
 
 /**
@@ -345,14 +343,11 @@ struct has_rep_member<Element, void_t<decltype(std::declval<Element>().rep())>> 
  */
 template <typename Element>
 struct scalar_representation_pair_accessor : public scalar_value_accessor<Element> {
-  using super_t    = scalar_value_accessor<Element>;
+  using base       = scalar_value_accessor<Element>;
   using rep_type   = device_storage_type_t<Element>;
   using value_type = thrust::pair<rep_type, bool>;
 
-  scalar_representation_pair_accessor(scalar const& scalar_value)
-    : scalar_value_accessor<Element>(scalar_value)
-  {
-  }
+  scalar_representation_pair_accessor(scalar const& scalar_value) : base(scalar_value) {}
 
   /**
    * @brief returns a pair with representative value and validity of the scalar.
@@ -364,7 +359,7 @@ struct scalar_representation_pair_accessor : public scalar_value_accessor<Elemen
   CUDA_DEVICE_CALLABLE
   const value_type operator()(size_type) const
   {
-    return {get_rep(super_t::dscalar), super_t::dscalar.is_valid()};
+    return {get_rep(base::dscalar), base::dscalar.is_valid()};
   }
 
  private:
