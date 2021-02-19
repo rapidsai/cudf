@@ -153,6 +153,7 @@ test:
     - test -f $PREFIX/include/cudf/strings/convert/convert_booleans.hpp
     - test -f $PREFIX/include/cudf/strings/convert/convert_datetime.hpp
     - test -f $PREFIX/include/cudf/strings/convert/convert_durations.hpp
+    - test -f $PREFIX/include/cudf/strings/convert/convert_fixed_point.hpp
     - test -f $PREFIX/include/cudf/strings/convert/convert_floats.hpp
     - test -f $PREFIX/include/cudf/strings/convert/convert_integers.hpp
     - test -f $PREFIX/include/cudf/strings/convert/convert_ipv4.hpp
@@ -204,6 +205,7 @@ test:
     - test -f $PREFIX/include/cudf_test/cudf_gtest.hpp
     - test -f $PREFIX/include/cudf_test/cxxopts.hpp
     - test -f $PREFIX/include/cudf_test/file_utilities.hpp
+    - test -f $PREFIX/include/cudf_test/iterator_utilities.hpp
     - test -f $PREFIX/include/cudf_test/table_utilities.hpp
     - test -f $PREFIX/include/cudf_test/timestamp_utilities.cuh
     - test -f $PREFIX/include/cudf_test/type_list_utilities.hpp

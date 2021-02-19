@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2020, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -78,8 +78,8 @@ class strings_column_view : private column_view {
   /**
    * @brief Returns the number of bytes in the chars child column.
    *
-   * This accounts for the offset of the strings' column_view and
-   * for empty columns.
+   * This accounts for empty columns but does not reflect a sliced parent column
+   * view  (i.e.: non-zero offset or reduced row count).
    */
   size_type chars_size() const noexcept;
 };

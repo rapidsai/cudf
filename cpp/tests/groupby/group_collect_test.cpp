@@ -108,5 +108,24 @@ TYPED_TEST(groupby_collect_test, dictionary)
   test_single_agg(keys, vals, expect_keys, expect_vals->view(), cudf::make_collect_aggregation());
 }
 
+TYPED_TEST(groupby_collect_test, CollectFailsWithNullExclusion)
+{
+  using K = int32_t;
+  using V = TypeParam;
+
+  fixed_width_column_wrapper<K, int32_t> keys{1, 1, 2, 2, 3, 3};
+  groupby::groupby gby{table_view{{keys}}};
+
+  fixed_width_column_wrapper<V, int32_t> values{{1, 2, 3, 4, 5, 6},
+                                                {true, false, true, false, true, false}};
+
+  std::vector<groupby::aggregation_request> agg_requests(1);
+  agg_requests[0].values = values;
+  agg_requests[0].aggregations.push_back(cudf::make_collect_aggregation(null_policy::EXCLUDE));
+
+  CUDF_EXPECT_THROW_MESSAGE(gby.aggregate(agg_requests),
+                            "null exclusion is not supported on groupby COLLECT aggregation.");
+}
+
 }  // namespace test
 }  // namespace cudf
