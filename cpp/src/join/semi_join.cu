@@ -22,8 +22,10 @@
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/gather.cuh>
 #include <cudf/detail/nvtx/ranges.hpp>
+#include <cudf/detail/sequence.hpp>
 #include <cudf/dictionary/detail/update_keys.hpp>
 #include <cudf/join.hpp>
+#include <cudf/scalar/scalar_factories.hpp>
 #include <cudf/table/table.hpp>
 #include <cudf/utilities/error.hpp>
 
@@ -45,6 +47,21 @@ std::unique_ptr<cudf::column> left_semi_anti_join(
 {
   CUDF_EXPECTS(0 != left_keys.num_columns(), "Left table is empty");
   CUDF_EXPECTS(0 != right_keys.num_columns(), "Right table is empty");
+
+  if (is_trivial_join(left_keys, right_keys, JoinKind)) {
+    return std::make_unique<cudf::column>(cudf::data_type(type_to_id<cudf::size_type>()),
+                                          0,
+                                          rmm::device_buffer{},
+                                          rmm::device_buffer{},
+                                          0);
+  }
+  if ((join_kind::LEFT_ANTI_JOIN == JoinKind) && (0 == right_keys.num_rows())) {
+    using ScalarType = cudf::scalar_type_t<cudf::size_type>;
+    auto zero = cudf::make_numeric_scalar(cudf::data_type(cudf::type_id::INT32), stream.value());
+    zero->set_valid(true, stream);
+    static_cast<ScalarType*>(zero.get())->set_value(0, stream);
+    return cudf::detail::sequence(left_keys.num_rows(), *zero, stream);
+  }
 
   auto const left_num_rows  = left_keys.num_rows();
   auto const right_num_rows = right_keys.num_rows();

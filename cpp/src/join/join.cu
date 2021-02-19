@@ -49,7 +49,9 @@ std::pair<std::unique_ptr<cudf::column>, std::unique_ptr<cudf::column>> inner_jo
   // build the hash map from the smaller table.
   if (right.num_rows() > left.num_rows()) {
     cudf::hash_join hj_obj(left, compare_nulls, stream);
-    return hj_obj.inner_join(right, compare_nulls, stream, mr);
+    auto result = hj_obj.inner_join(right, compare_nulls, stream, mr);
+    return std::make_pair<std::unique_ptr<cudf::column>, std::unique_ptr<cudf::column>>(
+      std::move(result.second), std::move(result.first));
   } else {
     cudf::hash_join hj_obj(right, compare_nulls, stream);
     return hj_obj.inner_join(left, compare_nulls, stream, mr);
