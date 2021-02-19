@@ -118,7 +118,7 @@ class NumericalColumn(ColumnBase):
                 if dnom.dtype.kind in "ui":
                     # Denominator either zero, or zero is contained therein
                     if (np.isscalar(dnom) and dnom == 0) or (isinstance(dnom, NumericalColumn) and 0 in dnom):
-                        if numr.dtype.kind in "ui" and op == "floordiv":
+                        if numr.dtype.kind in "ui" and binop == "floordiv":
                             # this is integer division by zero
                             raise ValueError(
                                 "Integer floor division by zero is undefined."
