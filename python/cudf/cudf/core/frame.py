@@ -3869,7 +3869,6 @@ def _drop_rows_by_labels(
     if not isinstance(labels, (cudf.Series, cudf.Index)):
         labels = as_column(labels)
 
-    res: DataFrameOrSeries
     if isinstance(obj._index, cudf.MultiIndex):
         if level is None:
             level = 0
@@ -3911,11 +3910,11 @@ def _drop_rows_by_labels(
         )
 
         if isinstance(obj, cudf.Series):
-            res = obj.__class__._from_data(
+            return obj.__class__._from_data(
                 join_res.iloc[:, idx_nlv:]._data, index=midx, name=obj.name
             )
         else:
-            res = obj.__class__._from_data(
+            return obj.__class__._from_data(
                 join_res.iloc[:, idx_nlv:]._data,
                 index=midx,
                 columns=obj.columns,
@@ -3929,7 +3928,6 @@ def _drop_rows_by_labels(
         if isinstance(obj, cudf.Series):
             res = obj.to_frame(name="tmp").join(key_df, how="leftanti")["tmp"]
             res.name = obj.name
+            return res
         else:
-            res = obj.join(key_df, how="leftanti")
-
-    return res
+            return obj.join(key_df, how="leftanti")
