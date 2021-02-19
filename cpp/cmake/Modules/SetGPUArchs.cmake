@@ -25,44 +25,27 @@ else()
   list(REMOVE_ITEM SUPPORTED_CUDA_ARCHITECTURES "62" "72")
 endif()
 
-# CMake < 3.20 has a bug in FindCUDAToolkit where it won't
-# properly detect the CUDAToolkit version when
-# find_package(CUDAToolkit) occurs before enable_language(CUDA)
-if(NOT DEFINED CUDAToolkit_VERSION AND CMAKE_CUDA_COMPILER)
-  execute_process(COMMAND ${CMAKE_CUDA_COMPILER} "--version" OUTPUT_VARIABLE NVCC_OUT)
-  if(NVCC_OUT MATCHES [=[ V([0-9]+)\.([0-9]+)\.([0-9]+)]=])
-    set(CUDAToolkit_VERSION_MAJOR "${CMAKE_MATCH_1}")
-    set(CUDAToolkit_VERSION_MINOR "${CMAKE_MATCH_2}")
-    set(CUDAToolkit_VERSION_PATCH "${CMAKE_MATCH_3}")
-    set(CUDAToolkit_VERSION  "${CMAKE_MATCH_1}.${CMAKE_MATCH_2}.${CMAKE_MATCH_3}")
-  endif()
-  unset(NVCC_OUT)
-endif()
-
-if(CUDAToolkit_VERSION_MAJOR LESS 11)
+if(CMAKE_CUDA_COMPILER_VERSION VERSION_LESS 11)
   list(REMOVE_ITEM SUPPORTED_CUDA_ARCHITECTURES "80")
 endif()
-if(CUDAToolkit_VERSION_MAJOR LESS 10)
+if(CMAKE_CUDA_COMPILER_VERSION VERSION_LESS 10)
   list(REMOVE_ITEM SUPPORTED_CUDA_ARCHITECTURES "75")
 endif()
-if(CUDAToolkit_VERSION_MAJOR LESS 9)
+if(CMAKE_CUDA_COMPILER_VERSION VERSION_LESS 9)
   list(REMOVE_ITEM SUPPORTED_CUDA_ARCHITECTURES "70")
 endif()
 
-# If `CMAKE_CUDA_ARCHITECTURES` is not defined, build for all supported architectures. If
-# `CMAKE_CUDA_ARCHITECTURES` is set to an empty string (""), build for only the current
-# architecture. If `CMAKE_CUDA_ARCHITECTURES` is specified by the user, use user setting.
-
-# This needs to be run before enabling the CUDA language due to the default initialization behavior
-# of `CMAKE_CUDA_ARCHITECTURES`, https://gitlab.kitware.com/cmake/cmake/-/issues/21302
-
-if(NOT DEFINED CMAKE_CUDA_ARCHITECTURES)
+if(${PROJECT_NAME}_BUILD_FOR_ALL_ARCHS)
   set(CMAKE_CUDA_ARCHITECTURES ${SUPPORTED_CUDA_ARCHITECTURES})
-endif()
-
-if(CMAKE_CUDA_ARCHITECTURES STREQUAL "")
-  unset(CMAKE_CUDA_ARCHITECTURES)
-  unset(CMAKE_CUDA_ARCHITECTURES CACHE)
-  include(${CUDF_SOURCE_DIR}/cmake/Modules/EvalGPUArchs.cmake)
+elseif(${PROJECT_NAME}_BUILD_FOR_DETECTED_ARCHS)
+  include(${PROJECT_SOURCE_DIR}/cmake/EvalGpuArchs.cmake)
   evaluate_gpu_archs(CMAKE_CUDA_ARCHITECTURES)
 endif()
+
+# CMake architecture list entry of "80" means to build compute and sm.
+# What we want is for the newest arch only to build that way
+# while the rest built only for sm.
+list(SORT CMAKE_CUDA_ARCHITECTURES ORDER ASCENDING)
+list(POP_BACK CMAKE_CUDA_ARCHITECTURES latest_arch)
+list(TRANSFORM CMAKE_CUDA_ARCHITECTURES APPEND "-real")
+list(APPEND CMAKE_CUDA_ARCHITECTURES ${latest_arch})

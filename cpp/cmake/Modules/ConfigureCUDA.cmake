@@ -13,13 +13,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 #=============================================================================
-
 # Find the CUDAToolkit
 find_package(CUDAToolkit REQUIRED)
-
-message(STATUS "CUDF: CUDAToolkit_VERSION: ${CUDAToolkit_VERSION}")
-message(VERBOSE "CUDF: CUDAToolkit_VERSION_MAJOR: ${CUDAToolkit_VERSION_MAJOR}")
-message(VERBOSE "CUDF: CUDAToolkit_VERSION_MINOR: ${CUDAToolkit_VERSION_MINOR}")
 
 # Auto-detect available GPU compute architectures
 
@@ -29,36 +24,43 @@ message(STATUS "CUDF: Building CUDF for GPU architectures: ${CMAKE_CUDA_ARCHITEC
 # Only enable the CUDA language after including SetGPUArchs.cmake
 enable_language(CUDA)
 
-if(NOT CMAKE_CUDA_COMPILER)
-    message(SEND_ERROR "CUDF: CMake cannot locate a CUDA compiler")
+if(CMAKE_CUDA_COMPILER_VERSION)
+  # Compute the version. from  CMAKE_CUDA_COMPILER_VERSION
+  string(REGEX REPLACE "([0-9]+)\\.([0-9]+).*" "\\1" CUDA_VERSION_MAJOR ${CMAKE_CUDA_COMPILER_VERSION})
+  string(REGEX REPLACE "([0-9]+)\\.([0-9]+).*" "\\2" CUDA_VERSION_MINOR ${CMAKE_CUDA_COMPILER_VERSION})
+  set(CUDA_VERSION "${CUDA_VERSION_MAJOR}.${CUDA_VERSION_MINOR}")
 endif()
 
+message(VERBOSE "CUDF: CUDA_VERSION_MAJOR: ${CUDA_VERSION_MAJOR}")
+message(VERBOSE "CUDF: CUDA_VERSION_MINOR: ${CUDA_VERSION_MINOR}")
+message(STATUS "CUDF: CUDA_VERSION: ${CUDA_VERSION}")
+
 if(CMAKE_COMPILER_IS_GNUCXX)
-    list(APPEND CUDF_CXX_FLAGS -Wall -Werror -Wno-unknown-pragmas -Wno-error=deprecated-declarations)
+    string(APPEND CMAKE_CXX_FLAGS " -Wall -Werror -Wno-unknown-pragmas -Wno-error=deprecated-declarations")
     if(CUDF_BUILD_TESTS OR CUDF_BUILD_BENCHMARKS)
         # Suppress parentheses warning which causes gmock to fail
-        list(APPEND CUDF_CUDA_FLAGS -Xcompiler=-Wno-parentheses)
+        string(APPEND CMAKE_CUDA_FLAGS " -Xcompiler=-Wno-parentheses")
     endif()
 endif()
 
-list(APPEND CUDF_CUDA_FLAGS --expt-extended-lambda --expt-relaxed-constexpr)
+string(APPEND CMAKE_CUDA_FLAGS " --expt-extended-lambda --expt-relaxed-constexpr")
 
 # set warnings as errors
-list(APPEND CUDF_CUDA_FLAGS -Werror=cross-execution-space-call)
-list(APPEND CUDF_CUDA_FLAGS -Xcompiler=-Wall,-Werror,-Wno-error=deprecated-declarations)
+string(APPEND CMAKE_CUDA_FLAGS " -Werror=cross-execution-space-call")
+string(APPEND CMAKE_CUDA_FLAGS " -Xcompiler=-Wall,-Werror,-Wno-error=deprecated-declarations")
 
 if(DISABLE_DEPRECATION_WARNING)
-    list(APPEND CUDF_CXX_FLAGS -Wno-deprecated-declarations)
-    list(APPEND CUDF_CUDA_FLAGS -Xcompiler=-Wno-deprecated-declarations)
+    string(APPEND CMAKE_CXX_FLAGS " -Wno-deprecated-declarations")
+    string(APPEND CMAKE_CUDA_FLAGS " -Xcompiler=-Wno-deprecated-declarations")
 endif()
 
 # Option to enable line info in CUDA device compilation to allow introspection when profiling / memchecking
 if(CUDA_ENABLE_LINEINFO)
-    list(APPEND CUDF_CUDA_FLAGS -lineinfo)
+    string(APPEND CMAKE_CUDA_FLAGS " -lineinfo")
 endif()
 
 # Debug options
 if(CMAKE_BUILD_TYPE MATCHES Debug)
     message(VERBOSE "CUDF: Building with debugging flags")
-    list(APPEND CUDF_CUDA_FLAGS -G -Xcompiler=-rdynamic)
+    string(APPEND CMAKE_CUDA_FLAGS " -G -Xcompiler=-rdynamic")
 endif()
