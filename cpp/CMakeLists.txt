@@ -354,6 +354,7 @@ add_library(cudf
     src/strings/convert/convert_booleans.cu
     src/strings/convert/convert_datetime.cu
     src/strings/convert/convert_durations.cu
+    src/strings/convert/convert_fixed_point.cu
     src/strings/convert/convert_floats.cu
     src/strings/convert/convert_hex.cu
     src/strings/convert/convert_integers.cu
