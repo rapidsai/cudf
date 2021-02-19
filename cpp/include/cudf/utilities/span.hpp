@@ -193,6 +193,11 @@ struct device_span : public span_base<T, Extent, device_span<T, Extent>> {
   }
 };
 
+/**
+ * @brief Base class for 2D spans. Not compliant with STL container semantics/syntax.
+ *
+ * The index operator returns the corresponding row as a span.
+ */
 template <typename T>
 class base_2dspan {
  public:
@@ -207,7 +212,8 @@ class base_2dspan {
 
   constexpr auto data() const { return _data; }
   constexpr auto size() const { return _size; }
-  constexpr bool is_empty() const noexcept { return _size.first == 0 || _size.second == 0; }
+  constexpr auto count() const noexcept { return size().first * size().second; }
+  constexpr bool is_empty() const noexcept { return count() == 0; }
 
   static constexpr size_t flatten_index(size_t row, size_t column, size_type size) noexcept
   {

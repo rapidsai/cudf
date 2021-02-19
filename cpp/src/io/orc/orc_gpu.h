@@ -21,7 +21,6 @@
 #include <io/comp/gpuinflate.h>
 #include <io/orc/orc_common.h>
 #include <io/statistics/column_stats.h>
-
 #include <cudf/types.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
@@ -30,7 +29,6 @@ namespace cudf {
 namespace io {
 namespace orc {
 namespace gpu {
-
 struct CompressedStreamInfo {
   CompressedStreamInfo() = default;
   explicit constexpr CompressedStreamInfo(const uint8_t *compressed_data_, size_t compressed_size_)
@@ -138,10 +136,13 @@ struct EncChunk {
   uint8_t scale;                   // scale for decimals or timestamps
 };
 
+/**
+ * @brief Struct to describe the streams that correspond to a single `EncChunk`.
+ */
 struct encoder_chunk_streams {
   uint8_t *data_ptrs[CI_NUM_STREAMS];  // encoded output
-  int32_t ids[CI_NUM_STREAMS];         // stream id or -1 if not present
-  uint32_t lengths[CI_NUM_STREAMS];    // in: max length, out: actual length (TODO: separate)
+  int32_t ids[CI_NUM_STREAMS];         // stream id; -1 if stream is not present
+  uint32_t lengths[CI_NUM_STREAMS];    // in: max length, out: actual length
 };
 
 /**

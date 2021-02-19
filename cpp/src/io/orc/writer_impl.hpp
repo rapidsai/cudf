@@ -175,7 +175,7 @@ class writer::impl {
                          hostdevice_vector<gpu::DictionaryChunk>* dict);
 
   /**
-   * @brief Builds up per-stripe dictionaries for string columns
+   * @brief Builds up per-stripe dictionaries for string columns.
    *
    * @param columns List of columns
    * @param num_rows Total number of rows
@@ -192,15 +192,36 @@ class writer::impl {
                           hostdevice_vector<gpu::DictionaryChunk> const& dict,
                           uint32_t* dict_index,
                           hostdevice_vector<gpu::StripeDictionary>& stripe_dict);
-
+  /**
+   * @brief Builds up per-column streams.
+   *
+   * @param columns List of columns
+   * @param num_rows Total number of rows
+   * @param stripe_bounds List of stripe boundaries
+   * @return List of stream descriptors
+   */
   orc_streams create_streams(host_span<orc_column_view> columns,
                              size_t num_rows,
                              host_span<stripe_rowgroups const> stripe_bounds);
 
+  /**
+   * @brief Gathers stripe information.
+   *
+   * @param columns List of columns
+   * @param num_rowgroups Total number of rowgroups
+   * @return List of stripe descriptors
+   */
   std::vector<stripe_rowgroups> gather_stripe_info(host_span<orc_column_view const> columns,
                                                    size_t num_rowgroups);
+
   /**
-   * @brief TODO
+   * @brief Encodes the input columns into streams.
+   *
+   * @param columns List of columns
+   * @param str_col_ids List of columns that are strings type
+   * @param stripe_bounds List of stripe boundaries
+   * @param stream CUDA stream used for device memory operations and kernel launches
+   * @return Encoded data and per-chunk stream descriptors
    */
   encoded_data encode_columns(host_span<orc_column_view const> columns,
                               std::vector<int> const& str_col_ids,
@@ -209,12 +230,12 @@ class writer::impl {
 
   /**
    * @brief Returns stripe information after compacting columns' individual data
-   * chunks into contiguous data streams
+   * chunks into contiguous data streams.
    *
    * @param num_rows Total number of rows
    * @param num_index_streams Total number of index streams
    * @param stripe_bounds List of stripe boundaries
-   * @param streams List of encoder chunk streams [column][rowgroup]
+   * @param enc_streams List of encoder chunk streams [column][rowgroup]
    * @param strm_desc List of stream descriptors [stripe][data_stream]
    *
    * @return The stripes' information
@@ -228,7 +249,7 @@ class writer::impl {
 
   /**
    * @brief Returns per-stripe and per-file column statistics encoded
-   * in ORC protobuf format
+   * in ORC protobuf format.
    *
    * @param columns List of columns
    * @param stripe_bounds List of stripe boundaries
@@ -239,21 +260,21 @@ class writer::impl {
     host_span<orc_column_view const> columns, host_span<stripe_rowgroups const> stripe_bounds);
 
   /**
-   * @brief Write the specified column's row index stream
+   * @brief Writes the specified column's row index stream.
    *
    * @param stripe_id Stripe's identifier
-   * @param col_id Column's identifier
+   * @param stream_id Stream identifier (column id + 1)
    * @param columns List of columns
    * @param group Starting row group in the stripe
    * @param groups_in_stripe Number of row groups in the stripe
-   * @param TODO
+   * @param enc_streams List of encoder chunk streams [column][rowgroup]
    * @param strm_desc List of stream descriptors
    * @param comp_out Output status for compressed streams
    * @param streams List of all streams
    * @param pbw Protobuf writer
    */
   void write_index_stream(int32_t stripe_id,
-                          int32_t col_id,
+                          int32_t stream_id,
                           host_span<orc_column_view const> columns,
                           size_t group,
                           size_t groups_in_stripe,
@@ -268,7 +289,7 @@ class writer::impl {
    * @brief Write the specified column's data streams
    *
    * @param strm_desc Stream's descriptor
-   * @param chunk First column chunk of the stream
+   * @param enc_stream Chunk's streams
    * @param compressed_data Compressed stream data
    * @param stream_out Temporary host output buffer
    * @param stripe Stream's parent stripe

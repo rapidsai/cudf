@@ -1107,9 +1107,9 @@ void writer::impl::write(table_view const &table)
   // Assemble individual disparate column chunks into contiguous data streams
   const auto num_index_streams = (num_columns + 1);
   const auto num_data_streams  = streams.size() - num_index_streams;
-  hostdevice_2dvector<gpu::StripeStream> strm_desc(stripe_bounds.size(), num_data_streams);
+  hostdevice_2dvector<gpu::StripeStream> strm_descs(stripe_bounds.size(), num_data_streams);
   auto stripes =
-    gather_stripes(num_rows, num_index_streams, stripe_bounds, &enc_data.streams, &strm_desc);
+    gather_stripes(num_rows, num_index_streams, stripe_bounds, &enc_data.streams, &strm_descs);
 
   // Gather column statistics
   std::vector<std::vector<uint8_t>> column_stats;
@@ -1125,7 +1125,7 @@ void writer::impl::write(table_view const &table)
 
     for (size_t stripe_id = 0; stripe_id < stripe_bounds.size(); stripe_id++) {
       for (size_t i = 0; i < num_data_streams; i++) {  // TODO range for (at least)
-        gpu::StripeStream *ss = &strm_desc[stripe_id][i];
+        gpu::StripeStream *ss = &strm_descs[stripe_id][i];
         size_t stream_size    = ss->stream_size;
         if (compression_kind_ != NONE) {
           ss->first_block = num_compressed_blocks;
@@ -1154,9 +1154,9 @@ void writer::impl::write(table_view const &table)
   hostdevice_vector<gpu_inflate_status_s> comp_out(num_compressed_blocks);
   hostdevice_vector<gpu_inflate_input_s> comp_in(num_compressed_blocks);
   if (compression_kind_ != NONE) {
-    strm_desc.host_to_device(stream);
+    strm_descs.host_to_device(stream);
     gpu::CompressOrcDataStreams(static_cast<uint8_t *>(compressed_data.data()),
-                                strm_desc,
+                                strm_descs,
                                 enc_data.streams,
                                 comp_in.device_ptr(),
                                 comp_out.device_ptr(),
@@ -1164,7 +1164,7 @@ void writer::impl::write(table_view const &table)
                                 compression_kind_,
                                 compression_blocksize_,
                                 stream);
-    strm_desc.device_to_host(stream);
+    strm_descs.device_to_host(stream);
     comp_out.device_to_host(stream, true);
   }
 
@@ -1178,14 +1178,14 @@ void writer::impl::write(table_view const &table)
 
     // Column (skippable) index streams appear at the start of the stripe
     stripes[stripe_id].indexLength = 0;
-    for (size_t col_id = 0; col_id <= (size_t)num_columns; col_id++) {
+    for (size_type stream_id = 0; stream_id <= num_columns; ++stream_id) {
       write_index_stream(stripe_id,
-                         col_id,
+                         stream_id,
                          orc_columns,
                          group,
                          groups_in_stripe,
                          enc_data.streams,
-                         strm_desc,
+                         strm_descs,
                          comp_out,
                          &stripes[stripe_id],
                          &streams,
@@ -1194,12 +1194,9 @@ void writer::impl::write(table_view const &table)
 
     // Column data consisting one or more separate streams
     stripes[stripe_id].dataLength = 0;
-    for (size_t i = 0; i < num_data_streams; i++) {
-      const auto &ss   = strm_desc[stripe_id][i];
-      const auto &strm = enc_data.streams[ss.column_id][group];
-
-      write_data_stream(ss,
-                        strm,
+    for (auto const &strm_desc : strm_descs[stripe_id]) {
+      write_data_stream(strm_desc,
+                        enc_data.streams[strm_desc.column_id][group],
                         static_cast<uint8_t *>(compressed_data.data()),
                         stream_output.get(),
                         &stripes[stripe_id],
