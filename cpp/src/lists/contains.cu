@@ -46,30 +46,6 @@ auto get_search_keys_device_iterable_view(cudf::scalar const& search_key, rmm::c
   return &search_key;
 }
 
-// Extracts the ElementType::rep from decimals,
-// (e.g. to convert pair<decimal32, bool> => pair<int32_t, bool>).
-template <typename ElementType>
-struct transform_to_rep {
-  auto __device__ operator()(thrust::pair<ElementType, bool> element_and_validity) const
-  {
-    return thrust::make_pair(element_and_validity.first.value(), element_and_validity.second);
-  }
-};
-
-template <typename ElementType,
-          std::enable_if_t<!cudf::is_fixed_point<ElementType>(), void>* = nullptr>
-__device__ auto get_list_iter(cudf::list_device_view::const_pair_iterator<ElementType> const& iter)
-{
-  return iter;
-}
-
-template <typename ElementType,
-          std::enable_if_t<cudf::is_fixed_point<ElementType>(), void>* = nullptr>
-__device__ auto get_list_iter(cudf::list_device_view::const_pair_iterator<ElementType> const& iter)
-{
-  return thrust::make_transform_iterator(iter, transform_to_rep<ElementType>{});
-}
-
 /**
  * @brief Functor to search each list row for the specified search keys.
  */
@@ -138,7 +114,7 @@ struct lookup_functor {
           return;
         }
 
-        auto list_pair_begin = get_list_iter(list.pair_begin<ElementType>());
+        auto list_pair_begin = list.pair_rep_begin<ElementType>();
         auto list_pair_end   = list_pair_begin + list.size();
 
         auto search_key = search_key_and_validity.first;
