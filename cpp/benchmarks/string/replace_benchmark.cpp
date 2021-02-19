@@ -20,19 +20,18 @@
 #include <benchmarks/synchronization/synchronization.hpp>
 
 #include <cudf/scalar/scalar.hpp>
-#include <cudf/strings/detail/replace.hpp>
 #include <cudf/strings/replace.hpp>
 #include <cudf/strings/strings_column_view.hpp>
+#include <cudf_test/column_wrapper.hpp>
 
 #include <limits>
 
-using algorithm = cudf::strings::detail::replace_algorithm;
-
-class StringReplaceScalar : public cudf::benchmark {
+class StringReplace : public cudf::benchmark {
 };
 
-template <algorithm alg>
-static void BM_replace_scalar(benchmark::State& state, int target_size, int32_t maxrepl)
+enum replace_type { scalar, slice, multi };
+
+static void BM_replace(benchmark::State& state, replace_type rt)
 {
   cudf::size_type const n_rows{static_cast<cudf::size_type>(state.range(0))};
   cudf::size_type const max_str_length{static_cast<cudf::size_type>(state.range(1))};
@@ -42,12 +41,21 @@ static void BM_replace_scalar(benchmark::State& state, int target_size, int32_t 
   auto const table =
     create_random_table({cudf::type_id::STRING}, 1, row_count{n_rows}, table_profile);
   cudf::strings_column_view input(table->view().column(0));
-  cudf::string_scalar target(std::string(target_size, '+'));
+  cudf::string_scalar target("+");
   cudf::string_scalar repl("");
+  cudf::test::strings_column_wrapper targets({"+", "-"});
+  cudf::test::strings_column_wrapper repls({"", ""});
 
   for (auto _ : state) {
     cuda_event_timer raii(state, true, 0);
-    cudf::strings::detail::replace<alg>(input, target, repl, maxrepl);
+    switch (rt) {
+      case scalar: cudf::strings::replace(input, target, repl); break;
+      case slice: cudf::strings::replace_slice(input, repl, 1, 10); break;
+      case multi:
+        cudf::strings::replace(
+          input, cudf::strings_column_view(targets), cudf::strings_column_view(repls));
+        break;
+    }
   }
 
   state.SetBytesProcessed(state.iterations() * input.chars_size());
@@ -72,25 +80,14 @@ static void generate_bench_args(benchmark::internal::Benchmark* b)
   }
 }
 
-#define STRINGS_BENCHMARK_DEFINE(name, alg, tsize, maxrepl)                 \
-  BENCHMARK_DEFINE_F(StringReplaceScalar, name)                             \
-  (::benchmark::State & st) { BM_replace_scalar<alg>(st, tsize, maxrepl); } \
-  BENCHMARK_REGISTER_F(StringReplaceScalar, name)                           \
-    ->Apply(generate_bench_args)                                            \
-    ->UseManualTime()                                                       \
+#define STRINGS_BENCHMARK_DEFINE(name)                              \
+  BENCHMARK_DEFINE_F(StringReplace, name)                           \
+  (::benchmark::State & st) { BM_replace(st, replace_type::name); } \
+  BENCHMARK_REGISTER_F(StringReplace, name)                         \
+    ->Apply(generate_bench_args)                                    \
+    ->UseManualTime()                                               \
     ->Unit(benchmark::kMillisecond);
 
-STRINGS_BENCHMARK_DEFINE(replace_scalar_autoalg_single, algorithm::AUTO, 1, -1)
-STRINGS_BENCHMARK_DEFINE(replace_scalar_autoalg_single_max1, algorithm::AUTO, 1, 1)
-STRINGS_BENCHMARK_DEFINE(replace_scalar_autoalg_multi, algorithm::AUTO, 2, -1)
-STRINGS_BENCHMARK_DEFINE(replace_scalar_autoalg_multi_max1, algorithm::AUTO, 2, 1)
-
-// Useful for tuning the automatic algorithm heuristic
-STRINGS_BENCHMARK_DEFINE(replace_scalar_charalg_single, algorithm::CHAR_PARALLEL, 1, -1)
-STRINGS_BENCHMARK_DEFINE(replace_scalar_charalg_single_max1, algorithm::CHAR_PARALLEL, 1, 1)
-STRINGS_BENCHMARK_DEFINE(replace_scalar_charalg_multi, algorithm::CHAR_PARALLEL, 2, -1)
-STRINGS_BENCHMARK_DEFINE(replace_scalar_charalg_multi_max1, algorithm::CHAR_PARALLEL, 2, 1)
-STRINGS_BENCHMARK_DEFINE(replace_scalar_rowalg_single, algorithm::ROW_PARALLEL, 1, -1)
-STRINGS_BENCHMARK_DEFINE(replace_scalar_rowalg_single_max1, algorithm::ROW_PARALLEL, 1, 1)
-STRINGS_BENCHMARK_DEFINE(replace_scalar_rowalg_multi, algorithm::ROW_PARALLEL, 2, -1)
-STRINGS_BENCHMARK_DEFINE(replace_scalar_rowalg_multi_max1, algorithm::ROW_PARALLEL, 2, 1)
+STRINGS_BENCHMARK_DEFINE(scalar)
+STRINGS_BENCHMARK_DEFINE(slice)
+STRINGS_BENCHMARK_DEFINE(multi)
