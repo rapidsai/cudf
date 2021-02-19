@@ -17,6 +17,7 @@
 
 #include <cudf/column/column.hpp>
 #include <cudf/strings/strings_column_view.hpp>
+#include <cudf/utilities/span.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_uvector.hpp>
@@ -72,7 +73,7 @@ rmm::device_uvector<string_view> create_string_vector_from_column(
  * @return Child offsets column
  */
 std::unique_ptr<cudf::column> child_offsets_from_string_vector(
-  rmm::device_uvector<string_view> const& strings,
+  cudf::detail::device_span<string_view> strings,
   rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
@@ -87,7 +88,7 @@ std::unique_ptr<cudf::column> child_offsets_from_string_vector(
  * @return Child chars column
  */
 std::unique_ptr<cudf::column> child_chars_from_string_vector(
-  rmm::device_uvector<string_view> const& strings,
+  cudf::detail::device_span<string_view> strings,
   column_view const& offsets,
   rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
