@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,6 +17,7 @@
 #pragma once
 
 #include <cudf/column/column_view.hpp>
+#include <cudf/detail/iterator.cuh>
 #include <cudf/scalar/scalar.hpp>
 #include <cudf/utilities/traits.hpp>
 
@@ -479,6 +480,58 @@ struct indexalator_factory {
   static output_indexalator make_output_iterator(mutable_column_view const& indices)
   {
     return type_dispatcher(indices.type(), output_indexalator_fn{}, indices);
+  }
+
+  /**
+   * @brief An index accessor that returns a validity flag along with the index value.
+   *
+   * This is suitable as a `pair_iterator` for calling functions like `copy_if_else`.
+   */
+  struct nullable_index_accessor {
+    input_indexalator iter;
+    bitmask_type const* null_mask{};
+    size_type const offset{};
+    bool const has_nulls{};
+
+    /**
+     * @brief Create an accessor from a column_view.
+     */
+    nullable_index_accessor(column_view const& col, bool has_nulls = false)
+      : null_mask{col.null_mask()}, offset{col.offset()}, has_nulls{has_nulls}
+    {
+      if (has_nulls) { CUDF_EXPECTS(col.nullable(), "Unexpected non-nullable column."); }
+      iter = make_input_iterator(col);
+    }
+
+    /**
+     * @brief Create an accessor from a scalar.
+     */
+    nullable_index_accessor(scalar const& input) : has_nulls{!input.is_valid()}
+    {
+      iter = indexalator_factory::make_input_iterator(input);
+    }
+
+    __device__ thrust::pair<size_type, bool> operator()(size_type i) const
+    {
+      return {iter[i], (has_nulls ? bit_is_set(null_mask, i + offset) : true)};
+    }
+  };
+
+  /**
+   * @brief Create an index iterator with a nullable index accessor.
+   */
+  static auto make_input_pair_iterator(column_view const& col)
+  {
+    return make_counting_transform_iterator(0, nullable_index_accessor{col, col.has_nulls()});
+  }
+
+  /**
+   * @brief Create an index iterator with a nullable index accessor for a scalar.
+   */
+  static auto make_input_pair_iterator(scalar const& input)
+  {
+    return thrust::make_transform_iterator(thrust::make_constant_iterator<size_type>(0),
+                                           nullable_index_accessor{input});
   }
 };
 

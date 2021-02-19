@@ -135,10 +135,10 @@ if hasArg clean; then
 fi
 
 if (( ${BUILD_ALL_GPU_ARCH} == 0 )); then
-    GPU_ARCH="-DGPU_ARCHS="
+    CUDF_CMAKE_CUDA_ARCHITECTURES="-DCMAKE_CUDA_ARCHITECTURES="
     echo "Building for the architecture of the GPU in the system..."
 else
-    GPU_ARCH="-DGPU_ARCHS=ALL"
+    CUDF_CMAKE_CUDA_ARCHITECTURES=""
     echo "Building for *ALL* supported GPU architectures..."
 fi
 
@@ -148,7 +148,7 @@ fi
 if buildAll || hasArg libcudf; then
     cmake -S $REPODIR/cpp -B ${LIB_BUILD_DIR} \
           -DCMAKE_INSTALL_PREFIX=${INSTALL_PREFIX} \
-          ${GPU_ARCH} \
+          ${CUDF_CMAKE_CUDA_ARCHITECTURES} \
           -DUSE_NVTX=${BUILD_NVTX} \
           -DBUILD_BENCHMARKS=${BUILD_BENCHMARKS} \
           -DDISABLE_DEPRECATION_WARNING=${BUILD_DISABLE_DEPRECATION_WARNING} \
