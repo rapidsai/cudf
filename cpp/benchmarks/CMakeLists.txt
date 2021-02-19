@@ -182,6 +182,7 @@ ConfigureBench(TYPE_DISPATCHER_BENCH "${TD_BENCH_SRC}")
 
 set(REDUCTION_BENCH_SRC
   "${CMAKE_CURRENT_SOURCE_DIR}/reduction/anyall_benchmark.cpp"
+  "${CMAKE_CURRENT_SOURCE_DIR}/reduction/dictionary_benchmark.cpp"
   "${CMAKE_CURRENT_SOURCE_DIR}/reduction/reduce_benchmark.cpp"
   "${CMAKE_CURRENT_SOURCE_DIR}/reduction/minmax_benchmark.cpp")
 
@@ -301,9 +302,13 @@ set(SUBWORD_TOKENIZER_BENCH_SRC
 ConfigureBench(SUBWORD_TOKENIZER_BENCH "${SUBWORD_TOKENIZER_BENCH_SRC}")
 
 ###################################################################################################
-# - convert to string benchmark -------------------------------------------------------------------
+# - strings benchmark -------------------------------------------------------------------
 
-set(DURATION_TO_STRING_BENCH_SRC
-  "${CMAKE_CURRENT_SOURCE_DIR}/string/convert_durations_benchmark.cpp")
+set(STRINGS_BENCH_SRC
+  "${CMAKE_CURRENT_SOURCE_DIR}/string/case_benchmark.cpp"
+  "${CMAKE_CURRENT_SOURCE_DIR}/string/contains_benchmark.cpp"
+  "${CMAKE_CURRENT_SOURCE_DIR}/string/convert_durations_benchmark.cpp"
+  "${CMAKE_CURRENT_SOURCE_DIR}/string/replace_benchmark.cpp"
+  "${CMAKE_CURRENT_SOURCE_DIR}/string/url_decode_benchmark.cpp")
 
-ConfigureBench(DURATION_TO_STRING_BENCH "${DURATION_TO_STRING_BENCH_SRC}")
+ConfigureBench(STRINGS_BENCH "${STRINGS_BENCH_SRC}")

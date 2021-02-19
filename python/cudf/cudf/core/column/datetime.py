@@ -1,4 +1,4 @@
-# Copyright (c) 2019-2020, NVIDIA CORPORATION.
+# Copyright (c) 2019-2021, NVIDIA CORPORATION.
 from __future__ import annotations
 
 import datetime as dt
@@ -43,7 +43,7 @@ class DatetimeColumn(column.ColumnBase):
         data: Buffer,
         dtype: DtypeObj,
         mask: Buffer = None,
-        size: int = None,
+        size: int = None,  # TODO: make non-optional
         offset: int = 0,
         null_count: int = None,
     ):
@@ -255,7 +255,7 @@ class DatetimeColumn(column.ColumnBase):
             return binop_offset(self, rhs, op)
         lhs, rhs = self, rhs
         if op in ("eq", "ne", "lt", "gt", "le", "ge"):
-            out_dtype = np.bool
+            out_dtype = np.dtype(np.bool_)  # type: Dtype
         elif op == "add" and pd.api.types.is_timedelta64_dtype(rhs.dtype):
             out_dtype = cudf.core.column.timedelta._timedelta_add_result_dtype(
                 rhs, lhs

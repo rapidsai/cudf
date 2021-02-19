@@ -455,7 +455,7 @@ struct StringsCopyIfElseTest : public cudf::test::BaseFixture {
 
 TEST_F(StringsCopyIfElseTest, CopyIfElse)
 {
-  auto valids = cudf::test::make_counting_transform_iterator(
+  auto valids = cudf::detail::make_counting_transform_iterator(
     0, [](auto i) { return i % 2 == 0 ? true : false; });
 
   std::vector<const char*> h_strings1{"eee", "bb", "", "aa", "bbb", "ééé"};
@@ -482,7 +482,7 @@ TEST_F(StringsCopyIfElseTest, CopyIfElse)
 
 TEST_F(StringsCopyIfElseTest, CopyIfElseScalarColumn)
 {
-  auto valids = cudf::test::make_counting_transform_iterator(
+  auto valids = cudf::detail::make_counting_transform_iterator(
     0, [](auto i) { return i % 2 == 0 ? true : false; });
 
   std::vector<const char*> h_string1{"eee"};
@@ -510,7 +510,7 @@ TEST_F(StringsCopyIfElseTest, CopyIfElseScalarColumn)
 
 TEST_F(StringsCopyIfElseTest, CopyIfElseColumnScalar)
 {
-  auto valids = cudf::test::make_counting_transform_iterator(
+  auto valids = cudf::detail::make_counting_transform_iterator(
     0, [](auto i) { return i % 2 == 0 ? true : false; });
 
   std::vector<const char*> h_string1{"eee"};
@@ -537,7 +537,7 @@ TEST_F(StringsCopyIfElseTest, CopyIfElseColumnScalar)
 
 TEST_F(StringsCopyIfElseTest, CopyIfElseScalarScalar)
 {
-  auto valids = cudf::test::make_counting_transform_iterator(
+  auto valids = cudf::detail::make_counting_transform_iterator(
     0, [](auto i) { return i % 2 == 0 ? true : false; });
 
   std::vector<const char*> h_string1{"eee"};
@@ -595,8 +595,9 @@ TYPED_TEST(FixedPointTypes, FixedPointLarge)
 
   auto a = thrust::make_counting_iterator(-1000);
   auto b = thrust::make_constant_iterator(0);
-  auto m = make_counting_transform_iterator(-1000, [](int i) { return i > 0; });
-  auto e = make_counting_transform_iterator(-1000, [](int i) { return std::max(0, i); });
+  auto m = cudf::detail::make_counting_transform_iterator(-1000, [](int i) { return i > 0; });
+  auto e =
+    cudf::detail::make_counting_transform_iterator(-1000, [](int i) { return std::max(0, i); });
 
   auto const mask     = cudf::test::fixed_width_column_wrapper<bool>(m, m + 2000);
   auto const A        = fp_wrapper{a, a + 2000, scale_type{-3}};
