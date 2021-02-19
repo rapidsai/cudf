@@ -5,9 +5,8 @@ from __future__ import division
 import decimal
 import operator
 import random
-from itertools import product
-
 import re
+from itertools import product
 
 import numpy as np
 import pandas as pd
@@ -786,22 +785,19 @@ def test_binop_bool_uint(func, rhs):
     # TODO: remove this once issue #2172 is resolved
     if func == "rmod" or func == "rfloordiv":
         return
+    if func == "floordiv":
+        breakpoint()
     psr = pd.Series([True, False, False])
     gsr = cudf.from_pandas(psr)
     utils.assert_eq(
         getattr(psr, func)(rhs), getattr(gsr, func)(rhs), check_dtype=False
     )
 
+
 @pytest.mark.parametrize("dtype", INTEGER_TYPES)
-@pytest.mark.parametrize("lhs", [
-    cudf.Series([1])
-])
-@pytest.mark.parametrize("rhs", [
-    0,
-    cudf.Series([0]),
-    cudf.Series([0,1,2])
-])
-def test_binop_int_floordiv_by_zero(dtype,lhs, rhs):
+@pytest.mark.parametrize("lhs", [cudf.Series([1])])
+@pytest.mark.parametrize("rhs", [0, cudf.Series([0]), cudf.Series([0, 1, 2])])
+def test_binop_int_floordiv_by_zero(dtype, lhs, rhs):
     # We do not allow for integer floor division by zero,
     # because floor division is interpreted as being
     # stable with respect to the numerator's type. And there
@@ -810,7 +806,10 @@ def test_binop_int_floordiv_by_zero(dtype,lhs, rhs):
         rhs = np.dtype(dtype).type(rhs)
     else:
         rhs = rhs.astype(dtype)
-    with pytest.raises(ValueError, match=re.escape("Integer floor division by zero is undefined.")):
+    with pytest.raises(
+        ValueError,
+        match=re.escape("Integer floor division by zero is undefined."),
+    ):
         lhs // rhs
 
 

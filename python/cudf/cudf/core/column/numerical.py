@@ -89,16 +89,6 @@ class NumericalColumn(ColumnBase):
     def binary_operator(
         self, binop: str, rhs: BinaryOperand, reflect: bool = False,
     ) -> ColumnBase:
-        int_dtypes = [
-            np.dtype("int8"),
-            np.dtype("int16"),
-            np.dtype("int32"),
-            np.dtype("int64"),
-            np.dtype("uint8"),
-            np.dtype("uint16"),
-            np.dtype("uint32"),
-            np.dtype("uint64"),
-        ]
         if rhs is None:
             out_dtype = self.dtype
         else:
@@ -112,19 +102,25 @@ class NumericalColumn(ColumnBase):
 
             # Special cases for mod and floordiv
             if binop in {"mod", "floordiv"}:
-                dnom = self if reflect else rhs # denominator
-                numr = rhs if reflect else self # numerator
+                denominator = self if reflect else rhs  # denominator
+                numerator = rhs if reflect else self  # numerator
                 # check for zeroes in the denominator
-                if dnom.dtype.kind in "ui":
+                if denominator.dtype.kind in "bui":
                     # Denominator either zero, or zero is contained therein
-                    if (np.isscalar(dnom) and dnom == 0) or (isinstance(dnom, NumericalColumn) and 0 in dnom):
-                        if numr.dtype.kind in "ui" and binop == "floordiv":
+                    if (np.isscalar(denominator) and denominator == 0) or (
+                        isinstance(denominator, NumericalColumn)
+                        and 0 in denominator
+                    ):
+                        if (
+                            numerator.dtype.kind in "bui"
+                            and binop == "floordiv"
+                        ):
                             # this is integer division by zero
                             raise ValueError(
                                 "Integer floor division by zero is undefined."
                             )
                         out_dtype = np.dtype("float64")
-        
+
         return _numeric_column_binop(
             lhs=self, rhs=rhs, op=binop, out_dtype=out_dtype, reflect=reflect
         )
