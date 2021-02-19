@@ -3463,7 +3463,7 @@ class DataFrame(Frame, Serializable):
             if level is not None and isinstance(
                 self.index, cudf.core.multiindex.MultiIndex
             ):
-                out_index = self.index.copy()
+                out_index = self.index.copy(deep=copy)
                 out_index.get_level_values(level).to_frame().replace(
                     to_replace=list(index.keys()),
                     value=list(index.values()),
@@ -3481,9 +3481,7 @@ class DataFrame(Frame, Serializable):
             out = DataFrame(index=self.index)
 
         if columns:
-            out._data = self._data.replace_level_values(
-                mapper=columns, level=level
-            )
+            out._data = self._data.rename_levels(mapper=columns, level=level)
         else:
             out._data = self._data.copy(deep=copy)
 

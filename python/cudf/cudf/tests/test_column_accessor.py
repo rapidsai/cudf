@@ -268,7 +268,7 @@ def test_replace_level_values_RangeIndex():
         multiindex=False,
     )
 
-    got = ca.replace_level_values(mapper={"a": "f"}, level=None)
+    got = ca.rename_levels(mapper={"a": "f"}, level=0)
     check_ca_equal(expect, got)
 
 
@@ -283,5 +283,5 @@ def test_replace_level_values_MultiColumn():
         multiindex=True,
     )
 
-    got = ca.replace_level_values(mapper={"a": "f"}, level=0)
+    got = ca.rename_levels(mapper={"a": "f"}, level=0)
     check_ca_equal(expect, got)

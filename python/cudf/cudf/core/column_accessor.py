@@ -341,10 +341,12 @@ class ColumnAccessor(MutableMapping):
             key = (key,)
         return key + (pad_value,) * (self.nlevels - len(key))
 
-    def replace_level_values(
+    def rename_levels(
         self, mapper: Union[Mapping[Any, Any], Callable], level: int
     ) -> ColumnAccessor:
         """
+        Rename the specified levels of the given ColumnAccessor
+
         Parameters
         ----------
         self : ColumnAccessor of a given dataframe
@@ -370,49 +372,37 @@ class ColumnAccessor(MutableMapping):
         to the given mapper and level.
 
         """
-        col_names, columns = list(self.keys()), list(self.values())
-
         if self.multiindex:
-            if isinstance(mapper, Mapping):
-                cols_list = [list(col) for col in col_names]
-                new_names = []
-                for col_name in cols_list:
-                    col_name[level] = mapper.get(
-                        col_name[level], col_name[level]
-                    )
-                    new_names.append(tuple(col_name))
-                ca = ColumnAccessor(
-                    dict(zip(new_names, columns)),
-                    level_names=self.level_names,
-                    multiindex=self.multiindex,
-                )
-            else:
-                cols_list = [list(col) for col in col_names]
-                new_names = []
-                for col_name in cols_list:
-                    col_name[level] = mapper(col_name[level])
-                    new_names.append(tuple(col_name))
-                ca = ColumnAccessor(
-                    dict(zip(new_names, columns)),
-                    level_names=self.level_names,
-                    multiindex=self.multiindex,
-                )
+
+            def rename_column(x):
+                x = list(x)
+                if isinstance(mapper, Mapping):
+                    x[level] = mapper.get(x[level], x[level])
+                else:
+                    x[level] = mapper(x[level])
+                x = tuple(x)
+                return x
+
+            new_names = map(rename_column, self.keys())
+            ca = ColumnAccessor(
+                dict(zip(new_names, self.values())),
+                level_names=self.level_names,
+                multiindex=self.multiindex,
+            )
+
         else:
             if level != 0:
                 raise IndexError(
                     f"Too many levels: Index has only 1 level, not {level+1}"
                 )
-
-            cols_list = col_names
             if isinstance(mapper, Mapping):
-                new_names = [
-                    mapper.get(col_name, col_name) for col_name in cols_list
-                ]
+                new_names = (
+                    mapper.get(col_name, col_name) for col_name in self.keys()
+                )
             else:
-                new_names = [mapper(col_name) for col_name in cols_list]
-
+                new_names = (mapper(col_name) for col_name in self.keys())
             ca = ColumnAccessor(
-                dict(zip(new_names, columns)),
+                dict(zip(new_names, self.values())),
                 level_names=self.level_names,
                 multiindex=self.multiindex,
             )
