@@ -187,6 +187,35 @@ auto make_pair_iterator(column_device_view const& column)
 }
 
 /**
+ * @brief Constructs a pair rep iterator over a column's representative values and its validity.
+ *
+ * Dereferencing the returned iterator returns a `thrust::pair<rep_type, bool>`,
+ * where `rep_type` is `device_storage_type<T>`, the type used to store
+ * the value on the device.
+ *
+ * If an element at position `i` is valid (or `has_nulls == false`), then for `p = *(iter + i)`,
+ * `p.first` contains the value of the element at `i` and `p.second == true`.
+ *
+ * Else, if the element at `i` is null, then the value of `p.first` is undefined and `p.second ==
+ * false`. `pair(column[i], validity)`. `validity` is `true` if `has_nulls=false`. `validity` is
+ * validity of the element at `i` if `has_nulls=true` and the column is nullable.
+ *
+ * @throws cudf::logic_error if the column is nullable.
+ * @throws cudf::logic_error if column datatype and Element type mismatch.
+ *
+ * @tparam Element The type of elements in the column
+ * @tparam has_nulls boolean indicating to treat the column is nullable
+ * @param column The column to iterate
+ * @return auto Iterator that returns valid column elements, and validity of the
+ * element in a pair
+ */
+template <typename Element, bool has_nulls = false>
+auto make_pair_rep_iterator(column_device_view const& column)
+{
+  return column.pair_rep_begin<Element, has_nulls>();
+}
+
+/**
  * @brief Constructs an iterator over a column's validities.
  *
  * Dereferencing the returned iterator for element `i` will return the validity

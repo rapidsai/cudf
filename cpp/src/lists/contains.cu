@@ -57,29 +57,6 @@ struct transform_to_rep {
 };
 
 template <typename ElementType,
-          bool has_nulls,
-          std::enable_if_t<!cudf::is_fixed_point<ElementType>(), void>* = nullptr>
-auto get_pair_iterator(cudf::column_device_view const& d_search_keys)
-{
-  return d_search_keys.pair_begin<ElementType, has_nulls>();
-}
-
-template <typename ElementType,
-          bool has_nulls,
-          std::enable_if_t<cudf::is_fixed_point<ElementType>(), void>* = nullptr>
-auto get_pair_iterator(cudf::column_device_view const& d_search_keys)
-{
-  return thrust::make_transform_iterator(d_search_keys.pair_begin<ElementType, has_nulls>(),
-                                         transform_to_rep<ElementType>{});
-}
-
-template <typename ElementType, bool>
-auto get_pair_iterator(cudf::scalar const& search_key)
-{
-  return cudf::detail::make_pair_rep_iterator<ElementType>(search_key);
-}
-
-template <typename ElementType,
           std::enable_if_t<!cudf::is_fixed_point<ElementType>(), void>* = nullptr>
 __device__ auto get_list_iter(cudf::list_device_view::const_pair_iterator<ElementType> const& iter)
 {
@@ -223,7 +200,8 @@ struct lookup_functor {
       mutable_column_device_view::create(result_bools->mutable_view(), stream);
     auto mutable_result_validity =
       mutable_column_device_view::create(result_validity->mutable_view(), stream);
-    auto search_key_iter = get_pair_iterator<ElementType, search_keys_have_nulls>(*d_skeys);
+    auto search_key_iter =
+      cudf::detail::make_pair_rep_iterator<ElementType, search_keys_have_nulls>(*d_skeys);
 
     search_each_list_row<ElementType>(
       d_lists, search_key_iter, *mutable_result_bools, *mutable_result_validity, stream, mr);
