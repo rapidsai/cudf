@@ -3399,29 +3399,24 @@ class Frame(libcudf.table.Table):
                 indicator=indicator,
                 suffixes=suffixes,
             )
+        from cudf.core.join.join import merge
 
-        lhs = self
-        rhs = right
-
-        from cudf.core.join import Merge
-
-        mergeop = Merge(
-            lhs,
-            rhs,
-            on,
-            left_on,
-            right_on,
-            left_index,
-            right_index,
-            how,
-            sort,
-            lsuffix,
-            rsuffix,
-            method,
-            indicator,
-            suffixes,
+        return merge(
+            self,
+            right,
+            on=on,
+            left_on=left_on,
+            right_on=right_on,
+            left_index=left_index,
+            right_index=right_index,
+            how=how,
+            sort=sort,
+            lsuffix=lsuffix,
+            rsuffix=rsuffix,
+            method=method,
+            indicator=indicator,
+            suffixes=suffixes,
         )
-        return mergeop.perform_merge()
 
     def _is_sorted(self, ascending=None, null_position=None):
         """

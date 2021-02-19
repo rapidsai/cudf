@@ -3,105 +3,62 @@ from collections import OrderedDict, namedtuple
 
 import cudf
 from cudf import _lib as libcudf
-from cudf.core.join.casting_logic import (
-    _input_to_libcudf_castrules_any,
+from cudf.core.join._join_helpers import (
+    _cast_join_keys,
+    _coerce_to_list,
+    _coerce_to_tuple,
+    _Indexer,
     _libcudf_to_output_castrules,
 )
 
 
-class ColumnView:
-    def __init__(self, name, column=False, index=False):
-        self.name = name
-        self.column, self.index = column, index
-
-    def get_numeric_index(self, obj):
-        # get the position of the column (including any index columns)
-        if self.column:
-            index_nlevels = obj.index.nlevels if obj._index is not None else 0
-            return index_nlevels + tuple(obj._data).index(self.name)
-        else:
-            return obj.index.names.index(self.name)
-
-    @property
-    def is_index_level(self):
-        # True if this is an index column
-        return self.index
-
-    def value(self, obj):
-        # get the column
-        if self.column:
-            return obj._data[self.name]
-        else:
-            return obj._index._data[self.name]
-
-    def set_value(self, obj, value):
-        # set the colum
-        if self.column:
-            obj._data[self.name] = value
-        else:
-            obj._index._data[self.name] = value
-
-
-JoinKeys = namedtuple("JoinKeys", ["left", "right"])
-
-
-def Merge(
+def merge(
     lhs,
     rhs,
-    on=None,
-    left_on=None,
-    right_on=None,
-    left_index=False,
-    right_index=False,
-    how="inner",
-    sort=False,
-    lsuffix="_x",
-    rsuffix="_y",
-    method=None,
-    indicator=None,
-    suffixes=None,
+    *,
+    on,
+    left_on,
+    right_on,
+    left_index,
+    right_index,
+    how,
+    sort,
+    lsuffix,
+    rsuffix,
+    method,
+    indicator,
+    suffixes,
 ):
-    if how not in {"leftsemi", "leftanti"}:
-        return MergeBase(
-            lhs,
-            rhs,
-            on=on,
-            left_on=left_on,
-            right_on=right_on,
-            left_index=left_index,
-            right_index=right_index,
-            how=how,
-            sort=sort,
-            lsuffix=lsuffix,
-            rsuffix=rsuffix,
-            method=method,
-            indicator=indicator,
-            suffixes=suffixes,
-        )
+    if how in {"leftsemi", "leftanti"}:
+        merge_cls = MergeSemi
     else:
-        return MergeSemi(
-            lhs,
-            rhs,
-            on=on,
-            left_on=left_on,
-            right_on=right_on,
-            left_index=left_index,
-            right_index=right_index,
-            how=how,
-            sort=sort,
-            lsuffix=lsuffix,
-            rsuffix=rsuffix,
-            method=method,
-            indicator=indicator,
-            suffixes=suffixes,
-        )
+        merge_cls = Merge
+    mergeobj = merge_cls(
+        lhs,
+        rhs,
+        on=on,
+        left_on=left_on,
+        right_on=right_on,
+        left_index=left_index,
+        right_index=right_index,
+        how=how,
+        sort=sort,
+        lsuffix=lsuffix,
+        rsuffix=rsuffix,
+        method=method,
+        indicator=indicator,
+    )
+    return mergeobj.perform_merge()
 
 
-class MergeBase(object):
+class Merge(object):
+    JoinKeys = namedtuple("JoinKeys", ["left", "right"])
+
     def __init__(
         self,
         lhs,
         rhs,
+        *,
         on=None,
         left_on=None,
         right_on=None,
@@ -171,11 +128,8 @@ class MergeBase(object):
             suffixes=suffixes,
         )
 
-        # warning: self.lhs and self.rhs are mutated both before
-        # and after the join
-        self.lhs = lhs.copy(deep=False)
-        self.rhs = rhs.copy(deep=False)
-
+        self.lhs = lhs
+        self.rhs = rhs
         self.on = on
         self.left_on = left_on
         self.right_on = right_on
@@ -188,6 +142,7 @@ class MergeBase(object):
         self.suffixes = suffixes
 
         self.out_class = cudf.DataFrame
+
         if isinstance(self.lhs, cudf.MultiIndex) or isinstance(
             self.rhs, cudf.MultiIndex
         ):
@@ -198,7 +153,6 @@ class MergeBase(object):
         self.compute_join_keys()
 
     def compute_join_keys(self):
-
         if (
             self.left_index
             or self.right_index
@@ -210,7 +164,7 @@ class MergeBase(object):
             if self.left_index:
                 left_keys.extend(
                     [
-                        ColumnView(name=on, index=True)
+                        _Indexer(name=on, index=True)
                         for on in self.lhs.index.names
                     ]
                 )
@@ -218,14 +172,14 @@ class MergeBase(object):
                 # TODO: require left_on or left_index to be specified
                 left_keys.extend(
                     [
-                        ColumnView(name=on, column=True)
+                        _Indexer(name=on, column=True)
                         for on in _coerce_to_tuple(self.left_on)
                     ]
                 )
             if self.right_index:
                 right_keys.extend(
                     [
-                        ColumnView(name=on, index=True)
+                        _Indexer(name=on, index=True)
                         for on in self.rhs.index.names
                     ]
                 )
@@ -233,7 +187,7 @@ class MergeBase(object):
                 # TODO: require right_on or right_index to be specified
                 right_keys.extend(
                     [
-                        ColumnView(name=on, column=True)
+                        _Indexer(name=on, column=True)
                         for on in _coerce_to_tuple(self.right_on)
                     ]
                 )
@@ -245,20 +199,18 @@ class MergeBase(object):
                 if self.on is not None
                 else set(self.lhs._data.keys()) & set(self.rhs._data.keys())
             )
-            left_keys = [ColumnView(name=on, column=True) for on in on_names]
-            right_keys = [ColumnView(name=on, column=True) for on in on_names]
+            left_keys = [_Indexer(name=on, column=True) for on in on_names]
+            right_keys = [_Indexer(name=on, column=True) for on in on_names]
 
         if len(left_keys) != len(right_keys):
             raise ValueError(
                 "Merge operands must have same number of join key columns"
             )
 
-        self._keys = JoinKeys(left=left_keys, right=right_keys)
+        self._keys = self.__class__.JoinKeys(left=left_keys, right=right_keys)
 
     def perform_merge(self):
-        lhs, rhs = self.match_key_dtypes(
-            self.lhs, self.rhs, _input_to_libcudf_castrules_any
-        )
+        lhs, rhs = self.match_key_dtypes(self.lhs, self.rhs, _cast_join_keys)
 
         left_key_indices = [
             key.get_numeric_index(lhs) for key in self._keys.left
@@ -376,10 +328,7 @@ class MergeBase(object):
         else:
             key_columns_with_same_name = []
             for lkey, rkey in zip(*self._keys):
-                if (lkey.is_index_level, rkey.is_index_level) == (
-                    False,
-                    False,
-                ):
+                if (lkey.index, rkey.index) == (False, False,):
                     if lkey.name == rkey.name:
                         key_columns_with_same_name.append(lkey.name)
         for name in common_names:
@@ -466,11 +415,9 @@ class MergeBase(object):
         return out_lhs, out_rhs
 
 
-class MergeSemi(MergeBase):
+class MergeSemi(Merge):
     def perform_merge(self):
-        lhs, rhs = self.match_key_dtypes(
-            self.lhs, self.rhs, _input_to_libcudf_castrules_any
-        )
+        lhs, rhs = self.match_key_dtypes(self.lhs, self.rhs, _cast_join_keys)
 
         left_key_indices = [
             key.get_numeric_index(lhs) for key in self._keys.left
@@ -492,14 +439,3 @@ class MergeSemi(MergeBase):
     def output_column_names(self):
         left_names, _ = super().output_column_names()
         return left_names, {}
-
-
-def _coerce_to_tuple(obj):
-    if hasattr(obj, "__iter__") and not isinstance(obj, str):
-        return tuple(obj)
-    else:
-        return (obj,)
-
-
-def _coerce_to_list(obj):
-    return list(_coerce_to_tuple(obj))
