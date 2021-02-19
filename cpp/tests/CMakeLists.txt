@@ -44,7 +44,7 @@ target_include_directories(cudftestutil
     PUBLIC "$<BUILD_INTERFACE:${CUDF_SOURCE_DIR}>"
            "$<BUILD_INTERFACE:${CUDF_SOURCE_DIR}/src>")
 
-install(TARGETS cudftestutil gmock gtest gmock_main gtest_main
+install(TARGETS cudftestutil
         DESTINATION lib
         EXPORT cudf-targets)
 

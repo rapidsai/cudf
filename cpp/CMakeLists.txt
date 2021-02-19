@@ -133,6 +133,14 @@ if (CUDF_BUILD_TESTS OR CUDF_BUILD_BENCHMARKS)
         add_library(GTest::gtest_main ALIAS gtest_main)
         add_library(GTest::gmock_main ALIAS gmock_main)
     endif()
+    if(GTest_ADDED)
+        install(TARGETS gmock
+                        gtest
+                        gmock_main
+                        gtest_main
+            DESTINATION lib
+            EXPORT cudf-targets)
+    endif()
 endif()
 
 ###################################################################################################
@@ -156,6 +164,12 @@ if(CUDF_BUILD_BENCHMARKS)
         GIT_SHALLOW     TRUE
         OPTIONS         "BENCHMARK_ENABLE_TESTING OFF"
                         "BENCHMARK_ENABLE_INSTALL OFF")
+    if(benchmark_ADDED)
+        install(TARGETS benchmark
+                        benchmark_main
+            DESTINATION lib
+            EXPORT cudf-targets)
+    endif()
     add_subdirectory(benchmarks)
 endif()
 
