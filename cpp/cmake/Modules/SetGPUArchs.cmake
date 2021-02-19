@@ -38,7 +38,7 @@ endif()
 if(${PROJECT_NAME}_BUILD_FOR_ALL_ARCHS)
   set(CMAKE_CUDA_ARCHITECTURES ${SUPPORTED_CUDA_ARCHITECTURES})
 elseif(${PROJECT_NAME}_BUILD_FOR_DETECTED_ARCHS)
-  include(${PROJECT_SOURCE_DIR}/cmake/EvalGpuArchs.cmake)
+  include(${PROJECT_SOURCE_DIR}/cmake/Modules/EvalGpuArchs.cmake)
   evaluate_gpu_archs(CMAKE_CUDA_ARCHITECTURES)
 endif()
 
