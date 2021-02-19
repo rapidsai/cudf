@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2020, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -66,6 +66,7 @@ constexpr std::array<aggregation::Kind, 10> hash_aggregations{
     aggregation::SUM, aggregation::MIN, aggregation::MAX,
     aggregation::COUNT_VALID, aggregation::COUNT_ALL,
     aggregation::ARGMIN, aggregation::ARGMAX,
+    aggregation::SUM_OF_SQUARES,
     aggregation::MEAN, aggregation::STD, aggregation::VARIANCE};
 
 //Could be hash: SUM, PRODUCT, MIN, MAX, COUNT_VALID, COUNT_ALL, ANY, ALL,
@@ -97,7 +98,8 @@ bool constexpr is_hash_aggregation(aggregation::Kind t)
   // return array_contains(hash_aggregations, t);
   return (t == aggregation::SUM) or (t == aggregation::MIN) or (t == aggregation::MAX) or
          (t == aggregation::COUNT_VALID) or (t == aggregation::COUNT_ALL) or
-         (t == aggregation::ARGMIN) or (t == aggregation::ARGMAX) or (t == aggregation::MEAN) or
+         (t == aggregation::ARGMIN) or (t == aggregation::ARGMAX) or
+         (t == aggregation::SUM_OF_SQUARES) or (t == aggregation::MEAN) or
          (t == aggregation::STD) or (t == aggregation::VARIANCE);
 }
 

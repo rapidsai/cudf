@@ -205,6 +205,7 @@ test:
     - test -f $PREFIX/include/cudf_test/cudf_gtest.hpp
     - test -f $PREFIX/include/cudf_test/cxxopts.hpp
     - test -f $PREFIX/include/cudf_test/file_utilities.hpp
+    - test -f $PREFIX/include/cudf_test/iterator_utilities.hpp
     - test -f $PREFIX/include/cudf_test/table_utilities.hpp
     - test -f $PREFIX/include/cudf_test/timestamp_utilities.cuh
     - test -f $PREFIX/include/cudf_test/type_list_utilities.hpp
