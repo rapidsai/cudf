@@ -202,6 +202,8 @@ class parser {
     parse_whitespace();
   }
 
+  CUDA_HOST_DEVICE_CALLABLE parser(parser const& p) { *this = p; }
+
   CUDA_HOST_DEVICE_CALLABLE bool eof(const char* p) { return p - input >= input_len; }
   CUDA_HOST_DEVICE_CALLABLE bool eof() { return eof(pos); }
 
@@ -303,7 +305,7 @@ class json_state : private parser {
   {
   }
 
-  CUDA_HOST_DEVICE_CALLABLE json_state(json_state const& j) { *this = j; }
+  CUDA_HOST_DEVICE_CALLABLE json_state(json_state const& j) : parser(j) { *this = j; }
 
   CUDA_HOST_DEVICE_CALLABLE parse_result extract_element(json_output* output)
   {
@@ -469,12 +471,10 @@ struct command_buffer {
 // current state of the JSONPath
 class path_state : private parser {
  public:
-  CUDA_HOST_DEVICE_CALLABLE path_state() : parser() {}
   CUDA_HOST_DEVICE_CALLABLE path_state(const char* _path, size_t _path_len)
     : parser(_path, _path_len)
   {
   }
-  CUDA_HOST_DEVICE_CALLABLE path_state(path_state const& p) { *this = p; }
 
   CUDA_HOST_DEVICE_CALLABLE path_operator get_next_operator()
   {
@@ -563,7 +563,8 @@ class path_state : private parser {
   }
 };
 
-command_buffer build_command_buffer(std::string const& json_path, rmm::cuda_stream_view stream)
+std::pair<command_buffer, int> build_command_buffer(std::string const& json_path,
+                                                    rmm::cuda_stream_view stream)
 {
   path_state p_state(json_path.data(), static_cast<size_type>(json_path.size()));
 
@@ -571,11 +572,13 @@ command_buffer build_command_buffer(std::string const& json_path, rmm::cuda_stre
   cudf::string_scalar d_json_path(json_path);
 
   path_operator op;
+  int max_stack_depth = 1;
   do {
     op = p_state.get_next_operator();
     if (op.type == path_operator_type::ERROR) {
       CUDF_FAIL("Encountered invalid JSONPath input string");
     }
+    if (op.type == path_operator_type::CHILD_WILDCARD) { max_stack_depth++; }
     // convert pointer to device pointer
     if (op.name.len > 0) { op.name.str = d_json_path.data() + (op.name.str - json_path.data()); }
     h_operators.push_back(op);
@@ -588,94 +591,157 @@ command_buffer build_command_buffer(std::string const& json_path, rmm::cuda_stre
                   cudaMemcpyHostToDevice,
                   stream.value());
 
-  return {std::move(d_operators), std::move(d_json_path)};
+  return {command_buffer{std::move(d_operators), std::move(d_json_path)}, max_stack_depth};
 }
 
-CUDA_HOST_DEVICE_CALLABLE parse_result parse_json_path(json_state& j_state,
-                                                       path_operator const* const commands,
+#define PARSE_TRY(_x)                                                       \
+  do {                                                                      \
+    last_result = _x;                                                       \
+    if (last_result == parse_result::ERROR) { return parse_result::ERROR; } \
+  } while (0)
+
+template <int max_command_stack_depth>
+CUDA_HOST_DEVICE_CALLABLE parse_result parse_json_path(json_state& _j_state,
+                                                       path_operator const* _commands,
                                                        json_output& output,
-                                                       bool list_element = false)
+                                                       bool _list_element = false)
 {
-  path_operator op = *commands;
+  // manually maintained context stack in lieu of calling parse_json_path recursively.
+  struct context {
+    json_state j_state;
+    path_operator const* commands;
+    bool list_element;
+    bool state_flag;
+    int count;
+  };
+  context stack[max_command_stack_depth];
+  int stack_pos     = 0;
+  auto push_context = [&stack, &stack_pos](json_state const& _j_state,
+                                           path_operator const* _commands,
+                                           bool _list_element = false,
+                                           bool _state_flag   = false,
+                                           int _count         = 0) {
+    if (stack_pos == max_command_stack_depth - 1) { return false; }
+    stack[stack_pos++] = context{_j_state, _commands, _list_element, _state_flag, _count};
+    return true;
+  };
+  auto pop_context = [&stack, &stack_pos](context& c) {
+    if (stack_pos > 0) {
+      c = stack[--stack_pos];
+      return true;
+    }
+    return false;
+  };
+  push_context(_j_state, _commands, _list_element);
 
-  switch (op.type) {
-    // whatever the first object is
-    case path_operator_type::ROOT:
-      if (j_state.next_element() != parse_result::ERROR) {
-        return parse_json_path(j_state, commands + 1, output);
-      }
-      break;
+  parse_result last_result = parse_result::SUCCESS;
+  context ctx;
+  while (pop_context(ctx)) {
+    path_operator op = *ctx.commands;
 
-    // .name
-    // ['name']
-    // [1]
-    // will return a single thing
-    case path_operator_type::CHILD: {
-      parse_result res = j_state.child_element();
-      if (res != parse_result::SUCCESS) { return res; }
-      res = j_state.next_matching_element(op.name, true);
-      if (res != parse_result::SUCCESS) { return res; }
-      return parse_json_path(j_state, commands + 1, output, list_element);
-    } break;
+    switch (op.type) {
+      // whatever the first object is
+      case path_operator_type::ROOT:
+        PARSE_TRY(ctx.j_state.next_element());
+        push_context(ctx.j_state, ctx.commands + 1);
+        break;
 
-    // .*
-    // [*]
-    // will return an array of things
-    case path_operator_type::CHILD_WILDCARD: {
-      output.add_output("[\n", 2);
+      // .name
+      // ['name']
+      // [1]
+      // will return a single thing
+      case path_operator_type::CHILD: {
+        PARSE_TRY(ctx.j_state.child_element());
+        if (last_result == parse_result::SUCCESS) {
+          PARSE_TRY(ctx.j_state.next_matching_element(op.name, true));
+          if (last_result == parse_result::SUCCESS) {
+            push_context(ctx.j_state, ctx.commands + 1, ctx.list_element);
+          }
+        }
+      } break;
 
-      parse_result res = j_state.child_element();
-      if (res == parse_result::ERROR) { return parse_result::ERROR; }
-      if (res == parse_result::EMPTY) {
-        output.add_output("]\n", 2);
-        return parse_result::SUCCESS;
-      }
+      // .*
+      // [*]
+      // will return an array of things
+      case path_operator_type::CHILD_WILDCARD: {
+        // if we're on the first element of this wildcard
+        if (!ctx.state_flag) {
+          output.add_output("[\n", 2);
 
-      res       = j_state.next_matching_element(op.name, true);
-      int count = 0;
-      while (res == parse_result::SUCCESS) {
-        json_state j_sub(j_state);
-        parse_result sub_res =
-          parse_json_path(j_sub, commands + 1, output, count > 0 ? true : false);
-        if (sub_res == parse_result::ERROR) { return parse_result::ERROR; }
-        if (sub_res != parse_result::EMPTY) { count++; }
-        res = j_state.next_matching_element(op.name, false);
-      }
+          // step into the child element
+          PARSE_TRY(ctx.j_state.child_element());
+          if (last_result == parse_result::EMPTY) {
+            output.add_output("]\n", 2);
+            last_result = parse_result::SUCCESS;
+            break;
+          }
 
-      if (res == parse_result::ERROR) { return parse_result::ERROR; }
+          // first element
+          PARSE_TRY(ctx.j_state.next_matching_element(op.name, true));
+          if (last_result == parse_result::EMPTY) {
+            output.add_output("]\n", 2);
+            last_result = parse_result::SUCCESS;
+            break;
+          }
 
-      output.add_output("]\n", 2);
-      return parse_result::SUCCESS;
-    } break;
+          // re-push ourselves
+          push_context(ctx.j_state, ctx.commands, false, true);
+          // push the next command
+          push_context(ctx.j_state, ctx.commands + 1);
+        } else {
+          // if we actually processed something to the output, increment count
+          if (last_result != parse_result::EMPTY) { ctx.count++; }
 
-    // [0]
-    // [1]
-    // etc
-    // returns a single thing
-    case path_operator_type::CHILD_INDEX: {
-      parse_result res = j_state.child_element();
-      if (res != parse_result::SUCCESS) { return res; }
-      json_string any{"*", 1};
-      res = j_state.next_matching_element(any, true);
-      if (res != parse_result::SUCCESS) { return res; }
-      for (int idx = 1; idx <= op.index; idx++) {
-        res = j_state.next_matching_element(any, false);
-        if (res != parse_result::SUCCESS) { return res; }
-      }
-      return parse_json_path(j_state, commands + 1, output, list_element);
-    } break;
+          // next element
+          PARSE_TRY(ctx.j_state.next_matching_element(op.name, false));
+          if (last_result == parse_result::EMPTY) {
+            output.add_output("]\n", 2);
+            last_result = parse_result::SUCCESS;
+            break;
+          }
 
-    // some sort of error.
-    case path_operator_type::ERROR: return parse_result::ERROR; break;
+          // re-push ourselves
+          push_context(ctx.j_state, ctx.commands, false, true);
+          // push the next command
+          push_context(ctx.j_state, ctx.commands + 1, ctx.count > 0 ? true : false);
+        }
+      } break;
 
-    // END case
-    default: {
-      if (list_element) { output.add_output({",\n", 2}); }
-      if (j_state.extract_element(&output) == parse_result::ERROR) { return parse_result::ERROR; }
-    } break;
+      // [0]
+      // [1]
+      // etc
+      // returns a single thing
+      case path_operator_type::CHILD_INDEX: {
+        PARSE_TRY(ctx.j_state.child_element());
+        if (last_result == parse_result::SUCCESS) {
+          json_string any{"*", 1};
+          PARSE_TRY(ctx.j_state.next_matching_element(any, true));
+          if (last_result == parse_result::SUCCESS) {
+            for (int idx = 1; idx <= op.index; idx++) {
+              PARSE_TRY(ctx.j_state.next_matching_element(any, false));
+              if (last_result == parse_result::EMPTY) { break; }
+            }
+            push_context(ctx.j_state, ctx.commands + 1, ctx.list_element);
+          }
+        }
+      } break;
+
+      // some sort of error.
+      case path_operator_type::ERROR: return parse_result::ERROR; break;
+
+      // END case
+      default: {
+        if (ctx.list_element) { output.add_output({",\n", 2}); }
+        PARSE_TRY(ctx.j_state.extract_element(&output));
+      } break;
+    }
   }
   return parse_result::SUCCESS;
 }
+
+// hardcoding this for now. to reach a stack depth of 8 would require
+// a jsonpath containing 7 nested wildcards so this is probably reasonable.
+constexpr int max_command_stack_depth = 8;
 
 CUDA_HOST_DEVICE_CALLABLE json_output get_json_object_single(char const* input,
                                                              size_t input_len,
@@ -683,11 +749,10 @@ CUDA_HOST_DEVICE_CALLABLE json_output get_json_object_single(char const* input,
                                                              char* out_buf,
                                                              size_t out_buf_size)
 {
-  // TODO: add host-side code to verify path is a valid string.
   json_state j_state(input, input_len);
   json_output output{out_buf_size, 0, out_buf};
 
-  parse_json_path(j_state, commands, output);
+  parse_json_path<max_command_stack_depth>(j_state, commands, output);
 
   return output;
 }
@@ -719,11 +784,9 @@ std::unique_ptr<cudf::column> get_json_object(cudf::strings_column_view const& c
                                               rmm::mr::device_memory_resource* mr)
 {
   // preprocess the json_path into a command buffer
-  command_buffer cmd_buf = build_command_buffer(json_path, stream);
-
-  size_t stack_size;
-  cudaDeviceGetLimit(&stack_size, cudaLimitStackSize);
-  cudaDeviceSetLimit(cudaLimitStackSize, 4096);
+  std::pair<command_buffer, int> preprocess = build_command_buffer(json_path, stream);
+  CUDF_EXPECTS(preprocess.second <= max_command_stack_depth,
+               "Encountered json_path string that is too complex");
 
   auto offsets = cudf::make_fixed_width_column(
     data_type{type_id::INT32}, col.size() + 1, mask_state::UNALLOCATED, stream, mr);
@@ -735,7 +798,7 @@ std::unique_ptr<cudf::column> get_json_object(cudf::strings_column_view const& c
   get_json_object_kernel<<<grid.num_blocks, grid.num_threads_per_block, 0, stream.value()>>>(
     col.chars().head<char>(),
     col.offsets().head<size_type>(),
-    cmd_buf.commands.data(),
+    preprocess.first.commands.data(),
     offsets_view.head<size_type>(),
     nullptr,
     col.size());
@@ -757,13 +820,10 @@ std::unique_ptr<cudf::column> get_json_object(cudf::strings_column_view const& c
   get_json_object_kernel<<<grid.num_blocks, grid.num_threads_per_block, 0, stream.value()>>>(
     col.chars().head<char>(),
     col.offsets().head<size_type>(),
-    cmd_buf.commands.data(),
+    preprocess.first.commands.data(),
     offsets_view.head<size_type>(),
     chars_view.head<char>(),
     col.size());
-
-  // reset back to original stack size
-  cudaDeviceSetLimit(cudaLimitStackSize, stack_size);
 
   return make_strings_column(col.size(),
                              std::move(offsets),
