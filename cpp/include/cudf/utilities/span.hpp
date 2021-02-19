@@ -210,8 +210,8 @@ class base_2dspan {
   }
   base_2dspan(T* data, size_type size) noexcept : _data{data}, _size{size} {}
 
-  constexpr auto data() const { return _data; }
-  constexpr auto size() const { return _size; }
+  constexpr auto data() const noexcept { return _data; }
+  constexpr auto size() const noexcept { return _size; }
   constexpr auto count() const noexcept { return size().first * size().second; }
   constexpr bool is_empty() const noexcept { return count() == 0; }
 

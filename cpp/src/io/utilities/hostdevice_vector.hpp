@@ -162,7 +162,7 @@ class hostdevice_2dvector {
     return {_data.host_ptr() + base_2dspan<T>::flatten_index(row, 0, _size), _size.second};
   }
 
-  auto size() { return _size; }
+  auto size() const noexcept { return _size; }
 
   void host_to_device(rmm::cuda_stream_view stream, bool synchronize = false)
   {
