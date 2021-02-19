@@ -175,8 +175,8 @@ class hostdevice_2dvector {
   }
 
  private:
-  std::pair<size_t, size_t> _size;
   hostdevice_vector<T> _data;
+  typename base_2dspan<T>::size_type _size;
 };
 
 }  // namespace detail

@@ -172,7 +172,7 @@ class writer::impl {
                          std::vector<int> const& str_col_ids,
                          uint32_t* dict_data,
                          uint32_t* dict_index,
-                         hostdevice_vector<gpu::DictionaryChunk>& dict);
+                         hostdevice_vector<gpu::DictionaryChunk>* dict);
 
   /**
    * @brief Builds up per-stripe dictionaries for string columns

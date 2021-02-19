@@ -196,21 +196,27 @@ struct device_span : public span_base<T, Extent, device_span<T, Extent>> {
 template <typename T>
 class base_2dspan {
  public:
-  base_2dspan(T* ptr, std::pair<size_t, size_t> size) : _data_ptr{ptr}, _size(size) {}
+  using size_type = std::pair<size_t, size_t>;
 
-  constexpr auto data() const { return _data_ptr; }
+  constexpr base_2dspan() noexcept = default;
+  constexpr base_2dspan(T* data, size_t rows, size_t columns) noexcept
+    : _data{data}, _size{rows, columns}
+  {
+  }
+  base_2dspan(T* data, size_type size) noexcept : _data{data}, _size{size} {}
+
+  constexpr auto data() const { return _data; }
   constexpr auto size() const { return _size; }
+  constexpr bool is_empty() const noexcept { return _size.first == 0 || _size.second == 0; }
 
-  static constexpr size_t flatten_index(size_t row,
-                                        size_t column,
-                                        std::pair<size_t, size_t> size) noexcept
+  static constexpr size_t flatten_index(size_t row, size_t column, size_type size) noexcept
   {
     return row * size.second + column;
   }
 
  protected:
-  T* _data_ptr;
-  std::pair<size_t, size_t> _size;
+  T* _data = nullptr;
+  size_type _size{0, 0};
 };
 
 template <typename T>
@@ -219,11 +225,9 @@ class host_2dspan : public base_2dspan<T> {
   using base::base;
 
  public:
-  host_2dspan(T* ptr, std::pair<size_t, size_t> size) : base{ptr, size} {}
-
   constexpr host_span<T> operator[](size_t row)
   {
-    return {this->_data_ptr + base::flatten_index(row, 0, this->_size), this->_size.second};
+    return {this->data() + base::flatten_index(row, 0, this->size()), this->size().second};
   }
 
   template <
@@ -240,11 +244,9 @@ class device_2dspan : public base_2dspan<T> {
   using base::base;
 
  public:
-  device_2dspan(T* ptr, std::pair<size_t, size_t> size) : base{ptr, size} {}
-
   constexpr device_span<T> operator[](size_t row)
   {
-    return {this->_data_ptr + base::flatten_index(row, 0, this->_size), this->_size.second};
+    return {this->data() + base::flatten_index(row, 0, this->size()), this->size().second};
   }
   template <
     typename OtherT,
