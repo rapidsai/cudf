@@ -28,14 +28,15 @@
 
 #include <numeric>
 #include <random>
+#include <unordered_map>
 
 namespace {
-static constexpr cudf::size_type array_size{1 << 10};
 
 template <class FloatType>
-static const std::vector<FloatType>& get_float_numbers()
+static const std::vector<FloatType>& get_float_numbers(int64_t array_size)
 {
-  static std::vector<FloatType> numbers;
+  static std::unordered_map<int64_t, std::vector<FloatType>> number_arrays;
+  auto& numbers = number_arrays[array_size];
   if (numbers.size() == 0) {
     numbers.reserve(array_size);
     cudf::test::UniformRandomGenerator<FloatType> rand_gen(std::numeric_limits<FloatType>::min(),
@@ -47,12 +48,13 @@ static const std::vector<FloatType>& get_float_numbers()
 }
 
 template <class FloatType>
-static const std::vector<std::string>& get_floats_numbers_as_string()
+static const std::vector<std::string>& get_floats_numbers_as_string(int64_t array_size)
 {
-  static std::vector<std::string> numbers_str;
+  static std::unordered_map<int64_t, std::vector<std::string>> str_arrays;
+  auto& numbers_str = str_arrays[array_size];
   if (numbers_str.size() == 0) {
     numbers_str.reserve(array_size);
-    const auto& numbers = get_float_numbers<FloatType>();
+    const auto& numbers = get_float_numbers<FloatType>(array_size);
     std::transform(numbers.begin(), numbers.end(), std::back_inserter(numbers_str), [](auto x) {
       return std::to_string(x);
     });
@@ -67,7 +69,7 @@ class StringToFloatNumber : public cudf::benchmark {
 template <cudf::type_id float_type>
 void convert_to_float_number(benchmark::State& state)
 {
-  const auto& h_strings   = get_floats_numbers_as_string<double>();
+  const auto& h_strings   = get_floats_numbers_as_string<double>(state.range(0));
   const auto strings_size = std::accumulate(
     h_strings.begin(), h_strings.end(), std::size_t{0}, [](std::size_t size, const auto& str) {
       return size + str.length();
@@ -81,7 +83,7 @@ void convert_to_float_number(benchmark::State& state)
     volatile auto results = cudf::strings::to_floats(strings_view, cudf::data_type{float_type});
   }
 
-  state.SetBytesProcessed(state.iterations() * state.range(0) * strings_size);
+  state.SetBytesProcessed(state.iterations() * strings_size);
 }
 
 class StringFromFloatNumber : public cudf::benchmark {
@@ -89,7 +91,7 @@ class StringFromFloatNumber : public cudf::benchmark {
 template <class FloatType>
 void convert_from_float_number(benchmark::State& state)
 {
-  const auto& h_floats   = get_float_numbers<FloatType>();
+  const auto& h_floats   = get_float_numbers<FloatType>(state.range(0));
   const auto floats_size = h_floats.size() * sizeof(FloatType);
 
   cudf::test::fixed_width_column_wrapper<FloatType> floats(h_floats.begin(), h_floats.end());
@@ -100,7 +102,7 @@ void convert_from_float_number(benchmark::State& state)
     volatile auto results = cudf::strings::from_floats(floats_view);
   }
 
-  state.SetBytesProcessed(state.iterations() * state.range(0) * floats_size);
+  state.SetBytesProcessed(state.iterations() * floats_size);
 }
 
 #define CV_TO_FLOATS_BENCHMARK_DEFINE(name, float_type_id)                  \
@@ -110,7 +112,7 @@ void convert_from_float_number(benchmark::State& state)
   }                                                                         \
   BENCHMARK_REGISTER_F(StringToFloatNumber, name)                           \
     ->RangeMultiplier(1 << 5)                                               \
-    ->Range(1 << 10, 1 << 25)                                               \
+    ->Range(1 << 10, 1 << 20)                                               \
     ->UseManualTime()                                                       \
     ->Unit(benchmark::kMicrosecond);
 
@@ -121,7 +123,7 @@ void convert_from_float_number(benchmark::State& state)
   }                                                                           \
   BENCHMARK_REGISTER_F(StringFromFloatNumber, name)                           \
     ->RangeMultiplier(1 << 5)                                                 \
-    ->Range(1 << 10, 1 << 25)                                                 \
+    ->Range(1 << 10, 1 << 20)                                                 \
     ->UseManualTime()                                                         \
     ->Unit(benchmark::kMicrosecond);
 
