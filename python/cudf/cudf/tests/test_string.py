@@ -14,6 +14,7 @@ from cudf import concat
 from cudf.core import DataFrame, Series
 from cudf.core.column.string import StringColumn
 from cudf.core.index import StringIndex, as_index
+from cudf.tests.test_joining import assert_join_results_equal
 from cudf.tests.utils import (
     DATETIME_TYPES,
     NUMERIC_TYPES,
@@ -861,16 +862,12 @@ def test_string_split(data, pat, n, expand):
 
 
 @pytest.mark.parametrize(
-    "str_data,str_data_raise",
-    [
-        ([], 0),
-        (["a", "b", "c", "d", "e"], 0),
-        ([None, None, None, None, None], 1),
-    ],
+    "str_data",
+    [[], ["a", "b", "c", "d", "e"], [None, None, None, None, None]],
 )
 @pytest.mark.parametrize("num_keys", [1, 2, 3])
 @pytest.mark.parametrize("how", ["left", "right", "inner", "outer"])
-def test_string_join_key(str_data, str_data_raise, num_keys, how):
+def test_string_join_key(str_data, num_keys, how):
     other_data = [1, 2, 3, 4, 5][: len(str_data)]
 
     pdf = pd.DataFrame()
@@ -884,19 +881,17 @@ def test_string_join_key(str_data, str_data_raise, num_keys, how):
     pdf2 = pdf.copy()
     gdf2 = gdf.copy()
 
-    expectation = raise_builder(
-        [0 if how == "right" else str_data_raise], (AssertionError)
-    )
+    expect = pdf.merge(pdf2, on=list(range(num_keys)), how=how)
+    got = gdf.merge(gdf2, on=list(range(num_keys)), how=how)
 
-    with expectation:
-        expect = pdf.merge(pdf2, on=list(range(num_keys)), how=how)
-        got = gdf.merge(gdf2, on=list(range(num_keys)), how=how)
+    if len(expect) == 0 and len(got) == 0:
+        expect = expect.reset_index(drop=True)
+        got = got[expect.columns]  # reorder columns
 
-        if len(expect) == 0 and len(got) == 0:
-            expect = expect.reset_index(drop=True)
-            got = got[expect.columns]
+    if how == "right":
+        got = got[expect.columns]  # reorder columns
 
-        assert_eq(expect, got)
+    assert_join_results_equal(expect, got, how=how)
 
 
 @pytest.mark.parametrize(
@@ -940,7 +935,7 @@ def test_string_join_key_nulls(str_data_nulls):
 
     expect["vals_y"] = expect["vals_y"].fillna(-1).astype("int64")
 
-    assert_eq(expect, got)
+    assert_join_results_equal(expect, got, how="left")
 
 
 @pytest.mark.parametrize(
@@ -969,7 +964,10 @@ def test_string_join_non_key(str_data, num_cols, how):
         expect = expect.reset_index(drop=True)
         got = got[expect.columns]
 
-    assert_eq(expect, got)
+    if how == "right":
+        got = got[expect.columns]  # reorder columns
+
+    assert_join_results_equal(expect, got, how=how)
 
 
 @pytest.mark.parametrize(
@@ -1010,7 +1008,7 @@ def test_string_join_non_key_nulls(str_data_nulls):
         expect = expect.reset_index(drop=True)
         got = got[expect.columns]
 
-    assert_eq(expect, got)
+    assert_join_results_equal(expect, got, how="left")
 
 
 def test_string_join_values_nulls():
@@ -1050,7 +1048,7 @@ def test_string_join_values_nulls():
     expect = expect.sort_values(by=["a", "b", "c"]).reset_index(drop=True)
     got = got.sort_values(by=["a", "b", "c"]).reset_index(drop=True)
 
-    assert_eq(expect, got)
+    assert_join_results_equal(expect, got, how="left")
 
 
 @pytest.mark.parametrize(
