@@ -18,6 +18,7 @@
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/gather.cuh>
 #include <cudf/detail/gather.hpp>
+#include <cudf/detail/iterator.cuh>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/table/table.hpp>
 #include <cudf/table/table_view.hpp>
@@ -56,11 +57,9 @@ std::unique_ptr<table> sample(table_view const& input,
       return dist(rng);
     };
 
-    auto begin =
-      thrust::make_transform_iterator(thrust::counting_iterator<size_type>(0), RandomGen);
-    auto end = thrust::make_transform_iterator(thrust::counting_iterator<size_type>(n), RandomGen);
+    auto begin = cudf::detail::make_counting_transform_iterator(0, RandomGen);
 
-    return detail::gather(input, begin, end, out_of_bounds_policy::DONT_CHECK, stream, mr);
+    return detail::gather(input, begin, begin + n, out_of_bounds_policy::DONT_CHECK, stream, mr);
   } else {
     auto gather_map =
       make_numeric_column(data_type{type_id::INT32}, num_rows, mask_state::UNALLOCATED, stream);

@@ -154,6 +154,9 @@ struct quantile_aggregation final : derived_aggregation<quantile_aggregation> {
   }
 };
 
+/**
+ * @brief Derived aggregation class for specifying LEAD/LAG window aggregations
+ */
 struct lead_lag_aggregation final : derived_aggregation<lead_lag_aggregation> {
   lead_lag_aggregation(Kind kind, size_type offset)
     : derived_aggregation{offset < 0 ? (kind == LAG ? LEAD : LAG) : kind},
@@ -314,6 +317,27 @@ struct udf_aggregation final : derived_aggregation<udf_aggregation> {
            std::hash<std::string>{}(_function_name) ^
            std::hash<int>{}(static_cast<int32_t>(_output_type.id()));
   }
+};
+
+/**
+ * @brief Derived aggregation class for specifying COLLECT aggregation
+ */
+struct collect_list_aggregation final : derived_aggregation<nunique_aggregation> {
+  explicit collect_list_aggregation(null_policy null_handling = null_policy::INCLUDE)
+    : derived_aggregation{COLLECT}, _null_handling{null_handling}
+  {
+  }
+  null_policy _null_handling;  ///< include or exclude nulls
+
+ protected:
+  friend class derived_aggregation<nunique_aggregation>;
+
+  bool operator==(nunique_aggregation const& other) const
+  {
+    return _null_handling == other._null_handling;
+  }
+
+  size_t hash_impl() const { return std::hash<int>{}(static_cast<int>(_null_handling)); }
 };
 
 /**
