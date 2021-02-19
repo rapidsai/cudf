@@ -876,8 +876,7 @@ std::vector<std::vector<uint8_t>> writer::impl::gather_statistic_blobs(
 void writer::impl::write_index_stream(int32_t stripe_id,
                                       int32_t stream_id,
                                       host_span<orc_column_view const> columns,
-                                      size_t group,
-                                      size_t groups_in_stripe,
+                                      stripe_rowgroups const &rowgroups_range,
                                       host_2dspan<gpu::encoder_chunk_streams const> enc_streams,
                                       host_2dspan<gpu::StripeStream const> strm_desc,
                                       host_span<gpu_inflate_status_s const> comp_out,
@@ -938,17 +937,17 @@ void writer::impl::write_index_stream(int32_t stripe_id,
   buffer_.resize((compression_kind_ != NONE) ? 3 : 0);
 
   // Add row index entries
-  for (size_t g = group; g < group + groups_in_stripe; g++) {
+  std::for_each(rowgroups_range.cbegin(), rowgroups_range.cend(), [&](auto rowgroup) {
     pbw->put_row_index_entry(
       present.comp_pos, present.pos, data.comp_pos, data.pos, data2.comp_pos, data2.pos, kind);
 
     if (stream_id != 0) {
-      const auto &strm = enc_streams[column_id][g];
+      const auto &strm = enc_streams[column_id][rowgroup];
       scan_record(strm, gpu::CI_PRESENT, present);
       scan_record(strm, gpu::CI_DATA, data);
       scan_record(strm, gpu::CI_DATA2, data2);
     }
-  }
+  });
 
   (*streams)[stream_id].length = buffer_.size();
   if (compression_kind_ != NONE) {
@@ -1171,35 +1170,33 @@ void writer::impl::write(table_view const &table)
   ProtobufWriter pbw_(&buffer_);
 
   // Write stripes
-  size_t group = 0;
-  for (size_t stripe_id = 0; stripe_id < stripes.size(); stripe_id++) {
-    auto groups_in_stripe     = div_by_rowgroups(stripes[stripe_id].numberOfRows);
-    stripes[stripe_id].offset = out_sink_->bytes_written();
+  for (size_t stripe_id = 0; stripe_id < stripes.size(); ++stripe_id) {
+    auto const &rowgroup_range = stripe_bounds[stripe_id];
+    auto &stripe               = stripes[stripe_id];
+
+    stripe.offset = out_sink_->bytes_written();
 
     // Column (skippable) index streams appear at the start of the stripe
-    stripes[stripe_id].indexLength = 0;
     for (size_type stream_id = 0; stream_id <= num_columns; ++stream_id) {
       write_index_stream(stripe_id,
                          stream_id,
                          orc_columns,
-                         group,
-                         groups_in_stripe,
+                         rowgroup_range,
                          enc_data.streams,
                          strm_descs,
                          comp_out,
-                         &stripes[stripe_id],
+                         &stripe,
                          &streams,
                          &pbw_);
     }
 
     // Column data consisting one or more separate streams
-    stripes[stripe_id].dataLength = 0;
     for (auto const &strm_desc : strm_descs[stripe_id]) {
       write_data_stream(strm_desc,
-                        enc_data.streams[strm_desc.column_id][group],
+                        enc_data.streams[strm_desc.column_id][rowgroup_range.first],
                         static_cast<uint8_t *>(compressed_data.data()),
                         stream_output.get(),
-                        &stripes[stripe_id],
+                        &stripe,
                         &streams);
     }
 
@@ -1218,16 +1215,14 @@ void writer::impl::write(table_view const &table)
     }
     buffer_.resize((compression_kind_ != NONE) ? 3 : 0);
     pbw_.write(sf);
-    stripes[stripe_id].footerLength = buffer_.size();
+    stripe.footerLength = buffer_.size();
     if (compression_kind_ != NONE) {
-      uint32_t uncomp_sf_len = (stripes[stripe_id].footerLength - 3) * 2 + 1;
+      uint32_t uncomp_sf_len = (stripe.footerLength - 3) * 2 + 1;
       buffer_[0]             = static_cast<uint8_t>(uncomp_sf_len >> 0);
       buffer_[1]             = static_cast<uint8_t>(uncomp_sf_len >> 8);
       buffer_[2]             = static_cast<uint8_t>(uncomp_sf_len >> 16);
     }
     out_sink_->host_write(buffer_.data(), buffer_.size());
-
-    group += groups_in_stripe;
   }
 
   if (column_stats.size() != 0) {
@@ -1241,7 +1236,7 @@ void writer::impl::write(table_view const &table)
       pbw_.put_uint(num_rows);
       ff.statistics[0] = std::move(buffer_);
       for (int col_idx = 0; col_idx < num_columns; col_idx++) {
-        size_t idx = stripe_bounds.size() * num_columns + col_idx;
+        size_t idx = stripes.size() * num_columns + col_idx;
         if (idx < column_stats.size()) {
           ff.statistics[1 + col_idx] = std::move(column_stats[idx]);
         }
@@ -1249,15 +1244,15 @@ void writer::impl::write(table_view const &table)
     }
     // Stripe-level statistics
     size_t first_stripe = md.stripeStats.size();
-    md.stripeStats.resize(first_stripe + stripe_bounds.size());
-    for (size_t stripe_id = 0; stripe_id < stripe_bounds.size(); stripe_id++) {
+    md.stripeStats.resize(first_stripe + stripes.size());
+    for (size_t stripe_id = 0; stripe_id < stripes.size(); stripe_id++) {
       md.stripeStats[first_stripe + stripe_id].colStats.resize(1 + num_columns);
       buffer_.resize(0);
       pbw_.putb(1 * 8 + PB_TYPE_VARINT);
       pbw_.put_uint(stripes[stripe_id].numberOfRows);
       md.stripeStats[first_stripe + stripe_id].colStats[0] = std::move(buffer_);
       for (int col_idx = 0; col_idx < num_columns; col_idx++) {
-        size_t idx = stripe_bounds.size() * col_idx + stripe_id;
+        size_t idx = stripes.size() * col_idx + stripe_id;
         if (idx < column_stats.size()) {
           md.stripeStats[first_stripe + stripe_id].colStats[1 + col_idx] =
             std::move(column_stats[idx]);

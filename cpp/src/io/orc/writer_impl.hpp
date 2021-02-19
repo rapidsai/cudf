@@ -265,8 +265,7 @@ class writer::impl {
    * @param stripe_id Stripe's identifier
    * @param stream_id Stream identifier (column id + 1)
    * @param columns List of columns
-   * @param group Starting row group in the stripe
-   * @param groups_in_stripe Number of row groups in the stripe
+   * @param rowgroups_range Indexes of rowgroups in the stripe
    * @param enc_streams List of encoder chunk streams [column][rowgroup]
    * @param strm_desc List of stream descriptors
    * @param comp_out Output status for compressed streams
@@ -276,8 +275,7 @@ class writer::impl {
   void write_index_stream(int32_t stripe_id,
                           int32_t stream_id,
                           host_span<orc_column_view const> columns,
-                          size_t group,
-                          size_t groups_in_stripe,
+                          stripe_rowgroups const& rowgroups_range,
                           host_2dspan<gpu::encoder_chunk_streams const> enc_streams,
                           host_2dspan<gpu::StripeStream const> strm_desc,
                           host_span<gpu_inflate_status_s const> comp_out,
