@@ -26,7 +26,6 @@ from pandas.io.formats.printing import pprint_thing
 import cudf
 from cudf import _lib as libcudf
 from cudf._lib.null_mask import MaskState, create_null_mask
-from cudf._typing import ColumnLike
 from cudf.core import column, reshape
 from cudf.core.abc import Serializable
 from cudf.core.column import as_column, column_empty
@@ -7384,19 +7383,6 @@ class DataFrame(Frame, Serializable):
             if self_name != other_name:
                 return False
         return super().equals(other)
-
-    def _drop_rows_by_labels(self, labels: ColumnLike) -> "cudf.DataFrame":
-        """Delete rows specified by `label` parameter. In `DataFrame`, this can
-        be achieved efficiently by a left-anti join operation
-
-        labels: a list of labels specifying the rows to drop
-        """
-
-        # TODO: use internal API with "leftanti" and specify left and right
-        # join keys to bypass logic check
-        dropped = self.join(cudf.DataFrame(index=labels), how="leftanti")
-
-        return dropped
 
     _accessors = set()  # type: Set[Any]
 

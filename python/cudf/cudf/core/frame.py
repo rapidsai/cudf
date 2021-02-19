@@ -3925,6 +3925,11 @@ def _drop_rows_by_labels(
         if errors == "raise" and not labels.isin(obj.index).all():
             raise KeyError("One or more values not found in axis")
 
-        res = obj._drop_rows_by_labels(labels)
+        key_df = cudf.DataFrame(index=labels)
+        if isinstance(obj, cudf.Series):
+            res = obj.to_frame(name="tmp").join(key_df, how="leftanti")["tmp"]
+            res.name = obj.name
+        else:
+            res = obj.join(key_df, how="leftanti")
 
     return res
