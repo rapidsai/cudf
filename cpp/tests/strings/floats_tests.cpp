@@ -45,7 +45,8 @@ TEST_F(StringsConvertTest, ToFloats32)
                                      "456e",
                                      "-1.78e+5",
                                      "-122.33644782123456789",
-                                     "12e+309"};
+                                     "12e+309",
+                                     "3.4028236E38"};
   cudf::test::strings_column_wrapper strings(
     h_strings.begin(),
     h_strings.end(),
