@@ -265,7 +265,7 @@ def test_dataframe_join_mismatch_cats(how):
     expect.data_col_right = expect.data_col_right.astype(np.int64)
     expect.data_col_left = expect.data_col_left.astype(np.int64)
 
-    assert_eq(expect, got)
+    assert_eq(expect, got, check_categorical=False)
 
 
 @pytest.mark.parametrize("on", ["key1", ["key1", "key2"], None])
@@ -1224,7 +1224,7 @@ def test_categorical_typecast_inner():
     expect_dtype = CategoricalDtype(categories=[1, 2, 3], ordered=False)
     expect_data = cudf.Series([1, 2, 3], dtype=expect_dtype, name="key")
 
-    assert_eq(expect_data, result["key"])
+    assert_eq(expect_data, result["key"], check_categorical=False)
 
     # Equal categories, unequal ordering -> error
     left = make_categorical_dataframe([1, 2, 3], ordered=False)
@@ -1242,7 +1242,7 @@ def test_categorical_typecast_inner():
 
     expect_dtype = cudf.CategoricalDtype(categories=[2, 3], ordered=False)
     expect_data = cudf.Series([2, 3], dtype=expect_dtype, name="key")
-    assert_eq(expect_data, result["key"])
+    assert_eq(expect_data, result["key"], check_categorical=False)
 
     # One is ordered -> error
     left = make_categorical_dataframe([1, 2, 3], ordered=False)

@@ -183,6 +183,8 @@ def _libcudf_to_output_castrules(lcol, rcol, how):
     if pd.api.types.is_dtype_equal(ltype, rtype):
         return ltype
 
+    merge_return_type = _input_to_libcudf_castrules_any(lcol, rcol, how)
+
     l_is_cat = isinstance(ltype, CategoricalDtype)
     r_is_cat = isinstance(rtype, CategoricalDtype)
 

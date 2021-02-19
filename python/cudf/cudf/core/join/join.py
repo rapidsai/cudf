@@ -277,7 +277,7 @@ class MergeBase(object):
 
     def construct_result(self, lhs, rhs, left_rows, right_rows):
         lhs, rhs = self.match_key_dtypes(
-            lhs, rhs, _libcudf_to_output_castrules
+            self.lhs, self.rhs, _libcudf_to_output_castrules
         )
 
         # first construct the index.
@@ -331,9 +331,12 @@ class MergeBase(object):
         # the key columns on the other side will be used to sort.
         if self.sort:
             if self.on:
-                return result.sort_values(
-                    _coerce_to_list(self.on), ignore_index=True
-                )
+                if isinstance(result, cudf.Index):
+                    return result.sort_values()
+                else:
+                    return result.sort_values(
+                        _coerce_to_list(self.on), ignore_index=True
+                    )
             by = []
             if self.left_index and self.right_index:
                 by.extend(result.index._data.columns)
@@ -457,8 +460,9 @@ class MergeBase(object):
         for left_key, right_key in zip(*self._keys):
             lcol, rcol = left_key.value(lhs), right_key.value(rhs)
             dtype = match_func(lcol, rcol, how=self.how)
-            left_key.set_value(out_lhs, lcol.astype(dtype))
-            right_key.set_value(out_rhs, rcol.astype(dtype))
+            if dtype:
+                left_key.set_value(out_lhs, lcol.astype(dtype))
+                right_key.set_value(out_rhs, rcol.astype(dtype))
         return out_lhs, out_rhs
 
 
