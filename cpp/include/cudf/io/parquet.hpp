@@ -385,7 +385,7 @@ struct column_in_metadata {
   bool use_int96_timestamp = false;             // Input, Primitive only.
   bool output_as_binary    = false;             // Primitive only.
   thrust::optional<uint8_t> decimal_precision;  // Primitive only.
-  std::vector<column_in_metadata> children_metadata;
+  std::vector<column_in_metadata> children;
 };
 
 struct table_input_metadata {
@@ -512,6 +512,9 @@ class parquet_writer_options {
    * @param metadata Associated metadata.
    */
   void set_metadata(table_metadata const* metadata) { _metadata = metadata; }
+
+  // TODO: Decide on a name. input_metadata or input_schema
+  void set_input_metadata(table_input_metadata const* metadata) { _table_meta = metadata; }
 
   /**
    * @brief Sets the level of statistics.
@@ -838,6 +841,8 @@ class chunked_parquet_writer_options_builder {
     options._nullable_metadata = metadata;
     return *this;
   }
+
+  // TODO: table input metadata/schema setters and getters and tests for chunked
 
   /**
    * @brief Sets Sets the level of statistics in chunked_parquet_writer_options.

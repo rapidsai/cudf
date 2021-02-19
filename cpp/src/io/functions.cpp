@@ -428,8 +428,8 @@ table_input_metadata::table_input_metadata(table_view const& table)
                    col.child_end(),
                    std::back_inserter(children_column_metadata),
                    get_children);
-    auto col_meta              = column_in_metadata{};
-    col_meta.children_metadata = std::move(children_column_metadata);
+    auto col_meta     = column_in_metadata{};
+    col_meta.children = std::move(children_column_metadata);
     return col_meta;
   };
 

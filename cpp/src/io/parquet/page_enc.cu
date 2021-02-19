@@ -157,12 +157,18 @@ __global__ void __launch_bounds__(block_size) gpuInitPageFragments(PageFragment 
     } else {
       auto col                     = *(s->col.parent_column);
       auto current_start_value_idx = start_row;
-      while (col.type().id() == type_id::LIST) {
-        auto offset_col = col.child(lists_column_view::offsets_column_index);
-        current_start_value_idx =
-          offset_col.element<size_type>(current_start_value_idx + col.offset());
-        end_value_idx = offset_col.element<size_type>(end_value_idx + col.offset());
-        col           = col.child(lists_column_view::child_column_index);
+      if (s->col.level_bits >> 4 != 0) {
+        while (col.type().id() == type_id::LIST or col.type().id() == type_id::STRUCT) {
+          if (col.type().id() == type_id::STRUCT) {
+            col = col.child(0);
+          } else {
+            auto offset_col = col.child(lists_column_view::offsets_column_index);
+            current_start_value_idx =
+              offset_col.element<size_type>(current_start_value_idx + col.offset());
+            end_value_idx = offset_col.element<size_type>(end_value_idx + col.offset());
+            col           = col.child(lists_column_view::child_column_index);
+          }
+        }
       }
       s->start_value_idx = current_start_value_idx;
     }
@@ -963,8 +969,10 @@ __global__ void __launch_bounds__(128, 8) gpuEncodePages(EncPage *pages,
   __syncthreads();
 
   // Encode Repetition and Definition levels
-  if (s->page.page_type != PageType::DICTIONARY_PAGE && s->col.level_bits != 0 &&
-      s->col.level_bits >> 4 == 0) {
+  if (s->page.page_type != PageType::DICTIONARY_PAGE &&
+      (s->col.level_bits & 0xf) != 0 &&  // This means max definition level is not 0
+      (s->col.level_bits >> 4) == 0      // This means there are no repetition levels
+  ) {
     // Calculate definition levels from validity
     uint32_t def_lvl_bits = s->col.level_bits & 0xf;
     if (def_lvl_bits != 0) {
@@ -995,8 +1003,9 @@ __global__ void __launch_bounds__(128, 8) gpuEncodePages(EncPage *pages,
                 if (col.is_valid(row)) {
                   ++def;
                 } else {
+                  // We have found the shallowest level at which this row is null
                   break;
-                }
+                }  // If col not nullable then it does not contribute to def levels
               }
               is_col_nested = (col.type().id() == type_id::STRUCT);
               if (is_col_nested) { col = col.child(0); }
@@ -1025,7 +1034,9 @@ __global__ void __launch_bounds__(128, 8) gpuEncodePages(EncPage *pages,
         if (t == 0) { s->cur = rle_out; }
       }
     }
-  } else if (s->page.page_type != PageType::DICTIONARY_PAGE && s->col.parent_column != nullptr) {
+  } else if (s->page.page_type != PageType::DICTIONARY_PAGE &&
+             s->col.level_bits >> 4 != 0  // This means there ARE repetition levels
+  ) {
     // TODO: Consolidate this with the one above. The difference is only i how the def level is
     // obtained.
     auto encode_levels = [&](uint8_t const *lvl_val_data, uint32_t nbits) {
@@ -1094,10 +1105,16 @@ __global__ void __launch_bounds__(128, 8) gpuEncodePages(EncPage *pages,
     if (s->col.parent_column != nullptr) {
       auto col                    = *(s->col.parent_column);
       auto current_page_start_val = s->page_start_val;
-      while (col.type().id() == type_id::LIST) {
-        current_page_start_val = col.child(lists_column_view::offsets_column_index)
-                                   .element<size_type>(current_page_start_val + col.offset());
-        col = col.child(lists_column_view::child_column_index);
+      if (s->col.level_bits >> 4 != 0) {
+        while (col.type().id() == type_id::LIST or col.type().id() == type_id::STRUCT) {
+          if (col.type().id() == type_id::STRUCT) {
+            col = col.child(0);
+          } else {
+            current_page_start_val = col.child(lists_column_view::offsets_column_index)
+                                       .element<size_type>(current_page_start_val + col.offset());
+            col = col.child(lists_column_view::child_column_index);
+          }
+        }
       }
       s->page_start_val = current_page_start_val;
     }
@@ -1629,6 +1646,16 @@ __global__ void __launch_bounds__(1024) gpuGatherPages(EncColumnChunk *chunks, c
   }
 }
 
+template <typename T>
+void print(rmm::device_uvector<T> const &d_vec, std::string label = "")
+{
+  std::vector<T> h_vec(d_vec.size());
+  cudaMemcpy(h_vec.data(), d_vec.data(), d_vec.size() * sizeof(T), cudaMemcpyDeviceToHost);
+  printf("%s (%lu)\t", label.c_str(), h_vec.size());
+  for (auto &&i : h_vec) std::cout << (int)i << " ";
+  printf("\n");
+}
+
 /**
  * @brief Get the dremel offsets and repetition and definition levels for a LIST column
  *
@@ -1700,19 +1727,27 @@ dremel_data get_dremel_data(column_view h_col,
                             std::vector<bool> const &level_nullability,
                             rmm::cuda_stream_view stream)
 {
-  CUDF_EXPECTS(h_col.type().id() == type_id::LIST,
-               "Can only get rep/def levels for LIST type column");
+  // No longer true. Top level parent could be struct
+  // CUDF_EXPECTS(h_col.type().id() == type_id::LIST,
+  //              "Can only get rep/def levels for LIST type column");
+
+  auto get_list_level = [](column_view col) {
+    while (col.type().id() == type_id::STRUCT) { col = col.child(0); }
+    return col;
+  };
 
   auto get_empties = [&](column_view col, size_type start, size_type end) {
-    auto lcv = lists_column_view(col);
+    auto lcv = lists_column_view(get_list_level(col));
     rmm::device_uvector<size_type> empties_idx(lcv.size(), stream);
     rmm::device_uvector<size_type> empties(lcv.size(), stream);
     auto d_off = lcv.offsets().data<size_type>();
 
     auto empties_idx_end =
       thrust::copy_if(rmm::exec_policy(stream),
-                      thrust::make_counting_iterator(start),
-                      thrust::make_counting_iterator(end),
+                      thrust::make_counting_iterator(0),
+                      thrust::make_counting_iterator(lcv.size()),
+                      // thrust::make_counting_iterator(start),
+                      // thrust::make_counting_iterator(end),
                       empties_idx.begin(),
                       [d_off] __device__(auto i) { return d_off[i] == d_off[i + 1]; });
     auto empties_end = thrust::gather(rmm::exec_policy(stream),
@@ -1725,77 +1760,122 @@ dremel_data get_dremel_data(column_view h_col,
     return std::make_tuple(std::move(empties), std::move(empties_idx), empties_size);
   };
 
-  // Reverse the nesting in order to merge the deepest level with the leaf first and merge bottom
-  // up
-  auto curr_col        = h_col;
-  size_t max_vals_size = 0;
+  // // Reverse the nesting in order to merge the deepest level with the leaf first and merge bottom
+  // // up
+  // auto curr_col        = h_col;
+  size_t max_vals_size = 20;
+  // size_t max_vals_size = 0;
+  // std::vector<column_view> nesting_levels;
+  // std::vector<uint8_t> def_at_level;
+  // size_type level       = 0;
+  // auto add_def_at_level = [&](size_type level) {
+  //   auto is_level_nullable =
+  //     curr_col.nullable() or (not level_nullability.empty() and level_nullability[level]);
+  //   // For struct levels, this should be ? 1 : 0
+  //   def_at_level.push_back(is_level_nullable ? 2 : 1);
+  // };
+  // while (curr_col.type().id() == type_id::LIST) {
+  //   nesting_levels.push_back(curr_col);
+  //   add_def_at_level(level);
+  //   auto lcv = lists_column_view(curr_col);
+  //   max_vals_size += lcv.offsets().size();
+  //   curr_col = lcv.child();
+  //   level++;
+  // }
+  // // One more entry for leaf col
+  // add_def_at_level(level);
+  // max_vals_size += curr_col.size();
+
+  auto curr_col = h_col;
   std::vector<column_view> nesting_levels;
   std::vector<uint8_t> def_at_level;
-  size_type level       = 0;
-  auto add_def_at_level = [&](size_type level) {
-    auto is_level_nullable =
-      curr_col.nullable() or (not level_nullability.empty() and level_nullability[level]);
-    def_at_level.push_back(is_level_nullable ? 2 : 1);
+  auto add_def_at_level = [&](column_view col) {
+    // Add up all def level contributions in this column all the way till the fist list column
+    // appears in the heirarchy or until we get to leaf
+    uint32_t def = 0;
+    while (col.type().id() == type_id::STRUCT) {
+      def += (col.nullable()) ? 1 : 0;
+      col = col.child(0);
+    }
+    // At the end of all those structs is either a list column or the leaf. Leaf column contributes
+    // at least one def level. It doesn't matter what the leaf contributes because it'll be at the
+    // end of the exclusive scan.
+    def += (col.nullable()) ? 2 : 1;
+    def_at_level.push_back(def);
   };
-  while (curr_col.type().id() == type_id::LIST) {
+  while (cudf::is_nested(curr_col.type())) {
     nesting_levels.push_back(curr_col);
-    add_def_at_level(level);
-    auto lcv = lists_column_view(curr_col);
-    max_vals_size += lcv.offsets().size();
-    curr_col = lcv.child();
-    level++;
+    add_def_at_level(curr_col);
+    while (curr_col.type().id() == type_id::STRUCT) {
+      // Go down the heirarchy until we get to the LIST or the leaf level
+      curr_col = curr_col.child(0);
+    }
+    if (curr_col.type().id() == type_id::LIST) {
+      curr_col = curr_col.child(lists_column_view::child_column_index);
+      if (not is_nested(curr_col.type())) {
+        // Special case: when the leaf data column is the immediate child of the list col then we
+        // want it to be included right away. Otherwise the struct containing it will beincluded in
+        // the next iteration of this loop.
+        nesting_levels.push_back(curr_col);
+        add_def_at_level(curr_col);
+        break;
+      }
+    }
   }
-  // One more entry for leaf col
-  add_def_at_level(level);
-  max_vals_size += curr_col.size();
+
+  std::unique_ptr<rmm::device_buffer> device_view_owners;
+  column_device_view *d_nesting_levels;
+  std::tie(device_view_owners, d_nesting_levels) =
+    contiguous_copy_column_device_views<column_device_view>(nesting_levels, stream);
 
   // Add one more value at the end so that we can have the max def level
   def_at_level.push_back(0);
   thrust::exclusive_scan(
     thrust::host, def_at_level.begin(), def_at_level.end(), def_at_level.begin());
 
-  // Sliced list column views only have offsets applied to top level. Get offsets for each level.
-  rmm::device_uvector<size_type> d_column_offsets(nesting_levels.size() + 1, stream);
-  rmm::device_uvector<size_type> d_column_ends(nesting_levels.size() + 1, stream);
+  // // Sliced list column views only have offsets applied to top level. Get offsets for each level.
+  // rmm::device_uvector<size_type> d_column_offsets(nesting_levels.size() + 1, stream);
+  // rmm::device_uvector<size_type> d_column_ends(nesting_levels.size() + 1, stream);
 
-  auto d_col = column_device_view::create(h_col, stream);
-  cudf::detail::device_single_thread(
-    [offset_at_level  = d_column_offsets.data(),
-     end_idx_at_level = d_column_ends.data(),
-     col              = *d_col] __device__() {
-      auto curr_col           = col;
-      size_type off           = curr_col.offset();
-      size_type end           = off + curr_col.size();
-      size_type level         = 0;
-      offset_at_level[level]  = off;
-      end_idx_at_level[level] = end;
-      ++level;
-      // Apply offset recursively until we get to leaf data
-      while (curr_col.type().id() == type_id::LIST) {
-        off = curr_col.child(lists_column_view::offsets_column_index).element<size_type>(off);
-        end = curr_col.child(lists_column_view::offsets_column_index).element<size_type>(end);
-        offset_at_level[level]  = off;
-        end_idx_at_level[level] = end;
-        ++level;
-        curr_col = curr_col.child(lists_column_view::child_column_index);
-      }
-    },
-    stream);
+  // auto d_col = column_device_view::create(h_col, stream);
+  // cudf::detail::device_single_thread(
+  //   [offset_at_level  = d_column_offsets.data(),
+  //    end_idx_at_level = d_column_ends.data(),
+  //    col              = *d_col] __device__() {
+  //     auto curr_col           = col;
+  //     size_type off           = curr_col.offset();
+  //     size_type end           = off + curr_col.size();
+  //     size_type level         = 0;
+  //     offset_at_level[level]  = off;
+  //     end_idx_at_level[level] = end;
+  //     ++level;
+  //     // Apply offset recursively until we get to leaf data
+  //     // Skip doing the following for any structs we encounter in between.
+  //     while (curr_col.type().id() == type_id::LIST) {
+  //       off = curr_col.child(lists_column_view::offsets_column_index).element<size_type>(off);
+  //       end = curr_col.child(lists_column_view::offsets_column_index).element<size_type>(end);
+  //       offset_at_level[level]  = off;
+  //       end_idx_at_level[level] = end;
+  //       ++level;
+  //       curr_col = curr_col.child(lists_column_view::child_column_index);
+  //     }
+  //   },
+  //   stream);
 
   thrust::host_vector<size_type> column_offsets(nesting_levels.size() + 1);
-  CUDA_TRY(cudaMemcpyAsync(column_offsets.data(),
-                           d_column_offsets.data(),
-                           d_column_offsets.size() * sizeof(size_type),
-                           cudaMemcpyDeviceToHost,
-                           stream.value()));
+  // CUDA_TRY(cudaMemcpyAsync(column_offsets.data(),
+  //                          d_column_offsets.data(),
+  //                          d_column_offsets.size() * sizeof(size_type),
+  //                          cudaMemcpyDeviceToHost,
+  //                          stream.value()));
   thrust::host_vector<size_type> column_ends(nesting_levels.size() + 1);
-  CUDA_TRY(cudaMemcpyAsync(column_ends.data(),
-                           d_column_ends.data(),
-                           d_column_ends.size() * sizeof(size_type),
-                           cudaMemcpyDeviceToHost,
-                           stream.value()));
+  // CUDA_TRY(cudaMemcpyAsync(column_ends.data(),
+  //                          d_column_ends.data(),
+  //                          d_column_ends.size() * sizeof(size_type),
+  //                          cudaMemcpyDeviceToHost,
+  //                          stream.value()));
 
-  stream.synchronize();
+  // stream.synchronize();
 
   rmm::device_uvector<uint8_t> rep_level(max_vals_size, stream);
   rmm::device_uvector<uint8_t> def_level(max_vals_size, stream);
@@ -1807,10 +1887,11 @@ dremel_data get_dremel_data(column_view h_col,
   {
     // At this point, curr_col contains the leaf column. Max nesting level is
     // nesting_levels.size().
-    size_t level              = nesting_levels.size() - 1;
+    size_t level              = nesting_levels.size() - 2;
     curr_col                  = nesting_levels[level];
-    auto lcv                  = lists_column_view(curr_col);
-    auto offset_size_at_level = column_ends[level] - column_offsets[level] + 1;
+    auto lcv                  = lists_column_view(get_list_level(curr_col));
+    auto offset_size_at_level = lcv.offsets().size();
+    // auto offset_size_at_level = column_ends[level] - column_offsets[level] + 1;
 
     // Get empties at this level
     rmm::device_uvector<size_type> empties(0, stream);
@@ -1819,28 +1900,74 @@ dremel_data get_dremel_data(column_view h_col,
     std::tie(empties, empties_idx, empties_size) =
       get_empties(nesting_levels[level], column_offsets[level], column_ends[level]);
 
+    print(empties, "empties");
+    print(empties_idx, "empties_idx");
+
     // Merge empty at deepest parent level with the rep, def level vals at leaf level
 
     auto input_parent_rep_it = thrust::make_constant_iterator(level);
     auto input_parent_def_it = thrust::make_transform_iterator(
       thrust::make_counting_iterator(0),
       [idx            = empties_idx.data(),
-       mask           = lcv.null_mask(),
-       level_nullable = level_nullability.empty() ? false : level_nullability[level],
+       parent_col     = d_nesting_levels + level,
        curr_def_level = def_at_level[level]] __device__(auto i) {
-        return curr_def_level +
-               ((mask && bit_is_set(mask, idx[i]) or (!mask && level_nullable)) ? 1 : 0);
+        uint32_t def       = curr_def_level;
+        bool is_col_nested = false;
+        auto col           = *parent_col;
+        do {
+          if (col.nullable()) {
+            // TODO: Looks like instead of transforming on count iterator, we could've transformed
+            // empties_idx. Then this check would become is_valid(i) instead of is_valid(idx[i]).
+            // TODO: Once the above is done, we can maybe consolidate this functor with similar
+            // functionality thrice in this function and one more in gpuEncodePages.
+            if (col.is_valid(idx[i])) {
+              ++def;
+            } else {  // We have found the shallowest level at which this row is null
+              break;
+            }  // If col not nullable then it does not contribute to def levels
+          }
+          is_col_nested = (col.type().id() == type_id::STRUCT);
+          if (is_col_nested) { col = col.child(0); }
+        } while (is_col_nested);
+        return def;
       });
+    // [idx            = empties_idx.data(),
+    //  mask           = lcv.null_mask(),
+    //  level_nullable = level_nullability.empty() ? false : level_nullability[level],
+    //  curr_def_level = def_at_level[level]] __device__(auto i) {
+    //   return curr_def_level +
+    //          ((mask && bit_is_set(mask, idx[i]) or (!mask && level_nullable)) ? 1 : 0);
+    // });
 
-    auto input_child_rep_it = thrust::make_constant_iterator(nesting_levels.size());
+    // `nesting_levels.size()` == no of list levels + leaf. Max repetition level = no of list levels
+    auto input_child_rep_it = thrust::make_constant_iterator(nesting_levels.size() - 1);
     auto input_child_def_it = thrust::make_transform_iterator(
       thrust::make_counting_iterator(column_offsets[level + 1]),
-      [mask           = lcv.child().null_mask(),
-       level_nullable = level_nullability.empty() ? false : level_nullability[level + 1],
+      [child_col      = d_nesting_levels + level + 1,
        curr_def_level = def_at_level[level + 1]] __device__(auto i) {
-        return curr_def_level +
-               ((mask && bit_is_set(mask, i) or (!mask && level_nullable)) ? 1 : 0);
+        uint32_t def       = curr_def_level;
+        bool is_col_nested = false;
+        auto col           = *child_col;
+        do {
+          if (col.nullable()) {
+            if (col.is_valid(i)) {
+              ++def;
+            } else {
+              // We have found the shallowest level at which this row is null
+              break;
+            }  // If col not nullable then it does not contribute to def levels
+          }
+          is_col_nested = (col.type().id() == type_id::STRUCT);
+          if (is_col_nested) { col = col.child(0); }
+        } while (is_col_nested);
+        return def;
       });
+    // [mask           = lcv.child().null_mask(),
+    //  level_nullable = level_nullability.empty() ? false : level_nullability[level + 1],
+    //  curr_def_level = def_at_level[level + 1]] __device__(auto i) {
+    //   return curr_def_level +
+    //          ((mask && bit_is_set(mask, i) or (!mask && level_nullable)) ? 1 : 0);
+    // });
 
     // Zip the input and output value iterators so that merge operation is done only once
     auto input_parent_zip_it =
@@ -1855,8 +1982,10 @@ dremel_data get_dremel_data(column_view h_col,
     auto ends = thrust::merge_by_key(rmm::exec_policy(stream),
                                      empties.begin(),
                                      empties.begin() + empties_size,
-                                     thrust::make_counting_iterator(column_offsets[level + 1]),
-                                     thrust::make_counting_iterator(column_ends[level + 1]),
+                                     thrust::make_counting_iterator(0),
+                                     thrust::make_counting_iterator(lcv.child().size()),
+                                     //  thrust::make_counting_iterator(column_offsets[level + 1]),
+                                     //  thrust::make_counting_iterator(column_ends[level + 1]),
                                      input_parent_zip_it,
                                      input_child_zip_it,
                                      thrust::make_discard_iterator(),
@@ -1893,10 +2022,15 @@ dremel_data get_dremel_data(column_view h_col,
                     rep_level.begin());
   }
 
-  for (int level = nesting_levels.size() - 2; level >= 0; level--) {
-    curr_col                  = nesting_levels[level];
-    auto lcv                  = lists_column_view(curr_col);
-    auto offset_size_at_level = column_ends[level] - column_offsets[level] + 1;
+  print(rep_level, "rep");
+  print(def_level, "def");
+  print(new_offsets, "drem_off");
+
+  for (int level = nesting_levels.size() - 3; level >= 0; level--) {
+    curr_col = nesting_levels[level];
+    auto lcv = lists_column_view(get_list_level(curr_col));
+    // auto offset_size_at_level = column_ends[level] - column_offsets[level] + 1;
+    auto offset_size_at_level = lcv.offsets().size();
 
     // Get empties at this level
     rmm::device_uvector<size_type> empties(0, stream);
@@ -1922,12 +2056,35 @@ dremel_data get_dremel_data(column_view h_col,
     auto input_parent_def_it = thrust::make_transform_iterator(
       thrust::make_counting_iterator(0),
       [idx            = empties_idx.data(),
-       mask           = lcv.null_mask(),
-       level_nullable = level_nullability.empty() ? false : level_nullability[level],
+       parent_col     = d_nesting_levels + level,
        curr_def_level = def_at_level[level]] __device__(auto i) {
-        return curr_def_level +
-               ((mask && bit_is_set(mask, idx[i]) or (!mask && level_nullable)) ? 1 : 0);
+        uint32_t def       = curr_def_level;
+        bool is_col_nested = false;
+        auto col           = *parent_col;
+        do {
+          if (col.nullable()) {
+            // TODO: Looks like instead of transforming on count iterator, we could've transformed
+            // empties_idx. Then this check would become is_valid(i) instead of is_valid(idx[i]).
+            // TODO: Once the above is done, we can maybe consolidate this functor with similar
+            // functionality thrice in this function and one more in gpuEncodePages.
+            if (col.is_valid(idx[i])) {
+              ++def;
+            } else {  // We have found the shallowest level at which this row is null
+              break;
+            }  // If col not nullable then it does not contribute to def levels
+          }
+          is_col_nested = (col.type().id() == type_id::STRUCT);
+          if (is_col_nested) { col = col.child(0); }
+        } while (is_col_nested);
+        return def;
       });
+    // [idx            = empties_idx.data(),
+    //  mask           = lcv.null_mask(),
+    //  level_nullable = level_nullability.empty() ? false : level_nullability[level],
+    //  curr_def_level = def_at_level[level]] __device__(auto i) {
+    //   return curr_def_level +
+    //          ((mask && bit_is_set(mask, idx[i]) or (!mask && level_nullable)) ? 1 : 0);
+    // });
 
     // Zip the input and output value iterators so that merge operation is done only once
     auto input_parent_zip_it =
@@ -1986,6 +2143,9 @@ dremel_data get_dremel_data(column_view h_col,
   size_t level_vals_size = new_offsets.back_element(stream);
   rep_level.resize(level_vals_size, stream);
   def_level.resize(level_vals_size, stream);
+
+  print(rep_level, "rep");
+  print(def_level, "def");
 
   stream.synchronize();
 

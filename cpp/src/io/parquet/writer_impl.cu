@@ -607,7 +607,6 @@ std::vector<schema_tree_node> construct_schema_tree(LinkedColVector const &linke
         struct_schema.repetition_type =
           col_nullable ? FieldRepetitionType::OPTIONAL : FieldRepetitionType::REQUIRED;
 
-        // TODO: Depends on input schema as well as whether parent is list
         struct_schema.name = (schema[parent_idx].name == "list") ? "element" : col_meta.name;
         struct_schema.num_children = col->num_children();
         struct_schema.parent_idx   = parent_idx;
@@ -617,14 +616,12 @@ std::vector<schema_tree_node> construct_schema_tree(LinkedColVector const &linke
         // for (auto child_it = col->children.begin(); child_it < col->children.end(); child_it++) {
         //   add_schema(*child_it, struct_node_index);
         // }
-        CUDF_EXPECTS(col->num_children() == static_cast<int>(col_meta.children_metadata.size()),
+        CUDF_EXPECTS(col->num_children() == static_cast<int>(col_meta.children.size()),
                      "Mismatch in number of child columns between input table and metadata");
         for (size_t i = 0; i < col->children.size(); ++i) {
-          add_schema(col->children[i], col_meta.children_metadata[i], struct_node_index);
+          add_schema(col->children[i], col_meta.children[i], struct_node_index);
         }
       } else if (col->type().id() == type_id::LIST) {
-        // if list, add two elements for current and recursively call for child.
-        // TODO: Child has to be named "element"
         // List schema is denoted by two levels for each nesting level and one final level for leaf.
         // The top level is the same name as the column name.
         // So e.g. List<List<int>> is denoted in the schema by
@@ -634,7 +631,6 @@ std::vector<schema_tree_node> construct_schema_tree(LinkedColVector const &linke
         list_schema_1.converted_type = ConvertedType::LIST;
         list_schema_1.repetition_type =
           col_nullable ? FieldRepetitionType::OPTIONAL : FieldRepetitionType::REQUIRED;
-        // Depends on input schema as well as whether parent is list
         list_schema_1.name = (schema[parent_idx].name == "list") ? "element" : col_meta.name;
         list_schema_1.num_children = 1;
         list_schema_1.parent_idx   = parent_idx;
@@ -648,7 +644,7 @@ std::vector<schema_tree_node> construct_schema_tree(LinkedColVector const &linke
         schema.push_back(std::move(list_schema_2));
 
         add_schema(col->children[lists_column_view::child_column_index],
-                   col_meta.children_metadata[lists_column_view::child_column_index],
+                   col_meta.children[lists_column_view::child_column_index],
                    schema.size() - 1);
       } else {
         // if leaf, add current
@@ -766,31 +762,35 @@ std::vector<schema_tree_node> construct_schema_tree(LinkedColVector const &linke
           //   col_schema.converted_type = ConvertedType::UTF8;
           //   col_schema.stats_dtype    = statistics_dtype::dtype_string;
           //   break;
-          // case cudf::type_id::DECIMAL32:
-          //   col_schema.type           = Type::INT32;
-          //   col_schema.converted_type = ConvertedType::DECIMAL;
-          //   // TODO: Why is decimal 32 stats int32?
-          //   col_schema.stats_dtype = statistics_dtype::dtype_int32;
-          //   _decimal_scale =
-          //     -_leaf_col.type().scale();  // parquet and cudf disagree about scale signs
-          //   CUDF_EXPECTS(decimal_precision.size() > decimal_precision_idx,
-          //                "Not enough decimal precision values passed for data!");
-          //   CUDF_EXPECTS(decimal_precision[decimal_precision_idx] >= _decimal_scale,
-          //                "Precision must be equal to or greater than scale!");
-          //   _decimal_precision = decimal_precision[decimal_precision_idx++];
-          //   break;
-          // case cudf::type_id::DECIMAL64:
-          //   col_schema.type           = Type::INT64;
-          //   col_schema.converted_type = ConvertedType::DECIMAL;
-          //   col_schema.stats_dtype    = statistics_dtype::dtype_decimal64;
-          //   _decimal_scale =
-          //     -_leaf_col.type().scale();  // parquet and cudf disagree about scale signs
-          //   CUDF_EXPECTS(decimal_precision.size() > decimal_precision_idx,
-          //                "Not enough decimal precision values passed for data!");
-          //   CUDF_EXPECTS(decimal_precision[decimal_precision_idx] >= _decimal_scale,
-          //                "Precision must be equal to or greater than scale!");
-          //   _decimal_precision = decimal_precision[decimal_precision_idx++];
-          //   break;
+          case cudf::type_id::DECIMAL32:
+            col_schema.type           = Type::INT32;
+            col_schema.converted_type = ConvertedType::DECIMAL;
+            // TODO: Why is decimal 32 stats int32?
+            col_schema.stats_dtype = statistics_dtype::dtype_int32;
+            col_schema.decimal_scale =
+              -col->type().scale();  // parquet and cudf disagree about scale signs
+
+            // TODO: This expectation (that there are enough) should be a part of input schema check
+            // CUDF_EXPECTS(decimal_precision.size() > decimal_precision_idx,
+            //              "Not enough decimal precision values passed for data!");
+            CUDF_EXPECTS(col_meta.decimal_precision.has_value(),
+                         "Precision must be specified for decimal columns");
+            CUDF_EXPECTS(col_meta.decimal_precision.value() >= col_schema.decimal_scale,
+                         "Precision must be equal to or greater than scale!");
+            col_schema.decimal_precision = col_meta.decimal_precision.value();
+            break;
+          case cudf::type_id::DECIMAL64:
+            col_schema.type           = Type::INT64;
+            col_schema.converted_type = ConvertedType::DECIMAL;
+            col_schema.stats_dtype    = statistics_dtype::dtype_decimal64;
+            col_schema.decimal_scale =
+              -col->type().scale();  // parquet and cudf disagree about scale signs
+            CUDF_EXPECTS(col_meta.decimal_precision.has_value(),
+                         "Precision must be specified for decimal columns");
+            CUDF_EXPECTS(col_meta.decimal_precision.value() >= col_schema.decimal_scale,
+                         "Precision must be equal to or greater than scale!");
+            col_schema.decimal_precision = col_meta.decimal_precision.value();
+            break;
           default:
             col_schema.type        = UNDEFINED_TYPE;
             col_schema.stats_dtype = dtype_none;
@@ -893,6 +893,8 @@ struct new_parquet_column_view {
 
       stream.synchronize();
     }
+
+  }
 
   column_view cudf_column_view() const { return cudf_col; }
   parquet::Type physical_type() const { return schema_node.type; }
