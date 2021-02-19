@@ -1268,14 +1268,12 @@ void writer::impl::write(table_view const &table)
     md.num_rows = num_rows;
     md.column_order_listsize =
       (stats_granularity_ != statistics_freq::STATISTICS_NONE) ? num_columns : 0;
-    if (user_metadata != nullptr) {
-      std::transform(user_metadata->user_data.begin(),
-                     user_metadata->user_data.end(),
-                     std::back_inserter(md.key_value_metadata),
-                     [](auto const &kv) {
-                       return KeyValue{kv.first, kv.second};
-                     });
-    }
+    std::transform(tbl_meta.user_data.begin(),
+                   tbl_meta.user_data.end(),
+                   std::back_inserter(md.key_value_metadata),
+                   [](auto const &kv) {
+                     return KeyValue{kv.first, kv.second};
+                   });
     md.schema = this_table_schema;
   } else {
     // verify the user isn't passing mismatched tables
