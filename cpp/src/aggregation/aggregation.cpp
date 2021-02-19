@@ -126,9 +126,9 @@ std::unique_ptr<aggregation> make_row_number_aggregation()
   return std::make_unique<aggregation>(aggregation::ROW_NUMBER);
 }
 /// Factory to create a COLLECT aggregation
-std::unique_ptr<aggregation> make_collect_aggregation()
+std::unique_ptr<aggregation> make_collect_aggregation(null_policy null_handling)
 {
-  return std::make_unique<aggregation>(aggregation::COLLECT);
+  return std::make_unique<detail::collect_list_aggregation>(null_handling);
 }
 /// Factory to create a LAG aggregation
 std::unique_ptr<aggregation> make_lag_aggregation(size_type offset)

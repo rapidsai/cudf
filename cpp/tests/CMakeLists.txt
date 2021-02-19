@@ -366,6 +366,7 @@ ConfigureTest(STRINGS_TEST
     strings/findall_tests.cpp
     strings/find_tests.cpp
     strings/find_multiple_tests.cpp
+    strings/fixed_point_tests.cpp
     strings/floats_tests.cpp
     strings/hash_string.cu
     strings/integers_tests.cu

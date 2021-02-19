@@ -2403,6 +2403,18 @@ class Frame(libcudf.table.Table):
 
         return self
 
+    def _copy_interval_data(self, other, include_index=True):
+        for name, col, other_col in zip(
+            self._data.keys(), self._data.values(), other._data.values()
+        ):
+            if isinstance(other_col, cudf.core.column.IntervalColumn):
+                self._data[name] = cudf.core.column.IntervalColumn(col)
+
+    def _postprocess_columns(self, other, include_index=True):
+        self._copy_categories(other, include_index=include_index)
+        self._copy_struct_names(other, include_index=include_index)
+        self._copy_interval_data(other, include_index=include_index)
+
     def _unaryop(self, op):
         data_columns = (col.unary_operator(op) for col in self._columns)
         data = zip(self._column_names, data_columns)
