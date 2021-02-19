@@ -264,7 +264,7 @@ size_type filter_overlap_target_positions(size_type* d_target_positions,
                            d_overlapped_pos_indices,
                            target_false_overlap_filter_fn{
                              d_potential_overlapped_pos_indices, d_target_positions, target_size});
-  overlap_count = overlap_end - d_overlapped_pos_indices;
+  overlap_count = cudf::distance(d_overlapped_pos_indices, overlap_end);
 
   // In-place remove any target positions that are overlapped by valid target positions
   auto target_pos_end = thrust::remove_if(
@@ -278,7 +278,7 @@ size_type filter_overlap_target_positions(size_type* d_target_positions,
                                    d_overlapped_pos_indices + overlap_count,
                                    target_position_idx);
     });
-  return target_pos_end - d_target_positions;
+  return cudf::distance(d_target_positions, target_pos_end);
 }
 
 /**
@@ -301,28 +301,23 @@ size_type filter_false_target_positions(rmm::device_uvector<size_type>& target_p
 {
   // In-place remove any positions for target strings that crossed string boundaries.
   auto d_target_positions = target_positions.data();
-  size_type target_count  = target_positions.size();
   auto target_pos_end =
     thrust::remove_if(rmm::exec_policy(stream),
                       d_target_positions,
-                      d_target_positions + target_count,
+                      d_target_positions + target_positions.size(),
                       [d_offsets_span, target_size] __device__(size_type target_pos) -> bool {
-                        // find the end offset of the string containing the start of this target
-                        // position
+                        // find the end of the string containing the start of this target
                         size_type const* offset_ptr = thrust::upper_bound(
                           thrust::seq, d_offsets_span.begin(), d_offsets_span.end(), target_pos);
                         return target_pos + target_size >= *offset_ptr;
                       });
-  target_count = target_pos_end - d_target_positions;
+  auto const target_count = cudf::distance(d_target_positions, target_pos_end);
   if (target_count == 0) { return 0; }
 
   // Filter out target positions that are the result of overlapping target matches.
-  if (target_count > 1) {
-    target_count =
-      filter_overlap_target_positions(d_target_positions, target_count, target_size, stream);
-  }
-
-  return target_count;
+  return (target_count > 1)
+           ? filter_overlap_target_positions(d_target_positions, target_count, target_size, stream)
+           : target_count;
 }
 
 /**
@@ -371,7 +366,7 @@ size_type filter_maxrepl_target_positions(size_type* d_target_positions,
                         return match_count > max_repl_per_row;
                       });
 
-  return target_pos_end - d_target_positions;
+  return cudf::distance(d_target_positions, target_pos_end);
 }
 
 /**
