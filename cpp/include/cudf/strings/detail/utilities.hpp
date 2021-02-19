@@ -67,7 +67,7 @@ rmm::device_uvector<string_view> create_string_vector_from_column(
 /**
  * @brief Creates an offsets column from a string_view vector.
  *
- * @param strings Strings column
+ * @param strings Strings input data
  * @param stream CUDA stream used for device memory operations and kernel launches.
  * @param mr Device memory resource used to allocate the returned column's device memory.
  * @return Child offsets column
@@ -80,9 +80,8 @@ std::unique_ptr<cudf::column> child_offsets_from_string_vector(
 /**
  * @brief Creates a chars column from a string_view vector.
  *
- * @param strings Strings vector
+ * @param strings Strings input data
  * @param d_offsets Offsets vector for placing strings into column's memory.
- * @param null_count Number of null strings.
  * @param stream CUDA stream used for device memory operations and kernel launches.
  * @param mr Device memory resource used to allocate the returned column's device memory.
  * @return Child chars column
