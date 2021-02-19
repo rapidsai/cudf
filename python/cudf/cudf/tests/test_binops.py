@@ -7,6 +7,8 @@ import operator
 import random
 from itertools import product
 
+import re
+
 import numpy as np
 import pandas as pd
 import pytest
@@ -789,6 +791,27 @@ def test_binop_bool_uint(func, rhs):
     utils.assert_eq(
         getattr(psr, func)(rhs), getattr(gsr, func)(rhs), check_dtype=False
     )
+
+@pytest.mark.parametrize("dtype", INTEGER_TYPES)
+@pytest.mark.parametrize("lhs", [
+    cudf.Series([1])
+])
+@pytest.mark.parametrize("rhs", [
+    0,
+    cudf.Series([0]),
+    cudf.Series([0,1,2])
+])
+def test_binop_int_floordiv_by_zero(dtype,lhs, rhs):
+    # We do not allow for integer floor division by zero,
+    # because floor division is interpreted as being
+    # stable with respect to the numerator's type. And there
+    # is no sensible integer to return as an answer.
+    if np.isscalar(rhs):
+        rhs = np.dtype(dtype).type(rhs)
+    else:
+        rhs = rhs.astype(dtype)
+    with pytest.raises(ValueError, match=re.escape("Integer floor division by zero is undefined.")):
+        lhs // rhs
 
 
 def test_series_misc_binop():
