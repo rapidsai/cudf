@@ -88,6 +88,8 @@ __device__ inline FloatType stof(string_view const& d_str)
     }
     ++in_ptr;
   }
+  if (digits == 0) return sign * static_cast<FloatType>(0);
+
   // check for exponent char
   int exp_ten  = 0;
   int exp_sign = 1;
@@ -108,17 +110,23 @@ __device__ inline FloatType stof(string_view const& d_str)
       }
     }
   }
+
+  int const num_digits = static_cast<int>(log10(digits)) + 1;
   exp_ten *= exp_sign;
   exp_ten += exp_off;
+  exp_ten += num_digits - 1;
   if (exp_ten > std::numeric_limits<FloatType>::max_exponent10)
     return sign > 0 ? std::numeric_limits<FloatType>::infinity()
                     : -std::numeric_limits<FloatType>::infinity();
   else if (exp_ten < std::numeric_limits<FloatType>::min_exponent10)
     return FloatType{0};
+
   // using exp10() since the pow(10.0,exp_ten) function is
   // very inaccurate in 10.2: http://nvbugs/2971187
-  const FloatType value = static_cast<FloatType>(digits) * exp10(static_cast<FloatType>(exp_ten));
-  return (value * sign);
+  FloatType const base =
+    sign * static_cast<FloatType>(digits) * exp10(static_cast<FloatType>(1 - num_digits));
+  FloatType const exponent = exp10(static_cast<FloatType>(exp_ten));
+  return base * exponent;
 }
 
 /**
