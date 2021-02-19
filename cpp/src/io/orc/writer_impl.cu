@@ -724,7 +724,7 @@ encoded_data writer::impl::encode_columns(host_span<orc_column_view const> colum
   if (!str_col_ids.empty()) {
     auto d_stripe_dict = columns[str_col_ids[0]].device_stripe_dict();
     gpu::EncodeStripeDictionaries(
-      d_stripe_dict, chunks, chunk_streams, str_col_ids.size(), stripe_bounds.size(), stream);
+      d_stripe_dict, chunks, str_col_ids.size(), stripe_bounds.size(), chunk_streams, stream);
   }
 
   gpu::EncodeOrcColumnData(chunks, chunk_streams, stream);

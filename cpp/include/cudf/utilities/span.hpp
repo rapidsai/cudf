@@ -136,7 +136,7 @@ struct host_span : public span_base<T, Extent, host_span<T, Extent>> {
   template <typename OtherT,
             std::size_t OtherExtent,
             typename std::enable_if<(Extent == OtherExtent || Extent == dynamic_extent) &&
-                                      std::is_convertible<OtherT(*), T(*)>::value,
+                                      std::is_convertible<OtherT (*)[], T (*)[]>::value,
                                     void>::type* = nullptr>
   constexpr host_span(const host_span<OtherT, OtherExtent>& other) noexcept
     : base(other.data(), other.size())
@@ -185,7 +185,7 @@ struct device_span : public span_base<T, Extent, device_span<T, Extent>> {
   template <typename OtherT,
             std::size_t OtherExtent,
             typename std::enable_if<(Extent == OtherExtent || Extent == dynamic_extent) &&
-                                      std::is_convertible<OtherT(*), T(*)>::value,
+                                      std::is_convertible<OtherT (*)[], T (*)[]>::value,
                                     void>::type* = nullptr>
   constexpr device_span(const device_span<OtherT, OtherExtent>& other) noexcept
     : base(other.data(), other.size())
@@ -236,9 +236,9 @@ class host_2dspan : public base_2dspan<T> {
     return {this->data() + base::flatten_index(row, 0, this->size()), this->size().second};
   }
 
-  template <
-    typename OtherT,
-    typename std::enable_if<std::is_convertible<OtherT(*), T(*)>::value, void>::type* = nullptr>
+  template <typename OtherT,
+            typename std::enable_if<std::is_convertible<OtherT (*)[], T (*)[]>::value,
+                                    void>::type* = nullptr>
   constexpr host_2dspan(const host_2dspan<OtherT>& other) noexcept
     : base(other.data(), other.size())
   {
@@ -254,9 +254,9 @@ class device_2dspan : public base_2dspan<T> {
   {
     return {this->data() + base::flatten_index(row, 0, this->size()), this->size().second};
   }
-  template <
-    typename OtherT,
-    typename std::enable_if<std::is_convertible<OtherT(*), T(*)>::value, void>::type* = nullptr>
+  template <typename OtherT,
+            typename std::enable_if<std::is_convertible<OtherT (*)[], T (*)[]>::value,
+                                    void>::type* = nullptr>
   constexpr device_2dspan(const device_2dspan<OtherT>& other) noexcept
     : base(other.data(), other.size())
   {

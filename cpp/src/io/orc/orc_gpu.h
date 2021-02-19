@@ -300,17 +300,17 @@ void EncodeOrcColumnData(detail::device_2dspan<EncChunk const> chunks,
  * @brief Launches kernel for encoding column dictionaries
  *
  * @param[in] stripes Stripe dictionaries device array [stripe][string_column]
- * @param[in] chunks  encoder chunk device array [column][rowgroup]
- * @param[in, out] streams chunk streams device array [column][rowgroup]
+ * @param[in] chunks encoder chunk device array [column][rowgroup]
  * @param[in] num_string_columns Number of string columns
  * @param[in] num_stripes Number of stripes
+ * @param[in, out] streams chunk streams device array [column][rowgroup]
  * @param[in] stream CUDA stream to use, default rmm::cuda_stream_default
  */
 void EncodeStripeDictionaries(StripeDictionary *stripes,
                               detail::device_2dspan<EncChunk const> chunks,
-                              detail::device_2dspan<encoder_chunk_streams> streams,
                               uint32_t num_string_columns,
                               uint32_t num_stripes,
+                              detail::device_2dspan<encoder_chunk_streams> streams,
                               rmm::cuda_stream_view stream = rmm::cuda_stream_default);
 
 /**

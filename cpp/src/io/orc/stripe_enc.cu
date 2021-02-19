@@ -1194,9 +1194,9 @@ void EncodeOrcColumnData(device_2dspan<EncChunk const> chunks,
 
 void EncodeStripeDictionaries(StripeDictionary *stripes,
                               device_2dspan<EncChunk const> chunks,
-                              device_2dspan<encoder_chunk_streams> streams,
                               uint32_t num_string_columns,
                               uint32_t num_stripes,
+                              device_2dspan<encoder_chunk_streams> streams,
                               rmm::cuda_stream_view stream)
 {
   dim3 dim_block(512, 1);  // 512 threads per dictionary
