@@ -1147,10 +1147,7 @@ def test_typecast_on_join_overflow_unsafe(dtypes):
 
     with pytest.warns(
         UserWarning,
-        match=(
-            f"can't safely cast column"
-            f" from right with type {dtype_r} to {dtype_l}"
-        ),
+        match=(f"Can't safely cast column" f" from {dtype_r} to {dtype_l}"),
     ):
         merged = lhs.merge(rhs, on="a", how="left")  # noqa: F841
 

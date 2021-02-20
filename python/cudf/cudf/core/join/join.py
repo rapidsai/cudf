@@ -8,7 +8,6 @@ from cudf.core.join._join_helpers import (
     _coerce_to_list,
     _coerce_to_tuple,
     _Indexer,
-    _libcudf_to_output_castrules,
 )
 
 
@@ -47,6 +46,7 @@ def merge(
         rsuffix=rsuffix,
         method=method,
         indicator=indicator,
+        suffixes=suffixes,
     )
     return mergeobj.perform_merge()
 
@@ -59,18 +59,18 @@ class Merge(object):
         lhs,
         rhs,
         *,
-        on=None,
-        left_on=None,
-        right_on=None,
-        left_index=False,
-        right_index=False,
-        how="inner",
-        sort=False,
-        lsuffix="_x",
-        rsuffix="_y",
-        method=None,
-        indicator=None,
-        suffixes=None,
+        on,
+        left_on,
+        right_on,
+        left_index,
+        right_index,
+        how,
+        sort,
+        lsuffix,
+        rsuffix,
+        method,
+        indicator,
+        suffixes,
     ):
         """
         Manage the merging of two Frames.
@@ -197,7 +197,7 @@ class Merge(object):
             on_names = (
                 _coerce_to_tuple(self.on)
                 if self.on is not None
-                else set(self.lhs._data.keys()) & set(self.rhs._data.keys())
+                else set(self.lhs._data) & set(self.rhs._data)
             )
             left_keys = [_Indexer(name=on, column=True) for on in on_names]
             right_keys = [_Indexer(name=on, column=True) for on in on_names]
@@ -225,13 +225,10 @@ class Merge(object):
             right_on=right_key_indices,
             how=self.how,
         )
+        lhs, rhs = self.restore_categorical_keys(lhs, rhs)
         return self.construct_result(lhs, rhs, left_rows, right_rows)
 
     def construct_result(self, lhs, rhs, left_rows, right_rows):
-        lhs, rhs = self.match_key_dtypes(
-            self.lhs, self.rhs, _libcudf_to_output_castrules
-        )
-
         # first construct the index.
         if self.left_index and self.right_index:
             if self.how == "right":
@@ -274,53 +271,44 @@ class Merge(object):
                         ),
                     )
 
-        return self.sort_result(result)
+        if self.sort:
+            result = self.sort_result(result)
+        return result
 
     def sort_result(self, result):
-        # If sort=True, Pandas sorts on the key columns in the
+        # Pandas sorts on the key columns in the
         # same order as given in 'on'. If the indices are used as
         # keys, the index will be sorted. If one index is specified,
         # the key columns on the other side will be used to sort.
-        if self.sort:
-            if self.on:
-                if isinstance(result, cudf.Index):
-                    return result.sort_values()
-                else:
-                    return result.sort_values(
-                        _coerce_to_list(self.on), ignore_index=True
-                    )
-            by = []
-            if self.left_index and self.right_index:
-                by.extend(result.index._data.columns)
-            if self.left_on:
-                by.extend(
-                    [
-                        result._data[col]
-                        for col in _coerce_to_list(self.left_on)
-                    ]
+        if self.on:
+            if isinstance(result, cudf.Index):
+                return result.sort_values()
+            else:
+                return result.sort_values(
+                    _coerce_to_list(self.on), ignore_index=True
                 )
-            if self.right_on:
-                by.extend(
-                    [
-                        result._data[col]
-                        for col in _coerce_to_list(self.right_on)
-                    ]
-                )
-            if by:
-                to_sort = cudf.DataFrame._from_columns(by)
-                sort_order = to_sort.argsort()
-                result = result.take(sort_order)
+        by = []
+        if self.left_index and self.right_index:
+            by.extend(result.index._data.columns)
+        if self.left_on:
+            by.extend(
+                [result._data[col] for col in _coerce_to_list(self.left_on)]
+            )
+        if self.right_on:
+            by.extend(
+                [result._data[col] for col in _coerce_to_list(self.right_on)]
+            )
+        if by:
+            to_sort = cudf.DataFrame._from_columns(by)
+            sort_order = to_sort.argsort()
+            result = result.take(sort_order)
         return result
 
     def output_column_names(self):
         # Return mappings of input column names to (possibly) suffixed
         # result column names
-        left_names = OrderedDict(
-            zip(self.lhs._data.keys(), self.lhs._data.keys())
-        )
-        right_names = OrderedDict(
-            zip(self.rhs._data.keys(), self.rhs._data.keys())
-        )
+        left_names = OrderedDict(zip(self.lhs._data, self.lhs._data))
+        right_names = OrderedDict(zip(self.rhs._data, self.rhs._data))
         common_names = set(left_names) & set(right_names)
 
         if self.on:
@@ -328,7 +316,7 @@ class Merge(object):
         else:
             key_columns_with_same_name = []
             for lkey, rkey in zip(*self._keys):
-                if (lkey.index, rkey.index) == (False, False,):
+                if (lkey.index, rkey.index) == (False, False):
                     if lkey.name == rkey.name:
                         key_columns_with_same_name.append(lkey.name)
         for name in common_names:
@@ -375,7 +363,7 @@ class Merge(object):
             raise ValueError("Can not merge on unnamed Series")
 
         # If nothing specified, must have common cols to use implicitly
-        same_named_columns = set(lhs._data.keys()) & set(rhs._data.keys())
+        same_named_columns = set(lhs._data) & set(rhs._data)
         if (
             not (left_index or right_index)
             and not (left_on or right_on)
@@ -412,6 +400,30 @@ class Merge(object):
             if dtype:
                 left_key.set_value(out_lhs, lcol.astype(dtype))
                 right_key.set_value(out_rhs, rcol.astype(dtype))
+        return out_lhs, out_rhs
+
+    def restore_categorical_keys(self, lhs, rhs):
+        # For inner joins, any categorical keys were casted
+        # to the type of their categories.
+        # Here, we cast the keys back to categorical type
+        # before constructing the result
+
+        out_lhs = lhs.copy(deep=False)
+        out_rhs = rhs.copy(deep=False)
+
+        if self.how == "inner":
+            for left_key, right_key in zip(*self._keys):
+                if isinstance(
+                    left_key.value(self.lhs).dtype, cudf.CategoricalDtype
+                ) and isinstance(
+                    right_key.value(self.rhs).dtype, cudf.CategoricalDtype
+                ):
+                    left_key.set_value(
+                        out_lhs, left_key.value(out_lhs).astype("category")
+                    )
+                    right_key.set_value(
+                        out_rhs, right_key.value(out_rhs).astype("category")
+                    )
         return out_lhs, out_rhs
 
 
