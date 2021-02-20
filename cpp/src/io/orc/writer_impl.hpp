@@ -79,15 +79,12 @@ class orc_streams {
   operator std::vector<Stream>() const { return streams; }
 };
 
+/**
+ * @brief ORC per-chunk streams of encoded data.
+ */
 struct encoded_data {
-  rmm::device_uvector<uint8_t> data;
-  hostdevice_2dvector<gpu::encoder_chunk_streams> streams;
-};
-
-struct encoder_chunks {
-  hostdevice_vector<gpu::EncChunk> chunks;
-  // TODO add accessors/iterators
-  // TODO separate out redundant column info?
+  rmm::device_uvector<uint8_t> data;                        // Owning array of the encoded data
+  hostdevice_2dvector<gpu::encoder_chunk_streams> streams;  // streams of encoded data, per chunk
 };
 
 /**
@@ -232,11 +229,11 @@ class writer::impl {
    * @brief Returns stripe information after compacting columns' individual data
    * chunks into contiguous data streams.
    *
-   * @param num_rows Total number of rows
-   * @param num_index_streams Total number of index streams
-   * @param stripe_bounds List of stripe boundaries
-   * @param enc_streams List of encoder chunk streams [column][rowgroup]
-   * @param strm_desc List of stream descriptors [stripe][data_stream]
+   * @param[in] num_rows Total number of rows
+   * @param[in] num_index_streams Total number of index streams
+   * @param[in] stripe_bounds List of stripe boundaries
+   * @param[in,out] enc_streams List of encoder chunk streams [column][rowgroup]
+   * @param[in,out] strm_desc List of stream descriptors [stripe][data_stream]
    *
    * @return The stripes' information
    */
@@ -262,15 +259,16 @@ class writer::impl {
   /**
    * @brief Writes the specified column's row index stream.
    *
-   * @param stripe_id Stripe's identifier
-   * @param stream_id Stream identifier (column id + 1)
-   * @param columns List of columns
-   * @param rowgroups_range Indexes of rowgroups in the stripe
-   * @param enc_streams List of encoder chunk streams [column][rowgroup]
-   * @param strm_desc List of stream descriptors
-   * @param comp_out Output status for compressed streams
-   * @param streams List of all streams
-   * @param pbw Protobuf writer
+   * @param[in] stripe_id Stripe's identifier
+   * @param[in] stream_id Stream identifier (column id + 1)
+   * @param[in] columns List of columns
+   * @param[in] rowgroups_range Indexes of rowgroups in the stripe
+   * @param[in] enc_streams List of encoder chunk streams [column][rowgroup]
+   * @param[in] strm_desc List of stream descriptors
+   * @param[in] comp_out Output status for compressed streams
+   * @param[in,out] stripe Stream's parent stripe
+   * @param[in,out] streams List of all streams
+   * @param[in,out] pbw Protobuf writer
    */
   void write_index_stream(int32_t stripe_id,
                           int32_t stream_id,
@@ -286,12 +284,12 @@ class writer::impl {
   /**
    * @brief Write the specified column's data streams
    *
-   * @param strm_desc Stream's descriptor
-   * @param enc_stream Chunk's streams
-   * @param compressed_data Compressed stream data
-   * @param stream_out Temporary host output buffer
-   * @param stripe Stream's parent stripe
-   * @param streams List of all streams
+   * @param[in] strm_desc Stream's descriptor
+   * @param[in] enc_stream Chunk's streams
+   * @param[in] compressed_data Compressed stream data
+   * @param[in,out] stream_out Temporary host output buffer
+   * @param[in,out] stripe Stream's parent stripe
+   * @param[in,out] streams List of all streams
    */
   void write_data_stream(gpu::StripeStream const& strm_desc,
                          gpu::encoder_chunk_streams const& enc_stream,
