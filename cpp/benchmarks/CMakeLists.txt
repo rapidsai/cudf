@@ -309,6 +309,7 @@ set(STRINGS_BENCH_SRC
   "${CMAKE_CURRENT_SOURCE_DIR}/string/contains_benchmark.cpp"
   "${CMAKE_CURRENT_SOURCE_DIR}/string/convert_durations_benchmark.cpp"
   "${CMAKE_CURRENT_SOURCE_DIR}/string/convert_floats_benchmark.cpp"
+  "${CMAKE_CURRENT_SOURCE_DIR}/string/find_benchmark.cpp"
   "${CMAKE_CURRENT_SOURCE_DIR}/string/replace_benchmark.cpp"
   "${CMAKE_CURRENT_SOURCE_DIR}/string/url_decode_benchmark.cpp")
 
