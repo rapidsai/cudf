@@ -273,7 +273,7 @@ void DecodeNullsAndStringDictionaries(ColumnDesc *chunks,
  * @param[in] rowidx_stride Row index stride
  * @param[in] stream CUDA stream to use, default 0
  */
-void DecodeOrcColumnData(ColumnDesc *chunks,
+void DecodeOrcColumnData(ColumnDesc const *chunks,
                          DictionaryEntry *global_dictionary,
                          uint32_t num_columns,
                          uint32_t num_stripes,
@@ -303,55 +303,54 @@ void EncodeOrcColumnData(detail::device_2dspan<EncChunk const> chunks,
  * @param[in] chunks encoder chunk device array [column][rowgroup]
  * @param[in] num_string_columns Number of string columns
  * @param[in] num_stripes Number of stripes
- * @param[in, out] streams chunk streams device array [column][rowgroup]
+ * @param[in,out] enc_streams chunk streams device array [column][rowgroup]
  * @param[in] stream CUDA stream to use, default rmm::cuda_stream_default
  */
 void EncodeStripeDictionaries(StripeDictionary *stripes,
                               detail::device_2dspan<EncChunk const> chunks,
                               uint32_t num_string_columns,
                               uint32_t num_stripes,
-                              detail::device_2dspan<encoder_chunk_streams> streams,
+                              detail::device_2dspan<encoder_chunk_streams> enc_streams,
                               rmm::cuda_stream_view stream = rmm::cuda_stream_default);
 
 /**
  * @brief Launches kernel for compacting chunked column data prior to compression
  *
- * @param[in] strm_desc StripeStream device array [stripe][stream]
- * @param[in] streams
- * @param[in] num_stripe_streams Total number of streams
+ * @param[in,out] strm_desc StripeStream device array [stripe][stream]
+ * @param[in,out] enc_streams chunk streams device array [column][rowgroup]
  * @param[in] stream CUDA stream to use, default 0
  */
 void CompactOrcDataStreams(detail::device_2dspan<StripeStream> strm_desc,
-                           detail::device_2dspan<encoder_chunk_streams> streams,
+                           detail::device_2dspan<encoder_chunk_streams> enc_streams,
                            rmm::cuda_stream_view stream = rmm::cuda_stream_default);
 
 /**
  * @brief Launches kernel(s) for compressing data streams
  *
  * @param[in] compressed_data Output compressed blocks
- * @param[in] strm_desc StripeStream device array [stripe][stream]
- * @param[in] enc_streams Encoded streams device array [rowgroup][column]
+ * @param[in] num_compressed_blocks Total number of compressed blocks
+ * @param[in] compression Type of compression
+ * @param[in] comp_blk_size Compression block size
+ * @param[in] stream CUDA stream to use, default 0
+ * @param[in,out] strm_desc StripeStream device array [stripe][stream]
+ * @param[in,out] enc_streams chunk streams device array [column][rowgroup]
  * @param[out] comp_in Per-block compression input parameters
  * @param[out] comp_out Per-block compression status
- * @param[in] num_stripe_streams Total number of streams
- * @param[in] compression Type of compression
- * @param[in] num_compressed_blocks Total number of compressed blocks
- * @param[in] stream CUDA stream to use, default 0
  */
 void CompressOrcDataStreams(uint8_t *compressed_data,
+                            uint32_t num_compressed_blocks,
+                            CompressionKind compression,
+                            uint32_t comp_blk_size,
                             detail::device_2dspan<StripeStream> strm_desc,
                             detail::device_2dspan<encoder_chunk_streams> enc_streams,
                             gpu_inflate_input_s *comp_in,
                             gpu_inflate_status_s *comp_out,
-                            uint32_t num_compressed_blocks,
-                            CompressionKind compression,
-                            uint32_t comp_blk_size,
                             rmm::cuda_stream_view stream = rmm::cuda_stream_default);
 
 /**
  * @brief Launches kernel for initializing dictionary chunks
  *
- * @param[in] chunks DictionaryChunk device array [rowgroup][column]
+ * @param[in,out] chunks DictionaryChunk device array [rowgroup][column]
  * @param[in] num_columns Number of columns
  * @param[in] num_rowgroups Number of row groups
  * @param[in] stream CUDA stream to use, default 0

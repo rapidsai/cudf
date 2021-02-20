@@ -1374,7 +1374,7 @@ static const __device__ __constant__ uint32_t kTimestampNanoScale[8] = {
 // blockDim {block_size,1,1}
 template <int block_size>
 __global__ void __launch_bounds__(block_size)
-  gpuDecodeOrcColumnData(ColumnDesc *chunks,
+  gpuDecodeOrcColumnData(ColumnDesc const *chunks,
                          DictionaryEntry *global_dictionary,
                          timezone_table_view tz_table,
                          const RowGroup *row_groups,
@@ -1773,7 +1773,7 @@ void __host__ DecodeNullsAndStringDictionaries(ColumnDesc *chunks,
  * @param[in] rowidx_stride Row index stride
  * @param[in] stream CUDA stream to use, default 0
  */
-void __host__ DecodeOrcColumnData(ColumnDesc *chunks,
+void __host__ DecodeOrcColumnData(ColumnDesc const *chunks,
                                   DictionaryEntry *global_dictionary,
                                   uint32_t num_columns,
                                   uint32_t num_stripes,

@@ -1196,32 +1196,32 @@ void EncodeStripeDictionaries(StripeDictionary *stripes,
                               device_2dspan<EncChunk const> chunks,
                               uint32_t num_string_columns,
                               uint32_t num_stripes,
-                              device_2dspan<encoder_chunk_streams> streams,
+                              device_2dspan<encoder_chunk_streams> enc_streams,
                               rmm::cuda_stream_view stream)
 {
   dim3 dim_block(512, 1);  // 512 threads per dictionary
   dim3 dim_grid(num_string_columns * num_stripes, 2);
   gpuEncodeStringDictionaries<512>
-    <<<dim_grid, dim_block, 0, stream.value()>>>(stripes, chunks, streams);
+    <<<dim_grid, dim_block, 0, stream.value()>>>(stripes, chunks, enc_streams);
 }
 
 void CompactOrcDataStreams(device_2dspan<StripeStream> strm_desc,
-                           device_2dspan<encoder_chunk_streams> streams,
+                           device_2dspan<encoder_chunk_streams> enc_streams,
                            rmm::cuda_stream_view stream)
 {
   dim3 dim_block(1024, 1);
   dim3 dim_grid(strm_desc.size().first, strm_desc.size().second);
-  gpuCompactOrcDataStreams<<<dim_grid, dim_block, 0, stream.value()>>>(strm_desc, streams);
+  gpuCompactOrcDataStreams<<<dim_grid, dim_block, 0, stream.value()>>>(strm_desc, enc_streams);
 }
 
 void CompressOrcDataStreams(uint8_t *compressed_data,
-                            device_2dspan<StripeStream> strm_desc,
-                            device_2dspan<encoder_chunk_streams> enc_streams,
-                            gpu_inflate_input_s *comp_in,
-                            gpu_inflate_status_s *comp_out,
                             uint32_t num_compressed_blocks,
                             CompressionKind compression,
                             uint32_t comp_blk_size,
+                            detail::device_2dspan<StripeStream> strm_desc,
+                            detail::device_2dspan<encoder_chunk_streams> enc_streams,
+                            gpu_inflate_input_s *comp_in,
+                            gpu_inflate_status_s *comp_out,
                             rmm::cuda_stream_view stream)
 {
   dim3 dim_block_init(256, 1);

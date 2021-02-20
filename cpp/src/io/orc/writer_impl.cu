@@ -1155,13 +1155,13 @@ void writer::impl::write(table_view const &table)
   if (compression_kind_ != NONE) {
     strm_descs.host_to_device(stream);
     gpu::CompressOrcDataStreams(static_cast<uint8_t *>(compressed_data.data()),
+                                num_compressed_blocks,
+                                compression_kind_,
+                                compression_blocksize_,
                                 strm_descs,
                                 enc_data.streams,
                                 comp_in.device_ptr(),
                                 comp_out.device_ptr(),
-                                num_compressed_blocks,
-                                compression_kind_,
-                                compression_blocksize_,
                                 stream);
     strm_descs.device_to_host(stream);
     comp_out.device_to_host(stream, true);
