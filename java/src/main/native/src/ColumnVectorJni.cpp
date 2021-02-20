@@ -14,6 +14,8 @@
  * limitations under the License.
  */
 
+#include <cstdint>
+#include <memory>
 #include <arrow/api.h>
 #include <cudf/column/column_factories.hpp>
 #include <cudf/concatenate.hpp>
@@ -27,9 +29,16 @@
 #include <cudf/lists/lists_column_view.hpp>
 #include <cudf/scalar/scalar_factories.hpp>
 #include <cudf/structs/structs_column_view.hpp>
+#include "cudf/null_mask.hpp"
+#include "cudf/types.hpp"
+#include "cudf/utilities/traits.hpp"
+#include "cudf/unary.hpp"
+#include "rmm/device_buffer.hpp"
 
 #include "cudf_jni_apis.hpp"
 #include "dtype_utils.hpp"
+#include "jni.h"
+#include "jni_utils.hpp"
 
 
 extern "C" {
@@ -317,92 +326,74 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_makeEmptyCudfColumn(JNI
   CATCH_STD(env, 0);
 }
 
-JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_makeNumericCudfColumn(
-    JNIEnv *env, jobject j_object, jint j_type, jint j_size, jint j_mask_state) {
+cudf::column* replace_column(cudf::column list_column) {
+  cudf::lists_column_view lcv(list_column);
 
-  JNI_ARG_CHECK(env, (j_size != 0), "size is 0", 0);
+  std::unique_ptr<cudf::column> new_child;
+
+  if (lcv.child().type().id() != cudf::type_id::LIST) {
+    assert(lcv.child().type() == cudf::type_id::DECIMAL64);
+    cudf::data_type to_type = cudf::data_type(cudf::type_id::DECIMAL32, lcv.child().type().scale());
+    auto u_d32_ptr = cudf::cast(lcv.child(), to_type);
+    new_child.reset(u_d32_ptr.release());
+  } else {
+    new_child.reset(replace_column(list_column.child(cudf::lists_column_view::child_column_index)));
+  }
+
+  assert(new_child->size() == contents.children[lists_column_view::child_column_index].size());
+  int32_t size = list_column.size(); 
+  int32_t null_count = list_column.null_count();
+  auto contents = list_column.release();
+
+  auto col = cudf::make_lists_column(size, std::move(contents.children[cudf::lists_column_view::offsets_column_index]), 
+  std::move(new_child), null_count, std::move(*contents.null_mask.release()));
+  return col.release();
+}
+
+JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_castLeafD64ToD32( JNIEnv *env, jobject j_object, jlong j_handle) {
+
+  JNI_NULL_CHECK(env, j_handle, "native handle is null", 0);
 
   try {
-    cudf::jni::auto_set_device(env);
-    cudf::type_id n_type = static_cast<cudf::type_id>(j_type);
-    cudf::data_type n_data_type(n_type);
-    cudf::size_type n_size = static_cast<cudf::size_type>(j_size);
-    cudf::mask_state n_mask_state = static_cast<cudf::mask_state>(j_mask_state);
-    std::unique_ptr<cudf::column> column(
-        cudf::make_numeric_column(n_data_type, n_size, n_mask_state));
-    return reinterpret_cast<jlong>(column.release());
+    cudf::column_view *n_list_col_view = reinterpret_cast<cudf::column_view *>(j_handle);
+    JNI_ARG_CHECK(env, n_list_col_view->type().id() == cudf::type_id::LIST, "Only list types are allowed", 0);
+
+    auto copy_list = cudf::column(*n_list_col_view);
+
+    return reinterpret_cast<jlong>(replace_column(copy_list));
   }
   CATCH_STD(env, 0);
 }
 
-JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_makeTimestampCudfColumn(
-    JNIEnv *env, jobject j_object, jint j_type, jint j_size, jint j_mask_state) {
+JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_replaceColumnsInStruct(
+    JNIEnv *env, jobject j_object, jlong j_handle, jintArray j_indices, jlongArray j_children) {
 
-  JNI_NULL_CHECK(env, j_type, "type id is null", 0);
-  JNI_NULL_CHECK(env, j_size, "size is null", 0);
-
-  try {
-    cudf::jni::auto_set_device(env);
-    cudf::type_id n_type = static_cast<cudf::type_id>(j_type);
-    std::unique_ptr<cudf::data_type> n_data_type(new cudf::data_type(n_type));
-    cudf::size_type n_size = static_cast<cudf::size_type>(j_size);
-    cudf::mask_state n_mask_state = static_cast<cudf::mask_state>(j_mask_state);
-    std::unique_ptr<cudf::column> column(
-        cudf::make_timestamp_column(*n_data_type.get(), n_size, n_mask_state));
-    return reinterpret_cast<jlong>(column.release());
-  }
-  CATCH_STD(env, 0);
-}
-
-JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_makeStringCudfColumnHostSide(
-    JNIEnv *env, jobject j_object, jlong j_char_data, jlong j_offset_data, jlong j_valid_data,
-    jint j_null_count, jint size) {
-
-  JNI_ARG_CHECK(env, (size != 0), "size is 0", 0);
-  JNI_NULL_CHECK(env, j_char_data, "char data is null", 0);
-  JNI_NULL_CHECK(env, j_offset_data, "offset is null", 0);
+  JNI_NULL_CHECK(env, j_handle, "native handle is null", 0);
+  JNI_NULL_CHECK(env, j_indices, "child indices to replace can't be null", 0);
+  JNI_NULL_CHECK(env, j_children, "children to replace can't be null", 0);
 
   try {
-    cudf::jni::auto_set_device(env);
-    cudf::size_type *host_offsets = reinterpret_cast<cudf::size_type *>(j_offset_data);
-    char *n_char_data = reinterpret_cast<char *>(j_char_data);
-    cudf::size_type n_data_size = host_offsets[size];
-    cudf::bitmask_type *n_validity = reinterpret_cast<cudf::bitmask_type *>(j_valid_data);
+    cudf::jni::native_jpointerArray<cudf::column_view> children_to_replace(env, j_children);
+    cudf::jni::native_jintArray indices(env, j_indices);
+    JNI_ARG_CHECK(env, indices.size() == children_to_replace.size(), "The indices size and children size should match", 0);
 
-    if (n_validity == nullptr) {
-      j_null_count = 0;
+    cudf::column_view *n_struct_col_view = reinterpret_cast<cudf::column_view *>(j_handle);
+    JNI_ARG_CHECK(env, n_struct_col_view->type().id() == cudf::type_id::STRUCT, "Only struct types are allowed", 0);
+
+    std::vector<std::unique_ptr<cudf::column>> children;
+    children.reserve(n_struct_col_view->num_children());
+    int j = 0;
+    for (int i = 0 ; i < n_struct_col_view->num_children() ; i++) {
+      if (i == indices[j]) {
+        children.emplace_back(std::make_unique<cudf::column>(*(children_to_replace[j++])));
+      } else {
+        children.emplace_back(std::make_unique<cudf::column>(n_struct_col_view->child(i)));
+      }
     }
 
-    std::unique_ptr<cudf::column> offsets = cudf::make_numeric_column(
-        cudf::data_type{cudf::type_id::INT32}, size + 1, cudf::mask_state::UNALLOCATED);
-    auto offsets_view = offsets->mutable_view();
-    JNI_CUDA_TRY(env, 0,
-                 cudaMemcpyAsync(offsets_view.data<int32_t>(), host_offsets,
-                                 (size + 1) * sizeof(int32_t), cudaMemcpyHostToDevice));
-
-    std::unique_ptr<cudf::column> data = cudf::make_numeric_column(
-        cudf::data_type{cudf::type_id::INT8}, n_data_size, cudf::mask_state::UNALLOCATED);
-    auto data_view = data->mutable_view();
-    JNI_CUDA_TRY(env, 0,
-                 cudaMemcpyAsync(data_view.data<int8_t>(), n_char_data, n_data_size,
-                                 cudaMemcpyHostToDevice));
-
-    std::unique_ptr<cudf::column> column;
-    if (j_null_count == 0) {
-      column =
-          cudf::make_strings_column(size, std::move(offsets), std::move(data), j_null_count, {});
-    } else {
-      cudf::size_type bytes = (cudf::word_index(size) + 1) * sizeof(cudf::bitmask_type);
-      rmm::device_buffer dev_validity(bytes);
-      JNI_CUDA_TRY(env, 0,
-                   cudaMemcpyAsync(dev_validity.data(), n_validity, bytes, cudaMemcpyHostToDevice));
-
-      column = cudf::make_strings_column(size, std::move(offsets), std::move(data), j_null_count,
-                                         std::move(dev_validity));
-    }
-
-    JNI_CUDA_TRY(env, 0, cudaStreamSynchronize(0));
-    return reinterpret_cast<jlong>(column.release());
+    auto col = cudf::make_structs_column(n_struct_col_view->size(), std::move(children),
+    n_struct_col_view->null_count(), cudf::copy_bitmask(*n_struct_col_view));
+    return reinterpret_cast<jlong>(col.release());
   }
   CATCH_STD(env, 0);
 }

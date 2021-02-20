@@ -27,6 +27,7 @@ import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Optional;
 import java.util.function.Consumer;
@@ -395,6 +396,24 @@ public final class ColumnVector extends ColumnView {
   }
 
   /**
+   * Replace the leaf node in the list with the given column
+   */
+  public static ColumnVector castLeafD64ToD32(ColumnView origList) {
+    assert(origList.type == DType.LIST);
+    return new ColumnVector(castLeafD64ToD32(origList.getNativeView()));
+  }
+
+  /**
+   * Replace columns in the struct with the given columns
+   */
+  public static ColumnVector replaceColumnsInStruct(ColumnView origStruct, int[] indices,
+                                                    ColumnView[] views) {
+    assert(origStruct.type == DType.STRUCT);
+    return new ColumnVector(replaceColumnsInStruct(origStruct.getNativeView(), indices,
+        Arrays.stream(views).mapToLong( v -> v.getNativeView()).toArray()));
+  }
+
+  /**
    * Create a LIST column from the given columns. Each list in the returned column will have the
    * same number of entries in it as columns passed into this method. Be careful about the
    * number of rows passed in as there are limits on the maximum output size supported for
@@ -725,6 +744,10 @@ public final class ColumnVector extends ColumnView {
 
   private static native void setNativeNullCountColumn(long cudfColumnHandle, int nullCount) throws CudfException;
 
+  private static native long replaceColumnsInStruct(long cudfColumnHandle,
+                                                    int[] indices, long[] viewHandles) throws CudfException;
+
+  private static native long castLeafD64ToD32(long cudfColumnHandle) throws CudfException;
   /**
    * Create a cudf::column_view from a cudf::column.
    * @param cudfColumnHandle the pointer to the cudf::column
