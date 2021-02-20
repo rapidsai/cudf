@@ -5,7 +5,8 @@ import copy
 import functools
 import operator
 import warnings
-from collections import OrderedDict, abc as abc
+from collections import OrderedDict
+from collections import abc as abc
 from typing import TYPE_CHECKING, Any, Dict, Tuple, TypeVar, overload
 
 import cupy
@@ -26,7 +27,6 @@ from cudf.utils.dtypes import (
     is_scalar,
     min_scalar_type,
 )
-
 
 T = TypeVar("T", bound="Frame")
 
@@ -240,6 +240,7 @@ class Frame(libcudf.table.Table):
         -------
         copy : Series or DataFrame
             Object type matches caller.
+
         Examples
         --------
         >>> s = cudf.Series([1, 2], index=["a", "b"])
