@@ -276,25 +276,27 @@ std::vector<stripe_rowgroups> writer::impl::gather_stripe_info(
   size_t const max_stripe_rows = is_any_column_string ? 1000000 : 5000000;
 
   std::vector<stripe_rowgroups> infos;
-  for (size_t g = 0, stripe_start = 0, stripe_size = 0; g < num_rowgroups; g++) {
+  for (size_t rowgroup = 0, stripe_start = 0, stripe_size = 0; rowgroup < num_rowgroups;
+       ++rowgroup) {
     auto const rowgroup_size =
       std::accumulate(columns.begin(), columns.end(), 0ul, [&](size_t total_size, auto const &col) {
         if (col.is_string()) {
-          const auto dt = col.host_dict_chunk(g);
+          const auto dt = col.host_dict_chunk(rowgroup);
           return total_size + row_index_stride_ + dt->string_char_count;
         } else {
           return total_size + col.type_width() * row_index_stride_;
         }
       });
 
-    if ((g > stripe_start) && (stripe_size + rowgroup_size > max_stripe_size_ ||
-                               (g + 1 - stripe_start) * row_index_stride_ > max_stripe_rows)) {
-      infos.emplace_back(infos.size(), stripe_start, g - stripe_start);
-      stripe_start = g;
+    if ((rowgroup > stripe_start) &&
+        (stripe_size + rowgroup_size > max_stripe_size_ ||
+         (rowgroup + 1 - stripe_start) * row_index_stride_ > max_stripe_rows)) {
+      infos.emplace_back(infos.size(), stripe_start, rowgroup - stripe_start);
+      stripe_start = rowgroup;
       stripe_size  = 0;
     }
     stripe_size += rowgroup_size;
-    if (g + 1 == num_rowgroups) {
+    if (rowgroup + 1 == num_rowgroups) {
       infos.emplace_back(infos.size(), stripe_start, num_rowgroups - stripe_start);
     }
   }
@@ -354,15 +356,15 @@ void writer::impl::build_dictionaries(orc_column_view *columns,
     str_column.attach_stripe_dict(stripe_dict.host_ptr(), stripe_dict.device_ptr());
 
     for (auto const &stripe : stripe_bounds) {
-      auto *sd             = &stripe_dict[stripe.id * str_col_ids.size() + col_idx];
-      sd->column_data_base = str_column.host_dict_chunk(0)->column_data_base;
-      sd->dict_data        = str_column.host_dict_chunk(stripe.first)->dict_data;
-      sd->dict_index       = dict_index + col_idx * str_column.data_count();  // Indexed by abs row
-      sd->column_id        = str_col_ids[col_idx];
-      sd->start_chunk      = stripe.first;
-      sd->num_chunks       = stripe.size;
-      sd->dict_char_count  = 0;
-      sd->num_strings =
+      auto &sd            = stripe_dict[stripe.id * str_col_ids.size() + col_idx];
+      sd.column_data_base = str_column.host_dict_chunk(0)->column_data_base;
+      sd.dict_data        = str_column.host_dict_chunk(stripe.first)->dict_data;
+      sd.dict_index       = dict_index + col_idx * str_column.data_count();  // Indexed by abs row
+      sd.column_id        = str_col_ids[col_idx];
+      sd.start_chunk      = stripe.first;
+      sd.num_chunks       = stripe.size;
+      sd.dict_char_count  = 0;
+      sd.num_strings =
         std::accumulate(stripe.cbegin(), stripe.cend(), 0, [&](auto dt_str_cnt, auto rg_idx) {
           const auto &dt = dict[rg_idx * str_col_ids.size() + col_idx];
           return dt_str_cnt + dt.num_dict_strings;
@@ -402,7 +404,7 @@ orc_streams writer::impl::create_streams(host_span<orc_column_view> columns,
                                          host_span<stripe_rowgroups const> stripe_bounds)
 {
   // First n + 1 streams are row index streams, including 'column 0'
-  std::vector<Stream> streams{{ROW_INDEX, 0, 0}};  // Separate index and data streams?
+  std::vector<Stream> streams{{ROW_INDEX, 0, 0}};  // TODO: Separate index and data streams?
   streams.resize(columns.size() + 1);
   std::vector<int32_t> ids(columns.size() * gpu::CI_NUM_STREAMS, -1);
 
@@ -1077,8 +1079,7 @@ void writer::impl::write(table_view const &table)
   const auto num_dict_chunks = num_rowgroups * str_col_ids.size();
   hostdevice_vector<gpu::DictionaryChunk> dict(num_dict_chunks);
   if (!str_col_ids.empty()) {
-    init_dictionaries(
-      orc_columns.data(), str_col_ids, dict_data.data(), dict_index.data(), &dict);
+    init_dictionaries(orc_columns.data(), str_col_ids, dict_data.data(), dict_index.data(), &dict);
   }
 
   // Decide stripe boundaries early on, based on uncompressed size
@@ -1088,12 +1089,8 @@ void writer::impl::write(table_view const &table)
   const auto num_stripe_dict = stripe_bounds.size() * str_col_ids.size();
   hostdevice_vector<gpu::StripeDictionary> stripe_dict(num_stripe_dict);
   if (!str_col_ids.empty()) {
-    build_dictionaries(orc_columns.data(),
-                       str_col_ids,
-                       stripe_bounds,
-                       dict,
-                       dict_index.data(),
-                       stripe_dict);
+    build_dictionaries(
+      orc_columns.data(), str_col_ids, stripe_bounds, dict, dict_index.data(), stripe_dict);
   }
 
   auto streams  = create_streams(orc_columns, stripe_bounds);
@@ -1264,19 +1261,20 @@ void writer::impl::write(table_view const &table)
     ff.types[0].kind = STRUCT;
     ff.types[0].subtypes.resize(num_columns);
     ff.types[0].fieldNames.resize(num_columns);
-    for (int col_idx = 0; col_idx < num_columns; ++col_idx) {
-      ff.types[1 + col_idx].kind      = orc_columns[col_idx].orc_kind();
-      ff.types[0].subtypes[col_idx]   = 1 + col_idx;
-      ff.types[0].fieldNames[col_idx] = orc_columns[col_idx].orc_name();
+    for (auto const &column : orc_columns) {
+      ff.types[1 + column.id()].kind      = column.orc_kind();
+      ff.types[0].subtypes[column.id()]   = 1 + column.id();
+      ff.types[0].fieldNames[column.id()] = column.orc_name();
     }
   } else {
     // verify the user isn't passing mismatched tables
     CUDF_EXPECTS(ff.types.size() == 1 + orc_columns.size(),
                  "Mismatch in table structure between multiple calls to write");
-    for (auto col_idx = 0; col_idx < num_columns; col_idx++) {
-      CUDF_EXPECTS(ff.types[1 + col_idx].kind == orc_columns[col_idx].orc_kind(),
-                   "Mismatch in column types between multiple calls to write");
-    }
+    CUDF_EXPECTS(
+      std::all_of(orc_columns.cbegin(),
+                  orc_columns.cend(),
+                  [&](auto const &col) { return ff.types[1 + col.id()].kind == col.orc_kind(); }),
+      "Mismatch in column types between multiple calls to write");
   }
   ff.stripes.insert(ff.stripes.end(),
                     std::make_move_iterator(stripes.begin()),

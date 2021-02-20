@@ -50,7 +50,7 @@ using cudf::detail::host_2dspan;
 using cudf::detail::hostdevice_2dvector;
 
 /**
- * @brief Range of rowgroups contained in a stripe.
+ * @brief Indices of rowgroups contained in a stripe.
  *
  * Provides a container-like interface to iterate over rowgroup indices.
  */
@@ -77,6 +77,7 @@ class orc_streams {
   Stream const& operator[](int idx) const { return streams[idx]; }
   Stream& operator[](int idx) { return streams[idx]; }
   auto id(int idx) const { return ids[idx]; }
+  auto& id(int idx) { return ids[idx]; }
   auto size() const { return streams.size(); }
 
   /**
