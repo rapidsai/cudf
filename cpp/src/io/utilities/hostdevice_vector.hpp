@@ -136,6 +136,11 @@ class hostdevice_vector {
 namespace cudf {
 namespace detail {
 
+/**
+ * @brief Wrapper around hostdevice_vector to enable two-dimensional indexing.
+ *
+ * Does not incur additional allocations.
+ */
 template <typename T>
 class hostdevice_2dvector {
  public:

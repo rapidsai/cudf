@@ -553,8 +553,8 @@ orc_streams writer::impl::create_streams(host_span<orc_column_view> columns,
   return {std::move(streams), std::move(ids)};
 }
 
-orc_stream_offsets orc_streams::compute_offsets(host_span<orc_column_view const> columns,
-                                                size_t num_rowgroups) const
+orc_streams::orc_stream_offsets orc_streams::compute_offsets(
+  host_span<orc_column_view const> columns, size_t num_rowgroups) const
 {
   std::vector<size_t> strm_offsets(streams.size());
   size_t str_data_size = 0;

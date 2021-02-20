@@ -49,21 +49,25 @@ using cudf::detail::device_2dspan;
 using cudf::detail::host_2dspan;
 using cudf::detail::hostdevice_2dvector;
 
+/**
+ * @brief Range of rowgroups contained in a stripe.
+ *
+ * Provides a container-like interface to iterate over rowgroup indices.
+ */
 struct stripe_rowgroups {
-  uint32_t id;
-  uint32_t first;
-  uint32_t size;
+  uint32_t id;     // stripe id
+  uint32_t first;  // first rowgroup in the stripe
+  uint32_t size;   // number of rowgroups in the stripe
   stripe_rowgroups(uint32_t id, uint32_t first, uint32_t size) : id{id}, first{first}, size{size} {}
   auto cbegin() const { return thrust::make_counting_iterator(first); }
   auto cend() const { return thrust::make_counting_iterator(first + size); }
 };
-struct orc_stream_offsets {
-  std::vector<size_t> offsets;
-  size_t str_data_size;
-  size_t rle_data_size;
-  auto data_size() const { return str_data_size + rle_data_size; }
-};
 
+/**
+ * @brief List of per-column ORC streams.
+ *
+ * Provides interface to calculate their offsets.
+ */
 class orc_streams {
  public:
   std::vector<Stream> streams;
@@ -73,10 +77,20 @@ class orc_streams {
   Stream& operator[](int idx) { return streams[idx]; }
   auto id(int idx) const { return ids[idx]; }
   auto size() const { return streams.size(); }
+
+  /**
+   * @brief List of ORC stream offsets and their total size.
+   */
+  struct orc_stream_offsets {
+    std::vector<size_t> offsets;
+    size_t str_data_size = 0;
+    size_t rle_data_size = 0;
+    auto data_size() const { return str_data_size + rle_data_size; }
+  };
   orc_stream_offsets compute_offsets(host_span<orc_column_view const> columns,
                                      size_t num_rowgroups) const;
 
-  operator std::vector<Stream>() const { return streams; }
+  operator std::vector<Stream> const&() const { return streams; }
 };
 
 /**
@@ -192,9 +206,9 @@ class writer::impl {
   /**
    * @brief Builds up per-column streams.
    *
-   * @param columns List of columns
-   * @param num_rows Total number of rows
-   * @param stripe_bounds List of stripe boundaries
+   * @param[in,out] columns List of columns
+   * @param[in] num_rows Total number of rows
+   * @param[in] stripe_bounds List of stripe boundaries
    * @return List of stream descriptors
    */
   orc_streams create_streams(host_span<orc_column_view> columns,
