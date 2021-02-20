@@ -161,7 +161,7 @@ class orc_column_view {
       _data_count(col.size()),
       _null_count(col.null_count()),
       _data(col.head<uint8_t>() + col.offset() * _type_width),
-      _nulls(col.nullable() ? col.null_mask() : nullptr),
+      _nulls(col.null_mask()),
       _column_offset(col.offset()),
       _clockscale(to_clockscale<uint8_t>(col.type().id())),
       _type_kind(to_orc_type(col.type().id()))
@@ -303,7 +303,6 @@ std::vector<stripe_rowgroups> writer::impl::gather_stripe_info(
 }
 
 void writer::impl::init_dictionaries(orc_column_view *columns,
-                                     size_t num_rows,
                                      std::vector<int> const &str_col_ids,
                                      uint32_t *dict_data,
                                      uint32_t *dict_index,
@@ -322,8 +321,8 @@ void writer::impl::init_dictionaries(orc_column_view *columns,
       ck->valid_map_base    = str_column.nulls();
       ck->column_offset     = str_column.column_offset();
       ck->column_data_base  = str_column.data();
-      ck->dict_data         = dict_data + i * num_rows + g * row_index_stride_;
-      ck->dict_index        = dict_index + i * num_rows;  // Indexed by abs row
+      ck->dict_data         = dict_data + i * str_column.data_count() + g * row_index_stride_;
+      ck->dict_index        = dict_index + i * str_column.data_count();  // Indexed by abs row
       ck->start_row         = g * row_index_stride_;
       ck->num_rows          = std::min<uint32_t>(row_index_stride_,
                                         std::max<int>(str_column.data_count() - ck->start_row, 0));
@@ -340,7 +339,6 @@ void writer::impl::init_dictionaries(orc_column_view *columns,
 }
 
 void writer::impl::build_dictionaries(orc_column_view *columns,
-                                      size_t num_rows,
                                       std::vector<int> const &str_col_ids,
                                       host_span<stripe_rowgroups const> stripe_bounds,
                                       hostdevice_vector<gpu::DictionaryChunk> const &dict,
@@ -359,7 +357,7 @@ void writer::impl::build_dictionaries(orc_column_view *columns,
       auto *sd             = &stripe_dict[stripe.id * str_col_ids.size() + col_idx];
       sd->column_data_base = str_column.host_dict_chunk(0)->column_data_base;
       sd->dict_data        = str_column.host_dict_chunk(stripe.first)->dict_data;
-      sd->dict_index       = dict_index + col_idx * num_rows;  // Indexed by abs row
+      sd->dict_index       = dict_index + col_idx * str_column.data_count();  // Indexed by abs row
       sd->column_id        = str_col_ids[col_idx];
       sd->start_chunk      = stripe.first;
       sd->num_chunks       = stripe.size;
@@ -401,7 +399,6 @@ void writer::impl::build_dictionaries(orc_column_view *columns,
 }
 
 orc_streams writer::impl::create_streams(host_span<orc_column_view> columns,
-                                         size_t num_rows,
                                          host_span<stripe_rowgroups const> stripe_bounds)
 {
   // First n + 1 streams are row index streams, including 'column 0'
@@ -1081,7 +1078,7 @@ void writer::impl::write(table_view const &table)
   hostdevice_vector<gpu::DictionaryChunk> dict(num_dict_chunks);
   if (!str_col_ids.empty()) {
     init_dictionaries(
-      orc_columns.data(), num_rows, str_col_ids, dict_data.data(), dict_index.data(), &dict);
+      orc_columns.data(), str_col_ids, dict_data.data(), dict_index.data(), &dict);
   }
 
   // Decide stripe boundaries early on, based on uncompressed size
@@ -1092,7 +1089,6 @@ void writer::impl::write(table_view const &table)
   hostdevice_vector<gpu::StripeDictionary> stripe_dict(num_stripe_dict);
   if (!str_col_ids.empty()) {
     build_dictionaries(orc_columns.data(),
-                       num_rows,
                        str_col_ids,
                        stripe_bounds,
                        dict,
@@ -1100,7 +1096,7 @@ void writer::impl::write(table_view const &table)
                        stripe_dict);
   }
 
-  auto streams  = create_streams(orc_columns, num_rows, stripe_bounds);
+  auto streams  = create_streams(orc_columns, stripe_bounds);
   auto enc_data = encode_columns(orc_columns, str_col_ids, stripe_bounds, streams);
 
   // Assemble individual disparate column chunks into contiguous data streams

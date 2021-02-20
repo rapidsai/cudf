@@ -70,9 +70,10 @@ struct stripe_rowgroups {
  */
 class orc_streams {
  public:
-  std::vector<Stream> streams;
-  std::vector<int32_t> ids;
-
+  orc_streams(std::vector<Stream> streams, std::vector<int32_t> ids)
+    : streams{std::move(streams)}, ids{std::move(ids)}
+  {
+  }
   Stream const& operator[](int idx) const { return streams[idx]; }
   Stream& operator[](int idx) { return streams[idx]; }
   auto id(int idx) const { return ids[idx]; }
@@ -91,6 +92,10 @@ class orc_streams {
                                      size_t num_rowgroups) const;
 
   operator std::vector<Stream> const&() const { return streams; }
+
+ private:
+  std::vector<Stream> streams;
+  std::vector<int32_t> ids;
 };
 
 /**
@@ -172,14 +177,12 @@ class writer::impl {
    * @brief Builds up column dictionaries indices
    *
    * @param columns List of columns
-   * @param num_rows Total number of rows
    * @param str_col_ids List of columns that are strings type
    * @param dict_data Dictionary data memory
    * @param dict_index Dictionary index memory
    * @param dict List of dictionary chunks
    */
   void init_dictionaries(orc_column_view* columns,
-                         size_t num_rows,
                          std::vector<int> const& str_col_ids,
                          uint32_t* dict_data,
                          uint32_t* dict_index,
@@ -189,7 +192,6 @@ class writer::impl {
    * @brief Builds up per-stripe dictionaries for string columns.
    *
    * @param columns List of columns
-   * @param num_rows Total number of rows
    * @param str_col_ids List of columns that are strings type
    * @param stripe_bounds List of stripe boundaries
    * @param dict List of dictionary chunks
@@ -197,7 +199,6 @@ class writer::impl {
    * @param stripe_dict List of stripe dictionaries
    */
   void build_dictionaries(orc_column_view* columns,
-                          size_t num_rows,
                           std::vector<int> const& str_col_ids,
                           host_span<stripe_rowgroups const> stripe_bounds,
                           hostdevice_vector<gpu::DictionaryChunk> const& dict,
@@ -207,12 +208,10 @@ class writer::impl {
    * @brief Builds up per-column streams.
    *
    * @param[in,out] columns List of columns
-   * @param[in] num_rows Total number of rows
    * @param[in] stripe_bounds List of stripe boundaries
    * @return List of stream descriptors
    */
   orc_streams create_streams(host_span<orc_column_view> columns,
-                             size_t num_rows,
                              host_span<stripe_rowgroups const> stripe_bounds);
 
   /**
