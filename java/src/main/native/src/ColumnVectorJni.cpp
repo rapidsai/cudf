@@ -355,12 +355,10 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_castLeafD64ToD32( JNIEn
   JNI_NULL_CHECK(env, j_handle, "native handle is null", 0);
 
   try {
-    cudf::column_view *n_list_col_view = reinterpret_cast<cudf::column_view *>(j_handle);
-    JNI_ARG_CHECK(env, n_list_col_view->type().id() == cudf::type_id::LIST, "Only list types are allowed", 0);
+    cudf::column *n_list_col = reinterpret_cast<cudf::column *>(j_handle);
+    JNI_ARG_CHECK(env, n_list_col->type().id() == cudf::type_id::LIST, "Only list types are allowed", 0);
 
-    auto copy_list = cudf::column(*n_list_col_view);
-
-    return reinterpret_cast<jlong>(replace_column(copy_list));
+    return reinterpret_cast<jlong>(replace_column(*n_list_col));
   }
   CATCH_STD(env, 0);
 }

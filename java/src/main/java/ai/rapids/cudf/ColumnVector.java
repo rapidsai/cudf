@@ -396,11 +396,18 @@ public final class ColumnVector extends ColumnView {
   }
 
   /**
-   * Replace the leaf node in the list with the given column
+   * Cast Leaf node in the List col from a 64-bit Decimal to 32-bit Decimal, iff it exists.
+   *
+   * Ex 1:
+   * replace(col( type: List<List<Struct<int, List, String>>>)) => returns unchanged
+   *
+   * Ex 2:
+   * replace(col(type: List<List<D64>>) => col(type: List<List<D32>>)
+   *
    */
-  public static ColumnVector castLeafD64ToD32(ColumnView origList) {
-    assert(origList.type == DType.LIST);
-    return new ColumnVector(castLeafD64ToD32(origList.getNativeView()));
+  public ColumnVector castLeafD64ToD32() {
+    assert(type == DType.LIST);
+    return new ColumnVector(castLeafD64ToD32(offHeap.columnHandle));
   }
 
   /**
