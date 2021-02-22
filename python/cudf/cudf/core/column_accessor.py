@@ -5,7 +5,15 @@ from __future__ import annotations
 import itertools
 from collections import OrderedDict
 from collections.abc import MutableMapping
-from typing import TYPE_CHECKING, Any, Callable, Mapping, Tuple, Union
+from typing import (
+    TYPE_CHECKING,
+    Any,
+    Callable,
+    Mapping,
+    Optional,
+    Tuple,
+    Union,
+)
 
 import pandas as pd
 
@@ -342,7 +350,7 @@ class ColumnAccessor(MutableMapping):
         return key + (pad_value,) * (self.nlevels - len(key))
 
     def rename_levels(
-        self, mapper: Union[Mapping[Any, Any], Callable], level: int
+        self, mapper: Union[Mapping[Any, Any], Callable], level: Optional[int]
     ) -> ColumnAccessor:
         """
         Rename the specified levels of the given ColumnAccessor
@@ -383,6 +391,11 @@ class ColumnAccessor(MutableMapping):
                 x = tuple(x)
                 return x
 
+            if level is None:
+                raise NotImplementedError(
+                    "Renaming columns with a MultiIndex and level=None is"
+                    "not supported"
+                )
             new_names = map(rename_column, self.keys())
             ca = ColumnAccessor(
                 dict(zip(new_names, self.values())),
@@ -391,6 +404,8 @@ class ColumnAccessor(MutableMapping):
             )
 
         else:
+            if level is None:
+                level = 0
             if level != 0:
                 raise IndexError(
                     f"Too many levels: Index has only 1 level, not {level+1}"

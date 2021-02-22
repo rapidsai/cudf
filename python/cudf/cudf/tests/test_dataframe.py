@@ -8381,3 +8381,15 @@ def test_rename_for_level_RangeIndex_dataframe():
     got = gdf.rename(columns={"a": "f"}, index={0: 3, 1: 4}, level=0)
 
     assert_eq(expect, got)
+
+
+@pytest.mark.xfail(reason="level=None not implemented yet")
+def test_rename_for_level_is_None_MC():
+    gdf = gd.DataFrame({"a": [1, 2, 3], "b": [4, 5, 6], "c": [7, 8, 9]})
+    gdf.columns = pd.MultiIndex.from_tuples([("a", 1), ("a", 2), ("b", 1)])
+    pdf = gdf.to_pandas()
+
+    expect = pdf.rename(columns={"a": "f"}, level=None)
+    got = gdf.rename(columns={"a": "f"}, level=None)
+
+    assert_eq(expect, got)
