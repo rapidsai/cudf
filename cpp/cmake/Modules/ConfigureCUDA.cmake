@@ -33,6 +33,9 @@ message(STATUS "CUDF: CUDA_VERSION: ${CUDA_VERSION}")
 include(${CUDF_SOURCE_DIR}/cmake/Modules/SetGPUArchs.cmake)
 message(STATUS "CUDF: Building CUDF for GPU architectures: ${CMAKE_CUDA_ARCHITECTURES}")
 
+# Only enable the CUDA language after including SetGPUArchs.cmake
+enable_language(CUDA)
+
 if(CMAKE_COMPILER_IS_GNUCXX)
     string(APPEND CMAKE_CXX_FLAGS " -Wall -Werror -Wno-unknown-pragmas -Wno-error=deprecated-declarations")
     if(CUDF_BUILD_TESTS OR CUDF_BUILD_BENCHMARKS)

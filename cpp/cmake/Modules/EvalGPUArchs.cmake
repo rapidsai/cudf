@@ -14,6 +14,8 @@
 # limitations under the License.
 #=============================================================================
 
+enable_language(CUDA)
+
 function(evaluate_gpu_archs gpu_archs)
   set(eval_file ${PROJECT_BINARY_DIR}/eval_gpu_archs.cu)
   set(eval_exe ${PROJECT_BINARY_DIR}/eval_gpu_archs)

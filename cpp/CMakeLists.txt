@@ -29,7 +29,7 @@ elseif(CMAKE_CUDA_ARCHITECTURES STREQUAL "")
   set(CUDF_BUILD_FOR_DETECTED_ARCHS TRUE)
 endif()
 
-project(CUDF VERSION 0.19.0 LANGUAGES C CXX CUDA)
+project(CUDF VERSION 0.19.0 LANGUAGES C CXX)
 
 ###################################################################################################
 # - build options ---------------------------------------------------------------------------------
