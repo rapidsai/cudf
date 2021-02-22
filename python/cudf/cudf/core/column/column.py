@@ -855,9 +855,14 @@ class ColumnBase(Column, Serializable):
         rhs = None
 
         try:
-            # We need to convert values to same type as self,
-            # hence passing dtype=self.dtype
-            rhs = as_column(values, dtype=self.dtype)
+            rhs = as_column(values, nan_as_null=False)
+            if lhs.null_count == len(lhs):
+                lhs = lhs.astype(rhs.dtype)
+            elif rhs.null_count == len(rhs):
+                rhs = rhs.astype(lhs.dtype)
+
+            if not (rhs.null_count == len(rhs)) and lhs.dtype != rhs.dtype:
+                return full(len(self), False, dtype="bool")
 
             # Short-circuit if rhs is all null.
             if lhs.null_count == 0 and (rhs.null_count == len(rhs)):
@@ -867,28 +872,18 @@ class ColumnBase(Column, Serializable):
             # typecasting fails
             return full(len(self), False, dtype="bool")
 
-        # If categorical, combine categories first
-        if is_categorical_dtype(lhs):
-            lhs_cats = lhs.cat().categories._values
-            rhs_cats = rhs.cat().categories._values
+        res = lhs._obtain_isin_result(rhs)
 
-            if not np.issubdtype(rhs_cats.dtype, lhs_cats.dtype):
-                # If they're not the same dtype, short-circuit if the values
-                # list doesn't have any nulls. If it does have nulls, make
-                # the values list a Categorical with a single null
-                if not rhs.has_nulls:
-                    return full(len(self), False, dtype="bool")
-                rhs = as_column(pd.Categorical.from_codes([-1], categories=[]))
-                rhs = rhs.cat().set_categories(lhs_cats).astype(self.dtype)
+        return res
 
-        ldf = cudf.DataFrame({"x": lhs, "orig_order": arange(len(lhs))})
+    def _obtain_isin_result(self, rhs):
+        ldf = cudf.DataFrame({"x": self, "orig_order": arange(len(self))})
         rdf = cudf.DataFrame(
             {"x": rhs, "bool": full(len(rhs), True, dtype="bool")}
         )
         res = ldf.merge(rdf, on="x", how="left").sort_values(by="orig_order")
         res = res.drop_duplicates(subset="orig_order", ignore_index=True)
         res = res._data["bool"].fillna(False)
-
         return res
 
     def as_mask(self) -> Buffer:

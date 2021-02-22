@@ -1502,7 +1502,6 @@ def test_dataframe_cupy_array_wrong_index():
         gd.DataFrame(d_ary, index="a")
 
 
-@pytest.mark.xfail(reason="constructor does not coerce index inputs")
 def test_index_in_dataframe_constructor():
     a = pd.DataFrame({"x": [1, 2, 3]}, index=[4.0, 5.0, 6.0])
     b = gd.DataFrame({"x": [1, 2, 3]}, index=[4.0, 5.0, 6.0])
@@ -3990,10 +3989,12 @@ def test_value_counts():
 def test_isin_numeric(data, values):
     index = np.random.randint(0, 100, len(data))
     psr = pd.Series(data, index=index)
-    gsr = gd.Series.from_pandas(psr)
+    gsr = gd.Series.from_pandas(psr, nan_as_null=False)
 
-    got = gsr.isin(values)
     expected = psr.isin(values)
+    print(expected)
+    got = gsr.isin(values)
+
     assert_eq(got, expected)
 
 
@@ -4066,15 +4067,7 @@ def test_isin_datetime(data, values):
         ["this", "is"],
         [None, None, None],
         ["12", "14", "19"],
-        pytest.param(
-            [12, 14, 19],
-            marks=[
-                pytest.mark.xfail(
-                    reason="pandas's failure here seems like a bug "
-                    "given the reverse succeeds"
-                )
-            ],
-        ),
+        [12, 14, 19],
         ["is", "this", "is", "this", "is"],
     ],
 )
@@ -8094,9 +8087,8 @@ def test_agg_for_dataframes(data, aggs):
     pdf = pd.DataFrame(data)
     gdf = gd.DataFrame(data)
 
-    expect = pdf.agg(aggs)
-    got = gdf.agg(aggs)
-
+    expect = pdf.agg(aggs).sort_index()
+    got = gdf.agg(aggs).sort_index()
     assert_eq(expect, got, check_dtype=False)
 
 

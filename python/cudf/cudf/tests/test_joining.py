@@ -540,10 +540,6 @@ def test_empty_joins(how, left_empty, right_empty):
     assert len(expected) == len(result)
 
 
-@pytest.mark.xfail(
-    reason="left_on/right_on produces undefined results with 0"
-    "index and is disabled"
-)
 def test_merge_left_index_zero():
     left = pd.DataFrame({"x": [1, 2, 3, 4, 5, 6]}, index=[0, 1, 2, 3, 4, 5])
     right = pd.DataFrame(

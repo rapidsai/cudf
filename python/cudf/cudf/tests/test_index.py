@@ -565,7 +565,7 @@ def test_empty_df_head_tail_index(n):
         (
             pd.CategoricalIndex(["a", "b", "c", "a", "b", "c"]),
             pd.CategoricalIndex(["a", "b", "c", "a", "b", "c"]) != "a",
-            "h",
+            "a",
             None,
         ),
         (

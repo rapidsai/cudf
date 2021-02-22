@@ -9,6 +9,7 @@ from typing import (
     Dict,
     Mapping,
     Optional,
+    Sequence,
     Tuple,
     Union,
     cast,
@@ -867,6 +868,35 @@ class CategoricalColumn(column.ColumnBase):
         else:
             super().set_base_data(value)
 
+    def isin(self, values: Sequence) -> ColumnBase:
+        if cudf.utils.dtypes.is_scalar(values):
+            raise TypeError(
+                "only list-like objects are allowed to be passed "
+                f"to isin(), you passed a [{type(values).__name__}]"
+            )
+
+        lhs = self
+        rhs = None
+
+        try:
+            # We need to convert values to same type as self,
+            # hence passing dtype=self.dtype
+            rhs = cudf.core.column.as_column(values, dtype=self.dtype)
+
+            if not (rhs.null_count == len(rhs)) and lhs.dtype != rhs.dtype:
+                return cudf.core.column.full(len(self), False, dtype="bool")
+
+            # Short-circuit if rhs is all null.
+            if lhs.null_count == 0 and (rhs.null_count == len(rhs)):
+                return cudf.core.column.full(len(self), False, dtype="bool")
+        except ValueError:
+            # pandas functionally returns all False when cleansing via
+            # typecasting fails
+            return cudf.core.column.full(len(self), False, dtype="bool")
+
+        res = lhs._obtain_isin_result(rhs)
+        return res
+
     def set_base_mask(self, value: Optional[Buffer]):
         super().set_base_mask(value)
         self._codes = None
@@ -936,6 +966,22 @@ class CategoricalColumn(column.ColumnBase):
         )
 
     def __setitem__(self, key, value):
+        if cudf.utils.dtypes.is_scalar(value):
+            new_values = [value]
+        else:
+            new_values = value
+
+        to_add_categories = cudf.Index(new_values).difference(self.categories)
+
+        if (
+            len(to_add_categories)
+            and not to_add_categories.isna()._values.all()
+        ):
+            raise ValueError(
+                "Cannot setitem on a Categorical with a new "
+                "category, set the categories first"
+            )
+
         if cudf.utils.dtypes.is_scalar(value):
             value = self._encode(value) if value is not None else value
         else:

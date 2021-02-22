@@ -973,7 +973,6 @@ def test_series_setitem_datetime():
     assert_eq(psr, gsr)
 
 
-@pytest.mark.xfail(reason="Pandas will coerce to object datatype here")
 def test_series_setitem_datetime_coerced():
     psr = pd.Series(["2001", "2002", "2003"], dtype="datetime64[ns]")
     gsr = cudf.from_pandas(psr)

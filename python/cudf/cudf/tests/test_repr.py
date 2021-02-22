@@ -1169,8 +1169,7 @@ def test_timedelta_index_repr(index, expected_repr):
 def test_mulitIndex_repr(pmi, max_seq_items):
     pd.set_option("display.max_seq_items", max_seq_items)
     gmi = cudf.from_pandas(pmi)
-    print(gmi)
-    print(pmi)
+
     assert gmi.__repr__() == pmi.__repr__()
     pd.reset_option("display.max_seq_items")
 

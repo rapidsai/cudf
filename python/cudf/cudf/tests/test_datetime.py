@@ -413,9 +413,6 @@ def test_datetime_to_arrow(dtype):
 def test_datetime_unique(data, nulls):
     psr = pd.Series(data)
 
-    print(data)
-    print(nulls)
-
     if len(data) > 0:
         if nulls == "some":
             p = np.random.randint(0, len(data), 2)

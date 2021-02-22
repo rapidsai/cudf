@@ -1838,7 +1838,6 @@ def test_csv_reader_timedetla_dtypes(dtype):
     assert_eq(expected, actual)
 
 
-@pytest.mark.xfail(reason="https://github.com/rapidsai/cudf/issues/6719")
 @pytest.mark.parametrize(
     "dtype", sorted(list(cudf.utils.dtypes.DATETIME_TYPES))
 )

@@ -140,7 +140,10 @@ def test_series_nsmallest(data, n):
     sr = Series(data)
     psr = pd.Series(data)
     assert_eq(sr.nsmallest(n), psr.nsmallest(n))
-    assert_eq(sr.nsmallest(n, keep="last"), psr.nsmallest(n, keep="last"))
+    assert_eq(
+        sr.nsmallest(n, keep="last").sort_index(),
+        psr.nsmallest(n, keep="last").sort_index(),
+    )
 
     assert_exceptions_equal(
         lfunc=psr.nsmallest,

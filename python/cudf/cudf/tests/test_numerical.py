@@ -87,9 +87,6 @@ def test_can_cast_safely_mixed_kind():
     assert not data.can_cast_safely(to_dtype)
 
 
-@pytest.mark.xfail(
-    reason="cuDF null <-> pd.NA compatibility not yet supported"
-)
 def test_to_pandas_nullable_integer():
     gsr_not_null = Series([1, 2, 3])
     gsr_has_null = Series([1, 2, None])
@@ -98,12 +95,9 @@ def test_to_pandas_nullable_integer():
     psr_has_null = pd.Series([1, 2, None], dtype="Int64")
 
     assert_eq(gsr_not_null.to_pandas(), psr_not_null)
-    assert_eq(gsr_has_null.to_pandas(), psr_has_null)
+    assert_eq(gsr_has_null.to_pandas(nullable=True), psr_has_null)
 
 
-@pytest.mark.xfail(
-    reason="cuDF null <-> pd.NA compatibility not yet supported"
-)
 def test_to_pandas_nullable_bool():
     gsr_not_null = Series([True, False, True])
     gsr_has_null = Series([True, False, None])
@@ -112,7 +106,7 @@ def test_to_pandas_nullable_bool():
     psr_has_null = pd.Series([True, False, None], dtype="boolean")
 
     assert_eq(gsr_not_null.to_pandas(), psr_not_null)
-    assert_eq(gsr_has_null.to_pandas(), psr_has_null)
+    assert_eq(gsr_has_null.to_pandas(nullable=True), psr_has_null)
 
 
 def test_can_cast_safely_has_nulls():
