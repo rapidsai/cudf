@@ -3936,4 +3936,41 @@ public class ColumnVectorTest extends CudfTestBase {
       assertColumnsAreEqual(expected, created);
     }
   }
+
+  @Test
+  void testCastLeafNodeInList() {
+    try (
+        ColumnVector c1 = ColumnVector.decimalFromDoubles(DType.create(DType.DTypeEnum.DECIMAL32, 3), RoundingMode.HALF_UP, 770.892, 961.110);
+        ColumnVector c2 = ColumnVector.decimalFromDoubles(DType.create(DType.DTypeEnum.DECIMAL32, 3), RoundingMode.HALF_UP, 524.982, 479.946);
+        ColumnVector c3 = ColumnVector.decimalFromDoubles(DType.create(DType.DTypeEnum.DECIMAL32, 3), RoundingMode.HALF_UP, 346.997, 479.946);
+        ColumnVector c4 = ColumnVector.decimalFromDoubles(DType.create(DType.DTypeEnum.DECIMAL32, 3), RoundingMode.HALF_UP, 87.764, 414.239);
+        ColumnVector expected = ColumnVector.makeList(c1, c2, c3, c4);
+         ColumnVector child1 = ColumnVector.decimalFromDoubles(DType.create(DType.DTypeEnum.DECIMAL64, 3), RoundingMode.HALF_UP, 770.892, 961.110);
+         ColumnVector child2 = ColumnVector.decimalFromDoubles(DType.create(DType.DTypeEnum.DECIMAL64, 3), RoundingMode.HALF_UP, 524.982, 479.946);
+         ColumnVector child3 = ColumnVector.decimalFromDoubles(DType.create(DType.DTypeEnum.DECIMAL64, 3), RoundingMode.HALF_UP, 346.997, 479.946);
+         ColumnVector child4 = ColumnVector.decimalFromDoubles(DType.create(DType.DTypeEnum.DECIMAL64, 3), RoundingMode.HALF_UP, 87.764, 414.239);
+         ColumnVector created = ColumnVector.makeList(child1, child2, child3, child4);
+         ColumnVector replaced = created.castLeafD64ToD32()) {
+      assertColumnsAreEqual(expected, replaced);
+    }
+  }
+
+  @Test
+  void testReplaceColumnInStruct() {
+    try (ColumnVector expected = ColumnVector.fromStructs(new StructType(false,
+            Arrays.asList(
+                new BasicType(false, DType.INT32),
+                new BasicType(false, DType.INT32),
+                new BasicType(false, DType.INT32))),
+        new HostColumnVector.StructData(1, 5, 3),
+        new HostColumnVector.StructData(4, 9, 6));
+         ColumnVector child1 = ColumnVector.fromInts(1, 4);
+         ColumnVector child2 = ColumnVector.fromInts(2, 5);
+         ColumnVector child3 = ColumnVector.fromInts(3, 6);
+         ColumnVector created = ColumnVector.makeStruct(child1, child2, child3);
+         ColumnVector replaceWith = ColumnVector.fromInts(5, 9);
+         ColumnVector replaced = created.replaceColumnsInStruct(new int[]{1}, new ColumnVector[]{replaceWith})) {
+      assertColumnsAreEqual(expected, replaced);
+    }
+  }
 }

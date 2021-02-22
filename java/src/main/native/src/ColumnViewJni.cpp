@@ -60,6 +60,7 @@
 #include <cudf/lists/lists_column_view.hpp>
 #include <cudf/structs/structs_column_view.hpp>
 #include <map_lookup.hpp>
+#include "cudf/types.hpp"
 
 #include "cudf_jni_apis.hpp"
 #include "dtype_utils.hpp"
@@ -1759,5 +1760,44 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_copyColumnViewToCV(JNIEnv
     return reinterpret_cast<jlong>(ret.release());
   }
   CATCH_STD(env, 0)
+}
+
+JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_replaceColumnsInStruct(
+    JNIEnv *env, jobject j_object, jlong j_handle, jintArray j_indices, jlongArray j_children) {
+
+  JNI_NULL_CHECK(env, j_handle, "native handle is null", 0);
+  JNI_NULL_CHECK(env, j_indices, "child indices to replace can't be null", 0);
+  JNI_NULL_CHECK(env, j_children, "children to replace can't be null", 0);
+
+  try {
+    cudf::jni::native_jpointerArray<cudf::column_view> children_to_replace(env, j_children);
+    cudf::jni::native_jintArray indices(env, j_indices);
+    JNI_ARG_CHECK(env, indices.size() == children_to_replace.size(), "The indices size and children size should match", 0);
+
+    cudf::column_view *n_struct_col_view = reinterpret_cast<cudf::column_view *>(j_handle);
+    JNI_ARG_CHECK(env, n_struct_col_view->type().id() == cudf::type_id::STRUCT, "Only struct types are allowed", 0);
+
+    std::map<int32_t, cudf::column_view*> m;
+    for (int i = 0 ; i < indices.size() ; i++) {
+      m[indices[i]] = children_to_replace[i];
+    }
+
+    std::vector<std::unique_ptr<cudf::column>> children;
+    children.reserve(n_struct_col_view->num_children());
+    int j = 0;
+    for (int i = 0 ; i < n_struct_col_view->num_children() ; i++) {
+      auto it = m.find(i);
+      if (it != m.end()) {
+        children.emplace_back(std::make_unique<cudf::column>(*it->second));
+      } else {
+        children.emplace_back(std::make_unique<cudf::column>(n_struct_col_view->child(i)));
+      }
+    }
+
+    auto col = cudf::make_structs_column(n_struct_col_view->size(), std::move(children),
+    n_struct_col_view->null_count(), cudf::copy_bitmask(*n_struct_col_view));
+    return reinterpret_cast<jlong>(col.release());
+  }
+  CATCH_STD(env, 0);
 }
 } // extern "C"

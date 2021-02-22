@@ -19,6 +19,7 @@
 package ai.rapids.cudf;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Optional;
 
@@ -1297,6 +1298,16 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
   }
 
   /**
+   * Replace columns in the struct with the given columns
+   */
+  public ColumnVector replaceColumnsInStruct(int[] indices,
+                                             ColumnView[] views) {
+    assert(type == DType.STRUCT);
+    return new ColumnVector(replaceColumnsInStruct(getNativeView(), indices,
+        Arrays.stream(views).mapToLong(v -> v.getNativeView()).toArray()));
+  }
+
+  /**
    * Zero-copy cast between types with the same underlying representation.
    *
    * Similar to reinterpret_cast or bit_cast in C++. This will essentially take the underlying data
@@ -2437,6 +2448,8 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    */
   private static native long timestampToStringTimestamp(long viewHandle, String format);
 
+  private static native long replaceColumnsInStruct(long cudfColumnHandle,
+                                                    int[] indices, long[] viewHandles) throws CudfException;
   /**
    * Native method for locating the starting index of the first instance of a given substring
    * in each string in the column. 0 indexing, returns -1 if the substring is not found. Can be

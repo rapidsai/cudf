@@ -396,28 +396,21 @@ public final class ColumnVector extends ColumnView {
   }
 
   /**
-   * Cast Leaf node in the List col from a 64-bit Decimal to 32-bit Decimal, iff it exists.
+   * This is a very specialized method that has only one job. It takes in a list and returns a
+   * new list if the Leaf node is a 64-bit Decimal, converting the leaf to a 32-bit Decimal.
+   * Note: this is not a true cast as it assumes that the 64-bit Decimal column is a 32-bit Decimal
+   * column that happens to be stored as a 64-bit Decimal.
    *
    * Ex 1:
-   * replace(col( type: List<List<Struct<int, List, String>>>)) => returns unchanged
+   * replace(col( type: List<List<Struct<int, List, String>>>)) => throws an assert error
    *
    * Ex 2:
-   * replace(col(type: List<List<D64>>) => col(type: List<List<D32>>)
+   * replace(col(type: List<List<D64>>) => col(type: List<List<D32>>) no rounding is done
    *
    */
   public ColumnVector castLeafD64ToD32() {
     assert(type == DType.LIST);
     return new ColumnVector(castLeafD64ToD32(offHeap.columnHandle));
-  }
-
-  /**
-   * Replace columns in the struct with the given columns
-   */
-  public static ColumnVector replaceColumnsInStruct(ColumnView origStruct, int[] indices,
-                                                    ColumnView[] views) {
-    assert(origStruct.type == DType.STRUCT);
-    return new ColumnVector(replaceColumnsInStruct(origStruct.getNativeView(), indices,
-        Arrays.stream(views).mapToLong( v -> v.getNativeView()).toArray()));
   }
 
   /**
@@ -750,9 +743,6 @@ public final class ColumnVector extends ColumnView {
   private static native int getNativeNullCountColumn(long cudfColumnHandle) throws CudfException;
 
   private static native void setNativeNullCountColumn(long cudfColumnHandle, int nullCount) throws CudfException;
-
-  private static native long replaceColumnsInStruct(long cudfColumnHandle,
-                                                    int[] indices, long[] viewHandles) throws CudfException;
 
   private static native long castLeafD64ToD32(long cudfColumnHandle) throws CudfException;
   /**
