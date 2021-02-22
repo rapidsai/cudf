@@ -7,10 +7,10 @@ from typing import TYPE_CHECKING
 import cudf
 from cudf import _lib as libcudf
 from cudf.core.join._join_helpers import (
-    _cast_join_keys,
     _coerce_to_list,
     _coerce_to_tuple,
     _Indexer,
+    _match_join_keys,
 )
 
 if TYPE_CHECKING:
@@ -121,7 +121,7 @@ class Merge(object):
             Left and right suffixes specified together, unpacked into lsuffix
             and rsuffix.
         """
-        self.validate_merge_params(
+        self._validate_merge_params(
             lhs,
             rhs,
             on=on,
@@ -157,9 +157,37 @@ class Merge(object):
         elif isinstance(self.lhs, cudf.Index):
             self.out_class = self.lhs.__class__
 
-        self.compute_join_keys()
+        self._compute_join_keys()
 
-    def compute_join_keys(self):
+    def perform_merge(self):
+        lhs, rhs = self._match_key_dtypes(self.lhs, self.rhs)
+
+        left_key_indices = [
+            key.get_numeric_index(lhs) for key in self._keys.left
+        ]
+        right_key_indices = [
+            key.get_numeric_index(rhs) for key in self._keys.right
+        ]
+
+        left_rows, right_rows = self._joiner(
+            lhs,
+            rhs,
+            left_on=left_key_indices,
+            right_on=right_key_indices,
+            how=self.how,
+        )
+        lhs, rhs = self._restore_categorical_keys(lhs, rhs)
+
+        left_result = lhs._gather(left_rows, nullify=True)
+        right_result = rhs._gather(right_rows, nullify=True)
+
+        result = self._merge_results(left_result, right_result)
+
+        if self.sort:
+            result = self._sort_result(result)
+        return result
+
+    def _compute_join_keys(self):
         if (
             self.left_index
             or self.right_index
@@ -216,38 +244,11 @@ class Merge(object):
 
         self._keys = self.__class__.JoinKeys(left=left_keys, right=right_keys)
 
-    def perform_merge(self):
-        lhs, rhs = self.match_key_dtypes(self.lhs, self.rhs, _cast_join_keys)
+    def _merge_results(self, left_result: Frame, right_result: Frame) -> Frame:
+        # merge the left result and right result into a single Frame
 
-        left_key_indices = [
-            key.get_numeric_index(lhs) for key in self._keys.left
-        ]
-        right_key_indices = [
-            key.get_numeric_index(rhs) for key in self._keys.right
-        ]
-        left_rows, right_rows = self._joiner(
-            lhs,
-            rhs,
-            left_on=left_key_indices,
-            right_on=right_key_indices,
-            how=self.how,
-        )
-        lhs, rhs = self.restore_categorical_keys(lhs, rhs)
-        return self.construct_result(lhs, rhs, left_rows, right_rows)
-
-    def construct_result(self, lhs, rhs, left_rows, right_rows):
-        lhs = lhs._gather(left_rows, nullify=True)
-        rhs = rhs._gather(right_rows, nullify=True)
-
-        result = self.merge_results(lhs, rhs)
-
-        if self.sort:
-            result = self.sort_result(result)
-        return result
-
-    def merge_results(self, lhs: Frame, rhs: Frame) -> Frame:
-        lnames = OrderedDict(zip(lhs._data, lhs._data))
-        rnames = OrderedDict(zip(rhs._data, rhs._data))
+        lnames = OrderedDict(zip(left_result._data, left_result._data))
+        rnames = OrderedDict(zip(right_result._data, right_result._data))
         common_names = set(lnames) & set(rnames)
 
         if self.on:
@@ -270,22 +271,22 @@ class Merge(object):
         data = cudf.core.column_accessor.ColumnAccessor()
 
         for lcol in lnames:
-            data[lnames[lcol]] = lhs._data[lcol]
+            data[lnames[lcol]] = left_result._data[lcol]
         for rcol in rnames:
-            data[rnames[rcol]] = rhs._data[rcol]
+            data[rnames[rcol]] = right_result._data[rcol]
 
         # drop the index we won't be using:
         if self.left_index and self.right_index:
             if self.how == "right":
-                index = rhs._index
+                index = right_result._index
             else:
-                index = lhs._index
+                index = left_result._index
         elif self.left_index:
             # left_index and right_on
-            index = rhs._index
+            index = right_result._index
         elif self.right_index:
             # right_index and left_on
-            index = lhs._index
+            index = left_result._index
         else:
             index = None
 
@@ -297,12 +298,13 @@ class Merge(object):
                 if lkey.name == rkey.name:
                     # fill nulls in the key column with values from the RHS
                     lkey.set_value(
-                        result, lkey.value(result).fillna(rkey.value(rhs)),
+                        result,
+                        lkey.value(result).fillna(rkey.value(right_result)),
                     )
 
         return result
 
-    def sort_result(self, result):
+    def _sort_result(self, result):
         # Pandas sorts on the key columns in the
         # same order as given in 'on'. If the indices are used as
         # keys, the index will be sorted. If one index is specified,
@@ -332,7 +334,7 @@ class Merge(object):
         return result
 
     @staticmethod
-    def validate_merge_params(
+    def _validate_merge_params(
         lhs,
         rhs,
         on,
@@ -392,25 +394,22 @@ class Merge(object):
                         "lsuffix and rsuffix are not defined"
                     )
 
-    def match_key_dtypes(self, lhs, rhs, match_func):
+    def _match_key_dtypes(self, lhs, rhs):
+        # Match the dtypes of the key columns from lhs and rhs
         out_lhs = lhs.copy(deep=False)
         out_rhs = rhs.copy(deep=False)
-        # match the dtypes of the key columns in
-        # self.lhs and self.rhs according to the matching
-        # function `match_func`
         for left_key, right_key in zip(*self._keys):
             lcol, rcol = left_key.value(lhs), right_key.value(rhs)
-            dtype = match_func(lcol, rcol, how=self.how)
+            dtype = _match_join_keys(lcol, rcol, how=self.how)
             if dtype:
                 left_key.set_value(out_lhs, lcol.astype(dtype))
                 right_key.set_value(out_rhs, rcol.astype(dtype))
         return out_lhs, out_rhs
 
-    def restore_categorical_keys(self, lhs, rhs):
+    def _restore_categorical_keys(self, lhs, rhs):
         # For inner joins, any categorical keys were casted
         # to the type of their categories.
-        # Here, we cast the keys back to categorical type
-        # before constructing the result
+        # Here, we cast the keys back to categorical type.
 
         out_lhs = lhs.copy(deep=False)
         out_rhs = rhs.copy(deep=False)
@@ -436,5 +435,5 @@ class MergeSemi(Merge):
         left_rows = libcudf.join.semi_join(lhs, rhs, left_on, right_on, how)
         return left_rows, cudf.core.column.as_column([], dtype="int32")
 
-    def merge_results(self, lhs, rhs):
-        return super().merge_results(lhs, cudf.core.frame.Frame())
+    def _merge_results(self, lhs, rhs):
+        return super()._merge_results(lhs, cudf.core.frame.Frame())

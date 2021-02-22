@@ -49,7 +49,7 @@ class _Indexer:
             return obj.index.names.index(self.name)
 
 
-def _cast_join_keys(lcol, rcol, how):
+def _match_join_keys(lcol, rcol, how):
     # cast the keys lcol and rcol to a common dtype
 
     ltype = lcol.dtype
@@ -59,7 +59,7 @@ def _cast_join_keys(lcol, rcol, how):
     if isinstance(ltype, CategoricalDtype) or isinstance(
         rtype, CategoricalDtype
     ):
-        return _cast_join_categorical_keys(lcol, rcol, how)
+        return _match_join_categorical_keys(lcol, rcol, how)
 
     if pd.api.types.is_dtype_equal(ltype, rtype):
         return ltype
@@ -91,7 +91,7 @@ def _cast_join_keys(lcol, rcol, how):
     return None
 
 
-def _cast_join_categorical_keys(lcol, rcol, how):
+def _match_join_categorical_keys(lcol, rcol, how):
     # cast the keys lcol and rcol to a common dtype
     # when at least one of them is a categorical type
 
@@ -100,7 +100,7 @@ def _cast_join_categorical_keys(lcol, rcol, how):
 
     if l_is_cat and r_is_cat:
         # if both are categoricals, logic is complicated:
-        return _cast_join_categorical_keys_both(lcol, rcol, how)
+        return _match_join_categorical_keys_both(lcol, rcol, how)
     elif l_is_cat or r_is_cat:
         if l_is_cat and how in {"left", "leftsemi", "leftanti"}:
             return lcol.dtype
@@ -114,7 +114,7 @@ def _cast_join_categorical_keys(lcol, rcol, how):
         raise ValueError("Neither operand is categorical")
 
 
-def _cast_join_categorical_keys_both(lcol, rcol, how):
+def _match_join_categorical_keys_both(lcol, rcol, how):
     # cast lcol and rcol to a common type when they are *both*
     # categorical types.
     #
@@ -151,7 +151,7 @@ def _cast_join_categorical_keys_both(lcol, rcol, how):
 
     if how == "inner":
         # cast to category types -- we must cast them back later
-        return _cast_join_keys(ltype.categories, rtype.categories, how)
+        return _match_join_keys(ltype.categories, rtype.categories, how)
     elif how in {"left", "leftanti", "leftsemi"}:
         # always cast to left type
         return ltype
