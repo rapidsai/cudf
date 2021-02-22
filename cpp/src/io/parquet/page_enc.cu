@@ -996,10 +996,11 @@ __global__ void __launch_bounds__(128, 8) gpuEncodePages(EncPage *pages,
         uint32_t def_lvl = [&]() {
           if (rle_numvals + t < s->page.num_rows && row < s->col.num_rows) {
             uint32_t def       = 0;
+            size_type l        = 0;
             bool is_col_nested = false;
             auto col           = *s->col.parent_column;
             do {
-              if (col.nullable()) {
+              if (s->col.nullability[l]) {
                 if (col.is_valid(row)) {
                   ++def;
                 } else {
@@ -1008,7 +1009,10 @@ __global__ void __launch_bounds__(128, 8) gpuEncodePages(EncPage *pages,
                 }  // If col not nullable then it does not contribute to def levels
               }
               is_col_nested = (col.type().id() == type_id::STRUCT);
-              if (is_col_nested) { col = col.child(0); }
+              if (is_col_nested) {
+                col = col.child(0);
+                ++l;
+              }
             } while (is_col_nested);
             return def;
           } else {

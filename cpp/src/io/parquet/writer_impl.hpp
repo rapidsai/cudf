@@ -241,7 +241,7 @@ class writer::impl {
   cudf::io::parquet::FileMetaData md;
 
   // TODO: docs
-  table_input_metadata const* table_meta;
+  table_input_metadata const* table_meta = nullptr;
   // optional user metadata
   table_metadata_with_nullability user_metadata_with_nullability;
   // only used in the write_chunked() case. copied from the (optionally) user supplied

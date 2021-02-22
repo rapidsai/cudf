@@ -573,7 +573,8 @@ struct schema_tree_node : public SchemaElement {
 };
 
 std::vector<schema_tree_node> construct_schema_tree(LinkedColVector const &linked_columns,
-                                                    table_input_metadata const &metadata)
+                                                    table_input_metadata const &metadata,
+                                                    bool single_write_mode)
 {
   std::vector<schema_tree_node> schema;
   schema_tree_node root{};
@@ -588,16 +589,22 @@ std::vector<schema_tree_node> construct_schema_tree(LinkedColVector const &linke
   std::function<void(LinkedColPtr const &, column_in_metadata const &, size_t)> add_schema =
     [&](LinkedColPtr const &col, column_in_metadata const &col_meta, size_t parent_idx) {
       bool col_nullable = [&]() {
-        if (col_meta.nullable.has_value()) {
-          if (col_meta.nullable.value() == false) {
-            CUDF_EXPECTS(
-              col->nullable() == false,
-              "Mismatch in metadata prescribed nullability and input column nullability. "
-              "Metadata for nullable input column cannot prescribe nullability = false");
-          }
-          return col_meta.nullable.value();
-        } else {
+        if (single_write_mode) {
           return col->nullable();
+        } else {
+          if (col_meta.nullable.has_value()) {
+            if (col_meta.nullable.value() == false) {
+              CUDF_EXPECTS(
+                col->nullable() == false,
+                "Mismatch in metadata prescribed nullability and input column nullability. "
+                "Metadata for nullable input column cannot prescribe nullability = false");
+            }
+            return col_meta.nullable.value();
+          } else {
+            // For chunked write, when not provided nullability, we assume the worst case scenario
+            // that all columns are nullable.
+            return true;
+          }
         }
       }();
 
@@ -820,6 +827,7 @@ struct new_parquet_column_view {
                           std::vector<schema_tree_node> const &schema_tree,
                           rmm::cuda_stream_view stream)
     : schema_node(schema_node),
+      _d_nullability(0, stream),
       string_views(0, stream),
       _dremel_offsets(0, stream),
       _rep_level(0, stream),
@@ -874,6 +882,24 @@ struct new_parquet_column_view {
       if (curr_schema_node.repetition_type == parquet::REPEATED) { ++_max_rep_level; }
       curr_schema_node = schema_tree[curr_schema_node.parent_idx];
     }
+
+    // Construct nullability vector using repetition_type from schema.
+    std::vector<uint8_t> _nullability;
+    curr_schema_node = schema_node;
+    while (curr_schema_node.parent_idx != -1) {
+      if (not curr_schema_node.is_stub()) {
+        _nullability.push_back(curr_schema_node.repetition_type == FieldRepetitionType::OPTIONAL);
+      }
+      curr_schema_node = schema_tree[curr_schema_node.parent_idx];
+    }
+    // TODO: Explore doing this for all columns in a single go outside this ctor. Maybe using
+    // hostdevice_vector. Currently this involves a cudamemcpy for each column.
+    _d_nullability = rmm::device_uvector<uint8_t>(_nullability.size(), stream);
+    CUDA_TRY(cudaMemcpyAsync(_d_nullability.data(),
+                             _nullability.data(),
+                             _nullability.size() * sizeof(uint8_t),
+                             cudaMemcpyHostToDevice,
+                             stream.value()));
 
     _is_list = (_max_rep_level > 0) ? true : false;
 
@@ -954,7 +980,8 @@ struct new_parquet_column_view {
       }
       return nbits;
     };
-    desc.level_bits = count_bits(max_rep_level()) << 4 | count_bits(max_def_level());
+    desc.level_bits  = count_bits(max_rep_level()) << 4 | count_bits(max_def_level());
+    desc.nullability = _d_nullability.data();
     return desc;
   }
 
@@ -993,6 +1020,7 @@ struct new_parquet_column_view {
   std::vector<std::string> path_in_schema;
   uint8_t _max_def_level;
   uint8_t _max_rep_level;
+  rmm::device_uvector<uint8_t> _d_nullability;
 
   column_view cudf_col;
 
@@ -1003,7 +1031,7 @@ struct new_parquet_column_view {
                       ///< level vectors. O(num rows)
   rmm::device_uvector<uint8_t> _rep_level;
   rmm::device_uvector<uint8_t> _def_level;
-  std::vector<bool> _nullability;
+  std::vector<uint8_t> _nullability;
   size_type _data_count;
 
   // Dictionary related members
@@ -1199,6 +1227,7 @@ writer::impl::impl(std::unique_ptr<data_sink> sink,
     int96_timestamps(options.is_enabled_int96_timestamps()),
     decimal_precision(options.get_decimal_precision()),
     single_write_mode(mode == SingleWriteMode::YES),
+    table_meta(options.get_table_metadata()),
     out_sink_(std::move(sink))
 {
   if (options.get_nullable_metadata() != nullptr) {
@@ -1229,14 +1258,16 @@ void writer::impl::write(table_view const &table)
 
   auto tbl_meta = (table_meta == nullptr) ? table_input_metadata(table) : *table_meta;
   // Fill unnamed columns' names in tbl_meta
+  // TODO: it's not enough to give default names to top level columns. Do this recursively.
   for (size_t i = 0; i < tbl_meta.column_metadata.size(); ++i) {
     if (tbl_meta.column_metadata[i].name.empty()) {
       tbl_meta.column_metadata[i].name = "_col" + std::to_string(i);
     }
   }
+  // TODO: Verify structure of tbl_meta is same as table
 
   auto vec         = input_table_to_linked_columns(table);
-  auto schema_tree = construct_schema_tree(vec, tbl_meta);
+  auto schema_tree = construct_schema_tree(vec, tbl_meta, single_write_mode);
   // Construct parquet_column_views from the schema tree leaf nodes.
   std::vector<new_parquet_column_view> parquet_columns;
 

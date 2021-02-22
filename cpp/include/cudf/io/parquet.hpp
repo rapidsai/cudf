@@ -706,6 +706,9 @@ class chunked_parquet_writer_options {
   statistics_freq _stats_level = statistics_freq::STATISTICS_ROWGROUP;
   // Optional associated metadata.
   const table_metadata_with_nullability* _nullable_metadata = nullptr;
+
+  // TODO: All setters and getters in this and builder class
+  table_input_metadata const* _table_meta = nullptr;
   // Parquet writes can write INT96 or TIMESTAMP_MICROS. Defaults to TIMESTAMP_MICROS.
   bool _write_timestamps_as_int96 = false;
   // Optional decimal precision data - must be present if writing decimals
@@ -751,6 +754,8 @@ class chunked_parquet_writer_options {
     return _nullable_metadata;
   }
 
+  table_input_metadata const* get_table_metadata() const { return _table_meta; }
+
   /**
    * @brief Returns decimal precision pointer.
    */
@@ -770,6 +775,8 @@ class chunked_parquet_writer_options {
   {
     _nullable_metadata = metadata;
   }
+
+  void set_input_metadata(table_input_metadata const* metadata) { _table_meta = metadata; }
 
   /**
    * @brief Sets decimal precision data.

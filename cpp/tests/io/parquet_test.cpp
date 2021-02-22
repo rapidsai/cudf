@@ -1398,6 +1398,53 @@ TEST_F(ParquetChunkedWriterTest, DifferentNullability)
   CUDF_TEST_EXPECT_TABLES_EQUAL(*result.tbl, *full_table);
 }
 
+TEST_F(ParquetChunkedWriterTest, DifferentNullabilityStruct)
+{
+  // Struct<is_human:bool (non-nullable),
+  //        Struct<weight:float>,
+  //               age:int
+  //              > (nullable)
+  //       > (non-nullable)
+
+  // Table 1: is_human and struct_1 are non-nullable but should be nullable when read back.
+  auto weight_1   = cudf::test::fixed_width_column_wrapper<float>{{57.5, 51.1, 15.3}};
+  auto ages_1     = cudf::test::fixed_width_column_wrapper<int32_t>{{30, 27, 5}};
+  auto struct_1_1 = cudf::test::structs_column_wrapper{weight_1, ages_1};
+  auto is_human_1 = cudf::test::fixed_width_column_wrapper<bool>{{true, true, false}};
+  auto struct_2_1 = cudf::test::structs_column_wrapper{{is_human_1, struct_1_1}};
+  auto table_1    = cudf::table_view({struct_2_1});
+
+  // Table 2: struct_1 and is_human are nullable now so if we hadn't assumed worst case (nullable)
+  // when writing table_1, we would have wrong pages for it.
+  auto weight_2   = cudf::test::fixed_width_column_wrapper<float>{{1.1, -1.0, -1.0}};
+  auto ages_2     = cudf::test::fixed_width_column_wrapper<int32_t>{{31, 351, 351}, {1, 1, 0}};
+  auto struct_1_2 = cudf::test::structs_column_wrapper{{weight_2, ages_2}, {1, 0, 1}};
+  auto is_human_2 = cudf::test::fixed_width_column_wrapper<bool>{{false, false, false}, {1, 1, 0}};
+  auto struct_2_2 = cudf::test::structs_column_wrapper{{is_human_2, struct_1_2}};
+  auto table_2    = cudf::table_view({struct_2_2});
+
+  auto full_table = cudf::concatenate({table_1, table_2});
+
+  cudf_io::table_input_metadata expected_metadata(table_1);
+  expected_metadata.column_metadata[0].name                         = "being";
+  expected_metadata.column_metadata[0].children[0].name             = "human?";
+  expected_metadata.column_metadata[0].children[1].name             = "particulars";
+  expected_metadata.column_metadata[0].children[1].children[0].name = "weight";
+  expected_metadata.column_metadata[0].children[1].children[1].name = "age";
+
+  auto filepath = ("ChunkedNullableStruct.parquet");
+  cudf_io::chunked_parquet_writer_options args =
+    cudf_io::chunked_parquet_writer_options::builder(cudf_io::sink_info{filepath});
+  args.set_input_metadata(&expected_metadata);
+  cudf_io::parquet_chunked_writer(args).write(table_1).write(table_2);
+
+  cudf_io::parquet_reader_options read_opts =
+    cudf_io::parquet_reader_options::builder(cudf_io::source_info{filepath});
+  auto result = cudf_io::read_parquet(read_opts);
+
+  CUDF_TEST_EXPECT_TABLES_EQUIVALENT(*result.tbl, *full_table);
+}
+
 TEST_F(ParquetChunkedWriterTest, ForcedNullability)
 {
   srand(31337);
@@ -1584,7 +1631,7 @@ TEST_F(ParquetWriterTest, DecimalWrite)
 
   // verify sucess if equal precision is given
   expected_metadata.column_metadata[0].decimal_precision = 7;
-  expected_metadata.column_metadata[1].decimal_precision = 1;
+  expected_metadata.column_metadata[1].decimal_precision = 9;
   args.set_input_metadata(&expected_metadata);
   cudf_io::write_parquet(args);
 
