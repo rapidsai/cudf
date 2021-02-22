@@ -134,7 +134,7 @@ class corresponding_rows_not_equivalent {
         if (std::isinf(x) || std::isinf(y)) {
           return x != y;  // comparison of (inf==inf) returns true
         } else if (std::isnan(x) || std::isnan(y)) {
-          return std::isnan(x) ^ std::isnan(y);  // comparison of (nan==nan) returns false
+          return std::isnan(x) != std::isnan(y);  // comparison of (nan==nan) returns false
         } else {
           constexpr int ulp     = 4;  // ulp = unit of least precision, value taken from google test
           T const abs_x_minus_y = std::abs(x - y);
