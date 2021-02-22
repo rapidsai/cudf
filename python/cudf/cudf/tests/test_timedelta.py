@@ -420,13 +420,7 @@ def test_timedelta_dataframe_ops(df, op):
         np.timedelta64(4, "s"),
         np.timedelta64(456, "D"),
         np.timedelta64(46, "h"),
-        # TODO: PREM FIX THIS
-        pytest.param(
-            np.timedelta64("nat"),
-            marks=pytest.mark.xfail(
-                reason="https://github.com/pandas-dev/pandas/issues/35529"
-            ),
-        ),
+        np.timedelta64("nat"),
         np.timedelta64(1, "s"),
         np.timedelta64(1, "ms"),
         np.timedelta64(1, "us"),
@@ -509,16 +503,11 @@ def test_timedelta_series_ops_with_scalars(data, other_scalars, dtype, op):
         datetime.timedelta(seconds=768),
         datetime.timedelta(microseconds=7),
         np.timedelta64(4, "s"),
-        # TODO: PREM Fix this
-        pytest.param(
-            np.timedelta64("nat"),
-            marks=pytest.mark.xfail(
-                reason="https://github.com/pandas-dev/pandas/issues/35529"
-            ),
-        ),
+        np.timedelta64("nat", "s"),
         np.timedelta64(1, "s"),
         np.timedelta64(1, "ms"),
         np.timedelta64(1, "us"),
+        np.timedelta64("nat", "ns"),
         np.timedelta64(1, "ns"),
     ],
 )
@@ -774,7 +763,6 @@ def test_timedelta_datetime_index_ops_misc(
         "add",
         "sub",
         "truediv",
-        # TODO: PREM FIX THIS
         pytest.param(
             "floordiv",
             marks=pytest.mark.xfail(
@@ -841,7 +829,7 @@ def test_timedelta_index_ops_with_scalars(data, other_scalars, dtype, op):
         pytest.param(
             "floordiv",
             marks=pytest.mark.xfail(
-                reason="https://github.com/pandas-dev/pandas/issues/35529"
+                reason="https://github.com/rapidsai/cudf/issues/5938"
             ),
         ),
     ],

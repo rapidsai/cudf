@@ -127,7 +127,7 @@ class TimeDeltaColumn(column.ColumnBase):
             common_dtype = determine_out_dtype(self.dtype, rhs.dtype)
             lhs = lhs.astype(common_dtype).astype("float64")
             if isinstance(rhs, cudf.Scalar):
-                if rhs.is_valid:
+                if rhs.is_valid():
                     rhs = cudf.Scalar(
                         np.timedelta64(rhs.value)
                         .astype(common_dtype)
