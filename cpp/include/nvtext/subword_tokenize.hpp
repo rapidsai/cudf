@@ -59,7 +59,7 @@ struct hashed_vocabulary {
  * @param mr Memory resource to allocate any returned objects.
  * @return vocabulary hash-table elements
  */
-std::shared_ptr<hashed_vocabulary> load_vocabulary_file(
+std::unique_ptr<hashed_vocabulary> load_vocabulary_file(
   std::string const& filename_hashed_vocabulary,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 

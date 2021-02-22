@@ -183,7 +183,7 @@ uint64_t str_to_uint64(std::string const& str, uint64_t line_no)
  * @param filename_hashed_vocabulary Path to text file containing hashed vocabulary
  * @return object containing hash table elements for the wordpiece tokenizer
  */
-std::shared_ptr<hashed_vocabulary> load_vocabulary_file(
+std::unique_ptr<hashed_vocabulary> load_vocabulary_file(
   std::string const& filename_hashed_vocabulary,
   rmm::cuda_stream_view stream,
   rmm::mr::device_memory_resource* mr)
@@ -277,12 +277,12 @@ std::shared_ptr<hashed_vocabulary> load_vocabulary_file(
   detail::get_codepoint_metadata(stream);
   detail::get_aux_codepoint_data(stream);
 
-  return std::make_shared<hashed_vocabulary>(std::move(result));
+  return std::make_unique<hashed_vocabulary>(std::move(result));
 }
 
 }  // namespace detail
 
-std::shared_ptr<hashed_vocabulary> load_vocabulary_file(
+std::unique_ptr<hashed_vocabulary> load_vocabulary_file(
   std::string const& filename_hashed_vocabulary, rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
