@@ -22,6 +22,10 @@ namespace detail {
 
 namespace {
 
+// temporary. for debugging purposes
+#define DEBUG_NEWLINE
+// #define DEBUG_NEWLINE  "\n"
+
 using namespace cudf;
 
 CUDA_HOST_DEVICE_CALLABLE char to_lower(char const c)
@@ -666,12 +670,12 @@ CUDA_HOST_DEVICE_CALLABLE parse_result parse_json_path(json_state& _j_state,
       case path_operator_type::CHILD_WILDCARD: {
         // if we're on the first element of this wildcard
         if (!ctx.state_flag) {
-          output.add_output("[\n", 2);
+          output.add_output("[" DEBUG_NEWLINE, 2);
 
           // step into the child element
           PARSE_TRY(ctx.j_state.child_element());
           if (last_result == parse_result::EMPTY) {
-            output.add_output("]\n", 2);
+            output.add_output("]" DEBUG_NEWLINE, 2);
             last_result = parse_result::SUCCESS;
             break;
           }
@@ -679,7 +683,7 @@ CUDA_HOST_DEVICE_CALLABLE parse_result parse_json_path(json_state& _j_state,
           // first element
           PARSE_TRY(ctx.j_state.next_matching_element(op.name, true));
           if (last_result == parse_result::EMPTY) {
-            output.add_output("]\n", 2);
+            output.add_output("]" DEBUG_NEWLINE, 2);
             last_result = parse_result::SUCCESS;
             break;
           }
@@ -695,7 +699,7 @@ CUDA_HOST_DEVICE_CALLABLE parse_result parse_json_path(json_state& _j_state,
           // next element
           PARSE_TRY(ctx.j_state.next_matching_element(op.name, false));
           if (last_result == parse_result::EMPTY) {
-            output.add_output("]\n", 2);
+            output.add_output("]" DEBUG_NEWLINE, 2);
             last_result = parse_result::SUCCESS;
             break;
           }
@@ -731,7 +735,7 @@ CUDA_HOST_DEVICE_CALLABLE parse_result parse_json_path(json_state& _j_state,
 
       // END case
       default: {
-        if (ctx.list_element) { output.add_output({",\n", 2}); }
+        if (ctx.list_element) { output.add_output({"," DEBUG_NEWLINE, 2}); }
         PARSE_TRY(ctx.j_state.extract_element(&output));
       } break;
     }
