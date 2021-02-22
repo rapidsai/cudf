@@ -5005,11 +5005,15 @@ def test_cov_nans():
 def test_df_sr_binop(gsr, colnames, op):
     data = [[0, 2, 5], [3, None, 5], [6, 7, np.nan]]
     data = dict(zip(colnames, data))
-
     gdf = gd.DataFrame(data)
-    pdf = gdf.to_pandas(nullable=True)
+    if op is operator.floordiv or op is operator.mod:
+        # integer floor division is disallowed
+        # Just replace that one value for this op
+        gdf = gdf.replace(0, 3)
 
-    psr = gsr.to_pandas(nullable=True)
+    pdf = gdf.to_pandas()
+
+    psr = gsr.to_pandas()
 
     expect = op(pdf, psr)
     got = op(gdf, gsr)
@@ -5017,6 +5021,7 @@ def test_df_sr_binop(gsr, colnames, op):
 
     expect = op(psr, pdf)
     got = op(gsr, gdf)
+    breakpoint()
     assert_eq(expect.astype(float), got.astype(float))
 
 
