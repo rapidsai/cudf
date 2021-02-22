@@ -15,6 +15,7 @@
  */
 #pragma once
 
+#include <cudf/ast/detail/linearizer.hpp>
 #include <cudf/ast/detail/operators.hpp>
 #include <cudf/ast/linearizer.hpp>
 #include <cudf/ast/operators.hpp>
@@ -318,7 +319,13 @@ __device__ void evaluate_row_expression(detail::row_evaluator const& evaluator,
 
 struct ast_plan {
  public:
-  ast_plan() : sizes(), data_pointers() {}
+  ast_plan(linearizer const& expr_linearizer) : sizes(), data_pointers()
+  {
+    add_to_plan(expr_linearizer.data_references());
+    add_to_plan(expr_linearizer.literals());
+    add_to_plan(expr_linearizer.operators());
+    add_to_plan(expr_linearizer.operator_source_indices());
+  }
 
   using buffer_type = std::pair<std::unique_ptr<char[]>, int>;
 

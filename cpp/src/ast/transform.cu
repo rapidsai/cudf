@@ -90,21 +90,10 @@ std::unique_ptr<column> compute_column(table_view const table,
                                        rmm::cuda_stream_view stream,
                                        rmm::mr::device_memory_resource* mr)
 {
-  // Linearize the AST
-  auto const expr_linearizer         = linearizer(expr, table);
-  auto const data_references         = expr_linearizer.data_references();
-  auto const literals                = expr_linearizer.literals();
-  auto const operators               = expr_linearizer.operators();
-  auto const num_operators           = cudf::size_type(operators.size());
-  auto const operator_source_indices = expr_linearizer.operator_source_indices();
-  auto const expr_data_type          = expr_linearizer.root_data_type();
+  auto const expr_linearizer = linearizer(expr, table);    // Linearize the AST
+  auto const plan            = ast_plan(expr_linearizer);  // Create ast_plan
 
-  // Create ast_plan and device buffer
-  auto plan = ast_plan();
-  plan.add_to_plan(data_references);
-  plan.add_to_plan(literals);
-  plan.add_to_plan(operators);
-  plan.add_to_plan(operator_source_indices);
+  // Create device buffer
   auto const host_data_buffer = plan.get_host_data_buffer();
   auto const buffer_offsets   = plan.get_offsets();
   auto const buffer_size      = host_data_buffer.second;
@@ -131,7 +120,7 @@ std::unique_ptr<column> compute_column(table_view const table,
 
   // Prepare output column
   auto output_column = cudf::make_fixed_width_column(
-    expr_data_type, table_num_rows, mask_state::UNALLOCATED, stream, mr);
+    expr_linearizer.root_data_type(), table_num_rows, mask_state::UNALLOCATED, stream, mr);
   auto mutable_output_device =
     cudf::mutable_column_device_view::create(output_column->mutable_view(), stream);
 
@@ -150,6 +139,7 @@ std::unique_ptr<column> compute_column(table_view const table,
       : MAX_BLOCK_SIZE;
   auto const config               = cudf::detail::grid_1d{table_num_rows, block_size};
   auto const shmem_size_per_block = shmem_size_per_thread * config.num_threads_per_block;
+  auto const num_operators = static_cast<cudf::size_type>(expr_linearizer.operators().size());
 
   // Execute the kernel
   cudf::ast::detail::compute_column_kernel<MAX_BLOCK_SIZE>
