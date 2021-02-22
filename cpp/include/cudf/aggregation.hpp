@@ -214,7 +214,7 @@ std::unique_ptr<aggregation> make_row_number_aggregation();
  *
  * @param null_handling Indicates whether to include/exclude nulls in list elements.
  */
-std::unique_ptr<aggregation> make_collect_aggregation(
+std::unique_ptr<aggregation> make_collect_list_aggregation(
   null_policy null_handling = null_policy::INCLUDE);
 
 /// Factory to create a LAG aggregation

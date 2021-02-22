@@ -126,7 +126,7 @@ std::unique_ptr<aggregation> make_row_number_aggregation()
   return std::make_unique<aggregation>(aggregation::ROW_NUMBER);
 }
 /// Factory to create a COLLECT_LIST aggregation
-std::unique_ptr<aggregation> make_collect_aggregation(null_policy null_handling)
+std::unique_ptr<aggregation> make_collect_list_aggregation(null_policy null_handling)
 {
   return std::make_unique<detail::collect_list_aggregation>(null_handling);
 }
