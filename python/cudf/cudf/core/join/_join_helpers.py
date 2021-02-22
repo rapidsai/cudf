@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 import warnings
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Iterable
 
 import numpy as np
 import pandas as pd
@@ -51,16 +51,24 @@ class _Indexer:
             else:
                 raise KeyError()
 
-    def get_numeric_index(self, obj: Frame) -> int:
-        # get the position of the column in `obj`
-        # (counting any index columns)
-        if self.column:
-            index_nlevels = obj._index.nlevels if obj._index is not None else 0
-            return index_nlevels + tuple(obj._data).index(self.name)
+
+def _frame_select_by_indexers(
+    frame: Frame, indexers: Iterable[_Indexer]
+) -> Frame:
+    # Select columns from the given `Frame` using `indexers`,
+    # and return a new `Frame`.
+    index_data = frame._data.__class__()
+    data = frame._data.__class__()
+
+    for idx in indexers:
+        if idx.index:
+            index_data[idx.name] = idx.get(frame)
         else:
-            if obj._index is not None:
-                return obj._index.names.index(self.name)
-            raise KeyError()
+            data[idx.name] = idx.get(frame)
+
+    result_index = cudf.Index._from_data(index_data) if index_data else None
+    result = cudf.core.frame.Frame(data=data, index=result_index)
+    return result
 
 
 def _match_join_keys(lcol: ColumnBase, rcol: ColumnBase, how: str) -> Dtype:

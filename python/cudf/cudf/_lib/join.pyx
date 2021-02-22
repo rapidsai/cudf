@@ -19,13 +19,11 @@ from cudf._lib.cpp.table.table_view cimport table_view
 cimport cudf._lib.cpp.join as cpp_join
 
 
-cpdef join(Table lhs, Table rhs, left_on, right_on, how=None):
+cpdef join(Table lhs, Table rhs, how=None):
     # left, inner and outer join
-    cdef vector[size_type] c_left_on = left_on
-    cdef vector[size_type] c_right_on = right_on
     cdef pair[unique_ptr[column], unique_ptr[column]] c_result
-    cdef table_view c_lhs = lhs.view().select(c_left_on)
-    cdef table_view c_rhs = rhs.view().select(c_right_on)
+    cdef table_view c_lhs = lhs.view()
+    cdef table_view c_rhs = rhs.view()
 
     if how == "inner":
         c_result = move(cpp_join.inner_join(
@@ -50,15 +48,13 @@ cpdef join(Table lhs, Table rhs, left_on, right_on, how=None):
     )
 
 
-cpdef semi_join(Table lhs, Table rhs, left_on, right_on, how=None):
+cpdef semi_join(Table lhs, Table rhs, how=None):
     from cudf.core.column import as_column
 
     # left-semi and left-anti joins
-    cdef vector[size_type] c_left_on = left_on
-    cdef vector[size_type] c_right_on = right_on
     cdef unique_ptr[column] c_result
-    cdef table_view c_lhs = lhs.view().select(c_left_on)
-    cdef table_view c_rhs = rhs.view().select(c_right_on)
+    cdef table_view c_lhs = lhs.view()
+    cdef table_view c_rhs = rhs.view()
 
     if how == "leftsemi":
         c_result = move(cpp_join.left_semi_join(

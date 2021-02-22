@@ -2,13 +2,14 @@
 from __future__ import annotations
 
 from collections import OrderedDict, namedtuple
-from typing import TYPE_CHECKING, Tuple
+from typing import TYPE_CHECKING, Callable, Tuple
 
 import cudf
 from cudf import _lib as libcudf
 from cudf.core.join._join_helpers import (
     _coerce_to_list,
     _coerce_to_tuple,
+    _frame_select_by_indexers,
     _Indexer,
     _match_join_keys,
 )
@@ -66,18 +67,17 @@ class Merge(object):
 
     # The joiner function must have the following signature:
     #
-    #     def joiner(lhs, rhs, left_on, right_on, how=how):
+    #     def joiner(lhs, rhs, how=how):
     #          ...
     #
-    # Where:
+    # where:
     #
-    # - `lhs` and `rhs` represent the left and right Frames to join
-    # - `left_on` and `right_on` represent the *numerical* indices
-    #   of the key columns  of lhs and rhs. This allows specifying
-    #   index levels as keys in an unambiguous way.
+    # - `lhs` and `rhs` are Frames composed of the left and right join keys
     # - `how` is a string specifying the kind of join to perform
-    #   (useful if the joiner function can perform more than one join).
-    _joiner = libcudf.join.join
+    #
+    # ...and it returns a tuple of two gather maps representing the rows
+    # to gather from the left- and right- side tables respectively.
+    _joiner: Callable = libcudf.join.join
 
     def __init__(
         self,
@@ -166,33 +166,28 @@ class Merge(object):
         self.rsuffix = rsuffix
         self.suffixes = suffixes
 
-        self._out_class = cudf.DataFrame
+        self._compute_join_keys()
+
+    @property
+    def _out_class(self):
+        out_class = cudf.DataFrame
 
         if isinstance(self.lhs, cudf.MultiIndex) or isinstance(
             self.rhs, cudf.MultiIndex
         ):
-            self._out_class = cudf.MultiIndex
+            out_class = cudf.MultiIndex
         elif isinstance(self.lhs, cudf.Index):
-            self._out_class = self.lhs.__class__
-
-        self._compute_join_keys()
+            out_class = self.lhs.__class__
+        return out_class
 
     def perform_merge(self) -> Frame:
         lhs, rhs = self._match_key_dtypes(self.lhs, self.rhs)
 
-        left_key_indices = [
-            key.get_numeric_index(lhs) for key in self._keys.left
-        ]
-        right_key_indices = [
-            key.get_numeric_index(rhs) for key in self._keys.right
-        ]
+        left_table = _frame_select_by_indexers(lhs, self._keys.left)
+        right_table = _frame_select_by_indexers(rhs, self._keys.right)
 
         left_rows, right_rows = self._joiner(
-            lhs,
-            rhs,
-            left_on=left_key_indices,
-            right_on=right_key_indices,
-            how=self.how,
+            left_table, right_table, how=self.how,
         )
         lhs, rhs = self._restore_categorical_keys(lhs, rhs)
 
@@ -307,7 +302,7 @@ class Merge(object):
                 del right_names[name]
 
         # Assemble the data columns of the result:
-        data = cudf.core.column_accessor.ColumnAccessor()
+        data = left_result._data.__class__()
 
         for lcol in left_names:
             data[left_names[lcol]] = left_result._data[lcol]
@@ -316,10 +311,7 @@ class Merge(object):
 
         # Index of the result:
         if self.left_index and self.right_index:
-            if self.how == "right":
-                index = right_result._index
-            else:
-                index = left_result._index
+            index = left_result._index
         elif self.left_index:
             # left_index and right_on
             index = right_result._index
