@@ -140,6 +140,8 @@ struct string_to_float_fn {
   __device__ FloatType operator()(size_type idx)
   {
     if (strings_column.is_null(idx)) return static_cast<FloatType>(0);
+    // The cast to FloatType will create predictable results for floats that are larger than the
+    // FloatType can hold
     return static_cast<FloatType>(stod(strings_column.element<string_view>(idx)));
   }
 };
