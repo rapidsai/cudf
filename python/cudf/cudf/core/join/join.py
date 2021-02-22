@@ -1,5 +1,8 @@
 # Copyright (c) 2020-2021, NVIDIA CORPORATION.
+from __future__ import annotations
+
 from collections import OrderedDict, namedtuple
+from typing import TYPE_CHECKING
 
 import cudf
 from cudf import _lib as libcudf
@@ -9,6 +12,9 @@ from cudf.core.join._join_helpers import (
     _coerce_to_tuple,
     _Indexer,
 )
+
+if TYPE_CHECKING:
+    from cudf.core.frame import Frame
 
 
 def merge(
@@ -53,6 +59,7 @@ def merge(
 
 class Merge(object):
     JoinKeys = namedtuple("JoinKeys", ["left", "right"])
+    _joiner = libcudf.join.join
 
     def __init__(
         self,
@@ -218,7 +225,7 @@ class Merge(object):
         right_key_indices = [
             key.get_numeric_index(rhs) for key in self._keys.right
         ]
-        left_rows, right_rows = libcudf.join.join(
+        left_rows, right_rows = self._joiner(
             lhs,
             rhs,
             left_on=left_key_indices,
@@ -229,35 +236,60 @@ class Merge(object):
         return self.construct_result(lhs, rhs, left_rows, right_rows)
 
     def construct_result(self, lhs, rhs, left_rows, right_rows):
-        # first construct the index.
-        if self.left_index and self.right_index:
-            if self.how == "right":
-                out_index = rhs.index._gather(left_rows, nullify=True)
-            else:
-                out_index = lhs.index._gather(left_rows, nullify=True)
-        elif self.left_index:
-            # left_index and right_on
-            out_index = rhs.index._gather(right_rows, nullify=True)
-        elif self.right_index:
-            # right_index and left_on
-            out_index = lhs.index._gather(left_rows, nullify=True)
+        lhs = lhs._gather(left_rows, nullify=True)
+        rhs = rhs._gather(right_rows, nullify=True)
+
+        result = self.merge_results(lhs, rhs)
+
+        if self.sort:
+            result = self.sort_result(result)
+        return result
+
+    def merge_results(self, lhs: Frame, rhs: Frame) -> Frame:
+        lnames = OrderedDict(zip(lhs._data, lhs._data))
+        rnames = OrderedDict(zip(rhs._data, rhs._data))
+        common_names = set(lnames) & set(rnames)
+
+        if self.on:
+            key_columns_with_same_name = self.on
         else:
-            out_index = None
+            key_columns_with_same_name = []
+            for lkey, rkey in zip(*self._keys):
+                if (lkey.index, rkey.index) == (False, False):
+                    if lkey.name == rkey.name:
+                        key_columns_with_same_name.append(lkey.name)
+
+        for name in common_names:
+            if name not in key_columns_with_same_name:
+                lnames[name] = f"{name}{self.lsuffix}"
+                rnames[name] = f"{name}{self.rsuffix}"
+            else:
+                del rnames[name]
 
         # now construct the data:
         data = cudf.core.column_accessor.ColumnAccessor()
-        left_names, right_names = self.output_column_names()
 
-        for lcol in left_names:
-            data[left_names[lcol]] = lhs._data[lcol].take(
-                left_rows, nullify=True
-            )
-        for rcol in right_names:
-            data[right_names[rcol]] = rhs._data[rcol].take(
-                right_rows, nullify=True
-            )
+        for lcol in lnames:
+            data[lnames[lcol]] = lhs._data[lcol]
+        for rcol in rnames:
+            data[rnames[rcol]] = rhs._data[rcol]
 
-        result = self.out_class._from_data(data, index=out_index)
+        # drop the index we won't be using:
+        if self.left_index and self.right_index:
+            if self.how == "right":
+                index = rhs._index
+            else:
+                index = lhs._index
+        elif self.left_index:
+            # left_index and right_on
+            index = rhs._index
+        elif self.right_index:
+            # right_index and left_on
+            index = lhs._index
+        else:
+            index = None
+
+        result = self.out_class._from_data(data=data, index=index)
 
         # if outer join, key columns with the same name are combined:
         if self.how == "outer":
@@ -265,14 +297,9 @@ class Merge(object):
                 if lkey.name == rkey.name:
                     # fill nulls in the key column with values from the RHS
                     lkey.set_value(
-                        result,
-                        lkey.value(result).fillna(
-                            rkey.value(rhs).take(right_rows, nullify=True)
-                        ),
+                        result, lkey.value(result).fillna(rkey.value(rhs)),
                     )
 
-        if self.sort:
-            result = self.sort_result(result)
         return result
 
     def sort_result(self, result):
@@ -303,29 +330,6 @@ class Merge(object):
             sort_order = to_sort.argsort()
             result = result.take(sort_order)
         return result
-
-    def output_column_names(self):
-        # Return mappings of input column names to (possibly) suffixed
-        # result column names
-        left_names = OrderedDict(zip(self.lhs._data, self.lhs._data))
-        right_names = OrderedDict(zip(self.rhs._data, self.rhs._data))
-        common_names = set(left_names) & set(right_names)
-
-        if self.on:
-            key_columns_with_same_name = self.on
-        else:
-            key_columns_with_same_name = []
-            for lkey, rkey in zip(*self._keys):
-                if (lkey.index, rkey.index) == (False, False):
-                    if lkey.name == rkey.name:
-                        key_columns_with_same_name.append(lkey.name)
-        for name in common_names:
-            if name not in key_columns_with_same_name:
-                left_names[name] = f"{name}{self.lsuffix}"
-                right_names[name] = f"{name}{self.rsuffix}"
-            else:
-                del right_names[name]
-        return left_names, right_names
 
     @staticmethod
     def validate_merge_params(
@@ -428,26 +432,9 @@ class Merge(object):
 
 
 class MergeSemi(Merge):
-    def perform_merge(self):
-        lhs, rhs = self.match_key_dtypes(self.lhs, self.rhs, _cast_join_keys)
+    def _joiner(self, lhs, rhs, left_on, right_on, how):
+        left_rows = libcudf.join.semi_join(lhs, rhs, left_on, right_on, how)
+        return left_rows, cudf.core.column.as_column([], dtype="int32")
 
-        left_key_indices = [
-            key.get_numeric_index(lhs) for key in self._keys.left
-        ]
-        right_key_indices = [
-            key.get_numeric_index(rhs) for key in self._keys.right
-        ]
-        left_rows = libcudf.join.semi_join(
-            lhs,
-            rhs,
-            left_on=left_key_indices,
-            right_on=right_key_indices,
-            how=self.how,
-        )
-        return self.construct_result(
-            lhs, rhs, left_rows, cudf.core.column.as_column([])
-        )
-
-    def output_column_names(self):
-        left_names, _ = super().output_column_names()
-        return left_names, {}
+    def merge_results(self, lhs, rhs):
+        return super().merge_results(lhs, cudf.core.frame.Frame())
