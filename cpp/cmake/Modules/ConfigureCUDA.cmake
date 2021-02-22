@@ -13,16 +13,9 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 #=============================================================================
+
 # Find the CUDAToolkit
 find_package(CUDAToolkit REQUIRED)
-
-# Auto-detect available GPU compute architectures
-
-include(${CUDF_SOURCE_DIR}/cmake/Modules/SetGPUArchs.cmake)
-message(STATUS "CUDF: Building CUDF for GPU architectures: ${CMAKE_CUDA_ARCHITECTURES}")
-
-# Only enable the CUDA language after including SetGPUArchs.cmake
-enable_language(CUDA)
 
 if(CMAKE_CUDA_COMPILER_VERSION)
   # Compute the version. from  CMAKE_CUDA_COMPILER_VERSION
@@ -34,6 +27,11 @@ endif()
 message(VERBOSE "CUDF: CUDA_VERSION_MAJOR: ${CUDA_VERSION_MAJOR}")
 message(VERBOSE "CUDF: CUDA_VERSION_MINOR: ${CUDA_VERSION_MINOR}")
 message(STATUS "CUDF: CUDA_VERSION: ${CUDA_VERSION}")
+
+# Auto-detect available GPU compute architectures
+
+include(${CUDF_SOURCE_DIR}/cmake/Modules/SetGPUArchs.cmake)
+message(STATUS "CUDF: Building CUDF for GPU architectures: ${CMAKE_CUDA_ARCHITECTURES}")
 
 if(CMAKE_COMPILER_IS_GNUCXX)
     string(APPEND CMAKE_CXX_FLAGS " -Wall -Werror -Wno-unknown-pragmas -Wno-error=deprecated-declarations")
