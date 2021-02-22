@@ -197,6 +197,56 @@ TYPED_TEST(Sort, WithAllValid)
   }
 }
 
+TYPED_TEST(Sort, WithStructColumn)
+{
+  using T = TypeParam;
+
+  std::initializer_list<std::string> names = {"Samuel Vimes",
+                                              "Carrot Ironfoundersson",
+                                              "Angua von Uberwald",
+                                              "Cheery Littlebottom",
+                                              "Detritus",
+                                              "Mr Slant"};
+  auto num_rows{std::distance(names.begin(), names.end())};
+  auto names_col = cudf::test::strings_column_wrapper{names.begin(), names.end()};
+  auto ages_col =
+    cudf::test::fixed_width_column_wrapper<TypeParam, int32_t>{{48, 27, 25, 31, 351, 351}};
+
+  auto is_human_col = cudf::test::fixed_width_column_wrapper<bool>{
+    {true, true, false, false, false, false}, {1, 1, 0, 1, 1, 0}};
+
+  auto struct_col =
+    cudf::test::structs_column_wrapper{{names_col, ages_col, is_human_col}}.release();
+
+  EXPECT_EQ(num_rows, struct_col->size());
+
+  auto struct_col_view{struct_col->view()};
+
+  fixed_width_column_wrapper<T> col1{{5, 4, 3, 5, 8, 9}};
+  strings_column_wrapper col2({"d", "e", "a", "d", "k", "a"});
+  fixed_width_column_wrapper<T> col3{{10, 40, 70, 5, 2, 20}};
+  table_view input{{col1, col2, col3, struct_col_view}};
+
+  fixed_width_column_wrapper<int32_t> expected{{2, 1, 0, 3, 4, 5}};
+  std::vector<order> column_order{
+    order::ASCENDING, order::ASCENDING, order::DESCENDING, order::ASCENDING};
+
+  auto got = sorted_order(input, column_order);
+
+  // Skip validating bools order. Valid true bools are all
+  // equivalent, and yield random order after thrust::sort
+  if (!std::is_same<T, bool>::value) {
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, got->view());
+
+    // Run test for sort and sort_by_key
+    run_sort_test(input, expected, column_order);
+  } else {
+    // Run test for sort and sort_by_key
+    fixed_width_column_wrapper<int32_t> expected_for_bool{{2, 5, 3, 0, 1, 4}};
+    run_sort_test(input, expected_for_bool, column_order);
+  }
+}
+
 TYPED_TEST(Sort, Stable)
 {
   using T = TypeParam;
