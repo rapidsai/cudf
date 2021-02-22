@@ -18,21 +18,21 @@ class _Indexer:
     # 4  1
     # 5  2
     # 6  3
-    # >>> _Indexer("a", column=True).value(df)  # returns column "a" of df
-    # >>> _Indexer("b", index=True).value(df)  # returns index level "b" of df
+    # >>> _Indexer("a", column=True).get(df)  # returns column "a" of df
+    # >>> _Indexer("b", index=True).get(df)  # returns index level "b" of df
 
     def __init__(self, name, column=False, index=False):
         self.name = name
         self.column, self.index = column, index
 
-    def value(self, obj):
+    def get(self, obj):
         # get the column from `obj`
         if self.column:
             return obj._data[self.name]
         else:
             return obj._index._data[self.name]
 
-    def set_value(self, obj, value):
+    def set(self, obj, value):
         # set the colum in `obj`
         if self.column:
             obj._data[self.name] = value

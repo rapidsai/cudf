@@ -57,8 +57,26 @@ def merge(
     return mergeobj.perform_merge()
 
 
+_JoinKeys = namedtuple("JoinKeys", ["left", "right"])
+
+
 class Merge(object):
-    JoinKeys = namedtuple("JoinKeys", ["left", "right"])
+    # A namedtuple of indexers representing the left and right keys
+    _keys: _JoinKeys
+
+    # The joiner function must have the following signature:
+    #
+    #     def joiner(lhs, rhs, left_on, right_on, how=how):
+    #          ...
+    #
+    # Where:
+    #
+    # - `lhs` and `rhs` represent the left and right Frames to join
+    # - `left_on` and `right_on` represent the *numerical* indices
+    #   of the key columns  of lhs and rhs. This allows specifying
+    #   index levels as keys in an unambiguous way.
+    # - `how` is a string specifying the kind of join to perform
+    #   (useful if the joiner function can perform more than one join).
     _joiner = libcudf.join.join
 
     def __init__(
@@ -148,14 +166,14 @@ class Merge(object):
         self.rsuffix = rsuffix
         self.suffixes = suffixes
 
-        self.out_class = cudf.DataFrame
+        self._out_class = cudf.DataFrame
 
         if isinstance(self.lhs, cudf.MultiIndex) or isinstance(
             self.rhs, cudf.MultiIndex
         ):
-            self.out_class = cudf.MultiIndex
+            self._out_class = cudf.MultiIndex
         elif isinstance(self.lhs, cudf.Index):
-            self.out_class = self.lhs.__class__
+            self._out_class = self.lhs.__class__
 
         self._compute_join_keys()
 
@@ -188,6 +206,7 @@ class Merge(object):
         return result
 
     def _compute_join_keys(self):
+        # Computes self._keys
         if (
             self.left_index
             or self.right_index
@@ -242,14 +261,31 @@ class Merge(object):
                 "Merge operands must have same number of join key columns"
             )
 
-        self._keys = self.__class__.JoinKeys(left=left_keys, right=right_keys)
+        self._keys = _JoinKeys(left=left_keys, right=right_keys)
 
     def _merge_results(self, left_result: Frame, right_result: Frame) -> Frame:
-        # merge the left result and right result into a single Frame
+        # Merge the Frames `left_result` and `right_result` into a single
+        # `Frame`, suffixing column names if necessary.
 
-        lnames = OrderedDict(zip(left_result._data, left_result._data))
-        rnames = OrderedDict(zip(right_result._data, right_result._data))
-        common_names = set(lnames) & set(rnames)
+        # For outer joins, the key columns from left_result and
+        # right_result are combined if they have the same name.
+        # We will drop those keys from right_result later, so
+        # combine them now with keys from left_result.
+        if self.how == "outer":
+            for lkey, rkey in zip(*self._keys):
+                if lkey.name == rkey.name:
+                    # fill nulls in lhs from values in the rhs
+                    lkey.set(
+                        left_result,
+                        lkey.get(left_result).fillna(rkey.get(right_result)),
+                    )
+
+        # `left_names` and `right_names` are mappings of column names
+        # of `lhs` and `rhs` to the corresponding column names in the result
+        left_names = OrderedDict(zip(left_result._data, left_result._data))
+        right_names = OrderedDict(zip(right_result._data, right_result._data))
+
+        common_names = set(left_names) & set(right_names)
 
         if self.on:
             key_columns_with_same_name = self.on
@@ -260,22 +296,25 @@ class Merge(object):
                     if lkey.name == rkey.name:
                         key_columns_with_same_name.append(lkey.name)
 
+        # For any columns with the same name:
+        # - if they are key columns, keep only the left column
+        # - if they are not key columns, use suffixes
         for name in common_names:
             if name not in key_columns_with_same_name:
-                lnames[name] = f"{name}{self.lsuffix}"
-                rnames[name] = f"{name}{self.rsuffix}"
+                left_names[name] = f"{name}{self.lsuffix}"
+                right_names[name] = f"{name}{self.rsuffix}"
             else:
-                del rnames[name]
+                del right_names[name]
 
-        # now construct the data:
+        # Assemble the data columns of the result:
         data = cudf.core.column_accessor.ColumnAccessor()
 
-        for lcol in lnames:
-            data[lnames[lcol]] = left_result._data[lcol]
-        for rcol in rnames:
-            data[rnames[rcol]] = right_result._data[rcol]
+        for lcol in left_names:
+            data[left_names[lcol]] = left_result._data[lcol]
+        for rcol in right_names:
+            data[right_names[rcol]] = right_result._data[rcol]
 
-        # drop the index we won't be using:
+        # Index of the result:
         if self.left_index and self.right_index:
             if self.how == "right":
                 index = right_result._index
@@ -290,17 +329,8 @@ class Merge(object):
         else:
             index = None
 
-        result = self.out_class._from_data(data=data, index=index)
-
-        # if outer join, key columns with the same name are combined:
-        if self.how == "outer":
-            for lkey, rkey in zip(*self._keys):
-                if lkey.name == rkey.name:
-                    # fill nulls in the key column with values from the RHS
-                    lkey.set_value(
-                        result,
-                        lkey.value(result).fillna(rkey.value(right_result)),
-                    )
+        # Construct result from data and index:
+        result = self._out_class._from_data(data=data, index=index)
 
         return result
 
@@ -350,7 +380,6 @@ class Merge(object):
         """
         Error for various invalid combinations of merge input parameters
         """
-
         # must actually support the requested merge type
         if how not in {"left", "inner", "outer", "leftanti", "leftsemi"}:
             raise NotImplementedError(f"{how} merge not supported yet")
@@ -399,41 +428,37 @@ class Merge(object):
         out_lhs = lhs.copy(deep=False)
         out_rhs = rhs.copy(deep=False)
         for left_key, right_key in zip(*self._keys):
-            lcol, rcol = left_key.value(lhs), right_key.value(rhs)
+            lcol, rcol = left_key.get(lhs), right_key.get(rhs)
             dtype = _match_join_keys(lcol, rcol, how=self.how)
             if dtype:
-                left_key.set_value(out_lhs, lcol.astype(dtype))
-                right_key.set_value(out_rhs, rcol.astype(dtype))
+                left_key.set(out_lhs, lcol.astype(dtype))
+                right_key.set(out_rhs, rcol.astype(dtype))
         return out_lhs, out_rhs
 
     def _restore_categorical_keys(self, lhs, rhs):
-        # For inner joins, any categorical keys were casted
-        # to the type of their categories.
-        # Here, we cast the keys back to categorical type.
-
+        # For inner joins, any categorical keys in `self.lhs` and `self.rhs`
+        # were casted to their category type to produce `lhs` and `rhs`.
+        # Here, we cast them back.
         out_lhs = lhs.copy(deep=False)
         out_rhs = rhs.copy(deep=False)
-
         if self.how == "inner":
             for left_key, right_key in zip(*self._keys):
                 if isinstance(
-                    left_key.value(self.lhs).dtype, cudf.CategoricalDtype
+                    left_key.get(self.lhs).dtype, cudf.CategoricalDtype
                 ) and isinstance(
-                    right_key.value(self.rhs).dtype, cudf.CategoricalDtype
+                    right_key.get(self.rhs).dtype, cudf.CategoricalDtype
                 ):
-                    left_key.set_value(
-                        out_lhs, left_key.value(out_lhs).astype("category")
+                    left_key.set(
+                        out_lhs, left_key.get(out_lhs).astype("category")
                     )
-                    right_key.set_value(
-                        out_rhs, right_key.value(out_rhs).astype("category")
+                    right_key.set(
+                        out_rhs, right_key.get(out_rhs).astype("category")
                     )
         return out_lhs, out_rhs
 
 
 class MergeSemi(Merge):
-    def _joiner(self, lhs, rhs, left_on, right_on, how):
-        left_rows = libcudf.join.semi_join(lhs, rhs, left_on, right_on, how)
-        return left_rows, cudf.core.column.as_column([], dtype="int32")
+    _joiner = libcudf.join.semi_join
 
     def _merge_results(self, lhs, rhs):
         return super()._merge_results(lhs, cudf.core.frame.Frame())

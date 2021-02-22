@@ -51,6 +51,8 @@ cpdef join(Table lhs, Table rhs, left_on, right_on, how=None):
 
 
 cpdef semi_join(Table lhs, Table rhs, left_on, right_on, how=None):
+    from cudf.core.column import as_column
+
     # left-semi and left-anti joins
     cdef vector[size_type] c_left_on = left_on
     cdef vector[size_type] c_right_on = right_on
@@ -70,4 +72,4 @@ cpdef semi_join(Table lhs, Table rhs, left_on, right_on, how=None):
         ))
     else:
         raise ValueError(f"Invalid join type {how}")
-    return Column.from_unique_ptr(move(c_result))
+    return Column.from_unique_ptr(move(c_result)), as_column([], dtype="int32")
