@@ -190,6 +190,11 @@ CUDF_TYPE_MAPPING(numeric::decimal32, type_id::DECIMAL32);
 CUDF_TYPE_MAPPING(numeric::decimal64, type_id::DECIMAL64);
 CUDF_TYPE_MAPPING(cudf::struct_view, type_id::STRUCT);
 
+template <cudf::type_id Id>
+struct dispatch_storage_type {
+  using type = device_storage_type_t<typename id_to_type_impl<Id>::type>;
+};
+
 template <typename T>
 struct type_to_scalar_type_impl {
   using ScalarType = cudf::scalar;
