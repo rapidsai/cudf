@@ -855,18 +855,10 @@ class ColumnBase(Column, Serializable):
         rhs = None
 
         try:
-            rhs = as_column(values, nan_as_null=False)
-            if lhs.null_count == len(lhs):
-                lhs = lhs.astype(rhs.dtype)
-            elif rhs.null_count == len(rhs):
-                rhs = rhs.astype(lhs.dtype)
-
-            if not (rhs.null_count == len(rhs)) and lhs.dtype != rhs.dtype:
-                return full(len(self), False, dtype="bool")
-
-            # Short-circuit if rhs is all null.
-            if lhs.null_count == 0 and (rhs.null_count == len(rhs)):
-                return full(len(self), False, dtype="bool")
+            lhs, rhs = self._process_values_for_isin(values)
+            res = lhs._isin_earlystop(rhs)
+            if res is not None:
+                return res
         except ValueError:
             # pandas functionally returns all False when cleansing via
             # typecasting fails
@@ -875,6 +867,26 @@ class ColumnBase(Column, Serializable):
         res = lhs._obtain_isin_result(rhs)
 
         return res
+
+    def _process_values_for_isin(self, values):
+        lhs = self
+        rhs = as_column(values, nan_as_null=False)
+        if lhs.null_count == len(lhs):
+            lhs = lhs.astype(rhs.dtype)
+        elif rhs.null_count == len(rhs):
+            rhs = rhs.astype(lhs.dtype)
+        return lhs, rhs
+
+    def _isin_earlystop(self, rhs):
+        if self.dtype != rhs.dtype:
+            if self.null_count and rhs.null_count:
+                return self.isna()
+            else:
+                return cudf.core.column.full(len(self), False, dtype="bool")
+        elif self.null_count == 0 and (rhs.null_count == len(rhs)):
+            return cudf.core.column.full(len(self), False, dtype="bool")
+        else:
+            return None
 
     def _obtain_isin_result(self, rhs):
         ldf = cudf.DataFrame({"x": self, "orig_order": arange(len(self))})

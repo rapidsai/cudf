@@ -351,13 +351,9 @@ class DatetimeColumn(column.ColumnBase):
             if rhs.dtype.kind in {"f", "i", "u"}:
                 return cudf.core.column.full(len(self), False, dtype="bool")
             rhs = rhs.astype(self.dtype)
-
-            if not (rhs.null_count == len(rhs)) and lhs.dtype != rhs.dtype:
-                return cudf.core.column.full(len(self), False, dtype="bool")
-
-            # Short-circuit if rhs is all null.
-            if lhs.null_count == 0 and (rhs.null_count == len(rhs)):
-                return cudf.core.column.full(len(self), False, dtype="bool")
+            res = lhs._isin_earlystop(rhs)
+            if res is not None:
+                return res
         except ValueError:
             # pandas functionally returns all False when cleansing via
             # typecasting fails
