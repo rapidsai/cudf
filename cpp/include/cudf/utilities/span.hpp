@@ -194,9 +194,9 @@ struct device_span : public span_base<T, Extent, device_span<T, Extent>> {
 };
 
 /**
- * @brief Base class for 2D spans. Not compliant with STL container semantics/syntax.
+ * @brief Generic class for row-major 2D spans. Not compliant with STL container semantics/syntax.
  *
- * The index operator returns the corresponding row as a span.
+ * The index operator returns the corresponding row.
  */
 template <typename T, typename Row>
 class base_2dspan {
@@ -238,8 +238,20 @@ class base_2dspan {
   T* _data = nullptr;
   size_type _size{0, 0};
 };
+
+/**
+ * @brief Alias for the 2D span for host data.
+ *
+ * Index operator returns rows as `host_span`.
+ */
 template <class T>
 using host_2dspan = base_2dspan<T, host_span<T>>;
+
+/**
+ * @brief Alias for the 2D span for device data.
+ *
+ * Index operator returns rows as `device_span`.
+ */
 template <class T>
 using device_2dspan = base_2dspan<T, device_span<T>>;
 
