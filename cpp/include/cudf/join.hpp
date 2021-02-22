@@ -32,10 +32,33 @@ namespace cudf {
  */
 
 /**
- * @brief Performs  an inner join on the specified columns of two
- * tables (`left`, `right`), and returns the row indices corresponding
- * to the result.
- */ // TODO: explain this better
+ * @brief Returns the row indices to use when constructing
+ * the result of performing an inner join between two tables.
+ *
+ * @code{.pseudo}
+ *     Left: {{0, 1, 2}}
+ *     Right: {{1, 2, 3}}
+ *     Result: {{1, 2}, {0, 1}}
+ *
+ *     Left: {{0, 1, 2}, {3, 4, 5}}
+ *     Right: {{1, 2, 3}, {4, 6, 7}}
+ *     Result: {{1}, {0}}
+ *
+ * @throw cudf::logic_error if number of elements in `left_on` or `right_on`
+ * mismatch.
+ * @throw cudf::logic_error if number of columns in either `left` or `right`
+ * table is 0 or exceeds MAX_JOIN_SIZE
+ *
+ * @param[in] left A table representing the keys of the left table of the join
+ * @param[in] right A table representing  the keys of the right table of the join
+ * @param[in] compare_nulls controls whether null join-key values
+ * should match or not.
+ * @param mr Device memory resource used to allocate the returned table and columns' device memory
+ *
+ * @return A pair of columns [`left_indices`, `right_indices`] that can be used to construct
+ * the result of performing an inner join between two tables with `left_keys` and `right_keys`
+ * as the join keys .
+ */
 std::pair<std::unique_ptr<cudf::column>, std::unique_ptr<cudf::column>> inner_join(
   cudf::table_view const& left_keys,
   cudf::table_view const& right_keys,
