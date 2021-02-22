@@ -979,7 +979,9 @@ class ColumnBase(Column, Serializable):
         ascending: bool = True,
         na_position: builtins.str = "last",
     ) -> Tuple[ColumnBase, "cudf.core.column.NumericalColumn"]:
-        col_inds = self.as_frame()._get_sorted_inds(ascending, na_position)
+        col_inds = self.as_frame()._get_sorted_inds(
+            ascending=ascending, na_position=na_position
+        )
         col_keys = self.take(col_inds)
         return col_keys, col_inds
 

@@ -569,7 +569,7 @@ class Frame(libcudf.table.Table):
         else:
             return self._index.equals(other._index)
 
-    def _get_columns_by_label(self, labels, downcast):
+    def _get_columns_by_label(self, labels, downcast=False):
         """
         Returns columns of the Frame specified by `labels`
 
@@ -2720,12 +2720,15 @@ class Frame(libcudf.table.Table):
         else:
             return result
 
-    def _get_sorted_inds(self, ascending=True, na_position="last"):
+    def _get_sorted_inds(self, by=None, ascending=True, na_position="last"):
         """
         Sort by the values.
 
         Parameters
         ----------
+        by: list, optional
+            Labels specifyin columns to sort by. By default,
+            sort by all columns of `self`
         ascending : bool or list of bool, default True
             If True, sort values in ascending order, otherwise descending.
         na_position : {‘first’ or ‘last’}, default ‘last’
@@ -2760,11 +2763,17 @@ class Frame(libcudf.table.Table):
             )
             na_position = 0
 
+        to_sort = (
+            self
+            if by is None
+            else self._get_columns_by_label(by, downcast=False)
+        )
+
         # If given a scalar need to construct a sequence of length # of columns
         if np.isscalar(ascending):
-            ascending = [ascending] * self._num_columns
+            ascending = [ascending] * to_sort._num_columns
 
-        return libcudf.sort.order_by(self, ascending, na_position)
+        return libcudf.sort.order_by(to_sort, ascending, na_position)
 
     def sin(self):
         """

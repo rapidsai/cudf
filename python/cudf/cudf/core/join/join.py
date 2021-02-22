@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 from collections import OrderedDict, namedtuple
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Tuple
 
 import cudf
 from cudf import _lib as libcudf
@@ -177,7 +177,7 @@ class Merge(object):
 
         self._compute_join_keys()
 
-    def perform_merge(self):
+    def perform_merge(self) -> Frame:
         lhs, rhs = self._match_key_dtypes(self.lhs, self.rhs)
 
         left_key_indices = [
@@ -334,21 +334,21 @@ class Merge(object):
 
         return result
 
-    def _sort_result(self, result):
+    def _sort_result(self, result: Frame) -> Frame:
         # Pandas sorts on the key columns in the
         # same order as given in 'on'. If the indices are used as
         # keys, the index will be sorted. If one index is specified,
         # the key columns on the other side will be used to sort.
         if self.on:
             if isinstance(result, cudf.Index):
-                return result.sort_values()
+                sort_order = result._get_sorted_inds()
             else:
-                return result.sort_values(
-                    _coerce_to_list(self.on), ignore_index=True
-                )
+                sort_order = result._get_sorted_inds(_coerce_to_list(self.on))
+            return result._gather(sort_order, keep_index=False)
         by = []
         if self.left_index and self.right_index:
-            by.extend(result.index._data.columns)
+            if result._index is not None:
+                by.extend(result._index._data.columns)
         if self.left_on:
             by.extend(
                 [result._data[col] for col in _coerce_to_list(self.left_on)]
@@ -360,7 +360,7 @@ class Merge(object):
         if by:
             to_sort = cudf.DataFrame._from_columns(by)
             sort_order = to_sort.argsort()
-            result = result.take(sort_order)
+            result = result._gather(sort_order)
         return result
 
     @staticmethod
@@ -423,7 +423,7 @@ class Merge(object):
                         "lsuffix and rsuffix are not defined"
                     )
 
-    def _match_key_dtypes(self, lhs, rhs):
+    def _match_key_dtypes(self, lhs: Frame, rhs: Frame) -> Tuple[Frame, Frame]:
         # Match the dtypes of the key columns from lhs and rhs
         out_lhs = lhs.copy(deep=False)
         out_rhs = rhs.copy(deep=False)
@@ -435,7 +435,9 @@ class Merge(object):
                 right_key.set(out_rhs, rcol.astype(dtype))
         return out_lhs, out_rhs
 
-    def _restore_categorical_keys(self, lhs, rhs):
+    def _restore_categorical_keys(
+        self, lhs: Frame, rhs: Frame
+    ) -> Tuple[Frame, Frame]:
         # For inner joins, any categorical keys in `self.lhs` and `self.rhs`
         # were casted to their category type to produce `lhs` and `rhs`.
         # Here, we cast them back.
@@ -460,5 +462,5 @@ class Merge(object):
 class MergeSemi(Merge):
     _joiner = libcudf.join.semi_join
 
-    def _merge_results(self, lhs, rhs):
+    def _merge_results(self, lhs: Frame, rhs: Frame) -> Frame:
         return super()._merge_results(lhs, cudf.core.frame.Frame())

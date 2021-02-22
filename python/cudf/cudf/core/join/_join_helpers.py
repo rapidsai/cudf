@@ -36,17 +36,20 @@ class _Indexer:
         # get the column from `obj`
         if self.column:
             return obj._data[self.name]
-        if obj._index is not None:
-            return obj._index._data[self.name]
+        else:
+            if obj._index is not None:
+                return obj._index._data[self.name]
         raise KeyError()
 
     def set(self, obj: Frame, value: ColumnBase):
         # set the colum in `obj`
         if self.column:
             obj._data[self.name] = value
-        if obj._index is not None:
-            obj._index._data[self.name] = value
-        raise KeyError()
+        else:
+            if obj._index is not None:
+                obj._index._data[self.name] = value
+            else:
+                raise KeyError()
 
     def get_numeric_index(self, obj: Frame) -> int:
         # get the position of the column in `obj`
@@ -54,9 +57,10 @@ class _Indexer:
         if self.column:
             index_nlevels = obj._index.nlevels if obj._index is not None else 0
             return index_nlevels + tuple(obj._data).index(self.name)
-        if obj._index is not None:
-            return obj._index.names.index(self.name)
-        raise KeyError()
+        else:
+            if obj._index is not None:
+                return obj._index.names.index(self.name)
+            raise KeyError()
 
 
 def _match_join_keys(lcol: ColumnBase, rcol: ColumnBase, how: str) -> Dtype:
