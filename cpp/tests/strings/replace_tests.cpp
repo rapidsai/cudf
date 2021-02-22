@@ -185,9 +185,7 @@ TEST_F(StringsReplaceTest, ReplaceNullInput)
 {
   std::vector<const char*> h_null_strings(128);
   auto strings = cudf::test::strings_column_wrapper(
-    h_null_strings.begin(),
-    h_null_strings.end(),
-    thrust::make_constant_iterator(false));
+    h_null_strings.begin(), h_null_strings.end(), thrust::make_constant_iterator(false));
   auto strings_view = cudf::strings_column_view(strings);
   // replace all occurrences of '+' with ''
   // should not replace anything as input is all null
