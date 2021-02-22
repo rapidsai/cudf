@@ -320,11 +320,11 @@ struct udf_aggregation final : derived_aggregation<udf_aggregation> {
 };
 
 /**
- * @brief Derived aggregation class for specifying COLLECT aggregation
+ * @brief Derived aggregation class for specifying COLLECT_LIST aggregation
  */
 struct collect_list_aggregation final : derived_aggregation<nunique_aggregation> {
   explicit collect_list_aggregation(null_policy null_handling = null_policy::INCLUDE)
-    : derived_aggregation{COLLECT}, _null_handling{null_handling}
+    : derived_aggregation{COLLECT_LIST}, _null_handling{null_handling}
   {
   }
   null_policy _null_handling;  ///< include or exclude nulls
@@ -514,9 +514,9 @@ struct target_type_impl<Source, aggregation::ROW_NUMBER> {
   using type = cudf::size_type;
 };
 
-// Always use list for COLLECT
+// Always use list for COLLECT_LIST
 template <typename Source>
-struct target_type_impl<Source, aggregation::COLLECT> {
+struct target_type_impl<Source, aggregation::COLLECT_LIST> {
   using type = cudf::list_view;
 };
 
@@ -617,8 +617,8 @@ CUDA_HOST_DEVICE_CALLABLE decltype(auto) aggregation_dispatcher(aggregation::Kin
       return f.template operator()<aggregation::NTH_ELEMENT>(std::forward<Ts>(args)...);
     case aggregation::ROW_NUMBER:
       return f.template operator()<aggregation::ROW_NUMBER>(std::forward<Ts>(args)...);
-    case aggregation::COLLECT:
-      return f.template operator()<aggregation::COLLECT>(std::forward<Ts>(args)...);
+    case aggregation::COLLECT_LIST:
+      return f.template operator()<aggregation::COLLECT_LIST>(std::forward<Ts>(args)...);
     case aggregation::LEAD:
       return f.template operator()<aggregation::LEAD>(std::forward<Ts>(args)...);
     case aggregation::LAG:

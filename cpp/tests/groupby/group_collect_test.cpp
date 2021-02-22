@@ -124,7 +124,7 @@ TYPED_TEST(groupby_collect_test, CollectFailsWithNullExclusion)
   agg_requests[0].aggregations.push_back(cudf::make_collect_aggregation(null_policy::EXCLUDE));
 
   CUDF_EXPECT_THROW_MESSAGE(gby.aggregate(agg_requests),
-                            "null exclusion is not supported on groupby COLLECT aggregation.");
+                            "null exclusion is not supported on groupby COLLECT_LIST aggregation.");
 }
 
 }  // namespace test

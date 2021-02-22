@@ -41,7 +41,7 @@ static constexpr bool is_rolling_supported()
       (op == aggregation::SUM) or (op == aggregation::MIN) or (op == aggregation::MAX) or
       (op == aggregation::COUNT_VALID) or (op == aggregation::COUNT_ALL) or
       (op == aggregation::MEAN) or (op == aggregation::ROW_NUMBER) or (op == aggregation::LEAD) or
-      (op == aggregation::LAG) or (op == aggregation::COLLECT);
+      (op == aggregation::LAG) or (op == aggregation::COLLECT_LIST);
 
     constexpr bool is_valid_numeric_agg =
       (cudf::is_numeric<ColumnType>() or cudf::is_duration<ColumnType>() or
@@ -54,23 +54,23 @@ static constexpr bool is_rolling_supported()
     return (op == aggregation::MIN) or (op == aggregation::MAX) or
            (op == aggregation::COUNT_VALID) or (op == aggregation::COUNT_ALL) or
            (op == aggregation::ROW_NUMBER) or (op == aggregation::LEAD) or
-           (op == aggregation::LAG) or (op == aggregation::COLLECT);
+           (op == aggregation::LAG) or (op == aggregation::COLLECT_LIST);
   } else if (cudf::is_fixed_point<ColumnType>()) {
     return (op == aggregation::SUM) or (op == aggregation::MIN) or (op == aggregation::MAX) or
            (op == aggregation::COUNT_VALID) or (op == aggregation::COUNT_ALL) or
            (op == aggregation::ROW_NUMBER) or (op == aggregation::LEAD) or
-           (op == aggregation::LAG) or (op == aggregation::COLLECT);
+           (op == aggregation::LAG) or (op == aggregation::COLLECT_LIST);
   } else if (std::is_same<ColumnType, cudf::string_view>()) {
     return (op == aggregation::MIN) or (op == aggregation::MAX) or
            (op == aggregation::COUNT_VALID) or (op == aggregation::COUNT_ALL) or
-           (op == aggregation::ROW_NUMBER) or (op == aggregation::COLLECT);
+           (op == aggregation::ROW_NUMBER) or (op == aggregation::COLLECT_LIST);
 
   } else if (std::is_same<ColumnType, cudf::list_view>()) {
     return (op == aggregation::COUNT_VALID) or (op == aggregation::COUNT_ALL) or
-           (op == aggregation::ROW_NUMBER) or (op == aggregation::COLLECT);
+           (op == aggregation::ROW_NUMBER) or (op == aggregation::COLLECT_LIST);
   } else if (std::is_same<ColumnType, cudf::struct_view>()) {
     // TODO: Add support for COUNT_VALID, COUNT_ALL, ROW_NUMBER.
-    return op == aggregation::COLLECT;
+    return op == aggregation::COLLECT_LIST;
   } else {
     return false;
   }

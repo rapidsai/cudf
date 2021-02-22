@@ -74,7 +74,7 @@ class aggregation {
     NUNIQUE,         ///< count number of unique elements
     NTH_ELEMENT,     ///< get the nth element
     ROW_NUMBER,      ///< get row-number of current index (relative to rolling window)
-    COLLECT,         ///< collect values into a list
+    COLLECT_LIST,    ///< collect values into a list
     LEAD,            ///< window function, accesses row at specified offset following current row
     LAG,             ///< window function, accesses row at specified offset preceding current row
     PTX,             ///< PTX  UDF based reduction
@@ -205,9 +205,9 @@ std::unique_ptr<aggregation> make_nth_element_aggregation(
 std::unique_ptr<aggregation> make_row_number_aggregation();
 
 /**
- * @brief Factory to create a COLLECT aggregation
+ * @brief Factory to create a COLLECT_LIST aggregation
  *
- * `COLLECT` returns a list column of all included elements in the group/series.
+ * `COLLECT_LIST` returns a list column of all included elements in the group/series.
  *
  * If `null_handling` is set to `EXCLUDE`, null elements are dropped from each
  * of the list rows.

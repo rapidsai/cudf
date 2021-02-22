@@ -401,12 +401,12 @@ void store_result_functor::operator()<aggregation::NTH_ELEMENT>(aggregation cons
 }
 
 template <>
-void store_result_functor::operator()<aggregation::COLLECT>(aggregation const& agg)
+void store_result_functor::operator()<aggregation::COLLECT_LIST>(aggregation const& agg)
 {
   auto null_handling =
     static_cast<cudf::detail::collect_list_aggregation const&>(agg)._null_handling;
   CUDF_EXPECTS(null_handling == null_policy::INCLUDE,
-               "null exclusion is not supported on groupby COLLECT aggregation.");
+               "null exclusion is not supported on groupby COLLECT_LIST aggregation.");
 
   if (cache.has_result(col_idx, agg)) return;
 
