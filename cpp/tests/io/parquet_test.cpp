@@ -1531,30 +1531,51 @@ TEST_F(ParquetChunkedWriterTest, ForcedNullabilityList)
   CUDF_TEST_EXPECT_TABLES_EQUAL(*result.tbl, *full_table);
 }
 
-TEST_F(ParquetChunkedWriterTest, WrongNullability)
+TEST_F(ParquetChunkedWriterTest, ForcedNullabilityStruct)
 {
-  srand(31337);
-  auto table1 = create_random_fixed_table<int>(5, 5, false);
+  // Struct<is_human:bool (non-nullable),
+  //        Struct<weight:float>,
+  //               age:int
+  //              > (nullable)
+  //       > (non-nullable)
 
-  auto filepath = temp_env->get_temp_filepath("ChunkedWrongNullable.parquet");
+  // Table 1: is_human and struct_2 are non-nullable and should stay that way when read back.
+  auto weight_1   = cudf::test::fixed_width_column_wrapper<float>{{57.5, 51.1, 15.3}};
+  auto ages_1     = cudf::test::fixed_width_column_wrapper<int32_t>{{30, 27, 5}};
+  auto struct_1_1 = cudf::test::structs_column_wrapper{weight_1, ages_1};
+  auto is_human_1 = cudf::test::fixed_width_column_wrapper<bool>{{true, true, false}};
+  auto struct_2_1 = cudf::test::structs_column_wrapper{{is_human_1, struct_1_1}};
+  auto table_1    = cudf::table_view({struct_2_1});
 
-  cudf::io::table_metadata_with_nullability nullable_metadata;
-  // Number of columns with mask in table (i.e 5) and size of column nullability (i.e 6), are
-  // mismatching.
-  nullable_metadata.column_nullable.insert(nullable_metadata.column_nullable.begin(), 6, true);
+  auto weight_2   = cudf::test::fixed_width_column_wrapper<float>{{1.1, -1.0, -1.0}};
+  auto ages_2     = cudf::test::fixed_width_column_wrapper<int32_t>{{31, 351, 351}, {1, 1, 0}};
+  auto struct_1_2 = cudf::test::structs_column_wrapper{{weight_2, ages_2}, {1, 0, 1}};
+  auto is_human_2 = cudf::test::fixed_width_column_wrapper<bool>{{false, false, false}};
+  auto struct_2_2 = cudf::test::structs_column_wrapper{{is_human_2, struct_1_2}};
+  auto table_2    = cudf::table_view({struct_2_2});
+
+  auto full_table = cudf::concatenate({table_1, table_2});
+
+  cudf_io::table_input_metadata expected_metadata(table_1);
+  expected_metadata.column_metadata[0].name                         = "being";
+  expected_metadata.column_metadata[0].nullable                     = false;
+  expected_metadata.column_metadata[0].children[0].name             = "human?";
+  expected_metadata.column_metadata[0].children[0].nullable         = false;
+  expected_metadata.column_metadata[0].children[1].name             = "particulars";
+  expected_metadata.column_metadata[0].children[1].children[0].name = "weight";
+  expected_metadata.column_metadata[0].children[1].children[1].name = "age";
+
+  auto filepath = ("ChunkedNullableStruct.parquet");
   cudf_io::chunked_parquet_writer_options args =
-    cudf_io::chunked_parquet_writer_options::builder(cudf_io::sink_info{filepath})
-      .nullable_metadata(&nullable_metadata);
-  EXPECT_THROW(cudf_io::parquet_chunked_writer(args).write(*table1), cudf::logic_error);
+    cudf_io::chunked_parquet_writer_options::builder(cudf_io::sink_info{filepath});
+  args.set_input_metadata(&expected_metadata);
+  cudf_io::parquet_chunked_writer(args).write(table_1).write(table_2);
 
-  nullable_metadata.column_nullable.clear();
-  // Number of columns with mask in table (i.e 5) and size of column nullability (i.e 4), are
-  // mismatching.
-  nullable_metadata.column_nullable.insert(nullable_metadata.column_nullable.begin(), 4, true);
-  cudf_io::chunked_parquet_writer_options args2 =
-    cudf_io::chunked_parquet_writer_options::builder(cudf_io::sink_info{filepath})
-      .nullable_metadata(&nullable_metadata);
-  EXPECT_THROW(cudf_io::parquet_chunked_writer(args2).write(*table1), cudf::logic_error);
+  cudf_io::parquet_reader_options read_opts =
+    cudf_io::parquet_reader_options::builder(cudf_io::source_info{filepath});
+  auto result = cudf_io::read_parquet(read_opts);
+
+  CUDF_TEST_EXPECT_TABLES_EQUAL(*result.tbl, *full_table);
 }
 
 TEST_F(ParquetChunkedWriterTest, ReadRowGroups)

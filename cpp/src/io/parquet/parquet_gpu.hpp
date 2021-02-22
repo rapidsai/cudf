@@ -232,6 +232,9 @@ struct EncColumnDesc : stats_column_desc {
 
   column_device_view *leaf_column;    //!< Pointer to leaf column
   column_device_view *parent_column;  //!< Pointer to parent column. Is nullptr if not list type.
+  uint8_t *nullability;  //!< Array of nullability of each nesting level. e.g. nullable[0] is
+                         //!< nullability of parent_column. May be different from col.nullable() in
+                         //!< case of chunked writing.
 };
 
 constexpr int max_page_fragment_size = 5000;  //!< Max number of rows in a page fragment
