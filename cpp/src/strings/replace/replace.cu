@@ -33,6 +33,7 @@
 
 #include <thrust/binary_search.h>
 #include <thrust/count.h>
+#include <thrust/distance.h>
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/iterator/transform_iterator.h>
 #include <thrust/scan.h>
@@ -350,7 +351,7 @@ size_type filter_maxrepl_target_positions(size_type* d_target_positions,
   auto pos_to_row_fn = [d_offsets_span] __device__(size_type target_pos) -> size_type {
     auto upper_bound =
       thrust::upper_bound(thrust::seq, d_offsets_span.begin(), d_offsets_span.end(), target_pos);
-    return upper_bound - d_offsets_span.begin();
+    return thrust::distance(d_offsets_span.begin(), upper_bound);
   };
 
   // compute the match count per row for each target position
@@ -465,7 +466,8 @@ std::unique_ptr<column> replace_char_parallel(strings_column_view const& strings
     // determine the number of target positions occurring before this offset
     size_type const* next_target_pos_ptr = thrust::lower_bound(
       thrust::seq, d_target_positions_span.begin(), d_target_positions_span.end(), offset);
-    size_type num_prev_targets = next_target_pos_ptr - d_target_positions_span.data();
+    size_type num_prev_targets =
+      thrust::distance(d_target_positions_span.data(), next_target_pos_ptr);
     return offset - chars_start + delta_per_target * num_prev_targets;
   };
   thrust::transform(rmm::exec_policy(stream),
