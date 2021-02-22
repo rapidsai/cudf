@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2020, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -69,8 +69,7 @@ std::unique_ptr<column> scatter(
   if (target.has_nulls()) null_mask = cudf::detail::copy_bitmask(target.parent(), stream, mr);
 
   // create string vectors
-  rmm::device_vector<string_view> target_vector =
-    create_string_vector_from_column(target, stream.value());
+  rmm::device_vector<string_view> target_vector = create_string_vector_from_column(target, stream);
   // do the scatter
   thrust::scatter(rmm::exec_policy(stream), begin, end, scatter_map, target_vector.begin());
 

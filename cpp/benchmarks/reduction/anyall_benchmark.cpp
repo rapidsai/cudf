@@ -22,7 +22,6 @@
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_wrapper.hpp>
 
-#include <memory>
 #include <random>
 
 class Reduction : public cudf::benchmark {
@@ -33,18 +32,18 @@ void BM_reduction_anyall(benchmark::State& state, std::unique_ptr<cudf::aggregat
 {
   const cudf::size_type column_size{static_cast<cudf::size_type>(state.range(0))};
 
-  cudf::test::UniformRandomGenerator<long> rand_gen(0, 100);
-  auto data_it = cudf::test::make_counting_transform_iterator(
+  cudf::test::UniformRandomGenerator<long> rand_gen(
+    (agg->kind == cudf::aggregation::ALL ? 1 : 0), (agg->kind == cudf::aggregation::ANY ? 0 : 100));
+  auto data_it = cudf::detail::make_counting_transform_iterator(
     0, [&rand_gen](cudf::size_type row) { return rand_gen.generate(); });
   cudf::test::fixed_width_column_wrapper<type, typename decltype(data_it)::value_type> values(
     data_it, data_it + column_size);
 
-  auto input_column = cudf::column_view(values);
   cudf::data_type output_dtype{cudf::type_id::BOOL8};
 
   for (auto _ : state) {
     cuda_event_timer timer(state, true);
-    auto result = cudf::reduce(input_column, agg, output_dtype);
+    auto result = cudf::reduce(values, agg, output_dtype);
   }
 }
 

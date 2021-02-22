@@ -1,3 +1,11 @@
+# cuDF 0.19.0 (Date TBD)
+
+## New Features
+
+## Improvements
+
+## Bug Fixes
+
 # 0.18.0
 
 Please see https://github.com/rapidsai/cudf/releases/tag/branch-0.18-latest for the latest changes to this development branch.
@@ -192,6 +200,7 @@ Please see https://github.com/rapidsai/cudf/releases/tag/branch-0.18-latest for 
 - PR #6854 Fix the parameter order of writeParquetBufferBegin
 - PR #6855 Fix `.str.replace_with_backrefs` docs examples
 - PR #6853 Fix contiguous split of null string columns
+- PR #6860 Move codecov upload to build script
 - PR #6861 Fix compile error in type_dispatch_benchmark.cu
 - PR #6864 Handle contiguous_split corner case for nested string columns with no children
 - PR #6869 Avoid dependency resolution failure in latest version of pip by explicitly specifying versions for dask and distributed

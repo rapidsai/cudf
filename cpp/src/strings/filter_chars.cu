@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,12 +18,14 @@
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/get_value.cuh>
+#include <cudf/detail/iterator.cuh>
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/strings/detail/utilities.hpp>
 #include <cudf/strings/string_view.cuh>
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/strings/translate.hpp>
+
 #include <strings/utilities.cuh>
 
 #include <rmm/cuda_stream_view.hpp>
@@ -131,9 +133,8 @@ std::unique_ptr<column> filter_characters(
 
   // create offsets column
   filter_fn ffn{d_strings, keep_characters, table.begin(), table.end(), d_replacement};
-  auto offsets_transformer_itr =
-    thrust::make_transform_iterator(thrust::make_counting_iterator<int32_t>(0), ffn);
-  auto offsets_column = make_offsets_child_column(
+  auto offsets_transformer_itr = cudf::detail::make_counting_transform_iterator(0, ffn);
+  auto offsets_column          = make_offsets_child_column(
     offsets_transformer_itr, offsets_transformer_itr + strings_count, stream, mr);
   ffn.d_offsets = offsets_column->view().data<int32_t>();
 

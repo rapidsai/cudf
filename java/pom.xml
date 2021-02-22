@@ -21,7 +21,7 @@
 
     <groupId>ai.rapids</groupId>
     <artifactId>cudf</artifactId>
-    <version>0.18-SNAPSHOT</version>
+    <version>0.19-SNAPSHOT</version>
 
     <name>cudfjni</name>
     <description>
@@ -365,6 +365,7 @@
         <plugins>
             <plugin>
                 <artifactId>maven-antrun-plugin</artifactId>
+                <version>1.8</version>
                 <executions>
                     <execution>
                         <id>cmake</id>

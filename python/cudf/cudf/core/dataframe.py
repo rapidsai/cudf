@@ -39,6 +39,7 @@ from cudf.core.window import Rolling
 from cudf.utils import applyutils, docutils, ioutils, queryutils, utils
 from cudf.utils.docutils import copy_docstring
 from cudf.utils.dtypes import (
+    can_convert_to_column,
     cudf_dtype_from_pydata_dtype,
     find_common_type,
     is_categorical_dtype,
@@ -408,9 +409,12 @@ class DataFrame(Frame, Serializable):
             index = as_index(index)
 
         self._index = as_index(index)
-
         # list-of-dicts case
         if len(data) > 0 and isinstance(data[0], dict):
+            data = DataFrame.from_pandas(pd.DataFrame(data))
+            self._data = data._data
+        # interval in a list
+        elif len(data) > 0 and isinstance(data[0], pd._libs.interval.Interval):
             data = DataFrame.from_pandas(pd.DataFrame(data))
             self._data = data._data
         else:
@@ -683,20 +687,9 @@ class DataFrame(Frame, Serializable):
         elif isinstance(arg, slice):
             return self._slice(arg)
 
-        elif isinstance(
-            arg,
-            (
-                list,
-                cupy.ndarray,
-                np.ndarray,
-                pd.Series,
-                Series,
-                Index,
-                pd.Index,
-            ),
-        ):
+        elif can_convert_to_column(arg):
             mask = arg
-            if isinstance(mask, list):
+            if is_list_like(mask):
                 mask = pd.Series(mask)
             if mask.dtype == "bool":
                 return self._apply_boolean_mask(mask)
@@ -776,11 +769,9 @@ class DataFrame(Frame, Serializable):
                     # pandas raises key error here
                     self.insert(len(self._data), arg, value)
 
-        elif isinstance(
-            arg, (list, np.ndarray, pd.Series, Series, Index, pd.Index)
-        ):
+        elif can_convert_to_column(arg):
             mask = arg
-            if isinstance(mask, list):
+            if is_list_like(mask):
                 mask = np.array(mask)
 
             if mask.dtype == "bool":
