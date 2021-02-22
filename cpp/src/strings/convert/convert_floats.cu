@@ -141,7 +141,7 @@ struct string_to_float_fn {
   __device__ FloatType operator()(size_type idx)
   {
     if (strings_column.is_null(idx)) return static_cast<FloatType>(0);
-    return stof<FloatType>(strings_column.element<string_view>(idx));
+    return static_cast<FloatType>(stof<double>(strings_column.element<string_view>(idx)));
   }
 };
 
