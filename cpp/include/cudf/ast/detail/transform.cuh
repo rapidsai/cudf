@@ -319,7 +319,7 @@ __device__ void evaluate_row_expression(detail::row_evaluator const& evaluator,
 
 struct ast_plan {
  public:
-  ast_plan(linearizer const& expr_linearizer) : sizes(), data_pointers()
+  ast_plan(linearizer const& expr_linearizer) : _sizes{}, _data_pointers{}
   {
     add_to_plan(expr_linearizer.data_references());
     add_to_plan(expr_linearizer.literals());
@@ -329,37 +329,50 @@ struct ast_plan {
 
   using buffer_type = std::pair<std::unique_ptr<char[]>, int>;
 
+  /**
+   * @brief Helper function for adding components (operators, literals, etc) to AST plan
+   *
+   * @tparam T  The underlying type of the input `std::vector`
+   * @param  v  The `std::vector` containing components (operators, literals, etc)
+   */
   template <typename T>
   void add_to_plan(std::vector<T> const& v)
   {
     auto const data_size = sizeof(T) * v.size();
-    sizes.push_back(data_size);
-    data_pointers.push_back(v.data());
+    _sizes.push_back(data_size);
+    _data_pointers.push_back(v.data());
   }
 
-  buffer_type get_host_data_buffer() const
+  /**
+   * @brief Create and return host buffer
+   *
+   * @return `std::pair` containing host buffer and buffer size
+   */
+  buffer_type host_data_buffer() const
   {
-    auto const total_size = std::accumulate(sizes.cbegin(), sizes.cend(), 0);
+    auto const total_size = std::accumulate(_sizes.cbegin(), _sizes.cend(), 0);
     auto host_data_buffer = std::make_unique<char[]>(total_size);
-    auto const offsets    = get_offsets();
-    for (unsigned int i = 0; i < data_pointers.size(); ++i) {
-      std::memcpy(host_data_buffer.get() + offsets[i], data_pointers[i], sizes[i]);
-    }
+    for (unsigned int i = 0; i < _data_pointers.size(); ++i)
+      std::memcpy(host_data_buffer.get() + offsets()[i], _data_pointers[i], _sizes[i]);
     return std::make_pair(std::move(host_data_buffer), total_size);
   }
 
-  std::vector<cudf::size_type> get_offsets() const
+  /**
+   * @brief Returns a `std::vector` of offsets into `data_pointers`
+   *
+   * @return `std::vector` of offsets into `data_pointers`
+   */
+  std::vector<cudf::size_type> offsets() const
   {
-    auto offsets = std::vector<int>(sizes.size());
+    auto offsets = std::vector<int>(_sizes.size());
     // When C++17, use std::exclusive_scan
-    offsets[0] = 0;
-    std::partial_sum(sizes.cbegin(), sizes.cend() - 1, offsets.begin() + 1);
+    std::partial_sum(_sizes.cbegin(), _sizes.cend() - 1, offsets.begin() + 1);
     return offsets;
   }
 
  private:
-  std::vector<cudf::size_type> sizes;
-  std::vector<const void*> data_pointers;
+  std::vector<cudf::size_type> _sizes;
+  std::vector<const void*> _data_pointers;
 };
 
 /**

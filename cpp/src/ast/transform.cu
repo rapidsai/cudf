@@ -94,8 +94,8 @@ std::unique_ptr<column> compute_column(table_view const table,
   auto const plan            = ast_plan(expr_linearizer);  // Create ast_plan
 
   // Create device buffer
-  auto const host_data_buffer = plan.get_host_data_buffer();
-  auto const buffer_offsets   = plan.get_offsets();
+  auto const host_data_buffer = plan.host_data_buffer();
+  auto const buffer_offsets   = plan.offsets();
   auto const buffer_size      = host_data_buffer.second;
   auto device_data_buffer =
     rmm::device_buffer(host_data_buffer.first.get(), buffer_size, stream, mr);
