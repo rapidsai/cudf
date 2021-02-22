@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2020, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -315,7 +315,8 @@ std::unique_ptr<column> starts_with(
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
 {
   auto pfn = [] __device__(string_view d_string, string_view d_target) {
-    return d_string.find(d_target) == 0;
+    return (d_target.size_bytes() <= d_string.size_bytes()) &&
+           (d_target.compare(d_string.data(), d_target.size_bytes()) == 0);
   };
   return contains_fn(strings, target, pfn, stream, mr);
 }
@@ -327,7 +328,8 @@ std::unique_ptr<column> starts_with(
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
 {
   auto pfn = [] __device__(string_view d_string, string_view d_target) {
-    return d_string.find(d_target) == 0;
+    return (d_target.size_bytes() <= d_string.size_bytes()) &&
+           (d_target.compare(d_string.data(), d_target.size_bytes()) == 0);
   };
   return contains_fn(strings, targets, pfn, stream, mr);
 }
@@ -339,10 +341,10 @@ std::unique_ptr<column> ends_with(
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
 {
   auto pfn = [] __device__(string_view d_string, string_view d_target) {
-    auto str_length = d_string.length();
-    auto tgt_length = d_target.length();
-    if (str_length < tgt_length) return false;
-    return d_string.find(d_target, str_length - tgt_length) >= 0;
+    auto const str_size = d_string.size_bytes();
+    auto const tgt_size = d_target.size_bytes();
+    return (tgt_size <= str_size) &&
+           (d_target.compare(d_string.data() + str_size - tgt_size, tgt_size) == 0);
   };
 
   return contains_fn(strings, target, pfn, stream, mr);
@@ -355,10 +357,10 @@ std::unique_ptr<column> ends_with(
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
 {
   auto pfn = [] __device__(string_view d_string, string_view d_target) {
-    auto str_length = d_string.length();
-    auto tgt_length = d_target.length();
-    if (str_length < tgt_length) return false;
-    return d_string.find(d_target, str_length - tgt_length) >= 0;
+    auto const str_size = d_string.size_bytes();
+    auto const tgt_size = d_target.size_bytes();
+    return (tgt_size <= str_size) &&
+           (d_target.compare(d_string.data() + str_size - tgt_size, tgt_size) == 0);
   };
 
   return contains_fn(strings, targets, pfn, stream, mr);
