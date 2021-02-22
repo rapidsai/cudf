@@ -337,18 +337,18 @@ class parquet_column_view {
       // size of the leaf column
       // Calculate row offset into dremel data (repetition/definition values) and the respective
       // definition and repetition levels
-      gpu::dremel_data dremel = gpu::get_dremel_data(col, _nullability, stream);
-      _dremel_offsets         = std::move(dremel.dremel_offsets);
-      _rep_level              = std::move(dremel.rep_level);
-      _def_level              = std::move(dremel.def_level);
-      leaf_col_offset         = dremel.leaf_col_offset;
-      _data_count             = dremel.leaf_data_size;
-      _max_def_level          = dremel.max_def_level;
+      // gpu::dremel_data dremel = gpu::get_dremel_data(col, _nullability, stream);
+      // _dremel_offsets         = std::move(dremel.dremel_offsets);
+      // _rep_level              = std::move(dremel.rep_level);
+      // _def_level              = std::move(dremel.def_level);
+      // leaf_col_offset         = dremel.leaf_col_offset;
+      // _data_count             = dremel.leaf_data_size;
+      // _max_def_level          = dremel.max_def_level;
 
-      _type_width = (is_fixed_width(_leaf_col.type())) ? cudf::size_of(_leaf_col.type()) : 0;
-      _data       = (is_fixed_width(_leaf_col.type()))
-                ? _leaf_col.head<uint8_t>() + leaf_col_offset * _type_width
-                : nullptr;
+      // _type_width = (is_fixed_width(_leaf_col.type())) ? cudf::size_of(_leaf_col.type()) : 0;
+      // _data       = (is_fixed_width(_leaf_col.type()))
+      //           ? _leaf_col.head<uint8_t>() + leaf_col_offset * _type_width
+      //           : nullptr;
 
       // Calculate nesting levels
       column_view curr_col = col;
@@ -909,10 +909,11 @@ struct new_parquet_column_view {
       // size of the leaf column
       // Calculate row offset into dremel data (repetition/definition values) and the respective
       // definition and repetition levels
-      gpu::dremel_data dremel = gpu::get_dremel_data(cudf_col, _nullability, stream);
-      _dremel_offsets         = std::move(dremel.dremel_offsets);
-      _rep_level              = std::move(dremel.rep_level);
-      _def_level              = std::move(dremel.def_level);
+      gpu::dremel_data dremel =
+        gpu::get_dremel_data(cudf_col, _d_nullability, _nullability, stream);
+      _dremel_offsets = std::move(dremel.dremel_offsets);
+      _rep_level      = std::move(dremel.rep_level);
+      _def_level      = std::move(dremel.def_level);
       // Needed for constructing string view vector for statistics calc
       // leaf_col_offset         = dremel.leaf_col_offset;
       // Needed for knowing what size dictionary to allocate

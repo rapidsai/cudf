@@ -1728,13 +1728,11 @@ void print(rmm::device_uvector<T> const &d_vec, std::string label = "")
  * Similarly we merge up all the way till level 0 offsets
  */
 dremel_data get_dremel_data(column_view h_col,
-                            std::vector<bool> const &level_nullability,
+                            // TODO: make it a device_span once it is converted to a single hd_vec
+                            rmm::device_uvector<uint8_t> const &d_nullability,
+                            std::vector<uint8_t> const &nullability,
                             rmm::cuda_stream_view stream)
 {
-  // No longer true. Top level parent could be struct
-  // CUDF_EXPECTS(h_col.type().id() == type_id::LIST,
-  //              "Can only get rep/def levels for LIST type column");
-
   auto get_list_level = [](column_view col) {
     while (col.type().id() == type_id::STRUCT) { col = col.child(0); }
     return col;
@@ -1764,6 +1762,7 @@ dremel_data get_dremel_data(column_view h_col,
     return std::make_tuple(std::move(empties), std::move(empties_idx), empties_size);
   };
 
+  // TODO: copy logic to get max_vals_size before cleaning up old code below
   // // Reverse the nesting in order to merge the deepest level with the leaf first and merge bottom
   // // up
   // auto curr_col        = h_col;
@@ -1793,19 +1792,25 @@ dremel_data get_dremel_data(column_view h_col,
   auto curr_col = h_col;
   std::vector<column_view> nesting_levels;
   std::vector<uint8_t> def_at_level;
+  std::vector<uint8_t> start_at_sub_level;
+  uint8_t curr_nesting_level_idx = 0;
+
   auto add_def_at_level = [&](column_view col) {
     // Add up all def level contributions in this column all the way till the fist list column
     // appears in the heirarchy or until we get to leaf
     uint32_t def = 0;
+    start_at_sub_level.push_back(curr_nesting_level_idx);
     while (col.type().id() == type_id::STRUCT) {
-      def += (col.nullable()) ? 1 : 0;
+      def += (nullability[curr_nesting_level_idx]) ? 1 : 0;
       col = col.child(0);
+      ++curr_nesting_level_idx;
     }
     // At the end of all those structs is either a list column or the leaf. Leaf column contributes
     // at least one def level. It doesn't matter what the leaf contributes because it'll be at the
     // end of the exclusive scan.
-    def += (col.nullable()) ? 2 : 1;
+    def += (nullability[curr_nesting_level_idx]) ? 2 : 1;
     def_at_level.push_back(def);
+    ++curr_nesting_level_idx;
   };
   while (cudf::is_nested(curr_col.type())) {
     nesting_levels.push_back(curr_col);
@@ -1912,14 +1917,17 @@ dremel_data get_dremel_data(column_view h_col,
     auto input_parent_rep_it = thrust::make_constant_iterator(level);
     auto input_parent_def_it = thrust::make_transform_iterator(
       thrust::make_counting_iterator(0),
-      [idx            = empties_idx.data(),
-       parent_col     = d_nesting_levels + level,
-       curr_def_level = def_at_level[level]] __device__(auto i) {
+      [idx             = empties_idx.data(),
+       parent_col      = d_nesting_levels + level,
+       d_nullability   = d_nullability.data(),
+       sub_level_start = start_at_sub_level[level],
+       curr_def_level  = def_at_level[level]] __device__(auto i) {
         uint32_t def       = curr_def_level;
+        uint8_t l          = sub_level_start;
         bool is_col_nested = false;
         auto col           = *parent_col;
         do {
-          if (col.nullable()) {
+          if (d_nullability[l]) {
             // TODO: Looks like instead of transforming on count iterator, we could've transformed
             // empties_idx. Then this check would become is_valid(i) instead of is_valid(idx[i]).
             // TODO: Once the above is done, we can maybe consolidate this functor with similar
@@ -1931,7 +1939,10 @@ dremel_data get_dremel_data(column_view h_col,
             }  // If col not nullable then it does not contribute to def levels
           }
           is_col_nested = (col.type().id() == type_id::STRUCT);
-          if (is_col_nested) { col = col.child(0); }
+          if (is_col_nested) {
+            col = col.child(0);
+            ++l;
+          }
         } while (is_col_nested);
         return def;
       });
@@ -1947,13 +1958,16 @@ dremel_data get_dremel_data(column_view h_col,
     auto input_child_rep_it = thrust::make_constant_iterator(nesting_levels.size() - 1);
     auto input_child_def_it = thrust::make_transform_iterator(
       thrust::make_counting_iterator(column_offsets[level + 1]),
-      [child_col      = d_nesting_levels + level + 1,
-       curr_def_level = def_at_level[level + 1]] __device__(auto i) {
+      [child_col       = d_nesting_levels + level + 1,
+       d_nullability   = d_nullability.data(),
+       sub_level_start = start_at_sub_level[level + 1],
+       curr_def_level  = def_at_level[level + 1]] __device__(auto i) {
         uint32_t def       = curr_def_level;
+        uint8_t l          = sub_level_start;
         bool is_col_nested = false;
         auto col           = *child_col;
         do {
-          if (col.nullable()) {
+          if (d_nullability[l]) {
             if (col.is_valid(i)) {
               ++def;
             } else {
@@ -1962,7 +1976,10 @@ dremel_data get_dremel_data(column_view h_col,
             }  // If col not nullable then it does not contribute to def levels
           }
           is_col_nested = (col.type().id() == type_id::STRUCT);
-          if (is_col_nested) { col = col.child(0); }
+          if (is_col_nested) {
+            col = col.child(0);
+            ++l;
+          }
         } while (is_col_nested);
         return def;
       });
