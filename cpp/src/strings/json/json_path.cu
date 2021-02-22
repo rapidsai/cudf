@@ -24,7 +24,10 @@ namespace {
 
 // temporary. for debugging purposes
 #define DEBUG_NEWLINE
+#define DEBUG_NEWLINE_LEN (0)
+
 // #define DEBUG_NEWLINE  "\n"
+// #define DEBUG_NEWLINE_LEN (1)
 
 using namespace cudf;
 
@@ -159,6 +162,9 @@ CUDA_HOST_DEVICE_CALLABLE char const* device_strpbrk(const char* str,
 struct json_string {
   const char* str;
   int64_t len;
+
+  CUDA_HOST_DEVICE_CALLABLE json_string() : str(nullptr), len(-1) {}
+  CUDA_HOST_DEVICE_CALLABLE json_string(const char* _str, int64_t _len) : str(_str), len(_len) {}
 
   CUDA_HOST_DEVICE_CALLABLE bool operator==(json_string const& cmp)
   {
@@ -567,13 +573,13 @@ class path_state : private parser {
   }
 };
 
-std::pair<command_buffer, int> build_command_buffer(std::string const& json_path,
-                                                    rmm::cuda_stream_view stream)
+std::pair<rmm::device_uvector<path_operator>, int> build_command_buffer(
+  cudf::string_scalar const& json_path, rmm::cuda_stream_view stream)
 {
-  path_state p_state(json_path.data(), static_cast<size_type>(json_path.size()));
+  std::string h_json_path = json_path.to_string(stream);
+  path_state p_state(h_json_path.data(), static_cast<size_type>(h_json_path.size()));
 
   std::vector<path_operator> h_operators;
-  cudf::string_scalar d_json_path(json_path);
 
   path_operator op;
   int max_stack_depth = 1;
@@ -584,7 +590,7 @@ std::pair<command_buffer, int> build_command_buffer(std::string const& json_path
     }
     if (op.type == path_operator_type::CHILD_WILDCARD) { max_stack_depth++; }
     // convert pointer to device pointer
-    if (op.name.len > 0) { op.name.str = d_json_path.data() + (op.name.str - json_path.data()); }
+    if (op.name.len > 0) { op.name.str = json_path.data() + (op.name.str - h_json_path.data()); }
     h_operators.push_back(op);
   } while (op.type != path_operator_type::END);
 
@@ -595,7 +601,7 @@ std::pair<command_buffer, int> build_command_buffer(std::string const& json_path
                   cudaMemcpyHostToDevice,
                   stream.value());
 
-  return {command_buffer{std::move(d_operators), std::move(d_json_path)}, max_stack_depth};
+  return {std::move(d_operators), max_stack_depth};
 }
 
 #define PARSE_TRY(_x)                                                       \
@@ -670,12 +676,12 @@ CUDA_HOST_DEVICE_CALLABLE parse_result parse_json_path(json_state& _j_state,
       case path_operator_type::CHILD_WILDCARD: {
         // if we're on the first element of this wildcard
         if (!ctx.state_flag) {
-          output.add_output("[" DEBUG_NEWLINE, 2);
+          output.add_output("[" DEBUG_NEWLINE, 1 + DEBUG_NEWLINE_LEN);
 
           // step into the child element
           PARSE_TRY(ctx.j_state.child_element());
           if (last_result == parse_result::EMPTY) {
-            output.add_output("]" DEBUG_NEWLINE, 2);
+            output.add_output("]" DEBUG_NEWLINE, 1 + DEBUG_NEWLINE_LEN);
             last_result = parse_result::SUCCESS;
             break;
           }
@@ -683,7 +689,7 @@ CUDA_HOST_DEVICE_CALLABLE parse_result parse_json_path(json_state& _j_state,
           // first element
           PARSE_TRY(ctx.j_state.next_matching_element(op.name, true));
           if (last_result == parse_result::EMPTY) {
-            output.add_output("]" DEBUG_NEWLINE, 2);
+            output.add_output("]" DEBUG_NEWLINE, 1 + DEBUG_NEWLINE_LEN);
             last_result = parse_result::SUCCESS;
             break;
           }
@@ -699,7 +705,7 @@ CUDA_HOST_DEVICE_CALLABLE parse_result parse_json_path(json_state& _j_state,
           // next element
           PARSE_TRY(ctx.j_state.next_matching_element(op.name, false));
           if (last_result == parse_result::EMPTY) {
-            output.add_output("]" DEBUG_NEWLINE, 2);
+            output.add_output("]" DEBUG_NEWLINE, 1 + DEBUG_NEWLINE_LEN);
             last_result = parse_result::SUCCESS;
             break;
           }
@@ -735,7 +741,7 @@ CUDA_HOST_DEVICE_CALLABLE parse_result parse_json_path(json_state& _j_state,
 
       // END case
       default: {
-        if (ctx.list_element) { output.add_output({"," DEBUG_NEWLINE, 2}); }
+        if (ctx.list_element) { output.add_output({"," DEBUG_NEWLINE, 1 + DEBUG_NEWLINE_LEN}); }
         PARSE_TRY(ctx.j_state.extract_element(&output));
       } break;
     }
@@ -783,12 +789,13 @@ __global__ void get_json_object_kernel(char const* chars,
 }
 
 std::unique_ptr<cudf::column> get_json_object(cudf::strings_column_view const& col,
-                                              std::string const& json_path,
+                                              cudf::string_scalar const& json_path,
                                               rmm::cuda_stream_view stream,
                                               rmm::mr::device_memory_resource* mr)
 {
   // preprocess the json_path into a command buffer
-  std::pair<command_buffer, int> preprocess = build_command_buffer(json_path, stream);
+  std::pair<rmm::device_uvector<path_operator>, int> preprocess =
+    build_command_buffer(json_path, stream);
   CUDF_EXPECTS(preprocess.second <= max_command_stack_depth,
                "Encountered json_path string that is too complex");
 
@@ -802,7 +809,7 @@ std::unique_ptr<cudf::column> get_json_object(cudf::strings_column_view const& c
   get_json_object_kernel<<<grid.num_blocks, grid.num_threads_per_block, 0, stream.value()>>>(
     col.chars().head<char>(),
     col.offsets().head<size_type>(),
-    preprocess.first.commands.data(),
+    preprocess.first.data(),
     offsets_view.head<size_type>(),
     nullptr,
     col.size());
@@ -824,7 +831,7 @@ std::unique_ptr<cudf::column> get_json_object(cudf::strings_column_view const& c
   get_json_object_kernel<<<grid.num_blocks, grid.num_threads_per_block, 0, stream.value()>>>(
     col.chars().head<char>(),
     col.offsets().head<size_type>(),
-    preprocess.first.commands.data(),
+    preprocess.first.data(),
     offsets_view.head<size_type>(),
     chars_view.head<char>(),
     col.size());
@@ -842,7 +849,7 @@ std::unique_ptr<cudf::column> get_json_object(cudf::strings_column_view const& c
 }  // namespace detail
 
 std::unique_ptr<cudf::column> get_json_object(cudf::strings_column_view const& col,
-                                              std::string const& json_path,
+                                              cudf::string_scalar const& json_path,
                                               rmm::mr::device_memory_resource* mr)
 {
   return detail::get_json_object(col, json_path, 0, mr);
