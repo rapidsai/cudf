@@ -991,6 +991,9 @@ class ColumnBase(Column, Serializable):
             raise NotImplementedError(msg)
         return cpp_distinct_count(self, ignore_nulls=dropna)
 
+    def can_cast_safely(self, to_dtype: Dtype) -> bool:
+        return False
+
     def astype(self, dtype: Dtype, **kwargs) -> ColumnBase:
         if is_categorical_dtype(dtype):
             return self.as_categorical_column(dtype, **kwargs)

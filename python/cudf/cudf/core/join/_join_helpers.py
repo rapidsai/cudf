@@ -1,12 +1,19 @@
 # Copyright (c) 2021, NVIDIA CORPORATION.
+from __future__ import annotations
 
 import warnings
+from typing import TYPE_CHECKING, Any
 
 import numpy as np
 import pandas as pd
 
 import cudf
 from cudf.core.dtypes import CategoricalDtype
+
+if TYPE_CHECKING:
+    from cudf._typing import Dtype
+    from cudf.core.column import ColumnBase
+    from cudf.core.frame import Frame
 
 
 class _Indexer:
@@ -21,35 +28,38 @@ class _Indexer:
     # >>> _Indexer("a", column=True).get(df)  # returns column "a" of df
     # >>> _Indexer("b", index=True).get(df)  # returns index level "b" of df
 
-    def __init__(self, name, column=False, index=False):
+    def __init__(self, name: Any, column=False, index=False):
         self.name = name
         self.column, self.index = column, index
 
-    def get(self, obj):
+    def get(self, obj: Frame) -> ColumnBase:
         # get the column from `obj`
         if self.column:
             return obj._data[self.name]
-        else:
+        if obj._index is not None:
             return obj._index._data[self.name]
+        raise KeyError()
 
-    def set(self, obj, value):
+    def set(self, obj: Frame, value: ColumnBase):
         # set the colum in `obj`
         if self.column:
             obj._data[self.name] = value
-        else:
+        if obj._index is not None:
             obj._index._data[self.name] = value
+        raise KeyError()
 
-    def get_numeric_index(self, obj):
+    def get_numeric_index(self, obj: Frame) -> int:
         # get the position of the column in `obj`
         # (counting any index columns)
         if self.column:
-            index_nlevels = obj.index.nlevels if obj._index is not None else 0
+            index_nlevels = obj._index.nlevels if obj._index is not None else 0
             return index_nlevels + tuple(obj._data).index(self.name)
-        else:
-            return obj.index.names.index(self.name)
+        if obj._index is not None:
+            return obj._index.names.index(self.name)
+        raise KeyError()
 
 
-def _match_join_keys(lcol, rcol, how):
+def _match_join_keys(lcol: ColumnBase, rcol: ColumnBase, how: str) -> Dtype:
     # cast the keys lcol and rcol to a common dtype
 
     ltype = lcol.dtype
@@ -59,7 +69,7 @@ def _match_join_keys(lcol, rcol, how):
     if isinstance(ltype, CategoricalDtype) or isinstance(
         rtype, CategoricalDtype
     ):
-        return _match_join_categorical_keys(lcol, rcol, how)
+        return _match_categorical_dtypes(ltype, rtype, how)
 
     if pd.api.types.is_dtype_equal(ltype, rtype):
         return ltype
@@ -91,37 +101,30 @@ def _match_join_keys(lcol, rcol, how):
     return None
 
 
-def _match_join_categorical_keys(lcol, rcol, how):
+def _match_categorical_dtypes(ltype: Dtype, rtype: Dtype, how: str) -> Dtype:
     # cast the keys lcol and rcol to a common dtype
     # when at least one of them is a categorical type
 
-    l_is_cat = isinstance(lcol.dtype, CategoricalDtype)
-    r_is_cat = isinstance(rcol.dtype, CategoricalDtype)
-
-    if l_is_cat and r_is_cat:
+    if isinstance(ltype, CategoricalDtype) and isinstance(
+        rtype, CategoricalDtype
+    ):
         # if both are categoricals, logic is complicated:
-        return _match_join_categorical_keys_both(lcol, rcol, how)
-    elif l_is_cat or r_is_cat:
-        if l_is_cat and how in {"left", "leftsemi", "leftanti"}:
-            return lcol.dtype
-        common_type = (
-            lcol.dtype.categories.dtype
-            if l_is_cat
-            else rcol.dtype.categories.dtype
-        )
-        return common_type
-    else:
-        raise ValueError("Neither operand is categorical")
+        return _match_categorical_dtypes_both(ltype, rtype, how)
+
+    if isinstance(ltype, CategoricalDtype):
+        if how in {"left", "leftsemi", "leftanti"}:
+            return ltype
+        common_type = ltype.categories.dtype
+    elif isinstance(rtype, CategoricalDtype):
+        common_type = rtype.categories.dtype
+    return common_type
 
 
-def _match_join_categorical_keys_both(lcol, rcol, how):
-    # cast lcol and rcol to a common type when they are *both*
-    # categorical types.
-    #
+def _match_categorical_dtypes_both(
+    ltype: CategoricalDtype, rtype: CategoricalDtype, how: str
+) -> Dtype:
     # The commontype depends on both `how` and the specifics of the
     # categorical variables to be merged.
-
-    ltype, rtype = lcol.dtype, rcol.dtype
 
     # when both are ordered and both have the same categories,
     # no casting required:
@@ -151,7 +154,9 @@ def _match_join_categorical_keys_both(lcol, rcol, how):
 
     if how == "inner":
         # cast to category types -- we must cast them back later
-        return _match_join_keys(ltype.categories, rtype.categories, how)
+        return _match_join_keys(
+            ltype.categories._values, rtype.categories._values, how
+        )
     elif how in {"left", "leftanti", "leftsemi"}:
         # always cast to left type
         return ltype
