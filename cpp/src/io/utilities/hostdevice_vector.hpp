@@ -159,12 +159,12 @@ class hostdevice_2dvector {
 
   host_span<T> operator[](size_t row)
   {
-    return {_data.host_ptr() + base_2dspan<T>::flatten_index(row, 0, _size), _size.second};
+    return {_data.host_ptr() + host_2dspan<T>::flatten_index(row, 0, _size), _size.second};
   }
 
   host_span<T const> operator[](size_t row) const
   {
-    return {_data.host_ptr() + base_2dspan<T>::flatten_index(row, 0, _size), _size.second};
+    return {_data.host_ptr() + host_2dspan<T>::flatten_index(row, 0, _size), _size.second};
   }
 
   auto size() const noexcept { return _size; }
@@ -181,7 +181,7 @@ class hostdevice_2dvector {
 
  private:
   hostdevice_vector<T> _data;
-  typename base_2dspan<T>::size_type _size;
+  typename host_2dspan<T>::size_type _size;
 };
 
 }  // namespace detail

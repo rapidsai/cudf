@@ -198,7 +198,7 @@ struct device_span : public span_base<T, Extent, device_span<T, Extent>> {
  *
  * The index operator returns the corresponding row as a span.
  */
-template <typename T>
+template <typename T, typename Row>
 class base_2dspan {
  public:
   using size_type = std::pair<size_t, size_t>;
@@ -220,48 +220,28 @@ class base_2dspan {
     return row * size.second + column;
   }
 
+  constexpr Row operator[](size_t row)
+  {
+    return {this->data() + flatten_index(row, 0, this->size()), this->size().second};
+  }
+
+  template <
+    typename OtherT,
+    typename OtherRow,
+    typename std::enable_if<std::is_convertible<OtherRow, Row>::value, void>::type* = nullptr>
+  constexpr base_2dspan(base_2dspan<OtherT, OtherRow> const& other) noexcept
+    : _data{other.data()}, _size{other.size()}
+  {
+  }
+
  protected:
   T* _data = nullptr;
   size_type _size{0, 0};
 };
-
-template <typename T>
-class host_2dspan : public base_2dspan<T> {
-  using base = base_2dspan<T>;
-  using base::base;
-
- public:
-  constexpr host_span<T> operator[](size_t row)
-  {
-    return {this->data() + base::flatten_index(row, 0, this->size()), this->size().second};
-  }
-
-  template <typename OtherT,
-            typename std::enable_if<std::is_convertible<OtherT (*)[], T (*)[]>::value,
-                                    void>::type* = nullptr>
-  constexpr host_2dspan(const host_2dspan<OtherT>& other) noexcept
-    : base(other.data(), other.size())
-  {
-  }
-};
-template <typename T>
-class device_2dspan : public base_2dspan<T> {
-  using base = base_2dspan<T>;
-  using base::base;
-
- public:
-  constexpr device_span<T> operator[](size_t row)
-  {
-    return {this->data() + base::flatten_index(row, 0, this->size()), this->size().second};
-  }
-  template <typename OtherT,
-            typename std::enable_if<std::is_convertible<OtherT (*)[], T (*)[]>::value,
-                                    void>::type* = nullptr>
-  constexpr device_2dspan(const device_2dspan<OtherT>& other) noexcept
-    : base(other.data(), other.size())
-  {
-  }
-};
+template <class T>
+using host_2dspan = base_2dspan<T, host_span<T>>;
+template <class T>
+using device_2dspan = base_2dspan<T, device_span<T>>;
 
 }  // namespace detail
 }  // namespace cudf
