@@ -1,4 +1,5 @@
 # Copyright (c) 2020, NVIDIA CORPORATION
+
 import itertools
 
 import numba
@@ -252,13 +253,22 @@ class Rolling:
 
     def apply(self, func, *args, **kwargs):
         """
-        Counterpart of pandas.core.window.Rolling.apply
+        Counterpart of `pandas.core.window.Rolling.apply
+        <https://pandas.pydata.org/pandas-docs/stable/reference/api/pandas.core.window.rolling.Rolling.apply.html>`_.
 
-        *func* is a user defined function that takes an 1D array as input:
+        Parameters
+        ----------
+        func : function
+            A user defined function that takes an 1D array as input
 
         See also
         --------
-        The Notes section in `Series.applymap`.
+        cudf.core.series.Series.applymap : Apply an elementwise function to
+            transform the values in the Column.
+
+        Notes
+        -----
+        See notes of the :meth:`cudf.core.series.Series.applymap`
 
         """
         has_nulls = False
@@ -364,7 +374,7 @@ class RollingGroupby(Rolling):
         self._group_keys = groupby.grouping.keys.take(sort_order)
         obj = groupby.obj.take(sort_order)
 
-        gb_size = groupby.size()
+        gb_size = groupby.size().sort_index()
         self._group_starts = (
             gb_size.cumsum().shift(1).fillna(0).repeat(gb_size)
         )

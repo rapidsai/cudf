@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2020, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2021, NVIDIA CORPORATION.
  *
  * Copyright 2018-2019 BlazingDB, Inc.
  *     Copyright 2018 Christian Noboa Mardini <christian@blazingdb.com>
@@ -17,17 +17,19 @@
  * limitations under the License.
  */
 
-#include <tests/binaryop/assert-binops.h>
-#include <tests/binaryop/binop-fixture.hpp>
-
 #include <cudf/binaryop.hpp>
+#include <cudf/detail/iterator.cuh>
 #include <cudf/fixed_point/fixed_point.hpp>
 #include <cudf/scalar/scalar_factories.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
+
 #include <cudf_test/column_utilities.hpp>
 #include <cudf_test/column_wrapper.hpp>
 #include <cudf_test/type_lists.hpp>
+
+#include <tests/binaryop/assert-binops.h>
+#include <tests/binaryop/binop-fixture.hpp>
 
 namespace cudf {
 namespace test {
@@ -654,7 +656,7 @@ TEST_F(BinaryOperationIntegrationTest, Greater_Vector_Vector_B8_TSMS_TSS)
   using GREATER = cudf::library::operation::Greater<TypeOut, TypeLhs, TypeRhs>;
 
   cudf::test::UniformRandomGenerator<long> rand_gen(1, 10);
-  auto itr = cudf::test::make_counting_transform_iterator(
+  auto itr = cudf::detail::make_counting_transform_iterator(
     0, [&rand_gen](auto row) { return rand_gen.generate() * 1000; });
 
   cudf::test::fixed_width_column_wrapper<TypeLhs, typename decltype(itr)::value_type> lhs(
@@ -937,9 +939,6 @@ TEST_F(BinaryOperationIntegrationTest, ShiftRightUnsigned_Vector_Vector_SI32)
   using TypeLhs = int;
   using TypeRhs = int;
 
-  using SHIFT_RIGHT_UNSIGNED =
-    cudf::library::operation::ShiftRightUnsigned<TypeOut, TypeLhs, TypeRhs>;
-
   int num_els = 4;
 
   TypeLhs lhs[] = {-8, 78, -93, 0, -INT_MAX};
@@ -1020,7 +1019,7 @@ TEST_F(BinaryOperationIntegrationTest, LogBase_Vector_Scalar_SI32_SI32_float)
   using LOG_BASE = cudf::library::operation::LogBase<TypeOut, TypeLhs, TypeRhs>;
 
   // Make sure there are no zeros. The log value is purposefully cast to int for easy comparison
-  auto elements = make_counting_transform_iterator(1, [](auto i) { return i + 10; });
+  auto elements = cudf::detail::make_counting_transform_iterator(1, [](auto i) { return i + 10; });
   fixed_width_column_wrapper<TypeLhs> lhs(elements, elements + 100);
   // Find log to the base 10
   auto rhs = numeric_scalar<TypeRhs>(10);
@@ -1039,7 +1038,7 @@ TEST_F(BinaryOperationIntegrationTest, LogBase_Scalar_Vector_float_SI32)
   using LOG_BASE = cudf::library::operation::LogBase<TypeOut, TypeLhs, TypeRhs>;
 
   // Make sure there are no zeros
-  auto elements = make_counting_transform_iterator(1, [](auto i) { return i + 30; });
+  auto elements = cudf::detail::make_counting_transform_iterator(1, [](auto i) { return i + 30; });
   fixed_width_column_wrapper<TypeRhs> rhs(elements, elements + 100);
   // Find log to the base 2
   auto lhs = numeric_scalar<TypeLhs>(2);
@@ -1058,11 +1057,12 @@ TEST_F(BinaryOperationIntegrationTest, LogBase_Vector_Vector_double_SI64_SI32)
   using LOG_BASE = cudf::library::operation::LogBase<TypeOut, TypeLhs, TypeRhs>;
 
   // Make sure there are no zeros
-  auto elements = make_counting_transform_iterator(1, [](auto i) { return std::pow(2, i); });
+  auto elements =
+    cudf::detail::make_counting_transform_iterator(1, [](auto i) { return std::pow(2, i); });
   fixed_width_column_wrapper<TypeLhs> lhs(elements, elements + 50);
 
   // Find log to the base 7
-  auto rhs_elements = make_counting_transform_iterator(0, [](auto) { return 7; });
+  auto rhs_elements = cudf::detail::make_counting_transform_iterator(0, [](auto) { return 7; });
   fixed_width_column_wrapper<TypeRhs> rhs(rhs_elements, rhs_elements + 50);
   auto out = cudf::binary_operation(
     lhs, rhs, cudf::binary_operator::LOG_BASE, data_type(type_to_id<TypeOut>()));
@@ -1148,8 +1148,6 @@ TEST_F(BinaryOperationIntegrationTest, NullAwareEqual_Scalar_Vector_B8_tsD_tsD)
 TEST_F(BinaryOperationIntegrationTest, NullAwareEqual_Vector_Scalar_B8_string_string_EmptyString)
 {
   using TypeOut = bool;
-  using TypeLhs = std::string;
-  using TypeRhs = std::string;
 
   auto str_col = cudf::test::strings_column_wrapper({"eee", "bb", "<null>", "", "aa", "bbb", "ééé"},
                                                     {true, false, true, true, true, false, true});
@@ -1170,8 +1168,6 @@ TEST_F(BinaryOperationIntegrationTest, NullAwareEqual_Vector_Scalar_B8_string_st
 TEST_F(BinaryOperationIntegrationTest, NullAwareEqual_Scalar_Vector_B8_string_string_ValidString)
 {
   using TypeOut = bool;
-  using TypeLhs = std::string;
-  using TypeRhs = std::string;
 
   auto str_col = cudf::test::strings_column_wrapper({"eee", "bb", "<null>", "", "aa", "bbb", "ééé"},
                                                     {true, false, true, true, true, false, true});
@@ -1192,8 +1188,6 @@ TEST_F(BinaryOperationIntegrationTest, NullAwareEqual_Scalar_Vector_B8_string_st
 TEST_F(BinaryOperationIntegrationTest, NullAwareEqual_Vector_Scalar_B8_string_string_NoMatch)
 {
   using TypeOut = bool;
-  using TypeLhs = std::string;
-  using TypeRhs = std::string;
 
   // Try with non nullable input
   auto str_col =
@@ -1215,8 +1209,6 @@ TEST_F(BinaryOperationIntegrationTest, NullAwareEqual_Vector_Scalar_B8_string_st
 TEST_F(BinaryOperationIntegrationTest, NullAwareEqual_Scalar_Vector_B8_string_string_NullNonNull)
 {
   using TypeOut = bool;
-  using TypeLhs = std::string;
-  using TypeRhs = std::string;
 
   // Try with all invalid input
   auto str_col = cudf::test::strings_column_wrapper({"eee", "bb", "<null>", "", "aa", "bbb", "ééé"},
@@ -1239,8 +1231,6 @@ TEST_F(BinaryOperationIntegrationTest, NullAwareEqual_Scalar_Vector_B8_string_st
 TEST_F(BinaryOperationIntegrationTest, NullAwareEqual_Vector_Scalar_B8_string_string_NullNonNull)
 {
   using TypeOut = bool;
-  using TypeLhs = std::string;
-  using TypeRhs = std::string;
 
   // Try with all invalid input
   auto str_col =
@@ -1263,8 +1253,6 @@ TEST_F(BinaryOperationIntegrationTest, NullAwareEqual_Vector_Scalar_B8_string_st
 TEST_F(BinaryOperationIntegrationTest, NullAwareEqual_Scalar_Vector_B8_string_string_NullNull)
 {
   using TypeOut = bool;
-  using TypeLhs = std::string;
-  using TypeRhs = std::string;
 
   // Try with all invalid input
   auto str_col =
@@ -1288,8 +1276,6 @@ TEST_F(BinaryOperationIntegrationTest, NullAwareEqual_Scalar_Vector_B8_string_st
 TEST_F(BinaryOperationIntegrationTest, NullAwareEqual_Scalar_Vector_B8_string_string_MatchInvalid)
 {
   using TypeOut = bool;
-  using TypeLhs = std::string;
-  using TypeRhs = std::string;
 
   auto str_col = cudf::test::strings_column_wrapper({"eee", "bb", "<null>", "", "aa", "bbb", "ééé"},
                                                     {true, false, true, true, true, false, true});
@@ -1310,8 +1296,6 @@ TEST_F(BinaryOperationIntegrationTest, NullAwareEqual_Scalar_Vector_B8_string_st
 TEST_F(BinaryOperationIntegrationTest, NullAwareEqual_Vector_InvalidScalar_B8_string_string)
 {
   using TypeOut = bool;
-  using TypeLhs = std::string;
-  using TypeRhs = std::string;
 
   auto str_col = cudf::test::strings_column_wrapper({"eee", "bb", "<null>", "", "aa", "bbb", "ééé"},
                                                     {true, false, true, true, true, false, true});
@@ -1368,8 +1352,6 @@ TEST_F(BinaryOperationIntegrationTest, NullAwareEqual_Vector_Vector_B8_tsD_tsD_N
 TEST_F(BinaryOperationIntegrationTest, NullAwareEqual_Vector_Vector_B8_string_string_MixMix)
 {
   using TypeOut = bool;
-  using TypeLhs = std::string;
-  using TypeRhs = std::string;
 
   auto lhs_col =
     cudf::test::strings_column_wrapper({"eee", "invalid", "<null>", "", "aa", "invalid", "ééé"},
@@ -1392,8 +1374,6 @@ TEST_F(BinaryOperationIntegrationTest, NullAwareEqual_Vector_Vector_B8_string_st
 TEST_F(BinaryOperationIntegrationTest, NullAwareEqual_Vector_Vector_B8_string_string_MixValid)
 {
   using TypeOut = bool;
-  using TypeLhs = std::string;
-  using TypeRhs = std::string;
 
   auto lhs_col =
     cudf::test::strings_column_wrapper({"eee", "invalid", "<null>", "", "aa", "invalid", "ééé"},
@@ -1415,8 +1395,6 @@ TEST_F(BinaryOperationIntegrationTest, NullAwareEqual_Vector_Vector_B8_string_st
 TEST_F(BinaryOperationIntegrationTest, NullAwareEqual_Vector_Vector_B8_string_string_MixInvalid)
 {
   using TypeOut = bool;
-  using TypeLhs = std::string;
-  using TypeRhs = std::string;
 
   auto lhs_col =
     cudf::test::strings_column_wrapper({"eee", "invalid", "<null>", "", "aa", "invalid", "ééé"},
@@ -1439,8 +1417,6 @@ TEST_F(BinaryOperationIntegrationTest, NullAwareEqual_Vector_Vector_B8_string_st
 TEST_F(BinaryOperationIntegrationTest, NullAwareEqual_Vector_Vector_B8_string_string_ValidValid)
 {
   using TypeOut = bool;
-  using TypeLhs = std::string;
-  using TypeRhs = std::string;
 
   auto lhs_col =
     cudf::test::strings_column_wrapper({"eee", "invalid", "<null>", "", "aa", "invalid", "ééé"});
@@ -1461,8 +1437,6 @@ TEST_F(BinaryOperationIntegrationTest, NullAwareEqual_Vector_Vector_B8_string_st
 TEST_F(BinaryOperationIntegrationTest, NullAwareEqual_Vector_Vector_B8_string_string_ValidInvalid)
 {
   using TypeOut = bool;
-  using TypeLhs = std::string;
-  using TypeRhs = std::string;
 
   auto lhs_col =
     cudf::test::strings_column_wrapper({"eee", "invalid", "<null>", "", "aa", "invalid", "ééé"});
@@ -1484,8 +1458,6 @@ TEST_F(BinaryOperationIntegrationTest, NullAwareEqual_Vector_Vector_B8_string_st
 TEST_F(BinaryOperationIntegrationTest, NullAwareEqual_Vector_Vector_B8_string_string_InvalidInvalid)
 {
   using TypeOut = bool;
-  using TypeLhs = std::string;
-  using TypeRhs = std::string;
 
   auto lhs_col =
     cudf::test::strings_column_wrapper({"eee", "invalid", "<null>", "", "aa", "invalid", "ééé"},
@@ -1509,7 +1481,6 @@ TEST_F(BinaryOperationIntegrationTest, NullAwareEqual_Vector_VectorAllInvalid_B8
 {
   using TypeOut = bool;
   using TypeLhs = int32_t;
-  using TypeRhs = int32_t;
 
   auto lhs_col = fixed_width_column_wrapper<TypeLhs>{{-INT32_MAX, -37, 0, 499, 44, INT32_MAX},
                                                      {false, false, false, false, false, false}};
@@ -1619,7 +1590,6 @@ TEST_F(BinaryOperationIntegrationTest, NullAwareMin_Vector_Vector_SI64_SI32_SI8)
 {
   using TypeOut = int64_t;
   using TypeLhs = int32_t;
-  using TypeRhs = int8_t;
 
   auto int_col =
     fixed_width_column_wrapper<TypeLhs>{{999, -37, 0, INT32_MAX, -INT32_MAX, -4379, 55},
@@ -1642,7 +1612,6 @@ TEST_F(BinaryOperationIntegrationTest, NullAwareMax_Vector_Vector_SI64_SI32_SI8)
 {
   using TypeOut = int64_t;
   using TypeLhs = int32_t;
-  using TypeRhs = int8_t;
 
   auto int_col = fixed_width_column_wrapper<TypeLhs>{
     {999, -37, 0, INT32_MAX, -INT32_MAX, -4379, 55}, {true, true, true, true, true, true, true}};
@@ -1696,7 +1665,6 @@ TEST_F(BinaryOperationIntegrationTest, NullAwareMax_Vector_Vector_SI32_SI64_SI8)
 {
   using TypeOut = int32_t;
   using TypeLhs = int64_t;
-  using TypeRhs = int8_t;
 
   auto int_col =
     fixed_width_column_wrapper<TypeLhs>{{999, -37, 0, INT32_MAX, -INT32_MAX, -4379, 55},
@@ -1861,8 +1829,6 @@ TEST_F(BinaryOperationIntegrationTest, PMod_Scalar_Vector_FP32)
   using TypeLhs = float;
   using TypeRhs = float;
 
-  using PMOD = cudf::library::operation::PMod<TypeOut, TypeLhs, TypeRhs>;
-
   auto lhs = cudf::scalar_type_t<TypeLhs>(-86099.68377);
   auto rhs = fixed_width_column_wrapper<TypeRhs>{{90770.74881, -15456.4335, 32213.22119}};
 
@@ -1880,8 +1846,6 @@ TEST_F(BinaryOperationIntegrationTest, PMod_Vector_Scalar_FP64)
   using TypeLhs = double;
   using TypeRhs = double;
 
-  using PMOD = cudf::library::operation::PMod<TypeOut, TypeLhs, TypeRhs>;
-
   auto lhs = fixed_width_column_wrapper<TypeLhs>{{90770.74881, -15456.4335, 32213.22119}};
   auto rhs = cudf::scalar_type_t<TypeRhs>(-86099.68377);
 
@@ -1898,8 +1862,6 @@ TEST_F(BinaryOperationIntegrationTest, PMod_Vector_Vector_FP64_FP32_FP64)
   using TypeOut = double;
   using TypeLhs = float;
   using TypeRhs = double;
-
-  using PMOD = cudf::library::operation::PMod<TypeOut, TypeLhs, TypeRhs>;
 
   auto lhs = fixed_width_column_wrapper<TypeLhs>{
     {24854.55893, 79946.87288, -86099.68377, -86099.68377, 1.0, 1.0, -1.0, -1.0}};
@@ -2064,7 +2026,7 @@ TYPED_TEST(FixedPointTestBothReps, FixedPointBinaryOpAdd)
 
   auto const sz = std::size_t{1000};
 
-  auto begin      = make_counting_transform_iterator(1, [](auto i) {
+  auto begin      = cudf::detail::make_counting_transform_iterator(1, [](auto i) {
     return decimalXX{i, scale_type{0}};
   });
   auto const vec1 = std::vector<decimalXX>(begin, begin + sz);
@@ -2093,7 +2055,7 @@ TYPED_TEST(FixedPointTestBothReps, FixedPointBinaryOpMultiply)
 
   auto const sz = std::size_t{1000};
 
-  auto begin      = make_counting_transform_iterator(1, [](auto i) {
+  auto begin      = cudf::detail::make_counting_transform_iterator(1, [](auto i) {
     return decimalXX{i, scale_type{0}};
   });
   auto const vec1 = std::vector<decimalXX>(begin, begin + sz);
@@ -2184,8 +2146,9 @@ TYPED_TEST(FixedPointTestBothReps, FixedPointBinaryOpDiv4)
   using decimalXX = TypeParam;
   using RepType   = device_storage_type_t<decimalXX>;
 
-  auto begin          = make_counting_transform_iterator(0, [](auto i) { return i * 11; });
-  auto result_begin   = make_counting_transform_iterator(0, [](auto i) { return (i * 11) / 12; });
+  auto begin = cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i * 11; });
+  auto result_begin =
+    cudf::detail::make_counting_transform_iterator(0, [](auto i) { return (i * 11) / 12; });
   auto const lhs      = fp_wrapper<RepType>(begin, begin + 1000, scale_type{-1});
   auto const rhs      = make_fixed_point_scalar<decimalXX>(12, scale_type{-1});
   auto const expected = fp_wrapper<RepType>(result_begin, result_begin + 1000, scale_type{0});
@@ -2240,6 +2203,21 @@ TYPED_TEST(FixedPointTestBothReps, FixedPointBinaryOpMultiplyScalar)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
 }
 
+TYPED_TEST(FixedPointTestBothReps, FixedPointBinaryOpSimplePlus)
+{
+  using namespace numeric;
+  using decimalXX = TypeParam;
+  using RepType   = device_storage_type_t<decimalXX>;
+
+  auto const lhs      = fp_wrapper<RepType>{{150, 200}, scale_type{-2}};
+  auto const rhs      = fp_wrapper<RepType>{{2250, 1005}, scale_type{-3}};
+  auto const expected = fp_wrapper<RepType>{{3750, 3005}, scale_type{-3}};
+
+  auto const result = cudf::binary_operation(lhs, rhs, cudf::binary_operator::ADD, {});
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
+}
+
 TYPED_TEST(FixedPointTestBothReps, FixedPointBinaryOpEqualSimple)
 {
   using namespace numeric;
@@ -2266,7 +2244,7 @@ TYPED_TEST(FixedPointTestBothReps, FixedPointBinaryOpEqualLessGreater)
 
   // TESTING binary op ADD
 
-  auto begin      = make_counting_transform_iterator(1, [](auto e) { return e * 1000; });
+  auto begin = cudf::detail::make_counting_transform_iterator(1, [](auto e) { return e * 1000; });
   auto const vec1 = std::vector<RepType>(begin, begin + sz);
   auto const vec2 = std::vector<RepType>(sz, 0);
 
@@ -2293,6 +2271,235 @@ TYPED_TEST(FixedPointTestBothReps, FixedPointBinaryOpEqualLessGreater)
   auto const greater_result =
     cudf::binary_operation(iota_3_after_add->view(), zeros_3, binary_operator::GREATER, {});
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(true_col, greater_result->view());
+}
+
+TYPED_TEST(FixedPointTestBothReps, FixedPointBinaryOpNullMaxSimple)
+{
+  using namespace numeric;
+  using decimalXX = TypeParam;
+  using RepType   = device_storage_type_t<decimalXX>;
+
+  auto const trues    = std::vector<bool>(4, true);
+  auto const col1     = fp_wrapper<RepType>{{40, 30, 20, 10, 0}, {1, 0, 1, 1, 0}, scale_type{-2}};
+  auto const col2     = fp_wrapper<RepType>{{10, 20, 30, 40, 0}, {1, 1, 1, 0, 0}, scale_type{-2}};
+  auto const expected = fp_wrapper<RepType>{{40, 20, 30, 10, 0}, {1, 1, 1, 1, 0}, scale_type{-2}};
+
+  auto const result = cudf::binary_operation(col1, col2, binary_operator::NULL_MAX, {});
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
+}
+
+TYPED_TEST(FixedPointTestBothReps, FixedPointBinaryOpNullMinSimple)
+{
+  using namespace numeric;
+  using decimalXX = TypeParam;
+  using RepType   = device_storage_type_t<decimalXX>;
+
+  auto const trues    = std::vector<bool>(4, true);
+  auto const col1     = fp_wrapper<RepType>{{40, 30, 20, 10, 0}, {1, 1, 1, 0, 0}, scale_type{-1}};
+  auto const col2     = fp_wrapper<RepType>{{10, 20, 30, 40, 0}, {1, 0, 1, 1, 0}, scale_type{-1}};
+  auto const expected = fp_wrapper<RepType>{{10, 30, 20, 40, 0}, {1, 1, 1, 1, 0}, scale_type{-1}};
+
+  auto const result = cudf::binary_operation(col1, col2, binary_operator::NULL_MIN, {});
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
+}
+
+TYPED_TEST(FixedPointTestBothReps, FixedPointBinaryOpNullEqualsSimple)
+{
+  using namespace numeric;
+  using decimalXX = TypeParam;
+  using RepType   = device_storage_type_t<decimalXX>;
+
+  auto const trues    = std::vector<bool>(4, true);
+  auto const col1     = fp_wrapper<RepType>{{400, 300, 300, 100}, {1, 1, 1, 0}, scale_type{-2}};
+  auto const col2     = fp_wrapper<RepType>{{40, 200, 20, 400}, {1, 0, 1, 0}, scale_type{-1}};
+  auto const expected = wrapper<bool>{{1, 0, 0, 1}, {1, 1, 1, 1}};
+
+  auto const result = cudf::binary_operation(col1, col2, binary_operator::NULL_EQUALS, {});
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
+}
+
+TYPED_TEST(FixedPointTestBothReps, FixedPointBinaryOpTrueDiv)
+{
+  using namespace numeric;
+  using decimalXX = TypeParam;
+  using RepType   = device_storage_type_t<decimalXX>;
+
+  auto const lhs      = fp_wrapper<RepType>{{10, 30, 50, 70}, scale_type{-1}};
+  auto const rhs      = fp_wrapper<RepType>{{4, 4, 4, 4}, scale_type{0}};
+  auto const expected = fp_wrapper<RepType>{{25, 75, 125, 175}, scale_type{-2}};
+
+  auto const type   = data_type{type_to_id<decimalXX>(), -2};
+  auto const result = cudf::binary_operation(lhs, rhs, cudf::binary_operator::TRUE_DIV, type);
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
+}
+
+TYPED_TEST(FixedPointTestBothReps, FixedPointBinaryOpTrueDiv2)
+{
+  using namespace numeric;
+  using decimalXX = TypeParam;
+  using RepType   = device_storage_type_t<decimalXX>;
+
+  auto const lhs      = fp_wrapper<RepType>{{10, 30, 50, 70}, scale_type{1}};
+  auto const rhs      = fp_wrapper<RepType>{{20, 20, 20, 20}, scale_type{-1}};
+  auto const expected = fp_wrapper<RepType>{{5000, 15000, 25000, 35000}, scale_type{-2}};
+
+  auto const type   = data_type{type_to_id<decimalXX>(), -2};
+  auto const result = cudf::binary_operation(lhs, rhs, cudf::binary_operator::TRUE_DIV, type);
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
+}
+
+TYPED_TEST(FixedPointTestBothReps, FixedPointBinaryOpTrueDiv3)
+{
+  using namespace numeric;
+  using decimalXX = TypeParam;
+  using RepType   = device_storage_type_t<decimalXX>;
+
+  auto const lhs      = fp_wrapper<RepType>{{10, 30, 50, 70}, scale_type{1}};
+  auto const rhs      = fp_wrapper<RepType>{{300, 900, 300, 300}, scale_type{-2}};
+  auto const expected = fp_wrapper<RepType>{{3333, 3333, 16666, 23333}, scale_type{-2}};
+
+  auto const type   = data_type{type_to_id<decimalXX>(), -2};
+  auto const result = cudf::binary_operation(lhs, rhs, cudf::binary_operator::TRUE_DIV, type);
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
+}
+
+TYPED_TEST(FixedPointTestBothReps, FixedPointBinaryOpTrueDiv4)
+{
+  using namespace numeric;
+  using decimalXX = TypeParam;
+  using RepType   = device_storage_type_t<decimalXX>;
+
+  auto const lhs      = fp_wrapper<RepType>{{10, 30, 50, 70}, scale_type{1}};
+  auto const rhs      = make_fixed_point_scalar<decimalXX>(3, scale_type{0});
+  auto const expected = fp_wrapper<RepType>{{3333, 10000, 16666, 23333}, scale_type{-2}};
+
+  auto const type   = data_type{type_to_id<decimalXX>(), -2};
+  auto const result = cudf::binary_operation(lhs, *rhs, cudf::binary_operator::TRUE_DIV, type);
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
+}
+
+TYPED_TEST(FixedPointTestBothReps, FixedPointBinaryOpTrueDiv5)
+{
+  using namespace numeric;
+  using decimalXX = TypeParam;
+  using RepType   = device_storage_type_t<decimalXX>;
+
+  auto const lhs      = fp_wrapper<RepType>{{10, 30, 50, 70}, scale_type{1}};
+  auto const rhs      = make_fixed_point_scalar<decimalXX>(30000, scale_type{-4});
+  auto const expected = fp_wrapper<RepType>{{3333, 10000, 16666, 23333}, scale_type{-2}};
+
+  auto const type   = data_type{type_to_id<decimalXX>(), -2};
+  auto const result = cudf::binary_operation(lhs, *rhs, cudf::binary_operator::TRUE_DIV, type);
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
+}
+
+TYPED_TEST(FixedPointTestBothReps, FixedPointBinaryOpTrueDiv6)
+{
+  using namespace numeric;
+  using decimalXX = TypeParam;
+  using RepType   = device_storage_type_t<decimalXX>;
+
+  for (auto const i : {0, 1, 2, 3, 4, 5, 6, 7}) {
+    auto const val = 3 * numeric::detail::ipow<int32_t, Radix::BASE_10>(i);
+    auto const lhs = make_fixed_point_scalar<decimalXX>(val, scale_type{-i});
+    auto const rhs = fp_wrapper<RepType>{{10, 30, 50, 70}, scale_type{-1}};
+
+    auto const expected = fp_wrapper<RepType>{{300, 100, 60, 42}, scale_type{-2}};
+
+    auto const type   = data_type{type_to_id<decimalXX>(), -2};
+    auto const result = cudf::binary_operation(*lhs, rhs, cudf::binary_operator::TRUE_DIV, type);
+
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
+  }
+}
+
+TYPED_TEST(FixedPointTestBothReps, FixedPointBinaryOpTrueDiv7)
+{
+  using namespace numeric;
+  using decimalXX = TypeParam;
+  using RepType   = device_storage_type_t<decimalXX>;
+
+  auto const lhs = make_fixed_point_scalar<decimalXX>(12000, scale_type{-1});
+  auto const rhs = fp_wrapper<RepType>{{100, 200, 300, 500, 600, 800, 1200, 1300}, scale_type{-2}};
+
+  auto const expected = fp_wrapper<RepType>{{12, 6, 4, 2, 2, 1, 1, 0}, scale_type{2}};
+
+  auto const type   = data_type{type_to_id<decimalXX>(), 2};
+  auto const result = cudf::binary_operation(*lhs, rhs, cudf::binary_operator::TRUE_DIV, type);
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
+}
+
+TYPED_TEST(FixedPointTestBothReps, FixedPointBinaryOpTrueDiv8)
+{
+  using namespace numeric;
+  using decimalXX = TypeParam;
+  using RepType   = device_storage_type_t<decimalXX>;
+
+  auto const lhs      = fp_wrapper<RepType>{{4000, 6000, 80000}, scale_type{-1}};
+  auto const rhs      = make_fixed_point_scalar<decimalXX>(500, scale_type{-2});
+  auto const expected = fp_wrapper<RepType>{{0, 1, 16}, scale_type{2}};
+
+  auto const type   = data_type{type_to_id<decimalXX>(), 2};
+  auto const result = cudf::binary_operation(lhs, *rhs, cudf::binary_operator::TRUE_DIV, type);
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
+}
+
+TYPED_TEST(FixedPointTestBothReps, FixedPointBinaryOpTrueDiv9)
+{
+  using namespace numeric;
+  using decimalXX = TypeParam;
+  using RepType   = device_storage_type_t<decimalXX>;
+
+  auto const lhs      = fp_wrapper<RepType>{{100000, 200000, 300000}, scale_type{-2}};
+  auto const rhs      = make_fixed_point_scalar<decimalXX>(7, scale_type{1});
+  auto const expected = fp_wrapper<RepType>{{1, 2, 4}, scale_type{1}};
+
+  auto const type   = data_type{type_to_id<decimalXX>(), 1};
+  auto const result = cudf::binary_operation(lhs, *rhs, cudf::binary_operator::TRUE_DIV, type);
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
+}
+
+TYPED_TEST(FixedPointTestBothReps, FixedPointBinaryOpTrueDiv10)
+{
+  using namespace numeric;
+  using decimalXX = TypeParam;
+  using RepType   = device_storage_type_t<decimalXX>;
+
+  auto const lhs      = fp_wrapper<RepType>{{100000, 200000, 300000}, scale_type{-2}};
+  auto const rhs      = make_fixed_point_scalar<decimalXX>(7, scale_type{0});
+  auto const expected = fp_wrapper<RepType>{{14, 28, 42}, scale_type{1}};
+
+  auto const type   = data_type{type_to_id<decimalXX>(), 1};
+  auto const result = cudf::binary_operation(lhs, *rhs, cudf::binary_operator::TRUE_DIV, type);
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
+}
+
+TYPED_TEST(FixedPointTestBothReps, FixedPointBinaryOpTrueDiv11)
+{
+  using namespace numeric;
+  using decimalXX = TypeParam;
+  using RepType   = device_storage_type_t<decimalXX>;
+
+  auto const lhs      = fp_wrapper<RepType>{{1000000, 2000000, 3000000}, scale_type{-2}};
+  auto const rhs      = fp_wrapper<RepType>{{7, 7, 7}, scale_type{0}};
+  auto const expected = fp_wrapper<RepType>{{142, 285, 428}, scale_type{1}};
+
+  auto const type   = data_type{type_to_id<decimalXX>(), 1};
+  auto const result = cudf::binary_operation(lhs, rhs, cudf::binary_operator::TRUE_DIV, type);
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
 }
 
 }  // namespace binop

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2020, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,6 +16,8 @@
 
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_factories.hpp>
+#include <cudf/detail/iterator.cuh>
+#include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/strings/convert/convert_booleans.hpp>
 #include <cudf/strings/detail/converters.hpp>
@@ -24,9 +26,12 @@
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/utilities/traits.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
+
 #include <strings/utilities.cuh>
 
-#include <rmm/thrust_rmm_allocator.h>
+#include <rmm/cuda_stream_view.hpp>
+#include <rmm/exec_policy.hpp>
+
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/transform.h>
 
@@ -36,7 +41,7 @@ namespace detail {
 // Convert strings column to boolean column
 std::unique_ptr<column> to_booleans(strings_column_view const& strings,
                                     string_scalar const& true_string,
-                                    cudaStream_t stream,
+                                    rmm::cuda_stream_view stream,
                                     rmm::mr::device_memory_resource* mr)
 {
   size_type strings_count = strings.size();
@@ -51,14 +56,14 @@ std::unique_ptr<column> to_booleans(strings_column_view const& strings,
   // create output column copying the strings' null-mask
   auto results      = make_numeric_column(data_type{type_id::BOOL8},
                                      strings_count,
-                                     copy_bitmask(strings.parent(), stream, mr),
+                                     cudf::detail::copy_bitmask(strings.parent(), stream, mr),
                                      strings.null_count(),
                                      stream,
                                      mr);
   auto results_view = results->mutable_view();
   auto d_results    = results_view.data<bool>();
 
-  thrust::transform(rmm::exec_policy(stream)->on(stream),
+  thrust::transform(rmm::exec_policy(stream),
                     thrust::make_counting_iterator<size_type>(0),
                     thrust::make_counting_iterator<size_type>(strings_count),
                     d_results,
@@ -80,7 +85,7 @@ std::unique_ptr<column> to_booleans(strings_column_view const& strings,
                                     rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::to_booleans(strings, true_string, cudaStream_t{}, mr);
+  return detail::to_booleans(strings, true_string, rmm::cuda_stream_default, mr);
 }
 
 namespace detail {
@@ -88,11 +93,11 @@ namespace detail {
 std::unique_ptr<column> from_booleans(column_view const& booleans,
                                       string_scalar const& true_string,
                                       string_scalar const& false_string,
-                                      cudaStream_t stream,
+                                      rmm::cuda_stream_view stream,
                                       rmm::mr::device_memory_resource* mr)
 {
   size_type strings_count = booleans.size();
-  if (strings_count == 0) return make_empty_strings_column(mr, stream);
+  if (strings_count == 0) return make_empty_strings_column(stream, mr);
 
   CUDF_EXPECTS(booleans.type().id() == type_id::BOOL8, "Input column must be boolean type");
   CUDF_EXPECTS(true_string.is_valid() && true_string.size() > 0,
@@ -106,31 +111,25 @@ std::unique_ptr<column> from_booleans(column_view const& booleans,
   auto d_column = *column;
 
   // copy null mask
-  rmm::device_buffer null_mask = copy_bitmask(booleans, stream, mr);
+  rmm::device_buffer null_mask = cudf::detail::copy_bitmask(booleans, stream, mr);
   // build offsets column
-  auto offsets_transformer_itr =
-    thrust::make_transform_iterator(thrust::make_counting_iterator<int32_t>(0),
-                                    [d_column, d_true, d_false] __device__(size_type idx) {
-                                      if (d_column.is_null(idx)) return 0;
-                                      size_type bytes = 0;
-                                      if (d_column.element<bool>(idx))
-                                        bytes = d_true.size_bytes();
-                                      else
-                                        bytes = d_false.size_bytes();
-                                      return bytes;
-                                    });
+  auto offsets_transformer_itr = cudf::detail::make_counting_transform_iterator(
+    0, [d_column, d_true, d_false] __device__(size_type idx) {
+      if (d_column.is_null(idx)) return 0;
+      return d_column.element<bool>(idx) ? d_true.size_bytes() : d_false.size_bytes();
+    });
   auto offsets_column = make_offsets_child_column(
-    offsets_transformer_itr, offsets_transformer_itr + strings_count, mr, stream);
+    offsets_transformer_itr, offsets_transformer_itr + strings_count, stream, mr);
   auto offsets_view = offsets_column->view();
   auto d_offsets    = offsets_view.data<int32_t>();
 
   // build chars column
   size_type bytes = thrust::device_pointer_cast(d_offsets)[strings_count];
   auto chars_column =
-    create_chars_child_column(strings_count, booleans.null_count(), bytes, mr, stream);
+    create_chars_child_column(strings_count, booleans.null_count(), bytes, stream, mr);
   auto chars_view = chars_column->mutable_view();
   auto d_chars    = chars_view.data<char>();
-  thrust::for_each_n(rmm::exec_policy(stream)->on(stream),
+  thrust::for_each_n(rmm::exec_policy(stream),
                      thrust::make_counting_iterator<size_type>(0),
                      strings_count,
                      [d_column, d_true, d_false, d_offsets, d_chars] __device__(size_type idx) {
@@ -138,7 +137,7 @@ std::unique_ptr<column> from_booleans(column_view const& booleans,
                        string_view result = (d_column.element<bool>(idx) ? d_true : d_false);
                        memcpy(d_chars + d_offsets[idx], result.data(), result.size_bytes());
                      });
-  //
+
   return make_strings_column(strings_count,
                              std::move(offsets_column),
                              std::move(chars_column),
@@ -158,7 +157,7 @@ std::unique_ptr<column> from_booleans(column_view const& booleans,
                                       rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::from_booleans(booleans, true_string, false_string, cudaStream_t{}, mr);
+  return detail::from_booleans(booleans, true_string, false_string, rmm::cuda_stream_default, mr);
 }
 
 }  // namespace strings

@@ -20,11 +20,12 @@
 #include <cudf/utilities/error.hpp>
 #include <io/utilities/file_utils.hpp>
 
+#include <rmm/cuda_stream_view.hpp>
+
 namespace cudf {
 namespace io {
 /**
  * @brief Implementation class for storing data into a local file.
- *
  */
 class file_sink : public data_sink {
  public:
@@ -70,7 +71,6 @@ class file_sink : public data_sink {
 
 /**
  * @brief Implementation class for storing data into a std::vector.
- *
  */
 class host_buffer_sink : public data_sink {
  public:
@@ -94,7 +94,6 @@ class host_buffer_sink : public data_sink {
 
 /**
  * @brief Implementation class for voiding data (no io performed)
- *
  */
 class void_sink : public data_sink {
  public:
@@ -106,7 +105,7 @@ class void_sink : public data_sink {
 
   bool supports_device_write() const override { return true; }
 
-  void device_write(void const* gpu_data, size_t size, cudaStream_t stream) override
+  void device_write(void const* gpu_data, size_t size, rmm::cuda_stream_view stream) override
   {
     _bytes_written += size;
   }
@@ -129,7 +128,7 @@ class user_sink_wrapper : public data_sink {
 
   bool supports_device_write() const override { return user_sink->supports_device_write(); }
 
-  void device_write(void const* gpu_data, size_t size, cudaStream_t stream) override
+  void device_write(void const* gpu_data, size_t size, rmm::cuda_stream_view stream) override
   {
     CUDF_EXPECTS(user_sink->supports_device_write(),
                  "device_write() being called on a data_sink that doesn't support it");

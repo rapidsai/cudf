@@ -26,3 +26,9 @@ if [[ "$PYTHON" == "3.7" ]] && [[ "$CUDA" == "10.1" ]]; then
 else
     export UPLOAD_LIBCUDF_KAFKA=0
 fi
+
+if [[ -z "$PROJECT_FLASH" || "$PROJECT_FLASH" == "0" ]]; then
+    #If project flash is not activate, always build both
+    export BUILD_LIBCUDF=1
+    export BUILD_CUDF=1
+fi

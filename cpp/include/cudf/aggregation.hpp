@@ -38,6 +38,10 @@ namespace cudf {
  * @file
  */
 
+// forward declaration
+namespace detail {
+class aggregation_finalizer;
+}  // namespace detail
 /**
  * @brief Base class for specifying the desired aggregation in an
  * `aggregation_request`.
@@ -69,12 +73,12 @@ class aggregation {
     ARGMIN,          ///< Index of min element
     NUNIQUE,         ///< count number of unique elements
     NTH_ELEMENT,     ///< get the nth element
-    ROW_NUMBER,      ///< get row-number of element
+    ROW_NUMBER,      ///< get row-number of current index (relative to rolling window)
     COLLECT,         ///< collect values into a list
     LEAD,            ///< window function, accesses row at specified offset following current row
     LAG,             ///< window function, accesses row at specified offset preceding current row
-    PTX,             ///< PTX UDF based reduction
-    CUDA             ///< CUDA UDf based reduction
+    PTX,             ///< PTX  UDF based reduction
+    CUDA             ///< CUDA UDF based reduction
   };
 
   aggregation(aggregation::Kind a) : kind{a} {}
@@ -90,6 +94,10 @@ class aggregation {
   }
 
   virtual ~aggregation() = default;
+
+  // override functions for compound aggregations
+  virtual std::vector<aggregation::Kind> get_simple_aggregations(data_type col_type) const;
+  virtual void finalize(cudf::detail::aggregation_finalizer& finalizer);
 };
 
 enum class udf_type : bool { CUDA, PTX };
@@ -196,8 +204,18 @@ std::unique_ptr<aggregation> make_nth_element_aggregation(
 /// Factory to create a ROW_NUMBER aggregation
 std::unique_ptr<aggregation> make_row_number_aggregation();
 
-/// Factory to create a COLLECT_NUMBER aggregation
-std::unique_ptr<aggregation> make_collect_aggregation();
+/**
+ * @brief Factory to create a COLLECT aggregation
+ *
+ * `COLLECT` returns a list column of all included elements in the group/series.
+ *
+ * If `null_handling` is set to `EXCLUDE`, null elements are dropped from each
+ * of the list rows.
+ *
+ * @param null_handling Indicates whether to include/exclude nulls in list elements.
+ */
+std::unique_ptr<aggregation> make_collect_aggregation(
+  null_policy null_handling = null_policy::INCLUDE);
 
 /// Factory to create a LAG aggregation
 std::unique_ptr<aggregation> make_lag_aggregation(size_type offset);

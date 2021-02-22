@@ -20,6 +20,7 @@
 #include <cudf/detail/aggregation/aggregation.hpp>
 #include <cudf/groupby.hpp>
 #include <cudf/utilities/bit.hpp>
+#include "multi_pass_kernels.cuh"
 
 namespace cudf {
 namespace groupby {
@@ -57,22 +58,20 @@ namespace hash {
  * rows. In this way, after all rows are aggregated, `output_values` will likely
  * be "sparse", meaning that not all rows contain the result of an aggregation.
  *
- * @tparam skip_rows_with_nulls Indicates if rows in `input_keys` containing
- * null values should be skipped. It `true`, it is assumed `row_bitmask` is a
- * bitmask where bit `i` indicates the presence of a null value in row `i`.
  * @tparam Map The type of the hash map
  */
-template <bool skip_rows_with_nulls, typename Map>
-struct compute_single_pass_aggs {
+template <typename Map>
+struct compute_single_pass_aggs_fn {
   Map map;
   size_type num_keys;
   table_device_view input_values;
   mutable_table_device_view output_values;
   aggregation::Kind const* __restrict__ aggs;
   bitmask_type const* __restrict__ row_bitmask;
+  bool skip_rows_with_nulls;
 
   /**
-   * @brief Construct a new compute_single_pass_aggs functor object
+   * @brief Construct a new compute_single_pass_aggs_fn functor object
    *
    * @param map Hash map object to insert key,value pairs into.
    * @param num_keys The number of rows in input keys table
@@ -84,19 +83,24 @@ struct compute_single_pass_aggs {
    * columns of the `input_values` rows
    * @param row_bitmask Bitmask where bit `i` indicates the presence of a null
    * value in row `i` of input keys. Only used if `skip_rows_with_nulls` is `true`
+   * @param skip_rows_with_nulls Indicates if rows in `input_keys` containing
+   * null values should be skipped. It `true`, it is assumed `row_bitmask` is a
+   * bitmask where bit `i` indicates the presence of a null value in row `i`.
    */
-  compute_single_pass_aggs(Map map,
-                           size_type num_keys,
-                           table_device_view input_values,
-                           mutable_table_device_view output_values,
-                           aggregation::Kind const* aggs,
-                           bitmask_type const* row_bitmask)
+  compute_single_pass_aggs_fn(Map map,
+                              size_type num_keys,
+                              table_device_view input_values,
+                              mutable_table_device_view output_values,
+                              aggregation::Kind const* aggs,
+                              bitmask_type const* row_bitmask,
+                              bool skip_rows_with_nulls)
     : map(map),
       num_keys(num_keys),
       input_values(input_values),
       output_values(output_values),
       aggs(aggs),
-      row_bitmask(row_bitmask)
+      row_bitmask(row_bitmask),
+      skip_rows_with_nulls(skip_rows_with_nulls)
   {
   }
 
@@ -110,8 +114,6 @@ struct compute_single_pass_aggs {
     }
   }
 };
-
-// TODO (dm): variance kernel
 
 }  // namespace hash
 }  // namespace detail

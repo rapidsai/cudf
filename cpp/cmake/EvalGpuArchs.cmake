@@ -1,4 +1,5 @@
-# Copyright (c) 2019, NVIDIA CORPORATION.
+#=============================================================================
+# Copyright (c) 2019-2021, NVIDIA CORPORATION.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -11,14 +12,14 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-#
+#=============================================================================
 
 function(evaluate_gpu_archs gpu_archs)
   set(eval_file ${PROJECT_BINARY_DIR}/eval_gpu_archs.cu)
   set(eval_exe ${PROJECT_BINARY_DIR}/eval_gpu_archs)
   set(error_file ${PROJECT_BINARY_DIR}/eval_gpu_archs.stderr.log)
   file(WRITE ${eval_file}
-    "
+[=[
 #include <cstdio>
 #include <set>
 #include <string>
@@ -31,23 +32,23 @@ int main(int argc, char** argv) {
       char buff[32];
       cudaDeviceProp prop;
       if(cudaGetDeviceProperties(&prop, dev) != cudaSuccess) continue;
-      sprintf(buff, \"%d%d\", prop.major, prop.minor);
+      sprintf(buff, "%d%d", prop.major, prop.minor);
       archs.insert(buff);
     }
   }
   if(archs.empty()) {
-    printf(\"ALL\");
+    printf("ALL");
   } else {
     bool first = true;
     for(const auto& arch : archs) {
-      printf(first? \"%s\" : \";%s\", arch.c_str());
+      printf(first? "%s" : ";%s", arch.c_str());
       first = false;
     }
   }
-  printf(\"\\n\");
+  printf("\n");
   return 0;
 }
-")
+]=])
   execute_process(
     COMMAND ${CMAKE_CUDA_COMPILER}
       -std=c++11
@@ -57,6 +58,6 @@ int main(int argc, char** argv) {
     OUTPUT_VARIABLE __gpu_archs
     OUTPUT_STRIP_TRAILING_WHITESPACE
     ERROR_FILE ${error_file})
-  message("Auto detection of gpu-archs: ${__gpu_archs}")
+  message(VERBOSE "CUDF: Auto detection of gpu-archs: ${__gpu_archs}")
   set(${gpu_archs} ${__gpu_archs} PARENT_SCOPE)
-endfunction(evaluate_gpu_archs)
+endfunction()

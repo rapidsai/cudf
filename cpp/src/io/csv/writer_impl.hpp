@@ -28,6 +28,8 @@
 #include <cudf/table/table.hpp>
 #include <cudf/utilities/error.hpp>
 
+#include <rmm/cuda_stream_view.hpp>
+
 #include <memory>
 #include <string>
 #include <vector>
@@ -42,7 +44,7 @@ using namespace cudf::io;
 
 /**
  * @brief Implementation for CSV writer
- **/
+ */
 class writer::impl {
  public:
   /**
@@ -51,7 +53,7 @@ class writer::impl {
    * @param sink Output sink
    * @param options Settings for controlling behavior
    * @param mr Device memory resource to use for device memory allocation
-   **/
+   */
   impl(std::unique_ptr<data_sink> sink,
        csv_writer_options const& options,
        rmm::mr::device_memory_resource* mr);
@@ -62,10 +64,10 @@ class writer::impl {
    * @param table The set of columns
    * @param metadata The metadata associated with the table
    * @param stream CUDA stream used for device memory operations and kernel launches.
-   **/
+   */
   void write(table_view const& table,
              const table_metadata* metadata = nullptr,
-             cudaStream_t stream            = nullptr);
+             rmm::cuda_stream_view stream   = rmm::cuda_stream_default);
 
   /**
    * @brief Write the header of a CSV format.
@@ -73,10 +75,10 @@ class writer::impl {
    * @param table The set of columns
    * @param metadata The metadata associated with the table
    * @param stream CUDA stream used for device memory operations and kernel launches.
-   **/
+   */
   void write_chunked_begin(table_view const& table,
                            const table_metadata* metadata = nullptr,
-                           cudaStream_t stream            = nullptr);
+                           rmm::cuda_stream_view stream   = rmm::cuda_stream_default);
 
   /**
    * @brief Write dataset to CSV format without header.
@@ -84,10 +86,10 @@ class writer::impl {
    * @param strings_column Subset of columns converted to string to be written.
    * @param metadata The metadata associated with the table
    * @param stream CUDA stream used for device memory operations and kernel launches.
-   **/
+   */
   void write_chunked(strings_column_view const& strings_column,
                      const table_metadata* metadata = nullptr,
-                     cudaStream_t stream            = nullptr);
+                     rmm::cuda_stream_view stream   = rmm::cuda_stream_default);
 
   /**
    * @brief Write footer of CSV format (typically, empty).
@@ -95,10 +97,10 @@ class writer::impl {
    * @param table The set of columns
    * @param metadata The metadata associated with the table
    * @param stream CUDA stream used for device memory operations and kernel launches.
-   **/
+   */
   void write_chunked_end(table_view const& table,
                          const table_metadata* metadata = nullptr,
-                         cudaStream_t stream            = nullptr)
+                         rmm::cuda_stream_view stream   = rmm::cuda_stream_default)
   {
     // purposely no-op (for now);
   }
@@ -111,7 +113,7 @@ class writer::impl {
 
 std::unique_ptr<column> pandas_format_durations(
   column_view const& durations,
-  cudaStream_t stream,
+  rmm::cuda_stream_view stream,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 }  // namespace csv

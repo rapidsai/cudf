@@ -23,7 +23,7 @@ def _read_orc_stripe(fs, path, stripe, columns, kwargs=None):
     return df_stripe
 
 
-def read_orc(path, columns=None, storage_options=None, **kwargs):
+def read_orc(path, columns=None, filters=None, storage_options=None, **kwargs):
     """Read cudf dataframe from ORC file(s).
 
     Note that this function is mostly borrowed from upstream Dask.
@@ -35,6 +35,20 @@ def read_orc(path, columns=None, storage_options=None, **kwargs):
         and may include glob character if a single string.
     columns: None or list(str)
         Columns to load. If None, loads all.
+    filters : None or list of tuple or list of lists of tuples
+        If not None, specifies a filter predicate used to filter out row groups
+        using statistics stored for each row group as Parquet metadata. Row
+        groups that do not match the given filter predicate are not read. The
+        predicate is expressed in disjunctive normal form (DNF) like
+        `[[('x', '=', 0), ...], ...]`. DNF allows arbitrary boolean logical
+        combinations of single column predicates. The innermost tuples each
+        describe a single column predicate. The list of inner predicates is
+        interpreted as a conjunction (AND), forming a more selective and
+        multiple column predicate. Finally, the outermost list combines
+        these filters as a disjunction (OR). Predicates may also be passed
+        as a list of tuples. This form is interpreted as a single conjunction.
+        To express OR in predicates, one must use the (preferred) notation of
+        list of lists of tuples.
     storage_options: None or dict
         Further parameters to pass to the bytes backend.
 
@@ -76,7 +90,11 @@ def read_orc(path, columns=None, storage_options=None, **kwargs):
     dsk = {}
     N = 0
     for path, n in zip(paths, nstripes_per_file):
-        for stripe in range(n):
+        for stripe in (
+            range(n)
+            if filters is None
+            else cudf.io.orc._filter_stripes(filters, path)
+        ):
             dsk[(name, N)] = (
                 _read_orc_stripe,
                 fs,

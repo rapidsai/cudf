@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -15,9 +15,11 @@
  */
 
 #include <cudf_test/base_fixture.hpp>
+#include <cudf_test/column_utilities.hpp>
 #include <cudf_test/column_wrapper.hpp>
 #include <cudf_test/type_lists.hpp>
 
+#include <cudf/binaryop.hpp>
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/utilities/cuda.cuh>
 #include <cudf/fixed_point/fixed_point.hpp>
@@ -25,6 +27,8 @@
 #include <cudf/types.hpp>
 #include <cudf/utilities/error.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
+
+#include <rmm/exec_policy.hpp>
 
 #include <algorithm>
 #include <limits>
@@ -506,7 +510,7 @@ TEST_F(FixedPointTest, DecimalXXThrustOnDevice)
   thrust::device_vector<decimal32> vec1(1000, decimal32{1, scale_type{-2}});
 
   auto const sum = thrust::reduce(
-    rmm::exec_policy(0)->on(0), std::cbegin(vec1), std::cend(vec1), decimal32{0, scale_type{-2}});
+    rmm::exec_policy(), std::cbegin(vec1), std::cend(vec1), decimal32{0, scale_type{-2}});
 
   EXPECT_EQ(static_cast<int32_t>(sum), 1000);
 
@@ -522,7 +526,7 @@ TEST_F(FixedPointTest, DecimalXXThrustOnDevice)
   std::iota(std::begin(vec2), std::end(vec2), 1);
 
   auto const res1 = thrust::reduce(
-    rmm::exec_policy(0)->on(0), std::cbegin(vec1), std::cend(vec1), decimal32{0, scale_type{-2}});
+    rmm::exec_policy(), std::cbegin(vec1), std::cend(vec1), decimal32{0, scale_type{-2}});
 
   auto const res2 = std::accumulate(std::cbegin(vec2), std::cend(vec2), 0);
 
@@ -530,11 +534,8 @@ TEST_F(FixedPointTest, DecimalXXThrustOnDevice)
 
   thrust::device_vector<int32_t> vec3(1000);
 
-  thrust::transform(rmm::exec_policy(0)->on(0),
-                    std::cbegin(vec1),
-                    std::cend(vec1),
-                    std::begin(vec3),
-                    cast_to_int32_fn{});
+  thrust::transform(
+    rmm::exec_policy(), std::cbegin(vec1), std::cend(vec1), std::begin(vec3), cast_to_int32_fn{});
 
   thrust::host_vector<int32_t> vec3_host = vec3;
 
@@ -572,12 +573,77 @@ TYPED_TEST(FixedPointTestBothReps, NoScaleOrWrongTypeID)
 
 TYPED_TEST(FixedPointTestBothReps, SimpleFixedPointColumnWrapper)
 {
-  using decimalXX = fixed_point<TypeParam, Radix::BASE_10>;
+  using RepType = cudf::device_storage_type_t<TypeParam>;
 
-  auto const a = cudf::test::fixed_point_column_wrapper<int32_t>{{11, 22, 33}, scale_type{-1}};
-  auto const b = cudf::test::fixed_point_column_wrapper<int32_t>{{110, 220, 330}, scale_type{-2}};
+  auto const a = cudf::test::fixed_point_column_wrapper<RepType>{{11, 22, 33}, scale_type{-1}};
+  auto const b = cudf::test::fixed_point_column_wrapper<RepType>{{110, 220, 330}, scale_type{-2}};
 
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(a, b);
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(a, b);
+}
+
+TEST_F(FixedPointTest, PositiveScaleWithValuesOutsideUnderlyingType32)
+{
+  // This is testing fixed_point values outside the range of its underlying type.
+  // For example, 100,000,000 with scale of 6 is 100,000,000,000,000 (100 trillion) and this is
+  // outside the range of a int32_t
+
+  using fp_wrapper = cudf::test::fixed_point_column_wrapper<int32_t>;
+
+  auto const a = fp_wrapper{{100000000}, scale_type{6}};
+  auto const b = fp_wrapper{{5000000}, scale_type{7}};
+  auto const c = fp_wrapper{{2}, scale_type{0}};
+
+  auto const expected1 = fp_wrapper{{150000000}, scale_type{6}};
+  auto const expected2 = fp_wrapper{{50000000}, scale_type{6}};
+
+  auto const result1 = cudf::binary_operation(a, b, cudf::binary_operator::ADD, {});
+  auto const result2 = cudf::binary_operation(a, c, cudf::binary_operator::DIV, {});
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected1, result1->view());
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected2, result2->view());
+}
+
+TEST_F(FixedPointTest, PositiveScaleWithValuesOutsideUnderlyingType64)
+{
+  // This is testing fixed_point values outside the range of its underlying type.
+  // For example, 100,000,000 with scale of 100 is 10 ^ 108 and this is far outside the
+  // range of a int64_t
+
+  using fp_wrapper = cudf::test::fixed_point_column_wrapper<int64_t>;
+
+  auto const a = fp_wrapper{{100000000}, scale_type{100}};
+  auto const b = fp_wrapper{{5000000}, scale_type{101}};
+  auto const c = fp_wrapper{{2}, scale_type{0}};
+
+  auto const expected1 = fp_wrapper{{150000000}, scale_type{100}};
+  auto const expected2 = fp_wrapper{{50000000}, scale_type{100}};
+
+  auto const result1 = cudf::binary_operation(a, b, cudf::binary_operator::ADD, {});
+  auto const result2 = cudf::binary_operation(a, c, cudf::binary_operator::DIV, {});
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected1, result1->view());
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected2, result2->view());
+}
+
+TYPED_TEST(FixedPointTestBothReps, ExtremelyLargeNegativeScale)
+{
+  // This is testing fixed_point values with an extremely large negative scale. The fixed_point
+  // implementation should be able to handle any scale representable by an int32_t
+
+  using fp_wrapper = cudf::test::fixed_point_column_wrapper<TypeParam>;
+
+  auto const a = fp_wrapper{{10}, scale_type{-201}};
+  auto const b = fp_wrapper{{50}, scale_type{-202}};
+  auto const c = fp_wrapper{{2}, scale_type{0}};
+
+  auto const expected1 = fp_wrapper{{150}, scale_type{-202}};
+  auto const expected2 = fp_wrapper{{5}, scale_type{-201}};
+
+  auto const result1 = cudf::binary_operation(a, b, cudf::binary_operator::ADD, {});
+  auto const result2 = cudf::binary_operation(a, c, cudf::binary_operator::DIV, {});
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected1, result1->view());
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected2, result2->view());
 }
 
 CUDF_TEST_PROGRAM_MAIN()

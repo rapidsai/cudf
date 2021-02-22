@@ -18,6 +18,8 @@
 #include <cudf/detail/merge.cuh>
 #include <cudf/dictionary/dictionary_column_view.hpp>
 
+#include <rmm/cuda_stream_view.hpp>
+
 namespace cudf {
 namespace dictionary {
 namespace detail {
@@ -33,15 +35,15 @@ namespace detail {
  * @param lcol First column.
  * @param rcol Second column.
  * @param row_order Indexes for each column.
- * @param mr Device memory resource used to allocate the returned column's device memory.
  * @param stream CUDA stream used for device memory operations and kernel launches.
+ * @param mr Device memory resource used to allocate the returned column's device memory.
  * @return New dictionary column.
  */
 std::unique_ptr<column> merge(dictionary_column_view const& lcol,
                               dictionary_column_view const& rcol,
                               cudf::detail::index_vector const& row_order,
-                              rmm::mr::device_memory_resource* mr,
-                              cudaStream_t stream);
+                              rmm::cuda_stream_view stream,
+                              rmm::mr::device_memory_resource* mr);
 
 }  // namespace detail
 }  // namespace dictionary

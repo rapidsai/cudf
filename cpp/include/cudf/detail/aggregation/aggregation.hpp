@@ -27,6 +27,68 @@
 
 namespace cudf {
 namespace detail {
+
+// Forward declare compound aggregations.
+class mean_aggregation;
+class var_aggregation;
+class std_aggregation;
+class min_aggregation;
+class max_aggregation;
+
+// Visitor pattern
+class aggregation_finalizer {  // Declares the interface for the finalizer
+ public:
+  // Declare overloads for each kind of a agg to dispatch
+  virtual void visit(aggregation const& agg)      = 0;
+  virtual void visit(min_aggregation const& agg)  = 0;
+  virtual void visit(max_aggregation const& agg)  = 0;
+  virtual void visit(mean_aggregation const& agg) = 0;
+  virtual void visit(var_aggregation const& agg)  = 0;
+  virtual void visit(std_aggregation const& agg)  = 0;
+};
+
+/**
+ * @brief Derived class for specifying a min aggregation
+ */
+struct min_aggregation final : aggregation {
+  min_aggregation() : aggregation{MIN} {}
+
+  std::vector<aggregation::Kind> get_simple_aggregations(data_type col_type) const override
+  {
+    if (col_type.id() == type_id::STRING)
+      return {aggregation::ARGMIN};
+    else
+      return {this->kind};
+  }
+  void finalize(aggregation_finalizer& finalizer) override { finalizer.visit(*this); }
+
+  std::unique_ptr<aggregation> clone() const override
+  {
+    return std::make_unique<min_aggregation>(*this);
+  }
+};
+
+/**
+ * @brief Derived class for specifying a max aggregation
+ */
+struct max_aggregation final : aggregation {
+  max_aggregation() : aggregation{MAX} {}
+
+  std::vector<aggregation::Kind> get_simple_aggregations(data_type col_type) const override
+  {
+    if (col_type.id() == type_id::STRING)
+      return {aggregation::ARGMAX};
+    else
+      return {this->kind};
+  }
+  void finalize(aggregation_finalizer& finalizer) override { finalizer.visit(*this); }
+
+  std::unique_ptr<aggregation> clone() const override
+  {
+    return std::make_unique<max_aggregation>(*this);
+  }
+};
+
 /**
  * @brief A wrapper to simplify inheritance of virtual methods from aggregation
  *
@@ -92,6 +154,9 @@ struct quantile_aggregation final : derived_aggregation<quantile_aggregation> {
   }
 };
 
+/**
+ * @brief Derived aggregation class for specifying LEAD/LAG window aggregations
+ */
 struct lead_lag_aggregation final : derived_aggregation<lead_lag_aggregation> {
   lead_lag_aggregation(Kind kind, size_type offset)
     : derived_aggregation{offset < 0 ? (kind == LAG ? LEAD : LAG) : kind},
@@ -110,11 +175,34 @@ struct lead_lag_aggregation final : derived_aggregation<lead_lag_aggregation> {
 };
 
 /**
+ * @brief Derived class for specifying a mean aggregation
+ */
+struct mean_aggregation final : aggregation {
+  mean_aggregation() : aggregation{MEAN} {}
+
+  std::vector<aggregation::Kind> get_simple_aggregations(data_type col_type) const override
+  {
+    CUDF_EXPECTS(is_fixed_width(col_type), "MEAN aggregation expects fixed width type");
+    return {aggregation::SUM, aggregation::COUNT_VALID};
+  }
+  void finalize(aggregation_finalizer& finalizer) override { finalizer.visit(*this); }
+
+  std::unique_ptr<aggregation> clone() const override
+  {
+    return std::make_unique<mean_aggregation>(*this);
+  }
+};
+
+/**
  * @brief Derived class for specifying a standard deviation/variance aggregation
  */
-struct std_var_aggregation final : derived_aggregation<std_var_aggregation> {
-  std_var_aggregation(aggregation::Kind k, size_type ddof) : derived_aggregation{k}, _ddof{ddof} {}
+struct std_var_aggregation : derived_aggregation<std_var_aggregation> {
   size_type _ddof;  ///< Delta degrees of freedom
+
+  virtual std::vector<aggregation::Kind> get_simple_aggregations(data_type col_type) const override
+  {
+    return {aggregation::SUM, aggregation::COUNT_VALID};
+  }
 
  protected:
   friend class derived_aggregation<std_var_aggregation>;
@@ -122,14 +210,36 @@ struct std_var_aggregation final : derived_aggregation<std_var_aggregation> {
   bool operator==(std_var_aggregation const& other) const { return _ddof == other._ddof; }
 
   size_t hash_impl() const { return std::hash<size_type>{}(_ddof); }
+
+  std_var_aggregation(aggregation::Kind k, size_type ddof) : derived_aggregation{k}, _ddof{ddof}
+  {
+    CUDF_EXPECTS(k == aggregation::STD or k == aggregation::VARIANCE,
+                 "std_var_aggregation can accept only STD, VARIANCE");
+  }
+};
+
+/**
+ * @brief Derived class for specifying a standard deviation aggregation
+ */
+struct std_aggregation final : std_var_aggregation {
+  std_aggregation(size_type ddof) : std_var_aggregation{aggregation::STD, ddof} {}
+  void finalize(aggregation_finalizer& finalizer) override { finalizer.visit(*this); }
+};
+
+/**
+ * @brief Derived class for specifying a variance aggregation
+ */
+struct var_aggregation final : std_var_aggregation {
+  var_aggregation(size_type ddof) : std_var_aggregation{aggregation::VARIANCE, ddof} {}
+  void finalize(aggregation_finalizer& finalizer) override { finalizer.visit(*this); }
 };
 
 /**
  * @brief Derived class for specifying a nunique aggregation
  */
 struct nunique_aggregation final : derived_aggregation<nunique_aggregation> {
-  nunique_aggregation(aggregation::Kind k, null_policy null_handling)
-    : derived_aggregation{k}, _null_handling{null_handling}
+  nunique_aggregation(null_policy null_handling)
+    : derived_aggregation{NUNIQUE}, _null_handling{null_handling}
   {
   }
   null_policy _null_handling;  ///< include or exclude nulls
@@ -149,8 +259,8 @@ struct nunique_aggregation final : derived_aggregation<nunique_aggregation> {
  * @brief Derived class for specifying a nth element aggregation
  */
 struct nth_element_aggregation final : derived_aggregation<nth_element_aggregation> {
-  nth_element_aggregation(aggregation::Kind k, size_type n, null_policy null_handling)
-    : derived_aggregation{k}, _n{n}, _null_handling{null_handling}
+  nth_element_aggregation(size_type n, null_policy null_handling)
+    : derived_aggregation{NTH_ELEMENT}, _n{n}, _null_handling{null_handling}
   {
   }
   size_type _n;                ///< nth index to return
@@ -184,6 +294,8 @@ struct udf_aggregation final : derived_aggregation<udf_aggregation> {
       _function_name{"rolling_udf"},
       _output_type{output_type}
   {
+    CUDF_EXPECTS(type == aggregation::PTX or type == aggregation::CUDA,
+                 "udf_aggregation can accept only PTX, CUDA");
   }
   std::string const _source;
   std::string const _operator_name;
@@ -208,6 +320,27 @@ struct udf_aggregation final : derived_aggregation<udf_aggregation> {
 };
 
 /**
+ * @brief Derived aggregation class for specifying COLLECT aggregation
+ */
+struct collect_list_aggregation final : derived_aggregation<nunique_aggregation> {
+  explicit collect_list_aggregation(null_policy null_handling = null_policy::INCLUDE)
+    : derived_aggregation{COLLECT}, _null_handling{null_handling}
+  {
+  }
+  null_policy _null_handling;  ///< include or exclude nulls
+
+ protected:
+  friend class derived_aggregation<nunique_aggregation>;
+
+  bool operator==(nunique_aggregation const& other) const
+  {
+    return _null_handling == other._null_handling;
+  }
+
+  size_t hash_impl() const { return std::hash<int>{}(static_cast<int>(_null_handling)); }
+};
+
+/**
  * @brief Sentinel value used for `ARGMAX` aggregation.
  *
  * The output column for an `ARGMAX` aggregation is initialized with the
@@ -228,7 +361,7 @@ constexpr size_type ARGMIN_SENTINEL{-1};
  *
  * @tparam Source The type on which the aggregation is computed
  * @tparam k The aggregation performed
- **/
+ */
 template <typename Source, aggregation::Kind k, typename Enable = void>
 struct target_type_impl {
   using type = void;
@@ -300,6 +433,15 @@ struct target_type_impl<
   k,
   std::enable_if_t<std::is_integral<Source>::value && is_sum_product_agg(k)>> {
   using type = int64_t;
+};
+
+// Summing fixed_point numbers, always use the decimal64 accumulator
+template <typename Source, aggregation::Kind k>
+struct target_type_impl<
+  Source,
+  k,
+  std::enable_if_t<cudf::is_fixed_point<Source>() && (k == aggregation::SUM)>> {
+  using type = numeric::decimal64;
 };
 
 // Summing/Multiplying float/doubles, use same type accumulator
@@ -417,8 +559,8 @@ using kind_to_type = typename kind_to_type_impl<k>::type;
 #endif
 
 AGG_KIND_MAPPING(aggregation::QUANTILE, quantile_aggregation);
-AGG_KIND_MAPPING(aggregation::STD, std_var_aggregation);
-AGG_KIND_MAPPING(aggregation::VARIANCE, std_var_aggregation);
+AGG_KIND_MAPPING(aggregation::STD, std_aggregation);
+AGG_KIND_MAPPING(aggregation::VARIANCE, var_aggregation);
 
 /**
  * @brief Dispatches `k` as a non-type template parameter to a callable,  `f`.

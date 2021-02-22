@@ -18,7 +18,7 @@ class GroupBy(Serializable):
     _MAX_GROUPS_BEFORE_WARN = 100
 
     def __init__(
-        self, obj, by=None, level=None, sort=True, as_index=True, dropna=True
+        self, obj, by=None, level=None, sort=False, as_index=True, dropna=True
     ):
         """
         Group a DataFrame or Series by a set of columns.
@@ -37,9 +37,9 @@ class GroupBy(Serializable):
         level : int, level_name or list, optional
             For objects with a MultiIndex, `level` can be used to specify
             grouping by one or more levels of the MultiIndex.
-        sort : True, optional
-            If True (default), sort results by group9s). Note that
-            unlike Pandas, this also sorts values within each group.
+        sort : bool, default False
+            Sort the result by group keys. Differ from Pandas, cudf defaults
+            to False for better performance.
         as_index : bool, optional
             If as_index=True (default), the group names appear
             as the keys of the resulting DataFrame.
@@ -101,7 +101,7 @@ class GroupBy(Serializable):
                     len(self.obj), "int8", masked=False
                 )
             )
-            .groupby(self.grouping)
+            .groupby(self.grouping, sort=self._sort)
             .agg("size")
         )
 
@@ -126,12 +126,13 @@ class GroupBy(Serializable):
         Examples
         --------
         >>> import cudf
-        >>> a = cudf.DataFrame({'a': [1, 1, 2], 'b': [1, 2, 3]})
+        >>> a = cudf.DataFrame(
+            {'a': [1, 1, 2], 'b': [1, 2, 3], 'c': [2, 2, 1]})
         >>> a.groupby('a').agg('sum')
            b
         a
-        1  3
         2  3
+        1  3
 
         Specifying a list of aggregations to perform on each column.
 
@@ -139,8 +140,8 @@ class GroupBy(Serializable):
             b       c
           sum min sum min
         a
-        1   3   1   4   2
         2   3   3   1   1
+        1   3   1   4   2
 
         Using a dict to specify aggregations to perform per column.
 
@@ -148,8 +149,8 @@ class GroupBy(Serializable):
             a   b
           max min mean
         a
-        1   1   1  1.5
         2   2   3  3.0
+        1   1   1  1.5
 
         Using lambdas/callables to specify aggregations taking parameters.
 
@@ -164,6 +165,9 @@ class GroupBy(Serializable):
         """
         normalized_aggs = self._normalize_aggs(func)
 
+        # Note: When there are no key columns, the below produces
+        # a Float64Index, while Pandas returns an Int64Index
+        # (GH: 6945)
         result = self._groupby.aggregate(self.obj, normalized_aggs)
 
         result = cudf.DataFrame._from_table(result)
@@ -190,10 +194,11 @@ class GroupBy(Serializable):
                         raise
 
         # set index names to be group key names
-        result.index.names = self.grouping.names
+        if len(result):
+            result.index.names = self.grouping.names
 
         # copy categorical information from keys to the result index:
-        result.index._postprocess_columns(self.grouping.keys)
+        result.index._copy_type_metadata(self.grouping.keys)
         result._index = cudf.core.index.Index._from_table(result._index)
 
         if not self._as_index:
@@ -258,7 +263,7 @@ class GroupBy(Serializable):
 
         grouped_keys = cudf.Index._from_table(grouped_keys)
         grouped_values = self.obj.__class__._from_table(grouped_values)
-        grouped_values._postprocess_columns(self.obj)
+        grouped_values._copy_type_metadata(self.obj)
         group_names = grouped_keys.unique()
         return (group_names, offsets, grouped_keys, grouped_values)
 
@@ -307,6 +312,60 @@ class GroupBy(Serializable):
 
         return out
 
+    def pipe(self, func, *args, **kwargs):
+        """
+        Apply a function `func` with arguments to this GroupBy
+        object and return the function’s result.
+
+        Parameters
+        ----------
+        func : function
+            Function to apply to this GroupBy object or,
+            alternatively, a ``(callable, data_keyword)`` tuple where
+            ``data_keyword`` is a string indicating the keyword of
+            ``callable`` that expects the GroupBy object.
+        args : iterable, optional
+            Positional arguments passed into ``func``.
+        kwargs : mapping, optional
+            A dictionary of keyword arguments passed into ``func``.
+
+        Returns
+        -------
+        object : the return type of ``func``.
+
+        See also
+        --------
+        cudf.core.series.Series.pipe
+            Apply a function with arguments to a series.
+
+        cudf.core.dataframe.DataFrame.pipe
+            Apply a function with arguments to a dataframe.
+
+        apply
+            Apply function to each group instead of to the full GroupBy object.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> df = cudf.DataFrame({'A': ['a', 'b', 'a', 'b'], 'B': [1, 2, 3, 4]})
+        >>> df
+        A  B
+        0  a  1
+        1  b  2
+        2  a  3
+        3  b  4
+
+        To get the difference between each groups maximum and minimum value
+        in one pass, you can do
+
+        >>> df.groupby('A').pipe(lambda x: x.max() - x.min())
+        B
+        A
+        a  2
+        b  2
+        """
+        return cudf.core.common.pipe(self, func, *args, **kwargs)
+
     def apply(self, function):
         """Apply a python transformation function over the grouped chunk.
 
@@ -348,7 +407,7 @@ class GroupBy(Serializable):
           6    2    6   12
         """
         if not callable(function):
-            raise TypeError("type {!r} is not callable", type(function))
+            raise TypeError(f"type {type(function)} is not callable")
         _, offsets, _, grouped_values = self._grouped()
 
         ngroups = len(offsets) - 1
@@ -361,7 +420,22 @@ class GroupBy(Serializable):
         chunks = [
             grouped_values[s:e] for s, e in zip(offsets[:-1], offsets[1:])
         ]
-        result = cudf.concat([function(chk) for chk in chunks])
+        chunk_results = [function(chk) for chk in chunks]
+
+        if not len(chunk_results):
+            return self.obj.__class__()
+
+        if cudf.utils.dtypes.is_scalar(chunk_results[0]):
+            result = cudf.Series(
+                chunk_results, index=self.grouping.keys[offsets[:-1]]
+            )
+            result.index.names = self.grouping.names
+        elif isinstance(chunk_results[0], cudf.Series):
+            result = cudf.concat(chunk_results, axis=1).T
+            result.index.names = self.grouping.names
+        else:
+            result = cudf.concat(chunk_results)
+
         if self._sort:
             result = result.sort_index()
         return result
@@ -498,7 +572,7 @@ class GroupBy(Serializable):
 
         """
         if not callable(function):
-            raise TypeError("type {!r} is not callable", type(function))
+            raise TypeError(f"type {type(function)} is not callable")
 
         _, offsets, _, grouped_values = self._grouped()
         kwargs.update({"chunks": offsets})
@@ -518,7 +592,7 @@ class GroupBy(Serializable):
 
 class DataFrameGroupBy(GroupBy):
     def __init__(
-        self, obj, by=None, level=None, sort=True, as_index=True, dropna=True
+        self, obj, by=None, level=None, sort=False, as_index=True, dropna=True
     ):
         """
         Group DataFrame using a mapper or by a Series of columns.
@@ -545,10 +619,11 @@ class DataFrameGroupBy(GroupBy):
             For aggregated output, return object with group labels as
             the index. Only relevant for DataFrame input.
             as_index=False is effectively “SQL-style” grouped output.
-        sort : bool, default True
-            Sort group keys. Get better performance by turning this off.
-            Note this does not influence the order of observations within each
-            group. Groupby preserves the order of rows within each group.
+        sort : bool, default False
+            Sort result by group key. Differ from Pandas, cudf defaults to
+            ``False`` for better performance. Note this does not influence
+            the order of observations within each group. Groupby preserves
+            the order of rows within each group.
         dropna : bool, optional
             If True (default), do not include the "null" group.
 
@@ -597,8 +672,8 @@ class DataFrameGroupBy(GroupBy):
         >>> df.groupby(level="Type").mean()
                 Max Speed
         Type
-        Captive      210.0
         Wild         185.0
+        Captive      210.0
 
         """
         super().__init__(
@@ -616,12 +691,14 @@ class DataFrameGroupBy(GroupBy):
         except AttributeError:
             if key in self.obj:
                 return self.obj[key].groupby(
-                    self.grouping, dropna=self._dropna
+                    self.grouping, dropna=self._dropna, sort=self._sort
                 )
             raise
 
     def __getitem__(self, key):
-        return self.obj[key].groupby(self.grouping, dropna=self._dropna)
+        return self.obj[key].groupby(
+            self.grouping, dropna=self._dropna, sort=self._sort
+        )
 
     def nunique(self):
         """
@@ -632,7 +709,7 @@ class DataFrameGroupBy(GroupBy):
 
 class SeriesGroupBy(GroupBy):
     def __init__(
-        self, obj, by=None, level=None, sort=True, as_index=True, dropna=True
+        self, obj, by=None, level=None, sort=False, as_index=True, dropna=True
     ):
         """
         Group Series using a mapper or by a Series of columns.
@@ -659,10 +736,11 @@ class SeriesGroupBy(GroupBy):
             For aggregated output, return object with group labels as
             the index. Only relevant for DataFrame input.
             as_index=False is effectively “SQL-style” grouped output.
-        sort : bool, default True
-            Sort group keys. Get better performance by turning this off.
-            Note this does not influence the order of observations within each
-            group. Groupby preserves the order of rows within each group.
+        sort : bool, default False
+            Sort result by group key. Differ from Pandas, cudf defaults to
+            ``False`` for better performance. Note this does not influence
+            the order of observations within each group. Groupby preserves
+            the order of rows within each group.
 
         Returns
         -------
@@ -705,8 +783,9 @@ class SeriesGroupBy(GroupBy):
         result = super().agg(func)
 
         # downcast the result to a Series:
-        if result.shape[1] == 1 and not pd.api.types.is_list_like(func):
-            return result.iloc[:, 0]
+        if len(result._data):
+            if result.shape[1] == 1 and not pd.api.types.is_list_like(func):
+                return result.iloc[:, 0]
 
         # drop the first level if we have a multiindex
         if (
@@ -739,6 +818,9 @@ class _Grouping(Serializable):
         self._named_columns = []
         self._handle_by_or_level(by, level)
 
+        if len(obj) and not len(self._key_columns):
+            raise ValueError("No group keys passed")
+
     def _handle_by_or_level(self, by=None, level=None):
         if level is not None:
             if by is not None:
@@ -769,7 +851,10 @@ class _Grouping(Serializable):
     @property
     def keys(self):
         nkeys = len(self._key_columns)
-        if nkeys > 1:
+
+        if nkeys == 0:
+            return cudf.core.index.as_index([], name=None)
+        elif nkeys > 1:
             return cudf.MultiIndex(
                 source_data=cudf.DataFrame(
                     dict(zip(range(nkeys), self._key_columns))

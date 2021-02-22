@@ -24,7 +24,7 @@ cudf::test::fixed_width_column_wrapper<T> create_fixed_columns(cudf::size_type s
                                                                cudf::size_type size,
                                                                InputIterator valids)
 {
-  auto iter = cudf::test::make_counting_transform_iterator(start, [](auto i) { return T(i); });
+  auto iter = cudf::detail::make_counting_transform_iterator(start, [](auto i) { return T(i); });
 
   return cudf::test::fixed_width_column_wrapper<T>(iter, iter + size, valids);
 }
@@ -52,17 +52,70 @@ std::vector<cudf::test::fixed_width_column_wrapper<T>> create_expected_columns(
 
   for (unsigned long index = 0; index < indices.size(); index += 2) {
     auto iter =
-      cudf::test::make_counting_transform_iterator(indices[index], [](auto i) { return T(i); });
+      cudf::detail::make_counting_transform_iterator(indices[index], [](auto i) { return T(i); });
+    if (not nullable) {
+      result.push_back(cudf::test::fixed_width_column_wrapper<T>(
+        iter, iter + (indices[index + 1] - indices[index])));
+    } else {
+      auto valids = cudf::detail::make_counting_transform_iterator(
+        indices[index], [](auto i) { return i % 2 == 0 ? true : false; });
+      result.push_back(cudf::test::fixed_width_column_wrapper<T>(
+        iter, iter + (indices[index + 1] - indices[index]), valids));
+    }
+  }
+
+  return result;
+}
+
+template <typename T>
+std::vector<cudf::test::fixed_width_column_wrapper<T>> create_expected_columns(
+  std::vector<cudf::size_type> const& indices, std::vector<bool> const& validity)
+{
+  std::vector<cudf::test::fixed_width_column_wrapper<T>> result = {};
+
+  for (unsigned long index = 0; index < indices.size(); index += 2) {
+    auto iter =
+      cudf::detail::make_counting_transform_iterator(indices[index], [](auto i) { return T(i); });
+    result.push_back(cudf::test::fixed_width_column_wrapper<T>(
+      iter, iter + (indices[index + 1] - indices[index]), validity.begin() + indices[index]));
+  }
+
+  return result;
+}
+
+template <typename T, typename ElementIter>
+std::vector<cudf::test::fixed_width_column_wrapper<T>> create_expected_columns(
+  std::vector<cudf::size_type> const& indices, ElementIter begin, bool nullable)
+{
+  std::vector<cudf::test::fixed_width_column_wrapper<T>> result = {};
+
+  for (unsigned long index = 0; index < indices.size(); index += 2) {
+    auto iter = begin + indices[index];
 
     if (not nullable) {
       result.push_back(cudf::test::fixed_width_column_wrapper<T>(
         iter, iter + (indices[index + 1] - indices[index])));
     } else {
-      auto valids = cudf::test::make_counting_transform_iterator(
+      auto valids = cudf::detail::make_counting_transform_iterator(
         indices[index], [](auto i) { return i % 2 == 0 ? true : false; });
       result.push_back(cudf::test::fixed_width_column_wrapper<T>(
         iter, iter + (indices[index + 1] - indices[index]), valids));
     }
+  }
+
+  return result;
+}
+
+template <typename T, typename ElementIter>
+std::vector<cudf::test::fixed_width_column_wrapper<T>> create_expected_columns(
+  std::vector<cudf::size_type> const& indices, ElementIter begin, std::vector<bool> const& validity)
+{
+  std::vector<cudf::test::fixed_width_column_wrapper<T>> result = {};
+
+  for (unsigned long index = 0; index < indices.size(); index += 2) {
+    auto iter = begin + indices[index];
+    result.push_back(cudf::test::fixed_width_column_wrapper<T>(
+      iter, iter + (indices[index + 1] - indices[index]), validity.begin() + indices[index]));
   }
 
   return result;
@@ -79,15 +132,15 @@ std::vector<cudf::table> create_expected_tables(cudf::size_type num_cols,
     std::vector<std::unique_ptr<cudf::column>> cols = {};
 
     for (int idx = 0; idx < num_cols; idx++) {
-      auto iter = cudf::test::make_counting_transform_iterator(indices[index] + (idx * num_cols),
-                                                               [](auto i) { return T(i); });
+      auto iter = cudf::detail::make_counting_transform_iterator(indices[index] + (idx * num_cols),
+                                                                 [](auto i) { return T(i); });
 
       if (not nullable) {
         cudf::test::fixed_width_column_wrapper<T> wrap(
           iter, iter + (indices[index + 1] - indices[index]));
         cols.push_back(wrap.release());
       } else {
-        auto valids = cudf::test::make_counting_transform_iterator(
+        auto valids = cudf::detail::make_counting_transform_iterator(
           indices[index], [](auto i) { return i % 2 == 0 ? true : false; });
         cudf::test::fixed_width_column_wrapper<T> wrap(
           iter, iter + (indices[index + 1] - indices[index]), valids);
@@ -113,11 +166,27 @@ inline std::vector<cudf::test::strings_column_wrapper> create_expected_string_co
       result.push_back(cudf::test::strings_column_wrapper(strings.begin() + indices[index],
                                                           strings.begin() + indices[index + 1]));
     } else {
-      auto valids = cudf::test::make_counting_transform_iterator(
+      auto valids = cudf::detail::make_counting_transform_iterator(
         indices[index], [](auto i) { return i % 2 == 0 ? true : false; });
       result.push_back(cudf::test::strings_column_wrapper(
         strings.begin() + indices[index], strings.begin() + indices[index + 1], valids));
     }
+  }
+
+  return result;
+}
+
+inline std::vector<cudf::test::strings_column_wrapper> create_expected_string_columns(
+  std::vector<std::string> const& strings,
+  std::vector<cudf::size_type> const& indices,
+  std::vector<bool> const& validity)
+{
+  std::vector<cudf::test::strings_column_wrapper> result = {};
+
+  for (unsigned long index = 0; index < indices.size(); index += 2) {
+    result.push_back(cudf::test::strings_column_wrapper(strings.begin() + indices[index],
+                                                        strings.begin() + indices[index + 1],
+                                                        validity.begin() + indices[index]));
   }
 
   return result;
@@ -139,7 +208,7 @@ inline std::vector<cudf::table> create_expected_string_tables(
                                                 strings[idx].begin() + indices[index + 1]);
         cols.push_back(wrap.release());
       } else {
-        auto valids = cudf::test::make_counting_transform_iterator(
+        auto valids = cudf::detail::make_counting_transform_iterator(
           indices[index], [](auto i) { return i % 2 == 0 ? true : false; });
         cudf::test::strings_column_wrapper wrap(
           strings[idx].begin() + indices[index], strings[idx].begin() + indices[index + 1], valids);

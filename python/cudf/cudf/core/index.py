@@ -1,8 +1,9 @@
 # Copyright (c) 2018-2020, NVIDIA CORPORATION.
-from __future__ import division, print_function
+from __future__ import annotations, division, print_function
 
 import pickle
 from numbers import Number
+from typing import Any, Dict, Set, Type
 
 import cupy
 import numpy as np
@@ -32,7 +33,7 @@ from cudf.utils.dtypes import (
     is_scalar,
     numeric_normalize_types,
 )
-from cudf.utils.utils import cached_property
+from cudf.utils.utils import cached_property, search_range
 
 
 def _to_frame(this_index, index=True, name=None):
@@ -126,16 +127,18 @@ class Index(Frame, Serializable):
         UInt64Index([1, 2, 3], dtype='uint64', name='a')
 
         >>> cudf.Index(cudf.DataFrame({"a":[1, 2], "b":[2, 3]}))
-        MultiIndex(levels=[0    1
-        1    2
-        dtype: int64, 0    2
-        1    3
-        dtype: int64],
-        codes=   a  b
-        0  0  0
-        1  1  1)
+        MultiIndex([(1, 2),
+                    (2, 3)],
+                  names=['a', 'b'])
         """
         pass
+
+    @cached_property
+    def _values(self) -> ColumnBase:
+        raise NotImplementedError
+
+    def __getitem__(self, key):
+        raise NotImplementedError()
 
     def drop_duplicates(self, keep="first"):
         """
@@ -237,7 +240,7 @@ class Index(Frame, Serializable):
         Examples
         --------
         >>> import cudf
-        >>> idx = cudf.core.index.StringIndex(["a","b","c"])
+        >>> idx = cudf.Index(["a", "b", "c"])
         >>> idx.get_level_values(0)
         StringIndex(['a' 'b' 'c'], dtype='object')
         """
@@ -407,31 +410,17 @@ class Index(Frame, Serializable):
         ...         names=["x", "y"],
         ...     )
         >>> midx
-        MultiIndex(levels=[0       1
-        1    null
-        2       4
-        3    null
-        dtype: int64, 0    1
-        1    2
-        2    5
-        dtype: int64],
-        codes=   x  y
-        0  0  0
-        1  0  2
-        2  1  1
-        3  2  1
-        4  3  0)
+        MultiIndex([(   1, 1),
+                    (   1, 5),
+                    (<NA>, 2),
+                    (   4, 2),
+                    (<NA>, 1)],
+                   names=['x', 'y'])
         >>> midx.dropna()
-        MultiIndex(levels=[0    1
-        1    4
-        dtype: int64, 0    1
-        1    2
-        2    5
-        dtype: int64],
-        codes=   x  y
-        0  0  0
-        1  0  2
-        2  1  1)
+        MultiIndex([(1, 1),
+                    (1, 5),
+                    (4, 2)],
+                   names=['x', 'y'])
         """
         return super().dropna(how=how)
 
@@ -451,6 +440,92 @@ class Index(Frame, Serializable):
             )
         else:
             return self
+
+    def factorize(self, na_sentinel=-1):
+        """
+        Encode the input values as integer labels
+
+        See Also
+        --------
+        cudf.core.series.Series.factorize : Encode the input values of Series.
+
+        """
+        return cudf.core.algorithms.factorize(self, na_sentinel=na_sentinel)
+
+    @property
+    def nlevels(self):
+        """
+        Number of levels.
+        """
+        return 1
+
+    def _set_names(self, names, inplace=False):
+        if inplace:
+            idx = self
+        else:
+            idx = self.copy(deep=False)
+
+        idx.names = names
+        if not inplace:
+            return idx
+
+    def set_names(self, names, level=None, inplace=False):
+        """
+        Set Index or MultiIndex name.
+        Able to set new names partially and by level.
+
+        Parameters
+        ----------
+        names : label or list of label
+            Name(s) to set.
+        level : int, label or list of int or label, optional
+            If the index is a MultiIndex, level(s) to set (None for all
+            levels). Otherwise level must be None.
+        inplace : bool, default False
+            Modifies the object directly, instead of creating a new Index or
+            MultiIndex.
+
+        Returns
+        -------
+        Index
+            The same type as the caller or None if inplace is True.
+
+        See Also
+        --------
+        cudf.core.index.Index.rename : Able to set new names without level.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> idx = cudf.Index([1, 2, 3, 4])
+        >>> idx
+        Int64Index([1, 2, 3, 4], dtype='int64')
+        >>> idx.set_names('quarter')
+        Int64Index([1, 2, 3, 4], dtype='int64', name='quarter')
+        >>> idx = cudf.MultiIndex.from_product([['python', 'cobra'],
+        ... [2018, 2019]])
+        >>> idx
+        MultiIndex([('python', 2018),
+                    ('python', 2019),
+                    ( 'cobra', 2018),
+                    ( 'cobra', 2019)],
+                   )
+        >>> idx.names
+        FrozenList([None, None])
+        >>> idx.set_names(['kind', 'year'], inplace=True)
+        >>> idx.names
+        FrozenList(['kind', 'year'])
+        >>> idx.set_names('species', level=0, inplace=True)
+        >>> idx.names
+        FrozenList(['species', 'year'])
+        """
+        if level is not None:
+            raise ValueError("Level must be None for non-MultiIndex")
+
+        if not is_list_like(names):
+            names = [names]
+
+        return self._set_names(names=names, inplace=inplace)
 
     def fillna(self, value, downcast=None):
         """
@@ -531,20 +606,12 @@ class Index(Frame, Serializable):
         ...      names=["x", "y"],
         ... )
         >>> index
-        MultiIndex(levels=[0     1
-        1     3
-        2     4
-        3   -10
-        dtype: int64, 0     1
-        1    11
-        2     5
-        dtype: int64],
-        codes=   x  y
-        0  0  0
-        1  0  2
-        2  1  1
-        3  2  1
-        4  3  0)
+        MultiIndex([(  1,  1),
+                    (  1,  5),
+                    (  3, 11),
+                    (  4, 11),
+                    (-10,  1)],
+                   names=['x', 'y'])
         >>> index.argsort()
         array([4, 0, 1, 2, 3], dtype=int32)
         >>> index.argsort(ascending=False)
@@ -632,7 +699,7 @@ class Index(Frame, Serializable):
 
         See Also
         --------
-        Index.max : Return the maximum value in an Index.
+        cudf.core.index.Index.max : Return the maximum value in an Index.
         cudf.core.series.Series.min : Return the minimum value in a Series.
         cudf.core.dataframe.DataFrame.min : Return the minimum values in
             a DataFrame.
@@ -657,7 +724,7 @@ class Index(Frame, Serializable):
 
         See Also
         --------
-        Index.min : Return the minimum value in an Index.
+        cudf.core.index.Index.min : Return the minimum value in an Index.
         cudf.core.series.Series.max : Return the maximum value in a Series.
         cudf.core.dataframe.DataFrame.max : Return the maximum values in
             a DataFrame.
@@ -889,50 +956,26 @@ class Index(Frame, Serializable):
         ...      names=["x", "y"],
         ... )
         >>> midx
-        MultiIndex(levels=[0     1
-        1     3
-        2     4
-        3   -10
-        dtype: int64, 0     1
-        1    11
-        2     5
-        dtype: int64],
-        codes=   x  y
-        0  0  0
-        1  0  2
-        2  1  1
-        3  2  1
-        4  3  0)
+        MultiIndex([(  1,  1),
+                    (  1,  5),
+                    (  3, 11),
+                    (  4, 11),
+                    (-10,  1)],
+                   names=['x', 'y'])
         >>> midx.sort_values()
-        MultiIndex(levels=[0     1
-        1     3
-        2     4
-        3   -10
-        dtype: int64, 0     1
-        1    11
-        2     5
-        dtype: int64],
-        codes=   x  y
-        4  3  0
-        0  0  0
-        1  0  2
-        2  1  1
-        3  2  1)
+        MultiIndex([(-10,  1),
+                    (  1,  1),
+                    (  1,  5),
+                    (  3, 11),
+                    (  4, 11)],
+                   names=['x', 'y'])
         >>> midx.sort_values(ascending=False)
-        MultiIndex(levels=[0     1
-        1     3
-        2     4
-        3   -10
-        dtype: int64, 0     1
-        1    11
-        2     5
-        dtype: int64],
-        codes=   x  y
-        3  2  1
-        2  1  1
-        1  0  2
-        0  0  0
-        4  3  0)
+        MultiIndex([(  4, 11),
+                    (  3, 11),
+                    (  1,  5),
+                    (  1,  1),
+                    (-10,  1)],
+                   names=['x', 'y'])
         """
         if key is not None:
             raise NotImplementedError("key parameter is not yet implemented.")
@@ -1047,16 +1090,18 @@ class Index(Frame, Serializable):
         >>> lhs = cudf.DataFrame(
         ...     {"a":[2, 3, 1], "b":[3, 4, 2]}).set_index(['a', 'b']
         ... ).index
+        >>> lhs
+        MultiIndex([(2, 3),
+                    (3, 4),
+                    (1, 2)],
+                   names=['a', 'b'])
         >>> rhs = cudf.DataFrame({"a":[1, 4, 3]}).set_index('a').index
+        >>> rhs
+        Int64Index([1, 4, 3], dtype='int64', name='a')
         >>> lhs.join(rhs, how='inner')
-        MultiIndex(levels=[0    1
-        1    3
-        dtype: int64, 0    2
-        1    4
-        dtype: int64],
-        codes=   a  b
-        0  1  1
-        1  0  0)
+        MultiIndex([(3, 4),
+                    (1, 2)],
+                   names=['a', 'b'])
         """
 
         if isinstance(self, cudf.MultiIndex) and isinstance(
@@ -1401,7 +1446,7 @@ class Index(Frame, Serializable):
         >>> data = [10, 20, 30, np.nan]
         >>> pdi = pd.Index(data)
         >>> cudf.core.index.Index.from_pandas(pdi)
-        Index(['10.0', '20.0', '30.0', 'null'], dtype='object')
+        Float64Index([10.0, 20.0, 30.0, <NA>], dtype='float64')
         >>> cudf.core.index.Index.from_pandas(pdi, nan_as_null=False)
         Float64Index([10.0, 20.0, 30.0, nan], dtype='float64')
         """
@@ -1448,7 +1493,11 @@ class Index(Frame, Serializable):
         else:
             return as_index(table)
 
-    _accessors = set()
+    _accessors = set()  # type: Set[Any]
+
+    @property
+    def _constructor_expanddim(self):
+        return cudf.MultiIndex
 
 
 class RangeIndex(Index):
@@ -1463,7 +1512,6 @@ class RangeIndex(Index):
     start : int (default: 0), or other range instance
     stop : int (default: 0)
     step : int (default: 1)
-        Not yet supported
     name : object, optional
         Name to be stored in the index.
     dtype : numpy dtype
@@ -1478,30 +1526,31 @@ class RangeIndex(Index):
     Examples
     --------
     >>> import cudf
-    >>> cudf.RangeIndex(0, 10, name="a")
-    RangeIndex(start=0, stop=10, name='a')
+    >>> cudf.RangeIndex(0, 10, 1, name="a")
+    RangeIndex(start=0, stop=10, step=1, name='a')
 
-    >>> cudf.RangeIndex(range(1, 10), name="a")
-    RangeIndex(start=1, stop=10, name='a')
+    >>> cudf.RangeIndex(range(1, 10, 1), name="a")
+    RangeIndex(start=1, stop=10, step=1, name='a')
     """
 
     def __new__(
-        cls, start, stop=None, step=None, dtype=None, copy=False, name=None
+        cls, start, stop=None, step=1, dtype=None, copy=False, name=None
     ) -> "RangeIndex":
 
-        if step is not None:
-            raise NotImplementedError("step is not yet supported")
+        if step == 0:
+            raise ValueError("Step must not be zero.")
 
         out = Frame.__new__(cls)
         if isinstance(start, range):
             therange = start
             start = therange.start
             stop = therange.stop
+            step = therange.step
         if stop is None:
             start, stop = 0, start
         out._start = int(start)
         out._stop = int(stop)
-        out._cached_values = None
+        out._step = int(step) if step is not None else 1
         out._index = None
         out._name = name
 
@@ -1533,6 +1582,13 @@ class RangeIndex(Index):
         return self._stop
 
     @property
+    def step(self):
+        """
+        The value of the step parameter.
+        """
+        return self._step
+
+    @property
     def _num_columns(self):
         return 1
 
@@ -1543,7 +1599,9 @@ class RangeIndex(Index):
     @cached_property
     def _values(self):
         if len(self) > 0:
-            return column.arange(self._start, self._stop, dtype=self.dtype)
+            return column.arange(
+                self._start, self._stop, self._step, dtype=self.dtype
+            )
         else:
             return column.column_empty(0, masked=False, dtype=self.dtype)
 
@@ -1560,10 +1618,7 @@ class RangeIndex(Index):
             return False
         if not item % 1 == 0:
             return False
-        if self._start <= item < self._stop:
-            return True
-        else:
-            return False
+        return item in range(self._start, self._stop, self._step)
 
     def copy(self, name=None, deep=False, dtype=None, names=None):
         """
@@ -1591,13 +1646,16 @@ class RangeIndex(Index):
 
         name = self.name if name is None else name
 
-        _idx_new = RangeIndex(start=self._start, stop=self._stop, name=name)
+        _idx_new = RangeIndex(
+            start=self._start, stop=self._stop, step=self._step, name=name
+        )
 
         return _idx_new
 
     def __repr__(self):
         return (
             f"{self.__class__.__name__}(start={self._start}, stop={self._stop}"
+            f", step={self._step}"
             + (
                 f", name={pd.io.formats.printing.default_pprint(self.name)}"
                 if self.name is not None
@@ -1607,25 +1665,20 @@ class RangeIndex(Index):
         )
 
     def __len__(self):
-        return max(0, self._stop - self._start)
+        return len(range(self._start, self._stop, self._step))
 
     def __getitem__(self, index):
         if isinstance(index, slice):
-            start, stop, step = index.indices(len(self))
-            sln = (stop - start) // step
-            sln = max(0, sln)
-            start += self._start
-            stop += self._start
-            if sln == 0:
-                return RangeIndex(0, stop=None, name=self.name)
-            elif step == 1:
-                return RangeIndex(start, stop=stop, name=self.name)
-            else:
-                return index_from_range(start, stop, step)
+            sl_start, sl_stop, sl_step = index.indices(len(self))
+
+            lo = self._start + sl_start * self._step
+            hi = self._start + sl_stop * self._step
+            st = self._step * sl_step
+            return RangeIndex(start=lo, stop=hi, step=st, name=self._name)
 
         elif isinstance(index, Number):
             index = utils.normalize_index(index, len(self))
-            index += self._start
+            index = self._start + index * self._step
             return index
         else:
             if is_scalar(index):
@@ -1639,7 +1692,11 @@ class RangeIndex(Index):
 
     def equals(self, other):
         if isinstance(other, RangeIndex):
-            if (self._start, self._stop) == (other._start, other._stop):
+            if (self._start, self._stop, self._step) == (
+                other._start,
+                other._stop,
+                other._step,
+            ):
                 return True
         return super().equals(other)
 
@@ -1653,6 +1710,7 @@ class RangeIndex(Index):
         # during de-serialization
         header["index_column"]["start"] = self._start
         header["index_column"]["stop"] = self._stop
+        header["index_column"]["step"] = self._step
         frames = []
 
         header["name"] = pickle.dumps(self.name)
@@ -1667,7 +1725,8 @@ class RangeIndex(Index):
         name = pickle.loads(header["name"])
         start = h["start"]
         stop = h["stop"]
-        return RangeIndex(start=start, stop=stop, name=name)
+        step = h.get("step", 1)
+        return RangeIndex(start=start, stop=stop, step=step, name=name)
 
     @property
     def dtype(self):
@@ -1679,17 +1738,27 @@ class RangeIndex(Index):
     @property
     def is_contiguous(self):
         """
-        Returns if the index is contiguous. `True` incase of RangeIndex.
+        Returns if the index is contiguous.
         """
-        return True
+        return self._step == 1
 
     @property
     def size(self):
-        return max(0, self._stop - self._start)
+        return self.__len__()
 
-    def find_label_range(self, first, last):
-        """Find range that starts with `first` and ends with `last`,
-        inclusively.
+    def find_label_range(self, first=None, last=None):
+        """Find subrange in the ``RangeIndex``, marked by their positions, that
+        starts greater or equal to ``first`` and ends less or equal to ``last``
+
+        The range returned is assumed to be monotonically increasing. In cases
+        where there is no such range that suffice the constraint, an exception
+        will be raised.
+
+        Parameters
+        ----------
+        first, last : int, optional, Default None
+            The "start" and "stop" values of the subrange. If None, will use
+            ``self._start`` as first, ``self._stop`` as last.
 
         Returns
         -------
@@ -1697,26 +1766,26 @@ class RangeIndex(Index):
             The starting index and the ending index.
             The `last` value occurs at ``end - 1`` position.
         """
-        # clip first to range
-        if first is None or first < self._start:
-            begin = self._start
-        elif first < self._stop:
-            begin = first
-        else:
-            begin = self._stop
-        # clip last to range
-        if last is None:
-            end = self._stop
-        elif last < self._start:
-            end = begin
-        elif last < self._stop:
-            end = last + 1
-        else:
-            end = self._stop
-        # shift to index
-        return begin - self._start, end - self._start
 
-    @copy_docstring(_to_frame)
+        first = self._start if first is None else first
+        last = self._stop if last is None else last
+
+        if self._step < 0:
+            first = -first
+            last = -last
+            start = -self._start
+            step = -self._step
+        else:
+            start = self._start
+            step = self._step
+
+        stop = start + len(self) * step
+        begin = search_range(start, stop, first, step, side="left")
+        end = search_range(start, stop, last, step, side="right")
+
+        return begin, end
+
+    @copy_docstring(_to_frame)  # type: ignore
     def to_frame(self, index=True, name=None):
         return _to_frame(self, index, name)
 
@@ -1739,6 +1808,7 @@ class RangeIndex(Index):
         return pd.RangeIndex(
             start=self._start,
             stop=self._stop,
+            step=self._step,
             dtype=self.dtype,
             name=self.name,
         )
@@ -1756,7 +1826,7 @@ class RangeIndex(Index):
         Return if the index is monotonic increasing
         (only equal or increasing) values.
         """
-        return self._start <= self._stop
+        return self._step > 0 or len(self) <= 1
 
     @property
     def is_monotonic_decreasing(self):
@@ -1764,18 +1834,41 @@ class RangeIndex(Index):
         Return if the index is monotonic decreasing
         (only equal or decreasing) values.
         """
-        return self._start >= self._stop
+        return self._step < 0 or len(self) <= 1
 
-    def get_slice_bound(self, label, side, kind):
-        if label < self._start:
-            return 0
-        elif label >= self._stop:
-            return len(self)
+    def get_slice_bound(self, label, side, kind=None):
+        """
+        Calculate slice bound that corresponds to given label.
+        Returns leftmost (one-past-the-rightmost if ``side=='right'``) position
+        of given label.
+
+        Parameters
+        ----------
+        label : int
+            A valid value in the ``RangeIndex``
+        side : {'left', 'right'}
+        kind : Unused
+            To keep consistency with other index types.
+
+        Returns
+        -------
+        int
+            Index of label.
+        """
+        if side not in {"left", "right"}:
+            raise ValueError(f"Unrecognized side parameter: {side}")
+
+        if self._step < 0:
+            label = -label
+            start = -self._start
+            step = -self._step
         else:
-            if side == "left":
-                return label - self._start
-            elif side == "right":
-                return (label - self._start) + 1
+            start = self._start
+            step = self._step
+
+        stop = start + len(self) * step
+        pos = search_range(start, stop, label, step, side=side)
+        return pos
 
     @property
     def __cuda_array_interface__(self):
@@ -1798,7 +1891,7 @@ class GenericIndex(Index):
     """An array of orderable values that represent the indices of another Column
 
     Attributes
-    ---
+    ----------
     _values: A Column object
     name: A string
     """
@@ -1947,7 +2040,7 @@ class GenericIndex(Index):
         else:
             return res
 
-    @copy_docstring(_to_frame)
+    @copy_docstring(_to_frame)  # type: ignore
     def to_frame(self, index=True, name=None):
         return _to_frame(self, index, name)
 
@@ -2497,18 +2590,12 @@ class CategoricalIndex(GenericIndex):
     >>> import pandas as pd
     >>> cudf.CategoricalIndex(
     ... data=[1, 2, 3, 4], categories=[1, 2], ordered=False, name="a")
-    CategoricalIndex(['1', '2', 'null', 'null'],
-            categories=['1', '2', 'null'],
-            ordered=False,
-            dtype='category')
+    CategoricalIndex([1, 2, <NA>, <NA>], categories=[1, 2], ordered=False, name='a', dtype='category', name='a')
 
     >>> cudf.CategoricalIndex(
     ... data=[1, 2, 3, 4], dtype=pd.CategoricalDtype([1, 2, 3]), name="a")
-    CategoricalIndex(['1', '2', '3', 'null'],
-            categories=['1', '2', '3', 'null'],
-            ordered=False,
-            dtype='category')
-    """
+    CategoricalIndex([1, 2, 3, <NA>], categories=[1, 2, 3], ordered=False, name='a', dtype='category', name='a')
+    """  # noqa: E501
 
     def __new__(
         cls,
@@ -2630,14 +2717,10 @@ class StringIndex(GenericIndex):
             + ")"
         )
 
-    @copy_docstring(StringMethods.__init__)
+    @copy_docstring(StringMethods.__init__)  # type: ignore
     @property
     def str(self):
         return StringMethods(column=self._values, parent=self)
-
-    @property
-    def _constructor_expanddim(self):
-        return cudf.MultiIndex
 
     def _clean_nulls_from_index(self):
         """
@@ -2650,7 +2733,7 @@ class StringIndex(GenericIndex):
             return self
 
 
-def as_index(arbitrary, **kwargs):
+def as_index(arbitrary, **kwargs) -> Index:
     """Create an Index from an arbitrary object
 
     Currently supported inputs are:
@@ -2702,8 +2785,7 @@ def as_index(arbitrary, **kwargs):
     elif isinstance(arbitrary, cudf.DataFrame):
         return cudf.MultiIndex(source_data=arbitrary)
     elif isinstance(arbitrary, range):
-        if arbitrary.step == 1:
-            return RangeIndex(arbitrary.start, arbitrary.stop, **kwargs)
+        return RangeIndex(arbitrary, **kwargs)
     return as_index(
         column.as_column(arbitrary, dtype=kwargs.get("dtype", None)), **kwargs
     )
@@ -2720,7 +2802,7 @@ _dtype_to_index = {
     np.uint64: UInt64Index,
     np.float32: Float32Index,
     np.float64: Float64Index,
-}
+}  # type: Dict[Any, Type[Index]]
 
 _index_to_dtype = {
     Int8Index: np.int8,

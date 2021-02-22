@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2020, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 
+#include <cudf/detail/iterator.cuh>
 #include <cudf/dictionary/encode.hpp>
 #include <cudf/replace.hpp>
 #include <cudf/scalar/scalar_factories.hpp>
@@ -584,6 +585,80 @@ TEST_F(ClampDictionaryTest, WithReplace)
   cudf::test::fixed_width_column_wrapper<int64_t> expected({2000, 2, 3, 3000, 0, 3000, 3, 2, 2000},
                                                            {1, 1, 1, 1, 0, 1, 1, 1, 1});
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, decoded->view());
+}
+
+template <typename T>
+struct FixedPointTest : public cudf::test::BaseFixture {
+};
+
+TYPED_TEST_CASE(FixedPointTest, cudf::test::FixedPointTypes);
+
+TYPED_TEST(FixedPointTest, ZeroScale)
+{
+  using namespace numeric;
+  using decimalXX  = TypeParam;
+  using RepType    = cudf::device_storage_type_t<decimalXX>;
+  using fp_wrapper = cudf::test::fixed_point_column_wrapper<RepType>;
+
+  auto const scale    = scale_type{0};
+  auto const lo       = cudf::make_fixed_point_scalar<decimalXX>(2, scale);
+  auto const hi       = cudf::make_fixed_point_scalar<decimalXX>(8, scale);
+  auto const input    = fp_wrapper{{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10}, scale};
+  auto const expected = fp_wrapper{{2, 2, 2, 3, 4, 5, 6, 7, 8, 8, 8}, scale};
+  auto const result   = cudf::clamp(input, *lo, *hi);
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
+}
+
+TYPED_TEST(FixedPointTest, LargeTest)
+{
+  using namespace numeric;
+  using decimalXX  = TypeParam;
+  using RepType    = cudf::device_storage_type_t<decimalXX>;
+  using fp_wrapper = cudf::test::fixed_point_column_wrapper<RepType>;
+
+  auto const scale = scale_type{-3};
+  auto const lo    = cudf::make_fixed_point_scalar<decimalXX>(1000, scale);
+  auto const hi    = cudf::make_fixed_point_scalar<decimalXX>(2000, scale);
+
+  auto begin          = thrust::make_counting_iterator(-1000);
+  auto clamp          = [](int e) { return e < 1000 ? 1000 : e > 2000 ? 2000 : e; };
+  auto begin2         = cudf::detail::make_counting_transform_iterator(-1000, clamp);
+  auto const input    = fp_wrapper{begin, begin + 5000, scale};
+  auto const expected = fp_wrapper{begin2, begin2 + 5000, scale};
+  auto const result   = cudf::clamp(input, *lo, *hi);
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
+}
+
+TYPED_TEST(FixedPointTest, MismatchedScalarScales)
+{
+  using namespace numeric;
+  using decimalXX  = TypeParam;
+  using RepType    = cudf::device_storage_type_t<decimalXX>;
+  using fp_wrapper = cudf::test::fixed_point_column_wrapper<RepType>;
+
+  auto const scale = scale_type{0};
+  auto const lo    = cudf::make_fixed_point_scalar<decimalXX>(2, scale_type{-1});
+  auto const hi    = cudf::make_fixed_point_scalar<decimalXX>(8, scale);
+  auto const input = fp_wrapper{{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10}, scale};
+
+  EXPECT_THROW(cudf::clamp(input, *lo, *hi), cudf::logic_error);
+}
+
+TYPED_TEST(FixedPointTest, MismatchedColumnScalarScale)
+{
+  using namespace numeric;
+  using decimalXX  = TypeParam;
+  using RepType    = cudf::device_storage_type_t<decimalXX>;
+  using fp_wrapper = cudf::test::fixed_point_column_wrapper<RepType>;
+
+  auto const scale = scale_type{0};
+  auto const lo    = cudf::make_fixed_point_scalar<decimalXX>(2, scale);
+  auto const hi    = cudf::make_fixed_point_scalar<decimalXX>(8, scale);
+  auto const input = fp_wrapper{{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10}, scale_type{-4}};
+
+  EXPECT_THROW(cudf::clamp(input, *lo, *hi), cudf::logic_error);
 }
 
 CUDF_TEST_PROGRAM_MAIN()

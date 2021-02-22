@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2020, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -13,7 +13,10 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
+#include <cudf/detail/iterator.cuh>
 #include <cudf/hashing.hpp>
+
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_utilities.hpp>
 #include <cudf_test/column_wrapper.hpp>
@@ -109,6 +112,18 @@ TEST_F(HashTest, MultiValueNulls)
 
   EXPECT_EQ(input1.num_rows(), output1->size());
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(output1->view(), output2->view());
+
+  auto const serial_output1 = cudf::hash(input1, cudf::hash_id::HASH_SERIAL_MURMUR3, {}, 0);
+  auto const serial_output2 = cudf::hash(input2, cudf::hash_id::HASH_SERIAL_MURMUR3);
+
+  EXPECT_EQ(input1.num_rows(), serial_output1->size());
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(serial_output1->view(), serial_output2->view());
+
+  auto const spark_output1 = cudf::hash(input1, cudf::hash_id::HASH_SPARK_MURMUR3, {}, 0);
+  auto const spark_output2 = cudf::hash(input2, cudf::hash_id::HASH_SPARK_MURMUR3);
+
+  EXPECT_EQ(input1.num_rows(), spark_output1->size());
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(spark_output1->view(), spark_output2->view());
 }
 
 template <typename T>
@@ -128,6 +143,18 @@ TYPED_TEST(HashTestTyped, Equality)
 
   EXPECT_EQ(input.num_rows(), output1->size());
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(output1->view(), output2->view());
+
+  auto const serial_output1 = cudf::hash(input, cudf::hash_id::HASH_SERIAL_MURMUR3, {}, 0);
+  auto const serial_output2 = cudf::hash(input, cudf::hash_id::HASH_SERIAL_MURMUR3);
+
+  EXPECT_EQ(input.num_rows(), serial_output1->size());
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(serial_output1->view(), serial_output2->view());
+
+  auto const spark_output1 = cudf::hash(input, cudf::hash_id::HASH_SPARK_MURMUR3, {}, 0);
+  auto const spark_output2 = cudf::hash(input, cudf::hash_id::HASH_SPARK_MURMUR3);
+
+  EXPECT_EQ(input.num_rows(), spark_output1->size());
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(spark_output1->view(), spark_output2->view());
 }
 
 TYPED_TEST(HashTestTyped, EqualityNulls)
@@ -146,6 +173,18 @@ TYPED_TEST(HashTestTyped, EqualityNulls)
 
   EXPECT_EQ(input1.num_rows(), output1->size());
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(output1->view(), output2->view());
+
+  auto const serial_output1 = cudf::hash(input1, cudf::hash_id::HASH_SERIAL_MURMUR3, {}, 0);
+  auto const serial_output2 = cudf::hash(input2, cudf::hash_id::HASH_SERIAL_MURMUR3);
+
+  EXPECT_EQ(input1.num_rows(), serial_output1->size());
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(serial_output1->view(), serial_output2->view());
+
+  auto const spark_output1 = cudf::hash(input1, cudf::hash_id::HASH_SPARK_MURMUR3, {}, 0);
+  auto const spark_output2 = cudf::hash(input2, cudf::hash_id::HASH_SPARK_MURMUR3);
+
+  EXPECT_EQ(input1.num_rows(), spark_output1->size());
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(spark_output1->view(), spark_output2->view());
 }
 
 template <typename T>
@@ -173,6 +212,92 @@ TYPED_TEST(HashTestFloatTyped, TestExtremes)
   auto const output2 = cudf::hash(input2);
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(output1->view(), output2->view(), true);
+
+  auto const serial_output1 = cudf::hash(input1, cudf::hash_id::HASH_SERIAL_MURMUR3, {}, 0);
+  auto const serial_output2 = cudf::hash(input2, cudf::hash_id::HASH_SERIAL_MURMUR3);
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(serial_output1->view(), serial_output2->view());
+
+  auto const spark_output1 = cudf::hash(input1, cudf::hash_id::HASH_SPARK_MURMUR3, {}, 0);
+  auto const spark_output2 = cudf::hash(input2, cudf::hash_id::HASH_SPARK_MURMUR3);
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(spark_output1->view(), spark_output2->view());
+}
+
+class SerialMurmurHash3Test : public cudf::test::BaseFixture {
+};
+
+TEST_F(SerialMurmurHash3Test, MultiValueWithSeeds)
+{
+  fixed_width_column_wrapper<int32_t> const strings_col_result(
+    {1467149710, -680899318, -1620282500, 91106683, -1564993834});
+  fixed_width_column_wrapper<int32_t> const ints_col_result(
+    {933211791, 751823303, -1080202046, 723455942, 133916647});
+
+  strings_column_wrapper const strings_col({"",
+                                            "The quick brown fox",
+                                            "jumps over the lazy dog.",
+                                            "All work and no play makes Jack a dull boy",
+                                            "!\"#$%&\'()*+,-./]:;<=>?@[\\]^_`{|}~\ud720\ud721"});
+
+  using limits = std::numeric_limits<int32_t>;
+  fixed_width_column_wrapper<int32_t> const ints_col({0, 100, -100, limits::min(), limits::max()});
+
+  fixed_width_column_wrapper<bool> const bools_col1({0, 1, 1, 1, 0});
+  fixed_width_column_wrapper<bool> const bools_col2({0, 1, 2, 255, 0});
+
+  auto const input1 = cudf::table_view({strings_col});
+  auto const input2 = cudf::table_view({ints_col});
+  auto const input3 = cudf::table_view({strings_col, ints_col, bools_col1});
+  auto const input4 = cudf::table_view({strings_col, ints_col, bools_col2});
+
+  auto const hashed_output1 = cudf::hash(input1, cudf::hash_id::HASH_SERIAL_MURMUR3, {}, 314);
+  auto const hashed_output2 = cudf::hash(input2, cudf::hash_id::HASH_SERIAL_MURMUR3, {}, 42);
+  auto const hashed_output3 = cudf::hash(input3, cudf::hash_id::HASH_SERIAL_MURMUR3, {});
+  auto const hashed_output4 = cudf::hash(input4, cudf::hash_id::HASH_SERIAL_MURMUR3, {});
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(hashed_output1->view(), strings_col_result, true);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(hashed_output2->view(), ints_col_result, true);
+  EXPECT_EQ(input3.num_rows(), hashed_output3->size());
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(hashed_output3->view(), hashed_output4->view(), true);
+}
+
+class SparkMurmurHash3Test : public cudf::test::BaseFixture {
+};
+
+TEST_F(SparkMurmurHash3Test, MultiValueWithSeeds)
+{
+  fixed_width_column_wrapper<int32_t> const strings_col_result(
+    {1467149710, 723257560, -1620282500, -2001858707, 1588473657});
+  fixed_width_column_wrapper<int32_t> const ints_col_result(
+    {933211791, 751823303, -1080202046, 723455942, 133916647});
+
+  strings_column_wrapper const strings_col({"",
+                                            "The quick brown fox",
+                                            "jumps over the lazy dog.",
+                                            "All work and no play makes Jack a dull boy",
+                                            "!\"#$%&\'()*+,-./:;<=>?@[\\]^_`{|}~\ud720\ud721"});
+
+  using limits = std::numeric_limits<int32_t>;
+  fixed_width_column_wrapper<int32_t> const ints_col({0, 100, -100, limits::min(), limits::max()});
+
+  fixed_width_column_wrapper<bool> const bools_col1({0, 1, 1, 1, 0});
+  fixed_width_column_wrapper<bool> const bools_col2({0, 1, 2, 255, 0});
+
+  auto const input1 = cudf::table_view({strings_col});
+  auto const input2 = cudf::table_view({ints_col});
+  auto const input3 = cudf::table_view({strings_col, ints_col, bools_col1});
+  auto const input4 = cudf::table_view({strings_col, ints_col, bools_col2});
+
+  auto const hashed_output1 = cudf::hash(input1, cudf::hash_id::HASH_SPARK_MURMUR3, {}, 314);
+  auto const hashed_output2 = cudf::hash(input2, cudf::hash_id::HASH_SPARK_MURMUR3, {}, 42);
+  auto const hashed_output3 = cudf::hash(input3, cudf::hash_id::HASH_SPARK_MURMUR3, {});
+  auto const hashed_output4 = cudf::hash(input4, cudf::hash_id::HASH_SPARK_MURMUR3, {});
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(hashed_output1->view(), strings_col_result, true);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(hashed_output2->view(), ints_col_result, true);
+  EXPECT_EQ(input3.num_rows(), hashed_output3->size());
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(hashed_output3->view(), hashed_output4->view(), true);
 }
 
 class MD5HashTest : public cudf::test::BaseFixture {
@@ -267,7 +392,7 @@ TEST_F(MD5HashTest, MultiValueNulls)
 
 TEST_F(MD5HashTest, StringListsNulls)
 {
-  auto validity = make_counting_transform_iterator(0, [](auto i) { return i != 0; });
+  auto validity = cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i != 0; });
 
   strings_column_wrapper const strings_col(
     {"",
@@ -342,7 +467,7 @@ TEST_F(MD5HashTest, TestBoolListsWithNulls)
   fixed_width_column_wrapper<bool> const col3({0, 255, 255, 64, 49, 42, 5, 6, 102},
                                               {1, 0, 0, 1, 1, 0, 0, 0, 1});
 
-  auto validity = make_counting_transform_iterator(0, [](auto i) { return i != 1; });
+  auto validity = cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i != 1; });
   lists_column_wrapper<bool> const list_col(
     {{0, 0, 0}, {1}, {}, {{1, 1, 1}, validity}, {1, 1}, {1, 1}, {1}, {1}, {1}}, validity);
 
@@ -374,7 +499,7 @@ TYPED_TEST(MD5HashListTestTyped, TestListsWithNulls)
   fixed_width_column_wrapper<T> const col3({0, 255, 255, 64, 49, 42, 5, 6, 102},
                                            {1, 0, 0, 1, 1, 0, 0, 0, 1});
 
-  auto validity = make_counting_transform_iterator(0, [](auto i) { return i != 1; });
+  auto validity = cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i != 1; });
   lists_column_wrapper<T> const list_col(
     {{0, 0, 0}, {127}, {}, {{32, 127, 64}, validity}, {27, 49}, {18, 68}, {100}, {101}, {102}},
     validity);

@@ -30,6 +30,7 @@ from cudf.tests.utils import (
     assert_eq,
     assert_exceptions_equal,
 )
+from cudf.utils.utils import search_range
 
 
 def test_df_set_index_from_series():
@@ -70,7 +71,7 @@ def test_df_slice_empty_index():
         df.index[1]
 
 
-def test_index_find_label_range():
+def test_index_find_label_range_genericindex():
     # Monotonic Index
     idx = Int64Index(np.asarray([4, 5, 6, 10]))
     assert idx.find_label_range(4, 6) == (0, 3)
@@ -90,6 +91,26 @@ def test_index_find_label_range():
     with pytest.raises(ValueError) as raises:
         idx_nm.find_label_range(4, 11)
     raises.match("value not found")
+
+
+def test_index_find_label_range_rangeindex():
+    """Cudf specific
+    """
+    # step > 0
+    # 3, 8, 13, 18
+    ridx = RangeIndex(3, 20, 5)
+    assert ridx.find_label_range(3, 8) == (0, 2)
+    assert ridx.find_label_range(0, 7) == (0, 1)
+    assert ridx.find_label_range(3, 19) == (0, 4)
+    assert ridx.find_label_range(2, 21) == (0, 4)
+
+    # step < 0
+    # 20, 15, 10, 5
+    ridx = RangeIndex(20, 3, -5)
+    assert ridx.find_label_range(15, 10) == (1, 3)
+    assert ridx.find_label_range(10, 0) == (2, 4)
+    assert ridx.find_label_range(30, 13) == (0, 2)
+    assert ridx.find_label_range(30, 0) == (0, 4)
 
 
 def test_index_comparision():
@@ -480,11 +501,13 @@ def test_index_names():
         range(0, 5),
         range(1, 10),
         range(1, 10, 1),
+        range(1, 10, 3),
+        range(10, 1, -3),
         range(-5, 10),
     ],
 )
 def test_range_index_from_range(data):
-    assert_eq(pd.Index(data), cudf.core.index.as_index(data))
+    assert_eq(pd.Index(data), cudf.Index(data))
 
 
 @pytest.mark.parametrize(
@@ -1666,3 +1689,111 @@ def test_index_equals_categories():
     expect = lhs.to_pandas().equals(rhs.to_pandas())
 
     assert_eq(expect, got)
+
+
+def test_index_rangeindex_search_range():
+    # step > 0
+    ridx = RangeIndex(-13, 17, 4)
+    stop = ridx._start + ridx._step * len(ridx)
+    for i in range(len(ridx)):
+        assert i == search_range(
+            ridx._start, stop, ridx[i], ridx._step, side="left"
+        )
+        assert i + 1 == search_range(
+            ridx._start, stop, ridx[i], ridx._step, side="right"
+        )
+
+
+@pytest.mark.parametrize(
+    "rge", [(1, 10, 1), (1, 10, 3), (10, -17, -1), (10, -17, -3)],
+)
+def test_index_rangeindex_get_item_basic(rge):
+    pridx = pd.RangeIndex(*rge)
+    gridx = cudf.RangeIndex(*rge)
+
+    for i in range(-len(pridx), len(pridx)):
+        assert pridx[i] == gridx[i]
+
+
+@pytest.mark.parametrize(
+    "rge", [(1, 10, 3), (10, 1, -3)],
+)
+def test_index_rangeindex_get_item_out_of_bounds(rge):
+    gridx = cudf.RangeIndex(*rge)
+    with pytest.raises(IndexError):
+        _ = gridx[4]
+
+
+@pytest.mark.parametrize(
+    "rge", [(10, 1, 1), (-17, 10, -3)],
+)
+def test_index_rangeindex_get_item_null_range(rge):
+    gridx = cudf.RangeIndex(*rge)
+
+    with pytest.raises(IndexError):
+        gridx[0]
+
+
+@pytest.mark.parametrize(
+    "rge", [(-17, 21, 2), (21, -17, -3), (0, 0, 1), (0, 1, -3), (10, 0, 5)]
+)
+@pytest.mark.parametrize(
+    "sl",
+    [
+        slice(1, 7, 1),
+        slice(1, 7, 2),
+        slice(-1, 7, 1),
+        slice(-1, 7, 2),
+        slice(-3, 7, 2),
+        slice(7, 1, -2),
+        slice(7, -3, -2),
+        slice(None, None, 1),
+        slice(0, None, 2),
+        slice(0, None, 3),
+        slice(0, 0, 3),
+    ],
+)
+def test_index_rangeindex_get_item_slices(rge, sl):
+    pridx = pd.RangeIndex(*rge)
+    gridx = cudf.RangeIndex(*rge)
+
+    assert_eq(pridx[sl], gridx[sl])
+
+
+@pytest.mark.parametrize(
+    "idx",
+    [
+        pd.Index([1, 2, 3]),
+        pd.Index(["abc", "def", "ghi"]),
+        pd.RangeIndex(0, 10, 1),
+        pd.Index([0.324, 0.234, 1.3], name="abc"),
+    ],
+)
+@pytest.mark.parametrize("names", [None, "a", "new name", ["another name"]])
+@pytest.mark.parametrize("inplace", [True, False])
+def test_index_set_names(idx, names, inplace):
+    pi = idx.copy()
+    gi = cudf.from_pandas(idx)
+
+    expected = pi.set_names(names=names, inplace=inplace)
+    actual = gi.set_names(names=names, inplace=inplace)
+
+    if inplace:
+        expected, actual = pi, gi
+
+    assert_eq(expected, actual)
+
+
+@pytest.mark.parametrize("idx", [pd.Index([1, 2, 3], name="abc")])
+@pytest.mark.parametrize("level", [1, [0], "abc"])
+@pytest.mark.parametrize("names", [None, "a"])
+def test_index_set_names_error(idx, level, names):
+    pi = idx.copy()
+    gi = cudf.from_pandas(idx)
+
+    assert_exceptions_equal(
+        lfunc=pi.set_names,
+        rfunc=gi.set_names,
+        lfunc_args_and_kwargs=([], {"names": names, "level": level}),
+        rfunc_args_and_kwargs=([], {"names": names, "level": level}),
+    )

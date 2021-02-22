@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2020, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,6 +18,8 @@
 #include <cudf/table/table.hpp>
 #include <cudf/table/table_view.hpp>
 #include <cudf/utilities/error.hpp>
+
+#include <rmm/cuda_stream_view.hpp>
 
 namespace cudf {
 
@@ -46,7 +48,7 @@ table::table(std::vector<std::unique_ptr<column>>&& columns) : _columns{std::mov
 }
 
 // Copy the contents of a `table_view`
-table::table(table_view view, cudaStream_t stream, rmm::mr::device_memory_resource* mr)
+table::table(table_view view, rmm::cuda_stream_view stream, rmm::mr::device_memory_resource* mr)
   : _num_rows{view.num_rows()}
 {
   CUDF_FUNC_RANGE();

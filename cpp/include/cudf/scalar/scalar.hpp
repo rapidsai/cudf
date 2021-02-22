@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -21,7 +21,7 @@
 
 #include <cudf/fixed_point/fixed_point.hpp>
 
-#include <rmm/thrust_rmm_allocator.h>
+#include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_buffer.hpp>
 #include <rmm/device_scalar.hpp>
 
@@ -67,7 +67,10 @@ class scalar {
    * @param is_valid true: set the value to valid. false: set it to null
    * @param stream CUDA stream used for device memory operations.
    */
-  void set_valid(bool is_valid, cudaStream_t stream = 0) { _is_valid.set_value(is_valid, stream); }
+  void set_valid(bool is_valid, rmm::cuda_stream_view stream = rmm::cuda_stream_default)
+  {
+    _is_valid.set_value(is_valid, stream);
+  }
 
   /**
    * @brief Indicates whether the scalar contains a valid value
@@ -78,7 +81,10 @@ class scalar {
    * @return true Value is valid
    * @return false Value is invalid/null
    */
-  bool is_valid(cudaStream_t stream = 0) const { return _is_valid.value(stream); }
+  bool is_valid(rmm::cuda_stream_view stream = rmm::cuda_stream_default) const
+  {
+    return _is_valid.value(stream);
+  }
 
   /**
    * @brief Returns a raw pointer to the validity bool in device memory
@@ -109,7 +115,7 @@ class scalar {
    */
   scalar(data_type type,
          bool is_valid                       = false,
-         cudaStream_t stream                 = 0,
+         rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
          rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
     : _type(type), _is_valid(is_valid, stream, mr)
   {
@@ -136,7 +142,7 @@ class fixed_width_scalar : public scalar {
    * @param value New value of scalar
    * @param stream CUDA stream used for device memory operations.
    */
-  void set_value(T value, cudaStream_t stream = 0)
+  void set_value(T value, rmm::cuda_stream_view stream = rmm::cuda_stream_default)
   {
     _data.set_value(value, stream);
     this->set_valid(true, stream);
@@ -152,7 +158,10 @@ class fixed_width_scalar : public scalar {
    *
    * @param stream CUDA stream used for device memory operations.
    */
-  T value(cudaStream_t stream = 0) const { return _data.value(stream); }
+  T value(rmm::cuda_stream_view stream = rmm::cuda_stream_default) const
+  {
+    return _data.value(stream);
+  }
 
   /**
    * @brief Returns a raw pointer to the value in device memory
@@ -179,7 +188,7 @@ class fixed_width_scalar : public scalar {
    */
   fixed_width_scalar(T value,
                      bool is_valid                       = true,
-                     cudaStream_t stream                 = 0,
+                     rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
                      rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
     : scalar(data_type(type_to_id<T>()), is_valid, stream, mr), _data(value, stream, mr)
   {
@@ -195,7 +204,7 @@ class fixed_width_scalar : public scalar {
    */
   fixed_width_scalar(rmm::device_scalar<T>&& data,
                      bool is_valid                       = true,
-                     cudaStream_t stream                 = 0,
+                     rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
                      rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
     : scalar(data_type(type_to_id<T>()), is_valid, stream, mr),
       _data{std::forward<rmm::device_scalar<T>>(data)}
@@ -232,7 +241,7 @@ class numeric_scalar : public detail::fixed_width_scalar<T> {
    */
   numeric_scalar(T value,
                  bool is_valid                       = true,
-                 cudaStream_t stream                 = 0,
+                 rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
                  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
     : detail::fixed_width_scalar<T>(value, is_valid, stream, mr)
   {
@@ -248,7 +257,7 @@ class numeric_scalar : public detail::fixed_width_scalar<T> {
    */
   numeric_scalar(rmm::device_scalar<T>&& data,
                  bool is_valid                       = true,
-                 cudaStream_t stream                 = 0,
+                 rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
                  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
     : detail::fixed_width_scalar<T>(std::forward<rmm::device_scalar<T>>(data), is_valid, stream, mr)
   {
@@ -286,7 +295,7 @@ class fixed_point_scalar : public scalar {
   fixed_point_scalar(rep_type value,
                      numeric::scale_type scale,
                      bool is_valid                       = true,
-                     cudaStream_t stream                 = 0,
+                     rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
                      rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
     : scalar{data_type{type_to_id<T>(), static_cast<int32_t>(scale)}, is_valid, stream, mr},
       _data{value}
@@ -303,7 +312,7 @@ class fixed_point_scalar : public scalar {
    */
   fixed_point_scalar(rep_type value,
                      bool is_valid                       = true,
-                     cudaStream_t stream                 = 0,
+                     rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
                      rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
     : scalar{data_type{type_to_id<T>(), 0}, is_valid, stream, mr}, _data{value}
   {
@@ -319,28 +328,27 @@ class fixed_point_scalar : public scalar {
    */
   fixed_point_scalar(T value,
                      bool is_valid                       = true,
-                     cudaStream_t stream                 = 0,
+                     rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
                      rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
-    : scalar{data_type{type_to_id<T>(), 0}, is_valid, stream, mr},
-      _data{numeric::scaled_integer<rep_type>{value}.value}
+    : scalar{data_type{type_to_id<T>(), value.scale()}, is_valid, stream, mr}, _data{value.value()}
   {
-    CUDF_EXPECTS(value == (T{_data.value(), numeric::scale_type{0}}),
-                 "scale of fixed_point value should be zero");
   }
 
   /**
    * @brief Construct a new fixed_point scalar object from existing device memory.
    *
-   * @param[in] data The scalar's data in device memory
-   * @param[in] is_valid Whether the value held by the scalar is valid
-   * @param[in] stream CUDA stream used for device memory operations.
-   * @param[in] mr Device memory resource to use for device memory allocation
+   * @param[in] data      The scalar's data in device memory
+   * @param[in] scale     The scale of the fixed_point scalar
+   * @param[in] is_valid  Whether the value held by the scalar is valid
+   * @param[in] stream    CUDA stream used for device memory operations.
+   * @param[in] mr        Device memory resource to use for device memory allocation
    */
   fixed_point_scalar(rmm::device_scalar<rep_type>&& data,
+                     numeric::scale_type scale,
                      bool is_valid                       = true,
-                     cudaStream_t stream                 = 0,
+                     rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
                      rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
-    : scalar{data_type{type_to_id<T>()}, is_valid, stream, mr},  // note that scale is ignored here
+    : scalar{data_type{type_to_id<T>(), scale}, is_valid, stream, mr},
       _data{std::forward<rmm::device_scalar<rep_type>>(data)}
   {
   }
@@ -350,7 +358,21 @@ class fixed_point_scalar : public scalar {
    *
    * @param stream CUDA stream used for device memory operations.
    */
-  rep_type value(cudaStream_t stream = 0) const { return _data.value(stream); }
+  rep_type value(rmm::cuda_stream_view stream = rmm::cuda_stream_default) const
+  {
+    return _data.value(stream);
+  }
+
+  /**
+   * @brief Get the decimal32 or decimal64
+   *
+   * @param stream CUDA stream used for device memory operations.
+   */
+  T fixed_point_value(rmm::cuda_stream_view stream = rmm::cuda_stream_default) const
+  {
+    using namespace numeric;
+    return T{scaled_integer<rep_type>{_data.value(stream), scale_type{type().scale()}}};
+  }
 
   /**
    * @brief Returns a raw pointer to the value in device memory
@@ -390,7 +412,7 @@ class string_scalar : public scalar {
    */
   string_scalar(std::string const& string,
                 bool is_valid                       = true,
-                cudaStream_t stream                 = 0,
+                rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
                 rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
     : scalar(data_type(type_id::STRING), is_valid), _data(string.data(), string.size(), stream, mr)
   {
@@ -407,12 +429,8 @@ class string_scalar : public scalar {
    */
   string_scalar(value_type const& source,
                 bool is_valid                       = true,
-                cudaStream_t stream                 = 0,
-                rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
-    : scalar(data_type(type_id::STRING), is_valid),
-      _data(source.data(), source.size_bytes(), stream, mr)
-  {
-  }
+                rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
+                rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
   /**
    * @brief Construct a new string scalar object from string_view in device memory
@@ -425,11 +443,8 @@ class string_scalar : public scalar {
    */
   string_scalar(rmm::device_scalar<value_type>& data,
                 bool is_valid                       = true,
-                cudaStream_t stream                 = 0,
-                rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
-    : string_scalar(data.value(stream), is_valid, stream, mr)
-  {
-  }
+                rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
+                rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
   /**
    * @brief Implicit conversion operator to get the value of the scalar in a host std::string
@@ -441,14 +456,14 @@ class string_scalar : public scalar {
    *
    * @param stream CUDA stream used for device memory operations.
    */
-  std::string to_string(cudaStream_t stream = 0) const;
+  std::string to_string(rmm::cuda_stream_view stream = rmm::cuda_stream_default) const;
 
   /**
    * @brief Get the value of the scalar as a string_view
    *
    * @param stream CUDA stream used for device memory operations.
    */
-  value_type value(cudaStream_t stream = 0) const { return value_type{data(), size()}; }
+  value_type value(rmm::cuda_stream_view stream = rmm::cuda_stream_default) const;
 
   /**
    * @brief Returns the size of the string in bytes
@@ -492,7 +507,7 @@ class chrono_scalar : public detail::fixed_width_scalar<T> {
    */
   chrono_scalar(T value,
                 bool is_valid                       = true,
-                cudaStream_t stream                 = 0,
+                rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
                 rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
     : detail::fixed_width_scalar<T>(value, is_valid, stream, mr)
   {
@@ -508,7 +523,7 @@ class chrono_scalar : public detail::fixed_width_scalar<T> {
    */
   chrono_scalar(rmm::device_scalar<T>&& data,
                 bool is_valid                       = true,
-                cudaStream_t stream                 = 0,
+                rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
                 rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
     : detail::fixed_width_scalar<T>(std::forward<rmm::device_scalar<T>>(data), is_valid, stream, mr)
   {
@@ -535,7 +550,7 @@ struct timestamp_scalar : chrono_scalar<T> {
   template <typename Duration2>
   timestamp_scalar(Duration2 const& value,
                    bool is_valid,
-                   cudaStream_t stream                 = 0,
+                   rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
                    rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
     : chrono_scalar<T>(T{typename T::duration{value}}, is_valid, stream, mr)
   {
@@ -564,7 +579,7 @@ struct duration_scalar : chrono_scalar<T> {
    */
   duration_scalar(typename T::rep value,
                   bool is_valid,
-                  cudaStream_t stream                 = 0,
+                  rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
                   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
     : chrono_scalar<T>(T{value}, is_valid, stream, mr)
   {

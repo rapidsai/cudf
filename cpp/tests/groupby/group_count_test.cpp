@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -145,7 +145,6 @@ TYPED_TEST(groupby_count_test, null_keys_and_values)
 
 }
 
-
 struct groupby_count_string_test : public cudf::test::BaseFixture {};
 
 TEST_F(groupby_count_string_test, basic)
@@ -167,6 +166,61 @@ TEST_F(groupby_count_string_test, basic)
     test_single_agg(keys, vals, expect_keys, expect_vals, std::move(agg1), force_use_sort_impl::YES);
 }
 // clang-format on
+
+template <typename T>
+struct FixedPointTestBothReps : public cudf::test::BaseFixture {
+};
+
+TYPED_TEST_CASE(FixedPointTestBothReps, cudf::test::FixedPointTypes);
+
+TYPED_TEST(FixedPointTestBothReps, GroupByCount)
+{
+  using namespace numeric;
+  using decimalXX  = TypeParam;
+  using RepType    = cudf::device_storage_type_t<decimalXX>;
+  using fp_wrapper = cudf::test::fixed_point_column_wrapper<RepType>;
+
+  using K = int32_t;
+  using V = decimalXX;
+  using R = cudf::detail::target_type_t<V, aggregation::COUNT_VALID>;
+
+  auto const scale = scale_type{-1};
+  auto const keys  = fixed_width_column_wrapper<K>{1, 2, 3, 1, 2, 2, 1, 3, 3, 2};
+  auto const vals  = fp_wrapper{{0, 1, 2, 3, 4, 5, 6, 7, 8, 9}, scale};
+
+  auto const expect_keys = fixed_width_column_wrapper<K>{1, 2, 3};
+  auto const expect_vals = fixed_width_column_wrapper<R, int>{3, 4, 3};
+
+  auto agg = cudf::make_count_aggregation();
+  test_single_agg(keys, vals, expect_keys, expect_vals, std::move(agg));
+
+  auto agg1 = cudf::make_count_aggregation();
+  test_single_agg(keys, vals, expect_keys, expect_vals, std::move(agg1), force_use_sort_impl::YES);
+
+  auto agg2 = cudf::make_count_aggregation(null_policy::INCLUDE);
+  test_single_agg(keys, vals, expect_keys, expect_vals, std::move(agg2));
+}
+
+struct groupby_dictionary_count_test : public cudf::test::BaseFixture {
+};
+
+TEST_F(groupby_dictionary_count_test, basic)
+{
+  using K = int32_t;
+  using V = std::string;
+  using R = cudf::detail::target_type_t<V, aggregation::COUNT_VALID>;
+
+  // clang-format off
+  strings_column_wrapper       keys{"1", "3", "3", "5", "5", "0"};
+  dictionary_column_wrapper<K> vals{ 1,   1,   1,   1,   1,   1};
+  strings_column_wrapper             expect_keys{"0", "1", "3", "5"};
+  fixed_width_column_wrapper<R, int> expect_vals{ 1,   1,   2,   2};
+  // clang-format on
+
+  test_single_agg(keys, vals, expect_keys, expect_vals, cudf::make_count_aggregation());
+  test_single_agg(
+    keys, vals, expect_keys, expect_vals, cudf::make_count_aggregation(), force_use_sort_impl::YES);
+}
 
 }  // namespace test
 }  // namespace cudf

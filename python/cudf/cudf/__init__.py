@@ -1,4 +1,4 @@
-# Copyright (c) 2018-2020, NVIDIA CORPORATION.
+# Copyright (c) 2018-2021, NVIDIA CORPORATION.
 from cudf.utils.gpu_utils import validate_setup  # isort:skip
 
 validate_setup()
@@ -10,7 +10,13 @@ import rmm
 
 from cudf import core, datasets, testing
 from cudf._version import get_versions
+from cudf.api.extensions import (
+    register_dataframe_accessor,
+    register_index_accessor,
+    register_series_accessor,
+)
 from cudf.core import (
+    NA,
     CategoricalIndex,
     DataFrame,
     DatetimeIndex,
@@ -23,6 +29,7 @@ from cudf.core import (
     Int64Index,
     MultiIndex,
     RangeIndex,
+    Scalar,
     Series,
     TimedeltaIndex,
     UInt8Index,
@@ -32,7 +39,8 @@ from cudf.core import (
     from_pandas,
     merge,
 )
-from cudf.core.dtypes import CategoricalDtype
+from cudf.core.algorithms import factorize
+from cudf.core.dtypes import CategoricalDtype, Decimal64Dtype
 from cudf.core.groupby import Grouper
 from cudf.core.ops import (
     add,
@@ -56,7 +64,8 @@ from cudf.core.ops import (
 )
 from cudf.core.reshape import concat, get_dummies, melt, merge_sorted
 from cudf.core.series import isclose
-from cudf.core.tools.datetimes import to_datetime
+from cudf.core.tools.datetimes import DateOffset, to_datetime
+from cudf.core.tools.numeric import to_numeric
 from cudf.io import (
     from_dlpack,
     read_avro,
@@ -69,11 +78,6 @@ from cudf.io import (
 )
 from cudf.utils.dtypes import _NA_REP
 from cudf.utils.utils import set_allocator
-from cudf.api.extensions import (
-    register_dataframe_accessor,
-    register_series_accessor,
-    register_index_accessor,
-)
 
 cuda.set_memory_manager(rmm.RMMNumbaManager)
 cupy.cuda.set_allocator(rmm.rmm_cupy_allocator)

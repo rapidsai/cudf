@@ -42,6 +42,9 @@ class GpuArrowReader(Sequence):
         return GpuArrowNodeReader(self._table, idx)
 
     def schema(self):
+        """
+        Return a pyarrow schema
+        """
         return self._table.schema
 
     def to_dict(self):

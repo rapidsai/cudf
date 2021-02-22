@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2020, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -15,19 +15,20 @@
  */
 
 #include <io/comp/gpuinflate.h>
+
 #include <cudf_test/base_fixture.hpp>
 
 #include <vector>
 
-#include <rmm/thrust_rmm_allocator.h>
 #include <rmm/device_buffer.hpp>
+#include <rmm/device_vector.hpp>
 
 /**
  * @brief Base test fixture for decompression
  *
  * Calls into Decompressor fixture to dispatch actual decompression work,
  * whose interface and setup is different for each codec.
- **/
+ */
 template <typename Decompressor>
 struct DecompressTest : public cudf::test::BaseFixture {
   void SetUp() override
@@ -92,7 +93,7 @@ struct DecompressTest : public cudf::test::BaseFixture {
 
 /**
  * @brief Derived fixture for GZIP decompression
- **/
+ */
 struct GzipDecompressTest : public DecompressTest<GzipDecompressTest> {
   cudaError_t dispatch()
   {
@@ -102,7 +103,7 @@ struct GzipDecompressTest : public DecompressTest<GzipDecompressTest> {
 
 /**
  * @brief Derived fixture for Snappy decompression
- **/
+ */
 struct SnappyDecompressTest : public DecompressTest<SnappyDecompressTest> {
   cudaError_t dispatch()
   {
@@ -112,7 +113,7 @@ struct SnappyDecompressTest : public DecompressTest<SnappyDecompressTest> {
 
 /**
  * @brief Derived fixture for Brotli decompression
- **/
+ */
 struct BrotliDecompressTest : public DecompressTest<BrotliDecompressTest> {
   cudaError_t dispatch()
   {

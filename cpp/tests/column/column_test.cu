@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,6 +17,7 @@
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_view.hpp>
 #include <cudf/copying.hpp>
+#include <cudf/detail/iterator.cuh>
 #include <cudf/null_mask.hpp>
 #include <cudf/transform.hpp>
 #include <cudf/types.hpp>
@@ -63,7 +64,7 @@ TYPED_TEST_CASE(TypedColumnTest, cudf::test::Types<int32_t>);
  * @brief Verifies equality of the properties and data of a `column`'s views.
  *
  * @param col The `column` to verify
- **/
+ */
 void verify_column_views(cudf::column col)
 {
   cudf::column_view view                 = col;
@@ -435,10 +436,10 @@ TYPED_TEST(ListsColumnTest, ListsSlicedColumnViewConstructor)
 
 TYPED_TEST(ListsColumnTest, ListsSlicedColumnViewConstructorWithNulls)
 {
-  auto valids = cudf::test::make_counting_transform_iterator(
+  auto valids = cudf::detail::make_counting_transform_iterator(
     0, [](auto i) { return i % 2 == 0 ? true : false; });
 
-  auto expect_valids = cudf::test::make_counting_transform_iterator(
+  auto expect_valids = cudf::detail::make_counting_transform_iterator(
     0, [](auto i) { return i % 2 == 0 ? false : true; });
 
   using LCW = cudf::test::lists_column_wrapper<TypeParam>;

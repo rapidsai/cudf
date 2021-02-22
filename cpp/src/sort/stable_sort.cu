@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-20, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2020, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -21,15 +21,17 @@
 #include <cudf/sorting.hpp>
 #include <cudf/table/table_view.hpp>
 
+#include <rmm/cuda_stream_view.hpp>
+
 namespace cudf {
 namespace detail {
 std::unique_ptr<column> stable_sorted_order(table_view input,
                                             std::vector<order> const& column_order,
                                             std::vector<null_order> const& null_precedence,
-                                            rmm::mr::device_memory_resource* mr,
-                                            cudaStream_t stream)
+                                            rmm::cuda_stream_view stream,
+                                            rmm::mr::device_memory_resource* mr)
 {
-  return sorted_order<true>(input, column_order, null_precedence, mr, stream);
+  return sorted_order<true>(input, column_order, null_precedence, stream, mr);
 }
 
 }  // namespace detail
@@ -39,7 +41,8 @@ std::unique_ptr<column> stable_sorted_order(table_view input,
                                             std::vector<null_order> const& null_precedence,
                                             rmm::mr::device_memory_resource* mr)
 {
-  return detail::stable_sorted_order(input, column_order, null_precedence, mr);
+  return detail::stable_sorted_order(
+    input, column_order, null_precedence, rmm::cuda_stream_default, mr);
 }
 
 }  // namespace cudf

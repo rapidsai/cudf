@@ -1,4 +1,4 @@
-# Copyright (c) 2020, NVIDIA CORPORATION.
+# Copyright (c) 2020-2021, NVIDIA CORPORATION.
 
 import cupy as cp
 import numpy as np
@@ -10,6 +10,7 @@ import cudf
 from cudf.core.buffer import Buffer
 from cudf.utils.dtypes import (
     is_categorical_dtype,
+    is_decimal_dtype,
     is_list_dtype,
     is_struct_dtype
 )
@@ -43,9 +44,10 @@ from cudf._lib.cpp.column.column_factories cimport (
 )
 from cudf._lib.cpp.lists.lists_column_view cimport lists_column_view
 from cudf._lib.cpp.scalar.scalar cimport scalar
-from cudf._lib.scalar cimport Scalar
+from cudf._lib.scalar cimport DeviceScalar
 cimport cudf._lib.cpp.types as libcudf_types
 cimport cudf._lib.cpp.unary as libcudf_unary
+
 
 cdef class Column:
     """
@@ -59,14 +61,14 @@ cdef class Column:
     The *dtype* indicates the Column's element type.
     """
     def __init__(
-            self,
-            object data,
-            int size,
-            object dtype,
-            object mask=None,
-            int offset=0,
-            object null_count=None,
-            object children=()
+        self,
+        object data,
+        int size,
+        object dtype,
+        object mask=None,
+        int offset=0,
+        object null_count=None,
+        object children=()
     ):
 
         self._size = size
@@ -246,10 +248,10 @@ cdef class Column:
             )
 
         return cudf.core.column.build_column(
-            self.data,
-            self.dtype,
-            mask,
-            self.size,
+            data=self.data,
+            dtype=self.dtype,
+            mask=mask,
+            size=self.size,
             offset=0,
             children=self.children
         )
@@ -308,8 +310,8 @@ cdef class Column:
             self._size = other_col.size
             self._dtype = other_col._dtype
             self.set_base_data(other_col.base_data)
-            self.set_base_mask(other_col.base_mask)
             self.set_base_children(other_col.base_children)
+            self.set_base_mask(other_col.base_mask)
         else:
             return other_col
 
@@ -386,14 +388,19 @@ cdef class Column:
             tid = libcudf_types.type_id.LIST
         elif is_struct_dtype(self.dtype):
             tid = libcudf_types.type_id.STRUCT
+        elif is_decimal_dtype(self.dtype):
+            tid = libcudf_types.type_id.DECIMAL64
         else:
             tid = <libcudf_types.type_id> (
                 <underlying_type_t_type_id> (
                     np_to_cudf_types[np.dtype(data_dtype)]
                 )
             )
-
-        cdef libcudf_types.data_type dtype = libcudf_types.data_type(tid)
+        cdef libcudf_types.data_type dtype = (
+            libcudf_types.data_type(tid, -self.dtype.scale)
+            if tid == libcudf_types.type_id.DECIMAL64
+            else libcudf_types.data_type(tid)
+        )
         cdef libcudf_types.size_type offset = self.offset
         cdef vector[column_view] children
         cdef void* data
@@ -555,23 +562,22 @@ cdef class Column:
         children = tuple(children)
 
         result = cudf.core.column.build_column(
-            data,
-            dtype,
-            mask,
-            size,
-            offset,
-            null_count,
-            tuple(children)
+            data=data,
+            dtype=dtype,
+            mask=mask,
+            size=size,
+            offset=offset,
+            null_count=null_count,
+            children=tuple(children)
         )
 
         return result
 
-
-def make_column_from_scalar(Scalar val, size_type size):
-    cdef scalar* c_val = val.c_value.get()
-
-    cdef unique_ptr[column] c_result
-    with nogil:
-        c_result = move(cpp_make_column_from_scalar(c_val[0], size))
-
-    return Column.from_unique_ptr(move(c_result))
+    @staticmethod
+    def from_scalar(py_val, size_type size):
+        cdef DeviceScalar val = py_val.device_value
+        cdef const scalar* c_val = val.get_raw_ptr()
+        cdef unique_ptr[column] c_result
+        with nogil:
+            c_result = move(cpp_make_column_from_scalar(c_val[0], size))
+        return Column.from_unique_ptr(move(c_result))

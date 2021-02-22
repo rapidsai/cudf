@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,12 +16,13 @@
 
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_view.hpp>
+#include <cudf/detail/iterator.cuh>
 #include <cudf/transform.hpp>
 #include <cudf/types.hpp>
+
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_utilities.hpp>
 #include <cudf_test/column_wrapper.hpp>
-#include <cudf_test/type_lists.hpp>
 
 struct MaskToNullTest : public cudf::test::BaseFixture {
   void run_test(std::vector<bool> input, std::vector<bool> val)
@@ -37,7 +38,7 @@ struct MaskToNullTest : public cudf::test::BaseFixture {
         }
       });
 
-    auto sample = cudf::test::make_counting_transform_iterator(0, [](auto i) { return i; });
+    auto sample = cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i; });
 
     cudf::test::fixed_width_column_wrapper<int32_t> expected(
       sample, sample + input.size(), input.begin());
@@ -53,7 +54,7 @@ struct MaskToNullTest : public cudf::test::BaseFixture {
   {
     cudf::test::fixed_width_column_wrapper<bool> input_column(input.begin(), input.end());
 
-    auto sample = cudf::test::make_counting_transform_iterator(0, [](auto i) { return i; });
+    auto sample = cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i; });
     cudf::test::fixed_width_column_wrapper<int32_t> expected(
       sample, sample + input.size(), input.begin());
 

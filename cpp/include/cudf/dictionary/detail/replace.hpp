@@ -19,6 +19,8 @@
 #include <cudf/dictionary/dictionary_column_view.hpp>
 #include <cudf/scalar/scalar.hpp>
 
+#include <rmm/cuda_stream_view.hpp>
+
 namespace cudf {
 namespace dictionary {
 namespace detail {
@@ -32,15 +34,15 @@ namespace detail {
  *
  * @param input Column with nulls to replace.
  * @param replacement Column with values to use for replacing.
- * @param mr Device memory resource used to allocate the returned column's device memory.
  * @param stream CUDA stream used for device memory operations and kernel launches.
+ * @param mr Device memory resource used to allocate the returned column's device memory.
  * @return New dictionary column with null rows replaced.
  */
 std::unique_ptr<column> replace_nulls(
   dictionary_column_view const& input,
   dictionary_column_view const& replacement,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource(),
-  cudaStream_t stream                 = 0);
+  rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
  * @brief Create a new dictionary column by replacing nulls with a
@@ -50,15 +52,15 @@ std::unique_ptr<column> replace_nulls(
  *
  * @param input Column with nulls to replace.
  * @param replacement Value to use for replacing.
- * @param mr Device memory resource used to allocate the returned column's device memory.
  * @param stream CUDA stream used for device memory operations and kernel launches.
+ * @param mr Device memory resource used to allocate the returned column's device memory.
  * @return New dictionary column with null rows replaced.
  */
 std::unique_ptr<column> replace_nulls(
   dictionary_column_view const& input,
   scalar const& replacement,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource(),
-  cudaStream_t stream                 = 0);
+  rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 }  // namespace detail
 }  // namespace dictionary

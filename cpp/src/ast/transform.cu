@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -29,6 +29,8 @@
 #include <cudf/utilities/error.hpp>
 #include <cudf/utilities/traits.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
+
+#include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_buffer.hpp>
 #include <rmm/mr/device/device_memory_resource.hpp>
 
@@ -38,9 +40,7 @@
 #include <type_traits>
 
 namespace cudf {
-
 namespace ast {
-
 namespace detail {
 
 /**
@@ -87,17 +87,17 @@ __launch_bounds__(max_block_size) __global__
 
 std::unique_ptr<column> compute_column(table_view const table,
                                        expression const& expr,
-                                       cudaStream_t stream,
+                                       rmm::cuda_stream_view stream,
                                        rmm::mr::device_memory_resource* mr)
 {
   // Linearize the AST
   auto const expr_linearizer         = linearizer(expr, table);
-  auto const data_references         = expr_linearizer.get_data_references();
-  auto const literals                = expr_linearizer.get_literals();
-  auto const operators               = expr_linearizer.get_operators();
+  auto const data_references         = expr_linearizer.data_references();
+  auto const literals                = expr_linearizer.literals();
+  auto const operators               = expr_linearizer.operators();
   auto const num_operators           = cudf::size_type(operators.size());
-  auto const operator_source_indices = expr_linearizer.get_operator_source_indices();
-  auto const expr_data_type          = expr_linearizer.get_root_data_type();
+  auto const operator_source_indices = expr_linearizer.operator_source_indices();
+  auto const expr_data_type          = expr_linearizer.root_data_type();
 
   // Create ast_plan and device buffer
   auto plan = ast_plan();
@@ -136,24 +136,24 @@ std::unique_ptr<column> compute_column(table_view const table,
     cudf::mutable_column_device_view::create(output_column->mutable_view(), stream);
 
   // Configure kernel parameters
-  auto const num_intermediates     = expr_linearizer.get_intermediate_count();
+  auto const num_intermediates     = expr_linearizer.intermediate_count();
   auto const shmem_size_per_thread = static_cast<int>(sizeof(std::int64_t) * num_intermediates);
   int device_id;
   CUDA_TRY(cudaGetDevice(&device_id));
-  int shmem_per_block_limit;
+  int shmem_limit_per_block;
   CUDA_TRY(
-    cudaDeviceGetAttribute(&shmem_per_block_limit, cudaDevAttrMaxSharedMemoryPerBlock, device_id));
+    cudaDeviceGetAttribute(&shmem_limit_per_block, cudaDevAttrMaxSharedMemoryPerBlock, device_id));
   auto constexpr MAX_BLOCK_SIZE = 128;
   auto const block_size =
-    (shmem_size_per_thread > 0)
-      ? std::min(MAX_BLOCK_SIZE, shmem_per_block_limit / shmem_size_per_thread)
+    shmem_size_per_thread != 0
+      ? std::min(MAX_BLOCK_SIZE, shmem_limit_per_block / shmem_size_per_thread)
       : MAX_BLOCK_SIZE;
-  cudf::detail::grid_1d config(table_num_rows, block_size);
+  auto const config               = cudf::detail::grid_1d{table_num_rows, block_size};
   auto const shmem_size_per_block = shmem_size_per_thread * config.num_threads_per_block;
 
   // Execute the kernel
   cudf::ast::detail::compute_column_kernel<MAX_BLOCK_SIZE>
-    <<<config.num_blocks, config.num_threads_per_block, shmem_size_per_block, stream>>>(
+    <<<config.num_blocks, config.num_threads_per_block, shmem_size_per_block, stream.value()>>>(
       *table_device,
       device_literals,
       *mutable_output_device,
@@ -162,7 +162,7 @@ std::unique_ptr<column> compute_column(table_view const table,
       device_operator_source_indices,
       num_operators,
       num_intermediates);
-  CHECK_CUDA(stream);
+  CHECK_CUDA(stream.value());
   return output_column;
 }
 
@@ -173,7 +173,7 @@ std::unique_ptr<column> compute_column(table_view const table,
                                        rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::compute_column(table, expr, 0, mr);
+  return detail::compute_column(table, expr, rmm::cuda_stream_default, mr);
 }
 
 }  // namespace ast

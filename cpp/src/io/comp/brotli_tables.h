@@ -54,9 +54,9 @@ THE SOFTWARE.
 #define CONSTANT static const
 #endif
 
-#define BROTLI_NUM_BLOCK_LEN_SYMBOLS 26
-#define BROTLI_NUM_LITERAL_SYMBOLS 256
-#define BROTLI_NUM_COMMAND_SYMBOLS 704
+constexpr int brotli_num_block_len_symbols = 26;
+constexpr int brotli_num_literal_symbols   = 256;
+constexpr int brotli_num_command_symbols   = 704;
 
 CONSTANT uint8_t kReverseBits[1 << 8] = {
   0x00, 0x80, 0x40, 0xC0, 0x20, 0xA0, 0x60, 0xE0, 0x10, 0x90, 0x50, 0xD0, 0x30, 0xB0, 0x70, 0xF0,
@@ -2149,14 +2149,6 @@ CONSTANT uint8_t kContextLookup[2048] = {
   7,
 };
 
-/* typeof(MODE) == ContextType; returns ContextLut */
-#define BROTLI_CONTEXT_LUT(MODE) ((MODE) << 9)
-
-/* typeof(LUT) == const uint8_t* */
-#define BROTLI_NEED_CONTEXT_LUT(MODE) ((MODE) < (4 << 9))
-#define BROTLI_CONTEXT(P1, P2, LUT) \
-  (kContextLookup[(LUT) + (P1)] | kContextLookup[(LUT) + (P2) + 256])
-
 typedef struct CmdLutElement {
   uint8_t insert_len_extra_bits;
   uint8_t copy_len_extra_bits;
@@ -2166,7 +2158,7 @@ typedef struct CmdLutElement {
   uint16_t copy_len_offset;
 } CmdLutElement;
 
-CONSTANT CmdLutElement kCmdLut[BROTLI_NUM_COMMAND_SYMBOLS] = {
+CONSTANT CmdLutElement kCmdLut[brotli_num_command_symbols] = {
   {0x00, 0x00, 0, 0x00, 0x0000, 0x0002},  {0x00, 0x00, 0, 0x01, 0x0000, 0x0003},
   {0x00, 0x00, 0, 0x02, 0x0000, 0x0004},  {0x00, 0x00, 0, 0x03, 0x0000, 0x0005},
   {0x00, 0x00, 0, 0x03, 0x0000, 0x0006},  {0x00, 0x00, 0, 0x03, 0x0000, 0x0007},
@@ -2526,10 +2518,10 @@ CONSTANT uint8_t kCodeLengthPrefixLength[16] = {2, 2, 2, 3, 2, 2, 2, 4, 2, 2, 2,
 CONSTANT uint8_t kCodeLengthPrefixValue[16]  = {0, 4, 3, 2, 0, 4, 3, 1, 0, 4, 3, 2, 0, 4, 3, 5};
 
 // Represents the range of values belonging to a prefix code: [offset, offset + 2^nbits)
-CONSTANT uint16_t kBlockLengthPrefixCodeOffset[BROTLI_NUM_BLOCK_LEN_SYMBOLS] = {
+CONSTANT uint16_t kBlockLengthPrefixCodeOffset[brotli_num_block_len_symbols] = {
   1,   5,   9,   13,  17,  25,  33,  41,  49,   65,   81,   97,   113,
   145, 177, 209, 241, 305, 369, 497, 753, 1265, 2289, 4337, 8433, 16625};
-CONSTANT uint8_t kBlockLengthPrefixCodeBits[BROTLI_NUM_BLOCK_LEN_SYMBOLS] = {
+CONSTANT uint8_t kBlockLengthPrefixCodeBits[brotli_num_block_len_symbols] = {
   2, 2, 2, 2, 3, 3, 3, 3, 4, 4, 4, 4, 5, 5, 5, 5, 6, 6, 7, 8, 9, 10, 11, 12, 13, 24};
 
 // Maximum possible Huffman table size for an alphabet size of (index * 32),
@@ -2538,12 +2530,11 @@ CONSTANT uint16_t kMaxHuffmanTableSize[] = {
   256,  402,  436,  468,  500,  534,  566,  598,  630,  662,  694,  726,  758,
   790,  822,  854,  886,  920,  952,  984,  1016, 1048, 1080, 1112, 1144, 1176,
   1208, 1240, 1272, 1304, 1336, 1368, 1400, 1432, 1464, 1496, 1528};
-// BROTLI_NUM_BLOCK_LEN_SYMBOLS == 26
-#define BROTLI_HUFFMAN_MAX_SIZE_26 396
-// BROTLI_MAX_BLOCK_TYPE_SYMBOLS == 258
-#define BROTLI_HUFFMAN_MAX_SIZE_258 632
+
+constexpr int brotli_huffman_max_size_26  = 396;
+constexpr int brotli_huffman_max_size_258 = 632;
 // Max table size for context map
-#define BROTLI_HUFFMAN_MAX_SIZE_272 646
+constexpr int brotli_huffman_max_size_272 = 646;
 
 enum brotli_transform_type_e {
   BROTLI_TRANSFORM_IDENTITY        = 0,
@@ -2569,8 +2560,6 @@ enum brotli_transform_type_e {
   BROTLI_TRANSFORM_OMIT_FIRST_9    = 20,
   BROTLI_NUM_TRANSFORM_TYPES  // Counts transforms, not a transform itself.
 };
-
-#define BROTLI_TRANSFORMS_MAX_CUT_OFF BROTLI_TRANSFORM_OMIT_LAST_9
 
 /* RFC 7932 transforms string data */
 CONSTANT uint8_t kPrefixSuffix[217] = {
@@ -2662,12 +2651,3 @@ CONSTANT uint8_t kTransformsData[] = {
 };
 
 CONSTANT int kNumTransforms = (int)(sizeof(kTransformsData) / (3 * sizeof(kTransformsData[0])));
-
-/* result is uint8_t. */
-#define BROTLI_TRANSFORM_PREFIX_ID(I) (kTransformsData[((I)*3) + 0])
-#define BROTLI_TRANSFORM_TYPE(I) (kTransformsData[((I)*3) + 1])
-#define BROTLI_TRANSFORM_SUFFIX_ID(I) (kTransformsData[((I)*3) + 2])
-
-/* result is const uint8_t*. */
-#define BROTLI_TRANSFORM_PREFIX(I) (&kPrefixSuffix[kPrefixSuffixMap[BROTLI_TRANSFORM_PREFIX_ID(I)]])
-#define BROTLI_TRANSFORM_SUFFIX(I) (&kPrefixSuffix[kPrefixSuffixMap[BROTLI_TRANSFORM_SUFFIX_ID(I)]])

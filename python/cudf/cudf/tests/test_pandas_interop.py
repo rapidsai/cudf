@@ -1,8 +1,7 @@
-# Copyright (c) 2018, NVIDIA CORPORATION.
+# Copyright (c) 2018-2020, NVIDIA CORPORATION.
 
 import numpy as np
 import pandas as pd
-import pytest
 
 import cudf
 from cudf.core import DataFrame
@@ -85,6 +84,7 @@ def test_from_pandas_rangeindex():
 
 
 def test_from_pandas_rangeindex_step():
-    idx1 = pd.RangeIndex(start=0, stop=8, step=2, name="myindex")
-    with pytest.raises(ValueError):
-        cudf.from_pandas(idx1)
+    expected = pd.RangeIndex(start=0, stop=8, step=2, name="myindex")
+    actual = cudf.from_pandas(expected)
+
+    assert_eq(expected, actual)

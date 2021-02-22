@@ -17,18 +17,19 @@
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_factories.hpp>
 
+#include <rmm/cuda_stream_view.hpp>
+
 namespace cudf {
 
 /**
  * @copydoc cudf::make_lists_column
- *
  */
 std::unique_ptr<column> make_lists_column(size_type num_rows,
                                           std::unique_ptr<column> offsets_column,
                                           std::unique_ptr<column> child_column,
                                           size_type null_count,
                                           rmm::device_buffer&& null_mask,
-                                          cudaStream_t stream,
+                                          rmm::cuda_stream_view stream,
                                           rmm::mr::device_memory_resource* mr)
 {
   if (null_count > 0) { CUDF_EXPECTS(null_mask.size() > 0, "Column with nulls must be nullable."); }

@@ -27,7 +27,6 @@
  *
  * If this value is incremented, the above version include guard needs to be
  * updated.
- *
  */
 #define NVTX3_MINOR_VERSION 0
 
@@ -496,7 +495,6 @@
  *    NVTX3_FUNC_RANGE();
  * }
  * \endcode
- *
  */
 
 /**
@@ -506,7 +504,6 @@
  * Initializing a legacy-C (i.e., no constructor) union member requires
  * initializing in the constructor body. Non-empty constexpr constructors
  * require C++14 relaxed constexpr.
- *
  */
 #if __cpp_constexpr >= 201304L
 #define NVTX3_RELAXED_CONSTEXPR constexpr
@@ -741,7 +738,6 @@ class domain {
  * will be grouped together.
  *
  * @return Reference to the `domain` corresponding to the global NVTX domain.
- *
  */
 template <>
 inline domain const& domain::get<domain::global>()
@@ -753,7 +749,6 @@ inline domain const& domain::get<domain::global>()
 /**
  * @brief Indicates the values of the red, green, blue color channels for
  * a rgb color code.
- *
  */
 struct rgb {
   /// Type used for component values
@@ -782,7 +777,6 @@ struct rgb {
 /**
  * @brief Indicates the value of the alpha, red, green, and blue color
  * channels for an argb color code.
- *
  */
 struct argb final : rgb {
   /**
@@ -815,7 +809,6 @@ struct argb final : rgb {
  * Specifying colors for NVTX events is a convenient way to visually
  * differentiate among different events in a visualization tool such as Nsight
  * Systems.
- *
  */
 class color {
  public:
@@ -921,7 +914,6 @@ class color {
  * \endcode
  *
  * To associate a name string with a category id, see `named_category`.
- *
  */
 class category {
  public:
@@ -1537,7 +1529,6 @@ class payload {
  * // they will be forwarded to the `EventAttribute`s constructor
  * nvtx3::thread_range r{nvtx3::payload{42}, nvtx3::category{1}, "message"};
  * \endcode
- *
  */
 class event_attributes {
  public:
@@ -1763,7 +1754,6 @@ class domain_thread_range {
 
 /**
  * @brief Alias for a `domain_thread_range` in the global NVTX domain.
- *
  */
 using thread_range = domain_thread_range<>;
 
@@ -1854,7 +1844,6 @@ class domain_process_range {
 
 /**
  * @brief Alias for a `domain_process_range` in the global NVTX domain.
- *
  */
 using process_range = domain_process_range<>;
 

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2020, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,12 +17,14 @@
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_factories.hpp>
 #include <cudf/copying.hpp>
+#include <cudf/detail/iterator.cuh>
 #include <cudf/scalar/scalar.hpp>
+#include <cudf/sorting.hpp>
 #include <cudf/strings/copying.hpp>
 #include <cudf/strings/detail/scatter.cuh>
 #include <cudf/strings/detail/utilities.hpp>
-#include <cudf/strings/sorting.hpp>
 #include <cudf/strings/strings_column_view.hpp>
+#include <cudf/table/table_view.hpp>
 #include <cudf/utilities/error.hpp>
 
 #include <tests/strings/utilities.h>
@@ -31,6 +33,7 @@
 #include <cudf_test/column_wrapper.hpp>
 
 #include <thrust/iterator/constant_iterator.h>
+
 #include <vector>
 
 struct StringsColumnTest : public cudf::test::BaseFixture {
@@ -44,18 +47,17 @@ TEST_F(StringsColumnTest, Sort)
   cudf::test::strings_column_wrapper h_expected({"<null>", "", "aa", "bb", "bbb", "eee", "ééé"},
                                                 {0, 1, 1, 1, 1, 1, 1});
 
-  auto strings_view = cudf::strings_column_view(h_strings);
-  auto results      = cudf::strings::detail::sort(strings_view, cudf::strings::detail::name);
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, h_expected);
+  auto results =
+    cudf::sort(cudf::table_view({h_strings}), {cudf::order::ASCENDING}, {cudf::null_order::BEFORE});
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(results->view().column(0), h_expected);
 }
 
 TEST_F(StringsColumnTest, SortZeroSizeStringsColumn)
 {
   cudf::column_view zero_size_strings_column(
     cudf::data_type{cudf::type_id::STRING}, 0, nullptr, nullptr, 0);
-  auto strings_view = cudf::strings_column_view(zero_size_strings_column);
-  auto results      = cudf::strings::detail::sort(strings_view, cudf::strings::detail::name);
-  cudf::test::expect_strings_empty(results->view());
+  auto results = cudf::sort(cudf::table_view({zero_size_strings_column}));
+  cudf::test::expect_strings_empty(results->view().column(0));
 }
 
 class SliceParmsTest : public StringsColumnTest,
@@ -182,6 +184,15 @@ struct column_to_string_view_vector {
   }
 };
 
+TEST_F(StringsColumnTest, GatherTooBig)
+{
+  cudf::test::strings_column_wrapper strings({"0123456789012345678901234567890123456789"});
+  auto map = thrust::constant_iterator<int8_t>(0);
+  cudf::test::fixed_width_column_wrapper<int8_t> gather_map(
+    map, map + std::numeric_limits<cudf::size_type>::max() / 20);
+  EXPECT_THROW(cudf::gather(cudf::table_view{{strings}}, gather_map), cudf::logic_error);
+}
+
 TEST_F(StringsColumnTest, Scatter)
 {
   std::vector<const char*> h_strings1{"eee", "bb", nullptr, "", "aa", "bbb", "ééé"};
@@ -202,8 +213,8 @@ TEST_F(StringsColumnTest, Scatter)
   scatter_map.push_back(1);
 
   auto source_column = cudf::column_device_view::create(source.parent());
-  auto begin = thrust::make_transform_iterator(thrust::make_counting_iterator<cudf::size_type>(0),
-                                               column_to_string_view_vector{*source_column});
+  auto begin =
+    cudf::detail::make_counting_transform_iterator(0, column_to_string_view_vector{*source_column});
 
   auto results =
     cudf::strings::detail::scatter(begin, begin + source.size(), scatter_map.begin(), target);

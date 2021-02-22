@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2020, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,10 +16,12 @@
 
 #include <cudf/scalar/scalar.hpp>
 
+#include <rmm/cuda_stream_view.hpp>
+
 namespace cudf {
 // Create a strings-type column from array of pointer/size pairs
 std::unique_ptr<scalar> make_string_scalar(std::string const& string,
-                                           cudaStream_t stream,
+                                           rmm::cuda_stream_view stream,
                                            rmm::mr::device_memory_resource* mr)
 {
   auto s = new string_scalar(string, true, stream, mr);

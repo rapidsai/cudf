@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018-2020, NVIDIA CORPORATION.
+ * Copyright (c) 2018-2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -34,6 +34,18 @@ namespace cudf {
  */
 
 /**
+ * @brief Policy to account for possible out-of-bounds indices
+ *
+ * `NULLIFY` means to nullify output values corresponding to out-of-bounds gather_map values.
+ * `DONT_CHECK` means do not check whether the indices are out-of-bounds, for better performance.
+ */
+
+enum class out_of_bounds_policy : bool {
+  NULLIFY,    /// Output values corresponding to out-of-bounds indices are null
+  DONT_CHECK  /// No bounds checking is performed, better performance
+};
+
+/**
  * @brief Gathers the specified rows (including null values) of a set of columns.
  *
  * @ingroup copy_gather
@@ -49,22 +61,24 @@ namespace cudf {
  * For dictionary columns, the keys column component is copied and not trimmed
  * if the gather results in abandoned key elements.
  *
- * @throws cudf::logic_error if `check_bounds == true` and an index exists in
- * `gather_map` outside the range `[-n, n)`, where `n` is the number of rows in
- * the source table. If `check_bounds == false`, the behavior is undefined.
+ * @throws cudf::logic_error if gather_map contains null values.
  *
  * @param[in] source_table The input columns whose rows will be gathered
  * @param[in] gather_map View into a non-nullable column of integral indices that maps the
  * rows in the source columns to rows in the destination columns.
- * @param[in] check_bounds Optionally perform bounds checking on the values
- * of `gather_map` and throw an error if any of its values are out of bounds.
+ * @param[in] bounds_policy Policy to apply to account for possible out-of-bounds indices
+ * `DONT_CHECK` skips all bounds checking for gather map values. `NULLIFY` coerces rows that
+ * corresponds to out-of-bounds indices in the gather map to be null elements. Callers should
+ * use `DONT_CHECK` when they are certain that the gather_map contains only valid indices for
+ * better performance. If `policy` is set to `DONT_CHECK` and there are out-of-bounds indices
+ * in the gather map, the behavior is undefined. Defaults to `DONT_CHECK`.
  * @param[in] mr Device memory resource used to allocate the returned table's device memory
  * @return std::unique_ptr<table> Result of the gather
  */
 std::unique_ptr<table> gather(
   table_view const& source_table,
   column_view const& gather_map,
-  bool check_bounds                   = false,
+  out_of_bounds_policy bounds_policy  = out_of_bounds_policy::DONT_CHECK,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
@@ -145,7 +159,7 @@ std::unique_ptr<table> scatter(
  * @return Result of scattering values from source to target
  */
 std::unique_ptr<table> scatter(
-  std::vector<std::unique_ptr<scalar>> const& source,
+  std::vector<std::reference_wrapper<const scalar>> const& source,
   column_view const& indices,
   table_view const& target,
   bool check_bounds                   = false,
@@ -287,6 +301,46 @@ std::unique_ptr<column> copy_range(
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
+ * @brief Creates a new column by shifting all values by an offset.
+ *
+ * @ingroup copy_shift
+ *
+ * Elements will be determined by `output[idx] = input[idx - offset]`.
+ * Some elements in the output may be indeterminable from the input. For those
+ * elements, the value will be determined by `fill_values`.
+ *
+ * @code{.pseudo}
+ * Examples
+ * -------------------------------------------------
+ * input       = [0, 1, 2, 3, 4]
+ * offset      = 3
+ * fill_values = @
+ * return      = [@, @, @, 0, 1]
+ * -------------------------------------------------
+ * input       = [5, 4, 3, 2, 1]
+ * offset      = -2
+ * fill_values = 7
+ * return      = [3, 2, 1, 7, 7]
+ * @endcode
+ *
+ * @note if the input is nullable, the output will be nullable.
+ * @note if the fill value is null, the output will be nullable.
+ *
+ * @param input      Column to be shifted.
+ * @param offset     The offset by which to shift the input.
+ * @param fill_value Fill value for indeterminable outputs.
+ * @param mr         Device memory resource used to allocate the returned result's device memory
+ *
+ * @throw cudf::logic_error if @p input dtype is not fixed-with.
+ * @throw cudf::logic_error if @p fill_value dtype does not match @p input dtype.
+ */
+std::unique_ptr<column> shift(
+  column_view const& input,
+  size_type offset,
+  scalar const& fill_value,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+
+/**
  * @brief Slices a `column_view` into a set of `column_view`s according to a set of indices.
  *
  * @ingroup copy_slice
@@ -423,22 +477,49 @@ std::vector<column_view> split(column_view const& input, std::vector<size_type> 
 std::vector<table_view> split(table_view const& input, std::vector<size_type> const& splits);
 
 /**
+ * @brief Column data in a serialized format
+ *
+ * @ingroup copy_split
+ *
+ * Contains data from an array of columns in two contiguous buffers: one on host, which contains
+ * table metadata and one on device which contains the table data.
+ */
+struct packed_columns {
+  /**
+   * @brief Host-side metadata buffer used for reconstructing columns via unpack.
+   *
+   * @ingroup copy_split
+   */
+  struct metadata {
+    metadata(std::vector<uint8_t>&& v) : data_(std::move(v)) {}
+    uint8_t const* data() const { return data_.data(); }
+    size_t size() const { return data_.size(); }
+
+   private:
+    std::vector<uint8_t> data_;
+  };
+
+  std::unique_ptr<metadata> metadata_;
+  std::unique_ptr<rmm::device_buffer> gpu_data;
+};
+
+/**
  * @brief The result(s) of a `contiguous_split`
  *
  * @ingroup copy_split
  *
  * Each table_view resulting from a split operation performed by contiguous_split,
- * will be returned wrapped in a `contiguous_split_result`.  The table_view and internal
+ * will be returned wrapped in a `packed_table`.  The table_view and internal
  * column_views in this struct are not owned by a top level cudf::table or cudf::column.
- * The backing memory is instead owned by the `all_data` field and in one
+ * The backing memory and metadata is instead owned by the `data` field and is in one
  * contiguous block.
  *
  * The user is responsible for assuring that the `table` or any derived table_views do
- * not outlive the memory owned by `all_data`
+ * not outlive the memory owned by `data`
  */
-struct contiguous_split_result {
+struct packed_table {
   cudf::table_view table;
-  std::unique_ptr<rmm::device_buffer> all_data;
+  packed_columns data;
 };
 
 /**
@@ -448,7 +529,7 @@ struct contiguous_split_result {
  * @ingroup copy_split
  *
  * The memory for the output views is allocated in a single contiguous `rmm::device_buffer` returned
- * in the `contiguous_split_result`. There is no top-level owning table.
+ * in the `packed_table`. There is no top-level owning table.
  *
  * The returned views of `input` are constructed from a vector of indices, that indicate
  * where each split should occur. The `i`th returned `table_view` is sliced as
@@ -460,7 +541,7 @@ struct contiguous_split_result {
  *
  * @note It is the caller's responsibility to ensure that the returned views
  * do not outlive the viewed device memory contained in the `all_data` field of the
- * returned contiguous_split_result.
+ * returned packed_table.
  *
  * @code{.pseudo}
  * Example:
@@ -479,14 +560,80 @@ struct contiguous_split_result {
  * @param input View of a table to split
  * @param splits A vector of indices where the view will be split
  * @param[in] mr Device memory resource used to allocate the returned result's device memory
- * @param[in] stream CUDA stream used for device memory operations and kernel launches.
  * @return The set of requested views of `input` indicated by the `splits` and the viewed memory
  * buffer.
  */
-std::vector<contiguous_split_result> contiguous_split(
+std::vector<packed_table> contiguous_split(
   cudf::table_view const& input,
   std::vector<size_type> const& splits,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+
+/**
+ * @brief Deep-copy a `table_view` into a serialized contiguous memory format
+ *
+ * The metadata from the `table_view` is copied into a host vector of bytes and the data from the
+ * `table_view` is copied into a `device_buffer`. Pass the output of this function into
+ * `cudf::unpack` to deserialize.
+ *
+ * @param input View of the table to pack
+ * @param[in] mr Optional, The resource to use for all returned device allocations
+ * @return packed_columns A struct containing the serialized metadata and data in contiguous host
+ *         and device memory respectively
+ */
+packed_columns pack(cudf::table_view const& input,
+                    rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+
+/**
+ * @brief Produce the metadata used for packing a table stored in a contiguous buffer.
+ *
+ * The metadata from the `table_view` is copied into a host vector of bytes which can be used to
+ * construct a `packed_columns` or `packed_table` structure.  The caller is responsible for
+ * guaranteeing that that all of the columns in the table point into `contiguous_buffer`.
+ *
+ * @param input View of the table to pack
+ * @param contgiuous_buffer A contiguous buffer of device memory which contains the data referenced
+ * by the columns in `table`
+ * @param buffer_size The size of `contiguous_buffer`.
+ * @return Vector of bytes representing the metadata used to `unpack` a packed_columns struct.
+ */
+packed_columns::metadata pack_metadata(table_view const& table,
+                                       uint8_t const* contiguous_buffer,
+                                       size_t buffer_size);
+
+/**
+ * @brief Deserialize the result of `cudf::pack`
+ *
+ * Converts the result of a serialized table into a `table_view` that points to the data stored in
+ * the contiguous device buffer contained in `input`.
+ *
+ * It is the caller's responsibility to ensure that the `table_view` in the output does not outlive
+ * the data in the input.
+ *
+ * No new device memory is allocated in this function.
+ *
+ * @param input The packed columns to unpack
+ * @return The unpacked `table_view`
+ */
+table_view unpack(packed_columns const& input);
+
+/**
+ * @brief Deserialize the result of `cudf::pack`
+ *
+ * Converts the result of a serialized table into a `table_view` that points to the data stored in
+ * the contiguous device buffer contained in `gpu_data` using the metadata contained in the host
+ * buffer `metadata`.
+ *
+ * It is the caller's responsibility to ensure that the `table_view` in the output does not outlive
+ * the data in the input.
+ *
+ * No new device memory is allocated in this function.
+ *
+ * @param metadata The host-side metadata buffer resulting from the initial pack() call
+ * @param gpu_data The device-side contiguous buffer storing the data that will be referenced by
+ * the resulting `table_view`
+ * @return The unpacked `table_view`
+ */
+table_view unpack(uint8_t const* metadata, uint8_t const* gpu_data);
 
 /**
  * @brief   Returns a new column, where each element is selected from either @p lhs or
@@ -512,46 +659,6 @@ std::unique_ptr<column> copy_if_else(
   column_view const& rhs,
   column_view const& boolean_mask,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
-
-/**
- * @brief Creates a new column by shifting all values by an offset.
- *
- * @ingroup copy_shift
- *
- * Elements will be determined by `output[idx] = input[idx - offset]`.
- * Some elements in the output may be indeterminable from the input. For those
- * elements, the value will be determined by `fill_values`.
- *
- * @code{.pseudo}
- * Examples
- * -------------------------------------------------
- * input       = [0, 1, 2, 3, 4]
- * offset      = 3
- * fill_values = @
- * return      = [@, @, @, 0, 1]
- * -------------------------------------------------
- * input       = [5, 4, 3, 2, 1]
- * offset      = -2
- * fill_values = 7
- * return      = [3, 2, 1, 7, 7]
- * @endcode
- *
- * @note if the input is nullable, the output will be nullable.
- * @note if the fill value is null, the output will be nullable.
- *
- * @param input      Column to be shifted.
- * @param offset     The offset by which to shift the input.
- * @param fill_value Fill value for indeterminable outputs.
- *
- * @throw cudf::logic_error if @p input dtype is not fixed-with.
- * @throw cudf::logic_error if @p fill_value dtype does not match @p input dtype.
- */
-std::unique_ptr<column> shift(
-  column_view const& input,
-  size_type offset,
-  scalar const& fill_value,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource(),
-  cudaStream_t stream                 = 0);
 
 /**
  * @brief   Returns a new column, where each element is selected from either @p lhs or
@@ -697,7 +804,7 @@ std::unique_ptr<table> boolean_mask_scatter(
  * @returns Returns a table by scattering `input` into `target` as per `boolean_mask`.
  */
 std::unique_ptr<table> boolean_mask_scatter(
-  std::vector<std::reference_wrapper<scalar>> const& input,
+  std::vector<std::reference_wrapper<const scalar>> const& input,
   table_view const& target,
   column_view const& boolean_mask,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
@@ -722,7 +829,7 @@ std::unique_ptr<scalar> get_element(
 
 /**
  * @brief Indicates whether a row can be sampled more than once.
- **/
+ */
 enum class sample_with_replacement : bool {
   FALSE,  // A row can be sampled only once
   TRUE    // A row can be sampled more than once

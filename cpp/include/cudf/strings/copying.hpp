@@ -18,6 +18,8 @@
 #include <cudf/column/column.hpp>
 #include <cudf/strings/strings_column_view.hpp>
 
+#include <rmm/cuda_stream_view.hpp>
+
 namespace cudf {
 namespace strings {
 namespace detail {
@@ -50,7 +52,7 @@ std::unique_ptr<cudf::column> copy_slice(
   size_type start,
   size_type end                       = -1,
   size_type step                      = 1,
-  cudaStream_t stream                 = 0,
+  rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 }  // namespace detail

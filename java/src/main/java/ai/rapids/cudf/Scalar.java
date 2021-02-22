@@ -1,6 +1,6 @@
 /*
  *
- *  Copyright (c) 2019-2020, NVIDIA CORPORATION.
+ *  Copyright (c) 2019-2021, NVIDIA CORPORATION.
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -215,6 +215,16 @@ public final class Scalar implements AutoCloseable, BinaryOperable {
     return new Scalar(DType.FLOAT32, makeFloat32Scalar(value, true));
   }
 
+  public static Scalar fromDecimal(int scale, int unscaledValue) {
+    long handle = makeDecimal32Scalar(unscaledValue, scale, true);
+    return new Scalar(DType.create(DType.DTypeEnum.DECIMAL32, scale), handle);
+  }
+
+  public static Scalar fromDecimal(int scale, long unscaledValue) {
+    long handle = makeDecimal64Scalar(unscaledValue, scale, true);
+    return new Scalar(DType.create(DType.DTypeEnum.DECIMAL64, scale), handle);
+  }
+
   public static Scalar fromFloat(Float value) {
     if (value == null) {
       return Scalar.fromNull(DType.FLOAT32);
@@ -233,7 +243,7 @@ public final class Scalar implements AutoCloseable, BinaryOperable {
     return Scalar.fromDouble(value.doubleValue());
   }
 
-  public static Scalar fromBigDecimal(BigDecimal value) {
+  public static Scalar fromDecimal(BigDecimal value) {
     if (value == null) {
       return Scalar.fromNull(DType.create(DType.DTypeEnum.DECIMAL64, 0));
     }
@@ -266,7 +276,7 @@ public final class Scalar implements AutoCloseable, BinaryOperable {
    */
   public static Scalar durationFromLong(DType type, long value) {
     if (type.isDurationType()) {
-      if (type == DType.DURATION_DAYS) {
+      if (type.equals(DType.DURATION_DAYS)) {
         int intValue = (int)value;
         if (value != intValue) {
           throw new IllegalArgumentException("value too large for type " + type + ": " + value);
@@ -294,8 +304,8 @@ public final class Scalar implements AutoCloseable, BinaryOperable {
   }
 
   public static Scalar timestampFromLong(DType type, long value) {
-    if (type.isTimestamp()) {
-      if (type == DType.TIMESTAMP_DAYS) {
+    if (type.isTimestampType()) {
+      if (type.equals(DType.TIMESTAMP_DAYS)) {
         int intValue = (int)value;
         if (value != intValue) {
           throw new IllegalArgumentException("value too large for type " + type + ": " + value);
@@ -476,8 +486,8 @@ public final class Scalar implements AutoCloseable, BinaryOperable {
 
   @Override
   public ColumnVector binaryOp(BinaryOp op, BinaryOperable rhs, DType outType) {
-    if (rhs instanceof ColumnVector) {
-      ColumnVector cvRhs = (ColumnVector) rhs;
+    if (rhs instanceof ColumnView) {
+      ColumnView cvRhs = (ColumnView) rhs;
       return new ColumnVector(binaryOp(this, cvRhs, op, outType));
     } else {
       throw new IllegalArgumentException(rhs.getClass() + " is not supported as a binary op with " +
@@ -485,7 +495,7 @@ public final class Scalar implements AutoCloseable, BinaryOperable {
     }
   }
 
-  static long binaryOp(Scalar lhs, ColumnVector rhs, BinaryOp op, DType outputType) {
+  static long binaryOp(Scalar lhs, ColumnView rhs, BinaryOp op, DType outputType) {
     return binaryOpSV(lhs.getScalarHandle(), rhs.getNativeView(),
         op.nativeId, outputType.typeId.getNativeId(), outputType.getScale());
   }
@@ -497,7 +507,7 @@ public final class Scalar implements AutoCloseable, BinaryOperable {
     if (this == o) return true;
     if (o == null || getClass() != o.getClass()) return false;
     Scalar other = (Scalar) o;
-    if (type != other.type) return false;
+    if (!type.equals(other.type)) return false;
     boolean valid = isValid();
     if (valid != other.isValid()) return false;
     if (!valid) return true;
@@ -515,6 +525,7 @@ public final class Scalar implements AutoCloseable, BinaryOperable {
     case INT32:
     case UINT32:
     case TIMESTAMP_DAYS:
+    case DECIMAL32:
       return getInt() == other.getInt();
     case FLOAT32:
       return getFloat() == other.getFloat();
@@ -526,7 +537,8 @@ public final class Scalar implements AutoCloseable, BinaryOperable {
     case TIMESTAMP_MILLISECONDS:
     case TIMESTAMP_MICROSECONDS:
     case TIMESTAMP_NANOSECONDS:
-      return getLong() == getLong();
+    case DECIMAL64:
+      return getLong() == other.getLong();
     case STRING:
       return Arrays.equals(getUTF8(), other.getUTF8());
     default:
@@ -556,6 +568,7 @@ public final class Scalar implements AutoCloseable, BinaryOperable {
       case INT32:
       case UINT32:
       case TIMESTAMP_DAYS:
+      case DECIMAL32:
         valueHash = getInt();
         break;
       case INT64:
@@ -564,6 +577,7 @@ public final class Scalar implements AutoCloseable, BinaryOperable {
       case TIMESTAMP_MILLISECONDS:
       case TIMESTAMP_MICROSECONDS:
       case TIMESTAMP_NANOSECONDS:
+      case DECIMAL64:
         valueHash = Long.hashCode(getLong());
         break;
       case FLOAT32:
@@ -631,6 +645,11 @@ public final class Scalar implements AutoCloseable, BinaryOperable {
         sb.append('"');
         sb.append(getJavaString());
         sb.append('"');
+        break;
+      case DECIMAL32:
+        // FALL THROUGH
+      case DECIMAL64:
+        sb.append(getBigDecimal());
         break;
       default:
         throw new IllegalArgumentException("Unknown scalar type: " + type);

@@ -20,7 +20,10 @@
 #include <cudf/utilities/error.hpp>
 #include <cudf/utilities/traits.hpp>
 
+#include <thrust/iterator/transform_iterator.h>
+
 #include <exception>
+#include <numeric>
 #include <vector>
 
 namespace cudf {
@@ -124,11 +127,9 @@ mutable_column_view::operator column_view() const
 
 size_type count_descendants(column_view parent)
 {
-  size_type count{parent.num_children()};
-  for (size_type i = 0; i < parent.num_children(); ++i) {
-    count += count_descendants(parent.child(i));
-  }
-  return count;
+  auto descendants = [](auto const& child) { return count_descendants(child); };
+  auto begin       = thrust::make_transform_iterator(parent.child_begin(), descendants);
+  return std::accumulate(begin, begin + parent.num_children(), size_type{parent.num_children()});
 }
 
 column_view logical_cast(column_view const& input, data_type type)
@@ -141,6 +142,18 @@ column_view logical_cast(column_view const& input, data_type type)
                      input._null_count,
                      input._offset,
                      input._children};
+}
+
+mutable_column_view logical_cast(mutable_column_view const& input, data_type type)
+{
+  CUDF_EXPECTS(is_logically_castable(input._type, type), "types are not logically castable");
+  return mutable_column_view{type,
+                             input._size,
+                             const_cast<void*>(input._data),
+                             const_cast<cudf::bitmask_type*>(input._null_mask),
+                             input._null_count,
+                             input._offset,
+                             input.mutable_children};
 }
 
 }  // namespace cudf

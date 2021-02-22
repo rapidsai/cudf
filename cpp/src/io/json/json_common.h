@@ -17,21 +17,6 @@
 #pragma once
 
 #include <cudf/types.hpp>
+#include <io/utilities/column_type_histogram.hpp>
 
 class SerialTrieNode;
-
-namespace cudf {
-namespace io {
-namespace json {
-struct column_info {
-  cudf::size_type float_count;
-  cudf::size_type datetime_count;
-  cudf::size_type string_count;
-  cudf::size_type int_count;
-  cudf::size_type bool_count;
-  cudf::size_type null_count;
-};
-
-}  // namespace json
-}  // namespace io
-}  // namespace cudf

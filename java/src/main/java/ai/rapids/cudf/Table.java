@@ -1,6 +1,6 @@
 /*
  *
- *  Copyright (c) 2019-2020, NVIDIA CORPORATION.
+ *  Copyright (c) 2019-2021, NVIDIA CORPORATION.
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -18,7 +18,17 @@
 
 package ai.rapids.cudf;
 
+import ai.rapids.cudf.HostColumnVector.BasicType;
+import ai.rapids.cudf.HostColumnVector.DataType;
+import ai.rapids.cudf.HostColumnVector.ListType;
+import ai.rapids.cudf.HostColumnVector.StructData;
+import ai.rapids.cudf.HostColumnVector.StructType;
+
 import java.io.File;
+import java.io.Serializable;
+import java.math.BigDecimal;
+import java.math.RoundingMode;
+import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
@@ -107,6 +117,11 @@ public final class Table implements AutoCloseable {
    */
   ColumnVector[] getColumns() {
     return columns;
+  }
+
+  /** Return the native table view handle for this table */
+  long getNativeView() {
+    return nativeHandle;
   }
 
   /**
@@ -211,15 +226,17 @@ public final class Table implements AutoCloseable {
 
   /**
    * Read in Parquet formatted data.
-   * @param filterColumnNames name of the columns to read, or an empty array if we want to read
-   *                          all of them
-   * @param filePath          the path of the file to read, or null if no path should be read.
-   * @param address           the address of the buffer to read from or 0 if we should not.
-   * @param length            the length of the buffer to read from.
-   * @param timeUnit          return type of TimeStamp in units
+   * @param filterColumnNames  name of the columns to read, or an empty array if we want to read
+   *                           all of them
+   * @param filePath           the path of the file to read, or null if no path should be read.
+   * @param address            the address of the buffer to read from or 0 if we should not.
+   * @param length             the length of the buffer to read from.
+   * @param timeUnit           return type of TimeStamp in units
+   * @param strictDecimalTypes whether strictly reading all decimal columns as fixed-point decimal type
    */
   private static native long[] readParquet(String[] filterColumnNames, String filePath,
-                                           long address, long length, int timeUnit) throws CudfException;
+                                           long address, long length, int timeUnit,
+                                           boolean strictDecimalTypes) throws CudfException;
 
   /**
    * Setup everything to write parquet formatted data to a file.
@@ -229,6 +246,9 @@ public final class Table implements AutoCloseable {
    * @param metadataValues  Metadata values corresponding to metadataKeys
    * @param compression     native compression codec ID
    * @param statsFreq       native statistics frequency ID
+   * @param isInt96         true if timestamp type is int96
+   * @param precisions      precision list containing all the precisions of the decimal types in
+   *                        the columns
    * @param filename        local output path
    * @return a handle that is used in later calls to writeParquetChunk and writeParquetEnd.
    */
@@ -238,6 +258,8 @@ public final class Table implements AutoCloseable {
                                                    String[] metadataValues,
                                                    int compression,
                                                    int statsFreq,
+                                                   boolean isInt96,
+                                                   int[] precisions,
                                                    String filename) throws CudfException;
 
   /**
@@ -248,6 +270,9 @@ public final class Table implements AutoCloseable {
    * @param metadataValues  Metadata values corresponding to metadataKeys
    * @param compression     native compression codec ID
    * @param statsFreq       native statistics frequency ID
+   * @param isInt96         true if timestamp type is int96
+   * @param precisions      precision list containing all the precisions of the decimal types in
+   *                        the columns
    * @param consumer        consumer of host buffers produced.
    * @return a handle that is used in later calls to writeParquetChunk and writeParquetEnd.
    */
@@ -257,6 +282,8 @@ public final class Table implements AutoCloseable {
                                                      String[] metadataValues,
                                                      int compression,
                                                      int statsFreq,
+                                                     boolean isInt96,
+                                                     int[] precisions,
                                                      HostBufferConsumer consumer) throws CudfException;
 
   /**
@@ -437,7 +464,11 @@ public final class Table implements AutoCloseable {
 
   private static native long[] timeRangeRollingWindowAggregate(long inputTable, int[] keyIndices, int[] timestampIndices, boolean[] isTimesampAscending,
                                                                int[] aggColumnsIndices, long[] aggInstances, int[] minPeriods,
-                                                               int[] preceding, int[] following, boolean ignoreNullKeys) throws CudfException;
+                                                               int[] preceding, int[] following, boolean[] unboundedPreceding, boolean[] unboundedFollowing, 
+                                                               boolean ignoreNullKeys) throws CudfException;
+
+  private static native long sortOrder(long inputTable, long[] sortKeys, boolean[] isDescending,
+      boolean[] areNullsSmallest) throws CudfException;
 
   private static native long[] orderBy(long inputTable, long[] sortKeys, boolean[] isDescending,
                                        boolean[] areNullsSmallest) throws CudfException;
@@ -480,7 +511,11 @@ public final class Table implements AutoCloseable {
                                                  long columnHandle,
                                                  boolean checkCount);
 
-  private native long createCudfTableView(long[] nativeColumnViewHandles);
+  private static native long[] explode(long tableHandle, int index);
+
+  private static native long createCudfTableView(long[] nativeColumnViewHandles);
+
+  private static native long[] columnViewsFromPacked(ByteBuffer metadata, long dataAddress);
 
   /////////////////////////////////////////////////////////////////////////////
   // TABLE CREATION APIs
@@ -607,7 +642,8 @@ public final class Table implements AutoCloseable {
    */
   public static Table readParquet(ParquetOptions opts, File path) {
     return new Table(readParquet(opts.getIncludeColumnNames(),
-        path.getAbsolutePath(), 0, 0, opts.timeUnit().typeId.getNativeId()));
+        path.getAbsolutePath(), 0, 0, opts.timeUnit().typeId.getNativeId(),
+        opts.isStrictDecimalType()));
   }
 
   /**
@@ -667,7 +703,8 @@ public final class Table implements AutoCloseable {
     assert len <= buffer.getLength() - offset;
     assert offset >= 0 && offset < buffer.length;
     return new Table(readParquet(opts.getIncludeColumnNames(),
-        null, buffer.getAddress() + offset, len, opts.timeUnit().typeId.getNativeId()));
+        null, buffer.getAddress() + offset, len, opts.timeUnit().typeId.getNativeId(),
+        opts.isStrictDecimalType()));
   }
 
   /**
@@ -763,6 +800,8 @@ public final class Table implements AutoCloseable {
           options.getMetadataValues(),
           options.getCompressionType().nativeId,
           options.getStatisticsFrequency().nativeId,
+          options.isTimestampTypeInt96(),
+          options.getPrecisions(),
           outputFile.getAbsolutePath());
     }
 
@@ -773,6 +812,8 @@ public final class Table implements AutoCloseable {
           options.getMetadataValues(),
           options.getCompressionType().nativeId,
           options.getStatisticsFrequency().nativeId,
+          options.isTimestampTypeInt96(),
+          options.getPrecisions(),
           consumer);
       this.consumer = consumer;
     }
@@ -1210,7 +1251,8 @@ public final class Table implements AutoCloseable {
   }
 
   /**
-   * Given a sorted table return the lower bound.
+   * Find smallest indices in a sorted table where values should be inserted to maintain order.
+   * <pre>
    * Example:
    *
    *  Single column:
@@ -1228,14 +1270,11 @@ public final class Table implements AutoCloseable {
    *                      { .7 },
    *                      { 61 }}
    *   result          = {  3 }
-   * NaNs in column values produce incorrect results.
+   * </pre>
    * The input table and the values table need to be non-empty (row count > 0)
-   * The column data types of the tables' have to match in order.
-   * Strings and String categories do not work for this method. If the input table is
-   * unsorted the results are wrong. Types of columns can be of mixed data types.
-   * @param areNullsSmallest true if nulls are assumed smallest
-   * @param valueTable the table of values that need to be inserted
-   * @param descFlags indicates the ordering of the column(s), true if descending
+   * @param areNullsSmallest per column, true if nulls are assumed smallest
+   * @param valueTable the table of values to find insertion locations for
+   * @param descFlags per column indicates the ordering, true if descending.
    * @return ColumnVector with lower bound indices for all rows in valueTable
    */
   public ColumnVector lowerBound(boolean[] areNullsSmallest,
@@ -1246,7 +1285,34 @@ public final class Table implements AutoCloseable {
   }
 
   /**
+   * Find smallest indices in a sorted table where values should be inserted to maintain order.
+   * This is a convenience method. It pulls out the columns indicated by the args and sets up the
+   * ordering properly to call `lowerBound`.
+   * @param valueTable the table of values to find insertion locations for
+   * @param args the sort order used to sort this table.
+   * @return ColumnVector with lower bound indices for all rows in valueTable
+   */
+  public ColumnVector lowerBound(Table valueTable, OrderByArg... args) {
+    boolean[] areNullsSmallest = new boolean[args.length];
+    boolean[] descFlags = new boolean[args.length];
+    ColumnVector[] inputColumns = new ColumnVector[args.length];
+    ColumnVector[] searchColumns = new ColumnVector[args.length];
+    for (int i = 0; i < args.length; i++) {
+      areNullsSmallest[i] = args[i].isNullSmallest;
+      descFlags[i] = args[i].isDescending;
+      inputColumns[i] = columns[args[i].index];
+      searchColumns[i] = valueTable.columns[args[i].index];
+    }
+    try (Table input = new Table(inputColumns);
+         Table search = new Table(searchColumns)) {
+      return input.lowerBound(areNullsSmallest, search, descFlags);
+    }
+  }
+
+  /**
+   * Find largest indices in a sorted table where values should be inserted to maintain order.
    * Given a sorted table return the upper bound.
+   * <pre>
    * Example:
    *
    *  Single column:
@@ -1264,14 +1330,11 @@ public final class Table implements AutoCloseable {
    *                      { .7 },
    *                      { 61 }}
    *   result          = {  5 }
-   * NaNs in column values produce incorrect results.
+   * </pre>
    * The input table and the values table need to be non-empty (row count > 0)
-   * The column data types of the tables' have to match in order.
-   * Strings and String categories do not work for this method. If the input table is
-   * unsorted the results are wrong. Types of columns can be of mixed data types.
-   * @param areNullsSmallest true if nulls are assumed smallest
-   * @param valueTable the table of values that need to be inserted
-   * @param descFlags indicates the ordering of the column(s), true if descending
+   * @param areNullsSmallest per column, true if nulls are assumed smallest
+   * @param valueTable the table of values to find insertion locations for
+   * @param descFlags per column indicates the ordering, true if descending.
    * @return ColumnVector with upper bound indices for all rows in valueTable
    */
   public ColumnVector upperBound(boolean[] areNullsSmallest,
@@ -1281,11 +1344,36 @@ public final class Table implements AutoCloseable {
       descFlags, areNullsSmallest, true));
   }
 
+  /**
+   * Find largest indices in a sorted table where values should be inserted to maintain order.
+   * This is a convenience method. It pulls out the columns indicated by the args and sets up the
+   * ordering properly to call `upperBound`.
+   * @param valueTable the table of values to find insertion locations for
+   * @param args the sort order used to sort this table.
+   * @return ColumnVector with upper bound indices for all rows in valueTable
+   */
+  public ColumnVector upperBound(Table valueTable, OrderByArg... args) {
+    boolean[] areNullsSmallest = new boolean[args.length];
+    boolean[] descFlags = new boolean[args.length];
+    ColumnVector[] inputColumns = new ColumnVector[args.length];
+    ColumnVector[] searchColumns = new ColumnVector[args.length];
+    for (int i = 0; i < args.length; i++) {
+      areNullsSmallest[i] = args[i].isNullSmallest;
+      descFlags[i] = args[i].isDescending;
+      inputColumns[i] = columns[args[i].index];
+      searchColumns[i] = valueTable.columns[args[i].index];
+    }
+    try (Table input = new Table(inputColumns);
+         Table search = new Table(searchColumns)) {
+      return input.upperBound(areNullsSmallest, search, descFlags);
+    }
+  }
+
   private void assertForBounds(Table valueTable) {
     assert this.getRowCount() != 0 : "Input table cannot be empty";
     assert valueTable.getRowCount() != 0 : "Value table cannot be empty";
     for (int i = 0; i < Math.min(columns.length, valueTable.columns.length); i++) {
-      assert valueTable.columns[i].getType() == this.getColumn(i).getType() :
+      assert valueTable.columns[i].getType().equals(this.getColumn(i).getType()) :
           "Input and values tables' data types do not match";
     }
   }
@@ -1306,16 +1394,38 @@ public final class Table implements AutoCloseable {
   /////////////////////////////////////////////////////////////////////////////
 
   /**
+   * Get back a gather map that can be used to sort the data. This allows you to sort by data
+   * that does not appear in the final result and not pay the cost of gathering the data that
+   * is only needed for sorting.
+   * @param args what order to sort the data by
+   * @return a gather map
+   */
+  public ColumnVector sortOrder(OrderByArg... args) {
+    long[] sortKeys = new long[args.length];
+    boolean[] isDescending = new boolean[args.length];
+    boolean[] areNullsSmallest = new boolean[args.length];
+    for (int i = 0; i < args.length; i++) {
+      int index = args[i].index;
+      assert (index >= 0 && index < columns.length) :
+          "index is out of range 0 <= " + index + " < " + columns.length;
+      isDescending[i] = args[i].isDescending;
+      areNullsSmallest[i] = args[i].isNullSmallest;
+      sortKeys[i] = columns[index].getNativeView();
+    }
+
+    return new ColumnVector(sortOrder(nativeHandle, sortKeys, isDescending, areNullsSmallest));
+  }
+
+  /**
    * Orders the table using the sortkeys returning a new allocated table. The caller is
    * responsible for cleaning up
    * the {@link ColumnVector} returned as part of the output {@link Table}
    * <p>
    * Example usage: orderBy(true, Table.asc(0), Table.desc(3)...);
-   * @param args             - Suppliers to initialize sortKeys.
+   * @param args Suppliers to initialize sortKeys.
    * @return Sorted Table
    */
   public Table orderBy(OrderByArg... args) {
-    assert args.length <= columns.length;
     long[] sortKeys = new long[args.length];
     boolean[] isDescending = new boolean[args.length];
     boolean[] areNullsSmallest = new boolean[args.length];
@@ -1340,13 +1450,13 @@ public final class Table implements AutoCloseable {
    *             initially.
    * @return a combined sorted table.
    */
-  public static Table merge(List<Table> tables, OrderByArg... args) {
-    assert !tables.isEmpty();
-    long[] tableHandles = new long[tables.size()];
-    Table first = tables.get(0);
+  public static Table merge(Table[] tables, OrderByArg... args) {
+    assert tables.length > 0;
+    long[] tableHandles = new long[tables.length];
+    Table first = tables[0];
     assert args.length <= first.columns.length;
-    for (int i = 0; i < tables.size(); i++) {
-      Table t = tables.get(i);
+    for (int i = 0; i < tables.length; i++) {
+      Table t = tables[i];
       assert t != null;
       assert t.columns.length == first.columns.length;
       tableHandles[i] = t.nativeHandle;
@@ -1357,13 +1467,26 @@ public final class Table implements AutoCloseable {
     for (int i = 0; i < args.length; i++) {
       int index = args[i].index;
       assert (index >= 0 && index < first.columns.length) :
-              "index is out of range 0 <= " + index + " < " + first.columns.length;
+          "index is out of range 0 <= " + index + " < " + first.columns.length;
       isDescending[i] = args[i].isDescending;
       areNullsSmallest[i] = args[i].isNullSmallest;
       sortKeyIndexes[i] = index;
     }
 
     return new Table(merge(tableHandles, sortKeyIndexes, isDescending, areNullsSmallest));
+  }
+
+  /**
+   * Merge multiple already sorted tables keeping the sort order the same.
+   * This is a more efficient version of concatenate followed by orderBy, but requires that
+   * the input already be sorted.
+   * @param tables the tables that should be merged.
+   * @param args the ordering of the tables.  Should match how they were sorted
+   *             initially.
+   * @return a combined sorted table.
+   */
+  public static Table merge(List<Table> tables, OrderByArg... args) {
+    return merge(tables.toArray(new Table[tables.size()]), args);
   }
 
   public static OrderByArg asc(final int index) {
@@ -1561,7 +1684,7 @@ public final class Table implements AutoCloseable {
    * the filter defined by the boolean mask
    */
   public Table filter(ColumnVector mask) {
-    assert mask.getType() == DType.BOOL8 : "Mask column must be of type BOOL8";
+    assert mask.getType().equals(DType.BOOL8) : "Mask column must be of type BOOL8";
     assert getRowCount() == 0 || getRowCount() == mask.getRowCount() : "Mask column has incorrect size";
     return new Table(filter(nativeHandle, mask.getNativeView()));
   }
@@ -1588,6 +1711,47 @@ public final class Table implements AutoCloseable {
     return contiguousSplit(nativeHandle, indices);
   }
 
+  /**
+   * Explodes a list column's elements.
+   *
+   * Any list is exploded, which means the elements of the list in each row are expanded
+   * into new rows in the output. The corresponding rows for other columns in the input
+   * are duplicated.
+   *
+   * <code>
+   * Example:
+   * input:  [[5,10,15], 100],
+   *         [[20,25],   200],
+   *         [[30],      300],
+   * index: 0
+   * output: [5,         100],
+   *         [10,        100],
+   *         [15,        100],
+   *         [20,        200],
+   *         [25,        200],
+   *         [30,        300]
+   * </code>
+   *
+   * Nulls propagate in different ways depending on what is null.
+   * <code>
+   *     [[5,null,15], 100],
+   *     [null,        200]
+   * returns:
+   *     [5,           100],
+   *     [null,        100],
+   *     [15,          100]
+   * </code>
+   * Note that null lists are completely removed from the output
+   * and nulls inside lists are pulled out and remain.
+   *
+   * @param index Column index to explode inside the table.
+   * @return A new table with explode_col exploded.
+   */
+  public Table explode(int index) {
+    assert 0 <= index && index < columns.length : "Column index is out of range";
+    assert columns[index].getType().equals(DType.LIST) : "Column to explode must be of type LIST";
+    return new Table(explode(nativeHandle, index));
+  }
 
   /**
    * Gathers the rows of this table according to `gatherMap` such that row "i"
@@ -1726,11 +1890,55 @@ public final class Table implements AutoCloseable {
     return new Table(convertFromRows(vec.getNativeView(), types, scale));
   }
 
+  /**
+   * Construct a table from a packed representation.
+   * @param metadata host-based metadata for the table
+   * @param data GPU data buffer for the table
+   * @return table which is zero-copy reconstructed from the packed-form
+   */
+  public static Table fromPackedTable(ByteBuffer metadata, DeviceMemoryBuffer data) {
+    // Ensure the metadata buffer is direct so it can be passed to JNI
+    ByteBuffer directBuffer = metadata;
+    if (!directBuffer.isDirect()) {
+      directBuffer = ByteBuffer.allocateDirect(metadata.remaining());
+      directBuffer.put(metadata);
+      directBuffer.flip();
+    }
+
+    long[] columnViewAddresses = columnViewsFromPacked(directBuffer, data.getAddress());
+    ColumnVector[] columns = new ColumnVector[columnViewAddresses.length];
+    Table result = null;
+    try {
+      for (int i = 0; i < columns.length; i++) {
+        columns[i] = ColumnVector.fromViewWithContiguousAllocation(columnViewAddresses[i], data);
+        columnViewAddresses[i] = 0;
+      }
+      result = new Table(columns);
+    } catch (Throwable t) {
+      for (int i = 0; i < columns.length; i++) {
+        if (columns[i] != null) {
+          columns[i].close();
+        }
+        if (columnViewAddresses[i] != 0) {
+          ColumnView.deleteColumnView(columnViewAddresses[i]);
+        }
+      }
+      throw t;
+    }
+
+    // close columns to leave the resulting table responsible for freeing underlying columns
+    for (ColumnVector column : columns) {
+      column.close();
+    }
+
+    return result;
+  }
+
   /////////////////////////////////////////////////////////////////////////////
   // HELPER CLASSES
   /////////////////////////////////////////////////////////////////////////////
 
-  public static final class OrderByArg {
+  public static final class OrderByArg implements Serializable {
     final int index;
     final boolean isDescending;
     final boolean isNullSmallest;
@@ -1739,6 +1947,13 @@ public final class Table implements AutoCloseable {
       this.index = index;
       this.isDescending = isDescending;
       this.isNullSmallest = isNullSmallest;
+    }
+
+    @Override
+    public String toString() {
+      return "ORDER BY " + index +
+          (isDescending ? " DESC " : " ASC ") +
+          (isNullSmallest ? "NULL SMALLEST" : "NULL LARGEST");
     }
   }
 
@@ -2107,6 +2322,8 @@ public final class Table implements AutoCloseable {
       try {
         int[] aggPrecedingWindows = new int[totalOps];
         int[] aggFollowingWindows = new int[totalOps];
+        boolean[] aggPrecedingWindowsUnbounded = new boolean[totalOps];
+        boolean[] aggFollowingWindowsUnbounded = new boolean[totalOps];
         int[] aggMinPeriods = new int[totalOps];
         int opIndex = 0;
         for (Map.Entry<Integer, ColumnWindowOps> entry: groupedOps.entrySet()) {
@@ -2116,6 +2333,8 @@ public final class Table implements AutoCloseable {
             aggInstances[opIndex] = operation.createNativeInstance();
             aggPrecedingWindows[opIndex] = operation.getWindowOptions().getPreceding();
             aggFollowingWindows[opIndex] = operation.getWindowOptions().getFollowing();
+            aggPrecedingWindowsUnbounded[opIndex] = operation.getWindowOptions().isUnboundedPreceding();
+            aggFollowingWindowsUnbounded[opIndex] = operation.getWindowOptions().isUnboundedFollowing();
             aggMinPeriods[opIndex] = operation.getWindowOptions().getMinPeriods();
             assert (operation.getWindowOptions().getFrameType() == WindowOptions.FrameType.RANGE);
             timestampColumnIndexes[opIndex] = operation.getWindowOptions().getTimestampColumnIndex();
@@ -2136,6 +2355,7 @@ public final class Table implements AutoCloseable {
             isTimestampOrderAscending,
             aggColumnIndexes,
             aggInstances, aggMinPeriods, aggPrecedingWindows, aggFollowingWindows,
+            aggPrecedingWindowsUnbounded, aggFollowingWindowsUnbounded,
             groupByOptions.getIgnoreNullKeys()))) {
           // prepare the final table
           ColumnVector[] finalCols = new ColumnVector[windowAggregates.length];
@@ -2357,84 +2577,202 @@ public final class Table implements AutoCloseable {
    * tests.
    */
   public static final class TestBuilder {
-    private final List<DType> types = new ArrayList<>();
+    private final List<DataType> types = new ArrayList<>();
     private final List<Object> typeErasedData = new ArrayList<>();
 
     public TestBuilder column(String... values) {
-      types.add(DType.STRING);
+      types.add(new BasicType(true, DType.STRING));
       typeErasedData.add(values);
       return this;
     }
 
     public TestBuilder column(Boolean... values) {
-      types.add(DType.BOOL8);
+      types.add(new BasicType(true, DType.BOOL8));
       typeErasedData.add(values);
       return this;
     }
 
     public TestBuilder column(Byte... values) {
-      types.add(DType.INT8);
+      types.add(new BasicType(true, DType.INT8));
       typeErasedData.add(values);
       return this;
     }
 
     public TestBuilder column(Short... values) {
-      types.add(DType.INT16);
+      types.add(new BasicType(true, DType.INT16));
       typeErasedData.add(values);
       return this;
     }
 
     public TestBuilder column(Integer... values) {
-      types.add(DType.INT32);
+      types.add(new BasicType(true, DType.INT32));
       typeErasedData.add(values);
       return this;
     }
 
     public TestBuilder column(Long... values) {
-      types.add(DType.INT64);
+      types.add(new BasicType(true, DType.INT64));
       typeErasedData.add(values);
       return this;
     }
 
     public TestBuilder column(Float... values) {
-      types.add(DType.FLOAT32);
+      types.add(new BasicType(true, DType.FLOAT32));
       typeErasedData.add(values);
       return this;
     }
 
     public TestBuilder column(Double... values) {
-      types.add(DType.FLOAT64);
+      types.add(new BasicType(true, DType.FLOAT64));
+      typeErasedData.add(values);
+      return this;
+    }
+
+    public TestBuilder column(ListType dataType, List<?>... values) {
+      types.add(dataType);
+      typeErasedData.add(values);
+      return this;
+    }
+
+    public TestBuilder column(String[]... values) {
+      types.add(new ListType(true, new BasicType(true, DType.STRING)));
+      typeErasedData.add(values);
+      return this;
+    }
+
+    public TestBuilder column(Boolean[]... values) {
+      types.add(new ListType(true, new BasicType(true, DType.BOOL8)));
+      typeErasedData.add(values);
+      return this;
+    }
+
+    public TestBuilder column(Byte[]... values) {
+      types.add(new ListType(true, new BasicType(true, DType.INT8)));
+      typeErasedData.add(values);
+      return this;
+    }
+
+    public TestBuilder column(Short[]... values) {
+      types.add(new ListType(true, new BasicType(true, DType.INT16)));
+      typeErasedData.add(values);
+      return this;
+    }
+
+    public TestBuilder column(Integer[]... values) {
+      types.add(new ListType(true, new BasicType(true, DType.INT32)));
+      typeErasedData.add(values);
+      return this;
+    }
+
+    public TestBuilder column(Long[]... values) {
+      types.add(new ListType(true, new BasicType(true, DType.INT64)));
+      typeErasedData.add(values);
+      return this;
+    }
+
+    public TestBuilder column(Float[]... values) {
+      types.add(new ListType(true, new BasicType(true, DType.FLOAT32)));
+      typeErasedData.add(values);
+      return this;
+    }
+
+    public TestBuilder column(Double[]... values) {
+      types.add(new ListType(true, new BasicType(true, DType.FLOAT64)));
+      typeErasedData.add(values);
+      return this;
+    }
+
+    public TestBuilder column(StructType dataType, StructData... values) {
+      types.add(dataType);
+      typeErasedData.add(values);
+      return this;
+    }
+
+    public TestBuilder column(StructType dataType, StructData[]... values) {
+      types.add(new ListType(true, dataType));
       typeErasedData.add(values);
       return this;
     }
 
     public TestBuilder timestampDayColumn(Integer... values) {
-      types.add(DType.TIMESTAMP_DAYS);
+      types.add(new BasicType(true, DType.TIMESTAMP_DAYS));
       typeErasedData.add(values);
       return this;
     }
 
     public TestBuilder timestampNanosecondsColumn(Long... values) {
-      types.add(DType.TIMESTAMP_NANOSECONDS);
+      types.add(new BasicType(true, DType.TIMESTAMP_NANOSECONDS));
       typeErasedData.add(values);
       return this;
     }
 
     public TestBuilder timestampMillisecondsColumn(Long... values) {
-      types.add(DType.TIMESTAMP_MILLISECONDS);
+      types.add(new BasicType(true, DType.TIMESTAMP_MILLISECONDS));
       typeErasedData.add(values);
       return this;
     }
 
     public TestBuilder timestampMicrosecondsColumn(Long... values) {
-      types.add(DType.TIMESTAMP_MICROSECONDS);
+      types.add(new BasicType(true, DType.TIMESTAMP_MICROSECONDS));
       typeErasedData.add(values);
       return this;
     }
 
     public TestBuilder timestampSecondsColumn(Long... values) {
-      types.add(DType.TIMESTAMP_SECONDS);
+      types.add(new BasicType(true, DType.TIMESTAMP_SECONDS));
       typeErasedData.add(values);
+      return this;
+    }
+
+    public TestBuilder decimal32Column(int scale, Integer... unscaledValues) {
+      types.add(new BasicType(true, DType.create(DType.DTypeEnum.DECIMAL32, scale)));
+      typeErasedData.add(unscaledValues);
+      return this;
+    }
+
+    public TestBuilder decimal32Column(int scale, RoundingMode mode, Double... values) {
+      types.add(new BasicType(true, DType.create(DType.DTypeEnum.DECIMAL32, scale)));
+      BigDecimal[] data = Arrays.stream(values).map((x) -> {
+        if (x == null) return null;
+        return BigDecimal.valueOf(x).setScale(-scale, mode);
+      }).toArray(BigDecimal[]::new);
+      typeErasedData.add(data);
+      return this;
+    }
+
+    public TestBuilder decimal32Column(int scale, RoundingMode mode, String... values) {
+      types.add(new BasicType(true, DType.create(DType.DTypeEnum.DECIMAL32, scale)));
+      BigDecimal[] data = Arrays.stream(values).map((x) -> {
+        if (x == null) return null;
+        return new BigDecimal(x).setScale(-scale, mode);
+      }).toArray(BigDecimal[]::new);
+      typeErasedData.add(data);
+      return this;
+    }
+
+    public TestBuilder decimal64Column(int scale, Long... unscaledValues) {
+      types.add(new BasicType(true, DType.create(DType.DTypeEnum.DECIMAL64, scale)));
+      typeErasedData.add(unscaledValues);
+      return this;
+    }
+
+    public TestBuilder decimal64Column(int scale, RoundingMode mode, Double... values) {
+      types.add(new BasicType(true, DType.create(DType.DTypeEnum.DECIMAL64, scale)));
+      BigDecimal[] data = Arrays.stream(values).map((x) -> {
+        if (x == null) return null;
+        return BigDecimal.valueOf(x).setScale(-scale, mode);
+      }).toArray(BigDecimal[]::new);
+      typeErasedData.add(data);
+      return this;
+    }
+
+    public TestBuilder decimal64Column(int scale, RoundingMode mode, String... values) {
+      types.add(new BasicType(true, DType.create(DType.DTypeEnum.DECIMAL64, scale)));
+      BigDecimal[] data = Arrays.stream(values).map((x) -> {
+        if (x == null) return null;
+        return new BigDecimal(x).setScale(-scale, mode);
+      }).toArray(BigDecimal[]::new);
+      typeErasedData.add(data);
       return this;
     }
 
@@ -2480,17 +2818,69 @@ public final class Table implements AutoCloseable {
         case FLOAT64:
           ret = ColumnVector.fromBoxedDoubles((Double[]) dataArray);
           break;
+        case DECIMAL32:
+        case DECIMAL64:
+          int scale = type.getScale();
+          if (dataArray instanceof Integer[]) {
+            BigDecimal[] data = Arrays.stream(((Integer[]) dataArray))
+                .map((i) -> i == null ? null : BigDecimal.valueOf(i, -scale))
+                .toArray(BigDecimal[]::new);
+            ret = ColumnVector.build(type, data.length, (b) -> b.appendBoxed(data));
+          } else if (dataArray instanceof Long[]) {
+            BigDecimal[] data = Arrays.stream(((Long[]) dataArray))
+                .map((i) -> i == null ? null : BigDecimal.valueOf(i, -scale))
+                .toArray(BigDecimal[]::new);
+            ret = ColumnVector.build(type, data.length, (b) -> b.appendBoxed(data));
+          } else if (dataArray instanceof BigDecimal[]) {
+            BigDecimal[] data = (BigDecimal[]) dataArray;
+            ret = ColumnVector.build(type, data.length, (b) -> b.appendBoxed(data));
+          } else {
+            throw new IllegalArgumentException(
+                "Data array of invalid type(" + dataArray.getClass() + ") to build decimal column");
+          }
+          break;
         default:
           throw new IllegalArgumentException(type + " is not supported yet");
       }
       return ret;
     }
 
+    @SuppressWarnings("unchecked")
+    private static <T> ColumnVector fromLists(DataType dataType, Object[] dataArray) {
+      List[] dataLists = new List[dataArray.length];
+      for (int i = 0; i < dataLists.length; ++i) {
+        // The element in dataArray can be an array or list, because the below overloaded
+        // version accepts a List of Array as rows.
+        //  `public TestBuilder column(ListType dataType, List<?>... values)`
+        Object dataList = dataArray[i];
+        dataLists[i] = dataList == null ? null :
+            (dataList instanceof List ? (List)dataList : Arrays.asList((Object[])dataList));
+      }
+      return ColumnVector.fromLists(dataType, dataLists);
+    }
+
+    private static ColumnVector fromStructs(DataType dataType, StructData[] dataArray) {
+      return ColumnVector.fromStructs(dataType, dataArray);
+    }
+
     public Table build() {
       List<ColumnVector> columns = new ArrayList<>(types.size());
       try {
         for (int i = 0; i < types.size(); i++) {
-          columns.add(from(types.get(i), typeErasedData.get(i)));
+          DataType dataType = types.get(i);
+          DType dtype = dataType.getType();
+          Object dataArray = typeErasedData.get(i);
+          if (dtype.isNestedType()) {
+            if (dtype.equals(DType.LIST)) {
+              columns.add(fromLists(dataType, (Object[]) dataArray));
+            } else if (dtype.equals(DType.STRUCT)) {
+              columns.add(fromStructs(dataType, (StructData[]) dataArray));
+            } else {
+              throw new IllegalStateException("Unexpected nested type: " + dtype);
+            }
+          } else {
+            columns.add(from(dtype, dataArray));
+          }
         }
         return new Table(columns.toArray(new ColumnVector[columns.size()]));
       } finally {

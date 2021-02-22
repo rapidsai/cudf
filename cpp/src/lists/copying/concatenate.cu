@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -23,6 +23,10 @@
 #include <cudf/detail/concatenate.cuh>
 #include <cudf/detail/get_value.cuh>
 #include <cudf/lists/lists_column_view.hpp>
+
+#include <rmm/cuda_stream_view.hpp>
+#include <rmm/exec_policy.hpp>
+
 #include <memory>
 
 namespace cudf {
@@ -46,7 +50,7 @@ namespace {
  */
 std::unique_ptr<column> merge_offsets(std::vector<lists_column_view> const& columns,
                                       size_type total_list_count,
-                                      cudaStream_t stream,
+                                      rmm::cuda_stream_view stream,
                                       rmm::mr::device_memory_resource* mr)
 {
   // outgoing offsets
@@ -64,9 +68,9 @@ std::unique_ptr<column> merge_offsets(std::vector<lists_column_view> const& colu
       int const local_shift =
         shift -
         (c.offset() > 0 ? cudf::detail::get_value<size_type>(c.offsets(), c.offset(), stream) : 0);
-      column_device_view offsets(c.offsets(), 0, 0);
+      column_device_view offsets(c.offsets(), nullptr, nullptr);
       thrust::transform(
-        rmm::exec_policy(stream)->on(stream),
+        rmm::exec_policy(stream),
         offsets.begin<size_type>() + c.offset(),
         offsets.begin<size_type>() + c.offset() + c.size() + 1,
         d_merged_offsets.begin<size_type>() + count,
@@ -84,11 +88,10 @@ std::unique_ptr<column> merge_offsets(std::vector<lists_column_view> const& colu
 
 /**
  * @copydoc cudf::lists::detail::concatenate
- *
  */
 std::unique_ptr<column> concatenate(
   std::vector<column_view> const& columns,
-  cudaStream_t stream                 = 0,
+  rmm::cuda_stream_view stream,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
 {
   std::vector<lists_column_view> lists_columns;
@@ -109,7 +112,7 @@ std::unique_ptr<column> concatenate(
                   total_list_count += l.size();
                   children.push_back(l.get_sliced_child(stream));
                 });
-  auto data = cudf::detail::concatenate(children, mr, stream);
+  auto data = cudf::detail::concatenate(children, stream, mr);
 
   // merge offsets
   auto offsets = merge_offsets(lists_columns, total_list_count, stream, mr);

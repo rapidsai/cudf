@@ -23,6 +23,8 @@
 
 #include <cudf/io/json.hpp>
 
+#include <rmm/cuda_stream_view.hpp>
+
 // Forward declarations
 namespace arrow {
 namespace io {
@@ -77,7 +79,8 @@ class reader {
    * @param[in] options Settings for controlling reading behavior
    * @return cudf::table object that contains the array of cudf::column.
    */
-  table_with_metadata read(json_reader_options const &options, cudaStream_t stream = 0);
+  table_with_metadata read(json_reader_options const &options,
+                           rmm::cuda_stream_view stream = rmm::cuda_stream_default);
 };
 
 }  // namespace json

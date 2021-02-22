@@ -18,6 +18,8 @@
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_view.hpp>
 
+#include <rmm/cuda_stream_view.hpp>
+
 /**
  * @file
  * @brief Class definition for cudf::lists_column_view
@@ -84,7 +86,7 @@ class lists_column_view : private column_view {
    *
    * @throw cudf::logic error if this is an empty column
    */
-  column_view get_sliced_child(cudaStream_t stream) const;
+  column_view get_sliced_child(rmm::cuda_stream_view stream) const;
 };
 /** @} */  // end of group
 }  // namespace cudf

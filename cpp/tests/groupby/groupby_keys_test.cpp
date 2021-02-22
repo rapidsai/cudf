@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2020, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -28,7 +28,8 @@ template <typename V>
 struct groupby_keys_test : public cudf::test::BaseFixture {
 };
 
-using supported_types = cudf::test::Types<int8_t, int16_t, int32_t, int64_t, float, double>;
+using supported_types = cudf::test::
+  Types<int8_t, int16_t, int32_t, int64_t, float, double, numeric::decimal32, numeric::decimal64>;
 
 TYPED_TEST_CASE(groupby_keys_test, supported_types);
 
@@ -194,6 +195,27 @@ TEST_F(groupby_string_keys_test, basic)
     test_single_agg(keys, vals, expect_keys, expect_vals, std::move(agg));
 }
 // clang-format on
+
+struct groupby_dictionary_keys_test : public cudf::test::BaseFixture {
+};
+
+TEST_F(groupby_dictionary_keys_test, basic)
+{
+  using K = std::string;
+  using V = int32_t;
+  using R = cudf::detail::target_type_t<V, aggregation::SUM>;
+
+  // clang-format off
+  dictionary_column_wrapper<K> keys { "aaa", "año", "₹1", "aaa", "año", "año", "aaa", "₹1", "₹1", "año"};
+  fixed_width_column_wrapper<V> vals{     0,     1,    2,     3,     4,     5,     6,    7,    8,     9};
+  dictionary_column_wrapper<K>expect_keys  ({ "aaa", "año", "₹1" });
+  fixed_width_column_wrapper<R> expect_vals({     9,    19,   17 });
+  // clang-format on
+
+  test_single_agg(keys, vals, expect_keys, expect_vals, cudf::make_sum_aggregation());
+  test_single_agg(
+    keys, vals, expect_keys, expect_vals, cudf::make_sum_aggregation(), force_use_sort_impl::YES);
+}
 
 }  // namespace test
 }  // namespace cudf

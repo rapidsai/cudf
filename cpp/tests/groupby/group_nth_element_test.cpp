@@ -21,6 +21,7 @@
 #include <cudf_test/type_lists.hpp>
 
 #include <cudf/detail/aggregation/aggregation.hpp>
+#include <cudf/dictionary/update_keys.hpp>
 
 namespace cudf {
 namespace test {
@@ -293,11 +294,12 @@ TYPED_TEST(groupby_nth_element_test, exclude_nulls_negative_index)
   test_single_agg(keys, vals, expect_keys, expect_vals2, std::move(agg));
 }
 
-TYPED_TEST(groupby_nth_element_test, basic_string)
+struct groupby_nth_element_string_test : public cudf::test::BaseFixture {
+};
+
+TEST_F(groupby_nth_element_string_test, basic_string)
 {
   using K = int32_t;
-  using V = std::string;
-  using R = cudf::detail::target_type_t<V, aggregation::NTH_ELEMENT>;
 
   fixed_width_column_wrapper<K> keys{1, 2, 3, 1, 2, 2, 1, 3, 3, 2};
   strings_column_wrapper vals{"ABCD", "1", "2", "3", "4", "5", "6", "7", "8", "9"};
@@ -343,6 +345,22 @@ TYPED_TEST(groupby_nth_element_test, basic_string)
   test_single_agg(keys, vals, expect_keys, expect_vals7, std::move(agg));
 }
 // clang-format on
+
+TEST_F(groupby_nth_element_string_test, dictionary)
+{
+  using K = int32_t;
+  using V = std::string;
+
+  fixed_width_column_wrapper<K> keys{1, 2, 3, 1, 2, 2, 1, 3, 3, 2};
+  dictionary_column_wrapper<V> vals{"AB", "1", "2", "3", "4", "5", "6", "7", "8", "9"};
+  fixed_width_column_wrapper<K> expect_keys{1, 2, 3};
+  dictionary_column_wrapper<V> expect_vals_w{"6", "5", "8"};
+
+  auto expect_vals = cudf::dictionary::set_keys(expect_vals_w, vals.keys());
+
+  test_single_agg(
+    keys, vals, expect_keys, expect_vals->view(), cudf::make_nth_element_aggregation(2));
+}
 
 }  // namespace test
 }  // namespace cudf

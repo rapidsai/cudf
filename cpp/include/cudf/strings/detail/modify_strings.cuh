@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,12 +16,16 @@
 #pragma once
 
 #include <cudf/column/column_device_view.cuh>
+#include <cudf/detail/iterator.cuh>
+#include <cudf/detail/null_mask.hpp>
 #include <cudf/strings/detail/utilities.hpp>
 #include <cudf/strings/string_view.cuh>
 #include <cudf/strings/strings_column_view.hpp>
+
 #include <strings/utilities.cuh>
 
-#include <rmm/thrust_rmm_allocator.h>
+#include <rmm/cuda_stream_view.hpp>
+#include <rmm/exec_policy.hpp>
 
 namespace cudf {
 namespace strings {
@@ -41,9 +45,9 @@ namespace detail {
  *
  * @param strings Number Column of strings to apply the modifications on;
  * it is not modified in place; rather a new column is returned instead
- * @param mr Device memory resource used to allocate the returned column's device memory.
- * (cannot be a default argument because of the variadic pack);
  * @param stream CUDA stream used for device memory operations and kernel launches.
+ * (cannot be a default argument because of the variadic pack);
+ * @param mr Device memory resource used to allocate the returned column's device memory.
  * (cannot be a default argument because of the variadic pack);
  * @param ...args Additional arguments to be forwarded to
  * the probe / execute constructors (can be empty);
@@ -51,30 +55,27 @@ namespace detail {
  */
 template <typename device_probe_functor, typename device_execute_functor, typename... Types>
 std::unique_ptr<column> modify_strings(strings_column_view const& strings,
+                                       rmm::cuda_stream_view stream,
                                        rmm::mr::device_memory_resource* mr,
-                                       cudaStream_t stream,
                                        Types&&... args)
 {
   auto strings_count = strings.size();
-  if (strings_count == 0) return detail::make_empty_strings_column(mr, stream);
-
-  auto execpol = rmm::exec_policy(stream);
+  if (strings_count == 0) return detail::make_empty_strings_column(stream, mr);
 
   auto strings_column  = column_device_view::create(strings.parent(), stream);
   auto d_column        = *strings_column;
   size_type null_count = strings.null_count();
 
   // copy null mask
-  rmm::device_buffer null_mask = copy_bitmask(strings.parent(), stream, mr);
+  rmm::device_buffer null_mask = cudf::detail::copy_bitmask(strings.parent(), stream, mr);
   // get the lookup tables used for case conversion
 
   device_probe_functor d_probe_fctr{d_column, std::forward<Types>(args)...};
 
   // build offsets column -- calculate the size of each output string
-  auto offsets_transformer_itr =
-    thrust::make_transform_iterator(thrust::make_counting_iterator<size_type>(0), d_probe_fctr);
-  auto offsets_column = detail::make_offsets_child_column(
-    offsets_transformer_itr, offsets_transformer_itr + strings_count, mr, stream);
+  auto offsets_transformer_itr = cudf::detail::make_counting_transform_iterator(0, d_probe_fctr);
+  auto offsets_column          = detail::make_offsets_child_column(
+    offsets_transformer_itr, offsets_transformer_itr + strings_count, stream, mr);
   auto offsets_view = offsets_column->view();
   auto d_new_offsets =
     offsets_view.template data<int32_t>();  // not sure why this requires `.template` and the next
@@ -83,19 +84,18 @@ std::unique_ptr<column> modify_strings(strings_column_view const& strings,
   // build the chars column -- convert characters based on case_flag parameter
   size_type bytes = thrust::device_pointer_cast(d_new_offsets)[strings_count];
   auto chars_column =
-    strings::detail::create_chars_child_column(strings_count, null_count, bytes, mr, stream);
+    strings::detail::create_chars_child_column(strings_count, null_count, bytes, stream, mr);
   auto chars_view = chars_column->mutable_view();
   auto d_chars    = chars_view.data<char>();
 
   device_execute_functor d_execute_fctr{
     d_column, d_new_offsets, d_chars, std::forward<Types>(args)...};
 
-  thrust::for_each_n(execpol->on(stream),
+  thrust::for_each_n(rmm::exec_policy(stream),
                      thrust::make_counting_iterator<size_type>(0),
                      strings_count,
                      d_execute_fctr);
 
-  //
   return make_strings_column(strings_count,
                              std::move(offsets_column),
                              std::move(chars_column),

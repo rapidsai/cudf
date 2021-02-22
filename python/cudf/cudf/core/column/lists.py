@@ -1,9 +1,13 @@
-# Copyright (c) 2020, NVIDIA CORPORATION.
+# Copyright (c) 2020-2021, NVIDIA CORPORATION.
+
+import pickle
 
 import pyarrow as pa
 
 import cudf
-from cudf.core.column import ColumnBase
+from cudf._lib.lists import count_elements
+from cudf.core.buffer import Buffer
+from cudf.core.column import ColumnBase, column
 from cudf.core.column.methods import ColumnMethodsMixin
 from cudf.utils.dtypes import is_list_dtype
 
@@ -108,6 +112,57 @@ class ListColumn(ColumnBase):
         else:
             super().set_base_data(value)
 
+    def serialize(self):
+        header = {}
+        header["type-serialized"] = pickle.dumps(type(self))
+        header["dtype"] = pickle.dumps(self.dtype)
+        header["null_count"] = self.null_count
+        header["size"] = self.size
+
+        frames = []
+        sub_headers = []
+
+        for item in self.children:
+            sheader, sframes = item.serialize()
+            sub_headers.append(sheader)
+            frames.extend(sframes)
+
+        if self.null_count > 0:
+            frames.append(self.mask)
+
+        header["subheaders"] = sub_headers
+        header["frame_count"] = len(frames)
+
+        return header, frames
+
+    @classmethod
+    def deserialize(cls, header, frames):
+
+        # Get null mask
+        if header["null_count"] > 0:
+            mask = Buffer(frames[-1])
+        else:
+            mask = None
+
+        # Deserialize child columns
+        children = []
+        f = 0
+        for h in header["subheaders"]:
+            fcount = h["frame_count"]
+            child_frames = frames[f : f + fcount]
+            column_type = pickle.loads(h["type-serialized"])
+            children.append(column_type.deserialize(h, child_frames))
+            f += fcount
+
+        # Materialize list column
+        return column.build_column(
+            data=None,
+            dtype=pickle.loads(header["dtype"]),
+            mask=mask,
+            children=tuple(children),
+            size=header["size"],
+        )
+
 
 class ListMethods(ColumnMethodsMixin):
     """
@@ -119,8 +174,7 @@ class ListMethods(ColumnMethodsMixin):
             raise AttributeError(
                 "Can only use .list accessor with a 'list' dtype"
             )
-        self._column = column
-        self._parent = parent
+        super().__init__(column=column, parent=parent)
 
     @property
     def leaves(self):
@@ -137,7 +191,7 @@ class ListMethods(ColumnMethodsMixin):
         >>> a = cudf.Series([[[1, None], [3, 4]], None, [[5, 6]]])
         >>> a.list.leaves
         0       1
-        1    null
+        1    <NA>
         2       3
         3       4
         4       5
@@ -150,3 +204,27 @@ class ListMethods(ColumnMethodsMixin):
             return self._return_or_inplace(
                 self._column.elements, retain_index=False
             )
+
+    def len(self):
+        """
+        Computes the length of each element in the Series/Index.
+
+        Returns
+        -------
+        Series or Index
+
+        Examples
+        --------
+        >>> s = cudf.Series([[1, 2, 3], None, [4, 5]])
+        >>> s
+        0    [1, 2, 3]
+        1         None
+        2       [4, 5]
+        dtype: list
+        >>> s.list.len()
+        0       3
+        1    <NA>
+        2       2
+        dtype: int32
+        """
+        return self._return_or_inplace(count_elements(self._column))

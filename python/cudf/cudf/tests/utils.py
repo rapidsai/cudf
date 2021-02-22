@@ -12,6 +12,7 @@ from pandas import testing as tm
 
 import cudf
 from cudf._lib.null_mask import bitmask_allocation_size_bytes
+from cudf.core.column.datetime import _numpy_to_pandas_conversion
 from cudf.utils import dtypes as dtypeutils
 
 supported_numpy_dtypes = [
@@ -73,8 +74,6 @@ def assert_eq(left, right, **kwargs):
     without switching between assert_frame_equal/assert_series_equal/...
     functions.
     """
-    __tracebackhide__ = True
-
     if hasattr(left, "to_pandas"):
         left = left.to_pandas()
     if hasattr(right, "to_pandas"):
@@ -98,13 +97,13 @@ def assert_eq(left, right, **kwargs):
         else:
             assert np.array_equal(left, right)
     else:
+        # Use the overloaded __eq__ of the operands
         if left == right:
             return True
+        elif any([np.issubdtype(type(x), np.floating) for x in (left, right)]):
+            np.testing.assert_almost_equal(left, right)
         else:
-            if np.isnan(left):
-                assert np.isnan(right)
-            else:
-                assert np.allclose(left, right, equal_nan=True)
+            np.testing.assert_equal(left, right)
     return True
 
 
@@ -259,8 +258,20 @@ def gen_rand(dtype, size, **kwargs):
         return np.random.randint(low=low, high=high, size=size).astype(dtype)
     elif dtype.kind == "b":
         low = kwargs.get("low", 0)
-        high = kwargs.get("high", 1)
+        high = kwargs.get("high", 2)
         return np.random.randint(low=low, high=high, size=size).astype(np.bool)
+    elif dtype.kind == "M":
+        low = kwargs.get("low", 0)
+        time_unit, _ = np.datetime_data(dtype)
+        high = kwargs.get(
+            "high",
+            1000000000000000000 / _numpy_to_pandas_conversion[time_unit],
+        )
+        return pd.to_datetime(
+            np.random.randint(low=low, high=high, size=size), unit=time_unit
+        )
+    elif dtype.kind == "U":
+        return pd.util.testing.rands_array(10, size)
     raise NotImplementedError(f"dtype.kind={dtype.kind}")
 
 

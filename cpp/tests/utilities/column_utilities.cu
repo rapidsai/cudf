@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2020, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -25,7 +25,7 @@
 #include <cudf/table/row_operators.cuh>
 #include <cudf/table/table_device_view.cuh>
 #include <cudf/utilities/bit.hpp>
-#include "cudf/utilities/type_dispatcher.hpp"
+#include <cudf/utilities/type_dispatcher.hpp>
 
 #include <cudf_test/column_utilities.hpp>
 #include <cudf_test/column_wrapper.hpp>
@@ -33,6 +33,8 @@
 #include <cudf_test/detail/column_utilities.hpp>
 
 #include <jit/type.h>
+
+#include <rmm/exec_policy.hpp>
 
 #include <thrust/equal.h>
 #include <thrust/iterator/counting_iterator.h>
@@ -48,11 +50,24 @@ namespace {
 
 template <bool check_exact_equality>
 struct column_property_comparator {
+  bool types_equivalent(cudf::data_type const& lhs, cudf::data_type const& rhs)
+  {
+    return is_fixed_point(lhs) ? lhs.id() == rhs.id() : lhs == rhs;
+  }
+
   void compare_common(cudf::column_view const& lhs, cudf::column_view const& rhs)
   {
-    EXPECT_EQ(lhs.type(), rhs.type());
+    if (check_exact_equality) {
+      EXPECT_EQ(lhs.type(), rhs.type());
+    } else {
+      EXPECT_TRUE(types_equivalent(lhs.type(), rhs.type()));
+    }
+
     EXPECT_EQ(lhs.size(), rhs.size());
+
     if (lhs.size() > 0 && check_exact_equality) { EXPECT_EQ(lhs.nullable(), rhs.nullable()); }
+
+    EXPECT_EQ(lhs.null_count(), rhs.null_count());
 
     // equivalent, but not exactly equal columns can have a different number of children if their
     // sizes are both 0. Specifically, empty string columns may or may not have children.
@@ -145,39 +160,37 @@ class corresponding_rows_not_equivalent {
   }
 };
 
-std::string differences_message(thrust::device_vector<int> const& differences,
-                                column_view const& lhs,
-                                column_view const& rhs,
-                                bool all_differences,
-                                int depth)
+// Stringify the inconsistent values resulted from the comparison of two columns element-wise
+std::string stringify_column_differences(thrust::device_vector<int> const& differences,
+                                         column_view const& lhs,
+                                         column_view const& rhs,
+                                         bool print_all_differences,
+                                         int depth)
 {
   CUDF_EXPECTS(not differences.empty(), "Shouldn't enter this function if `differences` is empty");
-
   std::string const depth_str = depth > 0 ? "depth " + std::to_string(depth) + '\n' : "";
-
-  if (all_differences) {
+  if (print_all_differences) {
     std::ostringstream buffer;
     buffer << depth_str << "differences:" << std::endl;
 
+    // thrust may crash if a device_vector is passed to fixed_width_column_wrapper,
+    // thus we construct fixed_width_column_wrapper from a host_vector instead
+    thrust::host_vector<int> h_differences(differences);
     auto source_table = cudf::table_view({lhs, rhs});
-    auto diff_column  = fixed_width_column_wrapper<int32_t>(differences.begin(), differences.end());
-    auto diff_table   = cudf::gather(source_table, diff_column);
-
+    auto diff_column =
+      fixed_width_column_wrapper<int32_t>(h_differences.begin(), h_differences.end());
+    auto diff_table = cudf::gather(source_table, diff_column);
     //  Need to pull back the differences
     auto const h_left_strings  = to_strings(diff_table->get_column(0));
     auto const h_right_strings = to_strings(diff_table->get_column(1));
-
-    for (size_t i = 0; i < differences.size(); ++i)
-      buffer << depth_str << "lhs[" << differences[i] << "] = " << h_left_strings[i] << ", rhs["
-             << differences[i] << "] = " << h_right_strings[i] << std::endl;
-
+    for (size_t i = 0; i < h_differences.size(); ++i)
+      buffer << depth_str << "lhs[" << h_differences[i] << "] = " << h_left_strings[i] << ", rhs["
+             << h_differences[i] << "] = " << h_right_strings[i] << std::endl;
     return buffer.str();
   } else {
-    int index = differences[0];  // only stringify first difference
-
+    int index     = differences[0];  // only stringify first difference
     auto diff_lhs = cudf::detail::slice(lhs, index, index + 1);
     auto diff_rhs = cudf::detail::slice(rhs, index, index + 1);
-
     return depth_str + "first difference: " + "lhs[" + std::to_string(index) +
            "] = " + to_string(diff_lhs, "") + ", rhs[" + std::to_string(index) +
            "] = " + to_string(diff_rhs, "");
@@ -209,7 +222,8 @@ struct column_comparator_impl {
     differences.resize(thrust::distance(differences.begin(), diff_iter));  // shrink back down
 
     if (not differences.empty())
-      GTEST_FAIL() << differences_message(differences, lhs, rhs, print_all_differences, depth);
+      GTEST_FAIL() << stringify_column_differences(
+        differences, lhs, rhs, print_all_differences, depth);
   }
 };
 
@@ -300,7 +314,8 @@ struct column_comparator_impl<list_view, check_exact_equality> {
     differences.resize(thrust::distance(differences.begin(), diff_iter));  // shrink back down
 
     if (not differences.empty())
-      GTEST_FAIL() << differences_message(differences, lhs, rhs, print_all_differences, depth);
+      GTEST_FAIL() << stringify_column_differences(
+        differences, lhs, rhs, print_all_differences, depth);
 
     // recurse
     auto lhs_child = lhs_l.get_sliced_child(0);
@@ -321,13 +336,18 @@ struct column_comparator_impl<struct_view, check_exact_equality> {
                   bool print_all_differences,
                   int depth)
   {
+    structs_column_view l_scv(lhs);
+    structs_column_view r_scv(rhs);
+
     std::for_each(thrust::make_counting_iterator(0),
                   thrust::make_counting_iterator(0) + lhs.num_children(),
                   [&](auto i) {
-                    cudf::type_dispatcher(lhs.child(i).type(),
+                    column_view lhs_child = l_scv.get_sliced_child(i);
+                    column_view rhs_child = r_scv.get_sliced_child(i);
+                    cudf::type_dispatcher(lhs_child.type(),
                                           column_comparator<check_exact_equality>{},
-                                          lhs.child(i),
-                                          rhs.child(i),
+                                          lhs_child,
+                                          rhs_child,
                                           print_all_differences,
                                           depth + 1);
                   });
@@ -355,7 +375,6 @@ struct column_comparator {
 
 /**
  * @copydoc cudf::test::expect_column_properties_equal
- *
  */
 void expect_column_properties_equal(column_view const& lhs, column_view const& rhs)
 {
@@ -364,7 +383,6 @@ void expect_column_properties_equal(column_view const& lhs, column_view const& r
 
 /**
  * @copydoc cudf::test::expect_column_properties_equivalent
- *
  */
 void expect_column_properties_equivalent(column_view const& lhs, column_view const& rhs)
 {
@@ -373,7 +391,6 @@ void expect_column_properties_equivalent(column_view const& lhs, column_view con
 
 /**
  * @copydoc cudf::test::expect_columns_equal
- *
  */
 void expect_columns_equal(cudf::column_view const& lhs,
                           cudf::column_view const& rhs,
@@ -384,7 +401,6 @@ void expect_columns_equal(cudf::column_view const& lhs,
 
 /**
  * @copydoc cudf::test::expect_columns_equivalent
- *
  */
 void expect_columns_equivalent(cudf::column_view const& lhs,
                                cudf::column_view const& rhs,
@@ -395,7 +411,6 @@ void expect_columns_equivalent(cudf::column_view const& lhs,
 
 /**
  * @copydoc cudf::test::expect_equal_buffers
- *
  */
 void expect_equal_buffers(void const* lhs, void const* rhs, std::size_t size_bytes)
 {
@@ -410,7 +425,6 @@ void expect_equal_buffers(void const* lhs, void const* rhs, std::size_t size_byt
 
 /**
  * @copydoc cudf::test::bitmask_to_host
- *
  */
 std::vector<bitmask_type> bitmask_to_host(cudf::column_view const& c)
 {
@@ -500,7 +514,7 @@ std::string nested_offsets_to_string(NestedColumnView const& c, std::string cons
   // normalize the offset values for the column offset
   size_type const* d_offsets = offsets.head<size_type>() + c.offset();
   thrust::transform(
-    rmm::exec_policy(0)->on(0),
+    rmm::exec_policy(),
     d_offsets,
     d_offsets + output_size,
     shifted_offsets.begin(),
@@ -563,10 +577,21 @@ struct column_view_printer {
                   std::string const& indent)
   {
     auto const h_data = cudf::test::to_host<Element>(col);
-    std::transform(std::cbegin(h_data.first),
-                   std::cend(h_data.first),
-                   std::back_inserter(out),
-                   [](auto const& fp) { return std::to_string(static_cast<double>(fp)); });
+    if (col.nullable()) {
+      std::transform(thrust::make_counting_iterator(size_type{0}),
+                     thrust::make_counting_iterator(col.size()),
+                     std::back_inserter(out),
+                     [&h_data](auto idx) {
+                       return h_data.second.empty() || bit_is_set(h_data.second.data(), idx)
+                                ? static_cast<std::string>(h_data.first[idx])
+                                : std::string("NULL");
+                     });
+    } else {
+      std::transform(std::cbegin(h_data.first),
+                     std::cend(h_data.first),
+                     std::back_inserter(out),
+                     [col](auto const& fp) { return static_cast<std::string>(fp); });
+    }
   }
 
   template <typename Element,
@@ -578,6 +603,7 @@ struct column_view_printer {
     //
     //  Implementation for strings, call special to_host variant
     //
+    if (col.is_empty()) return;
     auto h_data = cudf::test::to_host<std::string>(col);
 
     out.resize(col.size());
@@ -687,11 +713,13 @@ struct column_view_printer {
                  << detail::to_string(bitmask_to_host(col), col.size(), indent) << "\n";
     }
 
-    std::transform(
-      view.child_begin(),
-      view.child_end(),
-      std::ostream_iterator<std::string>(out_stream, "\n"),
-      [&](auto child_column) { return detail::to_string(child_column, ", ", indent + "    "); });
+    auto iter = thrust::make_counting_iterator(0);
+    std::transform(iter,
+                   iter + view.num_children(),
+                   std::ostream_iterator<std::string>(out_stream, "\n"),
+                   [&](size_type index) {
+                     return detail::to_string(view.get_sliced_child(index), ", ", indent + "    ");
+                   });
 
     out.push_back(out_stream.str());
   }
@@ -703,7 +731,6 @@ namespace detail {
 
 /**
  * @copydoc cudf::test::detail::to_strings
- *
  */
 std::vector<std::string> to_strings(cudf::column_view const& col, std::string const& indent)
 {
@@ -755,7 +782,6 @@ std::string to_string(std::vector<bitmask_type> const& null_mask,
 
 /**
  * @copydoc cudf::test::to_strings
- *
  */
 std::vector<std::string> to_strings(cudf::column_view const& col)
 {
@@ -764,7 +790,6 @@ std::vector<std::string> to_strings(cudf::column_view const& col)
 
 /**
  * @copydoc cudf::test::to_string(cudf::column_view, std::string)
- *
  */
 std::string to_string(cudf::column_view const& col, std::string const& delimiter)
 {
@@ -773,7 +798,6 @@ std::string to_string(cudf::column_view const& col, std::string const& delimiter
 
 /**
  * @copydoc cudf::test::to_string(std::vector<bitmask_type>, size_type)
- *
  */
 std::string to_string(std::vector<bitmask_type> const& null_mask, size_type null_mask_size)
 {
@@ -782,7 +806,6 @@ std::string to_string(std::vector<bitmask_type> const& null_mask, size_type null
 
 /**
  * @copydoc cudf::test::print
- *
  */
 void print(cudf::column_view const& col, std::ostream& os, std::string const& delimiter)
 {
@@ -791,7 +814,6 @@ void print(cudf::column_view const& col, std::ostream& os, std::string const& de
 
 /**
  * @copydoc cudf::test::validate_host_masks
- *
  */
 bool validate_host_masks(std::vector<bitmask_type> const& expected_mask,
                          std::vector<bitmask_type> const& got_mask,

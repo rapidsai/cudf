@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,6 +18,8 @@
 #include <cudf/utilities/error.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
 
+#include <rmm/cuda_stream_view.hpp>
+
 #include <dlpack/dlpack.h>
 
 #include <algorithm>
@@ -31,6 +33,12 @@ struct get_column_data_impl {
     return col.data<T>();
   }
 };
+
+template <>
+void const* get_column_data_impl::operator()<string_view>(column_view const& col)
+{
+  return nullptr;
+}
 
 void const* get_column_data(column_view const& col)
 {
@@ -113,8 +121,8 @@ struct dltensor_context {
 
 namespace detail {
 std::unique_ptr<table> from_dlpack(DLManagedTensor const* managed_tensor,
-                                   rmm::mr::device_memory_resource* mr,
-                                   cudaStream_t stream)
+                                   rmm::cuda_stream_view stream,
+                                   rmm::mr::device_memory_resource* mr)
 {
   CUDF_EXPECTS(nullptr != managed_tensor, "managed_tensor is null");
   auto const& tensor = managed_tensor->dl_tensor;
@@ -171,7 +179,7 @@ std::unique_ptr<table> from_dlpack(DLManagedTensor const* managed_tensor,
                              reinterpret_cast<void*>(tensor_data),
                              bytes,
                              cudaMemcpyDefault,
-                             stream));
+                             stream.value()));
 
     tensor_data += col_stride;
   }
@@ -180,8 +188,8 @@ std::unique_ptr<table> from_dlpack(DLManagedTensor const* managed_tensor,
 }
 
 DLManagedTensor* to_dlpack(table_view const& input,
-                           rmm::mr::device_memory_resource* mr,
-                           cudaStream_t stream)
+                           rmm::cuda_stream_view stream,
+                           rmm::mr::device_memory_resource* mr)
 {
   auto const num_rows = input.num_rows();
   auto const num_cols = input.num_columns();
@@ -241,13 +249,19 @@ DLManagedTensor* to_dlpack(table_view const& input,
                              get_column_data(col),
                              stride_bytes,
                              cudaMemcpyDefault,
-                             stream));
+                             stream.value()));
     tensor_data += stride_bytes;
   }
 
   // Defer ownership of managed tensor to caller
   managed_tensor->deleter     = dltensor_context::deleter;
   managed_tensor->manager_ctx = context.release();
+
+  // synchronize the stream because after the return the data may be accessed from the host before
+  // the above `cudaMemcpyAsync` calls have completed their copies (especially if pinned host
+  // memory is used).
+  stream.synchronize();
+
   return managed_tensor.release();
 }
 
@@ -256,12 +270,12 @@ DLManagedTensor* to_dlpack(table_view const& input,
 std::unique_ptr<table> from_dlpack(DLManagedTensor const* managed_tensor,
                                    rmm::mr::device_memory_resource* mr)
 {
-  return detail::from_dlpack(managed_tensor, mr);
+  return detail::from_dlpack(managed_tensor, rmm::cuda_stream_default, mr);
 }
 
 DLManagedTensor* to_dlpack(table_view const& input, rmm::mr::device_memory_resource* mr)
 {
-  return detail::to_dlpack(input, mr);
+  return detail::to_dlpack(input, rmm::cuda_stream_default, mr);
 }
 
 }  // namespace cudf

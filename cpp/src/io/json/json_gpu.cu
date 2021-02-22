@@ -30,7 +30,10 @@
 #include <cudf/utilities/traits.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
 
+#include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_buffer.hpp>
+#include <rmm/device_vector.hpp>
+#include <rmm/exec_policy.hpp>
 
 #include <thrust/detail/copy.h>
 #include <thrust/find.h>
@@ -58,14 +61,14 @@ namespace {
 __device__ std::pair<char const *, char const *> limit_range_to_brackets(char const *begin,
                                                                          char const *end)
 {
-  begin = thrust::find_if(
-    thrust::seq, begin, end, [] __device__(auto c) { return c == '[' || c == '{'; });
-  end = thrust::find_if(thrust::seq,
-                        thrust::make_reverse_iterator(end),
-                        thrust::make_reverse_iterator(++begin),
-                        [](auto c) { return c == ']' || c == '}'; })
-          .base();
-  return {begin, --end};
+  auto const data_begin = thrust::next(thrust::find_if(
+    thrust::seq, begin, end, [] __device__(auto c) { return c == '[' || c == '{'; }));
+  auto const data_end   = thrust::next(thrust::find_if(thrust::seq,
+                                                     thrust::make_reverse_iterator(end),
+                                                     thrust::make_reverse_iterator(data_begin),
+                                                     [](auto c) { return c == ']' || c == '}'; }))
+                          .base();
+  return {data_begin, data_end};
 }
 
 /**
@@ -145,7 +148,7 @@ __inline__ __device__ cudf::timestamp_D decode_value(const char *begin,
                                                      const char *end,
                                                      parse_options_view const &opts)
 {
-  return cudf::timestamp_D{cudf::duration_D{parseDateFormat(begin, end, opts.dayfirst)}};
+  return cudf::timestamp_D{cudf::duration_D{to_date(begin, end, opts.dayfirst)}};
 }
 
 /**
@@ -162,7 +165,7 @@ __inline__ __device__ cudf::timestamp_s decode_value(const char *begin,
                                                      const char *end,
                                                      parse_options_view const &opts)
 {
-  auto milli = parseDateTimeFormat(begin, end, opts.dayfirst);
+  auto milli = to_date_time(begin, end, opts.dayfirst);
   return cudf::timestamp_s{cudf::duration_s{milli / 1000}};
 }
 
@@ -180,7 +183,7 @@ __inline__ __device__ cudf::timestamp_ms decode_value(const char *begin,
                                                       const char *end,
                                                       parse_options_view const &opts)
 {
-  auto milli = parseDateTimeFormat(begin, end, opts.dayfirst);
+  auto milli = to_date_time(begin, end, opts.dayfirst);
   return cudf::timestamp_ms{cudf::duration_ms{milli}};
 }
 
@@ -198,7 +201,7 @@ __inline__ __device__ cudf::timestamp_us decode_value(const char *begin,
                                                       const char *end,
                                                       parse_options_view const &opts)
 {
-  auto milli = parseDateTimeFormat(begin, end, opts.dayfirst);
+  auto milli = to_date_time(begin, end, opts.dayfirst);
   return cudf::timestamp_us{cudf::duration_us{milli * 1000}};
 }
 
@@ -216,7 +219,7 @@ __inline__ __device__ cudf::timestamp_ns decode_value(const char *begin,
                                                       const char *end,
                                                       parse_options_view const &opts)
 {
-  auto milli = parseDateTimeFormat(begin, end, opts.dayfirst);
+  auto milli = to_date_time(begin, end, opts.dayfirst);
   return cudf::timestamp_ns{cudf::duration_ns{milli * 1000000}};
 }
 
@@ -226,7 +229,7 @@ __inline__ __device__ cudf::timestamp_ns decode_value(const char *begin,
   __inline__ __device__ Type decode_value(                              \
     const char *begin, const char *end, parse_options_view const &opts) \
   {                                                                     \
-    return Type{parseTimeDeltaFormat<Type>(begin, 0, end - begin)};     \
+    return Type{to_time_delta<Type>(begin, end)};                       \
   }
 #endif
 DURATION_DECODE_VALUE(duration_D)
@@ -304,16 +307,12 @@ struct ConvertFunctor {
   {
     T &value{static_cast<T *>(output_column)[row]};
 
-    // Check for user-specified true/false values first, where the output is
-    // replaced with 1/0 respectively
     value = [&opts, end, begin]() -> T {
-      if (serialized_trie_contains(opts.trie_true, begin, end - begin)) {
-        return 1;
-      } else if (serialized_trie_contains(opts.trie_false, begin, end - begin)) {
-        return 0;
-      } else {
-        return decode_value<T>(begin, end - 1, opts);
-      }
+      // Check for user-specified true/false values
+      auto const len = static_cast<size_t>(end - begin);
+      if (serialized_trie_contains(opts.trie_true, {begin, len})) { return 1; }
+      if (serialized_trie_contains(opts.trie_false, {begin, len})) { return 0; }
+      return decode_value<T>(begin, end, opts);
     }();
 
     return true;
@@ -330,8 +329,9 @@ struct ConvertFunctor {
                                                       size_t row,
                                                       parse_options_view const &opts)
   {
-    auto &value{static_cast<T *>(out_buffer)[row]};
-    value = decode_value<T>(begin, end - 1, opts);
+    T const value                     = decode_value<T>(begin, end, opts);
+    static_cast<T *>(out_buffer)[row] = value;
+
     return !std::isnan(value);
   }
 
@@ -348,45 +348,11 @@ struct ConvertFunctor {
                                                       cudf::size_type row,
                                                       const parse_options_view &opts)
   {
-    T &value{static_cast<T *>(output_column)[row]};
-    value = decode_value<T>(begin, end - 1, opts);
+    static_cast<T *>(output_column)[row] = decode_value<T>(begin, end, opts);
 
     return true;
   }
 };
-
-/**
- * @brief Checks whether the given character is a whitespace character.
- *
- * @param[in] ch The character to check
- *
- * @return True if the input is whitespace, False otherwise
- */
-__inline__ __device__ bool is_whitespace(char ch) { return ch == '\t' || ch == ' '; }
-
-/**
- * @brief Adjusts the range to ignore starting/trailing whitespace and quotation characters.
- *
- * @param[in] begin Pointer to the first character in the parsing range
- * @param[in] end pointer to the first character after the parsing range
- * @param[in] quotechar The character used to denote quotes; '\0' if none
- *
- * @return Trimmed range
- */
-__inline__ __device__ std::pair<char const *, char const *> trim_whitespaces_quotes(
-  char const *begin, char const *end, char quotechar = '\0')
-{
-  auto not_whitespace = [] __device__(auto c) { return !is_whitespace(c); };
-
-  begin = thrust::find_if(thrust::seq, begin, end, not_whitespace);
-  end   = thrust::find_if(thrust::seq,
-                        thrust::make_reverse_iterator(end),
-                        thrust::make_reverse_iterator(begin),
-                        not_whitespace)
-          .base();
-
-  return {(*begin == quotechar) ? ++begin : begin, (*(end - 1) == quotechar) ? end - 1 : end};
-}
 
 /**
  * @brief Returns true is the input character is a valid digit.
@@ -542,12 +508,12 @@ __global__ void convert_data_to_columns_kernel(parse_options_view opts,
        input_field_index++) {
     auto const desc =
       next_field_descriptor(current, row_data_range.second, opts, input_field_index, col_map);
-    auto const value_len = desc.value_end - desc.value_begin;
+    auto const value_len = static_cast<size_t>(std::max(desc.value_end - desc.value_begin, 0L));
 
     current = desc.value_end + 1;
 
     // Empty fields are not legal values
-    if (value_len > 0 && !serialized_trie_contains(opts.trie_na, desc.value_begin, value_len)) {
+    if (!serialized_trie_contains(opts.trie_na, {desc.value_begin, value_len})) {
       // Type dispatcher does not handle strings
       if (column_types[desc.column].id() == type_id::STRING) {
         auto str_list           = static_cast<string_pair *>(output_columns[desc.column]);
@@ -593,12 +559,13 @@ __global__ void convert_data_to_columns_kernel(parse_options_view opts,
  * @param[in] num_columns The number of columns of input data
  * @param[out] column_infos The count for each column data type
  */
-__global__ void detect_data_types_kernel(parse_options_view const opts,
-                                         device_span<char const> const data,
-                                         device_span<uint64_t const> const row_offsets,
-                                         col_map_type *col_map,
-                                         int num_columns,
-                                         device_span<column_info> const column_infos)
+__global__ void detect_data_types_kernel(
+  parse_options_view const opts,
+  device_span<char const> const data,
+  device_span<uint64_t const> const row_offsets,
+  col_map_type *col_map,
+  int num_columns,
+  device_span<cudf::io::column_type_histogram> const column_infos)
 {
   auto const rec_id = threadIdx.x + (blockDim.x * blockIdx.x);
   if (rec_id >= row_offsets.size()) return;
@@ -612,13 +579,13 @@ __global__ void detect_data_types_kernel(parse_options_view const opts,
        input_field_index++) {
     auto const desc =
       next_field_descriptor(current, row_data_range.second, opts, input_field_index, col_map);
-    auto const value_len = desc.value_end - desc.value_begin;
+    auto const value_len = static_cast<size_t>(std::max(desc.value_end - desc.value_begin, 0L));
 
     // Advance to the next field; +1 to skip the delimiter
     current = desc.value_end + 1;
 
     // Checking if the field is empty/valid
-    if (value_len <= 0 || serialized_trie_contains(opts.trie_na, desc.value_begin, value_len)) {
+    if (serialized_trie_contains(opts.trie_na, {desc.value_begin, value_len})) {
       // Increase the null count for array rows, where the null count is initialized to zero.
       if (!are_rows_objects) { atomicAdd(&column_infos[desc.column].null_count, 1); }
       continue;
@@ -637,6 +604,7 @@ __global__ void detect_data_types_kernel(parse_options_view const opts,
     int decimal_count  = 0;
     int slash_count    = 0;
     int dash_count     = 0;
+    int plus_count     = 0;
     int colon_count    = 0;
     int exponent_count = 0;
     int other_count    = 0;
@@ -654,6 +622,7 @@ __global__ void detect_data_types_kernel(parse_options_view const opts,
       switch (*pos) {
         case '.': decimal_count++; break;
         case '-': dash_count++; break;
+        case '+': plus_count++; break;
         case '/': slash_count++; break;
         case ':': colon_count++; break;
         case 'e':
@@ -667,15 +636,22 @@ __global__ void detect_data_types_kernel(parse_options_view const opts,
     // Integers have to have the length of the string
     int int_req_number_cnt = value_len;
     // Off by one if they start with a minus sign
-    if (*desc.value_begin == '-' && value_len > 1) { --int_req_number_cnt; }
+    if ((*desc.value_begin == '-' || *desc.value_begin == '+') && value_len > 1) {
+      --int_req_number_cnt;
+    }
     // Off by one if they are a hexadecimal number
     if (maybe_hex) { --int_req_number_cnt; }
-    if (serialized_trie_contains(opts.trie_true, desc.value_begin, value_len) ||
-        serialized_trie_contains(opts.trie_false, desc.value_begin, value_len)) {
+    if (serialized_trie_contains(opts.trie_true, {desc.value_begin, value_len}) ||
+        serialized_trie_contains(opts.trie_false, {desc.value_begin, value_len})) {
       atomicAdd(&column_infos[desc.column].bool_count, 1);
     } else if (digit_count == int_req_number_cnt) {
-      atomicAdd(&column_infos[desc.column].int_count, 1);
-    } else if (is_like_float(value_len, digit_count, decimal_count, dash_count, exponent_count)) {
+      bool is_negative       = (*desc.value_begin == '-');
+      char const *data_begin = desc.value_begin + (is_negative || (*desc.value_begin == '+'));
+      cudf::size_type *ptr   = cudf::io::gpu::infer_integral_field_counter(
+        data_begin, data_begin + digit_count, is_negative, column_infos[desc.column]);
+      atomicAdd(ptr, 1);
+    } else if (is_like_float(
+                 value_len, digit_count, decimal_count, dash_count + plus_count, exponent_count)) {
       atomicAdd(&column_infos[desc.column].float_count, 1);
     }
     // A date-time field cannot have more than 3 non-special characters
@@ -742,7 +718,6 @@ __device__ key_value_range get_next_key_value_range(char const *begin,
  * @param[in] row_offsets The offset of each row in the input
  * @param[out] keys_cnt Number of keys found in the file
  * @param[out] keys_info optional, information (offset, length, hash) for each found key
- *
  */
 __global__ void collect_keys_info_kernel(parse_options_view const options,
                                          device_span<char const> const data,
@@ -785,7 +760,7 @@ void convert_json_to_columns(parse_options_view const &opts,
                              device_span<void *const> const output_columns,
                              device_span<bitmask_type *const> const valid_fields,
                              device_span<cudf::size_type> num_valid_fields,
-                             cudaStream_t stream)
+                             rmm::cuda_stream_view stream)
 {
   int block_size;
   int min_grid_size;
@@ -794,37 +769,37 @@ void convert_json_to_columns(parse_options_view const &opts,
 
   const int grid_size = (row_offsets.size() + block_size - 1) / block_size;
 
-  convert_data_to_columns_kernel<<<grid_size, block_size, 0, stream>>>(
+  convert_data_to_columns_kernel<<<grid_size, block_size, 0, stream.value()>>>(
     opts, data, row_offsets, column_types, col_map, output_columns, valid_fields, num_valid_fields);
 
   CUDA_TRY(cudaGetLastError());
 }
 
 /**
- * @copydoc cudf::io::json::gpu::detect_data_types
+ * @copydoc cudf::io::gpu::detect_data_types
  */
 
-std::vector<cudf::io::json::column_info> detect_data_types(
+std::vector<cudf::io::column_type_histogram> detect_data_types(
   const parse_options_view &options,
   device_span<char const> const data,
   device_span<uint64_t const> const row_offsets,
   bool do_set_null_count,
   int num_columns,
   col_map_type *col_map,
-  cudaStream_t stream)
+  rmm::cuda_stream_view stream)
 {
   int block_size;
   int min_grid_size;
   CUDA_TRY(
     cudaOccupancyMaxPotentialBlockSize(&min_grid_size, &block_size, detect_data_types_kernel));
 
-  rmm::device_vector<cudf::io::json::column_info> d_column_infos(num_columns,
-                                                                 cudf::io::json::column_info{});
+  rmm::device_vector<cudf::io::column_type_histogram> d_column_infos(
+    num_columns, cudf::io::column_type_histogram{});
 
   if (do_set_null_count) {
     // Set the null count to the row count (all fields assumes to be null).
     thrust::for_each(
-      rmm::exec_policy(stream)->on(stream),
+      rmm::exec_policy(stream),
       d_column_infos.begin(),
       d_column_infos.end(),
       [num_records = row_offsets.size()] __device__(auto &info) { info.null_count = num_records; });
@@ -833,12 +808,12 @@ std::vector<cudf::io::json::column_info> detect_data_types(
   // Calculate actual block count to use based on records count
   const int grid_size = (row_offsets.size() + block_size - 1) / block_size;
 
-  detect_data_types_kernel<<<grid_size, block_size, 0, stream>>>(
+  detect_data_types_kernel<<<grid_size, block_size, 0, stream.value()>>>(
     options, data, row_offsets, col_map, num_columns, d_column_infos);
 
   CUDA_TRY(cudaGetLastError());
 
-  auto h_column_infos = std::vector<cudf::io::json::column_info>(num_columns);
+  auto h_column_infos = std::vector<cudf::io::column_type_histogram>(num_columns);
 
   thrust::copy(d_column_infos.begin(), d_column_infos.end(), h_column_infos.begin());
 
@@ -853,7 +828,7 @@ void collect_keys_info(parse_options_view const &options,
                        device_span<uint64_t const> const row_offsets,
                        unsigned long long int *keys_cnt,
                        thrust::optional<mutable_table_device_view> keys_info,
-                       cudaStream_t stream)
+                       rmm::cuda_stream_view stream)
 {
   int block_size;
   int min_grid_size;
@@ -863,7 +838,7 @@ void collect_keys_info(parse_options_view const &options,
   // Calculate actual block count to use based on records count
   const int grid_size = (row_offsets.size() + block_size - 1) / block_size;
 
-  collect_keys_info_kernel<<<grid_size, block_size, 0, stream>>>(
+  collect_keys_info_kernel<<<grid_size, block_size, 0, stream.value()>>>(
     options, data, row_offsets, keys_cnt, keys_info);
 
   CUDA_TRY(cudaGetLastError());

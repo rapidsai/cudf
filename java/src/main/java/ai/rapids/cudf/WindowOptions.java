@@ -33,6 +33,9 @@ public class WindowOptions {
   private final int timestampColumnIndex;
   private final boolean timestampOrderAscending;
   private final FrameType frameType;
+  private final boolean isUnboundedPreceding;
+  private final boolean isUnboundedFollowing;
+
 
   private WindowOptions(Builder builder) {
     this.preceding = builder.preceding;
@@ -43,6 +46,8 @@ public class WindowOptions {
     this.timestampColumnIndex = builder.timestampColumnIndex;
     this.timestampOrderAscending = builder.timestampOrderAscending;
     this.frameType = timestampColumnIndex == -1? FrameType.ROWS : FrameType.RANGE; 
+    this.isUnboundedPreceding = builder.isUnboundedPreceding;
+    this.isUnboundedFollowing = builder.isUnboundedFollowing;
   }
 
   @Override
@@ -56,7 +61,9 @@ public class WindowOptions {
               this.minPeriods == o.minPeriods &&
               this.timestampColumnIndex == o.timestampColumnIndex &&
               this.timestampOrderAscending == o.timestampOrderAscending &&
-              this.frameType == o.frameType;
+              this.frameType == o.frameType &&
+              this.isUnboundedPreceding == o.isUnboundedPreceding &&
+              this.isUnboundedFollowing == o.isUnboundedFollowing;
       if (precedingCol != null) {
         ret = ret && precedingCol.equals(o.precedingCol);
       }
@@ -83,6 +90,8 @@ public class WindowOptions {
     if (followingCol != null) {
       ret = 31 * ret + followingCol.hashCode();
     }
+    ret = 31 * ret + Boolean.hashCode(isUnboundedPreceding);
+    ret = 31 * ret + Boolean.hashCode(isUnboundedFollowing);
     return ret;
   }
 
@@ -104,6 +113,10 @@ public class WindowOptions {
 
   boolean isTimestampOrderAscending() { return this.timestampOrderAscending; }
 
+  boolean isUnboundedPreceding() { return this.isUnboundedPreceding; }
+
+  boolean isUnboundedFollowing() { return this.isUnboundedFollowing; }
+
   FrameType getFrameType() { return frameType; }
 
   public static class Builder {
@@ -115,6 +128,8 @@ public class WindowOptions {
     private ColumnVector followingCol = null;
     private int timestampColumnIndex = -1;
     private boolean timestampOrderAscending = true;
+    private boolean isUnboundedPreceding = false;
+    private boolean isUnboundedFollowing = false;
 
     /**
      * Set the minimum number of observation required to evaluate an element.  If there are not
@@ -155,6 +170,26 @@ public class WindowOptions {
 
     public Builder timestampDescending() {
       this.timestampOrderAscending = false;
+      return this;
+    }
+
+    public Builder unboundedPreceding() {
+      this.isUnboundedPreceding = true;
+      return this;
+    }
+
+    public Builder unboundedFollowing() {
+      this.isUnboundedFollowing = true;
+      return this;
+    }
+
+    public Builder preceding(int preceding) {
+      this.preceding = preceding;
+      return this;
+    }
+
+    public Builder following(int following) {
+      this.following = following;
       return this;
     }
 

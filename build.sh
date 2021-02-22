@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# Copyright (c) 2019, NVIDIA CORPORATION.
+# Copyright (c) 2019-2021, NVIDIA CORPORATION.
 
 # cuDF build script
 
@@ -37,7 +37,7 @@ HELP="$0 [clean] [libcudf] [cudf] [dask_cudf] [benchmarks] [tests] [libcudf_kafk
    --disable_nvtx       - disable inserting NVTX profiling ranges
    --show_depr_warn     - show cmake deprecation warnings
    --ptds               - enable per-thread default stream
-   -h                   - print this text
+   -h | --h[elp]        - print this text
 
    default action (no args) is to build and install 'libcudf' then 'cudf'
    then 'dask_cudf' targets
@@ -51,7 +51,7 @@ CUSTREAMZ_BUILD_DIR=${REPODIR}/python/custreamz/build
 BUILD_DIRS="${LIB_BUILD_DIR} ${CUDF_BUILD_DIR} ${DASK_CUDF_BUILD_DIR} ${KAFKA_LIB_BUILD_DIR} ${CUDF_KAFKA_BUILD_DIR} ${CUSTREAMZ_BUILD_DIR}"
 
 # Set defaults for vars modified by flags to this script
-VERBOSE=""
+VERBOSE_FLAG=""
 BUILD_TYPE=Release
 INSTALL_TARGET=install
 BUILD_BENCHMARKS=OFF
@@ -75,7 +75,7 @@ function buildAll {
     ((${NUMARGS} == 0 )) || !(echo " ${ARGS} " | grep -q " [^-]\+ ")
 }
 
-if hasArg -h; then
+if hasArg -h || hasArg --h || hasArg --help; then
     echo "${HELP}"
     exit 0
 fi
@@ -92,7 +92,7 @@ fi
 
 # Process flags
 if hasArg -v; then
-    VERBOSE=1
+    VERBOSE_FLAG="-v"
 fi
 if hasArg -g; then
     BUILD_TYPE=Debug
@@ -135,10 +135,10 @@ if hasArg clean; then
 fi
 
 if (( ${BUILD_ALL_GPU_ARCH} == 0 )); then
-    GPU_ARCH="-DGPU_ARCHS="
+    CUDF_CMAKE_CUDA_ARCHITECTURES="-DCMAKE_CUDA_ARCHITECTURES="
     echo "Building for the architecture of the GPU in the system..."
 else
-    GPU_ARCH="-DGPU_ARCHS=ALL"
+    CUDF_CMAKE_CUDA_ARCHITECTURES=""
     echo "Building for *ALL* supported GPU architectures..."
 fi
 
@@ -146,32 +146,28 @@ fi
 # Configure, build, and install libcudf
 
 if buildAll || hasArg libcudf; then
-    mkdir -p ${LIB_BUILD_DIR}
-    cd ${LIB_BUILD_DIR}
-    cmake -DCMAKE_INSTALL_PREFIX=${INSTALL_PREFIX} \
-          ${GPU_ARCH} \
+    cmake -S $REPODIR/cpp -B ${LIB_BUILD_DIR} \
+          -DCMAKE_INSTALL_PREFIX=${INSTALL_PREFIX} \
+          ${CUDF_CMAKE_CUDA_ARCHITECTURES} \
           -DUSE_NVTX=${BUILD_NVTX} \
           -DBUILD_BENCHMARKS=${BUILD_BENCHMARKS} \
           -DDISABLE_DEPRECATION_WARNING=${BUILD_DISABLE_DEPRECATION_WARNING} \
           -DPER_THREAD_DEFAULT_STREAM=${BUILD_PER_THREAD_DEFAULT_STREAM} \
-          -DCMAKE_BUILD_TYPE=${BUILD_TYPE} $REPODIR/cpp
-fi
-
-if buildAll || hasArg libcudf; then
+          -DCMAKE_BUILD_TYPE=${BUILD_TYPE}
 
     cd ${LIB_BUILD_DIR}
     if [[ ${INSTALL_TARGET} != "" ]]; then
-        make -j${PARALLEL_LEVEL} install_cudf VERBOSE=${VERBOSE}
+        cmake --build . -j${PARALLEL_LEVEL} --target install_cudf ${VERBOSE_FLAG}
     else
-        make -j${PARALLEL_LEVEL} cudf VERBOSE=${VERBOSE}
+        cmake --build . -j${PARALLEL_LEVEL} --target cudf ${VERBOSE_FLAG}
     fi
 
     if [[ ${BUILD_TESTS} == "ON" ]]; then
-        make -j${PARALLEL_LEVEL} build_tests_cudf VERBOSE=${VERBOSE}
+        cmake --build . -j${PARALLEL_LEVEL} --target build_tests_cudf ${VERBOSE_FLAG}
     fi
 
     if [[ ${BUILD_BENCHMARKS} == "ON" ]]; then
-        make -j${PARALLEL_LEVEL} build_benchmarks_cudf VERBOSE=${VERBOSE}
+        cmake --build . -j${PARALLEL_LEVEL} --target build_benchmarks_cudf ${VERBOSE_FLAG}
     fi
 fi
 
@@ -201,19 +197,19 @@ fi
 
 # Build libcudf_kafka library
 if hasArg libcudf_kafka; then
-    mkdir -p ${KAFKA_LIB_BUILD_DIR}
-    cd ${KAFKA_LIB_BUILD_DIR}
-    cmake -DCMAKE_INSTALL_PREFIX=${INSTALL_PREFIX} \
-          -DCMAKE_BUILD_TYPE=${BUILD_TYPE} $REPODIR/cpp/libcudf_kafka
+    cmake -S $REPODIR/cpp/libcudf_kafka -B ${KAFKA_LIB_BUILD_DIR} \
+          -DCMAKE_INSTALL_PREFIX=${INSTALL_PREFIX} \
+          -DCMAKE_BUILD_TYPE=${BUILD_TYPE}
 
+    cd ${KAFKA_LIB_BUILD_DIR}
     if [[ ${INSTALL_TARGET} != "" ]]; then
-        make -j${PARALLEL_LEVEL} install VERBOSE=${VERBOSE}
+        cmake --build . -j${PARALLEL_LEVEL} --target install ${VERBOSE_FLAG}
     else
-        make -j${PARALLEL_LEVEL} libcudf_kafka VERBOSE=${VERBOSE}
+        cmake --build . -j${PARALLEL_LEVEL} --target  libcudf_kafka ${VERBOSE_FLAG}
     fi
 
     if [[ ${BUILD_TESTS} == "ON" ]]; then
-        make -j${PARALLEL_LEVEL} build_tests_libcudf_kafka VERBOSE=${VERBOSE}
+        cmake --build . -j${PARALLEL_LEVEL} --target  build_tests_libcudf_kafka ${VERBOSE_FLAG}
     fi
 fi
 

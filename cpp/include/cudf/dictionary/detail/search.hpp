@@ -17,6 +17,8 @@
 #include <cudf/dictionary/dictionary_column_view.hpp>
 #include <cudf/scalar/scalar.hpp>
 
+#include <rmm/cuda_stream_view.hpp>
+
 namespace cudf {
 namespace dictionary {
 namespace detail {
@@ -30,8 +32,8 @@ namespace detail {
 std::unique_ptr<scalar> get_index(
   dictionary_column_view const& dictionary,
   scalar const& key,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource(),
-  cudaStream_t stream                 = 0);
+  rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
  * @brief Get the index for a key if it were added to the given dictionary.
@@ -48,15 +50,15 @@ std::unique_ptr<scalar> get_index(
  *
  * @param dictionary The dictionary to search for the key.
  * @param key The value to search for in the dictionary keyset.
- * @param mr Device memory resource used to allocate the returned column's device memory.
  * @param stream CUDA stream used for device memory operations and kernel launches.
+ * @param mr Device memory resource used to allocate the returned column's device memory.
  * @return Numeric scalar index value of the key within the dictionary
  */
 std::unique_ptr<scalar> get_insert_index(
   dictionary_column_view const& dictionary,
   scalar const& key,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource(),
-  cudaStream_t stream                 = 0);
+  rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 }  // namespace detail
 }  // namespace dictionary

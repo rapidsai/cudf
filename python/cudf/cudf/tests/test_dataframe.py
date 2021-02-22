@@ -1,4 +1,5 @@
-# Copyright (c) 2018-2020, NVIDIA CORPORATION.
+# Copyright (c) 2018-2021, NVIDIA CORPORATION.
+
 import array as arr
 import io
 import operator
@@ -760,12 +761,13 @@ def test_dataframe_to_string():
     densearray = masked.to_array()
     np.testing.assert_equal(data[validids], densearray)
     # valid position is corret
+
     for i in validids:
         assert data[i] == values[i]
     # null position is correct
     for i in range(len(values)):
         if i not in validids:
-            assert values[i] is None
+            assert values[i] is gd.NA
 
     pd.options.display.max_rows = 10
     got = df.to_string()
@@ -783,7 +785,8 @@ a b  c
     assert got.split() == expect.split()
 
 
-def test_dataframe_to_string_wide():
+def test_dataframe_to_string_wide(monkeypatch):
+    monkeypatch.setenv("COLUMNS", 79)
     # Test basic
     df = gd.DataFrame()
     for i in range(100):
@@ -799,7 +802,6 @@ def test_dataframe_to_string_wide():
 [3 rows x 100 columns]
 """
     # values should match despite whitespace difference
-
     assert got.split() == expect.split()
 
 
@@ -1965,9 +1967,29 @@ def test_iteritems(gdf):
 
 
 @pytest.mark.parametrize("q", [0.5, 1, 0.001, [0.5], [], [0.005, 0.5, 1]])
-def test_quantile(pdf, gdf, q):
-    assert_eq(pdf["x"].quantile(q), gdf["x"].quantile(q))
-    assert_eq(pdf.quantile(q), gdf.quantile(q))
+@pytest.mark.parametrize("numeric_only", [True, False])
+def test_quantile(q, numeric_only):
+    ts = pd.date_range("2018-08-24", periods=5, freq="D")
+    td = pd.to_timedelta(np.arange(5), unit="h")
+    pdf = pd.DataFrame(
+        {"date": ts, "delta": td, "val": np.random.randn(len(ts))}
+    )
+    gdf = gd.DataFrame.from_pandas(pdf)
+
+    assert_eq(pdf["date"].quantile(q), gdf["date"].quantile(q))
+    assert_eq(pdf["delta"].quantile(q), gdf["delta"].quantile(q))
+    assert_eq(pdf["val"].quantile(q), gdf["val"].quantile(q))
+
+    if numeric_only:
+        assert_eq(pdf.quantile(q), gdf.quantile(q))
+    else:
+        q = q if isinstance(q, list) else [q]
+        assert_eq(
+            pdf.quantile(
+                q if isinstance(q, list) else [q], numeric_only=False
+            ),
+            gdf.quantile(q, numeric_only=False),
+        )
 
 
 def test_empty_quantile():
@@ -2205,14 +2227,29 @@ def test_arrow_handle_no_index_name(pdf, gdf):
 @pytest.mark.parametrize("num_bins", [1, 2, 4, 20])
 @pytest.mark.parametrize("right", [True, False])
 @pytest.mark.parametrize("dtype", NUMERIC_TYPES + ["bool"])
-def test_series_digitize(num_rows, num_bins, right, dtype):
+@pytest.mark.parametrize("series_bins", [True, False])
+def test_series_digitize(num_rows, num_bins, right, dtype, series_bins):
     data = np.random.randint(0, 100, num_rows).astype(dtype)
     bins = np.unique(np.sort(np.random.randint(2, 95, num_bins).astype(dtype)))
     s = gd.Series(data)
-    indices = s.digitize(bins, right)
+    if series_bins:
+        s_bins = gd.Series(bins)
+        indices = s.digitize(s_bins, right)
+    else:
+        indices = s.digitize(bins, right)
     np.testing.assert_array_equal(
         np.digitize(data, bins, right), indices.to_array()
     )
+
+
+def test_series_digitize_invalid_bins():
+    s = gd.Series(np.random.randint(0, 30, 80), dtype="int32")
+    bins = gd.Series([2, None, None, 50, 90], dtype="int32")
+
+    with pytest.raises(
+        ValueError, match="`bins` cannot contain null entries."
+    ):
+        _ = s.digitize(bins)
 
 
 def test_pandas_non_contiguious():
@@ -3206,86 +3243,61 @@ def test_ndim():
 
 
 @pytest.mark.parametrize(
-    "arr",
+    "decimals",
     [
-        np.random.normal(-100, 100, 1000),
-        np.random.randint(-50, 50, 1000),
-        np.zeros(100),
-        np.repeat([-0.6459412758761901], 100),
-        np.repeat(np.nan, 100),
-        np.array([1.123, 2.343, np.nan, 0.0]),
-    ],
-)
-@pytest.mark.parametrize(
-    "decimal",
-    [
+        -3,
         0,
-        1,
-        2,
-        3,
-        4,
         5,
-        6,
-        7,
-        8,
-        9,
-        10,
-        11,
-        12,
-        13,
-        14,
-        15,
-        16,
-        17,
-        pytest.param(
-            -1,
-            marks=[
-                pytest.mark.xfail(reason="NotImplementedError: decimals < 0")
-            ],
-        ),
+        pd.Series([1, 4, 3, -6], index=["w", "x", "y", "z"]),
+        gd.Series([-4, -2, 12], index=["x", "y", "z"]),
+        {"w": -1, "x": 15, "y": 2},
     ],
 )
-def test_round(arr, decimal):
-    pser = pd.Series(arr)
-    ser = gd.Series(arr)
-    result = ser.round(decimal)
-    expected = pser.round(decimal)
+def test_dataframe_round(decimals):
+    pdf = pd.DataFrame(
+        {
+            "w": np.arange(0.5, 10.5, 1),
+            "x": np.random.normal(-100, 100, 10),
+            "y": np.array(
+                [
+                    14.123,
+                    2.343,
+                    np.nan,
+                    0.0,
+                    -8.302,
+                    np.nan,
+                    94.313,
+                    -112.236,
+                    -8.029,
+                    np.nan,
+                ]
+            ),
+            "z": np.repeat([-0.6459412758761901], 10),
+        }
+    )
+    gdf = gd.DataFrame.from_pandas(pdf)
 
+    if isinstance(decimals, gd.Series):
+        pdecimals = decimals.to_pandas()
+    else:
+        pdecimals = decimals
+
+    result = gdf.round(decimals)
+    expected = pdf.round(pdecimals)
     assert_eq(result, expected)
 
     # with nulls, maintaining existing null mask
-    arr = arr.astype("float64")  # for pandas nulls
-    mask = np.random.randint(0, 2, arr.shape[0])
-    arr[mask == 1] = np.nan
+    for c in pdf.columns:
+        arr = pdf[c].to_numpy().astype("float64")  # for pandas nulls
+        arr.ravel()[np.random.choice(10, 5, replace=False)] = np.nan
+        pdf[c] = gdf[c] = arr
 
-    pser = pd.Series(arr)
-    ser = gd.Series(arr)
-    result = ser.round(decimal)
-    expected = pser.round(decimal)
+    result = gdf.round(decimals)
+    expected = pdf.round(pdecimals)
 
     assert_eq(result, expected)
-    np.array_equal(ser.nullmask.to_array(), result.to_array())
-
-
-@pytest.mark.parametrize(
-    "series",
-    [
-        gd.Series([1.0, None, np.nan, 4.0], nan_as_null=False),
-        gd.Series([1.24430, None, np.nan, 4.423530], nan_as_null=False),
-        gd.Series([1.24430, np.nan, 4.423530], nan_as_null=False),
-        gd.Series([-1.24430, np.nan, -4.423530], nan_as_null=False),
-        gd.Series(np.repeat(np.nan, 100)),
-    ],
-)
-@pytest.mark.parametrize("decimal", [0, 1, 2, 3])
-def test_round_nan_as_null_false(series, decimal):
-    pser = series.to_pandas()
-    ser = gd.Series(series)
-    result = ser.round(decimal)
-    expected = pser.round(decimal)
-    np.testing.assert_array_almost_equal(
-        result.to_pandas(), expected, decimal=10
-    )
+    for c in gdf.columns:
+        np.array_equal(gdf[c].nullmask.to_array(), result[c].to_array())
 
 
 @pytest.mark.parametrize(
@@ -7889,3 +7901,429 @@ def test_dataframe_to_pandas_nullable_dtypes(df, expected_pdf):
     actual_pdf = df.to_pandas(nullable=True)
 
     assert_eq(actual_pdf, expected_pdf)
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        [{"a": 1, "b": 2, "c": 3}, {"a": 4, "b": 5, "c": 6}],
+        [{"a": 1, "b": 2, "c": None}, {"a": None, "b": 5, "c": 6}],
+        [{"a": 1, "b": 2}, {"a": 1, "b": 5, "c": 6}],
+        [{"a": 1, "b": 2}, {"b": 5, "c": 6}],
+        [{}, {"a": 1, "b": 5, "c": 6}],
+        [{"a": 1, "b": 2, "c": 3}, {"a": 4.5, "b": 5.5, "c": 6.5}],
+    ],
+)
+def test_dataframe_init_from_list_of_dicts(data):
+    expect = pd.DataFrame(data)
+    got = gd.DataFrame(data)
+
+    assert_eq(expect, got)
+
+
+def test_dataframe_pipe():
+    pdf = pd.DataFrame()
+    gdf = gd.DataFrame()
+
+    def add_int_col(df, column):
+        df[column] = df._constructor_sliced([10, 20, 30, 40])
+        return df
+
+    def add_str_col(df, column):
+        df[column] = df._constructor_sliced(["a", "b", "xyz", "ai"])
+        return df
+
+    expected = (
+        pdf.pipe(add_int_col, "one")
+        .pipe(add_int_col, column="two")
+        .pipe(add_str_col, "three")
+    )
+    actual = (
+        gdf.pipe(add_int_col, "one")
+        .pipe(add_int_col, column="two")
+        .pipe(add_str_col, "three")
+    )
+
+    assert_eq(expected, actual)
+
+    expected = (
+        pdf.pipe((add_str_col, "df"), column="one")
+        .pipe(add_str_col, column="two")
+        .pipe(add_int_col, "three")
+    )
+    actual = (
+        gdf.pipe((add_str_col, "df"), column="one")
+        .pipe(add_str_col, column="two")
+        .pipe(add_int_col, "three")
+    )
+
+    assert_eq(expected, actual)
+
+
+def test_dataframe_pipe_error():
+    pdf = pd.DataFrame()
+    gdf = gd.DataFrame()
+
+    def custom_func(df, column):
+        df[column] = df._constructor_sliced([10, 20, 30, 40])
+        return df
+
+    assert_exceptions_equal(
+        lfunc=pdf.pipe,
+        rfunc=gdf.pipe,
+        lfunc_args_and_kwargs=([(custom_func, "columns")], {"columns": "d"}),
+        rfunc_args_and_kwargs=([(custom_func, "columns")], {"columns": "d"}),
+    )
+
+
+@pytest.mark.parametrize(
+    "op",
+    [
+        "count",
+        "cummin",
+        "cummax",
+        "cummax",
+        "cumprod",
+        "kurt",
+        "kurtosis",
+        "skew",
+    ],
+)
+def test_dataframe_axis1_unsupported_ops(op):
+    df = gd.DataFrame({"a": [1, 2, 3], "b": [8, 9, 10]})
+
+    with pytest.raises(
+        NotImplementedError, match="Only axis=0 is currently supported."
+    ):
+        getattr(df, op)(axis=1)
+
+
+def test_dataframe_from_pandas_duplicate_columns():
+    pdf = pd.DataFrame(columns=["a", "b", "c", "a"])
+    pdf["a"] = [1, 2, 3]
+
+    with pytest.raises(
+        ValueError, match="Duplicate column names are not allowed"
+    ):
+        gd.from_pandas(pdf)
+
+
+@pytest.mark.parametrize(
+    "df",
+    [
+        pd.DataFrame(
+            {"a": [1, 2, 3], "b": [10, 11, 20], "c": ["a", "bcd", "xyz"]}
+        ),
+        pd.DataFrame(),
+    ],
+)
+@pytest.mark.parametrize(
+    "columns",
+    [
+        None,
+        ["a"],
+        ["c", "a"],
+        ["b", "a", "c"],
+        [],
+        pd.Index(["c", "a"]),
+        gd.Index(["c", "a"]),
+        ["abc", "a"],
+        ["column_not_exists1", "column_not_exists2"],
+    ],
+)
+@pytest.mark.parametrize("index", [["abc", "def", "ghi"]])
+def test_dataframe_constructor_columns(df, columns, index):
+    def assert_local_eq(actual, df, expected, host_columns):
+        check_index_type = False if expected.empty else True
+        if host_columns is not None and any(
+            col not in df.columns for col in host_columns
+        ):
+            assert_eq(
+                expected,
+                actual,
+                check_dtype=False,
+                check_index_type=check_index_type,
+            )
+        else:
+            assert_eq(expected, actual, check_index_type=check_index_type)
+
+    gdf = gd.from_pandas(df)
+    host_columns = (
+        columns.to_pandas() if isinstance(columns, gd.Index) else columns
+    )
+
+    expected = pd.DataFrame(df, columns=host_columns, index=index)
+    actual = gd.DataFrame(gdf, columns=columns, index=index)
+
+    assert_local_eq(actual, df, expected, host_columns)
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        {"a": [1, 2, 3], "b": [3.0, 4.0, 5.0], "c": [True, True, False]},
+        {"a": [1.0, 2.0, 3.0], "b": [3.0, 4.0, 5.0], "c": [True, True, False]},
+        {"a": [1, 2, 3], "b": [3, 4, 5], "c": [True, True, False]},
+        {"a": [1, 2, 3], "b": [True, True, False], "c": [False, True, False]},
+        {
+            "a": [1.0, 2.0, 3.0],
+            "b": [True, True, False],
+            "c": [False, True, False],
+        },
+        {"a": [1, 2, 3], "b": [3, 4, 5], "c": [2.0, 3.0, 4.0]},
+        {"a": [1, 2, 3], "b": [2.0, 3.0, 4.0], "c": [5.0, 6.0, 4.0]},
+    ],
+)
+@pytest.mark.parametrize(
+    "aggs",
+    [
+        ["min", "sum", "max"],
+        ("min", "sum", "max"),
+        {"min", "sum", "max"},
+        "sum",
+        {"a": "sum", "b": "min", "c": "max"},
+        {"a": ["sum"], "b": ["min"], "c": ["max"]},
+        {"a": ("sum"), "b": ("min"), "c": ("max")},
+        {"a": {"sum"}, "b": {"min"}, "c": {"max"}},
+        {"a": ["sum", "min"], "b": ["sum", "max"], "c": ["min", "max"]},
+        {"a": ("sum", "min"), "b": ("sum", "max"), "c": ("min", "max")},
+        {"a": {"sum", "min"}, "b": {"sum", "max"}, "c": {"min", "max"}},
+    ],
+)
+def test_agg_for_dataframes(data, aggs):
+    pdf = pd.DataFrame(data)
+    gdf = gd.DataFrame(data)
+
+    expect = pdf.agg(aggs)
+    got = gdf.agg(aggs)
+
+    assert_eq(expect, got, check_dtype=False)
+
+
+@pytest.mark.parametrize("aggs", [{"a": np.sum, "b": np.min, "c": np.max}])
+def test_agg_for_unsupported_function(aggs):
+    gdf = gd.DataFrame(
+        {"a": [1, 2, 3], "b": [3.0, 4.0, 5.0], "c": [True, True, False]}
+    )
+
+    with pytest.raises(NotImplementedError):
+        gdf.agg(aggs)
+
+
+@pytest.mark.parametrize("aggs", ["asdf"])
+def test_agg_for_dataframe_with_invalid_function(aggs):
+    gdf = gd.DataFrame(
+        {"a": [1, 2, 3], "b": [3.0, 4.0, 5.0], "c": [True, True, False]}
+    )
+
+    with pytest.raises(
+        AttributeError,
+        match=f"{aggs} is not a valid function for 'DataFrame' object",
+    ):
+        gdf.agg(aggs)
+
+
+@pytest.mark.parametrize("aggs", [{"a": "asdf"}])
+def test_agg_for_series_with_invalid_function(aggs):
+    gdf = gd.DataFrame(
+        {"a": [1, 2, 3], "b": [3.0, 4.0, 5.0], "c": [True, True, False]}
+    )
+
+    with pytest.raises(
+        AttributeError,
+        match=f"{aggs['a']} is not a valid function for 'Series' object",
+    ):
+        gdf.agg(aggs)
+
+
+@pytest.mark.parametrize(
+    "aggs",
+    [
+        "sum",
+        ["min", "sum", "max"],
+        {"a": {"sum", "min"}, "b": {"sum", "max"}, "c": {"min", "max"}},
+    ],
+)
+def test_agg_for_dataframe_with_string_columns(aggs):
+    gdf = gd.DataFrame(
+        {"a": ["m", "n", "o"], "b": ["t", "u", "v"], "c": ["x", "y", "z"]},
+        index=["a", "b", "c"],
+    )
+
+    with pytest.raises(
+        NotImplementedError,
+        match=re.escape(
+            "DataFrame.agg() is not supported for "
+            "frames containing string columns"
+        ),
+    ):
+        gdf.agg(aggs)
+
+
+@pytest.mark.parametrize(
+    "join", ["left"],
+)
+@pytest.mark.parametrize(
+    "overwrite", [True, False],
+)
+@pytest.mark.parametrize(
+    "filter_func", [None],
+)
+@pytest.mark.parametrize(
+    "errors", ["ignore"],
+)
+@pytest.mark.parametrize(
+    "data",
+    [
+        {"a": [1, 2, 3], "b": [3, 4, 5]},
+        {"e": [1.0, 2.0, 3.0], "d": [3.0, 4.0, 5.0]},
+        {"c": [True, False, False], "d": [False, True, True]},
+        {"g": [2.0, np.nan, 4.0], "n": [np.nan, np.nan, np.nan]},
+        {"d": [np.nan, np.nan, np.nan], "e": [np.nan, np.nan, np.nan]},
+        {"a": [1.0, 2, 3], "b": pd.Series([4.0, 8.0, 3.0], index=[1, 2, 3])},
+        {
+            "d": [1.0, 2.0, 3.0],
+            "c": pd.Series([np.nan, np.nan, np.nan], index=[1, 2, 3]),
+        },
+        {
+            "a": [False, True, False],
+            "b": pd.Series([1.0, 2.0, np.nan], index=[1, 2, 3]),
+        },
+        {
+            "a": [np.nan, np.nan, np.nan],
+            "e": pd.Series([np.nan, np.nan, np.nan], index=[1, 2, 3]),
+        },
+    ],
+)
+@pytest.mark.parametrize(
+    "data2",
+    [
+        {"b": [3, 5, 6], "e": [8, 2, 1]},
+        {"c": [True, False, True], "d": [3.0, 4.0, 5.0]},
+        {"e": [False, False, True], "g": [True, True, False]},
+        {"g": [np.nan, np.nan, np.nan], "c": [np.nan, np.nan, np.nan]},
+        {"a": [7, 5, 8], "b": pd.Series([2.0, 7.0, 9.0], index=[0, 1, 2])},
+        {
+            "b": [np.nan, 2.0, np.nan],
+            "c": pd.Series([2, np.nan, 5.0], index=[2, 3, 4]),
+        },
+        {
+            "a": [True, np.nan, True],
+            "d": pd.Series([False, True, np.nan], index=[0, 1, 3]),
+        },
+    ],
+)
+def test_update_for_dataframes(
+    data, data2, join, overwrite, filter_func, errors
+):
+    pdf = pd.DataFrame(data)
+    gdf = gd.DataFrame(data)
+
+    other_pd = pd.DataFrame(data2)
+    other_gd = gd.DataFrame(data2)
+
+    expect = pdf.update(other_pd, join, overwrite, filter_func, errors)
+    got = gdf.update(other_gd, join, overwrite, filter_func, errors)
+
+    assert_eq(expect, got)
+
+
+@pytest.mark.parametrize(
+    "join", ["right"],
+)
+def test_update_for_right_join(join):
+    gdf = gd.DataFrame({"a": [1, 2, 3], "b": [3.0, 4.0, 5.0]})
+    other_gd = gd.DataFrame({"a": [1, np.nan, 3], "b": [np.nan, 2.0, 5.0]})
+
+    with pytest.raises(
+        NotImplementedError, match="Only left join is supported"
+    ):
+        gdf.update(other_gd, join)
+
+
+@pytest.mark.parametrize(
+    "errors", ["raise"],
+)
+def test_update_for_data_overlap(errors):
+    pdf = pd.DataFrame({"a": [1, 2, 3], "b": [3.0, 4.0, 5.0]})
+    gdf = gd.DataFrame({"a": [1, 2, 3], "b": [3.0, 4.0, 5.0]})
+
+    other_pd = pd.DataFrame({"a": [1, np.nan, 3], "b": [np.nan, 2.0, 5.0]})
+    other_gd = gd.DataFrame({"a": [1, np.nan, 3], "b": [np.nan, 2.0, 5.0]})
+
+    assert_exceptions_equal(
+        lfunc=pdf.update,
+        rfunc=gdf.update,
+        lfunc_args_and_kwargs=([other_pd, errors], {}),
+        rfunc_args_and_kwargs=([other_gd, errors], {}),
+    )
+
+
+@pytest.mark.parametrize(
+    "gdf",
+    [
+        gd.DataFrame({"a": [[1], [2], [3]]}),
+        gd.DataFrame(
+            {
+                "left-a": [0, 1, 2],
+                "a": [[1], None, [3]],
+                "right-a": ["abc", "def", "ghi"],
+            }
+        ),
+        gd.DataFrame(
+            {
+                "left-a": [[], None, None],
+                "a": [[1], None, [3]],
+                "right-a": ["abc", "def", "ghi"],
+            }
+        ),
+    ],
+)
+def test_dataframe_roundtrip_arrow_list_dtype(gdf):
+    table = gdf.to_arrow()
+    expected = gd.DataFrame.from_arrow(table)
+
+    assert_eq(gdf, expected)
+
+
+@pytest.mark.parametrize(
+    "gdf",
+    [
+        gd.DataFrame({"a": [{"one": 3, "two": 4, "three": 10}]}),
+        gd.DataFrame(
+            {
+                "left-a": [0, 1, 2],
+                "a": [{"x": 0.23, "y": 43}, None, {"x": 23.9, "y": 4.3}],
+                "right-a": ["abc", "def", "ghi"],
+            }
+        ),
+        gd.DataFrame(
+            {
+                "left-a": [{"a": 1}, None, None],
+                "a": [
+                    {"one": 324, "two": 23432, "three": 324},
+                    None,
+                    {"one": 3.24, "two": 1, "three": 324},
+                ],
+                "right-a": ["abc", "def", "ghi"],
+            }
+        ),
+    ],
+)
+def test_dataframe_roundtrip_arrow_struct_dtype(gdf):
+    table = gdf.to_arrow()
+    expected = gd.DataFrame.from_arrow(table)
+
+    assert_eq(gdf, expected)
+
+
+def test_dataframe_setitem_cupy_array():
+    np.random.seed(0)
+    pdf = pd.DataFrame(np.random.randn(10, 2))
+    gdf = gd.from_pandas(pdf)
+
+    gpu_array = cupy.array([True, False] * 5)
+    pdf[gpu_array.get()] = 1.5
+    gdf[gpu_array] = 1.5
+
+    assert_eq(pdf, gdf)

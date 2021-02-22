@@ -16,6 +16,8 @@
 
 #pragma once
 
+#include <cstdint>
+
 namespace cudf {
 namespace io {
 namespace orc {

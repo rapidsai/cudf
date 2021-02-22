@@ -5,8 +5,8 @@ from collections import defaultdict
 from uuid import uuid4
 
 from fsspec.core import get_fs_token_paths
-from pyarrow import parquet as pq
-from pyarrow import dataset as ds
+from fsspec.utils import stringify_path
+from pyarrow import dataset as ds, parquet as pq
 
 import cudf
 from cudf._lib import parquet as libparquet
@@ -201,14 +201,22 @@ def read_parquet(
 
     filepaths_or_buffers = []
     for source in filepath_or_buffer:
+        if ioutils.is_directory(source, **kwargs):
+            fs = _ensure_filesystem(passed_filesystem=None, path=source)
+            source = stringify_path(source)
+            source = fs.sep.join([source, "*.parquet"])
+
         tmp_source, compression = ioutils.get_filepath_or_buffer(
-            path_or_data=source, compression=None, **kwargs
+            path_or_data=source, compression=None, **kwargs,
         )
         if compression is not None:
             raise ValueError(
                 "URL content-encoding decompression is not supported"
             )
-        filepaths_or_buffers.append(tmp_source)
+        if isinstance(tmp_source, list):
+            filepath_or_buffer.extend(tmp_source)
+        else:
+            filepaths_or_buffers.append(tmp_source)
 
     if filters is not None:
         # Convert filters to ds.Expression
@@ -269,6 +277,7 @@ def to_parquet(
     partition_file_name=None,
     statistics="ROWGROUP",
     metadata_file_path=None,
+    int96_timestamps=False,
     *args,
     **kwargs,
 ):
@@ -307,6 +316,7 @@ def to_parquet(
                     compression=compression,
                     statistics=statistics,
                     metadata_file_path=metadata_file_path,
+                    int96_timestamps=int96_timestamps,
                 )
         else:
             write_parquet_res = libparquet.write_parquet(
@@ -316,6 +326,7 @@ def to_parquet(
                 compression=compression,
                 statistics=statistics,
                 metadata_file_path=metadata_file_path,
+                int96_timestamps=int96_timestamps,
             )
 
         return write_parquet_res

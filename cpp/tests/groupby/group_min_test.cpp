@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2020, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -21,6 +21,7 @@
 #include <cudf_test/type_lists.hpp>
 
 #include <cudf/detail/aggregation/aggregation.hpp>
+#include <cudf/dictionary/update_keys.hpp>
 
 namespace cudf {
 namespace test {
@@ -168,6 +169,84 @@ TEST_F(groupby_min_string_test, zero_valid_values)
     test_single_agg(keys, vals, expect_keys, expect_vals, std::move(agg2), force_use_sort_impl::YES);
 }
 // clang-format on
+
+struct groupby_dictionary_min_test : public cudf::test::BaseFixture {
+};
+
+TEST_F(groupby_dictionary_min_test, basic)
+{
+  using K = int32_t;
+  using V = std::string;
+
+  // clang-format off
+  fixed_width_column_wrapper<K> keys{     1,     2,    3,     1,     2,     2,     1,    3,    3,    2 };
+  dictionary_column_wrapper<V>  vals{ "año", "bit", "₹1", "aaa", "zit", "bat", "aaa", "$1", "₹1", "wut"};
+  fixed_width_column_wrapper<K> expect_keys   {     1,     2,    3 };
+  dictionary_column_wrapper<V>  expect_vals_w({ "aaa", "bat", "$1" });
+  // clang-format on
+
+  auto expect_vals = cudf::dictionary::set_keys(expect_vals_w, vals.keys());
+
+  test_single_agg(keys, vals, expect_keys, expect_vals->view(), cudf::make_min_aggregation());
+  test_single_agg(keys,
+                  vals,
+                  expect_keys,
+                  expect_vals->view(),
+                  cudf::make_min_aggregation(),
+                  force_use_sort_impl::YES);
+}
+
+template <typename T>
+struct FixedPointTestBothReps : public cudf::test::BaseFixture {
+};
+
+TYPED_TEST_CASE(FixedPointTestBothReps, cudf::test::FixedPointTypes);
+
+TYPED_TEST(FixedPointTestBothReps, GroupBySortMinDecimalAsValue)
+{
+  using namespace numeric;
+  using decimalXX  = TypeParam;
+  using RepType    = cudf::device_storage_type_t<decimalXX>;
+  using fp_wrapper = cudf::test::fixed_point_column_wrapper<RepType>;
+
+  using K = int32_t;
+
+  for (auto const i : {2, 1, 0, -1, -2}) {
+    auto const scale = scale_type{i};
+    auto const keys  = fixed_width_column_wrapper<K>{1, 2, 3, 1, 2, 2, 1, 3, 3, 2};
+    auto const vals  = fp_wrapper{{0, 1, 2, 3, 4, 5, 6, 7, 8, 9}, scale};
+
+    auto const expect_keys     = fixed_width_column_wrapper<K>{1, 2, 3};
+    auto const expect_vals_min = fp_wrapper{{0, 1, 2}, scale};
+
+    auto agg2 = cudf::make_min_aggregation();
+    test_single_agg(
+      keys, vals, expect_keys, expect_vals_min, std::move(agg2), force_use_sort_impl::YES);
+  }
+}
+
+// This test will not work until the following ptxas bug is fixed in 10.2
+// https://nvbugswb.nvidia.com/NvBugs5/SWBug.aspx?bugid=3186317&cp=
+TYPED_TEST(FixedPointTestBothReps, DISABLED_GroupByHashMinDecimalAsValue)
+{
+  using namespace numeric;
+  using decimalXX  = TypeParam;
+  using RepType    = cudf::device_storage_type_t<decimalXX>;
+  using fp_wrapper = cudf::test::fixed_point_column_wrapper<RepType>;
+  using K          = int32_t;
+
+  for (auto const i : {2, 1, 0, -1, -2}) {
+    auto const scale = scale_type{i};
+    auto const keys  = fixed_width_column_wrapper<K>{1, 2, 3, 1, 2, 2, 1, 3, 3, 2};
+    auto const vals  = fp_wrapper{{0, 1, 2, 3, 4, 5, 6, 7, 8, 9}, scale};
+
+    auto const expect_keys     = fixed_width_column_wrapper<K>{1, 2, 3};
+    auto const expect_vals_min = fp_wrapper{{0, 1, 2}, scale};
+
+    auto agg6 = cudf::make_min_aggregation();
+    test_single_agg(keys, vals, expect_keys, expect_vals_min, std::move(agg6));
+  }
+}
 
 }  // namespace test
 }  // namespace cudf

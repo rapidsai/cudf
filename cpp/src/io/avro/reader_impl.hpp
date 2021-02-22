@@ -24,11 +24,14 @@
 #include "avro.h"
 #include "avro_gpu.h"
 
+#include <cudf/utilities/span.hpp>
 #include <io/utilities/column_buffer.hpp>
 #include <io/utilities/hostdevice_vector.hpp>
 
 #include <cudf/io/datasource.hpp>
 #include <cudf/io/detail/avro.hpp>
+
+#include <rmm/cuda_stream_view.hpp>
 
 #include <memory>
 #include <string>
@@ -69,7 +72,7 @@ class reader::impl {
    *
    * @return The set of columns along with metadata
    */
-  table_with_metadata read(avro_reader_options const &options, cudaStream_t stream);
+  table_with_metadata read(avro_reader_options const &options, rmm::cuda_stream_view stream);
 
  private:
   /**
@@ -81,7 +84,7 @@ class reader::impl {
    * @return Device buffer to decompressed block data
    */
   rmm::device_buffer decompress_data(const rmm::device_buffer &comp_block_data,
-                                     cudaStream_t stream);
+                                     rmm::cuda_stream_view stream);
 
   /**
    * @brief Convert the avro row-based block data and outputs to columns
@@ -89,18 +92,16 @@ class reader::impl {
    * @param block_data Uncompressed block data
    * @param dict Dictionary entries
    * @param global_dictionary Dictionary allocation
-   * @param total_dictionary_entries Number of dictionary entries
    * @param out_buffers Output columns' device buffers
    * @param stream CUDA stream used for device memory operations and kernel launches.
    */
   void decode_data(const rmm::device_buffer &block_data,
                    const std::vector<std::pair<uint32_t, uint32_t>> &dict,
-                   hostdevice_vector<uint8_t> &global_dictionary,
-                   size_t total_dictionary_entries,
+                   cudf::detail::device_span<gpu::nvstrdesc_s> global_dictionary,
                    size_t num_rows,
                    std::vector<std::pair<int, std::string>> columns,
                    std::vector<column_buffer> &out_buffers,
-                   cudaStream_t stream);
+                   rmm::cuda_stream_view stream);
 
  private:
   rmm::mr::device_memory_resource *_mr = nullptr;

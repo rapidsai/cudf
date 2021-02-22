@@ -1,4 +1,4 @@
-# Copyright (c) 2020, NVIDIA CORPORATION.
+# Copyright (c) 2020-2021, NVIDIA CORPORATION.
 
 import pandas as pd
 import pyarrow as pa
@@ -70,3 +70,45 @@ def test_leaves(data):
     expect = cudf.Series(pa_array, dtype=dtype)
     got = cudf.Series(data).list.leaves
     assert_eq(expect, got)
+
+
+def test_list_to_pandas_nullable_true():
+    df = cudf.DataFrame({"a": cudf.Series([[1, 2, 3]])})
+    actual = df.to_pandas(nullable=True)
+    expected = pd.DataFrame({"a": pd.Series([[1, 2, 3]])})
+
+    assert_eq(actual, expected)
+
+
+def test_listdtype_hash():
+    a = cudf.core.dtypes.ListDtype("int64")
+    b = cudf.core.dtypes.ListDtype("int64")
+
+    assert hash(a) == hash(b)
+
+    c = cudf.core.dtypes.ListDtype("int32")
+
+    assert hash(a) != hash(c)
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        [[]],
+        [[1, 2, 3], [4, 5]],
+        [[1, 2, 3], [], [4, 5]],
+        [[1, 2, 3], None, [4, 5]],
+        [[None, None], [None]],
+        [[[[[[1, 2, 3]]]]]],
+        cudf.Series([[1, 2]]).iloc[0:0],
+        cudf.Series([None, [1, 2]]).iloc[0:1],
+    ],
+)
+def test_len(data):
+    gsr = cudf.Series(data)
+    psr = gsr.to_pandas()
+
+    expect = psr.map(lambda x: len(x) if x is not None else None)
+    got = gsr.list.len()
+
+    assert_eq(expect, got, check_dtype=False)
