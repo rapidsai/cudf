@@ -44,7 +44,14 @@ namespace strings {
 namespace detail {
 namespace {
 
-// average string byte-length threshold for running the char-level parallel algorithm
+/**
+ * @brief Average string byte-length threshold for deciding character-level vs row-level parallel
+ * algorithm.
+ *
+ * This value was determined by running the replace string scalar benchmark against different
+ * power-of-2 string lengths and observing the point at which the performance only improved for
+ * all trials.
+ */
 constexpr size_type BYTES_PER_VALID_ROW_THRESHOLD = 64;
 
 /**
@@ -375,6 +382,7 @@ size_type filter_maxrepl_target_positions(size_type* d_target_positions,
  * Replaces occurrences of the target string with the replacement string using an algorithm with
  * character-level parallelism. This algorithm will perform well when the strings in the string
  * column are relatively long.
+ * @see BYTES_PER_VALID_ROW_THRESHOLD
  *
  * @param strings     String column to search for target strings.
  * @param chars_start Offset of the first character in the string column.
@@ -498,6 +506,7 @@ std::unique_ptr<column> replace_char_parallel(strings_column_view const& strings
  * Replaces occurrences of the target string with the replacement string using an algorithm with
  * row-level parallelism. This algorithm will perform well when the strings in the string
  * column are relatively short.
+ * @see BYTES_PER_VALID_ROW_THRESHOLD
  *
  * @param strings     String column to search for target strings.
  * @param d_target    String to search for within the string column.
