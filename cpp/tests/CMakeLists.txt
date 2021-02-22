@@ -577,6 +577,7 @@ set(STRINGS_TEST_SRC
     "${CMAKE_CURRENT_SOURCE_DIR}/strings/findall_tests.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/strings/find_tests.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/strings/find_multiple_tests.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/strings/fixed_point_tests.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/strings/floats_tests.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/strings/hash_string.cu"
     "${CMAKE_CURRENT_SOURCE_DIR}/strings/integers_tests.cu"
