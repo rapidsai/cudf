@@ -3876,6 +3876,48 @@ public class ColumnVectorTest extends CudfTestBase {
   }
 
   @Test
+  void testGetJSONObject() {
+    String jsonString = "{ \"store\": {\n" +
+        "    \"book\": [\n" +
+        "      { \"category\": \"reference\",\n" +
+        "        \"author\": \"Nigel Rees\",\n" +
+        "        \"title\": \"Sayings of the Century\",\n" +
+        "        \"price\": 8.95\n" +
+        "      },\n" +
+        "      { \"category\": \"fiction\",\n" +
+        "        \"author\": \"Evelyn Waugh\",\n" +
+        "        \"title\": \"Sword of Honour\",\n" +
+        "        \"price\": 12.99\n" +
+        "      },\n" +
+        "      { \"category\": \"fiction\",\n" +
+        "        \"author\": \"Herman Melville\",\n" +
+        "        \"title\": \"Moby Dick\",\n" +
+        "        \"isbn\": \"0-553-21311-3\",\n" +
+        "        \"price\": 8.99\n" +
+        "      },\n" +
+        "      { \"category\": \"fiction\",\n" +
+        "        \"author\": \"J. R. R. Tolkien\",\n" +
+        "        \"title\": \"The Lord of the Rings\",\n" +
+        "        \"isbn\": \"0-395-19395-8\",\n" +
+        "        \"price\": 22.99\n" +
+        "      }\n" +
+        "    ],\n" +
+        "    \"bicycle\": {\n" +
+        "      \"color\": \"red\",\n" +
+        "      \"price\": 19.95\n" +
+        "    }\n" +
+        "  }\n" +
+        "}";
+
+    try (ColumnVector json = ColumnVector.fromStrings(jsonString);
+         ColumnVector expectedAuthors = ColumnVector.fromStrings("[\n\"Nigel Rees\",\n\"Evelyn " +
+             "Waugh\",\n\"Herman Melville\",\n\"J. R. R. Tolkien\"]\n");
+         ColumnVector gotAuthors = json.getJSONObject("$.store.book[*].author")) {
+      assertColumnsAreEqual(expectedAuthors, gotAuthors);
+    }
+  }
+
+  @Test
   void testMakeStructEmpty() {
     final int numRows = 10;
     try (ColumnVector expected = ColumnVector.emptyStructs(new StructType(false, new ArrayList<>()), numRows);
