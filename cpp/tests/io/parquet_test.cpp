@@ -652,12 +652,6 @@ TEST_F(ParquetWriterTest, ListColumn2)
   // [[]]
   lcw col1{{{1, 2, 3}, {}, {4, 5}, {}, {0, 6, 0}}, {{7, 8}}, lcw{}, lcw{lcw{}}};
 
-  // cudf_io::table_metadata expected_metadata;
-  // expected_metadata.column_names.emplace_back("col_list_int_0");
-  // expected_metadata.schema_info.emplace_back("col_list_int_0");
-  // expected_metadata.column_names.emplace_back("col_list_list_int_1");
-  // expected_metadata.schema_info.emplace_back("col_list_list_int_1");
-
   table_view expected({col0, col1});
   cudf_io::table_input_metadata expected_metadata(expected);
   expected_metadata.column_metadata[0].name = "col_list_int_0";
@@ -736,18 +730,18 @@ TEST_F(ParquetWriterTest, HostBuffer)
     cudf::test::make_counting_transform_iterator(0, [](auto i) { return true; });
   column_wrapper<int> col{seq_col.begin(), seq_col.end(), validity};
 
-  cudf_io::table_metadata expected_metadata;
-  expected_metadata.column_names.emplace_back("col_other");
-
   std::vector<std::unique_ptr<column>> cols;
   cols.push_back(col.release());
   const auto expected = std::make_unique<table>(std::move(cols));
   EXPECT_EQ(1, expected->num_columns());
 
+  cudf_io::table_input_metadata expected_metadata(*expected);
+  expected_metadata.column_metadata[0].name = "col_other";
+
   std::vector<char> out_buffer;
   cudf_io::parquet_writer_options out_opts =
     cudf_io::parquet_writer_options::builder(cudf_io::sink_info(&out_buffer), expected->view())
-      .metadata(&expected_metadata);
+      .input_schema(&expected_metadata);
   cudf_io::write_parquet(out_opts);
   cudf_io::parquet_reader_options in_opts = cudf_io::parquet_reader_options::builder(
     cudf_io::source_info(out_buffer.data(), out_buffer.size()));
@@ -2024,11 +2018,11 @@ TEST_F(ParquetReaderTest, ReorderedColumns)
 
     cudf::table_view tbl{{a, b}};
     auto filepath = temp_env->get_temp_filepath("ReorderedColumns.parquet");
-    cudf_io::table_metadata md;
-    md.column_names.push_back("a");
-    md.column_names.push_back("b");
+    cudf_io::table_input_metadata md(tbl);
+    md.column_metadata[0].name = "a";
+    md.column_metadata[1].name = "b";
     cudf_io::parquet_writer_options opts =
-      cudf_io::parquet_writer_options::builder(cudf_io::sink_info{filepath}, tbl).metadata(&md);
+      cudf_io::parquet_writer_options::builder(cudf_io::sink_info{filepath}, tbl).input_schema(&md);
     cudf_io::write_parquet(opts);
 
     // read them out of order
@@ -2046,11 +2040,11 @@ TEST_F(ParquetReaderTest, ReorderedColumns)
 
     cudf::table_view tbl{{a, b}};
     auto filepath = temp_env->get_temp_filepath("ReorderedColumns2.parquet");
-    cudf_io::table_metadata md;
-    md.column_names.push_back("a");
-    md.column_names.push_back("b");
+    cudf_io::table_input_metadata md(tbl);
+    md.column_metadata[0].name = "a";
+    md.column_metadata[1].name = "b";
     cudf_io::parquet_writer_options opts =
-      cudf_io::parquet_writer_options::builder(cudf_io::sink_info{filepath}, tbl).metadata(&md);
+      cudf_io::parquet_writer_options::builder(cudf_io::sink_info{filepath}, tbl).input_schema(&md);
     cudf_io::write_parquet(opts);
 
     // read them out of order
@@ -2071,13 +2065,13 @@ TEST_F(ParquetReaderTest, ReorderedColumns)
 
   cudf::table_view tbl{{a, b, c, d}};
   auto filepath = temp_env->get_temp_filepath("ReorderedColumns3.parquet");
-  cudf_io::table_metadata md;
-  md.column_names.push_back("a");
-  md.column_names.push_back("b");
-  md.column_names.push_back("c");
-  md.column_names.push_back("d");
+  cudf_io::table_input_metadata md(tbl);
+  md.column_metadata[0].name = "a";
+  md.column_metadata[1].name = "b";
+  md.column_metadata[2].name = "c";
+  md.column_metadata[3].name = "d";
   cudf_io::parquet_writer_options opts =
-    cudf_io::parquet_writer_options::builder(cudf_io::sink_info{filepath}, tbl).metadata(&md);
+    cudf_io::parquet_writer_options::builder(cudf_io::sink_info{filepath}, tbl).input_schema(&md);
   cudf_io::write_parquet(opts);
 
   {
