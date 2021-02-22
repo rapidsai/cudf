@@ -17,6 +17,10 @@
 # Find the CUDAToolkit
 find_package(CUDAToolkit REQUIRED)
 
+# Must come after find_package(CUDAToolkit) because we symlink
+# ccache as a compiler front-end for nvcc in gpuCI CPU builds.
+enable_language(CUDA)
+
 if(CMAKE_CUDA_COMPILER_VERSION)
   # Compute the version. from  CMAKE_CUDA_COMPILER_VERSION
   string(REGEX REPLACE "([0-9]+)\\.([0-9]+).*" "\\1" CUDA_VERSION_MAJOR ${CMAKE_CUDA_COMPILER_VERSION})
@@ -32,9 +36,6 @@ message(STATUS "CUDF: CUDA_VERSION: ${CUDA_VERSION}")
 
 include(${CUDF_SOURCE_DIR}/cmake/Modules/SetGPUArchs.cmake)
 message(STATUS "CUDF: Building CUDF for GPU architectures: ${CMAKE_CUDA_ARCHITECTURES}")
-
-# Only enable the CUDA language after including SetGPUArchs.cmake
-enable_language(CUDA)
 
 if(CMAKE_COMPILER_IS_GNUCXX)
     string(APPEND CMAKE_CXX_FLAGS " -Wall -Werror -Wno-unknown-pragmas -Wno-error=deprecated-declarations")
