@@ -498,7 +498,8 @@ TEST_F(CopyBitmaskTest, TestCopyColumnViewVectorDiscontiguous)
     concatenated_bitmask.data(), gold_mask.data(), cudf::num_bitmask_words(num_elements));
 }
 
-struct MergeBitmaskTest : public cudf::test::BaseFixture {};
+struct MergeBitmaskTest : public cudf::test::BaseFixture {
+};
 
 TEST_F(MergeBitmaskTest, TestBitmaskAnd)
 {
@@ -515,12 +516,14 @@ TEST_F(MergeBitmaskTest, TestBitmaskAnd)
   rmm::device_buffer result3 = cudf::bitmask_and(input3);
 
   auto odd_indices =
-    cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i%2; });
+    cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i % 2; });
   auto odd = cudf::test::detail::make_null_mask(odd_indices, odd_indices + input2.num_rows());
 
   EXPECT_EQ(nullptr, result1.data());
-  CUDF_TEST_EXPECT_EQUAL_BUFFERS(result2.data(), odd.data(), cudf::num_bitmask_words(input2.num_rows()));
-  CUDF_TEST_EXPECT_EQUAL_BUFFERS(result3.data(), odd.data(), cudf::num_bitmask_words(input2.num_rows()));
+  CUDF_TEST_EXPECT_EQUAL_BUFFERS(
+    result2.data(), odd.data(), cudf::num_bitmask_words(input2.num_rows()));
+  CUDF_TEST_EXPECT_EQUAL_BUFFERS(
+    result3.data(), odd.data(), cudf::num_bitmask_words(input2.num_rows()));
 }
 
 TEST_F(MergeBitmaskTest, TestBitmaskOr)
@@ -538,11 +541,13 @@ TEST_F(MergeBitmaskTest, TestBitmaskOr)
   rmm::device_buffer result3 = cudf::bitmask_or(input3);
 
   auto all_but_index3 =
-    cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i!=3; });
-  auto null3 = cudf::test::detail::make_null_mask(all_but_index3, all_but_index3 + input2.num_rows());
+    cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i != 3; });
+  auto null3 =
+    cudf::test::detail::make_null_mask(all_but_index3, all_but_index3 + input2.num_rows());
 
   EXPECT_EQ(nullptr, result1.data());
-  CUDF_TEST_EXPECT_EQUAL_BUFFERS(result2.data(), null3.data(), cudf::num_bitmask_words(input2.num_rows()));
+  CUDF_TEST_EXPECT_EQUAL_BUFFERS(
+    result2.data(), null3.data(), cudf::num_bitmask_words(input2.num_rows()));
   EXPECT_EQ(nullptr, result3.data());
 }
 
