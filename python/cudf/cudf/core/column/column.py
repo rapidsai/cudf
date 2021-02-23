@@ -49,12 +49,12 @@ from cudf.utils.dtypes import (
     get_time_unit,
     is_categorical_dtype,
     is_decimal_dtype,
+    is_interval_dtype,
     is_list_dtype,
     is_numerical_dtype,
     is_scalar,
     is_string_dtype,
     is_struct_dtype,
-    is_interval_dtype,
     min_signed_type,
     min_unsigned_type,
     np_to_pa_dtype,
@@ -876,7 +876,12 @@ class ColumnBase(Column, Serializable):
 
         return res
 
-    def _process_values_for_isin(self, values):
+    def _process_values_for_isin(
+        self, values: Sequence
+    ) -> Tuple[ColumnBase, ColumnBase]:
+        """
+        Helper function for `isin` which pre-process `values` based on `self`.
+        """
         lhs = self
         rhs = as_column(values, nan_as_null=False)
         if lhs.null_count == len(lhs):
@@ -885,7 +890,11 @@ class ColumnBase(Column, Serializable):
             rhs = rhs.astype(lhs.dtype)
         return lhs, rhs
 
-    def _isin_earlystop(self, rhs):
+    def _isin_earlystop(self, rhs: ColumnBase) -> Union[ColumnBase, None]:
+        """
+        Helper function for `isin` which determines possibility of
+        early-stopping or not.
+        """
         if self.dtype != rhs.dtype:
             if self.null_count and rhs.null_count:
                 return self.isna()
@@ -896,7 +905,11 @@ class ColumnBase(Column, Serializable):
         else:
             return None
 
-    def _obtain_isin_result(self, rhs):
+    def _obtain_isin_result(self, rhs: ColumnBase) -> ColumnBase:
+        """
+        Helper function for `isin` which merges `self` & `rhs`
+        to determine what values of `rhs` exist in `self`.
+        """
         ldf = cudf.DataFrame({"x": self, "orig_order": arange(len(self))})
         rdf = cudf.DataFrame(
             {"x": rhs, "bool": full(len(rhs), True, dtype="bool")}

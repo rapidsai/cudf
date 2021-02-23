@@ -9,6 +9,7 @@ from typing import (
     Dict,
     Mapping,
     Optional,
+    Sequence,
     Tuple,
     Union,
     cast,
@@ -867,7 +868,9 @@ class CategoricalColumn(column.ColumnBase):
         else:
             super().set_base_data(value)
 
-    def _process_values_for_isin(self, values):
+    def _process_values_for_isin(
+        self, values: Sequence
+    ) -> Tuple[ColumnBase, ColumnBase]:
         lhs = self
         # We need to convert values to same type as self,
         # hence passing dtype=self.dtype
