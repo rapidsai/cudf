@@ -1769,15 +1769,15 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_getJSONObject(JNIEnv *env
                                                                      jlong j_view_handle, jlong j_scalar_handle) {
 
    JNI_NULL_CHECK(env, j_view_handle, "view cannot be null", 0);
-   JNI_NULL_CHECK(env, j_path, "path cannot be null", 0);
+   JNI_NULL_CHECK(env, j_scalar_handle, "path cannot be null", 0);
 
   try {
 
     cudf::column_view* n_column_view = reinterpret_cast<cudf::column_view*>(j_view_handle);
     cudf::strings_column_view n_strings_col_view(*n_column_view);
-    cudf::scalar* n_scalar_path = reinterpret_cast<cudf::scalar*>(j_scalar_handle);
+    cudf::string_scalar *n_scalar_path = reinterpret_cast<cudf::string_scalar *>(j_scalar_handle);
 
-    auto result = cudf::strings::get_json_object(n_strings_col_view, n_scalar_path);
+    auto result = cudf::strings::get_json_object(n_strings_col_view, *n_scalar_path);
 
     return reinterpret_cast<jlong>(result.release());
   }
