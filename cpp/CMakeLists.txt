@@ -231,9 +231,7 @@ message(STATUS "CUFILE: CUFILE_INCLUDE set to ${CUFILE_INCLUDE}")
 
 add_library(cufile SHARED IMPORTED ${CUFILE_LIBRARY})
 if (CUFILE_INCLUDE AND CUFILE_LIBRARY)
-    set_target_properties(cufile PROPERTIES IMPORTED_LOCATION ${CUFILE_LIBRARY})    
-    configure_file("${CMAKE_CURRENT_SOURCE_DIR}/config/cufile.json"
-    "${CMAKE_BINARY_DIR}/config/cufile.json")
+    set_target_properties(cufile PROPERTIES IMPORTED_LOCATION ${CUFILE_LIBRARY})
 else()
     message(FATAL_ERROR "cufile not found, please pass the GDS install directory using -DGDS_ROOT")
 endif (CUFILE_INCLUDE AND CUFILE_LIBRARY)
@@ -639,10 +637,6 @@ install(TARGETS cudf
 
 install(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/include/cudf
         DESTINATION include
-        COMPONENT cudf)
-
-install(FILES ${CMAKE_CURRENT_SOURCE_DIR}/config/cufile.json 
-        DESTINATION lib 
         COMPONENT cudf)
 
 install(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/include/cudf_test

@@ -60,12 +60,6 @@ std::string get_libcudf_dir_path()
 struct cufile_driver {
   cufile_driver()
   {
-    // Unless CUFILE_ENV_PATH_JSON is already set, set the env var to point to a config file with
-    // enabled compatiblity mode
-    auto const cufile_config_path = get_libcudf_dir_path() + "config/cufile.json";
-    CUDF_EXPECTS(setenv("CUFILE_ENV_PATH_JSON", cufile_config_path.c_str(), 0) == 0,
-                 "Failed to set the cuFile config file environment variable.");
-
     CUDF_EXPECTS(cuFileDriverOpen().err == CU_FILE_SUCCESS, "Failed to initialize cuFile driver");
   }
   ~cufile_driver() { cuFileDriverClose(); }
