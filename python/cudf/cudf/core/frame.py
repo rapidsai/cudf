@@ -6,7 +6,7 @@ import functools
 import operator
 import warnings
 from collections import OrderedDict, abc as abc
-from typing import Any, Dict, Tuple, overload
+from typing import TYPE_CHECKING, Any, Dict, Tuple, TypeVar, overload
 
 import cupy
 import numpy as np
@@ -28,6 +28,12 @@ from cudf.utils.dtypes import (
 )
 
 
+T = TypeVar("T", bound="Frame")
+
+if TYPE_CHECKING:
+    from cudf.core.column_accessor import ColumnAccessor
+
+
 class Frame(libcudf.table.Table):
     """
     Frame: A collection of Column objects with an optional index.
@@ -39,6 +45,8 @@ class Frame(libcudf.table.Table):
     index : Table
         A Frame representing the (optional) index columns.
     """
+
+    _data: "ColumnAccessor"
 
     @classmethod
     def _from_table(cls, table: Frame):
@@ -209,8 +217,89 @@ class Frame(libcudf.table.Table):
     def __len__(self):
         return self._num_rows
 
-    def copy(self, deep=True):
-        return Frame(self._data.copy(deep=deep))
+    def copy(self: T, deep: bool = True) -> T:
+        """
+        Make a copy of this object's indices and data.
+
+        When ``deep=True`` (default), a new object will be created with a
+        copy of the calling object's data and indices. Modifications to
+        the data or indices of the copy will not be reflected in the
+        original object (see notes below).
+        When ``deep=False``, a new object will be created without copying
+        the calling object's data or index (only references to the data
+        and index are copied). Any changes to the data of the original
+        will be reflected in the shallow copy (and vice versa).
+
+        Parameters
+        ----------
+        deep : bool, default True
+            Make a deep copy, including a copy of the data and the indices.
+            With ``deep=False`` neither the indices nor the data are copied.
+
+        Returns
+        -------
+        copy : Series or DataFrame
+            Object type matches caller.
+        Examples
+        --------
+        >>> s = cudf.Series([1, 2], index=["a", "b"])
+        >>> s
+        a    1
+        b    2
+        dtype: int64
+        >>> s_copy = s.copy()
+        >>> s_copy
+        a    1
+        b    2
+        dtype: int64
+
+        **Shallow copy versus default (deep) copy:**
+
+        >>> s = cudf.Series([1, 2], index=["a", "b"])
+        >>> deep = s.copy()
+        >>> shallow = s.copy(deep=False)
+
+        Shallow copy shares data and index with original.
+
+        >>> s is shallow
+        False
+        >>> s._column is shallow._column and s.index is shallow.index
+        True
+
+        Deep copy has own copy of data and index.
+
+        >>> s is deep
+        False
+        >>> s.values is deep.values or s.index is deep.index
+        False
+
+        Updates to the data shared by shallow copy and original is reflected
+        in both; deep copy remains unchanged.
+
+        >>> s['a'] = 3
+        >>> shallow['b'] = 4
+        >>> s
+        a    3
+        b    4
+        dtype: int64
+        >>> shallow
+        a    3
+        b    4
+        dtype: int64
+        >>> deep
+        a    1
+        b    2
+        dtype: int64
+        """
+        new_frame = self.__class__.__new__(type(self))
+        new_frame._data = self._data.copy(deep=deep)
+
+        if self._index is not None:
+            new_frame._index = self._index.copy(deep=deep)
+        else:
+            new_frame._index = None
+
+        return new_frame
 
     @classmethod
     @annotate("CONCAT", color="orange", domain="cudf_python")
@@ -506,7 +595,7 @@ class Frame(libcudf.table.Table):
                 self, as_column(gather_map), keep_index=keep_index
             )
         )
-        result._postprocess_columns(self)
+        result._copy_type_metadata(self)
         if keep_index and self._index is not None:
             result._index.names = self._index.names
         return result
@@ -521,7 +610,7 @@ class Frame(libcudf.table.Table):
             self, columns_to_hash, num_partitions, keep_index
         )
         output = self.__class__._from_table(output)
-        output._postprocess_columns(self, include_index=keep_index)
+        output._copy_type_metadata(self, include_index=keep_index)
         return output, offsets
 
     def _as_column(self):
@@ -540,7 +629,7 @@ class Frame(libcudf.table.Table):
     def _scatter(self, key, value):
         result = self._from_table(libcudf.copying.scatter(value, key, self))
 
-        result._postprocess_columns(self)
+        result._copy_type_metadata(self)
         return result
 
     def _empty_like(self, keep_index=True):
@@ -548,66 +637,8 @@ class Frame(libcudf.table.Table):
             libcudf.copying.table_empty_like(self, keep_index)
         )
 
-        result._postprocess_columns(self, include_index=keep_index)
+        result._copy_type_metadata(self, include_index=keep_index)
         return result
-
-    def _slice(self, arg):
-        """
-       _slice : slice the frame as per the arg
-
-       Parameters
-       ----------
-       arg : should always be of type slice and doesn't handle step
-
-       """
-        from cudf.core.index import RangeIndex
-
-        num_rows = len(self)
-        if num_rows == 0:
-            return self
-        start, stop, stride = arg.indices(num_rows)
-
-        # This is just to handle RangeIndex type, stop
-        # it from materializing unnecessarily
-        keep_index = True
-        if self.index is not None and isinstance(self.index, RangeIndex):
-            if self._num_columns == 0:
-                result = self._empty_like(keep_index)
-                result._index = self.index[start:stop]
-                return result
-            keep_index = False
-
-        if start < 0:
-            start = start + num_rows
-        if stop < 0:
-            stop = stop + num_rows
-
-        if start > stop and (stride is None or stride == 1):
-            return self._empty_like(keep_index)
-        else:
-            start = len(self) if start > num_rows else start
-            stop = len(self) if stop > num_rows else stop
-
-            if stride is not None and stride != 1:
-                return self._gather(
-                    cudf.core.column.arange(
-                        start, stop=stop, step=stride, dtype=np.int32
-                    )
-                )
-            else:
-                result = self._from_table(
-                    libcudf.copying.table_slice(
-                        self, [start, stop], keep_index
-                    )[0]
-                )
-
-                result._postprocess_columns(self, include_index=keep_index)
-                # Adding index of type RangeIndex back to
-                # result
-                if keep_index is False and self.index is not None:
-                    result.index = self.index[start:stop]
-                result.columns = self.columns
-                return result
 
     def clip(self, lower=None, upper=None, inplace=False, axis=1):
         """
@@ -732,7 +763,7 @@ class Frame(libcudf.table.Table):
         for i, name in enumerate(self._data):
             output._data[name] = self._data[name].clip(lower[i], upper[i])
 
-        output._postprocess_columns(self, include_index=False)
+        output._copy_type_metadata(self, include_index=False)
 
         return self._mimic_inplace(output, inplace=inplace)
 
@@ -1075,7 +1106,7 @@ class Frame(libcudf.table.Table):
         result = partitioned._split(output_offsets, keep_index=keep_index)
 
         for frame in result:
-            frame._postprocess_columns(self, include_index=keep_index)
+            frame._copy_type_metadata(self, include_index=keep_index)
 
         if npartitions:
             for _ in range(npartitions - len(result)):
@@ -1496,7 +1527,7 @@ class Frame(libcudf.table.Table):
                 frame, how=how, keys=subset, thresh=thresh
             )
         )
-        result._postprocess_columns(frame)
+        result._copy_type_metadata(frame)
         return result
 
     def _drop_na_columns(self, how="any", subset=None, thresh=None):
@@ -1541,7 +1572,7 @@ class Frame(libcudf.table.Table):
                 self, as_column(boolean_mask)
             )
         )
-        result._postprocess_columns(self)
+        result._copy_type_metadata(self)
         return result
 
     def _quantiles(
@@ -1573,7 +1604,7 @@ class Frame(libcudf.table.Table):
             )
         )
 
-        result._postprocess_columns(self)
+        result._copy_type_metadata(self)
         return result
 
     def rank(
@@ -1734,7 +1765,7 @@ class Frame(libcudf.table.Table):
             libcudf.filling.repeat(self, count)
         )
 
-        result._postprocess_columns(self)
+        result._copy_type_metadata(self)
         return result
 
     def _fill(self, fill_values, begin, end, inplace):
@@ -2016,7 +2047,7 @@ class Frame(libcudf.table.Table):
                     keep_index=keep_index,
                 )
             )
-            result._postprocess_columns(self)
+            result._copy_type_metadata(self)
 
             return result
         else:
@@ -2305,7 +2336,7 @@ class Frame(libcudf.table.Table):
             )
         )
 
-        result._postprocess_columns(self)
+        result._copy_type_metadata(self)
         return result
 
     def replace(self, to_replace: Any, replacement: Any) -> Frame:
@@ -2344,44 +2375,23 @@ class Frame(libcudf.table.Table):
 
         return result
 
-    def _copy_categories(self, other, include_index=True):
+    def _copy_type_metadata(
+        self, other: Frame, include_index: bool = True
+    ) -> Frame:
         """
-        Utility that copies category information from `other`
-        to `self`.
+        Copy type metadata from each column of `other` to the corresponding
+        column of `self`.
+        See `ColumnBase._copy_type_metadata` for more information.
         """
         for name, col, other_col in zip(
             self._data.keys(), self._data.values(), other._data.values()
         ):
-            if isinstance(
-                other_col, cudf.core.column.CategoricalColumn
-            ) and not isinstance(col, cudf.core.column.CategoricalColumn):
-                self._data[name] = build_categorical_column(
-                    categories=other_col.categories,
-                    codes=as_column(col.base_data, dtype=col.dtype),
-                    mask=col.base_mask,
-                    ordered=other_col.ordered,
-                    size=col.size,
-                    offset=col.offset,
-                    null_count=col.null_count,
-                )
+            self._data[name] = other_col._copy_type_metadata(col)
+
         if include_index:
-            # include_index will still behave as False
-            # incase of self._index being a RangeIndex
-            if (
-                self._index is not None
-                and not isinstance(self._index, cudf.core.index.RangeIndex)
-                and isinstance(
-                    other._index,
-                    (cudf.core.index.CategoricalIndex, cudf.MultiIndex),
-                )
-            ):
-                self._index._postprocess_columns(
-                    other._index, include_index=False
-                )
+            if self._index is not None and other._index is not None:
+                self._index._copy_type_metadata(other._index)
                 # When other._index is a CategoricalIndex, there is
-                # possibility that corresposing self._index be GenericIndex
-                # with codes. So to update even the class signature, we
-                # have to reconstruct self._index:
                 if isinstance(
                     other._index, cudf.core.index.CategoricalIndex
                 ) and not isinstance(
@@ -2390,36 +2400,20 @@ class Frame(libcudf.table.Table):
                     self._index = cudf.core.index.Index._from_table(
                         self._index
                     )
+
         return self
 
-    def _copy_struct_names(self, other, include_index=True):
-        """
-        Utility that copies struct field names.
-        """
+    def _copy_interval_data(self, other, include_index=True):
         for name, col, other_col in zip(
             self._data.keys(), self._data.values(), other._data.values()
         ):
-            if isinstance(other_col, cudf.core.column.StructColumn):
-                self._data[name] = col._rename_fields(
-                    other_col.dtype.fields.keys()
-                )
-
-        if include_index and self._index is not None:
-            for name, col, other_col in zip(
-                self._index._data.keys(),
-                self._index._data.values(),
-                other._index._data.values(),
-            ):
-                if isinstance(other_col, cudf.core.column.StructColumn):
-                    self._index._data[name] = col._rename_fields(
-                        other_col.dtype.fields.keys()
-                    )
-
-        return self
+            if isinstance(other_col, cudf.core.column.IntervalColumn):
+                self._data[name] = cudf.core.column.IntervalColumn(col)
 
     def _postprocess_columns(self, other, include_index=True):
         self._copy_categories(other, include_index=include_index)
         self._copy_struct_names(other, include_index=include_index)
+        self._copy_interval_data(other, include_index=include_index)
 
     def _unaryop(self, op):
         data_columns = (col.unary_operator(op) for col in self._columns)
@@ -2651,7 +2645,7 @@ class Frame(libcudf.table.Table):
         The table containing the tiled "rows".
         """
         result = self.__class__._from_table(libcudf.reshape.tile(self, count))
-        result._postprocess_columns(self)
+        result._copy_type_metadata(self)
         return result
 
     def searchsorted(

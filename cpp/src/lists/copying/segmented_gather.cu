@@ -16,6 +16,7 @@
 #include <cudf/detail/gather.cuh>
 #include <cudf/detail/gather.hpp>
 #include <cudf/detail/indexalator.cuh>
+#include <cudf/detail/iterator.cuh>
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/lists/detail/gather.cuh>
 
@@ -59,14 +60,12 @@ std::unique_ptr<column> segmented_gather(lists_column_view const& value_column,
     // Add sub_index to value_column offsets, to get gather indices of child of value_column
     return value_offsets[offset_idx] + wrapped_sub_index - value_offsets[0];
   };
-  auto child_gather_index_begin =
-    thrust::make_transform_iterator(thrust::make_counting_iterator<size_type>(0), transformer);
-  auto child_gather_index_end = child_gather_index_begin + gather_map_size;
+  auto child_gather_index_begin = cudf::detail::make_counting_transform_iterator(0, transformer);
 
   // Call gather on child of value_column
   auto child_table = cudf::detail::gather(table_view({value_column.get_sliced_child(stream)}),
                                           child_gather_index_begin,
-                                          child_gather_index_end,
+                                          child_gather_index_begin + gather_map_size,
                                           out_of_bounds_policy::DONT_CHECK,
                                           stream,
                                           mr);

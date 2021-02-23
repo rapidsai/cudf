@@ -36,7 +36,7 @@ nvidia-docker run -it cudf-build:10.1-devel-centos7 bash
 You can download the cuDF repo in the docker container or you can mount it into the container.
 Here I choose to download again in the container.
 ```bash
-git clone --recursive https://github.com/rapidsai/cudf.git -b branch-0.18
+git clone --recursive https://github.com/rapidsai/cudf.git -b branch-0.19
 ```
 
 ### Build cuDF jar
@@ -49,5 +49,5 @@ scl enable devtoolset-7 "java/ci/build-in-docker.sh"
 
 ### The output
 
-You can find the cuDF jar in java/target/ like cudf-0.18-SNAPSHOT-cuda10-1.jar.
+You can find the cuDF jar in java/target/ like cudf-0.19-SNAPSHOT-cuda10-1.jar.
 

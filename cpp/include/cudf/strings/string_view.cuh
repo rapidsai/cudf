@@ -241,7 +241,7 @@ __device__ inline int string_view::compare(const char* data, size_type bytes) co
 
 __device__ inline bool string_view::operator==(const string_view& rhs) const
 {
-  return compare(rhs) == 0;
+  return (size_bytes() == rhs.size_bytes()) && (compare(rhs) == 0);
 }
 
 __device__ inline bool string_view::operator!=(const string_view& rhs) const

@@ -85,6 +85,7 @@ gpuci_conda_retry install -y \
 # gpuci_conda_retry remove --force rapids-build-env rapids-notebook-env
 # gpuci_conda_retry install -y "your-pkg=1.0.0"
 
+
 gpuci_logger "Check compiler versions"
 python --version
 $CC --version
@@ -218,5 +219,9 @@ py.test -n 6 --cache-clear --basetemp=${WORKSPACE}/custreamz-cuda-tmp --junitxml
 gpuci_logger "Test notebooks"
 ${WORKSPACE}/ci/gpu/test-notebooks.sh 2>&1 | tee nbtest.log
 python ${WORKSPACE}/ci/utils/nbtestlog2junitxml.py nbtest.log
+
+if [ -n "${CODECOV_TOKEN}" ]; then
+    codecov -t $CODECOV_TOKEN
+fi
 
 return ${EXITCODE}
