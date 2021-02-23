@@ -352,8 +352,9 @@ struct ast_plan {
   {
     auto const total_size = std::accumulate(_sizes.cbegin(), _sizes.cend(), 0);
     auto host_data_buffer = std::make_unique<char[]>(total_size);
+    auto const offset     = offsets();  // calculate once outside for loop
     for (unsigned int i = 0; i < _data_pointers.size(); ++i)
-      std::memcpy(host_data_buffer.get() + offsets()[i], _data_pointers[i], _sizes[i]);
+      std::memcpy(host_data_buffer.get() + offset[i], _data_pointers[i], _sizes[i]);
     return std::make_pair(std::move(host_data_buffer), total_size);
   }
 
