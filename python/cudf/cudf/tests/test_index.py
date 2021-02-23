@@ -1351,11 +1351,11 @@ def test_categorical_index_basic(data, categories, dtype, ordered, name):
     assert_eq(pindex, gindex)
 
 
-@pytest.mark.parametrize("closed", ["left", "right"])
+@pytest.mark.parametrize("closed", ["left", "right", "both", "neither"])
 @pytest.mark.parametrize("freq", [1, 2, 3])
 @pytest.mark.parametrize("start", [0, 1, 2, 3])
 @pytest.mark.parametrize("end", [4, 5, 6, 7])
-def test_interval_range_basic(start, end, freq, closed):
+def test_interval_range_freq_basic(start, end, freq, closed):
     pindex = pd.interval_range(start=start, end=end, freq=freq, closed=closed)
     gindex = cudf.interval_range(
         start=start, end=end, freq=freq, closed=closed
@@ -1364,15 +1364,97 @@ def test_interval_range_basic(start, end, freq, closed):
     assert_eq(pindex, gindex)
 
 
-@pytest.mark.parametrize("closed", ["right"])
+@pytest.mark.parametrize("closed", ["left", "right", "both", "neither"])
+@pytest.mark.parametrize("periods", [1, 2, 3])
+@pytest.mark.parametrize("start", [0, 1, 2, 3])
+@pytest.mark.parametrize("end", [4, 5, 6, 7])
+def test_interval_range_periods_basic(start, end, periods, closed):
+    pindex = pd.interval_range(
+        start=start, end=end, periods=periods, closed=closed
+    )
+    gindex = cudf.interval_range(
+        start=start, end=end, periods=periods, closed=closed
+    )
+
+    assert_eq(pindex, gindex)
+
+
+@pytest.mark.parametrize("closed", ["left", "right", "both", "neither"])
+@pytest.mark.parametrize("periods", [1, 2, 3])
+@pytest.mark.parametrize("freq", [1, 2, 3, 4])
+@pytest.mark.parametrize("end", [4, 8, 9, 10])
+def test_interval_range_periods_freq_end(end, freq, periods, closed):
+    pindex = pd.interval_range(
+        end=end, freq=freq, periods=periods, closed=closed
+    )
+    gindex = cudf.interval_range(
+        end=end, freq=freq, periods=periods, closed=closed
+    )
+
+    assert_eq(pindex, gindex)
+
+
+@pytest.mark.parametrize("closed", ["left", "right", "both", "neither"])
+@pytest.mark.parametrize("periods", [1, 2, 3])
+@pytest.mark.parametrize("freq", [1, 2, 3, 4])
+@pytest.mark.parametrize("start", [1, 4, 9, 12])
+def test_interval_range_periods_freq_start(start, freq, periods, closed):
+    pindex = pd.interval_range(
+        start=start, freq=freq, periods=periods, closed=closed
+    )
+    gindex = cudf.interval_range(
+        start=start, freq=freq, periods=periods, closed=closed
+    )
+
+    assert_eq(pindex, gindex)
+
+
+@pytest.mark.parametrize("closed", ["right", "left", "both", "neither"])
 @pytest.mark.parametrize(
     "data",
     [
-        [pd.Interval(0, 3), pd.Interval(1, 7)],
-        [pd.Interval(0, 6), pd.Interval(1, 2)],
+        ([pd.Interval(30, 50)]),
+        ([pd.Interval(0, 3), pd.Interval(1, 7)]),
+        ([pd.Interval(0.2, 60.3), pd.Interval(1, 7), pd.Interval(0, 0)]),
     ],
 )
 def test_interval_index_basic(data, closed):
+    pindex = pd.IntervalIndex(data, closed=closed)
+    gindex = IntervalIndex(data, closed=closed)
+
+    assert_eq(pindex, gindex)
+
+
+@pytest.mark.parametrize("closed", ["right", "left", "both", "neither"])
+@pytest.mark.parametrize(
+    "data",
+    [
+        ([pd.Interval(1, 6), pd.Interval(1, 10), pd.Interval(1, 3)]),
+        (
+            [
+                pd.Interval(3.5, 6.0),
+                pd.Interval(1.0, 7.0),
+                pd.Interval(0.0, 10.0),
+            ]
+        ),
+        (
+            [
+                pd.Interval(50, 100, closed="left"),
+                pd.Interval(1.0, 7.0, closed="left"),
+                pd.Interval(16, 322, closed="left"),
+            ]
+        ),
+        (
+            [
+                pd.Interval(50, 100, closed="right"),
+                pd.Interval(1.0, 7.0, closed="right"),
+                pd.Interval(16, 322, closed="right"),
+            ]
+        ),
+    ],
+)
+def test_interval_index_many_params(data, closed):
+
     pindex = pd.IntervalIndex(data, closed=closed)
     gindex = IntervalIndex(data, closed=closed)
 

@@ -2707,25 +2707,51 @@ class interval_range(GenericIndex):
         start: int = None,
         end: int = None,
         periods: int = None,
-        freq: int = 1,
+        freq: int = None,
         closed: str = "right",
         name: str = None,
     ) -> "IntervalIndex":
-        if freq:
+        # breakpoint()
+        if freq and periods and start and end:
+            raise ValueError(
+                "Of the four parameters: start, end, periods, and "
+                "freq, exactly three must be specified"
+            )
+        elif freq and periods and start:
+            end = freq * periods + start
             left_col = cupy.arange(start, end, freq)
             right_col = cupy.arange(start + freq, end + 1, freq)
-            # sometimes the left col overlaps with the right col,
-            # seems to occur with even freq and odd end, and in other places too
             if len(left_col) != len(right_col):
                 left_col = cupy.arange(start, end - freq, freq)
             if len(right_col) == 0 or len(left_col) == 0:
-                # I get an error passing to cudf IntervalIndex
                 return pd.IntervalIndex([], closed=closed)
-        if periods:
-            periods_array = cupy.asarray(cupy.arange(start,end+1))
-            hist, bin_edges = cupy.histogram(periods_array,periods)
-            left_col= bin_edges[:-1]
-            right_col= bin_edges[1:]
+        elif freq and periods and end:
+            start = end - (freq * periods)
+            left_col = cupy.arange(start, end, freq)
+            right_col = cupy.arange(start + freq, end + 1, freq)
+            if len(left_col) != len(right_col):
+                left_col = cupy.arange(start, end - freq, freq)
+            if len(right_col) == 0 or len(left_col) == 0:
+                return pd.IntervalIndex([], closed=closed)
+        elif freq and not periods:
+            left_col = cupy.arange(start, end, freq)
+            right_col = cupy.arange(start + freq, end + 1, freq)
+            # sometimes the left col overlaps with the right col
+            if len(left_col) != len(right_col):
+                left_col = cupy.arange(start, end - freq, freq)
+            if len(right_col) == 0 or len(left_col) == 0:
+                # I get an error passing an empty list to cudf IntervalIndex
+                return pd.IntervalIndex([], closed=closed)
+        elif periods and not freq:
+            periods_array = cupy.asarray(cupy.arange(start, end + 1))
+            hist, bin_edges = cupy.histogram(periods_array, periods)
+            # cupy.histogram turns all arrays into a float array
+            # this can cause the dtype to be a float instead of an int
+            # the below adjusts for this
+            if cupy.all(cupy.mod(bin_edges, 1) == 0):
+                bin_edges = bin_edges.astype(int)
+            left_col = bin_edges[:-1]
+            right_col = bin_edges[1:]
 
         interval_col = column.build_interval_column(
             left_col, right_col, closed=closed
@@ -2773,6 +2799,11 @@ class IntervalIndex(GenericIndex):
         elif isinstance(data, (pd._libs.interval.Interval, pd.IntervalIndex)):
             data = column.as_column(data, dtype=dtype,)
         else:
+            if data is not None and data[0].closed != closed:
+                # when closed is not the same as the data's closed
+                # we need to change the data closed value,
+                # not sure how to do this on the gpu?
+                data = pd.arrays.IntervalArray(data, closed=closed)
             data = column.as_column(
                 data, dtype="interval" if dtype is None else dtype
             )

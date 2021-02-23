@@ -2086,7 +2086,9 @@ def as_column(
                     sr = pd.Series(arbitrary, dtype="str")
                     data = as_column(sr, nan_as_null=nan_as_null)
                 elif is_interval_dtype(dtype):
-                    sr = pd.Series(arbitrary, dtype="interval")
+                    sr = pd.Series(
+                        arbitrary, dtype="interval" if dtype is None else dtype
+                    )
                     data = as_column(sr, nan_as_null=nan_as_null)
                 else:
                     data = as_column(
