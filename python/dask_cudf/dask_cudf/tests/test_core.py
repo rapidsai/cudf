@@ -1,3 +1,5 @@
+# Copyright (c) 2021, NVIDIA CORPORATION.
+
 import random
 
 import cupy as cp

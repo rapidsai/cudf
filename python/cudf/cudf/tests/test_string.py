@@ -1,4 +1,5 @@
-# Copyright (c) 2018-2020, NVIDIA CORPORATION.
+# Copyright (c) 2018-2021, NVIDIA CORPORATION.
+
 import re
 from contextlib import ExitStack as does_not_raise
 from sys import getsizeof

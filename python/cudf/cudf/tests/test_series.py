@@ -1,4 +1,5 @@
 # Copyright (c) 2020-2021, NVIDIA CORPORATION.
+
 import operator
 import re
 from string import ascii_letters, digits
