@@ -198,7 +198,7 @@ struct device_span : public span_base<T, Extent, device_span<T, Extent>> {
  *
  * The index operator returns the corresponding row.
  */
-template <typename T, typename Row>
+template <typename T, template <typename, std::size_t> typename RowType>
 class base_2dspan {
  public:
   using size_type = std::pair<size_t, size_t>;
@@ -220,16 +220,18 @@ class base_2dspan {
     return row * size.second + column;
   }
 
-  constexpr Row operator[](size_t row)
+  constexpr RowType<T, dynamic_extent> operator[](size_t row)
   {
     return {this->data() + flatten_index(row, 0, this->size()), this->size().second};
   }
 
-  template <
-    typename OtherT,
-    typename OtherRow,
-    typename std::enable_if<std::is_convertible<OtherRow, Row>::value, void>::type* = nullptr>
-  constexpr base_2dspan(base_2dspan<OtherT, OtherRow> const& other) noexcept
+  template <typename OtherT,
+            template <typename, size_t>
+            typename OtherRowType,
+            typename std::enable_if<std::is_convertible<OtherRowType<OtherT, dynamic_extent>,
+                                                        RowType<T, dynamic_extent>>::value,
+                                    void>::type* = nullptr>
+  constexpr base_2dspan(base_2dspan<OtherT, OtherRowType> const& other) noexcept
     : _data{other.data()}, _size{other.size()}
   {
   }
@@ -245,7 +247,7 @@ class base_2dspan {
  * Index operator returns rows as `host_span`.
  */
 template <class T>
-using host_2dspan = base_2dspan<T, host_span<T>>;
+using host_2dspan = base_2dspan<T, host_span>;
 
 /**
  * @brief Alias for the 2D span for device data.
@@ -253,7 +255,7 @@ using host_2dspan = base_2dspan<T, host_span<T>>;
  * Index operator returns rows as `device_span`.
  */
 template <class T>
-using device_2dspan = base_2dspan<T, device_span<T>>;
+using device_2dspan = base_2dspan<T, device_span>;
 
 }  // namespace detail
 }  // namespace cudf
