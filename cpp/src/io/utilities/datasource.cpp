@@ -93,14 +93,14 @@ class memory_mapped_source : public datasource {
     if (!supports_device_read()) CUDF_FAIL("Device reads are not supported for this file.");
 
     auto const read_size = std::min(size, _map_size - (offset - _map_offset));
-    return _cufile_in->read(offset, size);
+    return _cufile_in->read(offset, read_size);
   }
 
   size_t device_read(size_t offset, size_t size, uint8_t *dst) override
   {
     if (!supports_device_read()) CUDF_FAIL("Device reads are not supported for this file.");
     auto const read_size = std::min(size, _map_size - (offset - _map_offset));
-    return _cufile_in->read(offset, size, dst);
+    return _cufile_in->read(offset, read_size, dst);
   }
 
   size_t size() const override { return _file_size; }

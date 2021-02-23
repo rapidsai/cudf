@@ -220,11 +220,11 @@ endif(Boost_FOUND)
 
 find_path(CUFILE_INCLUDE "cufile.h"
     HINTS "${GDS_ROOT}/lib"
-          "/usr/local/gds/lib")
+          "/usr/local/cuda/lib64")
 
 find_library(CUFILE_LIBRARY "libcufile.so"
     HINTS "${GDS_ROOT}/lib"
-          "/usr/local/gds/lib")
+          "/usr/local/cuda/lib64")
 
 message(STATUS "CUFILE: CUFILE_LIBRARY set to ${CUFILE_LIBRARY}")
 message(STATUS "CUFILE: CUFILE_INCLUDE set to ${CUFILE_INCLUDE}")

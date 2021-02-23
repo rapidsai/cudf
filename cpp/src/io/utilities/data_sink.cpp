@@ -55,7 +55,7 @@ class file_sink : public data_sink {
     return _cufile_out != nullptr && _cufile_out->is_cufile_io_preferred(size);
   }
 
-  void device_write(void const* gpu_data, size_t size, cudaStream_t stream) override
+  void device_write(void const* gpu_data, size_t size, rmm::cuda_stream_view stream) override
   {
     if (!supports_device_write()) CUDF_FAIL("Device writes are not supported for this file.");
 
