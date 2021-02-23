@@ -157,17 +157,17 @@ __global__ void __launch_bounds__(block_size) gpuInitPageFragments(PageFragment 
     } else {
       auto col                     = *(s->col.parent_column);
       auto current_start_value_idx = start_row;
-      if (s->col.level_bits >> 4 != 0) {
-        while (col.type().id() == type_id::LIST or col.type().id() == type_id::STRUCT) {
-          if (col.type().id() == type_id::STRUCT) {
-            col = col.child(0);
-          } else {
-            auto offset_col = col.child(lists_column_view::offsets_column_index);
-            current_start_value_idx =
-              offset_col.element<size_type>(current_start_value_idx + col.offset());
-            end_value_idx = offset_col.element<size_type>(end_value_idx + col.offset());
-            col           = col.child(lists_column_view::child_column_index);
-          }
+      while (col.type().id() == type_id::LIST or col.type().id() == type_id::STRUCT) {
+        if (col.type().id() == type_id::STRUCT) {
+          current_start_value_idx += col.offset();
+          end_value_idx += col.offset();
+          col = col.child(0);
+        } else {
+          auto offset_col = col.child(lists_column_view::offsets_column_index);
+          current_start_value_idx =
+            offset_col.element<size_type>(current_start_value_idx + col.offset());
+          end_value_idx = offset_col.element<size_type>(end_value_idx + col.offset());
+          col           = col.child(lists_column_view::child_column_index);
         }
       }
       s->start_value_idx = current_start_value_idx;
@@ -1010,6 +1010,7 @@ __global__ void __launch_bounds__(128, 8) gpuEncodePages(EncPage *pages,
               }
               is_col_nested = (col.type().id() == type_id::STRUCT);
               if (is_col_nested) {
+                row += col.offset();
                 col = col.child(0);
                 ++l;
               }
@@ -1109,15 +1110,14 @@ __global__ void __launch_bounds__(128, 8) gpuEncodePages(EncPage *pages,
     if (s->col.parent_column != nullptr) {
       auto col                    = *(s->col.parent_column);
       auto current_page_start_val = s->page_start_val;
-      if (s->col.level_bits >> 4 != 0) {
-        while (col.type().id() == type_id::LIST or col.type().id() == type_id::STRUCT) {
-          if (col.type().id() == type_id::STRUCT) {
-            col = col.child(0);
-          } else {
-            current_page_start_val = col.child(lists_column_view::offsets_column_index)
-                                       .element<size_type>(current_page_start_val + col.offset());
-            col = col.child(lists_column_view::child_column_index);
-          }
+      while (col.type().id() == type_id::LIST or col.type().id() == type_id::STRUCT) {
+        if (col.type().id() == type_id::STRUCT) {
+          current_page_start_val += col.offset();
+          col = col.child(0);
+        } else {
+          current_page_start_val = col.child(lists_column_view::offsets_column_index)
+                                     .element<size_type>(current_page_start_val + col.offset());
+          col = col.child(lists_column_view::child_column_index);
         }
       }
       s->page_start_val = current_page_start_val;
