@@ -487,10 +487,6 @@ TYPED_TEST(ScanTest, LeadingNulls)
       cudf::scan(col_in, cudf::make_sum_aggregation(), scan_type::INCLUSIVE, null_policy::INCLUDE));
   cudf::test::fixed_width_column_wrapper<TypeParam> expected_col_out(
     out_v.begin(), out_v.end(), out_b.begin());
-  if (do_print) {
-    print_view(expected_col_out, "expect = ");
-    print_view(col_out->view(), "result = ");
-  }
   CUDF_TEST_EXPECT_COLUMN_PROPERTIES_EQUAL(expected_col_out, col_out->view());
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_col_out, col_out->view());
 }
