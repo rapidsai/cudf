@@ -409,9 +409,12 @@ class DataFrame(Frame, Serializable):
             index = as_index(index)
 
         self._index = as_index(index)
-
         # list-of-dicts case
         if len(data) > 0 and isinstance(data[0], dict):
+            data = DataFrame.from_pandas(pd.DataFrame(data))
+            self._data = data._data
+        # interval in a list
+        elif len(data) > 0 and isinstance(data[0], pd._libs.interval.Interval):
             data = DataFrame.from_pandas(pd.DataFrame(data))
             self._data = data._data
         else:

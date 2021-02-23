@@ -27,65 +27,10 @@
 
 #include <rmm/cuda_stream_view.hpp>
 
-#include <thrust/iterator/constant_iterator.h>
-#include <thrust/iterator/counting_iterator.h>
-
 namespace cudf {
 namespace dictionary {
 namespace detail {
 namespace {
-
-/**
- * @brief An index accessor that returns a validity flag along with the index value.
- *
- * This is used to make a `pair_iterator` for calling `copy_if_else`.
- */
-template <bool has_nulls = false>
-struct nullable_index_accessor {
-  cudf::detail::input_indexalator iter;
-  bitmask_type const* null_mask{};
-  size_type const offset{};
-
-  /**
-   * @brief Create an accessor from a column_view.
-   */
-  nullable_index_accessor(column_view const& col) : null_mask{col.null_mask()}, offset{col.offset()}
-  {
-    if (has_nulls) { CUDF_EXPECTS(col.nullable(), "Unexpected non-nullable column."); }
-    iter = cudf::detail::indexalator_factory::make_input_iterator(col);
-  }
-
-  /**
-   * @brief Create an accessor from a scalar.
-   */
-  nullable_index_accessor(scalar const& input)
-  {
-    iter = cudf::detail::indexalator_factory::make_input_iterator(input);
-  }
-
-  __device__ thrust::pair<size_type, bool> operator()(size_type i) const
-  {
-    return {iter[i], (has_nulls ? bit_is_set(null_mask, i + offset) : true)};
-  }
-};
-
-/**
- * @brief Create an index iterator with a nullable index accessor.
- */
-template <bool has_nulls>
-auto make_nullable_index_iterator(column_view const& col)
-{
-  return cudf::detail::make_counting_transform_iterator(0, nullable_index_accessor<has_nulls>{col});
-}
-
-/**
- * @brief Create an index iterator with a nullable index accessor for a scalar.
- */
-auto make_scalar_iterator(scalar const& input)
-{
-  return thrust::make_transform_iterator(thrust::make_constant_iterator<size_type>(0),
-                                         nullable_index_accessor<false>{input});
-}
 
 /**
  * @brief This utility uses `copy_if_else` to replace null entries using the input bitmask as a
@@ -116,7 +61,7 @@ std::unique_ptr<column> replace_indices(column_view const& input,
   using Element = typename thrust::
     tuple_element<0, typename thrust::iterator_traits<ReplacementIter>::value_type>::type;
 
-  auto input_pair_iterator = make_nullable_index_iterator<true>(input);
+  auto input_pair_iterator = cudf::detail::indexalator_factory::make_input_pair_iterator(input);
 
   return cudf::detail::copy_if_else(true,
                                     input_pair_iterator,
@@ -151,11 +96,12 @@ std::unique_ptr<column> replace_nulls(dictionary_column_view const& input,
   auto const input_indices =
     dictionary_column_view(matched.front()->view()).get_indices_annotated();
   auto const repl_indices = dictionary_column_view(matched.back()->view()).get_indices_annotated();
+
   auto new_indices =
-    repl_indices.has_nulls()
-      ? replace_indices(input_indices, make_nullable_index_iterator<true>(repl_indices), stream, mr)
-      : replace_indices(
-          input_indices, make_nullable_index_iterator<false>(repl_indices), stream, mr);
+    replace_indices(input_indices,
+                    cudf::detail::indexalator_factory::make_input_pair_iterator(repl_indices),
+                    stream,
+                    mr);
 
   return make_dictionary_column(
     std::move(matched.front()->release().children.back()), std::move(new_indices), stream, mr);
@@ -185,7 +131,10 @@ std::unique_ptr<column> replace_nulls(dictionary_column_view const& input,
   // now build the new indices by doing replace-null on the updated indices
   auto const input_indices = input_view.get_indices_annotated();
   auto new_indices =
-    replace_indices(input_indices, make_scalar_iterator(*scalar_index), stream, mr);
+    replace_indices(input_indices,
+                    cudf::detail::indexalator_factory::make_input_pair_iterator(*scalar_index),
+                    stream,
+                    mr);
   new_indices->set_null_mask(rmm::device_buffer{0, stream, mr}, 0);
 
   return make_dictionary_column(
