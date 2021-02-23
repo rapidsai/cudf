@@ -14,8 +14,8 @@
  * limitations under the License.
  */
 
-#include "../fixture/benchmark_fixture.hpp"
-#include "../synchronization/synchronization.hpp"
+#include <fixture/benchmark_fixture.hpp>
+#include <synchronization/synchronization.hpp>
 
 #include <benchmark/benchmark.h>
 
