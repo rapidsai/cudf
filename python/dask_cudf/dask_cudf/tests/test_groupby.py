@@ -125,12 +125,8 @@ def test_groupby_std(func):
 @pytest.mark.parametrize(
     "func",
     [
-        pytest.param(
-            lambda df: df.groupby(["a", "b"]).x.sum(), marks=pytest.mark.xfail
-        ),
-        pytest.param(
-            lambda df: df.groupby(["a", "b"]).sum(), marks=pytest.mark.xfail
-        ),
+        pytest.param(lambda df: df.groupby(["a", "b"]).x.sum()),
+        pytest.param(lambda df: df.groupby(["a", "b"]).sum()),
         pytest.param(
             lambda df: df.groupby(["a", "b"]).agg({"x", "sum"}),
             marks=pytest.mark.xfail,

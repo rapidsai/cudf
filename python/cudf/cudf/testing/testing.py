@@ -8,6 +8,7 @@ import numpy as np
 import pandas as pd
 
 import cudf
+from cudf.core._compat import PANDAS_GE_110
 from cudf.utils.dtypes import is_categorical_dtype
 
 
@@ -91,6 +92,8 @@ def assert_column_equal(
     check_datetimelike_compat=False,
     check_categorical=True,
     check_category_order=True,
+    rtol=1e-05,
+    atol=1e-08,
     obj="ColumnBase",
 ):
     """
@@ -122,6 +125,10 @@ def assert_column_equal(
         Whether to compare internal Categorical exactly.
     check_category_order : bool, default True
         Whether to compare category order of internal Categoricals
+    rtol : float, default 1e-5
+        Relative tolerance. Only used when `check_exact` is False.
+    atol : float, default 1e-8
+        Absolute tolerance. Only used when `check_exact` is False.
     obj : str, default ‘ColumnBase’
         Specify object name being compared, internally used to
         show appropriate assertion message.
@@ -165,6 +172,8 @@ def assert_column_equal(
                     exact=check_dtype,
                     check_exact=True,
                     check_categorical=False,
+                    rtol=rtol,
+                    atol=atol,
                 )
                 assert_column_equal(
                     left.codes,
@@ -173,6 +182,8 @@ def assert_column_equal(
                     check_exact=True,
                     check_categorical=False,
                     check_category_order=False,
+                    rtol=rtol,
+                    atol=atol,
                 )
 
             if left.ordered != right.ordered:
@@ -220,6 +231,8 @@ def assert_index_equal(
     check_less_precise: Union[bool, int] = False,
     check_exact: bool = True,
     check_categorical: bool = True,
+    rtol: float = 1e-5,
+    atol: float = 1e-8,
     obj: str = "Index",
 ):
     """
@@ -247,6 +260,10 @@ def assert_index_equal(
         Whether to compare number exactly.
     check_categorical : bool, default True
         Whether to compare internal Categorical exactly.
+    rtol : float, default 1e-5
+        Relative tolerance. Only used when `check_exact` is False.
+    atol : float, default 1e-8
+        Absolute tolerance. Only used when `check_exact` is False.
     obj : str, default ‘Index’
         Specify object name being compared, internally used to
         show appropriate assertion message.
@@ -304,15 +321,27 @@ def assert_index_equal(
             llevel = cudf.Index(left._columns[level], name=left.names[level])
             rlevel = cudf.Index(right._columns[level], name=right.names[level])
             mul_obj = f"MultiIndex level [{level}]"
-            assert_index_equal(
-                llevel,
-                rlevel,
-                exact=check_exact,
-                check_names=check_names,
-                check_less_precise=check_less_precise,
-                check_exact=check_exact,
-                obj=mul_obj,
-            )
+            if PANDAS_GE_110:
+                assert_index_equal(
+                    llevel,
+                    rlevel,
+                    exact=check_exact,
+                    check_names=check_names,
+                    check_exact=check_exact,
+                    rtol=rtol,
+                    atol=atol,
+                    obj=mul_obj,
+                )
+            else:
+                assert_index_equal(
+                    llevel,
+                    rlevel,
+                    exact=check_exact,
+                    check_names=check_names,
+                    check_less_precise=check_less_precise,
+                    check_exact=check_exact,
+                    obj=mul_obj,
+                )
         return
 
     assert_column_equal(
@@ -343,6 +372,8 @@ def assert_series_equal(
     check_datetimelike_compat=False,
     check_categorical=True,
     check_category_order=True,
+    rtol=1e-5,
+    atol=1e-8,
     obj="Series",
 ):
     """
@@ -380,6 +411,10 @@ def assert_series_equal(
         Whether to compare internal Categorical exactly.
     check_category_order : bool, default True
         Whether to compare category order of internal Categoricals
+    rtol : float, default 1e-5
+        Relative tolerance. Only used when `check_exact` is False.
+    atol : float, default 1e-8
+        Absolute tolerance. Only used when `check_exact` is False.
     obj : str, default ‘Series’
         Specify object name being compared, internally used to
         show appropriate assertion message.
@@ -423,28 +458,55 @@ def assert_series_equal(
         raise_assert_detail(obj, "Series length are different", msg1, msg2)
 
     # index comparison
-    assert_index_equal(
-        left.index,
-        right.index,
-        exact=check_index_type,
-        check_names=check_names,
-        check_less_precise=check_less_precise,
-        check_exact=check_exact,
-        check_categorical=check_categorical,
-        obj=f"{obj}.index",
-    )
+    if PANDAS_GE_110:
+        assert_index_equal(
+            left.index,
+            right.index,
+            exact=check_index_type,
+            check_names=check_names,
+            check_exact=check_exact,
+            check_categorical=check_categorical,
+            rtol=rtol,
+            atol=atol,
+            obj=f"{obj}.index",
+        )
+    else:
+        assert_index_equal(
+            left.index,
+            right.index,
+            exact=check_index_type,
+            check_names=check_names,
+            check_less_precise=check_less_precise,
+            check_exact=check_exact,
+            check_categorical=check_categorical,
+            obj=f"{obj}.index",
+        )
 
-    assert_column_equal(
-        left._column,
-        right._column,
-        check_dtype=check_dtype,
-        check_column_type=check_series_type,
-        check_less_precise=check_less_precise,
-        check_exact=check_exact,
-        check_datetimelike_compat=check_datetimelike_compat,
-        check_categorical=check_categorical,
-        check_category_order=check_category_order,
-    )
+    if PANDAS_GE_110:
+        assert_column_equal(
+            left._column,
+            right._column,
+            check_dtype=check_dtype,
+            check_column_type=check_series_type,
+            check_exact=check_exact,
+            check_datetimelike_compat=check_datetimelike_compat,
+            check_categorical=check_categorical,
+            check_category_order=check_category_order,
+            rtol=rtol,
+            atol=atol,
+        )
+    else:
+        assert_column_equal(
+            left._column,
+            right._column,
+            check_dtype=check_dtype,
+            check_column_type=check_series_type,
+            check_less_precise=check_less_precise,
+            check_exact=check_exact,
+            check_datetimelike_compat=check_datetimelike_compat,
+            check_categorical=check_categorical,
+            check_category_order=check_category_order,
+        )
 
     # metadata comparison
     if check_names and (left.name != right.name):
@@ -460,13 +522,14 @@ def assert_frame_equal(
     check_index_type="equiv",
     check_column_type="equiv",
     check_frame_type=True,
-    check_less_precise=False,
-    by_blocks=False,
     check_names=True,
+    by_blocks=False,
     check_exact=False,
     check_datetimelike_compat=False,
     check_categorical=True,
     check_like=False,
+    rtol=1e-5,
+    atol=1e-8,
     obj="DataFrame",
 ):
     """
@@ -493,8 +556,6 @@ def assert_frame_equal(
         and similar to pandas.
     check_frame_type : bool, default True
         Whether to check the DataFrame class is identical.
-    check_less_precise : bool or int, default False
-        Not yet supported
     check_names : bool, default True
         Whether to check that the names attribute for both the index and
         column attributes of the DataFrame is identical.
@@ -512,6 +573,10 @@ def assert_frame_equal(
         If True, ignore the order of index & columns.
         Note: index labels must match their respective
         rows (same as in columns) - same labels must be with the same data.
+    rtol : float, default 1e-5
+        Relative tolerance. Only used when `check_exact` is False.
+    atol : float, default 1e-8
+        Absolute tolerance. Only used when `check_exact` is False.
     obj : str, default ‘DataFrame’
         Specify object name being compared, internally used to
         show appropriate assertion message.
@@ -568,40 +633,73 @@ def assert_frame_equal(
         left, right = left.reindex(index=right.index), right
         right = right[list(left._data.names)]
 
-    if check_less_precise:
-        raise NotImplementedError("check_less_precise is not yet supported")
-
     # index comparison
-    assert_index_equal(
-        left.index,
-        right.index,
-        exact=check_index_type,
-        check_names=check_names,
-        check_less_precise=check_less_precise,
-        check_exact=check_exact,
-        check_categorical=check_categorical,
-        obj=f"{obj}.index",
-    )
+    if PANDAS_GE_110:
+        assert_index_equal(
+            left.index,
+            right.index,
+            exact=check_index_type,
+            check_names=check_names,
+            check_exact=check_exact,
+            check_categorical=check_categorical,
+            rtol=rtol,
+            atol=atol,
+            obj=f"{obj}.index",
+        )
+    else:
+        assert_index_equal(
+            left.index,
+            right.index,
+            exact=check_index_type,
+            check_names=check_names,
+            check_exact=check_exact,
+            check_categorical=check_categorical,
+            obj=f"{obj}.index",
+        )
 
-    pd.testing.assert_index_equal(
-        left.columns,
-        right.columns,
-        exact=check_column_type,
-        check_names=check_names,
-        check_less_precise=check_less_precise,
-        check_exact=check_exact,
-        check_categorical=check_categorical,
-        obj=f"{obj}.columns",
-    )
+    if PANDAS_GE_110:
+        pd.testing.assert_index_equal(
+            left.columns,
+            right.columns,
+            exact=check_column_type,
+            check_names=check_names,
+            check_exact=check_exact,
+            check_categorical=check_categorical,
+            rtol=rtol,
+            atol=atol,
+            obj=f"{obj}.columns",
+        )
+    else:
+        pd.testing.assert_index_equal(
+            left.columns,
+            right.columns,
+            exact=check_column_type,
+            check_names=check_names,
+            check_exact=check_exact,
+            check_categorical=check_categorical,
+            obj=f"{obj}.columns",
+        )
 
     for col in left.columns:
-        assert_column_equal(
-            left._data[col],
-            right._data[col],
-            check_dtype=check_dtype,
-            check_less_precise=check_less_precise,
-            check_exact=check_exact,
-            check_datetimelike_compat=check_datetimelike_compat,
-            check_categorical=check_categorical,
-            obj=f'Column name="{col}"',
-        )
+        if PANDAS_GE_110:
+            assert_column_equal(
+                left._data[col],
+                right._data[col],
+                check_dtype=check_dtype,
+                check_exact=check_exact,
+                check_datetimelike_compat=check_datetimelike_compat,
+                check_categorical=check_categorical,
+                rtol=rtol,
+                atol=atol,
+                obj=f'Column name="{col}"',
+            )
+        else:
+            assert_column_equal(
+                left._data[col],
+                right._data[col],
+                check_dtype=check_dtype,
+                check_exact=check_exact,
+                check_datetimelike_compat=check_datetimelike_compat,
+                check_categorical=check_categorical,
+                obj=f'Column name="{col}"',
+            )

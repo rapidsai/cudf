@@ -792,7 +792,7 @@ a b  c
 
 
 def test_dataframe_to_string_wide(monkeypatch):
-    monkeypatch.setenv("COLUMNS", 79)
+    monkeypatch.setenv("COLUMNS", "79")
     # Test basic
     df = gd.DataFrame()
     for i in range(100):
@@ -3340,7 +3340,9 @@ def test_all(data):
     # Pandas treats `None` in object type columns as True for some reason, so
     # replacing with `False`
     if np.array(data).ndim <= 1:
-        pdata = pd.Series(data).replace([None], False)
+        pdata = pd.Series(
+            data, dtype=None if len(data) else "float64"
+        ).replace([None], False)
         gdata = gd.Series.from_pandas(pdata)
     else:
         pdata = pd.DataFrame(data, columns=["a", "b"]).replace([None], False)
@@ -3393,7 +3395,7 @@ def test_all(data):
 @pytest.mark.parametrize("axis", [0, 1])
 def test_any(data, axis):
     if np.array(data).ndim <= 1:
-        pdata = pd.Series(data)
+        pdata = pd.Series(data, dtype=None if len(data) else "float64")
         gdata = gd.Series.from_pandas(pdata)
 
         if axis == 1:
@@ -4591,7 +4593,7 @@ def test_rowwise_ops(data, op, skipna):
         expected = getattr(pdf, op)(axis=1, skipna=skipna)
         got = getattr(gdf, op)(axis=1, skipna=skipna)
 
-    assert_eq(expected, got, check_less_precise=7)
+    assert_eq(expected, got, check_exact=False)
 
 
 @pytest.mark.parametrize(

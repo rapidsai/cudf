@@ -717,7 +717,7 @@ def test_dataframe_describe():
     ddf = dgd.from_cudf(df, npartitions=4)
     pddf = dd.from_pandas(pdf, npartitions=4)
 
-    dd.assert_eq(ddf.describe(), pddf.describe(), check_less_precise=3)
+    dd.assert_eq(ddf.describe(), pddf.describe(), check_exact=False)
 
 
 def test_index_map_partitions():

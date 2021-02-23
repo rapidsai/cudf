@@ -585,7 +585,9 @@ class DataFrame(Frame, Serializable):
     def dtypes(self):
         """Return the dtypes in this object."""
         return pd.Series(
-            [x.dtype for x in self._data.columns], index=self._data.names
+            [x.dtype for x in self._data.columns],
+            index=self._data.names,
+            dtype=None if len(self._data.names) else "float64",
         )
 
     @property

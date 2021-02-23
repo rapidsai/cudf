@@ -3,7 +3,6 @@ from __future__ import annotations
 
 import copy
 import functools
-import operator
 import warnings
 from collections import OrderedDict, abc as abc
 from typing import TYPE_CHECKING, Any, Dict, Tuple, TypeVar, overload
@@ -26,7 +25,6 @@ from cudf.utils.dtypes import (
     is_scalar,
     min_scalar_type,
 )
-
 
 T = TypeVar("T", bound="Frame")
 
@@ -340,9 +338,11 @@ class Frame(libcudf.table.Table):
                 np.intersect1d, all_columns_list
             )
             # get column names not present in all objs
-            non_intersecting_columns = (
-                functools.reduce(operator.or_, (obj.columns for obj in objs))
-                ^ intersecting_columns
+            union_of_columns = objs[0].columns
+            for obj in objs[1:]:
+                union_of_columns = union_of_columns.union(obj.columns)
+            non_intersecting_columns = union_of_columns.symmetric_difference(
+                intersecting_columns
             )
             names = OrderedDict.fromkeys(intersecting_columns).keys()
 
