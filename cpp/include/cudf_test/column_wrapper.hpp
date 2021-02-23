@@ -139,7 +139,6 @@ template <typename ElementTo,
           typename std::enable_if_t<not cudf::is_fixed_point<ElementTo>()>* = nullptr>
 rmm::device_buffer make_elements(InputIterator begin, InputIterator end)
 {
-  std::cout << "hello?\n";
   static_assert(cudf::is_fixed_width<ElementTo>(), "Unexpected non-fixed width type.");
   auto transformer     = fixed_width_type_converter<ElementFrom, ElementTo>{};
   auto transform_begin = thrust::make_transform_iterator(begin, transformer);
