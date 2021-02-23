@@ -1,6 +1,4 @@
 # Copyright (c) 2018-2021, NVIDIA CORPORATION.
-from functools import lru_cache
-
 import cachetools
 import cupy
 import numpy as np
@@ -244,7 +242,6 @@ def grouped_window_sizes_from_offset(arr, group_starts, offset):
 _udf_code_cache = cachetools.LRUCache(maxsize=32)
 
 
-@lru_cache(maxsize=32)
 def compile_udf(udf, type_signature):
     """Compile ``udf`` with `numba`
 
