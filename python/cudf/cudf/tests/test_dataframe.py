@@ -648,13 +648,6 @@ def test_dataframe_column_rename(axis):
 
     assert_eq(expect, got)
 
-    gdf = gd.DataFrame({"a": [1, 2, 3], "b": [4, 5, 6], "c": [7, 8, 9]})
-    rename_mapper = {"a": "z", "b": "z", "c": "z"}
-    expect = gd.DataFrame({"z": [1, 2, 3], "z_1": [4, 5, 6], "z_2": [7, 8, 9]})
-    got = gdf.rename(columns=rename_mapper)
-
-    assert_eq(expect, got)
-
 
 def test_dataframe_pop():
     pdf = pd.DataFrame(
