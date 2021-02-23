@@ -22,13 +22,16 @@
 #include <cudf/scalar/scalar.hpp>
 #include <cudf/strings/replace.hpp>
 #include <cudf/strings/strings_column_view.hpp>
+#include <cudf_test/column_wrapper.hpp>
 
 #include <limits>
 
-class StringReplaceScalar : public cudf::benchmark {
+class StringReplace : public cudf::benchmark {
 };
 
-static void BM_replace_scalar(benchmark::State& state)
+enum replace_type { scalar, slice, multi };
+
+static void BM_replace(benchmark::State& state, replace_type rt)
 {
   cudf::size_type const n_rows{static_cast<cudf::size_type>(state.range(0))};
   cudf::size_type const max_str_length{static_cast<cudf::size_type>(state.range(1))};
@@ -40,10 +43,19 @@ static void BM_replace_scalar(benchmark::State& state)
   cudf::strings_column_view input(table->view().column(0));
   cudf::string_scalar target("+");
   cudf::string_scalar repl("");
+  cudf::test::strings_column_wrapper targets({"+", "-"});
+  cudf::test::strings_column_wrapper repls({"", ""});
 
   for (auto _ : state) {
     cuda_event_timer raii(state, true, 0);
-    cudf::strings::replace(input, target, repl);
+    switch (rt) {
+      case scalar: cudf::strings::replace(input, target, repl); break;
+      case slice: cudf::strings::replace_slice(input, repl, 1, 10); break;
+      case multi:
+        cudf::strings::replace(
+          input, cudf::strings_column_view(targets), cudf::strings_column_view(repls));
+        break;
+    }
   }
 
   state.SetBytesProcessed(state.iterations() * input.chars_size());
@@ -68,12 +80,14 @@ static void generate_bench_args(benchmark::internal::Benchmark* b)
   }
 }
 
-#define STRINGS_BENCHMARK_DEFINE(name)                 \
-  BENCHMARK_DEFINE_F(StringReplaceScalar, name)        \
-  (::benchmark::State & st) { BM_replace_scalar(st); } \
-  BENCHMARK_REGISTER_F(StringReplaceScalar, name)      \
-    ->Apply(generate_bench_args)                       \
-    ->UseManualTime()                                  \
+#define STRINGS_BENCHMARK_DEFINE(name)                              \
+  BENCHMARK_DEFINE_F(StringReplace, name)                           \
+  (::benchmark::State & st) { BM_replace(st, replace_type::name); } \
+  BENCHMARK_REGISTER_F(StringReplace, name)                         \
+    ->Apply(generate_bench_args)                                    \
+    ->UseManualTime()                                               \
     ->Unit(benchmark::kMillisecond);
 
-STRINGS_BENCHMARK_DEFINE(replace_scalar)
+STRINGS_BENCHMARK_DEFINE(scalar)
+STRINGS_BENCHMARK_DEFINE(slice)
+STRINGS_BENCHMARK_DEFINE(multi)

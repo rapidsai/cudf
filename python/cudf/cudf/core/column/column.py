@@ -1605,6 +1605,15 @@ def build_column(
             null_count=null_count,
             children=children,
         )
+    elif is_interval_dtype(dtype):
+        return cudf.core.column.IntervalColumn(
+            dtype=dtype,
+            mask=mask,
+            size=size,
+            offset=offset,
+            null_count=null_count,
+            children=children,
+        )
     else:
         assert data is not None
         return cudf.core.column.NumericalColumn(
@@ -2086,9 +2095,7 @@ def as_column(
                     sr = pd.Series(arbitrary, dtype="str")
                     data = as_column(sr, nan_as_null=nan_as_null)
                 elif is_interval_dtype(dtype):
-                    sr = pd.Series(
-                        arbitrary, dtype="interval" if dtype is None else dtype
-                    )
+                    sr = pd.Series(arbitrary, dtype="interval")
                     data = as_column(sr, nan_as_null=nan_as_null)
                 else:
                     data = as_column(

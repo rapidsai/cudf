@@ -25,6 +25,7 @@
 #include <cudf/lists/lists_column_view.hpp>
 #include <cudf/scalar/scalar.hpp>
 #include <cudf/scalar/scalar_device_view.cuh>
+#include <cudf/table/row_operators.cuh>
 #include <cudf/utilities/type_dispatcher.hpp>
 #include <rmm/exec_policy.hpp>
 #include <type_traits>
@@ -45,18 +46,6 @@ auto get_search_keys_device_iterable_view(cudf::scalar const& search_key, rmm::c
   return &search_key;
 }
 
-template <typename ElementType, bool has_nulls>
-auto get_pair_iterator(cudf::column_device_view const& d_search_keys)
-{
-  return d_search_keys.pair_begin<ElementType, has_nulls>();
-}
-
-template <typename ElementType, bool>
-auto get_pair_iterator(cudf::scalar const& search_key)
-{
-  return cudf::detail::make_pair_iterator<ElementType>(search_key);
-}
-
 /**
  * @brief Functor to search each list row for the specified search keys.
  */
@@ -64,16 +53,17 @@ template <bool search_keys_have_nulls>
 struct lookup_functor {
   template <typename ElementType>
   struct is_supported {
-    static constexpr bool value = cudf::is_numeric<ElementType>() ||
-                                  cudf::is_chrono<ElementType>() ||
-                                  std::is_same<ElementType, cudf::string_view>::value;
+    static constexpr bool value =
+      cudf::is_numeric<ElementType>() || cudf::is_chrono<ElementType>() ||
+      cudf::is_fixed_point<ElementType>() || std::is_same<ElementType, cudf::string_view>::value;
   };
 
   template <typename ElementType, typename... Args>
   std::enable_if_t<!is_supported<ElementType>::value, std::unique_ptr<column>> operator()(
     Args&&...) const
   {
-    CUDF_FAIL("lists::contains() is only supported on numeric types, chrono types, and strings.");
+    CUDF_FAIL(
+      "lists::contains() is only supported on numeric types, decimals, chrono types, and strings.");
   }
 
   std::pair<rmm::device_buffer, size_type> construct_null_mask(lists_column_view const& input_lists,
@@ -124,14 +114,18 @@ struct lookup_functor {
           return;
         }
 
-        auto search_key    = search_key_and_validity.first;
-        d_bools[row_index] = thrust::find_if(thrust::seq,
-                                             list.pair_begin<ElementType>(),
-                                             list.pair_end<ElementType>(),
-                                             [search_key] __device__(auto element_and_validity) {
-                                               return element_and_validity.second &&
-                                                      (element_and_validity.first == search_key);
-                                             }) != list.pair_end<ElementType>();
+        auto list_pair_begin = list.pair_rep_begin<ElementType>();
+        auto list_pair_end   = list_pair_begin + list.size();
+
+        auto search_key = search_key_and_validity.first;
+        d_bools[row_index] =
+          thrust::find_if(thrust::seq,
+                          list_pair_begin,
+                          list_pair_end,
+                          [search_key] __device__(auto element_and_validity) {
+                            return element_and_validity.second &&
+                                   cudf::equality_compare(element_and_validity.first, search_key);
+                          }) != list_pair_end;
         d_validity[row_index] =
           d_bools[row_index] ||
           thrust::none_of(thrust::seq,
@@ -153,8 +147,8 @@ struct lookup_functor {
 
     CUDF_EXPECTS(!cudf::is_nested(lists.child().type()),
                  "Nested types not supported in lists::contains()");
-    CUDF_EXPECTS(lists.child().type().id() == search_key.type().id(),
-                 "Type of search key does not match list column element type.");
+    CUDF_EXPECTS(lists.child().type() == search_key.type(),
+                 "Type/Scale of search key does not match list column element type.");
     CUDF_EXPECTS(search_key.type().id() != type_id::EMPTY, "Type cannot be empty.");
 
     auto constexpr search_key_is_scalar = std::is_same<SearchKeyType, cudf::scalar>::value;
@@ -182,7 +176,8 @@ struct lookup_functor {
       mutable_column_device_view::create(result_bools->mutable_view(), stream);
     auto mutable_result_validity =
       mutable_column_device_view::create(result_validity->mutable_view(), stream);
-    auto search_key_iter = get_pair_iterator<ElementType, search_keys_have_nulls>(*d_skeys);
+    auto search_key_iter =
+      cudf::detail::make_pair_rep_iterator<ElementType, search_keys_have_nulls>(*d_skeys);
 
     search_each_list_row<ElementType>(
       d_lists, search_key_iter, *mutable_result_bools, *mutable_result_validity, stream, mr);
