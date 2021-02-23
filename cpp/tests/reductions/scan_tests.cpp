@@ -472,7 +472,6 @@ TYPED_TEST(ScanTest, EmptyColumnskip_nulls)
 
 TYPED_TEST(ScanTest, LeadingNulls)
 {
-  bool do_print = true;
   auto const v  = cudf::test::make_type_param_vector<TypeParam>({100, 200, 300});
   auto const b  = std::vector<bool>{0, 1, 1};
   cudf::test::fixed_width_column_wrapper<TypeParam> const col_in(v.begin(), v.end(), b.begin());
