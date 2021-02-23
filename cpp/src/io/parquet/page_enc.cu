@@ -2076,14 +2076,17 @@ dremel_data get_dremel_data(column_view h_col,
     auto input_parent_rep_it = thrust::make_constant_iterator(level);
     auto input_parent_def_it = thrust::make_transform_iterator(
       thrust::make_counting_iterator(0),
-      [idx            = empties_idx.data(),
-       parent_col     = d_nesting_levels + level,
-       curr_def_level = def_at_level[level]] __device__(auto i) {
+      [idx             = empties_idx.data(),
+       parent_col      = d_nesting_levels + level,
+       d_nullability   = d_nullability.data(),
+       sub_level_start = start_at_sub_level[level],
+       curr_def_level  = def_at_level[level]] __device__(auto i) {
         uint32_t def       = curr_def_level;
+        uint8_t l          = sub_level_start;
         bool is_col_nested = false;
         auto col           = *parent_col;
         do {
-          if (col.nullable()) {
+          if (d_nullability[l]) {
             // TODO: Looks like instead of transforming on count iterator, we could've transformed
             // empties_idx. Then this check would become is_valid(i) instead of is_valid(idx[i]).
             // TODO: Once the above is done, we can maybe consolidate this functor with similar
@@ -2095,7 +2098,10 @@ dremel_data get_dremel_data(column_view h_col,
             }  // If col not nullable then it does not contribute to def levels
           }
           is_col_nested = (col.type().id() == type_id::STRUCT);
-          if (is_col_nested) { col = col.child(0); }
+          if (is_col_nested) {
+            col = col.child(0);
+            ++l;
+          }
         } while (is_col_nested);
         return def;
       });

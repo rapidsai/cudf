@@ -1336,6 +1336,103 @@ TEST_F(ParquetChunkedWriterTest, ListOfStruct)
   CUDF_TEST_EXPECT_TABLES_EQUIVALENT(*result.tbl, *full_table);
 }
 
+TEST_F(ParquetChunkedWriterTest, ListOfStructOfStructOfListOfList)
+{
+  auto valids  = cudf::test::make_counting_transform_iterator(0, [](auto i) { return i % 2; });
+  auto valids2 = cudf::test::make_counting_transform_iterator(0, [](auto i) { return i != 3; });
+
+  using lcw = cudf::test::lists_column_wrapper<int32_t>;
+
+  // Table 1 ===========================
+
+  // []
+  // [NULL, 2, NULL]
+  // [4, 5]
+  // NULL
+  lcw land_1{{{}, {{1, 2, 3}, valids}, {4, 5}, {}}, valids2};
+
+  // []
+  // [[1, 2, 3], [], [4, 5], [], [0, 6, 0]]
+  // [[7, 8], []]
+  // [[]]
+  lcw flats_1{lcw{}, {{1, 2, 3}, {}, {4, 5}, {}, {0, 6, 0}}, {{7, 8}, {}}, lcw{lcw{}}};
+
+  auto weight_1   = cudf::test::fixed_width_column_wrapper<float>{{57.5, 51.1, 15.3, 1.1}};
+  auto ages_1     = cudf::test::fixed_width_column_wrapper<int32_t>{{30, 27, 5, 31}};
+  auto struct_1_1 = cudf::test::structs_column_wrapper{weight_1, ages_1, land_1, flats_1};
+  auto is_human_1 = cudf::test::fixed_width_column_wrapper<bool>{{true, true, false, false}};
+  auto struct_2_1 = cudf::test::structs_column_wrapper{{is_human_1, struct_1_1}};
+
+  auto list_offsets_column_1 =
+    cudf::test::fixed_width_column_wrapper<cudf::size_type>{0, 2, 3, 4}.release();
+  auto num_list_rows_1 = list_offsets_column_1->size() - 1;
+
+  auto list_col_1 = cudf::make_lists_column(num_list_rows_1,
+                                            std::move(list_offsets_column_1),
+                                            struct_2_1.release(),
+                                            cudf::UNKNOWN_NULL_COUNT,
+                                            {});
+
+  auto table_1 = table_view({*list_col_1});
+
+  // Table 2 ===========================
+
+  // []
+  // [7, 8, 9]
+  lcw land_2{{}, {7, 8, 9}};
+
+  // [[]]
+  // [[], [], []]
+  lcw flats_2{lcw{lcw{}}, lcw{lcw{}, lcw{}, lcw{}}};
+
+  auto weight_2   = cudf::test::fixed_width_column_wrapper<float>{{-1.0, -1.0}};
+  auto ages_2     = cudf::test::fixed_width_column_wrapper<int32_t>{{351, 351}, {1, 0}};
+  auto struct_1_2 = cudf::test::structs_column_wrapper{{weight_2, ages_2, land_2, flats_2}, {0, 1}};
+  auto is_human_2 = cudf::test::fixed_width_column_wrapper<bool>{{false, false}, {1, 0}};
+  auto struct_2_2 = cudf::test::structs_column_wrapper{{is_human_2, struct_1_2}};
+
+  auto list_offsets_column_2 =
+    cudf::test::fixed_width_column_wrapper<cudf::size_type>{0, 1, 2}.release();
+  auto num_list_rows_2 = list_offsets_column_2->size() - 1;
+
+  auto list_col_2 = cudf::make_lists_column(num_list_rows_2,
+                                            std::move(list_offsets_column_2),
+                                            struct_2_2.release(),
+                                            cudf::UNKNOWN_NULL_COUNT,
+                                            {});
+
+  auto table_2 = table_view({*list_col_2});
+
+  auto full_table = cudf::concatenate({table_1, table_2});
+
+  cudf_io::table_input_metadata expected_metadata(table_1);
+  expected_metadata.column_metadata[0].name                                     = "family";
+  expected_metadata.column_metadata[0].children[1].nullable                     = false;
+  expected_metadata.column_metadata[0].children[1].children[0].name             = "human?";
+  expected_metadata.column_metadata[0].children[1].children[1].name             = "particulars";
+  expected_metadata.column_metadata[0].children[1].children[1].children[0].name = "weight";
+  expected_metadata.column_metadata[0].children[1].children[1].children[1].name = "age";
+  expected_metadata.column_metadata[0].children[1].children[1].children[2].name = "land_unit";
+  expected_metadata.column_metadata[0].children[1].children[1].children[3].name = "flats";
+
+  auto filepath = ("ChunkedListOfStruct.parquet");
+  cudf_io::chunked_parquet_writer_options args =
+    cudf_io::chunked_parquet_writer_options::builder(cudf_io::sink_info{filepath});
+  args.set_input_metadata(&expected_metadata);
+  cudf_io::parquet_chunked_writer(args).write(table_1).write(table_2);
+
+  cudf_io::parquet_reader_options read_opts =
+    cudf_io::parquet_reader_options::builder(cudf_io::source_info{filepath});
+  auto result = cudf_io::read_parquet(read_opts);
+
+  CUDF_TEST_EXPECT_TABLES_EQUIVALENT(*result.tbl, *full_table);
+
+  // We specifically mentioned in input schema that struct_2 is non-nullable across chunked calls.
+  auto result_parent_list = result.tbl->get_column(0);
+  auto result_struct_2    = result_parent_list.child(cudf::lists_column_view::child_column_index);
+  EXPECT_EQ(result_struct_2.nullable(), false);
+}
+
 TEST_F(ParquetChunkedWriterTest, MismatchedTypes)
 {
   srand(31337);
