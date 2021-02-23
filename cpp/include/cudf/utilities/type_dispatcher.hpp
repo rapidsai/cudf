@@ -194,8 +194,9 @@ CUDF_TYPE_MAPPING(cudf::struct_view, type_id::STRUCT);
  * @brief Use this specialization on `type_dispatcher` whenever you only need to operate on the
  * underlying stored type.
  *
- * For example, `cudf::sort` in sort.cu uses `cudf::type_dispatcher<dispatch_storage_type>(...)`
- * However, reductions needs both `data_type` and underlying type, so can not use this.
+ * For example, `cudf::sort` in sort.cu uses `cudf::type_dispatcher<dispatch_storage_type>(...)`.
+ * `cudf::gather` in gather.cuh also uses `cudf::type_dispatcher<dispatch_storage_type>(...)`.
+ * However, reductions needs both `data_type` and underlying type, so cannot use this.
  */
 template <cudf::type_id Id>
 struct dispatch_storage_type {
