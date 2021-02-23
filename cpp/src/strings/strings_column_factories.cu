@@ -105,8 +105,8 @@ std::unique_ptr<column> make_strings_column(const rmm::device_vector<string_view
                                             rmm::mr::device_memory_resource* mr)
 {
   return detail::make_strings_column(
-    detail::device_span<string_view>(const_cast<string_view*>(string_views.data().get()),
-                                     string_views.size()),
+    detail::device_span<string_view>{const_cast<string_view*>(string_views.data().get()),
+                                     string_views.size()},
     null_placeholder,
     stream,
     mr);
@@ -141,11 +141,29 @@ std::unique_ptr<column> make_strings_column(std::vector<char> const& strings,
                                             rmm::cuda_stream_view stream,
                                             rmm::mr::device_memory_resource* mr)
 {
-  rmm::device_vector<char> d_strings{strings};
-  rmm::device_vector<size_type> d_offsets{offsets};
-  rmm::device_vector<bitmask_type> d_null_mask{null_mask};
+  rmm::device_uvector<char> d_strings{strings.size(), stream};
+  rmm::device_uvector<size_type> d_offsets{offsets.size(), stream};
+  rmm::device_uvector<bitmask_type> d_null_mask{null_mask.size(), stream};
 
-  return make_strings_column(d_strings, d_offsets, d_null_mask, null_count, stream, mr);
+  CUDA_TRY(cudaMemcpyAsync(
+    d_strings.data(), strings.data(), strings.size(), cudaMemcpyDefault, stream.value()));
+  CUDA_TRY(cudaMemcpyAsync(d_offsets.data(),
+                           offsets.data(),
+                           offsets.size() * sizeof(size_type),
+                           cudaMemcpyDefault,
+                           stream.value()));
+  CUDA_TRY(cudaMemcpyAsync(d_null_mask.data(),
+                           null_mask.data(),
+                           null_mask.size() * sizeof(bitmask_type),
+                           cudaMemcpyDefault,
+                           stream.value()));
+
+  return make_strings_column(detail::device_span<char>{d_strings},
+                             detail::device_span<size_type>{d_offsets},
+                             null_count,
+                             d_null_mask.release(),
+                             stream,
+                             mr);
 }
 
 //
