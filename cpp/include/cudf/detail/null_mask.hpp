@@ -16,6 +16,7 @@
 #pragma once
 
 #include <cudf/types.hpp>
+#include <cudf/utilities/span.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 
@@ -116,18 +117,6 @@ rmm::device_buffer bitmask_and(
   rmm::mr::device_memory_resource *mr = rmm::mr::get_current_device_resource());
 
 /**
- * @copydoc cudf::bitmask_binop
- *
- * @param[in] stream CUDA stream used for device memory operations and kernel launches.
- */
-template <typename Binop>
-rmm::device_buffer bitmask_binop(
-  Binop op,
-  table_view const &view,
-  rmm::cuda_stream_view stream,
-  rmm::mr::device_memory_resource *mr = rmm::mr::get_current_device_resource());
-
-/**
  * @copydoc cudf::bitmask_and
  *
  * @param[in] stream CUDA stream used for device memory operations and kernel launches.
@@ -153,9 +142,9 @@ rmm::device_buffer bitmask_and(
 template <typename Binop>
 void inplace_bitmask_binop(
   Binop op,
-  bitmask_type *dest_mask,
-  std::vector<bitmask_type const *> const &masks,
-  std::vector<size_type> const &begin_bits,
+  device_span<bitmask_type> destination,
+  device_span<bitmask_type const *> source,
+  device_span<size_type> begin_bit,
   size_type mask_size,
   rmm::cuda_stream_view stream,
   rmm::mr::device_memory_resource *mr = rmm::mr::get_current_device_resource());
