@@ -29,7 +29,7 @@
 
 #include <thrust/optional.h>
 
-using cudf::detail::device_span;
+using cudf::device_span;
 
 namespace cudf {
 namespace io {

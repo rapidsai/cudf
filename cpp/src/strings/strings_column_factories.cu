@@ -48,30 +48,18 @@ struct string_view_to_pair {
 
 }  // namespace
 
-namespace detail {
-
+// Create a strings-type column from vector of pointer/size pairs
 std::unique_ptr<column> make_strings_column(
-  const device_span<thrust::pair<const char*, size_type>>& strings,
+  device_span<thrust::pair<const char*, size_type>> strings,
   rmm::cuda_stream_view stream,
   rmm::mr::device_memory_resource* mr)
 {
   return cudf::strings::detail::make_strings_column(strings.begin(), strings.end(), stream, mr);
 }
 
-std::unique_ptr<column> make_strings_column(const device_span<string_view>& string_views,
-                                            const string_view null_placeholder,
-                                            rmm::cuda_stream_view stream,
-                                            rmm::mr::device_memory_resource* mr)
-{
-  auto it_pair =
-    thrust::make_transform_iterator(string_views.begin(), string_view_to_pair{null_placeholder});
-  return cudf::strings::detail::make_strings_column(
-    it_pair, it_pair + string_views.size(), stream, mr);
-}
-
 std::unique_ptr<column> make_strings_column(
-  device_span<char> const& chars,
-  device_span<size_type> const& offsets,
+  device_span<char> chars,
+  device_span<size_type> offsets,
   size_type null_count,
   rmm::device_buffer&& null_mask,
   rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
@@ -87,41 +75,28 @@ std::unique_ptr<column> make_strings_column(
                                                     mr);
 }
 
-}  // namespace detail
-
-// Create a strings-type column from vector of pointer/size pairs
-std::unique_ptr<column> make_strings_column(
-  const rmm::device_vector<thrust::pair<const char*, size_type>>& strings,
-  rmm::cuda_stream_view stream,
-  rmm::mr::device_memory_resource* mr)
-{
-  return strings::detail::make_strings_column(strings.begin(), strings.end(), stream, mr);
-}
-
-// Create a strings-type column from vector of string_view
-std::unique_ptr<column> make_strings_column(const rmm::device_vector<string_view>& string_views,
-                                            const string_view null_placeholder,
+std::unique_ptr<column> make_strings_column(device_span<string_view const> string_views,
+                                            string_view null_placeholder,
                                             rmm::cuda_stream_view stream,
                                             rmm::mr::device_memory_resource* mr)
 {
-  return detail::make_strings_column(
-    detail::device_span<string_view>{const_cast<string_view*>(string_views.data().get()),
-                                     string_views.size()},
-    null_placeholder,
-    stream,
-    mr);
+  auto it_pair =
+    thrust::make_transform_iterator(string_views.begin(), string_view_to_pair{null_placeholder});
+  return cudf::strings::detail::make_strings_column(
+    it_pair, it_pair + string_views.size(), stream, mr);
 }
 
 // Create a strings-type column from device vector of chars and vector of offsets.
-std::unique_ptr<column> make_strings_column(rmm::device_vector<char> const& strings,
-                                            rmm::device_vector<size_type> const& offsets,
-                                            rmm::device_vector<bitmask_type> const& valid_mask,
+std::unique_ptr<column> make_strings_column(cudf::device_span<char> strings,
+                                            cudf::device_span<size_type> offsets,
+                                            cudf::device_span<bitmask_type> valid_mask,
                                             size_type null_count,
                                             rmm::cuda_stream_view stream,
                                             rmm::mr::device_memory_resource* mr)
 {
   // build null bitmask
-  rmm::device_buffer null_mask{valid_mask.data().get(), valid_mask.size() * sizeof(bitmask_type)};
+  rmm::device_buffer null_mask{
+    valid_mask.data(), valid_mask.size() * sizeof(bitmask_type), stream, mr};
 
   return cudf::strings::detail::make_strings_column(strings.begin(),
                                                     strings.end(),
@@ -158,12 +133,15 @@ std::unique_ptr<column> make_strings_column(std::vector<char> const& strings,
                            cudaMemcpyDefault,
                            stream.value()));
 
-  return make_strings_column(detail::device_span<char>{d_strings},
-                             detail::device_span<size_type>{d_offsets},
-                             null_count,
-                             d_null_mask.release(),
-                             stream,
-                             mr);
+  auto ret = make_strings_column(device_span<char>{d_strings},
+                                 device_span<size_type>{d_offsets},
+                                 null_count,
+                                 d_null_mask.release(),
+                                 stream,
+                                 mr);
+
+  stream.synchronize();
+  return ret;
 }
 
 //

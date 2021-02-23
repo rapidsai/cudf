@@ -24,7 +24,6 @@
 #include <cudf/detail/utilities/device_atomics.cuh>
 #include <cudf/null_mask.hpp>
 #include <cudf/reduction.hpp>
-#include <cudf/strings/detail/strings_column_factories.hpp>
 #include <cudf/utilities/error.hpp>
 #include <cudf/utilities/span.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
@@ -181,8 +180,8 @@ struct ScanDispatcher {
     }
     CHECK_CUDA(stream.value());
 
-    auto output_column = cudf::detail::make_strings_column(
-      device_span<T>{result}, Op::template identity<T>(), stream, mr);
+    auto output_column =
+      cudf::make_strings_column(result, Op::template identity<string_view>(), stream, mr);
     if (null_handling == null_policy::EXCLUDE) {
       output_column->set_null_mask(detail::copy_bitmask(input_view, stream, mr),
                                    input_view.null_count());

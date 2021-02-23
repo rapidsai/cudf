@@ -26,7 +26,7 @@
 
 #include <zlib.h>  // uncompress
 
-using cudf::detail::host_span;
+using cudf::host_span;
 
 namespace cudf {
 namespace io {

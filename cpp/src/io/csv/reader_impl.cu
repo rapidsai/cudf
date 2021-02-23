@@ -26,7 +26,6 @@
 #include <io/utilities/type_conversion.cuh>
 
 #include <cudf/io/types.hpp>
-#include <cudf/strings/detail/strings_column_factories.hpp>
 #include <cudf/strings/replace.hpp>
 #include <cudf/table/table.hpp>
 #include <cudf/utilities/error.hpp>
@@ -43,8 +42,8 @@
 using std::string;
 using std::vector;
 
-using cudf::detail::device_span;
-using cudf::detail::host_span;
+using cudf::device_span;
+using cudf::host_span;
 
 namespace cudf {
 namespace io {
@@ -352,10 +351,7 @@ table_with_metadata reader::impl::read(rmm::cuda_stream_view stream)
         // during the conversion stage
         const std::string quotechar(1, opts.quotechar);
         const std::string dblquotechar(2, opts.quotechar);
-        std::unique_ptr<column> col = cudf::detail::make_strings_column(
-          cudf::detail::device_span<thrust::pair<char const *, size_type>>{
-            out_buffers[i]._strings.data().get(), out_buffers[i]._strings.size()},
-          stream);
+        std::unique_ptr<column> col = cudf::make_strings_column(out_buffers[i]._strings, stream);
         out_columns.emplace_back(
           cudf::strings::replace(col->view(), dblquotechar, quotechar, -1, mr_));
       } else {

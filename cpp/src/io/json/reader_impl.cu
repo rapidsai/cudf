@@ -41,7 +41,7 @@
 
 #include <thrust/optional.h>
 
-using cudf::detail::host_span;
+using cudf::host_span;
 
 namespace cudf {
 namespace io {
@@ -600,9 +600,11 @@ table_with_metadata reader::impl::convert_data_to_table(rmm::cuda_stream_view st
   stream.synchronize();
 
   // postprocess columns
-  auto target = make_strings_column(
-    std::vector<char>{'\\', '"', '\\', '\\', '\\', 't', '\\', 'r', '\\', 'b'}, {0, 2, 4, 6, 8, 10});
-  auto repl = make_strings_column({'"', '\\', '\t', '\r', '\b'}, {0, 1, 2, 3, 4, 5});
+  auto target =
+    make_strings_column(std::vector<char>{'\\', '"', '\\', '\\', '\\', 't', '\\', 'r', '\\', 'b'},
+                        std::vector<size_type>{0, 2, 4, 6, 8, 10});
+  auto repl = make_strings_column(std::vector<char>{'"', '\\', '\t', '\r', '\b'},
+                                  std::vector<size_type>{0, 1, 2, 3, 4, 5});
 
   thrust::host_vector<cudf::size_type> h_valid_counts = d_valid_counts;
   std::vector<std::unique_ptr<column>> out_columns;

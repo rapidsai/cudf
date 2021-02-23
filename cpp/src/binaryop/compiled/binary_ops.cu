@@ -20,7 +20,6 @@
 #include <cudf/detail/iterator.cuh>
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/scalar/scalar_device_view.cuh>
-#include <cudf/strings/detail/strings_column_factories.hpp>
 #include <cudf/table/table_view.hpp>
 #include <cudf/utilities/span.hpp>
 
@@ -402,8 +401,7 @@ struct null_considering_binop {
           lhs_dev_view, rhs_dev_view, col_size, stream, minmax_func, out_col_strings.data());
 
         // Create an output column with the resultant strings
-        out = cudf::detail::make_strings_column(
-          cudf::detail::device_span<cudf::string_view>{out_col_strings}, invalid_str, stream, mr);
+        out = cudf::make_strings_column(out_col_strings, invalid_str, stream, mr);
 
         break;
       }

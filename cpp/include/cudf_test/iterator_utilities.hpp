@@ -66,7 +66,7 @@ static auto iterator_with_null_at(Iter index_start, Iter index_end)
  * and yields `true` (to mark valid rows) for all other indices. E.g.
  *
  * @code
- * using host_span = cudf::detail::host_span<cudf::size_type const>;
+ * using host_span = cudf::host_span<cudf::size_type const>;
  * auto iter = iterator_with_null_at(host_span{std::vector<size_type>{8,9}});
  * iter[6] == true;  // i.e. Valid row at index 6.
  * iter[7] == true;  // i.e. Valid row at index 7.
@@ -77,7 +77,7 @@ static auto iterator_with_null_at(Iter index_start, Iter index_end)
  * @param indices The indices for which the validity iterator must return `false` (i.e. null)
  * @return auto Validity iterator
  */
-static auto iterator_with_null_at(cudf::detail::host_span<cudf::size_type const> const& indices)
+static auto iterator_with_null_at(cudf::host_span<cudf::size_type const> const& indices)
 {
   return iterator_with_null_at(indices.begin(), indices.end());
 }

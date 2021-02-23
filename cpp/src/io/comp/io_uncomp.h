@@ -22,7 +22,7 @@
 
 #include <cudf/utilities/span.hpp>
 
-using cudf::detail::host_span;
+using cudf::host_span;
 
 namespace cudf {
 namespace io {

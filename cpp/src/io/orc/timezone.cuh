@@ -32,8 +32,8 @@ namespace io {
 
 struct timezone_table_view {
   int32_t gmt_offset = 0;
-  cudf::detail::device_span<int64_t const> ttimes;
-  cudf::detail::device_span<int32_t const> offsets;
+  cudf::device_span<int64_t const> ttimes;
+  cudf::device_span<int32_t const> offsets;
 };
 
 static constexpr int64_t day_seconds = 24 * 60 * 60;
@@ -85,8 +85,8 @@ CUDA_HOST_DEVICE_CALLABLE int32_t get_gmt_offset_impl(int64_t const *ttimes,
  *
  * Implemented in `get_gmt_offset_impl`.
  */
-inline __host__ int32_t get_gmt_offset(cudf::detail::host_span<int64_t const> ttimes,
-                                       cudf::detail::host_span<int32_t const> offsets,
+inline __host__ int32_t get_gmt_offset(cudf::host_span<int64_t const> ttimes,
+                                       cudf::host_span<int32_t const> offsets,
                                        int64_t ts)
 {
   CUDF_EXPECTS(ttimes.size() == offsets.size(),
@@ -99,8 +99,8 @@ inline __host__ int32_t get_gmt_offset(cudf::detail::host_span<int64_t const> tt
  *
  * Implemented in `get_gmt_offset_impl`.
  */
-inline __device__ int32_t get_gmt_offset(cudf::detail::device_span<int64_t const> ttimes,
-                                         cudf::detail::device_span<int32_t const> offsets,
+inline __device__ int32_t get_gmt_offset(cudf::device_span<int64_t const> ttimes,
+                                         cudf::device_span<int32_t const> offsets,
                                          int64_t ts)
 {
   return get_gmt_offset_impl(ttimes.begin(), offsets.begin(), ttimes.size(), ts);

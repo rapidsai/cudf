@@ -30,7 +30,7 @@
 #include <cuda_runtime.h>
 #include <thrust/host_vector.h>
 
-using cudf::detail::device_span;
+using cudf::device_span;
 
 static constexpr char trie_terminating_character = '\n';
 
