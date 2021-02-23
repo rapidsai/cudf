@@ -15,6 +15,7 @@
  */
 
 #include <cudf/column/column_device_view.cuh>
+#include <cudf/detail/null_mask.cuh>
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/utilities/cuda.cuh>
@@ -318,41 +319,6 @@ __global__ void copy_offset_bitmask(bitmask_type *__restrict__ destination,
   }
 }
 
-/**
- * @brief Computes the merger of an array of bitmasks using a binary operator
- *
- * @param op The binary operator used to combine the bitmasks
- * @param destination The bitmask to write result into
- * @param source Array of source mask pointers. All masks must be of same size
- * @param begin_bit Array of offsets into corresponding @p source masks.
- *                  Must be same size as source array
- * @param num_sources Number of masks in @p source array
- * @param source_size Number of bits in each mask in @p source
- * @param number_of_mask_words The number of words of type bitmask_type to copy
- */
-template <typename Binop>
-__global__ void offset_bitmask_binop(Binop op,
-                                     device_span<bitmask_type> destination,
-                                     device_span<bitmask_type const *> source,
-                                     device_span<size_type> begin_bit,
-                                     size_type source_size)
-{
-  for (size_type destination_word_index = threadIdx.x + blockIdx.x * blockDim.x;
-       destination_word_index < destination.size();
-       destination_word_index += blockDim.x * gridDim.x) {
-    bitmask_type destination_word = detail::get_mask_offset_word(
-      source[0], destination_word_index, begin_bit[0], begin_bit[0] + source_size);
-    for (size_type i = 1; i < source.size(); i++) {
-      destination_word =
-        op(destination_word,
-           detail::get_mask_offset_word(
-             source[i], destination_word_index, begin_bit[i], begin_bit[i] + source_size));
-    }
-
-    destination[destination_word_index] = destination_word;
-  }
-}
-
 // convert [first_bit_index,last_bit_index) to
 // [first_word_index,last_word_index)
 struct to_word_index : public thrust::unary_function<size_type, size_type> {
@@ -427,29 +393,6 @@ rmm::device_buffer copy_bitmask(column_view const &view,
   return null_mask;
 }
 
-
-// Inplace Bitwise merge of the masks
-template <typename Binop>
-void inplace_bitmask_binop(Binop op,
-                           device_span<bitmask_type> dest_mask,
-                           device_span<bitmask_type const *> masks,
-                           device_span<size_type> begin_bits,
-                           size_type mask_size,
-                           rmm::cuda_stream_view stream,
-                           rmm::mr::device_memory_resource *mr)
-{
-  CUDF_EXPECTS(mask_size > 0, "Invalid bit range.");
-
-  cudf::detail::grid_1d config(dest_mask.size(), 256);
-  offset_bitmask_binop<<<config.num_blocks, config.num_threads_per_block, 0, stream.value()>>>(
-    op,
-    dest_mask,
-    masks,
-    begin_bits,
-    mask_size);
-  CHECK_CUDA(stream.value());
-}
-
 // Inplace Bitwise AND of the masks
 void inplace_bitmask_and(bitmask_type *dest_mask,
                          std::vector<bitmask_type const *> const &masks,
@@ -459,9 +402,9 @@ void inplace_bitmask_and(bitmask_type *dest_mask,
                          rmm::mr::device_memory_resource *mr)
 {
   CUDF_EXPECTS(std::all_of(begin_bits.begin(), begin_bits.end(), [](auto b) { return b >= 0; }),
-                "Invalid range.");
+               "Invalid range.");
   CUDF_EXPECTS(std::all_of(masks.begin(), masks.end(), [](auto p) { return p != nullptr; }),
-                "Mask pointer cannot be null");
+               "Mask pointer cannot be null");
 
   rmm::device_vector<bitmask_type const *> d_masks(masks);
   rmm::device_vector<size_type> d_begin_bits(begin_bits);
@@ -474,38 +417,6 @@ void inplace_bitmask_and(bitmask_type *dest_mask,
     mask_size,
     stream,
     mr);
-}
-
-template <typename Binop>
-rmm::device_buffer bitmask_binop(Binop op,
-                                 std::vector<bitmask_type const *> const &masks,
-                                 std::vector<size_type> const &begin_bits,
-                                 size_type mask_size,
-                                 rmm::cuda_stream_view stream,
-                                 rmm::mr::device_memory_resource *mr)
-{
-  CUDF_EXPECTS(std::all_of(begin_bits.begin(), begin_bits.end(), [](auto b) { return b >= 0; }),
-                "Invalid range.");
-  CUDF_EXPECTS(std::all_of(masks.begin(), masks.end(), [](auto p) { return p != nullptr; }),
-                "Mask pointer cannot be null");
-  rmm::device_buffer dest_mask{};
-  auto num_bytes = bitmask_allocation_size_bytes(mask_size);
-
-  rmm::device_vector<bitmask_type const *> d_masks(masks);
-  rmm::device_vector<size_type> d_begin_bits(begin_bits);
-
-  dest_mask = rmm::device_buffer{num_bytes, stream, mr};
-
-  inplace_bitmask_binop(
-    op,
-    device_span<bitmask_type>(static_cast<bitmask_type *>(dest_mask.data()), num_bitmask_words(mask_size)),
-    device_span<bitmask_type const *>(d_masks.data().get(), d_masks.size()),
-    device_span<size_type>(d_begin_bits.data().get(), d_begin_bits.size()),
-    mask_size,
-    stream,
-    mr);
-
-  return dest_mask;
 }
 
 // Bitwise AND of the masks
