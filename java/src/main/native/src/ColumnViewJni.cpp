@@ -61,6 +61,7 @@
 #include <cudf/structs/structs_column_view.hpp>
 #include <map_lookup.hpp>
 #include "cudf/strings/strings_column_view.hpp"
+#include "cudf/types.hpp"
 
 #include "cudf_jni_apis.hpp"
 #include "dtype_utils.hpp"
@@ -1765,7 +1766,7 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_copyColumnViewToCV(JNIEnv
 }
 
 JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_getJSONObject(JNIEnv *env, jobject j_object, 
-                                                                     jlong j_view_handle, jstring j_path) {
+                                                                     jlong j_view_handle, jlong j_scalar_handle) {
 
    JNI_NULL_CHECK(env, j_view_handle, "view cannot be null", 0);
    JNI_NULL_CHECK(env, j_path, "path cannot be null", 0);
@@ -1774,9 +1775,9 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_getJSONObject(JNIEnv *env
 
     cudf::column_view* n_column_view = reinterpret_cast<cudf::column_view*>(j_view_handle);
     cudf::strings_column_view n_strings_col_view(*n_column_view);
+    cudf::scalar* n_scalar_path = reinterpret_cast<cudf::scalar*>(j_scalar_handle);
 
-    cudf::jni::native_jstring n_path(env, j_path);
-    auto result = cudf::strings::get_json_object(n_strings_col_view, std::string(n_path.get()));
+    auto result = cudf::strings::get_json_object(n_strings_col_view, n_scalar_path);
 
     return reinterpret_cast<jlong>(result.release());
   }
