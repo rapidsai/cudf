@@ -1,4 +1,4 @@
-# Copyright (c) 2020, NVIDIA CORPORATION.
+# Copyright (c) 2020-2021, NVIDIA CORPORATION.
 
 import numpy as np
 
@@ -44,6 +44,11 @@ from cudf._lib.cpp.strings.convert.convert_urls cimport (
 from cudf._lib.cpp.strings.convert.convert_durations cimport (
     to_durations as cpp_to_durations,
     from_durations as cpp_from_durations
+)
+from cudf._lib.cpp.strings.convert.convert_fixed_point cimport (
+    to_fixed_point as cpp_to_fixed_point,
+    from_fixed_point as cpp_from_fixed_point,
+    is_fixed_point as cpp_is_fixed_point
 )
 from cudf._lib.cpp.types cimport (
     type_id,
@@ -768,6 +773,57 @@ def is_hex(Column source_strings):
     with nogil:
         c_result = move(cpp_is_hex(
             source_view
+        ))
+
+    return Column.from_unique_ptr(move(c_result))
+
+
+def from_decimal(Column input_col):
+    cdef column_view input_column_view = input_col.view()
+    cdef unique_ptr[column] c_result
+    with nogil:
+        c_result = move(
+            cpp_from_fixed_point(
+                input_column_view))
+
+    return Column.from_unique_ptr(move(c_result))
+
+
+def to_decimal(Column input_col, object out_type, object scale=0):
+    cdef column_view input_column_view = input_col.view()
+    cdef unique_ptr[column] c_result
+    cdef type_id tid = <type_id> (
+        <underlying_type_t_type_id> (
+            np_to_cudf_types[out_type]
+        )
+    )
+    cdef data_type c_out_type = data_type(tid, scale)
+    with nogil:
+        c_result = move(
+            cpp_to_fixed_point(
+                input_column_view,
+                c_out_type))
+
+    return Column.from_unique_ptr(move(c_result))
+
+
+def is_fixed_point(Column input_col, object out_type, object scale=0):
+    """
+    Returns a Column of boolean values with True for `input_col`
+    that have fixed-point characters.
+    """
+    cdef unique_ptr[column] c_result
+    cdef column_view source_view = input_col.view()
+    cdef type_id tid = <type_id> (
+        <underlying_type_t_type_id> (
+            np_to_cudf_types[out_type]
+        )
+    )
+    cdef data_type c_out_type = data_type(tid, scale)
+    with nogil:
+        c_result = move(cpp_is_fixed_point(
+            source_view,
+            c_out_type
         ))
 
     return Column.from_unique_ptr(move(c_result))
