@@ -402,11 +402,8 @@ struct null_considering_binop {
           lhs_dev_view, rhs_dev_view, col_size, stream, minmax_func, out_col_strings.data());
 
         // Create an output column with the resultant strings
-        out = cudf::detail::make_strings_column(cudf::detail::device_span<cudf::string_view>(
-                                                  out_col_strings.data(), out_col_strings.size()),
-                                                invalid_str,
-                                                stream,
-                                                mr);
+        out = cudf::detail::make_strings_column(
+          cudf::detail::device_span<cudf::string_view>{out_col_strings}, invalid_str, stream, mr);
 
         break;
       }

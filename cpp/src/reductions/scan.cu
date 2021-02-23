@@ -182,7 +182,7 @@ struct ScanDispatcher {
     CHECK_CUDA(stream.value());
 
     auto output_column = cudf::detail::make_strings_column(
-      device_span<T>{result.data(), result.size()}, Op::template identity<T>(), stream, mr);
+      device_span<T>{result}, Op::template identity<T>(), stream, mr);
     if (null_handling == null_policy::EXCLUDE) {
       output_column->set_null_mask(detail::copy_bitmask(input_view, stream, mr),
                                    input_view.null_count());
