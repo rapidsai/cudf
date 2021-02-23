@@ -10,9 +10,9 @@ from dask import dataframe as dd
 from dask.dataframe.core import make_meta, meta_nonempty
 from dask.utils import M
 
-import cudf
-
 import dask_cudf as dgd
+
+import cudf
 
 
 def test_from_cudf():
@@ -658,7 +658,7 @@ def test_make_meta_backends(index):
 @pytest.mark.parametrize(
     "data",
     [
-        pd.Series([]),
+        pd.Series([], dtype="float64"),
         pd.DataFrame({"abc": [], "xyz": []}),
         pd.Series([1, 2, 10, 11]),
         pd.DataFrame({"abc": [1, 2, 10, 11], "xyz": [100, 12, 120, 1]}),

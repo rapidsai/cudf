@@ -493,7 +493,7 @@ def test_categorical_dataframe_slice_copy():
         pd.Series([1, 2, 3, 89], dtype="float64"),
         pd.Series([1, 2.5, 3.001, 89], dtype="float64"),
         pd.Series([None, None, None]),
-        pd.Series([]),
+        pd.Series([], dtype="float64"),
     ],
 )
 @pytest.mark.parametrize(
@@ -526,7 +526,7 @@ def test_categorical_typecast(data, cat_type):
         pd.Series([1, 2, 3, 89], dtype="float64"),
         pd.Series([1, 2.5, 3.001, 89], dtype="float64"),
         pd.Series([None, None, None]),
-        pd.Series([]),
+        pd.Series([], dtype="float64"),
     ],
 )
 @pytest.mark.parametrize(

@@ -960,7 +960,9 @@ def test_index_equal_misc(data, other):
     actual = gd_data.equals(np.array(gd_other))
     assert_eq(expected, actual)
 
-    expected = pd_data.equals(pd.Series(pd_other))
+    expected = pd_data.equals(
+        pd.Series(pd_other, dtype=None if len(pd_other) else "float64")
+    )
     actual = gd_data.equals(cudf.Series(gd_other))
     assert_eq(expected, actual)
 

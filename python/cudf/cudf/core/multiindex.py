@@ -15,6 +15,7 @@ from pandas._config import get_option
 import cudf
 from cudf import _lib as libcudf
 from cudf._typing import DataFrameOrSeries
+from cudf.core._compat import PANDAS_GE_120
 from cudf.core.column import column
 from cudf.core.frame import Frame
 from cudf.core.index import Index, as_index
@@ -485,7 +486,28 @@ class MultiIndex(Index):
                     )
                 )
             )
-            preprocess = preprocess.to_pandas(nullable=True)
+
+            if PANDAS_GE_120:
+                # TODO: Remove this whole `if` block,
+                # this is a workaround for the following issue:
+                # https://github.com/pandas-dev/pandas/issues/39984
+                temp_df = preprocess._source_data
+
+                preprocess_pdf = pd.DataFrame()
+                for col in temp_df.columns:
+                    if temp_df[col].dtype.kind == "f":
+                        preprocess_pdf[col] = temp_df[col].to_pandas(
+                            nullable=False
+                        )
+                    else:
+                        preprocess_pdf[col] = temp_df[col].to_pandas(
+                            nullable=True
+                        )
+
+                preprocess_pdf.columns = preprocess.names
+                preprocess = pd.MultiIndex.from_frame(preprocess_pdf)
+            else:
+                preprocess = preprocess.to_pandas(nullable=True)
             preprocess.values[:] = tuples_list
         else:
             preprocess = preprocess.to_pandas(nullable=True)

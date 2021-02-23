@@ -204,7 +204,7 @@ def test_approx_quantiles_int():
 @pytest.mark.parametrize("q", [[], 0.5, 1, 0.234, [0.345], [0.243, 0.5, 1]])
 def test_misc_quantiles(data, q):
 
-    pdf_series = pd.Series(data)
+    pdf_series = pd.Series(data, dtype=None if len(data) else "float64")
     gdf_series = Series(data)
 
     expected = pdf_series.quantile(q)
@@ -434,13 +434,13 @@ def test_df_corr():
 )
 @pytest.mark.parametrize("skipna", [True, False, None])
 def test_nans_stats(data, ops, skipna):
-    psr = pd.Series(data)
+    psr = pd.Series(data, dtype=None if len(data) else "float64")
     gsr = Series(data)
     assert_eq(
         getattr(psr, ops)(skipna=skipna), getattr(gsr, ops)(skipna=skipna)
     )
 
-    psr = pd.Series(data)
+    psr = pd.Series(data, dtype=None if len(data) else "float64")
     gsr = Series(data, nan_as_null=False)
     # Since there is no concept of `nan_as_null` in pandas,
     # nulls will be returned in the operations. So only

@@ -1496,7 +1496,8 @@ def test_groupby_apply_return_series_dataframe(cust_func):
 
 
 @pytest.mark.parametrize(
-    "pdf", [pd.DataFrame(), pd.DataFrame({"a": []}), pd.Series([])]
+    "pdf",
+    [pd.DataFrame(), pd.DataFrame({"a": []}), pd.Series([], dtype="float64")],
 )
 def test_groupby_no_keys(pdf):
     gdf = cudf.from_pandas(pdf)
@@ -1509,7 +1510,8 @@ def test_groupby_no_keys(pdf):
 
 
 @pytest.mark.parametrize(
-    "pdf", [pd.DataFrame(), pd.DataFrame({"a": []}), pd.Series([])]
+    "pdf",
+    [pd.DataFrame(), pd.DataFrame({"a": []}), pd.Series([], dtype="float64")],
 )
 def test_groupby_apply_no_keys(pdf):
     gdf = cudf.from_pandas(pdf)

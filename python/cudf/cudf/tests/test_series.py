@@ -28,7 +28,7 @@ def _series_na_data():
         pd.Series([0, 1, 2, 3, 4]),
         pd.Series(["a", "b", "u", "h", "d"]),
         pd.Series([None, None, np.nan, None, np.inf, -np.inf]),
-        pd.Series([]),
+        pd.Series([], dtype="float64"),
         pd.Series(
             [pd.NaT, pd.Timestamp("1939-05-27"), pd.Timestamp("1940-04-25")]
         ),
@@ -383,7 +383,7 @@ def test_series_tolist(data):
     [[], [None, None], ["a"], ["a", "b", "c"] * 500, [1.0, 2.0, 0.3] * 57],
 )
 def test_series_size(data):
-    psr = pd.Series(data)
+    psr = pd.Series(data, dtype=None if len(data) else "float64")
     gsr = cudf.Series(data)
 
     assert_eq(psr.size, gsr.size)
@@ -490,7 +490,7 @@ def test_series_factorize(data, na_sentinel):
 @pytest.mark.parametrize("normalize", [True, False])
 @pytest.mark.parametrize("nulls", ["none", "some"])
 def test_series_datetime_value_counts(data, nulls, normalize, dropna):
-    psr = pd.Series(data)
+    psr = pd.Series(data, dtype=None if len(data) else "datetime64[ns]")
 
     if len(data) > 0:
         if nulls == "one":
@@ -733,7 +733,8 @@ def test_series_notnull_notna(ps, nan_as_null):
     "sr1", [pd.Series([10, 11, 12], index=["a", "b", "z"]), pd.Series(["a"])]
 )
 @pytest.mark.parametrize(
-    "sr2", [pd.Series([]), pd.Series(["a", "a", "c", "z", "A"])]
+    "sr2",
+    [pd.Series([], dtype="float64"), pd.Series(["a", "a", "c", "z", "A"])],
 )
 @pytest.mark.parametrize(
     "op",
@@ -851,6 +852,10 @@ def test_series_memory_usage():
                 ],
                 dtype=pd.StringDtype(),
             ),
+        ),
+        (
+            cudf.Series([1, 2, None, 10.2, None], dtype="float32",),
+            pd.Series([1, 2, None, 10.2, None], dtype=pd.Float32Dtype(),),
         ),
     ],
 )

@@ -158,7 +158,7 @@ def test_integer_dataframe(x):
 @settings(deadline=None)
 def test_integer_series(x):
     sr = cudf.Series(x)
-    ps = pd.Series(x)
+    ps = pd.Series(x, dtype=None if len(x) else "float64")
 
     assert sr.__repr__() == ps.__repr__()
 
@@ -175,7 +175,7 @@ def test_float_dataframe(x):
 @settings(deadline=None)
 def test_float_series(x):
     sr = cudf.Series(x, nan_as_null=False)
-    ps = pd.Series(x)
+    ps = pd.Series(x, dtype=None if len(x) else "float64")
     assert sr.__repr__() == ps.__repr__()
 
 
@@ -261,6 +261,7 @@ def test_generic_index(length, dtype):
     psr = pd.Series(
         range(length),
         index=np.random.randint(0, high=100, size=length).astype(dtype),
+        dtype="float64" if length == 0 else None,
     )
     gsr = cudf.Series.from_pandas(psr)
 

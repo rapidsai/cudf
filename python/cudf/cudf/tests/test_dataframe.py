@@ -1281,8 +1281,10 @@ def test_concat_different_column_dataframe(df1_d, df2_d):
     assert_eq(got, expect, check_dtype=False)
 
 
-@pytest.mark.parametrize("ser_1", [pd.Series([1, 2, 3]), pd.Series([])])
-@pytest.mark.parametrize("ser_2", [pd.Series([])])
+@pytest.mark.parametrize(
+    "ser_1", [pd.Series([1, 2, 3]), pd.Series([], dtype="float64")]
+)
+@pytest.mark.parametrize("ser_2", [pd.Series([], dtype="float64")])
 def test_concat_empty_series(ser_1, ser_2):
     got = gd.concat([gd.Series(ser_1), gd.Series(ser_2)])
     expect = pd.concat([ser_1, ser_2])
@@ -1689,7 +1691,7 @@ def test_series_shape():
 
 
 def test_series_shape_empty():
-    ps = pd.Series()
+    ps = pd.Series(dtype="float64")
     cs = gd.Series([])
 
     assert ps.shape == cs.shape
@@ -2285,7 +2287,7 @@ def test_series_all_null(num_elements, null_type):
         data = [null_type] * num_elements
 
     # Typecast Pandas because None will return `object` dtype
-    expect = pd.Series(data).astype("float64")
+    expect = pd.Series(data, dtype="float64")
     got = gd.Series(data)
 
     assert_eq(expect, got)
@@ -3245,7 +3247,7 @@ def test_ndim():
     assert pdf.ndim == gdf.ndim
     assert pdf.x.ndim == gdf.x.ndim
 
-    s = pd.Series()
+    s = pd.Series(dtype="float64")
     gs = gd.Series()
     assert s.ndim == gs.ndim
 
@@ -3486,7 +3488,7 @@ def test_as_column_types():
     col = column.as_column(gd.Series([]))
     assert_eq(col.dtype, np.dtype("float64"))
     gds = gd.Series(col)
-    pds = pd.Series(pd.Series([]))
+    pds = pd.Series(pd.Series([], dtype="float64"))
 
     assert_eq(pds, gds)
 
@@ -3521,7 +3523,7 @@ def test_as_column_types():
 
     assert_eq(pds, gds)
 
-    pds = pd.Series([])
+    pds = pd.Series([], dtype="float64")
     gds = gd.Series(column.as_column(pds))
     assert_eq(pds, gds)
 
@@ -3857,7 +3859,7 @@ def test_create_dataframe_column():
     ],
 )
 def test_series_values_host_property(data):
-    pds = pd.Series(data)
+    pds = pd.Series(data, dtype=None if len(data) else "float64")
     gds = gd.Series(data)
 
     np.testing.assert_array_equal(pds.values, gds.values_host)
@@ -3880,7 +3882,7 @@ def test_series_values_host_property(data):
     ],
 )
 def test_series_values_property(data):
-    pds = pd.Series(data)
+    pds = pd.Series(data, dtype=None if len(data) else "float64")
     gds = gd.Series(data)
     gds_vals = gds.values
     assert isinstance(gds_vals, cupy.ndarray)
@@ -3988,11 +3990,10 @@ def test_value_counts():
 )
 def test_isin_numeric(data, values):
     index = np.random.randint(0, 100, len(data))
-    psr = pd.Series(data, index=index)
+    psr = pd.Series(data, index=index, dtype=None if len(data) else "float64")
     gsr = gd.Series.from_pandas(psr, nan_as_null=False)
 
     expected = psr.isin(values)
-    print(expected)
     got = gsr.isin(values)
 
     assert_eq(got, expected)
@@ -4043,7 +4044,7 @@ def test_isin_numeric(data, values):
     ],
 )
 def test_isin_datetime(data, values):
-    psr = pd.Series(data)
+    psr = pd.Series(data, dtype=None if len(data) else "datetime64[ns]")
     gsr = gd.Series.from_pandas(psr)
 
     got = gsr.isin(values)
@@ -4072,7 +4073,7 @@ def test_isin_datetime(data, values):
     ],
 )
 def test_isin_string(data, values):
-    psr = pd.Series(data)
+    psr = pd.Series(data, dtype=None if len(data) else "float64")
     gsr = gd.Series.from_pandas(psr)
 
     got = gsr.isin(values)
@@ -4101,7 +4102,7 @@ def test_isin_string(data, values):
     ],
 )
 def test_isin_categorical(data, values):
-    psr = pd.Series(data)
+    psr = pd.Series(data, dtype=None if len(data) else "float64")
     gsr = gd.Series.from_pandas(psr)
 
     got = gsr.isin(values)
@@ -4135,7 +4136,7 @@ def test_isin_categorical(data, values):
     ],
 )
 def test_isin_index(data, values):
-    psr = pd.Series(data)
+    psr = pd.Series(data, dtype=None if len(data) else "float64")
     gsr = gd.Series.from_pandas(psr)
 
     got = gsr.index.isin(values)
@@ -6671,10 +6672,10 @@ def test_dataframe_keys(df):
             ["abc", "def", "ghi", "xyz", "pqr", "abc"],
             index=[1, 2, 3, 4, 5, 10],
         ),
-        pd.Series(index=["a", "b", "c", "d", "e", "f"]),
-        pd.Series(index=[10, 11, 12]),
-        pd.Series(),
-        pd.Series([]),
+        pd.Series(index=["a", "b", "c", "d", "e", "f"], dtype="float64"),
+        pd.Series(index=[10, 11, 12], dtype="float64"),
+        pd.Series(dtype="float64"),
+        pd.Series([], dtype="float64"),
     ],
 )
 def test_series_keys(ps):
@@ -7248,9 +7249,9 @@ def test_dataframe_size(df):
 @pytest.mark.parametrize(
     "ps",
     [
-        pd.Series(),
-        pd.Series(index=[100, 10, 1, 0]),
-        pd.Series([]),
+        pd.Series(dtype="float64"),
+        pd.Series(index=[100, 10, 1, 0], dtype="float64"),
+        pd.Series([], dtype="float64"),
         pd.Series(["a", "b", "c", "d"]),
         pd.Series(["a", "b", "c", "d"], index=[0, 1, 10, 11]),
     ],
@@ -7292,13 +7293,16 @@ def test_dataframe_init_with_columns(data, columns):
     "data, ignore_dtype",
     [
         ([pd.Series([1, 2, 3])], False),
-        ([pd.Series(index=[1, 2, 3])], False),
-        ([pd.Series(name="empty series name")], False),
-        ([pd.Series([1]), pd.Series([]), pd.Series([3])], False),
+        ([pd.Series(index=[1, 2, 3], dtype="float64")], False),
+        ([pd.Series(name="empty series name", dtype="float64")], False),
+        (
+            [pd.Series([1]), pd.Series([], dtype="float64"), pd.Series([3])],
+            False,
+        ),
         (
             [
                 pd.Series([1, 0.324234, 32424.323, -1233, 34242]),
-                pd.Series([]),
+                pd.Series([], dtype="float64"),
                 pd.Series([3], name="series that is named"),
             ],
             False,
@@ -7315,16 +7319,16 @@ def test_dataframe_init_with_columns(data, columns):
         (
             [
                 pd.Series([1, 0.324234, 32424.323, -1233, 34242]),
-                pd.Series([]),
-                pd.Series(index=[10, 11, 12]),
+                pd.Series([], dtype="float64"),
+                pd.Series(index=[10, 11, 12], dtype="float64"),
             ],
             False,
         ),
         (
             [
                 pd.Series([1, 0.324234, 32424.323, -1233, 34242]),
-                pd.Series([], name="abc"),
-                pd.Series(index=[10, 11, 12]),
+                pd.Series([], name="abc", dtype="float64"),
+                pd.Series(index=[10, 11, 12], dtype="float64"),
             ],
             False,
         ),
@@ -7357,17 +7361,21 @@ def test_dataframe_init_from_series_list(data, ignore_dtype, columns):
     "data, ignore_dtype, index",
     [
         ([pd.Series([1, 2, 3])], False, ["a", "b", "c"]),
-        ([pd.Series(index=[1, 2, 3])], False, ["a", "b"]),
-        ([pd.Series(name="empty series name")], False, ["index1"]),
+        ([pd.Series(index=[1, 2, 3], dtype="float64")], False, ["a", "b"]),
         (
-            [pd.Series([1]), pd.Series([]), pd.Series([3])],
+            [pd.Series(name="empty series name", dtype="float64")],
+            False,
+            ["index1"],
+        ),
+        (
+            [pd.Series([1]), pd.Series([], dtype="float64"), pd.Series([3])],
             False,
             ["0", "2", "1"],
         ),
         (
             [
                 pd.Series([1, 0.324234, 32424.323, -1233, 34242]),
-                pd.Series([]),
+                pd.Series([], dtype="float64"),
                 pd.Series([3], name="series that is named"),
             ],
             False,
@@ -7390,8 +7398,8 @@ def test_dataframe_init_from_series_list(data, ignore_dtype, columns):
         (
             [
                 pd.Series([1, 0.324234, 32424.323, -1233, 34242]),
-                pd.Series([]),
-                pd.Series(index=[10, 11, 12]),
+                pd.Series([], dtype="float64"),
+                pd.Series(index=[10, 11, 12], dtype="float64"),
             ],
             False,
             ["a", "b", "c"],
@@ -7399,8 +7407,8 @@ def test_dataframe_init_from_series_list(data, ignore_dtype, columns):
         (
             [
                 pd.Series([1, 0.324234, 32424.323, -1233, 34242]),
-                pd.Series([], name="abc"),
-                pd.Series(index=[10, 11, 12]),
+                pd.Series([], name="abc", dtype="float64"),
+                pd.Series(index=[10, 11, 12], dtype="float64"),
             ],
             False,
             ["a", "v", "z"],
@@ -7440,7 +7448,7 @@ def test_dataframe_init_from_series_list_with_index(
         (
             [
                 pd.Series([1, 0.324234, 32424.323, -1233, 34242]),
-                pd.Series([]),
+                pd.Series([], dtype="float64"),
                 pd.Series([3], name="series that is named"),
             ],
             ["_", "+"],
@@ -7864,6 +7872,10 @@ def test_dataframe_error_equality(df1, df2, op):
                         ],
                         dtype="object",
                     ),
+                    "c": gd.Series(
+                        [0.1, None, 0.2, None, 3, 4, 1000, None],
+                        dtype="float64",
+                    ),
                 }
             ),
             pd.DataFrame(
@@ -7884,6 +7896,10 @@ def test_dataframe_error_equality(df1, df2, op):
                             "rapids ai",
                         ],
                         dtype=pd.StringDtype(),
+                    ),
+                    "c": pd.Series(
+                        [0.1, None, 0.2, None, 3, 4, 1000, None],
+                        dtype=pd.Float64Dtype(),
                     ),
                 }
             ),

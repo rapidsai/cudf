@@ -690,7 +690,7 @@ class DataFrame(Frame, Serializable):
         elif can_convert_to_column(arg):
             mask = arg
             if is_list_like(mask):
-                mask = pd.Series(mask)
+                mask = pd.Series(mask, dtype=None if len(mask) else "float64")
             if mask.dtype == "bool":
                 return self._apply_boolean_mask(mask)
             else:
