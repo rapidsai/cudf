@@ -1456,12 +1456,10 @@ class DataFrame(Frame, Serializable):
                     if col not in df_cols:
                         r_opr = other_cols[col]
                         l_opr = Series(
-                            column_empty(
-                                len(self), masked=True, dtype=other.dtype
-                            )
+                            as_column(np.nan, length=len(self))
                         )
                     if col not in other_cols_keys:
-                        r_opr = None
+                        r_opr = np.nan
                         l_opr = self[col]
                 result[col] = op(l_opr, r_opr)
 
