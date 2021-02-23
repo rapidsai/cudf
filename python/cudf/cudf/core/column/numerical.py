@@ -258,7 +258,7 @@ class NumericalColumn(ColumnBase):
             rhs = rhs.astype(dtype=self.dtype)
 
         if lhs.null_count == len(lhs):
-            lhs = cast("cudf.core.column.ColumnBase", lhs.astype(rhs.dtype))
+            lhs = lhs.astype(rhs.dtype)
         elif rhs.null_count == len(rhs):
             rhs = rhs.astype(lhs.dtype)
 
