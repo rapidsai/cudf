@@ -5,8 +5,7 @@ import copy
 import functools
 import operator
 import warnings
-from collections import OrderedDict
-from collections import abc as abc
+from collections import OrderedDict, abc as abc
 from typing import TYPE_CHECKING, Any, Dict, Tuple, TypeVar, overload
 
 import cupy
