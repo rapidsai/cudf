@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2020, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -40,7 +40,7 @@ namespace detail {
  * @tparam Op device binary operator
  */
 template <typename Op>
-struct ScanDispatcher {
+struct scan_dispatcher {
  private:
   template <typename T>
   static constexpr bool is_string_supported()
@@ -213,12 +213,9 @@ struct ScanDispatcher {
                                      rmm::cuda_stream_view stream,
                                      rmm::mr::device_memory_resource* mr)
   {
-    auto output = [&] {
-      using Type = device_storage_type_t<T>;
-      return inclusive == scan_type::INCLUSIVE
-               ? inclusive_scan<Type>(input, null_handling, stream, mr)
-               : exclusive_scan<Type>(input, null_handling, stream, mr);
-    }();
+    auto output = inclusive == scan_type::INCLUSIVE
+                    ? inclusive_scan<T>(input, null_handling, stream, mr)
+                    : exclusive_scan<T>(input, null_handling, stream, mr);
 
     if (null_handling == null_policy::EXCLUDE) {
       CUDF_EXPECTS(input.null_count() == output->null_count(),
@@ -253,40 +250,40 @@ std::unique_ptr<column> scan(
 
   switch (agg->kind) {
     case aggregation::SUM:
-      return cudf::type_dispatcher(input.type(),
-                                   ScanDispatcher<cudf::DeviceSum>(),
-                                   input,
-                                   inclusive,
-                                   null_handling,
-                                   stream,
-                                   mr);
+      return cudf::type_dispatcher<dispatch_storage_type>(input.type(),
+                                                          scan_dispatcher<cudf::DeviceSum>(),
+                                                          input,
+                                                          inclusive,
+                                                          null_handling,
+                                                          stream,
+                                                          mr);
     case aggregation::MIN:
-      return cudf::type_dispatcher(input.type(),
-                                   ScanDispatcher<cudf::DeviceMin>(),
-                                   input,
-                                   inclusive,
-                                   null_handling,
-                                   stream,
-                                   mr);
+      return cudf::type_dispatcher<dispatch_storage_type>(input.type(),
+                                                          scan_dispatcher<cudf::DeviceMin>(),
+                                                          input,
+                                                          inclusive,
+                                                          null_handling,
+                                                          stream,
+                                                          mr);
     case aggregation::MAX:
-      return cudf::type_dispatcher(input.type(),
-                                   ScanDispatcher<cudf::DeviceMax>(),
-                                   input,
-                                   inclusive,
-                                   null_handling,
-                                   stream,
-                                   mr);
+      return cudf::type_dispatcher<dispatch_storage_type>(input.type(),
+                                                          scan_dispatcher<cudf::DeviceMax>(),
+                                                          input,
+                                                          inclusive,
+                                                          null_handling,
+                                                          stream,
+                                                          mr);
     case aggregation::PRODUCT:
       // a product scan on a decimal type with non-zero scale would result in each element having
       // a different scale, and because scale is stored once per column, this is not possible
       if (is_fixed_point(input.type())) CUDF_FAIL("decimal32/64 cannot support product scan");
-      return cudf::type_dispatcher(input.type(),
-                                   ScanDispatcher<cudf::DeviceProduct>(),
-                                   input,
-                                   inclusive,
-                                   null_handling,
-                                   stream,
-                                   mr);
+      return cudf::type_dispatcher<dispatch_storage_type>(input.type(),
+                                                          scan_dispatcher<cudf::DeviceProduct>(),
+                                                          input,
+                                                          inclusive,
+                                                          null_handling,
+                                                          stream,
+                                                          mr);
     default: CUDF_FAIL("Unsupported aggregation operator for scan");
   }
 }
