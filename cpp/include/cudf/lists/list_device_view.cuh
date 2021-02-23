@@ -187,7 +187,7 @@ class list_device_view {
   CUDA_DEVICE_CALLABLE const_pair_rep_iterator<T> pair_rep_end() const
   {
     return const_pair_rep_iterator<T>{thrust::counting_iterator<size_type>(size()),
-                                      pair_accessor<T>{*this}};
+                                      pair_rep_accessor<T>{*this}};
   }
 
  private:
