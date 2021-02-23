@@ -5003,26 +5003,32 @@ def test_cov_nans():
     ],
 )
 def test_df_sr_binop(gsr, colnames, op):
-    data = [[0, 2, 5], [3, None, 5], [6, 7, np.nan]]
-    data = dict(zip(colnames, data))
-    gdf = gd.DataFrame(data)
-    if op is operator.floordiv or op is operator.mod:
-        # integer floor division is disallowed
-        # Just replace that one value for this op
-        gdf = gdf.replace(0, 3)
+    def insert_col(ary, pdf, gdf, label):
+        gdata = gd.Series(ary, nan_as_null=False, dtype='float32')
+        pdata = pd.Series(
+            pd.Float32Dtype().__from_arrow__(
+                gdata.to_arrow()
+            )
+        )
+        pdf[label] = pdata
+        gdf[label] = gdata
+        return pdf, gdf
 
-    pdf = gdf.to_pandas()
+    pdf, gdf = pd.DataFrame(), gd.DataFrame()
+    data = [[2,3,4], [5,np.nan,7], [8,9,None]]
+    for d, name in zip(data, ('a','b','c')):
+        pdf, gdf = insert_col(d, pdf, gdf, name)    
 
     psr = gsr.to_pandas()
-
+    breakpoint()
     expect = op(pdf, psr)
     got = op(gdf, gsr)
-    assert_eq(expect.astype(float), got.astype(float))
+    breakpoint()
+    assert_eq(expect, got, check_dtype=False)
 
     expect = op(psr, pdf)
     got = op(gsr, gdf)
-    breakpoint()
-    assert_eq(expect.astype(float), got.astype(float))
+    assert_eq(expect, got, check_dtype=False)
 
 
 @pytest.mark.parametrize(
