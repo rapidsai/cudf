@@ -17,7 +17,6 @@
 
 #include <thrust/logical.h>
 #include <cudf/strings/string_view.cuh>
-#include <io/utilities/block_utils.cuh>
 
 namespace cudf {
 namespace strings {
@@ -107,10 +106,17 @@ __device__ bool is_float(string_view const& d_str)
   return result;
 }
 
+inline __device__ string_view shuffle_xor(string_view var, uint32_t delta)
+{
+  const char* data = reinterpret_cast<const char*>(
+    __shfl_xor_sync(~0, reinterpret_cast<uintptr_t>(var.data()), delta));
+  auto size = __shfl_xor_sync(~0, var.size_bytes(), delta);
+  return string_view(data, size);
+}
+
 template <typename Operator>
 inline __device__ string_view WarpReduce(string_view extremum_value, Operator op)
 {
-  using cudf::io::shuffle_xor;
   string_view value = shuffle_xor(extremum_value, 1);
   extremum_value    = op(value, extremum_value);
   value             = shuffle_xor(extremum_value, 2);
