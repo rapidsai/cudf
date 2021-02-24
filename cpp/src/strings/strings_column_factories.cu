@@ -17,7 +17,6 @@
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
-#include <cudf/detail/valid_if.cuh>
 #include <cudf/strings/detail/strings_column_factories.cuh>
 #include <cudf/utilities/error.hpp>
 #include <cudf/utilities/span.hpp>
@@ -26,11 +25,6 @@
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_vector.hpp>
 #include <rmm/exec_policy.hpp>
-
-#include <thrust/for_each.h>
-#include <thrust/iterator/counting_iterator.h>
-#include <thrust/iterator/zip_iterator.h>
-#include <thrust/transform_reduce.h>
 
 namespace cudf {
 
@@ -54,6 +48,8 @@ std::unique_ptr<column> make_strings_column(
   rmm::cuda_stream_view stream,
   rmm::mr::device_memory_resource* mr)
 {
+  CUDF_FUNC_RANGE();
+
   return cudf::strings::detail::make_strings_column(strings.begin(), strings.end(), stream, mr);
 }
 
@@ -65,6 +61,8 @@ std::unique_ptr<column> make_strings_column(
   rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
 {
+  CUDF_FUNC_RANGE();
+
   return cudf::strings::detail::make_strings_column(chars.begin(),
                                                     chars.end(),
                                                     offsets.begin(),
@@ -80,6 +78,8 @@ std::unique_ptr<column> make_strings_column(device_span<string_view const> strin
                                             rmm::cuda_stream_view stream,
                                             rmm::mr::device_memory_resource* mr)
 {
+  CUDF_FUNC_RANGE();
+
   auto it_pair =
     thrust::make_transform_iterator(string_views.begin(), string_view_to_pair{null_placeholder});
   return cudf::strings::detail::make_strings_column(
@@ -94,6 +94,8 @@ std::unique_ptr<column> make_strings_column(cudf::device_span<char const> string
                                             rmm::cuda_stream_view stream,
                                             rmm::mr::device_memory_resource* mr)
 {
+  CUDF_FUNC_RANGE();
+
   // build null bitmask
   rmm::device_buffer null_mask{
     valid_mask.data(), valid_mask.size() * sizeof(bitmask_type), stream, mr};
@@ -117,6 +119,8 @@ std::unique_ptr<column> make_strings_column(size_type num_strings,
                                             rmm::cuda_stream_view stream,
                                             rmm::mr::device_memory_resource* mr)
 {
+  CUDF_FUNC_RANGE();
+
   if (null_count > 0) CUDF_EXPECTS(null_mask.size() > 0, "Column with nulls must be nullable.");
   CUDF_EXPECTS(num_strings == offsets_column->size() - 1,
                "Invalid offsets column size for strings column.");
