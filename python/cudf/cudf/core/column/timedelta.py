@@ -369,12 +369,6 @@ class TimeDeltaColumn(column.ColumnBase):
         )
 
     def isin(self, values: Sequence) -> ColumnBase:
-        if cudf.utils.dtypes.is_scalar(values):
-            raise TypeError(
-                "only list-like objects are allowed to be passed "
-                f"to isin(), you passed a [{type(values).__name__}]"
-            )
-
         lhs = self
         rhs = None
 

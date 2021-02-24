@@ -854,12 +854,6 @@ class ColumnBase(Column, Serializable):
         TypeError
             If values is a string
         """
-        if is_scalar(values):
-            raise TypeError(
-                "only list-like objects are allowed to be passed "
-                f"to isin(), you passed a [{type(values).__name__}]"
-            )
-
         lhs = self
         rhs = None
 
