@@ -7,6 +7,7 @@ from cudf._lib.scalar import as_device_scalar
 from cudf._lib.scalar cimport DeviceScalar
 from cudf._lib.types import np_to_cudf_types
 from cudf._lib.types cimport underlying_type_t_type_id
+from cudf._lib.cpp.types cimport DECIMAL64
 
 from cudf.core.column.column import as_column
 
@@ -789,37 +790,31 @@ def from_decimal(Column input_col):
     return Column.from_unique_ptr(move(c_result))
 
 
-def to_decimal(Column input_col, object out_type, object scale=0):
+def to_decimal(Column input_col, object out_type):
     cdef column_view input_column_view = input_col.view()
     cdef unique_ptr[column] c_result
-    cdef type_id tid = <type_id> (
-        <underlying_type_t_type_id> (
-            np_to_cudf_types[out_type]
-        )
-    )
-    cdef data_type c_out_type = data_type(tid, scale)
+    cdef int scale = out_type.scale
+    cdef data_type c_out_type = data_type(DECIMAL64, -scale)
     with nogil:
         c_result = move(
             cpp_to_fixed_point(
                 input_column_view,
                 c_out_type))
 
-    return Column.from_unique_ptr(move(c_result))
+    result = Column.from_unique_ptr(move(c_result))
+    result.dtype.precision = out_type.precision
+    return result
 
 
-def is_fixed_point(Column input_col, object out_type, object scale=0):
+def is_fixed_point(Column input_col, object out_type):
     """
     Returns a Column of boolean values with True for `input_col`
     that have fixed-point characters.
     """
     cdef unique_ptr[column] c_result
     cdef column_view source_view = input_col.view()
-    cdef type_id tid = <type_id> (
-        <underlying_type_t_type_id> (
-            np_to_cudf_types[out_type]
-        )
-    )
-    cdef data_type c_out_type = data_type(tid, scale)
+    cdef int scale = out_type.scale
+    cdef data_type c_out_type = data_type(DECIMAL64, -scale)
     with nogil:
         c_result = move(cpp_is_fixed_point(
             source_view,
