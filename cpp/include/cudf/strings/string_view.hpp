@@ -18,6 +18,7 @@
 #include <cuda_runtime.h>
 #include <cstddef>
 #include <cudf/types.hpp>
+#include <cudf/utilities/error.hpp>
 #include <iterator>
 
 /**
@@ -48,6 +49,12 @@ constexpr int8_t UNKNOWN_CHAR_WIDTH{-1};
  * contains characters of different widths.
  */
 constexpr int8_t VARIABLE_CHAR_WIDTH{0};
+
+namespace strings {
+namespace detail {
+  static __constant__ char max_string_sentinel[5]{"\xF7\xBF\xBF\xBF"};
+}  // namespace detail
+}  // namespace strings
 
 /**
  * @brief A non-owning, immutable view of device data that is a variable length
@@ -289,6 +296,25 @@ class string_view {
    * @return New instance pointing to a subset of the characters within this instance.
    */
   CUDA_DEVICE_CALLABLE string_view substr(size_type start, size_type length) const;
+
+  /**
+   * @brief Return minimum value associated with the string type
+   *
+   * @return An empty string
+   */
+  CUDA_HOST_DEVICE_CALLABLE static string_view min() {
+    return string_view();
+  }
+
+  CUDA_HOST_DEVICE_CALLABLE static string_view max() {
+    const char* psentinel{nullptr};
+#if defined(__CUDA_ARCH__)
+    psentinel = &cudf::strings::detail::max_string_sentinel[0];
+#else
+    CUDA_TRY(cudaGetSymbolAddress((void**)&psentinel, cudf::strings::detail::max_string_sentinel));
+#endif
+    return string_view(psentinel, 4);
+  }
 
   /**
    * @brief Default constructor represents an empty string.
