@@ -203,11 +203,11 @@ ConfigureTest(INTEROP_TEST
 ###################################################################################################
 # - jit cache tests -------------------------------------------------------------------------------
 ConfigureTest(JITCACHE_TEST
-    src/jit/cache.cpp
+    "${CUDF_SOURCE_DIR}/src/jit/cache.cpp"
     jit/jit-cache-test.cpp)
 
 ConfigureTest(JITCACHE_MULTIPROC_TEST
-    src/jit/cache.cpp
+    "${CUDF_SOURCE_DIR}/src/jit/cache.cpp"
     jit/jit-cache-multiprocess-test.cpp)
 
 ###################################################################################################
