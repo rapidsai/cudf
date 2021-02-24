@@ -59,11 +59,23 @@ void unary_operation(mutable_column_view output,
 {
   std::string hash = "prog_transform" + std::to_string(std::hash<std::string>{}(udf));
 
+  std::cout << "The program's hash is:" << std::endl;
+  std::cout << hash << std::endl;
+
+  std::cout << "the actual udf string is: " << std::endl;
+  std::cout << udf << std::endl;
+
+
+  std::cout << "cuda_source is:" << std::endl;
   std::string cuda_source = code::kernel_header;
+  std::cout << cuda_source << std::endl;
+
   if (is_ptx) {
     cuda_source += cudf::jit::parse_single_function_ptx(
                      udf, "GENERIC_UNARY_OP", cudf::jit::get_type_name(output_type), {0}) +
                    code::kernel;
+    std::cout << "cuda_source after is_ptx condition: " << std::endl;
+    std::cout << cuda_source << std::endl;
   } else {
     cuda_source += cudf::jit::parse_single_function_cuda(udf, "GENERIC_UNARY_OP") + code::kernel;
   }
