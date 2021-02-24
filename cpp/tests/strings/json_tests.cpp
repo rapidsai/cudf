@@ -220,4 +220,42 @@ TEST_F(JsonTests, GetJsonObject)
 
     cudf::test::print(*result);
   }
+
+  // empty query -> null
+  {
+    cudf::test::strings_column_wrapper input{""};
+    std::string json_path("");
+    auto result = cudf::strings::get_json_object(cudf::strings_column_view(input), json_path);
+
+    cudf::test::print(*result);
+  }
+
+  // empty input -> null
+  {
+    cudf::test::strings_column_wrapper input{""};
+    std::string json_path("$");
+    auto result = cudf::strings::get_json_object(cudf::strings_column_view(input), json_path);
+
+    cudf::test::print(*result);
+  }
+
+  // empty output -> null
+  {
+    cudf::test::strings_column_wrapper input{"{\"a\": \"b\"}"};
+    std::string json_path("$[*].c");
+    auto result = cudf::strings::get_json_object(cudf::strings_column_view(input), json_path);
+
+    cudf::test::print(*result);
+  }
+
+  // slightly different from "empty output". in this case, we're
+  // returning something, but it happens to be empty. so we expect
+  // a valid, but empty row
+  {
+    cudf::test::strings_column_wrapper input{"{\"store\": { \"bicycle\" : \"\" } }"};
+    std::string json_path("$.store.bicycle");
+    auto result = cudf::strings::get_json_object(cudf::strings_column_view(input), json_path);
+
+    cudf::test::print(*result);
+  }
 }
