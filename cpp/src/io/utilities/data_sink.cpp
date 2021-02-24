@@ -66,7 +66,7 @@ class file_sink : public data_sink {
  private:
   std::ofstream _output_stream;
   size_t _bytes_written = 0;
-  std::unique_ptr<cufile_output> _cufile_out;
+  std::unique_ptr<cufile_output_impl> _cufile_out;
 };
 
 /**

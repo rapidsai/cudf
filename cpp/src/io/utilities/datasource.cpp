@@ -138,7 +138,7 @@ class memory_mapped_source : public datasource {
   void *_map_addr    = nullptr;
   size_t _map_size   = 0;
   size_t _map_offset = 0;
-  std::unique_ptr<cufile_input> _cufile_in;
+  std::unique_ptr<cufile_input_impl> _cufile_in;
 };
 
 /**

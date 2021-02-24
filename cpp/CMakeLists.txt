@@ -231,6 +231,7 @@ message(STATUS "CUFILE: CUFILE_INCLUDE set to ${CUFILE_INCLUDE}")
 
 add_library(cufile SHARED IMPORTED ${CUFILE_LIBRARY})
 if (CUFILE_INCLUDE AND CUFILE_LIBRARY)
+    add_compile_definitions(CUFILE_INSTALLED)
     set_target_properties(cufile PROPERTIES IMPORTED_LOCATION ${CUFILE_LIBRARY})
 else()
     message(FATAL_ERROR "cufile not found, please pass the GDS install directory using -DGDS_ROOT")

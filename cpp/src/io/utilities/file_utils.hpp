@@ -16,7 +16,9 @@
 
 #pragma once
 
+#ifdef CUFILE_INSTALLED
 #include <cufile.h>
+#endif
 
 #include <rmm/cuda_stream_view.hpp>
 
@@ -44,32 +46,12 @@ class file_wrapper {
 };
 
 /**
- * @brief Class that provides RAII for cuFile file registration.
- */
-struct cufile_registered_file {
-  CUfileHandle_t handle = nullptr;
-  explicit cufile_registered_file(int fd);
-  ~cufile_registered_file();
-};
-
-/**
  * @brief Base class for cuFile input/output.
  *
  * Contains the file handles and common API for cuFile input and output classes.
  */
 class cufile_io_base {
  public:
-  cufile_io_base(std::string const &filepath, int flags)
-    : file(filepath, flags), cf_file{file.desc()}
-  {
-  }
-  cufile_io_base(std::string const &filepath, int flags, mode_t mode)
-    : file(filepath, flags, mode), cf_file{file.desc()}
-  {
-  }
-
-  virtual ~cufile_io_base() = default;
-
   /**
    * @brief Returns an estimate of whether the cuFile operation is the optimal option.
    *
@@ -87,8 +69,62 @@ class cufile_io_base {
    * different logic based on the system config.
    */
   static constexpr size_t op_size_threshold = 128 << 10;
+};
+
+/**
+ * @brief Interface class for cufile input.
+ */
+class cufile_input : public cufile_io_base {
+ public:
+  /**
+   * @brief Reads into a new device buffer.
+   */
+  virtual std::unique_ptr<datasource::buffer> read(size_t offset,
+                                                   size_t size,
+                                                   rmm::cuda_stream_view stream) = 0;
+
+  /**
+   * @brief Reads into existing device memory.
+   *
+   * Returns the number of bytes read.
+   */
+  virtual size_t read(size_t offset, size_t size, uint8_t *dst, rmm::cuda_stream_view stream) = 0;
+};
+
+/**
+ * @brief Interface class for cufile output.
+ */
+class cufile_output : public cufile_io_base {
+ public:
+  /**
+   * @brief Writes the data from a device buffer into a file.
+   */
+  virtual void write(void const *data, size_t offset, size_t size) = 0;
+};
+
+#ifdef CUFILE_INSTALLED
+/**
+ * @brief Class that provides RAII for cuFile file registration.
+ */
+struct cufile_registered_file {
+ private:
+  void register_handle();
+
+ public:
   file_wrapper const file;
-  cufile_registered_file const cf_file;
+  CUfileHandle_t handle = nullptr;
+  cufile_registered_file(std::string const &filepath, int flags) : file(filepath, flags)
+  {
+    register_handle();
+  }
+
+  cufile_registered_file(std::string const &filepath, int flags, mode_t mode)
+    : file(filepath, flags, mode)
+  {
+    register_handle();
+  }
+
+  ~cufile_registered_file();
 };
 
 /**
@@ -96,23 +132,18 @@ class cufile_io_base {
  *
  * Exposes APIs to read directly from a file into device memory.
  */
-class cufile_input final : public cufile_io_base {
+class cufile_input_impl final : public cufile_input {
  public:
-  cufile_input(std::string const &filepath);
+  cufile_input_impl(std::string const &filepath);
 
-  /**
-   * @brief Reads into a new device buffer.
-   */
   std::unique_ptr<datasource::buffer> read(size_t offset,
                                            size_t size,
-                                           rmm::cuda_stream_view stream);
+                                           rmm::cuda_stream_view stream) override;
 
-  /**
-   * @brief Reads into existing device memory.
-   *
-   * Returns the number of bytes read.
-   */
-  size_t read(size_t offset, size_t size, uint8_t *dst, rmm::cuda_stream_view stream);
+  size_t read(size_t offset, size_t size, uint8_t *dst, rmm::cuda_stream_view stream) override;
+
+ private:
+  cufile_registered_file const cf_file;
 };
 
 /**
@@ -120,29 +151,56 @@ class cufile_input final : public cufile_io_base {
  *
  * Exposes an API to write directly into a file from device memory.
  */
-class cufile_output final : public cufile_io_base {
+class cufile_output_impl final : public cufile_output {
  public:
-  cufile_output(std::string const &filepath);
+  cufile_output_impl(std::string const &filepath);
 
-  /**
-   * @brief Writes the data from a device buffer into a file.
-   */
-  void write(void const *data, size_t offset, size_t size);
+  void write(void const *data, size_t offset, size_t size) override;
+
+ private:
+  cufile_registered_file const cf_file;
+};
+#else
+
+class cufile_input_impl final : public cufile_input {
+ public:
+  std::unique_ptr<datasource::buffer> read(size_t offset,
+                                           size_t size,
+                                           rmm::cuda_stream_view stream) override
+  {
+    CUDF_FAIL("Only used to compile without cufile library, should not be called");
+  }
+
+  size_t read(size_t offset, size_t size, uint8_t *dst, rmm::cuda_stream_view stream) override
+  {
+    CUDF_FAIL("Only used to compile without cufile library, should not be called");
+  }
 };
 
-/**
- * @brief Creates a `cufile_input` object
- *
- * Returns a null pointer if an exception occurs in the `cufile_input` constructor.
- */
-std::unique_ptr<cufile_input> make_cufile_input(std::string const &filepath);
+class cufile_output_impl final : public cufile_output {
+ public:
+  void write(void const *data, size_t offset, size_t size) override
+  {
+    CUDF_FAIL("Only used to compile without cufile library, should not be called");
+  }
+};
+#endif
 
 /**
- * @brief Creates a `cufile_output` object
+ * @brief Creates a `cufile_input_impl` object
  *
- * Returns a null pointer if an exception occurs in the `cufile_output` constructor.
+ * Returns a null pointer if an exception occurs in the `cufile_input_impl` constructor, or if the
+ * cuFile library is not installed.
  */
-std::unique_ptr<cufile_output> make_cufile_output(std::string const &filepath);
+std::unique_ptr<cufile_input_impl> make_cufile_input(std::string const &filepath);
+
+/**
+ * @brief Creates a `cufile_output_impl` object
+ *
+ * Returns a null pointer if an exception occurs in the `cufile_output_impl` constructor, or if the
+ * cuFile library is not installed.
+ */
+std::unique_ptr<cufile_output_impl> make_cufile_output(std::string const &filepath);
 
 };  // namespace io
 };  // namespace cudf

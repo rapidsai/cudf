@@ -83,13 +83,13 @@ long file_wrapper::size() const
   }
   return _size;
 }
-
-cufile_registered_file::cufile_registered_file(int fd)
+#ifdef CUFILE_INSTALLED
+void cufile_registered_file::register_handle()
 {
   init_cufile_driver();
 
   CUfileDescr_t cufile_desc{};
-  cufile_desc.handle.fd = fd;
+  cufile_desc.handle.fd = file.desc();
   cufile_desc.type      = CU_FILE_HANDLE_TYPE_OPAQUE_FD;
   CUDF_EXPECTS(cuFileHandleRegister(&handle, &cufile_desc).err == CU_FILE_SUCCESS,
                "Cannot register file handle with cuFile");
@@ -97,15 +97,15 @@ cufile_registered_file::cufile_registered_file(int fd)
 
 cufile_registered_file::~cufile_registered_file() { cuFileHandleDeregister(handle); }
 
-cufile_input::cufile_input(std::string const &filepath)
-  : cufile_io_base(filepath, O_RDONLY | O_DIRECT)
+cufile_input_impl::cufile_input_impl(std::string const &filepath)
+  : cf_file(filepath, O_RDONLY | O_DIRECT)
 {
   init_cufile_driver();
 }
 
-std::unique_ptr<datasource::buffer> cufile_input::read(size_t offset,
-                                                       size_t size,
-                                                       rmm::cuda_stream_view stream)
+std::unique_ptr<datasource::buffer> cufile_input_impl::read(size_t offset,
+                                                            size_t size,
+                                                            rmm::cuda_stream_view stream)
 {
   rmm::device_buffer out_data(size, stream);
   CUDF_EXPECTS(cuFileRead(cf_file.handle, out_data.data(), size, offset, 0) != -1,
@@ -114,7 +114,10 @@ std::unique_ptr<datasource::buffer> cufile_input::read(size_t offset,
   return datasource::buffer::create(std::move(out_data));
 }
 
-size_t cufile_input::read(size_t offset, size_t size, uint8_t *dst, rmm::cuda_stream_view stream)
+size_t cufile_input_impl::read(size_t offset,
+                               size_t size,
+                               uint8_t *dst,
+                               rmm::cuda_stream_view stream)
 {
   CUDF_EXPECTS(cuFileRead(cf_file.handle, dst, size, offset, 0) != -1,
                "cuFile error reading from a file");
@@ -122,34 +125,39 @@ size_t cufile_input::read(size_t offset, size_t size, uint8_t *dst, rmm::cuda_st
   return size;
 }
 
-cufile_output::cufile_output(std::string const &filepath)
-  : cufile_io_base(filepath, O_CREAT | O_RDWR | O_DIRECT, 0664)
+cufile_output_impl::cufile_output_impl(std::string const &filepath)
+  : cf_file(filepath, O_CREAT | O_RDWR | O_DIRECT, 0664)
 {
   init_cufile_driver();
 }
 
-void cufile_output::write(void const *data, size_t offset, size_t size)
+void cufile_output_impl::write(void const *data, size_t offset, size_t size)
 {
   CUDF_EXPECTS(cuFileWrite(cf_file.handle, data, size, offset, 0) != -1,
                "cuFile error writing to a file");
 }
+#endif
 
-std::unique_ptr<cufile_input> make_cufile_input(std::string const &filepath)
+std::unique_ptr<cufile_input_impl> make_cufile_input(std::string const &filepath)
 {
+#ifdef CUFILE_INSTALLED
   try {
-    return std::make_unique<cufile_input>(filepath);
+    return std::make_unique<cufile_input_impl>(filepath);
   } catch (...) {
-    return nullptr;
   }
+#endif
+  return nullptr;
 }
 
-std::unique_ptr<cufile_output> make_cufile_output(std::string const &filepath)
+std::unique_ptr<cufile_output_impl> make_cufile_output(std::string const &filepath)
 {
+#ifdef CUFILE_INSTALLED
   try {
-    return std::make_unique<cufile_output>(filepath);
+    return std::make_unique<cufile_output_impl>(filepath);
   } catch (...) {
-    return nullptr;
   }
+#endif
+  return nullptr;
 }
 
 };  // namespace io
