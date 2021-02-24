@@ -16,6 +16,7 @@
 
 #pragma once
 #include <stdint.h>
+#include <cudf/strings/string_view.cuh>
 
 namespace cudf {
 namespace io {
@@ -30,6 +31,15 @@ template <typename T>
 inline __device__ T shuffle_xor(T var, uint32_t delta)
 {
   return __shfl_xor_sync(~0, var, delta);
+}
+
+template <>
+inline __device__ string_view shuffle_xor(string_view var, uint32_t delta)
+{
+  const char *data =
+    reinterpret_cast<const char *>(shuffle_xor(reinterpret_cast<uintptr_t>(var.data()), delta));
+  auto size = shuffle_xor(var.size_bytes(), delta);
+  return string_view(data, size);
 }
 
 inline __device__ void syncwarp(void) { __syncwarp(); }

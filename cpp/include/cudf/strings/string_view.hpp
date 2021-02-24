@@ -50,20 +50,6 @@ constexpr int8_t UNKNOWN_CHAR_WIDTH{-1};
  */
 constexpr int8_t VARIABLE_CHAR_WIDTH{0};
 
-namespace strings {
-namespace detail {
-/**
- * @brief string value for sentinel which is used in min, max reduction
- * operators
- * This sentinel string value is the highest possible valid UTF-8 encoded
- * character. This serves as identity value for maximum operator on string
- * values. Also, this char pointer serves as valid device pointer of identity
- * value for minimum operator on string values.
- */
-static __constant__ char max_string_sentinel[5]{"\xF7\xBF\xBF\xBF"};
-}  // namespace detail
-}  // namespace strings
-
 /**
  * @brief A non-owning, immutable view of device data that is a variable length
  * char array representing a UTF-8 string.
@@ -310,18 +296,8 @@ class string_view {
    *
    * @return An empty string
    */
-  CUDA_HOST_DEVICE_CALLABLE static string_view min() { return string_view(); }
-
-  CUDA_HOST_DEVICE_CALLABLE static string_view max()
-  {
-    const char* psentinel{nullptr};
-#if defined(__CUDA_ARCH__)
-    psentinel = &cudf::strings::detail::max_string_sentinel[0];
-#else
-    CUDA_TRY(cudaGetSymbolAddress((void**)&psentinel, cudf::strings::detail::max_string_sentinel));
-#endif
-    return string_view(psentinel, 4);
-  }
+  CUDA_HOST_DEVICE_CALLABLE static string_view min();
+  CUDA_HOST_DEVICE_CALLABLE static string_view max();
 
   /**
    * @brief Default constructor represents an empty string.
