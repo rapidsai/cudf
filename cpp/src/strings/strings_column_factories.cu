@@ -87,9 +87,9 @@ std::unique_ptr<column> make_strings_column(device_span<string_view const> strin
 }
 
 // Create a strings-type column from device vector of chars and vector of offsets.
-std::unique_ptr<column> make_strings_column(cudf::device_span<char> strings,
-                                            cudf::device_span<size_type> offsets,
-                                            cudf::device_span<bitmask_type> valid_mask,
+std::unique_ptr<column> make_strings_column(cudf::device_span<char const> strings,
+                                            cudf::device_span<size_type const> offsets,
+                                            cudf::device_span<bitmask_type const> valid_mask,
                                             size_type null_count,
                                             rmm::cuda_stream_view stream,
                                             rmm::mr::device_memory_resource* mr)
@@ -106,42 +106,6 @@ std::unique_ptr<column> make_strings_column(cudf::device_span<char> strings,
                                                     std::move(null_mask),
                                                     stream,
                                                     mr);
-}
-
-// Create strings column from host vectors
-std::unique_ptr<column> make_strings_column(std::vector<char> const& strings,
-                                            std::vector<size_type> const& offsets,
-                                            std::vector<bitmask_type> const& null_mask,
-                                            size_type null_count,
-                                            rmm::cuda_stream_view stream,
-                                            rmm::mr::device_memory_resource* mr)
-{
-  rmm::device_uvector<char> d_strings{strings.size(), stream};
-  rmm::device_uvector<size_type> d_offsets{offsets.size(), stream};
-  rmm::device_uvector<bitmask_type> d_null_mask{null_mask.size(), stream};
-
-  CUDA_TRY(cudaMemcpyAsync(
-    d_strings.data(), strings.data(), strings.size(), cudaMemcpyDefault, stream.value()));
-  CUDA_TRY(cudaMemcpyAsync(d_offsets.data(),
-                           offsets.data(),
-                           offsets.size() * sizeof(size_type),
-                           cudaMemcpyDefault,
-                           stream.value()));
-  CUDA_TRY(cudaMemcpyAsync(d_null_mask.data(),
-                           null_mask.data(),
-                           null_mask.size() * sizeof(bitmask_type),
-                           cudaMemcpyDefault,
-                           stream.value()));
-
-  auto ret = make_strings_column(device_span<char>{d_strings},
-                                 device_span<size_type>{d_offsets},
-                                 null_count,
-                                 d_null_mask.release(),
-                                 stream,
-                                 mr);
-
-  stream.synchronize();
-  return ret;
 }
 
 //

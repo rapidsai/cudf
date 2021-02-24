@@ -146,10 +146,6 @@ TEST_F(StringsFactoriesTest, CreateColumnFromOffsets)
   EXPECT_EQ(memcmp(h_buffer.data(), h_chars_data.data(), h_buffer.size()), 0);
   EXPECT_EQ(
     memcmp(h_offsets.data(), h_offsets_data.data(), h_offsets.size() * sizeof(cudf::size_type)), 0);
-
-  // check host version of the factory too
-  auto column2 = cudf::make_strings_column(h_buffer, h_offsets, h_nulls, null_count);
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(column->view(), column2->view());
 }
 
 TEST_F(StringsFactoriesTest, CreateScalar)

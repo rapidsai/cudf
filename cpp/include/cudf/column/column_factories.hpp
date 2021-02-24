@@ -414,47 +414,12 @@ std::unique_ptr<column> make_strings_column(
  * columns' device memory.
  */
 std::unique_ptr<column> make_strings_column(
-  cudf::device_span<char> strings,
-  cudf::device_span<size_type> offsets,
-  cudf::device_span<bitmask_type> null_mask = {},
-  size_type null_count                      = cudf::UNKNOWN_NULL_COUNT,
-  rmm::cuda_stream_view stream              = rmm::cuda_stream_default,
-  rmm::mr::device_memory_resource* mr       = rmm::mr::get_current_device_resource());
-
-/**
- * @brief Construct STRING type column given a host vector of chars encoded as UTF-8, a host vector
- * of byte offsets identifying individual strings within the char vector, and an optional null
- * bitmask.
- *
- * `offsets.front()` must always be zero.
- *
- * The total number of char bytes must not exceed the maximum size of size_type. Use the
- * strings_column_view class to perform strings operations on this type of column.
- *
- * This function makes a deep copy of the strings, offsets, null_mask to create a new column.
- *
- * @throws std::bad_alloc if device memory allocation fails
- *
- * @param[in] strings Host vector of chars in host memory. This char array is expected to be
- *  UTF-8 encoded characters.
- * @param[in] offsets Host vector of byte offsets in host memory. The number of elements is one
- *  more  than the total number of strings so the `offsets.back()` is the total number of bytes in
- *  the strings array. `offsets.front()` must always be 0 to point to the beginning of `strings`.
- * @param[in] null_mask Host vector containing the null element indicator bitmask. Arrow format for
- *  nulls is used for interpeting this bitmask.
- * @param[in] null_count The number of null string entries. If equal to `UNKNOWN_NULL_COUNT`, the
- *  null count will be computed dynamically on the first invocation of `column::null_count()`
- * @param[in] stream CUDA stream used for device memory operations and kernel launches.
- * @param[in] mr Device memory resource used for allocation of the column's `null_mask` and children
- * columns' device memory.
- */
-std::unique_ptr<column> make_strings_column(
-  const std::vector<char>& strings,
-  const std::vector<size_type>& offsets,
-  const std::vector<bitmask_type>& null_mask = {},
-  size_type null_count                       = cudf::UNKNOWN_NULL_COUNT,
-  rmm::cuda_stream_view stream               = rmm::cuda_stream_default,
-  rmm::mr::device_memory_resource* mr        = rmm::mr::get_current_device_resource());
+  cudf::device_span<char const> strings,
+  cudf::device_span<size_type const> offsets,
+  cudf::device_span<bitmask_type const> null_mask = {},
+  size_type null_count                            = cudf::UNKNOWN_NULL_COUNT,
+  rmm::cuda_stream_view stream                    = rmm::cuda_stream_default,
+  rmm::mr::device_memory_resource* mr             = rmm::mr::get_current_device_resource());
 
 /**
  * @brief Constructs a STRING type column given offsets column, chars columns, and null mask and
