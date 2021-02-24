@@ -4887,6 +4887,11 @@ class StringColumn(column.ColumnBase):
         format = "%D days %H:%M:%S"
         return self._as_datetime_or_timedelta_column(out_dtype, format)
 
+    def as_decimal_column(
+        self, dtype: Dtype, **kwargs
+    ) -> "cudf.core.column.DecimalColumn":
+        return str_cast.to_decimal(self, dtype)
+
     def as_string_column(self, dtype: Dtype, format=None) -> StringColumn:
         return self
 

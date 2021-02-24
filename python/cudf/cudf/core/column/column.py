@@ -1015,6 +1015,8 @@ class ColumnBase(Column, Serializable):
                     "Casting interval columns not currently supported"
                 )
             return self
+        elif is_decimal_dtype(dtype):
+            return self.as_decimal_column(dtype, **kwargs)
         elif np.issubdtype(dtype, np.datetime64):
             return self.as_datetime_column(dtype, **kwargs)
         elif np.issubdtype(dtype, np.timedelta64):
