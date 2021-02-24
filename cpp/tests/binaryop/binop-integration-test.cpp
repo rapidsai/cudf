@@ -22,6 +22,7 @@
 #include <cudf/fixed_point/fixed_point.hpp>
 #include <cudf/scalar/scalar_factories.hpp>
 #include <cudf/types.hpp>
+#include <cudf/utilities/error.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
 
 #include <cudf_test/column_utilities.hpp>
@@ -2123,6 +2124,9 @@ TYPED_TEST(FixedPointTestBothReps, FixedPointBinaryOpDiv2)
   auto const result = cudf::binary_operation(lhs, rhs, cudf::binary_operator::DIV, {});
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
+  auto output_type = cudf::data_type{type_to_id<decimalXX>(), scale_type{1}};
+  EXPECT_THROW(cudf::binary_operation(lhs, rhs, cudf::binary_operator::DIV, output_type),
+               cudf::logic_error);
 }
 
 TYPED_TEST(FixedPointTestBothReps, FixedPointBinaryOpDiv3)
