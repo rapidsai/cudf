@@ -199,4 +199,25 @@ TEST_F(JsonTests, GetJsonObject)
 
     cudf::test::print(*result);
   }
+
+  {
+    // spark behavioral difference.
+    //  standard:     "fiction"
+    //  spark:        fiction
+    cudf::test::strings_column_wrapper input{json_string};
+    std::string json_path("$.store.book[2].category");
+    auto result = cudf::strings::get_json_object(cudf::strings_column_view(input), json_path);
+
+    cudf::test::print(*result);
+  }
+
+  {
+    char const* str = "{\"a\" : \"b\"}";
+    cudf::test::strings_column_wrapper input{{str, str, str, str}, {1, 0, 1, 0}};
+
+    std::string json_path("$.a");
+    auto result = cudf::strings::get_json_object(cudf::strings_column_view(input), json_path);
+
+    cudf::test::print(*result);
+  }
 }

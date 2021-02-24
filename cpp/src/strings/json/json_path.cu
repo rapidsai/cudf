@@ -1,5 +1,6 @@
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/get_value.cuh>
+#include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/utilities/cuda.cuh>
 #include <cudf/scalar/scalar.hpp>
 #include <cudf/scalar/scalar_factories.hpp>
@@ -7,14 +8,13 @@
 #include <cudf/types.hpp>
 #include <cudf/utilities/error.hpp>
 
+#include <io/utilities/column_type_histogram.hpp>
 #include <io/utilities/parsing_utils.cuh>
 
 #include <rmm/device_uvector.hpp>
 #include <rmm/exec_policy.hpp>
 
 #include <cudf_test/column_wrapper.hpp>
-
-// #include "db_test.cuh"
 
 namespace cudf {
 namespace strings {
@@ -28,6 +28,30 @@ namespace {
 
 // #define DEBUG_NEWLINE  "\n"
 // #define DEBUG_NEWLINE_LEN (1)
+
+// temporary. spark doesn't strictly follow the JSONPath spec.
+// I think this probably should be a configurable enum to control
+// the kind of output you get and what features are supported.
+//
+// Current known differences:
+// - When returning a string value as a single element, Spark strips the quotes.
+//   standard:   "whee"
+//   spark:      whee
+//
+// - Spark only supports the wildcard operator when in a subscript, eg  [*]
+//   It does not handle .*
+//
+#define __SPARK_BEHAVIORS
+
+// Other, non-spark known differences:
+//
+// - In jsonpath_ng, name subscripts can use double quotes instead of the standard
+//   single quotes in the query string.
+//   standard:      $.thing['subscript']
+//   jsonpath_ng:   $.thing["subscript"]
+//
+//  Currently, this code only allows single-quotes but that can be easily expanded.
+//
 
 using namespace cudf;
 
@@ -317,7 +341,7 @@ class json_state : private parser {
 
   CUDA_HOST_DEVICE_CALLABLE json_state(json_state const& j) : parser(j) { *this = j; }
 
-  CUDA_HOST_DEVICE_CALLABLE parse_result extract_element(json_output* output)
+  CUDA_HOST_DEVICE_CALLABLE parse_result extract_element(json_output* output, bool list_element)
   {
     // collapse the current element into a json_string
 
@@ -329,6 +353,15 @@ class json_state : private parser {
       pos = cur_el_start;
       if (parse_value() != parse_result::SUCCESS) { return parse_result::ERROR; }
       end = pos;
+
+#if defined(__SPARK_BEHAVIORS)
+      // spark/hive-specific behavior.  if this is a non-list-element wrapped in quotes,
+      // strip them
+      if (!list_element && *start == '\"' && *(end - 1) == '\"') {
+        start++;
+        end--;
+      }
+#endif
     }
     // otherwise, march through everything inside
     else {
@@ -373,7 +406,7 @@ class json_state : private parser {
     return parse_result::SUCCESS;
   }
 
-  CUDA_HOST_DEVICE_CALLABLE parse_result skip_element() { return extract_element(nullptr); }
+  CUDA_HOST_DEVICE_CALLABLE parse_result skip_element() { return extract_element(nullptr, false); }
 
   json_element_type element;
 
@@ -498,6 +531,9 @@ class path_state : private parser {
         path_operator op;
         json_string term{".[", 2};
         if (parse_path_name(op.name, term)) {
+          // this is another potential use case for __SPARK_BEHAVIORS / configurability
+          // Spark currently only handles the wildcard operator inside [*], it does
+          // not handle .*
           if (op.name.len == 1 && op.name.str[0] == '*') {
             op.type = path_operator_type::CHILD_WILDCARD;
           } else {
@@ -621,18 +657,18 @@ CUDA_HOST_DEVICE_CALLABLE parse_result parse_json_path(json_state& _j_state,
     json_state j_state;
     path_operator const* commands;
     bool list_element;
+    int element_count;
     bool state_flag;
-    int count;
   };
   context stack[max_command_stack_depth];
   int stack_pos     = 0;
   auto push_context = [&stack, &stack_pos](json_state const& _j_state,
                                            path_operator const* _commands,
                                            bool _list_element = false,
-                                           bool _state_flag   = false,
-                                           int _count         = 0) {
+                                           int _element_count = 0,
+                                           bool _state_flag   = false) {
     if (stack_pos == max_command_stack_depth - 1) { return false; }
-    stack[stack_pos++] = context{_j_state, _commands, _list_element, _state_flag, _count};
+    stack[stack_pos++] = context{_j_state, _commands, _list_element, _element_count, _state_flag};
     return true;
   };
   auto pop_context = [&stack, &stack_pos](context& c) {
@@ -665,7 +701,7 @@ CUDA_HOST_DEVICE_CALLABLE parse_result parse_json_path(json_state& _j_state,
         if (last_result == parse_result::SUCCESS) {
           PARSE_TRY(ctx.j_state.next_matching_element(op.name, true));
           if (last_result == parse_result::SUCCESS) {
-            push_context(ctx.j_state, ctx.commands + 1, ctx.list_element);
+            push_context(ctx.j_state, ctx.commands + 1, ctx.list_element, ctx.element_count);
           }
         }
       } break;
@@ -695,12 +731,12 @@ CUDA_HOST_DEVICE_CALLABLE parse_result parse_json_path(json_state& _j_state,
           }
 
           // re-push ourselves
-          push_context(ctx.j_state, ctx.commands, false, true);
+          push_context(ctx.j_state, ctx.commands, false, 0, true);
           // push the next command
-          push_context(ctx.j_state, ctx.commands + 1);
+          push_context(ctx.j_state, ctx.commands + 1, true, 0);
         } else {
           // if we actually processed something to the output, increment count
-          if (last_result != parse_result::EMPTY) { ctx.count++; }
+          if (last_result != parse_result::EMPTY) { ctx.element_count++; }
 
           // next element
           PARSE_TRY(ctx.j_state.next_matching_element(op.name, false));
@@ -711,9 +747,9 @@ CUDA_HOST_DEVICE_CALLABLE parse_result parse_json_path(json_state& _j_state,
           }
 
           // re-push ourselves
-          push_context(ctx.j_state, ctx.commands, false, true);
+          push_context(ctx.j_state, ctx.commands, false, 0, true);
           // push the next command
-          push_context(ctx.j_state, ctx.commands + 1, ctx.count > 0 ? true : false);
+          push_context(ctx.j_state, ctx.commands + 1, true, ctx.element_count);
         }
       } break;
 
@@ -731,7 +767,7 @@ CUDA_HOST_DEVICE_CALLABLE parse_result parse_json_path(json_state& _j_state,
               PARSE_TRY(ctx.j_state.next_matching_element(any, false));
               if (last_result == parse_result::EMPTY) { break; }
             }
-            push_context(ctx.j_state, ctx.commands + 1, ctx.list_element);
+            push_context(ctx.j_state, ctx.commands + 1, ctx.list_element, ctx.element_count);
           }
         }
       } break;
@@ -741,8 +777,10 @@ CUDA_HOST_DEVICE_CALLABLE parse_result parse_json_path(json_state& _j_state,
 
       // END case
       default: {
-        if (ctx.list_element) { output.add_output({"," DEBUG_NEWLINE, 1 + DEBUG_NEWLINE_LEN}); }
-        PARSE_TRY(ctx.j_state.extract_element(&output));
+        if (ctx.list_element && ctx.element_count > 0) {
+          output.add_output({"," DEBUG_NEWLINE, 1 + DEBUG_NEWLINE_LEN});
+        }
+        PARSE_TRY(ctx.j_state.extract_element(&output, ctx.list_element));
       } break;
     }
   }
@@ -759,6 +797,8 @@ CUDA_HOST_DEVICE_CALLABLE json_output get_json_object_single(char const* input,
                                                              char* out_buf,
                                                              size_t out_buf_size)
 {
+  if (input_len == 0) { return json_output{0, 0, out_buf}; }
+
   json_state j_state(input, input_len);
   json_output output{out_buf_size, 0, out_buf};
 
@@ -839,8 +879,8 @@ std::unique_ptr<cudf::column> get_json_object(cudf::strings_column_view const& c
   return make_strings_column(col.size(),
                              std::move(offsets),
                              std::move(chars),
-                             UNKNOWN_NULL_COUNT,
-                             rmm::device_buffer{},
+                             col.null_count(),
+                             cudf::detail::copy_bitmask(col.parent(), stream, mr),
                              stream,
                              mr);
 }
