@@ -20,7 +20,6 @@
 #include <cudf/column/column_factories.hpp>
 #include <cudf/strings/detail/utilities.hpp>
 #include <cudf/strings/strings_column_view.hpp>
-#include <cudf/utilities/error.hpp>
 #include <cudf/utilities/span.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
@@ -77,27 +76,12 @@ std::unique_ptr<cudf::column> gather(
   auto const strings_count = strings.size();
   if (output_count == 0) return make_empty_strings_column(stream, mr);
 
-  // allocate offsets column
+  // allocate offsets column and use memory to compute string size in each output row
   auto out_offsets_column = make_numeric_column(
     data_type{type_id::INT32}, output_count + 1, mask_state::UNALLOCATED, stream, mr);
   auto const d_out_offsets = out_offsets_column->mutable_view().template data<int32_t>();
-
-  if (strings_count == 0) {
-    // Gathering from an empty strings column, so generate null offsets with no chars.
-    CUDF_EXPECTS(NullifyOutOfBounds, "gathering from an empty strings column");
-    CUDA_TRY(cudaMemsetAsync(
-      d_out_offsets, 0, out_offsets_column->size() * sizeof(int32_t), stream.value()));
-    return make_strings_column(output_count,
-                               std::move(out_offsets_column),
-                               create_chars_child_column(0, 0, 0, stream, mr),
-                               0,
-                               rmm::device_buffer{0, stream, mr},
-                               stream,
-                               mr);
-  }
-
-  // use output offsets memory to compute string size in each output row
-  auto const d_in_offsets = strings.offsets().data<int32_t>() + strings.offset();
+  auto const d_in_offsets =
+    (strings_count > 0) ? strings.offsets().data<int32_t>() + strings.offset() : nullptr;
   thrust::transform(rmm::exec_policy(stream),
                     begin,
                     end,
@@ -130,7 +114,7 @@ std::unique_ptr<cudf::column> gather(
   // fill in chars
   cudf::detail::device_span<int32_t const> const d_out_offsets_span(d_out_offsets,
                                                                     output_count + 1);
-  auto const d_in_chars = strings.chars().data<char>();
+  auto const d_in_chars = (strings_count > 0) ? strings.chars().data<char>() : nullptr;
   auto gather_chars_fn =
     [d_out_offsets_span, begin, d_in_offsets, d_in_chars] __device__(size_type out_char_idx) {
       // find output row index for this output char index
