@@ -31,6 +31,11 @@ endif()
 
 project(CUDF VERSION 0.19.0 LANGUAGES C CXX)
 
+# Needed because GoogleBenchmark changes the state of FindThreads.cmake,
+# causing subsequent runs to have different values for the `Threads::Threads` target.
+# Setting this flag ensures `Threads::Threads` is the same value in first run and subsequent runs.
+set(THREADS_PREFER_PTHREAD_FLAG ON)
+
 ###################################################################################################
 # - build options ---------------------------------------------------------------------------------
 
@@ -126,65 +131,6 @@ include(cmake/thirdparty/CUDF_GetDLPack.cmake)
 include(cmake/thirdparty/CUDF_GetLibcudacxx.cmake)
 # Stringify libcudf and libcudacxx headers used in JIT operations
 include(cmake/Modules/StringifyJITHeaders.cmake)
-
-if (CUDF_BUILD_TESTS OR CUDF_BUILD_BENCHMARKS)
-    # Find or install GoogleTest
-    CPMFindPackage(NAME GTest
-        VERSION         1.10.0
-        GIT_REPOSITORY  https://github.com/google/googletest.git
-        GIT_TAG         release-1.10.0
-        GIT_SHALLOW     TRUE
-        OPTIONS         "INSTALL_GTEST OFF"
-        # googletest >= 1.10.0 provides a cmake config file -- use it if it exists
-        FIND_PACKAGE_ARGUMENTS "CONFIG")
-    # Add GTest aliases if they don't already exist.
-    # Assumes if GTest::gtest doesn't exist, the others don't either.
-    # TODO: Is this always a valid assumption?
-    if(NOT TARGET GTest::gtest)
-        add_library(GTest::gtest ALIAS gtest)
-        add_library(GTest::gmock ALIAS gmock)
-        add_library(GTest::gtest_main ALIAS gtest_main)
-        add_library(GTest::gmock_main ALIAS gmock_main)
-    endif()
-    if(GTest_ADDED)
-        install(TARGETS gmock
-                        gtest
-                        gmock_main
-                        gtest_main
-            DESTINATION lib
-            EXPORT cudf-targets)
-    endif()
-endif()
-
-###################################################################################################
-# - add tests -------------------------------------------------------------------------------------
-
-if(CUDF_BUILD_TESTS)
-    # include CTest module -- automatically calls enable_testing()
-    include(CTest)
-    add_subdirectory(tests)
-endif()
-
-###################################################################################################
-# - add benchmarks --------------------------------------------------------------------------------
-
-if(CUDF_BUILD_BENCHMARKS)
-    # Find or install GoogleBench
-    CPMFindPackage(NAME benchmark
-        VERSION         1.5.2
-        GIT_REPOSITORY  https://github.com/google/benchmark.git
-        GIT_TAG         v1.5.2
-        GIT_SHALLOW     TRUE
-        OPTIONS         "BENCHMARK_ENABLE_TESTING OFF"
-                        "BENCHMARK_ENABLE_INSTALL OFF")
-    if(benchmark_ADDED)
-        install(TARGETS benchmark
-                        benchmark_main
-            DESTINATION lib
-            EXPORT cudf-targets)
-    endif()
-    add_subdirectory(benchmarks)
-endif()
 
 ###################################################################################################
 # - library targets -------------------------------------------------------------------------------
@@ -524,6 +470,69 @@ SECTIONS
 target_link_options(cudf PRIVATE "${CUDF_BINARY_DIR}/fatbin.ld")
 
 add_library(cudf::cudf ALIAS cudf)
+
+###################################################################################################
+# - tests and benchmarks --------------------------------------------------------------------------
+###################################################################################################
+
+if (CUDF_BUILD_TESTS OR CUDF_BUILD_BENCHMARKS)
+    # Find or install GoogleTest
+    CPMFindPackage(NAME GTest
+        VERSION         1.10.0
+        GIT_REPOSITORY  https://github.com/google/googletest.git
+        GIT_TAG         release-1.10.0
+        GIT_SHALLOW     TRUE
+        OPTIONS         "INSTALL_GTEST OFF"
+        # googletest >= 1.10.0 provides a cmake config file -- use it if it exists
+        FIND_PACKAGE_ARGUMENTS "CONFIG")
+    # Add GTest aliases if they don't already exist.
+    # Assumes if GTest::gtest doesn't exist, the others don't either.
+    # TODO: Is this always a valid assumption?
+    if(NOT TARGET GTest::gtest)
+        add_library(GTest::gtest ALIAS gtest)
+        add_library(GTest::gmock ALIAS gmock)
+        add_library(GTest::gtest_main ALIAS gtest_main)
+        add_library(GTest::gmock_main ALIAS gmock_main)
+    endif()
+    if(GTest_ADDED)
+        install(TARGETS gmock
+                        gtest
+                        gmock_main
+                        gtest_main
+            DESTINATION lib
+            EXPORT cudf-targets)
+    endif()
+endif()
+
+###################################################################################################
+# - add tests -------------------------------------------------------------------------------------
+
+if(CUDF_BUILD_TESTS)
+    # include CTest module -- automatically calls enable_testing()
+    include(CTest)
+    add_subdirectory(tests)
+endif()
+
+###################################################################################################
+# - add benchmarks --------------------------------------------------------------------------------
+
+if(CUDF_BUILD_BENCHMARKS)
+    # Find or install GoogleBench
+    CPMFindPackage(NAME benchmark
+        VERSION         1.5.2
+        GIT_REPOSITORY  https://github.com/google/benchmark.git
+        GIT_TAG         v1.5.2
+        GIT_SHALLOW     TRUE
+        OPTIONS         "BENCHMARK_ENABLE_TESTING OFF"
+                        "BENCHMARK_ENABLE_INSTALL OFF")
+    if(benchmark_ADDED)
+        install(TARGETS benchmark
+                        benchmark_main
+            DESTINATION lib
+            EXPORT cudf-targets)
+    endif()
+    add_subdirectory(benchmarks)
+endif()
 
 ###################################################################################################
 # - install targets -------------------------------------------------------------------------------
