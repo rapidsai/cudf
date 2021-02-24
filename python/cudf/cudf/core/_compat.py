@@ -6,4 +6,4 @@ from packaging import version
 PANDAS_VERSION = version.parse(pd.__version__)
 PANDAS_GE_100 = PANDAS_VERSION >= version.parse("1.0")
 PANDAS_GE_110 = PANDAS_VERSION >= version.parse("1.1")
-PANDAS_GE_120 = PANDAS_VERSION >= version.parse("1.2.0")
+PANDAS_GE_120 = PANDAS_VERSION >= version.parse("1.2")
