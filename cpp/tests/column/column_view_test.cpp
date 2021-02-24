@@ -58,22 +58,22 @@ struct ColumnViewAllTypesTests : public cudf::test::BaseFixture {
 TYPED_TEST_CASE(ColumnViewAllTypesTests, cudf::test::FixedWidthTypes);
 
 template <typename FromType, typename ToType, typename Iterator>
-void do_logical_cast(cudf::column_view const& column_view, Iterator begin, Iterator end)
+void do_bit_cast(cudf::column_view const& column_view, Iterator begin, Iterator end)
 {
   auto mutable_column_view = reinterpret_cast<cudf::mutable_column_view const&>(column_view);
   cudf::data_type to_type{cudf::type_to_id<ToType>()};
 
   if (std::is_same<FromType, ToType>::value) {
     // Cast to same to_type
-    auto output  = cudf::logical_cast(column_view, column_view.type());
-    auto output1 = cudf::logical_cast(mutable_column_view, mutable_column_view.type());
+    auto output  = cudf::bit_cast(column_view, column_view.type());
+    auto output1 = cudf::bit_cast(mutable_column_view, mutable_column_view.type());
     cudf::test::expect_columns_equal(output, column_view);
     cudf::test::expect_columns_equal(output1, mutable_column_view);
   } else if (std::is_same<rep_type_t<FromType>, ToType>::value ||
              std::is_same<FromType, rep_type_t<ToType>>::value) {
     // Cast integer to timestamp or vice versa
-    auto output  = cudf::logical_cast(column_view, to_type);
-    auto output1 = cudf::logical_cast(mutable_column_view, to_type);
+    auto output  = cudf::bit_cast(column_view, to_type);
+    auto output1 = cudf::bit_cast(mutable_column_view, to_type);
     cudf::test::fixed_width_column_wrapper<ToType, cudf::size_type> expected(begin, end);
     cudf::test::expect_columns_equal(output, expected);
     cudf::test::expect_columns_equal(output1, expected);
@@ -84,25 +84,25 @@ void do_logical_cast(cudf::column_view const& column_view, Iterator begin, Itera
       constexpr auto to_size   = sizeof(cudf::device_storage_type_t<ToType>);
       if (from_size == to_size) {
         // Cast from FromType to ToType
-        auto output1         = cudf::logical_cast(column_view, to_type);
-        auto output1_mutable = cudf::logical_cast(mutable_column_view, to_type);
+        auto output1         = cudf::bit_cast(column_view, to_type);
+        auto output1_mutable = cudf::bit_cast(mutable_column_view, to_type);
 
         // Cast back from ToType to FromType
         cudf::data_type from_type{cudf::type_to_id<FromType>()};
-        auto output2         = cudf::logical_cast(output1, from_type);
-        auto output2_mutable = cudf::logical_cast(output1_mutable, from_type);
+        auto output2         = cudf::bit_cast(output1, from_type);
+        auto output2_mutable = cudf::bit_cast(output1_mutable, from_type);
 
         cudf::test::expect_columns_equal(output2, column_view);
         cudf::test::expect_columns_equal(output2_mutable, mutable_column_view);
       } else {
         // Not allow to cast if sizes are mismatched
-        EXPECT_THROW(cudf::logical_cast(column_view, to_type), cudf::logic_error);
-        EXPECT_THROW(cudf::logical_cast(mutable_column_view, to_type), cudf::logic_error);
+        EXPECT_THROW(cudf::bit_cast(column_view, to_type), cudf::logic_error);
+        EXPECT_THROW(cudf::bit_cast(mutable_column_view, to_type), cudf::logic_error);
       }
     } else {
       // Not allow to cast if any of from/to types is not trivially copyable
-      EXPECT_THROW(cudf::logical_cast(column_view, to_type), cudf::logic_error);
-      EXPECT_THROW(cudf::logical_cast(mutable_column_view, to_type), cudf::logic_error);
+      EXPECT_THROW(cudf::bit_cast(column_view, to_type), cudf::logic_error);
+      EXPECT_THROW(cudf::bit_cast(mutable_column_view, to_type), cudf::logic_error);
     }
   }
 }
@@ -114,21 +114,21 @@ TYPED_TEST(ColumnViewAllTypesTests, LogicalCast)
 
   cudf::test::fixed_width_column_wrapper<TypeParam, cudf::size_type> input(begin, end);
 
-  do_logical_cast<TypeParam, int8_t>(input, begin, end);
-  do_logical_cast<TypeParam, int16_t>(input, begin, end);
-  do_logical_cast<TypeParam, int32_t>(input, begin, end);
-  do_logical_cast<TypeParam, int64_t>(input, begin, end);
-  do_logical_cast<TypeParam, float>(input, begin, end);
-  do_logical_cast<TypeParam, double>(input, begin, end);
-  do_logical_cast<TypeParam, bool>(input, begin, end);
-  do_logical_cast<TypeParam, cudf::duration_D>(input, begin, end);
-  do_logical_cast<TypeParam, cudf::duration_s>(input, begin, end);
-  do_logical_cast<TypeParam, cudf::duration_ms>(input, begin, end);
-  do_logical_cast<TypeParam, cudf::duration_us>(input, begin, end);
-  do_logical_cast<TypeParam, cudf::duration_ns>(input, begin, end);
-  do_logical_cast<TypeParam, cudf::timestamp_D>(input, begin, end);
-  do_logical_cast<TypeParam, cudf::timestamp_s>(input, begin, end);
-  do_logical_cast<TypeParam, cudf::timestamp_ms>(input, begin, end);
-  do_logical_cast<TypeParam, cudf::timestamp_us>(input, begin, end);
-  do_logical_cast<TypeParam, cudf::timestamp_ns>(input, begin, end);
+  do_bit_cast<TypeParam, int8_t>(input, begin, end);
+  do_bit_cast<TypeParam, int16_t>(input, begin, end);
+  do_bit_cast<TypeParam, int32_t>(input, begin, end);
+  do_bit_cast<TypeParam, int64_t>(input, begin, end);
+  do_bit_cast<TypeParam, float>(input, begin, end);
+  do_bit_cast<TypeParam, double>(input, begin, end);
+  do_bit_cast<TypeParam, bool>(input, begin, end);
+  do_bit_cast<TypeParam, cudf::duration_D>(input, begin, end);
+  do_bit_cast<TypeParam, cudf::duration_s>(input, begin, end);
+  do_bit_cast<TypeParam, cudf::duration_ms>(input, begin, end);
+  do_bit_cast<TypeParam, cudf::duration_us>(input, begin, end);
+  do_bit_cast<TypeParam, cudf::duration_ns>(input, begin, end);
+  do_bit_cast<TypeParam, cudf::timestamp_D>(input, begin, end);
+  do_bit_cast<TypeParam, cudf::timestamp_s>(input, begin, end);
+  do_bit_cast<TypeParam, cudf::timestamp_ms>(input, begin, end);
+  do_bit_cast<TypeParam, cudf::timestamp_us>(input, begin, end);
+  do_bit_cast<TypeParam, cudf::timestamp_ns>(input, begin, end);
 }

@@ -592,7 +592,7 @@ constexpr inline bool is_nested(data_type type)
 }
 
 template <typename FromType>
-struct is_logically_castable_to_impl {
+struct is_bit_castable_to_impl {
   template <typename ToType,
             typename std::enable_if_t<cuda::std::is_same_v<ToType, cudf::string_view>>* = nullptr>
   constexpr bool operator()()
@@ -615,7 +615,7 @@ struct is_logically_castable_to_impl {
   }
 };
 
-struct is_logically_castable_from_impl {
+struct is_bit_castable_from_impl {
   template <typename FromType,
             typename std::enable_if_t<cuda::std::is_same_v<FromType, cudf::string_view>>* = nullptr>
   constexpr bool operator()(data_type)
@@ -628,26 +628,26 @@ struct is_logically_castable_from_impl {
     typename std::enable_if_t<not cuda::std::is_same_v<FromType, cudf::string_view>>* = nullptr>
   constexpr bool operator()(data_type to)
   {
-    return cudf::type_dispatcher(to, is_logically_castable_to_impl<FromType>{});
+    return cudf::type_dispatcher(to, is_bit_castable_to_impl<FromType>{});
   }
 };
 
 /**
- * @brief Indicates whether `from` is logically castable to `to`.
+ * @brief Indicates whether `from` is bit-castable to `to`.
  *
- * This casting is based on bit_cast. Data types that have the same size and are trivially
- * copyable are eligible for logical cast.
+ * This casting is based on std::bit_cast. Data types that have the same size and are trivially
+ * copyable are eligible for this casting.
  *
- * See `cudf::logical_cast()` which returns a zero-copy `column_view` when casting between
- * logically castable types.
+ * See `cudf::bit_cast()` which returns a zero-copy `column_view` when casting between
+ * bit-castable types.
  *
  * @param from The `data_type` to convert from
  * @param to The `data_type` to convert to
- * @return `true` if the types are logically castable
+ * @return `true` if the types are castable
  */
-constexpr bool is_logically_castable(data_type from, data_type to)
+constexpr bool is_bit_castable(data_type from, data_type to)
 {
-  return type_dispatcher(from, is_logically_castable_from_impl{}, to);
+  return type_dispatcher(from, is_bit_castable_from_impl{}, to);
 }
 
 template <typename From, typename To>
