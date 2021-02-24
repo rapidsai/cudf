@@ -16,17 +16,10 @@
 
 function(find_and_configure_rmm VERSION)
 
-    # If building against a local RMM source repo without installing,
-    # set the RMM_HOME and RMM_ROOT environment variables to the source
-    # and binary dirs, i.e. the git repo root and build dir, respectively.
-    if(ARGC GREATER 2 AND (ARGV1 AND ARGV2))
-        set(BUILD_TESTS OFF)
-        set(BUILD_BENCHMARKS OFF)
-        add_subdirectory("${ARGV1}" "${ARGV2}" EXCLUDE_FROM_ALL)
-        return()
-    endif()
-
-    # Alteratively, set `-DCPM_rmm_SOURCE=/path/to/rmm` in the CMake configure flags.
+    # Consumers have two options for local source builds:
+    # 1. Pass `-D CPM_rmm_SOURCE=/path/to/rmm` to build a local RMM source tree
+    # 2. Pass `-D CMAKE_PREFIX_PATH=/path/to/rmm/build` to use an existing local
+    #    RMM build directory as the install location for find_package(rmm)
 
     CPMFindPackage(NAME rmm
         VERSION         ${VERSION}
@@ -39,8 +32,13 @@ function(find_and_configure_rmm VERSION)
                         "CMAKE_CUDA_ARCHITECTURES ${CMAKE_CUDA_ARCHITECTURES}"
                         "DISABLE_DEPRECATION_WARNING ${DISABLE_DEPRECATION_WARNING}"
     )
+
+    if(NOT rmm_BINARY_DIR IN_LIST CMAKE_PREFIX_PATH)
+        list(APPEND CMAKE_PREFIX_PATH "${rmm_BINARY_DIR}")
+        set(CMAKE_PREFIX_PATH ${CMAKE_PREFIX_PATH} PARENT_SCOPE)
+    endif()
 endfunction()
 
 set(CUDF_MIN_VERSION_rmm "${CUDF_VERSION_MAJOR}.${CUDF_VERSION_MINOR}")
 
-find_and_configure_rmm(${CUDF_MIN_VERSION_rmm} "$ENV{RMM_HOME}" "$ENV{RMM_ROOT}")
+find_and_configure_rmm(${CUDF_MIN_VERSION_rmm})
