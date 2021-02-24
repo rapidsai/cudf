@@ -38,31 +38,31 @@ include(${CUDF_SOURCE_DIR}/cmake/Modules/SetGPUArchs.cmake)
 message(STATUS "CUDF: Building CUDF for GPU architectures: ${CMAKE_CUDA_ARCHITECTURES}")
 
 if(CMAKE_COMPILER_IS_GNUCXX)
-    string(APPEND CMAKE_CXX_FLAGS " -Wall -Werror -Wno-unknown-pragmas -Wno-error=deprecated-declarations")
+    list(APPEND CUDF_CXX_FLAGS -Wall -Werror -Wno-unknown-pragmas -Wno-error=deprecated-declarations)
     if(CUDF_BUILD_TESTS OR CUDF_BUILD_BENCHMARKS)
         # Suppress parentheses warning which causes gmock to fail
-        string(APPEND CMAKE_CUDA_FLAGS " -Xcompiler=-Wno-parentheses")
+        list(APPEND CUDF_CUDA_FLAGS -Xcompiler=-Wno-parentheses)
     endif()
 endif()
 
-string(APPEND CMAKE_CUDA_FLAGS " --expt-extended-lambda --expt-relaxed-constexpr")
+list(APPEND CUDF_CUDA_FLAGS --expt-extended-lambda --expt-relaxed-constexpr)
 
 # set warnings as errors
-string(APPEND CMAKE_CUDA_FLAGS " -Werror=cross-execution-space-call")
-string(APPEND CMAKE_CUDA_FLAGS " -Xcompiler=-Wall,-Werror,-Wno-error=deprecated-declarations")
+list(APPEND CUDF_CUDA_FLAGS -Werror=cross-execution-space-call)
+list(APPEND CUDF_CUDA_FLAGS -Xcompiler=-Wall,-Werror,-Wno-error=deprecated-declarations)
 
 if(DISABLE_DEPRECATION_WARNING)
-    string(APPEND CMAKE_CXX_FLAGS " -Wno-deprecated-declarations")
-    string(APPEND CMAKE_CUDA_FLAGS " -Xcompiler=-Wno-deprecated-declarations")
+    list(APPEND CUDF_CXX_FLAGS -Wno-deprecated-declarations)
+    list(APPEND CUDF_CUDA_FLAGS -Xcompiler=-Wno-deprecated-declarations)
 endif()
 
 # Option to enable line info in CUDA device compilation to allow introspection when profiling / memchecking
 if(CUDA_ENABLE_LINEINFO)
-    string(APPEND CMAKE_CUDA_FLAGS " -lineinfo")
+    list(APPEND CUDF_CUDA_FLAGS -lineinfo)
 endif()
 
 # Debug options
 if(CMAKE_BUILD_TYPE MATCHES Debug)
     message(VERBOSE "CUDF: Building with debugging flags")
-    string(APPEND CMAKE_CUDA_FLAGS " -G -Xcompiler=-rdynamic")
+    list(APPEND CUDF_CUDA_FLAGS -G -Xcompiler=-rdynamic)
 endif()
