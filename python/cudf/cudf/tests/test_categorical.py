@@ -6,10 +6,8 @@ import numpy as np
 import pandas as pd
 import pytest
 
-import cudf as gd
-from cudf.core import DataFrame, Series
+import cudf
 from cudf.core._compat import PANDAS_GE_110
-from cudf.core.index import as_index
 from cudf.tests.utils import assert_eq, assert_exceptions_equal
 
 
@@ -22,10 +20,10 @@ def pd_str_cat():
 
 def test_categorical_basic():
     cat = pd.Categorical(["a", "a", "b", "c", "a"], categories=["a", "b", "c"])
-    cudf_cat = as_index(cat)
+    cudf_cat = cudf.Index(cat)
 
     pdsr = pd.Series(cat, index=["p", "q", "r", "s", "t"])
-    sr = Series(cat, index=["p", "q", "r", "s", "t"])
+    sr = cudf.Series(cat, index=["p", "q", "r", "s", "t"])
     assert_eq(pdsr.cat.codes, sr.cat.codes, check_dtype=False)
 
     # Test attributes
@@ -53,7 +51,7 @@ def test_categorical_integer():
         pytest.xfail(reason="pandas >=1.1 required")
     cat = pd.Categorical(["a", "_", "_", "c", "a"], categories=["a", "b", "c"])
     pdsr = pd.Series(cat)
-    sr = Series(cat)
+    sr = cudf.Series(cat)
     np.testing.assert_array_equal(
         cat.codes, sr.cat.codes.astype(cat.codes.dtype).fillna(-1).to_array()
     )
@@ -81,7 +79,7 @@ def test_categorical_compare_unordered():
     cat = pd.Categorical(["a", "a", "b", "c", "a"], categories=["a", "b", "c"])
     pdsr = pd.Series(cat)
 
-    sr = Series(cat)
+    sr = cudf.Series(cat)
 
     # test equal
     out = sr == sr
@@ -112,12 +110,12 @@ def test_categorical_compare_ordered():
         ["a", "a", "b", "c", "a"], categories=["a", "b", "c"], ordered=True
     )
     pdsr1 = pd.Series(cat1)
-    sr1 = Series(cat1)
+    sr1 = cudf.Series(cat1)
     cat2 = pd.Categorical(
         ["a", "b", "a", "c", "b"], categories=["a", "b", "c"], ordered=True
     )
     pdsr2 = pd.Series(cat2)
-    sr2 = Series(cat2)
+    sr2 = cudf.Series(cat2)
 
     # test equal
     out = sr1 == sr1
@@ -142,7 +140,7 @@ def test_categorical_compare_ordered():
 def test_categorical_binary_add():
     cat = pd.Categorical(["a", "a", "b", "c", "a"], categories=["a", "b", "c"])
     pdsr = pd.Series(cat)
-    sr = Series(cat)
+    sr = cudf.Series(cat)
 
     assert_exceptions_equal(
         lfunc=operator.add,
@@ -157,7 +155,7 @@ def test_categorical_binary_add():
 def test_categorical_unary_ceil():
     cat = pd.Categorical(["a", "a", "b", "c", "a"], categories=["a", "b", "c"])
     pdsr = pd.Series(cat)
-    sr = Series(cat)
+    sr = cudf.Series(cat)
 
     assert_exceptions_equal(
         lfunc=getattr,
@@ -176,7 +174,7 @@ def test_categorical_element_indexing():
     """
     cat = pd.Categorical(["a", "a", "b", "c", "a"], categories=["a", "b", "c"])
     pdsr = pd.Series(cat)
-    sr = Series(cat)
+    sr = cudf.Series(cat)
     assert_eq(pdsr, sr)
     assert_eq(pdsr.cat.codes, sr.cat.codes, check_dtype=False)
 
@@ -188,7 +186,7 @@ def test_categorical_masking():
     """
     cat = pd.Categorical(["a", "a", "b", "c", "a"], categories=["a", "b", "c"])
     pdsr = pd.Series(cat)
-    sr = Series(cat)
+    sr = cudf.Series(cat)
 
     # check scalar comparison
     expect_matches = pdsr == "a"
@@ -208,7 +206,7 @@ def test_categorical_masking():
 
 
 def test_df_cat_set_index():
-    df = DataFrame()
+    df = cudf.DataFrame()
     df["a"] = pd.Categorical(list("aababcabbc"), categories=list("abc"))
     df["b"] = np.arange(len(df))
     got = df.set_index("a")
@@ -220,7 +218,7 @@ def test_df_cat_set_index():
 
 
 def test_df_cat_sort_index():
-    df = DataFrame()
+    df = cudf.DataFrame()
     df["a"] = pd.Categorical(list("aababcabbc"), categories=list("abc"))
     df["b"] = np.arange(len(df))
 
@@ -231,7 +229,7 @@ def test_df_cat_sort_index():
 
 
 def test_cat_series_binop_error():
-    df = DataFrame()
+    df = cudf.DataFrame()
     df["a"] = pd.Categorical(list("aababcabbc"), categories=list("abc"))
     df["b"] = np.arange(len(df))
 
@@ -273,8 +271,8 @@ def test_categorical_unique(num_elements):
     )
 
     # gdf
-    gdf = DataFrame()
-    gdf["a"] = Series.from_categorical(pd_cat)
+    gdf = cudf.DataFrame()
+    gdf["a"] = cudf.Series.from_categorical(pd_cat)
     gdf_unique_sorted = np.sort(gdf["a"].unique().to_pandas())
 
     # pandas
@@ -300,8 +298,8 @@ def test_categorical_unique_count(nelem):
     )
 
     # gdf
-    gdf = DataFrame()
-    gdf["a"] = Series.from_categorical(pd_cat)
+    gdf = cudf.DataFrame()
+    gdf["a"] = cudf.Series.from_categorical(pd_cat)
     gdf_unique_count = gdf["a"].nunique()
 
     # pandas
@@ -316,7 +314,7 @@ def test_categorical_unique_count(nelem):
 def test_categorical_empty():
     cat = pd.Categorical([])
     pdsr = pd.Series(cat)
-    sr = Series(cat)
+    sr = cudf.Series(cat)
     np.testing.assert_array_equal(cat.codes, sr.cat.codes.to_array())
 
     # Test attributes
@@ -331,7 +329,7 @@ def test_categorical_empty():
 def test_categorical_set_categories():
     cat = pd.Categorical(["a", "a", "b", "c", "a"], categories=["a", "b", "c"])
     psr = pd.Series(cat)
-    sr = Series.from_categorical(cat)
+    sr = cudf.Series.from_categorical(cat)
 
     # adding category
     expect = psr.cat.set_categories(["a", "b", "c", "d"])
@@ -349,7 +347,7 @@ def test_categorical_set_categories_preserves_order():
     # reassigning categories should preserve element ordering
     assert_eq(
         series.cat.set_categories([1, 2]),
-        Series(series).cat.set_categories([1, 2]),
+        cudf.Series(series).cat.set_categories([1, 2]),
     )
 
 
@@ -357,7 +355,7 @@ def test_categorical_set_categories_preserves_order():
 def test_categorical_as_ordered(pd_str_cat, inplace):
 
     pd_sr = pd.Series(pd_str_cat.copy().set_ordered(False))
-    cd_sr = gd.Series(pd_str_cat.copy().set_ordered(False))
+    cd_sr = cudf.Series(pd_str_cat.copy().set_ordered(False))
 
     assert cd_sr.cat.ordered is False
     assert cd_sr.cat.ordered == pd_sr.cat.ordered
@@ -376,7 +374,7 @@ def test_categorical_as_ordered(pd_str_cat, inplace):
 def test_categorical_as_unordered(pd_str_cat, inplace):
 
     pd_sr = pd.Series(pd_str_cat.copy().set_ordered(True))
-    cd_sr = gd.Series(pd_str_cat.copy().set_ordered(True))
+    cd_sr = cudf.Series(pd_str_cat.copy().set_ordered(True))
 
     assert cd_sr.cat.ordered is True
     assert cd_sr.cat.ordered == pd_sr.cat.ordered
@@ -399,7 +397,7 @@ def test_categorical_reorder_categories(
 ):
 
     pd_sr = pd.Series(pd_str_cat.copy().set_ordered(from_ordered))
-    cd_sr = gd.Series(pd_str_cat.copy().set_ordered(from_ordered))
+    cd_sr = cudf.Series(pd_str_cat.copy().set_ordered(from_ordered))
 
     assert_eq(pd_sr, cd_sr)
 
@@ -421,7 +419,7 @@ def test_categorical_reorder_categories(
 def test_categorical_add_categories(pd_str_cat, inplace):
 
     pd_sr = pd.Series(pd_str_cat.copy())
-    cd_sr = gd.Series(pd_str_cat.copy())
+    cd_sr = cudf.Series(pd_str_cat.copy())
 
     assert_eq(pd_sr, cd_sr)
 
@@ -442,7 +440,7 @@ def test_categorical_add_categories(pd_str_cat, inplace):
 def test_categorical_remove_categories(pd_str_cat, inplace):
 
     pd_sr = pd.Series(pd_str_cat.copy())
-    cd_sr = gd.Series(pd_str_cat.copy())
+    cd_sr = cudf.Series(pd_str_cat.copy())
 
     assert_eq(pd_sr, cd_sr)
 
@@ -470,7 +468,7 @@ def test_categorical_remove_categories(pd_str_cat, inplace):
 
 def test_categorical_dataframe_slice_copy():
     pdf = pd.DataFrame({"g": pd.Series(["a", "b", "z"], dtype="category")})
-    gdf = DataFrame.from_pandas(pdf)
+    gdf = cudf.from_pandas(pdf)
 
     exp = pdf[1:].copy()
     gdf = gdf[1:].copy()
@@ -511,7 +509,7 @@ def test_categorical_dataframe_slice_copy():
 )
 def test_categorical_typecast(data, cat_type):
     pd_data = data.copy()
-    gd_data = gd.from_pandas(data)
+    gd_data = cudf.from_pandas(data)
 
     assert_eq(pd_data.astype(cat_type), gd_data.astype(cat_type))
 
@@ -545,7 +543,7 @@ def test_categorical_typecast(data, cat_type):
 )
 def test_categorical_set_categories_categoricals(data, new_categories):
     pd_data = data.copy().astype("category")
-    gd_data = gd.from_pandas(pd_data)
+    gd_data = cudf.from_pandas(pd_data)
 
     assert_eq(
         pd_data.cat.set_categories(new_categories=new_categories),
@@ -557,7 +555,7 @@ def test_categorical_set_categories_categoricals(data, new_categories):
             new_categories=pd.Series(new_categories, dtype="category")
         ),
         gd_data.cat.set_categories(
-            new_categories=gd.Series(new_categories, dtype="category")
+            new_categories=cudf.Series(new_categories, dtype="category")
         ),
     )
 
@@ -590,14 +588,14 @@ def test_categorical_set_categories_categoricals(data, new_categories):
 )
 def test_categorical_creation(data, dtype):
     expected = pd.Series(data, dtype=dtype)
-    got = gd.Series(data, dtype=dtype)
+    got = cudf.Series(data, dtype=dtype)
     assert_eq(expected, got)
 
-    got = gd.Series(data, dtype=gd.from_pandas(dtype))
+    got = cudf.Series(data, dtype=cudf.from_pandas(dtype))
     assert_eq(expected, got)
 
     expected = pd.Series(data, dtype="category")
-    got = gd.Series(data, dtype="category")
+    got = cudf.Series(data, dtype="category")
     assert_eq(expected, got)
 
 
@@ -613,33 +611,33 @@ def test_categorical_creation(data, dtype):
 @pytest.mark.parametrize("ordered", [True, False])
 def test_categorical_dtype(categories, ordered):
     expected = pd.CategoricalDtype(categories=categories, ordered=ordered)
-    got = gd.CategoricalDtype(categories=categories, ordered=ordered)
+    got = cudf.CategoricalDtype(categories=categories, ordered=ordered)
     assert_eq(expected, got)
 
 
 @pytest.mark.parametrize(
     ("data", "expected"),
     [
-        (gd.Series([1]), np.uint8),
-        (gd.Series([1, None]), np.uint8),
-        (gd.Series(np.arange(np.iinfo(np.int8).max)), np.uint8),
+        (cudf.Series([1]), np.uint8),
+        (cudf.Series([1, None]), np.uint8),
+        (cudf.Series(np.arange(np.iinfo(np.int8).max)), np.uint8),
         (
-            gd.Series(np.append(np.arange(np.iinfo(np.int8).max), [None])),
+            cudf.Series(np.append(np.arange(np.iinfo(np.int8).max), [None])),
             np.uint8,
         ),
-        (gd.Series(np.arange(np.iinfo(np.int16).max)), np.uint16),
+        (cudf.Series(np.arange(np.iinfo(np.int16).max)), np.uint16),
         (
-            gd.Series(np.append(np.arange(np.iinfo(np.int16).max), [None])),
+            cudf.Series(np.append(np.arange(np.iinfo(np.int16).max), [None])),
             np.uint16,
         ),
-        (gd.Series(np.arange(np.iinfo(np.uint8).max)), np.uint8),
+        (cudf.Series(np.arange(np.iinfo(np.uint8).max)), np.uint8),
         (
-            gd.Series(np.append(np.arange(np.iinfo(np.uint8).max), [None])),
+            cudf.Series(np.append(np.arange(np.iinfo(np.uint8).max), [None])),
             np.uint8,
         ),
-        (gd.Series(np.arange(np.iinfo(np.uint16).max)), np.uint16),
+        (cudf.Series(np.arange(np.iinfo(np.uint16).max)), np.uint16),
         (
-            gd.Series(np.append(np.arange(np.iinfo(np.uint16).max), [None])),
+            cudf.Series(np.append(np.arange(np.iinfo(np.uint16).max), [None])),
             np.uint16,
         ),
     ],
@@ -664,7 +662,7 @@ def test_astype_dtype(data, expected):
 )
 def test_add_categories(data, add):
     pds = pd.Series(data, dtype="category")
-    gds = gd.Series(data, dtype="category")
+    gds = cudf.Series(data, dtype="category")
 
     expected = pds.cat.add_categories(add)
     actual = gds.cat.add_categories(add)
@@ -692,7 +690,7 @@ def test_add_categories(data, add):
 )
 def test_add_categories_error(data, add):
     pds = pd.Series(data, dtype="category")
-    gds = gd.Series(data, dtype="category")
+    gds = cudf.Series(data, dtype="category")
 
     assert_exceptions_equal(
         pds.cat.add_categories,
@@ -704,12 +702,12 @@ def test_add_categories_error(data, add):
 
 
 def test_add_categories_mixed_error():
-    gds = gd.Series(["a", "bd", "ef"], dtype="category")
+    gds = cudf.Series(["a", "bd", "ef"], dtype="category")
 
     with pytest.raises(TypeError):
         gds.cat.add_categories([1, 2, 3])
 
-    gds = gd.Series([1, 2, 3], dtype="category")
+    gds = cudf.Series([1, 2, 3], dtype="category")
 
     with pytest.raises(TypeError):
         gds.cat.add_categories(["a", "bd", "ef"])
@@ -743,7 +741,7 @@ def test_add_categories_mixed_error():
 def test_categorical_assignment(data, cat_dtype):
     pd_df = pd.DataFrame()
     pd_df["a"] = np.ones(len(data))
-    cd_df = gd.from_pandas(pd_df)
+    cd_df = cudf.from_pandas(pd_df)
 
     pd_cat_series = pd.Series(data, dtype=cat_dtype)
     # assign categorical series
@@ -757,7 +755,7 @@ def test_categorical_assignment(data, cat_dtype):
     # see issue: https://github.com/rapidsai/cudf/issues/2269
     pd_df = pd.DataFrame()
     pd_df["a"] = np.ones(len(data))
-    cd_df = gd.from_pandas(pd_df)
+    cd_df = cudf.from_pandas(pd_df)
 
     pd_categorical = pd.Categorical(data, dtype=cat_dtype)
     pd_df.assign(cat_col=pd_categorical)

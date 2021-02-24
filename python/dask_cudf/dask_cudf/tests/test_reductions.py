@@ -8,7 +8,7 @@ from dask import dataframe as dd
 
 import dask_cudf as dgd
 
-import cudf as gd
+import cudf
 
 
 def _make_random_frame(nelem, npartitions=2):
@@ -18,7 +18,7 @@ def _make_random_frame(nelem, npartitions=2):
             "y": np.random.normal(size=nelem) + 1,
         }
     )
-    gdf = gd.DataFrame.from_pandas(df)
+    gdf = cudf.DataFrame.from_pandas(df)
     dgf = dgd.from_cudf(gdf, npartitions=npartitions)
     return df, dgf
 
@@ -49,15 +49,15 @@ def test_series_reduce(reducer):
 @pytest.mark.parametrize(
     "data",
     [
-        gd.datasets.randomdata(
+        cudf.datasets.randomdata(
             nrows=10000,
             dtypes={"a": "category", "b": int, "c": float, "d": int},
         ),
-        gd.datasets.randomdata(
+        cudf.datasets.randomdata(
             nrows=10000,
             dtypes={"a": "category", "b": int, "c": float, "d": str},
         ),
-        gd.datasets.randomdata(
+        cudf.datasets.randomdata(
             nrows=10000, dtypes={"a": bool, "b": int, "c": float, "d": str}
         ),
     ],
