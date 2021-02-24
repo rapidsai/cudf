@@ -594,16 +594,16 @@ public class ColumnVectorTest extends CudfTestBase {
          ColumnVector intResultV0V1 = v1.mergeAndSetValidity(BinaryOp.BITWISE_OR, v0, v1);
          ColumnVector intResultMulti = v1.mergeAndSetValidity(BinaryOp.BITWISE_OR, v0, v0, v1, v1, v0, v1, v0);
          ColumnVector intResultv0v1v2 = v2.mergeAndSetValidity(BinaryOp.BITWISE_OR, v0, v1, v2);
-         ColumnVector v2 = ColumnVector.fromStrings("0", "100", "1", "2", "MIN_VALUE", "3");
-         ColumnVector stringResult = v2.mergeAndSetValidity(BinaryOp.BITWISE_OR, v0, v1);
+         ColumnVector v3 = ColumnVector.fromStrings("0", "100", "1", "2", "MIN_VALUE", "3");
+         ColumnVector stringResult = v3.mergeAndSetValidity(BinaryOp.BITWISE_OR, v0, v1);
          ColumnVector stringExpected = ColumnVector.fromStrings("0", "100", "1", "2", "MIN_VALUE", null);
-         ColumnVector noMaskResult = v2.mergeAndSetValidity(BinaryOp.BITWISE_OR)) {
+         ColumnVector noMaskResult = v3.mergeAndSetValidity(BinaryOp.BITWISE_OR)) {
       assertColumnsAreEqual(v0, intResultV0);
       assertColumnsAreEqual(v1, intResultV0V1);
       assertColumnsAreEqual(v1, intResultMulti);
-      assertColumnsAreEqual(v1, intResultv0v1v2);
+      assertColumnsAreEqual(v2, intResultv0v1v2);
       assertColumnsAreEqual(stringExpected, stringResult);
-      assertColumnsAreEqual(v2, noMaskResult);
+      assertColumnsAreEqual(v3, noMaskResult);
     }
   }
 

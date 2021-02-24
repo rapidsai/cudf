@@ -1315,6 +1315,7 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_bitwiseMergeAndSetValidit
       default:
         JNI_THROW_NEW(env, "java/lang/IllegalArgumentException", "Unsupported merge operation", 0);
     }
+
     return reinterpret_cast<jlong>(copy.release());
   }
   CATCH_STD(env, 0);
