@@ -23,7 +23,7 @@ def test_dataframe_setitem_bool_mask_scaler(df, arg, value):
 @pytest.mark.xfail(
     condition=not PANDAS_GE_120,
     reason="pandas incorrectly adds nulls with dataframes "
-    "but works fine with scalers",
+    "but works fine with scalars",
 )
 def test_dataframe_setitem_scaler_bool():
     df = pd.DataFrame({"a": [1, 2, 3]})
