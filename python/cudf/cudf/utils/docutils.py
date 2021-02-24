@@ -27,7 +27,7 @@ def docfmt(**kwargs):
 
     def outer(fn):
         buf = []
-        formatsiter = string.Formatter().parse(fn.__doc__)
+        formatsiter = string.Formatter().parse(fn.__doc__)#
         for literal, field, fmtspec, conv in formatsiter:
             assert conv is None
             assert not fmtspec
