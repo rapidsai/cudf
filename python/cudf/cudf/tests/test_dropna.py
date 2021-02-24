@@ -22,7 +22,7 @@ from cudf.tests.utils import assert_eq
 @pytest.mark.parametrize("inplace", [True, False])
 def test_dropna_series(data, nulls, inplace):
 
-    psr = pd.Series(data, dtype=None if len(data) else "float64")
+    psr = cudf.utils.utils.create_pandas_series(data=data)
 
     if len(data) > 0:
         if nulls == "one":

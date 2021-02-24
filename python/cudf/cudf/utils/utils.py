@@ -1,4 +1,5 @@
-# Copyright (c) 2020, NVIDIA CORPORATION.
+# Copyright (c) 2020-2021, NVIDIA CORPORATION.
+
 import functools
 from collections import OrderedDict
 from collections.abc import Sequence
@@ -621,4 +622,19 @@ def _categorical_scalar_broadcast_to(cat_scalar, size):
         size=codes.size,
         offset=codes.offset,
         ordered=ordered,
+    )
+
+
+def create_pandas_series(
+    data=None, index=None, dtype=None, name=None, copy=False, fastpath=False
+):
+    if (data is None or len(data) == 0) and dtype is None:
+        dtype = "float64"
+    return pd.Series(
+        data=data,
+        index=index,
+        dtype=dtype,
+        name=name,
+        copy=copy,
+        fastpath=fastpath,
     )

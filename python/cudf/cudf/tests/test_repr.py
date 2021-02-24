@@ -159,7 +159,7 @@ def test_integer_dataframe(x):
 @settings(deadline=None)
 def test_integer_series(x):
     sr = cudf.Series(x)
-    ps = pd.Series(x, dtype=None if len(x) else "float64")
+    ps = cudf.utils.utils.create_pandas_series(data=x)
 
     assert sr.__repr__() == ps.__repr__()
 
@@ -176,7 +176,7 @@ def test_float_dataframe(x):
 @settings(deadline=None)
 def test_float_series(x):
     sr = cudf.Series(x, nan_as_null=False)
-    ps = pd.Series(x, dtype=None if len(x) else "float64")
+    ps = cudf.utils.utils.create_pandas_series(data=x)
     assert sr.__repr__() == ps.__repr__()
 
 

@@ -403,7 +403,7 @@ def test_datetime_to_arrow(dtype):
 @pytest.mark.parametrize(
     "data",
     [
-        [],
+        pd.Series([], dtype="datetime64[ns]"),
         pd.Series(pd.date_range("2010-01-01", "2010-02-01")),
         pd.Series([None, None], dtype="datetime64[ns]"),
     ],
@@ -412,7 +412,7 @@ def test_datetime_to_arrow(dtype):
     "nulls", ["none", pytest.param("some", marks=pytest.mark.xfail)]
 )
 def test_datetime_unique(data, nulls):
-    psr = pd.Series(data, dtype=None if len(data) else "datetime64[ns]")
+    psr = data.copy()
 
     if len(data) > 0:
         if nulls == "some":
@@ -429,14 +429,14 @@ def test_datetime_unique(data, nulls):
 @pytest.mark.parametrize(
     "data",
     [
-        [],
+        pd.Series([], dtype="datetime64[ns]"),
         pd.Series(pd.date_range("2010-01-01", "2010-02-01")),
         pd.Series([None, None], dtype="datetime64[ns]"),
     ],
 )
 @pytest.mark.parametrize("nulls", ["none", "some"])
 def test_datetime_nunique(data, nulls):
-    psr = pd.Series(data, dtype=None if len(data) else "datetime64[ns]")
+    psr = data.copy()
 
     if len(data) > 0:
         if nulls == "some":

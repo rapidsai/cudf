@@ -39,7 +39,7 @@ def test_rolling_series_basic(data, index, agg, nulls, center):
         elif nulls == "all":
             data = [np.nan] * len(data)
 
-    psr = pd.Series(data, index=index, dtype=None if len(data) else "float64")
+    psr = cudf.utils.utils.create_pandas_series(data=data, index=index)
     gsr = cudf.Series(psr)
     for window_size in range(1, len(data) + 1):
         for min_periods in range(1, window_size + 1):
@@ -214,7 +214,7 @@ def test_rolling_getitem_window():
 @pytest.mark.parametrize("center", [True, False])
 def test_rollling_series_numba_udf_basic(data, index, center):
 
-    psr = pd.Series(data, index=index, dtype=None if len(data) else "float64")
+    psr = cudf.utils.utils.create_pandas_series(data=data, index=index)
     gsr = cudf.from_pandas(psr)
 
     def some_func(A):

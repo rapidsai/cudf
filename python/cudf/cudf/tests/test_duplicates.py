@@ -56,7 +56,7 @@ def test_duplicated_with_misspelled_column_name(subset):
     ],
 )
 def test_drop_duplicates_series(data, keep):
-    pds = Series(data, dtype=None if len(data) else "float64")
+    pds = cudf.utils.utils.create_pandas_series(data)
     gds = cudf.from_pandas(pds)
 
     assert_df(pds.drop_duplicates(keep=keep), gds.drop_duplicates(keep=keep))

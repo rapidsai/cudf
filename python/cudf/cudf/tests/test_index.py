@@ -961,7 +961,7 @@ def test_index_equal_misc(data, other):
     assert_eq(expected, actual)
 
     expected = pd_data.equals(
-        pd.Series(pd_other, dtype=None if len(pd_other) else "float64")
+        cudf.utils.utils.create_pandas_series(data=pd_other)
     )
     actual = gd_data.equals(cudf.Series(gd_other))
     assert_eq(expected, actual)

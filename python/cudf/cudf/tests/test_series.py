@@ -384,7 +384,7 @@ def test_series_tolist(data):
     [[], [None, None], ["a"], ["a", "b", "c"] * 500, [1.0, 2.0, 0.3] * 57],
 )
 def test_series_size(data):
-    psr = pd.Series(data, dtype=None if len(data) else "float64")
+    psr = cudf.utils.utils.create_pandas_series(data=data)
     gsr = cudf.Series(data)
 
     assert_eq(psr.size, gsr.size)
@@ -482,7 +482,7 @@ def test_series_factorize(data, na_sentinel):
 @pytest.mark.parametrize(
     "data",
     [
-        [],
+        pd.Series([], dtype="datetime64[ns]"),
         pd.Series(pd.date_range("2010-01-01", "2010-02-01")),
         pd.Series([None, None], dtype="datetime64[ns]"),
     ],
@@ -491,7 +491,7 @@ def test_series_factorize(data, na_sentinel):
 @pytest.mark.parametrize("normalize", [True, False])
 @pytest.mark.parametrize("nulls", ["none", "some"])
 def test_series_datetime_value_counts(data, nulls, normalize, dropna):
-    psr = pd.Series(data, dtype=None if len(data) else "datetime64[ns]")
+    psr = data.copy()
 
     if len(data) > 0:
         if nulls == "one":

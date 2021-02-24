@@ -584,10 +584,8 @@ class DataFrame(Frame, Serializable):
     @property
     def dtypes(self):
         """Return the dtypes in this object."""
-        return pd.Series(
-            [x.dtype for x in self._data.columns],
-            index=self._data.names,
-            dtype=None if len(self._data.names) else "float64",
+        return cudf.utils.utils.create_pandas_series(
+            data=[x.dtype for x in self._data.columns], index=self._data.names,
         )
 
     @property
@@ -692,7 +690,7 @@ class DataFrame(Frame, Serializable):
         elif can_convert_to_column(arg):
             mask = arg
             if is_list_like(mask):
-                mask = pd.Series(mask, dtype=None if len(mask) else "float64")
+                mask = cudf.utils.utils.create_pandas_series(data=mask)
             if mask.dtype == "bool":
                 return self._apply_boolean_mask(mask)
             else:
