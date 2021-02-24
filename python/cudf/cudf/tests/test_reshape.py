@@ -9,6 +9,7 @@ import pytest
 import cudf
 from cudf import melt as cudf_melt
 from cudf.core import DataFrame
+from cudf.core._compat import PANDAS_GE_120
 from cudf.tests.utils import (
     ALL_TYPES,
     DATETIME_TYPES,
@@ -73,7 +74,16 @@ def test_melt(nulls, num_id_vars, num_value_vars, num_rows, dtype):
 @pytest.mark.parametrize("num_cols", [1, 2, 10])
 @pytest.mark.parametrize("num_rows", [1, 2, 1000])
 @pytest.mark.parametrize(
-    "dtype", list(NUMERIC_TYPES + DATETIME_TYPES) + ["str"],
+    "dtype",
+    list(NUMERIC_TYPES + DATETIME_TYPES)
+    + [
+        pytest.param(
+            "str",
+            marks=pytest.mark.xfail(
+                condition=not PANDAS_GE_120, reason="pandas bug"
+            ),
+        )
+    ],
 )
 @pytest.mark.parametrize("nulls", ["none", "some"])
 def test_df_stack(nulls, num_cols, num_rows, dtype):

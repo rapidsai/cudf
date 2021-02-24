@@ -5,6 +5,7 @@ import pandas as pd
 import pytest
 
 import cudf
+from cudf.core._compat import PANDAS_GE_120
 from cudf.tests.utils import assert_eq, assert_exceptions_equal
 
 
@@ -19,6 +20,11 @@ def test_dataframe_setitem_bool_mask_scaler(df, arg, value):
     assert_eq(df, gdf)
 
 
+@pytest.mark.xfail(
+    condition=not PANDAS_GE_120,
+    reason="pandas incorrectly adds nulls with dataframes "
+    "but works fine with scalers",
+)
 def test_dataframe_setitem_scaler_bool():
     df = pd.DataFrame({"a": [1, 2, 3]})
     df[[True, False, True]] = pd.DataFrame({"a": [-1, -2]})

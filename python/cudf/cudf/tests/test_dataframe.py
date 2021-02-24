@@ -18,7 +18,7 @@ import pytest
 from numba import cuda
 
 import cudf
-from cudf.core._compat import PANDAS_GE_110
+from cudf.core._compat import PANDAS_GE_110, PANDAS_GE_120
 from cudf.core.column import column
 from cudf.tests import utils
 from cudf.tests.utils import (
@@ -1852,7 +1852,7 @@ def test_dataframe_min_count_ops(data, ops, skipna, min_count):
     psr = pd.DataFrame(data)
     gsr = cudf.DataFrame(data)
 
-    if psr.shape[0] * psr.shape[1] < min_count:
+    if PANDAS_GE_120 and psr.shape[0] * psr.shape[1] < min_count:
         pytest.xfail("https://github.com/pandas-dev/pandas/issues/39738")
 
     assert_eq(
@@ -4065,7 +4065,14 @@ def test_isin_datetime(data, values):
         ["this", "is"],
         [None, None, None],
         ["12", "14", "19"],
-        [12, 14, 19],
+        pytest.param(
+            [12, 14, 19],
+            marks=pytest.mark.xfail(
+                not PANDAS_GE_120,
+                reason="pandas's failure here seems like a bug(in < 1.2) "
+                "given the reverse succeeds",
+            ),
+        ),
         ["is", "this", "is", "this", "is"],
     ],
 )
@@ -4286,7 +4293,14 @@ def test_isin_dataframe(data, values):
             rfunc_args_and_kwargs=([values],),
         )
     else:
-        expected = pdf.isin(values)
+        try:
+            expected = pdf.isin(values)
+        except ValueError as e:
+            if str(e) == "Lengths must match.":
+                pytest.xfail(
+                    not PANDAS_GE_110,
+                    "https://github.com/pandas-dev/pandas/issues/34256",
+                )
 
         if isinstance(values, (pd.DataFrame, pd.Series)):
             values = cudf.from_pandas(values)
@@ -4906,7 +4920,12 @@ def test_rowwise_ops_datetime_dtypes_pdbug(data):
     expected = pdf.max(axis=1, skipna=False)
     got = gdf.max(axis=1, skipna=False)
 
-    assert_eq(got, expected)
+    if PANDAS_GE_120:
+        assert_eq(got, expected)
+    else:
+        # PANDAS BUG: https://github.com/pandas-dev/pandas/issues/36907
+        with pytest.raises(AssertionError, match="numpy array are different"):
+            assert_eq(got, expected)
 
 
 @pytest.mark.parametrize(

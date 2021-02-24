@@ -11,6 +11,7 @@ import pandas as pd
 import pytest
 
 import cudf
+from cudf.core._compat import PANDAS_GE_110
 from cudf.tests.utils import DATETIME_TYPES, NUMERIC_TYPES, assert_eq
 
 
@@ -133,7 +134,18 @@ def test_json_writer(tmpdir, pdf, gdf):
         assert os.path.exists(pdf_series_fname)
         assert os.path.exists(gdf_series_fname)
 
-        expect_series = pd.read_json(pdf_series_fname, typ="series")
+        try:
+            # xref 'https://github.com/pandas-dev/pandas/pull/33373'
+            expect_series = pd.read_json(pdf_series_fname, typ="series")
+        except TypeError as e:
+            if (
+                not PANDAS_GE_110
+                and str(e) == "<class 'bool'> is not convertible to datetime"
+            ):
+                continue
+            else:
+                raise e
+
         got_series = pd.read_json(gdf_series_fname, typ="series")
 
         assert_eq(expect_series, got_series)

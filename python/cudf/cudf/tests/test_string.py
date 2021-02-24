@@ -13,6 +13,7 @@ import pytest
 import cudf
 from cudf import concat
 from cudf.core import DataFrame, Series
+from cudf.core._compat import PANDAS_GE_110
 from cudf.core.column.string import StringColumn
 from cudf.core.index import StringIndex, as_index
 from cudf.tests.utils import (
@@ -341,8 +342,20 @@ def _cat_convert_seq_to_cudf(others):
         ("f", "g", "h", "i", "j"),
         pd.Series(["f", "g", "h", "i", "j"]),
         pd.Series(["AbC", "de", "FGHI", "j", "kLm"]),
-        pd.Index(["f", "g", "h", "i", "j"]),
-        pd.Index(["AbC", "de", "FGHI", "j", "kLm"]),
+        pytest.param(
+            pd.Index(["f", "g", "h", "i", "j"]),
+            marks=pytest.mark.xfail(
+                condition=not PANDAS_GE_110,
+                reason="https://github.com/pandas-dev/pandas/issues/33436",
+            ),
+        ),
+        pytest.param(
+            pd.Index(["AbC", "de", "FGHI", "j", "kLm"]),
+            marks=pytest.mark.xfail(
+                condition=not PANDAS_GE_110,
+                reason="https://github.com/pandas-dev/pandas/issues/33436",
+            ),
+        ),
         (
             np.array(["f", "g", "h", "i", "j"]),
             np.array(["f", "g", "h", "i", "j"]),
@@ -367,26 +380,38 @@ def _cat_convert_seq_to_cudf(others):
             pd.Series(["f", "g", "h", "i", "j"]),
             np.array(["f", "g", "h", "i", "j"]),
         ),
-        (
-            pd.Series(["f", "g", "h", "i", "j"]),
-            np.array(["f", "a", "b", "f", "a"]),
-            pd.Series(["f", "g", "h", "i", "j"]),
-            np.array(["f", "a", "b", "f", "a"]),
-            np.array(["f", "a", "b", "f", "a"]),
-            pd.Index(["1", "2", "3", "4", "5"]),
-            np.array(["f", "a", "b", "f", "a"]),
-            pd.Index(["f", "g", "h", "i", "j"]),
+        pytest.param(
+            (
+                pd.Series(["f", "g", "h", "i", "j"]),
+                np.array(["f", "a", "b", "f", "a"]),
+                pd.Series(["f", "g", "h", "i", "j"]),
+                np.array(["f", "a", "b", "f", "a"]),
+                np.array(["f", "a", "b", "f", "a"]),
+                pd.Index(["1", "2", "3", "4", "5"]),
+                np.array(["f", "a", "b", "f", "a"]),
+                pd.Index(["f", "g", "h", "i", "j"]),
+            ),
+            marks=pytest.mark.xfail(
+                condition=not PANDAS_GE_110,
+                reason="https://github.com/pandas-dev/pandas/issues/33436",
+            ),
         ),
-        [
-            pd.Index(["f", "g", "h", "i", "j"]),
-            np.array(["f", "a", "b", "f", "a"]),
-            pd.Series(["f", "g", "h", "i", "j"]),
-            np.array(["f", "a", "b", "f", "a"]),
-            np.array(["f", "a", "b", "f", "a"]),
-            pd.Index(["f", "g", "h", "i", "j"]),
-            np.array(["f", "a", "b", "f", "a"]),
-            pd.Index(["f", "g", "h", "i", "j"]),
-        ],
+        pytest.param(
+            [
+                pd.Index(["f", "g", "h", "i", "j"]),
+                np.array(["f", "a", "b", "f", "a"]),
+                pd.Series(["f", "g", "h", "i", "j"]),
+                np.array(["f", "a", "b", "f", "a"]),
+                np.array(["f", "a", "b", "f", "a"]),
+                pd.Index(["f", "g", "h", "i", "j"]),
+                np.array(["f", "a", "b", "f", "a"]),
+                pd.Index(["f", "g", "h", "i", "j"]),
+            ],
+            marks=pytest.mark.xfail(
+                condition=not PANDAS_GE_110,
+                reason="https://github.com/pandas-dev/pandas/issues/33436",
+            ),
+        ),
         [
             pd.Series(["hello", "world", "abc", "xyz", "pqr"]),
             pd.Series(["abc", "xyz", "hello", "pqr", "world"]),
@@ -488,8 +513,20 @@ def test_string_cat(ps_gs, others, sep, na_rep, index):
         ("f", "g", "h", "i", "j"),
         pd.Series(["f", "g", "h", "i", "j"]),
         pd.Series(["AbC", "de", "FGHI", "j", "kLm"]),
-        pd.Index(["f", "g", "h", "i", "j"]),
-        pd.Index(["AbC", "de", "FGHI", "j", "kLm"]),
+        pytest.param(
+            pd.Index(["f", "g", "h", "i", "j"]),
+            marks=pytest.mark.xfail(
+                condition=not PANDAS_GE_110,
+                reason="https://github.com/pandas-dev/pandas/issues/33436",
+            ),
+        ),
+        pytest.param(
+            pd.Index(["AbC", "de", "FGHI", "j", "kLm"]),
+            marks=pytest.mark.xfail(
+                condition=not PANDAS_GE_110,
+                reason="https://github.com/pandas-dev/pandas/issues/33436",
+            ),
+        ),
         (
             np.array(["f", "g", "h", "i", "j"]),
             np.array(["f", "g", "h", "i", "j"]),
@@ -502,26 +539,38 @@ def test_string_cat(ps_gs, others, sep, na_rep, index):
             pd.Series(["f", "g", "h", "i", "j"]),
             pd.Series(["f", "g", "h", "i", "j"]),
         ],
-        (
-            pd.Series(["f", "g", "h", "i", "j"]),
-            np.array(["f", "a", "b", "f", "a"]),
-            pd.Series(["f", "g", "h", "i", "j"]),
-            np.array(["f", "a", "b", "f", "a"]),
-            np.array(["f", "a", "b", "f", "a"]),
-            pd.Index(["1", "2", "3", "4", "5"]),
-            np.array(["f", "a", "b", "f", "a"]),
-            pd.Index(["f", "g", "h", "i", "j"]),
+        pytest.param(
+            (
+                pd.Series(["f", "g", "h", "i", "j"]),
+                np.array(["f", "a", "b", "f", "a"]),
+                pd.Series(["f", "g", "h", "i", "j"]),
+                np.array(["f", "a", "b", "f", "a"]),
+                np.array(["f", "a", "b", "f", "a"]),
+                pd.Index(["1", "2", "3", "4", "5"]),
+                np.array(["f", "a", "b", "f", "a"]),
+                pd.Index(["f", "g", "h", "i", "j"]),
+            ),
+            marks=pytest.mark.xfail(
+                condition=not PANDAS_GE_110,
+                reason="https://github.com/pandas-dev/pandas/issues/33436",
+            ),
         ),
-        [
-            pd.Index(["f", "g", "h", "i", "j"]),
-            np.array(["f", "a", "b", "f", "a"]),
-            pd.Series(["f", "g", "h", "i", "j"]),
-            np.array(["f", "a", "b", "f", "a"]),
-            np.array(["f", "a", "b", "f", "a"]),
-            pd.Index(["f", "g", "h", "i", "j"]),
-            np.array(["f", "a", "b", "f", "a"]),
-            pd.Index(["f", "g", "h", "i", "j"]),
-        ],
+        pytest.param(
+            [
+                pd.Index(["f", "g", "h", "i", "j"]),
+                np.array(["f", "a", "b", "f", "a"]),
+                pd.Series(["f", "g", "h", "i", "j"]),
+                np.array(["f", "a", "b", "f", "a"]),
+                np.array(["f", "a", "b", "f", "a"]),
+                pd.Index(["f", "g", "h", "i", "j"]),
+                np.array(["f", "a", "b", "f", "a"]),
+                pd.Index(["f", "g", "h", "i", "j"]),
+            ],
+            marks=pytest.mark.xfail(
+                condition=not PANDAS_GE_110,
+                reason="https://github.com/pandas-dev/pandas/issues/33436",
+            ),
+        ),
         [
             pd.Series(
                 ["hello", "world", "abc", "xyz", "pqr"],
@@ -580,8 +629,20 @@ def test_string_index_str_cat(data, others, sep, na_rep, name):
         None,
         ["f", "g", "h", "i", "j"],
         pd.Series(["AbC", "de", "FGHI", "j", "kLm"]),
-        pd.Index(["f", "g", "h", "i", "j"]),
-        pd.Index(["AbC", "de", "FGHI", "j", "kLm"]),
+        pytest.param(
+            pd.Index(["f", "g", "h", "i", "j"]),
+            marks=pytest.mark.xfail(
+                condition=not PANDAS_GE_110,
+                reason="https://github.com/pandas-dev/pandas/issues/33436",
+            ),
+        ),
+        pytest.param(
+            pd.Index(["AbC", "de", "FGHI", "j", "kLm"]),
+            marks=pytest.mark.xfail(
+                condition=not PANDAS_GE_110,
+                reason="https://github.com/pandas-dev/pandas/issues/33436",
+            ),
+        ),
         [
             np.array(["f", "g", "h", "i", "j"]),
             np.array(["f", "g", "h", "i", "j"]),

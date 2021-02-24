@@ -9,7 +9,7 @@ import pytest
 
 import cudf
 from cudf import DataFrame, Series
-from cudf.core._compat import PANDAS_GE_110
+from cudf.core._compat import PANDAS_GE_110, PANDAS_GE_120
 from cudf.tests import utils
 from cudf.tests.utils import INTEGER_TYPES, assert_eq, assert_exceptions_equal
 
@@ -975,6 +975,10 @@ def test_series_setitem_datetime():
     assert_eq(psr, gsr)
 
 
+@pytest.mark.xfail(
+    condition=not PANDAS_GE_120,
+    reason="Pandas will coerce to object datatype here",
+)
 def test_series_setitem_datetime_coerced():
     psr = pd.Series(["2001", "2002", "2003"], dtype="datetime64[ns]")
     gsr = cudf.from_pandas(psr)

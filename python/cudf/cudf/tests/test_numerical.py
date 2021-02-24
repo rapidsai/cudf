@@ -6,6 +6,7 @@ import pytest
 
 import cudf
 from cudf import Series
+from cudf.core._compat import PANDAS_GE_100
 from cudf.tests.utils import assert_eq
 
 
@@ -89,6 +90,10 @@ def test_can_cast_safely_mixed_kind():
     assert not data.can_cast_safely(to_dtype)
 
 
+@pytest.mark.xfail(
+    condition=not PANDAS_GE_100,
+    reason="cuDF null <-> pd.NA compatibility not yet supported",
+)
 def test_to_pandas_nullable_integer():
     gsr_not_null = Series([1, 2, 3])
     gsr_has_null = Series([1, 2, None])
@@ -100,6 +105,10 @@ def test_to_pandas_nullable_integer():
     assert_eq(gsr_has_null.to_pandas(nullable=True), psr_has_null)
 
 
+@pytest.mark.xfail(
+    condition=not PANDAS_GE_100,
+    reason="cuDF null <-> pd.NA compatibility not yet supported",
+)
 def test_to_pandas_nullable_bool():
     gsr_not_null = Series([True, False, True])
     gsr_has_null = Series([True, False, None])
