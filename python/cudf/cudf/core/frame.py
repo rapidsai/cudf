@@ -27,7 +27,6 @@ from cudf.utils.dtypes import (
     min_scalar_type,
 )
 
-
 T = TypeVar("T", bound="Frame")
 
 if TYPE_CHECKING:
