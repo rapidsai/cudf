@@ -3909,10 +3909,12 @@ public class ColumnVectorTest extends CudfTestBase {
         "  }\n" +
         "}";
 
-    try (ColumnVector json = ColumnVector.fromStrings(jsonString);
-         ColumnVector expectedAuthors = ColumnVector.fromStrings("[\n\"Nigel Rees\",\n\"Evelyn " +
-             "Waugh\",\n\"Herman Melville\",\n\"J. R. R. Tolkien\"]\n");
-         ColumnVector gotAuthors = json.getJSONObject("$.store.book[*].author")) {
+    try (ColumnVector json = ColumnVector.fromStrings(jsonString, jsonString);
+         ColumnVector expectedAuthors = ColumnVector.fromStrings("[\"Nigel Rees\",\"Evelyn " +
+             "Waugh\",\"Herman Melville\",\"J. R. R. Tolkien\"]", "[\"Nigel Rees\",\"Evelyn " +
+             "Waugh\",\"Herman Melville\",\"J. R. R. Tolkien\"]");
+         Scalar path = Scalar.fromString("$.store.book[*].author");
+         ColumnVector gotAuthors = json.getJSONObject(path)) {
       assertColumnsAreEqual(expectedAuthors, gotAuthors);
     }
   }
