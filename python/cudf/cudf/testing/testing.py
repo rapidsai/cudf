@@ -231,6 +231,7 @@ def assert_index_equal(
     check_less_precise: Union[bool, int] = False,
     check_exact: bool = True,
     check_categorical: bool = True,
+    check_order: bool = True,
     rtol: float = 1e-5,
     atol: float = 1e-8,
     obj: str = "Index",
@@ -260,6 +261,13 @@ def assert_index_equal(
         Whether to compare number exactly.
     check_categorical : bool, default True
         Whether to compare internal Categorical exactly.
+    check_order : bool, default True
+        Whether to compare the order of index entries as
+        well as their values.
+        If True, both indexes must contain the same elements,
+        in the same order.
+        If False, both indexes must contain the same elements,
+        but in any order.
     rtol : float, default 1e-5
         Relative tolerance. Only used when `check_exact` is False.
     atol : float, default 1e-8
@@ -310,6 +318,11 @@ def assert_index_equal(
             obj, "lengths are different", f"{len(left)}", f"{len(right)}"
         )
 
+    # If order doesn't matter then sort the index entries
+    if not check_order:
+        left = left.sort_values()
+        right = right.sort_values()
+
     if isinstance(left, cudf.MultiIndex):
         if left.nlevels != right.nlevels:
             raise AssertionError(
@@ -328,6 +341,7 @@ def assert_index_equal(
                     exact=check_exact,
                     check_names=check_names,
                     check_exact=check_exact,
+                    check_order=check_order,
                     rtol=rtol,
                     atol=atol,
                     obj=mul_obj,
