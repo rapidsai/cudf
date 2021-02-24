@@ -73,13 +73,12 @@ __launch_bounds__(max_block_size) __global__
 {
   extern __shared__ std::int64_t intermediate_storage[];
   auto thread_intermediate_storage = &intermediate_storage[threadIdx.x * num_intermediates];
-  auto const start_idx             = cudf::size_type(threadIdx.x + blockIdx.x * blockDim.x);
-  auto const stride                = cudf::size_type(blockDim.x * gridDim.x);
-  auto const num_rows              = table.num_rows();
+  auto const start_idx = static_cast<cudf::size_type>(threadIdx.x + blockIdx.x * blockDim.x);
+  auto const stride    = static_cast<cudf::size_type>(blockDim.x * gridDim.x);
   auto const evaluator =
     cudf::ast::detail::row_evaluator(table, literals, thread_intermediate_storage, &output_column);
 
-  for (cudf::size_type row_index = start_idx; row_index < num_rows; row_index += stride) {
+  for (cudf::size_type row_index = start_idx; row_index < table.num_rows(); row_index += stride) {
     evaluate_row_expression(
       evaluator, data_references, operators, operator_source_indices, num_operators, row_index);
   }
@@ -90,29 +89,8 @@ std::unique_ptr<column> compute_column(table_view const table,
                                        rmm::cuda_stream_view stream,
                                        rmm::mr::device_memory_resource* mr)
 {
-  auto const expr_linearizer = linearizer(expr, table);    // Linearize the AST
-  auto const plan            = ast_plan(expr_linearizer);  // Create ast_plan
-
-  // Create device buffer
-  auto const host_data_buffer = plan.host_data_buffer();
-  auto const buffer_offsets   = plan.offsets();
-  auto const buffer_size      = host_data_buffer.second;
-  auto device_data_buffer =
-    rmm::device_buffer(host_data_buffer.first.get(), buffer_size, stream, mr);
-  // To reduce overhead, we don't call a stream sync here.
-  // The stream is synced later when the table_device_view is created.
-
-  // Create device pointers to components of plan
-  auto const device_data_buffer_ptr = static_cast<const char*>(device_data_buffer.data());
-  auto const device_data_references = reinterpret_cast<const detail::device_data_reference*>(
-    device_data_buffer_ptr + buffer_offsets[0]);
-  auto const device_literals =
-    reinterpret_cast<const cudf::detail::fixed_width_scalar_device_view_base*>(
-      device_data_buffer_ptr + buffer_offsets[1]);
-  auto const device_operators =
-    reinterpret_cast<const ast_operator*>(device_data_buffer_ptr + buffer_offsets[2]);
-  auto const device_operator_source_indices =
-    reinterpret_cast<const cudf::size_type*>(device_data_buffer_ptr + buffer_offsets[3]);
+  auto const expr_linearizer = linearizer(expr, table);                // Linearize the AST
+  auto const plan            = ast_plan{expr_linearizer, stream, mr};  // Create ast_plan
 
   // Create table device view
   auto table_device         = table_device_view::create(table, stream);
@@ -145,11 +123,11 @@ std::unique_ptr<column> compute_column(table_view const table,
   cudf::ast::detail::compute_column_kernel<MAX_BLOCK_SIZE>
     <<<config.num_blocks, config.num_threads_per_block, shmem_size_per_block, stream.value()>>>(
       *table_device,
-      device_literals,
+      plan.device_literals(),
       *mutable_output_device,
-      device_data_references,
-      device_operators,
-      device_operator_source_indices,
+      plan.device_data_references(),
+      plan.device_operators(),
+      plan.device_operator_source_indices(),
       num_operators,
       num_intermediates);
   CHECK_CUDA(stream.value());

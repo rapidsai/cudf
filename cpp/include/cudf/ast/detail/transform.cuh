@@ -317,16 +317,60 @@ __device__ void evaluate_row_expression(detail::row_evaluator const& evaluator,
   }
 }
 
+/**
+ * @brief The AST plan creates a device buffer of data needed to execute an AST.
+ *
+ * On construction, an AST plan creates a single "packed" host buffer of all necessary data arrays,
+ * and copies that to the device with a single host-device memory copy. Because the plan tends to be
+ * small, this is the most efficient approach for low latency.
+ *
+ * TODO: Remove comment below depending on final design
+ * The stream is not synchronized automatically, so a stream sync must be performed manually (or by
+ * another function) before the device data can be used safely.
+ *
+ */
 struct ast_plan {
  public:
-  ast_plan(linearizer const& expr_linearizer) : _sizes{}, _data_pointers{}
+  ast_plan(linearizer const& expr_linearizer,
+           rmm::cuda_stream_view stream,
+           rmm::mr::device_memory_resource* mr)
+    : _sizes{}, _data_pointers{}
   {
     add_to_plan(expr_linearizer.data_references());
     add_to_plan(expr_linearizer.literals());
     add_to_plan(expr_linearizer.operators());
     add_to_plan(expr_linearizer.operator_source_indices());
+
+    // Create device buffer
+    auto const h_data_buffer  = host_data_buffer();
+    auto const buffer_offsets = offsets();
+    auto const buffer_size    = h_data_buffer.second;
+    auto device_data_buffer =
+      rmm::device_buffer(h_data_buffer.first.get(), buffer_size, stream, mr);
+
+    // To reduce overhead, we don't call a stream sync here.
+    // The stream is synced later when the table_device_view is created.
+    // ^^^^ this comment will be removed, we are synchronizing vvvv
+    stream.synchronize();  // this doesn't seem to work
+
+    // Create device pointers to components of plan
+    auto const device_data_buffer_ptr = static_cast<const char*>(device_data_buffer.data());
+    _device_data_references           = reinterpret_cast<const detail::device_data_reference*>(
+      device_data_buffer_ptr + buffer_offsets[0]);
+    _device_literals = reinterpret_cast<const cudf::detail::fixed_width_scalar_device_view_base*>(
+      device_data_buffer_ptr + buffer_offsets[1]);
+    _device_operators =
+      reinterpret_cast<const ast_operator*>(device_data_buffer_ptr + buffer_offsets[2]);
+    _device_operator_source_indices =
+      reinterpret_cast<const cudf::size_type*>(device_data_buffer_ptr + buffer_offsets[3]);
   }
 
+  auto device_data_references() const { return _device_data_references; }
+  auto device_literals() const { return _device_literals; }
+  auto device_operators() const { return _device_operators; }
+  auto device_operator_source_indices() const { return _device_operator_source_indices; }
+
+ private:
   using buffer_type = std::pair<std::unique_ptr<char[]>, int>;
 
   /**
@@ -371,9 +415,12 @@ struct ast_plan {
     return offsets;
   }
 
- private:
   std::vector<cudf::size_type> _sizes;
   std::vector<const void*> _data_pointers;
+  const detail::device_data_reference* _device_data_references;
+  const cudf::detail::fixed_width_scalar_device_view_base* _device_literals;
+  const ast_operator* _device_operators;
+  const cudf::size_type* _device_operator_source_indices;
 };
 
 /**
