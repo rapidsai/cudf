@@ -362,60 +362,60 @@ std::unique_ptr<column> day_of_year(column_view const& column,
 std::unique_ptr<column> extract_year(column_view const& column, rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::extract_year(column, 0, mr);
+  return detail::extract_year(column, rmm::cuda_stream_default, mr);
 }
 
 std::unique_ptr<column> extract_month(column_view const& column,
                                       rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::extract_month(column, 0, mr);
+  return detail::extract_month(column, rmm::cuda_stream_default, mr);
 }
 
 std::unique_ptr<column> extract_day(column_view const& column, rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::extract_day(column, 0, mr);
+  return detail::extract_day(column, rmm::cuda_stream_default, mr);
 }
 
 std::unique_ptr<column> extract_weekday(column_view const& column,
                                         rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::extract_weekday(column, 0, mr);
+  return detail::extract_weekday(column, rmm::cuda_stream_default, mr);
 }
 
 std::unique_ptr<column> extract_hour(column_view const& column, rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::extract_hour(column, 0, mr);
+  return detail::extract_hour(column, rmm::cuda_stream_default, mr);
 }
 
 std::unique_ptr<column> extract_minute(column_view const& column,
                                        rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::extract_minute(column, 0, mr);
+  return detail::extract_minute(column, rmm::cuda_stream_default, mr);
 }
 
 std::unique_ptr<column> extract_second(column_view const& column,
                                        rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::extract_second(column, 0, mr);
+  return detail::extract_second(column, rmm::cuda_stream_default, mr);
 }
 
 std::unique_ptr<column> last_day_of_month(column_view const& column,
                                           rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::last_day_of_month(column, 0, mr);
+  return detail::last_day_of_month(column, rmm::cuda_stream_default, mr);
 }
 
 std::unique_ptr<column> day_of_year(column_view const& column, rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::day_of_year(column, 0, mr);
+  return detail::day_of_year(column, rmm::cuda_stream_default, mr);
 }
 
 std::unique_ptr<cudf::column> add_calendrical_months(cudf::column_view const& timestamp_column,
@@ -423,7 +423,8 @@ std::unique_ptr<cudf::column> add_calendrical_months(cudf::column_view const& ti
                                                      rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::add_calendrical_months(timestamp_column, months_column, 0, mr);
+  return detail::add_calendrical_months(
+    timestamp_column, months_column, rmm::cuda_stream_default, mr);
 }
 }  // namespace datetime
 }  // namespace cudf
