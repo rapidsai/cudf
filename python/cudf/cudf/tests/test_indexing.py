@@ -1037,6 +1037,7 @@ def test_series_setitem_string(key, value):
     [
         ("a", 4),
         ("b", 4),
+        ("d", 4),
         (["a", "b"], 4),
         (["a", "b"], [4, 5]),
         ([True, False, True], 4),
