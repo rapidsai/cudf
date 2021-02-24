@@ -57,11 +57,17 @@ struct stats_column_desc {
 struct string_stats {
   const char *ptr;  //!< ptr to character data
   uint32_t length;  //!< length of string
-  string_stats& operator=(const string_view& val) {
+  __host__ __device__ __forceinline__
+  volatile string_stats& operator=(const string_view& val) volatile {
     ptr = val.data();
     length = val.size_bytes();
     return *this;
   }
+  __host__ __device__ __forceinline__
+  operator string_view() volatile {
+    return string_view(ptr, static_cast<size_type>(length));
+  }
+  __host__ __device__ __forceinline__
   operator string_view() const {
     return string_view(ptr, static_cast<size_type>(length));
   }

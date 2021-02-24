@@ -16,6 +16,8 @@
 
 #include "column_stats.h"
 
+#include <cudf/strings/string_view.hpp>
+
 #include <io/utilities/block_utils.cuh>
 
 #include <rmm/cuda_stream_view.hpp>
@@ -62,82 +64,62 @@ struct IgnoreNaNSum {
   }
 };
 
-/**
- * Warp-wide Min reduction for string types
- */
-inline __device__ string_stats WarpReduceMinString(const char *smin, uint32_t lmin)
-{
-  uint32_t len = shuffle_xor(lmin, 1);
-  const char *ptr =
-    reinterpret_cast<const char *>(shuffle_xor(reinterpret_cast<uintptr_t>(smin), 1));
-  if (!smin || (ptr && nvstr_is_lesser(ptr, len, smin, lmin))) {
-    smin = ptr;
-    lmin = len;
-  }
-  len = shuffle_xor(lmin, 2);
-  ptr = reinterpret_cast<const char *>(shuffle_xor(reinterpret_cast<uintptr_t>(smin), 2));
-  if (!smin || (ptr && nvstr_is_lesser(ptr, len, smin, lmin))) {
-    smin = ptr;
-    lmin = len;
-  }
-  len = shuffle_xor(lmin, 4);
-  ptr = reinterpret_cast<const char *>(shuffle_xor(reinterpret_cast<uintptr_t>(smin), 4));
-  if (!smin || (ptr && nvstr_is_lesser(ptr, len, smin, lmin))) {
-    smin = ptr;
-    lmin = len;
-  }
-  len = shuffle_xor(lmin, 8);
-  ptr = reinterpret_cast<const char *>(shuffle_xor(reinterpret_cast<uintptr_t>(smin), 8));
-  if (!smin || (ptr && nvstr_is_lesser(ptr, len, smin, lmin))) {
-    smin = ptr;
-    lmin = len;
-  }
-  len = shuffle_xor(lmin, 16);
-  ptr = reinterpret_cast<const char *>(shuffle_xor(reinterpret_cast<uintptr_t>(smin), 16));
-  if (!smin || (ptr && nvstr_is_lesser(ptr, len, smin, lmin))) {
-    smin = ptr;
-    lmin = len;
-  }
-  return {smin, lmin};
+template <>
+inline __device__ string_view shuffle_xor(string_view var, uint32_t delta) {
+  const char *data =
+    reinterpret_cast<const char *>(shuffle_xor(reinterpret_cast<uintptr_t>(var.data()), delta));
+  auto size = shuffle_xor(var.size_bytes(), delta);
+  return string_view(data, size);
 }
 
-/**
- * Warp-wide Max reduction for string types
- */
-inline __device__ string_stats WarpReduceMaxString(const char *smax, uint32_t lmax)
+inline __device__ string_view WarpReduceMin(string_view minimum_value)
 {
-  uint32_t len = shuffle_xor(lmax, 1);
-  const char *ptr =
-    reinterpret_cast<const char *>(shuffle_xor(reinterpret_cast<uintptr_t>(smax), 1));
-  if (!smax || (ptr && nvstr_is_greater(ptr, len, smax, lmax))) {
-    smax = ptr;
-    lmax = len;
+  string_view value = shuffle_xor(minimum_value, 1);
+  if (value < minimum_value) {
+    minimum_value = value;
   }
-  len = shuffle_xor(lmax, 2);
-  ptr = reinterpret_cast<const char *>(shuffle_xor(reinterpret_cast<uintptr_t>(smax), 2));
-  if (!smax || (ptr && nvstr_is_greater(ptr, len, smax, lmax))) {
-    smax = ptr;
-    lmax = len;
+  value = shuffle_xor(minimum_value, 2);
+  if (value < minimum_value) {
+    minimum_value = value;
   }
-  len = shuffle_xor(lmax, 4);
-  ptr = reinterpret_cast<const char *>(shuffle_xor(reinterpret_cast<uintptr_t>(smax), 4));
-  if (!smax || (ptr && nvstr_is_greater(ptr, len, smax, lmax))) {
-    smax = ptr;
-    lmax = len;
+  value = shuffle_xor(minimum_value, 4);
+  if (value < minimum_value) {
+    minimum_value = value;
   }
-  len = shuffle_xor(lmax, 8);
-  ptr = reinterpret_cast<const char *>(shuffle_xor(reinterpret_cast<uintptr_t>(smax), 8));
-  if (!smax || (ptr && nvstr_is_greater(ptr, len, smax, lmax))) {
-    smax = ptr;
-    lmax = len;
+  value = shuffle_xor(minimum_value, 8);
+  if (value < minimum_value) {
+    minimum_value = value;
   }
-  len = shuffle_xor(lmax, 16);
-  ptr = reinterpret_cast<const char *>(shuffle_xor(reinterpret_cast<uintptr_t>(smax), 16));
-  if (!smax || (ptr && nvstr_is_greater(ptr, len, smax, lmax))) {
-    smax = ptr;
-    lmax = len;
+  value = shuffle_xor(minimum_value, 16);
+  if (value < minimum_value) {
+    minimum_value = value;
   }
-  return {smax, lmax};
+  return minimum_value;
+}
+
+inline __device__ string_view WarpReduceMax(string_view maximum_value)
+{
+  string_view value = shuffle_xor(maximum_value, 1);
+  if (value > maximum_value) {
+    maximum_value = value;
+  }
+  value = shuffle_xor(maximum_value, 2);
+  if (value > maximum_value) {
+    maximum_value = value;
+  }
+  value = shuffle_xor(maximum_value, 4);
+  if (value > maximum_value) {
+    maximum_value = value;
+  }
+  value = shuffle_xor(maximum_value, 8);
+  if (value > maximum_value) {
+    maximum_value = value;
+  }
+  value = shuffle_xor(maximum_value, 16);
+  if (value > maximum_value) {
+    maximum_value = value;
+  }
+  return maximum_value;
 }
 
 /**
@@ -162,29 +144,24 @@ gatherIntColumnStats(stats_state_s *s, statistics_dtype dtype, uint32_t t, Stora
   for (uint32_t i = 0; i < s->group.num_rows; i += block_size) {
     uint32_t r                = i + t;
     uint32_t row              = r + s->group.start_row;
-    const uint32_t *valid_map = s->col.valid_map_base;
-    uint32_t is_valid         = (r < s->group.num_rows && row < s->col.num_values)
-                          ? (valid_map) ? (valid_map[(row + s->col.column_offset) / 32] >>
-                                           ((row + s->col.column_offset) % 32)) &
-                                            1
-                                        : 1
-                          : 0;
+    uint32_t is_valid = (r < s->group.num_rows && row < s->col.leaf_column->size()) ?
+                        s->col.leaf_column->is_valid(row) : 0;
     if (is_valid) {
       switch (dtype) {
         case dtype_int32:
-        case dtype_date32: v = static_cast<const int32_t *>(s->col.column_data_base)[row]; break;
+        case dtype_date32: v = s->col.leaf_column->element<int32_t>(row); break;
         case dtype_int64:
-        case dtype_decimal64: v = static_cast<const int64_t *>(s->col.column_data_base)[row]; break;
-        case dtype_int16: v = static_cast<const int16_t *>(s->col.column_data_base)[row]; break;
+        case dtype_decimal64: v = s->col.leaf_column->element<int64_t>(row); break;
+        case dtype_int16: v = s->col.leaf_column->element<int16_t>(row); break;
         case dtype_timestamp64:
-          v = static_cast<const int64_t *>(s->col.column_data_base)[row];
+          v = s->col.leaf_column->element<int64_t>(row);
           if (s->col.ts_scale < -1) {
             v /= -s->col.ts_scale;
           } else if (s->col.ts_scale > 1) {
             v *= s->col.ts_scale;
           }
           break;
-        default: v = static_cast<const int8_t *>(s->col.column_data_base)[row]; break;
+        default: v = s->col.leaf_column->element<int8_t>(row); break;
       }
       vmin = min(vmin, v);
       vmax = max(vmax, v);
@@ -237,18 +214,13 @@ gatherFloatColumnStats(stats_state_s *s, statistics_dtype dtype, uint32_t t, Sto
   for (uint32_t i = 0; i < s->group.num_rows; i += block_size) {
     uint32_t r                = i + t;
     uint32_t row              = r + s->group.start_row;
-    const uint32_t *valid_map = s->col.valid_map_base;
-    uint32_t is_valid         = (r < s->group.num_rows && row < s->col.num_values)
-                          ? (valid_map) ? (valid_map[(row + s->col.column_offset) >> 5] >>
-                                           ((row + s->col.column_offset) & 0x1f)) &
-                                            1
-                                        : 1
-                          : 0;
+    uint32_t is_valid = (r < s->group.num_rows && row < s->col.leaf_column->size()) ?
+                        s->col.leaf_column->is_valid(row) : 0;
     if (is_valid) {
       if (dtype == dtype_float64) {
-        v = static_cast<const double *>(s->col.column_data_base)[row];
+        v = s->col.leaf_column->element<double>(row);
       } else {
-        v = static_cast<const float *>(s->col.column_data_base)[row];
+        v = s->col.leaf_column->element<float>(row);
       }
       if (v < vmin) { vmin = v; }
       if (v > vmax) { vmax = v; }
@@ -295,36 +267,26 @@ void __device__ gatherStringColumnStats(stats_state_s *s, uint32_t t, Storage &s
 {
   using block_reduce = cub::BlockReduce<uint32_t, block_size>;
   uint32_t len_sum   = 0;
-  const char *smin   = nullptr;
-  const char *smax   = nullptr;
-  uint32_t lmin      = 0;
-  uint32_t lmax      = 0;
   uint32_t nn_cnt    = 0;
-  bool has_minmax;
-  string_stats minval, maxval;
+  bool has_minmax    = false;
+
+  string_view minimum_value = string_view::max();
+  string_view maximum_value = string_view::min();
 
   for (uint32_t i = 0; i < s->group.num_rows; i += block_size) {
     uint32_t r                = i + t;
     uint32_t row              = r + s->group.start_row;
-    const uint32_t *valid_map = s->col.valid_map_base;
-    uint32_t is_valid         = (r < s->group.num_rows && row < s->col.num_values)
-                          ? (valid_map) ? (valid_map[(row + s->col.column_offset) >> 5] >>
-                                           ((row + s->col.column_offset) & 0x1f)) &
-                                            1
-                                        : 1
-                          : 0;
+    uint32_t is_valid = (r < s->group.num_rows && row < s->col.leaf_column->size()) ?
+                        s->col.leaf_column->is_valid(row) : 0;
     if (is_valid) {
-      const nvstrdesc_s *str_col = static_cast<const nvstrdesc_s *>(s->col.column_data_base);
-      uint32_t len               = (uint32_t)str_col[row].count;
-      const char *ptr            = str_col[row].ptr;
-      len_sum += len;
-      if (!smin || nvstr_is_lesser(ptr, len, smin, lmin)) {
-        lmin = len;
-        smin = ptr;
+      has_minmax = true;
+      auto str = s->col.leaf_column->element<string_view>(row);
+      len_sum += str.size_bytes();
+      if (str > maximum_value) {
+        maximum_value = str;
       }
-      if (!smax || nvstr_is_greater(ptr, len, smax, lmax)) {
-        lmax = len;
-        smax = ptr;
+      if (str < minimum_value) {
+        minimum_value = str;
       }
     }
     nn_cnt += __syncthreads_count(is_valid);
@@ -333,34 +295,29 @@ void __device__ gatherStringColumnStats(stats_state_s *s, uint32_t t, Storage &s
     s->ck.non_nulls  = nn_cnt;
     s->ck.null_count = s->group.num_rows - nn_cnt;
   }
-  minval = WarpReduceMinString(smin, lmin);
-  maxval = WarpReduceMaxString(smax, lmax);
+  minimum_value = WarpReduceMin(minimum_value);
+  maximum_value = WarpReduceMax(maximum_value);
   __syncwarp();
   if (!(t & 0x1f)) {
-    s->warp_min[t >> 5].str_val.ptr    = minval.ptr;
-    s->warp_min[t >> 5].str_val.length = minval.length;
-    s->warp_max[t >> 5].str_val.ptr    = maxval.ptr;
-    s->warp_max[t >> 5].str_val.length = maxval.length;
+    s->warp_min[t >> 5].str_val = minimum_value;
+    s->warp_max[t >> 5].str_val = maximum_value;
   }
-  has_minmax = __syncthreads_or(smin != nullptr);
+  has_minmax = __syncthreads_or(has_minmax);
   if (has_minmax) { len_sum = block_reduce(storage.string_stats).Sum(len_sum); }
   if (t < 32 * 1) {
-    minval = WarpReduceMinString(s->warp_min[t].str_val.ptr, s->warp_min[t].str_val.length);
+    minimum_value = WarpReduceMin(s->warp_min[t].str_val);
     if (!(t & 0x1f)) {
       if (has_minmax) {
-        s->ck.min_value.str_val.ptr    = minval.ptr;
-        s->ck.min_value.str_val.length = minval.length;
-        s->ck.sum.i_val                = len_sum;
+        s->ck.min_value.str_val = minimum_value;
+        s->ck.sum.i_val         = len_sum;
       }
       s->ck.has_minmax = has_minmax;
       s->ck.has_sum    = has_minmax;
     }
   } else if (t < 32 * 2 and has_minmax) {
-    maxval =
-      WarpReduceMaxString(s->warp_max[t & 0x1f].str_val.ptr, s->warp_max[t & 0x1f].str_val.length);
+    maximum_value = WarpReduceMax(s->warp_max[t & 0x1f].str_val);
     if (!(t & 0x1f)) {
-      s->ck.max_value.str_val.ptr    = maxval.ptr;
-      s->ck.max_value.str_val.length = maxval.length;
+      s->ck.max_value.str_val = maximum_value;
     }
   }
 }
@@ -554,44 +511,37 @@ void __device__ mergeStringColumnStats(merge_state_s *s,
                                        Storage &storage)
 {
   uint32_t len_sum    = 0;
-  const char *smin    = nullptr;
-  const char *smax    = nullptr;
-  uint32_t lmin       = 0;
-  uint32_t lmax       = 0;
   uint32_t non_nulls  = 0;
   uint32_t null_count = 0;
-  bool has_minmax;
-  string_stats minval, maxval;
+  bool has_minmax     = false;
+
+  string_view minimum_value = string_view::max();
+  string_view maximum_value = string_view::min();
 
   for (uint32_t i = t; i < num_chunks; i += block_size) {
     const statistics_chunk *ck = &ck_in[i];
     if (ck->has_minmax) {
-      uint32_t len0    = ck->min_value.str_val.length;
-      const char *ptr0 = ck->min_value.str_val.ptr;
-      uint32_t len1    = ck->max_value.str_val.length;
-      const char *ptr1 = ck->max_value.str_val.ptr;
-      if (!smin || (ptr0 && nvstr_is_lesser(ptr0, len0, smin, lmin))) {
-        lmin = len0;
-        smin = ptr0;
+      has_minmax = true;
+      string_view val0 = ck->min_value.str_val;
+      string_view val1 = ck->max_value.str_val;
+      if (val0 < minimum_value) {
+        minimum_value = val0;
       }
-      if (!smax || (ptr1 && nvstr_is_greater(ptr1, len1, smax, lmax))) {
-        lmax = len1;
-        smax = ptr1;
+      if (val1 > maximum_value) {
+        maximum_value = val1;
       }
     }
     if (ck->has_sum) { len_sum += (uint32_t)ck->sum.i_val; }
     non_nulls += ck->non_nulls;
     null_count += ck->null_count;
   }
-  minval = WarpReduceMinString(smin, lmin);
-  maxval = WarpReduceMaxString(smax, lmax);
+  minimum_value = WarpReduceMin(minimum_value);
+  maximum_value = WarpReduceMax(maximum_value);
   if (!(t & 0x1f)) {
-    s->warp_min[t >> 5].str_val.ptr    = minval.ptr;
-    s->warp_min[t >> 5].str_val.length = minval.length;
-    s->warp_max[t >> 5].str_val.ptr    = maxval.ptr;
-    s->warp_max[t >> 5].str_val.length = maxval.length;
+    s->warp_min[t >> 5].str_val = minimum_value;
+    s->warp_max[t >> 5].str_val = maximum_value;
   }
-  has_minmax = __syncthreads_or(smin != nullptr);
+  has_minmax = __syncthreads_or(has_minmax);
 
   non_nulls = cub::BlockReduce<uint32_t, block_size>(storage.u32).Sum(non_nulls);
   __syncthreads();
@@ -599,12 +549,11 @@ void __device__ mergeStringColumnStats(merge_state_s *s,
   __syncthreads();
   if (has_minmax) { len_sum = cub::BlockReduce<uint32_t, block_size>(storage.u32).Sum(len_sum); }
   if (t < 32 * 1) {
-    minval = WarpReduceMinString(s->warp_min[t].str_val.ptr, s->warp_min[t].str_val.length);
+    minimum_value = WarpReduceMin(s->warp_min[t].str_val);
     if (!(t & 0x1f)) {
       if (has_minmax) {
-        s->ck.min_value.str_val.ptr    = minval.ptr;
-        s->ck.min_value.str_val.length = minval.length;
-        s->ck.sum.i_val                = len_sum;
+        s->ck.min_value.str_val = minimum_value;
+        s->ck.sum.i_val         = len_sum;
       }
       s->ck.has_minmax = has_minmax;
       s->ck.has_sum    = has_minmax;
@@ -612,11 +561,9 @@ void __device__ mergeStringColumnStats(merge_state_s *s,
       s->ck.null_count = null_count;
     }
   } else if (t < 32 * 2) {
-    maxval =
-      WarpReduceMaxString(s->warp_max[t & 0x1f].str_val.ptr, s->warp_max[t & 0x1f].str_val.length);
+    maximum_value = WarpReduceMax(s->warp_max[t & 0x1f].str_val);
     if (!((t & 0x1f) and has_minmax)) {
-      s->ck.max_value.str_val.ptr    = maxval.ptr;
-      s->ck.max_value.str_val.length = maxval.length;
+      s->ck.max_value.str_val = maximum_value;
     }
   }
 }
