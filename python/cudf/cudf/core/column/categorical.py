@@ -946,12 +946,7 @@ class CategoricalColumn(column.ColumnBase):
         )
 
     def __setitem__(self, key, value):
-        if cudf.utils.dtypes.is_scalar(value):
-            new_values = [value]
-        else:
-            new_values = value
-
-        to_add_categories = cudf.Index(new_values).difference(self.categories)
+        to_add_categories = cudf.Index(value).difference(self.categories)
 
         if (
             len(to_add_categories)
