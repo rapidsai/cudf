@@ -1746,10 +1746,8 @@ dremel_data get_dremel_data(column_view h_col,
 
     auto empties_idx_end =
       thrust::copy_if(rmm::exec_policy(stream),
-                      thrust::make_counting_iterator(0),
-                      thrust::make_counting_iterator(lcv.size()),
-                      // thrust::make_counting_iterator(start),
-                      // thrust::make_counting_iterator(end),
+                      thrust::make_counting_iterator(start),
+                      thrust::make_counting_iterator(end),
                       empties_idx.begin(),
                       [d_off] __device__(auto i) { return d_off[i] == d_off[i + 1]; });
     auto empties_end = thrust::gather(rmm::exec_policy(stream),
@@ -1766,7 +1764,7 @@ dremel_data get_dremel_data(column_view h_col,
   // // Reverse the nesting in order to merge the deepest level with the leaf first and merge bottom
   // // up
   // auto curr_col        = h_col;
-  size_t max_vals_size = 20;
+  size_t max_vals_size = 40;
   // size_t max_vals_size = 0;
   // std::vector<column_view> nesting_levels;
   // std::vector<uint8_t> def_at_level;
@@ -1837,54 +1835,59 @@ dremel_data get_dremel_data(column_view h_col,
   std::tie(device_view_owners, d_nesting_levels) =
     contiguous_copy_column_device_views<column_device_view>(nesting_levels, stream);
 
-  // Add one more value at the end so that we can have the max def level
-  def_at_level.push_back(0);
   thrust::exclusive_scan(
     thrust::host, def_at_level.begin(), def_at_level.end(), def_at_level.begin());
 
-  // // Sliced list column views only have offsets applied to top level. Get offsets for each level.
-  // rmm::device_uvector<size_type> d_column_offsets(nesting_levels.size() + 1, stream);
-  // rmm::device_uvector<size_type> d_column_ends(nesting_levels.size() + 1, stream);
+  // Sliced list column views only have offsets applied to top level. Get offsets for each level.
+  rmm::device_uvector<size_type> d_column_offsets(nesting_levels.size(), stream);
+  rmm::device_uvector<size_type> d_column_ends(nesting_levels.size(), stream);
 
-  // auto d_col = column_device_view::create(h_col, stream);
-  // cudf::detail::device_single_thread(
-  //   [offset_at_level  = d_column_offsets.data(),
-  //    end_idx_at_level = d_column_ends.data(),
-  //    col              = *d_col] __device__() {
-  //     auto curr_col           = col;
-  //     size_type off           = curr_col.offset();
-  //     size_type end           = off + curr_col.size();
-  //     size_type level         = 0;
-  //     offset_at_level[level]  = off;
-  //     end_idx_at_level[level] = end;
-  //     ++level;
-  //     // Apply offset recursively until we get to leaf data
-  //     // Skip doing the following for any structs we encounter in between.
-  //     while (curr_col.type().id() == type_id::LIST) {
-  //       off = curr_col.child(lists_column_view::offsets_column_index).element<size_type>(off);
-  //       end = curr_col.child(lists_column_view::offsets_column_index).element<size_type>(end);
-  //       offset_at_level[level]  = off;
-  //       end_idx_at_level[level] = end;
-  //       ++level;
-  //       curr_col = curr_col.child(lists_column_view::child_column_index);
-  //     }
-  //   },
-  //   stream);
+  auto d_col = column_device_view::create(h_col, stream);
+  cudf::detail::device_single_thread(
+    [offset_at_level  = d_column_offsets.data(),
+     end_idx_at_level = d_column_ends.data(),
+     col              = *d_col] __device__() {
+      auto curr_col           = col;
+      size_type off           = curr_col.offset();
+      size_type end           = off + curr_col.size();
+      size_type level         = 0;
+      offset_at_level[level]  = off;
+      end_idx_at_level[level] = end;
+      ++level;
+      // Apply offset recursively until we get to leaf data
+      // Skip doing the following for any structs we encounter in between.
+      while (curr_col.type().id() == type_id::LIST or curr_col.type().id() == type_id::STRUCT) {
+        if (curr_col.type().id() == type_id::LIST) {
+          off = curr_col.child(lists_column_view::offsets_column_index).element<size_type>(off);
+          end = curr_col.child(lists_column_view::offsets_column_index).element<size_type>(end);
+          offset_at_level[level]  = off;
+          end_idx_at_level[level] = end;
+          ++level;
+          curr_col = curr_col.child(lists_column_view::child_column_index);
+        } else {
+          curr_col = curr_col.child(0);
+        }
+      }
+    },
+    stream);
+
+  print(d_column_offsets, "offsets");
+  print(d_column_ends, "ends");
 
   thrust::host_vector<size_type> column_offsets(nesting_levels.size() + 1);
-  // CUDA_TRY(cudaMemcpyAsync(column_offsets.data(),
-  //                          d_column_offsets.data(),
-  //                          d_column_offsets.size() * sizeof(size_type),
-  //                          cudaMemcpyDeviceToHost,
-  //                          stream.value()));
+  CUDA_TRY(cudaMemcpyAsync(column_offsets.data(),
+                           d_column_offsets.data(),
+                           d_column_offsets.size() * sizeof(size_type),
+                           cudaMemcpyDeviceToHost,
+                           stream.value()));
   thrust::host_vector<size_type> column_ends(nesting_levels.size() + 1);
-  // CUDA_TRY(cudaMemcpyAsync(column_ends.data(),
-  //                          d_column_ends.data(),
-  //                          d_column_ends.size() * sizeof(size_type),
-  //                          cudaMemcpyDeviceToHost,
-  //                          stream.value()));
+  CUDA_TRY(cudaMemcpyAsync(column_ends.data(),
+                           d_column_ends.data(),
+                           d_column_ends.size() * sizeof(size_type),
+                           cudaMemcpyDeviceToHost,
+                           stream.value()));
 
-  // stream.synchronize();
+  stream.synchronize();
 
   rmm::device_uvector<uint8_t> rep_level(max_vals_size, stream);
   rmm::device_uvector<uint8_t> def_level(max_vals_size, stream);
@@ -1899,8 +1902,7 @@ dremel_data get_dremel_data(column_view h_col,
     size_t level              = nesting_levels.size() - 2;
     curr_col                  = nesting_levels[level];
     auto lcv                  = lists_column_view(get_list_level(curr_col));
-    auto offset_size_at_level = lcv.offsets().size();
-    // auto offset_size_at_level = column_ends[level] - column_offsets[level] + 1;
+    auto offset_size_at_level = column_ends[level] - column_offsets[level] + 1;
 
     // Get empties at this level
     rmm::device_uvector<size_type> empties(0, stream);
@@ -1943,13 +1945,6 @@ dremel_data get_dremel_data(column_view h_col,
         } while (is_col_nested);
         return def;
       });
-    // [idx            = empties_idx.data(),
-    //  mask           = lcv.null_mask(),
-    //  level_nullable = level_nullability.empty() ? false : level_nullability[level],
-    //  curr_def_level = def_at_level[level]] __device__(auto i) {
-    //   return curr_def_level +
-    //          ((mask && bit_is_set(mask, idx[i]) or (!mask && level_nullable)) ? 1 : 0);
-    // });
 
     // `nesting_levels.size()` == no of list levels + leaf. Max repetition level = no of list levels
     auto input_child_rep_it = thrust::make_constant_iterator(nesting_levels.size() - 1);
@@ -1980,12 +1975,6 @@ dremel_data get_dremel_data(column_view h_col,
         } while (is_col_nested);
         return def;
       });
-    // [mask           = lcv.child().null_mask(),
-    //  level_nullable = level_nullability.empty() ? false : level_nullability[level + 1],
-    //  curr_def_level = def_at_level[level + 1]] __device__(auto i) {
-    //   return curr_def_level +
-    //          ((mask && bit_is_set(mask, i) or (!mask && level_nullable)) ? 1 : 0);
-    // });
 
     // Zip the input and output value iterators so that merge operation is done only once
     auto input_parent_zip_it =
@@ -2000,10 +1989,8 @@ dremel_data get_dremel_data(column_view h_col,
     auto ends = thrust::merge_by_key(rmm::exec_policy(stream),
                                      empties.begin(),
                                      empties.begin() + empties_size,
-                                     thrust::make_counting_iterator(0),
-                                     thrust::make_counting_iterator(lcv.child().size()),
-                                     //  thrust::make_counting_iterator(column_offsets[level + 1]),
-                                     //  thrust::make_counting_iterator(column_ends[level + 1]),
+                                     thrust::make_counting_iterator(column_offsets[level + 1]),
+                                     thrust::make_counting_iterator(column_ends[level + 1]),
                                      input_parent_zip_it,
                                      input_child_zip_it,
                                      thrust::make_discard_iterator(),
@@ -2045,10 +2032,9 @@ dremel_data get_dremel_data(column_view h_col,
   print(new_offsets, "drem_off");
 
   for (int level = nesting_levels.size() - 3; level >= 0; level--) {
-    curr_col = nesting_levels[level];
-    auto lcv = lists_column_view(get_list_level(curr_col));
-    // auto offset_size_at_level = column_ends[level] - column_offsets[level] + 1;
-    auto offset_size_at_level = lcv.offsets().size();
+    curr_col                  = nesting_levels[level];
+    auto lcv                  = lists_column_view(get_list_level(curr_col));
+    auto offset_size_at_level = column_ends[level] - column_offsets[level] + 1;
 
     // Get empties at this level
     rmm::device_uvector<size_type> empties(0, stream);
@@ -2056,6 +2042,9 @@ dremel_data get_dremel_data(column_view h_col,
     size_t empties_size;
     std::tie(empties, empties_idx, empties_size) =
       get_empties(nesting_levels[level], column_offsets[level], column_ends[level]);
+
+    print(empties, "empties");
+    print(empties_idx, "empties_idx");
 
     auto offset_transformer = [new_child_offsets = new_offsets.data(),
                                child_start       = column_offsets[level + 1]] __device__(auto x) {
@@ -2085,7 +2074,7 @@ dremel_data get_dremel_data(column_view h_col,
           if (d_nullability[l]) {
             // TODO: consolidate this functor with similar functionality thrice in this function and
             // one more in gpuEncodePages.
-            if (col.is_valid(i)) {
+            if (col.nullable() and bit_is_set(col.null_mask(), i)) {
               ++def;
             } else {  // We have found the shallowest level at which this row is null
               break;
@@ -2099,13 +2088,6 @@ dremel_data get_dremel_data(column_view h_col,
         } while (is_col_nested);
         return def;
       });
-    // [idx            = empties_idx.data(),
-    //  mask           = lcv.null_mask(),
-    //  level_nullable = level_nullability.empty() ? false : level_nullability[level],
-    //  curr_def_level = def_at_level[level]] __device__(auto i) {
-    //   return curr_def_level +
-    //          ((mask && bit_is_set(mask, idx[i]) or (!mask && level_nullable)) ? 1 : 0);
-    // });
 
     // Zip the input and output value iterators so that merge operation is done only once
     auto input_parent_zip_it =
@@ -2159,21 +2141,22 @@ dremel_data get_dremel_data(column_view h_col,
                     scatter_it + new_offsets.size() - 1,
                     new_offsets.begin(),
                     rep_level.begin());
+    print(rep_level, "rep");
+    print(def_level, "def");
   }
 
   size_t level_vals_size = new_offsets.back_element(stream);
   rep_level.resize(level_vals_size, stream);
   def_level.resize(level_vals_size, stream);
 
-  print(rep_level, "rep");
-  print(def_level, "def");
-
   stream.synchronize();
 
   size_type leaf_col_offset = column_offsets[column_offsets.size() - 1];
-  size_type leaf_data_size  = column_ends[column_ends.size() - 1] - leaf_col_offset;
-  uint8_t max_def_level     = def_at_level.back() - 1;
+  // TODO: No longer hd_vec. Can use column_ends.back()
+  size_type leaf_data_size = column_ends[column_ends.size() - 1] - leaf_col_offset;
+  uint8_t max_def_level    = def_at_level.back() - 1;
 
+  // TODO: Don't need all these anymore. See if they can be trimmed.
   return dremel_data{std::move(new_offsets),
                      std::move(rep_level),
                      std::move(def_level),
