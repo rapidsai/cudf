@@ -17,7 +17,6 @@
 /**
  * @brief Serialized trie implementation for C++/CUDA
  * @file trie.cuh
- *
  */
 
 #pragma once
@@ -89,6 +88,12 @@ inline thrust::host_vector<SerialTrieNode> createSerializedTrie(
   // Serialize the tree trie
   std::deque<IndexedTrieNode> to_visit;
   thrust::host_vector<SerialTrieNode> nodes;
+
+  // If the Tree trie matches empty strings, the root node is marked as 'end of word'.
+  // The first node in the serialized trie is also used to match empty strings, so we're
+  // initializing it using the `is_end_of_word` value from the root node.
+  nodes.push_back(SerialTrieNode(trie_terminating_character, tree_trie.is_end_of_word));
+
   // Add root node to queue. this node is not included to the serialized trie
   to_visit.emplace_back(&tree_trie, -1);
   while (!to_visit.empty()) {
@@ -112,7 +117,7 @@ inline thrust::host_vector<SerialTrieNode> createSerializedTrie(
         has_children = true;
       }
     }
-    // Only add the terminating character is there any nodes were added
+    // Only add the terminating character any nodes were added
     if (has_children) { nodes.push_back(SerialTrieNode(trie_terminating_character)); }
   }
   return nodes;
@@ -130,23 +135,22 @@ inline thrust::host_vector<SerialTrieNode> createSerializedTrie(
  * @return Boolean value, true if string is found, false otherwise
  */
 __host__ __device__ inline bool serialized_trie_contains(device_span<SerialTrieNode const> trie,
-                                                         char const *key,
-                                                         size_t key_len)
+                                                         device_span<char const> key)
 {
-  if (trie.data() == nullptr) return false;
-  int curr_node = 0;
-  for (size_t i = 0; i < key_len; ++i) {
+  if (trie.data() == nullptr || trie.empty()) return false;
+  if (key.empty()) return trie.front().is_leaf;
+  auto curr_node = trie.begin() + 1;
+  for (auto curr_key = key.begin(); curr_key < key.end(); ++curr_key) {
     // Don't jump away from root node
-    if (i != 0) { curr_node += trie[curr_node].children_offset; }
+    if (curr_key != key.begin()) { curr_node += curr_node->children_offset; }
     // Search for the next character in the array of children nodes
     // Nodes are sorted - terminate search if the node is larger or equal
-    while (trie[curr_node].character != trie_terminating_character &&
-           trie[curr_node].character < key[i]) {
+    while (curr_node->character != trie_terminating_character && curr_node->character < *curr_key) {
       ++curr_node;
     }
     // Could not find the next character, done with the search
-    if (trie[curr_node].character != key[i]) { return false; }
+    if (curr_node->character != *curr_key) { return false; }
   }
   // Even if the node is present, return true only if that node is at the end of a word
-  return trie[curr_node].is_leaf;
+  return curr_node->is_leaf;
 }

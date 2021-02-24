@@ -1,4 +1,4 @@
-# Copyright (c) 2020, NVIDIA CORPORATION.
+# Copyright (c) 2020-2021, NVIDIA CORPORATION.
 import numpy as np
 
 from . import (
@@ -10,22 +10,27 @@ from . import (
     datetime,
     filling,
     gpuarrow,
+    groupby,
     hash,
     interop,
     join,
+    json,
     merge,
     null_mask,
     nvtext,
     orc,
+    parquet,
     partitioning,
     quantiles,
     reduce,
     replace,
     reshape,
     rolling,
+    round,
     search,
     sort,
     stream_compaction,
+    string_casting,
     strings,
     table,
     transpose,

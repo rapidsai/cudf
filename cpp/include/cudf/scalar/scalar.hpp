@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -21,7 +21,6 @@
 
 #include <cudf/fixed_point/fixed_point.hpp>
 
-#include <rmm/thrust_rmm_allocator.h>
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_buffer.hpp>
 #include <rmm/device_scalar.hpp>
@@ -331,26 +330,25 @@ class fixed_point_scalar : public scalar {
                      bool is_valid                       = true,
                      rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
                      rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
-    : scalar{data_type{type_to_id<T>(), 0}, is_valid, stream, mr},
-      _data{numeric::scaled_integer<rep_type>{value}.value}
+    : scalar{data_type{type_to_id<T>(), value.scale()}, is_valid, stream, mr}, _data{value.value()}
   {
-    CUDF_EXPECTS(value == (T{_data.value(), numeric::scale_type{0}}),
-                 "scale of fixed_point value should be zero");
   }
 
   /**
    * @brief Construct a new fixed_point scalar object from existing device memory.
    *
-   * @param[in] data The scalar's data in device memory
-   * @param[in] is_valid Whether the value held by the scalar is valid
-   * @param[in] stream CUDA stream used for device memory operations.
-   * @param[in] mr Device memory resource to use for device memory allocation
+   * @param[in] data      The scalar's data in device memory
+   * @param[in] scale     The scale of the fixed_point scalar
+   * @param[in] is_valid  Whether the value held by the scalar is valid
+   * @param[in] stream    CUDA stream used for device memory operations.
+   * @param[in] mr        Device memory resource to use for device memory allocation
    */
   fixed_point_scalar(rmm::device_scalar<rep_type>&& data,
+                     numeric::scale_type scale,
                      bool is_valid                       = true,
                      rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
                      rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
-    : scalar{data_type{type_to_id<T>()}, is_valid, stream, mr},  // note that scale is ignored here
+    : scalar{data_type{type_to_id<T>(), scale}, is_valid, stream, mr},
       _data{std::forward<rmm::device_scalar<rep_type>>(data)}
   {
   }
@@ -363,6 +361,17 @@ class fixed_point_scalar : public scalar {
   rep_type value(rmm::cuda_stream_view stream = rmm::cuda_stream_default) const
   {
     return _data.value(stream);
+  }
+
+  /**
+   * @brief Get the decimal32 or decimal64
+   *
+   * @param stream CUDA stream used for device memory operations.
+   */
+  T fixed_point_value(rmm::cuda_stream_view stream = rmm::cuda_stream_default) const
+  {
+    using namespace numeric;
+    return T{scaled_integer<rep_type>{_data.value(stream), scale_type{type().scale()}}};
   }
 
   /**
@@ -421,11 +430,7 @@ class string_scalar : public scalar {
   string_scalar(value_type const& source,
                 bool is_valid                       = true,
                 rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
-                rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
-    : scalar(data_type(type_id::STRING), is_valid),
-      _data(source.data(), source.size_bytes(), stream, mr)
-  {
-  }
+                rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
   /**
    * @brief Construct a new string scalar object from string_view in device memory
@@ -439,10 +444,7 @@ class string_scalar : public scalar {
   string_scalar(rmm::device_scalar<value_type>& data,
                 bool is_valid                       = true,
                 rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
-                rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
-    : string_scalar(data.value(stream), is_valid, stream, mr)
-  {
-  }
+                rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
   /**
    * @brief Implicit conversion operator to get the value of the scalar in a host std::string
@@ -461,10 +463,7 @@ class string_scalar : public scalar {
    *
    * @param stream CUDA stream used for device memory operations.
    */
-  value_type value(rmm::cuda_stream_view stream = rmm::cuda_stream_default) const
-  {
-    return value_type{data(), size()};
-  }
+  value_type value(rmm::cuda_stream_view stream = rmm::cuda_stream_default) const;
 
   /**
    * @brief Returns the size of the string in bytes

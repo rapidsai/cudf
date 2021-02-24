@@ -184,7 +184,7 @@ std::unique_ptr<cudf::column> normalize_spaces(
   auto d_chars = chars_column->mutable_view().data<char>();
 
   // copy tokens to the chars buffer
-  thrust::for_each_n(rmm::exec_policy(stream)->on(stream.value()),
+  thrust::for_each_n(rmm::exec_policy(stream),
                      thrust::make_counting_iterator<cudf::size_type>(0),
                      strings_count,
                      normalize_spaces_fn{d_strings, d_offsets, d_chars});
@@ -220,8 +220,9 @@ std::unique_ptr<cudf::column> normalize_characters(cudf::strings_column_view con
     return normalizer.normalize(d_chars, d_offsets, strings.size(), stream);
   }();
 
-  CUDF_EXPECTS(result.first->size() <= std::numeric_limits<cudf::size_type>::max(),
-               "output too large for strings column");
+  CUDF_EXPECTS(
+    result.first->size() <= static_cast<std::size_t>(std::numeric_limits<cudf::size_type>::max()),
+    "output too large for strings column");
 
   // convert the result into a strings column
   // - the cp_chars are the new 4-byte code-point values for all the characters in the output
@@ -247,7 +248,7 @@ std::unique_ptr<cudf::column> normalize_characters(cudf::strings_column_view con
 
   // build the chars output data: convert the 4-byte code-point values into UTF-8 chars
   thrust::for_each_n(
-    rmm::exec_policy(stream)->on(stream.value()),
+    rmm::exec_policy(stream),
     thrust::make_counting_iterator<cudf::size_type>(0),
     strings_count,
     codepoint_to_utf8_fn{*strings_column, cp_chars, cp_offsets, d_offsets, d_chars});

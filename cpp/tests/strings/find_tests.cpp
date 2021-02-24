@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2020, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -23,7 +23,6 @@
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_utilities.hpp>
 #include <cudf_test/column_wrapper.hpp>
-#include <cudf_test/type_lists.hpp>
 
 #include <vector>
 
@@ -281,7 +280,7 @@ TEST_F(StringsFindTest, ErrorCheck)
                cudf::logic_error);
 }
 
-class FindParmsTest : public StringsFindTest, public testing::WithParamInterface<int32_t> {
+class FindParmsTest : public StringsFindTest, public testing::WithParamInterface<cudf::size_type> {
 };
 
 TEST_P(FindParmsTest, Find)
@@ -308,12 +307,12 @@ TEST_P(FindParmsTest, Find)
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
   }
   {
-    auto begin   = position;
+    auto begin   = static_cast<int32_t>(position);
     auto results = cudf::strings::find(strings_view, cudf::string_scalar(""), begin);
     cudf::test::fixed_width_column_wrapper<int32_t> expected(
       {begin, (begin > 0 ? -1 : 0), begin, begin, begin});
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
-    auto end = position + 1;
+    auto end = static_cast<int32_t>(position + 1);
     results  = cudf::strings::rfind(strings_view, cudf::string_scalar(""), 0, end);
     cudf::test::fixed_width_column_wrapper<int32_t> rexpected({end, 0, end, end, end});
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, rexpected);
@@ -322,4 +321,4 @@ TEST_P(FindParmsTest, Find)
 
 INSTANTIATE_TEST_CASE_P(StringsFindTest,
                         FindParmsTest,
-                        testing::ValuesIn(std::array<int32_t, 4>{0, 1, 2, 3}));
+                        testing::ValuesIn(std::array<cudf::size_type, 4>{0, 1, 2, 3}));

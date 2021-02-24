@@ -62,7 +62,6 @@ struct aggregation_request {
  * For every `aggregation_request` given to `groupby::aggregate` an
  * `aggregation_result` will be returned. The `aggregation_result` holds the
  * resulting column(s) for each requested aggregation on the `request`s values.
- *
  */
 struct aggregation_result {
   /// Columns of results from an `aggregation_request`

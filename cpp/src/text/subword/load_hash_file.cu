@@ -50,7 +50,7 @@ const codepoint_metadata_type* get_codepoint_metadata(rmm::cuda_stream_view stre
     codepoint_metadata_type* table =
       static_cast<codepoint_metadata_type*>(rmm::mr::get_current_device_resource()->allocate(
         codepoint_metadata_size * sizeof(codepoint_metadata_type), stream));
-    thrust::fill(rmm::exec_policy(stream)->on(stream.value()),
+    thrust::fill(rmm::exec_policy(stream),
                  table + cp_section1_end,
                  table + codepoint_metadata_size,
                  codepoint_metadata_default_value);
@@ -83,7 +83,7 @@ const aux_codepoint_data_type* get_aux_codepoint_data(rmm::cuda_stream_view stre
     aux_codepoint_data_type* table =
       static_cast<aux_codepoint_data_type*>(rmm::mr::get_current_device_resource()->allocate(
         aux_codepoint_data_size * sizeof(aux_codepoint_data_type), stream));
-    thrust::fill(rmm::exec_policy(stream)->on(stream.value()),
+    thrust::fill(rmm::exec_policy(stream),
                  table + aux_section1_end,
                  table + aux_codepoint_data_size,
                  aux_codepoint_default_value);

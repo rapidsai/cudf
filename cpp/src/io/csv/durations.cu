@@ -47,25 +47,25 @@ template <typename T>
 __device__ void dissect_duration(T duration, duration_component* timeparts)
 {
   timeparts->is_negative = (duration < T{0});
-  timeparts->day         = simt::std::chrono::floor<duration_D>(duration).count();
+  timeparts->day         = cuda::std::chrono::floor<duration_D>(duration).count();
 
-  if (simt::std::is_same<T, duration_D>::value) return;
+  if (cuda::std::is_same<T, duration_D>::value) return;
 
   // adjust for pandas format
   if (timeparts->is_negative) {
     duration =
-      simt::std::chrono::duration_cast<T>(duration % duration_D(1) + simt::std::chrono::hours(24));
+      cuda::std::chrono::duration_cast<T>(duration % duration_D(1) + cuda::std::chrono::hours(24));
   }
-  duration_s seconds = simt::std::chrono::duration_cast<duration_s>(duration);
+  duration_s seconds = cuda::std::chrono::duration_cast<duration_s>(duration);
   timeparts->hour =
-    (simt::std::chrono::duration_cast<simt::std::chrono::hours>(seconds) % duration_D(1)).count();
-  timeparts->minute = (simt::std::chrono::duration_cast<simt::std::chrono::minutes>(seconds) %
-                       simt::std::chrono::hours(1))
+    (cuda::std::chrono::duration_cast<cuda::std::chrono::hours>(seconds) % duration_D(1)).count();
+  timeparts->minute = (cuda::std::chrono::duration_cast<cuda::std::chrono::minutes>(seconds) %
+                       cuda::std::chrono::hours(1))
                         .count();
-  timeparts->second = (seconds % simt::std::chrono::minutes(1)).count();
-  if (not simt::std::is_same<T, duration_s>::value) {
+  timeparts->second = (seconds % cuda::std::chrono::minutes(1)).count();
+  if (not cuda::std::is_same<T, duration_s>::value) {
     timeparts->nanosecond =
-      (simt::std::chrono::duration_cast<duration_ns>(duration) % duration_s(1)).count();
+      (cuda::std::chrono::duration_cast<duration_ns>(duration) % duration_s(1)).count();
   }
 }
 
@@ -195,7 +195,7 @@ struct dispatch_from_durations_fn {
     auto chars_view = chars_column->mutable_view();
     auto d_chars    = chars_view.template data<char>();
 
-    thrust::for_each_n(rmm::exec_policy(stream)->on(stream.value()),
+    thrust::for_each_n(rmm::exec_policy(stream),
                        thrust::make_counting_iterator<size_type>(0),
                        strings_count,
                        duration_to_string_fn<T>{d_column, d_new_offsets, d_chars});

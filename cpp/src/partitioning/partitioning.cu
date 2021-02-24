@@ -27,6 +27,7 @@
 #include <cudf/table/table_device_view.cuh>
 
 #include <rmm/cuda_stream_view.hpp>
+#include <rmm/exec_policy.hpp>
 
 namespace cudf {
 namespace {
@@ -85,7 +86,6 @@ class bitwise_partitioner {
   const size_type mask;
 };
 
-/* --------------------------------------------------------------------------*/
 /**
  * @brief Computes which partition each row of a device_table will belong to
  based on hashing each row, and applying a partition function to the hash value.
@@ -111,7 +111,6 @@ class bitwise_partitioner {
  partition(num_partitions -1) size, ...} }
  * @param[out] global_partition_sizes The number of rows in each partition.
  */
-/* ----------------------------------------------------------------------------*/
 template <class row_hasher_t, typename partitioner_type>
 __global__ void compute_row_partition_numbers(row_hasher_t the_hasher,
                                               const size_type num_rows,
@@ -169,7 +168,6 @@ __global__ void compute_row_partition_numbers(row_hasher_t the_hasher,
   }
 }
 
-/* --------------------------------------------------------------------------*/
 /**
  * @brief  Given an array of partition numbers, computes the final output
  location for each element in the output such that all rows with the same
@@ -187,7 +185,6 @@ __global__ void compute_row_partition_numbers(row_hasher_t the_hasher,
          {block0 partition(num_partitions-1) offset, block1
  partition(num_partitions -1) offset, ...} }
  */
-/* ----------------------------------------------------------------------------*/
 __global__ void compute_row_output_locations(size_type* __restrict__ row_partition_numbers,
                                              const size_type num_rows,
                                              const size_type num_partitions,
@@ -227,7 +224,6 @@ __global__ void compute_row_output_locations(size_type* __restrict__ row_partiti
   }
 }
 
-/* --------------------------------------------------------------------------*/
 /**
  * @brief Move one column from the input table to the hashed table.
  *
@@ -244,7 +240,6 @@ __global__ void compute_row_output_locations(size_type* __restrict__ row_partiti
  * for each block
  * @param[in] scanned_block_partition_sizes The scan of block_partition_sizes
  */
-/* ----------------------------------------------------------------------------*/
 template <typename InputIter, typename DataType>
 __global__ void copy_block_partitions(InputIter input_iter,
                                       DataType* __restrict__ output_buf,
@@ -398,10 +393,12 @@ struct copy_block_partitions_dispatcher {
                                      rmm::cuda_stream_view stream,
                                      rmm::mr::device_memory_resource* mr)
   {
-    rmm::device_buffer output(input.size() * sizeof(DataType), stream, mr);
+    using Type = device_storage_type_t<DataType>;
 
-    copy_block_partitions_impl(input.data<DataType>(),
-                               static_cast<DataType*>(output.data()),
+    rmm::device_buffer output(input.size() * sizeof(Type), stream, mr);
+
+    copy_block_partitions_impl(input.data<Type>(),
+                               static_cast<Type*>(output.data()),
                                input.size(),
                                num_partitions,
                                row_partition_numbers,
@@ -534,7 +531,7 @@ std::pair<std::unique_ptr<table>, std::vector<size_type>> hash_partition_table(
 
   // Compute exclusive scan of all blocks' partition sizes in-place to determine
   // the starting point for each blocks portion of each partition in the output
-  thrust::exclusive_scan(rmm::exec_policy(stream)->on(stream.value()),
+  thrust::exclusive_scan(rmm::exec_policy(stream),
                          block_partition_sizes.begin(),
                          block_partition_sizes.end(),
                          scanned_block_partition_sizes.data().get());
@@ -543,7 +540,7 @@ std::pair<std::unique_ptr<table>, std::vector<size_type>> hash_partition_table(
   // location of each partition in final output.
   // TODO This can be done independently on a separate stream
   size_type* scanned_global_partition_sizes{global_partition_sizes.data().get()};
-  thrust::exclusive_scan(rmm::exec_policy(stream)->on(stream.value()),
+  thrust::exclusive_scan(rmm::exec_policy(stream),
                          global_partition_sizes.begin(),
                          global_partition_sizes.end(),
                          scanned_global_partition_sizes);
@@ -681,10 +678,8 @@ struct dispatch_map_type {
 
     // `histogram` was created with an extra entry at the end such that an
     // exclusive scan will put the total number of rows at the end
-    thrust::exclusive_scan(rmm::exec_policy()->on(stream.value()),
-                           histogram.begin(),
-                           histogram.end(),
-                           histogram.begin());
+    thrust::exclusive_scan(
+      rmm::exec_policy(stream), histogram.begin(), histogram.end(), histogram.begin());
 
     // Copy offsets to host
     std::vector<size_type> partition_offsets(histogram.size());
@@ -696,7 +691,7 @@ struct dispatch_map_type {
 
     // For each `partition_map[i]`, atomically increment the corresponding
     // partition offset to determine `i`s location in the output
-    thrust::transform(rmm::exec_policy(stream)->on(stream.value()),
+    thrust::transform(rmm::exec_policy(stream),
                       partition_map.begin<MapType>(),
                       partition_map.end<MapType>(),
                       scatter_map.begin(),

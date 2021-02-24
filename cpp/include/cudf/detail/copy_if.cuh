@@ -99,7 +99,6 @@ __launch_bounds__(block_size) __global__
 {
   T* __restrict__ output_data                   = output_view.data<T>();
   cudf::bitmask_type* __restrict__ output_valid = output_view.null_mask();
-  constexpr cudf::size_type leader_lane{0};
   static_assert(block_size <= 1024, "Maximum thread block size exceeded");
 
   int tid                      = threadIdx.x + per_thread * block_size * blockIdx.x;
@@ -109,8 +108,8 @@ __launch_bounds__(block_size) __global__
   __shared__ bool temp_valids[has_validity ? block_size + cudf::detail::warp_size : 1];
   __shared__ T temp_data[block_size];
 
-  cudf::size_type warp_valid_counts{0};
-  cudf::size_type block_sum = 0;
+  cudf::size_type warp_valid_counts{0};  // total valid sum over the `per_thread` loop below
+  cudf::size_type block_sum = 0;         // count passing filter over the `per_thread` loop below
 
   // Note that since the maximum gridDim.x on all supported GPUs is as big as
   // cudf::size_type, this loop is sufficient to cover our maximum column size
@@ -160,6 +159,8 @@ __launch_bounds__(block_size) __global__
       const int wid        = threadIdx.x / cudf::detail::warp_size;
       const int lane       = threadIdx.x % cudf::detail::warp_size;
 
+      cudf::size_type tmp_warp_valid_counts{0};
+
       if (tmp_block_sum > 0 && wid <= last_warp) {
         int valid_index = (block_offset / cudf::detail::warp_size) + wid;
 
@@ -168,9 +169,8 @@ __launch_bounds__(block_size) __global__
 
         // Note the atomicOr's below assume that output_valid has been set to
         // all zero before the kernel
-
         if (lane == 0 && valid_warp != 0) {
-          warp_valid_counts = __popc(valid_warp);
+          tmp_warp_valid_counts = __popc(valid_warp);
           if (wid > 0 && wid < last_warp)
             output_valid[valid_index] = valid_warp;
           else {
@@ -182,23 +182,46 @@ __launch_bounds__(block_size) __global__
         if ((wid == 0) && (last_warp == num_warps)) {
           uint32_t valid_warp = __ballot_sync(0xffffffff, temp_valids[block_size + threadIdx.x]);
           if (lane == 0 && valid_warp != 0) {
-            warp_valid_counts += __popc(valid_warp);
+            tmp_warp_valid_counts += __popc(valid_warp);
             atomicOr(&output_valid[valid_index + num_warps], valid_warp);
           }
         }
       }
+      warp_valid_counts += tmp_warp_valid_counts;
     }
 
     block_offset += tmp_block_sum;
     tid += block_size;
   }
   // Compute total null_count for this block and add it to global count
+  constexpr cudf::size_type leader_lane{0};
   cudf::size_type block_valid_count =
     cudf::detail::single_lane_block_sum_reduce<block_size, leader_lane>(warp_valid_counts);
+
   if (threadIdx.x == 0) {  // one thread computes and adds to null count
     atomicAdd(output_null_count, block_sum - block_valid_count);
   }
 }
+
+template <typename T, typename Enable = void>
+struct DeviceType {
+  using type = T;
+};
+
+template <typename T>
+struct DeviceType<T, std::enable_if_t<cudf::is_timestamp<T>()>> {
+  using type = typename T::rep;
+};
+
+template <typename T>
+struct DeviceType<T, std::enable_if_t<std::is_same<numeric::decimal32, T>::value>> {
+  using type = typename cudf::device_storage_type_t<T>;
+};
+
+template <typename T>
+struct DeviceType<T, std::enable_if_t<std::is_same<numeric::decimal64, T>::value>> {
+  using type = typename cudf::device_storage_type_t<T>;
+};
 
 // Dispatch functor which performs the scatter for fixed column types and gather for other
 template <typename Filter, int block_size>
@@ -219,7 +242,8 @@ struct scatter_gather_functor {
 
     bool has_valid = input.nullable();
 
-    using Type   = cudf::device_storage_type_t<T>;
+    using Type = typename DeviceType<T>::type;
+
     auto scatter = (has_valid) ? scatter_kernel<Type, Filter, block_size, true>
                                : scatter_kernel<Type, Filter, block_size, false>;
 
@@ -262,7 +286,7 @@ struct scatter_gather_functor {
   {
     rmm::device_uvector<cudf::size_type> indices(output_size, stream);
 
-    thrust::copy_if(rmm::exec_policy(stream)->on(stream.value()),
+    thrust::copy_if(rmm::exec_policy(stream),
                     thrust::counting_iterator<cudf::size_type>(0),
                     thrust::counting_iterator<cudf::size_type>(input.size()),
                     indices.begin(),

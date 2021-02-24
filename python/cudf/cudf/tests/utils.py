@@ -11,8 +11,8 @@ import pytest
 from pandas import testing as tm
 
 import cudf
-from cudf.core.column.datetime import _numpy_to_pandas_conversion
 from cudf._lib.null_mask import bitmask_allocation_size_bytes
+from cudf.core.column.datetime import _numpy_to_pandas_conversion
 from cudf.utils import dtypes as dtypeutils
 
 supported_numpy_dtypes = [
@@ -74,8 +74,6 @@ def assert_eq(left, right, **kwargs):
     without switching between assert_frame_equal/assert_series_equal/...
     functions.
     """
-    __tracebackhide__ = True
-
     if hasattr(left, "to_pandas"):
         left = left.to_pandas()
     if hasattr(right, "to_pandas"):
@@ -99,13 +97,13 @@ def assert_eq(left, right, **kwargs):
         else:
             assert np.array_equal(left, right)
     else:
+        # Use the overloaded __eq__ of the operands
         if left == right:
             return True
+        elif any([np.issubdtype(type(x), np.floating) for x in (left, right)]):
+            np.testing.assert_almost_equal(left, right)
         else:
-            if np.isnan(left):
-                assert np.isnan(right)
-            else:
-                assert np.allclose(left, right, equal_nan=True)
+            np.testing.assert_equal(left, right)
     return True
 
 

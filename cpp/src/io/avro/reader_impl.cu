@@ -17,7 +17,7 @@
 /**
  * @file reader_impl.cu
  * @brief cuDF-IO Avro reader class implementation
- **/
+ */
 
 #include "reader_impl.hpp"
 
@@ -28,7 +28,6 @@
 #include <cudf/utilities/error.hpp>
 #include <cudf/utilities/traits.hpp>
 
-#include <rmm/thrust_rmm_allocator.h>
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_buffer.hpp>
 #include <rmm/device_uvector.hpp>
@@ -46,7 +45,7 @@ using namespace cudf::io;
 namespace {
 /**
  * @brief Function that translates Avro data kind to cuDF type enum
- **/
+ */
 type_id to_type_id(const avro::schema_entry *col)
 {
   switch (col->kind) {
@@ -67,7 +66,7 @@ type_id to_type_id(const avro::schema_entry *col)
 /**
  * @brief A helper wrapper for Avro file metadata. Provides some additional
  * convenience methods for initializing and accessing the metadata and schema
- **/
+ */
 class metadata : public file_metadata {
  public:
   explicit metadata(datasource *const src) : source(src) {}
@@ -77,7 +76,7 @@ class metadata : public file_metadata {
    *
    * @param[in,out] row_start Starting row of the selection
    * @param[in,out] row_count Total number of rows selected
-   **/
+   */
   void init_and_select_rows(int &row_start, int &row_count)
   {
     const auto buffer = source->host_read(0, source->size());
@@ -93,7 +92,7 @@ class metadata : public file_metadata {
    * @param[in] use_names List of column names to select
    *
    * @return List of column names
-   **/
+   */
   auto select_columns(std::vector<std::string> use_names)
   {
     std::vector<std::pair<int, std::string>> selection;
@@ -188,11 +187,7 @@ rmm::device_buffer reader::impl::decompress_data(const rmm::device_buffer &comp_
   }
 
   for (int loop_cnt = 0; loop_cnt < 2; loop_cnt++) {
-    CUDA_TRY(cudaMemcpyAsync(inflate_in.device_ptr(),
-                             inflate_in.host_ptr(),
-                             inflate_in.memory_size(),
-                             cudaMemcpyHostToDevice,
-                             stream.value()));
+    inflate_in.host_to_device(stream);
     CUDA_TRY(
       cudaMemsetAsync(inflate_out.device_ptr(), 0, inflate_out.memory_size(), stream.value()));
     if (_metadata->codec == "deflate") {
@@ -204,12 +199,7 @@ rmm::device_buffer reader::impl::decompress_data(const rmm::device_buffer &comp_
     } else {
       CUDF_FAIL("Unsupported compression codec\n");
     }
-    CUDA_TRY(cudaMemcpyAsync(inflate_out.host_ptr(),
-                             inflate_out.device_ptr(),
-                             inflate_out.memory_size(),
-                             cudaMemcpyDeviceToHost,
-                             stream.value()));
-    stream.synchronize();
+    inflate_out.device_to_host(stream, true);
 
     // Check if larger output is required, as it's not known ahead of time
     if (_metadata->codec == "deflate" && !loop_cnt) {
@@ -310,11 +300,7 @@ void reader::impl::decode_data(const rmm::device_buffer &block_data,
   }
   rmm::device_buffer block_list(
     _metadata->block_list.data(), _metadata->block_list.size() * sizeof(block_desc_s), stream);
-  CUDA_TRY(cudaMemcpyAsync(schema_desc.device_ptr(),
-                           schema_desc.host_ptr(),
-                           schema_desc.memory_size(),
-                           cudaMemcpyHostToDevice,
-                           stream.value()));
+  schema_desc.host_to_device(stream);
 
   gpu::DecodeAvroColumnData(static_cast<block_desc_s *>(block_list.data()),
                             schema_desc.device_ptr(),
@@ -337,12 +323,7 @@ void reader::impl::decode_data(const rmm::device_buffer &block_data,
                                stream.value()));
     }
   }
-  CUDA_TRY(cudaMemcpyAsync(schema_desc.host_ptr(),
-                           schema_desc.device_ptr(),
-                           schema_desc.memory_size(),
-                           cudaMemcpyDeviceToHost,
-                           stream.value()));
-  stream.synchronize();
+  schema_desc.device_to_host(stream, true);
 
   for (size_t i = 0; i < out_buffers.size(); i++) {
     const auto col_idx          = selection[i].first;

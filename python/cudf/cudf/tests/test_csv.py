@@ -1,4 +1,4 @@
-# Copyright (c) 2018-2020, NVIDIA CORPORATION.
+# Copyright (c) 2018-2021, NVIDIA CORPORATION.
 
 import csv
 import gzip
@@ -15,7 +15,7 @@ import pytest
 
 import cudf
 from cudf import read_csv
-from cudf.tests.utils import assert_eq
+from cudf.tests.utils import assert_eq, assert_exceptions_equal
 
 
 def make_numeric_dataframe(nrows, dtype):
@@ -519,7 +519,7 @@ def test_csv_reader_float_decimal(tmpdir):
 def test_csv_reader_NaN_values():
 
     names = dtypes = ["float32"]
-    empty_cells = '\n""\n  \n "" \n'
+    empty_cells = '\n""\n'
     default_na_cells = (
         "#N/A\n#N/A N/A\n#NA\n-1.#IND\n"
         "-1.#QNAN\n-NaN\n-nan\n1.#IND\n"
@@ -531,47 +531,54 @@ def test_csv_reader_NaN_values():
     custom_na_values = ["NV_NAN", "NotANumber"]
 
     # test default NA values. empty cells should also yield NaNs
-    all_nan = read_csv(
+    gdf = read_csv(
         StringIO(default_na_cells + empty_cells), names=names, dtype=dtypes
     )
-    assert all(np.isnan(all_nan.to_pandas()["float32"]))
+    pdf = pd.read_csv(
+        StringIO(default_na_cells + empty_cells), names=names, dtype=np.float32
+    )
+    assert_eq(pdf, gdf)
 
     # custom NA values
-    all_nan = read_csv(
+    gdf = read_csv(
         StringIO(all_cells),
         names=names,
         dtype=dtypes,
         na_values=custom_na_values,
     )
-    assert all(np.isnan(all_nan.to_pandas()["float32"]))
+    pdf = pd.read_csv(
+        StringIO(all_cells),
+        names=names,
+        dtype=np.float32,
+        na_values=custom_na_values,
+    )
+    assert_eq(pdf, gdf)
 
     # custom NA values
-    all_nan = read_csv(
+    gdf = read_csv(
         StringIO(empty_cells + default_na_cells + "_NAA_\n"),
         names=names,
         dtype=dtypes,
         na_values="_NAA_",
     )
-    assert all(np.isnan(all_nan.to_pandas()["float32"]))
+    pdf = pd.read_csv(
+        StringIO(empty_cells + default_na_cells + "_NAA_\n"),
+        names=names,
+        dtype=np.float32,
+        na_values="_NAA_",
+    )
+    assert_eq(pdf, gdf)
 
     # data type detection should evaluate the column to int8 (all nulls)
-    df_int8 = read_csv(
-        StringIO(default_na_cells + custom_na_cells),
-        header=None,
-        na_values=custom_na_values,
+    gdf = read_csv(
+        StringIO(all_cells), header=None, na_values=custom_na_values,
     )
-    assert df_int8.dtypes[0] == "int8"
-    assert all(
-        df_int8["0"][idx] is cudf.NA for idx in range(len(df_int8["0"]))
-    )
+    assert gdf.dtypes[0] == "int8"
+    assert all(gdf["0"][idx] is cudf.NA for idx in range(len(gdf["0"])))
 
-    # data type detection should evaluate the column to object;
-    # for data type detection, cells need to be completely empty,
-    # but some cells in empty_cells contain blank characters and quotes
-    df_obj = read_csv(
-        StringIO(all_cells), header=None, na_values=custom_na_values
-    )
-    assert df_obj.dtypes[0] == np.dtype("object")
+    # data type detection should evaluate the column to object if some nulls
+    gdf = read_csv(StringIO(all_cells), header=None)
+    assert gdf.dtypes[0] == np.dtype("object")
 
 
 def test_csv_reader_thousands(tmpdir):
@@ -1898,34 +1905,74 @@ def test_csv_reader_category_error():
         cudf.read_csv(StringIO(csv_buf), dtype="category")
 
 
-def test_csv_reader_keep_default_na_error():
-    # TODO: Remove this test once following
-    # issue is fixed: https://github.com/rapidsai/cudf/issues/6680
-    df = cudf.DataFrame({"a": [1, 2, 3], "b": ["a", "b", "c"]})
-    csv_buf = df.to_csv()
-
-    with pytest.raises(
-        NotImplementedError,
-        match=re.escape(
-            "keep_default_na=False is currently not supported, please refer "
-            "to: https://github.com/rapidsai/cudf/issues/6680"
-        ),
-    ):
-        cudf.read_csv(StringIO(csv_buf), keep_default_na=False)
-
-
-def test_csv_writer_datetime_sep_error():
-    # TODO: Remove this test once following
-    # issues is fixed: https://github.com/rapidsai/cudf/issues/6699
+def test_csv_writer_datetime_sep():
     df = cudf.DataFrame(
         {"a": cudf.Series([22343, 2323423, 234324234], dtype="datetime64[ns]")}
     )
+    df["a"] = df["a"].astype("datetime64[s]")
+    expected = df.to_pandas().to_csv(date_format="%Y-%m-%dT%H:%M:%SZ", sep="-")
+    actual = df.to_csv(sep="-")
+    assert expected == actual
 
-    with pytest.raises(
-        ValueError,
-        match=re.escape(
-            "sep cannot be '-' when writing a datetime64 dtype to csv, "
-            "refer to: https://github.com/rapidsai/cudf/issues/6699"
-        ),
-    ):
-        df.to_csv(sep="-")
+
+def test_na_filter_empty_fields():
+    test_na = "TEST_NAN"
+    df = pd.DataFrame({"col0": ["valid", None, "also_valid", "", test_na]})
+    buffer = df.to_csv(index=False)
+
+    pdf = pd.read_csv(StringIO(buffer), na_filter=False)
+    gdf = cudf.read_csv(StringIO(buffer), na_filter=False)
+    assert_eq(pdf, gdf)
+
+    pdf = pd.read_csv(StringIO(buffer), keep_default_na=False)
+    gdf = cudf.read_csv(StringIO(buffer), keep_default_na=False)
+    assert_eq(pdf, gdf)
+
+    pdf = pd.read_csv(
+        StringIO(buffer), keep_default_na=False, na_values=test_na
+    )
+    gdf = cudf.read_csv(
+        StringIO(buffer), keep_default_na=False, na_values=test_na
+    )
+    assert_eq(pdf, gdf)
+
+
+def test_csv_sep_error():
+    pdf = pd.DataFrame({"a": [1, 2, 3]})
+    gdf = cudf.DataFrame({"a": [1, 2, 3]})
+    assert_exceptions_equal(
+        lfunc=pdf.to_csv,
+        rfunc=gdf.to_csv,
+        lfunc_args_and_kwargs=([], {"sep": "abc"}),
+        rfunc_args_and_kwargs=([], {"sep": "abc"}),
+        expected_error_message='"sep" must be a 1-character string',
+    )
+
+    assert_exceptions_equal(
+        lfunc=pdf.to_csv,
+        rfunc=gdf.to_csv,
+        lfunc_args_and_kwargs=([], {"sep": 1}),
+        rfunc_args_and_kwargs=([], {"sep": 1}),
+        expected_error_message='"sep" must be string, not int',
+    )
+
+
+def test_to_csv_encoding_error():
+    # TODO: Remove this test once following
+    # issue is fixed: https://github.com/rapidsai/cudf/issues/2957
+    df = cudf.DataFrame({"a": ["你好", "test"]})
+    encoding = "utf-8-sig"
+    error_message = (
+        f"Encoding {encoding} is not supported. "
+        + "Currently, only utf-8 encoding is supported."
+    )
+    with pytest.raises(NotImplementedError, match=re.escape(error_message)):
+        df.to_csv("test.csv", encoding=encoding)
+
+
+def test_to_csv_compression_error():
+    df = cudf.DataFrame({"a": ["test"]})
+    compression = "snappy"
+    error_message = "Writing compressed csv is not currently supported in cudf"
+    with pytest.raises(NotImplementedError, match=re.escape(error_message)):
+        df.to_csv("test.csv", compression=compression)

@@ -20,9 +20,16 @@ namespace jit {
 namespace code {
 const char* kernel_header =
   R"***(
-    #include <cudf/types.hpp>
-    #include <simt/limits>
+    #pragma once
 
+    // Include Jitify's cstddef header first
+    #include <cstddef>
+
+    #include <cuda/std/climits>
+    #include <cuda/std/cstddef>
+    #include <cuda/std/limits>
+
+    #include <cudf/types.hpp>
     #include <cudf/wrappers/timestamps.hpp>
   )***";
 

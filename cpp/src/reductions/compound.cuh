@@ -25,7 +25,7 @@
 namespace cudf {
 namespace reduction {
 namespace compound {
-/** --------------------------------------------------------------------------*
+/**
  * @brief Multi-step reduction for operations such as mean and variance, and
  * standard deviation.
  *
@@ -41,7 +41,7 @@ namespace compound {
  * @tparam ResultType   the output cudf dtype
  * @tparam Op           the compound operator derived from
  * `cudf::reduction::op::compound_op`
- * ----------------------------------------------------------------------------**/
+ */
 template <typename ElementType, typename ResultType, typename Op>
 std::unique_ptr<scalar> compound_reduction(column_view const& col,
                                            data_type const output_dtype,

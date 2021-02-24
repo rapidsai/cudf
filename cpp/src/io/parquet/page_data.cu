@@ -21,8 +21,8 @@
 #include <cudf/detail/utilities/release_assert.cuh>
 #include <cudf/utilities/bit.hpp>
 
-#include <rmm/thrust_rmm_allocator.h>
 #include <rmm/cuda_stream_view.hpp>
+#include <rmm/exec_policy.hpp>
 
 #include <thrust/iterator/transform_iterator.h>
 #include <thrust/iterator/transform_output_iterator.h>
@@ -813,6 +813,39 @@ inline __device__ void gpuOutputDecimalAsFloat(volatile page_state_s *s,
   scale = s->col.decimal_scale;
   d     = Int128ToDouble_rn(i128_lo, i128_hi);
   *dst  = (scale < 0) ? (d * kPow10[min(-scale, 39)]) : (d / kPow10[min(scale, 39)]);
+}
+
+/**
+ * @brief Output a fixed-length byte array(len <= 8) as a 64-bit int
+ *
+ * @param[in,out] s Page state input/output
+ * @param[in] src_pos Source position
+ * @param[in] dst Pointer to row output data
+ */
+inline __device__ void gpuOutputFixedLenByteArrayAsInt64(volatile page_state_s *s,
+                                                         int src_pos,
+                                                         int64_t *dst)
+{
+  uint32_t const dtype_len_in = s->dtype_len_in;
+  uint8_t const *data         = s->dict_base ? s->dict_base : s->data_start;
+  uint32_t const pos =
+    (s->dict_base ? ((s->dict_bits > 0) ? s->dict_idx[src_pos & (non_zero_buffer_size - 1)] : 0)
+                  : src_pos) *
+    dtype_len_in;
+  uint32_t const dict_size = s->dict_size;
+
+  int64_t unscaled64 = 0;
+  for (unsigned int i = 0; i < dtype_len_in; i++) {
+    uint32_t v = (pos + i < dict_size) ? data[pos + i] : 0;
+    unscaled64 = (unscaled64 << 8) | v;
+  }
+  // Shift the unscaled value up and back down when it isn't all 8 bytes,
+  // which sign extend the value for correctly representing negative numbers.
+  if (dtype_len_in < 8) {
+    unscaled64 <<= 64 - dtype_len_in * 8;
+    unscaled64 >>= 64 - dtype_len_in * 8;
+  }
+  *dst = unscaled64;
 }
 
 /**
@@ -1690,7 +1723,14 @@ extern "C" __global__ void __launch_bounds__(block_size)
           switch (dtype) {
             case INT32: gpuOutputFast(s, src_pos, static_cast<uint32_t *>(dst)); break;
             case INT64: gpuOutputFast(s, src_pos, static_cast<uint2 *>(dst)); break;
-            default: gpuOutputDecimalAsFloat(s, src_pos, static_cast<double *>(dst), dtype); break;
+            default:
+              // we currently do not support reading byte arrays larger than DECIMAL64
+              if (s->dtype_len_in <= 8) {
+                gpuOutputFixedLenByteArrayAsInt64(s, src_pos, static_cast<int64_t *>(dst));
+              } else {
+                gpuOutputDecimalAsFloat(s, src_pos, static_cast<double *>(dst), dtype);
+              }
+              break;
           }
         } else if (dtype == INT96)
           gpuOutputInt96Timestamp(s, src_pos, static_cast<int64_t *>(dst));
@@ -1792,7 +1832,7 @@ void PreprocessColumnData(hostdevice_vector<PageInfo> &pages,
     pages.device_ptr(), [] __device__(PageInfo const &page) { return page.chunk_idx; });
   auto page_input = thrust::make_transform_iterator(
     pages.device_ptr(), [] __device__(PageInfo const &page) { return page.num_rows; });
-  thrust::exclusive_scan_by_key(rmm::exec_policy(stream)->on(stream.value()),
+  thrust::exclusive_scan_by_key(rmm::exec_policy(stream),
                                 key_input,
                                 key_input + pages.size(),
                                 page_input,
@@ -1827,15 +1867,14 @@ void PreprocessColumnData(hostdevice_vector<PageInfo> &pages,
   rmm::device_uvector<int> page_keys(pages.size(), stream);
   rmm::device_uvector<int> page_index(pages.size(), stream);
   {
-    thrust::transform(rmm::exec_policy(stream)->on(stream.value()),
+    thrust::transform(rmm::exec_policy(stream),
                       pages.device_ptr(),
                       pages.device_ptr() + pages.size(),
                       page_keys.begin(),
                       [] __device__(PageInfo const &page) { return page.src_col_schema; });
 
-    thrust::sequence(
-      rmm::exec_policy(stream)->on(stream.value()), page_index.begin(), page_index.end());
-    thrust::stable_sort_by_key(rmm::exec_policy(stream)->on(stream.value()),
+    thrust::sequence(rmm::exec_policy(stream), page_index.begin(), page_index.end());
+    thrust::stable_sort_by_key(rmm::exec_policy(stream),
                                page_keys.begin(),
                                page_keys.end(),
                                page_index.begin(),
@@ -1868,8 +1907,7 @@ void PreprocessColumnData(hostdevice_vector<PageInfo> &pages,
       // for struct columns, higher levels of the output columns are shared between input
       // columns. so don't compute any given level more than once.
       if (out_buf.size == 0) {
-        int size = thrust::reduce(
-          rmm::exec_policy(stream)->on(stream.value()), size_input, size_input + pages.size());
+        int size = thrust::reduce(rmm::exec_policy(stream), size_input, size_input + pages.size());
 
         // if this is a list column add 1 for non-leaf levels for the terminating offset
         if (out_buf.type.id() == type_id::LIST && l_idx < max_depth) { size++; }
@@ -1879,7 +1917,7 @@ void PreprocessColumnData(hostdevice_vector<PageInfo> &pages,
       }
 
       // compute per-page start offset
-      thrust::exclusive_scan_by_key(rmm::exec_policy(stream)->on(stream.value()),
+      thrust::exclusive_scan_by_key(rmm::exec_policy(stream),
                                     page_keys.begin(),
                                     page_keys.end(),
                                     size_input,

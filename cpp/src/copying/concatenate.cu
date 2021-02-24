@@ -29,6 +29,8 @@
 #include <cudf/table/table_device_view.cuh>
 
 #include <rmm/cuda_stream_view.hpp>
+#include <rmm/device_vector.hpp>
+#include <rmm/exec_policy.hpp>
 
 #include <thrust/binary_search.h>
 #include <thrust/transform_scan.h>
@@ -100,7 +102,7 @@ auto create_device_views(std::vector<column_view> const& views, rmm::cuda_stream
  * @param dest_mask The output buffer to copy null masks into
  * @param number_of_mask_bits The total number of null masks bits that are being
  * copied
- **/
+ */
 __global__ void concatenate_masks_kernel(column_device_view const* views,
                                          size_t const* output_offsets,
                                          size_type number_of_views,
@@ -225,7 +227,7 @@ std::unique_ptr<column> fused_concatenate(std::vector<column_view> const& views,
   auto const& d_offsets   = std::get<2>(device_views);
   auto const output_size  = std::get<3>(device_views);
 
-  CUDF_EXPECTS(output_size < std::numeric_limits<size_type>::max(),
+  CUDF_EXPECTS(output_size < static_cast<std::size_t>(std::numeric_limits<size_type>::max()),
                "Total number of concatenated rows exceeds size_type range");
 
   // Allocate output
@@ -274,10 +276,7 @@ std::unique_ptr<column> for_each_concatenate(std::vector<column_view> const& vie
 
   auto count = 0;
   for (auto& v : views) {
-    thrust::copy(rmm::exec_policy(stream)->on(stream.value()),
-                 v.begin<T>(),
-                 v.end<T>(),
-                 m_view.begin<T>() + count);
+    thrust::copy(rmm::exec_policy(stream), v.begin<T>(), v.end<T>(), m_view.begin<T>() + count);
     count += v.size();
   }
 
@@ -365,7 +364,7 @@ void bounds_and_type_check(ColIter begin, ColIter end)
     std::accumulate(begin, end, std::size_t{}, [](size_t a, auto const& b) {
       return a + static_cast<size_t>(b.size());
     });
-  CUDF_EXPECTS(total_row_count <= std::numeric_limits<size_type>::max(),
+  CUDF_EXPECTS(total_row_count <= static_cast<std::size_t>(std::numeric_limits<size_type>::max()),
                "Total number of concatenated rows exceeds size_type range");
 
   // march each child

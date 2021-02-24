@@ -1,6 +1,6 @@
 /*
  *
- *  Copyright (c) 2019-2020, NVIDIA CORPORATION.
+ *  Copyright (c) 2019-2021, NVIDIA CORPORATION.
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -35,6 +35,7 @@ import java.io.FileInputStream;
 import java.io.IOException;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.util.ArrayList;
@@ -92,7 +93,7 @@ public class TableTest extends CudfTestBase {
    * @param expect The expected result column
    * @param cv The input column
    */
-  public static void assertColumnsAreEqual(ColumnVector expect, ColumnVector cv) {
+  public static void assertColumnsAreEqual(ColumnView expect, ColumnView cv) {
     assertColumnsAreEqual(expect, cv, "unnamed");
   }
 
@@ -102,7 +103,7 @@ public class TableTest extends CudfTestBase {
    * @param cv The input column
    * @param colName The name of the column
    */
-  public static void assertColumnsAreEqual(ColumnVector expected, ColumnVector cv, String colName) {
+  public static void assertColumnsAreEqual(ColumnView expected, ColumnView cv, String colName) {
     assertPartialColumnsAreEqual(expected, 0, expected.getRowCount(), cv, colName, true);
   }
 
@@ -121,7 +122,7 @@ public class TableTest extends CudfTestBase {
    * @param expected The expected result Struct column
    * @param cv The input Struct column
    */
-  public static void assertStructColumnsAreEqual(ColumnVector expected, ColumnVector cv) {
+  public static void assertStructColumnsAreEqual(ColumnView expected, ColumnView cv) {
     assertPartialStructColumnsAreEqual(expected, 0, expected.getRowCount(), cv, "unnamed", true);
   }
 
@@ -134,8 +135,8 @@ public class TableTest extends CudfTestBase {
    * @param colName The name of the column
    * @param enableNullCheck Whether to check for nulls in the Struct column
    */
-  public static void assertPartialStructColumnsAreEqual(ColumnVector expected, long rowOffset, long length,
-                                                        ColumnVector cv, String colName, boolean enableNullCheck) {
+  public static void assertPartialStructColumnsAreEqual(ColumnView expected, long rowOffset, long length,
+      ColumnView cv, String colName, boolean enableNullCheck) {
     try (HostColumnVector hostExpected = expected.copyToHost();
          HostColumnVector hostcv = cv.copyToHost()) {
       assertPartialColumnsAreEqual(hostExpected, rowOffset, length, hostcv, colName, enableNullCheck);
@@ -149,8 +150,8 @@ public class TableTest extends CudfTestBase {
    * @param colName The name of the column
    * @param enableNullCheck Whether to check for nulls in the column
    */
-  public static void assertPartialColumnsAreEqual(ColumnVector expected, long rowOffset, long length,
-                                                  ColumnVector cv, String colName, boolean enableNullCheck) {
+  public static void assertPartialColumnsAreEqual(ColumnView expected, long rowOffset, long length,
+      ColumnView cv, String colName, boolean enableNullCheck) {
     try (HostColumnVector hostExpected = expected.copyToHost();
          HostColumnVector hostcv = cv.copyToHost()) {
       assertPartialColumnsAreEqual(hostExpected, rowOffset, length, hostcv, colName, enableNullCheck);
@@ -321,7 +322,7 @@ public class TableTest extends CudfTestBase {
       for (long row = 0; row < numRows; row++) {
         try (HostColumnVector cv = table.getColumn(col).copyToHost()) {
           Object key = 0;
-          if (cv.getType() == DType.INT32) {
+          if (cv.getType().equals(DType.INT32)) {
             key = cv.getInt(row);
           } else {
             key = cv.getDouble(row);
@@ -735,7 +736,7 @@ public class TableTest extends CudfTestBase {
       };
       assertTableTypes(expectedTypes, table);
     }
-    // An CudfException will be thrown here because we haven't support reading decimal stored as FIXED_LEN_BYTE_ARRAY.
+    // An CudfException will be thrown here because it contains a FIXED_LEN_BYTE_ARRAY column whose type length exceeds 8.
     ParquetOptions opts = ParquetOptions.builder().enableStrictDecimalType(true).build();
     assertThrows(ai.rapids.cudf.CudfException.class, () -> {
       try (Table table = Table.readParquet(opts, TEST_DECIMAL_PARQUET_FILE)) {}
@@ -804,7 +805,7 @@ public class TableTest extends CudfTestBase {
     try (Table table = Table.readORC(TEST_ORC_TIMESTAMP_DATE_FILE)) {
       assertEquals(2, table.getNumberOfColumns());
       found = table.getColumn(0).getType();
-      assertTrue(found.isTimestamp());
+      assertTrue(found.isTimestampType());
       assertEquals(DType.TIMESTAMP_MILLISECONDS, table.getColumn(1).getType());
     }
 
@@ -1672,9 +1673,13 @@ public class TableTest extends CudfTestBase {
         .build()) {
       splits = t1.contiguousSplit(2, 5, 9);
       assertEquals(4, splits.length);
+      assertEquals(2, splits[0].getRowCount());
       assertEquals(2, splits[0].getTable().getRowCount());
+      assertEquals(3, splits[1].getRowCount());
       assertEquals(3, splits[1].getTable().getRowCount());
+      assertEquals(4, splits[2].getRowCount());
       assertEquals(4, splits[2].getTable().getRowCount());
+      assertEquals(1, splits[3].getRowCount());
       assertEquals(1, splits[3].getTable().getRowCount());
     } finally {
       if (splits != null) {
@@ -1697,9 +1702,13 @@ public class TableTest extends CudfTestBase {
         .build()) {
       splits = t1.contiguousSplit(2, 5, 9);
       assertEquals(4, splits.length);
+      assertEquals(2, splits[0].getRowCount());
       assertEquals(2, splits[0].getTable().getRowCount());
+      assertEquals(3, splits[1].getRowCount());
       assertEquals(3, splits[1].getTable().getRowCount());
+      assertEquals(4, splits[2].getRowCount());
       assertEquals(4, splits[2].getTable().getRowCount());
+      assertEquals(1, splits[3].getRowCount());
       assertEquals(1, splits[3].getTable().getRowCount());
     } finally {
       if (splits != null) {
@@ -2165,6 +2174,25 @@ public class TableTest extends CudfTestBase {
   }
 
   @Test
+  void testSerializationReconstructFromMetadata() throws IOException {
+    try (Table t = buildTestTable()) {
+      ByteArrayOutputStream bout = new ByteArrayOutputStream();
+      JCudfSerialization.writeToStream(t, bout, 0, t.getRowCount());
+      ByteArrayInputStream bin = new ByteArrayInputStream(bout.toByteArray());
+      try (JCudfSerialization.TableAndRowCountPair trcp = JCudfSerialization.readTableFrom(bin)) {
+        ContiguousTable contigTable = trcp.getContiguousTable();
+        DeviceMemoryBuffer oldbuf = contigTable.getBuffer();
+        try (DeviceMemoryBuffer newbuf = oldbuf.sliceWithCopy(0, oldbuf.getLength())) {
+          ByteBuffer metadata = contigTable.getMetadataDirectBuffer();
+          try (Table newTable = Table.fromPackedTable(metadata, newbuf)) {
+            assertTablesAreEqual(t, newTable);
+          }
+        }
+      }
+    }
+  }
+
+  @Test
   void testValidityFill() {
     byte[] buff = new byte[2];
     buff[0] = 0;
@@ -2249,25 +2277,34 @@ public class TableTest extends CudfTestBase {
 
   @Test
   void testWindowingCount() {
-    try (Table unsorted = new Table.TestBuilder().column( 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1) // GBY Key
-                                                 .column( 1, 1, 1, 1, 2, 2, 2, 2, 3, 3, 3, 3) // GBY Key
-                                                 .column( 1, 1, 2, 2, 3, 3, 4, 4, 5, 5, 6, 6) // OBY Key
-                                                 .column( 7, 5, 1, 9, 7, 9, 8, 2, 8, 0, 6, 6) // Agg Column
-                                                 .build()) {
+    try (Table unsorted = new Table.TestBuilder()
+        .column(1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1) // GBY Key
+        .column(1, 1, 1, 1, 2, 2, 2, 2, 3, 3, 3, 3) // GBY Key
+        .column(1, 1, 2, 2, 3, 3, 4, 4, 5, 5, 6, 6) // OBY Key
+        .column(7, 5, 1, 9, 7, 9, 8, 2, 8, 0, 6, 6) // Agg Column
+        .decimal32Column(-1, 1, 1, 1, 1, 2, 2, 2, 2, 3, 3, 3, 3) // Decimal GBY Key
+        .decimal64Column(1, 1L, 1L, 2L, 2L, 3L, 3L, 4L, 4L, 5L, 5L, 6L, 6L) // Decimal OBY Key
+        .build()) {
       try (Table sorted = unsorted.orderBy(Table.asc(0), Table.asc(1), Table.asc(2));
+           Table decSorted = unsorted.orderBy(Table.asc(0), Table.asc(4), Table.asc(5));
            ColumnVector expectSortedAggColumn = ColumnVector.fromBoxedInts(7, 5, 1, 9, 7, 9, 8, 2, 8, 0, 6, 6)) {
         ColumnVector sortedAggColumn = sorted.getColumn(3);
         assertColumnsAreEqual(expectSortedAggColumn, sortedAggColumn);
+        ColumnVector decSortedAggColumn = decSorted.getColumn(3);
+        assertColumnsAreEqual(expectSortedAggColumn, decSortedAggColumn);
 
         WindowOptions window = WindowOptions.builder()
-                                            .minPeriods(1)
-                                            .window(2, 1)
-                                            .build();
+            .minPeriods(1)
+            .window(2, 1)
+            .build();
 
         try (Table windowAggResults = sorted.groupBy(0, 1)
-                                            .aggregateWindows(WindowAggregate.count(3, window));
+            .aggregateWindows(Aggregation.count().onColumn(3).overWindow(window));
+             Table decWindowAggResults = decSorted.groupBy(0, 4)
+                 .aggregateWindows(Aggregation.count().onColumn(3).overWindow(window));
              ColumnVector expect = ColumnVector.fromBoxedInts(2, 3, 3, 2, 2, 3, 3, 2, 2, 3, 3, 2)) {
           assertColumnsAreEqual(expect, windowAggResults.getColumn(0));
+          assertColumnsAreEqual(expect, decWindowAggResults.getColumn(0));
         }
       }
     }
@@ -2275,25 +2312,37 @@ public class TableTest extends CudfTestBase {
 
   @Test
   void testWindowingMin() {
-    try (Table unsorted = new Table.TestBuilder().column( 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1) // GBY Key
-                                                 .column( 1, 1, 1, 1, 2, 2, 2, 2, 3, 3, 3, 3) // GBY Key
-                                                 .column( 1, 1, 2, 2, 3, 3, 4, 4, 5, 5, 6, 6) // OBY Key
-                                                 .column( 7, 5, 1, 9, 7, 9, 8, 2, 8, 0, 6, 6) // Agg Column
-                                                 .build()) {
+    try (Table unsorted = new Table.TestBuilder()
+        .column(1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1) // GBY Key
+        .column(1, 1, 1, 1, 2, 2, 2, 2, 3, 3, 3, 3) // GBY Key
+        .column(1, 1, 2, 2, 3, 3, 4, 4, 5, 5, 6, 6) // OBY Key
+        .column(7, 5, 1, 9, 7, 9, 8, 2, 8, 0, 6, 6) // Agg Column
+        .decimal32Column(-1, 1, 1, 1, 1, 2, 2, 2, 2, 3, 3, 3, 3) // Decimal GBY Key
+        .decimal64Column(1, 1L, 1L, 2L, 2L, 3L, 3L, 4L, 4L, 5L, 5L, 6L, 6L) // Decimal OBY Key
+        .decimal64Column(2, 7L, 5L, 1L, 9L, 7L, 9L, 8L, 2L, 8L, 0L, 6L, 6L) // Decimal Agg Column
+        .build()) {
       try (Table sorted = unsorted.orderBy(Table.asc(0), Table.asc(1), Table.asc(2));
-           ColumnVector expectSortedAggCol = ColumnVector.fromBoxedInts(7, 5, 1, 9, 7, 9, 8, 2, 8, 0, 6, 6)) {
+           Table decSorted = unsorted.orderBy(Table.asc(0), Table.asc(4), Table.asc(5));
+           ColumnVector expectSortedAggCol = ColumnVector.fromBoxedInts(7, 5, 1, 9, 7, 9, 8, 2, 8, 0, 6, 6);
+           ColumnVector expectDecSortedAggCol = ColumnVector.decimalFromLongs(2, 7, 5, 1, 9, 7, 9, 8, 2, 8, 0, 6, 6)) {
         ColumnVector sortedAggColumn = sorted.getColumn(3);
         assertColumnsAreEqual(expectSortedAggCol, sortedAggColumn);
+        ColumnVector decSortedAggColumn = decSorted.getColumn(6);
+        assertColumnsAreEqual(expectDecSortedAggCol, decSortedAggColumn);
 
         WindowOptions window = WindowOptions.builder()
-                                            .minPeriods(1)
-                                            .window(2, 1)
-                                            .build();
+            .minPeriods(1)
+            .window(2, 1)
+            .build();
 
         try (Table windowAggResults = sorted.groupBy(0, 1)
-                                            .aggregateWindows(WindowAggregate.min(3, window));
-             ColumnVector expect = ColumnVector.fromBoxedInts(5, 1, 1, 1, 7, 7, 2, 2, 0, 0, 0, 6)) {
+            .aggregateWindows(Aggregation.min().onColumn(3).overWindow(window));
+             Table decWindowAggResults = decSorted.groupBy(0, 4)
+                 .aggregateWindows(Aggregation.min().onColumn(6).overWindow(window));
+             ColumnVector expect = ColumnVector.fromBoxedInts(5, 1, 1, 1, 7, 7, 2, 2, 0, 0, 0, 6);
+             ColumnVector decExpect = ColumnVector.decimalFromLongs(2, 5, 1, 1, 1, 7, 7, 2, 2, 0, 0, 0, 6)) {
           assertColumnsAreEqual(expect, windowAggResults.getColumn(0));
+          assertColumnsAreEqual(decExpect, decWindowAggResults.getColumn(0));
         }
       }
     }
@@ -2301,25 +2350,37 @@ public class TableTest extends CudfTestBase {
 
   @Test
   void testWindowingMax() {
-    try (Table unsorted = new Table.TestBuilder().column( 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1) // GBY Key
-                                                 .column( 1, 1, 1, 1, 2, 2, 2, 2, 3, 3, 3, 3) // GBY Key
-                                                 .column( 1, 1, 2, 2, 3, 3, 4, 4, 5, 5, 6, 6) // OBY Key
-                                                 .column( 7, 5, 1, 9, 7, 9, 8, 2, 8, 0, 6, 6) // Agg Column
-                                                 .build()) {
+    try (Table unsorted = new Table.TestBuilder()
+        .column(1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1) // GBY Key
+        .column(1, 1, 1, 1, 2, 2, 2, 2, 3, 3, 3, 3) // GBY Key
+        .column(1, 1, 2, 2, 3, 3, 4, 4, 5, 5, 6, 6) // OBY Key
+        .column(7, 5, 1, 9, 7, 9, 8, 2, 8, 0, 6, 6) // Agg Column
+        .decimal32Column(-1, 1, 1, 1, 1, 2, 2, 2, 2, 3, 3, 3, 3) // Decimal GBY Key
+        .decimal64Column(1, 1L, 1L, 2L, 2L, 3L, 3L, 4L, 4L, 5L, 5L, 6L, 6L) // Decimal OBY Key
+        .decimal64Column(2, 7L, 5L, 1L, 9L, 7L, 9L, 8L, 2L, 8L, 0L, 6L, 6L) // Decimal Agg Column
+        .build()) {
       try (Table sorted = unsorted.orderBy(Table.asc(0), Table.asc(1), Table.asc(2));
-           ColumnVector expectSortedAggCol = ColumnVector.fromBoxedInts(7, 5, 1, 9, 7, 9, 8, 2, 8, 0, 6, 6)) {
+           Table decSorted = unsorted.orderBy(Table.asc(0), Table.asc(4), Table.asc(5));
+           ColumnVector expectSortedAggCol = ColumnVector.fromBoxedInts(7, 5, 1, 9, 7, 9, 8, 2, 8, 0, 6, 6);
+           ColumnVector expectDecSortedAggCol = ColumnVector.decimalFromLongs(2, 7, 5, 1, 9, 7, 9, 8, 2, 8, 0, 6, 6)) {
         ColumnVector sortedAggColumn = sorted.getColumn(3);
         assertColumnsAreEqual(expectSortedAggCol, sortedAggColumn);
+        ColumnVector decSortedAggColumn = decSorted.getColumn(6);
+        assertColumnsAreEqual(expectDecSortedAggCol, decSortedAggColumn);
 
         WindowOptions window = WindowOptions.builder()
-                                            .minPeriods(1)
-                                            .window(2, 1)
-                                            .build();
+            .minPeriods(1)
+            .window(2, 1)
+            .build();
 
         try (Table windowAggResults = sorted.groupBy(0, 1)
-                                            .aggregateWindows(WindowAggregate.max(3, window));
-             ColumnVector expect = ColumnVector.fromBoxedInts(7, 7, 9, 9, 9, 9, 9, 8, 8, 8, 6, 6)) {
+            .aggregateWindows(Aggregation.max().onColumn(3).overWindow(window));
+             Table decWindowAggResults = decSorted.groupBy(0, 4)
+                 .aggregateWindows(Aggregation.max().onColumn(6).overWindow(window));
+             ColumnVector expect = ColumnVector.fromBoxedInts(7, 7, 9, 9, 9, 9, 9, 8, 8, 8, 6, 6);
+             ColumnVector decExpect = ColumnVector.decimalFromLongs(2, 7, 7, 9, 9, 9, 9, 9, 8, 8, 8, 6, 6)) {
           assertColumnsAreEqual(expect, windowAggResults.getColumn(0));
+          assertColumnsAreEqual(decExpect, decWindowAggResults.getColumn(0));
         }
       }
     }
@@ -2327,26 +2388,25 @@ public class TableTest extends CudfTestBase {
 
   @Test
   void testWindowingSum() {
-    try (Table unsorted = new Table.TestBuilder().column( 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1) // GBY Key
-                                                 .column( 1, 1, 1, 1, 2, 2, 2, 2, 3, 3, 3, 3) // GBY Key
-                                                 .column( 1, 1, 2, 2, 3, 3, 4, 4, 5, 5, 6, 6) // OBY Key
-                                                 .column( 7, 5, 1, 9, 7, 9, 8, 2, 8, 0, 6, 6) // Agg Column
-                                                 .build();
-         ColumnVector expectSortedAggColumn = ColumnVector.fromBoxedInts(7, 5, 1, 9, 7, 9, 8, 2, 8, 0, 6, 6)) {
-
-      try (Table sorted = unsorted.orderBy(Table.asc(0), Table.asc(1), Table.asc(2))) {
+    try (Table unsorted = new Table.TestBuilder()
+        .column(1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1) // GBY Key
+        .column(1, 1, 1, 1, 2, 2, 2, 2, 3, 3, 3, 3) // GBY Key
+        .column(1, 1, 2, 2, 3, 3, 4, 4, 5, 5, 6, 6) // OBY Key
+        .column(7, 5, 1, 9, 7, 9, 8, 2, 8, 0, 6, 6) // Agg Column
+        .build()) {
+      try (Table sorted = unsorted.orderBy(Table.asc(0), Table.asc(1), Table.asc(2));
+           ColumnVector expectSortedAggColumn = ColumnVector.fromBoxedInts(7, 5, 1, 9, 7, 9, 8, 2, 8, 0, 6, 6)) {
         ColumnVector sortedAggColumn = sorted.getColumn(3);
         assertColumnsAreEqual(expectSortedAggColumn, sortedAggColumn);
 
         WindowOptions window = WindowOptions.builder()
-                                            .minPeriods(1)
-                                            .window(2, 1)
-                                            .build();
+            .minPeriods(1)
+            .window(2, 1)
+            .build();
 
         try (Table windowAggResults = sorted.groupBy(0, 1)
-                                            .aggregateWindows(WindowAggregate.sum(3, window));
-             ColumnVector expectAggResult = ColumnVector.fromBoxedLongs(12L, 13L, 15L, 10L, 16L, 24L, 19L, 10L, 8L, 14L, 12L, 12L);
-        ) {
+            .aggregateWindows(Aggregation.sum().onColumn(3).overWindow(window));
+             ColumnVector expectAggResult = ColumnVector.fromBoxedLongs(12L, 13L, 15L, 10L, 16L, 24L, 19L, 10L, 8L, 14L, 12L, 12L)) {
           assertColumnsAreEqual(expectAggResult, windowAggResults.getColumn(0));
         }
       }
@@ -2355,56 +2415,153 @@ public class TableTest extends CudfTestBase {
 
   @Test
   void testWindowingRowNumber() {
-    try (Table unsorted = new Table.TestBuilder().column( 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1) // GBY Key
-                                                 .column( 1, 1, 1, 1, 2, 2, 2, 2, 3, 3, 3, 3) // GBY Key
-                                                 .column( 1, 1, 2, 2, 3, 3, 4, 4, 5, 5, 6, 6) // OBY Key
-                                                 .column( 7, 5, 1, 9, 7, 9, 8, 2, 8, 0, 6, 6) // Agg Column
-                                                 .build();
-         ColumnVector expectSortedAggColumn = ColumnVector.fromBoxedInts(7, 5, 1, 9, 7, 9, 8, 2, 8, 0, 6, 6)) {
-
-      try (Table sorted = unsorted.orderBy(Table.asc(0), Table.asc(1), Table.asc(2))) {
+    try (Table unsorted = new Table.TestBuilder()
+        .column(1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1) // GBY Key
+        .column(1, 1, 1, 1, 2, 2, 2, 2, 3, 3, 3, 3) // GBY Key
+        .column(1, 1, 2, 2, 3, 3, 4, 4, 5, 5, 6, 6) // OBY Key
+        .column(7, 5, 1, 9, 7, 9, 8, 2, 8, 0, 6, 6) // Agg Column
+        .decimal32Column(-1, 1, 1, 1, 1, 2, 2, 2, 2, 3, 3, 3, 3) // Decimal GBY Key
+        .decimal64Column(1, 1L, 1L, 2L, 2L, 3L, 3L, 4L, 4L, 5L, 5L, 6L, 6L) // Decimal OBY Key
+        .decimal64Column(2, 7L, 5L, 1L, 9L, 7L, 9L, 8L, 2L, 8L, 0L, 6L, 6L) // Decimal Agg Column
+        .build()) {
+      try (Table sorted = unsorted.orderBy(Table.asc(0), Table.asc(1), Table.asc(2));
+           Table decSorted = unsorted.orderBy(Table.asc(0), Table.asc(4), Table.asc(5));
+           ColumnVector expectSortedAggColumn = ColumnVector.fromBoxedInts(7, 5, 1, 9, 7, 9, 8, 2, 8, 0, 6, 6);
+           ColumnVector expectDecSortedAggColumn = ColumnVector.decimalFromLongs(2, 7, 5, 1, 9, 7, 9, 8, 2, 8, 0, 6, 6)) {
         ColumnVector sortedAggColumn = sorted.getColumn(3);
         assertColumnsAreEqual(expectSortedAggColumn, sortedAggColumn);
+        ColumnVector decSortedAggColumn = decSorted.getColumn(6);
+        assertColumnsAreEqual(expectDecSortedAggColumn, decSortedAggColumn);
 
         WindowOptions.Builder windowBuilder = WindowOptions.builder().minPeriods(1);
 
         try (Table windowAggResults = sorted.groupBy(0, 1)
-                                            .aggregateWindows(WindowAggregate.row_number(3, windowBuilder.window(2,1).build()));
-             ColumnVector expectAggResult = ColumnVector.fromBoxedInts(1,2,2,2, 1,2,2,2, 1,2,2,2);
-        ) {
+            .aggregateWindows(Aggregation
+                .rowNumber()
+                .onColumn(3)
+                .overWindow(windowBuilder.window(2, 1).build()));
+             Table decWindowAggResults = decSorted.groupBy(0, 4)
+                 .aggregateWindows(Aggregation
+                     .rowNumber()
+                     .onColumn(6)
+                     .overWindow(windowBuilder.window(2, 1).build()));
+             ColumnVector expectAggResult = ColumnVector.fromBoxedInts(1, 2, 2, 2, 1, 2, 2, 2, 1, 2, 2, 2)) {
           assertColumnsAreEqual(expectAggResult, windowAggResults.getColumn(0));
+          assertColumnsAreEqual(expectAggResult, decWindowAggResults.getColumn(0));
         }
 
         try (Table windowAggResults = sorted.groupBy(0, 1)
-                                            .aggregateWindows(WindowAggregate.row_number(3, windowBuilder.window(3,2).build()));
-             ColumnVector expectAggResult = ColumnVector.fromBoxedInts(1,2,3,3, 1,2,3,3, 1,2,3,3);
-        ) {
+            .aggregateWindows(Aggregation
+                .rowNumber()
+                .onColumn(3)
+                .overWindow(windowBuilder.window(3, 2).build()));
+             Table decWindowAggResults = decSorted.groupBy(0, 4)
+                 .aggregateWindows(Aggregation
+                     .rowNumber()
+                     .onColumn(6)
+                     .overWindow(windowBuilder.window(3, 2).build()));
+             ColumnVector expectAggResult = ColumnVector.fromBoxedInts(1, 2, 3, 3, 1, 2, 3, 3, 1, 2, 3, 3)) {
           assertColumnsAreEqual(expectAggResult, windowAggResults.getColumn(0));
+          assertColumnsAreEqual(expectAggResult, decWindowAggResults.getColumn(0));
         }
 
         try (Table windowAggResults = sorted.groupBy(0, 1)
-                                            .aggregateWindows(WindowAggregate.row_number(3, windowBuilder.window(4,3).build()));
-             ColumnVector expectAggResult = ColumnVector.fromBoxedInts(1,2,3,4, 1,2,3,4, 1,2,3,4);
-        ) {
+            .aggregateWindows(Aggregation
+                .rowNumber()
+                .onColumn(3)
+                .overWindow(windowBuilder.window(4, 3).build()));
+             Table decWindowAggResults = decSorted.groupBy(0, 4)
+                 .aggregateWindows(Aggregation
+                     .rowNumber()
+                     .onColumn(6)
+                     .overWindow(windowBuilder.window(4, 3).build()));
+             ColumnVector expectAggResult = ColumnVector.fromBoxedInts(1, 2, 3, 4, 1, 2, 3, 4, 1, 2, 3, 4)) {
           assertColumnsAreEqual(expectAggResult, windowAggResults.getColumn(0));
+          assertColumnsAreEqual(expectAggResult, decWindowAggResults.getColumn(0));
         }
        }
     }
   }
 
   @Test
-  void testWindowingLead() {
-    try (Table unsorted = new Table.TestBuilder()
-        .column( 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1) // GBY Key
-        .column( 1, 1, 1, 1, 2, 2, 2, 2, 3, 3, 3, 3) // GBY Key
-        .column( 1, 1, 2, 2, 3, 3, 4, 4, 5, 5, 6, 6) // OBY Key
-        .column( 7, 5, 1, 9, 7, 9, 8, 2, 8, 0, 6, 6) // Agg Column
-        .build();
+  void testWindowingCollect() {
+    Aggregation aggCollect = Aggregation.collect();
+    WindowOptions winOpts = WindowOptions.builder()
+                                         .minPeriods(1)
+                                         .window(2, 1).build();
+    StructType nestedType = new StructType(false,
+        new BasicType(false, DType.INT32), new BasicType(false, DType.STRING));
+    try (Table raw = new Table.TestBuilder()
+             .column( 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1) // GBY Key
+             .column( 1, 1, 1, 1, 2, 2, 2, 2, 3, 3, 3, 3) // GBY Key
+             .column( 1, 2, 3, 4, 1, 2, 3, 4, 5, 6, 7, 8) // OBY Key
+             .column( 7, 5, 1, 9, 7, 9, 8, 2, 8, 0, 6, 6) // Agg Column of INT32
+             .column(nestedType,                          // Agg Column of Struct
+                 new StructData(1, "s1"), new StructData(2, "s2"), new StructData(3, "s3"),
+                 new StructData(4, "s4"), new StructData(11, "s11"), new StructData(22, "s22"),
+                 new StructData(33, "s33"), new StructData(44, "s44"), new StructData(111, "s111"),
+                 new StructData(222, "s222"), new StructData(333, "s333"), new StructData(444, "s444")
+              ).build();
          ColumnVector expectSortedAggColumn = ColumnVector.fromBoxedInts(7, 5, 1, 9, 7, 9, 8, 2, 8, 0, 6, 6)) {
-
-      try (Table sorted = unsorted.orderBy(Table.asc(0), Table.asc(1), Table.asc(2))) {
+      try (Table sorted = raw.orderBy(Table.asc(0), Table.asc(1), Table.asc(2))) {
         ColumnVector sortedAggColumn = sorted.getColumn(3);
         assertColumnsAreEqual(expectSortedAggColumn, sortedAggColumn);
+
+        // Primitive type: INT32
+        try (Table windowAggResults = sorted.groupBy(0, 1)
+                 .aggregateWindows(aggCollect.onColumn(3).overWindow(winOpts));
+             ColumnVector expected = ColumnVector.fromLists(
+                 new ListType(false, new BasicType(false, DType.INT32)),
+                 Arrays.asList(7,5), Arrays.asList(7,5,1), Arrays.asList(5,1,9), Arrays.asList(1,9),
+                 Arrays.asList(7,9), Arrays.asList(7,9,8), Arrays.asList(9,8,2), Arrays.asList(8,2),
+                 Arrays.asList(8,0), Arrays.asList(8,0,6), Arrays.asList(0,6,6), Arrays.asList(6,6))) {
+          assertColumnsAreEqual(expected, windowAggResults.getColumn(0));
+        }
+
+        // Nested type: Struct
+        List<StructData>[] expectedNestedData = new List[12];
+        expectedNestedData[0] = Arrays.asList(new StructData(1, "s1"),new StructData(2, "s2"));
+        expectedNestedData[1] = Arrays.asList(new StructData(1, "s1"),new StructData(2, "s2"),new StructData(3, "s3"));
+        expectedNestedData[2] = Arrays.asList(new StructData(2, "s2"),new StructData(3, "s3"),new StructData(4, "s4"));
+        expectedNestedData[3] = Arrays.asList(new StructData(3, "s3"),new StructData(4, "s4"));
+        expectedNestedData[4] = Arrays.asList(new StructData(11, "s11"),new StructData(22, "s22"));
+        expectedNestedData[5] = Arrays.asList(new StructData(11, "s11"),new StructData(22, "s22"),new StructData(33, "s33"));
+        expectedNestedData[6] = Arrays.asList(new StructData(22, "s22"),new StructData(33, "s33"), new StructData(44, "s44"));
+        expectedNestedData[7] = Arrays.asList(new StructData(33, "s33"), new StructData(44, "s44"));
+        expectedNestedData[8] = Arrays.asList(new StructData(111, "s111"),new StructData(222, "s222"));
+        expectedNestedData[9] = Arrays.asList(new StructData(111, "s111"),new StructData(222, "s222"),new StructData(333, "s333"));
+        expectedNestedData[10] = Arrays.asList(new StructData(222, "s222"),new StructData(333, "s333"),new StructData(444, "s444"));
+        expectedNestedData[11] = Arrays.asList(new StructData(333, "s333"),new StructData(444, "s444"));
+        try (Table windowAggResults = sorted.groupBy(0, 1)
+                 .aggregateWindows(aggCollect.onColumn(4).overWindow(winOpts));
+             ColumnVector expected = ColumnVector.fromLists(
+                 new ListType(false, nestedType), expectedNestedData)) {
+          assertColumnsAreEqual(expected, windowAggResults.getColumn(0));
+        }
+      }
+    }
+  }
+
+  @Test
+  void testWindowingLead() {
+    try (Table unsorted = new Table.TestBuilder()
+        .column(1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1) // GBY Key
+        .column(1, 1, 1, 1, 2, 2, 2, 2, 3, 3, 3, 3) // GBY Key
+        .column(1, 1, 2, 2, 3, 3, 4, 4, 5, 5, 6, 6) // OBY Key
+        .column(7, 5, 1, 9, 7, 9, 8, 2, 8, 0, 6, 6) // Agg Column
+        .decimal32Column(-1, 1, 1, 1, 1, 2, 2, 2, 2, 3, 3, 3, 3) // Decimal GBY Key
+        .decimal64Column(1, 1L, 1L, 2L, 2L, 3L, 3L, 4L, 4L, 5L, 5L, 6L, 6L) // Decimal OBY Key
+        .decimal64Column(-2, 7L, 5L, 1L, 9L, 7L, 9L, 8L, 2L, 8L, 0L, 6L, 6L) // Decimal Agg Column
+        .build()) {
+
+      try (Table sorted = unsorted.orderBy(Table.asc(0), Table.asc(1), Table.asc(2));
+           Table decSorted = unsorted.orderBy(Table.asc(0), Table.asc(4), Table.asc(5));
+           ColumnVector expectSortedAggColumn = ColumnVector.fromBoxedInts(7, 5, 1, 9, 7, 9, 8, 2, 8, 0, 6, 6);
+           ColumnVector expectDecSortedAggColumn = ColumnVector.decimalFromLongs(-2, 7, 5, 1, 9, 7, 9, 8, 2, 8, 0, 6, 6)) {
+        ColumnVector sortedAggColumn = sorted.getColumn(3);
+        assertColumnsAreEqual(expectSortedAggColumn, sortedAggColumn);
+        ColumnVector decSortedAggColumn = decSorted.getColumn(6);
+        assertColumnsAreEqual(expectDecSortedAggColumn, decSortedAggColumn);
 
         WindowOptions.Builder windowBuilder = WindowOptions.builder().minPeriods(1);
 
@@ -2412,9 +2569,16 @@ public class TableTest extends CudfTestBase {
             .aggregateWindows(Aggregation
                 .lead(0)
                 .onColumn(3)
-                .overWindow(windowBuilder.window(2,1).build()));
-             ColumnVector expectAggResult = ColumnVector.fromBoxedInts(7, 5, 1, 9, 7, 9, 8, 2, 8, 0, 6, 6)) {
+                .overWindow(windowBuilder.window(2, 1).build()));
+             Table decWindowAggResults = decSorted.groupBy(0, 4)
+                 .aggregateWindows(Aggregation
+                     .lead(0)
+                     .onColumn(6)
+                     .overWindow(windowBuilder.window(2, 1).build()));
+             ColumnVector expectAggResult = ColumnVector.fromBoxedInts(7, 5, 1, 9, 7, 9, 8, 2, 8, 0, 6, 6);
+             ColumnVector decExpectAggResult = ColumnVector.decimalFromLongs(-2, 7, 5, 1, 9, 7, 9, 8, 2, 8, 0, 6, 6)) {
           assertColumnsAreEqual(expectAggResult, windowAggResults.getColumn(0));
+          assertColumnsAreEqual(decExpectAggResult, decWindowAggResults.getColumn(0));
         }
 
         try (Table windowAggResults = sorted.groupBy(0, 1)
@@ -2422,18 +2586,33 @@ public class TableTest extends CudfTestBase {
                 .lead(1)
                 .onColumn(3)
                 .overWindow(windowBuilder.window(0,1).build()));
-             ColumnVector expectAggResult = ColumnVector.fromBoxedInts(5, 1, 9, null, 9, 8, 2, null, 0, 6, 6, null)) {
+             Table decWindowAggResults = sorted.groupBy(0, 4)
+                 .aggregateWindows(Aggregation
+                     .lead(1)
+                     .onColumn(6)
+                     .overWindow(windowBuilder.window(0,1).build()));
+             ColumnVector expectAggResult = ColumnVector.fromBoxedInts(5, 1, 9, null, 9, 8, 2, null, 0, 6, 6, null);
+             ColumnVector decExpectAggResult = decimalFromBoxedInts(true, -2, 5, 1, 9, null, 9, 8, 2, null, 0, 6, 6, null)) {
           assertColumnsAreEqual(expectAggResult, windowAggResults.getColumn(0));
+          assertColumnsAreEqual(decExpectAggResult, decWindowAggResults.getColumn(0));
         }
 
         try (ColumnVector defaultOutput = ColumnVector.fromBoxedInts(0, -1, -2, -3, -4, -5, -6, -7, -8, -9, -10, -11);
+             ColumnVector decDefaultOutput = ColumnVector.decimalFromLongs(-2, 0, -1, -2, -3, -4, -5, -6, -7, -8, -9, -10, -11);
              Table windowAggResults = sorted.groupBy(0, 1)
                  .aggregateWindows(Aggregation
                      .lead(1, defaultOutput)
                      .onColumn(3)
                      .overWindow(windowBuilder.window(0,1).build()));
-             ColumnVector expectAggResult = ColumnVector.fromBoxedInts(5, 1, 9, -3, 9, 8, 2, -7, 0, 6, 6, -11)) {
+             Table decWindowAggResults = sorted.groupBy(0, 4)
+                 .aggregateWindows(Aggregation
+                     .lead(1, decDefaultOutput)
+                     .onColumn(6)
+                     .overWindow(windowBuilder.window(0,1).build()));
+             ColumnVector expectAggResult = ColumnVector.fromBoxedInts(5, 1, 9, -3, 9, 8, 2, -7, 0, 6, 6, -11);
+             ColumnVector decExpectAggResult = ColumnVector.decimalFromLongs(-2, 5, 1, 9, -3, 9, 8, 2, -7, 0, 6, 6, -11)) {
           assertColumnsAreEqual(expectAggResult, windowAggResults.getColumn(0));
+          assertColumnsAreEqual(decExpectAggResult, decWindowAggResults.getColumn(0));
         }
 
         // Outside bounds
@@ -2442,8 +2621,15 @@ public class TableTest extends CudfTestBase {
                 .lead(3)
                 .onColumn(3)
                 .overWindow(windowBuilder.window(0,1).build()));
-             ColumnVector expectAggResult = ColumnVector.fromBoxedInts(null, null, null, null, null, null, null, null, null, null, null, null)) {
+             Table decWindowAggResults = sorted.groupBy(0, 4)
+                 .aggregateWindows(Aggregation
+                     .lead(3)
+                     .onColumn(6)
+                     .overWindow(windowBuilder.window(0,1).build()));
+             ColumnVector expectAggResult = ColumnVector.fromBoxedInts(null, null, null, null, null, null, null, null, null, null, null, null);
+             ColumnVector decExpectAggResult = decimalFromBoxedInts(true, -2, null, null, null, null, null, null, null, null, null, null, null, null)) {
           assertColumnsAreEqual(expectAggResult, windowAggResults.getColumn(0));
+          assertColumnsAreEqual(decExpectAggResult, decWindowAggResults.getColumn(0));
         }
       }
     }
@@ -2452,16 +2638,23 @@ public class TableTest extends CudfTestBase {
   @Test
   void testWindowingLag() {
     try (Table unsorted = new Table.TestBuilder()
-        .column( 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1) // GBY Key
-        .column( 1, 1, 1, 1, 2, 2, 2, 2, 3, 3, 3, 3) // GBY Key
-        .column( 1, 1, 2, 2, 3, 3, 4, 4, 5, 5, 6, 6) // OBY Key
-        .column( 7, 5, 1, 9, 7, 9, 8, 2, 8, 0, 6, 6) // Agg Column
-        .build();
-         ColumnVector expectSortedAggColumn = ColumnVector.fromBoxedInts(7, 5, 1, 9, 7, 9, 8, 2, 8, 0, 6, 6)) {
+        .column(1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1) // GBY Key
+        .column(1, 1, 1, 1, 2, 2, 2, 2, 3, 3, 3, 3) // GBY Key
+        .column(1, 1, 2, 2, 3, 3, 4, 4, 5, 5, 6, 6) // OBY Key
+        .column(7, 5, 1, 9, 7, 9, 8, 2, 8, 0, 6, 6) // Agg Column
+        .decimal32Column(-1, 1, 1, 1, 1, 2, 2, 2, 2, 3, 3, 3, 3) // Decimal GBY Key
+        .decimal64Column(1, 1L, 1L, 2L, 2L, 3L, 3L, 4L, 4L, 5L, 5L, 6L, 6L) // Decimal OBY Key
+        .decimal64Column(-2, 7L, 5L, 1L, 9L, 7L, 9L, 8L, 2L, 8L, 0L, 6L, 6L) // Decimal Agg Column
+        .build()) {
 
-      try (Table sorted = unsorted.orderBy(Table.asc(0), Table.asc(1), Table.asc(2))) {
+      try (Table sorted = unsorted.orderBy(Table.asc(0), Table.asc(1), Table.asc(2));
+           Table decSorted = unsorted.orderBy(Table.asc(0), Table.asc(4), Table.asc(5));
+           ColumnVector expectSortedAggColumn = ColumnVector.fromBoxedInts(7, 5, 1, 9, 7, 9, 8, 2, 8, 0, 6, 6);
+           ColumnVector decExpectSortedAggColumn = ColumnVector.decimalFromLongs(-2, 7, 5, 1, 9, 7, 9, 8, 2, 8, 0, 6, 6)) {
         ColumnVector sortedAggColumn = sorted.getColumn(3);
         assertColumnsAreEqual(expectSortedAggColumn, sortedAggColumn);
+        ColumnVector decSortedAggColumn = decSorted.getColumn(6);
+        assertColumnsAreEqual(decExpectSortedAggColumn, decSortedAggColumn);
 
         WindowOptions.Builder windowBuilder = WindowOptions.builder().minPeriods(1);
 
@@ -2470,8 +2663,15 @@ public class TableTest extends CudfTestBase {
                 .lag(0)
                 .onColumn(3)
                 .overWindow(windowBuilder.window(2,1).build()));
-             ColumnVector expectAggResult = ColumnVector.fromBoxedInts(7, 5, 1, 9, 7, 9, 8, 2, 8, 0, 6, 6)) {
+             Table decWindowAggResults = sorted.groupBy(0, 4)
+                 .aggregateWindows(Aggregation
+                     .lag(0)
+                     .onColumn(6)
+                     .overWindow(windowBuilder.window(2,1).build()));
+             ColumnVector expectAggResult = ColumnVector.fromBoxedInts(7, 5, 1, 9, 7, 9, 8, 2, 8, 0, 6, 6);
+             ColumnVector decExpectAggResult = ColumnVector.decimalFromLongs(-2, 7, 5, 1, 9, 7, 9, 8, 2, 8, 0, 6, 6)) {
           assertColumnsAreEqual(expectAggResult, windowAggResults.getColumn(0));
+          assertColumnsAreEqual(decExpectAggResult, decWindowAggResults.getColumn(0));
         }
 
         try (Table windowAggResults = sorted.groupBy(0, 1)
@@ -2479,18 +2679,33 @@ public class TableTest extends CudfTestBase {
                 .lag(1)
                 .onColumn(3)
                 .overWindow(windowBuilder.window(2,0).build()));
-             ColumnVector expectAggResult = ColumnVector.fromBoxedInts(null, 7, 5, 1, null, 7, 9, 8, null, 8, 0, 6)) {
+             Table decWindowAggResults = sorted.groupBy(0, 4)
+                 .aggregateWindows(Aggregation
+                     .lag(1)
+                     .onColumn(6)
+                     .overWindow(windowBuilder.window(2,0).build()));
+             ColumnVector expectAggResult = ColumnVector.fromBoxedInts(null, 7, 5, 1, null, 7, 9, 8, null, 8, 0, 6);
+             ColumnVector decExpectAggResult = decimalFromBoxedInts(true, -2, null, 7, 5, 1, null, 7, 9, 8, null, 8, 0, 6)) {
           assertColumnsAreEqual(expectAggResult, windowAggResults.getColumn(0));
+          assertColumnsAreEqual(decExpectAggResult, decWindowAggResults.getColumn(0));
         }
 
         try (ColumnVector defaultOutput = ColumnVector.fromBoxedInts(0, -1, -2, -3, -4, -5, -6, -7, -8, -9, -10, -11);
+             ColumnVector decDefaultOutput = ColumnVector.decimalFromLongs(-2, 0, -1, -2, -3, -4, -5, -6, -7, -8, -9, -10, -11);
              Table windowAggResults = sorted.groupBy(0, 1)
                  .aggregateWindows(Aggregation
                      .lag(1, defaultOutput)
                      .onColumn(3)
-                     .overWindow(windowBuilder.window(2,0).build()));
-             ColumnVector expectAggResult = ColumnVector.fromBoxedInts(0, 7, 5, 1, -4, 7, 9, 8, -8, 8, 0, 6)) {
+                     .overWindow(windowBuilder.window(2, 0).build()));
+             Table decWindowAggResults = sorted.groupBy(0, 4)
+                 .aggregateWindows(Aggregation
+                     .lag(1, decDefaultOutput)
+                     .onColumn(6)
+                     .overWindow(windowBuilder.window(2, 0).build()));
+             ColumnVector expectAggResult = ColumnVector.fromBoxedInts(0, 7, 5, 1, -4, 7, 9, 8, -8, 8, 0, 6);
+             ColumnVector decExpectAggResult = ColumnVector.decimalFromLongs(-2, 0, 7, 5, 1, -4, 7, 9, 8, -8, 8, 0, 6)) {
           assertColumnsAreEqual(expectAggResult, windowAggResults.getColumn(0));
+          assertColumnsAreEqual(decExpectAggResult, decWindowAggResults.getColumn(0));
         }
 
         // Outside bounds
@@ -2498,9 +2713,16 @@ public class TableTest extends CudfTestBase {
             .aggregateWindows(Aggregation
                 .lag(3)
                 .onColumn(3)
-                .overWindow(windowBuilder.window(1,0).build()));
-             ColumnVector expectAggResult = ColumnVector.fromBoxedInts(null, null, null, null, null, null, null, null, null, null, null, null)) {
+                .overWindow(windowBuilder.window(1, 0).build()));
+             Table decWindowAggResults = sorted.groupBy(0, 4)
+                 .aggregateWindows(Aggregation
+                     .lag(3)
+                     .onColumn(6)
+                     .overWindow(windowBuilder.window(1, 0).build()));
+             ColumnVector expectAggResult = ColumnVector.fromBoxedInts(null, null, null, null, null, null, null, null, null, null, null, null);
+             ColumnVector decExpectAggResult = decimalFromBoxedInts(true, -2, null, null, null, null, null, null, null, null, null, null, null, null);) {
           assertColumnsAreEqual(expectAggResult, windowAggResults.getColumn(0));
+          assertColumnsAreEqual(decExpectAggResult, decWindowAggResults.getColumn(0));
         }
       }
     }
@@ -3814,6 +4036,20 @@ public class TableTest extends CudfTestBase {
         .build();
   }
 
+  private Table getExpectedFileTableWithDecimals() {
+    return new TestBuilder()
+        .column(true, false, false, true, false)
+        .column(5, 1, 0, 2, 7)
+        .column(new Byte[]{2, 3, 4, 5, 9})
+        .column(3l, 9l, 4l, 2l, 20l)
+        .column("this", "is", "a", "test", "string")
+        .column(1.0f, 3.5f, 5.9f, 7.1f, 9.8f)
+        .column(5.0d, 9.5d, 0.9d, 7.23d, 2.8d)
+        .decimal32Column(3, 298, 2473, 2119, 1273, 9879)
+        .decimal64Column(4, 398l, 1322l, 983237l, 99872l, 21337l)
+        .build();
+  }
+
   @Test
   void testParquetWriteToFileNoNames() throws IOException {
     File tempFile = File.createTempFile("test-nonames", ".parquet");
@@ -3873,9 +4109,12 @@ public class TableTest extends CudfTestBase {
 
   @Test
   void testParquetWriteToBufferChunkedInt96() {
-    try (Table table0 = getExpectedFileTable();
+    try (Table table0 = getExpectedFileTableWithDecimals();
          MyBufferConsumer consumer = new MyBufferConsumer()) {
-      ParquetWriterOptions options = ParquetWriterOptions.builder().withTimestampInt96(true).build();
+      ParquetWriterOptions options = ParquetWriterOptions.builder()
+          .withTimestampInt96(true)
+          .withPrecisionValues(5, 5)
+          .build();
 
       try (TableWriter writer = Table.writeParquetChunked(options, consumer)) {
         writer.write(table0);
@@ -3908,11 +4147,13 @@ public class TableTest extends CudfTestBase {
   @Test
   void testParquetWriteToFileWithNames() throws IOException {
     File tempFile = File.createTempFile("test-names", ".parquet");
-    try (Table table0 = getExpectedFileTable()) {
+    try (Table table0 = getExpectedFileTableWithDecimals()) {
       ParquetWriterOptions options = ParquetWriterOptions.builder()
-          .withColumnNames("first", "second", "third", "fourth", "fifth", "sixth", "seventh")
+          .withColumnNames("first", "second", "third", "fourth", "fifth", "sixth", "seventh",
+              "eighth", "nineth")
           .withCompressionType(CompressionType.NONE)
           .withStatisticsFrequency(ParquetWriterOptions.StatisticsFrequency.NONE)
+          .withPrecisionValues(5, 6)
           .build();
       try (TableWriter writer = Table.writeParquetChunked(options, tempFile.getAbsoluteFile())) {
         writer.write(table0);
@@ -3928,12 +4169,14 @@ public class TableTest extends CudfTestBase {
   @Test
   void testParquetWriteToFileWithNamesAndMetadata() throws IOException {
     File tempFile = File.createTempFile("test-names-metadata", ".parquet");
-    try (Table table0 = getExpectedFileTable()) {
+    try (Table table0 = getExpectedFileTableWithDecimals()) {
       ParquetWriterOptions options = ParquetWriterOptions.builder()
-          .withColumnNames("first", "second", "third", "fourth", "fifth", "sixth", "seventh")
+          .withColumnNames("first", "second", "third", "fourth", "fifth", "sixth", "seventh",
+            "eighth", "nineth")
           .withMetadata("somekey", "somevalue")
           .withCompressionType(CompressionType.NONE)
           .withStatisticsFrequency(ParquetWriterOptions.StatisticsFrequency.NONE)
+          .withPrecisionValues(6, 8)
           .build();
       try (TableWriter writer = Table.writeParquetChunked(options, tempFile.getAbsoluteFile())) {
         writer.write(table0);
@@ -3949,10 +4192,11 @@ public class TableTest extends CudfTestBase {
   @Test
   void testParquetWriteToFileUncompressedNoStats() throws IOException {
     File tempFile = File.createTempFile("test-uncompressed", ".parquet");
-    try (Table table0 = getExpectedFileTable()) {
+    try (Table table0 = getExpectedFileTableWithDecimals()) {
       ParquetWriterOptions options = ParquetWriterOptions.builder()
           .withCompressionType(CompressionType.NONE)
           .withStatisticsFrequency(ParquetWriterOptions.StatisticsFrequency.NONE)
+          .withPrecisionValues(4, 6)
           .build();
       try (TableWriter writer = Table.writeParquetChunked(options, tempFile.getAbsoluteFile())) {
         writer.write(table0);
@@ -4188,6 +4432,19 @@ public class TableTest extends CudfTestBase {
     return values;
   }
 
+  private static ColumnVector decimalFromBoxedInts(boolean isDec64, int scale, Integer... values) {
+    BigDecimal[] decimals = new BigDecimal[values.length];
+    for (int i = 0; i < values.length; i++) {
+      if (values[i] == null) {
+        decimals[i] = null;
+      } else {
+        decimals[i] = BigDecimal.valueOf(values[i], -scale);
+      }
+    }
+    DType type = isDec64 ? DType.create(DType.DTypeEnum.DECIMAL64, scale) : DType.create(DType.DTypeEnum.DECIMAL32, scale);
+    return ColumnVector.build(type, decimals.length, (b) -> b.appendBoxed(decimals));
+  }
+
   private Table buildTestTable() {
     StructType mapStructType = new StructType(true,
         new BasicType(false, DType.STRING),
@@ -4256,4 +4513,55 @@ public class TableTest extends CudfTestBase {
       }
     }
   }
+
+  @Test
+  void testExplode() {
+    // Child is primitive type
+    try (Table t1 = new Table.TestBuilder()
+            .column(new ListType(true, new BasicType(true, DType.INT32)),
+                Arrays.asList(1, 2, 3),
+                Arrays.asList(4, 5),
+                Arrays.asList(6),
+                null)
+            .column("s1", "s2", "s3", "s4")
+            .column(   1,    3,    5,    7)
+            .column(12.0, 14.0, 13.0, 11.0)
+            .build();
+         Table expected = new Table.TestBuilder()
+            .column(   1,    2,    3,    4,    5,    6)
+            .column("s1", "s1", "s1", "s2", "s2", "s3")
+            .column(   1,    1,    1,    3,    3,    5)
+            .column(12.0, 12.0, 12.0, 14.0, 14.0, 13.0)
+            .build()) {
+      try (Table exploded = t1.explode(0)) {
+        assertTablesAreEqual(expected, exploded);
+      }
+    }
+
+    // Child is nested type
+    StructType nestedType = new StructType(false,
+        new BasicType(false, DType.INT32), new BasicType(false, DType.STRING));
+    try (Table t1 = new Table.TestBuilder()
+            .column(new ListType(false, nestedType),
+                Arrays.asList(struct(1, "k1"), struct(2, "k2"), struct(3, "k3")),
+                Arrays.asList(struct(4, "k4"), struct(5, "k5")),
+                Arrays.asList(struct(6, "k6")))
+            .column("s1", "s2", "s3")
+            .column(   1,    3,    5)
+            .column(12.0, 14.0, 13.0)
+            .build();
+         Table expected = new Table.TestBuilder()
+            .column(nestedType,
+                struct(1, "k1"), struct(2, "k2"), struct(3, "k3"),
+                struct(4, "k4"), struct(5, "k5"), struct(6, "k6"))
+            .column("s1", "s1", "s1", "s2", "s2", "s3")
+            .column(   1,    1,    1,    3,    3,    5)
+            .column(12.0, 12.0, 12.0, 14.0, 14.0, 13.0)
+            .build()) {
+      try (Table exploded = t1.explode(0)) {
+        assertTablesAreEqual(expected, exploded);
+      }
+    }
+  }
+
 }
