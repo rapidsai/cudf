@@ -51,6 +51,19 @@ std::string get_libcudf_dir_path()
   return dir_path;
 }
 
+file_wrapper::~file_wrapper() { close(fd); }
+
+long file_wrapper::size() const
+{
+  if (_size < 0) {
+    struct stat st;
+    CUDF_EXPECTS(fstat(fd, &st) != -1, "Cannot query file size");
+    _size = static_cast<size_t>(st.st_size);
+  }
+  return _size;
+}
+
+#ifdef CUFILE_INSTALLED
 /**
  * @brief Class that provides RAII for cuFile driver management.
  *
@@ -68,22 +81,10 @@ struct cufile_driver {
 /**
  * @brief Initializes the cuFile driver.
  *
- * Needs to be called before any cuFile operation.
+ * Should be called before any cuFile operation (no overhead after the first call).
  */
 void init_cufile_driver() { static cufile_driver driver; }
 
-file_wrapper::~file_wrapper() { close(fd); }
-
-long file_wrapper::size() const
-{
-  if (_size < 0) {
-    struct stat st;
-    CUDF_EXPECTS(fstat(fd, &st) != -1, "Cannot query file size");
-    _size = static_cast<size_t>(st.st_size);
-  }
-  return _size;
-}
-#ifdef CUFILE_INSTALLED
 void cufile_registered_file::register_handle()
 {
   init_cufile_driver();

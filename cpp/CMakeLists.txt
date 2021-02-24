@@ -233,8 +233,6 @@ add_library(cufile SHARED IMPORTED ${CUFILE_LIBRARY})
 if (CUFILE_INCLUDE AND CUFILE_LIBRARY)
     add_compile_definitions(CUFILE_INSTALLED)
     set_target_properties(cufile PROPERTIES IMPORTED_LOCATION ${CUFILE_LIBRARY})
-else()
-    message(FATAL_ERROR "cufile not found, please pass the GDS install directory using -DGDS_ROOT")
 endif (CUFILE_INCLUDE AND CUFILE_LIBRARY)
 
 ###################################################################################################
@@ -328,8 +326,10 @@ include_directories("${CMAKE_BINARY_DIR}/include"
                     "${ZLIB_INCLUDE_DIRS}"
                     "${Boost_INCLUDE_DIRS}"
                     "${RMM_INCLUDE}"
-                    "${DLPACK_INCLUDE}"
-                    "${CUFILE_INCLUDE}")
+                    "${DLPACK_INCLUDE}")
+if(CUFILE_INSTALLED)
+    include_directories("${CUFILE_INCLUDE}")
+endif()
 
 if(CONDA_INCLUDE_DIRS)
     include_directories("${CONDA_INCLUDE_DIRS}")
@@ -543,7 +543,11 @@ function(add_library_module NAMESPACE MODULE MODULE_SOURCE_DIRS)
     # spdlog level
     target_compile_definitions("${NAMESPACE}_${MODULE}" PUBLIC "SPDLOG_ACTIVE_LEVEL=SPDLOG_LEVEL_${LOGGING_LEVEL}")
     add_dependencies("${NAMESPACE}_${MODULE}" stringify_run)
-    target_link_libraries("${NAMESPACE}_${MODULE}" arrow arrow_cuda nvrtc ${CUDART_LIBRARY} cuda ${ZLIB_LIBRARIES} ${Boost_LIBRARIES} cufile)
+    target_link_libraries("${NAMESPACE}_${MODULE}" arrow arrow_cuda nvrtc ${CUDART_LIBRARY} cuda ${ZLIB_LIBRARIES} ${Boost_LIBRARIES})
+    if(CUFILE_INSTALLED)
+        target_link_libraries(cufile)
+    endif()
+
     add_library("${NAMESPACE}::${MODULE}" ALIAS "${NAMESPACE}_${MODULE}")
 endfunction()
 
