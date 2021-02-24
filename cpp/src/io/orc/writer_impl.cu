@@ -1127,9 +1127,14 @@ void writer::impl::write(table_view const &table)
   // Gather column statistics
   std::vector<std::vector<uint8_t>> column_stats;
   if (enable_statistics_ && num_columns > 0 && num_rows > 0) {
-    column_stats = gather_statistic_blobs(
-      *device_columns,
-      orc_columns.data(), num_columns, num_rows, num_rowgroups, stripe_list, stripes, chunks);
+    column_stats = gather_statistic_blobs(*device_columns,
+                                          orc_columns.data(),
+                                          num_columns,
+                                          num_rows,
+                                          num_rowgroups,
+                                          stripe_list,
+                                          stripes,
+                                          chunks);
   }
 
   // Allocate intermediate output stream buffer

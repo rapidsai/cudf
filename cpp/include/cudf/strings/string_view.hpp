@@ -52,7 +52,7 @@ constexpr int8_t VARIABLE_CHAR_WIDTH{0};
 
 namespace strings {
 namespace detail {
-  static __constant__ char max_string_sentinel[5]{"\xF7\xBF\xBF\xBF"};
+static __constant__ char max_string_sentinel[5]{"\xF7\xBF\xBF\xBF"};
 }  // namespace detail
 }  // namespace strings
 
@@ -302,11 +302,10 @@ class string_view {
    *
    * @return An empty string
    */
-  CUDA_HOST_DEVICE_CALLABLE static string_view min() {
-    return string_view();
-  }
+  CUDA_HOST_DEVICE_CALLABLE static string_view min() { return string_view(); }
 
-  CUDA_HOST_DEVICE_CALLABLE static string_view max() {
+  CUDA_HOST_DEVICE_CALLABLE static string_view max()
+  {
     const char* psentinel{nullptr};
 #if defined(__CUDA_ARCH__)
     psentinel = &cudf::strings::detail::max_string_sentinel[0];

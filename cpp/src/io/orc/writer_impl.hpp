@@ -228,7 +228,7 @@ class writer::impl {
    * @return The statistic blobs
    */
   std::vector<std::vector<uint8_t>> gather_statistic_blobs(
-    const table_device_view &table,
+    const table_device_view& table,
     orc_column_view const* columns,
     size_t num_columns,
     size_t num_rows,

@@ -65,7 +65,8 @@ struct IgnoreNaNSum {
 };
 
 template <>
-inline __device__ string_view shuffle_xor(string_view var, uint32_t delta) {
+inline __device__ string_view shuffle_xor(string_view var, uint32_t delta)
+{
   const char *data =
     reinterpret_cast<const char *>(shuffle_xor(reinterpret_cast<uintptr_t>(var.data()), delta));
   auto size = shuffle_xor(var.size_bytes(), delta);
@@ -75,50 +76,30 @@ inline __device__ string_view shuffle_xor(string_view var, uint32_t delta) {
 inline __device__ string_view WarpReduceMin(string_view minimum_value)
 {
   string_view value = shuffle_xor(minimum_value, 1);
-  if (value < minimum_value) {
-    minimum_value = value;
-  }
+  if (value < minimum_value) { minimum_value = value; }
   value = shuffle_xor(minimum_value, 2);
-  if (value < minimum_value) {
-    minimum_value = value;
-  }
+  if (value < minimum_value) { minimum_value = value; }
   value = shuffle_xor(minimum_value, 4);
-  if (value < minimum_value) {
-    minimum_value = value;
-  }
+  if (value < minimum_value) { minimum_value = value; }
   value = shuffle_xor(minimum_value, 8);
-  if (value < minimum_value) {
-    minimum_value = value;
-  }
+  if (value < minimum_value) { minimum_value = value; }
   value = shuffle_xor(minimum_value, 16);
-  if (value < minimum_value) {
-    minimum_value = value;
-  }
+  if (value < minimum_value) { minimum_value = value; }
   return minimum_value;
 }
 
 inline __device__ string_view WarpReduceMax(string_view maximum_value)
 {
   string_view value = shuffle_xor(maximum_value, 1);
-  if (value > maximum_value) {
-    maximum_value = value;
-  }
+  if (value > maximum_value) { maximum_value = value; }
   value = shuffle_xor(maximum_value, 2);
-  if (value > maximum_value) {
-    maximum_value = value;
-  }
+  if (value > maximum_value) { maximum_value = value; }
   value = shuffle_xor(maximum_value, 4);
-  if (value > maximum_value) {
-    maximum_value = value;
-  }
+  if (value > maximum_value) { maximum_value = value; }
   value = shuffle_xor(maximum_value, 8);
-  if (value > maximum_value) {
-    maximum_value = value;
-  }
+  if (value > maximum_value) { maximum_value = value; }
   value = shuffle_xor(maximum_value, 16);
-  if (value > maximum_value) {
-    maximum_value = value;
-  }
+  if (value > maximum_value) { maximum_value = value; }
   return maximum_value;
 }
 
@@ -142,10 +123,11 @@ gatherIntColumnStats(stats_state_s *s, statistics_dtype dtype, uint32_t t, Stora
   uint32_t nn_cnt = 0;
   __shared__ volatile bool has_minmax;
   for (uint32_t i = 0; i < s->group.num_rows; i += block_size) {
-    uint32_t r                = i + t;
-    uint32_t row              = r + s->group.start_row;
-    uint32_t is_valid = (r < s->group.num_rows && row < s->col.leaf_column->size()) ?
-                        s->col.leaf_column->is_valid(row) : 0;
+    uint32_t r        = i + t;
+    uint32_t row      = r + s->group.start_row;
+    uint32_t is_valid = (r < s->group.num_rows && row < s->col.leaf_column->size())
+                          ? s->col.leaf_column->is_valid(row)
+                          : 0;
     if (is_valid) {
       switch (dtype) {
         case dtype_int32:
@@ -212,10 +194,11 @@ gatherFloatColumnStats(stats_state_s *s, statistics_dtype dtype, uint32_t t, Sto
   uint32_t nn_cnt = 0;
   __shared__ volatile bool has_minmax;
   for (uint32_t i = 0; i < s->group.num_rows; i += block_size) {
-    uint32_t r                = i + t;
-    uint32_t row              = r + s->group.start_row;
-    uint32_t is_valid = (r < s->group.num_rows && row < s->col.leaf_column->size()) ?
-                        s->col.leaf_column->is_valid(row) : 0;
+    uint32_t r        = i + t;
+    uint32_t row      = r + s->group.start_row;
+    uint32_t is_valid = (r < s->group.num_rows && row < s->col.leaf_column->size())
+                          ? s->col.leaf_column->is_valid(row)
+                          : 0;
     if (is_valid) {
       if (dtype == dtype_float64) {
         v = s->col.leaf_column->element<double>(row);
@@ -274,20 +257,17 @@ void __device__ gatherStringColumnStats(stats_state_s *s, uint32_t t, Storage &s
   string_view maximum_value = string_view::min();
 
   for (uint32_t i = 0; i < s->group.num_rows; i += block_size) {
-    uint32_t r                = i + t;
-    uint32_t row              = r + s->group.start_row;
-    uint32_t is_valid = (r < s->group.num_rows && row < s->col.leaf_column->size()) ?
-                        s->col.leaf_column->is_valid(row) : 0;
+    uint32_t r        = i + t;
+    uint32_t row      = r + s->group.start_row;
+    uint32_t is_valid = (r < s->group.num_rows && row < s->col.leaf_column->size())
+                          ? s->col.leaf_column->is_valid(row)
+                          : 0;
     if (is_valid) {
       has_minmax = true;
-      auto str = s->col.leaf_column->element<string_view>(row);
+      auto str   = s->col.leaf_column->element<string_view>(row);
       len_sum += str.size_bytes();
-      if (str > maximum_value) {
-        maximum_value = str;
-      }
-      if (str < minimum_value) {
-        minimum_value = str;
-      }
+      if (str > maximum_value) { maximum_value = str; }
+      if (str < minimum_value) { minimum_value = str; }
     }
     nn_cnt += __syncthreads_count(is_valid);
   }
@@ -316,9 +296,7 @@ void __device__ gatherStringColumnStats(stats_state_s *s, uint32_t t, Storage &s
     }
   } else if (t < 32 * 2 and has_minmax) {
     maximum_value = WarpReduceMax(s->warp_max[t & 0x1f].str_val);
-    if (!(t & 0x1f)) {
-      s->ck.max_value.str_val = maximum_value;
-    }
+    if (!(t & 0x1f)) { s->ck.max_value.str_val = maximum_value; }
   }
 }
 
@@ -521,15 +499,11 @@ void __device__ mergeStringColumnStats(merge_state_s *s,
   for (uint32_t i = t; i < num_chunks; i += block_size) {
     const statistics_chunk *ck = &ck_in[i];
     if (ck->has_minmax) {
-      has_minmax = true;
+      has_minmax       = true;
       string_view val0 = ck->min_value.str_val;
       string_view val1 = ck->max_value.str_val;
-      if (val0 < minimum_value) {
-        minimum_value = val0;
-      }
-      if (val1 > maximum_value) {
-        maximum_value = val1;
-      }
+      if (val0 < minimum_value) { minimum_value = val0; }
+      if (val1 > maximum_value) { maximum_value = val1; }
     }
     if (ck->has_sum) { len_sum += (uint32_t)ck->sum.i_val; }
     non_nulls += ck->non_nulls;
@@ -562,9 +536,7 @@ void __device__ mergeStringColumnStats(merge_state_s *s,
     }
   } else if (t < 32 * 2) {
     maximum_value = WarpReduceMax(s->warp_max[t & 0x1f].str_val);
-    if (!((t & 0x1f) and has_minmax)) {
-      s->ck.max_value.str_val = maximum_value;
-    }
+    if (!((t & 0x1f) and has_minmax)) { s->ck.max_value.str_val = maximum_value; }
   }
 }
 
