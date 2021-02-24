@@ -339,9 +339,9 @@ class Frame(libcudf.table.Table):
                 np.intersect1d, all_columns_list
             )
             # get column names not present in all objs
-            union_of_columns = objs[0].columns
-            for obj in objs[1:]:
-                union_of_columns = union_of_columns.union(obj.columns)
+            union_of_columns = functools.reduce(
+                pd.Index.union, [obj.columns for obj in objs]
+            )
             non_intersecting_columns = union_of_columns.symmetric_difference(
                 intersecting_columns
             )
