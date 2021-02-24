@@ -8,7 +8,6 @@ import pytest
 
 import cudf
 from cudf import melt as cudf_melt
-from cudf.core import DataFrame
 from cudf.core._compat import PANDAS_GE_120
 from cudf.tests.utils import (
     ALL_TYPES,
@@ -56,7 +55,7 @@ def test_melt(nulls, num_id_vars, num_value_vars, num_rows, dtype):
         pdf[colname] = data
         value_vars.append(colname)
 
-    gdf = DataFrame.from_pandas(pdf)
+    gdf = cudf.from_pandas(pdf)
 
     got = cudf_melt(frame=gdf, id_vars=id_vars, value_vars=value_vars)
     got_from_melt_method = gdf.melt(id_vars=id_vars, value_vars=value_vars)
@@ -101,7 +100,7 @@ def test_df_stack(nulls, num_cols, num_rows, dtype):
             data[idx] = np.nan
         pdf[colname] = data
 
-    gdf = DataFrame.from_pandas(pdf)
+    gdf = cudf.from_pandas(pdf)
 
     got = gdf.stack()
 
@@ -137,7 +136,7 @@ def test_interleave_columns(nulls, num_cols, num_rows, dtype):
             data[idx] = np.nan
         pdf[colname] = data
 
-    gdf = DataFrame.from_pandas(pdf)
+    gdf = cudf.from_pandas(pdf)
 
     if dtype == "category":
         with pytest.raises(ValueError):
@@ -176,7 +175,7 @@ def test_tile(nulls, num_cols, num_rows, dtype, count):
             data[idx] = np.nan
         pdf[colname] = data
 
-    gdf = DataFrame.from_pandas(pdf)
+    gdf = cudf.from_pandas(pdf)
 
     got = gdf.tile(count)
     expect = pd.DataFrame(pd.concat([pdf] * count))
@@ -356,7 +355,7 @@ def test_series_merge_sorted(nparts, key, na_position, ascending):
 )
 def test_pivot_simple(index, column, data):
     pdf = pd.DataFrame({"index": index, "column": column, "data": data})
-    gdf = cudf.DataFrame.from_pandas(pdf)
+    gdf = cudf.from_pandas(pdf)
 
     expect = pdf.pivot("index", "column")
     got = gdf.pivot("index", "column")

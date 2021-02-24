@@ -1,6 +1,7 @@
 # Copyright (c) 2018-2021, NVIDIA CORPORATION.
 
 import operator
+import string
 
 import numpy as np
 import pandas as pd
@@ -259,13 +260,13 @@ def test_cat_series_binop_error():
 
 @pytest.mark.parametrize("num_elements", [10, 100, 1000])
 def test_categorical_unique(num_elements):
-    from string import ascii_letters, digits
-
     # create categorical series
     np.random.seed(12)
     pd_cat = pd.Categorical(
         pd.Series(
-            np.random.choice(list(ascii_letters + digits), num_elements),
+            np.random.choice(
+                list(string.ascii_letters + string.digits), num_elements
+            ),
             dtype="category",
         )
     )
@@ -286,13 +287,13 @@ def test_categorical_unique(num_elements):
 
 @pytest.mark.parametrize("nelem", [20, 50, 100])
 def test_categorical_unique_count(nelem):
-    from string import ascii_letters, digits
-
     # create categorical series
     np.random.seed(12)
     pd_cat = pd.Categorical(
         pd.Series(
-            np.random.choice(list(ascii_letters + digits), nelem),
+            np.random.choice(
+                list(string.ascii_letters + string.digits), nelem
+            ),
             dtype="category",
         )
     )

@@ -1,13 +1,13 @@
 # Copyright (c) 2018-2021, NVIDIA CORPORATION.
 
 import re
+from concurrent.futures import ThreadPoolExecutor
 
 import numpy as np
 import pandas as pd
 import pytest
 
 import cudf
-from cudf.core import Series
 from cudf.datasets import randomdata
 from cudf.tests.utils import assert_eq, assert_exceptions_equal
 
@@ -32,7 +32,7 @@ def test_series_reductions(method, dtype, skipna):
     arr = arr.astype(dtype)
     if dtype in (np.float32, np.float64):
         arr[[2, 5, 14, 19, 50, 70]] = np.nan
-    sr = Series.from_masked_array(arr, Series(mask).as_mask())
+    sr = cudf.Series.from_masked_array(arr, cudf.Series(mask).as_mask())
     psr = sr.to_pandas()
     psr[~mask] = np.nan
 
@@ -44,18 +44,16 @@ def test_series_reductions(method, dtype, skipna):
             return fn(skipna=skipna)
 
     expect, got = call_test(psr, skipna=skipna), call_test(sr, skipna=skipna)
-    print(expect, got)
+
     np.testing.assert_approx_equal(expect, got)
 
 
 @pytest.mark.parametrize("method", methods)
 def test_series_reductions_concurrency(method):
-    from concurrent.futures import ThreadPoolExecutor
-
     e = ThreadPoolExecutor(10)
 
     np.random.seed(0)
-    srs = [Series(np.random.random(10000)) for _ in range(1)]
+    srs = [cudf.Series(np.random.random(10000)) for _ in range(1)]
 
     def call_test(sr):
         fn = getattr(sr, method)
@@ -74,7 +72,7 @@ def test_series_reductions_concurrency(method):
 def test_series_std(ddof):
     np.random.seed(0)
     arr = np.random.random(100) - 0.5
-    sr = Series(arr)
+    sr = cudf.Series(arr)
     pd = sr.to_pandas()
     got = sr.std(ddof=ddof)
     expect = pd.std(ddof=ddof)
@@ -85,7 +83,7 @@ def test_series_unique():
     for size in [10 ** x for x in range(5)]:
         arr = np.random.randint(low=-1, high=10, size=size)
         mask = arr != -1
-        sr = Series.from_masked_array(arr, Series(mask).as_mask())
+        sr = cudf.Series.from_masked_array(arr, cudf.Series(mask).as_mask())
         assert set(arr[mask]) == set(sr.unique().to_array())
         assert len(set(arr[mask])) == sr.nunique()
 
@@ -97,13 +95,13 @@ def test_series_unique():
 def test_series_nunique(nan_as_null, dropna):
     # We remove nulls as opposed to NaNs using the dropna parameter,
     # so to test against pandas we replace NaN with another discrete value
-    cudf_series = Series([1, 2, 2, 3, 3], nan_as_null=nan_as_null)
+    cudf_series = cudf.Series([1, 2, 2, 3, 3], nan_as_null=nan_as_null)
     pd_series = pd.Series([1, 2, 2, 3, 3])
     expect = pd_series.nunique(dropna=dropna)
     got = cudf_series.nunique(dropna=dropna)
     assert expect == got
 
-    cudf_series = Series(
+    cudf_series = cudf.Series(
         [1.0, 2.0, 3.0, np.nan, None], nan_as_null=nan_as_null
     )
     if nan_as_null is True:
@@ -115,7 +113,7 @@ def test_series_nunique(nan_as_null, dropna):
     got = cudf_series.nunique(dropna=dropna)
     assert expect == got
 
-    cudf_series = Series([1.0, np.nan, np.nan], nan_as_null=nan_as_null)
+    cudf_series = cudf.Series([1.0, np.nan, np.nan], nan_as_null=nan_as_null)
     if nan_as_null is True:
         pd_series = pd.Series([1.0, np.nan, np.nan])
     else:
@@ -127,7 +125,7 @@ def test_series_nunique(nan_as_null, dropna):
 
 def test_series_scale():
     arr = pd.Series(np.random.randint(low=-10, high=10, size=100))
-    sr = Series(arr)
+    sr = cudf.Series(arr)
 
     vmin = arr.min()
     vmax = arr.max()
@@ -143,7 +141,7 @@ def test_exact_quantiles(int_method):
     quant_values = [0.0, 0.25, 0.33, 0.5, 1.0]
 
     df = pd.DataFrame(arr)
-    gdf_series = Series(arr)
+    gdf_series = cudf.Series(arr)
 
     q1 = gdf_series.quantile(
         quant_values, interpolation=int_method, exact=True
@@ -162,7 +160,7 @@ def test_exact_quantiles_int(int_method):
     quant_values = [0.0, 0.25, 0.33, 0.5, 1.0]
 
     df = pd.DataFrame(arr)
-    gdf_series = Series(arr)
+    gdf_series = cudf.Series(arr)
 
     q1 = gdf_series.quantile(
         quant_values, interpolation=int_method, exact=True
@@ -180,7 +178,7 @@ def test_approx_quantiles():
     arr = np.asarray([6.8, 0.15, 3.4, 4.17, 2.13, 1.11, -1.01, 0.8, 5.7])
     quant_values = [0.0, 0.25, 0.33, 0.5, 1.0]
 
-    gdf_series = Series(arr)
+    gdf_series = cudf.Series(arr)
     pdf_series = pd.Series(arr)
 
     q1 = gdf_series.quantile(quant_values, exact=False)
@@ -194,7 +192,7 @@ def test_approx_quantiles_int():
     quant_values = [0.5]
     approx_results = [2]
 
-    gdf_series = Series(arr)
+    gdf_series = cudf.Series(arr)
 
     q1 = gdf_series.quantile(quant_values, exact=False)
 
@@ -206,7 +204,7 @@ def test_approx_quantiles_int():
 def test_misc_quantiles(data, q):
 
     pdf_series = cudf.utils.utils.create_pandas_series(data=data)
-    gdf_series = Series(data)
+    gdf_series = cudf.Series(data)
 
     expected = pdf_series.quantile(q)
     actual = gdf_series.quantile(q)
@@ -216,17 +214,17 @@ def test_misc_quantiles(data, q):
 @pytest.mark.parametrize(
     "data",
     [
-        Series(np.random.normal(-100, 100, 1000)),
-        Series(np.random.randint(-50, 50, 1000)),
-        Series(np.zeros(100)),
-        Series(np.repeat(np.nan, 100)),
-        Series(np.array([1.123, 2.343, np.nan, 0.0])),
-        Series(
+        cudf.Series(np.random.normal(-100, 100, 1000)),
+        cudf.Series(np.random.randint(-50, 50, 1000)),
+        cudf.Series(np.zeros(100)),
+        cudf.Series(np.repeat(np.nan, 100)),
+        cudf.Series(np.array([1.123, 2.343, np.nan, 0.0])),
+        cudf.Series(
             [5, 10, 53, None, np.nan, None, 12, 43, -423], nan_as_null=False
         ),
-        Series([1.1032, 2.32, 43.4, 13, -312.0], index=[0, 4, 3, 19, 6]),
-        Series([]),
-        Series([-3]),
+        cudf.Series([1.1032, 2.32, 43.4, 13, -312.0], index=[0, 4, 3, 19, 6]),
+        cudf.Series([]),
+        cudf.Series([-3]),
         randomdata(
             nrows=1000, dtypes={"a": float, "b": int, "c": float, "d": str}
         ),
@@ -257,17 +255,17 @@ def test_kurtosis(data, null_flag):
 @pytest.mark.parametrize(
     "data",
     [
-        Series(np.random.normal(-100, 100, 1000)),
-        Series(np.random.randint(-50, 50, 1000)),
-        Series(np.zeros(100)),
-        Series(np.repeat(np.nan, 100)),
-        Series(np.array([1.123, 2.343, np.nan, 0.0])),
-        Series(
+        cudf.Series(np.random.normal(-100, 100, 1000)),
+        cudf.Series(np.random.randint(-50, 50, 1000)),
+        cudf.Series(np.zeros(100)),
+        cudf.Series(np.repeat(np.nan, 100)),
+        cudf.Series(np.array([1.123, 2.343, np.nan, 0.0])),
+        cudf.Series(
             [5, 10, 53, None, np.nan, None, 12, 43, -423], nan_as_null=False
         ),
-        Series([1.1032, 2.32, 43.4, 13, -312.0], index=[0, 4, 3, 19, 6]),
-        Series([]),
-        Series([-3]),
+        cudf.Series([1.1032, 2.32, 43.4, 13, -312.0], index=[0, 4, 3, 19, 6]),
+        cudf.Series([]),
+        cudf.Series([-3]),
         randomdata(
             nrows=1000, dtypes={"a": float, "b": int, "c": float, "d": str}
         ),
@@ -300,13 +298,13 @@ def test_series_median(dtype, num_na):
     mask = np.arange(100) >= num_na
 
     arr = arr.astype(dtype)
-    sr = Series.from_masked_array(arr, Series(mask).as_mask())
+    sr = cudf.Series.from_masked_array(arr, cudf.Series(mask).as_mask())
     arr2 = arr[mask]
     ps = pd.Series(arr2, dtype=dtype)
 
     actual = sr.median(skipna=True)
     desired = ps.median(skipna=True)
-    print(actual, desired)
+
     np.testing.assert_approx_equal(actual, desired)
 
     # only for float until integer null supported convert to pandas in cudf
@@ -326,10 +324,10 @@ def test_series_median(dtype, num_na):
         np.zeros(100),
         np.repeat(np.nan, 100),
         np.array([1.123, 2.343, np.nan, 0.0]),
-        Series([5, 10, 53, None, np.nan, None], nan_as_null=False),
-        Series([1.1, 2.32, 43.4], index=[0, 4, 3]),
-        Series([]),
-        Series([-3]),
+        cudf.Series([5, 10, 53, None, np.nan, None], nan_as_null=False),
+        cudf.Series([1.1, 2.32, 43.4], index=[0, 4, 3]),
+        cudf.Series([]),
+        cudf.Series([-3]),
     ],
 )
 @pytest.mark.parametrize(
@@ -340,13 +338,13 @@ def test_series_median(dtype, num_na):
         np.zeros(100),
         np.repeat(np.nan, 100),
         np.array([1.123, 2.343, np.nan, 0.0]),
-        Series([1.1, 2.32, 43.4], index=[0, 500, 4000]),
-        Series([5]),
+        cudf.Series([1.1, 2.32, 43.4], index=[0, 500, 4000]),
+        cudf.Series([5]),
     ],
 )
 def test_cov1d(data1, data2):
-    gs1 = Series(data1)
-    gs2 = Series(data2)
+    gs1 = cudf.Series(data1)
+    gs2 = cudf.Series(data2)
 
     ps1 = gs1.to_pandas()
     ps2 = gs2.to_pandas()
@@ -364,10 +362,10 @@ def test_cov1d(data1, data2):
         np.zeros(100),
         np.repeat(np.nan, 100),
         np.array([1.123, 2.343, np.nan, 0.0]),
-        Series([5, 10, 53, None, np.nan, None], nan_as_null=False),
-        Series([1.1032, 2.32, 43.4], index=[0, 4, 3]),
-        Series([]),
-        Series([-3]),
+        cudf.Series([5, 10, 53, None, np.nan, None], nan_as_null=False),
+        cudf.Series([1.1032, 2.32, 43.4], index=[0, 4, 3]),
+        cudf.Series([]),
+        cudf.Series([-3]),
     ],
 )
 @pytest.mark.parametrize(
@@ -378,13 +376,13 @@ def test_cov1d(data1, data2):
         np.zeros(100),
         np.repeat(np.nan, 100),
         np.array([1.123, 2.343, np.nan, 0.0]),
-        Series([1.1, 2.32, 43.4], index=[0, 500, 4000]),
-        Series([5]),
+        cudf.Series([1.1, 2.32, 43.4], index=[0, 500, 4000]),
+        cudf.Series([5]),
     ],
 )
 def test_corr1d(data1, data2):
-    gs1 = Series(data1)
-    gs2 = Series(data2)
+    gs1 = cudf.Series(data1)
+    gs2 = cudf.Series(data2)
 
     ps1 = gs1.to_pandas()
     ps2 = gs2.to_pandas()
@@ -436,13 +434,13 @@ def test_df_corr():
 @pytest.mark.parametrize("skipna", [True, False, None])
 def test_nans_stats(data, ops, skipna):
     psr = cudf.utils.utils.create_pandas_series(data=data)
-    gsr = Series(data)
+    gsr = cudf.Series(data)
     assert_eq(
         getattr(psr, ops)(skipna=skipna), getattr(gsr, ops)(skipna=skipna)
     )
 
     psr = cudf.utils.utils.create_pandas_series(data=data)
-    gsr = Series(data, nan_as_null=False)
+    gsr = cudf.Series(data, nan_as_null=False)
     # Since there is no concept of `nan_as_null` in pandas,
     # nulls will be returned in the operations. So only
     # testing for `skipna=True` when `nan_as_null=False`
@@ -462,7 +460,7 @@ def test_nans_stats(data, ops, skipna):
 @pytest.mark.parametrize("min_count", [-10, -1, 0, 1, 2, 3, 5, 10])
 def test_min_count_ops(data, ops, skipna, min_count):
     psr = pd.Series(data)
-    gsr = Series(data)
+    gsr = cudf.Series(data)
 
     assert_eq(
         getattr(psr, ops)(skipna=skipna, min_count=min_count),
@@ -473,8 +471,8 @@ def test_min_count_ops(data, ops, skipna, min_count):
 @pytest.mark.parametrize(
     "gsr",
     [
-        Series([1, 2, 3, 4], dtype="datetime64[ns]"),
-        Series([1, 2, 3, 4], dtype="timedelta64[ns]"),
+        cudf.Series([1, 2, 3, 4], dtype="datetime64[ns]"),
+        cudf.Series([1, 2, 3, 4], dtype="timedelta64[ns]"),
     ],
 )
 def test_cov_corr_invalid_dtypes(gsr):

@@ -11,7 +11,6 @@ import pyarrow as pa
 import pytest
 
 import cudf
-from cudf.core import DataFrame
 from cudf.core._compat import PANDAS_GE_110
 from cudf.core.index import (
     CategoricalIndex,
@@ -35,7 +34,7 @@ from cudf.utils.utils import search_range
 
 
 def test_df_set_index_from_series():
-    df = DataFrame()
+    df = cudf.DataFrame()
     df["a"] = list(range(10))
     df["b"] = list(range(0, 20, 2))
 
@@ -49,7 +48,7 @@ def test_df_set_index_from_series():
 
 
 def test_df_set_index_from_name():
-    df = DataFrame()
+    df = cudf.DataFrame()
     df["a"] = list(range(10))
     df["b"] = list(range(0, 20, 2))
 
@@ -65,7 +64,7 @@ def test_df_set_index_from_name():
 
 
 def test_df_slice_empty_index():
-    df = DataFrame()
+    df = cudf.DataFrame()
     assert isinstance(df.index, RangeIndex)
     assert isinstance(df.index[:1], RangeIndex)
     with pytest.raises(IndexError):
@@ -153,10 +152,10 @@ def test_categorical_index():
     pdf = pd.DataFrame()
     pdf["a"] = [1, 2, 3]
     pdf["index"] = pd.Categorical(["a", "b", "c"])
-    initial_df = DataFrame.from_pandas(pdf)
+    initial_df = cudf.from_pandas(pdf)
     pdf = pdf.set_index("index")
-    gdf1 = DataFrame.from_pandas(pdf)
-    gdf2 = DataFrame()
+    gdf1 = cudf.from_pandas(pdf)
+    gdf2 = cudf.DataFrame()
     gdf2["a"] = [1, 2, 3]
     gdf2["index"] = pd.Categorical(["a", "b", "c"])
     assert_eq(initial_df.index, gdf2.index)
@@ -273,7 +272,7 @@ def test_index_rename_preserves_arg():
 
 
 def test_set_index_as_property():
-    cdf = DataFrame()
+    cdf = cudf.DataFrame()
     col1 = np.arange(10)
     col2 = np.arange(0, 20, 2)
     cdf["a"] = col1
@@ -1419,7 +1418,7 @@ def test_multiindex_sample_basic(n, frac, replace, axis):
             "int": [1, 3, 5, 4, 2],
         },
     )
-    mul_index = cudf.Index(DataFrame.from_pandas(pdf))
+    mul_index = cudf.Index(cudf.from_pandas(pdf))
     random_state = 0
 
     try:

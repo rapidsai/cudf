@@ -1,5 +1,8 @@
 # Copyright (c) 2020-2021, NVIDIA CORPORATION.
 
+import itertools as it
+import random
+
 import numpy as np
 import pytest
 from pandas import DataFrame, MultiIndex, Series, date_range
@@ -277,9 +280,6 @@ def test_drop_duplicates_empty(df):
 
 @pytest.mark.parametrize("num_columns", [3, 4, 5])
 def test_dataframe_drop_duplicates_numeric_method(num_columns):
-    import itertools as it
-    import random
-
     comb = list(it.permutations(range(num_columns), num_columns))
     shuf = list(comb)
     random.Random(num_columns).shuffle(shuf)
