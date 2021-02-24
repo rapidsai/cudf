@@ -615,28 +615,17 @@ def assert_frame_equal(
         right = right[list(left._data.names)]
 
     # index comparison
-    if PANDAS_GE_110:
-        assert_index_equal(
-            left.index,
-            right.index,
-            exact=check_index_type,
-            check_names=check_names,
-            check_exact=check_exact,
-            check_categorical=check_categorical,
-            rtol=rtol,
-            atol=atol,
-            obj=f"{obj}.index",
-        )
-    else:
-        assert_index_equal(
-            left.index,
-            right.index,
-            exact=check_index_type,
-            check_names=check_names,
-            check_exact=check_exact,
-            check_categorical=check_categorical,
-            obj=f"{obj}.index",
-        )
+    assert_index_equal(
+        left.index,
+        right.index,
+        exact=check_index_type,
+        check_names=check_names,
+        check_exact=check_exact,
+        check_categorical=check_categorical,
+        rtol=rtol,
+        atol=atol,
+        obj=f"{obj}.index",
+    )
 
     if PANDAS_GE_110:
         pd.testing.assert_index_equal(
