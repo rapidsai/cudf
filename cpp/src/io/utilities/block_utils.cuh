@@ -16,7 +16,6 @@
 
 #pragma once
 #include <stdint.h>
-#include <cudf/strings/string_view.cuh>
 
 namespace cudf {
 namespace io {
