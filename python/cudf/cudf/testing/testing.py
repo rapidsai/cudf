@@ -334,28 +334,18 @@ def assert_index_equal(
             llevel = cudf.Index(left._columns[level], name=left.names[level])
             rlevel = cudf.Index(right._columns[level], name=right.names[level])
             mul_obj = f"MultiIndex level [{level}]"
-            if PANDAS_GE_110:
-                assert_index_equal(
-                    llevel,
-                    rlevel,
-                    exact=check_exact,
-                    check_names=check_names,
-                    check_exact=check_exact,
-                    check_order=check_order,
-                    rtol=rtol,
-                    atol=atol,
-                    obj=mul_obj,
-                )
-            else:
-                assert_index_equal(
-                    llevel,
-                    rlevel,
-                    exact=check_exact,
-                    check_names=check_names,
-                    check_less_precise=check_less_precise,
-                    check_exact=check_exact,
-                    obj=mul_obj,
-                )
+            assert_index_equal(
+                llevel,
+                rlevel,
+                exact=check_exact,
+                check_names=check_names,
+                check_exact=check_exact,
+                check_less_precise=check_less_precise,
+                check_order=check_order,
+                rtol=rtol,
+                atol=atol,
+                obj=mul_obj,
+            )
         return
 
     assert_column_equal(
@@ -472,55 +462,32 @@ def assert_series_equal(
         raise_assert_detail(obj, "Series length are different", msg1, msg2)
 
     # index comparison
-    if PANDAS_GE_110:
-        assert_index_equal(
-            left.index,
-            right.index,
-            exact=check_index_type,
-            check_names=check_names,
-            check_exact=check_exact,
-            check_categorical=check_categorical,
-            rtol=rtol,
-            atol=atol,
-            obj=f"{obj}.index",
-        )
-    else:
-        assert_index_equal(
-            left.index,
-            right.index,
-            exact=check_index_type,
-            check_names=check_names,
-            check_less_precise=check_less_precise,
-            check_exact=check_exact,
-            check_categorical=check_categorical,
-            obj=f"{obj}.index",
-        )
+    assert_index_equal(
+        left.index,
+        right.index,
+        exact=check_index_type,
+        check_names=check_names,
+        check_less_precise=check_less_precise,
+        check_exact=check_exact,
+        check_categorical=check_categorical,
+        rtol=rtol,
+        atol=atol,
+        obj=f"{obj}.index",
+    )
 
-    if PANDAS_GE_110:
-        assert_column_equal(
-            left._column,
-            right._column,
-            check_dtype=check_dtype,
-            check_column_type=check_series_type,
-            check_exact=check_exact,
-            check_datetimelike_compat=check_datetimelike_compat,
-            check_categorical=check_categorical,
-            check_category_order=check_category_order,
-            rtol=rtol,
-            atol=atol,
-        )
-    else:
-        assert_column_equal(
-            left._column,
-            right._column,
-            check_dtype=check_dtype,
-            check_column_type=check_series_type,
-            check_less_precise=check_less_precise,
-            check_exact=check_exact,
-            check_datetimelike_compat=check_datetimelike_compat,
-            check_categorical=check_categorical,
-            check_category_order=check_category_order,
-        )
+    assert_column_equal(
+        left._column,
+        right._column,
+        check_dtype=check_dtype,
+        check_column_type=check_series_type,
+        check_less_precise=check_less_precise,
+        check_exact=check_exact,
+        check_datetimelike_compat=check_datetimelike_compat,
+        check_categorical=check_categorical,
+        check_category_order=check_category_order,
+        rtol=rtol,
+        atol=atol,
+    )
 
     # metadata comparison
     if check_names and (left.name != right.name):
@@ -695,25 +662,14 @@ def assert_frame_equal(
         )
 
     for col in left.columns:
-        if PANDAS_GE_110:
-            assert_column_equal(
-                left._data[col],
-                right._data[col],
-                check_dtype=check_dtype,
-                check_exact=check_exact,
-                check_datetimelike_compat=check_datetimelike_compat,
-                check_categorical=check_categorical,
-                rtol=rtol,
-                atol=atol,
-                obj=f'Column name="{col}"',
-            )
-        else:
-            assert_column_equal(
-                left._data[col],
-                right._data[col],
-                check_dtype=check_dtype,
-                check_exact=check_exact,
-                check_datetimelike_compat=check_datetimelike_compat,
-                check_categorical=check_categorical,
-                obj=f'Column name="{col}"',
-            )
+        assert_column_equal(
+            left._data[col],
+            right._data[col],
+            check_dtype=check_dtype,
+            check_exact=check_exact,
+            check_datetimelike_compat=check_datetimelike_compat,
+            check_categorical=check_categorical,
+            rtol=rtol,
+            atol=atol,
+            obj=f'Column name="{col}"',
+        )
