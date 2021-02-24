@@ -808,7 +808,7 @@ std::unique_ptr<column> binary_operation(column_view const& lhs,
     return binops::compiled::binary_operation(lhs, rhs, op, output_type.value(), stream, mr);
 
   // Check for datatype
-  CUDF_EXPECTS(is_fixed_width(type), "Invalid/Unsupported output datatype");
+  CUDF_EXPECTS(is_fixed_width(output_type.value()), "Invalid/Unsupported output datatype");
   CUDF_EXPECTS(is_fixed_width(lhs.type()), "Invalid/Unsupported lhs datatype");
   CUDF_EXPECTS(is_fixed_width(rhs.type()), "Invalid/Unsupported rhs datatype");
 
