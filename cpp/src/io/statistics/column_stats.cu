@@ -258,7 +258,8 @@ void __device__ gatherStringColumnStats(stats_state_s *s, uint32_t t, Storage &s
       s->ck.has_sum    = has_minmax;
     }
   } else if (t < 32 * 2 and has_minmax) {
-    maximum_value = cudf::strings::string::WarpReduce(s->warp_max[t & 0x1f].str_val, cudf::DeviceMax());
+    maximum_value =
+      cudf::strings::string::WarpReduce(s->warp_max[t & 0x1f].str_val, cudf::DeviceMax());
     if (!(t & 0x1f)) { s->ck.max_value.str_val = maximum_value; }
   }
 }
@@ -498,7 +499,8 @@ void __device__ mergeStringColumnStats(merge_state_s *s,
       s->ck.null_count = null_count;
     }
   } else if (t < 32 * 2) {
-    maximum_value = cudf::strings::string::WarpReduce(s->warp_max[t & 0x1f].str_val, cudf::DeviceMax());
+    maximum_value =
+      cudf::strings::string::WarpReduce(s->warp_max[t & 0x1f].str_val, cudf::DeviceMax());
     if (!((t & 0x1f) and has_minmax)) { s->ck.max_value.str_val = maximum_value; }
   }
 }

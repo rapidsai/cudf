@@ -112,14 +112,14 @@ inline __device__ string_view WarpReduce(string_view extremum_value, Operator op
 {
   using cudf::io::shuffle_xor;
   string_view value = shuffle_xor(extremum_value, 1);
-  extremum_value = op(value, extremum_value);
-  value = shuffle_xor(extremum_value, 2);
-  extremum_value = op(value, extremum_value);
-  value = shuffle_xor(extremum_value, 4);
-  extremum_value = op(value, extremum_value);
-  value = shuffle_xor(extremum_value, 8);
-  extremum_value = op(value, extremum_value);
-  value = shuffle_xor(extremum_value, 16);
+  extremum_value    = op(value, extremum_value);
+  value             = shuffle_xor(extremum_value, 2);
+  extremum_value    = op(value, extremum_value);
+  value             = shuffle_xor(extremum_value, 4);
+  extremum_value    = op(value, extremum_value);
+  value             = shuffle_xor(extremum_value, 8);
+  extremum_value    = op(value, extremum_value);
+  value             = shuffle_xor(extremum_value, 16);
   return op(value, extremum_value);
 }
 
