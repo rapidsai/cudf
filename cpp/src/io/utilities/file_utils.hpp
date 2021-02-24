@@ -16,12 +16,14 @@
 
 #pragma once
 
-#include <string>
-
 #include <cufile.h>
+
+#include <rmm/cuda_stream_view.hpp>
 
 #include <cudf/io/datasource.hpp>
 #include <cudf/utilities/error.hpp>
+
+#include <string>
 
 namespace cudf {
 namespace io {
@@ -101,14 +103,16 @@ class cufile_input final : public cufile_io_base {
   /**
    * @brief Reads into a new device buffer.
    */
-  std::unique_ptr<datasource::buffer> read(size_t offset, size_t size);
+  std::unique_ptr<datasource::buffer> read(size_t offset,
+                                           size_t size,
+                                           rmm::cuda_stream_view stream);
 
   /**
    * @brief Reads into existing device memory.
    *
    * Returns the number of bytes read.
    */
-  size_t read(size_t offset, size_t size, uint8_t *dst);
+  size_t read(size_t offset, size_t size, uint8_t *dst, rmm::cuda_stream_view stream);
 };
 
 /**

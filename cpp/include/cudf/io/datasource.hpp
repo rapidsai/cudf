@@ -19,6 +19,8 @@
 #include <cudf/io/types.hpp>
 #include <cudf/utilities/error.hpp>
 
+#include <rmm/cuda_stream_view.hpp>
+
 #include <arrow/buffer.h>
 #include <arrow/io/file.h>
 #include <arrow/io/interfaces.h>
@@ -158,12 +160,14 @@ class datasource {
    * Data source implementations that don't support direct device reads don't need to override this
    * function.
    *
-   * @param[in] offset Bytes from the start
-   * @param[in] size Bytes to read
+   * @param offset Bytes from the start
+   * @param size Bytes to read
    *
    * @return The data buffer in the device memory
    */
-  virtual std::unique_ptr<datasource::buffer> device_read(size_t offset, size_t size)
+  virtual std::unique_ptr<datasource::buffer> device_read(size_t offset,
+                                                          size_t size,
+                                                          rmm::cuda_stream_view stream)
   {
     CUDF_FAIL("datasource classes that support device_read must override this function.");
   }
@@ -174,13 +178,13 @@ class datasource {
    * Data source implementations that don't support direct device reads don't need to override this
    * function.
    *
-   * @param[in] offset Bytes from the start
-   * @param[in] size Bytes to read
-   * @param[in] dst Address of the existing device memory
+   * @param offset Bytes from the start
+   * @param size Bytes to read
+   * @param dst Address of the existing device memory
    *
    * @return The number of bytes read (can be smaller than size)
    */
-  virtual size_t device_read(size_t offset, size_t size, uint8_t* dst)
+  virtual size_t device_read(size_t offset, size_t size, uint8_t* dst, rmm::cuda_stream_view stream)
   {
     CUDF_FAIL("datasource classes that support device_read must override this function.");
   }

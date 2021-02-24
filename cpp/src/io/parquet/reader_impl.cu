@@ -852,7 +852,7 @@ void reader::impl::read_column_chunks(
     if (io_size != 0) {
       auto &source = _sources[chunk_source_map[chunk]];
       if (source->is_device_read_preferred(io_size)) {
-        page_data[chunk] = source->device_read(io_offset, io_size);
+        page_data[chunk] = source->device_read(io_offset, io_size, stream);
       } else {
         auto const buffer = source->host_read(io_offset, io_size);
         page_data[chunk] =

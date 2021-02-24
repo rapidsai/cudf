@@ -88,19 +88,24 @@ class memory_mapped_source : public datasource {
     return _cufile_in != nullptr && _cufile_in->is_cufile_io_preferred(size);
   }
 
-  std::unique_ptr<datasource::buffer> device_read(size_t offset, size_t size) override
+  std::unique_ptr<datasource::buffer> device_read(size_t offset,
+                                                  size_t size,
+                                                  rmm::cuda_stream_view stream) override
   {
     if (!supports_device_read()) CUDF_FAIL("Device reads are not supported for this file.");
 
     auto const read_size = std::min(size, _map_size - (offset - _map_offset));
-    return _cufile_in->read(offset, read_size);
+    return _cufile_in->read(offset, read_size, stream);
   }
 
-  size_t device_read(size_t offset, size_t size, uint8_t *dst) override
+  size_t device_read(size_t offset,
+                     size_t size,
+                     uint8_t *dst,
+                     rmm::cuda_stream_view stream) override
   {
     if (!supports_device_read()) CUDF_FAIL("Device reads are not supported for this file.");
     auto const read_size = std::min(size, _map_size - (offset - _map_offset));
-    return _cufile_in->read(offset, read_size, dst);
+    return _cufile_in->read(offset, read_size, dst, stream);
   }
 
   size_t size() const override { return _file_size; }
@@ -159,14 +164,19 @@ class user_datasource_wrapper : public datasource {
 
   bool supports_device_read() const override { return source->supports_device_read(); }
 
-  size_t device_read(size_t offset, size_t size, uint8_t *dst) override
+  size_t device_read(size_t offset,
+                     size_t size,
+                     uint8_t *dst,
+                     rmm::cuda_stream_view stream) override
   {
-    return source->device_read(offset, size, dst);
+    return source->device_read(offset, size, dst, stream);
   }
 
-  std::unique_ptr<buffer> device_read(size_t offset, size_t size) override
+  std::unique_ptr<buffer> device_read(size_t offset,
+                                      size_t size,
+                                      rmm::cuda_stream_view stream) override
   {
-    return source->device_read(offset, size);
+    return source->device_read(offset, size, stream);
   }
 
   size_t size() const override { return source->size(); }

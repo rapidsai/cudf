@@ -103,16 +103,18 @@ cufile_input::cufile_input(std::string const &filepath)
   init_cufile_driver();
 }
 
-std::unique_ptr<datasource::buffer> cufile_input::read(size_t offset, size_t size)
+std::unique_ptr<datasource::buffer> cufile_input::read(size_t offset,
+                                                       size_t size,
+                                                       rmm::cuda_stream_view stream)
 {
-  rmm::device_buffer out_data(size);
+  rmm::device_buffer out_data(size, stream);
   CUDF_EXPECTS(cuFileRead(cf_file.handle, out_data.data(), size, offset, 0) != -1,
                "cuFile error reading from a file");
 
   return datasource::buffer::create(std::move(out_data));
 }
 
-size_t cufile_input::read(size_t offset, size_t size, uint8_t *dst)
+size_t cufile_input::read(size_t offset, size_t size, uint8_t *dst, rmm::cuda_stream_view stream)
 {
   CUDF_EXPECTS(cuFileRead(cf_file.handle, dst, size, offset, 0) != -1,
                "cuFile error reading from a file");
