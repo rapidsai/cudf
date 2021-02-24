@@ -585,7 +585,6 @@ std::vector<schema_tree_node> construct_schema_tree(LinkedColVector const &linke
   root.parent_idx      = -1;  // root schema has no parent
   schema.push_back(std::move(root));
 
-  // TODO: handle single_write_mode
   std::function<void(LinkedColPtr const &, column_in_metadata const &, size_t)> add_schema =
     [&](LinkedColPtr const &col, column_in_metadata const &col_meta, size_t parent_idx) {
       bool col_nullable = [&]() {
@@ -804,7 +803,6 @@ std::vector<schema_tree_node> construct_schema_tree(LinkedColVector const &linke
             break;
         }
 
-        // TODO: Use input schema to influence this
         col_schema.repetition_type = col_nullable ? OPTIONAL : REQUIRED;
         col_schema.name        = (schema[parent_idx].name == "list") ? "element" : col_meta.name;
         col_schema.parent_idx  = parent_idx;
@@ -1260,12 +1258,17 @@ void writer::impl::write(table_view const &table)
 
   auto tbl_meta = (table_meta == nullptr) ? table_input_metadata(table) : *table_meta;
   // Fill unnamed columns' names in tbl_meta
-  // TODO: it's not enough to give default names to top level columns. Do this recursively.
+  std::function<void(column_in_metadata &, std::string)> add_default_name =
+    [&](column_in_metadata &col_meta, std::string default_name) {
+      if (col_meta.name.empty()) col_meta.name = default_name;
+      for (size_t i = 0; i < col_meta.children.size(); ++i) {
+        add_default_name(col_meta.children[i], col_meta.name + "_" + std::to_string(i));
+      }
+    };
   for (size_t i = 0; i < tbl_meta.column_metadata.size(); ++i) {
-    if (tbl_meta.column_metadata[i].name.empty()) {
-      tbl_meta.column_metadata[i].name = "_col" + std::to_string(i);
-    }
+    add_default_name(tbl_meta.column_metadata[i], "_col" + std::to_string(i));
   }
+
   // TODO: Verify structure of tbl_meta is same as table
 
   auto vec         = input_table_to_linked_columns(table);
@@ -1286,13 +1289,6 @@ void writer::impl::write(table_view const &table)
   for (auto const &parq_col : parquet_columns) { cudf_cols.push_back(parq_col.cudf_column_view()); }
   table_view single_streams_table(cudf_cols);
   size_type num_columns = single_streams_table.num_columns();
-
-  // TODO: See if we need to Change table_device_view to following single allocation for vector of
-  // columns.
-  // std::unique_ptr<rmm::device_buffer> device_view_owners;
-  // column_device_view *device_views_ptr;
-  // std::tie(device_view_owners, device_views_ptr) =
-  //   contiguous_copy_column_device_views<column_device_view>(cudf_cols, rmm::cuda_stream_view());
 
   std::vector<SchemaElement> this_table_schema(schema_tree.begin(), schema_tree.end());
 
