@@ -54,19 +54,18 @@ struct column_sorted_order_fn {
     // But this also requires making a copy of the input data.
     auto temp_col = column(input, stream);
     auto d_col    = temp_col.mutable_view();
-    using DeviceT = device_storage_type_t<T>;
     if (ascending) {
       thrust::sort_by_key(rmm::exec_policy(stream),
-                          d_col.begin<DeviceT>(),
-                          d_col.end<DeviceT>(),
+                          d_col.begin<T>(),
+                          d_col.end<T>(),
                           indices.begin<size_type>(),
-                          thrust::less<DeviceT>());
+                          thrust::less<T>());
     } else {
       thrust::sort_by_key(rmm::exec_policy(stream),
-                          d_col.begin<DeviceT>(),
-                          d_col.end<DeviceT>(),
+                          d_col.begin<T>(),
+                          d_col.end<T>(),
                           indices.begin<size_type>(),
-                          thrust::greater<DeviceT>());
+                          thrust::greater<T>());
     }
   }
   template <typename T, typename std::enable_if_t<!is_radix_sort_supported<T>()>* = nullptr>
@@ -132,13 +131,13 @@ std::unique_ptr<column> sorted_order<false>(column_view const& input,
   mutable_column_view indices_view = sorted_indices->mutable_view();
   thrust::sequence(
     rmm::exec_policy(stream), indices_view.begin<size_type>(), indices_view.end<size_type>(), 0);
-  cudf::type_dispatcher(input.type(),
-                        column_sorted_order_fn{},
-                        input,
-                        indices_view,
-                        column_order == order::ASCENDING,
-                        null_precedence,
-                        stream);
+  cudf::type_dispatcher<dispatch_storage_type>(input.type(),
+                                               column_sorted_order_fn{},
+                                               input,
+                                               indices_view,
+                                               column_order == order::ASCENDING,
+                                               null_precedence,
+                                               stream);
   return sorted_indices;
 }
 

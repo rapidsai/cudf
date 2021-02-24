@@ -5,7 +5,15 @@ from __future__ import annotations
 import itertools
 from collections import OrderedDict
 from collections.abc import MutableMapping
-from typing import TYPE_CHECKING, Any, Tuple, Union
+from typing import (
+    TYPE_CHECKING,
+    Any,
+    Callable,
+    Mapping,
+    Optional,
+    Tuple,
+    Union,
+)
 
 import pandas as pd
 
@@ -340,6 +348,81 @@ class ColumnAccessor(MutableMapping):
         if not isinstance(key, tuple):
             key = (key,)
         return key + (pad_value,) * (self.nlevels - len(key))
+
+    def rename_levels(
+        self, mapper: Union[Mapping[Any, Any], Callable], level: Optional[int]
+    ) -> ColumnAccessor:
+        """
+        Rename the specified levels of the given ColumnAccessor
+
+        Parameters
+        ----------
+        self : ColumnAccessor of a given dataframe
+
+        mapper : dict-like or function transformations to apply to
+            the column label values depending on selected ``level``.
+
+            If dict-like, only replace the specified level of the
+            ColumnAccessor's keys (that match the mapper's keys) with
+            mapper's values
+
+            If callable, the function is applied only to the specified level
+            of the ColumnAccessor's keys.
+
+        level : int
+            In case of RangeIndex, only supported level is [0, None].
+            In case of a MultiColumn, only the column labels in the specified
+            level of the ColumnAccessor's keys will be transformed.
+
+        Returns
+        -------
+        A new ColumnAccessor with values in the keys replaced according
+        to the given mapper and level.
+
+        """
+        if self.multiindex:
+
+            def rename_column(x):
+                x = list(x)
+                if isinstance(mapper, Mapping):
+                    x[level] = mapper.get(x[level], x[level])
+                else:
+                    x[level] = mapper(x[level])
+                x = tuple(x)
+                return x
+
+            if level is None:
+                raise NotImplementedError(
+                    "Renaming columns with a MultiIndex and level=None is"
+                    "not supported"
+                )
+            new_names = map(rename_column, self.keys())
+            ca = ColumnAccessor(
+                dict(zip(new_names, self.values())),
+                level_names=self.level_names,
+                multiindex=self.multiindex,
+            )
+
+        else:
+            if level is None:
+                level = 0
+            if level != 0:
+                raise IndexError(
+                    f"Too many levels: Index has only 1 level, not {level+1}"
+                )
+            if isinstance(mapper, Mapping):
+                new_names = (
+                    mapper.get(col_name, col_name) for col_name in self.keys()
+                )
+            else:
+                new_names = (mapper(col_name) for col_name in self.keys())
+            ca = ColumnAccessor(
+                dict(zip(new_names, self.values())),
+                level_names=self.level_names,
+                multiindex=self.multiindex,
+            )
+
+        return self.__class__(ca)
 
 
 def _compare_keys(target: Any, key: Any) -> bool:
