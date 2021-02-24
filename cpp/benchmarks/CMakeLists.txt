@@ -38,8 +38,6 @@ target_include_directories(cudf_datagen
            "$<BUILD_INTERFACE:${CUDF_SOURCE_DIR}>"
            "$<BUILD_INTERFACE:${CUDF_SOURCE_DIR}/src>")
 
-
-
 ###################################################################################################
 # - compiler function -----------------------------------------------------------------------------
 
