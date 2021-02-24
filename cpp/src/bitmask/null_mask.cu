@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2020, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -29,6 +29,7 @@
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_buffer.hpp>
 #include <rmm/device_scalar.hpp>
+#include <rmm/device_uvector.hpp>
 #include <rmm/device_vector.hpp>
 #include <rmm/mr/device/device_memory_resource.hpp>
 
@@ -394,34 +395,27 @@ rmm::device_buffer copy_bitmask(column_view const &view,
 }
 
 // Inplace Bitwise AND of the masks
-void inplace_bitmask_and(bitmask_type *dest_mask,
-                         std::vector<bitmask_type const *> const &masks,
-                         std::vector<size_type> const &begin_bits,
+void inplace_bitmask_and(device_span<bitmask_type> dest_mask,
+                         host_span<bitmask_type const *> const masks,
+                         host_span<size_type> const begin_bits,
                          size_type mask_size,
                          rmm::cuda_stream_view stream,
                          rmm::mr::device_memory_resource *mr)
 {
-  CUDF_EXPECTS(std::all_of(begin_bits.begin(), begin_bits.end(), [](auto b) { return b >= 0; }),
-               "Invalid range.");
-  CUDF_EXPECTS(std::all_of(masks.begin(), masks.end(), [](auto p) { return p != nullptr; }),
-               "Mask pointer cannot be null");
-
-  rmm::device_vector<bitmask_type const *> d_masks(masks);
-  rmm::device_vector<size_type> d_begin_bits(begin_bits);
-
   inplace_bitmask_binop(
     [] __device__(bitmask_type left, bitmask_type right) { return left & right; },
-    device_span<bitmask_type>(dest_mask, num_bitmask_words(mask_size)),
-    device_span<bitmask_type const *>(d_masks.data().get(), d_masks.size()),
-    device_span<size_type>(d_begin_bits.data().get(), d_begin_bits.size()),
+    dest_mask,
+    masks,
+    begin_bits,
     mask_size,
     stream,
     mr);
+  stream.synchronize();
 }
 
 // Bitwise AND of the masks
-rmm::device_buffer bitmask_and(std::vector<bitmask_type const *> const &masks,
-                               std::vector<size_type> const &begin_bits,
+rmm::device_buffer bitmask_and(host_span<bitmask_type const *> const masks,
+                               host_span<size_type> const begin_bits,
                                size_type mask_size,
                                rmm::cuda_stream_view stream,
                                rmm::mr::device_memory_resource *mr)
@@ -629,6 +623,7 @@ rmm::device_buffer bitmask_and(table_view const &view,
   return null_mask;
 }
 
+// Returns the bitwise OR of the null masks of all columns in the table view
 rmm::device_buffer bitmask_or(table_view const &view,
                               rmm::cuda_stream_view stream,
                               rmm::mr::device_memory_resource *mr)
