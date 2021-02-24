@@ -31,7 +31,7 @@ namespace detail {
 
 /**
  * @brief Asynchronously construct a `device_uvector` containing a deep copy of data from a
- * host_span
+ * `host_span`
  *
  * @note This function does not synchronize `stream`.
  *
@@ -39,7 +39,7 @@ namespace detail {
  * @param source_data The host_span of data to deep copy
  * @param stream The stream on which to allocate memory and perform the copy
  * @param mr The memory resource to use for allocating the returned device_uvector
- * @return rmm::device_uvector<T> A device_uvector containing the copied data
+ * @return A device_uvector containing the copied data
  */
 template <typename T>
 rmm::device_uvector<T> make_device_uvector_async(
@@ -67,7 +67,7 @@ rmm::device_uvector<T> make_device_uvector_async(
  * @param c The input host container from which to copy
  * @param stream The stream on which to allocate memory and perform the copy
  * @param mr The memory resource to use for allocating the returned device_uvector
- * @return rmm::device_uvector<T> A device_uvector containing the copied data
+ * @return A device_uvector containing the copied data
  */
 template <template <typename, typename...> typename Container,
           typename T,
@@ -82,7 +82,7 @@ rmm::device_uvector<T> make_device_uvector_async(
 
 /**
  * @brief Asynchronously construct a `device_uvector` containing a deep copy of data from a
- * device_span
+ * `device_span`
  *
  * @note This function does not synchronize `stream`.
  *
@@ -90,7 +90,7 @@ rmm::device_uvector<T> make_device_uvector_async(
  * @param source_data The device_span of data to deep copy
  * @param stream The stream on which to allocate memory and perform the copy
  * @param mr The memory resource to use for allocating the returned device_uvector
- * @return rmm::device_uvector<T> A device_uvector containing the copied data
+ * @return A device_uvector containing the copied data
  */
 template <typename T>
 rmm::device_uvector<T> make_device_uvector_async(
@@ -118,7 +118,7 @@ rmm::device_uvector<T> make_device_uvector_async(
  * @param c The input device container from which to copy
  * @param stream The stream on which to allocate memory and perform the copy
  * @param mr The memory resource to use for allocating the returned device_uvector
- * @return rmm::device_uvector<T> A device_uvector containing the copied data
+ * @return A device_uvector containing the copied data
  */
 template <template <typename, typename...> typename Container,
           typename T,
@@ -134,7 +134,7 @@ rmm::device_uvector<T> make_device_uvector_async(
 
 /**
  * @brief Synchronously construct a `device_uvector` containing a deep copy of data from a
- * host_span
+ * `host_span`
  *
  * @note This function synchronizes `stream`.
  *
@@ -142,7 +142,7 @@ rmm::device_uvector<T> make_device_uvector_async(
  * @param source_data The host_span of data to deep copy
  * @param stream The stream on which to allocate memory and perform the copy
  * @param mr The memory resource to use for allocating the returned device_uvector
- * @return rmm::device_uvector<T> A device_uvector containing the copied data
+ * @return A device_uvector containing the copied data
  */
 template <typename T>
 rmm::device_uvector<T> make_device_uvector_sync(
@@ -171,7 +171,7 @@ rmm::device_uvector<T> make_device_uvector_sync(
  * @param c The input host container from which to copy
  * @param stream The stream on which to allocate memory and perform the copy
  * @param mr The memory resource to use for allocating the returned device_uvector
- * @return rmm::device_uvector<T> A device_uvector containing the copied data
+ * @return A device_uvector containing the copied data
  */
 template <template <typename, typename...> typename Container,
           typename T,
@@ -186,7 +186,7 @@ rmm::device_uvector<T> make_device_uvector_sync(
 
 /**
  * @brief Synchronously construct a `device_uvector` containing a deep copy of data from a
- * device_span
+ * `device_span`
  *
  * @note This function synchronizes `stream`.
  *
@@ -194,7 +194,7 @@ rmm::device_uvector<T> make_device_uvector_sync(
  * @param source_data The device_span of data to deep copy
  * @param stream The stream on which to allocate memory and perform the copy
  * @param mr The memory resource to use for allocating the returned device_uvector
- * @return rmm::device_uvector<T> A device_uvector containing the copied data
+ * @return A device_uvector containing the copied data
  */
 template <typename T>
 rmm::device_uvector<T> make_device_uvector_sync(
@@ -223,7 +223,7 @@ rmm::device_uvector<T> make_device_uvector_sync(
  * @param c The input device container from which to copy
  * @param stream The stream on which to allocate memory and perform the copy
  * @param mr The memory resource to use for allocating the returned device_uvector
- * @return rmm::device_uvector<T> A device_uvector containing the copied data
+ * @return A device_uvector containing the copied data
  */
 template <template <typename, typename...> typename Container,
           typename T,
