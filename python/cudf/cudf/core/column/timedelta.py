@@ -369,27 +369,7 @@ class TimeDeltaColumn(column.ColumnBase):
         )
 
     def isin(self, values: Sequence) -> ColumnBase:
-        lhs = self
-        rhs = None
-
-        try:
-            rhs = cudf.core.column.as_column(values)
-
-            if rhs.dtype.kind in {"f", "i", "u"}:
-                return cudf.core.column.full(len(self), False, dtype="bool")
-
-            rhs = rhs.astype(self.dtype)
-            res = lhs._isin_earlystop(rhs)
-            if res is not None:
-                return res
-        except ValueError:
-            # pandas functionally returns all False when cleansing via
-            # typecasting fails
-            return cudf.core.column.full(len(self), False, dtype="bool")
-
-        res = lhs._obtain_isin_result(rhs)
-
-        return res
+        return cudf.core.tools.datetimes._isin_datetimelike(self, values)
 
     def quantile(
         self, q: Union[float, Sequence[float]], interpolation: str, exact: bool

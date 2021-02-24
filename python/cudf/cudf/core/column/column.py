@@ -849,10 +849,6 @@ class ColumnBase(Column, Serializable):
         -------
         result: Column
             Column of booleans indicating if each element is in values.
-        Raises
-        -------
-        TypeError
-            If values is a string
         """
         lhs = self
         rhs = None

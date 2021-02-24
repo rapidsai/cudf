@@ -337,25 +337,7 @@ class DatetimeColumn(column.ColumnBase):
         return self.as_numerical.is_unique
 
     def isin(self, values: Sequence) -> ColumnBase:
-        lhs = self
-        rhs = None
-
-        try:
-            rhs = cudf.core.column.as_column(values)
-
-            if rhs.dtype.kind in {"f", "i", "u"}:
-                return cudf.core.column.full(len(self), False, dtype="bool")
-            rhs = rhs.astype(self.dtype)
-            res = lhs._isin_earlystop(rhs)
-            if res is not None:
-                return res
-        except ValueError:
-            # pandas functionally returns all False when cleansing via
-            # typecasting fails
-            return cudf.core.column.full(len(self), False, dtype="bool")
-
-        res = lhs._obtain_isin_result(rhs)
-        return res
+        return cudf.core.tools.datetimes._isin_datetimelike(self, values)
 
     def can_cast_safely(self, to_dtype: Dtype) -> bool:
         if np.issubdtype(to_dtype, np.datetime64):
