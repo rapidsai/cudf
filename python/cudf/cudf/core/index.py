@@ -3,7 +3,7 @@ from __future__ import annotations, division, print_function
 
 import pickle
 from numbers import Number
-from typing import Any, Dict, Set, Type
+from typing import Any, Dict, Set, Type, cast
 
 import cupy
 import numpy as np
@@ -2711,7 +2711,6 @@ class interval_range(GenericIndex):
         closed: str = "right",
         name: str = None,
     ) -> "IntervalIndex":
-        # breakpoint()
         if freq and periods and start and end:
             raise ValueError(
                 "Of the four parameters: start, end, periods, and "
@@ -2735,15 +2734,21 @@ class interval_range(GenericIndex):
                 return pd.IntervalIndex([], closed=closed)
         elif freq and not periods:
             left_col = cupy.arange(start, end, freq)
-            right_col = cupy.arange(start + freq, end + 1, freq)
+            if end is not None:
+                    end = end +1
+            right_col = cupy.arange(start + freq, end, freq)
             # sometimes the left col overlaps with the right col
             if len(left_col) != len(right_col):
-                left_col = cupy.arange(start, end - freq, freq)
+                if end is not None:
+                    end = end - freq
+                left_col = cupy.arange(start, end, freq)
             if len(right_col) == 0 or len(left_col) == 0:
                 # I get an error passing an empty list to cudf IntervalIndex
                 return pd.IntervalIndex([], closed=closed)
         elif periods and not freq:
-            periods_array = cupy.asarray(cupy.arange(start, end + 1))
+            if end is not None:
+                    end = end +1
+            periods_array = cupy.asarray(cupy.arange(start, end))
             hist, bin_edges = cupy.histogram(periods_array, periods)
             # cupy.histogram turns all arrays into a float array
             # this can cause the dtype to be a float instead of an int
@@ -2756,8 +2761,7 @@ class interval_range(GenericIndex):
         interval_col = column.build_interval_column(
             left_col, right_col, closed=closed
         )
-        return IntervalIndex(interval_col)
-
+        return cast('interval_range',IntervalIndex(interval_col))
 
 class IntervalIndex(GenericIndex):
     """
