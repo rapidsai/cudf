@@ -115,6 +115,7 @@ TEST_F(SetBitmaskTest, error_range)
   std::vector<size_pair> begin_end_pass{
     {0, size},         // begin>=0
     {0, 1},            // begin>=0
+    {8, 8},            // begin==end
     {8, 9},            // begin<=end
     {size - 1, size},  // begin<=end
   };
