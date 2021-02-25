@@ -5007,18 +5007,17 @@ def test_df_sr_binop(gsr, colnames, op):
     data = dict(zip(colnames, data))
 
     gdf = gd.DataFrame(data)
-    pdf = gdf.to_pandas(nullable=True)
+    pdf = pd.DataFrame.from_dict(data)
 
-    psr = gsr.to_pandas(nullable=True)
+    psr = gsr.to_pandas()
 
     expect = op(pdf, psr)
-    got = op(gdf, gsr).to_pandas(nullable=True)
-    assert_eq(expect, got)
+    got = op(gdf, gsr)
+    assert_eq(expect.astype(float), got.astype(float))
 
     expect = op(psr, pdf)
-    breakpoint()
-    got = op(gsr, gdf).to_pandas(nullable=True)
-    assert_eq(expect, got)
+    got = op(psr, pdf)
+    assert_eq(expect.astype(float), got.astype(float))
 
 
 @pytest.mark.parametrize(
