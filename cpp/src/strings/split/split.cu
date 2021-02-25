@@ -506,8 +506,8 @@ std::unique_ptr<table> split_fn(strings_column_view const& strings_column,
   }
 
   // create working area to hold all token positions
-  rmm::device_vector<string_index_pair> tokens(columns_count * strings_count);
-  string_index_pair* d_tokens = tokens.data().get();
+  rmm::device_uvector<string_index_pair> tokens(columns_count * strings_count, stream);
+  string_index_pair* d_tokens = tokens.data();
   // initialize the token positions
   // -- accounts for nulls, empty, and strings with no delimiter in them
   thrust::for_each_n(rmm::exec_policy(stream),
@@ -775,8 +775,8 @@ std::unique_ptr<table> whitespace_split_fn(size_type strings_count,
   }
 
   // get the positions for every token
-  rmm::device_vector<string_index_pair> tokens(columns_count * strings_count);
-  string_index_pair* d_tokens = tokens.data().get();
+  rmm::device_uvector<string_index_pair> tokens(columns_count * strings_count, stream);
+  string_index_pair* d_tokens = tokens.data();
   thrust::fill(rmm::exec_policy(stream),
                d_tokens,
                d_tokens + (columns_count * strings_count),
