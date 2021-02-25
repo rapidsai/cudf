@@ -2710,7 +2710,7 @@ class interval_range(GenericIndex):
         freq: int = None,
         closed: str = "right",
         name: str = None,
-    ) -> "IntervalIndex":
+    ) -> "interval_range":
         if freq and periods and start and end:
             raise ValueError(
                 "Of the four parameters: start, end, periods, and "
@@ -2765,7 +2765,7 @@ class interval_range(GenericIndex):
         interval_col = column.build_interval_column(
             left_col, right_col, closed=closed
         )
-        return cast("interval_range", IntervalIndex(interval_col))
+        return cast(interval_range, IntervalIndex(interval_col))
 
 
 class IntervalIndex(GenericIndex):
@@ -2796,7 +2796,7 @@ class IntervalIndex(GenericIndex):
 
     def __new__(
         cls, data=None, closed=None, dtype=None, copy=False, name=None,
-    ) -> "interval_range":
+    ) -> "IntervalIndex":
         if copy:
             data = column.as_column(data, dtype=dtype).copy(deep=True)
         out = Frame.__new__(cls)
