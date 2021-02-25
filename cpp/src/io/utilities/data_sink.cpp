@@ -48,7 +48,7 @@ class file_sink : public data_sink {
 
   size_t bytes_written() override { return _bytes_written; }
 
-  bool supports_device_write() const override { return true; }
+  bool supports_device_write() const override { return _cufile_out != nullptr; }
 
   bool is_device_write_preferred(size_t size) const override
   {
