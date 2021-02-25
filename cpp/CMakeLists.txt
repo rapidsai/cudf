@@ -216,7 +216,7 @@ else()
 endif(Boost_FOUND)
 
 ###################################################################################################
-# - find cufile -----------------------------------------------------------------------------------
+# - cuFile -----------------------------------------------------------------------------------
 
 find_path(CUFILE_INCLUDE "cufile.h"
     HINTS "${GDS_ROOT}/lib"
@@ -229,11 +229,11 @@ find_library(CUFILE_LIBRARY "libcufile.so"
 message(STATUS "CUFILE: CUFILE_LIBRARY set to ${CUFILE_LIBRARY}")
 message(STATUS "CUFILE: CUFILE_INCLUDE set to ${CUFILE_INCLUDE}")
 
-add_library(cufile SHARED IMPORTED ${CUFILE_LIBRARY})
 if (CUFILE_INCLUDE AND CUFILE_LIBRARY)
+    add_library(cufile SHARED IMPORTED ${CUFILE_LIBRARY})
+    set_target_properties(cufile PROPERTIES IMPORTED_LOCATION ${CUFILE_LIBRARY})
     set(CUFILE_INSTALLED TRUE)
     add_compile_definitions(CUFILE_INSTALLED)
-    set_target_properties(cufile PROPERTIES IMPORTED_LOCATION ${CUFILE_LIBRARY})
 endif (CUFILE_INCLUDE AND CUFILE_LIBRARY)
 
 ###################################################################################################
