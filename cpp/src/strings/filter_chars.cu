@@ -49,8 +49,8 @@ namespace {
 struct filter_fn {
   column_device_view const d_strings;
   filter_type keep_characters;
-  rmm::device_vector<char_range>::iterator table_begin;
-  rmm::device_vector<char_range>::iterator table_end;
+  rmm::device_uvector<char_range>::iterator table_begin;
+  rmm::device_uvector<char_range>::iterator table_end;
   string_view const d_replacement;
   int32_t* d_offsets{};
   char* d_chars{};
@@ -128,7 +128,12 @@ std::unique_ptr<column> filter_characters(
     characters_to_filter.begin(), characters_to_filter.end(), htable.begin(), [](auto entry) {
       return char_range{entry.first, entry.second};
     });
-  rmm::device_vector<char_range> table(htable);  // copy filter table to device memory
+  rmm::device_uvector<char_range> table(table_size, stream);
+  CUDA_TRY(cudaMemcpyAsync(table.data(),
+                           htable.data(),
+                           table_size * sizeof(char_range),
+                           cudaMemcpyHostToDevice,
+                           stream.value()));
 
   auto d_strings = column_device_view::create(strings.parent(), stream);
 
