@@ -87,7 +87,6 @@ struct orc_byterle_state_s {
 
 struct orc_rowdec_state_s {
   uint32_t nz_count;
-  uint32_t last_row[num_warps];
   uint32_t row[row_decoder_buffer_size];  // 0=skip, >0: row position relative to cur_row
 };
 
@@ -95,11 +94,6 @@ struct orc_strdict_state_s {
   DictionaryEntry *local_dict;
   uint32_t dict_pos;
   uint32_t dict_len;
-};
-
-struct orc_nulldec_state_s {
-  uint32_t row;
-  uint32_t null_count[num_warps];
 };
 
 struct orc_datadec_state_s {
@@ -119,7 +113,7 @@ struct orcdec_state_s {
   int is_string;
   union {
     orc_strdict_state_s dict;
-    orc_nulldec_state_s nulls;
+    uint32_t nulls_desc_row;  // number of rows processed for nulls.
     orc_datadec_state_s data;
   } top;
   union {
@@ -1120,8 +1114,12 @@ __global__ void __launch_bounds__(block_size)
                                       size_t first_row)
 {
   __shared__ __align__(16) orcdec_state_s state_g;
-  using warp_reduce = cub::WarpReduce<uint32_t>;
-  __shared__ typename warp_reduce::TempStorage temp_storage[block_size / 32];
+  using warp_reduce  = cub::WarpReduce<uint32_t>;
+  using block_reduce = cub::BlockReduce<uint32_t, block_size>;
+  __shared__ union {
+    typename warp_reduce::TempStorage wr_storage[block_size / 32];
+    typename block_reduce::TempStorage bk_storage;
+  } temp_storage;
 
   orcdec_state_s *const s = &state_g;
   bool is_nulldec         = (blockIdx.y >= num_stripes);
@@ -1136,8 +1134,8 @@ __global__ void __launch_bounds__(block_size)
     uint32_t null_count = 0;
     // Decode NULLs
     if (t == 0) {
-      s->chunk.skip_count = 0;
-      s->top.nulls.row    = 0;
+      s->chunk.skip_count   = 0;
+      s->top.nulls_desc_row = 0;
       bytestream_init(&s->bs, s->chunk.streams[CI_PRESENT], s->chunk.strm_len[CI_PRESENT]);
     }
     __syncthreads();
@@ -1145,8 +1143,8 @@ __global__ void __launch_bounds__(block_size)
       // No present stream: all rows are valid
       s->vals.u32[t] = ~0;
     }
-    while (s->top.nulls.row < s->chunk.num_rows) {
-      uint32_t nrows_max = min(s->chunk.num_rows - s->top.nulls.row, blockDim.x * 32);
+    while (s->top.nulls_desc_row < s->chunk.num_rows) {
+      uint32_t nrows_max = min(s->chunk.num_rows - s->top.nulls_desc_row, blockDim.x * 32);
       uint32_t nrows;
       size_t row_in;
 
@@ -1164,7 +1162,7 @@ __global__ void __launch_bounds__(block_size)
         nrows = nrows_max;
       }
       __syncthreads();
-      row_in = s->chunk.start_row + s->top.nulls.row;
+      row_in = s->chunk.start_row + s->top.nulls_desc_row;
       if (row_in + nrows > first_row && row_in < first_row + max_num_rows &&
           s->chunk.valid_map_base != NULL) {
         int64_t dst_row   = row_in - first_row;
@@ -1211,29 +1209,25 @@ __global__ void __launch_bounds__(block_size)
         uint32_t skippedrows = min(static_cast<uint32_t>(first_row - row_in), nrows);
         uint32_t skip_count  = 0;
         for (uint32_t i = t * 32; i < skippedrows; i += 32 * 32) {
-          uint32_t bits = s->vals.u32[i >> 5];
-          if (i + 32 > skippedrows) { bits &= (1 << (skippedrows - i)) - 1; }
+          // Need to arrange the bytes to apply mask properly.
+          uint32_t bits = (i + 32 <= skippedrows) ? s->vals.u32[i >> 5]
+                                                  : (__byte_perm(s->vals.u32[i >> 5], 0, 0x0123) &
+                                                     (0xffffffffu << (0x20 - skippedrows + i)));
           skip_count += __popc(bits);
         }
-        skip_count = warp_reduce(temp_storage[t / 32]).Sum(skip_count);
+        skip_count = warp_reduce(temp_storage.wr_storage[t / 32]).Sum(skip_count);
         if (t == 0) { s->chunk.skip_count += skip_count; }
       }
       __syncthreads();
-      if (t == 0) { s->top.nulls.row += nrows; }
+      if (t == 0) { s->top.nulls_desc_row += nrows; }
       __syncthreads();
     }
     __syncthreads();
     // Sum up the valid counts and infer null_count
-    null_count = warp_reduce(temp_storage[t / 32]).Sum(null_count);
-    if (!(t & 0x1f)) { s->top.nulls.null_count[t >> 5] = null_count; }
-    __syncthreads();
-    if (t < 32) {
-      null_count = (t < num_warps) ? s->top.nulls.null_count[t] : 0;
-      null_count = warp_reduce(temp_storage[t / 32]).Sum(null_count);
-      if (t == 0) {
-        chunks[chunk_id].null_count = null_count;
-        chunks[chunk_id].skip_count = s->chunk.skip_count;
-      }
+    null_count = block_reduce(temp_storage.bk_storage).Sum(null_count);
+    if (t == 0) {
+      chunks[chunk_id].null_count = null_count;
+      chunks[chunk_id].skip_count = s->chunk.skip_count;
     }
   } else {
     // Decode string dictionary
@@ -1289,7 +1283,7 @@ __global__ void __launch_bounds__(block_size)
  * @param[in,out] s Column chunk decoder state
  * @param[in] first_row crop all rows below first rows
  * @param[in] t thread id
- * @param[in] temp_storage shared memory storage to performance warp reduce
+ * @param[in] temp_storage shared memory storage to perform block reduce
  */
 template <typename Storage>
 static __device__ void DecodeRowPositions(orcdec_state_s *s,
@@ -1297,7 +1291,8 @@ static __device__ void DecodeRowPositions(orcdec_state_s *s,
                                           int t,
                                           Storage &temp_storage)
 {
-  using warp_reduce = cub::WarpReduce<uint32_t>;
+  using block_reduce = cub::BlockReduce<uint32_t, block_size>;
+
   if (t == 0) {
     if (s->chunk.skip_count != 0) {
       s->u.rowdec.nz_count = min(min(s->chunk.skip_count, s->top.data.max_vals), blockDim.x);
@@ -1338,15 +1333,9 @@ static __device__ void DecodeRowPositions(orcdec_state_s *s,
       // TBD: Brute-forcing this, there might be a more efficient way to find the thread with the
       // last row
       last_row = (nz_count == s->u.rowdec.nz_count) ? row_plus1 : 0;
-      last_row = warp_reduce(temp_storage[t / 32]).Reduce(last_row, cub::Max());
-      if (!(t & 0x1f)) { *(volatile uint32_t *)&s->u.rowdec.last_row[t >> 5] = last_row; }
-      nz_pos = (valid) ? nz_count : 0;
-      __syncthreads();
-      if (t < 32) {
-        last_row = (t < num_warps) ? *(volatile uint32_t *)&s->u.rowdec.last_row[t] : 0;
-        last_row = warp_reduce(temp_storage[t / 32]).Reduce(last_row, cub::Max());
-        if (t == 0) { s->top.data.nrows = last_row; }
-      }
+      last_row = block_reduce(temp_storage).Reduce(last_row, cub::Max());
+      nz_pos   = (valid) ? nz_count : 0;
+      if (t == 0) { s->top.data.nrows = last_row; }
       if (valid && nz_pos - 1 < s->u.rowdec.nz_count) { s->u.rowdec.row[nz_pos - 1] = row_plus1; }
       __syncthreads();
     } else {
@@ -1396,7 +1385,7 @@ __global__ void __launch_bounds__(block_size)
                          uint32_t rowidx_stride)
 {
   __shared__ __align__(16) orcdec_state_s state_g;
-  __shared__ typename cub::WarpReduce<uint32_t>::TempStorage temp_storage[block_size / 32];
+  __shared__ typename cub::BlockReduce<uint32_t, block_size>::TempStorage temp_storage;
 
   orcdec_state_s *const s = &state_g;
   uint32_t chunk_id;

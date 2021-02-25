@@ -54,6 +54,7 @@ from cudf.utils.dtypes import (
     is_scalar,
     is_string_dtype,
     is_struct_dtype,
+    is_interval_dtype,
     min_signed_type,
     min_unsigned_type,
     np_to_pa_dtype,
@@ -117,6 +118,10 @@ class ColumnBase(Column, Serializable):
             pd_series = pd.Series(pandas_array, copy=False)
         elif str(self.dtype) in NUMERIC_TYPES and self.null_count == 0:
             pd_series = pd.Series(cupy.asnumpy(self.values), copy=False)
+        elif is_interval_dtype(self.dtype):
+            pd_series = pd.Series(
+                pd.IntervalDtype().__from_arrow__(self.to_arrow())
+            )
         else:
             pd_series = self.to_arrow().to_pandas(**kwargs)
 
@@ -370,7 +375,6 @@ class ColumnBase(Column, Serializable):
         """
         if not isinstance(array, (pa.Array, pa.ChunkedArray)):
             raise TypeError("array should be PyArrow array or chunked array")
-
         data = pa.table([array], [None])
         if isinstance(array.type, pa.DictionaryType):
             indices_table = pa.table(
@@ -406,6 +410,10 @@ class ColumnBase(Column, Serializable):
             )
         elif isinstance(array.type, pa.StructType):
             return cudf.core.column.StructColumn.from_arrow(array)
+        elif isinstance(
+            array.type, pd.core.arrays._arrow_utils.ArrowIntervalType
+        ):
+            return cudf.core.column.IntervalColumn.from_arrow(array)
 
         return libcudf.interop.from_arrow(data, data.column_names)._data[
             "None"
@@ -1001,6 +1009,12 @@ class ColumnBase(Column, Serializable):
                     "Casting list columns not currently supported"
                 )
             return self
+        elif is_interval_dtype(self.dtype):
+            if not self.dtype == dtype:
+                raise NotImplementedError(
+                    "Casting interval columns not currently supported"
+                )
+            return self
         elif np.issubdtype(dtype, np.datetime64):
             return self.as_datetime_column(dtype, **kwargs)
         elif np.issubdtype(dtype, np.timedelta64):
@@ -1581,6 +1595,15 @@ def build_column(
             null_count=null_count,
             children=children,
         )
+    elif is_interval_dtype(dtype):
+        return cudf.core.column.IntervalColumn(
+            dtype=dtype,
+            mask=mask,
+            size=size,
+            offset=offset,
+            null_count=null_count,
+            children=children,
+        )
     else:
         assert data is not None
         return cudf.core.column.NumericalColumn(
@@ -1619,7 +1642,6 @@ def build_categorical_column(
     ordered : bool
         Indicates whether the categories are ordered
     """
-
     codes_dtype = min_unsigned_type(len(categories))
     codes = as_column(codes)
     if codes.dtype != codes_dtype:
@@ -1765,6 +1787,8 @@ def as_column(
             return as_column(arbitrary.array)
         if is_categorical_dtype(arbitrary):
             data = as_column(pa.array(arbitrary, from_pandas=True))
+        elif is_interval_dtype(arbitrary.dtype):
+            data = as_column(pa.array(arbitrary, from_pandas=True))
         elif arbitrary.dtype == np.bool_:
             data = as_column(cupy.asarray(arbitrary), dtype=arbitrary.dtype)
         elif arbitrary.dtype.kind in ("f"):
@@ -1886,6 +1910,18 @@ def as_column(
                 mask=mask,
                 dtype=arbitrary.dtype,
             )
+        elif (
+            arbitrary.size != 0
+            and arb_dtype.kind in ("O")
+            and isinstance(arbitrary[0], pd._libs.interval.Interval)
+        ):
+            # changing from pd array to series,possible arrow bug
+            interval_series = pd.Series(arbitrary)
+            data = as_column(
+                pa.Array.from_pandas(interval_series), dtype=arbitrary.dtype,
+            )
+            if dtype is not None:
+                data = data.astype(dtype)
         elif arb_dtype.kind in ("O", "U"):
             data = as_column(
                 pa.Array.from_pandas(arbitrary), dtype=arbitrary.dtype
@@ -1916,7 +1952,17 @@ def as_column(
                 arb_dtype = check_cast_unsupported_dtype(arbitrary.dtype)
                 if arb_dtype != arbitrary.dtype.numpy_dtype:
                     arbitrary = arbitrary.astype(arb_dtype)
-        if arb_dtype.kind in ("O", "U"):
+        if (
+            arbitrary.size != 0
+            and isinstance(arbitrary[0], pd._libs.interval.Interval)
+            and arb_dtype.kind in ("O")
+        ):
+            # changing from pd array to series,possible arrow bug
+            interval_series = pd.Series(arbitrary)
+            data = as_column(
+                pa.Array.from_pandas(interval_series), dtype=arb_dtype
+            )
+        elif arb_dtype.kind in ("O", "U"):
             data = as_column(pa.Array.from_pandas(arbitrary), dtype=arb_dtype)
         else:
             data = as_column(
@@ -1971,7 +2017,7 @@ def as_column(
                         )
                         return cudf.core.column.DecimalColumn.from_arrow(data)
                     dtype = pd.api.types.pandas_dtype(dtype)
-                    if is_categorical_dtype(dtype):
+                    if is_categorical_dtype(dtype) or is_interval_dtype(dtype):
                         raise TypeError
                     else:
                         np_type = np.dtype(dtype).type
@@ -1996,6 +2042,9 @@ def as_column(
                     data = as_column(sr, nan_as_null=nan_as_null, dtype=dtype)
                 elif np_type == np.str_:
                     sr = pd.Series(arbitrary, dtype="str")
+                    data = as_column(sr, nan_as_null=nan_as_null)
+                elif is_interval_dtype(dtype):
+                    sr = pd.Series(arbitrary, dtype="interval")
                     data = as_column(sr, nan_as_null=nan_as_null)
                 else:
                     data = as_column(
