@@ -2724,7 +2724,9 @@ class interval_range(GenericIndex):
             elif freq and periods and start:
                 end = freq * periods + start
             left_col = cupy.arange(start, end, freq)
-            right_col = cupy.arange(start + freq, end + 1, freq)
+            if end is not None:
+                end = end + 1
+            right_col = cupy.arange(start + freq, end, freq)
             if len(left_col) != len(right_col):
                 left_col = cupy.arange(start, end - freq, freq)
             if len(right_col) == 0 or len(left_col) == 0:
