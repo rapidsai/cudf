@@ -2735,8 +2735,12 @@ class interval_range(GenericIndex):
         elif freq and not periods:
             left_col = cupy.arange(start, end, freq)
             if end is not None:
-                    end = end +1
-            right_col = cupy.arange(start + freq, end, freq)
+                end = end + 1
+            if start is not None:
+                new_freq = start + freq
+            elif start is None:
+                new_freq = freq
+            right_col = cupy.arange(new_freq, end, freq)
             # sometimes the left col overlaps with the right col
             if len(left_col) != len(right_col):
                 if end is not None:
@@ -2747,7 +2751,7 @@ class interval_range(GenericIndex):
                 return pd.IntervalIndex([], closed=closed)
         elif periods and not freq:
             if end is not None:
-                    end = end +1
+                end = end + 1
             periods_array = cupy.asarray(cupy.arange(start, end))
             hist, bin_edges = cupy.histogram(periods_array, periods)
             # cupy.histogram turns all arrays into a float array
@@ -2761,7 +2765,8 @@ class interval_range(GenericIndex):
         interval_col = column.build_interval_column(
             left_col, right_col, closed=closed
         )
-        return cast('interval_range',IntervalIndex(interval_col))
+        return cast("interval_range", IntervalIndex(interval_col))
+
 
 class IntervalIndex(GenericIndex):
     """
@@ -2791,7 +2796,7 @@ class IntervalIndex(GenericIndex):
 
     def __new__(
         cls, data=None, closed=None, dtype=None, copy=False, name=None,
-    ) -> "IntervalIndex":
+    ) -> "interval_range":
         if copy:
             data = column.as_column(data, dtype=dtype).copy(deep=True)
         out = Frame.__new__(cls)
