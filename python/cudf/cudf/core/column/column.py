@@ -1072,6 +1072,11 @@ class ColumnBase(Column, Serializable):
     ) -> "cudf.core.column.NumericalColumn":
         raise NotImplementedError
 
+    def as_decimal_column(
+        self, dtype: Dtype, **kwargs
+    ) -> "cudf.core.column.DecimalColumn":
+        raise NotImplementedError
+
     def as_datetime_column(
         self, dtype: Dtype, **kwargs
     ) -> "cudf.core.column.DatetimeColumn":

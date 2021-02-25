@@ -110,7 +110,7 @@ def cast(Column input, object dtype=np.float64):
             )
         )
         c_dtype = data_type(tid)
-    
+
     cdef unique_ptr[column] c_result
 
     with nogil:
