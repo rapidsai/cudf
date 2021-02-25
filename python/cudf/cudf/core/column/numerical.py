@@ -205,6 +205,14 @@ class NumericalColumn(ColumnBase):
             ),
         )
 
+    def as_decimal_column(
+        self, dtype: Dtype, **kwargs
+    ) -> "cudf.core.column.DecimalColumn":
+        return cast(
+            "cudf.core.column.DecimalColumn",
+            libcudf.unary.cast(self, dtype),
+        )
+
     def as_numerical_column(self, dtype: Dtype) -> NumericalColumn:
         dtype = np.dtype(dtype)
         if dtype == self.dtype:
