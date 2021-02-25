@@ -1042,7 +1042,7 @@ __global__ void __launch_bounds__(128, 8) gpuEncodePages(EncPage *pages,
   } else if (s->page.page_type != PageType::DICTIONARY_PAGE &&
              s->col.level_bits >> 4 != 0  // This means there ARE repetition levels
   ) {
-    // TODO: Consolidate this with the one above. The difference is only i how the def level is
+    // TODO(cp): Consolidate this with the one above. The difference is only i how the def level is
     // obtained.
     auto encode_levels = [&](uint8_t const *lvl_val_data, uint32_t nbits) {
       // For list types, the repetition and definition levels are pre-calculated. We just need to
@@ -1728,7 +1728,7 @@ void print(rmm::device_uvector<T> const &d_vec, std::string label = "")
  * Similarly we merge up all the way till level 0 offsets
  */
 dremel_data get_dremel_data(column_view h_col,
-                            // TODO: make it a device_span once it is converted to a single hd_vec
+                            // TODO(cp): use device_span once it is converted to a single hd_vec
                             rmm::device_uvector<uint8_t> const &d_nullability,
                             std::vector<uint8_t> const &nullability,
                             rmm::cuda_stream_view stream)
@@ -1929,8 +1929,8 @@ dremel_data get_dremel_data(column_view h_col,
         auto col           = *parent_col;
         do {
           if (d_nullability[l]) {
-            // TODO: consolidate this functor with similar functionality thrice in this function and
-            // one more in gpuEncodePages.
+            // TODO(cp): consolidate this functor with similar functionality thrice in this function
+            // and one more in gpuEncodePages.
             if (col.is_valid(i)) {
               ++def;
             } else {  // We have found the shallowest level at which this row is null
@@ -2072,8 +2072,8 @@ dremel_data get_dremel_data(column_view h_col,
         auto col           = *parent_col;
         do {
           if (d_nullability[l]) {
-            // TODO: consolidate this functor with similar functionality thrice in this function and
-            // one more in gpuEncodePages.
+            // TODO(cp): consolidate this functor with similar functionality thrice in this function
+            // and one more in gpuEncodePages.
             if (col.nullable() and bit_is_set(col.null_mask(), i)) {
               ++def;
             } else {  // We have found the shallowest level at which this row is null
@@ -2152,11 +2152,11 @@ dremel_data get_dremel_data(column_view h_col,
   stream.synchronize();
 
   size_type leaf_col_offset = column_offsets[column_offsets.size() - 1];
-  // TODO: No longer hd_vec. Can use column_ends.back()
+  // TODO(cp): No longer hd_vec. Can use column_ends.back()
   size_type leaf_data_size = column_ends[column_ends.size() - 1] - leaf_col_offset;
   uint8_t max_def_level    = def_at_level.back() - 1;
 
-  // TODO: Don't need all these anymore. See if they can be trimmed.
+  // TODO(cp): Don't need all these anymore. See if they can be trimmed.
   return dremel_data{std::move(new_offsets),
                      std::move(rep_level),
                      std::move(def_level),
