@@ -45,7 +45,7 @@ static void BM_filter_chars(benchmark::State& state, FilterAPI api)
     create_random_table({cudf::type_id::STRING}, 1, row_count{n_rows}, table_profile);
   cudf::strings_column_view input(table->view().column(0));
 
-  auto types = cudf::strings::string_character_types::SPACE;
+  auto const types = cudf::strings::string_character_types::SPACE;
   std::vector<std::pair<cudf::char_utf8, cudf::char_utf8>> filter_table{
     {cudf::char_utf8{'a'}, cudf::char_utf8{'c'}}};
 
