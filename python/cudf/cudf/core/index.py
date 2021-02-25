@@ -2726,9 +2726,15 @@ class interval_range(GenericIndex):
             left_col = cupy.arange(start, end, freq)
             if end is not None:
                 end = end + 1
-            right_col = cupy.arange(start + freq, end, freq)
+            if start is not None:
+                new_freq = start + freq
+            elif start is None:
+                new_freq = freq
+            right_col = cupy.arange(new_freq, end, freq)
             if len(left_col) != len(right_col):
-                left_col = cupy.arange(start, end - freq, freq)
+                if end is not None:
+                    end = end - freq
+                left_col = cupy.arange(start, end, freq)
             if len(right_col) == 0 or len(left_col) == 0:
                 return pd.IntervalIndex([], closed=closed)
         elif freq and not periods:
