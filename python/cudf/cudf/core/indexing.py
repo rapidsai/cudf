@@ -4,7 +4,6 @@ from typing import Any, Union
 
 import numpy as np
 import pandas as pd
-from cupy import isscalar
 from nvtx import annotate
 
 import cudf
@@ -148,9 +147,9 @@ class _SeriesLocIndexer(object):
             key = self._loc_to_iloc(key)
         except KeyError as e:
             if (
-                isscalar(key)
+                is_scalar(key)
                 and not isinstance(self._sr.index, cudf.MultiIndex)
-                and isscalar(value)
+                and is_scalar(value)
             ):
                 _append_new_row_inplace(self._sr.index._values, key)
                 _append_new_row_inplace(self._sr._column, value)
