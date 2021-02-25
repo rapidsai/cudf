@@ -3331,7 +3331,7 @@ def test_all(data):
     # Pandas treats `None` in object type columns as True for some reason, so
     # replacing with `False`
     if np.array(data).ndim <= 1:
-        pdata = cudf.utils.utils.create_pandas_series(data=data).replace(
+        pdata = cudf.utils.utils._create_pandas_series(data=data).replace(
             [None], False
         )
         gdata = cudf.Series.from_pandas(pdata)
@@ -3386,7 +3386,7 @@ def test_all(data):
 @pytest.mark.parametrize("axis", [0, 1])
 def test_any(data, axis):
     if np.array(data).ndim <= 1:
-        pdata = cudf.utils.utils.create_pandas_series(data=data)
+        pdata = cudf.utils.utils._create_pandas_series(data=data)
         gdata = cudf.Series.from_pandas(pdata)
 
         if axis == 1:
@@ -3856,7 +3856,7 @@ def test_create_dataframe_column():
     ],
 )
 def test_series_values_host_property(data):
-    pds = cudf.utils.utils.create_pandas_series(data=data)
+    pds = cudf.utils.utils._create_pandas_series(data=data)
     gds = cudf.Series(data)
 
     np.testing.assert_array_equal(pds.values, gds.values_host)
@@ -3879,7 +3879,7 @@ def test_series_values_host_property(data):
     ],
 )
 def test_series_values_property(data):
-    pds = cudf.utils.utils.create_pandas_series(data=data)
+    pds = cudf.utils.utils._create_pandas_series(data=data)
     gds = cudf.Series(data)
     gds_vals = gds.values
     assert isinstance(gds_vals, cupy.ndarray)
@@ -3987,7 +3987,7 @@ def test_value_counts():
 )
 def test_isin_numeric(data, values):
     index = np.random.randint(0, 100, len(data))
-    psr = cudf.utils.utils.create_pandas_series(data=data, index=index)
+    psr = cudf.utils.utils._create_pandas_series(data=data, index=index)
     gsr = cudf.Series.from_pandas(psr, nan_as_null=False)
 
     expected = psr.isin(values)
@@ -4041,7 +4041,7 @@ def test_isin_numeric(data, values):
     ],
 )
 def test_isin_datetime(data, values):
-    psr = cudf.utils.utils.create_pandas_series(data=data)
+    psr = cudf.utils.utils._create_pandas_series(data=data)
     gsr = cudf.Series.from_pandas(psr)
 
     got = gsr.isin(values)
@@ -4077,7 +4077,7 @@ def test_isin_datetime(data, values):
     ],
 )
 def test_isin_string(data, values):
-    psr = cudf.utils.utils.create_pandas_series(data=data)
+    psr = cudf.utils.utils._create_pandas_series(data=data)
     gsr = cudf.Series.from_pandas(psr)
 
     got = gsr.isin(values)
@@ -4106,7 +4106,7 @@ def test_isin_string(data, values):
     ],
 )
 def test_isin_categorical(data, values):
-    psr = cudf.utils.utils.create_pandas_series(data=data)
+    psr = cudf.utils.utils._create_pandas_series(data=data)
     gsr = cudf.Series.from_pandas(psr)
 
     got = gsr.isin(values)
@@ -4140,7 +4140,7 @@ def test_isin_categorical(data, values):
     ],
 )
 def test_isin_index(data, values):
-    psr = cudf.utils.utils.create_pandas_series(data=data)
+    psr = cudf.utils.utils._create_pandas_series(data=data)
     gsr = cudf.Series.from_pandas(psr)
 
     got = gsr.index.isin(values)

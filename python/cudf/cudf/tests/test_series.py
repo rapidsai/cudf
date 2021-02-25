@@ -384,7 +384,7 @@ def test_series_tolist(data):
     [[], [None, None], ["a"], ["a", "b", "c"] * 500, [1.0, 2.0, 0.3] * 57],
 )
 def test_series_size(data):
-    psr = cudf.utils.utils.create_pandas_series(data=data)
+    psr = cudf.utils.utils._create_pandas_series(data=data)
     gsr = cudf.Series(data)
 
     assert_eq(psr.size, gsr.size)
