@@ -720,6 +720,36 @@ def test_dataframe_describe():
     dd.assert_eq(ddf.describe(), pddf.describe(), check_less_precise=3)
 
 
+def test_zero_std_describe():
+    num = 84886781
+    df = cudf.DataFrame(
+        {
+            "x": np.full((20,), num, dtype=np.float),
+            "y": np.full((20,), num, dtype=np.float),
+        }
+    )
+    pdf = df.to_pandas()
+    ddf = dgd.from_cudf(df, npartitions=4)
+    pddf = dd.from_pandas(pdf, npartitions=4)
+
+    dd.assert_eq(ddf.describe(), pddf.describe(), check_less_precise=3)
+
+
+def test_large_numbers_describe():
+    num = 8488678001
+    df = cudf.DataFrame(
+        {
+            "x": np.arange(num, num + 1000, dtype=np.float),
+            "y": np.arange(num, num + 1000, dtype=np.float),
+        }
+    )
+    pdf = df.to_pandas()
+    ddf = dgd.from_cudf(df, npartitions=4)
+    pddf = dd.from_pandas(pdf, npartitions=4)
+
+    dd.assert_eq(ddf.describe(), pddf.describe(), check_less_precise=3)
+
+
 def test_index_map_partitions():
     # https://github.com/rapidsai/cudf/issues/6738
 
