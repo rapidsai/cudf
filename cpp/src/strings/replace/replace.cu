@@ -392,6 +392,7 @@ size_type filter_maxrepl_target_positions(size_type* d_target_positions,
  * @param d_repl      Replacement string if target string is found.
  * @param maxrepl     Maximum times to replace if target appears multiple times in a string.
  * @param stream      CUDA stream to use for device operations
+ * @param mr          Device memory resource used to allocate the returned column's device memory
  * @return New strings column.
  */
 std::unique_ptr<column> replace_char_parallel(strings_column_view const& strings,
@@ -515,6 +516,7 @@ std::unique_ptr<column> replace_char_parallel(strings_column_view const& strings
  * @param d_repl      Replacement string if target string is found.
  * @param maxrepl     Maximum times to replace if target appears multiple times in a string.
  * @param stream      CUDA stream to use for device operations
+ * @param mr          Device memory resource used to allocate the returned column's device memory
  * @return New strings column.
  */
 std::unique_ptr<column> replace_row_parallel(strings_column_view const& strings,

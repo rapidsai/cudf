@@ -38,6 +38,7 @@ enum class replace_algorithm {
  * @copydoc cudf::strings::replace(strings_column_view const&, string_scalar const&,
  * string_scalar const&, int32_t, rmm::mr::device_memory_resource*)
  *
+ * @tparam    alg    Replacement algorithm to use
  * @param[in] stream CUDA stream used for device memory operations and kernel launches.
  */
 template <replace_algorithm alg = replace_algorithm::AUTO>
