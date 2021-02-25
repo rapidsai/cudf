@@ -1,6 +1,7 @@
-# Copyright (c) 2018-2020, NVIDIA CORPORATION.
+# Copyright (c) 2018-2021, NVIDIA CORPORATION.
 import re
 from contextlib import ExitStack as does_not_raise
+from decimal import Decimal
 from sys import getsizeof
 
 import cupy
@@ -219,6 +220,28 @@ def test_string_decimal():
     fp = gs.astype(cudf.Decimal64Dtype(scale=-3, precision=3))
     got = fp.astype("str")
     assert_eq(gs, got)
+    #
+    fp = cudf.Series(
+        [Decimal("1.23"), Decimal("2.34"), Decimal("3.45")],
+        dtype=cudf.Decimal64Dtype(precision=3, scale=2),
+    )
+    gs = fp.astype("str")
+    got = gs.astype(cudf.Decimal64Dtype(scale=2, precision=3))
+    assert_eq(fp, got)
+    fp = cudf.Series(
+        [Decimal("123"), Decimal("234"), Decimal("345")],
+        dtype=cudf.Decimal64Dtype(precision=3, scale=0),
+    )
+    gs = fp.astype("str")
+    got = gs.astype(cudf.Decimal64Dtype(scale=0, precision=3))
+    assert_eq(fp, got)
+    fp = cudf.Series(
+        [Decimal("12300"), Decimal("-400"), Decimal("5000.0")],
+        dtype=cudf.Decimal64Dtype(precision=5, scale=-2),
+    )
+    gs = fp.astype("str")
+    got = gs.astype(cudf.Decimal64Dtype(scale=-2, precision=5))
+    assert_eq(fp, got)
 
 
 @pytest.mark.parametrize(
