@@ -257,11 +257,17 @@ std::vector<schema_tree_node> construct_schema_tree(LinkedColVector const &linke
         list_schema_2.parent_idx      = schema.size() - 1;  // Parent is list_schema_1, last added.
         schema.push_back(std::move(list_schema_2));
 
+        CUDF_EXPECTS(col_meta.children.size() == 2,
+                     "List column's metadata should have exactly two children");
+
         add_schema(col->children[lists_column_view::child_column_index],
                    col_meta.children[lists_column_view::child_column_index],
                    schema.size() - 1);
       } else {
         // if leaf, add current
+        CUDF_EXPECTS(col_meta.children.size() == 0,
+                     "Leaf column's corresponding metadata cannot have children");
+
         schema_tree_node col_schema{};
 
         switch (col->type().id()) {
@@ -423,8 +429,9 @@ std::vector<schema_tree_node> construct_schema_tree(LinkedColVector const &linke
       }
     };
 
+  CUDF_EXPECTS(metadata.column_metadata.size() == linked_columns.size(),
+               "Mismatch in the number of columns and the corresponding metadata elements");
   // Add all linked_columns to schema using parent_idx = 0 (root)
-  // for (auto const &col : linked_columns) { add_schema(col, 0); }
   for (size_t i = 0; i < linked_columns.size(); ++i) {
     add_schema(linked_columns[i], metadata.column_metadata[i], 0);
   }
@@ -887,8 +894,6 @@ void writer::impl::write(table_view const &table)
   for (size_t i = 0; i < tbl_meta.column_metadata.size(); ++i) {
     add_default_name(tbl_meta.column_metadata[i], "_col" + std::to_string(i));
   }
-
-  // TODO: Verify structure of tbl_meta is same as table
 
   auto vec         = input_table_to_linked_columns(table);
   auto schema_tree = construct_schema_tree(vec, tbl_meta, single_write_mode);
