@@ -110,7 +110,7 @@ endif(CONDA_LINK_DIRS)
 
 set(COLUMN_TEST_SRC
     "${CMAKE_CURRENT_SOURCE_DIR}/column/column_test.cu"
-    "${CMAKE_CURRENT_SOURCE_DIR}/column/column_view_test.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/column/bit_cast_test.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/column/column_device_view_test.cu"
     "${CMAKE_CURRENT_SOURCE_DIR}/column/compound_test.cu")
 
