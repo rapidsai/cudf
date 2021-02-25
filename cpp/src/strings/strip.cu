@@ -51,15 +51,6 @@ struct strip_fn {
   int32_t* d_offsets{};
   char* d_chars{};
 
-  __device__ bool is_strip_character(char_utf8 chr)
-  {
-    return d_to_strip.empty() ? (chr <= ' ') :  // whitespace check
-             thrust::any_of(
-               thrust::seq, d_to_strip.begin(), d_to_strip.end(), [chr] __device__(char_utf8 c) {
-                 return c == chr;
-               });
-  }
-
   __device__ void operator()(size_type idx)
   {
     if (d_strings.is_null(idx)) {
@@ -68,25 +59,31 @@ struct strip_fn {
     }
     auto const d_str = d_strings.element<string_view>(idx);
 
-    size_type left_offset = 0;
-    // auto itr              = d_str.begin();
-    if (stype == strip_type::LEFT || stype == strip_type::BOTH) {
-      auto const itr = thrust::find_if(thrust::seq, d_str.begin(), d_str.end(), [this](auto chr) {
-        return !this->is_strip_character(chr);
-      });
+    auto is_strip_character = [d_to_strip = d_to_strip] __device__(char_utf8 chr) -> bool {
+      return d_to_strip.empty() ? (chr <= ' ') :  // whitespace check
+               thrust::any_of(
+                 thrust::seq, d_to_strip.begin(), d_to_strip.end(), [chr] __device__(char_utf8 c) {
+                   return c == chr;
+                 });
+    };
 
-      left_offset = itr != d_str.end() ? itr.byte_offset() : d_str.size_bytes();
-    }
+    size_type const left_offset = [&] {
+      if (stype != strip_type::LEFT && stype != strip_type::BOTH) return 0;
+      auto const itr =
+        thrust::find_if_not(thrust::seq, d_str.begin(), d_str.end(), is_strip_character);
+      return itr != d_str.end() ? itr.byte_offset() : d_str.size_bytes();
+    }();
+
     size_type right_offset = d_str.size_bytes();
     if (stype == strip_type::RIGHT || stype == strip_type::BOTH) {
       auto const length = d_str.length();
-
-      auto itr = d_str.end();
+      auto itr          = d_str.end();
       for (size_type n = 0; n < length; ++n) {
         if (!is_strip_character(*(--itr))) break;
         right_offset = itr.byte_offset();
       }
     }
+
     auto const bytes = (right_offset > left_offset) ? right_offset - left_offset : 0;
     if (d_chars)
       memcpy(d_chars + d_offsets[idx], d_str.data() + left_offset, bytes);
