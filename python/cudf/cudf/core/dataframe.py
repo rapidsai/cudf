@@ -7528,10 +7528,11 @@ def merge(left, right, *args, **kwargs):
 
 # a bit of fanciness to inject docstring with left parameter
 merge_doc = DataFrame.merge.__doc__
-idx = merge_doc.find("right")
-merge.__doc__ = "".join(
-    [merge_doc[:idx], "\n\tleft : DataFrame\n\t", merge_doc[idx:]]
-)
+if merge_doc is not None:
+    idx = merge_doc.find("right")
+    merge.__doc__ = "".join(
+        [merge_doc[:idx], "\n\tleft : DataFrame\n\t", merge_doc[idx:]]
+    )
 
 
 def _align_indices(lhs, rhs):
