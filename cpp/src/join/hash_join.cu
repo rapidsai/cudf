@@ -13,6 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+#include <thrust/uninitialized_fill.h>
 #include <join/hash_join.cuh>
 
 #include <cudf/detail/concatenate.cuh>
@@ -105,7 +106,12 @@ get_left_join_indices_complement(rmm::device_uvector<size_type> &right_indices,
                      0);
   } else {
     // Assume all the indices in invalid_index_map are invalid
-    rmm::device_vector<size_type> invalid_index_map(right_table_row_count, 1);
+    rmm::device_uvector<size_type> invalid_index_map(right_table_row_count, stream);
+    thrust::uninitialized_fill(thrust::cuda::par.on(stream.value()),
+                               invalid_index_map.begin(),
+                               invalid_index_map.end(),
+                               int32_t{1});
+
     // Functor to check for index validity since left joins can create invalid indices
     valid_range<size_type> valid(0, right_table_row_count);
 
@@ -295,7 +301,7 @@ hash_join::hash_join_impl::hash_join_impl(cudf::table_view const &build,
   _hash_table = build_join_hash_table(_build, compare_nulls, stream);
 }
 
-std::pair<std::unique_ptr<cudf::column>, std::unique_ptr<cudf::column>>
+std::pair<rmm::device_uvector<size_type>, rmm::device_uvector<size_type>>
 hash_join::hash_join_impl::inner_join(cudf::table_view const &probe,
                                       null_equality compare_nulls,
                                       rmm::cuda_stream_view stream,
@@ -305,7 +311,7 @@ hash_join::hash_join_impl::inner_join(cudf::table_view const &probe,
   return compute_hash_join<cudf::detail::join_kind::INNER_JOIN>(probe, compare_nulls, stream, mr);
 }
 
-std::pair<std::unique_ptr<cudf::column>, std::unique_ptr<cudf::column>>
+std::pair<rmm::device_uvector<size_type>, rmm::device_uvector<size_type>>
 hash_join::hash_join_impl::left_join(cudf::table_view const &probe,
                                      null_equality compare_nulls,
                                      rmm::cuda_stream_view stream,
@@ -315,7 +321,7 @@ hash_join::hash_join_impl::left_join(cudf::table_view const &probe,
   return compute_hash_join<cudf::detail::join_kind::LEFT_JOIN>(probe, compare_nulls, stream, mr);
 }
 
-std::pair<std::unique_ptr<cudf::column>, std::unique_ptr<cudf::column>>
+std::pair<rmm::device_uvector<size_type>, rmm::device_uvector<size_type>>
 hash_join::hash_join_impl::full_join(cudf::table_view const &probe,
                                      null_equality compare_nulls,
                                      rmm::cuda_stream_view stream,
@@ -327,10 +333,10 @@ hash_join::hash_join_impl::full_join(cudf::table_view const &probe,
 
 template <cudf::detail::join_kind JoinKind>
 std::pair<rmm::device_uvector<size_type>, rmm::device_uvector<size_type>>
-hash_join::hash_join_impl::compute_hash_join_indices(cudf::table_view const &probe,
-                                                     null_equality compare_nulls,
-                                                     rmm::cuda_stream_view stream,
-                                                     rmm::mr::device_memory_resource *mr) const
+hash_join::hash_join_impl::compute_hash_join(cudf::table_view const &probe,
+                                             null_equality compare_nulls,
+                                             rmm::cuda_stream_view stream,
+                                             rmm::mr::device_memory_resource *mr) const
 {
   CUDF_EXPECTS(0 != probe.num_columns(), "Hash join probe table is empty");
   CUDF_EXPECTS(probe.num_rows() < cudf::detail::MAX_JOIN_SIZE,
@@ -351,29 +357,6 @@ hash_join::hash_join_impl::compute_hash_join_indices(cudf::table_view const &pro
                "Mismatch in joining column data types");
 
   return probe_join_indices<JoinKind>(probe, compare_nulls, stream);
-}
-
-template <cudf::detail::join_kind JoinKind>
-std::pair<std::unique_ptr<cudf::column>, std::unique_ptr<cudf::column>>
-hash_join::hash_join_impl::compute_hash_join(cudf::table_view const &probe,
-                                             null_equality compare_nulls,
-                                             rmm::cuda_stream_view stream,
-                                             rmm::mr::device_memory_resource *mr) const
-{
-  auto join_indices = compute_hash_join_indices<JoinKind>(probe, compare_nulls, stream, mr);
-  auto join_size    = join_indices.first.size();
-  auto left_map     = std::make_unique<cudf::column>(cudf::data_type(type_to_id<cudf::size_type>()),
-                                                 join_size,
-                                                 join_indices.first.release(),
-                                                 rmm::device_buffer{},
-                                                 0);
-  auto right_map    = std::make_unique<cudf::column>(cudf::data_type(type_to_id<cudf::size_type>()),
-                                                  join_size,
-                                                  join_indices.second.release(),
-                                                  rmm::device_buffer{},
-                                                  0);
-  return std::make_pair<std::unique_ptr<cudf::column>, std::unique_ptr<cudf::column>>(
-    std::move(left_map), std::move(right_map));
 }
 
 template <cudf::detail::join_kind JoinKind>

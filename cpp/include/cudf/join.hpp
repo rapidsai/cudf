@@ -59,7 +59,7 @@ namespace cudf {
  * the result of performing an inner join between two tables with `left_keys` and `right_keys`
  * as the join keys .
  */
-std::pair<std::unique_ptr<cudf::column>, std::unique_ptr<cudf::column>> inner_join(
+std::pair<rmm::device_uvector<size_type>, rmm::device_uvector<size_type>> inner_join(
   cudf::table_view const& left_keys,
   cudf::table_view const& right_keys,
   null_equality compare_nulls         = null_equality::EQUAL,
@@ -135,7 +135,7 @@ std::unique_ptr<cudf::table> inner_join(
  * tables (`left`, `right`), and returns the row indices corresponding
  * to the result.
  */ // TODO: explain this better
-std::pair<std::unique_ptr<cudf::column>, std::unique_ptr<cudf::column>> left_join(
+std::pair<rmm::device_uvector<size_type>, rmm::device_uvector<size_type>> left_join(
   cudf::table_view const& left_keys,
   cudf::table_view const& right_keys,
   null_equality compare_nulls         = null_equality::EQUAL,
@@ -213,7 +213,7 @@ std::unique_ptr<cudf::table> left_join(
  * tables (`left`, `right`), and returns the row indices corresponding
  * to the result.
  */ // TODO: explain this better
-std::pair<std::unique_ptr<cudf::column>, std::unique_ptr<cudf::column>> full_join(
+std::pair<rmm::device_uvector<size_type>, rmm::device_uvector<size_type>> full_join(
   cudf::table_view const& left_keys,
   cudf::table_view const& right_keys,
   null_equality compare_nulls         = null_equality::EQUAL,
@@ -342,7 +342,7 @@ std::unique_ptr<cudf::table> left_semi_join(
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /** TODO: document */
-std::unique_ptr<cudf::column> left_semi_join(
+rmm::device_uvector<size_type> left_semi_join(
   cudf::table_view const& left_keys,
   cudf::table_view const& right_keys,
   null_equality compare_nulls         = null_equality::EQUAL,
@@ -404,7 +404,7 @@ std::unique_ptr<cudf::table> left_anti_join(
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /** TODO: document */
-std::unique_ptr<cudf::column> left_anti_join(
+rmm::device_uvector<size_type> left_anti_join(
   cudf::table_view const& left_keys,
   cudf::table_view const& right_keys,
   null_equality compare_nulls         = null_equality::EQUAL,
@@ -473,7 +473,7 @@ class hash_join {
    * tables (`left`, `right`), and returns the row indices corresponding
    * to the result.
    */ // TODO: explain this better
-  std::pair<std::unique_ptr<cudf::column>, std::unique_ptr<cudf::column>> inner_join(
+  std::pair<rmm::device_uvector<size_type>, rmm::device_uvector<size_type>> inner_join(
     cudf::table_view const& probe,
     null_equality compare_nulls         = null_equality::EQUAL,
     rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
@@ -484,7 +484,7 @@ class hash_join {
    * tables (`left`, `right`), and returns the row indices corresponding
    * to the result.
    */ // TODO: explain this better
-  std::pair<std::unique_ptr<cudf::column>, std::unique_ptr<cudf::column>> left_join(
+  std::pair<rmm::device_uvector<size_type>, rmm::device_uvector<size_type>> left_join(
     cudf::table_view const& probe,
     null_equality compare_nulls         = null_equality::EQUAL,
     rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
@@ -495,7 +495,7 @@ class hash_join {
    * tables (`left`, `right`), and returns the row indices corresponding
    * to the result.
    */ // TODO: explain this better
-  std::pair<std::unique_ptr<cudf::column>, std::unique_ptr<cudf::column>> full_join(
+  std::pair<rmm::device_uvector<size_type>, rmm::device_uvector<size_type>> full_join(
     cudf::table_view const& probe,
     null_equality compare_nulls         = null_equality::EQUAL,
     rmm::cuda_stream_view stream        = rmm::cuda_stream_default,

@@ -230,19 +230,19 @@ struct hash_join::hash_join_impl {
                  null_equality compare_nulls,
                  rmm::cuda_stream_view stream = rmm::cuda_stream_default);
 
-  std::pair<std::unique_ptr<cudf::column>, std::unique_ptr<cudf::column>> inner_join(
+  std::pair<rmm::device_uvector<size_type>, rmm::device_uvector<size_type>> inner_join(
     cudf::table_view const& probe,
     null_equality compare_nulls,
     rmm::cuda_stream_view stream,
     rmm::mr::device_memory_resource* mr) const;
 
-  std::pair<std::unique_ptr<cudf::column>, std::unique_ptr<cudf::column>> left_join(
+  std::pair<rmm::device_uvector<size_type>, rmm::device_uvector<size_type>> left_join(
     cudf::table_view const& probe,
     null_equality compare_nulls,
     rmm::cuda_stream_view stream,
     rmm::mr::device_memory_resource* mr) const;
 
-  std::pair<std::unique_ptr<cudf::column>, std::unique_ptr<cudf::column>> full_join(
+  std::pair<rmm::device_uvector<size_type>, rmm::device_uvector<size_type>> full_join(
     cudf::table_view const& probe,
     null_equality compare_nulls,
     rmm::cuda_stream_view stream,
@@ -257,7 +257,7 @@ struct hash_join::hash_join_impl {
                             rmm::mr::device_memory_resource* mr) const;
 
   template <cudf::detail::join_kind JoinKind>
-  std::pair<std::unique_ptr<cudf::column>, std::unique_ptr<cudf::column>> compute_hash_join(
+  std::pair<rmm::device_uvector<size_type>, rmm::device_uvector<size_type>> compute_hash_join(
     cudf::table_view const& probe,
     null_equality compare_nulls,
     rmm::cuda_stream_view stream,

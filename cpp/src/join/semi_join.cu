@@ -38,7 +38,7 @@ namespace cudf {
 namespace detail {
 
 template <join_kind JoinKind>
-std::unique_ptr<cudf::column> left_semi_anti_join(
+rmm::device_uvector<cudf::size_type> left_semi_anti_join(
   cudf::table_view const& left_keys,
   cudf::table_view const& right_keys,
   null_equality compare_nulls,
@@ -49,18 +49,12 @@ std::unique_ptr<cudf::column> left_semi_anti_join(
   CUDF_EXPECTS(0 != right_keys.num_columns(), "Right table is empty");
 
   if (is_trivial_join(left_keys, right_keys, JoinKind)) {
-    return std::make_unique<cudf::column>(cudf::data_type(type_to_id<cudf::size_type>()),
-                                          0,
-                                          rmm::device_buffer{},
-                                          rmm::device_buffer{},
-                                          0);
+    return rmm::device_uvector<cudf::size_type>(0, stream);
   }
   if ((join_kind::LEFT_ANTI_JOIN == JoinKind) && (0 == right_keys.num_rows())) {
-    using ScalarType = cudf::scalar_type_t<cudf::size_type>;
-    auto zero = cudf::make_numeric_scalar(cudf::data_type(cudf::type_id::INT32), stream.value());
-    zero->set_valid(true, stream);
-    static_cast<ScalarType*>(zero.get())->set_value(0, stream);
-    return cudf::detail::sequence(left_keys.num_rows(), *zero, stream);
+    auto result = rmm::device_uvector<cudf::size_type>(left_keys.num_rows(), stream);
+    thrust::sequence(thrust::cuda::par.on(stream.value()), result.begin(), result.end());
+    return std::move(result);
   }
 
   auto const left_num_rows  = left_keys.num_rows();
@@ -103,7 +97,7 @@ std::unique_ptr<cudf::column> left_semi_anti_join(
   // For semi join we want contains to be true, for anti join we want contains to be false
   bool join_type_boolean = (JoinKind == join_kind::LEFT_SEMI_JOIN);
 
-  rmm::device_uvector<size_type> gather_map(left_num_rows, stream);
+  rmm::device_uvector<cudf::size_type> gather_map(left_num_rows, stream);
 
   // gather_map_end will be the end of valid data in gather_map
   auto gather_map_end = thrust::copy_if(
@@ -117,11 +111,7 @@ std::unique_ptr<cudf::column> left_semi_anti_join(
     });
 
   auto join_size = thrust::distance(gather_map.begin(), gather_map_end);
-  return std::make_unique<cudf::column>(cudf::data_type(type_to_id<cudf::size_type>()),
-                                        join_size,
-                                        gather_map.release(),
-                                        rmm::device_buffer{},
-                                        0);
+  return std::move(gather_map);
 }
 
 /**
@@ -195,8 +185,8 @@ std::unique_ptr<cudf::table> left_semi_anti_join(
 
   auto const left_updated = scatter_columns(left_selected, left_on, left);
   return cudf::detail::gather(left_updated,
-                              gather_map->view().template begin<cudf::size_type>(),
-                              gather_map->view().template end<cudf::size_type>(),
+                              gather_map.begin(),
+                              gather_map.end(),
                               out_of_bounds_policy::DONT_CHECK,
                               stream,
                               mr);
@@ -216,10 +206,10 @@ std::unique_ptr<cudf::table> left_semi_join(cudf::table_view const& left,
     left, right, left_on, right_on, compare_nulls, rmm::cuda_stream_default, mr);
 }
 
-std::unique_ptr<cudf::column> left_semi_join(cudf::table_view const& left,
-                                             cudf::table_view const& right,
-                                             null_equality compare_nulls,
-                                             rmm::mr::device_memory_resource* mr)
+rmm::device_uvector<cudf::size_type> left_semi_join(cudf::table_view const& left,
+                                                    cudf::table_view const& right,
+                                                    null_equality compare_nulls,
+                                                    rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
   return detail::left_semi_anti_join<detail::join_kind::LEFT_SEMI_JOIN>(
@@ -238,10 +228,10 @@ std::unique_ptr<cudf::table> left_anti_join(cudf::table_view const& left,
     left, right, left_on, right_on, compare_nulls, rmm::cuda_stream_default, mr);
 }
 
-std::unique_ptr<cudf::column> left_anti_join(cudf::table_view const& left,
-                                             cudf::table_view const& right,
-                                             null_equality compare_nulls,
-                                             rmm::mr::device_memory_resource* mr)
+rmm::device_uvector<cudf::size_type> left_anti_join(cudf::table_view const& left,
+                                                    cudf::table_view const& right,
+                                                    null_equality compare_nulls,
+                                                    rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
   return detail::left_semi_anti_join<detail::join_kind::LEFT_ANTI_JOIN>(

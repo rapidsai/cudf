@@ -26,7 +26,7 @@
 namespace cudf {
 namespace detail {
 
-std::pair<std::unique_ptr<cudf::column>, std::unique_ptr<cudf::column>> inner_join(
+std::pair<rmm::device_uvector<size_type>, rmm::device_uvector<size_type>> inner_join(
   table_view const& left_input,
   table_view const& right_input,
   null_equality compare_nulls,
@@ -50,7 +50,7 @@ std::pair<std::unique_ptr<cudf::column>, std::unique_ptr<cudf::column>> inner_jo
   if (right.num_rows() > left.num_rows()) {
     cudf::hash_join hj_obj(left, compare_nulls, stream);
     auto result = hj_obj.inner_join(right, compare_nulls, stream, mr);
-    return std::make_pair<std::unique_ptr<cudf::column>, std::unique_ptr<cudf::column>>(
+    return std::make_pair<rmm::device_uvector<size_type>, rmm::device_uvector<size_type>>(
       std::move(result.second), std::move(result.first));
   } else {
     cudf::hash_join hj_obj(right, compare_nulls, stream);
@@ -82,48 +82,40 @@ std::unique_ptr<table> inner_join(table_view const& left_input,
   // build the hash map from the smaller table.
   if (right.num_rows() > left.num_rows()) {
     cudf::hash_join hj_obj(left.select(left_on), compare_nulls, stream);
-    auto join_indices      = hj_obj.inner_join(right.select(right_on), compare_nulls, stream, mr);
-    auto join_indices_view = std::make_pair<cudf::column_view, cudf::column_view>(
-      join_indices.first->view(), join_indices.second->view());
-    std::unique_ptr<table> left_result =
-      detail::gather(left,
-                     join_indices_view.second.template begin<cudf::size_type>(),
-                     join_indices_view.second.template end<cudf::size_type>(),
-                     out_of_bounds_policy::DONT_CHECK,
-                     stream,
-                     mr);
-    std::unique_ptr<table> right_result =
-      detail::gather(right,
-                     join_indices_view.first.template begin<cudf::size_type>(),
-                     join_indices_view.first.template end<cudf::size_type>(),
-                     out_of_bounds_policy::DONT_CHECK,
-                     stream,
-                     mr);
+    auto join_indices = hj_obj.inner_join(right.select(right_on), compare_nulls, stream, mr);
+    std::unique_ptr<table> left_result  = detail::gather(left,
+                                                        join_indices.second.begin(),
+                                                        join_indices.second.end(),
+                                                        out_of_bounds_policy::DONT_CHECK,
+                                                        stream,
+                                                        mr);
+    std::unique_ptr<table> right_result = detail::gather(right,
+                                                         join_indices.first.begin(),
+                                                         join_indices.first.end(),
+                                                         out_of_bounds_policy::DONT_CHECK,
+                                                         stream,
+                                                         mr);
     return combine_table_pair(std::move(left_result), std::move(right_result));
   } else {
     cudf::hash_join hj_obj(right.select(right_on), compare_nulls, stream);
-    auto join_indices      = hj_obj.inner_join(left.select(left_on), compare_nulls, stream, mr);
-    auto join_indices_view = std::make_pair<cudf::column_view, cudf::column_view>(
-      join_indices.first->view(), join_indices.second->view());
-    std::unique_ptr<table> left_result =
-      detail::gather(left,
-                     join_indices_view.first.template begin<cudf::size_type>(),
-                     join_indices_view.first.template end<cudf::size_type>(),
-                     out_of_bounds_policy::DONT_CHECK,
-                     stream,
-                     mr);
-    std::unique_ptr<table> right_result =
-      detail::gather(right,
-                     join_indices_view.second.template begin<cudf::size_type>(),
-                     join_indices_view.second.template end<cudf::size_type>(),
-                     out_of_bounds_policy::DONT_CHECK,
-                     stream,
-                     mr);
+    auto join_indices = hj_obj.inner_join(left.select(left_on), compare_nulls, stream, mr);
+    std::unique_ptr<table> left_result  = detail::gather(left,
+                                                        join_indices.first.begin(),
+                                                        join_indices.first.end(),
+                                                        out_of_bounds_policy::DONT_CHECK,
+                                                        stream,
+                                                        mr);
+    std::unique_ptr<table> right_result = detail::gather(right,
+                                                         join_indices.second.begin(),
+                                                         join_indices.second.end(),
+                                                         out_of_bounds_policy::DONT_CHECK,
+                                                         stream,
+                                                         mr);
     return combine_table_pair(std::move(left_result), std::move(right_result));
   }
 }
 
-std::pair<std::unique_ptr<cudf::column>, std::unique_ptr<cudf::column>> left_join(
+std::pair<rmm::device_uvector<size_type>, rmm::device_uvector<size_type>> left_join(
   table_view const& left_input,
   table_view const& right_input,
   null_equality compare_nulls,
@@ -171,27 +163,22 @@ std::unique_ptr<table> left_join(table_view const& left_input,
     return cudf::detail::combine_table_pair(std::move(probe_build_pair.first),
                                             std::move(probe_build_pair.second));
   }
-
-  auto join_indices_view = std::make_pair<cudf::column_view, cudf::column_view>(
-    join_indices.first->view(), join_indices.second->view());
-  std::unique_ptr<table> left_result =
-    detail::gather(left,
-                   join_indices_view.first.template begin<cudf::size_type>(),
-                   join_indices_view.first.template end<cudf::size_type>(),
-                   out_of_bounds_policy::NULLIFY,
-                   stream,
-                   mr);
-  std::unique_ptr<table> right_result =
-    detail::gather(right,
-                   join_indices_view.second.template begin<cudf::size_type>(),
-                   join_indices_view.second.template end<cudf::size_type>(),
-                   out_of_bounds_policy::NULLIFY,
-                   stream,
-                   mr);
+  std::unique_ptr<table> left_result  = detail::gather(left,
+                                                      join_indices.first.begin(),
+                                                      join_indices.first.end(),
+                                                      out_of_bounds_policy::NULLIFY,
+                                                      stream,
+                                                      mr);
+  std::unique_ptr<table> right_result = detail::gather(right,
+                                                       join_indices.second.begin(),
+                                                       join_indices.second.end(),
+                                                       out_of_bounds_policy::NULLIFY,
+                                                       stream,
+                                                       mr);
   return combine_table_pair(std::move(left_result), std::move(right_result));
 }
 
-std::pair<std::unique_ptr<cudf::column>, std::unique_ptr<cudf::column>> full_join(
+std::pair<rmm::device_uvector<size_type>, rmm::device_uvector<size_type>> full_join(
   table_view const& left_input,
   table_view const& right_input,
   null_equality compare_nulls,
@@ -239,23 +226,18 @@ std::unique_ptr<table> full_join(table_view const& left_input,
     return cudf::detail::combine_table_pair(std::move(probe_build_pair.first),
                                             std::move(probe_build_pair.second));
   }
-
-  auto join_indices_view = std::make_pair<cudf::column_view, cudf::column_view>(
-    join_indices.first->view(), join_indices.second->view());
-  std::unique_ptr<table> left_result =
-    detail::gather(left,
-                   join_indices_view.first.template begin<cudf::size_type>(),
-                   join_indices_view.first.template end<cudf::size_type>(),
-                   out_of_bounds_policy::NULLIFY,
-                   stream,
-                   mr);
-  std::unique_ptr<table> right_result =
-    detail::gather(right,
-                   join_indices_view.second.template begin<cudf::size_type>(),
-                   join_indices_view.second.template end<cudf::size_type>(),
-                   out_of_bounds_policy::NULLIFY,
-                   stream,
-                   mr);
+  std::unique_ptr<table> left_result  = detail::gather(left,
+                                                      join_indices.first.begin(),
+                                                      join_indices.first.end(),
+                                                      out_of_bounds_policy::NULLIFY,
+                                                      stream,
+                                                      mr);
+  std::unique_ptr<table> right_result = detail::gather(right,
+                                                       join_indices.second.begin(),
+                                                       join_indices.second.end(),
+                                                       out_of_bounds_policy::NULLIFY,
+                                                       stream,
+                                                       mr);
   return combine_table_pair(std::move(left_result), std::move(right_result));
 }
 
@@ -270,7 +252,7 @@ hash_join::hash_join(cudf::table_view const& build,
 {
 }
 
-std::pair<std::unique_ptr<cudf::column>, std::unique_ptr<cudf::column>> hash_join::inner_join(
+std::pair<rmm::device_uvector<size_type>, rmm::device_uvector<size_type>> hash_join::inner_join(
   cudf::table_view const& probe,
   null_equality compare_nulls,
   rmm::cuda_stream_view stream,
@@ -279,7 +261,7 @@ std::pair<std::unique_ptr<cudf::column>, std::unique_ptr<cudf::column>> hash_joi
   return impl->inner_join(probe, compare_nulls, stream, mr);
 }
 
-std::pair<std::unique_ptr<cudf::column>, std::unique_ptr<cudf::column>> hash_join::left_join(
+std::pair<rmm::device_uvector<size_type>, rmm::device_uvector<size_type>> hash_join::left_join(
   cudf::table_view const& probe,
   null_equality compare_nulls,
   rmm::cuda_stream_view stream,
@@ -288,7 +270,7 @@ std::pair<std::unique_ptr<cudf::column>, std::unique_ptr<cudf::column>> hash_joi
   return impl->left_join(probe, compare_nulls, stream, mr);
 }
 
-std::pair<std::unique_ptr<cudf::column>, std::unique_ptr<cudf::column>> hash_join::full_join(
+std::pair<rmm::device_uvector<size_type>, rmm::device_uvector<size_type>> hash_join::full_join(
   cudf::table_view const& probe,
   null_equality compare_nulls,
   rmm::cuda_stream_view stream,
@@ -299,7 +281,7 @@ std::pair<std::unique_ptr<cudf::column>, std::unique_ptr<cudf::column>> hash_joi
 
 // external APIs
 
-std::pair<std::unique_ptr<cudf::column>, std::unique_ptr<cudf::column>> inner_join(
+std::pair<rmm::device_uvector<size_type>, rmm::device_uvector<size_type>> inner_join(
   table_view const& left,
   table_view const& right,
   null_equality compare_nulls,
@@ -321,7 +303,7 @@ std::unique_ptr<table> inner_join(table_view const& left,
     left, right, left_on, right_on, compare_nulls, rmm::cuda_stream_default, mr);
 }
 
-std::pair<std::unique_ptr<cudf::column>, std::unique_ptr<cudf::column>> left_join(
+std::pair<rmm::device_uvector<size_type>, rmm::device_uvector<size_type>> left_join(
   table_view const& left,
   table_view const& right,
   null_equality compare_nulls,
@@ -343,7 +325,7 @@ std::unique_ptr<table> left_join(table_view const& left,
     left, right, left_on, right_on, compare_nulls, rmm::cuda_stream_default, mr);
 }
 
-std::pair<std::unique_ptr<cudf::column>, std::unique_ptr<cudf::column>> full_join(
+std::pair<rmm::device_uvector<size_type>, rmm::device_uvector<size_type>> full_join(
   table_view const& left,
   table_view const& right,
   null_equality compare_nulls,
