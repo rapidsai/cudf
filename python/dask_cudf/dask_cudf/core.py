@@ -484,7 +484,7 @@ def _parallel_var(ddf, meta, skipna, split_every, out):
             dsk[(local_name, group, depth)] = (_aggregate_var, node_list)
     dsk[(name, 0)] = (_finalize_var, (local_name, group, depth))
 
-    graph = HighLevelGraph.from_collections(name, dsk, dependencies=[num])
+    graph = HighLevelGraph.from_collections(name, dsk, dependencies=[num, ddf])
     result = dd.core.new_dd_object(graph, name, meta, (None, None))
     if isinstance(ddf, DataFrame):
         result.divisions = (min(ddf.columns), max(ddf.columns))

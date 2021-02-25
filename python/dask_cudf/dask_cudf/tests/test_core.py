@@ -709,6 +709,23 @@ def test_dataframe_set_index():
     assert_eq(ddf.compute(), pddf.compute())
 
 
+def test_series_describe():
+    random.seed(0)
+    sr = cudf.datasets.randomdata(20)["x"]
+    psr = sr.to_pandas()
+
+    dsr = dgd.from_cudf(sr, npartitions=4)
+    pdsr = dd.from_pandas(psr, npartitions=4)
+
+    # NOTE: Removing `compute` is causing an
+    # "incorrect dependencies" error here.
+    dd.assert_eq(
+        dsr.describe().compute(),
+        pdsr.describe().compute(),
+        check_less_precise=3,
+    )
+
+
 def test_dataframe_describe():
     random.seed(0)
     df = cudf.datasets.randomdata(20)
