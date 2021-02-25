@@ -783,36 +783,27 @@ std::unique_ptr<column> binary_operation(column_view const& lhs,
 std::unique_ptr<column> binary_operation(column_view const& lhs,
                                          column_view const& rhs,
                                          binary_operator op,
-                                         thrust::optional<data_type> output_type,
+                                         data_type output_type,
                                          rmm::cuda_stream_view stream,
                                          rmm::mr::device_memory_resource* mr)
 {
   CUDF_EXPECTS(lhs.size() == rhs.size(), "Column sizes don't match");
 
-  if (is_fixed_point(lhs.type()) or is_fixed_point(rhs.type())) {
-    if (op != binary_operator::TRUE_DIV) {
-      CUDF_EXPECTS(
-        not output_type.has_value(),
-        "Only TRUE_DIV supports specified output_type for fixed_point binary operations. For other "
-        "fixed_point binary operations, please pass {} or std::nullopt for output_type and the "
-        "cudf::data_type and numeric::scale_type will be automatically calculated.");
-    }
+  if (lhs.type().id() == type_id::STRING and rhs.type().id() == type_id::STRING)
+    return binops::compiled::binary_operation(lhs, rhs, op, output_type, stream, mr);
 
-    return fixed_point_binary_operation(lhs, rhs, op, output_type, stream, mr);
+  if (is_fixed_point(lhs.type()) or is_fixed_point(rhs.type())) {
+    auto const type =
+      op == binary_operator::TRUE_DIV ? output_type : thrust::optional<data_type>{thrust::nullopt};
+    return fixed_point_binary_operation(lhs, rhs, op, type, stream, mr);
   }
 
-  CUDF_EXPECTS(output_type.has_value(), "Must specify output_type of column.");
-  // Use output_type.value() for the rest of the function
-
-  if (lhs.type().id() == type_id::STRING and rhs.type().id() == type_id::STRING)
-    return binops::compiled::binary_operation(lhs, rhs, op, output_type.value(), stream, mr);
-
   // Check for datatype
-  CUDF_EXPECTS(is_fixed_width(type), "Invalid/Unsupported output datatype");
+  CUDF_EXPECTS(is_fixed_width(output_type), "Invalid/Unsupported output datatype");
   CUDF_EXPECTS(is_fixed_width(lhs.type()), "Invalid/Unsupported lhs datatype");
   CUDF_EXPECTS(is_fixed_width(rhs.type()), "Invalid/Unsupported rhs datatype");
 
-  auto out = make_fixed_width_column_for_output(lhs, rhs, op, output_type.value(), stream, mr);
+  auto out = make_fixed_width_column_for_output(lhs, rhs, op, output_type, stream, mr);
 
   if (lhs.is_empty() or rhs.is_empty()) return out;
 
@@ -877,7 +868,7 @@ std::unique_ptr<column> binary_operation(column_view const& lhs,
 std::unique_ptr<column> binary_operation(column_view const& lhs,
                                          column_view const& rhs,
                                          binary_operator op,
-                                         thrust::optional<data_type> output_type,
+                                         data_type output_type,
                                          rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();

@@ -146,7 +146,7 @@ std::unique_ptr<column> binary_operation(
   column_view const& lhs,
   column_view const& rhs,
   binary_operator op,
-  thrust::optional<data_type> output_type,
+  data_type output_type,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
