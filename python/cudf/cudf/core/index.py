@@ -2716,16 +2716,13 @@ class interval_range(GenericIndex):
                 "Of the four parameters: start, end, periods, and "
                 "freq, exactly three must be specified"
             )
-        elif freq and periods and start:
+        if freq and periods and start:
             end = freq * periods + start
-            left_col = cupy.arange(start, end, freq)
-            right_col = cupy.arange(start + freq, end + 1, freq)
-            if len(left_col) != len(right_col):
-                left_col = cupy.arange(start, end - freq, freq)
-            if len(right_col) == 0 or len(left_col) == 0:
-                return pd.IntervalIndex([], closed=closed)
-        elif freq and periods and end:
-            start = end - (freq * periods)
+        if (freq and periods and end) or (freq and periods and start):
+            if freq and periods and end:
+                start = end - (freq * periods)
+            elif freq and periods and start:
+                end = freq * periods + start
             left_col = cupy.arange(start, end, freq)
             right_col = cupy.arange(start + freq, end + 1, freq)
             if len(left_col) != len(right_col):
