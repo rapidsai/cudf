@@ -296,17 +296,40 @@ class DataFrame(_Frame, dd.core.DataFrame):
             return handle_out(out, result)
 
         else:
-            num = self._get_numeric_data()
-            x = 1.0 * num.sum(skipna=skipna, split_every=split_every)
-            x2 = 1.0 * (num ** 2).sum(skipna=skipna, split_every=split_every)
-            n = num.count(split_every=split_every)
-            name = self._token_prefix + "var"
-            result = map_partitions(
-                var_aggregate, x2, x, n, token=name, meta=meta, ddof=ddof
+
+            def _local_var(x, skipna):
+                n = len(x)
+                avg = x.mean(skipna=skipna)
+                m2 = ((x - avg) ** 2).sum(skipna=skipna)
+                return n, avg, m2
+
+            def _aggregate_var(parts):
+                n, avg, m2 = parts[0]
+                for i in range(1, len(parts)):
+                    n_a, avg_a, m2_a = n, avg, m2
+                    n_b, avg_b, m2_b = parts[i]
+                    n = n_a + n_b
+                    avg = (n_a * avg_a + n_b * avg_b) / n
+                    delta = avg_b - avg_a
+                    m2 = m2_a + m2_b + delta ** 2 * n_a * n_b / n
+                return m2 / (n - 1)
+
+            dsk = {}
+            name = "var-" + tokenize(
+                axis, skipna, ddof, split_every, dtype, out
             )
-            if isinstance(self, DataFrame):
-                result.divisions = (min(self.columns), max(self.columns))
-            return handle_out(out, result)
+            local_name = "local-" + name
+            num = self._get_numeric_data()
+            parts = []
+            for n in range(num.npartitions):
+                parts.append((local_name, n))
+                dsk[parts[-1]] = (_local_var, (num._name, n), skipna)
+            dsk[(name, 0)] = (_aggregate_var, parts)
+
+            graph = HighLevelGraph.from_collections(
+                name, dsk, dependencies=[num]
+            )
+            return dd.core.new_dd_object(graph, name, meta, (None, None))
 
     def repartition(self, *args, **kwargs):
         """ Wraps dask.dataframe DataFrame.repartition method.
