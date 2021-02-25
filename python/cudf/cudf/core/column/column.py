@@ -1088,7 +1088,7 @@ class ColumnBase(Column, Serializable):
         raise NotImplementedError
 
     def as_decimal_column(
-        self, dtype: Dtype, format=None
+        self, dtype: Dtype, **kwargs
     ) -> "cudf.core.column.DecimalColumn":
         raise NotImplementedError
 
