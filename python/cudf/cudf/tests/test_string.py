@@ -206,6 +206,21 @@ def test_string_astype(dtype):
     assert_eq(expect, got)
 
 
+def test_string_decimal():
+    gs = Series(["1.11", "2.22", "3.33"])
+    fp = gs.astype(cudf.Decimal64Dtype(scale=2, precision=3))
+    got = fp.astype("str")
+    assert_eq(gs, got)
+    gs = Series(["111", "222", "33"])
+    fp = gs.astype(cudf.Decimal64Dtype(scale=0, precision=3))
+    got = fp.astype("str")
+    assert_eq(gs, got)
+    gs = Series(["111000", "22000", "3000"])
+    fp = gs.astype(cudf.Decimal64Dtype(scale=-3, precision=3))
+    got = fp.astype("str")
+    assert_eq(gs, got)
+
+
 @pytest.mark.parametrize(
     "dtype", NUMERIC_TYPES + DATETIME_TYPES + ["bool", "object", "str"]
 )
