@@ -72,56 +72,6 @@ parquet::Compression to_parquet_compression(compression_type compression)
   }
 }
 
-std::vector<std::vector<bool>> get_per_column_nullability(table_view const &table,
-                                                          std::vector<bool> const &col_nullable)
-{
-  auto get_depth = [](column_view const &col) {
-    column_view curr_col = col;
-    uint16_t depth       = 1;
-    while (curr_col.type().id() == type_id::LIST) {
-      depth++;
-      curr_col = lists_column_view{curr_col}.child();
-    }
-    return depth;
-  };
-
-  // for each column, check depth and add subsequent bool values to its nullable vector
-  std::vector<std::vector<bool>> per_column_nullability;
-  auto null_it  = col_nullable.begin();
-  auto const_it = thrust::make_constant_iterator(true);
-  for (auto const &col : table) {
-    uint16_t depth = get_depth(col);
-    if (col_nullable.empty()) {
-      // If no per-column nullability is specified then assume that all columns are nullable
-      per_column_nullability.emplace_back(const_it, const_it + depth);
-    } else {
-      CUDF_EXPECTS(
-        null_it + depth <= col_nullable.end(),
-        "Mismatch between size of column nullability passed in user_metadata_with_nullability and "
-        "number of null masks expected in table. Expected more values in passed metadata");
-      per_column_nullability.emplace_back(null_it, null_it + depth);
-      null_it += depth;
-    }
-  }
-  CUDF_EXPECTS(
-    null_it == col_nullable.end(),
-    "Mismatch between size of column nullability passed in user_metadata_with_nullability and "
-    "number of null masks expected in table. Too many values in passed metadata");
-  return per_column_nullability;
-}
-
-/**
- * @brief Get the leaf column
- *
- * Returns the dtype of the leaf column when `col` is a list column.
- */
-column_view get_leaf_col(column_view col)
-{
-  column_view curr_col = col;
-  while (curr_col.type().id() == type_id::LIST) { curr_col = lists_column_view{curr_col}.child(); }
-  return curr_col;
-}
-
 }  // namespace
 
 /**
@@ -154,381 +104,20 @@ __global__ void stringdata_to_nvstrdesc(gpu::nvstrdesc_s *dst,
   }
 }
 
-/**
- * @brief Helper class that adds parquet-specific column info
- */
-class parquet_column_view {
- public:
-  /**
-   * @brief Constructor that extracts out the string position + length pairs
-   * for building dictionaries for string columns
-   */
-  explicit parquet_column_view(size_t id,
-                               column_view const &col,
-                               std::vector<bool> const &nullability,
-                               const table_metadata *metadata,
-                               bool int96_timestamps,
-                               std::vector<uint8_t> const &decimal_precision,
-                               uint &decimal_precision_idx,
-                               rmm::cuda_stream_view stream)
-    : _col(col),
-      _leaf_col(get_leaf_col(col)),
-      _id(id),
-      _string_type(_leaf_col.type().id() == type_id::STRING),
-      _list_type(col.type().id() == type_id::LIST),
-      _type_width((_string_type || _list_type) ? 0 : cudf::size_of(col.type())),
-      _row_count(col.size()),
-      // Unused
-      _null_count(_leaf_col.null_count()),
-      _data(col.head<uint8_t>() + col.offset() * _type_width),
-      _nulls(_leaf_col.nullable() ? _leaf_col.null_mask() : nullptr),
-      _offset(col.offset()),
-      _converted_type(ConvertedType::UNKNOWN),
-      _ts_scale(0),
-      _dremel_offsets(0, stream),
-      _rep_level(0, stream),
-      _def_level(0, stream),
-      _nullability(nullability)
-  {
-    switch (_leaf_col.type().id()) {
-      case cudf::type_id::INT8:
-        _physical_type  = Type::INT32;
-        _converted_type = ConvertedType::INT_8;
-        _stats_dtype    = statistics_dtype::dtype_int8;
-        break;
-      case cudf::type_id::INT16:
-        _physical_type  = Type::INT32;
-        _converted_type = ConvertedType::INT_16;
-        _stats_dtype    = statistics_dtype::dtype_int16;
-        break;
-      case cudf::type_id::INT32:
-        _physical_type = Type::INT32;
-        _stats_dtype   = statistics_dtype::dtype_int32;
-        break;
-      case cudf::type_id::INT64:
-        _physical_type = Type::INT64;
-        _stats_dtype   = statistics_dtype::dtype_int64;
-        break;
-      case cudf::type_id::UINT8:
-        _physical_type  = Type::INT32;
-        _converted_type = ConvertedType::UINT_8;
-        _stats_dtype    = statistics_dtype::dtype_int8;
-        break;
-      case cudf::type_id::UINT16:
-        _physical_type  = Type::INT32;
-        _converted_type = ConvertedType::UINT_16;
-        _stats_dtype    = statistics_dtype::dtype_int16;
-        break;
-      case cudf::type_id::UINT32:
-        _physical_type  = Type::INT32;
-        _converted_type = ConvertedType::UINT_32;
-        _stats_dtype    = statistics_dtype::dtype_int32;
-        break;
-      case cudf::type_id::UINT64:
-        _physical_type  = Type::INT64;
-        _converted_type = ConvertedType::UINT_64;
-        _stats_dtype    = statistics_dtype::dtype_int64;
-        break;
-      case cudf::type_id::FLOAT32:
-        _physical_type = Type::FLOAT;
-        _stats_dtype   = statistics_dtype::dtype_float32;
-        break;
-      case cudf::type_id::FLOAT64:
-        _physical_type = Type::DOUBLE;
-        _stats_dtype   = statistics_dtype::dtype_float64;
-        break;
-      case cudf::type_id::BOOL8:
-        _physical_type = Type::BOOLEAN;
-        _stats_dtype   = statistics_dtype::dtype_bool;
-        break;
-      // unsupported outside cudf for parquet 1.0.
-      case cudf::type_id::DURATION_DAYS:
-        _physical_type  = Type::INT32;
-        _converted_type = ConvertedType::TIME_MILLIS;
-        _stats_dtype    = statistics_dtype::dtype_int64;
-        break;
-      case cudf::type_id::DURATION_SECONDS:
-        _physical_type  = Type::INT64;
-        _converted_type = ConvertedType::TIME_MILLIS;
-        _stats_dtype    = statistics_dtype::dtype_int64;
-        _ts_scale       = 1000;
-        break;
-      case cudf::type_id::DURATION_MILLISECONDS:
-        _physical_type  = Type::INT64;
-        _converted_type = ConvertedType::TIME_MILLIS;
-        _stats_dtype    = statistics_dtype::dtype_int64;
-        break;
-      case cudf::type_id::DURATION_MICROSECONDS:
-        _physical_type  = Type::INT64;
-        _converted_type = ConvertedType::TIME_MICROS;
-        _stats_dtype    = statistics_dtype::dtype_int64;
-        break;
-      // unsupported outside cudf for parquet 1.0.
-      case cudf::type_id::DURATION_NANOSECONDS:
-        _physical_type  = Type::INT64;
-        _converted_type = ConvertedType::TIME_MICROS;
-        _stats_dtype    = statistics_dtype::dtype_int64;
-        _ts_scale       = -1000;  // negative value indicates division by absolute value
-        break;
-      case cudf::type_id::TIMESTAMP_DAYS:
-        _physical_type  = Type::INT32;
-        _converted_type = ConvertedType::DATE;
-        _stats_dtype    = statistics_dtype::dtype_int32;
-        break;
-      case cudf::type_id::TIMESTAMP_SECONDS:
-        _physical_type  = int96_timestamps ? Type::INT96 : Type::INT64;
-        _converted_type = ConvertedType::TIMESTAMP_MILLIS;
-        _stats_dtype    = statistics_dtype::dtype_timestamp64;
-        _ts_scale       = 1000;
-        break;
-      case cudf::type_id::TIMESTAMP_MILLISECONDS:
-        _physical_type  = int96_timestamps ? Type::INT96 : Type::INT64;
-        _converted_type = ConvertedType::TIMESTAMP_MILLIS;
-        _stats_dtype    = statistics_dtype::dtype_timestamp64;
-        break;
-      case cudf::type_id::TIMESTAMP_MICROSECONDS:
-        _physical_type  = int96_timestamps ? Type::INT96 : Type::INT64;
-        _converted_type = ConvertedType::TIMESTAMP_MICROS;
-        _stats_dtype    = statistics_dtype::dtype_timestamp64;
-        break;
-      case cudf::type_id::TIMESTAMP_NANOSECONDS:
-        _physical_type  = int96_timestamps ? Type::INT96 : Type::INT64;
-        _converted_type = ConvertedType::TIMESTAMP_MICROS;
-        _stats_dtype    = statistics_dtype::dtype_timestamp64;
-        _ts_scale       = -1000;  // negative value indicates division by absolute value
-        break;
-      case cudf::type_id::STRING:
-        _physical_type  = Type::BYTE_ARRAY;
-        _converted_type = ConvertedType::UTF8;
-        _stats_dtype    = statistics_dtype::dtype_string;
-        break;
-      case cudf::type_id::DECIMAL32:
-        _physical_type  = Type::INT32;
-        _converted_type = ConvertedType::DECIMAL;
-        // TODO: Why is decimal 32 stats int32?
-        _stats_dtype   = statistics_dtype::dtype_int32;
-        _decimal_scale = -_leaf_col.type().scale();  // parquet and cudf disagree about scale signs
-        CUDF_EXPECTS(decimal_precision.size() > decimal_precision_idx,
-                     "Not enough decimal precision values passed for data!");
-        CUDF_EXPECTS(decimal_precision[decimal_precision_idx] >= _decimal_scale,
-                     "Precision must be equal to or greater than scale!");
-        _decimal_precision = decimal_precision[decimal_precision_idx++];
-        break;
-      case cudf::type_id::DECIMAL64:
-        _physical_type  = Type::INT64;
-        _converted_type = ConvertedType::DECIMAL;
-        _stats_dtype    = statistics_dtype::dtype_decimal64;
-        _decimal_scale  = -_leaf_col.type().scale();  // parquet and cudf disagree about scale signs
-        CUDF_EXPECTS(decimal_precision.size() > decimal_precision_idx,
-                     "Not enough decimal precision values passed for data!");
-        CUDF_EXPECTS(decimal_precision[decimal_precision_idx] >= _decimal_scale,
-                     "Precision must be equal to or greater than scale!");
-        _decimal_precision = decimal_precision[decimal_precision_idx++];
-        break;
-      default:
-        _physical_type = UNDEFINED_TYPE;
-        _stats_dtype   = dtype_none;
-        break;
-    }
-    size_type leaf_col_offset = col.offset();
-    _data_count               = col.size();
-    if (_list_type) {
-      // Top level column's offsets are not applied to all children. Get the effective offset and
-      // size of the leaf column
-      // Calculate row offset into dremel data (repetition/definition values) and the respective
-      // definition and repetition levels
-      // gpu::dremel_data dremel = gpu::get_dremel_data(col, _nullability, stream);
-      // _dremel_offsets         = std::move(dremel.dremel_offsets);
-      // _rep_level              = std::move(dremel.rep_level);
-      // _def_level              = std::move(dremel.def_level);
-      // leaf_col_offset         = dremel.leaf_col_offset;
-      // _data_count             = dremel.leaf_data_size;
-      // _max_def_level          = dremel.max_def_level;
-
-      // _type_width = (is_fixed_width(_leaf_col.type())) ? cudf::size_of(_leaf_col.type()) : 0;
-      // _data       = (is_fixed_width(_leaf_col.type()))
-      //           ? _leaf_col.head<uint8_t>() + leaf_col_offset * _type_width
-      //           : nullptr;
-
-      // Calculate nesting levels
-      column_view curr_col = col;
-      _nesting_levels      = 0;
-      while (curr_col.type().id() == type_id::LIST) {
-        lists_column_view list_col(curr_col);
-        _nesting_levels++;
-        curr_col = list_col.child();
-      }
-
-      // Update level nullability if no nullability was passed in.
-      curr_col = col;
-      if (_nullability.empty()) {
-        while (curr_col.type().id() == type_id::LIST) {
-          lists_column_view list_col(curr_col);
-          _nullability.push_back(list_col.null_mask() != nullptr);
-          curr_col = list_col.child();
-        }
-        _nullability.push_back(curr_col.null_mask() != nullptr);
-      }
-
-      stream.synchronize();
-    } else {
-      if (_nullability.empty()) { _nullability = {col.nullable()}; }
-      _max_def_level = (_nullability[0]) ? 1 : 0;
-    }
-    if (_string_type && _data_count > 0) {
-      strings_column_view view{_leaf_col};
-      _indexes = rmm::device_buffer(_data_count * sizeof(gpu::nvstrdesc_s), stream);
-
-      stringdata_to_nvstrdesc<<<((_data_count - 1) >> 8) + 1, 256, 0, stream.value()>>>(
-        reinterpret_cast<gpu::nvstrdesc_s *>(_indexes.data()),
-        view.offsets().data<size_type>() + leaf_col_offset,
-        view.chars().data<char>(),
-        _nulls,
-        _data_count);
-      _data = _indexes.data();
-
-      stream.synchronize();
-    }
-
-    // Generating default name if name isn't present in metadata
-    if (metadata && _id < metadata->column_names.size()) {
-      _name = metadata->column_names[_id];
-    } else {
-      _name = "_col" + std::to_string(_id);
-    }
-    _path_in_schema.push_back(_name);
-  }
-
-  // Unused
-  auto is_string() const noexcept { return _string_type; }
-  // Used only for schema gen and EncColDesc gen
-  auto is_list() const noexcept { return _list_type; }
-  // Unused
-  size_t type_width() const noexcept { return _type_width; }
-  // schema and EncColDesc
-  size_t row_count() const noexcept { return _row_count; }
-  // EncColDesc
-  size_t data_count() const noexcept { return _data_count; }
-  // Unused
-  size_t null_count() const noexcept { return _null_count; }
-  // Unused
-  bool nullable() const { return _nullability.back(); }
-  void const *data() const noexcept { return _data; }
-  uint32_t const *nulls() const noexcept { return _nulls; }
-  size_type offset() const noexcept { return _offset; }
-  bool level_nullable(size_t level) const { return _nullability[level]; }
-  int32_t decimal_scale() const noexcept { return _decimal_scale; }
-  uint8_t decimal_precision() const noexcept { return _decimal_precision; }
-
-  // List related data
-  column_view cudf_col() const noexcept { return _col; }
-  column_view leaf_col() const noexcept { return _leaf_col; }
-  size_type nesting_levels() const noexcept { return _nesting_levels; }
-  size_type const *level_offsets() const noexcept { return _dremel_offsets.data(); }
-  uint8_t const *repetition_levels() const noexcept { return _rep_level.data(); }
-  uint8_t const *definition_levels() const noexcept { return _def_level.data(); }
-  uint16_t max_def_level() const noexcept { return _max_def_level; }
-  void set_def_level(uint16_t def_level) { _max_def_level = def_level; }
-
-  auto name() const noexcept { return _name; }
-  auto physical_type() const noexcept { return _physical_type; }
-  auto converted_type() const noexcept { return _converted_type; }
-  auto stats_type() const noexcept { return _stats_dtype; }
-  int32_t ts_scale() const noexcept { return _ts_scale; }
-  void set_path_in_schema(std::vector<std::string> path) { _path_in_schema = std::move(path); }
-  auto get_path_in_schema() const noexcept { return _path_in_schema; }
-
-  // Dictionary management
-  uint32_t *get_dict_data() { return (_dict_data.size()) ? _dict_data.data().get() : nullptr; }
-  uint32_t *get_dict_index() { return (_dict_index.size()) ? _dict_index.data().get() : nullptr; }
-  void use_dictionary(bool use_dict) { _dictionary_used = use_dict; }
-  void alloc_dictionary(size_t max_num_rows)
-  {
-    _dict_data.resize(max_num_rows);
-    _dict_index.resize(max_num_rows);
-  }
-  bool check_dictionary_used()
-  {
-    if (!_dictionary_used) {
-      _dict_data.resize(0);
-      _dict_data.shrink_to_fit();
-      _dict_index.resize(0);
-      _dict_index.shrink_to_fit();
-    }
-    return _dictionary_used;
-  }
-
- private:
-  // cudf data column
-  column_view _col;
-  column_view _leaf_col;
-
-  // Identifier within set of columns
-  size_t _id        = 0;
-  bool _string_type = false;
-  bool _list_type   = false;
-
-  size_t _type_width     = 0;
-  size_t _row_count      = 0;
-  size_t _data_count     = 0;
-  size_t _null_count     = 0;
-  void const *_data      = nullptr;
-  uint32_t const *_nulls = nullptr;
-  size_type _offset      = 0;
-
-  // parquet-related members
-  std::string _name{};
-  Type _physical_type;
-  ConvertedType _converted_type;
-  statistics_dtype _stats_dtype;
-  int32_t _ts_scale;
-  std::vector<std::string> _path_in_schema;
-
-  // Dictionary-related members
-  bool _dictionary_used = false;
-  rmm::device_vector<uint32_t> _dict_data;
-  rmm::device_vector<uint32_t> _dict_index;
-
-  // List-related members
-  rmm::device_uvector<size_type>
-    _dremel_offsets;  ///< For each row, the absolute offset into the repetition and definition
-                      ///< level vectors. O(num rows)
-  rmm::device_uvector<uint8_t> _rep_level;
-  rmm::device_uvector<uint8_t> _def_level;
-  std::vector<bool> _nullability;
-  size_type _max_def_level  = -1;
-  size_type _nesting_levels = 0;
-
-  // String-related members
-  rmm::device_buffer _indexes;
-
-  // Decimal-related members
-  int32_t _decimal_scale     = 0;
-  uint8_t _decimal_precision = 0;
-};
-// 1. We need to convert all cudf columns into a format where the child knows its parent. First
-//    define a class that enables this.
-// 2. Convert individual cudf columns into that format.
-// 3. For each input cudf column, use input schema to construct output schema in tree format
-// 4. For each leaf of output schema, use stored augmented cudf leaf column to travel upwards and
-//    get its heirarchy. Also get its precribed nullability and path in schema. Construct pcv from
-//    these informations.
-
 struct linked_column_view;
 
 using LinkedColPtr    = std::shared_ptr<linked_column_view>;
 using LinkedColVector = std::vector<LinkedColPtr>;
 
+/**
+ * @brief column_view with the added member pointer to the parent of this column.
+ *
+ */
 struct linked_column_view : public column_view {
-  // TODO: we are currently keeping all column_view children info multiple times - once for each
+  // TODO(cp): we are currently keeping all column_view children info multiple times - once for each
   //       copy of this object. Options:
   // 1. Inherit from column_view_base. Only lose out on children vector. That is not needed.
   // 2. Don't inherit at all. make linked_column_view keep a reference wrapper to its column_view
-  // 3. OR, WAIT A SECOND! Why do we need to keep linked_column as children at all? We only need to
-  //    assign the linked column to leaf node of schema and go up from there?
-  //    ANS: BECAUSE, we need to keep all the constructed linked columns somewhere anyway. leaf
-  //    level linked_column will only have its parent info but its parent would also need to be
-  //    linked_column to have a chain all the way up to top. Ab dobara mat poochna.
   linked_column_view(column_view const &col) : column_view(col), parent(nullptr)
   {
     for (auto child_it = col.child_begin(); child_it < col.child_end(); ++child_it) {
@@ -544,12 +133,16 @@ struct linked_column_view : public column_view {
     }
   }
 
-  // linked_column_view() = default;
-
-  linked_column_view *parent;
+  linked_column_view *parent;  //!< Pointer to parent of this column. Nullptr if root
   LinkedColVector children;
 };
 
+/**
+ * @brief Converts all column_views of a table into linked_column_views
+ *
+ * @param table table of columns to convert
+ * @return Vector of converted linked_column_views
+ */
 LinkedColVector input_table_to_linked_columns(table_view const &table)
 {
   LinkedColVector result;
@@ -560,18 +153,33 @@ LinkedColVector input_table_to_linked_columns(table_view const &table)
   return result;
 }
 
+/**
+ * @brief Extends SchemaElement to add members required in constructing parquet_column_view
+ *
+ * Added members are:
+ * 1. leaf_column: Pointer to leaf linked_column_view which points to the corresponding data stream
+ *    of a leaf schema node. For non-leaf strut node, this is nullptr.
+ * 2. stats_dtype: datatype for statistics calculation required for the data stream of a leaf node.
+ * 3. ts_scale: scale to multiply or divide timestamp by in order to convert timestamp to parquet
+ *    supported types
+ */
 struct schema_tree_node : public SchemaElement {
   LinkedColPtr leaf_column;
   statistics_dtype stats_dtype;
   int32_t ts_scale;
 
-  // TODO: Think about making schema a class that holds a vector of schema_tree_nodes. The function
-  // construct_schema_tree could be its constructor.
-  // It can have method to get the per column nullability given a schema node index corresponding
-  // to a leaf schema.
-  // Much easier than that is a method to get path in schema, given a leaf node
+  // TODO(fut): Think about making schema a class that holds a vector of schema_tree_nodes. The
+  // function construct_schema_tree could be its constructor. It can have method to get the per
+  // column nullability given a schema node index corresponding to a leaf schema. Much easier than
+  // that is a method to get path in schema, given a leaf node
 };
 
+/**
+ * @brief Construct schema from input columns and per-column input options
+ *
+ * Recursively traverses through linked_columns and corresponding metadata to construct schema tree.
+ * The resulting schema tree is stored in a vector in pre-order traversal order.
+ */
 std::vector<schema_tree_node> construct_schema_tree(LinkedColVector const &linked_columns,
                                                     table_input_metadata const &metadata,
                                                     bool single_write_mode)
@@ -742,6 +350,9 @@ std::vector<schema_tree_node> construct_schema_tree(LinkedColVector const &linke
             col_schema.stats_dtype    = statistics_dtype::dtype_int32;
             break;
           // case cudf::type_id::TIMESTAMP_SECONDS:
+          // TODO(api): Need to wait until we know what to do with api. Then we'll make cython
+          // bindings, then we'll be able to test int96 writing. gtests don't have any tests for
+          // this.
           //   col_schema.type           = int96_timestamps ? Type::INT96 : Type::INT64;
           //   col_schema.converted_type = ConvertedType::TIMESTAMP_MILLIS;
           //   col_schema.stats_dtype    = statistics_dtype::dtype_timestamp64;
@@ -763,6 +374,7 @@ std::vector<schema_tree_node> construct_schema_tree(LinkedColVector const &linke
           //   col_schema.stats_dtype    = statistics_dtype::dtype_timestamp64;
           //   _ts_scale = -1000;  // negative value indicates division by absolute value
           //   break;
+          // TODO (stat): Wait and watch if converting string into nvstrdesc is even needed
           // case cudf::type_id::STRING:
           //   col_schema.type           = Type::BYTE_ARRAY;
           //   col_schema.converted_type = ConvertedType::UTF8;
@@ -820,6 +432,16 @@ std::vector<schema_tree_node> construct_schema_tree(LinkedColVector const &linke
   return schema;
 }
 
+/**
+ * @brief Class to store parquet specific information for one data stream.
+ *
+ * Contains information about a single data stream. In case of struct columns, a data stream is one
+ * of the child leaf columns that contains data.
+ * e.g. A column Struct<int, List<float>> contains 2 data streams:
+ * - Struct<int>
+ * - Struct<List<float>>
+ *
+ */
 struct new_parquet_column_view {
   new_parquet_column_view(schema_tree_node const &schema_node,
                           std::vector<schema_tree_node> const &schema_tree,
@@ -891,7 +513,7 @@ struct new_parquet_column_view {
       curr_schema_node = schema_tree[curr_schema_node.parent_idx];
     }
     _nullability = std::vector<uint8_t>(r_nullability.cbegin(), r_nullability.cend());
-    // TODO: Explore doing this for all columns in a single go outside this ctor. Maybe using
+    // TODO(cp): Explore doing this for all columns in a single go outside this ctor. Maybe using
     // hostdevice_vector. Currently this involves a cudamemcpy for each column.
     _d_nullability = rmm::device_uvector<uint8_t>(_nullability.size(), stream);
     CUDA_TRY(cudaMemcpyAsync(_d_nullability.data(),
@@ -944,20 +566,20 @@ struct new_parquet_column_view {
     auto desc       = gpu::EncColumnDesc{};  // Zero out all fields
     auto type_width = (col.type().id() == type_id::STRING) ? 0 : cudf::size_of(col.type());
 
-    // TODO: Remove during statistics refactor. No other code uses these
-    // TODO: List stats would be broken until then. Need to fix column_data_base and num_values for
-    // offseted list case.
+    // TODO(stat): Remove during statistics refactor. No other code uses these
+    // TODO(stat): List stats would be broken until then. Need to fix column_data_base and
+    // num_values for offseted list case.
     desc.column_data_base = col.head<uint8_t>() + col.offset() * type_width;
     desc.valid_map_base   = col.null_mask();
     desc.column_offset    = col.offset();
-    desc.num_values = col.size();  // TODO: NOOO, This has to be data count because leaf size is not
-                                   // the same as data count. What if we have offset in the parent
-                                   // column? Actual size of leaf data we have to view is lesser
+    desc.num_values =
+      col.size();  // TODO(stat): NOOO, This has to be data count because leaf size is not
+                   // the same as data count. What if we have offset in the parent
+                   // column? Actual size of leaf data we have to view is lesser
 
     desc.stats_dtype = schema_node.stats_dtype;
     desc.ts_scale    = schema_node.ts_scale;
 
-    // TODO: Remember to re-enable dictionary support
     // TODO (dm): Enable dictionary for list after refactor
     if (physical_type() != BOOLEAN && physical_type() != UNDEFINED_TYPE && !is_list()) {
       alloc_dictionary(col.size());  // TODO: This also has to be data count. Reason above.
@@ -988,7 +610,6 @@ struct new_parquet_column_view {
   std::vector<std::string> get_path_in_schema() { return path_in_schema; }
 
   // LIST related member functions
-  // TODO: Maybe they can be removed
   uint8_t max_def_level() const noexcept { return _max_def_level; }
   uint8_t max_rep_level() const noexcept { return _max_rep_level; }
   bool is_list() const noexcept { return _is_list; }
@@ -1015,7 +636,6 @@ struct new_parquet_column_view {
 
  private:
   // Schema related members
-  // TODO: Need a way to traverse upwards given a leaf schema node
   schema_tree_node schema_node;
   std::vector<std::string> path_in_schema;
   uint8_t _max_def_level;
@@ -1035,7 +655,6 @@ struct new_parquet_column_view {
   size_type _data_count;
 
   // Dictionary related members
-  // TODO: These shouldn't exist in this class. Remove them in dictionary encoding refactor
   bool _dictionary_used = false;
   rmm::device_vector<uint32_t> _dict_data;
   rmm::device_vector<uint32_t> _dict_index;
@@ -1319,8 +938,8 @@ void writer::impl::write(table_view const &table)
 
   // Initialize column description
   hostdevice_vector<gpu::EncColumnDesc> col_desc(0, parquet_columns.size(), stream);
-  // TODO: This should be `auto const&` but isn't since dictionary space is allocated when calling
-  //       get_device_view(). Fix during dictionary refactor.
+  // This should've been `auto const&` but isn't since dictionary space is allocated when calling
+  // get_device_view(). Fix during dictionary refactor.
   for (auto &col : parquet_columns) {
     auto enccol = col.get_device_view();
     col_desc.insert(enccol);
