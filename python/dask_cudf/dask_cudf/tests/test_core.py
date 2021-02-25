@@ -12,9 +12,9 @@ from dask import dataframe as dd
 from dask.dataframe.core import make_meta, meta_nonempty
 from dask.utils import M
 
-import dask_cudf as dgd
-
 import cudf
+
+import dask_cudf as dgd
 
 
 def test_from_cudf():
@@ -719,7 +719,9 @@ def test_dataframe_describe():
     ddf = dgd.from_cudf(df, npartitions=4)
     pddf = dd.from_pandas(pdf, npartitions=4)
 
-    dd.assert_eq(ddf.describe(), pddf.describe(), check_exact=False)
+    dd.assert_eq(
+        ddf.describe(), pddf.describe(), check_exact=False, atol=0.0001
+    )
 
 
 def test_index_map_partitions():
