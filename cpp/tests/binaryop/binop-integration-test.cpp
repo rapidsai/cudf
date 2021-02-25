@@ -2327,7 +2327,7 @@ TYPED_TEST(FixedPointTestBothReps, FixedPointBinaryOpTrueDiv)
   using decimalXX = TypeParam;
   using RepType   = device_storage_type_t<decimalXX>;
 
-  auto const lhs      = fp_wrapper<RepType>{{10, 30, 50, 70}, scale_type{-1}};
+  auto const lhs      = fp_wrapper<RepType>{{100, 300, 500, 700}, scale_type{-2}};
   auto const rhs      = fp_wrapper<RepType>{{4, 4, 4, 4}, scale_type{0}};
   auto const expected = fp_wrapper<RepType>{{25, 75, 125, 175}, scale_type{-2}};
 
@@ -2343,7 +2343,7 @@ TYPED_TEST(FixedPointTestBothReps, FixedPointBinaryOpTrueDiv2)
   using decimalXX = TypeParam;
   using RepType   = device_storage_type_t<decimalXX>;
 
-  auto const lhs      = fp_wrapper<RepType>{{10, 30, 50, 70}, scale_type{1}};
+  auto const lhs      = fp_wrapper<RepType>{{100000, 300000, 500000, 700000}, scale_type{-3}};
   auto const rhs      = fp_wrapper<RepType>{{20, 20, 20, 20}, scale_type{-1}};
   auto const expected = fp_wrapper<RepType>{{5000, 15000, 25000, 35000}, scale_type{-2}};
 
@@ -2359,8 +2359,8 @@ TYPED_TEST(FixedPointTestBothReps, FixedPointBinaryOpTrueDiv3)
   using decimalXX = TypeParam;
   using RepType   = device_storage_type_t<decimalXX>;
 
-  auto const lhs      = fp_wrapper<RepType>{{10, 30, 50, 70}, scale_type{1}};
-  auto const rhs      = fp_wrapper<RepType>{{300, 900, 300, 300}, scale_type{-2}};
+  auto const lhs      = fp_wrapper<RepType>{{10000, 30000, 50000, 70000}, scale_type{-2}};
+  auto const rhs      = fp_wrapper<RepType>{{3, 9, 3, 3}, scale_type{0}};
   auto const expected = fp_wrapper<RepType>{{3333, 3333, 16666, 23333}, scale_type{-2}};
 
   auto const type   = data_type{type_to_id<decimalXX>(), -2};
@@ -2377,25 +2377,9 @@ TYPED_TEST(FixedPointTestBothReps, FixedPointBinaryOpTrueDiv4)
 
   auto const lhs      = fp_wrapper<RepType>{{10, 30, 50, 70}, scale_type{1}};
   auto const rhs      = make_fixed_point_scalar<decimalXX>(3, scale_type{0});
-  auto const expected = fp_wrapper<RepType>{{3333, 10000, 16666, 23333}, scale_type{-2}};
+  auto const expected = fp_wrapper<RepType>{{3, 10, 16, 23}, scale_type{1}};
 
-  auto const type   = data_type{type_to_id<decimalXX>(), -2};
-  auto const result = cudf::binary_operation(lhs, *rhs, cudf::binary_operator::TRUE_DIV, type);
-
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
-}
-
-TYPED_TEST(FixedPointTestBothReps, FixedPointBinaryOpTrueDiv5)
-{
-  using namespace numeric;
-  using decimalXX = TypeParam;
-  using RepType   = device_storage_type_t<decimalXX>;
-
-  auto const lhs      = fp_wrapper<RepType>{{10, 30, 50, 70}, scale_type{1}};
-  auto const rhs      = make_fixed_point_scalar<decimalXX>(30000, scale_type{-4});
-  auto const expected = fp_wrapper<RepType>{{3333, 10000, 16666, 23333}, scale_type{-2}};
-
-  auto const type   = data_type{type_to_id<decimalXX>(), -2};
+  auto const type   = data_type{type_to_id<decimalXX>(), 1};
   auto const result = cudf::binary_operation(lhs, *rhs, cudf::binary_operator::TRUE_DIV, type);
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
@@ -2407,18 +2391,15 @@ TYPED_TEST(FixedPointTestBothReps, FixedPointBinaryOpTrueDiv6)
   using decimalXX = TypeParam;
   using RepType   = device_storage_type_t<decimalXX>;
 
-  for (auto const i : {0, 1, 2, 3, 4, 5, 6, 7}) {
-    auto const val = 3 * numeric::detail::ipow<int32_t, Radix::BASE_10>(i);
-    auto const lhs = make_fixed_point_scalar<decimalXX>(val, scale_type{-i});
-    auto const rhs = fp_wrapper<RepType>{{10, 30, 50, 70}, scale_type{-1}};
+  auto const lhs = make_fixed_point_scalar<decimalXX>(3000, scale_type{-3});
+  auto const rhs = fp_wrapper<RepType>{{10, 30, 50, 70}, scale_type{-1}};
 
-    auto const expected = fp_wrapper<RepType>{{300, 100, 60, 42}, scale_type{-2}};
+  auto const expected = fp_wrapper<RepType>{{300, 100, 60, 42}, scale_type{-2}};
 
-    auto const type   = data_type{type_to_id<decimalXX>(), -2};
-    auto const result = cudf::binary_operation(*lhs, rhs, cudf::binary_operator::TRUE_DIV, type);
+  auto const type   = data_type{type_to_id<decimalXX>(), -2};
+  auto const result = cudf::binary_operation(*lhs, rhs, cudf::binary_operator::TRUE_DIV, type);
 
-    CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
-  }
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
 }
 
 TYPED_TEST(FixedPointTestBothReps, FixedPointBinaryOpTrueDiv7)
@@ -2427,7 +2408,7 @@ TYPED_TEST(FixedPointTestBothReps, FixedPointBinaryOpTrueDiv7)
   using decimalXX = TypeParam;
   using RepType   = device_storage_type_t<decimalXX>;
 
-  auto const lhs = make_fixed_point_scalar<decimalXX>(12000, scale_type{-1});
+  auto const lhs = make_fixed_point_scalar<decimalXX>(1200, scale_type{0});
   auto const rhs = fp_wrapper<RepType>{{100, 200, 300, 500, 600, 800, 1200, 1300}, scale_type{-2}};
 
   auto const expected = fp_wrapper<RepType>{{12, 6, 4, 2, 2, 1, 1, 0}, scale_type{2}};
@@ -2445,7 +2426,7 @@ TYPED_TEST(FixedPointTestBothReps, FixedPointBinaryOpTrueDiv8)
   using RepType   = device_storage_type_t<decimalXX>;
 
   auto const lhs      = fp_wrapper<RepType>{{4000, 6000, 80000}, scale_type{-1}};
-  auto const rhs      = make_fixed_point_scalar<decimalXX>(500, scale_type{-2});
+  auto const rhs      = make_fixed_point_scalar<decimalXX>(5000, scale_type{-3});
   auto const expected = fp_wrapper<RepType>{{0, 1, 16}, scale_type{2}};
 
   auto const type   = data_type{type_to_id<decimalXX>(), 2};
@@ -2460,7 +2441,7 @@ TYPED_TEST(FixedPointTestBothReps, FixedPointBinaryOpTrueDiv9)
   using decimalXX = TypeParam;
   using RepType   = device_storage_type_t<decimalXX>;
 
-  auto const lhs      = fp_wrapper<RepType>{{100000, 200000, 300000}, scale_type{-2}};
+  auto const lhs      = fp_wrapper<RepType>{{10, 20, 30}, scale_type{2}};
   auto const rhs      = make_fixed_point_scalar<decimalXX>(7, scale_type{1});
   auto const expected = fp_wrapper<RepType>{{1, 2, 4}, scale_type{1}};
 
@@ -2476,7 +2457,7 @@ TYPED_TEST(FixedPointTestBothReps, FixedPointBinaryOpTrueDiv10)
   using decimalXX = TypeParam;
   using RepType   = device_storage_type_t<decimalXX>;
 
-  auto const lhs      = fp_wrapper<RepType>{{100000, 200000, 300000}, scale_type{-2}};
+  auto const lhs      = fp_wrapper<RepType>{{100, 200, 300}, scale_type{1}};
   auto const rhs      = make_fixed_point_scalar<decimalXX>(7, scale_type{0});
   auto const expected = fp_wrapper<RepType>{{14, 28, 42}, scale_type{1}};
 
@@ -2492,7 +2473,7 @@ TYPED_TEST(FixedPointTestBothReps, FixedPointBinaryOpTrueDiv11)
   using decimalXX = TypeParam;
   using RepType   = device_storage_type_t<decimalXX>;
 
-  auto const lhs      = fp_wrapper<RepType>{{1000000, 2000000, 3000000}, scale_type{-2}};
+  auto const lhs      = fp_wrapper<RepType>{{1000, 2000, 3000}, scale_type{1}};
   auto const rhs      = fp_wrapper<RepType>{{7, 7, 7}, scale_type{0}};
   auto const expected = fp_wrapper<RepType>{{142, 285, 428}, scale_type{1}};
 
