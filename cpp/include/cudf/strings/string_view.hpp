@@ -18,7 +18,6 @@
 #include <cuda_runtime.h>
 #include <cstddef>
 #include <cudf/types.hpp>
-#include <cudf/utilities/error.hpp>
 #include <iterator>
 
 /**
@@ -297,6 +296,13 @@ class string_view {
    * @return An empty string
    */
   CUDA_HOST_DEVICE_CALLABLE static string_view min();
+
+  /**
+   * @brief Return maximum value associated with the string type
+   *
+   * @return A string that represents the highest possible valid UTF-8 encoded
+   * character.
+   */
   CUDA_HOST_DEVICE_CALLABLE static string_view max();
 
   /**

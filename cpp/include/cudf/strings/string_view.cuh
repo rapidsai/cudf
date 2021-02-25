@@ -17,6 +17,7 @@
 #pragma once
 
 #include <cudf/strings/string_view.hpp>
+#include <cudf/utilities/error.hpp>
 
 #include <thrust/count.h>
 #include <thrust/find.h>

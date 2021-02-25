@@ -115,7 +115,7 @@ inline __device__ string_view shuffle_xor(string_view var, uint32_t delta)
 }
 
 template <typename Operator>
-inline __device__ string_view WarpReduce(string_view extremum_value, Operator op)
+inline __device__ string_view warp_reduce(string_view extremum_value, Operator op)
 {
   string_view value = shuffle_xor(extremum_value, 1);
   extremum_value    = op(value, extremum_value);
