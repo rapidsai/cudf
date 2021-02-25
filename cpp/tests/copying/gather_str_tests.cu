@@ -143,8 +143,7 @@ TEST_F(GatherTestStr, GatherZeroSizeStringsColumn)
 {
   cudf::column_view zero_size_strings_column(
     cudf::data_type{cudf::type_id::STRING}, 0, nullptr, nullptr, 0);
-  std::vector<int32_t> h_map{0};
-  cudf::test::fixed_width_column_wrapper<int32_t> gather_map(h_map.begin(), h_map.end());
+  cudf::test::fixed_width_column_wrapper<int32_t> gather_map({0});
   cudf::column_view gather_view = gather_map;
   cudf::test::strings_column_wrapper expected{std::pair<std::string, bool>{"", false}};
   auto results = cudf::detail::gather(cudf::table_view({zero_size_strings_column}),
