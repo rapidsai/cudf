@@ -1075,14 +1075,11 @@ class CategoricalColumn(column.ColumnBase):
         if self.categories.dtype.kind == "f":
             new_mask = bools_to_mask(self.notnull())
             col = column.build_categorical_column(
-                categories=self.dtype.categories._values,
-                codes=column.as_column(
-                    self.codes.base_data, dtype=self.codes.dtype
-                ),
+                categories=self.categories,
+                codes=column.as_column(self.codes, dtype=self.codes.dtype),
                 mask=new_mask,
                 ordered=self.dtype.ordered,
-                offset=self.offset,
-                size=self.size,
+                size=self.codes.size,
             )
         else:
             col = self

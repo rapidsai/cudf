@@ -1433,7 +1433,7 @@ def test_categorical_series_with_nan_repr():
     4     NaN
     5    <NA>
     dtype: category
-    Categories (4, object): [1.0, 10.0, 2.0, NaN]
+    Categories (4, float64): [1.0, 10.0, 2.0, NaN]
     """
     )
 

@@ -1092,7 +1092,14 @@ class Series(Frame, Serializable):
         if isinstance(preprocess._column, cudf.core.column.CategoricalColumn):
             category_memory = lines[-1]
             if preprocess._column.categories.dtype.kind == "f":
-                category_memory = category_memory.replace("'", "")
+                category_memory = category_memory.replace("'", "").split(": ")
+                category_memory = (
+                    category_memory[0].replace(
+                        "object", preprocess._column.categories.dtype.name
+                    )
+                    + ": "
+                    + category_memory[1]
+                )
             lines = lines[:-1]
         if len(lines) > 1:
             if lines[-1].startswith("Name: "):
