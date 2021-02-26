@@ -268,6 +268,36 @@ public abstract class Aggregation {
         }
     }
 
+    private static final class CollectAggregation extends Aggregation {
+        private final boolean includeNulls;
+
+        public CollectAggregation(boolean includeNulls) {
+            super(Kind.COLLECT);
+            this.includeNulls = includeNulls;
+        }
+
+        @Override
+        long createNativeInstance() {
+            return Aggregation.createCollectAgg(includeNulls);
+        }
+
+        @Override
+        public int hashCode() {
+            return 31 * kind.hashCode() + Boolean.hashCode(includeNulls);
+        }
+
+        @Override
+        public boolean equals(Object other) {
+            if (this == other) {
+                return true;
+            } else if (other instanceof CollectAggregation) {
+                CollectAggregation o = (CollectAggregation) other;
+                return o.includeNulls == this.includeNulls;
+            }
+            return false;
+        }
+    }
+
     protected final Kind kind;
 
     protected Aggregation(Kind kind) {
@@ -514,10 +544,19 @@ public abstract class Aggregation {
     }
 
     /**
-     * Collect the values into a list.
+     * Collect the values into a list. nulls will be skipped.
      */
     public static Aggregation collect() {
-        return new NoParamAggregation(Kind.COLLECT);
+        return collect(false);
+    }
+
+    /**
+     * Collect the values into a list.
+     * @param includeNulls true if nulls should be included in the aggregation or false if they
+     *                     should be skipped.
+     */
+    public static Aggregation collect(boolean includeNulls) {
+        return new CollectAggregation(includeNulls);
     }
 
     /**
@@ -586,4 +625,9 @@ public abstract class Aggregation {
      * Create a lead or lag aggregation.
      */
     private static native long createLeadLagAgg(int kind, int offset);
+
+    /**
+     * Create a collect aggregation including nulls or not.
+     */
+    private static native long createCollectAgg(boolean includeNulls);
 }

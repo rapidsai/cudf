@@ -2503,6 +2503,7 @@ public class TableTest extends CudfTestBase {
 
   @Test
   void testWindowingCollect() {
+    Aggregation aggCollectWithNulls = Aggregation.collect(true);
     Aggregation aggCollect = Aggregation.collect();
     WindowOptions winOpts = WindowOptions.builder()
                                          .minPeriods(1)
@@ -2513,26 +2514,38 @@ public class TableTest extends CudfTestBase {
              .column( 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1) // GBY Key
              .column( 1, 1, 1, 1, 2, 2, 2, 2, 3, 3, 3, 3) // GBY Key
              .column( 1, 2, 3, 4, 1, 2, 3, 4, 5, 6, 7, 8) // OBY Key
-             .column( 7, 5, 1, 9, 7, 9, 8, 2, 8, 0, 6, 6) // Agg Column of INT32
+             .column( 7, 5, 1, 9, 7, 9, 8, 2, null, 0, 6, null) // Agg Column of INT32
              .column(nestedType,                          // Agg Column of Struct
                  new StructData(1, "s1"), new StructData(2, "s2"), new StructData(3, "s3"),
                  new StructData(4, "s4"), new StructData(11, "s11"), new StructData(22, "s22"),
                  new StructData(33, "s33"), new StructData(44, "s44"), new StructData(111, "s111"),
                  new StructData(222, "s222"), new StructData(333, "s333"), new StructData(444, "s444")
               ).build();
-         ColumnVector expectSortedAggColumn = ColumnVector.fromBoxedInts(7, 5, 1, 9, 7, 9, 8, 2, 8, 0, 6, 6)) {
+         ColumnVector expectSortedAggColumn = ColumnVector
+             .fromBoxedInts(7, 5, 1, 9, 7, 9, 8, 2, null, 0, 6, null)) {
       try (Table sorted = raw.orderBy(Table.asc(0), Table.asc(1), Table.asc(2))) {
         ColumnVector sortedAggColumn = sorted.getColumn(3);
         assertColumnsAreEqual(expectSortedAggColumn, sortedAggColumn);
 
         // Primitive type: INT32
+        //  a) including nulls
+        try (Table windowAggResults = sorted.groupBy(0, 1)
+                 .aggregateWindows(aggCollectWithNulls.onColumn(3).overWindow(winOpts));
+             ColumnVector expected = ColumnVector.fromLists(
+                 new ListType(false, new BasicType(false, DType.INT32)),
+                 Arrays.asList(7,5), Arrays.asList(7,5,1), Arrays.asList(5,1,9), Arrays.asList(1,9),
+                 Arrays.asList(7,9), Arrays.asList(7,9,8), Arrays.asList(9,8,2), Arrays.asList(8,2),
+                 Arrays.asList(null,0), Arrays.asList(null,0,6), Arrays.asList(0,6,null), Arrays.asList(6,null))) {
+          assertColumnsAreEqual(expected, windowAggResults.getColumn(0));
+        }
+        //  b) excluding nulls
         try (Table windowAggResults = sorted.groupBy(0, 1)
                  .aggregateWindows(aggCollect.onColumn(3).overWindow(winOpts));
              ColumnVector expected = ColumnVector.fromLists(
                  new ListType(false, new BasicType(false, DType.INT32)),
                  Arrays.asList(7,5), Arrays.asList(7,5,1), Arrays.asList(5,1,9), Arrays.asList(1,9),
                  Arrays.asList(7,9), Arrays.asList(7,9,8), Arrays.asList(9,8,2), Arrays.asList(8,2),
-                 Arrays.asList(8,0), Arrays.asList(8,0,6), Arrays.asList(0,6,6), Arrays.asList(6,6))) {
+                 Arrays.asList(0), Arrays.asList(0,6), Arrays.asList(0,6), Arrays.asList(6))) {
           assertColumnsAreEqual(expected, windowAggResults.getColumn(0));
         }
 
