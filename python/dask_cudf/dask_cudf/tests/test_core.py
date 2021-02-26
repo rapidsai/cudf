@@ -748,7 +748,7 @@ def test_zero_std_describe():
     dd.assert_eq(ddf.describe(), pddf.describe(), check_less_precise=3)
 
 
-def test_large_numbers_describe():
+def test_large_numbers_var():
     num = 8488678001
     df = cudf.DataFrame(
         {
@@ -760,7 +760,7 @@ def test_large_numbers_describe():
     ddf = dgd.from_cudf(df, npartitions=4)
     pddf = dd.from_pandas(pdf, npartitions=4)
 
-    dd.assert_eq(ddf.describe(), pddf.describe(), check_less_precise=3)
+    dd.assert_eq(ddf.var(), pddf.var(), check_less_precise=3)
 
 
 def test_index_map_partitions():
