@@ -737,8 +737,8 @@ def test_zero_std_describe():
     num = 84886781
     df = cudf.DataFrame(
         {
-            "x": np.full((20,), num, dtype=np.float),
-            "y": np.full((20,), num, dtype=np.float),
+            "x": np.full((20,), num, dtype=np.float64),
+            "y": np.full((20,), num, dtype=np.float64),
         }
     )
     pdf = df.to_pandas()
@@ -752,8 +752,8 @@ def test_large_numbers_describe():
     num = 8488678001
     df = cudf.DataFrame(
         {
-            "x": np.arange(num, num + 1000, dtype=np.float),
-            "y": np.arange(num, num + 1000, dtype=np.float),
+            "x": np.arange(num, num + 1000, dtype=np.float64),
+            "y": np.arange(num, num + 1000, dtype=np.float64),
         }
     )
     pdf = df.to_pandas()
