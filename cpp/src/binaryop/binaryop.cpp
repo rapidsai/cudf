@@ -383,23 +383,6 @@ bool is_supported_fixed_point_binop(binary_operator op)
 }
 
 /**
- * @brief Computes the scale for a `fixed_point` number based on given binary operator `op`
- *
- * @param op The binary_operator used for two `fixed_point` numbers
- * @param left_scale Scale of left `fixed_point` number
- * @param right_scale Scale of right `fixed_point` number
- * @return int32_t The resulting `scale` of the computed `fixed_point` number
- */
-int32_t compute_scale_for_binop(binary_operator op, int32_t left_scale, int32_t right_scale)
-{
-  CUDF_EXPECTS(is_supported_fixed_point_binop(op), "Unsupported fixed_point binary operation.");
-  if (op == binary_operator::MUL) return left_scale + right_scale;
-  if (op == binary_operator::DIV || op == binary_operator::TRUE_DIV)
-    return left_scale - right_scale;
-  return std::min(left_scale, right_scale);
-}
-
-/**
  * @brief Helper predicate function that identifies if `op` requires scales to be the same
  *
  * @param op `binary_operator`
@@ -410,6 +393,15 @@ bool is_same_scale_necessary(binary_operator op)
 {
   return op != binary_operator::MUL && op != binary_operator::DIV &&
          op != binary_operator::TRUE_DIV;
+}
+
+template <typename Lhs, typename Rhs>
+void fixed_point_binary_operation_validation(binary_operator op, Lhs lhs, Rhs rhs)
+{
+  CUDF_EXPECTS(is_fixed_point(lhs), "Input must have fixed_point data_type.");
+  CUDF_EXPECTS(is_fixed_point(rhs), "Input must have fixed_point data_type.");
+  CUDF_EXPECTS(is_supported_fixed_point_binop(op), "Unsupported fixed_point binary operation");
+  CUDF_EXPECTS(lhs.id() == rhs.id(), "Data type mismatch");
 }
 
 /**
@@ -431,20 +423,19 @@ std::unique_ptr<column> fixed_point_binary_operation(scalar const& lhs,
 {
   using namespace numeric;
 
-  CUDF_EXPECTS(is_fixed_point(lhs.type()), "Input must have fixed_point data_type.");
-  CUDF_EXPECTS(is_fixed_point(rhs.type()), "Input must have fixed_point data_type.");
-  CUDF_EXPECTS(is_supported_fixed_point_binop(op), "Unsupported fixed_point binary operation");
-  CUDF_EXPECTS(lhs.type().id() == rhs.type().id(), "Data type mismatch");
+  fixed_point_binary_operation_validation(op, lhs.type(), rhs.type());
 
-  auto const scale = compute_scale_for_binop(op, lhs.type().scale(), rhs.type().scale());
-  if (op == binary_operator::TRUE_DIV)
+  if (op == binary_operator::TRUE_DIV) {
+    auto const scale =
+      binary_operation_fixed_point_scale(op, lhs.type().scale(), rhs.type().scale());
     CUDF_EXPECTS(scale == output_type.scale(),
                  "TRUE_DIV requires output_type.scale() to match resulting lhs scale - rhs scale");
+  }
 
-  auto const out_type =
-    is_comparison_binop(op) ? data_type{type_id::BOOL8} : data_type{lhs.type().id(), scale};
-
-  auto out = make_fixed_width_column_for_output(lhs, rhs, op, out_type, stream, mr);
+  auto out = [&] {
+    auto const out_type = is_comparison_binop(op) ? data_type{type_id::BOOL8} : output_type;
+    return make_fixed_width_column_for_output(lhs, rhs, op, out_type, stream, mr);
+  }();
 
   if (rhs.is_empty()) return out;
 
@@ -514,20 +505,19 @@ std::unique_ptr<column> fixed_point_binary_operation(column_view const& lhs,
 {
   using namespace numeric;
 
-  CUDF_EXPECTS(is_fixed_point(lhs.type()), "Input must have fixed_point data_type.");
-  CUDF_EXPECTS(is_fixed_point(rhs.type()), "Input must have fixed_point data_type.");
-  CUDF_EXPECTS(is_supported_fixed_point_binop(op), "Unsupported fixed_point binary operation");
-  CUDF_EXPECTS(lhs.type().id() == rhs.type().id(), "Data type mismatch");
+  fixed_point_binary_operation_validation(op, lhs.type(), rhs.type());
 
-  auto const scale = compute_scale_for_binop(op, lhs.type().scale(), rhs.type().scale());
-  if (op == binary_operator::TRUE_DIV)
+  if (op == binary_operator::TRUE_DIV) {
+    auto const scale =
+      binary_operation_fixed_point_scale(op, lhs.type().scale(), rhs.type().scale());
     CUDF_EXPECTS(scale == output_type.scale(),
                  "TRUE_DIV requires output_type.scale() to match resulting lhs scale - rhs scale");
+  }
 
-  auto const out_type =
-    is_comparison_binop(op) ? data_type{type_id::BOOL8} : data_type{lhs.type().id(), scale};
-
-  auto out = make_fixed_width_column_for_output(lhs, rhs, op, out_type, stream, mr);
+  auto out = [&] {
+    auto const out_type = is_comparison_binop(op) ? data_type{type_id::BOOL8} : output_type;
+    return make_fixed_width_column_for_output(lhs, rhs, op, out_type, stream, mr);
+  }();
 
   if (lhs.is_empty()) return out;
 
@@ -597,20 +587,19 @@ std::unique_ptr<column> fixed_point_binary_operation(column_view const& lhs,
 {
   using namespace numeric;
 
-  CUDF_EXPECTS(is_fixed_point(lhs.type()), "Input must have fixed_point data_type.");
-  CUDF_EXPECTS(is_fixed_point(rhs.type()), "Input must have fixed_point data_type.");
-  CUDF_EXPECTS(is_supported_fixed_point_binop(op), "Unsupported fixed_point binary operation");
-  CUDF_EXPECTS(lhs.type().id() == rhs.type().id(), "Data type mismatch");
+  fixed_point_binary_operation_validation(op, lhs.type(), rhs.type());
 
-  auto const scale = compute_scale_for_binop(op, lhs.type().scale(), rhs.type().scale());
-  if (op == binary_operator::TRUE_DIV)
+  if (op == binary_operator::TRUE_DIV) {
+    auto const scale =
+      binary_operation_fixed_point_scale(op, lhs.type().scale(), rhs.type().scale());
     CUDF_EXPECTS(scale == output_type.scale(),
                  "TRUE_DIV requires output_type.scale() to match resulting lhs scale - rhs scale");
+  }
 
-  auto const out_type =
-    is_comparison_binop(op) ? data_type{type_id::BOOL8} : data_type{lhs.type().id(), scale};
-
-  auto out = make_fixed_width_column_for_output(lhs, rhs, op, out_type, stream, mr);
+  auto out = [&] {
+    auto const out_type = is_comparison_binop(op) ? data_type{type_id::BOOL8} : output_type;
+    return make_fixed_width_column_for_output(lhs, rhs, op, out_type, stream, mr);
+  }();
 
   if (lhs.is_empty() or rhs.is_empty()) return out;
 
@@ -671,9 +660,8 @@ std::unique_ptr<column> binary_operation(scalar const& lhs,
   if (lhs.type().id() == type_id::STRING and rhs.type().id() == type_id::STRING)
     return binops::compiled::binary_operation(lhs, rhs, op, output_type, stream, mr);
 
-  if (is_fixed_point(lhs.type()) or is_fixed_point(rhs.type())) {
+  if (is_fixed_point(lhs.type()) or is_fixed_point(rhs.type()))
     return fixed_point_binary_operation(lhs, rhs, op, output_type, stream, mr);
-  }
 
   // Check for datatype
   CUDF_EXPECTS(is_fixed_width(output_type), "Invalid/Unsupported output datatype");
@@ -728,9 +716,8 @@ std::unique_ptr<column> binary_operation(column_view const& lhs,
   if (lhs.type().id() == type_id::STRING and rhs.type().id() == type_id::STRING)
     return binops::compiled::binary_operation(lhs, rhs, op, output_type, stream, mr);
 
-  if (is_fixed_point(lhs.type()) or is_fixed_point(rhs.type())) {
+  if (is_fixed_point(lhs.type()) or is_fixed_point(rhs.type()))
     return fixed_point_binary_operation(lhs, rhs, op, output_type, stream, mr);
-  }
 
   // Check for datatype
   CUDF_EXPECTS(is_fixed_width(output_type), "Invalid/Unsupported output datatype");
@@ -778,6 +765,28 @@ std::unique_ptr<column> binary_operation(column_view const& lhs,
 }
 
 }  // namespace detail
+
+int32_t binary_operation_fixed_point_scale(binary_operator op,
+                                           int32_t left_scale,
+                                           int32_t right_scale)
+{
+  CUDF_EXPECTS(cudf::detail::is_supported_fixed_point_binop(op),
+               "Unsupported fixed_point binary operation.");
+  if (op == binary_operator::MUL) return left_scale + right_scale;
+  if (op == binary_operator::DIV || op == binary_operator::TRUE_DIV)
+    return left_scale - right_scale;
+  return std::min(left_scale, right_scale);
+}
+
+cudf::data_type binary_operation_fixed_point_output_type(binary_operator op,
+                                                         cudf::data_type const& lhs,
+                                                         cudf::data_type const& rhs)
+{
+  cudf::detail::fixed_point_binary_operation_validation(op, lhs, rhs);
+
+  auto const scale = binary_operation_fixed_point_scale(op, lhs.scale(), rhs.scale());
+  return cudf::data_type{lhs.id(), scale};
+}
 
 std::unique_ptr<column> binary_operation(scalar const& lhs,
                                          column_view const& rhs,
