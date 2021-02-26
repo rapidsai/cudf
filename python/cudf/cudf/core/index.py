@@ -137,6 +137,10 @@ class Index(Frame, Serializable):
     def _values(self) -> ColumnBase:
         raise NotImplementedError
 
+    @property
+    def dtype(self):
+        raise NotImplementedError
+
     def __getitem__(self, key):
         raise NotImplementedError()
 

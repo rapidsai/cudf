@@ -53,10 +53,10 @@ class CategoricalDtype(ExtensionDtype):
         )
 
     def to_pandas(self) -> pd.CategoricalDtype:
-        if self._categories is None:
+        if self.categories is None:
             categories = None
         else:
-            if self._categories.dtype.kind == "f":
+            if self.categories.dtype.kind == "f":
                 categories = self.categories.dropna().to_pandas()
             else:
                 categories = self.categories.to_pandas()
