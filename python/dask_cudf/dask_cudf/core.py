@@ -439,6 +439,8 @@ def _parallel_var(ddf, meta, skipna, split_every, out):
             n = x.count(skipna=skipna)
             avg = x.mean(skipna=skipna)
         else:
+            # Not skipping nulls, so might as well
+            # avoid the full `count` operation
             n = len(x)
             avg = x.sum(skipna=skipna) / n
         m2 = ((x - avg) ** 2).sum(skipna=skipna)
