@@ -103,28 +103,38 @@ class cufile_output : public cufile_io_base {
 };
 
 #ifdef CUFILE_INSTALLED
+
+class cufile_driver;
 /**
  * @brief Class that provides RAII for cuFile file registration.
  */
 struct cufile_registered_file {
- private:
   void register_handle();
 
  public:
-  file_wrapper const file;
-  CUfileHandle_t handle = nullptr;
-  cufile_registered_file(std::string const &filepath, int flags) : file(filepath, flags)
+  cufile_registered_file(cufile_driver const *driver, std::string const &filepath, int flags)
+    : _file(filepath, flags), _driver{driver}
   {
     register_handle();
   }
 
-  cufile_registered_file(std::string const &filepath, int flags, mode_t mode)
-    : file(filepath, flags, mode)
+  cufile_registered_file(cufile_driver const *driver,
+                         std::string const &filepath,
+                         int flags,
+                         mode_t mode)
+    : _file(filepath, flags, mode), _driver{driver}
   {
     register_handle();
   }
+
+  auto handle() const noexcept { return _handle; }
 
   ~cufile_registered_file();
+
+ private:
+  file_wrapper const _file;
+  CUfileHandle_t _handle       = nullptr;
+  cufile_driver const *_driver = nullptr;
 };
 
 /**
@@ -143,6 +153,7 @@ class cufile_input_impl final : public cufile_input {
   size_t read(size_t offset, size_t size, uint8_t *dst, rmm::cuda_stream_view stream) override;
 
  private:
+  cufile_driver const *driver;
   cufile_registered_file const cf_file;
 };
 
@@ -158,6 +169,7 @@ class cufile_output_impl final : public cufile_output {
   void write(void const *data, size_t offset, size_t size) override;
 
  private:
+  cufile_driver const *driver;
   cufile_registered_file const cf_file;
 };
 #else
