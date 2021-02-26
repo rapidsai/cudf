@@ -2129,18 +2129,15 @@ dremel_data get_dremel_data(column_view h_col,
 
   stream.synchronize();
 
-  size_type leaf_col_offset = column_offsets[column_offsets.size() - 1];
-  // TODO(cp): No longer hd_vec. Can use column_ends.back()
-  size_type leaf_data_size = column_ends[column_ends.size() - 1] - leaf_col_offset;
-  uint8_t max_def_level    = def_at_level.back() - 1;
+  size_type leaf_col_offset = column_offsets.back();
+  size_type leaf_data_size  = column_ends.back() - leaf_col_offset;
 
   // TODO(cp): Don't need all these anymore. See if they can be trimmed.
   return dremel_data{std::move(new_offsets),
                      std::move(rep_level),
                      std::move(def_level),
                      leaf_col_offset,
-                     leaf_data_size,
-                     max_def_level};
+                     leaf_data_size};
 }
 
 /**

@@ -393,10 +393,6 @@ std::vector<schema_tree_node> construct_schema_tree(LinkedColVector const &linke
             col_schema.stats_dtype = statistics_dtype::dtype_int32;
             col_schema.decimal_scale =
               -col->type().scale();  // parquet and cudf disagree about scale signs
-
-            // TODO: This expectation (that there are enough) should be a part of input schema check
-            // CUDF_EXPECTS(decimal_precision.size() > decimal_precision_idx,
-            //              "Not enough decimal precision values passed for data!");
             CUDF_EXPECTS(col_meta.decimal_precision.has_value(),
                          "Precision must be specified for decimal columns");
             CUDF_EXPECTS(col_meta.decimal_precision.value() >= col_schema.decimal_scale,

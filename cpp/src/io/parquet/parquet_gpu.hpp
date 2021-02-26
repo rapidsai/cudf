@@ -406,7 +406,6 @@ struct dremel_data {
 
   size_type leaf_col_offset;
   size_type leaf_data_size;
-  uint8_t max_def_level;
 };
 
 /**
