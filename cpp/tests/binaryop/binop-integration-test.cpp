@@ -2301,8 +2301,8 @@ TYPED_TEST(FixedPointTestBothReps, FixedPointBinaryOpEqualSimple)
   auto const col2     = fp_wrapper<RepType>{{100, 200, 300, 400}, scale_type{-2}};
   auto const expected = wrapper<bool>(trues.begin(), trues.end());
 
-  // TODO
-  auto const result = cudf::binary_operation(col1, col2, binary_operator::EQUAL, {});
+  auto const result =
+    cudf::binary_operation(col1, col2, binary_operator::EQUAL, cudf::data_type{type_id::BOOL8});
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
 }
@@ -2337,17 +2337,17 @@ TYPED_TEST(FixedPointTestBothReps, FixedPointBinaryOpEqualLessGreater)
   auto const trues    = std::vector<bool>(sz, true);
   auto const true_col = wrapper<bool>(trues.begin(), trues.end());
 
-  // TODO
+  auto const btype = cudf::data_type{type_id::BOOL8};
   auto const equal_result =
-    cudf::binary_operation(iota_3, iota_3_after_add->view(), binary_operator::EQUAL, {});
+    cudf::binary_operation(iota_3, iota_3_after_add->view(), binary_operator::EQUAL, btype);
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(true_col, equal_result->view());
 
   auto const less_result =
-    cudf::binary_operation(zeros_3, iota_3_after_add->view(), binary_operator::LESS, {});
+    cudf::binary_operation(zeros_3, iota_3_after_add->view(), binary_operator::LESS, btype);
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(true_col, less_result->view());
 
   auto const greater_result =
-    cudf::binary_operation(iota_3_after_add->view(), zeros_3, binary_operator::GREATER, {});
+    cudf::binary_operation(iota_3_after_add->view(), zeros_3, binary_operator::GREATER, btype);
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(true_col, greater_result->view());
 }
 
@@ -2402,7 +2402,8 @@ TYPED_TEST(FixedPointTestBothReps, FixedPointBinaryOpNullEqualsSimple)
   auto const col2     = fp_wrapper<RepType>{{40, 200, 20, 400}, {1, 0, 1, 0}, scale_type{-1}};
   auto const expected = wrapper<bool>{{1, 0, 0, 1}, {1, 1, 1, 1}};
 
-  auto const result = cudf::binary_operation(col1, col2, binary_operator::NULL_EQUALS, {});
+  auto const result = cudf::binary_operation(
+    col1, col2, binary_operator::NULL_EQUALS, cudf::data_type{type_id::BOOL8});
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
 }
