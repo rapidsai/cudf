@@ -717,8 +717,6 @@ def test_series_describe():
     dsr = dgd.from_cudf(sr, npartitions=4)
     pdsr = dd.from_pandas(psr, npartitions=4)
 
-    # NOTE: Removing `compute` is causing an
-    # "incorrect dependencies" error here.
     dd.assert_eq(
         dsr.describe(), pdsr.describe(), check_less_precise=3,
     )
