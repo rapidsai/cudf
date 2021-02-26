@@ -56,7 +56,9 @@ class CategoricalDtype(ExtensionDtype):
         if self.categories is None:
             categories = None
         else:
-            if self.categories.dtype.kind == "f":
+            if isinstance(
+                self.categories, (cudf.Float32Index, cudf.Float64Index)
+            ):
                 categories = self.categories.dropna().to_pandas()
             else:
                 categories = self.categories.to_pandas()
