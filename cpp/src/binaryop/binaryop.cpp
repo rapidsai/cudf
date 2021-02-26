@@ -378,8 +378,7 @@ bool is_comparison_binop(binary_operator op)
  */
 bool is_supported_fixed_point_binop(binary_operator op)
 {
-  return is_basic_arithmetic_binop(op) or is_comparison_binop(op) or
-         op == binary_operator::TRUE_DIV;
+  return is_basic_arithmetic_binop(op) or is_comparison_binop(op);
 }
 
 /**
@@ -391,8 +390,7 @@ bool is_supported_fixed_point_binop(binary_operator op)
  */
 bool is_same_scale_necessary(binary_operator op)
 {
-  return op != binary_operator::MUL && op != binary_operator::DIV &&
-         op != binary_operator::TRUE_DIV;
+  return op != binary_operator::MUL && op != binary_operator::DIV;
 }
 
 template <typename Lhs, typename Rhs>
@@ -424,13 +422,6 @@ std::unique_ptr<column> fixed_point_binary_operation(scalar const& lhs,
   using namespace numeric;
 
   fixed_point_binary_operation_validation(op, lhs.type(), rhs.type());
-
-  if (op == binary_operator::TRUE_DIV) {
-    auto const scale =
-      binary_operation_fixed_point_scale(op, lhs.type().scale(), rhs.type().scale());
-    CUDF_EXPECTS(scale == output_type.scale(),
-                 "TRUE_DIV requires output_type.scale() to match resulting lhs scale - rhs scale");
-  }
 
   auto out = [&] {
     auto const out_type = is_comparison_binop(op) ? data_type{type_id::BOOL8} : output_type;
@@ -507,13 +498,6 @@ std::unique_ptr<column> fixed_point_binary_operation(column_view const& lhs,
 
   fixed_point_binary_operation_validation(op, lhs.type(), rhs.type());
 
-  if (op == binary_operator::TRUE_DIV) {
-    auto const scale =
-      binary_operation_fixed_point_scale(op, lhs.type().scale(), rhs.type().scale());
-    CUDF_EXPECTS(scale == output_type.scale(),
-                 "TRUE_DIV requires output_type.scale() to match resulting lhs scale - rhs scale");
-  }
-
   auto out = [&] {
     auto const out_type = is_comparison_binop(op) ? data_type{type_id::BOOL8} : output_type;
     return make_fixed_width_column_for_output(lhs, rhs, op, out_type, stream, mr);
@@ -588,13 +572,6 @@ std::unique_ptr<column> fixed_point_binary_operation(column_view const& lhs,
   using namespace numeric;
 
   fixed_point_binary_operation_validation(op, lhs.type(), rhs.type());
-
-  if (op == binary_operator::TRUE_DIV) {
-    auto const scale =
-      binary_operation_fixed_point_scale(op, lhs.type().scale(), rhs.type().scale());
-    CUDF_EXPECTS(scale == output_type.scale(),
-                 "TRUE_DIV requires output_type.scale() to match resulting lhs scale - rhs scale");
-  }
 
   auto out = [&] {
     auto const out_type = is_comparison_binop(op) ? data_type{type_id::BOOL8} : output_type;
@@ -773,8 +750,7 @@ int32_t binary_operation_fixed_point_scale(binary_operator op,
   CUDF_EXPECTS(cudf::detail::is_supported_fixed_point_binop(op),
                "Unsupported fixed_point binary operation.");
   if (op == binary_operator::MUL) return left_scale + right_scale;
-  if (op == binary_operator::DIV || op == binary_operator::TRUE_DIV)
-    return left_scale - right_scale;
+  if (op == binary_operator::DIV) return left_scale - right_scale;
   return std::min(left_scale, right_scale);
 }
 
