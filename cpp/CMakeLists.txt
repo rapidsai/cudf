@@ -459,8 +459,7 @@ else()
     target_link_libraries(cudf PUBLIC CUDA::nvrtc CUDA::cudart CUDA::cuda_driver)
 endif()
 
-if(NOT CMAKE_BUILD_TYPE STREQUAL "Release")
-    file(WRITE "${CUDF_BINARY_DIR}/fatbin.ld"
+file(WRITE "${CUDF_BINARY_DIR}/fatbin.ld"
 [=[
 SECTIONS
 {
@@ -468,8 +467,7 @@ SECTIONS
   .nv_fatbin : { *(.nv_fatbin) }
 }
 ]=])
-    target_link_options(cudf PRIVATE "${CUDF_BINARY_DIR}/fatbin.ld")
-endif()
+target_link_options(cudf PRIVATE "${CUDF_BINARY_DIR}/fatbin.ld")
 
 add_library(cudf::cudf ALIAS cudf)
 
