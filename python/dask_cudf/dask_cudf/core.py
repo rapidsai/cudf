@@ -435,10 +435,12 @@ def _naive_var(ddf, meta, skipna, ddof, split_every, out):
 
 def _parallel_var(ddf, meta, skipna, split_every, out):
     def _local_var(x, skipna):
-        n = len(x)
-        # TODO: x.sum()/n seems to be faster than x.mean()
-        # on Quadro RTX 8000 - Need to compare on V/A100
-        avg = x.mean(skipna=skipna)
+        if skipna:
+            n = x.count(skipna=skipna)
+            avg = x.mean(skipna=skipna)
+        else:
+            n = len(x)
+            avg = x.sum(skipna=skipna) / n
         m2 = ((x - avg) ** 2).sum(skipna=skipna)
         return n, avg, m2
 
