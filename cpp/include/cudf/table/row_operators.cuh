@@ -173,8 +173,8 @@ class element_equality_comparator {
     noexcept
   {
     if (has_nulls) {
-      bool const lhs_is_null{lhs.nullable() and lhs.is_null(lhs_element_index)};
-      bool const rhs_is_null{rhs.nullable() and rhs.is_null(rhs_element_index)};
+      bool const lhs_is_null{lhs.is_null(lhs_element_index)};
+      bool const rhs_is_null{rhs.is_null(rhs_element_index)};
       if (lhs_is_null and rhs_is_null) {
         return nulls_are_equal;
       } else if (lhs_is_null != rhs_is_null) {
@@ -269,8 +269,8 @@ class element_relational_comparator {
                                       size_type rhs_element_index) const noexcept
   {
     if (has_nulls) {
-      bool const lhs_is_null{lhs.nullable() and lhs.is_null(lhs_element_index)};
-      bool const rhs_is_null{rhs.nullable() and rhs.is_null(rhs_element_index)};
+      bool const lhs_is_null{lhs.is_null(lhs_element_index)};
+      bool const rhs_is_null{rhs.is_null(rhs_element_index)};
 
       if (lhs_is_null and rhs_is_null) {  // null <? null
         return weak_ordering::EQUIVALENT;
@@ -352,8 +352,8 @@ class row_lexicographic_comparator {
                                                  size_type rhs_index) const noexcept
   {
     if (has_nulls) {
-      bool const lhs_is_null{lhs.nullable() and lhs.is_null(lhs_index)};
-      bool const rhs_is_null{rhs.nullable() and rhs.is_null(rhs_index)};
+      bool const lhs_is_null{lhs.is_null(lhs_index)};
+      bool const rhs_is_null{rhs.is_null(rhs_index)};
 
       if (lhs_is_null and rhs_is_null) {  // null <? null
         return weak_ordering::EQUIVALENT;
