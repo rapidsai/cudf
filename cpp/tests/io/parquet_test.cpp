@@ -681,6 +681,7 @@ TEST_F(ParquetWriterTest, ListColumn)
   // EXPECT_EQ(expected_metadata.column_names, result.metadata.column_names);
 }
 
+// TODO(cp): remove. This has served its purpose.
 TEST_F(ParquetWriterTest, ListColumn2)
 {
   auto valids  = cudf::test::make_counting_transform_iterator(0, [](auto i) { return i % 2; });
@@ -965,10 +966,10 @@ TEST_F(ParquetWriterTest, ListOfStruct)
 
   cudf_io::table_input_metadata expected_metadata(expected);
   expected_metadata.column_metadata[0].name                                     = "family";
-  expected_metadata.column_metadata[0].children[1].children[0].name             = "human?";
-  expected_metadata.column_metadata[0].children[1].children[1].name             = "particulars";
-  expected_metadata.column_metadata[0].children[1].children[1].children[0].name = "weight";
-  expected_metadata.column_metadata[0].children[1].children[1].children[1].name = "age";
+  expected_metadata.column_metadata[0].children[0].children[0].name             = "human?";
+  expected_metadata.column_metadata[0].children[0].children[1].name             = "particulars";
+  expected_metadata.column_metadata[0].children[0].children[1].children[0].name = "weight";
+  expected_metadata.column_metadata[0].children[0].children[1].children[1].name = "age";
 
   auto filepath = ("ListOfStruct.parquet");
   cudf_io::parquet_writer_options args =
@@ -1350,11 +1351,11 @@ TEST_F(ParquetChunkedWriterTest, ListOfStruct)
 
   cudf_io::table_input_metadata expected_metadata(table_1);
   expected_metadata.column_metadata[0].name                                     = "family";
-  expected_metadata.column_metadata[0].children[1].nullable                     = false;
-  expected_metadata.column_metadata[0].children[1].children[0].name             = "human?";
-  expected_metadata.column_metadata[0].children[1].children[1].name             = "particulars";
-  expected_metadata.column_metadata[0].children[1].children[1].children[0].name = "weight";
-  expected_metadata.column_metadata[0].children[1].children[1].children[1].name = "age";
+  expected_metadata.column_metadata[0].children[0].nullable                     = false;
+  expected_metadata.column_metadata[0].children[0].children[0].name             = "human?";
+  expected_metadata.column_metadata[0].children[0].children[1].name             = "particulars";
+  expected_metadata.column_metadata[0].children[0].children[1].children[0].name = "weight";
+  expected_metadata.column_metadata[0].children[0].children[1].children[1].name = "age";
 
   auto filepath = ("ChunkedListOfStruct.parquet");
   cudf_io::chunked_parquet_writer_options args =
@@ -1440,13 +1441,13 @@ TEST_F(ParquetChunkedWriterTest, ListOfStructOfStructOfListOfList)
 
   cudf_io::table_input_metadata expected_metadata(table_1);
   expected_metadata.column_metadata[0].name                                     = "family";
-  expected_metadata.column_metadata[0].children[1].nullable                     = false;
-  expected_metadata.column_metadata[0].children[1].children[0].name             = "human?";
-  expected_metadata.column_metadata[0].children[1].children[1].name             = "particulars";
-  expected_metadata.column_metadata[0].children[1].children[1].children[0].name = "weight";
-  expected_metadata.column_metadata[0].children[1].children[1].children[1].name = "age";
-  expected_metadata.column_metadata[0].children[1].children[1].children[2].name = "land_unit";
-  expected_metadata.column_metadata[0].children[1].children[1].children[3].name = "flats";
+  expected_metadata.column_metadata[0].children[0].nullable                     = false;
+  expected_metadata.column_metadata[0].children[0].children[0].name             = "human?";
+  expected_metadata.column_metadata[0].children[0].children[1].name             = "particulars";
+  expected_metadata.column_metadata[0].children[0].children[1].children[0].name = "weight";
+  expected_metadata.column_metadata[0].children[0].children[1].children[1].name = "age";
+  expected_metadata.column_metadata[0].children[0].children[1].children[2].name = "land_unit";
+  expected_metadata.column_metadata[0].children[0].children[1].children[3].name = "flats";
 
   auto filepath = ("ListOfStructOfStructOfListOfList.parquet");
   cudf_io::chunked_parquet_writer_options args =
@@ -1642,17 +1643,17 @@ TEST_F(ParquetChunkedWriterTest, ForcedNullability)
 
   auto filepath = temp_env->get_temp_filepath("ChunkedNoNullable.parquet");
 
-  cudf::io::table_metadata_with_nullability nullable_metadata;
+  cudf_io::table_input_metadata metadata(*table1);
 
   // In the absence of prescribed per-column nullability in metadata, the writer assumes the worst
   // and considers all columns nullable. However cudf::concatenate will not force nulls in case no
   // columns are nullable. To get the expected result, we tell the writer the nullability of all
   // columns in advance.
-  nullable_metadata.column_nullable.insert(nullable_metadata.column_nullable.begin(), 5, false);
+  for (auto& col_meta : metadata.column_metadata) { col_meta.nullable = false; }
 
   cudf_io::chunked_parquet_writer_options args =
     cudf_io::chunked_parquet_writer_options::builder(cudf_io::sink_info{filepath})
-      .nullable_metadata(&nullable_metadata);
+      .table_metadata(&metadata);
   cudf_io::parquet_chunked_writer(args).write(*table1).write(*table2);
 
   cudf_io::parquet_reader_options read_opts =
@@ -1671,8 +1672,6 @@ TEST_F(ParquetChunkedWriterTest, ForcedNullabilityList)
 
   using lcw = cudf::test::lists_column_wrapper<int32_t>;
 
-  cudf::io::table_metadata_with_nullability nullable_metadata;
-
   // COL0 ====================
   // [1, 2, 3]
   // []
@@ -1686,9 +1685,6 @@ TEST_F(ParquetChunkedWriterTest, ForcedNullabilityList)
   // NULL
   lcw col01{{{7}, {}, {8, 9, 10, 11}, {}}, valids2};
 
-  nullable_metadata.column_nullable.push_back(true);   // List is nullable at first (root) level
-  nullable_metadata.column_nullable.push_back(false);  // non-nullable at second (leaf) level
-
   // COL1 (non-nested columns to test proper schema construction)
   size_t num_rows = static_cast<cudf::column_view>(col00).size();
   auto seq_col0   = random_values<int>(num_rows);
@@ -1697,18 +1693,21 @@ TEST_F(ParquetChunkedWriterTest, ForcedNullabilityList)
   column_wrapper<int> col10{seq_col0.begin(), seq_col0.end(), valids};
   column_wrapper<int> col11{seq_col1.begin(), seq_col1.end(), valids2};
 
-  nullable_metadata.column_nullable.push_back(true);
-
   auto table1 = table_view({col00, col10});
   auto table2 = table_view({col01, col11});
 
   auto full_table = cudf::concatenate({table1, table2});
 
+  cudf_io::table_input_metadata metadata(table1);
+  metadata.column_metadata[0].nullable = true;  // List is nullable at first (root) level
+  metadata.column_metadata[0].children[0].nullable = false;  // non-nullable at second (leaf) level
+  metadata.column_metadata[1].nullable             = true;
+
   auto filepath = temp_env->get_temp_filepath("ChunkedListNullable.parquet");
 
   cudf_io::chunked_parquet_writer_options args =
     cudf_io::chunked_parquet_writer_options::builder(cudf_io::sink_info{filepath})
-      .nullable_metadata(&nullable_metadata);
+      .table_metadata(&metadata);
   cudf_io::parquet_chunked_writer(args).write(table1).write(table2);
 
   cudf_io::parquet_reader_options read_opts =
@@ -2672,22 +2671,4 @@ TEST_F(ParquetReaderTest, DecimalRead)
   }
 }
 
-TEST_F(ParquetReaderTest, Struct)
-{
-  cudf_io::parquet_reader_options reader_opts =
-    cudf_io::parquet_reader_options_builder(cudf_io::source_info(
-      "/Users/dmakkar/Developer/Porting/temp/parq_struct/parquet_list_of_structs.parquet"));
-
-  cudf_io::read_parquet(reader_opts);
-
-  reader_opts = cudf_io::parquet_reader_options_builder(cudf_io::source_info(
-    "/Users/dmakkar/Developer/Porting/temp/parq_struct/parquet_complex.parquet"));
-
-  cudf_io::read_parquet(reader_opts);
-
-  reader_opts = cudf_io::parquet_reader_options_builder(cudf_io::source_info(
-    "/Users/dmakkar/Developer/Porting/temp/parq_struct/parquet_list_of_nullable_structs.parquet"));
-
-  cudf_io::read_parquet(reader_opts);
-}
 CUDF_TEST_PROGRAM_MAIN()

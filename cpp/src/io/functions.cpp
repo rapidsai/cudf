@@ -30,6 +30,7 @@
 #include <cudf/io/orc.hpp>
 #include <cudf/io/orc_metadata.hpp>
 #include <cudf/io/parquet.hpp>
+#include <cudf/lists/lists_column_view.hpp>
 #include <cudf/table/table.hpp>
 #include <cudf/utilities/error.hpp>
 
@@ -423,13 +424,20 @@ table_input_metadata::table_input_metadata(table_view const& table)
 {
   // Create a metadata heirarchy using `table`
   std::function<column_in_metadata(column_view const&)> get_children = [&](column_view const& col) {
-    std::vector<column_in_metadata> children_column_metadata;
-    std::transform(col.child_begin(),
-                   col.child_end(),
-                   std::back_inserter(children_column_metadata),
-                   get_children);
-    auto col_meta     = column_in_metadata{};
-    col_meta.children = std::move(children_column_metadata);
+    auto col_meta = column_in_metadata{};
+    if (col.type().id() == type_id::STRING) {
+      // For string columns, we do not want to generate the metadata for the children. We want to
+      // treat this as a leaf column
+      return col_meta;
+    } else if (col.type().id() == type_id::LIST) {
+      // For list columns, we do not want the user to set metadata for the "offsets" column. Its
+      // only logical child is the "child" column.
+      col_meta.children.emplace_back(
+        get_children(col.child(lists_column_view::child_column_index)));
+      return col_meta;
+    }
+    std::transform(
+      col.child_begin(), col.child_end(), std::back_inserter(col_meta.children), get_children);
     return col_meta;
   };
 

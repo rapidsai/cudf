@@ -850,6 +850,11 @@ class chunked_parquet_writer_options_builder {
   }
 
   // TODO: table input metadata/schema setters and getters and tests for chunked
+  chunked_parquet_writer_options_builder& table_metadata(table_input_metadata const* metadata)
+  {
+    options._table_meta = metadata;
+    return *this;
+  }
 
   /**
    * @brief Sets Sets the level of statistics in chunked_parquet_writer_options.

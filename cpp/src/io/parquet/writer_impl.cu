@@ -257,11 +257,11 @@ std::vector<schema_tree_node> construct_schema_tree(LinkedColVector const &linke
         list_schema_2.parent_idx      = schema.size() - 1;  // Parent is list_schema_1, last added.
         schema.push_back(std::move(list_schema_2));
 
-        CUDF_EXPECTS(col_meta.children.size() == 2,
-                     "List column's metadata should have exactly two children");
+        CUDF_EXPECTS(col_meta.children.size() == 1,
+                     "List column's metadata should have exactly one child");
 
         add_schema(col->children[lists_column_view::child_column_index],
-                   col_meta.children[lists_column_view::child_column_index],
+                   col_meta.children[0],
                    schema.size() - 1);
       } else {
         // if leaf, add current
