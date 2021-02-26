@@ -9,7 +9,7 @@ import pickle
 import sys
 import warnings
 from collections import OrderedDict, defaultdict
-from collections.abc import Iterable, Mapping, Sequence
+from collections.abc import Iterable, Sequence
 from typing import Any, Set, TypeVar
 
 import cupy
@@ -3445,11 +3445,6 @@ class DataFrame(Frame, Serializable):
                 "Only errors='ignore' is currently supported"
             )
 
-        if level:
-            raise NotImplementedError(
-                "Only level=False is currently supported"
-            )
-
         if mapper is None and index is None and columns is None:
             return self.copy(deep=copy)
 
@@ -3467,35 +3462,29 @@ class DataFrame(Frame, Serializable):
                     "Implicit conversion of index to "
                     "mixed type is not yet supported."
                 )
-            out = DataFrame(
-                index=self.index.replace(
+
+            if level is not None and isinstance(
+                self.index, cudf.core.multiindex.MultiIndex
+            ):
+                out_index = self.index.copy(deep=copy)
+                out_index.get_level_values(level).to_frame().replace(
                     to_replace=list(index.keys()),
-                    replacement=list(index.values()),
+                    value=list(index.values()),
+                    inplace=True,
                 )
-            )
+                out = DataFrame(index=out_index)
+            else:
+                out = DataFrame(
+                    index=self.index.replace(
+                        to_replace=list(index.keys()),
+                        replacement=list(index.values()),
+                    )
+                )
         else:
             out = DataFrame(index=self.index)
 
         if columns:
-            postfix = 1
-            if isinstance(columns, Mapping):
-                # It is possible for DataFrames with a MultiIndex columns
-                # object to have columns with the same name. The following
-                # use of _cols.items and ("_1", "_2"... allows the use of
-                # rename in this case
-                for key, col in self._data.items():
-                    if key in columns:
-                        if columns[key] in out._data:
-                            out_column = columns[key] + "_" + str(postfix)
-                            postfix += 1
-                        else:
-                            out_column = columns[key]
-                        out[out_column] = col
-                    else:
-                        out[key] = col
-            elif callable(columns):
-                for key, col in self._data.items():
-                    out[columns(key)] = col
+            out._data = self._data.rename_levels(mapper=columns, level=level)
         else:
             out._data = self._data.copy(deep=copy)
 
@@ -7528,10 +7517,11 @@ def merge(left, right, *args, **kwargs):
 
 # a bit of fanciness to inject docstring with left parameter
 merge_doc = DataFrame.merge.__doc__
-idx = merge_doc.find("right")
-merge.__doc__ = "".join(
-    [merge_doc[:idx], "\n\tleft : DataFrame\n\t", merge_doc[idx:]]
-)
+if merge_doc is not None:
+    idx = merge_doc.find("right")
+    merge.__doc__ = "".join(
+        [merge_doc[:idx], "\n\tleft : DataFrame\n\t", merge_doc[idx:]]
+    )
 
 
 def _align_indices(lhs, rhs):
