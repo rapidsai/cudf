@@ -63,57 +63,87 @@ long file_wrapper::size() const
   return _size;
 }
 
-#ifdef CUFILE_INSTALLED
+#ifdef CUFILE_INCLUDE
 /**
- * @brief Class that provides RAII for cuFile driver management.
- *
- * Should be used as a singleton. Sets the environment path to point to cudf cuFile config file
- * (enables compatilibity mode).
+ * @brief Class that dynamically loads the cuFile library and manages the cuFile driver.
  */
-class cufile_driver {
+class cufile_shim {
  private:
-  cufile_driver()
-  {
-    // dlopen
-    CUDF_EXPECTS(cuFileDriverOpen().err == CU_FILE_SUCCESS, "Failed to initialize cuFile driver");
-    // dlsym for each used API
-  }
+  cufile_shim();
 
  public:
-  static auto const *get_instance()
-  {
-    static bool first_call = true;
-    static std::unique_ptr<cufile_driver> instance;
-    if (first_call) {
-      try {
-        instance = std::unique_ptr<cufile_driver>(new cufile_driver());
-      } catch (...) {
-        first_call = false;
-        throw;
-      }
-      first_call = false;
-    } else if (!instance) {
-      CUDF_FAIL("Failed to initialize cuFile driver");
-    }
-    return instance.get();
+  cufile_shim(cufile_shim const &) = delete;
+  cufile_shim &operator=(cufile_shim const &) = delete;
+
+  static auto const *get_instance();
+
+  void *cf_lib                                        = nullptr;
+  decltype(cuFileDriverOpen) *driver_open             = nullptr;
+  decltype(cuFileDriverClose) *driver_close           = nullptr;
+  decltype(cuFileHandleRegister) *handle_register     = nullptr;
+  decltype(cuFileHandleDeregister) *handle_deregister = nullptr;
+  decltype(cuFileRead) *read                          = nullptr;
+  decltype(cuFileWrite) *write                        = nullptr;
+
+  ~cufile_shim()
+  {  // try-catch?
+    driver_close();
+    dlclose(cf_lib);
   }
-  ~cufile_driver() { cuFileDriverClose(); }
-  // forwards cufile APIs
 };
+
+cufile_shim::cufile_shim()
+{
+  cf_lib      = dlopen("libcufile.so", RTLD_NOW);
+  driver_open = reinterpret_cast<decltype(driver_open)>(dlsym(cf_lib, "cuFileDriverOpen"));
+  CUDF_EXPECTS(driver_open != nullptr, "could not find cuFile symbol");
+  driver_close = reinterpret_cast<decltype(driver_close)>(dlsym(cf_lib, "cuFileDriverClose"));
+  CUDF_EXPECTS(driver_close != nullptr, "could not find cuFile symbol");
+  handle_register =
+    reinterpret_cast<decltype(handle_register)>(dlsym(cf_lib, "cuFileHandleRegister"));
+  CUDF_EXPECTS(handle_register != nullptr, "could not find cuFile symbol");
+  handle_deregister =
+    reinterpret_cast<decltype(handle_deregister)>(dlsym(cf_lib, "cuFileHandleDeregister"));
+  CUDF_EXPECTS(handle_deregister != nullptr, "could not find cuFile symbol");
+  read = reinterpret_cast<decltype(read)>(dlsym(cf_lib, "cuFileRead"));
+  CUDF_EXPECTS(read != nullptr, "could not find cuFile symbol");
+  write = reinterpret_cast<decltype(write)>(dlsym(cf_lib, "cuFileWrite"));
+  CUDF_EXPECTS(write != nullptr, "could not find cuFile symbol");
+
+  CUDF_EXPECTS(driver_open().err == CU_FILE_SUCCESS, "Failed to initialize cuFile driver");
+}
+
+auto const *cufile_shim::get_instance()
+{
+  static bool first_call = true;
+  static std::unique_ptr<cufile_shim> instance;
+  if (first_call) {
+    try {
+      instance = std::unique_ptr<cufile_shim>(new cufile_shim());
+    } catch (...) {
+      first_call = false;
+      throw;
+    }
+    first_call = false;
+  } else if (!instance) {
+    CUDF_FAIL("Failed to initialize cuFile driver");
+  }
+  return instance.get();
+}
 
 void cufile_registered_file::register_handle()
 {
   CUfileDescr_t cufile_desc{};
   cufile_desc.handle.fd = _file.desc();
   cufile_desc.type      = CU_FILE_HANDLE_TYPE_OPAQUE_FD;
-  CUDF_EXPECTS(cuFileHandleRegister(&_handle, &cufile_desc).err == CU_FILE_SUCCESS,
+  CUDF_EXPECTS(shim->handle_register(&cf_handle, &cufile_desc).err == CU_FILE_SUCCESS,
                "Cannot register file handle with cuFile");
 }
 
-cufile_registered_file::~cufile_registered_file() { cuFileHandleDeregister(_handle); }
+cufile_registered_file::~cufile_registered_file() { shim->handle_deregister(cf_handle); }
 
 cufile_input_impl::cufile_input_impl(std::string const &filepath)
-  : driver{cufile_driver::get_instance()}, cf_file(driver, filepath, O_RDONLY | O_DIRECT)
+  : shim{cufile_shim::get_instance()}, cf_file(shim, filepath, O_RDONLY | O_DIRECT)
 {
 }
 
@@ -122,7 +152,7 @@ std::unique_ptr<datasource::buffer> cufile_input_impl::read(size_t offset,
                                                             rmm::cuda_stream_view stream)
 {
   rmm::device_buffer out_data(size, stream);
-  CUDF_EXPECTS(cuFileRead(cf_file.handle(), out_data.data(), size, offset, 0) != -1,
+  CUDF_EXPECTS(shim->read(cf_file.handle(), out_data.data(), size, offset, 0) != -1,
                "cuFile error reading from a file");
 
   return datasource::buffer::create(std::move(out_data));
@@ -133,28 +163,27 @@ size_t cufile_input_impl::read(size_t offset,
                                uint8_t *dst,
                                rmm::cuda_stream_view stream)
 {
-  CUDF_EXPECTS(cuFileRead(cf_file.handle(), dst, size, offset, 0) != -1,
+  CUDF_EXPECTS(shim->read(cf_file.handle(), dst, size, offset, 0) != -1,
                "cuFile error reading from a file");
   // have to read the requested size for now
   return size;
 }
 
 cufile_output_impl::cufile_output_impl(std::string const &filepath)
-  : driver{cufile_driver::get_instance()},
-    cf_file(driver, filepath, O_CREAT | O_RDWR | O_DIRECT, 0664)
+  : shim{cufile_shim::get_instance()}, cf_file(shim, filepath, O_CREAT | O_RDWR | O_DIRECT, 0664)
 {
 }
 
 void cufile_output_impl::write(void const *data, size_t offset, size_t size)
 {
-  CUDF_EXPECTS(cuFileWrite(cf_file.handle(), data, size, offset, 0) != -1,
+  CUDF_EXPECTS(shim->write(cf_file.handle(), data, size, offset, 0) != -1,
                "cuFile error writing to a file");
 }
 #endif
 
 std::unique_ptr<cufile_input_impl> make_cufile_input(std::string const &filepath)
 {
-#ifdef CUFILE_INSTALLED
+#ifdef CUFILE_INCLUDE
   try {
     return std::make_unique<cufile_input_impl>(filepath);
   } catch (...) {
@@ -165,7 +194,7 @@ std::unique_ptr<cufile_input_impl> make_cufile_input(std::string const &filepath
 
 std::unique_ptr<cufile_output_impl> make_cufile_output(std::string const &filepath)
 {
-#ifdef CUFILE_INSTALLED
+#ifdef CUFILE_INCLUDE
   try {
     return std::make_unique<cufile_output_impl>(filepath);
   } catch (...) {

@@ -16,7 +16,7 @@
 
 #pragma once
 
-#ifdef CUFILE_INSTALLED
+#ifdef CUFILE_INCLUDE
 #include <cufile.h>
 #endif
 
@@ -102,9 +102,9 @@ class cufile_output : public cufile_io_base {
   virtual void write(void const *data, size_t offset, size_t size) = 0;
 };
 
-#ifdef CUFILE_INSTALLED
+#ifdef CUFILE_INCLUDE
 
-class cufile_driver;
+class cufile_shim;
 /**
  * @brief Class that provides RAII for cuFile file registration.
  */
@@ -112,29 +112,29 @@ struct cufile_registered_file {
   void register_handle();
 
  public:
-  cufile_registered_file(cufile_driver const *driver, std::string const &filepath, int flags)
-    : _file(filepath, flags), _driver{driver}
+  cufile_registered_file(cufile_shim const *shim, std::string const &filepath, int flags)
+    : _file(filepath, flags), shim{shim}
   {
     register_handle();
   }
 
-  cufile_registered_file(cufile_driver const *driver,
+  cufile_registered_file(cufile_shim const *shim,
                          std::string const &filepath,
                          int flags,
                          mode_t mode)
-    : _file(filepath, flags, mode), _driver{driver}
+    : _file(filepath, flags, mode), shim{shim}
   {
     register_handle();
   }
 
-  auto handle() const noexcept { return _handle; }
+  auto const &handle() const noexcept { return cf_handle; }
 
   ~cufile_registered_file();
 
  private:
   file_wrapper const _file;
-  CUfileHandle_t _handle       = nullptr;
-  cufile_driver const *_driver = nullptr;
+  CUfileHandle_t cf_handle = nullptr;
+  cufile_shim const *shim  = nullptr;
 };
 
 /**
@@ -153,7 +153,7 @@ class cufile_input_impl final : public cufile_input {
   size_t read(size_t offset, size_t size, uint8_t *dst, rmm::cuda_stream_view stream) override;
 
  private:
-  cufile_driver const *driver;
+  cufile_shim const *shim = nullptr;
   cufile_registered_file const cf_file;
 };
 
@@ -169,7 +169,7 @@ class cufile_output_impl final : public cufile_output {
   void write(void const *data, size_t offset, size_t size) override;
 
  private:
-  cufile_driver const *driver;
+  cufile_shim const *shim = nullptr;
   cufile_registered_file const cf_file;
 };
 #else

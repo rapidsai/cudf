@@ -222,20 +222,11 @@ find_path(CUFILE_INCLUDE "cufile.h"
     HINTS "${GDS_ROOT}/lib"
           "/usr/local/cuda/lib64")
 
-find_library(CUFILE_LIBRARY "libcufile.so"
-    HINTS "${GDS_ROOT}/lib"
-          "/usr/local/cuda/lib64")
-
-message(STATUS "CUFILE: CUFILE_LIBRARY set to ${CUFILE_LIBRARY}")
 message(STATUS "CUFILE: CUFILE_INCLUDE set to ${CUFILE_INCLUDE}")
 
-if (CUFILE_INCLUDE AND CUFILE_LIBRARY)
-    add_library(cufile SHARED IMPORTED ${CUFILE_LIBRARY})
-    set_target_properties(cufile PROPERTIES IMPORTED_LOCATION ${CUFILE_LIBRARY})
-    set(CUFILE_INSTALLED TRUE)
-    add_compile_definitions(CUFILE_INSTALLED)
-endif (CUFILE_INCLUDE AND CUFILE_LIBRARY)
-
+if (CUFILE_INCLUDE)
+    add_compile_definitions(CUFILE_INCLUDE)
+endif (CUFILE_INCLUDE)
 ###################################################################################################
 # - RMM -------------------------------------------------------------------------------------------
 
@@ -328,9 +319,9 @@ include_directories("${CMAKE_BINARY_DIR}/include"
                     "${Boost_INCLUDE_DIRS}"
                     "${RMM_INCLUDE}"
                     "${DLPACK_INCLUDE}")
-if(CUFILE_INSTALLED)
+if(CUFILE_INCLUDE)
     include_directories("${CUFILE_INCLUDE}")
-endif(CUFILE_INSTALLED)
+endif(CUFILE_INCLUDE)
 
 if(CONDA_INCLUDE_DIRS)
     include_directories("${CONDA_INCLUDE_DIRS}")
@@ -545,9 +536,6 @@ function(add_library_module NAMESPACE MODULE MODULE_SOURCE_DIRS)
     target_compile_definitions("${NAMESPACE}_${MODULE}" PUBLIC "SPDLOG_ACTIVE_LEVEL=SPDLOG_LEVEL_${LOGGING_LEVEL}")
     add_dependencies("${NAMESPACE}_${MODULE}" stringify_run)
     target_link_libraries("${NAMESPACE}_${MODULE}" arrow arrow_cuda nvrtc ${CUDART_LIBRARY} cuda ${ZLIB_LIBRARIES} ${Boost_LIBRARIES})
-    if(CUFILE_INSTALLED)
-        target_link_libraries("${NAMESPACE}_${MODULE}" cufile)
-    endif(CUFILE_INSTALLED)
 
     add_library("${NAMESPACE}::${MODULE}" ALIAS "${NAMESPACE}_${MODULE}")
 endfunction()
