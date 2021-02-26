@@ -60,6 +60,7 @@ dependencies:
   - packaging
   - protobuf
   - nvtx>=0.2.1
+  - cachetools
   - pip:
       - git+https://github.com/dask/dask.git@master
       - git+https://github.com/dask/distributed.git@master

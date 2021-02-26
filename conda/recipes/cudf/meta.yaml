@@ -46,6 +46,7 @@ requirements:
     - {{ pin_compatible('cudatoolkit', max_pin='x.x') }}
     - nvtx >=0.2.1
     - packaging
+    - cachetools
 
 test:
   requires:
