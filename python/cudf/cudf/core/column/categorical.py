@@ -949,11 +949,13 @@ class CategoricalColumn(column.ColumnBase):
         if cudf.utils.dtypes.is_scalar(
             value
         ) and cudf._lib.scalar._is_null_host_scalar(value):
-            to_add_categories = []
+            to_add_categories = 0
         else:
-            to_add_categories = cudf.Index(value).difference(self.categories)
+            to_add_categories = len(
+                cudf.Index(value).difference(self.categories)
+            )
 
-        if len(to_add_categories):
+        if to_add_categories > 0:
             raise ValueError(
                 "Cannot setitem on a Categorical with a new "
                 "category, set the categories first"
@@ -1070,9 +1072,18 @@ class CategoricalColumn(column.ColumnBase):
         self, index: ColumnLike = None, nullable: bool = False, **kwargs
     ) -> pd.Series:
 
-        if self.categories.isnull().any():
-            col = self.copy(deep=True)
-            col[col.isnull()] = None
+        if self.categories.dtype.kind == "f":
+            new_mask = bools_to_mask(self.notnull())
+            col = column.build_categorical_column(
+                categories=self.dtype.categories._values,
+                codes=column.as_column(
+                    self.codes.base_data, dtype=self.codes.dtype
+                ),
+                mask=new_mask,
+                ordered=self.dtype.ordered,
+                offset=self.offset,
+                size=self.size,
+            )
         else:
             col = self
 
@@ -1211,16 +1222,34 @@ class CategoricalColumn(column.ColumnBase):
         )
 
     def isnull(self) -> ColumnBase:
-        """Identify missing values in a Column.
+        """
+        Identify missing values in a CategoricalColumn.
         """
         result = libcudf.unary.is_null(self)
 
         if self.categories.dtype.kind == "f":
             # Need to consider `np.nan` values incase
-            # of a float column
-            result = result | libcudf.unary.is_nan(
-                self.astype(self.categories.dtype)
-            )
+            # of an underlying float column
+            categories = libcudf.unary.is_nan(self.categories)
+            if categories.any():
+                code = self._encode(np.nan)
+                result = result | (self.codes == cudf.Scalar(code))
+
+        return result
+
+    def notnull(self) -> ColumnBase:
+        """
+        Identify non-missing values in a CategoricalColumn.
+        """
+        result = libcudf.unary.is_valid(self)
+
+        if self.categories.dtype.kind == "f":
+            # Need to consider `np.nan` values incase
+            # of an underlying float column
+            categories = libcudf.unary.is_nan(self.categories)
+            if categories.any():
+                code = self._encode(np.nan)
+                result = result & (self.codes != cudf.Scalar(code))
 
         return result
 
