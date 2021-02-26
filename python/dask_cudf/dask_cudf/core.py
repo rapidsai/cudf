@@ -368,7 +368,7 @@ class Series(_Frame, dd.core.Series):
 
     def count(self, split_every=False):
         return reduction(
-            self,
+            [self],
             chunk=M.count,
             aggregate=np.sum,
             split_every=split_every,
@@ -436,6 +436,8 @@ def _naive_var(ddf, meta, skipna, ddof, split_every, out):
 def _parallel_var(ddf, meta, skipna, split_every, out):
     def _local_var(x, skipna):
         n = len(x)
+        # TODO: x.sum()/n seems to be faster than x.mean()
+        # on Quadro RTX 8000 - Need to compare on V/A100
         avg = x.mean(skipna=skipna)
         m2 = ((x - avg) ** 2).sum(skipna=skipna)
         return n, avg, m2
@@ -666,11 +668,8 @@ def reduction(
         meta = _emulate(apply, aggregate, [[meta_chunk]], aggregate_kwargs)
     meta = dd.core.make_meta(meta)
 
-    for arg in args:
-        if isinstance(arg, _Frame):
-            dsk.update(arg.dask)
-
-    return dd.core.new_dd_object(dsk, b, meta, (None, None))
+    graph = HighLevelGraph.from_collections(b, dsk, dependencies=args)
+    return dd.core.new_dd_object(graph, b, meta, (None, None))
 
 
 def from_cudf(data, npartitions=None, chunksize=None, sort=True, name=None):

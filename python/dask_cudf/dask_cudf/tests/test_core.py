@@ -720,9 +720,7 @@ def test_series_describe():
     # NOTE: Removing `compute` is causing an
     # "incorrect dependencies" error here.
     dd.assert_eq(
-        dsr.describe().compute(),
-        pdsr.describe().compute(),
-        check_less_precise=3,
+        dsr.describe(), pdsr.describe(), check_less_precise=3,
     )
 
 
