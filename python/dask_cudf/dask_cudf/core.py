@@ -488,6 +488,8 @@ def _parallel_var(ddf, meta, skipna, split_every, out):
                 (local_name, p, depth - 1) for p in range(lstart, lstop)
             ]
             dsk[(local_name, group, depth)] = (_aggregate_var, node_list)
+    if height == 1:
+        group = depth = 0
     dsk[(name, 0)] = (_finalize_var, (local_name, group, depth))
 
     graph = HighLevelGraph.from_collections(name, dsk, dependencies=[num, ddf])
