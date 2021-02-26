@@ -711,6 +711,19 @@ def test_dataframe_set_index():
     assert_eq(ddf.compute(), pddf.compute())
 
 
+def test_series_describe():
+    random.seed(0)
+    sr = cudf.datasets.randomdata(20)["x"]
+    psr = sr.to_pandas()
+
+    dsr = dgd.from_cudf(sr, npartitions=4)
+    pdsr = dd.from_pandas(psr, npartitions=4)
+
+    dd.assert_eq(
+        dsr.describe(), pdsr.describe(), check_less_precise=3,
+    )
+
+
 def test_dataframe_describe():
     random.seed(0)
     df = cudf.datasets.randomdata(20)
@@ -722,6 +735,36 @@ def test_dataframe_describe():
     dd.assert_eq(
         ddf.describe(), pddf.describe(), check_exact=False, atol=0.0001
     )
+
+
+def test_zero_std_describe():
+    num = 84886781
+    df = cudf.DataFrame(
+        {
+            "x": np.full((20,), num, dtype=np.float64),
+            "y": np.full((20,), num, dtype=np.float64),
+        }
+    )
+    pdf = df.to_pandas()
+    ddf = dgd.from_cudf(df, npartitions=4)
+    pddf = dd.from_pandas(pdf, npartitions=4)
+
+    dd.assert_eq(ddf.describe(), pddf.describe(), check_less_precise=3)
+
+
+def test_large_numbers_var():
+    num = 8488678001
+    df = cudf.DataFrame(
+        {
+            "x": np.arange(num, num + 1000, dtype=np.float64),
+            "y": np.arange(num, num + 1000, dtype=np.float64),
+        }
+    )
+    pdf = df.to_pandas()
+    ddf = dgd.from_cudf(df, npartitions=4)
+    pddf = dd.from_pandas(pdf, npartitions=4)
+
+    dd.assert_eq(ddf.var(), pddf.var(), check_less_precise=3)
 
 
 def test_index_map_partitions():
