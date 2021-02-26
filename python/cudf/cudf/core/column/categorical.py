@@ -946,12 +946,14 @@ class CategoricalColumn(column.ColumnBase):
         )
 
     def __setitem__(self, key, value):
-        to_add_categories = cudf.Index(value).difference(self.categories)
+        if cudf.utils.dtypes.is_scalar(
+            value
+        ) and cudf._lib.scalar._is_null_host_scalar(value):
+            to_add_categories = []
+        else:
+            to_add_categories = cudf.Index(value).difference(self.categories)
 
-        if (
-            len(to_add_categories)
-            and not to_add_categories.isna()._values.all()
-        ):
+        if len(to_add_categories):
             raise ValueError(
                 "Cannot setitem on a Categorical with a new "
                 "category, set the categories first"
@@ -1067,11 +1069,18 @@ class CategoricalColumn(column.ColumnBase):
     def to_pandas(
         self, index: ColumnLike = None, nullable: bool = False, **kwargs
     ) -> pd.Series:
-        signed_dtype = min_signed_type(len(self.categories))
-        codes = self.cat().codes.astype(signed_dtype).fillna(-1).to_array()
-        categories = self.categories.to_pandas()
+
+        if self.categories.isnull().any():
+            col = self.copy(deep=True)
+            col[col.isnull()] = None
+        else:
+            col = self
+
+        signed_dtype = min_signed_type(len(col.categories))
+        codes = col.cat().codes.astype(signed_dtype).fillna(-1).to_array()
+        categories = col.categories.dropna(drop_nan=True).to_pandas()
         data = pd.Categorical.from_codes(
-            codes, categories=categories, ordered=self.ordered
+            codes, categories=categories, ordered=col.ordered
         )
         return pd.Series(data, index=index)
 
@@ -1200,6 +1209,20 @@ class CategoricalColumn(column.ColumnBase):
             size=output.size,
             ordered=self.dtype.ordered,
         )
+
+    def isnull(self) -> ColumnBase:
+        """Identify missing values in a Column.
+        """
+        result = libcudf.unary.is_null(self)
+
+        if self.categories.dtype.kind == "f":
+            # Need to consider `np.nan` values incase
+            # of a float column
+            result = result | libcudf.unary.is_nan(
+                self.astype(self.categories.dtype)
+            )
+
+        return result
 
     def fillna(
         self, fill_value: Any = None, method: Any = None, dtype: Dtype = None

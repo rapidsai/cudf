@@ -1417,3 +1417,59 @@ def test_mulitIndex_null_repr(gdi, expected_repr):
     actual_repr = gdi.__repr__()
 
     assert actual_repr.split() == expected_repr.split()
+
+
+def test_categorical_series_with_nan_repr():
+    series = cudf.Series(
+        [1, 2, np.nan, 10, np.nan, None], nan_as_null=False
+    ).astype("category")
+
+    expected_repr = textwrap.dedent(
+        """
+    0     1.0
+    1     2.0
+    2     NaN
+    3    10.0
+    4     NaN
+    5    <NA>
+    dtype: category
+    Categories (4, object): [1.0, 10.0, 2.0, NaN]
+    """
+    )
+
+    assert series.__repr__().split() == expected_repr.split()
+
+
+def test_categorical_dataframe_with_nan_repr():
+    series = cudf.Series(
+        [1, 2, np.nan, 10, np.nan, None], nan_as_null=False
+    ).astype("category")
+    df = cudf.DataFrame({"a": series})
+    expected_repr = textwrap.dedent(
+        """
+          a
+    0   1.0
+    1   2.0
+    2   NaN
+    3  10.0
+    4   NaN
+    5  <NA>
+    """
+    )
+
+    assert df.__repr__().split() == expected_repr.split()
+
+
+def test_categorical_index_with_nan_repr():
+    cat_index = cudf.Index(
+        cudf.Series(
+            [1, 2, np.nan, 10, np.nan, None], nan_as_null=False
+        ).astype("category")
+    )
+
+    expected_repr = (
+        "CategoricalIndex([1.0, 2.0, NaN, 10.0, NaN, <NA>], "
+        "categories=[1.0, 10.0, 2.0, NaN], ordered=False, dtype='category')"
+    )
+
+    assert cat_index.__repr__() == expected_repr

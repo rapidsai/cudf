@@ -762,3 +762,19 @@ def test_categorical_assignment(data, cat_dtype):
     pd_df.assign(cat_col=pd_categorical)
     cd_df.assign(cat_col=pd_categorical)
     assert_eq(pd_df, cd_df)
+
+
+def test_categorical_allow_nan():
+    gs = cudf.Series([1, 2, np.nan, 10, np.nan, None], nan_as_null=False)
+    gs = gs.astype("category")
+    expected_codes = cudf.Series([0, 1, 3, 2, 3, None], dtype="uint8")
+    assert_eq(expected_codes, gs.cat.codes)
+
+    expected_categories = cudf.Index([1.0, 2.0, 10.0, np.nan], dtype="float64")
+    assert_eq(expected_categories, gs.cat.categories)
+
+    actual_ps = gs.to_pandas()
+    expected_ps = pd.Series(
+        [1.0, 2.0, np.nan, 10.0, np.nan, np.nan], dtype="category"
+    )
+    assert_eq(actual_ps, expected_ps)

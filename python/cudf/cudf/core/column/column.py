@@ -1063,14 +1063,14 @@ class ColumnBase(Column, Serializable):
 
         # columns include null index in factorization; remove:
         if self.has_nulls:
-            cats = cats.dropna()
+            cats = cats._column.dropna(drop_nan=False)
             min_type = min_unsigned_type(len(cats), 8)
             labels = labels - 1
             if np.dtype(min_type).itemsize < labels.dtype.itemsize:
                 labels = labels.astype(min_type)
 
         return build_categorical_column(
-            categories=cats._column,
+            categories=cats,
             codes=labels._column,
             mask=self.mask,
             ordered=ordered,
@@ -2077,9 +2077,11 @@ def _construct_array(
         arbitrary = cupy.asarray(arbitrary, dtype=dtype)
     except (TypeError, ValueError):
         native_dtype = dtype
-        if dtype is None and pd.api.types.infer_dtype(arbitrary) in (
-            "mixed",
-            "mixed-integer",
+        if (
+            dtype is None
+            and not cudf._lib.scalar._is_null_host_scalar(arbitrary)
+            and pd.api.types.infer_dtype(arbitrary)
+            in ("mixed", "mixed-integer",)
         ):
             native_dtype = "object"
         arbitrary = np.asarray(

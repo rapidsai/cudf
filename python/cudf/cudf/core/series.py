@@ -1070,7 +1070,13 @@ class Series(Frame, Serializable):
                 else get_option("display.min_rows")
             )
             show_dimensions = get_option("display.show_dimensions")
-            output = preprocess.to_pandas().to_string(
+            if preprocess._column.categories.dtype.kind == "f":
+                pd_series = (
+                    preprocess.astype("str").to_pandas().astype("category")
+                )
+            else:
+                pd_series = preprocess.to_pandas()
+            output = pd_series.to_string(
                 name=self.name,
                 dtype=self.dtype,
                 min_rows=min_rows,
@@ -1085,6 +1091,8 @@ class Series(Frame, Serializable):
 
         if isinstance(preprocess._column, cudf.core.column.CategoricalColumn):
             category_memory = lines[-1]
+            if preprocess._column.categories.dtype.kind == "f":
+                category_memory = category_memory.replace("'", "")
             lines = lines[:-1]
         if len(lines) > 1:
             if lines[-1].startswith("Name: "):
