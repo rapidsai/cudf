@@ -1,9 +1,9 @@
 # Copyright (c) 2020-2021, NVIDIA CORPORATION.
+
 from __future__ import annotations
 
 import copy
 import functools
-import operator
 import warnings
 from collections import OrderedDict, abc as abc
 from typing import TYPE_CHECKING, Any, Dict, Tuple, TypeVar, overload
@@ -339,9 +339,11 @@ class Frame(libcudf.table.Table):
                 np.intersect1d, all_columns_list
             )
             # get column names not present in all objs
-            non_intersecting_columns = (
-                functools.reduce(operator.or_, (obj.columns for obj in objs))
-                ^ intersecting_columns
+            union_of_columns = functools.reduce(
+                pd.Index.union, [obj.columns for obj in objs]
+            )
+            non_intersecting_columns = union_of_columns.symmetric_difference(
+                intersecting_columns
             )
             names = OrderedDict.fromkeys(intersecting_columns).keys()
 

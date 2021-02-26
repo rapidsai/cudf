@@ -1,3 +1,5 @@
+# Copyright (c) 2021, NVIDIA CORPORATION.
+
 import random
 
 import cupy as cp
@@ -658,7 +660,7 @@ def test_make_meta_backends(index):
 @pytest.mark.parametrize(
     "data",
     [
-        pd.Series([]),
+        pd.Series([], dtype="float64"),
         pd.DataFrame({"abc": [], "xyz": []}),
         pd.Series([1, 2, 10, 11]),
         pd.DataFrame({"abc": [1, 2, 10, 11], "xyz": [100, 12, 120, 1]}),
@@ -717,7 +719,9 @@ def test_dataframe_describe():
     ddf = dgd.from_cudf(df, npartitions=4)
     pddf = dd.from_pandas(pdf, npartitions=4)
 
-    dd.assert_eq(ddf.describe(), pddf.describe(), check_less_precise=3)
+    dd.assert_eq(
+        ddf.describe(), pddf.describe(), check_exact=False, atol=0.0001
+    )
 
 
 def test_index_map_partitions():
