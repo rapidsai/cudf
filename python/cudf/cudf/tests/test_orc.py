@@ -8,6 +8,7 @@ import numpy as np
 import pandas as pd
 import pyarrow as pa
 import pyarrow.orc
+import pyorc
 import pytest
 
 import cudf
@@ -316,6 +317,30 @@ def test_orc_read_rows(datadir, skiprows, num_rows):
     pdf = pdf[skiprows : skiprows + num_rows]
 
     np.testing.assert_allclose(pdf, gdf)
+
+
+def test_orc_read_skiprows(tmpdir):
+    buff = BytesIO()
+    df = pd.DataFrame(
+        {"a": [1, 0, 1, 0, None, 1, 1, 1, 0, None, 0, 0, 1, 1, 1, 1]},
+        dtype=pd.BooleanDtype(),
+    )
+    writer = pyorc.Writer(buff, pyorc.Struct(a=pyorc.Boolean()))
+    tuples = list(
+        map(
+            lambda x: (None,) if x[0] is pd.NA else x,
+            list(df.itertuples(index=False, name=None)),
+        )
+    )
+    writer.writerows(tuples)
+    writer.close()
+
+    skiprows = 10
+
+    expected = cudf.read_orc(buff)[skiprows::].reset_index(drop=True)
+    got = cudf.read_orc(buff, skiprows=skiprows)
+
+    assert_eq(expected, got)
 
 
 def test_orc_reader_uncompressed_block(datadir):

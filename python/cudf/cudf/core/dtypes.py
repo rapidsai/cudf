@@ -8,6 +8,7 @@ import numpy as np
 import pandas as pd
 import pyarrow as pa
 from pandas.api.extensions import ExtensionDtype
+from pandas.core.arrays._arrow_utils import ArrowIntervalType
 
 import cudf
 from cudf._typing import Dtype
@@ -219,7 +220,7 @@ class StructDtype(ExtensionDtype):
         return self._typ.equals(other._typ)
 
     def __repr__(self):
-        return f"StructDtype({self.fields})"
+        return f"{type(self).__name__}({self.fields})"
 
     def __hash__(self):
         return hash(self._typ)
@@ -304,3 +305,39 @@ class Decimal64Dtype(ExtensionDtype):
             )
         if abs(scale) > precision:
             raise ValueError(f"scale={scale} exceeds precision={precision}")
+
+
+class IntervalDtype(StructDtype):
+    name = "interval"
+
+    def __init__(self, subtype, closed="right"):
+        """
+        subtype: str, np.dtype
+            The dtype of the Interval bounds.
+        closed: {‘right’, ‘left’, ‘both’, ‘neither’}, default ‘right’
+            Whether the interval is closed on the left-side, right-side,
+            both or neither. See the Notes for more detailed explanation.
+        """
+        super().__init__(fields={"left": subtype, "right": subtype})
+
+        if closed in ["left", "right", "neither", "both"]:
+            self.closed = closed
+        else:
+            raise ValueError("closed value is not valid")
+
+    @property
+    def subtype(self):
+        return self.fields["left"]
+
+    def __repr__(self):
+        return f"interval[{self.fields['left']}]"
+
+    @classmethod
+    def from_arrow(cls, typ):
+        return IntervalDtype(typ.subtype.to_pandas_dtype(), typ.closed)
+
+    def to_arrow(self):
+
+        return ArrowIntervalType(
+            pa.from_numpy_dtype(self.subtype), self.closed
+        )
