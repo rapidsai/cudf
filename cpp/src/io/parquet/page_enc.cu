@@ -2074,7 +2074,7 @@ dremel_data get_dremel_data(column_view h_col,
           if (d_nullability[l]) {
             // TODO(cp): consolidate this functor with similar functionality thrice in this function
             // and one more in gpuEncodePages.
-            if (col.nullable() and bit_is_set(col.null_mask(), i)) {
+            if (not col.nullable() or bit_is_set(col.null_mask(), i)) {
               ++def;
             } else {  // We have found the shallowest level at which this row is null
               break;

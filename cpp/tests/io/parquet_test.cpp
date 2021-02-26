@@ -1448,7 +1448,7 @@ TEST_F(ParquetChunkedWriterTest, ListOfStructOfStructOfListOfList)
   expected_metadata.column_metadata[0].children[1].children[1].children[2].name = "land_unit";
   expected_metadata.column_metadata[0].children[1].children[1].children[3].name = "flats";
 
-  auto filepath = ("ChunkedListOfStruct.parquet");
+  auto filepath = ("ListOfStructOfStructOfListOfList.parquet");
   cudf_io::chunked_parquet_writer_options args =
     cudf_io::chunked_parquet_writer_options::builder(cudf_io::sink_info{filepath});
   args.set_input_metadata(&expected_metadata);
