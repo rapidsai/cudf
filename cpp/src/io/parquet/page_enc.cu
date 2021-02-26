@@ -1760,33 +1760,6 @@ dremel_data get_dremel_data(column_view h_col,
     return std::make_tuple(std::move(empties), std::move(empties_idx), empties_size);
   };
 
-  // TODO: copy logic to get max_vals_size before cleaning up old code below
-  // // Reverse the nesting in order to merge the deepest level with the leaf first and merge bottom
-  // // up
-  // auto curr_col        = h_col;
-  size_t max_vals_size = 40;
-  // size_t max_vals_size = 0;
-  // std::vector<column_view> nesting_levels;
-  // std::vector<uint8_t> def_at_level;
-  // size_type level       = 0;
-  // auto add_def_at_level = [&](size_type level) {
-  //   auto is_level_nullable =
-  //     curr_col.nullable() or (not level_nullability.empty() and level_nullability[level]);
-  //   // For struct levels, this should be ? 1 : 0
-  //   def_at_level.push_back(is_level_nullable ? 2 : 1);
-  // };
-  // while (curr_col.type().id() == type_id::LIST) {
-  //   nesting_levels.push_back(curr_col);
-  //   add_def_at_level(level);
-  //   auto lcv = lists_column_view(curr_col);
-  //   max_vals_size += lcv.offsets().size();
-  //   curr_col = lcv.child();
-  //   level++;
-  // }
-  // // One more entry for leaf col
-  // add_def_at_level(level);
-  // max_vals_size += curr_col.size();
-
   auto curr_col = h_col;
   std::vector<column_view> nesting_levels;
   std::vector<uint8_t> def_at_level;
@@ -1874,13 +1847,13 @@ dremel_data get_dremel_data(column_view h_col,
   print(d_column_offsets, "offsets");
   print(d_column_ends, "ends");
 
-  thrust::host_vector<size_type> column_offsets(nesting_levels.size() + 1);
+  thrust::host_vector<size_type> column_offsets(nesting_levels.size());
   CUDA_TRY(cudaMemcpyAsync(column_offsets.data(),
                            d_column_offsets.data(),
                            d_column_offsets.size() * sizeof(size_type),
                            cudaMemcpyDeviceToHost,
                            stream.value()));
-  thrust::host_vector<size_type> column_ends(nesting_levels.size() + 1);
+  thrust::host_vector<size_type> column_ends(nesting_levels.size());
   CUDA_TRY(cudaMemcpyAsync(column_ends.data(),
                            d_column_ends.data(),
                            d_column_ends.size() * sizeof(size_type),
@@ -1888,6 +1861,11 @@ dremel_data get_dremel_data(column_view h_col,
                            stream.value()));
 
   stream.synchronize();
+
+  size_t max_vals_size = 0;
+  for (size_t l = 0; l < column_offsets.size(); ++l) {
+    max_vals_size += column_ends[l] - column_offsets[l];
+  }
 
   rmm::device_uvector<uint8_t> rep_level(max_vals_size, stream);
   rmm::device_uvector<uint8_t> def_level(max_vals_size, stream);
