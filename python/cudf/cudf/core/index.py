@@ -2753,6 +2753,7 @@ class interval_range(GenericIndex):
         )
         return cast(interval_range, IntervalIndex(interval_col))
 
+
 class IntervalIndex(GenericIndex):
     """
     Immutable index of intervals that are closed on the same side.
