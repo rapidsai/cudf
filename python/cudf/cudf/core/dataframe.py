@@ -9,8 +9,8 @@ import pickle
 import sys
 import warnings
 from collections import OrderedDict, defaultdict
-from collections.abc import Iterable, Mapping, Sequence
-from typing import Any, Set
+from collections.abc import Iterable, Sequence
+from typing import Any, Set, TypeVar
 
 import cupy
 import numpy as np
@@ -39,6 +39,7 @@ from cudf.core.window import Rolling
 from cudf.utils import applyutils, docutils, ioutils, queryutils, utils
 from cudf.utils.docutils import copy_docstring
 from cudf.utils.dtypes import (
+    can_convert_to_column,
     cudf_dtype_from_pydata_dtype,
     find_common_type,
     is_categorical_dtype,
@@ -52,6 +53,8 @@ from cudf.utils.dtypes import (
     numeric_normalize_types,
 )
 from cudf.utils.utils import OrderedColumnDict
+
+T = TypeVar("T", bound="DataFrame")
 
 
 def _unique_name(existing_names, suffix="_unique_name"):
@@ -207,20 +210,7 @@ class DataFrame(Frame, Serializable):
         if isinstance(columns, (Series, cudf.Index)):
             columns = columns.to_pandas()
 
-        if isinstance(data, ColumnAccessor):
-            if index is None:
-                index = as_index(range(data.nrows))
-            else:
-                index = as_index(index)
-            self._index = index
-
-            if columns is not None:
-                self._data = data
-                self._reindex(columns=columns, deep=True, inplace=True)
-            else:
-                self._data = data
-
-        elif isinstance(data, (DataFrame, pd.DataFrame)):
+        if isinstance(data, (DataFrame, pd.DataFrame)):
             if isinstance(data, pd.DataFrame):
                 data = self.from_pandas(data)
 
@@ -250,7 +240,6 @@ class DataFrame(Frame, Serializable):
             else:
                 self._index = as_index(index)
             if columns is not None:
-
                 self._data = ColumnAccessor(
                     OrderedDict.fromkeys(
                         columns,
@@ -420,9 +409,12 @@ class DataFrame(Frame, Serializable):
             index = as_index(index)
 
         self._index = as_index(index)
-
         # list-of-dicts case
         if len(data) > 0 and isinstance(data[0], dict):
+            data = DataFrame.from_pandas(pd.DataFrame(data))
+            self._data = data._data
+        # interval in a list
+        elif len(data) > 0 and isinstance(data[0], pd._libs.interval.Interval):
             data = DataFrame.from_pandas(pd.DataFrame(data))
             self._data = data._data
         else:
@@ -500,6 +492,17 @@ class DataFrame(Frame, Serializable):
         out = cls.__new__(cls)
         out._data = table._data
         out._index = index
+        return out
+
+    @classmethod
+    def _from_data(cls, data, index=None, columns=None):
+        out = cls.__new__(cls)
+        out._data = data
+        if index is None:
+            index = cudf.Index(range(data.nrows))
+        out._index = index
+        if columns is not None:
+            out.columns = columns
         return out
 
     @staticmethod
@@ -684,20 +687,9 @@ class DataFrame(Frame, Serializable):
         elif isinstance(arg, slice):
             return self._slice(arg)
 
-        elif isinstance(
-            arg,
-            (
-                list,
-                cupy.ndarray,
-                np.ndarray,
-                pd.Series,
-                Series,
-                Index,
-                pd.Index,
-            ),
-        ):
+        elif can_convert_to_column(arg):
             mask = arg
-            if isinstance(mask, list):
+            if is_list_like(mask):
                 mask = pd.Series(mask)
             if mask.dtype == "bool":
                 return self._apply_boolean_mask(mask)
@@ -777,11 +769,9 @@ class DataFrame(Frame, Serializable):
                     # pandas raises key error here
                     self.insert(len(self._data), arg, value)
 
-        elif isinstance(
-            arg, (list, np.ndarray, pd.Series, Series, Index, pd.Index)
-        ):
+        elif can_convert_to_column(arg):
             mask = arg
-            if isinstance(mask, list):
+            if is_list_like(mask):
                 mask = np.array(mask)
 
             if mask.dtype == "bool":
@@ -831,6 +821,66 @@ class DataFrame(Frame, Serializable):
         columns = sum(col.__sizeof__() for col in self._data.columns)
         index = self._index.__sizeof__()
         return columns + index
+
+    def _slice(self: T, arg: slice) -> T:
+        """
+       _slice : slice the frame as per the arg
+
+       Parameters
+       ----------
+       arg : should always be of type slice
+
+       """
+        from cudf.core.index import RangeIndex
+
+        num_rows = len(self)
+        if num_rows == 0:
+            return self
+        start, stop, stride = arg.indices(num_rows)
+
+        # This is just to handle RangeIndex type, stop
+        # it from materializing unnecessarily
+        keep_index = True
+        if self.index is not None and isinstance(self.index, RangeIndex):
+            if self._num_columns == 0:
+                result = self._empty_like(keep_index)
+                result._index = self.index[start:stop]
+                return result
+            keep_index = False
+
+        # For decreasing slices, terminal at before-the-zero
+        # position is preserved.
+        if start < 0:
+            start = start + num_rows
+        if stop < 0 and not (stride < 0 and stop == -1):
+            stop = stop + num_rows
+
+        if start > stop and (stride is None or stride == 1):
+            return self._empty_like(keep_index)
+        else:
+            start = len(self) if start > num_rows else start
+            stop = len(self) if stop > num_rows else stop
+
+            if stride is not None and stride != 1:
+                return self._gather(
+                    cudf.core.column.arange(
+                        start, stop=stop, step=stride, dtype=np.int32
+                    )
+                )
+            else:
+                result = self._from_table(
+                    libcudf.copying.table_slice(
+                        self, [start, stop], keep_index
+                    )[0]
+                )
+
+                result._copy_type_metadata(self, include_index=keep_index)
+                # Adding index of type RangeIndex back to
+                # result
+                if keep_index is False and self.index is not None:
+                    result.index = self.index[start:stop]
+                result.columns = self.columns
+                return result
 
     def memory_usage(self, index=True, deep=False):
         """
@@ -1332,12 +1382,14 @@ class DataFrame(Frame, Serializable):
             elif isinstance(labels, tuple):
                 nlevels = len(labels)
             if self._data.multiindex is False or nlevels == self._data.nlevels:
-                return self._constructor_sliced(
-                    new_data, name=labels, index=self.index
+                out = self._constructor_sliced()._from_data(
+                    new_data, index=self.index, name=labels
                 )
-        return self._constructor(
-            new_data, columns=new_data.to_pandas_index(), index=self.index
+                return out
+        out = self._constructor()._from_data(
+            new_data, index=self.index, columns=new_data.to_pandas_index()
         )
+        return out
 
     # unary, binary, rbinary, orderedcompare, unorderedcompare
     def _apply_op(self, fn, other=None, fill_value=None):
@@ -3036,21 +3088,6 @@ class DataFrame(Frame, Serializable):
         out.columns = self.columns
         return out
 
-    @annotate("DATAFRAME_COPY", color="cyan", domain="cudf_python")
-    def copy(self, deep=True):
-        """
-        Returns a copy of this dataframe
-
-        Parameters
-        ----------
-        deep: bool
-           Make a full copy of Series columns and Index at the GPU level, or
-           create a new allocation with references.
-        """
-        out = DataFrame(data=self._data.copy(deep=deep))
-        out.index = self.index.copy(deep=deep)
-        return out
-
     def __copy__(self):
         return self.copy(deep=True)
 
@@ -3408,11 +3445,6 @@ class DataFrame(Frame, Serializable):
                 "Only errors='ignore' is currently supported"
             )
 
-        if level:
-            raise NotImplementedError(
-                "Only level=False is currently supported"
-            )
-
         if mapper is None and index is None and columns is None:
             return self.copy(deep=copy)
 
@@ -3430,35 +3462,29 @@ class DataFrame(Frame, Serializable):
                     "Implicit conversion of index to "
                     "mixed type is not yet supported."
                 )
-            out = DataFrame(
-                index=self.index.replace(
+
+            if level is not None and isinstance(
+                self.index, cudf.core.multiindex.MultiIndex
+            ):
+                out_index = self.index.copy(deep=copy)
+                out_index.get_level_values(level).to_frame().replace(
                     to_replace=list(index.keys()),
-                    replacement=list(index.values()),
+                    value=list(index.values()),
+                    inplace=True,
                 )
-            )
+                out = DataFrame(index=out_index)
+            else:
+                out = DataFrame(
+                    index=self.index.replace(
+                        to_replace=list(index.keys()),
+                        replacement=list(index.values()),
+                    )
+                )
         else:
             out = DataFrame(index=self.index)
 
         if columns:
-            postfix = 1
-            if isinstance(columns, Mapping):
-                # It is possible for DataFrames with a MultiIndex columns
-                # object to have columns with the same name. The following
-                # use of _cols.items and ("_1", "_2"... allows the use of
-                # rename in this case
-                for key, col in self._data.items():
-                    if key in columns:
-                        if columns[key] in out._data:
-                            out_column = columns[key] + "_" + str(postfix)
-                            postfix += 1
-                        else:
-                            out_column = columns[key]
-                        out[out_column] = col
-                    else:
-                        out[key] = col
-            elif callable(columns):
-                for key, col in self._data.items():
-                    out[columns(key)] = col
+            out._data = self._data.rename_levels(mapper=columns, level=level)
         else:
             out._data = self._data.copy(deep=copy)
 
@@ -7491,10 +7517,11 @@ def merge(left, right, *args, **kwargs):
 
 # a bit of fanciness to inject docstring with left parameter
 merge_doc = DataFrame.merge.__doc__
-idx = merge_doc.find("right")
-merge.__doc__ = "".join(
-    [merge_doc[:idx], "\n\tleft : DataFrame\n\t", merge_doc[idx:]]
-)
+if merge_doc is not None:
+    idx = merge_doc.find("right")
+    merge.__doc__ = "".join(
+        [merge_doc[:idx], "\n\tleft : DataFrame\n\t", merge_doc[idx:]]
+    )
 
 
 def _align_indices(lhs, rhs):

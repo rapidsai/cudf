@@ -113,7 +113,7 @@ std::vector<std::unique_ptr<column>> generate_lists(bool include_validity)
   using LCW = cudf::test::lists_column_wrapper<int>;
 
   if(include_validity){
-    auto valids = cudf::test::make_counting_transform_iterator(0, [](auto i) { return i % 2 == 0; });
+    auto valids = cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i % 2 == 0; });
     cudf::test::lists_column_wrapper<int> list0{{1, 2, 3},
                                           {4, 5},
                                           {6},

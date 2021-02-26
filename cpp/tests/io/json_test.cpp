@@ -20,17 +20,16 @@
 #include <cudf_test/cudf_gtest.hpp>
 #include <cudf_test/type_lists.hpp>
 
+#include <cudf/detail/iterator.cuh>
 #include <cudf/io/datasource.hpp>
+#include <cudf/io/json.hpp>
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/table/table.hpp>
 #include <cudf/table/table_view.hpp>
 
-#include <cudf/io/json.hpp>
-
 #include <arrow/io/api.h>
 
 #include <fstream>
-
 #include <type_traits>
 
 #define wrapper cudf::test::fixed_width_column_wrapper
@@ -165,7 +164,7 @@ TEST_F(JsonReaderTest, BasicJsonLines)
   EXPECT_EQ(result.metadata.column_names[0], "0");
   EXPECT_EQ(result.metadata.column_names[1], "1");
 
-  auto validity = cudf::test::make_counting_transform_iterator(0, [](auto i) { return true; });
+  auto validity = cudf::detail::make_counting_transform_iterator(0, [](auto i) { return true; });
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(result.tbl->get_column(0), int_wrapper{{1, 2, 3}, validity});
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(result.tbl->get_column(1),
@@ -190,7 +189,7 @@ TEST_F(JsonReaderTest, FloatingPoint)
   EXPECT_EQ(result.tbl->num_columns(), 1);
   EXPECT_EQ(result.tbl->get_column(0).type().id(), cudf::type_id::FLOAT32);
 
-  auto validity = cudf::test::make_counting_transform_iterator(0, [](auto i) { return true; });
+  auto validity = cudf::detail::make_counting_transform_iterator(0, [](auto i) { return true; });
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(
     result.tbl->get_column(0),
@@ -223,7 +222,7 @@ TEST_F(JsonReaderTest, JsonLinesStrings)
   EXPECT_EQ(result.metadata.column_names[1], "1");
   EXPECT_EQ(result.metadata.column_names[2], "2");
 
-  auto validity = cudf::test::make_counting_transform_iterator(0, [](auto i) { return true; });
+  auto validity = cudf::detail::make_counting_transform_iterator(0, [](auto i) { return true; });
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(result.tbl->get_column(0), int_wrapper{{1, 2}, validity});
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(result.tbl->get_column(1), float64_wrapper{{1.1, 2.2}, validity});
@@ -270,7 +269,7 @@ TEST_F(JsonReaderTest, MultiColumn)
       .lines(true);
   cudf_io::table_with_metadata result = cudf_io::read_json(in_options);
 
-  auto validity = cudf::test::make_counting_transform_iterator(0, [](auto i) { return true; });
+  auto validity = cudf::detail::make_counting_transform_iterator(0, [](auto i) { return true; });
 
   const auto view = result.tbl->view();
 
@@ -325,7 +324,7 @@ TEST_F(JsonReaderTest, Booleans)
   EXPECT_EQ(result.tbl->num_columns(), 1);
   EXPECT_EQ(result.tbl->get_column(0).type().id(), cudf::type_id::BOOL8);
 
-  auto validity = cudf::test::make_counting_transform_iterator(0, [](auto i) { return true; });
+  auto validity = cudf::detail::make_counting_transform_iterator(0, [](auto i) { return true; });
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(result.tbl->get_column(0),
                                  bool_wrapper{{true, true, false, false, true}, validity});
@@ -352,7 +351,7 @@ TEST_F(JsonReaderTest, Dates)
   EXPECT_EQ(result.tbl->num_columns(), 1);
   EXPECT_EQ(result.tbl->get_column(0).type().id(), cudf::type_id::TIMESTAMP_MILLISECONDS);
 
-  auto validity = cudf::test::make_counting_transform_iterator(0, [](auto i) { return true; });
+  auto validity = cudf::detail::make_counting_transform_iterator(0, [](auto i) { return true; });
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(result.tbl->get_column(0),
                                  timestamp_ms_wrapper{{983750400000,
@@ -388,7 +387,7 @@ TEST_F(JsonReaderTest, Durations)
   EXPECT_EQ(result.tbl->num_columns(), 1);
   EXPECT_EQ(result.tbl->get_column(0).type().id(), cudf::type_id::DURATION_NANOSECONDS);
 
-  auto validity = cudf::test::make_counting_transform_iterator(0, [](auto i) { return true; });
+  auto validity = cudf::detail::make_counting_transform_iterator(0, [](auto i) { return true; });
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(
     result.tbl->get_column(0),
@@ -424,7 +423,7 @@ TEST_F(JsonReaderTest, JsonLinesDtypeInference)
   EXPECT_EQ(std::string(result.metadata.column_names[1]), "1");
   EXPECT_EQ(std::string(result.metadata.column_names[2]), "2");
 
-  auto validity = cudf::test::make_counting_transform_iterator(0, [](auto i) { return true; });
+  auto validity = cudf::detail::make_counting_transform_iterator(0, [](auto i) { return true; });
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(result.tbl->get_column(0), int64_wrapper{{100, 200}, validity});
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(result.tbl->get_column(1), float64_wrapper{{1.1, 2.2}, validity});
@@ -453,7 +452,7 @@ TEST_F(JsonReaderTest, JsonLinesFileInput)
   EXPECT_EQ(std::string(result.metadata.column_names[0]), "0");
   EXPECT_EQ(std::string(result.metadata.column_names[1]), "1");
 
-  auto validity = cudf::test::make_counting_transform_iterator(0, [](auto i) { return true; });
+  auto validity = cudf::detail::make_counting_transform_iterator(0, [](auto i) { return true; });
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(result.tbl->get_column(0), int64_wrapper{{11, 22}, validity});
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(result.tbl->get_column(1), float64_wrapper{{1.1, 2.2}, validity});
@@ -480,7 +479,7 @@ TEST_F(JsonReaderTest, JsonLinesByteRange)
   EXPECT_EQ(result.tbl->get_column(0).type().id(), cudf::type_id::INT64);
   EXPECT_EQ(std::string(result.metadata.column_names[0]), "0");
 
-  auto validity = cudf::test::make_counting_transform_iterator(0, [](auto i) { return true; });
+  auto validity = cudf::detail::make_counting_transform_iterator(0, [](auto i) { return true; });
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(result.tbl->get_column(0),
                                  int64_wrapper{{3000, 4000, 5000}, validity});
@@ -506,7 +505,7 @@ TEST_F(JsonReaderTest, JsonLinesObjects)
   EXPECT_EQ(result.tbl->get_column(1).type().id(), cudf::type_id::FLOAT64);
   EXPECT_EQ(std::string(result.metadata.column_names[1]), "col2");
 
-  auto validity = cudf::test::make_counting_transform_iterator(0, [](auto i) { return true; });
+  auto validity = cudf::detail::make_counting_transform_iterator(0, [](auto i) { return true; });
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(result.tbl->get_column(0), int64_wrapper{{1}, validity});
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(result.tbl->get_column(1), float64_wrapper{{2.0}, validity});
@@ -532,7 +531,7 @@ TEST_F(JsonReaderTest, JsonLinesObjectsStrings)
     EXPECT_EQ(std::string(result.metadata.column_names[1]), "col2");
     EXPECT_EQ(std::string(result.metadata.column_names[2]), "col3");
 
-    auto validity = cudf::test::make_counting_transform_iterator(0, [](auto i) { return true; });
+    auto validity = cudf::detail::make_counting_transform_iterator(0, [](auto i) { return true; });
 
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(result.tbl->get_column(0), int64_wrapper{{100, 200}, validity});
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(result.tbl->get_column(1),
@@ -574,9 +573,9 @@ TEST_F(JsonReaderTest, JsonLinesObjectsMissingData)
   EXPECT_EQ(std::string(result.metadata.column_names[2]), "col1");
 
   auto col1_validity =
-    cudf::test::make_counting_transform_iterator(0, [](auto i) { return i != 0; });
+    cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i != 0; });
   auto col2_validity =
-    cudf::test::make_counting_transform_iterator(0, [](auto i) { return i == 0; });
+    cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i == 0; });
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(result.tbl->get_column(2),
                                  float64_wrapper{{0., 200.}, col1_validity});
@@ -608,7 +607,7 @@ TEST_F(JsonReaderTest, JsonLinesObjectsOutOfOrder)
   EXPECT_EQ(std::string(result.metadata.column_names[1]), "col2");
   EXPECT_EQ(std::string(result.metadata.column_names[2]), "col3");
 
-  auto validity = cudf::test::make_counting_transform_iterator(0, [](auto i) { return true; });
+  auto validity = cudf::detail::make_counting_transform_iterator(0, [](auto i) { return true; });
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(result.tbl->get_column(0), int64_wrapper{{100, 200}, validity});
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(result.tbl->get_column(1), float64_wrapper{{1.1, 2.2}, validity});
@@ -673,7 +672,7 @@ TEST_F(JsonReaderTest, ArrowFileSource)
             static_cast<cudf::size_type>(in_options.get_dtypes().size()));
   EXPECT_EQ(result.tbl->get_column(0).type().id(), cudf::type_id::INT8);
 
-  auto validity = cudf::test::make_counting_transform_iterator(0, [](auto i) { return true; });
+  auto validity = cudf::detail::make_counting_transform_iterator(0, [](auto i) { return true; });
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(result.tbl->get_column(0),
                                  int8_wrapper{{9, 8, 7, 6, 5, 4, 3, 2}, validity});

@@ -16,6 +16,7 @@
 
 #include <cudf/concatenate.hpp>
 #include <cudf/copying.hpp>
+#include <cudf/detail/iterator.cuh>
 #include <cudf/fixed_point/fixed_point.hpp>
 #include <cudf/io/data_sink.hpp>
 #include <cudf/io/parquet.hpp>
@@ -55,7 +56,7 @@ std::unique_ptr<cudf::table> create_fixed_table(cudf::size_type num_columns,
                                                 bool include_validity,
                                                 Elements elements)
 {
-  auto valids = cudf::test::make_counting_transform_iterator(
+  auto valids = cudf::detail::make_counting_transform_iterator(
     0, [](auto i) { return i % 2 == 0 ? true : false; });
   std::vector<cudf::test::fixed_width_column_wrapper<T>> src_cols(num_columns);
   for (int idx = 0; idx < num_columns; idx++) {
@@ -83,7 +84,8 @@ std::unique_ptr<cudf::table> create_random_fixed_table(cudf::size_type num_colum
                                                        cudf::size_type num_rows,
                                                        bool include_validity)
 {
-  auto rand_elements = cudf::test::make_counting_transform_iterator(0, [](T i) { return rand(); });
+  auto rand_elements =
+    cudf::detail::make_counting_transform_iterator(0, [](T i) { return rand(); });
   return create_fixed_table<T>(num_columns, num_rows, include_validity, rand_elements);
 }
 
@@ -94,7 +96,7 @@ std::unique_ptr<cudf::table> create_compressible_fixed_table(cudf::size_type num
                                                              bool include_validity)
 {
   auto compressible_elements =
-    cudf::test::make_counting_transform_iterator(0, [period](T i) { return i / period; });
+    cudf::detail::make_counting_transform_iterator(0, [period](T i) { return i / period; });
   return create_fixed_table<T>(num_columns, num_rows, include_validity, compressible_elements);
 }
 
@@ -172,8 +174,8 @@ inline auto random_values(size_t size)
 TYPED_TEST(ParquetWriterNumericTypeTest, SingleColumn)
 {
   auto sequence =
-    cudf::test::make_counting_transform_iterator(0, [](auto i) { return TypeParam(i); });
-  auto validity = cudf::test::make_counting_transform_iterator(0, [](auto i) { return true; });
+    cudf::detail::make_counting_transform_iterator(0, [](auto i) { return TypeParam(i); });
+  auto validity = cudf::detail::make_counting_transform_iterator(0, [](auto i) { return true; });
 
   constexpr auto num_rows = 100;
   column_wrapper<TypeParam> col(sequence, sequence + num_rows, validity);
@@ -198,8 +200,8 @@ TYPED_TEST(ParquetWriterNumericTypeTest, SingleColumn)
 TYPED_TEST(ParquetWriterNumericTypeTest, SingleColumnWithNulls)
 {
   auto sequence =
-    cudf::test::make_counting_transform_iterator(0, [](auto i) { return TypeParam(i); });
-  auto validity = cudf::test::make_counting_transform_iterator(0, [](auto i) { return (i % 2); });
+    cudf::detail::make_counting_transform_iterator(0, [](auto i) { return TypeParam(i); });
+  auto validity = cudf::detail::make_counting_transform_iterator(0, [](auto i) { return (i % 2); });
 
   constexpr auto num_rows = 100;
   column_wrapper<TypeParam> col(sequence, sequence + num_rows, validity);
@@ -223,9 +225,9 @@ TYPED_TEST(ParquetWriterNumericTypeTest, SingleColumnWithNulls)
 
 TYPED_TEST(ParquetWriterChronoTypeTest, Chronos)
 {
-  auto sequence = cudf::test::make_counting_transform_iterator(
+  auto sequence = cudf::detail::make_counting_transform_iterator(
     0, [](auto i) { return ((std::rand() / 10000) * 1000); });
-  auto validity = cudf::test::make_counting_transform_iterator(0, [](auto i) { return true; });
+  auto validity = cudf::detail::make_counting_transform_iterator(0, [](auto i) { return true; });
 
   constexpr auto num_rows = 100;
   column_wrapper<TypeParam, typename decltype(sequence)::value_type> col(
@@ -251,10 +253,10 @@ TYPED_TEST(ParquetWriterChronoTypeTest, Chronos)
 
 TYPED_TEST(ParquetWriterChronoTypeTest, ChronosWithNulls)
 {
-  auto sequence = cudf::test::make_counting_transform_iterator(
+  auto sequence = cudf::detail::make_counting_transform_iterator(
     0, [](auto i) { return ((std::rand() / 10000) * 1000); });
   auto validity =
-    cudf::test::make_counting_transform_iterator(0, [](auto i) { return (i > 30) && (i < 60); });
+    cudf::detail::make_counting_transform_iterator(0, [](auto i) { return (i > 30) && (i < 60); });
 
   constexpr auto num_rows = 100;
   column_wrapper<TypeParam, typename decltype(sequence)::value_type> col(
@@ -290,13 +292,13 @@ TEST_F(ParquetWriterTest, MultiColumn)
   auto col5_data = random_values<double>(num_rows);
   auto col6_vals = random_values<int32_t>(num_rows);
   auto col7_vals = random_values<int64_t>(num_rows);
-  auto col6_data = cudf::test::make_counting_transform_iterator(0, [col6_vals](auto i) {
+  auto col6_data = cudf::detail::make_counting_transform_iterator(0, [col6_vals](auto i) {
     return numeric::decimal32{col6_vals[i], numeric::scale_type{5}};
   });
-  auto col7_data = cudf::test::make_counting_transform_iterator(0, [col7_vals](auto i) {
+  auto col7_data = cudf::detail::make_counting_transform_iterator(0, [col7_vals](auto i) {
     return numeric::decimal64{col7_vals[i], numeric::scale_type{-5}};
   });
-  auto validity  = cudf::test::make_counting_transform_iterator(0, [](auto i) { return true; });
+  auto validity  = cudf::detail::make_counting_transform_iterator(0, [](auto i) { return true; });
 
   // column_wrapper<bool> col0{
   //    col0_data.begin(), col0_data.end(), validity};
@@ -358,24 +360,27 @@ TEST_F(ParquetWriterTest, MultiColumnWithNulls)
   auto col5_data = random_values<double>(num_rows);
   auto col6_vals = random_values<int32_t>(num_rows);
   auto col7_vals = random_values<int64_t>(num_rows);
-  auto col6_data = cudf::test::make_counting_transform_iterator(0, [col6_vals](auto i) {
+  auto col6_data = cudf::detail::make_counting_transform_iterator(0, [col6_vals](auto i) {
     return numeric::decimal32{col6_vals[i], numeric::scale_type{-2}};
   });
-  auto col7_data = cudf::test::make_counting_transform_iterator(0, [col7_vals](auto i) {
+  auto col7_data = cudf::detail::make_counting_transform_iterator(0, [col7_vals](auto i) {
     return numeric::decimal64{col7_vals[i], numeric::scale_type{-8}};
   });
-  // auto col0_mask = cudf::test::make_counting_transform_iterator(
+  // auto col0_mask = cudf::detail::make_counting_transform_iterator(
   //    0, [](auto i) { return (i % 2); });
-  auto col1_mask = cudf::test::make_counting_transform_iterator(0, [](auto i) { return (i < 10); });
-  auto col2_mask = cudf::test::make_counting_transform_iterator(0, [](auto i) { return true; });
+  auto col1_mask =
+    cudf::detail::make_counting_transform_iterator(0, [](auto i) { return (i < 10); });
+  auto col2_mask = cudf::detail::make_counting_transform_iterator(0, [](auto i) { return true; });
   auto col3_mask =
-    cudf::test::make_counting_transform_iterator(0, [](auto i) { return (i == (num_rows - 1)); });
+    cudf::detail::make_counting_transform_iterator(0, [](auto i) { return (i == (num_rows - 1)); });
   auto col4_mask =
-    cudf::test::make_counting_transform_iterator(0, [](auto i) { return (i >= 40 || i <= 60); });
-  auto col5_mask = cudf::test::make_counting_transform_iterator(0, [](auto i) { return (i > 80); });
-  auto col6_mask = cudf::test::make_counting_transform_iterator(0, [](auto i) { return (i % 5); });
+    cudf::detail::make_counting_transform_iterator(0, [](auto i) { return (i >= 40 || i <= 60); });
+  auto col5_mask =
+    cudf::detail::make_counting_transform_iterator(0, [](auto i) { return (i > 80); });
+  auto col6_mask =
+    cudf::detail::make_counting_transform_iterator(0, [](auto i) { return (i % 5); });
   auto col7_mask =
-    cudf::test::make_counting_transform_iterator(0, [](auto i) { return (i != 55); });
+    cudf::detail::make_counting_transform_iterator(0, [](auto i) { return (i != 55); });
 
   // column_wrapper<bool> col0{
   //    col0_data.begin(), col0_data.end(), col0_mask};
@@ -437,7 +442,7 @@ TEST_F(ParquetWriterTest, Strings)
 
   auto seq_col0 = random_values<int>(num_rows);
   auto seq_col2 = random_values<float>(num_rows);
-  auto validity = cudf::test::make_counting_transform_iterator(0, [](auto i) { return true; });
+  auto validity = cudf::detail::make_counting_transform_iterator(0, [](auto i) { return true; });
 
   column_wrapper<int> col0{seq_col0.begin(), seq_col0.end(), validity};
   column_wrapper<cudf::string_view> col1{strings.begin(), strings.end()};
@@ -480,7 +485,7 @@ TEST_F(ParquetWriterTest, SlicedTable)
   auto seq_col0 = random_values<int>(num_rows);
   auto seq_col2 = random_values<float>(num_rows);
   auto validity =
-    cudf::test::make_counting_transform_iterator(0, [](auto i) { return i % 3 != 0; });
+    cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i % 3 != 0; });
 
   column_wrapper<int> col0{seq_col0.begin(), seq_col0.end(), validity};
   column_wrapper<cudf::string_view> col1{strings.begin(), strings.end()};
@@ -497,8 +502,8 @@ TEST_F(ParquetWriterTest, SlicedTable)
   // [NULL, [[13],[14,15,16]],  NULL]
   // [[[]]]
   // [NULL, [], NULL, [[]]]
-  auto valids  = cudf::test::make_counting_transform_iterator(0, [](auto i) { return i % 2; });
-  auto valids2 = cudf::test::make_counting_transform_iterator(0, [](auto i) { return i != 3; });
+  auto valids  = cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i % 2; });
+  auto valids2 = cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i != 3; });
   lcw col4{{
              {{{{1, 2, 3, 4}, valids}}, {{{5, 6, 7}, valids}, {8, 9}}},
              {{{{10, 11}, {12}}, {{13}, {14, 15, 16}}, {{17, 18}}}, valids},
@@ -585,8 +590,8 @@ TEST_F(ParquetWriterTest, SlicedTable)
 
 TEST_F(ParquetWriterTest, ListColumn)
 {
-  auto valids  = cudf::test::make_counting_transform_iterator(0, [](auto i) { return i % 2; });
-  auto valids2 = cudf::test::make_counting_transform_iterator(0, [](auto i) { return i != 3; });
+  auto valids  = cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i % 2; });
+  auto valids2 = cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i != 3; });
 
   using lcw = cudf::test::lists_column_wrapper<int32_t>;
 
@@ -684,8 +689,8 @@ TEST_F(ParquetWriterTest, ListColumn)
 // TODO(cp): remove. This has served its purpose.
 TEST_F(ParquetWriterTest, ListColumn2)
 {
-  auto valids  = cudf::test::make_counting_transform_iterator(0, [](auto i) { return i % 2; });
-  auto valids2 = cudf::test::make_counting_transform_iterator(0, [](auto i) { return i != 3; });
+  auto valids  = cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i % 2; });
+  auto valids2 = cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i != 3; });
 
   using lcw = cudf::test::lists_column_wrapper<int32_t>;
 
@@ -729,7 +734,7 @@ TEST_F(ParquetWriterTest, MultiIndex)
   auto col3_data = random_values<int32_t>(num_rows);
   auto col4_data = random_values<float>(num_rows);
   auto col5_data = random_values<double>(num_rows);
-  auto validity  = cudf::test::make_counting_transform_iterator(0, [](auto i) { return true; });
+  auto validity  = cudf::detail::make_counting_transform_iterator(0, [](auto i) { return true; });
 
   column_wrapper<int8_t> col1{col1_data.begin(), col1_data.end(), validity};
   column_wrapper<int16_t> col2{col2_data.begin(), col2_data.end(), validity};
@@ -776,7 +781,7 @@ TEST_F(ParquetWriterTest, HostBuffer)
   constexpr auto num_rows = 100 << 10;
   const auto seq_col      = random_values<int>(num_rows);
   const auto validity =
-    cudf::test::make_counting_transform_iterator(0, [](auto i) { return true; });
+    cudf::detail::make_counting_transform_iterator(0, [](auto i) { return true; });
   column_wrapper<int> col{seq_col.begin(), seq_col.end(), validity};
 
   std::vector<std::unique_ptr<column>> cols;
@@ -871,8 +876,8 @@ TEST_F(ParquetWriterTest, StructOfList)
   auto ages_col =
     cudf::test::fixed_width_column_wrapper<int32_t>{{48, 27, 25, 31, 351, 351}, {1, 1, 1, 1, 1, 0}};
 
-  auto valids  = cudf::test::make_counting_transform_iterator(0, [](auto i) { return i % 2; });
-  auto valids2 = cudf::test::make_counting_transform_iterator(0, [](auto i) { return i != 3; });
+  auto valids  = cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i % 2; });
+  auto valids2 = cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i != 3; });
 
   using lcw = cudf::test::lists_column_wrapper<int32_t>;
 
@@ -1250,8 +1255,8 @@ TEST_F(ParquetChunkedWriterTest, Strings)
 
 TEST_F(ParquetChunkedWriterTest, ListColumn)
 {
-  auto valids  = cudf::test::make_counting_transform_iterator(0, [](auto i) { return i % 2; });
-  auto valids2 = cudf::test::make_counting_transform_iterator(0, [](auto i) { return i != 3; });
+  auto valids  = cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i % 2; });
+  auto valids2 = cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i != 3; });
 
   using lcw = cudf::test::lists_column_wrapper<int32_t>;
 
@@ -1372,8 +1377,8 @@ TEST_F(ParquetChunkedWriterTest, ListOfStruct)
 
 TEST_F(ParquetChunkedWriterTest, ListOfStructOfStructOfListOfList)
 {
-  auto valids  = cudf::test::make_counting_transform_iterator(0, [](auto i) { return i % 2; });
-  auto valids2 = cudf::test::make_counting_transform_iterator(0, [](auto i) { return i != 3; });
+  auto valids  = cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i % 2; });
+  auto valids2 = cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i != 3; });
 
   using lcw = cudf::test::lists_column_wrapper<int32_t>;
 
@@ -1528,8 +1533,8 @@ TEST_F(ParquetChunkedWriterTest, MismatchedStructure)
 
 TEST_F(ParquetChunkedWriterTest, MismatchedStructureList)
 {
-  auto valids  = cudf::test::make_counting_transform_iterator(0, [](auto i) { return i % 2; });
-  auto valids2 = cudf::test::make_counting_transform_iterator(0, [](auto i) { return i != 3; });
+  auto valids  = cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i % 2; });
+  auto valids2 = cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i != 3; });
 
   using lcw = cudf::test::lists_column_wrapper<int32_t>;
 
@@ -1667,8 +1672,8 @@ TEST_F(ParquetChunkedWriterTest, ForcedNullabilityList)
 {
   srand(31337);
 
-  auto valids  = cudf::test::make_counting_transform_iterator(0, [](auto i) { return i % 2; });
-  auto valids2 = cudf::test::make_counting_transform_iterator(0, [](auto i) { return i != 3; });
+  auto valids  = cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i % 2; });
+  auto valids2 = cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i != 3; });
 
   using lcw = cudf::test::lists_column_wrapper<int32_t>;
 
@@ -1812,7 +1817,8 @@ TEST_F(ParquetWriterTest, DecimalWrite)
   auto seq_col0                      = random_values<int32_t>(num_rows);
   auto seq_col1                      = random_values<int64_t>(num_rows);
 
-  auto valids = cudf::test::make_counting_transform_iterator(0, [](auto i) { return i % 2 == 0; });
+  auto valids =
+    cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i % 2 == 0; });
 
   auto col0 = cudf::test::fixed_point_column_wrapper<int32_t>{
     seq_col0.begin(), seq_col0.end(), valids, numeric::scale_type{5}};
@@ -2478,7 +2484,8 @@ TEST_F(ParquetReaderTest, DecimalRead)
       cudf_io::source_info{reinterpret_cast<const char*>(decimals_parquet), decimals_parquet_len});
     auto result = cudf_io::read_parquet(read_opts);
 
-    auto validity = cudf::test::make_counting_transform_iterator(0, [](auto i) { return i != 50; });
+    auto validity =
+      cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i != 50; });
 
     EXPECT_EQ(result.tbl->view().num_columns(), 3);
 
@@ -2626,7 +2633,7 @@ TEST_F(ParquetReaderTest, DecimalRead)
     EXPECT_EQ(result.tbl->view().num_columns(), 2);
 
     auto validity_c0 =
-      cudf::test::make_counting_transform_iterator(0, [](auto i) { return i != 19; });
+      cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i != 19; });
     int64_t col0_data[] = {6361295, 698632,  7821423, 7073444, 9631892, 3021012, 5195059,
                            9913714, 901749,  7776938, 3186566, 4955569, 5131067, 98619,
                            2282579, 7521455, 4430706, 1937859, 4532040, 0};
@@ -2638,7 +2645,7 @@ TEST_F(ParquetReaderTest, DecimalRead)
     cudf::test::expect_columns_equal(result.tbl->view().column(0), col0);
 
     auto validity_c1 =
-      cudf::test::make_counting_transform_iterator(0, [](auto i) { return i != 18; });
+      cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i != 18; });
     int64_t col1_data[] = {361378026250,
                            30646804862,
                            429930238629,

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -22,6 +22,7 @@
 
 #include <cudf/column/column_view.hpp>
 #include <cudf/copying.hpp>
+#include <cudf/detail/iterator.cuh>
 #include <cudf/groupby.hpp>
 #include <cudf/sorting.hpp>
 #include <cudf/table/table.hpp>
@@ -100,13 +101,13 @@ inline void test_single_agg(column_view const& keys,
 
 inline auto all_valid()
 {
-  auto all_valid = make_counting_transform_iterator(0, [](auto i) { return true; });
+  auto all_valid = cudf::detail::make_counting_transform_iterator(0, [](auto i) { return true; });
   return all_valid;
 }
 
 inline auto all_null()
 {
-  auto all_null = make_counting_transform_iterator(0, [](auto i) { return false; });
+  auto all_null = cudf::detail::make_counting_transform_iterator(0, [](auto i) { return false; });
   return all_null;
 }
 

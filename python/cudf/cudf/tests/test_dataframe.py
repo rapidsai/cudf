@@ -648,13 +648,6 @@ def test_dataframe_column_rename(axis):
 
     assert_eq(expect, got)
 
-    gdf = gd.DataFrame({"a": [1, 2, 3], "b": [4, 5, 6], "c": [7, 8, 9]})
-    rename_mapper = {"a": "z", "b": "z", "c": "z"}
-    expect = gd.DataFrame({"z": [1, 2, 3], "z_1": [4, 5, 6], "z_2": [7, 8, 9]})
-    got = gdf.rename(columns=rename_mapper)
-
-    assert_eq(expect, got)
-
 
 def test_dataframe_pop():
     pdf = pd.DataFrame(
@@ -8057,15 +8050,6 @@ def test_dataframe_constructor_columns(df, columns, index):
 
     assert_local_eq(actual, df, expected, host_columns)
 
-    expected = pd.DataFrame(df, columns=host_columns)
-    actual = gd.DataFrame(gdf._data, columns=columns, index=index)
-    if index is not None:
-        if df.shape == (0, 0):
-            expected = pd.DataFrame(columns=host_columns, index=index)
-        else:
-            expected.index = index
-    assert_local_eq(actual, df, expected, host_columns)
-
 
 @pytest.mark.parametrize(
     "data",
@@ -8324,3 +8308,81 @@ def test_dataframe_roundtrip_arrow_struct_dtype(gdf):
     expected = gd.DataFrame.from_arrow(table)
 
     assert_eq(gdf, expected)
+
+
+def test_dataframe_setitem_cupy_array():
+    np.random.seed(0)
+    pdf = pd.DataFrame(np.random.randn(10, 2))
+    gdf = gd.from_pandas(pdf)
+
+    gpu_array = cupy.array([True, False] * 5)
+    pdf[gpu_array.get()] = 1.5
+    gdf[gpu_array] = 1.5
+
+    assert_eq(pdf, gdf)
+
+
+@pytest.mark.parametrize(
+    "data", [{"a": [1, 2, 3], "b": [4, 5, 6], "c": [7, 8, 9]}]
+)
+@pytest.mark.parametrize(
+    "index", [{0: 123, 1: 4, 2: 6}],
+)
+@pytest.mark.parametrize(
+    "level", ["x", 0],
+)
+def test_rename_for_level_MultiIndex_dataframe(data, index, level):
+    pdf = pd.DataFrame(
+        data,
+        index=pd.MultiIndex.from_tuples([(0, 1, 2), (1, 2, 3), (2, 3, 4)]),
+    )
+    pdf.index.names = ["x", "y", "z"]
+    gdf = gd.from_pandas(pdf)
+
+    expect = pdf.rename(index=index, level=level)
+    got = gdf.rename(index=index, level=level)
+
+    assert_eq(expect, got)
+
+
+@pytest.mark.parametrize(
+    "data", [{"a": [1, 2, 3], "b": [4, 5, 6], "c": [7, 8, 9]}]
+)
+@pytest.mark.parametrize(
+    "columns", [{"a": "f", "b": "g"}, {1: 3, 2: 4}, lambda s: 2 * s],
+)
+@pytest.mark.parametrize(
+    "level", [0, 1],
+)
+def test_rename_for_level_MultiColumn_dataframe(data, columns, level):
+    gdf = gd.DataFrame(data)
+    gdf.columns = pd.MultiIndex.from_tuples([("a", 1), ("a", 2), ("b", 1)])
+
+    pdf = gdf.to_pandas()
+
+    expect = pdf.rename(columns=columns, level=level)
+    got = gdf.rename(columns=columns, level=level)
+
+    assert_eq(expect, got)
+
+
+def test_rename_for_level_RangeIndex_dataframe():
+    gdf = gd.DataFrame({"a": [1, 2, 3], "b": [4, 5, 6], "c": [7, 8, 9]})
+    pdf = gdf.to_pandas()
+
+    expect = pdf.rename(columns={"a": "f"}, index={0: 3, 1: 4}, level=0)
+    got = gdf.rename(columns={"a": "f"}, index={0: 3, 1: 4}, level=0)
+
+    assert_eq(expect, got)
+
+
+@pytest.mark.xfail(reason="level=None not implemented yet")
+def test_rename_for_level_is_None_MC():
+    gdf = gd.DataFrame({"a": [1, 2, 3], "b": [4, 5, 6], "c": [7, 8, 9]})
+    gdf.columns = pd.MultiIndex.from_tuples([("a", 1), ("a", 2), ("b", 1)])
+    pdf = gdf.to_pandas()
+
+    expect = pdf.rename(columns={"a": "f"}, level=None)
+    got = gdf.rename(columns={"a": "f"}, level=None)
+
+    assert_eq(expect, got)

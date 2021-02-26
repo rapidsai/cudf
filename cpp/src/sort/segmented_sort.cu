@@ -62,7 +62,7 @@ rmm::device_uvector<size_type> get_segment_indices(size_type num_rows,
                       counting_iter,
                       counting_iter + segment_ids.size(),
                       segment_ids.begin());
-  return std::move(segment_ids);
+  return segment_ids;
 }
 
 std::unique_ptr<column> segmented_sorted_order(table_view const& keys,

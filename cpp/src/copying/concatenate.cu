@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -300,13 +300,11 @@ struct concatenate_dispatch {
     bool const has_nulls =
       std::any_of(views.cbegin(), views.cend(), [](auto const& col) { return col.has_nulls(); });
 
-    using Type = device_storage_type_t<T>;
-
     // Use a heuristic to guess when the fused kernel will be faster
     if (use_fused_kernel_heuristic(has_nulls, views.size())) {
-      return fused_concatenate<Type>(views, has_nulls, stream, mr);
+      return fused_concatenate<T>(views, has_nulls, stream, mr);
     } else {
-      return for_each_concatenate<Type>(views, has_nulls, stream, mr);
+      return for_each_concatenate<T>(views, has_nulls, stream, mr);
     }
   }
 };
@@ -409,8 +407,8 @@ std::unique_ptr<column> concatenate(std::vector<column_view> const& columns_to_c
     return empty_like(columns_to_concat.front());
   }
 
-  return type_dispatcher(columns_to_concat.front().type(),
-                         concatenate_dispatch{columns_to_concat, stream, mr});
+  return type_dispatcher<dispatch_storage_type>(
+    columns_to_concat.front().type(), concatenate_dispatch{columns_to_concat, stream, mr});
 }
 
 std::unique_ptr<table> concatenate(std::vector<table_view> const& tables_to_concat,

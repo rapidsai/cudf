@@ -49,10 +49,6 @@ struct intrle_enc_state_s {
   uint32_t hdr_bytes;
   uint32_t pl_bytes;
   volatile uint32_t delta_map[(512 / 32) + 1];
-  volatile union {
-    uint32_t u32[(512 / 32) * 2];
-    uint64_t u64[(512 / 32) * 2];
-  } scratch;
 };
 
 struct strdata_enc_state_s {
@@ -79,7 +75,7 @@ struct orcenc_state_s {
     StripeDictionary dict_stripe;
   } u;
   union {
-    uint8_t u8[scratch_buffer_size];  // general scratch buffer
+    uint8_t u8[scratch_buffer_size];  // gblock_vminscratch buffer
     uint32_t u32[scratch_buffer_size / 4];
   } buf;
   union {
@@ -349,8 +345,7 @@ static inline __device__ void StoreBitsBigEndian(
  * @param[in] numvals max number of values to encode
  * @param[in] flush encode all remaining values if nonzero
  * @param[in] t thread id
- * @param[in] temp_storage_full shared memory storage to performance warp reduce
- * @param[in] temp_storage_half shared memory storage to performance half warp reduce
+ * @param[in] temp_storage shared memory storage to perform block reduce
  *
  * @return number of input values encoded
  */
@@ -358,21 +353,20 @@ template <StreamIndexType cid,
           class T,
           bool is_signed,
           uint32_t inmask,
-          typename FullStorage,
-          typename HalfStorage>
+          int block_size,
+          typename Storage>
 static __device__ uint32_t IntegerRLE(orcenc_state_s *s,
                                       const T *inbuf,
                                       uint32_t inpos,
                                       uint32_t numvals,
                                       uint32_t flush,
                                       int t,
-                                      FullStorage &temp_storage_full,
-                                      HalfStorage &temp_storage_half)
+                                      Storage &temp_storage)
 {
-  using warp_reduce      = cub::WarpReduce<T>;
-  using half_warp_reduce = cub::WarpReduce<T, 16>;
-  uint8_t *dst           = s->chunk.streams[cid] + s->strm_pos[cid];
-  uint32_t out_cnt       = 0;
+  using block_reduce = cub::BlockReduce<T, block_size>;
+  uint8_t *dst       = s->chunk.streams[cid] + s->strm_pos[cid];
+  uint32_t out_cnt   = 0;
+  __shared__ volatile uint64_t block_vmin;
 
   while (numvals > 0) {
     T v0               = (t < numvals) ? inbuf[(inpos + t) & inmask] : 0;
@@ -421,69 +415,55 @@ static __device__ uint32_t IntegerRLE(orcenc_state_s *s,
       } else {
         intrle_minmax(vmax, vmin);
       }
-      vmin = warp_reduce(temp_storage_full[t / 32]).Reduce(vmin, cub::Min());
-      __syncwarp();
-      vmax = warp_reduce(temp_storage_full[t / 32]).Reduce(vmax, cub::Max());
-      __syncwarp();
-      if (!(t & 0x1f)) {
-        s->u.intrle.scratch.u64[(t >> 5) * 2 + 0] = vmin;
-        s->u.intrle.scratch.u64[(t >> 5) * 2 + 1] = vmax;
-      }
+      vmin = block_reduce(temp_storage).Reduce(vmin, cub::Min());
       __syncthreads();
-      if (t < 32) {
-        vmin = (T)s->u.intrle.scratch.u64[(t & 0xf) * 2 + 0];
-        vmax = (T)s->u.intrle.scratch.u64[(t & 0xf) * 2 + 1];
-        vmin = half_warp_reduce(temp_storage_half[t / 32]).Reduce(vmin, cub::Min());
-        __syncwarp();
-        vmax = half_warp_reduce(temp_storage_half[t / 32]).Reduce(vmax, cub::Max());
-        __syncwarp();
-        if (t == 0) {
-          uint32_t mode1_w, mode2_w;
-          typename std::make_unsigned<T>::type vrange_mode1, vrange_mode2;
-          s->u.intrle.scratch.u64[0] = (uint64_t)vmin;
-          if (sizeof(T) > 4) {
-            vrange_mode1 = (is_signed) ? max(zigzag(vmin), zigzag(vmax)) : vmax;
-            vrange_mode2 = vmax - vmin;
-            mode1_w      = 8 - min(CountLeadingBytes64(vrange_mode1), 7);
-            mode2_w      = 8 - min(CountLeadingBytes64(vrange_mode2), 7);
+      vmax = block_reduce(temp_storage).Reduce(vmax, cub::Max());
+      if (t == 0) {
+        uint32_t mode1_w, mode2_w;
+        typename std::make_unsigned<T>::type vrange_mode1, vrange_mode2;
+        block_vmin = static_cast<uint64_t>(vmin);
+        if (sizeof(T) > 4) {
+          vrange_mode1 = (is_signed) ? max(zigzag(vmin), zigzag(vmax)) : vmax;
+          vrange_mode2 = vmax - vmin;
+          mode1_w      = 8 - min(CountLeadingBytes64(vrange_mode1), 7);
+          mode2_w      = 8 - min(CountLeadingBytes64(vrange_mode2), 7);
+        } else {
+          vrange_mode1 = (is_signed) ? max(zigzag(vmin), zigzag(vmax)) : vmax;
+          vrange_mode2 = vmax - vmin;
+          mode1_w      = 4 - min(CountLeadingBytes32(vrange_mode1), 3);
+          mode2_w      = 4 - min(CountLeadingBytes32(vrange_mode2), 3);
+        }
+        // Decide between mode1 & mode2 (also mode3 for length=2 repeat)
+        if (vrange_mode2 == 0 && mode1_w > 1) {
+          // Should only occur if literal_run==2 (otherwise would have resulted in repeat_run >=
+          // 3)
+          uint32_t bytecnt = 2;
+          dst[0]           = 0xC0 + ((literal_run - 1) >> 8);
+          dst[1]           = (literal_run - 1) & 0xff;
+          bytecnt += StoreVarint(dst + 2, vrange_mode1);
+          dst[bytecnt++]           = 0;  // Zero delta
+          s->u.intrle.literal_mode = 3;
+          s->u.intrle.literal_w    = bytecnt;
+        } else {
+          uint32_t range, w;
+          if (mode1_w > mode2_w && (literal_run - 1) * (mode1_w - mode2_w) > 4) {
+            s->u.intrle.literal_mode = 2;
+            w                        = mode2_w;
+            range                    = (uint32_t)vrange_mode2;
           } else {
-            vrange_mode1 = (is_signed) ? max(zigzag(vmin), zigzag(vmax)) : vmax;
-            vrange_mode2 = vmax - vmin;
-            mode1_w      = 4 - min(CountLeadingBytes32(vrange_mode1), 3);
-            mode2_w      = 4 - min(CountLeadingBytes32(vrange_mode2), 3);
+            s->u.intrle.literal_mode = 1;
+            w                        = mode1_w;
+            range                    = (uint32_t)vrange_mode1;
           }
-          // Decide between mode1 & mode2 (also mode3 for length=2 repeat)
-          if (vrange_mode2 == 0 && mode1_w > 1) {
-            // Should only occur if literal_run==2 (otherwise would have resulted in repeat_run >=
-            // 3)
-            uint32_t bytecnt = 2;
-            dst[0]           = 0xC0 + ((literal_run - 1) >> 8);
-            dst[1]           = (literal_run - 1) & 0xff;
-            bytecnt += StoreVarint(dst + 2, vrange_mode1);
-            dst[bytecnt++]           = 0;  // Zero delta
-            s->u.intrle.literal_mode = 3;
-            s->u.intrle.literal_w    = bytecnt;
-          } else {
-            uint32_t range, w;
-            if (mode1_w > mode2_w && (literal_run - 1) * (mode1_w - mode2_w) > 4) {
-              s->u.intrle.literal_mode = 2;
-              w                        = mode2_w;
-              range                    = (uint32_t)vrange_mode2;
-            } else {
-              s->u.intrle.literal_mode = 1;
-              w                        = mode1_w;
-              range                    = (uint32_t)vrange_mode1;
-            }
-            if (w == 1)
-              w = (range >= 16) ? w << 3 : (range >= 4) ? 4 : (range >= 2) ? 2 : 1;
-            else
-              w <<= 3;  // bytes -> bits
-            s->u.intrle.literal_w = w;
-          }
+          if (w == 1)
+            w = (range >= 16) ? w << 3 : (range >= 4) ? 4 : (range >= 2) ? 2 : 1;
+          else
+            w <<= 3;  // bytes -> bits
+          s->u.intrle.literal_w = w;
         }
       }
       __syncthreads();
-      vmin         = (T)s->u.intrle.scratch.u64[0];
+      vmin         = static_cast<T>(block_vmin);
       literal_mode = s->u.intrle.literal_mode;
       literal_w    = s->u.intrle.literal_w;
       if (literal_mode == 1) {
@@ -665,12 +645,9 @@ __global__ void __launch_bounds__(block_size)
 {
   __shared__ __align__(16) orcenc_state_s state_g;
   __shared__ union {
-    typename cub::WarpReduce<int32_t>::TempStorage full_i32[block_size / 32];
-    typename cub::WarpReduce<int64_t>::TempStorage full_i64[block_size / 32];
-    typename cub::WarpReduce<uint32_t>::TempStorage full_u32[block_size / 32];
-    typename cub::WarpReduce<int32_t, 16>::TempStorage half_i32[block_size / 32];
-    typename cub::WarpReduce<int64_t, 16>::TempStorage half_i64[block_size / 32];
-    typename cub::WarpReduce<uint32_t, 16>::TempStorage half_u32[block_size / 32];
+    typename cub::BlockReduce<int32_t, block_size>::TempStorage i32;
+    typename cub::BlockReduce<int64_t, block_size>::TempStorage i64;
+    typename cub::BlockReduce<uint32_t, block_size>::TempStorage u32;
   } temp_storage;
 
   orcenc_state_s *const s = &state_g;
@@ -867,25 +844,13 @@ __global__ void __launch_bounds__(block_size)
           case SHORT:
           case INT:
           case DATE:
-            n = IntegerRLE<CI_DATA, int32_t, true, 0x3ff>(s,
-                                                          s->vals.i32,
-                                                          s->nnz - s->numvals,
-                                                          s->numvals,
-                                                          flush,
-                                                          t,
-                                                          temp_storage.full_i32,
-                                                          temp_storage.half_i32);
+            n = IntegerRLE<CI_DATA, int32_t, true, 0x3ff, block_size>(
+              s, s->vals.i32, s->nnz - s->numvals, s->numvals, flush, t, temp_storage.i32);
             break;
           case LONG:
           case TIMESTAMP:
-            n = IntegerRLE<CI_DATA, int64_t, true, 0x3ff>(s,
-                                                          s->vals.i64,
-                                                          s->nnz - s->numvals,
-                                                          s->numvals,
-                                                          flush,
-                                                          t,
-                                                          temp_storage.full_i64,
-                                                          temp_storage.half_i64);
+            n = IntegerRLE<CI_DATA, int64_t, true, 0x3ff, block_size>(
+              s, s->vals.i64, s->nnz - s->numvals, s->numvals, flush, t, temp_storage.i64);
             break;
           case BYTE:
             n = ByteRLE<CI_DATA, 0x3ff>(s, s->vals.u8, s->nnz - s->numvals, s->numvals, flush, t);
@@ -910,14 +875,8 @@ __global__ void __launch_bounds__(block_size)
             break;
           case STRING:
             if (s->chunk.encoding_kind == DICTIONARY_V2) {
-              n = IntegerRLE<CI_DATA, uint32_t, false, 0x3ff>(s,
-                                                              s->vals.u32,
-                                                              s->nnz - s->numvals,
-                                                              s->numvals,
-                                                              flush,
-                                                              t,
-                                                              temp_storage.full_u32,
-                                                              temp_storage.half_u32);
+              n = IntegerRLE<CI_DATA, uint32_t, false, 0x3ff, block_size>(
+                s, s->vals.u32, s->nnz - s->numvals, s->numvals, flush, t, temp_storage.u32);
             } else {
               n = s->numvals;
             }
@@ -933,14 +892,8 @@ __global__ void __launch_bounds__(block_size)
         switch (s->chunk.type_kind) {
           case TIMESTAMP:
           case STRING:
-            n = IntegerRLE<CI_DATA2, uint32_t, false, 0x3ff>(s,
-                                                             s->lengths.u32,
-                                                             s->nnz - s->numlengths,
-                                                             s->numlengths,
-                                                             flush,
-                                                             t,
-                                                             temp_storage.full_u32,
-                                                             temp_storage.half_u32);
+            n = IntegerRLE<CI_DATA2, uint32_t, false, 0x3ff, block_size>(
+              s, s->lengths.u32, s->nnz - s->numlengths, s->numlengths, flush, t, temp_storage.u32);
             break;
           default: n = s->numlengths; break;
         }
@@ -975,10 +928,7 @@ __global__ void __launch_bounds__(block_size)
   gpuEncodeStringDictionaries(StripeDictionary *stripes, EncChunk *chunks, uint32_t num_columns)
 {
   __shared__ __align__(16) orcenc_state_s state_g;
-  __shared__ union {
-    typename cub::WarpReduce<uint32_t>::TempStorage full_u32[block_size / 32];
-    typename cub::WarpReduce<uint32_t, 16>::TempStorage half_u32[block_size / 32];
-  } temp_storage;
+  __shared__ typename cub::BlockReduce<uint32_t, block_size>::TempStorage temp_storage;
 
   orcenc_state_s *const s = &state_g;
   uint32_t stripe_id      = blockIdx.x;
@@ -1027,14 +977,8 @@ __global__ void __launch_bounds__(block_size)
       __syncthreads();
       if (s->numlengths + numvals > 0) {
         uint32_t flush = (s->cur_row + numvals == s->nrows) ? 1 : 0;
-        uint32_t n     = IntegerRLE<CI_DATA2, uint32_t, false, 0x3ff>(s,
-                                                                  s->lengths.u32,
-                                                                  s->cur_row,
-                                                                  s->numlengths + numvals,
-                                                                  flush,
-                                                                  t,
-                                                                  temp_storage.full_u32,
-                                                                  temp_storage.half_u32);
+        uint32_t n     = IntegerRLE<CI_DATA2, uint32_t, false, 0x3ff, block_size>(
+          s, s->lengths.u32, s->cur_row, s->numlengths + numvals, flush, t, temp_storage);
         __syncthreads();
         if (!t) {
           s->numlengths += numvals;
