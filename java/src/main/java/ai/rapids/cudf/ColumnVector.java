@@ -408,7 +408,7 @@ public final class ColumnVector extends ColumnView {
    * replace(col(type: List<List<D64>>) => col(type: List<List<D32>>) no rounding is done
    *
    */
-  public ColumnVector castLeafD64ToD32() {
+  public ColumnVector castLeafDecimal64ToDecimal32() {
     assert(type == DType.LIST);
     return new ColumnVector(castLeafD64ToD32(offHeap.columnHandle));
   }

@@ -3950,7 +3950,7 @@ public class ColumnVectorTest extends CudfTestBase {
          ColumnVector child3 = ColumnVector.decimalFromDoubles(DType.create(DType.DTypeEnum.DECIMAL64, 3), RoundingMode.HALF_UP, 346.997, 479.946);
          ColumnVector child4 = ColumnVector.decimalFromDoubles(DType.create(DType.DTypeEnum.DECIMAL64, 3), RoundingMode.HALF_UP, 87.764, 414.239);
          ColumnVector created = ColumnVector.makeList(child1, child2, child3, child4);
-         ColumnVector replaced = created.castLeafD64ToD32()) {
+         ColumnVector replaced = created.castLeafDecimal64ToDecimal32()) {
       assertColumnsAreEqual(expected, replaced);
     }
   }
