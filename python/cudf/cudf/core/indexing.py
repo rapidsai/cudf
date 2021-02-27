@@ -92,6 +92,9 @@ class _SeriesIlocIndexer(object):
         # coerce value into a scalar or column
         if is_scalar(value):
             value = to_cudf_compatible_scalar(value)
+        elif isinstance(value, (pd.Series, cudf.Series)):
+            value = cudf.Series(value)
+            value = value._align_to_index(self._sr.index, how="right")
         else:
             value = column.as_column(value)
 

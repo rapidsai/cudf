@@ -931,6 +931,10 @@ def test_series_setitem_null():
         ([], []),
         (slice(None, None), 1),
         (slice(-1, -3), 7),
+        (
+            slice(None, None, None),
+            pd.Series([5, 4, 3, 2, 1], index=[2, 4, 1, 3, 0]),
+        ),
     ],
 )
 @pytest.mark.parametrize("nulls", ["none", "some", "all"])
