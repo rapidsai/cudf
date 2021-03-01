@@ -394,12 +394,23 @@ bool is_same_scale_necessary(binary_operator op)
 }
 
 template <typename Lhs, typename Rhs>
-void fixed_point_binary_operation_validation(binary_operator op, Lhs lhs, Rhs rhs)
+void fixed_point_binary_operation_validation(binary_operator op,
+                                             Lhs lhs,
+                                             Rhs rhs,
+                                             thrust::optional<cudf::data_type> output_type = {})
 {
   CUDF_EXPECTS(is_fixed_point(lhs), "Input must have fixed_point data_type.");
   CUDF_EXPECTS(is_fixed_point(rhs), "Input must have fixed_point data_type.");
   CUDF_EXPECTS(is_supported_fixed_point_binop(op), "Unsupported fixed_point binary operation");
   CUDF_EXPECTS(lhs.id() == rhs.id(), "Data type mismatch");
+  if (output_type.has_value()) {
+    if (is_comparison_binop(op))
+      CUDF_EXPECTS(output_type == cudf::data_type{type_id::BOOL8},
+                   "Comparison operations require boolean output type.");
+    else
+      CUDF_EXPECTS(is_fixed_point(output_type.value()),
+                   "fixed_point binary operations require fixed_point output type.");
+  }
 }
 
 /**
@@ -421,7 +432,7 @@ std::unique_ptr<column> fixed_point_binary_operation(scalar const& lhs,
 {
   using namespace numeric;
 
-  fixed_point_binary_operation_validation(op, lhs.type(), rhs.type());
+  fixed_point_binary_operation_validation(op, lhs.type(), rhs.type(), output_type);
   auto out = make_fixed_width_column_for_output(lhs, rhs, op, output_type, stream, mr);
   if (rhs.is_empty()) return out;
   auto out_view = out->mutable_view();
@@ -490,7 +501,7 @@ std::unique_ptr<column> fixed_point_binary_operation(column_view const& lhs,
 {
   using namespace numeric;
 
-  fixed_point_binary_operation_validation(op, lhs.type(), rhs.type());
+  fixed_point_binary_operation_validation(op, lhs.type(), rhs.type(), output_type);
   auto out = make_fixed_width_column_for_output(lhs, rhs, op, output_type, stream, mr);
   if (lhs.is_empty()) return out;
   auto out_view = out->mutable_view();
@@ -559,7 +570,7 @@ std::unique_ptr<column> fixed_point_binary_operation(column_view const& lhs,
 {
   using namespace numeric;
 
-  fixed_point_binary_operation_validation(op, lhs.type(), rhs.type());
+  fixed_point_binary_operation_validation(op, lhs.type(), rhs.type(), output_type);
   auto out = make_fixed_width_column_for_output(lhs, rhs, op, output_type, stream, mr);
   if (lhs.is_empty() or rhs.is_empty()) return out;
   auto out_view = out->mutable_view();

@@ -30,6 +30,7 @@
 
 #include <tests/binaryop/assert-binops.h>
 #include <tests/binaryop/binop-fixture.hpp>
+#include "cudf/utilities/error.hpp"
 
 namespace cudf {
 namespace test {
@@ -2568,6 +2569,25 @@ TYPED_TEST(FixedPointTestBothReps, FixedPointBinaryOp_Div11)
   auto const result = cudf::binary_operation(lhs, rhs, cudf::binary_operator::DIV, type);
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
+}
+
+TYPED_TEST(FixedPointTestBothReps, FixedPointBinaryOpThrows)
+{
+  using namespace numeric;
+  using decimalXX = TypeParam;
+  using RepType   = device_storage_type_t<decimalXX>;
+
+  auto const col = fp_wrapper<RepType>{{100, 300, 500, 700}, scale_type{-2}};
+  // auto const expected = fp_wrapper<RepType>{{25, 75, 125, 175}, scale_type{-2}};
+
+  auto const non_bool_type = data_type{type_to_id<decimalXX>(), -2};
+  auto const float_type    = data_type{type_id::FLOAT32};
+  EXPECT_THROW(cudf::binary_operation(col, col, cudf::binary_operator::LESS, non_bool_type),
+               cudf::logic_error);
+  EXPECT_THROW(cudf::binary_operation(col, col, cudf::binary_operator::MUL, float_type),
+               cudf::logic_error);
+
+  // CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
 }
 
 }  // namespace binop
