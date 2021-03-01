@@ -1,4 +1,5 @@
-# Copyright (c) 2020, NVIDIA CORPORATION.
+# Copyright (c) 2020-2021, NVIDIA CORPORATION.
+
 import numpy as np
 
 from cudf._lib.scalar import DeviceScalar, _is_null_host_scalar
