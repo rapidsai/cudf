@@ -21,6 +21,8 @@
 
 #include "writer_impl.hpp"
 
+#include <io/utilities/column_utils.cuh>
+
 #include <cudf/null_mask.hpp>
 #include <cudf/strings/strings_column_view.hpp>
 
@@ -38,6 +40,7 @@ namespace detail {
 namespace orc {
 using namespace cudf::io::orc;
 using namespace cudf::io;
+using cudf::io::orc::gpu::nvstrdesc_s;
 
 struct row_group_index_info {
   int32_t pos       = -1;  // Position
@@ -725,6 +728,7 @@ std::vector<StripeInformation> writer::impl::gather_stripes(
 }
 
 std::vector<std::vector<uint8_t>> writer::impl::gather_statistic_blobs(
+  const table_device_view &table,
   orc_column_view const *columns,
   size_t num_columns,
   size_t num_rows,
@@ -787,6 +791,10 @@ std::vector<std::vector<uint8_t>> writer::impl::gather_statistic_blobs(
   }
   stat_desc.host_to_device(stream);
   stat_merge.host_to_device(stream);
+
+  rmm::device_uvector<column_device_view> leaf_column_views =
+    cudf::io::create_leaf_column_device_views(stat_desc, table, stream);
+
   gpu::orc_init_statistics_groups(stat_groups.data().get(),
                                   stat_desc.device_ptr(),
                                   num_columns,
@@ -1019,6 +1027,9 @@ void writer::impl::write(table_view const &table)
       "be specified");
   }
 
+  auto device_columns = table_device_view::create(table);
+  rmm::device_uvector<column_device_view> device_leaf_columns(table.num_columns(), stream);
+
   // Wrapper around cudf columns to attach ORC-specific type info
   std::vector<orc_column_view> orc_columns;
   orc_columns.reserve(num_columns);  // Avoids unnecessary re-allocation
@@ -1116,8 +1127,14 @@ void writer::impl::write(table_view const &table)
   // Gather column statistics
   std::vector<std::vector<uint8_t>> column_stats;
   if (enable_statistics_ && num_columns > 0 && num_rows > 0) {
-    column_stats = gather_statistic_blobs(
-      orc_columns.data(), num_columns, num_rows, num_rowgroups, stripe_list, stripes, chunks);
+    column_stats = gather_statistic_blobs(*device_columns,
+                                          orc_columns.data(),
+                                          num_columns,
+                                          num_rows,
+                                          num_rowgroups,
+                                          stripe_list,
+                                          stripes,
+                                          chunks);
   }
 
   // Allocate intermediate output stream buffer

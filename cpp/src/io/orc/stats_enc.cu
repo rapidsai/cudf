@@ -51,7 +51,7 @@ __global__ void __launch_bounds__(init_threads_per_block)
   uint32_t t              = threadIdx.x;
   statistics_group *group = &group_g[threadIdx.y];
   if (chunk_id < num_rowgroups and t == 0) {
-    uint32_t num_rows = cols[col_id].num_rows;
+    uint32_t num_rows = cols[col_id].leaf_column->size();
     group->col        = &cols[col_id];
     group->start_row  = chunk_id * row_index_stride;
     group->num_rows = min(num_rows - min(chunk_id * row_index_stride, num_rows), row_index_stride);
