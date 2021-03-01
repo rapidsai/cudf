@@ -31,46 +31,10 @@ namespace cudf {
 namespace io {
 
 /**
- * @brief Set column_device_view pointers in column description array
- *
- * @param[out] col_desc Column description array [column_id]
- * @param[out] leaf_column_views Device array to store leaf columns
- * @param[in] parent_table_device_view Table device view containing parent columns
- * @param[in] stream CUDA stream to use, default 0
- */
-template <typename ColumnDescriptor>
-void init_column_device_views(ColumnDescriptor *col_desc,
-                              column_device_view *leaf_column_views,
-                              const table_device_view &parent_column_table_device_view,
-                              rmm::cuda_stream_view stream)
-{
-  auto iter = thrust::make_counting_iterator<size_type>(0);
-  thrust::for_each(rmm::exec_policy(stream),
-                   iter,
-                   iter + parent_column_table_device_view.num_columns(),
-                   [col_desc,
-                    parent_col_view = parent_column_table_device_view,
-                    leaf_column_views] __device__(size_type index) mutable {
-                     column_device_view col = parent_col_view.column(index);
-
-                     if (col.type().id() == type_id::LIST) {
-                       col_desc[index].parent_column = parent_col_view.begin() + index;
-                     } else {
-                       col_desc[index].parent_column = nullptr;
-                     }
-                     // traverse till leaf column
-                     while (col.type().id() == type_id::LIST) {
-                       col = col.child(lists_column_view::child_column_index);
-                     }
-                     // Store leaf_column to device storage
-                     column_device_view *leaf_col_ptr = leaf_column_views + index;
-                     *leaf_col_ptr                    = col;
-                     col_desc[index].leaf_column      = leaf_col_ptr;
-                   });
-}
-
-/**
  * @brief Create column_device_view pointers from leaf columns
+ *
+ * A device_uvector is created to store the leaves of parent columns. The
+ * column descriptor array is updated to point to these leaf columns.
  *
  * @param col_desc Column description array
  * @param parent_table_device_view Table device view containing parent columns
@@ -86,8 +50,33 @@ rmm::device_uvector<column_device_view> create_leaf_column_device_views(
 {
   rmm::device_uvector<column_device_view> leaf_column_views(parent_table_device_view.num_columns(),
                                                             stream);
-  cudf::io::init_column_device_views(
-    col_desc.device_ptr(), leaf_column_views.data(), parent_table_device_view, stream);
+  ColumnDescriptor *col_ptr                 = col_desc.device_ptr();
+  column_device_view *leaf_column_views_ptr = leaf_column_views.data();
+
+  auto iter = thrust::make_counting_iterator<size_type>(0);
+  thrust::for_each(rmm::exec_policy(stream),
+                   iter,
+                   iter + parent_table_device_view.num_columns(),
+                   [col_ptr,
+                    parent_col_view = parent_table_device_view,
+                    leaf_column_views_ptr] __device__(size_type index) mutable {
+                     column_device_view col = parent_col_view.column(index);
+
+                     if (col.type().id() == type_id::LIST) {
+                       col_ptr[index].parent_column = parent_col_view.begin() + index;
+                     } else {
+                       col_ptr[index].parent_column = nullptr;
+                     }
+                     // traverse till leaf column
+                     while (col.type().id() == type_id::LIST) {
+                       col = col.child(lists_column_view::child_column_index);
+                     }
+                     // Store leaf_column to device storage
+                     column_device_view *leaf_col_ptr = leaf_column_views_ptr + index;
+                     *leaf_col_ptr                    = col;
+                     col_ptr[index].leaf_column       = leaf_col_ptr;
+                   });
+
   return leaf_column_views;
 }
 

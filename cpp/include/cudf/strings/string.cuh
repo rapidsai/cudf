@@ -106,29 +106,6 @@ __device__ bool is_float(string_view const& d_str)
   return result;
 }
 
-inline __device__ string_view shuffle_xor(string_view var, uint32_t delta)
-{
-  const char* data = reinterpret_cast<const char*>(
-    __shfl_xor_sync(~0, reinterpret_cast<uintptr_t>(var.data()), delta));
-  auto size = __shfl_xor_sync(~0, var.size_bytes(), delta);
-  return string_view(data, size);
-}
-
-template <typename Operator>
-inline __device__ string_view warp_reduce(string_view extremum_value, Operator op)
-{
-  string_view value = shuffle_xor(extremum_value, 1);
-  extremum_value    = op(value, extremum_value);
-  value             = shuffle_xor(extremum_value, 2);
-  extremum_value    = op(value, extremum_value);
-  value             = shuffle_xor(extremum_value, 4);
-  extremum_value    = op(value, extremum_value);
-  value             = shuffle_xor(extremum_value, 8);
-  extremum_value    = op(value, extremum_value);
-  value             = shuffle_xor(extremum_value, 16);
-  return op(value, extremum_value);
-}
-
 /** @} */  // end of group
 }  // namespace string
 }  // namespace strings

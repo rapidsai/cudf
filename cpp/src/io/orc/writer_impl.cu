@@ -1028,7 +1028,6 @@ void writer::impl::write(table_view const &table)
   }
 
   auto device_columns = table_device_view::create(table);
-  rmm::device_uvector<column_device_view> device_leaf_columns(table.num_columns(), stream);
 
   // Wrapper around cudf columns to attach ORC-specific type info
   std::vector<orc_column_view> orc_columns;
