@@ -1214,7 +1214,7 @@ def test_dataframe_concat_different_numerical_columns(dtype1, dtype2):
 
 
 def test_dataframe_concat_different_column_types():
-    df1 = cudf.Series([42], dtype=float)
+    df1 = cudf.Series([42], dtype=np.float64)
     df2 = cudf.Series(["a"], dtype="category")
     with pytest.raises(ValueError):
         cudf.concat([df1, df2])
