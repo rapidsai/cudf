@@ -2127,44 +2127,6 @@ void InitPageFragments(PageFragment *frag,
 }
 
 /**
- * @copydoc void init_column_device_views(EncColumnDesc *col_desc,
- *            column_device_view *leaf_column_views,
- *            const table_device_view &parent_table_device_view,
- *            rmm::cuda_stream_view stream)
- */
-void init_column_device_views(EncColumnDesc *col_desc,
-                              column_device_view *leaf_column_views,
-                              const table_device_view &parent_column_table_device_view,
-                              rmm::cuda_stream_view stream)
-{
-  cudf::detail::device_single_thread(
-    [col_desc,
-     parent_col_view = parent_column_table_device_view,
-     leaf_column_views] __device__() mutable {
-      for (size_type i = 0; i < parent_col_view.num_columns(); ++i) {
-        col_desc[i].parent_column = parent_col_view.begin() + i;
-        column_device_view col    = parent_col_view.column(i);
-        // traverse till leaf column
-        while (col.type().id() == type_id::LIST or col.type().id() == type_id::STRUCT) {
-          if (col.type().id() == type_id::LIST) {
-            auto offset_col = col.child(lists_column_view::offsets_column_index);
-            col             = col.child(lists_column_view::child_column_index);
-          } else if (col.type().id() == type_id::STRUCT) {
-            col = col.child(0);
-          } else {
-            release_assert(false and "Unsupported nested type");
-          }
-        }
-        // Store leaf_column to device storage
-        column_device_view *leaf_col_ptr = leaf_column_views + i;
-        *leaf_col_ptr                    = col;
-        col_desc[i].leaf_column          = leaf_col_ptr;
-      }
-    },
-    stream);
-}
-
-/**
  * @brief Launches kernel for initializing fragment statistics groups
  *
  * @param[out] groups Statistics groups [num_columns x num_fragments]
