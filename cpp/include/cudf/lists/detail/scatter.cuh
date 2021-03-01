@@ -431,11 +431,11 @@ struct list_child_constructor {
     auto const num_child_rows{
       cudf::detail::get_value<size_type>(list_offsets, list_offsets.size() - 1, stream)};
 
-    auto string_views = rmm::device_vector<string_view>(num_child_rows);
+    auto string_views = rmm::device_uvector<string_view>(num_child_rows, stream);
 
     auto populate_string_views = [d_scattered_lists = list_vector.begin(),  // unbound_list_view*
                                   d_list_offsets    = list_offsets.template data<int32_t>(),
-                                  d_string_views    = string_views.data().get(),
+                                  d_string_views    = string_views.data(),
                                   source_lists,
                                   target_lists] __device__(auto const& row_index) {
       auto unbound_list_view    = d_scattered_lists[row_index];
@@ -483,7 +483,7 @@ struct list_child_constructor {
       string_views.begin(), string_views.size(), stream, mr);
 
     auto string_chars = cudf::strings::detail::child_chars_from_string_vector(
-      string_views, string_offsets->view().template data<cudf::size_type>(), 0, stream, mr);
+      string_views, string_offsets->view(), stream, mr);
     auto child_null_mask =
       source_lists_column_view.child().nullable() || target_lists_column_view.child().nullable()
         ? construct_child_nullmask(

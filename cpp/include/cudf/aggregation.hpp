@@ -204,8 +204,18 @@ std::unique_ptr<aggregation> make_nth_element_aggregation(
 /// Factory to create a ROW_NUMBER aggregation
 std::unique_ptr<aggregation> make_row_number_aggregation();
 
-/// Factory to create a COLLECT_NUMBER aggregation
-std::unique_ptr<aggregation> make_collect_aggregation();
+/**
+ * @brief Factory to create a COLLECT aggregation
+ *
+ * `COLLECT` returns a list column of all included elements in the group/series.
+ *
+ * If `null_handling` is set to `EXCLUDE`, null elements are dropped from each
+ * of the list rows.
+ *
+ * @param null_handling Indicates whether to include/exclude nulls in list elements.
+ */
+std::unique_ptr<aggregation> make_collect_aggregation(
+  null_policy null_handling = null_policy::INCLUDE);
 
 /// Factory to create a LAG aggregation
 std::unique_ptr<aggregation> make_lag_aggregation(size_type offset);

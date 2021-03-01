@@ -5,7 +5,7 @@ import pandas as pd
 import pytest
 
 import cudf
-from cudf.core import DataFrame, Series
+from cudf.core._compat import PANDAS_GE_120
 from cudf.core.dtypes import CategoricalDtype
 from cudf.tests.utils import (
     INTEGER_TYPES,
@@ -100,7 +100,7 @@ def assert_join_results_equal(expect, got, how, **kwargs):
 
 @pytest.mark.parametrize("aa,bb,how,method", make_params())
 def test_dataframe_join_how(aa, bb, how, method):
-    df = DataFrame()
+    df = cudf.DataFrame()
     df["a"] = aa
     df["b"] = bb
 
@@ -156,8 +156,7 @@ def test_dataframe_join_how(aa, bb, how, method):
 
 def _check_series(expect, got):
     magic = 0xDEADBEAF
-    # print("expect\n", expect)
-    # print("got\n", got.to_string(nrows=None))
+
     direct_equal = np.all(expect.values == got.to_array())
     nanfilled_equal = np.all(
         expect.fillna(magic).values == got.fillna(magic).to_array()
@@ -171,7 +170,7 @@ def _check_series(expect, got):
 def test_dataframe_join_suffix():
     np.random.seed(0)
 
-    df = DataFrame()
+    df = cudf.DataFrame()
     for k in "abc":
         df[k] = np.random.randint(0, 5, 5)
 
@@ -198,12 +197,12 @@ def test_dataframe_join_suffix():
 
 
 def test_dataframe_join_cats():
-    lhs = DataFrame()
+    lhs = cudf.DataFrame()
     lhs["a"] = pd.Categorical(list("aababcabbc"), categories=list("abc"))
     lhs["b"] = bb = np.arange(len(lhs))
     lhs = lhs.set_index("a")
 
-    rhs = DataFrame()
+    rhs = cudf.DataFrame()
     rhs["a"] = pd.Categorical(list("abcac"), categories=list("abc"))
     rhs["c"] = cc = np.arange(len(rhs))
     rhs = rhs.set_index("a")
@@ -263,8 +262,8 @@ def test_dataframe_join_mismatch_cats(how):
     pdf1["join_col"] = pdf1["join_col"].astype("category")
     pdf2["join_col"] = pdf2["join_col"].astype("category")
 
-    gdf1 = DataFrame.from_pandas(pdf1)
-    gdf2 = DataFrame.from_pandas(pdf2)
+    gdf1 = cudf.from_pandas(pdf1)
+    gdf2 = cudf.from_pandas(pdf2)
 
     gdf1 = gdf1.set_index("join_col")
     gdf2 = gdf2.set_index("join_col")
@@ -294,13 +293,13 @@ def test_dataframe_merge_on(on):
     np.random.seed(0)
 
     # Make cuDF
-    df_left = DataFrame()
+    df_left = cudf.DataFrame()
     nelem = 500
     df_left["key1"] = np.random.randint(0, 40, nelem)
     df_left["key2"] = np.random.randint(0, 50, nelem)
     df_left["left_val"] = np.arange(nelem)
 
-    df_right = DataFrame()
+    df_right = cudf.DataFrame()
     nelem = 500
     df_right["key1"] = np.random.randint(0, 30, nelem)
     df_right["key2"] = np.random.randint(0, 50, nelem)
@@ -360,13 +359,13 @@ def test_dataframe_merge_on_unknown_column():
     np.random.seed(0)
 
     # Make cuDF
-    df_left = DataFrame()
+    df_left = cudf.DataFrame()
     nelem = 500
     df_left["key1"] = np.random.randint(0, 40, nelem)
     df_left["key2"] = np.random.randint(0, 50, nelem)
     df_left["left_val"] = np.arange(nelem)
 
-    df_right = DataFrame()
+    df_right = cudf.DataFrame()
     nelem = 500
     df_right["key1"] = np.random.randint(0, 30, nelem)
     df_right["key2"] = np.random.randint(0, 50, nelem)
@@ -381,13 +380,13 @@ def test_dataframe_merge_no_common_column():
     np.random.seed(0)
 
     # Make cuDF
-    df_left = DataFrame()
+    df_left = cudf.DataFrame()
     nelem = 500
     df_left["key1"] = np.random.randint(0, 40, nelem)
     df_left["key2"] = np.random.randint(0, 50, nelem)
     df_left["left_val"] = np.arange(nelem)
 
-    df_right = DataFrame()
+    df_right = cudf.DataFrame()
     nelem = 500
     df_right["key3"] = np.random.randint(0, 30, nelem)
     df_right["key4"] = np.random.randint(0, 50, nelem)
@@ -399,18 +398,18 @@ def test_dataframe_merge_no_common_column():
 
 
 def test_dataframe_empty_merge():
-    gdf1 = DataFrame({"a": [], "b": []})
-    gdf2 = DataFrame({"a": [], "c": []})
+    gdf1 = cudf.DataFrame({"a": [], "b": []})
+    gdf2 = cudf.DataFrame({"a": [], "c": []})
 
-    expect = DataFrame({"a": [], "b": [], "c": []})
+    expect = cudf.DataFrame({"a": [], "b": [], "c": []})
     got = gdf1.merge(gdf2, how="left", on=["a"])
 
     assert_join_results_equal(expect, got, how="left")
 
 
 def test_dataframe_merge_order():
-    gdf1 = DataFrame()
-    gdf2 = DataFrame()
+    gdf1 = cudf.DataFrame()
+    gdf2 = cudf.DataFrame()
     gdf1["id"] = [10, 11]
     gdf1["timestamp"] = [1, 2]
     gdf1["a"] = [3, 4]
@@ -478,8 +477,8 @@ def test_dataframe_pairs_of_triples(pairs, max, rows, how):
         pdf_left[left_column] = np.random.randint(0, max, rows)
     for right_column in pairs[1]:
         pdf_right[right_column] = np.random.randint(0, max, rows)
-    gdf_left = DataFrame.from_pandas(pdf_left)
-    gdf_right = DataFrame.from_pandas(pdf_right)
+    gdf_left = cudf.from_pandas(pdf_left)
+    gdf_right = cudf.from_pandas(pdf_right)
     if not set(pdf_left.columns).intersection(pdf_right.columns):
         with pytest.raises(
             pd.core.reshape.merge.MergeError,
@@ -514,10 +513,6 @@ def test_dataframe_pairs_of_triples(pairs, max, rows, how):
 
 
 def test_safe_merging_with_left_empty():
-    import numpy as np
-    import pandas as pd
-
-    from cudf import DataFrame
 
     np.random.seed(0)
 
@@ -528,8 +523,8 @@ def test_safe_merging_with_left_empty():
         pdf_left[left_column] = np.random.randint(0, 10, 0)
     for right_column in pairs[1]:
         pdf_right[right_column] = np.random.randint(0, 10, 5)
-    gdf_left = DataFrame.from_pandas(pdf_left)
-    gdf_right = DataFrame.from_pandas(pdf_right)
+    gdf_left = cudf.from_pandas(pdf_left)
+    gdf_right = cudf.from_pandas(pdf_right)
 
     pdf_result = pdf_left.merge(pdf_right)
     gdf_result = gdf_left.merge(gdf_right)
@@ -562,16 +557,17 @@ def test_empty_joins(how, left_empty, right_empty):
 
 
 @pytest.mark.xfail(
+    condition=not PANDAS_GE_120,
     reason="left_on/right_on produces undefined results with 0"
-    "index and is disabled"
+    "index and is disabled",
 )
 def test_merge_left_index_zero():
     left = pd.DataFrame({"x": [1, 2, 3, 4, 5, 6]}, index=[0, 1, 2, 3, 4, 5])
     right = pd.DataFrame(
         {"y": [10, 20, 30, 6, 5, 4]}, index=[0, 1, 2, 3, 4, 6]
     )
-    gleft = DataFrame.from_pandas(left)
-    gright = DataFrame.from_pandas(right)
+    gleft = cudf.from_pandas(left)
+    gright = cudf.from_pandas(right)
     pd_merge = left.merge(right, left_on="x", right_on="y")
     gd_merge = gleft.merge(gright, left_on="x", right_on="y")
 
@@ -592,8 +588,8 @@ def test_merge_left_right_index_left_right_on_zero_kwargs(kwargs):
     right = pd.DataFrame(
         {"y": [10, 20, 30, 6, 5, 4]}, index=[0, 1, 2, 3, 4, 6]
     )
-    gleft = DataFrame.from_pandas(left)
-    gright = DataFrame.from_pandas(right)
+    gleft = cudf.from_pandas(left)
+    gright = cudf.from_pandas(right)
     pd_merge = left.merge(right, **kwargs)
     gd_merge = gleft.merge(gright, **kwargs)
     assert_join_results_equal(pd_merge, gd_merge, how="left")
@@ -613,8 +609,8 @@ def test_merge_left_right_index_left_right_on_kwargs(kwargs):
     right = pd.DataFrame(
         {"y": [10, 20, 30, 6, 5, 4]}, index=[1, 2, 3, 4, 5, 7]
     )
-    gleft = DataFrame.from_pandas(left)
-    gright = DataFrame.from_pandas(right)
+    gleft = cudf.from_pandas(left)
+    gright = cudf.from_pandas(right)
     pd_merge = left.merge(right, **kwargs)
     gd_merge = gleft.merge(gright, **kwargs)
     assert_join_results_equal(pd_merge, gd_merge, how="left")
@@ -695,8 +691,8 @@ def test_merge_on_index_retained():
 def test_merge_left_right_index_left_right_on_kwargs2(kwargs):
     left = pd.DataFrame({"x": [1, 2, 3]}, index=[10, 20, 30])
     right = pd.DataFrame({"y": [10, 20, 30]}, index=[1, 2, 30])
-    gleft = DataFrame.from_pandas(left)
-    gright = DataFrame.from_pandas(right)
+    gleft = cudf.from_pandas(left)
+    gright = cudf.from_pandas(right)
     gd_merge = gleft.merge(gright, **kwargs)
     pd_merge = left.merge(right, **kwargs)
     if pd_merge.empty:
@@ -730,8 +726,8 @@ def test_merge_sort(ons, hows):
     left.index = [6, 5, 4, 7, 5, 5, 5, 4, 4]
     right.index = [5, 4, 1, 9, 4, 3, 5, 4, 4]
 
-    gleft = DataFrame.from_pandas(left)
-    gright = DataFrame.from_pandas(right)
+    gleft = cudf.from_pandas(left)
+    gright = cudf.from_pandas(right)
     gd_merge = gleft.merge(gright, **kwargs)
 
     pd_merge = left.merge(right, **kwargs)
@@ -778,8 +774,8 @@ def test_merge_sort_on_indexes(kwargs):
     left.index = [6, 5, 4, 7, 5, 5, 5, 4, 4]
     right.index = [5, 4, 1, 9, 4, 3, 5, 4, 4]
 
-    gleft = DataFrame.from_pandas(left)
-    gright = DataFrame.from_pandas(right)
+    gleft = cudf.from_pandas(left)
+    gright = cudf.from_pandas(right)
     gd_merge = gleft.merge(gright, **kwargs)
 
     if left_index and right_index:
@@ -802,8 +798,8 @@ def test_join_datetimes_index(dtype):
     datetimes = pd.Series(pd.date_range("20010101", "20010102", freq="12h"))
     pdf_lhs = pd.DataFrame(index=[1, 0, 1, 2, 0, 0, 1])
     pdf_rhs = pd.DataFrame({"d": datetimes})
-    gdf_lhs = DataFrame.from_pandas(pdf_lhs)
-    gdf_rhs = DataFrame.from_pandas(pdf_rhs)
+    gdf_lhs = cudf.from_pandas(pdf_lhs)
+    gdf_rhs = cudf.from_pandas(pdf_rhs)
 
     gdf_rhs["d"] = gdf_rhs["d"].astype(dtype)
 
@@ -818,8 +814,8 @@ def test_join_datetimes_index(dtype):
 def test_join_with_different_names():
     left = pd.DataFrame({"a": [0, 1, 2.0, 3, 4, 5, 9]})
     right = pd.DataFrame({"b": [12, 5, 3, 9.0, 5], "c": [1, 2, 3, 4, 5.0]})
-    gleft = DataFrame.from_pandas(left)
-    gright = DataFrame.from_pandas(right)
+    gleft = cudf.from_pandas(left)
+    gright = cudf.from_pandas(right)
     pd_merge = left.merge(right, how="outer", left_on=["a"], right_on=["b"])
     gd_merge = gleft.merge(gright, how="outer", left_on=["a"], right_on=["b"])
     assert_join_results_equal(pd_merge, gd_merge, how="outer")
@@ -828,8 +824,8 @@ def test_join_with_different_names():
 def test_join_same_name_different_order():
     left = pd.DataFrame({"a": [0, 0], "b": [1, 2]})
     right = pd.DataFrame({"a": [1, 2], "b": [0, 0]})
-    gleft = DataFrame.from_pandas(left)
-    gright = DataFrame.from_pandas(right)
+    gleft = cudf.from_pandas(left)
+    gright = cudf.from_pandas(right)
     pd_merge = left.merge(right, left_on=["a", "b"], right_on=["b", "a"])
     gd_merge = gleft.merge(gright, left_on=["a", "b"], right_on=["b", "a"])
     assert_join_results_equal(pd_merge, gd_merge, how="left")
@@ -838,8 +834,8 @@ def test_join_same_name_different_order():
 def test_join_empty_table_dtype():
     left = pd.DataFrame({"a": []})
     right = pd.DataFrame({"b": [12, 5, 3, 9.0, 5], "c": [1, 2, 3, 4, 5.0]})
-    gleft = DataFrame.from_pandas(left)
-    gright = DataFrame.from_pandas(right)
+    gleft = cudf.from_pandas(left)
+    gright = cudf.from_pandas(right)
     pd_merge = left.merge(right, how="left", left_on=["a"], right_on=["b"])
     gd_merge = gleft.merge(gright, how="left", left_on=["a"], right_on=["b"])
     assert_eq(pd_merge["a"].dtype, gd_merge["a"].dtype)
@@ -937,7 +933,7 @@ def test_join_multi(how, column_a, column_b, column_c):
 )
 def test_merge_multi(kwargs):
 
-    left = DataFrame(
+    left = cudf.DataFrame(
         {
             "a": [1, 2, 3, 4, 3, 5, 6],
             "b": [1, 3, 5, 7, 5, 9, 0],
@@ -945,7 +941,7 @@ def test_merge_multi(kwargs):
             "d": ["v", "w", "x", "y", "z", "1", "2"],
         }
     )
-    right = DataFrame(
+    right = cudf.DataFrame(
         {
             "a": [0, 9, 3, 4, 3, 7, 8],
             "b": [2, 4, 5, 7, 5, 6, 8],
@@ -1001,19 +997,19 @@ def test_merge_multi(kwargs):
 def test_typecast_on_join_int_to_int(dtype_l, dtype_r):
     other_data = ["a", "b", "c"]
 
-    join_data_l = Series([1, 2, 3], dtype=dtype_l)
-    join_data_r = Series([1, 2, 4], dtype=dtype_r)
+    join_data_l = cudf.Series([1, 2, 3], dtype=dtype_l)
+    join_data_r = cudf.Series([1, 2, 4], dtype=dtype_r)
 
-    gdf_l = DataFrame({"join_col": join_data_l, "B": other_data})
-    gdf_r = DataFrame({"join_col": join_data_r, "B": other_data})
+    gdf_l = cudf.DataFrame({"join_col": join_data_l, "B": other_data})
+    gdf_r = cudf.DataFrame({"join_col": join_data_r, "B": other_data})
 
     exp_dtype = np.find_common_type([], [np.dtype(dtype_l), np.dtype(dtype_r)])
 
     exp_join_data = [1, 2]
     exp_other_data = ["a", "b"]
-    exp_join_col = Series(exp_join_data, dtype=exp_dtype)
+    exp_join_col = cudf.Series(exp_join_data, dtype=exp_dtype)
 
-    expect = DataFrame(
+    expect = cudf.DataFrame(
         {
             "join_col": exp_join_col,
             "B_x": exp_other_data,
@@ -1031,11 +1027,11 @@ def test_typecast_on_join_int_to_int(dtype_l, dtype_r):
 def test_typecast_on_join_float_to_float(dtype_l, dtype_r):
     other_data = ["a", "b", "c", "d", "e", "f"]
 
-    join_data_l = Series([1, 2, 3, 0.9, 4.5, 6], dtype=dtype_l)
-    join_data_r = Series([1, 2, 3, 0.9, 4.5, 7], dtype=dtype_r)
+    join_data_l = cudf.Series([1, 2, 3, 0.9, 4.5, 6], dtype=dtype_l)
+    join_data_r = cudf.Series([1, 2, 3, 0.9, 4.5, 7], dtype=dtype_r)
 
-    gdf_l = DataFrame({"join_col": join_data_l, "B": other_data})
-    gdf_r = DataFrame({"join_col": join_data_r, "B": other_data})
+    gdf_l = cudf.DataFrame({"join_col": join_data_l, "B": other_data})
+    gdf_r = cudf.DataFrame({"join_col": join_data_r, "B": other_data})
 
     exp_dtype = np.find_common_type([], [np.dtype(dtype_l), np.dtype(dtype_r)])
 
@@ -1046,9 +1042,9 @@ def test_typecast_on_join_float_to_float(dtype_l, dtype_r):
         exp_join_data = [1, 2, 3, 0.9, 4.5]
         exp_other_data = ["a", "b", "c", "d", "e"]
 
-    exp_join_col = Series(exp_join_data, dtype=exp_dtype)
+    exp_join_col = cudf.Series(exp_join_data, dtype=exp_dtype)
 
-    expect = DataFrame(
+    expect = cudf.DataFrame(
         {
             "join_col": exp_join_col,
             "B_x": exp_other_data,
@@ -1072,19 +1068,19 @@ def test_typecast_on_join_mixed_int_float(dtype_l, dtype_r):
 
     other_data = ["a", "b", "c", "d", "e", "f"]
 
-    join_data_l = Series([1, 2, 3, 0.9, 4.5, 6], dtype=dtype_l)
-    join_data_r = Series([1, 2, 3, 0.9, 4.5, 7], dtype=dtype_r)
+    join_data_l = cudf.Series([1, 2, 3, 0.9, 4.5, 6], dtype=dtype_l)
+    join_data_r = cudf.Series([1, 2, 3, 0.9, 4.5, 7], dtype=dtype_r)
 
-    gdf_l = DataFrame({"join_col": join_data_l, "B": other_data})
-    gdf_r = DataFrame({"join_col": join_data_r, "B": other_data})
+    gdf_l = cudf.DataFrame({"join_col": join_data_l, "B": other_data})
+    gdf_r = cudf.DataFrame({"join_col": join_data_r, "B": other_data})
 
     exp_dtype = np.find_common_type([], [np.dtype(dtype_l), np.dtype(dtype_r)])
 
     exp_join_data = [1, 2, 3]
     exp_other_data = ["a", "b", "c"]
-    exp_join_col = Series(exp_join_data, dtype=exp_dtype)
+    exp_join_col = cudf.Series(exp_join_data, dtype=exp_dtype)
 
-    expect = DataFrame(
+    expect = cudf.DataFrame(
         {
             "join_col": exp_join_col,
             "B_x": exp_other_data,
@@ -1101,18 +1097,18 @@ def test_typecast_on_join_no_float_round():
 
     other_data = ["a", "b", "c", "d", "e"]
 
-    join_data_l = Series([1, 2, 3, 4, 5], dtype="int8")
-    join_data_r = Series([1, 2, 3, 4.01, 4.99], dtype="float32")
+    join_data_l = cudf.Series([1, 2, 3, 4, 5], dtype="int8")
+    join_data_r = cudf.Series([1, 2, 3, 4.01, 4.99], dtype="float32")
 
-    gdf_l = DataFrame({"join_col": join_data_l, "B": other_data})
-    gdf_r = DataFrame({"join_col": join_data_r, "B": other_data})
+    gdf_l = cudf.DataFrame({"join_col": join_data_l, "B": other_data})
+    gdf_r = cudf.DataFrame({"join_col": join_data_r, "B": other_data})
 
     exp_join_data = [1, 2, 3, 4, 5]
     exp_Bx = ["a", "b", "c", "d", "e"]
     exp_By = ["a", "b", "c", None, None]
-    exp_join_col = Series(exp_join_data, dtype="float32")
+    exp_join_col = cudf.Series(exp_join_data, dtype="float32")
 
-    expect = DataFrame(
+    expect = cudf.DataFrame(
         {"join_col": exp_join_col, "B_x": exp_Bx, "B_y": exp_By}
     )
 
@@ -1162,23 +1158,23 @@ def test_typecast_on_join_overflow_unsafe(dtypes):
 )
 def test_typecast_on_join_dt_to_dt(dtype_l, dtype_r):
     other_data = ["a", "b", "c", "d", "e"]
-    join_data_l = Series(
+    join_data_l = cudf.Series(
         ["1991-11-20", "1999-12-31", "2004-12-04", "2015-01-01", "2019-08-15"]
     ).astype(dtype_l)
-    join_data_r = Series(
+    join_data_r = cudf.Series(
         ["1991-11-20", "1999-12-31", "2004-12-04", "2015-01-01", "2019-08-16"]
     ).astype(dtype_r)
 
-    gdf_l = DataFrame({"join_col": join_data_l, "B": other_data})
-    gdf_r = DataFrame({"join_col": join_data_r, "B": other_data})
+    gdf_l = cudf.DataFrame({"join_col": join_data_l, "B": other_data})
+    gdf_r = cudf.DataFrame({"join_col": join_data_r, "B": other_data})
 
     exp_dtype = max(np.dtype(dtype_l), np.dtype(dtype_r))
 
     exp_join_data = ["1991-11-20", "1999-12-31", "2004-12-04", "2015-01-01"]
     exp_other_data = ["a", "b", "c", "d"]
-    exp_join_col = Series(exp_join_data, dtype=exp_dtype)
+    exp_join_col = cudf.Series(exp_join_data, dtype=exp_dtype)
 
-    expect = DataFrame(
+    expect = cudf.DataFrame(
         {
             "join_col": exp_join_col,
             "B_x": exp_other_data,
@@ -1200,21 +1196,21 @@ def test_typecast_on_join_categorical(dtype_l, dtype_r):
         pytest.skip("Can't determine which categorical to use")
 
     other_data = ["a", "b", "c", "d", "e"]
-    join_data_l = Series([1, 2, 3, 4, 5], dtype=dtype_l)
-    join_data_r = Series([1, 2, 3, 4, 6], dtype=dtype_r)
+    join_data_l = cudf.Series([1, 2, 3, 4, 5], dtype=dtype_l)
+    join_data_r = cudf.Series([1, 2, 3, 4, 6], dtype=dtype_r)
     if dtype_l == "category":
         exp_dtype = join_data_l.dtype.categories.dtype
     elif dtype_r == "category":
         exp_dtype = join_data_r.dtype.categories.dtype
 
-    gdf_l = DataFrame({"join_col": join_data_l, "B": other_data})
-    gdf_r = DataFrame({"join_col": join_data_r, "B": other_data})
+    gdf_l = cudf.DataFrame({"join_col": join_data_l, "B": other_data})
+    gdf_r = cudf.DataFrame({"join_col": join_data_r, "B": other_data})
 
     exp_join_data = [1, 2, 3, 4]
     exp_other_data = ["a", "b", "c", "d"]
-    exp_join_col = Series(exp_join_data, dtype=exp_dtype)
+    exp_join_col = cudf.Series(exp_join_data, dtype=exp_dtype)
 
-    expect = DataFrame(
+    expect = cudf.DataFrame(
         {
             "join_col": exp_join_col,
             "B_x": exp_other_data,
@@ -1443,8 +1439,8 @@ def test_categorical_typecast_outer_one_cat(dtype):
 def test_index_join(lhs, rhs, how, level):
     l_pdf = pd.DataFrame({"a": [2, 3, 1, 4], "b": [3, 7, 8, 1]})
     r_pdf = pd.DataFrame({"a": [1, 5, 4, 0], "b": [3, 9, 8, 4]})
-    l_df = DataFrame.from_pandas(l_pdf)
-    r_df = DataFrame.from_pandas(r_pdf)
+    l_df = cudf.from_pandas(l_pdf)
+    r_df = cudf.from_pandas(r_pdf)
     p_lhs = l_pdf.set_index(lhs).index
     p_rhs = r_pdf.set_index(rhs).index
     g_lhs = l_df.set_index(lhs).index
@@ -1461,8 +1457,8 @@ def test_index_join_corner_cases():
     r_pdf = pd.DataFrame(
         {"a": [1, 5, 4, 0], "b": [3, 9, 8, 4], "c": [2, 3, 6, 0]}
     )
-    l_df = DataFrame.from_pandas(l_pdf)
-    r_df = DataFrame.from_pandas(r_pdf)
+    l_df = cudf.from_pandas(l_pdf)
+    r_df = cudf.from_pandas(r_pdf)
 
     # Join when column name doesn't match with level
     lhs = ["a", "b"]
@@ -1516,8 +1512,10 @@ def test_index_join_corner_cases():
 
 
 def test_index_join_exception_cases():
-    l_df = DataFrame({"a": [2, 3, 1, 4], "b": [3, 7, 8, 1]})
-    r_df = DataFrame({"a": [1, 5, 4, 0], "b": [3, 9, 8, 4], "c": [2, 3, 6, 0]})
+    l_df = cudf.DataFrame({"a": [2, 3, 1, 4], "b": [3, 7, 8, 1]})
+    r_df = cudf.DataFrame(
+        {"a": [1, 5, 4, 0], "b": [3, 9, 8, 4], "c": [2, 3, 6, 0]}
+    )
 
     # Join between two MultiIndex
     lhs = ["a", "b"]
@@ -1540,12 +1538,12 @@ def test_index_join_exception_cases():
 
 
 def test_typecast_on_join_indexes():
-    join_data_l = Series([1, 2, 3, 4, 5], dtype="int8")
-    join_data_r = Series([1, 2, 3, 4, 6], dtype="int32")
+    join_data_l = cudf.Series([1, 2, 3, 4, 5], dtype="int8")
+    join_data_r = cudf.Series([1, 2, 3, 4, 6], dtype="int32")
     other_data = ["a", "b", "c", "d", "e"]
 
-    gdf_l = DataFrame({"join_col": join_data_l, "B": other_data})
-    gdf_r = DataFrame({"join_col": join_data_r, "B": other_data})
+    gdf_l = cudf.DataFrame({"join_col": join_data_l, "B": other_data})
+    gdf_r = cudf.DataFrame({"join_col": join_data_r, "B": other_data})
 
     gdf_l = gdf_l.set_index("join_col")
     gdf_r = gdf_r.set_index("join_col")
@@ -1553,7 +1551,7 @@ def test_typecast_on_join_indexes():
     exp_join_data = [1, 2, 3, 4]
     exp_other_data = ["a", "b", "c", "d"]
 
-    expect = DataFrame(
+    expect = cudf.DataFrame(
         {
             "join_col": exp_join_data,
             "B_x": exp_other_data,
@@ -1568,17 +1566,17 @@ def test_typecast_on_join_indexes():
 
 
 def test_typecast_on_join_multiindices():
-    join_data_l_0 = Series([1, 2, 3, 4, 5], dtype="int8")
-    join_data_l_1 = Series([2, 3, 4.1, 5.9, 6], dtype="float32")
-    join_data_l_2 = Series([7, 8, 9, 0, 1], dtype="float32")
+    join_data_l_0 = cudf.Series([1, 2, 3, 4, 5], dtype="int8")
+    join_data_l_1 = cudf.Series([2, 3, 4.1, 5.9, 6], dtype="float32")
+    join_data_l_2 = cudf.Series([7, 8, 9, 0, 1], dtype="float32")
 
-    join_data_r_0 = Series([1, 2, 3, 4, 5], dtype="int32")
-    join_data_r_1 = Series([2, 3, 4, 5, 6], dtype="int32")
-    join_data_r_2 = Series([7, 8, 9, 0, 0], dtype="float64")
+    join_data_r_0 = cudf.Series([1, 2, 3, 4, 5], dtype="int32")
+    join_data_r_1 = cudf.Series([2, 3, 4, 5, 6], dtype="int32")
+    join_data_r_2 = cudf.Series([7, 8, 9, 0, 0], dtype="float64")
 
     other_data = ["a", "b", "c", "d", "e"]
 
-    gdf_l = DataFrame(
+    gdf_l = cudf.DataFrame(
         {
             "join_col_0": join_data_l_0,
             "join_col_1": join_data_l_1,
@@ -1586,7 +1584,7 @@ def test_typecast_on_join_multiindices():
             "B": other_data,
         }
     )
-    gdf_r = DataFrame(
+    gdf_r = cudf.DataFrame(
         {
             "join_col_0": join_data_r_0,
             "join_col_1": join_data_r_1,
@@ -1598,12 +1596,12 @@ def test_typecast_on_join_multiindices():
     gdf_l = gdf_l.set_index(["join_col_0", "join_col_1", "join_col_2"])
     gdf_r = gdf_r.set_index(["join_col_0", "join_col_1", "join_col_2"])
 
-    exp_join_data_0 = Series([1, 2], dtype="int32")
-    exp_join_data_1 = Series([2, 3], dtype="float64")
-    exp_join_data_2 = Series([7, 8], dtype="float64")
-    exp_other_data = Series(["a", "b"])
+    exp_join_data_0 = cudf.Series([1, 2], dtype="int32")
+    exp_join_data_1 = cudf.Series([2, 3], dtype="float64")
+    exp_join_data_2 = cudf.Series([7, 8], dtype="float64")
+    exp_other_data = cudf.Series(["a", "b"])
 
-    expect = DataFrame(
+    expect = cudf.DataFrame(
         {
             "join_col_0": exp_join_data_0,
             "join_col_1": exp_join_data_1,
@@ -1619,12 +1617,12 @@ def test_typecast_on_join_multiindices():
 
 
 def test_typecast_on_join_indexes_matching_categorical():
-    join_data_l = Series(["a", "b", "c", "d", "e"], dtype="category")
-    join_data_r = Series(["a", "b", "c", "d", "e"], dtype="str")
+    join_data_l = cudf.Series(["a", "b", "c", "d", "e"], dtype="category")
+    join_data_r = cudf.Series(["a", "b", "c", "d", "e"], dtype="str")
     other_data = [1, 2, 3, 4, 5]
 
-    gdf_l = DataFrame({"join_col": join_data_l, "B": other_data})
-    gdf_r = DataFrame({"join_col": join_data_r, "B": other_data})
+    gdf_l = cudf.DataFrame({"join_col": join_data_l, "B": other_data})
+    gdf_r = cudf.DataFrame({"join_col": join_data_r, "B": other_data})
 
     gdf_l = gdf_l.set_index("join_col")
     gdf_r = gdf_r.set_index("join_col")
@@ -1632,7 +1630,7 @@ def test_typecast_on_join_indexes_matching_categorical():
     exp_join_data = ["a", "b", "c", "d", "e"]
     exp_other_data = [1, 2, 3, 4, 5]
 
-    expect = DataFrame(
+    expect = cudf.DataFrame(
         {
             "join_col": exp_join_data,
             "B_x": exp_other_data,
@@ -1686,9 +1684,9 @@ def test_series_dataframe_mixed_merging(lhs, rhs, how, kwargs):
 
     check_lhs = lhs.copy()
     check_rhs = rhs.copy()
-    if isinstance(lhs, Series):
+    if isinstance(lhs, cudf.Series):
         check_lhs = lhs.to_frame()
-    if isinstance(rhs, Series):
+    if isinstance(rhs, cudf.Series):
         check_rhs = rhs.to_frame()
 
     expect = check_lhs.merge(check_rhs, how=how, **kwargs)

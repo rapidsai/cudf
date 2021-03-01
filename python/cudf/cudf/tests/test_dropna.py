@@ -1,4 +1,5 @@
-# Copyright (c) 2020, NVIDIA CORPORATION.
+# Copyright (c) 2020-2021, NVIDIA CORPORATION.
+
 import numpy as np
 import pandas as pd
 import pytest
@@ -21,7 +22,7 @@ from cudf.tests.utils import assert_eq
 @pytest.mark.parametrize("inplace", [True, False])
 def test_dropna_series(data, nulls, inplace):
 
-    psr = pd.Series(data)
+    psr = cudf.utils.utils._create_pandas_series(data=data)
 
     if len(data) > 0:
         if nulls == "one":
@@ -40,14 +41,12 @@ def test_dropna_series(data, nulls, inplace):
     if gsr.null_count == len(gsr):
         check_dtype = False
 
+    expected = psr.dropna()
+    actual = gsr.dropna()
+
     if inplace:
-        psr.dropna()
-        gsr.dropna()
         expected = psr
         actual = gsr
-    else:
-        expected = psr.dropna()
-        actual = gsr.dropna()
 
     assert_eq(expected, actual, check_dtype=check_dtype)
 
@@ -71,14 +70,12 @@ def test_dropna_dataframe(data, how, axis, inplace):
     pdf = pd.DataFrame(data)
     gdf = cudf.from_pandas(pdf)
 
+    expected = pdf.dropna(axis=axis, how=how, inplace=inplace)
+    actual = gdf.dropna(axis=axis, how=how, inplace=inplace)
+
     if inplace:
-        pdf.dropna(axis=axis, how=how, inplace=inplace)
-        gdf.dropna(axis=axis, how=how, inplace=inplace)
         expected = pdf
         actual = gdf
-    else:
-        expected = pdf.dropna(axis=axis, how=how, inplace=inplace)
-        actual = gdf.dropna(axis=axis, how=how, inplace=inplace)
 
     assert_eq(expected, actual)
 
@@ -192,18 +189,14 @@ def test_dropna_thresh_cols(thresh, subset, inplace):
     )
     gdf = cudf.from_pandas(pdf)
 
+    expected = pdf.dropna(
+        axis=1, thresh=thresh, subset=subset, inplace=inplace
+    )
+    actual = gdf.dropna(axis=1, thresh=thresh, subset=subset, inplace=inplace)
+
     if inplace:
-        pdf.dropna(axis=1, thresh=thresh, subset=subset, inplace=inplace)
-        gdf.dropna(axis=1, thresh=thresh, subset=subset, inplace=inplace)
         expected = pdf
         actual = gdf
-    else:
-        expected = pdf.dropna(
-            axis=1, thresh=thresh, subset=subset, inplace=inplace
-        )
-        actual = gdf.dropna(
-            axis=1, thresh=thresh, subset=subset, inplace=inplace
-        )
 
     assert_eq(
         expected, actual,
