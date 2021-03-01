@@ -745,6 +745,17 @@ def test_operator_func_between_series_logical(
     )
     expect = pdf_series_result
     got = gdf_series_result.to_pandas(nullable=True)
+    
+    # If fill_value is np.nan, things break down a bit,
+    # because setting a NaN into a pandas nullable float
+    # array still gets transformed to <NA>. As such,
+    # pd_series_with_nulls.fillna(np.nan) has no effect.
+    if (
+        pdf_series_a.isnull().sum() != pdf_series_b.isnull().sum()
+    ) and np.isscalar(fill_value) and np.isnan(fill_value):
+        with pytest.raises(AssertionError):
+            utils.assert_eq(expect, got)
+        return
     utils.assert_eq(expect, got)
 
 @pytest.mark.parametrize("dtype", ["float32", "float64"])
