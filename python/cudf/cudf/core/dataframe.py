@@ -5714,7 +5714,6 @@ class DataFrame(Frame, Serializable):
             DataFrame of booleans showing whether each element in
             the DataFrame is contained in values.
         """
-
         if isinstance(values, dict):
 
             result_df = DataFrame()
@@ -5741,7 +5740,7 @@ class DataFrame(Frame, Serializable):
                 ) and isinstance(
                     values._column, cudf.core.column.CategoricalColumn
                 ):
-                    res = self._data[col] == values._column
+                    res = (self._data[col] == values._column).fillna(False)
                     result[col] = res
                 elif (
                     isinstance(
@@ -5756,7 +5755,7 @@ class DataFrame(Frame, Serializable):
                 ):
                     result[col] = utils.scalar_broadcast_to(False, len(self))
                 else:
-                    result[col] = self._data[col] == values._column
+                    result[col] = (self._data[col] == values._column).fillna(False)
 
             result.index = self.index
             return result
@@ -5766,7 +5765,7 @@ class DataFrame(Frame, Serializable):
             result = DataFrame()
             for col in self._data.names:
                 if col in values.columns:
-                    result[col] = self._data[col] == values[col]._column
+                    result[col] = (self._data[col] == values[col]._column).fillna(False)
                 else:
                     result[col] = utils.scalar_broadcast_to(False, len(self))
             result.index = self.index
