@@ -1,9 +1,9 @@
 # Copyright (c) 2020-2021, NVIDIA CORPORATION.
+
 from __future__ import annotations
 
 import copy
 import functools
-import operator
 import warnings
 from collections import OrderedDict, abc as abc
 from typing import TYPE_CHECKING, Any, Dict, Tuple, TypeVar, overload
@@ -26,7 +26,6 @@ from cudf.utils.dtypes import (
     is_scalar,
     min_scalar_type,
 )
-
 
 T = TypeVar("T", bound="Frame")
 
@@ -340,9 +339,11 @@ class Frame(libcudf.table.Table):
                 np.intersect1d, all_columns_list
             )
             # get column names not present in all objs
-            non_intersecting_columns = (
-                functools.reduce(operator.or_, (obj.columns for obj in objs))
-                ^ intersecting_columns
+            union_of_columns = functools.reduce(
+                pd.Index.union, [obj.columns for obj in objs]
+            )
+            non_intersecting_columns = union_of_columns.symmetric_difference(
+                intersecting_columns
             )
             names = OrderedDict.fromkeys(intersecting_columns).keys()
 
@@ -2402,6 +2403,18 @@ class Frame(libcudf.table.Table):
                     )
 
         return self
+
+    def _copy_interval_data(self, other, include_index=True):
+        for name, col, other_col in zip(
+            self._data.keys(), self._data.values(), other._data.values()
+        ):
+            if isinstance(other_col, cudf.core.column.IntervalColumn):
+                self._data[name] = cudf.core.column.IntervalColumn(col)
+
+    def _postprocess_columns(self, other, include_index=True):
+        self._copy_categories(other, include_index=include_index)
+        self._copy_struct_names(other, include_index=include_index)
+        self._copy_interval_data(other, include_index=include_index)
 
     def _unaryop(self, op):
         data_columns = (col.unary_operator(op) for col in self._columns)

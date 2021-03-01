@@ -1,10 +1,12 @@
-# Copyright (c) 2018-2020, NVIDIA CORPORATION.
+# Copyright (c) 2018-2021, NVIDIA CORPORATION.
 
+import datetime
 import itertools
 
 import numpy as np
 import pandas as pd
 import pytest
+from numba import cuda
 from numpy.testing import assert_array_equal
 
 import cudf
@@ -284,8 +286,6 @@ def test_groupby_apply():
 
 
 def test_groupby_apply_grouped():
-    from numba import cuda
-
     np.random.seed(0)
     df = DataFrame()
     nelem = 20
@@ -732,12 +732,12 @@ def test_groupby_multi_agg_multi_groupby():
 
 
 def test_groupby_datetime_multi_agg_multi_groupby():
-    from datetime import datetime, timedelta
-
     pdf = pd.DataFrame(
         {
             "a": pd.date_range(
-                datetime.now(), datetime.now() + timedelta(9), freq="D"
+                datetime.datetime.now(),
+                datetime.datetime.now() + datetime.timedelta(9),
+                freq="D",
             ),
             "b": np.random.randint(0, 5, 10),
             "c": np.random.randint(0, 5, 10),
@@ -1496,7 +1496,8 @@ def test_groupby_apply_return_series_dataframe(cust_func):
 
 
 @pytest.mark.parametrize(
-    "pdf", [pd.DataFrame(), pd.DataFrame({"a": []}), pd.Series([])]
+    "pdf",
+    [pd.DataFrame(), pd.DataFrame({"a": []}), pd.Series([], dtype="float64")],
 )
 def test_groupby_no_keys(pdf):
     gdf = cudf.from_pandas(pdf)
@@ -1509,7 +1510,8 @@ def test_groupby_no_keys(pdf):
 
 
 @pytest.mark.parametrize(
-    "pdf", [pd.DataFrame(), pd.DataFrame({"a": []}), pd.Series([])]
+    "pdf",
+    [pd.DataFrame(), pd.DataFrame({"a": []}), pd.Series([], dtype="float64")],
 )
 def test_groupby_apply_no_keys(pdf):
     gdf = cudf.from_pandas(pdf)
