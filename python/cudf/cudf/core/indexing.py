@@ -95,8 +95,10 @@ class _SeriesIlocIndexer(object):
         else:
             value = column.as_column(value)
 
-        if hasattr(value, "dtype") and pd.api.types.is_numeric_dtype(
-            value.dtype
+        if (
+            not is_categorical_dtype(self._sr._column.dtype)
+            and hasattr(value, "dtype")
+            and pd.api.types.is_numeric_dtype(value.dtype)
         ):
             # normalize types if necessary:
             if not pd.api.types.is_integer(key):
