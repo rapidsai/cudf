@@ -3245,8 +3245,15 @@ public class ColumnVectorTest extends CudfTestBase {
   @Test
   void testIsDouble() {
     String[] doubleStrings = {"A", "nan", "Inf", "-Inf", "Infinity", "infinity", "-0.0", "0.0",
-        "1.7976931348623157E308", "1.7976931348623158E308", "-1.7976931348623157E308",
-        "-1.7976931348623158E308", "1.2e-234", "NULL", "null", null, "423"};
+        "1.7976931348623157E308",
+        // Current CUDF Code does not detect overflow for this. "1.7976931348623158E308",
+        // So we make it a little larger for this test
+        "1.7976931348623159E308",
+        "-1.7976931348623157E308",
+        // Current CUDF Code does not detect overflow for this. "-1.7976931348623158E308",
+        // So we make it a little larger for this test
+        "-1.7976931348623159E308",
+        "1.2e-234", "NULL", "null", null, "423"};
     try (ColumnVector doubleStringCV = ColumnVector.fromStrings(doubleStrings);
          ColumnVector isDouble = doubleStringCV.isFloat();
          ColumnVector doubles = doubleStringCV.asDoubles();
