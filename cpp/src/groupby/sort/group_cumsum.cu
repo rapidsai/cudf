@@ -22,11 +22,11 @@
 namespace cudf {
 namespace groupby {
 namespace detail {
-std::unique_ptr<column> group_cumsum(column_view const& values,
-                                     size_type num_groups,
-                                     rmm::device_vector<size_type> const& group_labels,
-                                     rmm::cuda_stream_view stream,
-                                     rmm::mr::device_memory_resource* mr)
+std::unique_ptr<column> sum_scan(column_view const& values,
+                                 size_type num_groups,
+                                 rmm::device_vector<size_type> const& group_labels,
+                                 rmm::cuda_stream_view stream,
+                                 rmm::mr::device_memory_resource* mr)
 {
   auto values_type = cudf::is_dictionary(values.type())
                        ? dictionary_column_view(values).keys().type()

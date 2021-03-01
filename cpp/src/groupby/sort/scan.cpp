@@ -65,10 +65,10 @@ void scan_result_functor::operator()<aggregation::SUM>(aggregation const& agg)
 {
   if (cache.has_result(col_idx, agg)) return;
 
-  cache.add_result(col_idx,
-                   agg,
-                   detail::group_cumsum(
-                     get_grouped_values(), helper.num_groups(), helper.group_labels(), stream, mr));
+  cache.add_result(
+    col_idx,
+    agg,
+    detail::sum_scan(get_grouped_values(), helper.num_groups(), helper.group_labels(), stream, mr));
 }
 
 }  // namespace detail

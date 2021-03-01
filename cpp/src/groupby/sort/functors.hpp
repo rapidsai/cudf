@@ -64,8 +64,7 @@ struct store_result_functor {
       //            values when asked for grouped values. Change this then.
       return sorted_values->view();
     else
-      grouped_values = helper.grouped_values(values);
-    return grouped_values->view();
+      return (grouped_values = helper.grouped_values(values))->view();
   };
 
   /**
@@ -76,8 +75,8 @@ struct store_result_functor {
    */
   column_view get_sorted_values()
   {
-    if (not sorted_values) sorted_values = helper.sorted_values(values);
-    return sorted_values->view();
+    return sorted_values ? sorted_values->view()
+                         : (sorted_values = helper.sorted_values(values))->view();
   };
 
  protected:
