@@ -5017,33 +5017,21 @@ def test_cov_nans():
     ],
 )
 def test_df_sr_binop(gsr, colnames, op):
-    def insert_col(ary, pdf, gdf, label):
-        gdata = gd.Series(ary, nan_as_null=False, dtype='float32')
-        pdata = pd.Series(
-            pd.Float32Dtype().__from_arrow__(
-                gdata.to_arrow()
-            )
-        )
-        pdf[label] = pdata
-        gdf[label] = gdata
-        return pdf, gdf
+    data = [[0, 2, 5], [3, None, 5], [6, 7, np.nan]]
+    data = dict(zip(colnames, data))
 
-    pdf, gdf = pd.DataFrame(), gd.DataFrame()
-    data = [[2,3,4], [5,np.nan,7], [8,9,None]]
-    for d, name in zip(data, ('a','b','c')):
-        pdf, gdf = insert_col(d, pdf, gdf, name)    
-
+    gdf = cudf.DataFrame(data)
+    pdf = pd.DataFrame.from_dict(data)
 
     psr = gsr.to_pandas()
-    breakpoint()
+
     expect = op(pdf, psr)
     got = op(gdf, gsr)
-    breakpoint()
-    assert_eq(expect, got, check_dtype=False)
+    assert_eq(expect.astype(float), got.astype(float))
 
     expect = op(psr, pdf)
-    got = op(gsr, gdf)
-    assert_eq(expect, got, check_dtype=False)
+    got = op(psr, pdf)
+    assert_eq(expect.astype(float), got.astype(float))
 
 
 @pytest.mark.parametrize(
