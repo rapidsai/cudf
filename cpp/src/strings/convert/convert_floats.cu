@@ -49,17 +49,16 @@ namespace {
  *
  * This function will also handle scientific notation format.
  */
-template <class FloatType>
-__device__ inline FloatType stof(string_view const& d_str)
+__device__ inline double stod(string_view const& d_str)
 {
   const char* in_ptr = d_str.data();
   const char* end    = in_ptr + d_str.size_bytes();
   if (end == in_ptr) return 0.0;
   // special strings
-  if (d_str.compare("NaN", 3) == 0) return std::numeric_limits<FloatType>::quiet_NaN();
-  if (d_str.compare("Inf", 3) == 0) return std::numeric_limits<FloatType>::infinity();
-  if (d_str.compare("-Inf", 4) == 0) return -std::numeric_limits<FloatType>::infinity();
-  FloatType sign{1.0};
+  if (d_str.compare("NaN", 3) == 0) return std::numeric_limits<double>::quiet_NaN();
+  if (d_str.compare("Inf", 3) == 0) return std::numeric_limits<double>::infinity();
+  if (d_str.compare("-Inf", 4) == 0) return -std::numeric_limits<double>::infinity();
+  double sign{1.0};
   if (*in_ptr == '-' || *in_ptr == '+') {
     sign = (*in_ptr == '-' ? -1 : 1);
     ++in_ptr;
@@ -88,7 +87,7 @@ __device__ inline FloatType stof(string_view const& d_str)
     }
     ++in_ptr;
   }
-  if (digits == 0) return sign * static_cast<FloatType>(0);
+  if (digits == 0) return sign * static_cast<double>(0);
 
   // check for exponent char
   int exp_ten  = 0;
@@ -115,17 +114,17 @@ __device__ inline FloatType stof(string_view const& d_str)
   exp_ten *= exp_sign;
   exp_ten += exp_off;
   exp_ten += num_digits - 1;
-  if (exp_ten > std::numeric_limits<FloatType>::max_exponent10)
-    return sign > 0 ? std::numeric_limits<FloatType>::infinity()
-                    : -std::numeric_limits<FloatType>::infinity();
-  else if (exp_ten < std::numeric_limits<FloatType>::min_exponent10)
-    return FloatType{0};
+  if (exp_ten > std::numeric_limits<double>::max_exponent10)
+    return sign > 0 ? std::numeric_limits<double>::infinity()
+                    : -std::numeric_limits<double>::infinity();
+  else if (exp_ten < std::numeric_limits<double>::min_exponent10)
+    return double{0};
 
   // using exp10() since the pow(10.0,exp_ten) function is
   // very inaccurate in 10.2: http://nvbugs/2971187
-  FloatType const base =
-    sign * static_cast<FloatType>(digits) * exp10(static_cast<FloatType>(1 - num_digits));
-  FloatType const exponent = exp10(static_cast<FloatType>(exp_ten));
+  double const base =
+    sign * static_cast<double>(digits) * exp10(static_cast<double>(1 - num_digits));
+  double const exponent = exp10(static_cast<double>(exp_ten));
   return base * exponent;
 }
 
@@ -141,7 +140,9 @@ struct string_to_float_fn {
   __device__ FloatType operator()(size_type idx)
   {
     if (strings_column.is_null(idx)) return static_cast<FloatType>(0);
-    return static_cast<FloatType>(stof<double>(strings_column.element<string_view>(idx)));
+    // The cast to FloatType will create predictable results for floats that are larger than the
+    // FloatType can hold
+    return static_cast<FloatType>(stod(strings_column.element<string_view>(idx)));
   }
 };
 

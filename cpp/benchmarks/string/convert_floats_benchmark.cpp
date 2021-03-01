@@ -14,8 +14,8 @@
  * limitations under the License.
  */
 
-#include "../fixture/benchmark_fixture.hpp"
-#include "../synchronization/synchronization.hpp"
+#include <fixture/benchmark_fixture.hpp>
+#include <synchronization/synchronization.hpp>
 
 #include <benchmark/benchmark.h>
 
@@ -32,6 +32,8 @@
 
 namespace {
 
+// For each array_size, this function is called twice from both StringToFloatNumber and
+// StringFromFloatNumber classes. Thus, the results are cached for reuse.
 template <class FloatType>
 static const std::vector<FloatType>& get_float_numbers(int64_t array_size)
 {
@@ -48,17 +50,12 @@ static const std::vector<FloatType>& get_float_numbers(int64_t array_size)
 }
 
 template <class FloatType>
-static const std::vector<std::string>& get_floats_numbers_as_string(int64_t array_size)
+static std::vector<std::string> get_floats_numbers_as_string(int64_t array_size)
 {
-  static std::unordered_map<int64_t, std::vector<std::string>> str_arrays;
-  auto& numbers_str = str_arrays[array_size];
-  if (numbers_str.size() == 0) {
-    numbers_str.reserve(array_size);
-    const auto& numbers = get_float_numbers<FloatType>(array_size);
-    std::transform(numbers.begin(), numbers.end(), std::back_inserter(numbers_str), [](auto x) {
-      return std::to_string(x);
-    });
-  }
+  std::vector<std::string> numbers_str(array_size);
+  const auto& numbers = get_float_numbers<FloatType>(array_size);
+  std::transform(
+    numbers.begin(), numbers.end(), numbers_str.begin(), [](auto x) { return std::to_string(x); });
   return numbers_str;
 }
 
@@ -111,8 +108,8 @@ void convert_from_float_number(benchmark::State& state)
     convert_to_float_number<float_type_id>(state);                          \
   }                                                                         \
   BENCHMARK_REGISTER_F(StringToFloatNumber, name)                           \
-    ->RangeMultiplier(1 << 5)                                               \
-    ->Range(1 << 10, 1 << 20)                                               \
+    ->RangeMultiplier(1 << 2)                                               \
+    ->Range(1 << 10, 1 << 17)                                               \
     ->UseManualTime()                                                       \
     ->Unit(benchmark::kMicrosecond);
 
@@ -122,8 +119,8 @@ void convert_from_float_number(benchmark::State& state)
     convert_from_float_number<float_type>(state);                             \
   }                                                                           \
   BENCHMARK_REGISTER_F(StringFromFloatNumber, name)                           \
-    ->RangeMultiplier(1 << 5)                                                 \
-    ->Range(1 << 10, 1 << 20)                                                 \
+    ->RangeMultiplier(1 << 2)                                                 \
+    ->Range(1 << 10, 1 << 17)                                                 \
     ->UseManualTime()                                                         \
     ->Unit(benchmark::kMicrosecond);
 
