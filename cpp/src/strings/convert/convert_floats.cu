@@ -63,6 +63,8 @@ __device__ inline double stod(string_view const& d_str)
     sign = (*in_ptr == '-' ? -1 : 1);
     ++in_ptr;
   }
+
+  // Parse and store the mantissa as much as we can, until we are about to exceed the limit of uint64_t
   constexpr uint64_t max_holding = (std::numeric_limits<uint64_t>::max() - 9L) / 10L;
   uint64_t digits                = 0;
   int exp_off                    = 0;
