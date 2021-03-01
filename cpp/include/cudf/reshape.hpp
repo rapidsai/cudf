@@ -150,12 +150,12 @@ std::unique_ptr<table> explode(
  * [[20,25],   200],
  * [[30],      300],
  * returns
- * [5,   0,    100],
- * [10,  1,    100],
- * [15,  2,    100],
- * [20,  0,    200],
- * [25,  1,    200],
- * [30,  0,    300],
+ * [0,   5,    100],
+ * [1,   10,   100],
+ * [2,   15,    100],
+ * [0,   20,    200],
+ * [1,   25,    200],
+ * [0,   30,    300],
  * ```
  *
  * Nulls and empty lists propagate in different ways depending on what is null or empty.
@@ -164,9 +164,9 @@ std::unique_ptr<table> explode(
  * [null,        200],
  * [[],          300],
  * returns
- * [5,    0,     100],
- * [null, 1,     100],
- * [15,   2,     100],
+ * [0,    5,     100],
+ * [1,    null,  100],
+ * [2,    15,    100],
  * ```
  * Note that null lists are not included in the resulting table, but nulls inside
  * lists and empty lists will be represented with a null entry for that column in that row.

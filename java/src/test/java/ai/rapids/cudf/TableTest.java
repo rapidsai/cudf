@@ -4550,9 +4550,19 @@ public class TableTest extends CudfTestBase {
             .column("s1", "s1", "s1", "s2", "s2", "s3")
             .column(   1,    1,    1,    3,    3,    5)
             .column(12.0, 12.0, 12.0, 14.0, 14.0, 13.0)
-            .build()) {
+            .build();
+         Table expectedPos = new Table.TestBuilder()
+             .column(   0,    1,    2,    0,    1,    0)
+             .column(   1,    2,    3,    4,    5,    6)
+             .column("s1", "s1", "s1", "s2", "s2", "s3")
+             .column(   1,    1,    1,    3,    3,    5)
+             .column(12.0, 12.0, 12.0, 14.0, 14.0, 13.0)
+             .build()) {
       try (Table exploded = t1.explode(0)) {
         assertTablesAreEqual(expected, exploded);
+      }
+      try (Table explodedPos = t1.explodePosition(0)) {
+        assertTablesAreEqual(expectedPos, explodedPos);
       }
     }
 
@@ -4575,9 +4585,21 @@ public class TableTest extends CudfTestBase {
             .column("s1", "s1", "s1", "s2", "s2", "s3")
             .column(   1,    1,    1,    3,    3,    5)
             .column(12.0, 12.0, 12.0, 14.0, 14.0, 13.0)
-            .build()) {
+            .build();
+         Table expectedPos = new Table.TestBuilder()
+             .column(   0,    1,    2,    0,    1,    0)
+             .column(nestedType,
+                 struct(1, "k1"), struct(2, "k2"), struct(3, "k3"),
+                 struct(4, "k4"), struct(5, "k5"), struct(6, "k6"))
+             .column("s1", "s1", "s1", "s2", "s2", "s3")
+             .column(   1,    1,    1,    3,    3,    5)
+             .column(12.0, 12.0, 12.0, 14.0, 14.0, 13.0)
+             .build()) {
       try (Table exploded = t1.explode(0)) {
         assertTablesAreEqual(expected, exploded);
+      }
+      try (Table explodedPos = t1.explodePosition(0)) {
+        assertTablesAreEqual(expectedPos, explodedPos);
       }
     }
   }
