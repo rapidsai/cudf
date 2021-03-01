@@ -161,7 +161,8 @@ set(GROUPBY_TEST_SRC
     "${CMAKE_CURRENT_SOURCE_DIR}/groupby/group_quantile_test.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/groupby/group_nunique_test.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/groupby/group_nth_element_test.cpp"
-    "${CMAKE_CURRENT_SOURCE_DIR}/groupby/group_collect_test.cpp")
+    "${CMAKE_CURRENT_SOURCE_DIR}/groupby/group_collect_test.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/groupby/group_sum_scan_test.cpp")
 
 ConfigureTest(GROUPBY_TEST "${GROUPBY_TEST_SRC}")
 

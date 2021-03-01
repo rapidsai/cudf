@@ -21,6 +21,7 @@
 #include <cudf/column/column_view.hpp>
 #include <cudf/detail/aggregation/aggregation.cuh>
 #include <cudf/detail/iterator.cuh>
+#include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/utilities/device_atomics.cuh>
 #include <cudf/detail/valid_if.cuh>
 #include <cudf/table/table_device_view.cuh>
@@ -68,11 +69,7 @@ struct scan_functor {
                          : data_type{type_to_id<ResultType>()};
 
     std::unique_ptr<column> result =
-      make_fixed_width_column(result_type,
-                              values.size(),
-                              values.has_nulls() ? mask_state::ALL_NULL : mask_state::UNALLOCATED,
-                              stream,
-                              mr);
+      make_fixed_width_column(result_type, values.size(), mask_state::UNALLOCATED, stream, mr);
 
     if (values.is_empty()) { return result; }
 
@@ -82,15 +79,29 @@ struct scan_functor {
     auto resultview = mutable_column_device_view::create(result->mutable_view(), stream);
     auto valuesview = column_device_view::create(values, stream);
 
-    using Operator = cudf::detail::corresponding_operator_t<K>;
-    thrust::exclusive_scan_by_key(rmm::exec_policy(stream),
-                                  group_labels.begin(),
-                                  group_labels.end(),
-                                  values.begin<T>(),
-                                  resultview->begin<ResultType>(),
-                                  Operator::template identity<ResultType>(),
-                                  thrust::equal_to<size_type>{},
-                                  Operator{});
+    if (values.has_nulls()) {
+      auto input = thrust::make_transform_iterator(
+        make_null_replacement_iterator(*valuesview, OpType::template identity<DeviceType>()),
+        thrust::identity<ResultType>{});
+      thrust::inclusive_scan_by_key(rmm::exec_policy(stream),
+                                    group_labels.begin(),
+                                    group_labels.end(),
+                                    input,
+                                    resultview->begin<ResultType>(),
+                                    thrust::equal_to<size_type>{},
+                                    OpType{});
+      result->set_null_mask(cudf::detail::copy_bitmask(values, stream));
+    } else {
+      auto input = thrust::make_transform_iterator(valuesview->begin<DeviceType>(),
+                                                   thrust::identity<ResultType>{});
+      thrust::inclusive_scan_by_key(rmm::exec_policy(stream),
+                                    group_labels.begin(),
+                                    group_labels.end(),
+                                    input,
+                                    resultview->begin<ResultType>(),
+                                    thrust::equal_to<size_type>{},
+                                    OpType{});
+    }
     return result;
   }
 
