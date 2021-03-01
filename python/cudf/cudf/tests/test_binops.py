@@ -770,11 +770,7 @@ def test_operator_func_series_and_scalar_logical(
     gdf_series = utils.gen_rand_series(
         dtype, 1000, has_nulls=has_nulls, stride=10000
     )
-    pdf_series = gdf_series.to_pandas()
-    # replace the NaNs with None
-    vals = [v if not np.isnan(v) else None for v in pdf_series]
-    pdf_series = utils.NullableFloatSeriesCompare(vals, dtype=pdf_series.dtype)
-
+    pdf_series = gdf_series.to_pandas(nullable=True)
     gdf_series_result = getattr(gdf_series, func)(
         cudf.Scalar(scalar) if use_cudf_scalar else scalar,
         fill_value=fill_value,
@@ -783,7 +779,10 @@ def test_operator_func_series_and_scalar_logical(
         scalar, fill_value=fill_value
     )
 
-    utils.assert_eq(pdf_series_result, gdf_series_result.to_pandas(nullable=True))
+    expect = pdf_series_result
+    got = gdf_series_result.to_pandas(nullable=True)
+
+    utils.assert_eq(expect, got)
 
 
 @pytest.mark.parametrize("func", _operators_arithmetic)
