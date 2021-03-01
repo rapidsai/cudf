@@ -86,7 +86,7 @@ public:
 
   void host_write(void const *data, size_t size) override {
     JNIEnv *env = cudf::jni::get_jni_env(jvm);
-    size_t left_to_copy = size;
+    long left_to_copy = static_cast<long>(size);
     const char *copy_from = static_cast<const char *>(data);
     while (left_to_copy > 0) {
       long buffer_amount_available = current_buffer_len - current_buffer_written;
@@ -111,7 +111,7 @@ public:
 
   void device_write(void const *gpu_data, size_t size, rmm::cuda_stream_view stream) override {
     JNIEnv *env = cudf::jni::get_jni_env(jvm);
-    size_t left_to_copy = size;
+    long left_to_copy = static_cast<long>(size);
     const char *copy_from = static_cast<const char *>(gpu_data);
     while (left_to_copy > 0) {
       long buffer_amount_available = current_buffer_len - current_buffer_written;
@@ -209,7 +209,7 @@ public:
 
   explicit native_arrow_ipc_writer_handle(const std::vector<std::string> &col_names,
                                           const std::shared_ptr<arrow::io::OutputStream> &sink)
-      : initialized(false), column_names(col_names), sink(sink), file_name("") {}
+      : initialized(false), column_names(col_names), file_name(""), sink(sink) {}
 
   bool initialized;
   std::vector<std::string> column_names;
@@ -541,7 +541,7 @@ convert_table_for_return(JNIEnv *env, std::unique_ptr<cudf::table> &table_result
   for (int i = 0; i < table_cols; i++) {
     outcol_handles[i] = reinterpret_cast<jlong>(ret[i].release());
   }
-  for (int i = 0; i < extra_columns.size(); i++) {
+  for (size_t i = 0; i < extra_columns.size(); i++) {
     outcol_handles[i + table_cols] = reinterpret_cast<jlong>(extra_columns[i].release());
   }
   return outcol_handles.get_jArray();
@@ -553,6 +553,7 @@ jlongArray convert_table_for_return(JNIEnv *env, std::unique_ptr<cudf::table> &t
 }
 
 namespace {
+
 // Check that window parameters are valid.
 bool valid_window_parameters(native_jintArray const &values,
                              native_jpointerArray<cudf::aggregation> const &ops,
@@ -562,14 +563,6 @@ bool valid_window_parameters(native_jintArray const &values,
          values.size() == preceding.size() && values.size() == following.size();
 }
 
-// Check that time-range window parameters are valid.
-bool valid_window_parameters(native_jintArray const &values, native_jintArray const &timestamps,
-                             native_jpointerArray<cudf::aggregation> const &ops,
-                             native_jintArray const &min_periods, native_jintArray const &preceding,
-                             native_jintArray const &following) {
-  return values.size() == timestamps.size() &&
-         valid_window_parameters(values, ops, min_periods, preceding, following);
-}
 } // namespace
 
 } // namespace jni
@@ -927,7 +920,7 @@ JNIEXPORT long JNICALL Java_ai_rapids_cudf_Table_writeParquetBufferBegin(
     table_metadata_with_nullability metadata;
     metadata.column_nullable = nullability;
     metadata.column_names = col_names.as_cpp_vector();
-    for (size_t i = 0; i < meta_keys.size(); ++i) {
+    for (auto i = 0; i < meta_keys.size(); ++i) {
       metadata.user_data[meta_keys[i].get()] = meta_values[i].get();
     }
 
@@ -977,7 +970,7 @@ JNIEXPORT long JNICALL Java_ai_rapids_cudf_Table_writeParquetFileBegin(
     table_metadata_with_nullability metadata;
     metadata.column_nullable = nullability;
     metadata.column_names = col_names.as_cpp_vector();
-    for (size_t i = 0; i < meta_keys.size(); ++i) {
+    for (int i = 0; i < meta_keys.size(); ++i) {
       metadata.user_data[meta_keys[i].get()] = meta_values[i].get();
     }
     cudf::jni::native_jintArray precisions(env, j_precisions);
@@ -1106,7 +1099,7 @@ JNIEXPORT long JNICALL Java_ai_rapids_cudf_Table_writeORCBufferBegin(
     table_metadata_with_nullability metadata;
     metadata.column_nullable = nullability;
     metadata.column_names = col_names.as_cpp_vector();
-    for (size_t i = 0; i < meta_keys.size(); ++i) {
+    for (int i = 0; i < meta_keys.size(); ++i) {
       metadata.user_data[meta_keys[i].get()] = meta_values[i].get();
     }
 
@@ -1149,7 +1142,7 @@ JNIEXPORT long JNICALL Java_ai_rapids_cudf_Table_writeORCFileBegin(
     table_metadata_with_nullability metadata;
     metadata.column_nullable = nullability;
     metadata.column_names = col_names.as_cpp_vector();
-    for (size_t i = 0; i < meta_keys.size(); ++i) {
+    for (int i = 0; i < meta_keys.size(); ++i) {
       metadata.user_data[meta_keys[i].get()] = meta_values[i].get();
     }
 
@@ -1605,7 +1598,7 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_concatenate(JNIEnv *env, 
     cudf::jni::auto_set_device(env);
     cudf::jni::native_jpointerArray<cudf::table_view> tables(env, table_handles);
 
-    long unsigned int num_tables = tables.size();
+    int num_tables = tables.size();
     // There are some issues with table_view and std::vector. We cannot give the
     // vector a size or it will not compile.
     std::vector<cudf::table_view> to_concat;
@@ -1635,7 +1628,6 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_hashPartition(JNIEnv *env
     cudf::jni::auto_set_device(env);
     cudf::table_view *n_input_table = reinterpret_cast<cudf::table_view *>(input_table);
     cudf::jni::native_jintArray n_columns_to_hash(env, columns_to_hash);
-    int n_number_of_partitions = static_cast<int>(number_of_partitions);
     cudf::jni::native_jintArray n_output_offsets(env, output_offsets);
 
     JNI_ARG_CHECK(env, n_columns_to_hash.size() > 0, "columns_to_hash is zero", NULL);
@@ -1648,7 +1640,7 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_hashPartition(JNIEnv *env
     std::pair<std::unique_ptr<cudf::table>, std::vector<cudf::size_type>> result =
         cudf::hash_partition(*n_input_table, columns_to_hash_vec, number_of_partitions);
 
-    for (int i = 0; i < result.second.size(); i++) {
+    for (size_t i = 0; i < result.second.size(); i++) {
       n_output_offsets[i] = result.second[i];
     }
 
@@ -1668,12 +1660,11 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_roundRobinPartition(
   try {
     cudf::jni::auto_set_device(env);
     auto n_input_table = reinterpret_cast<cudf::table_view *>(input_table);
-    int n_num_partitions = static_cast<int>(num_partitions);
     cudf::jni::native_jintArray n_output_offsets(env, output_offsets);
 
     auto result = cudf::round_robin_partition(*n_input_table, num_partitions, start_partition);
 
-    for (int i = 0; i < result.second.size(); i++) {
+    for (size_t i = 0; i < result.second.size(); i++) {
       n_output_offsets[i] = result.second[i];
     }
 
@@ -1859,8 +1850,8 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Table_bound(JNIEnv *env, jclass, jlo
 
     JNI_ARG_CHECK(env, (column_desc_flags.size() == column_null_orders.size()),
                   "null-order and sort-order size mismatch", 0);
-    uint32_t num_columns = column_null_orders.size();
-    for (int i = 0; i < num_columns; i++) {
+    size_t num_columns = column_null_orders.size();
+    for (size_t i = 0; i < num_columns; i++) {
       column_desc_flags[i] = n_desc_flags[i] ? cudf::order::DESCENDING : cudf::order::ASCENDING;
       column_null_orders[i] =
           n_are_nulls_smallest[i] ? cudf::null_order::BEFORE : cudf::null_order::AFTER;
@@ -1894,7 +1885,7 @@ JNIEXPORT jobjectArray JNICALL Java_ai_rapids_cudf_Table_contiguousSplit(JNIEnv 
     std::vector<cudf::packed_table> result = cudf::contiguous_split(*n_table, indices);
     cudf::jni::native_jobjectArray<jobject> n_result =
         cudf::jni::contiguous_table_array(env, result.size());
-    for (int i = 0; i < result.size(); i++) {
+    for (size_t i = 0; i < result.size(); i++) {
       n_result.set(i, cudf::jni::contiguous_table_from(env, result[i].data,
                                                        result[i].table.num_rows()));
     }

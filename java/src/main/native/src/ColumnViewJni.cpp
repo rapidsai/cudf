@@ -303,11 +303,11 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_ColumnView_slice(JNIEnv *env, j
     std::vector<cudf::column_view> result = cudf::slice(*n_column, indices);
     cudf::jni::native_jlongArray n_result(env, result.size());
     std::vector<std::unique_ptr<cudf::column>> column_result(result.size());
-    for (int i = 0; i < result.size(); i++) {
+    for (size_t i = 0; i < result.size(); i++) {
       column_result[i].reset(new cudf::column(result[i]));
       n_result[i] = reinterpret_cast<jlong>(column_result[i].get());
     }
-    for (int i = 0; i < result.size(); i++) {
+    for (size_t i = 0; i < result.size(); i++) {
       column_result[i].release();
     }
     return n_result.get_jArray();
@@ -418,11 +418,11 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_ColumnView_split(JNIEnv *env, j
     std::vector<cudf::column_view> result = cudf::split(*n_column, indices);
     cudf::jni::native_jlongArray n_result(env, result.size());
     std::vector<std::unique_ptr<cudf::column>> column_result(result.size());
-    for (int i = 0; i < result.size(); i++) {
+    for (size_t i = 0; i < result.size(); i++) {
       column_result[i].reset(new cudf::column(result[i]));
       n_result[i] = reinterpret_cast<jlong>(column_result[i].get());
     }
-    for (int i = 0; i < result.size(); i++) {
+    for (size_t i = 0; i < result.size(); i++) {
       column_result[i].release();
     }
     return n_result.get_jArray();

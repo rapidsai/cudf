@@ -49,10 +49,10 @@ namespace {
 struct filter_fn {
   column_device_view const d_strings;
   filter_type keep_characters;
-  rmm::device_vector<char_range>::iterator table_begin;
-  rmm::device_vector<char_range>::iterator table_end;
+  rmm::device_uvector<char_range>::iterator table_begin;
+  rmm::device_uvector<char_range>::iterator table_end;
   string_view const d_replacement;
-  int32_t const* d_offsets{};
+  int32_t* d_offsets{};
   char* d_chars{};
 
   /**
@@ -78,23 +78,28 @@ struct filter_fn {
    * This is also used to calculate the size of the output.
    *
    * @param idx Index of the current string to process.
-   * @return The size of the output for this string.
    */
-  __device__ size_type operator()(size_type idx)
+  __device__ void operator()(size_type idx)
   {
-    if (d_strings.is_null(idx)) return 0;
-    string_view d_str = d_strings.element<string_view>(idx);
-    size_type nbytes  = d_str.size_bytes();
-    auto const in_ptr = d_str.data();
-    auto out_ptr      = d_chars ? d_chars + d_offsets[idx] : nullptr;
-    for (auto itr = d_str.begin(); itr != d_str.end(); ++itr) {
-      auto const char_size = bytes_in_char_utf8(*itr);
-      string_view const d_newchar =
-        remove_char(*itr) ? d_replacement : string_view(in_ptr + itr.byte_offset(), char_size);
-      nbytes += d_newchar.size_bytes() - char_size;
-      if (out_ptr) out_ptr = cudf::strings::detail::copy_string(out_ptr, d_newchar);
+    if (d_strings.is_null(idx)) {
+      if (!d_chars) d_offsets[idx] = 0;
+      return;
     }
-    return nbytes;
+    auto const d_str = d_strings.element<string_view>(idx);
+
+    auto nbytes  = d_str.size_bytes();
+    auto out_ptr = d_chars ? d_chars + d_offsets[idx] : nullptr;
+    for (auto itr = d_str.begin(); itr != d_str.end(); ++itr) {
+      auto const char_size        = bytes_in_char_utf8(*itr);
+      string_view const d_newchar = remove_char(*itr)
+                                      ? d_replacement
+                                      : string_view(d_str.data() + itr.byte_offset(), char_size);
+      if (out_ptr)
+        out_ptr = cudf::strings::detail::copy_string(out_ptr, d_newchar);
+      else
+        nbytes += d_newchar.size_bytes() - char_size;
+    }
+    if (!out_ptr) d_offsets[idx] = nbytes;
   }
 };
 
@@ -123,36 +128,25 @@ std::unique_ptr<column> filter_characters(
     characters_to_filter.begin(), characters_to_filter.end(), htable.begin(), [](auto entry) {
       return char_range{entry.first, entry.second};
     });
-  rmm::device_vector<char_range> table(htable);  // copy filter table to device memory
+  rmm::device_uvector<char_range> table(table_size, stream);
+  CUDA_TRY(cudaMemcpyAsync(table.data(),
+                           htable.data(),
+                           table_size * sizeof(char_range),
+                           cudaMemcpyHostToDevice,
+                           stream.value()));
 
-  auto strings_column = column_device_view::create(strings.parent(), stream);
-  auto d_strings      = *strings_column;
+  auto d_strings = column_device_view::create(strings.parent(), stream);
 
-  // create null mask
-  rmm::device_buffer null_mask = cudf::detail::copy_bitmask(strings.parent(), stream, mr);
-
-  // create offsets column
-  filter_fn ffn{d_strings, keep_characters, table.begin(), table.end(), d_replacement};
-  auto offsets_transformer_itr = cudf::detail::make_counting_transform_iterator(0, ffn);
-  auto offsets_column          = make_offsets_child_column(
-    offsets_transformer_itr, offsets_transformer_itr + strings_count, stream, mr);
-  ffn.d_offsets = offsets_column->view().data<int32_t>();
-
-  // build chars column
-  size_type bytes = cudf::detail::get_value<int32_t>(offsets_column->view(), strings_count, stream);
-  auto chars_column = strings::detail::create_chars_child_column(
-    strings_count, strings.null_count(), bytes, stream, mr);
-  ffn.d_chars = chars_column->mutable_view().data<char>();
-  thrust::for_each_n(rmm::exec_policy(stream),
-                     thrust::make_counting_iterator<cudf::size_type>(0),
-                     strings_count,
-                     ffn);
+  // this utility calls the strip_fn to build the offsets and chars columns
+  filter_fn ffn{*d_strings, keep_characters, table.begin(), table.end(), d_replacement};
+  auto children = cudf::strings::detail::make_strings_children(
+    ffn, strings.size(), strings.null_count(), stream, mr);
 
   return make_strings_column(strings_count,
-                             std::move(offsets_column),
-                             std::move(chars_column),
+                             std::move(children.first),
+                             std::move(children.second),
                              strings.null_count(),
-                             std::move(null_mask),
+                             cudf::detail::copy_bitmask(strings.parent(), stream, mr),
                              stream,
                              mr);
 }

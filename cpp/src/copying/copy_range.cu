@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2020, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -108,9 +108,8 @@ struct out_of_place_copy_range_dispatch {
     }
 
     if (source_end != source_begin) {  // otherwise no-op
-      using Type    = cudf::device_storage_type_t<T>;
       auto ret_view = p_ret->mutable_view();
-      in_place_copy_range<Type>(source, ret_view, source_begin, source_end, target_begin, stream);
+      in_place_copy_range<T>(source, ret_view, source_begin, source_end, target_begin, stream);
     }
 
     return p_ret;
@@ -261,13 +260,14 @@ std::unique_ptr<column> copy_range(column_view const& source,
                "Range is out of bounds.");
   CUDF_EXPECTS(target.type() == source.type(), "Data type mismatch.");
 
-  return cudf::type_dispatcher(target.type(),
-                               out_of_place_copy_range_dispatch{source, target},
-                               source_begin,
-                               source_end,
-                               target_begin,
-                               stream,
-                               mr);
+  return cudf::type_dispatcher<dispatch_storage_type>(
+    target.type(),
+    out_of_place_copy_range_dispatch{source, target},
+    source_begin,
+    source_end,
+    target_begin,
+    stream,
+    mr);
 }
 
 }  // namespace detail

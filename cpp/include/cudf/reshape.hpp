@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -125,8 +125,8 @@ std::unique_ptr<column> byte_cast(
  * [null,        100],
  * [15,          100],
  * ```
- * Note that null lists are completely removed from the output
- * and nulls and empty lists inside lists are pulled out and remain.
+ * Note that null lists are not included in the resulting table, but nulls inside
+ * lists and empty lists will be represented with a null entry for that column in that row.
  *
  * @param input_table Table to explode.
  * @param explode_column_idx Column index to explode inside the table.
@@ -135,6 +135,49 @@ std::unique_ptr<column> byte_cast(
  * @return A new table with explode_col exploded.
  */
 std::unique_ptr<table> explode(
+  table_view const& input_table,
+  size_type explode_column_idx,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+
+/**
+ * @brief Explodes a list column's elements and includes a position column.
+ *
+ * Any list is exploded, which means the elements of the list in each row are expanded into new rows
+ * in the output. The corresponding rows for other columns in the input are duplicated. A position
+ * column is added that has the index inside the original list for each row. Example:
+ * ```
+ * [[5,10,15], 100],
+ * [[20,25],   200],
+ * [[30],      300],
+ * returns
+ * [5,   0,    100],
+ * [10,  1,    100],
+ * [15,  2,    100],
+ * [20,  0,    200],
+ * [25,  1,    200],
+ * [30,  0,    300],
+ * ```
+ *
+ * Nulls and empty lists propagate in different ways depending on what is null or empty.
+ *```
+ * [[5,null,15], 100],
+ * [null,        200],
+ * [[],          300],
+ * returns
+ * [5,    0,     100],
+ * [null, 1,     100],
+ * [15,   2,     100],
+ * ```
+ * Note that null lists are not included in the resulting table, but nulls inside
+ * lists and empty lists will be represented with a null entry for that column in that row.
+ *
+ * @param input_table Table to explode.
+ * @param explode_column_idx Column index to explode inside the table.
+ * @param mr Device memory resource used to allocate the returned column's device memory.
+ *
+ * @return A new table with explode_col exploded.
+ */
+std::unique_ptr<table> explode_position(
   table_view const& input_table,
   size_type explode_column_idx,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());

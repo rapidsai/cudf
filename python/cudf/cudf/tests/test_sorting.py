@@ -1,5 +1,6 @@
-# Copyright (c) 2018-2020, NVIDIA CORPORATION.
+# Copyright (c) 2018-2021, NVIDIA CORPORATION.
 
+import string
 from itertools import product
 
 import numpy as np
@@ -140,7 +141,10 @@ def test_series_nsmallest(data, n):
     sr = Series(data)
     psr = pd.Series(data)
     assert_eq(sr.nsmallest(n), psr.nsmallest(n))
-    assert_eq(sr.nsmallest(n, keep="last"), psr.nsmallest(n, keep="last"))
+    assert_eq(
+        sr.nsmallest(n, keep="last").sort_index(),
+        psr.nsmallest(n, keep="last").sort_index(),
+    )
 
     assert_exceptions_equal(
         lfunc=psr.nsmallest,
@@ -222,14 +226,12 @@ def test_dataframe_multi_column(
     num_cols, num_rows, dtype, ascending, na_position
 ):
 
-    from string import ascii_lowercase
-
     np.random.seed(0)
-    by = list(ascii_lowercase[:num_cols])
+    by = list(string.ascii_lowercase[:num_cols])
     pdf = pd.DataFrame()
 
     for i in range(5):
-        colname = ascii_lowercase[i]
+        colname = string.ascii_lowercase[i]
         data = np.random.randint(0, 26, num_rows).astype(dtype)
         pdf[colname] = data
 
@@ -253,14 +255,12 @@ def test_dataframe_multi_column_nulls(
     num_cols, num_rows, dtype, nulls, ascending, na_position
 ):
 
-    from string import ascii_lowercase
-
     np.random.seed(0)
-    by = list(ascii_lowercase[:num_cols])
+    by = list(string.ascii_lowercase[:num_cols])
     pdf = pd.DataFrame()
 
     for i in range(3):
-        colname = ascii_lowercase[i]
+        colname = string.ascii_lowercase[i]
         data = np.random.randint(0, 26, num_rows).astype(dtype)
         if nulls == "some":
             idx = np.array([], dtype="int64")
