@@ -212,10 +212,6 @@ def binaryop(lhs, rhs, op, dtype):
             c_op,
             c_dtype
         )
-
-    #if is_string_col is True:
-    #    return handle_null_for_string_column(result, op.name.lower())
-    #else:
     return result
 
 
