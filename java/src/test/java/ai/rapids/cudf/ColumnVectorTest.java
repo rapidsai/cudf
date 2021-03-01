@@ -3938,20 +3938,23 @@ public class ColumnVectorTest extends CudfTestBase {
   }
 
   @Test
-  void testCastLeafNodeInList() {
+  void testReplaceLeafNodeInList() {
     try (
-        ColumnVector c1 = ColumnVector.decimalFromDoubles(DType.create(DType.DTypeEnum.DECIMAL32, 3), RoundingMode.HALF_UP, 770.892, 961.110);
-        ColumnVector c2 = ColumnVector.decimalFromDoubles(DType.create(DType.DTypeEnum.DECIMAL32, 3), RoundingMode.HALF_UP, 524.982, 479.946);
-        ColumnVector c3 = ColumnVector.decimalFromDoubles(DType.create(DType.DTypeEnum.DECIMAL32, 3), RoundingMode.HALF_UP, 346.997, 479.946);
-        ColumnVector c4 = ColumnVector.decimalFromDoubles(DType.create(DType.DTypeEnum.DECIMAL32, 3), RoundingMode.HALF_UP, 87.764, 414.239);
+        ColumnVector c1 = ColumnVector.fromInts(1, 2);
+        ColumnVector c2 = ColumnVector.fromInts(8, 3);
+        ColumnVector c3 = ColumnVector.fromInts(9, 8);
+        ColumnVector c4 = ColumnVector.fromInts(2, 6);
         ColumnVector expected = ColumnVector.makeList(c1, c2, c3, c4);
          ColumnVector child1 = ColumnVector.decimalFromDoubles(DType.create(DType.DTypeEnum.DECIMAL64, 3), RoundingMode.HALF_UP, 770.892, 961.110);
          ColumnVector child2 = ColumnVector.decimalFromDoubles(DType.create(DType.DTypeEnum.DECIMAL64, 3), RoundingMode.HALF_UP, 524.982, 479.946);
          ColumnVector child3 = ColumnVector.decimalFromDoubles(DType.create(DType.DTypeEnum.DECIMAL64, 3), RoundingMode.HALF_UP, 346.997, 479.946);
          ColumnVector child4 = ColumnVector.decimalFromDoubles(DType.create(DType.DTypeEnum.DECIMAL64, 3), RoundingMode.HALF_UP, 87.764, 414.239);
          ColumnVector created = ColumnVector.makeList(child1, child2, child3, child4);
-         ColumnVector replaced = created.castLeafDecimal64ToDecimal32()) {
-      assertColumnsAreEqual(expected, replaced);
+         ColumnVector newChild = ColumnVector.fromInts(1, 8, 9, 2, 2, 3, 8, 6);
+         ColumnView replacedView = created.replaceListChild(newChild)) {
+      try (ColumnVector replaced = replacedView.copyToColumnVector()) {
+        assertColumnsAreEqual(expected, replaced);
+      }
     }
   }
 
@@ -3969,8 +3972,10 @@ public class ColumnVectorTest extends CudfTestBase {
          ColumnVector child3 = ColumnVector.fromInts(3, 6);
          ColumnVector created = ColumnVector.makeStruct(child1, child2, child3);
          ColumnVector replaceWith = ColumnVector.fromInts(5, 9);
-         ColumnVector replaced = created.replaceColumnsInStruct(new int[]{1}, new ColumnVector[]{replaceWith})) {
-      assertColumnsAreEqual(expected, replaced);
+         ColumnView replacedView = created.replaceChildrenWithViews(new int[]{1}, new ColumnVector[]{replaceWith})) {
+      try (ColumnVector replaced = replacedView.copyToColumnVector()) {
+        assertColumnsAreEqual(expected, replaced);
+      }
     }
   }
 }

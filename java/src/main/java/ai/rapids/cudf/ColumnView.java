@@ -1298,13 +1298,23 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
   }
 
   /**
-   * Replace columns in the struct with the given columns
+   * This method takes in a nested type and replaces its children with the given views
    */
-  public ColumnVector replaceColumnsInStruct(int[] indices,
+  public ColumnView replaceChildrenWithViews(int[] indices,
                                              ColumnView[] views) {
     assert(type == DType.STRUCT);
-    return new ColumnVector(replaceColumnsInStruct(getNativeView(), indices,
+    return new ColumnView(replaceChildrenWithViews(getNativeView(), indices,
         Arrays.stream(views).mapToLong(v -> v.getNativeView()).toArray()));
+  }
+
+  /**
+   * This method takes in a list and returns a new list with the leaf node replaced with the given
+   * view. The number of rows in the new child should be the same as the original otherwise the
+   * resulting list will have bad data
+   */
+  public ColumnView replaceListChild(ColumnView child) {
+    assert(type == DType.LIST);
+    return replaceChildrenWithViews(new int[]{1}, new ColumnView[]{child});
   }
 
   /**
@@ -2448,7 +2458,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    */
   private static native long timestampToStringTimestamp(long viewHandle, String format);
 
-  private static native long replaceColumnsInStruct(long cudfColumnHandle,
+  private static native long replaceChildrenWithViews(long cudfColumnHandle,
                                                     int[] indices, long[] viewHandles) throws CudfException;
   /**
    * Native method for locating the starting index of the first instance of a given substring

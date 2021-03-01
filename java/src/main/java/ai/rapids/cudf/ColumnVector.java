@@ -396,24 +396,6 @@ public final class ColumnVector extends ColumnView {
   }
 
   /**
-   * This is a very specialized method that has only one job. It takes in a list and returns a
-   * new list if the Leaf node is a 64-bit Decimal, converting the leaf to a 32-bit Decimal.
-   * Note: this is not a true cast as it assumes that the 64-bit Decimal column is a 32-bit Decimal
-   * column that happens to be stored as a 64-bit Decimal.
-   *
-   * Ex 1:
-   * replace(col( type: List<List<Struct<int, List, String>>>)) => throws an assert error
-   *
-   * Ex 2:
-   * replace(col(type: List<List<D64>>) => col(type: List<List<D32>>) no rounding is done
-   *
-   */
-  public ColumnVector castLeafDecimal64ToDecimal32() {
-    assert(type == DType.LIST);
-    return new ColumnVector(castLeafD64ToD32(offHeap.columnHandle));
-  }
-
-  /**
    * Create a LIST column from the given columns. Each list in the returned column will have the
    * same number of entries in it as columns passed into this method. Be careful about the
    * number of rows passed in as there are limits on the maximum output size supported for

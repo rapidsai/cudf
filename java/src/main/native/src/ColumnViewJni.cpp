@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 
+#include <memory>
 #include <numeric>
 
 #include <cudf/aggregation.hpp>
@@ -64,6 +65,7 @@
 
 #include "cudf_jni_apis.hpp"
 #include "dtype_utils.hpp"
+#include "jni_utils.hpp"
 
 namespace {
 
@@ -1762,7 +1764,7 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_copyColumnViewToCV(JNIEnv
   CATCH_STD(env, 0)
 }
 
-JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_replaceColumnsInStruct(
+JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_replaceChildrenWithViews(
     JNIEnv *env, jobject j_object, jlong j_handle, jintArray j_indices, jlongArray j_children) {
 
   JNI_NULL_CHECK(env, j_handle, "native handle is null", 0);
@@ -1774,30 +1776,34 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_replaceColumnsInStruct(
     cudf::jni::native_jintArray indices(env, j_indices);
     JNI_ARG_CHECK(env, indices.size() == children_to_replace.size(), "The indices size and children size should match", 0);
 
-    cudf::column_view *n_struct_col_view = reinterpret_cast<cudf::column_view *>(j_handle);
-    JNI_ARG_CHECK(env, n_struct_col_view->type().id() == cudf::type_id::STRUCT, "Only struct types are allowed", 0);
+    cudf::column_view *n_col_view = reinterpret_cast<cudf::column_view *>(j_handle);
+    cudf::type_id id = n_col_view->type().id();
+    JNI_ARG_CHECK(env, id == cudf::type_id::STRUCT || id == cudf::type_id::LIST, "Only nested types are allowed", 0);
+    if (id == cudf::type_id::LIST) {
+      JNI_ARG_CHECK(env, children_to_replace.size() == 1, "LIST can only have one child to replace", 0);
+    }
 
     std::map<int32_t, cudf::column_view*> m;
     for (int i = 0 ; i < indices.size() ; i++) {
       m[indices[i]] = children_to_replace[i];
     }
 
-    std::vector<std::unique_ptr<cudf::column>> children;
-    children.reserve(n_struct_col_view->num_children());
+    std::vector<cudf::column_view> children;
+    children.reserve(n_col_view->num_children());
     int j = 0;
-    for (int i = 0 ; i < n_struct_col_view->num_children() ; i++) {
+    for (int i = 0 ; i < n_col_view->num_children() ; i++) {
       auto it = m.find(i);
       if (it != m.end()) {
-        children.emplace_back(std::make_unique<cudf::column>(*it->second));
+        children.emplace_back(*it->second);
       } else {
-        children.emplace_back(std::make_unique<cudf::column>(n_struct_col_view->child(i)));
+        children.emplace_back(n_col_view->child(i));
       }
     }
 
-    auto col = cudf::make_structs_column(n_struct_col_view->size(), std::move(children),
-    n_struct_col_view->null_count(), cudf::copy_bitmask(*n_struct_col_view));
-    return reinterpret_cast<jlong>(col.release());
+    std::unique_ptr<cudf::column_view> n_new_nested(new cudf::column_view(n_col_view->type(), n_col_view->size(), nullptr, n_col_view->null_mask(), n_col_view->null_count(), n_col_view->offset(), children));
+    return reinterpret_cast<jlong>(n_new_nested.release());
   }
   CATCH_STD(env, 0);
 }
+
 } // extern "C"
