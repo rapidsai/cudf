@@ -1455,12 +1455,6 @@ class DataFrame(Frame, Serializable):
                 else:
                     if col not in df_cols:
                         r_opr = other_cols[col]
-    
-                        if r_opr == 1 and fn == '__pow__':
-                            # special case in pandas. 1**val == 1 for any val
-                            # including NaN and <NA>
-                            result[col] = as_column(1, length=len(self))
-                            continue
                         l_opr = Series(
                             as_column(np.nan, length=len(self))
                         )
