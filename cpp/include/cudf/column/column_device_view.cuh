@@ -242,6 +242,8 @@ template <typename T>
 struct value_accessor;
 template <typename T, bool has_nulls>
 struct pair_accessor;
+template <typename T, bool has_nulls>
+struct pair_rep_accessor;
 template <typename T>
 struct mutable_value_accessor;
 }  // namespace detail
@@ -335,6 +337,15 @@ class alignas(16) column_device_view : public detail::column_device_view_base {
     thrust::transform_iterator<detail::pair_accessor<T, has_nulls>, count_it>;
 
   /**
+   * @brief Pair rep iterator for navigating this column
+   *
+   * Each row value is accessed in its representative form.
+   */
+  template <typename T, bool has_nulls>
+  using const_pair_rep_iterator =
+    thrust::transform_iterator<detail::pair_rep_accessor<T, has_nulls>, count_it>;
+
+  /**
    * @brief Return a pair iterator to the first element of the column.
    *
    * Dereferencing the returned iterator returns a `thrust::pair<T, bool>`.
@@ -358,6 +369,31 @@ class alignas(16) column_device_view : public detail::column_device_view_base {
   }
 
   /**
+   * @brief Return a pair iterator to the first element of the column.
+   *
+   * Dereferencing the returned iterator returns a `thrust::pair<rep_type, bool>`,
+   * where `rep_type` is `device_storage_type<T>`, the type used to store
+   * the value on the device.
+   *
+   * If an element at position `i` is valid (or `has_nulls == false`), then
+   * for `p = *(iter + i)`, `p.first` contains the value of the element at `i`
+   * and `p.second == true`.
+   *
+   * Else, if the element at `i` is null, then the value of `p.first` is
+   * undefined and `p.second == false`.
+   *
+   * @throws cudf::logic_error if tparam `has_nulls == true` and
+   * `nullable() == false`
+   * @throws cudf::logic_error if column datatype and Element type mismatch.
+   */
+  template <typename T, bool has_nulls>
+  const_pair_rep_iterator<T, has_nulls> pair_rep_begin() const
+  {
+    return const_pair_rep_iterator<T, has_nulls>{count_it{0},
+                                                 detail::pair_rep_accessor<T, has_nulls>{*this}};
+  }
+
+  /**
    * @brief Return a pair iterator to the element following the last element of
    * the column.
    *
@@ -370,6 +406,21 @@ class alignas(16) column_device_view : public detail::column_device_view_base {
   {
     return const_pair_iterator<T, has_nulls>{count_it{size()},
                                              detail::pair_accessor<T, has_nulls>{*this}};
+  }
+
+  /**
+   * @brief Return a pair iterator to the element following the last element of
+   * the column.
+   *
+   * @throws cudf::logic_error if tparam `has_nulls == true` and
+   * `nullable() == false`
+   * @throws cudf::logic_error if column datatype and Element type mismatch.
+   */
+  template <typename T, bool has_nulls>
+  const_pair_rep_iterator<T, has_nulls> pair_rep_end() const
+  {
+    return const_pair_rep_iterator<T, has_nulls>{count_it{size()},
+                                                 detail::pair_rep_accessor<T, has_nulls>{*this}};
   }
 
   /**
@@ -891,6 +942,60 @@ struct pair_accessor {
   thrust::pair<T, bool> operator()(cudf::size_type i) const
   {
     return {col.element<T>(i), (has_nulls ? col.is_valid_nocheck(i) : true)};
+  }
+};
+
+/**
+ * @brief pair accessor of column with/without null bitmask
+ * A unary functor returns pair with representative scalar value at `id` and boolean validity
+ * `operator() (cudf::size_type id)` computes `element`  and
+ * returns a `pair(element, validity)`
+ *
+ * the return value for element `i` will return `pair(column[i], validity)`
+ * `validity` is `true` if `has_nulls=false`.
+ * `validity` is validity of the element at `i` if `has_nulls=true` and the
+ * column is nullable.
+ *
+ * @throws cudf::logic_error if `has_nulls==true` and the column is not
+ * nullable.
+ * @throws cudf::logic_error if column datatype and template T type mismatch.
+ *
+ * @tparam T The type of elements in the column
+ * @tparam has_nulls boolean indicating to treat the column is nullable
+ */
+template <typename T, bool has_nulls = false>
+struct pair_rep_accessor {
+  column_device_view const col;  ///< column view of column in device
+
+  using rep_type = device_storage_type_t<T>;
+
+  /**
+   * @brief constructor
+   * @param[in] _col column device view of cudf column
+   */
+  pair_rep_accessor(column_device_view const& _col) : col{_col}
+  {
+    CUDF_EXPECTS(type_id_matches_device_storage_type<T>(col.type().id()), "the data type mismatch");
+    if (has_nulls) { CUDF_EXPECTS(_col.nullable(), "Unexpected non-nullable column."); }
+  }
+
+  CUDA_DEVICE_CALLABLE
+  thrust::pair<rep_type, bool> operator()(cudf::size_type i) const
+  {
+    return {get_rep<T>(i), (has_nulls ? col.is_valid_nocheck(i) : true)};
+  }
+
+ private:
+  template <typename R, std::enable_if_t<std::is_same<R, rep_type>::value, void>* = nullptr>
+  CUDA_DEVICE_CALLABLE auto get_rep(cudf::size_type i) const
+  {
+    return col.element<R>(i);
+  }
+
+  template <typename R, std::enable_if_t<not std::is_same<R, rep_type>::value, void>* = nullptr>
+  CUDA_DEVICE_CALLABLE auto get_rep(cudf::size_type i) const
+  {
+    return col.element<R>(i).value();
   }
 };
 

@@ -1993,7 +1993,20 @@ class GenericIndex(Index):
         # utilize `Index.to_string` once it is implemented
         # related issue : https://github.com/pandas-dev/pandas/issues/35389
         if isinstance(preprocess, CategoricalIndex):
-            output = preprocess.to_pandas().__repr__()
+            if preprocess.categories.dtype.kind == "f":
+                output = (
+                    preprocess.astype("str")
+                    .to_pandas()
+                    .astype("category")
+                    .__repr__()
+                )
+                break_idx = output.find("ordered=")
+                output = (
+                    output[:break_idx].replace("'", "") + output[break_idx:]
+                )
+            else:
+                output = preprocess.to_pandas().__repr__()
+
             output = output.replace("nan", cudf._NA_REP)
         elif preprocess._values.nullable:
             output = self._clean_nulls_from_index().to_pandas().__repr__()

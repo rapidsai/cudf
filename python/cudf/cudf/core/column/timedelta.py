@@ -1,4 +1,5 @@
 # Copyright (c) 2020-2021, NVIDIA CORPORATION.
+
 from __future__ import annotations
 
 import datetime as dt
@@ -127,7 +128,7 @@ class TimeDeltaColumn(column.ColumnBase):
             common_dtype = determine_out_dtype(self.dtype, rhs.dtype)
             lhs = lhs.astype(common_dtype).astype("float64")
             if isinstance(rhs, cudf.Scalar):
-                if rhs.is_valid:
+                if rhs.is_valid():
                     rhs = cudf.Scalar(
                         np.timedelta64(rhs.value)
                         .astype(common_dtype)
@@ -367,6 +368,9 @@ class TimeDeltaColumn(column.ColumnBase):
             self.as_numerical.median(skipna=skipna), unit=self.time_unit
         )
 
+    def isin(self, values: Sequence) -> ColumnBase:
+        return cudf.core.tools.datetimes._isin_datetimelike(self, values)
+
     def quantile(
         self, q: Union[float, Sequence[float]], interpolation: str, exact: bool
     ) -> "column.ColumnBase":
@@ -380,15 +384,12 @@ class TimeDeltaColumn(column.ColumnBase):
     def sum(
         self, skipna: bool = None, dtype: Dtype = None, min_count=0
     ) -> pd.Timedelta:
-        if len(self) == 0:
-            return pd.Timedelta(None, unit=self.time_unit)
-        else:
-            return pd.Timedelta(
-                self.as_numerical.sum(
-                    skipna=skipna, dtype=dtype, min_count=min_count
-                ),
-                unit=self.time_unit,
-            )
+        return pd.Timedelta(
+            self.as_numerical.sum(
+                skipna=skipna, dtype=dtype, min_count=min_count
+            ),
+            unit=self.time_unit,
+        )
 
     def std(
         self, skipna: bool = None, ddof: int = 1, dtype: Dtype = np.float64
