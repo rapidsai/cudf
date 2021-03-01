@@ -22,7 +22,8 @@ from cudf.utils.dtypes import (
     INTEGER_TYPES,
     NUMERIC_TYPES,
     TIMEDELTA_TYPES,
-    ALL_TYPES
+    ALL_TYPES,
+    cudf_dtypes_to_pandas_dtypes
 )
 
 STRING_TYPES = {"str"}
@@ -727,10 +728,14 @@ _permu_values = [0, 1, None, np.nan]
 def test_operator_func_between_series_logical(
     dtype, func, scalar_a, scalar_b, fill_value
 ):
+    pandas_dtype = cudf_dtypes_to_pandas_dtypes[np.dtype(dtype)]
+
     gdf_series_a = Series([scalar_a], nan_as_null=False).astype(dtype)
     gdf_series_b = Series([scalar_b], nan_as_null=False).astype(dtype)
-    pdf_series_a = utils.NullableFloatSeriesCompare([scalar_a], dtype=dtype)
-    pdf_series_b = utils.NullableFloatSeriesCompare([scalar_b], dtype=dtype)
+
+    pdf_series_a = gdf_series_a.to_pandas(nullable=True)
+    pdf_series_b = gdf_series_b.to_pandas(nullable=True)
+
 
     gdf_series_result = getattr(gdf_series_a, func)(
         gdf_series_b, fill_value=fill_value
@@ -738,8 +743,9 @@ def test_operator_func_between_series_logical(
     pdf_series_result = getattr(pdf_series_a, func)(
         pdf_series_b, fill_value=fill_value
     )
-    utils.assert_eq(pdf_series_result, gdf_series_result.to_pandas(nullable=True))
-
+    expect = pdf_series_result
+    got = gdf_series_result.to_pandas(nullable=True)
+    utils.assert_eq(expect, got)
 
 @pytest.mark.parametrize("dtype", ["float32", "float64"])
 @pytest.mark.parametrize("func", _operators_comparison)
