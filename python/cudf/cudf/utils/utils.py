@@ -194,7 +194,7 @@ def initfunc(f):
     return wrapper
 
 
-def get_null_series(size, dtype=np.bool):
+def get_null_series(size, dtype=np.bool_):
     """
     Creates a null series of provided dtype and size
 

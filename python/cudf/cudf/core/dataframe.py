@@ -5808,7 +5808,7 @@ class DataFrame(Frame, Serializable):
         is_pure_dt = all(is_datetime_dtype(dt) for dt in self.dtypes)
 
         if not is_pure_dt:
-            filtered = self.select_dtypes(include=[np.number, np.bool])
+            filtered = self.select_dtypes(include=[np.number, np.bool_])
         else:
             filtered = self.copy(deep=False)
 
@@ -6587,8 +6587,8 @@ class DataFrame(Frame, Serializable):
             msg = "Kurtosis only supports int, float, and bool dtypes."
             raise NotImplementedError(msg)
 
-        self = self.select_dtypes(include=[np.number, np.bool])
-        return self._apply_support_method(
+        filtered = self.select_dtypes(include=[np.number, np.bool_])
+        return filtered._apply_support_method(
             "kurtosis",
             axis=axis,
             skipna=skipna,
@@ -6636,8 +6636,8 @@ class DataFrame(Frame, Serializable):
             msg = "Skew only supports int, float, and bool dtypes."
             raise NotImplementedError(msg)
 
-        self = self.select_dtypes(include=[np.number, np.bool])
-        return self._apply_support_method(
+        filtered = self.select_dtypes(include=[np.number, np.bool_])
+        return filtered._apply_support_method(
             "skew",
             axis=axis,
             skipna=skipna,

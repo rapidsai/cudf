@@ -251,7 +251,7 @@ class Scalar(object):
 
     def _binop_result_dtype_or_error(self, other, op):
         if op in {"__eq__", "__ne__", "__lt__", "__gt__", "__le__", "__ge__"}:
-            return np.bool
+            return np.bool_
 
         out_dtype = get_allowed_combinations_for_operator(
             self.dtype, other.dtype, op

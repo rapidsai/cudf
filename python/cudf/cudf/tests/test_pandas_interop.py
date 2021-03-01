@@ -23,8 +23,8 @@ def test_to_pandas():
 
     # Notice, the dtype differ when Pandas and cudf boolean series
     # contains None/NaN
-    assert df["c"].dtype == np.bool
-    assert pdf["c"].dtype == np.object
+    assert df["c"].dtype == np.bool_
+    assert pdf["c"].dtype == np.object_
 
     assert len(df["a"]) == len(pdf["a"])
     assert len(df["b"]) == len(pdf["b"])
