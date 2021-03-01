@@ -655,16 +655,47 @@ class MultiIndex(Index):
         level : str or int, optional
             Name or position of the index level to use (if the index
             is a MultiIndex).
+
         Returns
         -------
         is_contained : cupy array
             CuPy array of boolean values.
+
         Notes
         -------
         When `level` is None, `values` can only be MultiIndex, or a
         set/list-like tuples.
         When `level` is provided, `values` can be Index or MultiIndex,
         or a set/list-like tuples.
+
+        Examples
+        --------
+        >>> idx = cudf.Index([1,2,3])
+        >>> idx
+        Int64Index([1, 2, 3], dtype='int64')
+
+        Check whether each index value in a list of values.
+        >>> idx.isin([1, 4])
+        array([ True, False, False])
+
+        >>> midx = cudf.form_pandas(pd.MultiIndex.from_arrays([[1,2,3],
+        ...                                  ['red', 'blue', 'green']],
+        ...                                  names=('number', 'color')))
+        >>> midx
+        MultiIndex([(1,   'red'),
+                    (2,  'blue'),
+                    (3, 'green')],
+                   names=['number', 'color'])
+
+        Check whether the strings in the 'color' level of the MultiIndex
+        are in a list of colors.
+
+        >>> midx.isin(['red', 'orange', 'yellow'], level='color')
+        array([ True, False, False])
+
+        To check across the levels of a MultiIndex, pass a list of tuples:
+        >>> midx.isin([(1, 'red'), (3, 'red')])
+        array([ True, False, False])
         """
         from cudf.utils.dtypes import is_list_like
 

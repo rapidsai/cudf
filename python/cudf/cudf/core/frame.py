@@ -239,6 +239,7 @@ class Frame(libcudf.table.Table):
         -------
         copy : Series or DataFrame
             Object type matches caller.
+
         Examples
         --------
         >>> s = cudf.Series([1, 2], index=["a", "b"])

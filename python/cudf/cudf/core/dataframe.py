@@ -5713,6 +5713,43 @@ class DataFrame(Frame, Serializable):
         DataFrame:
             DataFrame of booleans showing whether each element in
             the DataFrame is contained in values.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> df = cudf.DataFrame({'num_legs': [2, 4], 'num_wings': [2, 0]},
+        ...                     index=['falcon', 'dog'])
+        >>> df
+                num_legs  num_wings
+        falcon         2          2
+        dog            4          0
+
+        When ``values`` is a list check whether every value in the DataFrame
+        is present in the list (which animals have 0 or 2 legs or wings)
+
+        >>> df.isin([0, 2])
+                num_legs  num_wings
+        falcon      True       True
+        dog        False       True
+
+        When ``values`` is a dict, we can pass values to check for each
+        column separately:
+
+        >>> df.isin({'num_wings': [0, 3]})
+                num_legs  num_wings
+        falcon     False      False
+        dog        False       True
+
+        When ``values`` is a Series or DataFrame the index and column must
+        match. Note that 'falcon' does not match based on the number of legs
+        in other.
+
+        >>> other = cudf.DataFrame({'num_legs': [8, 2], 'num_wings': [0, 2]},
+        ...                         index=['spider', 'falcon'])
+        >>> df.isin(other)
+                num_legs  num_wings
+        falcon      True       True
+        dog        False      False
         """
 
         if isinstance(values, dict):
