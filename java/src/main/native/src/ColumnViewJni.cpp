@@ -1800,7 +1800,8 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_replaceChildrenWithViews(
       }
     }
 
-    std::unique_ptr<cudf::column_view> n_new_nested(new cudf::column_view(n_col_view->type(), n_col_view->size(), nullptr, n_col_view->null_mask(), n_col_view->null_count(), n_col_view->offset(), children));
+    std::unique_ptr<cudf::column_view> n_new_nested(new cudf::column_view(n_col_view->type(), n_col_view->size(), 
+    nullptr, n_col_view->null_mask(), n_col_view->null_count(), n_col_view->offset(), children));
     return reinterpret_cast<jlong>(n_new_nested.release());
   }
   CATCH_STD(env, 0);
