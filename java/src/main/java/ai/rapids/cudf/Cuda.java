@@ -41,7 +41,7 @@ public class Cuda {
     }
 
     @Override
-    protected boolean cleanImpl(boolean logErrorIfNotClean) {
+    protected synchronized boolean cleanImpl(boolean logErrorIfNotClean) {
       boolean neededCleanup = false;
       long origAddress = stream;
       if (stream != CUDA_STREAM_DEFAULT &&
@@ -139,7 +139,7 @@ public class Cuda {
     }
 
     @Override
-    protected boolean cleanImpl(boolean logErrorIfNotClean) {
+    protected synchronized boolean cleanImpl(boolean logErrorIfNotClean) {
       boolean neededCleanup = false;
       long origAddress = event;
       if (event != 0) {

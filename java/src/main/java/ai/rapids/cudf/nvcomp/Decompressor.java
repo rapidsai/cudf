@@ -135,7 +135,7 @@ public class Decompressor {
       }
 
       @Override
-      protected boolean cleanImpl(boolean logErrorIfNotClean) {
+      protected synchronized boolean cleanImpl(boolean logErrorIfNotClean) {
         boolean neededCleanup = false;
         long address = metadata;
         if (metadata != 0) {

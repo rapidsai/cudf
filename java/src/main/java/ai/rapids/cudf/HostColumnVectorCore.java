@@ -553,7 +553,7 @@ public class HostColumnVectorCore implements AutoCloseable {
     }
 
     @Override
-    protected boolean cleanImpl(boolean logErrorIfNotClean) {
+    protected synchronized boolean cleanImpl(boolean logErrorIfNotClean) {
       boolean neededCleanup = false;
       if (data != null || valid != null || offsets != null) {
         try {
