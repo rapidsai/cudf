@@ -135,7 +135,8 @@ void set_null_mask(bitmask_type *bitmask,
 {
   CUDF_FUNC_RANGE();
   CUDF_EXPECTS(begin_bit >= 0, "Invalid range.");
-  CUDF_EXPECTS(begin_bit < end_bit, "Invalid bit range.");
+  CUDF_EXPECTS(begin_bit <= end_bit, "Invalid bit range.");
+  if (begin_bit == end_bit) return;
   if (bitmask != nullptr) {
     auto number_of_mask_words =
       num_bitmask_words(end_bit) - begin_bit / detail::size_in_bits<bitmask_type>();

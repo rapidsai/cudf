@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2020, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -176,11 +176,9 @@ struct column_gatherer_impl {
     auto destination_column =
       cudf::detail::allocate_like(source_column, num_rows, policy, stream, mr);
 
-    using Type = device_storage_type_t<Element>;
-
-    gather_helper(source_column.data<Type>(),
+    gather_helper(source_column.data<Element>(),
                   source_column.size(),
-                  destination_column->mutable_view().template begin<Type>(),
+                  destination_column->mutable_view().template begin<Element>(),
                   gather_map_begin,
                   gather_map_end,
                   nullify_out_of_bounds,
@@ -559,14 +557,14 @@ struct column_gatherer_impl<struct_view, MapItRoot> {
                    std::back_inserter(output_struct_members),
                    [&gather_map_begin, &gather_map_end, nullify_out_of_bounds, stream, mr](
                      cudf::column_view const& col) {
-                     return cudf::type_dispatcher(col.type(),
-                                                  column_gatherer{},
-                                                  col,
-                                                  gather_map_begin,
-                                                  gather_map_end,
-                                                  nullify_out_of_bounds,
-                                                  stream,
-                                                  mr);
+                     return cudf::type_dispatcher<dispatch_storage_type>(col.type(),
+                                                                         column_gatherer{},
+                                                                         col,
+                                                                         gather_map_begin,
+                                                                         gather_map_end,
+                                                                         nullify_out_of_bounds,
+                                                                         stream,
+                                                                         mr);
                    });
 
     gather_bitmask(
@@ -633,14 +631,14 @@ std::unique_ptr<table> gather(
   for (auto const& source_column : source_table) {
     // The data gather for n columns will be put on the first n streams
     destination_columns.push_back(
-      cudf::type_dispatcher(source_column.type(),
-                            column_gatherer{},
-                            source_column,
-                            gather_map_begin,
-                            gather_map_end,
-                            bounds_policy == out_of_bounds_policy::NULLIFY,
-                            stream,
-                            mr));
+      cudf::type_dispatcher<dispatch_storage_type>(source_column.type(),
+                                                   column_gatherer{},
+                                                   source_column,
+                                                   gather_map_begin,
+                                                   gather_map_end,
+                                                   bounds_policy == out_of_bounds_policy::NULLIFY,
+                                                   stream,
+                                                   mr));
   }
 
   gather_bitmask_op const op = bounds_policy == out_of_bounds_policy::NULLIFY

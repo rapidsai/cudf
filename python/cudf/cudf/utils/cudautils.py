@@ -1,9 +1,9 @@
 # Copyright (c) 2018-2021, NVIDIA CORPORATION.
-from functools import lru_cache
-
+import cachetools
 import cupy
 import numpy as np
 from numba import cuda
+from pickle import dumps
 
 import cudf
 from cudf.utils.utils import check_equals_float, check_equals_int
@@ -235,7 +235,13 @@ def grouped_window_sizes_from_offset(arr, group_starts, offset):
     return window_sizes
 
 
-@lru_cache(maxsize=32)
+# This cache is keyed on the (signature, code, closure variables) of UDFs, so
+# it can hit for distinct functions that are similar. The lru_cache wrapping
+# compile_udf misses for these similar functions, but doesn't need to serialize
+# closure variables to check for a hit.
+_udf_code_cache = cachetools.LRUCache(maxsize=32)
+
+
 def compile_udf(udf, type_signature):
     """Compile ``udf`` with `numba`
 
@@ -266,8 +272,30 @@ def compile_udf(udf, type_signature):
       An numpy type
 
     """
+
+    # Check if we've already compiled a similar (but possibly distinct)
+    # function before
+    codebytes = udf.__code__.co_code
+    if udf.__closure__ is not None:
+        cvars = tuple([x.cell_contents for x in udf.__closure__])
+        cvarbytes = dumps(cvars)
+    else:
+        cvarbytes = b""
+
+    key = (type_signature, codebytes, cvarbytes)
+    res = _udf_code_cache.get(key)
+    if res:
+        return res
+
+    # We haven't compiled a function like this before, so need to fall back to
+    # compilation with Numba
     ptx_code, return_type = cuda.compile_ptx_for_current_device(
         udf, type_signature, device=True
     )
     output_type = numpy_support.as_dtype(return_type)
-    return (ptx_code, output_type.type)
+
+    # Populate the cache for this function
+    res = (ptx_code, output_type.type)
+    _udf_code_cache[key] = res
+
+    return res
