@@ -1072,7 +1072,16 @@ class Series(Frame, Serializable):
             show_dimensions = get_option("display.show_dimensions")
             if preprocess._column.categories.dtype.kind == "f":
                 pd_series = (
-                    preprocess.astype("str").to_pandas().astype("category")
+                    preprocess.astype("str")
+                    .to_pandas()
+                    .astype(
+                        dtype=pd.CategoricalDtype(
+                            categories=preprocess.dtype.categories.astype(
+                                "str"
+                            ).to_pandas(),
+                            ordered=preprocess.dtype.ordered,
+                        )
+                    )
                 )
             else:
                 pd_series = preprocess.to_pandas()
