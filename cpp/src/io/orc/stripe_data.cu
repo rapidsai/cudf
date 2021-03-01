@@ -901,11 +901,15 @@ static __device__ uint32_t Byte_RLE(orc_bytestream_s *bs,
                                     volatile orc_byterle_state_s *rle,
                                     volatile uint8_t *vals,
                                     uint32_t maxvals,
-                                    int t)
+                                    int t, bool check=false)
 {
   uint32_t numvals, numruns;
   int r, tr;
   if (t == 0) {
+    if (check){
+	    printf("RGSL: maxvals is %u \n", maxvals);
+    }
+
     uint32_t maxpos  = min(bs->len, bs->pos + (bytestream_buffer_size - 8u));
     uint32_t lastpos = bs->pos;
     numvals = numruns = 0;
@@ -915,15 +919,25 @@ static __device__ uint32_t Byte_RLE(orc_bytestream_s *bs,
       rle->runs_pos[numruns] = pos;
       rle->runs_loc[numruns] = numvals;
       n                      = bytestream_readbyte(bs, pos++);
+      if(check) printf("RGSL: n is %u pos %u, maxpos %u\n", n, pos, maxpos);
       if (n <= 0x7f) {
         // Run
         n = n + 3;
+	if(check){
+        for (uint32_t i=0; i<n; i++) {
+            printf("%u, ", bytestream_readbyte(bs, pos));
+        }}
         pos++;
       } else {
         // Literals
         n = 0x100 - n;
+	if(check){
+        for (uint32_t i=0; i<n; i++) {
+            printf("%u, ", bytestream_readbyte(bs, pos+i));
+        }}
         pos += n;
       }
+
       if (pos > maxpos || numvals + n > maxvals) { break; }
       numruns++;
       numvals += n;
@@ -950,6 +964,7 @@ static __device__ uint32_t Byte_RLE(orc_bytestream_s *bs,
       n            = 0x100 - n;
     }
     for (uint32_t i = tr; i < n; i += 32) {
+      if(check) printf("RGSL: %u Value being copied is %u \n", loc+i, bytestream_readbyte(bs, pos + (i & literal_mask)));
       vals[loc + i] = bytestream_readbyte(bs, pos + (i & literal_mask));
     }
   }
@@ -1529,12 +1544,13 @@ __global__ void __launch_bounds__(block_size)
         __syncthreads();
       } else if (s->chunk.type_kind == BOOLEAN) {
         int n = ((numvals + 7) >> 3);
+ 	if(s->top.data.cur_row==138784 and t ==0) printf("RGSL : n is %u and buffered count is %u \n", n, s->top.data.buffered_count);
         if (n > s->top.data.buffered_count) {
           numvals = Byte_RLE(&s->bs,
                              &s->u.rle8,
                              &s->vals.u8[s->top.data.buffered_count],
                              n - s->top.data.buffered_count,
-                             t) +
+                             t, s->top.data.cur_row==138784? true:false) +
                     s->top.data.buffered_count;
         } else {
           numvals = s->top.data.buffered_count;
@@ -1651,6 +1667,9 @@ __global__ void __launch_bounds__(block_size)
               break;
             case BYTE: static_cast<uint8_t *>(data_out)[row] = s->vals.u8[t + vals_skipped]; break;
             case BOOLEAN:
+		if(row == 138784) printf("RGSL: Start row is  %u and cur_row is %u and end_rows is %u\n", s->chunk.start_row, s->top.data.cur_row, s->top.data.end_row);
+		if(row == 138784) printf("RGSL: val at %u and vals skipped is %u and t+skipped it %u\n", s->vals.u8[(t + vals_skipped) >> 3], vals_skipped, t+vals_skipped);
+		if(row == 138788) printf("RGSL: val at %u and vals skipped is %u and t+skipped it %u\n", s->vals.u8[(t + vals_skipped) >> 3], vals_skipped, t+vals_skipped);
               static_cast<uint8_t *>(data_out)[row] =
                 (s->vals.u8[(t + vals_skipped) >> 3] >> ((~(t + vals_skipped)) & 7)) & 1;
               break;
@@ -1725,6 +1744,7 @@ __global__ void __launch_bounds__(block_size)
     __syncthreads();
     if (t == 0) {
       s->top.data.cur_row += s->top.data.nrows;
+      if(s->top.data.cur_row==139442 and t ==0) printf("RGSL : before cur_rows is %u and nrows %u\n", s->top.data.cur_row - s->top.data.nrows, s->top.data.nrows);
       if (s->is_string && !is_dictionary(s->chunk.encoding_kind) && s->top.data.max_vals > 0) {
         s->chunk.dictionary_start += s->vals.u32[s->top.data.max_vals - 1];
       }
