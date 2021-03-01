@@ -670,14 +670,8 @@ class MultiIndex(Index):
 
         Examples
         --------
-        >>> idx = cudf.Index([1,2,3])
-        >>> idx
-        Int64Index([1, 2, 3], dtype='int64')
-
-        Check whether each index value in a list of values.
-        >>> idx.isin([1, 4])
-        array([ True, False, False])
-
+        >>> import cudf
+        >>> import pandas as pd
         >>> midx = cudf.form_pandas(pd.MultiIndex.from_arrays([[1,2,3],
         ...                                  ['red', 'blue', 'green']],
         ...                                  names=('number', 'color')))
@@ -694,6 +688,7 @@ class MultiIndex(Index):
         array([ True, False, False])
 
         To check across the levels of a MultiIndex, pass a list of tuples:
+
         >>> midx.isin([(1, 'red'), (3, 'red')])
         array([ True, False, False])
         """
