@@ -14,8 +14,6 @@
  * limitations under the License.
  */
 
-#include <cstdint>
-#include <memory>
 #include <arrow/api.h>
 #include <cudf/column/column_factories.hpp>
 #include <cudf/concatenate.hpp>
@@ -29,56 +27,11 @@
 #include <cudf/lists/lists_column_view.hpp>
 #include <cudf/scalar/scalar_factories.hpp>
 #include <cudf/structs/structs_column_view.hpp>
-#include "cudf/null_mask.hpp"
-#include "cudf/types.hpp"
-#include "cudf/utilities/traits.hpp"
-#include "cudf/unary.hpp"
-#include "rmm/device_buffer.hpp"
 
 #include "cudf_jni_apis.hpp"
 #include "dtype_utils.hpp"
-#include "jni.h"
-#include "jni_utils.hpp"
-
 
 extern "C" {
-
-cudf::column* replace_column(cudf::column* list_column) {
-  cudf::lists_column_view lcv(list_column->view());
-
-  std::unique_ptr<cudf::column> new_child;
-
-  if (lcv.child().type().id() != cudf::type_id::LIST) {
-    assert(lcv.child().type() == cudf::type_id::DECIMAL64);
-    cudf::data_type to_type = cudf::data_type(cudf::type_id::DECIMAL32, lcv.child().type().scale());
-    auto u_d32_ptr = cudf::cast(lcv.child(), to_type);
-    new_child.reset(u_d32_ptr.release());
-  } else {
-    new_child.reset(replace_column(&list_column->child(cudf::lists_column_view::child_column_index)));
-  }
-
-  assert(new_child->size() == contents.children[lists_column_view::child_column_index].size());
-  int32_t size = list_column->size(); 
-  int32_t null_count = list_column->null_count();
-  auto contents = list_column->release();
-
-  auto col = cudf::make_lists_column(size, std::move(contents.children[cudf::lists_column_view::offsets_column_index]), 
-  std::move(new_child), null_count, std::move(*contents.null_mask.release()));
-  return col.release();
-}
-
-JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_castLeafD64ToD32( JNIEnv *env, jobject j_object, jlong j_handle) {
-
-  JNI_NULL_CHECK(env, j_handle, "native handle is null", 0);
-
-  try {
-    cudf::column *n_list_col = reinterpret_cast<cudf::column *>(j_handle);
-    JNI_ARG_CHECK(env, n_list_col->type().id() == cudf::type_id::LIST, "Only list types are allowed", 0);
-
-    return reinterpret_cast<jlong>(replace_column(n_list_col));
-  }
-  CATCH_STD(env, 0);
-}
 
 JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_sequence(JNIEnv *env, jclass,
                                                                   jlong j_initial_val, jlong j_step,

@@ -1302,7 +1302,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    */
   public ColumnView replaceChildrenWithViews(int[] indices,
                                              ColumnView[] views) {
-    assert(type == DType.STRUCT);
+    assert(type == DType.STRUCT || type == DType.LIST);
     return new ColumnView(replaceChildrenWithViews(getNativeView(), indices,
         Arrays.stream(views).mapToLong(v -> v.getNativeView()).toArray()));
   }

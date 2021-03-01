@@ -27,7 +27,6 @@ import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.List;
 import java.util.Optional;
 import java.util.function.Consumer;
@@ -726,7 +725,6 @@ public final class ColumnVector extends ColumnView {
 
   private static native void setNativeNullCountColumn(long cudfColumnHandle, int nullCount) throws CudfException;
 
-  private static native long castLeafD64ToD32(long cudfColumnHandle) throws CudfException;
   /**
    * Create a cudf::column_view from a cudf::column.
    * @param cudfColumnHandle the pointer to the cudf::column
