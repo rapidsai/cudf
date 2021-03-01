@@ -75,36 +75,6 @@ parquet::Compression to_parquet_compression(compression_type compression)
 
 }  // namespace
 
-/**
- * @brief Helper kernel for converting string data/offsets into nvstrdesc
- * REMOVEME: Once we eliminate the legacy readers/writers, the kernels could be
- * made to use the native offset+data layout.
- */
-__global__ void stringdata_to_nvstrdesc(gpu::nvstrdesc_s *dst,
-                                        const size_type *offsets,
-                                        const char *strdata,
-                                        const uint32_t *nulls,
-                                        size_type column_size)
-{
-  size_type row = blockIdx.x * blockDim.x + threadIdx.x;
-  if (row < column_size) {
-    uint32_t is_valid = (nulls) ? (nulls[row >> 5] >> (row & 0x1f)) & 1 : 1;
-    size_t count;
-    const char *ptr;
-    if (is_valid) {
-      size_type cur  = offsets[row];
-      size_type next = offsets[row + 1];
-      ptr            = strdata + cur;
-      count          = (next > cur) ? next - cur : 0;
-    } else {
-      ptr   = nullptr;
-      count = 0;
-    }
-    dst[row].ptr   = ptr;
-    dst[row].count = count;
-  }
-}
-
 struct linked_column_view;
 
 using LinkedColPtr    = std::shared_ptr<linked_column_view>;
@@ -382,11 +352,11 @@ std::vector<schema_tree_node> construct_schema_tree(LinkedColVector const &linke
           //   _ts_scale = -1000;  // negative value indicates division by absolute value
           //   break;
           // TODO (stat): Wait and watch if converting string into nvstrdesc is even needed
-          // case cudf::type_id::STRING:
-          //   col_schema.type           = Type::BYTE_ARRAY;
-          //   col_schema.converted_type = ConvertedType::UTF8;
-          //   col_schema.stats_dtype    = statistics_dtype::dtype_string;
-          //   break;
+          case cudf::type_id::STRING:
+            col_schema.type           = Type::BYTE_ARRAY;
+            col_schema.converted_type = ConvertedType::UTF8;
+            col_schema.stats_dtype    = statistics_dtype::dtype_string;
+            break;
           case cudf::type_id::DECIMAL32:
             col_schema.type           = Type::INT32;
             col_schema.converted_type = ConvertedType::DECIMAL;
@@ -452,7 +422,6 @@ struct new_parquet_column_view {
                           rmm::cuda_stream_view stream)
     : schema_node(schema_node),
       _d_nullability(0, stream),
-      string_views(0, stream),
       _dremel_offsets(0, stream),
       _rep_level(0, stream),
       _def_level(0, stream)
@@ -538,14 +507,10 @@ struct new_parquet_column_view {
       _dremel_offsets = std::move(dremel.dremel_offsets);
       _rep_level      = std::move(dremel.rep_level);
       _def_level      = std::move(dremel.def_level);
-      // Needed for constructing string view vector for statistics calc
-      // leaf_col_offset         = dremel.leaf_col_offset;
-      // Needed for knowing what size dictionary to allocate
-      _data_count = dremel.leaf_data_size;
+      _data_count = dremel.leaf_data_size;  // Needed for knowing what size dictionary to allocate
 
       stream.synchronize();
     }
-
   }
 
   column_view cudf_column_view() const { return cudf_col; }
@@ -566,27 +531,16 @@ struct new_parquet_column_view {
 
   gpu::EncColumnDesc get_device_view()
   {
-    column_view col = leaf_column();
-    auto desc       = gpu::EncColumnDesc{};  // Zero out all fields
-    auto type_width = (col.type().id() == type_id::STRING) ? 0 : cudf::size_of(col.type());
-
-    // TODO(stat): Remove during statistics refactor. No other code uses these
-    // TODO(stat): List stats would be broken until then. Need to fix column_data_base and
-    // num_values for offseted list case.
-    desc.column_data_base = col.head<uint8_t>() + col.offset() * type_width;
-    desc.valid_map_base   = col.null_mask();
-    desc.column_offset    = col.offset();
-    desc.num_values =
-      col.size();  // TODO(stat): NOOO, This has to be data count because leaf size is not
-                   // the same as data count. What if we have offset in the parent
-                   // column? Actual size of leaf data we have to view is lesser
-
+    column_view col  = leaf_column();
+    auto desc        = gpu::EncColumnDesc{};  // Zero out all fields
     desc.stats_dtype = schema_node.stats_dtype;
     desc.ts_scale    = schema_node.ts_scale;
 
     // TODO (dm): Enable dictionary for list after refactor
     if (physical_type() != BOOLEAN && physical_type() != UNDEFINED_TYPE && !is_list()) {
-      alloc_dictionary(col.size());  // TODO: This also has to be data count. Reason above.
+      alloc_dictionary(col.size());  // TODO: This has to be data count because leaf size is not
+                                     // the same as data count. What if we have offset in the parent
+                                     // column? Actual size of leaf data we have to view is lesser
       desc.dict_index = get_dict_index();
       desc.dict_data  = get_dict_data();
     }

@@ -401,7 +401,6 @@ struct dremel_data {
   rmm::device_uvector<uint8_t> rep_level;
   rmm::device_uvector<uint8_t> def_level;
 
-  size_type leaf_col_offset;
   size_type leaf_data_size;
 };
 
