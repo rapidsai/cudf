@@ -396,8 +396,8 @@ rmm::device_buffer copy_bitmask(column_view const &view,
 
 // Inplace Bitwise AND of the masks
 void inplace_bitmask_and(device_span<bitmask_type> dest_mask,
-                         host_span<bitmask_type const *> const masks,
-                         host_span<size_type> const begin_bits,
+                         host_span<bitmask_type const *> masks,
+                         host_span<size_type const> begin_bits,
                          size_type mask_size,
                          rmm::cuda_stream_view stream,
                          rmm::mr::device_memory_resource *mr)
@@ -414,8 +414,8 @@ void inplace_bitmask_and(device_span<bitmask_type> dest_mask,
 }
 
 // Bitwise AND of the masks
-rmm::device_buffer bitmask_and(host_span<bitmask_type const *> const masks,
-                               host_span<size_type> const begin_bits,
+rmm::device_buffer bitmask_and(host_span<bitmask_type const *> masks,
+                               host_span<size_type const> begin_bits,
                                size_type mask_size,
                                rmm::cuda_stream_view stream,
                                rmm::mr::device_memory_resource *mr)

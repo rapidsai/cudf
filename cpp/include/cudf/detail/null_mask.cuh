@@ -40,8 +40,8 @@ namespace detail {
 template <typename Binop>
 __global__ void offset_bitmask_binop(Binop op,
                                      device_span<bitmask_type> destination,
-                                     device_span<bitmask_type const *> const source,
-                                     device_span<size_type> const source_begin_bits,
+                                     device_span<bitmask_type const *> source,
+                                     device_span<size_type const> source_begin_bits,
                                      size_type source_size_bits)
 {
   for (size_type destination_word_index = threadIdx.x + blockIdx.x * blockDim.x;
@@ -75,8 +75,8 @@ __global__ void offset_bitmask_binop(Binop op,
 template <typename Binop>
 rmm::device_buffer bitmask_binop(
   Binop op,
-  host_span<bitmask_type const *> const masks,
-  host_span<size_type> const masks_begin_bits,
+  host_span<bitmask_type const *> masks,
+  host_span<size_type const> masks_begin_bits,
   size_type mask_size_bits,
   rmm::cuda_stream_view stream,
   rmm::mr::device_memory_resource *mr = rmm::mr::get_current_device_resource())
@@ -113,8 +113,8 @@ template <typename Binop>
 void inplace_bitmask_binop(
   Binop op,
   device_span<bitmask_type> dest_mask,
-  host_span<bitmask_type const *> const masks,
-  host_span<size_type> const masks_begin_bits,
+  host_span<bitmask_type const *> masks,
+  host_span<size_type const> masks_begin_bits,
   size_type mask_size_bits,
   rmm::cuda_stream_view stream,
   rmm::mr::device_memory_resource *mr = rmm::mr::get_current_device_resource())
@@ -129,13 +129,16 @@ void inplace_bitmask_binop(
   rmm::device_uvector<bitmask_type const *> d_masks(masks.size(), stream, mr);
   rmm::device_uvector<size_type> d_begin_bits(masks_begin_bits.size(), stream, mr);
 
-  CUDA_TRY(cudaMemcpy(d_masks.data(), masks.data(), masks.size_bytes(), cudaMemcpyHostToDevice));
-  CUDA_TRY(cudaMemcpy(d_begin_bits.data(),
-                      masks_begin_bits.data(),
-                      masks_begin_bits.size_bytes(),
-                      cudaMemcpyHostToDevice));
+  CUDA_TRY(cudaMemcpyAsync(
+    d_masks.data(), masks.data(), masks.size_bytes(), cudaMemcpyHostToDevice, stream.value()));
+  CUDA_TRY(cudaMemcpyAsync(d_begin_bits.data(),
+                           masks_begin_bits.data(),
+                           masks_begin_bits.size_bytes(),
+                           cudaMemcpyHostToDevice,
+                           stream.value()));
 
   cudf::detail::grid_1d config(dest_mask.size(), 256);
+  stream.synchronize();
   offset_bitmask_binop<<<config.num_blocks, config.num_threads_per_block, 0, stream.value()>>>(
     op, dest_mask, d_masks, d_begin_bits, mask_size_bits);
   CHECK_CUDA(stream.value());
