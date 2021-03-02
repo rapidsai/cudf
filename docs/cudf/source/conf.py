@@ -211,21 +211,21 @@ autoclass_content = "init"
 github_doc_root = "https://github.com/rtfd/recommonmark/tree/master/doc/"
 
 # Replace API shorthands with fullname
-reftarget_aliases = {
+_reftarget_aliases = {
     "cudf.Series": ("cudf.core.series.Series", "cudf.Series"),
     "cudf.Index": ("cudf.core.index.Index", "cudf.Index"),
     "cupy.core.core.ndarray": ("cupy.ndarray", "cupy.ndarray"),
 }
 
-internal_names_to_ignore = {"cudf.core.column.string.StringColumn"}
+_internal_names_to_ignore = {"cudf.core.column.string.StringColumn"}
 
 
 def resolve_aliases(app, doctree):
     pending_xrefs = doctree.traverse(condition=pending_xref)
     for node in pending_xrefs:
         alias = node.get("reftarget", None)
-        if alias is not None and alias in reftarget_aliases:
-            real_ref, text_to_render = reftarget_aliases[alias]
+        if alias is not None and alias in _reftarget_aliases:
+            real_ref, text_to_render = _reftarget_aliases[alias]
             node["reftarget"] = real_ref
 
             text_node = next(
@@ -236,7 +236,7 @@ def resolve_aliases(app, doctree):
 
 def ignore_internal_references(app, env, node, contnode):
     name = node.get("reftarget", None)
-    if name is not None and name in internal_names_to_ignore:
+    if name is not None and name in _internal_names_to_ignore:
         node["reftarget"] = ""
         return contnode
 
