@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -107,7 +107,7 @@ void do_bit_cast(cudf::column_view const& column_view, Iterator begin, Iterator 
   }
 }
 
-TYPED_TEST(ColumnViewAllTypesTests, LogicalCast)
+TYPED_TEST(ColumnViewAllTypesTests, BitCast)
 {
   auto begin = thrust::make_counting_iterator(1);
   auto end   = thrust::make_counting_iterator(16);
