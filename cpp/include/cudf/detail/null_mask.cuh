@@ -138,7 +138,6 @@ void inplace_bitmask_binop(
                            stream.value()));
 
   cudf::detail::grid_1d config(dest_mask.size(), 256);
-  stream.synchronize();
   offset_bitmask_binop<<<config.num_blocks, config.num_threads_per_block, 0, stream.value()>>>(
     op, dest_mask, d_masks, d_begin_bits, mask_size_bits);
   CHECK_CUDA(stream.value());
