@@ -13,9 +13,9 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 #=============================================================================
-cmake_minimum_required(VERSION 3.14 FATAL_ERROR)
+cmake_minimum_required(VERSION 3.18 FATAL_ERROR)
 
-project(CUDA_KAFKA VERSION 0.15.0 LANGUAGES C CXX CUDA)
+project(CUDA_KAFKA VERSION 0.19.0 LANGUAGES C CXX CUDA)
 
 # TODO: Since we have no actual CUDA code in cudf_kafka this should be removed in the future
 # in favor of using FindCUDAToolkit to get the needed CUDA include headers
@@ -147,7 +147,13 @@ include_directories("${RDKAFKA_INCLUDE}")
 
 ###################################################################################################
 # - cudf_kafka Install ----------------------------------------------------------------------------
-target_link_libraries(cudf_kafka cudf)
+
+# add third party dependencies using CPM
+include(cmake/thirdparty/CUSPATIAL_GetCPM.cmake)
+# find cuDF
+include(cmake/thirdparty/CUSPATIAL_GetCUDF.cmake)
+
+target_link_libraries(cudf_kafka rmm::rmm cudf::cudf)
 
 install(TARGETS cudf_kafka
         DESTINATION lib)
