@@ -352,7 +352,7 @@ std::unique_ptr<column> make_fixed_width_column(
  * columns' device memory.
  */
 std::unique_ptr<column> make_strings_column(
-  cudf::device_span<thrust::pair<const char*, size_type>> strings,
+  cudf::device_span<thrust::pair<const char*, size_type> const> strings,
   rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 

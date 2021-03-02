@@ -44,7 +44,7 @@ struct string_view_to_pair {
 
 // Create a strings-type column from vector of pointer/size pairs
 std::unique_ptr<column> make_strings_column(
-  device_span<thrust::pair<const char*, size_type>> strings,
+  device_span<thrust::pair<const char*, size_type> const> strings,
   rmm::cuda_stream_view stream,
   rmm::mr::device_memory_resource* mr)
 {
