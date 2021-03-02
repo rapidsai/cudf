@@ -44,7 +44,7 @@ struct scan_functor {
   static constexpr bool is_supported()
   {
     if (K == aggregation::SUM)
-      return cudf::is_numeric<T>() || cudf::is_duration<T>();  // || cudf::is_fixed_point<T>();
+      return cudf::is_numeric<T>() || cudf::is_duration<T>() || cudf::is_fixed_point<T>();
     else if (K == aggregation::MIN or K == aggregation::MAX)
       return cudf::is_fixed_width<T>() and is_relationally_comparable<T, T>();
     else
@@ -82,23 +82,23 @@ struct scan_functor {
     if (values.has_nulls()) {
       auto input = thrust::make_transform_iterator(
         make_null_replacement_iterator(*valuesview, OpType::template identity<DeviceType>()),
-        thrust::identity<ResultType>{});
+        thrust::identity<ResultDeviceType>{});
       thrust::inclusive_scan_by_key(rmm::exec_policy(stream),
                                     group_labels.begin(),
                                     group_labels.end(),
                                     input,
-                                    resultview->begin<ResultType>(),
+                                    resultview->begin<ResultDeviceType>(),
                                     thrust::equal_to<size_type>{},
                                     OpType{});
       result->set_null_mask(cudf::detail::copy_bitmask(values, stream));
     } else {
       auto input = thrust::make_transform_iterator(valuesview->begin<DeviceType>(),
-                                                   thrust::identity<ResultType>{});
+                                                   thrust::identity<ResultDeviceType>{});
       thrust::inclusive_scan_by_key(rmm::exec_policy(stream),
                                     group_labels.begin(),
                                     group_labels.end(),
                                     input,
-                                    resultview->begin<ResultType>(),
+                                    resultview->begin<ResultDeviceType>(),
                                     thrust::equal_to<size_type>{},
                                     OpType{});
     }

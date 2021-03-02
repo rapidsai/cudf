@@ -28,36 +28,6 @@ template <typename V>
 struct groupby_sum_scan_test : public cudf::test::BaseFixture {
 };
 
-inline void test_single_scan(column_view const& keys,
-                             column_view const& values,
-                             column_view const& expect_keys,
-                             column_view const& expect_vals,
-                             std::unique_ptr<aggregation>&& agg,
-                             null_policy include_null_keys                  = null_policy::EXCLUDE,
-                             sorted keys_are_sorted                         = sorted::NO,
-                             std::vector<order> const& column_order         = {},
-                             std::vector<null_order> const& null_precedence = {})
-{
-  std::vector<groupby::aggregation_request> requests;
-  requests.emplace_back(groupby::aggregation_request());
-  requests[0].values = values;
-
-  requests[0].aggregations.push_back(std::move(agg));
-
-  groupby::groupby gb_obj(
-    table_view({keys}), include_null_keys, keys_are_sorted, column_order, null_precedence);
-
-  auto result = gb_obj.scan(requests);
-
-  auto const sort_order  = sorted_order(result.first->view(), {}, {null_order::AFTER});
-  auto const sorted_keys = gather(result.first->view(), *sort_order);
-  auto const sorted_vals = gather(table_view({result.second[0].results[0]->view()}), *sort_order);
-
-  // cudf::test::print(sorted_vals->get_column(0));
-  CUDF_TEST_EXPECT_TABLES_EQUAL(table_view({expect_keys}), *sorted_keys);
-  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expect_vals, sorted_vals->get_column(0), true);
-}
-
 using supported_types =
   cudf::test::Concat<cudf::test::Types<int8_t, int16_t, int32_t, int64_t, float, double>,
                      cudf::test::DurationTypes>;
@@ -163,6 +133,35 @@ TYPED_TEST(groupby_sum_scan_test, null_keys_and_values)
   test_single_scan(keys, vals, expect_keys, expect_vals, std::move(agg2));
 }
 // clang-format on
+
+template <typename T>
+struct FixedPointTestBothReps : public cudf::test::BaseFixture {
+};
+
+TYPED_TEST_CASE(FixedPointTestBothReps, cudf::test::FixedPointTypes);
+
+TYPED_TEST(FixedPointTestBothReps, GroupBySortSumScanDecimalAsValue)
+{
+  using namespace numeric;
+  using decimalXX      = TypeParam;
+  using RepType        = cudf::device_storage_type_t<decimalXX>;
+  using fp_wrapper     = cudf::test::fixed_point_column_wrapper<RepType>;
+  using out_fp_wrapper = cudf::test::fixed_point_column_wrapper<int64_t>;
+
+  using K = int32_t;
+
+  for (auto const i : {2, 1, 0, -1, -2}) {
+    auto const scale = scale_type{i};
+    auto const keys  = fixed_width_column_wrapper<K>{1, 2, 3, 1, 2, 2, 1, 3, 3, 2};
+    auto const vals  = fp_wrapper{{0, 1, 2, 3, 4, 5, 6, 7, 8, 9}, scale};
+
+    auto const expect_keys     = fixed_width_column_wrapper<K>{1, 1, 1, 2, 2, 2, 2, 3, 3, 3};
+    auto const expect_vals_sum = out_fp_wrapper{{0, 3, 9, 1, 5, 10, 19, 2, 9, 17}, scale};
+
+    auto agg2 = cudf::make_sum_aggregation();
+    test_single_scan(keys, vals, expect_keys, expect_vals_sum, std::move(agg2));
+  }
+}
 
 }  // namespace test
 }  // namespace cudf
