@@ -281,12 +281,8 @@ TEST_F(StringsConcatenateWithColSeparatorTest, SingleColumnStringMixNoReplacemen
     {"", "", "", "bbabc", "", "d", "éa", "", "bbb", "éééf"},
     {false, false, true, true, false, true, true, false, true, true});
 
-  CUDA_TRY(cudaDeviceSynchronize());
-
   auto results =
     cudf::strings::concatenate(cudf::table_view{{col0}}, cudf::strings_column_view(sep_col));
-
-  CUDA_TRY(cudaDeviceSynchronize());
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, exp_results, true);
 }
