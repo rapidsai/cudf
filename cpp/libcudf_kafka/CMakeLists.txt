@@ -149,9 +149,9 @@ include_directories("${RDKAFKA_INCLUDE}")
 # - cudf_kafka Install ----------------------------------------------------------------------------
 
 # add third party dependencies using CPM
-include(cmake/thirdparty/CUSPATIAL_GetCPM.cmake)
+include(cmake/thirdparty/CUDF_KAFKA_GetCPM.cmake)
 # find cuDF
-include(cmake/thirdparty/CUSPATIAL_GetCUDF.cmake)
+include(cmake/thirdparty/CUDF_KAFKA_GetCUDF.cmake)
 
 target_link_libraries(cudf_kafka rmm::rmm cudf::cudf)
 
