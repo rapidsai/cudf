@@ -1,6 +1,7 @@
 # Copyright (c) 2018-2021, NVIDIA CORPORATION.
 import pyarrow as pa
 import cudf
+import pandas as pd
 from cudf.core.column import StructColumn
 
 
@@ -89,3 +90,23 @@ class IntervalColumn(StructColumn):
             children=struct_copy.base_children,
             closed=closed,
         )
+
+    def as_interval_column(
+        self, dtype, **kwargs
+    ):
+        if isinstance(dtype, str) and dtype == "interval":
+            return self
+        if (
+            isinstance(
+                dtype, (cudf.core.dtypes.IntervalDtype, pd.IntervalDtype)
+            )
+        ):
+            return self
+
+        if isinstance(dtype, pd.IntervalDtype):
+            dtype = IntervalDtype(
+                closed=dtype.closed
+            )
+
+        if not isinstance(dtype, IntervalDtype):
+            raise ValueError("dtype must be IntervalDtype")

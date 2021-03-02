@@ -2676,7 +2676,13 @@ class CategoricalIndex(GenericIndex):
         return self._values.cat().categories
 
 
-class interval_range(GenericIndex):
+def interval_range(
+    start: int = None,
+    end: int = None,
+    periods: int = None,
+    freq: int = None,
+    closed: str = "right",
+    name: str = None) -> "IntervalIndex":
     """
     Returns a fixed frequency IntervalIndex.
 
@@ -2700,58 +2706,56 @@ class interval_range(GenericIndex):
 
     Returns
     IntervalIndex
+
+    Examples
+    --------
+    >>> import cudf
+    >>> import pandas as pd
+    >>> cudf.interval_range(start=0,end=5)
+    ... IntervalIndex([(0, 0], (1, 1], (2, 2], (3, 3], (4, 4], (5, 5]],
+              closed='right',dtype='interval')
     """
-
-    def __new__(
-        cls,
-        start: int = None,
-        end: int = None,
-        periods: int = None,
-        freq: int = None,
-        closed: str = "right",
-        name: str = None,
-    ) -> "interval_range":
-        if freq and periods and start and end:
-            raise ValueError(
-                "Of the four parameters: start, end, periods, and "
-                "freq, exactly three must be specified"
-            )
-        elif periods and not freq:
-            if end is not None:
-                end = end + 1
-            periods_array = cupy.asarray(cupy.arange(start, end))
-            hist, bin_edges = cupy.histogram(periods_array, periods)
-            # cupy.histogram turns all arrays into a float array
-            # this can cause the dtype to be a float instead of an int
-            # the below adjusts for this
-            if cupy.all(cupy.mod(bin_edges, 1) == 0):
-                bin_edges = bin_edges.astype(int)
-            left_col = bin_edges[:-1]
-            right_col = bin_edges[1:]
-        else:
-            if freq and periods and end:
-                start = end - (freq * periods)
-            if freq and periods and start:
-                end = freq * periods + start
-            left_col = cupy.arange(start, end, freq)
-            if end is not None:
-                end = end + 1
-            if start is not None and freq is not None:
-                new_freq = start + freq
-            elif start is not None and freq is None:
-                new_freq = start
-            right_col = cupy.arange(new_freq, end, freq)
-            if len(left_col) != len(right_col):
-                if end and freq is not None:
-                    end = end - freq
-                left_col = cupy.arange(start, end, freq)
-            if len(right_col) == 0 or len(left_col) == 0:
-                return pd.IntervalIndex([], closed=closed)
-
-        interval_col = column.build_interval_column(
-            left_col, right_col, closed=closed
+    if freq and periods and start and end:
+        raise ValueError(
+            "Of the four parameters: start, end, periods, and "
+            "freq, exactly three must be specified"
         )
-        return cast(interval_range, IntervalIndex(interval_col))
+    elif periods and not freq:
+        if end is not None:
+            end = end + 1
+        periods_array = cupy.asarray(cupy.arange(start, end))
+        hist, bin_edges = cupy.histogram(periods_array, periods)
+        # cupy.histogram turns all arrays into a float array
+        # this can cause the dtype to be a float instead of an int
+        # the below adjusts for this
+        if cupy.all(cupy.mod(bin_edges, 1) == 0):
+            bin_edges = bin_edges.astype(int)
+        left_col = bin_edges[:-1]
+        right_col = bin_edges[1:]
+    else:
+        if freq and periods and end:
+            start = end - (freq * periods)
+        if freq and periods and start:
+            end = freq * periods + start
+        left_col = cupy.arange(start, end, freq)
+        if end is not None:
+            end = end + 1
+        if start is not None and freq is not None:
+            new_freq = start + freq
+        elif start is not None and freq is None:
+            new_freq = start
+        right_col = cupy.arange(new_freq, end, freq)
+        if len(left_col) != len(right_col):
+            if end and freq is not None:
+                end = end - freq
+            left_col = cupy.arange(start, end, freq)
+        if len(right_col) == 0 or len(left_col) == 0:
+            return pd.IntervalIndex([], closed=closed)
+
+    interval_col = column.build_interval_column(
+        left_col, right_col, closed=closed
+    )
+    return IntervalIndex(interval_col)
 
 
 class IntervalIndex(GenericIndex):
