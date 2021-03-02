@@ -4987,13 +4987,13 @@ def test_cov_nans():
 @pytest.mark.parametrize(
     "gsr",
     [
-        cudf.Series([1, 2, 3]),
-        cudf.Series([1, 2, 3], index=["a", "b", "c"]),
-        cudf.Series([1, 2, 3], index=["a", "b", "d"]),
-        cudf.Series([1, 2], index=["a", "b"]),
-        cudf.Series([1, 2, 3], index=cudf.core.index.RangeIndex(0, 3)),
+        cudf.Series([4, 2, 3]),
+        cudf.Series([4, 2, 3], index=["a", "b", "c"]),
+        cudf.Series([4, 2, 3], index=["a", "b", "d"]),
+        cudf.Series([4, 2], index=["a", "b"]),
+        cudf.Series([4, 2, 3], index=cudf.core.index.RangeIndex(0, 3)),
         pytest.param(
-            cudf.Series([1, 2, 3, 4, 5], index=["a", "b", "d", "0", "12"]),
+            cudf.Series([4, 2, 3, 4, 5], index=["a", "b", "d", "0", "12"]),
             marks=pytest.mark.xfail,
         ),
     ],
@@ -5008,12 +5008,13 @@ def test_cov_nans():
         operator.truediv,
         operator.mod,
         operator.pow,
-        operator.eq,
-        operator.lt,
-        operator.le,
-        operator.gt,
-        operator.ge,
-        operator.ne,
+        # TODO: Remove XFAILs after PR is merged
+        pytest.param(operator.eq, marks=pytest.mark.xfail()),
+        pytest.param(operator.lt, marks=pytest.mark.xfail()),
+        pytest.param(operator.le, marks=pytest.mark.xfail()),
+        pytest.param(operator.gt, marks=pytest.mark.xfail()),
+        pytest.param(operator.ge, marks=pytest.mark.xfail()),
+        pytest.param(operator.ne, marks=pytest.mark.xfail()),
     ],
 )
 def test_df_sr_binop(gsr, colnames, op):
@@ -5021,17 +5022,17 @@ def test_df_sr_binop(gsr, colnames, op):
     data = dict(zip(colnames, data))
 
     gdf = cudf.DataFrame(data)
-    pdf = pd.DataFrame.from_dict(data)
+    pdf = gdf.to_pandas(nullable=True)
 
     psr = gsr.to_pandas()
 
     expect = op(pdf, psr)
     got = op(gdf, gsr)
-    assert_eq(expect.astype(float), got.astype(float))
+    assert_eq(expect, got, check_dtype=False)
 
     expect = op(psr, pdf)
     got = op(gsr, gdf)
-    assert_eq(expect.astype(float), got.astype(float))
+    assert_eq(expect, got, check_dtype=False)
 
 
 @pytest.mark.parametrize(
