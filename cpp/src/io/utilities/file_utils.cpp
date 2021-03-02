@@ -30,13 +30,13 @@ namespace io {
 file_wrapper::file_wrapper(std::string const &filepath, int flags)
   : fd(open(filepath.c_str(), flags))
 {
-  CUDF_EXPECTS(fd != -1, "Cannot open file");
+  CUDF_EXPECTS(fd != -1, "Cannot open file " + filepath);
 }
 
 file_wrapper::file_wrapper(std::string const &filepath, int flags, mode_t mode)
   : fd(open(filepath.c_str(), flags, mode))
 {
-  CUDF_EXPECTS(fd != -1, "Cannot open file");
+  CUDF_EXPECTS(fd != -1, "Cannot open file " + filepath);
 }
 
 /**
