@@ -173,7 +173,7 @@ class _SeriesLocIndexer(object):
 
         else:
             arg = Series(column.as_column(arg))
-            if arg.dtype in [np.bool, np.bool_]:
+            if arg.dtype in (bool, np.bool_):
                 return arg
             else:
                 indices = indices_from_labels(self._sr, arg)
