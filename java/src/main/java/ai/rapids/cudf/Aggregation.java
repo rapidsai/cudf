@@ -1,6 +1,6 @@
 /*
  *
- *  Copyright (c) 2020, NVIDIA CORPORATION.
+ *  Copyright (c) 2020-2021, NVIDIA CORPORATION.
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -63,6 +63,18 @@ public abstract class Aggregation {
         final int nativeId;
 
         Kind(int nativeId) {this.nativeId = nativeId;}
+    }
+
+    /*
+     * This is analogous to the native 'null_policy'.
+     */
+    public enum NullPolicy {
+        EXCLUDE(false),
+        INCLUDE(true);
+
+        NullPolicy(boolean includeNulls) { this.includeNulls = includeNulls; }
+
+        final boolean includeNulls;
     }
 
     /**
@@ -269,21 +281,21 @@ public abstract class Aggregation {
     }
 
     private static final class CollectAggregation extends Aggregation {
-        private final boolean includeNulls;
+        private final NullPolicy nullPolicy;
 
-        public CollectAggregation(boolean includeNulls) {
+        public CollectAggregation(NullPolicy nullPolicy) {
             super(Kind.COLLECT);
-            this.includeNulls = includeNulls;
+            this.nullPolicy = nullPolicy;
         }
 
         @Override
         long createNativeInstance() {
-            return Aggregation.createCollectAgg(includeNulls);
+            return Aggregation.createCollectAgg(nullPolicy.includeNulls);
         }
 
         @Override
         public int hashCode() {
-            return 31 * kind.hashCode() + Boolean.hashCode(includeNulls);
+            return 31 * kind.hashCode() + nullPolicy.hashCode();
         }
 
         @Override
@@ -292,7 +304,7 @@ public abstract class Aggregation {
                 return true;
             } else if (other instanceof CollectAggregation) {
                 CollectAggregation o = (CollectAggregation) other;
-                return o.includeNulls == this.includeNulls;
+                return o.nullPolicy == this.nullPolicy;
             }
             return false;
         }
@@ -547,16 +559,16 @@ public abstract class Aggregation {
      * Collect the values into a list. nulls will be skipped.
      */
     public static Aggregation collect() {
-        return collect(false);
+        return collect(NullPolicy.EXCLUDE);
     }
 
     /**
      * Collect the values into a list.
-     * @param includeNulls true if nulls should be included in the aggregation or false if they
+     * @param nullPolicy INCLUDE if nulls should be included in the aggregation or EXCLUDE if they
      *                     should be skipped.
      */
-    public static Aggregation collect(boolean includeNulls) {
-        return new CollectAggregation(includeNulls);
+    public static Aggregation collect(NullPolicy nullPolicy) {
+        return new CollectAggregation(nullPolicy);
     }
 
     /**

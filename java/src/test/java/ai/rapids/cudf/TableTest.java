@@ -2503,7 +2503,7 @@ public class TableTest extends CudfTestBase {
 
   @Test
   void testWindowingCollect() {
-    Aggregation aggCollectWithNulls = Aggregation.collect(true);
+    Aggregation aggCollectWithNulls = Aggregation.collect(Aggregation.NullPolicy.INCLUDE);
     Aggregation aggCollect = Aggregation.collect();
     WindowOptions winOpts = WindowOptions.builder()
                                          .minPeriods(1)
