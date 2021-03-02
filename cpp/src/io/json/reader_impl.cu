@@ -633,6 +633,10 @@ table_with_metadata reader::impl::convert_data_to_table(rmm::cuda_stream_view st
     }
   }
 
+  // This is to ensure the stream-ordered make_stream_column calls above complete before
+  // the temporary std::vectors are destroyed on exit from this function.
+  stream.synchronize();
+
   CUDF_EXPECTS(!out_columns.empty(), "No columns created from json input");
 
   return table_with_metadata{std::make_unique<table>(std::move(out_columns)), metadata_};
