@@ -21,6 +21,7 @@
 #
 import os
 import sys
+
 from recommonmark.transform import AutoStructify
 
 sys.path.insert(0, os.path.abspath("../.."))

@@ -36,6 +36,6 @@ function(find_and_configure_cudf VERSION)
     endif()
 endfunction()
 
-set(CUDF_KAFKA_MIN_VERSION_cudf 0.19.0)
+set(CUDF_KAFKA_MIN_VERSION_cudf 0.19)
 
 find_and_configure_cudf(${CUDF_KAFKA_MIN_VERSION_cudf})
