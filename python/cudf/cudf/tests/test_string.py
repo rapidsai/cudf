@@ -218,7 +218,7 @@ def test_string_astype(dtype):
     ],
 )
 def test_string_to_decimal(data, scale, precision):
-    gs = Series(data, dtype="str")
+    gs = cudf.Series(data, dtype="str")
     fp = gs.astype(cudf.Decimal64Dtype(scale=scale, precision=precision))
     got = fp.astype("str")
     assert_eq(gs, got)
