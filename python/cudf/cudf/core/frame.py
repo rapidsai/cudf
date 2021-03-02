@@ -1787,7 +1787,7 @@ class Frame(libcudf.table.Table):
         """Shift values by `periods` positions.
         """
         assert axis in (None, 0) and freq is None
-        return self._shift(periods)
+        return self._shift(periods, fill_value)
 
     def _shift(self, offset, fill_value=None):
         data_columns = (col.shift(offset, fill_value) for col in self._columns)

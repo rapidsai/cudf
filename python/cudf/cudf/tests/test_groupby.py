@@ -347,6 +347,34 @@ def test_groupby_cudf_2keys_agg(nelem, func):
     assert_eq(got_df, expect_df, check_dtype=check_dtype)
 
 
+@pytest.mark.parametrize("period", range(-20, 25, 5))
+def test_dataframe_groupby_shift(period):
+    pdf = pd.DataFrame(
+        {
+            "a": np.random.randint(-5, 5, 100),
+            "b": np.random.normal(-100, 100, 100),
+            "c": np.repeat([984.49420204], 100),
+        }
+    )
+    gdf = cudf.DataFrame.from_pandas(pdf)
+
+    for col in pdf.columns:
+        expected = pdf.groupby(col, sort=True).shift(period)
+        actual = gdf.groupby(col, sort=True).shift(period)
+        assert_eq(actual, expected)
+
+
+@pytest.mark.parametrize("period", range(-20, 25, 5))
+def test_series_groupby_shift(period):
+    pdf = pd.DataFrame({"a": np.random.randint(-10, 10, 1000)})
+    gdf = cudf.DataFrame.from_pandas(pdf)
+
+    expected = pdf.groupby("a", sort=True).a.shift(period)
+    actual = gdf.groupby("a", sort=True).a.shift(period)
+
+    assert_eq(actual, expected)
+
+
 @pytest.mark.parametrize(
     "agg", ["min", "max", "idxmin", "idxmax", "count", "sum", "mean"]
 )

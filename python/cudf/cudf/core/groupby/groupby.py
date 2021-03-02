@@ -5,6 +5,7 @@ import pickle
 import warnings
 
 import pandas as pd
+import numpy as np
 from nvtx import annotate
 
 import cudf
@@ -588,6 +589,56 @@ class GroupBy(Serializable):
         cudf.core.window.Rolling
         """
         return cudf.core.window.rolling.RollingGroupby(self, *args, **kwargs)
+
+    def shift(self, periods=1, freq=None, axis=0, fill_value=None):
+        """
+        Shift each group by periods observations.
+        If freq is passed, the index will be increased using the periods and
+        the freq.
+        Parameters
+        ----------
+        periods : int, default 1
+            Number of periods to shift.
+        freq : str, optional
+            Frequency string.
+        axis : axis to shift, default 0
+            Shift direction.
+        fill_value : optional
+            The scalar value to use for newly introduced missing values.
+
+        Returns
+        -------
+        Series or DataFrame
+            Object shifted within each group.
+        """
+        if isinstance(self, DataFrameGroupBy):
+            results = [
+                group.shift(periods, freq, axis, fill_value)
+                if abs(periods) <= len(group)
+                else cudf.DataFrame(columns=group.columns, index=group.index)
+                for _, group in self
+            ]
+            result = cudf.concat(results)
+            result = result.drop(self.grouping._named_columns, axis=1)
+        else:
+            results = [
+                group.shift(periods, freq, axis, fill_value)
+                if abs(periods) <= len(group)
+                else cudf.Series(index=group.index, name=group.name)
+                for _, group in self
+            ]
+            result = cudf.concat(results)
+
+        if self._sort:
+            result = result.sort_index()
+
+        if (
+            not(freq is not None or axis != 0 or fill_value is not None)
+            and periods != 0
+        ):
+            result = result.astype(np.float64)
+
+        return result
 
 
 class DataFrameGroupBy(GroupBy):
