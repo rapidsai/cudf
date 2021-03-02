@@ -238,6 +238,7 @@ add_library(cudf
     src/io/statistics/column_stats.cu
     src/io/utilities/data_sink.cpp
     src/io/utilities/datasource.cpp
+    src/io/utilities/file_utils.cpp
     src/io/utilities/parsing_utils.cu
     src/io/utilities/type_conversion.cpp
     src/jit/cache.cpp
