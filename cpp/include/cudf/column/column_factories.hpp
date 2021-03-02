@@ -42,9 +42,8 @@ namespace cudf {
 std::unique_ptr<column> make_empty_column(data_type type);
 
 /**
- * @brief Construct column with sufficient uninitialized storage
- * to hold `size` elements of the specified numeric `data_type` with an optional
- * null mask.
+ * @brief Construct column with sufficient uninitialized storage to hold `size` elements of the
+ * specified numeric `data_type` with an optional null mask.
  *
  * @note `null_count()` is determined by the requested null mask `state`
  *
@@ -66,9 +65,8 @@ std::unique_ptr<column> make_numeric_column(
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
- * @brief Construct column with sufficient uninitialized storage
- * to hold `size` elements of the specified numeric `data_type` with a
- * null mask.
+ * @brief Construct column with sufficient uninitialized storage to hold `size` elements of the
+ * specified numeric `data_type` with a null mask.
  *
  * @note null_count is optional and will be computed if not provided.
  *
@@ -154,9 +152,8 @@ std::unique_ptr<column> make_fixed_point_column(
 }
 
 /**
- * @brief Construct column with sufficient uninitialized storage
- * to hold `size` elements of the specified timestamp `data_type` with an
- * optional null mask.
+ * @brief Construct column with sufficient uninitialized storage to hold `size` elements of the
+ * specified timestamp `data_type` with an optional null mask.
  *
  * @note `null_count()` is determined by the requested null mask `state`
  *
@@ -178,9 +175,8 @@ std::unique_ptr<column> make_timestamp_column(
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
- * @brief Construct column with sufficient uninitialized storage
- * to hold `size` elements of the specified timestamp `data_type` with a
- * null mask.
+ * @brief Construct column with sufficient uninitialized storage to hold `size` elements of the
+ * specified timestamp `data_type` with a null mask.
  *
  * @note null_count is optional and will be computed if not provided.
  *
@@ -212,9 +208,8 @@ std::unique_ptr<column> make_timestamp_column(
 }
 
 /**
- * @brief Construct column with sufficient uninitialized storage
- * to hold `size` elements of the specified duration `data_type` with an
- * optional null mask.
+ * @brief Construct column with sufficient uninitialized storage to hold `size` elements of the
+ * specified duration `data_type` with an optional null mask.
  *
  * @note `null_count()` is determined by the requested null mask `state`
  *
@@ -236,9 +231,8 @@ std::unique_ptr<column> make_duration_column(
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
- * @brief Construct column with sufficient uninitialized storage
- * to hold `size` elements of the specified duration `data_type` with a
- * null mask.
+ * @brief Construct column with sufficient uninitialized storage to hold `size` elements of the
+ * specified duration `data_type` with a null mask.
  *
  * @note null_count is optional and will be computed if not provided.
  *
@@ -270,9 +264,8 @@ std::unique_ptr<column> make_duration_column(
 }
 
 /**
- * @brief Construct column with sufficient uninitialized storage
- * to hold `size` elements of the specified fixed width `data_type` with an optional
- * null mask.
+ * @brief Construct column with sufficient uninitialized storage to hold `size` elements of the
+ * specified fixed width `data_type` with an optional null mask.
  *
  * @note `null_count()` is determined by the requested null mask `state`
  *
@@ -294,9 +287,8 @@ std::unique_ptr<column> make_fixed_width_column(
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
- * @brief Construct column with sufficient uninitialized storage
- * to hold `size` elements of the specified fixed width `data_type` with a
- * null mask.
+ * @brief Construct column with sufficient uninitialized storage to hold `size` elements of the
+ * specified fixed width `data_type` with a null mask.
  *
  * @note null_count is optional and will be computed if not provided.
  *
@@ -331,7 +323,8 @@ std::unique_ptr<column> make_fixed_width_column(
 }
 
 /**
- * @brief Construct STRING type column given a device span of pointer/size pairs.
+ * @brief Construct a STRING type column given a device span of pointer/size pairs.
+ *
  * The total number of char bytes must not exceed the maximum size of size_type.
  * The string characters are expected to be UTF-8 encoded sequence of char
  * bytes. Use the strings_column_view class to perform strings operations on
@@ -357,7 +350,8 @@ std::unique_ptr<column> make_strings_column(
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
- * @brief Construct STRING type column given a device span of string_view.
+ * @brief Construct a STRING type column given a device span of string_view.
+ *
  * The total number of char bytes must not exceed the maximum size of size_type.
  * The string characters are expected to be UTF-8 encoded sequence of char
  * bytes. Use the strings_column_view class to perform strings operations on
@@ -387,7 +381,7 @@ std::unique_ptr<column> make_strings_column(
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
- * @brief Construct STRING type column given a device span of chars encoded as UTF-8, a device
+ * @brief Construct a STRING type column given a device span of chars encoded as UTF-8, a device
  * span of byte offsets identifying individual strings within the char vector, and an optional
  * null bitmask.
  *
@@ -422,8 +416,10 @@ std::unique_ptr<column> make_strings_column(
   rmm::mr::device_memory_resource* mr             = rmm::mr::get_current_device_resource());
 
 /**
- * @brief Constructs a STRING type column given offsets column, chars columns, and null mask and
- *  null count. The columns and mask are moved into the resulting strings column.
+ * @brief Construct a STRING type column given offsets column, chars columns, and null mask and null
+ * count.
+ *
+ * The columns and mask are moved into the resulting strings column.
  *
  * @param[in] num_strings The number of strings the column represents.
  * @param[in] offsets_column The column of offset values for this column. The number of elements is
@@ -448,11 +444,10 @@ std::unique_ptr<column> make_strings_column(
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
- * @brief Constructs a LIST type column given offsets column, child column,
- * and null mask and null count.
+ * @brief Construct a LIST type column given offsets column, child column, null mask and null
+ * count.
  *
  * The columns and mask are moved into the resulting lists column.
- *
  *
  * List columns are structured similarly to strings columns.  They contain
  * a set of offsets which represents the lengths of the lists in each row, and
@@ -513,7 +508,7 @@ std::unique_ptr<cudf::column> make_lists_column(
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
- * @brief Constructs a STRUCT column using specified child columns as members.
+ * @brief Construct a STRUCT column using specified child columns as members.
  *
  * Specified child/member columns and null_mask are adopted by resultant
  * struct column.
@@ -543,8 +538,7 @@ std::unique_ptr<cudf::column> make_structs_column(
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
- * @brief Return a column with size elements that are all equal to the
- * given scalar.
+ * @brief Construct a column with size elements that are all equal to the given scalar.
  *
  * The output column will have the same type as `s.type()`
  * The output column will contain all null rows if `s.invalid()==false`
@@ -562,8 +556,7 @@ std::unique_ptr<column> make_column_from_scalar(
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
- * @brief Return a dictionary column with size elements that are all equal to the
- * given scalar.
+ * @brief Construct a dictionary column with size elements that are all equal to the given scalar.
  *
  * The output column will have keys of type `s.type()`
  * The output column will be empty if `size==0`.
