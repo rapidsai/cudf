@@ -18,88 +18,77 @@
 #include <synchronization/synchronization.hpp>
 
 #include <benchmark/benchmark.h>
+#include <benchmarks/common/generate_benchmark_input.hpp>
 
-#include <cudf/column/column_view.hpp>
 #include <cudf/strings/convert/convert_floats.hpp>
 #include <cudf/types.hpp>
 
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_wrapper.hpp>
 
-#include <numeric>
-#include <random>
-#include <unordered_map>
-
 namespace {
-
-// For each array_size, this function is called twice from both StringToFloatNumber and
-// StringFromFloatNumber classes. Thus, the results are cached for reuse.
 template <class FloatType>
-static const std::vector<FloatType>& get_float_numbers(int64_t array_size)
+std::unique_ptr<cudf::column> get_floats_column(int64_t array_size)
 {
-  static std::unordered_map<int64_t, std::vector<FloatType>> number_arrays;
-  auto& numbers = number_arrays[array_size];
-  if (numbers.size() == 0) {
-    numbers.reserve(array_size);
-    cudf::test::UniformRandomGenerator<FloatType> rand_gen(std::numeric_limits<FloatType>::min(),
-                                                           std::numeric_limits<FloatType>::max());
-    std::generate_n(
-      std::back_inserter(numbers), array_size, [&rand_gen]() { return rand_gen.generate(); });
+  std::unique_ptr<cudf::table> tbl;
+  if (sizeof(FloatType) == sizeof(float)) {
+    tbl = create_random_table(
+      {cudf::type_id::FLOAT32}, 1, row_count{static_cast<cudf::size_type>(array_size)});
+  } else {
+    tbl = create_random_table(
+      {cudf::type_id::FLOAT64}, 1, row_count{static_cast<cudf::size_type>(array_size)});
   }
-  return numbers;
+  return std::move(tbl->release().front());
 }
 
-template <class FloatType>
-static std::vector<std::string> get_floats_numbers_as_string(int64_t array_size)
+std::unique_ptr<cudf::column> get_floats_string_column(int64_t array_size)
 {
-  std::vector<std::string> numbers_str(array_size);
-  const auto& numbers = get_float_numbers<FloatType>(array_size);
-  std::transform(
-    numbers.begin(), numbers.end(), numbers_str.begin(), [](auto x) { return std::to_string(x); });
-  return numbers_str;
+  const auto floats = get_floats_column<double>(array_size);
+  return cudf::strings::from_floats(floats->view());
 }
-
 }  // anonymous namespace
 
 class StringToFloatNumber : public cudf::benchmark {
 };
+
 template <cudf::type_id float_type>
 void convert_to_float_number(benchmark::State& state)
 {
-  const auto& h_strings   = get_floats_numbers_as_string<double>(state.range(0));
-  const auto strings_size = std::accumulate(
-    h_strings.begin(), h_strings.end(), std::size_t{0}, [](std::size_t size, const auto& str) {
-      return size + str.length();
-    });
-
-  cudf::test::strings_column_wrapper strings(h_strings.begin(), h_strings.end());
-  const auto strings_view = cudf::strings_column_view(strings);
+  const auto array_size   = state.range(0);
+  const auto strings_col  = get_floats_string_column(array_size);
+  const auto strings_view = cudf::strings_column_view(strings_col->view());
 
   for (auto _ : state) {
-    cuda_event_timer raii(state, true);  // flush_l2_cache = true, stream = 0
+    cuda_event_timer raii(state, true);
     volatile auto results = cudf::strings::to_floats(strings_view, cudf::data_type{float_type});
   }
 
-  state.SetBytesProcessed(state.iterations() * strings_size);
+  // bytes_processed = bytes_input + bytes_output
+  state.SetBytesProcessed(
+    state.iterations() *
+    (strings_view.chars_size() + array_size * cudf::size_of(cudf::data_type{float_type})));
 }
 
 class StringFromFloatNumber : public cudf::benchmark {
 };
+
 template <class FloatType>
 void convert_from_float_number(benchmark::State& state)
 {
-  const auto& h_floats   = get_float_numbers<FloatType>(state.range(0));
-  const auto floats_size = h_floats.size() * sizeof(FloatType);
-
-  cudf::test::fixed_width_column_wrapper<FloatType> floats(h_floats.begin(), h_floats.end());
-  const auto floats_view = cudf::column_view(floats);
+  const auto array_size                 = state.range(0);
+  const auto floats                     = get_floats_column<FloatType>(array_size);
+  const auto floats_view                = floats->view();
+  std::unique_ptr<cudf::column> results = nullptr;
 
   for (auto _ : state) {
     cuda_event_timer raii(state, true);  // flush_l2_cache = true, stream = 0
-    volatile auto results = cudf::strings::from_floats(floats_view);
+    results = cudf::strings::from_floats(floats_view);
   }
 
-  state.SetBytesProcessed(state.iterations() * floats_size);
+  // bytes_processed = bytes_input + bytes_output
+  state.SetBytesProcessed(
+    state.iterations() *
+    (cudf::strings_column_view(results->view()).chars_size() + array_size * sizeof(FloatType)));
 }
 
 #define CV_TO_FLOATS_BENCHMARK_DEFINE(name, float_type_id)                  \
@@ -108,7 +97,7 @@ void convert_from_float_number(benchmark::State& state)
     convert_to_float_number<float_type_id>(state);                          \
   }                                                                         \
   BENCHMARK_REGISTER_F(StringToFloatNumber, name)                           \
-    ->RangeMultiplier(1 << 2)                                               \
+    ->RangeMultiplier(4)                                                    \
     ->Range(1 << 10, 1 << 17)                                               \
     ->UseManualTime()                                                       \
     ->Unit(benchmark::kMicrosecond);
@@ -119,7 +108,7 @@ void convert_from_float_number(benchmark::State& state)
     convert_from_float_number<float_type>(state);                             \
   }                                                                           \
   BENCHMARK_REGISTER_F(StringFromFloatNumber, name)                           \
-    ->RangeMultiplier(1 << 2)                                                 \
+    ->RangeMultiplier(4)                                                      \
     ->Range(1 << 10, 1 << 17)                                                 \
     ->UseManualTime()                                                         \
     ->Unit(benchmark::kMicrosecond);
