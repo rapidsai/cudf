@@ -75,8 +75,8 @@ std::unique_ptr<cudf::column> tokenize_fn(cudf::size_type strings_count,
                          d_token_counts.template begin<int32_t>(),
                          d_token_counts.template end<int32_t>(),
                          token_offsets.begin() + 1);
-  CUDA_TRY(cudaMemsetAsync(token_offsets.data().get(), 0, sizeof(int32_t), stream.value()));
-  auto const total_tokens = token_offsets.back();
+  CUDA_TRY(cudaMemsetAsync(token_offsets.data(), 0, sizeof(int32_t), stream.value()));
+  auto const total_tokens = token_offsets.back_element(stream);
   // build a list of pointers to each token
   rmm::device_uvector<string_index_pair> tokens(total_tokens, stream);
   // now go get the tokens
