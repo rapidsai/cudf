@@ -21,6 +21,13 @@ build:
     - PARALLEL_LEVEL
     - VERSION_SUFFIX
     - PROJECT_FLASH
+    - CCACHE_DIR
+    - CCACHE_NOHASHDIR
+    - CCACHE_COMPILERCHECK
+    - CMAKE_GENERATOR
+    - CMAKE_C_COMPILER_LAUNCHER
+    - CMAKE_CXX_COMPILER_LAUNCHER
+    - CMAKE_CUDA_COMPILER_LAUNCHER
   run_exports:
     - {{ pin_subpackage("libcudf", max_pin="x.x") }}
 
@@ -62,6 +69,7 @@ test:
     - test -f $PREFIX/include/cudf/detail/binaryop.hpp
     - test -f $PREFIX/include/cudf/detail/concatenate.hpp
     - test -f $PREFIX/include/cudf/detail/copy.hpp
+    - test -f $PREFIX/include/cudf/detail/datetime.hpp
     - test -f $PREFIX/include/cudf/detail/fill.hpp
     - test -f $PREFIX/include/cudf/detail/gather.hpp
     - test -f $PREFIX/include/cudf/detail/groupby.hpp

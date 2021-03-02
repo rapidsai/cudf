@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from numbers import Number
-from typing import Any, Callable, Sequence, Union, cast
+from typing import Any, Callable, Sequence, Tuple, Union, cast
 
 import numpy as np
 import pandas as pd
@@ -252,6 +252,22 @@ class NumericalColumn(ColumnBase):
         self, skipna: bool = None, ddof: int = 1, dtype: Dtype = np.float64
     ) -> float:
         return self.reduce("std", skipna=skipna, dtype=dtype, ddof=ddof)
+
+    def _process_values_for_isin(
+        self, values: Sequence
+    ) -> Tuple[ColumnBase, ColumnBase]:
+        lhs = cast("cudf.core.column.ColumnBase", self)
+        rhs = as_column(values, nan_as_null=False)
+
+        if isinstance(rhs, NumericalColumn):
+            rhs = rhs.astype(dtype=self.dtype)
+
+        if lhs.null_count == len(lhs):
+            lhs = lhs.astype(rhs.dtype)
+        elif rhs.null_count == len(rhs):
+            rhs = rhs.astype(lhs.dtype)
+
+        return lhs, rhs
 
     def sum_of_squares(self, dtype: Dtype = None) -> float:
         return libcudf.reduce.reduce("sum_of_squares", self, dtype=dtype)

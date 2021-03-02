@@ -1,3 +1,5 @@
+# Copyright (c) 2021, NVIDIA CORPORATION.
+
 import math
 
 import numpy as np
@@ -37,7 +39,7 @@ def test_rolling_series_basic(data, index, agg, nulls, center):
         elif nulls == "all":
             data = [np.nan] * len(data)
 
-    psr = pd.Series(data, index=index)
+    psr = cudf.utils.utils._create_pandas_series(data=data, index=index)
     gsr = cudf.Series(psr)
     for window_size in range(1, len(data) + 1):
         for min_periods in range(1, window_size + 1):
@@ -99,13 +101,7 @@ def test_rolling_dataframe_basic(data, agg, nulls, center):
         pytest.param("min"),
         pytest.param("max"),
         pytest.param("mean"),
-        pytest.param(
-            "count",  # Does not follow similar conventions as
-            # with non-offset columns
-            marks=pytest.mark.xfail(
-                reason="Differs from pandas behaviour here"
-            ),
-        ),
+        pytest.param("count"),
     ],
 )
 def test_rolling_with_offset(agg):
@@ -218,7 +214,7 @@ def test_rolling_getitem_window():
 @pytest.mark.parametrize("center", [True, False])
 def test_rollling_series_numba_udf_basic(data, index, center):
 
-    psr = pd.Series(data, index=index)
+    psr = cudf.utils.utils._create_pandas_series(data=data, index=index)
     gsr = cudf.from_pandas(psr)
 
     def some_func(A):

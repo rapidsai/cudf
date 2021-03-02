@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2020, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,6 +19,7 @@
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_factories.hpp>
+#include <cudf/detail/get_value.cuh>
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/strings/detail/strings_column_factories.cuh>
@@ -34,7 +35,7 @@
 #include <thrust/binary_search.h>  // upper_bound()
 #include <thrust/copy.h>           // copy_if()
 #include <thrust/count.h>          // count_if()
-#include <thrust/extrema.h>        // max()
+#include <thrust/reduce.h>         // maximum()
 #include <thrust/transform.h>      // transform()
 
 namespace cudf {
@@ -429,7 +430,7 @@ std::unique_ptr<table> split_fn(strings_column_view const& strings_column,
                                 rmm::mr::device_memory_resource* mr)
 {
   std::vector<std::unique_ptr<column>> results;
-  auto strings_count = strings_column.size();
+  auto const strings_count = strings_column.size();
   if (strings_count == 0) {
     results.push_back(make_empty_strings_column(stream, mr));
     return std::make_unique<table>(std::move(results));
@@ -437,11 +438,13 @@ std::unique_ptr<table> split_fn(strings_column_view const& strings_column,
 
   auto d_offsets = strings_column.offsets().data<int32_t>();
   d_offsets += strings_column.offset();  // nvbug-2808421 : do not combine with the previous line
-  auto chars_bytes = thrust::device_pointer_cast(d_offsets)[strings_count] -
-                     thrust::device_pointer_cast(d_offsets)[0];
+  auto const chars_bytes =
+    cudf::detail::get_value<int32_t>(
+      strings_column.offsets(), strings_column.offset() + strings_count, stream) -
+    cudf::detail::get_value<int32_t>(strings_column.offsets(), strings_column.offset(), stream);
 
   // count the number of delimiters in the entire column
-  size_type delimiter_count =
+  auto const delimiter_count =
     thrust::count_if(rmm::exec_policy(stream),
                      thrust::make_counting_iterator<size_type>(0),
                      thrust::make_counting_iterator<size_type>(chars_bytes),
@@ -450,8 +453,8 @@ std::unique_ptr<table> split_fn(strings_column_view const& strings_column,
                      });
 
   // create vector of every delimiter position in the chars column
-  rmm::device_vector<size_type> delimiter_positions(delimiter_count);
-  auto d_positions = delimiter_positions.data().get();
+  rmm::device_uvector<size_type> delimiter_positions(delimiter_count, stream);
+  auto d_positions = delimiter_positions.data();
   auto copy_end    = thrust::copy_if(rmm::exec_policy(stream),
                                   thrust::make_counting_iterator<size_type>(0),
                                   thrust::make_counting_iterator<size_type>(chars_bytes),
@@ -461,8 +464,8 @@ std::unique_ptr<table> split_fn(strings_column_view const& strings_column,
                                   });
 
   // create vector of string indices for each delimiter
-  rmm::device_vector<size_type> string_indices(delimiter_count);  // these will be strings that
-  auto d_string_indices = string_indices.data().get();            // only contain delimiters
+  rmm::device_uvector<size_type> string_indices(delimiter_count, stream);  // these will
+  auto d_string_indices = string_indices.data();  // be strings that only contain delimiters
   thrust::upper_bound(rmm::exec_policy(stream),
                       d_offsets,
                       d_offsets + strings_count,
@@ -471,8 +474,8 @@ std::unique_ptr<table> split_fn(strings_column_view const& strings_column,
                       string_indices.begin());
 
   // compute the number of tokens per string
-  rmm::device_vector<size_type> token_counts(strings_count);
-  auto d_token_counts = token_counts.data().get();
+  rmm::device_uvector<size_type> token_counts(strings_count, stream);
+  auto d_token_counts = token_counts.data();
   // first, initialize token counts for strings without delimiters in them
   thrust::transform(rmm::exec_policy(stream),
                     thrust::make_counting_iterator<size_type>(0),
@@ -482,6 +485,7 @@ std::unique_ptr<table> split_fn(strings_column_view const& strings_column,
                       // null are 0, all others 1
                       return static_cast<size_type>(tokenizer.is_valid(idx));
                     });
+
   // now compute the number of tokens in each string
   thrust::for_each_n(
     rmm::exec_policy(stream),
@@ -493,8 +497,11 @@ std::unique_ptr<table> split_fn(strings_column_view const& strings_column,
     });
 
   // the columns_count is the maximum number of tokens for any string
-  size_type columns_count =
-    *thrust::max_element(rmm::exec_policy(stream), token_counts.begin(), token_counts.end());
+  auto const columns_count = thrust::reduce(rmm::exec_policy(stream),
+                                            token_counts.begin(),
+                                            token_counts.end(),
+                                            0,
+                                            thrust::maximum<size_type>{});
   // boundary case: if no columns, return one null column (custrings issue #119)
   if (columns_count == 0) {
     results.push_back(std::make_unique<column>(
@@ -506,8 +513,8 @@ std::unique_ptr<table> split_fn(strings_column_view const& strings_column,
   }
 
   // create working area to hold all token positions
-  rmm::device_vector<string_index_pair> tokens(columns_count * strings_count);
-  string_index_pair* d_tokens = tokens.data().get();
+  rmm::device_uvector<string_index_pair> tokens(columns_count * strings_count, stream);
+  string_index_pair* d_tokens = tokens.data();
   // initialize the token positions
   // -- accounts for nulls, empty, and strings with no delimiter in them
   thrust::for_each_n(rmm::exec_policy(stream),
@@ -748,20 +755,20 @@ std::unique_ptr<table> whitespace_split_fn(size_type strings_count,
                                            rmm::mr::device_memory_resource* mr)
 {
   // compute the number of tokens per string
-  size_type columns_count = 0;
-  rmm::device_vector<size_type> token_counts(strings_count);
-  auto d_token_counts = token_counts.data().get();
-  if (strings_count > 0) {
-    thrust::transform(
-      rmm::exec_policy(stream),
-      thrust::make_counting_iterator<size_type>(0),
-      thrust::make_counting_iterator<size_type>(strings_count),
-      d_token_counts,
-      [tokenizer] __device__(size_type idx) { return tokenizer.count_tokens(idx); });
-    // column count is the maximum number of tokens for any string
-    columns_count =
-      *thrust::max_element(rmm::exec_policy(stream), token_counts.begin(), token_counts.end());
-  }
+  rmm::device_uvector<size_type> token_counts(strings_count, stream);
+  auto d_token_counts = token_counts.data();
+  thrust::transform(rmm::exec_policy(stream),
+                    thrust::make_counting_iterator<size_type>(0),
+                    thrust::make_counting_iterator<size_type>(strings_count),
+                    d_token_counts,
+                    [tokenizer] __device__(size_type idx) { return tokenizer.count_tokens(idx); });
+
+  // column count is the maximum number of tokens for any string
+  size_type const columns_count = thrust::reduce(rmm::exec_policy(stream),
+                                                 token_counts.begin(),
+                                                 token_counts.end(),
+                                                 0,
+                                                 thrust::maximum<size_type>{});
 
   std::vector<std::unique_ptr<column>> results;
   // boundary case: if no columns, return one null column (issue #119)
@@ -775,8 +782,8 @@ std::unique_ptr<table> whitespace_split_fn(size_type strings_count,
   }
 
   // get the positions for every token
-  rmm::device_vector<string_index_pair> tokens(columns_count * strings_count);
-  string_index_pair* d_tokens = tokens.data().get();
+  rmm::device_uvector<string_index_pair> tokens(columns_count * strings_count, stream);
+  string_index_pair* d_tokens = tokens.data();
   thrust::fill(rmm::exec_policy(stream),
                d_tokens,
                d_tokens + (columns_count * strings_count),

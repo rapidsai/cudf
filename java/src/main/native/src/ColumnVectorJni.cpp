@@ -147,7 +147,6 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_makeList(JNIEnv *env, j
     if (children.size() == 0) {
       // special case because cudf::interleave_columns does not support no columns
       auto offsets = cudf::make_column_from_scalar(*zero, row_count + 1);
-      cudf::type_id n_type = static_cast<cudf::type_id>(j_type);
       cudf::data_type n_data_type = cudf::jni::make_data_type(j_type, scale);
       auto empty_col = cudf::make_empty_column(n_data_type);
       ret = cudf::make_lists_column(row_count, std::move(offsets), std::move(empty_col),
@@ -308,7 +307,6 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_makeEmptyCudfColumn(JNI
 
   try {
     cudf::jni::auto_set_device(env);
-    cudf::type_id n_type = static_cast<cudf::type_id>(j_type);
     cudf::data_type n_data_type = cudf::jni::make_data_type(j_type, scale);
 
     std::unique_ptr<cudf::column> column(cudf::make_empty_column(n_data_type));
