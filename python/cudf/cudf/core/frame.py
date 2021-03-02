@@ -239,6 +239,7 @@ class Frame(libcudf.table.Table):
         -------
         copy : Series or DataFrame
             Object type matches caller.
+
         Examples
         --------
         >>> s = cudf.Series([1, 2], index=["a", "b"])
@@ -1195,7 +1196,7 @@ class Frame(libcudf.table.Table):
             map_index = as_column(map_index)
 
         # Convert float to integer
-        if map_index.dtype == np.float:
+        if map_index.dtype.kind == "f":
             map_index = map_index.astype(np.int32)
 
         # Convert string or categorical to integer
