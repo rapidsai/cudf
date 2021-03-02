@@ -557,14 +557,14 @@ struct column_gatherer_impl<struct_view, MapItRoot> {
                    std::back_inserter(output_struct_members),
                    [&gather_map_begin, &gather_map_end, nullify_out_of_bounds, stream, mr](
                      cudf::column_view const& col) {
-                     return cudf::type_dispatcher(col.type(),
-                                                  column_gatherer{},
-                                                  col,
-                                                  gather_map_begin,
-                                                  gather_map_end,
-                                                  nullify_out_of_bounds,
-                                                  stream,
-                                                  mr);
+                     return cudf::type_dispatcher<dispatch_storage_type>(col.type(),
+                                                                         column_gatherer{},
+                                                                         col,
+                                                                         gather_map_begin,
+                                                                         gather_map_end,
+                                                                         nullify_out_of_bounds,
+                                                                         stream,
+                                                                         mr);
                    });
 
     gather_bitmask(

@@ -1,4 +1,4 @@
-# Copyright (c) 2018, NVIDIA CORPORATION.
+# Copyright (c) 2018-2021, NVIDIA CORPORATION.
 
 import os
 from string import ascii_letters
@@ -14,7 +14,7 @@ try:
     import tables  # noqa F401
 except ImportError:
     pytest.skip(
-        "PyTables is not installed and is required for HDF " "reading/writing",
+        "PyTables is not installed and is required for HDF reading/writing",
         allow_module_level=True,
     )
 
@@ -34,7 +34,7 @@ def pdf(request):
         nrows=nrows, ncols=ncols, data_gen_f=lambda r, c: r, r_idx_type="i"
     )
     # Delete the name of the column index, and rename the row index
-    del test_pdf.columns.name
+    test_pdf.columns.name = None
     test_pdf.index.name = "test_index"
 
     # Cast all the column dtypes to objects, rename them, and then cast to
@@ -94,14 +94,16 @@ def test_hdf_reader(hdf_files, columns):
     expect_df = pd.read_hdf(hdf_df_file, columns=columns)
     got_df = cudf.read_hdf(hdf_df_file, columns=columns)
 
-    assert_eq(expect_df, got_df, check_categorical=False)
+    assert_eq(
+        expect_df, got_df, check_categorical=False, check_index_type=False
+    )
 
     for column in hdf_series.keys():
 
         expect_series = pd.read_hdf(hdf_series[column])
         got_series = cudf.read_hdf(hdf_series[column])
 
-        assert_eq(expect_series, got_series)
+        assert_eq(expect_series, got_series, check_index_type=False)
 
 
 @pytest.mark.parametrize("format", ["fixed", "table"])
@@ -130,7 +132,7 @@ def test_hdf_writer(tmpdir, pdf, gdf, complib, format):
     expect = pd.read_hdf(pdf_df_fname)
     got = pd.read_hdf(gdf_df_fname)
 
-    assert_eq(expect, got)
+    assert_eq(expect, got, check_index_type=False)
 
     for column in pdf.columns:
         pdf_series_fname = tmpdir.join(column + "_" + "pdf_series.hdf")
@@ -149,4 +151,4 @@ def test_hdf_writer(tmpdir, pdf, gdf, complib, format):
         expect_series = pd.read_hdf(pdf_series_fname)
         got_series = pd.read_hdf(gdf_series_fname)
 
-        assert_eq(expect_series, got_series)
+        assert_eq(expect_series, got_series, check_index_type=False)

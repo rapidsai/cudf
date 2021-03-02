@@ -584,8 +584,8 @@ class DataFrame(Frame, Serializable):
     @property
     def dtypes(self):
         """Return the dtypes in this object."""
-        return pd.Series(
-            [x.dtype for x in self._data.columns], index=self._data.names
+        return cudf.utils.utils._create_pandas_series(
+            data=[x.dtype for x in self._data.columns], index=self._data.names,
         )
 
     @property
@@ -690,7 +690,7 @@ class DataFrame(Frame, Serializable):
         elif can_convert_to_column(arg):
             mask = arg
             if is_list_like(mask):
-                mask = pd.Series(mask)
+                mask = cudf.utils.utils._create_pandas_series(data=mask)
             if mask.dtype == "bool":
                 return self._apply_boolean_mask(mask)
             else:
@@ -7517,10 +7517,11 @@ def merge(left, right, *args, **kwargs):
 
 # a bit of fanciness to inject docstring with left parameter
 merge_doc = DataFrame.merge.__doc__
-idx = merge_doc.find("right")
-merge.__doc__ = "".join(
-    [merge_doc[:idx], "\n\tleft : DataFrame\n\t", merge_doc[idx:]]
-)
+if merge_doc is not None:
+    idx = merge_doc.find("right")
+    merge.__doc__ = "".join(
+        [merge_doc[:idx], "\n\tleft : DataFrame\n\t", merge_doc[idx:]]
+    )
 
 
 def _align_indices(lhs, rhs):
