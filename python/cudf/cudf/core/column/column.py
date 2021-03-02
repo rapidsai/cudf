@@ -1022,7 +1022,11 @@ class ColumnBase(Column, Serializable):
                 )
             return self
         elif is_interval_dtype(self.dtype):
-            return self.as_interval_column(dtype, **kwargs)
+            if not self.dtype == dtype:
+                raise NotImplementedError(
+                    "Casting list columns not currently supported"
+                )
+            return self
         elif np.issubdtype(dtype, np.datetime64):
             return self.as_datetime_column(dtype, **kwargs)
         elif np.issubdtype(dtype, np.timedelta64):
@@ -2103,7 +2107,7 @@ def as_column(
                     data = as_column(sr, nan_as_null=nan_as_null)
                 elif is_interval_dtype(dtype):
                     sr = pd.Series(arbitrary, dtype="interval")
-                    data = as_column(sr, nan_as_null=nan_as_null, dtype=dtype)
+                    data = as_column(sr, nan_as_null=nan_as_null)
                 else:
                     data = as_column(
                         _construct_array(arbitrary, dtype),
