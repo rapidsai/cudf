@@ -633,7 +633,7 @@ class GroupBy(Serializable):
             result = result.sort_index()
 
         if (
-            not(freq is not None or axis != 0 or fill_value is not None)
+            not (freq is not None or axis != 0 or fill_value is not None)
             and periods != 0
         ):
             result = result.astype(np.float64)
