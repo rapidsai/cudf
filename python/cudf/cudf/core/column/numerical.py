@@ -214,7 +214,8 @@ class NumericalColumn(ColumnBase):
                 "types not currently supported"
             )
         result = libcudf.unary.cast(self, dtype)
-        result.dtype.precision = dtype.precision
+        if isinstance(dtype, cudf.core.dtypes.Decimal64Dtype):
+            result.dtype.precision = dtype.precision
         return result
 
     def as_numerical_column(self, dtype: Dtype) -> NumericalColumn:

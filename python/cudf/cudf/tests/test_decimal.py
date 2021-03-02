@@ -73,7 +73,7 @@ def test_from_arrow_max_precision():
 @pytest.mark.parametrize("from_dtype", FLOAT_TYPES)
 @pytest.mark.parametrize(
     "to_dtype",
-    [Decimal64Dtype(7, 2), Decimal64Dtype(11, 4), Decimal64Dtype(18, 9)]
+    [Decimal64Dtype(7, 2), Decimal64Dtype(11, 4), Decimal64Dtype(18, 9)],
 )
 def test_typecast_to_decimal(data, from_dtype, to_dtype):
     actual = data.astype(from_dtype)
@@ -109,11 +109,11 @@ def test_typecast_to_decimal(data, from_dtype, to_dtype):
 )
 @pytest.mark.parametrize(
     "from_dtype",
-    [Decimal64Dtype(7, 2), Decimal64Dtype(11, 4), Decimal64Dtype(18, 10)]
+    [Decimal64Dtype(7, 2), Decimal64Dtype(11, 4), Decimal64Dtype(18, 10)],
 )
 @pytest.mark.parametrize(
     "to_dtype",
-    [Decimal64Dtype(7, 2), Decimal64Dtype(11, 4), Decimal64Dtype(18, 10)]
+    [Decimal64Dtype(7, 2), Decimal64Dtype(11, 4), Decimal64Dtype(18, 10)],
 )
 def test_typecast_to_from_decimal(data, from_dtype, to_dtype):
     actual = data.astype(from_dtype)
@@ -149,7 +149,7 @@ def test_typecast_to_from_decimal(data, from_dtype, to_dtype):
 )
 @pytest.mark.parametrize(
     "from_dtype",
-    [Decimal64Dtype(7, 2), Decimal64Dtype(11, 4), Decimal64Dtype(18, 10)]
+    [Decimal64Dtype(7, 2), Decimal64Dtype(11, 4), Decimal64Dtype(18, 10)],
 )
 @pytest.mark.parametrize("to_dtype", FLOAT_TYPES)
 def test_typecast_from_decimal(data, from_dtype, to_dtype):
