@@ -1,5 +1,7 @@
 # Copyright (c) 2018-2021, NVIDIA CORPORATION.
+
 import re
+import urllib.parse
 from contextlib import ExitStack as does_not_raise
 from decimal import Decimal
 from sys import getsizeof
@@ -12,7 +14,7 @@ import pytest
 
 import cudf
 from cudf import concat
-from cudf.core import DataFrame, Series
+from cudf.core._compat import PANDAS_GE_110
 from cudf.core.column.string import StringColumn
 from cudf.core.index import StringIndex, as_index
 from cudf.tests.utils import (
@@ -56,7 +58,7 @@ def index(request):
 @pytest.fixture
 def ps_gs(data, index):
     ps = pd.Series(data, index=index, dtype="str", name="nice name")
-    gs = Series(data, index=index, dtype="str", name="nice name")
+    gs = cudf.Series(data, index=index, dtype="str", name="nice name")
     return (ps, gs)
 
 
@@ -64,7 +66,7 @@ def ps_gs(data, index):
 def test_string_ingest(construct):
     expect = ["a", "a", "b", "c", "a"]
     data = construct(expect)
-    got = Series(data)
+    got = cudf.Series(data)
     assert got.dtype == np.dtype("object")
     assert len(got) == 5
     for idx, val in enumerate(expect):
@@ -105,7 +107,7 @@ def test_string_get_item(ps_gs, item):
     ps, gs = ps_gs
 
     got = gs.iloc[item]
-    if isinstance(got, Series):
+    if isinstance(got, cudf.Series):
         got = got.to_arrow()
 
     if isinstance(item, cupy.ndarray):
@@ -139,7 +141,7 @@ def test_string_bool_mask(ps_gs, item):
     ps, gs = ps_gs
 
     got = gs.iloc[item]
-    if isinstance(got, Series):
+    if isinstance(got, cudf.Series):
         got = got.to_arrow()
 
     if isinstance(item, cupy.ndarray):
@@ -195,7 +197,7 @@ def test_string_astype(dtype):
     elif dtype == "str" or dtype == "object":
         data = ["ab", "cd", "ef", "gh", "ij"]
     ps = pd.Series(data)
-    gs = Series(data)
+    gs = cudf.Series(data)
 
     # Pandas str --> bool typecasting always returns True if there's a string
     if dtype.startswith("bool"):
@@ -216,7 +218,7 @@ def test_string_astype(dtype):
     ],
 )
 def test_string_to_decimal(data, scale, precision):
-    gs = Series(data)
+    gs = Series(data, dtype="str")
     fp = gs.astype(cudf.Decimal64Dtype(scale=scale, precision=precision))
     got = fp.astype("str")
     assert_eq(gs, got)
@@ -246,7 +248,7 @@ def test_string_from_decimal(data, scale, precision):
 def test_string_empty_astype(dtype):
     data = []
     ps = pd.Series(data, dtype="str")
-    gs = Series(data, dtype="str")
+    gs = cudf.Series(data, dtype="str")
 
     expect = ps.astype(dtype)
     got = gs.astype(dtype)
@@ -277,7 +279,7 @@ def test_string_numeric_astype(dtype):
     if not dtype.startswith("datetime64"):
         ps = pd.Series(data, dtype=dtype)
 
-    gs = Series(data, dtype=dtype)
+    gs = cudf.Series(data, dtype=dtype)
 
     expect = pd.Series(ps.astype("str"))
     got = gs.astype("str")
@@ -293,7 +295,7 @@ def test_string_empty_numeric_astype(dtype):
         ps = pd.Series(data, dtype="datetime64[ns]")
     else:
         ps = pd.Series(data, dtype=dtype)
-    gs = Series(data, dtype=dtype)
+    gs = cudf.Series(data, dtype=dtype)
 
     expect = ps.astype("str")
     got = gs.astype("str")
@@ -308,8 +310,8 @@ def test_string_concat():
 
     ps1 = pd.Series(data1, index=index)
     ps2 = pd.Series(data2, index=index)
-    gs1 = Series(data1, index=index)
-    gs2 = Series(data2, index=index)
+    gs1 = cudf.Series(data1, index=index)
+    gs2 = cudf.Series(data2, index=index)
 
     expect = pd.concat([ps1, ps2])
     got = concat([gs1, gs2])
@@ -377,13 +379,15 @@ def _cat_convert_seq_to_cudf(others):
         pytest.param(
             pd.Index(["f", "g", "h", "i", "j"]),
             marks=pytest.mark.xfail(
-                reason="https://github.com/pandas-dev/pandas/issues/33436"
+                condition=not PANDAS_GE_110,
+                reason="https://github.com/pandas-dev/pandas/issues/33436",
             ),
         ),
         pytest.param(
             pd.Index(["AbC", "de", "FGHI", "j", "kLm"]),
             marks=pytest.mark.xfail(
-                reason="https://github.com/pandas-dev/pandas/issues/33436"
+                condition=not PANDAS_GE_110,
+                reason="https://github.com/pandas-dev/pandas/issues/33436",
             ),
         ),
         (
@@ -422,7 +426,8 @@ def _cat_convert_seq_to_cudf(others):
                 pd.Index(["f", "g", "h", "i", "j"]),
             ),
             marks=pytest.mark.xfail(
-                reason="https://github.com/pandas-dev/pandas/issues/33436"
+                condition=not PANDAS_GE_110,
+                reason="https://github.com/pandas-dev/pandas/issues/33436",
             ),
         ),
         pytest.param(
@@ -437,7 +442,8 @@ def _cat_convert_seq_to_cudf(others):
                 pd.Index(["f", "g", "h", "i", "j"]),
             ],
             marks=pytest.mark.xfail(
-                reason="https://github.com/pandas-dev/pandas/issues/33436"
+                condition=not PANDAS_GE_110,
+                reason="https://github.com/pandas-dev/pandas/issues/33436",
             ),
         ),
         [
@@ -544,13 +550,15 @@ def test_string_cat(ps_gs, others, sep, na_rep, index):
         pytest.param(
             pd.Index(["f", "g", "h", "i", "j"]),
             marks=pytest.mark.xfail(
-                reason="https://github.com/pandas-dev/pandas/issues/33436"
+                condition=not PANDAS_GE_110,
+                reason="https://github.com/pandas-dev/pandas/issues/33436",
             ),
         ),
         pytest.param(
             pd.Index(["AbC", "de", "FGHI", "j", "kLm"]),
             marks=pytest.mark.xfail(
-                reason="https://github.com/pandas-dev/pandas/issues/33436"
+                condition=not PANDAS_GE_110,
+                reason="https://github.com/pandas-dev/pandas/issues/33436",
             ),
         ),
         (
@@ -577,7 +585,8 @@ def test_string_cat(ps_gs, others, sep, na_rep, index):
                 pd.Index(["f", "g", "h", "i", "j"]),
             ),
             marks=pytest.mark.xfail(
-                reason="https://github.com/pandas-dev/pandas/issues/33436"
+                condition=not PANDAS_GE_110,
+                reason="https://github.com/pandas-dev/pandas/issues/33436",
             ),
         ),
         pytest.param(
@@ -592,7 +601,8 @@ def test_string_cat(ps_gs, others, sep, na_rep, index):
                 pd.Index(["f", "g", "h", "i", "j"]),
             ],
             marks=pytest.mark.xfail(
-                reason="https://github.com/pandas-dev/pandas/issues/33436"
+                condition=not PANDAS_GE_110,
+                reason="https://github.com/pandas-dev/pandas/issues/33436",
             ),
         ),
         [
@@ -645,16 +655,7 @@ def test_string_index_str_cat(data, others, sep, na_rep, name):
 
 
 @pytest.mark.parametrize(
-    "data",
-    [
-        pytest.param(
-            ["a", None, "c", None, "e"],
-            marks=pytest.mark.xfail(
-                reason="https://github.com/rapidsai/cudf/issues/5862"
-            ),
-        ),
-        ["a", "b", "c", "d", "a"],
-    ],
+    "data", [["a", None, "c", None, "e"], ["a", "b", "c", "d", "a"]],
 )
 @pytest.mark.parametrize(
     "others",
@@ -665,13 +666,15 @@ def test_string_index_str_cat(data, others, sep, na_rep, name):
         pytest.param(
             pd.Index(["f", "g", "h", "i", "j"]),
             marks=pytest.mark.xfail(
-                reason="https://github.com/pandas-dev/pandas/issues/33436"
+                condition=not PANDAS_GE_110,
+                reason="https://github.com/pandas-dev/pandas/issues/33436",
             ),
         ),
         pytest.param(
             pd.Index(["AbC", "de", "FGHI", "j", "kLm"]),
             marks=pytest.mark.xfail(
-                reason="https://github.com/pandas-dev/pandas/issues/33436"
+                condition=not PANDAS_GE_110,
+                reason="https://github.com/pandas-dev/pandas/issues/33436",
             ),
         ),
         [
@@ -766,16 +769,20 @@ def test_string_index_duplicate_str_cat(data, others, sep, na_rep, name):
     )
 
 
-@pytest.mark.xfail(raises=ValueError)
-@pytest.mark.parametrize("sep", [None, "", " ", "|", ",", "|||"])
-@pytest.mark.parametrize("na_rep", [None, "", "null", "a"])
-def test_string_cat_str(ps_gs, sep, na_rep):
-    ps, gs = ps_gs
-
-    got = gs.str.cat(gs.str, sep=sep, na_rep=na_rep)
-    expect = ps.str.cat(ps.str, sep=sep, na_rep=na_rep)
-
-    assert_eq(expect, got)
+def test_string_cat_str_error():
+    gs = cudf.Series(["a", "v", "s"])
+    # https://github.com/pandas-dev/pandas/issues/28277
+    # ability to pass StringMethods is being removed in future.
+    with pytest.raises(
+        TypeError,
+        match=re.escape(
+            "others must be Series, Index, DataFrame, np.ndarrary "
+            "or list-like (either containing only strings or "
+            "containing only objects of type Series/Index/"
+            "np.ndarray[1-dim])"
+        ),
+    ):
+        gs.str.cat(gs.str)
 
 
 @pytest.mark.xfail(raises=(NotImplementedError, AttributeError))
@@ -881,12 +888,8 @@ def test_string_upper(ps_gs):
 @pytest.mark.parametrize("n", [-1, 0, 1, 3, 10])
 @pytest.mark.parametrize("expand", [True, False, None])
 def test_string_split(data, pat, n, expand):
-
-    if data in (["a b", " c ", "   d", "e   ", "f"],) and pat is None:
-        pytest.xfail("None pattern split algorithm not implemented yet")
-
     ps = pd.Series(data, dtype="str")
-    gs = Series(data, dtype="str")
+    gs = cudf.Series(data, dtype="str")
 
     expect = ps.str.split(pat=pat, n=n, expand=expand)
     got = gs.str.split(pat=pat, n=n, expand=expand)
@@ -908,10 +911,10 @@ def test_string_join_key(str_data, str_data_raise, num_keys, how):
     other_data = [1, 2, 3, 4, 5][: len(str_data)]
 
     pdf = pd.DataFrame()
-    gdf = DataFrame()
+    gdf = cudf.DataFrame()
     for i in range(num_keys):
         pdf[i] = pd.Series(str_data, dtype="str")
-        gdf[i] = Series(str_data, dtype="str")
+        gdf[i] = cudf.Series(str_data, dtype="str")
     pdf["a"] = other_data
     gdf["a"] = other_data
 
@@ -951,18 +954,18 @@ def test_string_join_key_nulls(str_data_nulls):
     other_data_nulls = [6, 7, 8, 9, 10][: len(str_data_nulls)]
 
     pdf = pd.DataFrame()
-    gdf = DataFrame()
+    gdf = cudf.DataFrame()
     pdf["key"] = pd.Series(str_data, dtype="str")
-    gdf["key"] = Series(str_data, dtype="str")
+    gdf["key"] = cudf.Series(str_data, dtype="str")
     pdf["vals"] = other_data
     gdf["vals"] = other_data
 
     pdf2 = pd.DataFrame()
-    gdf2 = DataFrame()
+    gdf2 = cudf.DataFrame()
     pdf2["key"] = pd.Series(str_data_nulls, dtype="str")
-    gdf2["key"] = Series(str_data_nulls, dtype="str")
+    gdf2["key"] = cudf.Series(str_data_nulls, dtype="str")
     pdf2["vals"] = pd.Series(other_data_nulls, dtype="int64")
-    gdf2["vals"] = Series(other_data_nulls, dtype="int64")
+    gdf2["vals"] = cudf.Series(other_data_nulls, dtype="int64")
 
     expect = pdf.merge(pdf2, on="key", how="left")
     got = gdf.merge(gdf2, on="key", how="left")
@@ -986,10 +989,10 @@ def test_string_join_non_key(str_data, num_cols, how):
     other_data = [1, 2, 3, 4, 5][: len(str_data)]
 
     pdf = pd.DataFrame()
-    gdf = DataFrame()
+    gdf = cudf.DataFrame()
     for i in range(num_cols):
         pdf[i] = pd.Series(str_data, dtype="str")
-        gdf[i] = Series(str_data, dtype="str")
+        gdf[i] = cudf.Series(str_data, dtype="str")
     pdf["a"] = other_data
     gdf["a"] = other_data
 
@@ -1024,18 +1027,18 @@ def test_string_join_non_key_nulls(str_data_nulls):
     other_data_nulls = [6, 7, 8, 9, 10][: len(str_data_nulls)]
 
     pdf = pd.DataFrame()
-    gdf = DataFrame()
+    gdf = cudf.DataFrame()
     pdf["vals"] = pd.Series(str_data, dtype="str")
-    gdf["vals"] = Series(str_data, dtype="str")
+    gdf["vals"] = cudf.Series(str_data, dtype="str")
     pdf["key"] = other_data
     gdf["key"] = other_data
 
     pdf2 = pd.DataFrame()
-    gdf2 = DataFrame()
+    gdf2 = cudf.DataFrame()
     pdf2["vals"] = pd.Series(str_data_nulls, dtype="str")
-    gdf2["vals"] = Series(str_data_nulls, dtype="str")
+    gdf2["vals"] = cudf.Series(str_data_nulls, dtype="str")
     pdf2["key"] = pd.Series(other_data_nulls, dtype="int64")
-    gdf2["key"] = Series(other_data_nulls, dtype="int64")
+    gdf2["key"] = cudf.Series(other_data_nulls, dtype="int64")
 
     expect = pdf.merge(pdf2, on="key", how="left")
     got = gdf.merge(gdf2, on="key", how="left")
@@ -1075,8 +1078,8 @@ def test_string_join_values_nulls():
     left_pdf = pd.DataFrame(left_dict)
     right_pdf = pd.DataFrame(right_dict)
 
-    left_gdf = DataFrame.from_pandas(left_pdf)
-    right_gdf = DataFrame.from_pandas(right_pdf)
+    left_gdf = cudf.DataFrame.from_pandas(left_pdf)
+    right_gdf = cudf.DataFrame.from_pandas(right_pdf)
 
     expect = left_pdf.merge(right_pdf, how="left", on="b")
     got = left_gdf.merge(right_gdf, how="left", on="b")
@@ -1095,10 +1098,10 @@ def test_string_groupby_key(str_data, num_keys):
     other_data = [1, 2, 3, 4, 5][: len(str_data)]
 
     pdf = pd.DataFrame()
-    gdf = DataFrame()
+    gdf = cudf.DataFrame()
     for i in range(num_keys):
         pdf[i] = pd.Series(str_data, dtype="str")
-        gdf[i] = Series(str_data, dtype="str")
+        gdf[i] = cudf.Series(str_data, dtype="str")
     pdf["a"] = other_data
     gdf["a"] = other_data
 
@@ -1120,10 +1123,10 @@ def test_string_groupby_non_key(str_data, num_cols, agg):
     other_data = [1, 2, 3, 4, 5][: len(str_data)]
 
     pdf = pd.DataFrame()
-    gdf = DataFrame()
+    gdf = cudf.DataFrame()
     for i in range(num_cols):
         pdf[i] = pd.Series(str_data, dtype="str")
-        gdf[i] = Series(str_data, dtype="str")
+        gdf[i] = cudf.Series(str_data, dtype="str")
     pdf["a"] = other_data
     gdf["a"] = other_data
 
@@ -1145,9 +1148,9 @@ def test_string_groupby_key_index():
     other_data = [1, 2, 3, 4, 5]
 
     pdf = pd.DataFrame()
-    gdf = DataFrame()
+    gdf = cudf.DataFrame()
     pdf["a"] = pd.Series(str_data, dtype="str")
-    gdf["a"] = Series(str_data, dtype="str")
+    gdf["a"] = cudf.Series(str_data, dtype="str")
     pdf["b"] = other_data
     gdf["b"] = other_data
 
@@ -1161,7 +1164,7 @@ def test_string_groupby_key_index():
 def test_string_set_scalar(scalar):
     pdf = pd.DataFrame()
     pdf["a"] = [1, 2, 3, 4, 5]
-    gdf = DataFrame.from_pandas(pdf)
+    gdf = cudf.DataFrame.from_pandas(pdf)
 
     pdf["b"] = "a"
     gdf["b"] = "a"
@@ -1171,10 +1174,8 @@ def test_string_set_scalar(scalar):
 
 
 def test_string_index():
-    from cudf.core.column import as_column
-
     pdf = pd.DataFrame(np.random.rand(5, 5))
-    gdf = DataFrame.from_pandas(pdf)
+    gdf = cudf.DataFrame.from_pandas(pdf)
     stringIndex = ["a", "b", "c", "d", "e"]
     pdf.index = stringIndex
     gdf.index = stringIndex
@@ -1187,7 +1188,9 @@ def test_string_index():
     pdf.index = stringIndex.to_pandas()
     gdf.index = stringIndex
     assert_eq(pdf, gdf)
-    stringIndex = as_index(as_column(["a", "b", "c", "d", "e"]), name="name")
+    stringIndex = cudf.Index(
+        cudf.core.column.as_column(["a", "b", "c", "d", "e"]), name="name"
+    )
     pdf.index = stringIndex.to_pandas()
     gdf.index = stringIndex
     assert_eq(pdf, gdf)
@@ -1205,7 +1208,7 @@ def test_string_index():
 )
 def test_string_unique(item):
     ps = pd.Series(item)
-    gs = Series(item)
+    gs = cudf.Series(item)
     # Pandas `unique` returns a numpy array
     pres = pd.Series(ps.unique())
     # cudf returns sorted unique with `None` placed before other strings
@@ -1215,12 +1218,12 @@ def test_string_unique(item):
 
 
 def test_string_slice():
-    df = DataFrame({"a": ["hello", "world"]})
+    df = cudf.DataFrame({"a": ["hello", "world"]})
     pdf = pd.DataFrame({"a": ["hello", "world"]})
     a_slice_got = df.a.str.slice(0, 2)
     a_slice_expected = pdf.a.str.slice(0, 2)
 
-    assert isinstance(a_slice_got, Series)
+    assert isinstance(a_slice_got, cudf.Series)
     assert_eq(a_slice_expected, a_slice_got)
 
 
@@ -1230,8 +1233,8 @@ def test_string_equality():
 
     ps1 = pd.Series(data1)
     ps2 = pd.Series(data2)
-    gs1 = Series(data1)
-    gs2 = Series(data2)
+    gs1 = cudf.Series(data1)
+    gs2 = cudf.Series(data2)
 
     expect = ps1 == ps2
     got = gs1 == gs2
@@ -1244,7 +1247,7 @@ def test_string_equality():
     assert_eq(expect, got.fillna(False))
 
     ps1 = pd.Series(["a"])
-    gs1 = Series(["a"])
+    gs1 = cudf.Series(["a"])
 
     expect = ps1 == "m"
     got = gs1 == "m"
@@ -1268,7 +1271,7 @@ def test_string_equality():
 )
 def test_string_binary_op_add(lhs, rhs):
     pds = pd.Series(lhs) + pd.Series(rhs)
-    gds = Series(lhs) + Series(rhs)
+    gds = cudf.Series(lhs) + cudf.Series(rhs)
 
     assert_eq(pds, gds)
 
@@ -1313,7 +1316,7 @@ def test_string_no_children_properties():
 )
 def test_string_get(string, index):
     pds = pd.Series(string)
-    gds = Series(string)
+    gds = cudf.Series(string)
 
     assert_eq(
         pds.str.get(index).fillna(""), gds.str.get(index).fillna(""),
@@ -1336,7 +1339,7 @@ def test_string_get(string, index):
 )
 def test_string_slice_str(string, number, diff):
     pds = pd.Series(string)
-    gds = Series(string)
+    gds = cudf.Series(string)
 
     assert_eq(pds.str.slice(start=number), gds.str.slice(start=number))
     assert_eq(pds.str.slice(stop=number), gds.str.slice(stop=number))
@@ -1354,11 +1357,11 @@ def test_string_slice_str(string, number, diff):
 
 
 def test_string_slice_from():
-    gs = Series(["hello world", "holy accéntéd", "batman", None, ""])
-    d_starts = Series([2, 3, 0, -1, -1], dtype=np.int32)
-    d_stops = Series([-1, -1, 0, -1, -1], dtype=np.int32)
+    gs = cudf.Series(["hello world", "holy accéntéd", "batman", None, ""])
+    d_starts = cudf.Series([2, 3, 0, -1, -1], dtype=np.int32)
+    d_stops = cudf.Series([-1, -1, 0, -1, -1], dtype=np.int32)
     got = gs.str.slice_from(starts=d_starts._column, stops=d_stops._column)
-    expected = Series(["llo world", "y accéntéd", "", None, ""])
+    expected = cudf.Series(["llo world", "y accéntéd", "", None, ""])
     assert_eq(got, expected)
 
 
@@ -1375,7 +1378,7 @@ def test_string_slice_from():
 @pytest.mark.parametrize("repr", ["2", "!!"])
 def test_string_slice_replace(string, number, diff, repr):
     pds = pd.Series(string)
-    gds = Series(string)
+    gds = cudf.Series(string)
 
     assert_eq(
         pds.str.slice_replace(start=number, repl=repr),
@@ -1399,7 +1402,7 @@ def test_string_slice_replace(string, number, diff, repr):
 
 
 def test_string_insert():
-    gs = Series(["hello world", "holy accéntéd", "batman", None, ""])
+    gs = cudf.Series(["hello world", "holy accéntéd", "batman", None, ""])
 
     ps = pd.Series(["hello world", "holy accéntéd", "batman", None, ""])
 
@@ -1453,7 +1456,7 @@ _string_char_types_data = [
 )
 @pytest.mark.parametrize("data", _string_char_types_data)
 def test_string_char_types(type_op, data):
-    gs = Series(data)
+    gs = cudf.Series(data)
     ps = pd.Series(data)
 
     assert_eq(getattr(gs.str, type_op)(), getattr(ps.str, type_op)())
@@ -1469,8 +1472,8 @@ def test_string_filter_alphanum():
                 rs = rs + c
         expected.append(rs)
 
-    gs = Series(data)
-    assert_eq(gs.str.filter_alphanum(), Series(expected))
+    gs = cudf.Series(data)
+    assert_eq(gs.str.filter_alphanum(), cudf.Series(expected))
 
     expected = []
     for st in data:
@@ -1479,7 +1482,7 @@ def test_string_filter_alphanum():
             if not str.isalnum(c):
                 rs = rs + c
         expected.append(rs)
-    assert_eq(gs.str.filter_alphanum(keep=False), Series(expected))
+    assert_eq(gs.str.filter_alphanum(keep=False), cudf.Series(expected))
 
     expected = []
     for st in data:
@@ -1490,7 +1493,7 @@ def test_string_filter_alphanum():
             else:
                 rs = rs + "*"
         expected.append(rs)
-    assert_eq(gs.str.filter_alphanum("*"), Series(expected))
+    assert_eq(gs.str.filter_alphanum("*"), cudf.Series(expected))
 
     expected = []
     for st in data:
@@ -1501,7 +1504,7 @@ def test_string_filter_alphanum():
             else:
                 rs = rs + "*"
         expected.append(rs)
-    assert_eq(gs.str.filter_alphanum("*", keep=False), Series(expected))
+    assert_eq(gs.str.filter_alphanum("*", keep=False), cudf.Series(expected))
 
 
 @pytest.mark.parametrize(
@@ -1520,7 +1523,7 @@ def test_string_filter_alphanum():
     ],
 )
 def test_string_char_case(case_op, data):
-    gs = Series(data)
+    gs = cudf.Series(data)
     ps = pd.Series(data)
 
     s = gs.str
@@ -1550,7 +1553,7 @@ def test_string_char_case(case_op, data):
     ],
 )
 def test_strings_rpartition(data):
-    gs = Series(data)
+    gs = cudf.Series(data)
     ps = pd.Series(data)
 
     assert_eq(ps.str.rpartition(), gs.str.rpartition())
@@ -1569,7 +1572,7 @@ def test_strings_rpartition(data):
     ],
 )
 def test_strings_partition(data):
-    gs = Series(data, name="str_name")
+    gs = cudf.Series(data, name="str_name")
     ps = pd.Series(data, name="str_name")
 
     assert_eq(ps.str.partition(), gs.str.partition())
@@ -1601,7 +1604,7 @@ def test_strings_partition(data):
 @pytest.mark.parametrize("n", [-1, 2, 1, 9])
 @pytest.mark.parametrize("expand", [True, False, None])
 def test_strings_rsplit(data, n, expand):
-    gs = Series(data)
+    gs = cudf.Series(data)
     ps = pd.Series(data)
 
     assert_eq(
@@ -1637,7 +1640,7 @@ def test_strings_rsplit(data, n, expand):
 @pytest.mark.parametrize("n", [-1, 2, 1, 9])
 @pytest.mark.parametrize("expand", [True, False, None])
 def test_strings_split(data, n, expand):
-    gs = Series(data)
+    gs = cudf.Series(data)
     ps = pd.Series(data)
 
     assert_eq(
@@ -1676,7 +1679,7 @@ def test_strings_split(data, n, expand):
     "to_strip", ["⅕", None, "123.", ".!? \n\t", "123.!? \n\t", " ", ".", ","]
 )
 def test_strings_strip_tests(data, to_strip):
-    gs = Series(data)
+    gs = cudf.Series(data)
     ps = pd.Series(data)
 
     assert_eq(ps.str.strip(to_strip=to_strip), gs.str.strip(to_strip=to_strip))
@@ -1718,7 +1721,7 @@ def test_strings_strip_tests(data, to_strip):
 @pytest.mark.parametrize("width", [0, 1, 4, 9, 100])
 @pytest.mark.parametrize("fillchar", ["⅕", "1", ".", "t", " ", ","])
 def test_strings_filling_tests(data, width, fillchar):
-    gs = Series(data)
+    gs = cudf.Series(data)
     ps = pd.Series(data)
 
     assert_eq(
@@ -1764,7 +1767,7 @@ def test_strings_filling_tests(data, width, fillchar):
 )
 @pytest.mark.parametrize("width", [0, 1, 4, 6, 9, 100])
 def test_strings_zfill_tests(data, width):
-    gs = Series(data)
+    gs = cudf.Series(data)
     ps = pd.Series(data)
 
     assert_eq(ps.str.zfill(width=width), gs.str.zfill(width=width))
@@ -1792,7 +1795,7 @@ def test_strings_zfill_tests(data, width):
 )
 @pytest.mark.parametrize("fillchar", [" ", ".", "\n", "+", "\t"])
 def test_strings_pad_tests(data, width, side, fillchar):
-    gs = Series(data)
+    gs = cudf.Series(data)
     ps = pd.Series(data)
 
     assert_eq(
@@ -1822,7 +1825,7 @@ def test_strings_pad_tests(data, width, side, fillchar):
 )
 @pytest.mark.parametrize("width", [1, 4, 8, 12, 100])
 def test_string_wrap(data, width):
-    gs = Series(data)
+    gs = cudf.Series(data)
     ps = pd.Series(data)
 
     assert_eq(
@@ -1866,7 +1869,7 @@ def test_string_wrap(data, width):
 )
 @pytest.mark.parametrize("pat", ["a", " ", "\t", "another", "0", r"\$"])
 def test_string_count(data, pat):
-    gs = Series(data)
+    gs = cudf.Series(data)
     ps = pd.Series(data)
 
     assert_eq(gs.str.count(pat=pat), ps.str.count(pat=pat), check_dtype=False)
@@ -1875,7 +1878,7 @@ def test_string_count(data, pat):
 
 def test_string_findall():
     ps = pd.Series(["Lion", "Monkey", "Rabbit"])
-    gs = Series(["Lion", "Monkey", "Rabbit"])
+    gs = cudf.Series(["Lion", "Monkey", "Rabbit"])
 
     assert_eq(ps.str.findall("Monkey")[1][0], gs.str.findall("Monkey")[0][1])
     assert_eq(ps.str.findall("on")[0][0], gs.str.findall("on")[0][0])
@@ -1886,21 +1889,21 @@ def test_string_findall():
 
 def test_string_replace_multi():
     ps = pd.Series(["hello", "goodbye"])
-    gs = Series(["hello", "goodbye"])
+    gs = cudf.Series(["hello", "goodbye"])
     expect = ps.str.replace("e", "E").str.replace("o", "O")
     got = gs.str.replace(["e", "o"], ["E", "O"])
 
     assert_eq(expect, got)
 
     ps = pd.Series(["foo", "fuz", np.nan])
-    gs = Series.from_pandas(ps)
+    gs = cudf.Series.from_pandas(ps)
 
     expect = ps.str.replace("f.", "ba", regex=True)
     got = gs.str.replace(["f."], ["ba"], regex=True)
     assert_eq(expect, got)
 
     ps = pd.Series(["f.o", "fuz", np.nan])
-    gs = Series.from_pandas(ps)
+    gs = cudf.Series.from_pandas(ps)
 
     expect = ps.str.replace("f.", "ba", regex=False)
     got = gs.str.replace(["f."], ["ba"], regex=False)
@@ -1936,7 +1939,7 @@ def test_string_replace_with_backrefs(find, replace):
         "tést-string-again",
     ]
     ps = pd.Series(s)
-    gs = Series(s)
+    gs = cudf.Series(s)
     got = gs.str.replace_with_backrefs(find, replace)
     expected = ps.str.replace(find, replace, regex=True)
     assert_eq(got, expected)
@@ -1949,7 +1952,7 @@ def test_string_replace_with_backrefs(find, replace):
 def test_string_table_view_creation():
     data = ["hi"] * 25 + [None] * 2027
     psr = pd.Series(data)
-    gsr = Series.from_pandas(psr)
+    gsr = cudf.Series.from_pandas(psr)
 
     expect = psr[:1]
     got = gsr[:1]
@@ -1975,7 +1978,7 @@ def test_string_table_view_creation():
 )
 def test_string_starts_ends(data, pat):
     ps = pd.Series(data)
-    gs = Series(data)
+    gs = cudf.Series(data)
 
     assert_eq(
         ps.str.startswith(pat), gs.str.startswith(pat), check_dtype=False
@@ -2012,7 +2015,7 @@ def test_string_starts_ends(data, pat):
     ],
 )
 def test_string_starts_ends_list_like_pat(data, pat):
-    gs = Series(data)
+    gs = cudf.Series(data)
 
     starts_expected = []
     ends_expected = []
@@ -2051,7 +2054,7 @@ def test_string_starts_ends_list_like_pat(data, pat):
 )
 def test_string_find(data, sub):
     ps = pd.Series(data)
-    gs = Series(data)
+    gs = cudf.Series(data)
 
     got = gs.str.find(sub)
     expect = ps.str.find(sub)
@@ -2121,7 +2124,7 @@ def test_string_find(data, sub):
 )
 def test_string_str_index(data, sub, er):
     ps = pd.Series(data)
-    gs = Series(data)
+    gs = cudf.Series(data)
 
     if er is None:
         assert_eq(ps.str.index(sub), gs.str.index(sub), check_dtype=False)
@@ -2160,7 +2163,7 @@ def test_string_str_index(data, sub, er):
 )
 def test_string_str_rindex(data, sub, er):
     ps = pd.Series(data)
-    gs = Series(data)
+    gs = cudf.Series(data)
 
     if er is None:
         assert_eq(ps.str.rindex(sub), gs.str.rindex(sub), check_dtype=False)
@@ -2217,10 +2220,10 @@ def test_string_str_rindex(data, sub, er):
     ],
 )
 def test_string_contains_multi(data, sub, expect):
-    gs = Series(data)
-    sub = Series(sub)
+    gs = cudf.Series(data)
+    sub = cudf.Series(sub)
     got = gs.str.contains(sub)
-    expect = Series(expect)
+    expect = cudf.Series(expect)
     assert_eq(expect, got, check_dtype=False)
 
 
@@ -2240,7 +2243,7 @@ def test_string_contains_multi(data, sub, expect):
 @pytest.mark.parametrize("pat", ["", " ", "a", "abc", "cat", "$", "\n"])
 def test_string_str_match(data, pat):
     ps = pd.Series(data)
-    gs = Series(data)
+    gs = cudf.Series(data)
 
     assert_eq(ps.str.match(pat), gs.str.match(pat))
     assert_eq(
@@ -2263,7 +2266,7 @@ def test_string_str_match(data, pat):
 )
 def test_string_str_translate(data):
     ps = pd.Series(data)
-    gs = Series(data)
+    gs = cudf.Series(data)
 
     assert_eq(
         ps.str.translate(str.maketrans({"a": "z"})),
@@ -2318,15 +2321,17 @@ def test_string_str_filter_characters():
         "$1.50",
         "",
     ]
-    gs = Series(data)
-    expected = Series(["helloworld", "ABCD", "", "accnt", None, "150", ""])
+    gs = cudf.Series(data)
+    expected = cudf.Series(
+        ["helloworld", "ABCD", "", "accnt", None, "150", ""]
+    )
     filter = {"a": "z", "A": "Z", "0": "9"}
     assert_eq(expected, gs.str.filter_characters(filter))
 
-    expected = Series([" ", "+++", "?!@#$%^&*()", "é", None, "$.", ""])
+    expected = cudf.Series([" ", "+++", "?!@#$%^&*()", "é", None, "$.", ""])
     assert_eq(expected, gs.str.filter_characters(filter, False))
 
-    expected = Series(
+    expected = cudf.Series(
         ["hello world", "A B C D", "           ", "acc nt", None, " 1 50", ""]
     )
     assert_eq(expected, gs.str.filter_characters(filter, True, " "))
@@ -2345,7 +2350,7 @@ def test_string_str_code_points():
         " 1234 ",
         "XYZ",
     ]
-    gs = Series(data)
+    gs = cudf.Series(data)
     expected = [
         97,
         98,
@@ -2385,7 +2390,7 @@ def test_string_str_code_points():
         89,
         90,
     ]
-    expected = Series(expected)
+    expected = cudf.Series(expected)
 
     assert_eq(expected, gs.str.code_points(), check_dtype=False)
 
@@ -2400,9 +2405,7 @@ def test_string_str_code_points():
     ],
 )
 def test_string_str_url_encode(data):
-    import urllib.parse
-
-    gs = Series(data)
+    gs = cudf.Series(data)
 
     got = gs.str.url_encode()
     expected = pd.Series([urllib.parse.quote(url, safe="~") for url in data])
@@ -2420,9 +2423,7 @@ def test_string_str_url_encode(data):
     ],
 )
 def test_string_str_decode_url(data):
-    import urllib.parse
-
-    gs = Series(data)
+    gs = cudf.Series(data)
 
     got = gs.str.url_decode()
     expected = pd.Series([urllib.parse.unquote(url) for url in data])
@@ -2444,7 +2445,7 @@ def test_string_str_decode_url(data):
 @pytest.mark.parametrize("obj_type", [None, "str", "category"])
 def test_string_typecast(data, obj_type, dtype):
     psr = pd.Series(data, dtype=obj_type)
-    gsr = Series(data, dtype=obj_type)
+    gsr = cudf.Series(data, dtype=obj_type)
 
     expect = psr.astype(dtype=dtype)
     actual = gsr.astype(dtype=dtype)
@@ -2483,7 +2484,7 @@ def test_string_typecast(data, obj_type, dtype):
 @pytest.mark.parametrize("obj_type", [None, "str", "category"])
 def test_string_typecast_error(data, obj_type, dtype):
     psr = pd.Series(data, dtype=obj_type)
-    gsr = Series(data, dtype=obj_type)
+    gsr = cudf.Series(data, dtype=obj_type)
 
     assert_exceptions_equal(
         lfunc=psr.astype,
@@ -2505,23 +2506,23 @@ def test_string_typecast_error(data, obj_type, dtype):
 )
 def test_string_hex_to_int(data):
 
-    gsr = Series(data)
+    gsr = cudf.Series(data)
 
     got = gsr.str.htoi()
-    expected = Series([263988422296292, 0, 281474976710655])
+    expected = cudf.Series([263988422296292, 0, 281474976710655])
 
     assert_eq(expected, got)
 
 
 def test_string_ishex():
-    gsr = Series(["", None, "0x01a2b3c4d5e6f", "0789", "ABCDEF0"])
+    gsr = cudf.Series(["", None, "0x01a2b3c4d5e6f", "0789", "ABCDEF0"])
     got = gsr.str.ishex()
-    expected = Series([False, None, True, True, True])
+    expected = cudf.Series([False, None, True, True, True])
     assert_eq(expected, got)
 
 
 def test_string_istimestamp():
-    gsr = Series(
+    gsr = cudf.Series(
         [
             "",
             None,
@@ -2539,7 +2540,7 @@ def test_string_istimestamp():
         ]
     )
     got = gsr.str.istimestamp(r"%Y%m%d %H%M%S.%f%p%z")
-    expected = Series(
+    expected = cudf.Series(
         [
             False,
             None,
@@ -2560,8 +2561,10 @@ def test_string_istimestamp():
 
 
 def test_string_ip4_to_int():
-    gsr = Series(["", None, "hello", "41.168.0.1", "127.0.0.1", "41.197.0.1"])
-    expected = Series([0, None, 0, 698875905, 2130706433, 700776449])
+    gsr = cudf.Series(
+        ["", None, "hello", "41.168.0.1", "127.0.0.1", "41.197.0.1"]
+    )
+    expected = cudf.Series([0, None, 0, 698875905, 2130706433, 700776449])
 
     got = gsr.str.ip2int()
 
@@ -2569,18 +2572,18 @@ def test_string_ip4_to_int():
 
 
 def test_string_int_to_ipv4():
-    gsr = Series([0, None, 0, 698875905, 2130706433, 700776449])
-    expected = Series(
+    gsr = cudf.Series([0, None, 0, 698875905, 2130706433, 700776449])
+    expected = cudf.Series(
         ["0.0.0.0", None, "0.0.0.0", "41.168.0.1", "127.0.0.1", "41.197.0.1"]
     )
 
-    got = Series(gsr._column.int2ip())
+    got = cudf.Series(gsr._column.int2ip())
 
     assert_eq(expected, got)
 
 
 def test_string_isipv4():
-    gsr = Series(
+    gsr = cudf.Series(
         [
             "",
             None,
@@ -2596,7 +2599,7 @@ def test_string_isipv4():
         ]
     )
     got = gsr.str.isipv4()
-    expected = Series(
+    expected = cudf.Series(
         [
             False,
             None,
@@ -2618,7 +2621,7 @@ def test_string_isipv4():
     "dtype", sorted(list(dtypeutils.NUMERIC_TYPES - {"int64", "uint64"}))
 )
 def test_string_int_to_ipv4_dtype_fail(dtype):
-    gsr = Series([1, 2, 3, 4, 5]).astype(dtype)
+    gsr = cudf.Series([1, 2, 3, 4, 5]).astype(dtype)
     with pytest.raises(TypeError):
         gsr._column.int2ip()
 
@@ -2649,7 +2652,7 @@ def test_string_int_to_ipv4_dtype_fail(dtype):
 )
 def test_string_str_subscriptable(data, index):
     psr = pd.Series(data)
-    gsr = Series(data)
+    gsr = cudf.Series(data)
 
     assert_eq(psr.str[index], gsr.str[index])
 
@@ -2671,8 +2674,8 @@ def test_string_str_subscriptable(data, index):
     ],
 )
 def test_string_str_byte_count(data, expected):
-    sr = Series(data)
-    expected = Series(expected, dtype="int32")
+    sr = cudf.Series(data)
+    expected = cudf.Series(expected, dtype="int32")
     actual = sr.str.byte_count()
     assert_eq(expected, actual)
 
@@ -2720,8 +2723,8 @@ def test_string_str_byte_count(data, expected):
     ],
 )
 def test_str_isinteger(data, expected):
-    sr = Series(data, dtype="str")
-    expected = Series(expected)
+    sr = cudf.Series(data, dtype="str")
+    expected = cudf.Series(expected)
     actual = sr.str.isinteger()
     assert_eq(expected, actual)
 
@@ -2776,8 +2779,8 @@ def test_str_isinteger(data, expected):
     ],
 )
 def test_str_isfloat(data, expected):
-    sr = Series(data, dtype="str")
-    expected = Series(expected)
+    sr = cudf.Series(data, dtype="str")
+    expected = cudf.Series(expected)
     actual = sr.str.isfloat()
     assert_eq(expected, actual)
 
@@ -2807,7 +2810,7 @@ def test_str_isfloat(data, expected):
 )
 def test_str_min(data):
     psr = pd.Series(data)
-    sr = Series(data)
+    sr = cudf.Series(data)
 
     assert_eq(psr.min(), sr.min())
 
@@ -2832,7 +2835,7 @@ def test_str_min(data):
 )
 def test_str_max(data):
     psr = pd.Series(data)
-    sr = Series(data)
+    sr = cudf.Series(data)
 
     assert_eq(psr.max(), sr.max())
 
@@ -2857,13 +2860,13 @@ def test_str_max(data):
 )
 def test_str_sum(data):
     psr = pd.Series(data)
-    sr = Series(data)
+    sr = cudf.Series(data)
 
     assert_eq(psr.sum(), sr.sum())
 
 
 def test_str_mean():
-    sr = Series(["a", "b", "c", "d", "e"])
+    sr = cudf.Series(["a", "b", "c", "d", "e"])
 
     with pytest.raises(TypeError):
         sr.mean()
@@ -2871,20 +2874,20 @@ def test_str_mean():
 
 def test_string_product():
     psr = pd.Series(["1", "2", "3", "4", "5"])
-    sr = Series(["1", "2", "3", "4", "5"])
+    sr = cudf.Series(["1", "2", "3", "4", "5"])
 
     assert_exceptions_equal(
         lfunc=psr.product,
         rfunc=sr.product,
         expected_error_message=re.escape(
-            f"cannot perform prod with type {sr.dtype}"
+            f"cannot perform product with type {sr.dtype}"
         ),
     )
 
 
 def test_string_var():
     psr = pd.Series(["1", "2", "3", "4", "5"])
-    sr = Series(["1", "2", "3", "4", "5"])
+    sr = cudf.Series(["1", "2", "3", "4", "5"])
 
     assert_exceptions_equal(
         lfunc=psr.var, rfunc=sr.var, compare_error_message=False
@@ -2893,7 +2896,7 @@ def test_string_var():
 
 def test_string_std():
     psr = pd.Series(["1", "2", "3", "4", "5"])
-    sr = Series(["1", "2", "3", "4", "5"])
+    sr = cudf.Series(["1", "2", "3", "4", "5"])
 
     assert_exceptions_equal(
         lfunc=psr.std, rfunc=sr.std, compare_error_message=False

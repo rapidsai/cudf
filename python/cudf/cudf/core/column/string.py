@@ -5194,7 +5194,7 @@ def _get_cols_list(parent_obj, others):
         ]
 
         return cols_list
-    elif others is not None:
+    elif others is not None and not isinstance(others, StringMethods):
         if (
             parent_index is not None
             and isinstance(others, cudf.Series)

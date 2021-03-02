@@ -1,4 +1,5 @@
 # Copyright (c) 2018-2021, NVIDIA CORPORATION.
+
 from __future__ import annotations
 
 import builtins
@@ -49,12 +50,12 @@ from cudf.utils.dtypes import (
     get_time_unit,
     is_categorical_dtype,
     is_decimal_dtype,
+    is_interval_dtype,
     is_list_dtype,
     is_numerical_dtype,
     is_scalar,
     is_string_dtype,
     is_struct_dtype,
-    is_interval_dtype,
     min_signed_type,
     min_unsigned_type,
     np_to_pa_dtype,
@@ -848,55 +849,65 @@ class ColumnBase(Column, Serializable):
         -------
         result: Column
             Column of booleans indicating if each element is in values.
-        Raises
-        -------
-        TypeError
-            If values is a string
         """
-        if is_scalar(values):
-            raise TypeError(
-                "only list-like objects are allowed to be passed "
-                f"to isin(), you passed a [{type(values).__name__}]"
-            )
-
         lhs = self
         rhs = None
 
         try:
-            # We need to convert values to same type as self,
-            # hence passing dtype=self.dtype
-            rhs = as_column(values, dtype=self.dtype)
-
-            # Short-circuit if rhs is all null.
-            if lhs.null_count == 0 and (rhs.null_count == len(rhs)):
-                return full(len(self), False, dtype="bool")
+            lhs, rhs = self._process_values_for_isin(values)
+            res = lhs._isin_earlystop(rhs)
+            if res is not None:
+                return res
         except ValueError:
             # pandas functionally returns all False when cleansing via
             # typecasting fails
             return full(len(self), False, dtype="bool")
 
-        # If categorical, combine categories first
-        if is_categorical_dtype(lhs):
-            lhs_cats = lhs.cat().categories._values
-            rhs_cats = rhs.cat().categories._values
+        res = lhs._obtain_isin_result(rhs)
 
-            if not np.issubdtype(rhs_cats.dtype, lhs_cats.dtype):
-                # If they're not the same dtype, short-circuit if the values
-                # list doesn't have any nulls. If it does have nulls, make
-                # the values list a Categorical with a single null
-                if not rhs.has_nulls:
-                    return full(len(self), False, dtype="bool")
-                rhs = as_column(pd.Categorical.from_codes([-1], categories=[]))
-                rhs = rhs.cat().set_categories(lhs_cats).astype(self.dtype)
+        return res
 
-        ldf = cudf.DataFrame({"x": lhs, "orig_order": arange(len(lhs))})
+    def _process_values_for_isin(
+        self, values: Sequence
+    ) -> Tuple[ColumnBase, ColumnBase]:
+        """
+        Helper function for `isin` which pre-process `values` based on `self`.
+        """
+        lhs = self
+        rhs = as_column(values, nan_as_null=False)
+        if lhs.null_count == len(lhs):
+            lhs = lhs.astype(rhs.dtype)
+        elif rhs.null_count == len(rhs):
+            rhs = rhs.astype(lhs.dtype)
+        return lhs, rhs
+
+    def _isin_earlystop(self, rhs: ColumnBase) -> Union[ColumnBase, None]:
+        """
+        Helper function for `isin` which determines possibility of
+        early-stopping or not.
+        """
+        if self.dtype != rhs.dtype:
+            if self.null_count and rhs.null_count:
+                return self.isna()
+            else:
+                return cudf.core.column.full(len(self), False, dtype="bool")
+        elif self.null_count == 0 and (rhs.null_count == len(rhs)):
+            return cudf.core.column.full(len(self), False, dtype="bool")
+        else:
+            return None
+
+    def _obtain_isin_result(self, rhs: ColumnBase) -> ColumnBase:
+        """
+        Helper function for `isin` which merges `self` & `rhs`
+        to determine what values of `rhs` exist in `self`.
+        """
+        ldf = cudf.DataFrame({"x": self, "orig_order": arange(len(self))})
         rdf = cudf.DataFrame(
             {"x": rhs, "bool": full(len(rhs), True, dtype="bool")}
         )
         res = ldf.merge(rdf, on="x", how="left").sort_values(by="orig_order")
         res = res.drop_duplicates(subset="orig_order", ignore_index=True)
         res = res._data["bool"].fillna(False)
-
         return res
 
     def as_mask(self) -> Buffer:
@@ -1054,14 +1065,14 @@ class ColumnBase(Column, Serializable):
 
         # columns include null index in factorization; remove:
         if self.has_nulls:
-            cats = cats.dropna()
+            cats = cats._column.dropna(drop_nan=False)
             min_type = min_unsigned_type(len(cats), 8)
             labels = labels - 1
             if np.dtype(min_type).itemsize < labels.dtype.itemsize:
                 labels = labels.astype(min_type)
 
         return build_categorical_column(
-            categories=cats._column,
+            categories=cats,
             codes=labels._column,
             mask=self.mask,
             ordered=ordered,
@@ -1257,7 +1268,7 @@ class ColumnBase(Column, Serializable):
     def product(
         self, skipna: bool = None, dtype: Dtype = None, min_count: int = 0
     ):
-        raise TypeError(f"cannot perform prod with type {self.dtype}")
+        raise TypeError(f"cannot perform product with type {self.dtype}")
 
     def mean(self, skipna: bool = None, dtype: Dtype = None):
         raise TypeError(f"cannot perform mean with type {self.dtype}")
@@ -1269,7 +1280,7 @@ class ColumnBase(Column, Serializable):
         raise TypeError(f"cannot perform var with type {self.dtype}")
 
     def kurtosis(self, skipna: bool = None):
-        raise TypeError(f"cannot perform kurt with type {self.dtype}")
+        raise TypeError(f"cannot perform kurtosis with type {self.dtype}")
 
     def skew(self, skipna: bool = None):
         raise TypeError(f"cannot perform skew with type {self.dtype}")
@@ -2073,9 +2084,11 @@ def _construct_array(
         arbitrary = cupy.asarray(arbitrary, dtype=dtype)
     except (TypeError, ValueError):
         native_dtype = dtype
-        if dtype is None and pd.api.types.infer_dtype(arbitrary) in (
-            "mixed",
-            "mixed-integer",
+        if (
+            dtype is None
+            and not cudf._lib.scalar._is_null_host_scalar(arbitrary)
+            and pd.api.types.infer_dtype(arbitrary)
+            in ("mixed", "mixed-integer",)
         ):
             native_dtype = "object"
         arbitrary = np.asarray(
