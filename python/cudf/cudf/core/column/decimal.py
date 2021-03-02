@@ -67,7 +67,10 @@ class DecimalColumn(ColumnBase):
     ) -> "cudf.core.column.DecimalColumn":
         if dtype == self.dtype:
             return self
-        return libcudf.unary.cast(self, dtype)
+        result = libcudf.unary.cast(self, dtype)
+        if isinstance(dtype, cudf.core.dtypes.Decimal64Dtype):
+            result.dtype.precision = dtype.precision
+        return result
 
     def as_numerical_column(
         self, dtype: Dtype
