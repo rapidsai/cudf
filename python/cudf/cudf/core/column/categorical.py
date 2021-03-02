@@ -9,6 +9,7 @@ from typing import (
     Dict,
     Mapping,
     Optional,
+    Sequence,
     Tuple,
     Union,
     cast,
@@ -867,6 +868,15 @@ class CategoricalColumn(column.ColumnBase):
         else:
             super().set_base_data(value)
 
+    def _process_values_for_isin(
+        self, values: Sequence
+    ) -> Tuple[ColumnBase, ColumnBase]:
+        lhs = self
+        # We need to convert values to same type as self,
+        # hence passing dtype=self.dtype
+        rhs = cudf.core.column.as_column(values, dtype=self.dtype)
+        return lhs, rhs
+
     def set_base_mask(self, value: Optional[Buffer]):
         super().set_base_mask(value)
         self._codes = None
@@ -936,6 +946,21 @@ class CategoricalColumn(column.ColumnBase):
         )
 
     def __setitem__(self, key, value):
+        if cudf.utils.dtypes.is_scalar(
+            value
+        ) and cudf._lib.scalar._is_null_host_scalar(value):
+            to_add_categories = 0
+        else:
+            to_add_categories = len(
+                cudf.Index(value).difference(self.categories)
+            )
+
+        if to_add_categories > 0:
+            raise ValueError(
+                "Cannot setitem on a Categorical with a new "
+                "category, set the categories first"
+            )
+
         if cudf.utils.dtypes.is_scalar(value):
             value = self._encode(value) if value is not None else value
         else:
@@ -1046,11 +1071,24 @@ class CategoricalColumn(column.ColumnBase):
     def to_pandas(
         self, index: ColumnLike = None, nullable: bool = False, **kwargs
     ) -> pd.Series:
-        signed_dtype = min_signed_type(len(self.categories))
-        codes = self.cat().codes.astype(signed_dtype).fillna(-1).to_array()
-        categories = self.categories.to_pandas()
+
+        if self.categories.dtype.kind == "f":
+            new_mask = bools_to_mask(self.notnull())
+            col = column.build_categorical_column(
+                categories=self.categories,
+                codes=column.as_column(self.codes, dtype=self.codes.dtype),
+                mask=new_mask,
+                ordered=self.dtype.ordered,
+                size=self.codes.size,
+            )
+        else:
+            col = self
+
+        signed_dtype = min_signed_type(len(col.categories))
+        codes = col.cat().codes.astype(signed_dtype).fillna(-1).to_array()
+        categories = col.categories.dropna(drop_nan=True).to_pandas()
         data = pd.Categorical.from_codes(
-            codes, categories=categories, ordered=self.ordered
+            codes, categories=categories, ordered=col.ordered
         )
         return pd.Series(data, index=index)
 
@@ -1180,6 +1218,38 @@ class CategoricalColumn(column.ColumnBase):
             ordered=self.dtype.ordered,
         )
 
+    def isnull(self) -> ColumnBase:
+        """
+        Identify missing values in a CategoricalColumn.
+        """
+        result = libcudf.unary.is_null(self)
+
+        if self.categories.dtype.kind == "f":
+            # Need to consider `np.nan` values incase
+            # of an underlying float column
+            categories = libcudf.unary.is_nan(self.categories)
+            if categories.any():
+                code = self._encode(np.nan)
+                result = result | (self.codes == cudf.Scalar(code))
+
+        return result
+
+    def notnull(self) -> ColumnBase:
+        """
+        Identify non-missing values in a CategoricalColumn.
+        """
+        result = libcudf.unary.is_valid(self)
+
+        if self.categories.dtype.kind == "f":
+            # Need to consider `np.nan` values incase
+            # of an underlying float column
+            categories = libcudf.unary.is_nan(self.categories)
+            if categories.any():
+                code = self._encode(np.nan)
+                result = result & (self.codes != cudf.Scalar(code))
+
+        return result
+
     def fillna(
         self, fill_value: Any = None, method: Any = None, dtype: Dtype = None
     ) -> CategoricalColumn:
@@ -1204,6 +1274,12 @@ class CategoricalColumn(column.ColumnBase):
                         raise ValueError(err_msg) from err
             else:
                 fill_value = column.as_column(fill_value, nan_as_null=False)
+                if isinstance(fill_value, CategoricalColumn):
+                    if self.dtype != fill_value.dtype:
+                        raise ValueError(
+                            "Cannot set a Categorical with another, "
+                            "without identical categories"
+                        )
                 # TODO: only required if fill_value has a subset of the
                 # categories:
                 fill_value = fill_value.cat()._set_categories(

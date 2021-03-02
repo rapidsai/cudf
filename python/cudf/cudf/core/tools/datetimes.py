@@ -1,6 +1,7 @@
-# Copyright (c) 2019-2020, NVIDIA CORPORATION.
+# Copyright (c) 2019-2021, NVIDIA CORPORATION.
 
 import warnings
+from typing import Sequence, Union
 
 import numpy as np
 import pandas as pd
@@ -497,3 +498,43 @@ class DateOffset(pd.DateOffset, metaclass=_UndoOffsetMeta):
             raise AttributeError("DateOffset objects are immutable.")
         else:
             object.__setattr__(self, name, value)
+
+
+def _isin_datetimelike(
+    lhs: Union[column.TimeDeltaColumn, column.DatetimeColumn], values: Sequence
+) -> column.ColumnBase:
+    """
+    Check whether values are contained in the
+    DateTimeColumn or TimeDeltaColumn.
+
+    Parameters
+    ----------
+    lhs : TimeDeltaColumn or DatetimeColumn
+        Column to check whether the `values` exist in.
+    values : set or list-like
+        The sequence of values to test. Passing in a single string will
+        raise a TypeError. Instead, turn a single string into a list
+        of one element.
+
+    Returns
+    -------
+    result: Column
+        Column of booleans indicating if each element is in values.
+    """
+    rhs = None
+    try:
+        rhs = cudf.core.column.as_column(values)
+
+        if rhs.dtype.kind in {"f", "i", "u"}:
+            return cudf.core.column.full(len(lhs), False, dtype="bool")
+        rhs = rhs.astype(lhs.dtype)
+        res = lhs._isin_earlystop(rhs)
+        if res is not None:
+            return res
+    except ValueError:
+        # pandas functionally returns all False when cleansing via
+        # typecasting fails
+        return cudf.core.column.full(len(lhs), False, dtype="bool")
+
+    res = lhs._obtain_isin_result(rhs)
+    return res

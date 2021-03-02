@@ -150,24 +150,18 @@ if buildAll || hasArg libcudf; then
           -DCMAKE_INSTALL_PREFIX=${INSTALL_PREFIX} \
           ${CUDF_CMAKE_CUDA_ARCHITECTURES} \
           -DUSE_NVTX=${BUILD_NVTX} \
+          -DBUILD_TESTS=${BUILD_TESTS} \
           -DBUILD_BENCHMARKS=${BUILD_BENCHMARKS} \
           -DDISABLE_DEPRECATION_WARNING=${BUILD_DISABLE_DEPRECATION_WARNING} \
           -DPER_THREAD_DEFAULT_STREAM=${BUILD_PER_THREAD_DEFAULT_STREAM} \
           -DCMAKE_BUILD_TYPE=${BUILD_TYPE}
 
     cd ${LIB_BUILD_DIR}
+
+    cmake --build . -j${PARALLEL_LEVEL} ${VERBOSE_FLAG}
+
     if [[ ${INSTALL_TARGET} != "" ]]; then
-        cmake --build . -j${PARALLEL_LEVEL} --target install_cudf ${VERBOSE_FLAG}
-    else
-        cmake --build . -j${PARALLEL_LEVEL} --target cudf ${VERBOSE_FLAG}
-    fi
-
-    if [[ ${BUILD_TESTS} == "ON" ]]; then
-        cmake --build . -j${PARALLEL_LEVEL} --target build_tests_cudf ${VERBOSE_FLAG}
-    fi
-
-    if [[ ${BUILD_BENCHMARKS} == "ON" ]]; then
-        cmake --build . -j${PARALLEL_LEVEL} --target build_benchmarks_cudf ${VERBOSE_FLAG}
+        cmake --build . -j${PARALLEL_LEVEL} --target install ${VERBOSE_FLAG}
     fi
 fi
 

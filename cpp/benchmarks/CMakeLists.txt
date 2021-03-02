@@ -14,303 +14,176 @@
 # limitations under the License.
 #=============================================================================
 
-add_library(cudf_datagen STATIC
-                   "${CMAKE_SOURCE_DIR}/benchmarks/common/generate_benchmark_input.cpp"
-)
+find_package(Threads REQUIRED)
+
+add_library(cudf_datagen STATIC common/generate_benchmark_input.cpp)
+target_compile_features(cudf_datagen PUBLIC cxx_std_14 cuda_std_14)
+
+target_compile_options(cudf_datagen
+            PUBLIC "$<$<COMPILE_LANGUAGE:CXX>:${CUDF_CXX_FLAGS}>"
+                   "$<$<COMPILE_LANGUAGE:CUDA>:${CUDF_CUDA_FLAGS}>")
+
+target_link_libraries(cudf_datagen
+               PUBLIC GTest::gmock
+                      GTest::gtest
+                      GTest::gmock_main
+                      GTest::gtest_main
+                      benchmark::benchmark
+                      benchmark::benchmark_main
+                      Threads::Threads
+                      cudf)
+
+target_include_directories(cudf_datagen
+    PUBLIC "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>"
+           "$<BUILD_INTERFACE:${CUDF_SOURCE_DIR}>"
+           "$<BUILD_INTERFACE:${CUDF_SOURCE_DIR}/src>")
 
 ###################################################################################################
 # - compiler function -----------------------------------------------------------------------------
 
-set(BENCHMARK_LIST CACHE INTERNAL "BENCHMARK_LIST")
+# Use an OBJECT library so we only compile these helper source files only once
+add_library(cudf_benchmark_common OBJECT
+    "${CUDF_SOURCE_DIR}/tests/utilities/base_fixture.cpp"
+    synchronization/synchronization.cpp
+    io/cuio_benchmark_common.cpp)
+target_link_libraries(cudf_benchmark_common PRIVATE cudf_datagen)
 
-function(ConfigureBench CMAKE_BENCH_NAME CMAKE_BENCH_SRC)
-    add_executable(${CMAKE_BENCH_NAME}
-                   ${CMAKE_BENCH_SRC}
-                   "${CMAKE_CURRENT_SOURCE_DIR}/synchronization/synchronization.cpp"
-                   "${CMAKE_SOURCE_DIR}/tests/utilities/base_fixture.cpp"
-                   "${CMAKE_SOURCE_DIR}/benchmarks/io/cuio_benchmark_common.cpp")
-    set_target_properties(${CMAKE_BENCH_NAME} PROPERTIES POSITION_INDEPENDENT_CODE ON)
-    target_link_libraries(${CMAKE_BENCH_NAME} benchmark benchmark_main pthread cudf_datagen cudf)
-    set_target_properties(${CMAKE_BENCH_NAME} PROPERTIES
-                            RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/gbenchmarks")
-    set(BENCHMARK_LIST ${BENCHMARK_LIST} ${CMAKE_BENCH_NAME} CACHE INTERNAL "BENCHMARK_LIST")
-endfunction(ConfigureBench)
-
-###################################################################################################
-# - include paths ---------------------------------------------------------------------------------
-
-include_directories("${THRUST_INCLUDE_DIR}"
-                    "${JITIFY_INCLUDE_DIR}"
-                    "${LIBCUDACXX_INCLUDE_DIR}")
-
-if(CMAKE_CUDA_TOOLKIT_INCLUDE_DIRECTORIES)
-    include_directories("${CMAKE_CUDA_TOOLKIT_INCLUDE_DIRECTORIES}")
-endif(CMAKE_CUDA_TOOLKIT_INCLUDE_DIRECTORIES)
-
-include_directories("${CMAKE_BINARY_DIR}/include"
-                    "${CMAKE_SOURCE_DIR}/include"
-                    "${CMAKE_SOURCE_DIR}"
-                    "${CMAKE_SOURCE_DIR}/src"
-                    "${CMAKE_SOURCE_DIR}/thirdparty/dlpack/include"
-                    "${GTEST_INCLUDE_DIR}"
-                    "${GBENCH_INCLUDE_DIR}"
-                    "${ARROW_INCLUDE_DIR}"
-                    "${RMM_INCLUDE}"
-                    "${CMAKE_CURRENT_SOURCE_DIR}")
-
-if(CONDA_INCLUDE_DIRS)
-  include_directories("${CONDA_INCLUDE_DIRS}")
-endif(CONDA_INCLUDE_DIRS)
-
-###################################################################################################
-# - library paths ---------------------------------------------------------------------------------
-
-link_directories("${CMAKE_CUDA_IMPLICIT_LINK_DIRECTORIES}" # CMAKE_CUDA_IMPLICIT_LINK_DIRECTORIES is an undocumented/unsupported variable containing the link directories for nvcc
-                 "${CMAKE_BINARY_DIR}/lib"
-                 "${CMAKE_BINARY_DIR}"
-                 "${GTEST_LIBRARY_DIR}"
-                 "${GBENCH_LIBRARY_DIR}"
-                 "${RMM_LIBRARY}")
+function(ConfigureBench CMAKE_BENCH_NAME)
+    add_executable(${CMAKE_BENCH_NAME} ${ARGN})
+    set_target_properties(${CMAKE_BENCH_NAME}
+        PROPERTIES RUNTIME_OUTPUT_DIRECTORY "$<BUILD_INTERFACE:${CUDF_BINARY_DIR}/gbenchmarks>")
+    target_link_libraries(${CMAKE_BENCH_NAME} PRIVATE cudf_benchmark_common cudf_datagen)
+endfunction()
 
 ###################################################################################################
 # - column benchmarks -----------------------------------------------------------------------------
-
-set(COLUMN_CONCAT_BENCH_SRC
-  "${CMAKE_CURRENT_SOURCE_DIR}/column/concatenate_benchmark.cpp")
-
-ConfigureBench(COLUMN_CONCAT_BENCH "${COLUMN_CONCAT_BENCH_SRC}")
+ConfigureBench(COLUMN_CONCAT_BENCH column/concatenate_benchmark.cpp)
 
 ###################################################################################################
 # - gather benchmark ------------------------------------------------------------------------------
-
-set(GATHER_BENCH_SRC
-  "${CMAKE_CURRENT_SOURCE_DIR}/copying/gather_benchmark.cu")
-
-ConfigureBench(GATHER_BENCH "${GATHER_BENCH_SRC}")
+ConfigureBench(GATHER_BENCH copying/gather_benchmark.cu)
 
 ###################################################################################################
 # - scatter benchmark -----------------------------------------------------------------------------
-
-set(SCATTER_BENCH_SRC
-  "${CMAKE_CURRENT_SOURCE_DIR}/copying/scatter_benchmark.cu")
-
-ConfigureBench(SCATTER_BENCH "${SCATTER_BENCH_SRC}")
+ConfigureBench(SCATTER_BENCH copying/scatter_benchmark.cu)
 
 ###################################################################################################
 # - contiguous_split benchmark  -------------------------------------------------------------------
-
-set(CONTIGUOUS_SPLIT_BENCH_SRC
-  "${CMAKE_CURRENT_SOURCE_DIR}/copying/contiguous_split_benchmark.cu")
-
-ConfigureBench(CONTIGUOUS_SPLIT_BENCH "${CONTIGUOUS_SPLIT_BENCH_SRC}")
+ConfigureBench(CONTIGUOUS_SPLIT_BENCH copying/contiguous_split_benchmark.cu)
 
 ###################################################################################################
 # - shift benchmark -------------------------------------------------------------------------------
-
-set(SHIFT_BENCH_SRC
-  "${CMAKE_CURRENT_SOURCE_DIR}/copying/shift_benchmark.cu")
-
-ConfigureBench(SHIFT_BENCH "${SHIFT_BENCH_SRC}")
+ConfigureBench(SHIFT_BENCH copying/shift_benchmark.cu)
 
 ###################################################################################################
 # - transpose benchmark ---------------------------------------------------------------------------
-
-set(TRANSPOSE_BENCH_SRC
-  "${CMAKE_CURRENT_SOURCE_DIR}/transpose/transpose_benchmark.cu")
-
-ConfigureBench(TRANSPOSE_BENCH "${TRANSPOSE_BENCH_SRC}")
+ConfigureBench(TRANSPOSE_BENCH transpose/transpose_benchmark.cu)
 
 ###################################################################################################
 # - apply_boolean_mask benchmark ------------------------------------------------------------------
-
-set(APPLY_BOOLEAN_MASK_BENCH_SRC
-  "${CMAKE_CURRENT_SOURCE_DIR}/stream_compaction/apply_boolean_mask_benchmark.cpp")
-
-ConfigureBench(APPLY_BOOLEAN_MASK_BENCH "${APPLY_BOOLEAN_MASK_BENCH_SRC}")
+ConfigureBench(APPLY_BOOLEAN_MASK_BENCH stream_compaction/apply_boolean_mask_benchmark.cpp)
 
 ###################################################################################################
 # - stream_compaction benchmark -------------------------------------------------------------------
-
-set(STREAM_COMPACTION_BENCH_SRC
-  "${CMAKE_CURRENT_SOURCE_DIR}/stream_compaction/drop_duplicates_benchmark.cpp")
-
-ConfigureBench(STREAM_COMPACTION_BENCH "${STREAM_COMPACTION_BENCH_SRC}")
+ConfigureBench(STREAM_COMPACTION_BENCH stream_compaction/drop_duplicates_benchmark.cpp)
 
 ###################################################################################################
 # - join benchmark --------------------------------------------------------------------------------
-
-set(JOIN_BENCH_SRC
-  "${CMAKE_CURRENT_SOURCE_DIR}/join/join_benchmark.cu")
-
-ConfigureBench(JOIN_BENCH "${JOIN_BENCH_SRC}")
+ConfigureBench(JOIN_BENCH join/join_benchmark.cu)
 
 ###################################################################################################
 # - iterator benchmark ----------------------------------------------------------------------------
-
-set(ITERATOR_BENCH_SRC
-  "${CMAKE_CURRENT_SOURCE_DIR}/iterator/iterator_benchmark.cu")
-
-ConfigureBench(ITERATOR_BENCH "${ITERATOR_BENCH_SRC}")
+ConfigureBench(ITERATOR_BENCH iterator/iterator_benchmark.cu)
 
 ###################################################################################################
 # - search benchmark ------------------------------------------------------------------------------
-
-set(SEARCH_BENCH_SRC
-  "${CMAKE_CURRENT_SOURCE_DIR}/search/search_benchmark.cu")
-
-ConfigureBench(SEARCH_BENCH "${SEARCH_BENCH_SRC}")
+ConfigureBench(SEARCH_BENCH search/search_benchmark.cu)
 
 ###################################################################################################
 # - sort benchmark --------------------------------------------------------------------------------
-
-set(SORT_BENCH_SRC
-  "${CMAKE_CURRENT_SOURCE_DIR}/sort/sort_benchmark.cpp"
-  "${CMAKE_CURRENT_SOURCE_DIR}/sort/sort_strings_benchmark.cpp")
-
-ConfigureBench(SORT_BENCH "${SORT_BENCH_SRC}")
+ConfigureBench(SORT_BENCH
+  sort/sort_benchmark.cpp
+  sort/sort_strings_benchmark.cpp)
 
 ###################################################################################################
 # - type_dispatcher benchmark ---------------------------------------------------------------------
-
-set(TD_BENCH_SRC
-  "${CMAKE_CURRENT_SOURCE_DIR}/type_dispatcher/type_dispatcher_benchmark.cu")
-
-ConfigureBench(TYPE_DISPATCHER_BENCH "${TD_BENCH_SRC}")
+ConfigureBench(TYPE_DISPATCHER_BENCH type_dispatcher/type_dispatcher_benchmark.cu)
 
 ###################################################################################################
 # - reduction benchmark ---------------------------------------------------------------------------
-
-set(REDUCTION_BENCH_SRC
-  "${CMAKE_CURRENT_SOURCE_DIR}/reduction/anyall_benchmark.cpp"
-  "${CMAKE_CURRENT_SOURCE_DIR}/reduction/dictionary_benchmark.cpp"
-  "${CMAKE_CURRENT_SOURCE_DIR}/reduction/reduce_benchmark.cpp"
-  "${CMAKE_CURRENT_SOURCE_DIR}/reduction/minmax_benchmark.cpp")
-
-ConfigureBench(REDUCTION_BENCH "${REDUCTION_BENCH_SRC}")
+ConfigureBench(REDUCTION_BENCH
+  reduction/anyall_benchmark.cpp
+  reduction/dictionary_benchmark.cpp
+  reduction/reduce_benchmark.cpp
+  reduction/minmax_benchmark.cpp)
 
 ###################################################################################################
 # - groupby benchmark -----------------------------------------------------------------------------
-
-set(GROUPBY_BENCH_SRC
-  "${CMAKE_CURRENT_SOURCE_DIR}/groupby/group_sum_benchmark.cu"
-  "${CMAKE_CURRENT_SOURCE_DIR}/groupby/group_nth_benchmark.cu")
-
-ConfigureBench(GROUPBY_BENCH "${GROUPBY_BENCH_SRC}")
+ConfigureBench(GROUPBY_BENCH
+  groupby/group_sum_benchmark.cu
+  groupby/group_nth_benchmark.cu)
 
 ###################################################################################################
 # - hashing benchmark -----------------------------------------------------------------------------
-
-set(HASHING_BENCH_SRC
-  "${CMAKE_CURRENT_SOURCE_DIR}/hashing/hashing_benchmark.cpp")
-
-ConfigureBench(HASHING_BENCH "${HASHING_BENCH_SRC}")
+ConfigureBench(HASHING_BENCH hashing/hashing_benchmark.cpp)
 
 ###################################################################################################
 # - merge benchmark -------------------------------------------------------------------------------
-
-set(MERGE_BENCH_SRC
-  "${CMAKE_CURRENT_SOURCE_DIR}/merge/merge_benchmark.cpp")
-
-ConfigureBench(MERGE_BENCH "${MERGE_BENCH_SRC}")
+ConfigureBench(MERGE_BENCH merge/merge_benchmark.cpp)
 
 ###################################################################################################
 # - null_mask benchmark ---------------------------------------------------------------------------
-
-set(NULLMASK_BENCH_SRC
-  "${CMAKE_CURRENT_SOURCE_DIR}/null_mask/set_null_mask_benchmark.cpp")
-
-ConfigureBench(NULLMASK_BENCH "${NULLMASK_BENCH_SRC}")
+ConfigureBench(NULLMASK_BENCH null_mask/set_null_mask_benchmark.cpp)
 
 ###################################################################################################
 # - parquet writer chunks benchmark ---------------------------------------------------------------
-
-set(PARQUET_WRITER_CHUNKS_BENCH_SRC
-  "${CMAKE_CURRENT_SOURCE_DIR}/io/parquet/parquet_writer_chunks_benchmark.cpp")
-
-ConfigureBench(PARQUET_WRITER_CHUNKS_BENCH "${PARQUET_WRITER_CHUNKS_BENCH_SRC}")
+ConfigureBench(PARQUET_WRITER_CHUNKS_BENCH io/parquet/parquet_writer_chunks_benchmark.cpp)
 
 ###################################################################################################
 # - parquet reader benchmark ----------------------------------------------------------------------
-
-set(PARQUET_READER_BENCH_SRC
-  "${CMAKE_CURRENT_SOURCE_DIR}/io/parquet/parquet_reader_benchmark.cpp")
-
-ConfigureBench(PARQUET_READER_BENCH "${PARQUET_READER_BENCH_SRC}")
+ConfigureBench(PARQUET_READER_BENCH io/parquet/parquet_reader_benchmark.cpp)
 
 ###################################################################################################
 # - orc reader benchmark --------------------------------------------------------------------------
-
-set(ORC_READER_BENCH_SRC
-  "${CMAKE_CURRENT_SOURCE_DIR}/io/orc/orc_reader_benchmark.cpp")
-
-ConfigureBench(ORC_READER_BENCH "${ORC_READER_BENCH_SRC}")
+ConfigureBench(ORC_READER_BENCH io/orc/orc_reader_benchmark.cpp)
 
 ###################################################################################################
 # - csv reader benchmark --------------------------------------------------------------------------
-
-set(CSV_READER_BENCH_SRC
-  "${CMAKE_CURRENT_SOURCE_DIR}/io/csv/csv_reader_benchmark.cpp")
-
-ConfigureBench(CSV_READER_BENCH "${CSV_READER_BENCH_SRC}")
+ConfigureBench(CSV_READER_BENCH io/csv/csv_reader_benchmark.cpp)
 
 ###################################################################################################
 # - parquet writer benchmark ----------------------------------------------------------------------
-
-set(PARQUET_WRITER_BENCH_SRC
-  "${CMAKE_CURRENT_SOURCE_DIR}/io/parquet/parquet_writer_benchmark.cpp")
-
-ConfigureBench(PARQUET_WRITER_BENCH "${PARQUET_WRITER_BENCH_SRC}")
+ConfigureBench(PARQUET_WRITER_BENCH io/parquet/parquet_writer_benchmark.cpp)
 
 ###################################################################################################
 # - orc writer benchmark --------------------------------------------------------------------------
-
-set(ORC_WRITER_BENCH_SRC
-  "${CMAKE_CURRENT_SOURCE_DIR}/io/orc/orc_writer_benchmark.cpp")
-
-ConfigureBench(ORC_WRITER_BENCH "${ORC_WRITER_BENCH_SRC}")
+ConfigureBench(ORC_WRITER_BENCH io/orc/orc_writer_benchmark.cpp)
 
 ###################################################################################################
 # - csv writer benchmark --------------------------------------------------------------------------
-
-set(CSV_WRITER_BENCH_SRC
-  "${CMAKE_CURRENT_SOURCE_DIR}/io/csv/csv_writer_benchmark.cpp")
-
-ConfigureBench(CSV_WRITER_BENCH "${CSV_WRITER_BENCH_SRC}")
+ConfigureBench(CSV_WRITER_BENCH io/csv/csv_writer_benchmark.cpp)
 
 ###################################################################################################
 # - ast benchmark ---------------------------------------------------------------------------------
-
-set(AST_BENCH_SRC
-  "${CMAKE_CURRENT_SOURCE_DIR}/ast/transform_benchmark.cpp")
-
-ConfigureBench(AST_BENCH "${AST_BENCH_SRC}")
+ConfigureBench(AST_BENCH ast/transform_benchmark.cpp)
 
 ###################################################################################################
 # - binaryop benchmark ----------------------------------------------------------------------------
-
-set(BINARYOP_BENCH_SRC
-  "${CMAKE_CURRENT_SOURCE_DIR}/binaryop/binaryop_benchmark.cu")
-
-ConfigureBench(BINARYOP_BENCH "${BINARYOP_BENCH_SRC}")
+ConfigureBench(BINARYOP_BENCH binaryop/binaryop_benchmark.cu)
 
 ###################################################################################################
 # - subword tokenizer benchmark -------------------------------------------------------------------
-
-set(SUBWORD_TOKENIZER_BENCH_SRC
-  "${CMAKE_CURRENT_SOURCE_DIR}/text/subword_benchmark.cpp")
-
-ConfigureBench(SUBWORD_TOKENIZER_BENCH "${SUBWORD_TOKENIZER_BENCH_SRC}")
+ConfigureBench(SUBWORD_TOKENIZER_BENCH text/subword_benchmark.cpp)
 
 ###################################################################################################
 # - strings benchmark -------------------------------------------------------------------
-
-set(STRINGS_BENCH_SRC
-  "${CMAKE_CURRENT_SOURCE_DIR}/string/case_benchmark.cpp"
-  "${CMAKE_CURRENT_SOURCE_DIR}/string/contains_benchmark.cpp"
-  "${CMAKE_CURRENT_SOURCE_DIR}/string/convert_durations_benchmark.cpp"
-  "${CMAKE_CURRENT_SOURCE_DIR}/string/copy_benchmark.cpp"
-  "${CMAKE_CURRENT_SOURCE_DIR}/string/find_benchmark.cpp"
-  "${CMAKE_CURRENT_SOURCE_DIR}/string/replace_benchmark.cpp"
-  "${CMAKE_CURRENT_SOURCE_DIR}/string/url_decode_benchmark.cpp")
-
-ConfigureBench(STRINGS_BENCH "${STRINGS_BENCH_SRC}")
+ConfigureBench(STRINGS_BENCH
+  string/case_benchmark.cpp
+  string/contains_benchmark.cpp
+  string/convert_durations_benchmark.cpp
+  string/copy_benchmark.cpp
+  string/filter_benchmark.cpp
+  string/find_benchmark.cpp
+  string/replace_benchmark.cpp
+  string/split_benchmark.cpp
+  string/url_decode_benchmark.cpp)

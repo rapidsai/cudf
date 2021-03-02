@@ -27,6 +27,8 @@ def docfmt(**kwargs):
 
     def outer(fn):
         buf = []
+        if fn.__doc__ is None:
+            return fn
         formatsiter = string.Formatter().parse(fn.__doc__)
         for literal, field, fmtspec, conv in formatsiter:
             assert conv is None
@@ -44,7 +46,6 @@ def docfmt(**kwargs):
                     buf.extend([indent + ln for ln in valuelines[1:]])
                 else:
                     buf.append(kwargs[field])
-
         fn.__doc__ = "".join(buf)
         return fn
 

@@ -584,8 +584,8 @@ class DataFrame(Frame, Serializable):
     @property
     def dtypes(self):
         """Return the dtypes in this object."""
-        return pd.Series(
-            [x.dtype for x in self._data.columns], index=self._data.names
+        return cudf.utils.utils._create_pandas_series(
+            data=[x.dtype for x in self._data.columns], index=self._data.names,
         )
 
     @property
@@ -690,7 +690,7 @@ class DataFrame(Frame, Serializable):
         elif can_convert_to_column(arg):
             mask = arg
             if is_list_like(mask):
-                mask = pd.Series(mask)
+                mask = cudf.utils.utils._create_pandas_series(data=mask)
             if mask.dtype == "bool":
                 return self._apply_boolean_mask(mask)
             else:
@@ -5713,6 +5713,43 @@ class DataFrame(Frame, Serializable):
         DataFrame:
             DataFrame of booleans showing whether each element in
             the DataFrame is contained in values.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> df = cudf.DataFrame({'num_legs': [2, 4], 'num_wings': [2, 0]},
+        ...                     index=['falcon', 'dog'])
+        >>> df
+                num_legs  num_wings
+        falcon         2          2
+        dog            4          0
+
+        When ``values`` is a list check whether every value in the DataFrame
+        is present in the list (which animals have 0 or 2 legs or wings)
+
+        >>> df.isin([0, 2])
+                num_legs  num_wings
+        falcon      True       True
+        dog        False       True
+
+        When ``values`` is a dict, we can pass values to check for each
+        column separately:
+
+        >>> df.isin({'num_wings': [0, 3]})
+                num_legs  num_wings
+        falcon     False      False
+        dog        False       True
+
+        When ``values`` is a Series or DataFrame the index and column must
+        match. Note that 'falcon' does not match based on the number of legs
+        in other.
+
+        >>> other = cudf.DataFrame({'num_legs': [8, 2], 'num_wings': [0, 2]},
+        ...                         index=['spider', 'falcon'])
+        >>> df.isin(other)
+                num_legs  num_wings
+        falcon      True       True
+        dog        False      False
         """
 
         if isinstance(values, dict):
@@ -5808,7 +5845,7 @@ class DataFrame(Frame, Serializable):
         is_pure_dt = all(is_datetime_dtype(dt) for dt in self.dtypes)
 
         if not is_pure_dt:
-            filtered = self.select_dtypes(include=[np.number, np.bool])
+            filtered = self.select_dtypes(include=[np.number, np.bool_])
         else:
             filtered = self.copy(deep=False)
 
@@ -6587,8 +6624,8 @@ class DataFrame(Frame, Serializable):
             msg = "Kurtosis only supports int, float, and bool dtypes."
             raise NotImplementedError(msg)
 
-        self = self.select_dtypes(include=[np.number, np.bool])
-        return self._apply_support_method(
+        filtered = self.select_dtypes(include=[np.number, np.bool_])
+        return filtered._apply_support_method(
             "kurtosis",
             axis=axis,
             skipna=skipna,
@@ -6636,8 +6673,8 @@ class DataFrame(Frame, Serializable):
             msg = "Skew only supports int, float, and bool dtypes."
             raise NotImplementedError(msg)
 
-        self = self.select_dtypes(include=[np.number, np.bool])
-        return self._apply_support_method(
+        filtered = self.select_dtypes(include=[np.number, np.bool_])
+        return filtered._apply_support_method(
             "skew",
             axis=axis,
             skipna=skipna,
@@ -7517,10 +7554,11 @@ def merge(left, right, *args, **kwargs):
 
 # a bit of fanciness to inject docstring with left parameter
 merge_doc = DataFrame.merge.__doc__
-idx = merge_doc.find("right")
-merge.__doc__ = "".join(
-    [merge_doc[:idx], "\n\tleft : DataFrame\n\t", merge_doc[idx:]]
-)
+if merge_doc is not None:
+    idx = merge_doc.find("right")
+    merge.__doc__ = "".join(
+        [merge_doc[:idx], "\n\tleft : DataFrame\n\t", merge_doc[idx:]]
+    )
 
 
 def _align_indices(lhs, rhs):
