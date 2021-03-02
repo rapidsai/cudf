@@ -302,9 +302,9 @@ ConfigureTest(STREAM_COMPACTION_TEST
 # - rolling tests ---------------------------------------------------------------------------------
 ConfigureTest(ROLLING_TEST 
     rolling/rolling_test.cpp 
-    grouped_rolling/grouped_rolling_test.cpp
-    lead_lag/lead_lag_test.cpp
-    collect_list/collect_list_test.cpp)
+    rolling/grouped_rolling_test.cpp
+    rolling/lead_lag_test.cpp
+    rolling/collect_list_test.cpp)
 
 ###################################################################################################
 # - filling test ----------------------------------------------------------------------------------
