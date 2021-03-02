@@ -475,33 +475,12 @@ ConfigureTest(STREAM_COMPACTION_TEST "${STREAM_COMPACTION_TEST_SRC}")
 # - rolling tests ---------------------------------------------------------------------------------
 
 set(ROLLING_TEST_SRC
-    "${CMAKE_CURRENT_SOURCE_DIR}/rolling/rolling_test.cpp")
+    "${CMAKE_CURRENT_SOURCE_DIR}/rolling/rolling_test.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/rolling/grouped_rolling_test.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/rolling/lead_lag_test.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/rolling/collect_list_test.cpp")
 
 ConfigureTest(ROLLING_TEST "${ROLLING_TEST_SRC}")
-
-###################################################################################################
-# - grouped rolling tests -------------------------------------------------------------------------
-
-set(GROUPED_ROLLING_TEST_SRC
-    "${CMAKE_CURRENT_SOURCE_DIR}/grouped_rolling/grouped_rolling_test.cpp")
-
-ConfigureTest(GROUPED_ROLLING_TEST "${GROUPED_ROLLING_TEST_SRC}")
-
-###################################################################################################
-# - lead/lag rolling tests ---------------------------------------------------------------------------------
-
-set(LEAD_LAG_TEST_SRC
-    "${CMAKE_CURRENT_SOURCE_DIR}/lead_lag/lead_lag_test.cpp")
-
-ConfigureTest(LEAD_LAG_TEST "${LEAD_LAG_TEST_SRC}")
-
-###################################################################################################
-# - collect_list rolling tests ---------------------------------------------------------------------------------
-
-set(COLLECT_LIST_SRC
-    "${CMAKE_CURRENT_SOURCE_DIR}/collect_list/collect_list_test.cpp")
-
-ConfigureTest(COLLECT_LIST_TEST "${COLLECT_LIST_SRC}")
 
 ###################################################################################################
 # - filling test ----------------------------------------------------------------------------------
