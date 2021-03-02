@@ -3,7 +3,7 @@ from __future__ import annotations, division, print_function
 
 import pickle
 from numbers import Number
-from typing import Any, Dict, Set, Type, cast
+from typing import Any, Dict, Set, Type
 
 import cupy
 import numpy as np
@@ -2712,7 +2712,8 @@ def interval_range(
     periods: int = None,
     freq: int = None,
     closed: str = "right",
-    name: str = None) -> "IntervalIndex":
+    name: str = None,
+) -> "IntervalIndex":
     """
     Returns a fixed frequency IntervalIndex.
 

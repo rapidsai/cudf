@@ -2103,7 +2103,7 @@ def as_column(
                     data = as_column(sr, nan_as_null=nan_as_null)
                 elif is_interval_dtype(dtype):
                     sr = pd.Series(arbitrary, dtype="interval")
-                    data = as_column(sr, nan_as_null=nan_as_null,dtype=dtype)
+                    data = as_column(sr, nan_as_null=nan_as_null, dtype=dtype)
                 else:
                     data = as_column(
                         _construct_array(arbitrary, dtype),

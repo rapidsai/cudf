@@ -3,6 +3,7 @@ import pyarrow as pa
 import cudf
 import pandas as pd
 from cudf.core.column import StructColumn
+from cudf.core.dtypes import IntervalDtype
 
 
 class IntervalColumn(StructColumn):
@@ -39,7 +40,7 @@ class IntervalColumn(StructColumn):
     def from_arrow(self, data):
         new_col = super().from_arrow(data.storage)
         size = len(data)
-        dtype = cudf.core.dtypes.IntervalDtype.from_arrow(data.type)
+        dtype = IntervalDtype.from_arrow(data.type)
         mask = data.buffers()[0]
         if mask is not None:
             mask = cudf.utils.utils.pa_mask_buffer_to_mask(mask, len(data))
@@ -66,9 +67,7 @@ class IntervalColumn(StructColumn):
     def from_struct_column(self, closed="right"):
         return IntervalColumn(
             size=self.size,
-            dtype=cudf.core.dtypes.IntervalDtype(
-                self.dtype.fields["left"], closed
-            ),
+            dtype=IntervalDtype(self.dtype.fields["left"], closed),
             mask=self.base_mask,
             offset=self.offset,
             null_count=self.null_count,
@@ -81,9 +80,7 @@ class IntervalColumn(StructColumn):
         struct_copy = super().copy(deep=deep)
         return IntervalColumn(
             size=struct_copy.size,
-            dtype=cudf.core.dtypes.IntervalDtype(
-                struct_copy.dtype.fields["left"], closed
-            ),
+            dtype=IntervalDtype(struct_copy.dtype.fields["left"], closed),
             mask=struct_copy.base_mask,
             offset=struct_copy.offset,
             null_count=struct_copy.null_count,
@@ -91,22 +88,14 @@ class IntervalColumn(StructColumn):
             closed=closed,
         )
 
-    def as_interval_column(
-        self, dtype, **kwargs
-    ):
+    def as_interval_column(self, dtype, **kwargs):
         if isinstance(dtype, str) and dtype == "interval":
             return self
-        if (
-            isinstance(
-                dtype, (cudf.core.dtypes.IntervalDtype, pd.IntervalDtype)
-            )
-        ):
+        if isinstance(dtype, (IntervalDtype, pd.IntervalDtype)):
             return self
 
         if isinstance(dtype, pd.IntervalDtype):
-            dtype = IntervalDtype(
-                closed=dtype.closed
-            )
+            dtype = IntervalDtype(closed=dtype.closed)
 
         if not isinstance(dtype, IntervalDtype):
             raise ValueError("dtype must be IntervalDtype")
