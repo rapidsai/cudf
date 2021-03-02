@@ -1302,6 +1302,9 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * Note: Make sure the numbers of rows in the leaf node are the same as the child replacing it
    * otherwise the list can point to elements outside of the column values.
    *
+   * Note: this method returns a ColumnView and it won't live past the ColumnVector that its
+   * pointing to.
+   *
    * Ex: List<Int> list = col{{1,3}, {9,3,5}}
    *
    * validNewChild = col{8, 3, 9, 2, 0}
@@ -1330,6 +1333,9 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * This method takes in a list and returns a new list with the leaf node replaced with the given
    * view. Make sure the numbers of rows in the leaf node are the same as the child replacing it
    * otherwise the list can point to elements outside of the column values.
+   *
+   * Note: this method returns a ColumnView and it won't live past the ColumnVector that its
+   * pointing to.
    *
    * Ex: List<Int> list = col{{1,3}, {9,3,5}}
    *
