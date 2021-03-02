@@ -536,7 +536,6 @@ function(add_library_module NAMESPACE MODULE MODULE_SOURCE_DIRS)
     target_compile_definitions("${NAMESPACE}_${MODULE}" PUBLIC "SPDLOG_ACTIVE_LEVEL=SPDLOG_LEVEL_${LOGGING_LEVEL}")
     add_dependencies("${NAMESPACE}_${MODULE}" stringify_run)
     target_link_libraries("${NAMESPACE}_${MODULE}" arrow arrow_cuda nvrtc ${CUDART_LIBRARY} cuda ${ZLIB_LIBRARIES} ${Boost_LIBRARIES})
-
     add_library("${NAMESPACE}::${MODULE}" ALIAS "${NAMESPACE}_${MODULE}")
 endfunction()
 
