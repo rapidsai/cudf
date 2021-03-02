@@ -1778,13 +1778,11 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_replaceChildrenWithViews(
 
     cudf::column_view *n_col_view = reinterpret_cast<cudf::column_view *>(j_handle);
     cudf::type_id id = n_col_view->type().id();
-    JNI_ARG_CHECK(env, id == cudf::type_id::STRUCT || id == cudf::type_id::LIST, "Only nested types are allowed", 0);
-    if (id == cudf::type_id::LIST) {
-      JNI_ARG_CHECK(env, children_to_replace.size() == 1, "LIST can only have one child to replace", 0);
-    }
 
     std::map<int32_t, cudf::column_view*> m;
     for (int i = 0 ; i < indices.size() ; i++) {
+      auto it = m.find(indices[i]);
+      JNI_ARG_CHECK(env, it == m.end(), "Duplicate mapping found for replacing child index", 0);
       m[indices[i]] = children_to_replace[i];
     }
 
@@ -1794,11 +1792,15 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_replaceChildrenWithViews(
     for (int i = 0 ; i < n_col_view->num_children() ; i++) {
       auto it = m.find(i);
       if (it != m.end()) {
+        JNI_ARG_CHECK(env, (*it->second).size() == n_col_view->child(i).size(), "Child size don't match", 0);
+        m.erase(it);
         children.emplace_back(*it->second);
       } else {
         children.emplace_back(n_col_view->child(i));
       }
     }
+
+    JNI_ARG_CHECK(env, m.empty(), "One or more invalid child indices passed to be replaced", 0);
 
     std::unique_ptr<cudf::column_view> n_new_nested(new cudf::column_view(n_col_view->type(), n_col_view->size(), 
     nullptr, n_col_view->null_mask(), n_col_view->null_count(), n_col_view->offset(), children));

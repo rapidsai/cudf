@@ -1299,18 +1299,51 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
 
   /**
    * This method takes in a nested type and replaces its children with the given views
+   * Note: Make sure the numbers of rows in the leaf node are the same as the child replacing it
+   * otherwise the list can point to elements outside of the column values.
+   *
+   * Ex: List<Int> list = col{{1,3}, {9,3,5}}
+   *
+   * validNewChild = col{8, 3, 9, 2, 0}
+   *
+   * list.replaceChildrenWithViews(1, validNewChild) => col{{8, 3}, {9, 2, 0}}
+   *
+   * invalidNewChild = col{3, 2}
+   * list.replaceChildrenWithViews(1, invalidNewChild) => col{{3, 2}, {invalid, invalid, invalid}}
+   *
+   * invalidNewChild = col{8, 3, 9, 2, 0, 0, 7}
+   * list.replaceChildrenWithViews(1, invalidNewChild) => col{{8, 3}, {9, 2, 0}} // undefined result
    */
   public ColumnView replaceChildrenWithViews(int[] indices,
                                              ColumnView[] views) {
-    assert(type == DType.STRUCT || type == DType.LIST);
+    assert(type.isNestedType());
+    assert(indices.length == views.length);
+    if (type == DType.LIST) {
+      assert(indices.length == 1);
+    }
+
     return new ColumnView(replaceChildrenWithViews(getNativeView(), indices,
         Arrays.stream(views).mapToLong(v -> v.getNativeView()).toArray()));
   }
 
   /**
    * This method takes in a list and returns a new list with the leaf node replaced with the given
-   * view. The number of rows in the new child should be the same as the original otherwise the
-   * resulting list will have bad data
+   * view. Make sure the numbers of rows in the leaf node are the same as the child replacing it
+   * otherwise the list can point to elements outside of the column values.
+   *
+   * Ex: List<Int> list = col{{1,3}, {9,3,5}}
+   *
+   * validNewChild = col{8, 3, 9, 2, 0}
+   *
+   * list.replaceChildrenWithViews(1, validNewChild) => col{{8, 3}, {9, 2, 0}}
+   *
+   * invalidNewChild = col{3, 2}
+   * list.replaceChildrenWithViews(1, invalidNewChild) =>
+   *        col{{3, 2}, {invalid, invalid, invalid}} throws an exception
+   *
+   * invalidNewChild = col{8, 3, 9, 2, 0, 0, 7}
+   * list.replaceChildrenWithViews(1, invalidNewChild) =>
+   *       col{{8, 3}, {9, 2, 0}} throws an exception
    */
   public ColumnView replaceListChild(ColumnView child) {
     assert(type == DType.LIST);

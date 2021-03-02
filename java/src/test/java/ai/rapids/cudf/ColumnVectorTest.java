@@ -3959,6 +3959,20 @@ public class ColumnVectorTest extends CudfTestBase {
   }
 
   @Test
+  void testReplaceLeafNodeInListWithIllegal() {
+    assertThrows(IllegalArgumentException.class, () -> {
+      try (ColumnVector child1 = ColumnVector.decimalFromDoubles(DType.create(DType.DTypeEnum.DECIMAL64, 3), RoundingMode.HALF_UP, 770.892, 961.110);
+          ColumnVector child2 = ColumnVector.decimalFromDoubles(DType.create(DType.DTypeEnum.DECIMAL64, 3), RoundingMode.HALF_UP, 524.982, 479.946);
+          ColumnVector child3 = ColumnVector.decimalFromDoubles(DType.create(DType.DTypeEnum.DECIMAL64, 3), RoundingMode.HALF_UP, 346.997, 479.946);
+          ColumnVector child4 = ColumnVector.decimalFromDoubles(DType.create(DType.DTypeEnum.DECIMAL64, 3), RoundingMode.HALF_UP, 87.764, 414.239);
+          ColumnVector created = ColumnVector.makeList(child1, child2, child3, child4);
+          ColumnVector newChild = ColumnVector.fromInts(0, 1, 8, 9, 2, 2, 3, 8, 6);
+          ColumnView replacedView = created.replaceListChild(newChild)) {
+      }
+    });
+  }
+
+  @Test
   void testReplaceColumnInStruct() {
     try (ColumnVector expected = ColumnVector.fromStructs(new StructType(false,
             Arrays.asList(
@@ -3977,5 +3991,33 @@ public class ColumnVectorTest extends CudfTestBase {
         assertColumnsAreEqual(expected, replaced);
       }
     }
+  }
+
+  @Test
+  void testReplaceIllegalIndexColumnInStruct() {
+    assertThrows(IllegalArgumentException.class, () -> {
+      try (ColumnVector child1 = ColumnVector.fromInts(1, 4);
+           ColumnVector child2 = ColumnVector.fromInts(2, 5);
+           ColumnVector child3 = ColumnVector.fromInts(3, 6);
+           ColumnVector created = ColumnVector.makeStruct(child1, child2, child3);
+           ColumnVector replaceWith = ColumnVector.fromInts(5, 9);
+           ColumnView replacedView = created.replaceChildrenWithViews(new int[]{5},
+               new ColumnVector[]{replaceWith})) {
+      }
+    });
+  }
+
+  @Test
+  void testReplaceSameIndexColumnInStruct() {
+    assertThrows(IllegalArgumentException.class, () -> {
+      try (ColumnVector child1 = ColumnVector.fromInts(1, 4);
+           ColumnVector child2 = ColumnVector.fromInts(2, 5);
+           ColumnVector child3 = ColumnVector.fromInts(3, 6);
+           ColumnVector created = ColumnVector.makeStruct(child1, child2, child3);
+           ColumnVector replaceWith = ColumnVector.fromInts(5, 9);
+           ColumnView replacedView = created.replaceChildrenWithViews(new int[]{1, 1},
+               new ColumnVector[]{replaceWith, replaceWith})) {
+      }
+    });
   }
 }
