@@ -1815,7 +1815,7 @@ def test_csv_reader_dtypes(dtype):
 
 
 @pytest.mark.parametrize(
-    "dtype", ["Int64", "UInt32", {"a": "UInt64", "b": "float64", "c": "Int32"}]
+    "dtype", ["Int64", "UInt32", {"a": "UInt64", "b": "Float64", "c": "Int32"}]
 )
 def test_csv_reader_nullable_dtypes(dtype):
     buf = "a,b,c\n1,10,111\n2,11,112\n3,12,113\n4,13,114\n"
@@ -1838,7 +1838,6 @@ def test_csv_reader_timedetla_dtypes(dtype):
     assert_eq(expected, actual)
 
 
-@pytest.mark.xfail(reason="https://github.com/rapidsai/cudf/issues/6719")
 @pytest.mark.parametrize(
     "dtype", sorted(list(cudf.utils.dtypes.DATETIME_TYPES))
 )
