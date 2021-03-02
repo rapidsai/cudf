@@ -1,5 +1,5 @@
 #=============================================================================
-# Copyright (c) 2018-2020, NVIDIA CORPORATION.
+# Copyright (c) 2020, NVIDIA CORPORATION.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -14,15 +14,16 @@
 # limitations under the License.
 #=============================================================================
 
-project(cudf-GoogleTest)
+# Jitify doesn't have a version :/
 
-include(ExternalProject)
+function(find_and_configure_jitify)
+    CPMFindPackage(NAME     jitify
+            VERSION         1.0.0
+            GIT_REPOSITORY  https://github.com/rapidsai/jitify.git
+            GIT_TAG         cudf_0.16
+            GIT_SHALLOW     TRUE
+            DOWNLOAD_ONLY   TRUE)
+    set(JITIFY_INCLUDE_DIR "${jitify_SOURCE_DIR}" PARENT_SCOPE)
+endfunction()
 
-ExternalProject_Add(GoogleTest
-                    GIT_REPOSITORY    https://github.com/google/googletest.git
-                    GIT_TAG           release-1.8.0
-                    GIT_SHALLOW       true
-                    SOURCE_DIR        "${GTEST_ROOT}/googletest"
-                    BINARY_DIR        "${GTEST_ROOT}/build"
-                    INSTALL_DIR       "${GTEST_ROOT}/install"
-                    CMAKE_ARGS        ${GTEST_CMAKE_ARGS} -DCMAKE_INSTALL_PREFIX=${GTEST_ROOT}/install)
+find_and_configure_jitify()

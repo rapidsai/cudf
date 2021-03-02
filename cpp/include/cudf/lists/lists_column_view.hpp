@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -56,6 +56,10 @@ class lists_column_view : private column_view {
   using column_view::null_mask;
   using column_view::offset;
   using column_view::size;
+  using offset_type = int32_t;
+  static_assert(std::is_same<offset_type, size_type>::value,
+                "offset_type is expected to be the same as size_type.");
+  using offset_iterator = offset_type const*;
 
   /**
    * @brief Returns the parent column.
@@ -87,6 +91,23 @@ class lists_column_view : private column_view {
    * @throw cudf::logic error if this is an empty column
    */
   column_view get_sliced_child(rmm::cuda_stream_view stream) const;
+
+  /**
+   * @brief Return first offset (accounting for column offset)
+   *
+   * @return int32_t const* Pointer to the first offset
+   */
+  offset_iterator offsets_begin() const noexcept
+  {
+    return offsets().begin<offset_type>() + offset();
+  }
+
+  /**
+   * @brief Return one past the last offset
+   *
+   * @return int32_t const* Pointer to one past the last offset
+   */
+  offset_iterator offsets_end() const noexcept { return offsets_begin() + size(); }
 };
 /** @} */  // end of group
 }  // namespace cudf

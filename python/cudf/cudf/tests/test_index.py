@@ -1,4 +1,4 @@
-# Copyright (c) 2018-2020, NVIDIA CORPORATION.
+# Copyright (c) 2018-2021, NVIDIA CORPORATION.
 
 """
 Test related to Index
@@ -11,7 +11,7 @@ import pyarrow as pa
 import pytest
 
 import cudf
-from cudf.core import DataFrame
+from cudf.core._compat import PANDAS_GE_110
 from cudf.core.index import (
     CategoricalIndex,
     DatetimeIndex,
@@ -35,7 +35,7 @@ from cudf.utils.utils import search_range
 
 
 def test_df_set_index_from_series():
-    df = DataFrame()
+    df = cudf.DataFrame()
     df["a"] = list(range(10))
     df["b"] = list(range(0, 20, 2))
 
@@ -49,7 +49,7 @@ def test_df_set_index_from_series():
 
 
 def test_df_set_index_from_name():
-    df = DataFrame()
+    df = cudf.DataFrame()
     df["a"] = list(range(10))
     df["b"] = list(range(0, 20, 2))
 
@@ -65,7 +65,7 @@ def test_df_set_index_from_name():
 
 
 def test_df_slice_empty_index():
-    df = DataFrame()
+    df = cudf.DataFrame()
     assert isinstance(df.index, RangeIndex)
     assert isinstance(df.index[:1], RangeIndex)
     with pytest.raises(IndexError):
@@ -153,10 +153,10 @@ def test_categorical_index():
     pdf = pd.DataFrame()
     pdf["a"] = [1, 2, 3]
     pdf["index"] = pd.Categorical(["a", "b", "c"])
-    initial_df = DataFrame.from_pandas(pdf)
+    initial_df = cudf.from_pandas(pdf)
     pdf = pdf.set_index("index")
-    gdf1 = DataFrame.from_pandas(pdf)
-    gdf2 = DataFrame()
+    gdf1 = cudf.from_pandas(pdf)
+    gdf2 = cudf.DataFrame()
     gdf2["a"] = [1, 2, 3]
     gdf2["index"] = pd.Categorical(["a", "b", "c"])
     assert_eq(initial_df.index, gdf2.index)
@@ -273,7 +273,7 @@ def test_index_rename_preserves_arg():
 
 
 def test_set_index_as_property():
-    cdf = DataFrame()
+    cdf = cudf.DataFrame()
     col1 = np.arange(10)
     col2 = np.arange(0, 20, 2)
     cdf["a"] = col1
@@ -566,7 +566,7 @@ def test_empty_df_head_tail_index(n):
         (
             pd.CategoricalIndex(["a", "b", "c", "a", "b", "c"]),
             pd.CategoricalIndex(["a", "b", "c", "a", "b", "c"]) != "a",
-            "h",
+            "a",
             None,
         ),
         (
@@ -804,9 +804,12 @@ def test_index_difference(data, other, sort):
         and gd_other.dtype.kind != "f"
         or (gd_data.dtype.kind != "f" and gd_other.dtype.kind == "f")
     ):
-        pytest.xfail(
-            "Bug in Pandas: https://github.com/pandas-dev/pandas/issues/35217"
+        pytest.mark.xfail(
+            condition=not PANDAS_GE_110,
+            reason="Bug in Pandas: "
+            "https://github.com/pandas-dev/pandas/issues/35217",
         )
+
     expected = pd_data.difference(pd_other, sort=sort)
     actual = gd_data.difference(gd_other, sort=sort)
     assert_eq(expected, actual)
@@ -868,9 +871,12 @@ def test_index_equals(data, other):
     if (
         gd_data.dtype.kind == "f" or gd_other.dtype.kind == "f"
     ) and cudf.utils.dtypes.is_mixed_with_object_dtype(gd_data, gd_other):
-        pytest.xfail(
-            "Bug in Pandas: https://github.com/pandas-dev/pandas/issues/35217"
+        pytest.mark.xfail(
+            condition=not PANDAS_GE_110,
+            reason="Bug in Pandas: "
+            "https://github.com/pandas-dev/pandas/issues/35217",
         )
+
     expected = pd_data.equals(pd_other)
     actual = gd_data.equals(gd_other)
     assert_eq(expected, actual)
@@ -922,8 +928,10 @@ def test_index_categories_equal(data, other):
         and gd_other.dtype.kind != "f"
         or (gd_data.dtype.kind != "f" and gd_other.dtype.kind == "f")
     ):
-        pytest.xfail(
-            "Bug in Pandas: https://github.com/pandas-dev/pandas/issues/35217"
+        pytest.mark.xfail(
+            condition=not PANDAS_GE_110,
+            reason="Bug in Pandas: "
+            "https://github.com/pandas-dev/pandas/issues/35217",
         )
 
     expected = pd_data.equals(pd_other)
@@ -984,7 +992,9 @@ def test_index_equal_misc(data, other):
     actual = gd_data.equals(np.array(gd_other))
     assert_eq(expected, actual)
 
-    expected = pd_data.equals(pd.Series(pd_other))
+    expected = pd_data.equals(
+        cudf.utils.utils._create_pandas_series(data=pd_other)
+    )
     actual = gd_data.equals(cudf.Series(gd_other))
     assert_eq(expected, actual)
 
@@ -1519,7 +1529,7 @@ def test_multiindex_sample_basic(n, frac, replace, axis):
             "int": [1, 3, 5, 4, 2],
         },
     )
-    mul_index = cudf.Index(DataFrame.from_pandas(pdf))
+    mul_index = cudf.Index(cudf.from_pandas(pdf))
     random_state = 0
 
     try:

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2020, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,9 +20,15 @@
 #include <cudf/column/column_factories.hpp>
 #include <cudf/strings/detail/utilities.hpp>
 #include <cudf/strings/strings_column_view.hpp>
+#include <cudf/utilities/span.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
+
+#include <thrust/binary_search.h>
+#include <thrust/distance.h>
+#include <thrust/iterator/counting_iterator.h>
+#include <thrust/transform.h>
 
 namespace cudf {
 
@@ -34,6 +40,7 @@ constexpr inline bool is_signed_iterator()
 
 namespace strings {
 namespace detail {
+
 /**
  * @brief Returns a new strings column using the specified indices to select
  * elements from the `strings` column.
@@ -65,67 +72,69 @@ std::unique_ptr<cudf::column> gather(
   rmm::cuda_stream_view stream,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
 {
-  auto output_count  = std::distance(begin, end);
-  auto strings_count = strings.size();
+  auto const output_count  = std::distance(begin, end);
+  auto const strings_count = strings.size();
   if (output_count == 0) return make_empty_strings_column(stream, mr);
 
-  auto strings_column = column_device_view::create(strings.parent(), stream);
-  auto d_strings      = *strings_column;
-
-  // build offsets column
-  auto offsets_column = make_numeric_column(
+  // allocate offsets column and use memory to compute string size in each output row
+  auto out_offsets_column = make_numeric_column(
     data_type{type_id::INT32}, output_count + 1, mask_state::UNALLOCATED, stream, mr);
-  auto d_offsets = offsets_column->mutable_view().template data<int32_t>();
+  auto const d_out_offsets = out_offsets_column->mutable_view().template data<int32_t>();
+  auto const d_in_offsets =
+    (strings_count > 0) ? strings.offsets().data<int32_t>() + strings.offset() : nullptr;
   thrust::transform(rmm::exec_policy(stream),
                     begin,
                     end,
-                    d_offsets,
-                    [d_strings, strings_count] __device__(size_type idx) {
-                      if (NullifyOutOfBounds && ((idx < 0) || (idx >= strings_count))) return 0;
-                      if (d_strings.is_null(idx)) return 0;
-                      return d_strings.element<string_view>(idx).size_bytes();
+                    d_out_offsets,
+                    [d_in_offsets, strings_count] __device__(size_type in_idx) {
+                      if (NullifyOutOfBounds && (in_idx < 0 || in_idx >= strings_count)) return 0;
+                      return d_in_offsets[in_idx + 1] - d_in_offsets[in_idx];
                     });
 
   // check total size is not too large
-  size_t total_bytes = thrust::transform_reduce(
+  size_t const total_bytes = thrust::transform_reduce(
     rmm::exec_policy(stream),
-    d_offsets,
-    d_offsets + output_count,
+    d_out_offsets,
+    d_out_offsets + output_count,
     [] __device__(auto size) { return static_cast<size_t>(size); },
     size_t{0},
     thrust::plus<size_t>{});
   CUDF_EXPECTS(total_bytes < static_cast<std::size_t>(std::numeric_limits<size_type>::max()),
                "total size of output strings is too large for a cudf column");
 
-  // create offsets from sizes
+  // In-place convert output sizes into offsets
   thrust::exclusive_scan(
-    rmm::exec_policy(stream), d_offsets, d_offsets + output_count + 1, d_offsets);
+    rmm::exec_policy(stream), d_out_offsets, d_out_offsets + output_count + 1, d_out_offsets);
 
   // build chars column
-  size_type bytes   = static_cast<size_type>(total_bytes);
-  auto chars_column = create_chars_child_column(output_count, 0, bytes, stream, mr);
-  auto d_chars      = chars_column->mutable_view().template data<char>();
+  size_type const out_chars_bytes = static_cast<size_type>(total_bytes);
+  auto out_chars_column  = create_chars_child_column(output_count, 0, out_chars_bytes, stream, mr);
+  auto const d_out_chars = out_chars_column->mutable_view().template data<char>();
+
   // fill in chars
-  auto gather_chars =
-    [d_strings, begin, strings_count, d_offsets, d_chars] __device__(size_type idx) {
-      auto index = begin[idx];
-      if (NullifyOutOfBounds) {
-        if (is_signed_iterator<MapIterator>() ? ((index < 0) || (index >= strings_count))
-                                              : (index >= strings_count))
-          return;
-      }
-      if (d_strings.is_null(index)) return;
-      string_view d_str = d_strings.element<string_view>(index);
-      memcpy(d_chars + d_offsets[idx], d_str.data(), d_str.size_bytes());
+  cudf::detail::device_span<int32_t const> const d_out_offsets_span(d_out_offsets,
+                                                                    output_count + 1);
+  auto const d_in_chars = (strings_count > 0) ? strings.chars().data<char>() : nullptr;
+  auto gather_chars_fn =
+    [d_out_offsets_span, begin, d_in_offsets, d_in_chars] __device__(size_type out_char_idx) {
+      // find output row index for this output char index
+      auto const next_row_ptr = thrust::upper_bound(
+        thrust::seq, d_out_offsets_span.begin(), d_out_offsets_span.end(), out_char_idx);
+      auto const out_row_idx     = thrust::distance(d_out_offsets_span.begin(), next_row_ptr) - 1;
+      auto const str_char_offset = out_char_idx - d_out_offsets_span[out_row_idx];
+      auto const in_row_idx      = begin[out_row_idx];
+      auto const in_char_offset  = d_in_offsets[in_row_idx] + str_char_offset;
+      return d_in_chars[in_char_offset];
     };
-  thrust::for_each_n(rmm::exec_policy(stream),
-                     thrust::make_counting_iterator<size_type>(0),
-                     output_count,
-                     gather_chars);
+  thrust::transform(rmm::exec_policy(stream),
+                    thrust::make_counting_iterator<size_type>(0),
+                    thrust::make_counting_iterator<size_type>(out_chars_bytes),
+                    d_out_chars,
+                    gather_chars_fn);
 
   return make_strings_column(output_count,
-                             std::move(offsets_column),
-                             std::move(chars_column),
+                             std::move(out_offsets_column),
+                             std::move(out_chars_column),
                              0,
                              rmm::device_buffer{0, stream, mr},
                              stream,

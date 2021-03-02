@@ -1365,6 +1365,16 @@ class Index(Frame, Serializable):
         is_contained : cupy array
             CuPy array of boolean values.
 
+        Examples
+        --------
+        >>> idx = cudf.Index([1,2,3])
+        >>> idx
+        Int64Index([1, 2, 3], dtype='int64')
+
+        Check whether each index value in a list of values.
+
+        >>> idx.isin([1, 4])
+        array([ True, False, False])
         """
 
         result = self.to_series().isin(values).values
@@ -1996,7 +2006,27 @@ class GenericIndex(Index):
         # utilize `Index.to_string` once it is implemented
         # related issue : https://github.com/pandas-dev/pandas/issues/35389
         if isinstance(preprocess, CategoricalIndex):
-            output = preprocess.to_pandas().__repr__()
+            if preprocess.categories.dtype.kind == "f":
+                output = (
+                    preprocess.astype("str")
+                    .to_pandas()
+                    .astype(
+                        dtype=pd.CategoricalDtype(
+                            categories=preprocess.dtype.categories.astype(
+                                "str"
+                            ).to_pandas(),
+                            ordered=preprocess.dtype.ordered,
+                        )
+                    )
+                    .__repr__()
+                )
+                break_idx = output.find("ordered=")
+                output = (
+                    output[:break_idx].replace("'", "") + output[break_idx:]
+                )
+            else:
+                output = preprocess.to_pandas().__repr__()
+
             output = output.replace("nan", cudf._NA_REP)
         elif preprocess._values.nullable:
             output = self._clean_nulls_from_index().to_pandas().__repr__()
