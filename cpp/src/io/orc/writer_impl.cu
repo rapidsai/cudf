@@ -350,9 +350,7 @@ void writer::impl::build_dictionaries(orc_column_view *columns,
   const auto num_rowgroups = dict.size() / str_col_ids.size();
 
   for (size_t col_idx = 0; col_idx < str_col_ids.size(); ++col_idx) {
-    size_t direct_cost = 0;
-    size_t dict_cost   = 0;
-    auto &str_column   = columns[str_col_ids[col_idx]];
+    auto &str_column = columns[str_col_ids[col_idx]];
     str_column.attach_stripe_dict(stripe_dict.host_ptr(), stripe_dict.device_ptr());
 
     for (auto const &stripe : stripe_bounds) {
@@ -369,22 +367,27 @@ void writer::impl::build_dictionaries(orc_column_view *columns,
           const auto &dt = dict[rg_idx * str_col_ids.size() + col_idx];
           return dt_str_cnt + dt.num_dict_strings;
         });
-      direct_cost = std::accumulate(
-        stripe.cbegin(), stripe.cend(), direct_cost, [&](auto dir_cost, auto rg_idx) {
-          const auto &dt = dict[rg_idx * str_col_ids.size() + col_idx];
-          return dir_cost + dt.string_char_count;
-        });
-      dict_cost =
-        std::accumulate(stripe.cbegin(), stripe.cend(), dict_cost, [&](auto dt_cost, auto rg_idx) {
-          const auto &dt = dict[rg_idx * str_col_ids.size() + col_idx];
-          return dt_cost + dt.dict_char_count + dt.num_dict_strings;
-        });
     }
 
-    // Early disable of dictionary if it doesn't look good at the chunk level
-    if (enable_dictionary_ && dict_cost >= direct_cost) {
-      for (auto const &stripe : stripe_bounds) {
-        stripe_dict[stripe.id * str_col_ids.size() + col_idx].dict_data = nullptr;
+    if (enable_dictionary_) {
+      struct string_column_cost {
+        size_t direct     = 0;
+        size_t dictionary = 0;
+      };
+      auto const col_cost =
+        std::accumulate(stripe_bounds.front().cbegin(),
+                        stripe_bounds.back().cend(),
+                        string_column_cost{},
+                        [&](auto cost, auto rg_idx) -> string_column_cost {
+                          const auto &dt = dict[rg_idx * str_col_ids.size() + col_idx];
+                          return {cost.dictionary + dt.dict_char_count + dt.num_dict_strings,
+                                  cost.direct + dt.string_char_count};
+                        });
+      // Disable dictionary if it does not reduce the output size
+      if (col_cost.dictionary >= col_cost.direct) {
+        for (auto const &stripe : stripe_bounds) {
+          stripe_dict[stripe.id * str_col_ids.size() + col_idx].dict_data = nullptr;
+        }
       }
     }
   }
