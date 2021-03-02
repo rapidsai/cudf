@@ -5018,20 +5018,22 @@ def test_cov_nans():
     ],
 )
 def test_df_sr_binop(gsr, colnames, op):
-    data = [[3, 2, 5], [3, None, 5], [6, 7, np.nan]]
+    data = [[3.0, 2.0, 5.0], [3.0, None, 5.0], [6.0, 7.0, np.nan]]
     data = dict(zip(colnames, data))
+
+    gsr = gsr.astype('float64')
 
     gdf = cudf.DataFrame(data)
     pdf = gdf.to_pandas(nullable=True)
 
-    psr = gsr.to_pandas()
+    psr = gsr.to_pandas(nullable=True)
 
     expect = op(pdf, psr)
-    got = op(gdf, gsr)
+    got = op(gdf, gsr).to_pandas(nullable=True)
     assert_eq(expect, got, check_dtype=False)
 
     expect = op(psr, pdf)
-    got = op(gsr, gdf)
+    got = op(gsr, gdf).to_pandas(nullable=True)
     assert_eq(expect, got, check_dtype=False)
 
 

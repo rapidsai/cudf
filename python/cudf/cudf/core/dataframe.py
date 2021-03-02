@@ -1459,7 +1459,7 @@ class DataFrame(Frame, Serializable):
                             as_column(np.nan, length=len(self))
                         )
                     if col not in other_cols_keys:
-                        r_opr = np.nan
+                        r_opr = None
                         l_opr = self[col]
                 result[col] = op(l_opr, r_opr)
 
