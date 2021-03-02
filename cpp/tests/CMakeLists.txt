@@ -35,8 +35,6 @@ target_compile_features(cudftestutil PUBLIC cxx_std_14 cuda_std_14)
 target_link_libraries(cudftestutil
                PUBLIC GTest::gmock
                       GTest::gtest
-                      GTest::gmock_main
-                      GTest::gtest_main
                       Threads::Threads
                       cudf)
 
@@ -55,7 +53,7 @@ function(ConfigureTest CMAKE_TEST_NAME )
     add_executable(${CMAKE_TEST_NAME} ${ARGN})
     set_target_properties(${CMAKE_TEST_NAME}
         PROPERTIES RUNTIME_OUTPUT_DIRECTORY "$<BUILD_INTERFACE:${CUDF_BINARY_DIR}/gtests>")
-    target_link_libraries(${CMAKE_TEST_NAME} PRIVATE cudftestutil)
+    target_link_libraries(${CMAKE_TEST_NAME} PRIVATE cudftestutil GTest::gmock_main GTest::gtest_main)
     add_test(NAME ${CMAKE_TEST_NAME} COMMAND ${CMAKE_TEST_NAME})
 endfunction()
 
