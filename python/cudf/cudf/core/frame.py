@@ -1,9 +1,9 @@
 # Copyright (c) 2020-2021, NVIDIA CORPORATION.
+
 from __future__ import annotations
 
 import copy
 import functools
-import operator
 import warnings
 from collections import OrderedDict, abc as abc
 from typing import TYPE_CHECKING, Any, Dict, Tuple, TypeVar, overload
@@ -26,7 +26,6 @@ from cudf.utils.dtypes import (
     is_scalar,
     min_scalar_type,
 )
-
 
 T = TypeVar("T", bound="Frame")
 
@@ -340,9 +339,11 @@ class Frame(libcudf.table.Table):
                 np.intersect1d, all_columns_list
             )
             # get column names not present in all objs
-            non_intersecting_columns = (
-                functools.reduce(operator.or_, (obj.columns for obj in objs))
-                ^ intersecting_columns
+            union_of_columns = functools.reduce(
+                pd.Index.union, [obj.columns for obj in objs]
+            )
+            non_intersecting_columns = union_of_columns.symmetric_difference(
+                intersecting_columns
             )
             names = OrderedDict.fromkeys(intersecting_columns).keys()
 
@@ -1194,7 +1195,7 @@ class Frame(libcudf.table.Table):
             map_index = as_column(map_index)
 
         # Convert float to integer
-        if map_index.dtype == np.float:
+        if map_index.dtype.kind == "f":
             map_index = map_index.astype(np.int32)
 
         # Convert string or categorical to integer

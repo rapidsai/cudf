@@ -19,48 +19,50 @@
 #include <benchmarks/fixture/benchmark_fixture.hpp>
 #include <benchmarks/synchronization/synchronization.hpp>
 
-#include <cudf/scalar/scalar.hpp>
-#include <cudf/strings/replace.hpp>
+#include <cudf/copying.hpp>
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf_test/column_wrapper.hpp>
 
-#include <limits>
+#include <algorithm>
+#include <random>
 
 #include "string_bench_args.hpp"
 
-class StringReplace : public cudf::benchmark {
+class StringCopy : public cudf::benchmark {
 };
 
-enum replace_type { scalar, slice, multi };
+enum copy_type { gather, scatter };
 
-static void BM_replace(benchmark::State& state, replace_type rt)
+static void BM_copy(benchmark::State& state, copy_type ct)
 {
   cudf::size_type const n_rows{static_cast<cudf::size_type>(state.range(0))};
   cudf::size_type const max_str_length{static_cast<cudf::size_type>(state.range(1))};
   data_profile table_profile;
   table_profile.set_distribution_params(
     cudf::type_id::STRING, distribution_id::NORMAL, 0, max_str_length);
-  auto const table =
+
+  auto const source =
     create_random_table({cudf::type_id::STRING}, 1, row_count{n_rows}, table_profile);
-  cudf::strings_column_view input(table->view().column(0));
-  cudf::string_scalar target("+");
-  cudf::string_scalar repl("");
-  cudf::test::strings_column_wrapper targets({"+", "-"});
-  cudf::test::strings_column_wrapper repls({"", ""});
+  auto const target =
+    create_random_table({cudf::type_id::STRING}, 1, row_count{n_rows}, table_profile);
+
+  // scatter indices
+  std::vector<cudf::size_type> host_map_data(n_rows);
+  std::iota(host_map_data.begin(), host_map_data.end(), 0);
+  std::random_shuffle(host_map_data.begin(), host_map_data.end());
+  cudf::test::fixed_width_column_wrapper<cudf::size_type> index_map(host_map_data.begin(),
+                                                                    host_map_data.end());
 
   for (auto _ : state) {
     cuda_event_timer raii(state, true, 0);
-    switch (rt) {
-      case scalar: cudf::strings::replace(input, target, repl); break;
-      case slice: cudf::strings::replace_slice(input, repl, 1, 10); break;
-      case multi:
-        cudf::strings::replace(
-          input, cudf::strings_column_view(targets), cudf::strings_column_view(repls));
-        break;
+    switch (ct) {
+      case gather: cudf::gather(source->view(), index_map); break;
+      case scatter: cudf::scatter(source->view(), index_map, target->view()); break;
     }
   }
 
-  state.SetBytesProcessed(state.iterations() * input.chars_size());
+  state.SetBytesProcessed(state.iterations() *
+                          cudf::strings_column_view(source->view().column(0)).chars_size());
 }
 
 static void generate_bench_args(benchmark::internal::Benchmark* b)
@@ -74,14 +76,13 @@ static void generate_bench_args(benchmark::internal::Benchmark* b)
   generate_string_bench_args(b, min_rows, max_rows, row_mult, min_rowlen, max_rowlen, len_mult);
 }
 
-#define STRINGS_BENCHMARK_DEFINE(name)                              \
-  BENCHMARK_DEFINE_F(StringReplace, name)                           \
-  (::benchmark::State & st) { BM_replace(st, replace_type::name); } \
-  BENCHMARK_REGISTER_F(StringReplace, name)                         \
-    ->Apply(generate_bench_args)                                    \
-    ->UseManualTime()                                               \
+#define COPY_BENCHMARK_DEFINE(name)                           \
+  BENCHMARK_DEFINE_F(StringCopy, name)                        \
+  (::benchmark::State & st) { BM_copy(st, copy_type::name); } \
+  BENCHMARK_REGISTER_F(StringCopy, name)                      \
+    ->Apply(generate_bench_args)                              \
+    ->UseManualTime()                                         \
     ->Unit(benchmark::kMillisecond);
 
-STRINGS_BENCHMARK_DEFINE(scalar)
-STRINGS_BENCHMARK_DEFINE(slice)
-STRINGS_BENCHMARK_DEFINE(multi)
+COPY_BENCHMARK_DEFINE(gather)
+COPY_BENCHMARK_DEFINE(scatter)

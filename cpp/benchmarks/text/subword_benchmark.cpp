@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -65,7 +65,7 @@ static void BM_cuda_tokenizer_cudf(benchmark::State& state)
   auto vocab = nvtext::load_vocabulary_file(hash_file);
   for (auto _ : state) {
     auto result = nvtext::subword_tokenize(cudf::strings_column_view{strings},
-                                           vocab,
+                                           *vocab,
                                            max_sequence_length,
                                            stride,
                                            do_lower,

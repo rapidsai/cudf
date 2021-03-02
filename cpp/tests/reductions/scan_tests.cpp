@@ -470,6 +470,27 @@ TYPED_TEST(ScanTest, EmptyColumnskip_nulls)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_col_out2, col_out->view());
 }
 
+TYPED_TEST(ScanTest, LeadingNulls)
+{
+  auto const v = cudf::test::make_type_param_vector<TypeParam>({100, 200, 300});
+  auto const b = std::vector<bool>{0, 1, 1};
+  cudf::test::fixed_width_column_wrapper<TypeParam> const col_in(v.begin(), v.end(), b.begin());
+  std::unique_ptr<cudf::column> col_out;
+
+  // expected outputs
+  std::vector<TypeParam> out_v(v.size());
+  std::vector<bool> out_b(v.size(), 0);
+
+  // skipna=false
+  CUDF_EXPECT_NO_THROW(
+    col_out =
+      cudf::scan(col_in, cudf::make_sum_aggregation(), scan_type::INCLUSIVE, null_policy::INCLUDE));
+  cudf::test::fixed_width_column_wrapper<TypeParam> expected_col_out(
+    out_v.begin(), out_v.end(), out_b.begin());
+  CUDF_TEST_EXPECT_COLUMN_PROPERTIES_EQUAL(expected_col_out, col_out->view());
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_col_out, col_out->view());
+}
+
 template <typename T>
 struct FixedPointTestBothReps : public cudf::test::BaseFixture {
 };

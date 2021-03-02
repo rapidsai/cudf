@@ -20,20 +20,21 @@
 #include <benchmarks/synchronization/synchronization.hpp>
 
 #include <cudf/scalar/scalar.hpp>
-#include <cudf/strings/replace.hpp>
+#include <cudf/strings/char_types/char_types.hpp>
 #include <cudf/strings/strings_column_view.hpp>
+#include <cudf/strings/strip.hpp>
+#include <cudf/strings/translate.hpp>
 #include <cudf_test/column_wrapper.hpp>
 
 #include <limits>
+#include <vector>
 
-#include "string_bench_args.hpp"
+enum FilterAPI { filter, filter_chars, strip };
 
-class StringReplace : public cudf::benchmark {
+class StringFilterChars : public cudf::benchmark {
 };
 
-enum replace_type { scalar, slice, multi };
-
-static void BM_replace(benchmark::State& state, replace_type rt)
+static void BM_filter_chars(benchmark::State& state, FilterAPI api)
 {
   cudf::size_type const n_rows{static_cast<cudf::size_type>(state.range(0))};
   cudf::size_type const max_str_length{static_cast<cudf::size_type>(state.range(1))};
@@ -43,20 +44,17 @@ static void BM_replace(benchmark::State& state, replace_type rt)
   auto const table =
     create_random_table({cudf::type_id::STRING}, 1, row_count{n_rows}, table_profile);
   cudf::strings_column_view input(table->view().column(0));
-  cudf::string_scalar target("+");
-  cudf::string_scalar repl("");
-  cudf::test::strings_column_wrapper targets({"+", "-"});
-  cudf::test::strings_column_wrapper repls({"", ""});
+
+  auto const types = cudf::strings::string_character_types::SPACE;
+  std::vector<std::pair<cudf::char_utf8, cudf::char_utf8>> filter_table{
+    {cudf::char_utf8{'a'}, cudf::char_utf8{'c'}}};
 
   for (auto _ : state) {
     cuda_event_timer raii(state, true, 0);
-    switch (rt) {
-      case scalar: cudf::strings::replace(input, target, repl); break;
-      case slice: cudf::strings::replace_slice(input, repl, 1, 10); break;
-      case multi:
-        cudf::strings::replace(
-          input, cudf::strings_column_view(targets), cudf::strings_column_view(repls));
-        break;
+    switch (api) {
+      case filter: cudf::strings::filter_characters_of_type(input, types); break;
+      case filter_chars: cudf::strings::filter_characters(input, filter_table); break;
+      case strip: cudf::strings::strip(input); break;
     }
   }
 
@@ -71,17 +69,25 @@ static void generate_bench_args(benchmark::internal::Benchmark* b)
   int const min_rowlen = 1 << 5;
   int const max_rowlen = 1 << 13;
   int const len_mult   = 4;
-  generate_string_bench_args(b, min_rows, max_rows, row_mult, min_rowlen, max_rowlen, len_mult);
+  for (int row_count = min_rows; row_count <= max_rows; row_count *= row_mult) {
+    for (int rowlen = min_rowlen; rowlen <= max_rowlen; rowlen *= len_mult) {
+      // avoid generating combinations that exceed the cudf column limit
+      size_t total_chars = static_cast<size_t>(row_count) * rowlen;
+      if (total_chars < std::numeric_limits<cudf::size_type>::max()) {
+        b->Args({row_count, rowlen});
+      }
+    }
+  }
 }
 
-#define STRINGS_BENCHMARK_DEFINE(name)                              \
-  BENCHMARK_DEFINE_F(StringReplace, name)                           \
-  (::benchmark::State & st) { BM_replace(st, replace_type::name); } \
-  BENCHMARK_REGISTER_F(StringReplace, name)                         \
-    ->Apply(generate_bench_args)                                    \
-    ->UseManualTime()                                               \
+#define STRINGS_BENCHMARK_DEFINE(name)                                \
+  BENCHMARK_DEFINE_F(StringFilterChars, name)                         \
+  (::benchmark::State & st) { BM_filter_chars(st, FilterAPI::name); } \
+  BENCHMARK_REGISTER_F(StringFilterChars, name)                       \
+    ->Apply(generate_bench_args)                                      \
+    ->UseManualTime()                                                 \
     ->Unit(benchmark::kMillisecond);
 
-STRINGS_BENCHMARK_DEFINE(scalar)
-STRINGS_BENCHMARK_DEFINE(slice)
-STRINGS_BENCHMARK_DEFINE(multi)
+STRINGS_BENCHMARK_DEFINE(filter)
+STRINGS_BENCHMARK_DEFINE(filter_chars)
+STRINGS_BENCHMARK_DEFINE(strip)

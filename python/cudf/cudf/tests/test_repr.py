@@ -1,4 +1,5 @@
-# Copyright (c) 2019-2020, NVIDIA CORPORATION.
+# Copyright (c) 2019-2021, NVIDIA CORPORATION.
+
 import textwrap
 
 import cupy as cp
@@ -158,7 +159,7 @@ def test_integer_dataframe(x):
 @settings(deadline=None)
 def test_integer_series(x):
     sr = cudf.Series(x)
-    ps = pd.Series(x)
+    ps = cudf.utils.utils._create_pandas_series(data=x)
 
     assert sr.__repr__() == ps.__repr__()
 
@@ -175,7 +176,7 @@ def test_float_dataframe(x):
 @settings(deadline=None)
 def test_float_series(x):
     sr = cudf.Series(x, nan_as_null=False)
-    ps = pd.Series(x)
+    ps = cudf.utils.utils._create_pandas_series(data=x)
     assert sr.__repr__() == ps.__repr__()
 
 
@@ -261,6 +262,7 @@ def test_generic_index(length, dtype):
     psr = pd.Series(
         range(length),
         index=np.random.randint(0, high=100, size=length).astype(dtype),
+        dtype="float64" if length == 0 else None,
     )
     gsr = cudf.Series.from_pandas(psr)
 
@@ -1169,8 +1171,7 @@ def test_timedelta_index_repr(index, expected_repr):
 def test_mulitIndex_repr(pmi, max_seq_items):
     pd.set_option("display.max_seq_items", max_seq_items)
     gmi = cudf.from_pandas(pmi)
-    print(gmi)
-    print(pmi)
+
     assert gmi.__repr__() == pmi.__repr__()
     pd.reset_option("display.max_seq_items")
 
@@ -1416,3 +1417,79 @@ def test_mulitIndex_null_repr(gdi, expected_repr):
     actual_repr = gdi.__repr__()
 
     assert actual_repr.split() == expected_repr.split()
+
+
+def test_categorical_series_with_nan_repr():
+    series = cudf.Series(
+        [1, 2, np.nan, 10, np.nan, None], nan_as_null=False
+    ).astype("category")
+
+    expected_repr = textwrap.dedent(
+        """
+    0     1.0
+    1     2.0
+    2     NaN
+    3    10.0
+    4     NaN
+    5    <NA>
+    dtype: category
+    Categories (4, float64): [1.0, 2.0, 10.0, NaN]
+    """
+    )
+
+    assert series.__repr__().split() == expected_repr.split()
+
+    sliced_expected_repr = textwrap.dedent(
+        """
+        2     NaN
+        3    10.0
+        4     NaN
+        5    <NA>
+        dtype: category
+        Categories (4, float64): [1.0, 2.0, 10.0, NaN]
+        """
+    )
+
+    assert series[2:].__repr__().split() == sliced_expected_repr.split()
+
+
+def test_categorical_dataframe_with_nan_repr():
+    series = cudf.Series(
+        [1, 2, np.nan, 10, np.nan, None], nan_as_null=False
+    ).astype("category")
+    df = cudf.DataFrame({"a": series})
+    expected_repr = textwrap.dedent(
+        """
+          a
+    0   1.0
+    1   2.0
+    2   NaN
+    3  10.0
+    4   NaN
+    5  <NA>
+    """
+    )
+
+    assert df.__repr__().split() == expected_repr.split()
+
+
+def test_categorical_index_with_nan_repr():
+    cat_index = cudf.Index(
+        cudf.Series(
+            [1, 2, np.nan, 10, np.nan, None], nan_as_null=False
+        ).astype("category")
+    )
+
+    expected_repr = (
+        "CategoricalIndex([1.0, 2.0, NaN, 10.0, NaN, <NA>], "
+        "categories=[1.0, 2.0, 10.0, NaN], ordered=False, dtype='category')"
+    )
+
+    assert cat_index.__repr__() == expected_repr
+
+    sliced_expected_repr = (
+        "CategoricalIndex([NaN, 10.0, NaN, <NA>], "
+        "categories=[1.0, 2.0, 10.0, NaN], ordered=False, dtype='category')"
+    )
+
+    assert cat_index[2:].__repr__() == sliced_expected_repr
