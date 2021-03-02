@@ -433,6 +433,7 @@ std::unique_ptr<column> fixed_point_binary_operation(scalar const& lhs,
   using namespace numeric;
 
   fixed_point_binary_operation_validation(op, lhs.type(), rhs.type(), output_type);
+
   auto out = make_fixed_width_column_for_output(lhs, rhs, op, output_type, stream, mr);
   if (rhs.is_empty()) return out;
   auto out_view = out->mutable_view();
@@ -502,6 +503,7 @@ std::unique_ptr<column> fixed_point_binary_operation(column_view const& lhs,
   using namespace numeric;
 
   fixed_point_binary_operation_validation(op, lhs.type(), rhs.type(), output_type);
+
   auto out = make_fixed_width_column_for_output(lhs, rhs, op, output_type, stream, mr);
   if (lhs.is_empty()) return out;
   auto out_view = out->mutable_view();
@@ -571,6 +573,7 @@ std::unique_ptr<column> fixed_point_binary_operation(column_view const& lhs,
   using namespace numeric;
 
   fixed_point_binary_operation_validation(op, lhs.type(), rhs.type(), output_type);
+
   auto out = make_fixed_width_column_for_output(lhs, rhs, op, output_type, stream, mr);
   if (lhs.is_empty() or rhs.is_empty()) return out;
   auto out_view = out->mutable_view();
