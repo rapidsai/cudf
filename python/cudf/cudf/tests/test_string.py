@@ -207,40 +207,36 @@ def test_string_astype(dtype):
     assert_eq(expect, got)
 
 
-def test_string_decimal():
-    gs = Series(["1.11", "2.22", "3.33"])
-    fp = gs.astype(cudf.Decimal64Dtype(scale=2, precision=3))
+@pytest.mark.parametrize(
+    "data, scale, precision",
+    [
+        (["1.11", "2.22", "3.33"], 2, 3),
+        (["111", "222", "33"], 0, 3),
+        (["111000", "22000", "3000"], -3, 3),
+    ],
+)
+def test_string_to_decimal(data, scale, precision):
+    gs = Series(data)
+    fp = gs.astype(cudf.Decimal64Dtype(scale=scale, precision=precision))
     got = fp.astype("str")
     assert_eq(gs, got)
-    gs = Series(["111", "222", "33"])
-    fp = gs.astype(cudf.Decimal64Dtype(scale=0, precision=3))
-    got = fp.astype("str")
-    assert_eq(gs, got)
-    gs = Series(["111000", "22000", "3000"])
-    fp = gs.astype(cudf.Decimal64Dtype(scale=-3, precision=3))
-    got = fp.astype("str")
-    assert_eq(gs, got)
-    #
+
+
+@pytest.mark.parametrize(
+    "data, scale, precision",
+    [
+        (["1.23", "-2.34", "3.45"], 2, 3),
+        (["123", "-234", "345"], 0, 3),
+        (["12300", "-400", "5000.0"], -2, 5),
+    ],
+)
+def test_string_from_decimal(data, scale, precision):
     fp = cudf.Series(
-        [Decimal("1.23"), Decimal("2.34"), Decimal("3.45")],
-        dtype=cudf.Decimal64Dtype(precision=3, scale=2),
+        [Decimal(data[0]), Decimal(data[1]), Decimal(data[2])],
+        dtype=cudf.Decimal64Dtype(scale=scale, precision=precision),
     )
     gs = fp.astype("str")
-    got = gs.astype(cudf.Decimal64Dtype(scale=2, precision=3))
-    assert_eq(fp, got)
-    fp = cudf.Series(
-        [Decimal("123"), Decimal("234"), Decimal("345")],
-        dtype=cudf.Decimal64Dtype(precision=3, scale=0),
-    )
-    gs = fp.astype("str")
-    got = gs.astype(cudf.Decimal64Dtype(scale=0, precision=3))
-    assert_eq(fp, got)
-    fp = cudf.Series(
-        [Decimal("12300"), Decimal("-400"), Decimal("5000.0")],
-        dtype=cudf.Decimal64Dtype(precision=5, scale=-2),
-    )
-    gs = fp.astype("str")
-    got = gs.astype(cudf.Decimal64Dtype(scale=-2, precision=5))
+    got = gs.astype(cudf.Decimal64Dtype(scale=scale, precision=precision))
     assert_eq(fp, got)
 
 
