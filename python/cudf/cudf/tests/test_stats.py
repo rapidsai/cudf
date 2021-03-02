@@ -381,26 +381,26 @@ def test_cov1d(data1, data2):
         Series([5]),
     ],
 )
-def test_corr1d(data1, data2):
+@pytest.mark.parametrize('method',['spearman','pearson'])
+def test_corr1d(data1, data2, method):
     gs1 = Series(data1)
     gs2 = Series(data2)
 
     ps1 = gs1.to_pandas()
     ps2 = gs2.to_pandas()
 
-    got = gs1.corr(gs2)
-    expected = ps1.corr(ps2)
+    got = gs1.corr(gs2, method)
+    expected = ps1.corr(ps2, method)
     np.testing.assert_approx_equal(got, expected, significant=8)
 
-
+@pytest.mark.parametrize('method',['spearman','pearson'])
 def test_df_corr():
 
     gdf = randomdata(100, {str(x): float for x in range(50)})
     pdf = gdf.to_pandas()
-    got = gdf.corr()
-    expected = pdf.corr()
+    got = gdf.corr(method)
+    expected = pdf.corr(method)
     assert_eq(got, expected)
-
 
 @pytest.mark.parametrize(
     "data",
