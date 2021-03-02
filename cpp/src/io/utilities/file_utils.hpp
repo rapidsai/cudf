@@ -16,7 +16,7 @@
 
 #pragma once
 
-#ifdef CUFILE_INCLUDE
+#ifdef CUFILE_FOUND
 #include <cufile.h>
 #endif
 
@@ -102,7 +102,7 @@ class cufile_output : public cufile_io_base {
   virtual void write(void const *data, size_t offset, size_t size) = 0;
 };
 
-#ifdef CUFILE_INCLUDE
+#ifdef CUFILE_FOUND
 
 class cufile_shim;
 /**

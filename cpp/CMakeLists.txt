@@ -428,9 +428,9 @@ endif()
 
 # Add cuFile include paths if available
 if(cuFile_FOUND)
-    target_include_directories(cudf PUBLIC ${cuFile_INCLUDE_DIRS})
+    target_include_directories(cudf PUBLIC "${cuFile_INCLUDE_DIRS}")
     target_compile_options(cudf PUBLIC ${cuFile_COMPILE_OPTIONS})
-    target_compile_definitions(cudf PUBLIC CUDA_API_PER_THREAD_DEFAULT_STREAM)
+    target_compile_definitions(cudf PUBLIC CUFILE_FOUND)
 endif()
 
 # Instruct jitify to use the kernel JIT cache

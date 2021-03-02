@@ -63,7 +63,7 @@ long file_wrapper::size() const
   return _size;
 }
 
-#ifdef CUFILE_INCLUDE
+#ifdef CUFILE_FOUND
 /**
  * @brief Class that dynamically loads the cuFile library and manages the cuFile driver.
  */
@@ -183,7 +183,7 @@ void cufile_output_impl::write(void const *data, size_t offset, size_t size)
 
 std::unique_ptr<cufile_input_impl> make_cufile_input(std::string const &filepath)
 {
-#ifdef CUFILE_INCLUDE
+#ifdef CUFILE_FOUND
   try {
     return std::make_unique<cufile_input_impl>(filepath);
   } catch (...) {
@@ -194,7 +194,7 @@ std::unique_ptr<cufile_input_impl> make_cufile_input(std::string const &filepath
 
 std::unique_ptr<cufile_output_impl> make_cufile_output(std::string const &filepath)
 {
-#ifdef CUFILE_INCLUDE
+#ifdef CUFILE_FOUND
   try {
     return std::make_unique<cufile_output_impl>(filepath);
   } catch (...) {
