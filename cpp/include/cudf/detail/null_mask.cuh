@@ -92,7 +92,6 @@ rmm::device_buffer bitmask_binop(
                         stream,
                         mr);
 
-  stream.synchronize();
   return dest_mask;
 }
 
@@ -141,6 +140,7 @@ void inplace_bitmask_binop(
   offset_bitmask_binop<<<config.num_blocks, config.num_threads_per_block, 0, stream.value()>>>(
     op, dest_mask, d_masks, d_begin_bits, mask_size_bits);
   CHECK_CUDA(stream.value());
+  stream.synchronize();
 }
 
 }  // namespace detail

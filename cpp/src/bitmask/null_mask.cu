@@ -410,7 +410,6 @@ void inplace_bitmask_and(device_span<bitmask_type> dest_mask,
     mask_size,
     stream,
     mr);
-  stream.synchronize();
 }
 
 // Bitwise AND of the masks
