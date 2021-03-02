@@ -672,7 +672,7 @@ class MultiIndex(Index):
         --------
         >>> import cudf
         >>> import pandas as pd
-        >>> midx = cudf.form_pandas(pd.MultiIndex.from_arrays([[1,2,3],
+        >>> midx = cudf.from_pandas(pd.MultiIndex.from_arrays([[1,2,3],
         ...                                  ['red', 'blue', 'green']],
         ...                                  names=('number', 'color')))
         >>> midx
