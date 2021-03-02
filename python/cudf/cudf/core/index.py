@@ -2672,17 +2672,15 @@ class CategoricalIndex(GenericIndex):
             dtype = None
 
         if categories is not None:
-            data.cat().set_categories(
-                categories, ordered=ordered, inplace=True
-            )
+            data.cat.set_categories(categories, ordered=ordered, inplace=True)
         elif isinstance(dtype, (pd.CategoricalDtype, cudf.CategoricalDtype)):
-            data.cat().set_categories(
+            data.cat.set_categories(
                 dtype.categories, ordered=ordered, inplace=True
             )
         elif ordered is True and data.ordered is False:
-            data.cat().as_ordered(inplace=True)
+            data.cat.as_ordered(inplace=True)
         elif ordered is False and data.ordered is True:
-            data.cat().as_unordered(inplace=True)
+            data.cat.as_unordered(inplace=True)
 
         out._initialize(data, **kwargs)
 
@@ -2693,14 +2691,14 @@ class CategoricalIndex(GenericIndex):
         """
         The category codes of this categorical.
         """
-        return self._values.cat().codes
+        return self._values.cat.codes
 
     @property
     def categories(self):
         """
         The categories of this categorical.
         """
-        return self._values.cat().categories
+        return self._values.cat.categories
 
 
 class StringIndex(GenericIndex):

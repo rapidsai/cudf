@@ -36,11 +36,11 @@ def transpose(Table source):
     if is_categorical_dtype(dtype):
         if any(not is_categorical_dtype(c.dtype) for c in source._columns):
             raise ValueError('Columns must all have the same dtype')
-        cats = list(c.cat().categories for c in source._columns)
+        cats = list(c.cat.categories for c in source._columns)
         cats = cudf.Series(cudf.concat(cats)).drop_duplicates()._column
         source = Table(index=source._index, data=[
-            (name, col.cat()._set_categories(
-                col.cat().categories, cats, is_unique=True).codes)
+            (name, col.cat._set_categories(
+                col.cat.categories, cats, is_unique=True).codes)
             for name, col in source._data.items()
         ])
     elif dtype.kind in 'OU':

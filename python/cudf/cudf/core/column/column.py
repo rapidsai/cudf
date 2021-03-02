@@ -63,6 +63,7 @@ from cudf.utils.dtypes import (
 from cudf.utils.utils import mask_dtype
 
 T = TypeVar("T", bound="ColumnBase")
+ParentType = Union["cudf.Series", "cudf.Index"]
 
 
 class ColumnBase(Column, Serializable):
@@ -188,9 +189,8 @@ class ColumnBase(Column, Serializable):
             n += bitmask_allocation_size_bytes(self.size)
         return n
 
-    def cat(
-        self, parent=None
-    ) -> "cudf.core.column.categorical.CategoricalAccessor":
+    @property
+    def cat(self) -> "cudf.core.column.categorical.CategoricalAccessor":
         raise NotImplementedError()
 
     def str(self, parent=None) -> "cudf.core.column.string.StringMethods":
@@ -253,21 +253,19 @@ class ColumnBase(Column, Serializable):
         if is_categorical:
             # Combine and de-dupe the categories
             cats = (
-                cudf.concat([o.cat().categories for o in objs])
+                cudf.concat([o.cat.categories for o in objs])
                 .to_series()
                 .drop_duplicates(ignore_index=True)
                 ._column
             )
             objs = [
-                o.cat()._set_categories(
-                    o.cat().categories, cats, is_unique=True
-                )
+                o.cat._set_categories(o.cat.categories, cats, is_unique=True)
                 for o in objs
             ]
             # Map `objs` into a list of the codes until we port Categorical to
             # use the libcudf++ Category data type.
-            objs = [o.cat().codes._column for o in objs]
-            head = head.cat().codes._column
+            objs = [o.cat.codes._column for o in objs]
+            head = head.cat.codes._column
 
         newsize = sum(map(len, objs))
         if newsize > libcudf.MAX_COLUMN_SIZE:

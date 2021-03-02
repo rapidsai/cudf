@@ -5149,8 +5149,8 @@ def test_memory_usage_cat():
     gdf = cudf.from_pandas(df)
 
     expected = (
-        gdf.B._column.cat().categories.__sizeof__()
-        + gdf.B._column.cat().codes.__sizeof__()
+        gdf.B._column.cat.categories.__sizeof__()
+        + gdf.B._column.cat.codes.__sizeof__()
     )
 
     # Check cat column
