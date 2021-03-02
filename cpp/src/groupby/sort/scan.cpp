@@ -71,6 +71,27 @@ void scan_result_functor::operator()<aggregation::SUM>(aggregation const& agg)
     detail::sum_scan(get_grouped_values(), helper.num_groups(), helper.group_labels(), stream, mr));
 }
 
+template <>
+void scan_result_functor::operator()<aggregation::MIN>(aggregation const& agg)
+{
+  if (cache.has_result(col_idx, agg)) return;
+
+  cache.add_result(
+    col_idx,
+    agg,
+    detail::min_scan(get_grouped_values(), helper.num_groups(), helper.group_labels(), stream, mr));
+}
+
+template <>
+void scan_result_functor::operator()<aggregation::MAX>(aggregation const& agg)
+{
+  if (cache.has_result(col_idx, agg)) return;
+
+  cache.add_result(
+    col_idx,
+    agg,
+    detail::max_scan(get_grouped_values(), helper.num_groups(), helper.group_labels(), stream, mr));
+}
 }  // namespace detail
 
 // Sort-based groupby
