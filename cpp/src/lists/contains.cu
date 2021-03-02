@@ -114,18 +114,15 @@ struct lookup_functor {
           return;
         }
 
-        auto list_pair_begin = list.pair_rep_begin<ElementType>();
-        auto list_pair_end   = list_pair_begin + list.size();
-
         auto search_key = search_key_and_validity.first;
         d_bools[row_index] =
           thrust::find_if(thrust::seq,
-                          list_pair_begin,
-                          list_pair_end,
+                          list.pair_rep_begin<ElementType>(),
+                          list.pair_rep_end<ElementType>(),
                           [search_key] __device__(auto element_and_validity) {
                             return element_and_validity.second &&
                                    cudf::equality_compare(element_and_validity.first, search_key);
-                          }) != list_pair_end;
+                          }) != list.pair_rep_end<ElementType>();
         d_validity[row_index] =
           d_bools[row_index] ||
           thrust::none_of(thrust::seq,

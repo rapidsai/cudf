@@ -1,4 +1,4 @@
-# Copyright (c) 2018-2020, NVIDIA CORPORATION.
+# Copyright (c) 2018-2021, NVIDIA CORPORATION.
 
 import re
 
@@ -372,8 +372,8 @@ def test_concat_mixed_input():
     [
         [pd.Series([1, 2, 3]), pd.DataFrame({"a": [1, 2]})],
         [pd.Series([1, 2, 3]), pd.DataFrame({"a": []})],
-        [pd.Series([]), pd.DataFrame({"a": []})],
-        [pd.Series([]), pd.DataFrame({"a": [1, 2]})],
+        [pd.Series([], dtype="float64"), pd.DataFrame({"a": []})],
+        [pd.Series([], dtype="float64"), pd.DataFrame({"a": [1, 2]})],
         [pd.Series([1, 2, 3.0, 1.2], name="abc"), pd.DataFrame({"a": [1, 2]})],
         [
             pd.Series(

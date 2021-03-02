@@ -1,3 +1,5 @@
+# Copyright (c) 2021, NVIDIA CORPORATION.
+
 from itertools import combinations
 
 import cupy
@@ -6,8 +8,7 @@ import pandas as pd
 import pytest
 
 import cudf
-from cudf import DataFrame, Series
-from cudf.core._compat import PANDAS_GE_110
+from cudf.core._compat import PANDAS_GE_110, PANDAS_GE_120
 from cudf.tests import utils
 from cudf.tests.utils import INTEGER_TYPES, assert_eq, assert_exceptions_equal
 
@@ -59,7 +60,11 @@ def pdf_gdf_multi():
                 pd.Series(range(3, 12)),
                 pd.Series(range(0, 9, 2)),
             ),
-            (Series(range(12)), Series(range(3, 12)), Series(range(0, 9, 2))),
+            (
+                cudf.Series(range(12)),
+                cudf.Series(range(3, 12)),
+                cudf.Series(range(0, 9, 2)),
+            ),
             (
                 [i in range(12) for i in range(20)],
                 [i in range(3, 12) for i in range(12)],
@@ -96,7 +101,7 @@ def pdf_gdf_multi():
 )
 def test_series_indexing(i1, i2, i3):
     a1 = np.arange(20)
-    series = Series(a1)
+    series = cudf.Series(a1)
     # Indexing
     sr1 = series.iloc[i1]
     assert sr1.null_count == 0
@@ -123,7 +128,7 @@ def test_series_indexing_large_size():
     gsr = cudf.Series(cupy.ones(n_elem))
     gsr[0] = None
     got = gsr[gsr.isna()]
-    expect = Series([None], dtype="float64")
+    expect = cudf.Series([None], dtype="float64")
 
     assert_eq(expect, got)
 
@@ -133,7 +138,7 @@ def test_series_indexing_large_size():
     "arg", ["b", ["a", "c"], slice(1, 2, 1), [True, False, True]]
 )
 def test_series_get_item(psr, arg):
-    gsr = Series.from_pandas(psr)
+    gsr = cudf.from_pandas(psr)
 
     expect = psr[arg]
     got = gsr[arg]
@@ -142,7 +147,7 @@ def test_series_get_item(psr, arg):
 
 
 def test_dataframe_column_name_indexing():
-    df = DataFrame()
+    df = cudf.DataFrame()
     data = np.asarray(range(10), dtype=np.int32)
     df["a"] = data
     df[1] = data
@@ -159,7 +164,7 @@ def test_dataframe_column_name_indexing():
     pdf["key2"] = np.random.randint(0, 3, nelem)
     pdf[1] = np.arange(1, 1 + nelem)
     pdf[2] = np.random.random(nelem)
-    df = DataFrame.from_pandas(pdf)
+    df = cudf.from_pandas(pdf)
 
     assert_eq(df[df.columns], df)
     assert_eq(df[df.columns[:1]], df[["key1"]])
@@ -172,7 +177,7 @@ def test_dataframe_column_name_indexing():
     df = pd.DataFrame()
     for i in range(0, 10):
         df[i] = range(nelem)
-    gdf = DataFrame.from_pandas(df)
+    gdf = cudf.DataFrame.from_pandas(df)
     assert_eq(gdf, df)
 
     assert_eq(gdf[gdf.columns], gdf)
@@ -180,7 +185,7 @@ def test_dataframe_column_name_indexing():
 
 
 def test_dataframe_slicing():
-    df = DataFrame()
+    df = cudf.DataFrame()
     size = 123
     df["a"] = ha = np.random.randint(low=0, high=100, size=size).astype(
         np.int32
@@ -237,7 +242,7 @@ def test_dataframe_loc(scalar, step):
         }
     )
 
-    df = DataFrame.from_pandas(pdf)
+    df = cudf.DataFrame.from_pandas(pdf)
 
     assert_eq(df.loc[:, ["a"]], pdf.loc[:, ["a"]])
 
@@ -309,7 +314,7 @@ def test_dataframe_loc(scalar, step):
 
 def test_dataframe_loc_duplicate_index_scalar():
     pdf = pd.DataFrame({"a": [1, 2, 3, 4, 5]}, index=[1, 2, 1, 4, 2])
-    gdf = DataFrame.from_pandas(pdf)
+    gdf = cudf.DataFrame.from_pandas(pdf)
 
     assert_eq(pdf.loc[2], gdf.loc[2])
 
@@ -323,13 +328,13 @@ def test_dataframe_loc_mask(mask, arg):
     pdf = pd.DataFrame(
         {"a": ["a", "b", "c", "d", "e"], "b": ["f", "g", "h", "i", "j"]}
     )
-    gdf = DataFrame.from_pandas(pdf)
+    gdf = cudf.DataFrame.from_pandas(pdf)
 
     assert_eq(pdf.loc[mask, arg], gdf.loc[mask, arg])
 
 
 def test_dataframe_loc_outbound():
-    df = DataFrame()
+    df = cudf.DataFrame()
     size = 10
     df["a"] = ha = np.random.randint(low=0, high=100, size=size).astype(
         np.int32
@@ -345,7 +350,7 @@ def test_dataframe_loc_outbound():
 
 def test_series_loc_numerical():
     ps = pd.Series([1, 2, 3, 4, 5], index=[5, 6, 7, 8, 9])
-    gs = Series.from_pandas(ps)
+    gs = cudf.Series.from_pandas(ps)
 
     assert_eq(ps.loc[5], gs.loc[5])
     assert_eq(ps.loc[6], gs.loc[6])
@@ -363,7 +368,7 @@ def test_series_loc_numerical():
 
 def test_series_loc_float_index():
     ps = pd.Series([1, 2, 3, 4, 5], index=[5.43, 6.34, 7.34, 8.0, 9.1])
-    gs = Series.from_pandas(ps)
+    gs = cudf.Series.from_pandas(ps)
 
     assert_eq(ps.loc[5.43], gs.loc[5.43])
     assert_eq(ps.loc[8], gs.loc[8])
@@ -381,7 +386,7 @@ def test_series_loc_string():
     ps = pd.Series(
         [1, 2, 3, 4, 5], index=["one", "two", "three", "four", "five"]
     )
-    gs = Series.from_pandas(ps)
+    gs = cudf.Series.from_pandas(ps)
 
     assert_eq(ps.loc["one"], gs.loc["one"])
     assert_eq(ps.loc["five"], gs.loc["five"])
@@ -404,7 +409,7 @@ def test_series_loc_datetime():
     ps = pd.Series(
         [1, 2, 3, 4, 5], index=pd.date_range("20010101", "20010105")
     )
-    gs = Series.from_pandas(ps)
+    gs = cudf.Series.from_pandas(ps)
 
     # a few different ways of specifying a datetime label:
     assert_eq(ps.loc["20010101"], gs.loc["20010101"])
@@ -465,7 +470,7 @@ def test_series_loc_categorical():
     ps = pd.Series(
         [1, 2, 3, 4, 5], index=pd.Categorical(["a", "b", "c", "d", "e"])
     )
-    gs = Series.from_pandas(ps)
+    gs = cudf.Series.from_pandas(ps)
 
     assert_eq(ps.loc["a"], gs.loc["a"])
     assert_eq(ps.loc["e"], gs.loc["e"])
@@ -529,12 +534,12 @@ def test_dataframe_series_loc_multiindex(obj):
 @pytest.mark.parametrize("nelem", [2, 5, 20, 100])
 def test_series_iloc(nelem):
 
-    # create random series
+    # create random cudf.Series
     np.random.seed(12)
     ps = pd.Series(np.random.sample(nelem))
 
-    # gpu series
-    gs = Series(ps)
+    # gpu cudf.Series
+    gs = cudf.Series(ps)
 
     # positive tests for indexing
     np.testing.assert_allclose(gs.iloc[-1 * nelem], ps.iloc[-1 * nelem])
@@ -565,7 +570,7 @@ def test_series_iloc(nelem):
 
 @pytest.mark.parametrize("nelem", [2, 5, 20, 100])
 def test_dataframe_iloc(nelem):
-    gdf = DataFrame()
+    gdf = cudf.DataFrame()
 
     gdf["a"] = ha = np.random.randint(low=0, high=100, size=nelem).astype(
         np.int32
@@ -617,7 +622,7 @@ def test_dataframe_iloc(nelem):
 
 @pytest.mark.xfail(raises=AssertionError, reason="Series.index are different")
 def test_dataframe_iloc_tuple():
-    gdf = DataFrame()
+    gdf = cudf.DataFrame()
     nelem = 123
     gdf["a"] = ha = np.random.randint(low=0, high=100, size=nelem).astype(
         np.int32
@@ -639,7 +644,7 @@ def test_dataframe_iloc_tuple():
     raises=IndexError, reason="positional indexers are out-of-bounds"
 )
 def test_dataframe_iloc_index_error():
-    gdf = DataFrame()
+    gdf = cudf.DataFrame()
     nelem = 123
     gdf["a"] = ha = np.random.randint(low=0, high=100, size=nelem).astype(
         np.int32
@@ -660,7 +665,7 @@ def test_dataframe_iloc_index_error():
 @pytest.mark.parametrize("ntake", [0, 1, 10, 123, 122, 200])
 def test_dataframe_take(ntake):
     np.random.seed(0)
-    df = DataFrame()
+    df = cudf.DataFrame()
 
     nelem = 123
     df["ii"] = np.random.randint(0, 20, nelem)
@@ -679,7 +684,7 @@ def test_dataframe_take(ntake):
 @pytest.mark.parametrize("ntake", [1, 2, 8, 9])
 def test_dataframe_take_with_multiIndex(ntake):
     np.random.seed(0)
-    df = DataFrame(
+    df = cudf.DataFrame(
         index=cudf.MultiIndex(
             levels=[["lama", "cow", "falcon"], ["speed", "weight", "length"]],
             codes=[[0, 0, 0, 1, 1, 1, 2, 2, 2], [0, 1, 2, 0, 1, 2, 0, 1, 2]],
@@ -705,7 +710,7 @@ def test_series_take(ntake, keep_index):
     nelem = 123
 
     data = np.random.randint(0, 20, nelem)
-    sr = Series(data)
+    sr = cudf.Series(data)
 
     take_indices = np.random.randint(0, len(sr), ntake)
 
@@ -723,7 +728,7 @@ def test_series_take(ntake, keep_index):
 def test_series_take_positional():
     psr = pd.Series([1, 2, 3, 4, 5], index=["a", "b", "c", "d", "e"])
 
-    gsr = Series.from_pandas(psr)
+    gsr = cudf.Series.from_pandas(psr)
 
     take_indices = [1, 2, 0, 3]
 
@@ -737,7 +742,7 @@ def test_series_take_positional():
 @pytest.mark.parametrize("slice_start", [None, 0, 1, 3, 10, -10])
 @pytest.mark.parametrize("slice_end", [None, 0, 1, 30, 50, -1])
 def test_dataframe_masked_slicing(nelem, slice_start, slice_end):
-    gdf = DataFrame()
+    gdf = cudf.DataFrame()
     gdf["a"] = list(range(nelem))
     gdf["b"] = list(range(nelem, 2 * nelem))
     gdf["a"] = gdf["a"].set_mask(utils.random_bitmask(nelem))
@@ -754,13 +759,13 @@ def test_dataframe_masked_slicing(nelem, slice_start, slice_end):
 
 def test_dataframe_boolean_mask_with_None():
     pdf = pd.DataFrame({"a": [0, 1, 2, 3], "b": [0.1, 0.2, None, 0.3]})
-    gdf = DataFrame.from_pandas(pdf)
+    gdf = cudf.DataFrame.from_pandas(pdf)
     pdf_masked = pdf[[True, False, True, False]]
     gdf_masked = gdf[[True, False, True, False]]
     assert_eq(pdf_masked, gdf_masked)
 
     with pytest.raises(ValueError):
-        gdf[Series([True, False, None, False])]
+        gdf[cudf.Series([True, False, None, False])]
 
 
 @pytest.mark.parametrize("dtype", [int, float, str])
@@ -840,12 +845,12 @@ def test_dataframe_apply_boolean_mask():
             "c": ["a", None, "b", "c"],
         }
     )
-    gdf = DataFrame.from_pandas(pdf)
+    gdf = cudf.DataFrame.from_pandas(pdf)
     assert_eq(pdf[[True, False, True, False]], gdf[[True, False, True, False]])
 
 
 """
-This test compares cudf and Pandas dataframe boolean indexing.
+This test compares cudf and Pandas DataFrame boolean indexing.
 """
 
 
@@ -973,7 +978,10 @@ def test_series_setitem_datetime():
     assert_eq(psr, gsr)
 
 
-@pytest.mark.xfail(reason="Pandas will coerce to object datatype here")
+@pytest.mark.xfail(
+    condition=not PANDAS_GE_120,
+    reason="Pandas will coerce to object datatype here",
+)
 def test_series_setitem_datetime_coerced():
     psr = pd.Series(["2001", "2002", "2003"], dtype="datetime64[ns]")
     gsr = cudf.from_pandas(psr)
@@ -1156,7 +1164,7 @@ def test_sliced_indexing():
     a = list(range(4, 4 + 150))
     b = list(range(0, 0 + 150))
     pdf = pd.DataFrame({"a": a, "b": b})
-    gdf = DataFrame.from_pandas(pdf)
+    gdf = cudf.DataFrame.from_pandas(pdf)
     pdf = pdf.set_index("a")
     gdf = gdf.set_index("a")
     pidx = pdf.index[:75]
