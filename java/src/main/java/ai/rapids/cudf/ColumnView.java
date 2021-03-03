@@ -1106,9 +1106,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * Returns a boolean scalar that is true if all of the elements in
    * the column are true or non-zero otherwise false.
    * Null values are skipped.
-   * @deprecated the only output type supported is BOOL8.
    */
-  @Deprecated
   public Scalar all() {
     return all(DType.BOOL8);
   }
@@ -1118,7 +1116,9 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * if all of the elements in the column are true or non-zero
    * otherwise false or 0.
    * Null values are skipped.
+   * @deprecated the only output type supported is BOOL8.
    */
+  @Deprecated
   public Scalar all(DType outType) {
     return reduce(Aggregation.all(), outType);
   }

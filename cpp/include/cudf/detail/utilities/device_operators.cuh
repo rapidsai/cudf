@@ -92,7 +92,7 @@ struct DeviceCount {
  * values. Also, this char pointer serves as valid device pointer of identity
  * value for minimum operator on string values.
  */
-__constant__ char max_string_sentinel[5]{"\xF7\xBF\xBF\xBF"};
+static __constant__ char max_string_sentinel[5]{"\xF7\xBF\xBF\xBF"};
 
 /* @brief binary `min` operator */
 struct DeviceMin {
