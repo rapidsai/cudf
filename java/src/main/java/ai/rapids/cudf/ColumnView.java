@@ -1334,7 +1334,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * view. Make sure the numbers of rows in the leaf node are the same as the child replacing it
    * otherwise the list can point to elements outside of the column values.
    *
-   * Note: this method returns a ColumnView and it won't live past the ColumnVector that its
+   * Note: this method returns a ColumnView that won't live past the ColumnVector that it's
    * pointing to.
    *
    * Ex: List<Int> list = col{{1,3}, {9,3,5}}
