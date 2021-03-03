@@ -1455,9 +1455,7 @@ class DataFrame(Frame, Serializable):
                 else:
                     if col not in df_cols:
                         r_opr = other_cols[col]
-                        l_opr = Series(
-                            as_column(np.nan, length=len(self))
-                        )
+                        l_opr = Series(as_column(np.nan, length=len(self)))
                     if col not in other_cols_keys:
                         r_opr = None
                         l_opr = self[col]

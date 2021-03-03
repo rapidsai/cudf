@@ -5021,7 +5021,7 @@ def test_df_sr_binop(gsr, colnames, op):
     data = [[3.0, 2.0, 5.0], [3.0, None, 5.0], [6.0, 7.0, np.nan]]
     data = dict(zip(colnames, data))
 
-    gsr = gsr.astype('float64')
+    gsr = gsr.astype("float64")
 
     gdf = cudf.DataFrame(data)
     pdf = gdf.to_pandas(nullable=True)
