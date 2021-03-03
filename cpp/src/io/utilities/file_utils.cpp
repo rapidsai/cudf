@@ -64,6 +64,25 @@ long file_wrapper::size() const
 }
 
 #ifdef CUFILE_FOUND
+
+class cufile_config {
+  bool enabled = true;
+
+  cufile_config()
+  {
+    // TODO read env var
+  }
+
+ public:
+  bool is_enabled() const { return enabled; }
+
+  static cufile_config const *instance()
+  {
+    static cufile_config _instance;
+    return &_instance;
+  }
+};
+
 /**
  * @brief Class that dynamically loads the cuFile library and manages the cuFile driver.
  */
@@ -72,7 +91,7 @@ class cufile_shim {
   cufile_shim();
 
   std::unique_ptr<cudf::logic_error> init_error;
-  auto is_valid() const noexcept { return init_error != nullptr; }
+  auto is_valid() const noexcept { return init_error == nullptr; }
 
  public:
   cufile_shim(cufile_shim const &) = delete;
@@ -126,6 +145,7 @@ cufile_shim const *cufile_shim::instance()
   static cufile_shim _instance;
   // Defer throwing to avoid repeated attempts to load the library
   if (!_instance.is_valid()) CUDF_FAIL("" + std::string(_instance.init_error->what()));
+
   return &_instance;
 }
 
@@ -182,9 +202,8 @@ void cufile_output_impl::write(void const *data, size_t offset, size_t size)
 std::unique_ptr<cufile_input_impl> make_cufile_input(std::string const &filepath)
 {
 #ifdef CUFILE_FOUND
-  try {
+  if (cufile_config::instance()->is_enabled()) {
     return std::make_unique<cufile_input_impl>(filepath);
-  } catch (...) {
   }
 #endif
   return nullptr;
@@ -193,9 +212,8 @@ std::unique_ptr<cufile_input_impl> make_cufile_input(std::string const &filepath
 std::unique_ptr<cufile_output_impl> make_cufile_output(std::string const &filepath)
 {
 #ifdef CUFILE_FOUND
-  try {
+  if (cufile_config::instance()->is_enabled()) {
     return std::make_unique<cufile_output_impl>(filepath);
-  } catch (...) {
   }
 #endif
   return nullptr;
