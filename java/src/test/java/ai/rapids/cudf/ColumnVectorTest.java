@@ -2061,10 +2061,10 @@ public class ColumnVectorTest extends CudfTestBase {
   }
 
   @Test
-  void testLogicalCast() {
+  void testBitCast() {
     try (ColumnVector cv = ColumnVector.decimalFromLongs(-2, 1L, 2L, 100L, 552L);
          ColumnVector expected = ColumnVector.fromLongs(1L, 2L, 100L, 552L);
-         ColumnView casted = cv.logicalCastTo(DType.INT64)) {
+         ColumnView casted = cv.bitCastTo(DType.INT64)) {
       assertColumnsAreEqual(expected, casted);
     }
   }
@@ -3229,30 +3229,45 @@ public class ColumnVectorTest extends CudfTestBase {
     String[] floatStrings = {"A", "nan", "Inf", "-Inf", "Infinity", "infinity", "-0.0", "0.0",
         "3.4028235E38", "3.4028236E38", "-3.4028235E38", "-3.4028236E38", "1.2e-24", "NULL", "null",
         null, "423"};
-    String[] doubleStrings = {"A", "nan", "Inf", "-Inf", "Infinity", "infinity", "-0.0", "0.0",
-        "1.7976931348623159E308", "1.7976931348623160E308", "-1.7976931348623159E308",
-        "-1.7976931348623160E308", "1.2e-234", "NULL", "null", null, "423"};
     try (ColumnVector floatStringCV = ColumnVector.fromStrings(floatStrings);
-         ColumnVector doubleStringCV = ColumnVector.fromStrings(doubleStrings);
          ColumnVector isFloat = floatStringCV.isFloat();
-         ColumnVector isDouble = doubleStringCV.isFloat();
-         ColumnVector doubles = doubleStringCV.asDoubles();
          ColumnVector floats = floatStringCV.asFloats();
          ColumnVector expectedFloats = ColumnVector.fromBoxedFloats(0f, 0f, Float.POSITIVE_INFINITY,
              Float.NEGATIVE_INFINITY, 0f, 0f, -0f, 0f, Float.MAX_VALUE, Float.POSITIVE_INFINITY,
              -Float.MAX_VALUE, Float.NEGATIVE_INFINITY, 1.2e-24f, 0f, 0f, null, 423f);
+         ColumnVector expected = ColumnVector.fromBoxedBooleans(false, false, true, true, false,
+             false, true, true, true, true, true, true, true, false, false, null, true)) {
+      assertColumnsAreEqual(expected, isFloat);
+      assertColumnsAreEqual(expectedFloats, floats);
+    }
+  }
+
+  @Test
+  void testIsDouble() {
+    String[] doubleStrings = {"A", "nan", "Inf", "-Inf", "Infinity", "infinity", "-0.0", "0.0",
+        "1.7976931348623157E308",
+        // Current CUDF Code does not detect overflow for this. "1.7976931348623158E308",
+        // So we make it a little larger for this test
+        "1.7976931348623159E308",
+        "-1.7976931348623157E308",
+        // Current CUDF Code does not detect overflow for this. "-1.7976931348623158E308",
+        // So we make it a little larger for this test
+        "-1.7976931348623159E308",
+        "1.2e-234", "NULL", "null", null, "423"};
+    try (ColumnVector doubleStringCV = ColumnVector.fromStrings(doubleStrings);
+         ColumnVector isDouble = doubleStringCV.isFloat();
+         ColumnVector doubles = doubleStringCV.asDoubles();
          ColumnVector expectedDoubles = ColumnVector.fromBoxedDoubles(0d, 0d,
              Double.POSITIVE_INFINITY, Double.NEGATIVE_INFINITY, 0d, 0d, -0d, 0d, Double.MAX_VALUE,
              Double.POSITIVE_INFINITY, -Double.MAX_VALUE, Double.NEGATIVE_INFINITY, 1.2e-234d, 0d,
              0d, null, 423d);
          ColumnVector expected = ColumnVector.fromBoxedBooleans(false, false, true, true, false,
              false, true, true, true, true, true, true, true, false, false, null, true)) {
-      assertColumnsAreEqual(expected, isFloat);
       assertColumnsAreEqual(expected, isDouble);
-      assertColumnsAreEqual(expectedFloats, floats);
       assertColumnsAreEqual(expectedDoubles, doubles);
     }
   }
+
   @Test
   void testCreateDurationDays() {
     Integer[] days = {100, 10, 23, 1, -1, 0, Integer.MAX_VALUE, null, Integer.MIN_VALUE};
