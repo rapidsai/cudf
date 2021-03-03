@@ -22,8 +22,6 @@ from cudf.utils.dtypes import (
     INTEGER_TYPES,
     NUMERIC_TYPES,
     TIMEDELTA_TYPES,
-    ALL_TYPES,
-    cudf_dtypes_to_pandas_dtypes
 )
 
 STRING_TYPES = {"str"}
@@ -207,6 +205,7 @@ def test_series_compare(cmpop, obj_class, dtype):
     np.testing.assert_equal(result2.to_array(), cmpop(arr2, arr2))
     np.testing.assert_equal(result3.to_array(), cmpop(arr1, arr2))
 
+
 def _series_compare_nulls_typegen():
     tests = []
     tests += list(product(DATETIME_TYPES, DATETIME_TYPES))
@@ -215,6 +214,7 @@ def _series_compare_nulls_typegen():
     tests += list(product(STRING_TYPES, STRING_TYPES))
 
     return tests
+
 
 @pytest.mark.parametrize("cmpop", _cmpops)
 @pytest.mark.parametrize("dtypes", _series_compare_nulls_typegen())
@@ -229,21 +229,22 @@ def test_series_compare_nulls(cmpop, dtypes):
 
     lmask = ~lser.isnull()
     rmask = ~rser.isnull()
-    
+
     expect_mask = np.logical_and(lmask, rmask)
-    expect = cudf.Series([None] * 5, dtype='bool')
+    expect = cudf.Series([None] * 5, dtype="bool")
     expect[expect_mask] = cmpop(lser[expect_mask], rser[expect_mask])
-    
+
     got = cmpop(lser, rser)
     utils.assert_eq(expect, got)
 
 
 @pytest.mark.parametrize(
-    "obj", [pd.Series(["a", "b", None, "d", "e", None], dtype='string'), "a"]
+    "obj", [pd.Series(["a", "b", None, "d", "e", None], dtype="string"), "a"]
 )
 @pytest.mark.parametrize("cmpop", _cmpops)
 @pytest.mark.parametrize(
-    "cmp_obj", [pd.Series(["b", "a", None, "d", "f", None], dtype='string'), "a"]
+    "cmp_obj",
+    [pd.Series(["b", "a", None, "d", "f", None], dtype="string"), "a"],
 )
 def test_string_series_compare(obj, cmpop, cmp_obj):
 
@@ -728,14 +729,12 @@ _permu_values = [0, 1, None, np.nan]
 def test_operator_func_between_series_logical(
     dtype, func, scalar_a, scalar_b, fill_value
 ):
-    pandas_dtype = cudf_dtypes_to_pandas_dtypes[np.dtype(dtype)]
 
     gdf_series_a = Series([scalar_a], nan_as_null=False).astype(dtype)
     gdf_series_b = Series([scalar_b], nan_as_null=False).astype(dtype)
 
     pdf_series_a = gdf_series_a.to_pandas(nullable=True)
     pdf_series_b = gdf_series_b.to_pandas(nullable=True)
-
 
     gdf_series_result = getattr(gdf_series_a, func)(
         gdf_series_b, fill_value=fill_value
@@ -745,18 +744,21 @@ def test_operator_func_between_series_logical(
     )
     expect = pdf_series_result
     got = gdf_series_result.to_pandas(nullable=True)
-    
+
     # If fill_value is np.nan, things break down a bit,
     # because setting a NaN into a pandas nullable float
     # array still gets transformed to <NA>. As such,
     # pd_series_with_nulls.fillna(np.nan) has no effect.
     if (
-        pdf_series_a.isnull().sum() != pdf_series_b.isnull().sum()
-    ) and np.isscalar(fill_value) and np.isnan(fill_value):
+        (pdf_series_a.isnull().sum() != pdf_series_b.isnull().sum())
+        and np.isscalar(fill_value)
+        and np.isnan(fill_value)
+    ):
         with pytest.raises(AssertionError):
             utils.assert_eq(expect, got)
         return
     utils.assert_eq(expect, got)
+
 
 @pytest.mark.parametrize("dtype", ["float32", "float64"])
 @pytest.mark.parametrize("func", _operators_comparison)

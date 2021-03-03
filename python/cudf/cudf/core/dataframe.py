@@ -5755,7 +5755,9 @@ class DataFrame(Frame, Serializable):
                 ):
                     result[col] = utils.scalar_broadcast_to(False, len(self))
                 else:
-                    result[col] = (self._data[col] == values._column).fillna(False)
+                    result[col] = (self._data[col] == values._column).fillna(
+                        False
+                    )
 
             result.index = self.index
             return result
@@ -5765,7 +5767,9 @@ class DataFrame(Frame, Serializable):
             result = DataFrame()
             for col in self._data.names:
                 if col in values.columns:
-                    result[col] = (self._data[col] == values[col]._column).fillna(False)
+                    result[col] = (
+                        self._data[col] == values[col]._column
+                    ).fillna(False)
                 else:
                     result[col] = utils.scalar_broadcast_to(False, len(self))
             result.index = self.index
