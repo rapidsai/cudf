@@ -71,11 +71,19 @@ class cufile_shim {
  private:
   cufile_shim();
 
+  std::unique_ptr<cudf::logic_error> init_error;
+
  public:
   cufile_shim(cufile_shim const &) = delete;
   cufile_shim &operator=(cufile_shim const &) = delete;
 
-  static auto const *get_instance();
+  static cufile_shim const *instance();
+
+  ~cufile_shim()
+  {
+    driver_close();
+    dlclose(cf_lib);
+  }
 
   void *cf_lib                                        = nullptr;
   decltype(cuFileDriverOpen) *driver_open             = nullptr;
@@ -84,51 +92,40 @@ class cufile_shim {
   decltype(cuFileHandleDeregister) *handle_deregister = nullptr;
   decltype(cuFileRead) *read                          = nullptr;
   decltype(cuFileWrite) *write                        = nullptr;
-
-  ~cufile_shim()
-  {  // try-catch?
-    driver_close();
-    dlclose(cf_lib);
-  }
 };
 
 cufile_shim::cufile_shim()
 {
-  cf_lib      = dlopen("libcufile.so", RTLD_NOW);
-  driver_open = reinterpret_cast<decltype(driver_open)>(dlsym(cf_lib, "cuFileDriverOpen"));
-  CUDF_EXPECTS(driver_open != nullptr, "could not find cuFile symbol");
-  driver_close = reinterpret_cast<decltype(driver_close)>(dlsym(cf_lib, "cuFileDriverClose"));
-  CUDF_EXPECTS(driver_close != nullptr, "could not find cuFile symbol");
-  handle_register =
-    reinterpret_cast<decltype(handle_register)>(dlsym(cf_lib, "cuFileHandleRegister"));
-  CUDF_EXPECTS(handle_register != nullptr, "could not find cuFile symbol");
-  handle_deregister =
-    reinterpret_cast<decltype(handle_deregister)>(dlsym(cf_lib, "cuFileHandleDeregister"));
-  CUDF_EXPECTS(handle_deregister != nullptr, "could not find cuFile symbol");
-  read = reinterpret_cast<decltype(read)>(dlsym(cf_lib, "cuFileRead"));
-  CUDF_EXPECTS(read != nullptr, "could not find cuFile symbol");
-  write = reinterpret_cast<decltype(write)>(dlsym(cf_lib, "cuFileWrite"));
-  CUDF_EXPECTS(write != nullptr, "could not find cuFile symbol");
+  try {
+    cf_lib      = dlopen("libcufile.so", RTLD_NOW);
+    driver_open = reinterpret_cast<decltype(driver_open)>(dlsym(cf_lib, "cuFileDriverOpen"));
+    CUDF_EXPECTS(driver_open != nullptr, "could not find cuFile cuFileDriverOpen symbol");
+    driver_close = reinterpret_cast<decltype(driver_close)>(dlsym(cf_lib, "cuFileDriverClose"));
+    CUDF_EXPECTS(driver_close != nullptr, "could not find cuFile cuFileDriverClose symbol");
+    handle_register =
+      reinterpret_cast<decltype(handle_register)>(dlsym(cf_lib, "cuFileHandleRegister"));
+    CUDF_EXPECTS(handle_register != nullptr, "could not find cuFile cuFileHandleRegister symbol");
+    handle_deregister =
+      reinterpret_cast<decltype(handle_deregister)>(dlsym(cf_lib, "cuFileHandleDeregister"));
+    CUDF_EXPECTS(handle_deregister != nullptr,
+                 "could not find cuFile cuFileHandleDeregister symbol");
+    read = reinterpret_cast<decltype(read)>(dlsym(cf_lib, "cuFileRead"));
+    CUDF_EXPECTS(read != nullptr, "could not find cuFile cuFileRead symbol");
+    write = reinterpret_cast<decltype(write)>(dlsym(cf_lib, "cuFileWrite"));
+    CUDF_EXPECTS(write != nullptr, "could not find cuFile cuFileWrite symbol");
 
-  CUDF_EXPECTS(driver_open().err == CU_FILE_SUCCESS, "Failed to initialize cuFile driver");
+    CUDF_EXPECTS(driver_open().err == CU_FILE_SUCCESS, "Failed to initialize cuFile driver");
+  } catch (cudf::logic_error const &err) {
+    init_error = std::make_unique<cudf::logic_error>(err);
+  }
 }
 
-auto const *cufile_shim::get_instance()
+cufile_shim const *cufile_shim::instance()
 {
-  static bool first_call = true;
-  static std::unique_ptr<cufile_shim> instance;
-  if (first_call) {
-    try {
-      instance = std::unique_ptr<cufile_shim>(new cufile_shim());
-    } catch (...) {
-      first_call = false;
-      throw;
-    }
-    first_call = false;
-  } else if (!instance) {
-    CUDF_FAIL("Failed to initialize cuFile driver");
-  }
-  return instance.get();
+  static cufile_shim _instance;
+  // Defer throwing to avoid repeated attempts to load the library
+  if (_instance.init_error) CUDF_FAIL("" + std::string(_instance.init_error->what()));
+  return &_instance;
 }
 
 void cufile_registered_file::register_handle()
@@ -143,7 +140,7 @@ void cufile_registered_file::register_handle()
 cufile_registered_file::~cufile_registered_file() { shim->handle_deregister(cf_handle); }
 
 cufile_input_impl::cufile_input_impl(std::string const &filepath)
-  : shim{cufile_shim::get_instance()}, cf_file(shim, filepath, O_RDONLY | O_DIRECT)
+  : shim{cufile_shim::instance()}, cf_file(shim, filepath, O_RDONLY | O_DIRECT)
 {
 }
 
@@ -170,7 +167,7 @@ size_t cufile_input_impl::read(size_t offset,
 }
 
 cufile_output_impl::cufile_output_impl(std::string const &filepath)
-  : shim{cufile_shim::get_instance()}, cf_file(shim, filepath, O_CREAT | O_RDWR | O_DIRECT, 0664)
+  : shim{cufile_shim::instance()}, cf_file(shim, filepath, O_CREAT | O_RDWR | O_DIRECT, 0664)
 {
 }
 
