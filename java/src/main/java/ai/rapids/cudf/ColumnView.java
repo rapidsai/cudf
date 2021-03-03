@@ -1106,9 +1106,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * Returns a boolean scalar that is true if all of the elements in
    * the column are true or non-zero otherwise false.
    * Null values are skipped.
-   * @deprecated the only output type supported is BOOL8.
    */
-  @Deprecated
   public Scalar all() {
     return all(DType.BOOL8);
   }
@@ -1118,7 +1116,9 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * if all of the elements in the column are true or non-zero
    * otherwise false or 0.
    * Null values are skipped.
+   * @deprecated the only output type supported is BOOL8.
    */
+  @Deprecated
   public Scalar all(DType outType) {
     return reduce(Aggregation.all(), outType);
   }
@@ -1304,9 +1304,24 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * types must match.
    * @param type the type you want to go to.
    * @return a ColumnView that cannot outlive the Column that owns the actual data it points to.
+   * @deprecated this has changed to bit_cast in C++ so use that name instead
    */
+  @Deprecated
   public ColumnView logicalCastTo(DType type) {
-    return new ColumnView(logicalCastTo(getNativeView(),
+    return bitCastTo(type);
+  }
+
+  /**
+   * Zero-copy cast between types with the same underlying length.
+   *
+   * Similar to bit_cast in C++. This will take the underlying data and create new metadata
+   * so it is interpreted as a new type. Not all types are supported the width of the
+   * types must match.
+   * @param type the type you want to go to.
+   * @return a ColumnView that cannot outlive the Column that owns the actual data it points to.
+   */
+  public ColumnView bitCastTo(DType type) {
+    return new ColumnView(bitCastTo(getNativeView(),
         type.typeId.getNativeId(), type.getScale()));
   }
 
@@ -2607,7 +2622,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
 
   private static native long castTo(long nativeHandle, int type, int scale);
 
-  private static native long logicalCastTo(long nativeHandle, int type, int scale);
+  private static native long bitCastTo(long nativeHandle, int type, int scale);
 
   private static native long byteListCast(long nativeHandle, boolean config);
 

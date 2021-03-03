@@ -359,7 +359,7 @@ class column_view : public detail::column_view_base {
   auto child_end() const noexcept { return _children.cend(); }
 
  private:
-  friend column_view logical_cast(column_view const& input, data_type type);
+  friend column_view bit_cast(column_view const& input, data_type type);
 
   std::vector<column_view> _children{};  ///< Based on element type, children
                                          ///< may contain additional data
@@ -550,7 +550,7 @@ class mutable_column_view : public detail::column_view_base {
   operator column_view() const;
 
  private:
-  friend mutable_column_view logical_cast(mutable_column_view const& input, data_type type);
+  friend mutable_column_view bit_cast(mutable_column_view const& input, data_type type);
 
   std::vector<mutable_column_view> mutable_children;
 };
@@ -564,47 +564,49 @@ class mutable_column_view : public detail::column_view_base {
 size_type count_descendants(column_view parent);
 
 /**
- * @brief Zero-copy cast between types with the same underlying representation.
+ * @brief Zero-copy cast between types with the same size and compatible underlying representations.
  *
  * This is similar to `reinterpret_cast` or `bit_cast` in that it gives a view of the same raw bits
  * as a different type. Unlike `reinterpret_cast` however, this cast is only allowed on types that
- * have the same width and underlying representation. For example, the way timestamp types are laid
- * out in memory is equivalent to an integer representing a duration since a fixed epoch; logically
- * casting to the same integer type (INT32 for days, INT64 for others) results in a raw view of the
- * duration count. However, an INT32 column cannot be logically cast to INT64 as the sizes differ,
- * nor can an INT32 columm be logically cast to a FLOAT32 since what the bits represent differs.
+ * have the same width and compatible representations. For example, the way timestamp types are laid
+ * out in memory is equivalent to an integer representing a duration since a fixed epoch;
+ * bit-casting to the same integer type (INT32 for days, INT64 for others) results in a raw view of
+ * the duration count. A FLOAT32 can also be bit-casted into INT32 and treated as an integer value.
+ * However, an INT32 column cannot be bit-casted to INT64 as the sizes differ, nor can a string_view
+ * column be casted into a numeric type column as their data representations are not compatible.
  *
- * The validity of the conversion can be checked with `cudf::is_logically_castable()`.
+ * The validity of the conversion can be checked with `cudf::is_bit_castable()`.
  *
  * @throws cudf::logic_error if the specified cast is not possible, i.e.,
- * `is_logically_castable(input.type(), type)` is false.
+ * `is_bit_castable(input.type(), type)` is false.
  *
  * @param input The `column_view` to cast from
  * @param type The `data_type` to cast to
  * @return New `column_view` wrapping the same data as `input` but cast to `type`
  */
-column_view logical_cast(column_view const& input, data_type type);
+column_view bit_cast(column_view const& input, data_type type);
 
 /**
- * @brief Zero-copy cast between types with the same underlying representation.
+ * @brief Zero-copy cast between types with the same size and compatible underlying representations.
  *
  * This is similar to `reinterpret_cast` or `bit_cast` in that it gives a view of the same raw bits
  * as a different type. Unlike `reinterpret_cast` however, this cast is only allowed on types that
- * have the same width and underlying representation. For example, the way timestamp types are laid
- * out in memory is equivalent to an integer representing a duration since a fixed epoch; logically
- * casting to the same integer type (INT32 for days, INT64 for others) results in a raw view of the
- * duration count. However, an INT32 column cannot be logically cast to INT64 as the sizes differ,
- * nor can an INT32 columm be logically cast to a FLOAT32 since what the bits represent differs.
+ * have the same width and compatible representations. For example, the way timestamp types are laid
+ * out in memory is equivalent to an integer representing a duration since a fixed epoch;
+ * bit-casting to the same integer type (INT32 for days, INT64 for others) results in a raw view of
+ * the duration count. A FLOAT32 can also be bit-casted into INT32 and treated as an integer value.
+ * However, an INT32 column cannot be bit-casted to INT64 as the sizes differ, nor can a string_view
+ * column be casted into a numeric type column as their data representations are not compatible.
  *
- * The validity of the conversion can be checked with `cudf::is_logically_castable()`.
+ * The validity of the conversion can be checked with `cudf::is_bit_castable()`.
  *
  * @throws cudf::logic_error if the specified cast is not possible, i.e.,
- * `is_logically_castable(input.type(), type)` is false.
+ * `is_bit_castable(input.type(), type)` is false.
  *
  * @param input The `mutable_column_view` to cast from
  * @param type The `data_type` to cast to
  * @return New `mutable_column_view` wrapping the same data as `input` but cast to `type`
  */
-mutable_column_view logical_cast(mutable_column_view const& input, data_type type);
+mutable_column_view bit_cast(mutable_column_view const& input, data_type type);
 
 }  // namespace cudf

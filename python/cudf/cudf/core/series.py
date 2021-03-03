@@ -1072,7 +1072,16 @@ class Series(Frame, Serializable):
             show_dimensions = get_option("display.show_dimensions")
             if preprocess._column.categories.dtype.kind == "f":
                 pd_series = (
-                    preprocess.astype("str").to_pandas().astype("category")
+                    preprocess.astype("str")
+                    .to_pandas()
+                    .astype(
+                        dtype=pd.CategoricalDtype(
+                            categories=preprocess.dtype.categories.astype(
+                                "str"
+                            ).to_pandas(),
+                            ordered=preprocess.dtype.ordered,
+                        )
+                    )
                 )
             else:
                 pd_series = preprocess.to_pandas()
@@ -3775,6 +3784,41 @@ class Series(Frame, Serializable):
         -------
         TypeError
             If values is a string
+
+        Examples
+        --------
+        >>> import cudf
+        >>> s = cudf.Series(['lama', 'cow', 'lama', 'beetle', 'lama',
+        ...                'hippo'], name='animal')
+        >>> s.isin(['cow', 'lama'])
+        0     True
+        1     True
+        2     True
+        3    False
+        4     True
+        5    False
+        Name: animal, dtype: bool
+
+        Passing a single string as ``s.isin('lama')`` will raise an error. Use
+        a list of one element instead:
+
+        >>> s.isin(['lama'])
+        0     True
+        1    False
+        2     True
+        3    False
+        4     True
+        5    False
+        Name: animal, dtype: bool
+
+        Strings and integers are distinct and are therefore not comparable:
+
+        >>> cudf.Series([1]).isin(['1'])
+        0    False
+        dtype: bool
+        >>> cudf.Series([1.1]).isin(['1.1'])
+        0    False
+        dtype: bool
         """
 
         if is_scalar(values):
