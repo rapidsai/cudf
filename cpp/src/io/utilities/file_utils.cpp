@@ -72,6 +72,7 @@ class cufile_shim {
   cufile_shim();
 
   std::unique_ptr<cudf::logic_error> init_error;
+  auto is_valid() const noexcept { return init_error != nullptr; }
 
  public:
   cufile_shim(cufile_shim const &) = delete;
@@ -124,7 +125,7 @@ cufile_shim const *cufile_shim::instance()
 {
   static cufile_shim _instance;
   // Defer throwing to avoid repeated attempts to load the library
-  if (_instance.init_error) CUDF_FAIL("" + std::string(_instance.init_error->what()));
+  if (!_instance.is_valid()) CUDF_FAIL("" + std::string(_instance.init_error->what()));
   return &_instance;
 }
 
