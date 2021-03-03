@@ -86,6 +86,7 @@ def test_typecast_to_decimal(data, from_dtype, to_dtype):
     expected = cudf.Series(DecimalColumn.from_arrow(pa_arr))
 
     assert_eq(actual, expected)
+    assert_eq(actual.dtype, expected.dtype)
 
 
 @pytest.mark.parametrize(
