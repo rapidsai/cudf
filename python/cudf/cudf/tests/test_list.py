@@ -141,3 +141,11 @@ def test_extract_nested_lists():
     expect = cudf.Series([[[1, 2], [3, 4]], []])
     got = sr.list.extract(0)
     assert_eq(expect, got)
+
+
+def test_extract_nulls():
+    # TODO: do we really want this?
+    sr = cudf.Series([[], [], []])
+    got = sr.list.extract(100)
+    expect = cudf.Series([None, None, None], dtype="int8")
+    assert_eq(expect, got)
