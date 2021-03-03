@@ -283,7 +283,6 @@ TEST_F(StringsConcatenateWithColSeparatorTest, SingleColumnStringMixNoReplacemen
 
   auto results =
     cudf::strings::concatenate(cudf::table_view{{col0}}, cudf::strings_column_view(sep_col));
-
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, exp_results, true);
 }
 
