@@ -134,6 +134,24 @@ TYPED_TEST(groupby_min_scan_test, null_keys_and_values)
 
 // clang-format on
 
+struct groupby_min_scan_string_test : public cudf::test::BaseFixture {
+};
+
+TEST_F(groupby_min_scan_string_test, basic)
+{
+  using K = int32_t;
+
+  fixed_width_column_wrapper<K> keys{1, 2, 3, 1, 2, 2, 1, 3, 3, 2};
+  strings_column_wrapper vals{"año", "bit", "₹1", "aaa", "zit", "bat", "aaa", "$1", "₹1", "wut"};
+
+  fixed_width_column_wrapper<K> expect_keys{1, 1, 1, 2, 2, 2, 2, 3, 3, 3};
+  strings_column_wrapper expect_vals;
+
+  auto agg = cudf::make_min_aggregation();
+  CUDF_EXPECT_THROW_MESSAGE(test_single_scan(keys, vals, expect_keys, expect_vals, std::move(agg)),
+                            "Unsupported groupby scan type-agg combination");
+}
+
 template <typename T>
 struct FixedPointTestBothReps : public cudf::test::BaseFixture {
 };

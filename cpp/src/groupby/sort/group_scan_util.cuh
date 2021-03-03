@@ -108,7 +108,7 @@ struct scan_functor {
   template <typename T, typename... Args>
   std::enable_if_t<not is_supported<T>(), std::unique_ptr<column>> operator()(Args&&... args)
   {
-    CUDF_FAIL("Unsupported type-agg combination");
+    CUDF_FAIL("Unsupported groupby scan type-agg combination");
   }
 };
 
