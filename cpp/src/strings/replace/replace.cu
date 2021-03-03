@@ -317,7 +317,7 @@ size_type filter_false_target_positions(rmm::device_uvector<size_type>& target_p
                         // find the end of the string containing the start of this target
                         size_type const* offset_ptr = thrust::upper_bound(
                           thrust::seq, d_offsets_span.begin(), d_offsets_span.end(), target_pos);
-                        return target_pos + target_size >= *offset_ptr;
+                        return target_pos + target_size > *offset_ptr;
                       });
   auto const target_count = cudf::distance(d_target_positions, target_pos_end);
   if (target_count == 0) { return 0; }
