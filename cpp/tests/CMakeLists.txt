@@ -35,8 +35,6 @@ target_compile_features(cudftestutil PUBLIC cxx_std_14 cuda_std_14)
 target_link_libraries(cudftestutil
                PUBLIC GTest::gmock
                       GTest::gtest
-                      GTest::gmock_main
-                      GTest::gtest_main
                       Threads::Threads
                       cudf)
 
@@ -55,7 +53,7 @@ function(ConfigureTest CMAKE_TEST_NAME )
     add_executable(${CMAKE_TEST_NAME} ${ARGN})
     set_target_properties(${CMAKE_TEST_NAME}
         PROPERTIES RUNTIME_OUTPUT_DIRECTORY "$<BUILD_INTERFACE:${CUDF_BINARY_DIR}/gtests>")
-    target_link_libraries(${CMAKE_TEST_NAME} PRIVATE cudftestutil)
+    target_link_libraries(${CMAKE_TEST_NAME} PRIVATE cudftestutil GTest::gmock_main GTest::gtest_main)
     add_test(NAME ${CMAKE_TEST_NAME} COMMAND ${CMAKE_TEST_NAME})
 endfunction()
 
@@ -300,19 +298,11 @@ ConfigureTest(STREAM_COMPACTION_TEST
 
 ###################################################################################################
 # - rolling tests ---------------------------------------------------------------------------------
-ConfigureTest(ROLLING_TEST rolling/rolling_test.cpp)
-
-###################################################################################################
-# - grouped rolling tests -------------------------------------------------------------------------
-ConfigureTest(GROUPED_ROLLING_TEST grouped_rolling/grouped_rolling_test.cpp)
-
-###################################################################################################
-# - lead/lag rolling tests ------------------------------------------------------------------------
-ConfigureTest(LEAD_LAG_TEST lead_lag/lead_lag_test.cpp)
-
-###################################################################################################
-# - collect_list rolling tests --------------------------------------------------------------------
-ConfigureTest(COLLECT_LIST_TEST collect_list/collect_list_test.cpp)
+ConfigureTest(ROLLING_TEST 
+    rolling/rolling_test.cpp 
+    rolling/grouped_rolling_test.cpp
+    rolling/lead_lag_test.cpp
+    rolling/collect_list_test.cpp)
 
 ###################################################################################################
 # - filling test ----------------------------------------------------------------------------------
