@@ -118,15 +118,12 @@ inline void test_single_scan(column_view const& keys,
   groupby::groupby gb_obj(
     table_view({keys}), include_null_keys, keys_are_sorted, column_order, null_precedence);
 
+  // groupby scan uses sort implementation
   auto result = gb_obj.scan(requests);
 
-  auto const sort_order  = sorted_order(result.first->view(), {}, {null_order::AFTER});
-  auto const sorted_keys = gather(result.first->view(), *sort_order);
-  auto const sorted_vals = gather(table_view({result.second[0].results[0]->view()}), *sort_order);
-
-  // cudf::test::print(sorted_vals->get_column(0));
-  CUDF_TEST_EXPECT_TABLES_EQUAL(table_view({expect_keys}), *sorted_keys);
-  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expect_vals, sorted_vals->get_column(0), true);
+  // cudf::test::print(*result.second[0].results[0]);
+  CUDF_TEST_EXPECT_TABLES_EQUAL(table_view({expect_keys}), result.first->view());
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expect_vals, *result.second[0].results[0], true);
 }
 
 inline auto all_valid()
