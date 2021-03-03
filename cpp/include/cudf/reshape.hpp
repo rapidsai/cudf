@@ -175,8 +175,8 @@ std::unique_ptr<table> explode(
  * @param explode_column_idx Column index to explode inside the table.
  * @param mr Device memory resource used to allocate the returned column's device memory.
  *
-   * @return A new table with exploded value and position. The column order of return table is
-   *         [cols before explode_input, explode_position, explode_value, cols after explode_input].
+ * @return A new table with exploded value and position. The column order of return table is
+ *         [cols before explode_input, explode_position, explode_value, cols after explode_input].
  */
 std::unique_ptr<table> explode_position(
   table_view const& input_table,
