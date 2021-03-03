@@ -2731,7 +2731,7 @@ def interval_range(
     name : str, default None
     Name of the resulting IntervalIndex.
 
-    closed : {‘left’, ‘right’, ‘both’, ‘neither’}, default ‘right’
+    closed : {"left", "right", "both", "neither"}, default "right"
     Whether the intervals are closed on the left-side, right-side,
     both or neither.
 
@@ -2752,26 +2752,35 @@ def interval_range(
             "freq, exactly three must be specified"
         )
     elif periods and not freq:
-        if end is not None:
-            end = end + 1
-        periods_array = cupy.asarray(cupy.arange(start,end))
-        left_col = periods_array[:-1:periods]
-        right_col = periods_array[periods::periods]
-    else:
-        if freq and periods and end:
-            start = end - (freq * periods)
-        if freq and periods and start:
-            end = freq * periods + start
-        left_col = cupy.arange(start, end, freq) #possibly  subtract freq here from end 
+        assert(end is not None and start is not None)
         end = end + 1
-        if freq is not None:
-            start = start + freq
+        periods_array = cupy.asarray(cupy.arange(start,end))
+        _, bin_edges = cupy.histogram(periods_array, periods)
+        # cupy.histogram turns all arrays into a float array
+        # this can cause the dtype to be a float instead of an int
+        # the below adjusts for this
+        if cupy.all(cupy.mod(bin_edges, 1) == 0):
+            bin_edges = bin_edges.astype(int)
+        left_col = bin_edges[:-1]
+        right_col = bin_edges[1:]
+    elif freq and periods:
+        if end:
+            start = end - (freq * periods)
+        if start:
+            end = freq * periods + start
+        left_col = cupy.arange(start, end, freq) 
+        assert(end is not None and start is not None)
+        end = end + 1
+        start = start + freq
         right_col = cupy.arange(start, end, freq)
-        if len(left_col) != len(right_col):
-            if freq is not None:
-                end = end - freq
-            left_col = cupy.arange(start, end, freq)
-        if len(right_col) == 0 or len(left_col) == 0:
+    elif freq and not periods:
+        assert(end is not None and start is not None)
+        end = end - freq + 1
+        left_col = cupy.arange(start, end, freq)
+        end = end + freq + 1
+        start = start + freq
+        right_col = cupy.arange(start, end, freq)
+    if len(right_col) == 0 or len(left_col) == 0:
             return cudf.IntervalIndex([], closed=closed)
 
     interval_col = column.build_interval_column(
@@ -2789,7 +2798,7 @@ class IntervalIndex(GenericIndex):
     Array-like containing Interval objects from which to build the
     IntervalIndex.
 
-    closed : {‘left’, ‘right’, ‘both’, ‘neither’}, default ‘right’
+    closed : {"left", "right", "both", "neither"}, default "right"
     Whether the intervals are closed on the left-side, right-side,
     both or neither.
 
@@ -2825,11 +2834,11 @@ class IntervalIndex(GenericIndex):
                 # we need to change the data closed value,
                 # not sure how to do this on the gpu?
                 data = pd.arrays.IntervalArray(data, closed=closed)
+            if not data and closed != 'right':
+                data = pd.arrays.IntervalArray(data, closed=closed)
             data = column.as_column(
                 data, dtype="interval" if dtype is None else dtype
             )
-            # dtype has already been taken care
-            dtype = None
 
         out._initialize(data, **kwargs)
         return out
