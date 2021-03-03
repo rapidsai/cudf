@@ -153,6 +153,7 @@ cdef binaryop_s_v(DeviceScalar lhs, Column rhs,
 
     return Column.from_unique_ptr(move(c_result))
 
+
 def binaryop(lhs, rhs, op, dtype):
     """
     Dispatches a binary op call to the appropriate libcudf function:
