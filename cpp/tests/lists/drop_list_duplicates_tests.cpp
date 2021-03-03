@@ -20,6 +20,7 @@
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_utilities.hpp>
 #include <cudf_test/column_wrapper.hpp>
+#include <cudf_test/table_utilities.hpp>
 
 //#include <thrust/iterator/constant_iterator.h>
 //#include <vector>
@@ -27,6 +28,44 @@
 struct DropListDuplicatesTest : public cudf::test::BaseFixture {
 };
 
+TEST_F(DropListDuplicatesTest, NonNullTable)
+{
+  using LCW = cudf::test::lists_column_wrapper<int32_t, int32_t>;
+
+  LCW l1{{1, 2, 3}, {3, 2, 1, 4, 1}, {5}, {10, 8, 9}, {6, 7}};
+
+  auto sliced_list = cudf::slice(l1, {1, 5})[0];
+
+  // Ascending
+
+  LCW expected{{1, 2, 3, 4}, {5}, {8, 9, 10}, {6, 7}};
+  auto results = cudf::lists::drop_list_duplicates(cudf::lists_column_view{sliced_list},
+                                                   cudf::null_equality::EQUAL);
+  printf("line %d\n", __LINE__);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(results->view(), expected, true);
+}
+
+TEST_F(DropListDuplicatesTest, NonNullStringTable)
+{
+  //  using LCW = cudf::test::lists_column_wrapper<std::string, std::string>;
+
+  using LCW = cudf::test::lists_column_wrapper<int32_t, int32_t>;
+  //  LCW l1{{"hello", "apple"}, "world", "world", "my"};
+
+  LCW l1{{1, 2, 3}, {3, 2, 1, 4, 1}, {5}, {10, 8, 9}, {6, 7}};
+
+  auto sliced_list = cudf::slice(l1, {1, 5})[0];
+
+  // Ascending
+
+  LCW expected{{1, 2, 3, 4}, {5}, {8, 9, 10}, {6, 7}};
+  auto results = cudf::lists::drop_list_duplicates(cudf::lists_column_view{sliced_list},
+                                                   cudf::null_equality::EQUAL);
+  printf("line %d\n", __LINE__);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(results->view(), expected, true);
+}
+
+#if 0
 TEST_F(DropListDuplicatesTest, NonNullTable)
 {
   cudf::test::fixed_width_column_wrapper<int32_t> col1{{5, 4, 3, 5, 8, 5}};
@@ -86,8 +125,8 @@ TEST_F(DropListDuplicatesTest, WithNull)
   cudf::test::fixed_width_column_wrapper<int32_t> exp_col_first{{4, 5, 5, 8}, {0, 1, 1, 1}};
   cudf::test::fixed_width_column_wrapper<int32_t> exp_key_col_first{{20, 19, 20, 21}, {0, 1, 1, 1}};
   cudf::table_view expected_first{{exp_col_first, exp_key_col_first}};
-  auto got_first =
-    drop_duplicates(input, keys, cudf::duplicate_keep_option::KEEP_FIRST, null_equality::EQUAL);
+  auto got_first = drop_duplicates(
+    input, keys, cudf::duplicate_keep_option::KEEP_FIRST, cudf::null_equality::EQUAL);
 
   CUDF_TEST_EXPECT_TABLES_EQUAL(expected_first, got_first->view());
 
@@ -131,8 +170,8 @@ TEST_F(DropListDuplicatesTest, EmptyInputTable)
   cudf::table_view input{{col}};
   std::vector<cudf::size_type> keys{1, 2};
 
-  auto got =
-    drop_duplicates(input, keys, cudf::duplicate_keep_option::KEEP_FIRST, null_equality::EQUAL);
+  auto got = drop_duplicates(
+    input, keys, cudf::duplicate_keep_option::KEEP_FIRST, cudf::null_equality::EQUAL);
 
   CUDF_TEST_EXPECT_TABLES_EQUAL(input, got->view());
 }
@@ -142,8 +181,8 @@ TEST_F(DropListDuplicatesTest, NoColumnInputTable)
   cudf::table_view input{std::vector<cudf::column_view>()};
   std::vector<cudf::size_type> keys{1, 2};
 
-  auto got =
-    drop_duplicates(input, keys, cudf::duplicate_keep_option::KEEP_FIRST, null_equality::EQUAL);
+  auto got = drop_duplicates(
+    input, keys, cudf::duplicate_keep_option::KEEP_FIRST, cudf::null_equality::EQUAL);
 
   CUDF_TEST_EXPECT_TABLES_EQUAL(input, got->view());
 }
@@ -155,8 +194,10 @@ TEST_F(DropListDuplicatesTest, EmptyKeys)
   cudf::table_view input{{col}};
   std::vector<cudf::size_type> keys{};
 
-  auto got =
-    drop_duplicates(input, keys, cudf::duplicate_keep_option::KEEP_FIRST, null_equality::EQUAL);
+  auto got = drop_duplicates(
+    input, keys, cudf::duplicate_keep_option::KEEP_FIRST, cudf::null_equality::EQUAL);
 
   CUDF_TEST_EXPECT_TABLES_EQUAL(cudf::table_view{{empty_col}}, got->view());
 }
+
+#endif
