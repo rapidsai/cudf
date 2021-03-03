@@ -16,7 +16,6 @@
 #pragma once
 
 #include <cudf/column/column.hpp>
-#include <cudf/column/column_view.hpp>
 #include <cudf/lists/lists_column_view.hpp>
 #include <cudf/stream_compaction.hpp>
 
@@ -29,33 +28,30 @@ namespace lists {
  */
 
 /**
- * @brief Create a new column by removing duplicated elements from each list in the given
+ * @brief Create a new column by removing duplicated entries from each list in the given
  * lists_column
  *
- * Given an `input` list_column_view, the list elements in the column are copied to an output column
- * such that their duplicated entries are dropped. Adopted from stream compaction, the definition of
- * uniqueness depends on the value of @p keep:
- * - KEEP_FIRST: only the first of a sequence of duplicate entries is copied
- * - KEEP_LAST: only the last of a sequence of duplicate entries is copied
- * - KEEP_NONE: all duplicate entries are dropped out
+ * Given an `input` list_column_view, the list rows in the column are copied to an output column
+ * such that their duplicated entries are dropped out to keep only unique entries. The order of
+ * those entries are not guaranteed to be preserved as in the input column.
+ *
+ * If any row in the input column contains nested types, cudf::logic_error will be thrown.
  *
  * @param[in] lists_column    the input lists_column_view
- * @param[in] keep            keep first entry, last entry, or no entries if duplicates found
  * @param[in] nulls_equal     flag to denote nulls are considered equal
  * @param[in] mr              Device memory resource used to allocate the returned column
  *
- *  * @code{.pseudo}
- * input = { {1, 1, 2, 1, 3}, {4}, {5, 6, 6, 6, 5} }
- * if keep is KEEP_FIRST, the output will be { {1, 2, 3}, {4}, {5, 6} }
- * if keep is KEEP_LAST, the output will be  { {2, 1, 3}, {4}, {6, 5} }
- * if keep is KEEP_NONE, the output will be  { {2, 3}, {4}, {} }
+ * @code{.pseudo}
+ * If the input is { {1, 1, 2, 1, 3}, {4}, {5, 6, 6, 6, 5} }
+ * Then a valid output can be { {1, 2, 3}, {4}, {5, 6} }
+ * Note that permuting the entries of each sublist in this output also produces another valid
+ * output.
  * @endcode
  *
- * @return A list column with lists having unique entries as specified by the `keep` policy.
+ * @return A list column with list elements having unique entries.
  */
 std::unique_ptr<column> drop_list_duplicates(
   lists_column_view const& lists_column,
-  duplicate_keep_option keep,
   null_equality nulls_equal           = null_equality::EQUAL,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
