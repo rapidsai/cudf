@@ -13,7 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-#include <io/utilities/file_utils.hpp>
+#include <io/utilities/file_io_utilities.hpp>
 
 #include <dlfcn.h>
 #include <fcntl.h>
