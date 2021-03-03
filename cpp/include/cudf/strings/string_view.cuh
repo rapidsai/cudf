@@ -62,7 +62,7 @@ static __constant__ char max_string_sentinel[5]{"\xF7\xBF\xBF\xBF"};
  * @brief Return minimum value associated with the string type
  *
  * This function is needed to be host callable because it is called by a host
- * calleable function DeviceMax::identity<string_view>()
+ * callable function DeviceMax::identity<string_view>()
  *
  * @return An empty string
  */
@@ -72,7 +72,7 @@ CUDA_HOST_DEVICE_CALLABLE string_view string_view::min() { return string_view();
  * @brief Return maximum value associated with the string type
  *
  * This function is needed to be host callable because it is called by a host
- * calleable function DeviceMin::identity<string_view>()
+ * callable function DeviceMin::identity<string_view>()
  *
  * @return A string value which represents the highest possible valid UTF-8 encoded
  * character.

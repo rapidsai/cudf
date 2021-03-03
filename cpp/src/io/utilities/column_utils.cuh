@@ -20,6 +20,7 @@
 #include <cudf/lists/lists_column_view.hpp>
 #include <cudf/table/table_device_view.cuh>
 #include <cudf/types.hpp>
+#include <cudf/utilities/span.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
@@ -44,37 +45,35 @@ namespace io {
  */
 template <typename ColumnDescriptor>
 rmm::device_uvector<column_device_view> create_leaf_column_device_views(
-  hostdevice_vector<ColumnDescriptor> &col_desc,
+  cudf::detail::device_span<ColumnDescriptor> &col_desc,
   const table_device_view &parent_table_device_view,
   rmm::cuda_stream_view stream)
 {
   rmm::device_uvector<column_device_view> leaf_column_views(parent_table_device_view.num_columns(),
                                                             stream);
-  ColumnDescriptor *col_ptr                 = col_desc.device_ptr();
-  column_device_view *leaf_column_views_ptr = leaf_column_views.data();
+  auto leaf_columns = cudf::detail::device_span<column_device_view>{leaf_column_views};
 
   auto iter = thrust::make_counting_iterator<size_type>(0);
   thrust::for_each(rmm::exec_policy(stream),
                    iter,
                    iter + parent_table_device_view.num_columns(),
-                   [col_ptr,
-                    parent_col_view = parent_table_device_view,
-                    leaf_column_views_ptr] __device__(size_type index) mutable {
+                   [col_desc, parent_col_view = parent_table_device_view, leaf_columns] __device__(
+                     size_type index) mutable {
                      column_device_view col = parent_col_view.column(index);
 
                      if (col.type().id() == type_id::LIST) {
-                       col_ptr[index].parent_column = parent_col_view.begin() + index;
+                       col_desc[index].parent_column = parent_col_view.begin() + index;
                      } else {
-                       col_ptr[index].parent_column = nullptr;
+                       col_desc[index].parent_column = nullptr;
                      }
                      // traverse till leaf column
                      while (col.type().id() == type_id::LIST) {
                        col = col.child(lists_column_view::child_column_index);
                      }
                      // Store leaf_column to device storage
-                     column_device_view *leaf_col_ptr = leaf_column_views_ptr + index;
+                     column_device_view *leaf_col_ptr = leaf_columns.begin() + index;
                      *leaf_col_ptr                    = col;
-                     col_ptr[index].leaf_column       = leaf_col_ptr;
+                     col_desc[index].leaf_column      = leaf_col_ptr;
                    });
 
   return leaf_column_views;

@@ -17,6 +17,7 @@
 #pragma once
 
 #include <cudf/utilities/error.hpp>
+#include <cudf/utilities/span.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_buffer.hpp>
@@ -90,6 +91,9 @@ class hostdevice_vector {
   {
     return reinterpret_cast<T const *>(d_data.data()) + offset;
   }
+
+  operator cudf::detail::device_span<T>() { return {device_ptr(), max_elements}; }
+  operator cudf::detail::device_span<T const>() const { return {device_ptr(), max_elements}; }
 
   void host_to_device(rmm::cuda_stream_view stream, bool synchronize = false)
   {

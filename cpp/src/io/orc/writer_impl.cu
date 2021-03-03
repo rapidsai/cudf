@@ -25,6 +25,7 @@
 
 #include <cudf/null_mask.hpp>
 #include <cudf/strings/strings_column_view.hpp>
+#include <cudf/utilities/span.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_buffer.hpp>
@@ -792,8 +793,9 @@ std::vector<std::vector<uint8_t>> writer::impl::gather_statistic_blobs(
   stat_desc.host_to_device(stream);
   stat_merge.host_to_device(stream);
 
+  auto stat_span = cudf::detail::device_span<stats_column_desc>{stat_desc};
   rmm::device_uvector<column_device_view> leaf_column_views =
-    cudf::io::create_leaf_column_device_views(stat_desc, table, stream);
+    cudf::io::create_leaf_column_device_views(stat_span, table, stream);
 
   gpu::orc_init_statistics_groups(stat_groups.data().get(),
                                   stat_desc.device_ptr(),
@@ -1027,8 +1029,6 @@ void writer::impl::write(table_view const &table)
       "be specified");
   }
 
-  auto device_columns = table_device_view::create(table);
-
   // Wrapper around cudf columns to attach ORC-specific type info
   std::vector<orc_column_view> orc_columns;
   orc_columns.reserve(num_columns);  // Avoids unnecessary re-allocation
@@ -1123,6 +1123,7 @@ void writer::impl::write(table_view const &table)
   auto stripes = gather_stripes(
     num_columns, num_rows, num_index_streams, num_data_streams, stripe_list, chunks, strm_desc);
 
+  auto device_columns = table_device_view::create(table);
   // Gather column statistics
   std::vector<std::vector<uint8_t>> column_stats;
   if (enable_statistics_ && num_columns > 0 && num_rows > 0) {
