@@ -33,6 +33,7 @@
 #include <cudf/table/table.hpp>
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
+#include <cudf/utilities/error.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 
@@ -57,6 +58,7 @@ struct scan_result_functor : store_result_functor {
   template <aggregation::Kind k>
   void operator()(aggregation const& agg)
   {
+    CUDF_FAIL("Unsupported groupby scan aggregation");
   }
 };
 
@@ -91,6 +93,14 @@ void scan_result_functor::operator()<aggregation::MAX>(aggregation const& agg)
     col_idx,
     agg,
     detail::max_scan(get_grouped_values(), helper.num_groups(), helper.group_labels(), stream, mr));
+}
+
+template <>
+void scan_result_functor::operator()<aggregation::COUNT_ALL>(aggregation const& agg)
+{
+  if (cache.has_result(col_idx, agg)) return;
+
+  cache.add_result(col_idx, agg, detail::count_scan(helper.group_labels(), stream, mr));
 }
 }  // namespace detail
 

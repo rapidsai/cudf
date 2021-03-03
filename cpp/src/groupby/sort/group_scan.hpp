@@ -75,13 +75,11 @@ std::unique_ptr<column> max_scan(column_view const& values,
 /**
  * @brief Internal API to calculate cumulative number of values in each group of @p values
  *
- * @param group_offsets Offsets of groups' starting points within @p values
- * @param num_groups Number of groups ( unique values in @p group_labels )
+ * @param group_labels ID of group that the corresponding value belongs to
  * @param mr Device memory resource used to allocate the returned column's device memory
  * @param stream CUDA stream used for device memory operations and kernel launches.
  */
-std::unique_ptr<column> count_scan(rmm::device_vector<size_type> const& group_offsets,
-                                   size_type num_groups,
+std::unique_ptr<column> count_scan(rmm::device_vector<size_type> const& group_labels,
                                    rmm::cuda_stream_view stream,
                                    rmm::mr::device_memory_resource* mr);
 
