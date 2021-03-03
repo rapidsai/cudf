@@ -782,7 +782,15 @@ def is_hex(Column source_strings):
 def from_decimal(Column input_col):
     """
     Converts a `DecimalColumn` to a `StringColumn`.
-    """ 
+
+    Parameters
+    ----------
+    input_col : input column of type decimal
+
+    Returns
+    -------
+    A column of strings representing the input decimal values.
+    """
     cdef column_view input_column_view = input_col.view()
     cdef unique_ptr[column] c_result
     with nogil:
@@ -797,6 +805,15 @@ def to_decimal(Column input_col, object out_type):
     """
     Returns a `DecimalColumn` from the provided `StringColumn`
     using the scale in the `out_type`.
+
+    Parameters
+    ----------
+    input_col : input column of type string
+    out_type : The type and scale of the decimal column expected
+
+    Returns
+    -------
+    A column of decimals parsed from the string values.
     """
     cdef column_view input_column_view = input_col.view()
     cdef unique_ptr[column] c_result
@@ -816,7 +833,19 @@ def to_decimal(Column input_col, object out_type):
 def is_fixed_point(Column input_col, object dtype):
     """
     Returns a Column of boolean values with True for `input_col`
-    that have fixed-point characters.
+    that have fixed-point characters. The output row also has a
+    False value if the corresponding string would cause an integer
+    overflow. The scale of the `dtype` is used to determine overflow
+    in the output row.
+
+    Parameters
+    ----------
+    input_col : input column of type string
+    dtype : The type and scale of a decimal column
+
+    Returns
+    -------
+    A Column of booleans indicating valid decimal conversion.
     """
     cdef unique_ptr[column] c_result
     cdef column_view source_view = input_col.view()
