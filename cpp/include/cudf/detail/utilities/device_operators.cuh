@@ -84,6 +84,16 @@ struct DeviceCount {
   }
 };
 
+/**
+ * @brief string value for sentinel which is used in min, max reduction
+ * operators
+ * This sentinel string value is the highest possible valid UTF-8 encoded
+ * character. This serves as identity value for maximum operator on string
+ * values. Also, this char pointer serves as valid device pointer of identity
+ * value for minimum operator on string values.
+ */
+static __constant__ char max_string_sentinel[5]{"\xF7\xBF\xBF\xBF"};
+
 /* @brief binary `min` operator */
 struct DeviceMin {
   template <typename T>
