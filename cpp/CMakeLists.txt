@@ -184,7 +184,7 @@ add_library(cudf
     src/groupby/hash/groupby.cu
     src/groupby/sort/group_argmax.cu
     src/groupby/sort/group_argmin.cu
-    src/groupby/sort/groupby.cu
+    src/groupby/sort/aggregate.cpp
     src/groupby/sort/group_collect.cu
     src/groupby/sort/group_count.cu
     src/groupby/sort/group_max.cu
