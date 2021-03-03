@@ -12,7 +12,7 @@ from cudf._fuzz_testing.utils import (
     _generate_rand_meta,
     pyarrow_to_pandas,
 )
-from cudf.tests import dataset_generator as dg
+from cudf.testing import dataset_generator as dg
 from cudf.utils.dtypes import pandas_dtypes_to_cudf_dtypes
 
 logging.basicConfig(

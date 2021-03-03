@@ -13,7 +13,11 @@ import pytest
 
 import cudf
 from cudf.io.orc import ORCWriter
-from cudf.tests.utils import assert_eq, gen_rand_series, supported_numpy_dtypes
+from cudf.testing.utils import (
+    assert_eq,
+    gen_rand_series,
+    supported_numpy_dtypes,
+)
 
 
 @pytest.fixture(scope="module")

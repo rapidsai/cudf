@@ -9,7 +9,7 @@ from distributed.utils_test import loop  # noqa: F401
 import dask_cudf
 
 import cudf
-from cudf.tests.utils import assert_eq
+from cudf.testing.utils import assert_eq
 
 dask_cuda = pytest.importorskip("dask_cuda")
 

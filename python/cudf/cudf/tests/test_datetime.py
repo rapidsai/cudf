@@ -14,7 +14,7 @@ import pytest
 import cudf
 from cudf.core import DataFrame, Series
 from cudf.core.index import DatetimeIndex
-from cudf.tests.utils import (
+from cudf.testing.utils import (
     DATETIME_TYPES,
     NUMERIC_TYPES,
     assert_eq,

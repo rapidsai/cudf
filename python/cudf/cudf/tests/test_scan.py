@@ -5,7 +5,12 @@ import pandas as pd
 import pytest
 
 import cudf
-from cudf.tests.utils import INTEGER_TYPES, NUMERIC_TYPES, assert_eq, gen_rand
+from cudf.testing.utils import (
+    INTEGER_TYPES,
+    NUMERIC_TYPES,
+    assert_eq,
+    gen_rand,
+)
 
 params_sizes = [0, 1, 2, 5]
 

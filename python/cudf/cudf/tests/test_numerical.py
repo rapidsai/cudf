@@ -6,7 +6,7 @@ import pytest
 
 import cudf
 from cudf.core._compat import PANDAS_GE_100
-from cudf.tests.utils import assert_eq
+from cudf.testing.utils import assert_eq
 
 
 def test_can_cast_safely_same_kind():

@@ -7,7 +7,7 @@ import numpy as np
 import pytest
 
 from cudf import Series
-from cudf.tests import utils
+from cudf.testing import utils
 
 
 @pytest.mark.parametrize(

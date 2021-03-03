@@ -9,11 +9,11 @@ import cudf
 from cudf.core.dtypes import (
     CategoricalDtype,
     Decimal64Dtype,
+    IntervalDtype,
     ListDtype,
     StructDtype,
-    IntervalDtype,
 )
-from cudf.tests.utils import assert_eq
+from cudf.testing.utils import assert_eq
 
 
 def test_cdt_basic():

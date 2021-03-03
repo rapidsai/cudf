@@ -8,7 +8,7 @@ import pytest
 
 import cudf
 from cudf.core import DataFrame, GenericIndex, Series
-from cudf.tests import utils
+from cudf.testing import utils
 
 
 def test_onehot_simple():

@@ -12,9 +12,9 @@ from dask import dataframe as dd
 from dask.dataframe.core import make_meta, meta_nonempty
 from dask.utils import M
 
-import cudf
-
 import dask_cudf as dgd
+
+import cudf
 
 
 def test_from_cudf():
@@ -706,7 +706,7 @@ def test_dataframe_set_index():
 
     pddf = dd.from_pandas(pdf, npartitions=4)
     pddf = pddf.set_index("str")
-    from cudf.tests.utils import assert_eq
+    from cudf.testing.utils import assert_eq
 
     assert_eq(ddf.compute(), pddf.compute())
 

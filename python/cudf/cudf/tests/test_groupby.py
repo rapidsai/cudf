@@ -12,7 +12,7 @@ from numpy.testing import assert_array_equal
 import cudf
 from cudf.core import DataFrame, Series
 from cudf.core._compat import PANDAS_GE_110
-from cudf.tests.utils import assert_eq, assert_exceptions_equal
+from cudf.testing.utils import assert_eq, assert_exceptions_equal
 
 _now = np.datetime64("now")
 _tomorrow = _now + np.timedelta64(1, "D")

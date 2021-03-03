@@ -6,7 +6,7 @@ import pytest
 
 import cudf
 from cudf.core._compat import PANDAS_GE_120
-from cudf.tests.utils import assert_eq, assert_exceptions_equal
+from cudf.testing.utils import assert_eq, assert_exceptions_equal
 
 
 @pytest.mark.parametrize("df", [pd.DataFrame({"a": [1, 2, 3]})])

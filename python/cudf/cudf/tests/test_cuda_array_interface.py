@@ -10,7 +10,7 @@ import pytest
 from numba import cuda
 
 import cudf
-from cudf.tests.utils import DATETIME_TYPES, NUMERIC_TYPES, assert_eq
+from cudf.testing.utils import DATETIME_TYPES, NUMERIC_TYPES, assert_eq
 
 
 @pytest.mark.parametrize("dtype", NUMERIC_TYPES + DATETIME_TYPES)

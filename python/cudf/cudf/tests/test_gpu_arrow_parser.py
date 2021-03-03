@@ -8,7 +8,7 @@ from numba import cuda
 
 import cudf
 from cudf.comm.gpuarrow import GpuArrowReader
-from cudf.tests.utils import INTEGER_TYPES
+from cudf.testing.utils import INTEGER_TYPES
 
 
 def make_gpu_parse_arrow_data_batch():

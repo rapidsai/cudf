@@ -8,7 +8,7 @@ from dask import dataframe as dd
 import dask_cudf as dgd
 
 from cudf import DataFrame, Series
-from cudf.tests.utils import assert_eq
+from cudf.testing.utils import assert_eq
 
 #############################################################################
 #                        Datetime Accessor                                  #

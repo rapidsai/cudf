@@ -17,8 +17,8 @@ from pyarrow import parquet as pq
 
 import cudf
 from cudf.io.parquet import ParquetWriter, merge_parquet_filemetadata
-from cudf.tests import dataset_generator as dg
-from cudf.tests.utils import assert_eq
+from cudf.testing import dataset_generator as dg
+from cudf.testing.utils import assert_eq
 
 
 @pytest.fixture(scope="module")

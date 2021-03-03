@@ -9,7 +9,7 @@ import pytest
 
 from cudf.core import DataFrame, Series
 from cudf.core.column import NumericalColumn
-from cudf.tests.utils import (
+from cudf.testing.utils import (
     DATETIME_TYPES,
     NUMERIC_TYPES,
     assert_eq,

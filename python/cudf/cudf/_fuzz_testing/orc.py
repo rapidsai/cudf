@@ -16,7 +16,7 @@ from cudf._fuzz_testing.utils import (
     pandas_to_orc,
     pyarrow_to_pandas,
 )
-from cudf.tests import dataset_generator as dg
+from cudf.testing import dataset_generator as dg
 
 logging.basicConfig(
     format="%(asctime)s %(levelname)-8s %(message)s",
