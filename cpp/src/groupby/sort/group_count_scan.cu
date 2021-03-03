@@ -14,10 +14,16 @@
  * limitations under the License.
  */
 
-#include <groupby/sort/group_scan_util.cuh>
+#include <cudf/column/column.hpp>
+#include <cudf/column/column_factories.hpp>
+#include <cudf/types.hpp>
 
 #include <thrust/iterator/constant_iterator.h>
+#include <thrust/scan.h>
+
 #include <rmm/cuda_stream_view.hpp>
+#include <rmm/device_vector.hpp>
+#include <rmm/exec_policy.hpp>
 
 namespace cudf {
 namespace groupby {

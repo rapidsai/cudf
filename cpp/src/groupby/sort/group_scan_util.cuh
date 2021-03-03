@@ -32,7 +32,6 @@
 #include <rmm/exec_policy.hpp>
 
 #include <thrust/functional.h>
-#include <thrust/iterator/discard_iterator.h>
 #include <thrust/scan.h>
 
 namespace cudf {
