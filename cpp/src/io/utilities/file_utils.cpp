@@ -66,11 +66,17 @@ long file_wrapper::size() const
 #ifdef CUFILE_FOUND
 
 class cufile_config {
-  bool enabled = true;
+  bool enabled = false;
 
   cufile_config()
   {
-    // TODO read env var
+    auto const policy = std::getenv("LIBCUDF_CUFILE_POLICY");
+    if (policy == nullptr) {
+      enabled = false;
+    } else {
+      auto const policy_string = std::string(policy);
+      enabled                  = (policy_string == "ALWAYS" || policy_string == "GDS");
+    }
   }
 
  public:
