@@ -3649,21 +3649,19 @@ class Series(Frame, Serializable):
         if self.empty or other.empty:
             return cudf.utils.dtypes._get_nan_for_dtype(self.dtype)
         
-        if method == "pearson":
-            
+        if method == "pearson": 
             lhs = self.nans_to_nulls().dropna()
-            rhs = other.nans_to_nulls().dropna()
-            lhs, rhs = _align_indices([lhs, rhs], how="inner")
+            rhs = other.nans_to_nulls().dropna()  
             
         elif method == "spearman":
-            
             lhs = self.nans_to_nulls().dropna().rank()
             rhs = other.nans_to_nulls().dropna().rank()
-            lhs, rhs = _align_indices([lhs, rhs], how="inner")
-            
+        
         else:
             raise ValueError("method must be either 'pearson', 'spearman'")
             
+        lhs, rhs = _align_indices([lhs, rhs], how="inner")
+        
         return lhs._column.corr(rhs._column)
 
     def isin(self, values):
