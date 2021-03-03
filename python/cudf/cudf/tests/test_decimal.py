@@ -113,7 +113,7 @@ def test_typecast_to_decimal(data, from_dtype, to_dtype):
 )
 @pytest.mark.parametrize(
     "to_dtype",
-    [Decimal64Dtype(7, 2), Decimal64Dtype(11, 4), Decimal64Dtype(18, 10)],
+    [Decimal64Dtype(7, 2), Decimal64Dtype(18, 10), Decimal64Dtype(11, 4)],
 )
 def test_typecast_to_from_decimal(data, from_dtype, to_dtype):
     actual = data.astype(from_dtype)
@@ -126,6 +126,7 @@ def test_typecast_to_from_decimal(data, from_dtype, to_dtype):
     expected = cudf.Series(DecimalColumn.from_arrow(pa_arr))
 
     assert_eq(actual, expected)
+    assert_eq(actual.dtype, expected.dtype)
 
 
 @pytest.mark.parametrize(
