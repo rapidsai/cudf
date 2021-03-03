@@ -1726,3 +1726,49 @@ def test_binops_decimal(args):
     got = op(a, b)
     assert expect.dtype == got.dtype
     utils.assert_eq(expect, got)
+
+
+@pytest.mark.parametrize(
+    "dtype",
+    [
+        "uint8",
+        "uint16",
+        "uint32",
+        "uint64",
+        "int8",
+        "int16",
+        "int32",
+        "int64",
+        "float32",
+        "float64",
+        "str",
+        "datetime64[ns]",
+        "datetime64[us]",
+        "datetime64[ms]",
+        "datetime64[s]",
+        "timedelta64[ns]",
+        "timedelta64[us]",
+        "timedelta64[ms]",
+        "timedelta64[s]",
+    ],
+)
+@pytest.mark.parametrize("null_scalar", [None, cudf.NA])
+@pytest.mark.parametrize("cmpop", _cmpops)
+def test_column_null_scalar_comparison(dtype, null_scalar, cmpop):
+    # This test is meant to validate that comparing
+    # a series of any dtype with a null scalar produces
+    # a new series where all the elements are <NA>.
+    dtype = np.dtype(dtype)
+
+    data = [1, 2, 3, 4, 5]
+    sr = cudf.Series(data, dtype=dtype)
+    result = cmpop(sr, null_scalar)
+
+    # TODO - remove this xfail after PR 7490 is merged
+    if dtype.kind not in "mM":  # non-time obeys NaN comparison logic
+        if cmpop is not operator.ne:
+            assert (result.eq(False)).all()
+        else:
+            assert (result.eq(True)).all()
+    else:
+        assert result.isnull().all()
