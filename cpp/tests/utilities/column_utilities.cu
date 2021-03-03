@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2020, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -127,11 +127,20 @@ class corresponding_rows_not_equivalent {
       column_device_view const& lhs, column_device_view const& rhs, size_type index)
     {
       if (lhs.is_valid(index) and rhs.is_valid(index)) {
-        int ulp = 4;  // value taken from google test
-        T x     = lhs.element<T>(index);
-        T y     = rhs.element<T>(index);
-        return std::abs(x - y) > std::numeric_limits<T>::epsilon() * std::abs(x + y) * ulp &&
-               std::abs(x - y) >= std::numeric_limits<T>::min();
+        T const x = lhs.element<T>(index);
+        T const y = rhs.element<T>(index);
+
+        // Must handle inf and nan separately
+        if (std::isinf(x) || std::isinf(y)) {
+          return x != y;  // comparison of (inf==inf) returns true
+        } else if (std::isnan(x) || std::isnan(y)) {
+          return std::isnan(x) != std::isnan(y);  // comparison of (nan==nan) returns false
+        } else {
+          constexpr int ulp     = 4;  // ulp = unit of least precision, value taken from google test
+          T const abs_x_minus_y = std::abs(x - y);
+          return abs_x_minus_y >= std::numeric_limits<T>::min() &&
+                 abs_x_minus_y > std::numeric_limits<T>::epsilon() * std::abs(x + y) * ulp;
+        }
       } else {
         // if either is null, then the inequality was checked already
         return true;
@@ -160,39 +169,37 @@ class corresponding_rows_not_equivalent {
   }
 };
 
-std::string differences_message(thrust::device_vector<int> const& differences,
-                                column_view const& lhs,
-                                column_view const& rhs,
-                                bool all_differences,
-                                int depth)
+// Stringify the inconsistent values resulted from the comparison of two columns element-wise
+std::string stringify_column_differences(thrust::device_vector<int> const& differences,
+                                         column_view const& lhs,
+                                         column_view const& rhs,
+                                         bool print_all_differences,
+                                         int depth)
 {
   CUDF_EXPECTS(not differences.empty(), "Shouldn't enter this function if `differences` is empty");
-
   std::string const depth_str = depth > 0 ? "depth " + std::to_string(depth) + '\n' : "";
-
-  if (all_differences) {
+  if (print_all_differences) {
     std::ostringstream buffer;
     buffer << depth_str << "differences:" << std::endl;
 
+    // thrust may crash if a device_vector is passed to fixed_width_column_wrapper,
+    // thus we construct fixed_width_column_wrapper from a host_vector instead
+    thrust::host_vector<int> h_differences(differences);
     auto source_table = cudf::table_view({lhs, rhs});
-    auto diff_column  = fixed_width_column_wrapper<int32_t>(differences.begin(), differences.end());
-    auto diff_table   = cudf::gather(source_table, diff_column);
-
+    auto diff_column =
+      fixed_width_column_wrapper<int32_t>(h_differences.begin(), h_differences.end());
+    auto diff_table = cudf::gather(source_table, diff_column);
     //  Need to pull back the differences
     auto const h_left_strings  = to_strings(diff_table->get_column(0));
     auto const h_right_strings = to_strings(diff_table->get_column(1));
-
-    for (size_t i = 0; i < differences.size(); ++i)
-      buffer << depth_str << "lhs[" << differences[i] << "] = " << h_left_strings[i] << ", rhs["
-             << differences[i] << "] = " << h_right_strings[i] << std::endl;
-
+    for (size_t i = 0; i < h_differences.size(); ++i)
+      buffer << depth_str << "lhs[" << h_differences[i] << "] = " << h_left_strings[i] << ", rhs["
+             << h_differences[i] << "] = " << h_right_strings[i] << std::endl;
     return buffer.str();
   } else {
-    int index = differences[0];  // only stringify first difference
-
+    int index     = differences[0];  // only stringify first difference
     auto diff_lhs = cudf::detail::slice(lhs, index, index + 1);
     auto diff_rhs = cudf::detail::slice(rhs, index, index + 1);
-
     return depth_str + "first difference: " + "lhs[" + std::to_string(index) +
            "] = " + to_string(diff_lhs, "") + ", rhs[" + std::to_string(index) +
            "] = " + to_string(diff_rhs, "");
@@ -224,7 +231,8 @@ struct column_comparator_impl {
     differences.resize(thrust::distance(differences.begin(), diff_iter));  // shrink back down
 
     if (not differences.empty())
-      GTEST_FAIL() << differences_message(differences, lhs, rhs, print_all_differences, depth);
+      GTEST_FAIL() << stringify_column_differences(
+        differences, lhs, rhs, print_all_differences, depth);
   }
 };
 
@@ -315,7 +323,8 @@ struct column_comparator_impl<list_view, check_exact_equality> {
     differences.resize(thrust::distance(differences.begin(), diff_iter));  // shrink back down
 
     if (not differences.empty())
-      GTEST_FAIL() << differences_message(differences, lhs, rhs, print_all_differences, depth);
+      GTEST_FAIL() << stringify_column_differences(
+        differences, lhs, rhs, print_all_differences, depth);
 
     // recurse
     auto lhs_child = lhs_l.get_sliced_child(0);

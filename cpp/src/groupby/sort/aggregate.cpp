@@ -349,6 +349,11 @@ void aggregrate_result_functor::operator()<aggregation::NTH_ELEMENT>(aggregation
 template <>
 void aggregrate_result_functor::operator()<aggregation::COLLECT>(aggregation const& agg)
 {
+  auto null_handling =
+    static_cast<cudf::detail::collect_list_aggregation const&>(agg)._null_handling;
+  CUDF_EXPECTS(null_handling == null_policy::INCLUDE,
+               "null exclusion is not supported on groupby COLLECT aggregation.");
+
   if (cache.has_result(col_idx, agg)) return;
 
   auto result = detail::group_collect(

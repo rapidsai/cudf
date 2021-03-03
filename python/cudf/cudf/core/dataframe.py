@@ -9,7 +9,7 @@ import pickle
 import sys
 import warnings
 from collections import OrderedDict, defaultdict
-from collections.abc import Iterable, Mapping, Sequence
+from collections.abc import Iterable, Sequence
 from typing import Any, Set, TypeVar
 
 import cupy
@@ -409,9 +409,12 @@ class DataFrame(Frame, Serializable):
             index = as_index(index)
 
         self._index = as_index(index)
-
         # list-of-dicts case
         if len(data) > 0 and isinstance(data[0], dict):
+            data = DataFrame.from_pandas(pd.DataFrame(data))
+            self._data = data._data
+        # interval in a list
+        elif len(data) > 0 and isinstance(data[0], pd._libs.interval.Interval):
             data = DataFrame.from_pandas(pd.DataFrame(data))
             self._data = data._data
         else:
@@ -581,8 +584,8 @@ class DataFrame(Frame, Serializable):
     @property
     def dtypes(self):
         """Return the dtypes in this object."""
-        return pd.Series(
-            [x.dtype for x in self._data.columns], index=self._data.names
+        return cudf.utils.utils._create_pandas_series(
+            data=[x.dtype for x in self._data.columns], index=self._data.names,
         )
 
     @property
@@ -687,7 +690,7 @@ class DataFrame(Frame, Serializable):
         elif can_convert_to_column(arg):
             mask = arg
             if is_list_like(mask):
-                mask = pd.Series(mask)
+                mask = cudf.utils.utils._create_pandas_series(data=mask)
             if mask.dtype == "bool":
                 return self._apply_boolean_mask(mask)
             else:
@@ -3442,11 +3445,6 @@ class DataFrame(Frame, Serializable):
                 "Only errors='ignore' is currently supported"
             )
 
-        if level:
-            raise NotImplementedError(
-                "Only level=False is currently supported"
-            )
-
         if mapper is None and index is None and columns is None:
             return self.copy(deep=copy)
 
@@ -3464,35 +3462,29 @@ class DataFrame(Frame, Serializable):
                     "Implicit conversion of index to "
                     "mixed type is not yet supported."
                 )
-            out = DataFrame(
-                index=self.index.replace(
+
+            if level is not None and isinstance(
+                self.index, cudf.core.multiindex.MultiIndex
+            ):
+                out_index = self.index.copy(deep=copy)
+                out_index.get_level_values(level).to_frame().replace(
                     to_replace=list(index.keys()),
-                    replacement=list(index.values()),
+                    value=list(index.values()),
+                    inplace=True,
                 )
-            )
+                out = DataFrame(index=out_index)
+            else:
+                out = DataFrame(
+                    index=self.index.replace(
+                        to_replace=list(index.keys()),
+                        replacement=list(index.values()),
+                    )
+                )
         else:
             out = DataFrame(index=self.index)
 
         if columns:
-            postfix = 1
-            if isinstance(columns, Mapping):
-                # It is possible for DataFrames with a MultiIndex columns
-                # object to have columns with the same name. The following
-                # use of _cols.items and ("_1", "_2"... allows the use of
-                # rename in this case
-                for key, col in self._data.items():
-                    if key in columns:
-                        if columns[key] in out._data:
-                            out_column = columns[key] + "_" + str(postfix)
-                            postfix += 1
-                        else:
-                            out_column = columns[key]
-                        out[out_column] = col
-                    else:
-                        out[key] = col
-            elif callable(columns):
-                for key, col in self._data.items():
-                    out[columns(key)] = col
+            out._data = self._data.rename_levels(mapper=columns, level=level)
         else:
             out._data = self._data.copy(deep=copy)
 
@@ -5721,6 +5713,43 @@ class DataFrame(Frame, Serializable):
         DataFrame:
             DataFrame of booleans showing whether each element in
             the DataFrame is contained in values.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> df = cudf.DataFrame({'num_legs': [2, 4], 'num_wings': [2, 0]},
+        ...                     index=['falcon', 'dog'])
+        >>> df
+                num_legs  num_wings
+        falcon         2          2
+        dog            4          0
+
+        When ``values`` is a list check whether every value in the DataFrame
+        is present in the list (which animals have 0 or 2 legs or wings)
+
+        >>> df.isin([0, 2])
+                num_legs  num_wings
+        falcon      True       True
+        dog        False       True
+
+        When ``values`` is a dict, we can pass values to check for each
+        column separately:
+
+        >>> df.isin({'num_wings': [0, 3]})
+                num_legs  num_wings
+        falcon     False      False
+        dog        False       True
+
+        When ``values`` is a Series or DataFrame the index and column must
+        match. Note that 'falcon' does not match based on the number of legs
+        in other.
+
+        >>> other = cudf.DataFrame({'num_legs': [8, 2], 'num_wings': [0, 2]},
+        ...                         index=['spider', 'falcon'])
+        >>> df.isin(other)
+                num_legs  num_wings
+        falcon      True       True
+        dog        False      False
         """
 
         if isinstance(values, dict):
@@ -5816,7 +5845,7 @@ class DataFrame(Frame, Serializable):
         is_pure_dt = all(is_datetime_dtype(dt) for dt in self.dtypes)
 
         if not is_pure_dt:
-            filtered = self.select_dtypes(include=[np.number, np.bool])
+            filtered = self.select_dtypes(include=[np.number, np.bool_])
         else:
             filtered = self.copy(deep=False)
 
@@ -6595,8 +6624,8 @@ class DataFrame(Frame, Serializable):
             msg = "Kurtosis only supports int, float, and bool dtypes."
             raise NotImplementedError(msg)
 
-        self = self.select_dtypes(include=[np.number, np.bool])
-        return self._apply_support_method(
+        filtered = self.select_dtypes(include=[np.number, np.bool_])
+        return filtered._apply_support_method(
             "kurtosis",
             axis=axis,
             skipna=skipna,
@@ -6644,8 +6673,8 @@ class DataFrame(Frame, Serializable):
             msg = "Skew only supports int, float, and bool dtypes."
             raise NotImplementedError(msg)
 
-        self = self.select_dtypes(include=[np.number, np.bool])
-        return self._apply_support_method(
+        filtered = self.select_dtypes(include=[np.number, np.bool_])
+        return filtered._apply_support_method(
             "skew",
             axis=axis,
             skipna=skipna,
@@ -7525,10 +7554,11 @@ def merge(left, right, *args, **kwargs):
 
 # a bit of fanciness to inject docstring with left parameter
 merge_doc = DataFrame.merge.__doc__
-idx = merge_doc.find("right")
-merge.__doc__ = "".join(
-    [merge_doc[:idx], "\n\tleft : DataFrame\n\t", merge_doc[idx:]]
-)
+if merge_doc is not None:
+    idx = merge_doc.find("right")
+    merge.__doc__ = "".join(
+        [merge_doc[:idx], "\n\tleft : DataFrame\n\t", merge_doc[idx:]]
+    )
 
 
 def _align_indices(lhs, rhs):

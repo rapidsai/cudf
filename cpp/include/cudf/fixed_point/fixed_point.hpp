@@ -537,21 +537,23 @@ class fixed_point {
   explicit operator std::string() const
   {
     if (_scale < 0) {
-      int const n = std::pow(10, -_scale);
-      int const f = _value % n;
+      auto const av   = std::abs(_value);
+      int64_t const n = std::pow(10, -_scale);
+      int64_t const f = av % n;
       auto const num_zeros =
         std::max(0, (-_scale - static_cast<int32_t>(std::to_string(f).size())));
       auto const zeros = std::string(num_zeros, '0');
-      return std::to_string(_value / n) + std::string(".") + zeros +
-             std::to_string(std::abs(_value) % n);
+      auto const sign  = _value < 0 ? std::string("-") : std::string();
+      return sign + std::to_string(av / n) + std::string(".") + zeros + std::to_string(av % n);
     } else {
       auto const zeros = std::string(_scale, '0');
       return std::to_string(_value) + zeros;
     }
   }
-};  // namespace numeric
+};
 
-/** @brief Function for identifying integer overflow when adding
+/**
+ *  @brief Function for identifying integer overflow when adding
  *
  * @tparam Rep Type of integer to check for overflow on
  * @tparam T Types of lhs and rhs (ensures they are the same type)
