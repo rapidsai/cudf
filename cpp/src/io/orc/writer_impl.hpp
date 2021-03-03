@@ -64,6 +64,14 @@ struct stripe_rowgroups {
 };
 
 /**
+ * @brief Returns the total number of rowgroups in the list of contigious stripes.
+ */
+inline auto stripes_size(host_span<stripe_rowgroups const> stripes)
+{
+  return !stripes.empty() ? *stripes.back().cend() - stripes.front().first : 0;
+}
+
+/**
  * @brief List of per-column ORC streams.
  *
  * Provides interface to calculate their offsets.

@@ -592,7 +592,7 @@ encoded_data writer::impl::encode_columns(host_span<orc_column_view const> colum
                                           orc_streams const &streams)
 {
   auto const num_columns   = columns.size();
-  auto const num_rowgroups = *stripe_bounds.back().cend();
+  auto const num_rowgroups = stripes_size(stripe_bounds);
   hostdevice_2dvector<gpu::EncChunk> chunks(num_columns, num_rowgroups);
   hostdevice_2dvector<gpu::encoder_chunk_streams> chunk_streams(num_columns, num_rowgroups);
   auto const stream_offsets = streams.compute_offsets(columns, num_rowgroups);
@@ -777,7 +777,7 @@ std::vector<StripeInformation> writer::impl::gather_stripes(
 std::vector<std::vector<uint8_t>> writer::impl::gather_statistic_blobs(
   host_span<orc_column_view const> columns, host_span<stripe_rowgroups const> stripe_bounds)
 {
-  auto const num_rowgroups = *stripe_bounds.back().cend();
+  auto const num_rowgroups = stripes_size(stripe_bounds);
   size_t num_stat_blobs    = (1 + stripe_bounds.size()) * columns.size();
   size_t num_chunks        = num_rowgroups * columns.size();
 
