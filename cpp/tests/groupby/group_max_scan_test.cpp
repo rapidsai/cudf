@@ -38,12 +38,12 @@ TYPED_TEST(groupby_max_scan_test, basic)
   using R = cudf::detail::target_type_t<V, aggregation::MAX>;
 
   // clang-format off
-    fixed_width_column_wrapper<K> keys          {1, 2, 3, 1, 2, 2, 1, 3, 3, 2};
-    fixed_width_column_wrapper<V, int32_t> vals({5, 6, 7, 8, 9, 0, 1, 2, 3, 4});
+  fixed_width_column_wrapper<K> keys          {1, 2, 3, 1, 2, 2, 1, 3, 3, 2};
+  fixed_width_column_wrapper<V, int32_t> vals({5, 6, 7, 8, 9, 0, 1, 2, 3, 4});
 
-    fixed_width_column_wrapper<K> expect_keys          {1, 1, 1, 2, 2, 2, 2, 3, 3, 3};
-                                                    // {5, 8, 1, 6, 9, 0, 4, 7, 2, 3}
-    fixed_width_column_wrapper<R, int32_t> expect_vals({5, 8, 8, 6, 9, 9, 9, 7, 7, 7});
+  fixed_width_column_wrapper<K> expect_keys          {1, 1, 1, 2, 2, 2, 2, 3, 3, 3};
+                                                  // {5, 8, 1, 6, 9, 0, 4, 7, 2, 3}
+  fixed_width_column_wrapper<R, int32_t> expect_vals({5, 8, 8, 6, 9, 9, 9, 7, 7, 7});
   // clang-format on
 
   auto agg = cudf::make_max_aggregation();
@@ -60,11 +60,11 @@ TYPED_TEST(groupby_max_scan_test, empty_cols)
   using R = cudf::detail::target_type_t<V, aggregation::MAX>;
 
   // clang-format off
-    fixed_width_column_wrapper<K> keys        { };
-    fixed_width_column_wrapper<V> vals        { };
+  fixed_width_column_wrapper<K> keys        { };
+  fixed_width_column_wrapper<V> vals        { };
 
-    fixed_width_column_wrapper<K> expect_keys { };
-    fixed_width_column_wrapper<R> expect_vals { };
+  fixed_width_column_wrapper<K> expect_keys { };
+  fixed_width_column_wrapper<R> expect_vals { };
   // clang-format on
 
   auto agg = cudf::make_max_aggregation();
@@ -81,11 +81,11 @@ TYPED_TEST(groupby_max_scan_test, zero_valid_keys)
   using R = cudf::detail::target_type_t<V, aggregation::MAX>;
 
   // clang-format off
-    fixed_width_column_wrapper<K> keys(         {1, 2, 3}, all_null() );
-    fixed_width_column_wrapper<V, int32_t> vals({3, 4, 5});
+  fixed_width_column_wrapper<K> keys(         {1, 2, 3}, all_null() );
+  fixed_width_column_wrapper<V, int32_t> vals({3, 4, 5});
 
-    fixed_width_column_wrapper<K> expect_keys { };
-    fixed_width_column_wrapper<R> expect_vals { };
+  fixed_width_column_wrapper<K> expect_keys { };
+  fixed_width_column_wrapper<R> expect_vals { };
   // clang-format on
 
   auto agg = cudf::make_max_aggregation();
@@ -102,11 +102,11 @@ TYPED_TEST(groupby_max_scan_test, zero_valid_values)
   using R = cudf::detail::target_type_t<V, aggregation::MAX>;
 
   // clang-format off
-    fixed_width_column_wrapper<K> keys          {1, 1, 1};
-    fixed_width_column_wrapper<V, int32_t> vals({3, 4, 5}, all_null());
+  fixed_width_column_wrapper<K> keys          {1, 1, 1};
+  fixed_width_column_wrapper<V, int32_t> vals({3, 4, 5}, all_null());
 
-    fixed_width_column_wrapper<K> expect_keys          {  1,  1,  1};
-    fixed_width_column_wrapper<R, int32_t> expect_vals({ -1, -1, -1}, all_null());
+  fixed_width_column_wrapper<K> expect_keys          {  1,  1,  1};
+  fixed_width_column_wrapper<R, int32_t> expect_vals({ -1, -1, -1}, all_null());
   // clang-format on
 
   auto agg = cudf::make_max_aggregation();
@@ -123,16 +123,16 @@ TYPED_TEST(groupby_max_scan_test, null_keys_and_values)
   using R = cudf::detail::target_type_t<V, aggregation::MAX>;
 
   // clang-format off
-    fixed_width_column_wrapper<K> keys(         {1, 2, 3, 1, 2, 2, 1, 3, 3, 2, 4},
-                                                {1, 1, 1, 1, 1, 1, 1, 0, 1, 1, 1});
-    fixed_width_column_wrapper<V, int32_t> vals({5, 6, 7, 8, 9, 0, 1, 2, 3, 4, 4},
-                                                {0, 1, 1, 1, 1, 0, 1, 1, 1, 1, 0});
+  fixed_width_column_wrapper<K> keys(         {1, 2, 3, 1, 2, 2, 1, 3, 3, 2, 4},
+                                              {1, 1, 1, 1, 1, 1, 1, 0, 1, 1, 1});
+  fixed_width_column_wrapper<V, int32_t> vals({5, 6, 7, 8, 9, 0, 1, 2, 3, 4, 4},
+                                              {0, 1, 1, 1, 1, 0, 1, 1, 1, 1, 0});
 
-                                          //  { 1, 1, 1, 2, 2, 2, 2, 3, _, 3, 4}
-    fixed_width_column_wrapper<K> expect_keys({ 1, 1, 1, 2, 2, 2, 2, 3,/**/3, 4}, all_valid());
-                                          //  { -, 3, 6, 1, 4, -, 9, 2, _, 8, -}
-    fixed_width_column_wrapper<R, int32_t> expect_vals({-1, 8, 8, 6, 9,-1, 9, 7,/*2,*/7,-1},
-                                                       { 0, 1, 1, 1, 1, 0, 1, 1,/*1,*/1, 0});
+                                        //  { 1, 1, 1, 2, 2, 2, 2, 3, _, 3, 4}
+  fixed_width_column_wrapper<K> expect_keys({ 1, 1, 1, 2, 2, 2, 2, 3,/**/3, 4}, all_valid());
+                                        //  { -, 3, 6, 1, 4, -, 9, 2, _, 8, -}
+  fixed_width_column_wrapper<R, int32_t> expect_vals({-1, 8, 8, 6, 9,-1, 9, 7,/*2,*/7,-1},
+                                                      { 0, 1, 1, 1, 1, 0, 1, 1,/*1,*/1, 0});
   // clang-format on
 
   auto agg = cudf::make_max_aggregation();
