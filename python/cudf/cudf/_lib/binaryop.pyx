@@ -153,18 +153,6 @@ cdef binaryop_s_v(DeviceScalar lhs, Column rhs,
 
     return Column.from_unique_ptr(move(c_result))
 
-
-def handle_null_for_string_column(Column input_col, op):
-    if op in ('eq', 'lt', 'le', 'gt', 'ge'):
-        return replace_nulls(input_col, DeviceScalar(False, 'bool'))
-
-    elif op == 'ne':
-        return replace_nulls(input_col, DeviceScalar(True, 'bool'))
-
-    # Nothing needs to be done
-    return input_col
-
-
 def binaryop(lhs, rhs, op, dtype):
     """
     Dispatches a binary op call to the appropriate libcudf function:
