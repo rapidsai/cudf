@@ -195,6 +195,10 @@ add_library(cudf
     src/groupby/sort/group_std.cu
     src/groupby/sort/group_sum.cu
     src/groupby/sort/scan.cpp
+    src/groupby/sort/group_count_scan.cu
+    src/groupby/sort/group_max_scan.cu
+    src/groupby/sort/group_min_scan.cu
+    src/groupby/sort/group_sum_scan.cu
     src/groupby/sort/sort_helper.cu
     src/hash/hashing.cu
     src/interop/dlpack.cpp
