@@ -1789,7 +1789,8 @@ public final class Table implements AutoCloseable {
    * lists and empty lists will be represented with a null entry for that column in that row.
    *
    * @param index Column index to explode inside the table.
-   * @return A new table with explode_col exploded.
+   * @return A new table with exploded value and position. The column order of return table is
+   *         [cols before explode_input, explode_position, explode_value, cols after explode_input].
    */
   public Table explodePosition(int index) {
     assert 0 <= index && index < columns.length : "Column index is out of range";
