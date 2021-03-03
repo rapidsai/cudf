@@ -61,7 +61,7 @@
 #include <cudf/lists/lists_column_view.hpp>
 #include <cudf/structs/structs_column_view.hpp>
 #include <map_lookup.hpp>
-#include "cudf/types.hpp"
+#include <cudf/types.hpp>
 
 #include "cudf_jni_apis.hpp"
 #include "dtype_utils.hpp"
