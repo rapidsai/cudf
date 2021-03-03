@@ -1802,9 +1802,8 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_replaceChildrenWithViews(
 
     JNI_ARG_CHECK(env, m.empty(), "One or more invalid child indices passed to be replaced", 0);
 
-    std::unique_ptr<cudf::column_view> n_new_nested(new cudf::column_view(n_col_view->type(), n_col_view->size(), 
+    return reinterpret_cast<jlong>(new cudf::column_view(n_col_view->type(), n_col_view->size(), 
     nullptr, n_col_view->null_mask(), n_col_view->null_count(), n_col_view->offset(), new_children));
-    return reinterpret_cast<jlong>(n_new_nested.release());
   }
   CATCH_STD(env, 0);
 }
