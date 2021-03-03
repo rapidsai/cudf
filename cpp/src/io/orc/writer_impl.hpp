@@ -213,6 +213,7 @@ class writer::impl {
                           hostdevice_vector<gpu::DictionaryChunk> const& dict,
                           uint32_t* dict_index,
                           hostdevice_vector<gpu::StripeDictionary>& stripe_dict);
+
   /**
    * @brief Builds up per-column streams.
    *
