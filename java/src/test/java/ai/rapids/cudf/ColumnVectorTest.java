@@ -2061,10 +2061,10 @@ public class ColumnVectorTest extends CudfTestBase {
   }
 
   @Test
-  void testLogicalCast() {
+  void testBitCast() {
     try (ColumnVector cv = ColumnVector.decimalFromLongs(-2, 1L, 2L, 100L, 552L);
          ColumnVector expected = ColumnVector.fromLongs(1L, 2L, 100L, 552L);
-         ColumnView casted = cv.logicalCastTo(DType.INT64)) {
+         ColumnView casted = cv.bitCastTo(DType.INT64)) {
       assertColumnsAreEqual(expected, casted);
     }
   }
