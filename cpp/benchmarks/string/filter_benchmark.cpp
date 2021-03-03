@@ -20,15 +20,21 @@
 #include <benchmarks/synchronization/synchronization.hpp>
 
 #include <cudf/scalar/scalar.hpp>
-#include <cudf/strings/replace.hpp>
+#include <cudf/strings/char_types/char_types.hpp>
 #include <cudf/strings/strings_column_view.hpp>
+#include <cudf/strings/strip.hpp>
+#include <cudf/strings/translate.hpp>
+#include <cudf_test/column_wrapper.hpp>
 
 #include <limits>
+#include <vector>
 
-class StringReplaceScalar : public cudf::benchmark {
+enum FilterAPI { filter, filter_chars, strip };
+
+class StringFilterChars : public cudf::benchmark {
 };
 
-static void BM_replace_scalar(benchmark::State& state)
+static void BM_filter_chars(benchmark::State& state, FilterAPI api)
 {
   cudf::size_type const n_rows{static_cast<cudf::size_type>(state.range(0))};
   cudf::size_type const max_str_length{static_cast<cudf::size_type>(state.range(1))};
@@ -38,12 +44,18 @@ static void BM_replace_scalar(benchmark::State& state)
   auto const table =
     create_random_table({cudf::type_id::STRING}, 1, row_count{n_rows}, table_profile);
   cudf::strings_column_view input(table->view().column(0));
-  cudf::string_scalar target("+");
-  cudf::string_scalar repl("");
+
+  auto const types = cudf::strings::string_character_types::SPACE;
+  std::vector<std::pair<cudf::char_utf8, cudf::char_utf8>> filter_table{
+    {cudf::char_utf8{'a'}, cudf::char_utf8{'c'}}};
 
   for (auto _ : state) {
     cuda_event_timer raii(state, true, 0);
-    cudf::strings::replace(input, target, repl);
+    switch (api) {
+      case filter: cudf::strings::filter_characters_of_type(input, types); break;
+      case filter_chars: cudf::strings::filter_characters(input, filter_table); break;
+      case strip: cudf::strings::strip(input); break;
+    }
   }
 
   state.SetBytesProcessed(state.iterations() * input.chars_size());
@@ -68,12 +80,14 @@ static void generate_bench_args(benchmark::internal::Benchmark* b)
   }
 }
 
-#define STRINGS_BENCHMARK_DEFINE(name)                 \
-  BENCHMARK_DEFINE_F(StringReplaceScalar, name)        \
-  (::benchmark::State & st) { BM_replace_scalar(st); } \
-  BENCHMARK_REGISTER_F(StringReplaceScalar, name)      \
-    ->Apply(generate_bench_args)                       \
-    ->UseManualTime()                                  \
+#define STRINGS_BENCHMARK_DEFINE(name)                                \
+  BENCHMARK_DEFINE_F(StringFilterChars, name)                         \
+  (::benchmark::State & st) { BM_filter_chars(st, FilterAPI::name); } \
+  BENCHMARK_REGISTER_F(StringFilterChars, name)                       \
+    ->Apply(generate_bench_args)                                      \
+    ->UseManualTime()                                                 \
     ->Unit(benchmark::kMillisecond);
 
-STRINGS_BENCHMARK_DEFINE(replace_scalar)
+STRINGS_BENCHMARK_DEFINE(filter)
+STRINGS_BENCHMARK_DEFINE(filter_chars)
+STRINGS_BENCHMARK_DEFINE(strip)

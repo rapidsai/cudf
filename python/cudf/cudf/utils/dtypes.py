@@ -14,6 +14,7 @@ from pandas.core.dtypes.dtypes import CategoricalDtype, CategoricalDtypeType
 
 import cudf
 from cudf._lib.scalar import DeviceScalar, _is_null_host_scalar
+from cudf.core._compat import PANDAS_GE_120
 
 _NA_REP = "<NA>"
 _np_pa_dtypes = {
@@ -72,6 +73,12 @@ pandas_dtypes_to_cudf_dtypes = {
     pd.BooleanDtype(): np.dtype("bool_"),
     pd.StringDtype(): np.dtype("object"),
 }
+
+if PANDAS_GE_120:
+    cudf_dtypes_to_pandas_dtypes[np.dtype("float32")] = pd.Float32Dtype()
+    cudf_dtypes_to_pandas_dtypes[np.dtype("float64")] = pd.Float64Dtype()
+    pandas_dtypes_to_cudf_dtypes[pd.Float32Dtype()] = np.dtype("float32")
+    pandas_dtypes_to_cudf_dtypes[pd.Float64Dtype()] = np.dtype("float64")
 
 SIGNED_INTEGER_TYPES = {"int8", "int16", "int32", "int64"}
 UNSIGNED_TYPES = {"uint8", "uint16", "uint32", "uint64"}
@@ -232,10 +239,22 @@ def is_list_dtype(obj):
 
 def is_struct_dtype(obj):
     return (
-        type(obj) is cudf.core.dtypes.StructDtype
+        isinstance(obj, cudf.core.dtypes.StructDtype)
         or obj is cudf.core.dtypes.StructDtype
         or (isinstance(obj, str) and obj == cudf.core.dtypes.StructDtype.name)
         or (hasattr(obj, "dtype") and is_struct_dtype(obj.dtype))
+    )
+
+
+def is_interval_dtype(obj):
+    return (
+        isinstance(obj, cudf.core.dtypes.IntervalDtype)
+        or isinstance(obj, pd.core.dtypes.dtypes.IntervalDtype)
+        or obj is cudf.core.dtypes.IntervalDtype
+        or (
+            isinstance(obj, str) and obj == cudf.core.dtypes.IntervalDtype.name
+        )
+        or (hasattr(obj, "dtype") and is_interval_dtype(obj.dtype))
     )
 
 

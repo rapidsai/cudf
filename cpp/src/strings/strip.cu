@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2020, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -35,16 +35,6 @@ namespace cudf {
 namespace strings {
 namespace detail {
 namespace {
-/**
- * @brief Used as template parameter to divide size calculation from
- * the actual string operation within a function.
- *
- * Useful when most of the logic is identical for both passes.
- */
-enum TwoPass {
-  SizeOnly = 0,  ///< calculate the size only
-  ExecuteOp      ///< run the string operation
-};
 
 /**
  * @brief Strip characters from the beginning and/or end of a string.
@@ -53,51 +43,52 @@ enum TwoPass {
  * of any characters found in d_to_strip or whitespace if
  * d_to_strip is empty.
  *
- * @tparam Pass Allows computing only the size of the output
- *              or writing the output to device memory.
  */
-template <TwoPass Pass = SizeOnly>
 struct strip_fn {
   column_device_view const d_strings;
-  strip_type stype;  // right, left, or both
-  string_view d_to_strip;
-  int32_t const* d_offsets{};
+  strip_type const stype;  // right, left, or both
+  string_view const d_to_strip;
+  int32_t* d_offsets{};
   char* d_chars{};
 
-  __device__ bool is_strip_character(char_utf8 chr)
+  __device__ void operator()(size_type idx)
   {
-    return d_to_strip.empty() ? (chr <= ' ') :  // whitespace check
-             thrust::any_of(
-               thrust::seq, d_to_strip.begin(), d_to_strip.end(), [chr] __device__(char_utf8 c) {
-                 return c == chr;
-               });
-  }
-
-  __device__ size_type operator()(size_type idx)
-  {
-    if (d_strings.is_null(idx)) return 0;
-    string_view d_str     = d_strings.element<string_view>(idx);
-    size_type length      = d_str.length();
-    size_type left_offset = 0;
-    auto itr              = d_str.begin();
-    if (stype == strip_type::LEFT || stype == strip_type::BOTH) {
-      for (; itr != d_str.end();) {
-        if (!is_strip_character(*itr++)) break;
-        left_offset = itr.byte_offset();
-      }
+    if (d_strings.is_null(idx)) {
+      if (!d_chars) d_offsets[idx] = 0;
+      return;
     }
+    auto const d_str = d_strings.element<string_view>(idx);
+
+    auto is_strip_character = [d_to_strip = d_to_strip] __device__(char_utf8 chr) -> bool {
+      return d_to_strip.empty() ? (chr <= ' ') :  // whitespace check
+               thrust::any_of(
+                 thrust::seq, d_to_strip.begin(), d_to_strip.end(), [chr] __device__(char_utf8 c) {
+                   return c == chr;
+                 });
+    };
+
+    size_type const left_offset = [&] {
+      if (stype != strip_type::LEFT && stype != strip_type::BOTH) return 0;
+      auto const itr =
+        thrust::find_if_not(thrust::seq, d_str.begin(), d_str.end(), is_strip_character);
+      return itr != d_str.end() ? itr.byte_offset() : d_str.size_bytes();
+    }();
+
     size_type right_offset = d_str.size_bytes();
     if (stype == strip_type::RIGHT || stype == strip_type::BOTH) {
-      itr = d_str.end();
+      auto const length = d_str.length();
+      auto itr          = d_str.end();
       for (size_type n = 0; n < length; ++n) {
         if (!is_strip_character(*(--itr))) break;
         right_offset = itr.byte_offset();
       }
     }
-    size_type bytes = 0;
-    if (right_offset > left_offset) bytes = right_offset - left_offset;
-    if (Pass == ExecuteOp) memcpy(d_chars + d_offsets[idx], d_str.data() + left_offset, bytes);
-    return bytes;
+
+    auto const bytes = (right_offset > left_offset) ? right_offset - left_offset : 0;
+    if (d_chars)
+      memcpy(d_chars + d_offsets[idx], d_str.data() + left_offset, bytes);
+    else
+      d_offsets[idx] = bytes;
   }
 };
 
@@ -110,42 +101,22 @@ std::unique_ptr<column> strip(
   rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
 {
-  auto strings_count = strings.size();
-  if (strings_count == 0) return detail::make_empty_strings_column(stream, mr);
+  if (strings.is_empty()) return detail::make_empty_strings_column(stream, mr);
 
   CUDF_EXPECTS(to_strip.is_valid(), "Parameter to_strip must be valid");
-  string_view d_to_strip(to_strip.data(), to_strip.size());
+  string_view const d_to_strip(to_strip.data(), to_strip.size());
 
-  auto strings_column  = column_device_view::create(strings.parent(), stream);
-  auto d_column        = *strings_column;
-  size_type null_count = strings.null_count();
+  auto const d_column = column_device_view::create(strings.parent(), stream);
 
-  // copy null mask
-  rmm::device_buffer null_mask = cudf::detail::copy_bitmask(strings.parent(), stream, mr);
+  // this utility calls the strip_fn to build the offsets and chars columns
+  auto children = cudf::strings::detail::make_strings_children(
+    strip_fn{*d_column, stype, d_to_strip}, strings.size(), strings.null_count(), stream, mr);
 
-  // build offsets column -- calculate the size of each output string
-  auto offsets_transformer_itr = thrust::make_transform_iterator(
-    thrust::make_counting_iterator<size_type>(0), strip_fn<SizeOnly>{d_column, stype, d_to_strip});
-  auto offsets_column = make_offsets_child_column(
-    offsets_transformer_itr, offsets_transformer_itr + strings_count, stream, mr);
-  auto offsets_view = offsets_column->view();
-  auto d_offsets    = offsets_view.data<int32_t>();
-
-  // build the chars column -- convert characters based on case_flag parameter
-  size_type bytes   = thrust::device_pointer_cast(d_offsets)[strings_count];
-  auto chars_column = create_chars_child_column(strings_count, null_count, bytes, stream, mr);
-  auto chars_view   = chars_column->mutable_view();
-  auto d_chars      = chars_view.data<char>();
-  thrust::for_each_n(rmm::exec_policy(stream),
-                     thrust::make_counting_iterator<size_type>(0),
-                     strings_count,
-                     strip_fn<ExecuteOp>{d_column, stype, d_to_strip, d_offsets, d_chars});
-
-  return make_strings_column(strings_count,
-                             std::move(offsets_column),
-                             std::move(chars_column),
-                             null_count,
-                             std::move(null_mask),
+  return make_strings_column(strings.size(),
+                             std::move(children.first),
+                             std::move(children.second),
+                             strings.null_count(),
+                             cudf::detail::copy_bitmask(strings.parent(), stream, mr),
                              stream,
                              mr);
 }
