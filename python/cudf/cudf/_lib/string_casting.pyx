@@ -780,6 +780,9 @@ def is_hex(Column source_strings):
 
 
 def from_decimal(Column input_col):
+    """
+    Converts a `DecimalColumn` to a `StringColumn`.
+    """ 
     cdef column_view input_column_view = input_col.view()
     cdef unique_ptr[column] c_result
     with nogil:
@@ -791,6 +794,10 @@ def from_decimal(Column input_col):
 
 
 def to_decimal(Column input_col, object out_type):
+    """
+    Returns a `DecimalColumn` from the provided `StringColumn`
+    using the scale in the `out_type`.
+    """
     cdef column_view input_column_view = input_col.view()
     cdef unique_ptr[column] c_result
     cdef int scale = out_type.scale
@@ -806,19 +813,19 @@ def to_decimal(Column input_col, object out_type):
     return result
 
 
-def is_fixed_point(Column input_col, object out_type):
+def is_fixed_point(Column input_col, object dtype):
     """
     Returns a Column of boolean values with True for `input_col`
     that have fixed-point characters.
     """
     cdef unique_ptr[column] c_result
     cdef column_view source_view = input_col.view()
-    cdef int scale = out_type.scale
-    cdef data_type c_out_type = data_type(DECIMAL64, -scale)
+    cdef int scale = dtype.scale
+    cdef data_type c_dtype = data_type(DECIMAL64, -scale)
     with nogil:
         c_result = move(cpp_is_fixed_point(
             source_view,
-            c_out_type
+            c_dtype
         ))
 
     return Column.from_unique_ptr(move(c_result))
