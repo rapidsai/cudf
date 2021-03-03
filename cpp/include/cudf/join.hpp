@@ -507,7 +507,6 @@ class hash_join {
    * undefined.
    *
    * @param build The build table, from which the hash table is built.
-   * @param build_on The column indices from `build` to join on.
    * @param compare_nulls Controls whether null join-key values should match or not.
    * @param stream CUDA stream used for device memory operations and kernel launches
    */
@@ -516,10 +515,19 @@ class hash_join {
             rmm::cuda_stream_view stream = rmm::cuda_stream_default);
 
   /**
-   * @brief Performs  an inner join on the specified columns of two
-   * tables (`left`, `right`), and returns the row indices corresponding
-   * to the result.
-   */ // TODO: explain this better
+   * Returns the row indices that can be used to construct the result of performing
+   * an inner join between two tables. @see cudf::inner_join().
+   *
+   * @param probe The probe table, from which the tuples are probed.
+   * @param compare_nulls Controls whether null join-key values should match or not.
+   * @param mr Device memory resource used to allocate the returned table and columns' device
+   * memory.
+   * @param stream CUDA stream used for device memory operations and kernel launches
+   *
+   * @return A pair of columns [`left_indices`, `right_indices`] that can be used to construct
+   * the result of performing an inner join between two tables with `build` and `probe`
+   * as the the join keys .
+   */
   std::pair<rmm::device_uvector<size_type>, rmm::device_uvector<size_type>> inner_join(
     cudf::table_view const& probe,
     null_equality compare_nulls         = null_equality::EQUAL,
@@ -527,21 +535,40 @@ class hash_join {
     rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource()) const;
 
   /**
-   * @brief Performs a left join on the specified columns of two
-   * tables (`left`, `right`), and returns the row indices corresponding
-   * to the result.
-   */ // TODO: explain this better
+   * Returns the row indices that can be used to construct the result of performing
+   * a left join between two tables. @see cudf::left_join().
+   *
+   * @param probe The probe table, from which the tuples are probed.
+   * @param compare_nulls Controls whether null join-key values should match or not.
+   * @param mr Device memory resource used to allocate the returned table and columns' device
+   * memory.
+   * @param stream CUDA stream used for device memory operations and kernel launches
+   *
+   * @return A pair of columns [`left_indices`, `right_indices`] that can be used to construct
+   * the result of performing a left join between two tables with `build` and `probe`
+   * as the the join keys .
+   */
   std::pair<rmm::device_uvector<size_type>, rmm::device_uvector<size_type>> left_join(
     cudf::table_view const& probe,
     null_equality compare_nulls         = null_equality::EQUAL,
     rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
     rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource()) const;
 
+
   /**
-   * @brief Performs a full join on the specified columns of two
-   * tables (`left`, `right`), and returns the row indices corresponding
-   * to the result.
-   */ // TODO: explain this better
+   * Returns the row indices that can be used to construct the result of performing
+   * a full join between two tables. @see cudf::full_join().
+   *
+   * @param probe The probe table, from which the tuples are probed.
+   * @param compare_nulls Controls whether null join-key values should match or not.
+   * @param mr Device memory resource used to allocate the returned table and columns' device
+   * memory.
+   * @param stream CUDA stream used for device memory operations and kernel launches
+   *
+   * @return A pair of columns [`left_indices`, `right_indices`] that can be used to construct
+   * the result of performing a full join between two tables with `build` and `probe`
+   * as the the join keys .
+   */
   std::pair<rmm::device_uvector<size_type>, rmm::device_uvector<size_type>> full_join(
     cudf::table_view const& probe,
     null_equality compare_nulls         = null_equality::EQUAL,
