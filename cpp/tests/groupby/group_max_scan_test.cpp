@@ -31,90 +31,98 @@ struct groupby_max_scan_test : public cudf::test::BaseFixture {
 
 TYPED_TEST_CASE(groupby_max_scan_test, cudf::test::FixedWidthTypesWithoutFixedPoint);
 
-// clang-format off
 TYPED_TEST(groupby_max_scan_test, basic)
 {
-    using K = int32_t;
-    using V = TypeParam;
-    using R = cudf::detail::target_type_t<V, aggregation::MAX>;
+  using K = int32_t;
+  using V = TypeParam;
+  using R = cudf::detail::target_type_t<V, aggregation::MAX>;
 
+  // clang-format off
     fixed_width_column_wrapper<K> keys          {1, 2, 3, 1, 2, 2, 1, 3, 3, 2};
     fixed_width_column_wrapper<V, int32_t> vals({5, 6, 7, 8, 9, 0, 1, 2, 3, 4});
 
     fixed_width_column_wrapper<K> expect_keys          {1, 1, 1, 2, 2, 2, 2, 3, 3, 3};
                                                     // {5, 8, 1, 6, 9, 0, 4, 7, 2, 3}
     fixed_width_column_wrapper<R, int32_t> expect_vals({5, 8, 8, 6, 9, 9, 9, 7, 7, 7});
+  // clang-format on
 
-    auto agg = cudf::make_max_aggregation();
-    test_single_scan(keys, vals, expect_keys, expect_vals, std::move(agg));
+  auto agg = cudf::make_max_aggregation();
+  test_single_scan(keys, vals, expect_keys, expect_vals, std::move(agg));
 
-    auto agg2 = cudf::make_max_aggregation();
-    test_single_scan(keys, vals, expect_keys, expect_vals, std::move(agg2));
+  auto agg2 = cudf::make_max_aggregation();
+  test_single_scan(keys, vals, expect_keys, expect_vals, std::move(agg2));
 }
 
 TYPED_TEST(groupby_max_scan_test, empty_cols)
 {
-    using K = int32_t;
-    using V = TypeParam;
-    using R = cudf::detail::target_type_t<V, aggregation::MAX>;
+  using K = int32_t;
+  using V = TypeParam;
+  using R = cudf::detail::target_type_t<V, aggregation::MAX>;
 
+  // clang-format off
     fixed_width_column_wrapper<K> keys        { };
     fixed_width_column_wrapper<V> vals        { };
 
     fixed_width_column_wrapper<K> expect_keys { };
     fixed_width_column_wrapper<R> expect_vals { };
+  // clang-format on
 
-    auto agg = cudf::make_max_aggregation();
-    test_single_scan(keys, vals, expect_keys, expect_vals, std::move(agg));
+  auto agg = cudf::make_max_aggregation();
+  test_single_scan(keys, vals, expect_keys, expect_vals, std::move(agg));
 
-    auto agg2 = cudf::make_max_aggregation();
-    test_single_scan(keys, vals, expect_keys, expect_vals, std::move(agg2));
+  auto agg2 = cudf::make_max_aggregation();
+  test_single_scan(keys, vals, expect_keys, expect_vals, std::move(agg2));
 }
 
 TYPED_TEST(groupby_max_scan_test, zero_valid_keys)
 {
-    using K = int32_t;
-    using V = TypeParam;
-    using R = cudf::detail::target_type_t<V, aggregation::MAX>;
+  using K = int32_t;
+  using V = TypeParam;
+  using R = cudf::detail::target_type_t<V, aggregation::MAX>;
 
-    fixed_width_column_wrapper<K> keys( { 1, 2, 3}, all_null() );
+  // clang-format off
+    fixed_width_column_wrapper<K> keys(         {1, 2, 3}, all_null() );
     fixed_width_column_wrapper<V, int32_t> vals({3, 4, 5});
 
     fixed_width_column_wrapper<K> expect_keys { };
     fixed_width_column_wrapper<R> expect_vals { };
+  // clang-format on
 
-    auto agg = cudf::make_max_aggregation();
-    test_single_scan(keys, vals, expect_keys, expect_vals, std::move(agg));
+  auto agg = cudf::make_max_aggregation();
+  test_single_scan(keys, vals, expect_keys, expect_vals, std::move(agg));
 
-    auto agg2 = cudf::make_max_aggregation();
-    test_single_scan(keys, vals, expect_keys, expect_vals, std::move(agg2));
+  auto agg2 = cudf::make_max_aggregation();
+  test_single_scan(keys, vals, expect_keys, expect_vals, std::move(agg2));
 }
 
 TYPED_TEST(groupby_max_scan_test, zero_valid_values)
 {
-    using K = int32_t;
-    using V = TypeParam;
-    using R = cudf::detail::target_type_t<V, aggregation::MAX>;
+  using K = int32_t;
+  using V = TypeParam;
+  using R = cudf::detail::target_type_t<V, aggregation::MAX>;
 
-    fixed_width_column_wrapper<K> keys   { 1, 1, 1};
+  // clang-format off
+    fixed_width_column_wrapper<K> keys          {1, 1, 1};
     fixed_width_column_wrapper<V, int32_t> vals({3, 4, 5}, all_null());
 
-    fixed_width_column_wrapper<K> expect_keys { 1, 1, 1 };
-    fixed_width_column_wrapper<R, int32_t> expect_vals({ -1, -1, -1 }, all_null());
+    fixed_width_column_wrapper<K> expect_keys          {  1,  1,  1};
+    fixed_width_column_wrapper<R, int32_t> expect_vals({ -1, -1, -1}, all_null());
+  // clang-format on
 
-    auto agg = cudf::make_max_aggregation();
-    test_single_scan(keys, vals, expect_keys, expect_vals, std::move(agg));
+  auto agg = cudf::make_max_aggregation();
+  test_single_scan(keys, vals, expect_keys, expect_vals, std::move(agg));
 
-    auto agg2 = cudf::make_max_aggregation();
-    test_single_scan(keys, vals, expect_keys, expect_vals, std::move(agg2));
+  auto agg2 = cudf::make_max_aggregation();
+  test_single_scan(keys, vals, expect_keys, expect_vals, std::move(agg2));
 }
 
 TYPED_TEST(groupby_max_scan_test, null_keys_and_values)
 {
-    using K = int32_t;
-    using V = TypeParam;
-    using R = cudf::detail::target_type_t<V, aggregation::MAX>;
+  using K = int32_t;
+  using V = TypeParam;
+  using R = cudf::detail::target_type_t<V, aggregation::MAX>;
 
+  // clang-format off
     fixed_width_column_wrapper<K> keys(         {1, 2, 3, 1, 2, 2, 1, 3, 3, 2, 4},
                                                 {1, 1, 1, 1, 1, 1, 1, 0, 1, 1, 1});
     fixed_width_column_wrapper<V, int32_t> vals({5, 6, 7, 8, 9, 0, 1, 2, 3, 4, 4},
@@ -125,15 +133,14 @@ TYPED_TEST(groupby_max_scan_test, null_keys_and_values)
                                           //  { -, 3, 6, 1, 4, -, 9, 2, _, 8, -}
     fixed_width_column_wrapper<R, int32_t> expect_vals({-1, 8, 8, 6, 9,-1, 9, 7,/*2,*/7,-1},
                                                        { 0, 1, 1, 1, 1, 0, 1, 1,/*1,*/1, 0});
+  // clang-format on
 
-    auto agg = cudf::make_max_aggregation();
-    test_single_scan(keys, vals, expect_keys, expect_vals, std::move(agg));
+  auto agg = cudf::make_max_aggregation();
+  test_single_scan(keys, vals, expect_keys, expect_vals, std::move(agg));
 
-    auto agg2 = cudf::make_max_aggregation();
-    test_single_scan(keys, vals, expect_keys, expect_vals, std::move(agg2));
+  auto agg2 = cudf::make_max_aggregation();
+  test_single_scan(keys, vals, expect_keys, expect_vals, std::move(agg2));
 }
-
-// clang-format on
 
 template <typename T>
 struct FixedPointTestBothReps : public cudf::test::BaseFixture {
@@ -152,12 +159,14 @@ TYPED_TEST(FixedPointTestBothReps, GroupBySortMaxScanDecimalAsValue)
 
   for (auto const i : {2, 1, 0, -1, -2}) {
     auto const scale = scale_type{i};
+    // clang-format off
     auto const keys  = fixed_width_column_wrapper<K>{1, 2, 3, 1, 2, 2, 1, 3, 3, 2};
-    auto const vals  = fp_wrapper{{5, 6, 7, 8, 9, 0, 1, 2, 3, 4}, scale};
+    auto const vals  = fp_wrapper{                  {5, 6, 7, 8, 9, 0, 1, 2, 3, 4}, scale};
 
     //                                                        {5, 8, 1, 6, 9, 0, 4, 7, 2, 3}
     auto const expect_keys     = fixed_width_column_wrapper<K>{1, 1, 1, 2, 2, 2, 2, 3, 3, 3};
-    auto const expect_vals_max = fp_wrapper{{5, 8, 8, 6, 9, 9, 9, 7, 7, 7}, scale};
+    auto const expect_vals_max = fp_wrapper{                  {5, 8, 8, 6, 9, 9, 9, 7, 7, 7}, scale};
+    // clang-format on
 
     auto agg2 = cudf::make_max_aggregation();
     test_single_scan(keys, vals, expect_keys, expect_vals_max, std::move(agg2));
