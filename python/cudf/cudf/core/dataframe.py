@@ -6931,7 +6931,7 @@ class DataFrame(Frame, Serializable):
         df.columns = self.columns
         return df
 
-    def corr(self, method):
+    def corr(self, method="pearson"):
         """Compute the correlation matrix of a DataFrame. Method: {'pearson', 'spearman'}
         """
         if method == 'pearson':             
