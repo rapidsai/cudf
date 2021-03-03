@@ -5,7 +5,7 @@ import pickle
 import pyarrow as pa
 
 import cudf
-from cudf._lib.lists import count_elements
+from cudf._lib.lists import count_elements, extract_element
 from cudf.core.buffer import Buffer
 from cudf.core.column import ColumnBase, column
 from cudf.core.column.methods import ColumnMethodsMixin
@@ -175,6 +175,9 @@ class ListMethods(ColumnMethodsMixin):
                 "Can only use .list accessor with a 'list' dtype"
             )
         super().__init__(column=column, parent=parent)
+
+    def extract(self, index):
+        return self._return_or_inplace(extract_element(self._column, index))
 
     @property
     def leaves(self):
