@@ -2754,34 +2754,25 @@ def interval_range(
     elif periods and not freq:
         if end is not None:
             end = end + 1
-        periods_array = cupy.asarray(cupy.arange(start, end))
-        hist, bin_edges = cupy.histogram(periods_array, periods)
-        # cupy.histogram turns all arrays into a float array
-        # this can cause the dtype to be a float instead of an int
-        # the below adjusts for this
-        if cupy.all(cupy.mod(bin_edges, 1) == 0):
-            bin_edges = bin_edges.astype(int)
-        left_col = bin_edges[:-1]
-        right_col = bin_edges[1:]
+        periods_array = cupy.asarray(cupy.arange(start,end))
+        left_col = periods_array[:-1:periods]
+        right_col = periods_array[periods::periods]
     else:
         if freq and periods and end:
             start = end - (freq * periods)
         if freq and periods and start:
             end = freq * periods + start
-        left_col = cupy.arange(start, end, freq)
-        if end is not None:
-            end = end + 1
-        if start is not None and freq is not None:
-            new_freq = start + freq
-        elif start is not None and freq is None:
-            new_freq = start
-        right_col = cupy.arange(new_freq, end, freq)
+        left_col = cupy.arange(start, end, freq) #possibly  subtract freq here from end 
+        end = end + 1
+        if freq is not None:
+            start = start + freq
+        right_col = cupy.arange(start, end, freq)
         if len(left_col) != len(right_col):
-            if end and freq is not None:
+            if freq is not None:
                 end = end - freq
             left_col = cupy.arange(start, end, freq)
         if len(right_col) == 0 or len(left_col) == 0:
-            return pd.IntervalIndex([], closed=closed)
+            return cudf.IntervalIndex([], closed=closed)
 
     interval_col = column.build_interval_column(
         left_col, right_col, closed=closed
@@ -2829,7 +2820,7 @@ class IntervalIndex(GenericIndex):
         elif isinstance(data, (pd._libs.interval.Interval, pd.IntervalIndex)):
             data = column.as_column(data, dtype=dtype,)
         else:
-            if data is not None and data[0].closed != closed:
+            if data is not None and data != [] and data[0].closed != closed:
                 # when closed is not the same as the data's closed
                 # we need to change the data closed value,
                 # not sure how to do this on the gpu?

@@ -62,7 +62,12 @@ class IntervalColumn(StructColumn):
 
     def to_arrow(self):
         typ = self.dtype.to_arrow()
-        return pa.ExtensionArray.from_storage(typ, super().to_arrow())
+        struct_arrow = super().to_arrow()
+        if len(struct_arrow) == 0:
+            #struct arrow is pa.struct array with null children types
+            #we need to make sure its children have non-null type
+            struct_arrow = pa.array([],typ.storage_type)
+        return pa.ExtensionArray.from_storage(typ, struct_arrow)
 
     def from_struct_column(self, closed="right"):
         return IntervalColumn(
