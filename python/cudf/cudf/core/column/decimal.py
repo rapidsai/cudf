@@ -12,7 +12,9 @@ from cudf.core.buffer import Buffer
 from cudf.core.column import ColumnBase
 from cudf.core.dtypes import Decimal64Dtype
 from cudf.utils.utils import pa_mask_buffer_to_mask
-from cudf._lib import string_casting as str_cast
+from cudf._lib.strings.convert.convert_fixed_point import (
+    from_decimal as cpp_from_decimal,
+)
 from cudf._typing import Dtype
 from cudf.core.column import as_column
 
@@ -69,7 +71,7 @@ class DecimalColumn(ColumnBase):
         self, dtype: Dtype, format=None
     ) -> "cudf.core.column.StringColumn":
         if len(self) > 0:
-            return str_cast.from_decimal(self)
+            return cpp_from_decimal(self)
         else:
             return cast(
                 "cudf.core.column.StringColumn", as_column([], dtype="object")
