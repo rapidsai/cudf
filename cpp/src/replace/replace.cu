@@ -17,7 +17,7 @@
  * limitations under the License.
  */
 /*
- * Copyright (c) 2019-2020, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -241,9 +241,7 @@ __global__ void replace_kernel(cudf::column_device_view input,
                                cudf::column_device_view values_to_replace,
                                cudf::column_device_view replacement)
 {
-  using Type = cudf::device_storage_type_t<T>;
-
-  Type* __restrict__ output_data = output.data<Type>();
+  T* __restrict__ output_data = output.data<T>();
 
   cudf::size_type i = blockIdx.x * blockDim.x + threadIdx.x;
 
@@ -260,12 +258,12 @@ __global__ void replace_kernel(cudf::column_device_view input,
       output_is_valid = input_is_valid;
     }
     if (input_is_valid)
-      thrust::tie(output_data[i], output_is_valid) = get_new_value<Type, replacement_has_nulls>(
+      thrust::tie(output_data[i], output_is_valid) = get_new_value<T, replacement_has_nulls>(
         i,
-        input.data<Type>(),
-        values_to_replace.data<Type>(),
-        values_to_replace.data<Type>() + values_to_replace.size(),
-        replacement.data<Type>(),
+        input.data<T>(),
+        values_to_replace.data<T>(),
+        values_to_replace.data<T>() + values_to_replace.size(),
+        replacement.data<T>(),
         replacement.null_mask());
 
     /* output valid counts calculations*/
@@ -461,7 +459,7 @@ std::unique_ptr<cudf::column> replace_kernel_forwarder::operator()<cudf::diction
     cudf::dictionary::detail::set_keys(replacements, matched_view.keys(), stream);
 
   auto indices_type = matched_view.indices().type();
-  auto new_indices  = cudf::type_dispatcher(
+  auto new_indices  = cudf::type_dispatcher<cudf::dispatch_storage_type>(
     indices_type,
     replace_kernel_forwarder{},
     matched_view.get_indices_annotated(),
@@ -502,13 +500,13 @@ std::unique_ptr<cudf::column> find_and_replace_all(cudf::column_view const& inpu
     return std::make_unique<cudf::column>(input_col);
   }
 
-  return cudf::type_dispatcher(input_col.type(),
-                               replace_kernel_forwarder{},
-                               input_col,
-                               values_to_replace,
-                               replacement_values,
-                               stream,
-                               mr);
+  return cudf::type_dispatcher<dispatch_storage_type>(input_col.type(),
+                                                      replace_kernel_forwarder{},
+                                                      input_col,
+                                                      values_to_replace,
+                                                      replacement_values,
+                                                      stream,
+                                                      mr);
 }
 
 }  // namespace detail

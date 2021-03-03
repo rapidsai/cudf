@@ -15,7 +15,7 @@
  */
 
 #include <cudf/column/column_device_view.cuh>
-#include <cudf/detail/gather.hpp>
+#include <cudf/detail/gather.cuh>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/lists/lists_column_view.hpp>
 #include <cudf/reshape.hpp>
@@ -36,7 +36,6 @@
 namespace cudf {
 namespace detail {
 namespace {
-
 using GatherType   = rmm::device_uvector<size_type>;
 using PositionType = rmm::device_uvector<size_type>;
 

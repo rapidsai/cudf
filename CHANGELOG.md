@@ -1,14 +1,216 @@
 # cuDF 0.19.0 (Date TBD)
 
-## New Features
+Please see https://github.com/rapidsai/cudf/releases/tag/branch-0.19-latest for the latest changes to this development branch.
 
-## Improvements
+# cuDF 0.18.0 (24 Feb 2021)
 
-## Bug Fixes
+## Breaking Changes 🚨
 
-# 0.18.0
+- Default `groupby` to `sort=False` (#7180) @isVoid
+- Add libcudf API for parsing of ORC statistics (#7136) @vuule
+- Replace ORC writer api with class (#7099) @rgsl888prabhu
+- Pack/unpack functionality to convert tables to and from a serialized format. (#7096) @nvdbaranec
+- Replace parquet writer api with class (#7058) @rgsl888prabhu
+- Add days check to cudf::is_timestamp using cuda::std::chrono classes (#7028) @davidwendt
+- Fix default parameter values of `write_csv` and `write_parquet` (#6967) @vuule
+- Align `Series.groupby` API to match Pandas (#6964) @kkraus14
+- Share `factorize` implementation with Index and cudf module (#6885) @brandon-b-miller
 
-Please see https://github.com/rapidsai/cudf/releases/tag/branch-0.18-latest for the latest changes to this development branch.
+## Bug Fixes 🐛
+
+- Remove incorrect std::move call on return variable (#7319) @davidwendt
+- Fix failing CI ORC test (#7313) @vuule
+- Disallow constructing frames from a ColumnAccessor (#7298) @shwina
+- fix java cuFile tests (#7296) @rongou
+- Fix style issues related to NumPy (#7279) @shwina
+- Fix bug when `iloc` slice terminates at before-the-zero position (#7277) @isVoid
+- Fix copying dtype metadata after calling libcudf functions (#7271) @shwina
+- Move lists utility function definition out of header (#7266) @mythrocks
+- Throw if bool column would cause incorrect result when writing to ORC (#7261) @vuule
+- Use `uvector` in `replace_nulls`; Fix `sort_helper::grouped_value` doc (#7256) @isVoid
+- Remove floating point types from cudf::sort fast-path (#7250) @davidwendt
+- Disallow picking output columns from nested columns. (#7248) @devavret
+- Fix `loc` for Series with a MultiIndex (#7243) @shwina
+- Fix Arrow column test leaks (#7241) @tgravescs
+- Fix test column vector leak (#7238) @kuhushukla
+- Fix some bugs in java scalar support for decimal (#7237) @revans2
+- Improve `assert_eq` handling of scalar (#7220) @isVoid
+- Fix missing null_count() comparison in test framework and related failures (#7219) @nvdbaranec
+- Remove floating point types from radix sort fast-path (#7215) @davidwendt
+- Fixing parquet benchmarks (#7214) @rgsl888prabhu
+- Handle various parameter combinations in `replace` API (#7207) @galipremsagar
+- Export mock aws credentials for s3 tests (#7176) @ayushdg
+- Add `MultiIndex.rename` API (#7172) @isVoid
+- Fix importing list &amp; struct types in `from_arrow` (#7162) @galipremsagar
+- Fixing parquet precision writing failing if scale is equal to precision (#7146) @hyperbolic2346
+- Update s3 tests to use moto_server (#7144) @ayushdg
+- Fix JIT cache multi-process test flakiness in slow drives (#7142) @devavret
+- Fix compilation errors in libcudf (#7138) @galipremsagar
+- Fix compilation failure caused by `-Wall` addition. (#7134) @codereport
+- Add informative error message for `sep` in CSV writer (#7095) @galipremsagar
+- Add JIT cache per compute capability (#7090) @devavret
+- Implement `__hash__` method for ListDtype (#7081) @galipremsagar
+- Only upload packages that were built (#7077) @raydouglass
+- Fix comparisons between Series and cudf.NA (#7072) @brandon-b-miller
+- Handle `nan` values correctly in `Series.one_hot_encoding` (#7059) @galipremsagar
+- Add `unstack()` support for non-multiindexed dataframes (#7054) @isVoid
+- Fix `read_orc` for decimal type (#7034) @rgsl888prabhu
+- Fix backward compatibility of loading a 0.16 pkl file (#7033) @galipremsagar
+- Decimal casts in JNI became a NOOP (#7032) @revans2
+- Restore usual instance/subclass checking to cudf.DateOffset (#7029) @shwina
+- Add days check to cudf::is_timestamp using cuda::std::chrono classes (#7028) @davidwendt
+- Fix to_csv delimiter handling of timestamp format (#7023) @davidwendt
+- Pin librdkakfa to gcc 7 compatible version (#7021) @raydouglass
+- Fix `fillna` &amp; `dropna` to also consider `np.nan` as a missing value (#7019) @galipremsagar
+- Fix round operator&#39;s HALF_EVEN computation for negative integers (#7014) @nartal1
+- Skip Thrust sort patch if already applied (#7009) @harrism
+- Fix `cudf::hash_partition` for `decimal32` and `decimal64` (#7006) @codereport
+- Fix Thrust unroll patch command (#7002) @harrism
+- Fix loc behaviour when key of incorrect type is used (#6993) @shwina
+- Fix int to datetime conversion in csv_read (#6991) @kaatish
+- fix excluding cufile tests by default (#6988) @rongou
+- Fix java cufile tests when cufile is not installed (#6987) @revans2
+- Make `cudf::round` for `fixed_point` when `scale = -decimal_places` a no-op (#6975) @codereport
+- Fix type comparison for java (#6970) @revans2
+- Fix default parameter values of `write_csv` and `write_parquet` (#6967) @vuule
+- Align `Series.groupby` API to match Pandas (#6964) @kkraus14
+- Fix timestamp parsing in ORC reader for timezones without transitions (#6959) @vuule
+- Fix typo in numerical.py (#6957) @rgsl888prabhu
+- `fixed_point_value` double-shifts in `fixed_point` construction (#6950) @codereport
+- fix libcu++ include path for jni (#6948) @rongou
+- Fix groupby agg/apply behaviour when no key columns are provided (#6945) @shwina
+- Avoid inserting null elements into join hash table when nulls are treated as unequal (#6943) @hyperbolic2346
+- Fix cudf::merge gtest for dictionary columns (#6942) @davidwendt
+- Pass numeric scalars of the same dtype through numeric binops (#6938) @brandon-b-miller
+- Fix N/A detection for empty fields in CSV reader (#6922) @vuule
+- Fix rmm_mode=managed parameter for gtests (#6912) @davidwendt
+- Fix nullmask offset handling in parquet and orc writer (#6889) @kaatish
+- Correct the sampling range when sampling with replacement (#6884) @ChrisJar
+- Handle nested string columns with no children in contiguous_split. (#6864) @nvdbaranec
+- Fix `columns` &amp; `index` handling in dataframe constructor (#6838) @galipremsagar
+
+## Documentation 📖
+
+- Update readme (#7318) @shwina
+- Fix typo in cudf.core.column.string.extract docs (#7253) @adelevie
+- Update doxyfile project number (#7161) @davidwendt
+- Update 10 minutes to cuDF and CuPy with new APIs (#7158) @ChrisJar
+- Cross link RMM &amp; libcudf Doxygen docs (#7149) @ajschmidt8
+- Add documentation for support dtypes in all IO formats (#7139) @galipremsagar
+- Add groupby docs (#7100) @shwina
+- Update cudf python docstrings with new null representation (`&lt;NA&gt;`) (#7050) @galipremsagar
+- Make Doxygen comments formatting consistent (#7041) @vuule
+- Add docs for working with missing data (#7010) @galipremsagar
+- Remove warning in from_dlpack and to_dlpack methods (#7001) @miguelusque
+- libcudf Developer Guide (#6977) @harrism
+- Add JNI wrapper for the cuFile API (GDS) (#6940) @rongou
+
+## New Features 🚀
+
+- Support `numeric_only` field for `rank()` (#7213) @isVoid
+- Add support for `cudf::binary_operation` `TRUE_DIV` for `decimal32` and `decimal64` (#7198) @codereport
+- Implement COLLECT rolling window aggregation (#7189) @mythrocks
+- Add support for array-like inputs in `cudf.get_dummies` (#7181) @galipremsagar
+- Default `groupby` to `sort=False` (#7180) @isVoid
+- Add libcudf lists column count_elements API (#7173) @davidwendt
+- Implement `cudf::group_by` (sort) for `decimal32` and `decimal64` (#7169) @codereport
+- Add encoding and compression argument to CSV writer (#7168) @VibhuJawa
+- `cudf::rolling_window` `SUM` support for `decimal32` and `decimal64` (#7147) @codereport
+- Adding support for explode to cuDF (#7140) @hyperbolic2346
+- Add libcudf API for parsing of ORC statistics (#7136) @vuule
+- update GDS/cuFile location for 0.9 release (#7131) @rongou
+- Add Segmented sort (#7122) @karthikeyann
+- Add `cudf::binary_operation` `NULL_MIN`, `NULL_MAX` &amp; `NULL_EQUALS` for `decimal32` and `decimal64` (#7119) @codereport
+- Add `scale` and `value` methods to `fixed_point` (#7109) @codereport
+- Replace ORC writer api with class (#7099) @rgsl888prabhu
+- Pack/unpack functionality to convert tables to and from a serialized format. (#7096) @nvdbaranec
+- Improve `digitize` API (#7071) @isVoid
+- Add List types support in data generator (#7064) @galipremsagar
+- `cudf::scan` support for `decimal32` and `decimal64` (#7063) @codereport
+- `cudf::rolling` `ROW_NUMBER` support for `decimal32` and `decimal64` (#7061) @codereport
+- Replace parquet writer api with class (#7058) @rgsl888prabhu
+- Support contains() on lists of primitives (#7039) @mythrocks
+- Implement `cudf::rolling` for `decimal32` and `decimal64` (#7037) @codereport
+- Add `ffill` and `bfill` to string columns (#7036) @isVoid
+- Enable round in cudf for DataFrame and Series (#7022) @ChrisJar
+- Extend `replace_nulls_policy` to `string` and `dictionary` type (#7004) @isVoid
+- Add segmented_gather(list_column, gather_list) (#7003) @karthikeyann
+- Add `method` field to `fillna` for fixed width columns (#6998) @isVoid
+- Manual merge of branch 0.17 into branch 0.18 (#6995) @shwina
+- Implement `cudf::reduce` for `decimal32` and `decimal64` (part 2) (#6980) @codereport
+- Add Ufunc alias look up for appropriate numpy ufunc dispatching (#6973) @VibhuJawa
+- Add pytest-xdist to dev environment.yml (#6958) @galipremsagar
+- Add `Index.set_names` api (#6929) @galipremsagar
+- Add `replace_null` API with `replace_policy` parameter, `fixed_width` column support (#6907) @isVoid
+- Share `factorize` implementation with Index and cudf module (#6885) @brandon-b-miller
+- Implement update() function (#6883) @skirui-source
+- Add groupby idxmin, idxmax aggregation (#6856) @karthikeyann
+- Implement `cudf::reduce` for `decimal32` and `decimal64` (part 1) (#6814) @codereport
+- Implement cudf.DateOffset for months (#6775) @brandon-b-miller
+- Add Python DecimalColumn (#6715) @shwina
+- Add dictionary support to libcudf groupby functions (#6585) @davidwendt
+
+## Improvements 🛠️
+
+- Update stale GHA with exemptions &amp; new labels (#7395) @mike-wendt
+- Add GHA to mark issues/prs as stale/rotten (#7388) @Ethyling
+- Unpin from numpy &lt; 1.20 (#7335) @shwina
+- Prepare Changelog for Automation (#7309) @galipremsagar
+- Prepare Changelog for Automation (#7272) @ajschmidt8
+- Add JNI support for converting Arrow buffers to CUDF ColumnVectors (#7222) @tgravescs
+- Add coverage for `skiprows` and `num_rows` in parquet reader fuzz testing (#7216) @galipremsagar
+- Define and implement more behavior for merging on categorical variables (#7209) @brandon-b-miller
+- Add CudfSeriesGroupBy to optimize dask_cudf groupby-mean (#7194) @rjzamora
+- Add dictionary column support to rolling_window (#7186) @davidwendt
+- Modify the semantics of `end` pointers in cuIO to match standard library (#7179) @vuule
+- Adding unit tests for `fixed_point` with extremely large `scale`s (#7178) @codereport
+- Fast path single column sort (#7167) @davidwendt
+- Fix -Werror=sign-compare errors in device code (#7164) @trxcllnt
+- Refactor cudf::string_view host and device code (#7159) @davidwendt
+- Enable logic for GPU auto-detection in cudfjni (#7155) @gerashegalov
+- Java bindings for Fixed-point type support for Parquet (#7153) @razajafri
+- Add Java interface for the new API &#39;explode&#39; (#7151) @firestarman
+- Replace offsets with iterators in cuIO utilities and CSV parser (#7150) @vuule
+- Add gbenchmarks for reduction aggregations any() and all() (#7129) @davidwendt
+- Update JNI for contiguous_split packed results (#7127) @jlowe
+- Add JNI and Java bindings for list_contains (#7125) @kuhushukla
+- Add Java unit tests for window aggregate &#39;collect&#39; (#7121) @firestarman
+- verify window operations on decimal with java tests (#7120) @sperlingxx
+- Adds in JNI support for creating an list column from existing columns (#7112) @revans2
+- Build libcudf with -Wall (#7105) @trxcllnt
+- Add column_device_view pointers to EncColumnDesc (#7097) @kaatish
+- Add `pyorc` to dev environment (#7085) @galipremsagar
+- JNI support for creating struct column from existing columns and fixed bug in struct with no children (#7084) @revans2
+- Fastpath single strings column in cudf::sort (#7075) @davidwendt
+- Upgrade nvcomp to 1.2.1 (#7069) @rongou
+- Refactor ORC `ProtobufReader` to make it more extendable (#7055) @vuule
+- Add Java tests for decimal casts (#7051) @sperlingxx
+- Auto-label PRs based on their content (#7044) @jolorunyomi
+- Create sort gbenchmark for strings column (#7040) @davidwendt
+- Refactor io memory fetches to use hostdevice_vector methods (#7035) @ChrisJar
+- Spark Murmur3 hash functionality (#7024) @rwlee
+- Fix libcudf strings logic where size_type is used to access INT32 column data (#7020) @davidwendt
+- Adding decimal writing support to parquet (#7017) @hyperbolic2346
+- Add compression=&quot;infer&quot; as default for dask_cudf.read_csv (#7013) @rjzamora
+- Correct ORC docstring; other minor cuIO improvements (#7012) @vuule
+- Reduce number of hostdevice_vector allocations in parquet reader (#7005) @devavret
+- Check output size overflow on strings gather (#6997) @davidwendt
+- Improve representation of `MultiIndex` (#6992) @galipremsagar
+- Disable some pragma unroll statements in thrust sort.h (#6982) @davidwendt
+- Minor `cudf::round` internal refactoring (#6976) @codereport
+- Add Java bindings for URL conversion (#6972) @jlowe
+- Enable strict_decimal_types in parquet reading (#6969) @sperlingxx
+- Add in basic support to JNI for logical_cast (#6954) @revans2
+- Remove duplicate file array_tests.cpp (#6953) @karthikeyann
+- Add null mask `fixed_point_column_wrapper` constructors (#6951) @codereport
+- Update Java bindings version to 0.18-SNAPSHOT (#6949) @jlowe
+- Use simplified `rmm::exec_policy` (#6939) @harrism
+- Add null count test for apply_boolean_mask (#6903) @harrism
+- Implement DataFrame.quantile for datetime and timedelta data types (#6902) @ChrisJar
+- Remove **kwargs from string/categorical methods (#6750) @shwina
+- Refactor rolling.cu to reduce compile time (#6512) @mythrocks
+- Add static type checking via Mypy (#6381) @shwina
+- Update to official libcu++ on Github (#6275) @trxcllnt
 
 # cuDF 0.17.0 (10 Dec 2020)
 

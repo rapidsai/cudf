@@ -125,7 +125,7 @@ uint32_t str_to_uint32(std::string const& str, uint64_t line_no)
 {
   try {
     return std::stoi(str);  // there is no std::stoui
-  } catch (std::exception exc) {
+  } catch (std::exception const& exc) {
     std::string message("Line ");
     message += std::to_string(line_no) + ": ";
     message += "cannot convert integer from '";
@@ -133,7 +133,7 @@ uint32_t str_to_uint32(std::string const& str, uint64_t line_no)
     message += "': ";
     message += exc.what();
     std::cerr << message << std::endl;
-    throw exc;
+    throw;
   }
 }
 
@@ -147,7 +147,7 @@ uint64_t str_to_uint64(std::string const& str, uint64_t line_no)
 {
   try {
     return std::stoul(str);
-  } catch (std::exception exc) {
+  } catch (std::exception const& exc) {
     std::string message("Line ");
     message += std::to_string(line_no) + ": ";
     message += "cannot convert integer from '";
@@ -155,7 +155,7 @@ uint64_t str_to_uint64(std::string const& str, uint64_t line_no)
     message += "': ";
     message += exc.what();
     std::cerr << message << std::endl;
-    throw exc;
+    throw;
   }
 }
 }  // namespace
@@ -183,9 +183,10 @@ uint64_t str_to_uint64(std::string const& str, uint64_t line_no)
  * @param filename_hashed_vocabulary Path to text file containing hashed vocabulary
  * @return object containing hash table elements for the wordpiece tokenizer
  */
-hashed_vocabulary load_vocabulary_file(std::string const& filename_hashed_vocabulary,
-                                       rmm::cuda_stream_view stream,
-                                       rmm::mr::device_memory_resource* mr)
+std::unique_ptr<hashed_vocabulary> load_vocabulary_file(
+  std::string const& filename_hashed_vocabulary,
+  rmm::cuda_stream_view stream,
+  rmm::mr::device_memory_resource* mr)
 {
   hashed_vocabulary result;
   std::ifstream hash_file(filename_hashed_vocabulary);
@@ -276,13 +277,13 @@ hashed_vocabulary load_vocabulary_file(std::string const& filename_hashed_vocabu
   detail::get_codepoint_metadata(stream);
   detail::get_aux_codepoint_data(stream);
 
-  return result;
+  return std::make_unique<hashed_vocabulary>(std::move(result));
 }
 
 }  // namespace detail
 
-hashed_vocabulary load_vocabulary_file(std::string const& filename_hashed_vocabulary,
-                                       rmm::mr::device_memory_resource* mr)
+std::unique_ptr<hashed_vocabulary> load_vocabulary_file(
+  std::string const& filename_hashed_vocabulary, rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
   return detail::load_vocabulary_file(filename_hashed_vocabulary, rmm::cuda_stream_default, mr);

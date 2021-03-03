@@ -56,6 +56,13 @@ TEST_F(ExplodeTest, Empty)
   cudf::table_view expected({expected_a, expected_b});
 
   CUDF_TEST_EXPECT_TABLES_EQUAL(ret->view(), expected);
+
+  auto pos_ret = cudf::explode_position(t, 0);
+
+  fixed_width_column_wrapper<int32_t> expected_c{};
+  cudf::table_view pos_expected({expected_a, expected_b, expected_c});
+
+  CUDF_TEST_EXPECT_TABLES_EQUAL(pos_ret->view(), pos_expected);
 }
 
 TEST_F(ExplodeTest, NonList)
@@ -66,6 +73,7 @@ TEST_F(ExplodeTest, NonList)
   cudf::table_view t({a, b});
 
   EXPECT_THROW(cudf::explode(t, 1), cudf::logic_error);
+  EXPECT_THROW(cudf::explode_position(t, 1), cudf::logic_error);
 }
 
 TEST_F(ExplodeTest, Basics)
@@ -94,6 +102,12 @@ TEST_F(ExplodeTest, Basics)
   auto ret = cudf::explode(t, 1);
 
   CUDF_TEST_EXPECT_TABLES_EQUAL(ret->view(), expected);
+
+  fixed_width_column_wrapper<int32_t> expected_pos_col{0, 1, 2, 0, 1, 0, 1};
+  cudf::table_view pos_expected({expected_a, expected_pos_col, expected_b, expected_c});
+
+  auto pos_ret = cudf::explode_position(t, 1);
+  CUDF_TEST_EXPECT_TABLES_EQUAL(pos_ret->view(), pos_expected);
 }
 
 TEST_F(ExplodeTest, SingleNull)
@@ -125,6 +139,12 @@ TEST_F(ExplodeTest, SingleNull)
   auto ret = cudf::explode(t, 0);
 
   CUDF_TEST_EXPECT_TABLES_EQUAL(ret->view(), expected);
+
+  fixed_width_column_wrapper<int32_t> expected_pos_col{0, 1, 0, 1};
+  cudf::table_view pos_expected({expected_pos_col, expected_a, expected_b});
+
+  auto pos_ret = cudf::explode_position(t, 0);
+  CUDF_TEST_EXPECT_TABLES_EQUAL(pos_ret->view(), pos_expected);
 }
 
 TEST_F(ExplodeTest, Nulls)
@@ -156,6 +176,12 @@ TEST_F(ExplodeTest, Nulls)
   auto ret = cudf::explode(t, 0);
 
   CUDF_TEST_EXPECT_TABLES_EQUAL(ret->view(), expected);
+
+  fixed_width_column_wrapper<int32_t> expected_pos_col{0, 1, 2, 0, 1};
+  cudf::table_view pos_expected({expected_pos_col, expected_a, expected_b});
+
+  auto pos_ret = cudf::explode_position(t, 0);
+  CUDF_TEST_EXPECT_TABLES_EQUAL(pos_ret->view(), pos_expected);
 }
 
 TEST_F(ExplodeTest, NullsInList)
@@ -187,6 +213,12 @@ TEST_F(ExplodeTest, NullsInList)
   auto ret = cudf::explode(t, 0);
 
   CUDF_TEST_EXPECT_TABLES_EQUAL(ret->view(), expected);
+
+  fixed_width_column_wrapper<int32_t> expected_pos_col{0, 1, 2, 0, 1, 2, 3, 0, 1, 2};
+  cudf::table_view pos_expected({expected_pos_col, expected_a, expected_b});
+
+  auto pos_ret = cudf::explode_position(t, 0);
+  CUDF_TEST_EXPECT_TABLES_EQUAL(pos_ret->view(), pos_expected);
 }
 
 TEST_F(ExplodeTest, Nested)
@@ -223,6 +255,12 @@ TEST_F(ExplodeTest, Nested)
   auto ret = cudf::explode(t, 0);
 
   CUDF_TEST_EXPECT_TABLES_EQUAL(ret->view(), expected);
+
+  fixed_width_column_wrapper<int32_t> expected_pos_col{0, 1, 0, 0, 1, 2, 3};
+  cudf::table_view pos_expected({expected_pos_col, expected_a, expected_b});
+
+  auto pos_ret = cudf::explode_position(t, 0);
+  CUDF_TEST_EXPECT_TABLES_EQUAL(pos_ret->view(), pos_expected);
 }
 
 TEST_F(ExplodeTest, NestedNulls)
@@ -262,6 +300,12 @@ TEST_F(ExplodeTest, NestedNulls)
   auto ret = cudf::explode(t, 0);
 
   CUDF_TEST_EXPECT_TABLES_EQUAL(ret->view(), expected);
+
+  fixed_width_column_wrapper<int32_t> expected_pos_col{0, 1, 0, 1, 2};
+  cudf::table_view pos_expected({expected_pos_col, expected_a, expected_b});
+
+  auto pos_ret = cudf::explode_position(t, 0);
+  CUDF_TEST_EXPECT_TABLES_EQUAL(pos_ret->view(), pos_expected);
 }
 
 TEST_F(ExplodeTest, NullsInNested)
@@ -299,6 +343,12 @@ TEST_F(ExplodeTest, NullsInNested)
   auto ret = cudf::explode(t, 0);
 
   CUDF_TEST_EXPECT_TABLES_EQUAL(ret->view(), expected);
+
+  fixed_width_column_wrapper<int32_t> expected_pos_col{0, 1, 0, 0, 1, 2};
+  cudf::table_view pos_expected({expected_pos_col, expected_a, expected_b});
+
+  auto pos_ret = cudf::explode_position(t, 0);
+  CUDF_TEST_EXPECT_TABLES_EQUAL(pos_ret->view(), pos_expected);
 }
 
 TEST_F(ExplodeTest, NullsInNestedDoubleExplode)
@@ -331,10 +381,16 @@ TEST_F(ExplodeTest, NullsInNestedDoubleExplode)
   cudf::table_view t({a, b});
   cudf::table_view expected({expected_a, expected_b});
 
-  auto ret = cudf::explode(t, 0);
-  ret      = cudf::explode(ret->view(), 0);
+  auto first_explode_ret = cudf::explode(t, 0);
+  auto ret               = cudf::explode(first_explode_ret->view(), 0);
 
   CUDF_TEST_EXPECT_TABLES_EQUAL(ret->view(), expected);
+
+  fixed_width_column_wrapper<int32_t> expected_pos_col{0, 1, 0, 1, 2, 0, 1, 0, 1, 0, 0, 1};
+  cudf::table_view pos_expected({expected_pos_col, expected_a, expected_b});
+
+  auto pos_ret = cudf::explode_position(first_explode_ret->view(), 0);
+  CUDF_TEST_EXPECT_TABLES_EQUAL(pos_ret->view(), pos_expected);
 }
 
 TEST_F(ExplodeTest, NestedStructs)
@@ -376,6 +432,12 @@ TEST_F(ExplodeTest, NestedStructs)
   auto ret = cudf::explode(t, 0);
 
   CUDF_TEST_EXPECT_TABLES_EQUAL(ret->view(), expected);
+
+  fixed_width_column_wrapper<int32_t> expected_pos_col{0, 1, 0, 0, 1, 2};
+  cudf::table_view pos_expected({expected_pos_col, expected_a, expected_b});
+
+  auto pos_ret = cudf::explode_position(t, 0);
+  CUDF_TEST_EXPECT_TABLES_EQUAL(pos_ret->view(), pos_expected);
 }
 
 TYPED_TEST(ExplodeTypedTest, ListOfStructs)
@@ -415,6 +477,12 @@ TYPED_TEST(ExplodeTypedTest, ListOfStructs)
   cudf::table_view expected({expected_a->view(), expected_b});
 
   CUDF_TEST_EXPECT_TABLES_EQUAL(ret->view(), expected);
+
+  fixed_width_column_wrapper<int32_t> expected_pos_col{0, 1, 0, 1, 0, 1, 0, 1, 0, 1};
+  cudf::table_view pos_expected({expected_pos_col, expected_a->view(), expected_b});
+
+  auto pos_ret = cudf::explode_position(t, 0);
+  CUDF_TEST_EXPECT_TABLES_EQUAL(pos_ret->view(), pos_expected);
 }
 
 TEST_F(ExplodeTest, SlicedList)
@@ -462,6 +530,12 @@ TEST_F(ExplodeTest, SlicedList)
   auto ret = cudf::explode(sliced_t[0], 0);
 
   CUDF_TEST_EXPECT_TABLES_EQUAL(ret->view(), expected);
+
+  fixed_width_column_wrapper<int32_t> expected_pos_col{0, 1, 2, 0, 1, 2};
+  cudf::table_view pos_expected({expected_pos_col, expected_a, expected_b});
+
+  auto pos_ret = cudf::explode_position(sliced_t[0], 0);
+  CUDF_TEST_EXPECT_TABLES_EQUAL(pos_ret->view(), pos_expected);
 }
 
 TEST_F(ExplodeOuterTest, Empty)
