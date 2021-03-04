@@ -379,10 +379,11 @@ cdef class Column:
     cdef column_view _view(self, libcudf_types.size_type null_count) except *:
         if is_categorical_dtype(self.dtype):
             col = self.base_children[0]
+            data_dtype = col.dtype 
         else:
             col = self
+            data_dtype = self.dtype 
 
-        data_dtype = self.dtype if not is_categorical_dtype(self.dtype) else col.dtype
         cdef libcudf_types.data_type dtype = dtype_to_data_type(data_dtype)
         cdef libcudf_types.size_type offset = self.offset
         cdef vector[column_view] children
