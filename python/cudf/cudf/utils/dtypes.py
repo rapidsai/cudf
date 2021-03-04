@@ -13,7 +13,7 @@ from pandas.core.dtypes.common import infer_dtype_from_object
 from pandas.core.dtypes.dtypes import CategoricalDtype, CategoricalDtypeType
 
 import cudf
-from cudf._lib.scalar import DeviceScalar, _is_null_host_scalar
+from cudf._lib.scalar import DeviceScalar
 from cudf.core._compat import PANDAS_GE_120
 
 _NA_REP = "<NA>"
@@ -331,6 +331,7 @@ def to_cudf_compatible_scalar(val, dtype=None):
 
     If `val` is None, returns None.
     """
+    from cudf._lib.scalar import DeviceScalar, _is_null_host_scalar
     if _is_null_host_scalar(val) or isinstance(val, cudf.Scalar):
         return val
 
