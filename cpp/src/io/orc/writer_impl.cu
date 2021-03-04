@@ -793,9 +793,8 @@ std::vector<std::vector<uint8_t>> writer::impl::gather_statistic_blobs(
   stat_desc.host_to_device(stream);
   stat_merge.host_to_device(stream);
 
-  auto stat_span = cudf::detail::device_span<stats_column_desc>{stat_desc};
   rmm::device_uvector<column_device_view> leaf_column_views =
-    cudf::io::create_leaf_column_device_views(stat_span, table, stream);
+    cudf::io::create_leaf_column_device_views<stats_column_desc>(stat_desc, table, stream);
 
   gpu::orc_init_statistics_groups(stat_groups.data().get(),
                                   stat_desc.device_ptr(),

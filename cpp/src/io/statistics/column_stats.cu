@@ -383,10 +383,8 @@ void __device__ mergeFloatColumnStats(merge_state_s *s,
   for (uint32_t i = t; i < num_chunks; i += block_size) {
     const statistics_chunk *ck = &ck_in[i];
     if (ck->has_minmax) {
-      double v0 = ck->min_value.fp_val;
-      double v1 = ck->max_value.fp_val;
-      if (v0 < vmin) { vmin = v0; }
-      if (v1 > vmax) { vmax = v1; }
+      vmin = min(vmin, ck->min_value.fp_val);
+      vmax = max(vmax, ck->max_value.fp_val);
     }
     if (ck->has_sum) { vsum += ck->sum.fp_val; }
     non_nulls += ck->non_nulls;
@@ -448,11 +446,9 @@ void __device__ mergeStringColumnStats(merge_state_s *s,
   for (uint32_t i = t; i < num_chunks; i += block_size) {
     const statistics_chunk *ck = &ck_in[i];
     if (ck->has_minmax) {
-      has_minmax       = true;
-      string_view val0 = ck->min_value.str_val;
-      string_view val1 = ck->max_value.str_val;
-      if (val0 < minimum_value) { minimum_value = val0; }
-      if (val1 > maximum_value) { maximum_value = val1; }
+      has_minmax    = true;
+      minimum_value = std::min<string_view>(minimum_value, ck->min_value.str_val);
+      maximum_value = std::max<string_view>(maximum_value, ck->max_value.str_val);
     }
     if (ck->has_sum) { len_sum += (uint32_t)ck->sum.i_val; }
     non_nulls += ck->non_nulls;

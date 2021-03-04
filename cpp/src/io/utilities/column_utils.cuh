@@ -37,6 +37,9 @@ namespace io {
  * A device_uvector is created to store the leaves of parent columns. The
  * column descriptor array is updated to point to these leaf columns.
  *
+ * @tparam ColumnDescriptor Struct describing properties of columns with
+ * pointers to leaf and parent columns
+ *
  * @param col_desc Column description array
  * @param parent_table_device_view Table device view containing parent columns
  * @param stream CUDA stream to use
@@ -45,7 +48,7 @@ namespace io {
  */
 template <typename ColumnDescriptor>
 rmm::device_uvector<column_device_view> create_leaf_column_device_views(
-  cudf::detail::device_span<ColumnDescriptor> &col_desc,
+  typename cudf::detail::device_span<ColumnDescriptor> col_desc,
   const table_device_view &parent_table_device_view,
   rmm::cuda_stream_view stream)
 {
