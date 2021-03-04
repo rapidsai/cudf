@@ -160,8 +160,8 @@ gatherFloatColumnStats(stats_state_s *s, statistics_dtype dtype, uint32_t t, Sto
       } else {
         v = s->col.leaf_column->element<float>(row);
       }
-      if (v < vmin) { vmin = v; }
-      if (v > vmax) { vmax = v; }
+      vmin = min(vmin, v);
+      vmax = max(vmax, v);
       if (!isnan(v)) { vsum += v; }
     }
     nn_cnt += __syncthreads_count(is_valid);
@@ -220,8 +220,8 @@ void __device__ gatherStringColumnStats(stats_state_s *s, uint32_t t, Storage &s
       has_minmax = true;
       auto str   = s->col.leaf_column->element<string_view>(row);
       len_sum += str.size_bytes();
-      if (str > maximum_value) { maximum_value = str; }
-      if (str < minimum_value) { minimum_value = str; }
+      minimum_value = thrust::min<string_view>(minimum_value, str);
+      maximum_value = thrust::max<string_view>(maximum_value, str);
     }
     nn_cnt += __syncthreads_count(is_valid);
   }
@@ -447,8 +447,8 @@ void __device__ mergeStringColumnStats(merge_state_s *s,
     const statistics_chunk *ck = &ck_in[i];
     if (ck->has_minmax) {
       has_minmax    = true;
-      minimum_value = std::min<string_view>(minimum_value, ck->min_value.str_val);
-      maximum_value = std::max<string_view>(maximum_value, ck->max_value.str_val);
+      minimum_value = thrust::min<string_view>(minimum_value, ck->min_value.str_val);
+      maximum_value = thrust::max<string_view>(maximum_value, ck->max_value.str_val);
     }
     if (ck->has_sum) { len_sum += (uint32_t)ck->sum.i_val; }
     non_nulls += ck->non_nulls;
