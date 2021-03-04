@@ -28,11 +28,11 @@
 #include <cstring>
 #include <string>
 
+using cudf::device_span;
+using cudf::host_span;
 using cudf::detail::device_2dspan;
 using cudf::detail::host_2dspan;
 using cudf::detail::hostdevice_2dvector;
-using cudf::device_span;
-using cudf::host_span;
 
 template <typename T>
 void expect_equivolent(host_span<T> a, host_span<T> b)

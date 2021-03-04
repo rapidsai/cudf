@@ -197,7 +197,7 @@ struct device_span : public cudf::detail::span_base<T, Extent, device_span<T, Ex
 };
 
 namespace detail {
-  
+
 /**
  * @brief Generic class for row-major 2D spans. Not compliant with STL container semantics/syntax.
  *
