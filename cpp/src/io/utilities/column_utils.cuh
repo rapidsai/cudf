@@ -48,13 +48,13 @@ namespace io {
  */
 template <typename ColumnDescriptor>
 rmm::device_uvector<column_device_view> create_leaf_column_device_views(
-  typename cudf::detail::device_span<ColumnDescriptor> col_desc,
+  typename cudf::device_span<ColumnDescriptor> col_desc,
   const table_device_view &parent_table_device_view,
   rmm::cuda_stream_view stream)
 {
   rmm::device_uvector<column_device_view> leaf_column_views(parent_table_device_view.num_columns(),
                                                             stream);
-  auto leaf_columns = cudf::detail::device_span<column_device_view>{leaf_column_views};
+  auto leaf_columns = cudf::device_span<column_device_view>{leaf_column_views};
 
   auto iter = thrust::make_counting_iterator<size_type>(0);
   thrust::for_each(rmm::exec_policy(stream),
