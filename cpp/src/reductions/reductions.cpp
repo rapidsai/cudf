@@ -112,7 +112,7 @@ std::unique_ptr<scalar> reduce(
   rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
   rmm::mr::device_memory_resource *mr = rmm::mr::get_current_device_resource())
 {
-  std::unique_ptr<scalar> result = make_default_constructed_scalar(output_dtype);
+  std::unique_ptr<scalar> result = make_default_constructed_scalar(output_dtype, stream, mr);
   result->set_valid(false, stream);
 
   // check if input column is empty

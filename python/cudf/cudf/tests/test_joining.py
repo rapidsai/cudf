@@ -846,8 +846,8 @@ def test_join_empty_table_dtype():
     "column_a",
     [
         (
-            pd.Series([None, 1, 2, 3, 4, 5, 6, 7]).astype(np.float64),
-            pd.Series([8, 9, 10, 11, 12, None, 14, 15]).astype(np.float64),
+            pd.Series([None, 1, 2, 3, 4, 5, 6, 7], dtype=np.float64),
+            pd.Series([8, 9, 10, 11, 12, None, 14, 15], dtype=np.float64),
         )
     ],
 )
@@ -855,8 +855,8 @@ def test_join_empty_table_dtype():
     "column_b",
     [
         (
-            pd.Series([0, 1, 0, None, 1, 0, 0, 0]).astype(np.float64),
-            pd.Series([None, 1, 2, 1, 2, 2, 0, 0]).astype(np.float64),
+            pd.Series([0, 1, 0, None, 1, 0, 0, 0], dtype=np.float64),
+            pd.Series([None, 1, 2, 1, 2, 2, 0, 0], dtype=np.float64),
         )
     ],
 )

@@ -1433,11 +1433,24 @@ def test_categorical_series_with_nan_repr():
     4     NaN
     5    <NA>
     dtype: category
-    Categories (4, float64): [1.0, 10.0, 2.0, NaN]
+    Categories (4, float64): [1.0, 2.0, 10.0, NaN]
     """
     )
 
     assert series.__repr__().split() == expected_repr.split()
+
+    sliced_expected_repr = textwrap.dedent(
+        """
+        2     NaN
+        3    10.0
+        4     NaN
+        5    <NA>
+        dtype: category
+        Categories (4, float64): [1.0, 2.0, 10.0, NaN]
+        """
+    )
+
+    assert series[2:].__repr__().split() == sliced_expected_repr.split()
 
 
 def test_categorical_dataframe_with_nan_repr():
@@ -1469,7 +1482,14 @@ def test_categorical_index_with_nan_repr():
 
     expected_repr = (
         "CategoricalIndex([1.0, 2.0, NaN, 10.0, NaN, <NA>], "
-        "categories=[1.0, 10.0, 2.0, NaN], ordered=False, dtype='category')"
+        "categories=[1.0, 2.0, 10.0, NaN], ordered=False, dtype='category')"
     )
 
     assert cat_index.__repr__() == expected_repr
+
+    sliced_expected_repr = (
+        "CategoricalIndex([NaN, 10.0, NaN, <NA>], "
+        "categories=[1.0, 2.0, 10.0, NaN], ordered=False, dtype='category')"
+    )
+
+    assert cat_index[2:].__repr__() == sliced_expected_repr

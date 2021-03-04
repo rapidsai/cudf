@@ -1366,6 +1366,16 @@ class Index(Frame, Serializable):
         is_contained : cupy array
             CuPy array of boolean values.
 
+        Examples
+        --------
+        >>> idx = cudf.Index([1,2,3])
+        >>> idx
+        Int64Index([1, 2, 3], dtype='int64')
+
+        Check whether each index value in a list of values.
+
+        >>> idx.isin([1, 4])
+        array([ True, False, False])
         """
 
         result = self.to_series().isin(values).values
@@ -2005,7 +2015,14 @@ class GenericIndex(Index):
                 output = (
                     preprocess.astype("str")
                     .to_pandas()
-                    .astype("category")
+                    .astype(
+                        dtype=pd.CategoricalDtype(
+                            categories=preprocess.dtype.categories.astype(
+                                "str"
+                            ).to_pandas(),
+                            ordered=preprocess.dtype.ordered,
+                        )
+                    )
                     .__repr__()
                 )
                 break_idx = output.find("ordered=")
