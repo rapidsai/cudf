@@ -514,7 +514,7 @@ public class HostColumnVectorCore implements AutoCloseable {
    * Close method for the column
    */
   @Override
-  public void close() {
+  public synchronized void close() {
     for (HostColumnVectorCore child : children) {
       if (child != null) {
         child.close();
