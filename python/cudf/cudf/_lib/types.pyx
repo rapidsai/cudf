@@ -19,6 +19,7 @@ from cudf.utils.dtypes import is_decimal_dtype, is_list_dtype, is_struct_dtype
 
 cimport cudf._lib.cpp.types as libcudf_types
 
+
 class TypeId(IntEnum):
     EMPTY = <underlying_type_t_type_id> libcudf_types.type_id.EMPTY
     INT8 = <underlying_type_t_type_id> libcudf_types.type_id.INT8
