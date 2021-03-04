@@ -34,7 +34,7 @@ message(STATUS "CUDF: CUDA_VERSION: ${CUDA_VERSION}")
 
 # Auto-detect available GPU compute architectures
 
-include(${CUDF_SOURCE_DIR}/cmake/Modules/SetGPUArchs.cmake)
+include(${CMAKE_SOURCE_DIR}/cmake/Modules/SetGPUArchs.cmake)
 message(STATUS "CUDF: Building CUDF for GPU architectures: ${CMAKE_CUDA_ARCHITECTURES}")
 
 if(CMAKE_COMPILER_IS_GNUCXX)
