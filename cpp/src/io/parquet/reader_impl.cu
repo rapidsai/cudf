@@ -858,7 +858,7 @@ void reader::impl::read_column_chunks(
         page_data[chunk] =
           datasource::buffer::create(rmm::device_buffer(buffer->data(), buffer->size(), stream));
       }
-      uint8_t const *d_compdata = page_data[chunk]->data();
+      auto d_compdata = page_data[chunk]->data();
       do {
         chunks[chunk].compressed_data = d_compdata;
         d_compdata += chunks[chunk].compressed_size;

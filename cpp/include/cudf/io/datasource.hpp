@@ -52,7 +52,7 @@ class datasource {
     /**
      * @brief Returns the address of the data in the buffer.
      */
-    virtual const uint8_t* data() const = 0;
+    virtual uint8_t const* data() const = 0;
 
     /**
      * @brief Base class destructor
@@ -152,16 +152,27 @@ class datasource {
    */
   virtual bool supports_device_read() const { return false; }
 
+  /**
+   * @brief Estimates whether a direct device read would be more optimal for the given size.
+   *
+   * @param size Number of bytes to read
+   * @return whether the device read is expected to be more performant for the given size
+   */
   virtual bool is_device_read_preferred(size_t size) const { return supports_device_read(); }
 
   /**
    * @brief Returns a device buffer with a subset of data from the source.
    *
+   * For optimal performance, should only be called when `is_device_read_preferred` returns `true`.
    * Data source implementations that don't support direct device reads don't need to override this
    * function.
    *
+   *  @throws cudf::logic_error the object does not support direct device reads, i.e.
+   * `supports_device_read` returns `false`.
+   *
    * @param offset Bytes from the start
    * @param size Bytes to read
+   * @param stream CUDA stream to use, default `rmm::cuda_stream_default`
    *
    * @return The data buffer in the device memory
    */
@@ -169,24 +180,29 @@ class datasource {
                                                           size_t size,
                                                           rmm::cuda_stream_view stream)
   {
-    CUDF_FAIL("datasource classes that support device_read must override this function.");
+    CUDF_FAIL("datasource classes that support device_read must override it.");
   }
 
   /**
    * @brief Reads a selected range into a preallocated device buffer
    *
+   * For optimal performance, should only be called when `is_device_read_preferred` returns `true`.
    * Data source implementations that don't support direct device reads don't need to override this
    * function.
+   *
+   *  @throws cudf::logic_error the object does not support direct device reads, i.e.
+   * `supports_device_read` returns `false`.
    *
    * @param offset Bytes from the start
    * @param size Bytes to read
    * @param dst Address of the existing device memory
+   * @param stream CUDA stream to use, default `rmm::cuda_stream_default`
    *
    * @return The number of bytes read (can be smaller than size)
    */
   virtual size_t device_read(size_t offset, size_t size, uint8_t* dst, rmm::cuda_stream_view stream)
   {
-    CUDF_FAIL("datasource classes that support device_read must override this function.");
+    CUDF_FAIL("datasource classes that support device_read must override it.");
   }
 
   /**
@@ -214,34 +230,48 @@ class datasource {
 
     size_t size() const override { return _size; }
 
-    const uint8_t* data() const override { return _data; }
+    uint8_t const* data() const override { return _data; }
 
    private:
     uint8_t* const _data;
     size_t const _size;
   };
 
+  /**
+   * @brief Derived implementation of `buffer` that owns the data.
+   *
+   * Can use different container types to hold the data buffer.
+   *
+   * @tparam Container Type of the container object that owns the data
+   */
   template <typename Container>
   class owning_buffer : public buffer {
    public:
+    /**
+     * @brief Moves the input container into the newly created object.
+     */
     owning_buffer(Container&& data_owner)
       : _data(std::move(data_owner)), _data_ptr(_data.data()), _size(_data.size())
     {
     }
-    // to create a view into an existing owning buffer
-    owning_buffer(Container&& data_owner, const uint8_t* data_ptr, size_t size)
+
+    /**
+     * @brief Moves the input container into the newly created object, and exposes a subspan of the
+     * buffer.
+     */
+    owning_buffer(Container&& data_owner, uint8_t const* data_ptr, size_t size)
       : _data(std::move(data_owner)), _data_ptr(data_ptr), _size(size)
     {
     }
 
     size_t size() const override { return _size; }
 
-    const uint8_t* data() const override { return static_cast<uint8_t const*>(_data_ptr); }
+    uint8_t const* data() const override { return static_cast<uint8_t const*>(_data_ptr); }
 
    private:
     Container _data;
-    void const* const _data_ptr;
-    size_t const _size;
+    void const* _data_ptr;
+    size_t _size;
   };
 };
 
@@ -268,7 +298,7 @@ class arrow_io_source : public datasource {
     {
     }
     size_t size() const override { return arrow_buffer->size(); }
-    const uint8_t* data() const override { return arrow_buffer->data(); }
+    uint8_t const* data() const override { return arrow_buffer->data(); }
   };
 
  public:
