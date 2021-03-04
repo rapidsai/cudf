@@ -13,6 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+#include <cudf_test/file_utilities.hpp>
 #include <io/utilities/file_io_utilities.hpp>
 
 #include <dlfcn.h>
@@ -23,6 +24,8 @@
 #include <unistd.h>
 
 #include <rmm/device_buffer.hpp>
+
+#include <fstream>
 
 namespace cudf {
 namespace io {
@@ -66,16 +69,43 @@ long file_wrapper::size() const
 #ifdef CUFILE_FOUND
 
 class cufile_config {
+  std::string const default_policy = "OFF";
+  std::string const json_path_env_var = "CUFILE_ENV_PATH_JSON";
+
   bool enabled = false;
+  temp_directory tmp_config_dir{"cudf_cufile_config"};
+
+  std::string getenv_or(std::string const &env_var_name, std::string const &default_val)
+  {
+    auto const env_val = std::getenv(env_var_name.c_str());
+    return (env_val == nullptr) ? default_val : std::string(env_val);
+  }
 
   cufile_config()
   {
-    auto const policy = std::getenv("LIBCUDF_CUFILE_POLICY");
-    if (policy == nullptr) {
-      enabled = false;
-    } else {
-      auto const policy_string = std::string(policy);
-      enabled                  = (policy_string == "ALWAYS" || policy_string == "GDS");
+    auto const policy = getenv_or("LIBCUDF_CUFILE_POLICY", default_policy);
+
+    enabled = (policy == "ALWAYS" || policy == "GDS");
+
+    if (enabled) {
+      auto const config_file_path = getenv_or(json_path_env_var, "/etc/cufile.json");
+      std::ifstream user_config(config_file_path);
+      auto const cudf_config_path = tmp_config_dir.path() + "/cufile.json";
+      std::ofstream cudf_config_file(cudf_config_path);
+
+      std::string line;
+      while (std::getline(user_config, line)) {
+        std::string const tag = "\"allow_compat_mode\"";
+        if (line.find(tag) != std::string::npos) {
+          // TODO: only replace the true/false value
+          cudf_config_file << tag << ": " << ((policy == "ALWAYS") ? "true" : "false") << ",\n";
+        } else {
+          cudf_config_file << line << '\n';
+        }
+
+        CUDF_EXPECTS(setenv(json_path_env_var.c_str(), cudf_config_path.c_str(), 0) == 0,
+                     "Failed to set the cuFile config file environment variable.");
+      }
     }
   }
 
