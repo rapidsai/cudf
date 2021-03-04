@@ -1026,6 +1026,8 @@ class ColumnBase(Column, Serializable):
                     "Casting interval columns not currently supported"
                 )
             return self
+        elif is_decimal_dtype(dtype):
+            return self.as_decimal_column(dtype, **kwargs)
         elif np.issubdtype(dtype, np.datetime64):
             return self.as_datetime_column(dtype, **kwargs)
         elif np.issubdtype(dtype, np.timedelta64):
@@ -1094,6 +1096,11 @@ class ColumnBase(Column, Serializable):
     def as_string_column(
         self, dtype: Dtype, format=None
     ) -> "cudf.core.column.StringColumn":
+        raise NotImplementedError
+
+    def as_decimal_column(
+        self, dtype: Dtype, **kwargs
+    ) -> "cudf.core.column.DecimalColumn":
         raise NotImplementedError
 
     def apply_boolean_mask(self, mask) -> ColumnBase:
