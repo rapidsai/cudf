@@ -383,7 +383,7 @@ class row_lexicographic_comparator {
       state = cudf::type_dispatcher(lhs.child(i).type(), comparator, lhs_index, rhs_index);
 
       if (state == weak_ordering::EQUIVALENT) { continue; }
-      return state;  // == (ascending ? weak_ordering::LESS : weak_ordering::GREATER);
+      return state;
     }
     return weak_ordering::EQUIVALENT;
   }
