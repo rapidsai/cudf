@@ -63,6 +63,7 @@ class DecimalColumn(ColumnBase):
         result.dtype.precision = _binop_precision(self.dtype, other.dtype, op)
         return result
 
+
 def _binop_scale(l_dtype, r_dtype, op):
     # This should at some point be hooked up to libcudf's
     # binary_operation_fixed_point_scale
