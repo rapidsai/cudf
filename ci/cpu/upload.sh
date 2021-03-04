@@ -28,8 +28,8 @@ fi
 ################################################################################
 
 gpuci_logger "Get conda file output locations"
-export LIBCUDF_FILE=`conda build --no-build-id --croot ${WORKSPACE}/.conda-bld conda/recipes/libcudf --output`
-export LIBCUDF_KAFKA_FILE=`conda --no-build-id --croot ${WORKSPACE}/.conda-bld build conda/recipes/libcudf_kafka --output`
+export LIBCUDF_FILE=`conda build --no-build-id --croot ${WORKSPACE}/.conda-bld/libcudf conda/recipes/libcudf --output`
+export LIBCUDF_KAFKA_FILE=`conda build --no-build-id --croot ${WORKSPACE}/.conda-bld/libcudf_kafka conda/recipes/libcudf_kafka --output`
 export CUDF_FILE=`conda build conda/recipes/cudf --python=$PYTHON --output`
 export DASK_CUDF_FILE=`conda build conda/recipes/dask-cudf --python=$PYTHON --output`
 export CUDF_KAFKA_FILE=`conda build conda/recipes/cudf_kafka --python=$PYTHON --output`
