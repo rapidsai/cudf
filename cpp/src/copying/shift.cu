@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2020, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -60,8 +60,7 @@ struct shift_functor {
     rmm::cuda_stream_view stream,
     rmm::mr::device_memory_resource* mr)
   {
-    using Type       = device_storage_type_t<T>;
-    using ScalarType = cudf::scalar_type_t<Type>;
+    using ScalarType = cudf::scalar_type_t<T>;
     auto& scalar     = static_cast<ScalarType const&>(fill_value);
 
     auto device_input = column_device_view::create(input);
@@ -88,7 +87,7 @@ struct shift_functor {
       output->set_null_count(std::get<1>(mask_pair));
     }
 
-    auto data = device_output->data<Type>();
+    auto data = device_output->data<T>();
 
     // avoid assigning elements we know to be invalid.
     if (not scalar.is_valid()) {
@@ -103,7 +102,7 @@ struct shift_functor {
     auto func_value =
       [size, offset, fill = scalar.data(), input = *device_input] __device__(size_type idx) {
         auto src_idx = idx - offset;
-        return out_of_bounds(size, src_idx) ? *fill : input.element<Type>(src_idx);
+        return out_of_bounds(size, src_idx) ? *fill : input.element<T>(src_idx);
       };
 
     thrust::transform(rmm::exec_policy(stream), index_begin, index_end, data, func_value);
@@ -128,7 +127,8 @@ std::unique_ptr<column> shift(column_view const& input,
 
   if (input.is_empty()) { return empty_like(input); }
 
-  return type_dispatcher(input.type(), shift_functor{}, input, offset, fill_value, stream, mr);
+  return type_dispatcher<dispatch_storage_type>(
+    input.type(), shift_functor{}, input, offset, fill_value, stream, mr);
 }
 
 }  // namespace detail

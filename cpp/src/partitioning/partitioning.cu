@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -393,12 +393,10 @@ struct copy_block_partitions_dispatcher {
                                      rmm::cuda_stream_view stream,
                                      rmm::mr::device_memory_resource* mr)
   {
-    using Type = device_storage_type_t<DataType>;
+    rmm::device_buffer output(input.size() * sizeof(DataType), stream, mr);
 
-    rmm::device_buffer output(input.size() * sizeof(Type), stream, mr);
-
-    copy_block_partitions_impl(input.data<Type>(),
-                               static_cast<Type*>(output.data()),
+    copy_block_partitions_impl(input.data<DataType>(),
+                               static_cast<DataType*>(output.data()),
                                input.size(),
                                num_partitions,
                                row_partition_numbers,
@@ -569,17 +567,17 @@ std::pair<std::unique_ptr<table>, std::vector<size_type>> hash_partition_table(
 
     // Copy input to output by partition per column
     std::transform(input.begin(), input.end(), output_cols.begin(), [=](auto const& col) {
-      return cudf::type_dispatcher(col.type(),
-                                   copy_block_partitions_dispatcher{},
-                                   col,
-                                   num_partitions,
-                                   row_partition_numbers_ptr,
-                                   row_partition_offset_ptr,
-                                   block_partition_sizes_ptr,
-                                   scanned_block_partition_sizes_ptr,
-                                   grid_size,
-                                   stream,
-                                   mr);
+      return cudf::type_dispatcher<dispatch_storage_type>(col.type(),
+                                                          copy_block_partitions_dispatcher{},
+                                                          col,
+                                                          num_partitions,
+                                                          row_partition_numbers_ptr,
+                                                          row_partition_offset_ptr,
+                                                          block_partition_sizes_ptr,
+                                                          scanned_block_partition_sizes_ptr,
+                                                          grid_size,
+                                                          stream,
+                                                          mr);
     });
 
     if (has_nulls(input)) {

@@ -113,8 +113,13 @@ std::unique_ptr<scalar> make_string_scalar(
  * @throws std::bad_alloc if device memory allocation fails
  *
  * @param type The desired element type
+ * @param stream CUDA stream used for device memory operations.
+ * @param mr Device memory resource used to allocate the scalar's `data` and `is_valid` bool.
  */
-std::unique_ptr<scalar> make_default_constructed_scalar(data_type type);
+std::unique_ptr<scalar> make_default_constructed_scalar(
+  data_type type,
+  rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
  * @brief Construct scalar using the given value of fixed width type

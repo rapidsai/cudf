@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -272,12 +272,10 @@ struct column_merger {
     //
     merged_col->set_null_count(lcol.null_count() + rcol.null_count());
 
-    using Type = device_storage_type_t<Element>;
-
     // to resolve view.data()'s types use: Element
     //
-    auto const d_lcol = lcol.data<Type>();
-    auto const d_rcol = rcol.data<Type>();
+    auto const d_lcol = lcol.data<Element>();
+    auto const d_rcol = rcol.data<Element>();
 
     // capture lcol, rcol
     // and "gather" into merged_view.data()[indx_merged]
@@ -286,7 +284,7 @@ struct column_merger {
     thrust::transform(rmm::exec_policy(stream),
                       row_order_.begin(),
                       row_order_.end(),
-                      merged_view.begin<Type>(),
+                      merged_view.begin<Element>(),
                       [d_lcol, d_rcol] __device__(index_type const& index_pair) {
                         // When C++17, use structure bindings
                         auto side  = thrust::get<0>(index_pair);
@@ -383,7 +381,7 @@ table_ptr_type merge(cudf::table_view const& left_table,
             right_table.begin(),
             std::back_inserter(merged_cols),
             [&](auto const& left_col, auto const& right_col) {
-              return cudf::type_dispatcher(
+              return cudf::type_dispatcher<dispatch_storage_type>(
                 left_col.type(), merger, left_col, right_col, stream, mr);
             });
 

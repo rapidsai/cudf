@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2020, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -41,28 +41,26 @@ struct copy_if_else_functor_impl {
                                      rmm::cuda_stream_view stream,
                                      rmm::mr::device_memory_resource* mr)
   {
-    using Type = device_storage_type_t<T>;
-
     if (left_nullable) {
       if (right_nullable) {
-        auto lhs_iter = cudf::detail::make_pair_iterator<Type, true>(lhs);
-        auto rhs_iter = cudf::detail::make_pair_iterator<Type, true>(rhs);
+        auto lhs_iter = cudf::detail::make_pair_iterator<T, true>(lhs);
+        auto rhs_iter = cudf::detail::make_pair_iterator<T, true>(rhs);
         return detail::copy_if_else(
           true, lhs_iter, lhs_iter + size, rhs_iter, filter, lhs.type(), stream, mr);
       }
-      auto lhs_iter = cudf::detail::make_pair_iterator<Type, true>(lhs);
-      auto rhs_iter = cudf::detail::make_pair_iterator<Type, false>(rhs);
+      auto lhs_iter = cudf::detail::make_pair_iterator<T, true>(lhs);
+      auto rhs_iter = cudf::detail::make_pair_iterator<T, false>(rhs);
       return detail::copy_if_else(
         true, lhs_iter, lhs_iter + size, rhs_iter, filter, lhs.type(), stream, mr);
     }
     if (right_nullable) {
-      auto lhs_iter = cudf::detail::make_pair_iterator<Type, false>(lhs);
-      auto rhs_iter = cudf::detail::make_pair_iterator<Type, true>(rhs);
+      auto lhs_iter = cudf::detail::make_pair_iterator<T, false>(lhs);
+      auto rhs_iter = cudf::detail::make_pair_iterator<T, true>(rhs);
       return detail::copy_if_else(
         true, lhs_iter, lhs_iter + size, rhs_iter, filter, lhs.type(), stream, mr);
     }
-    auto lhs_iter = cudf::detail::make_pair_iterator<Type, false>(lhs);
-    auto rhs_iter = cudf::detail::make_pair_iterator<Type, false>(rhs);
+    auto lhs_iter = cudf::detail::make_pair_iterator<T, false>(lhs);
+    auto rhs_iter = cudf::detail::make_pair_iterator<T, false>(rhs);
     return detail::copy_if_else(
       false, lhs_iter, lhs_iter + size, rhs_iter, filter, lhs.type(), stream, mr);
   }
@@ -182,30 +180,30 @@ std::unique_ptr<column> copy_if_else(Left const& lhs,
     auto filter = [bool_mask_device] __device__(cudf::size_type i) {
       return bool_mask_device.is_valid_nocheck(i) and bool_mask_device.element<bool>(i);
     };
-    return cudf::type_dispatcher(lhs.type(),
-                                 copy_if_else_functor{},
-                                 lhs,
-                                 rhs,
-                                 boolean_mask.size(),
-                                 left_nullable,
-                                 right_nullable,
-                                 filter,
-                                 stream,
-                                 mr);
+    return cudf::type_dispatcher<dispatch_storage_type>(lhs.type(),
+                                                        copy_if_else_functor{},
+                                                        lhs,
+                                                        rhs,
+                                                        boolean_mask.size(),
+                                                        left_nullable,
+                                                        right_nullable,
+                                                        filter,
+                                                        stream,
+                                                        mr);
   } else {
     auto filter = [bool_mask_device] __device__(cudf::size_type i) {
       return bool_mask_device.element<bool>(i);
     };
-    return cudf::type_dispatcher(lhs.type(),
-                                 copy_if_else_functor{},
-                                 lhs,
-                                 rhs,
-                                 boolean_mask.size(),
-                                 left_nullable,
-                                 right_nullable,
-                                 filter,
-                                 stream,
-                                 mr);
+    return cudf::type_dispatcher<dispatch_storage_type>(lhs.type(),
+                                                        copy_if_else_functor{},
+                                                        lhs,
+                                                        rhs,
+                                                        boolean_mask.size(),
+                                                        left_nullable,
+                                                        right_nullable,
+                                                        filter,
+                                                        stream,
+                                                        mr);
   }
 }
 

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2020, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -106,10 +106,8 @@ struct column_scalar_scatterer_impl {
     auto result      = std::make_unique<column>(target, stream, mr);
     auto result_view = result->mutable_view();
 
-    using Type = device_storage_type_t<Element>;
-
     // Use permutation iterator with constant index to dereference scalar data
-    auto scalar_impl = static_cast<const scalar_type_t<Type>*>(&source.get());
+    auto scalar_impl = static_cast<const scalar_type_t<Element>*>(&source.get());
     auto scalar_iter =
       thrust::make_permutation_iterator(scalar_impl->data(), thrust::make_constant_iterator(0));
 
@@ -117,7 +115,7 @@ struct column_scalar_scatterer_impl {
                     scalar_iter,
                     scalar_iter + scatter_rows,
                     scatter_iter,
-                    result_view.begin<Type>());
+                    result_view.begin<Element>());
 
     return result;
   }
@@ -300,14 +298,14 @@ std::unique_ptr<table> scatter(std::vector<std::reference_wrapper<const scalar>>
                  target.begin(),
                  result.begin(),
                  [=](auto const& source_scalar, auto const& target_col) {
-                   return type_dispatcher(target_col.type(),
-                                          scatter_functor,
-                                          source_scalar,
-                                          scatter_iter,
-                                          scatter_rows,
-                                          target_col,
-                                          stream,
-                                          mr);
+                   return type_dispatcher<dispatch_storage_type>(target_col.type(),
+                                                                 scatter_functor,
+                                                                 source_scalar,
+                                                                 scatter_iter,
+                                                                 scatter_rows,
+                                                                 target_col,
+                                                                 stream,
+                                                                 mr);
                  });
 
   scatter_scalar_bitmask(source, scatter_iter, scatter_rows, result, stream, mr);

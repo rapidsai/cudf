@@ -306,11 +306,11 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_ColumnView_slice(JNIEnv *env, j
     std::vector<cudf::column_view> result = cudf::slice(*n_column, indices);
     cudf::jni::native_jlongArray n_result(env, result.size());
     std::vector<std::unique_ptr<cudf::column>> column_result(result.size());
-    for (int i = 0; i < result.size(); i++) {
+    for (size_t i = 0; i < result.size(); i++) {
       column_result[i].reset(new cudf::column(result[i]));
       n_result[i] = reinterpret_cast<jlong>(column_result[i].get());
     }
-    for (int i = 0; i < result.size(); i++) {
+    for (size_t i = 0; i < result.size(); i++) {
       column_result[i].release();
     }
     return n_result.get_jArray();
@@ -421,11 +421,11 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_ColumnView_split(JNIEnv *env, j
     std::vector<cudf::column_view> result = cudf::split(*n_column, indices);
     cudf::jni::native_jlongArray n_result(env, result.size());
     std::vector<std::unique_ptr<cudf::column>> column_result(result.size());
-    for (int i = 0; i < result.size(); i++) {
+    for (size_t i = 0; i < result.size(); i++) {
       column_result[i].reset(new cudf::column(result[i]));
       n_result[i] = reinterpret_cast<jlong>(column_result[i].get());
     }
-    for (int i = 0; i < result.size(); i++) {
+    for (size_t i = 0; i < result.size(); i++) {
       column_result[i].release();
     }
     return n_result.get_jArray();
@@ -763,16 +763,16 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_castTo(JNIEnv *env, jclas
   CATCH_STD(env, 0);
 }
 
-JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_logicalCastTo(JNIEnv *env, jclass,
-                                                                     jlong handle, jint type,
-                                                                     jint scale) {
+JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_bitCastTo(JNIEnv *env, jclass,
+                                                                 jlong handle, jint type,
+                                                                 jint scale) {
   JNI_NULL_CHECK(env, handle, "native handle is null", 0);
   try {
     cudf::jni::auto_set_device(env);
     cudf::column_view *column = reinterpret_cast<cudf::column_view *>(handle);
     cudf::data_type n_data_type = cudf::jni::make_data_type(type, scale);
     std::unique_ptr<cudf::column_view> result = std::make_unique<cudf::column_view>();
-    *result = cudf::logical_cast(*column, n_data_type);
+    *result = cudf::bit_cast(*column, n_data_type);
     return reinterpret_cast<jlong>(result.release());
   }
   CATCH_STD(env, 0);
