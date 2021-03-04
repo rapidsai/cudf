@@ -29,7 +29,6 @@ target_link_libraries(cudf_datagen
                       GTest::gmock_main
                       GTest::gtest_main
                       benchmark::benchmark
-                      benchmark::benchmark_main
                       Threads::Threads
                       cudf)
 
@@ -52,7 +51,8 @@ function(ConfigureBench CMAKE_BENCH_NAME)
     add_executable(${CMAKE_BENCH_NAME} ${ARGN})
     set_target_properties(${CMAKE_BENCH_NAME}
         PROPERTIES RUNTIME_OUTPUT_DIRECTORY "$<BUILD_INTERFACE:${CUDF_BINARY_DIR}/gbenchmarks>")
-    target_link_libraries(${CMAKE_BENCH_NAME} PRIVATE cudf_benchmark_common cudf_datagen)
+    target_link_libraries(${CMAKE_BENCH_NAME}
+        PRIVATE cudf_benchmark_common cudf_datagen benchmark::benchmark_main)
 endfunction()
 
 ###################################################################################################
@@ -181,6 +181,7 @@ ConfigureBench(STRINGS_BENCH
   string/case_benchmark.cpp
   string/contains_benchmark.cpp
   string/convert_durations_benchmark.cpp
+  string/convert_floats_benchmark.cpp
   string/copy_benchmark.cpp
   string/filter_benchmark.cpp
   string/find_benchmark.cpp
