@@ -89,12 +89,12 @@ class cufile_config {
 
     if (enabled) {
       auto const config_file_path = getenv_or(json_path_env_var, "/etc/cufile.json");
-      std::ifstream user_config(config_file_path);
+      std::ifstream user_config_file(config_file_path);
       auto const cudf_config_path = tmp_config_dir.path() + "/cufile.json";
       std::ofstream cudf_config_file(cudf_config_path);
 
       std::string line;
-      while (std::getline(user_config, line)) {
+      while (std::getline(user_config_file, line)) {
         std::string const tag = "\"allow_compat_mode\"";
         if (line.find(tag) != std::string::npos) {
           // TODO: only replace the true/false value
@@ -239,7 +239,10 @@ std::unique_ptr<cufile_input_impl> make_cufile_input(std::string const &filepath
 {
 #ifdef CUFILE_FOUND
   if (cufile_config::instance()->is_enabled()) {
-    return std::make_unique<cufile_input_impl>(filepath);
+    try {
+      return std::make_unique<cufile_input_impl>(filepath);
+    } catch (...) {
+    }
   }
 #endif
   return nullptr;
@@ -249,7 +252,10 @@ std::unique_ptr<cufile_output_impl> make_cufile_output(std::string const &filepa
 {
 #ifdef CUFILE_FOUND
   if (cufile_config::instance()->is_enabled()) {
-    return std::make_unique<cufile_output_impl>(filepath);
+    try {
+      return std::make_unique<cufile_output_impl>(filepath);
+    } catch (...) {
+    }
   }
 #endif
   return nullptr;
