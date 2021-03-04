@@ -112,8 +112,7 @@ std::unique_ptr<cudf::column> gather(
   auto const d_out_chars = out_chars_column->mutable_view().template data<char>();
 
   // fill in chars
-  cudf::detail::device_span<int32_t const> const d_out_offsets_span(d_out_offsets,
-                                                                    output_count + 1);
+  cudf::device_span<int32_t const> const d_out_offsets_span(d_out_offsets, output_count + 1);
   auto const d_in_chars = (strings_count > 0) ? strings.chars().data<char>() : nullptr;
   auto gather_chars_fn =
     [d_out_offsets_span, begin, d_in_offsets, d_in_chars] __device__(size_type out_char_idx) {

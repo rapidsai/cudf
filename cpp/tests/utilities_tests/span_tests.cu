@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -27,8 +27,8 @@
 #include <cstring>
 #include <string>
 
-using cudf::detail::device_span;
-using cudf::detail::host_span;
+using cudf::device_span;
+using cudf::host_span;
 
 template <typename T>
 void expect_equivolent(host_span<T> a, host_span<T> b)

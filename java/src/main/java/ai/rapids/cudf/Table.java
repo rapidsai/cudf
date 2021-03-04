@@ -513,6 +513,8 @@ public final class Table implements AutoCloseable {
 
   private static native long[] explode(long tableHandle, int index);
 
+  private static native long[] explodePosition(long tableHandle, int index);
+
   private static native long createCudfTableView(long[] nativeColumnViewHandles);
 
   private static native long[] columnViewsFromPacked(ByteBuffer metadata, long dataAddress);
@@ -1751,6 +1753,49 @@ public final class Table implements AutoCloseable {
     assert 0 <= index && index < columns.length : "Column index is out of range";
     assert columns[index].getType().equals(DType.LIST) : "Column to explode must be of type LIST";
     return new Table(explode(nativeHandle, index));
+  }
+
+  /**
+   * Explodes a list column's elements and includes a position column.
+   *
+   * Any list is exploded, which means the elements of the list in each row are expanded into new rows
+   * in the output. The corresponding rows for other columns in the input are duplicated. A position
+   * column is added that has the index inside the original list for each row. Example:
+   * <code>
+   * [[5,10,15], 100],
+   * [[20,25],   200],
+   * [[30],      300],
+   * returns
+   * [0,   5,    100],
+   * [1,   10,   100],
+   * [2,   15,    100],
+   * [0,   20,    200],
+   * [1,   25,    200],
+   * [0,   30,    300],
+   * </code>
+   *
+   * Nulls and empty lists propagate in different ways depending on what is null or empty.
+   * <code>
+   * [[5,null,15], 100],
+   * [null,        200],
+   * [[],          300],
+   * returns
+   * [0,    5,     100],
+   * [1,    null,  100],
+   * [2,    15,    100],
+   * </code>
+   *
+   * Note that null lists are not included in the resulting table, but nulls inside
+   * lists and empty lists will be represented with a null entry for that column in that row.
+   *
+   * @param index Column index to explode inside the table.
+   * @return A new table with exploded value and position. The column order of return table is
+   *         [cols before explode_input, explode_position, explode_value, cols after explode_input].
+   */
+  public Table explodePosition(int index) {
+    assert 0 <= index && index < columns.length : "Column index is out of range";
+    assert columns[index].getType().equals(DType.LIST) : "Column to explode must be of type LIST";
+    return new Table(explodePosition(nativeHandle, index));
   }
 
   /**
