@@ -332,6 +332,7 @@ def to_cudf_compatible_scalar(val, dtype=None):
     If `val` is None, returns None.
     """
     from cudf._lib.scalar import DeviceScalar, _is_null_host_scalar
+
     if _is_null_host_scalar(val) or isinstance(val, cudf.Scalar):
         return val
 

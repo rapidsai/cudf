@@ -56,10 +56,13 @@ class DecimalColumn(ColumnBase):
         if reflect:
             self, other = other, self
         scale = _binop_scale(self.dtype, other.dtype, op)
-        output_type = Decimal64Dtype(scale=scale, precision=18) # precision will be ignored
+        output_type = Decimal64Dtype(
+            scale=scale, precision=18
+        )  # precision will be ignored
         result = libcudf.binaryop.binaryop(self, other, op, output_type)
         result.dtype.precision = _binop_precision(self.dtype, other.dtype, op)
         return result
+
 
 def _binop_scale(l_dtype, r_dtype, op):
     s1, s2 = l_dtype.scale, r_dtype.scale
@@ -69,6 +72,7 @@ def _binop_scale(l_dtype, r_dtype, op):
         return s1 + s2
     else:
         raise NotImplementedError()
+
 
 def _binop_precision(l_dtype, r_dtype, op):
     """
