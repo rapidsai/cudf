@@ -34,8 +34,8 @@ function(find_and_configure_cudf VERSION)
         list(APPEND CMAKE_PREFIX_PATH "${cudf_BINARY_DIR}")
         set(CMAKE_PREFIX_PATH ${CMAKE_PREFIX_PATH} PARENT_SCOPE)
     endif()
+
 endfunction()
 
 set(CUDF_KAFKA_MIN_VERSION_cudf 0.19)
-
 find_and_configure_cudf(${CUDF_KAFKA_MIN_VERSION_cudf})

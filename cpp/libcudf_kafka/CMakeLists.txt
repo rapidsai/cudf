@@ -14,7 +14,7 @@
 # limitations under the License.
 #=============================================================================
 cmake_minimum_required(VERSION 3.18 FATAL_ERROR)
-project(CUDA_KAFKA VERSION 0.19.0 LANGUAGES C CXX CUDA)
+project(CUDA_KAFKA VERSION 0.19.0 LANGUAGES C CXX)
 
 #################################################################################################
 # - CUDA architectures
@@ -42,6 +42,15 @@ message(VERBOSE "CUDF_KAFKA: Build gtests: ${CUDF_KAFKA_BUILD_TESTS}")
 message(VERBOSE "CUDF_KAFKA: Build Arrow static library: ${ARROW_STATIC_LIB}")
 
 ###################################################################################################
+# - compiler options ------------------------------------------------------------------------------
+
+# * find CUDAToolkit package
+# * determine GPU architectures
+# * enable the CMake CUDA language
+# * set other CUDA compilation flags
+include(cmake/Modules/ConfigureCUDA.cmake)
+
+###################################################################################################
 # - Dependencies
 
 # CPM
@@ -50,36 +59,12 @@ include(cmake/thirdparty/CUDF_KAFKA_GetCPM.cmake)
 # libcudf
 include(cmake/thirdparty/CUDF_KAFKA_GetCUDF.cmake)
 
-# # librdkafka
-# include(cmake/thirdparty/CUDF_KAFKA_GetRDKafka.cmake)
+# librdkafka
+include(cmake/thirdparty/CUDF_KAFKA_GetRDKafka.cmake)
 
-
-###################################################################################################
-# - tests and benchmarks --------------------------------------------------------------------------
-
+# # GTests if enabled
 # if (CUDF_KAFKA_BUILD_TESTS)
-#     # Find or install GoogleTest
-#     CPMFindPackage(NAME GTest
-#         VERSION         1.10.0
-#         GIT_REPOSITORY  https://github.com/google/googletest.git
-#         GIT_TAG         release-1.10.0
-#         GIT_SHALLOW     TRUE
-#         OPTIONS         "INSTALL_GTEST OFF"
-#         # googletest >= 1.10.0 provides a cmake config file -- use it if it exists
-#         FIND_PACKAGE_ARGUMENTS "CONFIG")
-#     # Add GTest aliases if they don't already exist.
-#     # Assumes if GTest::gtest doesn't exist, the others don't either.
-#     # TODO: Is this always a valid assumption?
-#     if(NOT TARGET GTest::gtest)
-#         add_library(GTest::gtest ALIAS gtest)
-#         add_library(GTest::gmock ALIAS gmock)
-#         add_library(GTest::gtest_main ALIAS gtest_main)
-#         add_library(GTest::gmock_main ALIAS gmock_main)
-#     endif()
-
-#     # include CTest module -- automatically calls enable_testing()
-#     include(CTest)
-#     add_subdirectory(tests)
+#     include(cmake/thirdparty/CUDF_KAFKA_GetGTest.cmake)
 # endif()
 
 ###################################################################################################
@@ -111,9 +96,6 @@ add_library(cudf_kafka SHARED
 
 ###################################################################################################
 # cudf_kafka - librdkafka -------------------------------------------------------------------------
-
-find_path(RDKAFKA_INCLUDE "librdkafka" HINTS "$ENV{RDKAFKA_ROOT}/include")
-find_library(RDKAFKA++_LIBRARY "rdkafka++" HINTS "$ENV{RDKAFKA_ROOT}/lib" "$ENV{RDKAFKA_ROOT}/build")
 
 target_link_libraries(cudf_kafka ${RDKAFKA++_LIBRARY})
 include_directories("${RDKAFKA_INCLUDE}")
