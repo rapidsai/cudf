@@ -22,6 +22,7 @@
 #include <cudf/fixed_point/fixed_point.hpp>
 #include <cudf/scalar/scalar_factories.hpp>
 #include <cudf/types.hpp>
+#include <cudf/unary.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
 
 #include <cudf_test/column_utilities.hpp>
@@ -2251,6 +2252,39 @@ TYPED_TEST(FixedPointTestBothReps, FixedPointBinaryOpAdd5)
   auto const type = cudf::binary_operation_fixed_point_output_type(
     cudf::binary_operator::ADD, lhs->type(), static_cast<cudf::column_view>(rhs).type());
   auto const result = cudf::binary_operation(*lhs, rhs, cudf::binary_operator::ADD, type);
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
+}
+
+TYPED_TEST(FixedPointTestBothReps, FixedPointBinaryOpAdd6)
+{
+  using namespace numeric;
+  using decimalXX = TypeParam;
+  using RepType   = device_storage_type_t<decimalXX>;
+
+  auto const col = fp_wrapper<RepType>{{3, 4, 5, 6, 7, 8}, scale_type{0}};
+
+  auto const expected1 = fp_wrapper<RepType>{{6, 8, 10, 12, 14, 16}, scale_type{0}};
+  auto const expected2 = fp_wrapper<RepType>{{0, 0, 1, 1, 1, 1}, scale_type{1}};
+  auto const type1     = cudf::data_type{cudf::type_to_id<decimalXX>(), 0};
+  auto const type2     = cudf::data_type{cudf::type_to_id<decimalXX>(), 1};
+  auto const result1   = cudf::binary_operation(col, col, cudf::binary_operator::ADD, type1);
+  auto const result2   = cudf::binary_operation(col, col, cudf::binary_operator::ADD, type2);
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected1, result1->view());
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected2, result2->view());
+}
+
+TYPED_TEST(FixedPointTestBothReps, FixedPointCast)
+{
+  using namespace numeric;
+  using decimalXX = TypeParam;
+  using RepType   = device_storage_type_t<decimalXX>;
+
+  auto const col      = fp_wrapper<RepType>{{6, 8, 10, 12, 14, 16}, scale_type{0}};
+  auto const expected = fp_wrapper<RepType>{{0, 0, 1, 1, 1, 1}, scale_type{1}};
+  auto const type     = cudf::data_type{cudf::type_to_id<decimalXX>(), 1};
+  auto const result   = cudf::cast(col, type);
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
 }
