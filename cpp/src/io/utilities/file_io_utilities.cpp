@@ -69,7 +69,7 @@ long file_wrapper::size() const
 #ifdef CUFILE_FOUND
 
 class cufile_config {
-  std::string const default_policy = "OFF";
+  std::string const default_policy    = "OFF";
   std::string const json_path_env_var = "CUFILE_ENV_PATH_JSON";
 
   bool enabled = false;
