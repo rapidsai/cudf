@@ -30,6 +30,8 @@
 namespace cudf {
 namespace io {
 
+namespace detail {
+
 /**
  * @brief Class that provides RAII for file handling.
  */
@@ -48,7 +50,7 @@ class file_wrapper {
 /**
  * @brief Base class for cuFile input/output.
  *
- * Contains the file handles and common API for cuFile input and output classes.
+ * Contains the common API for cuFile input and output classes.
  */
 class cufile_io_base {
  public:
@@ -65,8 +67,8 @@ class cufile_io_base {
   /**
    * @brief The read/write size above which cuFile is faster then host read + copy
    *
-   * This may not be the optimal threshold for all systems. `is_cufile_io_preferred` can use a
-   * different logic based on the system config.
+   * This may not be the optimal threshold for all systems. Derived `is_cufile_io_preferred`
+   * implementations can use a different logic.
    */
   static constexpr size_t op_size_threshold = 128 << 10;
 };
@@ -213,6 +215,6 @@ std::unique_ptr<cufile_input_impl> make_cufile_input(std::string const &filepath
  * cuFile library is not installed.
  */
 std::unique_ptr<cufile_output_impl> make_cufile_output(std::string const &filepath);
-
+};  // namespace detail
 };  // namespace io
 };  // namespace cudf

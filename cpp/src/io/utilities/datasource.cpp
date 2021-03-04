@@ -46,9 +46,9 @@ class memory_mapped_source : public datasource {
 
  public:
   explicit memory_mapped_source(const char *filepath, size_t offset, size_t size)
-    : _cufile_in(make_cufile_input(filepath))
+    : _cufile_in(detail::make_cufile_input(filepath))
   {
-    auto const file = file_wrapper(filepath, O_RDONLY);
+    auto const file = detail::file_wrapper(filepath, O_RDONLY);
     _file_size      = file.size();
     if (_file_size != 0) { map(file.desc(), offset, size); }
   }
@@ -138,7 +138,7 @@ class memory_mapped_source : public datasource {
   void *_map_addr    = nullptr;
   size_t _map_size   = 0;
   size_t _map_offset = 0;
-  std::unique_ptr<cufile_input_impl> _cufile_in;
+  std::unique_ptr<detail::cufile_input_impl> _cufile_in;
 };
 
 /**

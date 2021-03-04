@@ -29,6 +29,7 @@
 
 namespace cudf {
 namespace io {
+namespace detail {
 
 file_wrapper::file_wrapper(std::string const &filepath, int flags)
   : fd(open(filepath.c_str(), flags))
@@ -40,18 +41,6 @@ file_wrapper::file_wrapper(std::string const &filepath, int flags, mode_t mode)
   : fd(open(filepath.c_str(), flags, mode))
 {
   CUDF_EXPECTS(fd != -1, "Cannot open file " + filepath);
-}
-
-/**
- * Returns the directory from which the libcudf.so is loaded.
- */
-std::string get_libcudf_dir_path()
-{
-  Dl_info dl_info{};
-  dladdr((void *)get_libcudf_dir_path, &dl_info);
-  std::string full_path{dl_info.dli_fname};
-  auto const dir_path = full_path.substr(0, full_path.find_last_of('/') + 1);
-  return dir_path;
 }
 
 file_wrapper::~file_wrapper() { close(fd); }
@@ -261,5 +250,6 @@ std::unique_ptr<cufile_output_impl> make_cufile_output(std::string const &filepa
   return nullptr;
 }
 
+};  // namespace detail
 };  // namespace io
 };  // namespace cudf

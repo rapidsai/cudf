@@ -29,7 +29,8 @@ namespace io {
  */
 class file_sink : public data_sink {
  public:
-  explicit file_sink(std::string const& filepath) : _cufile_out(make_cufile_output(filepath))
+  explicit file_sink(std::string const& filepath)
+    : _cufile_out(detail::make_cufile_output(filepath))
   {
     _output_stream.open(filepath, std::ios::out | std::ios::binary | std::ios::trunc);
     CUDF_EXPECTS(_output_stream.is_open(), "Cannot open output file");
@@ -66,7 +67,7 @@ class file_sink : public data_sink {
  private:
   std::ofstream _output_stream;
   size_t _bytes_written = 0;
-  std::unique_ptr<cufile_output_impl> _cufile_out;
+  std::unique_ptr<detail::cufile_output_impl> _cufile_out;
 };
 
 /**
