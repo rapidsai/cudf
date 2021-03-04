@@ -1103,6 +1103,11 @@ class ColumnBase(Column, Serializable):
     ) -> "cudf.core.column.StringColumn":
         raise NotImplementedError
 
+    def as_decimal_column(
+        self, dtype: Dtype, **kwargs
+    ) -> "cudf.core.column.DecimalColumn":
+        raise NotImplementedError
+
     def apply_boolean_mask(self, mask) -> ColumnBase:
         mask = as_column(mask, dtype="bool")
         result = (
