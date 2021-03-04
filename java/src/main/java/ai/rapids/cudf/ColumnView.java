@@ -18,8 +18,6 @@
 
 package ai.rapids.cudf;
 
-import javafx.util.Pair;
-
 import java.util.*;
 import java.util.stream.IntStream;
 
@@ -51,7 +49,9 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
   }
 
   /**
-   * Create a new column vector based off of data already on the device.
+   * Create a new column view based off of data already on the device. Ref count on the buffers
+   * is not incremented and none of the underlying buffers are owned by this view. If ownership
+   * is needed, call {@link ColumnView#copyToColumnVector}
    * @param type           the type of the vector
    * @param rows           the number of rows in this vector.
    * @param nullCount      the number of nulls in the dataset.
@@ -72,7 +72,9 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
   }
 
   /**
-   * Create a new column vector based off of data already on the device.
+   * Create a new column view based off of data already on the device. Ref count on the buffers
+   * is not incremented and none of the underlying buffers are owned by this view. If ownership
+   * is needed, call {@link ColumnView#copyToColumnVector}
    * @param type           the type of the vector
    * @param rows           the number of rows in this vector.
    * @param nullCount      the number of nulls in the dataset.

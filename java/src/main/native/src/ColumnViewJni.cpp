@@ -14,7 +14,6 @@
  * limitations under the License.
  */
 
-#include <memory>
 #include <numeric>
 
 #include <cudf/aggregation.hpp>
@@ -61,11 +60,9 @@
 #include <cudf/lists/lists_column_view.hpp>
 #include <cudf/structs/structs_column_view.hpp>
 #include <map_lookup.hpp>
-#include <cudf/types.hpp>
 
 #include "cudf_jni_apis.hpp"
 #include "dtype_utils.hpp"
-#include "jni_utils.hpp"
 
 namespace {
 
@@ -1763,5 +1760,4 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_copyColumnViewToCV(JNIEnv
   }
   CATCH_STD(env, 0)
 }
-
 } // extern "C"
