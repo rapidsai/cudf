@@ -21,11 +21,10 @@
 #include <cudf/detail/iterator.cuh>
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
-#include <cudf/detail/utilities/device_atomics.cuh>
+#include <cudf/detail/utilities/device_operators.cuh>
 #include <cudf/null_mask.hpp>
 #include <cudf/reduction.hpp>
 #include <cudf/utilities/error.hpp>
-#include <cudf/utilities/span.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
@@ -34,6 +33,32 @@
 
 namespace cudf {
 namespace detail {
+
+namespace {
+/**
+ * @brief Accessor handles both nullable and non-nullable columns.
+ *
+ * @tparam Element type used for null-replacement value
+ */
+template <typename Element>
+struct null_replace_accessor {
+  column_device_view const col;      ///< column view of column in device
+  Element const null_replacement{};  ///< value returned when element is null
+  bool const has_nulls;              ///< true if col has null elements
+
+  null_replace_accessor(column_device_view const& _col, Element null_val, bool has_nulls)
+    : col{_col}, null_replacement{null_val}, has_nulls(has_nulls)
+  {
+    CUDF_EXPECTS(data_type(type_to_id<Element>()) == col.type(), "the data type mismatch");
+    if (has_nulls) CUDF_EXPECTS(_col.nullable(), "column with nulls must have a validity bitmask");
+  }
+  __device__ Element operator()(cudf::size_type i) const
+  {
+    return has_nulls && col.is_null_nocheck(i) ? null_replacement : col.element<Element>(i);
+  }
+};
+}  // namespace
+
 /**
  * @brief Dispatcher for running Scan operation on input column
  * Dispatches scan operation on `Op` and creates output column
@@ -73,23 +98,14 @@ struct scan_dispatcher {
     mutable_column_view output = output_column->mutable_view();
     auto d_input               = column_device_view::create(input_view, stream);
 
-    if (input_view.has_nulls()) {
-      auto input = make_null_replacement_iterator(*d_input, Op::template identity<T>());
-      thrust::exclusive_scan(rmm::exec_policy(stream),
-                             input,
-                             input + size,
-                             output.data<T>(),
-                             Op::template identity<T>(),
-                             Op{});
-    } else {
-      auto input = d_input->begin<T>();
-      thrust::exclusive_scan(rmm::exec_policy(stream),
-                             input,
-                             input + size,
-                             output.data<T>(),
-                             Op::template identity<T>(),
-                             Op{});
-    }
+    auto input = make_counting_transform_iterator(
+      0, null_replace_accessor<T>{*d_input, Op::template identity<T>(), input_view.has_nulls()});
+    thrust::exclusive_scan(rmm::exec_policy(stream),
+                           input,
+                           input + size,
+                           output.data<T>(),
+                           Op::template identity<T>(),
+                           Op{});
 
     CHECK_CUDA(stream.value());
     return output_column;
@@ -147,13 +163,9 @@ struct scan_dispatcher {
     auto d_input               = column_device_view::create(input_view, stream);
     mutable_column_view output = output_column->mutable_view();
 
-    if (input_view.has_nulls()) {
-      auto input = make_null_replacement_iterator(*d_input, Op::template identity<T>());
-      thrust::inclusive_scan(rmm::exec_policy(stream), input, input + size, output.data<T>(), Op{});
-    } else {
-      auto input = d_input->begin<T>();
-      thrust::inclusive_scan(rmm::exec_policy(stream), input, input + size, output.data<T>(), Op{});
-    }
+    auto const input = make_counting_transform_iterator(
+      0, null_replace_accessor<T>{*d_input, Op::template identity<T>(), input_view.has_nulls()});
+    thrust::inclusive_scan(rmm::exec_policy(stream), input, input + size, output.data<T>(), Op{});
 
     CHECK_CUDA(stream.value());
     return output_column;
@@ -171,13 +183,10 @@ struct scan_dispatcher {
 
     auto d_input = column_device_view::create(input_view, stream);
 
-    if (input_view.has_nulls()) {
-      auto input = make_null_replacement_iterator(*d_input, Op::template identity<T>());
-      thrust::inclusive_scan(rmm::exec_policy(stream), input, input + size, result.data(), Op{});
-    } else {
-      auto input = d_input->begin<T>();
-      thrust::inclusive_scan(rmm::exec_policy(stream), input, input + size, result.data(), Op{});
-    }
+    auto input = make_counting_transform_iterator(
+      0, null_replace_accessor<T>{*d_input, Op::template identity<T>(), input_view.has_nulls()});
+    thrust::inclusive_scan(rmm::exec_policy(stream), input, input + size, result.data(), Op{});
+
     CHECK_CUDA(stream.value());
 
     auto output_column =
