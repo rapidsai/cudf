@@ -18,10 +18,10 @@
 
 package ai.rapids.cudf;
 
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.List;
-import java.util.Optional;
+import javafx.util.Pair;
+
+import java.util.*;
+import java.util.stream.IntStream;
 
 import static ai.rapids.cudf.HostColumnVector.OFFSET_SIZE;
 
@@ -50,6 +50,53 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
     this.nullCount = ColumnView.getNativeNullCount(viewHandle);
   }
 
+  /**
+   * Create a new column vector based off of data already on the device.
+   * @param type           the type of the vector
+   * @param rows           the number of rows in this vector.
+   * @param nullCount      the number of nulls in the dataset.
+   * @param validityBuffer an optional validity buffer. Must be provided if nullCount != 0.
+   *                       The ownership doesn't change on this buffer
+   * @param offsetBuffer   a host buffer required for nested types including strings and string
+   *                       categories. The ownership doesn't change on this buffer
+   * @param children       an array of ColumnView children
+   */
+  public ColumnView(DType type, long rows, Optional<Long> nullCount,
+                     BaseDeviceMemoryBuffer validityBuffer,
+                     BaseDeviceMemoryBuffer offsetBuffer, ColumnView[] children) {
+    this(type, (int) rows, nullCount.orElse(UNKNOWN_NULL_COUNT).intValue(),
+        null, validityBuffer, offsetBuffer, children);
+    assert(type.isNestedType());
+    assert (nullCount.isPresent() && nullCount.get() <= Integer.MAX_VALUE)
+        || !nullCount.isPresent();
+  }
+
+  /**
+   * Create a new column vector based off of data already on the device.
+   * @param type           the type of the vector
+   * @param rows           the number of rows in this vector.
+   * @param nullCount      the number of nulls in the dataset.
+   * @param dataBuffer     a host buffer required for nested types including strings and string
+   *                       categories. The ownership doesn't change on this buffer
+   * @param validityBuffer an optional validity buffer. Must be provided if nullCount != 0.
+   *                       The ownership doesn't change on this buffer
+   */
+  public ColumnView(DType type, long rows, Optional<Long> nullCount,
+                    BaseDeviceMemoryBuffer dataBuffer,
+                    BaseDeviceMemoryBuffer validityBuffer) {
+    this(type, (int) rows, nullCount.orElse(UNKNOWN_NULL_COUNT).intValue(),
+        dataBuffer, validityBuffer, null, null);
+    assert (!type.isNestedType());
+    assert (nullCount.isPresent() && nullCount.get() <= Integer.MAX_VALUE)
+        || !nullCount.isPresent();
+  }
+
+  private ColumnView(DType type, long rows, int nullCount,
+                     BaseDeviceMemoryBuffer dataBuffer, BaseDeviceMemoryBuffer validityBuffer,
+                     BaseDeviceMemoryBuffer offsetBuffer, ColumnView[] children) {
+    this(ColumnVector.initViewHandle(type, (int) rows, nullCount, dataBuffer, validityBuffer,
+        offsetBuffer, Arrays.stream(children).mapToLong(c -> c.getNativeView()).toArray()));
+  }
 
   /** Creates a ColumnVector from a column view handle
    * @return a new ColumnVector
@@ -1319,14 +1366,35 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    */
   public ColumnView replaceChildrenWithViews(int[] indices,
                                              ColumnView[] views) {
-    assert(type.isNestedType());
-    assert(indices.length == views.length);
+    assert (type.isNestedType());
+    assert (indices.length == views.length);
     if (type == DType.LIST) {
-      assert(indices.length == 1);
+      assert (indices.length == 1);
     }
-
-    return new ColumnView(replaceChildrenWithViews(getNativeView(), indices,
-        Arrays.stream(views).mapToLong(v -> v.getNativeView()).toArray()));
+    if (indices.length != views.length) {
+      throw new IllegalArgumentException("The indices size and children size should match");
+    }
+    Map<Integer, ColumnView> map = new HashMap<>();
+    IntStream.range(0, indices.length).forEach(index -> {
+      if (map.containsKey(indices[index])) {
+        throw new IllegalArgumentException("Duplicate mapping found for replacing child index");
+      }
+      map.put(indices[index], views[index]);
+    });
+    List<ColumnView> newChildren = new ArrayList<>(getNumChildren());
+    IntStream.range(0, getNumChildren()).forEach(i -> {
+      ColumnView view = map.remove(i);
+      if (view == null) {
+        newChildren.add(getChildColumnView(i));
+      } else {
+        newChildren.add(view);
+      }
+    });
+    if (!map.isEmpty()) {
+      throw new IllegalArgumentException("One or more invalid child indices passed to be replaced");
+    }
+    return new ColumnView(type, getRowCount(), Optional.of(getNullCount()), getValid(),
+        getOffsets(), views);
   }
 
   /**
@@ -2497,8 +2565,6 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    */
   private static native long timestampToStringTimestamp(long viewHandle, String format);
 
-  private static native long replaceChildrenWithViews(long cudfColumnHandle,
-                                                    int[] indices, long[] viewHandles) throws CudfException;
   /**
    * Native method for locating the starting index of the first instance of a given substring
    * in each string in the column. 0 indexing, returns -1 if the substring is not found. Can be

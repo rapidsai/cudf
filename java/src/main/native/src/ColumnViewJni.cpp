@@ -1764,48 +1764,4 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_copyColumnViewToCV(JNIEnv
   CATCH_STD(env, 0)
 }
 
-JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_replaceChildrenWithViews(
-    JNIEnv *env, jobject j_object, jlong j_handle, jintArray j_indices, jlongArray j_children) {
-
-  JNI_NULL_CHECK(env, j_handle, "native handle is null", 0);
-  JNI_NULL_CHECK(env, j_indices, "child indices to replace can't be null", 0);
-  JNI_NULL_CHECK(env, j_children, "children to replace can't be null", 0);
-
-  try {
-    cudf::jni::native_jpointerArray<cudf::column_view> children_to_replace(env, j_children);
-    cudf::jni::native_jintArray indices(env, j_indices);
-    JNI_ARG_CHECK(env, indices.size() == children_to_replace.size(), "The indices size and children size should match", 0);
-
-    cudf::column_view *n_col_view = reinterpret_cast<cudf::column_view *>(j_handle);
-    cudf::type_id id = n_col_view->type().id();
-
-    std::map<int32_t, cudf::column_view*> m;
-    for (int i = 0 ; i < indices.size() ; i++) {
-      auto it = m.find(indices[i]);
-      JNI_ARG_CHECK(env, it == m.end(), "Duplicate mapping found for replacing child index", 0);
-      m[indices[i]] = children_to_replace[i];
-    }
-
-    std::vector<cudf::column_view> new_children;
-    new_children.reserve(n_col_view->num_children());
-    int j = 0;
-    for (int i = 0 ; i < n_col_view->num_children() ; i++) {
-      auto it = m.find(i);
-      if (it != m.end()) {
-        JNI_ARG_CHECK(env, (*it->second).size() == n_col_view->child(i).size(), "Child size don't match", 0);
-        new_children.emplace_back(*it->second);
-        m.erase(it);
-      } else {
-        new_children.emplace_back(n_col_view->child(i));
-      }
-    }
-
-    JNI_ARG_CHECK(env, m.empty(), "One or more invalid child indices passed to be replaced", 0);
-
-    return reinterpret_cast<jlong>(new cudf::column_view(n_col_view->type(), n_col_view->size(), 
-    nullptr, n_col_view->null_mask(), n_col_view->null_count(), n_col_view->offset(), new_children));
-  }
-  CATCH_STD(env, 0);
-}
-
 } // extern "C"
