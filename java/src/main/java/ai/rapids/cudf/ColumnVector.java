@@ -858,7 +858,7 @@ public final class ColumnVector extends ColumnView {
     }
 
     @Override
-    protected boolean cleanImpl(boolean logErrorIfNotClean) {
+    protected synchronized boolean cleanImpl(boolean logErrorIfNotClean) {
       boolean neededCleanup = false;
       long address = 0;
 
