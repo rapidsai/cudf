@@ -15,4 +15,4 @@ ctypedef bool underlying_type_t_null_policy
 
 cdef dtype_from_column_view(column_view cv)
 
-cdef libcudf_types.data_type dtype_to_data_type(dtype)
+cdef libcudf_types.data_type dtype_to_data_type(dtype) except *

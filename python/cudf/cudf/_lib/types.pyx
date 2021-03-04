@@ -210,7 +210,7 @@ cdef dtype_from_column_view(column_view cv):
     else:
         return cudf_to_np_types[<underlying_type_t_type_id>(tid)]
 
-cdef libcudf_types.data_type dtype_to_data_type(dtype):
+cdef libcudf_types.data_type dtype_to_data_type(dtype) except *:
     if is_list_dtype(dtype):
         tid = libcudf_types.type_id.LIST
     elif is_struct_dtype(dtype):
