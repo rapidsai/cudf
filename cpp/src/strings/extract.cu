@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2020, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -92,26 +92,25 @@ std::unique_ptr<table> extract(
   auto regex_insts = d_prog.insts_counts();
 
   for (int32_t column_index = 0; column_index < groups; ++column_index) {
-    rmm::device_vector<string_index_pair> indices(strings_count);
-    string_index_pair* d_indices = indices.data().get();
+    rmm::device_uvector<string_index_pair> indices(strings_count, stream);
 
     if ((regex_insts > MAX_STACK_INSTS) || (regex_insts <= RX_SMALL_INSTS))
       thrust::transform(rmm::exec_policy(stream),
                         thrust::make_counting_iterator<size_type>(0),
                         thrust::make_counting_iterator<size_type>(strings_count),
-                        d_indices,
+                        indices.begin(),
                         extract_fn<RX_STACK_SMALL>{d_prog, d_strings, column_index});
     else if (regex_insts <= RX_MEDIUM_INSTS)
       thrust::transform(rmm::exec_policy(stream),
                         thrust::make_counting_iterator<size_type>(0),
                         thrust::make_counting_iterator<size_type>(strings_count),
-                        d_indices,
+                        indices.begin(),
                         extract_fn<RX_STACK_MEDIUM>{d_prog, d_strings, column_index});
     else
       thrust::transform(rmm::exec_policy(stream),
                         thrust::make_counting_iterator<size_type>(0),
                         thrust::make_counting_iterator<size_type>(strings_count),
-                        d_indices,
+                        indices.begin(),
                         extract_fn<RX_STACK_LARGE>{d_prog, d_strings, column_index});
 
     results.emplace_back(make_strings_column(indices, stream, mr));

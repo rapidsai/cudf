@@ -518,18 +518,7 @@
                                     <!--Set by groovy script-->
                                     <directory>${native.cudf.path}</directory>
                                     <includes>
-                                        <include>libcudf_ast.so</include>
-                                        <include>libcudf_base.so</include>
-                                        <include>libcudf_comms.so</include>
-                                        <include>libcudf_hash.so</include>
-                                        <include>libcudf_interop.so</include>
-                                        <include>libcudf_io.so</include>
-                                        <include>libcudf_join.so</include>
-                                        <include>libcudf_merge.so</include>
-                                        <include>libcudf_partitioning.so</include>
-                                        <include>libcudf_reductions.so</include>
-                                        <include>libcudf_replace.so</include>
-                                        <include>libcudf_rolling.so</include>
+                                        <include>libcudf.so</include>
                                     </includes>
                                 </resource>
                                 <resource>
