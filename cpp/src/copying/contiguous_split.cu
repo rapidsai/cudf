@@ -94,7 +94,7 @@ struct dst_buf_info {
   int num_rows;  // # of rows (which may be different from num_elements in the case of validity or
                  // offset buffers)
   int src_row_index;  // row index to start reading from from my associated source buffer
-  int dst_offset;     // my offset into the per-partition allocation
+  size_t dst_offset;  // my offset into the per-partition allocation
   int value_shift;    // amount to shift values down by (for offset buffers)
   int bit_shift;      // # of bits to shift right by (for validity buffers)
   size_type valid_count;
@@ -142,12 +142,12 @@ __device__ void copy_buffer(uint8_t* __restrict__ dst,
                             int num_rows,
                             size_type* valid_count)
 {
-  src += (src_row_index * element_size);
+  src += (static_cast<size_t>(src_row_index) * static_cast<size_t>(element_size));
 
   size_type thread_valid_count = 0;
 
   // handle misalignment. read 16 bytes in 4 byte reads. write in a single 16 byte store.
-  const size_t num_bytes = num_elements * element_size;
+  const size_t num_bytes = static_cast<size_t>(num_elements) * static_cast<size_t>(element_size);
   // how many bytes we're misaligned from 4-byte alignment
   const uint32_t ofs = reinterpret_cast<uintptr_t>(src) % 4;
   size_t pos         = t * 16;
@@ -191,7 +191,7 @@ __device__ void copy_buffer(uint8_t* __restrict__ dst,
     // alignment must be a multiple of 4. value shifting and bit shifting are mututally exclusive
     // and will never both be true at the same time.
     if (value_shift || bit_shift) {
-      int idx    = (num_bytes - remainder) / 4;
+      size_t idx = (num_bytes - remainder) / 4;
       uint32_t v = remainder > 0 ? (reinterpret_cast<uint32_t*>(src)[idx] - value_shift) : 0;
       while (remainder) {
         uint32_t next =
@@ -205,7 +205,7 @@ __device__ void copy_buffer(uint8_t* __restrict__ dst,
       }
     } else {
       while (remainder) {
-        int idx      = num_bytes - remainder--;
+        size_t idx   = num_bytes - remainder--;
         uint32_t val = reinterpret_cast<uint8_t*>(src)[idx];
         if (valid_count) { thread_valid_count += __popc(val); }
         reinterpret_cast<uint8_t*>(dst)[idx] = val;
@@ -224,8 +224,9 @@ __device__ void copy_buffer(uint8_t* __restrict__ dst,
         // we may have copied more bits than there are actual rows in the output.
         // so we need to subtract off the count of any bits that shouldn't have been
         // considered during the copy step.
-        int max_row     = (num_bytes * 8);
-        int slack_bits  = max_row > num_rows ? max_row - num_rows : 0;
+        size_t max_row = (num_bytes * 8);
+        size_t slack_bits =
+          max_row > static_cast<size_t>(num_rows) ? max_row - static_cast<size_t>(num_rows) : 0;
         auto slack_mask = set_most_significant_bits(slack_bits);
         if (slack_mask > 0) {
           uint32_t last_word = reinterpret_cast<uint32_t*>(dst + (num_bytes - 4))[0];
@@ -722,10 +723,10 @@ struct split_key_functor {
  */
 struct dst_offset_output_iterator {
   dst_buf_info* c;
-  using value_type        = int;
-  using difference_type   = int;
-  using pointer           = int*;
-  using reference         = int&;
+  using value_type        = size_t;
+  using difference_type   = size_t;
+  using pointer           = size_t*;
+  using reference         = size_t&;
   using iterator_category = thrust::output_device_iterator_tag;
 
   dst_offset_output_iterator operator+ __host__ __device__(int i)
@@ -929,7 +930,7 @@ std::vector<packed_table> contiguous_split(cudf::table_view const& input,
         return num_rows;
       }();
       int const element_size = cudf::type_dispatcher(data_type{src_info.type}, size_of_helper{});
-      size_t const bytes     = num_elements * element_size;
+      size_t const bytes = static_cast<size_t>(num_elements) * static_cast<size_t>(element_size);
       return dst_buf_info{_round_up_safe(bytes, 64),
                           num_elements,
                           element_size,
@@ -969,7 +970,7 @@ std::vector<packed_table> contiguous_split(cudf::table_view const& input,
                                   keys + num_bufs,
                                   values,
                                   dst_offset_output_iterator{d_dst_buf_info},
-                                  0);
+                                  static_cast<size_t>(0));
   }
 
   // DtoH buf sizes and col info back to the host
