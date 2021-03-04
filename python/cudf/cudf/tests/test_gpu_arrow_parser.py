@@ -1,4 +1,5 @@
-# Copyright (c) 2018, NVIDIA CORPORATION.
+# Copyright (c) 2018-2021, NVIDIA CORPORATION.
+
 import logging
 
 import numpy as np
@@ -178,6 +179,7 @@ def make_gpu_parse_arrow_cats_batch():
 
 
 def test_gpu_parse_arrow_cats():
+    pytest.xfail(reason="need dictionary mapping in libcudf from_arrow")
     batch = make_gpu_parse_arrow_cats_batch()
 
     stream = pa.BufferOutputStream()
