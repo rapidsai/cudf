@@ -376,20 +376,43 @@ table_with_metadata read_parquet(
  * @{
  * @file
  */
+class table_input_metadata;
 
-struct column_in_metadata {
-  std::string name = "";
-  thrust::optional<bool> nullable;              // Input only. Can be output also but will be
-                                                // redundant with actual info in column_view
-  bool list_column_is_map  = false;             // Group only.
-  bool use_int96_timestamp = false;             // Input, Primitive only.
-  bool output_as_binary    = false;             // Primitive only.
-  thrust::optional<uint8_t> decimal_precision;  // Primitive only.
+class column_in_metadata {
+  friend table_input_metadata;
+  std::string _name = "";
+  thrust::optional<bool> _nullable;  // Input only. Can be output also but will be
+                                     // redundant with actual info in column_view
+  bool _list_column_is_map = false;  // Group only.
+  // yes
+  bool _use_int96_timestamp = false;  // Input, Primitive only.
+  // bool _output_as_binary = false;
+  thrust::optional<uint8_t> _decimal_precision;  // Primitive only.
   std::vector<column_in_metadata> children;
+
+ public:
+  void set_name(std::string const& name) { _name = name; }
+  void set_nullability(bool nullable) { _nullable = nullable; }
+  void set_list_column_as_map() { _list_column_is_map = true; }
+  void enable_int96_timestamps(bool req) { _use_int96_timestamp = req; }
+  void set_decimal_precision(uint8_t precision) { _decimal_precision = precision; }
+  column_in_metadata& child(size_type i) { return children[i]; }
+  column_in_metadata const& child(size_type i) const { return children[i]; }
+
+  std::string get_name() const { return _name; }
+  bool nullability_defined() const { return _nullable.has_value(); }
+  bool nullable() const { return _nullable.value(); }
+  bool is_map() const { return _list_column_is_map; }
+  bool is_enabled_int96_timestamps() const { return _use_int96_timestamp; }
+  bool decimal_precision_defined() const { return _decimal_precision.has_value(); }
+  uint8_t get_decimal_precision() const { return _decimal_precision.value(); }
+  size_type num_children() const { return children.size(); }
 };
 
-struct table_input_metadata {
+class table_input_metadata {
+ public:
   // TODO: Should we have a constructor that accepts a moved user_data?
+  table_input_metadata() = default;  // Required by cython
   table_input_metadata(table_view const& table);
 
   std::vector<column_in_metadata> column_metadata;

@@ -3,6 +3,7 @@
 from libcpp cimport bool
 from libcpp.string cimport string
 from libcpp.vector cimport vector
+from libcpp.map cimport map
 from libcpp.memory cimport shared_ptr, unique_ptr
 from libc.stdint cimport uint8_t
 
@@ -64,6 +65,20 @@ cdef extern from "cudf/io/parquet.hpp" namespace "cudf::io" nogil:
     cdef cudf_io_types.table_with_metadata read_parquet(
         parquet_reader_options args) except +
 
+    cdef cppclass column_in_metadata:
+        void set_name(const string& name)
+        void set_nullability(bool nullable)
+        void set_list_column_as_map()
+        void enable_int96_timestamps(bool req)
+        column_in_metadata& child(size_type i)
+
+    cdef cppclass table_input_metadata:
+        table_input_metadata() except +
+        table_input_metadata(const cudf_table_view.table_view& table) except +
+        
+        vector[column_in_metadata] column_metadata
+        map[string, string] user_data
+
     cdef cppclass parquet_writer_options:
         parquet_writer_options() except +
         cudf_io_types.sink_info get_sink_info() except +
@@ -101,6 +116,9 @@ cdef extern from "cudf/io/parquet.hpp" namespace "cudf::io" nogil:
         ) except +
         parquet_writer_options_builder& metadata(
             cudf_io_types.table_metadata *m
+        ) except +
+        parquet_writer_options_builder& input_schema(
+            table_input_metadata *m
         ) except +
         parquet_writer_options_builder& stats_level(
             cudf_io_types.statistics_freq sf

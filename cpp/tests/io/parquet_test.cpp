@@ -323,16 +323,16 @@ TEST_F(ParquetWriterTest, MultiColumn)
   EXPECT_EQ(7, expected->num_columns());
 
   cudf_io::table_input_metadata expected_metadata(*expected);
-  // expected_metadata.column_metadata[0].name = "bools";
-  expected_metadata.column_metadata[0].name              = "int8s";
-  expected_metadata.column_metadata[1].name              = "int16s";
-  expected_metadata.column_metadata[2].name              = "int32s";
-  expected_metadata.column_metadata[3].name              = "floats";
-  expected_metadata.column_metadata[4].name              = "doubles";
-  expected_metadata.column_metadata[5].name              = "decimal32s";
-  expected_metadata.column_metadata[5].decimal_precision = 10;
-  expected_metadata.column_metadata[6].name              = "decimal64s";
-  expected_metadata.column_metadata[6].decimal_precision = 20;
+  // expected_metadata.column_metadata[0].set_name( "bools");
+  expected_metadata.column_metadata[0].set_name("int8s");
+  expected_metadata.column_metadata[1].set_name("int16s");
+  expected_metadata.column_metadata[2].set_name("int32s");
+  expected_metadata.column_metadata[3].set_name("floats");
+  expected_metadata.column_metadata[4].set_name("doubles");
+  expected_metadata.column_metadata[5].set_name("decimal32s");
+  expected_metadata.column_metadata[5].set_decimal_precision(10);
+  expected_metadata.column_metadata[6].set_name("decimal64s");
+  expected_metadata.column_metadata[6].set_decimal_precision(20);
 
   auto filepath = temp_env->get_temp_filepath("MultiColumn.parquet");
   cudf_io::parquet_writer_options out_opts =
@@ -406,15 +406,15 @@ TEST_F(ParquetWriterTest, MultiColumnWithNulls)
 
   cudf_io::table_input_metadata expected_metadata(*expected);
   // expected_metadata.column_names.emplace_back("bools");
-  expected_metadata.column_metadata[0].name              = "int8s";
-  expected_metadata.column_metadata[1].name              = "int16s";
-  expected_metadata.column_metadata[2].name              = "int32s";
-  expected_metadata.column_metadata[3].name              = "floats";
-  expected_metadata.column_metadata[4].name              = "doubles";
-  expected_metadata.column_metadata[5].name              = "decimal32s";
-  expected_metadata.column_metadata[5].decimal_precision = 9;
-  expected_metadata.column_metadata[6].name              = "decimal64s";
-  expected_metadata.column_metadata[6].decimal_precision = 20;
+  expected_metadata.column_metadata[0].set_name("int8s");
+  expected_metadata.column_metadata[1].set_name("int16s");
+  expected_metadata.column_metadata[2].set_name("int32s");
+  expected_metadata.column_metadata[3].set_name("floats");
+  expected_metadata.column_metadata[4].set_name("doubles");
+  expected_metadata.column_metadata[5].set_name("decimal32s");
+  expected_metadata.column_metadata[5].set_decimal_precision(9);
+  expected_metadata.column_metadata[6].set_name("decimal64s");
+  expected_metadata.column_metadata[6].set_decimal_precision(20);
 
   auto filepath = temp_env->get_temp_filepath("MultiColumnWithNulls.parquet");
   cudf_io::parquet_writer_options out_opts =
@@ -562,17 +562,17 @@ TEST_F(ParquetWriterTest, SlicedTable)
   auto expected_slice = cudf::slice(expected, {2, static_cast<cudf::size_type>(num_rows) - 1});
 
   cudf_io::table_input_metadata expected_metadata(expected_slice);
-  expected_metadata.column_metadata[0].name = "col_other";
-  // expected_metadata.column_metadata[1].name                         = "col_string";
-  expected_metadata.column_metadata[1].name                         = "col_another";
-  expected_metadata.column_metadata[2].name                         = "col_list";
-  expected_metadata.column_metadata[3].name                         = "col_multi_level_list";
-  expected_metadata.column_metadata[4].name                         = "col_struct";
-  expected_metadata.column_metadata[4].name                         = "col_struct_list";
-  expected_metadata.column_metadata[5].children[0].name             = "human?";
-  expected_metadata.column_metadata[5].children[1].name             = "particulars";
-  expected_metadata.column_metadata[5].children[1].children[0].name = "land";
-  expected_metadata.column_metadata[5].children[1].children[1].name = "flats";
+  expected_metadata.column_metadata[0].set_name("col_other");
+  // expected_metadata.column_metadata[1].set_name( "col_string");
+  expected_metadata.column_metadata[1].set_name("col_another");
+  expected_metadata.column_metadata[2].set_name("col_list");
+  expected_metadata.column_metadata[3].set_name("col_multi_level_list");
+  expected_metadata.column_metadata[4].set_name("col_struct");
+  expected_metadata.column_metadata[4].set_name("col_struct_list");
+  expected_metadata.column_metadata[5].child(0).set_name("human?");
+  expected_metadata.column_metadata[5].child(1).set_name("particulars");
+  expected_metadata.column_metadata[5].child(1).child(0).set_name("land");
+  expected_metadata.column_metadata[5].child(1).child(1).set_name("flats");
 
   auto filepath = ("SlicedTable.parquet");
   cudf_io::parquet_writer_options out_opts =
@@ -686,45 +686,6 @@ TEST_F(ParquetWriterTest, ListColumn)
   // EXPECT_EQ(expected_metadata.column_names, result.metadata.column_names);
 }
 
-// TODO(cp): remove. This has served its purpose.
-TEST_F(ParquetWriterTest, ListColumn2)
-{
-  auto valids  = cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i % 2; });
-  auto valids2 = cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i != 3; });
-
-  using lcw = cudf::test::lists_column_wrapper<int32_t>;
-
-  // [NULL, 2, NULL]
-  // []
-  // [4, 5]
-  // NULL
-  lcw col0{{{{1, 2, 3}, valids}, {}, {4, 5}, {}}, valids2};
-
-  // [[1, 2, 3], [], [4, 5], [], [0, 6, 0]]
-  // [[7, 8]]
-  // []
-  // [[]]
-  lcw col1{{{1, 2, 3}, {}, {4, 5}, {}, {0, 6, 0}}, {{7, 8}}, lcw{}, lcw{lcw{}}};
-
-  table_view expected({col0, col1});
-  cudf_io::table_input_metadata expected_metadata(expected);
-  expected_metadata.column_metadata[0].name = "col_list_int_0";
-  expected_metadata.column_metadata[1].name = "col_list_list_int_1";
-
-  auto filepath = ("ListColumn.parquet");
-  auto out_opts = cudf_io::parquet_writer_options::builder(cudf_io::sink_info{filepath}, expected)
-                    .input_schema(&expected_metadata)
-                    .compression(cudf_io::compression_type::NONE);
-
-  cudf_io::write_parquet(out_opts);
-
-  auto in_opts = cudf_io::parquet_reader_options::builder(cudf_io::source_info{filepath});
-  auto result  = cudf_io::read_parquet(in_opts);
-
-  CUDF_TEST_EXPECT_TABLES_EQUAL(expected, result.tbl->view());
-  // EXPECT_EQ(expected_metadata.column_names, result.metadata.column_names);
-}
-
 TEST_F(ParquetWriterTest, MultiIndex)
 {
   constexpr auto num_rows = 100;
@@ -752,11 +713,11 @@ TEST_F(ParquetWriterTest, MultiIndex)
   EXPECT_EQ(5, expected->num_columns());
 
   cudf_io::table_input_metadata expected_metadata(*expected);
-  expected_metadata.column_metadata[0].name = "int8s";
-  expected_metadata.column_metadata[1].name = "int16s";
-  expected_metadata.column_metadata[2].name = "int32s";
-  expected_metadata.column_metadata[3].name = "floats";
-  expected_metadata.column_metadata[4].name = "doubles";
+  expected_metadata.column_metadata[0].set_name("int8s");
+  expected_metadata.column_metadata[1].set_name("int16s");
+  expected_metadata.column_metadata[2].set_name("int32s");
+  expected_metadata.column_metadata[3].set_name("floats");
+  expected_metadata.column_metadata[4].set_name("doubles");
   expected_metadata.user_data.insert(
     {"pandas", "\"index_columns\": [\"floats\", \"doubles\"], \"column1\": [\"int8s\"]"});
 
@@ -790,7 +751,7 @@ TEST_F(ParquetWriterTest, HostBuffer)
   EXPECT_EQ(1, expected->num_columns());
 
   cudf_io::table_input_metadata expected_metadata(*expected);
-  expected_metadata.column_metadata[0].name = "col_other";
+  expected_metadata.column_metadata[0].set_name("col_other");
 
   std::vector<char> out_buffer;
   cudf_io::parquet_writer_options out_opts =
@@ -916,13 +877,13 @@ TEST_F(ParquetWriterTest, StructOfList)
   auto expected = table_view({*struct_2});
 
   cudf_io::table_input_metadata expected_metadata(expected);
-  expected_metadata.column_metadata[0].name                         = "being";
-  expected_metadata.column_metadata[0].children[0].name             = "human?";
-  expected_metadata.column_metadata[0].children[1].name             = "particulars";
-  expected_metadata.column_metadata[0].children[1].children[0].name = "weight";
-  expected_metadata.column_metadata[0].children[1].children[1].name = "age";
-  expected_metadata.column_metadata[0].children[1].children[2].name = "land_unit";
-  expected_metadata.column_metadata[0].children[1].children[3].name = "flats";
+  expected_metadata.column_metadata[0].set_name("being");
+  expected_metadata.column_metadata[0].child(0).set_name("human?");
+  expected_metadata.column_metadata[0].child(1).set_name("particulars");
+  expected_metadata.column_metadata[0].child(1).child(0).set_name("weight");
+  expected_metadata.column_metadata[0].child(1).child(1).set_name("age");
+  expected_metadata.column_metadata[0].child(1).child(2).set_name("land_unit");
+  expected_metadata.column_metadata[0].child(1).child(3).set_name("flats");
 
   auto filepath = ("StructOfList.parquet");
   cudf_io::parquet_writer_options args =
@@ -970,11 +931,11 @@ TEST_F(ParquetWriterTest, ListOfStruct)
   auto expected = table_view({*list_col});
 
   cudf_io::table_input_metadata expected_metadata(expected);
-  expected_metadata.column_metadata[0].name                                     = "family";
-  expected_metadata.column_metadata[0].children[0].children[0].name             = "human?";
-  expected_metadata.column_metadata[0].children[0].children[1].name             = "particulars";
-  expected_metadata.column_metadata[0].children[0].children[1].children[0].name = "weight";
-  expected_metadata.column_metadata[0].children[0].children[1].children[1].name = "age";
+  expected_metadata.column_metadata[0].set_name("family");
+  expected_metadata.column_metadata[0].child(0).child(0).set_name("human?");
+  expected_metadata.column_metadata[0].child(0).child(1).set_name("particulars");
+  expected_metadata.column_metadata[0].child(0).child(1).child(0).set_name("weight");
+  expected_metadata.column_metadata[0].child(0).child(1).child(1).set_name("age");
 
   auto filepath = ("ListOfStruct.parquet");
   cudf_io::parquet_writer_options args =
@@ -1355,12 +1316,12 @@ TEST_F(ParquetChunkedWriterTest, ListOfStruct)
   auto full_table = cudf::concatenate({table_1, table_2});
 
   cudf_io::table_input_metadata expected_metadata(table_1);
-  expected_metadata.column_metadata[0].name                                     = "family";
-  expected_metadata.column_metadata[0].children[0].nullable                     = false;
-  expected_metadata.column_metadata[0].children[0].children[0].name             = "human?";
-  expected_metadata.column_metadata[0].children[0].children[1].name             = "particulars";
-  expected_metadata.column_metadata[0].children[0].children[1].children[0].name = "weight";
-  expected_metadata.column_metadata[0].children[0].children[1].children[1].name = "age";
+  expected_metadata.column_metadata[0].set_name("family");
+  expected_metadata.column_metadata[0].child(0).set_nullability(false);
+  expected_metadata.column_metadata[0].child(0).child(0).set_name("human?");
+  expected_metadata.column_metadata[0].child(0).child(1).set_name("particulars");
+  expected_metadata.column_metadata[0].child(0).child(1).child(0).set_name("weight");
+  expected_metadata.column_metadata[0].child(0).child(1).child(1).set_name("age");
 
   auto filepath = ("ChunkedListOfStruct.parquet");
   cudf_io::chunked_parquet_writer_options args =
@@ -1445,14 +1406,14 @@ TEST_F(ParquetChunkedWriterTest, ListOfStructOfStructOfListOfList)
   auto full_table = cudf::concatenate({table_1, table_2});
 
   cudf_io::table_input_metadata expected_metadata(table_1);
-  expected_metadata.column_metadata[0].name                                     = "family";
-  expected_metadata.column_metadata[0].children[0].nullable                     = false;
-  expected_metadata.column_metadata[0].children[0].children[0].name             = "human?";
-  expected_metadata.column_metadata[0].children[0].children[1].name             = "particulars";
-  expected_metadata.column_metadata[0].children[0].children[1].children[0].name = "weight";
-  expected_metadata.column_metadata[0].children[0].children[1].children[1].name = "age";
-  expected_metadata.column_metadata[0].children[0].children[1].children[2].name = "land_unit";
-  expected_metadata.column_metadata[0].children[0].children[1].children[3].name = "flats";
+  expected_metadata.column_metadata[0].set_name("family");
+  expected_metadata.column_metadata[0].child(0).set_nullability(false);
+  expected_metadata.column_metadata[0].child(0).child(0).set_name("human?");
+  expected_metadata.column_metadata[0].child(0).child(1).set_name("particulars");
+  expected_metadata.column_metadata[0].child(0).child(1).child(0).set_name("weight");
+  expected_metadata.column_metadata[0].child(0).child(1).child(1).set_name("age");
+  expected_metadata.column_metadata[0].child(0).child(1).child(2).set_name("land_unit");
+  expected_metadata.column_metadata[0].child(0).child(1).child(3).set_name("flats");
 
   auto filepath = ("ListOfStructOfStructOfListOfList.parquet");
   cudf_io::chunked_parquet_writer_options args =
@@ -1619,11 +1580,11 @@ TEST_F(ParquetChunkedWriterTest, DifferentNullabilityStruct)
   auto full_table = cudf::concatenate({table_1, table_2});
 
   cudf_io::table_input_metadata expected_metadata(table_1);
-  expected_metadata.column_metadata[0].name                         = "being";
-  expected_metadata.column_metadata[0].children[0].name             = "human?";
-  expected_metadata.column_metadata[0].children[1].name             = "particulars";
-  expected_metadata.column_metadata[0].children[1].children[0].name = "weight";
-  expected_metadata.column_metadata[0].children[1].children[1].name = "age";
+  expected_metadata.column_metadata[0].set_name("being");
+  expected_metadata.column_metadata[0].child(0).set_name("human?");
+  expected_metadata.column_metadata[0].child(1).set_name("particulars");
+  expected_metadata.column_metadata[0].child(1).child(0).set_name("weight");
+  expected_metadata.column_metadata[0].child(1).child(1).set_name("age");
 
   auto filepath = ("ChunkedNullableStruct.parquet");
   cudf_io::chunked_parquet_writer_options args =
@@ -1654,7 +1615,7 @@ TEST_F(ParquetChunkedWriterTest, ForcedNullability)
   // and considers all columns nullable. However cudf::concatenate will not force nulls in case no
   // columns are nullable. To get the expected result, we tell the writer the nullability of all
   // columns in advance.
-  for (auto& col_meta : metadata.column_metadata) { col_meta.nullable = false; }
+  for (auto& col_meta : metadata.column_metadata) { col_meta.set_nullability(false); }
 
   cudf_io::chunked_parquet_writer_options args =
     cudf_io::chunked_parquet_writer_options::builder(cudf_io::sink_info{filepath})
@@ -1704,9 +1665,10 @@ TEST_F(ParquetChunkedWriterTest, ForcedNullabilityList)
   auto full_table = cudf::concatenate({table1, table2});
 
   cudf_io::table_input_metadata metadata(table1);
-  metadata.column_metadata[0].nullable = true;  // List is nullable at first (root) level
-  metadata.column_metadata[0].children[0].nullable = false;  // non-nullable at second (leaf) level
-  metadata.column_metadata[1].nullable             = true;
+  metadata.column_metadata[0].set_nullability(true);  // List is nullable at first (root) level
+  metadata.column_metadata[0].child(0).set_nullability(
+    false);  // non-nullable at second (leaf) level
+  metadata.column_metadata[1].set_nullability(true);
 
   auto filepath = temp_env->get_temp_filepath("ChunkedListNullable.parquet");
 
@@ -1748,13 +1710,13 @@ TEST_F(ParquetChunkedWriterTest, ForcedNullabilityStruct)
   auto full_table = cudf::concatenate({table_1, table_2});
 
   cudf_io::table_input_metadata expected_metadata(table_1);
-  expected_metadata.column_metadata[0].name                         = "being";
-  expected_metadata.column_metadata[0].nullable                     = false;
-  expected_metadata.column_metadata[0].children[0].name             = "human?";
-  expected_metadata.column_metadata[0].children[0].nullable         = false;
-  expected_metadata.column_metadata[0].children[1].name             = "particulars";
-  expected_metadata.column_metadata[0].children[1].children[0].name = "weight";
-  expected_metadata.column_metadata[0].children[1].children[1].name = "age";
+  expected_metadata.column_metadata[0].set_name("being");
+  expected_metadata.column_metadata[0].set_nullability(false);
+  expected_metadata.column_metadata[0].child(0).set_name("human?");
+  expected_metadata.column_metadata[0].child(0).set_nullability(false);
+  expected_metadata.column_metadata[0].child(1).set_name("particulars");
+  expected_metadata.column_metadata[0].child(1).child(0).set_name("weight");
+  expected_metadata.column_metadata[0].child(1).child(1).set_name("age");
 
   auto filepath = ("ChunkedNullableStruct.parquet");
   cudf_io::chunked_parquet_writer_options args =
@@ -1837,14 +1799,14 @@ TEST_F(ParquetWriterTest, DecimalWrite)
   cudf_io::table_input_metadata expected_metadata(table);
 
   // verify failure if too small a precision is given
-  expected_metadata.column_metadata[0].decimal_precision = 7;
-  expected_metadata.column_metadata[1].decimal_precision = 1;
+  expected_metadata.column_metadata[0].set_decimal_precision(7);
+  expected_metadata.column_metadata[1].set_decimal_precision(1);
   args.set_input_metadata(&expected_metadata);
   EXPECT_THROW(cudf_io::write_parquet(args), cudf::logic_error);
 
   // verify sucess if equal precision is given
-  expected_metadata.column_metadata[0].decimal_precision = 7;
-  expected_metadata.column_metadata[1].decimal_precision = 9;
+  expected_metadata.column_metadata[0].set_decimal_precision(7);
+  expected_metadata.column_metadata[1].set_decimal_precision(9);
   args.set_input_metadata(&expected_metadata);
   cudf_io::write_parquet(args);
 
@@ -2217,8 +2179,8 @@ TEST_F(ParquetReaderTest, ReorderedColumns)
     cudf::table_view tbl{{a, b}};
     auto filepath = temp_env->get_temp_filepath("ReorderedColumns.parquet");
     cudf_io::table_input_metadata md(tbl);
-    md.column_metadata[0].name = "a";
-    md.column_metadata[1].name = "b";
+    md.column_metadata[0].set_name("a");
+    md.column_metadata[1].set_name("b");
     cudf_io::parquet_writer_options opts =
       cudf_io::parquet_writer_options::builder(cudf_io::sink_info{filepath}, tbl).input_schema(&md);
     cudf_io::write_parquet(opts);
@@ -2239,8 +2201,8 @@ TEST_F(ParquetReaderTest, ReorderedColumns)
     cudf::table_view tbl{{a, b}};
     auto filepath = temp_env->get_temp_filepath("ReorderedColumns2.parquet");
     cudf_io::table_input_metadata md(tbl);
-    md.column_metadata[0].name = "a";
-    md.column_metadata[1].name = "b";
+    md.column_metadata[0].set_name("a");
+    md.column_metadata[1].set_name("b");
     cudf_io::parquet_writer_options opts =
       cudf_io::parquet_writer_options::builder(cudf_io::sink_info{filepath}, tbl).input_schema(&md);
     cudf_io::write_parquet(opts);
@@ -2264,10 +2226,10 @@ TEST_F(ParquetReaderTest, ReorderedColumns)
   cudf::table_view tbl{{a, b, c, d}};
   auto filepath = temp_env->get_temp_filepath("ReorderedColumns3.parquet");
   cudf_io::table_input_metadata md(tbl);
-  md.column_metadata[0].name = "a";
-  md.column_metadata[1].name = "b";
-  md.column_metadata[2].name = "c";
-  md.column_metadata[3].name = "d";
+  md.column_metadata[0].set_name("a");
+  md.column_metadata[1].set_name("b");
+  md.column_metadata[2].set_name("c");
+  md.column_metadata[3].set_name("d");
   cudf_io::parquet_writer_options opts =
     cudf_io::parquet_writer_options::builder(cudf_io::sink_info{filepath}, tbl).input_schema(&md);
   cudf_io::write_parquet(opts);

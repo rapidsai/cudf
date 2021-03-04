@@ -48,6 +48,8 @@ from cudf._lib.cpp.table.table_view cimport (
 from cudf._lib.cpp.io.parquet cimport (
     read_parquet as parquet_reader,
     parquet_reader_options,
+    table_input_metadata,
+    column_in_metadata,
     parquet_writer_options,
     write_parquet as parquet_writer,
     parquet_chunked_writer as cpp_parquet_chunked_writer,
@@ -284,10 +286,8 @@ cpdef write_parquet(
     """
 
     # Create the write options
-    cdef unique_ptr[cudf_io_types.table_metadata] tbl_meta = \
-        make_unique[cudf_io_types.table_metadata]()
+    cdef unique_ptr[table_input_metadata] table_meta
 
-    cdef vector[string] column_names
     cdef map[string, string] user_data
     cdef table_view tv
     cdef unique_ptr[cudf_io_types.data_sink] _data_sink
@@ -295,24 +295,30 @@ cpdef write_parquet(
 
     if index is not False and not isinstance(table._index, cudf.RangeIndex):
         tv = table.view()
+        table_meta = make_unique[table_input_metadata](tv)
         for level, idx_name in enumerate(table._index.names):
-            column_names.push_back(
+            table_meta.get().column_metadata[level].set_name(
                 str.encode(
                     _index_level_name(idx_name, level, table._column_names)
                 )
             )
+        num_index_cols_meta = len(table._index.names)
     else:
         tv = table.data_view()
+        table_meta = make_unique[table_input_metadata](tv)
+        num_index_cols_meta = 0
 
-    for col_name in table._column_names:
-        column_names.push_back(str.encode(col_name))
+    # _get_table_col_names(table, table_meta.get()[0])
+    for i, name in enumerate(table._column_names, num_index_cols_meta):
+        table_meta.get().column_metadata[i].set_name(name.encode())
+        _get_col_children_names(table[name]._column, table_meta.get().column_metadata[i])
+
 
     pandas_metadata = generate_pandas_metadata(table, index)
     user_data[str.encode("pandas")] = str.encode(pandas_metadata)
 
     # Set the table_metadata
-    tbl_meta.get().column_names = column_names
-    tbl_meta.get().user_data = user_data
+    table_meta.get().user_data = user_data
 
     cdef cudf_io_types.compression_type comp_type = _get_comp_type(compression)
     cdef cudf_io_types.statistics_freq stat_freq = _get_stat_freq(statistics)
@@ -328,7 +334,7 @@ cpdef write_parquet(
     with nogil:
         args = move(
             parquet_writer_options.builder(sink, tv)
-            .metadata(tbl_meta.get())
+            .input_schema(table_meta.get())
             .compression(comp_type)
             .stats_level(stat_freq)
             .column_chunks_file_path(c_column_chunks_file_path)
@@ -514,3 +520,17 @@ cdef Column _update_column_struct_field_names(
             )
         col.set_base_children(tuple(children))
     return col
+
+cdef _get_col_children_names(Column col, column_in_metadata& col_meta):
+    if is_struct_dtype(col):
+        print("yes, struct ", zip(col.children, list(col.dtype.fields)))
+        for i, (child_col, name) in enumerate(
+            zip(col.children, list(col.dtype.fields))
+        ):
+            col_meta.child(i).set_name(name.encode())
+            _get_col_children_names(child_col, col_meta.child(i))
+    elif is_list_dtype(col):
+        _get_col_children_names(col.children[1], col_meta.child(0))
+    else:
+        return
+    

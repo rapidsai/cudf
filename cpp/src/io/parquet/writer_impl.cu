@@ -170,14 +170,14 @@ std::vector<schema_tree_node> construct_schema_tree(LinkedColVector const &linke
         if (single_write_mode) {
           return col->nullable();
         } else {
-          if (col_meta.nullable.has_value()) {
-            if (col_meta.nullable.value() == false) {
+          if (col_meta.nullability_defined()) {
+            if (col_meta.nullable() == false) {
               CUDF_EXPECTS(
                 col->nullable() == false,
                 "Mismatch in metadata prescribed nullability and input column nullability. "
                 "Metadata for nullable input column cannot prescribe nullability = false");
             }
-            return col_meta.nullable.value();
+            return col_meta.nullable();
           } else {
             // For chunked write, when not provided nullability, we assume the worst case scenario
             // that all columns are nullable.
@@ -192,7 +192,7 @@ std::vector<schema_tree_node> construct_schema_tree(LinkedColVector const &linke
         struct_schema.repetition_type =
           col_nullable ? FieldRepetitionType::OPTIONAL : FieldRepetitionType::REQUIRED;
 
-        struct_schema.name = (schema[parent_idx].name == "list") ? "element" : col_meta.name;
+        struct_schema.name = (schema[parent_idx].name == "list") ? "element" : col_meta.get_name();
         struct_schema.num_children = col->num_children();
         struct_schema.parent_idx   = parent_idx;
         schema.push_back(std::move(struct_schema));
@@ -201,10 +201,10 @@ std::vector<schema_tree_node> construct_schema_tree(LinkedColVector const &linke
         // for (auto child_it = col->children.begin(); child_it < col->children.end(); child_it++) {
         //   add_schema(*child_it, struct_node_index);
         // }
-        CUDF_EXPECTS(col->num_children() == static_cast<int>(col_meta.children.size()),
+        CUDF_EXPECTS(col->num_children() == static_cast<int>(col_meta.num_children()),
                      "Mismatch in number of child columns between input table and metadata");
         for (size_t i = 0; i < col->children.size(); ++i) {
-          add_schema(col->children[i], col_meta.children[i], struct_node_index);
+          add_schema(col->children[i], col_meta.child(i), struct_node_index);
         }
       } else if (col->type().id() == type_id::LIST) {
         // List schema is denoted by two levels for each nesting level and one final level for leaf.
@@ -216,7 +216,7 @@ std::vector<schema_tree_node> construct_schema_tree(LinkedColVector const &linke
         list_schema_1.converted_type = ConvertedType::LIST;
         list_schema_1.repetition_type =
           col_nullable ? FieldRepetitionType::OPTIONAL : FieldRepetitionType::REQUIRED;
-        list_schema_1.name = (schema[parent_idx].name == "list") ? "element" : col_meta.name;
+        list_schema_1.name = (schema[parent_idx].name == "list") ? "element" : col_meta.get_name();
         list_schema_1.num_children = 1;
         list_schema_1.parent_idx   = parent_idx;
         schema.push_back(std::move(list_schema_1));
@@ -228,15 +228,15 @@ std::vector<schema_tree_node> construct_schema_tree(LinkedColVector const &linke
         list_schema_2.parent_idx      = schema.size() - 1;  // Parent is list_schema_1, last added.
         schema.push_back(std::move(list_schema_2));
 
-        CUDF_EXPECTS(col_meta.children.size() == 1,
+        CUDF_EXPECTS(col_meta.num_children() == 1,
                      "List column's metadata should have exactly one child");
 
         add_schema(col->children[lists_column_view::child_column_index],
-                   col_meta.children[0],
+                   col_meta.child(0),
                    schema.size() - 1);
       } else {
         // if leaf, add current
-        CUDF_EXPECTS(col_meta.children.size() == 0,
+        CUDF_EXPECTS(col_meta.num_children() == 0,
                      "Leaf column's corresponding metadata cannot have children");
 
         schema_tree_node col_schema{};
@@ -326,32 +326,28 @@ std::vector<schema_tree_node> construct_schema_tree(LinkedColVector const &linke
             col_schema.converted_type = ConvertedType::DATE;
             col_schema.stats_dtype    = statistics_dtype::dtype_int32;
             break;
-          // case cudf::type_id::TIMESTAMP_SECONDS:
-          // TODO(api): Need to wait until we know what to do with api. Then we'll make cython
-          // bindings, then we'll be able to test int96 writing. gtests don't have any tests for
-          // this.
-          //   col_schema.type           = int96_timestamps ? Type::INT96 : Type::INT64;
-          //   col_schema.converted_type = ConvertedType::TIMESTAMP_MILLIS;
-          //   col_schema.stats_dtype    = statistics_dtype::dtype_timestamp64;
-          //   _ts_scale                 = 1000;
-          //   break;
-          // case cudf::type_id::TIMESTAMP_MILLISECONDS:
-          //   col_schema.type           = int96_timestamps ? Type::INT96 : Type::INT64;
-          //   col_schema.converted_type = ConvertedType::TIMESTAMP_MILLIS;
-          //   col_schema.stats_dtype    = statistics_dtype::dtype_timestamp64;
-          //   break;
-          // case cudf::type_id::TIMESTAMP_MICROSECONDS:
-          //   col_schema.type           = int96_timestamps ? Type::INT96 : Type::INT64;
-          //   col_schema.converted_type = ConvertedType::TIMESTAMP_MICROS;
-          //   col_schema.stats_dtype    = statistics_dtype::dtype_timestamp64;
-          //   break;
-          // case cudf::type_id::TIMESTAMP_NANOSECONDS:
-          //   col_schema.type           = int96_timestamps ? Type::INT96 : Type::INT64;
-          //   col_schema.converted_type = ConvertedType::TIMESTAMP_MICROS;
-          //   col_schema.stats_dtype    = statistics_dtype::dtype_timestamp64;
-          //   _ts_scale = -1000;  // negative value indicates division by absolute value
-          //   break;
-          // TODO (stat): Wait and watch if converting string into nvstrdesc is even needed
+          case cudf::type_id::TIMESTAMP_SECONDS:
+            col_schema.type = col_meta.is_enabled_int96_timestamps() ? Type::INT96 : Type::INT64;
+            col_schema.converted_type = ConvertedType::TIMESTAMP_MILLIS;
+            col_schema.stats_dtype    = statistics_dtype::dtype_timestamp64;
+            col_schema.ts_scale       = 1000;
+            break;
+          case cudf::type_id::TIMESTAMP_MILLISECONDS:
+            col_schema.type = col_meta.is_enabled_int96_timestamps() ? Type::INT96 : Type::INT64;
+            col_schema.converted_type = ConvertedType::TIMESTAMP_MILLIS;
+            col_schema.stats_dtype    = statistics_dtype::dtype_timestamp64;
+            break;
+          case cudf::type_id::TIMESTAMP_MICROSECONDS:
+            col_schema.type = col_meta.is_enabled_int96_timestamps() ? Type::INT96 : Type::INT64;
+            col_schema.converted_type = ConvertedType::TIMESTAMP_MICROS;
+            col_schema.stats_dtype    = statistics_dtype::dtype_timestamp64;
+            break;
+          case cudf::type_id::TIMESTAMP_NANOSECONDS:
+            col_schema.type = col_meta.is_enabled_int96_timestamps() ? Type::INT96 : Type::INT64;
+            col_schema.converted_type = ConvertedType::TIMESTAMP_MICROS;
+            col_schema.stats_dtype    = statistics_dtype::dtype_timestamp64;
+            col_schema.ts_scale = -1000;  // negative value indicates division by absolute value
+            break;
           case cudf::type_id::STRING:
             col_schema.type           = Type::BYTE_ARRAY;
             col_schema.converted_type = ConvertedType::UTF8;
@@ -364,11 +360,11 @@ std::vector<schema_tree_node> construct_schema_tree(LinkedColVector const &linke
             col_schema.stats_dtype = statistics_dtype::dtype_int32;
             col_schema.decimal_scale =
               -col->type().scale();  // parquet and cudf disagree about scale signs
-            CUDF_EXPECTS(col_meta.decimal_precision.has_value(),
+            CUDF_EXPECTS(col_meta.decimal_precision_defined(),
                          "Precision must be specified for decimal columns");
-            CUDF_EXPECTS(col_meta.decimal_precision.value() >= col_schema.decimal_scale,
+            CUDF_EXPECTS(col_meta.get_decimal_precision() >= col_schema.decimal_scale,
                          "Precision must be equal to or greater than scale!");
-            col_schema.decimal_precision = col_meta.decimal_precision.value();
+            col_schema.decimal_precision = col_meta.get_decimal_precision();
             break;
           case cudf::type_id::DECIMAL64:
             col_schema.type           = Type::INT64;
@@ -376,11 +372,11 @@ std::vector<schema_tree_node> construct_schema_tree(LinkedColVector const &linke
             col_schema.stats_dtype    = statistics_dtype::dtype_decimal64;
             col_schema.decimal_scale =
               -col->type().scale();  // parquet and cudf disagree about scale signs
-            CUDF_EXPECTS(col_meta.decimal_precision.has_value(),
+            CUDF_EXPECTS(col_meta.decimal_precision_defined(),
                          "Precision must be specified for decimal columns");
-            CUDF_EXPECTS(col_meta.decimal_precision.value() >= col_schema.decimal_scale,
+            CUDF_EXPECTS(col_meta.get_decimal_precision() >= col_schema.decimal_scale,
                          "Precision must be equal to or greater than scale!");
-            col_schema.decimal_precision = col_meta.decimal_precision.value();
+            col_schema.decimal_precision = col_meta.get_decimal_precision();
             break;
           default:
             col_schema.type        = UNDEFINED_TYPE;
@@ -389,7 +385,7 @@ std::vector<schema_tree_node> construct_schema_tree(LinkedColVector const &linke
         }
 
         col_schema.repetition_type = col_nullable ? OPTIONAL : REQUIRED;
-        col_schema.name        = (schema[parent_idx].name == "list") ? "element" : col_meta.name;
+        col_schema.name = (schema[parent_idx].name == "list") ? "element" : col_meta.get_name();
         col_schema.parent_idx  = parent_idx;
         col_schema.leaf_column = col;
         schema.push_back(col_schema);
@@ -826,9 +822,9 @@ void writer::impl::write(table_view const &table)
   // Fill unnamed columns' names in tbl_meta
   std::function<void(column_in_metadata &, std::string)> add_default_name =
     [&](column_in_metadata &col_meta, std::string default_name) {
-      if (col_meta.name.empty()) col_meta.name = default_name;
-      for (size_t i = 0; i < col_meta.children.size(); ++i) {
-        add_default_name(col_meta.children[i], col_meta.name + "_" + std::to_string(i));
+      if (col_meta.get_name().empty()) col_meta.set_name(default_name);
+      for (size_type i = 0; i < col_meta.num_children(); ++i) {
+        add_default_name(col_meta.child(i), col_meta.get_name() + "_" + std::to_string(i));
       }
     };
   for (size_t i = 0; i < tbl_meta.column_metadata.size(); ++i) {
