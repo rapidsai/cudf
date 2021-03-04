@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -28,9 +28,10 @@
 #include <type_traits>
 
 namespace cudf {
-namespace detail {
 
 constexpr std::size_t dynamic_extent = std::numeric_limits<std::size_t>::max();
+
+namespace detail {
 
 /**
  * @brief C++20 std::span with reduced feature set.
@@ -100,6 +101,8 @@ class span_base {
   size_type _size;
 };
 
+}  // namespace detail
+
 // ===== host_span =================================================================================
 
 template <typename T>
@@ -116,8 +119,8 @@ struct is_host_span_supported_container<  //
   thrust::host_vector<T, Alloc>> : std::true_type {
 };
 
-template <typename T, std::size_t Extent = dynamic_extent>
-struct host_span : public span_base<T, Extent, host_span<T, Extent>> {
+template <typename T, std::size_t Extent = cudf::dynamic_extent>
+struct host_span : public cudf::detail::span_base<T, Extent, host_span<T, Extent>> {
   using base = cudf::detail::span_base<T, Extent, host_span<T, Extent>>;
   using base::base;
 
@@ -165,8 +168,8 @@ struct is_device_span_supported_container<  //
   rmm::device_uvector<T>> : std::true_type {
 };
 
-template <typename T, std::size_t Extent = dynamic_extent>
-struct device_span : public span_base<T, Extent, device_span<T, Extent>> {
+template <typename T, std::size_t Extent = cudf::dynamic_extent>
+struct device_span : public cudf::detail::span_base<T, Extent, device_span<T, Extent>> {
   using base = cudf::detail::span_base<T, Extent, device_span<T, Extent>>;
   using base::base;
 
@@ -193,6 +196,8 @@ struct device_span : public span_base<T, Extent, device_span<T, Extent>> {
   }
 };
 
+namespace detail {
+  
 /**
  * @brief Generic class for row-major 2D spans. Not compliant with STL container semantics/syntax.
  *

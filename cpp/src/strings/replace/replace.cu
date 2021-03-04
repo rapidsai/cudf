@@ -38,8 +38,6 @@
 #include <thrust/iterator/transform_iterator.h>
 #include <thrust/scan.h>
 
-using cudf::detail::device_span;
-
 namespace cudf {
 namespace strings {
 namespace detail {
