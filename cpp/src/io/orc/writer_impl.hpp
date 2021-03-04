@@ -280,7 +280,8 @@ class writer::impl {
    */
   std::vector<std::vector<uint8_t>> gather_statistic_blobs(
     const table_device_view& table,
-    host_span<orc_column_view const> columns, host_span<stripe_rowgroups const> stripe_bounds);
+    host_span<orc_column_view const> columns,
+    host_span<stripe_rowgroups const> stripe_bounds);
 
   /**
    * @brief Writes the specified column's row index stream.

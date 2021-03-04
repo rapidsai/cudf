@@ -780,7 +780,8 @@ std::vector<StripeInformation> writer::impl::gather_stripes(
 
 std::vector<std::vector<uint8_t>> writer::impl::gather_statistic_blobs(
   const table_device_view &table,
-  host_span<orc_column_view const> columns, host_span<stripe_rowgroups const> stripe_bounds)
+  host_span<orc_column_view const> columns,
+  host_span<stripe_rowgroups const> stripe_bounds)
 {
   auto const num_rowgroups = stripes_size(stripe_bounds);
   size_t num_stat_blobs    = (1 + stripe_bounds.size()) * columns.size();
