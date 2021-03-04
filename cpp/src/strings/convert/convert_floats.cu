@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2020, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -58,15 +58,18 @@ __device__ inline double stod(string_view const& d_str)
   if (d_str.compare("NaN", 3) == 0) return std::numeric_limits<double>::quiet_NaN();
   if (d_str.compare("Inf", 3) == 0) return std::numeric_limits<double>::infinity();
   if (d_str.compare("-Inf", 4) == 0) return -std::numeric_limits<double>::infinity();
-  double sign = 1.0;
+  double sign{1.0};
   if (*in_ptr == '-' || *in_ptr == '+') {
     sign = (*in_ptr == '-' ? -1 : 1);
     ++in_ptr;
   }
-  unsigned long max_mantissa = 0x0FFFFFFFFFFFFF;
-  unsigned long digits       = 0;
-  int exp_off                = 0;
-  bool decimal               = false;
+
+  // Parse and store the mantissa as much as we can,
+  // until we are about to exceed the limit of uint64_t
+  constexpr uint64_t max_holding = (std::numeric_limits<uint64_t>::max() - 9L) / 10L;
+  uint64_t digits                = 0;
+  int exp_off                    = 0;
+  bool decimal                   = false;
   while (in_ptr < end) {
     char ch = *in_ptr;
     if (ch == '.') {
@@ -75,11 +78,11 @@ __device__ inline double stod(string_view const& d_str)
       continue;
     }
     if (ch < '0' || ch > '9') break;
-    if (digits > max_mantissa)
+    if (digits > max_holding)
       exp_off += (int)!decimal;
     else {
-      digits = (digits * 10L) + (unsigned long)(ch - '0');
-      if (digits > max_mantissa) {
+      digits = (digits * 10L) + static_cast<uint64_t>(ch - '0');
+      if (digits > max_holding) {
         digits = digits / 10L;
         exp_off += (int)!decimal;
       } else
@@ -87,6 +90,8 @@ __device__ inline double stod(string_view const& d_str)
     }
     ++in_ptr;
   }
+  if (digits == 0) return sign * static_cast<double>(0);
+
   // check for exponent char
   int exp_ten  = 0;
   int exp_sign = 1;
@@ -107,17 +112,23 @@ __device__ inline double stod(string_view const& d_str)
       }
     }
   }
+
+  int const num_digits = static_cast<int>(log10(digits)) + 1;
   exp_ten *= exp_sign;
   exp_ten += exp_off;
-  if (exp_ten > 308)
+  exp_ten += num_digits - 1;
+  if (exp_ten > std::numeric_limits<double>::max_exponent10)
     return sign > 0 ? std::numeric_limits<double>::infinity()
                     : -std::numeric_limits<double>::infinity();
-  else if (exp_ten < -308)
-    return 0.0;
+  else if (exp_ten < std::numeric_limits<double>::min_exponent10)
+    return double{0};
+
   // using exp10() since the pow(10.0,exp_ten) function is
   // very inaccurate in 10.2: http://nvbugs/2971187
-  double value = static_cast<double>(digits) * exp10(static_cast<double>(exp_ten));
-  return (value * sign);
+  double const base =
+    sign * static_cast<double>(digits) * exp10(static_cast<double>(1 - num_digits));
+  double const exponent = exp10(static_cast<double>(exp_ten));
+  return base * exponent;
 }
 
 /**
@@ -132,8 +143,8 @@ struct string_to_float_fn {
   __device__ FloatType operator()(size_type idx)
   {
     if (strings_column.is_null(idx)) return static_cast<FloatType>(0);
-    // the cast to FloatType will create predictable results
-    // for floats that are larger than the FloatType can hold
+    // The cast to FloatType will create predictable results for floats that are larger than the
+    // FloatType can hold
     return static_cast<FloatType>(stod(strings_column.element<string_view>(idx)));
   }
 };
