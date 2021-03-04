@@ -222,6 +222,7 @@ std::unique_ptr<table> explode_outer(table_view const& input_table,
                     include_position,
                     offsets,
                     null_offset = null_offset.begin(),
+                    null_iter,
                     offset_size = explode_col.offsets().size() - 1] __device__(auto idx) {
                      auto lb_idx =
                        thrust::lower_bound(
@@ -233,29 +234,17 @@ std::unique_ptr<table> explode_outer(table_view const& input_table,
                      if (include_position) {
                        position_array[index_to_write] = idx - (offsets[lb_idx] - offsets[0]);
                      }
-                   });
-
-  // fill in entries for all the null and empty lists
-  thrust::for_each(rmm::exec_policy(stream),
-                   counting_iter,
-                   counting_iter + sliced_child.size(),
-                   [gather_map             = gather_map.begin(),
-                    explode_col_gather_map = explode_col_gather_map.begin(),
-                    position_array         = pos.begin(),
-                    include_position,
-                    null_iter = null_iter,
-                    offsets,
-                    null_offset = null_offset.begin()] __device__(auto idx) {
                      if (null_iter[idx] == 1) {
-                       auto index_to_write =
-                         null_offset[idx] == 0 ? offsets[idx] : offsets[idx] + null_offset[idx] - 1;
-                       gather_map[index_to_write] = idx;
+                      auto invalid_index =
+                        null_offset[idx] == 0 ? offsets[idx] : offsets[idx] + null_offset[idx] - 1;
+                      gather_map[invalid_index] = idx;
 
-                       // negative one to indicate a null value
-                       explode_col_gather_map[index_to_write] = -1;
+                      // negative one to indicate a null value
+                      explode_col_gather_map[invalid_index] = -1;
 
-                       if (include_position) { position_array[index_to_write] = 0; }
-                     }
+                      if (include_position) { position_array[invalid_index] = 0; }
+                    }
+
                    });
 
   return build_table(input_table,
