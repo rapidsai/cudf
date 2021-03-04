@@ -32,7 +32,8 @@ from rmm._lib.device_buffer cimport DeviceBuffer
 from cudf._lib.types import np_to_cudf_types, cudf_to_np_types
 from cudf._lib.types cimport (
     underlying_type_t_type_id,
-    dtype_from_column_view
+    dtype_from_column_view,
+    dtype_to_data_type
 )
 from cudf._lib.null_mask import bitmask_allocation_size_bytes
 
@@ -381,27 +382,8 @@ cdef class Column:
         else:
             col = self
 
-        data_dtype = col.dtype
-        cdef libcudf_types.type_id tid
-
-        # TODO refactor this? both self.dtype and data_dtype used
-        if is_list_dtype(self.dtype):
-            tid = libcudf_types.type_id.LIST
-        elif is_struct_dtype(self.dtype):
-            tid = libcudf_types.type_id.STRUCT
-        elif is_decimal_dtype(self.dtype):
-            tid = libcudf_types.type_id.DECIMAL64
-        else:
-            tid = <libcudf_types.type_id> (
-                <underlying_type_t_type_id> (
-                    np_to_cudf_types[np.dtype(data_dtype)]
-                )
-            )
-        cdef libcudf_types.data_type dtype = (
-            libcudf_types.data_type(tid, -self.dtype.scale)
-            if tid == libcudf_types.type_id.DECIMAL64
-            else libcudf_types.data_type(tid)
-        )
+        data_dtype = self.dtype if not is_categorical_dtype(self.dtype) else col.dtype
+        cdef libcudf_types.data_type dtype = dtype_to_data_type(data_dtype)
         cdef libcudf_types.size_type offset = self.offset
         cdef vector[column_view] children
         cdef void* data

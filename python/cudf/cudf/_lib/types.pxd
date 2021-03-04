@@ -5,7 +5,6 @@ from libcpp cimport bool
 from cudf._lib.cpp.column.column_view cimport column_view
 from cudf._lib.cpp.lists.lists_column_view cimport lists_column_view
 cimport cudf._lib.cpp.types as libcudf_types
-# from cudf._typing import Dtype
 
 ctypedef bool underlying_type_t_order
 ctypedef bool underlying_type_t_null_order
@@ -16,5 +15,4 @@ ctypedef bool underlying_type_t_null_policy
 
 cdef dtype_from_column_view(column_view cv)
 
-# TODO not sure if i need the import above ^
 cdef libcudf_types.data_type dtype_to_data_type(dtype)

@@ -58,12 +58,12 @@ class DecimalColumn(ColumnBase):
         scale = _binop_scale(self.dtype, other.dtype, op)
         output_type = Decimal64Dtype(
             scale=scale, precision=18
-        )  # precision will be ignored
+        )  # precision will be ignored, libcudf has no notion of precision
         result = libcudf.binaryop.binaryop(self, other, op, output_type)
         result.dtype.precision = _binop_precision(self.dtype, other.dtype, op)
         return result
 
-
+# This should at some point be hooked up to libcudf's binary_operation_fixed_point_scale
 def _binop_scale(l_dtype, r_dtype, op):
     s1, s2 = l_dtype.scale, r_dtype.scale
     if op in ("add", "sub"):
