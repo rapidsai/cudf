@@ -63,7 +63,7 @@ public class HostMemoryBuffer extends MemoryBuffer {
     }
 
     @Override
-    protected boolean cleanImpl(boolean logErrorIfNotClean) {
+    protected synchronized boolean cleanImpl(boolean logErrorIfNotClean) {
       boolean neededCleanup = false;
       long origAddress = address;
       if (address != 0) {
