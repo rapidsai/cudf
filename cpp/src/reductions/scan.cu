@@ -49,7 +49,8 @@ struct null_replace_accessor {
   null_replace_accessor(column_device_view const& _col, Element null_val, bool has_nulls)
     : col{_col}, null_replacement{null_val}, has_nulls(has_nulls)
   {
-    CUDF_EXPECTS(data_type(type_to_id<Element>()) == col.type(), "the data type mismatch");
+    CUDF_EXPECTS(type_to_id<Element>() == device_storage_type_id(col.type().id()),
+                 "the data type mismatch");
     if (has_nulls) CUDF_EXPECTS(_col.nullable(), "column with nulls must have a validity bitmask");
   }
   __device__ Element operator()(cudf::size_type i) const
