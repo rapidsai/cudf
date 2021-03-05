@@ -47,8 +47,8 @@ enum class inclusive{YES, NO};
  *
  * NULL elements in `input` belong to no bin and their corresponding label is NULL.
  *
- * @throws if `input.type() == left_edges.type() == right_edges.type()` is violated.
- * @throws if `left_edges.size() != right_edges.size()`
+ * @throws cudf::logic_error if`input.type() == left_edges.type() == right_edges.type()` is violated.
+ * @throws cudf::logic_error if`left_edges.size() != right_edges.size()`
  *
  * @param input The input elements to label according to the specified bins
  * @param left_edges Values of the left edge of each bin
