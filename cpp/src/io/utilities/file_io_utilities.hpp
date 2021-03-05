@@ -29,7 +29,6 @@
 
 namespace cudf {
 namespace io {
-
 namespace detail {
 
 /**
@@ -215,6 +214,7 @@ std::unique_ptr<cufile_input_impl> make_cufile_input(std::string const &filepath
  * cuFile library is not installed.
  */
 std::unique_ptr<cufile_output_impl> make_cufile_output(std::string const &filepath);
+
 };  // namespace detail
 };  // namespace io
 };  // namespace cudf

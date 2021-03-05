@@ -57,11 +57,14 @@ long file_wrapper::size() const
 
 #ifdef CUFILE_FOUND
 
+/**
+ * @brief Class that manages cuFile configuration.
+ */
 class cufile_config {
   std::string const default_policy    = "OFF";
   std::string const json_path_env_var = "CUFILE_ENV_PATH_JSON";
 
-  bool enabled = false;
+  std::string const policy = default_policy;
   temp_directory tmp_config_dir{"cudf_cufile_config"};
 
   std::string getenv_or(std::string const &env_var_name, std::string const &default_val)
@@ -70,15 +73,13 @@ class cufile_config {
     return (env_val == nullptr) ? default_val : std::string(env_val);
   }
 
-  cufile_config()
+  cufile_config() : policy{getenv_or("LIBCUDF_CUFILE_POLICY", default_policy)}
   {
-    auto const policy = getenv_or("LIBCUDF_CUFILE_POLICY", default_policy);
-
-    enabled = (policy == "ALWAYS" || policy == "GDS");
-
-    if (enabled) {
+    if (is_enabled()) {
+      // Modify the config file based on the policy
       auto const config_file_path = getenv_or(json_path_env_var, "/etc/cufile.json");
       std::ifstream user_config_file(config_file_path);
+      // Modified config file is stored in a temporary directory
       auto const cudf_config_path = tmp_config_dir.path() + "/cufile.json";
       std::ofstream cudf_config_file(cudf_config_path);
 
@@ -87,11 +88,13 @@ class cufile_config {
         std::string const tag = "\"allow_compat_mode\"";
         if (line.find(tag) != std::string::npos) {
           // TODO: only replace the true/false value
-          cudf_config_file << tag << ": " << ((policy == "ALWAYS") ? "true" : "false") << ",\n";
+          // Enable compatiblity mode when cuDF does not fall back to host path
+          cudf_config_file << tag << ": " << (is_required() ? "true" : "false") << ",\n";
         } else {
           cudf_config_file << line << '\n';
         }
 
+        // Point libcufile to the modified config file
         CUDF_EXPECTS(setenv(json_path_env_var.c_str(), cudf_config_path.c_str(), 0) == 0,
                      "Failed to set the cuFile config file environment variable.");
       }
@@ -99,7 +102,15 @@ class cufile_config {
   }
 
  public:
-  bool is_enabled() const { return enabled; }
+  /**
+   * @brief Returns true when cuFile use is enabled.
+   */
+  bool is_enabled() const { return policy == "ALWAYS" || policy == "GDS"; }
+
+  /**
+   * @brief Returns true when cuDF should not fall back to host IO.
+   */
+  bool is_required() const { return policy == "ALWAYS"; }
 
   static cufile_config const *instance()
   {
@@ -114,6 +125,10 @@ class cufile_config {
 class cufile_shim {
  private:
   cufile_shim();
+
+  void *cf_lib                              = nullptr;
+  decltype(cuFileDriverOpen) *driver_open   = nullptr;
+  decltype(cuFileDriverClose) *driver_close = nullptr;
 
   std::unique_ptr<cudf::logic_error> init_error;
   auto is_valid() const noexcept { return init_error == nullptr; }
@@ -130,9 +145,6 @@ class cufile_shim {
     dlclose(cf_lib);
   }
 
-  void *cf_lib                                        = nullptr;
-  decltype(cuFileDriverOpen) *driver_open             = nullptr;
-  decltype(cuFileDriverClose) *driver_close           = nullptr;
   decltype(cuFileHandleRegister) *handle_register     = nullptr;
   decltype(cuFileHandleDeregister) *handle_deregister = nullptr;
   decltype(cuFileRead) *read                          = nullptr;
@@ -231,6 +243,7 @@ std::unique_ptr<cufile_input_impl> make_cufile_input(std::string const &filepath
     try {
       return std::make_unique<cufile_input_impl>(filepath);
     } catch (...) {
+      if (cufile_config::instance()->is_required()) throw;
     }
   }
 #endif
@@ -244,6 +257,7 @@ std::unique_ptr<cufile_output_impl> make_cufile_output(std::string const &filepa
     try {
       return std::make_unique<cufile_output_impl>(filepath);
     } catch (...) {
+      if (cufile_config::instance()->is_required()) throw;
     }
   }
 #endif
