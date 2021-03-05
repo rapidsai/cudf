@@ -427,13 +427,6 @@ if(CONDA_INCLUDE_DIRS)
     target_include_directories(cudf PUBLIC "$<BUILD_INTERFACE:${CONDA_INCLUDE_DIRS}>")
 endif()
 
-# Add cuFile include paths if available
-if(cuFile_FOUND)
-    target_include_directories(cudf PUBLIC "${cuFile_INCLUDE_DIRS}")
-    target_compile_options(cudf PUBLIC ${cuFile_COMPILE_OPTIONS})
-    target_compile_definitions(cudf PUBLIC CUFILE_FOUND)
-endif()
-
 # Instruct jitify to use the kernel JIT cache
 if(JITIFY_USE_CACHE)
     target_compile_definitions(cudf PUBLIC JITIFY_USE_CACHE "CUDF_VERSION=${PROJECT_VERSION}")
@@ -467,6 +460,11 @@ if(CUDA_STATIC_RUNTIME)
     target_link_libraries(cudf PUBLIC CUDA::nvrtc CUDA::cudart_static CUDA::cuda_driver)
 else()
     target_link_libraries(cudf PUBLIC CUDA::nvrtc CUDA::cudart CUDA::cuda_driver)
+endif()
+
+# Add cuFile interface if available
+if(cuFile_FOUND)
+    target_link_libraries(cudf PUBLIC cuFile::cuFile_interface)
 endif()
 
 file(WRITE "${CUDF_BINARY_DIR}/fatbin.ld"
