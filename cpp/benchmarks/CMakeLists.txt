@@ -183,6 +183,7 @@ ConfigureBench(STRINGS_BENCH
   string/convert_durations_benchmark.cpp
   string/convert_floats_benchmark.cpp
   string/copy_benchmark.cpp
+  string/extract_benchmark.cpp
   string/filter_benchmark.cpp
   string/find_benchmark.cpp
   string/replace_benchmark.cpp
