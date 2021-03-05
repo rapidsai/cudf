@@ -212,7 +212,6 @@ Please see https://github.com/rapidsai/cudf/releases/tag/branch-0.19-latest for 
 - Add static type checking via Mypy (#6381) @shwina
 - Update to official libcu++ on Github (#6275) @trxcllnt
 
-# cuDF 0.17.0 (Date TBD)
 # cuDF 0.17.0 (10 Dec 2020)
 
 ## New Features
