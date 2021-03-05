@@ -41,7 +41,7 @@ namespace string {
  * @param d_str String to check.
  * @return true if string has valid integer characters
  */
-__device__ bool is_integer(string_view const& d_str)
+inline __device__ bool is_integer(string_view const& d_str)
 {
   if (d_str.empty()) return false;
   auto begin = d_str.begin();
@@ -71,7 +71,7 @@ __device__ bool is_integer(string_view const& d_str)
  * @param d_str String to check.
  * @return true if string has valid float characters
  */
-__device__ bool is_float(string_view const& d_str)
+inline __device__ bool is_float(string_view const& d_str)
 {
   if (d_str.empty()) return false;
   // strings allowed by the converter
@@ -104,29 +104,6 @@ __device__ bool is_float(string_view const& d_str)
     return false;
   }
   return result;
-}
-
-inline __device__ string_view shuffle_xor(string_view var, uint32_t delta)
-{
-  const char* data = reinterpret_cast<const char*>(
-    __shfl_xor_sync(~0, reinterpret_cast<uintptr_t>(var.data()), delta));
-  auto size = __shfl_xor_sync(~0, var.size_bytes(), delta);
-  return string_view(data, size);
-}
-
-template <typename Operator>
-inline __device__ string_view warp_reduce(string_view extremum_value, Operator op)
-{
-  string_view value = shuffle_xor(extremum_value, 1);
-  extremum_value    = op(value, extremum_value);
-  value             = shuffle_xor(extremum_value, 2);
-  extremum_value    = op(value, extremum_value);
-  value             = shuffle_xor(extremum_value, 4);
-  extremum_value    = op(value, extremum_value);
-  value             = shuffle_xor(extremum_value, 8);
-  extremum_value    = op(value, extremum_value);
-  value             = shuffle_xor(extremum_value, 16);
-  return op(value, extremum_value);
 }
 
 /** @} */  // end of group

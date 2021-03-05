@@ -903,8 +903,8 @@ void writer::impl::write(table_view const &table)
   if (fragments.size() != 0) {
     // Move column info to device
     col_desc.host_to_device(stream);
-    leaf_column_views =
-      cudf::io::create_leaf_column_device_views(col_desc, *parent_column_table_device_view, stream);
+    leaf_column_views = create_leaf_column_device_views<gpu::EncColumnDesc>(
+      col_desc, *parent_column_table_device_view, stream);
 
     init_page_fragments(fragments, col_desc, num_columns, num_fragments, num_rows, fragment_size);
   }

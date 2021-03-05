@@ -371,7 +371,7 @@ __global__ void __launch_bounds__(encode_threads_per_block)
  * @param[in] num_columns Number of columns
  * @param[in] num_rowgroups Number of rowgroups
  * @param[in] row_index_stride Rowgroup size in rows
- * @param[in] stream CUDA stream to use, default 0
+ * @param[in] stream CUDA stream to use, default `rmm::cuda_stream_default`
  */
 void orc_init_statistics_groups(statistics_group *groups,
                                 const stats_column_desc *cols,
@@ -392,7 +392,7 @@ void orc_init_statistics_groups(statistics_group *groups,
  * @param[in,out] groups Statistics merge groups
  * @param[in] chunks Statistics chunks
  * @param[in] statistics_count Number of statistics buffers to encode
- * @param[in] stream CUDA stream to use, default 0
+ * @param[in] stream CUDA stream to use, default `rmm::cuda_stream_default`
  */
 void orc_init_statistics_buffersize(statistics_merge_group *groups,
                                     const statistics_chunk *chunks,

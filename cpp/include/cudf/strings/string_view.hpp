@@ -293,6 +293,9 @@ class string_view {
   /**
    * @brief Return minimum value associated with the string type
    *
+   * This function is needed to be host callable because it is called by a host
+   * callable function DeviceMax::identity<string_view>()
+   *
    * @return An empty string
    */
   CUDA_HOST_DEVICE_CALLABLE static string_view min();
@@ -300,7 +303,10 @@ class string_view {
   /**
    * @brief Return maximum value associated with the string type
    *
-   * @return A string that represents the highest possible valid UTF-8 encoded
+   * This function is needed to be host callable because it is called by a host
+   * callable function DeviceMin::identity<string_view>()
+   *
+   * @return A string value which represents the highest possible valid UTF-8 encoded
    * character.
    */
   CUDA_HOST_DEVICE_CALLABLE static string_view max();

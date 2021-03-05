@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2020, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -21,9 +21,10 @@
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/scalar/scalar_device_view.cuh>
 #include <cudf/table/table_view.hpp>
+#include <cudf/utilities/span.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
-#include <rmm/device_vector.hpp>
+#include <rmm/device_uvector.hpp>
 #include <rmm/exec_policy.hpp>
 
 namespace cudf {
@@ -373,7 +374,7 @@ struct null_considering_binop {
                      "Output column type should match input column type");
 
         // Shallow copy of the resultant strings
-        rmm::device_vector<cudf::string_view> out_col_strings(col_size);
+        rmm::device_uvector<cudf::string_view> out_col_strings(col_size, stream);
 
         // Invalid output column strings - null rows
         cudf::string_view const invalid_str{nullptr, 0};
@@ -397,10 +398,10 @@ struct null_considering_binop {
 
         // Populate output column
         populate_out_col(
-          lhs_dev_view, rhs_dev_view, col_size, stream, minmax_func, out_col_strings.data().get());
+          lhs_dev_view, rhs_dev_view, col_size, stream, minmax_func, out_col_strings.data());
 
         // Create an output column with the resultant strings
-        out = make_strings_column(out_col_strings, invalid_str, stream, mr);
+        out = cudf::make_strings_column(out_col_strings, invalid_str, stream, mr);
 
         break;
       }
