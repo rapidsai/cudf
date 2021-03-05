@@ -1203,11 +1203,13 @@ __global__ void __launch_bounds__(128, 8) gpuEncodePages(EncPage *pages,
             auto const ret = convert_nanoseconds([&]() {
               using namespace cuda::std::chrono;
 
-              switch (s->col.converted_type) {
-                case TIMESTAMP_MILLIS: {
+              switch (s->col.leaf_column->type().id()) {
+                case type_id::TIMESTAMP_SECONDS:
+                case type_id::TIMESTAMP_MILLISECONDS: {
                   return sys_time<nanoseconds>{milliseconds{v}};
                 } break;
-                case TIMESTAMP_MICROS: {
+                case type_id::TIMESTAMP_MICROSECONDS:
+                case type_id::TIMESTAMP_NANOSECONDS: {
                   return sys_time<nanoseconds>{microseconds{v}};
                 } break;
               }

@@ -153,7 +153,8 @@ struct schema_tree_node : public SchemaElement {
  */
 std::vector<schema_tree_node> construct_schema_tree(LinkedColVector const &linked_columns,
                                                     table_input_metadata const &metadata,
-                                                    bool single_write_mode)
+                                                    bool single_write_mode,
+                                                    bool int96_timestamps)
 {
   std::vector<schema_tree_node> schema;
   schema_tree_node root{};
@@ -241,6 +242,8 @@ std::vector<schema_tree_node> construct_schema_tree(LinkedColVector const &linke
 
         schema_tree_node col_schema{};
 
+        bool timestamp_is_int96 = int96_timestamps or col_meta.is_enabled_int96_timestamps();
+
         switch (col->type().id()) {
           case cudf::type_id::INT8:
             col_schema.type           = Type::INT32;
@@ -327,26 +330,30 @@ std::vector<schema_tree_node> construct_schema_tree(LinkedColVector const &linke
             col_schema.stats_dtype    = statistics_dtype::dtype_int32;
             break;
           case cudf::type_id::TIMESTAMP_SECONDS:
-            col_schema.type = col_meta.is_enabled_int96_timestamps() ? Type::INT96 : Type::INT64;
-            col_schema.converted_type = ConvertedType::TIMESTAMP_MILLIS;
-            col_schema.stats_dtype    = statistics_dtype::dtype_timestamp64;
-            col_schema.ts_scale       = 1000;
+            col_schema.type = (timestamp_is_int96) ? Type::INT96 : Type::INT64;
+            col_schema.converted_type =
+              (timestamp_is_int96) ? ConvertedType::UNKNOWN : ConvertedType::TIMESTAMP_MILLIS;
+            col_schema.stats_dtype = statistics_dtype::dtype_timestamp64;
+            col_schema.ts_scale    = 1000;
             break;
           case cudf::type_id::TIMESTAMP_MILLISECONDS:
-            col_schema.type = col_meta.is_enabled_int96_timestamps() ? Type::INT96 : Type::INT64;
-            col_schema.converted_type = ConvertedType::TIMESTAMP_MILLIS;
-            col_schema.stats_dtype    = statistics_dtype::dtype_timestamp64;
+            col_schema.type = (timestamp_is_int96) ? Type::INT96 : Type::INT64;
+            col_schema.converted_type =
+              (timestamp_is_int96) ? ConvertedType::UNKNOWN : ConvertedType::TIMESTAMP_MILLIS;
+            col_schema.stats_dtype = statistics_dtype::dtype_timestamp64;
             break;
           case cudf::type_id::TIMESTAMP_MICROSECONDS:
-            col_schema.type = col_meta.is_enabled_int96_timestamps() ? Type::INT96 : Type::INT64;
-            col_schema.converted_type = ConvertedType::TIMESTAMP_MICROS;
-            col_schema.stats_dtype    = statistics_dtype::dtype_timestamp64;
+            col_schema.type = (timestamp_is_int96) ? Type::INT96 : Type::INT64;
+            col_schema.converted_type =
+              (timestamp_is_int96) ? ConvertedType::UNKNOWN : ConvertedType::TIMESTAMP_MICROS;
+            col_schema.stats_dtype = statistics_dtype::dtype_timestamp64;
             break;
           case cudf::type_id::TIMESTAMP_NANOSECONDS:
-            col_schema.type = col_meta.is_enabled_int96_timestamps() ? Type::INT96 : Type::INT64;
-            col_schema.converted_type = ConvertedType::TIMESTAMP_MICROS;
-            col_schema.stats_dtype    = statistics_dtype::dtype_timestamp64;
-            col_schema.ts_scale = -1000;  // negative value indicates division by absolute value
+            col_schema.type = (timestamp_is_int96) ? Type::INT96 : Type::INT64;
+            col_schema.converted_type =
+              (timestamp_is_int96) ? ConvertedType::UNKNOWN : ConvertedType::TIMESTAMP_MICROS;
+            col_schema.stats_dtype = statistics_dtype::dtype_timestamp64;
+            col_schema.ts_scale    = -1000;  // negative value indicates division by absolute value
             break;
           case cudf::type_id::STRING:
             col_schema.type           = Type::BYTE_ARRAY;
@@ -832,7 +839,7 @@ void writer::impl::write(table_view const &table)
   }
 
   auto vec         = input_table_to_linked_columns(table);
-  auto schema_tree = construct_schema_tree(vec, tbl_meta, single_write_mode);
+  auto schema_tree = construct_schema_tree(vec, tbl_meta, single_write_mode, int96_timestamps);
   // Construct parquet_column_views from the schema tree leaf nodes.
   std::vector<new_parquet_column_view> parquet_columns;
 

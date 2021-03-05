@@ -308,11 +308,11 @@ cpdef write_parquet(
         table_meta = make_unique[table_input_metadata](tv)
         num_index_cols_meta = 0
 
-    # _get_table_col_names(table, table_meta.get()[0])
     for i, name in enumerate(table._column_names, num_index_cols_meta):
         table_meta.get().column_metadata[i].set_name(name.encode())
-        _get_col_children_names(table[name]._column, table_meta.get().column_metadata[i])
-
+        _get_col_children_names(
+            table[name]._column, table_meta.get().column_metadata[i]
+        )
 
     pandas_metadata = generate_pandas_metadata(table, index)
     user_data[str.encode("pandas")] = str.encode(pandas_metadata)
