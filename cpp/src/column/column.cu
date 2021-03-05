@@ -193,7 +193,7 @@ struct create_column_from_view {
   std::unique_ptr<column> operator()()
   {
     cudf::strings_column_view sview(view);
-    return cudf::strings::detail::copy_slice(sview, 0, view.size(), 1, stream, mr);
+    return cudf::strings::detail::copy_slice(sview, 0, view.size(), stream, mr);
   }
 
   template <typename ColumnType,
