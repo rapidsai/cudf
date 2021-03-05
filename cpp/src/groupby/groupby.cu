@@ -182,7 +182,7 @@ groupby::groups groupby::get_groups(table_view values, rmm::mr::device_memory_re
   CUDF_FUNC_RANGE();
   auto grouped_keys = helper().sorted_keys(rmm::cuda_stream_default, mr);
 
-  auto group_offsets = helper().group_offsets(0);
+  auto const& group_offsets = helper().group_offsets(0);
   std::vector<size_type> group_offsets_vector(group_offsets.size());
   thrust::copy(group_offsets.begin(), group_offsets.end(), group_offsets_vector.begin());
 
