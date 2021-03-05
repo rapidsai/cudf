@@ -160,7 +160,7 @@ sort_groupby_helper::index_vector const& sort_groupby_helper::group_offsets(
 {
   if (_group_offsets) return *_group_offsets;
 
-  _group_offsets = std::make_unique<index_vector>(num_keys(stream) + 1);
+  _group_offsets = std::make_unique<index_vector>(num_keys(stream) + 1, stream);
 
   auto device_input_table = table_device_view::create(_keys, stream);
   auto sorted_order       = key_sort_order().data<size_type>();
@@ -182,9 +182,10 @@ sort_groupby_helper::index_vector const& sort_groupby_helper::group_offsets(
       permuted_row_equality_comparator<false>(*device_input_table, sorted_order));
   }
 
-  size_type num_groups          = thrust::distance(_group_offsets->begin(), result_end);
-  (*_group_offsets)[num_groups] = num_keys(stream);
-  _group_offsets->resize(num_groups + 1);
+  size_type num_groups = thrust::distance(_group_offsets->begin(), result_end);
+  //(*)[num_groups] = num_keys(stream);
+  _group_offsets->set_element(num_groups, num_keys(stream), stream);
+  _group_offsets->resize(num_groups + 1, stream);
 
   return *_group_offsets;
 }
@@ -195,7 +196,7 @@ sort_groupby_helper::index_vector const& sort_groupby_helper::group_labels(
   if (_group_labels) return *_group_labels;
 
   // Get group labels for future use in segmented sorting
-  _group_labels = std::make_unique<index_vector>(num_keys(stream));
+  _group_labels = std::make_unique<index_vector>(num_keys(stream), stream);
 
   auto& group_labels = *_group_labels;
 
@@ -221,7 +222,7 @@ column_view sort_groupby_helper::unsorted_keys_labels(rmm::cuda_stream_view stre
     data_type(type_to_id<size_type>()), _keys.num_rows(), mask_state::ALL_NULL, stream);
 
   auto group_labels_view = cudf::column_view(
-    data_type(type_to_id<size_type>()), group_labels().size(), group_labels().data().get());
+    data_type(type_to_id<size_type>()), group_labels().size(), group_labels().data());
 
   auto scatter_map = key_sort_order();
 
