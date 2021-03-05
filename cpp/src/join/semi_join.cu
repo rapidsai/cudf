@@ -112,6 +112,7 @@ std::unique_ptr<rmm::device_uvector<cudf::size_type>> left_semi_anti_join(
     });
 
   auto join_size = thrust::distance(gather_map->begin(), gather_map_end);
+  gather_map->resize(join_size, stream);
   return std::move(gather_map);
 }
 
