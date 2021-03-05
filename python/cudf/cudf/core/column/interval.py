@@ -64,9 +64,9 @@ class IntervalColumn(StructColumn):
         typ = self.dtype.to_arrow()
         struct_arrow = super().to_arrow()
         if len(struct_arrow) == 0:
-            #struct arrow is pa.struct array with null children types
-            #we need to make sure its children have non-null type
-            struct_arrow = pa.array([],typ.storage_type)
+            # struct arrow is pa.struct array with null children types
+            # we need to make sure its children have non-null type
+            struct_arrow = pa.array([], typ.storage_type)
         return pa.ExtensionArray.from_storage(typ, struct_arrow)
 
     def from_struct_column(self, closed="right"):
@@ -96,11 +96,20 @@ class IntervalColumn(StructColumn):
     def as_interval_column(self, dtype, **kwargs):
         if isinstance(dtype, str) and dtype == "interval":
             return self
+
+        if isinstance(dtype, (IntervalDtype, cudf.core.dtypes.IntervalDtype)):
+            return IntervalColumn(
+                size=self.size,
+                dtype=dtype,
+                mask=self.mask,
+                offset=self.offset,
+                null_count=self.null_count,
+                children=self.children,
+                closed=dtype.closed,
+            )
+
         if isinstance(dtype, (IntervalDtype, pd.IntervalDtype)):
             return self
-
-        if isinstance(dtype, pd.IntervalDtype):
-            dtype = IntervalDtype(closed=dtype.closed)
 
         if not isinstance(dtype, IntervalDtype):
             raise ValueError("dtype must be IntervalDtype")

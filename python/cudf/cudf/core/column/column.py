@@ -1022,11 +1022,7 @@ class ColumnBase(Column, Serializable):
                 )
             return self
         elif is_interval_dtype(self.dtype):
-            if not self.dtype == dtype:
-                raise NotImplementedError(
-                    "Casting list columns not currently supported"
-                )
-            return self
+            return self.as_interval_column(dtype, **kwargs)
         elif np.issubdtype(dtype, np.datetime64):
             return self.as_datetime_column(dtype, **kwargs)
         elif np.issubdtype(dtype, np.timedelta64):
@@ -1085,6 +1081,11 @@ class ColumnBase(Column, Serializable):
     def as_datetime_column(
         self, dtype: Dtype, **kwargs
     ) -> "cudf.core.column.DatetimeColumn":
+        raise NotImplementedError
+
+    def as_interval_column(
+        self, dtype: Dtype, **kwargs
+    ) -> "cudf.core.column.IntervalColumn":
         raise NotImplementedError
 
     def as_timedelta_column(
@@ -1710,7 +1711,10 @@ def build_interval_column(
     left = as_column(left_col)
     right = as_column(right_col)
 
-    dtype = IntervalDtype(left_col.dtype, closed)
+    if type(left_col) is not list:
+        dtype = IntervalDtype(left_col.dtype, closed)
+    else:
+        dtype = IntervalDtype("int64", closed)
     size = len(left)
     return build_column(
         data=None,
@@ -2107,7 +2111,7 @@ def as_column(
                     data = as_column(sr, nan_as_null=nan_as_null)
                 elif is_interval_dtype(dtype):
                     sr = pd.Series(arbitrary, dtype="interval")
-                    data = as_column(sr, nan_as_null=nan_as_null)
+                    data = as_column(sr, nan_as_null=nan_as_null, dtype=dtype)
                 else:
                     data = as_column(
                         _construct_array(arbitrary, dtype),

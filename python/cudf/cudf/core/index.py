@@ -25,6 +25,7 @@ from cudf.core.column import (
     column,
 )
 from cudf.core.column.string import StringMethods as StringMethods
+from cudf.core.dtypes import IntervalDtype
 from cudf.core.frame import Frame
 from cudf.utils import ioutils, utils
 from cudf.utils.docutils import copy_docstring
@@ -2745,6 +2746,19 @@ def interval_range(
     >>> cudf.interval_range(start=0,end=5)
     ... IntervalIndex([(0, 0], (1, 1], (2, 2], (3, 3], (4, 4], (5, 5]],
               closed='right',dtype='interval')
+
+    >>> cudf.interval_range(start=0,end=10, freq=2,closed='left')
+    ...IntervalIndex([[0, 2), [2, 4), [4, 6), [6, 8), [8, 10)],
+              closed='left',
+              dtype='interval')
+
+    >>> cudf.interval_range(start=0,end=10, periods=2,closed='left')
+    ...IntervalIndex([[0.0, 3.3333333333333335),
+            [3.3333333333333335, 6.666666666666667),
+            [6.666666666666667, 10.0)],
+            closed='left',
+            dtype='interval')
+
     """
     if freq and periods and start and end:
         raise ValueError(
@@ -2752,9 +2766,11 @@ def interval_range(
             "freq, exactly three must be specified"
         )
     elif periods and not freq:
-        assert(end is not None and start is not None)
+        assert end is not None and start is not None
         end = end + 1
-        periods_array = cupy.asarray(cupy.arange(start,end))
+        periods_array = cupy.asarray(cupy.arange(start, end))
+        # this ended up being the most consistent way to get the
+        # periods edges, other methods had failures
         _, bin_edges = cupy.histogram(periods_array, periods)
         # cupy.histogram turns all arrays into a float array
         # this can cause the dtype to be a float instead of an int
@@ -2768,20 +2784,20 @@ def interval_range(
             start = end - (freq * periods)
         if start:
             end = freq * periods + start
-        left_col = cupy.arange(start, end, freq) 
-        assert(end is not None and start is not None)
+        left_col = cupy.arange(start, end, freq)
+        assert end is not None and start is not None
         end = end + 1
         start = start + freq
         right_col = cupy.arange(start, end, freq)
     elif freq and not periods:
-        assert(end is not None and start is not None)
+        assert end is not None and start is not None
         end = end - freq + 1
         left_col = cupy.arange(start, end, freq)
         end = end + freq + 1
         start = start + freq
         right_col = cupy.arange(start, end, freq)
     if len(right_col) == 0 or len(left_col) == 0:
-            return cudf.IntervalIndex([], closed=closed)
+        return cudf.IntervalIndex([], closed=closed)
 
     interval_col = column.build_interval_column(
         left_col, right_col, closed=closed
@@ -2832,13 +2848,22 @@ class IntervalIndex(GenericIndex):
             if data is not None and data != [] and data[0].closed != closed:
                 # when closed is not the same as the data's closed
                 # we need to change the data closed value,
-                # not sure how to do this on the gpu?
-                data = pd.arrays.IntervalArray(data, closed=closed)
-            if not data and closed != 'right':
-                data = pd.arrays.IntervalArray(data, closed=closed)
-            data = column.as_column(
-                data, dtype="interval" if dtype is None else dtype
-            )
+                left_col = [data[i].left for i in range(len(data))]
+                # creating a col out of the left child so we can get
+                # the correct dtype
+                left = column.as_column(left_col)
+                data = column.as_column(
+                    data,
+                    dtype=IntervalDtype(left.dtype, closed=closed)
+                    if dtype is None
+                    else dtype,
+                )
+            if not data and closed != "right":
+                data = column.build_interval_column([], [], closed=closed)
+            else:
+                data = column.as_column(
+                    data, dtype="interval" if dtype is None else dtype
+                )
 
         out._initialize(data, **kwargs)
         return out
