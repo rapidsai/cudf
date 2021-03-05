@@ -26,12 +26,13 @@
 namespace cudf {
 namespace detail {
 
-std::pair<rmm::device_uvector<size_type>, rmm::device_uvector<size_type>> inner_join(
-  table_view const& left_input,
-  table_view const& right_input,
-  null_equality compare_nulls,
-  rmm::cuda_stream_view stream,
-  rmm::mr::device_memory_resource* mr)
+std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
+          std::unique_ptr<rmm::device_uvector<size_type>>>
+inner_join(table_view const& left_input,
+           table_view const& right_input,
+           null_equality compare_nulls,
+           rmm::cuda_stream_view stream,
+           rmm::mr::device_memory_resource* mr)
 {
   // Make sure any dictionary columns have matched key sets.
   // This will return any new dictionary columns created as well as updated table_views.
@@ -50,8 +51,9 @@ std::pair<rmm::device_uvector<size_type>, rmm::device_uvector<size_type>> inner_
   if (right.num_rows() > left.num_rows()) {
     cudf::hash_join hj_obj(left, compare_nulls, stream);
     auto result = hj_obj.inner_join(right, compare_nulls, stream, mr);
-    return std::make_pair<rmm::device_uvector<size_type>, rmm::device_uvector<size_type>>(
-      std::move(result.second), std::move(result.first));
+    return std::make_pair<std::unique_ptr<rmm::device_uvector<size_type>>,
+                          std::unique_ptr<rmm::device_uvector<size_type>>>(std::move(result.second),
+                                                                           std::move(result.first));
   } else {
     cudf::hash_join hj_obj(right, compare_nulls, stream);
     return hj_obj.inner_join(left, compare_nulls, stream, mr);
@@ -84,14 +86,14 @@ std::unique_ptr<table> inner_join(table_view const& left_input,
     cudf::hash_join hj_obj(left.select(left_on), compare_nulls, stream);
     auto join_indices = hj_obj.inner_join(right.select(right_on), compare_nulls, stream, mr);
     std::unique_ptr<table> left_result  = detail::gather(left,
-                                                        join_indices.second.begin(),
-                                                        join_indices.second.end(),
+                                                        join_indices.second->begin(),
+                                                        join_indices.second->end(),
                                                         out_of_bounds_policy::DONT_CHECK,
                                                         stream,
                                                         mr);
     std::unique_ptr<table> right_result = detail::gather(right,
-                                                         join_indices.first.begin(),
-                                                         join_indices.first.end(),
+                                                         join_indices.first->begin(),
+                                                         join_indices.first->end(),
                                                          out_of_bounds_policy::DONT_CHECK,
                                                          stream,
                                                          mr);
@@ -100,14 +102,14 @@ std::unique_ptr<table> inner_join(table_view const& left_input,
     cudf::hash_join hj_obj(right.select(right_on), compare_nulls, stream);
     auto join_indices = hj_obj.inner_join(left.select(left_on), compare_nulls, stream, mr);
     std::unique_ptr<table> left_result  = detail::gather(left,
-                                                        join_indices.first.begin(),
-                                                        join_indices.first.end(),
+                                                        join_indices.first->begin(),
+                                                        join_indices.first->end(),
                                                         out_of_bounds_policy::DONT_CHECK,
                                                         stream,
                                                         mr);
     std::unique_ptr<table> right_result = detail::gather(right,
-                                                         join_indices.second.begin(),
-                                                         join_indices.second.end(),
+                                                         join_indices.second->begin(),
+                                                         join_indices.second->end(),
                                                          out_of_bounds_policy::DONT_CHECK,
                                                          stream,
                                                          mr);
@@ -115,12 +117,13 @@ std::unique_ptr<table> inner_join(table_view const& left_input,
   }
 }
 
-std::pair<rmm::device_uvector<size_type>, rmm::device_uvector<size_type>> left_join(
-  table_view const& left_input,
-  table_view const& right_input,
-  null_equality compare_nulls,
-  rmm::cuda_stream_view stream,
-  rmm::mr::device_memory_resource* mr)
+std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
+          std::unique_ptr<rmm::device_uvector<size_type>>>
+left_join(table_view const& left_input,
+          table_view const& right_input,
+          null_equality compare_nulls,
+          rmm::cuda_stream_view stream,
+          rmm::mr::device_memory_resource* mr)
 {
   // Make sure any dictionary columns have matched key sets.
   // This will return any new dictionary columns created as well as updated table_views.
@@ -164,26 +167,27 @@ std::unique_ptr<table> left_join(table_view const& left_input,
                                             std::move(probe_build_pair.second));
   }
   std::unique_ptr<table> left_result  = detail::gather(left,
-                                                      join_indices.first.begin(),
-                                                      join_indices.first.end(),
+                                                      join_indices.first->begin(),
+                                                      join_indices.first->end(),
                                                       out_of_bounds_policy::NULLIFY,
                                                       stream,
                                                       mr);
   std::unique_ptr<table> right_result = detail::gather(right,
-                                                       join_indices.second.begin(),
-                                                       join_indices.second.end(),
+                                                       join_indices.second->begin(),
+                                                       join_indices.second->end(),
                                                        out_of_bounds_policy::NULLIFY,
                                                        stream,
                                                        mr);
   return combine_table_pair(std::move(left_result), std::move(right_result));
 }
 
-std::pair<rmm::device_uvector<size_type>, rmm::device_uvector<size_type>> full_join(
-  table_view const& left_input,
-  table_view const& right_input,
-  null_equality compare_nulls,
-  rmm::cuda_stream_view stream,
-  rmm::mr::device_memory_resource* mr)
+std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
+          std::unique_ptr<rmm::device_uvector<size_type>>>
+full_join(table_view const& left_input,
+          table_view const& right_input,
+          null_equality compare_nulls,
+          rmm::cuda_stream_view stream,
+          rmm::mr::device_memory_resource* mr)
 {
   // Make sure any dictionary columns have matched key sets.
   // This will return any new dictionary columns created as well as updated table_views.
@@ -227,14 +231,14 @@ std::unique_ptr<table> full_join(table_view const& left_input,
                                             std::move(probe_build_pair.second));
   }
   std::unique_ptr<table> left_result  = detail::gather(left,
-                                                      join_indices.first.begin(),
-                                                      join_indices.first.end(),
+                                                      join_indices.first->begin(),
+                                                      join_indices.first->end(),
                                                       out_of_bounds_policy::NULLIFY,
                                                       stream,
                                                       mr);
   std::unique_ptr<table> right_result = detail::gather(right,
-                                                       join_indices.second.begin(),
-                                                       join_indices.second.end(),
+                                                       join_indices.second->begin(),
+                                                       join_indices.second->end(),
                                                        out_of_bounds_policy::NULLIFY,
                                                        stream,
                                                        mr);
@@ -252,40 +256,44 @@ hash_join::hash_join(cudf::table_view const& build,
 {
 }
 
-std::pair<rmm::device_uvector<size_type>, rmm::device_uvector<size_type>> hash_join::inner_join(
-  cudf::table_view const& probe,
-  null_equality compare_nulls,
-  rmm::cuda_stream_view stream,
-  rmm::mr::device_memory_resource* mr) const
+std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
+          std::unique_ptr<rmm::device_uvector<size_type>>>
+hash_join::inner_join(cudf::table_view const& probe,
+                      null_equality compare_nulls,
+                      rmm::cuda_stream_view stream,
+                      rmm::mr::device_memory_resource* mr) const
 {
   return impl->inner_join(probe, compare_nulls, stream, mr);
 }
 
-std::pair<rmm::device_uvector<size_type>, rmm::device_uvector<size_type>> hash_join::left_join(
-  cudf::table_view const& probe,
-  null_equality compare_nulls,
-  rmm::cuda_stream_view stream,
-  rmm::mr::device_memory_resource* mr) const
+std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
+          std::unique_ptr<rmm::device_uvector<size_type>>>
+hash_join::left_join(cudf::table_view const& probe,
+                     null_equality compare_nulls,
+                     rmm::cuda_stream_view stream,
+                     rmm::mr::device_memory_resource* mr) const
 {
   return impl->left_join(probe, compare_nulls, stream, mr);
 }
 
-std::pair<rmm::device_uvector<size_type>, rmm::device_uvector<size_type>> hash_join::full_join(
-  cudf::table_view const& probe,
-  null_equality compare_nulls,
-  rmm::cuda_stream_view stream,
-  rmm::mr::device_memory_resource* mr) const
+std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
+          std::unique_ptr<rmm::device_uvector<size_type>>>
+hash_join::full_join(cudf::table_view const& probe,
+                     null_equality compare_nulls,
+                     rmm::cuda_stream_view stream,
+                     rmm::mr::device_memory_resource* mr) const
 {
   return impl->full_join(probe, compare_nulls, stream, mr);
 }
 
 // external APIs
 
-std::pair<rmm::device_uvector<size_type>, rmm::device_uvector<size_type>> inner_join(
-  table_view const& left,
-  table_view const& right,
-  null_equality compare_nulls,
-  rmm::mr::device_memory_resource* mr)
+std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
+          std::unique_ptr<rmm::device_uvector<size_type>>>
+inner_join(table_view const& left,
+           table_view const& right,
+           null_equality compare_nulls,
+           rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
   return detail::inner_join(left, right, compare_nulls, rmm::cuda_stream_default, mr);
@@ -303,11 +311,12 @@ std::unique_ptr<table> inner_join(table_view const& left,
     left, right, left_on, right_on, compare_nulls, rmm::cuda_stream_default, mr);
 }
 
-std::pair<rmm::device_uvector<size_type>, rmm::device_uvector<size_type>> left_join(
-  table_view const& left,
-  table_view const& right,
-  null_equality compare_nulls,
-  rmm::mr::device_memory_resource* mr)
+std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
+          std::unique_ptr<rmm::device_uvector<size_type>>>
+left_join(table_view const& left,
+          table_view const& right,
+          null_equality compare_nulls,
+          rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
   return detail::left_join(left, right, compare_nulls, rmm::cuda_stream_default, mr);
@@ -325,11 +334,12 @@ std::unique_ptr<table> left_join(table_view const& left,
     left, right, left_on, right_on, compare_nulls, rmm::cuda_stream_default, mr);
 }
 
-std::pair<rmm::device_uvector<size_type>, rmm::device_uvector<size_type>> full_join(
-  table_view const& left,
-  table_view const& right,
-  null_equality compare_nulls,
-  rmm::mr::device_memory_resource* mr)
+std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
+          std::unique_ptr<rmm::device_uvector<size_type>>>
+full_join(table_view const& left,
+          table_view const& right,
+          null_equality compare_nulls,
+          rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
   return detail::full_join(left, right, compare_nulls, rmm::cuda_stream_default, mr);

@@ -184,13 +184,15 @@ size_type estimate_join_output_size(table_device_view build_table,
  *
  * @return Join output indices vector pair
  */
-inline std::pair<rmm::device_uvector<size_type>, rmm::device_uvector<size_type>>
+inline std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
+                 std::unique_ptr<rmm::device_uvector<size_type>>>
 get_trivial_left_join_indices(table_view const& left, rmm::cuda_stream_view stream)
 {
-  rmm::device_uvector<size_type> left_indices(left.num_rows(), stream);
-  thrust::sequence(rmm::exec_policy(stream), left_indices.begin(), left_indices.end(), 0);
-  rmm::device_uvector<size_type> right_indices(left.num_rows(), stream);
-  thrust::fill(rmm::exec_policy(stream), right_indices.begin(), right_indices.end(), JoinNoneValue);
+  auto left_indices = std::make_unique<rmm::device_uvector<size_type>>(left.num_rows(), stream);
+  thrust::sequence(rmm::exec_policy(stream), left_indices->begin(), left_indices->end(), 0);
+  auto right_indices = std::make_unique<rmm::device_uvector<size_type>>(left.num_rows(), stream);
+  thrust::fill(
+    rmm::exec_policy(stream), right_indices->begin(), right_indices->end(), JoinNoneValue);
   return std::make_pair(std::move(left_indices), std::move(right_indices));
 }
 
@@ -230,38 +232,35 @@ struct hash_join::hash_join_impl {
                  null_equality compare_nulls,
                  rmm::cuda_stream_view stream = rmm::cuda_stream_default);
 
-  std::pair<rmm::device_uvector<size_type>, rmm::device_uvector<size_type>> inner_join(
-    cudf::table_view const& probe,
-    null_equality compare_nulls,
-    rmm::cuda_stream_view stream,
-    rmm::mr::device_memory_resource* mr) const;
+  std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
+            std::unique_ptr<rmm::device_uvector<size_type>>>
+  inner_join(cudf::table_view const& probe,
+             null_equality compare_nulls,
+             rmm::cuda_stream_view stream,
+             rmm::mr::device_memory_resource* mr) const;
 
-  std::pair<rmm::device_uvector<size_type>, rmm::device_uvector<size_type>> left_join(
-    cudf::table_view const& probe,
-    null_equality compare_nulls,
-    rmm::cuda_stream_view stream,
-    rmm::mr::device_memory_resource* mr) const;
+  std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
+            std::unique_ptr<rmm::device_uvector<size_type>>>
+  left_join(cudf::table_view const& probe,
+            null_equality compare_nulls,
+            rmm::cuda_stream_view stream,
+            rmm::mr::device_memory_resource* mr) const;
 
-  std::pair<rmm::device_uvector<size_type>, rmm::device_uvector<size_type>> full_join(
-    cudf::table_view const& probe,
-    null_equality compare_nulls,
-    rmm::cuda_stream_view stream,
-    rmm::mr::device_memory_resource* mr) const;
+  std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
+            std::unique_ptr<rmm::device_uvector<size_type>>>
+  full_join(cudf::table_view const& probe,
+            null_equality compare_nulls,
+            rmm::cuda_stream_view stream,
+            rmm::mr::device_memory_resource* mr) const;
 
  private:
   template <cudf::detail::join_kind JoinKind>
-  std::pair<rmm::device_uvector<size_type>, rmm::device_uvector<size_type>>
-  compute_hash_join_indices(cudf::table_view const& probe,
-                            null_equality compare_nulls,
-                            rmm::cuda_stream_view stream,
-                            rmm::mr::device_memory_resource* mr) const;
-
-  template <cudf::detail::join_kind JoinKind>
-  std::pair<rmm::device_uvector<size_type>, rmm::device_uvector<size_type>> compute_hash_join(
-    cudf::table_view const& probe,
-    null_equality compare_nulls,
-    rmm::cuda_stream_view stream,
-    rmm::mr::device_memory_resource* mr) const;
+  std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
+            std::unique_ptr<rmm::device_uvector<size_type>>>
+  compute_hash_join(cudf::table_view const& probe,
+                    null_equality compare_nulls,
+                    rmm::cuda_stream_view stream,
+                    rmm::mr::device_memory_resource* mr) const;
 
   /**
    * @brief Probes the `_hash_table` built from `_build` for tuples in `probe_table`,
@@ -279,8 +278,11 @@ struct hash_join::hash_join_impl {
    * @return Join output indices vector pair.
    */
   template <cudf::detail::join_kind JoinKind>
-  std::pair<rmm::device_uvector<size_type>, rmm::device_uvector<size_type>> probe_join_indices(
-    cudf::table_view const& probe, null_equality compare_nulls, rmm::cuda_stream_view stream) const;
+  std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
+            std::unique_ptr<rmm::device_uvector<size_type>>>
+  probe_join_indices(cudf::table_view const& probe,
+                     null_equality compare_nulls,
+                     rmm::cuda_stream_view stream) const;
 };
 
 }  // namespace cudf

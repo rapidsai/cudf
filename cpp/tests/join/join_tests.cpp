@@ -1076,11 +1076,11 @@ TEST_F(JoinTest, HashJoinSequentialProbes)
 
     auto result_table =
       cudf::table_view({cudf::column_view{cudf::data_type{cudf::type_id::INT32},
-                                          static_cast<cudf::size_type>(result.first.size()),
-                                          result.first.data()},
+                                          static_cast<cudf::size_type>(result.first->size()),
+                                          result.first->data()},
                         cudf::column_view{cudf::data_type{cudf::type_id::INT32},
-                                          static_cast<cudf::size_type>(result.second.size()),
-                                          result.second.data()}});
+                                          static_cast<cudf::size_type>(result.second->size()),
+                                          result.second->data()}});
     auto result_sort_order = cudf::sorted_order(result_table);
     auto sorted_result     = cudf::gather(result_table, *result_sort_order);
 
@@ -1108,11 +1108,11 @@ TEST_F(JoinTest, HashJoinSequentialProbes)
     auto result = hash_join.left_join(t0);
     auto result_table =
       cudf::table_view({cudf::column_view{cudf::data_type{cudf::type_id::INT32},
-                                          static_cast<cudf::size_type>(result.first.size()),
-                                          result.first.data()},
+                                          static_cast<cudf::size_type>(result.first->size()),
+                                          result.first->data()},
                         cudf::column_view{cudf::data_type{cudf::type_id::INT32},
-                                          static_cast<cudf::size_type>(result.second.size()),
-                                          result.second.data()}});
+                                          static_cast<cudf::size_type>(result.second->size()),
+                                          result.second->data()}});
     auto result_sort_order = cudf::sorted_order(result_table);
     auto sorted_result     = cudf::gather(result_table, *result_sort_order);
 
@@ -1140,11 +1140,11 @@ TEST_F(JoinTest, HashJoinSequentialProbes)
     auto result = hash_join.inner_join(t0);
     auto result_table =
       cudf::table_view({cudf::column_view{cudf::data_type{cudf::type_id::INT32},
-                                          static_cast<cudf::size_type>(result.first.size()),
-                                          result.first.data()},
+                                          static_cast<cudf::size_type>(result.first->size()),
+                                          result.first->data()},
                         cudf::column_view{cudf::data_type{cudf::type_id::INT32},
-                                          static_cast<cudf::size_type>(result.second.size()),
-                                          result.second.data()}});
+                                          static_cast<cudf::size_type>(result.second->size()),
+                                          result.second->data()}});
     auto result_sort_order = cudf::sorted_order(result_table);
     auto sorted_result     = cudf::gather(result_table, *result_sort_order);
 

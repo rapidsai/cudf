@@ -40,22 +40,24 @@ std::pair<std::unique_ptr<table>, std::unique_ptr<table>> get_empty_joined_table
 
 VectorPair concatenate_vector_pairs(VectorPair &a, VectorPair &b, rmm::cuda_stream_view stream)
 {
-  CUDF_EXPECTS((a.first.size() == a.second.size()),
+  CUDF_EXPECTS((a.first->size() == a.second->size()),
                "Mismatch between sizes of vectors in vector pair");
-  CUDF_EXPECTS((b.first.size() == b.second.size()),
+  CUDF_EXPECTS((b.first->size() == b.second->size()),
                "Mismatch between sizes of vectors in vector pair");
-  if (a.first.is_empty()) {
+  if (a.first->is_empty()) {
     return std::move(b);
-  } else if (b.first.is_empty()) {
+  } else if (b.first->is_empty()) {
     return std::move(a);
   }
-  auto original_size = a.first.size();
-  a.first.resize(a.first.size() + b.first.size(), stream);
-  a.second.resize(a.second.size() + b.second.size(), stream);
+  auto original_size = a.first->size();
+  a.first->resize(a.first->size() + b.first->size(), stream);
+  a.second->resize(a.second->size() + b.second->size(), stream);
   thrust::copy(
-    rmm::exec_policy(stream), b.first.begin(), b.first.end(), a.first.begin() + original_size);
-  thrust::copy(
-    rmm::exec_policy(stream), b.second.begin(), b.second.end(), a.second.begin() + original_size);
+    rmm::exec_policy(stream), b.first->begin(), b.first->end(), a.first->begin() + original_size);
+  thrust::copy(rmm::exec_policy(stream),
+               b.second->begin(),
+               b.second->end(),
+               a.second->begin() + original_size);
   return std::move(a);
 }
 
@@ -83,8 +85,9 @@ struct valid_range {
  *
  * @return Pair of vectors containing the left join indices complement
  */
-std::pair<rmm::device_uvector<size_type>, rmm::device_uvector<size_type>>
-get_left_join_indices_complement(rmm::device_uvector<size_type> &right_indices,
+std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
+          std::unique_ptr<rmm::device_uvector<size_type>>>
+get_left_join_indices_complement(std::unique_ptr<rmm::device_uvector<size_type>> &right_indices,
                                  size_type left_table_row_count,
                                  size_type right_table_row_count,
                                  rmm::cuda_stream_view stream)
@@ -92,7 +95,8 @@ get_left_join_indices_complement(rmm::device_uvector<size_type> &right_indices,
   // Get array of indices that do not appear in right_indices
 
   // Vector allocated for unmatched result
-  rmm::device_uvector<size_type> right_indices_complement(right_table_row_count, stream);
+  auto right_indices_complement =
+    std::make_unique<rmm::device_uvector<size_type>>(right_table_row_count, stream);
 
   // If left table is empty in a full join call then all rows of the right table
   // should be represented in the joined indices. This is an optimization since
@@ -101,15 +105,16 @@ get_left_join_indices_complement(rmm::device_uvector<size_type> &right_indices,
   // produce exactly the same result as the else path but will be faster.
   if (left_table_row_count == 0) {
     thrust::sequence(rmm::exec_policy(stream),
-                     right_indices_complement.begin(),
-                     right_indices_complement.end(),
+                     right_indices_complement->begin(),
+                     right_indices_complement->end(),
                      0);
   } else {
     // Assume all the indices in invalid_index_map are invalid
-    rmm::device_uvector<size_type> invalid_index_map(right_table_row_count, stream);
+    auto invalid_index_map =
+      std::make_unique<rmm::device_uvector<size_type>>(right_table_row_count, stream);
     thrust::uninitialized_fill(thrust::cuda::par.on(stream.value()),
-                               invalid_index_map.begin(),
-                               invalid_index_map.end(),
+                               invalid_index_map->begin(),
+                               invalid_index_map->end(),
                                int32_t{1});
 
     // Functor to check for index validity since left joins can create invalid indices
@@ -119,11 +124,11 @@ get_left_join_indices_complement(rmm::device_uvector<size_type> &right_indices,
     // Thus specifying that those locations are valid
     thrust::scatter_if(rmm::exec_policy(stream),
                        thrust::make_constant_iterator(0),
-                       thrust::make_constant_iterator(0) + right_indices.size(),
-                       right_indices.begin(),      // Index locations
-                       right_indices.begin(),      // Stencil - Check if index location is valid
-                       invalid_index_map.begin(),  // Output indices
-                       valid);                     // Stencil Predicate
+                       thrust::make_constant_iterator(0) + right_indices->size(),
+                       right_indices->begin(),      // Index locations
+                       right_indices->begin(),      // Stencil - Check if index location is valid
+                       invalid_index_map->begin(),  // Output indices
+                       valid);                      // Stencil Predicate
     size_type begin_counter = static_cast<size_type>(0);
     size_type end_counter   = static_cast<size_type>(right_table_row_count);
 
@@ -131,17 +136,18 @@ get_left_join_indices_complement(rmm::device_uvector<size_type> &right_indices,
     size_type indices_count = thrust::copy_if(rmm::exec_policy(stream),
                                               thrust::make_counting_iterator(begin_counter),
                                               thrust::make_counting_iterator(end_counter),
-                                              invalid_index_map.begin(),
-                                              right_indices_complement.begin(),
+                                              invalid_index_map->begin(),
+                                              right_indices_complement->begin(),
                                               thrust::identity<size_type>()) -
-                              right_indices_complement.begin();
-    right_indices_complement.resize(indices_count, stream);
+                              right_indices_complement->begin();
+    right_indices_complement->resize(indices_count, stream);
   }
 
-  rmm::device_uvector<size_type> left_invalid_indices(right_indices_complement.size(), stream);
+  auto left_invalid_indices =
+    std::make_unique<rmm::device_uvector<size_type>>(right_indices_complement->size(), stream);
   thrust::fill(rmm::exec_policy(stream),
-               left_invalid_indices.begin(),
-               left_invalid_indices.end(),
+               left_invalid_indices->begin(),
+               left_invalid_indices->end(),
                JoinNoneValue);
 
   return std::make_pair(std::move(left_invalid_indices), std::move(right_indices_complement));
@@ -212,20 +218,21 @@ std::unique_ptr<multimap_type, std::function<void(multimap_type *)>> build_join_
  * @return Join output indices vector pair.
  */
 template <join_kind JoinKind>
-std::pair<rmm::device_uvector<size_type>, rmm::device_uvector<size_type>> probe_join_hash_table(
-  cudf::table_device_view build_table,
-  cudf::table_device_view probe_table,
-  multimap_type const &hash_table,
-  null_equality compare_nulls,
-  rmm::cuda_stream_view stream)
+std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
+          std::unique_ptr<rmm::device_uvector<size_type>>>
+probe_join_hash_table(cudf::table_device_view build_table,
+                      cudf::table_device_view probe_table,
+                      multimap_type const &hash_table,
+                      null_equality compare_nulls,
+                      rmm::cuda_stream_view stream)
 {
   size_type estimated_size = estimate_join_output_size<JoinKind, multimap_type>(
     build_table, probe_table, hash_table, compare_nulls, stream);
 
   // If the estimated output size is zero, return immediately
   if (estimated_size == 0) {
-    return std::make_pair(rmm::device_uvector<size_type>{0, stream},
-                          rmm::device_uvector<size_type>{0, stream});
+    return std::make_pair(std::make_unique<rmm::device_uvector<size_type>>(0, stream),
+                          std::make_unique<rmm::device_uvector<size_type>>(0, stream));
   }
 
   // Because we are approximating the number of joined elements, our approximation
@@ -235,12 +242,13 @@ std::pair<rmm::device_uvector<size_type>, rmm::device_uvector<size_type>> probe_
   rmm::device_scalar<size_type> write_index(0, stream);
   size_type join_size{0};
 
-  rmm::device_uvector<size_type> left_indices{0, stream};
-  rmm::device_uvector<size_type> right_indices{0, stream};
+  auto left_indices  = std::make_unique<rmm::device_uvector<size_type>>(0, stream);
+  auto right_indices = std::make_unique<rmm::device_uvector<size_type>>(0, stream);
+
   auto current_estimated_size = estimated_size;
   do {
-    left_indices.resize(estimated_size, stream);
-    right_indices.resize(estimated_size, stream);
+    left_indices->resize(estimated_size, stream);
+    right_indices->resize(estimated_size, stream);
 
     constexpr int block_size{DEFAULT_JOIN_BLOCK_SIZE};
     detail::grid_1d config(probe_table.num_rows(), block_size);
@@ -249,15 +257,16 @@ std::pair<rmm::device_uvector<size_type>, rmm::device_uvector<size_type>> probe_
     row_hash hash_probe{probe_table};
     row_equality equality{probe_table, build_table, compare_nulls == null_equality::EQUAL};
     probe_hash_table<JoinKind, multimap_type, block_size, DEFAULT_JOIN_CACHE_SIZE>
-      <<<config.num_blocks, config.num_threads_per_block, 0, stream.value()>>>(hash_table,
-                                                                               build_table,
-                                                                               probe_table,
-                                                                               hash_probe,
-                                                                               equality,
-                                                                               left_indices.data(),
-                                                                               right_indices.data(),
-                                                                               write_index.data(),
-                                                                               estimated_size);
+      <<<config.num_blocks, config.num_threads_per_block, 0, stream.value()>>>(
+        hash_table,
+        build_table,
+        probe_table,
+        hash_probe,
+        equality,
+        left_indices->data(),
+        right_indices->data(),
+        write_index.data(),
+        estimated_size);
 
     CHECK_CUDA(stream.value());
 
@@ -266,8 +275,8 @@ std::pair<rmm::device_uvector<size_type>, rmm::device_uvector<size_type>> probe_
     estimated_size *= 2;
   } while ((current_estimated_size < join_size));
 
-  left_indices.resize(join_size, stream);
-  right_indices.resize(join_size, stream);
+  left_indices->resize(join_size, stream);
+  right_indices->resize(join_size, stream);
   return std::make_pair(std::move(left_indices), std::move(right_indices));
 }
 
@@ -301,7 +310,8 @@ hash_join::hash_join_impl::hash_join_impl(cudf::table_view const &build,
   _hash_table = build_join_hash_table(_build, compare_nulls, stream);
 }
 
-std::pair<rmm::device_uvector<size_type>, rmm::device_uvector<size_type>>
+std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
+          std::unique_ptr<rmm::device_uvector<size_type>>>
 hash_join::hash_join_impl::inner_join(cudf::table_view const &probe,
                                       null_equality compare_nulls,
                                       rmm::cuda_stream_view stream,
@@ -311,7 +321,8 @@ hash_join::hash_join_impl::inner_join(cudf::table_view const &probe,
   return compute_hash_join<cudf::detail::join_kind::INNER_JOIN>(probe, compare_nulls, stream, mr);
 }
 
-std::pair<rmm::device_uvector<size_type>, rmm::device_uvector<size_type>>
+std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
+          std::unique_ptr<rmm::device_uvector<size_type>>>
 hash_join::hash_join_impl::left_join(cudf::table_view const &probe,
                                      null_equality compare_nulls,
                                      rmm::cuda_stream_view stream,
@@ -321,7 +332,8 @@ hash_join::hash_join_impl::left_join(cudf::table_view const &probe,
   return compute_hash_join<cudf::detail::join_kind::LEFT_JOIN>(probe, compare_nulls, stream, mr);
 }
 
-std::pair<rmm::device_uvector<size_type>, rmm::device_uvector<size_type>>
+std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
+          std::unique_ptr<rmm::device_uvector<size_type>>>
 hash_join::hash_join_impl::full_join(cudf::table_view const &probe,
                                      null_equality compare_nulls,
                                      rmm::cuda_stream_view stream,
@@ -332,7 +344,8 @@ hash_join::hash_join_impl::full_join(cudf::table_view const &probe,
 }
 
 template <cudf::detail::join_kind JoinKind>
-std::pair<rmm::device_uvector<size_type>, rmm::device_uvector<size_type>>
+std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
+          std::unique_ptr<rmm::device_uvector<size_type>>>
 hash_join::hash_join_impl::compute_hash_join(cudf::table_view const &probe,
                                              null_equality compare_nulls,
                                              rmm::cuda_stream_view stream,
@@ -345,8 +358,8 @@ hash_join::hash_join_impl::compute_hash_join(cudf::table_view const &probe,
                "Mismatch in number of columns to be joined on");
 
   if (is_trivial_join(probe, _build, JoinKind)) {
-    return std::make_pair(rmm::device_uvector<size_type>{0, stream},
-                          rmm::device_uvector<size_type>{0, stream});
+    return std::make_pair(std::make_unique<rmm::device_uvector<size_type>>(0, stream),
+                          std::make_unique<rmm::device_uvector<size_type>>(0, stream));
   }
 
   CUDF_EXPECTS(std::equal(std::cbegin(_build),
@@ -360,7 +373,8 @@ hash_join::hash_join_impl::compute_hash_join(cudf::table_view const &probe,
 }
 
 template <cudf::detail::join_kind JoinKind>
-std::pair<rmm::device_uvector<size_type>, rmm::device_uvector<size_type>>
+std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
+          std::unique_ptr<rmm::device_uvector<size_type>>>
 hash_join::hash_join_impl::probe_join_indices(cudf::table_view const &probe,
                                               null_equality compare_nulls,
                                               rmm::cuda_stream_view stream) const
@@ -386,7 +400,6 @@ hash_join::hash_join_impl::probe_join_indices(cudf::table_view const &probe,
       join_indices.second, probe.num_rows(), _build.num_rows(), stream);
     join_indices = detail::concatenate_vector_pairs(join_indices, complement_indices, stream);
   }
-
   return join_indices;
 }
 

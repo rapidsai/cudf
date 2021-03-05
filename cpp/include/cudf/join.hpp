@@ -57,11 +57,12 @@ namespace cudf {
  * the result of performing an inner join between two tables with `left_keys` and `right_keys`
  * as the join keys .
  */
-std::pair<rmm::device_uvector<size_type>, rmm::device_uvector<size_type>> inner_join(
-  cudf::table_view const& left_keys,
-  cudf::table_view const& right_keys,
-  null_equality compare_nulls         = null_equality::EQUAL,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
+          std::unique_ptr<rmm::device_uvector<size_type>>>
+inner_join(cudf::table_view const& left_keys,
+           cudf::table_view const& right_keys,
+           null_equality compare_nulls         = null_equality::EQUAL,
+           rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
  * @brief Performs an inner join on the specified columns of two
@@ -108,7 +109,6 @@ std::unique_ptr<cudf::table> inner_join(
   null_equality compare_nulls         = null_equality::EQUAL,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
-
 /**
  * @brief Returns the row indices that can be used to construct
  * the result of performing a left join between two tables.
@@ -137,11 +137,12 @@ std::unique_ptr<cudf::table> inner_join(
  * the result of performing a left join between two tables with `left_keys` and `right_keys`
  * as the join keys .
  */
-std::pair<rmm::device_uvector<size_type>, rmm::device_uvector<size_type>> left_join(
-  cudf::table_view const& left_keys,
-  cudf::table_view const& right_keys,
-  null_equality compare_nulls         = null_equality::EQUAL,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
+          std::unique_ptr<rmm::device_uvector<size_type>>>
+left_join(cudf::table_view const& left_keys,
+          cudf::table_view const& right_keys,
+          null_equality compare_nulls         = null_equality::EQUAL,
+          rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
  * @brief Performs a left join (also known as left outer join) on the
@@ -196,7 +197,6 @@ std::unique_ptr<cudf::table> left_join(
   null_equality compare_nulls         = null_equality::EQUAL,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
-
 /**
  * @brief Returns the row indices that can be used to construct
  * the result of performing a full join between two tables.
@@ -223,11 +223,12 @@ std::unique_ptr<cudf::table> left_join(
  * the result of performing a full join between two tables with `left_keys` and `right_keys`
  * as the join keys .
  */
-std::pair<rmm::device_uvector<size_type>, rmm::device_uvector<size_type>> full_join(
-  cudf::table_view const& left_keys,
-  cudf::table_view const& right_keys,
-  null_equality compare_nulls         = null_equality::EQUAL,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
+          std::unique_ptr<rmm::device_uvector<size_type>>>
+full_join(cudf::table_view const& left_keys,
+          cudf::table_view const& right_keys,
+          null_equality compare_nulls         = null_equality::EQUAL,
+          rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
  * @brief Performs a full join (also known as full outer join) on the
@@ -330,7 +331,6 @@ std::unique_ptr<cudf::table> left_semi_join(
   null_equality compare_nulls         = null_equality::EQUAL,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
-
 /**
  * @brief Returns the row indices that can be used to construct
  * the result of performing a left semi join between two tables.
@@ -364,7 +364,7 @@ std::unique_ptr<cudf::table> left_semi_join(
  * the result of performing a left semi join between two tables with
  * `left_keys` and `right_keys` as the join keys .
  */
-rmm::device_uvector<size_type> left_semi_join(
+std::unique_ptr<rmm::device_uvector<size_type>> left_semi_join(
   cudf::table_view const& left_keys,
   cudf::table_view const& right_keys,
   null_equality compare_nulls         = null_equality::EQUAL,
@@ -451,7 +451,7 @@ std::unique_ptr<cudf::table> left_anti_join(
  * the result of performing a left anti join between two tables with
  * `left_keys` and `right_keys` as the join keys .
  */
-rmm::device_uvector<size_type> left_anti_join(
+std::unique_ptr<rmm::device_uvector<size_type>> left_anti_join(
   cudf::table_view const& left_keys,
   cudf::table_view const& right_keys,
   null_equality compare_nulls         = null_equality::EQUAL,
@@ -528,11 +528,12 @@ class hash_join {
    * the result of performing an inner join between two tables with `build` and `probe`
    * as the the join keys .
    */
-  std::pair<rmm::device_uvector<size_type>, rmm::device_uvector<size_type>> inner_join(
-    cudf::table_view const& probe,
-    null_equality compare_nulls         = null_equality::EQUAL,
-    rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
-    rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource()) const;
+  std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
+            std::unique_ptr<rmm::device_uvector<size_type>>>
+  inner_join(cudf::table_view const& probe,
+             null_equality compare_nulls         = null_equality::EQUAL,
+             rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
+             rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource()) const;
 
   /**
    * Returns the row indices that can be used to construct the result of performing
@@ -548,12 +549,12 @@ class hash_join {
    * the result of performing a left join between two tables with `build` and `probe`
    * as the the join keys .
    */
-  std::pair<rmm::device_uvector<size_type>, rmm::device_uvector<size_type>> left_join(
-    cudf::table_view const& probe,
-    null_equality compare_nulls         = null_equality::EQUAL,
-    rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
-    rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource()) const;
-
+  std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
+            std::unique_ptr<rmm::device_uvector<size_type>>>
+  left_join(cudf::table_view const& probe,
+            null_equality compare_nulls         = null_equality::EQUAL,
+            rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
+            rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource()) const;
 
   /**
    * Returns the row indices that can be used to construct the result of performing
@@ -569,11 +570,12 @@ class hash_join {
    * the result of performing a full join between two tables with `build` and `probe`
    * as the the join keys .
    */
-  std::pair<rmm::device_uvector<size_type>, rmm::device_uvector<size_type>> full_join(
-    cudf::table_view const& probe,
-    null_equality compare_nulls         = null_equality::EQUAL,
-    rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
-    rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource()) const;
+  std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
+            std::unique_ptr<rmm::device_uvector<size_type>>>
+  full_join(cudf::table_view const& probe,
+            null_equality compare_nulls         = null_equality::EQUAL,
+            rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
+            rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource()) const;
 
  private:
   struct hash_join_impl;
