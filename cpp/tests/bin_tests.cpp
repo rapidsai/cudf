@@ -64,6 +64,16 @@ TEST(BinColumnTest, TestInvalidInput)
           cudf::logic_error);
 };
 
+TEST(BinColumnTest, TestMismatchedEdges)
+{
+  fixed_width_column_wrapper<float> left_edges{0, 1, 2, 3, 4, 5, 6, 7, 8, 9};
+  fixed_width_column_wrapper<float> right_edges{1, 2, 3, 4, 5, 6, 7, 8, 9};
+  fixed_width_column_wrapper<float> input{0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5};
+
+  EXPECT_THROW(cudf::bin::bin(input, left_edges, cudf::bin::inclusive::YES, right_edges, cudf::bin::inclusive::NO),
+          cudf::logic_error);
+};
+
 }  // anonymous namespace
 
 CUDF_TEST_PROGRAM_MAIN()
