@@ -17,6 +17,7 @@
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_factories.hpp>
 #include <cudf/types.hpp>
+#include <cudf/utilities/span.hpp>
 
 #include <thrust/iterator/constant_iterator.h>
 #include <thrust/scan.h>
@@ -28,7 +29,7 @@
 namespace cudf {
 namespace groupby {
 namespace detail {
-std::unique_ptr<column> count_scan(rmm::device_vector<size_type> const& group_labels,
+std::unique_ptr<column> count_scan(cudf::device_span<size_type const> group_labels,
                                    rmm::cuda_stream_view stream,
                                    rmm::mr::device_memory_resource* mr)
 {
