@@ -79,19 +79,25 @@ public final class MemoryCleaner {
 
     public final void addRef() {
       if (REF_COUNT_DEBUG && refCountDebug != null) {
-        refCountDebug.add(new MemoryCleaner.RefCountDebugItem("INC"));
+        synchronized(this)  {
+          refCountDebug.add(new MemoryCleaner.RefCountDebugItem("INC"));
+        }
       }
     }
 
     public final void delRef() {
       if (REF_COUNT_DEBUG && refCountDebug != null) {
-        refCountDebug.add(new MemoryCleaner.RefCountDebugItem("DEC"));
+        synchronized(this) {
+          refCountDebug.add(new MemoryCleaner.RefCountDebugItem("DEC"));
+        }
       }
     }
 
     public final void logRefCountDebug(String message) {
       if (REF_COUNT_DEBUG && refCountDebug != null) {
-        log.error("{} (ID: {}): {}", message, id, MemoryCleaner.stringJoin("\n", refCountDebug));
+        synchronized(this) {
+          log.error("{} (ID: {}): {}", message, id, MemoryCleaner.stringJoin("\n", refCountDebug));
+        }
       }
     }
 

@@ -25,10 +25,11 @@
 #include <cudf/null_mask.hpp>
 #include <cudf/reduction.hpp>
 #include <cudf/utilities/error.hpp>
+#include <cudf/utilities/span.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
-#include <rmm/device_vector.hpp>
+#include <rmm/device_uvector.hpp>
 #include <rmm/exec_policy.hpp>
 
 namespace cudf {
@@ -166,22 +167,21 @@ struct scan_dispatcher {
                                          rmm::mr::device_memory_resource* mr)
   {
     const size_type size = input_view.size();
-    rmm::device_vector<T> result(size);
+    rmm::device_uvector<T> result(size, stream);
 
     auto d_input = column_device_view::create(input_view, stream);
 
     if (input_view.has_nulls()) {
       auto input = make_null_replacement_iterator(*d_input, Op::template identity<T>());
-      thrust::inclusive_scan(
-        rmm::exec_policy(stream), input, input + size, result.data().get(), Op{});
+      thrust::inclusive_scan(rmm::exec_policy(stream), input, input + size, result.data(), Op{});
     } else {
       auto input = d_input->begin<T>();
-      thrust::inclusive_scan(
-        rmm::exec_policy(stream), input, input + size, result.data().get(), Op{});
+      thrust::inclusive_scan(rmm::exec_policy(stream), input, input + size, result.data(), Op{});
     }
     CHECK_CUDA(stream.value());
 
-    auto output_column = make_strings_column(result, Op::template identity<T>(), stream, mr);
+    auto output_column =
+      cudf::make_strings_column(result, Op::template identity<string_view>(), stream, mr);
     if (null_handling == null_policy::EXCLUDE) {
       output_column->set_null_mask(detail::copy_bitmask(input_view, stream, mr),
                                    input_view.null_count());

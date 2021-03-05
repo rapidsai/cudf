@@ -21,6 +21,7 @@
 #include <cudf/concatenate.hpp>
 #include <cudf/copying.hpp>
 #include <cudf/detail/iterator.cuh>
+#include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/dictionary/encode.hpp>
 #include <cudf/fixed_point/fixed_point.hpp>
 #include <cudf/lists/lists_column_view.hpp>
@@ -701,7 +702,9 @@ class strings_column_wrapper : public detail::column_wrapper {
     std::vector<cudf::size_type> offsets;
     auto all_valid           = thrust::make_constant_iterator(true);
     std::tie(chars, offsets) = detail::make_chars_and_offsets(begin, end, all_valid);
-    wrapped                  = cudf::make_strings_column(chars, offsets);
+    auto d_chars             = cudf::detail::make_device_uvector_sync(chars);
+    auto d_offsets           = cudf::detail::make_device_uvector_sync(offsets);
+    wrapped                  = cudf::make_strings_column(d_chars, d_offsets);
   }
 
   /**
@@ -740,8 +743,11 @@ class strings_column_wrapper : public detail::column_wrapper {
     std::vector<char> chars;
     std::vector<size_type> offsets;
     std::tie(chars, offsets) = detail::make_chars_and_offsets(begin, end, v);
-    wrapped =
-      cudf::make_strings_column(chars, offsets, detail::make_null_mask_vector(v, v + num_strings));
+    auto null_mask           = detail::make_null_mask_vector(v, v + num_strings);
+    auto d_chars             = cudf::detail::make_device_uvector_sync(chars);
+    auto d_offsets           = cudf::detail::make_device_uvector_sync(offsets);
+    auto d_bitmask           = cudf::detail::make_device_uvector_sync(null_mask);
+    wrapped                  = cudf::make_strings_column(d_chars, d_offsets, d_bitmask);
   }
 
   /**

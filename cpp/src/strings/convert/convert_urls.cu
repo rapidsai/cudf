@@ -33,7 +33,7 @@
 #include <thrust/count.h>
 #include <thrust/iterator/counting_iterator.h>
 
-using cudf::detail::device_span;
+using cudf::device_span;
 
 namespace cudf {
 namespace strings {

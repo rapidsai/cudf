@@ -14,12 +14,26 @@
 # limitations under the License.
 #=============================================================================
 
-function(find_and_configure_rmm VERSION)
+function(cudf_save_if_enabled var)
+    if(CUDF_${var})
+        unset(${var} PARENT_SCOPE)
+        unset(${var} CACHE)
+    endif()
+endfunction()
 
+function(cudf_restore_if_enabled var)
+    if(CUDF_${var})
+        set(${var} ON CACHE INTERNAL "" FORCE)
+    endif()
+endfunction()
+
+function(find_and_configure_rmm VERSION)
     # Consumers have two options for local source builds:
     # 1. Pass `-D CPM_rmm_SOURCE=/path/to/rmm` to build a local RMM source tree
     # 2. Pass `-D CMAKE_PREFIX_PATH=/path/to/rmm/build` to use an existing local
     #    RMM build directory as the install location for find_package(rmm)
+    cudf_save_if_enabled(BUILD_TESTS)
+    cudf_save_if_enabled(BUILD_BENCHMARKS)
 
     CPMFindPackage(NAME rmm
         VERSION         ${VERSION}
@@ -32,6 +46,8 @@ function(find_and_configure_rmm VERSION)
                         "CMAKE_CUDA_ARCHITECTURES ${CMAKE_CUDA_ARCHITECTURES}"
                         "DISABLE_DEPRECATION_WARNING ${DISABLE_DEPRECATION_WARNING}"
     )
+    cudf_restore_if_enabled(BUILD_TESTS)
+    cudf_restore_if_enabled(BUILD_BENCHMARKS)
 
     if(NOT rmm_BINARY_DIR IN_LIST CMAKE_PREFIX_PATH)
         list(APPEND CMAKE_PREFIX_PATH "${rmm_BINARY_DIR}")
