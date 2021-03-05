@@ -28,27 +28,32 @@ namespace lists {
  */
 
 /**
- * @brief Create a new column by removing duplicated entries from each list in the given
- * lists_column
+ * @brief Create a new lists column by removing duplicated entries from each list element in the
+ * given lists column
  *
- * Given an `input` list_column_view, the list rows in the column are copied to an output column
- * such that their duplicated entries are dropped out to keep only unique entries. The order of
- * those entries are not guaranteed to be preserved as in the input column.
+ * Given an `input` lists_column_view, the list elements in the column are copied to an output lists
+ * column such that their duplicated entries are dropped out to keep only the unique ones. The
+ * order of those entries within each list are not guaranteed to be preserved as in the input.
  *
- * If any row in the input column contains nested types, cudf::logic_error will be thrown.
+ * Notes:
+ *  - If any row (list element) in the input column contains nested types, cudf::logic_error will be
+ * thrown.
+ *  - By current implementation, entries in the output lists are sorted by ascending order (nulls
+ * last), but this is not guaranteed in future implementation.
  *
- * @param[in] lists_column    the input lists_column_view
- * @param[in] nulls_equal     flag to denote nulls are considered equal
- * @param[in] mr              Device memory resource used to allocate the returned column
+ * @param lists_column The input lists_column_view
+ * @param nulls_equal  Flag to specify whether null entries should be considered equal
+ * @param mr           Device resource used to allocate memory
  *
  * @code{.pseudo}
- * If the input is { {1, 1, 2, 1, 3}, {4}, {5, 6, 6, 6, 5} }
- * Then a valid output can be { {1, 2, 3}, {4}, {5, 6} }
- * Note that permuting the entries of each sublist in this output also produces another valid
+ * lists_column = { {1, 1, 2, 1, 3}, {4}, NULL, {}, {NULL, NULL, NULL, 5, 6, 6, 6, 5} }
+ * output = { {1, 2, 3}, {4}, NULL, {}, {5, 6, NULL} }
+ *
+ * Note that permuting the entries of each list in this output also produces another valid
  * output.
  * @endcode
  *
- * @return A list column with list elements having unique entries.
+ * @return A list column with list elements having unique entries
  */
 std::unique_ptr<column> drop_list_duplicates(
   lists_column_view const& lists_column,
