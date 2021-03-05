@@ -40,7 +40,7 @@ static void BM_extract(benchmark::State& state, int re_instructions)
   cudf::strings_column_view input(table->view().column(0));
   std::string const raw_pattern =
     "1234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234"
-    "5678901234567890";
+    "5678901234567890123456789012345678901234567890";
   std::string const pattern = "(" + raw_pattern.substr(0, re_instructions) + ")";
 
   for (auto _ : state) {
@@ -70,5 +70,6 @@ static void generate_bench_args(benchmark::internal::Benchmark* b)
     ->UseManualTime()                                         \
     ->Unit(benchmark::kMillisecond);
 
-STRINGS_BENCHMARK_DEFINE(extract, 4)
-STRINGS_BENCHMARK_DEFINE(extract_long, 110)
+STRINGS_BENCHMARK_DEFINE(small, 4)
+STRINGS_BENCHMARK_DEFINE(medium, 48)
+STRINGS_BENCHMARK_DEFINE(large, 128)
