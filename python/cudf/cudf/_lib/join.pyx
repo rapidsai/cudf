@@ -3,7 +3,7 @@
 from collections import OrderedDict
 from itertools import chain
 
-from libcpp.memory cimport unique_ptr
+from libcpp.memory cimport unique_ptr, make_unique
 from libcpp.utility cimport move
 from libcpp.vector cimport vector
 from libcpp.pair cimport pair
@@ -13,7 +13,7 @@ from cudf._lib.column cimport Column
 from cudf._lib.table cimport Table, columns_from_ptr
 
 from cudf._lib.cpp.column.column cimport column
-from cudf._lib.cpp.types cimport size_type
+from cudf._lib.cpp.types cimport size_type, data_type, type_id
 from cudf._lib.cpp.table.table cimport table
 from cudf._lib.cpp.table.table_view cimport table_view
 cimport cudf._lib.cpp.join as cpp_join
@@ -21,7 +21,7 @@ cimport cudf._lib.cpp.join as cpp_join
 
 cpdef join(Table lhs, Table rhs, how=None):
     # left, inner and outer join
-    cdef pair[unique_ptr[column], unique_ptr[column]] c_result
+    cdef pair[cpp_join.gather_map_type, cpp_join.gather_map_type] c_result
     cdef table_view c_lhs = lhs.view()
     cdef table_view c_rhs = rhs.view()
 
@@ -42,9 +42,21 @@ cpdef join(Table lhs, Table rhs, how=None):
         ))
     else:
         raise ValueError(f"Invalid join type {how}")
+
+    cdef size_type join_size = c_result.first.get()[0].size()
+    cdef unique_ptr[column] left_rows = make_unique[column](
+        data_type(type_id.INT32),
+        join_size,
+        c_result.first.get()[0].release()
+    )
+    cdef unique_ptr[column] right_rows = make_unique[column](
+        data_type(type_id.INT32),
+        join_size,
+        c_result.second.get()[0].release()
+    )
     return (
-        Column.from_unique_ptr(move(c_result.first)),
-        Column.from_unique_ptr(move(c_result.second))
+        Column.from_unique_ptr(move(left_rows)),
+        Column.from_unique_ptr(move(right_rows))
     )
 
 
@@ -52,7 +64,7 @@ cpdef semi_join(Table lhs, Table rhs, how=None):
     from cudf.core.column import as_column
 
     # left-semi and left-anti joins
-    cdef unique_ptr[column] c_result
+    cdef cpp_join.gather_map_type c_result
     cdef table_view c_lhs = lhs.view()
     cdef table_view c_rhs = rhs.view()
 
@@ -68,4 +80,14 @@ cpdef semi_join(Table lhs, Table rhs, how=None):
         ))
     else:
         raise ValueError(f"Invalid join type {how}")
-    return Column.from_unique_ptr(move(c_result)), as_column([], dtype="int32")
+
+    cdef size_type join_size = c_result.get()[0].size()
+    cdef unique_ptr[column] left_rows = make_unique[column](
+        data_type(type_id.INT32),
+        join_size,
+        c_result.get()[0].release()
+    )
+    return (
+        Column.from_unique_ptr(move(left_rows)),
+        as_column([], dtype="int32")
+    )
