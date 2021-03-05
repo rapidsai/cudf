@@ -189,7 +189,6 @@ class ColumnBase(Column, Serializable):
             n += bitmask_allocation_size_bytes(self.size)
         return n
 
-    # @property
     def cat(
         self, parent=None
     ) -> "cudf.core.column.categorical.CategoricalAccessor":

@@ -936,7 +936,6 @@ class CategoricalColumn(column.ColumnBase):
     def ordered(self, value: bool):
         self.dtype.ordered = value
 
-    # @property
     def cat(self, parent: ParentType = None):
         return CategoricalAccessor(self, parent=parent)
 
