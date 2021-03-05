@@ -170,8 +170,8 @@ class datasource {
    *  @throws cudf::logic_error the object does not support direct device reads, i.e.
    * `supports_device_read` returns `false`.
    *
-   * @param offset Bytes from the start
-   * @param size Bytes to read
+   * @param offset Number of bytes from the start
+   * @param size Number of bytes to read
    * @param stream CUDA stream to use, default `rmm::cuda_stream_default`
    *
    * @return The data buffer in the device memory
@@ -190,11 +190,11 @@ class datasource {
    * Data source implementations that don't support direct device reads don't need to override this
    * function.
    *
-   *  @throws cudf::logic_error the object does not support direct device reads, i.e.
+   *  @throws cudf::logic_error when the object does not support direct device reads, i.e.
    * `supports_device_read` returns `false`.
    *
-   * @param offset Bytes from the start
-   * @param size Bytes to read
+   * @param offset Number of bytes from the start
+   * @param size Number of bytes to read
    * @param dst Address of the existing device memory
    * @param stream CUDA stream to use, default `rmm::cuda_stream_default`
    *

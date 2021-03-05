@@ -79,6 +79,14 @@ class cufile_input : public cufile_io_base {
  public:
   /**
    * @brief Reads into a new device buffer.
+   *
+   *  @throws cudf::logic_error on cuFile error
+   *
+   * @param offset Number of bytes from the start
+   * @param size Number of bytes to read
+   * @param stream CUDA stream to use, default `rmm::cuda_stream_default`
+   *
+   * @return The data buffer in the device memory
    */
   virtual std::unique_ptr<datasource::buffer> read(size_t offset,
                                                    size_t size,
@@ -87,7 +95,14 @@ class cufile_input : public cufile_io_base {
   /**
    * @brief Reads into existing device memory.
    *
-   * Returns the number of bytes read.
+   *  @throws cudf::logic_error on cuFile error
+   *
+   * @param offset Number of bytes from the start
+   * @param size Number of bytes to read
+   * @param dst Address of the existing device memory
+   * @param stream CUDA stream to use, default `rmm::cuda_stream_default`
+   *
+   * @return The number of bytes read
    */
   virtual size_t read(size_t offset, size_t size, uint8_t *dst, rmm::cuda_stream_view stream) = 0;
 };
@@ -99,6 +114,12 @@ class cufile_output : public cufile_io_base {
  public:
   /**
    * @brief Writes the data from a device buffer into a file.
+   *
+   *  @throws cudf::logic_error on cuFile error
+   *
+   * @param data Pointer to the buffer to be written into the output file
+   * @param offset Number of bytes from the start
+   * @param size Number of bytes to write
    */
   virtual void write(void const *data, size_t offset, size_t size) = 0;
 };
@@ -106,6 +127,7 @@ class cufile_output : public cufile_io_base {
 #ifdef CUFILE_FOUND
 
 class cufile_shim;
+
 /**
  * @brief Class that provides RAII for cuFile file registration.
  */

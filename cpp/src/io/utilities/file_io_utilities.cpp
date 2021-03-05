@@ -220,7 +220,7 @@ size_t cufile_input_impl::read(size_t offset,
 {
   CUDF_EXPECTS(shim->read(cf_file.handle(), dst, size, offset, 0) != -1,
                "cuFile error reading from a file");
-  // have to read the requested size for now
+  // always read the requested size for now
   return size;
 }
 
