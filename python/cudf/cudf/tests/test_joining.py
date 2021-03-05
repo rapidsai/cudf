@@ -7,7 +7,7 @@ import pytest
 import cudf
 from cudf.core._compat import PANDAS_GE_120
 from cudf.core.dtypes import CategoricalDtype
-from cudf.testing.utils import (
+from cudf.testing._utils import (
     INTEGER_TYPES,
     NUMERIC_TYPES,
     assert_eq,

@@ -116,7 +116,13 @@ cpdef generate_pandas_metadata(Table table, index):
             index_descriptors.append(descr)
 
     metadata = pa.pandas_compat.construct_metadata(
-        columns_to_convert=table._data.columns,
+        columns_to_convert=[
+            col.to_pandas()
+            if isinstance(col, cudf.core.column.CategoricalColumn)
+            else
+            col
+            for col in table._data.columns
+        ],
         df=table,
         column_names=col_names,
         index_levels=index_levels,

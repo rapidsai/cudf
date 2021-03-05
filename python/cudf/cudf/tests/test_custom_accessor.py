@@ -4,7 +4,7 @@ import pandas as pd
 import pytest
 
 import cudf as gd
-from cudf.testing.utils import assert_eq
+from cudf.testing._utils import assert_eq
 
 
 @gd.api.extensions.register_dataframe_accessor("point")

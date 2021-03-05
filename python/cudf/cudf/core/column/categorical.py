@@ -936,9 +936,9 @@ class CategoricalColumn(column.ColumnBase):
     def ordered(self, value: bool):
         self.dtype.ordered = value
 
-    @property
-    def cat(self):
-        return CategoricalAccessor(self, parent=None)
+    # @property
+    def cat(self, parent: ParentType = None):
+        return CategoricalAccessor(self, parent=parent)
 
     def unary_operator(self, unaryop: str):
         raise TypeError(
@@ -1086,7 +1086,7 @@ class CategoricalColumn(column.ColumnBase):
             col = self
 
         signed_dtype = min_signed_type(len(col.categories))
-        codes = col.cat.codes.astype(signed_dtype).fillna(-1).to_array()
+        codes = col.cat().codes.astype(signed_dtype).fillna(-1).to_array()
         categories = col.categories.dropna(drop_nan=True).to_pandas()
         data = pd.Categorical.from_codes(
             codes, categories=categories, ordered=col.ordered
@@ -1199,11 +1199,13 @@ class CategoricalColumn(column.ColumnBase):
         # named 'index', which came from the filtered categories,
         # contains the new ints that we need to map to
         to_replace_col = column.as_column(catmap.index).astype(
-            self.cat.codes.dtype
+            self.cat().codes.dtype
         )
-        replacement_col = catmap["index"]._column.astype(self.cat.codes.dtype)
+        replacement_col = catmap["index"]._column.astype(
+            self.cat().codes.dtype
+        )
 
-        replaced = column.as_column(self.cat.codes)
+        replaced = column.as_column(self.cat().codes)
         output = libcudf.replace.replace(
             replaced, to_replace_col, replacement_col
         )
@@ -1281,8 +1283,10 @@ class CategoricalColumn(column.ColumnBase):
                         )
                 # TODO: only required if fill_value has a subset of the
                 # categories:
-                fill_value = fill_value.cat._set_categories(
-                    fill_value.cat.categories, self.categories, is_unique=True,
+                fill_value = fill_value.cat()._set_categories(
+                    fill_value.cat().categories,
+                    self.categories,
+                    is_unique=True,
                 )
                 fill_value = column.as_column(fill_value.codes).astype(
                     self.codes.dtype
@@ -1360,7 +1364,7 @@ class CategoricalColumn(column.ColumnBase):
             # return a column full of Nulls.
             return _create_empty_categorical_column(self, dtype)
 
-        return self.cat.set_categories(
+        return self.cat().set_categories(
             new_categories=dtype.categories, ordered=dtype.ordered
         )
 
@@ -1385,8 +1389,8 @@ class CategoricalColumn(column.ColumnBase):
     def _get_decategorized_column(self) -> ColumnBase:
         if self.null_count == len(self):
             # self.categories is empty; just return codes
-            return self.cat.codes._column
-        gather_map = self.cat.codes.astype("int32").fillna(0)._column
+            return self.cat().codes._column
+        gather_map = self.cat().codes.astype("int32").fillna(0)._column
         out = self.categories.take(gather_map)
         out = out.set_mask(self.mask)
         return out
@@ -1419,7 +1423,9 @@ class CategoricalColumn(column.ColumnBase):
             )
 
     def __sizeof__(self) -> int:
-        return self.cat.categories.__sizeof__() + self.cat.codes.__sizeof__()
+        return (
+            self.cat().categories.__sizeof__() + self.cat().codes.__sizeof__()
+        )
 
     def _memory_usage(self, **kwargs) -> int:
         deep = kwargs.get("deep", False)
@@ -1427,7 +1433,8 @@ class CategoricalColumn(column.ColumnBase):
             return self.__sizeof__()
         else:
             return (
-                self.categories._memory_usage() + self.cat.codes.memory_usage()
+                self.categories._memory_usage()
+                + self.cat().codes.memory_usage()
             )
 
     def _mimic_inplace(
@@ -1453,7 +1460,7 @@ def _create_empty_categorical_column(
             cudf.utils.utils.scalar_broadcast_to(
                 categorical_column.default_na_value(),
                 categorical_column.size,
-                np.dtype(categorical_column.cat.codes),
+                np.dtype(categorical_column.cat().codes),
             )
         ),
         offset=categorical_column.offset,

@@ -8,7 +8,7 @@ import pytest
 
 import cudf
 from cudf.core import DataFrame, Series
-from cudf.testing.utils import (
+from cudf.testing._utils import (
     INTEGER_TYPES,
     NUMERIC_TYPES,
     assert_eq,

@@ -1,7 +1,7 @@
 import pandas as pd
 
 import cudf
-from cudf.testing.utils import assert_eq
+from cudf.testing._utils import assert_eq
 
 
 def test_single_q():

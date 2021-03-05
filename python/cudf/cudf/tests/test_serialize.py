@@ -9,7 +9,7 @@ import pytest
 
 import cudf
 from cudf.testing import utils
-from cudf.testing.utils import assert_eq
+from cudf.testing._utils import assert_eq
 
 
 @pytest.mark.parametrize(

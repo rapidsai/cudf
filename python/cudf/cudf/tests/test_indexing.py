@@ -10,7 +10,7 @@ import pytest
 import cudf
 from cudf.core._compat import PANDAS_GE_110, PANDAS_GE_120
 from cudf.testing import utils
-from cudf.testing.utils import (
+from cudf.testing._utils import (
     INTEGER_TYPES,
     assert_eq,
     assert_exceptions_equal,
