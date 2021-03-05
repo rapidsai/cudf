@@ -170,6 +170,9 @@ cdef extern from "cudf/io/parquet.hpp" namespace "cudf::io" nogil:
         chunked_parquet_writer_options_builder& nullable_metadata(
             cudf_io_types.table_metadata_with_nullability *m
         ) except +
+        chunked_parquet_writer_options_builder& input_schema(
+            table_input_metadata *m
+        ) except +
         chunked_parquet_writer_options_builder& stats_level(
             cudf_io_types.statistics_freq sf
         ) except +

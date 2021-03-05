@@ -1808,9 +1808,6 @@ dremel_data get_dremel_data(column_view h_col,
     },
     stream);
 
-  print(d_column_offsets, "offsets");
-  print(d_column_ends, "ends");
-
   thrust::host_vector<size_type> column_offsets(nesting_levels.size());
   CUDA_TRY(cudaMemcpyAsync(column_offsets.data(),
                            d_column_offsets.data(),
@@ -1852,9 +1849,6 @@ dremel_data get_dremel_data(column_view h_col,
     size_t empties_size;
     std::tie(empties, empties_idx, empties_size) =
       get_empties(nesting_levels[level], column_offsets[level], column_ends[level]);
-
-    print(empties, "empties");
-    print(empties_idx, "empties_idx");
 
     // Merge empty at deepest parent level with the rep, def level vals at leaf level
 
@@ -1969,10 +1963,6 @@ dremel_data get_dremel_data(column_view h_col,
                     rep_level.begin());
   }
 
-  print(rep_level, "rep");
-  print(def_level, "def");
-  print(new_offsets, "drem_off");
-
   for (int level = nesting_levels.size() - 3; level >= 0; level--) {
     curr_col                  = nesting_levels[level];
     auto lcv                  = lists_column_view(get_list_level(curr_col));
@@ -1984,9 +1974,6 @@ dremel_data get_dremel_data(column_view h_col,
     size_t empties_size;
     std::tie(empties, empties_idx, empties_size) =
       get_empties(nesting_levels[level], column_offsets[level], column_ends[level]);
-
-    print(empties, "empties");
-    print(empties_idx, "empties_idx");
 
     auto offset_transformer = [new_child_offsets = new_offsets.data(),
                                child_start       = column_offsets[level + 1]] __device__(auto x) {
@@ -2083,8 +2070,6 @@ dremel_data get_dremel_data(column_view h_col,
                     scatter_it + new_offsets.size() - 1,
                     new_offsets.begin(),
                     rep_level.begin());
-    print(rep_level, "rep");
-    print(def_level, "def");
   }
 
   size_t level_vals_size = new_offsets.back_element(stream);
@@ -2093,15 +2078,10 @@ dremel_data get_dremel_data(column_view h_col,
 
   stream.synchronize();
 
-  size_type leaf_col_offset = column_offsets.back();
-  size_type leaf_data_size  = column_ends.back() - leaf_col_offset;
+  size_type leaf_data_size = column_ends.back() - column_offsets.back();
 
-  // TODO(cp): Don't need all these anymore. See if they can be trimmed.
-  return dremel_data{std::move(new_offsets),
-                     std::move(rep_level),
-                     std::move(def_level),
-                     leaf_col_offset,
-                     leaf_data_size};
+  return dremel_data{
+    std::move(new_offsets), std::move(rep_level), std::move(def_level), leaf_data_size};
 }
 
 /**

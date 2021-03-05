@@ -879,6 +879,11 @@ class chunked_parquet_writer_options_builder {
     return *this;
   }
 
+  chunked_parquet_writer_options_builder& input_schema(table_input_metadata const* metadata)
+  {
+    options._table_meta = metadata;
+    return *this;
+  }
   /**
    * @brief Sets Sets the level of statistics in chunked_parquet_writer_options.
    *

@@ -363,6 +363,7 @@ cdef class ParquetWriter:
     """
     cdef bool initialized
     cdef unique_ptr[cpp_parquet_chunked_writer] writer
+    cdef unique_ptr[table_input_metadata] tbl_meta
     cdef cudf_io_types.sink_info sink
     cdef unique_ptr[cudf_io_types.data_sink] _data_sink
     cdef cudf_io_types.statistics_freq stat_freq
@@ -422,20 +423,44 @@ cdef class ParquetWriter:
     def _initialize_chunked_state(self, Table table):
         """ Prepares all the values required to build the
         chunked_parquet_writer_options and creates a writer"""
-        cdef unique_ptr[cudf_io_types.table_metadata_with_nullability] tbl_meta
-        tbl_meta = make_unique[cudf_io_types.table_metadata_with_nullability]()
+        cdef table_view tv
 
         # Set the table_metadata
-        tbl_meta.get().column_names = get_column_names(table, self.index)
+        num_index_cols_meta = 0
+        self.tbl_meta = make_unique[table_input_metadata](table.data_view())
+        if self.index is not False:
+            if isinstance(table._index, cudf.core.multiindex.MultiIndex):
+                tv = table.view()
+                self.tbl_meta = make_unique[table_input_metadata](tv)
+                for level, idx_name in enumerate(table._index.names):
+                    self.tbl_meta.get().column_metadata[level].set_name(
+                        (str.encode(idx_name))
+                    )
+                num_index_cols_meta = len(table._index.names)
+            else:
+                if table._index.name is not None:
+                    tv = table.view()
+                    self.tbl_meta = make_unique[table_input_metadata](tv)
+                    self.tbl_meta.get().column_metadata[0].set_name(
+                        str.encode(table._index.name)
+                    )
+                    num_index_cols_meta = 1
+
+        for i, name in enumerate(table._column_names, num_index_cols_meta):
+            self.tbl_meta.get().column_metadata[i].set_name(name.encode())
+            _get_col_children_names(
+                table[name]._column, self.tbl_meta.get().column_metadata[i]
+            )
+
         pandas_metadata = generate_pandas_metadata(table, self.index)
-        tbl_meta.get().user_data[str.encode("pandas")] = \
+        self.tbl_meta.get().user_data[str.encode("pandas")] = \
             str.encode(pandas_metadata)
 
         cdef chunked_parquet_writer_options args
         with nogil:
             args = move(
                 chunked_parquet_writer_options.builder(self.sink)
-                .nullable_metadata(tbl_meta.get())
+                .input_schema(self.tbl_meta.get())
                 .compression(self.comp_type)
                 .stats_level(self.stat_freq)
                 .build()
