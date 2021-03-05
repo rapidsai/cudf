@@ -1192,7 +1192,22 @@ class Series(Frame, Serializable):
                 else get_option("display.min_rows")
             )
             show_dimensions = get_option("display.show_dimensions")
-            output = preprocess.to_pandas().to_string(
+            if preprocess._column.categories.dtype.kind == "f":
+                pd_series = (
+                    preprocess.astype("str")
+                    .to_pandas()
+                    .astype(
+                        dtype=pd.CategoricalDtype(
+                            categories=preprocess.dtype.categories.astype(
+                                "str"
+                            ).to_pandas(),
+                            ordered=preprocess.dtype.ordered,
+                        )
+                    )
+                )
+            else:
+                pd_series = preprocess.to_pandas()
+            output = pd_series.to_string(
                 name=self.name,
                 dtype=self.dtype,
                 min_rows=min_rows,
@@ -1207,6 +1222,15 @@ class Series(Frame, Serializable):
 
         if isinstance(preprocess._column, cudf.core.column.CategoricalColumn):
             category_memory = lines[-1]
+            if preprocess._column.categories.dtype.kind == "f":
+                category_memory = category_memory.replace("'", "").split(": ")
+                category_memory = (
+                    category_memory[0].replace(
+                        "object", preprocess._column.categories.dtype.name
+                    )
+                    + ": "
+                    + category_memory[1]
+                )
             lines = lines[:-1]
         if len(lines) > 1:
             if lines[-1].startswith("Name: "):
@@ -3882,6 +3906,41 @@ class Series(Frame, Serializable):
         -------
         TypeError
             If values is a string
+
+        Examples
+        --------
+        >>> import cudf
+        >>> s = cudf.Series(['lama', 'cow', 'lama', 'beetle', 'lama',
+        ...                'hippo'], name='animal')
+        >>> s.isin(['cow', 'lama'])
+        0     True
+        1     True
+        2     True
+        3    False
+        4     True
+        5    False
+        Name: animal, dtype: bool
+
+        Passing a single string as ``s.isin('lama')`` will raise an error. Use
+        a list of one element instead:
+
+        >>> s.isin(['lama'])
+        0     True
+        1    False
+        2     True
+        3    False
+        4     True
+        5    False
+        Name: animal, dtype: bool
+
+        Strings and integers are distinct and are therefore not comparable:
+
+        >>> cudf.Series([1]).isin(['1'])
+        0    False
+        dtype: bool
+        >>> cudf.Series([1.1]).isin(['1.1'])
+        0    False
+        dtype: bool
         """
 
         if is_scalar(values):

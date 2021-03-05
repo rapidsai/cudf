@@ -41,8 +41,10 @@ template <typename T>
 struct TypedCollectListTest : public CollectListTest {
 };
 
-using TypesForTest = cudf::test::
-  Concat<cudf::test::IntegralTypes, cudf::test::FloatingPointTypes, cudf::test::DurationTypes>;
+using TypesForTest = cudf::test::Concat<cudf::test::IntegralTypes,
+                                        cudf::test::FloatingPointTypes,
+                                        cudf::test::DurationTypes,
+                                        cudf::test::FixedPointTypes>;
 
 TYPED_TEST_CASE(TypedCollectListTest, TypesForTest);
 
@@ -1228,5 +1230,3 @@ TYPED_TEST(TypedCollectListTest, GroupedTimeRangeRollingWindowOnStructsWithMinPe
 
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected_result->view(), result_with_nulls_excluded->view());
 }
-
-CUDF_TEST_PROGRAM_MAIN()

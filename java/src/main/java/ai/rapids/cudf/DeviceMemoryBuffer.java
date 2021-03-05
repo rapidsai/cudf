@@ -41,7 +41,7 @@ public class DeviceMemoryBuffer extends BaseDeviceMemoryBuffer {
     }
 
     @Override
-    protected boolean cleanImpl(boolean logErrorIfNotClean) {
+    protected synchronized boolean cleanImpl(boolean logErrorIfNotClean) {
       boolean neededCleanup = false;
       long origAddress = address;
       if (address != 0) {
@@ -79,7 +79,7 @@ public class DeviceMemoryBuffer extends BaseDeviceMemoryBuffer {
     }
 
     @Override
-    protected boolean cleanImpl(boolean logErrorIfNotClean) {
+    protected synchronized boolean cleanImpl(boolean logErrorIfNotClean) {
       boolean neededCleanup = false;
       if (rmmBufferAddress != 0) {
         Rmm.freeDeviceBuffer(rmmBufferAddress);
