@@ -68,10 +68,13 @@ fi
 
 if [ "$BUILD_LIBCUDF" == '1' ]; then
   gpuci_logger "Build conda pkg for libcudf"
-  gpuci_conda_retry build --no-build-id --croot ${WORKSPACE}/.conda-bld/libcudf conda/recipes/libcudf $CONDA_BUILD_ARGS
+  gpuci_conda_retry build --no-build-id --croot ${WORKSPACE}/.conda-bld conda/recipes/libcudf $CONDA_BUILD_ARGS
+  cp ${WORKSPACE}/.conda-bld/work ${WORKSPACE}/.conda-bld/libcudf/work
+
 
   gpuci_logger "Build conda pkg for libcudf_kafka"
-  gpuci_conda_retry build --no-build-id --croot ${WORKSPACE}/.conda-bld/libcudf_kafka conda/recipes/libcudf_kafka $CONDA_BUILD_ARGS
+  gpuci_conda_retry build --no-build-id --croot ${WORKSPACE}/.conda-bld conda/recipes/libcudf_kafka $CONDA_BUILD_ARGS
+  cp ${WORKSPACE}/.conda-bld/work ${WORKSPACE}/.conda-bld/libcudf_kafka/work
 fi
 
 if [ "$BUILD_CUDF" == '1' ]; then
