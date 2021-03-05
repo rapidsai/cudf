@@ -17,6 +17,7 @@
 #include <cudf/bin.hpp>
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_wrapper.hpp>
+#include <numeric>
 
 using namespace cudf::test;
 
@@ -24,15 +25,6 @@ namespace {
 
 // =============================================================================
 // ----- tests -----------------------------------------------------------------
-
-TEST(BinColumnTest, TestSimple)
-{
-  fixed_width_column_wrapper<float> left_edges{0, 1, 2, 3, 4, 5, 6, 7, 8, 9};
-  fixed_width_column_wrapper<float> right_edges{1, 2, 3, 4, 5, 6, 7, 8, 9, 10};
-  fixed_width_column_wrapper<float> input{0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5};
-
-  auto result = cudf::bin::bin(input, left_edges, cudf::bin::inclusive::YES, right_edges, cudf::bin::inclusive::NO);
-};
 
 TEST(BinColumnTest, TestInvalidLeft)
 {
@@ -72,6 +64,25 @@ TEST(BinColumnTest, TestMismatchedEdges)
 
   EXPECT_THROW(cudf::bin::bin(input, left_edges, cudf::bin::inclusive::YES, right_edges, cudf::bin::inclusive::NO),
           cudf::logic_error);
+};
+
+TEST(BinColumnTest, TestSimple)
+{
+  fixed_width_column_wrapper<float> left_edges{0, 1, 2, 3, 4, 5, 6, 7, 8, 9};
+  fixed_width_column_wrapper<float> right_edges{1, 2, 3, 4, 5, 6, 7, 8, 9, 10};
+  fixed_width_column_wrapper<float> input{0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5};
+
+  auto result = cudf::bin::bin(input, left_edges, cudf::bin::inclusive::YES, right_edges, cudf::bin::inclusive::NO);
+  // Check that the total number of elements binned is the number of input elements.
+  ASSERT_EQ(
+          std::accumulate(result->view().begin<float>(), result->view().end<float>(), 0),
+          static_cast<cudf::column_view>(input).size()
+          );
+  // Check that the first bin contains all the elements (true by construction).
+  ASSERT_EQ(
+          *result->view().begin<float>(),
+          static_cast<cudf::column_view>(input).size()
+          );
 };
 
 }  // anonymous namespace
