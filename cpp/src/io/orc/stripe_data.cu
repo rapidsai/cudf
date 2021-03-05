@@ -1374,7 +1374,7 @@ static const __device__ __constant__ uint32_t kTimestampNanoScale[8] = {
 // blockDim {block_size,1,1}
 template <int block_size>
 __global__ void __launch_bounds__(block_size)
-  gpuDecodeOrcColumnData(ColumnDesc *chunks,
+  gpuDecodeOrcColumnData(ColumnDesc const *chunks,
                          DictionaryEntry *global_dictionary,
                          timezone_table_view tz_table,
                          const RowGroup *row_groups,
@@ -1742,7 +1742,7 @@ __global__ void __launch_bounds__(block_size)
  * @param[in] num_stripes Number of stripes
  * @param[in] max_rows Maximum number of rows to load
  * @param[in] first_row Crop all rows below first_row
- * @param[in] stream CUDA stream to use, default 0
+ * @param[in] stream CUDA stream to use, default `rmm::cuda_stream_default`
  */
 void __host__ DecodeNullsAndStringDictionaries(ColumnDesc *chunks,
                                                DictionaryEntry *global_dictionary,
@@ -1771,9 +1771,9 @@ void __host__ DecodeNullsAndStringDictionaries(ColumnDesc *chunks,
  * @param[in] row_groups Optional row index data
  * @param[in] num_rowgroups Number of row groups in row index data
  * @param[in] rowidx_stride Row index stride
- * @param[in] stream CUDA stream to use, default 0
+ * @param[in] stream CUDA stream to use, default `rmm::cuda_stream_default`
  */
-void __host__ DecodeOrcColumnData(ColumnDesc *chunks,
+void __host__ DecodeOrcColumnData(ColumnDesc const *chunks,
                                   DictionaryEntry *global_dictionary,
                                   uint32_t num_columns,
                                   uint32_t num_stripes,
