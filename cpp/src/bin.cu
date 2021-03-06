@@ -27,17 +27,14 @@ namespace cudf {
 
 namespace bin {
 
-/// Kernel for accumulation. Note that hist_min/hist_max could be inferred from
-//the bins, but accessing them once outside the kernel ensures increases
-//likelihood of caching for performance.
+/// Kernel for accumulation.
 // TODO: Need to template a lot of these types.
-__global__ void accumulateKernel(float hist_min, float hist_max,
+__global__ void accumulateKernel(
         float *values, unsigned int num_values,
-        float *left_edges, unsigned int num_edges,
+        float *left_edges,
         float *right_edges,
         unsigned int *counts, unsigned int num_bins)
 {
-
     // Assume a set of blocks each containing a single thread for now.
     unsigned int step = static_cast<unsigned int>(num_values / gridDim.x);
     unsigned int lower_bound = blockIdx.x * step;
@@ -57,7 +54,7 @@ __global__ void accumulateKernel(float hist_min, float hist_max,
         // TODO: Currently this operates on a half-open interval [bin_hist_min,
         // bin_hist_max) for consistency with division operations in C++. The
         // left/right-inclusive checks need to be used to determine this.
-		if (value < hist_min || value >= hist_max)
+		if (value < left_edges[0] || value >= right_edges[num_bins - 1])
         {
 			return;
 		}
@@ -110,10 +107,8 @@ std::unique_ptr<column> bin(column_view const& input,
 
     // Run the kernel for accumulation.
     accumulateKernel<<<256, 1>>>(
-            // TODO: Figure out how to get these template parameters from the inputs.
-            *(left_edges.begin<float>()), *(right_edges.end<float>() - 1),
             thrust::raw_pointer_cast(dev_input.data()), input.size(),
-            thrust::raw_pointer_cast(dev_left_edges.data()), left_edges.size(),
+            thrust::raw_pointer_cast(dev_left_edges.data()),
             thrust::raw_pointer_cast(dev_right_edges.data()),
             thrust::raw_pointer_cast(dev_counts.data()), left_edges.size());
 

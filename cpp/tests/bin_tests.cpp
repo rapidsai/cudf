@@ -68,19 +68,24 @@ TEST(BinColumnTest, TestMismatchedEdges)
 
 TEST(BinColumnTest, TestSimple)
 {
-  fixed_width_column_wrapper<float> left_edges{0, 1, 2, 3, 4, 5, 6, 7, 8, 9};
-  fixed_width_column_wrapper<float> right_edges{1, 2, 3, 4, 5, 6, 7, 8, 9, 10};
+  fixed_width_column_wrapper<float> left_edges{0.0, 1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0};
+  fixed_width_column_wrapper<float> right_edges{1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 10.0};
   fixed_width_column_wrapper<float> input{0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5};
 
   auto result = cudf::bin::bin(input, left_edges, cudf::bin::inclusive::YES, right_edges, cudf::bin::inclusive::NO);
   // Check that the total number of elements binned is the number of input elements.
   ASSERT_EQ(
-          std::accumulate(result->view().begin<float>(), result->view().end<float>(), 0),
+          thrust::reduce(
+              result->view().begin<unsigned int>(), result->view().end<unsigned int>(),
+              (unsigned int) 0, thrust::plus<unsigned int>()),
           static_cast<cudf::column_view>(input).size()
           );
   // Check that the first bin contains all the elements (true by construction).
+  // TODO: Probably a better way to just get the first bin...
   ASSERT_EQ(
-          *result->view().begin<float>(),
+          thrust::reduce(
+              result->view().begin<unsigned int>(), result->view().begin<unsigned int>() + 1,
+              (unsigned int) 0, thrust::plus<unsigned int>()),
           static_cast<cudf::column_view>(input).size()
           );
 };
