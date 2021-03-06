@@ -49,6 +49,8 @@ function(find_and_configure_arrow VERSION BUILD_STATIC)
                         "ARROW_WITH_BACKTRACE ON"
                         "ARROW_CXXFLAGS -w"
                         "ARROW_JEMALLOC OFF"
+                        # Arrow modifies CMake's GLOBAL RULE_LAUNCH_COMPILE unless this is off
+                        "ARROW_USE_CCACHE OFF"
                         "ARROW_ARMV8_ARCH ${ARROW_ARMV8_ARCH}"
                         "ARROW_SIMD_LEVEL ${ARROW_SIMD_LEVEL}"
                         "ARROW_BUILD_STATIC ${ARROW_BUILD_STATIC}"
@@ -120,4 +122,4 @@ endfunction()
 
 set(CUDF_VERSION_Arrow 1.0.1)
 
-find_and_configure_arrow(${CUDF_VERSION_Arrow} ${ARROW_STATIC_LIB})
+find_and_configure_arrow(${CUDF_VERSION_Arrow} ${CUDF_USE_ARROW_STATIC})
