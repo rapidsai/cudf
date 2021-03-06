@@ -183,7 +183,6 @@ sort_groupby_helper::index_vector const& sort_groupby_helper::group_offsets(
   }
 
   size_type num_groups = thrust::distance(_group_offsets->begin(), result_end);
-  //(*)[num_groups] = num_keys(stream);
   _group_offsets->set_element(num_groups, num_keys(stream), stream);
   _group_offsets->resize(num_groups + 1, stream);
 
