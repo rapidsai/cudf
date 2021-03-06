@@ -36,12 +36,12 @@ __global__ void accumulateKernel(
     // Assume a set of blocks each containing a single thread for now.
     unsigned int step = static_cast<unsigned int>(num_values / gridDim.x);
     unsigned int lower_bound = blockIdx.x * step;
+    unsigned int upper_bound = lower_bound + step;
 
-    // Need to do a min then a max because the calculated upper bound could either be:
+    // For the final bin, need to do a min then a max because the calculated upper bound could either be:
     // 1. Exactly num_values, in which case the min/max will be no-ops.
     // 2. Larger than num_values, in which case the min will give num_values and the max will be a no-op.
     // 3. Smaller than num_values, in which case the min will be a no-op and max will bring back up to num_values.
-    unsigned int upper_bound = lower_bound + step;
     if ((blockIdx.x + 1) == gridDim.x)
         upper_bound = max(min(upper_bound, num_values), num_values);
 
@@ -71,12 +71,6 @@ __global__ void accumulateKernel(
 				high = mid;
 			}
 		}
-
-        // Avoid overflow.
-        if (low == num_bins)
-        {
-            --low;
-        }
         atomicAdd(&(counts[low]), 1);
     }
 }
