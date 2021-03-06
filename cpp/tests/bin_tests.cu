@@ -18,6 +18,7 @@
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_wrapper.hpp>
 #include <numeric>
+#include <thrust/device_ptr.h>
 
 using namespace cudf::test;
 
@@ -74,20 +75,11 @@ TEST(BinColumnTest, TestSimple)
 
   auto result = cudf::bin::bin(input, left_edges, cudf::bin::inclusive::YES, right_edges, cudf::bin::inclusive::NO);
   // Check that the total number of elements binned is the number of input elements.
-  ASSERT_EQ(
-          thrust::reduce(
-              result->view().begin<unsigned int>(), result->view().end<unsigned int>(),
-              (unsigned int) 0, thrust::plus<unsigned int>()),
-          static_cast<cudf::column_view>(input).size()
-          );
+  auto begin = thrust::device_ptr<const unsigned int>(result->view().begin<unsigned int>());
+  auto end = thrust::device_ptr<const unsigned int>(result->view().end<unsigned int>());
+  ASSERT_EQ(thrust::reduce(begin, end), static_cast<cudf::column_view>(input).size());
   // Check that the first bin contains all the elements (true by construction).
-  // TODO: Probably a better way to just get the first bin...
-  ASSERT_EQ(
-          thrust::reduce(
-              result->view().begin<unsigned int>(), result->view().begin<unsigned int>() + 1,
-              (unsigned int) 0, thrust::plus<unsigned int>()),
-          static_cast<cudf::column_view>(input).size()
-          );
+  ASSERT_EQ(*begin, static_cast<cudf::column_view>(input).size());
 };
 
 }  // anonymous namespace
