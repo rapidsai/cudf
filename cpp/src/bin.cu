@@ -19,8 +19,6 @@
 #include <memory>
 #include <cudf/bin.hpp>
 #include <cudf/utilities/error.hpp>
-#include <thrust/device_vector.h>
-#include <thrust/copy.h>
 #include <cudf/types.hpp>
 
 namespace cudf {
@@ -30,9 +28,9 @@ namespace bin {
 /// Kernel for accumulation.
 // TODO: Need to template a lot of these types.
 __global__ void accumulateKernel(
-        float *values, unsigned int num_values,
-        float *left_edges,
-        float *right_edges,
+        const float *values, unsigned int num_values,
+        const float *left_edges,
+        const float *right_edges,
         unsigned int *counts, unsigned int num_bins)
 {
     // Assume a set of blocks each containing a single thread for now.
@@ -96,26 +94,15 @@ std::unique_ptr<column> bin(column_view const& input,
     CUDF_EXPECTS(left_edges.size() == right_edges.size(), "The left and right edge columns must be of the same length.");
 
     // TODO: Figure out how to get these two template type from the input.
-    thrust::device_vector<float> dev_input(input.size(), 0);
-    thrust::device_vector<float> dev_left_edges(left_edges.size(), 0);
-    thrust::device_vector<float> dev_right_edges(right_edges.size(), 0);
-    thrust::device_vector<unsigned int> dev_counts(left_edges.size(), 0);
-
-    thrust::copy(input.begin<float>(), input.end<float>(), dev_input.begin());
-    thrust::copy(left_edges.begin<float>(), left_edges.end<float>(), dev_left_edges.begin());
-    thrust::copy(right_edges.begin<float>(), right_edges.end<float>(), dev_right_edges.begin());
+    auto output = cudf::make_numeric_column(data_type(type_id::UINT32), left_edges.size());
 
     // Run the kernel for accumulation.
     accumulateKernel<<<256, 1>>>(
-            thrust::raw_pointer_cast(dev_input.data()), input.size(),
-            thrust::raw_pointer_cast(dev_left_edges.data()),
-            thrust::raw_pointer_cast(dev_right_edges.data()),
-            thrust::raw_pointer_cast(dev_counts.data()), left_edges.size());
-
-    auto output = cudf::make_numeric_column(data_type(type_id::UINT32), left_edges.size());
-
-    // TODO: Figure out if creating a mutable view of output is the best way to pass it to thrust here.
-    thrust::copy(dev_counts.begin(), dev_counts.end(), static_cast<cudf::mutable_column_view>(*output).begin<unsigned int>());
+            input.begin<float>(), input.size(),
+            left_edges.begin<float>(),
+            right_edges.begin<float>(),
+            static_cast<cudf::mutable_column_view>(*output).begin<unsigned int>(),
+            left_edges.size());
 
     return output;
 }
