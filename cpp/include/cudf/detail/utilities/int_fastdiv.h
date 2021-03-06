@@ -14,8 +14,7 @@
  *  limitations under the License.
  */
 
-#ifndef _INT_FASTDIV_KJGIUHFG
-#define _INT_FASTDIV_KJGIUHFG
+#pragma once
 
 class int_fastdiv {
  public:
@@ -172,5 +171,3 @@ __host__ __device__ __forceinline__ int operator%(const unsigned char n, const i
 {
   return ((int)n) % divisor;
 }
-
-#endif

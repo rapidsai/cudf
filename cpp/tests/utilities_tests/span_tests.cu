@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -15,6 +15,7 @@
  */
 
 #include <cudf/utilities/span.hpp>
+#include <io/utilities/hostdevice_vector.hpp>
 
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/cudf_gtest.hpp>
@@ -27,8 +28,11 @@
 #include <cstring>
 #include <string>
 
-using cudf::detail::device_span;
-using cudf::detail::host_span;
+using cudf::device_span;
+using cudf::host_span;
+using cudf::detail::device_2dspan;
+using cudf::detail::host_2dspan;
+using cudf::detail::hostdevice_2dvector;
 
 template <typename T>
 void expect_equivolent(host_span<T> a, host_span<T> b)
@@ -235,6 +239,68 @@ TEST(SpanTest, CanUseDeviceSpan)
   thrust::host_vector<bool> h_message = d_message;
 
   ASSERT_TRUE(h_message[0]);
+}
+
+class MdSpanTest : public cudf::test::BaseFixture {
+};
+
+TEST(MdSpanTest, CanDetermineEmptiness)
+{
+  auto const vector            = hostdevice_2dvector<int>(1, 2);
+  auto const no_rows_vector    = hostdevice_2dvector<int>(0, 2);
+  auto const no_columns_vector = hostdevice_2dvector<int>(1, 0);
+
+  EXPECT_FALSE(host_2dspan<int const>{vector}.is_empty());
+  EXPECT_FALSE(device_2dspan<int const>{vector}.is_empty());
+  EXPECT_TRUE(host_2dspan<int const>{no_rows_vector}.is_empty());
+  EXPECT_TRUE(device_2dspan<int const>{no_rows_vector}.is_empty());
+  EXPECT_TRUE(host_2dspan<int const>{no_columns_vector}.is_empty());
+  EXPECT_TRUE(device_2dspan<int const>{no_columns_vector}.is_empty());
+}
+
+__global__ void readwrite_kernel(device_2dspan<int> result)
+{
+  if (result[5][6] == 5) {
+    result[5][6] *= 6;
+  } else {
+    result[5][6] = 5;
+  }
+}
+
+TEST(MdSpanTest, DeviceReadWrite)
+{
+  auto vector = hostdevice_2dvector<int>(11, 23);
+
+  readwrite_kernel<<<1, 1>>>(vector);
+  readwrite_kernel<<<1, 1>>>(vector);
+  vector.device_to_host(rmm::cuda_stream_default, true);
+  EXPECT_EQ(vector[5][6], 30);
+}
+
+TEST(MdSpanTest, HostReadWrite)
+{
+  auto vector = hostdevice_2dvector<int>(11, 23);
+  auto span   = host_2dspan<int>{vector};
+  span[5][6]  = 5;
+  if (span[5][6] == 5) { span[5][6] *= 6; }
+
+  EXPECT_EQ(vector[5][6], 30);
+}
+
+TEST(MdSpanTest, CanGetSize)
+{
+  auto const vector = hostdevice_2dvector<int>(1, 2);
+
+  EXPECT_EQ(host_2dspan<int const>{vector}.size(), vector.size());
+  EXPECT_EQ(device_2dspan<int const>{vector}.size(), vector.size());
+}
+
+TEST(MdSpanTest, CanGetCount)
+{
+  auto const vector = hostdevice_2dvector<int>(11, 23);
+
+  EXPECT_EQ(host_2dspan<int const>{vector}.count(), 11ul * 23);
+  EXPECT_EQ(device_2dspan<int const>{vector}.count(), 11ul * 23);
 }
 
 CUDF_TEST_PROGRAM_MAIN()

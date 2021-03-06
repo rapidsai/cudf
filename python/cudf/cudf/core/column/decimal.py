@@ -1,14 +1,22 @@
 # Copyright (c) 2021, NVIDIA CORPORATION.
 
+import cudf
 import cupy as cp
 import numpy as np
 import pyarrow as pa
+
+from typing import cast
 
 from cudf import _lib as libcudf
 from cudf.core.buffer import Buffer
 from cudf.core.column import ColumnBase
 from cudf.core.dtypes import Decimal64Dtype
 from cudf.utils.utils import pa_mask_buffer_to_mask
+from cudf._lib.strings.convert.convert_fixed_point import (
+    from_decimal as cpp_from_decimal,
+)
+from cudf._typing import Dtype
+from cudf.core.column import as_column
 
 
 class DecimalColumn(ColumnBase):
@@ -62,6 +70,16 @@ class DecimalColumn(ColumnBase):
         result = libcudf.binaryop.binaryop(self, other, op, output_type)
         result.dtype.precision = _binop_precision(self.dtype, other.dtype, op)
         return result
+
+    def as_string_column(
+        self, dtype: Dtype, format=None
+    ) -> "cudf.core.column.StringColumn":
+        if len(self) > 0:
+            return cpp_from_decimal(self)
+        else:
+            return cast(
+                "cudf.core.column.StringColumn", as_column([], dtype="object")
+            )
 
 
 def _binop_scale(l_dtype, r_dtype, op):

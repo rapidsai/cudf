@@ -45,31 +45,17 @@ TEST_F(StringsConvertTest, ToFloats32)
                                      "456e",
                                      "-1.78e+5",
                                      "-122.33644782123456789",
-                                     "12e+309"};
+                                     "12e+309",
+                                     "3.4028236E38"};
   cudf::test::strings_column_wrapper strings(
     h_strings.begin(),
     h_strings.end(),
     thrust::make_transform_iterator(h_strings.begin(), [](auto str) { return str != nullptr; }));
 
-  float nanval = std::numeric_limits<float>::quiet_NaN();
-  float infval = std::numeric_limits<float>::infinity();
-  std::vector<float> h_expected{1234.0,
-                                0,
-                                -876.0,
-                                543.2,
-                                -0.12,
-                                0.25,
-                                -0.002,
-                                0,
-                                -0.0,
-                                12000,
-                                nanval,
-                                0,
-                                123.0,
-                                456.0,
-                                -178000.0,
-                                -122.3364486694336,
-                                infval};
+  std::vector<float> h_expected;
+  std::for_each(h_strings.begin(), h_strings.end(), [&](const char* str) {
+    h_expected.push_back(str ? std::atof(str) : 0);
+  });
 
   auto strings_view = cudf::strings_column_view(strings);
   auto results = cudf::strings::to_floats(strings_view, cudf::data_type{cudf::type_id::FLOAT32});
@@ -78,7 +64,7 @@ TEST_F(StringsConvertTest, ToFloats32)
     h_expected.begin(),
     h_expected.end(),
     thrust::make_transform_iterator(h_strings.begin(), [](auto str) { return str != nullptr; }));
-  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*results, expected);
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*results, expected, true);
 }
 
 TEST_F(StringsConvertTest, FromFloats32)
@@ -107,7 +93,7 @@ TEST_F(StringsConvertTest, FromFloats32)
     h_expected.end(),
     thrust::make_transform_iterator(h_expected.begin(), [](auto str) { return str != nullptr; }));
 
-  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*results, expected);
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*results, expected, true);
 }
 
 TEST_F(StringsConvertTest, ToFloats64)
@@ -128,31 +114,17 @@ TEST_F(StringsConvertTest, ToFloats64)
                                      "456e",
                                      "-1.78e+5",
                                      "-122.33644782",
-                                     "12e+309"};
+                                     "12e+309",
+                                     "1.7976931348623159E308"};
   cudf::test::strings_column_wrapper strings(
     h_strings.begin(),
     h_strings.end(),
     thrust::make_transform_iterator(h_strings.begin(), [](auto str) { return str != nullptr; }));
 
-  double nanval = std::numeric_limits<double>::quiet_NaN();
-  double infval = std::numeric_limits<double>::infinity();
-  std::vector<double> h_expected{1234.0,
-                                 0,
-                                 -876.0,
-                                 543.2,
-                                 -0.12,
-                                 0.25,
-                                 -0.002,
-                                 0,
-                                 -0.0,
-                                 1.28e256,
-                                 nanval,
-                                 0,
-                                 123.0,
-                                 456.0,
-                                 -178000.0,
-                                 -122.33644781999999,
-                                 infval};
+  std::vector<double> h_expected;
+  std::for_each(h_strings.begin(), h_strings.end(), [&](const char* str) {
+    h_expected.push_back(str ? std::atof(str) : 0);
+  });
 
   auto strings_view = cudf::strings_column_view(strings);
   auto results = cudf::strings::to_floats(strings_view, cudf::data_type{cudf::type_id::FLOAT64});
@@ -161,7 +133,7 @@ TEST_F(StringsConvertTest, ToFloats64)
     h_expected.begin(),
     h_expected.end(),
     thrust::make_transform_iterator(h_strings.begin(), [](auto str) { return str != nullptr; }));
-  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*results, expected);
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*results, expected, true);
 }
 
 TEST_F(StringsConvertTest, FromFloats64)
@@ -190,7 +162,7 @@ TEST_F(StringsConvertTest, FromFloats64)
     h_expected.end(),
     thrust::make_transform_iterator(h_expected.begin(), [](auto str) { return str != nullptr; }));
 
-  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*results, expected);
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*results, expected, true);
 }
 
 TEST_F(StringsConvertTest, ZeroSizeStringsColumnFloat)
