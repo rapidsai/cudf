@@ -64,11 +64,7 @@ if [[ -z "$PROJECT_FLASH" || "$PROJECT_FLASH" == "0" ]]; then
   CONDA_CHANNEL=""
 else
   CONDA_BUILD_ARGS="--dirty --no-remove-work-dir"
-  if [[ ${CONDA_BLD_DIR} == "${WORKSPACE}/.conda-bld" ]]; then
-    CONDA_CHANNEL="-c $WORKSPACE/ci/artifacts/cudf/cpu/.conda-bld/"
-  else
-    CONDA_CHANNEL="-c $WORKSPACE/ci/artifacts/cudf/cpu/conda-bld/"
-  fi
+  CONDA_CHANNEL="-c $WORKSPACE/ci/artifacts/cudf/cpu/.conda-bld/"
 fi
 
 if [ "$BUILD_LIBCUDF" == '1' ]; then
