@@ -597,7 +597,7 @@ class NumericalColumn(ColumnBase):
                     # TODO: replace np.inf with cudf scalar when
                     # https://github.com/rapidsai/cudf/pull/6297 merges
                     non_infs = s[
-                        ((s == np.inf) | (s == -np.inf)).logical_not()
+                        ((s == np.inf) | (s == -np.inf)).logical_not().fillna(False)
                     ]
                     col = non_infs._column
                 else:
