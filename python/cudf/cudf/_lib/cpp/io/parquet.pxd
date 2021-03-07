@@ -75,7 +75,7 @@ cdef extern from "cudf/io/parquet.hpp" namespace "cudf::io" nogil:
     cdef cppclass table_input_metadata:
         table_input_metadata() except +
         table_input_metadata(const cudf_table_view.table_view& table) except +
-        
+
         vector[column_in_metadata] column_metadata
         map[string, string] user_data
 

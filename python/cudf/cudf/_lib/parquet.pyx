@@ -558,4 +558,3 @@ cdef _get_col_children_names(Column col, column_in_metadata& col_meta):
         _get_col_children_names(col.children[1], col_meta.child(0))
     else:
         return
-    
