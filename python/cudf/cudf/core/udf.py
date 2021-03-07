@@ -16,6 +16,7 @@ from numba.core.typing.templates import AbstractTemplate
 from numba.cuda.cudadecl import registry as cuda_registry
 from numba.cuda.cudaimpl import lower as cuda_lower
 from numba.extending import types
+import inspect
 
 
 class Masked(object):
@@ -103,3 +104,9 @@ def masked_add_py(m1, m2):
 
 def masked_add_py_2(m1, m2):
     return m1 + m2
+
+def compile_udf(func):
+
+    signature = (numba_masked, numba_masked)
+    ptx, _ = cuda.compile_ptx_for_current_device(func, signature, device=True)
+    return ptx

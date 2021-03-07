@@ -38,6 +38,13 @@ cdef extern from "cudf/transform.hpp" namespace "cudf" nogil:
         bool is_ptx
     ) except +
 
+    cdef unique_ptr[column] masked_binary_op(
+        column_view A,
+        column_view B, 
+        string binary_udf,
+        data_type output_type
+    ) except +
+
     cdef pair[unique_ptr[table], unique_ptr[column]] encode(
         table_view input
     ) except +

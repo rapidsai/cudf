@@ -131,4 +131,22 @@ std::unique_ptr<column> transform(column_view const& input,
   return detail::transform(input, unary_udf, output_type, is_ptx, rmm::cuda_stream_default, mr);
 }
 
+std::unique_ptr<column> masked_binary_op(column_view const& A, 
+                                         column_view const& B, 
+                                         std::string const& binary_udf, 
+                                         data_type output_type, 
+                                         rmm::mr::device_memory_resource* mr)
+{
+  std::cout << "hello world!" << std::endl;
+
+  rmm::cuda_stream_view stream = rmm::cuda_stream_default;
+
+  std::unique_ptr<column> output = make_fixed_width_column(
+    output_type, A.size(), copy_bitmask(A), cudf::UNKNOWN_NULL_COUNT, stream, mr);
+
+  return output;
+}
+
+
+
 }  // namespace cudf
