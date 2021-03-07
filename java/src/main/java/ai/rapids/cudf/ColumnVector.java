@@ -167,7 +167,7 @@ public final class ColumnVector extends ColumnView {
     }
   }
 
-  protected static long initViewHandle(DType type, int rows, int nc,
+  static long initViewHandle(DType type, int rows, int nc,
                                        BaseDeviceMemoryBuffer dataBuffer,
                                        BaseDeviceMemoryBuffer validityBuffer,
                                        BaseDeviceMemoryBuffer offsetBuffer, long[] childHandles) {

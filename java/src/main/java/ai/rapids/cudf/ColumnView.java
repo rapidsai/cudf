@@ -50,8 +50,12 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
 
   /**
    * Create a new column view based off of data already on the device. Ref count on the buffers
-   * is not incremented and none of the underlying buffers are owned by this view. If ownership
-   * is needed, call {@link ColumnView#copyToColumnVector}
+   * is not incremented and none of the underlying buffers are owned by this view. The returned
+   * ColumnView is only valid as long as the underlying buffers remain valid. If the buffers are
+   * closed before this ColumnView is closed, it will result in undefined behavior.
+   *
+   * If ownership is needed, call {@link ColumnView#copyToColumnVector}
+   *
    * @param type           the type of the vector
    * @param rows           the number of rows in this vector.
    * @param nullCount      the number of nulls in the dataset.
@@ -73,8 +77,12 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
 
   /**
    * Create a new column view based off of data already on the device. Ref count on the buffers
-   * is not incremented and none of the underlying buffers are owned by this view. If ownership
-   * is needed, call {@link ColumnView#copyToColumnVector}
+   * is not incremented and none of the underlying buffers are owned by this view. The returned
+   * ColumnView is only valid as long as the underlying buffers remain valid. If the buffers are
+   * closed before this ColumnView is closed, it will result in undefined behavior.
+   *
+   * If ownership is needed, call {@link ColumnView#copyToColumnVector}
+   *
    * @param type           the type of the vector
    * @param rows           the number of rows in this vector.
    * @param nullCount      the number of nulls in the dataset.
@@ -1396,7 +1404,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
       throw new IllegalArgumentException("One or more invalid child indices passed to be replaced");
     }
     return new ColumnView(type, getRowCount(), Optional.of(getNullCount()), getValid(),
-        getOffsets(), views);
+        getOffsets(), newChildren.stream().toArray(n -> new ColumnView[n]));
   }
 
   /**
