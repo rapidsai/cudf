@@ -71,6 +71,13 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
     return viewHandle;
   }
 
+  public static int getFixedPointOutpuScale(BinaryOp op, DType lhsType, DType rhsType) {
+    assert (lhsType.isDecimalType() && rhsType.isDecimalType());
+    return fixedPointOutputScale(op.nativeId, lhsType.getScale(), rhsType.getScale());
+  }
+
+  private static native int fixedPointOutputScale(int op, int lhsScale, int rhsScale);
+
   public final DType getType() {
     return type;
   }
