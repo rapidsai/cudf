@@ -65,14 +65,17 @@ TEST_F(DropListDuplicatesTest, FloatingPointTestsNonNull)
   test_once<false>(FLT_LCW{{}, {}, {5, 4, 3, 2, 1, 0}, {}, {6}, {}},
                    FLT_LCW{{}, {}, {0, 1, 2, 3, 4, 5}, {}, {6}, {}});
 
-  auto constexpr inf = std::numeric_limits<float_type>::infinity();
-  auto constexpr nan = std::numeric_limits<float_type>::quiet_NaN();
-  /* Lists contain inf/nan */
-  test_once<false>(FLT_LCW{0, 1, 2, 0, 1, 2, 0, 1, 2, inf, inf, inf}, FLT_LCW{0, 1, 2, inf});
-  test_once<false>(FLT_LCW{0, 1, 2, 0, 1, 2, 0, 1, 2, nan, nan, nan}, FLT_LCW{0, 1, 2, nan});
-  test_once<false>(FLT_LCW{nan, nan, nan, 0, 1, 2, 0, 1, 2, 0, 1, 2, inf, inf, inf},
-                   FLT_LCW{0, 1, 2, nan, inf});
-  test_once<false>(FLT_LCW{nan, inf, nan, inf, nan, inf}, FLT_LCW{nan, inf});
+  auto constexpr p_inf = std::numeric_limits<float_type>::infinity();
+  auto constexpr m_inf = -std::numeric_limits<float_type>::infinity();
+  /*
+   * Lists contain inf
+   * We can't test for lists containing nan because the order of nan is
+   * undefined after sorting
+   */
+  test_once<false>(FLT_LCW{0, 1, 2, 0, 1, 2, 0, 1, 2, p_inf, p_inf, p_inf},
+                   FLT_LCW{0, 1, 2, p_inf});
+  test_once<false>(FLT_LCW{p_inf, 0, m_inf, 0, p_inf, 0, m_inf, 0, p_inf, 0, m_inf},
+                   FLT_LCW{m_inf, 0, p_inf});
 }
 
 TEST_F(DropListDuplicatesTest, IntegerTestsNonNull)
