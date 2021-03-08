@@ -36,7 +36,7 @@ namespace detail {
  * s2 = copy_slice( s1, 2 )
  * s2 is ["c", "d", "e", "f"]
  * s2 = copy_slice( s1, 1, 3 )
- * s2 is ["d", "e"]
+ * s2 is ["b", "c"]
  * @endcode
  *
  * @param strings Strings instance for this operation.
