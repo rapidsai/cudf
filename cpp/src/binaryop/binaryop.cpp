@@ -439,9 +439,10 @@ std::unique_ptr<column> fixed_point_binary_operation(scalar const& lhs,
     return make_fixed_width_column_for_output(lhs, rhs, op, output_type, stream, mr);
 
   auto const scale = binary_operation_fixed_point_scale(op, lhs.type().scale(), rhs.type().scale());
-  auto const type  = cudf::data_type{rhs.type().id(), scale};
-  auto out         = make_fixed_width_column_for_output(lhs, rhs, op, type, stream, mr);
-  auto out_view    = out->mutable_view();
+  auto const type =
+    is_comparison_binop(op) ? data_type{type_id::BOOL8} : cudf::data_type{rhs.type().id(), scale};
+  auto out      = make_fixed_width_column_for_output(lhs, rhs, op, type, stream, mr);
+  auto out_view = out->mutable_view();
 
   if (lhs.type().scale() != rhs.type().scale() && is_same_scale_necessary(op)) {
     // Adjust scalar/column so they have they same scale
@@ -509,9 +510,10 @@ std::unique_ptr<column> fixed_point_binary_operation(column_view const& lhs,
     return make_fixed_width_column_for_output(lhs, rhs, op, output_type, stream, mr);
 
   auto const scale = binary_operation_fixed_point_scale(op, lhs.type().scale(), rhs.type().scale());
-  auto const type  = cudf::data_type{lhs.type().id(), scale};
-  auto out         = make_fixed_width_column_for_output(lhs, rhs, op, type, stream, mr);
-  auto out_view    = out->mutable_view();
+  auto const type =
+    is_comparison_binop(op) ? data_type{type_id::BOOL8} : cudf::data_type{lhs.type().id(), scale};
+  auto out      = make_fixed_width_column_for_output(lhs, rhs, op, type, stream, mr);
+  auto out_view = out->mutable_view();
 
   if (lhs.type().scale() != rhs.type().scale() && is_same_scale_necessary(op)) {
     // Adjust scalar/column so they have they same scale
@@ -579,9 +581,10 @@ std::unique_ptr<column> fixed_point_binary_operation(column_view const& lhs,
     return make_fixed_width_column_for_output(lhs, rhs, op, output_type, stream, mr);
 
   auto const scale = binary_operation_fixed_point_scale(op, lhs.type().scale(), rhs.type().scale());
-  auto const type  = cudf::data_type{lhs.type().id(), scale};
-  auto out         = make_fixed_width_column_for_output(lhs, rhs, op, type, stream, mr);
-  auto out_view    = out->mutable_view();
+  auto const type =
+    is_comparison_binop(op) ? data_type{type_id::BOOL8} : cudf::data_type{lhs.type().id(), scale};
+  auto out      = make_fixed_width_column_for_output(lhs, rhs, op, type, stream, mr);
+  auto out_view = out->mutable_view();
 
   if (lhs.type().scale() != rhs.type().scale() && is_same_scale_necessary(op)) {
     if (rhs.type().scale() < lhs.type().scale()) {

@@ -2342,6 +2342,22 @@ TYPED_TEST(FixedPointTestBothReps, FixedPointBinaryOpEqualSimple)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
 }
 
+TYPED_TEST(FixedPointTestBothReps, FixedPointBinaryOpEqualSimpleScale0)
+{
+  using namespace numeric;
+  using decimalXX = TypeParam;
+  using RepType   = device_storage_type_t<decimalXX>;
+
+  auto const trues    = std::vector<bool>(4, true);
+  auto const col      = fp_wrapper<RepType>{{1, 2, 3, 4}, scale_type{0}};
+  auto const expected = wrapper<bool>(trues.begin(), trues.end());
+
+  auto const result =
+    cudf::binary_operation(col, col, binary_operator::EQUAL, cudf::data_type{type_id::BOOL8});
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
+}
+
 TYPED_TEST(FixedPointTestBothReps, FixedPointBinaryOpEqualLessGreater)
 {
   using namespace numeric;
