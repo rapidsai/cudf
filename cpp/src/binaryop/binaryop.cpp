@@ -481,8 +481,7 @@ std::unique_ptr<column> fixed_point_binary_operation(scalar const& lhs,
   } else {
     binops::jit::binary_operation(out_view, lhs, rhs, op, stream);
   }
-  if (output_type.scale() != scale) return cudf::cast(out_view, output_type);
-  return out;
+  return output_type.scale() != scale ? cudf::cast(out_view, output_type) : std::move(out);
 }
 
 /**
@@ -552,8 +551,7 @@ std::unique_ptr<column> fixed_point_binary_operation(column_view const& lhs,
   } else {
     binops::jit::binary_operation(out_view, lhs, rhs, op, stream);
   }
-  if (output_type.scale() != scale) return cudf::cast(out_view, output_type);
-  return out;
+  return output_type.scale() != scale ? cudf::cast(out_view, output_type) : std::move(out);
 }
 
 /**
@@ -621,8 +619,7 @@ std::unique_ptr<column> fixed_point_binary_operation(column_view const& lhs,
   } else {
     binops::jit::binary_operation(out_view, lhs, rhs, op, stream);
   }
-  if (output_type.scale() != scale) return cudf::cast(out_view, output_type);
-  return out;
+  return output_type.scale() != scale ? cudf::cast(out_view, output_type) : std::move(out);
 }
 
 std::unique_ptr<column> binary_operation(scalar const& lhs,
