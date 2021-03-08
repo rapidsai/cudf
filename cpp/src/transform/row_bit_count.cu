@@ -64,9 +64,9 @@ using offset_type = int32_t;
  *
  *  span0 = [1, 2]                                        row 1 is represented by the span [1, 2]
  *  span1 = [L0.offsets[span0[0]], L0.offsets[span0[1]]]  expand by the offsets of L0
- *  span1 = [3, 6]                                        the range of offsets
+ *  span1 = [3, 6]                                        span applied to children of L0
  *  span2 = [L1.offsets[span1[0]], L1.offsets[span1[1]]]  expand by the offsets of L1
- *  span2 = [6, 14]
+ *  span2 = [6, 14]                                       span applied to children of L1
  *
  *  The total size of our row is computed as:
  *  (span0[1] - span0[0]) * sizeof(int)        the cost of the offsets for L0
@@ -108,7 +108,7 @@ struct column_info {
  *
  * If the input data contains only fixed-width types, this preprocess step
  * produces the value `simple_per_row_size` which is a constant for every
- * row in the output.  We can use thie value and skip the more complicated
+ * row in the output.  We can use this value and skip the more complicated
  * processing for lists, structs and strings entirely if `complex_type_count`
  * is 0.
  *
@@ -298,8 +298,8 @@ struct row_span {
 };
 
 /**
- * @brief Functor for computing the size, in bits, of a `span` of rows for a given
- * column_device_view
+ * @brief Functor for computing the size, in bits, of a `row_span` of rows for a given
+ * `column_device_view`
  *
  */
 struct row_size_functor {
