@@ -286,7 +286,7 @@ cpdef write_parquet(
     """
 
     # Create the write options
-    cdef unique_ptr[table_input_metadata] table_meta
+    cdef unique_ptr[table_input_metadata] tbl_meta
 
     cdef map[string, string] user_data
     cdef table_view tv
@@ -295,9 +295,9 @@ cpdef write_parquet(
 
     if index is not False and not isinstance(table._index, cudf.RangeIndex):
         tv = table.view()
-        table_meta = make_unique[table_input_metadata](tv)
+        tbl_meta = make_unique[table_input_metadata](tv)
         for level, idx_name in enumerate(table._index.names):
-            table_meta.get().column_metadata[level].set_name(
+            tbl_meta.get().column_metadata[level].set_name(
                 str.encode(
                     _index_level_name(idx_name, level, table._column_names)
                 )
@@ -305,20 +305,20 @@ cpdef write_parquet(
         num_index_cols_meta = len(table._index.names)
     else:
         tv = table.data_view()
-        table_meta = make_unique[table_input_metadata](tv)
+        tbl_meta = make_unique[table_input_metadata](tv)
         num_index_cols_meta = 0
 
     for i, name in enumerate(table._column_names, num_index_cols_meta):
-        table_meta.get().column_metadata[i].set_name(name.encode())
+        tbl_meta.get().column_metadata[i].set_name(name.encode())
         _get_col_children_names(
-            table[name]._column, table_meta.get().column_metadata[i]
+            table[name]._column, tbl_meta.get().column_metadata[i]
         )
 
     pandas_metadata = generate_pandas_metadata(table, index)
     user_data[str.encode("pandas")] = str.encode(pandas_metadata)
 
     # Set the table_metadata
-    table_meta.get().user_data = user_data
+    tbl_meta.get().user_data = user_data
 
     cdef cudf_io_types.compression_type comp_type = _get_comp_type(compression)
     cdef cudf_io_types.statistics_freq stat_freq = _get_stat_freq(statistics)
@@ -334,7 +334,7 @@ cpdef write_parquet(
     with nogil:
         args = move(
             parquet_writer_options.builder(sink, tv)
-            .input_schema(table_meta.get())
+            .metadata(tbl_meta.get())
             .compression(comp_type)
             .stats_level(stat_freq)
             .column_chunks_file_path(c_column_chunks_file_path)
@@ -460,7 +460,7 @@ cdef class ParquetWriter:
         with nogil:
             args = move(
                 chunked_parquet_writer_options.builder(self.sink)
-                .input_schema(self.tbl_meta.get())
+                .metadata(self.tbl_meta.get())
                 .compression(self.comp_type)
                 .stats_level(self.stat_freq)
                 .build()

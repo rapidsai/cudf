@@ -435,19 +435,13 @@ class parquet_writer_options {
   statistics_freq _stats_level = statistics_freq::STATISTICS_ROWGROUP;
   // Sets of columns to output
   table_view _table;
-  // TODO: Remove. And maybe rename the new input_metadata/schema thing with just "metadata"
   // Optional associated metadata
-  const table_metadata* _metadata = nullptr;
-
-  // TODO: Docs
-  table_input_metadata const* _table_meta = nullptr;
-  // Parquet writes can write INT96 or TIMESTAMP_MICROS. Defaults to TIMESTAMP_MICROS.
+  table_input_metadata const* _metadata = nullptr;
+  // Parquet writer can write INT96 or TIMESTAMP_MICROS. Defaults to TIMESTAMP_MICROS.
+  // If true then overrides any per-column setting in _metadata.
   bool _write_timestamps_as_int96 = false;
   // Column chunks file path to be set in the raw output metadata
   std::string _column_chunks_file_path;
-  /// vector of precision values for decimal writing. Exactly one entry
-  /// per decimal column. Optional unless decimals are being written.
-  std::vector<uint8_t> _decimal_precision;
 
   /**
    * @brief Constructor from sink and table.
@@ -510,9 +504,7 @@ class parquet_writer_options {
   /**
    * @brief Returns associated metadata.
    */
-  table_metadata const* get_metadata() const { return _metadata; }
-
-  table_input_metadata const* get_table_metadata() const { return _table_meta; }
+  table_input_metadata const* get_metadata() const { return _metadata; }
 
   /**
    * @brief Returns `true` if timestamps will be written as INT96
@@ -525,19 +517,11 @@ class parquet_writer_options {
   std::string get_column_chunks_file_path() const { return _column_chunks_file_path; }
 
   /**
-   * @brief Returns a constant reference to the decimal precision vector.
-   */
-  std::vector<uint8_t> const& get_decimal_precision() const { return _decimal_precision; }
-
-  /**
    * @brief Sets metadata.
    *
    * @param metadata Associated metadata.
    */
-  void set_metadata(table_metadata const* metadata) { _metadata = metadata; }
-
-  // TODO: Decide on a name. input_metadata or input_schema
-  void set_input_metadata(table_input_metadata const* metadata) { _table_meta = metadata; }
+  void set_metadata(table_input_metadata const* metadata) { _metadata = metadata; }
 
   /**
    * @brief Sets the level of statistics.
@@ -570,11 +554,6 @@ class parquet_writer_options {
   {
     _column_chunks_file_path.assign(file_path);
   }
-
-  /**
-   * @brief Sets the decimal precision vector data.
-   */
-  void set_decimal_precision(std::vector<uint8_t> dp) { _decimal_precision = std::move(dp); }
 };
 
 class parquet_writer_options_builder {
@@ -605,15 +584,9 @@ class parquet_writer_options_builder {
    * @param metadata Associated metadata.
    * @return this for chaining.
    */
-  parquet_writer_options_builder& metadata(table_metadata const* metadata)
+  parquet_writer_options_builder& metadata(table_input_metadata const* metadata)
   {
     options._metadata = metadata;
-    return *this;
-  }
-
-  parquet_writer_options_builder& input_schema(table_input_metadata const* metadata)
-  {
-    options._table_meta = metadata;
     return *this;
   }
 
@@ -728,14 +701,10 @@ class chunked_parquet_writer_options {
   // Specify the level of statistics in the output file
   statistics_freq _stats_level = statistics_freq::STATISTICS_ROWGROUP;
   // Optional associated metadata.
-  const table_metadata_with_nullability* _nullable_metadata = nullptr;
-
-  // TODO: All setters and getters in this and builder class
-  table_input_metadata const* _table_meta = nullptr;
-  // Parquet writes can write INT96 or TIMESTAMP_MICROS. Defaults to TIMESTAMP_MICROS.
+  table_input_metadata const* _metadata = nullptr;
+  // Parquet writer can write INT96 or TIMESTAMP_MICROS. Defaults to TIMESTAMP_MICROS.
+  // If true then overrides any per-column setting in _metadata.
   bool _write_timestamps_as_int96 = false;
-  // Optional decimal precision data - must be present if writing decimals
-  std::vector<uint8_t> _decimal_precision = {};
 
   /**
    * @brief Constructor from sink.
@@ -770,19 +739,9 @@ class chunked_parquet_writer_options {
   statistics_freq get_stats_level() const { return _stats_level; }
 
   /**
-   * @brief Returns nullable metadata information.
+   * @brief Returns metadata information.
    */
-  const table_metadata_with_nullability* get_nullable_metadata() const
-  {
-    return _nullable_metadata;
-  }
-
-  table_input_metadata const* get_table_metadata() const { return _table_meta; }
-
-  /**
-   * @brief Returns decimal precision pointer.
-   */
-  std::vector<uint8_t> const& get_decimal_precision() const { return _decimal_precision; }
+  table_input_metadata const* get_metadata() const { return _metadata; }
 
   /**
    * @brief Returns `true` if timestamps will be written as INT96
@@ -790,24 +749,11 @@ class chunked_parquet_writer_options {
   bool is_enabled_int96_timestamps() const { return _write_timestamps_as_int96; }
 
   /**
-   * @brief Sets nullable metadata.
+   * @brief Sets metadata.
    *
    * @param metadata Associated metadata.
    */
-  void set_nullable_metadata(const table_metadata_with_nullability* metadata)
-  {
-    _nullable_metadata = metadata;
-  }
-
-  void set_input_metadata(table_input_metadata const* metadata) { _table_meta = metadata; }
-
-  /**
-   * @brief Sets decimal precision data.
-   *
-   * @param v Vector of precision data flattened with exactly one entry per
-   *          decimal column.
-   */
-  void set_decimal_precision_data(std::vector<uint8_t> const& v) { _decimal_precision = v; }
+  void set_metadata(table_input_metadata const* metadata) { _metadata = metadata; }
 
   /**
    * @brief Sets the level of statistics in parquet_writer_options.
@@ -860,30 +806,17 @@ class chunked_parquet_writer_options_builder {
   chunked_parquet_writer_options_builder(sink_info const& sink) : options(sink){};
 
   /**
-   * @brief Sets nullable metadata to chunked_parquet_writer_options.
+   * @brief Sets metadata to chunked_parquet_writer_options.
    *
    * @param metadata Associated metadata.
    * @return this for chaining.
    */
-  chunked_parquet_writer_options_builder& nullable_metadata(
-    const table_metadata_with_nullability* metadata)
+  chunked_parquet_writer_options_builder& metadata(table_input_metadata const* metadata)
   {
-    options._nullable_metadata = metadata;
+    options._metadata = metadata;
     return *this;
   }
 
-  // TODO: table input metadata/schema setters and getters and tests for chunked
-  chunked_parquet_writer_options_builder& table_metadata(table_input_metadata const* metadata)
-  {
-    options._table_meta = metadata;
-    return *this;
-  }
-
-  chunked_parquet_writer_options_builder& input_schema(table_input_metadata const* metadata)
-  {
-    options._table_meta = metadata;
-    return *this;
-  }
   /**
    * @brief Sets Sets the level of statistics in chunked_parquet_writer_options.
    *
@@ -893,18 +826,6 @@ class chunked_parquet_writer_options_builder {
   chunked_parquet_writer_options_builder& stats_level(statistics_freq sf)
   {
     options._stats_level = sf;
-    return *this;
-  }
-
-  /**
-   * @brief Sets decimal precision data.
-   *
-   * @param v Vector of precision data flattened with exactly one entry per
-   *          decimal column.
-   */
-  chunked_parquet_writer_options_builder& decimal_precision(std::vector<uint8_t> const& v)
-  {
-    options._decimal_precision = v;
     return *this;
   }
 

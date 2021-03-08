@@ -776,10 +776,8 @@ writer::impl::impl(std::unique_ptr<data_sink> sink,
     stats_granularity_(options.get_stats_level()),
     int96_timestamps(options.is_enabled_int96_timestamps()),
     out_sink_(std::move(sink)),
-    decimal_precision(options.get_decimal_precision()),
     single_write_mode(mode == SingleWriteMode::YES),
-    table_meta(options.get_table_metadata()),
-    user_metadata(options.get_metadata())
+    table_meta(options.get_metadata())
 {
   init_state();
 }
@@ -794,16 +792,10 @@ writer::impl::impl(std::unique_ptr<data_sink> sink,
     compression_(to_parquet_compression(options.get_compression())),
     stats_granularity_(options.get_stats_level()),
     int96_timestamps(options.is_enabled_int96_timestamps()),
-    decimal_precision(options.get_decimal_precision()),
     single_write_mode(mode == SingleWriteMode::YES),
-    table_meta(options.get_table_metadata()),
+    table_meta(options.get_metadata()),
     out_sink_(std::move(sink))
 {
-  if (options.get_nullable_metadata() != nullptr) {
-    user_metadata_with_nullability = *options.get_nullable_metadata();
-    user_metadata                  = &user_metadata_with_nullability;
-  }
-
   init_state();
 }
 

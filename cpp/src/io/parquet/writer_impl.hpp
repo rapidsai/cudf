@@ -227,19 +227,10 @@ class writer::impl {
   bool int96_timestamps              = false;
   // Overall file metadata.  Filled in during the process and written during write_chunked_end()
   cudf::io::parquet::FileMetaData md;
-
-  // TODO: docs
-  table_input_metadata const* table_meta = nullptr;
   // optional user metadata
-  table_metadata_with_nullability user_metadata_with_nullability;
-  // only used in the write_chunked() case. copied from the (optionally) user supplied
-  // argument to write()
-  table_metadata const* user_metadata = nullptr;
+  table_input_metadata const* table_meta = nullptr;
   // to track if the output has been written to sink
   bool closed = false;
-  // vector of precision values for decimal writing. Exactly one entry
-  // per decimal column.
-  std::vector<uint8_t> decimal_precision;
   // current write position for rowgroups/chunks
   std::size_t current_chunk_offset;
   // special parameter only used by detail::write() to indicate that we are guaranteeing
