@@ -146,7 +146,7 @@
  *   @defgroup lists_contains Searching
  *   @defgroup lists_gather Gathering
  *   @defgroup lists_elements Counting
- *   @defgroup lists_drop_duplicates Dropping duplicated elements
+ *   @defgroup lists_drop_duplicates Filtering
  * @}
  * @defgroup nvtext_apis NVText
  * @{

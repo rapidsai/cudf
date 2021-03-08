@@ -56,31 +56,28 @@ std::vector<std::unique_ptr<column>> get_unique_entries_and_list_offsets(
   rmm::cuda_stream_view stream,
   rmm::mr::device_memory_resource* mr)
 {
-  /* Create an intermediate table, since the comparator only work on tables */
+  // Create an intermediate table, since the comparator only work on tables
   auto const device_input_table =
     cudf::table_device_view::create(table_view{{all_lists_entries}}, stream);
   auto const comp = row_equality_comparator<has_nulls>(
     *device_input_table, *device_input_table, nulls_equal == null_equality::EQUAL);
 
   auto const num_entries = all_lists_entries.size();
-  /* Allocate memory to store the indices of the unique entries */
+  // Allocate memory to store the indices of the unique entries
   auto const unique_indices = cudf::make_numeric_column(
     entries_list_offsets.type(), num_entries, mask_state::UNALLOCATED, stream);
   auto const unique_indices_begin = unique_indices->mutable_view().begin<size_type>();
 
   auto const copy_end =
-    thrust::copy_if(rmm::exec_policy(stream),
-                    thrust::make_counting_iterator(0),
-                    thrust::make_counting_iterator(num_entries),
-                    thrust::counting_iterator<size_type>(0),
-                    unique_indices_begin,
-                    [last_index = num_entries - 1, comp] __device__(size_type i) {
-                      return i == last_index || !comp(i, i + 1);
-                    });
+    thrust::unique_copy(rmm::exec_policy(stream),
+                        thrust::make_counting_iterator(0),
+                        thrust::make_counting_iterator(num_entries),
+                        unique_indices_begin,
+                        [comp] __device__(size_type i, size_type j) { return comp(i, j); });
+
+  // Collect unique entries and entry list offsets
   auto const indices = cudf::detail::slice(
     unique_indices->view(), 0, thrust::distance(unique_indices_begin, copy_end));
-
-  /* Collect unique entries and entry list offsets */
   return cudf::detail::gather(table_view{{all_lists_entries, entries_list_offsets}},
                               indices,
                               cudf::out_of_bounds_policy::DONT_CHECK,
@@ -113,10 +110,12 @@ std::unique_ptr<column> generate_clean_offsets(lists_column_view const& lists_co
                                                rmm::mr::device_memory_resource* mr)
 {
   auto const list_offsets =
-    cudf::detail::slice(
-      lists_column.offsets(), {lists_column.offset(), lists_column.offsets().size()}, stream)
+    cudf::detail::slice(lists_column.offsets(),
+                        {lists_column.offset(), lists_column.offset() + lists_column.size() + 1},
+                        stream)
       .front();
-  auto output_offsets = allocate_like(list_offsets, mask_allocation_policy::NEVER, mr);
+  auto output_offsets = make_numeric_column(
+    list_offsets.type(), lists_column.size() + 1, mask_state::UNALLOCATED, stream, mr);
   thrust::transform(
     rmm::exec_policy(stream),
     list_offsets.begin<size_type>(),
@@ -182,11 +181,10 @@ void generate_offsets(size_type num_entries,
                       rmm::mr::device_memory_resource* mr)
 {
   auto const new_offsets = allocate_like(original_offsets, mask_allocation_policy::NEVER, mr);
-  /*
-   * Firstly, generate list offsets for the unique entries, ignoring empty lists (if any)
-   * If entries_list_offsets = {1, 1, 1, 1, 1, 2, 3, 3, 3, 3, 3 }, num_entries = 11,
-   * then output = { 0, 4, 5, 8, 10 }
-   */
+
+  // Firstly, generate list offsets for the unique entries, ignoring empty lists (if any)
+  // If entries_list_offsets = {1, 1, 1, 1, 1, 2, 3, 3, 3, 3, 3 }, num_entries = 11,
+  // then output = { 0, 4, 5, 8, 10 }
   auto const end_copy = thrust::copy_if(
     rmm::exec_policy(stream),
     thrust::make_counting_iterator<size_type>(0),
@@ -195,13 +193,11 @@ void generate_offsets(size_type num_entries,
     [num_entries, offsets_ptr = entries_list_offsets.begin<size_type>()] __device__(size_type i)
       -> bool { return i == 0 || i == num_entries || offsets_ptr[i] != offsets_ptr[i - 1]; });
 
-  /*
-   * Generate a prefix sum of number of empty lists, storing inplace to the original lists
-   * offsets
-   * If the original list offsets is { 0, 0, 5, 5, 6, 6 } (there are 2 empty lists),
-   * and new_offsets = { 0, 4, 6 },
-   * then output = { 0, 1, 1, 2, 2, 3}
-   */
+  // Generate a prefix sum of number of empty lists, storing inplace to the original lists
+  // offsets
+  // If the original list offsets is { 0, 0, 5, 5, 6, 6 } (there are 2 empty lists),
+  // and new_offsets = { 0, 4, 6 },
+  // then output = { 0, 1, 1, 2, 2, 3}
   auto const iter_trans_begin = cudf::detail::make_counting_transform_iterator(
     0, [offsets = original_offsets.begin<size_type>()] __device__(size_type i) -> size_type {
       return (i > 0 && offsets[i] == offsets[i - 1]) ? 1 : 0;
@@ -211,12 +207,10 @@ void generate_offsets(size_type num_entries,
                          iter_trans_begin + original_offsets.size(),
                          original_offsets.begin<size_type>());
 
-  /*
-   * Generate the final list offsets
-   * If the original list offsets are { 0, 0, 5, 5, 6, 6 }, the new offsets are { 0, 4, 6 },
-   *  and the prefix sums of empty lists are { 0, 1, 1, 2, 2, 3 },
-   *  then output = { 0, 0, 4, 4, 5, 5 }
-   */
+  // Generate the final list offsets
+  // If the original list offsets are { 0, 0, 5, 5, 6, 6 }, the new offsets are { 0, 4, 6 },
+  //  and the prefix sums of empty lists are { 0, 1, 1, 2, 2, 3 },
+  //  then output = { 0, 0, 4, 4, 5, 5 }
   thrust::transform(
     rmm::exec_policy(stream),
     thrust::make_counting_iterator<size_type>(0),
@@ -241,20 +235,20 @@ std::unique_ptr<column> drop_list_duplicates(lists_column_view const& lists_colu
   if (cudf::is_nested(lists_column.child().type()))
     CUDF_FAIL("Nested types are not supported in drop_list_duplicates.");
 
-  /* Call segmented sort on the list elements */
+  // Call segmented sort on the list elements
   auto const sorted_lists = lists::sort_lists(lists_column, order::ASCENDING, null_order::AFTER);
 
-  /* Flatten all entries (depth = 1) of the lists column */
+  // Flatten all entries (depth = 1) of the lists column
   auto const all_lists_entries = lists_column_view(sorted_lists->view()).get_sliced_child(stream);
 
-  /* Generate a 0-based offset column */
+  // Generate a 0-based offset column
   auto lists_offsets = detail::generate_clean_offsets(lists_column, stream, mr);
 
-  /* Generate a mapping from list entries to offsets of the lists containing those entries */
+  // Generate a mapping from list entries to offsets of the lists containing those entries
   auto const entries_list_offsets = detail::generate_entry_list_offsets(
     all_lists_entries.size(), lists_offsets->view(), stream, mr);
 
-  /* Copy non-duplicated entries (along with their list offsets) to new arrays */
+  // Copy non-duplicated entries (along with their list offsets) to new arrays
   auto unique_entries_and_list_offsets =
     all_lists_entries.has_nulls()
       ? detail::get_unique_entries_and_list_offsets<true>(
@@ -262,14 +256,14 @@ std::unique_ptr<column> drop_list_duplicates(lists_column_view const& lists_colu
       : detail::get_unique_entries_and_list_offsets<false>(
           all_lists_entries, entries_list_offsets->view(), nulls_equal, stream, mr);
 
-  /* Generate offsets for the new lists column */
+  // Generate offsets for the new lists column
   detail::generate_offsets(unique_entries_and_list_offsets.front()->size(),
                            unique_entries_and_list_offsets.back()->view(),
                            lists_offsets->mutable_view(),
                            stream,
                            mr);
 
-  /* Construct a new list column without duplicated entries */
+  // Construct a new list column without duplicated entries
   return make_lists_column(lists_column.size(),
                            std::move(lists_offsets),
                            std::move(unique_entries_and_list_offsets.front()),
