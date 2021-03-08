@@ -89,13 +89,13 @@ TEST(BinColumnTest, TestSimple)
 {
   fixed_width_column_wrapper<float> left_edges{0.0, 1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0};
   fixed_width_column_wrapper<float> right_edges{1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 10.0};
-  fixed_width_column_wrapper<float> input{0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5};
+  fixed_width_column_wrapper<float> input{2.5, 2.5, 2.5, 2.5, 2.5, 2.5, 2.5, 2.5, 2.5, 2.5};
 
   auto result = cudf::bin::bin(input, left_edges, cudf::bin::inclusive::YES, right_edges, cudf::bin::inclusive::NO);
-  // Check that every element is placed in bin 0.
+  // Check that every element is placed in bin 2.
   auto begin = thrust::device_ptr<const unsigned int>(result->view().begin<unsigned int>());
   auto end = thrust::device_ptr<const unsigned int>(result->view().end<unsigned int>());
-  ASSERT_TRUE(thrust::all_of(begin, end, equal_value(0)));
+  ASSERT_TRUE(thrust::all_of(begin, end, equal_value(2)));
 };
 
 }  // anonymous namespace

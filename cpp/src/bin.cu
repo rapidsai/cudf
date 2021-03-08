@@ -80,7 +80,7 @@ __global__ void accumulateKernel(
 		}
         if (right_comp(value, right_edges[low]))
         {
-            counts[low] = low;
+            counts[i] = low;
         }
     }
 }
