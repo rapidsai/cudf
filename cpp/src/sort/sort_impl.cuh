@@ -21,6 +21,7 @@
 #include <cudf/table/row_operators.cuh>
 #include <cudf/table/table_device_view.cuh>
 #include <cudf/utilities/error.hpp>
+#include <cudf/utilities/traits.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_uvector.hpp>
@@ -58,6 +59,8 @@ struct simple_comparator {
   null_order null_precedence{};
 };
 
+std::pair<table_view, std::vector<std::unique_ptr<column>>> flatten_nested_columns(
+  table_view const& input);
 /**
  * @brief Sort indices of a single column.
  *
@@ -120,7 +123,8 @@ std::unique_ptr<column> sorted_order(table_view input,
                   : sorted_order<false>(single_col, col_order, null_prec, stream, mr);
   }
 
-  auto device_table = table_device_view::create(input, stream);
+  auto flat_table   = flatten_nested_columns(input);
+  auto device_table = table_device_view::create(flat_table.first, stream);
   rmm::device_vector<order> d_column_order(column_order);
 
   if (has_nulls(input)) {

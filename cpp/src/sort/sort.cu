@@ -19,6 +19,7 @@
 #include <cudf/detail/sorting.hpp>
 #include <cudf/sorting.hpp>
 #include <cudf/table/table_view.hpp>
+#include <cudf/unary.hpp>
 
 #include <sort/sort_impl.cuh>
 
@@ -26,6 +27,63 @@
 
 namespace cudf {
 namespace detail {
+
+// Convert null_mask to BOOL8 columns and flatten the struct children in order.
+void flatten_struct_column(column_view const& col,
+                           std::vector<column_view>& all_columns,
+                           std::vector<std::unique_ptr<column>>& validity_as_column)
+{
+  for (auto it = col.child_begin(); it != col.child_end(); it++) {
+    auto const& child = *it;
+    if (child.type().id() == type_id::STRUCT) {
+      if (child.nullable()) {
+        validity_as_column.push_back(cudf::is_valid(child));
+        all_columns.push_back(validity_as_column.back()->view());
+      }
+      flatten_struct_column(child, all_columns, validity_as_column);
+    } else {
+      all_columns.push_back(child);
+    }
+  }
+}
+
+// Flatten the nested structs for comparator due to recursion limitation in device code.
+std::pair<table_view, std::vector<std::unique_ptr<column>>> flatten_nested_columns(
+  table_view const& input)
+{
+  std::vector<std::unique_ptr<column>> nested_struct_validity;
+  auto const has_nested_struct = std::any_of(input.begin(), input.end(), [](auto const& col) {
+    return col.type().id() == type_id::STRUCT and
+           std::any_of(col.child_begin(), col.child_end(), [](auto const& child) {
+             return child.type().id() == type_id::STRUCT;
+           });
+  });
+  if (not has_nested_struct) return std::make_pair(input, std::move(nested_struct_validity));
+
+  std::vector<column_view> all_columns;
+  for (auto const& col : input) {
+    auto is_nested_struct = (col.type().id() == type_id::STRUCT) and
+                            std::any_of(col.child_begin(), col.child_end(), [](auto const& col) {
+                              return col.type().id() == type_id::STRUCT;
+                            });
+    if (is_nested_struct) {
+      std::vector<column_view> flattened;
+      flatten_struct_column(col, flattened, nested_struct_validity);
+      auto flat_struct = column_view(col.type(),
+                                     col.size(),
+                                     col.head(),
+                                     col.null_mask(),
+                                     col.null_count(),
+                                     col.offset(),
+                                     std::move(flattened));
+      all_columns.push_back(flat_struct);
+    } else {
+      all_columns.push_back(col);
+    }
+  }
+  return std::make_pair(table_view{all_columns}, std::move(nested_struct_validity));
+}
+
 std::unique_ptr<column> sorted_order(table_view input,
                                      std::vector<order> const& column_order,
                                      std::vector<null_order> const& null_precedence,
