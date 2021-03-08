@@ -53,6 +53,27 @@ const char* kernel =
     }
   )***";
 
+const char* masked_binary_op_kernel = 
+  R"***(
+    template <typename TypeOut, typename TypeIn1, typename TypeIn2>
+    __global__
+    void kernel(cudf::size_type size,
+                    TypeOut* out_data, TypeIn1* in_data1, TypeIn2 in_data2) {
+        int tid = threadIdx.x;
+        int blkid = blockIdx.x;
+        int blksz = blockDim.x;
+        int gridsz = gridDim.x;
+
+        int start = tid + blkid * blksz;
+        int step = blksz * gridsz;
+
+        for (cudf::size_type i=start; i<size; i+=step) {
+          GENERIC_BINARY_OP(&out_data[i], in_data[i]);  
+        }
+    }
+  )***";
+
+
 }  // namespace code
 }  // namespace jit
 }  // namespace transformation

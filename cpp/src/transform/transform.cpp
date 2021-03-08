@@ -137,12 +137,22 @@ std::unique_ptr<column> masked_binary_op(column_view const& A,
                                          data_type output_type, 
                                          rmm::mr::device_memory_resource* mr)
 {
-  std::cout << "hello world!" << std::endl;
+  std::cout << "ehllo " << std::endl;
+  std::cout << binary_udf << std::endl;
 
   rmm::cuda_stream_view stream = rmm::cuda_stream_default;
 
+
+
   std::unique_ptr<column> output = make_fixed_width_column(
     output_type, A.size(), copy_bitmask(A), cudf::UNKNOWN_NULL_COUNT, stream, mr);
+
+  auto null_mask = cudf::create_null_mask(A.size(), mask_state::ALL_VALID, mr);
+
+  std::unique_ptr<column> output_mask = make_fixed_width_column(
+    cudf::data_type{cudf::type_id::BOOL8}, A.size(), null_mask, cudf::UNKNOWN_NULL_COUNT, stream, mr);
+
+  
 
   return output;
 }
