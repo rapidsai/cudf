@@ -164,18 +164,19 @@ groupby::groups groupby::get_groups(table_view values, rmm::mr::device_memory_re
   CUDF_FUNC_RANGE();
   auto grouped_keys = helper().sorted_keys(rmm::cuda_stream_default, mr);
 
-  auto const& group_offsets = helper().group_offsets(0);
+  auto const& group_offsets = helper().group_offsets(rmm::cuda_stream_default);
   std::vector<size_type> group_offsets_vector(group_offsets.size());
-  thrust::copy(group_offsets.begin(), group_offsets.end(), group_offsets_vector.begin());
+  thrust::copy(thrust::device_pointer_cast(group_offsets.begin()),
+               thrust::device_pointer_cast(group_offsets.end()),
+               group_offsets_vector.begin());
 
-  std::unique_ptr<table> grouped_values{nullptr};
   if (values.num_columns()) {
-    grouped_values = cudf::detail::gather(values,
-                                          helper().key_sort_order(),
-                                          cudf::out_of_bounds_policy::DONT_CHECK,
-                                          cudf::detail::negative_index_policy::NOT_ALLOWED,
-                                          rmm::cuda_stream_default,
-                                          mr);
+    auto grouped_values = cudf::detail::gather(values,
+                                               helper().key_sort_order(),
+                                               cudf::out_of_bounds_policy::DONT_CHECK,
+                                               cudf::detail::negative_index_policy::NOT_ALLOWED,
+                                               rmm::cuda_stream_default,
+                                               mr);
     return groupby::groups{
       std::move(grouped_keys), std::move(group_offsets_vector), std::move(grouped_values)};
   } else {
