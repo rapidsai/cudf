@@ -16,7 +16,6 @@ from typing import (
 )
 
 import pandas as pd
-import pyarrow as pa
 
 import cudf
 from cudf.utils.utils import (
@@ -96,11 +95,6 @@ class ColumnAccessor(MutableMapping):
             [f"{name}: {col.dtype}" for name, col in self.items()]
         )
         return f"{type_info}\n{column_info}"
-
-    def _to_arrow_table(self):
-        arrays = [col.to_arrow() for col in self.values()]
-        names = list(self.keys())
-        return pa.Table.from_arrays(arrays, names)
 
     @property
     def level_names(self) -> Tuple[Any, ...]:
