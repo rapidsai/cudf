@@ -68,12 +68,13 @@ std::vector<std::unique_ptr<column>> get_unique_entries_and_list_offsets(
     entries_list_offsets.type(), num_entries, mask_state::UNALLOCATED, stream);
   auto const unique_indices_begin = unique_indices->mutable_view().begin<size_type>();
 
-  auto const copy_end =
-    thrust::unique_copy(rmm::exec_policy(stream),
-                        thrust::make_counting_iterator(0),
-                        thrust::make_counting_iterator(num_entries),
-                        unique_indices_begin,
-                        [comp] __device__(size_type i, size_type j) { return comp(i, j); });
+  auto const copy_end = thrust::unique_copy(
+    rmm::exec_policy(stream),
+    thrust::make_counting_iterator(0),
+    thrust::make_counting_iterator(num_entries),
+    unique_indices_begin,
+    [list_offsets = entries_list_offsets.begin<size_type>(), comp] __device__(
+      size_type i, size_type j) { return list_offsets[i] == list_offsets[j] && comp(i, j); });
 
   // Collect unique entries and entry list offsets
   auto const indices = cudf::detail::slice(
