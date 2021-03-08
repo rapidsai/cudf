@@ -101,14 +101,50 @@ std::unique_ptr<column> bin(column_view const& input,
     auto output = cudf::make_numeric_column(data_type(type_id::UINT32), left_edges.size());
 
     // Run the kernel for accumulation.
-    accumulateKernel<<<256, 1>>>(
-            input.begin<float>(), input.size(),
-            left_edges.begin<float>(),
-            right_edges.begin<float>(),
-            static_cast<cudf::mutable_column_view>(*output).begin<unsigned int>(),
-            left_edges.size(),
-            thrust::greater_equal<float>(),
-            thrust::less_equal<float>());
+    if ((left_inclusive == inclusive::YES) && (left_inclusive == inclusive::YES))
+    {
+        accumulateKernel<<<256, 1>>>(
+                input.begin<float>(), input.size(),
+                left_edges.begin<float>(),
+                right_edges.begin<float>(),
+                static_cast<cudf::mutable_column_view>(*output).begin<unsigned int>(),
+                left_edges.size(),
+                thrust::greater_equal<float>(),
+                thrust::less_equal<float>());
+    }
+    else if ((left_inclusive == inclusive::YES) && (left_inclusive == inclusive::NO))
+    {
+        accumulateKernel<<<256, 1>>>(
+                input.begin<float>(), input.size(),
+                left_edges.begin<float>(),
+                right_edges.begin<float>(),
+                static_cast<cudf::mutable_column_view>(*output).begin<unsigned int>(),
+                left_edges.size(),
+                thrust::greater_equal<float>(),
+                thrust::less<float>());
+    }
+    else if ((left_inclusive == inclusive::NO) && (left_inclusive == inclusive::YES))
+    {
+        accumulateKernel<<<256, 1>>>(
+                input.begin<float>(), input.size(),
+                left_edges.begin<float>(),
+                right_edges.begin<float>(),
+                static_cast<cudf::mutable_column_view>(*output).begin<unsigned int>(),
+                left_edges.size(),
+                thrust::greater<float>(),
+                thrust::less_equal<float>());
+    }
+    else if ((left_inclusive == inclusive::NO) && (left_inclusive == inclusive::NO))
+    {
+        accumulateKernel<<<256, 1>>>(
+                input.begin<float>(), input.size(),
+                left_edges.begin<float>(),
+                right_edges.begin<float>(),
+                static_cast<cudf::mutable_column_view>(*output).begin<unsigned int>(),
+                left_edges.size(),
+                thrust::greater<float>(),
+                thrust::less<float>());
+    }
 
     return output;
 }
