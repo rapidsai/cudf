@@ -18,9 +18,9 @@
 
 #include <cudf/aggregation.hpp>
 #include <cudf/column/column.hpp>
+#include <cudf/utilities/span.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
-#include <rmm/device_vector.hpp>
 
 #include <memory>
 
@@ -38,7 +38,7 @@ namespace detail {
  */
 std::unique_ptr<column> sum_scan(column_view const& values,
                                  size_type num_groups,
-                                 rmm::device_vector<size_type> const& group_labels,
+                                 cudf::device_span<size_type const> group_labels,
                                  rmm::cuda_stream_view stream,
                                  rmm::mr::device_memory_resource* mr);
 
@@ -53,7 +53,7 @@ std::unique_ptr<column> sum_scan(column_view const& values,
  */
 std::unique_ptr<column> min_scan(column_view const& values,
                                  size_type num_groups,
-                                 rmm::device_vector<size_type> const& group_labels,
+                                 cudf::device_span<size_type const> group_labels,
                                  rmm::cuda_stream_view stream,
                                  rmm::mr::device_memory_resource* mr);
 
@@ -68,7 +68,7 @@ std::unique_ptr<column> min_scan(column_view const& values,
  */
 std::unique_ptr<column> max_scan(column_view const& values,
                                  size_type num_groups,
-                                 rmm::device_vector<size_type> const& group_labels,
+                                 cudf::device_span<size_type const> group_labels,
                                  rmm::cuda_stream_view stream,
                                  rmm::mr::device_memory_resource* mr);
 
@@ -79,7 +79,7 @@ std::unique_ptr<column> max_scan(column_view const& values,
  * @param mr Device memory resource used to allocate the returned column's device memory
  * @param stream CUDA stream used for device memory operations and kernel launches.
  */
-std::unique_ptr<column> count_scan(rmm::device_vector<size_type> const& group_labels,
+std::unique_ptr<column> count_scan(cudf::device_span<size_type const> group_labels,
                                    rmm::cuda_stream_view stream,
                                    rmm::mr::device_memory_resource* mr);
 }  // namespace detail
