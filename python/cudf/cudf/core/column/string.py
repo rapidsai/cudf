@@ -347,7 +347,7 @@ class StringMethods(ColumnMethodsMixin):
     @overload
     def cat(
         self, others, sep: str = None, na_rep: str = None
-    ) -> Union[ParentType, "cudf.core.column.StringColumn"]:
+    ) -> Union[ParentType, "cudf.core.column.string.StringColumn"]:
         ...
 
     def cat(self, others=None, sep=None, na_rep=None):
