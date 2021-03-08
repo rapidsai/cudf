@@ -193,8 +193,7 @@ cdef dtype_from_structs_column_view(column_view cv):
 
 cdef dtype_from_decimal_column_view(column_view cv):
     scale = -cv.type().scale()
-    precision = 18  # max of 64 bit integer
-    return Decimal64Dtype(precision=precision, scale=scale)
+    return Decimal64Dtype(precision=Decimal64Dtype.MAX_PRECISION, scale=scale)
 
 cdef dtype_from_column_view(column_view cv):
     cdef libcudf_types.type_id tid = cv.type().id()
