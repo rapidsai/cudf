@@ -20,6 +20,7 @@
 #include <cudf/bin.hpp>
 #include <cudf/utilities/error.hpp>
 #include <cudf/types.hpp>
+#include <thrust/functional.h>
 
 namespace cudf {
 
@@ -49,10 +50,10 @@ __global__ void accumulateKernel(
     {
         float value = values[i];
 
-        // TODO: Currently this operates on a half-open interval [bin_hist_min,
-        // bin_hist_max) for consistency with division operations in C++. The
-        // left/right-inclusive checks need to be used to determine this.
-		if (value < left_edges[0] || value >= right_edges[num_bins - 1])
+        // Pre-filter anything that isn't within the range. These can always
+        // use strict inequality checks because even if one of the boundaries
+        // should be excluded that will be handled by the checks below.
+		if (value < left_edges[0] || value > right_edges[num_bins - 1])
         {
 			return;
 		}
@@ -62,7 +63,7 @@ __global__ void accumulateKernel(
 		unsigned int low = 0;
 		while (high - low > 1) {
 			unsigned int mid = (high + low) / 2;
-			if (left_edges[mid] <= value)
+			if (thrust::greater_equal<float>()(value, left_edges[mid]))
             {
 				low = mid;
 			}
@@ -71,7 +72,10 @@ __global__ void accumulateKernel(
 				high = mid;
 			}
 		}
-        atomicAdd(&(counts[low]), 1);
+        if (thrust::less_equal<float>()(value, right_edges[low]))
+        {
+            atomicAdd(&(counts[low]), 1);
+        }
     }
 }
 
