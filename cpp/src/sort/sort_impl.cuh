@@ -112,7 +112,7 @@ std::unique_ptr<column> sorted_order(table_view input,
                    0);
 
   // fast-path for single column sort
-  if (input.num_columns() == 1) {
+  if (input.num_columns() == 1 and not cudf::is_nested(input.column(0).type())) {
     auto const single_col = input.column(0);
     auto const col_order  = column_order.empty() ? order::ASCENDING : column_order.front();
     auto const null_prec  = null_precedence.empty() ? null_order::BEFORE : null_precedence.front();
