@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2020, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -140,6 +140,38 @@ std::unique_ptr<column> mask_to_bools(
   bitmask_type const* bitmask,
   size_type begin_bit,
   size_type end_bit,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+
+/**
+ * @brief Returns the cumulative size in bits of all columns in the `table_view` for
+ * each row.
+ *
+ * Each row in the returned column is the sum of the per-row size for each column in
+ * the table.
+ *
+ * In some cases, this is an inexact approximation. Specifically, with
+ * lists or strings, the cost of a row includes 32 bits for a single offset. However, two
+ * offsets is required to represent an entire row.  But this presents a problem, because to
+ * represent 2 rows, you need 3 offsets.  3 rows 4 offsets, etc.  Therefore it would not
+ * be accurate to say each row of a string column costs 2 offsets because summing multiple row
+ * sizes would give you a number too large. It is up to the caller to understand the schema
+ * of the input column to be able to calculate the small additional overhead of the
+ * terminating offset for any group of rows being considered.
+ *
+ * This function returns the per-row sizes as the columns are currently formed.  This can
+ * end up being different than the number you would get by gathering the rows under
+ * certain circumstances.  Specifically, the pushdown of validity masks by struct
+ * columns can nullify rows that actually contain underlying data for string or list
+ * columns. In these cases, the sized returned will be strictly:
+ *
+ * row_bit_count(column(x)) >= row_bit_count(gather(column(x)))
+ *
+ * @param t The table view to perform the computation on.
+ * @param mr Device memory resource used to allocate the returned columns's device memory
+ * @return A 32-bit integer column containing the per-row byte counts.
+ */
+std::unique_ptr<column> row_bit_count(
+  table_view const& t,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /** @} */  // end of group
