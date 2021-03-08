@@ -33,13 +33,6 @@ namespace bin {
 /// Enum used to define whether or not bins include their boundary points.
 enum class inclusive{YES, NO};
 
-/*
- * Questions/Comments:
- * 1. Why not pass a single array of edges rather than a left and a right? This
- *    API allows more room for user error (edges not matching) without providing
- *    any meaningful additional flexibility.
- */
-
 /**
  * @brief Labels elements based on membership in the specified bins.
  *

@@ -19,6 +19,7 @@
 #include <cudf_test/column_wrapper.hpp>
 #include <numeric>
 #include <thrust/device_ptr.h>
+#include <thrust/logical.h>
 
 using namespace cudf::test;
 
@@ -67,6 +68,23 @@ TEST(BinColumnTest, TestMismatchedEdges)
           cudf::logic_error);
 };
 
+/// A simple struct to be used as a predicate for comparing a sequence to a given value encoded by this struct in algorithms.
+struct equal_value
+{
+    equal_value(unsigned int value)
+    {
+        m_value = value;
+    }
+
+    __device__
+    bool operator()(unsigned int x) const
+    {
+        return x == m_value;
+    }
+
+    unsigned int m_value; /// The value to compare with.
+};
+
 TEST(BinColumnTest, TestSimple)
 {
   fixed_width_column_wrapper<float> left_edges{0.0, 1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0};
@@ -74,12 +92,10 @@ TEST(BinColumnTest, TestSimple)
   fixed_width_column_wrapper<float> input{0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5};
 
   auto result = cudf::bin::bin(input, left_edges, cudf::bin::inclusive::YES, right_edges, cudf::bin::inclusive::NO);
-  // Check that the total number of elements binned is the number of input elements.
+  // Check that every element is placed in bin 0.
   auto begin = thrust::device_ptr<const unsigned int>(result->view().begin<unsigned int>());
   auto end = thrust::device_ptr<const unsigned int>(result->view().end<unsigned int>());
-  ASSERT_EQ(thrust::reduce(begin, end), static_cast<cudf::column_view>(input).size());
-  // Check that the first bin contains all the elements (true by construction).
-  ASSERT_EQ(*begin, static_cast<cudf::column_view>(input).size());
+  ASSERT_TRUE(thrust::all_of(begin, end, equal_value(0)));
 };
 
 }  // anonymous namespace

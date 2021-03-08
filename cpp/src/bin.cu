@@ -80,7 +80,7 @@ __global__ void accumulateKernel(
 		}
         if (right_comp(value, right_edges[low]))
         {
-            atomicAdd(&(counts[low]), 1);
+            counts[low] = low;
         }
     }
 }
@@ -98,7 +98,7 @@ std::unique_ptr<column> bin(column_view const& input,
     CUDF_EXPECTS(left_edges.size() == right_edges.size(), "The left and right edge columns must be of the same length.");
 
     // TODO: Figure out how to get these two template type from the input.
-    auto output = cudf::make_numeric_column(data_type(type_id::UINT32), left_edges.size());
+    auto output = cudf::make_numeric_column(data_type(type_id::UINT32), input.size());
 
     // Run the kernel for accumulation.
     if ((left_inclusive == inclusive::YES) && (left_inclusive == inclusive::YES))
