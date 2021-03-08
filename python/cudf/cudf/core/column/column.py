@@ -172,7 +172,7 @@ class ColumnBase(Column, Serializable):
         if check_dtypes:
             if self.dtype != other.dtype:
                 return False
-        return (self == other).fillna(True).min()
+        return (self.fillna(True) == other.fillna(True)).fillna(False).min()
 
     def all(self) -> bool:
         return bool(libcudf.reduce.reduce("all", self, dtype=np.bool_))

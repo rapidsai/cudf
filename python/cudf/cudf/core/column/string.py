@@ -431,7 +431,6 @@ class StringMethods(ColumnMethodsMixin):
         3    dD
         dtype: object
         """
-
         if sep is None:
             sep = ""
 
@@ -4840,7 +4839,7 @@ class StringColumn(column.ColumnBase):
             return cudf.core.column.as_column([], dtype=dtype)
 
         # Check for None strings
-        if (self == "None").any():
+        if (self == "None").fillna(False).any():
             raise ValueError("Could not convert `None` value to datetime")
 
         casting_func = (
