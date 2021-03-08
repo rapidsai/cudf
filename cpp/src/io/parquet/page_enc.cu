@@ -943,8 +943,8 @@ __global__ void __launch_bounds__(128, 8) gpuEncodePages(EncPage *pages,
 
   // Encode Repetition and Definition levels
   if (s->page.page_type != PageType::DICTIONARY_PAGE &&
-      (s->col.level_bits & 0xf) != 0 &&  // This means max definition level is not 0
-      (s->col.level_bits >> 4) == 0      // This means there are no repetition levels
+      (s->col.level_bits & 0xf) != 0 &&  // This means max definition level is not 0 (nullable)
+      (s->col.level_bits >> 4) == 0      // This means there are no repetition levels (non-list)
   ) {
     // Calculate definition levels from validity
     uint32_t def_lvl_bits = s->col.level_bits & 0xf;
@@ -962,10 +962,6 @@ __global__ void __launch_bounds__(128, 8) gpuEncodePages(EncPage *pages,
         uint32_t row         = s->page.start_row + rle_numvals + t;
         // Definition level encodes validity. Checks the valid map and if it is valid, then sets the
         // def_lvl accordingly and sets it in s->vals which is then given to RleEncode to encode
-        // uint32_t def_lvl = (rle_numvals + t < s->page.num_rows && row < s->col.num_rows)
-        //                      ? s->col.leaf_column->is_valid(row)
-        //                      : 0;
-        // Brace yourself for new def level calculation:
         uint32_t def_lvl = [&]() {
           if (rle_numvals + t < s->page.num_rows && row < s->col.num_rows) {
             uint32_t def       = 0;
@@ -993,8 +989,6 @@ __global__ void __launch_bounds__(128, 8) gpuEncodePages(EncPage *pages,
             return 0u;
           }
         }();
-        // Non-list leaf column does not require taking into account
-        // leaf_column_offset
         s->vals[(rle_numvals + t) & (rle_buffer_size - 1)] = def_lvl;
         __syncthreads();
         rle_numvals += nrows;
@@ -1013,7 +1007,7 @@ __global__ void __launch_bounds__(128, 8) gpuEncodePages(EncPage *pages,
       }
     }
   } else if (s->page.page_type != PageType::DICTIONARY_PAGE &&
-             s->col.level_bits >> 4 != 0  // This means there ARE repetition levels
+             s->col.level_bits >> 4 != 0  // This means there ARE repetition levels (has list)
   ) {
     // TODO(cp): Consolidate this with the one above. The difference is only i how the def level is
     // obtained.
@@ -1616,16 +1610,6 @@ __global__ void __launch_bounds__(1024) gpuGatherPages(EncColumnChunk *chunks, c
   }
 }
 
-template <typename T>
-void print(rmm::device_uvector<T> const &d_vec, std::string label = "")
-{
-  std::vector<T> h_vec(d_vec.size());
-  cudaMemcpy(h_vec.data(), d_vec.data(), d_vec.size() * sizeof(T), cudaMemcpyDeviceToHost);
-  printf("%s (%lu)\t", label.c_str(), h_vec.size());
-  for (auto &&i : h_vec) std::cout << (int)i << " ";
-  printf("\n");
-}
-
 /**
  * @brief Get the dremel offsets and repetition and definition levels for a LIST column
  *
@@ -1760,7 +1744,7 @@ dremel_data get_dremel_data(column_view h_col,
       curr_col = curr_col.child(lists_column_view::child_column_index);
       if (not is_nested(curr_col.type())) {
         // Special case: when the leaf data column is the immediate child of the list col then we
-        // want it to be included right away. Otherwise the struct containing it will beincluded in
+        // want it to be included right away. Otherwise the struct containing it will be included in
         // the next iteration of this loop.
         nesting_levels.push_back(curr_col);
         add_def_at_level(curr_col);

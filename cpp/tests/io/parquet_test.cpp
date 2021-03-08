@@ -128,9 +128,7 @@ struct ParquetWriterChronoTypeTest : public ParquetWriterTest {
 // TODO: Replace with `NumericTypes` when unsigned support is added. Issue #5352
 using SupportedTypes = cudf::test::Types<int8_t, int16_t, int32_t, int64_t, bool, float, double>;
 TYPED_TEST_CASE(ParquetWriterNumericTypeTest, SupportedTypes);
-// using SupportedChronoTypes = cudf::test::Concat<cudf::test::ChronoTypes,
-// cudf::test::DurationTypes>;
-using SupportedChronoTypes = cudf::test::DurationTypes;
+using SupportedChronoTypes = cudf::test::Concat<cudf::test::ChronoTypes, cudf::test::DurationTypes>;
 TYPED_TEST_CASE(ParquetWriterChronoTypeTest, SupportedChronoTypes);
 
 // Base test fixture for chunked writer tests

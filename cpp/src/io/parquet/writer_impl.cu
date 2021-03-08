@@ -419,10 +419,10 @@ std::vector<schema_tree_node> construct_schema_tree(LinkedColVector const &linke
  * - Struct<List<float>>
  *
  */
-struct new_parquet_column_view {
-  new_parquet_column_view(schema_tree_node const &schema_node,
-                          std::vector<schema_tree_node> const &schema_tree,
-                          rmm::cuda_stream_view stream)
+struct parquet_column_view {
+  parquet_column_view(schema_tree_node const &schema_node,
+                      std::vector<schema_tree_node> const &schema_tree,
+                      rmm::cuda_stream_view stream)
     : schema_node(schema_node),
       _d_nullability(0, stream),
       _dremel_offsets(0, stream),
@@ -822,7 +822,6 @@ void writer::impl::write(table_view const &table)
 {
   CUDF_EXPECTS(not closed, "Data has already been flushed to out and closed");
 
-  // size_type num_columns = table.num_columns();
   size_type num_rows = table.num_rows();
 
   auto tbl_meta = (table_meta == nullptr) ? table_input_metadata(table) : *table_meta;
@@ -841,17 +840,13 @@ void writer::impl::write(table_view const &table)
   auto vec         = input_table_to_linked_columns(table);
   auto schema_tree = construct_schema_tree(vec, tbl_meta, single_write_mode, int96_timestamps);
   // Construct parquet_column_views from the schema tree leaf nodes.
-  std::vector<new_parquet_column_view> parquet_columns;
+  std::vector<parquet_column_view> parquet_columns;
 
   for (schema_tree_node const &schema_node : schema_tree) {
-    if (schema_node.leaf_column) {
-      // Calculate level nullability from schema and pass to new_parquet_column
-      // Construct path in schema for this leaf node and pass in
-      parquet_columns.emplace_back(schema_node, schema_tree, stream);
-    }
+    if (schema_node.leaf_column) { parquet_columns.emplace_back(schema_node, schema_tree, stream); }
   }
 
-  // Mass allocation of column_device_views for each new_parquet_column_view
+  // Mass allocation of column_device_views for each parquet_column_view
   std::vector<column_view> cudf_cols;
   for (auto const &parq_col : parquet_columns) { cudf_cols.push_back(parq_col.cudf_column_view()); }
   table_view single_streams_table(cudf_cols);
@@ -897,7 +892,7 @@ void writer::impl::write(table_view const &table)
   // 5000 is good enough for up to ~200-character strings. Longer strings will start producing
   // fragments larger than the desired page size -> TODO: keep track of the max fragment size, and
   // iteratively reduce this value if the largest fragment exceeds the max page size limit (we
-  // ideally want the page size to be below 1MB so as to have enough pages to get goodß
+  // ideally want the page size to be below 1MB so as to have enough pages to get good
   // compression/decompression performance).
   using cudf::io::parquet::gpu::max_page_fragment_size;
   constexpr uint32_t fragment_size = 5000;
@@ -915,7 +910,6 @@ void writer::impl::write(table_view const &table)
 
     init_page_fragments(fragments, col_desc, num_columns, num_fragments, num_rows, fragment_size);
   }
-  std::cout << "frags initted" << std::endl;
 
   size_t global_rowgroup_base = md.row_groups.size();
 
@@ -956,7 +950,6 @@ void writer::impl::write(table_view const &table)
         frag_stats.data().get(), fragments, col_desc, num_columns, num_fragments, fragment_size);
     }
   }
-  std::cout << "frags gathered" << std::endl;
   // Initialize row groups and column chunks
   uint32_t num_chunks = num_rowgroups * num_columns;
   hostdevice_vector<gpu::EncColumnChunk> chunks(num_chunks, stream);
@@ -1024,7 +1017,6 @@ void writer::impl::write(table_view const &table)
     f += fragments_in_chunk;
     start_row += (uint32_t)md.row_groups[global_r].num_rows;
   }
-  std::cout << "dicts allotted" << std::endl;
 
   // Free unused dictionaries
   for (auto &col : parquet_columns) { col.check_dictionary_used(); }

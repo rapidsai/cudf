@@ -548,7 +548,6 @@ cdef Column _update_column_struct_field_names(
 
 cdef _get_col_children_names(Column col, column_in_metadata& col_meta):
     if is_struct_dtype(col):
-        print("yes, struct ", zip(col.children, list(col.dtype.fields)))
         for i, (child_col, name) in enumerate(
             zip(col.children, list(col.dtype.fields))
         ):

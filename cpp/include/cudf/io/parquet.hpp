@@ -381,13 +381,12 @@ class table_input_metadata;
 class column_in_metadata {
   friend table_input_metadata;
   std::string _name = "";
-  thrust::optional<bool> _nullable;  // Input only. Can be output also but will be
-                                     // redundant with actual info in column_view
-  bool _list_column_is_map = false;  // Group only.
-  // yes
-  bool _use_int96_timestamp = false;  // Input, Primitive only.
+  thrust::optional<bool> _nullable;
+  // TODO: This isn't implemented yet
+  bool _list_column_is_map  = false;
+  bool _use_int96_timestamp = false;
   // bool _output_as_binary = false;
-  thrust::optional<uint8_t> _decimal_precision;  // Primitive only.
+  thrust::optional<uint8_t> _decimal_precision;
   std::vector<column_in_metadata> children;
 
  public:
@@ -436,6 +435,7 @@ class parquet_writer_options {
   statistics_freq _stats_level = statistics_freq::STATISTICS_ROWGROUP;
   // Sets of columns to output
   table_view _table;
+  // TODO: Remove. And maybe rename the new input_metadata/schema thing with just "metadata"
   // Optional associated metadata
   const table_metadata* _metadata = nullptr;
 
