@@ -35,6 +35,7 @@
 #include <thrust/iterator/discard_iterator.h>
 #include <thrust/scan.h>
 #include <thrust/sequence.h>
+#include <thrust/uninitialized_fill.h>
 #include <thrust/unique.h>
 
 #include <algorithm>
@@ -201,6 +202,10 @@ sort_groupby_helper::index_vector const& sort_groupby_helper::group_labels(
 
   if (num_keys(stream) == 0) return group_labels;
 
+  thrust::uninitialized_fill(rmm::exec_policy(stream),
+                             group_labels.begin(),
+                             group_labels.end(),
+                             index_vector::value_type{0});
   thrust::scatter(rmm::exec_policy(stream),
                   thrust::make_constant_iterator(1, decltype(num_groups())(1)),
                   thrust::make_constant_iterator(1, num_groups()),
