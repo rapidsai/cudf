@@ -150,12 +150,12 @@ std::unique_ptr<table> explode(
  * [[20,25],   200],
  * [[30],      300],
  * returns
- * [0,   5,    100],
- * [1,  10,    100],
- * [2,  15,    100],
- * [0,  20,    200],
- * [1,  25,    200],
- * [0,  30,    300],
+ * [0,   5,     100],
+ * [1,   10,    100],
+ * [2,   15,    100],
+ * [0,   20,    200],
+ * [1,   25,    200],
+ * [0,   30,    300],
  * ```
  *
  * Nulls and empty lists propagate in different ways depending on what is null or empty.
@@ -175,7 +175,8 @@ std::unique_ptr<table> explode(
  * @param explode_column_idx Column index to explode inside the table.
  * @param mr Device memory resource used to allocate the returned column's device memory.
  *
- * @return A new table with explode_col exploded.
+ * @return A new table with exploded value and position. The column order of return table is
+ *         [cols before explode_input, explode_position, explode_value, cols after explode_input].
  */
 std::unique_ptr<table> explode_position(
   table_view const& input_table,

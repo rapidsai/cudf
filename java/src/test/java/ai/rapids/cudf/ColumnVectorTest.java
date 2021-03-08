@@ -571,7 +571,7 @@ public class ColumnVectorTest extends CudfTestBase {
   }
 
   @Test
-  void testNullReconfigureNulls() {
+  void testAndNullReconfigureNulls() {
     try (ColumnVector v0 = ColumnVector.fromBoxedInts(0, 100, null, null, Integer.MIN_VALUE, null);
          ColumnVector v1 = ColumnVector.fromBoxedInts(0, 100, 1, 2, Integer.MIN_VALUE, null);
          ColumnVector intResult = v1.mergeAndSetValidity(BinaryOp.BITWISE_AND, v0);
@@ -582,6 +582,28 @@ public class ColumnVectorTest extends CudfTestBase {
       assertColumnsAreEqual(v0, intResult);
       assertColumnsAreEqual(stringExpected, stringResult);
       assertColumnsAreEqual(v2, noMaskResult);
+    }
+  }
+
+  @Test
+  void testOrNullReconfigureNulls() {
+    try (ColumnVector v0 = ColumnVector.fromBoxedInts(0, 100, null, null, Integer.MIN_VALUE, null);
+         ColumnVector v1 = ColumnVector.fromBoxedInts(0, 100, 1, 2, Integer.MIN_VALUE, null);
+         ColumnVector v2 = ColumnVector.fromBoxedInts(0, 100, 1, 2, Integer.MIN_VALUE, Integer.MAX_VALUE);
+         ColumnVector intResultV0 = v1.mergeAndSetValidity(BinaryOp.BITWISE_OR, v0);
+         ColumnVector intResultV0V1 = v1.mergeAndSetValidity(BinaryOp.BITWISE_OR, v0, v1);
+         ColumnVector intResultMulti = v1.mergeAndSetValidity(BinaryOp.BITWISE_OR, v0, v0, v1, v1, v0, v1, v0);
+         ColumnVector intResultv0v1v2 = v2.mergeAndSetValidity(BinaryOp.BITWISE_OR, v0, v1, v2);
+         ColumnVector v3 = ColumnVector.fromStrings("0", "100", "1", "2", "MIN_VALUE", "3");
+         ColumnVector stringResult = v3.mergeAndSetValidity(BinaryOp.BITWISE_OR, v0, v1);
+         ColumnVector stringExpected = ColumnVector.fromStrings("0", "100", "1", "2", "MIN_VALUE", null);
+         ColumnVector noMaskResult = v3.mergeAndSetValidity(BinaryOp.BITWISE_OR)) {
+      assertColumnsAreEqual(v0, intResultV0);
+      assertColumnsAreEqual(v1, intResultV0V1);
+      assertColumnsAreEqual(v1, intResultMulti);
+      assertColumnsAreEqual(v2, intResultv0v1v2);
+      assertColumnsAreEqual(stringExpected, stringResult);
+      assertColumnsAreEqual(v3, noMaskResult);
     }
   }
 
@@ -2061,10 +2083,10 @@ public class ColumnVectorTest extends CudfTestBase {
   }
 
   @Test
-  void testLogicalCast() {
+  void testBitCast() {
     try (ColumnVector cv = ColumnVector.decimalFromLongs(-2, 1L, 2L, 100L, 552L);
          ColumnVector expected = ColumnVector.fromLongs(1L, 2L, 100L, 552L);
-         ColumnView casted = cv.logicalCastTo(DType.INT64)) {
+         ColumnView casted = cv.bitCastTo(DType.INT64)) {
       assertColumnsAreEqual(expected, casted);
     }
   }
@@ -3950,5 +3972,106 @@ public class ColumnVectorTest extends CudfTestBase {
          ColumnVector created = ColumnVector.makeList(child1, child2, child3)) {
       assertColumnsAreEqual(expected, created);
     }
+  }
+
+  @Test
+  void testReplaceLeafNodeInList() {
+    try (
+        ColumnVector c1 = ColumnVector.fromInts(1, 2);
+        ColumnVector c2 = ColumnVector.fromInts(8, 3);
+        ColumnVector c3 = ColumnVector.fromInts(9, 8);
+        ColumnVector c4 = ColumnVector.fromInts(2, 6);
+        ColumnVector expected = ColumnVector.makeList(c1, c2, c3, c4);
+        ColumnVector child1 =
+            ColumnVector.decimalFromDoubles(DType.create(DType.DTypeEnum.DECIMAL64, 3),
+                RoundingMode.HALF_UP, 770.892, 961.110);
+        ColumnVector child2 =
+            ColumnVector.decimalFromDoubles(DType.create(DType.DTypeEnum.DECIMAL64, 3),
+                RoundingMode.HALF_UP, 524.982, 479.946);
+        ColumnVector child3 =
+            ColumnVector.decimalFromDoubles(DType.create(DType.DTypeEnum.DECIMAL64, 3),
+                RoundingMode.HALF_UP, 346.997, 479.946);
+        ColumnVector child4 =
+            ColumnVector.decimalFromDoubles(DType.create(DType.DTypeEnum.DECIMAL64, 3),
+                RoundingMode.HALF_UP, 87.764, 414.239);
+        ColumnVector created = ColumnVector.makeList(child1, child2, child3, child4);
+        ColumnVector newChild = ColumnVector.fromInts(1, 8, 9, 2, 2, 3, 8, 6);
+        ColumnView replacedView = created.replaceListChild(newChild)) {
+      try (ColumnVector replaced = replacedView.copyToColumnVector()) {
+        assertColumnsAreEqual(expected, replaced);
+      }
+    }
+  }
+
+  @Test
+  void testReplaceLeafNodeInListWithIllegal() {
+    assertThrows(IllegalArgumentException.class, () -> {
+      try (ColumnVector child1 =
+               ColumnVector.decimalFromDoubles(DType.create(DType.DTypeEnum.DECIMAL64, 3),
+                   RoundingMode.HALF_UP, 770.892, 961.110);
+           ColumnVector child2 =
+               ColumnVector.decimalFromDoubles(DType.create(DType.DTypeEnum.DECIMAL64, 3),
+                   RoundingMode.HALF_UP, 524.982, 479.946);
+           ColumnVector child3 =
+               ColumnVector.decimalFromDoubles(DType.create(DType.DTypeEnum.DECIMAL64, 3),
+                   RoundingMode.HALF_UP, 346.997, 479.946);
+           ColumnVector child4 =
+               ColumnVector.decimalFromDoubles(DType.create(DType.DTypeEnum.DECIMAL64, 3),
+                   RoundingMode.HALF_UP, 87.764, 414.239);
+           ColumnVector created = ColumnVector.makeList(child1, child2, child3, child4);
+           ColumnVector newChild = ColumnVector.fromInts(0, 1, 8, 9, 2, 2, 3, 8, 6);
+           ColumnView replacedView = created.replaceListChild(newChild)) {
+      }
+    });
+  }
+
+  @Test
+  void testReplaceColumnInStruct() {
+    try (ColumnVector expected = ColumnVector.fromStructs(new StructType(false,
+            Arrays.asList(
+                new BasicType(false, DType.INT32),
+                new BasicType(false, DType.INT32),
+                new BasicType(false, DType.INT32))),
+        new HostColumnVector.StructData(1, 5, 3),
+        new HostColumnVector.StructData(4, 9, 6));
+         ColumnVector child1 = ColumnVector.fromInts(1, 4);
+         ColumnVector child2 = ColumnVector.fromInts(2, 5);
+         ColumnVector child3 = ColumnVector.fromInts(3, 6);
+         ColumnVector created = ColumnVector.makeStruct(child1, child2, child3);
+         ColumnVector replaceWith = ColumnVector.fromInts(5, 9);
+         ColumnView replacedView = created.replaceChildrenWithViews(new int[]{1},
+             new ColumnVector[]{replaceWith})) {
+      try (ColumnVector replaced = replacedView.copyToColumnVector()) {
+        assertColumnsAreEqual(expected, replaced);
+      }
+    }
+  }
+
+  @Test
+  void testReplaceIllegalIndexColumnInStruct() {
+    assertThrows(IllegalArgumentException.class, () -> {
+      try (ColumnVector child1 = ColumnVector.fromInts(1, 4);
+           ColumnVector child2 = ColumnVector.fromInts(2, 5);
+           ColumnVector child3 = ColumnVector.fromInts(3, 6);
+           ColumnVector created = ColumnVector.makeStruct(child1, child2, child3);
+           ColumnVector replaceWith = ColumnVector.fromInts(5, 9);
+           ColumnView replacedView = created.replaceChildrenWithViews(new int[]{5},
+               new ColumnVector[]{replaceWith})) {
+      }
+    });
+  }
+
+  @Test
+  void testReplaceSameIndexColumnInStruct() {
+    assertThrows(IllegalArgumentException.class, () -> {
+      try (ColumnVector child1 = ColumnVector.fromInts(1, 4);
+           ColumnVector child2 = ColumnVector.fromInts(2, 5);
+           ColumnVector child3 = ColumnVector.fromInts(3, 6);
+           ColumnVector created = ColumnVector.makeStruct(child1, child2, child3);
+           ColumnVector replaceWith = ColumnVector.fromInts(5, 9);
+           ColumnView replacedView = created.replaceChildrenWithViews(new int[]{1, 1},
+               new ColumnVector[]{replaceWith, replaceWith})) {
+      }
+    });
   }
 }
