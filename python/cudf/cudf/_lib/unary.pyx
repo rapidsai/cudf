@@ -98,6 +98,8 @@ def cast(Column input, object dtype=np.float64):
     cdef type_id tid
     cdef data_type c_dtype
 
+    # TODO: Use dtype_to_data_type when it becomes available
+    # to simplify this conversion
     if is_decimal_dtype(dtype):
         tid = libcudf_types.type_id.DECIMAL64
         c_dtype = data_type(tid, -dtype.scale)
