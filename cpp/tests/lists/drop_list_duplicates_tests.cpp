@@ -87,6 +87,11 @@ TEST_F(DropListDuplicatesTest, IntegerTestsNonNull)
   test_once<true>(INT_LCW{{}, {}, {5, 4, 3, 2, 1, 0}, {}, {6}, {}},
                   INT_LCW{{}, {}, {0, 1, 2, 3, 4, 5}, {}, {6}, {}});
 
+  // List containing similar entries
+  test_once<true>(
+    INT_LCW{{1, 1, 1, 1, 1, 1, 1, 1}, {1, 1, 1, 1, 1, 2, 2, 2}, {2, 2, 2, 2, 3, 3, 3, 3}},
+    INT_LCW{{1}, {1, 2}, {2, 3}});
+
   // Sliced list column
   auto const list0 = INT_LCW{{1, 2, 3, 2, 3, 2, 3, 2, 3}, {3, 2, 1, 4, 1}, {5}, {10, 8, 9}, {6, 7}};
   auto const list1 = cudf::slice(list0, {1, 5})[0];
