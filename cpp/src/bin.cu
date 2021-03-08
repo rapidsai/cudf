@@ -28,11 +28,17 @@ namespace bin {
 
 /// Kernel for accumulation.
 // TODO: Need to template a lot of these types.
+// Note that the two comparators will always be called with an input value as
+// the first argument, i.e. inclusivity in bin i will be determined by
+// `left_comp(value, left_edges[i]) && right_comp(value, right_edges[i])`
+template <typename StrictWeakOrderingLeft, typename StrictWeakOrderingRight>
 __global__ void accumulateKernel(
         const float *values, unsigned int num_values,
         const float *left_edges,
         const float *right_edges,
-        unsigned int *counts, unsigned int num_bins)
+        unsigned int *counts, unsigned int num_bins,
+        StrictWeakOrderingLeft left_comp,
+        StrictWeakOrderingRight right_comp)
 {
     // Assume a set of blocks each containing a single thread for now.
     unsigned int step = static_cast<unsigned int>(num_values / gridDim.x);
@@ -63,7 +69,7 @@ __global__ void accumulateKernel(
 		unsigned int low = 0;
 		while (high - low > 1) {
 			unsigned int mid = (high + low) / 2;
-			if (thrust::greater_equal<float>()(value, left_edges[mid]))
+			if (left_comp(value, left_edges[mid]))
             {
 				low = mid;
 			}
@@ -72,7 +78,7 @@ __global__ void accumulateKernel(
 				high = mid;
 			}
 		}
-        if (thrust::less_equal<float>()(value, right_edges[low]))
+        if (right_comp(value, right_edges[low]))
         {
             atomicAdd(&(counts[low]), 1);
         }
@@ -100,7 +106,9 @@ std::unique_ptr<column> bin(column_view const& input,
             left_edges.begin<float>(),
             right_edges.begin<float>(),
             static_cast<cudf::mutable_column_view>(*output).begin<unsigned int>(),
-            left_edges.size());
+            left_edges.size(),
+            thrust::greater_equal<float>(),
+            thrust::less_equal<float>());
 
     return output;
 }
