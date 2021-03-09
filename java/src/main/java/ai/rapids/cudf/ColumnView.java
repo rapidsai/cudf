@@ -1398,7 +1398,9 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
       if (view == null) {
         newChildren.add(child);
       } else {
-        assert (child.getRowCount() == view.getRowCount());
+        if (child.getRowCount() != view.getRowCount()) {
+          throw new IllegalArgumentException("Child row count doesn't match the old child");
+        }
         newChildren.add(view);
       }
     });
