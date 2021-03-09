@@ -100,6 +100,25 @@ std::unique_ptr<cudf::table> create_compressible_fixed_table(cudf::size_type num
   return create_fixed_table<T>(num_columns, num_rows, include_validity, compressible_elements);
 }
 
+void compare_metadata_equality(cudf::io::table_input_metadata in_meta,
+                               cudf::io::table_metadata out_meta)
+{
+  std::function<void(cudf::io::column_name_info, cudf::io::column_in_metadata)> compare_names =
+    [&](cudf::io::column_name_info out_col, cudf::io::column_in_metadata in_col) {
+      if (not in_col.get_name().empty()) { EXPECT_EQ(out_col.name, in_col.get_name()); }
+      EXPECT_EQ(out_col.children.size(), in_col.num_children());
+      for (size_t i = 0; i < out_col.children.size(); ++i) {
+        compare_names(out_col.children[i], in_col.child(i));
+      }
+    };
+
+  EXPECT_EQ(out_meta.schema_info.size(), in_meta.column_metadata.size());
+
+  for (size_t i = 0; i < out_meta.schema_info.size(); ++i) {
+    compare_names(out_meta.schema_info[i], in_meta.column_metadata[i]);
+  }
+}
+
 // Base test fixture for tests
 struct ParquetWriterTest : public cudf::test::BaseFixture {
 };
@@ -343,7 +362,7 @@ TEST_F(ParquetWriterTest, MultiColumn)
   auto result = cudf_io::read_parquet(in_opts);
 
   CUDF_TEST_EXPECT_TABLES_EQUAL(expected->view(), result.tbl->view());
-  // EXPECT_EQ(expected_metadata.column_names, result.metadata.column_names);
+  compare_metadata_equality(expected_metadata, result.metadata);
 }
 
 TEST_F(ParquetWriterTest, MultiColumnWithNulls)
@@ -429,7 +448,7 @@ TEST_F(ParquetWriterTest, MultiColumnWithNulls)
   // TODO: Need to be able to return metadata in tree form from reader so they can be compared.
   // Unfortunately the closest thing to a heirarchical schema is column_name_info which does not
   // have any tests for it c++ or python.
-  // EXPECT_EQ(expected_metadata.column_names, result.metadata.column_names);
+  compare_metadata_equality(expected_metadata, result.metadata);
 }
 
 TEST_F(ParquetWriterTest, Strings)
@@ -469,7 +488,7 @@ TEST_F(ParquetWriterTest, Strings)
   auto result = cudf_io::read_parquet(in_opts);
 
   CUDF_TEST_EXPECT_TABLES_EQUAL(expected->view(), result.tbl->view());
-  // EXPECT_EQ(expected_metadata.column_names, result.metadata.column_names);
+  compare_metadata_equality(expected_metadata, result.metadata);
 }
 
 TEST_F(ParquetWriterTest, SlicedTable)
@@ -583,7 +602,7 @@ TEST_F(ParquetWriterTest, SlicedTable)
   auto result = cudf_io::read_parquet(in_opts);
 
   CUDF_TEST_EXPECT_TABLES_EQUAL(expected_slice, result.tbl->view());
-  // EXPECT_EQ(expected_metadata.column_names, result.metadata.column_names);
+  compare_metadata_equality(expected_metadata, result.metadata);
 }
 
 TEST_F(ParquetWriterTest, ListColumn)
@@ -681,7 +700,7 @@ TEST_F(ParquetWriterTest, ListColumn)
   auto result  = cudf_io::read_parquet(in_opts);
 
   CUDF_TEST_EXPECT_TABLES_EQUAL(expected, result.tbl->view());
-  // EXPECT_EQ(expected_metadata.column_names, result.metadata.column_names);
+  compare_metadata_equality(expected_metadata, result.metadata);
 }
 
 TEST_F(ParquetWriterTest, MultiIndex)
@@ -732,7 +751,7 @@ TEST_F(ParquetWriterTest, MultiIndex)
   auto result = cudf_io::read_parquet(in_opts);
 
   CUDF_TEST_EXPECT_TABLES_EQUAL(expected->view(), result.tbl->view());
-  // EXPECT_EQ(expected_metadata.column_names, result.metadata.column_names);
+  compare_metadata_equality(expected_metadata, result.metadata);
 }
 
 TEST_F(ParquetWriterTest, HostBuffer)
@@ -761,7 +780,7 @@ TEST_F(ParquetWriterTest, HostBuffer)
   const auto result = cudf_io::read_parquet(in_opts);
 
   CUDF_TEST_EXPECT_TABLES_EQUAL(expected->view(), result.tbl->view());
-  // EXPECT_EQ(expected_metadata.column_names, result.metadata.column_names);
+  compare_metadata_equality(expected_metadata, result.metadata);
 }
 
 TEST_F(ParquetWriterTest, NonNullable)
@@ -889,7 +908,10 @@ TEST_F(ParquetWriterTest, StructOfList)
 
   cudf_io::parquet_reader_options read_args =
     cudf_io::parquet_reader_options::builder(cudf_io::source_info(filepath));
-  cudf_io::read_parquet(read_args);
+  const auto result = cudf_io::read_parquet(read_args);
+
+  CUDF_TEST_EXPECT_TABLES_EQUAL(expected, result.tbl->view());
+  compare_metadata_equality(expected_metadata, result.metadata);
 }
 
 TEST_F(ParquetWriterTest, ListOfStruct)
@@ -928,10 +950,10 @@ TEST_F(ParquetWriterTest, ListOfStruct)
 
   cudf_io::table_input_metadata expected_metadata(expected);
   expected_metadata.column_metadata[0].set_name("family");
-  expected_metadata.column_metadata[0].child(0).child(0).set_name("human?");
-  expected_metadata.column_metadata[0].child(0).child(1).set_name("particulars");
-  expected_metadata.column_metadata[0].child(0).child(1).child(0).set_name("weight");
-  expected_metadata.column_metadata[0].child(0).child(1).child(1).set_name("age");
+  expected_metadata.column_metadata[0].child(1).child(0).set_name("human?");
+  expected_metadata.column_metadata[0].child(1).child(1).set_name("particulars");
+  expected_metadata.column_metadata[0].child(1).child(1).child(0).set_name("weight");
+  expected_metadata.column_metadata[0].child(1).child(1).child(1).set_name("age");
 
   auto filepath = temp_env->get_temp_filepath("ListOfStruct.parquet");
   cudf_io::parquet_writer_options args =
@@ -941,7 +963,10 @@ TEST_F(ParquetWriterTest, ListOfStruct)
 
   cudf_io::parquet_reader_options read_args =
     cudf_io::parquet_reader_options::builder(cudf_io::source_info(filepath));
-  cudf_io::read_parquet(read_args);
+  const auto result = cudf_io::read_parquet(read_args);
+
+  CUDF_TEST_EXPECT_TABLES_EQUAL(expected, result.tbl->view());
+  compare_metadata_equality(expected_metadata, result.metadata);
 }
 
 // custom data sink that supports device writes. uses plain file io.
@@ -1313,11 +1338,11 @@ TEST_F(ParquetChunkedWriterTest, ListOfStruct)
 
   cudf_io::table_input_metadata expected_metadata(table_1);
   expected_metadata.column_metadata[0].set_name("family");
-  expected_metadata.column_metadata[0].child(0).set_nullability(false);
-  expected_metadata.column_metadata[0].child(0).child(0).set_name("human?");
-  expected_metadata.column_metadata[0].child(0).child(1).set_name("particulars");
-  expected_metadata.column_metadata[0].child(0).child(1).child(0).set_name("weight");
-  expected_metadata.column_metadata[0].child(0).child(1).child(1).set_name("age");
+  expected_metadata.column_metadata[0].child(1).set_nullability(false);
+  expected_metadata.column_metadata[0].child(1).child(0).set_name("human?");
+  expected_metadata.column_metadata[0].child(1).child(1).set_name("particulars");
+  expected_metadata.column_metadata[0].child(1).child(1).child(0).set_name("weight");
+  expected_metadata.column_metadata[0].child(1).child(1).child(1).set_name("age");
 
   auto filepath = temp_env->get_temp_filepath("ChunkedListOfStruct.parquet");
   cudf_io::chunked_parquet_writer_options args =
@@ -1330,6 +1355,7 @@ TEST_F(ParquetChunkedWriterTest, ListOfStruct)
   auto result = cudf_io::read_parquet(read_opts);
 
   CUDF_TEST_EXPECT_TABLES_EQUIVALENT(*result.tbl, *full_table);
+  compare_metadata_equality(expected_metadata, result.metadata);
 }
 
 TEST_F(ParquetChunkedWriterTest, ListOfStructOfStructOfListOfList)
@@ -1403,13 +1429,13 @@ TEST_F(ParquetChunkedWriterTest, ListOfStructOfStructOfListOfList)
 
   cudf_io::table_input_metadata expected_metadata(table_1);
   expected_metadata.column_metadata[0].set_name("family");
-  expected_metadata.column_metadata[0].child(0).set_nullability(false);
-  expected_metadata.column_metadata[0].child(0).child(0).set_name("human?");
-  expected_metadata.column_metadata[0].child(0).child(1).set_name("particulars");
-  expected_metadata.column_metadata[0].child(0).child(1).child(0).set_name("weight");
-  expected_metadata.column_metadata[0].child(0).child(1).child(1).set_name("age");
-  expected_metadata.column_metadata[0].child(0).child(1).child(2).set_name("land_unit");
-  expected_metadata.column_metadata[0].child(0).child(1).child(3).set_name("flats");
+  expected_metadata.column_metadata[0].child(1).set_nullability(false);
+  expected_metadata.column_metadata[0].child(1).child(0).set_name("human?");
+  expected_metadata.column_metadata[0].child(1).child(1).set_name("particulars");
+  expected_metadata.column_metadata[0].child(1).child(1).child(0).set_name("weight");
+  expected_metadata.column_metadata[0].child(1).child(1).child(1).set_name("age");
+  expected_metadata.column_metadata[0].child(1).child(1).child(2).set_name("land_unit");
+  expected_metadata.column_metadata[0].child(1).child(1).child(3).set_name("flats");
 
   auto filepath = temp_env->get_temp_filepath("ListOfStructOfStructOfListOfList.parquet");
   cudf_io::chunked_parquet_writer_options args =
@@ -1422,6 +1448,7 @@ TEST_F(ParquetChunkedWriterTest, ListOfStructOfStructOfListOfList)
   auto result = cudf_io::read_parquet(read_opts);
 
   CUDF_TEST_EXPECT_TABLES_EQUIVALENT(*result.tbl, *full_table);
+  compare_metadata_equality(expected_metadata, result.metadata);
 
   // We specifically mentioned in input schema that struct_2 is non-nullable across chunked calls.
   auto result_parent_list = result.tbl->get_column(0);
@@ -1593,6 +1620,7 @@ TEST_F(ParquetChunkedWriterTest, DifferentNullabilityStruct)
   auto result = cudf_io::read_parquet(read_opts);
 
   CUDF_TEST_EXPECT_TABLES_EQUIVALENT(*result.tbl, *full_table);
+  compare_metadata_equality(expected_metadata, result.metadata);
 }
 
 TEST_F(ParquetChunkedWriterTest, ForcedNullability)
@@ -1662,7 +1690,7 @@ TEST_F(ParquetChunkedWriterTest, ForcedNullabilityList)
 
   cudf_io::table_input_metadata metadata(table1);
   metadata.column_metadata[0].set_nullability(true);  // List is nullable at first (root) level
-  metadata.column_metadata[0].child(0).set_nullability(
+  metadata.column_metadata[0].child(1).set_nullability(
     false);  // non-nullable at second (leaf) level
   metadata.column_metadata[1].set_nullability(true);
 
@@ -1725,6 +1753,7 @@ TEST_F(ParquetChunkedWriterTest, ForcedNullabilityStruct)
   auto result = cudf_io::read_parquet(read_opts);
 
   CUDF_TEST_EXPECT_TABLES_EQUAL(*result.tbl, *full_table);
+  compare_metadata_equality(expected_metadata, result.metadata);
 }
 
 TEST_F(ParquetChunkedWriterTest, ReadRowGroups)

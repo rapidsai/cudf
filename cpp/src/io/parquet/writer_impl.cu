@@ -229,16 +229,21 @@ std::vector<schema_tree_node> construct_schema_tree(LinkedColVector const &linke
         list_schema_2.parent_idx      = schema.size() - 1;  // Parent is list_schema_1, last added.
         schema.push_back(std::move(list_schema_2));
 
-        CUDF_EXPECTS(col_meta.num_children() == 1,
-                     "List column's metadata should have exactly one child");
+        CUDF_EXPECTS(col_meta.num_children() == 2,
+                     "List column's metadata should have exactly two children");
 
         add_schema(col->children[lists_column_view::child_column_index],
-                   col_meta.child(0),
+                   col_meta.child(lists_column_view::child_column_index),
                    schema.size() - 1);
       } else {
         // if leaf, add current
-        CUDF_EXPECTS(col_meta.num_children() == 0,
-                     "Leaf column's corresponding metadata cannot have children");
+        if (col->type().id() == type_id::STRING) {
+          CUDF_EXPECTS(col_meta.num_children() == 2,
+                       "String column's corresponding metadata should have exactly two children");
+        } else {
+          CUDF_EXPECTS(col_meta.num_children() == 0,
+                       "Leaf column's corresponding metadata cannot have children");
+        }
 
         schema_tree_node col_schema{};
 

@@ -554,6 +554,6 @@ cdef _get_col_children_names(Column col, column_in_metadata& col_meta):
             col_meta.child(i).set_name(name.encode())
             _get_col_children_names(child_col, col_meta.child(i))
     elif is_list_dtype(col):
-        _get_col_children_names(col.children[1], col_meta.child(0))
+        _get_col_children_names(col.children[1], col_meta.child(1))
     else:
         return
