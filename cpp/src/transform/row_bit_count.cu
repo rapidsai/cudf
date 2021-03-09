@@ -100,7 +100,8 @@ using offset_type = int32_t;
  */
 struct column_info {
   size_type depth;
-  size_type branch_depth_start, branch_depth_end;
+  size_type branch_depth_start;
+  size_type branch_depth_end;
 };
 
 /**
@@ -307,7 +308,9 @@ struct row_size_functor {
   __device__ size_type operator()(column_device_view const& col, row_span const& span)
   {
     auto const num_rows{span.row_end - span.row_start};
-    return ((sizeof(device_storage_type_t<T>) * 8) + (col.nullable() ? 1 : 0)) * num_rows;
+    auto const element_size  = sizeof(device_storage_type_t<T>) * 8;
+    auto const validity_size = col.nullable() ? 1 : 0;
+    return (element_size + validity_size) * num_rows;
   }
 };
 
@@ -320,10 +323,11 @@ __device__ size_type row_size_functor::operator()<string_view>(column_device_vie
   auto const row_start{span.row_start + col.offset()};
   auto const row_end{span.row_end + col.offset()};
 
-  return (((sizeof(offset_type) * 8) + (col.nullable() ? 1 : 0)) *
-          num_rows) +  // cost of offsets + validity
-         ((offsets.data<offset_type>()[row_end] - offsets.data<offset_type>()[row_start]) *
-          8);  // cost of chars
+  auto const offsets_size  = sizeof(offset_type) * 8;
+  auto const validity_size = col.nullable() ? 1 : 0;
+  auto const chars_size =
+    (offsets.data<offset_type>()[row_end] - offsets.data<offset_type>()[row_start]) * 8;
+  return ((offsets_size + validity_size) * num_rows) + chars_size;
 }
 
 template <>
@@ -332,8 +336,10 @@ __device__ size_type row_size_functor::operator()<list_view>(column_device_view 
 {
   column_device_view const& offsets = col.child(lists_column_view::offsets_column_index);
   auto const num_rows{span.row_end - span.row_start};
-  return ((sizeof(offset_type) * 8) + (col.nullable() ? 1 : 0)) *
-         num_rows;  // cost of offsets + validity
+
+  auto const offsets_size  = sizeof(offset_type) * 8;
+  auto const validity_size = col.nullable() ? 1 : 0;
+  return (offsets_size + validity_size) * num_rows;
 }
 
 template <>
