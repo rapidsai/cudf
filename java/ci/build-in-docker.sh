@@ -1,7 +1,7 @@
 #!/bin/bash
 
 #
-# Copyright (c) 2020, NVIDIA CORPORATION. All rights reserved.
+# Copyright (c) 2020-2021, NVIDIA CORPORATION. All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -75,7 +75,7 @@ make -j$PARALLEL_LEVEL install
 rm -rf $WORKSPACE/cpp/build
 mkdir -p $WORKSPACE/cpp/build
 cd $WORKSPACE/cpp/build
-cmake .. -DUSE_NVTX=OFF -DARROW_STATIC_LIB=ON -DBoost_USE_STATIC_LIBS=ON -DBUILD_TESTS=$SKIP_CPP_TESTS -DPER_THREAD_DEFAULT_STREAM=$ENABLE_PTDS -DRMM_LOGGING_LEVEL=$RMM_LOGGING_LEVEL
+cmake .. -DUSE_NVTX=OFF -DCUDF_USE_ARROW_STATIC=ON -DBoost_USE_STATIC_LIBS=ON -DBUILD_TESTS=$SKIP_CPP_TESTS -DPER_THREAD_DEFAULT_STREAM=$ENABLE_PTDS -DRMM_LOGGING_LEVEL=$RMM_LOGGING_LEVEL
 make -j$PARALLEL_LEVEL
 make install DESTDIR=$INSTALL_PREFIX
 
