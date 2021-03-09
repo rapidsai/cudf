@@ -4838,10 +4838,6 @@ class StringColumn(column.ColumnBase):
         if len(self) == 0:
             return cudf.core.column.as_column([], dtype=dtype)
 
-        # Check for None strings
-        if (self == "None").fillna(False).any():
-            raise ValueError("Could not convert `None` value to datetime")
-
         casting_func = (
             str_cast.timestamp2int
             if dtype.type == np.datetime64
