@@ -7476,7 +7476,7 @@ class DataFrame(Frame, Serializable):
         if exp_column not in self._column_names:
             raise ValueError("Can not find the column: " + exp_column)
         nlevels = self.index.nlevels
-        return DataFrame._from_table(
+        return self.__class__._from_table(
             libcudf.reshape.explode(self, exp_column, ignore_index, nlevels))
 
     _accessors = set()  # type: Set[Any]
