@@ -46,21 +46,9 @@ cpdef join(Table lhs, Table rhs, how=None):
     else:
         raise ValueError(f"Invalid join type {how}")
 
-    cdef size_type join_size = c_result.first.get()[0].size()
-    cdef unique_ptr[column] left_rows = make_unique[column](
-        data_type(type_id.INT32),
-        join_size,
-        c_result.first.get()[0].release()
-    )
-    cdef unique_ptr[column] right_rows = make_unique[column](
-        data_type(type_id.INT32),
-        join_size,
-        c_result.second.get()[0].release()
-    )
-    return (
-        Column.from_unique_ptr(move(left_rows)),
-        Column.from_unique_ptr(move(right_rows))
-    )
+    cdef Column left_rows = _gather_map_as_column(move(c_result.first))
+    cdef Column right_rows = _gather_map_as_column(move(c_result.second))
+    return left_rows, right_rows
 
 
 cpdef semi_join(Table lhs, Table rhs, how=None):
@@ -85,13 +73,18 @@ cpdef semi_join(Table lhs, Table rhs, how=None):
     else:
         raise ValueError(f"Invalid join type {how}")
 
-    cdef size_type join_size = c_result.get()[0].size()
-    cdef unique_ptr[column] left_rows = make_unique[column](
-        data_type(type_id.INT32),
-        join_size,
-        c_result.get()[0].release()
-    )
+    cdef Column left_rows = _gather_map_as_column(move(c_result))
     return (
-        Column.from_unique_ptr(move(left_rows)),
+        left_rows,
         as_column([], dtype="int32")
     )
+
+
+cdef Column _gather_map_as_column(cpp_join.gather_map_type gather_map):
+    # helple to convert a gather map to a Column
+    cdef size_type size = gather_map.get()[0].size()
+    cdef unique_ptr[column] c_col = make_unique[column](
+        data_type(type_id.INT32),
+        size,
+        gather_map.get()[0].release())
+    return Column.from_unique_ptr(move(c_col))
