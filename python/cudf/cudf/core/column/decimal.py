@@ -65,7 +65,7 @@ class DecimalColumn(ColumnBase):
             self, other = other, self
         scale = _binop_scale(self.dtype, other.dtype, op)
         output_type = Decimal64Dtype(
-            scale=scale, precision=18
+            scale=scale, precision=Decimal64Dtype.MAX_PRECISION
         )  # precision will be ignored, libcudf has no notion of precision
         result = libcudf.binaryop.binaryop(self, other, op, output_type)
         result.dtype.precision = _binop_precision(self.dtype, other.dtype, op)
