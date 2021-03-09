@@ -29,6 +29,8 @@ class _Indexer:
     # >>> _Indexer("b", index=True).get(df)  # returns index level "b" of df
 
     def __init__(self, name: Any, column=False, index=False):
+        if column and index:
+            raise ValueError("Cannot specify both column and index")
         self.name = name
         self.column, self.index = column, index
 
