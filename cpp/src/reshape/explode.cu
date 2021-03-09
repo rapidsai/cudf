@@ -187,7 +187,7 @@ std::unique_ptr<table> explode_outer(table_view const& input_table,
   // number of nulls or empty lists found so far in the explode column
   GatherType null_offset(explode_col.size(), stream);
 
-  auto null_iter = thrust::make_transform_iterator(
+  auto null_or_empty = thrust::make_transform_iterator(
     thrust::make_counting_iterator(0),
     [offsets, offsets_size = explode_col.size() - 1] __device__(int idx) {
       return (idx > offsets_size || (offsets[idx + 1] != offsets[idx])) ? 0 : 1;
