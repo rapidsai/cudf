@@ -25,6 +25,7 @@
 #include <thrust/execution_policy.h>
 #include <thrust/device_vector.h>
 #include <thrust/host_vector.h>
+#include <thrust/tuple.h>
 #include <stdio.h>
 #include <vector>
 #include <numeric>
@@ -94,29 +95,33 @@ __global__ void accumulateKernel(
     }
 }
 
-struct bin_finder
+struct bin_finder_new
 {
-    bin_finder(const unsigned int *lower_bounds, const float *input, const float *right_edges, unsigned int *output) : m_lower_bounds(lower_bounds), m_input(input), m_right_edges(right_edges), m_output(output) {}
+    bin_finder_new(const float *left_edges, const float *left_edges_end, const float *right_edges) : m_left_edges(left_edges), m_left_edges_end(left_edges_end), m_right_edges(right_edges) {}
 
-    __device__ void operator()(unsigned int i) const
+    __device__ unsigned int operator()(const float value) const
     {
+        auto bound = thrust::lower_bound(thrust::seq,
+                m_left_edges, m_left_edges_end,
+                value);
         // First check if the input is actually contained in the interval; if not, assign MYNULL.
         // TODO: Use the proper comparator here.
-        if (*(m_input + i) < *(m_right_edges + *(m_lower_bounds + i)))
+        auto index = bound - m_left_edges;
+        if (value < m_right_edges[index])
         {
             // TODO: Fix case where the input is less than all elements, so subtracting one will give a negative.
-            *(m_output + i) = *(m_lower_bounds + i) - 1;
+            // We must subtract 1 because lower bound's behavior is shifted by 1.
+            return index - 1;
         }
         else
         {
-            *(m_output + i) = MYNULL;
+            return MYNULL;
         }
     }
 
-    const unsigned int *m_lower_bounds;
-    const float *m_input;
+    const float *m_left_edges;
+    const float *m_left_edges_end;
     const float *m_right_edges;
-    unsigned int *m_output;
 };
 
 // Bin the input by the edges in left_edges and right_edges.
@@ -132,32 +137,13 @@ std::unique_ptr<column> bin(column_view const& input,
     CUDF_EXPECTS(left_edges.size() == right_edges.size(), "The left and right edge columns must be of the same length.");
 
     // TODO: Figure out how to get these two template type from the input.
-    auto lower_bounds = cudf::make_numeric_column(data_type(type_id::UINT32), input.size());
-
     // TODO: Use the comparator
-    // TODO: Fix that this is off by one. lower_bound returns the first value greater than or equal to.
-    thrust::lower_bound(thrust::device,
-            left_edges.begin<float>(), left_edges.end<float>(),
-            input.begin<float>(), input.end<float>(),
-            static_cast<cudf::mutable_column_view>(*lower_bounds).begin<unsigned int>());
-
     auto output = cudf::make_numeric_column(data_type(type_id::UINT32), input.size());
-
-    thrust::host_vector<unsigned int> host_indices(10);
-    std::iota(host_indices.begin(), host_indices.end(), 0);
-    thrust::device_vector<unsigned int> indices = host_indices;
-
-    thrust::for_each(
-        thrust::device,
-        indices.begin(),
-        indices.end(),
-        bin_finder(
-            static_cast<cudf::column_view>(*lower_bounds).begin<unsigned int>(),
-            input.begin<float>(),
-            right_edges.begin<float>(),
-            static_cast<cudf::mutable_column_view>(*output).begin<unsigned int>()
-            )
-        );
+    thrust::transform(thrust::device,
+            input.begin<float>(), input.end<float>(),
+            static_cast<cudf::mutable_column_view>(*output).begin<unsigned int>(),
+            bin_finder_new(left_edges.begin<float>(), left_edges.end<float>(), right_edges.begin<float>())
+            );
 
     //unsigned int *tmp = (unsigned int *) malloc(10 * sizeof(unsigned int));
     //cudaError_t err = cudaMemcpy(tmp, static_cast<cudf::mutable_column_view>(*output).begin<unsigned int>(), 10 * sizeof(unsigned int), cudaMemcpyDeviceToHost);
