@@ -17,6 +17,7 @@
 // TODO: Clean up includes when all debugging is done.
 #include <cudf/binning/bin.hpp>
 #include <cudf/binning/bin.cuh>
+#include <cudf/column/column_factories.hpp>
 #include <cudf/column/column_view.hpp>
 #include <cudf/utilities/error.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
@@ -33,6 +34,16 @@ std::unique_ptr<column> bin(column_view const& input,
                             inclusive right_inclusive,
                             rmm::mr::device_memory_resource * mr)
 {
+    // TODO: Check if we want an empty set of bins to be an error, or if it should just return NULL for all bins.
+    CUDF_EXPECTS(input.type() == left_edges.type(), "The input and edge columns must have the same types.");
+    CUDF_EXPECTS(input.type() == right_edges.type(), "The input and edge columns must have the same types.");
+    CUDF_EXPECTS(left_edges.size() == right_edges.size(), "The left and right edge columns must be of the same length.");
+
+    // Handle empty inputs.
+    if (input.is_empty()) {
+        return cudf::make_numeric_column(data_type(type_id::UINT32), 0);
+    }
+
     return type_dispatcher(
             input.type(), bin_type_dispatcher{}, input, left_edges, left_inclusive, right_edges, right_inclusive, mr);
 }

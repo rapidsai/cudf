@@ -29,10 +29,6 @@
 //#include <stdio.h>
 #include <cudf/copying.hpp>
 
-// Forward declare the enum class to avoid importing bin.hpp
-//enum class inclusive;
-
-
 namespace cudf {
 
 namespace bin {
@@ -49,7 +45,7 @@ struct bin_finder
           m_left_comp(StrictWeakOrderingLeft()), m_right_comp(StrictWeakOrderingRight())
     {}
 
-    __device__ unsigned int operator()(const T value) const
+    __device__ size_type operator()(const T value) const
     {
         // Immediately return NULL for NULL values.
         if (value == NULL)
@@ -64,18 +60,19 @@ struct bin_finder
         if ((bound == m_left_edges) || (bound == m_left_edges_end))
             return NULL;
 
-        // We must subtract 1 because lower bound returns the first index _greater than_ the value.
+        // We must subtract 1 because lower bound returns the first index
+        // _greater than_ the value. This is safe because bound == m_left edges
+        // would already have triggered a NULL return above.
         auto index = bound - m_left_edges - 1;
         return (m_right_comp(value, m_right_edges[index])) ? index : NULL;
     }
 
-    const T *m_left_edges;
-    const T *m_left_edges_end;
-    const T *m_right_edges;
-    // TODO: Can I store these by reference? Don't think so since the argument
-    // to lower_bound is not a ref, but I should check to be sure.
-    StrictWeakOrderingLeft m_left_comp;
-    StrictWeakOrderingRight m_right_comp;
+    const T *m_left_edges{};  // Pointer to the beginning of the device data containing left bin edges.
+    const T *m_left_edges_end{};  // Pointer to the end of the device data containing left bin edges.
+    const T *m_right_edges{};  // Pointer to the beginning of the device data containing right bin edges.
+    // TODO: Can I implement these as static members rather than making an instance on construction?
+    StrictWeakOrderingLeft m_left_comp; // Comparator used for left edges.
+    StrictWeakOrderingRight m_right_comp; // Comparator used for left edges.
 };
 
 
@@ -86,27 +83,14 @@ std::unique_ptr<column> bin_internal(column_view const& input,
                             column_view const& right_edges,
                             rmm::mr::device_memory_resource * mr)
 {
-    // TODO: Should this check or the empty return below be moved to the
-    // user-facing function? That's marginally faster and fail-fast is good, on
-    // the other hand this code base may prefer to have all logic in one place.
-    // TODO: Add check that edge sizes are > 0.
-    CUDF_EXPECTS(input.type() == left_edges.type(), "The input and edge columns must have the same types.");
-    CUDF_EXPECTS(input.type() == right_edges.type(), "The input and edge columns must have the same types.");
-    CUDF_EXPECTS(left_edges.size() == right_edges.size(), "The left and right edge columns must be of the same length.");
-
-    // Handle empty inputs.
-    if (input.is_empty()) {
-        // TODO: Determine what output type actually makes sense here, it
-        // probably shouldn't be empty_like but instead of some numeric type.
-        return empty_like(input);
-    }
-
-    // TODO: Figure out how to get these two template type from the input.
-    auto output = cudf::make_numeric_column(input.type(), input.size());
+    // TODO: Determine if UINT32 is the output type that we want. Is there a
+    // way to map (at compile time) from size_type to the largest value in type_id
+    // that can hold this?
+    auto output = cudf::make_numeric_column(data_type(type_id::UINT32), input.size());
 
     thrust::transform(thrust::device,
             input.begin<T>(), input.end<T>(),
-            static_cast<cudf::mutable_column_view>(*output).begin<unsigned int>(),
+            static_cast<cudf::mutable_column_view>(*output).begin<size_type>(),
             bin_finder<T, StrictWeakOrderingLeft, StrictWeakOrderingRight>(
                 left_edges.begin<T>(), left_edges.end<T>(), right_edges.begin<T>()
                 )
