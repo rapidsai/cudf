@@ -30,6 +30,7 @@
 #include <stdio.h>
 #include <vector>
 #include <numeric>
+#include <cudf/copying.hpp>
 
 namespace cudf {
 
@@ -85,12 +86,20 @@ std::unique_ptr<column> bin(column_view const& input,
                             inclusive right_inclusive,
                             rmm::mr::device_memory_resource * mr)
 {
+    // TODO: Add check that edge sizes are > 0.
     CUDF_EXPECTS(input.type() == left_edges.type(), "The input and edge columns must have the same types.");
     CUDF_EXPECTS(input.type() == right_edges.type(), "The input and edge columns must have the same types.");
     CUDF_EXPECTS(left_edges.size() == right_edges.size(), "The left and right edge columns must be of the same length.");
 
+    // Handle empty inputs.
+    if (input.is_empty()) {
+        // TODO: Determine what output type actually makes sense here, it
+        // probably shouldn't be empty_like but instead of some numeric type.
+        return empty_like(input);
+    }
+
     // TODO: Figure out how to get these two template type from the input.
-    auto output = cudf::make_numeric_column(data_type(type_id::UINT32), input.size());
+    auto output = cudf::make_numeric_column(input.type(), input.size());
 
     if ((left_inclusive == inclusive::YES) && (left_inclusive == inclusive::YES))
     {

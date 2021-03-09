@@ -100,6 +100,9 @@ TEST(BinColumnTest, TestSimple)
   //ASSERT_TRUE(thrust::all_of(begin, end, equal_value(3)));
 };
 
+// TODO: Add test for empty inputs.
+// TODO: Add test and error for empty edges for empty inputs.
+
 }  // anonymous namespace
 
 CUDF_TEST_PROGRAM_MAIN()
