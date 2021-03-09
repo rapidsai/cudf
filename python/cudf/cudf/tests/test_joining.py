@@ -14,7 +14,7 @@ from cudf.tests.utils import (
     assert_exceptions_equal,
 )
 
-_JOIN_TYPES = {"left", "inner", "outer", "right", "leftanti", "leftsemi"}
+_JOIN_TYPES = ("left", "inner", "outer", "right", "leftanti", "leftsemi")
 
 
 def make_params():
