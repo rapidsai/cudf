@@ -98,11 +98,11 @@ conda config --show-sources
 conda list --show-channel-urls
 
 function install_dask {
-    # Install the master version of dask, distributed, and streamz
-    gpuci_logger "Install the master version of dask, distributed, and streamz"
+    # Install the main version of dask, distributed, and streamz
+    gpuci_logger "Install the main version of dask, distributed, and streamz"
     set -x
-    pip install "git+https://github.com/dask/distributed.git@master" --upgrade --no-deps
-    pip install "git+https://github.com/dask/dask.git@master" --upgrade --no-deps
+    pip install "git+https://github.com/dask/distributed.git@main" --upgrade --no-deps
+    pip install "git+https://github.com/dask/dask.git@main" --upgrade --no-deps
     pip install "git+https://github.com/python-streamz/streamz.git" --upgrade --no-deps
     set +x
 }
@@ -152,7 +152,7 @@ else
     #Project Flash
     export LIB_BUILD_DIR="$WORKSPACE/ci/artifacts/cudf/cpu/libcudf_work/cpp/build"
     export LD_LIBRARY_PATH="$LIB_BUILD_DIR:$CONDA_PREFIX/lib:$LD_LIBRARY_PATH"
-    
+
     if hasArg --skip-tests; then
         gpuci_logger "Skipping Tests"
         exit 0
