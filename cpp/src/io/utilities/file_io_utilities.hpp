@@ -84,7 +84,7 @@ class cufile_input : public cufile_io_base {
    *
    * @param offset Number of bytes from the start
    * @param size Number of bytes to read
-   * @param stream CUDA stream to use, default `rmm::cuda_stream_default`
+   * @param stream CUDA stream to use
    *
    * @return The data buffer in the device memory
    */
@@ -100,7 +100,7 @@ class cufile_input : public cufile_io_base {
    * @param offset Number of bytes from the start
    * @param size Number of bytes to read
    * @param dst Address of the existing device memory
-   * @param stream CUDA stream to use, default `rmm::cuda_stream_default`
+   * @param stream CUDA stream to use
    *
    * @return The number of bytes read
    */
@@ -237,6 +237,6 @@ std::unique_ptr<cufile_input_impl> make_cufile_input(std::string const &filepath
  */
 std::unique_ptr<cufile_output_impl> make_cufile_output(std::string const &filepath);
 
-};  // namespace detail
-};  // namespace io
-};  // namespace cudf
+}  // namespace detail
+}  // namespace io
+}  // namespace cudf

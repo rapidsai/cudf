@@ -100,7 +100,7 @@ class cufile_config {
   /**
    * @brief Returns true when cuFile use is enabled.
    */
-  bool is_enabled() const { return policy == "ALWAYS" || policy == "GDS"; }
+  bool is_enabled() const { return policy == "ALWAYS" or policy == "GDS"; }
 
   /**
    * @brief Returns true when cuDF should not fall back to host IO.
@@ -259,6 +259,6 @@ std::unique_ptr<cufile_output_impl> make_cufile_output(std::string const &filepa
   return nullptr;
 }
 
-};  // namespace detail
-};  // namespace io
-};  // namespace cudf
+}  // namespace detail
+}  // namespace io
+}  // namespace cudf

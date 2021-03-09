@@ -172,7 +172,7 @@ class datasource {
    *
    * @param offset Number of bytes from the start
    * @param size Number of bytes to read
-   * @param stream CUDA stream to use, default `rmm::cuda_stream_default`
+   * @param stream CUDA stream to use
    *
    * @return The data buffer in the device memory
    */
@@ -196,7 +196,7 @@ class datasource {
    * @param offset Number of bytes from the start
    * @param size Number of bytes to read
    * @param dst Address of the existing device memory
-   * @param stream CUDA stream to use, default `rmm::cuda_stream_default`
+   * @param stream CUDA stream to use
    *
    * @return The number of bytes read (can be smaller than size)
    */

@@ -125,9 +125,9 @@ class data_sink {
    * @throws cudf::logic_error the object does not support direct device writes, i.e.
    * `supports_device_write` returns `false`.
    *
-   * @param data Pointer to the buffer to be written into the sink object
+   * @param gpu_data Pointer to the buffer to be written into the sink object
    * @param size Number of bytes to write
-   * @param stream CUDA stream to use, default `rmm::cuda_stream_default`
+   * @param stream CUDA stream to use
    */
   virtual void device_write(void const* gpu_data, size_t size, rmm::cuda_stream_view stream)
   {
