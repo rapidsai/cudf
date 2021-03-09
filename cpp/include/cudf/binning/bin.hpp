@@ -43,6 +43,8 @@ enum class inclusive{YES, NO};
  * right_edges[i]` (with the specified inclusiveness) and `label[j] == i`. If  `input[j]` does not
  * belong to any bin, then `label[j]` is NULL.
  *
+ * Bins must be provided in monotonically increasing order, otherwise behavior is undefined.
+ *
  * If two or more bins overlap, behavior is undefined.
  *
  * NULL elements in `input` belong to no bin and their corresponding label is NULL.

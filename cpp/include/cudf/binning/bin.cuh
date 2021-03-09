@@ -36,7 +36,6 @@
 namespace cudf {
 
 namespace bin {
-constexpr unsigned int MYNULL = 0xffffffff;
 
 template <typename T, typename StrictWeakOrderingLeft, typename StrictWeakOrderingRight>
 struct bin_finder
@@ -52,19 +51,22 @@ struct bin_finder
 
     __device__ unsigned int operator()(const T value) const
     {
-        // TODO: Immediately return NULL for NULL values.
+        // Immediately return NULL for NULL values.
+        if (value == NULL)
+            return NULL;
+
         auto bound = thrust::lower_bound(thrust::seq,
                 m_left_edges, m_left_edges_end,
                 value,
                 m_left_comp);
 
-        // First check if the input is actually contained in the interval; if not, assign MYNULL.
+        // Exit early and return NULL for values not within the interval.
         if ((bound == m_left_edges) || (bound == m_left_edges_end))
-            return MYNULL;
+            return NULL;
 
         // We must subtract 1 because lower bound returns the first index _greater than_ the value.
         auto index = bound - m_left_edges - 1;
-        return (m_right_comp(value, m_right_edges[index])) ? index : MYNULL;
+        return (m_right_comp(value, m_right_edges[index])) ? index : NULL;
     }
 
     const T *m_left_edges;
