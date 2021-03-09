@@ -210,7 +210,7 @@ std::unique_ptr<table> explode_outer(table_view const& input_table,
 
   // offsets + 1 here to skip the 0th offset, which removes a - 1 operation later.
   auto offsets_minus_one = thrust::make_transform_iterator(
-    offsets + 1, [offsets] __device__(auto i) { return (i - offsets[0]) - 1; });
+    thrust::next(offsets), [offsets] __device__(auto i) { return (i - offsets[0]) - 1; });
   // Fill in gather map with all the child column's entries
   thrust::for_each(rmm::exec_policy(stream),
                    counting_iter,
