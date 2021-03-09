@@ -2358,6 +2358,38 @@ TYPED_TEST(FixedPointTestBothReps, FixedPointBinaryOpEqualSimpleScale0)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
 }
 
+TYPED_TEST(FixedPointTestBothReps, FixedPointBinaryOpEqualSimpleScale0Null)
+{
+  using namespace numeric;
+  using decimalXX = TypeParam;
+  using RepType   = device_storage_type_t<decimalXX>;
+
+  auto const col1     = fp_wrapper<RepType>{{1, 2, 3, 4}, {1, 1, 1, 1}, scale_type{0}};
+  auto const col2     = fp_wrapper<RepType>{{1, 2, 3, 4}, {0, 0, 0, 0}, scale_type{0}};
+  auto const expected = wrapper<bool>{{0, 1, 0, 1}, {0, 0, 0, 0}};
+
+  auto const result =
+    cudf::binary_operation(col1, col2, binary_operator::EQUAL, cudf::data_type{type_id::BOOL8});
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
+}
+
+TYPED_TEST(FixedPointTestBothReps, FixedPointBinaryOpEqualSimpleScale2Null)
+{
+  using namespace numeric;
+  using decimalXX = TypeParam;
+  using RepType   = device_storage_type_t<decimalXX>;
+
+  auto const col1     = fp_wrapper<RepType>{{1, 2, 3, 4}, {1, 1, 1, 1}, scale_type{-2}};
+  auto const col2     = fp_wrapper<RepType>{{1, 2, 3, 4}, {0, 0, 0, 0}, scale_type{0}};
+  auto const expected = wrapper<bool>{{0, 1, 0, 1}, {0, 0, 0, 0}};
+
+  auto const result =
+    cudf::binary_operation(col1, col2, binary_operator::EQUAL, cudf::data_type{type_id::BOOL8});
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
+}
+
 TYPED_TEST(FixedPointTestBothReps, FixedPointBinaryOpEqualLessGreater)
 {
   using namespace numeric;
