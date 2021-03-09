@@ -71,16 +71,13 @@ inline auto make_counting_transform_iterator(cudf::size_type start, UnaryFunctio
 }
 
 /**
- * @brief value accessor of column with null bitmask
- * A unary functor returns scalar value at `id`.
- * `operator() (cudf::size_type id)` computes `element` and valid flag at `id`
- * This functor is only allowed for nullable columns.
+ * @brief Value accessor of column that may have a null bitmask.
  *
- * the return value for element `i` will return `column[i]`
+ * This unary functor returns scalar value at `id`.
+ * The `operator()(cudf::size_type id)` computes the `element` and valid flag at `id`.
+ *
+ * The return value for element `i` will return `column[i]`
  * if it is valid, or `null_replacement` if it is null.
- *
- * @throws cudf::logic_error if the column is not nullable.
- * @throws cudf::logic_error if column datatype and Element type mismatch.
  *
  * @tparam Element The type of elements in the column
  */
@@ -88,24 +85,33 @@ template <typename Element>
 struct null_replaced_value_accessor {
   column_device_view const col;      ///< column view of column in device
   Element const null_replacement{};  ///< value returned when element is null
+  bool const has_nulls;              ///< true if col has null elements
 
   /**
-   * @brief constructor
-   * @param[in] _col column device view of cudf column
+   * @brief Creates an accessor for a null-replacement iterator.
+   *
+   * @throws cudf::logic_error if `col` type does not match Element type.
+   * @throws cudf::logic_error if `has_nulls` is true but `col` does not have a validity mask.
+   *
+   * @param[in] col column device view of cudf column
    * @param[in] null_replacement The value to return for null elements
+   * @param[in] has_nulls Must be set to true if `col` has nulls.
    */
-  null_replaced_value_accessor(column_device_view const& _col, Element null_val)
-    : col{_col}, null_replacement{null_val}
+  null_replaced_value_accessor(column_device_view const& col,
+                               Element null_val,
+                               bool has_nulls = true)
+    : col{col}, null_replacement{null_val}, has_nulls{has_nulls}
   {
-    CUDF_EXPECTS(data_type(type_to_id<Element>()) == col.type(), "the data type mismatch");
-    // verify valid is non-null, otherwise, is_valid_nocheck() will crash
-    CUDF_EXPECTS(_col.nullable(), "Unexpected non-nullable column.");
+    CUDF_EXPECTS(type_to_id<Element>() == device_storage_type_id(col.type().id()),
+                 "the data type mismatch");
+    // verify validity bitmask is non-null, otherwise, is_null_nocheck() will crash
+    if (has_nulls) CUDF_EXPECTS(col.nullable(), "column with nulls must have a validity bitmask");
   }
 
   CUDA_DEVICE_CALLABLE
   Element operator()(cudf::size_type i) const
   {
-    return col.is_valid_nocheck(i) ? col.element<Element>(i) : null_replacement;
+    return has_nulls && col.is_null_nocheck(i) ? null_replacement : col.element<Element>(i);
   }
 };
 
@@ -140,7 +146,7 @@ struct validity_accessor {
  *
  * Dereferencing the returned iterator for element `i` will return `column[i]`
  * if it is valid, or `null_replacement` if it is null.
- * This iterator is only allowed for nullable columns.
+ * This iterator is only allowed for both nullable and non-nullable columns.
  *
  * @throws cudf::logic_error if the column is not nullable.
  * @throws cudf::logic_error if column datatype and Element type mismatch.
@@ -148,15 +154,17 @@ struct validity_accessor {
  * @tparam Element The type of elements in the column
  * @param column The column to iterate
  * @param null_replacement The value to return for null elements
- * @return auto Iterator that returns valid column elements, or a null
+ * @param has_nulls Must be set to true if `column` has nulls.
+ * @return Iterator that returns valid column elements, or a null
  * replacement value for null elements.
  */
 template <typename Element>
 auto make_null_replacement_iterator(column_device_view const& column,
-                                    Element const null_replacement = Element{0})
+                                    Element const null_replacement = Element{0},
+                                    bool has_nulls                 = true)
 {
   return make_counting_transform_iterator(
-    0, null_replaced_value_accessor<Element>{column, null_replacement});
+    0, null_replaced_value_accessor<Element>{column, null_replacement, has_nulls});
 }
 
 /**
