@@ -3561,6 +3561,32 @@ class DataFrame(Frame, Serializable):
 
         Rename will not overwite column names. If a list with duplicates is
         passed, column names will be postfixed with a number.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> df = cudf.DataFrame({"A": [1, 2, 3], "B": [4, 5, 6]})
+        >>> df
+           A  B
+        0  1  4
+        1  2  5
+        2  3  6
+
+        Rename columns using a mapping:
+
+        >>> df.rename(columns={"A": "a", "B": "c"})
+           a  c
+        0  1  4
+        1  2  5
+        2  3  6
+
+        Rename index using a mapping:
+
+        >>> df.rename(index={0: 10, 1: 20, 2: 30})
+            A  B
+        10  1  4
+        20  2  5
+        30  3  6
         """
         if errors != "ignore":
             raise NotImplementedError(
@@ -4129,20 +4155,129 @@ class DataFrame(Frame, Serializable):
     def nlargest(self, n, columns, keep="first"):
         """Get the rows of the DataFrame sorted by the n largest value of *columns*
 
+        Parameters
+        ----------
+        n : int
+            Number of rows to return.
+        columns : label or list of labels
+            Column label(s) to order by.
+        keep : {'first', 'last'}, default 'first'
+            Where there are duplicate values:
+            - `first` : prioritize the first occurrence(s)
+            - `last` : prioritize the last occurrence(s)
+
+        Returns
+        -------
+        DataFrame
+            The first `n` rows ordered by the given columns in descending
+            order.
+
         Notes
         -----
         Difference from pandas:
             - Only a single column is supported in *columns*
+
+        Examples
+        --------
+        >>> import cudf
+        >>> df = cudf.DataFrame({'population': [59000000, 65000000, 434000,
+        ...                                   434000, 434000, 337000, 11300,
+        ...                                   11300, 11300],
+        ...                    'GDP': [1937894, 2583560 , 12011, 4520, 12128,
+        ...                            17036, 182, 38, 311],
+        ...                    'alpha-2': ["IT", "FR", "MT", "MV", "BN",
+        ...                                "IS", "NR", "TV", "AI"]},
+        ...                   index=["Italy", "France", "Malta",
+        ...                          "Maldives", "Brunei", "Iceland",
+        ...                          "Nauru", "Tuvalu", "Anguilla"])
+        >>> df
+                  population      GDP alpha-2
+        Italy       59000000  1937894      IT
+        France      65000000  2583560      FR
+        Malta         434000    12011      MT
+        Maldives      434000     4520      MV
+        Brunei        434000    12128      BN
+        Iceland       337000    17036      IS
+        Nauru          11300      182      NR
+        Tuvalu         11300       38      TV
+        Anguilla       11300      311      AI
+        >>> df.nlargest(3, 'population')
+                population      GDP alpha-2
+        France    65000000  2583560      FR
+        Italy     59000000  1937894      IT
+        Malta       434000    12011      MT
+        >>> df.nlargest(3, 'population', keep='last')
+                population      GDP alpha-2
+        France    65000000  2583560      FR
+        Italy     59000000  1937894      IT
+        Brunei      434000    12128      BN
         """
         return self._n_largest_or_smallest("nlargest", n, columns, keep)
 
     def nsmallest(self, n, columns, keep="first"):
         """Get the rows of the DataFrame sorted by the n smallest value of *columns*
 
+        Parameters
+        ----------
+        n : int
+            Number of items to retrieve.
+        columns : list or str
+            Column name or names to order by.
+        keep : {'first', 'last'}, default 'first'
+            Where there are duplicate values:
+            - ``first`` : take the first occurrence.
+            - ``last`` : take the last occurrence.
+
+        Returns
+        -------
+        DataFrame
+
         Notes
         -----
         Difference from pandas:
             - Only a single column is supported in *columns*
+
+        Examples
+        --------
+        >>> import cudf
+        >>> df = cudf.DataFrame({'population': [59000000, 65000000, 434000,
+        ...                                   434000, 434000, 337000, 337000,
+        ...                                   11300, 11300],
+        ...                    'GDP': [1937894, 2583560 , 12011, 4520, 12128,
+        ...                            17036, 182, 38, 311],
+        ...                    'alpha-2': ["IT", "FR", "MT", "MV", "BN",
+        ...                                "IS", "NR", "TV", "AI"]},
+        ...                   index=["Italy", "France", "Malta",
+        ...                          "Maldives", "Brunei", "Iceland",
+        ...                          "Nauru", "Tuvalu", "Anguilla"])
+        >>> df
+                  population      GDP alpha-2
+        Italy       59000000  1937894      IT
+        France      65000000  2583560      FR
+        Malta         434000    12011      MT
+        Maldives      434000     4520      MV
+        Brunei        434000    12128      BN
+        Iceland       337000    17036      IS
+        Nauru         337000      182      NR
+        Tuvalu         11300       38      TV
+        Anguilla       11300      311      AI
+
+        In the following example, we will use ``nsmallest`` to select the
+        three rows having the smallest values in column "population".
+
+        >>> df.nsmallest(3, 'population')
+                  population    GDP alpha-2
+        Tuvalu         11300     38      TV
+        Anguilla       11300    311      AI
+        Iceland       337000  17036      IS
+
+        When using ``keep='last'``, ties are resolved in reverse order:
+
+        >>> df.nsmallest(3, 'population', keep='last')
+                  population  GDP alpha-2
+        Anguilla       11300  311      AI
+        Tuvalu         11300   38      TV
+        Nauru         337000  182      NR
         """
         return self._n_largest_or_smallest("nsmallest", n, columns, keep)
 
@@ -5745,7 +5880,28 @@ class DataFrame(Frame, Serializable):
         non-numeric types and result is expected to be a Series in case of
         Pandas. cuDF will return a DataFrame as it doesn't support mixed
         types under Series.
-        """
+
+        Examples
+        --------
+        >>> import cupy as cp
+        >>> import cudf
+        >>> df = cudf.DataFrame(cp.array([[1, 1], [2, 10], [3, 100], [4, 100]]),
+        ...                   columns=['a', 'b'])
+        >>> df
+           a    b
+        0  1    1
+        1  2   10
+        2  3  100
+        3  4  100
+        >>> df.quantile(0.1)
+        a    1.3
+        b    3.7
+        Name: 0.1, dtype: float64
+        >>> df.quantile([.1, .5])
+            a     b
+        0.1  1.3   3.7
+        0.5  2.5  55.0
+        """  # noqa: E501
         if axis not in (0, None):
             raise NotImplementedError("axis is not implemented yet")
 

@@ -1,4 +1,5 @@
-# Copyright (c) 2018-2020, NVIDIA CORPORATION.
+# Copyright (c) 2018-2021, NVIDIA CORPORATION.
+
 from __future__ import annotations, division, print_function
 
 import pickle
@@ -1178,6 +1179,19 @@ class Index(Frame, Serializable):
         -------
         Index
 
+        Examples
+        --------
+        >>> import cudf
+        >>> index = cudf.Index([1, 2, 3], name='one')
+        >>> index
+        Int64Index([1, 2, 3], dtype='int64', name='one')
+        >>> index.name
+        'one'
+        >>> renamed_index = index.rename('two')
+        >>> renamed_index
+        Int64Index([1, 2, 3], dtype='int64', name='two')
+        >>> renamed_index.name
+        'two'
         """
         if inplace is True:
             self.name = name
