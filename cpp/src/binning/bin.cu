@@ -140,28 +140,17 @@ struct bin_type_dispatcher {
             inclusive right_inclusive,
             rmm::mr::device_memory_resource * mr)
     {
-        switch (left_inclusive)
-        {
-            case inclusive::YES:
-                switch (right_inclusive)
-                {
-                    case inclusive::YES:
-                        // TODO: Don't pick float by default, dispatch as needed.
-                        return bin_internal<thrust::less_equal<float>, thrust::less_equal<float> >(input, left_edges, right_edges, mr);
-                    case inclusive::NO:
-                        return bin_internal<thrust::less_equal<float>, thrust::less<float> >(input, left_edges, right_edges, mr);
-                }
-            case inclusive::NO:
-                switch (right_inclusive)
-                {
-                    case inclusive::YES:
-                        return bin_internal<thrust::less<float>, thrust::less_equal<float> >(input, left_edges, right_edges, mr);
-                    case inclusive::NO:
-                        return bin_internal<thrust::less<float>, thrust::less<float> >(input, left_edges, right_edges, mr);
-                }
-            default:
-                CUDF_FAIL("Undefined rounding method");
-        }
+        // Using a switch statement might be more appropriate for an enum, but it's far more verbose in this case.
+        if ((left_inclusive == inclusive::YES) && (right_inclusive == inclusive::YES))
+            return bin_internal<thrust::less_equal<float>, thrust::less_equal<float> >(input, left_edges, right_edges, mr);
+        if ((left_inclusive == inclusive::YES) && (right_inclusive == inclusive::NO))
+            return bin_internal<thrust::less_equal<float>, thrust::less<float> >(input, left_edges, right_edges, mr);
+        if ((left_inclusive == inclusive::NO) && (right_inclusive == inclusive::YES))
+            return bin_internal<thrust::less<float>, thrust::less_equal<float> >(input, left_edges, right_edges, mr);
+        if ((left_inclusive == inclusive::NO) && (right_inclusive == inclusive::NO))
+            return bin_internal<thrust::less<float>, thrust::less<float> >(input, left_edges, right_edges, mr);
+
+        CUDF_FAIL("Undefined inclusive setting.");
     }
 };
 
