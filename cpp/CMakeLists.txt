@@ -141,12 +141,12 @@ add_library(cudf
     src/aggregation/result_cache.cpp
     src/ast/linearizer.cpp
     src/ast/transform.cu
-    src/bin.cu
     src/binaryop/binaryop.cpp
     src/binaryop/compiled/binary_ops.cu
     src/binaryop/jit/code/kernel.cpp
     src/binaryop/jit/code/operation.cpp
     src/binaryop/jit/code/traits.cpp
+    src/binning/bin.cu
     src/bitmask/null_mask.cu
     src/column/column.cu
     src/column/column_device_view.cu

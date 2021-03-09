@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-#include <cudf/bin.hpp>
+#include <cudf/binning/bin.hpp>
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_wrapper.hpp>
 #include <numeric>

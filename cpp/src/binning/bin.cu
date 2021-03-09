@@ -14,10 +14,11 @@
  * limitations under the License.
  */
 
+// TODO: Clean up includes when all debugging is done.
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_factories.hpp>
 #include <memory>
-#include <cudf/bin.hpp>
+#include <cudf/binning/bin.hpp>
 #include <cudf/utilities/error.hpp>
 #include <cudf/types.hpp>
 #include <thrust/functional.h>
