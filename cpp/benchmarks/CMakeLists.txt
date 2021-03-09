@@ -188,5 +188,6 @@ ConfigureBench(STRINGS_BENCH
   string/filter_benchmark.cpp
   string/find_benchmark.cpp
   string/replace_benchmark.cpp
+  string/replace_re_benchmark.cpp
   string/split_benchmark.cpp
   string/url_decode_benchmark.cpp)
