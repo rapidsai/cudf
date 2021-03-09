@@ -38,19 +38,19 @@ namespace bin {
 
 constexpr unsigned int MYNULL = 0xffffffff;
 
-template <typename StrictWeakOrderingLeft, typename StrictWeakOrderingRight>
+template <typename T, typename StrictWeakOrderingLeft, typename StrictWeakOrderingRight>
 struct bin_finder
 {
     bin_finder(
-            const float *left_edges,
-            const float *left_edges_end,
-            const float *right_edges
+            const T *left_edges,
+            const T *left_edges_end,
+            const T *right_edges
             )
         : m_left_edges(left_edges), m_left_edges_end(left_edges_end), m_right_edges(right_edges),
           m_left_comp(StrictWeakOrderingLeft()), m_right_comp(StrictWeakOrderingRight())
     {}
 
-    __device__ unsigned int operator()(const float value) const
+    __device__ unsigned int operator()(const T value) const
     {
         // TODO: Immediately return NULL for NULL values.
         auto bound = thrust::lower_bound(thrust::seq,
@@ -67,9 +67,9 @@ struct bin_finder
         return (m_right_comp(value, m_right_edges[index])) ? index : MYNULL;
     }
 
-    const float *m_left_edges;
-    const float *m_left_edges_end;
-    const float *m_right_edges;
+    const T *m_left_edges;
+    const T *m_left_edges_end;
+    const T *m_right_edges;
     // TODO: Can I store these by reference? Don't think so since the argument
     // to lower_bound is not a ref, but I should check to be sure.
     StrictWeakOrderingLeft m_left_comp;
@@ -78,7 +78,7 @@ struct bin_finder
 
 
 // Bin the input by the edges in left_edges and right_edges.
-template <typename StrictWeakOrderingLeft, typename StrictWeakOrderingRight>
+template <typename T, typename StrictWeakOrderingLeft, typename StrictWeakOrderingRight>
 std::unique_ptr<column> bin_internal(column_view const& input, 
                             column_view const& left_edges,
                             column_view const& right_edges,
@@ -100,10 +100,10 @@ std::unique_ptr<column> bin_internal(column_view const& input,
     auto output = cudf::make_numeric_column(input.type(), input.size());
 
     thrust::transform(thrust::device,
-            input.begin<float>(), input.end<float>(),
+            input.begin<T>(), input.end<T>(),
             static_cast<cudf::mutable_column_view>(*output).begin<unsigned int>(),
-            bin_finder<StrictWeakOrderingLeft, StrictWeakOrderingRight>(
-                left_edges.begin<float>(), left_edges.end<float>(), right_edges.begin<float>()
+            bin_finder<T, StrictWeakOrderingLeft, StrictWeakOrderingRight>(
+                left_edges.begin<T>(), left_edges.end<T>(), right_edges.begin<T>()
                 )
             );
 
@@ -142,13 +142,13 @@ struct bin_type_dispatcher {
     {
         // Using a switch statement might be more appropriate for an enum, but it's far more verbose in this case.
         if ((left_inclusive == inclusive::YES) && (right_inclusive == inclusive::YES))
-            return bin_internal<thrust::less_equal<float>, thrust::less_equal<float> >(input, left_edges, right_edges, mr);
+            return bin_internal<T, thrust::less_equal<T>, thrust::less_equal<T> >(input, left_edges, right_edges, mr);
         if ((left_inclusive == inclusive::YES) && (right_inclusive == inclusive::NO))
-            return bin_internal<thrust::less_equal<float>, thrust::less<float> >(input, left_edges, right_edges, mr);
+            return bin_internal<T, thrust::less_equal<T>, thrust::less<T> >(input, left_edges, right_edges, mr);
         if ((left_inclusive == inclusive::NO) && (right_inclusive == inclusive::YES))
-            return bin_internal<thrust::less<float>, thrust::less_equal<float> >(input, left_edges, right_edges, mr);
+            return bin_internal<T, thrust::less<T>, thrust::less_equal<T> >(input, left_edges, right_edges, mr);
         if ((left_inclusive == inclusive::NO) && (right_inclusive == inclusive::NO))
-            return bin_internal<thrust::less<float>, thrust::less<float> >(input, left_edges, right_edges, mr);
+            return bin_internal<T, thrust::less<T>, thrust::less<T> >(input, left_edges, right_edges, mr);
 
         CUDF_FAIL("Undefined inclusive setting.");
     }
