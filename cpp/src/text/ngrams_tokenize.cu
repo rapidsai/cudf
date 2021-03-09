@@ -166,8 +166,9 @@ std::unique_ptr<cudf::column> ngrams_tokenize(
                                    d_token_offsets + 1,
                                    strings_tokenizer{d_strings, d_delimiter},
                                    thrust::plus<int32_t>());
-  token_offsets.set_element(0, 0, stream);
-  auto const total_tokens = token_offsets.element(strings_count, stream);  // Ex. 5 tokens
+  int32_t const zero = 0;
+  token_offsets.set_element_async(0, zero, stream);
+  auto const total_tokens = token_offsets.back_element(stream);  // Ex. 5 tokens
 
   // get the token positions (in bytes) per string
   // Ex. start/end pairs: [(0,1),(2,4),(5,8), (0,2),(3,4)]
@@ -193,8 +194,8 @@ std::unique_ptr<cudf::column> ngrams_tokenize(
       return (token_count >= ngrams) ? token_count - ngrams + 1 : 0;
     },
     thrust::plus<int32_t>());
-  ngram_offsets.set_element(0, 0, stream);
-  auto const total_ngrams = ngram_offsets.element(strings_count, stream);
+  ngram_offsets.set_element_async(0, zero, stream);
+  auto const total_ngrams = ngram_offsets.back_element(stream);
 
   // Compute the total size of the ngrams for each string (not for each ngram)
   // Ex. 2 bigrams in 1st string total to 10 bytes; 1 bigram in 2nd string is 4 bytes
@@ -213,9 +214,8 @@ std::unique_ptr<cudf::column> ngrams_tokenize(
     d_chars_offsets + 1,
     ngram_builder_fn{d_strings, d_separator, ngrams, d_token_offsets, d_token_positions},
     thrust::plus<int32_t>());
-  chars_offsets.set_element(0, 0, stream);
-  auto const output_chars_size =
-    chars_offsets.element(strings_count, stream);  // Ex. 14 output bytes total
+  chars_offsets.set_element_async(0, zero, stream);
+  auto const output_chars_size = chars_offsets.back_element(stream);  // Ex. 14 output bytes total
 
   rmm::device_uvector<int32_t> ngram_sizes(total_ngrams, stream);  // size in bytes of each
   auto d_ngram_sizes = ngram_sizes.data();                         // ngram to generate

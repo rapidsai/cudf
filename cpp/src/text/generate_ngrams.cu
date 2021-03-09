@@ -236,7 +236,7 @@ std::unique_ptr<cudf::column> generate_character_ngrams(cudf::strings_column_vie
     thrust::plus<cudf::size_type>());
 
   // total ngrams count is the last entry
-  cudf::size_type const total_ngrams = ngram_offsets.element(strings_count, stream);
+  cudf::size_type const total_ngrams = ngram_offsets.back_element(stream);
   CUDF_EXPECTS(total_ngrams > 0,
                "Insufficient number of characters in each string to generate ngrams");
 
