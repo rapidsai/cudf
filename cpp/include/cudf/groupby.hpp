@@ -218,7 +218,7 @@ class groupby {
    * specified in `requests`.
    */
   std::pair<std::unique_ptr<table>, std::vector<aggregation_result>> scan(
-    host_span<aggregation_request const> requests,
+    std::vector<aggregation_request> const& requests,
     rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
   /**
