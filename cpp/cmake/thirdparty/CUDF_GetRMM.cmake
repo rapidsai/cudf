@@ -49,6 +49,13 @@ function(find_and_configure_rmm VERSION)
     cudf_restore_if_enabled(BUILD_TESTS)
     cudf_restore_if_enabled(BUILD_BENCHMARKS)
 
+    #Make sure consumers of cudf can also see rmm::rmm
+    if(TARGET rmm::rmm)
+        get_target_property(rmm_is_imported rmm::rmm IMPORTED)
+        if(rmm_is_imported)
+            set_target_properties(rmm::rmm PROPERTIES IMPORTED_GLOBAL TRUE)
+        endif()
+    endif()
     if(NOT rmm_BINARY_DIR IN_LIST CMAKE_PREFIX_PATH)
         list(APPEND CMAKE_PREFIX_PATH "${rmm_BINARY_DIR}")
         set(CMAKE_PREFIX_PATH ${CMAKE_PREFIX_PATH} PARENT_SCOPE)

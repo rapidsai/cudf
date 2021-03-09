@@ -4005,7 +4005,7 @@ public class ColumnVectorTest extends CudfTestBase {
 
   @Test
   void testReplaceLeafNodeInListWithIllegal() {
-    assertThrows(IllegalArgumentException.class, () -> {
+    Exception e = assertThrows(IllegalArgumentException.class, () -> {
       try (ColumnVector child1 =
                ColumnVector.decimalFromDoubles(DType.create(DType.DTypeEnum.DECIMAL64, 3),
                    RoundingMode.HALF_UP, 770.892, 961.110);
@@ -4023,6 +4023,7 @@ public class ColumnVectorTest extends CudfTestBase {
            ColumnView replacedView = created.replaceListChild(newChild)) {
       }
     });
+    assertTrue(e.getMessage().contains("Child row count doesn't match the old child"));
   }
 
   @Test
@@ -4049,7 +4050,7 @@ public class ColumnVectorTest extends CudfTestBase {
 
   @Test
   void testReplaceIllegalIndexColumnInStruct() {
-    assertThrows(IllegalArgumentException.class, () -> {
+    Exception e = assertThrows(IllegalArgumentException.class, () -> {
       try (ColumnVector child1 = ColumnVector.fromInts(1, 4);
            ColumnVector child2 = ColumnVector.fromInts(2, 5);
            ColumnVector child3 = ColumnVector.fromInts(3, 6);
@@ -4059,11 +4060,12 @@ public class ColumnVectorTest extends CudfTestBase {
                new ColumnVector[]{replaceWith})) {
       }
     });
+    assertTrue(e.getMessage().contains("One or more invalid child indices passed to be replaced"));
   }
 
   @Test
   void testReplaceSameIndexColumnInStruct() {
-    assertThrows(IllegalArgumentException.class, () -> {
+    Exception e = assertThrows(IllegalArgumentException.class, () -> {
       try (ColumnVector child1 = ColumnVector.fromInts(1, 4);
            ColumnVector child2 = ColumnVector.fromInts(2, 5);
            ColumnVector child3 = ColumnVector.fromInts(3, 6);
@@ -4073,5 +4075,6 @@ public class ColumnVectorTest extends CudfTestBase {
                new ColumnVector[]{replaceWith, replaceWith})) {
       }
     });
+    assertTrue(e.getMessage().contains("Duplicate mapping found for replacing child index"));
   }
 }
