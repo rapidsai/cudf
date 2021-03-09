@@ -156,7 +156,16 @@ class Index(Frame, Serializable):
         Returns
         -------
         deduplicated : Index
-        """
+
+        Examples
+        --------
+        >>> import cudf
+        >>> idx = cudf.Index(['lama', 'cow', 'lama', 'beetle', 'lama', 'hippo'])
+        >>> idx
+        StringIndex(['lama' 'cow' 'lama' 'beetle' 'lama' 'hippo'], dtype='object')
+        >>> idx.drop_duplicates()
+        StringIndex(['beetle' 'cow' 'hippo' 'lama'], dtype='object')
+        """  # noqa: E501
         return super().drop_duplicates(keep=keep)
 
     @property
@@ -1198,6 +1207,15 @@ class Index(Frame, Serializable):
         -------
         Index
             Index with values cast to specified dtype.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> index = cudf.Index([1, 2, 3])
+        >>> index
+        Int64Index([1, 2, 3], dtype='int64')
+        >>> index.astype('float64')
+        Float64Index([1.0, 2.0, 3.0], dtype='float64')
         """
         if pd.api.types.is_dtype_equal(dtype, self.dtype):
             return self.copy(deep=copy)
@@ -1290,6 +1308,15 @@ class Index(Frame, Serializable):
         -------
         out : bool
             If Index is empty, return True, if not return False.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> index = cudf.Index([])
+        >>> index
+        Float64Index([], dtype='float64')
+        >>> index.empty
+        True
         """
         return not self.size
 

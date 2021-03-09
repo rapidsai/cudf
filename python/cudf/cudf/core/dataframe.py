@@ -583,7 +583,32 @@ class DataFrame(Frame, Serializable):
 
     @property
     def dtypes(self):
-        """Return the dtypes in this object."""
+        """
+        Return the dtypes in this object.
+
+        Returns
+        -------
+        pandas.Series
+            The data type of each column.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> import pandas as pd
+        >>> df = cudf.DataFrame({'float': [1.0],
+        ...                    'int': [1],
+        ...                    'datetime': [pd.Timestamp('20180310')],
+        ...                    'string': ['foo']})
+        >>> df
+           float  int   datetime string
+        0    1.0    1 2018-03-10    foo
+        >>> df.dtypes
+        float              float64
+        int                  int64
+        datetime    datetime64[us]
+        string              object
+        dtype: object
+        """
         return cudf.utils.utils._create_pandas_series(
             data=[x.dtype for x in self._data.columns], index=self._data.names,
         )
@@ -1133,6 +1158,39 @@ class DataFrame(Frame, Serializable):
         Returns
         -------
         casted : DataFrame
+
+        Examples
+        --------
+        >>> import cudf
+        >>> df = cudf.DataFrame({'a': [10, 20, 30], 'b': [1, 2, 3]})
+        >>> df
+            a  b
+        0  10  1
+        1  20  2
+        2  30  3
+        >>> df.dtypes
+        a    int64
+        b    int64
+        dtype: object
+
+        Cast all columns to `int32`:
+
+        >>> df.astype('int32').dtypes
+        a    int32
+        b    int32
+        dtype: object
+
+        Cast `a` to `float32` using a dictionary:
+
+        >>> df.astype({'a': 'float32'}).dtypes
+        a    float32
+        b      int64
+        dtype: object
+        >>> df.astype({'a': 'float32'})
+            a  b
+        0  10.0  1
+        1  20.0  2
+        2  30.0  3
         """
         result = DataFrame(index=self.index)
 
@@ -3360,7 +3418,71 @@ class DataFrame(Frame, Serializable):
         """
         Return DataFrame with duplicate rows removed, optionally only
         considering certain subset of columns.
-        """
+
+        Parameters
+        ----------
+        subset : column label or sequence of labels, optional
+            Only consider certain columns for identifying duplicates, by
+            default use all of the columns.
+        keep : {'first', 'last', False}, default 'first'
+            Determines which duplicates (if any) to keep.
+            - ``first`` : Drop duplicates except for the first occurrence.
+            - ``last`` : Drop duplicates except for the last occurrence.
+            - False : Drop all duplicates.
+        inplace : bool, default False
+            Whether to drop duplicates in place or to return a copy.
+        ignore_index : bool, default False
+            If True, the resulting axis will be labeled 0, 1, …, n - 1.
+
+        Returns
+        -------
+        DataFrame or None
+            DataFrame with duplicates removed or None if ``inplace=True``.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> df = cudf.DataFrame({
+        ...     'brand': ['Yum Yum', 'Yum Yum', 'Indomie', 'Indomie', 'Indomie'],
+        ...     'style': ['cup', 'cup', 'cup', 'pack', 'pack'],
+        ...     'rating': [4, 4, 3.5, 15, 5]
+        ... })
+        >>> df
+             brand style  rating
+        0  Yum Yum   cup     4.0
+        1  Yum Yum   cup     4.0
+        2  Indomie   cup     3.5
+        3  Indomie  pack    15.0
+        4  Indomie  pack     5.0
+
+        By default, it removes duplicate rows based
+        on all columns. Note that order of
+        the rows being returned is not guaranteed
+        to be sorted.
+
+        >>> df.drop_duplicates()
+             brand style  rating
+        2  Indomie   cup     3.5
+        4  Indomie  pack     5.0
+        3  Indomie  pack    15.0
+        0  Yum Yum   cup     4.0
+
+        To remove duplicates on specific column(s),
+        use `subset`.
+
+        >>> df.drop_duplicates(subset=['brand'])
+             brand style  rating
+        2  Indomie   cup     3.5
+        0  Yum Yum   cup     4.0
+
+        To remove duplicates and keep last occurrences, use `keep`.
+
+        >>> df.drop_duplicates(subset=['brand', 'style'], keep='last')
+             brand style  rating
+        2  Indomie   cup     3.5
+        4  Indomie  pack     5.0
+        1  Yum Yum   cup     4.0
+        """  # noqa: E501
         outdf = super().drop_duplicates(
             subset=subset, keep=keep, ignore_index=ignore_index
         )

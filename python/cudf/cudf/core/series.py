@@ -1189,7 +1189,8 @@ class Series(Frame, Serializable):
         return result
 
     def add(self, other, fill_value=None, axis=0):
-        """Addition of series and other, element-wise
+        """
+        Addition of series and other, element-wise
         (binary operator add).
 
         Parameters
@@ -1198,6 +1199,43 @@ class Series(Frame, Serializable):
         fill_value : None or value
             Value to fill nulls with before computation. If data in both
             corresponding Series locations is null the result will be null
+
+        Returns
+        -------
+        Series
+            The result of the addition.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> a = cudf.Series([1, 1, 1, None], index=['a', 'b', 'c', 'd'])
+        >>> a
+        a       1
+        b       1
+        c       1
+        d    <NA>
+        dtype: int64
+        >>> b = cudf.Series([1, None, 1, None], index=['a', 'b', 'd', 'e'])
+        >>> b
+        a       1
+        b    <NA>
+        d       1
+        e    <NA>
+        dtype: int64
+        >>> a.add(b)
+        a       2
+        b    <NA>
+        c    <NA>
+        d    <NA>
+        e    <NA>
+        dtype: int64
+        >>> a.add(b, fill_value=0)
+        a       2
+        b       1
+        c       1
+        d       1
+        e    <NA>
+        dtype: int64
         """
         if axis != 0:
             raise NotImplementedError("Only axis=0 supported at this time.")
@@ -1867,7 +1905,71 @@ class Series(Frame, Serializable):
 
     def drop_duplicates(self, keep="first", inplace=False, ignore_index=False):
         """
-        Return Series with duplicate values removed
+        Return Series with duplicate values removed.
+
+        Parameters
+        ----------
+        keep : {'first', 'last', ``False``}, default 'first'
+            Method to handle dropping duplicates:
+            - 'first' : Drop duplicates except for the first occurrence.
+            - 'last' : Drop duplicates except for the last occurrence.
+            - ``False`` : Drop all duplicates.
+
+        inplace : bool, default ``False``
+            If ``True``, performs operation inplace and returns None.
+
+        Returns
+        -------
+        Series or None
+            Series with duplicates dropped or None if ``inplace=True``.
+
+        Examples
+        --------
+        >>> s = cudf.Series(['lama', 'cow', 'lama', 'beetle', 'lama', 'hippo'],
+        ...               name='animal')
+        >>> s
+        0      lama
+        1       cow
+        2      lama
+        3    beetle
+        4      lama
+        5     hippo
+        Name: animal, dtype: object
+
+        With the `keep` parameter, the selection behaviour of duplicated
+        values can be changed. The value ‘first’ keeps the first
+        occurrence for each set of duplicated entries.
+        The default value of keep is ‘first’. Note that order of
+        the rows being returned is not guaranteed
+        to be sorted.
+
+        >>> s.drop_duplicates()
+        3    beetle
+        1       cow
+        5     hippo
+        0      lama
+        Name: animal, dtype: object
+
+        The value ‘last’ for parameter `keep` keeps the last occurrence
+        for each set of duplicated entries.
+
+        >>> s.drop_duplicates(keep='last')
+        3    beetle
+        1       cow
+        5     hippo
+        4      lama
+        Name: animal, dtype: object
+
+        The value `False` for parameter `keep` discards all sets
+        of duplicated entries. Setting the value of ‘inplace’ to
+        `True` performs the operation inplace and returns `None`.
+
+        >>> s.drop_duplicates(keep=False, inplace=True)
+        >>> s
+        3    beetle
+        1       cow
+        5     hippo
+        Name: animal, dtype: object
         """
         result = super().drop_duplicates(keep=keep, ignore_index=ignore_index)
 
@@ -2110,7 +2212,27 @@ class Series(Frame, Serializable):
     @property
     def data(self):
         """The gpu buffer for the data
-        """
+
+        Returns
+        -------
+        out : The GPU buffer of the Series.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> series = cudf.Series([1, 2, 3, 4])
+        >>> series
+        0    1
+        1    2
+        2    3
+        3    4
+        dtype: int64
+        >>> series.data
+        <cudf.core.buffer.Buffer object at 0x7f23c192d110>
+        >>> series.data.to_host_array()
+        array([1, 0, 0, 0, 0, 0, 0, 0, 2, 0, 0, 0, 0, 0, 0, 0, 3, 0, 0, 0, 0, 0,
+               0, 0, 4, 0, 0, 0, 0, 0, 0, 0], dtype=uint8)
+        """  # noqa: E501
         return self._column.data
 
     @property
@@ -2157,7 +2279,26 @@ class Series(Frame, Serializable):
         Returns
         -------
         device array
+
+        Examples
+        --------
+        >>> import cudf
+        >>> s = cudf.Series([True, False, True])
+        >>> s.as_mask()
+        <cudf.core.buffer.Buffer object at 0x7f23c3eed0d0>
+        >>> s.as_mask().to_host_array()
+        array([  5,   0,   0,   0,   0,   0,   0,   0,   1,   0,   0,   0,   0,
+                 0,   0,   0,   2,   0,   0,   0,   0,   0,   0,   0, 181, 164,
+               188,   1,   0,   0,   0,   0, 255, 255, 255, 255, 255, 255, 255,
+               127, 253, 214,  62, 241,   1,   0,   0,   0,   0,   0,   0,   0,
+                 0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0],
+             dtype=uint8)
         """
+        if not pd.api.type.is_bool_dtype(self.dtype):
+            raise TypeError(
+                f"Series must of boolean dtype, found: {self.dtype}"
+            )
+
         return self._column.as_mask()
 
     def astype(self, dtype, copy=False, errors="raise"):
@@ -2188,6 +2329,52 @@ class Series(Frame, Serializable):
         out : Series
             Returns ``self.copy(deep=copy)`` if ``dtype`` is the same
             as ``self.dtype``.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> series = cudf.Series([1, 2], dtype='int32')
+        >>> series
+        0    1
+        1    2
+        dtype: int32
+        >>> series.astype('int64')
+        0    1
+        1    2
+        dtype: int64
+
+        Convert to categorical type:
+
+        >>> series.astype('category')
+        0    1
+        1    2
+        dtype: category
+        Categories (2, int64): [1, 2]
+
+        Convert to ordered categorical type with custom ordering:
+
+        >>> cat_dtype = cudf.CategoricalDtype(categories=[2, 1], ordered=True)
+        >>> series.astype(cat_dtype)
+        0    1
+        1    2
+        dtype: category
+        Categories (2, int64): [2 < 1]
+
+        Note that using `copy=False`(enabled by default)
+        and changing data on a new Series will
+        propagate changes:
+
+        >>> s1 = cudf.Series([1, 2])
+        >>> s1
+        0    1
+        1    2
+        dtype: int64
+        >>> s2 = s1.astype('int64', copy=False)
+        >>> s2[0] = 10
+        >>> s1
+        0    10
+        1     2
+        dtype: int64
         """
         if errors not in ("ignore", "raise", "warn"):
             raise ValueError("invalid error value specified")
@@ -2229,6 +2416,26 @@ class Series(Frame, Serializable):
         Returns
         -------
         result: Series
+
+        Examples
+        --------
+        >>> import cudf
+        >>> s = cudf.Series([3, 1, 2])
+        >>> s
+        0    3
+        1    1
+        2    2
+        dtype: int64
+        >>> s.argsort()
+        0    1
+        1    2
+        2    0
+        dtype: int32
+        >>> s[s.argsort()]
+        1    1
+        2    2
+        0    3
+        dtype: int64
         """
         return self._sort(ascending=ascending, na_position=na_position)[1]
 
@@ -3984,7 +4191,27 @@ class Series(Frame, Serializable):
     def abs(self):
         """Absolute value of each element of the series.
 
-        Returns a new Series.
+        Returns
+        -------
+        abs
+            Series containing the absolute value of each element.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> series = cudf.Series([-1.10, 2, -3.33, 4])
+        >>> series
+        0   -1.10
+        1    2.00
+        2   -3.33
+        3    4.00
+        dtype: float64
+        >>> series.abs()
+        0    1.10
+        1    2.00
+        2    3.33
+        3    4.00
+        dtype: float64
         """
         return self._unaryop("abs")
 
@@ -3993,10 +4220,31 @@ class Series(Frame, Serializable):
 
     # Rounding
     def ceil(self):
-        """Rounds each value upward to the smallest integral value not less
+        """
+        Rounds each value upward to the smallest integral value not less
         than the original.
 
-        Returns a new Series.
+        Returns
+        -------
+        res
+            Returns a new Series with ceiling value of each element.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> series = cudf.Series([1.1, 2.8, 3.5, 4.5])
+        >>> series
+        0    1.1
+        1    2.8
+        2    3.5
+        3    4.5
+        dtype: float64
+        >>> series.ceil()
+        0    2.0
+        1    3.0
+        2    4.0
+        3    5.0
+        dtype: float64
         """
         return self._unaryop("ceil")
 
@@ -4252,6 +4500,19 @@ class Series(Frame, Serializable):
         Returns
         -------
         A new Series containing the indices.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> s = cudf.Series([0.2, 6.4, 3.0, 1.6])
+        >>> bins = cudf.Series([0.0, 1.0, 2.5, 4.0, 10.0])
+        >>> inds = s.digitize(bins)
+        >>> inds
+        0    1
+        1    4
+        2    3
+        3    2
+        dtype: int32
         """
         return Series(
             cudf.core.column.numerical.digitize(self._column, bins, right)
@@ -4261,10 +4522,61 @@ class Series(Frame, Serializable):
         """Calculate the difference between values at positions i and i - N in
         an array and store the output in a new array.
 
+        Returns
+        -------
+        Series
+            First differences of the Series.
+
         Notes
         -----
         Diff currently only supports float and integer dtype columns with
         no null values.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> series = cudf.Series([1, 1, 2, 3, 5, 8])
+        >>> series
+        0    1
+        1    1
+        2    2
+        3    3
+        4    5
+        5    8
+        dtype: int64
+
+        Difference with previous row
+
+        >>> series.diff()
+        0    <NA>
+        1       0
+        2       1
+        3       1
+        4       2
+        5       3
+        dtype: int64
+
+        Difference with 3rd previous row
+
+        >>> series.diff(periods=3)
+        0    <NA>
+        1    <NA>
+        2    <NA>
+        3       2
+        4       4
+        5       6
+        dtype: int64
+
+        Difference with following row
+
+        >>> series.diff(periods=-1)
+        0       0
+        1      -1
+        2      -1
+        3      -2
+        4      -3
+        5    <NA>
+        dtype: int64
         """
         if self.has_nulls:
             raise AssertionError(
