@@ -95,19 +95,30 @@ __global__ void accumulateKernel(
     }
 }
 
+template <typename StrictWeakOrderingLeft, typename StrictWeakOrderingRight>
 struct bin_finder_new
 {
-    bin_finder_new(const float *left_edges, const float *left_edges_end, const float *right_edges) : m_left_edges(left_edges), m_left_edges_end(left_edges_end), m_right_edges(right_edges) {}
+    bin_finder_new(
+            const float *left_edges,
+            const float *left_edges_end,
+            const float *right_edges,
+            StrictWeakOrderingLeft left_comp,
+            StrictWeakOrderingRight right_comp
+            )
+        : m_left_edges(left_edges), m_left_edges_end(left_edges_end), m_right_edges(right_edges),
+          m_left_comp(left_comp), m_right_comp(right_comp)
+    {}
 
     __device__ unsigned int operator()(const float value) const
     {
         auto bound = thrust::lower_bound(thrust::seq,
                 m_left_edges, m_left_edges_end,
-                value);
+                value,
+                m_left_comp);
         // First check if the input is actually contained in the interval; if not, assign MYNULL.
         // TODO: Use the proper comparator here.
         auto index = bound - m_left_edges;
-        if (value < m_right_edges[index])
+        if (m_right_comp(value, m_right_edges[index]))
         {
             // TODO: Fix case where the input is less than all elements, so subtracting one will give a negative.
             // We must subtract 1 because lower bound's behavior is shifted by 1.
@@ -122,6 +133,10 @@ struct bin_finder_new
     const float *m_left_edges;
     const float *m_left_edges_end;
     const float *m_right_edges;
+    // TODO: Can I store these by reference? Don't think so since the argument
+    // to lower_bound is not a ref, but I should check to be sure.
+    StrictWeakOrderingLeft m_left_comp;
+    StrictWeakOrderingRight m_right_comp;
 };
 
 // Bin the input by the edges in left_edges and right_edges.
@@ -139,11 +154,52 @@ std::unique_ptr<column> bin(column_view const& input,
     // TODO: Figure out how to get these two template type from the input.
     // TODO: Use the comparator
     auto output = cudf::make_numeric_column(data_type(type_id::UINT32), input.size());
-    thrust::transform(thrust::device,
-            input.begin<float>(), input.end<float>(),
-            static_cast<cudf::mutable_column_view>(*output).begin<unsigned int>(),
-            bin_finder_new(left_edges.begin<float>(), left_edges.end<float>(), right_edges.begin<float>())
-            );
+
+    if ((left_inclusive == inclusive::YES) && (left_inclusive == inclusive::YES))
+    {
+        thrust::transform(thrust::device,
+                input.begin<float>(), input.end<float>(),
+                static_cast<cudf::mutable_column_view>(*output).begin<unsigned int>(),
+                bin_finder_new<thrust::less_equal<float>, thrust::less_equal<float>>(
+                    left_edges.begin<float>(), left_edges.end<float>(), right_edges.begin<float>(),
+                    thrust::less_equal<float>(), thrust::less_equal<float>()
+                    )
+                );
+    }
+    else if ((left_inclusive == inclusive::YES) && (left_inclusive == inclusive::NO))
+    {
+        thrust::transform(thrust::device,
+                input.begin<float>(), input.end<float>(),
+                static_cast<cudf::mutable_column_view>(*output).begin<unsigned int>(),
+                bin_finder_new<thrust::less_equal<float>, thrust::less<float>>(
+                    left_edges.begin<float>(), left_edges.end<float>(), right_edges.begin<float>(),
+                    thrust::less_equal<float>(), thrust::less<float>()
+                    )
+                );
+    }
+    else if ((left_inclusive == inclusive::NO) && (left_inclusive == inclusive::YES))
+    {
+        thrust::transform(thrust::device,
+                input.begin<float>(), input.end<float>(),
+                static_cast<cudf::mutable_column_view>(*output).begin<unsigned int>(),
+                bin_finder_new<thrust::less<float>, thrust::less_equal<float>>(
+                    left_edges.begin<float>(), left_edges.end<float>(), right_edges.begin<float>(),
+                    thrust::less<float>(), thrust::less_equal<float>()
+                    )
+                );
+    }
+    else if ((left_inclusive == inclusive::NO) && (left_inclusive == inclusive::NO))
+    {
+        thrust::transform(thrust::device,
+                input.begin<float>(), input.end<float>(),
+                static_cast<cudf::mutable_column_view>(*output).begin<unsigned int>(),
+                bin_finder_new<thrust::less<float>, thrust::less<float>>(
+                    left_edges.begin<float>(), left_edges.end<float>(), right_edges.begin<float>(),
+                    thrust::less<float>(), thrust::less<float>()
+                    )
+                );
+    }
+
 
     //unsigned int *tmp = (unsigned int *) malloc(10 * sizeof(unsigned int));
     //cudaError_t err = cudaMemcpy(tmp, static_cast<cudf::mutable_column_view>(*output).begin<unsigned int>(), 10 * sizeof(unsigned int), cudaMemcpyDeviceToHost);
