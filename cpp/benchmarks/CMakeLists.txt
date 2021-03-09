@@ -115,6 +115,7 @@ ConfigureBench(REDUCTION_BENCH
   reduction/anyall_benchmark.cpp
   reduction/dictionary_benchmark.cpp
   reduction/reduce_benchmark.cpp
+  reduction/scan_benchmark.cpp
   reduction/minmax_benchmark.cpp)
 
 ###################################################################################################
@@ -183,6 +184,7 @@ ConfigureBench(STRINGS_BENCH
   string/convert_durations_benchmark.cpp
   string/convert_floats_benchmark.cpp
   string/copy_benchmark.cpp
+  string/extract_benchmark.cpp
   string/filter_benchmark.cpp
   string/find_benchmark.cpp
   string/replace_benchmark.cpp
