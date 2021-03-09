@@ -207,8 +207,8 @@ class groupby {
    * keys:  {3 1 1 1 2}
    *        {4 1 1 1 2}
    * values:
-   *   SUM: {9 1 2 3 1}
-   *   MIN: {9 1 1 1 1}
+   *   SUM: {9 3 7 9 1}
+   *   MIN: {9 3 3 2 1}
    * ```
    *
    * @param requests The set of columns to scan and the scans to perform
@@ -218,7 +218,7 @@ class groupby {
    * specified in `requests`.
    */
   std::pair<std::unique_ptr<table>, std::vector<aggregation_result>> scan(
-    std::vector<aggregation_request> const& requests,
+    host_span<aggregation_request const> requests,
     rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
   /**

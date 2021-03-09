@@ -118,10 +118,9 @@ std::pair<std::unique_ptr<table>, std::vector<aggregation_result>> groupby::sort
   for (size_t i = 0; i < requests.size(); i++) {
     auto store_functor =
       detail::scan_result_functor(i, requests[i].values, helper(), cache, stream, mr);
-    for (size_t j = 0; j < requests[i].aggregations.size(); j++) {
+    for (auto const& aggregation: requests[i].aggregations) {
       // TODO (dm): single pass compute all supported reductions
-      cudf::detail::aggregation_dispatcher(
-        requests[i].aggregations[j]->kind, store_functor, *requests[i].aggregations[j]);
+      cudf::detail::aggregation_dispatcher(aggregation->kind, store_functor, *aggregation);
     }
   }
 

@@ -121,7 +121,6 @@ inline void test_single_scan(column_view const& keys,
   // groupby scan uses sort implementation
   auto result = gb_obj.scan(requests);
 
-  // cudf::test::print(*result.second[0].results[0]);
   CUDF_TEST_EXPECT_TABLES_EQUAL(table_view({expect_keys}), result.first->view());
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expect_vals, *result.second[0].results[0], true);
 }
