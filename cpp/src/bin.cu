@@ -115,19 +115,14 @@ struct bin_finder_new
                 m_left_edges, m_left_edges_end,
                 value,
                 m_left_comp);
+
         // First check if the input is actually contained in the interval; if not, assign MYNULL.
-        // TODO: Use the proper comparator here.
-        auto index = bound - m_left_edges;
-        if (m_right_comp(value, m_right_edges[index]))
-        {
-            // TODO: Fix case where the input is less than all elements, so subtracting one will give a negative.
-            // We must subtract 1 because lower bound's behavior is shifted by 1.
-            return index - 1;
-        }
-        else
-        {
+        if ((bound == m_left_edges) || (bound == m_left_edges_end))
             return MYNULL;
-        }
+
+        // We must subtract 1 because lower bound returns the first index _greater than_ the value. This is
+        auto index = bound - m_left_edges - 1;
+        return (m_right_comp(value, m_right_edges[index])) ? index : MYNULL;
     }
 
     const float *m_left_edges;
@@ -152,7 +147,6 @@ std::unique_ptr<column> bin(column_view const& input,
     CUDF_EXPECTS(left_edges.size() == right_edges.size(), "The left and right edge columns must be of the same length.");
 
     // TODO: Figure out how to get these two template type from the input.
-    // TODO: Use the comparator
     auto output = cudf::make_numeric_column(data_type(type_id::UINT32), input.size());
 
     if ((left_inclusive == inclusive::YES) && (left_inclusive == inclusive::YES))
