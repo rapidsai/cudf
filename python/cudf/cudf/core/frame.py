@@ -2742,7 +2742,7 @@ class Frame(libcudf.table.Table):
         Parameters
         ----------
         by: list, optional
-            Labels specifyin columns to sort by. By default,
+            Labels specifying columns to sort by. By default,
             sort by all columns of `self`
         ascending : bool or list of bool, default True
             If True, sort values in ascending order, otherwise descending.
