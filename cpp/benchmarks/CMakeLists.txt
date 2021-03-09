@@ -115,6 +115,7 @@ ConfigureBench(REDUCTION_BENCH
   reduction/anyall_benchmark.cpp
   reduction/dictionary_benchmark.cpp
   reduction/reduce_benchmark.cpp
+  reduction/scan_benchmark.cpp
   reduction/minmax_benchmark.cpp)
 
 ###################################################################################################
