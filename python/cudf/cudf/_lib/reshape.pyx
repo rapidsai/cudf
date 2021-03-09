@@ -1,4 +1,4 @@
-# Copyright (c) 2019-2020, NVIDIA CORPORATION.
+# Copyright (c) 2019-2021, NVIDIA CORPORATION.
 
 from libcpp.memory cimport unique_ptr
 from libcpp.utility cimport move
@@ -12,7 +12,8 @@ from cudf._lib.cpp.table.table_view cimport table_view
 
 from cudf._lib.cpp.reshape cimport (
     interleave_columns as cpp_interleave_columns,
-    tile as cpp_tile
+    tile as cpp_tile,
+    explode as cpp_explode
 )
 
 
@@ -40,4 +41,25 @@ def tile(Table source_table, size_type count):
         move(c_result),
         column_names=source_table._column_names,
         index_names=source_table._index_names
+    )
+
+
+def explode(Table input_table, explode_column_name, ignore_index, nlevels):
+    cdef table_view c_table_view = \
+        input_table.data_view() if ignore_index else input_table.view()
+    cdef size_type c_column_idx = \
+        input_table._column_names.index(explode_column_name)
+    if not ignore_index:
+        c_column_idx += nlevels
+    cdef unique_ptr[table] c_result
+
+    with nogil:
+        c_result = move(cpp_explode(c_table_view, c_column_idx))
+
+    exploded_index_names = None if ignore_index else input_table._index_names
+
+    return Table.from_unique_ptr(
+        move(c_result),
+        column_names=input_table._column_names,
+        index_names=exploded_index_names
     )

@@ -7425,6 +7425,60 @@ class DataFrame(Frame, Serializable):
                 return False
         return super().equals(other)
 
+    def explode(self, column, ignore_index=False):
+        """
+        Transform each element of a list-like to a row, replicating index
+        values.
+
+        Parameters
+        ----------
+        column : str or tuple
+            Column to explode. Now only supports one column
+        ignore_index : bool, default False
+            If True, the resulting index will be labeled 0, 1, …, n - 1.
+
+        Returns
+        -------
+        DataFrame
+
+        Examples
+        -------
+        nulls will be skipped.
+        >>> import cudf
+        >>> df = cudf.DataFrame("a": [[1, 2, 3], [4, 5], None], "b": [11, 22, 33])
+        >>> df
+                   a    b
+        0  [1, 2, 3]   11
+        1  [4, 5]      22
+        2  NaN         33
+        >>> df.explode('a')
+           a  b
+        0  1  11
+        1  2  11
+        2  3  11
+        3  4  22
+        4  5  22
+        """
+        if isinstance(column, str):
+            exp_column = column
+        elif isinstance(column, tuple):
+            if len(column) == 1:
+                exp_column = column[0]
+                if not isinstance(exp_column, str):
+                    raise TypeError("column should be str or tuple of str")
+            else:
+                raise ValueError(
+                    "Now only supports one column,"
+                    "but given multiple columns or no column"
+                )
+        else:
+            raise TypeError("column should be str or tuple of str")
+        if exp_column not in self._column_names:
+            raise ValueError("Can not find the column: " + exp_column)
+        nlevels = self.index.nlevels
+        return DataFrame._from_table(
+            libcudf.reshape.explode(self, exp_column, ignore_index, nlevels))
+
     _accessors = set()  # type: Set[Any]
 
 
