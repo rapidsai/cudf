@@ -14,11 +14,13 @@ from cudf.tests.utils import (
     assert_exceptions_equal,
 )
 
+_JOIN_TYPES = {"left", "inner", "outer", "right", "leftanti", "leftsemi"}
+
 
 def make_params():
     np.random.seed(0)
 
-    hows = "left,inner,outer,right,leftanti,leftsemi".split(",")
+    hows = _JOIN_TYPES
     methods = "hash,sort".split(",")
 
     # Test specific cases (1)
@@ -70,6 +72,8 @@ def pd_odd_joins(left, right, join_type):
 
 
 def assert_join_results_equal(expect, got, how, **kwargs):
+    if how not in _JOIN_TYPES:
+        raise ValueError(f"Unrecognized join type {how}")
     if how == "right":
         got = got[expect.columns]
 
