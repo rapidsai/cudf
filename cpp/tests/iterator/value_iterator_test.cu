@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -343,7 +343,7 @@ TYPED_TEST(IteratorTest, error_handling)
 
   CUDF_EXPECT_THROW_MESSAGE((cudf::detail::make_null_replacement_iterator(
                               *d_col_no_null, cudf::test::make_type_param_scalar<T>(0))),
-                            "Unexpected non-nullable column.");
+                            "column with nulls must have a validity bitmask");
 
   CUDF_EXPECT_THROW_MESSAGE((d_col_no_null->pair_begin<T, true>()),
                             "Unexpected non-nullable column.");
