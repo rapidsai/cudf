@@ -1009,8 +1009,6 @@ __global__ void __launch_bounds__(128, 8) gpuEncodePages(EncPage *pages,
   } else if (s->page.page_type != PageType::DICTIONARY_PAGE &&
              s->col.level_bits >> 4 != 0  // This means there ARE repetition levels (has list)
   ) {
-    // TODO(cp): Consolidate this with the one above. The difference is only i how the def level is
-    // obtained.
     auto encode_levels = [&](uint8_t const *lvl_val_data, uint32_t nbits) {
       // For list types, the repetition and definition levels are pre-calculated. We just need to
       // encode and write them now.
@@ -1611,6 +1609,41 @@ __global__ void __launch_bounds__(1024) gpuGatherPages(EncColumnChunk *chunks, c
 }
 
 /**
+ * @brief Functor to get definition level value for a nested struct column until the leaf level or
+ * the first list level.
+ *
+ */
+struct def_level_fn {
+  column_device_view const *parent_col;
+  uint8_t const *d_nullability;
+  uint8_t sub_level_start;
+  uint8_t curr_def_level;
+
+  __device__ uint32_t operator()(size_type i)
+  {
+    uint32_t def       = curr_def_level;
+    uint8_t l          = sub_level_start;
+    bool is_col_nested = false;
+    auto col           = *parent_col;
+    do {
+      if (d_nullability[l]) {
+        if (not col.nullable() or bit_is_set(col.null_mask(), i)) {
+          ++def;
+        } else {  // We have found the shallowest level at which this row is null
+          break;
+        }  // If col not nullable then it does not contribute to def levels
+      }
+      is_col_nested = (col.type().id() == type_id::STRUCT);
+      if (is_col_nested) {
+        col = col.child(0);
+        ++l;
+      }
+    } while (is_col_nested);
+    return def;
+  }
+};
+
+/**
  * @brief Get the dremel offsets and repetition and definition levels for a LIST column
  *
  * The repetition and definition level values are ideally computed using a recursive call over a
@@ -1839,64 +1872,21 @@ dremel_data get_dremel_data(column_view h_col,
     // Merge empty at deepest parent level with the rep, def level vals at leaf level
 
     auto input_parent_rep_it = thrust::make_constant_iterator(level);
-    auto input_parent_def_it = thrust::make_transform_iterator(
-      empties_idx.begin(),
-      [parent_col      = d_nesting_levels + level,
-       d_nullability   = d_nullability.data(),
-       sub_level_start = start_at_sub_level[level],
-       curr_def_level  = def_at_level[level]] __device__(auto i) {
-        uint32_t def       = curr_def_level;
-        uint8_t l          = sub_level_start;
-        bool is_col_nested = false;
-        auto col           = *parent_col;
-        do {
-          if (d_nullability[l]) {
-            // TODO(cp): consolidate this functor with similar functionality thrice in this function
-            // and one more in gpuEncodePages.
-            if (col.is_valid(i)) {
-              ++def;
-            } else {  // We have found the shallowest level at which this row is null
-              break;
-            }  // If col not nullable then it does not contribute to def levels
-          }
-          is_col_nested = (col.type().id() == type_id::STRUCT);
-          if (is_col_nested) {
-            col = col.child(0);
-            ++l;
-          }
-        } while (is_col_nested);
-        return def;
-      });
+    auto input_parent_def_it =
+      thrust::make_transform_iterator(empties_idx.begin(),
+                                      def_level_fn{d_nesting_levels + level,
+                                                   d_nullability.data(),
+                                                   start_at_sub_level[level],
+                                                   def_at_level[level]});
 
     // `nesting_levels.size()` == no of list levels + leaf. Max repetition level = no of list levels
     auto input_child_rep_it = thrust::make_constant_iterator(nesting_levels.size() - 1);
-    auto input_child_def_it = thrust::make_transform_iterator(
-      thrust::make_counting_iterator(column_offsets[level + 1]),
-      [child_col       = d_nesting_levels + level + 1,
-       d_nullability   = d_nullability.data(),
-       sub_level_start = start_at_sub_level[level + 1],
-       curr_def_level  = def_at_level[level + 1]] __device__(auto i) {
-        uint32_t def       = curr_def_level;
-        uint8_t l          = sub_level_start;
-        bool is_col_nested = false;
-        auto col           = *child_col;
-        do {
-          if (d_nullability[l]) {
-            if (col.is_valid(i)) {
-              ++def;
-            } else {
-              // We have found the shallowest level at which this row is null
-              break;
-            }  // If col not nullable then it does not contribute to def levels
-          }
-          is_col_nested = (col.type().id() == type_id::STRUCT);
-          if (is_col_nested) {
-            col = col.child(0);
-            ++l;
-          }
-        } while (is_col_nested);
-        return def;
-      });
+    auto input_child_def_it =
+      thrust::make_transform_iterator(thrust::make_counting_iterator(column_offsets[level + 1]),
+                                      def_level_fn{d_nesting_levels + level + 1,
+                                                   d_nullability.data(),
+                                                   start_at_sub_level[level + 1],
+                                                   def_at_level[level + 1]});
 
     // Zip the input and output value iterators so that merge operation is done only once
     auto input_parent_zip_it =
@@ -1975,34 +1965,12 @@ dremel_data get_dremel_data(column_view h_col,
     auto transformed_empties = thrust::make_transform_iterator(empties.begin(), offset_transformer);
 
     auto input_parent_rep_it = thrust::make_constant_iterator(level);
-    auto input_parent_def_it = thrust::make_transform_iterator(
-      empties_idx.begin(),
-      [parent_col      = d_nesting_levels + level,
-       d_nullability   = d_nullability.data(),
-       sub_level_start = start_at_sub_level[level],
-       curr_def_level  = def_at_level[level]] __device__(auto i) {
-        uint32_t def       = curr_def_level;
-        uint8_t l          = sub_level_start;
-        bool is_col_nested = false;
-        auto col           = *parent_col;
-        do {
-          if (d_nullability[l]) {
-            // TODO(cp): consolidate this functor with similar functionality thrice in this function
-            // and one more in gpuEncodePages.
-            if (not col.nullable() or bit_is_set(col.null_mask(), i)) {
-              ++def;
-            } else {  // We have found the shallowest level at which this row is null
-              break;
-            }  // If col not nullable then it does not contribute to def levels
-          }
-          is_col_nested = (col.type().id() == type_id::STRUCT);
-          if (is_col_nested) {
-            col = col.child(0);
-            ++l;
-          }
-        } while (is_col_nested);
-        return def;
-      });
+    auto input_parent_def_it =
+      thrust::make_transform_iterator(empties_idx.begin(),
+                                      def_level_fn{d_nesting_levels + level,
+                                                   d_nullability.data(),
+                                                   start_at_sub_level[level],
+                                                   def_at_level[level]});
 
     // Zip the input and output value iterators so that merge operation is done only once
     auto input_parent_zip_it =
