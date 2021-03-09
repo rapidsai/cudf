@@ -22,7 +22,9 @@
 import os
 import sys
 
+from docutils.nodes import Text
 from recommonmark.transform import AutoStructify
+from sphinx.addnodes import pending_xref
 
 sys.path.insert(0, os.path.abspath("../.."))
 
@@ -194,7 +196,10 @@ texinfo_documents = [
 
 
 # Example configuration for intersphinx: refer to the Python standard library.
-intersphinx_mapping = {"https://docs.python.org/": None}
+intersphinx_mapping = {
+    "python": ("https://docs.python.org/", None),
+    "cupy": ("https://docs.cupy.dev/en/stable/", None),
+}
 
 # Config numpydoc
 numpydoc_show_inherited_class_members = True
@@ -204,6 +209,36 @@ autoclass_content = "init"
 
 # Config AutoStructify
 github_doc_root = "https://github.com/rtfd/recommonmark/tree/master/doc/"
+
+# Replace API shorthands with fullname
+_reftarget_aliases = {
+    "cudf.Series": ("cudf.core.series.Series", "cudf.Series"),
+    "cudf.Index": ("cudf.core.index.Index", "cudf.Index"),
+    "cupy.core.core.ndarray": ("cupy.ndarray", "cupy.ndarray"),
+}
+
+_internal_names_to_ignore = {"cudf.core.column.string.StringColumn"}
+
+
+def resolve_aliases(app, doctree):
+    pending_xrefs = doctree.traverse(condition=pending_xref)
+    for node in pending_xrefs:
+        alias = node.get("reftarget", None)
+        if alias is not None and alias in _reftarget_aliases:
+            real_ref, text_to_render = _reftarget_aliases[alias]
+            node["reftarget"] = real_ref
+
+            text_node = next(
+                iter(node.traverse(lambda n: n.tagname == "#text"))
+            )
+            text_node.parent.replace(text_node, Text(text_to_render, ""))
+
+
+def ignore_internal_references(app, env, node, contnode):
+    name = node.get("reftarget", None)
+    if name is not None and name in _internal_names_to_ignore:
+        node["reftarget"] = ""
+        return contnode
 
 
 def setup(app):
@@ -219,3 +254,5 @@ def setup(app):
         True,
     )
     app.add_transform(AutoStructify)
+    app.connect("doctree-read", resolve_aliases)
+    app.connect("missing-reference", ignore_internal_references)
