@@ -27,7 +27,7 @@ namespace bin {
  * @addtogroup column_bin
  * @{
  * @file
- * @brief APIs for column histogramming.
+ * @brief APIs for binning values.
  */
 
 /// Enum used to define whether or not bins include their boundary points.

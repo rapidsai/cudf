@@ -36,69 +36,10 @@ namespace bin {
 
 constexpr unsigned int MYNULL = 0xffffffff;
 
-/// Kernel for accumulation.
-// TODO: Need to template a lot of these types.
-// Note that the two comparators will always be called with an input value as
-// the first argument, i.e. inclusivity in bin i will be determined by
-// `left_comp(value, left_edges[i]) && right_comp(value, right_edges[i])`
 template <typename StrictWeakOrderingLeft, typename StrictWeakOrderingRight>
-__global__ void accumulateKernel(
-        const float *values, unsigned int num_values,
-        const float *left_edges,
-        const float *right_edges,
-        unsigned int *counts, unsigned int num_bins,
-        StrictWeakOrderingLeft left_comp,
-        StrictWeakOrderingRight right_comp)
+struct bin_finder
 {
-    // Assume a set of blocks each containing a single thread for now.
-    unsigned int step = static_cast<unsigned int>(num_values / gridDim.x);
-    unsigned int lower_bound = blockIdx.x * step;
-    unsigned int upper_bound = lower_bound + step;
-
-    // For the final bin, need to do a min then a max because the calculated upper bound could either be:
-    // 1. Exactly num_values, in which case the min/max will be no-ops.
-    // 2. Larger than num_values, in which case the min will give num_values and the max will be a no-op.
-    // 3. Smaller than num_values, in which case the min will be a no-op and max will bring back up to num_values.
-    if ((blockIdx.x + 1) == gridDim.x)
-        upper_bound = max(min(upper_bound, num_values), num_values);
-
-    for (unsigned int i = lower_bound; i < upper_bound; ++i)
-    {
-        float value = values[i];
-
-        // Pre-filter anything that isn't within the range. These can always
-        // use strict inequality checks because even if one of the boundaries
-        // should be excluded that will be handled by the checks below.
-		if (value < left_edges[0] || value > right_edges[num_bins - 1])
-        {
-			return;
-		}
-
-        // Perform a binary search to determine the bin.
-		unsigned int high = num_bins - 1;
-		unsigned int low = 0;
-		while (high - low > 1) {
-			unsigned int mid = (high + low) / 2;
-			if (left_comp(value, left_edges[mid]))
-            {
-				low = mid;
-			}
-            else
-            {
-				high = mid;
-			}
-		}
-        if (right_comp(value, right_edges[low]))
-        {
-            counts[i] = low;
-        }
-    }
-}
-
-template <typename StrictWeakOrderingLeft, typename StrictWeakOrderingRight>
-struct bin_finder_new
-{
-    bin_finder_new(
+    bin_finder(
             const float *left_edges,
             const float *left_edges_end,
             const float *right_edges,
@@ -111,6 +52,7 @@ struct bin_finder_new
 
     __device__ unsigned int operator()(const float value) const
     {
+        // TODO: Immediately return NULL for NULL values.
         auto bound = thrust::lower_bound(thrust::seq,
                 m_left_edges, m_left_edges_end,
                 value,
@@ -154,7 +96,7 @@ std::unique_ptr<column> bin(column_view const& input,
         thrust::transform(thrust::device,
                 input.begin<float>(), input.end<float>(),
                 static_cast<cudf::mutable_column_view>(*output).begin<unsigned int>(),
-                bin_finder_new<thrust::less_equal<float>, thrust::less_equal<float>>(
+                bin_finder<thrust::less_equal<float>, thrust::less_equal<float>>(
                     left_edges.begin<float>(), left_edges.end<float>(), right_edges.begin<float>(),
                     thrust::less_equal<float>(), thrust::less_equal<float>()
                     )
@@ -165,7 +107,7 @@ std::unique_ptr<column> bin(column_view const& input,
         thrust::transform(thrust::device,
                 input.begin<float>(), input.end<float>(),
                 static_cast<cudf::mutable_column_view>(*output).begin<unsigned int>(),
-                bin_finder_new<thrust::less_equal<float>, thrust::less<float>>(
+                bin_finder<thrust::less_equal<float>, thrust::less<float>>(
                     left_edges.begin<float>(), left_edges.end<float>(), right_edges.begin<float>(),
                     thrust::less_equal<float>(), thrust::less<float>()
                     )
@@ -176,7 +118,7 @@ std::unique_ptr<column> bin(column_view const& input,
         thrust::transform(thrust::device,
                 input.begin<float>(), input.end<float>(),
                 static_cast<cudf::mutable_column_view>(*output).begin<unsigned int>(),
-                bin_finder_new<thrust::less<float>, thrust::less_equal<float>>(
+                bin_finder<thrust::less<float>, thrust::less_equal<float>>(
                     left_edges.begin<float>(), left_edges.end<float>(), right_edges.begin<float>(),
                     thrust::less<float>(), thrust::less_equal<float>()
                     )
@@ -187,7 +129,7 @@ std::unique_ptr<column> bin(column_view const& input,
         thrust::transform(thrust::device,
                 input.begin<float>(), input.end<float>(),
                 static_cast<cudf::mutable_column_view>(*output).begin<unsigned int>(),
-                bin_finder_new<thrust::less<float>, thrust::less<float>>(
+                bin_finder<thrust::less<float>, thrust::less<float>>(
                     left_edges.begin<float>(), left_edges.end<float>(), right_edges.begin<float>(),
                     thrust::less<float>(), thrust::less<float>()
                     )
@@ -198,52 +140,6 @@ std::unique_ptr<column> bin(column_view const& input,
     //unsigned int *tmp = (unsigned int *) malloc(10 * sizeof(unsigned int));
     //cudaError_t err = cudaMemcpy(tmp, static_cast<cudf::mutable_column_view>(*output).begin<unsigned int>(), 10 * sizeof(unsigned int), cudaMemcpyDeviceToHost);
     //fprintf(stderr, "The values of the output are %d, %d, %d.\n", tmp[0], tmp[1], tmp[2]);
-
-    // Run the kernel for accumulation.
-    //if ((left_inclusive == inclusive::YES) && (left_inclusive == inclusive::YES))
-    //{
-    //    accumulateKernel<<<256, 1>>>(
-    //            input.begin<float>(), input.size(),
-    //            left_edges.begin<float>(),
-    //            right_edges.begin<float>(),
-    //            static_cast<cudf::mutable_column_view>(*output).begin<unsigned int>(),
-    //            left_edges.size(),
-    //            thrust::greater_equal<float>(),
-    //            thrust::less_equal<float>());
-    //}
-    //else if ((left_inclusive == inclusive::YES) && (left_inclusive == inclusive::NO))
-    //{
-    //    accumulateKernel<<<256, 1>>>(
-    //            input.begin<float>(), input.size(),
-    //            left_edges.begin<float>(),
-    //            right_edges.begin<float>(),
-    //            static_cast<cudf::mutable_column_view>(*output).begin<unsigned int>(),
-    //            left_edges.size(),
-    //            thrust::greater_equal<float>(),
-    //            thrust::less<float>());
-    //}
-    //else if ((left_inclusive == inclusive::NO) && (left_inclusive == inclusive::YES))
-    //{
-    //    accumulateKernel<<<256, 1>>>(
-    //            input.begin<float>(), input.size(),
-    //            left_edges.begin<float>(),
-    //            right_edges.begin<float>(),
-    //            static_cast<cudf::mutable_column_view>(*output).begin<unsigned int>(),
-    //            left_edges.size(),
-    //            thrust::greater<float>(),
-    //            thrust::less_equal<float>());
-    //}
-    //else if ((left_inclusive == inclusive::NO) && (left_inclusive == inclusive::NO))
-    //{
-    //    accumulateKernel<<<256, 1>>>(
-    //            input.begin<float>(), input.size(),
-    //            left_edges.begin<float>(),
-    //            right_edges.begin<float>(),
-    //            static_cast<cudf::mutable_column_view>(*output).begin<unsigned int>(),
-    //            left_edges.size(),
-    //            thrust::greater<float>(),
-    //            thrust::less<float>());
-    //}
 
     return output;
 }
