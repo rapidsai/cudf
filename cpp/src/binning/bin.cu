@@ -44,12 +44,10 @@ struct bin_finder
     bin_finder(
             const float *left_edges,
             const float *left_edges_end,
-            const float *right_edges,
-            StrictWeakOrderingLeft left_comp,
-            StrictWeakOrderingRight right_comp
+            const float *right_edges
             )
         : m_left_edges(left_edges), m_left_edges_end(left_edges_end), m_right_edges(right_edges),
-          m_left_comp(left_comp), m_right_comp(right_comp)
+          m_left_comp(StrictWeakOrderingLeft()), m_right_comp(StrictWeakOrderingRight())
     {}
 
     __device__ unsigned int operator()(const float value) const
@@ -64,7 +62,7 @@ struct bin_finder
         if ((bound == m_left_edges) || (bound == m_left_edges_end))
             return MYNULL;
 
-        // We must subtract 1 because lower bound returns the first index _greater than_ the value. This is
+        // We must subtract 1 because lower bound returns the first index _greater than_ the value.
         auto index = bound - m_left_edges - 1;
         return (m_right_comp(value, m_right_edges[index])) ? index : MYNULL;
     }
@@ -80,11 +78,10 @@ struct bin_finder
 
 
 // Bin the input by the edges in left_edges and right_edges.
+template <typename StrictWeakOrderingLeft, typename StrictWeakOrderingRight>
 std::unique_ptr<column> bin_internal(column_view const& input, 
                             column_view const& left_edges,
-                            inclusive left_inclusive,
                             column_view const& right_edges,
-                            inclusive right_inclusive,
                             rmm::mr::device_memory_resource * mr)
 {
     // TODO: Add check that edge sizes are > 0.
@@ -102,51 +99,13 @@ std::unique_ptr<column> bin_internal(column_view const& input,
     // TODO: Figure out how to get these two template type from the input.
     auto output = cudf::make_numeric_column(input.type(), input.size());
 
-    if ((left_inclusive == inclusive::YES) && (left_inclusive == inclusive::YES))
-    {
-        thrust::transform(thrust::device,
-                input.begin<float>(), input.end<float>(),
-                static_cast<cudf::mutable_column_view>(*output).begin<unsigned int>(),
-                bin_finder<thrust::less_equal<float>, thrust::less_equal<float>>(
-                    left_edges.begin<float>(), left_edges.end<float>(), right_edges.begin<float>(),
-                    thrust::less_equal<float>(), thrust::less_equal<float>()
-                    )
-                );
-    }
-    else if ((left_inclusive == inclusive::YES) && (left_inclusive == inclusive::NO))
-    {
-        thrust::transform(thrust::device,
-                input.begin<float>(), input.end<float>(),
-                static_cast<cudf::mutable_column_view>(*output).begin<unsigned int>(),
-                bin_finder<thrust::less_equal<float>, thrust::less<float>>(
-                    left_edges.begin<float>(), left_edges.end<float>(), right_edges.begin<float>(),
-                    thrust::less_equal<float>(), thrust::less<float>()
-                    )
-                );
-    }
-    else if ((left_inclusive == inclusive::NO) && (left_inclusive == inclusive::YES))
-    {
-        thrust::transform(thrust::device,
-                input.begin<float>(), input.end<float>(),
-                static_cast<cudf::mutable_column_view>(*output).begin<unsigned int>(),
-                bin_finder<thrust::less<float>, thrust::less_equal<float>>(
-                    left_edges.begin<float>(), left_edges.end<float>(), right_edges.begin<float>(),
-                    thrust::less<float>(), thrust::less_equal<float>()
-                    )
-                );
-    }
-    else if ((left_inclusive == inclusive::NO) && (left_inclusive == inclusive::NO))
-    {
-        thrust::transform(thrust::device,
-                input.begin<float>(), input.end<float>(),
-                static_cast<cudf::mutable_column_view>(*output).begin<unsigned int>(),
-                bin_finder<thrust::less<float>, thrust::less<float>>(
-                    left_edges.begin<float>(), left_edges.end<float>(), right_edges.begin<float>(),
-                    thrust::less<float>(), thrust::less<float>()
-                    )
-                );
-    }
-
+    thrust::transform(thrust::device,
+            input.begin<float>(), input.end<float>(),
+            static_cast<cudf::mutable_column_view>(*output).begin<unsigned int>(),
+            bin_finder<StrictWeakOrderingLeft, StrictWeakOrderingRight>(
+                left_edges.begin<float>(), left_edges.end<float>(), right_edges.begin<float>()
+                )
+            );
 
     //unsigned int *tmp = (unsigned int *) malloc(10 * sizeof(unsigned int));
     //cudaError_t err = cudaMemcpy(tmp, static_cast<cudf::mutable_column_view>(*output).begin<unsigned int>(), 10 * sizeof(unsigned int), cudaMemcpyDeviceToHost);
@@ -181,7 +140,28 @@ struct bin_type_dispatcher {
             inclusive right_inclusive,
             rmm::mr::device_memory_resource * mr)
     {
-        return bin_internal(input, left_edges, left_inclusive, right_edges, right_inclusive, mr);
+        switch (left_inclusive)
+        {
+            case inclusive::YES:
+                switch (right_inclusive)
+                {
+                    case inclusive::YES:
+                        // TODO: Don't pick float by default, dispatch as needed.
+                        return bin_internal<thrust::less_equal<float>, thrust::less_equal<float> >(input, left_edges, right_edges, mr);
+                    case inclusive::NO:
+                        return bin_internal<thrust::less_equal<float>, thrust::less<float> >(input, left_edges, right_edges, mr);
+                }
+            case inclusive::NO:
+                switch (right_inclusive)
+                {
+                    case inclusive::YES:
+                        return bin_internal<thrust::less<float>, thrust::less_equal<float> >(input, left_edges, right_edges, mr);
+                    case inclusive::NO:
+                        return bin_internal<thrust::less<float>, thrust::less<float> >(input, left_edges, right_edges, mr);
+                }
+            default:
+                CUDF_FAIL("Undefined rounding method");
+        }
     }
 };
 
