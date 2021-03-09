@@ -682,7 +682,7 @@ class ColumnBase(Column, Serializable):
                     raise ValueError(
                         "Boolean mask must be of same length as column"
                     )
-                key = arange(len(self))[key.fillna(False)]
+                key = arange(len(self))[key]
                 if hasattr(value, "__len__") and len(value) == len(self):
                     value = as_column(value)[key]
             nelem = len(key)
