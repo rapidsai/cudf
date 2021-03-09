@@ -50,7 +50,7 @@ void superimpose_parent_nullmask(bitmask_type const* parent_null_mask,
       reinterpret_cast<bitmask_type const*>(current_child_mask)};
     std::vector<size_type> begin_bits{0, 0};
     cudf::detail::inplace_bitmask_and(
-      detail::device_span<bitmask_type>(current_child_mask, num_bitmask_words(child.size())),
+      device_span<bitmask_type>(current_child_mask, num_bitmask_words(child.size())),
       masks,
       begin_bits,
       child.size(),
