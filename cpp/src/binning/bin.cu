@@ -78,8 +78,9 @@ struct bin_finder
     StrictWeakOrderingRight m_right_comp;
 };
 
+
 // Bin the input by the edges in left_edges and right_edges.
-std::unique_ptr<column> bin(column_view const& input, 
+std::unique_ptr<column> bin_internal(column_view const& input, 
                             column_view const& left_edges,
                             inclusive left_inclusive,
                             column_view const& right_edges,
@@ -152,6 +153,62 @@ std::unique_ptr<column> bin(column_view const& input,
     //fprintf(stderr, "The values of the output are %d, %d, %d.\n", tmp[0], tmp[1], tmp[2]);
 
     return output;
+}
+
+
+
+template <typename T>
+constexpr inline auto is_supported_bin_type()
+{
+  return (cudf::is_numeric<T>() && not std::is_same<T, bool>::value); // || cudf::is_fixed_point<T>();
+}
+
+
+struct bin_type_dispatcher {
+    template <typename T, typename... Args>
+    std::enable_if_t<not is_supported_bin_type<T>(), std::unique_ptr<column>> operator()(
+            Args&&... args)
+    {
+        CUDF_FAIL("Type not support for cudf::bin");
+    }
+
+    template <typename T>
+    std::enable_if_t<is_supported_bin_type<T>(), std::unique_ptr<column>> operator()(
+            column_view const& input, 
+            column_view const& left_edges,
+            inclusive left_inclusive,
+            column_view const& right_edges,
+            inclusive right_inclusive,
+            rmm::mr::device_memory_resource * mr)
+    {
+        return bin_internal(input, left_edges, left_inclusive, right_edges, right_inclusive, mr);
+    }
+};
+
+
+
+// Bin the input by the edges in left_edges and right_edges.
+std::unique_ptr<column> bin(column_view const& input, 
+                            column_view const& left_edges,
+                            inclusive left_inclusive,
+                            column_view const& right_edges,
+                            inclusive right_inclusive,
+                            rmm::mr::device_memory_resource * mr)
+{
+    // TODO: Add check that edge sizes are > 0.
+    CUDF_EXPECTS(input.type() == left_edges.type(), "The input and edge columns must have the same types.");
+    CUDF_EXPECTS(input.type() == right_edges.type(), "The input and edge columns must have the same types.");
+    CUDF_EXPECTS(left_edges.size() == right_edges.size(), "The left and right edge columns must be of the same length.");
+
+    // Handle empty inputs.
+    if (input.is_empty()) {
+        // TODO: Determine what output type actually makes sense here, it
+        // probably shouldn't be empty_like but instead of some numeric type.
+        return empty_like(input);
+    }
+
+    return type_dispatcher(
+            input.type(), bin_type_dispatcher{}, input, left_edges, left_inclusive, right_edges, right_inclusive, mr);
 }
 }  // namespace bin
 }  // namespace cudf
