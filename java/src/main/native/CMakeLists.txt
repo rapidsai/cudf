@@ -175,7 +175,7 @@ find_library(ARROW_LIBRARY libarrow.a
         "${CUDF_CPP_BUILD_DIR}/_deps/arrow-build/release")
 
 if(NOT ARROW_LIBRARY)
-  message(FATAL_ERROR "Arrow static libs not found. Was libcudf built with ARROW_STATIC_LIB=ON?")
+  message(FATAL_ERROR "Arrow static libs not found. Was libcudf built with CUDF_USE_ARROW_STATIC=ON?")
 else()
   message(STATUS "ARROW: ARROW_LIBRARY set to ${ARROW_LIBRARY}")
 endif(NOT ARROW_LIBRARY)

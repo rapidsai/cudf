@@ -22,6 +22,7 @@
 #include "writer_impl.hpp"
 
 #include <io/parquet/compact_protocol_writer.hpp>
+#include <io/utilities/column_utils.cuh>
 
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/lists/lists_column_view.hpp>
@@ -495,17 +496,6 @@ class parquet_column_view {
   uint8_t _decimal_precision = 0;
 };
 
-rmm::device_uvector<column_device_view> writer::impl::create_leaf_column_device_views(
-  hostdevice_vector<gpu::EncColumnDesc> &col_desc,
-  const table_device_view &parent_table_device_view)
-{
-  rmm::device_uvector<column_device_view> leaf_column_views(parent_table_device_view.num_columns(),
-                                                            stream);
-  gpu::init_column_device_views(
-    col_desc.device_ptr(), leaf_column_views.data(), parent_table_device_view, stream);
-  return leaf_column_views;
-}
-
 void writer::impl::init_page_fragments(hostdevice_vector<gpu::PageFragment> &frag,
                                        hostdevice_vector<gpu::EncColumnDesc> &col_desc,
                                        uint32_t num_columns,
@@ -919,7 +909,8 @@ void writer::impl::write(table_view const &table)
   if (fragments.size() != 0) {
     // Move column info to device
     col_desc.host_to_device(stream);
-    leaf_column_views = create_leaf_column_device_views(col_desc, *parent_column_table_device_view);
+    leaf_column_views = create_leaf_column_device_views<gpu::EncColumnDesc>(
+      col_desc, *parent_column_table_device_view, stream);
 
     init_page_fragments(fragments, col_desc, num_columns, num_fragments, num_rows, fragment_size);
   }
