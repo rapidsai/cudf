@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -470,6 +470,27 @@ TYPED_TEST(ScanTest, EmptyColumnskip_nulls)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_col_out2, col_out->view());
 }
 
+TYPED_TEST(ScanTest, LeadingNulls)
+{
+  auto const v = cudf::test::make_type_param_vector<TypeParam>({100, 200, 300});
+  auto const b = std::vector<bool>{0, 1, 1};
+  cudf::test::fixed_width_column_wrapper<TypeParam> const col_in(v.begin(), v.end(), b.begin());
+  std::unique_ptr<cudf::column> col_out;
+
+  // expected outputs
+  std::vector<TypeParam> out_v(v.size());
+  std::vector<bool> out_b(v.size(), 0);
+
+  // skipna=false
+  CUDF_EXPECT_NO_THROW(
+    col_out =
+      cudf::scan(col_in, cudf::make_sum_aggregation(), scan_type::INCLUSIVE, null_policy::INCLUDE));
+  cudf::test::fixed_width_column_wrapper<TypeParam> expected_col_out(
+    out_v.begin(), out_v.end(), out_b.begin());
+  CUDF_TEST_EXPECT_COLUMN_PROPERTIES_EQUAL(expected_col_out, col_out->view());
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_col_out, col_out->view());
+}
+
 template <typename T>
 struct FixedPointTestBothReps : public cudf::test::BaseFixture {
 };
@@ -488,8 +509,13 @@ TYPED_TEST(FixedPointTestBothReps, FixedPointScanSum)
     auto const column   = fp_wrapper{{1, 2, 3, 4}, scale};
     auto const expected = fp_wrapper{{1, 3, 6, 10}, scale};
     auto const result   = cudf::scan(column, cudf::make_sum_aggregation(), scan_type::INCLUSIVE);
-
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(result->view(), expected);
+
+    auto const with_nulls     = fp_wrapper({1, 2, 3, 0, 4, 0}, {1, 1, 1, 0, 1, 0}, scale);
+    auto const expected_nulls = fp_wrapper({1, 3, 6, 0, 10, 0}, {1, 1, 1, 0, 1, 0}, scale);
+    auto const result_nulls =
+      cudf::scan(with_nulls, cudf::make_sum_aggregation(), scan_type::INCLUSIVE);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(result_nulls->view(), expected_nulls);
   }
 }
 
@@ -505,8 +531,13 @@ TYPED_TEST(FixedPointTestBothReps, FixedPointPreScanSum)
     auto const column   = fp_wrapper{{1, 2, 3, 4}, scale};
     auto const expected = fp_wrapper{{0, 1, 3, 6}, scale};
     auto const result   = cudf::scan(column, cudf::make_sum_aggregation(), scan_type::EXCLUSIVE);
-
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(result->view(), expected);
+
+    auto const with_nulls     = fp_wrapper({0, 1, 2, 3, 0, 4}, {0, 1, 1, 1, 0, 1}, scale);
+    auto const expected_nulls = fp_wrapper({0, 0, 1, 3, 0, 6}, {0, 1, 1, 1, 0, 1}, scale);
+    auto const result_nulls =
+      cudf::scan(with_nulls, cudf::make_sum_aggregation(), scan_type::EXCLUSIVE);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(result_nulls->view(), expected_nulls);
   }
 }
 
@@ -535,8 +566,13 @@ TYPED_TEST(FixedPointTestBothReps, FixedPointScanMin)
     auto const column   = fp_wrapper{{1, 2, 3, 4}, scale};
     auto const expected = fp_wrapper{{1, 1, 1, 1}, scale};
     auto const result   = cudf::scan(column, cudf::make_min_aggregation(), scan_type::INCLUSIVE);
-
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(result->view(), expected);
+
+    auto const with_nulls     = fp_wrapper({1, 0, 2, 0, 3, 4}, {1, 0, 1, 0, 1, 1}, scale);
+    auto const expected_nulls = fp_wrapper({1, 0, 1, 0, 1, 1}, {1, 0, 1, 0, 1, 1}, scale);
+    auto const result_nulls =
+      cudf::scan(with_nulls, cudf::make_min_aggregation(), scan_type::INCLUSIVE);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(result_nulls->view(), expected_nulls);
   }
 }
 
@@ -551,7 +587,11 @@ TYPED_TEST(FixedPointTestBothReps, FixedPointScanMax)
     auto const scale  = scale_type{i};
     auto const column = fp_wrapper{{1, 2, 3, 4}, scale};
     auto const result = cudf::scan(column, cudf::make_max_aggregation(), scan_type::INCLUSIVE);
-
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(result->view(), column);
+
+    auto const with_nulls = fp_wrapper({1, 0, 0, 2, 3, 4}, {1, 0, 0, 1, 1, 1}, scale);
+    auto const result_nulls =
+      cudf::scan(with_nulls, cudf::make_max_aggregation(), scan_type::INCLUSIVE);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(result_nulls->view(), with_nulls);
   }
 }

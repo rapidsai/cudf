@@ -15,8 +15,6 @@
 #include <rmm/device_uvector.hpp>
 #include <rmm/exec_policy.hpp>
 
-#include <cudf_test/column_wrapper.hpp>
-
 namespace cudf {
 namespace strings {
 namespace detail {

@@ -86,6 +86,9 @@ from cudf._lib.strings.contains import (
     count_re as cpp_count_re,
     match_re as cpp_match_re,
 )
+from cudf._lib.strings.convert.convert_fixed_point import (
+    to_decimal as cpp_to_decimal,
+)
 from cudf._lib.strings.convert.convert_urls import (
     url_decode as cpp_url_decode,
     url_encode as cpp_url_encode,
@@ -344,7 +347,7 @@ class StringMethods(ColumnMethodsMixin):
     @overload
     def cat(
         self, others, sep: str = None, na_rep: str = None
-    ) -> Union[ParentType, "cudf.core.column.StringColumn"]:
+    ) -> Union[ParentType, "cudf.core.column.string.StringColumn"]:
         ...
 
     def cat(self, others=None, sep=None, na_rep=None):
@@ -4887,6 +4890,11 @@ class StringColumn(column.ColumnBase):
         format = "%D days %H:%M:%S"
         return self._as_datetime_or_timedelta_column(out_dtype, format)
 
+    def as_decimal_column(
+        self, dtype: Dtype, **kwargs
+    ) -> "cudf.core.column.DecimalColumn":
+        return cpp_to_decimal(self, dtype)
+
     def as_string_column(self, dtype: Dtype, format=None) -> StringColumn:
         return self
 
@@ -5189,7 +5197,7 @@ def _get_cols_list(parent_obj, others):
         ]
 
         return cols_list
-    elif others is not None:
+    elif others is not None and not isinstance(others, StringMethods):
         if (
             parent_index is not None
             and isinstance(others, cudf.Series)

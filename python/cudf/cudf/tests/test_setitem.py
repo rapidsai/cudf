@@ -1,11 +1,12 @@
-# Copyright (c) 2018-2020, NVIDIA CORPORATION.
+# Copyright (c) 2018-2021, NVIDIA CORPORATION.
 
 import numpy as np
 import pandas as pd
 import pytest
 
 import cudf
-from cudf.tests.utils import assert_eq
+from cudf.core._compat import PANDAS_EQ_123, PANDAS_GE_120
+from cudf.tests.utils import assert_eq, assert_exceptions_equal
 
 
 @pytest.mark.parametrize("df", [pd.DataFrame({"a": [1, 2, 3]})])
@@ -19,10 +20,11 @@ def test_dataframe_setitem_bool_mask_scaler(df, arg, value):
     assert_eq(df, gdf)
 
 
-# pandas incorrectly adds nulls with dataframes
-# but works fine with scalers
-@pytest.mark.xfail()
-def test_dataframe_setitem_scaler_bool_inconsistency():
+@pytest.mark.xfail(
+    condition=PANDAS_EQ_123 or not PANDAS_GE_120,
+    reason="https://github.com/pandas-dev/pandas/issues/40204",
+)
+def test_dataframe_setitem_scaler_bool():
     df = pd.DataFrame({"a": [1, 2, 3]})
     df[[True, False, True]] = pd.DataFrame({"a": [-1, -2]})
 
@@ -114,7 +116,7 @@ def test_series_set_item(psr, arg):
     ],
 )
 def test_setitem_dataframe_series_inplace(df):
-    pdf = df
+    pdf = df.copy(deep=True)
     gdf = cudf.from_pandas(pdf)
 
     pdf["a"].replace(1, 500, inplace=True)
@@ -184,3 +186,15 @@ def test_column_set_equal_length_object_by_mask():
     data[bool_col] = replace_data
 
     assert_eq(cudf.Series(data), cudf.Series([100, 0, 300, 1, 500]))
+
+
+def test_categorical_setitem_invalid():
+    ps = pd.Series([1, 2, 3], dtype="category")
+    gs = cudf.Series([1, 2, 3], dtype="category")
+
+    assert_exceptions_equal(
+        lfunc=ps.__setitem__,
+        rfunc=gs.__setitem__,
+        lfunc_args_and_kwargs=([0, 5], {}),
+        rfunc_args_and_kwargs=([0, 5], {}),
+    )

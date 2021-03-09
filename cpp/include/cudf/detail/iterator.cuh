@@ -41,6 +41,8 @@
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/iterator/transform_iterator.h>
 
+#include <utility>
+
 namespace cudf {
 namespace detail {
 /**
@@ -69,16 +71,13 @@ inline auto make_counting_transform_iterator(cudf::size_type start, UnaryFunctio
 }
 
 /**
- * @brief value accessor of column with null bitmask
- * A unary functor returns scalar value at `id`.
- * `operator() (cudf::size_type id)` computes `element` and valid flag at `id`
- * This functor is only allowed for nullable columns.
+ * @brief Value accessor of column that may have a null bitmask.
  *
- * the return value for element `i` will return `column[i]`
+ * This unary functor returns scalar value at `id`.
+ * The `operator()(cudf::size_type id)` computes the `element` and valid flag at `id`.
+ *
+ * The return value for element `i` will return `column[i]`
  * if it is valid, or `null_replacement` if it is null.
- *
- * @throws cudf::logic_error if the column is not nullable.
- * @throws cudf::logic_error if column datatype and Element type mismatch.
  *
  * @tparam Element The type of elements in the column
  */
@@ -86,24 +85,33 @@ template <typename Element>
 struct null_replaced_value_accessor {
   column_device_view const col;      ///< column view of column in device
   Element const null_replacement{};  ///< value returned when element is null
+  bool const has_nulls;              ///< true if col has null elements
 
   /**
-   * @brief constructor
-   * @param[in] _col column device view of cudf column
+   * @brief Creates an accessor for a null-replacement iterator.
+   *
+   * @throws cudf::logic_error if `col` type does not match Element type.
+   * @throws cudf::logic_error if `has_nulls` is true but `col` does not have a validity mask.
+   *
+   * @param[in] col column device view of cudf column
    * @param[in] null_replacement The value to return for null elements
+   * @param[in] has_nulls Must be set to true if `col` has nulls.
    */
-  null_replaced_value_accessor(column_device_view const& _col, Element null_val)
-    : col{_col}, null_replacement{null_val}
+  null_replaced_value_accessor(column_device_view const& col,
+                               Element null_val,
+                               bool has_nulls = true)
+    : col{col}, null_replacement{null_val}, has_nulls{has_nulls}
   {
-    CUDF_EXPECTS(data_type(type_to_id<Element>()) == col.type(), "the data type mismatch");
-    // verify valid is non-null, otherwise, is_valid_nocheck() will crash
-    CUDF_EXPECTS(_col.nullable(), "Unexpected non-nullable column.");
+    CUDF_EXPECTS(type_to_id<Element>() == device_storage_type_id(col.type().id()),
+                 "the data type mismatch");
+    // verify validity bitmask is non-null, otherwise, is_null_nocheck() will crash
+    if (has_nulls) CUDF_EXPECTS(col.nullable(), "column with nulls must have a validity bitmask");
   }
 
   CUDA_DEVICE_CALLABLE
   Element operator()(cudf::size_type i) const
   {
-    return col.is_valid_nocheck(i) ? col.element<Element>(i) : null_replacement;
+    return has_nulls && col.is_null_nocheck(i) ? null_replacement : col.element<Element>(i);
   }
 };
 
@@ -138,7 +146,7 @@ struct validity_accessor {
  *
  * Dereferencing the returned iterator for element `i` will return `column[i]`
  * if it is valid, or `null_replacement` if it is null.
- * This iterator is only allowed for nullable columns.
+ * This iterator is only allowed for both nullable and non-nullable columns.
  *
  * @throws cudf::logic_error if the column is not nullable.
  * @throws cudf::logic_error if column datatype and Element type mismatch.
@@ -146,15 +154,17 @@ struct validity_accessor {
  * @tparam Element The type of elements in the column
  * @param column The column to iterate
  * @param null_replacement The value to return for null elements
- * @return auto Iterator that returns valid column elements, or a null
+ * @param has_nulls Must be set to true if `column` has nulls.
+ * @return Iterator that returns valid column elements, or a null
  * replacement value for null elements.
  */
 template <typename Element>
 auto make_null_replacement_iterator(column_device_view const& column,
-                                    Element const null_replacement = Element{0})
+                                    Element const null_replacement = Element{0},
+                                    bool has_nulls                 = true)
 {
   return make_counting_transform_iterator(
-    0, null_replaced_value_accessor<Element>{column, null_replacement});
+    0, null_replaced_value_accessor<Element>{column, null_replacement, has_nulls});
 }
 
 /**
@@ -182,6 +192,35 @@ template <typename Element, bool has_nulls = false>
 auto make_pair_iterator(column_device_view const& column)
 {
   return column.pair_begin<Element, has_nulls>();
+}
+
+/**
+ * @brief Constructs a pair rep iterator over a column's representative values and its validity.
+ *
+ * Dereferencing the returned iterator returns a `thrust::pair<rep_type, bool>`,
+ * where `rep_type` is `device_storage_type<T>`, the type used to store
+ * the value on the device.
+ *
+ * If an element at position `i` is valid (or `has_nulls == false`), then for `p = *(iter + i)`,
+ * `p.first` contains the value of the element at `i` and `p.second == true`.
+ *
+ * Else, if the element at `i` is null, then the value of `p.first` is undefined and `p.second ==
+ * false`. `pair(column[i], validity)`. `validity` is `true` if `has_nulls=false`. `validity` is
+ * validity of the element at `i` if `has_nulls=true` and the column is nullable.
+ *
+ * @throws cudf::logic_error if the column is nullable.
+ * @throws cudf::logic_error if column datatype and Element type mismatch.
+ *
+ * @tparam Element The type of elements in the column
+ * @tparam has_nulls boolean indicating to treat the column is nullable
+ * @param column The column to iterate
+ * @return auto Iterator that returns valid column elements, and validity of the
+ * element in a pair
+ */
+template <typename Element, bool has_nulls = false>
+auto make_pair_rep_iterator(column_device_view const& column)
+{
+  return column.pair_rep_begin<Element, has_nulls>();
 }
 
 /**
@@ -314,6 +353,69 @@ struct scalar_pair_accessor : public scalar_value_accessor<Element> {
 };
 
 /**
+ * @brief Utility to discard template type arguments.
+ *
+ * Substitute for std::void_t.
+ *
+ * @tparam T Ignored template parameter
+ */
+template <typename... T>
+using void_t = void;
+
+/**
+ * @brief Compile-time reflection to check if `Element` type has a `rep()` member.
+ */
+template <typename Element, typename = void>
+struct has_rep_member : std::false_type {
+};
+
+template <typename Element>
+struct has_rep_member<Element, void_t<decltype(std::declval<Element>().rep())>> : std::true_type {
+};
+
+/**
+ * @brief Pair accessor for scalar's representation value and validity.
+ *
+ * @tparam Element The type of element in the scalar.
+ */
+template <typename Element>
+struct scalar_representation_pair_accessor : public scalar_value_accessor<Element> {
+  using base       = scalar_value_accessor<Element>;
+  using rep_type   = device_storage_type_t<Element>;
+  using value_type = thrust::pair<rep_type, bool>;
+
+  scalar_representation_pair_accessor(scalar const& scalar_value) : base(scalar_value) {}
+
+  /**
+   * @brief returns a pair with representative value and validity of the scalar.
+   *
+   * @throw `cudf::logic_error` if this function is called in host.
+   *
+   * @return a pair with representative value and validity of the scalar.
+   */
+  CUDA_DEVICE_CALLABLE
+  const value_type operator()(size_type) const
+  {
+    return {get_rep(base::dscalar), base::dscalar.is_valid()};
+  }
+
+ private:
+  template <typename DeviceScalar,
+            std::enable_if_t<!has_rep_member<DeviceScalar>::value, void>* = nullptr>
+  CUDA_DEVICE_CALLABLE rep_type get_rep(DeviceScalar const& dscalar) const
+  {
+    return dscalar.value();
+  }
+
+  template <typename DeviceScalar,
+            std::enable_if_t<has_rep_member<DeviceScalar>::value, void>* = nullptr>
+  CUDA_DEVICE_CALLABLE rep_type get_rep(DeviceScalar const& dscalar) const
+  {
+    return dscalar.rep();
+  }
+};
+
+/**
  * @brief Constructs a constant device pair iterator over a scalar's value and its validity.
  *
  * Dereferencing the returned iterator returns a `thrust::pair<Element, bool>`.
@@ -341,6 +443,41 @@ auto inline make_pair_iterator(scalar const& scalar_value)
                "the data type mismatch");
   return thrust::make_transform_iterator(thrust::make_constant_iterator<size_type>(0),
                                          scalar_pair_accessor<Element>{scalar_value});
+}
+
+/**
+ * @brief Constructs a constant device pair iterator over a scalar's representative value
+ *        and its validity.
+ *
+ * Dereferencing the returned iterator returns a `thrust::pair<Element::rep, bool>`.
+ * E.g. For a valid `decimal32` row, a `thrust::pair<int32_t, bool>` is returned,
+ * with the value set to the `int32_t` representative value of the decimal,
+ * and validity `true`, indicating that the row is valid.
+ *
+ * If scalar is valid, then for `p = *(iter + i)`, `p.first` contains
+ * the representative value of the scalar and `p.second == true`.
+ *
+ * Else, if the scalar is null, then the value of `p.first` is undefined and `p.second == false`.
+ *
+ * The behaviour is undefined if the scalar is destroyed before iterator dereferencing.
+ *
+ * @throws cudf::logic_error if scalar datatype and Element type mismatch.
+ * @throws cudf::logic_error if the returned iterator is dereferenced in host
+ *
+ * @tparam Element The type of elements in the scalar
+ * @tparam bool unused. This template parameter exists to enforce same
+ * template interface as @ref make_pair_iterator(column_device_view const&).
+ * @param scalar_value The scalar to iterate
+ * @return auto Iterator that returns scalar's representative value,
+ *         and validity of the scalar in a pair
+ */
+template <typename Element, bool = false>
+auto make_pair_rep_iterator(scalar const& scalar_value)
+{
+  CUDF_EXPECTS(type_id_matches_device_storage_type<Element>(scalar_value.type().id()),
+               "the data type mismatch");
+  return make_counting_transform_iterator(
+    0, scalar_representation_pair_accessor<Element>{scalar_value});
 }
 
 }  // namespace detail

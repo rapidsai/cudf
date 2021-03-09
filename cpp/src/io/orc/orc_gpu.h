@@ -124,19 +124,25 @@ struct RowGroup {
  * @brief Struct to describe an encoder data chunk
  */
 struct EncChunk {
-  uint8_t *streams[CI_NUM_STREAMS];   // encoded output
-  int32_t strm_id[CI_NUM_STREAMS];    // stream id or -1 if not present
-  uint32_t strm_len[CI_NUM_STREAMS];  // in: max length, out: actual length
-  const uint32_t *valid_map_base;     // base ptr of input valid bit map
-  size_type column_offset;            // index of the first element relative to the base memory
-  const void *column_data_base;       // base ptr of input column data
-  uint32_t start_row;                 // start row of this chunk
-  uint32_t num_rows;                  // number of rows in this chunk
-  uint32_t valid_rows;                // max number of valid rows
-  uint8_t encoding_kind;              // column encoding kind (orc::ColumnEncodingKind)
-  uint8_t type_kind;                  // column data type (orc::TypeKind)
-  uint8_t dtype_len;                  // data type length
-  uint8_t scale;                      // scale for decimals or timestamps
+  const uint32_t *valid_map_base;  // base ptr of input valid bit map
+  size_type column_offset;         // index of the first element relative to the base memory
+  const void *column_data_base;    // base ptr of input column data
+  uint32_t start_row;              // start row of this chunk
+  uint32_t num_rows;               // number of rows in this chunk
+  uint32_t valid_rows;             // max number of valid rows
+  uint8_t encoding_kind;           // column encoding kind (orc::ColumnEncodingKind)
+  uint8_t type_kind;               // column data type (orc::TypeKind)
+  uint8_t dtype_len;               // data type length
+  uint8_t scale;                   // scale for decimals or timestamps
+};
+
+/**
+ * @brief Struct to describe the streams that correspond to a single `EncChunk`.
+ */
+struct encoder_chunk_streams {
+  uint8_t *data_ptrs[CI_NUM_STREAMS];  // encoded output
+  int32_t ids[CI_NUM_STREAMS];         // stream id; -1 if stream is not present
+  uint32_t lengths[CI_NUM_STREAMS];    // in: max length, out: actual length
 };
 
 /**
@@ -193,7 +199,7 @@ struct StripeDictionary {
  * @param[in] compression_block_size maximum size of compressed blocks (up to 16M)
  * @param[in] log2maxcr log2 of maximum compression ratio (used to infer max uncompressed size from
  *compressed size)
- * @param[in] stream CUDA stream to use, default 0
+ * @param[in] stream CUDA stream to use, default `rmm::cuda_stream_default`
  */
 void ParseCompressedStripeData(CompressedStreamInfo *strm_info,
                                int32_t num_streams,
@@ -206,7 +212,7 @@ void ParseCompressedStripeData(CompressedStreamInfo *strm_info,
  *
  * @param[in] strm_info List of compressed streams
  * @param[in] num_streams Number of compressed streams
- * @param[in] stream CUDA stream to use, default 0
+ * @param[in] stream CUDA stream to use, default `rmm::cuda_stream_default`
  */
 void PostDecompressionReassemble(CompressedStreamInfo *strm_info,
                                  int32_t num_streams,
@@ -221,7 +227,7 @@ void PostDecompressionReassemble(CompressedStreamInfo *strm_info,
  * @param[in] num_columns Number of columns
  * @param[in] num_stripes Number of stripes
  * @param[in] num_rowgroups Number of row groups
- * @param[in] stream CUDA stream to use, default 0
+ * @param[in] stream CUDA stream to use, default `rmm::cuda_stream_default`
  */
 void ParseRowGroupIndex(RowGroup *row_groups,
                         CompressedStreamInfo *strm_info,
@@ -241,7 +247,7 @@ void ParseRowGroupIndex(RowGroup *row_groups,
  * @param[in] num_stripes Number of stripes
  * @param[in] max_rows Maximum number of rows to load
  * @param[in] first_row Crop all rows below first_row
- * @param[in] stream CUDA stream to use, default 0
+ * @param[in] stream CUDA stream to use, default `rmm::cuda_stream_default`
  */
 void DecodeNullsAndStringDictionaries(ColumnDesc *chunks,
                                       DictionaryEntry *global_dictionary,
@@ -265,9 +271,9 @@ void DecodeNullsAndStringDictionaries(ColumnDesc *chunks,
  * @param[in] row_groups Optional row index data
  * @param[in] num_rowgroups Number of row groups in row index data
  * @param[in] rowidx_stride Row index stride
- * @param[in] stream CUDA stream to use, default 0
+ * @param[in] stream CUDA stream to use, default `rmm::cuda_stream_default`
  */
-void DecodeOrcColumnData(ColumnDesc *chunks,
+void DecodeOrcColumnData(ColumnDesc const *chunks,
                          DictionaryEntry *global_dictionary,
                          uint32_t num_columns,
                          uint32_t num_stripes,
@@ -282,79 +288,72 @@ void DecodeOrcColumnData(ColumnDesc *chunks,
 /**
  * @brief Launches kernel for encoding column data
  *
- * @param[in] chunks EncChunk device array [rowgroup][column]
- * @param[in] num_columns Number of columns
- * @param[in] num_rowgroups Number of row groups
- * @param[in] stream CUDA stream to use, default 0
+ * @param[in] chunks  encoder chunk device array [column][rowgroup]
+ * @param[in, out] streams chunk streams device array [column][rowgroup]
+ * @param[in] stream CUDA stream to use, default `rmm::cuda_stream_default`
  */
-void EncodeOrcColumnData(EncChunk *chunks,
-                         uint32_t num_columns,
-                         uint32_t num_rowgroups,
+void EncodeOrcColumnData(detail::device_2dspan<EncChunk const> chunks,
+                         detail::device_2dspan<encoder_chunk_streams> streams,
                          rmm::cuda_stream_view stream = rmm::cuda_stream_default);
 
 /**
  * @brief Launches kernel for encoding column dictionaries
  *
  * @param[in] stripes Stripe dictionaries device array [stripe][string_column]
- * @param[in] chunks EncChunk device array [rowgroup][column]
+ * @param[in] chunks encoder chunk device array [column][rowgroup]
  * @param[in] num_string_columns Number of string columns
- * @param[in] num_columns Number of columns
  * @param[in] num_stripes Number of stripes
- * @param[in] stream CUDA stream to use, default 0
+ * @param[in,out] enc_streams chunk streams device array [column][rowgroup]
+ * @param[in] stream CUDA stream to use, default `rmm::cuda_stream_default`
  */
 void EncodeStripeDictionaries(StripeDictionary *stripes,
-                              EncChunk *chunks,
+                              detail::device_2dspan<EncChunk const> chunks,
                               uint32_t num_string_columns,
-                              uint32_t num_columns,
                               uint32_t num_stripes,
+                              detail::device_2dspan<encoder_chunk_streams> enc_streams,
                               rmm::cuda_stream_view stream = rmm::cuda_stream_default);
 
 /**
  * @brief Launches kernel for compacting chunked column data prior to compression
  *
- * @param[in] strm_desc StripeStream device array [stripe][stream]
- * @param[in] chunks EncChunk device array [rowgroup][column]
- * @param[in] num_stripe_streams Total number of streams
- * @param[in] num_columns Number of columns
- * @param[in] stream CUDA stream to use, default 0
+ * @param[in,out] strm_desc StripeStream device array [stripe][stream]
+ * @param[in,out] enc_streams chunk streams device array [column][rowgroup]
+ * @param[in] stream CUDA stream to use, default `rmm::cuda_stream_default`
  */
-void CompactOrcDataStreams(StripeStream *strm_desc,
-                           EncChunk *chunks,
-                           uint32_t num_stripe_streams,
-                           uint32_t num_columns,
+void CompactOrcDataStreams(detail::device_2dspan<StripeStream> strm_desc,
+                           detail::device_2dspan<encoder_chunk_streams> enc_streams,
                            rmm::cuda_stream_view stream = rmm::cuda_stream_default);
 
 /**
  * @brief Launches kernel(s) for compressing data streams
  *
  * @param[in] compressed_data Output compressed blocks
- * @param[in] strm_desc StripeStream device array [stripe][stream]
- * @param[in] chunks EncChunk device array [rowgroup][column]
+ * @param[in] num_compressed_blocks Total number of compressed blocks
+ * @param[in] compression Type of compression
+ * @param[in] comp_blk_size Compression block size
+ * @param[in] stream CUDA stream to use, default `rmm::cuda_stream_default`
+ * @param[in,out] strm_desc StripeStream device array [stripe][stream]
+ * @param[in,out] enc_streams chunk streams device array [column][rowgroup]
  * @param[out] comp_in Per-block compression input parameters
  * @param[out] comp_out Per-block compression status
- * @param[in] num_stripe_streams Total number of streams
- * @param[in] compression Type of compression
- * @param[in] num_compressed_blocks Total number of compressed blocks
- * @param[in] stream CUDA stream to use, default 0
  */
 void CompressOrcDataStreams(uint8_t *compressed_data,
-                            StripeStream *strm_desc,
-                            EncChunk *chunks,
-                            gpu_inflate_input_s *comp_in,
-                            gpu_inflate_status_s *comp_out,
-                            uint32_t num_stripe_streams,
                             uint32_t num_compressed_blocks,
                             CompressionKind compression,
                             uint32_t comp_blk_size,
+                            detail::device_2dspan<StripeStream> strm_desc,
+                            detail::device_2dspan<encoder_chunk_streams> enc_streams,
+                            gpu_inflate_input_s *comp_in,
+                            gpu_inflate_status_s *comp_out,
                             rmm::cuda_stream_view stream = rmm::cuda_stream_default);
 
 /**
  * @brief Launches kernel for initializing dictionary chunks
  *
- * @param[in] chunks DictionaryChunk device array [rowgroup][column]
+ * @param[in,out] chunks DictionaryChunk device array [rowgroup][column]
  * @param[in] num_columns Number of columns
  * @param[in] num_rowgroups Number of row groups
- * @param[in] stream CUDA stream to use, default 0
+ * @param[in] stream CUDA stream to use, default `rmm::cuda_stream_default`
  */
 void InitDictionaryIndices(DictionaryChunk *chunks,
                            uint32_t num_columns,
@@ -370,7 +369,7 @@ void InitDictionaryIndices(DictionaryChunk *chunks,
  * @param[in] num_stripes Number of stripes
  * @param[in] num_rowgroups Number of row groups
  * @param[in] num_columns Number of columns
- * @param[in] stream CUDA stream to use, default 0
+ * @param[in] stream CUDA stream to use, default `rmm::cuda_stream_default`
  */
 void BuildStripeDictionaries(StripeDictionary *stripes_dev,
                              StripeDictionary *stripes_host,
@@ -388,7 +387,7 @@ void BuildStripeDictionaries(StripeDictionary *stripes_dev,
  * @param[in] num_columns Number of columns
  * @param[in] num_rowgroups Number of rowgroups
  * @param[in] row_index_stride Rowgroup size in rows
- * @param[in] stream CUDA stream to use, default 0
+ * @param[in] stream CUDA stream to use, default `rmm::cuda_stream_default`
  */
 void orc_init_statistics_groups(statistics_group *groups,
                                 const stats_column_desc *cols,
@@ -403,7 +402,7 @@ void orc_init_statistics_groups(statistics_group *groups,
  * @param[in,out] groups Statistics merge groups
  * @param[in] chunks Statistics chunks
  * @param[in] statistics_count Number of statistics buffers to encode
- * @param[in] stream CUDA stream to use, default 0
+ * @param[in] stream CUDA stream to use, default `rmm::cuda_stream_default`
  */
 void orc_init_statistics_buffersize(statistics_merge_group *groups,
                                     const statistics_chunk *chunks,

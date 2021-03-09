@@ -404,7 +404,7 @@ __global__ void __launch_bounds__(block_size)
  * @param[in] chunks DictionaryChunk device array [rowgroup][column]
  * @param[in] num_columns Number of columns
  * @param[in] num_rowgroups Number of row groups
- * @param[in] stream CUDA stream to use, default 0
+ * @param[in] stream CUDA stream to use, default `rmm::cuda_stream_default`
  */
 void InitDictionaryIndices(DictionaryChunk *chunks,
                            uint32_t num_columns,
@@ -425,7 +425,7 @@ void InitDictionaryIndices(DictionaryChunk *chunks,
  * @param[in] num_stripes Number of stripes
  * @param[in] num_rowgroups Number of row groups
  * @param[in] num_columns Number of columns
- * @param[in] stream CUDA stream to use, default 0
+ * @param[in] stream CUDA stream to use, default `rmm::cuda_stream_default`
  */
 void BuildStripeDictionaries(StripeDictionary *stripes,
                              StripeDictionary *stripes_host,
