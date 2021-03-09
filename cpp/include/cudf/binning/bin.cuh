@@ -33,6 +33,9 @@ namespace cudf {
 
 namespace bin {
 
+namespace detail {
+namespace {
+
 template <typename T, typename StrictWeakOrderingLeft, typename StrictWeakOrderingRight>
 struct bin_finder
 {
@@ -41,8 +44,7 @@ struct bin_finder
             const T *left_edges_end,
             const T *right_edges
             )
-        : m_left_edges(left_edges), m_left_edges_end(left_edges_end), m_right_edges(right_edges),
-          m_left_comp(StrictWeakOrderingLeft()), m_right_comp(StrictWeakOrderingRight())
+        : m_left_edges(left_edges), m_left_edges_end(left_edges_end), m_right_edges(right_edges)
     {}
 
     __device__ size_type operator()(const T value) const
@@ -71,21 +73,22 @@ struct bin_finder
     const T *m_left_edges_end{};  // Pointer to the end of the device data containing left bin edges.
     const T *m_right_edges{};  // Pointer to the beginning of the device data containing right bin edges.
     // TODO: Can I implement these as static members rather than making an instance on construction?
-    StrictWeakOrderingLeft m_left_comp; // Comparator used for left edges.
-    StrictWeakOrderingRight m_right_comp; // Comparator used for left edges.
+    StrictWeakOrderingLeft m_left_comp{}; // Comparator used for left edges.
+    StrictWeakOrderingRight m_right_comp{}; // Comparator used for left edges.
 };
 
 
-// Bin the input by the edges in left_edges and right_edges.
+/// Bin the input by the edges in left_edges and right_edges.
 template <typename T, typename StrictWeakOrderingLeft, typename StrictWeakOrderingRight>
-std::unique_ptr<column> bin_internal(column_view const& input, 
+std::unique_ptr<column> bin(column_view const& input, 
                             column_view const& left_edges,
                             column_view const& right_edges,
                             rmm::mr::device_memory_resource * mr)
 {
     // TODO: Determine if UINT32 is the output type that we want. Is there a
-    // way to map (at compile time) from size_type to the largest value in type_id
-    // that can hold this?
+    // way to map (at compile time) from size_type to the largest value in
+    // type_id that can hold this in case the typedef changes from int32_t to
+    // something larger?
     auto output = cudf::make_numeric_column(data_type(type_id::UINT32), input.size());
 
     thrust::transform(thrust::device,
@@ -103,28 +106,33 @@ std::unique_ptr<column> bin_internal(column_view const& input,
     return output;
 }
 
-
-
 // TODO: Figure out how this is instantiated for export to Python. It makes
 // sense that C++ tests will compile and run, but we need explicit template
 // instantiations somewhere to make this available to Python.
 template <typename T>
 constexpr inline auto is_supported_bin_type()
 {
+  // TODO: Determine what other types (such as fixed point numbers) should be
+  // supported, and whether any of them (like strings) require special
+  // handling.
   return (cudf::is_numeric<T>() && not std::is_same<T, bool>::value); // || cudf::is_fixed_point<T>();
 }
 
+}  // anonymous namespace
+}  // namespace detail
 
+
+/// Functor suitable for use with type_dispatcher that exploits SFINAE to call the appropriate detail::bin method.
 struct bin_type_dispatcher {
     template <typename T, typename... Args>
-    std::enable_if_t<not is_supported_bin_type<T>(), std::unique_ptr<column>> operator()(
+    std::enable_if_t<not detail::is_supported_bin_type<T>(), std::unique_ptr<column>> operator()(
             Args&&... args)
     {
         CUDF_FAIL("Type not support for cudf::bin");
     }
 
     template <typename T>
-    std::enable_if_t<is_supported_bin_type<T>(), std::unique_ptr<column>> operator()(
+    std::enable_if_t<detail::is_supported_bin_type<T>(), std::unique_ptr<column>> operator()(
             column_view const& input, 
             column_view const& left_edges,
             inclusive left_inclusive,
@@ -134,13 +142,13 @@ struct bin_type_dispatcher {
     {
         // Using a switch statement might be more appropriate for an enum, but it's far more verbose in this case.
         if ((left_inclusive == inclusive::YES) && (right_inclusive == inclusive::YES))
-            return bin_internal<T, thrust::less_equal<T>, thrust::less_equal<T> >(input, left_edges, right_edges, mr);
+            return detail::bin<T, thrust::less_equal<T>, thrust::less_equal<T> >(input, left_edges, right_edges, mr);
         if ((left_inclusive == inclusive::YES) && (right_inclusive == inclusive::NO))
-            return bin_internal<T, thrust::less_equal<T>, thrust::less<T> >(input, left_edges, right_edges, mr);
+            return detail::bin<T, thrust::less_equal<T>, thrust::less<T> >(input, left_edges, right_edges, mr);
         if ((left_inclusive == inclusive::NO) && (right_inclusive == inclusive::YES))
-            return bin_internal<T, thrust::less<T>, thrust::less_equal<T> >(input, left_edges, right_edges, mr);
+            return detail::bin<T, thrust::less<T>, thrust::less_equal<T> >(input, left_edges, right_edges, mr);
         if ((left_inclusive == inclusive::NO) && (right_inclusive == inclusive::NO))
-            return bin_internal<T, thrust::less<T>, thrust::less<T> >(input, left_edges, right_edges, mr);
+            return detail::bin<T, thrust::less<T>, thrust::less<T> >(input, left_edges, right_edges, mr);
 
         CUDF_FAIL("Undefined inclusive setting.");
     }
