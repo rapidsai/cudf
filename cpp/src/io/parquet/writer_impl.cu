@@ -513,6 +513,9 @@ struct parquet_column_view {
       _data_count = dremel.leaf_data_size;  // Needed for knowing what size dictionary to allocate
 
       stream.synchronize();
+    } else {
+      // For non-list struct, the size of the root column is the same as the size of the leaf column
+      _data_count = cudf_col.size();
     }
   }
 
@@ -541,9 +544,7 @@ struct parquet_column_view {
 
     // TODO (dm): Enable dictionary for list after refactor
     if (physical_type() != BOOLEAN && physical_type() != UNDEFINED_TYPE && !is_list()) {
-      alloc_dictionary(col.size());  // TODO: This has to be data count because leaf size is not
-                                     // the same as data count. What if we have offset in the parent
-                                     // column? Actual size of leaf data we have to view is lesser
+      alloc_dictionary(_data_count);
       desc.dict_index = get_dict_index();
       desc.dict_data  = get_dict_data();
     }
