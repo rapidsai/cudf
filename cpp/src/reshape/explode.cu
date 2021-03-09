@@ -36,30 +36,27 @@
 namespace cudf {
 namespace detail {
 namespace {
-using GatherType   = rmm::device_uvector<size_type>;
-using PositionType = rmm::device_uvector<size_type>;
 
 std::unique_ptr<table> build_table(table_view const& input_table,
                                    size_type const explode_column_idx,
                                    column_view const& sliced_child,
-                                   GatherType const& gather_map,
-                                   GatherType const& explode_col_gather_map,
-                                   PositionType position_array,
-                                   bool include_position,
+                                   cudf::device_span<size_type> const gather_map,
+                                   cudf::device_span<size_type> const explode_col_gather_map,
+                                   thrust::optional<rmm::device_uvector<size_type>> position_array,
                                    rmm::cuda_stream_view stream,
                                    rmm::mr::device_memory_resource* mr)
 {
   auto select_iter = thrust::make_transform_iterator(
     thrust::make_counting_iterator(0),
     [explode_column_idx](size_type i) { return i >= explode_column_idx ? i + 1 : i; });
-  std::vector<size_type> selected_columns(select_iter, select_iter + input_table.num_columns() - 1);
 
-  auto gathered_table = detail::gather(input_table.select(selected_columns),
-                                       gather_map.begin(),
-                                       gather_map.end(),
-                                       cudf::out_of_bounds_policy::DONT_CHECK,
-                                       stream,
-                                       mr);
+  auto gathered_table =
+    detail::gather(input_table.select(select_iter, select_iter + input_table.num_columns() - 1),
+                   gather_map.begin(),
+                   gather_map.end(),
+                   cudf::out_of_bounds_policy::DONT_CHECK,
+                   stream,
+                   mr);
 
   std::vector<std::unique_ptr<column>> columns = gathered_table.release()->release();
 
@@ -74,11 +71,11 @@ std::unique_ptr<table> build_table(table_view const& input_table,
                                  ->release()[0])
                    : std::make_unique<column>(sliced_child, stream, mr));
 
-  if (include_position) {
-    size_type position_size = position_array.size();
+  if (position_array) {
+    size_type position_size = position_array->size();
     columns.insert(columns.begin() + explode_column_idx,
                    std::make_unique<column>(
-                     data_type(type_to_id<size_type>()), position_size, position_array.release()));
+                     data_type(type_to_id<size_type>()), position_size, position_array->release()));
   }
 
   return std::make_unique<table>(std::move(columns));
@@ -92,13 +89,13 @@ std::unique_ptr<table> explode(table_view const& input_table,
 {
   lists_column_view explode_col{input_table.column(explode_column_idx)};
   auto sliced_child = explode_col.get_sliced_child(stream);
-  GatherType gather_map(sliced_child.size(), stream);
+  rmm::device_uvector<size_type> gather_map(sliced_child.size(), stream);
 
   // Sliced columns may require rebasing of the offsets.
   auto offsets = explode_col.offsets_begin();
   // offsets + 1 here to skip the 0th offset, which removes a - 1 operation later.
   auto offsets_minus_one = thrust::make_transform_iterator(
-    offsets + 1, [offsets] __device__(auto i) { return (i - offsets[0]) - 1; });
+    thrust::next(offsets), [offsets] __device__(auto i) { return (i - offsets[0]) - 1; });
   auto counting_iter = thrust::make_counting_iterator(0);
 
   // This looks like an off-by-one bug, but what is going on here is that we need to reduce each
@@ -111,17 +108,7 @@ std::unique_ptr<table> explode(table_view const& input_table,
                       counting_iter + gather_map.size(),
                       gather_map.begin());
 
-  GatherType empty{0, stream};
-  PositionType empty_pos{0, stream};
-  return build_table(input_table,
-                     explode_column_idx,
-                     sliced_child,
-                     gather_map,
-                     empty,
-                     std::move(empty_pos),
-                     false,
-                     stream,
-                     mr);
+  return build_table(input_table, explode_column_idx, sliced_child, gather_map, {}, {}, stream, mr);
 }
 
 std::unique_ptr<table> explode_position(table_view const& input_table,
@@ -131,7 +118,7 @@ std::unique_ptr<table> explode_position(table_view const& input_table,
 {
   lists_column_view explode_col{input_table.column(explode_column_idx)};
   auto sliced_child = explode_col.get_sliced_child(stream);
-  GatherType gather_map(sliced_child.size(), stream);
+  rmm::device_uvector<size_type> gather_map(sliced_child.size(), stream);
 
   // Sliced columns may require rebasing of the offsets.
   auto offsets = explode_col.offsets_begin();
@@ -140,37 +127,29 @@ std::unique_ptr<table> explode_position(table_view const& input_table,
     offsets + 1, [offsets] __device__(auto i) { return (i - offsets[0]) - 1; });
   auto counting_iter = thrust::make_counting_iterator(0);
 
-  PositionType pos(sliced_child.size(), stream, mr);
+  rmm::device_uvector<size_type> pos(sliced_child.size(), stream, mr);
 
   // This looks like an off-by-one bug, but what is going on here is that we need to reduce each
   // result from `lower_bound` by 1 to build the correct gather map. This can be accomplished by
   // skipping the first entry and using the result of `lower_bound` directly.
-  thrust::transform(rmm::exec_policy(stream),
-                    counting_iter,
-                    counting_iter + gather_map.size(),
-                    gather_map.begin(),
-                    [position_array = pos.data(),
-                     offsets_minus_one,
-                     offsets,
-                     offset_size = explode_col.size()] __device__(auto idx) -> size_type {
-                      auto lb_idx =
-                        thrust::lower_bound(
-                          thrust::seq, offsets_minus_one, offsets_minus_one + offset_size, idx) -
-                        offsets_minus_one;
-                      position_array[idx] = idx - (offsets[lb_idx] - offsets[0]);
-                      return lb_idx;
-                    });
+  thrust::transform(
+    rmm::exec_policy(stream),
+    counting_iter,
+    counting_iter + gather_map.size(),
+    gather_map.begin(),
+    [position_array = pos.data(),
+     offsets_minus_one,
+     offsets,
+     offset_size = explode_col.size()] __device__(auto idx) -> size_type {
+      auto lb_idx = thrust::distance(
+        offsets_minus_one,
+        thrust::lower_bound(thrust::seq, offsets_minus_one, offsets_minus_one + offset_size, idx));
+      position_array[idx] = idx - (offsets[lb_idx] - offsets[0]);
+      return lb_idx;
+    });
 
-  GatherType empty{0, stream};
-  return build_table(input_table,
-                     explode_column_idx,
-                     sliced_child,
-                     gather_map,
-                     empty,
-                     std::move(pos),
-                     true,
-                     stream,
-                     mr);
+  return build_table(
+    input_table, explode_column_idx, sliced_child, gather_map, {}, std::move(pos), stream, mr);
 }
 
 std::unique_ptr<table> explode_outer(table_view const& input_table,
@@ -185,15 +164,17 @@ std::unique_ptr<table> explode_outer(table_view const& input_table,
   auto offsets       = explode_col.offsets_begin();
 
   // number of nulls or empty lists found so far in the explode column
-  GatherType null_offset(explode_col.size(), stream);
+  rmm::device_uvector<size_type> null_offset(explode_col.size(), stream);
 
   auto null_or_empty = thrust::make_transform_iterator(
     thrust::make_counting_iterator(0),
     [offsets, offsets_size = explode_col.size() - 1] __device__(int idx) {
       return (idx > offsets_size || (offsets[idx + 1] != offsets[idx])) ? 0 : 1;
     });
-  thrust::inclusive_scan(
-    rmm::exec_policy(stream), null_iter, null_iter + sliced_child.size(), null_offset.begin());
+  thrust::inclusive_scan(rmm::exec_policy(stream),
+                         null_or_empty,
+                         null_or_empty + sliced_child.size(),
+                         null_offset.begin());
 
   auto null_or_empty_count = null_offset.size() > 0 ? null_offset.back_element(stream) : 0;
   if (null_or_empty_count == 0) {
@@ -204,9 +185,9 @@ std::unique_ptr<table> explode_outer(table_view const& input_table,
 
   auto gather_map_size = sliced_child.size() + null_or_empty_count;
 
-  GatherType gather_map(gather_map_size, stream);
-  GatherType explode_col_gather_map(gather_map_size, stream);
-  PositionType pos(include_position ? gather_map_size : 0, stream, mr);
+  rmm::device_uvector<size_type> gather_map(gather_map_size, stream);
+  rmm::device_uvector<size_type> explode_col_gather_map(gather_map_size, stream);
+  rmm::device_uvector<size_type> pos(include_position ? gather_map_size : 0, stream, mr);
 
   // offsets + 1 here to skip the 0th offset, which removes a - 1 operation later.
   auto offsets_minus_one = thrust::make_transform_iterator(
@@ -222,12 +203,12 @@ std::unique_ptr<table> explode_outer(table_view const& input_table,
                     include_position,
                     offsets,
                     null_offset = null_offset.begin(),
-                    null_iter,
+                    null_or_empty,
                     offset_size = explode_col.offsets().size() - 1] __device__(auto idx) {
-                     auto lb_idx =
+                     auto lb_idx = thrust::distance(
+                       offsets_minus_one,
                        thrust::lower_bound(
-                         thrust::seq, offsets_minus_one, offsets_minus_one + (offset_size), idx) -
-                       offsets_minus_one;
+                         thrust::seq, offsets_minus_one, offsets_minus_one + (offset_size), idx));
                      auto index_to_write                    = null_offset[lb_idx] + idx;
                      gather_map[index_to_write]             = lb_idx;
                      explode_col_gather_map[index_to_write] = idx;
@@ -246,15 +227,15 @@ std::unique_ptr<table> explode_outer(table_view const& input_table,
                      }
                    });
 
-  return build_table(input_table,
-                     explode_column_idx,
-                     sliced_child,
-                     gather_map,
-                     explode_col_gather_map,
-                     std::move(pos),
-                     include_position,
-                     stream,
-                     mr);
+  return build_table(
+    input_table,
+    explode_column_idx,
+    sliced_child,
+    gather_map,
+    explode_col_gather_map,
+    include_position ? std::move(pos) : thrust::optional<rmm::device_uvector<size_type>>{},
+    stream,
+    mr);
 }
 
 }  // namespace detail
