@@ -178,7 +178,8 @@ std::unique_ptr<table> explode_outer(table_view const& input_table,
 
   auto null_or_empty_count = null_offset.size() > 0 ? null_offset.back_element(stream) : 0;
   if (null_or_empty_count == 0) {
-    // performance penalty, run simple explode
+    // performance penalty to run the below loop if there are no nulls or empty lists.
+    // run simple explode instead
     return include_position ? explode_position(input_table, explode_column_idx, stream, mr)
                             : explode(input_table, explode_column_idx, stream, mr);
   }
