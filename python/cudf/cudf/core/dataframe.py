@@ -3785,6 +3785,21 @@ class DataFrame(Frame, Serializable):
         Returns
         -------
         a new dataframe with a new column append for the coded values.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> df = cudf.DataFrame({'a':[1, 2, 3], 'b':[10, 10, 20]})
+        >>> df
+           a   b
+        0  1  10
+        1  2  10
+        2  3  20
+        >>> df.label_encoding(column="b", prefix="b_col", cats=[10, 20])
+           a   b  b_col_labels
+        0  1  10             0
+        1  2  10             0
+        2  3  20             1
         """
 
         newname = prefix_sep.join([prefix, "labels"])

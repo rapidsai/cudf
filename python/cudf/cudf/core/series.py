@@ -1,4 +1,5 @@
 # Copyright (c) 2018-2021, NVIDIA CORPORATION.
+
 from __future__ import annotations
 
 import pickle
@@ -79,8 +80,37 @@ class Series(Frame, Serializable):
     def from_categorical(cls, categorical, codes=None):
         """Creates from a pandas.Categorical
 
-        If ``codes`` is defined, use it instead of ``categorical.codes``
-        """
+        Parameters
+        ----------
+        categorical : pandas.Categorical
+            Contains data stored in a pandas Categorical.
+
+        codes : array-like, optional.
+            The category codes of this categorical. If ``codes`` are
+            defined, they are used instead of ``categorical.codes``
+
+        Returns
+        -------
+        Series
+            A cudf categorical series.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> import pandas as pd
+        >>> pd_categorical = pd.Categorical(pd.Series(['a', 'b', 'c', 'a'], dtype='category'))
+        >>> pd_categorical
+        ['a', 'b', 'c', 'a']
+        Categories (3, object): ['a', 'b', 'c']
+        >>> series = cudf.Series.from_categorical(pd_categorical)
+        >>> series
+        0    a
+        1    b
+        2    c
+        3    a
+        dtype: category
+        Categories (3, object): ['a', 'b', 'c']
+        """  # noqa: E501
         col = cudf.core.column.categorical.pandas_categorical_as_column(
             categorical, codes=codes
         )
@@ -106,6 +136,31 @@ class Series(Frame, Serializable):
         null_count : int, optional
             The number of null values.
             If None, it is calculated automatically.
+
+        Returns
+        -------
+        Series
+
+        Examples
+        --------
+        >>> import cudf
+        >>> a = cudf.Series([1, 2, 3, None, 4, None])
+        >>> a
+        0       1
+        1       2
+        2       3
+        3    <NA>
+        4       4
+        5    <NA>
+        dtype: int64
+        >>> b = cudf.Series([10, 11, 12, 13, 14])
+        >>> cudf.Series.from_masked_array(data=b, mask=a._column.mask)
+        0      10
+        1      11
+        2      12
+        3    <NA>
+        4      14
+        dtype: int64
         """
         col = column.as_column(data).set_mask(mask)
         return cls(data=col)
@@ -1300,7 +1355,7 @@ class Series(Frame, Serializable):
     def __rsub__(self, other):
         return self._binaryop(other, "sub", reflect=True)
 
-    def mul(self, other, fill_value=None, axis=0):
+    def multiply(self, other, fill_value=None, axis=0):
         """Multiplication of series and other, element-wise
         (binary operator mul).
 
@@ -1310,10 +1365,42 @@ class Series(Frame, Serializable):
         fill_value : None or value
             Value to fill nulls with before computation. If data in both
             corresponding Series locations is null the result will be null
+
+        Returns
+        -------
+        Series
+            The result of the operation.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> a = cudf.Series([1, 2, 3, None], index=['a', 'b', 'c', 'd'])
+        >>> a
+        a       1
+        b       2
+        c       3
+        d    <NA>
+        dtype: int64
+        >>> b = cudf.Series([1, None, 2, None], index=['a', 'b', 'd', 'e'])
+        >>> b
+        a       1
+        b    <NA>
+        d       2
+        e    <NA>
+        dtype: int64
+        >>> a.multiply(b, fill_value=0)
+        a       1
+        b       0
+        c       0
+        d       0
+        e    <NA>
+        dtype: int64
         """
         if axis != 0:
             raise NotImplementedError("Only axis=0 supported at this time.")
         return self._binaryop(other, "mul", fill_value=fill_value)
+
+    mul = multiply
 
     def __mul__(self, other):
         return self._binaryop(other, "mul")
@@ -1346,6 +1433,26 @@ class Series(Frame, Serializable):
         fill_value : None or value
             Value to fill nulls with before computation. If data in both
             corresponding Series locations is null the result will be null
+
+        Returns
+        -------
+        Series
+            The result of the operation.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> series = cudf.Series([10, 20, 30])
+        >>> series
+        0    10
+        1    20
+        2    30
+        dtype: int64
+        >>> series.mod(4)
+        0    2
+        1    0
+        2    2
+        dtype: int64
         """
         if axis != 0:
             raise NotImplementedError("Only axis=0 supported at this time.")
@@ -1418,6 +1525,36 @@ class Series(Frame, Serializable):
         fill_value : None or value
             Value to fill nulls with before computation. If data in both
             corresponding Series locations is null the result will be null
+
+        Returns
+        -------
+        Series
+            The result of the operation.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> a = cudf.Series([1, 1, 1, None], index=['a', 'b', 'c', 'd'])
+        >>> a
+        a       1
+        b       1
+        c       1
+        d    <NA>
+        dtype: int64
+        >>> b = cudf.Series([1, None, 1, None], index=['a', 'b', 'd', 'e'])
+        >>> b
+        a       1
+        b    <NA>
+        d       1
+        e    <NA>
+        dtype: int64
+        >>> a.floordiv(b)
+        a       1
+        b    <NA>
+        c    <NA>
+        d    <NA>
+        e    <NA>
+        dtype: int64
         """
         if axis != 0:
             raise NotImplementedError("Only axis=0 supported at this time.")
@@ -1821,6 +1958,22 @@ class Series(Frame, Serializable):
         out : bool
             If Series has atleast one null value, return True, if not
             return False.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> series = cudf.Series([1, 2, None, 3, 4])
+        >>> series
+        0       1
+        1       2
+        2    <NA>
+        3       3
+        4       4
+        dtype: int64
+        >>> series.has_nulls
+        True
+        >>> series.dropna().has_nulls
+        False
         """
         return self._column.has_nulls
 
@@ -2022,6 +2175,30 @@ class Series(Frame, Serializable):
     def nans_to_nulls(self):
         """
         Convert nans (if any) to nulls
+
+        Returns
+        -------
+        Series
+
+        Examples
+        --------
+        >>> import cudf
+        >>> import numpy as np
+        >>> series = cudf.Series([1, 2, np.nan, None, 10], nan_as_null=False)
+        >>> series
+        0     1.0
+        1     2.0
+        2     NaN
+        3    <NA>
+        4    10.0
+        dtype: float64
+        >>> series.nans_to_nulls()
+        0     1.0
+        1     2.0
+        2    <NA>
+        3    <NA>
+        4    10.0
+        dtype: float64
         """
         result_col = self._column.nans_to_nulls()
         return self._copy_construct(data=result_col)
@@ -2253,6 +2430,18 @@ class Series(Frame, Serializable):
         See also
         --------
         cudf.core.dataframe.DataFrame.loc
+
+        Examples
+        --------
+        >>> import cudf
+        >>> series = cudf.Series([10, 11, 12], index=['a', 'b', 'c'])
+        >>> series
+        a    10
+        b    11
+        c    12
+        dtype: int64
+        >>> series.loc['b']
+        11
         """
         return _SeriesLocIndexer(self)
 
@@ -2264,6 +2453,18 @@ class Series(Frame, Serializable):
         See also
         --------
         cudf.core.dataframe.DataFrame.iloc
+
+        Examples
+        --------
+        >>> import cudf
+        >>> s = cudf.Series([10, 20, 30])
+        >>> s
+        0    10
+        1    20
+        2    30
+        dtype: int64
+        >>> s.iloc[2]
+        30
         """
         return _SeriesIlocIndexer(self)
 
@@ -2294,7 +2495,7 @@ class Series(Frame, Serializable):
                  0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0],
              dtype=uint8)
         """
-        if not pd.api.type.is_bool_dtype(self.dtype):
+        if not pd.api.types.is_bool_dtype(self.dtype):
             raise TypeError(
                 f"Series must of boolean dtype, found: {self.dtype}"
             )
@@ -2523,6 +2724,62 @@ class Series(Frame, Serializable):
 
     def nlargest(self, n=5, keep="first"):
         """Returns a new Series of the *n* largest element.
+
+        Parameters
+        ----------
+        n : int, default 5
+            Return this many descending sorted values.
+        keep : {'first', 'last'}, default 'first'
+            When there are duplicate values that cannot all fit in a
+            Series of `n` elements:
+            - ``first`` : return the first `n` occurrences in order
+                of appearance.
+            - ``last`` : return the last `n` occurrences in reverse
+                order of appearance.
+
+        Returns
+        -------
+        Series
+            The `n` largest values in the Series, sorted in decreasing order.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> countries_population = {"Italy": 59000000, "France": 65000000,
+        ...                         "Malta": 434000, "Maldives": 434000,
+        ...                         "Brunei": 434000, "Iceland": 337000,
+        ...                         "Nauru": 11300, "Tuvalu": 11300,
+        ...                         "Anguilla": 11300, "Montserrat": 5200}
+        >>> series = cudf.Series(countries_population)
+        >>> series
+        Italy         59000000
+        France        65000000
+        Malta           434000
+        Maldives        434000
+        Brunei          434000
+        Iceland         337000
+        Nauru            11300
+        Tuvalu           11300
+        Anguilla         11300
+        Montserrat        5200
+        dtype: int64
+        >>> series.nlargest()
+        France      65000000
+        Italy       59000000
+        Malta         434000
+        Maldives      434000
+        Brunei        434000
+        dtype: int64
+        >>> series.nlargest(3)
+        France    65000000
+        Italy     59000000
+        Malta       434000
+        dtype: int64
+        >>> series.nlargest(3, keep='last')
+        France    65000000
+        Italy     59000000
+        Brunei      434000
+        dtype: int64
         """
         return self._n_largest_or_smallest(n=n, keep=keep, largest=True)
 
@@ -3854,6 +4111,13 @@ class Series(Frame, Serializable):
         -----
         Parameters currently not supported are `axis`, `level` and
         `numeric_only`
+
+        Examples
+        --------
+        >>> import cudf
+        >>> series = cudf.Series([1, 2, 3, 4])
+        >>> series.kurtosis()
+        -1.1999999999999904
         """
         if axis not in (None, 0):
             raise NotImplementedError("axis parameter is not implemented yet")
@@ -4252,12 +4516,53 @@ class Series(Frame, Serializable):
         """Rounds each value downward to the largest integral value not greater
         than the original.
 
-        Returns a new Series.
+        Returns
+        -------
+        res
+            Returns a new Series with floor of each element.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> series = cudf.Series([-1.9, 2, 0.2, 1.5, 0.0, 3.0])
+        >>> series
+        0   -1.9
+        1    2.0
+        2    0.2
+        3    1.5
+        4    0.0
+        5    3.0
+        dtype: float64
+        >>> series.floor()
+        0   -2.0
+        1    2.0
+        2    0.0
+        3    1.0
+        4    0.0
+        5    3.0
+        dtype: float64
         """
         return self._unaryop("floor")
 
     def hash_values(self):
         """Compute the hash of values in this column.
+
+        Returns
+        -------
+        cupy array
+            A cupy array with hash values.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> series = cudf.Series([10, 120, 30])
+        >>> series
+        0     10
+        1    120
+        2     30
+        dtype: int64
+        >>> series.hash_values()
+        array([-1930516747,   422619251,  -941520876], dtype=int32)
         """
         return Series(self._hash()).values
 
@@ -4278,6 +4583,25 @@ class Series(Frame, Serializable):
         -------
         result : Series
             The encoded Series.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> series = cudf.Series([10, 120, 30])
+        >>> series.hash_encode(stop=200)
+        0     53
+        1     51
+        2    124
+        dtype: int32
+
+        You can choose to include name while hash
+        encoding by specifying `use_name=True`
+
+        >>> series.hash_encode(stop=200, use_name=True)
+        0    131
+        1     29
+        2     76
+        dtype: int32
         """
         assert stop > 0
 
