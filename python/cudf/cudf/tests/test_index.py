@@ -1362,9 +1362,29 @@ def test_categorical_index_basic(data, categories, dtype, ordered, name):
 
 
 @pytest.mark.parametrize("closed", ["left", "right", "both", "neither"])
-@pytest.mark.parametrize("freq", [1, 2, 3])
 @pytest.mark.parametrize("start", [0, 1, 2, 3])
 @pytest.mark.parametrize("end", [4, 5, 6, 7])
+def test_interval_range_basic(start, end, closed):
+    pindex = pd.interval_range(start=start, end=end, closed=closed)
+    gindex = cudf.interval_range(start=start, end=end, closed=closed)
+
+    assert_eq(pindex, gindex)
+
+
+@pytest.mark.parametrize("closed", ["left", "right", "both", "neither"])
+@pytest.mark.parametrize("start", [0])
+@pytest.mark.parametrize("end", [0])
+def test_interval_range_empty(start, end, closed):
+    pindex = pd.interval_range(start=start, end=end, closed=closed)
+    gindex = cudf.interval_range(start=start, end=end, closed=closed)
+
+    assert_eq(pindex, gindex)
+
+
+@pytest.mark.parametrize("closed", ["left", "right", "both", "neither"])
+@pytest.mark.parametrize("freq", [1, 2, 3])
+@pytest.mark.parametrize("start", [0, 1, 2, 3, 5])
+@pytest.mark.parametrize("end", [6, 8, 10, 43, 70])
 def test_interval_range_freq_basic(start, end, freq, closed):
     pindex = pd.interval_range(start=start, end=end, freq=freq, closed=closed)
     gindex = cudf.interval_range(
@@ -1426,11 +1446,20 @@ def test_interval_range_periods_freq_start(start, freq, periods, closed):
         ([pd.Interval(30, 50)]),
         ([pd.Interval(0, 3), pd.Interval(1, 7)]),
         ([pd.Interval(0.2, 60.3), pd.Interval(1, 7), pd.Interval(0, 0)]),
+        ([]),
     ],
 )
 def test_interval_index_basic(data, closed):
     pindex = pd.IntervalIndex(data, closed=closed)
     gindex = IntervalIndex(data, closed=closed)
+
+    assert_eq(pindex, gindex)
+
+
+@pytest.mark.parametrize("closed", ["right", "left", "both", "neither"])
+def test_interval_index_empty(closed):
+    pindex = pd.IntervalIndex([], closed=closed)
+    gindex = IntervalIndex([], closed=closed)
 
     assert_eq(pindex, gindex)
 
@@ -1467,6 +1496,15 @@ def test_interval_index_many_params(data, closed):
 
     pindex = pd.IntervalIndex(data, closed=closed)
     gindex = IntervalIndex(data, closed=closed)
+
+    assert_eq(pindex, gindex)
+
+
+@pytest.mark.parametrize("closed", ["left", "right", "both", "neither"])
+def test_interval_index_from_breaks(closed):
+    breaks = [0, 3, 6, 10]
+    pindex = pd.IntervalIndex.from_breaks(breaks, closed=closed)
+    gindex = IntervalIndex.from_breaks(breaks, closed=closed)
 
     assert_eq(pindex, gindex)
 

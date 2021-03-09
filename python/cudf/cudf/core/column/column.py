@@ -1712,12 +1712,14 @@ def build_interval_column(
         Null mask
     size : int, optional
     offset : int, optional
-    closed : str
-        Indicates which side if any is closed in the interval set
+    closed : {"left", "right", "both", "neither"}, default "right"
+            Whether the intervals are closed on the left-side, right-side,
+            both or neither.
     """
     left = as_column(left_col)
     right = as_column(right_col)
-
+    if not closed:
+        closed = "right"
     if type(left_col) is not list:
         dtype = IntervalDtype(left_col.dtype, closed)
     else:

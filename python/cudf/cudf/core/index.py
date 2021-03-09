@@ -2590,7 +2590,7 @@ class TimedeltaIndex(GenericIndex):
 
 
 class CategoricalIndex(GenericIndex):
-    """An categorical of orderable values that represent the indices of another
+    """A categorical of orderable values that represent the indices of another
     Column
 
     Parameters
@@ -2719,24 +2719,24 @@ def interval_range(
     Returns a fixed frequency IntervalIndex.
 
     Parameters
+    ----------
     start : numeric, default None
-    Left bound for generating intervals.
-
+        Left bound for generating intervals.
     end : numeric , default None
-    Right bound for generating intervals.
-
+        Right bound for generating intervals.
+    periods : int, default None
+        Number of periods to generate
     freq : numeric, default None
-    The length of each interval. Must be consistent
-    with the type of start and end
-
+        The length of each interval. Must be consistent
+        with the type of start and end
     name : str, default None
-    Name of the resulting IntervalIndex.
-
+        Name of the resulting IntervalIndex.
     closed : {"left", "right", "both", "neither"}, default "right"
-    Whether the intervals are closed on the left-side, right-side,
-    both or neither.
+        Whether the intervals are closed on the left-side, right-side,
+        both or neither.
 
     Returns
+    -------
     IntervalIndex
 
     Examples
@@ -2744,13 +2744,12 @@ def interval_range(
     >>> import cudf
     >>> import pandas as pd
     >>> cudf.interval_range(start=0,end=5)
-    ... IntervalIndex([(0, 0], (1, 1], (2, 2], (3, 3], (4, 4], (5, 5]],
-              closed='right',dtype='interval')
+    IntervalIndex([(0, 0], (1, 1], (2, 2], (3, 3], (4, 4], (5, 5]],
+    ...closed='right',dtype='interval')
 
     >>> cudf.interval_range(start=0,end=10, freq=2,closed='left')
-    ...IntervalIndex([[0, 2), [2, 4), [4, 6), [6, 8), [8, 10)],
-              closed='left',
-              dtype='interval')
+    IntervalIndex([[0, 2), [2, 4), [4, 6), [6, 8), [8, 10)],
+    ...closed='left',dtype='interval')
 
     >>> cudf.interval_range(start=0,end=10, periods=2,closed='left')
     ...IntervalIndex([[0.0, 3.3333333333333335),
@@ -2769,8 +2768,6 @@ def interval_range(
         assert end is not None and start is not None
         end = end + 1
         periods_array = cupy.asarray(cupy.arange(start, end))
-        # this ended up being the most consistent way to get the
-        # periods edges, other methods had failures
         _, bin_edges = cupy.histogram(periods_array, periods)
         # cupy.histogram turns all arrays into a float array
         # this can cause the dtype to be a float instead of an int
@@ -2796,6 +2793,16 @@ def interval_range(
         end = end + freq + 1
         start = start + freq
         right_col = cupy.arange(start, end, freq)
+    elif start is not None and end is not None:
+        left_col = cupy.arange(start, end, freq)
+        start = start + 1
+        end = end + 1
+        right_col = cupy.arange(start, end, freq)
+    else:
+        raise ValueError(
+            "Of the four parameters: start, end, periods, and "
+            "freq, atleast two must be specified"
+        )
     if len(right_col) == 0 or len(left_col) == 0:
         return cudf.IntervalIndex([], closed=closed)
 
@@ -2867,6 +2874,43 @@ class IntervalIndex(GenericIndex):
 
         out._initialize(data, **kwargs)
         return out
+
+    def from_breaks(breaks, closed="right", name=None, copy=False, dtype=None):
+        """
+        Construct an IntervalIndex from an array of splits.
+
+        Parameters
+        ---------
+
+        breaks : array-like (1-dimensional)
+            Left and right bounds for each interval.
+
+        closed : {"left", "right", "both", "neither"}, default "right"
+            Whether the intervals are closed on the left-side, right-side,
+            both or neither.
+
+        Returns
+        -------
+        IntervalIndex
+
+        Examples
+        --------
+        >>> import cudf
+        >>> import pandas as pd
+        >>> cudf.IntervalIndex.from_breaks([0, 1, 2, 3])
+        IntervalIndex([(0, 1], (1, 2], (2, 3]],
+                    closed='right',
+                    dtype='interval[int64]')
+        """
+
+        left_col = breaks[:-1:]
+        right_col = breaks[+1::]
+
+        interval_col = column.build_interval_column(
+            left_col, right_col, closed=closed
+        )
+
+        return IntervalIndex(interval_col)
 
 
 class StringIndex(GenericIndex):
