@@ -24,6 +24,7 @@ cd $WORKSPACE
 
 # Determine CUDA release version
 export CUDA_REL=${CUDA_VERSION%.*}
+export CONDA_ARTIFACT_PATH=${WORKSPACE}/ci/artifacts/cudf/cpu/.conda-bld/
 
 # Parse git describe
 export GIT_DESCRIBE_TAG=`git describe --tags`
@@ -97,11 +98,11 @@ conda config --show-sources
 conda list --show-channel-urls
 
 function install_dask {
-    # Install the master version of dask, distributed, and streamz
-    gpuci_logger "Install the master version of dask, distributed, and streamz"
+    # Install the main version of dask, distributed, and streamz
+    gpuci_logger "Install the main version of dask, distributed, and streamz"
     set -x
-    pip install "git+https://github.com/dask/distributed.git@master" --upgrade --no-deps
-    pip install "git+https://github.com/dask/dask.git@master" --upgrade --no-deps
+    pip install "git+https://github.com/dask/distributed.git@main" --upgrade --no-deps
+    pip install "git+https://github.com/dask/dask.git@main" --upgrade --no-deps
     pip install "git+https://github.com/python-streamz/streamz.git" --upgrade --no-deps
     set +x
 }
@@ -151,7 +152,7 @@ else
     #Project Flash
     export LIB_BUILD_DIR="$WORKSPACE/ci/artifacts/cudf/cpu/libcudf_work/cpp/build"
     export LD_LIBRARY_PATH="$LIB_BUILD_DIR:$CONDA_PREFIX/lib:$LD_LIBRARY_PATH"
-    
+
     if hasArg --skip-tests; then
         gpuci_logger "Skipping Tests"
         exit 0
@@ -170,15 +171,15 @@ else
         ${gt} --gtest_output=xml:${WORKSPACE}/test-results/
     done
 
-    CUDF_CONDA_FILE=`find $WORKSPACE/ci/artifacts/cudf/cpu/conda-bld/ -name "libcudf-*.tar.bz2"`
+    CUDF_CONDA_FILE=`find ${CONDA_ARTIFACT_PATH} -name "libcudf-*.tar.bz2"`
     CUDF_CONDA_FILE=`basename "$CUDF_CONDA_FILE" .tar.bz2` #get filename without extension
     CUDF_CONDA_FILE=${CUDF_CONDA_FILE//-/=} #convert to conda install
-    KAFKA_CONDA_FILE=`find $WORKSPACE/ci/artifacts/cudf/cpu/conda-bld/ -name "libcudf_kafka-*.tar.bz2"`
+    KAFKA_CONDA_FILE=`find ${CONDA_ARTIFACT_PATH} -name "libcudf_kafka-*.tar.bz2"`
     KAFKA_CONDA_FILE=`basename "$KAFKA_CONDA_FILE" .tar.bz2` #get filename without extension
     KAFKA_CONDA_FILE=${KAFKA_CONDA_FILE//-/=} #convert to conda install
 
     gpuci_logger "Installing $CUDF_CONDA_FILE & $KAFKA_CONDA_FILE"
-    conda install -c $WORKSPACE/ci/artifacts/cudf/cpu/conda-bld/ "$CUDF_CONDA_FILE" "$KAFKA_CONDA_FILE"
+    conda install -c ${CONDA_ARTIFACT_PATH} "$CUDF_CONDA_FILE" "$KAFKA_CONDA_FILE"
 
     install_dask
 
