@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2020, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -217,6 +217,20 @@ rmm::device_buffer copy_bitmask(
  * @return rmm::device_buffer Output bitmask
  */
 rmm::device_buffer bitmask_and(
+  table_view const& view,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+
+/**
+ * @brief Returns a bitwise OR of the bitmasks of columns of a table
+ *
+ * If any of the columns isn't nullable, it is considered all valid.
+ * If no column in the table is nullable, an empty bitmask is returned.
+ *
+ * @param view The table of columns
+ * @param mr Device memory resource used to allocate the returned device_buffer
+ * @return rmm::device_buffer Output bitmask
+ */
+rmm::device_buffer bitmask_or(
   table_view const& view,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
