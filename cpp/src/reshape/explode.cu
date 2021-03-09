@@ -234,7 +234,7 @@ std::unique_ptr<table> explode_outer(table_view const& input_table,
                      if (include_position) {
                        position_array[index_to_write] = idx - (offsets[lb_idx] - offsets[0]);
                      }
-                     if (null_iter[idx] == 1) {
+                     if (null_or_empty[idx]) {
                        auto invalid_index =
                          null_offset[idx] == 0 ? offsets[idx] : offsets[idx] + null_offset[idx] - 1;
                        gather_map[invalid_index] = idx;
