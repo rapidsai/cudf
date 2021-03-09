@@ -4005,7 +4005,7 @@ public class ColumnVectorTest extends CudfTestBase {
 
   @Test
   void testReplaceLeafNodeInListWithIllegal() {
-    assertThrows(IllegalArgumentException.class, () -> {
+    assertThrows(AssertionError.class, () -> {
       try (ColumnVector child1 =
                ColumnVector.decimalFromDoubles(DType.create(DType.DTypeEnum.DECIMAL64, 3),
                    RoundingMode.HALF_UP, 770.892, 961.110);
