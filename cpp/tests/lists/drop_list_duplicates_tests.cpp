@@ -32,10 +32,11 @@ void test_once(cudf::column_view const& input,
 {
   auto const results =
     cudf::lists::drop_list_duplicates(cudf::lists_column_view{input}, nulls_equal);
-  if (equal_test)
+  if (equal_test) {
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(results->view(), expected, true);
-  else
+  } else {
     CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(results->view(), expected, true);
+  }
 }
 
 struct DropListDuplicatesTest : public cudf::test::BaseFixture {

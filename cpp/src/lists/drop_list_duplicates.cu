@@ -112,20 +112,17 @@ std::unique_ptr<column> generate_clean_offsets(lists_column_view const& lists_co
                                                rmm::cuda_stream_view stream,
                                                rmm::mr::device_memory_resource* mr)
 {
-  auto const list_offsets =
-    cudf::detail::slice(lists_column.offsets(),
-                        {lists_column.offset(), lists_column.offset() + lists_column.size() + 1},
-                        stream)
-      .front();
-  auto output_offsets = make_numeric_column(
-    list_offsets.type(), lists_column.size() + 1, mask_state::UNALLOCATED, stream, mr);
+  auto output_offsets     = make_numeric_column(data_type{type_to_id<offset_type>()},
+                                            lists_column.size() + 1,
+                                            mask_state::UNALLOCATED,
+                                            stream,
+                                            mr);
+  auto const base_offsets = lists_column.offsets().begin<offset_type>() + lists_column.offset();
   thrust::transform(rmm::exec_policy(stream),
-                    list_offsets.begin<offset_type>(),
-                    list_offsets.end<offset_type>(),
+                    base_offsets,
+                    base_offsets + lists_column.size() + 1,
                     output_offsets->mutable_view().begin<offset_type>(),
-                    [first = list_offsets.begin<offset_type>()] __device__(auto offset) {
-                      return offset - *first;
-                    });
+                    [first = base_offsets] __device__(auto offset) { return offset - *first; });
   return output_offsets;
 }
 
@@ -238,8 +235,9 @@ std::unique_ptr<column> drop_list_duplicates(lists_column_view const& lists_colu
                                              rmm::mr::device_memory_resource* mr)
 {
   if (lists_column.is_empty()) return cudf::empty_like(lists_column.parent());
-  if (cudf::is_nested(lists_column.child().type()))
+  if (cudf::is_nested(lists_column.child().type())) {
     CUDF_FAIL("Nested types are not supported in drop_list_duplicates.");
+  }
 
   // Call segmented sort on the list elements
   auto const sorted_lists = lists::sort_lists(lists_column, order::ASCENDING, null_order::AFTER);
