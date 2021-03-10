@@ -21,6 +21,7 @@
 #include <cudf/column/column_view.hpp>
 #include <cudf/utilities/error.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
+#include <cudf/types.hpp>
 
 namespace cudf {
 
@@ -41,7 +42,7 @@ std::unique_ptr<column> bin(column_view const& input,
 
     // Handle empty inputs.
     if (input.is_empty()) {
-        return cudf::make_numeric_column(data_type(type_id::UINT32), 0);
+        return cudf::make_numeric_column(data_type(type_to_id<size_type>()), 0);
     }
 
     return type_dispatcher(

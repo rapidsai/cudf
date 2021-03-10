@@ -18,6 +18,7 @@
 
 // TODO: Clean up includes before pushing a final version.
 #include <cudf/column/column_view.hpp>
+#include <cudf/column/column_device_view.cuh>
 #include <rmm/mr/device/device_memory_resource.hpp>
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_factories.hpp>
@@ -28,18 +29,19 @@
 #include <thrust/binary_search.h>
 #include <thrust/execution_policy.h>
 #include <cudf/copying.hpp>
+#include <cudf/detail/valid_if.cuh>
+#include <cudf/null_mask.hpp>
+#include <thrust/tuple.h>
 
 namespace cudf {
 
 namespace bin {
 
-// TODO: This is a placeholder to remind myself to figure out the proper way to
-// set nulls. I need to modify the bitmask, but even if I passed a pointer to
-// it directly to the constructor of bin_finder and modified it directly (which
-// would be a terribly hacky solution), the current index is not provided to
-// the call operator so I wouldn't know what bit to set (and in any case that
-// would not be parallel-safe without atomics).
-constexpr unsigned int MYNULL = 0xffffffff;
+// Sentinel used to indicate that an input value should be placed in the null
+// bin.
+// NOTE: In theory if a user decided to specify 2^31 bins this would fail. We
+// could make this an error in Python, but that is such a crazy edge case...
+constexpr size_type NULL_VALUE{-1};
 
 namespace detail {
 namespace {
@@ -57,9 +59,13 @@ struct bin_finder
 
     __device__ size_type operator()(const T value) const
     {
-        // Immediately return NULL for NULL values.
-        if (value == MYNULL)
-            return MYNULL;
+        // TODO: Is it possible to check for null inputs here?
+        // column_device_view.is_valid seems to be the "officially supported"
+        // option, but even if I passed a view on construction of this struct I
+        // would need an index, which would require basically switching to a
+        // raw for loop masquerading as a thrust call.
+        //if (value == NULL_VALUE)
+        //    return NULL_VALUE;
 
         auto bound = thrust::lower_bound(thrust::seq,
                 m_left_edges, m_left_edges_end,
@@ -68,13 +74,13 @@ struct bin_finder
 
         // Exit early and return NULL for values not within the interval.
         if ((bound == m_left_edges) || (bound == m_left_edges_end))
-            return MYNULL;
+            return NULL_VALUE;
 
         // We must subtract 1 because lower bound returns the first index
         // _greater than_ the value. This is safe because bound == m_left edges
         // would already have triggered a NULL return above.
         auto index = bound - m_left_edges - 1;
-        return (m_right_comp(value, m_right_edges[index])) ? index : MYNULL;
+        return (m_right_comp(value, m_right_edges[index])) ? index : NULL_VALUE;
     }
 
     const T *m_left_edges{};  // Pointer to the beginning of the device data containing left bin edges.
@@ -86,6 +92,14 @@ struct bin_finder
 };
 
 
+struct filter_null_sentinel
+{
+    __device__ bool operator()(size_type i)
+    {
+        return (i != NULL_VALUE);
+    }
+};
+
 /// Bin the input by the edges in left_edges and right_edges.
 template <typename T, typename StrictWeakOrderingLeft, typename StrictWeakOrderingRight>
 std::unique_ptr<column> bin(column_view const& input, 
@@ -93,20 +107,29 @@ std::unique_ptr<column> bin(column_view const& input,
                             column_view const& right_edges,
                             rmm::mr::device_memory_resource * mr)
 {
-    // TODO: Determine if UINT32 is the output type that we want. Is there a
-    // way to map (at compile time) from size_type to the largest value in
-    // type_id that can hold this in case the typedef changes from int32_t to
-    // something larger?
-    auto output = cudf::make_numeric_column(data_type(type_id::UINT32), input.size());
+    auto output = cudf::make_numeric_column(data_type(type_to_id<size_type>()), input.size());
+    // TODO: Figure out why auto doesn't work here (or rather, why this works
+    // but then calls to begin/end later fail). I imagine suitable addition of
+    // a "template" keyword will fix it.
+    cudf::mutable_column_view output_mutable_view = output->mutable_view();
 
     thrust::transform(thrust::device,
             input.begin<T>(), input.end<T>(),
-            static_cast<cudf::mutable_column_view>(*output).begin<size_type>(),
+            output_mutable_view.begin<size_type>(),
             bin_finder<T, StrictWeakOrderingLeft, StrictWeakOrderingRight>(
                 left_edges.begin<T>(), left_edges.end<T>(), right_edges.begin<T>()
                 )
             );
-
+    
+    auto mask_and_count = cudf::detail::valid_if(
+        output_mutable_view.begin<size_type>(),
+        output_mutable_view.end<size_type>(),
+        filter_null_sentinel()
+        );
+    // TODO: Figure out how to compose with the input null mask.
+    //output->set_null_mask(bitmask_and(mask_and_count.first, input->view().null_mask()));
+    output->set_null_mask(mask_and_count.first, mask_and_count.second);
+            
     return output;
 }
 
