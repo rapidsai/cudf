@@ -7,9 +7,12 @@ import pandas as pd
 from nvtx import annotate
 
 import cudf
+from cudf._lib.concat import concat_columns
 from cudf._lib.scalar import _is_null_host_scalar
-from cudf._typing import DataFrameOrSeries, ScalarLike
+from cudf._typing import ColumnLike, DataFrameOrSeries, ScalarLike
+from cudf.core.column.column import as_column
 from cudf.utils.dtypes import (
+    find_common_type,
     is_categorical_dtype,
     is_column_like,
     is_list_like,
@@ -142,7 +145,19 @@ class _SeriesLocIndexer(object):
         return self._sr.iloc[arg]
 
     def __setitem__(self, key, value):
-        key = self._loc_to_iloc(key)
+        try:
+            key = self._loc_to_iloc(key)
+        except KeyError as e:
+            if (
+                is_scalar(key)
+                and not isinstance(self._sr.index, cudf.MultiIndex)
+                and is_scalar(value)
+            ):
+                _append_new_row_inplace(self._sr.index._values, key)
+                _append_new_row_inplace(self._sr._column, value)
+                return
+            else:
+                raise e
         if isinstance(value, (pd.Series, cudf.Series)):
             value = cudf.Series(value)
             value = value._align_to_index(self._sr.index, how="right")
@@ -481,3 +496,14 @@ def _normalize_dtypes(df):
         for name, col in df._data.items():
             df[name] = col.astype(normalized_dtype)
     return df
+
+
+def _append_new_row_inplace(col: ColumnLike, value: ScalarLike):
+    """Append a scalar `value` to the end of `col` inplace.
+       Cast to common type if possible
+    """
+    to_type = find_common_type([type(value), col.dtype])
+    val_col = as_column(value, dtype=to_type)
+    old_col = col.astype(to_type)
+
+    col._mimic_inplace(concat_columns([old_col, val_col]), inplace=True)
