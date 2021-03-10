@@ -16,11 +16,9 @@ from cudf._lib.cpp.column.column cimport column
 from cudf._lib.cpp.column.column_view cimport column_view
 
 
-# TODO: I generally try to avoid shadowing builtins, but this is very limited
-# scope and there's no use-case for actual input here so I'm just using that
-# name. I can change it if someone has a preference otherwise, though.
-# TODO: I think simple boolean flags for left and right inclusive are the most
-# Pythonic option, but I can use a more well-defined type if preferred.
+# I want to avoid shadowing builtins, so I've named this `bin_values` instead
+# of `bin`. I'm less concerned about shadowing `input` since this is a very
+# limited scope and there's no use-case for actual input here .
 cdef bin(Column input, Column left_edges, left_inclusive,
          Column right_edges, right_inclusive):
     cdef inclusive c_left_inclusive = inclusive.YES if left_inclusive else inclusive.NO
