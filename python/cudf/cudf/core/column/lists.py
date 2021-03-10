@@ -176,6 +176,11 @@ class ListMethods(ColumnMethodsMixin):
             )
         super().__init__(column=column, parent=parent)
 
+    def contains(self, key):
+        """
+        """
+        pass
+
     @property
     def leaves(self):
         """

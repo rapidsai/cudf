@@ -11,9 +11,10 @@ from cudf._lib.cpp.column.column_view cimport column_view
 from cudf._lib.cpp.column.column cimport column
 
 from cudf._lib.column cimport Column
-
-
+from cudf._lib.cpp.types cimport size_type
 from cudf.core.dtypes import ListDtype
+
+from cudf._lib.cpp.lists.contains cimport contains
 
 
 def count_elements(Column col):
@@ -29,6 +30,27 @@ def count_elements(Column col):
 
     with nogil:
         c_result = move(cpp_count_elements(list_view.get()[0]))
+
+    result = Column.from_unique_ptr(move(c_result))
+    return result
+
+
+def contains_elements(Column col, size_type key, Column col2):
+    if not isinstance(col.dtype, ListDtype):
+        raise TypeError("col is not a list column.")
+
+    # shared_ptr required because lists_column_view has no default
+    # ctor
+    cdef shared_ptr[lists_column_view] list_view = (
+        make_shared[lists_column_view](col.view())
+    )
+    cdef make_shared[lists_column_view] col_view = (
+        make_shared[lists_column_view](col2.view())
+    )
+    cdef unique_ptr[column] c_result
+
+    with nogil:
+        c_result = move(contains(list_view.get()[0], key, col_view))
 
     result = Column.from_unique_ptr(move(c_result))
     return result
