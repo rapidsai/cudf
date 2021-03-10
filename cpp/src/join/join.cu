@@ -79,42 +79,21 @@ std::unique_ptr<table> inner_join(table_view const& left_input,
   auto const left  = scatter_columns(matched.second.front(), left_on, left_input);
   auto const right = scatter_columns(matched.second.back(), right_on, right_input);
 
-  // For `inner_join`, we can freely choose either the `left` or `right` table to use for
-  // building/probing the hash map. Because building is typically more expensive than probing, we
-  // build the hash map from the smaller table.
-  if (right.num_rows() > left.num_rows()) {
-    cudf::hash_join hj_obj(left.select(left_on), compare_nulls, stream);
-    auto join_indices = hj_obj.inner_join(right.select(right_on), compare_nulls, stream, mr);
-    std::unique_ptr<table> left_result  = detail::gather(left,
-                                                        join_indices.second->begin(),
-                                                        join_indices.second->end(),
-                                                        out_of_bounds_policy::DONT_CHECK,
-                                                        stream,
-                                                        mr);
-    std::unique_ptr<table> right_result = detail::gather(right,
-                                                         join_indices.first->begin(),
-                                                         join_indices.first->end(),
-                                                         out_of_bounds_policy::DONT_CHECK,
-                                                         stream,
-                                                         mr);
-    return combine_table_pair(std::move(left_result), std::move(right_result));
-  } else {
-    cudf::hash_join hj_obj(right.select(right_on), compare_nulls, stream);
-    auto join_indices = hj_obj.inner_join(left.select(left_on), compare_nulls, stream, mr);
-    std::unique_ptr<table> left_result  = detail::gather(left,
-                                                        join_indices.first->begin(),
-                                                        join_indices.first->end(),
-                                                        out_of_bounds_policy::DONT_CHECK,
-                                                        stream,
-                                                        mr);
-    std::unique_ptr<table> right_result = detail::gather(right,
-                                                         join_indices.second->begin(),
-                                                         join_indices.second->end(),
-                                                         out_of_bounds_policy::DONT_CHECK,
-                                                         stream,
-                                                         mr);
-    return combine_table_pair(std::move(left_result), std::move(right_result));
-  }
+  auto join_indices =
+    inner_join(left.select(left_on), right.select(right_on), compare_nulls, stream, mr);
+  std::unique_ptr<table> left_result  = detail::gather(left,
+                                                      join_indices.first->begin(),
+                                                      join_indices.first->end(),
+                                                      out_of_bounds_policy::DONT_CHECK,
+                                                      stream,
+                                                      mr);
+  std::unique_ptr<table> right_result = detail::gather(right,
+                                                       join_indices.second->begin(),
+                                                       join_indices.second->end(),
+                                                       out_of_bounds_policy::DONT_CHECK,
+                                                       stream,
+                                                       mr);
+  return combine_table_pair(std::move(left_result), std::move(right_result));
 }
 
 std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
@@ -157,8 +136,8 @@ std::unique_ptr<table> left_join(table_view const& left_input,
   table_view const left  = scatter_columns(matched.second.front(), left_on, left_input);
   table_view const right = scatter_columns(matched.second.back(), right_on, right_input);
 
-  cudf::hash_join hj_obj(right.select(right_on), compare_nulls, stream);
-  auto join_indices = hj_obj.left_join(left.select(left_on), compare_nulls, stream, mr);
+  auto join_indices =
+    left_join(left.select(left_on), right.select(right_on), compare_nulls, stream, mr);
 
   if ((left_on.empty() || right_on.empty()) ||
       is_trivial_join(left, right, cudf::detail::join_kind::LEFT_JOIN)) {
@@ -221,8 +200,8 @@ std::unique_ptr<table> full_join(table_view const& left_input,
   table_view const left  = scatter_columns(matched.second.front(), left_on, left_input);
   table_view const right = scatter_columns(matched.second.back(), right_on, right_input);
 
-  cudf::hash_join hj_obj(right.select(right_on), compare_nulls, stream);
-  auto join_indices = hj_obj.full_join(left.select(left_on), compare_nulls, stream, mr);
+  auto join_indices =
+    full_join(left.select(left_on), right.select(right_on), compare_nulls, stream, mr);
 
   if ((left_on.empty() || right_on.empty()) ||
       is_trivial_join(left, right, cudf::detail::join_kind::FULL_JOIN)) {
