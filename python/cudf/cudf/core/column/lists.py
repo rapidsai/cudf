@@ -178,6 +178,24 @@ class ListMethods(ColumnMethodsMixin):
 
     def contains(self, key):
         """
+        Creates a column of bool values indicating whether the specified scalar
+        is an element of each row of a list column.
+
+        Parameters
+        ----------
+        search_key : scalar
+            element being searched for in each row of the list column
+
+        Returns
+        -------
+        Column
+
+        Examples
+        --------
+        >>> s = cudf.Series([[1, 2, 3], [3, 4, 5], [4, 5, 6]])
+        >>> s.list.contains(4)
+        Series([False, True, True])
+        dtype:
         """
         pass
 
