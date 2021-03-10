@@ -45,36 +45,36 @@ if [[ "$BUILD_LIBCUDF" == "1" && "$UPLOAD_LIBCUDF" == "1" ]]; then
   test -e ${LIBCUDF_FILE}
   echo "Upload libcudf"
   echo ${LIBCUDF_FILE}
-  gpuci_retry anaconda --no-progress -t ${MY_UPLOAD_KEY} upload -u ${CONDA_USERNAME:-rapidsai} ${LABEL_OPTION} --skip-existing ${LIBCUDF_FILE}
+  gpuci_retry anaconda -t ${MY_UPLOAD_KEY} upload -u ${CONDA_USERNAME:-rapidsai} ${LABEL_OPTION} --skip-existing ${LIBCUDF_FILE} --no-progress
 fi
 
 if [[ "$BUILD_CUDF" == "1" && "$UPLOAD_CUDF" == "1" ]]; then
   test -e ${CUDF_FILE}
   echo "Upload cudf"
   echo ${CUDF_FILE}
-  gpuci_retry anaconda --no-progress -t ${MY_UPLOAD_KEY} upload -u ${CONDA_USERNAME:-rapidsai} ${LABEL_OPTION} --skip-existing ${CUDF_FILE}
+  gpuci_retry anaconda -t ${MY_UPLOAD_KEY} upload -u ${CONDA_USERNAME:-rapidsai} ${LABEL_OPTION} --skip-existing ${CUDF_FILE} --no-progress
 
   test -e ${DASK_CUDF_FILE}
   echo "Upload dask-cudf"
   echo ${DASK_CUDF_FILE}
-  gpuci_retry anaconda --no-progress -t ${MY_UPLOAD_KEY} upload -u ${CONDA_USERNAME:-rapidsai} ${LABEL_OPTION} --skip-existing ${DASK_CUDF_FILE}
+  gpuci_retry anaconda -t ${MY_UPLOAD_KEY} upload -u ${CONDA_USERNAME:-rapidsai} ${LABEL_OPTION} --skip-existing ${DASK_CUDF_FILE} --no-progress
 
   test -e ${CUSTREAMZ_FILE}
   echo "Upload custreamz"
   echo ${CUSTREAMZ_FILE}
-  gpuci_retry anaconda --no-progress -t ${MY_UPLOAD_KEY} upload -u ${CONDA_USERNAME:-rapidsai} ${LABEL_OPTION} --skip-existing ${CUSTREAMZ_FILE}
+  gpuci_retry anaconda -t ${MY_UPLOAD_KEY} upload -u ${CONDA_USERNAME:-rapidsai} ${LABEL_OPTION} --skip-existing ${CUSTREAMZ_FILE} --no-progress
 fi
 
 if [[ "$BUILD_LIBCUDF" == "1" && "$UPLOAD_LIBCUDF_KAFKA" == "1" ]]; then
   test -e ${LIBCUDF_KAFKA_FILE}
   echo "Upload libcudf_kafka"
   echo ${LIBCUDF_KAFKA_FILE}
-  gpuci_retry anaconda --no-progress -t ${MY_UPLOAD_KEY} upload -u ${CONDA_USERNAME:-rapidsai} ${LABEL_OPTION} --skip-existing ${LIBCUDF_KAFKA_FILE}
+  gpuci_retry anaconda -t ${MY_UPLOAD_KEY} upload -u ${CONDA_USERNAME:-rapidsai} ${LABEL_OPTION} --skip-existing ${LIBCUDF_KAFKA_FILE} --no-progress
 fi
 
 if [[ "$BUILD_CUDF" == "1" && "$UPLOAD_CUDF_KAFKA" == "1" ]]; then
   test -e ${CUDF_KAFKA_FILE}
   echo "Upload cudf_kafka"
   echo ${CUDF_KAFKA_FILE}
-  gpuci_retry anaconda --no-progress -t ${MY_UPLOAD_KEY} upload -u ${CONDA_USERNAME:-rapidsai} ${LABEL_OPTION} --skip-existing ${CUDF_KAFKA_FILE}
+  gpuci_retry anaconda -t ${MY_UPLOAD_KEY} upload -u ${CONDA_USERNAME:-rapidsai} ${LABEL_OPTION} --skip-existing ${CUDF_KAFKA_FILE} --no-progress
 fi
