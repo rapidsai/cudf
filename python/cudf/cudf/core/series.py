@@ -1256,8 +1256,8 @@ class Series(Frame, Serializable):
         4    <NA>
         dtype: object
         >>> series.to_string()
-        '0       a\n1    <NA>\n2       b\n3       c\n4    <NA>\ndtype: object'
-        """
+        '0       a\\n1    <NA>\\n2       b\\n3       c\\n4    <NA>\\ndtype: object'
+        """  # noqa : E501
         return self.__repr__()
 
     def __str__(self):
@@ -2523,6 +2523,7 @@ class Series(Frame, Serializable):
         ----------
         keep : {'first', 'last', ``False``}, default 'first'
             Method to handle dropping duplicates:
+
             - 'first' : Drop duplicates except for the first occurrence.
             - 'last' : Drop duplicates except for the last occurrence.
             - ``False`` : Drop all duplicates.
@@ -3017,11 +3018,12 @@ class Series(Frame, Serializable):
             values then may propagate to other cudf objects.
         errors : {'raise', 'ignore', 'warn'}, default 'raise'
             Control raising of exceptions on invalid data for provided dtype.
+
             - ``raise`` : allow exceptions to be raised
             - ``ignore`` : suppress exceptions. On error return original
-            object.
+              object.
             - ``warn`` : prints last exceptions as warnings and
-            return original object.
+              return original object.
 
         Returns
         -------
@@ -3059,7 +3061,7 @@ class Series(Frame, Serializable):
         dtype: category
         Categories (2, int64): [2 < 1]
 
-        Note that using `copy=False`(enabled by default)
+        Note that using ``copy=False`` (enabled by default)
         and changing data on a new Series will
         propagate changes:
 
@@ -3267,10 +3269,11 @@ class Series(Frame, Serializable):
         keep : {'first', 'last'}, default 'first'
             When there are duplicate values that cannot all fit in a
             Series of `n` elements:
+
             - ``first`` : return the first `n` occurrences in order
-                of appearance.
+              of appearance.
             - ``last`` : return the last `n` occurrences in reverse
-                order of appearance.
+              order of appearance.
 
         Returns
         -------
@@ -3319,7 +3322,8 @@ class Series(Frame, Serializable):
         return self._n_largest_or_smallest(n=n, keep=keep, largest=True)
 
     def nsmallest(self, n=5, keep="first"):
-        """Returns a new Series of the *n* smallest element.
+        """
+        Returns a new Series of the *n* smallest element.
 
         Parameters
         ----------
@@ -3328,10 +3332,11 @@ class Series(Frame, Serializable):
         keep : {'first', 'last'}, default 'first'
             When there are duplicate values that cannot all fit in a
             Series of `n` elements:
+
             - ``first`` : return the first `n` occurrences in order
-                of appearance.
+              of appearance.
             - ``last`` : return the last `n` occurrences in reverse
-                order of appearance.
+              order of appearance.
 
         Returns
         -------

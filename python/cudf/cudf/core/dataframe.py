@@ -4163,6 +4163,7 @@ class DataFrame(Frame, Serializable):
             Column label(s) to order by.
         keep : {'first', 'last'}, default 'first'
             Where there are duplicate values:
+
             - `first` : prioritize the first occurrence(s)
             - `last` : prioritize the last occurrence(s)
 
@@ -4225,6 +4226,7 @@ class DataFrame(Frame, Serializable):
             Column name or names to order by.
         keep : {'first', 'last'}, default 'first'
             Where there are duplicate values:
+
             - ``first`` : take the first occurrence.
             - ``last`` : take the last occurrence.
 
