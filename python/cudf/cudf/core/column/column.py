@@ -1013,7 +1013,7 @@ class ColumnBase(Column, Serializable):
         return cpp_distinct_count(self, ignore_nulls=dropna)
 
     def can_cast_safely(self, to_dtype: Dtype) -> bool:
-        return False
+        raise NotImplementedError()
 
     def astype(self, dtype: Dtype, **kwargs) -> ColumnBase:
         if is_categorical_dtype(dtype):
