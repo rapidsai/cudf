@@ -1,6 +1,6 @@
 # Copyright (c) 2018-2021, NVIDIA CORPORATION.
 
-from __future__ import division
+from __future__ import annotations, division
 
 import inspect
 import itertools
@@ -10,7 +10,7 @@ import sys
 import warnings
 from collections import OrderedDict, defaultdict
 from collections.abc import Iterable, Sequence
-from typing import Any, Set, TypeVar
+from typing import Any, Optional, Set, TypeVar
 
 import cupy
 import numpy as np
@@ -30,7 +30,7 @@ from cudf.core import column, reshape
 from cudf.core.abc import Serializable
 from cudf.core.column import as_column, column_empty
 from cudf.core.column_accessor import ColumnAccessor
-from cudf.core.frame import Frame
+from cudf.core.frame import Frame, _drop_rows_by_labels
 from cudf.core.groupby.groupby import DataFrameGroupBy
 from cudf.core.index import Index, RangeIndex, as_index
 from cudf.core.indexing import _DataFrameIlocIndexer, _DataFrameLocIndexer
@@ -495,7 +495,12 @@ class DataFrame(Frame, Serializable):
         return out
 
     @classmethod
-    def _from_data(cls, data, index=None, columns=None):
+    def _from_data(
+        cls,
+        data: ColumnAccessor,
+        index: Optional[Index] = None,
+        columns: Any = None,
+    ) -> DataFrame:
         out = cls.__new__(cls)
         out._data = data
         if index is None:
@@ -3364,46 +3369,26 @@ class DataFrame(Frame, Serializable):
             )
 
         if inplace:
-            outdf = self
+            out = self
         else:
-            outdf = self.copy()
+            out = self.copy()
 
         if axis in (1, "columns"):
             target = _get_host_unique(target)
 
-            _drop_columns(outdf, target, errors)
+            _drop_columns(out, target, errors)
         elif axis in (0, "index"):
-            if not isinstance(target, (cudf.Series, cudf.Index)):
-                target = column.as_column(target)
-
-            if isinstance(self._index, cudf.MultiIndex):
-                if level is None:
-                    level = 0
-
-                levels_index = outdf.index.get_level_values(level)
-                if errors == "raise" and not target.isin(levels_index).all():
-                    raise KeyError("One or more values not found in axis")
-
-                # TODO : Could use anti-join as a future optimization
-                sliced_df = outdf.take(~levels_index.isin(target))
-                sliced_df._index.names = self._index.names
-            else:
-                if errors == "raise" and not target.isin(outdf.index).all():
-                    raise KeyError("One or more values not found in axis")
-
-                sliced_df = outdf.join(
-                    cudf.DataFrame(index=target), how="leftanti"
-                )
+            dropped = _drop_rows_by_labels(out, target, level, errors)
 
             if columns is not None:
                 columns = _get_host_unique(columns)
-                _drop_columns(sliced_df, columns, errors)
+                _drop_columns(dropped, columns, errors)
 
-            outdf._data = sliced_df._data
-            outdf._index = sliced_df._index
+            out._data = dropped._data
+            out._index = dropped._index
 
         if not inplace:
-            return outdf
+            return out
 
     def _drop_column(self, name):
         """Drop a column by *name*
@@ -7962,17 +7947,6 @@ def _get_union_of_series_names(series_list):
     return names_list
 
 
-def _drop_columns(df, columns, errors):
-    for c in columns:
-        try:
-            df._drop_column(c)
-        except KeyError as e:
-            if errors == "ignore":
-                pass
-            else:
-                raise e
-
-
 def _get_host_unique(array):
     if isinstance(
         array, (cudf.Series, cudf.Index, cudf.core.column.ColumnBase)
@@ -7982,3 +7956,14 @@ def _get_host_unique(array):
         return [array]
     else:
         return set(array)
+
+
+def _drop_columns(df: DataFrame, columns: Iterable, errors: str):
+    for c in columns:
+        try:
+            df._drop_column(c)
+        except KeyError as e:
+            if errors == "ignore":
+                pass
+            else:
+                raise e
