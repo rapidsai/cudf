@@ -102,9 +102,6 @@ struct BinTest : public BaseFixture {
 
 template <typename T>
 struct FloatingPointBinTest : public BinTest {
-    //FloatingPointBinTest() = default;
-    //~FloatingPointBinTest () = default;
-    //
     fixed_width_column_wrapper<T> left_edges{0.0, 1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0};
     fixed_width_column_wrapper<T> right_edges{1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 10.0};
     fixed_width_column_wrapper<T> input{2.5, 2.5, 2.5, 2.5, 2.5, 2.5, 2.5, 2.5, 2.5, 2.5};
