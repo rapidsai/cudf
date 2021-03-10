@@ -31,14 +31,12 @@ namespace lists {
  * @brief Create a new lists column by removing duplicated entries from each list element in the
  * given lists column
  *
+ * @throw cudf::logic_error if any row (list element) in the input column is a nested type.
+ *
  * Given an `input` lists_column_view, the list elements in the column are copied to an output lists
  * column such that their duplicated entries are dropped out to keep only the unique ones. The
- * order of those entries within each list are not guaranteed to be preserved as in the input.
- *
- * Notes:
- *  - If any row (list element) in the input column contains nested types, cudf::logic_error will be
- * thrown.
- *  - By current implementation, entries in the output lists are sorted by ascending order (nulls
+ * order of those entries within each list are not guaranteed to be preserved as in the input. In
+ * the current implementation, entries in the output lists are sorted by ascending order (nulls
  * last), but this is not guaranteed in future implementation.
  *
  * @param lists_column The input lists_column_view

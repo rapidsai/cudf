@@ -267,7 +267,7 @@ std::unique_ptr<column> drop_list_duplicates(lists_column_view const& lists_colu
                            stream,
                            mr);
 
-  // Construct a new list column without duplicated entries
+  // Construct a new lists column without duplicated entries
   return make_lists_column(lists_column.size(),
                            std::move(lists_offsets),
                            std::move(unique_entries_and_list_offsets.front()),
