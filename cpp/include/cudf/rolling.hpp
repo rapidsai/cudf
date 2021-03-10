@@ -16,6 +16,7 @@
 
 #pragma once
 
+#include <cudf/rolling/range_window_bounds.hpp>
 #include <cudf/types.hpp>
 
 #include <memory>
@@ -119,6 +120,7 @@ struct window_bounds {
   {
   }
 };
+
 /**
  * @brief  Applies a grouping-aware, fixed-size rolling window function to the values in a column.
  *
@@ -375,6 +377,119 @@ std::unique_ptr<column> grouped_time_range_rolling_window(
   column_view const& input,
   window_bounds preceding_window_in_days,
   window_bounds following_window_in_days,
+  size_type min_periods,
+  std::unique_ptr<aggregation> const& aggr,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+
+/**
+ * @brief  Applies a grouping-aware, value range-based rolling window function to the values in a
+ *         column.
+ *
+ * This is a generalization of `grouped_time_range_rolling_window()` to work with non-timestamp
+ * columns. Like `grouped_time_range_rolling_window()`, this function aggregates values in a window
+ * around each element of a specified `input` column. It differs from
+ * `grouped_time_range_rolling_window()` in that instead of a timestamp column, the ordered column
+ * can be of integral types as well as timestamps.
+ *
+ *   1. The elements of the `input` column are grouped into distinct groups (e.g. the result of a
+ *      groupby), determined by the corresponding values of the columns under `group_keys`. The
+ *      window-aggregation cannot cross the group boundaries.
+ *   2. Within a group, the aggregation window is calculated based on an interval (e.g. number
+ *      of days preceding/following the current row). The value intervals are applied on the
+ *      `orderby_column` argument.
+ *
+ * Note: This method requires that the rows are presorted by the group keys and orderby column
+ * values.
+ *
+ * The window intervals are specified as scalar values appropriate for the orderby column:
+ *   1. If `orderby` column is a timestamp, the `preceding`/`following` windows are specified
+ *      in terms of lower resolution `duration` scalars.
+ *      E.g. For `orderby` column of type `TIMESTAMP_SECONDS`, the intervals may be
+ * `DURATION_SECONDS` or `DURATION_DAYS`. Higher resolution durations (e.g. `DURATION_NANOSECONDS`)
+ * cannot be used with lower resolution timestamps.
+ *   2. If the `orderby` column is an integral type (e.g. `INT32`), the `preceding`/`following`
+ *      should be the exact same type (`INT32`).
+ *
+ * @code{.pseudo}
+ * Example: Consider a user-sales dataset, where the rows look as follows:
+ *  { "user_id", sales_amt, date }
+ *
+ * This method enables windowing queries such as grouping a dataset by `user_id`, sorting by
+ * increasing `date`, and summing up the `sales_amt` column over a window of 3 days (1 preceding
+ * day, the current day, and 1 following day).
+ *
+ * In this example,
+ *    1. `group_keys == [ user_id ]` of type `STRING`
+ *    2. `orderby_column == date` of type `timestamp_S`
+ *    3. `input == sales_amt` of type int
+ * The data are grouped by `user_id`, and ordered by `date`. The aggregation
+ * (SUM) is then calculated for a window of 3 days around (and including) each row.
+ *
+ * For the following input:
+ *
+ *  [ // user,  sales_amt,  YYYYMMDDhhmmss (date)
+ *    { "user1",   10,      20200101000000    },
+ *    { "user2",   20,      20200101000000    },
+ *    { "user1",   20,      20200102000000    },
+ *    { "user1",   10,      20200103000000    },
+ *    { "user2",   30,      20200101000000    },
+ *    { "user2",   80,      20200102000000    },
+ *    { "user1",   50,      20200107000000    },
+ *    { "user1",   60,      20200107000000    },
+ *    { "user2",   40,      20200104000000    }
+ *  ]
+ *
+ * Partitioning (grouping) by `user_id`, and ordering by `date` yields the following `sales_amt`
+ * vector (with 2 groups, one for each distinct `user_id`):
+ *
+ * Date :(202001-)  [ 01,  02,  03,  07,  07,    01,   01,   02,  04 ]
+ * Input:           [ 10,  20,  10,  50,  60,    20,   30,   80,  40 ]
+ *                    <-------user1-------->|<---------user2--------->
+ *
+ * The SUM aggregation is applied, with 1 day preceding, and 1 day following, with a minimum of 1
+ * period. The aggregation window is thus 3 *days* wide, yielding the following output column:
+ *
+ *  Results:        [ 30,  40,  30,  110, 110,  130,  130,  130,  40 ]
+ *
+ * @endcode
+ *
+ * Note: The number of rows participating in each window might vary, based on the index within the
+ * group, datestamp, and `min_periods`. Apropos:
+ *  1. results[0] considers 2 values, because it is at the beginning of its group, and has no
+ *     preceding values.
+ *  2. results[5] considers 3 values, despite being at the beginning of its group. It must include 2
+ *     following values, based on its datestamp.
+ *
+ * Each aggregation operation cannot cross group boundaries.
+ *
+ * The type of the returned column depends on the input column type `T`, and the aggregation:
+ *   1. COUNT   returns `INT32` columns
+ *   2. MIN/MAX returns `T` columns
+ *   3. SUM     returns the promoted type for T. Sum on `INT32` yields `INT64`.
+ *   4. MEAN    returns FLOAT64 columns
+ *   5. COLLECT returns columns of type `LIST<T>`.
+ *
+ * LEAD/LAG/ROW_NUMBER are undefined for range queries.
+ *
+ * @param[in] group_keys The (pre-sorted) grouping columns
+ * @param[in] orderby_column The (pre-sorted) order-by column, for range comparisons
+ * @param[in] order  The order (ASCENDING/DESCENDING) in which the order-by column is sorted
+ * @param[in] input The input column (to be aggregated)
+ * @param[in] preceding The interval value in the backward direction
+ * @param[in] following The interval value in the forward direction.
+ * @param[in] min_periods Minimum number of observations in window required to have a value,
+ *                        otherwise element `i` is null.
+ * @param[in] aggr The rolling window aggregation type (SUM, MAX, MIN, etc.)
+ *
+ * @returns   A nullable output column containing the rolling window results
+ */
+std::unique_ptr<column> grouped_range_rolling_window(
+  table_view const& group_keys,
+  column_view const& orderby_column,
+  cudf::order const& order,
+  column_view const& input,
+  range_window_bounds&& preceding,
+  range_window_bounds&& following,
   size_type min_periods,
   std::unique_ptr<aggregation> const& aggr,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());

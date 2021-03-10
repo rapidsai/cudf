@@ -299,6 +299,7 @@ add_library(cudf
     src/rolling/jit/code/kernel.cpp
     src/rolling/jit/code/operation.cpp
     src/rolling/rolling.cu
+    src/rolling/range_window_bounds.cpp
     src/round/round.cu
     src/scalar/scalar.cpp
     src/scalar/scalar_factories.cpp
