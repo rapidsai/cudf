@@ -32,8 +32,7 @@ namespace cudf {
  */
 
 /**
- * @brief Returns the row indices that can be used to construct
- * the result of performing an inner join between two tables.
+ * @brief Returns the indices of the matching rows resulting from an inner join between the specified tables. 
  *
  * @code{.pseudo}
  *     Left: {{0, 1, 2}}
