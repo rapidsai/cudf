@@ -1368,7 +1368,9 @@ class Series(Frame, Serializable):
         return "\n".join(lines)
 
     @annotate("BINARY_OP", color="orange", domain="cudf_python")
-    def _binaryop(self, other, fn, fill_value=None, reflect=False):
+    def _binaryop(
+        self, other, fn, fill_value=None, reflect=False, can_reindex=False
+    ):
         """
         Internal util to call a binary operator *fn* on operands *self*
         and *other*.  Return the output Series.  The output dtype is
@@ -1383,7 +1385,7 @@ class Series(Frame, Serializable):
 
         result_name = utils.get_result_name(self, other)
         if isinstance(other, Series):
-            if fn in cudf.utils.utils._EQUALITY_OPS:
+            if not can_reindex and fn in cudf.utils.utils._EQUALITY_OPS:
                 if not self.index.equals(other.index):
                     raise ValueError(
                         "Can only compare identically-labeled "
@@ -2196,10 +2198,47 @@ class Series(Frame, Serializable):
         fill_value : None or value
             Value to fill nulls with before computation. If data in both
             corresponding Series locations is null the result will be null
-        """
+
+        Returns
+        -------
+        Series
+            The result of the operation.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> a = cudf.Series([1, 2, 3, None, 10, 20], index=['a', 'c', 'd', 'e', 'f', 'g'])
+        >>> a
+        a       1
+        c       2
+        d       3
+        e    <NA>
+        f      10
+        g      20
+        dtype: int64
+        >>> b = cudf.Series([-10, 23, -1, None, None], index=['a', 'b', 'c', 'd', 'e'])
+        >>> b
+        a     -10
+        b      23
+        c      -1
+        d    <NA>
+        e    <NA>
+        dtype: int64
+        >>> a.eq(b, fill_value=2)
+        a    False
+        b    False
+        c    False
+        d    False
+        e     <NA>
+        f    False
+        g    False
+        dtype: bool
+        """  # noqa: E501
         if axis != 0:
             raise NotImplementedError("Only axis=0 supported at this time.")
-        return self._binaryop(other, "eq", fill_value)
+        return self._binaryop(
+            other=other, fn="eq", fill_value=fill_value, can_reindex=True
+        )
 
     def __eq__(self, other):
         return self._binaryop(other, "eq")
@@ -2214,10 +2253,47 @@ class Series(Frame, Serializable):
         fill_value : None or value
             Value to fill nulls with before computation. If data in both
             corresponding Series locations is null the result will be null
-        """
+
+        Returns
+        -------
+        Series
+            The result of the operation.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> a = cudf.Series([1, 2, 3, None, 10, 20], index=['a', 'c', 'd', 'e', 'f', 'g'])
+        >>> a
+        a       1
+        c       2
+        d       3
+        e    <NA>
+        f      10
+        g      20
+        dtype: int64
+        >>> b = cudf.Series([-10, 23, -1, None, None], index=['a', 'b', 'c', 'd', 'e'])
+        >>> b
+        a     -10
+        b      23
+        c      -1
+        d    <NA>
+        e    <NA>
+        dtype: int64
+        >>> a.ne(b, fill_value=2)
+        a    True
+        b    True
+        c    True
+        d    True
+        e    <NA>
+        f    True
+        g    True
+        dtype: bool
+        """  # noqa: E501
         if axis != 0:
             raise NotImplementedError("Only axis=0 supported at this time.")
-        return self._binaryop(other, "ne", fill_value)
+        return self._binaryop(
+            other=other, fn="ne", fill_value=fill_value, can_reindex=True
+        )
 
     def __ne__(self, other):
         return self._binaryop(other, "ne")
@@ -2232,10 +2308,47 @@ class Series(Frame, Serializable):
         fill_value : None or value
             Value to fill nulls with before computation. If data in both
             corresponding Series locations is null the result will be null
-        """
+
+        Returns
+        -------
+        Series
+            The result of the operation.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> a = cudf.Series([1, 2, 3, None, 10, 20], index=['a', 'c', 'd', 'e', 'f', 'g'])
+        >>> a
+        a       1
+        c       2
+        d       3
+        e    <NA>
+        f      10
+        g      20
+        dtype: int64
+        >>> b = cudf.Series([-10, 23, -1, None, None], index=['a', 'b', 'c', 'd', 'e'])
+        >>> b
+        a     -10
+        b      23
+        c      -1
+        d    <NA>
+        e    <NA>
+        dtype: int64
+        >>> a.lt(b, fill_value=-10)
+        a    False
+        b     True
+        c    False
+        d    False
+        e     <NA>
+        f    False
+        g    False
+        dtype: bool
+        """  # noqa: E501
         if axis != 0:
             raise NotImplementedError("Only axis=0 supported at this time.")
-        return self._binaryop(other, "lt", fill_value)
+        return self._binaryop(
+            other=other, fn="lt", fill_value=fill_value, can_reindex=True
+        )
 
     def __lt__(self, other):
         return self._binaryop(other, "lt")
@@ -2250,10 +2363,47 @@ class Series(Frame, Serializable):
         fill_value : None or value
             Value to fill nulls with before computation. If data in both
             corresponding Series locations is null the result will be null
-        """
+
+        Returns
+        -------
+        Series
+            The result of the operation.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> a = cudf.Series([1, 2, 3, None, 10, 20], index=['a', 'c', 'd', 'e', 'f', 'g'])
+        >>> a
+        a       1
+        c       2
+        d       3
+        e    <NA>
+        f      10
+        g      20
+        dtype: int64
+        >>> b = cudf.Series([-10, 23, -1, None, None], index=['a', 'b', 'c', 'd', 'e'])
+        >>> b
+        a     -10
+        b      23
+        c      -1
+        d    <NA>
+        e    <NA>
+        dtype: int64
+        >>> a.le(b, fill_value=-10)
+        a    False
+        b     True
+        c    False
+        d    False
+        e     <NA>
+        f    False
+        g    False
+        dtype: bool
+        """  # noqa: E501
         if axis != 0:
             raise NotImplementedError("Only axis=0 supported at this time.")
-        return self._binaryop(other, "le", fill_value)
+        return self._binaryop(
+            other=other, fn="le", fill_value=fill_value, can_reindex=True
+        )
 
     def __le__(self, other):
         return self._binaryop(other, "le")
@@ -2268,10 +2418,47 @@ class Series(Frame, Serializable):
         fill_value : None or value
             Value to fill nulls with before computation. If data in both
             corresponding Series locations is null the result will be null
-        """
+
+        Returns
+        -------
+        Series
+            The result of the operation.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> a = cudf.Series([1, 2, 3, None, 10, 20], index=['a', 'c', 'd', 'e', 'f', 'g'])
+        >>> a
+        a       1
+        c       2
+        d       3
+        e    <NA>
+        f      10
+        g      20
+        dtype: int64
+        >>> b = cudf.Series([-10, 23, -1, None, None], index=['a', 'b', 'c', 'd', 'e'])
+        >>> b
+        a     -10
+        b      23
+        c      -1
+        d    <NA>
+        e    <NA>
+        dtype: int64
+        >>> a.gt(b)
+        a     True
+        b    False
+        c     True
+        d    False
+        e    False
+        f    False
+        g    False
+        dtype: bool
+        """  # noqa: E501
         if axis != 0:
             raise NotImplementedError("Only axis=0 supported at this time.")
-        return self._binaryop(other, "gt", fill_value)
+        return self._binaryop(
+            other=other, fn="gt", fill_value=fill_value, can_reindex=True
+        )
 
     def __gt__(self, other):
         return self._binaryop(other, "gt")
@@ -2286,10 +2473,47 @@ class Series(Frame, Serializable):
         fill_value : None or value
             Value to fill nulls with before computation. If data in both
             corresponding Series locations is null the result will be null
-        """
+
+        Returns
+        -------
+        Series
+            The result of the operation.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> a = cudf.Series([1, 2, 3, None, 10, 20], index=['a', 'c', 'd', 'e', 'f', 'g'])
+        >>> a
+        a       1
+        c       2
+        d       3
+        e    <NA>
+        f      10
+        g      20
+        dtype: int64
+        >>> b = cudf.Series([-10, 23, -1, None, None], index=['a', 'b', 'c', 'd', 'e'])
+        >>> b
+        a     -10
+        b      23
+        c      -1
+        d    <NA>
+        e    <NA>
+        dtype: int64
+        >>> a.ge(b)
+        a     True
+        b    False
+        c     True
+        d    False
+        e    False
+        f    False
+        g    False
+        dtype: bool
+        """  # noqa: E501
         if axis != 0:
             raise NotImplementedError("Only axis=0 supported at this time.")
-        return self._binaryop(other, "ge", fill_value)
+        return self._binaryop(
+            other=other, fn="ge", fill_value=fill_value, can_reindex=True
+        )
 
     def __ge__(self, other):
         return self._binaryop(other, "ge")
