@@ -238,8 +238,8 @@ std::vector<schema_tree_node> construct_schema_tree(LinkedColVector const &linke
       } else {
         // if leaf, add current
         if (col->type().id() == type_id::STRING) {
-          CUDF_EXPECTS(col_meta.num_children() == 2,
-                       "String column's corresponding metadata should have exactly two children");
+          CUDF_EXPECTS(col_meta.num_children() == 2 or col_meta.num_children() == 0,
+                       "String column's corresponding metadata should have zero or two children");
         } else {
           CUDF_EXPECTS(col_meta.num_children() == 0,
                        "Leaf column's corresponding metadata cannot have children");
@@ -504,6 +504,8 @@ struct parquet_column_view {
                              stream.value()));
 
     _is_list = (_max_rep_level > 0) ? true : false;
+
+    if (cudf_col.size() == 0) { return; }
 
     if (_is_list) {
       // Top level column's offsets are not applied to all children. Get the effective offset and
