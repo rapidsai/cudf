@@ -1,5 +1,7 @@
 # Copyright (c) 2020, NVIDIA CORPORATION.
 
+import cudf
+
 from collections import OrderedDict
 from itertools import chain
 
@@ -53,8 +55,6 @@ cpdef join(Table lhs, Table rhs, how=None):
 
 cpdef semi_join(Table lhs, Table rhs, how=None):
 
-    from cudf.core.column import as_column
-
     # left-semi and left-anti joins
     cdef cpp_join.gather_map_type c_result
     cdef table_view c_lhs = lhs.view()
@@ -76,7 +76,7 @@ cpdef semi_join(Table lhs, Table rhs, how=None):
     cdef Column left_rows = _gather_map_as_column(move(c_result))
     return (
         left_rows,
-        as_column([], dtype="int32")
+        cudf.core.column.as_column([], dtype="int32")
     )
 
 
