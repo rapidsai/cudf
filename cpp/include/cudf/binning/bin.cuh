@@ -16,6 +16,7 @@
 
 #pragma once
 
+// TODO: Clean up includes before pushing a final version.
 #include <cudf/column/column_view.hpp>
 #include <rmm/mr/device/device_memory_resource.hpp>
 #include <cudf/column/column.hpp>
@@ -26,12 +27,19 @@
 #include <thrust/functional.h>
 #include <thrust/binary_search.h>
 #include <thrust/execution_policy.h>
-//#include <stdio.h>
 #include <cudf/copying.hpp>
 
 namespace cudf {
 
 namespace bin {
+
+// TODO: This is a placeholder to remind myself to figure out the proper way to
+// set nulls. I need to modify the bitmask, but even if I passed a pointer to
+// it directly to the constructor of bin_finder and modified it directly (which
+// would be a terribly hacky solution), the current index is not provided to
+// the call operator so I wouldn't know what bit to set (and in any case that
+// would not be parallel-safe without atomics).
+constexpr unsigned int MYNULL = 0xffffffff;
 
 namespace detail {
 namespace {
@@ -50,8 +58,8 @@ struct bin_finder
     __device__ size_type operator()(const T value) const
     {
         // Immediately return NULL for NULL values.
-        if (value == NULL)
-            return NULL;
+        if (value == MYNULL)
+            return MYNULL;
 
         auto bound = thrust::lower_bound(thrust::seq,
                 m_left_edges, m_left_edges_end,
@@ -60,13 +68,13 @@ struct bin_finder
 
         // Exit early and return NULL for values not within the interval.
         if ((bound == m_left_edges) || (bound == m_left_edges_end))
-            return NULL;
+            return MYNULL;
 
         // We must subtract 1 because lower bound returns the first index
         // _greater than_ the value. This is safe because bound == m_left edges
         // would already have triggered a NULL return above.
         auto index = bound - m_left_edges - 1;
-        return (m_right_comp(value, m_right_edges[index])) ? index : NULL;
+        return (m_right_comp(value, m_right_edges[index])) ? index : MYNULL;
     }
 
     const T *m_left_edges{};  // Pointer to the beginning of the device data containing left bin edges.
@@ -99,16 +107,12 @@ std::unique_ptr<column> bin(column_view const& input,
                 )
             );
 
-    //unsigned int *tmp = (unsigned int *) malloc(10 * sizeof(unsigned int));
-    //cudaError_t err = cudaMemcpy(tmp, static_cast<cudf::mutable_column_view>(*output).begin<unsigned int>(), 10 * sizeof(unsigned int), cudaMemcpyDeviceToHost);
-    //fprintf(stderr, "The values of the output are %d, %d, %d.\n", tmp[0], tmp[1], tmp[2]);
-
     return output;
 }
 
-// TODO: Figure out how this is instantiated for export to Python. It makes
-// sense that C++ tests will compile and run, but we need explicit template
-// instantiations somewhere to make this available to Python.
+// TODO: Figure out how this is instantiated for export to Python.  We need
+// explicit template instantiations (or some automatic template metaprogramming
+// solution) somewhere to make this available to Python.
 template <typename T>
 constexpr inline auto is_supported_bin_type()
 {
