@@ -32,6 +32,7 @@
 namespace cudf {
 namespace lists {
 namespace detail {
+namespace {
 using offset_type = lists_column_view::offset_type;
 /**
  * @brief Copy list entries and entry list offsets ignoring duplicates
@@ -112,17 +113,17 @@ std::unique_ptr<column> generate_clean_offsets(lists_column_view const& lists_co
                                                rmm::cuda_stream_view stream,
                                                rmm::mr::device_memory_resource* mr)
 {
-  auto output_offsets     = make_numeric_column(data_type{type_to_id<offset_type>()},
+  auto output_offsets = make_numeric_column(data_type{type_to_id<offset_type>()},
                                             lists_column.size() + 1,
                                             mask_state::UNALLOCATED,
                                             stream,
                                             mr);
-  auto const base_offsets = lists_column.offsets().begin<offset_type>() + lists_column.offset();
-  thrust::transform(rmm::exec_policy(stream),
-                    base_offsets,
-                    base_offsets + lists_column.size() + 1,
-                    output_offsets->mutable_view().begin<offset_type>(),
-                    [first = base_offsets] __device__(auto offset) { return offset - *first; });
+  thrust::transform(
+    rmm::exec_policy(stream),
+    lists_column.offsets_begin(),
+    lists_column.offsets_end(),
+    output_offsets->mutable_view().begin<offset_type>(),
+    [first = lists_column.offsets_begin()] __device__(auto offset) { return offset - *first; });
   return output_offsets;
 }
 
@@ -180,11 +181,10 @@ std::unique_ptr<column> generate_entry_list_offsets(size_type num_entries,
 void generate_offsets(size_type num_entries,
                       column_view const& entries_list_offsets,
                       mutable_column_view const& original_offsets,
-                      rmm::cuda_stream_view stream,
-                      rmm::mr::device_memory_resource* mr)
+                      rmm::cuda_stream_view stream)
 {
   // Firstly, generate temporary list offsets for the unique entries, ignoring empty lists (if any)
-  // If entries_list_offsets = {1, 1, 1, 1, 1, 2, 3, 3, 3, 3, 3 }, num_entries = 11,
+  // If entries_list_offsets = {1, 1, 1, 1, 2, 3, 3, 3, 4, 4 }, num_entries = 10,
   // then new_offsets = { 0, 4, 5, 8, 10 }
   auto const new_offsets = allocate_like(
     original_offsets, mask_allocation_policy::NEVER, rmm::mr::get_current_device_resource());
@@ -264,8 +264,7 @@ std::unique_ptr<column> drop_list_duplicates(lists_column_view const& lists_colu
   detail::generate_offsets(unique_entries_and_list_offsets.front()->size(),
                            unique_entries_and_list_offsets.back()->view(),
                            lists_offsets->mutable_view(),
-                           stream,
-                           mr);
+                           stream);
 
   // Construct a new lists column without duplicated entries
   return make_lists_column(lists_column.size(),
@@ -275,6 +274,7 @@ std::unique_ptr<column> drop_list_duplicates(lists_column_view const& lists_colu
                            cudf::detail::copy_bitmask(lists_column.parent(), stream, mr));
 }
 
+}  // anonymous namespace
 }  // namespace detail
 
 /**
