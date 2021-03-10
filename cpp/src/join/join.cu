@@ -51,9 +51,7 @@ inner_join(table_view const& left_input,
   if (right.num_rows() > left.num_rows()) {
     cudf::hash_join hj_obj(left, compare_nulls, stream);
     auto result = hj_obj.inner_join(right, compare_nulls, stream, mr);
-    return std::make_pair<std::unique_ptr<rmm::device_uvector<size_type>>,
-                          std::unique_ptr<rmm::device_uvector<size_type>>>(std::move(result.second),
-                                                                           std::move(result.first));
+    return std::make_pair(std::move(result.second), std::move(result.first));
   } else {
     cudf::hash_join hj_obj(right, compare_nulls, stream);
     return hj_obj.inner_join(left, compare_nulls, stream, mr);
