@@ -22,7 +22,6 @@
 
 namespace cudf {
 
-namespace bin {
 /**
  * @addtogroup column_bin
  * @{
@@ -68,5 +67,4 @@ std::unique_ptr<column> bin(column_view const& input,
 
 
 /** @} */  // end of group
-}  // namespace bin
 }  // namespace cudf

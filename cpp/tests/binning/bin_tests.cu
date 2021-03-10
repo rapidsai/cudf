@@ -59,7 +59,7 @@ TEST(BinColumnTest, TestInvalidLeft)
   fixed_width_column_wrapper<float> right_edges{1, 2, 3, 4, 5, 6, 7, 8, 9, 10};
   fixed_width_column_wrapper<float> input{0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5};
 
-  EXPECT_THROW(cudf::bin::bin(input, left_edges, cudf::bin::inclusive::YES, right_edges, cudf::bin::inclusive::NO),
+  EXPECT_THROW(cudf::bin(input, left_edges, cudf::inclusive::YES, right_edges, cudf::inclusive::NO),
           cudf::logic_error);
 };
 
@@ -69,7 +69,7 @@ TEST(BinColumnTest, TestInvalidRight)
   fixed_width_column_wrapper<double> right_edges{1, 2, 3, 4, 5, 6, 7, 8, 9, 10};
   fixed_width_column_wrapper<float> input{0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5};
 
-  EXPECT_THROW(cudf::bin::bin(input, left_edges, cudf::bin::inclusive::YES, right_edges, cudf::bin::inclusive::NO),
+  EXPECT_THROW(cudf::bin(input, left_edges, cudf::inclusive::YES, right_edges, cudf::inclusive::NO),
           cudf::logic_error);
 };
 
@@ -79,7 +79,7 @@ TEST(BinColumnTest, TestInvalidInput)
   fixed_width_column_wrapper<float> right_edges{1, 2, 3, 4, 5, 6, 7, 8, 9, 10};
   fixed_width_column_wrapper<double> input{0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5};
 
-  EXPECT_THROW(cudf::bin::bin(input, left_edges, cudf::bin::inclusive::YES, right_edges, cudf::bin::inclusive::NO),
+  EXPECT_THROW(cudf::bin(input, left_edges, cudf::inclusive::YES, right_edges, cudf::inclusive::NO),
           cudf::logic_error);
 };
 
@@ -89,7 +89,7 @@ TEST(BinColumnTest, TestMismatchedEdges)
   fixed_width_column_wrapper<float> right_edges{1, 2, 3, 4, 5, 6, 7, 8, 9};
   fixed_width_column_wrapper<float> input{0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5};
 
-  EXPECT_THROW(cudf::bin::bin(input, left_edges, cudf::bin::inclusive::YES, right_edges, cudf::bin::inclusive::NO),
+  EXPECT_THROW(cudf::bin(input, left_edges, cudf::inclusive::YES, right_edges, cudf::inclusive::NO),
           cudf::logic_error);
 };
 
@@ -120,12 +120,12 @@ TYPED_TEST(FloatingPointBinTest, TestFloatingPointData)
     // turning this into a parameterized test, so my best gues is that some of
     // the template magic that Google Test is doing is making automatic type
     // detection fail.
-    std::unique_ptr<cudf::column> result = cudf::bin::bin(
+    std::unique_ptr<cudf::column> result = cudf::bin(
             this->input,
             this->left_edges,
-            cudf::bin::inclusive::YES,
+            cudf::inclusive::YES,
             this->right_edges,
-            cudf::bin::inclusive::YES);
+            cudf::inclusive::YES);
     // Check that every element is placed in bin 2.
     auto begin = result->view().begin<const unsigned int>();
     auto end = result->view().end<const unsigned int>();
