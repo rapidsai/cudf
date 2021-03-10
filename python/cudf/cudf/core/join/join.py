@@ -176,7 +176,6 @@ class Merge(object):
                     else:
                         raise KeyError("message")
 
-    
         else:
             if left_on:
                 left_on = (
