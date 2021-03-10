@@ -172,9 +172,21 @@ TEST_F(SortListsInt, Sliced)
 {
   using T = int;
   LCW<T> l1{{1, 2, 3, 4}, {5, 6, 7}, {8, 9}, {10}};
-  auto sliced_list = cudf::slice(l1, {1, 4})[0];
 
-  auto results = sort_lists(lists_column_view{sliced_list}, {}, {});
+  auto sliced_list = cudf::slice(l1, {0, 4})[0];
+  auto results     = sort_lists(lists_column_view{sliced_list}, {}, {});
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(results->view(), sliced_list);
+
+  sliced_list = cudf::slice(l1, {1, 4})[0];
+  results     = sort_lists(lists_column_view{sliced_list}, {}, {});
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(results->view(), sliced_list);
+
+  sliced_list = cudf::slice(l1, {1, 2})[0];
+  results     = sort_lists(lists_column_view{sliced_list}, {}, {});
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(results->view(), sliced_list);
+
+  sliced_list = cudf::slice(l1, {0, 2})[0];
+  results     = sort_lists(lists_column_view{sliced_list}, {}, {});
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(results->view(), sliced_list);
 }
 
