@@ -16,7 +16,7 @@
 
 function(find_and_configure_dlpack VERSION)
     if(DLPACK_INCLUDE)
-        set(DLPACK_INCLUDE_DIR "${DLPACK_INCLUDE_DIR}" PARENT_SCOPE)
+        set(DLPACK_INCLUDE_DIR "${DLPACK_INCLUDE}" PARENT_SCOPE)
         return()
     endif()
     find_path(DLPACK_INCLUDE_DIR "dlpack"
