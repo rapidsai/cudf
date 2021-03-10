@@ -19,6 +19,7 @@
 #include <cudf/detail/gather.hpp>
 #include <cudf/detail/iterator.cuh>
 #include <cudf/detail/null_mask.hpp>
+#include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/lists/drop_list_duplicates.hpp>
 #include <cudf/lists/sorting.hpp>
 #include <cudf/table/row_operators.cuh>
@@ -284,6 +285,7 @@ std::unique_ptr<column> drop_list_duplicates(lists_column_view const& lists_colu
                                              null_equality nulls_equal,
                                              rmm::mr::device_memory_resource* mr)
 {
+  CUDF_FUNC_RANGE();
   return detail::drop_list_duplicates(lists_column, nulls_equal, rmm::cuda_stream_default, mr);
 }
 
