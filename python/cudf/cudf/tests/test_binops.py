@@ -1726,3 +1726,22 @@ def test_binops_decimal(args):
     got = op(a, b)
     assert expect.dtype == got.dtype
     utils.assert_eq(expect, got)
+
+
+@pytest.mark.parametrize("fn", ["eq", "ne", "lt", "gt", "le", "ge"])
+def test_equality_ops_index_mismatch(fn):
+    a = cudf.Series(
+        [1, 2, 3, None, None, 4], index=["a", "b", "c", "d", "e", "f"]
+    )
+    b = cudf.Series(
+        [-5, 4, 3, 2, 1, 0, 19, 11],
+        index=["aa", "b", "c", "d", "e", "f", "y", "z"],
+    )
+
+    pa = a.to_pandas()
+    pb = b.to_pandas()
+
+    expected = getattr(pa, fn)(pb)
+    actual = getattr(a, fn)(b)
+
+    utils.assert_eq(expected, actual)
