@@ -16,22 +16,18 @@
 
 // TODO: Clean up includes when all debugging is done.
 #include <cudf/binning/bin.hpp>
-#include <cudf/utilities/type_dispatcher.hpp>
-#include <cudf/column/column_view.hpp>
-#include <cudf/column/column_device_view.cuh>
 #include <rmm/mr/device/device_memory_resource.hpp>
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_factories.hpp>
-#include <cudf/binning/bin.hpp>
+#include <cudf/column/column_view.hpp>
+#include <cudf/column/column_device_view.cuh>
 #include <cudf/utilities/error.hpp>
 #include <cudf/types.hpp>
+#include <cudf/utilities/type_dispatcher.hpp>
 #include <thrust/functional.h>
 #include <thrust/binary_search.h>
 #include <thrust/execution_policy.h>
-#include <cudf/copying.hpp>
 #include <cudf/detail/valid_if.cuh>
-#include <cudf/detail/iterator.cuh>
-#include <thrust/tuple.h>
 #include <thrust/pair.h>
 
 namespace cudf {
@@ -127,9 +123,6 @@ std::unique_ptr<column> bin(column_view const& input,
     return output;
 }
 
-// TODO: Figure out how this is instantiated for export to Python.  We need
-// explicit template instantiations (or some automatic template metaprogramming
-// solution) somewhere to make this available to Python.
 template <typename T>
 constexpr inline auto is_supported_bin_type()
 {
@@ -191,7 +184,11 @@ struct bin_type_dispatcher {
 
 
 
-// Bin the input by the edges in left_edges and right_edges.
+// TODO: Figure out how this is instantiated for export to Python.  We need
+// explicit template instantiations (or some automatic template metaprogramming
+// solution) somewhere to make this available to Python.
+
+/// Bin the input by the edges in left_edges and right_edges.
 std::unique_ptr<column> bin(column_view const& input, 
                             column_view const& left_edges,
                             inclusive left_inclusive,

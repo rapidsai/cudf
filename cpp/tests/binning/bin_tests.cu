@@ -111,6 +111,8 @@ struct FloatingPointBinTest : public BinTest {
 // TODO: Add parameterized/fuzzing tests if we have a consistent way to add those.
 // TODO: Add tests for non-numeric types. Need to decide what types will be supported and how.
 // TODO: Add tests for different inclusion settings.
+// Add test for nulls.
+// Add tests for values outside the bounds.
 
 TYPED_TEST_CASE(FloatingPointBinTest, FloatingPointTypes);
 
