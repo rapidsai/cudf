@@ -167,7 +167,8 @@ struct SegmentedSortColumn {
         auto const null_replace_T = null_precedence == null_order::AFTER
                                       ? std::numeric_limits<T>::max()
                                       : std::numeric_limits<T>::min();
-        auto device_child         = column_device_view::create(child, stream);
+
+        auto device_child = column_device_view::create(child, stream);
         auto keys_in =
           cudf::detail::make_null_replacement_iterator<T>(*device_child, null_replace_T);
         thrust::copy_n(rmm::exec_policy(stream), keys_in, child.size(), keys.begin());
