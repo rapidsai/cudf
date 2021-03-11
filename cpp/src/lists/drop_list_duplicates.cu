@@ -20,7 +20,7 @@
 #include <cudf/detail/iterator.cuh>
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
-#include <cudf/lists/detail/sorting.cuh>
+#include <cudf/lists/detail/sorting.hpp>
 #include <cudf/lists/drop_list_duplicates.hpp>
 #include <cudf/table/row_operators.cuh>
 
@@ -241,11 +241,8 @@ std::unique_ptr<column> drop_list_duplicates(lists_column_view const& lists_colu
   }
 
   // Call segmented sort on the list elements and store them in a temporary column sorted_list
-  auto const sorted_lists = detail::sort_lists(lists_column,
-                                               order::ASCENDING,
-                                               null_order::AFTER,
-                                               stream,
-                                               rmm::mr::get_current_device_resource());
+  auto const sorted_lists =
+    detail::sort_lists(lists_column, order::ASCENDING, null_order::AFTER, stream);
 
   // Flatten all entries (depth = 1) of the lists column
   auto const all_lists_entries = lists_column_view(sorted_lists->view()).get_sliced_child(stream);
