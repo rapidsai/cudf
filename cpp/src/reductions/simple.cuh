@@ -57,7 +57,7 @@ std::unique_ptr<scalar> simple_reduction(column_view const& col,
   auto result = [&] {
     if (col.has_nulls()) {
       auto f  = simple_op.template get_null_replacing_element_transformer<ResultType>();
-      auto it = thrust::make_transform_iterator(dcol->pair_begin<ElementType, true>(), f);
+      auto it = thrust::make_transform_iterator(dcol->pair_begin<ElementType>(), f);
       return detail::reduce(it, col.size(), simple_op, stream, mr);
     } else {
       auto f  = simple_op.template get_element_transformer<ResultType>();
@@ -95,7 +95,7 @@ std::unique_ptr<scalar> fixed_point_reduction(column_view const& col,
   auto result = [&] {
     if (col.has_nulls()) {
       auto f  = simple_op.template get_null_replacing_element_transformer<Type>();
-      auto it = thrust::make_transform_iterator(dcol->pair_begin<Type, true>(), f);
+      auto it = thrust::make_transform_iterator(dcol->pair_begin<Type>(), f);
       return detail::reduce(it, col.size(), simple_op, stream, mr);
     } else {
       auto f  = simple_op.template get_element_transformer<Type>();

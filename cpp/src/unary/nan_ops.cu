@@ -36,23 +36,9 @@ struct nan_dispatcher {
   {
     auto input_device_view = column_device_view::create(input);
 
-    if (input.has_nulls()) {
-      auto input_pair_iterator = make_pair_iterator<T, true>(*input_device_view);
-      return true_if(input_pair_iterator,
-                     input_pair_iterator + input.size(),
-                     input.size(),
-                     predicate,
-                     stream,
-                     mr);
-    } else {
-      auto input_pair_iterator = make_pair_iterator<T, false>(*input_device_view);
-      return true_if(input_pair_iterator,
-                     input_pair_iterator + input.size(),
-                     input.size(),
-                     predicate,
-                     stream,
-                     mr);
-    }
+    auto input_pair_iterator = make_pair_iterator<T>(*input_device_view);
+    return true_if(
+      input_pair_iterator, input_pair_iterator + input.size(), input.size(), predicate, stream, mr);
   }
 
   template <typename T, typename Predicate>

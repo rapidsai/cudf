@@ -158,11 +158,11 @@ struct contains_scalar_dispatch {
 
     if (col.has_nulls()) {
       auto found_iter = thrust::find(rmm::exec_policy(stream),
-                                     d_col->pair_begin<Type, true>(),
-                                     d_col->pair_end<Type, true>(),
+                                     d_col->pair_begin<Type>(),
+                                     d_col->pair_end<Type>(),
                                      thrust::make_pair(s->value(), true));
 
-      return found_iter != d_col->pair_end<Type, true>();
+      return found_iter != d_col->pair_end<Type>();
     } else {
       auto found_iter = thrust::find(rmm::exec_policy(stream),  //
                                      d_col->begin<Type>(),

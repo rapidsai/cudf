@@ -187,23 +187,13 @@ std::enable_if_t<cudf::is_fixed_width<T>(), std::unique_ptr<cudf::column>> clamp
     return element_validity_pair.first;
   };
 
-  if (input.has_nulls()) {
-    auto input_pair_iterator = make_pair_iterator<T, true>(*input_device_view);
-    thrust::transform(rmm::exec_policy(stream),
-                      input_pair_iterator,
-                      input_pair_iterator + input.size(),
-                      scalar_zip_itr,
-                      output_device_view->begin<T>(),
-                      trans);
-  } else {
-    auto input_pair_iterator = make_pair_iterator<T, false>(*input_device_view);
-    thrust::transform(rmm::exec_policy(stream),
-                      input_pair_iterator,
-                      input_pair_iterator + input.size(),
-                      scalar_zip_itr,
-                      output_device_view->begin<T>(),
-                      trans);
-  }
+  auto input_pair_iterator = make_pair_iterator<T>(*input_device_view);
+  thrust::transform(rmm::exec_policy(stream),
+                    input_pair_iterator,
+                    input_pair_iterator + input.size(),
+                    scalar_zip_itr,
+                    output_device_view->begin<T>(),
+                    trans);
 
   return output;
 }

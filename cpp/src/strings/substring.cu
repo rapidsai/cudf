@@ -418,19 +418,11 @@ std::unique_ptr<column> slice_strings(strings_column_view const& strings,
   CUDF_FUNC_RANGE();
   auto delimiters_dev_view_ptr = cudf::column_device_view::create(delimiters.parent(), 0);
   auto delimiters_dev_view     = *delimiters_dev_view_ptr;
-  return (delimiters_dev_view.nullable())
-           ? detail::slice_strings(
-               strings,
-               cudf::detail::make_pair_iterator<string_view, true>(delimiters_dev_view),
-               count,
-               rmm::cuda_stream_default,
-               mr)
-           : detail::slice_strings(
-               strings,
-               cudf::detail::make_pair_iterator<string_view, false>(delimiters_dev_view),
-               count,
-               rmm::cuda_stream_default,
-               mr);
+  return detail::slice_strings(strings,
+                               cudf::detail::make_pair_iterator<string_view>(delimiters_dev_view),
+                               count,
+                               rmm::cuda_stream_default,
+                               mr);
 }
 
 }  // namespace strings

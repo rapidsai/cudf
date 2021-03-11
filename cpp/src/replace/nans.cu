@@ -54,53 +54,16 @@ struct replace_nans_functor {
       return dinput.is_null(i) or !std::isnan(dinput.element<T>(i));
     };
 
-    if (input.has_nulls()) {
-      auto input_pair_iterator = make_pair_iterator<T, true>(*input_device_view);
-      if (replacement_nullable) {
-        auto replacement_pair_iterator = make_pair_iterator<T, true>(replacement);
-        return copy_if_else(true,
-                            input_pair_iterator,
-                            input_pair_iterator + size,
-                            replacement_pair_iterator,
-                            predicate,
-                            input.type(),
-                            stream,
-                            mr);
-      } else {
-        auto replacement_pair_iterator = make_pair_iterator<T, false>(replacement);
-        return copy_if_else(true,
-                            input_pair_iterator,
-                            input_pair_iterator + size,
-                            replacement_pair_iterator,
-                            predicate,
-                            input.type(),
-                            stream,
-                            mr);
-      }
-    } else {
-      auto input_pair_iterator = make_pair_iterator<T, false>(*input_device_view);
-      if (replacement_nullable) {
-        auto replacement_pair_iterator = make_pair_iterator<T, true>(replacement);
-        return copy_if_else(true,
-                            input_pair_iterator,
-                            input_pair_iterator + size,
-                            replacement_pair_iterator,
-                            predicate,
-                            input.type(),
-                            stream,
-                            mr);
-      } else {
-        auto replacement_pair_iterator = make_pair_iterator<T, false>(replacement);
-        return copy_if_else(false,
-                            input_pair_iterator,
-                            input_pair_iterator + size,
-                            replacement_pair_iterator,
-                            predicate,
-                            input.type(),
-                            stream,
-                            mr);
-      }
-    }
+    auto input_pair_iterator       = make_pair_iterator<T>(*input_device_view);
+    auto replacement_pair_iterator = make_pair_iterator<T>(replacement);
+    return copy_if_else(true,
+                        input_pair_iterator,
+                        input_pair_iterator + size,
+                        replacement_pair_iterator,
+                        predicate,
+                        input.type(),
+                        stream,
+                        mr);
   }
 
   template <typename T, typename... Args>

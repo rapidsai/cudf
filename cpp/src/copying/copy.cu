@@ -41,26 +41,8 @@ struct copy_if_else_functor_impl {
                                      rmm::cuda_stream_view stream,
                                      rmm::mr::device_memory_resource* mr)
   {
-    if (left_nullable) {
-      if (right_nullable) {
-        auto lhs_iter = cudf::detail::make_pair_iterator<T, true>(lhs);
-        auto rhs_iter = cudf::detail::make_pair_iterator<T, true>(rhs);
-        return detail::copy_if_else(
-          true, lhs_iter, lhs_iter + size, rhs_iter, filter, lhs.type(), stream, mr);
-      }
-      auto lhs_iter = cudf::detail::make_pair_iterator<T, true>(lhs);
-      auto rhs_iter = cudf::detail::make_pair_iterator<T, false>(rhs);
-      return detail::copy_if_else(
-        true, lhs_iter, lhs_iter + size, rhs_iter, filter, lhs.type(), stream, mr);
-    }
-    if (right_nullable) {
-      auto lhs_iter = cudf::detail::make_pair_iterator<T, false>(lhs);
-      auto rhs_iter = cudf::detail::make_pair_iterator<T, true>(rhs);
-      return detail::copy_if_else(
-        true, lhs_iter, lhs_iter + size, rhs_iter, filter, lhs.type(), stream, mr);
-    }
-    auto lhs_iter = cudf::detail::make_pair_iterator<T, false>(lhs);
-    auto rhs_iter = cudf::detail::make_pair_iterator<T, false>(rhs);
+    auto lhs_iter = cudf::detail::make_pair_iterator<T>(lhs);
+    auto rhs_iter = cudf::detail::make_pair_iterator<T>(rhs);
     return detail::copy_if_else(
       false, lhs_iter, lhs_iter + size, rhs_iter, filter, lhs.type(), stream, mr);
   }
@@ -82,24 +64,8 @@ struct copy_if_else_functor_impl<string_view, Left, Right, Filter> {
   {
     using T = string_view;
 
-    if (left_nullable) {
-      if (right_nullable) {
-        auto lhs_iter = cudf::detail::make_pair_iterator<T, true>(lhs);
-        auto rhs_iter = cudf::detail::make_pair_iterator<T, true>(rhs);
-        return strings::detail::copy_if_else(
-          lhs_iter, lhs_iter + size, rhs_iter, filter, stream, mr);
-      }
-      auto lhs_iter = cudf::detail::make_pair_iterator<T, true>(lhs);
-      auto rhs_iter = cudf::detail::make_pair_iterator<T, false>(rhs);
-      return strings::detail::copy_if_else(lhs_iter, lhs_iter + size, rhs_iter, filter, stream, mr);
-    }
-    if (right_nullable) {
-      auto lhs_iter = cudf::detail::make_pair_iterator<T, false>(lhs);
-      auto rhs_iter = cudf::detail::make_pair_iterator<T, true>(rhs);
-      return strings::detail::copy_if_else(lhs_iter, lhs_iter + size, rhs_iter, filter, stream, mr);
-    }
-    auto lhs_iter = cudf::detail::make_pair_iterator<T, false>(lhs);
-    auto rhs_iter = cudf::detail::make_pair_iterator<T, false>(rhs);
+    auto lhs_iter = cudf::detail::make_pair_iterator<T>(lhs);
+    auto rhs_iter = cudf::detail::make_pair_iterator<T>(rhs);
     return strings::detail::copy_if_else(lhs_iter, lhs_iter + size, rhs_iter, filter, stream, mr);
   }
 };
