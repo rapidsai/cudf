@@ -34,6 +34,9 @@ using namespace cudf::test;
 template <typename T>
 using fwc_wrapper = cudf::test::fixed_width_column_wrapper<T>;
 
+// TODO: Maybe test more types.
+using ValidBinTypes = FloatingPointTypes;
+
 // =============================================================================
 // ----- Define standard fixture for all bin tests -----------------------------
 
@@ -72,6 +75,7 @@ struct equal_value
 // ----- test error cases ------------------------------------------------------
 
 /// Left edges type check.
+
 TEST(BinColumnTest, TestInvalidLeft)
 {
     fwc_wrapper<double> left_edges{0, 1, 2, 3, 4, 5, 6, 7, 8, 9};
@@ -81,6 +85,7 @@ TEST(BinColumnTest, TestInvalidLeft)
     EXPECT_THROW(cudf::bin(input, left_edges, cudf::inclusive::YES, right_edges, cudf::inclusive::NO),
             cudf::logic_error);
 };
+
 
 /// Right edges type check.
 TEST(BinColumnTest, TestInvalidRight)
@@ -144,8 +149,7 @@ struct BoundaryExclusionBinTestFixture : public TypedBinTestFixture<T> {
     }
 };
 
-// TODO: Maybe test more types.
-TYPED_TEST_CASE(BoundaryExclusionBinTestFixture, FloatingPointTypes);
+TYPED_TEST_CASE(BoundaryExclusionBinTestFixture, ValidBinTypes);
 
 // Boundary points when both bounds are excluded should be null.
 TYPED_TEST(BoundaryExclusionBinTestFixture, TestNoIncludes)
@@ -193,6 +197,21 @@ TEST(BinColumnTest, TestEmptyInput)
     ASSERT_TRUE(result->size() == 0);
 };
 
+/// Null inputs must map to nulls.
+TEST(BinColumnTest, TestInputWithNulls)
+{
+    fwc_wrapper<float> left_edges{0, 1, 2, 3, 4, 5, 6, 7, 8, 9};
+    fwc_wrapper<float> right_edges{1, 2, 3, 4, 5, 6, 7, 8, 9, 10};
+    fwc_wrapper<float> input{{1.5, 2.5, 3.5, 4.5}, {0, 1, 0, 1}};
+
+    std::unique_ptr<cudf::column> result = cudf::bin(input, left_edges, cudf::inclusive::NO, right_edges, cudf::inclusive::NO);
+    ASSERT_TRUE(result->size() == 4);
+    ASSERT_TRUE(result->null_count() == 2);
+
+    fwc_wrapper<cudf::size_type> expected{{0, 2, 0, 4}, {0, 1, 0, 1}};
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
+};
+
 template <typename T>
 struct FloatingPointBinTestFixture : public TypedBinTestFixture<T> {
     fwc_wrapper<T> left_edges{0.0, 1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0};
@@ -200,12 +219,10 @@ struct FloatingPointBinTestFixture : public TypedBinTestFixture<T> {
     fwc_wrapper<T> input{2.5, 2.5, 2.5, 2.5, 2.5, 2.5, 2.5, 2.5, 2.5, 2.5};
 };
 
-// TODO: Add tests for other numeric types.
 // TODO: Add parameterized/fuzzing tests if we have a consistent way to add those.
 // TODO: Add tests for non-numeric types. Need to decide what types will be supported and how.
-// TODO: Add tests for different inclusion settings.
-// Add test for nulls.
-// Add tests for values outside the bounds.
+// TODO: Add tests for values outside the bounds.
+// TODO: What happens if any bins contain nulls?
 
 TYPED_TEST_CASE(FloatingPointBinTestFixture, FloatingPointTypes);
 
@@ -225,6 +242,20 @@ TYPED_TEST(FloatingPointBinTestFixture, TestFloatingPointData)
     auto begin = result->view().begin<const unsigned int>();
     auto end = result->view().end<const unsigned int>();
     ASSERT_TRUE(thrust::all_of(thrust::device, begin, end, equal_value(2)));
+};
+
+TEST(BinColumnTest, KnownFailure)
+{
+    fwc_wrapper<float> left_edges{3.5, 6.0};
+    fwc_wrapper<float> right_edges{0.999, 3.5};
+    fwc_wrapper<float> input{1, 2, 3, 4, 5, 6};
+
+    std::unique_ptr<cudf::column> result = cudf::bin(input, left_edges, cudf::inclusive::NO, right_edges, cudf::inclusive::YES);
+
+    unsigned int *tmp = (unsigned int *) malloc(6 * sizeof(unsigned int));
+    cudaMemcpy(tmp, result->view().data<unsigned int>(), 6, cudaMemcpyDeviceToHost);
+    printf("The values are %d, %d, %d, %d, %d, %d.\n", tmp[0], tmp[1], tmp[2], tmp[3], tmp[4], tmp[5]);
+
 };
 
 }  // anonymous namespace
