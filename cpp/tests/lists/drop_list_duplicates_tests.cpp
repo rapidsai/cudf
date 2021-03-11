@@ -95,10 +95,16 @@ TEST_F(DropListDuplicatesTest, IntegerTestsNonNull)
 
   // Sliced list column
   auto const list0 = INT_LCW{{1, 2, 3, 2, 3, 2, 3, 2, 3}, {3, 2, 1, 4, 1}, {5}, {10, 8, 9}, {6, 7}};
-  auto const list1 = cudf::slice(list0, {1, 5})[0];
-  // TODO: add a test for cudf::slice(list0, {1, 3})[0] after the issue#7530 is fixed
+  auto const list1 = cudf::slice(list0, {0, 5})[0];
+  auto const list2 = cudf::slice(list0, {1, 5})[0];
+  auto const list3 = cudf::slice(list0, {1, 3})[0];
+  auto const list4 = cudf::slice(list0, {0, 3})[0];
+
   test_once<true>(list0, INT_LCW{{1, 2, 3}, {1, 2, 3, 4}, {5}, {8, 9, 10}, {6, 7}});
-  test_once<true>(list1, INT_LCW{{1, 2, 3, 4}, {5}, {8, 9, 10}, {6, 7}});
+  test_once<true>(list1, INT_LCW{{1, 2, 3}, {1, 2, 3, 4}, {5}, {8, 9, 10}, {6, 7}});
+  test_once<true>(list2, INT_LCW{{1, 2, 3, 4}, {5}, {8, 9, 10}, {6, 7}});
+  test_once<true>(list3, INT_LCW{{1, 2, 3, 4}, {5}});
+  test_once<true>(list4, INT_LCW{{1, 2, 3}, {1, 2, 3, 4}, {5}});
 }
 
 TEST_F(DropListDuplicatesTest, IntegerTestsWithNulls)
