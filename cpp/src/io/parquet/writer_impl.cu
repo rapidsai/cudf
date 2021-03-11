@@ -621,7 +621,7 @@ struct parquet_column_view {
   rmm::device_uvector<uint8_t> _rep_level;
   rmm::device_uvector<uint8_t> _def_level;
   std::vector<uint8_t> _nullability;
-  size_type _data_count;
+  size_type _data_count = 0;
 
   // Dictionary related members
   bool _dictionary_used = false;
