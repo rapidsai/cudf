@@ -35,6 +35,17 @@ template <typename T>
 using fwc_wrapper = cudf::test::fixed_width_column_wrapper<T>;
 
 // =============================================================================
+// ----- Define standard fixture for all bin tests -----------------------------
+
+struct BinTestFixture : public BaseFixture {
+};
+
+template <typename T>
+struct TypedBinTestFixture : public BinTestFixture {
+};
+
+
+// =============================================================================
 // ----- helper functions ------------------------------------------------------
 
 /// A simple struct to be used as a predicate for comparing a sequence to a given value encoded by this struct in algorithms.
@@ -119,6 +130,56 @@ TEST(BinColumnTest, TestEmptyEdges)
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
 };
 
+// ----- test inclusion options -----------------------------------------------
+
+template <typename T>
+struct BoundaryExclusionBinTestFixture : public TypedBinTestFixture<T> {
+    fwc_wrapper<T> left_edges{0, 1, 2, 3, 4};
+    fwc_wrapper<T> right_edges{1, 2, 3, 4, 5};
+    fwc_wrapper<T> input{1, 1};
+
+    std::unique_ptr<cudf::column> bin(cudf::inclusive left_inc, cudf::inclusive right_inc)
+    {
+        return cudf::bin(input, left_edges, left_inc, right_edges, right_inc);
+    }
+};
+
+// TODO: Maybe test more types.
+TYPED_TEST_CASE(BoundaryExclusionBinTestFixture, FloatingPointTypes);
+
+// Boundary points when both bounds are excluded should be null.
+TYPED_TEST(BoundaryExclusionBinTestFixture, TestNoIncludes)
+{
+    auto result = this->bin(cudf::inclusive::NO, cudf::inclusive::NO);
+    ASSERT_TRUE(result->size() == 2);
+    ASSERT_TRUE(result->null_count() == 2);
+
+    fwc_wrapper<cudf::size_type> expected{{0, 0}, {0, 0}};
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
+};
+
+// Boundary point 1 should be in bin 1 [1, 2).
+TYPED_TEST(BoundaryExclusionBinTestFixture, TestIncludeLeft)
+{
+    auto result = this->bin(cudf::inclusive::YES, cudf::inclusive::NO);
+    ASSERT_TRUE(result->size() == 2);
+    ASSERT_TRUE(result->null_count() == 0);
+
+    fwc_wrapper<cudf::size_type> expected{{1, 1}, {1, 1}};
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
+};
+
+// Boundary point 1 should be in bin 0 (0, 1].
+TYPED_TEST(BoundaryExclusionBinTestFixture, TestIncludeRight)
+{
+    auto result = this->bin(cudf::inclusive::NO, cudf::inclusive::YES);
+    ASSERT_TRUE(result->size() == 2);
+    ASSERT_TRUE(result->null_count() == 0);
+
+    fwc_wrapper<cudf::size_type> expected{{0, 0}, {1, 1}};
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
+};
+
 // ----- test valid data ------------------------------------------------------
 
 /// Empty input must return an empty output.
@@ -132,13 +193,8 @@ TEST(BinColumnTest, TestEmptyInput)
     ASSERT_TRUE(result->size() == 0);
 };
 
-
-// Tests on real data.
-struct BinTest : public BaseFixture {
-};
-
 template <typename T>
-struct FloatingPointBinTest : public BinTest {
+struct FloatingPointBinTestFixture : public TypedBinTestFixture<T> {
     fwc_wrapper<T> left_edges{0.0, 1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0};
     fwc_wrapper<T> right_edges{1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 10.0};
     fwc_wrapper<T> input{2.5, 2.5, 2.5, 2.5, 2.5, 2.5, 2.5, 2.5, 2.5, 2.5};
@@ -151,9 +207,9 @@ struct FloatingPointBinTest : public BinTest {
 // Add test for nulls.
 // Add tests for values outside the bounds.
 
-TYPED_TEST_CASE(FloatingPointBinTest, FloatingPointTypes);
+TYPED_TEST_CASE(FloatingPointBinTestFixture, FloatingPointTypes);
 
-TYPED_TEST(FloatingPointBinTest, TestFloatingPointData)
+TYPED_TEST(FloatingPointBinTestFixture, TestFloatingPointData)
 {
     // TODO: For some reason, auto doesn't work here. It _did_ work prior to my
     // turning this into a parameterized test, so my best gues is that some of
