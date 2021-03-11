@@ -101,7 +101,7 @@ TYPED_TEST(PairIteratorTest, mean_var_output)
   std::cout << "expected <mixed_output> = " << expected_value << std::endl;
 
   // GPU test
-  auto it_dev         = d_col->pair_begin<T, true>();
+  auto it_dev         = d_col->pair_begin<T>();
   auto it_dev_squared = thrust::make_transform_iterator(it_dev, transformer);
   auto result         = thrust::reduce(it_dev_squared,
                                it_dev_squared + d_col->size(),
@@ -141,7 +141,7 @@ TYPED_TEST(IteratorTest, nonull_pair_iterator)
   });
 
   // GPU test
-  auto it_dev = d_col->pair_begin<T, false>();
+  auto it_dev = d_col->pair_begin<T>();
   this->iterator_test_thrust(replaced_array, it_dev, host_values.size());
 }
 
@@ -176,11 +176,8 @@ TYPED_TEST(IteratorTest, null_pair_iterator)
                  });
 
   // GPU test
-  auto it_dev = d_col->pair_begin<T, true>();
+  auto it_dev = d_col->pair_begin<T>();
   this->iterator_test_thrust(value_and_validity, it_dev, host_values.size());
-
-  auto it_hasnonull_dev = d_col->pair_begin<T, false>();
-  this->iterator_test_thrust(value_all_valid, it_hasnonull_dev, host_values.size());
 
   auto itb_dev = cudf::detail::make_validity_iterator(*d_col);
   this->iterator_test_thrust(host_bools, itb_dev, host_values.size());

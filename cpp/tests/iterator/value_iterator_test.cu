@@ -345,10 +345,7 @@ TYPED_TEST(IteratorTest, error_handling)
                               *d_col_no_null, cudf::test::make_type_param_scalar<T>(0))),
                             "column with nulls must have a validity bitmask");
 
-  CUDF_EXPECT_THROW_MESSAGE((d_col_no_null->pair_begin<T, true>()),
-                            "Unexpected non-nullable column.");
-  CUDF_EXPECT_NO_THROW((d_col_null->pair_begin<T, false>()));
-  CUDF_EXPECT_NO_THROW((d_col_null->pair_begin<T, true>()));
+  CUDF_EXPECT_NO_THROW((d_col_null->pair_begin<T>()));
 
   // scalar iterator
   using ScalarType = cudf::scalar_type_t<T>;

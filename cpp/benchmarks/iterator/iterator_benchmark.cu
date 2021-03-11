@@ -161,24 +161,24 @@ __device__ thrust::pair<T, bool> operator+(thrust::pair<T, bool> lhs, thrust::pa
                                lhs.second + rhs.second};
 }
 // -----------------------------------------------------------------------------
-template <typename T, bool has_null>
+template <typename T>
 void pair_iterator_bench_cub(cudf::column_view &col,
                              rmm::device_vector<thrust::pair<T, bool>> &result)
 {
   thrust::pair<T, bool> init{0, false};
   auto d_col    = cudf::column_device_view::create(col);
   int num_items = col.size();
-  auto begin    = d_col->pair_begin<T, has_null>();
+  auto begin    = d_col->pair_begin<T>();
   reduce_by_cub(result.begin(), begin, num_items, init);
 }
 
-template <typename T, bool has_null>
+template <typename T>
 void pair_iterator_bench_thrust(cudf::column_view &col,
                                 rmm::device_vector<thrust::pair<T, bool>> &result)
 {
   thrust::pair<T, bool> init{0, false};
   auto d_col = cudf::column_device_view::create(col);
-  auto d_in  = d_col->pair_begin<T, has_null>();
+  auto d_in  = d_col->pair_begin<T>();
   auto d_end = d_in + col.size();
   thrust::reduce(thrust::device, d_in, d_end, init, cudf::DeviceSum{});
 }
@@ -202,11 +202,11 @@ void BM_pair_iterator(benchmark::State &state)
   for (auto _ : state) {
     cuda_event_timer raii(state, true);  // flush_l2_cache = true, stream = 0
     if (cub_or_thrust) {
-      pair_iterator_bench_cub<T, false>(hasnull_T,
-                                        dev_result);  // driven by pair iterator with nulls
+      pair_iterator_bench_cub<T>(hasnull_T,
+                                 dev_result);  // driven by pair iterator with nulls
     } else {
-      pair_iterator_bench_thrust<T, false>(hasnull_T,
-                                           dev_result);  // driven by pair iterator with nulls
+      pair_iterator_bench_thrust<T>(hasnull_T,
+                                    dev_result);  // driven by pair iterator with nulls
     }
   }
   state.SetBytesProcessed(static_cast<int64_t>(state.iterations()) * column_size *
