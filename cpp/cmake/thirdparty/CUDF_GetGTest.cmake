@@ -33,6 +33,11 @@ function(find_and_configure_gtest VERSION)
         add_library(GTest::gtest_main ALIAS gtest_main)
         add_library(GTest::gmock_main ALIAS gmock_main)
     endif()
+    # Make sure consumers of cudf can also see GTest::* targets
+    fix_cmake_global_defaults(GTest::gtest)
+    fix_cmake_global_defaults(GTest::gmock)
+    fix_cmake_global_defaults(GTest::gtest_main)
+    fix_cmake_global_defaults(GTest::gmock_main)
     if(GTest_ADDED)
         install(TARGETS gmock
                         gtest

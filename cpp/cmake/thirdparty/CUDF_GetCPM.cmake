@@ -17,3 +17,12 @@ if(NOT (EXISTS ${CPM_DOWNLOAD_LOCATION}))
 endif()
 
 include(${CPM_DOWNLOAD_LOCATION})
+
+function(fix_cmake_global_defaults target)
+    if(TARGET ${target})
+        get_target_property(_is_imported ${target} IMPORTED)
+        if(_is_imported)
+            set_target_properties(${target} PROPERTIES IMPORTED_GLOBAL TRUE)
+        endif()
+    endif()
+endfunction()
