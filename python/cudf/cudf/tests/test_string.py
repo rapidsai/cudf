@@ -17,7 +17,7 @@ from cudf import concat
 from cudf.core._compat import PANDAS_GE_110
 from cudf.core.column.string import StringColumn
 from cudf.core.index import StringIndex, as_index
-from cudf.testing.utils import (
+from cudf.testing._utils import (
     DATETIME_TYPES,
     NUMERIC_TYPES,
     assert_eq,

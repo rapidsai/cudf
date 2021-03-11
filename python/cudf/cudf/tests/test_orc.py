@@ -13,7 +13,7 @@ import pytest
 
 import cudf
 from cudf.io.orc import ORCWriter
-from cudf.testing.utils import (
+from cudf.testing._utils import (
     assert_eq,
     gen_rand_series,
     supported_numpy_dtypes,

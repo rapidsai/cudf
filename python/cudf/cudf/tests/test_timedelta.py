@@ -12,7 +12,7 @@ import pytest
 import cudf
 from cudf.core._compat import PANDAS_GE_120
 from cudf.testing import utils as utils
-from cudf.testing.utils import assert_eq, assert_exceptions_equal
+from cudf.testing._utils import assert_eq, assert_exceptions_equal
 
 _TIMEDELTA_DATA = [
     [1000000, 200000, 3000000],

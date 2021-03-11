@@ -21,7 +21,7 @@ import cudf
 from cudf.core._compat import PANDAS_GE_110, PANDAS_GE_120
 from cudf.core.column import column
 from cudf.testing import utils
-from cudf.testing.utils import (
+from cudf.testing._utils import (
     ALL_TYPES,
     DATETIME_TYPES,
     NUMERIC_TYPES,
@@ -5158,8 +5158,8 @@ def test_memory_usage_cat():
     gdf = cudf.from_pandas(df)
 
     expected = (
-        gdf.B._column.cat.categories.__sizeof__()
-        + gdf.B._column.cat.codes.__sizeof__()
+        gdf.B._column.cat().categories.__sizeof__()
+        + gdf.B._column.cat().codes.__sizeof__()
     )
 
     # Check cat column

@@ -9,7 +9,7 @@ import pytest
 
 import cudf
 from cudf import Series
-from cudf.testing.utils import assert_eq, assert_exceptions_equal
+from cudf.testing._utils import assert_eq, assert_exceptions_equal
 
 
 def test_series_map_basic():

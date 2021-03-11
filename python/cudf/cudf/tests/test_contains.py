@@ -5,7 +5,7 @@ import pytest
 
 from cudf import Series
 from cudf.core.index import RangeIndex, as_index
-from cudf.testing.utils import assert_eq
+from cudf.testing._utils import assert_eq
 
 
 def cudf_date_series(start, stop, freq):
