@@ -64,9 +64,11 @@ struct bin_finder
                 value,
                 m_left_comp);
 
-        // Exit early and return sentinel for values not within the interval.
-        if ((bound == m_left_span.begin()) || (bound == m_left_span.end()))
+        // Exit early and return sentinel for values that lie below the interval.
+        if (bound == m_left_span.begin())
+        {
             return NULL_VALUE;
+        }
 
         // We must subtract 1 because lower bound returns the first index
         // _greater than_ the value. This is safe because bound == m_left edges
@@ -206,10 +208,12 @@ std::unique_ptr<column> bin(column_view const& input,
                             inclusive right_inclusive,
                             rmm::mr::device_memory_resource * mr)
 {
-    // TODO: Check if we want an empty set of bins to be an error, or if it should just return NULL for all bins.
     CUDF_EXPECTS(input.type() == left_edges.type(), "The input and edge columns must have the same types.");
     CUDF_EXPECTS(input.type() == right_edges.type(), "The input and edge columns must have the same types.");
     CUDF_EXPECTS(left_edges.size() == right_edges.size(), "The left and right edge columns must be of the same length.");
+    // TODO: Decide whether to check `nullable` instead here. Allowing nullable
+    // columns that don't actually contain any null values seems safe, but may
+    // not be desirable from an API perspective.
     CUDF_EXPECTS(left_edges.null_count() == 0, "The left edges cannot contain nulls.");
     CUDF_EXPECTS(right_edges.null_count() == 0, "The right edges cannot contain nulls.");
 

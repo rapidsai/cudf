@@ -157,6 +157,21 @@ TEST(BinColumnTest, TestEmptyEdges)
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
 };
 
+// Values outside the bounds should be labeled NULL.
+TEST(BinColumnTest, TestOutOfBoundsInput)
+{
+    fwc_wrapper<float> left_edges{0, 1, 2, 3, 4, 5, 6, 7, 8, 9};
+    fwc_wrapper<float> right_edges{1, 2, 3, 4, 5, 6, 7, 8, 9, 10};
+    fwc_wrapper<float> input{8.5, 9.5, 10.5, 11.5};
+
+    std::unique_ptr<cudf::column> result = cudf::bin(input, left_edges, cudf::inclusive::YES, right_edges, cudf::inclusive::YES);
+    ASSERT_TRUE(result->size() == 4);
+    ASSERT_TRUE(result->null_count() == 2);
+
+    fwc_wrapper<cudf::size_type> expected{{8, 9, 0, 0}, {1, 1, 0, 0}};
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
+};
+
 // ----- test inclusion options -----------------------------------------------
 
 template <typename T>
@@ -173,7 +188,7 @@ struct BoundaryExclusionBinTestFixture : public TypedBinTestFixture<T> {
 
 TYPED_TEST_CASE(BoundaryExclusionBinTestFixture, ValidBinTypes);
 
-// Boundary points when both bounds are excluded should be null.
+// Boundary points when both bounds are excluded should be labeled null.
 TYPED_TEST(BoundaryExclusionBinTestFixture, TestNoIncludes)
 {
     auto result = this->bin(cudf::inclusive::NO, cudf::inclusive::NO);
@@ -245,7 +260,7 @@ struct FloatingPointBinTestFixture : public TypedBinTestFixture<T> {
 // TODO: Add tests for non-numeric types. Need to decide what types will be supported and how.
 // TODO: Add tests for values outside the bounds.
 
-TYPED_TEST_CASE(FloatingPointBinTestFixture, FloatingPointTypes);
+TYPED_TEST_CASE(FloatingPointBinTestFixture, ValidBinTypes);
 
 TYPED_TEST(FloatingPointBinTestFixture, TestFloatingPointData)
 {
