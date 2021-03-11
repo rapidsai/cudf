@@ -200,6 +200,15 @@ class Merge(object):
             result = self._sort_result(result)
         return result
 
+    def preprocess_merge_params(
+        self, on, left_on, right_on, lsuffix, rsuffix, suffixes
+    ):
+        """
+        Translate a valid configuration of user input parameters into
+        the subset of input configurations handled by the cython layer.
+        Apply suffixes to columns.
+        """
+
     def _compute_join_keys(self):
         # Computes self._keys
         if (
