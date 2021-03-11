@@ -365,19 +365,19 @@ public final class Table implements AutoCloseable {
 
   /**
    * Setup everything to write Arrow IPC formatted data to a file.
-   * @param columnNames names that correspond to the table columns
+   * @param columnMeta column metadata that correspond to the table columns
    * @param filename local output path
    * @return a handle that is used in later calls to writeArrowIPCChunk and writeArrowIPCEnd.
    */
-  private static native long writeArrowIPCFileBegin(String[] columnNames, String filename);
+  private static native long writeArrowIPCFileBegin(ColumnMetadata[] columnMeta, String filename);
 
   /**
    * Setup everything to write Arrow IPC formatted data to a buffer.
-   * @param columnNames names that correspond to the table columns
+   * @param columnMeta column metadata that correspond to the table columns
    * @param consumer consumer of host buffers produced.
    * @return a handle that is used in later calls to writeArrowIPCChunk and writeArrowIPCEnd.
    */
-  private static native long writeArrowIPCBufferBegin(String[] columnNames,
+  private static native long writeArrowIPCBufferBegin(ColumnMetadata[] columnMeta,
                                                       HostBufferConsumer consumer);
 
   /**
@@ -988,7 +988,7 @@ public final class Table implements AutoCloseable {
       this.consumer = null;
       this.maxChunkSize = options.getMaxChunkSize();
       this.handle = writeArrowIPCFileBegin(
-              options.getColumnNames(),
+              options.getColumnMetadata(),
               outputFile.getAbsolutePath());
     }
 
@@ -998,7 +998,7 @@ public final class Table implements AutoCloseable {
       this.consumer = consumer;
       this.maxChunkSize = options.getMaxChunkSize();
       this.handle = writeArrowIPCBufferBegin(
-              options.getColumnNames(),
+              options.getColumnMetadata(),
               consumer);
     }
 

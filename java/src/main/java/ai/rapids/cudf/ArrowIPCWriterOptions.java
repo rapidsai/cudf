@@ -1,6 +1,6 @@
 /*
  *
- *  Copyright (c) 2020, NVIDIA CORPORATION.
+ *  Copyright (c) 2020-2021, NVIDIA CORPORATION.
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -18,6 +18,10 @@
 
 package ai.rapids.cudf;
 
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.List;
+
 /**
  * Settings for writing Arrow IPC data.
  */
@@ -34,11 +38,13 @@ public class ArrowIPCWriterOptions extends WriterOptions {
 
   private final long size;
   private final DoneOnGpu callback;
+  private final ColumnMetadata[] columnMeta;
 
   private ArrowIPCWriterOptions(Builder builder) {
     super(builder);
     this.size = builder.size;
     this.callback = builder.callback;
+    this.columnMeta = builder.columnMeta.toArray(new ColumnMetadata[builder.columnMeta.size()]);
   }
 
   public long getMaxChunkSize() {
@@ -49,9 +55,23 @@ public class ArrowIPCWriterOptions extends WriterOptions {
     return callback;
   }
 
+  public ColumnMetadata[] getColumnMetadata() {
+    if (columnMeta == null || columnMeta.length == 0) {
+      // For compatibility. Try building from column names when column meta is empty.
+      // Should remove this once all the callers update to use only column metadata.
+      return Arrays
+              .stream(getColumnNames())
+              .map(ColumnMetadata::new)
+              .toArray(ColumnMetadata[]::new);
+    } else {
+      return columnMeta;
+    }
+  }
+
   public static class Builder extends WriterBuilder<Builder> {
     private long size = -1;
     private DoneOnGpu callback = (ignored) -> {};
+    private List<ColumnMetadata> columnMeta = new ArrayList<>();
 
     public Builder withMaxChunkSize(long size) {
       this.size = size;
@@ -64,6 +84,15 @@ public class ArrowIPCWriterOptions extends WriterOptions {
       } else {
         this.callback = callback;
       }
+      return this;
+    }
+
+    /**
+     * This should be used instead of `withColumnNames` when there are children
+     * columns of struct type.
+     */
+    public Builder withColumnMetadata(ColumnMetadata... columnMeta) {
+      this.columnMeta.addAll(Arrays.asList(columnMeta));
       return this;
     }
 

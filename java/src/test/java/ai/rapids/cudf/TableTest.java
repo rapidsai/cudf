@@ -4056,15 +4056,38 @@ public class TableTest extends CudfTestBase {
   }
 
   private Table getExpectedFileTable() {
-    return new TestBuilder()
-        .column(true, false, false, true, false)
-        .column(5, 1, 0, 2, 7)
-        .column(new Byte[]{2, 3, 4, 5, 9})
-        .column(3l, 9l, 4l, 2l, 20l)
-        .column("this", "is", "a", "test", "string")
-        .column(1.0f, 3.5f, 5.9f, 7.1f, 9.8f)
-        .column(5.0d, 9.5d, 0.9d, 7.23d, 2.8d)
-        .build();
+    return getExpectedFileTable(false);
+  }
+
+  private Table getExpectedFileTable(boolean withNestedColumns) {
+    TestBuilder tb = new TestBuilder()
+            .column(true, false, false, true, false)
+            .column(5, 1, 0, 2, 7)
+            .column(new Byte[]{2, 3, 4, 5, 9})
+            .column(3l, 9l, 4l, 2l, 20l)
+            .column("this", "is", "a", "test", "string")
+            .column(1.0f, 3.5f, 5.9f, 7.1f, 9.8f)
+            .column(5.0d, 9.5d, 0.9d, 7.23d, 2.8d);
+    if (withNestedColumns) {
+      StructType nestedType = new StructType(true,
+              new BasicType(false, DType.INT32), new BasicType(false, DType.STRING));
+      tb.column(nestedType,
+            struct(1, "k1"), struct(2, "k2"), struct(3, "k3"),
+            struct(4, "k4"), new HostColumnVector.StructData((List) null))
+        .column(new ListType(false, new BasicType(false, DType.INT32)),
+                Arrays.asList(1, 2),
+                Arrays.asList(3, 4),
+                Arrays.asList(5),
+                Arrays.asList(6, 7),
+                Arrays.asList(8, 9, 10))
+        .column(new ListType(false, nestedType),
+            Arrays.asList(struct(1, "k1"), struct(2, "k2"), struct(3, "k3")),
+            Arrays.asList(struct(4, "k4"), struct(5, "k5")),
+            Arrays.asList(struct(6, "k6")),
+            Arrays.asList(new HostColumnVector.StructData((List) null)),
+            Arrays.asList());
+    }
+    return tb.build();
   }
 
   private Table getExpectedFileTableWithDecimals() {
@@ -4272,10 +4295,20 @@ public class TableTest extends CudfTestBase {
 
   @Test
   void testArrowIPCWriteToBufferChunked() {
-    try (Table table0 = getExpectedFileTable();
+    try (Table table0 = getExpectedFileTable(true);
          MyBufferConsumer consumer = new MyBufferConsumer()) {
+      ColumnMetadata[] colMeta = Arrays.asList("first", "second", "third", "fourth", "fifth",
+              "sixth", "seventh").stream().map(ColumnMetadata::new)
+              .toArray(ColumnMetadata[]::new);
+      ColumnMetadata structCM = new ColumnMetadata("eight");
+      structCM.addChildren(new ColumnMetadata("id"), new ColumnMetadata("name"));
+      ColumnMetadata arrayPriCM = new ColumnMetadata("nine");
+      arrayPriCM.addChildren(new ColumnMetadata("aid"));
+      ColumnMetadata arrayStructCM = new ColumnMetadata("ten");
+      arrayStructCM.addChildren(structCM);
       ArrowIPCWriterOptions options = ArrowIPCWriterOptions.builder()
-              .withColumnNames("first", "second", "third", "fourth", "fifth", "sixth", "seventh")
+              .withColumnMetadata(colMeta)
+              .withColumnMetadata(structCM, arrayPriCM, arrayStructCM)
               .build();
       try (TableWriter writer = Table.writeArrowIPCChunked(options, consumer)) {
         writer.write(table0);
