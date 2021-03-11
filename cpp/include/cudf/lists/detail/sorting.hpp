@@ -28,11 +28,12 @@ namespace detail {
  *
  * @param stream CUDA stream used for device memory operations and kernel launches.
  */
-std::unique_ptr<column> sort_lists(lists_column_view const& input,
-                                   order column_order,
-                                   null_order null_precedence,
-                                   rmm::cuda_stream_view stream,
-                                   rmm::mr::device_memory_resource* mr);
+std::unique_ptr<column> sort_lists(
+  lists_column_view const& input,
+  order column_order,
+  null_order null_precedence,
+  rmm::cuda_stream_view stream,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 }  // namespace detail
 }  // namespace lists
 }  // namespace cudf
