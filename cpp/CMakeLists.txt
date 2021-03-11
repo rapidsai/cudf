@@ -514,6 +514,8 @@ install(TARGETS cudftestutil
         DESTINATION lib
         EXPORT cudf-targets)
 
+add_library(cudf::cudftestutil ALIAS cudftestutil)
+
 ###################################################################################################
 # - add tests -------------------------------------------------------------------------------------
 
