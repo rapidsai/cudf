@@ -32,7 +32,13 @@ namespace cudf {
  */
 
 /**
- * @brief Returns the indices of the matching rows resulting from an inner join between the specified tables. 
+ * @brief Returns a pair of row index vectors corresponding to an
+ * inner join between the specified tables.
+ *
+ * The first returned vector contains the row indices from the left
+ * table that have a match in the right table (in unspecified order).
+ * The corresponding values in the second returned vector are
+ * the matched row indices from the right table.
  *
  * @code{.pseudo}
  *     Left: {{0, 1, 2}}
@@ -46,13 +52,13 @@ namespace cudf {
  * @throw cudf::logic_error if number of elements in `left_keys` or `right_keys`
  * mismatch.
  *
- * @param[in] left A table representing the keys of the left table of the join
- * @param[in] right A table representing  the keys of the right table of the join
+ * @param[in] left_keys The left table
+ * @param[in] right_keys The right table
  * @param[in] compare_nulls controls whether null join-key values
  * should match or not.
  * @param mr Device memory resource used to allocate the returned table and columns' device memory
  *
- * @return A pair of columns [`left_indices`, `right_indices`] that can be used to construct
+ * @return A pair of vectors [`left_indices`, `right_indices`] that can be used to construct
  * the result of performing an inner join between two tables with `left_keys` and `right_keys`
  * as the join keys .
  */
@@ -109,10 +115,14 @@ std::unique_ptr<cudf::table> inner_join(
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
- * @brief Returns the row indices that can be used to construct
- * the result of performing a left join between two tables.
- * For rows in the right table that do not have a match in the
- * left table, the row index is an unspecified out-of-bounds value.
+ * @brief Returns a pair of row index vectors corresponding to a
+ * left join between the specified tables.
+ *
+ * The first returned vector contains all the row indices from the left
+ * table (in unspecified order). The corresponding value in the
+ * second returned vector is either (1) the row index of the matched row
+ * from the right table, if there is a match  or  (2) an unspecified
+ * out-of-bounds value.
  *
  * @code{.pseudo}
  *     Left: {{0, 1, 2}}
@@ -126,13 +136,13 @@ std::unique_ptr<cudf::table> inner_join(
  * @throw cudf::logic_error if number of elements in `left_keys` or `right_keys`
  * mismatch.
  *
- * @param[in] left A table representing the keys of the left table of the join
- * @param[in] right A table representing  the keys of the right table of the join
+ * @param[in] left_keys The left table
+ * @param[in] right_keys The right table
  * @param[in] compare_nulls controls whether null join-key values
  * should match or not.
  * @param mr Device memory resource used to allocate the returned table and columns' device memory
  *
- * @return A pair of columns [`left_indices`, `right_indices`] that can be used to construct
+ * @return A pair of vectors [`left_indices`, `right_indices`] that can be used to construct
  * the result of performing a left join between two tables with `left_keys` and `right_keys`
  * as the join keys .
  */
@@ -197,8 +207,13 @@ std::unique_ptr<cudf::table> left_join(
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
- * @brief Returns the row indices that can be used to construct
- * the result of performing a full join between two tables.
+ * @brief Returns a pair of row index vectors corresponding to a
+ * full join between the specified tables.
+ *
+ * Taken pairwise, the values from the returned vectors are one of:
+ * (1) row indices corresponding to matching rows from the left and
+ * right tables, (2) a row index and an unspecified out-of-bounds value,
+ * representing a row from one table without a match in the other.
  *
  * @code{.pseudo}
  *     Left: {{0, 1, 2}}
@@ -212,13 +227,13 @@ std::unique_ptr<cudf::table> left_join(
  * @throw cudf::logic_error if number of elements in `left_keys` or `right_keys`
  * mismatch.
  *
- * @param[in] left A table representing the keys of the left table of the join
- * @param[in] right A table representing  the keys of the right table of the join
+ * @param[in] left The left table
+ * @param[in] right The right table
  * @param[in] compare_nulls controls whether null join-key values
  * should match or not.
  * @param mr Device memory resource used to allocate the returned table and columns' device memory
  *
- * @return A pair of columns [`left_indices`, `right_indices`] that can be used to construct
+ * @return A pair of vectors [`left_indices`, `right_indices`] that can be used to construct
  * the result of performing a full join between two tables with `left_keys` and `right_keys`
  * as the join keys .
  */
@@ -283,6 +298,39 @@ std::unique_ptr<cudf::table> full_join(
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
+ * @brief Returns a vector of row indices corresponding to a left semi join
+ * between the specified tables.
+ *
+ * The returned vector contains the row indices from the left table
+ * for which there is a matching row in the right table.
+ *
+ * @code{.pseudo}
+ *          TableA: {{0, 1, 2}}
+ *          TableB: {{1, 2, 3}}
+ *          right_on: {1}
+ * Result: {1, 2}
+ * @endcode
+ *
+ * @throw cudf::logic_error if number of columns in either
+ * `left_keys` or `right_keys` table is 0 or exceeds MAX_JOIN_SIZE
+ *
+ * @param[in] left_keys The left table
+ * @param[in] right_keys The right table
+ * @param[in] compare_nulls controls whether null join-key values
+ * should match or not.
+ * @param mr Device memory resource used to allocate the returned table and columns' device memory
+ *
+ * @return A vector `left_indices` that can be used to construct
+ * the result of performing a left semi join between two tables with
+ * `left_keys` and `right_keys` as the join keys .
+ */
+std::unique_ptr<rmm::device_uvector<size_type>> left_semi_join(
+  cudf::table_view const& left_keys,
+  cudf::table_view const& right_keys,
+  null_equality compare_nulls         = null_equality::EQUAL,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+
+/**
  * @brief Performs a left semi join on the specified columns of two
  * tables (`left`, `right`)
  *
@@ -331,39 +379,31 @@ std::unique_ptr<cudf::table> left_semi_join(
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
- * @brief Returns the row indices that can be used to construct
- * the result of performing a left semi join between two tables.
+ * @brief Returns a vector of row indices corresponding to a left anti join
+ * between the specified tables.
+ *
+ * The returned vector contains the row indices from the left table
+ * for which there is no matching row in the right table.
  *
  * @code{.pseudo}
  *          TableA: {{0, 1, 2}}
- *          TableB: {{1, 2, 3}, {1, 2, 5}}
- *          left_on: {0}
- *          right_on: {1}
- * Result: {1, 2}
- *
- *          TableA {{0, 1, 2}, {1, 2, 5}}
- *          TableB {{1, 2, 3}}
- *          left_on: {0}
- *          right_on: {0}
- * Result: {1, 2}
+ *          TableB: {{1, 2, 3}}
+ * Result: {0}
  * @endcode
  *
- * @throw cudf::logic_error if number of elements in `left_on` or `right_on`
- * mismatch.
- * @throw cudf::logic_error if number of columns in either `left` or `right`
- * table is 0 or exceeds MAX_JOIN_SIZE
+ * @throw cudf::logic_error if the number of columns in either `left_keys` or `right_keys` is 0
  *
- * @param[in] left A table representing the keys of the left table of the join
- * @param[in] right A table representing  the keys of the right table of the join
+ * @param[in] left_keys The left table
+ * @param[in] right_keys The right table
  * @param[in] compare_nulls controls whether null join-key values
  * should match or not.
  * @param mr Device memory resource used to allocate the returned table and columns' device memory
  *
  * @return A column `left_indices` that can be used to construct
- * the result of performing a left semi join between two tables with
+ * the result of performing a left anti join between two tables with
  * `left_keys` and `right_keys` as the join keys .
  */
-std::unique_ptr<rmm::device_uvector<size_type>> left_semi_join(
+std::unique_ptr<rmm::device_uvector<size_type>> left_anti_join(
   cudf::table_view const& left_keys,
   cudf::table_view const& right_keys,
   null_equality compare_nulls         = null_equality::EQUAL,
@@ -417,42 +457,6 @@ std::unique_ptr<cudf::table> left_anti_join(
   cudf::table_view const& right,
   std::vector<cudf::size_type> const& left_on,
   std::vector<cudf::size_type> const& right_on,
-  null_equality compare_nulls         = null_equality::EQUAL,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
-
-/**
- * @brief Returns the row indices that can be used to construct
- * the result of performing a left anti join between two tables.
- *
- * @code{.pseudo}
- *          TableA: {{0, 1, 2}}
- *          TableB: {{1, 2, 3},  {1, 2, 5}}
- *          left_on: {0}
- *          right_on: {1}
- * Result: {0}
- *
- *          TableA: {{0, 1, 2}, {1, 2, 5}}
- *          TableB: {{1, 2, 3}}
- *          left_on: {0}
- *          right_on: {0}
- * Result: {0}
- * @endcode
- *
- * @throw cudf::logic_error if the number of columns in either `left_keys` or `right_keys` is 0
- *
- * @param[in] left A table representing the keys of the left table of the join
- * @param[in] right A table representing  the keys of the right table of the join
- * @param[in] compare_nulls controls whether null join-key values
- * should match or not.
- * @param mr Device memory resource used to allocate the returned table and columns' device memory
- *
- * @return A column `left_indices` that can be used to construct
- * the result of performing a left anti join between two tables with
- * `left_keys` and `right_keys` as the join keys .
- */
-std::unique_ptr<rmm::device_uvector<size_type>> left_anti_join(
-  cudf::table_view const& left_keys,
-  cudf::table_view const& right_keys,
   null_equality compare_nulls         = null_equality::EQUAL,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
