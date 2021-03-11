@@ -60,8 +60,8 @@ struct store_result_functor {
     if (grouped_values)
       return grouped_values->view();
     else if (sorted_values)
-      // TODO (dm): When we implement scan, it wouldn't be ok to return sorted
-      //            values when asked for grouped values. Change this then.
+      // In scan, it wouldn't be ok to return sorted values when asked for grouped values.
+      // It's overridden in scan implementation.
       return sorted_values->view();
     else
       return (grouped_values = helper.grouped_values(values))->view();

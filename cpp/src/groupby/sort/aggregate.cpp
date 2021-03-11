@@ -52,7 +52,7 @@ namespace detail {
  * memoised sorted and/or grouped values and re-using will save on computation
  * of these values.
  */
-struct aggregrate_result_functor : store_result_functor {
+struct aggregrate_result_functor final : store_result_functor {
   using store_result_functor::store_result_functor;
   template <aggregation::Kind k>
   void operator()(aggregation const& agg)
