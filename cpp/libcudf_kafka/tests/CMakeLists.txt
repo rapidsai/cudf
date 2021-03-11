@@ -21,7 +21,7 @@ function(ConfigureTest CMAKE_TEST_NAME )
     add_executable(${CMAKE_TEST_NAME} ${ARGN})
     set_target_properties(${CMAKE_TEST_NAME}
         PROPERTIES RUNTIME_OUTPUT_DIRECTORY "$<BUILD_INTERFACE:${CUDF_BINARY_DIR}/gtests>")
-    target_link_libraries(${CMAKE_TEST_NAME} PRIVATE GTest::gmock_main GTest::gtest_main)
+    target_link_libraries(${CMAKE_TEST_NAME} PRIVATE GTest::gmock_main GTest::gtest_main cudf_kafka)
     target_include_directories(${CMAKE_CURRENT_SOURCE_DIR}/../include)
     add_test(NAME ${CMAKE_TEST_NAME} COMMAND ${CMAKE_TEST_NAME})
 endfunction()
