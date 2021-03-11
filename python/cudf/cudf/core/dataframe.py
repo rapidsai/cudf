@@ -5733,7 +5733,8 @@ class DataFrame(Frame, Serializable):
             values = values.reindex(self.index)
 
             result = DataFrame()
-
+            # TODO: propagate nulls through isin
+            # https://github.com/rapidsai/cudf/issues/7556
             for col in self._data.names:
                 if isinstance(
                     self[col]._column, cudf.core.column.CategoricalColumn
