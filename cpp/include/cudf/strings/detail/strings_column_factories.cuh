@@ -27,6 +27,7 @@
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
 
+#include <thrust/binary_search.h>
 #include <thrust/for_each.h>
 #include <thrust/transform_reduce.h>
 
@@ -34,7 +35,27 @@ namespace cudf {
 namespace strings {
 namespace detail {
 
-// Create a strings-type column from iterators of pointer/size pairs
+/**
+ * @brief Average string byte-length threshold for deciding character-level
+ * vs. row-level parallel algorithm.
+ *
+ * This value was determined by running the factory_benchmark against different
+ * string lengths and observing the point where the performance is faster for
+ * long strings.
+ */
+constexpr size_type FACTORY_BYTES_PER_ROW_THRESHOLD = 64;
+
+/**
+ * @brief Create a strings-type column from iterators of pointer/size pairs
+ *
+ * @tparam IndexPairIterator iterator over type `pair<char const*,size_type>` values
+ *
+ * @param begin First string row (inclusive)
+ * @param end Last string row (exclusive)
+ * @param stream CUDA stream used for device memory operations
+ * @param mr  Device memory resource used to allocate the returned column's device memory
+ * @return New strings column
+ */
 template <typename IndexPairIterator>
 std::unique_ptr<column> make_strings_column(IndexPairIterator begin,
                                             IndexPairIterator end,
@@ -51,7 +72,7 @@ std::unique_ptr<column> make_strings_column(IndexPairIterator begin,
   auto size_checker = [] __device__(string_index_pair const& item) {
     return (item.first != nullptr) ? item.second : 0;
   };
-  size_t bytes = thrust::transform_reduce(
+  size_t const bytes = thrust::transform_reduce(
     rmm::exec_policy(stream), begin, end, size_checker, 0, thrust::plus<size_t>());
   CUDF_EXPECTS(bytes < static_cast<std::size_t>(std::numeric_limits<size_type>::max()),
                "total size of strings is too large for cudf column");
@@ -65,26 +86,50 @@ std::unique_ptr<column> make_strings_column(IndexPairIterator begin,
     offsets_transformer_itr, offsets_transformer_itr + strings_count, stream, mr);
 
   // create null mask
-  auto validator  = [] __device__(string_index_pair const item) { return item.first != nullptr; };
-  auto new_nulls  = cudf::detail::valid_if(begin, end, validator, stream, mr);
-  auto null_count = new_nulls.second;
+  auto validator = [] __device__(string_index_pair const item) { return item.first != nullptr; };
+  auto new_nulls = cudf::detail::valid_if(begin, end, validator, stream, mr);
+  auto const null_count = new_nulls.second;
   auto null_mask =
     (null_count > 0) ? std::move(new_nulls.first) : rmm::device_buffer{0, stream, mr};
 
   // build chars column
   auto chars_column =
     strings::detail::create_chars_child_column(strings_count, null_count, bytes, stream, mr);
-  auto d_chars    = chars_column->mutable_view().template data<char>();
-  auto copy_chars = [d_chars] __device__(auto item) {
-    string_index_pair str = thrust::get<0>(item);
-    size_type offset      = thrust::get<1>(item);
-    if (str.first != nullptr) memcpy(d_chars + offset, str.first, str.second);
-  };
-  thrust::for_each_n(rmm::exec_policy(stream),
-                     thrust::make_zip_iterator(
-                       thrust::make_tuple(begin, offsets_column->view().template begin<int32_t>())),
-                     strings_count,
-                     copy_chars);
+  auto d_chars = chars_column->mutable_view().template data<char>();
+
+  // use a character-parallel kernel for long string lengths
+  auto const avg_bytes_per_row = bytes / std::max(strings_count - null_count, 1);
+  if (avg_bytes_per_row > FACTORY_BYTES_PER_ROW_THRESHOLD) {
+    auto d_offsets = offsets_column->view().template data<int32_t>();
+    // this algorithm is based on a similar one used in strings::detail::gather()
+    auto copy_chars = [begin, d_offsets, strings_count, d_chars] __device__(size_type out_idx) {
+      auto const next_row =
+        thrust::upper_bound(thrust::seq, d_offsets, d_offsets + strings_count + 1, out_idx);
+      auto const out_row = thrust::distance(d_offsets, next_row) - 1;
+      // get the corresponding pair
+      string_index_pair const in_row = begin[out_row];
+      if (in_row.first && in_row.second) {
+        auto const offset = out_idx - d_offsets[out_row];
+        d_chars[out_idx]  = in_row.first[offset];
+      }
+    };
+    thrust::for_each_n(rmm::exec_policy(stream),
+                       thrust::counting_iterator<size_type>(0),
+                       static_cast<size_type>(bytes),
+                       copy_chars);
+  } else {
+    // this approach is 2-3x faster for large number smaller string lengths
+    auto copy_chars = [d_chars] __device__(auto item) {
+      string_index_pair const str = thrust::get<0>(item);
+      size_type const offset      = thrust::get<1>(item);
+      if (str.first != nullptr) memcpy(d_chars + offset, str.first, str.second);
+    };
+    thrust::for_each_n(rmm::exec_policy(stream),
+                       thrust::make_zip_iterator(thrust::make_tuple(
+                         begin, offsets_column->view().template begin<int32_t>())),
+                       strings_count,
+                       copy_chars);
+  }
 
   return make_strings_column(strings_count,
                              std::move(offsets_column),
@@ -95,7 +140,22 @@ std::unique_ptr<column> make_strings_column(IndexPairIterator begin,
                              mr);
 }
 
-// Create a strings-type column from iterators to chars, offsets, and bitmask.
+/**
+ * @brief Create a strings-type column from iterators to chars, offsets, and bitmask.
+ *
+ * @tparam CharIterator iterator over character bytes (int8)
+ * @tparam OffsetIterator iterator over offset values (size_type)
+ *
+ * @param chars_begin First character byte (inclusive)
+ * @param chars_end Last character byte (exclusive)
+ * @param offset_begin First offset value (inclusive)
+ * @param offset_end Last offset value (exclusive)
+ * @param null_count Number of null rows
+ * @param null_mask The validity bitmask in Arrow format
+ * @param stream CUDA stream used for device memory operations
+ * @param mr  Device memory resource used to allocate the returned column's device memory
+ * @return New strings column
+ */
 template <typename CharIterator, typename OffsetIterator>
 std::unique_ptr<column> make_strings_column(CharIterator chars_begin,
                                             CharIterator chars_end,
