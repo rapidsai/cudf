@@ -188,10 +188,10 @@ auto make_null_replacement_iterator(column_device_view const& column,
  * @return auto Iterator that returns valid column elements, and validity of the
  * element in a pair
  */
-template <typename Element, bool has_nulls = false>
+template <typename Element>
 auto make_pair_iterator(column_device_view const& column)
 {
-  return column.pair_begin<Element, has_nulls>();
+  return column.pair_begin<Element>();
 }
 
 /**
@@ -436,7 +436,7 @@ struct scalar_representation_pair_accessor : public scalar_value_accessor<Elemen
  * @param scalar_value The scalar to iterate
  * @return auto Iterator that returns scalar, and validity of the scalar in a pair
  */
-template <typename Element, bool = false>
+template <typename Element>
 auto inline make_pair_iterator(scalar const& scalar_value)
 {
   CUDF_EXPECTS(type_id_matches_device_storage_type<Element>(scalar_value.type().id()),

@@ -240,7 +240,7 @@ class alignas(16) column_device_view_base {
 // Forward declaration
 template <typename T>
 struct value_accessor;
-template <typename T, bool has_nulls>
+template <typename T>
 struct pair_accessor;
 template <typename T, bool has_nulls>
 struct pair_rep_accessor;
@@ -332,9 +332,8 @@ class alignas(16) column_device_view : public detail::column_device_view_base {
   /**
    * @brief Pair iterator for navigating this column
    */
-  template <typename T, bool has_nulls>
-  using const_pair_iterator =
-    thrust::transform_iterator<detail::pair_accessor<T, has_nulls>, count_it>;
+  template <typename T>
+  using const_pair_iterator = thrust::transform_iterator<detail::pair_accessor<T>, count_it>;
 
   /**
    * @brief Pair rep iterator for navigating this column
@@ -361,11 +360,10 @@ class alignas(16) column_device_view : public detail::column_device_view_base {
    * `nullable() == false`
    * @throws cudf::logic_error if column datatype and Element type mismatch.
    */
-  template <typename T, bool has_nulls>
-  const_pair_iterator<T, has_nulls> pair_begin() const
+  template <typename T>
+  const_pair_iterator<T> pair_begin() const
   {
-    return const_pair_iterator<T, has_nulls>{count_it{0},
-                                             detail::pair_accessor<T, has_nulls>{*this}};
+    return const_pair_iterator<T>{count_it{0}, detail::pair_accessor<T>{*this}};
   }
 
   /**
@@ -401,11 +399,10 @@ class alignas(16) column_device_view : public detail::column_device_view_base {
    * `nullable() == false`
    * @throws cudf::logic_error if column datatype and Element type mismatch.
    */
-  template <typename T, bool has_nulls>
-  const_pair_iterator<T, has_nulls> pair_end() const
+  template <typename T>
+  const_pair_iterator<T> pair_end() const
   {
-    return const_pair_iterator<T, has_nulls>{count_it{size()},
-                                             detail::pair_accessor<T, has_nulls>{*this}};
+    return const_pair_iterator<T>{count_it{size()}, detail::pair_accessor<T>{*this}};
   }
 
   /**
@@ -924,7 +921,7 @@ struct value_accessor {
  * @tparam T The type of elements in the column
  * @tparam has_nulls boolean indicating to treat the column is nullable
  */
-template <typename T, bool has_nulls = false>
+template <typename T>
 struct pair_accessor {
   column_device_view const col;  ///< column view of column in device
 
@@ -935,13 +932,12 @@ struct pair_accessor {
   pair_accessor(column_device_view const& _col) : col{_col}
   {
     CUDF_EXPECTS(type_id_matches_device_storage_type<T>(col.type().id()), "the data type mismatch");
-    if (has_nulls) { CUDF_EXPECTS(_col.nullable(), "Unexpected non-nullable column."); }
   }
 
   CUDA_DEVICE_CALLABLE
   thrust::pair<T, bool> operator()(cudf::size_type i) const
   {
-    return {col.element<T>(i), (has_nulls ? col.is_valid_nocheck(i) : true)};
+    return {col.element<T>(i), col.is_valid(i)};
   }
 };
 
