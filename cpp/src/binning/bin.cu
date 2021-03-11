@@ -30,6 +30,7 @@
 #include <thrust/execution_policy.h>
 #include <cudf/detail/valid_if.cuh>
 #include <thrust/pair.h>
+#include <limits>
 
 namespace cudf {
 
@@ -37,7 +38,7 @@ namespace cudf {
 // bin.
 // NOTE: In theory if a user decided to specify 2^31 bins this would fail. We
 // could make this an error in Python, but that is such a crazy edge case...
-constexpr size_type NULL_VALUE{-1};
+constexpr size_type NULL_VALUE{std::numeric_limits<size_type>::max()};
 
 namespace detail {
 namespace {
