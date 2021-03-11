@@ -393,7 +393,7 @@ class column_in_metadata {
   void set_name(std::string const& name) { _name = name; }
   void set_nullability(bool nullable) { _nullable = nullable; }
   void set_list_column_as_map() { _list_column_is_map = true; }
-  void enable_int96_timestamps(bool req) { _use_int96_timestamp = req; }
+  void set_int96_timestamps(bool req) { _use_int96_timestamp = req; }
   void set_decimal_precision(uint8_t precision) { _decimal_precision = precision; }
   column_in_metadata& child(size_type i) { return children[i]; }
   column_in_metadata const& child(size_type i) const { return children[i]; }

@@ -129,7 +129,7 @@ LinkedColVector input_table_to_linked_columns(table_view const &table)
  *
  * Added members are:
  * 1. leaf_column: Pointer to leaf linked_column_view which points to the corresponding data stream
- *    of a leaf schema node. For non-leaf strut node, this is nullptr.
+ *    of a leaf schema node. For non-leaf struct node, this is nullptr.
  * 2. stats_dtype: datatype for statistics calculation required for the data stream of a leaf node.
  * 3. ts_scale: scale to multiply or divide timestamp by in order to convert timestamp to parquet
  *    supported types
@@ -471,7 +471,7 @@ struct parquet_column_view {
     path_in_schema = std::vector<std::string>(path.cbegin(), path.cend());
 
     // Calculate max definition level by counting the number of levels that are optional (nullable)
-    // and max repetition level by counting the number of REPEATED levels in this column's heirarchy
+    // and max repetition level by counting the number of REPEATED levels in this column's hierarchy
     _max_def_level   = 0;
     _max_rep_level   = 0;
     curr_schema_node = schema_node;
@@ -495,7 +495,7 @@ struct parquet_column_view {
     }
     _nullability = std::vector<uint8_t>(r_nullability.cbegin(), r_nullability.cend());
     // TODO(cp): Explore doing this for all columns in a single go outside this ctor. Maybe using
-    // hostdevice_vector. Currently this involves a cudamemcpy for each column.
+    // hostdevice_vector. Currently this involves a cudaMemcpyAsync for each column.
     _d_nullability = rmm::device_uvector<uint8_t>(_nullability.size(), stream);
     CUDA_TRY(cudaMemcpyAsync(_d_nullability.data(),
                              _nullability.data(),

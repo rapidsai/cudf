@@ -421,7 +421,7 @@ std::unique_ptr<std::vector<uint8_t>> merge_rowgroup_metadata(
 
 table_input_metadata::table_input_metadata(table_view const& table)
 {
-  // Create a metadata heirarchy using `table`
+  // Create a metadata hierarchy using `table`
   std::function<column_in_metadata(column_view const&)> get_children = [&](column_view const& col) {
     auto col_meta = column_in_metadata{};
     std::transform(

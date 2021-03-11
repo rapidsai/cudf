@@ -1750,8 +1750,8 @@ dremel_data get_dremel_data(column_view h_col,
   uint8_t curr_nesting_level_idx = 0;
 
   auto add_def_at_level = [&](column_view col) {
-    // Add up all def level contributions in this column all the way till the fist list column
-    // appears in the heirarchy or until we get to leaf
+    // Add up all def level contributions in this column all the way till the first list column
+    // appears in the hierarchy or until we get to leaf
     uint32_t def = 0;
     start_at_sub_level.push_back(curr_nesting_level_idx);
     while (col.type().id() == type_id::STRUCT) {
@@ -1770,7 +1770,7 @@ dremel_data get_dremel_data(column_view h_col,
     nesting_levels.push_back(curr_col);
     add_def_at_level(curr_col);
     while (curr_col.type().id() == type_id::STRUCT) {
-      // Go down the heirarchy until we get to the LIST or the leaf level
+      // Go down the hierarchy until we get to the LIST or the leaf level
       curr_col = curr_col.child(0);
     }
     if (curr_col.type().id() == type_id::LIST) {
