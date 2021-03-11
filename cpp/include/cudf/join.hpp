@@ -111,6 +111,7 @@ std::unique_ptr<cudf::table> inner_join(
 /**
  * @brief Returns the row indices that can be used to construct
  * the result of performing a left join between two tables.
+ *
  * For rows in the right table that do not have a match in the
  * left table, the row index is an unspecified out-of-bounds value.
  *
