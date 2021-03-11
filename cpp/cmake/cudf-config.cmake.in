@@ -24,6 +24,7 @@ find_dependency(rmm @CUDF_MIN_VERSION_rmm@)
 find_dependency(Thrust @CUDF_MIN_VERSION_Thrust@)
 find_dependency(dlpack @CUDF_MIN_VERSION_dlpack@)
 find_dependency(libcudacxx @CUDF_MIN_VERSION_libcudacxx@)
+find_dependency(gtest @CUDF_MIN_VERSION_gtest@)
 
 thrust_create_target(cudf::Thrust FROM_OPTIONS)
 
