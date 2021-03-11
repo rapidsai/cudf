@@ -150,7 +150,8 @@ std::unique_ptr<column> code_points(
       return length;
     },
     thrust::plus<size_type>());
-  offsets.set_element(0, 0, stream);
+  size_type const zero = 0;
+  offsets.set_element_async(0, zero, stream);
 
   // the total size is the number of characters in the entire column
   size_type num_characters = offsets.back_element(stream);
