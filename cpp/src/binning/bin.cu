@@ -30,8 +30,9 @@
 #include <thrust/execution_policy.h>
 #include <cudf/copying.hpp>
 #include <cudf/detail/valid_if.cuh>
-#include <cudf/null_mask.hpp>
+#include <cudf/detail/iterator.cuh>
 #include <thrust/tuple.h>
+#include <thrust/pair.h>
 
 namespace cudf {
 
@@ -55,16 +56,12 @@ struct bin_finder
         : m_left_edges(left_edges), m_left_edges_end(left_edges_end), m_right_edges(right_edges)
     {}
 
-    __device__ size_type operator()(const T value) const
+    __device__ size_type operator()(thrust::pair<T, bool> input_value) const
     {
-        // TODO: Is it possible to check for null inputs here?
-        // column_device_view.is_valid seems to be the "officially supported"
-        // option, but even if I passed a view on construction of this struct I
-        // would need an index, which would require basically switching to a
-        // raw for loop masquerading as a thrust call.
-        //if (value == NULL_VALUE)
-        //    return NULL_VALUE;
+        if (!input_value.second)
+            return NULL_VALUE;
 
+        const T value = input_value.first;
         auto bound = thrust::lower_bound(thrust::seq,
                 m_left_edges, m_left_edges_end,
                 value,
@@ -99,7 +96,7 @@ struct filter_null_sentinel
 };
 
 /// Bin the input by the edges in left_edges and right_edges.
-template <typename T, typename StrictWeakOrderingLeft, typename StrictWeakOrderingRight>
+template <typename T, typename StrictWeakOrderingLeft, typename StrictWeakOrderingRight, bool InputIsNullable>
 std::unique_ptr<column> bin(column_view const& input, 
                             column_view const& left_edges,
                             column_view const& right_edges,
@@ -112,7 +109,8 @@ std::unique_ptr<column> bin(column_view const& input,
     cudf::mutable_column_view output_mutable_view = output->mutable_view();
 
     thrust::transform(thrust::device,
-            input.begin<T>(), input.end<T>(),
+            column_device_view::create(input)->pair_begin<T, InputIsNullable>(),
+            column_device_view::create(input)->pair_end<T, InputIsNullable>(),
             output_mutable_view.begin<size_type>(),
             bin_finder<T, StrictWeakOrderingLeft, StrictWeakOrderingRight>(
                 left_edges.begin<T>(), left_edges.end<T>(), right_edges.begin<T>()
@@ -124,10 +122,8 @@ std::unique_ptr<column> bin(column_view const& input,
         output_mutable_view.end<size_type>(),
         filter_null_sentinel()
         );
-    // TODO: Figure out how to compose with the input null mask.
-    //output->set_null_mask(bitmask_and(mask_and_count.first, input->view().null_mask()));
-    output->set_null_mask(mask_and_count.first, mask_and_count.second);
 
+    output->set_null_mask(mask_and_count.first, mask_and_count.second);
     return output;
 }
 
@@ -166,14 +162,28 @@ struct bin_type_dispatcher {
             rmm::mr::device_memory_resource * mr)
     {
         // Using a switch statement might be more appropriate for an enum, but it's far more verbose in this case.
-        if ((left_inclusive == inclusive::YES) && (right_inclusive == inclusive::YES))
-            return detail::bin<T, thrust::less_equal<T>, thrust::less_equal<T> >(input, left_edges, right_edges, mr);
-        if ((left_inclusive == inclusive::YES) && (right_inclusive == inclusive::NO))
-            return detail::bin<T, thrust::less_equal<T>, thrust::less<T> >(input, left_edges, right_edges, mr);
-        if ((left_inclusive == inclusive::NO) && (right_inclusive == inclusive::YES))
-            return detail::bin<T, thrust::less<T>, thrust::less_equal<T> >(input, left_edges, right_edges, mr);
-        if ((left_inclusive == inclusive::NO) && (right_inclusive == inclusive::NO))
-            return detail::bin<T, thrust::less<T>, thrust::less<T> >(input, left_edges, right_edges, mr);
+        if (input.nullable())
+        {
+            if ((left_inclusive == inclusive::YES) && (right_inclusive == inclusive::YES))
+                return detail::bin<T, thrust::less_equal<T>, thrust::less_equal<T>, true>(input, left_edges, right_edges, mr);
+            if ((left_inclusive == inclusive::YES) && (right_inclusive == inclusive::NO))
+                return detail::bin<T, thrust::less_equal<T>, thrust::less<T>, true>(input, left_edges, right_edges, mr);
+            if ((left_inclusive == inclusive::NO) && (right_inclusive == inclusive::YES))
+                return detail::bin<T, thrust::less<T>, thrust::less_equal<T>, true>(input, left_edges, right_edges, mr);
+            if ((left_inclusive == inclusive::NO) && (right_inclusive == inclusive::NO))
+                return detail::bin<T, thrust::less<T>, thrust::less<T>, true>(input, left_edges, right_edges, mr);
+        }
+        else
+        {
+            if ((left_inclusive == inclusive::YES) && (right_inclusive == inclusive::YES))
+                return detail::bin<T, thrust::less_equal<T>, thrust::less_equal<T>, false>(input, left_edges, right_edges, mr);
+            if ((left_inclusive == inclusive::YES) && (right_inclusive == inclusive::NO))
+                return detail::bin<T, thrust::less_equal<T>, thrust::less<T>, false>(input, left_edges, right_edges, mr);
+            if ((left_inclusive == inclusive::NO) && (right_inclusive == inclusive::YES))
+                return detail::bin<T, thrust::less<T>, thrust::less_equal<T>, false>(input, left_edges, right_edges, mr);
+            if ((left_inclusive == inclusive::NO) && (right_inclusive == inclusive::NO))
+                return detail::bin<T, thrust::less<T>, thrust::less<T>, false>(input, left_edges, right_edges, mr);
+        }
 
         CUDF_FAIL("Undefined inclusive setting.");
     }
