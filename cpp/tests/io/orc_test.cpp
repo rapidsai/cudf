@@ -1028,8 +1028,10 @@ TEST_F(OrcStatisticsTest, Basic)
 TEST_F(OrcWriterTest, SlicedValidMask)
 {
   std::vector<const char*> strings;
+  // Need more than 32 elements to reproduce the issue
   for (int i = 0; i < 34; ++i)
     strings.emplace_back("a long string to make sure overflow affects the output");
+  // An element is null only to enforce the output column to be nullable
   auto validity = cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i != 32; });
 
   column_wrapper<cudf::string_view> col{strings.begin(), strings.end(), validity};
@@ -1040,6 +1042,7 @@ TEST_F(OrcWriterTest, SlicedValidMask)
   cudf_io::table_metadata expected_metadata;
   expected_metadata.column_names.emplace_back("col_string");
 
+  // Bug tested here is easiest to reproduce when column_offset % 32 is 31
   std::vector<cudf::size_type> indices{31, 34};
   std::vector<cudf::column_view> sliced_col = cudf::slice(cols[0]->view(), indices);
   cudf::table_view tbl{sliced_col};
