@@ -109,6 +109,28 @@ TEST(BinColumnTest, TestInvalidInput)
             cudf::logic_error);
 };
 
+/// Left edges cannot contain nulls.
+TEST(BinColumnTest, TestLeftEdgesWithNulls)
+{
+    fwc_wrapper<float> left_edges{{0, 1, 2}, {0, 1, 0}};
+    fwc_wrapper<float> right_edges{1, 2, 3};
+    fwc_wrapper<double> input{0.5, 0.5, 0.5, 0.5};
+
+    EXPECT_THROW(cudf::bin(input, left_edges, cudf::inclusive::YES, right_edges, cudf::inclusive::NO),
+            cudf::logic_error);
+};
+
+/// Right edges cannot contain nulls.
+TEST(BinColumnTest, TestRightEdgesWithNulls)
+{
+    fwc_wrapper<float> left_edges{0, 1, 2};
+    fwc_wrapper<float> right_edges{{1, 2, 3}, {0, 1, 0}};
+    fwc_wrapper<double> input{0.5, 0.5, 0.5, 0.5};
+
+    EXPECT_THROW(cudf::bin(input, left_edges, cudf::inclusive::YES, right_edges, cudf::inclusive::NO),
+            cudf::logic_error);
+};
+
 /// Number of left and right edges must match.
 TEST(BinColumnTest, TestMismatchedEdges)
 {
@@ -222,7 +244,6 @@ struct FloatingPointBinTestFixture : public TypedBinTestFixture<T> {
 // TODO: Add parameterized/fuzzing tests if we have a consistent way to add those.
 // TODO: Add tests for non-numeric types. Need to decide what types will be supported and how.
 // TODO: Add tests for values outside the bounds.
-// TODO: What happens if any bins contain nulls?
 
 TYPED_TEST_CASE(FloatingPointBinTestFixture, FloatingPointTypes);
 

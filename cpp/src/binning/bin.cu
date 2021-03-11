@@ -210,6 +210,8 @@ std::unique_ptr<column> bin(column_view const& input,
     CUDF_EXPECTS(input.type() == left_edges.type(), "The input and edge columns must have the same types.");
     CUDF_EXPECTS(input.type() == right_edges.type(), "The input and edge columns must have the same types.");
     CUDF_EXPECTS(left_edges.size() == right_edges.size(), "The left and right edge columns must be of the same length.");
+    CUDF_EXPECTS(left_edges.null_count() == 0, "The left edges cannot contain nulls.");
+    CUDF_EXPECTS(right_edges.null_count() == 0, "The right edges cannot contain nulls.");
 
     // Handle empty inputs.
     if (input.is_empty()) {
