@@ -35,11 +35,13 @@ endif()
 ###################################################################################################
 # - Build options
 
+option(CUDF_USE_ARROW_STATIC "Build static arrow library" OFF)
 option(CUDF_KAFKA_BUILD_TESTS "Build tests for libcudf_kafka" ON)
-option(ARROW_STATIC_LIB "Build static arrow library" OFF)
+option(CUDF_KAFKA_BUILD_BENCHMARKS "Build benchmarks for libcudf_kafka" OFF)
 
 message(VERBOSE "CUDF_KAFKA: Build gtests: ${CUDF_KAFKA_BUILD_TESTS}")
-message(VERBOSE "CUDF_KAFKA: Build Arrow static library: ${ARROW_STATIC_LIB}")
+message(VERBOSE "CUDF_KAFKA: Build benchmarks: ${CUDF_KAFKA_BUILD_BENCHMARKS}")
+message(VERBOSE "CUDF_KAFKA: Build Arrow static library: ${CUDF_USE_ARROW_STATIC}")
 
 ###################################################################################################
 # - compiler options ------------------------------------------------------------------------------
@@ -63,9 +65,11 @@ include(cmake/thirdparty/CUDF_KAFKA_GetCUDF.cmake)
 include(cmake/thirdparty/CUDF_KAFKA_GetRDKafka.cmake)
 
 # # GTests if enabled
-# if (CUDF_KAFKA_BUILD_TESTS)
-#     include(cmake/thirdparty/CUDF_KAFKA_GetGTest.cmake)
-# endif()
+if (CUDF_KAFKA_BUILD_TESTS)
+    # include CTest module -- automatically calls enable_testing()
+    include(CTest)
+    add_subdirectory(tests)
+endif()
 
 ###################################################################################################
 # - include paths ---------------------------------------------------------------------------------

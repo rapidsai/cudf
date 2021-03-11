@@ -14,21 +14,39 @@
 # limitations under the License.
 #=============================================================================
 
+function(cudfkafka_save_if_enabled var)
+    if(CUDF_KAFKA_${var})
+        unset(${var} PARENT_SCOPE)
+        unset(${var} CACHE)
+    endif()
+endfunction()
+
+function(cudfkafka_restore_if_enabled var)
+    if(CUDF_KAFKA_${var})
+        set(${var} ON CACHE INTERNAL "" FORCE)
+    endif()
+endfunction()
+
 function(find_and_configure_cudf VERSION)
+    cudfkafka_save_if_enabled(BUILD_TESTS)
+    cudfkafka_save_if_enabled(BUILD_BENCHMARKS)
     CPMFindPackage(NAME cudf
         VERSION         ${VERSION}
-        GIT_REPOSITORY  https://github.com/rapidsai/cudf.git
-        GIT_TAG         branch-${VERSION}
+        GIT_REPOSITORY  https://github.com/trxcllnt/cudf.git
+        # GIT_TAG         branch-${VERSION}
+        GIT_TAG         fix/cmake-always-export-cudftestutil
         GIT_SHALLOW     TRUE
         SOURCE_SUBDIR   cpp
         OPTIONS         "BUILD_TESTS OFF"
                         "BUILD_BENCHMARKS OFF"
                         "USE_NVTX ${USE_NVTX}"
-                        "ARROW_STATIC_LIB ${ARROW_STATIC_LIB}"
+                        "CUDF_USE_ARROW_STATIC ${CUDF_USE_ARROW_STATIC}"
                         "JITIFY_USE_CACHE ${JITIFY_USE_CACHE}"
                         "CUDA_STATIC_RUNTIME ${CUDA_STATIC_RUNTIME}"
                         "PER_THREAD_DEFAULT_STREAM ${PER_THREAD_DEFAULT_STREAM}"
                         "DISABLE_DEPRECATION_WARNING ${DISABLE_DEPRECATION_WARNING}")
+    cudfkafka_restore_if_enabled(BUILD_TESTS)
+    cudfkafka_restore_if_enabled(BUILD_BENCHMARKS)
 
     if(NOT cudf_BINARY_DIR IN_LIST CMAKE_PREFIX_PATH)
         list(APPEND CMAKE_PREFIX_PATH "${cudf_BINARY_DIR}")
