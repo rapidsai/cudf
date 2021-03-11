@@ -55,6 +55,7 @@ namespace {
 /**
  * @brief Helper for pinned host memory
  */
+
 template <typename T>
 using pinned_buffer = std::unique_ptr<T, decltype(&cudaFreeHost)>;
 
@@ -143,6 +144,227 @@ struct schema_tree_node : public SchemaElement {
   // function construct_schema_tree could be its constructor. It can have method to get the per
   // column nullability given a schema node index corresponding to a leaf schema. Much easier than
   // that is a method to get path in schema, given a leaf node
+};
+
+struct leaf_schema_fn {
+  schema_tree_node &col_schema;
+  LinkedColPtr const &col;
+  column_in_metadata const &col_meta;
+  bool timestamp_is_int96;
+
+  template <typename T>
+  std::enable_if_t<std::is_same<T, bool>::value, void> operator()()
+  {
+    col_schema.type        = Type::BOOLEAN;
+    col_schema.stats_dtype = statistics_dtype::dtype_bool;
+  }
+
+  template <typename T>
+  std::enable_if_t<std::is_same<T, int8_t>::value, void> operator()()
+  {
+    col_schema.type           = Type::INT32;
+    col_schema.converted_type = ConvertedType::INT_8;
+    col_schema.stats_dtype    = statistics_dtype::dtype_int8;
+  }
+
+  template <typename T>
+  std::enable_if_t<std::is_same<T, int16_t>::value, void> operator()()
+  {
+    col_schema.type           = Type::INT32;
+    col_schema.converted_type = ConvertedType::INT_16;
+    col_schema.stats_dtype    = statistics_dtype::dtype_int16;
+  }
+
+  template <typename T>
+  std::enable_if_t<std::is_same<T, int32_t>::value, void> operator()()
+  {
+    col_schema.type        = Type::INT32;
+    col_schema.stats_dtype = statistics_dtype::dtype_int32;
+  }
+
+  template <typename T>
+  std::enable_if_t<std::is_same<T, int64_t>::value, void> operator()()
+  {
+    col_schema.type        = Type::INT64;
+    col_schema.stats_dtype = statistics_dtype::dtype_int64;
+  }
+
+  template <typename T>
+  std::enable_if_t<std::is_same<T, uint8_t>::value, void> operator()()
+  {
+    col_schema.type           = Type::INT32;
+    col_schema.converted_type = ConvertedType::UINT_8;
+    col_schema.stats_dtype    = statistics_dtype::dtype_int8;
+  }
+
+  template <typename T>
+  std::enable_if_t<std::is_same<T, uint16_t>::value, void> operator()()
+  {
+    col_schema.type           = Type::INT32;
+    col_schema.converted_type = ConvertedType::UINT_16;
+    col_schema.stats_dtype    = statistics_dtype::dtype_int16;
+  }
+
+  template <typename T>
+  std::enable_if_t<std::is_same<T, uint32_t>::value, void> operator()()
+  {
+    col_schema.type           = Type::INT32;
+    col_schema.converted_type = ConvertedType::UINT_32;
+    col_schema.stats_dtype    = statistics_dtype::dtype_int32;
+  }
+
+  template <typename T>
+  std::enable_if_t<std::is_same<T, uint64_t>::value, void> operator()()
+  {
+    col_schema.type           = Type::INT64;
+    col_schema.converted_type = ConvertedType::UINT_64;
+    col_schema.stats_dtype    = statistics_dtype::dtype_int64;
+  }
+
+  template <typename T>
+  std::enable_if_t<std::is_same<T, float>::value, void> operator()()
+  {
+    col_schema.type        = Type::FLOAT;
+    col_schema.stats_dtype = statistics_dtype::dtype_float32;
+  }
+
+  template <typename T>
+  std::enable_if_t<std::is_same<T, double>::value, void> operator()()
+  {
+    col_schema.type        = Type::DOUBLE;
+    col_schema.stats_dtype = statistics_dtype::dtype_float64;
+  }
+
+  template <typename T>
+  std::enable_if_t<std::is_same<T, cudf::string_view>::value, void> operator()()
+  {
+    col_schema.type           = Type::BYTE_ARRAY;
+    col_schema.converted_type = ConvertedType::UTF8;
+    col_schema.stats_dtype    = statistics_dtype::dtype_string;
+  }
+
+  template <typename T>
+  std::enable_if_t<std::is_same<T, cudf::timestamp_D>::value, void> operator()()
+  {
+    col_schema.type           = Type::INT32;
+    col_schema.converted_type = ConvertedType::DATE;
+    col_schema.stats_dtype    = statistics_dtype::dtype_int32;
+  }
+
+  template <typename T>
+  std::enable_if_t<std::is_same<T, cudf::timestamp_s>::value, void> operator()()
+  {
+    col_schema.type = (timestamp_is_int96) ? Type::INT96 : Type::INT64;
+    col_schema.converted_type =
+      (timestamp_is_int96) ? ConvertedType::UNKNOWN : ConvertedType::TIMESTAMP_MILLIS;
+    col_schema.stats_dtype = statistics_dtype::dtype_timestamp64;
+    col_schema.ts_scale    = 1000;
+  }
+
+  template <typename T>
+  std::enable_if_t<std::is_same<T, cudf::timestamp_ms>::value, void> operator()()
+  {
+    col_schema.type = (timestamp_is_int96) ? Type::INT96 : Type::INT64;
+    col_schema.converted_type =
+      (timestamp_is_int96) ? ConvertedType::UNKNOWN : ConvertedType::TIMESTAMP_MILLIS;
+    col_schema.stats_dtype = statistics_dtype::dtype_timestamp64;
+  }
+
+  template <typename T>
+  std::enable_if_t<std::is_same<T, cudf::timestamp_us>::value, void> operator()()
+  {
+    col_schema.type = (timestamp_is_int96) ? Type::INT96 : Type::INT64;
+    col_schema.converted_type =
+      (timestamp_is_int96) ? ConvertedType::UNKNOWN : ConvertedType::TIMESTAMP_MICROS;
+    col_schema.stats_dtype = statistics_dtype::dtype_timestamp64;
+  }
+
+  template <typename T>
+  std::enable_if_t<std::is_same<T, cudf::timestamp_ns>::value, void> operator()()
+  {
+    col_schema.type = (timestamp_is_int96) ? Type::INT96 : Type::INT64;
+    col_schema.converted_type =
+      (timestamp_is_int96) ? ConvertedType::UNKNOWN : ConvertedType::TIMESTAMP_MICROS;
+    col_schema.stats_dtype = statistics_dtype::dtype_timestamp64;
+    col_schema.ts_scale    = -1000;  // negative value indicates division by absolute value
+  }
+
+  //  unsupported outside cudf for parquet 1.0.
+  template <typename T>
+  std::enable_if_t<std::is_same<T, cudf::duration_D>::value, void> operator()()
+  {
+    col_schema.type           = Type::INT32;
+    col_schema.converted_type = ConvertedType::TIME_MILLIS;
+    col_schema.stats_dtype    = statistics_dtype::dtype_int64;
+  }
+
+  template <typename T>
+  std::enable_if_t<std::is_same<T, cudf::duration_s>::value, void> operator()()
+  {
+    col_schema.type           = Type::INT64;
+    col_schema.converted_type = ConvertedType::TIME_MILLIS;
+    col_schema.stats_dtype    = statistics_dtype::dtype_int64;
+    col_schema.ts_scale       = 1000;
+  }
+
+  template <typename T>
+  std::enable_if_t<std::is_same<T, cudf::duration_ms>::value, void> operator()()
+  {
+    col_schema.type           = Type::INT64;
+    col_schema.converted_type = ConvertedType::TIME_MILLIS;
+    col_schema.stats_dtype    = statistics_dtype::dtype_int64;
+  }
+
+  template <typename T>
+  std::enable_if_t<std::is_same<T, cudf::duration_us>::value, void> operator()()
+  {
+    col_schema.type           = Type::INT64;
+    col_schema.converted_type = ConvertedType::TIME_MICROS;
+    col_schema.stats_dtype    = statistics_dtype::dtype_int64;
+  }
+
+  //  unsupported outside cudf for parquet 1.0.
+  template <typename T>
+  std::enable_if_t<std::is_same<T, cudf::duration_ns>::value, void> operator()()
+  {
+    col_schema.type           = Type::INT64;
+    col_schema.converted_type = ConvertedType::TIME_MICROS;
+    col_schema.stats_dtype    = statistics_dtype::dtype_int64;
+    col_schema.ts_scale       = -1000;  // negative value indicates division by absolute value
+  }
+
+  template <typename T>
+  std::enable_if_t<cudf::is_fixed_point<T>(), void> operator()()
+  {
+    if (std::is_same<T, numeric::decimal32>::value) {
+      col_schema.type        = Type::INT32;
+      col_schema.stats_dtype = statistics_dtype::dtype_int32;
+    } else if (std::is_same<T, numeric::decimal64>::value) {
+      col_schema.type        = Type::INT64;
+      col_schema.stats_dtype = statistics_dtype::dtype_decimal64;
+    } else {
+      CUDF_FAIL("Unsupported fixed point type for parquet writer");
+    }
+    col_schema.converted_type = ConvertedType::DECIMAL;
+    col_schema.decimal_scale = -col->type().scale();  // parquet and cudf disagree about scale signs
+    CUDF_EXPECTS(col_meta.decimal_precision_defined(),
+                 "Precision must be specified for decimal columns");
+    CUDF_EXPECTS(col_meta.get_decimal_precision() >= col_schema.decimal_scale,
+                 "Precision must be equal to or greater than scale!");
+    col_schema.decimal_precision = col_meta.get_decimal_precision();
+  }
+
+  template <typename T>
+  std::enable_if_t<cudf::is_nested<T>(), void> operator()()
+  {
+    CUDF_FAIL("This functor is only meant for physical data types");
+  }
+
+  template <typename T>
+  std::enable_if_t<cudf::is_dictionary<T>(), void> operator()()
+  {
+    CUDF_FAIL("Dictionary columns are not supported for writing");
+  }
 };
 
 /**
@@ -249,152 +471,8 @@ std::vector<schema_tree_node> construct_schema_tree(LinkedColVector const &linke
 
         bool timestamp_is_int96 = int96_timestamps or col_meta.is_enabled_int96_timestamps();
 
-        switch (col->type().id()) {
-          case cudf::type_id::INT8:
-            col_schema.type           = Type::INT32;
-            col_schema.converted_type = ConvertedType::INT_8;
-            col_schema.stats_dtype    = statistics_dtype::dtype_int8;
-            break;
-          case cudf::type_id::INT16:
-            col_schema.type           = Type::INT32;
-            col_schema.converted_type = ConvertedType::INT_16;
-            col_schema.stats_dtype    = statistics_dtype::dtype_int16;
-            break;
-          case cudf::type_id::INT32:
-            col_schema.type        = Type::INT32;
-            col_schema.stats_dtype = statistics_dtype::dtype_int32;
-            break;
-          case cudf::type_id::INT64:
-            col_schema.type        = Type::INT64;
-            col_schema.stats_dtype = statistics_dtype::dtype_int64;
-            break;
-          case cudf::type_id::UINT8:
-            col_schema.type           = Type::INT32;
-            col_schema.converted_type = ConvertedType::UINT_8;
-            col_schema.stats_dtype    = statistics_dtype::dtype_int8;
-            break;
-          case cudf::type_id::UINT16:
-            col_schema.type           = Type::INT32;
-            col_schema.converted_type = ConvertedType::UINT_16;
-            col_schema.stats_dtype    = statistics_dtype::dtype_int16;
-            break;
-          case cudf::type_id::UINT32:
-            col_schema.type           = Type::INT32;
-            col_schema.converted_type = ConvertedType::UINT_32;
-            col_schema.stats_dtype    = statistics_dtype::dtype_int32;
-            break;
-          case cudf::type_id::UINT64:
-            col_schema.type           = Type::INT64;
-            col_schema.converted_type = ConvertedType::UINT_64;
-            col_schema.stats_dtype    = statistics_dtype::dtype_int64;
-            break;
-          case cudf::type_id::FLOAT32:
-            col_schema.type        = Type::FLOAT;
-            col_schema.stats_dtype = statistics_dtype::dtype_float32;
-            break;
-          case cudf::type_id::FLOAT64:
-            col_schema.type        = Type::DOUBLE;
-            col_schema.stats_dtype = statistics_dtype::dtype_float64;
-            break;
-          case cudf::type_id::BOOL8:
-            col_schema.type        = Type::BOOLEAN;
-            col_schema.stats_dtype = statistics_dtype::dtype_bool;
-            break;
-          // unsupported outside cudf for parquet 1.0.
-          case cudf::type_id::DURATION_DAYS:
-            col_schema.type           = Type::INT32;
-            col_schema.converted_type = ConvertedType::TIME_MILLIS;
-            col_schema.stats_dtype    = statistics_dtype::dtype_int64;
-            break;
-          case cudf::type_id::DURATION_SECONDS:
-            col_schema.type           = Type::INT64;
-            col_schema.converted_type = ConvertedType::TIME_MILLIS;
-            col_schema.stats_dtype    = statistics_dtype::dtype_int64;
-            col_schema.ts_scale       = 1000;
-            break;
-          case cudf::type_id::DURATION_MILLISECONDS:
-            col_schema.type           = Type::INT64;
-            col_schema.converted_type = ConvertedType::TIME_MILLIS;
-            col_schema.stats_dtype    = statistics_dtype::dtype_int64;
-            break;
-          case cudf::type_id::DURATION_MICROSECONDS:
-            col_schema.type           = Type::INT64;
-            col_schema.converted_type = ConvertedType::TIME_MICROS;
-            col_schema.stats_dtype    = statistics_dtype::dtype_int64;
-            break;
-          // unsupported outside cudf for parquet 1.0.
-          case cudf::type_id::DURATION_NANOSECONDS:
-            col_schema.type           = Type::INT64;
-            col_schema.converted_type = ConvertedType::TIME_MICROS;
-            col_schema.stats_dtype    = statistics_dtype::dtype_int64;
-            col_schema.ts_scale = -1000;  // negative value indicates division by absolute value
-            break;
-          case cudf::type_id::TIMESTAMP_DAYS:
-            col_schema.type           = Type::INT32;
-            col_schema.converted_type = ConvertedType::DATE;
-            col_schema.stats_dtype    = statistics_dtype::dtype_int32;
-            break;
-          case cudf::type_id::TIMESTAMP_SECONDS:
-            col_schema.type = (timestamp_is_int96) ? Type::INT96 : Type::INT64;
-            col_schema.converted_type =
-              (timestamp_is_int96) ? ConvertedType::UNKNOWN : ConvertedType::TIMESTAMP_MILLIS;
-            col_schema.stats_dtype = statistics_dtype::dtype_timestamp64;
-            col_schema.ts_scale    = 1000;
-            break;
-          case cudf::type_id::TIMESTAMP_MILLISECONDS:
-            col_schema.type = (timestamp_is_int96) ? Type::INT96 : Type::INT64;
-            col_schema.converted_type =
-              (timestamp_is_int96) ? ConvertedType::UNKNOWN : ConvertedType::TIMESTAMP_MILLIS;
-            col_schema.stats_dtype = statistics_dtype::dtype_timestamp64;
-            break;
-          case cudf::type_id::TIMESTAMP_MICROSECONDS:
-            col_schema.type = (timestamp_is_int96) ? Type::INT96 : Type::INT64;
-            col_schema.converted_type =
-              (timestamp_is_int96) ? ConvertedType::UNKNOWN : ConvertedType::TIMESTAMP_MICROS;
-            col_schema.stats_dtype = statistics_dtype::dtype_timestamp64;
-            break;
-          case cudf::type_id::TIMESTAMP_NANOSECONDS:
-            col_schema.type = (timestamp_is_int96) ? Type::INT96 : Type::INT64;
-            col_schema.converted_type =
-              (timestamp_is_int96) ? ConvertedType::UNKNOWN : ConvertedType::TIMESTAMP_MICROS;
-            col_schema.stats_dtype = statistics_dtype::dtype_timestamp64;
-            col_schema.ts_scale    = -1000;  // negative value indicates division by absolute value
-            break;
-          case cudf::type_id::STRING:
-            col_schema.type           = Type::BYTE_ARRAY;
-            col_schema.converted_type = ConvertedType::UTF8;
-            col_schema.stats_dtype    = statistics_dtype::dtype_string;
-            break;
-          case cudf::type_id::DECIMAL32:
-            col_schema.type           = Type::INT32;
-            col_schema.converted_type = ConvertedType::DECIMAL;
-            // TODO: Why is decimal 32 stats int32?
-            col_schema.stats_dtype = statistics_dtype::dtype_int32;
-            col_schema.decimal_scale =
-              -col->type().scale();  // parquet and cudf disagree about scale signs
-            CUDF_EXPECTS(col_meta.decimal_precision_defined(),
-                         "Precision must be specified for decimal columns");
-            CUDF_EXPECTS(col_meta.get_decimal_precision() >= col_schema.decimal_scale,
-                         "Precision must be equal to or greater than scale!");
-            col_schema.decimal_precision = col_meta.get_decimal_precision();
-            break;
-          case cudf::type_id::DECIMAL64:
-            col_schema.type           = Type::INT64;
-            col_schema.converted_type = ConvertedType::DECIMAL;
-            col_schema.stats_dtype    = statistics_dtype::dtype_decimal64;
-            col_schema.decimal_scale =
-              -col->type().scale();  // parquet and cudf disagree about scale signs
-            CUDF_EXPECTS(col_meta.decimal_precision_defined(),
-                         "Precision must be specified for decimal columns");
-            CUDF_EXPECTS(col_meta.get_decimal_precision() >= col_schema.decimal_scale,
-                         "Precision must be equal to or greater than scale!");
-            col_schema.decimal_precision = col_meta.get_decimal_precision();
-            break;
-          default:
-            col_schema.type        = UNDEFINED_TYPE;
-            col_schema.stats_dtype = dtype_none;
-            break;
-        }
+        cudf::type_dispatcher(col->type(),
+                              leaf_schema_fn{col_schema, col, col_meta, timestamp_is_int96});
 
         col_schema.repetition_type = col_nullable ? OPTIONAL : REQUIRED;
         col_schema.name = (schema[parent_idx].name == "list") ? "element" : col_meta.get_name();
