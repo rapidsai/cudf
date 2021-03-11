@@ -62,7 +62,7 @@ dependencies:
   - nvtx>=0.2.1
   - cachetools
   - pip:
-      - git+https://github.com/dask/dask.git@master
-      - git+https://github.com/dask/distributed.git@master
+      - git+https://github.com/dask/dask.git@main
+      - git+https://github.com/dask/distributed.git@main
       - git+https://github.com/python-streamz/streamz.git
       - pyorc

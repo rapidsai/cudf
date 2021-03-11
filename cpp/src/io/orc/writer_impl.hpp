@@ -26,6 +26,7 @@
 #include <cudf/io/detail/orc.hpp>
 #include <cudf/io/orc.hpp>
 #include <cudf/table/table.hpp>
+#include <cudf/table/table_device_view.cuh>
 #include <cudf/utilities/error.hpp>
 
 #include <thrust/iterator/counting_iterator.h>
@@ -271,13 +272,16 @@ class writer::impl {
    * @brief Returns per-stripe and per-file column statistics encoded
    * in ORC protobuf format.
    *
+   * @param table Table information to be written
    * @param columns List of columns
    * @param stripe_bounds List of stripe boundaries
    *
    * @return The statistic blobs
    */
   std::vector<std::vector<uint8_t>> gather_statistic_blobs(
-    host_span<orc_column_view const> columns, host_span<stripe_rowgroups const> stripe_bounds);
+    const table_device_view& table,
+    host_span<orc_column_view const> columns,
+    host_span<stripe_rowgroups const> stripe_bounds);
 
   /**
    * @brief Writes the specified column's row index stream.
