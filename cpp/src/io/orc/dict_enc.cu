@@ -70,10 +70,10 @@ static __device__ void LoadNonNullIndices(volatile dictinit_state_s *s,
                                           Storage &temp_storage)
 {
   if (t == 0) { s->nnz = 0; }
-  for (uint32_t i = 0; i < s->chunk.num_rows; i += 512) {
+  for (uint32_t i = 0; i < s->chunk.num_rows; i += block_size) {
     const uint32_t *valid_map = s->chunk.valid_map_base;
     uint32_t is_valid, nz_pos;
-    if (t < 512 / 32) {
+    if (t < block_size / 32) {
       if (!valid_map) {
         s->scratch_red[t] = 0xffffffffu;
       } else {
@@ -113,7 +113,7 @@ static __device__ void LoadNonNullIndices(volatile dictinit_state_s *s,
  * @param[in] chunks DictionaryChunk device array [rowgroup][column]
  * @param[in] num_columns Number of columns
  */
-// blockDim {512,1,1}
+// blockDim {block_size,1,1}
 template <int block_size>
 __global__ void __launch_bounds__(block_size, 2)
   gpuInitDictionaryIndices(DictionaryChunk *chunks, uint32_t num_columns)
@@ -415,9 +415,11 @@ void InitDictionaryIndices(DictionaryChunk *chunks,
                            uint32_t num_rowgroups,
                            rmm::cuda_stream_view stream)
 {
-  dim3 dim_block(512, 1);  // 512 threads per chunk
+  static constexpr int block_size = 512;
+  dim3 dim_block(block_size, 1);
   dim3 dim_grid(num_columns, num_rowgroups);
-  gpuInitDictionaryIndices<512><<<dim_grid, dim_block, 0, stream.value()>>>(chunks, num_columns);
+  gpuInitDictionaryIndices<block_size>
+    <<<dim_grid, dim_block, 0, stream.value()>>>(chunks, num_columns);
 }
 
 /**
