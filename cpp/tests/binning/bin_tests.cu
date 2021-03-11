@@ -18,15 +18,21 @@
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_wrapper.hpp>
 #include <numeric>
-#include <thrust/device_ptr.h>
 #include <thrust/logical.h>
 #include <cudf/column/column.hpp>
 #include <cudf_test/type_lists.hpp>
 #include <thrust/execution_policy.h>
+#include <thrust/execution_policy.h>
+#include <cudf/types.hpp>
+#include <stdio.h>
+
+
+namespace {
 
 using namespace cudf::test;
 
-namespace {
+template <typename T>
+using fwc_wrapper = cudf::test::fixed_width_column_wrapper<T>;
 
 // =============================================================================
 // ----- helper functions ------------------------------------------------------
@@ -52,49 +58,80 @@ struct equal_value
 // =============================================================================
 // ----- tests -----------------------------------------------------------------
 
-// Test error cases.
+// ----- test error cases ------------------------------------------------------
+
+/// Left edges type check.
 TEST(BinColumnTest, TestInvalidLeft)
 {
-  fixed_width_column_wrapper<double> left_edges{0, 1, 2, 3, 4, 5, 6, 7, 8, 9};
-  fixed_width_column_wrapper<float> right_edges{1, 2, 3, 4, 5, 6, 7, 8, 9, 10};
-  fixed_width_column_wrapper<float> input{0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5};
+    fwc_wrapper<double> left_edges{0, 1, 2, 3, 4, 5, 6, 7, 8, 9};
+    fwc_wrapper<float> right_edges{1, 2, 3, 4, 5, 6, 7, 8, 9, 10};
+    fwc_wrapper<float> input{0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5};
 
-  EXPECT_THROW(cudf::bin(input, left_edges, cudf::inclusive::YES, right_edges, cudf::inclusive::NO),
-          cudf::logic_error);
+    EXPECT_THROW(cudf::bin(input, left_edges, cudf::inclusive::YES, right_edges, cudf::inclusive::NO),
+            cudf::logic_error);
 };
 
+/// Right edges type check.
 TEST(BinColumnTest, TestInvalidRight)
 {
-  fixed_width_column_wrapper<float> left_edges{0, 1, 2, 3, 4, 5, 6, 7, 8, 9};
-  fixed_width_column_wrapper<double> right_edges{1, 2, 3, 4, 5, 6, 7, 8, 9, 10};
-  fixed_width_column_wrapper<float> input{0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5};
+    fwc_wrapper<float> left_edges{0, 1, 2, 3, 4, 5, 6, 7, 8, 9};
+    fwc_wrapper<double> right_edges{1, 2, 3, 4, 5, 6, 7, 8, 9, 10};
+    fwc_wrapper<float> input{0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5};
 
-  EXPECT_THROW(cudf::bin(input, left_edges, cudf::inclusive::YES, right_edges, cudf::inclusive::NO),
-          cudf::logic_error);
+    EXPECT_THROW(cudf::bin(input, left_edges, cudf::inclusive::YES, right_edges, cudf::inclusive::NO),
+            cudf::logic_error);
 };
 
+/// Input type check.
 TEST(BinColumnTest, TestInvalidInput)
 {
-  fixed_width_column_wrapper<float> left_edges{0, 1, 2, 3, 4, 5, 6, 7, 8, 9};
-  fixed_width_column_wrapper<float> right_edges{1, 2, 3, 4, 5, 6, 7, 8, 9, 10};
-  fixed_width_column_wrapper<double> input{0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5};
+    fwc_wrapper<float> left_edges{0, 1, 2, 3, 4, 5, 6, 7, 8, 9};
+    fwc_wrapper<float> right_edges{1, 2, 3, 4, 5, 6, 7, 8, 9, 10};
+    fwc_wrapper<double> input{0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5};
 
-  EXPECT_THROW(cudf::bin(input, left_edges, cudf::inclusive::YES, right_edges, cudf::inclusive::NO),
-          cudf::logic_error);
+    EXPECT_THROW(cudf::bin(input, left_edges, cudf::inclusive::YES, right_edges, cudf::inclusive::NO),
+            cudf::logic_error);
 };
 
+/// Number of left and right edges must match.
 TEST(BinColumnTest, TestMismatchedEdges)
 {
-  fixed_width_column_wrapper<float> left_edges{0, 1, 2, 3, 4, 5, 6, 7, 8, 9};
-  fixed_width_column_wrapper<float> right_edges{1, 2, 3, 4, 5, 6, 7, 8, 9};
-  fixed_width_column_wrapper<float> input{0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5};
+    fwc_wrapper<float> left_edges{0, 1, 2, 3, 4, 5, 6, 7, 8, 9};
+    fwc_wrapper<float> right_edges{1, 2, 3, 4, 5, 6, 7, 8, 9};
+    fwc_wrapper<float> input{0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5};
 
-  EXPECT_THROW(cudf::bin(input, left_edges, cudf::inclusive::YES, right_edges, cudf::inclusive::NO),
-          cudf::logic_error);
+    EXPECT_THROW(cudf::bin(input, left_edges, cudf::inclusive::YES, right_edges, cudf::inclusive::NO),
+            cudf::logic_error);
 };
 
-// TODO: Add test for empty inputs.
-// TODO: Add test and error (if we decide that should be an error) for empty edges.
+// If no edges are provided, the bin for all inputs is null.
+TEST(BinColumnTest, TestEmptyEdges)
+{
+    fwc_wrapper<float> left_edges{};
+    fwc_wrapper<float> right_edges{};
+    fwc_wrapper<float> input{0.5, 0.5};
+
+    std::unique_ptr<cudf::column> result = cudf::bin(input, left_edges, cudf::inclusive::YES, right_edges, cudf::inclusive::YES);
+    ASSERT_TRUE(result->size() == 2);
+    ASSERT_TRUE(result->null_count() == 2);
+
+    fwc_wrapper<cudf::size_type> expected{{0, 0}, {0, 0}};
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
+};
+
+// ----- test valid data ------------------------------------------------------
+
+/// Empty input must return an empty output.
+TEST(BinColumnTest, TestEmptyInput)
+{
+    fwc_wrapper<float> left_edges{0, 1, 2, 3, 4, 5, 6, 7, 8, 9};
+    fwc_wrapper<float> right_edges{1, 2, 3, 4, 5, 6, 7, 8, 9, 10};
+    fwc_wrapper<float> input{};
+
+    std::unique_ptr<cudf::column> result = cudf::bin(input, left_edges, cudf::inclusive::YES, right_edges, cudf::inclusive::YES);
+    ASSERT_TRUE(result->size() == 0);
+};
+
 
 // Tests on real data.
 struct BinTest : public BaseFixture {
@@ -102,9 +139,9 @@ struct BinTest : public BaseFixture {
 
 template <typename T>
 struct FloatingPointBinTest : public BinTest {
-    fixed_width_column_wrapper<T> left_edges{0.0, 1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0};
-    fixed_width_column_wrapper<T> right_edges{1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 10.0};
-    fixed_width_column_wrapper<T> input{2.5, 2.5, 2.5, 2.5, 2.5, 2.5, 2.5, 2.5, 2.5, 2.5};
+    fwc_wrapper<T> left_edges{0.0, 1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0};
+    fwc_wrapper<T> right_edges{1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 10.0};
+    fwc_wrapper<T> input{2.5, 2.5, 2.5, 2.5, 2.5, 2.5, 2.5, 2.5, 2.5, 2.5};
 };
 
 // TODO: Add tests for other numeric types.

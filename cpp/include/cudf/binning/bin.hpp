@@ -42,11 +42,11 @@ enum class inclusive{YES, NO};
  * right_edges[i]` (with the specified inclusiveness) and `label[j] == i`. If  `input[j]` does not
  * belong to any bin, then `label[j]` is NULL.
  *
- * Bins must be provided in monotonically increasing order, otherwise behavior is undefined.
- *
- * If two or more bins overlap, behavior is undefined.
- *
- * NULL elements in `input` belong to no bin and their corresponding label is NULL.
+ * Notes:
+ *   - Bins must be provided in monotonically increasing order, otherwise behavior is undefined.
+ *   - If an empty set of edges is provided, all elements in `input` are labeled NULL.
+ *   - If two or more bins overlap, behavior is undefined.
+ *   - NULL elements in `input` belong to no bin and their corresponding label is NULL.
  *
  * @throws cudf::logic_error if`input.type() == left_edges.type() == right_edges.type()` is violated.
  * @throws cudf::logic_error if`left_edges.size() != right_edges.size()`
