@@ -1783,10 +1783,9 @@ def test_equality_ops_index_mismatch(fn):
         index=["aa", "b", "c", "d", "e", "f", "y", "z"],
     )
 
-    pa = a.to_pandas()
-    pb = b.to_pandas()
-
+    pa = a.to_pandas(nullable=True)
+    pb = b.to_pandas(nullable=True)
     expected = getattr(pa, fn)(pb)
-    actual = getattr(a, fn)(b)
+    actual = getattr(a, fn)(b).to_pandas(nullable=True)
 
     utils.assert_eq(expected, actual)
