@@ -14,7 +14,6 @@
  * limitations under the License.
  */
 
-// TODO: Clean up includes when all debugging is done.
 #include <cudf/binning/bin.hpp>
 #include <cudf/utilities/span.hpp>
 #include <rmm/mr/device/device_memory_resource.hpp>
@@ -138,7 +137,7 @@ constexpr inline auto is_supported_bin_type()
   // TODO: Determine what other types (such as fixed point numbers) should be
   // supported, and whether any of them (like strings) require special
   // handling.
-  return (cudf::is_numeric<T>() && not std::is_same<T, bool>::value); // || cudf::is_fixed_point<T>();
+  return (cudf::is_numeric<T>() && !std::is_same<T, bool>::value); // || cudf::is_fixed_point<T>();
 }
 
 }  // anonymous namespace
