@@ -724,3 +724,21 @@ def test_orc_bool_encode_fail():
     # Also validate data
     pdf = pa.orc.ORCFile(buffer).read().to_pandas()
     assert_eq(okay_df, pdf)
+
+
+def test_nanoseconds_overflow(tmpdir):
+    path = tmpdir.join("nano64bit.orc")
+    # Use nanosecond values that take more than 32 bits to encode
+    s = cudf.Series([710424008, -338482640], dtype="datetime64[ns]")
+    expected = cudf.DataFrame({"s": s})
+    expected.to_orc(path)
+
+    cudf_got = cudf.read_orc(path)
+    assert_eq(expected, cudf_got)
+
+    try:
+        orcfile = pa.orc.ORCFile(path)
+    except pa.ArrowIOError as e:
+        pytest.skip(".orc file is not found: %s" % e)
+    pyarrow_got = orcfile.read()
+    assert_eq(expected.to_pandas(), pyarrow_got.to_pandas())
