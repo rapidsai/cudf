@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 
+#include <cudf/lists/list_view.hpp>
 #include <cudf/scalar/scalar.hpp>
 #include <cudf/strings/string_view.hpp>
 
