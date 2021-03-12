@@ -590,5 +590,55 @@ struct duration_scalar : chrono_scalar<T> {
    */
   typename T::rep count() { return this->value().count(); }
 };
+
+template <typename T>
+class list_scalar : public scalar {
+  public:
+  using value_type = cudf::list_view;
+
+  list_scalar() : scalar(data_type(type_id::LIST)) {}
+  ~list_scalar()                          = default;
+  list_scalar(list_scalar&& other)      = default;
+  list_scalar(list_scalar const& other) = default;
+  list_scalar& operator=(list_scalar const& other) = delete;
+  list_scalar& operator=(list_scalar&& other) = delete;
+
+  /**
+   * @brief Construct a new list scalar object from existing device data
+   *
+   * @param[in] value The value of the list
+   * @param[in] is_valid Whether the value held by the scalar is valid
+   * @param[in] stream CUDA stream used for device memory operations.
+   * @param[in] mr Device memory resource to use for device memory allocation
+   */
+  list_scalar(cudf::column_view const& value,
+              bool is_valid                       = true,
+              rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
+              rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
+    : scalar(data_type(type_id::LIST), is_valid), _data(value, stream, mr)
+  {
+  }
+
+  /**
+   * @brief Get the value of the scalar as a list_view
+   *
+   * @param stream CUDA stream used for device memory operations.
+   */
+  value_type value(rmm::cuda_stream_view stream = rmm::cuda_stream_default) const;
+
+  /**
+   * @brief Returns the number of elements in the list
+   */
+  size_type size() const { return _data.size(); }
+
+  /**
+   * @brief Returns a immutable view to the underlying list_scalar data
+   */
+  cudf::column_view data() const { return _data.view(); }
+
+  private:
+  cudf::column _data;
+};
+
 /** @} */  // end of group
 }  // namespace cudf
