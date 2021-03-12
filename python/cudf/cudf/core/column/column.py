@@ -109,6 +109,13 @@ class ColumnBase(Column, Serializable):
     def __len__(self) -> int:
         return self.size
 
+    def __repr__(self):
+        return (
+            f"{object.__repr__(self)}\n"
+            f"{self.to_arrow().to_string()}\n"
+            f"dtype: {self.dtype}"
+        )
+
     def to_pandas(
         self, index: ColumnLike = None, nullable: bool = False, **kwargs
     ) -> "pd.Series":
