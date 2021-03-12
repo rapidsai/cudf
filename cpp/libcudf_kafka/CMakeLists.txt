@@ -35,13 +35,11 @@ endif()
 ###################################################################################################
 # - Build options
 
-option(CUDF_USE_ARROW_STATIC "Build static arrow library" OFF)
 option(CUDF_KAFKA_BUILD_TESTS "Build tests for libcudf_kafka" ON)
 option(CUDF_KAFKA_BUILD_BENCHMARKS "Build benchmarks for libcudf_kafka" OFF)
 
 message(VERBOSE "CUDF_KAFKA: Build gtests: ${CUDF_KAFKA_BUILD_TESTS}")
 message(VERBOSE "CUDF_KAFKA: Build benchmarks: ${CUDF_KAFKA_BUILD_BENCHMARKS}")
-message(VERBOSE "CUDF_KAFKA: Build Arrow static library: ${CUDF_USE_ARROW_STATIC}")
 
 ###################################################################################################
 # - compiler options ------------------------------------------------------------------------------
