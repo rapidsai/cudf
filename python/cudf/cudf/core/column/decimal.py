@@ -4,7 +4,7 @@ import cudf
 import cupy as cp
 import numpy as np
 import pyarrow as pa
-
+from pandas.api.types import is_integer_dtype
 from typing import cast
 
 from cudf import _lib as libcudf
@@ -12,10 +12,11 @@ from cudf.core.buffer import Buffer
 from cudf.core.column import ColumnBase
 from cudf.core.dtypes import Decimal64Dtype
 from cudf.utils.utils import pa_mask_buffer_to_mask
+
+from cudf._typing import Dtype
 from cudf._lib.strings.convert.convert_fixed_point import (
     from_decimal as cpp_from_decimal,
 )
-from cudf._typing import Dtype
 from cudf.core.column import as_column
 
 
@@ -66,6 +67,26 @@ class DecimalColumn(ColumnBase):
         result = libcudf.binaryop.binaryop(self, other, op, "int32")
         result.dtype.precision = _binop_precision(self.dtype, other.dtype, op)
         return result
+
+    def as_decimal_column(
+        self, dtype: Dtype, **kwargs
+    ) -> "cudf.core.column.DecimalColumn":
+        if dtype == self.dtype:
+            return self
+        result = libcudf.unary.cast(self, dtype)
+        if isinstance(dtype, cudf.core.dtypes.Decimal64Dtype):
+            result.dtype.precision = dtype.precision
+        return result
+
+    def as_numerical_column(
+        self, dtype: Dtype
+    ) -> "cudf.core.column.NumericalColumn":
+        if is_integer_dtype(dtype):
+            raise NotImplementedError(
+                "Casting from decimal types to integer "
+                "types not currently supported"
+            )
+        return libcudf.unary.cast(self, dtype)
 
     def as_string_column(
         self, dtype: Dtype, format=None
