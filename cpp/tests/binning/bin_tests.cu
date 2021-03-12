@@ -28,18 +28,14 @@ using namespace cudf::test;
 template <typename T>
 using fwc_wrapper = cudf::test::fixed_width_column_wrapper<T>;
 
-// TODO: Add tests for additional types. For non-numeric types, we need to
-// decide what types will be supported and how this should behave
-using ValidBinTypes = FloatingPointTypes;
-
 struct BinTestFixture : public BaseFixture {
 };
 
-/*
+/**
  * Test error cases.
  */
 
-/// Left edges type check.
+// Left edges type check.
 
 TEST(BinColumnTest, TestInvalidLeft)
 {
@@ -51,7 +47,7 @@ TEST(BinColumnTest, TestInvalidLeft)
                cudf::logic_error);
 };
 
-/// Right edges type check.
+// Right edges type check.
 TEST(BinColumnTest, TestInvalidRight)
 {
   fwc_wrapper<float> left_edges{0, 1, 2, 3, 4, 5, 6, 7, 8, 9};
@@ -62,7 +58,7 @@ TEST(BinColumnTest, TestInvalidRight)
                cudf::logic_error);
 };
 
-/// Input type check.
+// Input type check.
 TEST(BinColumnTest, TestInvalidInput)
 {
   fwc_wrapper<float> left_edges{0, 1, 2, 3, 4, 5, 6, 7, 8, 9};
@@ -73,7 +69,7 @@ TEST(BinColumnTest, TestInvalidInput)
                cudf::logic_error);
 };
 
-/// Left edges cannot contain nulls.
+// Left edges cannot contain nulls.
 TEST(BinColumnTest, TestLeftEdgesWithNulls)
 {
   fwc_wrapper<float> left_edges{{0, 1, 2}, {0, 1, 0}};
@@ -84,7 +80,7 @@ TEST(BinColumnTest, TestLeftEdgesWithNulls)
                cudf::logic_error);
 };
 
-/// Right edges cannot contain nulls.
+// Right edges cannot contain nulls.
 TEST(BinColumnTest, TestRightEdgesWithNulls)
 {
   fwc_wrapper<float> left_edges{0, 1, 2};
@@ -95,7 +91,7 @@ TEST(BinColumnTest, TestRightEdgesWithNulls)
                cudf::logic_error);
 };
 
-/// Number of left and right edges must match.
+// Number of left and right edges must match.
 TEST(BinColumnTest, TestMismatchedEdges)
 {
   fwc_wrapper<float> left_edges{0, 1, 2, 3, 4, 5, 6, 7, 8, 9};
@@ -138,7 +134,7 @@ TEST(BinColumnTest, TestOutOfBoundsInput)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
 };
 
-/*
+/**
  * Test inclusion options.
  */
 
@@ -154,7 +150,7 @@ struct BoundaryExclusionBinTestFixture : public BinTestFixture {
   }
 };
 
-TYPED_TEST_CASE(BoundaryExclusionBinTestFixture, ValidBinTypes);
+TYPED_TEST_CASE(BoundaryExclusionBinTestFixture, FloatingPointTypes);
 
 // Boundary points when both bounds are excluded should be labeled null.
 TYPED_TEST(BoundaryExclusionBinTestFixture, TestNoIncludes)
@@ -189,11 +185,11 @@ TYPED_TEST(BoundaryExclusionBinTestFixture, TestIncludeRight)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
 };
 
-/*
+/**
  * Test valid data.
  */
 
-/// Empty input must return an empty output.
+// Empty input must return an empty output.
 TEST(BinColumnTest, TestEmptyInput)
 {
   fwc_wrapper<float> left_edges{0, 1, 2, 3, 4, 5, 6, 7, 8, 9};
@@ -205,7 +201,7 @@ TEST(BinColumnTest, TestEmptyInput)
   ASSERT_TRUE(result->size() == 0);
 };
 
-/// Null inputs must map to nulls.
+// Null inputs must map to nulls.
 TEST(BinColumnTest, TestInputWithNulls)
 {
   fwc_wrapper<float> left_edges{0, 1, 2, 3, 4, 5, 6, 7, 8, 9};
@@ -247,9 +243,42 @@ struct FloatingPointBinTestFixture : public BinTestFixture {
   }
 };
 
-TYPED_TEST_CASE(FloatingPointBinTestFixture, ValidBinTypes);
+TYPED_TEST_CASE(FloatingPointBinTestFixture, FloatingPointTypes);
 
 TYPED_TEST(FloatingPointBinTestFixture, TestFloatingPointData) { this->test(); };
+
+template <typename T>
+struct IntegerBinTestFixture : public BinTestFixture {
+  void test (cudf::inclusive left_inc, cudf::inclusive right_inc, fwc_wrapper<cudf::size_type> expected)
+  {
+    fwc_wrapper<T> left_edges{0, 2, 4, 6, 8};
+    fwc_wrapper<T> right_edges{2, 4, 6, 8, 10};
+    fwc_wrapper<T> input{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10};
+
+    auto result =
+      cudf::bin(input, left_edges, left_inc, right_edges, right_inc);
+
+    // Check that every element is placed in bin 2.
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
+  }
+};
+
+TYPED_TEST_CASE(IntegerBinTestFixture, IntegralTypesNotBool);
+
+TYPED_TEST(IntegerBinTestFixture, TestIntegerDataIncludeLeft)
+{
+    this->test(cudf::inclusive::YES, cudf::inclusive::NO, {{0, 0, 1, 1, 2, 2, 3, 3, 4, 4, 0}, {1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0}});
+};
+
+TYPED_TEST(IntegerBinTestFixture, TestIntegerDataIncludeRight)
+{
+    this->test(cudf::inclusive::NO, cudf::inclusive::YES, {{0, 0, 0, 1, 1, 2, 2, 3, 3, 4, 4}, {0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1}});
+};
+
+TYPED_TEST(IntegerBinTestFixture, TestIntegerDataIncludeNeither)
+{
+    this->test(cudf::inclusive::NO, cudf::inclusive::NO, {{0, 0, 1, 1, 2, 2, 3, 3, 4, 4, 5}, {0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0}});
+};
 
 }  // anonymous namespace
 
