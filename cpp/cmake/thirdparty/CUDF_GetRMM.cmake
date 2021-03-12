@@ -43,7 +43,6 @@ function(find_and_configure_rmm VERSION)
         OPTIONS         "BUILD_TESTS OFF"
                         "BUILD_BENCHMARKS OFF"
                         "CUDA_STATIC_RUNTIME ${CUDA_STATIC_RUNTIME}"
-                        "CMAKE_CUDA_ARCHITECTURES ${CMAKE_CUDA_ARCHITECTURES}"
                         "DISABLE_DEPRECATION_WARNING ${DISABLE_DEPRECATION_WARNING}"
     )
     cudf_restore_if_enabled(BUILD_TESTS)
