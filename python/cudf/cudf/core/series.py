@@ -2004,7 +2004,7 @@ class Series(Frame, Serializable):
             raise NotImplementedError(
                 "bool_only parameter is not implemented yet"
             )
-    
+
         skipna = False if skipna is None else skipna
 
         if skipna is False and self.has_nulls:
