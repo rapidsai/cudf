@@ -29,6 +29,8 @@
 #include <utility>
 #include <vector>
 
+#include <cudf/column/column.hpp>
+
 /**
  * @file
  * @brief Class definitions for cudf::scalar
@@ -591,7 +593,7 @@ struct duration_scalar : chrono_scalar<T> {
   typename T::rep count() { return this->value().count(); }
 };
 
-template <typename T>
+
 class list_scalar : public scalar {
   public:
   using value_type = cudf::list_view;

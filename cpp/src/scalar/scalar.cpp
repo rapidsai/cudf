@@ -58,7 +58,7 @@ std::string string_scalar::to_string(rmm::cuda_stream_view stream) const
 
 list_scalar::value_type list_scalar::value(rmm::cuda_stream_view stream) const
 {
-  return list_view{}
+  CUDF_FAIL("cudf::list_view not yet implemented.");
 }
 
 }  // namespace cudf
