@@ -18,6 +18,7 @@ from numba.cuda.cudaimpl import lower as cuda_lower
 from numba.extending import types
 import inspect
 
+from cudf.core.scalar import _NAType
 
 class Masked(object):
     def __init__(self, value, valid):
@@ -29,12 +30,21 @@ class MaskedType(types.Type):
     def __init__(self):
         super().__init__(name="Masked")
 
+class NAType(types.Type):
+    def __init__(self):
+        super().__init__(name="NA")
+
 numba_masked = MaskedType()  # name this something more natural - GM
+numba_na = NAType()
+
 
 @typeof_impl.register(Masked)
 def typeof_masked(val, c):
     return numba_masked
 
+@typeof_impl.register(_NAType)
+def typeof_na(val, c):
+    return numba_na
 
 @type_callable(Masked)
 def type_masked(context):
@@ -73,6 +83,12 @@ class MaskedScalarAdd(AbstractTemplate):
             return signature(numba_masked, numba_masked, numba_masked)
 
 
+@cuda_registry.register_global(operator.add)
+class MaskedScalarAddNull(AbstractTemplate):
+    def generic(self, args, kws):
+        if isinstance(args[0], MaskedType) and isinstance(args[1], NAType):
+            return signature(numba_masked, numba_masked, numba_na)
+
 @cuda_lower(operator.add, MaskedType, MaskedType)
 def masked_scalar_add_impl(context, builder, sig, args):
     # get the types from the signature
@@ -96,6 +112,13 @@ def masked_scalar_add_impl(context, builder, sig, args):
 
     return result._getvalue()
 
+@cuda_lower(operator.add, MaskedType, NAType)
+def masked_scalar_add_na_impl(context, builder, sig, args):
+    return_type = sig.return_type
+    result = cgutils.create_struct_proxy(return_type)(context, builder)
+    result.valid = False
+    return result._getvalue()
+
 
 @cuda.jit(numba_masked(numba_masked, numba_masked), device=True)
 def masked_add_py(m1, m2):
@@ -110,3 +133,8 @@ def compile_udf(func):
     signature = (numba_masked, numba_masked)
     ptx, _ = cuda.compile_ptx_for_current_device(func, signature, device=True)
     return ptx
+
+@cuda.jit(numba_masked(numba_masked), device=True)
+def test_scalar_null_add(masked):
+    result = masked + cudf.NA
+    return masked
