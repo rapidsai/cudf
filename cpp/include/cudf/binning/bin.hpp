@@ -31,7 +31,7 @@ namespace cudf {
  */
 
 /// Enum used to define whether or not bins include their boundary points.
-enum class inclusive{YES, NO};
+enum class inclusive { YES, NO };
 
 /**
  * @brief Labels elements based on membership in the specified bins.
@@ -49,7 +49,8 @@ enum class inclusive{YES, NO};
  *   - If two or more bins overlap, behavior is undefined.
  *   - NULL elements in `input` belong to no bin and their corresponding label is NULL.
  *
- * @throws cudf::logic_error if`input.type() == left_edges.type() == right_edges.type()` is violated.
+ * @throws cudf::logic_error if`input.type() == left_edges.type() == right_edges.type()` is
+ * violated.
  * @throws cudf::logic_error if`left_edges.size() != right_edges.size()`
  * @throws cudf::logic_error if either `left_edges` or `right_edges` contain NULLs.
  *
@@ -60,13 +61,13 @@ enum class inclusive{YES, NO};
  * @param right_inclusive Whether or not the right edge is inclusive
  * @return The labels of the elements in `input` according to the specified bins
  */
-std::unique_ptr<column> bin(column_view const& input, 
-                            column_view const& left_edges,
-                            inclusive left_inclusive,
-                            column_view const& right_edges,
-                            inclusive right_inclusive,
-                            rmm::mr::device_memory_resource * mr = rmm::mr::get_current_device_resource());
-
+std::unique_ptr<column> bin(
+  column_view const& input,
+  column_view const& left_edges,
+  inclusive left_inclusive,
+  column_view const& right_edges,
+  inclusive right_inclusive,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /** @} */  // end of group
 }  // namespace cudf
