@@ -134,6 +134,7 @@ test:
     - test -f $PREFIX/include/cudf/lists/detail/copying.hpp
     - test -f $PREFIX/include/cudf/lists/detail/sorting.hpp
     - test -f $PREFIX/include/cudf/lists/count_elements.hpp
+    - test -f $PREFIX/include/cudf/lists/drop_list_duplicates.hpp
     - test -f $PREFIX/include/cudf/lists/extract.hpp
     - test -f $PREFIX/include/cudf/lists/contains.hpp
     - test -f $PREFIX/include/cudf/lists/gather.hpp
@@ -168,10 +169,10 @@ test:
     - test -f $PREFIX/include/cudf/strings/convert/convert_integers.hpp
     - test -f $PREFIX/include/cudf/strings/convert/convert_ipv4.hpp
     - test -f $PREFIX/include/cudf/strings/convert/convert_urls.hpp
-    - test -f $PREFIX/include/cudf/strings/copying.hpp
     - test -f $PREFIX/include/cudf/strings/detail/combine.hpp
     - test -f $PREFIX/include/cudf/strings/detail/concatenate.hpp
     - test -f $PREFIX/include/cudf/strings/detail/converters.hpp
+    - test -f $PREFIX/include/cudf/strings/detail/copying.hpp
     - test -f $PREFIX/include/cudf/strings/detail/fill.hpp
     - test -f $PREFIX/include/cudf/strings/detail/replace.hpp
     - test -f $PREFIX/include/cudf/strings/detail/utilities.hpp
