@@ -44,7 +44,7 @@ namespace {
 
 template <typename T, typename LeftComparator, typename RightComparator>
 struct bin_finder {
-  bin_finder(detail::device_span<T> left_span, detail::device_span<T> right_span)
+  bin_finder(detail::device_span<const T> left_span, detail::device_span<const T> right_span)
     : m_left_span(left_span), m_right_span(right_span)
   {
   }
@@ -69,8 +69,8 @@ struct bin_finder {
     return (m_right_comp(value, m_right_span[index])) ? index : NULL_VALUE;
   }
 
-  detail::device_span<T> m_left_span{};   // The range of data containing all left bin edges.
-  detail::device_span<T> m_right_span{};  // The range of data containing all right bin edges.
+  detail::device_span<const T> m_left_span{};   // The range of data containing all left bin edges.
+  detail::device_span<const T> m_right_span{};  // The range of data containing all right bin edges.
   LeftComparator m_left_comp{};           // Comparator used for left edges.
   RightComparator m_right_comp{};         // Comparator used for left edges.
 };
@@ -100,7 +100,7 @@ std::unique_ptr<column> bin(column_view const& input,
                     // views provided on the edges will always return const types. The
                     // template arguments to `datq` need not specify const since that
                     // const is added as part of the signature.
-                    bin_finder<const T, LeftComparator, RightComparator>(
+                    bin_finder<T, LeftComparator, RightComparator>(
                       detail::device_span<const T>(left_edges.data<T>(), left_edges.size()),
                       detail::device_span<const T>(right_edges.data<T>(), right_edges.size())));
 
@@ -113,7 +113,7 @@ std::unique_ptr<column> bin(column_view const& input,
 }
 
 template <typename T>
-constexpr inline auto is_supported_bin_type()
+constexpr auto is_supported_bin_type()
 {
   // TODO: Determine what other types (such as fixed point numbers) should be
   // supported, and whether any of them (like strings) require special
