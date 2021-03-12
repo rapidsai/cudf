@@ -288,27 +288,6 @@ static inline __device__ uint32_t StoreVarint(uint8_t *dst, uint64_t v)
   return bytecnt;
 }
 
-static inline __device__ void intrle_minmax(int64_t &vmin, int64_t &vmax)
-{
-  vmin = INT64_MIN;
-  vmax = INT64_MAX;
-}
-static inline __device__ void intrle_minmax(uint64_t &vmin, uint64_t &vmax)
-{
-  vmin = UINT64_C(0);
-  vmax = UINT64_MAX;
-}
-static inline __device__ void intrle_minmax(int32_t &vmin, int32_t &vmax)
-{
-  vmin = INT32_MIN;
-  vmax = INT32_MAX;
-}
-static inline __device__ void intrle_minmax(uint32_t &vmin, uint32_t &vmax)
-{
-  vmin = UINT32_C(0);
-  vmax = UINT32_MAX;
-}
-
 template <class T>
 static inline __device__ void StoreBytesBigEndian(uint8_t *dst, T v, uint32_t w)
 {
@@ -417,13 +396,9 @@ static __device__ uint32_t IntegerRLE(orcenc_state_s *s,
     // Find minimum and maximum values
     if (literal_run > 0) {
       // Find min & max
-      T vmin, vmax;
+      T vmin = (t < literal_run) ? v0 : std::numeric_limits<T>::max();
+      T vmax = (t < literal_run) ? v0 : std::numeric_limits<T>::min();
       uint32_t literal_mode, literal_w;
-      if (t < literal_run) {
-        vmin = vmax = v0;
-      } else {
-        intrle_minmax(vmax, vmin);
-      }
       vmin = block_reduce(temp_storage).Reduce(vmin, cub::Min());
       __syncthreads();
       vmax = block_reduce(temp_storage).Reduce(vmax, cub::Max());
