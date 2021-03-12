@@ -11,6 +11,7 @@ from cudf._lib.cpp.column.column_view cimport column_view
 from cudf._lib.cpp.column.column cimport column
 
 from cudf._lib.column cimport Column
+from cudf._lib.scalar cimport DeviceScalar
 from cudf._lib.cpp.scalar.scalar cimport scalar
 from cudf.core.dtypes import ListDtype
 
@@ -35,7 +36,7 @@ def count_elements(Column col):
     return result
 
 
-def contains_elements(Column col, scalar search_key):
+def contains_elements(Column col, DeviceScalar search_key, Column search_keys):
     if not isinstance(col.dtype, ListDtype):
         raise TypeError("col is not a list column.")
 
@@ -44,11 +45,17 @@ def contains_elements(Column col, scalar search_key):
     cdef shared_ptr[lists_column_view] list_view = (
         make_shared[lists_column_view](col.view())
     )
+    cdef const scalar* search_key_value = search_key.get_raw_ptr()
+    cdef column_view search_keys_view = search_keys.view()
 
     cdef unique_ptr[column] c_result
 
     with nogil:
-        c_result = move(contains(list_view.get()[0], search_key))
+        c_result = move(contains(
+            list_view.get()[0],
+            search_key_value[0],
+            search_keys_view
+        )
 
     result = Column.from_unique_ptr(move(c_result))
     return result

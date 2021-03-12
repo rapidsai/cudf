@@ -10,6 +10,7 @@ from cudf._lib.cpp.column.column_view cimport column_view
 
 cdef extern from "cudf/lists/contains.hpp" namespace "cudf::lists" nogil:
     cdef unique_ptr[column] contains(
-        const lists_column_view,
-        const scalar,
+        lists_column_view lists,
+        scalar search_key,
+        column_view search_keys
     ) except +
