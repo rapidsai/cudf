@@ -325,15 +325,15 @@ def test_validity_add(nelem, lhs_nulls, rhs_nulls):
     res = lhs + rhs
     if lhs_nulls == "some" and rhs_nulls == "some":
         res_mask = np.asarray(
-            utils.expand_bits_to_bytes(lhs_mask & rhs_mask), dtype=np.bool
+            utils.expand_bits_to_bytes(lhs_mask & rhs_mask), dtype=np.bool_
         )[:nelem]
     if lhs_nulls == "some" and rhs_nulls == "none":
         res_mask = np.asarray(
-            utils.expand_bits_to_bytes(lhs_mask), dtype=np.bool
+            utils.expand_bits_to_bytes(lhs_mask), dtype=np.bool_
         )[:nelem]
     if lhs_nulls == "none" and rhs_nulls == "some":
         res_mask = np.asarray(
-            utils.expand_bits_to_bytes(rhs_mask), dtype=np.bool
+            utils.expand_bits_to_bytes(rhs_mask), dtype=np.bool_
         )[:nelem]
     # Fill NA values
     na_value = -10000
@@ -1771,3 +1771,22 @@ def test_binops_decimal(args):
     got = op(a, b)
     assert expect.dtype == got.dtype
     utils.assert_eq(expect, got)
+
+
+@pytest.mark.parametrize("fn", ["eq", "ne", "lt", "gt", "le", "ge"])
+def test_equality_ops_index_mismatch(fn):
+    a = cudf.Series(
+        [1, 2, 3, None, None, 4], index=["a", "b", "c", "d", "e", "f"]
+    )
+    b = cudf.Series(
+        [-5, 4, 3, 2, 1, 0, 19, 11],
+        index=["aa", "b", "c", "d", "e", "f", "y", "z"],
+    )
+
+    pa = a.to_pandas()
+    pb = b.to_pandas()
+
+    expected = getattr(pa, fn)(pb)
+    actual = getattr(a, fn)(b)
+
+    utils.assert_eq(expected, actual)

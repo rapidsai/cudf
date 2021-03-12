@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2020, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -56,20 +56,7 @@ public class NativeDepsLoader {
   private static final String[][] loadOrder = new String[][]{
       new String[]{
           "nvcomp",
-          "cudf_base"
-      },
-      new String[]{
-          "cudf_ast",
-          "cudf_comms",
-          "cudf_hash",
-          "cudf_interop",
-          "cudf_io",
-          "cudf_join",
-          "cudf_merge",
-          "cudf_partitioning",
-          "cudf_reductions",
-          "cudf_replace",
-          "cudf_rolling"
+          "cudf"
       },
       new String[]{
           "cudfjni"
