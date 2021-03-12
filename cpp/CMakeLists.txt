@@ -258,6 +258,7 @@ add_library(cudf
     src/lists/copying/segmented_gather.cu
     src/lists/count_elements.cu
     src/lists/extract.cu
+    src/lists/drop_list_duplicates.cu
     src/lists/lists_column_factories.cu
     src/lists/lists_column_view.cu
     src/lists/segmented_sort.cu
