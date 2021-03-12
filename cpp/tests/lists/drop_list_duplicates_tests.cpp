@@ -51,9 +51,9 @@ TEST_F(DropListDuplicatesTest, InvalidCasesTests)
   EXPECT_THROW(
     cudf::lists::drop_list_duplicates(cudf::lists_column_view{FLT_LCW{FLT_LCW{{1, 2}, {3}}}}),
     cudf::logic_error);
-  EXPECT_THROW(cudf::lists::drop_list_duplicates(
-                 cudf::lists_column_view{STR_LCW{STR_LCW{STR_LCW{"string"}}}}),
-               cudf::logic_error);
+  EXPECT_THROW(
+    cudf::lists::drop_list_duplicates(cudf::lists_column_view{STR_LCW{STR_LCW{STR_LCW{"string"}}}}),
+    cudf::logic_error);
 }
 
 TEST_F(DropListDuplicatesTest, FloatingPointTestsNonNull)
