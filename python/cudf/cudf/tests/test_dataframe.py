@@ -524,6 +524,15 @@ def test_dataframe_drop_raises():
         expected_error_message="One or more values not found in axis",
     )
 
+    # label dtype mismatch
+    assert_exceptions_equal(
+        lfunc=pdf.drop,
+        rfunc=df.drop,
+        lfunc_args_and_kwargs=([3],),
+        rfunc_args_and_kwargs=([3],),
+        expected_error_message="One or more values not found in axis",
+    )
+
     expect = pdf.drop("p", errors="ignore")
     actual = df.drop("p", errors="ignore")
 

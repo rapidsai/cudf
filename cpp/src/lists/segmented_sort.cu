@@ -167,6 +167,7 @@ struct SegmentedSortColumn {
         auto const null_replace_T = null_precedence == null_order::AFTER
                                       ? std::numeric_limits<T>::max()
                                       : std::numeric_limits<T>::min();
+
         auto device_child = column_device_view::create(child, stream);
         auto keys_in =
           cudf::detail::make_null_replacement_iterator<T>(*device_child, null_replace_T);
@@ -224,15 +225,13 @@ std::unique_ptr<column> sort_lists(lists_column_view const& input,
                                    rmm::mr::device_memory_resource* mr)
 {
   if (input.is_empty()) return empty_like(input.parent());
-  auto segment_offsets =
-    cudf::detail::slice(input.offsets(), {input.offset(), input.offsets().size()}, stream)[0];
-  // Copy list offsets.
-  auto output_offset = allocate_like(segment_offsets, mask_allocation_policy::RETAIN, mr);
+  auto output_offset = make_numeric_column(
+    input.offsets().type(), input.size() + 1, mask_state::UNALLOCATED, stream, mr);
   thrust::transform(rmm::exec_policy(stream),
-                    segment_offsets.begin<size_type>(),
-                    segment_offsets.end<size_type>(),
+                    input.offsets_begin(),
+                    input.offsets_end(),
                     output_offset->mutable_view().begin<size_type>(),
-                    [first = segment_offsets.begin<size_type>()] __device__(auto offset_index) {
+                    [first = input.offsets_begin()] __device__(auto offset_index) {
                       return offset_index - *first;
                     });
   // for numeric columns, calls Faster segmented radix sort path
