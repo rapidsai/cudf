@@ -58,24 +58,12 @@ void unary_operation(mutable_column_view output,
                      rmm::cuda_stream_view stream)
 {
   std::string hash = "prog_transform" + std::to_string(std::hash<std::string>{}(udf));
-
-  std::cout << "The program's hash is:" << std::endl;
-  std::cout << hash << std::endl;
-
-  std::cout << "the actual udf string is: " << std::endl;
-  std::cout << udf << std::endl;
-
-
-  std::cout << "cuda_source is:" << std::endl;
   std::string cuda_source = code::kernel_header;
-  std::cout << cuda_source << std::endl;
 
   if (is_ptx) {
     cuda_source += cudf::jit::parse_single_function_ptx(
                      udf, "GENERIC_UNARY_OP", cudf::jit::get_type_name(output_type), {0}) +
                    code::kernel;
-    std::cout << "cuda_source after is_ptx condition: " << std::endl;
-    std::cout << cuda_source << std::endl;
   } else {
     cuda_source += cudf::jit::parse_single_function_cuda(udf, "GENERIC_UNARY_OP") + code::kernel;
   }
@@ -91,6 +79,26 @@ void unary_operation(mutable_column_view output,
                      {cudf::jit::get_type_name(output.type()),  // list of template arguments
                       cudf::jit::get_type_name(input.type())})
     .launch(output.size(), cudf::jit::get_data_ptr(output), cudf::jit::get_data_ptr(input));
+}
+
+
+void binary_operation(column_view const& A, 
+                      column_view const& B, 
+                      std::string const& binary_udf, 
+                      data_type output_type, 
+                      column_view const& outcol_view,
+                      column_view const& outmsk_view,
+                      rmm::mr::device_memory_resource* mr)
+{
+  std::string cuda_source = code::kernel_header;
+  cuda_source += cudf::jit::parse_single_function_ptx(
+                     binary_udf, "GENERIC_BINARY_OP", cudf::jit::get_type_name(output_type), {0});
+
+  cuda_source += code::masked_binary_op_kernel;
+
+  std::cout << "*** CUDA_SOURCE ***" << std::endl;
+  std::cout << cuda_source << std::endl;
+
 }
 
 }  // namespace jit
@@ -119,6 +127,24 @@ std::unique_ptr<column> transform(column_view const& input,
   return output;
 }
 
+std::unique_ptr<column> masked_binary_op_inner(column_view const& A, 
+                                         column_view const& B, 
+                                         std::string const& binary_udf, 
+                                         data_type output_type, 
+                                         column_view const& outcol_view,
+                                         column_view const& outmsk_view,
+                                         rmm::mr::device_memory_resource* mr)
+{
+  rmm::cuda_stream_view stream = rmm::cuda_stream_default;
+  transformation::jit::binary_operation(A, B, binary_udf, output_type, outcol_view, outmsk_view, mr);
+
+  std::unique_ptr<column> output = make_fixed_width_column(
+    output_type, A.size(), copy_bitmask(A), cudf::UNKNOWN_NULL_COUNT, stream, mr);
+
+
+  return output;
+}
+
 }  // namespace detail
 
 std::unique_ptr<column> transform(column_view const& input,
@@ -139,32 +165,9 @@ std::unique_ptr<column> masked_binary_op(column_view const& A,
                                          column_view const& outmsk_view,
                                          rmm::mr::device_memory_resource* mr)
 {
-  std::cout << "ehllo " << std::endl;
-  std::cout << binary_udf << std::endl;
-
-  rmm::cuda_stream_view stream = rmm::cuda_stream_default;
-zz
-
-
-  std::string parsed_ptx = cudf::jit::parse_single_function_ptx(
-                     binary_udf, "GENERIC_BINARY_OP", cudf::jit::get_type_name(output_type), {0});
-
-
-  std::cout << "successfully parsed PTX!!!" << std::endl;
-  std::cout << "__________________________" << std::endl;
-  std::cout << parsed_ptx << std::endl;
-  std::cout << "__________________________" << std::endl;
-
-
-  std::unique_ptr<column> output = make_fixed_width_column(
-    output_type, A.size(), copy_bitmask(A), cudf::UNKNOWN_NULL_COUNT, stream, mr);
-
-
-
-
-  return output;
+  std::cout << "HERE!!" << std::endl;
+  return detail::masked_binary_op_inner(A, B, binary_udf, output_type, outcol_view, outmsk_view, mr);
 }
-
 
 
 }  // namespace cudf

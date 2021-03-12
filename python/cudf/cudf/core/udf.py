@@ -1,5 +1,4 @@
 import operator
-
 import numba
 import numpy as np
 from numba import cuda, njit
@@ -14,11 +13,14 @@ from numba.core.extending import (
 from numba.core.typing import signature
 from numba.core.typing.templates import AbstractTemplate
 from numba.cuda.cudadecl import registry as cuda_registry
-from numba.cuda.cudaimpl import lower as cuda_lower
+from numba.cuda.cudaimpl import lower as cuda_lower, registry as cuda_lowering_registry
 from numba.extending import types
 import inspect
 
+from llvmlite import ir
 from cudf.core.scalar import _NAType
+
+from numba.core.extending import make_attribute_wrapper
 
 class Masked(object):
     def __init__(self, value, valid):
@@ -36,7 +38,6 @@ class NAType(types.Type):
 
 numba_masked = MaskedType()  # name this something more natural - GM
 numba_na = NAType()
-
 
 @typeof_impl.register(Masked)
 def typeof_masked(val, c):
@@ -56,6 +57,8 @@ def type_masked(context):
 
     return typer
 
+make_attribute_wrapper(MaskedType, "value", "value")
+make_attribute_wrapper(MaskedType, "valid", "valid")
 
 @register_model(MaskedType)
 class MaskedModel(models.StructModel):
@@ -63,6 +66,13 @@ class MaskedModel(models.StructModel):
         members = [("value", types.int64), ("valid", types.bool_)]
         models.StructModel.__init__(self, dmm, fe_type, members)
 
+#@register_model(NAType) # check what model NoneType uses
+#class NAModel(models.OpaqueModel):
+#    def __init__(self, dmm, fe_type):
+#        members = []
+#        models.StructModel.__init__(self, dmm, fe_type, members)
+
+register_model(NAType)(models.OpaqueModel)
 
 @lower_builtin(Masked, types.int64, types.bool_)
 def impl_masked_constructor(context, builder, sig, args):
@@ -112,12 +122,20 @@ def masked_scalar_add_impl(context, builder, sig, args):
 
     return result._getvalue()
 
+
 @cuda_lower(operator.add, MaskedType, NAType)
 def masked_scalar_add_na_impl(context, builder, sig, args):
-    return_type = sig.return_type
-    result = cgutils.create_struct_proxy(return_type)(context, builder)
-    result.valid = False
+#    return_type = sig.return_type
+    # use context to get llvm type for a bool
+    breakpoint()
+    result = cgutils.create_struct_proxy(numba_masked)(context, builder)
+    result.valid = context.get_constant(types.boolean, 0)
     return result._getvalue()
+
+@cuda_lowering_registry.lower_constant(NAType)
+def constant_dummy(context, builder, ty, pyval):
+    # This handles None, etc.
+    return context.get_dummy_value()
 
 
 @cuda.jit(numba_masked(numba_masked, numba_masked), device=True)
@@ -137,4 +155,13 @@ def compile_udf(func):
 @cuda.jit(numba_masked(numba_masked), device=True)
 def test_scalar_null_add(masked):
     result = masked + cudf.NA
-    return masked
+    return result
+
+@cuda.jit
+def test_test_scalar_null_add(data, masks):
+    m = Masked(1, True)
+    result = test_scalar_null_add(m)
+    print(result.value)
+    print(types.int8(result.valid))
+    data[0] = result.value
+    masks[0] = result.valid

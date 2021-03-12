@@ -28,9 +28,9 @@ const char* kernel_header =
     #include <cuda/std/climits>
     #include <cuda/std/cstddef>
     #include <cuda/std/limits>
-
     #include <cudf/types.hpp>
     #include <cudf/wrappers/timestamps.hpp>
+    #include <cudf/utilities/bit.hpp>
 
     struct Masked {
       int value;
@@ -54,10 +54,6 @@ const char* kernel =
         int start = tid + blkid * blksz;
         int step = blksz * gridsz;
 
-        Masked m;
-        m.value = 1;
-        m.valid = true;
-
         for (cudf::size_type i=start; i<size; i+=step) {
           GENERIC_UNARY_OP(&out_data[i], in_data[i]);  
         }
@@ -70,8 +66,15 @@ const char* masked_binary_op_kernel =
 
     template <typename TypeOut, typename TypeIn1, typename TypeIn2>
     __global__
-    void kernel(cudf::size_type size,
-                    TypeOut* out_data, TypeIn1* in_data1, TypeIn2 in_data2) {
+    void kernel(cudf::size_type size, 
+                cudf::size_type offset,
+                TypeOut* out_data, 
+                cudf::bitmask_type const* out_mask,
+                TypeIn1* in_data1, 
+                cudf::bitmask_type const* in_data1_mask,
+                TypeIn2* in_data2,
+                cudf::bitmask_type const* in_data2_mask
+    ) {
         int tid = threadIdx.x;
         int blkid = blockIdx.x;
         int blksz = blockDim.x;
@@ -80,10 +83,21 @@ const char* masked_binary_op_kernel =
         int start = tid + blkid * blksz;
         int step = blksz * gridsz;
 
-        Masked m;
+        Masked output;
 
         for (cudf::size_type i=start; i<size; i+=step) {
-          GENERIC_BINARY_OP(&out_data[i], in_data1[i], in_data2[i]);  
+          bool mask_1 = cudf::bit_is_set(in_data1_mask, offset + i);
+          bool mask_2 = cudf::bit_is_set(in_data2_mask, offset + i);
+          
+          GENERIC_BINARY_OP(&output, 
+                            in_data1[i], 
+                            mask_1, 
+                            in_data2[i],
+                            mask_2);  
+
+          out_data[i] = output.value;
+          out_mask[i] = output.valid;
+
         }
     }
   )***";

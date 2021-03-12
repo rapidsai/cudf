@@ -24,6 +24,7 @@ extern const char* kernel_header;
 extern const char* kernel;
 extern const char* traits;
 extern const char* operation;
+extern const char* masked_binary_op_kernel;
 
 }  // namespace code
 }  // namespace jit
