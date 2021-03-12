@@ -42,12 +42,12 @@ constexpr size_type NULL_VALUE{std::numeric_limits<size_type>::max()};
 namespace detail {
 namespace {
 
-template <typename T, typename StrictWeakOrderingLeft, typename StrictWeakOrderingRight>
+template <typename T, typename LeftComparator, typename RightComparator>
 struct bin_finder
 {
     bin_finder(
-            device_span<T> left_span,
-            device_span<T> right_span
+            detail::device_span<T> left_span,
+            detail::device_span<T> right_span
             )
         : m_left_span(left_span), m_right_span(right_span)
     {}
@@ -78,46 +78,44 @@ struct bin_finder
         return (m_right_comp(value, m_right_span[index])) ? index : NULL_VALUE;
     }
 
-    device_span<T> m_left_span{};  // The range of data containing all left bin edges.
-    device_span<T> m_right_span{};  // The range of data containing all right bin edges.
-    // TODO: Can I implement these as static members rather than making an instance on construction?
-    StrictWeakOrderingLeft m_left_comp{}; // Comparator used for left edges.
-    StrictWeakOrderingRight m_right_comp{}; // Comparator used for left edges.
+    detail::device_span<T> m_left_span{};  // The range of data containing all left bin edges.
+    detail::device_span<T> m_right_span{};  // The range of data containing all right bin edges.
+    LeftComparator m_left_comp{}; // Comparator used for left edges.
+    RightComparator m_right_comp{}; // Comparator used for left edges.
 };
 
 
+// Functor to identify rows that should be filtered out based on the sentinel set by bin_finder::operator().
 struct filter_null_sentinel
 {
     __device__ bool operator()(size_type i)
     {
-        return (i != NULL_VALUE);
+        return i != NULL_VALUE;
     }
 };
 
 /// Bin the input by the edges in left_edges and right_edges.
-template <typename T, typename StrictWeakOrderingLeft, typename StrictWeakOrderingRight, bool InputIsNullable>
+template <typename T, typename LeftComparator, typename RightComparator, bool InputIsNullable>
 std::unique_ptr<column> bin(column_view const& input, 
                             column_view const& left_edges,
                             column_view const& right_edges,
                             rmm::mr::device_memory_resource * mr)
 {
     auto output = cudf::make_numeric_column(data_type(type_to_id<size_type>()), input.size());
-    // TODO: Figure out why auto doesn't work here (or rather, why this works
-    // but then calls to begin/end later fail). I imagine suitable addition of
-    // a "template" keyword will fix it.
-    cudf::mutable_column_view output_mutable_view = output->mutable_view();
+    auto output_mutable_view = output->mutable_view();
+    auto input_device_view = column_device_view::create(input);
 
     thrust::transform(thrust::device,
-            column_device_view::create(input)->pair_begin<T, InputIsNullable>(),
-            column_device_view::create(input)->pair_end<T, InputIsNullable>(),
+            input_device_view->pair_begin<T, InputIsNullable>(),
+            input_device_view->pair_end<T, InputIsNullable>(),
             output_mutable_view.begin<size_type>(),
             // Must specify const T as the template type because the column
             // views provided on the edges will always return const types. The
             // template arguments to `datq` need not specify const since that
             // const is added as part of the signature.
-            bin_finder<const T, StrictWeakOrderingLeft, StrictWeakOrderingRight>(
-                cudf::detail::device_span<const T>(left_edges.data<T>(), left_edges.size()),
-                cudf::detail::device_span<const T>(right_edges.data<T>(), right_edges.size())
+            bin_finder<const T, LeftComparator, RightComparator>(
+                detail::device_span<const T>(left_edges.data<T>(), left_edges.size()),
+                detail::device_span<const T>(right_edges.data<T>(), right_edges.size())
                 )
             );
 
@@ -194,11 +192,6 @@ struct bin_type_dispatcher {
     }
 };
 
-
-
-// TODO: Figure out how this is instantiated for export to Python.  We need
-// explicit template instantiations (or some automatic template metaprogramming
-// solution) somewhere to make this available to Python.
 
 /// Bin the input by the edges in left_edges and right_edges.
 std::unique_ptr<column> bin(column_view const& input, 

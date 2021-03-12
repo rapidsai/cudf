@@ -16,6 +16,7 @@
 
 #pragma once
 
+#include <cudf/column/column.hpp>
 #include <cudf/column/column_view.hpp>
 #include <rmm/mr/device/device_memory_resource.hpp>
 #include <rmm/mr/device/per_device_resource.hpp>

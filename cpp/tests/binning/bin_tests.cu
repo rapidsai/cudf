@@ -227,11 +227,7 @@ struct FloatingPointBinTestFixture : public BinTestFixture {
         fwc_wrapper<T> right_edges{1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 10.0};
         fwc_wrapper<T> input{2.5, 2.5, 2.5, 2.5, 2.5, 2.5, 2.5, 2.5, 2.5, 2.5};
 
-        // TODO: For some reason, auto doesn't work here. It _did_ work prior to my
-        // turning this into a parameterized test, so my best gues is that some of
-        // the template magic that Google Test is doing is making automatic type
-        // detection fail.
-        std::unique_ptr<cudf::column> result = cudf::bin(
+        auto result = cudf::bin(
                 input,
                 left_edges,
                 cudf::inclusive::YES,
