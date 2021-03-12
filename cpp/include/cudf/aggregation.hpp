@@ -75,6 +75,7 @@ class aggregation {
     NTH_ELEMENT,     ///< get the nth element
     ROW_NUMBER,      ///< get row-number of current index (relative to rolling window)
     COLLECT_LIST,    ///< collect values into a list
+    COLLECT_SET,     ///< collect values into a list without duplicate entries
     LEAD,            ///< window function, accesses row at specified offset following current row
     LAG,             ///< window function, accesses row at specified offset preceding current row
     PTX,             ///< PTX  UDF based reduction
@@ -215,6 +216,20 @@ std::unique_ptr<aggregation> make_row_number_aggregation();
  * @param null_handling Indicates whether to include/exclude nulls in list elements.
  */
 std::unique_ptr<aggregation> make_collect_list_aggregation(
+  null_policy null_handling = null_policy::INCLUDE);
+
+/**
+ * @brief Factory to create a COLLECT_SET aggregation
+ *
+ * `COLLECT_SET` returns a lists column of all included elements in the group/series. Within each
+ * list, the duplicated entries are dropped out such that each entry appears only once.
+ *
+ * If `null_handling` is set to `EXCLUDE`, null elements are dropped from each
+ * of the list rows.
+ *
+ * @param null_handling Indicates whether to include/exclude nulls in list elements.
+ */
+std::unique_ptr<aggregation> make_collect_set_aggregation(
   null_policy null_handling = null_policy::INCLUDE);
 
 /// Factory to create a LAG aggregation

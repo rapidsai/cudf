@@ -341,6 +341,27 @@ struct collect_list_aggregation final : derived_aggregation<nunique_aggregation>
 };
 
 /**
+ * @brief Derived aggregation class for specifying COLLECT_SET aggregation
+ */
+struct collect_set_aggregation final : derived_aggregation<nunique_aggregation> {
+  explicit collect_set_aggregation(null_policy null_handling = null_policy::INCLUDE)
+    : derived_aggregation{COLLECT_SET}, _null_handling{null_handling}
+  {
+  }
+  null_policy _null_handling;  ///< include or exclude nulls
+
+ protected:
+  friend class derived_aggregation<nunique_aggregation>;
+
+  bool operator==(nunique_aggregation const& other) const
+  {
+    return _null_handling == other._null_handling;
+  }
+
+  size_t hash_impl() const { return std::hash<int>{}(static_cast<int>(_null_handling)); }
+};
+
+/**
  * @brief Sentinel value used for `ARGMAX` aggregation.
  *
  * The output column for an `ARGMAX` aggregation is initialized with the
