@@ -593,13 +593,12 @@ struct duration_scalar : chrono_scalar<T> {
   typename T::rep count() { return this->value().count(); }
 };
 
-
 class list_scalar : public scalar {
-  public:
+ public:
   using value_type = cudf::list_view;
 
   list_scalar() : scalar(data_type(type_id::LIST)) {}
-  ~list_scalar()                          = default;
+  ~list_scalar()                        = default;
   list_scalar(list_scalar&& other)      = default;
   list_scalar(list_scalar const& other) = default;
   list_scalar& operator=(list_scalar const& other) = delete;
@@ -638,7 +637,7 @@ class list_scalar : public scalar {
    */
   cudf::column_view data() const { return _data.view(); }
 
-  private:
+ private:
   cudf::column _data;
 };
 
