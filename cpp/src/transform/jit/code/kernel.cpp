@@ -31,10 +31,17 @@ const char* kernel_header =
 
     #include <cudf/types.hpp>
     #include <cudf/wrappers/timestamps.hpp>
+
+    struct Masked {
+      int value;
+      bool valid;
+    };
+
   )***";
 
 const char* kernel =
   R"***(
+
     template <typename TypeOut, typename TypeIn>
     __global__
     void kernel(cudf::size_type size,
@@ -47,6 +54,10 @@ const char* kernel =
         int start = tid + blkid * blksz;
         int step = blksz * gridsz;
 
+        Masked m;
+        m.value = 1;
+        m.valid = true;
+
         for (cudf::size_type i=start; i<size; i+=step) {
           GENERIC_UNARY_OP(&out_data[i], in_data[i]);  
         }
@@ -55,6 +66,8 @@ const char* kernel =
 
 const char* masked_binary_op_kernel = 
   R"***(
+    
+
     template <typename TypeOut, typename TypeIn1, typename TypeIn2>
     __global__
     void kernel(cudf::size_type size,
@@ -67,8 +80,10 @@ const char* masked_binary_op_kernel =
         int start = tid + blkid * blksz;
         int step = blksz * gridsz;
 
+        Masked m;
+
         for (cudf::size_type i=start; i<size; i+=step) {
-          GENERIC_BINARY_OP(&out_data[i], in_data[i]);  
+          GENERIC_BINARY_OP(&out_data[i], in_data1[i], in_data2[i]);  
         }
     }
   )***";

@@ -42,7 +42,9 @@ cdef extern from "cudf/transform.hpp" namespace "cudf" nogil:
         column_view A,
         column_view B, 
         string binary_udf,
-        data_type output_type
+        data_type output_type,
+        column_view outcol_view,
+        column_view outmask_view,
     ) except +
 
     cdef pair[unique_ptr[table], unique_ptr[column]] encode(

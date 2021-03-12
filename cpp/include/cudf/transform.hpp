@@ -59,6 +59,8 @@ std::unique_ptr<column> masked_binary_op(
   column_view const& B,
   std::string const& binary_udf,
   data_type output_type,
+  column_view const& outcol_view,
+  column_view const& outmsk_view,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 

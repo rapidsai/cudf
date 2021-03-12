@@ -147,12 +147,20 @@ def masked_binary_op(Column A, Column B, op):
     )
     c_dtype = data_type(c_tid)
 
+    cdef Column output_column = cudf.core.column.column_empty(len(A), dtype='int64')
+    cdef Column output_mask = cudf.core.column.column_empty(len(A), dtype='bool')
+
+    cdef column_view outcol_view = output_column.view()
+    cdef column_view outmsk_view = output_mask.view()
+
     with nogil:
         c_output = move(libcudf_transform.masked_binary_op(
             A_view,
             B_view,
             c_str,
             c_dtype,
+            outcol_view,
+            outmsk_view
         ))
 
     return Column.from_unique_ptr(move(c_output))
