@@ -26,6 +26,7 @@
 #include <cudf/lists/list_view.cuh>
 #include <cudf/null_mask.hpp>
 #include <cudf/strings/string_view.cuh>
+#include <cudf/structs/struct_view.hpp>
 #include <cudf/utilities/bit.hpp>
 #include <cudf/utilities/error.hpp>
 #include <cudf/utilities/span.hpp>
