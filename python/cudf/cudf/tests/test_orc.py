@@ -729,7 +729,7 @@ def test_orc_bool_encode_fail():
 def test_nanoseconds_overflow(tmpdir):
     path = tmpdir.join("nano64bit.orc")
     # Use nanosecond values that take more than 32 bits to encode
-    s = cudf.Series([710424008, -338482640], dtype="datetime64[ns]")
+    s = cudf.Series([710424008, -1338482640], dtype="datetime64[ns]")
     expected = cudf.DataFrame({"s": s})
     expected.to_orc(path)
 
