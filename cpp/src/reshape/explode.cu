@@ -37,14 +37,15 @@ namespace cudf {
 namespace detail {
 namespace {
 
-std::unique_ptr<table> build_table(table_view const& input_table,
-                                   size_type const explode_column_idx,
-                                   column_view const& sliced_child,
-                                   cudf::device_span<size_type> const gather_map,
-                                   cudf::device_span<size_type> const explode_col_gather_map,
-                                   thrust::optional<rmm::device_uvector<size_type>> position_array,
-                                   rmm::cuda_stream_view stream,
-                                   rmm::mr::device_memory_resource* mr)
+std::unique_ptr<table> build_table(
+  table_view const& input_table,
+  size_type const explode_column_idx,
+  column_view const& sliced_child,
+  cudf::device_span<size_type const> gather_map,
+  thrust::optional<cudf::device_span<size_type const>> explode_col_gather_map,
+  thrust::optional<rmm::device_uvector<size_type>> position_array,
+  rmm::cuda_stream_view stream,
+  rmm::mr::device_memory_resource* mr)
 {
   auto select_iter = thrust::make_transform_iterator(
     thrust::make_counting_iterator(0),
@@ -61,10 +62,10 @@ std::unique_ptr<table> build_table(table_view const& input_table,
   std::vector<std::unique_ptr<column>> columns = gathered_table.release()->release();
 
   columns.insert(columns.begin() + explode_column_idx,
-                 explode_col_gather_map.size() > 0
+                 explode_col_gather_map
                    ? std::move(detail::gather(table_view({sliced_child}),
-                                              explode_col_gather_map.begin(),
-                                              explode_col_gather_map.end(),
+                                              explode_col_gather_map->begin(),
+                                              explode_col_gather_map->end(),
                                               cudf::out_of_bounds_policy::NULLIFY,
                                               stream,
                                               mr)
@@ -108,7 +109,14 @@ std::unique_ptr<table> explode(table_view const& input_table,
                       counting_iter + gather_map.size(),
                       gather_map.begin());
 
-  return build_table(input_table, explode_column_idx, sliced_child, gather_map, {}, {}, stream, mr);
+  return build_table(input_table,
+                     explode_column_idx,
+                     sliced_child,
+                     gather_map,
+                     thrust::nullopt,
+                     thrust::nullopt,
+                     stream,
+                     mr);
 }
 
 std::unique_ptr<table> explode_position(table_view const& input_table,
@@ -148,8 +156,14 @@ std::unique_ptr<table> explode_position(table_view const& input_table,
       return lb_idx;
     });
 
-  return build_table(
-    input_table, explode_column_idx, sliced_child, gather_map, {}, std::move(pos), stream, mr);
+  return build_table(input_table,
+                     explode_column_idx,
+                     sliced_child,
+                     gather_map,
+                     thrust::nullopt,
+                     std::move(pos),
+                     stream,
+                     mr);
 }
 
 std::unique_ptr<table> explode_outer(table_view const& input_table,
@@ -164,7 +178,7 @@ std::unique_ptr<table> explode_outer(table_view const& input_table,
   auto offsets       = explode_col.offsets_begin();
 
   // number of nulls or empty lists found so far in the explode column
-  rmm::device_uvector<size_type> null_offset(explode_col.size(), stream);
+  rmm::device_uvector<size_type> null_or_empty_offset(explode_col.size(), stream);
 
   auto null_or_empty = thrust::make_transform_iterator(
     thrust::make_counting_iterator(0),
@@ -174,9 +188,10 @@ std::unique_ptr<table> explode_outer(table_view const& input_table,
   thrust::inclusive_scan(rmm::exec_policy(stream),
                          null_or_empty,
                          null_or_empty + sliced_child.size(),
-                         null_offset.begin());
+                         null_or_empty_offset.begin());
 
-  auto null_or_empty_count = null_offset.size() > 0 ? null_offset.back_element(stream) : 0;
+  auto null_or_empty_count =
+    null_or_empty_offset.size() > 0 ? null_or_empty_offset.back_element(stream) : 0;
   if (null_or_empty_count == 0) {
     // performance penalty to run the below loop if there are no nulls or empty lists.
     // run simple explode instead
@@ -203,22 +218,23 @@ std::unique_ptr<table> explode_outer(table_view const& input_table,
                     position_array         = pos.begin(),
                     include_position,
                     offsets,
-                    null_offset = null_offset.begin(),
+                    null_or_empty_offset = null_or_empty_offset.begin(),
                     null_or_empty,
                     offset_size = explode_col.offsets().size() - 1] __device__(auto idx) {
                      auto lb_idx = thrust::distance(
                        offsets_minus_one,
                        thrust::lower_bound(
                          thrust::seq, offsets_minus_one, offsets_minus_one + (offset_size), idx));
-                     auto index_to_write                    = null_offset[lb_idx] + idx;
+                     auto index_to_write                    = null_or_empty_offset[lb_idx] + idx;
                      gather_map[index_to_write]             = lb_idx;
                      explode_col_gather_map[index_to_write] = idx;
                      if (include_position) {
                        position_array[index_to_write] = idx - (offsets[lb_idx] - offsets[0]);
                      }
                      if (null_or_empty[idx]) {
-                       auto invalid_index =
-                         null_offset[idx] == 0 ? offsets[idx] : offsets[idx] + null_offset[idx] - 1;
+                       auto invalid_index = null_or_empty_offset[idx] == 0
+                                              ? offsets[idx]
+                                              : offsets[idx] + null_or_empty_offset[idx] - 1;
                        gather_map[invalid_index] = idx;
 
                        // negative one to indicate a null value
