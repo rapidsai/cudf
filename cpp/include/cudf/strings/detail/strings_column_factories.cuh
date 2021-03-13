@@ -97,7 +97,7 @@ std::unique_ptr<column> make_strings_column(IndexPairIterator begin,
   std::unique_ptr<column> chars_column = [&] {
     // use a character-parallel kernel for long string lengths
     auto const avg_bytes_per_row = bytes / std::max(strings_count - null_count, 1);
-    if (avg_bytes_per_row > 0) {  // FACTORY_BYTES_PER_ROW_THRESHOLD
+    if (avg_bytes_per_row > FACTORY_BYTES_PER_ROW_THRESHOLD) {
       auto const d_offsets =
         device_span<size_type const>{offsets_column->view().template data<int32_t>(),
                                      static_cast<std::size_t>(offsets_column->size())};
