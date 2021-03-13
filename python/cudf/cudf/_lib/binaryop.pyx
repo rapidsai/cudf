@@ -93,6 +93,9 @@ class BinaryOperation(IntEnum):
     GENERIC_BINARY = (
         <underlying_type_t_binary_operator> binary_operator.GENERIC_BINARY
     )
+    NULL_EQUALS = (
+        <underlying_type_t_binary_operator> binary_operator.NULL_EQUALS
+    )
 
 
 cdef binaryop_v_v(Column lhs, Column rhs,
