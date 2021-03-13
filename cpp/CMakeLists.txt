@@ -469,7 +469,7 @@ else()
 endif()
 
 # Add cuFile interface if available
-if(cuFile_FOUND AND NOT TARGET cuFile::cuFile_interface)
+if(cuFile_FOUND)
     target_link_libraries(cudf PRIVATE cuFile::cuFile_interface)
 endif()
 
