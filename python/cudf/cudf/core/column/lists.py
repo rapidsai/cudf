@@ -6,8 +6,9 @@ import pyarrow as pa
 
 import cudf
 from cudf._lib.lists import count_elements
+from cudf._lib.copying import segmented_gather
 from cudf.core.buffer import Buffer
-from cudf.core.column import ColumnBase, column
+from cudf.core.column import ColumnBase, column, as_column
 from cudf.core.column.methods import ColumnMethodsMixin
 from cudf.utils.dtypes import is_list_dtype
 
@@ -228,3 +229,39 @@ class ListMethods(ColumnMethodsMixin):
         dtype: int32
         """
         return self._return_or_inplace(count_elements(self._column))
+
+    def take(self, lists_indices):
+        """
+        Collect list elements based on given indices.
+
+        Parameters
+        ----------
+        lists_indices: List of non-nullable lists of position types
+                       Specifies what to collect from each row
+
+        Returns
+        -------
+        ListColumn
+
+        Examples
+        --------
+        >>> s = cudf.Series([[1, 2, 3], None, [4, 5]])
+        >>> s
+        0    [1, 2, 3]
+        1         None
+        2       [4, 5]
+        dtype: list
+        >>> s.take([[0, 1], [], []])
+        0    [1, 2]
+        1      None
+        2        []
+        dtype: list
+        """
+
+        pa_lists_indices = pa.array(lists_indices)
+        if not pa_lists_indices.type == pa.ListType or not pa.types.is_integer(pa_lists_indices.value.type) or pa_lists_indices.null_count > 0:
+            raise ValueError("lists_indices is not a list of non-nullable"
+                                "lists of position types.")
+        lists_indices_col = as_column(pa_lists_indices)
+
+        return self._return_or_inplace(segmented_gather(self._column, lists_indices_col))
