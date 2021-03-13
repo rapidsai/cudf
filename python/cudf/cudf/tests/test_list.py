@@ -145,6 +145,7 @@ def test_extract_nested_lists():
 
 def test_extract_nulls():
     # TODO: do we really want this?
+    # this test fails because 100 (index) > 0 (min)
     sr = cudf.Series([[], [], []])
     got = sr.list.extract(100)
     expect = cudf.Series([None, None, None], dtype="int8")

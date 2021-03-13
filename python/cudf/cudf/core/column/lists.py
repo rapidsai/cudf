@@ -178,7 +178,8 @@ class ListMethods(ColumnMethodsMixin):
 
     def extract(self, index):
         """
-        Extracts the element at the given index from each row of a Series of lists
+        Extracts the element at the given index from each
+        row of a Series of lists
 
         Parameters
         ----------
@@ -192,13 +193,16 @@ class ListMethods(ColumnMethodsMixin):
         Examples
         --------
         >>> s = cudf.Series([[1, 2, 3], [3, 4, 5], [4, 5, 6]])
-        >>> s.list.extract(-1) 
+        >>> s.list.extract(-1)
         0    3
         1    5
         2    6
         dtype: int64
         """
         if abs(index) >= self.len().min():
+            # TODO: handle case when  index == -self.len().min()
+            # e.g: index= -3 should return [1,3,4]
+            # instead of IndexError
             raise IndexError("IndexError: list index out of range")
 
         return self._return_or_inplace(extract_element(self._column, index))
