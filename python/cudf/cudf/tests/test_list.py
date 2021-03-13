@@ -112,3 +112,32 @@ def test_len(data):
     got = gsr.list.len()
 
     assert_eq(expect, got, check_dtype=False)
+
+
+@pytest.mark.parametrize(
+    "data, key, expect",
+    [
+        ([[1, 2, 3], [3, 4, 5], [4, 5, 6]], 4, [False, True, True]),
+        (
+            [[1, 2.0, 3.0], [3.0, 4.0, 5], [4.0, 5, 6.0]],
+            4.0,
+            [False, True, True],
+        ),
+        (
+            [["a", "b", "c"], ["b", "e", "f"], ["e", "g", "m"]],
+            "b",
+            [True, True, False],
+        ),
+        (
+            [[False, True, True], [False, False, False], [True, True, False]],
+            True,
+            [True, False, True],
+        ),
+        # ([[None, None], [None, None]]) --> what to expect for null scalar
+    ],
+)
+def test_contains(data, key, expect):
+    sr = cudf.Series(data)
+    expect = cudf.Series(expect)
+    got = sr.list.contains(key)
+    assert_eq(expect, got)

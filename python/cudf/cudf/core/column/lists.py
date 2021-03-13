@@ -5,7 +5,7 @@ import pickle
 import pyarrow as pa
 
 import cudf
-from cudf._lib.lists import count_elements
+from cudf._lib.lists import contains_scalar, count_elements
 from cudf.core.buffer import Buffer
 from cudf.core.column import ColumnBase, column
 from cudf.core.column.methods import ColumnMethodsMixin
@@ -197,7 +197,10 @@ class ListMethods(ColumnMethodsMixin):
         Series([False, True, True])
         dtype:
         """
-        pass
+        search_key = cudf.Scalar(key).device_value
+        return self._return_or_inplace(
+            contains_scalar(self._column, search_key)
+        )
 
     @property
     def leaves(self):

@@ -12,5 +12,4 @@ cdef extern from "cudf/lists/contains.hpp" namespace "cudf::lists" nogil:
     cdef unique_ptr[column] contains(
         lists_column_view lists,
         scalar search_key,
-        column_view search_keys
     ) except +

@@ -36,7 +36,7 @@ def count_elements(Column col):
     return result
 
 
-def contains_elements(Column col, DeviceScalar search_key, Column search_keys):
+def contains_scalar(Column col, DeviceScalar search_key):
     if not isinstance(col.dtype, ListDtype):
         raise TypeError("col is not a list column.")
 
@@ -46,7 +46,6 @@ def contains_elements(Column col, DeviceScalar search_key, Column search_keys):
         make_shared[lists_column_view](col.view())
     )
     cdef const scalar* search_key_value = search_key.get_raw_ptr()
-    cdef column_view search_keys_view = search_keys.view()
 
     cdef unique_ptr[column] c_result
 
@@ -54,8 +53,7 @@ def contains_elements(Column col, DeviceScalar search_key, Column search_keys):
         c_result = move(contains(
             list_view.get()[0],
             search_key_value[0],
-            search_keys_view
-        )
+        ))
 
     result = Column.from_unique_ptr(move(c_result))
     return result
