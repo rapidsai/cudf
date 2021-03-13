@@ -14,6 +14,8 @@
  * limitations under the License.
  */
 
+#include "string_bench_args.hpp"
+
 #include <benchmark/benchmark.h>
 #include <benchmarks/common/generate_benchmark_input.hpp>
 #include <benchmarks/fixture/benchmark_fixture.hpp>
@@ -29,8 +31,6 @@
 #include <thrust/transform.h>
 
 #include <limits>
-
-#include "string_bench_args.hpp"
 
 namespace {
 using string_pair = thrust::pair<char const*, cudf::size_type>;
