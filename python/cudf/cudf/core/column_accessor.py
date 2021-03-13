@@ -86,15 +86,15 @@ class ColumnAccessor(MutableMapping):
         return len(self._data)
 
     def __repr__(self) -> str:
-        data_repr = self._data.__repr__()
-        multiindex_repr = self.multiindex.__repr__()
-        level_names_repr = self.level_names.__repr__()
-        return "{}({}, multiindex={}, level_names={})".format(
-            self.__class__.__name__,
-            data_repr,
-            multiindex_repr,
-            level_names_repr,
+        type_info = (
+            f"{self.__class__.__name__}("
+            f"multiindex={self.multiindex}, "
+            f"level_names={self.level_names})"
         )
+        column_info = "\n".join(
+            [f"{name}: {col.dtype}" for name, col in self.items()]
+        )
+        return f"{type_info}\n{column_info}"
 
     @property
     def level_names(self) -> Tuple[Any, ...]:
