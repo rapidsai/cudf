@@ -20,6 +20,7 @@
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/valid_if.cuh>
+#include <cudf/strings/detail/gather.cuh>
 #include <cudf/strings/detail/utilities.hpp>
 #include <cudf/utilities/error.hpp>
 
@@ -27,7 +28,7 @@
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
 
-#include <thrust/binary_search.h>
+#include <thrust/copy.h>
 #include <thrust/for_each.h>
 #include <thrust/transform_reduce.h>
 
@@ -93,43 +94,42 @@ std::unique_ptr<column> make_strings_column(IndexPairIterator begin,
     (null_count > 0) ? std::move(new_nulls.first) : rmm::device_buffer{0, stream, mr};
 
   // build chars column
-  auto chars_column =
-    strings::detail::create_chars_child_column(strings_count, null_count, bytes, stream, mr);
-  auto d_chars = chars_column->mutable_view().template data<char>();
+  std::unique_ptr<column> chars_column = [&] {
+    // use a character-parallel kernel for long string lengths
+    auto const avg_bytes_per_row = bytes / std::max(strings_count - null_count, 1);
+    if (avg_bytes_per_row > 0) {  // FACTORY_BYTES_PER_ROW_THRESHOLD
+      auto const d_offsets =
+        device_span<size_type const>{offsets_column->view().template data<int32_t>(),
+                                     static_cast<std::size_t>(offsets_column->size())};
+      auto const str_begin = thrust::make_transform_iterator(begin, [] __device__(auto ip) {
+        return string_view{ip.first, ip.second};
+      });
 
-  // use a character-parallel kernel for long string lengths
-  auto const avg_bytes_per_row = bytes / std::max(strings_count - null_count, 1);
-  if (avg_bytes_per_row > FACTORY_BYTES_PER_ROW_THRESHOLD) {
-    auto d_offsets = offsets_column->view().template data<int32_t>();
-    // this algorithm is based on a similar one used in strings::detail::gather()
-    auto copy_chars = [begin, d_offsets, strings_count, d_chars] __device__(size_type out_idx) {
-      auto const next_row =
-        thrust::upper_bound(thrust::seq, d_offsets, d_offsets + strings_count + 1, out_idx);
-      auto const out_row = thrust::distance(d_offsets, next_row) - 1;
-      // get the corresponding pair
-      string_index_pair const in_row = begin[out_row];
-      if (in_row.first && in_row.second) {
-        auto const offset = out_idx - d_offsets[out_row];
-        d_chars[out_idx]  = in_row.first[offset];
-      }
-    };
-    thrust::for_each_n(rmm::exec_policy(stream),
-                       thrust::counting_iterator<size_type>(0),
-                       static_cast<size_type>(bytes),
-                       copy_chars);
-  } else {
-    // this approach is 2-3x faster for large number smaller string lengths
-    auto copy_chars = [d_chars] __device__(auto item) {
-      string_index_pair const str = thrust::get<0>(item);
-      size_type const offset      = thrust::get<1>(item);
-      if (str.first != nullptr) memcpy(d_chars + offset, str.first, str.second);
-    };
-    thrust::for_each_n(rmm::exec_policy(stream),
-                       thrust::make_zip_iterator(thrust::make_tuple(
-                         begin, offsets_column->view().template begin<int32_t>())),
-                       strings_count,
-                       copy_chars);
-  }
+      return gather_chars(str_begin,
+                          thrust::make_counting_iterator<size_type>(0),
+                          thrust::make_counting_iterator<size_type>(strings_count),
+                          d_offsets,
+                          static_cast<size_type>(bytes),
+                          stream,
+                          mr);
+    } else {
+      // this approach is 2-3x faster for large number smaller string lengths
+      auto chars_column =
+        strings::detail::create_chars_child_column(strings_count, null_count, bytes, stream, mr);
+      auto d_chars    = chars_column->mutable_view().template data<char>();
+      auto copy_chars = [d_chars] __device__(auto item) {
+        string_index_pair const str = thrust::get<0>(item);
+        size_type const offset      = thrust::get<1>(item);
+        if (str.first != nullptr) memcpy(d_chars + offset, str.first, str.second);
+      };
+      thrust::for_each_n(rmm::exec_policy(stream),
+                         thrust::make_zip_iterator(thrust::make_tuple(
+                           begin, offsets_column->view().template begin<int32_t>())),
+                         strings_count,
+                         copy_chars);
+      return chars_column;
+    }
+  }();
 
   return make_strings_column(strings_count,
                              std::move(offsets_column),
