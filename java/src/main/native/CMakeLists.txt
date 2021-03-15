@@ -54,7 +54,9 @@ message(VERBOSE "CUDF_JNI: Statically link the CUDA runtime: ${CUDA_STATIC_RUNTI
 message(VERBOSE "CUDF_JNI: Build with GPUDirect Storage support: ${USE_GDS}")
 
 set(CUDF_SOURCE_DIR "${PROJECT_SOURCE_DIR}/../../../../cpp")
-set(CUDF_CPP_BUILD_DIR "${CUDF_SOURCE_DIR}/build")
+if (NOT CUDF_CPP_BUILD_DIR) 
+    set(CUDF_CPP_BUILD_DIR "${CUDF_SOURCE_DIR}/build")
+endif()
 
 set(CMAKE_MODULE_PATH
     "${CMAKE_CURRENT_SOURCE_DIR}/cmake/Modules/"
