@@ -86,23 +86,23 @@ ConfigureTest(ERROR_TEST error/error_handling_test.cu)
 ###################################################################################################
 # - groupby tests ---------------------------------------------------------------------------------
 ConfigureTest(GROUPBY_TEST
-    groupby/groupby_groups_test.cpp
-    groupby/group_argmin_test.cpp
-    groupby/group_argmax_test.cpp
-    groupby/groupby_keys_test.cpp
-    groupby/group_count_test.cpp
-    groupby/group_sum_test.cpp
-    groupby/group_min_test.cpp
-    groupby/group_max_test.cpp
-    groupby/group_sum_of_squares_test.cpp
-    groupby/group_mean_test.cpp
-    groupby/group_var_test.cpp
-    groupby/group_std_test.cpp
-    groupby/group_median_test.cpp
-    groupby/group_quantile_test.cpp
-    groupby/group_nunique_test.cpp
-    groupby/group_nth_element_test.cpp
-    groupby/group_collect_test.cpp)
+    groupby/argmin_test.cpp
+    groupby/argmax_test.cpp
+    groupby/collect_list_test.cpp
+    groupby/count_test.cpp
+    groupby/groups_test.cpp
+    groupby/keys_test.cpp
+    groupby/min_test.cpp
+    groupby/max_test.cpp
+    groupby/mean_test.cpp
+    groupby/median_test.cpp
+    groupby/nunique_test.cpp
+    groupby/nth_element_test.cpp
+    groupby/quantile_test.cpp
+    groupby/std_test.cpp
+    groupby/sum_test.cpp
+    groupby/sum_of_squares_test.cpp
+    groupby/var_test.cpp)
 
 ###################################################################################################
 # - join tests ------------------------------------------------------------------------------------
