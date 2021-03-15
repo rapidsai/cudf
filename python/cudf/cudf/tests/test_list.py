@@ -128,14 +128,9 @@ def test_take(data, idx):
     ps = pd.Series(data)
     gs = cudf.from_pandas(ps)
 
-    pdf = pd.DataFrame({"data": ps, "idx": idx})
-    expected = pdf.apply(
-        lambda x: [x["data"][i] for i in x["idx"]]
-        if x["data"] is not None
-        else None,
-        axis=1,
+    expected = pd.Series(zip(ps, idx)).map(
+        lambda x: [x[0][i] for i in x[1]] if x[0] is not None else None
     )
-
     got = gs.list.take(idx)
     assert_eq(expected, got)
 
