@@ -5,10 +5,10 @@ import pickle
 import pyarrow as pa
 
 import cudf
-from cudf._lib.lists import count_elements
 from cudf._lib.copying import segmented_gather
+from cudf._lib.lists import count_elements
 from cudf.core.buffer import Buffer
-from cudf.core.column import ColumnBase, column, as_column
+from cudf.core.column import ColumnBase, as_column, column
 from cudf.core.column.methods import ColumnMethodsMixin
 from cudf.utils.dtypes import is_list_dtype
 
@@ -236,7 +236,7 @@ class ListMethods(ColumnMethodsMixin):
 
         Parameters
         ----------
-        lists_indices: List of non-nullable lists of position types
+        lists_indices: List type arrays
                        Specifies what to collect from each row
 
         Returns
@@ -251,17 +251,28 @@ class ListMethods(ColumnMethodsMixin):
         1         None
         2       [4, 5]
         dtype: list
-        >>> s.take([[0, 1], [], []])
+        >>> s.list.take([[0, 1], [], []])
         0    [1, 2]
         1      None
         2        []
         dtype: list
         """
 
-        pa_lists_indices = pa.array(lists_indices)
-        if not pa_lists_indices.type == pa.ListType or not pa.types.is_integer(pa_lists_indices.value.type) or pa_lists_indices.null_count > 0:
-            raise ValueError("lists_indices is not a list of non-nullable"
-                                "lists of position types.")
-        lists_indices_col = as_column(pa_lists_indices)
-
-        return self._return_or_inplace(segmented_gather(self._column, lists_indices_col))
+        lists_indices_col = as_column(lists_indices)
+        if not isinstance(lists_indices_col, ListColumn):
+            raise ValueError("lists_indices should be list type array.")
+        if not len(lists_indices_col) == self._column.size:
+            raise ValueError(
+                "lists_indices and list column is of different " "size."
+            )
+        try:
+            res = segmented_gather(self._column, lists_indices_col)
+        except RuntimeError as e:
+            if "of index type" in str(e):
+                raise ValueError(
+                    "lists_indices should be column of "
+                    "values of index types."
+                )
+            if "contains nulls" in str(e):
+                raise ValueError("lists_indices contains null elements.")
+        return self._return_or_inplace(res)
