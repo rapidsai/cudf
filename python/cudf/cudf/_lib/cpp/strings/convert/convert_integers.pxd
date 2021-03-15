@@ -15,6 +15,10 @@ cdef extern from "cudf/strings/convert/convert_integers.hpp" namespace \
     cdef unique_ptr[column] from_integers(
         column_view input_col) except +
 
+    cdef unique_ptr[column] is_integer(
+        column_view source_strings
+    ) except +
+
     cdef unique_ptr[column] hex_to_integers(
         column_view input_col,
         data_type output_type) except +
