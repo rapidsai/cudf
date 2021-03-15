@@ -2,6 +2,7 @@
 
 import pickle
 
+import numpy as np
 import pyarrow as pa
 
 import cudf
@@ -10,7 +11,7 @@ from cudf._lib.lists import count_elements
 from cudf.core.buffer import Buffer
 from cudf.core.column import ColumnBase, as_column, column
 from cudf.core.column.methods import ColumnMethodsMixin
-from cudf.utils.dtypes import is_list_dtype
+from cudf.utils.dtypes import is_list_dtype, is_numerical_dtype
 
 
 class ListColumn(ColumnBase):
@@ -261,18 +262,21 @@ class ListMethods(ColumnMethodsMixin):
         lists_indices_col = as_column(lists_indices)
         if not isinstance(lists_indices_col, ListColumn):
             raise ValueError("lists_indices should be list type array.")
-        if not len(lists_indices_col) == self._column.size:
+        if not lists_indices_col.size == self._column.size:
             raise ValueError(
                 "lists_indices and list column is of different " "size."
             )
-        try:
-            res = segmented_gather(self._column, lists_indices_col)
-        except RuntimeError as e:
-            if "of index type" in str(e):
-                raise ValueError(
-                    "lists_indices should be column of "
-                    "values of index types."
-                )
-            if "contains nulls" in str(e):
-                raise ValueError("lists_indices contains null elements.")
-        return self._return_or_inplace(res)
+        if lists_indices_col.null_count > 0:
+            raise ValueError("lists_indices contains null elements.")
+        if not is_numerical_dtype(
+            lists_indices_col.children[1].dtype
+        ) or not np.issubdtype(
+            lists_indices_col.children[1].dtype, np.integer
+        ):
+            raise TypeError(
+                "lists_indices should be column of values of index types."
+            )
+
+        return self._return_or_inplace(
+            segmented_gather(self._column, lists_indices_col)
+        )

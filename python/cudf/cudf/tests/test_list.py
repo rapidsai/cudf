@@ -148,13 +148,13 @@ def test_take(data, idx):
         (
             [["a", "b"], ["c"]],
             pytest.raises(
-                ValueError, match="should be column of values of index types"
+                TypeError, match="should be column of values of index types"
             ),
         ),
         (
             [[[1], [0]], [[0]]],
             pytest.raises(
-                ValueError, match="should be column of values of index types"
+                TypeError, match="should be column of values of index types"
             ),
         ),
         ([[0, 1], None], pytest.raises(ValueError, match="contains null")),
