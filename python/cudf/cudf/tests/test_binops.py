@@ -1812,7 +1812,7 @@ def generate_test_null_equals_columnops_data():
         return column_l, column_r
 
     null_cases = ["neither", "left", "right", "both"]
-    data = [1,2,3]
+    data = [1, 2, 3]
 
     results = []
     # TODO: Numeric types can be cross compared as null equal
