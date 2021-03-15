@@ -172,10 +172,11 @@ class ColumnBase(Column, Serializable):
         if check_dtypes:
             if self.dtype != other.dtype:
                 return False
-        null_equals = libcudf.binaryop.binaryop(
-            self, other, "NULL_EQUALS", np.dtype("bool")
-        )
+        null_equals = self._null_equals(other)
         return null_equals.all()
+
+    def _null_equals(self, other: ColumnBase) -> ColumnBase:
+        return self.binary_operator("NULL_EQUALS", other)
 
     def all(self) -> bool:
         return bool(libcudf.reduce.reduce("all", self, dtype=np.bool_))

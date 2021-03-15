@@ -700,7 +700,15 @@ def _numeric_column_binop(
     if reflect:
         lhs, rhs = rhs, lhs
 
-    is_op_comparison = op in ["lt", "gt", "le", "ge", "eq", "ne"]
+    is_op_comparison = op in [
+        "lt",
+        "gt",
+        "le",
+        "ge",
+        "eq",
+        "ne",
+        "NULL_EQUALS",
+    ]
 
     if is_op_comparison:
         out_dtype = "bool"

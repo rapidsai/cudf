@@ -1789,3 +1789,55 @@ def test_equality_ops_index_mismatch(fn):
     actual = getattr(a, fn)(b).to_pandas(nullable=True)
 
     utils.assert_eq(expected, actual)
+
+
+def generate_test_null_equals_columnops_data():
+    # Generate tuples of:
+    # (left_data, right_data, compare_bool
+    # where compare_bool is the correct answer to
+    # if the columns should compare as null equals
+
+    def set_null_cases(column_l, column_r, case):
+        if case == "neither":
+            return column_l, column_r
+        elif case == "left":
+            column_l[1] = None
+        elif case == "right":
+            column_r[1] = None
+        elif case == "both":
+            column_l[1] = None
+            column_r[1] = None
+        else:
+            raise ValueError("Unknown null case")
+        return column_l, column_r
+
+    null_cases = ["neither", "left", "right", "both"]
+    data = [1,2,3]
+
+    results = []
+    # TODO: Numeric types can be cross compared as null equal
+    for dtype in (
+        list(NUMERIC_TYPES)
+        + list(DATETIME_TYPES)
+        + list(TIMEDELTA_TYPES)
+        + list(STRING_TYPES)
+        + ["category"]
+    ):
+        for case in null_cases:
+            left = cudf.Series(data, dtype=dtype)
+            right = cudf.Series(data, dtype=dtype)
+            if case in {"left", "right"}:
+                answer = False
+            else:
+                answer = True
+            left, right = set_null_cases(left, right, case)
+            results.append((left._column, right._column, answer, case))
+
+    return results
+
+
+@pytest.mark.parametrize(
+    "lcol,rcol,ans,case", generate_test_null_equals_columnops_data()
+)
+def test_null_equals_columnops(lcol, rcol, ans, case):
+    assert lcol._null_equals(rcol).all() == ans
