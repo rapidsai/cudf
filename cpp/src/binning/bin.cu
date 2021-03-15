@@ -71,8 +71,8 @@ struct bin_finder {
 
   detail::device_span<const T> m_left_span{};   // The range of data containing all left bin edges.
   detail::device_span<const T> m_right_span{};  // The range of data containing all right bin edges.
-  LeftComparator m_left_comp{};           // Comparator used for left edges.
-  RightComparator m_right_comp{};         // Comparator used for left edges.
+  LeftComparator m_left_comp{};                 // Comparator used for left edges.
+  RightComparator m_right_comp{};               // Comparator used for left edges.
 };
 
 // Functor to identify rows that should be filtered out based on the sentinel set by
@@ -204,12 +204,12 @@ std::unique_ptr<column> bin(column_view const& input,
   if (input.is_empty()) { return cudf::make_numeric_column(data_type(type_to_id<size_type>()), 0); }
 
   return type_dispatcher<dispatch_storage_type>(input.type(),
-                         bin_type_dispatcher{},
-                         input,
-                         left_edges,
-                         left_inclusive,
-                         right_edges,
-                         right_inclusive,
-                         mr);
+                                                bin_type_dispatcher{},
+                                                input,
+                                                left_edges,
+                                                left_inclusive,
+                                                right_edges,
+                                                right_inclusive,
+                                                mr);
 }
 }  // namespace cudf
