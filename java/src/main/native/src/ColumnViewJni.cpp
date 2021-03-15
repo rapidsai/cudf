@@ -760,16 +760,16 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_castTo(JNIEnv *env, jclas
   CATCH_STD(env, 0);
 }
 
-JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_logicalCastTo(JNIEnv *env, jclass,
-                                                                     jlong handle, jint type,
-                                                                     jint scale) {
+JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_bitCastTo(JNIEnv *env, jclass,
+                                                                 jlong handle, jint type,
+                                                                 jint scale) {
   JNI_NULL_CHECK(env, handle, "native handle is null", 0);
   try {
     cudf::jni::auto_set_device(env);
     cudf::column_view *column = reinterpret_cast<cudf::column_view *>(handle);
     cudf::data_type n_data_type = cudf::jni::make_data_type(type, scale);
     std::unique_ptr<cudf::column_view> result = std::make_unique<cudf::column_view>();
-    *result = cudf::logical_cast(*column, n_data_type);
+    *result = cudf::bit_cast(*column, n_data_type);
     return reinterpret_cast<jlong>(result.release());
   }
   CATCH_STD(env, 0);
@@ -1305,8 +1305,15 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_bitwiseMergeAndSetValidit
     cudf::table_view *input_table = new cudf::table_view(column_views);
 
     cudf::binary_operator op = static_cast<cudf::binary_operator>(bin_op);
-    if(op == cudf::binary_operator::BITWISE_AND) {
-      copy->set_null_mask(cudf::bitmask_and(*input_table));
+    switch(op) {
+      case cudf::binary_operator::BITWISE_AND:
+        copy->set_null_mask(cudf::bitmask_and(*input_table));
+        break;
+      case cudf::binary_operator::BITWISE_OR:
+        copy->set_null_mask(cudf::bitmask_or(*input_table));
+        break;
+      default:
+        JNI_THROW_NEW(env, cudf::jni::ILLEGAL_ARG_CLASS, "Unsupported merge operation", 0);
     }
 
     return reinterpret_cast<jlong>(copy.release());

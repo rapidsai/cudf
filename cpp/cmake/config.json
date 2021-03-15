@@ -1,0 +1,42 @@
+{
+  "parse": {
+    "additional_commands": {
+      "CPMFindPackage": {
+        "kwargs": {
+          "NAME": 1,
+          "GITHUB_REPOSITORY": "?",
+          "GIT_TAG": "?",
+          "VERSION": "?",
+          "GIT_SHALLOW": "?",
+          "OPTIONS": "*",
+          "FIND_PACKAGE_ARGUMENTS": "*" 
+        }
+      },
+      "ConfigureTest": {
+        "flags": ["TEST_NAME", "TEST_SRC"]
+      },
+      "ConfigureBench": {
+        "flags": ["BENCH_NAME", "BENCH_SRC"]
+      }
+    }
+  },
+  "format": {
+    "line_width": 100,
+    "tab_size": 2,
+    "command_case": "unchanged",
+    "max_lines_hwrap": 1,
+    "max_pargs_hwrap": 999
+  },
+  "lint": {
+    "disabled_codes": ["C0301"],
+    "function_pattern": "[0-9A-z_]+",
+    "macro_pattern": "[0-9A-z_]+",
+    "global_var_pattern": "[A-z][0-9A-z_]+",
+    "internal_var_pattern": "_[A-z][0-9A-z_]+",
+    "local_var_pattern": "[A-z][A-z0-9_]+",
+    "private_var_pattern": "_[0-9A-z_]+",
+    "public_var_pattern": "[A-z][0-9A-z_]+",
+    "argument_var_pattern": "[A-z][A-z0-9_]+",
+    "keyword_pattern": "[A-z][0-9A-z_]+"
+  }
+}

@@ -127,11 +127,20 @@ class corresponding_rows_not_equivalent {
       column_device_view const& lhs, column_device_view const& rhs, size_type index)
     {
       if (lhs.is_valid(index) and rhs.is_valid(index)) {
-        int ulp = 4;  // value taken from google test
-        T x     = lhs.element<T>(index);
-        T y     = rhs.element<T>(index);
-        return std::abs(x - y) > std::numeric_limits<T>::epsilon() * std::abs(x + y) * ulp &&
-               std::abs(x - y) >= std::numeric_limits<T>::min();
+        T const x = lhs.element<T>(index);
+        T const y = rhs.element<T>(index);
+
+        // Must handle inf and nan separately
+        if (std::isinf(x) || std::isinf(y)) {
+          return x != y;  // comparison of (inf==inf) returns true
+        } else if (std::isnan(x) || std::isnan(y)) {
+          return std::isnan(x) != std::isnan(y);  // comparison of (nan==nan) returns false
+        } else {
+          constexpr int ulp     = 4;  // ulp = unit of least precision, value taken from google test
+          T const abs_x_minus_y = std::abs(x - y);
+          return abs_x_minus_y >= std::numeric_limits<T>::min() &&
+                 abs_x_minus_y > std::numeric_limits<T>::epsilon() * std::abs(x + y) * ulp;
+        }
       } else {
         // if either is null, then the inequality was checked already
         return true;
@@ -181,7 +190,8 @@ std::string stringify_column_differences(thrust::device_vector<int> const& diffe
       fixed_width_column_wrapper<int32_t>(h_differences.begin(), h_differences.end());
     auto diff_table = cudf::gather(source_table, diff_column);
     //  Need to pull back the differences
-    auto const h_left_strings  = to_strings(diff_table->get_column(0));
+    auto const h_left_strings = to_strings(diff_table->get_column(0));
+
     auto const h_right_strings = to_strings(diff_table->get_column(1));
     for (size_t i = 0; i < h_differences.size(); ++i)
       buffer << depth_str << "lhs[" << h_differences[i] << "] = " << h_left_strings[i] << ", rhs["

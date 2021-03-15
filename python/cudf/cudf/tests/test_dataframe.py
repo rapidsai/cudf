@@ -524,6 +524,15 @@ def test_dataframe_drop_raises():
         expected_error_message="One or more values not found in axis",
     )
 
+    # label dtype mismatch
+    assert_exceptions_equal(
+        lfunc=pdf.drop,
+        rfunc=df.drop,
+        lfunc_args_and_kwargs=([3],),
+        rfunc_args_and_kwargs=([3],),
+        expected_error_message="One or more values not found in axis",
+    )
+
     expect = pdf.drop("p", errors="ignore")
     actual = df.drop("p", errors="ignore")
 
@@ -1214,7 +1223,7 @@ def test_dataframe_concat_different_numerical_columns(dtype1, dtype2):
 
 
 def test_dataframe_concat_different_column_types():
-    df1 = cudf.Series([42], dtype=np.float)
+    df1 = cudf.Series([42], dtype=np.float64)
     df2 = cudf.Series(["a"], dtype="category")
     with pytest.raises(ValueError):
         cudf.concat([df1, df2])
@@ -2353,7 +2362,7 @@ def test_head_tail(nelem, data_type):
 
 def test_tail_for_string():
     gdf = cudf.DataFrame()
-    gdf["id"] = cudf.Series(["a", "b"], dtype=np.object)
+    gdf["id"] = cudf.Series(["a", "b"], dtype=np.object_)
     gdf["v"] = cudf.Series([1, 2])
     assert_eq(gdf.tail(3), gdf.to_pandas().tail(3))
 

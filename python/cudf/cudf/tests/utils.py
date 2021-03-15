@@ -1,4 +1,4 @@
-# Copyright (c) 2020, NVIDIA CORPORATION.
+# Copyright (c) 2020-2021, NVIDIA CORPORATION.
 
 import re
 from collections.abc import Mapping, Sequence
@@ -259,7 +259,9 @@ def gen_rand(dtype, size, **kwargs):
     elif dtype.kind == "b":
         low = kwargs.get("low", 0)
         high = kwargs.get("high", 2)
-        return np.random.randint(low=low, high=high, size=size).astype(np.bool)
+        return np.random.randint(low=low, high=high, size=size).astype(
+            np.bool_
+        )
     elif dtype.kind == "M":
         low = kwargs.get("low", 0)
         time_unit, _ = np.datetime_data(dtype)
