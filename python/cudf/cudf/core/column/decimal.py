@@ -64,7 +64,11 @@ class DecimalColumn(ColumnBase):
     def binary_operator(self, op, other, reflect=False):
         if reflect:
             self, other = other, self
-        result = libcudf.binaryop.binaryop(self, other, op, "int32")
+        scale = _binop_scale(self.dtype, other.dtype, op)
+        output_type = Decimal64Dtype(
+            scale=scale, precision=Decimal64Dtype.MAX_PRECISION
+        )  # precision will be ignored, libcudf has no notion of precision
+        result = libcudf.binaryop.binaryop(self, other, op, output_type)
         result.dtype.precision = _binop_precision(self.dtype, other.dtype, op)
         return result
 
@@ -97,6 +101,18 @@ class DecimalColumn(ColumnBase):
             return cast(
                 "cudf.core.column.StringColumn", as_column([], dtype="object")
             )
+
+
+def _binop_scale(l_dtype, r_dtype, op):
+    # This should at some point be hooked up to libcudf's
+    # binary_operation_fixed_point_scale
+    s1, s2 = l_dtype.scale, r_dtype.scale
+    if op in ("add", "sub"):
+        return max(s1, s2)
+    elif op == "mul":
+        return s1 + s2
+    else:
+        raise NotImplementedError()
 
 
 def _binop_precision(l_dtype, r_dtype, op):
