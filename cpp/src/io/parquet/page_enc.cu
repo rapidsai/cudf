@@ -547,8 +547,8 @@ __global__ void __launch_bounds__(128) gpuInitPages(EncColumnChunk *chunks,
           page_g.num_rows         = rows_in_page;
           page_g.num_leaf_values  = leaf_values_in_page;
           page_g.num_values       = values_in_page;
-          uint32_t def_level_bits = col_g.level_bits & 0xf;
-          uint32_t rep_level_bits = col_g.level_bits >> 4;
+          uint32_t def_level_bits = col_g.num_def_level_bits();
+          uint32_t rep_level_bits = col_g.num_rep_level_bits();
           // Run length = 4, max(rle/bitpack header) = 5, add one byte per 256 values for overhead
           // TODO (dm): Improve readability of these calculations.
           uint32_t def_level_size =
@@ -943,11 +943,11 @@ __global__ void __launch_bounds__(128, 8) gpuEncodePages(EncPage *pages,
 
   // Encode Repetition and Definition levels
   if (s->page.page_type != PageType::DICTIONARY_PAGE &&
-      (s->col.level_bits & 0xf) != 0 &&  // This means max definition level is not 0 (nullable)
-      (s->col.level_bits >> 4) == 0      // This means there are no repetition levels (non-list)
+      (s->col.num_def_level_bits()) != 0 &&  // This means max definition level is not 0 (nullable)
+      (s->col.num_rep_level_bits()) == 0     // This means there are no repetition levels (non-list)
   ) {
     // Calculate definition levels from validity
-    uint32_t def_lvl_bits = s->col.level_bits & 0xf;
+    uint32_t def_lvl_bits = s->col.num_def_level_bits();
     if (def_lvl_bits != 0) {
       if (!t) {
         s->rle_run     = 0;
@@ -1006,7 +1006,7 @@ __global__ void __launch_bounds__(128, 8) gpuEncodePages(EncPage *pages,
       }
     }
   } else if (s->page.page_type != PageType::DICTIONARY_PAGE &&
-             s->col.level_bits >> 4 != 0  // This means there ARE repetition levels (has list)
+             s->col.num_rep_level_bits() != 0  // This means there ARE repetition levels (has list)
   ) {
     auto encode_levels = [&](uint8_t const *lvl_val_data, uint32_t nbits) {
       // For list types, the repetition and definition levels are pre-calculated. We just need to
@@ -1043,9 +1043,9 @@ __global__ void __launch_bounds__(128, 8) gpuEncodePages(EncPage *pages,
         if (t == 0) { s->cur = rle_out; }
       }
     };
-    encode_levels(s->col.rep_values, s->col.level_bits >> 4);
+    encode_levels(s->col.rep_values, s->col.num_rep_level_bits());
     __syncthreads();
-    encode_levels(s->col.def_values, s->col.level_bits & 0xf);
+    encode_levels(s->col.def_values, s->col.num_def_level_bits());
   }
   // Encode data values
   __syncthreads();

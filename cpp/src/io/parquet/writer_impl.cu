@@ -550,17 +550,22 @@ struct parquet_column_view {
 
     // Calculate max definition level by counting the number of levels that are optional (nullable)
     // and max repetition level by counting the number of REPEATED levels in this column's hierarchy
-    _max_def_level   = 0;
-    _max_rep_level   = 0;
-    curr_schema_node = schema_node;
+    uint16_t max_def_level = 0;
+    uint16_t max_rep_level = 0;
+    curr_schema_node       = schema_node;
     while (curr_schema_node.parent_idx != -1) {
       if (curr_schema_node.repetition_type == parquet::REPEATED or
           curr_schema_node.repetition_type == parquet::OPTIONAL) {
-        ++_max_def_level;
+        ++max_def_level;
       }
-      if (curr_schema_node.repetition_type == parquet::REPEATED) { ++_max_rep_level; }
+      if (curr_schema_node.repetition_type == parquet::REPEATED) { ++max_rep_level; }
       curr_schema_node = schema_tree[curr_schema_node.parent_idx];
     }
+    CUDF_EXPECTS(max_def_level < 256, "Definition levels above 255 are not supported");
+    CUDF_EXPECTS(max_rep_level < 256, "Definition levels above 255 are not supported");
+
+    _max_def_level = max_def_level;
+    _max_rep_level = max_rep_level;
 
     // Construct nullability vector using repetition_type from schema.
     std::list<uint8_t> r_nullability;

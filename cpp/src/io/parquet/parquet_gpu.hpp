@@ -223,6 +223,8 @@ struct EncColumnDesc : stats_column_desc {
   // TODO (dm): Evaluate if this is sufficient. At 4 bits, this allows a maximum 16 level nesting
   uint8_t level_bits;  //!< bits to encode max definition (lower nibble) & repetition (upper nibble)
                        //!< levels
+  CUDA_HOST_DEVICE_CALLABLE uint8_t num_def_level_bits() { return level_bits & 0xf; }
+  CUDA_HOST_DEVICE_CALLABLE uint8_t num_rep_level_bits() { return level_bits >> 4; }
   size_type const *const
     *nesting_offsets;  //!< If column is a nested type, contains offset array of each nesting level
 
