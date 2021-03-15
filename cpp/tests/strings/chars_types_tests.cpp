@@ -14,9 +14,10 @@
  * limitations under the License.
  */
 
-#include <tests/strings/utilities.h>
 #include <cudf/column/column.hpp>
 #include <cudf/strings/char_types/char_types.hpp>
+#include <cudf/strings/convert/convert_floats.hpp>
+#include <cudf/strings/convert/convert_integers.hpp>
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_utilities.hpp>

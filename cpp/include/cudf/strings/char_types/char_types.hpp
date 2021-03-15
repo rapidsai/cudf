@@ -146,54 +146,6 @@ std::unique_ptr<column> filter_characters_of_type(
   string_character_types types_to_keep = string_character_types::ALL_TYPES,
   rmm::mr::device_memory_resource* mr  = rmm::mr::get_current_device_resource());
 
-/**
- * @brief Returns a boolean column identifying strings in which all
- * characters are valid for conversion to integers.
- *
- * The output row entry will be set to `true` if the corresponding string element
- * has at least one character in [-+0-9].
- *
- * @code{.pseudo}
- * Example:
- * s = ['123', '-456', '', 'A', '+7']
- * b = s.is_integer(s)
- * b is [true, true, false, false, true]
- * @endcode
- *
- * Any null row results in a null entry for that row in the output column.
- *
- * @param strings Strings instance for this operation.
- * @param mr Device memory resource used to allocate the returned column's device memory.
- * @return New column of boolean results for each string.
- */
-std::unique_ptr<column> is_integer(
-  strings_column_view const& strings,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
-
-/**
- * @brief Returns a boolean column identifying strings in which all
- * characters are valid for conversion to floats.
- *
- * The output row entry will be set to `true` if the corresponding string element
- * has at least one character in [-+0-9eE.].
- *
- * @code{.pseudo}
- * Example:
- * s = ['123', '-456', '', 'A', '+7', '8.9' '3.7e+5']
- * b = s.is_float(s)
- * b is [true, true, false, false, true, true, true]
- * @endcode
- *
- * Any null row results in a null entry for that row in the output column.
- *
- * @param strings Strings instance for this operation.
- * @param mr Device memory resource used to allocate the returned column's device memory.
- * @return New column of boolean results for each string.
- */
-std::unique_ptr<column> is_float(
-  strings_column_view const& strings,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
-
 /** @} */  // end of doxygen group
 }  // namespace strings
 }  // namespace cudf
