@@ -113,7 +113,7 @@ TEST(BinColumnTest, TestEmptyEdges)
   fwc_wrapper<float> input{0.5, 0.5};
 
   std::unique_ptr<cudf::column> result =
-    cudf::bin(input, left_edges, cudf::inclusive::YES, right_edges, cudf::inclusive::YES);
+    cudf::bin(input, left_edges, cudf::inclusive::YES, right_edges, cudf::inclusive::NO);
   ASSERT_TRUE(result->size() == 2);
   ASSERT_TRUE(result->null_count() == 2);
 
@@ -129,7 +129,7 @@ TEST(BinColumnTest, TestOutOfBoundsInput)
   fwc_wrapper<float> input{8.5, 9.5, 10.5, 11.5};
 
   std::unique_ptr<cudf::column> result =
-    cudf::bin(input, left_edges, cudf::inclusive::YES, right_edges, cudf::inclusive::YES);
+    cudf::bin(input, left_edges, cudf::inclusive::YES, right_edges, cudf::inclusive::NO);
   ASSERT_TRUE(result->size() == 4);
   ASSERT_TRUE(result->null_count() == 2);
 
@@ -200,7 +200,7 @@ TEST(BinColumnTest, TestEmptyInput)
   fwc_wrapper<float> input{};
 
   std::unique_ptr<cudf::column> result =
-    cudf::bin(input, left_edges, cudf::inclusive::YES, right_edges, cudf::inclusive::YES);
+    cudf::bin(input, left_edges, cudf::inclusive::YES, right_edges, cudf::inclusive::NO);
   ASSERT_TRUE(result->size() == 0);
 };
 
@@ -229,7 +229,7 @@ struct FloatingPointBinTestFixture : public BinTestFixture {
     fwc_wrapper<T> input{2.5, 2.5, 2.5, 2.5, 2.5, 2.5, 2.5, 2.5, 2.5, 2.5};
 
     auto result =
-      cudf::bin(input, left_edges, cudf::inclusive::YES, right_edges, cudf::inclusive::YES);
+      cudf::bin(input, left_edges, cudf::inclusive::YES, right_edges, cudf::inclusive::NO);
 
     // Check that every element is placed in bin 2.
     fwc_wrapper<cudf::size_type> expected{{2, 2, 2, 2, 2, 2, 2, 2, 2, 2},
@@ -239,7 +239,7 @@ struct FloatingPointBinTestFixture : public BinTestFixture {
     // Test the first and last bins to catch any off-by-one errors.
     fwc_wrapper<T> input_endpoints{0.1, 9.9};
     std::unique_ptr<cudf::column> result2 = cudf::bin(
-      input_endpoints, left_edges, cudf::inclusive::YES, right_edges, cudf::inclusive::YES);
+      input_endpoints, left_edges, cudf::inclusive::YES, right_edges, cudf::inclusive::NO);
 
     fwc_wrapper<cudf::size_type> expected2{{0, 9}, {1, 1}};
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected2, result2->view());
@@ -298,7 +298,7 @@ TYPED_TEST(FixedPointBinTestFixture, TestFixedPointData)
     fpc_type_wrapper input{{25, 25, 25, 25, 25, 25, 25, 25, 25, 25}, numeric::scale_type{0}};
 
     auto result =
-      cudf::bin(input, left_edges, cudf::inclusive::YES, right_edges, cudf::inclusive::YES);
+      cudf::bin(input, left_edges, cudf::inclusive::YES, right_edges, cudf::inclusive::NO);
 
     // Check that every element is placed in bin 2.
     fwc_wrapper<cudf::size_type> expected{{2, 2, 2, 2, 2, 2, 2, 2, 2, 2}, {1, 1, 1, 1, 1, 1, 1, 1, 1, 1}};

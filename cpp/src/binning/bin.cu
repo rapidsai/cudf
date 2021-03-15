@@ -190,9 +190,7 @@ std::unique_ptr<column> bin(column_view const& input,
                             rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE()
-  CUDF_EXPECTS(input.type() == left_edges.type(),
-               "The input and edge columns must have the same types.");
-  CUDF_EXPECTS(input.type() == right_edges.type(),
+  CUDF_EXPECTS((input.type() == left_edges.type()) && (input.type() == right_edges.type()),
                "The input and edge columns must have the same types.");
   CUDF_EXPECTS(left_edges.size() == right_edges.size(),
                "The left and right edge columns must be of the same length.");
