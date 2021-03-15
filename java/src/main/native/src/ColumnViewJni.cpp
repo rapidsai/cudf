@@ -1027,12 +1027,15 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_binaryOpVV(JNIEnv *env, j
   CATCH_STD(env, 0);
 }
 
-JNIEXPORT jint JNICALL Java_ai_rapids_cudf_ColumnView_fixedPointOutputScale(JNIEnv *env, jclass, jint int_op,
-                                                                  jint lhs_scale, jint rhs_scale) {
+JNIEXPORT jint JNICALL Java_ai_rapids_cudf_ColumnView_fixedPointOutputScale(JNIEnv *env, jclass,
+                                                                            jint int_op,
+                                                                            jint lhs_scale,
+                                                                            jint rhs_scale) {
   try {
     // we just return the scale as the types will be the same as the lhs input
-    return cudf::binary_operation_fixed_point_scale(static_cast<cudf::binary_operator>(int_op), lhs_scale, rhs_scale);
-  } 
+    return cudf::binary_operation_fixed_point_scale(static_cast<cudf::binary_operator>(int_op),
+                                                    lhs_scale, rhs_scale);
+  }
   CATCH_STD(env, 0);
 }
 

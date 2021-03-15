@@ -87,14 +87,14 @@ public interface BinaryOperable {
       if (a.typeId == DType.DTypeEnum.DECIMAL32) {
         if (b.typeId == DType.DTypeEnum.DECIMAL32) {
           return DType.create(DType.DTypeEnum.DECIMAL32,
-              ColumnView.getFixedPointOutpuScale(op, lhs.getType(), rhs.getType()));
+              ColumnView.getFixedPointOutputScale(op, lhs.getType(), rhs.getType()));
         } else {
           throw new IllegalArgumentException("Both columns must be of the same fixed_point type");
         }
       } else if (a.typeId == DType.DTypeEnum.DECIMAL64) {
         if (b.typeId == DType.DTypeEnum.DECIMAL64) {
           return DType.create(DType.DTypeEnum.DECIMAL64,
-              ColumnView.getFixedPointOutpuScale(op, lhs.getType(), rhs.getType()));
+              ColumnView.getFixedPointOutputScale(op, lhs.getType(), rhs.getType()));
         } else {
           throw new IllegalArgumentException("Both columns must be of the same fixed_point type");
         }
