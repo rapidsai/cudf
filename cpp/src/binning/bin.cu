@@ -118,7 +118,7 @@ constexpr auto is_supported_bin_type()
   // TODO: Determine what other types (such as fixed point numbers) should be
   // supported, and whether any of them (like strings) require special
   // handling.
-  return (cudf::is_numeric<T>() && !std::is_same<T, bool>::value);  // || cudf::is_fixed_point<T>();
+  return (cudf::is_numeric<T>() && !std::is_same<T, bool>::value);
 }
 
 }  // anonymous namespace
@@ -204,7 +204,7 @@ std::unique_ptr<column> bin(column_view const& input,
   // Handle empty inputs.
   if (input.is_empty()) { return cudf::make_numeric_column(data_type(type_to_id<size_type>()), 0); }
 
-  return type_dispatcher(input.type(),
+  return type_dispatcher<dispatch_storage_type>(input.type(),
                          bin_type_dispatcher{},
                          input,
                          left_edges,

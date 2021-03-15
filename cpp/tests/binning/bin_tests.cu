@@ -28,6 +28,9 @@ using namespace cudf::test;
 template <typename T>
 using fwc_wrapper = cudf::test::fixed_width_column_wrapper<T>;
 
+template <typename T>
+using fpc_wrapper = cudf::test::fixed_point_column_wrapper<T>;
+
 struct BinTestFixture : public BaseFixture {
 };
 
@@ -279,6 +282,29 @@ TYPED_TEST(IntegerBinTestFixture, TestIntegerDataIncludeNeither)
 {
     this->test(cudf::inclusive::NO, cudf::inclusive::NO, {{0, 0, 1, 1, 2, 2, 3, 3, 4, 4, 5}, {0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0}});
 };
+
+template <typename T>
+struct FixedPointBinTestFixture : public BinTestFixture {
+};
+
+TYPED_TEST_CASE(FixedPointBinTestFixture, FixedPointTypes);
+
+TYPED_TEST(FixedPointBinTestFixture, TestFixedPointData)
+{
+    using fpc_type_wrapper = fpc_wrapper<cudf::device_storage_type_t<TypeParam> >;
+
+    fpc_type_wrapper left_edges{{0, 10, 20, 30, 40, 50, 60, 70, 80, 90}, numeric::scale_type{0}};
+    fpc_type_wrapper right_edges{{10, 20, 30, 40, 50, 60, 70, 80, 90, 100}, numeric::scale_type{0}};
+    fpc_type_wrapper input{{25, 25, 25, 25, 25, 25, 25, 25, 25, 25}, numeric::scale_type{0}};
+
+    auto result =
+      cudf::bin(input, left_edges, cudf::inclusive::YES, right_edges, cudf::inclusive::YES);
+
+    // Check that every element is placed in bin 2.
+    fwc_wrapper<cudf::size_type> expected{{2, 2, 2, 2, 2, 2, 2, 2, 2, 2}, {1, 1, 1, 1, 1, 1, 1, 1, 1, 1}};
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
+};
+
 
 }  // anonymous namespace
 
