@@ -25,7 +25,9 @@ from cudf._lib.cpp.table.table cimport table
 from cudf._lib.cpp.table.table_view cimport table_view
 from cudf._lib.cpp.types cimport size_type
 from cudf._lib.cpp.lists.lists_column_view cimport lists_column_view
-from cudf._lib.cpp.lists.gather cimport segmented_gather as cpp_segmented_gather
+from cudf._lib.cpp.lists.gather cimport (
+    segmented_gather as cpp_segmented_gather
+)
 cimport cudf._lib.cpp.copying as cpp_copying
 
 # workaround for https://github.com/cython/cython/issues/3885
@@ -707,6 +709,7 @@ def sample(Table input, size_type n,
         )
     )
 
+
 def segmented_gather(Column source_column, Column gather_map):
     cdef shared_ptr[lists_column_view] source_LCV = (
         make_shared[lists_column_view](source_column.view())
@@ -717,8 +720,10 @@ def segmented_gather(Column source_column, Column gather_map):
     cdef unique_ptr[column] c_result
 
     with nogil:
-        c_result = move(cpp_segmented_gather(source_LCV.get()[0],
-                                        gather_map_LCV.get()[0]))
+        c_result = move(
+            cpp_segmented_gather(
+                source_LCV.get()[0], gather_map_LCV.get()[0])
+        )
 
     result = Column.from_unique_ptr(move(c_result))
     return result
