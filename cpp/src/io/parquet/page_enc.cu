@@ -963,31 +963,30 @@ __global__ void __launch_bounds__(128, 8) gpuEncodePages(EncPage *pages,
         // Definition level encodes validity. Checks the valid map and if it is valid, then sets the
         // def_lvl accordingly and sets it in s->vals which is then given to RleEncode to encode
         uint32_t def_lvl = [&]() {
-          if (rle_numvals + t < s->page.num_rows && row < s->col.num_rows) {
-            uint32_t def       = 0;
-            size_type l        = 0;
-            bool is_col_nested = false;
-            auto col           = *s->col.parent_column;
-            do {
-              if (s->col.nullability[l]) {
-                if (col.is_valid(row)) {
-                  ++def;
-                } else {
-                  // We have found the shallowest level at which this row is null
-                  break;
-                }  // If col not nullable then it does not contribute to def levels
+          bool within_bounds = rle_numvals + t < s->page.num_rows && row < s->col.num_rows;
+          if (not within_bounds) { return 0u; }
+          uint32_t def       = 0;
+          size_type l        = 0;
+          bool is_col_struct = false;
+          auto col           = *s->col.parent_column;
+          do {
+            // If col not nullable then it does not contribute to def levels
+            if (s->col.nullability[l]) {
+              if (col.is_valid(row)) {
+                ++def;
+              } else {
+                // We have found the shallowest level at which this row is null
+                break;
               }
-              is_col_nested = (col.type().id() == type_id::STRUCT);
-              if (is_col_nested) {
-                row += col.offset();
-                col = col.child(0);
-                ++l;
-              }
-            } while (is_col_nested);
-            return def;
-          } else {
-            return 0u;
-          }
+            }
+            is_col_struct = (col.type().id() == type_id::STRUCT);
+            if (is_col_struct) {
+              row += col.offset();
+              col = col.child(0);
+              ++l;
+            }
+          } while (is_col_struct);
+          return def;
         }();
         s->vals[(rle_numvals + t) & (rle_buffer_size - 1)] = def_lvl;
         __syncthreads();
@@ -1623,22 +1622,23 @@ struct def_level_fn {
   {
     uint32_t def       = curr_def_level;
     uint8_t l          = sub_level_start;
-    bool is_col_nested = false;
+    bool is_col_struct = false;
     auto col           = *parent_col;
     do {
+      // If col not nullable then it does not contribute to def levels
       if (d_nullability[l]) {
         if (not col.nullable() or bit_is_set(col.null_mask(), i)) {
           ++def;
         } else {  // We have found the shallowest level at which this row is null
           break;
-        }  // If col not nullable then it does not contribute to def levels
+        }
       }
-      is_col_nested = (col.type().id() == type_id::STRUCT);
-      if (is_col_nested) {
+      is_col_struct = (col.type().id() == type_id::STRUCT);
+      if (is_col_struct) {
         col = col.child(0);
         ++l;
       }
-    } while (is_col_nested);
+    } while (is_col_struct);
     return def;
   }
 };
@@ -1827,13 +1827,13 @@ dremel_data get_dremel_data(column_view h_col,
     },
     stream);
 
-  thrust::host_vector<size_type> column_offsets(nesting_levels.size());
+  thrust::host_vector<size_type> column_offsets(d_column_offsets.size());
   CUDA_TRY(cudaMemcpyAsync(column_offsets.data(),
                            d_column_offsets.data(),
                            d_column_offsets.size() * sizeof(size_type),
                            cudaMemcpyDeviceToHost,
                            stream.value()));
-  thrust::host_vector<size_type> column_ends(nesting_levels.size());
+  thrust::host_vector<size_type> column_ends(d_column_ends.size());
   CUDA_TRY(cudaMemcpyAsync(column_ends.data(),
                            d_column_ends.data(),
                            d_column_ends.size() * sizeof(size_type),
