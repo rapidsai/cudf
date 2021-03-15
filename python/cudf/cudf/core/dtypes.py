@@ -235,7 +235,7 @@ class Decimal64Dtype(ExtensionDtype):
 
     name = "decimal"
     _metadata = ("precision", "scale")
-    _MAX_PRECISION = np.floor(np.log10(np.iinfo("int64").max))
+    MAX_PRECISION = np.floor(np.log10(np.iinfo("int64").max))
 
     def __init__(self, precision, scale=0):
         """
@@ -303,10 +303,10 @@ class Decimal64Dtype(ExtensionDtype):
 
     @classmethod
     def _validate(cls, precision, scale=0):
-        if precision > Decimal64Dtype._MAX_PRECISION:
+        if precision > Decimal64Dtype.MAX_PRECISION:
             raise ValueError(
                 f"Cannot construct a {cls.__name__}"
-                f" with precision > {cls._MAX_PRECISION}"
+                f" with precision > {cls.MAX_PRECISION}"
             )
         if abs(scale) > precision:
             raise ValueError(f"scale={scale} exceeds precision={precision}")
