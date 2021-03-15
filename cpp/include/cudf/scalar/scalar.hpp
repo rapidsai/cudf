@@ -593,6 +593,9 @@ struct duration_scalar : chrono_scalar<T> {
   typename T::rep count() { return this->value().count(); }
 };
 
+/**
+ * @brief An owning class to represent a list value in device memory
+ */
 class list_scalar : public scalar {
  public:
   using value_type = cudf::list_view;
