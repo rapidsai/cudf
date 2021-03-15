@@ -17,8 +17,8 @@
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/detail/gather.cuh>
 #include <cudf/detail/nvtx/ranges.hpp>
+#include <cudf/lists/explode.hpp>
 #include <cudf/lists/lists_column_view.hpp>
-#include <cudf/reshape.hpp>
 #include <cudf/table/table.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
 

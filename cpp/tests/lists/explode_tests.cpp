@@ -14,13 +14,13 @@
  * limitations under the License.
  */
 
-#include <cudf/detail/iterator.cuh>
-#include <cudf/lists/explode.hpp>
-
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_wrapper.hpp>
 #include <cudf_test/table_utilities.hpp>
 #include <cudf_test/type_lists.hpp>
+
+#include <cudf/detail/iterator.cuh>
+#include <cudf/lists/explode.hpp>
 
 using namespace cudf::test;
 using FCW = fixed_width_column_wrapper<int32_t>;
