@@ -347,7 +347,7 @@ struct leaf_schema_fn {
     }
     col_schema.converted_type = ConvertedType::DECIMAL;
     col_schema.decimal_scale = -col->type().scale();  // parquet and cudf disagree about scale signs
-    CUDF_EXPECTS(col_meta.decimal_precision_defined(),
+    CUDF_EXPECTS(col_meta.is_decimal_precision_set(),
                  "Precision must be specified for decimal columns");
     CUDF_EXPECTS(col_meta.get_decimal_precision() >= col_schema.decimal_scale,
                  "Precision must be equal to or greater than scale!");
@@ -393,7 +393,7 @@ std::vector<schema_tree_node> construct_schema_tree(LinkedColVector const &linke
         if (single_write_mode) {
           return col->nullable();
         } else {
-          if (col_meta.nullability_defined()) {
+          if (col_meta.is_nullability_defined()) {
             if (col_meta.nullable() == false) {
               CUDF_EXPECTS(
                 col->nullable() == false,

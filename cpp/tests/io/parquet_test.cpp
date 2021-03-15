@@ -346,10 +346,8 @@ TEST_F(ParquetWriterTest, MultiColumn)
   expected_metadata.column_metadata[2].set_name("int32s");
   expected_metadata.column_metadata[3].set_name("floats");
   expected_metadata.column_metadata[4].set_name("doubles");
-  expected_metadata.column_metadata[5].set_name("decimal32s");
-  expected_metadata.column_metadata[5].set_decimal_precision(10);
-  expected_metadata.column_metadata[6].set_name("decimal64s");
-  expected_metadata.column_metadata[6].set_decimal_precision(20);
+  expected_metadata.column_metadata[5].set_name("decimal32s").set_decimal_precision(10);
+  expected_metadata.column_metadata[6].set_name("decimal64s").set_decimal_precision(20);
 
   auto filepath = temp_env->get_temp_filepath("MultiColumn.parquet");
   cudf_io::parquet_writer_options out_opts =
@@ -428,10 +426,8 @@ TEST_F(ParquetWriterTest, MultiColumnWithNulls)
   expected_metadata.column_metadata[2].set_name("int32s");
   expected_metadata.column_metadata[3].set_name("floats");
   expected_metadata.column_metadata[4].set_name("doubles");
-  expected_metadata.column_metadata[5].set_name("decimal32s");
-  expected_metadata.column_metadata[5].set_decimal_precision(9);
-  expected_metadata.column_metadata[6].set_name("decimal64s");
-  expected_metadata.column_metadata[6].set_decimal_precision(20);
+  expected_metadata.column_metadata[5].set_name("decimal32s").set_decimal_precision(9);
+  expected_metadata.column_metadata[6].set_name("decimal64s").set_decimal_precision(20);
 
   auto filepath = temp_env->get_temp_filepath("MultiColumnWithNulls.parquet");
   cudf_io::parquet_writer_options out_opts =
@@ -1734,10 +1730,8 @@ TEST_F(ParquetChunkedWriterTest, ForcedNullabilityStruct)
   auto full_table = cudf::concatenate({table_1, table_2});
 
   cudf_io::table_input_metadata expected_metadata(table_1);
-  expected_metadata.column_metadata[0].set_name("being");
-  expected_metadata.column_metadata[0].set_nullability(false);
-  expected_metadata.column_metadata[0].child(0).set_name("human?");
-  expected_metadata.column_metadata[0].child(0).set_nullability(false);
+  expected_metadata.column_metadata[0].set_name("being").set_nullability(false);
+  expected_metadata.column_metadata[0].child(0).set_name("human?").set_nullability(false);
   expected_metadata.column_metadata[0].child(1).set_name("particulars");
   expected_metadata.column_metadata[0].child(1).child(0).set_name("weight");
   expected_metadata.column_metadata[0].child(1).child(1).set_name("age");
@@ -1829,7 +1823,7 @@ TEST_F(ParquetWriterTest, DecimalWrite)
   args.set_metadata(&expected_metadata);
   EXPECT_THROW(cudf_io::write_parquet(args), cudf::logic_error);
 
-  // verify sucess if equal precision is given
+  // verify success if equal precision is given
   expected_metadata.column_metadata[0].set_decimal_precision(7);
   expected_metadata.column_metadata[1].set_decimal_precision(9);
   args.set_metadata(&expected_metadata);

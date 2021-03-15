@@ -390,29 +390,144 @@ class column_in_metadata {
   std::vector<column_in_metadata> children;
 
  public:
-  void set_name(std::string const& name) { _name = name; }
-  void set_nullability(bool nullable) { _nullable = nullable; }
-  void set_list_column_as_map() { _list_column_is_map = true; }
-  void set_int96_timestamps(bool req) { _use_int96_timestamp = req; }
-  void set_decimal_precision(uint8_t precision) { _decimal_precision = precision; }
+  /**
+   * @brief Set the name of this column
+   *
+   * @return this for chaining
+   */
+  column_in_metadata& set_name(std::string const& name)
+  {
+    _name = name;
+    return *this;
+  }
+
+  /**
+   * @brief Set the nullability of this column
+   *
+   * Only valid in case of chunked writes. In single writes, this option is ignored.
+   *
+   * @return column_in_metadata&
+   */
+  column_in_metadata& set_nullability(bool nullable)
+  {
+    _nullable = nullable;
+    return *this;
+  }
+
+  /**
+   * @brief Specify that this list column should be encoded as a map in the written parquet file
+   *
+   * The column must have the structure list<struct<key, value>>. This option is invalid otherwise
+   *
+   * @return this for chaining
+   */
+  column_in_metadata& set_list_column_as_map()
+  {
+    _list_column_is_map = true;
+    return *this;
+  }
+
+  /**
+   * @brief Specifies whether this timestamp column should be encoded using the deprecated int96
+   * physical type. Only valid for the following column types:
+   * timestamp_s, timestamp_ms, timestamp_us, timestamp_ns
+   *
+   * @param req True = use int96 physical type. False = use int64 physical type
+   * @return this for chaining
+   */
+  column_in_metadata& set_int96_timestamps(bool req)
+  {
+    _use_int96_timestamp = req;
+    return *this;
+  }
+
+  /**
+   * @brief Set the decimal precision of this column. Only valid if this column is a decimal
+   * (fixed-point) type
+   *
+   * @param precision The integer precision to set for this decimal column
+   * @return this for chaining
+   */
+  column_in_metadata& set_decimal_precision(uint8_t precision)
+  {
+    _decimal_precision = precision;
+    return *this;
+  }
+
+  /**
+   * @brief Get reference to a child of this column
+   *
+   * @param i Index of the child to get
+   * @return this for chaining
+   */
   column_in_metadata& child(size_type i) { return children[i]; }
+
+  /**
+   * @brief Get const reference to a child of this column
+   *
+   * @param i Index of the child to get
+   * @return this for chaining
+   */
   column_in_metadata const& child(size_type i) const { return children[i]; }
 
+  /**
+   * @brief Get the name of this column
+   */
   std::string get_name() const { return _name; }
-  bool nullability_defined() const { return _nullable.has_value(); }
+
+  /**
+   * @brief Get whether nullability has been explicitly set for this column.
+   */
+  bool is_nullability_defined() const { return _nullable.has_value(); }
+
+  /**
+   * @brief Gets the explicitly set nullability for this column.
+   * @throws If nullability is not explicitly defined for this column.
+   *         Check using `is_nullability_defined()` first.
+   */
   bool nullable() const { return _nullable.value(); }
+
+  /**
+   * @brief If this is the metadata of a list column, returns whether it is to be encoded as a map.
+   */
   bool is_map() const { return _list_column_is_map; }
+
+  /**
+   * @brief Get whether to encode this timestamp column using deprecated int96 physical type
+   */
   bool is_enabled_int96_timestamps() const { return _use_int96_timestamp; }
-  bool decimal_precision_defined() const { return _decimal_precision.has_value(); }
+
+  /**
+   * @brief Get whether precision has been set for this decimal column
+   */
+  bool is_decimal_precision_set() const { return _decimal_precision.has_value(); }
+
+  /**
+   * @brief Get the decimal precision that was set for this column.
+   * @throws If decimal precision was not set for this column.
+   *         Check using `is_decimal_precision_set()` first.
+   */
   uint8_t get_decimal_precision() const { return _decimal_precision.value(); }
+
+  /**
+   * @brief Get the number of children of this column
+   */
   size_type num_children() const { return children.size(); }
 };
 
 class table_input_metadata {
  public:
-  // TODO: Should we have a constructor that accepts a moved user_data?
   table_input_metadata() = default;  // Required by cython
-  table_input_metadata(table_view const& table);
+
+  /**
+   * @brief Construct a new table_input_metadata from a table_view.
+   *
+   * The constructed table_input_metadata has the same structure as the passed table_view
+   *
+   * @param table The table_view to construct metadata for
+   * @param user_data Optional Additional metadata to encode, as key-value pairs
+   */
+  table_input_metadata(table_view const& table, std::map<std::string, std::string> user_data = {});
 
   std::vector<column_in_metadata> column_metadata;
   std::map<std::string, std::string> user_data;  //!< Format-dependent metadata as key-values pairs

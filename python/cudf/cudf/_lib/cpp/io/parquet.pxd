@@ -66,15 +66,19 @@ cdef extern from "cudf/io/parquet.hpp" namespace "cudf::io" nogil:
         parquet_reader_options args) except +
 
     cdef cppclass column_in_metadata:
-        void set_name(const string& name)
-        void set_nullability(bool nullable)
-        void set_list_column_as_map()
-        void set_int96_timestamps(bool req)
+        column_in_metadata& set_name(const string& name)
+        column_in_metadata& set_nullability(bool nullable)
+        column_in_metadata& set_list_column_as_map()
+        column_in_metadata& set_int96_timestamps(bool req)
         column_in_metadata& child(size_type i)
 
     cdef cppclass table_input_metadata:
         table_input_metadata() except +
         table_input_metadata(const cudf_table_view.table_view& table) except +
+        table_input_metadata(
+            const cudf_table_view.table_view& table,
+            map[string, string] user_data
+        ) except +
 
         vector[column_in_metadata] column_metadata
         map[string, string] user_data
