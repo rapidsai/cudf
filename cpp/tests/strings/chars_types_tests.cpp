@@ -235,14 +235,12 @@ TEST_F(StringsCharsTest, Integers)
   auto results = cudf::strings::is_integer(cudf::strings_column_view(strings1));
   cudf::test::fixed_width_column_wrapper<bool> expected1({1, 1, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0});
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected1);
-  EXPECT_FALSE(cudf::strings::all_integer(cudf::strings_column_view(strings1)));
 
   cudf::test::strings_column_wrapper strings2(
     {"0", "+0", "-0", "1234567890", "-27341132", "+012", "023", "-045"});
   results = cudf::strings::is_integer(cudf::strings_column_view(strings2));
   cudf::test::fixed_width_column_wrapper<bool> expected2({1, 1, 1, 1, 1, 1, 1, 1});
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected2);
-  EXPECT_TRUE(cudf::strings::all_integer(cudf::strings_column_view(strings2)));
 }
 
 TEST_F(StringsCharsTest, Floats)
@@ -266,14 +264,12 @@ TEST_F(StringsCharsTest, Floats)
   cudf::test::fixed_width_column_wrapper<bool> expected1(
     {1, 1, 0, 0, 1, 1, 1, 1, 0, 1, 0, 0, 0, 0, 0});
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected1);
-  EXPECT_FALSE(cudf::strings::all_float(cudf::strings_column_view(strings1)));
 
   cudf::test::strings_column_wrapper strings2(
     {"+175", "-34", "9.8", "1234567890", "6.7e17", "-917.2e5"});
   results = cudf::strings::is_float(cudf::strings_column_view(strings2));
   cudf::test::fixed_width_column_wrapper<bool> expected2({1, 1, 1, 1, 1, 1});
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected2);
-  EXPECT_TRUE(cudf::strings::all_float(cudf::strings_column_view(strings2)));
 }
 
 TEST_F(StringsCharsTest, EmptyStrings)
@@ -286,10 +282,8 @@ TEST_F(StringsCharsTest, EmptyStrings)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
   results = cudf::strings::is_integer(strings_view);
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
-  EXPECT_FALSE(cudf::strings::all_integer(strings_view));
   results = cudf::strings::is_float(strings_view);
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
-  EXPECT_FALSE(cudf::strings::all_float(strings_view));
 }
 
 TEST_F(StringsCharsTest, FilterCharTypes)
