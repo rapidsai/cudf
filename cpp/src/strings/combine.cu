@@ -136,8 +136,8 @@ std::unique_ptr<column> concatenate(table_view const& strings_columns,
       char* d_buffer = d_results_chars + d_results_offsets[idx];
       // write out each column's entry for this row
       for (size_type col_idx = 0; col_idx < num_columns; ++col_idx) {
-        auto d_column = d_table.column(col_idx);
-        string_view d_str =
+        auto const d_column = d_table.column(col_idx);
+        string_view const d_str =
           d_column.is_null(idx) ? d_narep.value() : d_column.element<string_view>(idx);
         d_buffer = detail::copy_string(d_buffer, d_str);
         // separator goes only in between elements
@@ -414,18 +414,17 @@ std::unique_ptr<column> concatenate(table_view const& strings_columns,
 
                        // Write out each column's entry for this row
                        for (size_type col_idx = 0; col_idx < num_columns; ++col_idx) {
-                         auto d_column = d_table.column(col_idx);
-                         // If the column isn't valid and if there isn't a replacement for it, skip
-                         // it
+                         auto const d_column = d_table.column(col_idx);
+                         // If the row is null and if there is no replacement, skip it
                          if (d_column.is_null(ridx) && !col_rep.is_valid()) continue;
 
                          // Separator goes only in between elements
                          if (colval_written)
                            d_buffer = detail::copy_string(d_buffer, separator_str);
 
-                         string_view d_str = d_column.is_null(ridx)
-                                               ? col_rep.value()
-                                               : d_column.element<string_view>(ridx);
+                         string_view const d_str = d_column.is_null(ridx)
+                                                     ? col_rep.value()
+                                                     : d_column.element<string_view>(ridx);
                          d_buffer       = detail::copy_string(d_buffer, d_str);
                          colval_written = true;
                        }
