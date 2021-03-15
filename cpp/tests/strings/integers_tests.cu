@@ -29,6 +29,27 @@
 struct StringsConvertTest : public cudf::test::BaseFixture {
 };
 
+TEST_F(StringsConvertTest, IsInteger)
+{
+  cudf::test::strings_column_wrapper strings;
+  auto strings_view = cudf::strings_column_view(strings);
+  auto results      = cudf::strings::is_integer(strings_view);
+  EXPECT_EQ(cudf::type_id::BOOL8, results->view().type().id());
+  EXPECT_EQ(0, results->view().size());
+
+  cudf::test::strings_column_wrapper strings1(
+    {"+175", "-34", "9.8", "17+2", "+-14", "1234567890", "67de", "", "1e10", "-", "++", ""});
+  results = cudf::strings::is_integer(cudf::strings_column_view(strings1));
+  cudf::test::fixed_width_column_wrapper<bool> expected1({1, 1, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0});
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected1);
+
+  cudf::test::strings_column_wrapper strings2(
+    {"0", "+0", "-0", "1234567890", "-27341132", "+012", "023", "-045"});
+  results = cudf::strings::is_integer(cudf::strings_column_view(strings2));
+  cudf::test::fixed_width_column_wrapper<bool> expected2({1, 1, 1, 1, 1, 1, 1, 1});
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected2);
+}
+
 TEST_F(StringsConvertTest, ToInteger)
 {
   std::vector<const char*> h_strings{
