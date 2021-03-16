@@ -76,17 +76,17 @@ TEST_F(FromArrowTest, EmptyTable)
 
 TEST_F(FromArrowTest, DateTimeTable)
 {
-  auto data = {1, 2, 3, 4, 5, 6};
+  auto data = std::vector<int64_t>{1, 2, 3, 4, 5, 6};
 
-  auto col =
-    cudf::test::fixed_width_column_wrapper<cudf::timestamp_ms, cudf::timestamp_ms::rep>(data);
+  auto col = cudf::test::fixed_width_column_wrapper<cudf::timestamp_ms, cudf::timestamp_ms::rep>(
+    data.begin(), data.end());
 
   cudf::table_view expected_table_view({col});
 
   std::shared_ptr<arrow::Array> arr;
-  arrow::TimestampBuilder timestamp_builder(timestamp(arrow::TimeUnit::type::MILLI),
+  arrow::TimestampBuilder timestamp_builder(arrow::timestamp(arrow::TimeUnit::type::MILLI),
                                             arrow::default_memory_pool());
-  timestamp_builder.AppendValues(std::vector<int64_t>(data));
+  timestamp_builder.AppendValues(data);
   CUDF_EXPECTS(timestamp_builder.Finish(&arr).ok(), "Failed to build array");
 
   std::vector<std::shared_ptr<arrow::Field>> schema_vector({arrow::field("a", arr->type())});
@@ -348,6 +348,31 @@ TEST_P(FromArrowTestSlice, SliceTest)
   } else {
     CUDF_TEST_EXPECT_TABLES_EQUAL(expected_cudf_table.view(), got_cudf_table->view());
   }
+}
+
+TEST_F(FromArrowTest, FixedPointTable)
+{
+  auto data = std::vector<int64_t>{1, 0, 2, 0, 3, 0, 4, 0, 5, 0, 6, 0};
+
+  auto col =
+    cudf::test::fixed_point_column_wrapper<int64_t>({1, 2, 3, 4, 5, 6}, numeric::scale_type{0});
+
+  cudf::table_view expected_table_view({col});
+
+  std::shared_ptr<arrow::Array> arr;
+  arrow::Decimal128Builder decimal_builder(arrow::decimal(1, 0), arrow::default_memory_pool());
+  decimal_builder.AppendValues(reinterpret_cast<const uint8_t*>(data.data()),
+                               sizeof(int64_t) * data.size());
+  CUDF_EXPECTS(decimal_builder.Finish(&arr).ok(), "Failed to build array");
+
+  std::vector<std::shared_ptr<arrow::Field>> schema_vector({arrow::field("a", arr->type())});
+  auto schema = std::make_shared<arrow::Schema>(schema_vector);
+
+  auto arrow_table = arrow::Table::Make(schema, {arr});
+
+  auto got_cudf_table = cudf::from_arrow(*arrow_table);
+
+  CUDF_TEST_EXPECT_TABLES_EQUAL(expected_table_view, got_cudf_table->view());
 }
 
 INSTANTIATE_TEST_CASE_P(FromArrowTest,
