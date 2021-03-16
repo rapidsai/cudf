@@ -76,29 +76,29 @@ struct scan_functor {
     auto result_table = mutable_table_view({*result});
     cudf::detail::initialize_with_identity(result_table, {K}, stream);
 
-    auto resultview = mutable_column_device_view::create(result->mutable_view(), stream);
-    auto valuesview = column_device_view::create(values, stream);
+    auto result_view = mutable_column_device_view::create(result->mutable_view(), stream);
+    auto values_view = column_device_view::create(values, stream);
 
     if (values.has_nulls()) {
       auto input = thrust::make_transform_iterator(
-        make_null_replacement_iterator(*valuesview, OpType::template identity<DeviceType>()),
+        make_null_replacement_iterator(*values_view, OpType::template identity<DeviceType>()),
         thrust::identity<ResultDeviceType>{});
       thrust::inclusive_scan_by_key(rmm::exec_policy(stream),
                                     group_labels.begin(),
                                     group_labels.end(),
                                     input,
-                                    resultview->begin<ResultDeviceType>(),
+                                    result_view->begin<ResultDeviceType>(),
                                     thrust::equal_to<size_type>{},
                                     OpType{});
       result->set_null_mask(cudf::detail::copy_bitmask(values, stream));
     } else {
-      auto input = thrust::make_transform_iterator(valuesview->begin<DeviceType>(),
+      auto input = thrust::make_transform_iterator(values_view->begin<DeviceType>(),
                                                    thrust::identity<ResultDeviceType>{});
       thrust::inclusive_scan_by_key(rmm::exec_policy(stream),
                                     group_labels.begin(),
                                     group_labels.end(),
                                     input,
-                                    resultview->begin<ResultDeviceType>(),
+                                    result_view->begin<ResultDeviceType>(),
                                     thrust::equal_to<size_type>{},
                                     OpType{});
     }
