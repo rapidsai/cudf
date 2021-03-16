@@ -434,7 +434,6 @@ class StringMethods(ColumnMethodsMixin):
         3    dD
         dtype: object
         """
-
         if sep is None:
             sep = ""
 
@@ -5109,7 +5108,7 @@ class StringColumn(column.ColumnBase):
         if isinstance(rhs, (StringColumn, str, cudf.Scalar)):
             if op == "add":
                 return cast("column.ColumnBase", lhs.str().cat(others=rhs))
-            elif op in ("eq", "ne", "gt", "lt", "ge", "le"):
+            elif op in ("eq", "ne", "gt", "lt", "ge", "le", "NULL_EQUALS"):
                 return _string_column_binop(self, rhs, op=op, out_dtype="bool")
 
         raise TypeError(
