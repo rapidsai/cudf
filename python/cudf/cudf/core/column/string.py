@@ -78,9 +78,7 @@ from cudf._lib.strings.char_types import (
 from cudf._lib.strings.convert.convert_integers import (
     is_integer as cpp_is_integer,
 )
-from cudf._lib.strings.convert.convert_floats import (
-    is_float as cpp_is_float,
-)
+from cudf._lib.strings.convert.convert_floats import is_float as cpp_is_float
 from cudf._lib.strings.combine import (
     concatenate as cpp_concatenate,
     join as cpp_join,
