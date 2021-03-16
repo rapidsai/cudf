@@ -524,6 +524,15 @@ def test_dataframe_drop_raises():
         expected_error_message="One or more values not found in axis",
     )
 
+    # label dtype mismatch
+    assert_exceptions_equal(
+        lfunc=pdf.drop,
+        rfunc=df.drop,
+        lfunc_args_and_kwargs=([3],),
+        rfunc_args_and_kwargs=([3],),
+        expected_error_message="One or more values not found in axis",
+    )
+
     expect = pdf.drop("p", errors="ignore")
     actual = df.drop("p", errors="ignore")
 
@@ -5008,12 +5017,14 @@ def test_cov_nans():
         operator.truediv,
         operator.mod,
         operator.pow,
-        operator.eq,
-        operator.lt,
-        operator.le,
-        operator.gt,
-        operator.ge,
-        operator.ne,
+        # comparison ops will temporarily XFAIL
+        # see PR  https://github.com/rapidsai/cudf/pull/7491
+        pytest.param(operator.eq, marks=pytest.mark.xfail()),
+        pytest.param(operator.lt, marks=pytest.mark.xfail()),
+        pytest.param(operator.le, marks=pytest.mark.xfail()),
+        pytest.param(operator.gt, marks=pytest.mark.xfail()),
+        pytest.param(operator.ge, marks=pytest.mark.xfail()),
+        pytest.param(operator.ne, marks=pytest.mark.xfail()),
     ],
 )
 def test_df_sr_binop(gsr, colnames, op):
@@ -5043,12 +5054,14 @@ def test_df_sr_binop(gsr, colnames, op):
         operator.truediv,
         operator.mod,
         operator.pow,
-        operator.eq,
-        operator.lt,
-        operator.le,
-        operator.gt,
-        operator.ge,
-        operator.ne,
+        # comparison ops will temporarily XFAIL
+        # see PR  https://github.com/rapidsai/cudf/pull/7491
+        pytest.param(operator.eq, marks=pytest.mark.xfail()),
+        pytest.param(operator.lt, marks=pytest.mark.xfail()),
+        pytest.param(operator.le, marks=pytest.mark.xfail()),
+        pytest.param(operator.gt, marks=pytest.mark.xfail()),
+        pytest.param(operator.ge, marks=pytest.mark.xfail()),
+        pytest.param(operator.ne, marks=pytest.mark.xfail()),
     ],
 )
 @pytest.mark.parametrize(

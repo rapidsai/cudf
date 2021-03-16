@@ -109,6 +109,13 @@ class ColumnBase(Column, Serializable):
     def __len__(self) -> int:
         return self.size
 
+    def __repr__(self):
+        return (
+            f"{object.__repr__(self)}\n"
+            f"{self.to_arrow().to_string()}\n"
+            f"dtype: {self.dtype}"
+        )
+
     def to_pandas(
         self, index: ColumnLike = None, nullable: bool = False, **kwargs
     ) -> "pd.Series":
@@ -172,7 +179,11 @@ class ColumnBase(Column, Serializable):
         if check_dtypes:
             if self.dtype != other.dtype:
                 return False
-        return (self == other).min()
+        null_equals = self._null_equals(other)
+        return null_equals.all()
+
+    def _null_equals(self, other: ColumnBase) -> ColumnBase:
+        return self.binary_operator("NULL_EQUALS", other)
 
     def all(self) -> bool:
         return bool(libcudf.reduce.reduce("all", self, dtype=np.bool_))
@@ -1036,6 +1047,8 @@ class ColumnBase(Column, Serializable):
                     "Casting interval columns not currently supported"
                 )
             return self
+        elif is_decimal_dtype(dtype):
+            return self.as_decimal_column(dtype, **kwargs)
         elif np.issubdtype(dtype, np.datetime64):
             return self.as_datetime_column(dtype, **kwargs)
         elif np.issubdtype(dtype, np.timedelta64):
@@ -1104,6 +1117,11 @@ class ColumnBase(Column, Serializable):
     def as_string_column(
         self, dtype: Dtype, format=None
     ) -> "cudf.core.column.StringColumn":
+        raise NotImplementedError
+
+    def as_decimal_column(
+        self, dtype: Dtype, **kwargs
+    ) -> "cudf.core.column.DecimalColumn":
         raise NotImplementedError
 
     def apply_boolean_mask(self, mask) -> ColumnBase:
