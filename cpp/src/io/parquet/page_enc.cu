@@ -1729,7 +1729,7 @@ struct def_level_fn {
  *
  * In general, one nesting level is the list level and any struct level that precedes it.
  *
- * A few more examples to visualize the partitioning of column heirarchy into nesting levels:
+ * A few more examples to visualize the partitioning of column hierarchy into nesting levels:
  * (L is list, S is struct, i is integer(leaf data level), angle brackets omitted)
  * ```
  * 1. LSi     = L   Si
