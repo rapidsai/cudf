@@ -8,7 +8,7 @@ from cudf._lib.cpp.column.column_view cimport column_view
 from cudf._lib.column cimport Column
 from cudf._lib.cpp.column.column cimport column
 
-from cudf._lib.cpp.strings.convert cimport (
+from cudf._lib.cpp.strings.convert.convert_integers cimport (
     is_integer as cpp_is_integer,
 )
 
@@ -27,4 +27,3 @@ def is_integer(Column source_strings):
         ))
 
     return Column.from_unique_ptr(move(c_result))
-
