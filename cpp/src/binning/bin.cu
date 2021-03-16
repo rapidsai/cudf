@@ -17,6 +17,8 @@
 #include <thrust/binary_search.h>
 #include <thrust/execution_policy.h>
 #include <thrust/functional.h>
+#include <thrust/distance.h>
+#include <thrust/advance.h>
 #include <thrust/pair.h>
 #include <cudf/binning/bin.hpp>
 #include <cudf/column/column.hpp>
@@ -61,11 +63,7 @@ struct bin_finder {
     // Exit early and return sentinel for values that lie below the interval.
     if (bound == m_left_begin) { return NULL_VALUE; }
 
-    // We must subtract 1 because lower bound returns the first index
-    // _greater than_ the value. This is safe because bound == m_left edges
-    // would already have triggered a NULL_VALUE return above, so there's
-    // no risk of negative values or wraparound for -1 here.
-    auto index = bound - m_left_begin - 1;
+    auto index = thrust::distance(m_left_begin, thrust::prev(bound));
     return (m_right_comp(value, m_right_begin[index])) ? index : NULL_VALUE;
   }
 
