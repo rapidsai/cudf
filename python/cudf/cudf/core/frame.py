@@ -3319,77 +3319,6 @@ class Frame(libcudf.table.Table):
         """
         return self._unaryop("sqrt")
 
-    @staticmethod
-    def _validate_merge_cfg(
-        lhs,
-        rhs,
-        left_on,
-        right_on,
-        on,
-        how,
-        left_index=False,
-        right_index=False,
-        lsuffix=None,
-        rsuffix=None,
-    ):
-        """
-        Error for various combinations of merge input parameters
-        """
-        len_left_on = len(left_on) if left_on is not None else 0
-        len_right_on = len(right_on) if right_on is not None else 0
-
-        # must actually support the requested merge type
-        if how not in ["left", "inner", "outer", "leftanti", "leftsemi"]:
-            raise NotImplementedError(f"{how} merge not supported yet")
-
-        # Passing 'on' with 'left_on' or 'right_on' is potentially ambiguous
-        if on:
-            if left_on or right_on:
-                raise ValueError(
-                    'Can only pass argument "on" OR "left_on" '
-                    'and "right_on", not a combination of both.'
-                )
-
-        # Require same total number of columns to join on in both operands
-        if not (len_left_on + left_index * len(lhs.index.names)) == (
-            len_right_on + right_index * len(rhs.index.names)
-        ):
-            raise ValueError(
-                "Merge operands must have same number of join key columns"
-            )
-
-        # If nothing specified, must have common cols to use implicitly
-        same_named_columns = set(lhs._data.keys()) & set(rhs._data.keys())
-        if not (left_index or right_index):
-            if not (left_on or right_on):
-                if len(same_named_columns) == 0:
-                    raise ValueError("No common columns to perform merge on")
-
-        for name in same_named_columns:
-            if not (
-                name in left_on
-                and name in right_on
-                and (left_on.index(name) == right_on.index(name))
-            ):
-                if not (lsuffix or rsuffix):
-                    raise ValueError(
-                        "there are overlapping columns but "
-                        "lsuffix and rsuffix are not defined"
-                    )
-
-        if on:
-            on_keys = [on] if not isinstance(on, list) else on
-            for key in on_keys:
-                if not (key in lhs._data.keys() and key in rhs._data.keys()):
-                    raise KeyError(f"Key {on} not in both operands")
-        else:
-            for key in left_on:
-                if key not in lhs._data.keys():
-                    raise KeyError(f'Key "{key}" not in left operand')
-            for key in right_on:
-                if key not in rhs._data.keys():
-                    raise KeyError(f'Key "{key}" not in right operand')
-
     def _merge(
         self,
         right,
@@ -3400,34 +3329,24 @@ class Frame(libcudf.table.Table):
         right_index=False,
         how="inner",
         sort=False,
-        lsuffix=None,
-        rsuffix=None,
         method="hash",
         indicator=False,
         suffixes=("_x", "_y"),
     ):
-        # Merge doesn't support right, so just swap
-        if how == "right":
-            return right._merge(
-                self,
-                on=on,
-                left_on=right_on,
-                right_on=left_on,
-                left_index=right_index,
-                right_index=left_index,
-                how="left",
-                sort=sort,
-                lsuffix=rsuffix,
-                rsuffix=lsuffix,
-                method=method,
-                indicator=indicator,
-                suffixes=suffixes,
-            )
         from cudf.core.join.join import merge
 
+        lhs, rhs = self, right
+        if how == "right":
+            # Merge doesn't support right, so just swap
+            how = "left"
+            lhs, rhs = right, self
+            left_on, right_on = right_on, left_on
+            left_index, right_index = right_index, left_index
+            suffixes = (suffixes[1], suffixes[0])
+
         return merge(
-            self,
-            right,
+            lhs,
+            rhs,
             on=on,
             left_on=left_on,
             right_on=right_on,
@@ -3435,8 +3354,6 @@ class Frame(libcudf.table.Table):
             right_index=right_index,
             how=how,
             sort=sort,
-            lsuffix=lsuffix,
-            rsuffix=rsuffix,
             method=method,
             indicator=indicator,
             suffixes=suffixes,

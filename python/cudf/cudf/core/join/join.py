@@ -29,8 +29,6 @@ def merge(
     right_index,
     how,
     sort,
-    lsuffix,
-    rsuffix,
     method,
     indicator,
     suffixes,
@@ -49,8 +47,6 @@ def merge(
         right_index=right_index,
         how=how,
         sort=sort,
-        lsuffix=lsuffix,
-        rsuffix=rsuffix,
         method=method,
         indicator=indicator,
         suffixes=suffixes,
@@ -91,8 +87,6 @@ class Merge(object):
         right_index,
         how,
         sort,
-        lsuffix,
-        rsuffix,
         method,
         indicator,
         suffixes,
@@ -127,14 +121,6 @@ class Merge(object):
         sort : bool
             Boolean flag indicating if the output Frame is to be
             sorted on the output's join keys, in left to right order.
-        lsuffix : string
-            The suffix to be appended to left hand column names that
-            are found to exist in the right frame, but are not specified
-            as join keys themselves.
-        rsuffix : string
-            The suffix to be appended to right hand column names that
-            are found to exist in the left frame, but are not specified
-            as join keys themselves.
         suffixes : list like
             Left and right suffixes specified together, unpacked into lsuffix
             and rsuffix.
@@ -148,11 +134,8 @@ class Merge(object):
             left_index=left_index,
             right_index=right_index,
             how=how,
-            lsuffix=lsuffix,
-            rsuffix=rsuffix,
             suffixes=suffixes,
         )
-
         self.lhs = lhs
         self.rhs = rhs
         self.on = on
@@ -162,10 +145,8 @@ class Merge(object):
         self.right_index = right_index
         self.how = how
         self.sort = sort
-        self.lsuffix = lsuffix
-        self.rsuffix = rsuffix
-        self.suffixes = suffixes
-
+        if suffixes:
+            self.lsuffix, self.rsuffix = suffixes
         self._compute_join_keys()
 
     @property
@@ -369,8 +350,6 @@ class Merge(object):
         left_index,
         right_index,
         how,
-        lsuffix,
-        rsuffix,
         suffixes,
     ):
         """
@@ -402,8 +381,7 @@ class Merge(object):
         ):
             raise ValueError("No common columns to perform merge on")
 
-        if suffixes:
-            lsuffix, rsuffix = suffixes
+        lsuffix, rsuffix = suffixes
         for name in same_named_columns:
             if name == left_on == right_on:
                 continue
