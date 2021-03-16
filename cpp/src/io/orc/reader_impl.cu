@@ -139,7 +139,7 @@ struct orc_stream_info {
   }
   uint64_t offset;      // offset in file
   size_t dst_pos;       // offset in memory relative to start of compressed stripe data
-  uint32_t length;      // length in file
+  size_t length;        // length in file
   uint32_t gdf_idx;     // column index
   uint32_t stripe_idx;  // stripe index
 };
