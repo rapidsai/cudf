@@ -57,7 +57,7 @@ public class ArrowIPCWriterOptions extends WriterOptions {
 
   public ColumnMetadata[] getColumnMetadata() {
     if (columnMeta == null || columnMeta.length == 0) {
-      // For compatibility. Try building from column names when column meta is empty.
+      // This is for compatibility. Try building from column names when column meta is empty.
       // Should remove this once all the callers update to use only column metadata.
       return Arrays
               .stream(getColumnNames())
@@ -90,6 +90,9 @@ public class ArrowIPCWriterOptions extends WriterOptions {
     /**
      * This should be used instead of `withColumnNames` when there are children
      * columns of struct type.
+     *
+     * (`columnNullability` is not used by Arrow IPC Writer, so it's fine to be ignored here.
+     * It can be placed into `ColumnMetadata` if needing it in the future.)
      */
     public Builder withColumnMetadata(ColumnMetadata... columnMeta) {
       this.columnMeta.addAll(Arrays.asList(columnMeta));

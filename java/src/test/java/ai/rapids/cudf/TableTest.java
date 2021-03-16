@@ -4300,12 +4300,13 @@ public class TableTest extends CudfTestBase {
       ColumnMetadata[] colMeta = Arrays.asList("first", "second", "third", "fourth", "fifth",
               "sixth", "seventh").stream().map(ColumnMetadata::new)
               .toArray(ColumnMetadata[]::new);
-      ColumnMetadata structCM = new ColumnMetadata("eight");
+      ColumnMetadata structCM = new ColumnMetadata("eighth");
       structCM.addChildren(new ColumnMetadata("id"), new ColumnMetadata("name"));
-      ColumnMetadata arrayPriCM = new ColumnMetadata("nine");
-      arrayPriCM.addChildren(new ColumnMetadata("aid"));
-      ColumnMetadata arrayStructCM = new ColumnMetadata("ten");
-      arrayStructCM.addChildren(structCM);
+      ColumnMetadata arrayPriCM = new ColumnMetadata("ninth");
+      // Array type needs a stub metadata for the offset column
+      arrayPriCM.addChildren(new ColumnMetadata(null), new ColumnMetadata("aid"));
+      ColumnMetadata arrayStructCM = new ColumnMetadata("tenth");
+      arrayStructCM.addChildren(new ColumnMetadata(null), structCM);
       ArrowIPCWriterOptions options = ArrowIPCWriterOptions.builder()
               .withColumnMetadata(colMeta)
               .withColumnMetadata(structCM, arrayPriCM, arrayStructCM)

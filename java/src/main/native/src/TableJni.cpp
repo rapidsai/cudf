@@ -569,7 +569,7 @@ static void build_one_column_metadata(JNIEnv *env, jobject meta_obj,
                                       cudf::column_metadata& out) {
   // get column name
   cudf::jni::native_jstring col_name(env, (jstring)env->GetObjectField(meta_obj, name_id));
-  out.name = std::string(col_name.get());
+  out.name = std::string(col_name.get() == NULL ? "" : col_name.get());
   // children
   jobjectArray j_children_meta = (jobjectArray)env->CallObjectMethod(meta_obj, children_mid);
   cudf::jni::native_jobjectArray<jobject> children_meta(env, j_children_meta);
