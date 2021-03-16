@@ -538,15 +538,15 @@ struct parquet_column_view {
     cudf_col = single_inheritance_cudf_col;
 
     // Construct path_in_schema by travelling up in the schema_tree
-    std::list<std::string> path;
+    std::vector<std::string> path;
     auto curr_schema_node = schema_node;
     do {
-      path.push_front(curr_schema_node.name);
+      path.push_back(curr_schema_node.name);
       if (curr_schema_node.parent_idx != -1) {
         curr_schema_node = schema_tree[curr_schema_node.parent_idx];
       }
     } while (curr_schema_node.parent_idx != -1);
-    path_in_schema = std::vector<std::string>(path.cbegin(), path.cend());
+    path_in_schema = std::vector<std::string>(path.crbegin(), path.crend());
 
     // Calculate max definition level by counting the number of levels that are optional (nullable)
     // and max repetition level by counting the number of REPEATED levels in this column's hierarchy
@@ -568,15 +568,15 @@ struct parquet_column_view {
     _max_rep_level = max_rep_level;
 
     // Construct nullability vector using repetition_type from schema.
-    std::list<uint8_t> r_nullability;
+    std::vector<uint8_t> r_nullability;
     curr_schema_node = schema_node;
     while (curr_schema_node.parent_idx != -1) {
       if (not curr_schema_node.is_stub()) {
-        r_nullability.push_front(curr_schema_node.repetition_type == FieldRepetitionType::OPTIONAL);
+        r_nullability.push_back(curr_schema_node.repetition_type == FieldRepetitionType::OPTIONAL);
       }
       curr_schema_node = schema_tree[curr_schema_node.parent_idx];
     }
-    _nullability = std::vector<uint8_t>(r_nullability.cbegin(), r_nullability.cend());
+    _nullability = std::vector<uint8_t>(r_nullability.crbegin(), r_nullability.crend());
     // TODO(cp): Explore doing this for all columns in a single go outside this ctor. Maybe using
     // hostdevice_vector. Currently this involves a cudaMemcpyAsync for each column.
     _d_nullability = rmm::device_uvector<uint8_t>(_nullability.size(), stream);
