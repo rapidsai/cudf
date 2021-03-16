@@ -5017,12 +5017,14 @@ def test_cov_nans():
         operator.truediv,
         operator.mod,
         operator.pow,
-        operator.eq,
-        operator.lt,
-        operator.le,
-        operator.gt,
-        operator.ge,
-        operator.ne,
+        # comparison ops will temporarily XFAIL
+        # see PR  https://github.com/rapidsai/cudf/pull/7491
+        pytest.param(operator.eq, marks=pytest.mark.xfail()),
+        pytest.param(operator.lt, marks=pytest.mark.xfail()),
+        pytest.param(operator.le, marks=pytest.mark.xfail()),
+        pytest.param(operator.gt, marks=pytest.mark.xfail()),
+        pytest.param(operator.ge, marks=pytest.mark.xfail()),
+        pytest.param(operator.ne, marks=pytest.mark.xfail()),
     ],
 )
 def test_df_sr_binop(gsr, colnames, op):
@@ -5052,12 +5054,14 @@ def test_df_sr_binop(gsr, colnames, op):
         operator.truediv,
         operator.mod,
         operator.pow,
-        operator.eq,
-        operator.lt,
-        operator.le,
-        operator.gt,
-        operator.ge,
-        operator.ne,
+        # comparison ops will temporarily XFAIL
+        # see PR  https://github.com/rapidsai/cudf/pull/7491
+        pytest.param(operator.eq, marks=pytest.mark.xfail()),
+        pytest.param(operator.lt, marks=pytest.mark.xfail()),
+        pytest.param(operator.le, marks=pytest.mark.xfail()),
+        pytest.param(operator.gt, marks=pytest.mark.xfail()),
+        pytest.param(operator.ge, marks=pytest.mark.xfail()),
+        pytest.param(operator.ne, marks=pytest.mark.xfail()),
     ],
 )
 @pytest.mark.parametrize(
