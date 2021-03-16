@@ -1797,12 +1797,19 @@ def test_binops_decimal(args):
         "timedelta64[s]",
     ],
 )
-@pytest.mark.parametrize("null_scalar", [None, cudf.NA])
+@pytest.mark.parametrize("null_scalar", [None, cudf.NA, np.datetime64("NaT")])
 @pytest.mark.parametrize("cmpop", _cmpops)
 def test_column_null_scalar_comparison(dtype, null_scalar, cmpop):
     # This test is meant to validate that comparing
     # a series of any dtype with a null scalar produces
     # a new series where all the elements are <NA>.
+
+    if isinstance(null_scalar, np.datetime64):
+        if np.dtype(dtype).kind not in "mM":
+            pytest.skip()
+        else:
+            null_scalar = null_scalar.astype(dtype)
+
     dtype = np.dtype(dtype)
 
     data = [1, 2, 3, 4, 5]
