@@ -1809,14 +1809,7 @@ def test_column_null_scalar_comparison(dtype, null_scalar, cmpop):
     sr = cudf.Series(data, dtype=dtype)
     result = cmpop(sr, null_scalar)
 
-    # TODO - remove this xfail after PR 7490 is merged
-    if dtype.kind not in "mM":  # non-time obeys NaN comparison logic
-        if cmpop is not operator.ne:
-            assert (result.eq(False)).all()
-        else:
-            assert (result.eq(True)).all()
-    else:
-        assert result.isnull().all()
+    assert result.isnull().all()
 
 @pytest.mark.parametrize("fn", ["eq", "ne", "lt", "gt", "le", "ge"])
 def test_equality_ops_index_mismatch(fn):
