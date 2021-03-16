@@ -8445,16 +8445,28 @@ def test_rename_for_level_is_None_MC():
 
 
 @pytest.mark.parametrize("ignore_index", [True, False])
-@pytest.mark.parametrize("p_index", [None, ['ia', 'ib', 'ic']])
+@pytest.mark.parametrize(
+    "p_index",
+    [
+        None,
+        ["ia", "ib", "ic", "id", "ie"],
+        pd.MultiIndex.from_tuples(
+            [(0, "a"), (0, "b"), (0, "c"), (1, "a"), (1, "b")]
+        ),
+    ],
+)
 def test_explode(ignore_index, p_index):
-    gdf = cudf.DataFrame({
-        "a": [[1, 2, 3], None, [4], [], [5, 6]],
-        "b": [11, 22, 33, 44, 55],
-        "c": ['a', 'e', 'i', 'o', 'u']
-    }, index=p_index)
-    pdf = gdf.to_pandas()
+    gdf = cudf.DataFrame(
+        {
+            "a": [[1, 2, 3], None, [4], [], [5, 6]],
+            "b": [11, 22, 33, 44, 55],
+            "c": ["a", "e", "i", "o", "u"],
+        },
+        index=p_index,
+    )
+    pdf = gdf.to_pandas(nullable=True)
 
-    expect = pdf.explode('a', ignore_index)
-    got = gdf.explode('a', ignore_index)
+    expect = pdf.explode("a", ignore_index).fillna(pd.NA)
+    got = gdf.explode("a", ignore_index)
 
-    assert_eq(expect, got)
+    assert_eq(got, expect, check_dtype=False)

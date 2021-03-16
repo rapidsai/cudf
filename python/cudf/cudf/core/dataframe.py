@@ -7746,13 +7746,18 @@ class DataFrame(Frame, Serializable):
         0     1  11
         0     2  11
         0     3  11
-        1  None  22
-        2  None  33
+        1  <NA>  22
+        2  <NA>  33
         3     4  44
         3     5  44
         """
+        if column not in self._column_names:
+            raise KeyError(column)
 
-        return super._explode(column, None if ignore_index else self.index)
+        explode_num = self._column_names.index(column)
+        return super()._explode(
+            explode_num, None if ignore_index else self.index
+        )
 
     _accessors = set()  # type: Set[Any]
 
