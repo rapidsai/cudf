@@ -166,28 +166,27 @@ std::unique_ptr<table> findall_re(
 
   for (int32_t column_index = 0; column_index < columns; ++column_index) {
     rmm::device_uvector<string_index_pair> indices(strings_count, stream);
-    auto d_indices = indices.data();
 
     if ((regex_insts > MAX_STACK_INSTS) || (regex_insts <= RX_SMALL_INSTS))
       thrust::transform(
         rmm::exec_policy(stream),
         thrust::make_counting_iterator<size_type>(0),
         thrust::make_counting_iterator<size_type>(strings_count),
-        d_indices,
+        indices.begin(),
         findall_fn<RX_STACK_SMALL>{*d_strings, *d_prog, column_index, d_find_counts});
     else if (regex_insts <= RX_MEDIUM_INSTS)
       thrust::transform(
         rmm::exec_policy(stream),
         thrust::make_counting_iterator<size_type>(0),
         thrust::make_counting_iterator<size_type>(strings_count),
-        d_indices,
+        indices.begin(),
         findall_fn<RX_STACK_MEDIUM>{*d_strings, *d_prog, column_index, d_find_counts});
     else
       thrust::transform(
         rmm::exec_policy(stream),
         thrust::make_counting_iterator<size_type>(0),
         thrust::make_counting_iterator<size_type>(strings_count),
-        d_indices,
+        indices.begin(),
         findall_fn<RX_STACK_LARGE>{*d_strings, *d_prog, column_index, d_find_counts});
     //
     results.emplace_back(make_strings_column(indices.begin(), indices.end(), stream, mr));

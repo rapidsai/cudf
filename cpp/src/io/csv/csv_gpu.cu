@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2020, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -26,6 +26,7 @@
 #include <cudf/lists/list_view.cuh>
 #include <cudf/null_mask.hpp>
 #include <cudf/strings/string_view.cuh>
+#include <cudf/structs/struct_view.hpp>
 #include <cudf/utilities/bit.hpp>
 #include <cudf/utilities/error.hpp>
 #include <cudf/utilities/span.hpp>
@@ -42,7 +43,7 @@
 
 using namespace ::cudf::io;
 
-using cudf::detail::device_span;
+using cudf::device_span;
 
 namespace cudf {
 namespace io {

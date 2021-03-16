@@ -2503,6 +2503,7 @@ public class TableTest extends CudfTestBase {
 
   @Test
   void testWindowingCollect() {
+    Aggregation aggCollectWithNulls = Aggregation.collect(Aggregation.NullPolicy.INCLUDE);
     Aggregation aggCollect = Aggregation.collect();
     WindowOptions winOpts = WindowOptions.builder()
                                          .minPeriods(1)
@@ -2513,26 +2514,38 @@ public class TableTest extends CudfTestBase {
              .column( 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1) // GBY Key
              .column( 1, 1, 1, 1, 2, 2, 2, 2, 3, 3, 3, 3) // GBY Key
              .column( 1, 2, 3, 4, 1, 2, 3, 4, 5, 6, 7, 8) // OBY Key
-             .column( 7, 5, 1, 9, 7, 9, 8, 2, 8, 0, 6, 6) // Agg Column of INT32
+             .column( 7, 5, 1, 9, 7, 9, 8, 2, null, 0, 6, null) // Agg Column of INT32
              .column(nestedType,                          // Agg Column of Struct
                  new StructData(1, "s1"), new StructData(2, "s2"), new StructData(3, "s3"),
                  new StructData(4, "s4"), new StructData(11, "s11"), new StructData(22, "s22"),
                  new StructData(33, "s33"), new StructData(44, "s44"), new StructData(111, "s111"),
                  new StructData(222, "s222"), new StructData(333, "s333"), new StructData(444, "s444")
               ).build();
-         ColumnVector expectSortedAggColumn = ColumnVector.fromBoxedInts(7, 5, 1, 9, 7, 9, 8, 2, 8, 0, 6, 6)) {
+         ColumnVector expectSortedAggColumn = ColumnVector
+             .fromBoxedInts(7, 5, 1, 9, 7, 9, 8, 2, null, 0, 6, null)) {
       try (Table sorted = raw.orderBy(Table.asc(0), Table.asc(1), Table.asc(2))) {
         ColumnVector sortedAggColumn = sorted.getColumn(3);
         assertColumnsAreEqual(expectSortedAggColumn, sortedAggColumn);
 
         // Primitive type: INT32
+        //  a) including nulls
+        try (Table windowAggResults = sorted.groupBy(0, 1)
+                 .aggregateWindows(aggCollectWithNulls.onColumn(3).overWindow(winOpts));
+             ColumnVector expected = ColumnVector.fromLists(
+                 new ListType(false, new BasicType(false, DType.INT32)),
+                 Arrays.asList(7,5), Arrays.asList(7,5,1), Arrays.asList(5,1,9), Arrays.asList(1,9),
+                 Arrays.asList(7,9), Arrays.asList(7,9,8), Arrays.asList(9,8,2), Arrays.asList(8,2),
+                 Arrays.asList(null,0), Arrays.asList(null,0,6), Arrays.asList(0,6,null), Arrays.asList(6,null))) {
+          assertColumnsAreEqual(expected, windowAggResults.getColumn(0));
+        }
+        //  b) excluding nulls
         try (Table windowAggResults = sorted.groupBy(0, 1)
                  .aggregateWindows(aggCollect.onColumn(3).overWindow(winOpts));
              ColumnVector expected = ColumnVector.fromLists(
                  new ListType(false, new BasicType(false, DType.INT32)),
                  Arrays.asList(7,5), Arrays.asList(7,5,1), Arrays.asList(5,1,9), Arrays.asList(1,9),
                  Arrays.asList(7,9), Arrays.asList(7,9,8), Arrays.asList(9,8,2), Arrays.asList(8,2),
-                 Arrays.asList(8,0), Arrays.asList(8,0,6), Arrays.asList(0,6,6), Arrays.asList(6,6))) {
+                 Arrays.asList(0), Arrays.asList(0,6), Arrays.asList(0,6), Arrays.asList(6))) {
           assertColumnsAreEqual(expected, windowAggResults.getColumn(0));
         }
 
@@ -4532,51 +4545,115 @@ public class TableTest extends CudfTestBase {
     }
   }
 
+  private Table[] buildExplodeTestTableWithPrimitiveTypes(boolean pos, boolean outer) {
+    try (Table input = new Table.TestBuilder()
+        .column(new ListType(true, new BasicType(true, DType.INT32)),
+            Arrays.asList(1, 2, 3),
+            Arrays.asList(4, 5),
+            Arrays.asList(6),
+            null,
+            Arrays.asList())
+        .column("s1", "s2", "s3", "s4", "s5")
+        .column(1, 3, 5, 7, 9)
+        .column(12.0, 14.0, 13.0, 11.0, 15.0)
+        .build()) {
+      Table.TestBuilder expectedBuilder = new Table.TestBuilder();
+      if (pos) {
+        Integer[] posData = outer ? new Integer[]{0, 1, 2, 0, 1, 0, 0, 0} : new Integer[]{0, 1, 2, 0, 1, 0};
+        expectedBuilder.column(posData);
+      }
+      List<Object[]> expectedData = new ArrayList<Object[]>(){{
+        if (!outer) {
+          this.add(new Integer[]{1, 2, 3, 4, 5, 6});
+          this.add(new String[]{"s1", "s1", "s1", "s2", "s2", "s3"});
+          this.add(new Integer[]{1, 1, 1, 3, 3, 5});
+          this.add(new Double[]{12.0, 12.0, 12.0, 14.0, 14.0, 13.0});
+        } else {
+          this.add(new Integer[]{1, 2, 3, 4, 5, 6, null, null});
+          this.add(new String[]{"s1", "s1", "s1", "s2", "s2", "s3", "s4", "s5"});
+          this.add(new Integer[]{1, 1, 1, 3, 3, 5, 7, 9});
+          this.add(new Double[]{12.0, 12.0, 12.0, 14.0, 14.0, 13.0, 11.0, 15.0});
+        }
+      }};
+      try (Table expected = expectedBuilder.column((Integer[]) expectedData.get(0))
+          .column((String[]) expectedData.get(1))
+          .column((Integer[]) expectedData.get(2))
+          .column((Double[]) expectedData.get(3))
+          .build()) {
+        return new Table[]{new Table(input.getColumns()), new Table(expected.getColumns())};
+      }
+    }
+  }
+
+  private Table[] buildExplodeTestTableWithNestedTypes(boolean pos) {
+    StructType nestedType = new StructType(true,
+        new BasicType(false, DType.INT32), new BasicType(false, DType.STRING));
+    try (Table input = new Table.TestBuilder()
+        .column(new ListType(false, nestedType),
+            Arrays.asList(struct(1, "k1"), struct(2, "k2"), struct(3, "k3")),
+            Arrays.asList(struct(4, "k4"), struct(5, "k5")),
+            Arrays.asList(struct(6, "k6")),
+            Arrays.asList(new HostColumnVector.StructData((List) null)),
+            Arrays.asList())
+        .column("s1", "s2", "s3", "s4", "s5")
+        .column(1, 3, 5, 7, 9)
+        .column(12.0, 14.0, 13.0, 11.0, 15.0)
+        .build()) {
+      Table.TestBuilder expectedBuilder = new Table.TestBuilder();
+      if (pos) {
+        expectedBuilder.column(0, 1, 2, 0, 1, 0, 0);
+      }
+      try (Table expected = expectedBuilder
+          .column(nestedType,
+              struct(1, "k1"), struct(2, "k2"), struct(3, "k3"),
+              struct(4, "k4"), struct(5, "k5"), struct(6, "k6"),
+              new HostColumnVector.StructData((List) null))
+          .column("s1", "s1", "s1", "s2", "s2", "s3", "s4")
+          .column(1, 1, 1, 3, 3, 5, 7)
+          .column(12.0, 12.0, 12.0, 14.0, 14.0, 13.0, 11.0)
+          .build()) {
+        return new Table[]{new Table(input.getColumns()), new Table(expected.getColumns())};
+      }
+    }
+  }
+
   @Test
   void testExplode() {
     // Child is primitive type
-    try (Table t1 = new Table.TestBuilder()
-            .column(new ListType(true, new BasicType(true, DType.INT32)),
-                Arrays.asList(1, 2, 3),
-                Arrays.asList(4, 5),
-                Arrays.asList(6),
-                null)
-            .column("s1", "s2", "s3", "s4")
-            .column(   1,    3,    5,    7)
-            .column(12.0, 14.0, 13.0, 11.0)
-            .build();
-         Table expected = new Table.TestBuilder()
-            .column(   1,    2,    3,    4,    5,    6)
-            .column("s1", "s1", "s1", "s2", "s2", "s3")
-            .column(   1,    1,    1,    3,    3,    5)
-            .column(12.0, 12.0, 12.0, 14.0, 14.0, 13.0)
-            .build()) {
-      try (Table exploded = t1.explode(0)) {
+    Table[] testTables = buildExplodeTestTableWithPrimitiveTypes(false, false);
+    try (Table input = testTables[0];
+         Table expected = testTables[1]) {
+      try (Table exploded = input.explode(0)) {
         assertTablesAreEqual(expected, exploded);
       }
     }
 
     // Child is nested type
-    StructType nestedType = new StructType(false,
-        new BasicType(false, DType.INT32), new BasicType(false, DType.STRING));
-    try (Table t1 = new Table.TestBuilder()
-            .column(new ListType(false, nestedType),
-                Arrays.asList(struct(1, "k1"), struct(2, "k2"), struct(3, "k3")),
-                Arrays.asList(struct(4, "k4"), struct(5, "k5")),
-                Arrays.asList(struct(6, "k6")))
-            .column("s1", "s2", "s3")
-            .column(   1,    3,    5)
-            .column(12.0, 14.0, 13.0)
-            .build();
-         Table expected = new Table.TestBuilder()
-            .column(nestedType,
-                struct(1, "k1"), struct(2, "k2"), struct(3, "k3"),
-                struct(4, "k4"), struct(5, "k5"), struct(6, "k6"))
-            .column("s1", "s1", "s1", "s2", "s2", "s3")
-            .column(   1,    1,    1,    3,    3,    5)
-            .column(12.0, 12.0, 12.0, 14.0, 14.0, 13.0)
-            .build()) {
-      try (Table exploded = t1.explode(0)) {
+    Table[] testTables2 = buildExplodeTestTableWithNestedTypes(false);
+    try (Table input = testTables2[0];
+         Table expected = testTables2[1]) {
+      try (Table exploded = input.explode(0)) {
+        assertTablesAreEqual(expected, exploded);
+      }
+    }
+  }
+
+  @Test
+  void testPosExplode() {
+    // Child is primitive type
+    Table[] testTables = buildExplodeTestTableWithPrimitiveTypes(true, false);
+    try (Table input = testTables[0];
+         Table expected = testTables[1]) {
+      try (Table exploded = input.explodePosition(0)) {
+        assertTablesAreEqual(expected, exploded);
+      }
+    }
+
+    // Child is primitive type
+    Table[] testTables2 = buildExplodeTestTableWithNestedTypes(true);
+    try (Table input = testTables2[0];
+         Table expected = testTables2[1]) {
+      try (Table exploded = input.explodePosition(0)) {
         assertTablesAreEqual(expected, exploded);
       }
     }
