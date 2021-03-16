@@ -28,7 +28,8 @@ namespace cudf {
 namespace detail {
 
 // Enum used to define whether or not bins include their boundary points.
-// This enum is not documented via doxygen here, but its alias in the main cudf namespace is documented.
+// This enum is not documented via doxygen here, but its alias in the main cudf namespace is
+// documented.
 enum class inclusive { YES, NO };
 
 /**
@@ -42,8 +43,8 @@ enum class inclusive { YES, NO };
  * @brief Labels elements based on membership in the specified bins.
  *
  * A bin `i` is defined by `left_edges[i], right_edges[i]`. Whether the edges are inclusive or
- * not is determined by `left_inclusive` and `right_inclusive`, respectively. If either `left_edges[i]`
- * or `right_edges[i]` is NULL, no value in `input` can be placed in bin `i`.
+ * not is determined by `left_inclusive` and `right_inclusive`, respectively. If either
+ * `left_edges[i]` or `right_edges[i]` is NULL, no value in `input` can be placed in bin `i`.
  *
  * A value `input[j]` belongs to bin `i` if `value[j]` is contained in the range `left_edges[i],
  * right_edges[i]` (with the specified inclusiveness) and `label[j] == i`. If  `input[j]` does not
@@ -66,8 +67,10 @@ enum class inclusive { YES, NO };
  * @param left_inclusive Whether or not the left edge is inclusive.
  * @param right_edges Value of the right edge of each bin.
  * @param right_inclusive Whether or not the right edge is inclusive.
- * @param edge_null_precedence Whether nulls in left and right edges are at the beginning or the end.
+ * @param edge_null_precedence Whether nulls in left and right edges are at the beginning or the
+ * end.
  * @param mr Device memory resource used to allocate the returned column's device.
+ * @param stream Stream view on which to allocate resources and queue execution.
  * @return The integer labels of the elements in `input` according to the specified bins.
  */
 std::unique_ptr<column> bin(
@@ -76,9 +79,9 @@ std::unique_ptr<column> bin(
   inclusive left_inclusive,
   column_view const& right_edges,
   inclusive right_inclusive,
-  null_order edge_null_precedence = null_order::BEFORE,
+  null_order edge_null_precedence     = null_order::BEFORE,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource(),
-  rmm::cuda_stream_view stream = rmm::cuda_stream_default);
+  rmm::cuda_stream_view stream        = rmm::cuda_stream_default);
 
 /** @} */  // end of group
 }  // namespace detail

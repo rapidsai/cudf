@@ -26,8 +26,8 @@
 #include <cudf/utilities/span.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
 
-#include <rmm/mr/device/device_memory_resource.hpp>
 #include <rmm/exec_policy.hpp>
+#include <rmm/mr/device/device_memory_resource.hpp>
 
 #include <thrust/advance.h>
 #include <thrust/binary_search.h>
@@ -48,10 +48,19 @@ namespace {
 // could make this an error in Python, but that is such a crazy edge case...
 constexpr size_type NULL_VALUE{std::numeric_limits<size_type>::max()};
 
-template <typename T, typename RandomAccessIterator, typename LeftComparator, typename RightComparator>
+template <typename T,
+          typename RandomAccessIterator,
+          typename LeftComparator,
+          typename RightComparator>
 struct bin_finder {
-  bin_finder(RandomAccessIterator left_begin, RandomAccessIterator left_end, RandomAccessIterator right_begin, size_type edge_index_shift)
-    : m_left_begin(left_begin), m_left_end(left_end), m_right_begin(right_begin), m_edge_index_shift(edge_index_shift)
+  bin_finder(RandomAccessIterator left_begin,
+             RandomAccessIterator left_end,
+             RandomAccessIterator right_begin,
+             size_type edge_index_shift)
+    : m_left_begin(left_begin),
+      m_left_end(left_end),
+      m_right_begin(right_begin),
+      m_edge_index_shift(edge_index_shift)
   {
   }
 
@@ -60,9 +69,8 @@ struct bin_finder {
     // Immediately return sentinel for null inputs.
     if (!input_value.second) return NULL_VALUE;
 
-    T value = input_value.first;
-    auto bound =
-      thrust::lower_bound(thrust::seq, m_left_begin, m_left_end, value, m_left_comp);
+    T value    = input_value.first;
+    auto bound = thrust::lower_bound(thrust::seq, m_left_begin, m_left_end, value, m_left_comp);
 
     // Exit early and return sentinel for values that lie below the interval.
     if (bound == m_left_begin) { return NULL_VALUE; }
@@ -71,12 +79,14 @@ struct bin_finder {
     return (m_right_comp(value, m_right_begin[index])) ? (index + m_edge_index_shift) : NULL_VALUE;
   }
 
-  RandomAccessIterator m_left_begin{};   // The beginning of the range containing the left bin edges.
-  RandomAccessIterator m_left_end{};     // The end of the range containing the left bin edges.
-  RandomAccessIterator m_right_begin{};  // The beginning of the range containing the right bin edges.
-  size_type m_edge_index_shift;          // The number of elements m_left_begin has been shifted to skip nulls.
-  LeftComparator m_left_comp{};          // Comparator used for left edges.
-  RightComparator m_right_comp{};        // Comparator used for right edges.
+  RandomAccessIterator m_left_begin{};  // The beginning of the range containing the left bin edges.
+  RandomAccessIterator m_left_end{};    // The end of the range containing the left bin edges.
+  RandomAccessIterator
+    m_right_begin{};  // The beginning of the range containing the right bin edges.
+  size_type
+    m_edge_index_shift;  // The number of elements m_left_begin has been shifted to skip nulls.
+  LeftComparator m_left_comp{};    // Comparator used for left edges.
+  RightComparator m_right_comp{};  // Comparator used for right edges.
 };
 
 // Functor to identify rows that should be filtered out based on the sentinel set by
@@ -94,30 +104,28 @@ std::unique_ptr<column> bin(column_view const& input,
                             rmm::mr::device_memory_resource* mr,
                             rmm::cuda_stream_view stream)
 {
-  auto output = make_numeric_column(data_type(type_to_id<size_type>()), input.size(), mask_state::UNALLOCATED, stream, mr);
+  auto output = make_numeric_column(
+    data_type(type_to_id<size_type>()), input.size(), mask_state::UNALLOCATED, stream, mr);
   auto output_mutable_view = output->mutable_view();
 
   // These device column views are necessary for creating iterators that work
   // for columns of compound types. The column_view iterators fail for compound
   // types because they return raw pointers to the start of the data.
-  auto input_device_view   = column_device_view::create(input);
-  auto left_edges_device_view   = column_device_view::create(left_edges);
-  auto right_edges_device_view   = column_device_view::create(right_edges);
+  auto input_device_view       = column_device_view::create(input);
+  auto left_edges_device_view  = column_device_view::create(left_edges);
+  auto right_edges_device_view = column_device_view::create(right_edges);
 
   // Compute the maximum shift required for either edge, then shift all the iterators appropriately.
   size_type null_shift = max(left_edges.null_count(), right_edges.null_count());
-  auto left_begin = left_edges_device_view->begin<T>();
-  auto left_end = left_edges_device_view->end<T>();
-  auto right_begin = right_edges_device_view->begin<T>();
+  auto left_begin      = left_edges_device_view->begin<T>();
+  auto left_end        = left_edges_device_view->end<T>();
+  auto right_begin     = right_edges_device_view->begin<T>();
 
-  if (edge_null_precedence == null_order::BEFORE)
-  {
-      left_begin = thrust::next(left_begin, null_shift);
-      right_begin = thrust::next(right_begin, null_shift);
-  }
-  else
-  {
-      left_end = thrust::prev(left_end, null_shift);
+  if (edge_null_precedence == null_order::BEFORE) {
+    left_begin  = thrust::next(left_begin, null_shift);
+    right_begin = thrust::next(right_begin, null_shift);
+  } else {
+    left_end = thrust::prev(left_end, null_shift);
   }
 
   // If all the nulls are at the beginning, the indices found by lower_bound
@@ -125,23 +133,22 @@ std::unique_ptr<column> bin(column_view const& input,
   // already be correct.
   size_type index_shift = (edge_null_precedence == null_order::BEFORE) ? null_shift : 0;
 
-  if (input.has_nulls())
-  {
-      thrust::transform(rmm::exec_policy(stream),
-                        input_device_view->pair_begin<T, true>(),
-                        input_device_view->pair_end<T, true>(),
-                        output_mutable_view.begin<size_type>(),
-                        bin_finder<T, decltype(left_edges_device_view->begin<T>()), LeftComparator, RightComparator>(
-                          left_begin, left_end, right_begin, index_shift));
-  }
-  else
-  {
-      thrust::transform(rmm::exec_policy(stream),
-                        input_device_view->pair_begin<T, false>(),
-                        input_device_view->pair_end<T, false>(),
-                        output_mutable_view.begin<size_type>(),
-                        bin_finder<T, decltype(left_edges_device_view->begin<T>()), LeftComparator, RightComparator>(
-                          left_begin, left_end, right_begin, index_shift));
+  if (input.has_nulls()) {
+    thrust::transform(
+      rmm::exec_policy(stream),
+      input_device_view->pair_begin<T, true>(),
+      input_device_view->pair_end<T, true>(),
+      output_mutable_view.begin<size_type>(),
+      bin_finder<T, decltype(left_edges_device_view->begin<T>()), LeftComparator, RightComparator>(
+        left_begin, left_end, right_begin, index_shift));
+  } else {
+    thrust::transform(
+      rmm::exec_policy(stream),
+      input_device_view->pair_begin<T, false>(),
+      input_device_view->pair_end<T, false>(),
+      output_mutable_view.begin<size_type>(),
+      bin_finder<T, decltype(left_edges_device_view->begin<T>()), LeftComparator, RightComparator>(
+        left_begin, left_end, right_begin, index_shift));
   }
 
   auto mask_and_count = valid_if(output_mutable_view.begin<size_type>(),
@@ -155,7 +162,8 @@ std::unique_ptr<column> bin(column_view const& input,
 template <typename T>
 constexpr auto is_supported_bin_type()
 {
-  return ((is_numeric<T>() && !std::is_same<T, bool>::value)) || std::is_same<T, string_view>::value;
+  return ((is_numeric<T>() && !std::is_same<T, bool>::value)) ||
+         std::is_same<T, string_view>::value;
 }
 
 /// Functor suitable for use with type_dispatcher to call the appropriate detail::bin method.
@@ -179,16 +187,16 @@ struct bin_type_dispatcher {
     rmm::cuda_stream_view stream)
   {
     if ((left_inclusive == inclusive::YES) && (right_inclusive == inclusive::YES))
-      return bin<T, thrust::less_equal<T>, thrust::less_equal<T> >(
+      return bin<T, thrust::less_equal<T>, thrust::less_equal<T>>(
         input, left_edges, right_edges, edge_null_precedence, mr, stream);
     if ((left_inclusive == inclusive::YES) && (right_inclusive == inclusive::NO))
-      return bin<T, thrust::less_equal<T>, thrust::less<T> >(
+      return bin<T, thrust::less_equal<T>, thrust::less<T>>(
         input, left_edges, right_edges, edge_null_precedence, mr, stream);
     if ((left_inclusive == inclusive::NO) && (right_inclusive == inclusive::YES))
-      return bin<T, thrust::less<T>, thrust::less_equal<T> >(
+      return bin<T, thrust::less<T>, thrust::less_equal<T>>(
         input, left_edges, right_edges, edge_null_precedence, mr, stream);
     if ((left_inclusive == inclusive::NO) && (right_inclusive == inclusive::NO))
-      return bin<T, thrust::less<T>, thrust::less<T> >(
+      return bin<T, thrust::less<T>, thrust::less<T>>(
         input, left_edges, right_edges, edge_null_precedence, mr, stream);
 
     CUDF_FAIL("Undefined inclusive setting.");
@@ -214,7 +222,10 @@ std::unique_ptr<column> bin(column_view const& input,
                "The left and right edge columns must be of the same length.");
 
   // Handle empty inputs.
-  if (input.is_empty()) { return make_numeric_column(data_type(type_to_id<size_type>()), 0, mask_state::UNALLOCATED, rmm::cuda_stream_default, mr); }
+  if (input.is_empty()) {
+    return make_numeric_column(
+      data_type(type_to_id<size_type>()), 0, mask_state::UNALLOCATED, rmm::cuda_stream_default, mr);
+  }
 
   return type_dispatcher<dispatch_storage_type>(input.type(),
                                                 detail::bin_type_dispatcher{},
@@ -239,6 +250,7 @@ std::unique_ptr<column> bin(column_view const& input,
                             null_order edge_null_precedence,
                             rmm::mr::device_memory_resource* mr)
 {
-    return detail::bin(input, left_edges, left_inclusive, right_edges, right_inclusive, edge_null_precedence, mr);
+  return detail::bin(
+    input, left_edges, left_inclusive, right_edges, right_inclusive, edge_null_precedence, mr);
 }
 }  // namespace cudf

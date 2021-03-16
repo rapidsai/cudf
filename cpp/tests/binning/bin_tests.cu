@@ -221,8 +221,12 @@ TEST(BinColumnTest, TestLeftEdgesWithNullsAfter)
   fwc_wrapper<float> right_edges{1, 2, 3, 4, 5, 6, 7, 8, 9, 10};
   fwc_wrapper<float> input{6.5, 7.5, 8.5, 9.5};
 
-  std::unique_ptr<cudf::column> result =
-    cudf::bin(input, left_edges, cudf::inclusive::NO, right_edges, cudf::inclusive::NO, cudf::null_order::AFTER);
+  std::unique_ptr<cudf::column> result = cudf::bin(input,
+                                                   left_edges,
+                                                   cudf::inclusive::NO,
+                                                   right_edges,
+                                                   cudf::inclusive::NO,
+                                                   cudf::null_order::AFTER);
   ASSERT_TRUE(result->size() == 4);
   ASSERT_TRUE(result->null_count() == 1);
 
@@ -253,8 +257,12 @@ TEST(BinColumnTest, TestRightEdgesWithNullsAfter)
   fwc_wrapper<float> right_edges{{1, 2, 3, 4, 5, 6, 7, 8, 9, 10}, {1, 1, 1, 1, 1, 1, 1, 1, 1, 0}};
   fwc_wrapper<float> input{6.5, 7.5, 8.5, 9.5};
 
-  std::unique_ptr<cudf::column> result =
-    cudf::bin(input, left_edges, cudf::inclusive::NO, right_edges, cudf::inclusive::NO, cudf::null_order::AFTER);
+  std::unique_ptr<cudf::column> result = cudf::bin(input,
+                                                   left_edges,
+                                                   cudf::inclusive::NO,
+                                                   right_edges,
+                                                   cudf::inclusive::NO,
+                                                   cudf::null_order::AFTER);
   ASSERT_TRUE(result->size() == 4);
   ASSERT_TRUE(result->null_count() == 1);
 
@@ -285,15 +293,18 @@ TEST(BinColumnTest, TestBothEdgesWithNullsAfterDifferentAmount)
   fwc_wrapper<float> right_edges{{1, 2, 3, 4, 5, 6, 7, 8, 9, 10}, {1, 1, 1, 1, 1, 1, 1, 1, 1, 0}};
   fwc_wrapper<float> input{6.5, 7.5, 8.5, 9.5};
 
-  std::unique_ptr<cudf::column> result =
-    cudf::bin(input, left_edges, cudf::inclusive::NO, right_edges, cudf::inclusive::NO, cudf::null_order::AFTER);
+  std::unique_ptr<cudf::column> result = cudf::bin(input,
+                                                   left_edges,
+                                                   cudf::inclusive::NO,
+                                                   right_edges,
+                                                   cudf::inclusive::NO,
+                                                   cudf::null_order::AFTER);
   ASSERT_TRUE(result->size() == 4);
   ASSERT_TRUE(result->null_count() == 2);
 
   fwc_wrapper<cudf::size_type> expected{{6, 7, 0, 0}, {1, 1, 0, 0}};
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
 };
-
 
 /**
  * Simple real data.
@@ -404,15 +415,15 @@ TYPED_TEST_CASE(StringBinTestFixture, StringTypes);
 
 TYPED_TEST(StringBinTestFixture, TestStringData)
 {
-    strings_column_wrapper left_edges{"a", "b", "c", "d", "e"};
-    strings_column_wrapper right_edges{"b", "c", "d", "e", "f"};
-    strings_column_wrapper input{"abc", "bcd", "cde", "def", "efg"};
+  strings_column_wrapper left_edges{"a", "b", "c", "d", "e"};
+  strings_column_wrapper right_edges{"b", "c", "d", "e", "f"};
+  strings_column_wrapper input{"abc", "bcd", "cde", "def", "efg"};
 
-    auto result =
-      cudf::bin(input, left_edges, cudf::inclusive::YES, right_edges, cudf::inclusive::NO);
+  auto result =
+    cudf::bin(input, left_edges, cudf::inclusive::YES, right_edges, cudf::inclusive::NO);
 
-    fwc_wrapper<cudf::size_type> expected{{0, 1, 2, 3, 4}, {1, 1, 1, 1, 1}};
-    CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
+  fwc_wrapper<cudf::size_type> expected{{0, 1, 2, 3, 4}, {1, 1, 1, 1, 1}};
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
 };
 
 }  // anonymous namespace
