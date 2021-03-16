@@ -105,9 +105,12 @@ const char* masked_binary_op_kernel =
 
 const char* null_kernel =
   R"***(
-    template <typename TypeOut, typename Type2>
+    template <typename TypeOut, typename TypeLhs, typename TypeRhs>
     __global__
-    void null_kernel(TypeOut* out_data, Type2* test) {}
+    void null_kernel(cudf::size_type size,
+                     TypeOut* out_data, 
+                     TypeLhs* lhs_data,
+                     TypeRhs* rhs_data) {}
 
   )***";
 

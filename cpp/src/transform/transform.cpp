@@ -113,11 +113,19 @@ void binary_operation(column_view const& A,
                       headers_code,
                       stream)
     .set_kernel_inst("null_kernel",
-                      {
-                        cudf::jit::get_type_name(outcol_view.type()), cudf::jit::get_type_name(outcol_view.type()),
-                      }
+                    {
+                      cudf::jit::get_type_name(outcol_view.type()), 
+                      cudf::jit::get_type_name(A.type()),
+                      cudf::jit::get_type_name(B.type())
+                    }
+    )
+    .launch(outcol_view.size(),
+      outcol_view.size(),
+      cudf::jit::get_data_ptr(outcol_view),
+      cudf::jit::get_data_ptr(A),
+      cudf::jit::get_data_ptr(B)      
     );
-  
+    std::cout << "KERNEL LAUNCHED!!!" << std::endl;
   /*
 
 
