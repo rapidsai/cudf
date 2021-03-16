@@ -110,7 +110,13 @@ const char* null_kernel =
     void null_kernel(cudf::size_type size,
                      TypeOut* out_data, 
                      TypeLhs* lhs_data,
-                     TypeRhs* rhs_data) {}
+                     TypeRhs* rhs_data,
+                     bool* out_mask,
+                     cudf::bitmask_type const* lhs_mask,
+                     cudf::size_type lhs_offset,
+                     cudf::bitmask_type const* rhs_mask,
+                     cudf::size_type rhs_offset
+                    ) {}
 
   )***";
 
