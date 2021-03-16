@@ -19,6 +19,7 @@
 #include <cudf/detail/sorting.hpp>
 #include <cudf/null_mask.hpp>
 #include <cudf/sorting.hpp>
+#include <cudf/structs/structs_column_view.hpp>
 #include <cudf/table/table_view.hpp>
 #include <cudf/unary.hpp>
 
@@ -52,7 +53,9 @@ struct flatten_table {
   }
 
   // Convert null_mask to BOOL8 columns and flatten the struct children in order.
-  void flatten_struct_column(column_view const& col, order col_order, null_order col_null_order)
+  void flatten_struct_column(structs_column_view const& col,
+                             order col_order,
+                             null_order col_null_order)
   {
     if (col.nullable()) {
       validity_as_column.push_back(cudf::is_valid(col));
@@ -61,10 +64,10 @@ struct flatten_table {
       if (not column_order.empty()) flat_column_order.push_back(col_order);  // doesn't matter.
       if (not null_precedence.empty()) flat_null_precedence.push_back(col_null_order);
     }
-    for (auto it = col.child_begin(); it != col.child_end(); it++) {
-      auto const& child = *it;
+    for (decltype(col.num_children()) i = 0; i < col.num_children(); ++i) {
+      auto const& child = col.get_sliced_child(i);
       if (child.type().id() == type_id::STRUCT) {
-        flatten_struct_column(child, col_order, null_order::BEFORE);
+        flatten_struct_column(structs_column_view{child}, col_order, null_order::BEFORE);
         // default spark behaviour is null_order::BEFORE
       } else {
         flat_columns.push_back(child);
@@ -87,7 +90,7 @@ struct flatten_table {
     for (decltype(input.num_columns()) i = 0; i < input.num_columns(); ++i) {
       auto const& col = input.column(i);
       if (col.type().id() == type_id::STRUCT) {
-        flatten_struct_column(col,
+        flatten_struct_column(structs_column_view{col},
                               (column_order.empty() ? order() : column_order[i]),
                               (null_precedence.empty() ? null_order() : null_precedence[i]));
       } else {

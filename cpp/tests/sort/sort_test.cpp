@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 
+#include <bits/stdint-intn.h>
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_utilities.hpp>
 #include <cudf_test/column_wrapper.hpp>
@@ -318,6 +319,118 @@ TYPED_TEST(Sort, WithSingleStructColumn)
 
   // Run test for sort and sort_by_key
   run_sort_test(input, expected, column_order);
+}
+
+TYPED_TEST(Sort, WithSlicedStructColumn)
+{
+  using T = TypeParam;
+  /*
+       /+-------------+
+       |             s|
+       +--------------+
+     0 | {"bbe", 1, 7}|
+     1 | {"bbe", 1, 8}|
+     2 | {"aaa", 0, 1}|
+     3 | {"abc", 0, 1}|
+     4 | {"ab",  0, 9}|
+     5 | {"za",  2, 5}|
+     6 | {"b",   1, 7}|
+     7 | { @,    3, 3}|
+       +--------------+
+  */
+  // clang-format off
+  using FWCW = cudf::test::fixed_width_column_wrapper<T, int32_t>;
+  std::vector<bool>             string_valids{    1,     1,     1,     1,    1,    1,   1,   0};
+  std::initializer_list<std::string> names = {"bbe", "bbe", "aaa", "abc", "ab", "za", "b", "x"};
+  auto col2 =                           FWCW{{    1,     1,     0,     0,    0,    2,   1,   3}};
+  auto col3 =                           FWCW{{    7,     8,     1,     1,    9,    5,   7,   3}};
+  auto col1 = cudf::test::strings_column_wrapper{names.begin(), names.end(), string_valids.begin()};
+  auto struct_col = structs_column_wrapper{{col1, col2, col3}}.release();
+  // clang-format on
+  auto struct_col_view{struct_col->view()};
+  table_view input{{struct_col_view}};
+  auto sliced_columns = cudf::split(struct_col_view, std::vector<size_type>{3});
+  auto sliced_tables  = cudf::split(input, std::vector<size_type>{3});
+  std::vector<order> column_order{order::ASCENDING};
+  /*
+        asce_null_first   sliced[3:]
+      /+-------------+
+      |             s|
+      +--------------+
+    7 | { @,    3, 3}|   7=4
+    2 | {"aaa", 0, 1}|
+    4 | {"ab",  0, 9}|   4=1
+    3 | {"abc", 0, 1}|   3=0
+    6 | {"b",   1, 7}|   6=3
+    0 | {"bbe", 1, 7}|
+    1 | {"bbe", 1, 8}|
+    5 | {"za",  2, 5}|   5=2
+      +--------------+
+  */
+
+  // normal
+  fixed_width_column_wrapper<int32_t> expected{{7, 2, 4, 3, 6, 0, 1, 5}};
+  auto got = sorted_order(input, column_order);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, got->view());
+  // Run test for sort and sort_by_key
+  run_sort_test(input, expected, column_order);
+
+  // table with sliced column
+  table_view input2{{sliced_columns[1]}};
+  fixed_width_column_wrapper<int32_t> expected2{{4, 1, 0, 3, 2}};
+  got = sorted_order(input2, column_order);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected2, got->view());
+  // Run test for sort and sort_by_key
+  run_sort_test(input2, expected2, column_order);
+
+  // sliced table[1]
+  fixed_width_column_wrapper<int32_t> expected3{{4, 1, 0, 3, 2}};
+  got = sorted_order(sliced_tables[1], column_order);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected3, got->view());
+  // Run test for sort and sort_by_key
+  run_sort_test(sliced_tables[1], expected3, column_order);
+
+  // sliced table[0]
+  fixed_width_column_wrapper<int32_t> expected4{{2, 0, 1}};
+  got = sorted_order(sliced_tables[0], column_order);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected4, got->view());
+  // Run test for sort and sort_by_key
+  run_sort_test(sliced_tables[0], expected4, column_order);
+}
+
+TYPED_TEST(Sort, SlicedColumns)
+{
+  using T    = TypeParam;
+  using FWCW = cudf::test::fixed_width_column_wrapper<T, int32_t>;
+
+  // clang-format off
+  std::vector<bool>             string_valids{    1,     1,     1,     1,    1,    1,   1,   0};
+  std::initializer_list<std::string> names = {"bbe", "bbe", "aaa", "abc", "ab", "za", "b", "x"};
+  auto col2 =                           FWCW{{    7,     8,     1,     1,    9,    5,   7,   3}};
+  auto col1 = cudf::test::strings_column_wrapper{names.begin(), names.end(), string_valids.begin()};
+  // clang-format on
+  table_view input{{col1, col2}};
+  auto sliced_columns1 = cudf::split(col1, std::vector<size_type>{3});
+  auto sliced_columns2 = cudf::split(col1, std::vector<size_type>{3});
+  auto sliced_tables   = cudf::split(input, std::vector<size_type>{3});
+  std::vector<order> column_order{order::ASCENDING, order::ASCENDING};
+
+  // normal
+  // fixed_width_column_wrapper<int32_t> expected{{2, 3, 7, 5, 0, 6, 1, 4}};
+  fixed_width_column_wrapper<int32_t> expected{{7, 2, 4, 3, 6, 0, 1, 5}};
+  auto got = sorted_order(input, column_order);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, got->view());
+  // Run test for sort and sort_by_key
+  run_sort_test(input, expected, column_order);
+
+  // table with sliced column
+  table_view input2{{sliced_columns1[1], sliced_columns2[1]}};
+  // fixed_width_column_wrapper<int32_t> expected2{{0, 4, 2, 3, 1}};
+  fixed_width_column_wrapper<int32_t> expected2{{4, 1, 0, 3, 2}};
+  got = sorted_order(input2, column_order);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected2, got->view());
+  // Run test for sort and sort_by_key
+  run_sort_test(input2, expected2, column_order);
 }
 
 TYPED_TEST(Sort, WithStructColumnCombinations)
