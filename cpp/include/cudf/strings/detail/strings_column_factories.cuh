@@ -113,7 +113,7 @@ std::unique_ptr<column> make_strings_column(IndexPairIterator begin,
                           stream,
                           mr);
     } else {
-      // this approach is 2-3x faster for large number smaller string lengths
+      // this approach is 2-3x faster for a large number of smaller string lengths
       auto chars_column =
         strings::detail::create_chars_child_column(strings_count, null_count, bytes, stream, mr);
       auto d_chars    = chars_column->mutable_view().template data<char>();
