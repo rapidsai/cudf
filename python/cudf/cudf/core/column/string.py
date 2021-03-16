@@ -75,9 +75,11 @@ from cudf._lib.strings.char_types import (
     is_space as cpp_isspace,
     is_upper as cpp_is_upper,
 )
-from cudf._lib.strings.convert import (
-    is_float as cpp_is_float,
+from cudf._lib.strings.convert.convert_integers import (
     is_integer as cpp_is_integer,
+)
+from cudf._lib.strings.convert.convert_floats import (
+    is_float as cpp_is_float,
 )
 from cudf._lib.strings.combine import (
     concatenate as cpp_concatenate,
