@@ -238,7 +238,7 @@ class ListMethods(ColumnMethodsMixin):
         Parameters
         ----------
         lists_indices: List type arrays
-        Specifies what to collect from each row
+            Specifies what to collect from each row
 
         Returns
         -------
