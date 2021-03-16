@@ -7725,11 +7725,6 @@ class DataFrame(Frame, Serializable):
         -------
         DataFrame
 
-        Notes
-        -------
-        In cudf, empty lists `[]` are mapped to nulls, as opposed to `nan` in
-        Pandas.
-
         Examples
         -------
         >>> import cudf
