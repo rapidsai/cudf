@@ -54,7 +54,7 @@ data_type arrow_to_cudf_type(arrow::DataType const& arrow_type)
     case arrow::Type::DOUBLE: return data_type(type_id::FLOAT64);
     case arrow::Type::DATE32: return data_type(type_id::TIMESTAMP_DAYS);
     case arrow::Type::TIMESTAMP: {
-      arrow::TimestampType const* type = static_cast<arrow::TimestampType const*>(&arrow_type);
+      auto type = static_cast<arrow::TimestampType const*>(&arrow_type);
       switch (type->unit()) {
         case arrow::TimeUnit::type::SECOND: return data_type(type_id::TIMESTAMP_SECONDS);
         case arrow::TimeUnit::type::MILLI: return data_type(type_id::TIMESTAMP_MILLISECONDS);
@@ -64,7 +64,7 @@ data_type arrow_to_cudf_type(arrow::DataType const& arrow_type)
       }
     }
     case arrow::Type::DURATION: {
-      arrow::DurationType const* type = static_cast<arrow::DurationType const*>(&arrow_type);
+      auto type = static_cast<arrow::DurationType const*>(&arrow_type);
       switch (type->unit()) {
         case arrow::TimeUnit::type::SECOND: return data_type(type_id::DURATION_SECONDS);
         case arrow::TimeUnit::type::MILLI: return data_type(type_id::DURATION_MILLISECONDS);
@@ -76,6 +76,10 @@ data_type arrow_to_cudf_type(arrow::DataType const& arrow_type)
     case arrow::Type::STRING: return data_type(type_id::STRING);
     case arrow::Type::DICTIONARY: return data_type(type_id::DICTIONARY32);
     case arrow::Type::LIST: return data_type(type_id::LIST);
+    case arrow::Type::DECIMAL: {  // DECIMAL128 ???
+      auto type = static_cast<arrow::Decimal128Type const*>(&arrow_type);
+      return data_type{type_id::DECIMAL64, type->scale()};
+    }
     case arrow::Type::STRUCT: return data_type(type_id::STRUCT);
     default: CUDF_FAIL("Unsupported type_id conversion to cudf");
   }
