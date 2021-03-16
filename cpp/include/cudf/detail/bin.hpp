@@ -16,28 +16,27 @@
 
 #pragma once
 
-#include <cudf/detail/bin.hpp>
-
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_view.hpp>
 #include <cudf/types.hpp>
 
+#include <rmm/cuda_stream_view.hpp>
 #include <rmm/mr/device/device_memory_resource.hpp>
 #include <rmm/mr/device/per_device_resource.hpp>
 
 namespace cudf {
+namespace detail {
+
+// Enum used to define whether or not bins include their boundary points.
+// This enum is not documented via doxygen here, but its alias in the main cudf namespace is documented.
+enum class inclusive { YES, NO };
 
 /**
  * @addtogroup binning
  * @{
  * @file
- * @brief APIs for binning values.
+ * @brief Internal APIs for binning values.
  */
-
-/**
- * @brief Enum used to define whether or not bins include their boundary points.
- */
-using inclusive = detail::inclusive;
 
 /**
  * @brief Labels elements based on membership in the specified bins.
@@ -78,7 +77,9 @@ std::unique_ptr<column> bin(
   column_view const& right_edges,
   inclusive right_inclusive,
   null_order edge_null_precedence = null_order::BEFORE,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource(),
+  rmm::cuda_stream_view stream = rmm::cuda_stream_default);
 
 /** @} */  // end of group
+}  // namespace detail
 }  // namespace cudf

@@ -19,6 +19,7 @@
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_factories.hpp>
 #include <cudf/column/column_view.hpp>
+#include <cudf/detail/bin.hpp>
 #include <cudf/detail/valid_if.cuh>
 #include <cudf/types.hpp>
 #include <cudf/utilities/error.hpp>
@@ -38,7 +39,6 @@
 #include <limits>
 
 namespace cudf {
-
 namespace detail {
 namespace {
 
@@ -179,16 +179,16 @@ struct bin_type_dispatcher {
     rmm::cuda_stream_view stream)
   {
     if ((left_inclusive == inclusive::YES) && (right_inclusive == inclusive::YES))
-      return detail::bin<T, thrust::less_equal<T>, thrust::less_equal<T> >(
+      return bin<T, thrust::less_equal<T>, thrust::less_equal<T> >(
         input, left_edges, right_edges, edge_null_precedence, mr, stream);
     if ((left_inclusive == inclusive::YES) && (right_inclusive == inclusive::NO))
-      return detail::bin<T, thrust::less_equal<T>, thrust::less<T> >(
+      return bin<T, thrust::less_equal<T>, thrust::less<T> >(
         input, left_edges, right_edges, edge_null_precedence, mr, stream);
     if ((left_inclusive == inclusive::NO) && (right_inclusive == inclusive::YES))
-      return detail::bin<T, thrust::less<T>, thrust::less_equal<T> >(
+      return bin<T, thrust::less<T>, thrust::less_equal<T> >(
         input, left_edges, right_edges, edge_null_precedence, mr, stream);
     if ((left_inclusive == inclusive::NO) && (right_inclusive == inclusive::NO))
-      return detail::bin<T, thrust::less<T>, thrust::less<T> >(
+      return bin<T, thrust::less<T>, thrust::less<T> >(
         input, left_edges, right_edges, edge_null_precedence, mr, stream);
 
     CUDF_FAIL("Undefined inclusive setting.");
@@ -205,7 +205,7 @@ std::unique_ptr<column> bin(column_view const& input,
                             inclusive right_inclusive,
                             null_order edge_null_precedence,
                             rmm::mr::device_memory_resource* mr,
-                            rmm::cuda_stream_view stream = rmm::cuda_stream_default)
+                            rmm::cuda_stream_view stream)
 {
   CUDF_FUNC_RANGE()
   CUDF_EXPECTS((input.type() == left_edges.type()) && (input.type() == right_edges.type()),
