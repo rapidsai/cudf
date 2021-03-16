@@ -22,6 +22,7 @@
 #include <cudf/table/table_device_view.cuh>
 #include <cudf/utilities/error.hpp>
 #include <cudf/utilities/traits.hpp>
+#include <structs/utilities.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_uvector.hpp>
@@ -59,24 +60,6 @@ struct simple_comparator {
   null_order null_precedence{};
 };
 
-/**
- * @brief Flatten table with struct columns to table with constituent columns of struct columns.
- *
- * If a table does not have struct columns, same input arguments are returned.
- *
- * @param input input table to be flattened
- * @param column_order column order for input table
- * @param null_precedence null order for input table
- * @return tuple with flattened table, vector of boolean columns (struct validity),
- * flattened column order, flattened null precedence.
- */
-std::tuple<table_view,
-           std::vector<std::unique_ptr<column>>,
-           std::vector<order>,
-           std::vector<null_order>>
-flatten_nested_columns(table_view const& input,
-                       std::vector<order> const& column_order,
-                       std::vector<null_order> const& null_precedence);
 /**
  * @brief Sort indices of a single column.
  *
@@ -139,7 +122,7 @@ std::unique_ptr<column> sorted_order(table_view input,
                   : sorted_order<false>(single_col, col_order, null_prec, stream, mr);
   }
 
-  auto flattened        = flatten_nested_columns(input, column_order, null_precedence);
+  auto flattened = structs::detail::flatten_nested_columns(input, column_order, null_precedence);
   auto& input_flattened = std::get<0>(flattened);
   auto device_table     = table_device_view::create(input_flattened, stream);
   rmm::device_vector<order> d_column_order(std::get<2>(flattened));
