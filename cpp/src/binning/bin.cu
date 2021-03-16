@@ -81,7 +81,7 @@ struct filter_null_sentinel {
 };
 
 /// Bin the input by the edges in left_edges and right_edges.
-template <typename T, typename LeftComparator, typename RightComparator, bool InputIsNullable>
+template <typename T, typename LeftComparator, typename RightComparator>
 std::unique_ptr<column> bin(column_view const& input,
                             column_view const& left_edges,
                             column_view const& right_edges,
@@ -91,17 +91,26 @@ std::unique_ptr<column> bin(column_view const& input,
   auto output_mutable_view = output->mutable_view();
   auto input_device_view   = column_device_view::create(input);
 
-  thrust::transform(thrust::device,
-                    input_device_view->pair_begin<T, InputIsNullable>(),
-                    input_device_view->pair_end<T, InputIsNullable>(),
-                    output_mutable_view.begin<size_type>(),
-                    // Must specify const T as the template type because the column
-                    // views provided on the edges will always return const types. The
-                    // template arguments to `datq` need not specify const since that
-                    // const is added as part of the signature.
-                    bin_finder<T, decltype(left_edges.begin<T>()), LeftComparator, RightComparator>(
-                      left_edges.begin<T>(), left_edges.end<T>(),
-                      right_edges.begin<T>()));
+  if (input.nullable())
+  {
+      thrust::transform(thrust::device,
+                        input_device_view->pair_begin<T, true>(),
+                        input_device_view->pair_end<T, true>(),
+                        output_mutable_view.begin<size_type>(),
+                        bin_finder<T, decltype(left_edges.begin<T>()), LeftComparator, RightComparator>(
+                          left_edges.begin<T>(), left_edges.end<T>(),
+                          right_edges.begin<T>()));
+  }
+  else
+  {
+      thrust::transform(thrust::device,
+                        input_device_view->pair_begin<T, false>(),
+                        input_device_view->pair_end<T, false>(),
+                        output_mutable_view.begin<size_type>(),
+                        bin_finder<T, decltype(left_edges.begin<T>()), LeftComparator, RightComparator>(
+                          left_edges.begin<T>(), left_edges.end<T>(),
+                          right_edges.begin<T>()));
+  }
 
   auto mask_and_count = cudf::detail::valid_if(output_mutable_view.begin<size_type>(),
                                                output_mutable_view.end<size_type>(),
@@ -142,39 +151,20 @@ struct bin_type_dispatcher {
     inclusive right_inclusive,
     rmm::mr::device_memory_resource* mr)
   {
-    // Note: We could be slightly more efficient in the not nullable case
-    // by overloading the call operator of bin_finder to accept a value in
-    // addition to a pair and using a raw (non-pair) iterator in the
-    // transform call in detail::bin, if we need to make this faster.
-    if (input.nullable()) {
-      // Using a switch statement might be more appropriate for an enum, but it's far more verbose
-      // in this case.
-      if ((left_inclusive == inclusive::YES) && (right_inclusive == inclusive::YES))
-        return detail::bin<T, thrust::less_equal<T>, thrust::less_equal<T>, true>(
-          input, left_edges, right_edges, mr);
-      if ((left_inclusive == inclusive::YES) && (right_inclusive == inclusive::NO))
-        return detail::bin<T, thrust::less_equal<T>, thrust::less<T>, true>(
-          input, left_edges, right_edges, mr);
-      if ((left_inclusive == inclusive::NO) && (right_inclusive == inclusive::YES))
-        return detail::bin<T, thrust::less<T>, thrust::less_equal<T>, true>(
-          input, left_edges, right_edges, mr);
-      if ((left_inclusive == inclusive::NO) && (right_inclusive == inclusive::NO))
-        return detail::bin<T, thrust::less<T>, thrust::less<T>, true>(
-          input, left_edges, right_edges, mr);
-    } else {
-      if ((left_inclusive == inclusive::YES) && (right_inclusive == inclusive::YES))
-        return detail::bin<T, thrust::less_equal<T>, thrust::less_equal<T>, false>(
-          input, left_edges, right_edges, mr);
-      if ((left_inclusive == inclusive::YES) && (right_inclusive == inclusive::NO))
-        return detail::bin<T, thrust::less_equal<T>, thrust::less<T>, false>(
-          input, left_edges, right_edges, mr);
-      if ((left_inclusive == inclusive::NO) && (right_inclusive == inclusive::YES))
-        return detail::bin<T, thrust::less<T>, thrust::less_equal<T>, false>(
-          input, left_edges, right_edges, mr);
-      if ((left_inclusive == inclusive::NO) && (right_inclusive == inclusive::NO))
-        return detail::bin<T, thrust::less<T>, thrust::less<T>, false>(
-          input, left_edges, right_edges, mr);
-    }
+    // Using a switch statement might be more appropriate for an enum, but it's far more verbose
+    // in this case.
+    if ((left_inclusive == inclusive::YES) && (right_inclusive == inclusive::YES))
+      return detail::bin<T, thrust::less_equal<T>, thrust::less_equal<T> >(
+        input, left_edges, right_edges, mr);
+    if ((left_inclusive == inclusive::YES) && (right_inclusive == inclusive::NO))
+      return detail::bin<T, thrust::less_equal<T>, thrust::less<T> >(
+        input, left_edges, right_edges, mr);
+    if ((left_inclusive == inclusive::NO) && (right_inclusive == inclusive::YES))
+      return detail::bin<T, thrust::less<T>, thrust::less_equal<T> >(
+        input, left_edges, right_edges, mr);
+    if ((left_inclusive == inclusive::NO) && (right_inclusive == inclusive::NO))
+      return detail::bin<T, thrust::less<T>, thrust::less<T> >(
+        input, left_edges, right_edges, mr);
 
     CUDF_FAIL("Undefined inclusive setting.");
   }
