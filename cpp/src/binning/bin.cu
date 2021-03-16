@@ -42,10 +42,10 @@ constexpr size_type NULL_VALUE{std::numeric_limits<size_type>::max()};
 namespace detail {
 namespace {
 
-template <typename T, typename LeftComparator, typename RightComparator>
+template <typename T, typename RandomAccessIterator, typename LeftComparator, typename RightComparator>
 struct bin_finder {
-  bin_finder(detail::device_span<const T> left_span, detail::device_span<const T> right_span)
-    : m_left_span(left_span), m_right_span(right_span)
+  bin_finder(RandomAccessIterator left_begin, RandomAccessIterator left_end, RandomAccessIterator right_begin)
+    : m_left_begin(left_begin), m_left_end(left_end), m_right_begin(right_begin)
   {
   }
 
@@ -56,23 +56,24 @@ struct bin_finder {
 
     T value = input_value.first;
     auto bound =
-      thrust::lower_bound(thrust::seq, m_left_span.begin(), m_left_span.end(), value, m_left_comp);
+      thrust::lower_bound(thrust::seq, m_left_begin, m_left_end, value, m_left_comp);
 
     // Exit early and return sentinel for values that lie below the interval.
-    if (bound == m_left_span.begin()) { return NULL_VALUE; }
+    if (bound == m_left_begin) { return NULL_VALUE; }
 
     // We must subtract 1 because lower bound returns the first index
     // _greater than_ the value. This is safe because bound == m_left edges
     // would already have triggered a NULL_VALUE return above, so there's
     // no risk of negative values or wraparound for -1 here.
-    auto index = bound - m_left_span.begin() - 1;
-    return (m_right_comp(value, m_right_span[index])) ? index : NULL_VALUE;
+    auto index = bound - m_left_begin - 1;
+    return (m_right_comp(value, m_right_begin[index])) ? index : NULL_VALUE;
   }
 
-  detail::device_span<const T> m_left_span{};   // The range of data containing all left bin edges.
-  detail::device_span<const T> m_right_span{};  // The range of data containing all right bin edges.
-  LeftComparator m_left_comp{};                 // Comparator used for left edges.
-  RightComparator m_right_comp{};               // Comparator used for left edges.
+  RandomAccessIterator m_left_begin{};   // The beginning of the range containing the left bin edges.
+  RandomAccessIterator m_left_end{};     // The end of the range containing the left bin edges.
+  RandomAccessIterator m_right_begin{};  // The beginning of the range containing the right bin edges.
+  LeftComparator m_left_comp{};          // Comparator used for left edges.
+  RightComparator m_right_comp{};        // Comparator used for right edges.
 };
 
 // Functor to identify rows that should be filtered out based on the sentinel set by
@@ -100,9 +101,9 @@ std::unique_ptr<column> bin(column_view const& input,
                     // views provided on the edges will always return const types. The
                     // template arguments to `datq` need not specify const since that
                     // const is added as part of the signature.
-                    bin_finder<T, LeftComparator, RightComparator>(
-                      detail::device_span<const T>(left_edges.data<T>(), left_edges.size()),
-                      detail::device_span<const T>(right_edges.data<T>(), right_edges.size())));
+                    bin_finder<T, decltype(left_edges.begin<T>()), LeftComparator, RightComparator>(
+                      left_edges.begin<T>(), left_edges.end<T>(),
+                      right_edges.begin<T>()));
 
   auto mask_and_count = cudf::detail::valid_if(output_mutable_view.begin<size_type>(),
                                                output_mutable_view.end<size_type>(),
