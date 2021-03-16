@@ -227,10 +227,13 @@ std::unique_ptr<aggregation> make_collect_list_aggregation(
  * If `null_handling` is set to `EXCLUDE`, null elements are dropped from each
  * of the list rows.
  *
- * @param null_handling Indicates whether to include/exclude nulls in list elements.
+ * @param null_handling Indicates whether to include/exclude nulls during collection
+ * @param nulls_equal   Flag to specify whether null entries within each list should be considered
+ * equal
  */
 std::unique_ptr<aggregation> make_collect_set_aggregation(
-  null_policy null_handling = null_policy::INCLUDE);
+  null_policy null_handling = null_policy::INCLUDE,
+  null_equality null_equal  = null_equality::EQUAL);
 
 /// Factory to create a LAG aggregation
 std::unique_ptr<aggregation> make_lag_aggregation(size_type offset);

@@ -131,9 +131,10 @@ std::unique_ptr<aggregation> make_collect_list_aggregation(null_policy null_hand
   return std::make_unique<detail::collect_list_aggregation>(null_handling);
 }
 /// Factory to create a COLLECT_SET aggregation
-std::unique_ptr<aggregation> make_collect_set_aggregation(null_policy null_handling)
+std::unique_ptr<aggregation> make_collect_set_aggregation(null_policy null_handling,
+                                                          null_equality null_equal)
 {
-  return std::make_unique<detail::collect_set_aggregation>(null_handling);
+  return std::make_unique<detail::collect_set_aggregation>(null_handling, null_equal);
 }
 /// Factory to create a LAG aggregation
 std::unique_ptr<aggregation> make_lag_aggregation(size_type offset)
