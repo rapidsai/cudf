@@ -17,9 +17,7 @@
 #include <cudf/column/column.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/sorting.hpp>
-#include <cudf/null_mask.hpp>
 #include <cudf/sorting.hpp>
-#include <cudf/structs/structs_column_view.hpp>
 #include <cudf/table/table_view.hpp>
 
 #include <sort/sort_impl.cuh>
@@ -28,7 +26,6 @@
 
 namespace cudf {
 namespace detail {
-
 std::unique_ptr<column> sorted_order(table_view input,
                                      std::vector<order> const& column_order,
                                      std::vector<null_order> const& null_precedence,
