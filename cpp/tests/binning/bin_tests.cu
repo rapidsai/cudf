@@ -404,10 +404,9 @@ TYPED_TEST_CASE(StringBinTestFixture, StringTypes);
 
 TYPED_TEST(StringBinTestFixture, TestStringData)
 {
-    strings_column_wrapper left_edges({"a", "b", "c", "d", "e"});
-    strings_column_wrapper right_edges({"b", "c", "d", "e", "f"});
-    //strings_column_wrapper input({"abc", "bcd", "cde", "def", "efg"});
-    strings_column_wrapper input({"abc"});
+    strings_column_wrapper left_edges{"a", "b", "c", "d", "e"};
+    strings_column_wrapper right_edges{"b", "c", "d", "e", "f"};
+    strings_column_wrapper input{"abc", "bcd", "cde", "def", "efg"};
 
     auto result =
       cudf::bin(input, left_edges, cudf::inclusive::YES, right_edges, cudf::inclusive::NO);

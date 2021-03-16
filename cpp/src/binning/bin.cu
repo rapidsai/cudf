@@ -86,34 +86,38 @@ template <typename T, typename LeftComparator, typename RightComparator>
 std::unique_ptr<column> bin(column_view const& input,
                             column_view const& left_edges,
                             column_view const& right_edges,
-                            null_order null_precedence,
+                            null_order edge_null_precedence,
                             rmm::mr::device_memory_resource* mr)
 {
   auto output = cudf::make_numeric_column(data_type(type_to_id<size_type>()), input.size());
   auto output_mutable_view = output->mutable_view();
+  // These device column views are necessary for creating iterators that work
+  // for columns of compound types. The column_view iterators do not work in
+  // this case since they return raw pointers to the start of the data.
   auto input_device_view   = column_device_view::create(input);
+  auto left_edges_device_view   = column_device_view::create(left_edges);
+  auto right_edges_device_view   = column_device_view::create(right_edges);
 
   // Compute the maximum shift required for either edge, then shift all the iterators appropriately.
   size_type null_shift = max(left_edges.null_count(), right_edges.null_count());
-  decltype(left_edges.begin<T>()) left_begin, left_end, right_begin;
+  auto left_begin = left_edges_device_view->begin<T>();
+  auto left_end = left_edges_device_view->end<T>();
+  auto right_begin = right_edges_device_view->begin<T>();
 
-  if (null_precedence == null_order::BEFORE)
+  if (edge_null_precedence == null_order::BEFORE)
   {
-      left_begin = thrust::next(left_edges.begin<T>(), null_shift);
-      right_begin = thrust::next(right_edges.begin<T>(), null_shift);
-      left_end = left_edges.end<T>();
+      left_begin = thrust::next(left_begin, null_shift);
+      right_begin = thrust::next(right_begin, null_shift);
   }
   else
   {
-      left_begin = left_edges.begin<T>();
-      right_begin = right_edges.begin<T>();
-      left_end = thrust::prev(left_edges.end<T>(), null_shift);
+      left_end = thrust::prev(left_end, null_shift);
   }
 
   // If all the nulls are at the beginning, the indices found by lower_bound
   // will be off by null_shift, but if they're at the end the indices will
   // already be correct.
-  size_type index_shift = (null_precedence == null_order::BEFORE) ? null_shift : 0;
+  size_type index_shift = (edge_null_precedence == null_order::BEFORE) ? null_shift : 0;
 
   if (input.has_nulls())
   {
@@ -121,7 +125,7 @@ std::unique_ptr<column> bin(column_view const& input,
                         input_device_view->pair_begin<T, true>(),
                         input_device_view->pair_end<T, true>(),
                         output_mutable_view.begin<size_type>(),
-                        bin_finder<T, decltype(left_edges.begin<T>()), LeftComparator, RightComparator>(
+                        bin_finder<T, decltype(left_edges_device_view->begin<T>()), LeftComparator, RightComparator>(
                           left_begin, left_end, right_begin, index_shift));
   }
   else
@@ -130,7 +134,7 @@ std::unique_ptr<column> bin(column_view const& input,
                         input_device_view->pair_begin<T, false>(),
                         input_device_view->pair_end<T, false>(),
                         output_mutable_view.begin<size_type>(),
-                        bin_finder<T, decltype(left_edges.begin<T>()), LeftComparator, RightComparator>(
+                        bin_finder<T, decltype(left_edges_device_view->begin<T>()), LeftComparator, RightComparator>(
                           left_begin, left_end, right_begin, index_shift));
   }
 
@@ -171,23 +175,23 @@ struct bin_type_dispatcher {
     inclusive left_inclusive,
     column_view const& right_edges,
     inclusive right_inclusive,
-    null_order null_precedence,
+    null_order edge_null_precedence,
     rmm::mr::device_memory_resource* mr)
   {
     // Using a switch statement might be more appropriate for an enum, but it's far more verbose
     // in this case.
     if ((left_inclusive == inclusive::YES) && (right_inclusive == inclusive::YES))
       return detail::bin<T, thrust::less_equal<T>, thrust::less_equal<T> >(
-        input, left_edges, right_edges, null_precedence, mr);
+        input, left_edges, right_edges, edge_null_precedence, mr);
     if ((left_inclusive == inclusive::YES) && (right_inclusive == inclusive::NO))
       return detail::bin<T, thrust::less_equal<T>, thrust::less<T> >(
-        input, left_edges, right_edges, null_precedence, mr);
+        input, left_edges, right_edges, edge_null_precedence, mr);
     if ((left_inclusive == inclusive::NO) && (right_inclusive == inclusive::YES))
       return detail::bin<T, thrust::less<T>, thrust::less_equal<T> >(
-        input, left_edges, right_edges, null_precedence, mr);
+        input, left_edges, right_edges, edge_null_precedence, mr);
     if ((left_inclusive == inclusive::NO) && (right_inclusive == inclusive::NO))
       return detail::bin<T, thrust::less<T>, thrust::less<T> >(
-        input, left_edges, right_edges, null_precedence, mr);
+        input, left_edges, right_edges, edge_null_precedence, mr);
 
     CUDF_FAIL("Undefined inclusive setting.");
   }
@@ -199,7 +203,7 @@ std::unique_ptr<column> bin(column_view const& input,
                             inclusive left_inclusive,
                             column_view const& right_edges,
                             inclusive right_inclusive,
-                            null_order null_precedence,
+                            null_order edge_null_precedence,
                             rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE()
@@ -218,7 +222,7 @@ std::unique_ptr<column> bin(column_view const& input,
                                                 left_inclusive,
                                                 right_edges,
                                                 right_inclusive,
-                                                null_precedence,
+                                                edge_null_precedence,
                                                 mr);
 }
 }  // namespace cudf
