@@ -28,11 +28,8 @@ std::unique_ptr<column> sum_scan(column_view const& values,
                                  rmm::cuda_stream_view stream,
                                  rmm::mr::device_memory_resource* mr)
 {
-  auto values_type = cudf::is_dictionary(values.type())
-                       ? dictionary_column_view(values).keys().type()
-                       : values.type();
   return type_dispatcher(
-    values_type, scan_functor<aggregation::SUM>{}, values, num_groups, group_labels, stream, mr);
+    values.type(), scan_functor<aggregation::SUM>{}, values, num_groups, group_labels, stream, mr);
 }
 
 }  // namespace detail
