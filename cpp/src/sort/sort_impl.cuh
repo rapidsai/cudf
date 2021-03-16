@@ -59,8 +59,24 @@ struct simple_comparator {
   null_order null_precedence{};
 };
 
-std::pair<table_view, std::vector<std::unique_ptr<column>>> flatten_nested_columns(
-  table_view const& input);
+/**
+ * @brief Flatten table with struct columns to table with constituent columns of struct columns.
+ *
+ * If a table does not have struct columns, same input arguments are returned.
+ *
+ * @param input input table to be flattened
+ * @param column_order column order for input table
+ * @param null_precedence null order for input table
+ * @return tuple with flattened table, vector of boolean columns (struct validity),
+ * flattened column order, flattened null precedence.
+ */
+std::tuple<table_view,
+           std::vector<std::unique_ptr<column>>,
+           std::vector<order>,
+           std::vector<null_order>>
+flatten_nested_columns(table_view const& input,
+                       std::vector<order> const& column_order,
+                       std::vector<null_order> const& null_precedence);
 /**
  * @brief Sort indices of a single column.
  *
@@ -123,12 +139,13 @@ std::unique_ptr<column> sorted_order(table_view input,
                   : sorted_order<false>(single_col, col_order, null_prec, stream, mr);
   }
 
-  auto flat_table   = flatten_nested_columns(input);
-  auto device_table = table_device_view::create(flat_table.first, stream);
-  rmm::device_vector<order> d_column_order(column_order);
+  auto flattened        = flatten_nested_columns(input, column_order, null_precedence);
+  auto& input_flattened = std::get<0>(flattened);
+  auto device_table     = table_device_view::create(input_flattened, stream);
+  rmm::device_vector<order> d_column_order(std::get<2>(flattened));
 
-  if (has_nulls(input)) {
-    rmm::device_vector<null_order> d_null_precedence(null_precedence);
+  if (has_nulls(input_flattened)) {
+    rmm::device_vector<null_order> d_null_precedence(std::get<3>(flattened));
     auto comparator = row_lexicographic_comparator<true>(
       *device_table, *device_table, d_column_order.data().get(), d_null_precedence.data().get());
     if (stable) {

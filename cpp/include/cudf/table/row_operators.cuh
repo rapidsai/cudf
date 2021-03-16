@@ -359,35 +359,6 @@ class row_lexicographic_comparator {
     CUDF_EXPECTS(_lhs.num_columns() == _rhs.num_columns(), "Mismatched number of columns.");
   }
 
-  inline __device__ weak_ordering struct_compare(column_device_view const& lhs,
-                                                 column_device_view const& rhs,
-                                                 null_order null_precedence,
-                                                 size_type lhs_index,
-                                                 size_type rhs_index) const noexcept
-  {
-    if (has_nulls) {
-      bool const lhs_is_null{lhs.is_null(lhs_index)};
-      bool const rhs_is_null{rhs.is_null(rhs_index)};
-
-      if (lhs_is_null or rhs_is_null) {  // atleast one is null
-        return null_compare(lhs_is_null, rhs_is_null, null_precedence);
-      }
-    }
-
-    for (size_type i = 0; i < lhs.num_child_columns(); ++i) {
-      weak_ordering state{weak_ordering::EQUIVALENT};
-
-      auto comparator =
-        element_relational_comparator<has_nulls>{lhs.child(i), rhs.child(i), null_precedence};
-
-      state = cudf::type_dispatcher(lhs.child(i).type(), comparator, lhs_index, rhs_index);
-
-      if (state == weak_ordering::EQUIVALENT) { continue; }
-      return state;
-    }
-    return weak_ordering::EQUIVALENT;
-  }
-
   /**
    * @brief Checks whether the row at `lhs_index` in the `lhs` table compares
    * lexicographically less than the row at `rhs_index` in the `rhs` table.
@@ -406,15 +377,10 @@ class row_lexicographic_comparator {
       null_order null_precedence =
         _null_precedence == nullptr ? null_order::BEFORE : _null_precedence[i];
 
-      if (_lhs.column(i).type().id() != type_id::STRUCT) {
-        auto comparator =
-          element_relational_comparator<has_nulls>{_lhs.column(i), _rhs.column(i), null_precedence};
+      auto comparator =
+        element_relational_comparator<has_nulls>{_lhs.column(i), _rhs.column(i), null_precedence};
 
-        state = cudf::type_dispatcher(_lhs.column(i).type(), comparator, lhs_index, rhs_index);
-      } else {
-        state =
-          struct_compare(_lhs.column(i), _rhs.column(i), null_precedence, lhs_index, rhs_index);
-      }
+      state = cudf::type_dispatcher(_lhs.column(i).type(), comparator, lhs_index, rhs_index);
 
       if (state == weak_ordering::EQUIVALENT) { continue; }
 

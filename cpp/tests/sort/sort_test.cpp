@@ -216,10 +216,8 @@ TYPED_TEST(Sort, WithStructColumn)
 
   auto struct_col =
     cudf::test::structs_column_wrapper{{names_col, ages_col, is_human_col}}.release();
-
-  EXPECT_EQ(num_rows, struct_col->size());
-
   auto struct_col_view{struct_col->view()};
+  EXPECT_EQ(num_rows, struct_col->size());
 
   fixed_width_column_wrapper<T> col1{{5, 4, 3, 5, 8, 9}};
   strings_column_wrapper col2({"d", "e", "a", "d", "k", "a"});
@@ -308,9 +306,7 @@ TYPED_TEST(Sort, WithSingleStructColumn)
     {true, true, false, false, false, false}, {1, 1, 0, 1, 1, 0}};
   auto struct_col =
     cudf::test::structs_column_wrapper{{names_col, ages_col, is_human_col}, v}.release();
-
   auto struct_col_view{struct_col->view()};
-
   table_view input{{struct_col_view}};
 
   fixed_width_column_wrapper<int32_t> expected{{2, 5, 1, 3, 4, 0}};
@@ -322,6 +318,151 @@ TYPED_TEST(Sort, WithSingleStructColumn)
 
   // Run test for sort and sort_by_key
   run_sort_test(input, expected, column_order);
+}
+
+TYPED_TEST(Sort, WithStructColumnCombinations)
+{
+  using T    = TypeParam;
+  using FWCW = cudf::test::fixed_width_column_wrapper<T, int32_t>;
+
+  // clang-format off
+  /*
+    +------------+
+    |           s|
+    +------------+
+  0 |   {0, null}|
+  1 |   {1, null}|
+  2 |        null|
+  3 |{null, null}|
+  4 |        null|
+  5 |{null, null}|
+  6 |   {null, 1}|
+  7 |   {null, 0}|
+    +------------+
+  */
+  std::vector<bool>                           struct_valids{1, 1, 0, 1, 0, 1, 1, 1};
+  auto col1       = FWCW{{ 0,  1,  9, -1,  9, -1, -1, -1}, {1, 1, 1, 0, 1, 0, 0, 0}};
+  auto col2       = FWCW{{-1, -1,  9, -1,  9, -1,  1,  0}, {0, 0, 1, 0, 1, 0, 1, 1}};
+  auto struct_col = cudf::test::structs_column_wrapper{{col1, col2}, struct_valids}.release();
+  /*
+    desc_nulls_first     desc_nulls_last     asce_nulls_first     asce_nulls_last
+    +------------+       +------------+      +------------+       +------------+
+    |           s|       |           s|      |           s|       |           s|
+    +------------+       +------------+      +------------+       +------------+
+  2 |        null|     1 |   {1, null}|    2 |        null|     3 |{null, null}|
+  4 |        null|     0 |   {0, null}|    4 |        null|     5 |{null, null}|
+  1 |   {1, null}|     6 |   {null, 1}|    3 |{null, null}|     7 |   {null, 0}|
+  0 |   {0, null}|     7 |   {null, 0}|    5 |{null, null}|     6 |   {null, 1}|
+  6 |   {null, 1}|     3 |{null, null}|    7 |   {null, 0}|     0 |   {0, null}|
+  7 |   {null, 0}|     5 |{null, null}|    6 |   {null, 1}|     1 |   {1, null}|
+  3 |{null, null}|     2 |        null|    0 |   {0, null}|     2 |        null|
+  5 |{null, null}|     4 |        null|    1 |   {1, null}|     4 |        null|
+    +------------+       +------------+      +------------+       +------------+
+  */
+  // clang-format on
+  auto struct_col_view{struct_col->view()};
+  table_view input{{struct_col_view}};
+  std::vector<order> column_order1{order::DESCENDING};
+
+  // desc_nulls_first
+  fixed_width_column_wrapper<int32_t> expected1{{2, 4, 1, 0, 6, 7, 3, 5}};
+  auto got = sorted_order(input, column_order1, {null_order::AFTER});
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected1, got->view());
+  // Run test for sort and sort_by_key
+  run_sort_test(input, expected1, column_order1, {null_order::AFTER});
+
+  // desc_nulls_last
+  fixed_width_column_wrapper<int32_t> expected2{{1, 0, 6, 7, 3, 5, 2, 4}};
+  got = sorted_order(input, column_order1, {null_order::BEFORE});
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected2, got->view());
+  // Run test for sort and sort_by_key
+  run_sort_test(input, expected2, column_order1, {null_order::BEFORE});
+
+  // asce_nulls_first
+  std::vector<order> column_order2{order::ASCENDING};
+  fixed_width_column_wrapper<int32_t> expected3{{2, 4, 3, 5, 7, 6, 0, 1}};
+  got = sorted_order(input, column_order2, {null_order::BEFORE});
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected3, got->view());
+  // Run test for sort and sort_by_key
+  run_sort_test(input, expected3, column_order2, {null_order::BEFORE});
+
+  // asce_nulls_last
+  fixed_width_column_wrapper<int32_t> expected4{{3, 5, 7, 6, 0, 1, 2, 4}};
+  got = sorted_order(input, column_order2, {null_order::AFTER});
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected4, got->view());
+  // Run test for sort and sort_by_key
+  run_sort_test(input, expected4, column_order2, {null_order::AFTER});
+}
+
+TYPED_TEST(Sort, WithStructColumnCombinationsWithoutNulls)
+{
+  using T    = TypeParam;
+  using FWCW = cudf::test::fixed_width_column_wrapper<T, int32_t>;
+
+  // clang-format off
+  /*
+    +------------+
+    |           s|
+    +------------+
+  0 |   {0, null}|
+  1 |   {1, null}|
+  2 |      {9, 9}|
+  3 |{null, null}|
+  4 |      {9, 9}|
+  5 |{null, null}|
+  6 |   {null, 1}|
+  7 |   {null, 0}|
+    +------------+
+  */
+  auto col1       = FWCW{{ 0,  1,  9, -1,  9, -1, -1, -1}, {1, 1, 1, 0, 1, 0, 0, 0}};
+  auto col2       = FWCW{{-1, -1,  9, -1,  9, -1,  1,  0}, {0, 0, 1, 0, 1, 0, 1, 1}};
+  auto struct_col = cudf::test::structs_column_wrapper{{col1, col2}}.release();
+  /* (nested columns are always nulls_first, spark requirement)
+    desc_nulls_*        asce_nulls_*
+    +------------+      +------------+
+    |           s|      |           s|
+    +------------+      +------------+
+  2 |      {9, 9}|    3 |{null, null}|
+  4 |      {9, 9}|    5 |{null, null}|
+  1 |   {1, null}|    7 |   {null, 0}|
+  0 |   {0, null}|    6 |   {null, 1}|
+  6 |   {null, 1}|    0 |   {0, null}|
+  7 |   {null, 0}|    1 |   {1, null}|
+  3 |{null, null}|    2 |      {9, 9}|
+  5 |{null, null}|    4 |      {9, 9}|
+    +------------+      +------------+
+  */
+  // clang-format on
+  auto struct_col_view{struct_col->view()};
+  table_view input{{struct_col_view}};
+  std::vector<order> column_order{order::DESCENDING};
+
+  // desc_nulls_first
+  fixed_width_column_wrapper<int32_t> expected1{{2, 4, 1, 0, 6, 7, 3, 5}};
+  auto got = sorted_order(input, column_order, {null_order::AFTER});
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected1, got->view());
+  // Run test for sort and sort_by_key
+  run_sort_test(input, expected1, column_order, {null_order::AFTER});
+
+  // desc_nulls_last
+  got = sorted_order(input, column_order, {null_order::BEFORE});
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected1, got->view());
+  // Run test for sort and sort_by_key
+  run_sort_test(input, expected1, column_order, {null_order::BEFORE});
+
+  // asce_nulls_first
+  std::vector<order> column_order2{order::ASCENDING};
+  fixed_width_column_wrapper<int32_t> expected2{{3, 5, 7, 6, 0, 1, 2, 4}};
+  got = sorted_order(input, column_order2, {null_order::BEFORE});
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected2, got->view());
+  // Run test for sort and sort_by_key
+  run_sort_test(input, expected2, column_order2, {null_order::BEFORE});
+
+  // asce_nulls_last
+  got = sorted_order(input, column_order2, {null_order::AFTER});
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected2, got->view());
+  // Run test for sort and sort_by_key
+  run_sort_test(input, expected2, column_order2, {null_order::AFTER});
 }
 
 TYPED_TEST(Sort, Stable)
