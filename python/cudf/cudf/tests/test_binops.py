@@ -1811,6 +1811,7 @@ def test_column_null_scalar_comparison(dtype, null_scalar, cmpop):
 
     assert result.isnull().all()
 
+
 @pytest.mark.parametrize("fn", ["eq", "ne", "lt", "gt", "le", "ge"])
 def test_equality_ops_index_mismatch(fn):
     a = cudf.Series(
