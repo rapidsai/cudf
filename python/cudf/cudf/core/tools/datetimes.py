@@ -8,8 +8,9 @@ import pandas as pd
 from pandas.core.tools.datetimes import _unit_map
 
 import cudf
-from cudf._lib.strings.convert.convert_integers import is_integer\
-    as cpp_is_integer
+from cudf._lib.strings.convert.convert_integers import (
+    is_integer as cpp_is_integer,
+)
 from cudf.core import column
 from cudf.core.index import as_index
 from cudf.utils.dtypes import is_scalar
@@ -315,12 +316,14 @@ def _process_col(col, unit, dayfirst, infer_datetime_format, format):
         else:
             if infer_datetime_format and format is None:
                 format = column.datetime.infer_format(
-                    element=col[0], dayfirst=dayfirst,
+                    element=col[0],
+                    dayfirst=dayfirst,
                 )
             elif format is None:
                 format = column.datetime.infer_format(element=col[0])
             col = col.as_datetime_column(
-                dtype=_unit_dtype_map[unit], format=format,
+                dtype=_unit_dtype_map[unit],
+                format=format,
             )
     return col
 

@@ -342,7 +342,9 @@ class StringMethods(ColumnMethodsMixin):
         2    11
         dtype: int32
         """
-        return self._return_or_inplace(cpp_count_bytes(self._column),)
+        return self._return_or_inplace(
+            cpp_count_bytes(self._column),
+        )
 
     @overload
     def cat(self, sep: str = None, na_rep: str = None) -> str:
@@ -444,7 +446,9 @@ class StringMethods(ColumnMethodsMixin):
 
         if others is None:
             data = cpp_join(
-                self._column, cudf.Scalar(sep), cudf.Scalar(na_rep, "str"),
+                self._column,
+                cudf.Scalar(sep),
+                cudf.Scalar(na_rep, "str"),
             )
         else:
             other_cols = _get_cols_list(self._parent, others)
@@ -4506,7 +4510,7 @@ class StringMethods(ColumnMethodsMixin):
         0     True
         1    False
         dtype: bool
-         """
+        """
         ltype = LetterType.CONSONANT
 
         if can_convert_to_column(position):
@@ -4643,8 +4647,7 @@ def _expected_types_format(types):
 
 
 class StringColumn(column.ColumnBase):
-    """Implements operations for Columns of String type
-    """
+    """Implements operations for Columns of String type"""
 
     _start_offset: Optional[int]
     _end_offset: Optional[int]
