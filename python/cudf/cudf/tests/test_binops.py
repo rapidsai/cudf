@@ -206,12 +206,45 @@ def test_series_compare(cmpop, obj_class, dtype):
     np.testing.assert_equal(result3.to_array(), cmpop(arr1, arr2))
 
 
+def _series_compare_nulls_typegen():
+    tests = []
+    tests += list(product(DATETIME_TYPES, DATETIME_TYPES))
+    tests += list(product(TIMEDELTA_TYPES, TIMEDELTA_TYPES))
+    tests += list(product(NUMERIC_TYPES, NUMERIC_TYPES))
+    tests += list(product(STRING_TYPES, STRING_TYPES))
+
+    return tests
+
+
+@pytest.mark.parametrize("cmpop", _cmpops)
+@pytest.mark.parametrize("dtypes", _series_compare_nulls_typegen())
+def test_series_compare_nulls(cmpop, dtypes):
+    ltype, rtype = dtypes
+
+    ldata = [1, 2, None, None, 5]
+    rdata = [2, 1, None, 4, None]
+
+    lser = Series(ldata, dtype=ltype)
+    rser = Series(rdata, dtype=rtype)
+
+    lmask = ~lser.isnull()
+    rmask = ~rser.isnull()
+
+    expect_mask = np.logical_and(lmask, rmask)
+    expect = cudf.Series([None] * 5, dtype="bool")
+    expect[expect_mask] = cmpop(lser[expect_mask], rser[expect_mask])
+
+    got = cmpop(lser, rser)
+    utils.assert_eq(expect, got)
+
+
 @pytest.mark.parametrize(
-    "obj", [pd.Series(["a", "b", None, "d", "e", None]), "a"]
+    "obj", [pd.Series(["a", "b", None, "d", "e", None], dtype="string"), "a"]
 )
 @pytest.mark.parametrize("cmpop", _cmpops)
 @pytest.mark.parametrize(
-    "cmp_obj", [pd.Series(["b", "a", None, "d", "f", None]), "a"]
+    "cmp_obj",
+    [pd.Series(["b", "a", None, "d", "f", None], dtype="string"), "a"],
 )
 def test_string_series_compare(obj, cmpop, cmp_obj):
 
@@ -221,9 +254,11 @@ def test_string_series_compare(obj, cmpop, cmp_obj):
     g_cmp_obj = cmp_obj
     if isinstance(g_cmp_obj, pd.Series):
         g_cmp_obj = Series.from_pandas(g_cmp_obj)
-
     got = cmpop(g_obj, g_cmp_obj)
     expected = cmpop(obj, cmp_obj)
+
+    if isinstance(expected, pd.Series):
+        expected = cudf.from_pandas(expected)
 
     utils.assert_eq(expected, got)
 
@@ -694,10 +729,12 @@ _permu_values = [0, 1, None, np.nan]
 def test_operator_func_between_series_logical(
     dtype, func, scalar_a, scalar_b, fill_value
 ):
-    gdf_series_a = Series([scalar_a]).astype(dtype)
-    gdf_series_b = Series([scalar_b]).astype(dtype)
-    pdf_series_a = gdf_series_a.to_pandas()
-    pdf_series_b = gdf_series_b.to_pandas()
+
+    gdf_series_a = Series([scalar_a], nan_as_null=False).astype(dtype)
+    gdf_series_b = Series([scalar_b], nan_as_null=False).astype(dtype)
+
+    pdf_series_a = gdf_series_a.to_pandas(nullable=True)
+    pdf_series_b = gdf_series_b.to_pandas(nullable=True)
 
     gdf_series_result = getattr(gdf_series_a, func)(
         gdf_series_b, fill_value=fill_value
@@ -705,16 +742,22 @@ def test_operator_func_between_series_logical(
     pdf_series_result = getattr(pdf_series_a, func)(
         pdf_series_b, fill_value=fill_value
     )
+    expect = pdf_series_result
+    got = gdf_series_result.to_pandas(nullable=True)
 
-    if scalar_a in [None, np.nan] and scalar_b in [None, np.nan]:
-        # cudf binary operations will return `None` when both left- and right-
-        # side values are `None`. It will return `np.nan` when either side is
-        # `np.nan`. As a consequence, when we convert our gdf => pdf during
-        # assert_eq, we get a pdf with dtype='object' (all inputs are none).
-        # to account for this, we use fillna.
-        gdf_series_result.fillna(func == "ne", inplace=True)
-
-    utils.assert_eq(pdf_series_result, gdf_series_result)
+    # If fill_value is np.nan, things break down a bit,
+    # because setting a NaN into a pandas nullable float
+    # array still gets transformed to <NA>. As such,
+    # pd_series_with_nulls.fillna(np.nan) has no effect.
+    if (
+        (pdf_series_a.isnull().sum() != pdf_series_b.isnull().sum())
+        and np.isscalar(fill_value)
+        and np.isnan(fill_value)
+    ):
+        with pytest.raises(AssertionError):
+            utils.assert_eq(expect, got)
+        return
+    utils.assert_eq(expect, got)
 
 
 @pytest.mark.parametrize("dtype", ["float32", "float64"])
@@ -729,8 +772,7 @@ def test_operator_func_series_and_scalar_logical(
     gdf_series = utils.gen_rand_series(
         dtype, 1000, has_nulls=has_nulls, stride=10000
     )
-    pdf_series = gdf_series.to_pandas()
-
+    pdf_series = gdf_series.to_pandas(nullable=True)
     gdf_series_result = getattr(gdf_series, func)(
         cudf.Scalar(scalar) if use_cudf_scalar else scalar,
         fill_value=fill_value,
@@ -739,7 +781,10 @@ def test_operator_func_series_and_scalar_logical(
         scalar, fill_value=fill_value
     )
 
-    utils.assert_eq(pdf_series_result, gdf_series_result)
+    expect = pdf_series_result
+    got = gdf_series_result.to_pandas(nullable=True)
+
+    utils.assert_eq(expect, got)
 
 
 @pytest.mark.parametrize("func", _operators_arithmetic)
@@ -1738,10 +1783,61 @@ def test_equality_ops_index_mismatch(fn):
         index=["aa", "b", "c", "d", "e", "f", "y", "z"],
     )
 
-    pa = a.to_pandas()
-    pb = b.to_pandas()
-
+    pa = a.to_pandas(nullable=True)
+    pb = b.to_pandas(nullable=True)
     expected = getattr(pa, fn)(pb)
-    actual = getattr(a, fn)(b)
+    actual = getattr(a, fn)(b).to_pandas(nullable=True)
 
     utils.assert_eq(expected, actual)
+
+
+def generate_test_null_equals_columnops_data():
+    # Generate tuples of:
+    # (left_data, right_data, compare_bool
+    # where compare_bool is the correct answer to
+    # if the columns should compare as null equals
+
+    def set_null_cases(column_l, column_r, case):
+        if case == "neither":
+            return column_l, column_r
+        elif case == "left":
+            column_l[1] = None
+        elif case == "right":
+            column_r[1] = None
+        elif case == "both":
+            column_l[1] = None
+            column_r[1] = None
+        else:
+            raise ValueError("Unknown null case")
+        return column_l, column_r
+
+    null_cases = ["neither", "left", "right", "both"]
+    data = [1, 2, 3]
+
+    results = []
+    # TODO: Numeric types can be cross compared as null equal
+    for dtype in (
+        list(NUMERIC_TYPES)
+        + list(DATETIME_TYPES)
+        + list(TIMEDELTA_TYPES)
+        + list(STRING_TYPES)
+        + ["category"]
+    ):
+        for case in null_cases:
+            left = cudf.Series(data, dtype=dtype)
+            right = cudf.Series(data, dtype=dtype)
+            if case in {"left", "right"}:
+                answer = False
+            else:
+                answer = True
+            left, right = set_null_cases(left, right, case)
+            results.append((left._column, right._column, answer, case))
+
+    return results
+
+
+@pytest.mark.parametrize(
+    "lcol,rcol,ans,case", generate_test_null_equals_columnops_data()
+)
+def test_null_equals_columnops(lcol, rcol, ans, case):
+    assert lcol._null_equals(rcol).all() == ans

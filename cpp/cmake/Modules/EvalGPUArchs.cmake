@@ -14,12 +14,21 @@
 # limitations under the License.
 #=============================================================================
 
+# Unset this first in case it's set to <empty_string>
+set(CMAKE_CUDA_ARCHITECTURES OFF)
+
+# Enable CUDA so we can invoke nvcc
+enable_language(CUDA)
+
+# Function uses the CUDA runtime API to query the compute capability of the device, so if a user
+# doesn't pass any architecture options to CMake we only build the current architecture
 function(evaluate_gpu_archs gpu_archs)
   set(eval_file ${PROJECT_BINARY_DIR}/eval_gpu_archs.cu)
   set(eval_exe ${PROJECT_BINARY_DIR}/eval_gpu_archs)
   set(error_file ${PROJECT_BINARY_DIR}/eval_gpu_archs.stderr.log)
-  file(WRITE ${eval_file}
-[=[
+  file(
+    WRITE ${eval_file}
+    "
 #include <cstdio>
 #include <set>
 #include <string>
@@ -32,32 +41,30 @@ int main(int argc, char** argv) {
       char buff[32];
       cudaDeviceProp prop;
       if(cudaGetDeviceProperties(&prop, dev) != cudaSuccess) continue;
-      sprintf(buff, "%d%d", prop.major, prop.minor);
+      sprintf(buff, \"%d%d\", prop.major, prop.minor);
       archs.insert(buff);
     }
   }
   if(archs.empty()) {
-    printf("ALL");
+    printf(\"${SUPPORTED_CUDA_ARCHITECTURES}\");
   } else {
     bool first = true;
     for(const auto& arch : archs) {
-      printf(first? "%s" : ";%s", arch.c_str());
+      printf(first? \"%s\" : \";%s\", arch.c_str());
       first = false;
     }
   }
-  printf("\n");
+  printf(\"\\n\");
   return 0;
 }
-]=])
+")
   execute_process(
-    COMMAND ${CMAKE_CUDA_COMPILER}
-      -std=c++11
-      -o ${eval_exe}
-      --run
-      ${eval_file}
+    COMMAND ${CMAKE_CUDA_COMPILER} -std=c++11 -o ${eval_exe} --run ${eval_file}
     OUTPUT_VARIABLE __gpu_archs
     OUTPUT_STRIP_TRAILING_WHITESPACE
     ERROR_FILE ${error_file})
-  message(VERBOSE "CUDF: Auto detection of gpu-archs: ${__gpu_archs}")
-  set(${gpu_archs} ${__gpu_archs} PARENT_SCOPE)
-endfunction()
+  message(STATUS "CUDF: Auto detection of gpu-archs: ${__gpu_archs}")
+  set(${gpu_archs}
+      ${__gpu_archs}
+      PARENT_SCOPE)
+endfunction(evaluate_gpu_archs)
