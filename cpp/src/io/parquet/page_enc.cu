@@ -1711,6 +1711,39 @@ struct def_level_fn {
  * ```
  *
  * Similarly we merge up all the way till level 0 offsets
+ *
+ * STRUCT COLUMNS :
+ * In case of struct columns, we don't have to merge struct levels with their children because a
+ * struct is the same size as its children. e.g. for a column `struct<int, float>`, if the row `i`
+ * is null, then the children columns `int` and `float` are also null at `i`. They also have the
+ * null entry represented in their respective null masks. So for any case of strictly struct based
+ * nesting, we can get the definition levels merely by iterating over the nesting for the same row.
+ *
+ * In case struct and lists are intermixed, the definition levels of all the contiguous struct
+ * levels can be constructed using the aforementioned iterative method. Only when we reach a list
+ * level, we need to do a merge with the subsequent level.
+ *
+ * So, for a column like `struct<list<int>>`, we are going to merge between the levels `struct<list`
+ * and `int`.
+ * For a column like `list<struct<int>>`, we are going to merge between `list` and `struct<int>`.
+ *
+ * In general, one nesting level is the list level and any struct level that precedes it.
+ *
+ * A few more examples to visualize the partitioning of column heirarchy into nesting levels:
+ * (L is list, S is struct, i is integer(leaf data level), angle brackets omitted)
+ * ```
+ * 1. LSi     = L   Si
+ *              - | --
+ *
+ * 2. LLSi    = L   L   Si
+ *              - | - | --
+ *
+ * 3. SSLi    = SSL   i
+ *              --- | -
+ *
+ * 4. LLSLSSi = L   L   SL   SSi
+ *              - | - | -- | ---
+```
  */
 dremel_data get_dremel_data(column_view h_col,
                             // TODO(cp): use device_span once it is converted to a single hd_vec
