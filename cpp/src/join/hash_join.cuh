@@ -181,16 +181,21 @@ size_type estimate_join_output_size(table_device_view build_table,
  *
  * @param left Table of left columns to join
  * @param stream CUDA stream used for device memory operations and kernel launches
+ * @param mr Device memory resource used to allocate the result
  *
  * @return Join output indices vector pair
  */
 inline std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
                  std::unique_ptr<rmm::device_uvector<size_type>>>
-get_trivial_left_join_indices(table_view const& left, rmm::cuda_stream_view stream)
+get_trivial_left_join_indices(
+  table_view const& left,
+  rmm::cuda_stream_view stream,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
 {
-  auto left_indices = std::make_unique<rmm::device_uvector<size_type>>(left.num_rows(), stream);
+  auto left_indices = std::make_unique<rmm::device_uvector<size_type>>(left.num_rows(), stream, mr);
   thrust::sequence(rmm::exec_policy(stream), left_indices->begin(), left_indices->end(), 0);
-  auto right_indices = std::make_unique<rmm::device_uvector<size_type>>(left.num_rows(), stream);
+  auto right_indices =
+    std::make_unique<rmm::device_uvector<size_type>>(left.num_rows(), stream, mr);
   thrust::fill(
     rmm::exec_policy(stream), right_indices->begin(), right_indices->end(), JoinNoneValue);
   return std::make_pair(std::move(left_indices), std::move(right_indices));
@@ -274,6 +279,7 @@ struct hash_join::hash_join_impl {
    * @param probe_table Table of probe side columns to join.
    * @param compare_nulls Controls whether null join-key values should match or not.
    * @param stream CUDA stream used for device memory operations and kernel launches.
+   * @param mr Device memory resource used to allocate the returned vectors.
    *
    * @return Join output indices vector pair.
    */
@@ -282,7 +288,8 @@ struct hash_join::hash_join_impl {
             std::unique_ptr<rmm::device_uvector<size_type>>>
   probe_join_indices(cudf::table_view const& probe,
                      null_equality compare_nulls,
-                     rmm::cuda_stream_view stream) const;
+                     rmm::cuda_stream_view stream,
+                     rmm::mr::device_memory_resource* mr) const;
 };
 
 }  // namespace cudf

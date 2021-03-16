@@ -29,8 +29,6 @@ def merge(
     right_index,
     how,
     sort,
-    lsuffix,
-    rsuffix,
     method,
     indicator,
     suffixes,
@@ -49,8 +47,6 @@ def merge(
         right_index=right_index,
         how=how,
         sort=sort,
-        lsuffix=lsuffix,
-        rsuffix=rsuffix,
         method=method,
         indicator=indicator,
         suffixes=suffixes,
@@ -91,8 +87,6 @@ class Merge(object):
         right_index,
         how,
         sort,
-        lsuffix,
-        rsuffix,
         method,
         indicator,
         suffixes,
@@ -127,14 +121,6 @@ class Merge(object):
         sort : bool
             Boolean flag indicating if the output Frame is to be
             sorted on the output's join keys, in left to right order.
-        lsuffix : string
-            The suffix to be appended to left hand column names that
-            are found to exist in the right frame, but are not specified
-            as join keys themselves.
-        rsuffix : string
-            The suffix to be appended to right hand column names that
-            are found to exist in the left frame, but are not specified
-            as join keys themselves.
         suffixes : list like
             Left and right suffixes specified together, unpacked into lsuffix
             and rsuffix.
@@ -148,11 +134,8 @@ class Merge(object):
             left_index=left_index,
             right_index=right_index,
             how=how,
-            lsuffix=lsuffix,
-            rsuffix=rsuffix,
             suffixes=suffixes,
         )
-
         self.lhs = lhs
         self.rhs = rhs
         self.on = on
@@ -162,10 +145,8 @@ class Merge(object):
         self.right_index = right_index
         self.how = how
         self.sort = sort
-        self.lsuffix = lsuffix
-        self.rsuffix = rsuffix
-        self.suffixes = suffixes
-
+        if suffixes:
+            self.lsuffix, self.rsuffix = suffixes
         self._compute_join_keys()
         self.preprocess_merge_params()
 
@@ -263,10 +244,11 @@ class Merge(object):
         # Merge the Frames `left_result` and `right_result` into a single
         # `Frame`, suffixing column names if necessary.
 
-        # For outer joins, the key columns from left_result and
-        # right_result are combined if they have the same name.
-        # We will drop those keys from right_result later, so
-        # combine them now with keys from left_result.
+        # If two key columns have the same name, a single output column appears
+        # in the result. For all other join types, the key column from the rhs
+        # is simply dropped. For outer joins, the two key columns are combined
+        # by filling nulls in the left key column with corresponding values
+        # from the right key column:
         if self.how == "outer":
             for lkey, rkey in zip(*self._keys):
                 if lkey.name == rkey.name:
@@ -276,11 +258,17 @@ class Merge(object):
                         lkey.get(left_result).fillna(rkey.get(right_result)),
                     )
 
-        # `left_names` and `right_names` are mappings of column names
-        # of `lhs` and `rhs` to the corresponding column names in the result
+        # Compute the result column names:
+        # left_names and right_names will be a mappings of input column names
+        # to the corresponding names in the final result.
         left_names = OrderedDict(zip(left_result._data, left_result._data))
         right_names = OrderedDict(zip(right_result._data, right_result._data))
 
+        # For any columns from left_result and right_result that have the same
+        # name:
+        # - if they are key columns, keep only the left column
+        # - if they are not key columns, use suffixes to differentiate them
+        #   in the final result
         common_names = set(left_names) & set(right_names)
 
         if self.on:
@@ -292,9 +280,6 @@ class Merge(object):
                     if lkey.name == rkey.name:
                         key_columns_with_same_name.append(lkey.name)
 
-        # For any columns with the same name:
-        # - if they are key columns, keep only the left column
-        # - if they are not key columns, use suffixes
         for name in common_names:
             if name not in key_columns_with_same_name:
                 left_names[name] = f"{name}{self.lsuffix}"
@@ -366,8 +351,6 @@ class Merge(object):
         left_index,
         right_index,
         how,
-        lsuffix,
-        rsuffix,
         suffixes,
     ):
         """
@@ -399,8 +382,7 @@ class Merge(object):
         ):
             raise ValueError("No common columns to perform merge on")
 
-        if suffixes:
-            lsuffix, rsuffix = suffixes
+        lsuffix, rsuffix = suffixes
         for name in same_named_columns:
             if name == left_on == right_on:
                 continue

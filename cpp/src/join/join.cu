@@ -77,8 +77,7 @@ std::unique_ptr<table> inner_join(table_view const& left_input,
   auto const left  = scatter_columns(matched.second.front(), left_on, left_input);
   auto const right = scatter_columns(matched.second.back(), right_on, right_input);
 
-  auto join_indices =
-    inner_join(left.select(left_on), right.select(right_on), compare_nulls, stream, mr);
+  auto join_indices = inner_join(left.select(left_on), right.select(right_on), compare_nulls, mr);
   std::unique_ptr<table> left_result  = detail::gather(left,
                                                       join_indices.first->begin(),
                                                       join_indices.first->end(),
@@ -134,8 +133,7 @@ std::unique_ptr<table> left_join(table_view const& left_input,
   table_view const left  = scatter_columns(matched.second.front(), left_on, left_input);
   table_view const right = scatter_columns(matched.second.back(), right_on, right_input);
 
-  auto join_indices =
-    left_join(left.select(left_on), right.select(right_on), compare_nulls, stream, mr);
+  auto join_indices = left_join(left.select(left_on), right.select(right_on), compare_nulls);
 
   if ((left_on.empty() || right_on.empty()) ||
       is_trivial_join(left, right, cudf::detail::join_kind::LEFT_JOIN)) {
@@ -198,8 +196,7 @@ std::unique_ptr<table> full_join(table_view const& left_input,
   table_view const left  = scatter_columns(matched.second.front(), left_on, left_input);
   table_view const right = scatter_columns(matched.second.back(), right_on, right_input);
 
-  auto join_indices =
-    full_join(left.select(left_on), right.select(right_on), compare_nulls, stream, mr);
+  auto join_indices = full_join(left.select(left_on), right.select(right_on), compare_nulls);
 
   if ((left_on.empty() || right_on.empty()) ||
       is_trivial_join(left, right, cudf::detail::join_kind::FULL_JOIN)) {

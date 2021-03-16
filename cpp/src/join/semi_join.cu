@@ -49,11 +49,11 @@ std::unique_ptr<rmm::device_uvector<cudf::size_type>> left_semi_anti_join(
   CUDF_EXPECTS(0 != right_keys.num_columns(), "Right table is empty");
 
   if (is_trivial_join(left_keys, right_keys, JoinKind)) {
-    return std::make_unique<rmm::device_uvector<cudf::size_type>>(0, stream);
+    return std::make_unique<rmm::device_uvector<cudf::size_type>>(0, stream, mr);
   }
   if ((join_kind::LEFT_ANTI_JOIN == JoinKind) && (0 == right_keys.num_rows())) {
     auto result =
-      std::make_unique<rmm::device_uvector<cudf::size_type>>(left_keys.num_rows(), stream);
+      std::make_unique<rmm::device_uvector<cudf::size_type>>(left_keys.num_rows(), stream, mr);
     thrust::sequence(thrust::cuda::par.on(stream.value()), result->begin(), result->end());
     return std::move(result);
   }
@@ -98,7 +98,8 @@ std::unique_ptr<rmm::device_uvector<cudf::size_type>> left_semi_anti_join(
   // For semi join we want contains to be true, for anti join we want contains to be false
   bool join_type_boolean = (JoinKind == join_kind::LEFT_SEMI_JOIN);
 
-  auto gather_map = std::make_unique<rmm::device_uvector<cudf::size_type>>(left_num_rows, stream);
+  auto gather_map =
+    std::make_unique<rmm::device_uvector<cudf::size_type>>(left_num_rows, stream, mr);
 
   // gather_map_end will be the end of valid data in gather_map
   auto gather_map_end = thrust::copy_if(
