@@ -384,7 +384,7 @@ get_null_bounds_for_timestamp_column(column_view const& timestamp_column,
 
   if (timestamp_column.has_nulls()) {
     auto p_timestamps_device_view = column_device_view::create(timestamp_column);
-    auto num_groups               = group_offsets.size();
+    auto num_groups               = group_offsets.size() - 1;
 
     // Null timestamps exist. Find null bounds, per group.
     thrust::for_each(
