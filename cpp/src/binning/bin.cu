@@ -14,12 +14,6 @@
  * limitations under the License.
  */
 
-#include <thrust/binary_search.h>
-#include <thrust/execution_policy.h>
-#include <thrust/functional.h>
-#include <thrust/distance.h>
-#include <thrust/advance.h>
-#include <thrust/pair.h>
 #include <cudf/binning/bin.hpp>
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_device_view.cuh>
@@ -30,8 +24,18 @@
 #include <cudf/utilities/error.hpp>
 #include <cudf/utilities/span.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
-#include <limits>
+
 #include <rmm/mr/device/device_memory_resource.hpp>
+#include <rmm/exec_policy.hpp>
+
+#include <thrust/advance.h>
+#include <thrust/binary_search.h>
+#include <thrust/distance.h>
+#include <thrust/execution_policy.h>
+#include <thrust/functional.h>
+#include <thrust/pair.h>
+
+#include <limits>
 
 namespace cudf {
 
@@ -87,10 +91,12 @@ std::unique_ptr<column> bin(column_view const& input,
                             column_view const& left_edges,
                             column_view const& right_edges,
                             null_order edge_null_precedence,
-                            rmm::mr::device_memory_resource* mr)
+                            rmm::mr::device_memory_resource* mr,
+                            rmm::cuda_stream_view stream = rmm::cuda_stream_default)
 {
-  auto output = cudf::make_numeric_column(data_type(type_to_id<size_type>()), input.size());
+  auto output = make_numeric_column(data_type(type_to_id<size_type>()), input.size(), mask_state::UNALLOCATED, stream, mr);
   auto output_mutable_view = output->mutable_view();
+
   // These device column views are necessary for creating iterators that work
   // for columns of compound types. The column_view iterators do not work in
   // this case since they return raw pointers to the start of the data.
@@ -121,7 +127,7 @@ std::unique_ptr<column> bin(column_view const& input,
 
   if (input.has_nulls())
   {
-      thrust::transform(thrust::device,
+      thrust::transform(rmm::exec_policy(stream),
                         input_device_view->pair_begin<T, true>(),
                         input_device_view->pair_end<T, true>(),
                         output_mutable_view.begin<size_type>(),
@@ -130,7 +136,7 @@ std::unique_ptr<column> bin(column_view const& input,
   }
   else
   {
-      thrust::transform(thrust::device,
+      thrust::transform(rmm::exec_policy(stream),
                         input_device_view->pair_begin<T, false>(),
                         input_device_view->pair_end<T, false>(),
                         output_mutable_view.begin<size_type>(),
@@ -138,9 +144,9 @@ std::unique_ptr<column> bin(column_view const& input,
                           left_begin, left_end, right_begin, index_shift));
   }
 
-  auto mask_and_count = cudf::detail::valid_if(output_mutable_view.begin<size_type>(),
-                                               output_mutable_view.end<size_type>(),
-                                               filter_null_sentinel());
+  auto mask_and_count = valid_if(output_mutable_view.begin<size_type>(),
+                                 output_mutable_view.end<size_type>(),
+                                 filter_null_sentinel());
 
   output->set_null_mask(mask_and_count.first, mask_and_count.second);
   return output;
@@ -149,17 +155,13 @@ std::unique_ptr<column> bin(column_view const& input,
 template <typename T>
 constexpr auto is_supported_bin_type()
 {
-  // TODO: Determine what other types (such as fixed point numbers) should be
-  // supported, and whether any of them (like strings) require special
-  // handling.
-  return ((cudf::is_numeric<T>() && !std::is_same<T, bool>::value)) || std::is_same<T, cudf::string_view>::value;
+  return ((is_numeric<T>() && !std::is_same<T, bool>::value)) || std::is_same<T, string_view>::value;
 }
 
 }  // anonymous namespace
 }  // namespace detail
 
-/// Functor suitable for use with type_dispatcher that exploits SFINAE to call the appropriate
-/// detail::bin method.
+/// Functor suitable for use with type_dispatcher to call the appropriate detail::bin method.
 struct bin_type_dispatcher {
   template <typename T, typename... Args>
   std::enable_if_t<not detail::is_supported_bin_type<T>(), std::unique_ptr<column>> operator()(
@@ -178,8 +180,6 @@ struct bin_type_dispatcher {
     null_order edge_null_precedence,
     rmm::mr::device_memory_resource* mr)
   {
-    // Using a switch statement might be more appropriate for an enum, but it's far more verbose
-    // in this case.
     if ((left_inclusive == inclusive::YES) && (right_inclusive == inclusive::YES))
       return detail::bin<T, thrust::less_equal<T>, thrust::less_equal<T> >(
         input, left_edges, right_edges, edge_null_precedence, mr);
@@ -213,7 +213,7 @@ std::unique_ptr<column> bin(column_view const& input,
                "The left and right edge columns must be of the same length.");
 
   // Handle empty inputs.
-  if (input.is_empty()) { return cudf::make_numeric_column(data_type(type_to_id<size_type>()), 0); }
+  if (input.is_empty()) { return make_numeric_column(data_type(type_to_id<size_type>()), 0, mask_state::UNALLOCATED, rmm::cuda_stream_default, mr); }
 
   return type_dispatcher<dispatch_storage_type>(input.type(),
                                                 bin_type_dispatcher{},

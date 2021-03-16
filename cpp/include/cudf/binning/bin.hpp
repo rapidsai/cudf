@@ -18,6 +18,8 @@
 
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_view.hpp>
+#include <cudf/types.hpp>
+
 #include <rmm/mr/device/device_memory_resource.hpp>
 #include <rmm/mr/device/per_device_resource.hpp>
 
@@ -56,13 +58,14 @@ enum class inclusive { YES, NO };
  * violated.
  * @throws cudf::logic_error if`left_edges.size() != right_edges.size()`
  *
- * @param input The input elements to label according to the specified bins
- * @param left_edges Values of the left edge of each bin
- * @param left_inclusive Whether or not the left edge is inclusive
- * @param right_edges Value of the right edge of each bin
- * @param right_inclusive Whether or not the right edge is inclusive
+ * @param input The input elements to label according to the specified bins.
+ * @param left_edges Values of the left edge of each bin.
+ * @param left_inclusive Whether or not the left edge is inclusive.
+ * @param right_edges Value of the right edge of each bin.
+ * @param right_inclusive Whether or not the right edge is inclusive.
  * @param edge_null_precedence Whether nulls in left and right edges are at the beginning or the end.
- * @return The labels of the elements in `input` according to the specified bins
+ * @param mr Device memory resource used to allocate the returned column's device.
+ * @return The integer labels of the elements in `input` according to the specified bins.
  */
 std::unique_ptr<column> bin(
   column_view const& input,
