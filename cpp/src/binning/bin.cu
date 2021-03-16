@@ -148,7 +148,7 @@ constexpr auto is_supported_bin_type()
   // TODO: Determine what other types (such as fixed point numbers) should be
   // supported, and whether any of them (like strings) require special
   // handling.
-  return (cudf::is_numeric<T>() && !std::is_same<T, bool>::value);
+  return ((cudf::is_numeric<T>() && !std::is_same<T, bool>::value)) || std::is_same<T, cudf::string_view>::value;
 }
 
 }  // anonymous namespace

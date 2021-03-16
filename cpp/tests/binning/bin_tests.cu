@@ -299,6 +299,7 @@ TEST(BinColumnTest, TestBothEdgesWithNullsAfterDifferentAmount)
  * Simple real data.
  */
 
+// Test floating point data.
 template <typename T>
 struct FloatingPointBinTestFixture : public BinTestFixture {
   void test()
@@ -329,6 +330,7 @@ TYPED_TEST_CASE(FloatingPointBinTestFixture, FloatingPointTypes);
 
 TYPED_TEST(FloatingPointBinTestFixture, TestFloatingPointData) { this->test(); };
 
+// Test integer inputs.
 template <typename T>
 struct IntegerBinTestFixture : public BinTestFixture {
   void test(cudf::inclusive left_inc,
@@ -369,6 +371,7 @@ TYPED_TEST(IntegerBinTestFixture, TestIntegerDataIncludeNeither)
              {{0, 0, 1, 1, 2, 2, 3, 3, 4, 4, 5}, {0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0}});
 };
 
+// Test fixed point data types.
 template <typename T>
 struct FixedPointBinTestFixture : public BinTestFixture {
 };
@@ -390,6 +393,27 @@ TYPED_TEST(FixedPointBinTestFixture, TestFixedPointData)
   fwc_wrapper<cudf::size_type> expected{{2, 2, 2, 2, 2, 2, 2, 2, 2, 2},
                                         {1, 1, 1, 1, 1, 1, 1, 1, 1, 1}};
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
+};
+
+// Test strings.
+template <typename T>
+struct StringBinTestFixture : public BinTestFixture {
+};
+
+TYPED_TEST_CASE(StringBinTestFixture, StringTypes);
+
+TYPED_TEST(StringBinTestFixture, TestStringData)
+{
+    strings_column_wrapper left_edges({"a", "b", "c", "d", "e"});
+    strings_column_wrapper right_edges({"b", "c", "d", "e", "f"});
+    //strings_column_wrapper input({"abc", "bcd", "cde", "def", "efg"});
+    strings_column_wrapper input({"abc"});
+
+    auto result =
+      cudf::bin(input, left_edges, cudf::inclusive::YES, right_edges, cudf::inclusive::NO);
+
+    fwc_wrapper<cudf::size_type> expected{{0, 1, 2, 3, 4}, {1, 1, 1, 1, 1}};
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
 };
 
 }  // anonymous namespace
