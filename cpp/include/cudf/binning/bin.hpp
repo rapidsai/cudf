@@ -44,21 +44,23 @@ enum class inclusive { YES, NO };
  * belong to any bin, then `label[j]` is NULL.
  *
  * Notes:
- *   - Bins must be provided in monotonically increasing order, otherwise behavior is undefined.
  *   - If an empty set of edges is provided, all elements in `input` are labeled NULL.
- *   - If two or more bins overlap, behavior is undefined.
  *   - NULL elements in `input` belong to no bin and their corresponding label is NULL.
+ *   - Bins must be provided in monotonically increasing order, otherwise behavior is undefined.
+ *   - If two or more bins overlap, behavior is undefined.
+ *   - If nulls are interspersed throughout the edges rather than being at the beginning or end
+ *     (as set by @p edge_null_precedence), behavior is undefined.
  *
  * @throws cudf::logic_error if`input.type() == left_edges.type() == right_edges.type()` is
  * violated.
  * @throws cudf::logic_error if`left_edges.size() != right_edges.size()`
- * @throws cudf::logic_error if either `left_edges` or `right_edges` contain NULLs.
  *
  * @param input The input elements to label according to the specified bins
  * @param left_edges Values of the left edge of each bin
  * @param left_inclusive Whether or not the left edge is inclusive
  * @param right_edges Value of the right edge of each bin
  * @param right_inclusive Whether or not the right edge is inclusive
+ * @param edge_null_precedence Whether nulls in left and right edges are at the beginning or the end.
  * @return The labels of the elements in `input` according to the specified bins
  */
 std::unique_ptr<column> bin(
@@ -67,6 +69,7 @@ std::unique_ptr<column> bin(
   inclusive left_inclusive,
   column_view const& right_edges,
   inclusive right_inclusive,
+  null_order null_precedence = null_order::BEFORE,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /** @} */  // end of group

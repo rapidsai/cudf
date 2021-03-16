@@ -72,28 +72,6 @@ TEST(BinColumnTest, TestInvalidInput)
                cudf::logic_error);
 };
 
-// Left edges cannot contain nulls.
-TEST(BinColumnTest, TestLeftEdgesWithNulls)
-{
-  fwc_wrapper<float> left_edges{{0, 1, 2}, {0, 1, 0}};
-  fwc_wrapper<float> right_edges{1, 2, 3};
-  fwc_wrapper<double> input{0.5, 0.5, 0.5, 0.5};
-
-  EXPECT_THROW(cudf::bin(input, left_edges, cudf::inclusive::YES, right_edges, cudf::inclusive::NO),
-               cudf::logic_error);
-};
-
-// Right edges cannot contain nulls.
-TEST(BinColumnTest, TestRightEdgesWithNulls)
-{
-  fwc_wrapper<float> left_edges{0, 1, 2};
-  fwc_wrapper<float> right_edges{{1, 2, 3}, {0, 1, 0}};
-  fwc_wrapper<double> input{0.5, 0.5, 0.5, 0.5};
-
-  EXPECT_THROW(cudf::bin(input, left_edges, cudf::inclusive::YES, right_edges, cudf::inclusive::NO),
-               cudf::logic_error);
-};
-
 // Number of left and right edges must match.
 TEST(BinColumnTest, TestMismatchedEdges)
 {
@@ -189,7 +167,7 @@ TYPED_TEST(BoundaryExclusionBinTestFixture, TestIncludeRight)
 };
 
 /**
- * Test valid data.
+ * Valid exceptional cases.
  */
 
 // Empty input must return an empty output.
@@ -219,6 +197,107 @@ TEST(BinColumnTest, TestInputWithNulls)
   fwc_wrapper<cudf::size_type> expected{{0, 2, 0, 4}, {0, 1, 0, 1}};
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
 };
+
+// Left edges with nulls at the beginning.
+TEST(BinColumnTest, TestLeftEdgesWithNullsBefore)
+{
+  fwc_wrapper<float> left_edges{{0, 1, 2, 3, 4, 5, 6, 7, 8, 9}, {0, 1, 1, 1, 1, 1, 1, 1, 1, 1}};
+  fwc_wrapper<float> right_edges{1, 2, 3, 4, 5, 6, 7, 8, 9, 10};
+  fwc_wrapper<float> input{0.5, 1.5, 2.5, 3.5};
+
+  std::unique_ptr<cudf::column> result =
+    cudf::bin(input, left_edges, cudf::inclusive::NO, right_edges, cudf::inclusive::NO);
+  ASSERT_TRUE(result->size() == 4);
+  ASSERT_TRUE(result->null_count() == 1);
+
+  fwc_wrapper<cudf::size_type> expected{{0, 1, 2, 3}, {0, 1, 1, 1}};
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
+};
+
+// Left edges with nulls at the end.
+TEST(BinColumnTest, TestLeftEdgesWithNullsAfter)
+{
+  fwc_wrapper<float> left_edges{{0, 1, 2, 3, 4, 5, 6, 7, 8, 9}, {1, 1, 1, 1, 1, 1, 1, 1, 1, 0}};
+  fwc_wrapper<float> right_edges{1, 2, 3, 4, 5, 6, 7, 8, 9, 10};
+  fwc_wrapper<float> input{6.5, 7.5, 8.5, 9.5};
+
+  std::unique_ptr<cudf::column> result =
+    cudf::bin(input, left_edges, cudf::inclusive::NO, right_edges, cudf::inclusive::NO, cudf::null_order::AFTER);
+  ASSERT_TRUE(result->size() == 4);
+  ASSERT_TRUE(result->null_count() == 1);
+
+  fwc_wrapper<cudf::size_type> expected{{6, 7, 8, 0}, {1, 1, 1, 0}};
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
+};
+
+// Right edges with nulls at the beginning.
+TEST(BinColumnTest, TestRightEdgesWithNullsBefore)
+{
+  fwc_wrapper<float> left_edges{0, 1, 2, 3, 4, 5, 6, 7, 8, 9};
+  fwc_wrapper<float> right_edges{{1, 2, 3, 4, 5, 6, 7, 8, 9, 10}, {0, 1, 1, 1, 1, 1, 1, 1, 1, 1}};
+  fwc_wrapper<float> input{0.5, 1.5, 2.5, 3.5};
+
+  std::unique_ptr<cudf::column> result =
+    cudf::bin(input, left_edges, cudf::inclusive::NO, right_edges, cudf::inclusive::NO);
+  ASSERT_TRUE(result->size() == 4);
+  ASSERT_TRUE(result->null_count() == 1);
+
+  fwc_wrapper<cudf::size_type> expected{{0, 1, 2, 3}, {0, 1, 1, 1}};
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
+};
+
+// Right edges with nulls at the end.
+TEST(BinColumnTest, TestRightEdgesWithNullsAfter)
+{
+  fwc_wrapper<float> left_edges{0, 1, 2, 3, 4, 5, 6, 7, 8, 9};
+  fwc_wrapper<float> right_edges{{1, 2, 3, 4, 5, 6, 7, 8, 9, 10}, {1, 1, 1, 1, 1, 1, 1, 1, 1, 0}};
+  fwc_wrapper<float> input{6.5, 7.5, 8.5, 9.5};
+
+  std::unique_ptr<cudf::column> result =
+    cudf::bin(input, left_edges, cudf::inclusive::NO, right_edges, cudf::inclusive::NO, cudf::null_order::AFTER);
+  ASSERT_TRUE(result->size() == 4);
+  ASSERT_TRUE(result->null_count() == 1);
+
+  fwc_wrapper<cudf::size_type> expected{{6, 7, 8, 0}, {1, 1, 1, 0}};
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
+};
+
+// Both edges with nulls at the beginning.
+TEST(BinColumnTest, TestBothEdgesWithNullsBeforeDifferentAmount)
+{
+  fwc_wrapper<float> left_edges{{0, 1, 2, 3, 4, 5, 6, 7, 8, 9}, {0, 1, 1, 1, 1, 1, 1, 1, 1, 1}};
+  fwc_wrapper<float> right_edges{{1, 2, 3, 4, 5, 6, 7, 8, 9, 10}, {0, 0, 1, 1, 1, 1, 1, 1, 1, 1}};
+  fwc_wrapper<float> input{0.5, 1.5, 2.5, 3.5};
+
+  std::unique_ptr<cudf::column> result =
+    cudf::bin(input, left_edges, cudf::inclusive::NO, right_edges, cudf::inclusive::NO);
+  ASSERT_TRUE(result->size() == 4);
+  ASSERT_TRUE(result->null_count() == 2);
+
+  fwc_wrapper<cudf::size_type> expected{{0, 0, 2, 3}, {0, 0, 1, 1}};
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
+};
+
+// Both edges with nulls at the end.
+TEST(BinColumnTest, TestBothEdgesWithNullsAfterDifferentAmount)
+{
+  fwc_wrapper<float> left_edges{{0, 1, 2, 3, 4, 5, 6, 7, 8, 9}, {1, 1, 1, 1, 1, 1, 1, 1, 0, 0}};
+  fwc_wrapper<float> right_edges{{1, 2, 3, 4, 5, 6, 7, 8, 9, 10}, {1, 1, 1, 1, 1, 1, 1, 1, 1, 0}};
+  fwc_wrapper<float> input{6.5, 7.5, 8.5, 9.5};
+
+  std::unique_ptr<cudf::column> result =
+    cudf::bin(input, left_edges, cudf::inclusive::NO, right_edges, cudf::inclusive::NO, cudf::null_order::AFTER);
+  ASSERT_TRUE(result->size() == 4);
+  ASSERT_TRUE(result->null_count() == 2);
+
+  fwc_wrapper<cudf::size_type> expected{{6, 7, 0, 0}, {1, 1, 0, 0}};
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
+};
+
+
+/**
+ * Simple real data.
+ */
 
 template <typename T>
 struct FloatingPointBinTestFixture : public BinTestFixture {

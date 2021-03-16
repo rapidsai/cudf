@@ -46,8 +46,8 @@ namespace {
 
 template <typename T, typename RandomAccessIterator, typename LeftComparator, typename RightComparator>
 struct bin_finder {
-  bin_finder(RandomAccessIterator left_begin, RandomAccessIterator left_end, RandomAccessIterator right_begin)
-    : m_left_begin(left_begin), m_left_end(left_end), m_right_begin(right_begin)
+  bin_finder(RandomAccessIterator left_begin, RandomAccessIterator left_end, RandomAccessIterator right_begin, size_type edge_index_shift)
+    : m_left_begin(left_begin), m_left_end(left_end), m_right_begin(right_begin), m_edge_index_shift(edge_index_shift)
   {
   }
 
@@ -64,12 +64,13 @@ struct bin_finder {
     if (bound == m_left_begin) { return NULL_VALUE; }
 
     auto index = thrust::distance(m_left_begin, thrust::prev(bound));
-    return (m_right_comp(value, m_right_begin[index])) ? index : NULL_VALUE;
+    return (m_right_comp(value, m_right_begin[index])) ? (index + m_edge_index_shift) : NULL_VALUE;
   }
 
   RandomAccessIterator m_left_begin{};   // The beginning of the range containing the left bin edges.
   RandomAccessIterator m_left_end{};     // The end of the range containing the left bin edges.
   RandomAccessIterator m_right_begin{};  // The beginning of the range containing the right bin edges.
+  size_type m_edge_index_shift;          // The number of elements m_left_begin has been shifted to skip nulls.
   LeftComparator m_left_comp{};          // Comparator used for left edges.
   RightComparator m_right_comp{};        // Comparator used for right edges.
 };
@@ -85,21 +86,43 @@ template <typename T, typename LeftComparator, typename RightComparator>
 std::unique_ptr<column> bin(column_view const& input,
                             column_view const& left_edges,
                             column_view const& right_edges,
+                            null_order null_precedence,
                             rmm::mr::device_memory_resource* mr)
 {
   auto output = cudf::make_numeric_column(data_type(type_to_id<size_type>()), input.size());
   auto output_mutable_view = output->mutable_view();
   auto input_device_view   = column_device_view::create(input);
 
-  if (input.nullable())
+  // Compute the maximum shift required for either edge, then shift all the iterators appropriately.
+  size_type null_shift = max(left_edges.null_count(), right_edges.null_count());
+  decltype(left_edges.begin<T>()) left_begin, left_end, right_begin;
+
+  if (null_precedence == null_order::BEFORE)
+  {
+      left_begin = thrust::next(left_edges.begin<T>(), null_shift);
+      right_begin = thrust::next(right_edges.begin<T>(), null_shift);
+      left_end = left_edges.end<T>();
+  }
+  else
+  {
+      left_begin = left_edges.begin<T>();
+      right_begin = right_edges.begin<T>();
+      left_end = thrust::prev(left_edges.end<T>(), null_shift);
+  }
+
+  // If all the nulls are at the beginning, the indices found by lower_bound
+  // will be off by null_shift, but if they're at the end the indices will
+  // already be correct.
+  size_type index_shift = (null_precedence == null_order::BEFORE) ? null_shift : 0;
+
+  if (input.has_nulls())
   {
       thrust::transform(thrust::device,
                         input_device_view->pair_begin<T, true>(),
                         input_device_view->pair_end<T, true>(),
                         output_mutable_view.begin<size_type>(),
                         bin_finder<T, decltype(left_edges.begin<T>()), LeftComparator, RightComparator>(
-                          left_edges.begin<T>(), left_edges.end<T>(),
-                          right_edges.begin<T>()));
+                          left_begin, left_end, right_begin, index_shift));
   }
   else
   {
@@ -108,8 +131,7 @@ std::unique_ptr<column> bin(column_view const& input,
                         input_device_view->pair_end<T, false>(),
                         output_mutable_view.begin<size_type>(),
                         bin_finder<T, decltype(left_edges.begin<T>()), LeftComparator, RightComparator>(
-                          left_edges.begin<T>(), left_edges.end<T>(),
-                          right_edges.begin<T>()));
+                          left_begin, left_end, right_begin, index_shift));
   }
 
   auto mask_and_count = cudf::detail::valid_if(output_mutable_view.begin<size_type>(),
@@ -149,22 +171,23 @@ struct bin_type_dispatcher {
     inclusive left_inclusive,
     column_view const& right_edges,
     inclusive right_inclusive,
+    null_order null_precedence,
     rmm::mr::device_memory_resource* mr)
   {
     // Using a switch statement might be more appropriate for an enum, but it's far more verbose
     // in this case.
     if ((left_inclusive == inclusive::YES) && (right_inclusive == inclusive::YES))
       return detail::bin<T, thrust::less_equal<T>, thrust::less_equal<T> >(
-        input, left_edges, right_edges, mr);
+        input, left_edges, right_edges, null_precedence, mr);
     if ((left_inclusive == inclusive::YES) && (right_inclusive == inclusive::NO))
       return detail::bin<T, thrust::less_equal<T>, thrust::less<T> >(
-        input, left_edges, right_edges, mr);
+        input, left_edges, right_edges, null_precedence, mr);
     if ((left_inclusive == inclusive::NO) && (right_inclusive == inclusive::YES))
       return detail::bin<T, thrust::less<T>, thrust::less_equal<T> >(
-        input, left_edges, right_edges, mr);
+        input, left_edges, right_edges, null_precedence, mr);
     if ((left_inclusive == inclusive::NO) && (right_inclusive == inclusive::NO))
       return detail::bin<T, thrust::less<T>, thrust::less<T> >(
-        input, left_edges, right_edges, mr);
+        input, left_edges, right_edges, null_precedence, mr);
 
     CUDF_FAIL("Undefined inclusive setting.");
   }
@@ -176,6 +199,7 @@ std::unique_ptr<column> bin(column_view const& input,
                             inclusive left_inclusive,
                             column_view const& right_edges,
                             inclusive right_inclusive,
+                            null_order null_precedence,
                             rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE()
@@ -183,11 +207,6 @@ std::unique_ptr<column> bin(column_view const& input,
                "The input and edge columns must have the same types.");
   CUDF_EXPECTS(left_edges.size() == right_edges.size(),
                "The left and right edge columns must be of the same length.");
-  // TODO: Decide whether to check `nullable` instead here. Allowing nullable
-  // columns that don't actually contain any null values seems safe, but may
-  // not be desirable from an API perspective.
-  CUDF_EXPECTS(left_edges.null_count() == 0, "The left edges cannot contain nulls.");
-  CUDF_EXPECTS(right_edges.null_count() == 0, "The right edges cannot contain nulls.");
 
   // Handle empty inputs.
   if (input.is_empty()) { return cudf::make_numeric_column(data_type(type_to_id<size_type>()), 0); }
@@ -199,6 +218,7 @@ std::unique_ptr<column> bin(column_view const& input,
                                                 left_inclusive,
                                                 right_edges,
                                                 right_inclusive,
+                                                null_precedence,
                                                 mr);
 }
 }  // namespace cudf
