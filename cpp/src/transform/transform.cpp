@@ -90,14 +90,85 @@ void binary_operation(column_view const& A,
                       column_view const& outmsk_view,
                       rmm::mr::device_memory_resource* mr)
 {
+
+  std::string hash = "prog_transform" + std::to_string(std::hash<std::string>{}(binary_udf));
+
   std::string cuda_source = code::kernel_header;
   cuda_source += cudf::jit::parse_single_function_ptx(
                      binary_udf, "GENERIC_BINARY_OP", cudf::jit::get_type_name(output_type), {0});
 
-  cuda_source += code::masked_binary_op_kernel;
+  cuda_source += code::null_kernel;
 
   std::cout << "*** CUDA_SOURCE ***" << std::endl;
   std::cout << cuda_source << std::endl;
+
+  rmm::cuda_stream_view stream;
+
+  // Launch the jitify kernel
+
+  cudf::jit::launcher(hash,
+                      cuda_source,
+                      header_names,
+                      cudf::jit::compiler_flags,
+                      headers_code,
+                      stream)
+    .set_kernel_inst("null_kernel",
+                      {
+                        cudf::jit::get_type_name(outcol_view.type()), cudf::jit::get_type_name(outcol_view.type()),
+                      }
+    );
+  
+  /*
+
+
+  cudf::jit::launcher(hash,
+                      cuda_source,
+                      header_names,
+                      cudf::jit::compiler_flags,
+                      headers_code,
+                      stream)
+    .set_kernel_inst("test_binop_kernel",  // name of the kernel we are launching
+                     {cudf::jit::get_type_name(outcol_view.type()),  // list of template arguments
+                      cudf::jit::get_type_name(A.type()),
+                      cudf::jit::get_type_name(B.type())});
+    //.launch(outcol_view.size(), 
+    //        cudf::jit::get_data_ptr(outcol_view), 
+    //        cudf::jit::get_data_ptr(A),
+    //        cudf::jit::get_data_ptr(B),
+    //        cudf::jit::get_data_ptr(outmsk_view), // ?
+    //        A.null_mask(),
+    //        A.offset(),
+    //        B.null_mask(),
+    //        B.offset()
+    //);
+
+  */
+
+  /*
+    void kernel(cudf::size_type size, 
+                TypeOut* out_data, 
+                TypeLhs* lhs_data,
+                TypeRhs* rhs_data, 
+                cudf::bitmask_type* output_mask,
+                cudf::bitmask_type const* lhs_mask, 
+                cudf::size_type lhs_offset,
+                cudf::bitmask_type const* rhs_mask, 
+                cudf::size_type rhs_offset)
+
+       .set_kernel_inst{cudf::jit::get_type_name(out.type()),  // list of template arguments
+                        cudf::jit::get_type_name(lhs.type()),
+                        cudf::jit::get_type_name(rhs.type()),
+                        get_operator_name(op, OperatorType::Direct)})
+      .launch(out.size(),
+              cudf::jit::get_data_ptr(out),
+              cudf::jit::get_data_ptr(lhs),
+              cudf::jit::get_data_ptr(rhs),
+              out.null_mask(),
+              lhs.null_mask(),
+              rhs.offset(),
+              rhs.null_mask(),
+              rhs.offset());
+   */
 
 }
 

@@ -127,7 +127,6 @@ def masked_scalar_add_impl(context, builder, sig, args):
 def masked_scalar_add_na_impl(context, builder, sig, args):
 #    return_type = sig.return_type
     # use context to get llvm type for a bool
-    breakpoint()
     result = cgutils.create_struct_proxy(numba_masked)(context, builder)
     result.valid = context.get_constant(types.boolean, 0)
     return result._getvalue()
@@ -152,9 +151,11 @@ def compile_udf(func):
     ptx, _ = cuda.compile_ptx_for_current_device(func, signature, device=True)
     return ptx
 
+NA = _NAType()
+
 @cuda.jit(numba_masked(numba_masked), device=True)
 def test_scalar_null_add(masked):
-    result = masked + cudf.NA
+    result = masked + NA
     return result
 
 @cuda.jit

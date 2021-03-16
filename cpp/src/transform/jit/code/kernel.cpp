@@ -64,44 +64,52 @@ const char* masked_binary_op_kernel =
   R"***(
     
 
-    template <typename TypeOut, typename TypeIn1, typename TypeIn2>
+    template <typename TypeOut, typename TypeLhs, typename TypeRhs>
     __global__
-    void kernel(cudf::size_type size, 
-                cudf::size_type offset,
+    void test_binop_kernel(cudf::size_type size, 
                 TypeOut* out_data, 
-                cudf::bitmask_type const* out_mask,
-                TypeIn1* in_data1, 
-                cudf::bitmask_type const* in_data1_mask,
-                TypeIn2* in_data2,
-                cudf::bitmask_type const* in_data2_mask
+                TypeLhs* lhs_data,
+                TypeRhs* rhs_data 
+                //bool* output_mask,
+                //cudf::bitmask_type const* lhs_mask, 
+                //cudf::size_type lhs_offset,
+                //cudf::bitmask_type const* rhs_mask, 
+                //cudf::size_type rhs_offset)
     ) {
-        int tid = threadIdx.x;
-        int blkid = blockIdx.x;
-        int blksz = blockDim.x;
-        int gridsz = gridDim.x;
+        //int tid = threadIdx.x;
+        //int blkid = blockIdx.x;
+        //int blksz = blockDim.x;
+        //int gridsz = gridDim.x;
 
-        int start = tid + blkid * blksz;
-        int step = blksz * gridsz;
+        //int start = tid + blkid * blksz;
+        //int step = blksz * gridsz;
 
-        Masked output;
+        //Masked output;
 
-        for (cudf::size_type i=start; i<size; i+=step) {
-          bool mask_1 = cudf::bit_is_set(in_data1_mask, offset + i);
-          bool mask_2 = cudf::bit_is_set(in_data2_mask, offset + i);
+        //for (cudf::size_type i=start; i<size; i+=step) {
+        //bool l_valid = lhs_mask ? cudf::bit_is_set(lhs_mask, lhs_offset + i) : true,
+        //bool r_valid = rhs_mask ? cudf::bit_is_set(rhs_mask, rhs_offset + i) : true,
           
-          GENERIC_BINARY_OP(&output, 
-                            in_data1[i], 
-                            mask_1, 
-                            in_data2[i],
-                            mask_2);  
+        //GENERIC_BINARY_OP(&output, 
+        //                  lhs_data[i], 
+        //                  l_valid, 
+        //                  rhs_data[i],
+        //                  r_valid);  
 
-          out_data[i] = output.value;
-          out_mask[i] = output.valid;
+        //  out_data[i] = output.value;
+        //  out_mask[i] = output.valid;
 
         }
     }
   )***";
 
+const char* null_kernel =
+  R"***(
+    template <typename TypeOut, typename Type2>
+    __global__
+    void null_kernel(TypeOut* out_data, Type2* test) {}
+
+  )***";
 
 }  // namespace code
 }  // namespace jit
