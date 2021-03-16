@@ -16,8 +16,6 @@
 
 #pragma once
 
-#include <cudf/lists/list_view.cuh>
-#include <cudf/structs/struct_view.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
 #include <cudf/wrappers/durations.hpp>
