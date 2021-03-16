@@ -1,4 +1,4 @@
-# Copyright (c) 2019-2020, NVIDIA CORPORATION.
+# Copyright (c) 2019-2021, NVIDIA CORPORATION.
 
 from libcpp.memory cimport unique_ptr
 from libcpp.utility cimport move
@@ -12,7 +12,8 @@ from cudf._lib.cpp.table.table_view cimport table_view
 
 from cudf._lib.cpp.reshape cimport (
     interleave_columns as cpp_interleave_columns,
-    tile as cpp_tile
+    tile as cpp_tile,
+    explode as cpp_explode
 )
 
 

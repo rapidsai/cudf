@@ -1,4 +1,4 @@
-# Copyright (c) 2019, NVIDIA CORPORATION.
+# Copyright (c) 2019-2021, NVIDIA CORPORATION.
 
 from libcpp.memory cimport unique_ptr
 
@@ -13,4 +13,7 @@ cdef extern from "cudf/reshape.hpp" namespace "cudf" nogil:
     ) except +
     cdef unique_ptr[table] tile(
         table_view source_table, size_type count
+    ) except +
+    cdef unique_ptr[table] explode(
+        table_view input_table, size_type explode_column_idx,
     ) except +

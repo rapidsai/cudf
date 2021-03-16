@@ -8442,3 +8442,19 @@ def test_rename_for_level_is_None_MC():
     got = gdf.rename(columns={"a": "f"}, level=None)
 
     assert_eq(expect, got)
+
+
+@pytest.mark.parametrize("ignore_index", [True, False])
+@pytest.mark.parametrize("p_index", [None, ['ia', 'ib', 'ic']])
+def test_explode(ignore_index, p_index):
+    gdf = cudf.DataFrame({
+        "a": [[1, 2, 3], None, [4], [], [5, 6]],
+        "b": [11, 22, 33, 44, 55],
+        "c": ['a', 'e', 'i', 'o', 'u']
+    }, index=p_index)
+    pdf = gdf.to_pandas()
+
+    expect = pdf.explode('a', ignore_index)
+    got = gdf.explode('a', ignore_index)
+
+    assert_eq(expect, got)

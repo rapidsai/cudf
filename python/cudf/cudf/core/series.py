@@ -6986,7 +6986,51 @@ class TimedeltaProperties(object):
         return Series(
             data=out_column, index=self.series._index, name=self.series.name
         )
+    
+    def explode(self, column, ignore_index=False):
+        """
+        Transform each element of a list-like to a row, replicating index
+        values.
 
+        Parameters
+        ----------
+        column : str or tuple
+            Column to explode. Now only supports one column
+        ignore_index : bool, default False
+            If True, the resulting index will be labeled 0, 1, …, n - 1.
+
+        Returns
+        -------
+        DataFrame
+
+        Notes
+        -------
+        In cudf, empty lists `[]` are mapped to nulls, as opposed to `nan` in
+        Pandas.
+
+        Examples
+        -------
+        nulls will be skipped.
+        >>> import cudf
+        >>> s = cudf.Series([[1, 2, 3], [], None, [4, 5]])
+        >>> s
+        0    [1, 2, 3]
+        1           []
+        2         None
+        3       [4, 5]
+        dtype: list
+        >>> s.explode()
+        0       1
+        0       2
+        0       3
+        1    None
+        2    None
+        3       4
+        3       5
+        dtype: int64
+        """
+
+        return super._explode(column, None if ignore_index else self.index)
 
 def _align_indices(series_list, how="outer", allow_non_unique=False):
     """

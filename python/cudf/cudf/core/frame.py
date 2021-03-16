@@ -3,10 +3,12 @@
 from __future__ import annotations
 
 import copy
+import uuid
+from cudf.utils.utils import OrderedColumnDict
 import functools
 import warnings
 from collections import OrderedDict, abc as abc
-from typing import TYPE_CHECKING, Any, Dict, Tuple, TypeVar, Union, overload
+from typing import TYPE_CHECKING, Any, Dict, Tuple, TypeVar, Union, overload, Optional
 
 import cupy
 import numpy as np
@@ -572,6 +574,27 @@ class Frame(libcudf.table.Table):
             return other._index is None
         else:
             return self._index.equals(other._index)
+
+    def _explode(self, column: Any, index: Optional[cudf.Index]):
+        if column not in self._column_names:
+            raise KeyError(column)
+        if index is not None:
+            for col in index._data:
+                self._data[str(uuid.uuid4())] = index._data[col]
+        
+        explode_num = self._column_names.index(column)
+        res_tbl = libcudf.reshape.explode_outer(cudf._lib.table.Table(self._data), explode_num)
+
+        if index is not None:
+            data = res_tbl._data[:-index.nlevels]
+            idx = cudf.Index._from_table(cudf._lib.table.Table(res_tbl._data[-index.nlevels:]))
+            idx.names = index.names
+        else:
+            data = res_tbl
+            idx = cudf.Index(range(self.size), name=None)
+        
+        res = self.__class__._from_data(data,index=idx)
+        return res
 
     def _get_columns_by_label(self, labels, downcast):
         """
