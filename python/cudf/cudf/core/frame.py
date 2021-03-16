@@ -6,7 +6,16 @@ import copy
 import functools
 import warnings
 from collections import OrderedDict, abc as abc
-from typing import TYPE_CHECKING, Any, Dict, Tuple, TypeVar, Union, overload
+from typing import (
+    TYPE_CHECKING,
+    Any,
+    Dict,
+    Optional,
+    Tuple,
+    TypeVar,
+    Union,
+    overload,
+)
 
 import cupy
 import numpy as np
@@ -572,6 +581,18 @@ class Frame(libcudf.table.Table):
             return other._index is None
         else:
             return self._index.equals(other._index)
+
+    def _explode(self, explode_column_num: int, index: Optional[cudf.Index]):
+        if index is not None:
+            explode_column_num += index.nlevels
+        res_tbl = libcudf.lists.explode_outer(
+            cudf._lib.table.Table(self._data, index=index), explode_column_num
+        )
+
+        res = self.__class__._from_table(res_tbl)
+        if index is not None:
+            res.index.names = index.names
+        return res
 
     def _get_columns_by_label(self, labels, downcast):
         """

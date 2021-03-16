@@ -1118,3 +1118,24 @@ def test_series_drop_raises():
     actual = gs.drop("p", errors="ignore")
 
     assert_eq(actual, expect)
+
+
+@pytest.mark.parametrize("ignore_index", [True, False])
+@pytest.mark.parametrize(
+    "p_index",
+    [
+        None,
+        ["ia", "ib", "ic", "id", "ie"],
+        pd.MultiIndex.from_tuples(
+            [(0, "a"), (0, "b"), (0, "c"), (1, "a"), (1, "b")]
+        ),
+    ],
+)
+def test_explode(ignore_index, p_index):
+    gdf = cudf.Series([[1, 2, 3], None, [4], [], [5, 6]], index=p_index)
+    pdf = gdf.to_pandas(nullable=True)
+
+    expect = pdf.explode(ignore_index)
+    got = gdf.explode(ignore_index)
+
+    assert_eq(expect, got, check_dtype=False)

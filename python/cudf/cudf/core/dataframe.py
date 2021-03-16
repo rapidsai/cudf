@@ -7709,6 +7709,56 @@ class DataFrame(Frame, Serializable):
                 return False
         return super().equals(other)
 
+    def explode(self, column, ignore_index=False):
+        """
+        Transform each element of a list-like to a row, replicating index
+        values.
+
+        Parameters
+        ----------
+        column : str or tuple
+            Column to explode. Now only supports one column
+        ignore_index : bool, default False
+            If True, the resulting index will be labeled 0, 1, …, n - 1.
+
+        Returns
+        -------
+        DataFrame
+
+        Notes
+        -------
+        In cudf, empty lists `[]` are mapped to nulls, as opposed to `nan` in
+        Pandas.
+
+        Examples
+        -------
+        >>> import cudf
+        >>> cudf.DataFrame(
+                {"a": [[1, 2, 3], [], None, [4, 5]], "b": [11, 22, 33, 44]}
+            )
+                   a   b
+        0  [1, 2, 3]  11
+        1         []  22
+        2       None  33
+        3     [4, 5]  44
+        >>> df.explode('a')
+              a   b
+        0     1  11
+        0     2  11
+        0     3  11
+        1  <NA>  22
+        2  <NA>  33
+        3     4  44
+        3     5  44
+        """
+        if column not in self._column_names:
+            raise KeyError(column)
+
+        explode_num = self._column_names.index(column)
+        return super()._explode(
+            explode_num, None if ignore_index else self.index
+        )
+
     _accessors = set()  # type: Set[Any]
 
 
