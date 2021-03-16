@@ -20,7 +20,7 @@ from numba import cuda
 import cudf
 from cudf.core._compat import PANDAS_GE_110, PANDAS_GE_120
 from cudf.core.column import column
-from cudf.testing import utils
+from cudf.testing import _utils as utils
 from cudf.testing._utils import (
     ALL_TYPES,
     DATETIME_TYPES,

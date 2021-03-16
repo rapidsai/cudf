@@ -11,7 +11,7 @@ import pytest
 
 import cudf
 from cudf.core import Series
-from cudf.testing import utils
+from cudf.testing import _utils as utils
 from cudf.testing._utils import NUMERIC_TYPES, gen_rand
 
 params_dtype = NUMERIC_TYPES

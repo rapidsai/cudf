@@ -14,7 +14,7 @@ import pytest
 import cudf
 from cudf.core import Series
 from cudf.core.index import as_index
-from cudf.testing import utils
+from cudf.testing import _utils as utils
 from cudf.utils.dtypes import (
     BOOL_TYPES,
     DATETIME_TYPES,
