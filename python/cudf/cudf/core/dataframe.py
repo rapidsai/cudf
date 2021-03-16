@@ -7441,43 +7441,34 @@ class DataFrame(Frame, Serializable):
         -------
         DataFrame
 
+        Notes
+        -------
+        In cudf, empty lists `[]` are mapped to nulls, as opposed to `nan` in
+        Pandas.
+
         Examples
         -------
-        nulls will be skipped.
         >>> import cudf
-        >>> df = cudf.DataFrame("a": [[1, 2, 3], [4, 5], None], "b": [11, 22, 33])
-        >>> df
-                   a    b
-        0  [1, 2, 3]   11
-        1  [4, 5]      22
-        2  NaN         33
+        >>> cudf.DataFrame(
+                {"a": [[1, 2, 3], [], None, [4, 5]], "b": [11, 22, 33, 44]}
+            )
+                   a   b
+        0  [1, 2, 3]  11
+        1         []  22
+        2       None  33
+        3     [4, 5]  44
         >>> df.explode('a')
-           a  b
-        0  1  11
-        1  2  11
-        2  3  11
-        3  4  22
-        4  5  22
+              a   b
+        0     1  11
+        0     2  11
+        0     3  11
+        1  None  22
+        2  None  33
+        3     4  44
+        3     5  44
         """
-        if isinstance(column, str):
-            exp_column = column
-        elif isinstance(column, tuple):
-            if len(column) == 1:
-                exp_column = column[0]
-                if not isinstance(exp_column, str):
-                    raise TypeError("column should be str or tuple of str")
-            else:
-                raise ValueError(
-                    "Now only supports one column,"
-                    "but given multiple columns or no column"
-                )
-        else:
-            raise TypeError("column should be str or tuple of str")
-        if exp_column not in self._column_names:
-            raise ValueError("Can not find the column: " + exp_column)
-        nlevels = self.index.nlevels
-        return self.__class__._from_table(
-            libcudf.reshape.explode(self, exp_column, ignore_index, nlevels))
+
+        return super._explode(column, None if ignore_index else self.index)
 
     _accessors = set()  # type: Set[Any]
 

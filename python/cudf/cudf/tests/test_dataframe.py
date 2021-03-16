@@ -8435,30 +8435,13 @@ def test_rename_for_level_is_None_MC():
 @pytest.mark.parametrize("p_index", [None, ['ia', 'ib', 'ic']])
 def test_explode(ignore_index, p_index):
     gdf = cudf.DataFrame({
-        "a": [[1, 2, 3], [4, 5], [6]],
-        "b": [11, 22, 33],
-        "c": [111, 222, 333]
+        "a": [[1, 2, 3], None, [4], [], [5, 6]],
+        "b": [11, 22, 33, 44, 55],
+        "c": ['a', 'e', 'i', 'o', 'u']
     }, index=p_index)
     pdf = gdf.to_pandas()
 
     expect = pdf.explode('a', ignore_index)
     got = gdf.explode('a', ignore_index)
 
-    assert_eq(expect, got, check_dtype=False)
-
-
-@pytest.mark.xfail(
-    reason="nulls are dropped by cudf, but pandas casts it to NaN"
-)
-def test_explode_with_nulls():
-    gdf = cudf.DataFrame({
-        "a": [[1, 2, 3], [4, 5], None],
-        "b": [11, 22, 33],
-        "c": [111, 222, 333]
-    })
-    pdf = gdf.to_pandas()
-
-    expect = pdf.explode('a')
-    got = gdf.explode('a')
-
-    assert_eq(expect, got, check_dtype=False)
+    assert_eq(expect, got)
