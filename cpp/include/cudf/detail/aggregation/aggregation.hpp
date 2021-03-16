@@ -541,6 +541,12 @@ struct target_type_impl<Source, aggregation::COLLECT_LIST> {
   using type = cudf::list_view;
 };
 
+// Always use list for COLLECT_SET
+template <typename Source>
+struct target_type_impl<Source, aggregation::COLLECT_SET> {
+  using type = cudf::list_view;
+};
+
 // Always use Source for LEAD
 template <typename Source>
 struct target_type_impl<Source, aggregation::LEAD> {
@@ -640,6 +646,8 @@ CUDA_HOST_DEVICE_CALLABLE decltype(auto) aggregation_dispatcher(aggregation::Kin
       return f.template operator()<aggregation::ROW_NUMBER>(std::forward<Ts>(args)...);
     case aggregation::COLLECT_LIST:
       return f.template operator()<aggregation::COLLECT_LIST>(std::forward<Ts>(args)...);
+    case aggregation::COLLECT_SET:
+      return f.template operator()<aggregation::COLLECT_SET>(std::forward<Ts>(args)...);
     case aggregation::LEAD:
       return f.template operator()<aggregation::LEAD>(std::forward<Ts>(args)...);
     case aggregation::LAG:
