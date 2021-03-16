@@ -110,6 +110,13 @@ class ColumnBase(Column, Serializable):
     def __len__(self) -> int:
         return self.size
 
+    def __repr__(self):
+        return (
+            f"{object.__repr__(self)}\n"
+            f"{self.to_arrow().to_string()}\n"
+            f"dtype: {self.dtype}"
+        )
+
     def to_pandas(
         self, index: ColumnLike = None, nullable: bool = False, **kwargs
     ) -> "pd.Series":
@@ -173,7 +180,11 @@ class ColumnBase(Column, Serializable):
         if check_dtypes:
             if self.dtype != other.dtype:
                 return False
-        return (self == other).min()
+        null_equals = self._null_equals(other)
+        return null_equals.all()
+
+    def _null_equals(self, other: ColumnBase) -> ColumnBase:
+        return self.binary_operator("NULL_EQUALS", other)
 
     def all(self) -> bool:
         return bool(libcudf.reduce.reduce("all", self, dtype=np.bool_))

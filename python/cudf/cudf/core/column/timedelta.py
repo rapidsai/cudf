@@ -223,7 +223,7 @@ class TimeDeltaColumn(column.ColumnBase):
 
         if op in ("eq", "ne"):
             out_dtype = self._binary_op_eq_ne(rhs)
-        elif op in ("lt", "gt", "le", "ge"):
+        elif op in ("lt", "gt", "le", "ge", "NULL_EQUALS"):
             out_dtype = self._binary_op_lt_gt_le_ge(rhs)
         elif op == "mul":
             out_dtype = self._binary_op_mul(rhs)
