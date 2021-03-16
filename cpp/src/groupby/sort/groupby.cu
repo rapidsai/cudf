@@ -27,7 +27,7 @@
 #include <cudf/detail/groupby/sort_helper.hpp>
 #include <cudf/detail/unary.hpp>
 #include <cudf/groupby.hpp>
-#include <cudf/lists/drop_list_duplicates.hpp>
+#include <cudf/lists/detail/drop_list_duplicates.hpp>
 #include <cudf/table/table.hpp>
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
@@ -419,18 +419,22 @@ void store_result_functor::operator()<aggregation::COLLECT_LIST>(aggregation con
 template <>
 void store_result_functor::operator()<aggregation::COLLECT_SET>(aggregation const& agg)
 {
-  auto null_handling =
+  auto const null_handling =
     static_cast<cudf::detail::collect_set_aggregation const&>(agg)._null_handling;
   CUDF_EXPECTS(null_handling == null_policy::INCLUDE,
                "null exclusion is not supported on groupby COLLECT_SET aggregation.");
 
   if (cache.has_result(col_idx, agg)) { return; }
-  auto const result = detail::group_collect(
-    get_grouped_values(), helper.group_offsets(), helper.num_groups(), stream, mr);
-  cache.add_result(
-    col_idx, agg, lists::drop_list_duplicates(lists_column_view(result->view()), stream, mr));
-};
 
+  auto const collect_result = detail::group_collect(
+    get_grouped_values(), helper.group_offsets(), helper.num_groups(), stream, mr);
+  auto const nulls_equal =
+    static_cast<cudf::detail::collect_set_aggregation const&>(agg)._null_equal;
+  cache.add_result(col_idx,
+                   agg,
+                   lists::detail::drop_list_duplicates(
+                     lists_column_view(collect_result->view()), nulls_equal, stream, mr));
+};
 }  // namespace detail
 
 // Sort-based groupby

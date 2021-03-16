@@ -343,22 +343,27 @@ struct collect_list_aggregation final : derived_aggregation<nunique_aggregation>
 /**
  * @brief Derived aggregation class for specifying COLLECT_SET aggregation
  */
-struct collect_set_aggregation final : derived_aggregation<nunique_aggregation> {
-  explicit collect_set_aggregation(null_policy null_handling = null_policy::INCLUDE)
-    : derived_aggregation{COLLECT_SET}, _null_handling{null_handling}
+struct collect_set_aggregation final : derived_aggregation<collect_set_aggregation> {
+  explicit collect_set_aggregation(null_policy null_handling = null_policy::INCLUDE,
+                                   null_equality null_equal  = null_equality::EQUAL)
+    : derived_aggregation{COLLECT_SET}, _null_handling{null_handling}, _null_equal(null_equal)
   {
   }
   null_policy _null_handling;  ///< include or exclude nulls
+  null_equality _null_equal;   ///< whether to consider nulls as equal values
 
  protected:
-  friend class derived_aggregation<nunique_aggregation>;
+  friend class derived_aggregation<collect_set_aggregation>;
 
-  bool operator==(nunique_aggregation const& other) const
+  bool operator==(collect_set_aggregation const& other) const
   {
-    return _null_handling == other._null_handling;
+    return _null_handling == other._null_handling && _null_equal == other._null_equal;
   }
 
-  size_t hash_impl() const { return std::hash<int>{}(static_cast<int>(_null_handling)); }
+  size_t hash_impl() const
+  {
+    return std::hash<int>{}(static_cast<int>(_null_handling) ^ static_cast<int>(_null_equal));
+  }
 };
 
 /**
