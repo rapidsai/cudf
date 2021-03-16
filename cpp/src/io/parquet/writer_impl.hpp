@@ -130,7 +130,7 @@ class writer::impl {
    * @param fragment_size Number of rows per fragment
    */
   void init_page_fragments(hostdevice_vector<gpu::PageFragment>& frag,
-                           hostdevice_vector<gpu::EncColumnDesc>& col_desc,
+                           hostdevice_vector<gpu::parquet_column_device_view>& col_desc,
                            uint32_t num_columns,
                            uint32_t num_fragments,
                            uint32_t num_rows,
@@ -148,7 +148,7 @@ class writer::impl {
    */
   void gather_fragment_statistics(statistics_chunk* dst_stats,
                                   hostdevice_vector<gpu::PageFragment>& frag,
-                                  hostdevice_vector<gpu::EncColumnDesc>& col_desc,
+                                  hostdevice_vector<gpu::parquet_column_device_view>& col_desc,
                                   uint32_t num_columns,
                                   uint32_t num_fragments,
                                   uint32_t fragment_size);
@@ -162,7 +162,7 @@ class writer::impl {
    * @param num_dictionaries Total number of dictionaries
    */
   void build_chunk_dictionaries(hostdevice_vector<gpu::EncColumnChunk>& chunks,
-                                hostdevice_vector<gpu::EncColumnDesc>& col_desc,
+                                hostdevice_vector<gpu::parquet_column_device_view>& col_desc,
                                 uint32_t num_rowgroups,
                                 uint32_t num_columns,
                                 uint32_t num_dictionaries);
@@ -178,7 +178,7 @@ class writer::impl {
    * @param num_stats_bfr Number of statistics buffers
    */
   void init_encoder_pages(hostdevice_vector<gpu::EncColumnChunk>& chunks,
-                          hostdevice_vector<gpu::EncColumnDesc>& col_desc,
+                          hostdevice_vector<gpu::parquet_column_device_view>& col_desc,
                           gpu::EncPage* pages,
                           statistics_chunk* page_stats,
                           statistics_chunk* frag_stats,

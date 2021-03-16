@@ -625,10 +625,10 @@ struct parquet_column_view {
     return col;
   }
 
-  gpu::EncColumnDesc get_device_view()
+  gpu::parquet_column_device_view get_device_view()
   {
     column_view col  = leaf_column();
-    auto desc        = gpu::EncColumnDesc{};  // Zero out all fields
+    auto desc        = gpu::parquet_column_device_view{};  // Zero out all fields
     desc.stats_dtype = schema_node.stats_dtype;
     desc.ts_scale    = schema_node.ts_scale;
 
@@ -713,7 +713,7 @@ struct parquet_column_view {
 };
 
 void writer::impl::init_page_fragments(hostdevice_vector<gpu::PageFragment> &frag,
-                                       hostdevice_vector<gpu::EncColumnDesc> &col_desc,
+                                       hostdevice_vector<gpu::parquet_column_device_view> &col_desc,
                                        uint32_t num_columns,
                                        uint32_t num_fragments,
                                        uint32_t num_rows,
@@ -729,12 +729,13 @@ void writer::impl::init_page_fragments(hostdevice_vector<gpu::PageFragment> &fra
   frag.device_to_host(stream, true);
 }
 
-void writer::impl::gather_fragment_statistics(statistics_chunk *frag_stats_chunk,
-                                              hostdevice_vector<gpu::PageFragment> &frag,
-                                              hostdevice_vector<gpu::EncColumnDesc> &col_desc,
-                                              uint32_t num_columns,
-                                              uint32_t num_fragments,
-                                              uint32_t fragment_size)
+void writer::impl::gather_fragment_statistics(
+  statistics_chunk *frag_stats_chunk,
+  hostdevice_vector<gpu::PageFragment> &frag,
+  hostdevice_vector<gpu::parquet_column_device_view> &col_desc,
+  uint32_t num_columns,
+  uint32_t num_fragments,
+  uint32_t fragment_size)
 {
   rmm::device_vector<statistics_group> frag_stats_group(num_fragments * num_columns);
 
@@ -750,11 +751,12 @@ void writer::impl::gather_fragment_statistics(statistics_chunk *frag_stats_chunk
   stream.synchronize();
 }
 
-void writer::impl::build_chunk_dictionaries(hostdevice_vector<gpu::EncColumnChunk> &chunks,
-                                            hostdevice_vector<gpu::EncColumnDesc> &col_desc,
-                                            uint32_t num_rowgroups,
-                                            uint32_t num_columns,
-                                            uint32_t num_dictionaries)
+void writer::impl::build_chunk_dictionaries(
+  hostdevice_vector<gpu::EncColumnChunk> &chunks,
+  hostdevice_vector<gpu::parquet_column_device_view> &col_desc,
+  uint32_t num_rowgroups,
+  uint32_t num_columns,
+  uint32_t num_dictionaries)
 {
   size_t dict_scratch_size = (size_t)num_dictionaries * gpu::kDictScratchSize;
   rmm::device_vector<uint32_t> dict_scratch(dict_scratch_size / sizeof(uint32_t));
@@ -776,7 +778,7 @@ void writer::impl::build_chunk_dictionaries(hostdevice_vector<gpu::EncColumnChun
 }
 
 void writer::impl::init_encoder_pages(hostdevice_vector<gpu::EncColumnChunk> &chunks,
-                                      hostdevice_vector<gpu::EncColumnDesc> &col_desc,
+                                      hostdevice_vector<gpu::parquet_column_device_view> &col_desc,
                                       gpu::EncPage *pages,
                                       statistics_chunk *page_stats,
                                       statistics_chunk *frag_stats,
@@ -963,13 +965,13 @@ void writer::impl::write(table_view const &table)
   rmm::device_uvector<column_device_view> leaf_column_views(0, stream);
 
   // Initialize column description
-  hostdevice_vector<gpu::EncColumnDesc> col_desc(0, parquet_columns.size(), stream);
+  hostdevice_vector<gpu::parquet_column_device_view> col_desc(parquet_columns.size(), stream);
   // This should've been `auto const&` but isn't since dictionary space is allocated when calling
   // get_device_view(). Fix during dictionary refactor.
-  for (auto &col : parquet_columns) {
-    auto enccol = col.get_device_view();
-    col_desc.insert(enccol);
-  }
+  std::transform(
+    parquet_columns.begin(), parquet_columns.end(), col_desc.host_ptr(), [](auto &pcol) {
+      return pcol.get_device_view();
+    });
 
   // Init page fragments
   // 5000 is good enough for up to ~200-character strings. Longer strings will start producing
@@ -988,7 +990,7 @@ void writer::impl::write(table_view const &table)
   if (fragments.size() != 0) {
     // Move column info to device
     col_desc.host_to_device(stream);
-    leaf_column_views = create_leaf_column_device_views<gpu::EncColumnDesc>(
+    leaf_column_views = create_leaf_column_device_views<gpu::parquet_column_device_view>(
       col_desc, *parent_column_table_device_view, stream);
 
     init_page_fragments(fragments, col_desc, num_columns, num_fragments, num_rows, fragment_size);

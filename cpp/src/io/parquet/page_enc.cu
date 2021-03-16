@@ -44,7 +44,7 @@ constexpr int init_hash_bits       = 12;
 constexpr uint32_t rle_buffer_size = (1 << 9);
 
 struct frag_init_state_s {
-  EncColumnDesc col;
+  parquet_column_device_view col;
   PageFragment frag;
   uint32_t total_dupes;
   size_type start_value_idx;
@@ -70,7 +70,7 @@ struct page_enc_state_s {
   volatile uint32_t scratch_red[32];
   EncPage page;
   EncColumnChunk ck;
-  EncColumnDesc col;
+  parquet_column_device_view col;
   gpu_inflate_input_s comp_in;
   gpu_inflate_status_s comp_out;
   uint16_t vals[rle_buffer_size];
@@ -111,12 +111,13 @@ inline __device__ uint32_t uint64_init_hash(uint64_t v)
  */
 // blockDim {512,1,1}
 template <int block_size>
-__global__ void __launch_bounds__(block_size) gpuInitPageFragments(PageFragment *frag,
-                                                                   const EncColumnDesc *col_desc,
-                                                                   int32_t num_fragments,
-                                                                   int32_t num_columns,
-                                                                   uint32_t fragment_size,
-                                                                   uint32_t max_num_rows)
+__global__ void __launch_bounds__(block_size)
+  gpuInitPageFragments(PageFragment *frag,
+                       const parquet_column_device_view *col_desc,
+                       int32_t num_fragments,
+                       int32_t num_columns,
+                       uint32_t fragment_size,
+                       uint32_t max_num_rows)
 {
   __shared__ __align__(16) frag_init_state_s state_g;
 
@@ -378,12 +379,13 @@ __global__ void __launch_bounds__(block_size) gpuInitPageFragments(PageFragment 
 }
 
 // blockDim {128,1,1}
-__global__ void __launch_bounds__(128) gpuInitFragmentStats(statistics_group *groups,
-                                                            const PageFragment *fragments,
-                                                            const EncColumnDesc *col_desc,
-                                                            int32_t num_fragments,
-                                                            int32_t num_columns,
-                                                            uint32_t fragment_size)
+__global__ void __launch_bounds__(128)
+  gpuInitFragmentStats(statistics_group *groups,
+                       const PageFragment *fragments,
+                       const parquet_column_device_view *col_desc,
+                       int32_t num_fragments,
+                       int32_t num_columns,
+                       uint32_t fragment_size)
 {
   __shared__ __align__(8) statistics_group group_g[4];
 
@@ -403,13 +405,13 @@ __global__ void __launch_bounds__(128) gpuInitFragmentStats(statistics_group *gr
 // blockDim {128,1,1}
 __global__ void __launch_bounds__(128) gpuInitPages(EncColumnChunk *chunks,
                                                     EncPage *pages,
-                                                    const EncColumnDesc *col_desc,
+                                                    const parquet_column_device_view *col_desc,
                                                     statistics_merge_group *page_grstats,
                                                     statistics_merge_group *chunk_grstats,
                                                     int32_t num_rowgroups,
                                                     int32_t num_columns)
 {
-  __shared__ __align__(8) EncColumnDesc col_g;
+  __shared__ __align__(8) parquet_column_device_view col_g;
   __shared__ __align__(8) EncColumnChunk ck_g;
   __shared__ __align__(8) PageFragment frag_g;
   __shared__ __align__(8) EncPage page_g;
@@ -1423,7 +1425,7 @@ class header_encoder {
 
 __device__ uint8_t *EncodeStatistics(uint8_t *start,
                                      const statistics_chunk *s,
-                                     const EncColumnDesc *col,
+                                     const parquet_column_device_view *col,
                                      float *fp_scratch)
 {
   uint8_t *end, dtype, dtype_len;
@@ -1481,7 +1483,7 @@ __global__ void __launch_bounds__(128) gpuEncodePageHeaders(EncPage *pages,
                                                             const statistics_chunk *chunk_stats,
                                                             uint32_t start_page)
 {
-  __shared__ __align__(8) EncColumnDesc col_g;
+  __shared__ __align__(8) parquet_column_device_view col_g;
   __shared__ __align__(8) EncColumnChunk ck_g;
   __shared__ __align__(8) EncPage page_g;
   __shared__ __align__(8) float fp_scratch[2];
@@ -2048,7 +2050,7 @@ dremel_data get_dremel_data(column_view h_col,
  * @param[in] stream CUDA stream to use, default 0
  */
 void InitPageFragments(PageFragment *frag,
-                       const EncColumnDesc *col_desc,
+                       const parquet_column_device_view *col_desc,
                        int32_t num_fragments,
                        int32_t num_columns,
                        uint32_t fragment_size,
@@ -2073,7 +2075,7 @@ void InitPageFragments(PageFragment *frag,
  */
 void InitFragmentStatistics(statistics_group *groups,
                             const PageFragment *fragments,
-                            const EncColumnDesc *col_desc,
+                            const parquet_column_device_view *col_desc,
                             int32_t num_fragments,
                             int32_t num_columns,
                             uint32_t fragment_size,
@@ -2098,7 +2100,7 @@ void InitFragmentStatistics(statistics_group *groups,
  */
 void InitEncoderPages(EncColumnChunk *chunks,
                       EncPage *pages,
-                      const EncColumnDesc *col_desc,
+                      const parquet_column_device_view *col_desc,
                       int32_t num_rowgroups,
                       int32_t num_columns,
                       statistics_merge_group *page_grstats,
