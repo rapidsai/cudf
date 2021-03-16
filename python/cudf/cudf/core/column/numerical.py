@@ -205,6 +205,19 @@ class NumericalColumn(ColumnBase):
             ),
         )
 
+    def as_decimal_column(
+        self, dtype: Dtype, **kwargs
+    ) -> "cudf.core.column.DecimalColumn":
+        if is_integer_dtype(self.dtype):
+            raise NotImplementedError(
+                "Casting from integer types to decimal "
+                "types not currently supported"
+            )
+        result = libcudf.unary.cast(self, dtype)
+        if isinstance(dtype, cudf.core.dtypes.Decimal64Dtype):
+            result.dtype.precision = dtype.precision
+        return result
+
     def as_numerical_column(self, dtype: Dtype) -> NumericalColumn:
         dtype = np.dtype(dtype)
         if dtype == self.dtype:
@@ -687,15 +700,20 @@ def _numeric_column_binop(
     if reflect:
         lhs, rhs = rhs, lhs
 
-    is_op_comparison = op in ["lt", "gt", "le", "ge", "eq", "ne"]
+    is_op_comparison = op in [
+        "lt",
+        "gt",
+        "le",
+        "ge",
+        "eq",
+        "ne",
+        "NULL_EQUALS",
+    ]
 
     if is_op_comparison:
         out_dtype = "bool"
 
     out = libcudf.binaryop.binaryop(lhs, rhs, op, out_dtype)
-
-    if is_op_comparison:
-        out = out.fillna(op == "ne")
 
     return out
 
