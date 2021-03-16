@@ -31,6 +31,7 @@
 
 #include <jit/timestamps.hpp.jit>
 #include <jit/types.hpp.jit>
+#include <jit/bit.hpp.jit>
 
 #include <rmm/cuda_stream_view.hpp>
 
@@ -39,7 +40,7 @@ namespace transformation {
 //! Jit functions
 namespace jit {
 
-const std::vector<std::string> header_names{cudf_types_hpp, cudf_wrappers_timestamps_hpp};
+const std::vector<std::string> header_names{cudf_types_hpp, cudf_wrappers_timestamps_hpp, cudf_utilities_bit_hpp};
 
 std::istream* headers_code(std::string filename, std::iostream& stream)
 {

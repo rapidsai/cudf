@@ -116,7 +116,26 @@ const char* null_kernel =
                      cudf::size_type lhs_offset,
                      cudf::bitmask_type const* rhs_mask,
                      cudf::size_type rhs_offset
-                    ) {}
+                    ) {
+        int tid = threadIdx.x;
+        int blkid = blockIdx.x;
+        int blksz = blockDim.x;
+        int gridsz = gridDim.x;
+
+        int start = tid + blkid * blksz;
+        int step = blksz * gridsz;
+
+        Masked output;
+
+        bool l_valid;
+        bool r_valid;
+
+
+        for (cudf::size_type i=start; i<size; i+=step) {
+          l_valid = cudf::bit_is_set(lhs_mask, lhs_offset + i);
+        }
+
+    }
 
   )***";
 
