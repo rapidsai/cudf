@@ -363,8 +363,7 @@ TEST_F(FromArrowTest, FixedPointTable)
 
   std::shared_ptr<arrow::Array> arr;
   arrow::Decimal128Builder decimal_builder(arrow::decimal(1, 0), arrow::default_memory_pool());
-  decimal_builder.AppendValues(reinterpret_cast<const uint8_t*>(data.data()),
-                               sizeof(int64_t) * data.size());
+  decimal_builder.AppendValues(reinterpret_cast<const uint8_t*>(data.data()), data.size() / 2);
   CUDF_EXPECTS(decimal_builder.Finish(&arr).ok(), "Failed to build array");
 
   auto const field         = arrow::field("a", arr->type());
