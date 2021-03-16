@@ -39,14 +39,14 @@
 
 namespace cudf {
 
+namespace detail {
+namespace {
+
 // Sentinel used to indicate that an input value should be placed in the null
 // bin.
 // NOTE: In theory if a user decided to specify 2^31 bins this would fail. We
 // could make this an error in Python, but that is such a crazy edge case...
 constexpr size_type NULL_VALUE{std::numeric_limits<size_type>::max()};
-
-namespace detail {
-namespace {
 
 template <typename T, typename RandomAccessIterator, typename LeftComparator, typename RightComparator>
 struct bin_finder {
@@ -92,14 +92,14 @@ std::unique_ptr<column> bin(column_view const& input,
                             column_view const& right_edges,
                             null_order edge_null_precedence,
                             rmm::mr::device_memory_resource* mr,
-                            rmm::cuda_stream_view stream = rmm::cuda_stream_default)
+                            rmm::cuda_stream_view stream)
 {
   auto output = make_numeric_column(data_type(type_to_id<size_type>()), input.size(), mask_state::UNALLOCATED, stream, mr);
   auto output_mutable_view = output->mutable_view();
 
   // These device column views are necessary for creating iterators that work
-  // for columns of compound types. The column_view iterators do not work in
-  // this case since they return raw pointers to the start of the data.
+  // for columns of compound types. The column_view iterators fail for compound
+  // types because they return raw pointers to the start of the data.
   auto input_device_view   = column_device_view::create(input);
   auto left_edges_device_view   = column_device_view::create(left_edges);
   auto right_edges_device_view   = column_device_view::create(right_edges);
@@ -158,9 +158,6 @@ constexpr auto is_supported_bin_type()
   return ((is_numeric<T>() && !std::is_same<T, bool>::value)) || std::is_same<T, string_view>::value;
 }
 
-}  // anonymous namespace
-}  // namespace detail
-
 /// Functor suitable for use with type_dispatcher to call the appropriate detail::bin method.
 struct bin_type_dispatcher {
   template <typename T, typename... Args>
@@ -178,24 +175,27 @@ struct bin_type_dispatcher {
     column_view const& right_edges,
     inclusive right_inclusive,
     null_order edge_null_precedence,
-    rmm::mr::device_memory_resource* mr)
+    rmm::mr::device_memory_resource* mr,
+    rmm::cuda_stream_view stream)
   {
     if ((left_inclusive == inclusive::YES) && (right_inclusive == inclusive::YES))
       return detail::bin<T, thrust::less_equal<T>, thrust::less_equal<T> >(
-        input, left_edges, right_edges, edge_null_precedence, mr);
+        input, left_edges, right_edges, edge_null_precedence, mr, stream);
     if ((left_inclusive == inclusive::YES) && (right_inclusive == inclusive::NO))
       return detail::bin<T, thrust::less_equal<T>, thrust::less<T> >(
-        input, left_edges, right_edges, edge_null_precedence, mr);
+        input, left_edges, right_edges, edge_null_precedence, mr, stream);
     if ((left_inclusive == inclusive::NO) && (right_inclusive == inclusive::YES))
       return detail::bin<T, thrust::less<T>, thrust::less_equal<T> >(
-        input, left_edges, right_edges, edge_null_precedence, mr);
+        input, left_edges, right_edges, edge_null_precedence, mr, stream);
     if ((left_inclusive == inclusive::NO) && (right_inclusive == inclusive::NO))
       return detail::bin<T, thrust::less<T>, thrust::less<T> >(
-        input, left_edges, right_edges, edge_null_precedence, mr);
+        input, left_edges, right_edges, edge_null_precedence, mr, stream);
 
     CUDF_FAIL("Undefined inclusive setting.");
   }
 };
+
+}  // anonymous namespace
 
 /// Bin the input by the edges in left_edges and right_edges.
 std::unique_ptr<column> bin(column_view const& input,
@@ -204,7 +204,8 @@ std::unique_ptr<column> bin(column_view const& input,
                             column_view const& right_edges,
                             inclusive right_inclusive,
                             null_order edge_null_precedence,
-                            rmm::mr::device_memory_resource* mr)
+                            rmm::mr::device_memory_resource* mr,
+                            rmm::cuda_stream_view stream = rmm::cuda_stream_default)
 {
   CUDF_FUNC_RANGE()
   CUDF_EXPECTS((input.type() == left_edges.type()) && (input.type() == right_edges.type()),
@@ -216,13 +217,28 @@ std::unique_ptr<column> bin(column_view const& input,
   if (input.is_empty()) { return make_numeric_column(data_type(type_to_id<size_type>()), 0, mask_state::UNALLOCATED, rmm::cuda_stream_default, mr); }
 
   return type_dispatcher<dispatch_storage_type>(input.type(),
-                                                bin_type_dispatcher{},
+                                                detail::bin_type_dispatcher{},
                                                 input,
                                                 left_edges,
                                                 left_inclusive,
                                                 right_edges,
                                                 right_inclusive,
                                                 edge_null_precedence,
-                                                mr);
+                                                mr,
+                                                stream);
+}
+
+}  // namespace detail
+
+/// Bin the input by the edges in left_edges and right_edges.
+std::unique_ptr<column> bin(column_view const& input,
+                            column_view const& left_edges,
+                            inclusive left_inclusive,
+                            column_view const& right_edges,
+                            inclusive right_inclusive,
+                            null_order edge_null_precedence,
+                            rmm::mr::device_memory_resource* mr)
+{
+    return detail::bin(input, left_edges, left_inclusive, right_edges, right_inclusive, edge_null_precedence, mr);
 }
 }  // namespace cudf
