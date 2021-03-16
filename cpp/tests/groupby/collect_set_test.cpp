@@ -28,9 +28,8 @@ namespace test {
 #define COL_K cudf::test::fixed_width_column_wrapper<int32_t, int32_t>
 #define COL_V cudf::test::fixed_width_column_wrapper<TypeParam, int32_t>
 #define LCL_V cudf::test::lists_column_wrapper<TypeParam, int32_t>
-#define DCL_V cudf::test::dictionary_column_wrapper<TypeParam, int32_t>
 #define VALIDITY std::initializer_list<bool>
-#define COLLECT_SET cudf::make_collect_list_aggregation()
+#define COLLECT_SET cudf::make_collect_set_aggregation()
 
 template <typename V>
 struct CollectSetTest : public cudf::test::BaseFixture {
