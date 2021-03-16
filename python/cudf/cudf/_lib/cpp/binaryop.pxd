@@ -27,6 +27,7 @@ cdef extern from "cudf/binaryop.hpp" namespace "cudf" nogil:
         GREATER "cudf::binary_operator::GREATER"
         LESS_EQUAL "cudf::binary_operator::LESS_EQUAL"
         GREATER_EQUAL "cudf::binary_operator::GREATER_EQUAL"
+        NULL_EQUALS "cudf::binary_operator::NULL_EQUALS"
         BITWISE_AND "cudf::binary_operator::BITWISE_AND"
         BITWISE_OR "cudf::binary_operator::BITWISE_OR"
         BITWISE_XOR "cudf::binary_operator::BITWISE_XOR"
