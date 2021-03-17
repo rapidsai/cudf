@@ -58,18 +58,18 @@ TYPED_TEST(CollectSetTypedTest, ExceptionCases)
   EXPECT_THROW(gby.aggregate(agg_requests), cudf::logic_error);
 }
 
-// TODO: Enable these tests after issue#7611 has been fixed
-TYPED_TEST(CollectSetTypedTest, DISABLED_TrivialCases)
+TYPED_TEST(CollectSetTypedTest, TrivialCases)
 {
   // Empty input
-  test_single_agg(COL_K{}, COL_V{}, COL_K{}, COL_V{}, COLLECT_SET);
+  // TODO: Enable this test after issue#7611 has been fixed
+  // test_single_agg(COL_K{}, COL_V{}, COL_K{}, COL_V{}, COLLECT_SET);
 
   // Single key input
   {
     COL_K keys{1};
     COL_V vals{10};
     COL_K keys_expected{1};
-    LCL_V vals_expected{{10}};
+    LCL_V vals_expected{LCL_V{10}};
     test_single_agg(keys, vals, keys_expected, vals_expected, COLLECT_SET);
   }
 
@@ -78,7 +78,7 @@ TYPED_TEST(CollectSetTypedTest, DISABLED_TrivialCases)
     COL_K keys{2, 1};
     COL_V vals{20, 10};
     COL_K keys_expected{1, 2};
-    LCL_V vals_expected{{10}, {20}};
+    LCL_V vals_expected{LCL_V{10}, LCL_V{20}};
     test_single_agg(keys, vals, keys_expected, vals_expected, COLLECT_SET);
   }
 }
