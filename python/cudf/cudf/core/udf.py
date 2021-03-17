@@ -115,7 +115,7 @@ def masked_scalar_add_impl(context, builder, sig, args):
     )
     result = cgutils.create_struct_proxy(masked_return_type)(context, builder)
 
-    valid = builder.or_(m1.valid, m2.valid)
+    valid = builder.and_(m1.valid, m2.valid)
     result.valid = valid
     with builder.if_then(valid):
         result.value = builder.add(m1.value, m2.value)

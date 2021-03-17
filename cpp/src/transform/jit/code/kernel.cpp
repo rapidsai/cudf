@@ -133,15 +133,13 @@ const char* null_kernel =
         long int l_data;
         long int r_data;
 
-        int64_t* my_int_addr = &output.value;
-
         for (cudf::size_type i=start; i<size; i+=step) {
           l_valid = lhs_mask ? cudf::bit_is_set(lhs_mask, lhs_offset + i) : true;
           r_valid = rhs_mask ? cudf::bit_is_set(rhs_mask, rhs_offset + i) : true;
           l_data = lhs_data[i];
           r_data = rhs_data[i];
 
-          GENERIC_BINARY_OP(my_int_addr, lhs_data[i], l_valid, rhs_data[i], r_valid);
+          GENERIC_BINARY_OP(&output.value, lhs_data[i], l_valid, rhs_data[i], r_valid);
 
           out_data[i] = output.value;
           out_mask[i] = output.valid;

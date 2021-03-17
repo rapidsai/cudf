@@ -127,7 +127,7 @@ def transform(Column input, op):
 
     return Column.from_unique_ptr(move(c_output))
 
-def masked_binary_op(Column A, Column B, op):
+def masked_binary_op(Column A, Column B, op, Column output_column, Column output_mask):
     cdef column_view A_view = A.view()
     cdef column_view B_view = B.view()
 
@@ -146,9 +146,6 @@ def masked_binary_op(Column A, Column B, op):
         <underlying_type_t_type_id> np_to_cudf_types[np.dtype('int64')]
     )
     c_dtype = data_type(c_tid)
-
-    cdef Column output_column = cudf.core.column.column_empty(len(A), dtype='int64')
-    cdef Column output_mask = cudf.core.column.column_empty(len(A), dtype='bool')
 
     cdef column_view outcol_view = output_column.view()
     cdef column_view outmsk_view = output_mask.view()
