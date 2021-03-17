@@ -27,6 +27,7 @@
 #include <cudf/io/orc.hpp>
 #include <cudf/io/parquet.hpp>
 #include <cudf/join.hpp>
+#include <cudf/lists/explode.hpp>
 #include <cudf/merge.hpp>
 #include <cudf/partitioning.hpp>
 #include <cudf/reshape.hpp>
@@ -1616,6 +1617,7 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_concatenate(JNIEnv *env, 
 JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_hashPartition(JNIEnv *env, jclass,
                                                                      jlong input_table,
                                                                      jintArray columns_to_hash,
+                                                                     jint hash_function,
                                                                      jint number_of_partitions,
                                                                      jintArray output_offsets) {
 
@@ -1626,6 +1628,7 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_hashPartition(JNIEnv *env
 
   try {
     cudf::jni::auto_set_device(env);
+    cudf::hash_id hash_func = static_cast<cudf::hash_id>(hash_function);
     cudf::table_view *n_input_table = reinterpret_cast<cudf::table_view *>(input_table);
     cudf::jni::native_jintArray n_columns_to_hash(env, columns_to_hash);
     cudf::jni::native_jintArray n_output_offsets(env, output_offsets);
@@ -1638,7 +1641,10 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_hashPartition(JNIEnv *env
     }
 
     std::pair<std::unique_ptr<cudf::table>, std::vector<cudf::size_type>> result =
-        cudf::hash_partition(*n_input_table, columns_to_hash_vec, number_of_partitions);
+        cudf::hash_partition(*n_input_table,
+                             columns_to_hash_vec,
+                             number_of_partitions,
+                             hash_func);
 
     for (size_t i = 0; i < result.second.size(); i++) {
       n_output_offsets[i] = result.second[i];

@@ -134,6 +134,7 @@ test:
     - test -f $PREFIX/include/cudf/lists/detail/copying.hpp
     - test -f $PREFIX/include/cudf/lists/detail/sorting.hpp
     - test -f $PREFIX/include/cudf/lists/count_elements.hpp
+    - test -f $PREFIX/include/cudf/lists/explode.hpp
     - test -f $PREFIX/include/cudf/lists/drop_list_duplicates.hpp
     - test -f $PREFIX/include/cudf/lists/extract.hpp
     - test -f $PREFIX/include/cudf/lists/contains.hpp
