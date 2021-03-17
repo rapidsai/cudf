@@ -266,8 +266,6 @@ class ListMethods(ColumnMethodsMixin):
             raise ValueError(
                 "lists_indices and list column is of different " "size."
             )
-        if lists_indices_col.null_count > 0:
-            raise ValueError("lists_indices contains null elements.")
         if not is_numerical_dtype(
             lists_indices_col.children[1].dtype
         ) or not np.issubdtype(
@@ -277,6 +275,13 @@ class ListMethods(ColumnMethodsMixin):
                 "lists_indices should be column of values of index types."
             )
 
-        return self._return_or_inplace(
-            segmented_gather(self._column, lists_indices_col)
-        )
+        try:
+            res = self._return_or_inplace(
+                segmented_gather(self._column, lists_indices_col)
+            )
+        except RuntimeError as e:
+            if "contains nulls" in str(e):
+                raise ValueError("lists_indices contains null.") from e
+            raise
+        else:
+            return res
