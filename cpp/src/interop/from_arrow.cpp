@@ -19,6 +19,7 @@
 #include <cudf/detail/concatenate.hpp>
 #include <cudf/detail/copy.hpp>
 #include <cudf/detail/interop.hpp>
+#include <cudf/detail/iterator.cuh>
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/transform.hpp>
@@ -33,6 +34,8 @@
 #include <cudf/utilities/type_dispatcher.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
+
+#include <thrust/gather.h>
 
 namespace cudf {
 
@@ -115,7 +118,7 @@ struct dispatch_to_cudf_column {
     return mask;
   }
 
-  template <typename T>
+  template <typename T, typename std::enable_if_t<not cudf::is_fixed_point<T>()>* = nullptr>
   std::unique_ptr<column> operator()(arrow::Array const& array,
                                      data_type type,
                                      bool skip_mask,
@@ -133,6 +136,57 @@ struct dispatch_to_cudf_column {
       sizeof(T) * num_rows,
       cudaMemcpyDefault,
       stream.value()));
+    if (has_nulls) {
+      auto tmp_mask = get_mask_buffer(array, stream, mr);
+
+      // If array is sliced, we have to copy whole mask and then take copy.
+      auto out_mask = (num_rows == static_cast<size_type>(data_buffer->size() / sizeof(T)))
+                        ? *tmp_mask
+                        : cudf::detail::copy_bitmask(static_cast<bitmask_type*>(tmp_mask->data()),
+                                                     array.offset(),
+                                                     array.offset() + num_rows,
+                                                     stream,
+                                                     mr);
+
+      col->set_null_mask(std::move(out_mask));
+    }
+
+    return col;
+  }
+
+  template <typename T, typename std::enable_if_t<cudf::is_fixed_point<T>()>* = nullptr>
+  std::unique_ptr<column> operator()(arrow::Array const& array,
+                                     data_type type,
+                                     bool skip_mask,
+                                     rmm::cuda_stream_view stream,
+                                     rmm::mr::device_memory_resource* mr)
+  {
+    using DeviceType = device_storage_type_t<T>;
+
+    auto data_buffer         = array.data()->buffers[1];
+    size_type const num_rows = array.length();
+    auto const has_nulls     = skip_mask ? false : array.null_bitmap_data() != nullptr;
+    auto col = make_fixed_width_column(type, num_rows, mask_state::UNALLOCATED, stream, mr);
+    auto mutable_column_view = col->mutable_view();
+
+    // CUDA_TRY(cudaMemcpyAsync(
+    //   mutable_column_view.data<void*>(),
+    //   reinterpret_cast<const uint8_t*>(data_buffer->address()) + array.offset() * sizeof(T),
+    //   sizeof(T) * num_rows,
+    //   cudaMemcpyDefault,
+    //   stream.value()));
+
+    auto temp = reinterpret_cast<const uint8_t*>(data_buffer->address()) +
+                array.offset() * sizeof(DeviceType);
+    auto data_64_ptr = reinterpret_cast<const int64_t*>(temp);
+    auto gather_map =
+      cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i * 2; });
+
+    thrust::gather(gather_map,  //
+                   gather_map + num_rows / 2,
+                   data_64_ptr,
+                   mutable_column_view.begin<DeviceType>());
+
     if (has_nulls) {
       auto tmp_mask = get_mask_buffer(array, stream, mr);
 
