@@ -64,11 +64,14 @@ class Merge(object):
 
     # The joiner function must have the following signature:
     #
-    #     def joiner(lhs, rhs):
+    #     def joiner(
+    #         lhs: Frame,
+    #         rhs: Frame
+    #     ) -> Tuple[Optional[Column], Optional[Column]]:
     #          ...
     #
     # where `lhs` and `rhs` are Frames composed of the left and right
-    # join key, and `joiner` returns a tuple of two gather maps
+    # join key. The `joiner` returns a tuple of two Columns
     # representing the rows to gather from the left- and right- side
     # tables respectively.
     _joiner: Callable
@@ -173,8 +176,13 @@ class Merge(object):
         )
         lhs, rhs = self._restore_categorical_keys(lhs, rhs)
 
-        left_result = lhs._gather(left_rows, nullify=True)
-        right_result = rhs._gather(right_rows, nullify=True)
+        left_result = cudf.core.frame.Frame()
+        right_result = cudf.core.frame.Frame()
+
+        if left_rows is not None:
+            left_result = lhs._gather(left_rows, nullify=True)
+        if right_rows is not None:
+            right_result = rhs._gather(right_rows, nullify=True)
 
         result = self._merge_results(left_result, right_result)
 
