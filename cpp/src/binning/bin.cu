@@ -89,14 +89,14 @@ struct bin_finder {
     return (m_right_comp(value, m_right_begin[index])) ? (index + m_edge_index_shift) : NULL_VALUE;
   }
 
-  RandomAccessIterator m_left_begin{};  // The beginning of the range containing the left bin edges.
-  RandomAccessIterator m_left_end{};    // The end of the range containing the left bin edges.
-  RandomAccessIterator
+  const RandomAccessIterator m_left_begin{};  // The beginning of the range containing the left bin edges.
+  const RandomAccessIterator m_left_end{};    // The end of the range containing the left bin edges.
+  const RandomAccessIterator
     m_right_begin{};  // The beginning of the range containing the right bin edges.
-  size_type
+  const size_type
     m_edge_index_shift;  // The number of elements m_left_begin has been shifted to skip nulls.
-  LeftComparator m_left_comp{};    // Comparator used for left edges.
-  RightComparator m_right_comp{};  // Comparator used for right edges.
+  const LeftComparator m_left_comp{};    // Comparator used for left edges.
+  const RightComparator m_right_comp{};  // Comparator used for right edges.
 };
 
 // Functor to identify rows that should be filtered out based on the sentinel set by
@@ -141,7 +141,9 @@ std::unique_ptr<column> bin(column_view const& input,
   // If all the nulls are at the beginning, the indices found by lower_bound
   // will be off by null_shift, but if they're at the end the indices will
   // already be correct.
-  size_type index_shift = (edge_null_precedence == null_order::BEFORE) ? null_shift : 0;
+  const size_type index_shift = (edge_null_precedence == null_order::BEFORE) ? null_shift : 0;
+
+  using RandomAccessIterator = decltype(left_edges_device_view->begin<T>());
 
   if (input.has_nulls()) {
     thrust::transform(
@@ -149,7 +151,7 @@ std::unique_ptr<column> bin(column_view const& input,
       input_device_view->pair_begin<T, true>(),
       input_device_view->pair_end<T, true>(),
       output_mutable_view.begin<size_type>(),
-      bin_finder<T, decltype(left_edges_device_view->begin<T>()), LeftComparator, RightComparator>(
+      bin_finder<T, RandomAccessIterator, LeftComparator, RightComparator>(
         left_begin, left_end, right_begin, index_shift));
   } else {
     thrust::transform(
@@ -157,11 +159,11 @@ std::unique_ptr<column> bin(column_view const& input,
       input_device_view->pair_begin<T, false>(),
       input_device_view->pair_end<T, false>(),
       output_mutable_view.begin<size_type>(),
-      bin_finder<T, decltype(left_edges_device_view->begin<T>()), LeftComparator, RightComparator>(
+      bin_finder<T, RandomAccessIterator, LeftComparator, RightComparator>(
         left_begin, left_end, right_begin, index_shift));
   }
 
-  auto mask_and_count = valid_if(output_mutable_view.begin<size_type>(),
+  const auto mask_and_count = valid_if(output_mutable_view.begin<size_type>(),
                                  output_mutable_view.end<size_type>(),
                                  filter_null_sentinel());
 

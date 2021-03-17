@@ -16,6 +16,8 @@
 
 #pragma once
 
+#include <cudf/binning/bin.hpp>
+
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_view.hpp>
 #include <cudf/types.hpp>
@@ -36,11 +38,6 @@ namespace detail {
  */
 
 /**
- * @brief Enum used to define whether or not bins include their boundary points.
- */
-enum class inclusive { YES, NO };
-
-/**
  * @copydoc cudf::bin(column_view const& input, column_view const& left_edges, inclusive
  * left_inclusive, column_view const& right_edges, inclusive right_inclusive, null_order
  * edge_null_precedence null_order::BEFORE, rmm::mr::device_memory_resource* mr)
@@ -54,8 +51,8 @@ std::unique_ptr<column> bin(
   column_view const& right_edges,
   inclusive right_inclusive,
   null_order edge_null_precedence     = null_order::BEFORE,
-  rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource(),
+  rmm::cuda_stream_view stream        = rmm::cuda_stream_default);
 
 /** @} */  // end of group
 }  // namespace detail
