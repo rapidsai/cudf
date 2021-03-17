@@ -163,7 +163,12 @@ def masked_binary_op(Column A, Column B, op):
             outmsk_view
         ))
 
-    return Column.from_unique_ptr(move(c_output))
+    #return Column.from_unique_ptr(move(c_output))
+
+    output_mask_real = bools_to_mask(output_mask)
+    output_column = output_column.set_mask(output_mask_real)
+
+    return output_column
 
 
 def table_encode(Table input):
