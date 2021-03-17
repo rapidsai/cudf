@@ -7717,7 +7717,7 @@ class DataFrame(Frame, Serializable):
         Parameters
         ----------
         column : str or tuple
-            Column to explode. Now only supports one column
+            Column to explode.
         ignore_index : bool, default False
             If True, the resulting index will be labeled 0, 1, …, n - 1.
 
@@ -7729,8 +7729,7 @@ class DataFrame(Frame, Serializable):
         -------
         >>> import cudf
         >>> cudf.DataFrame(
-                {"a": [[1, 2, 3], [], None, [4, 5]], "b": [11, 22, 33, 44]}
-            )
+                {"a": [[1, 2, 3], [], None, [4, 5]], "b": [11, 22, 33, 44]})
                    a   b
         0  [1, 2, 3]  11
         1         []  22
