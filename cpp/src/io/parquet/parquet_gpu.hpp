@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018-2020, NVIDIA CORPORATION.
+ * Copyright (c) 2018-2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -184,7 +184,7 @@ struct ColumnChunkDesc {
   {
   }
 
-  uint8_t *compressed_data;                        // pointer to compressed column chunk data
+  uint8_t const *compressed_data;                  // pointer to compressed column chunk data
   size_t compressed_size;                          // total compressed data size for this chunk
   size_t num_values;                               // total number of values in this column
   size_t start_row;                                // starting row of this chunk

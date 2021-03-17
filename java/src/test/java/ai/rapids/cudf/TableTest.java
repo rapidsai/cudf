@@ -1742,7 +1742,7 @@ public class TableTest extends CudfTestBase {
     final int PARTS = 5;
     int expectedPart = -1;
     try (Table start = new Table.TestBuilder().column(0).build();
-         PartitionedTable out = start.onColumns(0).partition(PARTS)) {
+         PartitionedTable out = start.onColumns(0).hashPartition(PARTS)) {
       // Lets figure out what partitions this is a part of.
       int[] parts = out.getPartitions();
       for (int i = 0; i < parts.length; i++) {
@@ -1755,7 +1755,7 @@ public class TableTest extends CudfTestBase {
     for (int numEntries = 1; numEntries < COUNT; numEntries++) {
       try (ColumnVector data = ColumnVector.build(DType.INT32, numEntries, Range.appendInts(0, numEntries));
            Table t = new Table(data);
-           PartitionedTable out = t.onColumns(0).partition(PARTS);
+           PartitionedTable out = t.onColumns(0).hashPartition(PARTS);
            HostColumnVector tmp = out.getColumn(0).copyToHost()) {
         // Now we need to get the range out for the partition we expect
         int[] parts = out.getPartitions();
@@ -1774,7 +1774,7 @@ public class TableTest extends CudfTestBase {
   }
 
   @Test
-  void testPartition() {
+  void testIdentityHashPartition() {
     final int count = 1024 * 1024;
     try (ColumnVector aIn = ColumnVector.build(DType.INT64, count, Range.appendLongs(count));
          ColumnVector bIn = ColumnVector.build(DType.INT32, count, (b) -> {
@@ -1793,7 +1793,57 @@ public class TableTest extends CudfTestBase {
         expected.add(i);
       }
       try (Table input = new Table(new ColumnVector[]{aIn, bIn, cIn});
-           PartitionedTable output = input.onColumns(0).partition(5)) {
+           PartitionedTable output = input.onColumns(0).hashPartition(HashType.IDENTITY, 5)) {
+        int[] parts = output.getPartitions();
+        assertEquals(5, parts.length);
+        assertEquals(0, parts[0]);
+        int previous = 0;
+        long rows = 0;
+        for (int i = 1; i < parts.length; i++) {
+          assertTrue(parts[i] >= previous);
+          rows += parts[i] - previous;
+          previous = parts[i];
+        }
+        assertTrue(rows <= count);
+        try (HostColumnVector aOut = output.getColumn(0).copyToHost();
+             HostColumnVector bOut = output.getColumn(1).copyToHost();
+             HostColumnVector cOut = output.getColumn(2).copyToHost()) {
+
+          for (int i = 0; i < count; i++) {
+            long fromA = aOut.getLong(i);
+            long fromB = bOut.getInt(i);
+            String fromC = cOut.getJavaString(i);
+            assertTrue(expected.remove(fromA));
+            assertEquals(fromA / 2, fromB);
+            assertEquals(String.valueOf(fromA), fromC, "At Index " + i);
+          }
+          assertTrue(expected.isEmpty());
+        }
+      }
+    }
+  }
+
+  @Test
+  void testHashPartition() {
+    final int count = 1024 * 1024;
+    try (ColumnVector aIn = ColumnVector.build(DType.INT64, count, Range.appendLongs(count));
+         ColumnVector bIn = ColumnVector.build(DType.INT32, count, (b) -> {
+           for (int i = 0; i < count; i++) {
+             b.append(i / 2);
+           }
+         });
+         ColumnVector cIn = ColumnVector.build(DType.STRING, count, (b) -> {
+           for (int i = 0; i < count; i++) {
+             b.appendUTF8String(String.valueOf(i).getBytes());
+           }
+         })) {
+
+      HashSet<Long> expected = new HashSet<>();
+      for (long i = 0; i < count; i++) {
+        expected.add(i);
+      }
+      try (Table input = new Table(new ColumnVector[]{aIn, bIn, cIn});
+           PartitionedTable output = input.onColumns(0).hashPartition(5)) {
         int[] parts = output.getPartitions();
         assertEquals(5, parts.length);
         assertEquals(0, parts[0]);
