@@ -61,9 +61,9 @@ using inclusive = detail::inclusive;
  *   - If nulls are interspersed throughout the edges rather than being at the beginning or end
  *     (as set by @p edge_null_precedence), behavior is undefined.
  *
- * @throws cudf::logic_error if`input.type() == left_edges.type() == right_edges.type()` is
+ * @throws cudf::logic_error if `input.type() == left_edges.type() == right_edges.type()` is
  * violated.
- * @throws cudf::logic_error if`left_edges.size() != right_edges.size()`
+ * @throws cudf::logic_error if `left_edges.size() != right_edges.size()`
  *
  * @param input The input elements to label according to the specified bins.
  * @param left_edges Values of the left edge of each bin.

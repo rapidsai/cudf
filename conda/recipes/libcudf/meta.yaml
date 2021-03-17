@@ -67,6 +67,7 @@ test:
     - test -f $PREFIX/include/cudf/datetime.hpp
     - test -f $PREFIX/include/cudf/detail/aggregation/aggregation.hpp
     - test -f $PREFIX/include/cudf/detail/aggregation/result_cache.hpp
+    - test -f $PREFIX/include/cudf/detail/bin.hpp
     - test -f $PREFIX/include/cudf/detail/binaryop.hpp
     - test -f $PREFIX/include/cudf/detail/concatenate.hpp
     - test -f $PREFIX/include/cudf/detail/copy.hpp
