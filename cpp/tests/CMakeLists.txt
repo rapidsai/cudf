@@ -15,38 +15,6 @@
 #=============================================================================
 
 ###################################################################################################
-# - common test utils -----------------------------------------------------------------------------
-
-find_package(Threads REQUIRED)
-
-add_library(cudftestutil STATIC
-            utilities/base_fixture.cpp
-            utilities/column_utilities.cu
-            utilities/table_utilities.cu
-            strings/utilities.cu)
-
-target_compile_options(cudftestutil
-            PUBLIC "$<$<COMPILE_LANGUAGE:CXX>:${CUDF_CXX_FLAGS}>"
-                   "$<$<COMPILE_LANGUAGE:CUDA>:${CUDF_CUDA_FLAGS}>"
-)
-
-target_compile_features(cudftestutil PUBLIC cxx_std_14 cuda_std_14)
-
-target_link_libraries(cudftestutil
-               PUBLIC GTest::gmock
-                      GTest::gtest
-                      Threads::Threads
-                      cudf)
-
-target_include_directories(cudftestutil
-    PUBLIC "$<BUILD_INTERFACE:${CUDF_SOURCE_DIR}>"
-           "$<BUILD_INTERFACE:${CUDF_SOURCE_DIR}/src>")
-
-install(TARGETS cudftestutil
-        DESTINATION lib
-        EXPORT cudf-targets)
-
-###################################################################################################
 # - compiler function -----------------------------------------------------------------------------
 
 function(ConfigureTest CMAKE_TEST_NAME )
@@ -319,7 +287,6 @@ ConfigureTest(SEARCH_TEST search/search_test.cpp)
 # - reshape test ----------------------------------------------------------------------------------
 ConfigureTest(RESHAPE_TEST
     reshape/byte_cast_tests.cpp
-    reshape/explode_tests.cpp
     reshape/interleave_columns_tests.cpp
     reshape/tile_tests.cpp)
 
@@ -422,6 +389,7 @@ ConfigureTest(AST_TEST ast/transform_tests.cpp)
 ConfigureTest(LISTS_TEST
     lists/contains_tests.cpp
     lists/count_elements_tests.cpp
+    lists/explode_tests.cpp
     lists/drop_list_duplicates_tests.cpp
     lists/extract_tests.cpp
     lists/sort_lists_tests.cpp)
