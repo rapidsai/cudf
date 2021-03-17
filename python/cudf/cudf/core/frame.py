@@ -575,6 +575,12 @@ class Frame(libcudf.table.Table):
             return self._index.equals(other._index)
 
     def _explode(self, explode_column: Any, ignore_index: bool):
+        """Helper function for `explode` in Series and Dataframe.
+        if the designated column to explode is non-nested, a copy
+        of the frame is returned. Otherwise, if ignore_index is
+        set, the original index is not exploded and will use
+        a `RangeIndex` instead.
+        """
         if not is_list_dtype(self._data[explode_column].dtype):
             copy = self.copy()
             if ignore_index:
