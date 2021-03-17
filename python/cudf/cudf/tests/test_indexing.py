@@ -9,7 +9,7 @@ import pytest
 
 import cudf
 from cudf.core._compat import PANDAS_GE_110, PANDAS_GE_120
-from cudf.testing import utils
+from cudf.testing import _utils as utils
 from cudf.testing._utils import (
     INTEGER_TYPES,
     assert_eq,
@@ -757,17 +757,6 @@ def test_dataframe_masked_slicing(nelem, slice_start, slice_end):
     got = do_slice(gdf).to_pandas()
 
     assert_eq(expect, got, check_dtype=False)
-
-
-def test_dataframe_boolean_mask_with_None():
-    pdf = pd.DataFrame({"a": [0, 1, 2, 3], "b": [0.1, 0.2, None, 0.3]})
-    gdf = cudf.DataFrame.from_pandas(pdf)
-    pdf_masked = pdf[[True, False, True, False]]
-    gdf_masked = gdf[[True, False, True, False]]
-    assert_eq(pdf_masked, gdf_masked)
-
-    with pytest.raises(ValueError):
-        gdf[cudf.Series([True, False, None, False])]
 
 
 @pytest.mark.parametrize("dtype", [int, float, str])

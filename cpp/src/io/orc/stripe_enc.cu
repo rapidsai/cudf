@@ -92,6 +92,7 @@ struct orcenc_state_s {
   union {
     uint8_t u8[2048];
     uint32_t u32[1024];
+    uint64_t u64[1024];
   } lengths;
 };
 
@@ -101,6 +102,7 @@ static inline __device__ uint32_t zigzag(int32_t v)
   int32_t s = (v >> 31);
   return ((v ^ s) * 2) - s;
 }
+static inline __device__ uint64_t zigzag(uint64_t v) { return v; }
 static inline __device__ uint64_t zigzag(int64_t v)
 {
   int64_t s = (v < 0) ? 1 : 0;
@@ -286,24 +288,6 @@ static inline __device__ uint32_t StoreVarint(uint8_t *dst, uint64_t v)
   return bytecnt;
 }
 
-static inline __device__ void intrle_minmax(int64_t &vmin, int64_t &vmax)
-{
-  vmin = INT64_MIN;
-  vmax = INT64_MAX;
-}
-// static inline __device__ void intrle_minmax(uint64_t &vmin, uint64_t &vmax) { vmin = UINT64_C(0);
-// vmax = UINT64_MAX; }
-static inline __device__ void intrle_minmax(int32_t &vmin, int32_t &vmax)
-{
-  vmin = INT32_MIN;
-  vmax = INT32_MAX;
-}
-static inline __device__ void intrle_minmax(uint32_t &vmin, uint32_t &vmax)
-{
-  vmin = UINT32_C(0);
-  vmax = UINT32_MAX;
-}
-
 template <class T>
 static inline __device__ void StoreBytesBigEndian(uint8_t *dst, T v, uint32_t w)
 {
@@ -412,13 +396,9 @@ static __device__ uint32_t IntegerRLE(orcenc_state_s *s,
     // Find minimum and maximum values
     if (literal_run > 0) {
       // Find min & max
-      T vmin, vmax;
+      T vmin = (t < literal_run) ? v0 : std::numeric_limits<T>::max();
+      T vmax = (t < literal_run) ? v0 : std::numeric_limits<T>::min();
       uint32_t literal_mode, literal_w;
-      if (t < literal_run) {
-        vmin = vmax = v0;
-      } else {
-        intrle_minmax(vmax, vmin);
-      }
       vmin = block_reduce(temp_storage).Reduce(vmin, cub::Min());
       __syncthreads();
       vmax = block_reduce(temp_storage).Reduce(vmax, cub::Max());
@@ -652,6 +632,7 @@ __global__ void __launch_bounds__(block_size)
     typename cub::BlockReduce<int32_t, block_size>::TempStorage i32;
     typename cub::BlockReduce<int64_t, block_size>::TempStorage i64;
     typename cub::BlockReduce<uint32_t, block_size>::TempStorage u32;
+    typename cub::BlockReduce<uint64_t, block_size>::TempStorage u64;
   } temp_storage;
 
   orcenc_state_s *const s = &state_g;
@@ -763,7 +744,7 @@ __global__ void __launch_bounds__(block_size)
             int64_t ts       = static_cast<const int64_t *>(base)[row];
             int32_t ts_scale = kTimeScale[min(s->chunk.scale, 9)];
             int64_t seconds  = ts / ts_scale;
-            int32_t nanos    = (ts - seconds * ts_scale);
+            int64_t nanos    = (ts - seconds * ts_scale);
             // There is a bug in the ORC spec such that for negative timestamps, it is understood
             // between the writer and reader that nanos will be adjusted to their positive component
             // but the negative seconds will be left alone. This means that -2.6 is encoded as
@@ -786,7 +767,7 @@ __global__ void __launch_bounds__(block_size)
               }
               nanos = (nanos << 3) + zeroes;
             }
-            s->lengths.u32[nz_idx] = nanos;
+            s->lengths.u64[nz_idx] = nanos;
             break;
           }
           case STRING:
@@ -897,6 +878,9 @@ __global__ void __launch_bounds__(block_size)
         uint32_t flush = (s->cur_row == s->chunk.num_rows) ? 1 : 0, n;
         switch (s->chunk.type_kind) {
           case TIMESTAMP:
+            n = IntegerRLE<CI_DATA2, uint64_t, false, 0x3ff, block_size>(
+              s, s->lengths.u64, s->nnz - s->numlengths, s->numlengths, flush, t, temp_storage.u64);
+            break;
           case STRING:
             n = IntegerRLE<CI_DATA2, uint32_t, false, 0x3ff, block_size>(
               s, s->lengths.u32, s->nnz - s->numlengths, s->numlengths, flush, t, temp_storage.u32);
