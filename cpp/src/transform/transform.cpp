@@ -94,6 +94,8 @@ void binary_operation(column_view const& A,
 
   std::string hash = "prog_transform" + std::to_string(std::hash<std::string>{}(binary_udf));
 
+  std::cout << binary_udf << std::endl;
+
   std::string cuda_source = code::kernel_header;
   cuda_source += cudf::jit::parse_single_function_ptx(
                      binary_udf, "GENERIC_BINARY_OP", cudf::jit::get_type_name(output_type), {0});

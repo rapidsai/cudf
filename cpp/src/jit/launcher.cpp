@@ -35,8 +35,6 @@ launcher::launcher(const std::string& hash,
                    rmm::cuda_stream_view stream)
   : cache_instance{cudf::jit::cudfJitCache::Instance()}, stream(stream)
 {
-  std::cout << "launcher::launcher cuda_source:" << std::endl;
-  std::cout << cuda_source << std::endl;
   program = cache_instance.getProgram(
     hash, cuda_source.c_str(), header_names, compiler_flags, file_callback);
 }
