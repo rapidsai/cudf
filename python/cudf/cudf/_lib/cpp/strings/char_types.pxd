@@ -1,4 +1,4 @@
-# Copyright (c) 2020, NVIDIA CORPORATION.
+# Copyright (c) 2021, NVIDIA CORPORATION.
 
 from libcpp.memory cimport unique_ptr
 from cudf._lib.cpp.column.column_view cimport column_view
