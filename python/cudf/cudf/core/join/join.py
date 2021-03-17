@@ -441,4 +441,7 @@ class MergeSemi(Merge):
         )
 
     def _merge_results(self, lhs: Frame, rhs: Frame) -> Frame:
-        return super()._merge_results(lhs, cudf.core.frame.Frame())
+        if issubclass(self._out_class, cudf.Index):
+            return self._out_class._from_data(lhs)
+        else:
+            return self._out_class._from_data(lhs._data, index=lhs._index)
