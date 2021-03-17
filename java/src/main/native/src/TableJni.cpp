@@ -567,9 +567,9 @@ static void build_column_metadata_from_handle(JNIEnv *env, jlongArray j_meta_han
                                               std::vector<cudf::column_metadata>& out_meta) {
   cudf::jni::native_jlongArray meta_handles(env, j_meta_handles);
   for (int i = 0; i < meta_handles.size(); i++) {
-    cudf::column_metadata *child = reinterpret_cast<cudf::column_metadata *>(meta_handles[i]);
-    // copy the child into `out_meta`.
-    out_meta.push_back(*child);
+    cudf::column_metadata *cm = reinterpret_cast<cudf::column_metadata *>(meta_handles[i]);
+    // copy to `out_meta`.
+    out_meta.push_back(*cm);
   }
 }
 
