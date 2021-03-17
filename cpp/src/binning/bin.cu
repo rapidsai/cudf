@@ -121,9 +121,9 @@ std::unique_ptr<column> bin(column_view const& input,
   // These device column views are necessary for creating iterators that work
   // for columns of compound types. The column_view iterators fail for compound
   // types because they return raw pointers to the start of the data.
-  auto input_device_view       = column_device_view::create(input);
-  auto left_edges_device_view  = column_device_view::create(left_edges);
-  auto right_edges_device_view = column_device_view::create(right_edges);
+  auto input_device_view       = column_device_view::create(input, stream);
+  auto left_edges_device_view  = column_device_view::create(left_edges, stream);
+  auto right_edges_device_view = column_device_view::create(right_edges, stream);
 
   // Compute the maximum shift required for either edge, then shift all the iterators appropriately.
   size_type null_shift = max(left_edges.null_count(), right_edges.null_count());
