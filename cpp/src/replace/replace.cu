@@ -450,7 +450,8 @@ std::unique_ptr<cudf::column> replace_kernel_forwarder::operator()<cudf::diction
   auto replacements = cudf::dictionary_column_view(replacement_values);
 
   auto matched_input = [&] {
-    auto new_keys = cudf::detail::concatenate({values.keys(), replacements.keys()}, stream);
+    auto views    = std::vector<cudf::column_view>({values.keys(), replacements.keys()});
+    auto new_keys = cudf::detail::concatenate(cudf::host_span<cudf::column_view>{views}, stream);
     return cudf::dictionary::detail::add_keys(input, new_keys->view(), stream, mr);
   }();
   auto matched_view   = cudf::dictionary_column_view(matched_input->view());

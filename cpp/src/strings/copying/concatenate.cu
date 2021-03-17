@@ -65,8 +65,7 @@ struct chars_size_transform {
   }
 };
 
-auto create_strings_device_views(std::vector<column_view> const& views,
-                                 rmm::cuda_stream_view stream)
+auto create_strings_device_views(host_span<column_view const> views, rmm::cuda_stream_view stream)
 {
   CUDF_FUNC_RANGE();
   // Assemble contiguous array of device views
@@ -80,7 +79,7 @@ auto create_strings_device_views(std::vector<column_view> const& views,
   auto input_offsets = thrust::host_vector<size_t>(views.size() + 1);
   auto offset_it     = std::next(input_offsets.begin());
   thrust::transform(
-    thrust::host, views.cbegin(), views.cend(), offset_it, [](auto const& col) -> size_t {
+    thrust::host, views.begin(), views.end(), offset_it, [](auto const& col) -> size_t {
       return static_cast<size_t>(col.size());
     });
   thrust::inclusive_scan(thrust::host, offset_it, input_offsets.end(), offset_it);
@@ -205,7 +204,7 @@ __global__ void fused_concatenate_string_chars_kernel(column_device_view const* 
   }
 }
 
-std::unique_ptr<column> concatenate(std::vector<column_view> const& columns,
+std::unique_ptr<column> concatenate(host_span<column_view const> columns,
                                     rmm::cuda_stream_view stream,
                                     rmm::mr::device_memory_resource* mr)
 {

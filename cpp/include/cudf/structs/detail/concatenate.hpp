@@ -18,6 +18,7 @@
 #include <cudf/column/column.hpp>
 #include <cudf/structs/structs_column_view.hpp>
 #include <cudf/table/table_view.hpp>
+#include <cudf/utilities/span.hpp>
 
 namespace cudf {
 namespace structs {
@@ -48,7 +49,7 @@ namespace detail {
  * @return        New column with concatenated results.
  */
 std::unique_ptr<column> concatenate(
-  std::vector<column_view> const& columns,
+  host_span<column_view const> columns,
   rmm::cuda_stream_view stream,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 

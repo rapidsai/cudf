@@ -62,8 +62,7 @@ struct compute_children_offsets_fn {
    *
    * @param columns The input dictionary columns.
    */
-  compute_children_offsets_fn(std::vector<column_view> const& columns)
-    : columns_ptrs{columns.size()}
+  compute_children_offsets_fn(host_span<column_view const> columns) : columns_ptrs{columns.size()}
   {
     std::transform(
       columns.begin(), columns.end(), columns_ptrs.begin(), [](auto& cv) { return &cv; });
@@ -187,7 +186,7 @@ struct dispatch_compute_indices {
 
 }  // namespace
 
-std::unique_ptr<column> concatenate(std::vector<column_view> const& columns,
+std::unique_ptr<column> concatenate(host_span<column_view const> columns,
                                     rmm::cuda_stream_view stream,
                                     rmm::mr::device_memory_resource* mr)
 {
@@ -206,7 +205,7 @@ std::unique_ptr<column> concatenate(std::vector<column_view> const& columns,
     CUDF_EXPECTS(keys.type() == keys_type, "key types of all dictionary columns must match");
     return keys;
   });
-  auto all_keys = cudf::detail::concatenate(keys_views, stream);
+  auto all_keys = cudf::detail::concatenate(host_span<column_view>{keys_views}, stream);
 
   // sort keys and remove duplicates;
   // this becomes the keys child for the output dictionary column
@@ -226,7 +225,7 @@ std::unique_ptr<column> concatenate(std::vector<column_view> const& columns,
     if (dict_view.is_empty()) return column_view{data_type{type_id::UINT32}, 0, nullptr};
     return dict_view.get_indices_annotated();  // nicely includes validity mask and view offset
   });
-  auto all_indices        = cudf::detail::concatenate(indices_views, stream, mr);
+  auto all_indices = cudf::detail::concatenate(host_span<column_view>{indices_views}, stream, mr);
   auto const indices_size = all_indices->size();
 
   // build a vector of values to map the old indices to the concatenated keys

@@ -29,6 +29,7 @@
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/table/table.hpp>
 #include <cudf/table/table_view.hpp>
+#include <cudf/utilities/span.hpp>
 
 #include <type_traits>
 
@@ -395,7 +396,7 @@ TEST_F(OrcWriterTest, MultiColumnWithNulls)
   auto col3_mask =
     cudf::detail::make_counting_transform_iterator(0, [](auto i) { return (i == (num_rows - 1)); });
   auto col4_mask =
-    cudf::detail::make_counting_transform_iterator(0, [](auto i) { return (i >= 40 || i <= 60); });
+    cudf::detail::make_counting_transform_iterator(0, [](auto i) { return (i >= 40 && i <= 60); });
   auto col5_mask =
     cudf::detail::make_counting_transform_iterator(0, [](auto i) { return (i > 80); });
 
@@ -657,7 +658,8 @@ TEST_F(OrcChunkedWriterTest, SimpleTable)
   auto table1 = create_random_fixed_table<int>(5, 5, true);
   auto table2 = create_random_fixed_table<int>(5, 5, true);
 
-  auto full_table = cudf::concatenate({*table1, *table2});
+  auto table_views = std::vector<table_view>({*table1, *table2});
+  auto full_table  = cudf::concatenate(cudf::host_span<table_view>{table_views});
 
   auto filepath = temp_env->get_temp_filepath("ChunkedSimple.orc");
   cudf_io::chunked_orc_writer_options opts =
@@ -677,7 +679,8 @@ TEST_F(OrcChunkedWriterTest, LargeTables)
   auto table1 = create_random_fixed_table<int>(512, 4096, true);
   auto table2 = create_random_fixed_table<int>(512, 8192, true);
 
-  auto full_table = cudf::concatenate({*table1, *table2});
+  auto table_views = std::vector<table_view>({*table1, *table2});
+  auto full_table  = cudf::concatenate(cudf::host_span<table_view>{table_views});
 
   auto filepath = temp_env->get_temp_filepath("ChunkedLarge.orc");
   cudf_io::chunked_orc_writer_options opts =
@@ -703,7 +706,7 @@ TEST_F(OrcChunkedWriterTest, ManyTables)
     tables.push_back(std::move(tbl));
   }
 
-  auto expected = cudf::concatenate(table_views);
+  auto expected = cudf::concatenate(cudf::host_span<table_view>{table_views});
 
   auto filepath = temp_env->get_temp_filepath("ChunkedManyTables.orc");
   cudf_io::chunked_orc_writer_options opts =
@@ -737,7 +740,8 @@ TEST_F(OrcChunkedWriterTest, Strings)
   cols.push_back(strings2.release());
   cudf::table tbl2(std::move(cols));
 
-  auto expected = cudf::concatenate({tbl1, tbl2});
+  auto table_views = std::vector<table_view>({tbl1, tbl2});
+  auto expected    = cudf::concatenate(cudf::host_span<table_view>{table_views});
 
   auto filepath = temp_env->get_temp_filepath("ChunkedStrings.orc");
   cudf_io::chunked_orc_writer_options opts =
@@ -799,7 +803,8 @@ TEST_F(OrcChunkedWriterTest, ReadStripes)
   auto table1 = create_random_fixed_table<int>(5, 5, true);
   auto table2 = create_random_fixed_table<int>(5, 5, true);
 
-  auto full_table = cudf::concatenate({*table2, *table1, *table2});
+  auto table_views = std::vector<table_view>({*table2, *table1, *table2});
+  auto full_table  = cudf::concatenate(cudf::host_span<table_view>{table_views});
 
   auto filepath = temp_env->get_temp_filepath("ChunkedStripes.orc");
   cudf_io::chunked_orc_writer_options opts =
@@ -863,7 +868,8 @@ TYPED_TEST(OrcChunkedWriterNumericTypeTest, UnalignedSize)
   cols.push_back(c2b_w.release());
   cudf::table tbl2(std::move(cols));
 
-  auto expected = cudf::concatenate({tbl1, tbl2});
+  auto table_views = std::vector<table_view>({tbl1, tbl2});
+  auto expected    = cudf::concatenate(cudf::host_span<table_view>{table_views});
 
   auto filepath = temp_env->get_temp_filepath("ChunkedUnalignedSize.orc");
   cudf_io::chunked_orc_writer_options opts =
@@ -910,7 +916,8 @@ TYPED_TEST(OrcChunkedWriterNumericTypeTest, UnalignedSize2)
   cols.push_back(c2b_w.release());
   cudf::table tbl2(std::move(cols));
 
-  auto expected = cudf::concatenate({tbl1, tbl2});
+  auto table_views = std::vector<table_view>({tbl1, tbl2});
+  auto expected    = cudf::concatenate(cudf::host_span<table_view>{table_views});
 
   auto filepath = temp_env->get_temp_filepath("ChunkedUnalignedSize2.orc");
   cudf_io::chunked_orc_writer_options opts =

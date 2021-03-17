@@ -150,8 +150,7 @@ struct dispatch_to_cudf_column {
 
 std::unique_ptr<column> get_empty_type_column(size_type size)
 {
-  return std::make_unique<column>(
-    data_type(type_id::EMPTY), size, std::move(rmm::device_buffer(0)));
+  return std::make_unique<column>(data_type(type_id::EMPTY), size, rmm::device_buffer(0));
 }
 
 /**
@@ -380,7 +379,8 @@ std::unique_ptr<table> from_arrow(arrow::Table const& input_table,
                                   concat_columns.end(),
                                   std::back_inserter(column_views),
                                   [](auto const& col) { return col->view(); });
-                   return cudf::detail::concatenate(column_views, stream, mr);
+                   return cudf::detail::concatenate(
+                     host_span<column_view>{column_views}, stream, mr);
                  });
 
   return std::make_unique<table>(std::move(columns));
