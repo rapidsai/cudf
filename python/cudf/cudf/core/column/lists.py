@@ -180,7 +180,7 @@ class ListMethods(ColumnMethodsMixin):
         """
         Extract element at the given index from each component
 
-        Extract element from lists, tuples, or strings in 
+        Extract element from lists, tuples, or strings in
         each element in the Series/Index.
 
         Parameters

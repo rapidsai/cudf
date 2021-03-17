@@ -115,6 +115,8 @@ def test_len(data):
 
 
 @pytest.mark.parametrize(
+    # TODO: Add tests for series of strings and tuples
+    # similar to pandas get() method
     "data, index, expect",
     [
         ([[None, None], [None, None]], 0, [None, None]),
