@@ -51,8 +51,8 @@ std::unique_ptr<column> bin(
   column_view const& right_edges,
   inclusive right_inclusive,
   null_order edge_null_precedence     = null_order::BEFORE,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource(),
-  rmm::cuda_stream_view stream        = rmm::cuda_stream_default);
+  rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /** @} */  // end of group
 }  // namespace detail

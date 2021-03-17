@@ -26,6 +26,7 @@
 #include <cudf/utilities/span.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
 
+#include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
 #include <rmm/mr/device/device_memory_resource.hpp>
 
@@ -112,8 +113,8 @@ std::unique_ptr<column> bin(column_view const& input,
                             column_view const& left_edges,
                             column_view const& right_edges,
                             null_order edge_null_precedence,
-                            rmm::mr::device_memory_resource* mr,
-                            rmm::cuda_stream_view stream)
+                            rmm::cuda_stream_view stream,
+                            rmm::mr::device_memory_resource* mr)
 {
   auto output = make_numeric_column(
     data_type(type_to_id<size_type>()), input.size(), mask_state::UNALLOCATED, stream, mr);
@@ -193,21 +194,21 @@ struct bin_type_dispatcher {
     column_view const& right_edges,
     inclusive right_inclusive,
     null_order edge_null_precedence,
-    rmm::mr::device_memory_resource* mr,
-    rmm::cuda_stream_view stream)
+    rmm::cuda_stream_view stream,
+    rmm::mr::device_memory_resource* mr)
   {
     if ((left_inclusive == inclusive::YES) && (right_inclusive == inclusive::YES))
       return bin<T, thrust::less_equal<T>, thrust::less_equal<T>>(
-        input, left_edges, right_edges, edge_null_precedence, mr, stream);
+        input, left_edges, right_edges, edge_null_precedence, stream, mr);
     if ((left_inclusive == inclusive::YES) && (right_inclusive == inclusive::NO))
       return bin<T, thrust::less_equal<T>, thrust::less<T>>(
-        input, left_edges, right_edges, edge_null_precedence, mr, stream);
+        input, left_edges, right_edges, edge_null_precedence, stream, mr);
     if ((left_inclusive == inclusive::NO) && (right_inclusive == inclusive::YES))
       return bin<T, thrust::less<T>, thrust::less_equal<T>>(
-        input, left_edges, right_edges, edge_null_precedence, mr, stream);
+        input, left_edges, right_edges, edge_null_precedence, stream, mr);
     if ((left_inclusive == inclusive::NO) && (right_inclusive == inclusive::NO))
       return bin<T, thrust::less<T>, thrust::less<T>>(
-        input, left_edges, right_edges, edge_null_precedence, mr, stream);
+        input, left_edges, right_edges, edge_null_precedence, stream, mr);
 
     CUDF_FAIL("Undefined inclusive setting.");
   }
@@ -222,8 +223,8 @@ std::unique_ptr<column> bin(column_view const& input,
                             column_view const& right_edges,
                             inclusive right_inclusive,
                             null_order edge_null_precedence,
-                            rmm::mr::device_memory_resource* mr,
-                            rmm::cuda_stream_view stream)
+                            rmm::cuda_stream_view stream,
+                            rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE()
   CUDF_EXPECTS((input.type() == left_edges.type()) && (input.type() == right_edges.type()),
@@ -245,8 +246,8 @@ std::unique_ptr<column> bin(column_view const& input,
                                                 right_edges,
                                                 right_inclusive,
                                                 edge_null_precedence,
-                                                mr,
-                                                stream);
+                                                stream,
+                                                mr);
 }
 
 }  // namespace detail
@@ -260,7 +261,13 @@ std::unique_ptr<column> bin(column_view const& input,
                             null_order edge_null_precedence,
                             rmm::mr::device_memory_resource* mr)
 {
-  return detail::bin(
-    input, left_edges, left_inclusive, right_edges, right_inclusive, edge_null_precedence, mr);
+  return detail::bin(input,
+                     left_edges,
+                     left_inclusive,
+                     right_edges,
+                     right_inclusive,
+                     edge_null_precedence,
+                     rmm::cuda_stream_default,
+                     mr);
 }
 }  // namespace cudf
