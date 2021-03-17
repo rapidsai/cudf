@@ -1,6 +1,7 @@
 # Copyright (c) 2020-2021, NVIDIA CORPORATION.
 from __future__ import annotations
 
+import functools
 from collections import OrderedDict, namedtuple
 from typing import TYPE_CHECKING, Callable, Tuple
 
@@ -63,17 +64,14 @@ class Merge(object):
 
     # The joiner function must have the following signature:
     #
-    #     def joiner(lhs, rhs, how=how):
+    #     def joiner(lhs, rhs):
     #          ...
     #
-    # where:
-    #
-    # - `lhs` and `rhs` are Frames composed of the left and right join keys
-    # - `how` is a string specifying the kind of join to perform
-    #
-    # ...and it returns a tuple of two gather maps representing the rows
-    # to gather from the left- and right- side tables respectively.
-    _joiner: Callable = libcudf.join.join
+    # where `lhs` and `rhs` are Frames composed of the left and right
+    # join key, and `joiner` returns a tuple of two gather maps
+    # representing the rows to gather from the left- and right- side
+    # tables respectively.
+    _joiner: Callable
 
     def __init__(
         self,
@@ -136,6 +134,8 @@ class Merge(object):
             how=how,
             suffixes=suffixes,
         )
+        self._joiner = functools.partial(libcudf.join.join, how=how)
+
         self.lhs = lhs
         self.rhs = rhs
         self.on = on
@@ -434,7 +434,11 @@ class Merge(object):
 
 
 class MergeSemi(Merge):
-    _joiner = libcudf.join.semi_join
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self._joiner = functools.partial(
+            libcudf.join.semi_join, how=kwargs["how"]
+        )
 
     def _merge_results(self, lhs: Frame, rhs: Frame) -> Frame:
         return super()._merge_results(lhs, cudf.core.frame.Frame())
