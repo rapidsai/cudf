@@ -117,6 +117,8 @@ include(cmake/Modules/ConfigureCUDA.cmake)
 
 # find zlib
 find_package(ZLIB REQUIRED)
+# find Threads (needed by cudftestutil)
+find_package(Threads REQUIRED)
 # add third party dependencies using CPM
 include(cmake/thirdparty/CUDF_GetCPM.cmake)
 # find boost
@@ -133,6 +135,8 @@ include(cmake/thirdparty/CUDF_GetArrow.cmake)
 include(cmake/thirdparty/CUDF_GetDLPack.cmake)
 # find libcu++
 include(cmake/thirdparty/CUDF_GetLibcudacxx.cmake)
+# find or install GoogleTest
+include(cmake/thirdparty/CUDF_GetGTest.cmake)
 # Stringify libcudf and libcudacxx headers used in JIT operations
 include(cmake/Modules/StringifyJITHeaders.cmake)
 
@@ -417,7 +421,8 @@ target_include_directories(cudf
                        "$<BUILD_INTERFACE:${CUDF_SOURCE_DIR}/include>"
                        "$<BUILD_INTERFACE:${CUDF_GENERATED_INCLUDE_DIR}/include>"
            PRIVATE     "$<BUILD_INTERFACE:${CUDF_SOURCE_DIR}/src>"
-           INTERFACE   "$<INSTALL_INTERFACE:include>")
+           INTERFACE   "$<INSTALL_INTERFACE:include>"
+                       "$<INSTALL_INTERFACE:include/libcudf/libcudaxx>")
 
 # Add Conda library paths if specified
 if(CONDA_LINK_DIRS)
@@ -480,34 +485,37 @@ add_library(cudf::cudf ALIAS cudf)
 # - tests and benchmarks --------------------------------------------------------------------------
 ###################################################################################################
 
-if (CUDF_BUILD_TESTS OR CUDF_BUILD_BENCHMARKS)
-    # Find or install GoogleTest
-    CPMFindPackage(NAME GTest
-        VERSION         1.10.0
-        GIT_REPOSITORY  https://github.com/google/googletest.git
-        GIT_TAG         release-1.10.0
-        GIT_SHALLOW     TRUE
-        OPTIONS         "INSTALL_GTEST OFF"
-        # googletest >= 1.10.0 provides a cmake config file -- use it if it exists
-        FIND_PACKAGE_ARGUMENTS "CONFIG")
-    # Add GTest aliases if they don't already exist.
-    # Assumes if GTest::gtest doesn't exist, the others don't either.
-    # TODO: Is this always a valid assumption?
-    if(NOT TARGET GTest::gtest)
-        add_library(GTest::gtest ALIAS gtest)
-        add_library(GTest::gmock ALIAS gmock)
-        add_library(GTest::gtest_main ALIAS gtest_main)
-        add_library(GTest::gmock_main ALIAS gmock_main)
-    endif()
-    if(GTest_ADDED)
-        install(TARGETS gmock
-                        gtest
-                        gmock_main
-                        gtest_main
-            DESTINATION lib
-            EXPORT cudf-targets)
-    endif()
-endif()
+###################################################################################################
+# - build cudftestutil ----------------------------------------------------------------------------
+
+add_library(cudftestutil STATIC
+            tests/utilities/base_fixture.cpp
+            tests/utilities/column_utilities.cu
+            tests/utilities/table_utilities.cu
+            tests/strings/utilities.cu)
+
+target_compile_options(cudftestutil
+            PUBLIC "$<$<COMPILE_LANGUAGE:CXX>:${CUDF_CXX_FLAGS}>"
+                   "$<$<COMPILE_LANGUAGE:CUDA>:${CUDF_CUDA_FLAGS}>"
+)
+
+target_compile_features(cudftestutil PUBLIC cxx_std_14 cuda_std_14)
+
+target_link_libraries(cudftestutil
+               PUBLIC GTest::gmock
+                      GTest::gtest
+                      Threads::Threads
+                      cudf)
+
+target_include_directories(cudftestutil
+    PUBLIC "$<BUILD_INTERFACE:${CUDF_SOURCE_DIR}>"
+           "$<BUILD_INTERFACE:${CUDF_SOURCE_DIR}/src>")
+
+install(TARGETS cudftestutil
+        DESTINATION lib
+        EXPORT cudf-targets)
+
+add_library(cudf::cudftestutil ALIAS cudftestutil)
 
 ###################################################################################################
 # - add tests -------------------------------------------------------------------------------------
