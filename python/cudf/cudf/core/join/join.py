@@ -151,6 +151,7 @@ class Merge(object):
 
     @property
     def _out_class(self):
+        # type of the result
         out_class = cudf.DataFrame
 
         if isinstance(self.lhs, cudf.MultiIndex) or isinstance(
