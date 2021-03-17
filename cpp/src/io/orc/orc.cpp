@@ -550,14 +550,14 @@ std::vector<int> metadata::select_columns(std::vector<std::string> use_names,
     }
   } else {
     // For now, only select all leaf nodes
-    for (int i = 0; i < get_num_columns(); ++i) {
+    for (int i = 1; i < get_num_columns(); ++i) {
       if (ff.types[i].subtypes.empty()) {
         selection.emplace_back(i);
         if (ff.types[i].kind == orc::TIMESTAMP) { has_timestamp_column = true; }
       }
     }
   }
-  CUDF_EXPECTS(selection.size() > 0, "Filtered out all columns");
+  CUDF_EXPECTS(use_names.empty() or selection.size() > 0, "Filtered out all columns");
 
   return selection;
 }
