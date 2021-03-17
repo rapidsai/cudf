@@ -287,7 +287,6 @@ ConfigureTest(SEARCH_TEST search/search_test.cpp)
 # - reshape test ----------------------------------------------------------------------------------
 ConfigureTest(RESHAPE_TEST
     reshape/byte_cast_tests.cpp
-    reshape/explode_tests.cpp
     reshape/interleave_columns_tests.cpp
     reshape/tile_tests.cpp)
 
@@ -390,6 +389,7 @@ ConfigureTest(AST_TEST ast/transform_tests.cpp)
 ConfigureTest(LISTS_TEST
     lists/contains_tests.cpp
     lists/count_elements_tests.cpp
+    lists/explode_tests.cpp
     lists/drop_list_duplicates_tests.cpp
     lists/extract_tests.cpp
     lists/sort_lists_tests.cpp)

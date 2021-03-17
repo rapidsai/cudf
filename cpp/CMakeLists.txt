@@ -260,6 +260,7 @@ add_library(cudf
     src/lists/copying/gather.cu
     src/lists/copying/segmented_gather.cu
     src/lists/count_elements.cu
+    src/lists/explode.cu
     src/lists/extract.cu
     src/lists/drop_list_duplicates.cu
     src/lists/lists_column_factories.cu
@@ -289,7 +290,6 @@ add_library(cudf
     src/replace/nulls.cu
     src/replace/replace.cu
     src/reshape/byte_cast.cu
-    src/reshape/explode.cu
     src/reshape/interleave_columns.cu
     src/reshape/tile.cu
     src/rolling/grouped_rolling.cu
