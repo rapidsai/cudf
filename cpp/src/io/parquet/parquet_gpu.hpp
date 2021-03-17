@@ -98,6 +98,7 @@ struct PageNestingInfo {
   // set during data decoding
   int32_t valid_count;       // # of valid values decoded in this page/nesting-level
   int32_t value_count;       // total # of values decoded in this page/nesting-level
+  int32_t null_count;        // null count
   int32_t valid_map_offset;  // current offset in bits relative to valid_map
   uint8_t *data_out;         // pointer into output buffer
   uint32_t *valid_map;       // pointer into output validity buffer
@@ -128,7 +129,17 @@ struct PageInfo {
   Encoding definition_level_encoding;  // Encoding used for definition levels (data page)
   Encoding repetition_level_encoding;  // Encoding used for repetition levels (data page)
 
+  // for nested types, we run a preprocess step in order to determine output
+  // column sizes. Because of this, we can jump directly to the position in the
+  // input data to start decoding instead of reading all of the data and discarding
+  // rows we don't care about.
+  //
+  // NOTE: for flat hierarchies we do not do the preprocess step, so skipped_values and
+  // skipped_leaf_values will always be 0.
+  //
+  // # of values skipped in the repetition/definition level stream
   int skipped_values;
+  // # of values skipped in the actual data stream.
   int skipped_leaf_values;
 
   // nesting information (input/output) for each page

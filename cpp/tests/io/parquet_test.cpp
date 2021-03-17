@@ -100,6 +100,89 @@ std::unique_ptr<cudf::table> create_compressible_fixed_table(cudf::size_type num
   return create_fixed_table<T>(num_columns, num_rows, include_validity, compressible_elements);
 }
 
+// this function replicates the "list_gen" function in
+// python/cudf/cudf/tests/test_parquet.py
+template <typename T>
+std::unique_ptr<cudf::column> make_parquet_list_col(
+  int skip_rows, int num_rows, int lists_per_row, int list_size, bool include_validity)
+{
+  auto valids =
+    cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i % 2 == 0 ? 1 : 0; });
+
+  // root list
+  std::vector<int> row_offsets(num_rows + 1);
+  int row_offset_count = 0;
+  {
+    int offset = 0;
+    for (int idx = 0; idx < (num_rows) + 1; idx++) {
+      row_offsets[row_offset_count] = offset;
+      if (!include_validity || valids[idx]) { offset += lists_per_row; }
+      row_offset_count++;
+    }
+  }
+  cudf::test::fixed_width_column_wrapper<int> offsets(row_offsets.begin(),
+                                                      row_offsets.begin() + row_offset_count);
+
+  // child list
+  std::vector<int> child_row_offsets((num_rows * lists_per_row) + 1);
+  int child_row_offset_count = 0;
+  {
+    int offset = 0;
+    for (int idx = 0; idx < (num_rows * lists_per_row); idx++) {
+      int row_index = idx / lists_per_row;
+      if (include_validity && !valids[row_index]) { continue; }
+
+      child_row_offsets[child_row_offset_count] = offset;
+      offset += list_size;
+      child_row_offset_count++;
+    }
+    child_row_offsets[child_row_offset_count++] = offset;
+  }
+  cudf::test::fixed_width_column_wrapper<int> child_offsets(
+    child_row_offsets.begin(), child_row_offsets.begin() + child_row_offset_count);
+
+  // child values
+  std::vector<T> child_values(num_rows * lists_per_row * list_size);
+  T first_child_value_index = skip_rows * lists_per_row * list_size;
+  int child_value_count     = 0;
+  {
+    for (int idx = 0; idx < (num_rows * lists_per_row * list_size); idx++) {
+      int row_index = idx / (lists_per_row * list_size);
+
+      int val = first_child_value_index;
+      first_child_value_index++;
+
+      if (include_validity && !valids[row_index]) { continue; }
+
+      child_values[child_value_count] = val;
+      child_value_count++;
+    }
+  }
+  // validity by value instead of index
+  auto valids2 = cudf::detail::make_counting_transform_iterator(
+    0, [list_size](auto i) { return (i % list_size) % 2 == 0 ? 1 : 0; });
+  auto child_data = include_validity
+                      ? cudf::test::fixed_width_column_wrapper<T>(
+                          child_values.begin(), child_values.begin() + child_value_count, valids2)
+                      : cudf::test::fixed_width_column_wrapper<T>(
+                          child_values.begin(), child_values.begin() + child_value_count);
+
+  int child_offsets_size = static_cast<cudf::column_view>(child_offsets).size() - 1;
+  auto child             = cudf::make_lists_column(
+    child_offsets_size, child_offsets.release(), child_data.release(), 0, rmm::device_buffer{});
+
+  int offsets_size = static_cast<cudf::column_view>(offsets).size() - 1;
+  return include_validity
+           ? cudf::make_lists_column(
+               offsets_size,
+               offsets.release(),
+               std::move(child),
+               cudf::UNKNOWN_NULL_COUNT,
+               cudf::test::detail::make_null_mask(valids, valids + offsets_size))
+           : cudf::make_lists_column(
+               offsets_size, offsets.release(), std::move(child), 0, rmm::device_buffer{});
+}
+
 // Base test fixture for tests
 struct ParquetWriterTest : public cudf::test::BaseFixture {
 };
@@ -1733,6 +1816,123 @@ TEST_F(ParquetReaderTest, UserBounds)
     // we should get empty columns back
     EXPECT_EQ(result.tbl->view().num_columns(), 4);
     EXPECT_EQ(result.tbl->view().column(0).size(), 0);
+  }
+}
+
+TEST_F(ParquetReaderTest, UserBoundsWithNulls)
+{
+  // clang-format off
+  cudf::test::fixed_width_column_wrapper<float> col{{1,1,1,1,1,1,1,1, 2,2,2,2,2,2,2,2, 3,3,3,3,3,3,3,3, 4,4,4,4,4,4,4,4,  5,5,5,5,5,5,5,5, 6,6,6,6,6,6,6,6, 7,7,7,7,7,7,7,7, 8,8,8,8,8,8,8,8}
+                                                   ,{1,1,1,0,0,0,1,1, 1,1,1,1,1,1,1,1, 0,0,0,0,0,0,0,0, 1,1,1,1,1,1,0,0,  1,0,1,1,1,1,1,1, 1,1,1,1,1,1,1,1, 1,1,1,1,1,1,1,1, 1,1,1,1,1,1,1,0}};
+  // clang-format on
+  cudf::table_view tbl({col});
+  auto filepath = temp_env->get_temp_filepath("UserBoundsWithNulls.parquet");
+  cudf_io::parquet_writer_options out_args =
+    cudf_io::parquet_writer_options::builder(cudf_io::sink_info{filepath}, tbl);
+  cudf_io::write_parquet(out_args);
+
+  // skip_rows / num_rows
+  // clang-format off
+  std::vector<std::pair<int, int>> params{ {-1, -1}, {1, 3}, {3, -1}, 
+                                           {31, -1}, {32, -1}, {33, -1},
+                                           {31, 5}, {32, 5}, {33, 5},
+                                           {-1, 7}, {-1, 31}, {-1, 32}, {-1, 33},
+                                           {62, -1}, {63, -1},
+                                           {62, 2}, {63, 1}};
+  // clang-format on
+  for (auto p : params) {
+    cudf_io::parquet_reader_options read_args =
+      cudf::io::parquet_reader_options::builder(cudf_io::source_info{filepath});
+    if (p.first >= 0) { read_args.set_skip_rows(p.first); }
+    if (p.second >= 0) { read_args.set_num_rows(p.second); }
+    auto result = cudf_io::read_parquet(read_args);
+
+    p.first  = p.first < 0 ? 0 : p.first;
+    p.second = p.second < 0 ? static_cast<cudf::column_view>(col).size() - p.first : p.second;
+    std::vector<cudf::size_type> slice_indices{p.first, p.first + p.second};
+    auto expected = cudf::slice(col, slice_indices);
+
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(result.tbl->get_column(0), expected[0]);
+  }
+}
+
+TEST_F(ParquetReaderTest, UserBoundsWithNullsLarge)
+{
+  constexpr int num_rows = 30 * 1000000;
+  srand(7562);
+  auto frand  = []() { return static_cast<float>(rand()) / static_cast<float>(RAND_MAX); };
+  auto valids = cudf::detail::make_counting_transform_iterator(
+    0, [&](int index) { return frand() >= 0.3 ? 1 : 0; });
+  auto values = thrust::make_counting_iterator(0);
+  cudf::test::fixed_width_column_wrapper<int> col(values, values + num_rows, valids);
+
+  // this file will have row groups of 1,000,000 each
+  cudf::table_view tbl({col});
+  auto filepath = temp_env->get_temp_filepath("UserBoundsWithNullsLarge.parquet");
+  cudf_io::parquet_writer_options out_args =
+    cudf_io::parquet_writer_options::builder(cudf_io::sink_info{filepath}, tbl);
+  cudf_io::write_parquet(out_args);
+
+  // skip_rows / num_rows
+  // clang-format off
+  std::vector<std::pair<int, int>> params{ {-1, -1}, {31, -1}, {32, -1}, {33, -1}, {1613470, -1}, {1999999, -1},
+                                           {31, 1}, {32, 1}, {33, 1},
+                                           // deliberately span some row group boundaries
+                                           {999000, 1001}, {999000, 2000}, {2999999, 2}, {13999997, -1},
+                                           {16785678, 3}, {22996176, 31},
+                                           {24001231, 17}, {29000001, 989999}, {29999999, 1} };
+  // clang-format on
+  for (auto p : params) {
+    cudf_io::parquet_reader_options read_args =
+      cudf::io::parquet_reader_options::builder(cudf_io::source_info{filepath});
+    if (p.first >= 0) { read_args.set_skip_rows(p.first); }
+    if (p.second >= 0) { read_args.set_num_rows(p.second); }
+    auto result = cudf_io::read_parquet(read_args);
+
+    p.first  = p.first < 0 ? 0 : p.first;
+    p.second = p.second < 0 ? static_cast<cudf::column_view>(col).size() - p.first : p.second;
+    std::vector<cudf::size_type> slice_indices{p.first, p.first + p.second};
+    auto expected = cudf::slice(col, slice_indices);
+
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(result.tbl->get_column(0), expected[0]);
+  }
+}
+
+TEST_F(ParquetReaderTest, ListUserBoundsWithNullsLarge)
+{
+  constexpr int num_rows = 5 * 1000000;
+  auto colp              = make_parquet_list_col<int>(0, num_rows, 5, 8, true);
+  cudf::column_view col  = *colp;
+
+  // this file will have row groups of 1,000,000 each
+  cudf::table_view tbl({col});
+  auto filepath = temp_env->get_temp_filepath("ListUserBoundsWithNullsLarge.parquet");
+  cudf_io::parquet_writer_options out_args =
+    cudf_io::parquet_writer_options::builder(cudf_io::sink_info{filepath}, tbl);
+  cudf_io::write_parquet(out_args);
+
+  // skip_rows / num_rows
+  // clang-format off
+  std::vector<std::pair<int, int>> params{ {-1, -1}, {31, -1}, {32, -1}, {33, -1}, {161470, -1}, {4499997, -1},
+                                           {31, 1}, {32, 1}, {33, 1},
+                                           // deliberately span some row group boundaries
+                                           {999000, 1001}, {999000, 2000}, {2999999, 2},
+                                           {1678567, 3}, {4299676, 31},
+                                           {4001231, 17}, {1900000, 989999}, {4999999, 1} };
+  // clang-format on
+  for (auto p : params) {
+    cudf_io::parquet_reader_options read_args =
+      cudf::io::parquet_reader_options::builder(cudf_io::source_info{filepath});
+    if (p.first >= 0) { read_args.set_skip_rows(p.first); }
+    if (p.second >= 0) { read_args.set_num_rows(p.second); }
+    auto result = cudf_io::read_parquet(read_args);
+
+    p.first  = p.first < 0 ? 0 : p.first;
+    p.second = p.second < 0 ? static_cast<cudf::column_view>(col).size() - p.first : p.second;
+    std::vector<cudf::size_type> slice_indices{p.first, p.first + p.second};
+    auto expected = cudf::slice(col, slice_indices);
+
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(result.tbl->get_column(0), expected[0]);
   }
 }
 

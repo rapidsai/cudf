@@ -1355,7 +1355,7 @@ void reader::impl::decode_page_data(hostdevice_vector<gpu::ColumnChunkDesc> &chu
       if (chunk_nested_valids.host_ptr(chunk_offsets[pi->chunk_idx])[l_idx] == nullptr) {
         continue;
       }
-      out_buf.null_count() += pni[l_idx].value_count - pni[l_idx].valid_count;
+      out_buf.null_count() += pni[l_idx].null_count;
     }
   }
 
