@@ -27,10 +27,6 @@ function(cudfkafka_restore_if_enabled var)
     endif()
 endfunction()
 
-if(NOT DEFINED CUDF_USE_ARROW_STATIC)
-  set(CUDF_USE_ARROW_STATIC OFF)
-endif()
-
 function(find_and_configure_cudf VERSION)
     cudfkafka_save_if_enabled(BUILD_TESTS)
     cudfkafka_save_if_enabled(BUILD_BENCHMARKS)
@@ -43,7 +39,6 @@ function(find_and_configure_cudf VERSION)
         OPTIONS         "BUILD_TESTS OFF"
                         "BUILD_BENCHMARKS OFF"
                         "USE_NVTX ${USE_NVTX}"
-                        "CUDF_USE_ARROW_STATIC ${CUDF_USE_ARROW_STATIC}"
                         "JITIFY_USE_CACHE ${JITIFY_USE_CACHE}"
                         "CUDA_STATIC_RUNTIME ${CUDA_STATIC_RUNTIME}"
                         "PER_THREAD_DEFAULT_STREAM ${PER_THREAD_DEFAULT_STREAM}"
