@@ -590,6 +590,9 @@ class Frame(libcudf.table.Table):
         res_tbl = libcudf.lists.explode_outer(self, explode_column_num)
         res = self.__class__._from_table(res_tbl)
 
+        res._data.multiindex = self._data.multiindex
+        res._data._level_names = self._data._level_names
+
         if ignore_index:
             self._index = tmp_index
         elif self._index is not None:

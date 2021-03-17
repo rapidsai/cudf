@@ -1136,8 +1136,8 @@ def test_series_drop_raises():
     ],
 )
 def test_explode(data, ignore_index, p_index):
-    gdf = cudf.Series(data, index=p_index)
-    pdf = gdf.to_pandas(nullable=True)
+    pdf = pd.Series(data, index=p_index, name="someseries")
+    gdf = cudf.from_pandas(pdf)
 
     expect = pdf.explode(ignore_index)
     got = gdf.explode(ignore_index)

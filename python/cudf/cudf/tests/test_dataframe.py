@@ -8447,16 +8447,33 @@ def test_rename_for_level_is_None_MC():
 @pytest.mark.parametrize(
     "data",
     [
-        {
-            "a": [[1, 2, 3], None, [4], [], [5, 6]],
-            "b": [11, 22, 33, 44, 55],
-            "c": ["a", "e", "i", "o", "u"],
-        },  # nested
-        {
-            "a": [1, 2, 3, 4, 5],
-            "b": [11, 22, 33, 44, 55],
-            "c": ["a", "e", "i", "o", "u"],
-        },  # non-nested
+        [
+            [[1, 2, 3], 11, "a"],
+            [None, 22, "e"],
+            [[4], 33, "i"],
+            [[], 44, "o"],
+            [[5, 6], 55, "u"],
+        ],  # nested
+        [
+            [1, 11, "a"],
+            [2, 22, "e"],
+            [3, 33, "i"],
+            [4, 44, "o"],
+            [5, 55, "u"],
+        ],  # non-nested
+    ],
+)
+@pytest.mark.parametrize(
+    ("labels", "label_to_explode"),
+    [
+        (None, 0),
+        (pd.Index(["a", "b", "c"]), "a"),
+        (
+            pd.MultiIndex.from_tuples(
+                [(0, "a"), (0, "b"), (1, "a")], names=["l0", "l1"]
+            ),
+            (0, "a"),
+        ),
     ],
 )
 @pytest.mark.parametrize("ignore_index", [True, False])
@@ -8470,11 +8487,11 @@ def test_rename_for_level_is_None_MC():
         ),
     ],
 )
-def test_explode(data, ignore_index, p_index):
-    gdf = cudf.DataFrame(data, index=p_index,)
-    pdf = gdf.to_pandas(nullable=True)
+def test_explode(data, labels, ignore_index, p_index, label_to_explode):
+    pdf = pd.DataFrame(data, index=p_index, columns=labels)
+    gdf = cudf.from_pandas(pdf)
 
-    expect = pdf.explode("a", ignore_index)
-    got = gdf.explode("a", ignore_index)
+    expect = pdf.explode(label_to_explode, ignore_index)
+    got = gdf.explode(label_to_explode, ignore_index)
 
-    assert_eq(got, expect, check_dtype=False)
+    assert_eq(expect, got, check_dtype=False)
