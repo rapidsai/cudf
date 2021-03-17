@@ -194,6 +194,8 @@ std::unique_ptr<column> join_strings(strings_column_view const& strings,
   size_type const zero = 0;
   output_offsets.set_element_async(0, zero, stream);
   // total size is the last entry
+  // Note this call does a synchronize on the stream and thereby also protects the
+  // set_element_async parameter from going out of scope before it is used.
   size_type const bytes = output_offsets.back_element(stream);
 
   // build offsets column (only 1 string so 2 offset entries)
