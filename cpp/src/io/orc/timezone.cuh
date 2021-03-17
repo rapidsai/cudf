@@ -107,7 +107,7 @@ inline __device__ int32_t get_gmt_offset(cudf::device_span<int64_t const> ttimes
 }
 
 struct timezone_table {
-  int32_t gmt_offset;
+  int32_t gmt_offset = 0;
   rmm::device_uvector<int64_t> ttimes;
   rmm::device_uvector<int32_t> offsets;
   timezone_table() : ttimes{0, rmm::cuda_stream_default}, offsets{0, rmm::cuda_stream_default} {}
