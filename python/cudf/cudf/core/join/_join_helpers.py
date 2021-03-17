@@ -74,8 +74,9 @@ def _frame_select_by_indexers(
 
 
 def _match_join_keys(lcol: ColumnBase, rcol: ColumnBase, how: str) -> Dtype:
-    # cast the keys lcol and rcol to a common dtype
+    common_type = None
 
+    # cast the keys lcol and rcol to a common dtype
     ltype = lcol.dtype
     rtype = rcol.dtype
 
@@ -109,10 +110,7 @@ def _match_join_keys(lcol: ColumnBase, rcol: ColumnBase, how: str) -> Dtype:
                 "upcasting to {common_type}."
             )
 
-    if common_type:
-        return common_type
-
-    return None
+    return common_type
 
 
 def _match_categorical_dtypes(ltype: Dtype, rtype: Dtype, how: str) -> Dtype:

@@ -25,7 +25,6 @@ cimport cudf._lib.cpp.join as cpp_join
 # the join result when joining on the keys `lhs` and `rhs`.
 
 cpdef join(Table lhs, Table rhs, how=None):
-
     cdef pair[cpp_join.gather_map_type, cpp_join.gather_map_type] c_result
     cdef table_view c_lhs = lhs.view()
     cdef table_view c_rhs = rhs.view()
@@ -54,7 +53,6 @@ cpdef join(Table lhs, Table rhs, how=None):
 
 
 cpdef semi_join(Table lhs, Table rhs, how=None):
-
     # left-semi and left-anti joins
     cdef cpp_join.gather_map_type c_result
     cdef table_view c_lhs = lhs.view()
@@ -76,7 +74,7 @@ cpdef semi_join(Table lhs, Table rhs, how=None):
     cdef Column left_rows = _gather_map_as_column(move(c_result))
     return (
         left_rows,
-        cudf.core.column.as_column([], dtype="int32")
+        None
     )
 
 

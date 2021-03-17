@@ -1,6 +1,7 @@
 # Copyright (c) 2020-2021, NVIDIA CORPORATION.
 from __future__ import annotations
 
+import functools
 from collections import OrderedDict, namedtuple
 from typing import TYPE_CHECKING, Callable, Tuple
 
@@ -63,17 +64,17 @@ class Merge(object):
 
     # The joiner function must have the following signature:
     #
-    #     def joiner(lhs, rhs, how=how):
+    #     def joiner(
+    #         lhs: Frame,
+    #         rhs: Frame
+    #     ) -> Tuple[Optional[Column], Optional[Column]]:
     #          ...
     #
-    # where:
-    #
-    # - `lhs` and `rhs` are Frames composed of the left and right join keys
-    # - `how` is a string specifying the kind of join to perform
-    #
-    # ...and it returns a tuple of two gather maps representing the rows
-    # to gather from the left- and right- side tables respectively.
-    _joiner: Callable = libcudf.join.join
+    # where `lhs` and `rhs` are Frames composed of the left and right
+    # join key. The `joiner` returns a tuple of two Columns
+    # representing the rows to gather from the left- and right- side
+    # tables respectively.
+    _joiner: Callable
 
     def __init__(
         self,
@@ -136,6 +137,8 @@ class Merge(object):
             how=how,
             suffixes=suffixes,
         )
+        self._joiner = functools.partial(libcudf.join.join, how=how)
+
         self.lhs = lhs
         self.rhs = rhs
         self.on = on
@@ -152,6 +155,7 @@ class Merge(object):
 
     @property
     def _out_class(self):
+        # type of the result
         out_class = cudf.DataFrame
 
         if isinstance(self.lhs, cudf.MultiIndex) or isinstance(
@@ -173,8 +177,13 @@ class Merge(object):
         )
         lhs, rhs = self._restore_categorical_keys(lhs, rhs)
 
-        left_result = lhs._gather(left_rows, nullify=True)
-        right_result = rhs._gather(right_rows, nullify=True)
+        left_result = cudf.core.frame.Frame()
+        right_result = cudf.core.frame.Frame()
+
+        if left_rows is not None:
+            left_result = lhs._gather(left_rows, nullify=True)
+        if right_rows is not None:
+            right_result = rhs._gather(right_rows, nullify=True)
 
         result = self._merge_results(left_result, right_result)
 
@@ -435,7 +444,15 @@ class Merge(object):
 
 
 class MergeSemi(Merge):
-    _joiner = libcudf.join.semi_join
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self._joiner = functools.partial(
+            libcudf.join.semi_join, how=kwargs["how"]
+        )
 
     def _merge_results(self, lhs: Frame, rhs: Frame) -> Frame:
-        return super()._merge_results(lhs, cudf.core.frame.Frame())
+        # semi-join result includes only lhs columns
+        if issubclass(self._out_class, cudf.Index):
+            return self._out_class._from_data(lhs)
+        else:
+            return self._out_class._from_data(lhs._data, index=lhs._index)
