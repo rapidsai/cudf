@@ -43,7 +43,8 @@ std::unique_ptr<table> build_table(
   column_view const& sliced_child,
   cudf::device_span<size_type const> gather_map,
   thrust::optional<cudf::device_span<size_type const>> explode_col_gather_map,
-  thrust::optional<rmm::device_uvector<size_type>> position_array,
+  rmm::device_uvector<size_type> position_array,
+  bool include_position,
   rmm::cuda_stream_view stream,
   rmm::mr::device_memory_resource* mr)
 {
@@ -72,11 +73,11 @@ std::unique_ptr<table> build_table(
                                  ->release()[0])
                    : std::make_unique<column>(sliced_child, stream, mr));
 
-  if (position_array) {
-    size_type position_size = position_array->size();
+  if (include_position) {
+    size_type position_size = position_array.size();
     columns.insert(columns.begin() + explode_column_idx,
                    std::make_unique<column>(
-                     data_type(type_to_id<size_type>()), position_size, position_array->release()));
+                     data_type(type_to_id<size_type>()), position_size, position_array.release()));
   }
 
   return std::make_unique<table>(std::move(columns));
@@ -109,12 +110,14 @@ std::unique_ptr<table> explode(table_view const& input_table,
                       counting_iter + gather_map.size(),
                       gather_map.begin());
 
+  rmm::device_uvector<size_type> empty{0, stream};
   return build_table(input_table,
                      explode_column_idx,
                      sliced_child,
                      gather_map,
                      thrust::nullopt,
-                     thrust::nullopt,
+                     std::move(empty),
+                     false,
                      stream,
                      mr);
 }
@@ -162,6 +165,7 @@ std::unique_ptr<table> explode_position(table_view const& input_table,
                      gather_map,
                      thrust::nullopt,
                      std::move(pos),
+                     true,
                      stream,
                      mr);
 }
@@ -213,46 +217,46 @@ std::unique_ptr<table> explode_outer(table_view const& input_table,
                    counting_iter,
                    counting_iter + sliced_child.size(),
                    [offsets_minus_one,
-                    gather_map             = gather_map.begin(),
-                    explode_col_gather_map = explode_col_gather_map.begin(),
-                    position_array         = pos.begin(),
+                    _gather_map             = gather_map.begin(),
+                    _explode_col_gather_map = explode_col_gather_map.begin(),
+                    _position_array         = pos.begin(),
                     include_position,
                     offsets,
-                    null_or_empty_offset = null_or_empty_offset.begin(),
+                    _null_or_empty_offset = null_or_empty_offset.begin(),
                     null_or_empty,
                     offset_size = explode_col.offsets().size() - 1] __device__(auto idx) {
                      auto lb_idx = thrust::distance(
                        offsets_minus_one,
                        thrust::lower_bound(
                          thrust::seq, offsets_minus_one, offsets_minus_one + (offset_size), idx));
-                     auto index_to_write                    = null_or_empty_offset[lb_idx] + idx;
-                     gather_map[index_to_write]             = lb_idx;
-                     explode_col_gather_map[index_to_write] = idx;
+                     auto index_to_write                     = _null_or_empty_offset[lb_idx] + idx;
+                     _gather_map[index_to_write]             = lb_idx;
+                     _explode_col_gather_map[index_to_write] = idx;
                      if (include_position) {
-                       position_array[index_to_write] = idx - (offsets[lb_idx] - offsets[0]);
+                       _position_array[index_to_write] = idx - (offsets[lb_idx] - offsets[0]);
                      }
                      if (null_or_empty[idx]) {
-                       auto invalid_index = null_or_empty_offset[idx] == 0
+                       auto invalid_index = _null_or_empty_offset[idx] == 0
                                               ? offsets[idx]
-                                              : offsets[idx] + null_or_empty_offset[idx] - 1;
-                       gather_map[invalid_index] = idx;
+                                              : offsets[idx] + _null_or_empty_offset[idx] - 1;
+                       _gather_map[invalid_index] = idx;
 
                        // negative one to indicate a null value
-                       explode_col_gather_map[invalid_index] = -1;
+                       _explode_col_gather_map[invalid_index] = -1;
 
-                       if (include_position) { position_array[invalid_index] = 0; }
+                       if (include_position) { _position_array[invalid_index] = 0; }
                      }
                    });
 
-  return build_table(
-    input_table,
-    explode_column_idx,
-    sliced_child,
-    gather_map,
-    explode_col_gather_map,
-    include_position ? std::move(pos) : thrust::optional<rmm::device_uvector<size_type>>{},
-    stream,
-    mr);
+  return build_table(input_table,
+                     explode_column_idx,
+                     sliced_child,
+                     gather_map,
+                     explode_col_gather_map,
+                     std::move(pos),
+                     include_position,
+                     stream,
+                     mr);
 }
 
 }  // namespace detail
