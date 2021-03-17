@@ -7749,9 +7749,7 @@ class DataFrame(Frame, Serializable):
             raise KeyError(column)
 
         explode_num = self._column_names.index(column)
-        return super()._explode(
-            explode_num, None if ignore_index else self.index
-        )
+        return super()._explode(explode_num, ignore_index)
 
     _accessors = set()  # type: Set[Any]
 
