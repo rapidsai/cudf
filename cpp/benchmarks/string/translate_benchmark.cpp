@@ -26,7 +26,6 @@
 #include <cudf_test/column_wrapper.hpp>
 
 #include <algorithm>
-#include <random>
 
 #include <thrust/iterator/counting_iterator.h>
 
