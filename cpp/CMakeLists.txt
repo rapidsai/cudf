@@ -139,6 +139,8 @@ include(cmake/thirdparty/CUDF_GetLibcudacxx.cmake)
 include(cmake/thirdparty/CUDF_GetGTest.cmake)
 # Stringify libcudf and libcudacxx headers used in JIT operations
 include(cmake/Modules/StringifyJITHeaders.cmake)
+# find cuFile
+include(cmake/Modules/FindcuFile.cmake)
 
 ###################################################################################################
 # - library targets -------------------------------------------------------------------------------
@@ -244,6 +246,7 @@ add_library(cudf
     src/io/statistics/column_stats.cu
     src/io/utilities/data_sink.cpp
     src/io/utilities/datasource.cpp
+    src/io/utilities/file_io_utilities.cpp
     src/io/utilities/parsing_utils.cu
     src/io/utilities/type_conversion.cpp
     src/jit/cache.cpp
@@ -467,6 +470,11 @@ if(CUDA_STATIC_RUNTIME)
     target_link_libraries(cudf PUBLIC CUDA::nvrtc CUDA::cudart_static CUDA::cuda_driver)
 else()
     target_link_libraries(cudf PUBLIC CUDA::nvrtc CUDA::cudart CUDA::cuda_driver)
+endif()
+
+# Add cuFile interface if available
+if(TARGET cuFile::cuFile_interface)
+    target_link_libraries(cudf PRIVATE cuFile::cuFile_interface)
 endif()
 
 file(WRITE "${CUDF_BINARY_DIR}/fatbin.ld"
