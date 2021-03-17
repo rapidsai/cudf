@@ -5,15 +5,11 @@ from decimal import Decimal
 import numpy as np
 import pyarrow as pa
 import pytest
+
 import cudf
-
-from cudf.core.dtypes import Decimal64Dtype
 from cudf.core.column import DecimalColumn, NumericalColumn
-
-from cudf.tests.utils import (
-    FLOAT_TYPES,
-    assert_eq,
-)
+from cudf.core.dtypes import Decimal64Dtype
+from cudf.testing._utils import FLOAT_TYPES, assert_eq
 
 
 @pytest.mark.parametrize(
