@@ -563,40 +563,14 @@ bool valid_window_parameters(native_jintArray const &values,
          values.size() == preceding.size() && values.size() == following.size();
 }
 
-static void build_one_column_metadata(JNIEnv *env, jobject meta_obj,
-                                      jfieldID name_id,
-                                      jmethodID children_mid,
-                                      cudf::column_metadata& out) {
-  // get column name
-  cudf::jni::native_jstring col_name(env, (jstring)env->GetObjectField(meta_obj, name_id));
-  out.name = std::string(col_name.get() == NULL ? "" : col_name.get());
-  // children
-  jobjectArray j_children_meta = (jobjectArray)env->CallObjectMethod(meta_obj, children_mid);
-  cudf::jni::native_jobjectArray<jobject> children_meta(env, j_children_meta);
-  for (int i = 0; i < children_meta.size(); i ++) {
-    cudf::column_metadata cudf_col_meta;
-    build_one_column_metadata(env, children_meta.get(i), name_id, children_mid, cudf_col_meta);
-    out.children_meta.push_back(std::move(cudf_col_meta));
-  }
-}
-
-static void build_column_metadata_from_handle(JNIEnv *env, jobjectArray meta_handle,
+static void build_column_metadata_from_handle(JNIEnv *env, jlongArray j_meta_handles,
                                               std::vector<cudf::column_metadata>& out_meta) {
-  native_jobjectArray<jobject> col_meta(env, meta_handle);
-  out_meta.reserve(col_meta.size());
-  // Init the column meatadata class
-  jclass col_meta_cls = env->FindClass("ai/rapids/cudf/ColumnMetadata");
-  JNI_NULL_CHECK(env, col_meta_cls, "Can not find class: ai/rapids/cudf/ColumnMetadata", );
-  jfieldID name_id = env->GetFieldID(col_meta_cls, "name", "Ljava/lang/String;");
-  jmethodID children_mid =
-    env->GetMethodID(col_meta_cls, "getChildren", "()[Lai/rapids/cudf/ColumnMetadata;");
-
-  for(int x = 0; x < col_meta.size(); x ++) {
-    cudf::column_metadata cudf_col_meta;
-    build_one_column_metadata(env, col_meta.get(x), name_id, children_mid, cudf_col_meta);
-    out_meta.push_back(std::move(cudf_col_meta));
+  cudf::jni::native_jlongArray meta_handles(env, j_meta_handles);
+  for (int i = 0; i < meta_handles.size(); i++) {
+    cudf::column_metadata *child = reinterpret_cast<cudf::column_metadata *>(meta_handles[i]);
+    // copy the child into `out_meta`.
+    out_meta.push_back(*child);
   }
-  cudf::jni::check_java_exception(env);
 }
 
 } // namespace
@@ -1232,7 +1206,7 @@ JNIEXPORT void JNICALL Java_ai_rapids_cudf_Table_writeORCEnd(JNIEnv *env, jclass
 }
 
 JNIEXPORT long JNICALL Java_ai_rapids_cudf_Table_writeArrowIPCBufferBegin(JNIEnv *env, jclass,
-                                                                          jobjectArray j_col_meta,
+                                                                          jlongArray j_col_meta,
                                                                           jobject consumer) {
   JNI_NULL_CHECK(env, j_col_meta, "null columns", 0);
   JNI_NULL_CHECK(env, consumer, "null consumer", 0);
@@ -1251,7 +1225,7 @@ JNIEXPORT long JNICALL Java_ai_rapids_cudf_Table_writeArrowIPCBufferBegin(JNIEnv
 }
 
 JNIEXPORT long JNICALL Java_ai_rapids_cudf_Table_writeArrowIPCFileBegin(JNIEnv *env, jclass,
-                                                                        jobjectArray j_col_meta,
+                                                                        jlongArray j_col_meta,
                                                                         jstring j_output_path) {
   JNI_NULL_CHECK(env, j_col_meta, "null columns", 0);
   JNI_NULL_CHECK(env, j_output_path, "null output path", 0);

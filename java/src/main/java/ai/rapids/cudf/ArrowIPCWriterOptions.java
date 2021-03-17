@@ -21,6 +21,7 @@ package ai.rapids.cudf;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import java.util.stream.Collectors;
 
 /**
  * Settings for writing Arrow IPC data.
@@ -38,13 +39,13 @@ public class ArrowIPCWriterOptions extends WriterOptions {
 
   private final long size;
   private final DoneOnGpu callback;
-  private final ColumnMetadata[] columnMeta;
+  private final List<ColumnMetadata> columnMeta;
 
   private ArrowIPCWriterOptions(Builder builder) {
     super(builder);
     this.size = builder.size;
     this.callback = builder.callback;
-    this.columnMeta = builder.columnMeta.toArray(new ColumnMetadata[builder.columnMeta.size()]);
+    this.columnMeta = builder.columnMeta;
   }
 
   public long getMaxChunkSize() {
@@ -55,14 +56,14 @@ public class ArrowIPCWriterOptions extends WriterOptions {
     return callback;
   }
 
-  public ColumnMetadata[] getColumnMetadata() {
-    if (columnMeta == null || columnMeta.length == 0) {
+  public List<ColumnMetadata> getColumnMetadata() {
+    if (columnMeta == null || columnMeta.size() == 0) {
       // This is for compatibility. Try building from column names when column meta is empty.
       // Should remove this once all the callers update to use only column metadata.
       return Arrays
               .stream(getColumnNames())
               .map(ColumnMetadata::new)
-              .toArray(ColumnMetadata[]::new);
+              .collect(Collectors.toList());
     } else {
       return columnMeta;
     }

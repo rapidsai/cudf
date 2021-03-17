@@ -365,19 +365,19 @@ public final class Table implements AutoCloseable {
 
   /**
    * Setup everything to write Arrow IPC formatted data to a file.
-   * @param columnMeta column metadata that correspond to the table columns
+   * @param columnsMeta column metadata that correspond to the table columns
    * @param filename local output path
    * @return a handle that is used in later calls to writeArrowIPCChunk and writeArrowIPCEnd.
    */
-  private static native long writeArrowIPCFileBegin(ColumnMetadata[] columnMeta, String filename);
+  private static native long writeArrowIPCFileBegin(long[] columnsMeta, String filename);
 
   /**
    * Setup everything to write Arrow IPC formatted data to a buffer.
-   * @param columnMeta column metadata that correspond to the table columns
+   * @param columnsMeta column metadata that correspond to the table columns
    * @param consumer consumer of host buffers produced.
    * @return a handle that is used in later calls to writeArrowIPCChunk and writeArrowIPCEnd.
    */
-  private static native long writeArrowIPCBufferBegin(ColumnMetadata[] columnMeta,
+  private static native long writeArrowIPCBufferBegin(long[] columnsMeta,
                                                       HostBufferConsumer consumer);
 
   /**
@@ -987,9 +987,12 @@ public final class Table implements AutoCloseable {
       this.callback = options.getCallback();
       this.consumer = null;
       this.maxChunkSize = options.getMaxChunkSize();
-      this.handle = writeArrowIPCFileBegin(
-              options.getColumnMetadata(),
-              outputFile.getAbsolutePath());
+      long[] metaHandles = ColumnMetadata.createNativeInstances(options.getColumnMetadata());
+      try {
+        this.handle = writeArrowIPCFileBegin(metaHandles, outputFile.getAbsolutePath());
+      } finally {
+        ColumnMetadata.close(metaHandles);
+      }
     }
 
     private ArrowIPCTableWriter(ArrowIPCWriterOptions options,
@@ -997,9 +1000,12 @@ public final class Table implements AutoCloseable {
       this.callback = options.getCallback();
       this.consumer = consumer;
       this.maxChunkSize = options.getMaxChunkSize();
-      this.handle = writeArrowIPCBufferBegin(
-              options.getColumnMetadata(),
-              consumer);
+      long[] metaHandles = ColumnMetadata.createNativeInstances(options.getColumnMetadata());
+      try {
+        this.handle = writeArrowIPCBufferBegin(metaHandles, consumer);
+      } finally {
+        ColumnMetadata.close(metaHandles);
+      }
     }
 
     @Override
