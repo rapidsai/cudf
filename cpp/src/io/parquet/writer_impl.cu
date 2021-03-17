@@ -501,159 +501,13 @@ std::vector<schema_tree_node> construct_schema_tree(LinkedColVector const &linke
 struct parquet_column_view {
   parquet_column_view(schema_tree_node const &schema_node,
                       std::vector<schema_tree_node> const &schema_tree,
-                      rmm::cuda_stream_view stream)
-    : schema_node(schema_node),
-      _d_nullability(0, stream),
-      _dremel_offsets(0, stream),
-      _rep_level(0, stream),
-      _def_level(0, stream)
-  {
-    // Construct single inheritance column_view from linked_column_view
-    auto curr_col                           = schema_node.leaf_column.get();
-    column_view single_inheritance_cudf_col = *curr_col;
-    while (curr_col->parent) {
-      auto const &parent = *curr_col->parent;
+                      rmm::cuda_stream_view stream);
 
-      // For list columns, we still need to retain the offset child column.
-      auto children =
-        (parent.type().id() == type_id::LIST)
-          ? std::vector<column_view>{parent.child(lists_column_view::offsets_column_index),
-                                     single_inheritance_cudf_col}
-          : std::vector<column_view>{single_inheritance_cudf_col};
-
-      single_inheritance_cudf_col = column_view(parent.type(),
-                                                parent.size(),
-                                                parent.head(),
-                                                parent.null_mask(),
-                                                UNKNOWN_NULL_COUNT,
-                                                parent.offset(),
-                                                children);
-
-      curr_col = curr_col->parent;
-    }
-    cudf_col = single_inheritance_cudf_col;
-
-    // Construct path_in_schema by travelling up in the schema_tree
-    std::vector<std::string> path;
-    auto curr_schema_node = schema_node;
-    do {
-      path.push_back(curr_schema_node.name);
-      if (curr_schema_node.parent_idx != -1) {
-        curr_schema_node = schema_tree[curr_schema_node.parent_idx];
-      }
-    } while (curr_schema_node.parent_idx != -1);
-    path_in_schema = std::vector<std::string>(path.crbegin(), path.crend());
-
-    // Calculate max definition level by counting the number of levels that are optional (nullable)
-    // and max repetition level by counting the number of REPEATED levels in this column's hierarchy
-    uint16_t max_def_level = 0;
-    uint16_t max_rep_level = 0;
-    curr_schema_node       = schema_node;
-    while (curr_schema_node.parent_idx != -1) {
-      if (curr_schema_node.repetition_type == parquet::REPEATED or
-          curr_schema_node.repetition_type == parquet::OPTIONAL) {
-        ++max_def_level;
-      }
-      if (curr_schema_node.repetition_type == parquet::REPEATED) { ++max_rep_level; }
-      curr_schema_node = schema_tree[curr_schema_node.parent_idx];
-    }
-    CUDF_EXPECTS(max_def_level < 256, "Definition levels above 255 are not supported");
-    CUDF_EXPECTS(max_rep_level < 256, "Definition levels above 255 are not supported");
-
-    _max_def_level = max_def_level;
-    _max_rep_level = max_rep_level;
-
-    // Construct nullability vector using repetition_type from schema.
-    std::vector<uint8_t> r_nullability;
-    curr_schema_node = schema_node;
-    while (curr_schema_node.parent_idx != -1) {
-      if (not curr_schema_node.is_stub()) {
-        r_nullability.push_back(curr_schema_node.repetition_type == FieldRepetitionType::OPTIONAL);
-      }
-      curr_schema_node = schema_tree[curr_schema_node.parent_idx];
-    }
-    _nullability = std::vector<uint8_t>(r_nullability.crbegin(), r_nullability.crend());
-    // TODO(cp): Explore doing this for all columns in a single go outside this ctor. Maybe using
-    // hostdevice_vector. Currently this involves a cudaMemcpyAsync for each column.
-    _d_nullability = rmm::device_uvector<uint8_t>(_nullability.size(), stream);
-    CUDA_TRY(cudaMemcpyAsync(_d_nullability.data(),
-                             _nullability.data(),
-                             _nullability.size() * sizeof(uint8_t),
-                             cudaMemcpyHostToDevice,
-                             stream.value()));
-
-    _is_list = (_max_rep_level > 0);
-
-    if (cudf_col.size() == 0) { return; }
-
-    if (_is_list) {
-      // Top level column's offsets are not applied to all children. Get the effective offset and
-      // size of the leaf column
-      // Calculate row offset into dremel data (repetition/definition values) and the respective
-      // definition and repetition levels
-      gpu::dremel_data dremel =
-        gpu::get_dremel_data(cudf_col, _d_nullability, _nullability, stream);
-      _dremel_offsets = std::move(dremel.dremel_offsets);
-      _rep_level      = std::move(dremel.rep_level);
-      _def_level      = std::move(dremel.def_level);
-      _data_count = dremel.leaf_data_size;  // Needed for knowing what size dictionary to allocate
-
-      stream.synchronize();
-    } else {
-      // For non-list struct, the size of the root column is the same as the size of the leaf column
-      _data_count = cudf_col.size();
-    }
-  }
+  column_view leaf_column_view() const;
+  gpu::parquet_column_device_view get_device_view();
 
   column_view cudf_column_view() const { return cudf_col; }
   parquet::Type physical_type() const { return schema_node.type; }
-
-  column_view leaf_column_view() const
-  {
-    auto col = cudf_col;
-    while (cudf::is_nested(col.type())) {
-      if (col.type().id() == type_id::LIST) {
-        col = col.child(lists_column_view::child_column_index);
-      } else if (col.type().id() == type_id::STRUCT) {
-        col = col.child(0);  // Stored cudf_col has only one child if struct
-      }
-    }
-    return col;
-  }
-
-  gpu::parquet_column_device_view get_device_view()
-  {
-    column_view col  = leaf_column_view();
-    auto desc        = gpu::parquet_column_device_view{};  // Zero out all fields
-    desc.stats_dtype = schema_node.stats_dtype;
-    desc.ts_scale    = schema_node.ts_scale;
-
-    // TODO (dm): Enable dictionary for list after refactor
-    if (physical_type() != BOOLEAN && physical_type() != UNDEFINED_TYPE && !is_list()) {
-      alloc_dictionary(_data_count);
-      desc.dict_index = get_dict_index();
-      desc.dict_data  = get_dict_data();
-    }
-
-    if (is_list()) {
-      desc.level_offsets = _dremel_offsets.data();
-      desc.rep_values    = _rep_level.data();
-      desc.def_values    = _def_level.data();
-    }
-    desc.num_rows      = cudf_col.size();
-    desc.physical_type = static_cast<uint8_t>(physical_type());
-    auto count_bits    = [](uint16_t number) {
-      int16_t nbits = 0;
-      while (number > 0) {
-        nbits++;
-        number >>= 1;
-      }
-      return nbits;
-    };
-    desc.level_bits  = count_bits(max_rep_level()) << 4 | count_bits(max_def_level());
-    desc.nullability = _d_nullability.data();
-    return desc;
-  }
 
   std::vector<std::string> const &get_path_in_schema() { return path_in_schema; }
 
@@ -707,6 +561,158 @@ struct parquet_column_view {
   rmm::device_vector<uint32_t> _dict_data;
   rmm::device_vector<uint32_t> _dict_index;
 };
+
+parquet_column_view::parquet_column_view(schema_tree_node const &schema_node,
+                                         std::vector<schema_tree_node> const &schema_tree,
+                                         rmm::cuda_stream_view stream)
+  : schema_node(schema_node),
+    _d_nullability(0, stream),
+    _dremel_offsets(0, stream),
+    _rep_level(0, stream),
+    _def_level(0, stream)
+{
+  // Construct single inheritance column_view from linked_column_view
+  auto curr_col                           = schema_node.leaf_column.get();
+  column_view single_inheritance_cudf_col = *curr_col;
+  while (curr_col->parent) {
+    auto const &parent = *curr_col->parent;
+
+    // For list columns, we still need to retain the offset child column.
+    auto children =
+      (parent.type().id() == type_id::LIST)
+        ? std::vector<column_view>{parent.child(lists_column_view::offsets_column_index),
+                                   single_inheritance_cudf_col}
+        : std::vector<column_view>{single_inheritance_cudf_col};
+
+    single_inheritance_cudf_col = column_view(parent.type(),
+                                              parent.size(),
+                                              parent.head(),
+                                              parent.null_mask(),
+                                              UNKNOWN_NULL_COUNT,
+                                              parent.offset(),
+                                              children);
+
+    curr_col = curr_col->parent;
+  }
+  cudf_col = single_inheritance_cudf_col;
+
+  // Construct path_in_schema by travelling up in the schema_tree
+  std::vector<std::string> path;
+  auto curr_schema_node = schema_node;
+  do {
+    path.push_back(curr_schema_node.name);
+    if (curr_schema_node.parent_idx != -1) {
+      curr_schema_node = schema_tree[curr_schema_node.parent_idx];
+    }
+  } while (curr_schema_node.parent_idx != -1);
+  path_in_schema = std::vector<std::string>(path.crbegin(), path.crend());
+
+  // Calculate max definition level by counting the number of levels that are optional (nullable)
+  // and max repetition level by counting the number of REPEATED levels in this column's hierarchy
+  uint16_t max_def_level = 0;
+  uint16_t max_rep_level = 0;
+  curr_schema_node       = schema_node;
+  while (curr_schema_node.parent_idx != -1) {
+    if (curr_schema_node.repetition_type == parquet::REPEATED or
+        curr_schema_node.repetition_type == parquet::OPTIONAL) {
+      ++max_def_level;
+    }
+    if (curr_schema_node.repetition_type == parquet::REPEATED) { ++max_rep_level; }
+    curr_schema_node = schema_tree[curr_schema_node.parent_idx];
+  }
+  CUDF_EXPECTS(max_def_level < 256, "Definition levels above 255 are not supported");
+  CUDF_EXPECTS(max_rep_level < 256, "Definition levels above 255 are not supported");
+
+  _max_def_level = max_def_level;
+  _max_rep_level = max_rep_level;
+
+  // Construct nullability vector using repetition_type from schema.
+  std::vector<uint8_t> r_nullability;
+  curr_schema_node = schema_node;
+  while (curr_schema_node.parent_idx != -1) {
+    if (not curr_schema_node.is_stub()) {
+      r_nullability.push_back(curr_schema_node.repetition_type == FieldRepetitionType::OPTIONAL);
+    }
+    curr_schema_node = schema_tree[curr_schema_node.parent_idx];
+  }
+  _nullability = std::vector<uint8_t>(r_nullability.crbegin(), r_nullability.crend());
+  // TODO(cp): Explore doing this for all columns in a single go outside this ctor. Maybe using
+  // hostdevice_vector. Currently this involves a cudaMemcpyAsync for each column.
+  _d_nullability = rmm::device_uvector<uint8_t>(_nullability.size(), stream);
+  CUDA_TRY(cudaMemcpyAsync(_d_nullability.data(),
+                           _nullability.data(),
+                           _nullability.size() * sizeof(uint8_t),
+                           cudaMemcpyHostToDevice,
+                           stream.value()));
+
+  _is_list = (_max_rep_level > 0);
+
+  if (cudf_col.size() == 0) { return; }
+
+  if (_is_list) {
+    // Top level column's offsets are not applied to all children. Get the effective offset and
+    // size of the leaf column
+    // Calculate row offset into dremel data (repetition/definition values) and the respective
+    // definition and repetition levels
+    gpu::dremel_data dremel = gpu::get_dremel_data(cudf_col, _d_nullability, _nullability, stream);
+    _dremel_offsets         = std::move(dremel.dremel_offsets);
+    _rep_level              = std::move(dremel.rep_level);
+    _def_level              = std::move(dremel.def_level);
+    _data_count = dremel.leaf_data_size;  // Needed for knowing what size dictionary to allocate
+
+    stream.synchronize();
+  } else {
+    // For non-list struct, the size of the root column is the same as the size of the leaf column
+    _data_count = cudf_col.size();
+  }
+}
+
+column_view parquet_column_view::leaf_column_view() const
+{
+  auto col = cudf_col;
+  while (cudf::is_nested(col.type())) {
+    if (col.type().id() == type_id::LIST) {
+      col = col.child(lists_column_view::child_column_index);
+    } else if (col.type().id() == type_id::STRUCT) {
+      col = col.child(0);  // Stored cudf_col has only one child if struct
+    }
+  }
+  return col;
+}
+
+gpu::parquet_column_device_view parquet_column_view::get_device_view()
+{
+  column_view col  = leaf_column_view();
+  auto desc        = gpu::parquet_column_device_view{};  // Zero out all fields
+  desc.stats_dtype = schema_node.stats_dtype;
+  desc.ts_scale    = schema_node.ts_scale;
+
+  // TODO (dm): Enable dictionary for list after refactor
+  if (physical_type() != BOOLEAN && physical_type() != UNDEFINED_TYPE && !is_list()) {
+    alloc_dictionary(_data_count);
+    desc.dict_index = get_dict_index();
+    desc.dict_data  = get_dict_data();
+  }
+
+  if (is_list()) {
+    desc.level_offsets = _dremel_offsets.data();
+    desc.rep_values    = _rep_level.data();
+    desc.def_values    = _def_level.data();
+  }
+  desc.num_rows      = cudf_col.size();
+  desc.physical_type = static_cast<uint8_t>(physical_type());
+  auto count_bits    = [](uint16_t number) {
+    int16_t nbits = 0;
+    while (number > 0) {
+      nbits++;
+      number >>= 1;
+    }
+    return nbits;
+  };
+  desc.level_bits  = count_bits(max_rep_level()) << 4 | count_bits(max_def_level());
+  desc.nullability = _d_nullability.data();
+  return desc;
+}
 
 void writer::impl::init_page_fragments(hostdevice_vector<gpu::PageFragment> &frag,
                                        hostdevice_vector<gpu::parquet_column_device_view> &col_desc,
