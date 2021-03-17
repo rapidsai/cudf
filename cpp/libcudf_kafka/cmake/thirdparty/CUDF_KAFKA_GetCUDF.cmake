@@ -27,6 +27,10 @@ function(cudfkafka_restore_if_enabled var)
     endif()
 endfunction()
 
+if(NOT DEFINED CUDF_USE_ARROW_STATIC)
+  set(CUDF_USE_ARROW_STATIC OFF)
+endif()
+
 function(find_and_configure_cudf VERSION)
     cudfkafka_save_if_enabled(BUILD_TESTS)
     cudfkafka_save_if_enabled(BUILD_BENCHMARKS)
