@@ -48,6 +48,16 @@ namespace {
 // could make this an error in Python, but that is such a crazy edge case...
 constexpr size_type NULL_VALUE{std::numeric_limits<size_type>::max()};
 
+/*
+ * Functor for finding bins using thrust::transform.
+ *
+ * This functor is stateful, in the sense that it stores (for read-only use)
+ * pointers to the edge ranges on construction to enable natural use with
+ * thrust::transform semantics.  To handle null values, this functor assumes
+ * that the input iterators have already been shifted to exclude the range
+ * containing nulls. The `edge_index_shift` parameter is used to return the
+ * index of a value's bin accounting for this shift.
+ */
 template <typename T,
           typename RandomAccessIterator,
           typename LeftComparator,
@@ -95,7 +105,7 @@ struct filter_null_sentinel {
   __device__ bool operator()(size_type i) { return i != NULL_VALUE; }
 };
 
-/// Bin the input by the edges in left_edges and right_edges.
+// Bin the input by the edges in left_edges and right_edges.
 template <typename T, typename LeftComparator, typename RightComparator>
 std::unique_ptr<column> bin(column_view const& input,
                             column_view const& left_edges,
@@ -166,7 +176,6 @@ constexpr auto is_supported_bin_type()
          std::is_same<T, string_view>::value;
 }
 
-/// Functor suitable for use with type_dispatcher to call the appropriate detail::bin method.
 struct bin_type_dispatcher {
   template <typename T, typename... Args>
   std::enable_if_t<not detail::is_supported_bin_type<T>(), std::unique_ptr<column>> operator()(

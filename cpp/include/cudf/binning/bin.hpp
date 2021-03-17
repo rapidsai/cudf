@@ -34,6 +34,9 @@ namespace cudf {
  * @brief APIs for binning values.
  */
 
+// TODO: Figure out the best way to document this enum. It needs to be in the
+// detail header to support that API, but that won't be publicly documented and
+// a using declaration doesn't show the values of the enum.
 /**
  * @brief Enum used to define whether or not bins include their boundary points.
  */
