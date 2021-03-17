@@ -167,35 +167,32 @@ struct dispatch_to_cudf_column {
   {
     using DeviceType = device_storage_type_t<T>;
 
-    auto data_buffer         = array.data()->buffers[1];
-    size_type const num_rows = array.length();
+    auto data_buffer    = array.data()->buffers[1];
+    auto const num_rows = static_cast<size_type>(array.length());
 
+    // TODO clean up this function (remove magic constants)
+    // TODO add back null logic
     // auto const has_nulls     = skip_mask ? false : array.null_bitmap_data() != nullptr;
 
     rmm::device_uvector<DeviceType> buf(num_rows * 2, stream);
-    rmm::device_uvector<DeviceType> out_buf(num_rows, stream);
+    rmm::device_uvector<DeviceType> out_buf(num_rows, stream, mr);
 
-    std::cout << "before memcpy" << std::endl;
-    CUDA_TRY(cudaMemcpy(reinterpret_cast<uint8_t*>(buf.data()),
-                        reinterpret_cast<const uint8_t*>(data_buffer->address()) +
-                          array.offset() * sizeof(DeviceType),
-                        sizeof(DeviceType) * num_rows * 2,
-                        cudaMemcpyDefault));
-    std::cout << "after memcpy" << std::endl;
+    CUDA_TRY(cudaMemcpyAsync(reinterpret_cast<uint8_t*>(buf.data()),
+                             reinterpret_cast<const uint8_t*>(data_buffer->address()) +
+                               array.offset() * sizeof(DeviceType),
+                             sizeof(DeviceType) * num_rows * 2,
+                             cudaMemcpyDefault,
+                             stream.value()));
 
     auto gather_map = cudf::detail::make_counting_transform_iterator(0, every_other{});
-
-    std::cout << "after making gathermap" << std::endl;
 
     thrust::gather(rmm::exec_policy(stream),
                    gather_map,  //
                    gather_map + num_rows,
                    buf.data(),
                    out_buf.data());
-    std::cout << "made gathermap" << std::endl;
-    auto result = make_fixed_point_column(type, num_rows, out_buf.release());
-    std::cout << "constructed ressullt " << std::endl;
-    return std::move(result);
+
+    return std::make_unique<cudf::column>(type, num_rows, out_buf.release());
   }
 };
 
