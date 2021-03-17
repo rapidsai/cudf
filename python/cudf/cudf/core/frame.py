@@ -23,6 +23,7 @@ from cudf.core.column import as_column, build_categorical_column, column_empty
 from cudf.utils.dtypes import (
     is_categorical_dtype,
     is_column_like,
+    is_list_dtype,
     is_numerical_dtype,
     is_scalar,
     min_scalar_type,
@@ -573,7 +574,14 @@ class Frame(libcudf.table.Table):
         else:
             return self._index.equals(other._index)
 
-    def _explode(self, explode_column_num: int, ignore_index: bool):
+    def _explode(self, explode_column: Any, ignore_index: bool):
+        if not is_list_dtype(self._data[explode_column].dtype):
+            copy = self.copy()
+            if ignore_index:
+                copy._index = cudf.RangeIndex(copy._num_rows)
+            return copy
+
+        explode_column_num = self._column_names.index(explode_column)
         if ignore_index:
             tmp_index, self._index = self._index, None
         elif self._index is not None:

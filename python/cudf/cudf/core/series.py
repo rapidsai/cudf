@@ -6399,7 +6399,7 @@ class Series(Frame, Serializable):
         dtype: int64
         """
 
-        return super()._explode(0, ignore_index)
+        return super()._explode(self._column_names[0], ignore_index)
 
     _accessors = set()  # type: Set[Any]
 

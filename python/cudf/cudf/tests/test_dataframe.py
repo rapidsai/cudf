@@ -8444,6 +8444,21 @@ def test_rename_for_level_is_None_MC():
     assert_eq(expect, got)
 
 
+@pytest.mark.parametrize(
+    "data",
+    [
+        {
+            "a": [[1, 2, 3], None, [4], [], [5, 6]],
+            "b": [11, 22, 33, 44, 55],
+            "c": ["a", "e", "i", "o", "u"],
+        },  # nested
+        {
+            "a": [1, 2, 3, 4, 5],
+            "b": [11, 22, 33, 44, 55],
+            "c": ["a", "e", "i", "o", "u"],
+        },  # non-nested
+    ],
+)
 @pytest.mark.parametrize("ignore_index", [True, False])
 @pytest.mark.parametrize(
     "p_index",
@@ -8455,15 +8470,8 @@ def test_rename_for_level_is_None_MC():
         ),
     ],
 )
-def test_explode(ignore_index, p_index):
-    gdf = cudf.DataFrame(
-        {
-            "a": [[1, 2, 3], None, [4], [], [5, 6]],
-            "b": [11, 22, 33, 44, 55],
-            "c": ["a", "e", "i", "o", "u"],
-        },
-        index=p_index,
-    )
+def test_explode(data, ignore_index, p_index):
+    gdf = cudf.DataFrame(data, index=p_index,)
     pdf = gdf.to_pandas(nullable=True)
 
     expect = pdf.explode("a", ignore_index)

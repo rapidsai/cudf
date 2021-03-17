@@ -7748,8 +7748,7 @@ class DataFrame(Frame, Serializable):
         if column not in self._column_names:
             raise KeyError(column)
 
-        explode_num = self._column_names.index(column)
-        return super()._explode(explode_num, ignore_index)
+        return super()._explode(column, ignore_index)
 
     _accessors = set()  # type: Set[Any]
 
