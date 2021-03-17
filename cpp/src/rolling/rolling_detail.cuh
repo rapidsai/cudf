@@ -1370,7 +1370,8 @@ std::unique_ptr<column> rolling_window(column_view const& input,
   auto input_col = cudf::is_dictionary(input.type())
                      ? dictionary_column_view(input).get_indices_annotated()
                      : input;
-  auto output    = cudf::type_dispatcher(input_col.type(),
+
+  auto output = cudf::type_dispatcher(input_col.type(),
                                       dispatch_rolling{},
                                       input_col,
                                       default_outputs,
