@@ -127,8 +127,8 @@ std::unique_ptr<column> grouped_rolling_window(table_view const& group_keys,
   //   groups.)
   //   3. [0, 500, 1000] indicates two equal-sized groups: [0,500), and [500,1000).
 
-  assert(group_offsets.size() >= 2 && group_offsets[0] == 0 &&
-         group_offsets[group_offsets.size() - 1] == input.size() &&
+  assert(group_offsets.size() >= 2 && group_offsets.element(0, rmm::cuda_stream_default) == 0 &&
+         group_offsets.element(group_offsets.size() - 1, rmm::cuda_stream_default) == input.size() &&
          "Must have at least one group.");
 
   auto preceding_calculator = [d_group_offsets = group_offsets.data(),
