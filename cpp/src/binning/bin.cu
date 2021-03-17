@@ -89,8 +89,9 @@ struct bin_finder {
     return (m_right_comp(value, m_right_begin[index])) ? (index + m_edge_index_shift) : NULL_VALUE;
   }
 
-  const RandomAccessIterator m_left_begin{};  // The beginning of the range containing the left bin edges.
-  const RandomAccessIterator m_left_end{};    // The end of the range containing the left bin edges.
+  const RandomAccessIterator
+    m_left_begin{};  // The beginning of the range containing the left bin edges.
+  const RandomAccessIterator m_left_end{};  // The end of the range containing the left bin edges.
   const RandomAccessIterator
     m_right_begin{};  // The beginning of the range containing the right bin edges.
   const size_type
@@ -146,26 +147,24 @@ std::unique_ptr<column> bin(column_view const& input,
   using RandomAccessIterator = decltype(left_edges_device_view->begin<T>());
 
   if (input.has_nulls()) {
-    thrust::transform(
-      rmm::exec_policy(stream),
-      input_device_view->pair_begin<T, true>(),
-      input_device_view->pair_end<T, true>(),
-      output_mutable_view.begin<size_type>(),
-      bin_finder<T, RandomAccessIterator, LeftComparator, RightComparator>(
-        left_begin, left_end, right_begin, index_shift));
+    thrust::transform(rmm::exec_policy(stream),
+                      input_device_view->pair_begin<T, true>(),
+                      input_device_view->pair_end<T, true>(),
+                      output_mutable_view.begin<size_type>(),
+                      bin_finder<T, RandomAccessIterator, LeftComparator, RightComparator>(
+                        left_begin, left_end, right_begin, index_shift));
   } else {
-    thrust::transform(
-      rmm::exec_policy(stream),
-      input_device_view->pair_begin<T, false>(),
-      input_device_view->pair_end<T, false>(),
-      output_mutable_view.begin<size_type>(),
-      bin_finder<T, RandomAccessIterator, LeftComparator, RightComparator>(
-        left_begin, left_end, right_begin, index_shift));
+    thrust::transform(rmm::exec_policy(stream),
+                      input_device_view->pair_begin<T, false>(),
+                      input_device_view->pair_end<T, false>(),
+                      output_mutable_view.begin<size_type>(),
+                      bin_finder<T, RandomAccessIterator, LeftComparator, RightComparator>(
+                        left_begin, left_end, right_begin, index_shift));
   }
 
   const auto mask_and_count = valid_if(output_mutable_view.begin<size_type>(),
-                                 output_mutable_view.end<size_type>(),
-                                 filter_null_sentinel());
+                                       output_mutable_view.end<size_type>(),
+                                       filter_null_sentinel());
 
   output->set_null_mask(mask_and_count.first, mask_and_count.second);
   return output;
