@@ -185,6 +185,7 @@ public final class Table implements AutoCloseable {
 
   private static native long[] hashPartition(long inputTable,
                                              int[] columnsToHash,
+                                             int hashTypeId,
                                              int numberOfPartitions,
                                              int[] outputOffsets) throws CudfException;
 
@@ -2587,15 +2588,31 @@ public final class Table implements AutoCloseable {
     }
 
     /**
-     * Hash partition a table into the specified number of partitions.
+     * Hash partition a table into the specified number of partitions. Uses the default MURMUR3
+     * hashing.
      * @param numberOfPartitions - number of partitions to use
      * @return - {@link PartitionedTable} - Table that exposes a limited functionality of the
      * {@link Table} class
      */
     public PartitionedTable hashPartition(int numberOfPartitions) {
+      return hashPartition(HashType.MURMUR3, numberOfPartitions);
+    }
+
+    /**
+     * Hash partition a table into the specified number of partitions.
+     * @param type the type of hash to use. Depending on the type of hash different restrictions
+     *             on the hash column(s) may exist. Not all hash functions are guaranteed to work
+     *             besides IDENTITY and MURMUR3.
+     * @param numberOfPartitions - number of partitions to use
+     * @return {@link PartitionedTable} - Table that exposes a limited functionality of the
+     * {@link Table} class
+     */
+    public PartitionedTable hashPartition(HashType type, int numberOfPartitions) {
       int[] partitionOffsets = new int[numberOfPartitions];
-      return new PartitionedTable(new Table(Table.hashPartition(operation.table.nativeHandle,
+      return new PartitionedTable(new Table(Table.hashPartition(
+          operation.table.nativeHandle,
           operation.indices,
+          type.nativeId,
           partitionOffsets.length,
           partitionOffsets)), partitionOffsets);
     }

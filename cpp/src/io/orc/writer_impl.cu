@@ -476,7 +476,6 @@ orc_streams writer::impl::create_streams(host_span<orc_column_view> columns,
         break;
       case TypeKind::STRING: {
         bool enable_dict           = enable_dictionary_;
-        size_t direct_data_size    = 0;
         size_t dict_data_size      = 0;
         size_t dict_strings        = 0;
         size_t dict_lengths_div512 = 0;
@@ -488,11 +487,15 @@ orc_streams writer::impl::create_streams(host_span<orc_column_view> columns,
             dict_lengths_div512 += (sd->num_strings + 0x1ff) >> 9;
             dict_data_size += sd->dict_char_count;
           }
-          direct_data_size += std::accumulate(
-            stripe.cbegin(), stripe.cend(), direct_data_size, [&](auto data_size, auto rg_idx) {
-              return data_size + column.host_dict_chunk(rg_idx)->string_char_count;
-            });
         }
+
+        auto const direct_data_size =
+          std::accumulate(stripe_bounds.front().cbegin(),
+                          stripe_bounds.back().cend(),
+                          size_t{0},
+                          [&](auto data_size, auto rg_idx) {
+                            return data_size + column.host_dict_chunk(rg_idx)->string_char_count;
+                          });
         if (enable_dict) {
           uint32_t dict_bits = 0;
           for (dict_bits = 1; dict_bits < 32; dict_bits <<= 1) {
