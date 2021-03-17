@@ -1892,6 +1892,10 @@ dremel_data get_dremel_data(column_view h_col,
   {
     // At this point, curr_col contains the leaf column. Max nesting level is
     // nesting_levels.size().
+
+    // We are going to start by merging the last column in nesting_levels (the leaf, which is at the
+    // index `nesting_levels.size() - 1`) with the second-to-last (which is at
+    // `nesting_levels.size() - 2`).
     size_t level              = nesting_levels.size() - 2;
     curr_col                  = nesting_levels[level];
     auto lcv                  = lists_column_view(get_list_level(curr_col));
@@ -1974,6 +1978,8 @@ dremel_data get_dremel_data(column_view h_col,
                     rep_level.begin());
   }
 
+  // Having already merged the last two levels, we are now going to merge the result with the
+  // third-last level which is at index `nesting_levels.size() - 3`.
   for (int level = nesting_levels.size() - 3; level >= 0; level--) {
     curr_col                  = nesting_levels[level];
     auto lcv                  = lists_column_view(get_list_level(curr_col));
