@@ -176,19 +176,20 @@ class ListMethods(ColumnMethodsMixin):
             )
         super().__init__(column=column, parent=parent)
 
-    def extract(self, index):
+    def get(self, index):
         """
-        Extracts the element at the given index from each
-        row of a Series of lists
+        Extract element at the given index from each component
+
+        Extract element from lists, tuples, or strings in 
+        each element in the Series/Index.
 
         Parameters
         ----------
         index : int
-            position of the desired element in the list
 
         Returns
         -------
-        Series
+        Series or Index
 
         Examples
         --------

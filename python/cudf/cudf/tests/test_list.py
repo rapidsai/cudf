@@ -124,14 +124,14 @@ def test_len(data):
         ([[[1, 2], [3, 4]], [[5, 6], [7, 8]]], 1, [[3, 4], [7, 8]]),
     ],
 )
-def test_extract(data, index, expect):
+def test_get(data, index, expect):
     sr = cudf.Series(data)
     expect = cudf.Series(expect)
-    got = sr.list.extract(index)
+    got = sr.list.get(index)
     assert_eq(expect, got)
 
 
-def test_extract_nested_lists():
+def test_get_nested_lists():
     sr = cudf.Series(
         [
             [[[1, 2], [3, 4]], [[5, 6], [7, 8]], [], [[3, 4], [7, 8]]],
@@ -139,14 +139,14 @@ def test_extract_nested_lists():
         ]
     )
     expect = cudf.Series([[[1, 2], [3, 4]], []])
-    got = sr.list.extract(0)
+    got = sr.list.get(0)
     assert_eq(expect, got)
 
 
-def test_extract_nulls():
+def test_get_nulls():
     # TODO: do we really want this?
     # this test fails because 100 (index) > 0 (min)
     sr = cudf.Series([[], [], []])
-    got = sr.list.extract(100)
+    got = sr.list.get(100)
     expect = cudf.Series([None, None, None], dtype="int8")
     assert_eq(expect, got)
