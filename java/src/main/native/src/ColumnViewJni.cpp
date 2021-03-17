@@ -42,6 +42,7 @@
 #include <cudf/strings/contains.hpp>
 #include <cudf/strings/convert/convert_booleans.hpp>
 #include <cudf/strings/convert/convert_datetime.hpp>
+#include <cudf/strings/convert/convert_fixed_point.hpp>
 #include <cudf/strings/convert/convert_floats.hpp>
 #include <cudf/strings/convert/convert_integers.hpp>
 #include <cudf/strings/convert/convert_urls.hpp>
@@ -698,6 +699,10 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_castTo(JNIEnv *env, jclas
         case cudf::type_id::UINT64:
           result = cudf::strings::from_integers(*column);
           break;
+        case cudf::type_id::DECIMAL32:
+        case cudf::type_id::DECIMAL64:
+          result = cudf::strings::from_fixed_point(*column);
+          break;
         default: JNI_THROW_NEW(env, "java/lang/IllegalArgumentException", "Invalid data type", 0);
       }
     } else if (column->type().id() == cudf::type_id::STRING) {
@@ -718,6 +723,10 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_castTo(JNIEnv *env, jclas
         case cudf::type_id::INT64:
         case cudf::type_id::UINT64:
           result = cudf::strings::to_integers(*column, n_data_type);
+          break;
+        case cudf::type_id::DECIMAL32:
+        case cudf::type_id::DECIMAL64:
+          result = cudf::strings::to_fixed_point(*column, n_data_type);
           break;
         default: JNI_THROW_NEW(env, "java/lang/IllegalArgumentException", "Invalid data type", 0);
       }
