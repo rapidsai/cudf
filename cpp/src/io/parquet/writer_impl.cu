@@ -36,11 +36,8 @@
 #include <rmm/device_uvector.hpp>
 #include <rmm/device_vector.hpp>
 
-#include <thrust/iterator/transform_output_iterator.h>
-
 #include <algorithm>
 #include <cstring>
-#include <list>
 #include <numeric>
 #include <utility>
 
@@ -55,7 +52,6 @@ namespace {
 /**
  * @brief Helper for pinned host memory
  */
-
 template <typename T>
 using pinned_buffer = std::unique_ptr<T, decltype(&cudaFreeHost)>;
 
@@ -586,7 +582,7 @@ struct parquet_column_view {
                              cudaMemcpyHostToDevice,
                              stream.value()));
 
-    _is_list = (_max_rep_level > 0) ? true : false;
+    _is_list = (_max_rep_level > 0);
 
     if (cudf_col.size() == 0) { return; }
 
@@ -612,7 +608,7 @@ struct parquet_column_view {
   column_view cudf_column_view() const { return cudf_col; }
   parquet::Type physical_type() const { return schema_node.type; }
 
-  column_view leaf_column() const
+  column_view leaf_column_view() const
   {
     auto col = cudf_col;
     while (cudf::is_nested(col.type())) {
@@ -627,7 +623,7 @@ struct parquet_column_view {
 
   gpu::parquet_column_device_view get_device_view()
   {
-    column_view col  = leaf_column();
+    column_view col  = leaf_column_view();
     auto desc        = gpu::parquet_column_device_view{};  // Zero out all fields
     desc.stats_dtype = schema_node.stats_dtype;
     desc.ts_scale    = schema_node.ts_scale;
@@ -659,7 +655,7 @@ struct parquet_column_view {
     return desc;
   }
 
-  std::vector<std::string> get_path_in_schema() { return path_in_schema; }
+  std::vector<std::string> const &get_path_in_schema() { return path_in_schema; }
 
   // LIST related member functions
   uint8_t max_def_level() const noexcept { return _max_def_level; }
@@ -690,8 +686,8 @@ struct parquet_column_view {
   // Schema related members
   schema_tree_node schema_node;
   std::vector<std::string> path_in_schema;
-  uint8_t _max_def_level;
-  uint8_t _max_rep_level;
+  uint8_t _max_def_level = 0;
+  uint8_t _max_rep_level = 0;
   rmm::device_uvector<uint8_t> _d_nullability;
 
   column_view cudf_col;
@@ -933,6 +929,7 @@ void writer::impl::write(table_view const &table)
 
   // Mass allocation of column_device_views for each parquet_column_view
   std::vector<column_view> cudf_cols;
+  cudf_cols.reserve(parquet_columns.size());
   for (auto const &parq_col : parquet_columns) { cudf_cols.push_back(parq_col.cudf_column_view()); }
   table_view single_streams_table(cudf_cols);
   size_type num_columns = single_streams_table.num_columns();
