@@ -14,7 +14,6 @@
  * limitations under the License.
  */
 
-#include <cudf/dictionary/dictionary_column_view.hpp>
 #include <groupby/sort/group_scan_util.cuh>
 
 #include <rmm/cuda_stream_view.hpp>
