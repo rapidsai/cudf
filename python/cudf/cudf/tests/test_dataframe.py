@@ -8466,7 +8466,7 @@ def test_explode(ignore_index, p_index):
     )
     pdf = gdf.to_pandas(nullable=True)
 
-    expect = pdf.explode("a", ignore_index).fillna(pd.NA)
+    expect = pdf.explode("a", ignore_index)
     got = gdf.explode("a", ignore_index)
 
     assert_eq(got, expect, check_dtype=False)
