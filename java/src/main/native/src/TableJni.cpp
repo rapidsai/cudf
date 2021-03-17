@@ -1641,8 +1641,10 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_hashPartition(JNIEnv *env
     }
 
     std::pair<std::unique_ptr<cudf::table>, std::vector<cudf::size_type>> result =
-        cudf::hash_partition(*n_input_table, columns_to_hash_vec,
-                number_of_partitions, hash_func);
+        cudf::hash_partition(*n_input_table,
+                             columns_to_hash_vec,
+                             number_of_partitions,
+                             hash_func);
 
     for (size_t i = 0; i < result.second.size(); i++) {
       n_output_offsets[i] = result.second[i];
