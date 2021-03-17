@@ -22,6 +22,7 @@
 #include <io/orc/orc_common.h>
 #include <io/statistics/column_stats.h>
 #include <cudf/types.hpp>
+#include <cudf/table/table_device_view.cuh>
 
 #include <rmm/cuda_stream_view.hpp>
 
@@ -175,6 +176,8 @@ struct DictionaryChunk {
     string_char_count;  // total size of string data (NOTE: assumes less than 4G bytes per chunk)
   uint32_t num_dict_strings;  // number of strings in dictionary
   uint32_t dict_char_count;   // size of dictionary string data for this chunk
+
+  column_device_view *leaf_column;    //!< Pointer to string column
 };
 
 /**
@@ -189,6 +192,8 @@ struct StripeDictionary {
   uint32_t num_chunks;           // number of chunks in the stripe
   uint32_t num_strings;          // number of unique strings in the dictionary
   uint32_t dict_char_count;      // total size of dictionary string data
+
+  column_device_view *leaf_column;    //!< Pointer to string column
 };
 
 /**
@@ -350,15 +355,25 @@ void CompressOrcDataStreams(uint8_t *compressed_data,
 /**
  * @brief Launches kernel for initializing dictionary chunks
  *
+ * @param[in] view TODO:
  * @param[in,out] chunks DictionaryChunk device array [rowgroup][column]
+ * @param[in] dict_data TODO:
+ * @param[in] dict_index TODO:
+ * @param[in] row_index_stride TODO:
+ * @param[in] str_col_ids TODO:
  * @param[in] num_columns Number of columns
  * @param[in] num_rowgroups Number of row groups
  * @param[in] stream CUDA stream to use, default `rmm::cuda_stream_default`
  */
-void InitDictionaryIndices(DictionaryChunk *chunks,
+void InitDictionaryIndices(const table_device_view &view,
+                           DictionaryChunk *chunks,
+                           uint32_t *dict_data,
+                           uint32_t *dict_index,
+                           size_t row_index_stride,
+                           size_type* str_col_ids,
                            uint32_t num_columns,
                            uint32_t num_rowgroups,
-                           rmm::cuda_stream_view stream = rmm::cuda_stream_default);
+                           rmm::cuda_stream_view stream);
 
 /**
  * @brief Launches kernel for building stripe dictionaries

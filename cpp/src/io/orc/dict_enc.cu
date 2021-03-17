@@ -18,6 +18,7 @@
 #include "orc_gpu.h"
 
 #include <io/utilities/block_utils.cuh>
+#include <cudf/table/table_device_view.cuh>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
@@ -48,12 +49,26 @@ struct dictinit_state_s {
 /**
  * @brief Return a 12-bit hash from a byte sequence
  */
-static inline __device__ uint32_t nvstr_init_hash(char const *ptr, uint32_t len)
+//static inline __device__ uint32_t nvstr_init_hash(char const *ptr, uint32_t len)
+//{
+//  if (len != 0) {
+//    return (ptr[0] + (ptr[len - 1] << 5) + (len << 10)) & ((1 << init_hash_bits) - 1);
+//  } else {
+//    return 0;
+//  }
+//}
+
+/**
+ * @brief Return a 12-bit hash from a string
+ */
+static inline __device__ uint32_t hash_string(const string_view &val)
 {
-  if (len != 0) {
-    return (ptr[0] + (ptr[len - 1] << 5) + (len << 10)) & ((1 << init_hash_bits) - 1);
-  } else {
+  if (val.empty()) {
     return 0;
+  } else {
+    char const *ptr = val.data();
+    uint32_t len = val.size_bytes();
+    return (ptr[0] + (ptr[len - 1] << 5) + (len << 10)) & ((1 << init_hash_bits) - 1);
   }
 }
 
@@ -111,12 +126,18 @@ static __device__ void LoadNonNullIndices(volatile dictinit_state_s *s,
  * @brief Gather all non-NULL string rows and compute total character data size
  *
  * @param[in] chunks DictionaryChunk device array [rowgroup][column]
- * @param[in] num_columns Number of columns
+ * @param[in] num_columns Number of string columns
  */
 // blockDim {block_size,1,1}
 template <int block_size>
 __global__ void __launch_bounds__(block_size, 2)
-  gpuInitDictionaryIndices(DictionaryChunk *chunks, uint32_t num_columns)
+  gpuInitDictionaryIndices(DictionaryChunk *chunks,
+      const table_device_view view,
+      uint32_t *dict_data,
+      uint32_t *dict_index,
+      size_t row_index_stride,
+      size_type* str_col_ids,
+      uint32_t num_columns)
 {
   __shared__ __align__(16) dictinit_state_s state_g;
 
@@ -131,12 +152,22 @@ __global__ void __launch_bounds__(block_size, 2)
   dictinit_state_s *const s = &state_g;
   uint32_t col_id           = blockIdx.x;
   uint32_t group_id         = blockIdx.y;
-  const nvstrdesc_s *ck_data;
-  uint32_t *dict_data;
   uint32_t nnz, start_row, dict_char_count;
   int t = threadIdx.x;
 
-  if (t == 0) s->chunk = chunks[group_id * num_columns + col_id];
+  if (t == 0) {
+    column_device_view *leaf_column_view = view.begin() + str_col_ids[col_id];
+    s->chunk = chunks[group_id * num_columns + col_id];
+    s->chunk.leaf_column = leaf_column_view;
+    s->chunk.valid_map_base = leaf_column_view->null_mask();
+    s->chunk.column_offset = leaf_column_view->offset();
+    //s->chunk.column_data_base = static_cast<const void*>(leaf_column_view->head());
+    s->chunk.dict_data = dict_data;
+    s->chunk.dict_index = dict_index;
+    s->chunk.start_row = group_id * row_index_stride;
+    s->chunk.num_rows = min(row_index_stride,
+        max(static_cast<size_t>(leaf_column_view->size() - s->chunk.start_row), size_t{0}));
+  }
   for (uint32_t i = 0; i < sizeof(s->map) / sizeof(uint32_t); i += block_size) {
     if (i + t < sizeof(s->map) / sizeof(uint32_t)) s->map.u32[i + t] = 0;
   }
@@ -152,15 +183,15 @@ __global__ void __launch_bounds__(block_size, 2)
   nnz       = s->nnz;
   dict_data = s->chunk.dict_data;
   start_row = s->chunk.start_row;
-  ck_data   = static_cast<const nvstrdesc_s *>(s->chunk.column_data_base) + start_row;
   for (uint32_t i = 0; i < nnz; i += block_size) {
     uint32_t ck_row = 0;
     uint32_t hash   = 0;
     uint32_t len    = 0;
     if (i + t < nnz) {
       ck_row = s->dict[i + t];
-      len    = static_cast<uint32_t>(ck_data[ck_row].count);
-      hash   = nvstr_init_hash(ck_data[ck_row].ptr, len);
+      string_view string_val = s->chunk.leaf_column->element<string_view>(ck_row + start_row);
+      len    = static_cast<uint32_t>(string_val.size_bytes());
+      hash   = hash_string(string_val);
     }
     len = block_reduce(temp_storage.reduce_storage).Sum(len);
     if (t == 0) s->chunk.string_char_count += len;
@@ -201,7 +232,8 @@ __global__ void __launch_bounds__(block_size, 2)
     bool collision;
     if (i + t < nnz) {
       ck_row  = dict_data[i + t] - start_row;
-      hash    = nvstr_init_hash(ck_data[ck_row].ptr, static_cast<uint32_t>(ck_data[ck_row].count));
+      string_view string_val = s->chunk.leaf_column->element<string_view>(ck_row + start_row);
+      hash    = hash_string(string_val);
       sh      = (hash & 1) ? 16 : 0;
       pos_old = s->map.u16[hash];
     }
@@ -233,18 +265,16 @@ __global__ void __launch_bounds__(block_size, 2)
   for (uint32_t i = 0; i < nnz; i += block_size) {
     uint32_t ck_row = 0, ck_row_ref = 0, is_dupe = 0;
     if (i + t < nnz) {
-      const char *str1, *str2;
-      uint32_t len1, len2, hash;
-      ck_row     = s->dict[i + t];
-      str1       = ck_data[ck_row].ptr;
-      len1       = static_cast<uint32_t>(ck_data[ck_row].count);
-      hash       = nvstr_init_hash(str1, len1);
+      uint32_t string_length, hash;
+      ck_row = s->dict[i + t];
+      string_view string_value = s->chunk.leaf_column->element<string_view>(ck_row + start_row);
+      string_length = static_cast<uint32_t>(string_value.size_bytes());
+      hash = hash_string(string_value);
       ck_row_ref = s->dict[(hash > 0) ? s->map.u16[hash - 1] : 0];
       if (ck_row_ref != ck_row) {
-        str2    = ck_data[ck_row_ref].ptr;
-        len2    = static_cast<uint32_t>(ck_data[ck_row_ref].count);
-        is_dupe = nvstr_is_equal(str1, len1, str2, len2);
-        dict_char_count += (is_dupe) ? 0 : len1;
+        string_view reference_string = s->chunk.leaf_column->element<string_view>(ck_row_ref + start_row);
+        is_dupe = (string_value == reference_string);
+        dict_char_count += (is_dupe) ? 0 : string_length;
       }
     }
     uint32_t dupes_in_block;
@@ -269,6 +299,15 @@ __global__ void __launch_bounds__(block_size, 2)
     chunks[group_id * num_columns + col_id].string_char_count = s->chunk.string_char_count;
     chunks[group_id * num_columns + col_id].num_dict_strings  = nnz - s->total_dupes;
     chunks[group_id * num_columns + col_id].dict_char_count   = dict_char_count;
+    chunks[group_id * num_columns + col_id].leaf_column = s->chunk.leaf_column;
+
+    chunks[group_id * num_columns + col_id].valid_map_base = s->chunk.valid_map_base;
+    chunks[group_id * num_columns + col_id].column_offset = s->chunk.column_offset;
+    chunks[group_id * num_columns + col_id].column_data_base = s->chunk.column_data_base;
+    chunks[group_id * num_columns + col_id].dict_data = s->chunk.dict_data;
+    chunks[group_id * num_columns + col_id].dict_index = s->chunk.dict_index;
+    chunks[group_id * num_columns + col_id].start_row = s->chunk.start_row;
+    chunks[group_id * num_columns + col_id].num_rows = s->chunk.num_rows;
   }
 }
 
@@ -357,7 +396,6 @@ __global__ void __launch_bounds__(block_size)
   uint32_t num_strings;
   uint32_t *dict_data, *dict_index;
   uint32_t dict_char_count;
-  const nvstrdesc_s *str_data;
   int t = threadIdx.x;
 
   if (t == 0) s->stripe = stripes[stripe_id * num_columns + col_id];
@@ -367,20 +405,18 @@ __global__ void __launch_bounds__(block_size)
   dict_data   = s->stripe.dict_data;
   if (!dict_data) return;
   dict_index      = s->stripe.dict_index;
-  str_data        = static_cast<const nvstrdesc_s *>(s->stripe.column_data_base);
+  string_view current_string = string_view::min();
   dict_char_count = 0;
   for (uint32_t i = 0; i < num_strings; i += block_size) {
     uint32_t cur     = (i + t < num_strings) ? dict_data[i + t] : 0;
     uint32_t cur_len = 0;
-    const char *cur_ptr;
     bool is_dupe = false;
     if (i + t < num_strings) {
-      cur_ptr = str_data[cur].ptr;
-      cur_len = str_data[cur].count;
+      current_string = s->stripe.leaf_column->element<string_view>(cur);
     }
     if (i + t != 0 && i + t < num_strings) {
       uint32_t prev = dict_data[i + t - 1];
-      is_dupe       = nvstr_is_equal(cur_ptr, cur_len, str_data[prev].ptr, str_data[prev].count);
+      is_dupe = (current_string == (s->stripe.leaf_column->element<string_view>(prev)));
     }
     dict_char_count += (is_dupe) ? 0 : cur_len;
     uint32_t dupes_in_block;
@@ -405,12 +441,19 @@ __global__ void __launch_bounds__(block_size)
 /**
  * @brief Launches kernel for initializing dictionary chunks
  *
+ * @param[in] view TODO:
  * @param[in] chunks DictionaryChunk device array [rowgroup][column]
+ * @param[in] str_col_ids TODO:
  * @param[in] num_columns Number of columns
  * @param[in] num_rowgroups Number of row groups
  * @param[in] stream CUDA stream to use, default `rmm::cuda_stream_default`
  */
-void InitDictionaryIndices(DictionaryChunk *chunks,
+void InitDictionaryIndices(const table_device_view &view,
+                           DictionaryChunk *chunks,
+                           uint32_t *dict_data,
+                           uint32_t *dict_index,
+                           size_t row_index_stride,
+                           size_type* str_col_ids,
                            uint32_t num_columns,
                            uint32_t num_rowgroups,
                            rmm::cuda_stream_view stream)
@@ -419,7 +462,7 @@ void InitDictionaryIndices(DictionaryChunk *chunks,
   dim3 dim_block(block_size, 1);
   dim3 dim_grid(num_columns, num_rowgroups);
   gpuInitDictionaryIndices<block_size>
-    <<<dim_grid, dim_block, 0, stream.value()>>>(chunks, num_columns);
+    <<<dim_grid, dim_block, 0, stream.value()>>>(chunks, view, dict_data, dict_index, row_index_stride, str_col_ids, num_columns);
 }
 
 /**
@@ -447,18 +490,16 @@ void BuildStripeDictionaries(StripeDictionary *stripes,
     stripes, chunks, num_columns);
   for (uint32_t i = 0; i < num_stripes * num_columns; i++) {
     if (stripes_host[i].dict_data != nullptr) {
-      thrust::device_ptr<uint32_t> p = thrust::device_pointer_cast(stripes_host[i].dict_data);
-      const nvstrdesc_s *str_data =
-        static_cast<const nvstrdesc_s *>(stripes_host[i].column_data_base);
+      thrust::device_ptr<uint32_t> dict_data_ptr =
+        thrust::device_pointer_cast(stripes_host[i].dict_data);
+      column_device_view *string_column = stripes_host[i].leaf_column;
       // NOTE: Requires the --expt-extended-lambda nvcc flag
       thrust::sort(rmm::exec_policy(stream),
-                   p,
-                   p + stripes_host[i].num_strings,
-                   [str_data] __device__(const uint32_t &lhs, const uint32_t &rhs) {
-                     return nvstr_is_lesser(str_data[lhs].ptr,
-                                            (uint32_t)str_data[lhs].count,
-                                            str_data[rhs].ptr,
-                                            (uint32_t)str_data[rhs].count);
+                   dict_data_ptr,
+                   dict_data_ptr + stripes_host[i].num_strings,
+                   [string_column] __device__(const uint32_t &lhs, const uint32_t &rhs) {
+                     return string_column->element<string_view>(lhs) <
+                     string_column->element<string_view>(rhs);
                    });
     }
   }
