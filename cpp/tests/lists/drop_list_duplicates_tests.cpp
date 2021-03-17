@@ -14,10 +14,12 @@
  * limitations under the License.
  */
 
-#include <cudf/lists/drop_list_duplicates.hpp>
-
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_wrapper.hpp>
+
+#include <cudf/lists/drop_list_duplicates.hpp>
+
+#include <unordered_set>
 
 using float_type = float;
 using int_type   = int32_t;
@@ -70,12 +72,52 @@ TEST_F(DropListDuplicatesTest, FloatingPointTestsNonNull)
   auto constexpr m_inf = -std::numeric_limits<float_type>::infinity();
 
   // Lists contain inf
-  // We can't test for lists containing nan because the order of nan is
-  // undefined after sorting
   test_once<false>(FLT_LCW{0, 1, 2, 0, 1, 2, 0, 1, 2, p_inf, p_inf, p_inf},
                    FLT_LCW{0, 1, 2, p_inf});
   test_once<false>(FLT_LCW{p_inf, 0, m_inf, 0, p_inf, 0, m_inf, 0, p_inf, 0, m_inf},
                    FLT_LCW{m_inf, 0, p_inf});
+
+  // Lists contain NaN
+  // The position of NaN is undefined after sorting, thus we need to offload the data to CPU to
+  // check for validity
+  auto constexpr NaN = std::numeric_limits<float_type>::quiet_NaN();
+
+  // We will not store NaN in an unordered_set because it can't check for NaN existence
+  std::unordered_set<float_type> results_expected{0, 1, 2};
+  auto results_col = cudf::lists::drop_list_duplicates(
+    cudf::lists_column_view{FLT_LCW{0, 1, NaN, 2, 0, NaN, 1, 2, 0, 1, 2, NaN, NaN, NaN}});
+  auto results_arr =
+    cudf::test::to_host<float_type>(cudf::lists_column_view(results_col->view()).child()).first;
+  EXPECT_EQ(results_arr.size(), results_expected.size() + 1);
+  int NaN_count{0};
+  std::unordered_set<float_type> results;
+  for (auto const x : results_arr) {
+    if (std::isnan(x)) {
+      ++NaN_count;
+    } else {
+      results.insert(x);
+    }
+  }
+  EXPECT_TRUE(results_expected.size() == results.size() && NaN_count == 1);
+
+  // Lists contain both NaN and inf
+  // We will not store NaN in an unordered_set because it can't check for NaN existence
+  results_expected = std::unordered_set<float_type>{0, 1, 2, m_inf, p_inf};
+  results_col      = cudf::lists::drop_list_duplicates(cudf::lists_column_view{FLT_LCW{
+    m_inf, 0, 1, p_inf, NaN, 2, 0, NaN, 1, 2, p_inf, 0, 1, m_inf, 2, NaN, p_inf, NaN, NaN, m_inf}});
+  results_arr =
+    cudf::test::to_host<float_type>(cudf::lists_column_view(results_col->view()).child()).first;
+  EXPECT_EQ(results_arr.size(), results_expected.size() + 1);
+  results.clear();
+  NaN_count = 0;
+  for (auto const x : results_arr) {
+    if (std::isnan(x)) {
+      ++NaN_count;
+    } else {
+      results.insert(x);
+    }
+  }
+  EXPECT_TRUE(results_expected.size() == results.size() && NaN_count == 1);
 }
 
 TEST_F(DropListDuplicatesTest, IntegerTestsNonNull)
