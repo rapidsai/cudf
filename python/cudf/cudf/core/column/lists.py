@@ -195,9 +195,12 @@ class ListMethods(ColumnMethodsMixin):
         >>> s = cudf.Series([[1, 2, 3], [3, 4, 5], [4, 5, 6]])
         >>> s.list.contains(4)
         Series([False, True, True])
-        dtype:
+        dtype: bool
         """
+        # if key is not None:
         search_key = cudf.Scalar(key).device_value
+        # else:
+        # search_key = key
         return self._return_or_inplace(
             contains_scalar(self._column, search_key)
         )

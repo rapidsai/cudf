@@ -133,11 +133,31 @@ def test_len(data):
             True,
             [True, False, True],
         ),
-        # ([[None, None], [None, None]]) --> what to expect for null scalar
     ],
 )
 def test_contains(data, key, expect):
     sr = cudf.Series(data)
     expect = cudf.Series(expect)
     got = sr.list.contains(key)
+    assert_eq(expect, got)
+
+
+def test_contains_null_search_key():
+    sr = cudf.Series([[1, 2, 3], [3, 4, 5], [4, 5, 6]])
+    expect = cudf.Series([False, False, False])
+    got = sr.list.contains(key=cudf.Scalar(None))
+    assert_eq(expect, got)
+
+
+def test_contains_null_rows():
+    sr = cudf.Series([[], [], []])
+    expect = cudf.Series([True, True, True])
+    got = sr.list.contains(key=cudf.Scalar(None, dtype="object"))
+    assert_eq(expect, got)
+
+
+def test_contains_invalid_search_key():
+    sr = cudf.Series([[1.0, 2.0, 3.0], [], [5.0, 7.0, 8.0]])
+    expect = cudf.Series([False, False, False])
+    got = sr.list.contains(4.0)
     assert_eq(expect, got)
