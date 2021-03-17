@@ -56,6 +56,7 @@ using inclusive = detail::inclusive;
  * Notes:
  *   - If an empty set of edges is provided, all elements in `input` are labeled NULL.
  *   - NULL elements in `input` belong to no bin and their corresponding label is NULL.
+ *   - NaN elements in `input` belong to no bin and their corresponding label is NULL.
  *   - Bins must be provided in monotonically increasing order, otherwise behavior is undefined.
  *   - If two or more bins overlap, behavior is undefined.
  *   - If nulls are interspersed throughout the edges rather than being at the beginning or end

@@ -16,10 +16,17 @@
 
 #include <cudf/binning/bin.hpp>
 #include <cudf/column/column.hpp>
+#include <cudf/column/column_view.hpp>
 #include <cudf/types.hpp>
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_wrapper.hpp>
 #include <cudf_test/type_lists.hpp>
+#include <cudf_test/type_list_utilities.hpp>
+
+#include <algorithm>
+#include <limits>
+#include <numeric>
+#include <vector>
 
 namespace {
 
@@ -31,15 +38,21 @@ using fwc_wrapper = cudf::test::fixed_width_column_wrapper<T>;
 template <typename T>
 using fpc_wrapper = cudf::test::fixed_point_column_wrapper<T>;
 
+// TODO: Should we move these into type_lists? They seem generally useful.
+using NumericTypesNotBool = Concat<IntegralTypesNotBool, FloatingPointTypes>;
+using SignedNumericTypesNotBool = cudf::test::Types<int8_t, int16_t, int32_t, int64_t, float, double>;
+
 struct BinTestFixture : public BaseFixture {
 };
 
-/**
+
+/*
  * Test error cases.
+ *
+ * Most of these are not parameterized by type to avoid unnecessary test overhead.
  */
 
 // Left edges type check.
-
 TEST(BinColumnTest, TestInvalidLeft)
 {
   fwc_wrapper<double> left_edges{0, 1, 2, 3, 4, 5, 6, 7, 8, 9};
@@ -83,306 +96,296 @@ TEST(BinColumnTest, TestMismatchedEdges)
                cudf::logic_error);
 };
 
-// If no edges are provided, the bin for all inputs is null.
-TEST(BinColumnTest, TestEmptyEdges)
+
+/*
+ * Valid exceptional cases.
+ */
+
+template <typename T>
+struct GenericExceptionCasesBinTestFixture : public BinTestFixture {
+    void test(
+            fwc_wrapper<T> input,
+            fwc_wrapper<cudf::size_type> expected,
+            fwc_wrapper<T> left_edges,
+            fwc_wrapper<T> right_edges,
+            cudf::null_order null_precedence=cudf::null_order::BEFORE
+            )
+    {
+        auto result = cudf::bin(input,
+                left_edges,
+                cudf::inclusive::NO,
+                right_edges,
+                cudf::inclusive::NO,
+                null_precedence
+                );
+        CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
+    }
+};
+
+template <typename T>
+struct ExceptionCasesBinTestFixture : public GenericExceptionCasesBinTestFixture<T> {
+};
+
+TYPED_TEST_CASE(ExceptionCasesBinTestFixture, NumericTypesNotBool);
+
+// Empty input must return an empty output.
+TYPED_TEST(ExceptionCasesBinTestFixture, TestEmptyInput)
 {
-  fwc_wrapper<float> left_edges{};
-  fwc_wrapper<float> right_edges{};
-  fwc_wrapper<float> input{0.5, 0.5};
+    this->test(
+            {},
+            {},
+            {0, 2, 4, 6, 8},
+            {2, 4, 6, 8, 10}
+            );
+};
 
-  std::unique_ptr<cudf::column> result =
-    cudf::bin(input, left_edges, cudf::inclusive::YES, right_edges, cudf::inclusive::NO);
-  ASSERT_TRUE(result->size() == 2);
-  ASSERT_TRUE(result->null_count() == 2);
-
-  fwc_wrapper<cudf::size_type> expected{{0, 0}, {0, 0}};
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
+// If no edges are provided, the bin for all inputs is null.
+TYPED_TEST(ExceptionCasesBinTestFixture, TestEmptyEdges)
+{
+    this->test(
+            {1, 1},
+            {{0, 0}, {0, 0}},
+            {},
+            {}
+            );
 };
 
 // Values outside the bounds should be labeled NULL.
-TEST(BinColumnTest, TestOutOfBoundsInput)
+TYPED_TEST(ExceptionCasesBinTestFixture, TestOutOfBoundsInput)
 {
-  fwc_wrapper<float> left_edges{0, 1, 2, 3, 4, 5, 6, 7, 8, 9};
-  fwc_wrapper<float> right_edges{1, 2, 3, 4, 5, 6, 7, 8, 9, 10};
-  fwc_wrapper<float> input{8.5, 9.5, 10.5, 11.5};
-
-  std::unique_ptr<cudf::column> result =
-    cudf::bin(input, left_edges, cudf::inclusive::YES, right_edges, cudf::inclusive::NO);
-  ASSERT_TRUE(result->size() == 4);
-  ASSERT_TRUE(result->null_count() == 2);
-
-  fwc_wrapper<cudf::size_type> expected{{8, 9, 0, 0}, {1, 1, 0, 0}};
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
+    this->test(
+            {7, 9, 11, 13},
+            {{3, 4, 0, 0}, {1, 1, 0, 0}},
+            {0, 2, 4, 6, 8},
+            {2, 4, 6, 8, 10}
+            );
 };
 
-/**
+// Null inputs must map to nulls.
+TYPED_TEST(ExceptionCasesBinTestFixture, TestInputWithNulls)
+{
+    this->test(
+            {{1, 3, 5, 7}, {0, 1, 0, 1}},
+            {{0, 1, 0, 3}, {0, 1, 0, 1}},
+            {0, 2, 4, 6, 8},
+            {2, 4, 6, 8, 10}
+            );
+};
+
+// Left edges with nulls at the beginning.
+TYPED_TEST(ExceptionCasesBinTestFixture, TestLeftEdgesWithNullsBefore)
+{
+    this->test(
+            {1, 3, 5, 7},
+            {{0, 1, 2, 3}, {0, 1, 1, 1}},
+            {{0, 2, 4, 6, 8}, {0, 1, 1, 1, 1}},
+            {2, 4, 6, 8, 10}
+            );
+};
+
+// Left edges with nulls at the end.
+TYPED_TEST(ExceptionCasesBinTestFixture, TestLeftEdgesWithNullsAfter)
+{
+    this->test(
+            {3, 5, 7, 9},
+            {{1, 2, 3, 0}, {1, 1, 1, 0}},
+            {{0, 2, 4, 6, 8}, {1, 1, 1, 1, 0}},
+            {2, 4, 6, 8, 10},
+            cudf::null_order::AFTER
+            );
+};
+
+// Right edges with nulls at the beginning.
+TYPED_TEST(ExceptionCasesBinTestFixture, TestRightEdgesWithNullsBefore)
+{
+    this->test(
+            {1, 3, 5, 7},
+            {{0, 1, 2, 3}, {0, 1, 1, 1}},
+            {0, 2, 4, 6, 8},
+            {{2, 4, 6, 8, 10}, {0, 1, 1, 1, 1}}
+            );
+};
+
+// Right edges with nulls at the end.
+TYPED_TEST(ExceptionCasesBinTestFixture, TestRightEdgesWithNullsAfter)
+{
+    this->test(
+            {3, 5, 7, 9},
+            {{1, 2, 3, 0}, {1, 1, 1, 0}},
+            {0, 2, 4, 6, 8},
+            {{2, 4, 6, 8, 10}, {1, 1, 1, 1, 0}},
+            cudf::null_order::AFTER
+            );
+};
+
+// Both edges with nulls at the beginning.
+TYPED_TEST(ExceptionCasesBinTestFixture, TestBothEdgesWithNullsBeforeDifferentAmount)
+{
+    this->test(
+            {1, 3, 5, 7},
+            {{0, 0, 2, 3}, {0, 0, 1, 1}},
+            {{0, 2, 4, 6, 8}, {0, 1, 1, 1, 1}},
+            {{2, 4, 6, 8, 10}, {0, 0, 1, 1, 1}}
+            );
+};
+
+// Both edges with nulls at the end.
+TYPED_TEST(ExceptionCasesBinTestFixture, TestBothEdgesWithNullsAfterDifferentAmount)
+{
+    this->test(
+            {3, 5, 7, 9},
+            {{1, 2, 0, 0}, {1, 1, 0, 0}},
+            {{0, 2, 4, 6, 8}, {1, 1, 1, 1, 0}},
+            {{2, 4, 6, 8, 10}, {1, 1, 1, 0, 0}},
+            cudf::null_order::AFTER
+            );
+};
+
+
+// Test that nan values are assigned the NULL label.
+template <typename T>
+struct NaNBinTestFixture : public GenericExceptionCasesBinTestFixture<T> {
+};
+
+TYPED_TEST_CASE(NaNBinTestFixture, FloatingPointTypes);
+
+TYPED_TEST(NaNBinTestFixture, TestNaN)
+{
+    if (std::numeric_limits<TypeParam>::has_quiet_NaN)
+    {
+        this->test(
+                {std::numeric_limits<TypeParam>::quiet_NaN()},
+                {{0}, {0}},
+                {0, 2, 4, 6, 8},
+                {2, 4, 6, 8, 10}
+                );
+    }
+}
+
+
+/*
  * Test inclusion options.
  */
 
 template <typename T>
 struct BoundaryExclusionBinTestFixture : public BinTestFixture {
-  fwc_wrapper<T> left_edges{0, 1, 2, 3, 4};
-  fwc_wrapper<T> right_edges{1, 2, 3, 4, 5};
-  fwc_wrapper<T> input{1, 1};
-
-  std::unique_ptr<cudf::column> bin(cudf::inclusive left_inc, cudf::inclusive right_inc)
+  void test(cudf::inclusive left_inc, cudf::inclusive right_inc, fwc_wrapper<cudf::size_type> expected)
   {
-    return cudf::bin(input, left_edges, left_inc, right_edges, right_inc);
+      fwc_wrapper<T> left_edges{0, 2, 4, 6, 8};
+      fwc_wrapper<T> right_edges{2, 4, 6, 8, 10};
+      fwc_wrapper<T> input{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10};
+
+      auto result = cudf::bin(input, left_edges, left_inc, right_edges, right_inc);
+      CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
   }
 };
 
-TYPED_TEST_CASE(BoundaryExclusionBinTestFixture, FloatingPointTypes);
+TYPED_TEST_CASE(BoundaryExclusionBinTestFixture, NumericTypesNotBool);
 
 // Boundary points when both bounds are excluded should be labeled null.
 TYPED_TEST(BoundaryExclusionBinTestFixture, TestNoIncludes)
-{
-  auto result = this->bin(cudf::inclusive::NO, cudf::inclusive::NO);
-  ASSERT_TRUE(result->size() == 2);
-  ASSERT_TRUE(result->null_count() == 2);
-
-  fwc_wrapper<cudf::size_type> expected{{0, 0}, {0, 0}};
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
-};
-
-// Boundary point 1 should be in bin 1 [1, 2).
-TYPED_TEST(BoundaryExclusionBinTestFixture, TestIncludeLeft)
-{
-  auto result = this->bin(cudf::inclusive::YES, cudf::inclusive::NO);
-  ASSERT_TRUE(result->size() == 2);
-  ASSERT_TRUE(result->null_count() == 0);
-
-  fwc_wrapper<cudf::size_type> expected{{1, 1}, {1, 1}};
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
-};
-
-// Boundary point 1 should be in bin 0 (0, 1].
-TYPED_TEST(BoundaryExclusionBinTestFixture, TestIncludeRight)
-{
-  auto result = this->bin(cudf::inclusive::NO, cudf::inclusive::YES);
-  ASSERT_TRUE(result->size() == 2);
-  ASSERT_TRUE(result->null_count() == 0);
-
-  fwc_wrapper<cudf::size_type> expected{{0, 0}, {1, 1}};
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
-};
-
-/**
- * Valid exceptional cases.
- */
-
-// Empty input must return an empty output.
-TEST(BinColumnTest, TestEmptyInput)
-{
-  fwc_wrapper<float> left_edges{0, 1, 2, 3, 4, 5, 6, 7, 8, 9};
-  fwc_wrapper<float> right_edges{1, 2, 3, 4, 5, 6, 7, 8, 9, 10};
-  fwc_wrapper<float> input{};
-
-  std::unique_ptr<cudf::column> result =
-    cudf::bin(input, left_edges, cudf::inclusive::YES, right_edges, cudf::inclusive::NO);
-  ASSERT_TRUE(result->size() == 0);
-};
-
-// Null inputs must map to nulls.
-TEST(BinColumnTest, TestInputWithNulls)
-{
-  fwc_wrapper<float> left_edges{0, 1, 2, 3, 4, 5, 6, 7, 8, 9};
-  fwc_wrapper<float> right_edges{1, 2, 3, 4, 5, 6, 7, 8, 9, 10};
-  fwc_wrapper<float> input{{1.5, 2.5, 3.5, 4.5}, {0, 1, 0, 1}};
-
-  std::unique_ptr<cudf::column> result =
-    cudf::bin(input, left_edges, cudf::inclusive::NO, right_edges, cudf::inclusive::NO);
-  ASSERT_TRUE(result->size() == 4);
-  ASSERT_TRUE(result->null_count() == 2);
-
-  fwc_wrapper<cudf::size_type> expected{{0, 2, 0, 4}, {0, 1, 0, 1}};
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
-};
-
-// Left edges with nulls at the beginning.
-TEST(BinColumnTest, TestLeftEdgesWithNullsBefore)
-{
-  fwc_wrapper<float> left_edges{{0, 1, 2, 3, 4, 5, 6, 7, 8, 9}, {0, 1, 1, 1, 1, 1, 1, 1, 1, 1}};
-  fwc_wrapper<float> right_edges{1, 2, 3, 4, 5, 6, 7, 8, 9, 10};
-  fwc_wrapper<float> input{0.5, 1.5, 2.5, 3.5};
-
-  std::unique_ptr<cudf::column> result =
-    cudf::bin(input, left_edges, cudf::inclusive::NO, right_edges, cudf::inclusive::NO);
-  ASSERT_TRUE(result->size() == 4);
-  ASSERT_TRUE(result->null_count() == 1);
-
-  fwc_wrapper<cudf::size_type> expected{{0, 1, 2, 3}, {0, 1, 1, 1}};
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
-};
-
-// Left edges with nulls at the end.
-TEST(BinColumnTest, TestLeftEdgesWithNullsAfter)
-{
-  fwc_wrapper<float> left_edges{{0, 1, 2, 3, 4, 5, 6, 7, 8, 9}, {1, 1, 1, 1, 1, 1, 1, 1, 1, 0}};
-  fwc_wrapper<float> right_edges{1, 2, 3, 4, 5, 6, 7, 8, 9, 10};
-  fwc_wrapper<float> input{6.5, 7.5, 8.5, 9.5};
-
-  std::unique_ptr<cudf::column> result = cudf::bin(input,
-                                                   left_edges,
-                                                   cudf::inclusive::NO,
-                                                   right_edges,
-                                                   cudf::inclusive::NO,
-                                                   cudf::null_order::AFTER);
-  ASSERT_TRUE(result->size() == 4);
-  ASSERT_TRUE(result->null_count() == 1);
-
-  fwc_wrapper<cudf::size_type> expected{{6, 7, 8, 0}, {1, 1, 1, 0}};
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
-};
-
-// Right edges with nulls at the beginning.
-TEST(BinColumnTest, TestRightEdgesWithNullsBefore)
-{
-  fwc_wrapper<float> left_edges{0, 1, 2, 3, 4, 5, 6, 7, 8, 9};
-  fwc_wrapper<float> right_edges{{1, 2, 3, 4, 5, 6, 7, 8, 9, 10}, {0, 1, 1, 1, 1, 1, 1, 1, 1, 1}};
-  fwc_wrapper<float> input{0.5, 1.5, 2.5, 3.5};
-
-  std::unique_ptr<cudf::column> result =
-    cudf::bin(input, left_edges, cudf::inclusive::NO, right_edges, cudf::inclusive::NO);
-  ASSERT_TRUE(result->size() == 4);
-  ASSERT_TRUE(result->null_count() == 1);
-
-  fwc_wrapper<cudf::size_type> expected{{0, 1, 2, 3}, {0, 1, 1, 1}};
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
-};
-
-// Right edges with nulls at the end.
-TEST(BinColumnTest, TestRightEdgesWithNullsAfter)
-{
-  fwc_wrapper<float> left_edges{0, 1, 2, 3, 4, 5, 6, 7, 8, 9};
-  fwc_wrapper<float> right_edges{{1, 2, 3, 4, 5, 6, 7, 8, 9, 10}, {1, 1, 1, 1, 1, 1, 1, 1, 1, 0}};
-  fwc_wrapper<float> input{6.5, 7.5, 8.5, 9.5};
-
-  std::unique_ptr<cudf::column> result = cudf::bin(input,
-                                                   left_edges,
-                                                   cudf::inclusive::NO,
-                                                   right_edges,
-                                                   cudf::inclusive::NO,
-                                                   cudf::null_order::AFTER);
-  ASSERT_TRUE(result->size() == 4);
-  ASSERT_TRUE(result->null_count() == 1);
-
-  fwc_wrapper<cudf::size_type> expected{{6, 7, 8, 0}, {1, 1, 1, 0}};
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
-};
-
-// Both edges with nulls at the beginning.
-TEST(BinColumnTest, TestBothEdgesWithNullsBeforeDifferentAmount)
-{
-  fwc_wrapper<float> left_edges{{0, 1, 2, 3, 4, 5, 6, 7, 8, 9}, {0, 1, 1, 1, 1, 1, 1, 1, 1, 1}};
-  fwc_wrapper<float> right_edges{{1, 2, 3, 4, 5, 6, 7, 8, 9, 10}, {0, 0, 1, 1, 1, 1, 1, 1, 1, 1}};
-  fwc_wrapper<float> input{0.5, 1.5, 2.5, 3.5};
-
-  std::unique_ptr<cudf::column> result =
-    cudf::bin(input, left_edges, cudf::inclusive::NO, right_edges, cudf::inclusive::NO);
-  ASSERT_TRUE(result->size() == 4);
-  ASSERT_TRUE(result->null_count() == 2);
-
-  fwc_wrapper<cudf::size_type> expected{{0, 0, 2, 3}, {0, 0, 1, 1}};
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
-};
-
-// Both edges with nulls at the end.
-TEST(BinColumnTest, TestBothEdgesWithNullsAfterDifferentAmount)
-{
-  fwc_wrapper<float> left_edges{{0, 1, 2, 3, 4, 5, 6, 7, 8, 9}, {1, 1, 1, 1, 1, 1, 1, 1, 0, 0}};
-  fwc_wrapper<float> right_edges{{1, 2, 3, 4, 5, 6, 7, 8, 9, 10}, {1, 1, 1, 1, 1, 1, 1, 1, 1, 0}};
-  fwc_wrapper<float> input{6.5, 7.5, 8.5, 9.5};
-
-  std::unique_ptr<cudf::column> result = cudf::bin(input,
-                                                   left_edges,
-                                                   cudf::inclusive::NO,
-                                                   right_edges,
-                                                   cudf::inclusive::NO,
-                                                   cudf::null_order::AFTER);
-  ASSERT_TRUE(result->size() == 4);
-  ASSERT_TRUE(result->null_count() == 2);
-
-  fwc_wrapper<cudf::size_type> expected{{6, 7, 0, 0}, {1, 1, 0, 0}};
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
-};
-
-/**
- * Simple real data.
- */
-
-// Test floating point data.
-template <typename T>
-struct FloatingPointBinTestFixture : public BinTestFixture {
-  void test()
-  {
-    fwc_wrapper<T> left_edges{0.0, 1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0};
-    fwc_wrapper<T> right_edges{1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 10.0};
-    fwc_wrapper<T> input{2.5, 2.5, 2.5, 2.5, 2.5, 2.5, 2.5, 2.5, 2.5, 2.5};
-
-    auto result =
-      cudf::bin(input, left_edges, cudf::inclusive::YES, right_edges, cudf::inclusive::NO);
-
-    // Check that every element is placed in bin 2.
-    fwc_wrapper<cudf::size_type> expected{{2, 2, 2, 2, 2, 2, 2, 2, 2, 2},
-                                          {1, 1, 1, 1, 1, 1, 1, 1, 1, 1}};
-    CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
-
-    // Test the first and last bins to catch any off-by-one errors.
-    fwc_wrapper<T> input_endpoints{0.1, 9.9};
-    std::unique_ptr<cudf::column> result2 = cudf::bin(
-      input_endpoints, left_edges, cudf::inclusive::YES, right_edges, cudf::inclusive::NO);
-
-    fwc_wrapper<cudf::size_type> expected2{{0, 9}, {1, 1}};
-    CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected2, result2->view());
-  }
-};
-
-TYPED_TEST_CASE(FloatingPointBinTestFixture, FloatingPointTypes);
-
-TYPED_TEST(FloatingPointBinTestFixture, TestFloatingPointData) { this->test(); };
-
-// Test integer inputs.
-template <typename T>
-struct IntegerBinTestFixture : public BinTestFixture {
-  void test(cudf::inclusive left_inc,
-            cudf::inclusive right_inc,
-            fwc_wrapper<cudf::size_type> expected)
-  {
-    fwc_wrapper<T> left_edges{0, 2, 4, 6, 8};
-    fwc_wrapper<T> right_edges{2, 4, 6, 8, 10};
-    fwc_wrapper<T> input{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10};
-
-    auto result = cudf::bin(input, left_edges, left_inc, right_edges, right_inc);
-
-    // Check that every element is placed in bin 2.
-    CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
-  }
-};
-
-TYPED_TEST_CASE(IntegerBinTestFixture, IntegralTypesNotBool);
-
-TYPED_TEST(IntegerBinTestFixture, TestIntegerDataIncludeLeft)
-{
-  this->test(cudf::inclusive::YES,
-             cudf::inclusive::NO,
-             {{0, 0, 1, 1, 2, 2, 3, 3, 4, 4, 0}, {1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0}});
-};
-
-TYPED_TEST(IntegerBinTestFixture, TestIntegerDataIncludeRight)
-{
-  this->test(cudf::inclusive::NO,
-             cudf::inclusive::YES,
-             {{0, 0, 0, 1, 1, 2, 2, 3, 3, 4, 4}, {0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1}});
-};
-
-TYPED_TEST(IntegerBinTestFixture, TestIntegerDataIncludeNeither)
 {
   this->test(cudf::inclusive::NO,
              cudf::inclusive::NO,
              {{0, 0, 1, 1, 2, 2, 3, 3, 4, 4, 5}, {0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0}});
 };
 
-// Test fixed point data types.
+// Boundary point 1 should be in bin 1 [1, 2).
+TYPED_TEST(BoundaryExclusionBinTestFixture, TestIncludeLeft)
+{
+  this->test(cudf::inclusive::YES,
+             cudf::inclusive::NO,
+             {{0, 0, 1, 1, 2, 2, 3, 3, 4, 4, 0}, {1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0}});
+};
+
+// Boundary point 1 should be in bin 0 (0, 1].
+TYPED_TEST(BoundaryExclusionBinTestFixture, TestIncludeRight)
+{
+  this->test(cudf::inclusive::NO,
+             cudf::inclusive::YES,
+             {{0, 0, 0, 1, 1, 2, 2, 3, 3, 4, 4}, {0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1}});
+};
+
+
+/*
+ * Test real data.
+ */
+
+// Test numeric data of reasonable size with noncontiguous bins.
+template <typename T>
+struct RealDataBinTestFixture : public BinTestFixture {
+  void test(unsigned int num_elements = 512, unsigned int inputs_per_bin = 4, T left_edge_start_val=0)
+  {
+    // Avoid testing numbers that are larger than the current type supports.
+    const T largest_value = (num_elements / inputs_per_bin) * 4;
+    num_elements = std::min(std::numeric_limits<T>::max(), largest_value);
+
+    unsigned int num_edges = num_elements / inputs_per_bin;
+
+    std::vector<T> left_edge_vector(num_edges);
+    std::vector<T> right_edge_vector(num_edges);
+    std::vector<T> partial_input_vector(num_edges);
+    std::vector<T> input_vector;
+    std::vector<cudf::size_type> partial_expected_vector(num_edges);
+    std::vector<cudf::size_type> expected_vector;
+    std::vector<unsigned int> expected_validity(num_elements, 1);
+
+    std::iota(left_edge_vector.begin(), left_edge_vector.end(), left_edge_start_val);
+
+    // Create noncontiguous bins of width 2 separate by 2, and place inputs in the middle of each bin.
+    std::transform(left_edge_vector.begin(), left_edge_vector.end(), left_edge_vector.begin(), [] (T val) { return val * 4; });
+    std::transform(left_edge_vector.begin(), left_edge_vector.end(), right_edge_vector.begin(), [] (T val) { return val + 2; });
+    std::transform(left_edge_vector.begin(), left_edge_vector.end(), partial_input_vector.begin(), [] (T val) { return val + 1; });
+    std::iota(partial_expected_vector.begin(), partial_expected_vector.end(), 0);
+
+    // Create vector containing duplicates of all the inputs.
+    input_vector.reserve(num_elements);
+    expected_vector.reserve(num_elements);
+    for (unsigned int i = 0; i < inputs_per_bin; ++i)
+    {
+        input_vector.insert(input_vector.end(), partial_input_vector.begin(), partial_input_vector.end());
+        expected_vector.insert(expected_vector.end(), partial_expected_vector.begin(), partial_expected_vector.end());
+    }
+
+    // Column wrappers are necessary inputs for the function.
+    fwc_wrapper<T> left_edges(left_edge_vector.begin(), left_edge_vector.end());
+    fwc_wrapper<T> right_edges(right_edge_vector.begin(), right_edge_vector.end());
+    fwc_wrapper<T> input(input_vector.begin(), input_vector.end());
+    fwc_wrapper<cudf::size_type> expected(expected_vector.begin(), expected_vector.end(), expected_validity.begin());
+
+    auto result =
+      cudf::bin(input, left_edges, cudf::inclusive::YES, right_edges, cudf::inclusive::NO);
+
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
+  }
+};
+
+TYPED_TEST_CASE(RealDataBinTestFixture, NumericTypesNotBool);
+
+TYPED_TEST(RealDataBinTestFixture, TestRealData256) { this->test(256); };
+TYPED_TEST(RealDataBinTestFixture, TestRealData512) { this->test(512); };
+TYPED_TEST(RealDataBinTestFixture, TestRealData1024) { this->test(1024); };
+
+// Test negative numbers for signed types.
+template <typename T>
+struct NegativeNumbersBinTestFixture : public RealDataBinTestFixture<T> {
+  void test(unsigned int num_elements = 512, unsigned int inputs_per_bin = 4)
+  {
+      RealDataBinTestFixture<T>::test(num_elements, inputs_per_bin, -static_cast<T>(num_elements / 2));
+  }
+};
+
+TYPED_TEST_CASE(NegativeNumbersBinTestFixture, SignedNumericTypesNotBool);
+
+TYPED_TEST(NegativeNumbersBinTestFixture, TestNegativeNumbers256) { this->test(256); };
+TYPED_TEST(NegativeNumbersBinTestFixture, TestNegativeNumbers512) { this->test(512); };
+TYPED_TEST(NegativeNumbersBinTestFixture, TestNegativeNumbers1024) { this->test(1024); };
+
+
+/*
+ * Test fixed point types.
+ */
+
 template <typename T>
 struct FixedPointBinTestFixture : public BinTestFixture {
 };
@@ -406,14 +409,13 @@ TYPED_TEST(FixedPointBinTestFixture, TestFixedPointData)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
 };
 
-// Test strings.
-template <typename T>
-struct StringBinTestFixture : public BinTestFixture {
-};
 
-TYPED_TEST_CASE(StringBinTestFixture, StringTypes);
+/*
+ * Test strings.
+ */
 
-TYPED_TEST(StringBinTestFixture, TestStringData)
+// Basic test of strings of lowercase alphanumerics.
+TEST(TestStringData, SimpleStringTest)
 {
   strings_column_wrapper left_edges{"a", "b", "c", "d", "e"};
   strings_column_wrapper right_edges{"b", "c", "d", "e", "f"};
@@ -425,6 +427,22 @@ TYPED_TEST(StringBinTestFixture, TestStringData)
   fwc_wrapper<cudf::size_type> expected{{0, 1, 2, 3, 4}, {1, 1, 1, 1, 1}};
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
 };
+
+// Test non-ASCII characters.
+TEST(TestStringData, NonAsciiStringTest)
+{
+  strings_column_wrapper left_edges{"A"};
+  strings_column_wrapper right_edges{"z"};
+  strings_column_wrapper input{"Héllo", "thesé", "HERE", "tést strings", "", "1.75", "-34",
+                               "+9.8", "17¼", "x³", "2³", " 12⅝", "1234567890", "de", "\t\r\n\f "};
+
+  auto result =
+    cudf::bin(input, left_edges, cudf::inclusive::NO, right_edges, cudf::inclusive::NO);
+
+  fwc_wrapper<cudf::size_type> expected{{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}, {1, 1, 1, 1, 0, 0, 0, 0, 0, 1, 0, 0, 0, 1, 0}};
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
+}
+
 
 }  // anonymous namespace
 
