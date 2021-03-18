@@ -729,4 +729,36 @@ TEST_F(MergeTest, KeysWithNulls)
     }
 }
 
+template <typename T>
+struct FixedPointTestBothReps : public cudf::test::BaseFixture {
+};
+
+template <typename T>
+using fp_wrapper = cudf::test::fixed_point_column_wrapper<T>;
+
+TYPED_TEST_CASE(FixedPointTestBothReps, cudf::test::FixedPointTypes);
+
+TYPED_TEST(FixedPointTestBothReps, FixedPointMerge)
+{
+  using namespace numeric;
+  using decimalXX = TypeParam;
+  using RepType   = cudf::device_storage_type_t<decimalXX>;
+
+  auto const a       = fp_wrapper<RepType>{{4, 22, 33, 44, 55}, scale_type{-1}};
+  auto const b       = fp_wrapper<RepType>{{5, 7, 10}, scale_type{-1}};
+  auto const table_a = cudf::table_view(std::vector<cudf::column_view>{a});
+  auto const table_b = cudf::table_view(std::vector<cudf::column_view>{b});
+  auto const tables  = std::vector<cudf::table_view>{table_a, table_b};
+
+  auto const key_cols = std::vector<cudf::size_type>{0};
+  auto const order    = std::vector<cudf::order>{cudf::order::ASCENDING};
+
+  auto const exp       = fp_wrapper<RepType>{{4, 5, 7, 10, 22, 33, 44, 55}, scale_type{-1}};
+  auto const exp_table = cudf::table_view(std::vector<cudf::column_view>{exp});
+
+  auto const result = cudf::merge(tables, key_cols, order);
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(exp_table.column(0), result->view().column(0));
+}
+
 CUDF_TEST_PROGRAM_MAIN()
