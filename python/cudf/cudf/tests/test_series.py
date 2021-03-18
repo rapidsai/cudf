@@ -1121,8 +1121,7 @@ def test_series_drop_raises():
 
 
 @pytest.mark.parametrize(
-    "data",
-    [[[1, 2, 3], None, [4], [], [5, 6]], [1, 2, 3, 4, 5]],
+    "data", [[[1, 2, 3], None, [4], [], [5, 6]], [1, 2, 3, 4, 5]],
 )
 @pytest.mark.parametrize("ignore_index", [True, False])
 @pytest.mark.parametrize(
