@@ -48,9 +48,6 @@ TYPED_TEST(groupby_max_scan_test, basic)
 
   auto agg = cudf::make_max_aggregation();
   test_single_scan(keys, vals, expect_keys, expect_vals, std::move(agg));
-
-  auto agg2 = cudf::make_max_aggregation();
-  test_single_scan(keys, vals, expect_keys, expect_vals, std::move(agg2));
 }
 
 TYPED_TEST(groupby_max_scan_test, empty_cols)
@@ -69,9 +66,6 @@ TYPED_TEST(groupby_max_scan_test, empty_cols)
 
   auto agg = cudf::make_max_aggregation();
   test_single_scan(keys, vals, expect_keys, expect_vals, std::move(agg));
-
-  auto agg2 = cudf::make_max_aggregation();
-  test_single_scan(keys, vals, expect_keys, expect_vals, std::move(agg2));
 }
 
 TYPED_TEST(groupby_max_scan_test, zero_valid_keys)
@@ -90,9 +84,6 @@ TYPED_TEST(groupby_max_scan_test, zero_valid_keys)
 
   auto agg = cudf::make_max_aggregation();
   test_single_scan(keys, vals, expect_keys, expect_vals, std::move(agg));
-
-  auto agg2 = cudf::make_max_aggregation();
-  test_single_scan(keys, vals, expect_keys, expect_vals, std::move(agg2));
 }
 
 TYPED_TEST(groupby_max_scan_test, zero_valid_values)
@@ -111,9 +102,6 @@ TYPED_TEST(groupby_max_scan_test, zero_valid_values)
 
   auto agg = cudf::make_max_aggregation();
   test_single_scan(keys, vals, expect_keys, expect_vals, std::move(agg));
-
-  auto agg2 = cudf::make_max_aggregation();
-  test_single_scan(keys, vals, expect_keys, expect_vals, std::move(agg2));
 }
 
 TYPED_TEST(groupby_max_scan_test, null_keys_and_values)
@@ -137,9 +125,6 @@ TYPED_TEST(groupby_max_scan_test, null_keys_and_values)
 
   auto agg = cudf::make_max_aggregation();
   test_single_scan(keys, vals, expect_keys, expect_vals, std::move(agg));
-
-  auto agg2 = cudf::make_max_aggregation();
-  test_single_scan(keys, vals, expect_keys, expect_vals, std::move(agg2));
 }
 
 template <typename T>
@@ -168,8 +153,8 @@ TYPED_TEST(FixedPointTestBothReps, GroupBySortMaxScanDecimalAsValue)
     auto const expect_vals_max = fp_wrapper{                  {5, 8, 8, 6, 9, 9, 9, 7, 7, 7}, scale};
     // clang-format on
 
-    auto agg2 = cudf::make_max_aggregation();
-    test_single_scan(keys, vals, expect_keys, expect_vals_max, std::move(agg2));
+    auto agg = cudf::make_max_aggregation();
+    test_single_scan(keys, vals, expect_keys, expect_vals_max, std::move(agg));
   }
 }
 

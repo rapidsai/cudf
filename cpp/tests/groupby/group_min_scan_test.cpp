@@ -46,9 +46,6 @@ TYPED_TEST(groupby_min_scan_test, basic)
 
   auto agg = cudf::make_min_aggregation();
   test_single_scan(keys, vals, expect_keys, expect_vals, std::move(agg));
-
-  auto agg2 = cudf::make_min_aggregation();
-  test_single_scan(keys, vals, expect_keys, expect_vals, std::move(agg2));
 }
 
 TYPED_TEST(groupby_min_scan_test, empty_cols)
@@ -67,9 +64,6 @@ TYPED_TEST(groupby_min_scan_test, empty_cols)
 
   auto agg = cudf::make_min_aggregation();
   test_single_scan(keys, vals, expect_keys, expect_vals, std::move(agg));
-
-  auto agg2 = cudf::make_min_aggregation();
-  test_single_scan(keys, vals, expect_keys, expect_vals, std::move(agg2));
 }
 
 TYPED_TEST(groupby_min_scan_test, zero_valid_keys)
@@ -88,9 +82,6 @@ TYPED_TEST(groupby_min_scan_test, zero_valid_keys)
 
   auto agg = cudf::make_min_aggregation();
   test_single_scan(keys, vals, expect_keys, expect_vals, std::move(agg));
-
-  auto agg2 = cudf::make_min_aggregation();
-  test_single_scan(keys, vals, expect_keys, expect_vals, std::move(agg2));
 }
 
 TYPED_TEST(groupby_min_scan_test, zero_valid_values)
@@ -109,9 +100,6 @@ TYPED_TEST(groupby_min_scan_test, zero_valid_values)
 
   auto agg = cudf::make_min_aggregation();
   test_single_scan(keys, vals, expect_keys, expect_vals, std::move(agg));
-
-  auto agg2 = cudf::make_min_aggregation();
-  test_single_scan(keys, vals, expect_keys, expect_vals, std::move(agg2));
 }
 
 TYPED_TEST(groupby_min_scan_test, null_keys_and_values)
@@ -135,9 +123,6 @@ TYPED_TEST(groupby_min_scan_test, null_keys_and_values)
 
   auto agg = cudf::make_min_aggregation();
   test_single_scan(keys, vals, expect_keys, expect_vals, std::move(agg));
-
-  auto agg2 = cudf::make_min_aggregation();
-  test_single_scan(keys, vals, expect_keys, expect_vals, std::move(agg2));
 }
 
 struct groupby_min_scan_string_test : public cudf::test::BaseFixture {
@@ -185,8 +170,8 @@ TYPED_TEST(FixedPointTestBothReps, GroupBySortMinScanDecimalAsValue)
     auto const expect_vals_min = fp_wrapper{                  {5, 5, 1, 6, 6, 0, 0, 7, 2, 2}, scale};
     // clang-format on
 
-    auto agg2 = cudf::make_min_aggregation();
-    test_single_scan(keys, vals, expect_keys, expect_vals_min, std::move(agg2));
+    auto agg = cudf::make_min_aggregation();
+    test_single_scan(keys, vals, expect_keys, expect_vals_min, std::move(agg));
   }
 }
 
