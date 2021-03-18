@@ -2052,4 +2052,32 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_explodePosition(JNIEnv *e
   CATCH_STD(env, 0);
 }
 
+JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_explodeOuter(JNIEnv *env, jclass,
+                                                                    jlong input_jtable,
+                                                                    jint column_index) {
+  JNI_NULL_CHECK(env, input_jtable, "explode: input table is null", 0);
+  try {
+    cudf::jni::auto_set_device(env);
+    cudf::table_view *input_table = reinterpret_cast<cudf::table_view *>(input_jtable);
+    cudf::size_type col_index = static_cast<cudf::size_type>(column_index);
+    std::unique_ptr<cudf::table> exploded = cudf::explode_outer(*input_table, col_index);
+    return cudf::jni::convert_table_for_return(env, exploded);
+  }
+  CATCH_STD(env, 0);
+}
+
+JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_explodeOuterPosition(JNIEnv *env, jclass,
+                                                                            jlong input_jtable,
+                                                                            jint column_index) {
+  JNI_NULL_CHECK(env, input_jtable, "explode: input table is null", 0);
+  try {
+    cudf::jni::auto_set_device(env);
+    cudf::table_view *input_table = reinterpret_cast<cudf::table_view *>(input_jtable);
+    cudf::size_type col_index = static_cast<cudf::size_type>(column_index);
+    std::unique_ptr<cudf::table> exploded = cudf::explode_outer_position(*input_table, col_index);
+    return cudf::jni::convert_table_for_return(env, exploded);
+  }
+  CATCH_STD(env, 0);
+}
+
 } // extern "C"
