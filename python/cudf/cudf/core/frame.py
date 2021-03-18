@@ -23,7 +23,6 @@ from cudf.core.column import as_column, build_categorical_column, column_empty
 from cudf.utils.dtypes import (
     is_categorical_dtype,
     is_column_like,
-    is_list_dtype,
     is_numerical_dtype,
     is_scalar,
     min_scalar_type,
@@ -581,32 +580,21 @@ class Frame(libcudf.table.Table):
         set, the original index is not exploded and will use
         a `RangeIndex`.
         """
-        if (
-            isinstance(self, (cudf.Series, cudf.DataFrame))
-            and self._index is not None
-        ):
-            if not is_list_dtype(self._data[explode_column].dtype):
-                data = self._data.copy(deep=True)
-                idx = None if ignore_index else self._index.copy(deep=True)
-                return self.__class__._from_data(data, index=idx)
+        explode_column_num = self._column_names.index(explode_column)
+        if not ignore_index and self._index is not None:
+            explode_column_num += self._index.nlevels
 
-            explode_column_num = self._column_names.index(explode_column)
-            if not ignore_index:
-                explode_column_num += self._index.nlevels
+        res_tbl = libcudf.lists.explode_outer(
+            self, explode_column_num, ignore_index
+        )
+        res = self.__class__._from_table(res_tbl)
 
-            res_tbl = libcudf.lists.explode_outer(
-                self, explode_column_num, ignore_index
-            )
-            res = self.__class__._from_table(res_tbl)
+        res._data.multiindex = self._data.multiindex
+        res._data._level_names = self._data._level_names
 
-            res._data.multiindex = self._data.multiindex
-            res._data._level_names = self._data._level_names
-
-            if not ignore_index:
-                res.index.names = self._index.names
-            return res
-        else:
-            raise NotImplementedError("_explode is not implemented for Index.")
+        if not ignore_index and self._index is not None:
+            res.index.names = self._index.names
+        return res
 
     def _get_columns_by_label(self, labels, downcast):
         """

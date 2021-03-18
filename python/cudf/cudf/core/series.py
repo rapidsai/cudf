@@ -6398,6 +6398,10 @@ class Series(Frame, Serializable):
         3       5
         dtype: int64
         """
+        if not is_list_dtype(self._column.dtype):
+            data = self._data.copy(deep=True)
+            idx = None if ignore_index else self._index.copy(deep=True)
+            return self.__class__._from_data(data, index=idx)
 
         return super()._explode(self._column_names[0], ignore_index)
 

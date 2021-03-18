@@ -7748,6 +7748,11 @@ class DataFrame(Frame, Serializable):
         if column not in self._column_names:
             raise KeyError(column)
 
+        if not is_list_dtype(self._data[column].dtype):
+            data = self._data.copy(deep=True)
+            idx = None if ignore_index else self._index.copy(deep=True)
+            return self.__class__._from_data(data, index=idx)
+
         return super()._explode(column, ignore_index)
 
     _accessors = set()  # type: Set[Any]
