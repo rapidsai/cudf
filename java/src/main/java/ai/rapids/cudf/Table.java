@@ -183,6 +183,9 @@ public final class Table implements AutoCloseable {
   
   private static native ContiguousTable[] contiguousSplit(long inputTable, int[] indices);
 
+  private static native long[] partition(long inputTable, long partitionView,
+      int numberOfPartitions, int[] outputOffsets);
+
   private static native long[] hashPartition(long inputTable,
                                              int[] columnsToHash,
                                              int hashTypeId,
@@ -1255,6 +1258,24 @@ public final class Table implements AutoCloseable {
    */
   public Table repeat(ColumnVector counts, boolean checkCount) {
     return new Table(repeatColumnCount(this.nativeHandle, counts.getNativeView(), checkCount));
+  }
+
+  /**
+   * Partition this table using the mapping in partitionMap. partitionMap must be an integer
+   * column. The number of rows in partitionMap must be the same as this table.  Each row
+   * in the map will indicate which partition the rows in the table belong to.
+   * @param partitionMap the partitions for each row.
+   * @param numberOfPartitions number of partitions
+   * @return {@link PartitionedTable} Table that exposes a limited functionality of the
+   * {@link Table} class
+   */
+  public PartitionedTable partition(ColumnView partitionMap, int numberOfPartitions) {
+    int[] partitionOffsets = new int[numberOfPartitions];
+    return new PartitionedTable(new Table(partition(
+        getNativeView(),
+        partitionMap.getNativeView(),
+        partitionOffsets.length,
+        partitionOffsets)), partitionOffsets);
   }
 
   /**

@@ -1774,6 +1774,23 @@ public class TableTest extends CudfTestBase {
   }
 
   @Test
+  void testPartition() {
+    try (Table t = new Table.TestBuilder()
+        .column(1, 2, 3, 4, 5, 6, 7, 8, 9, 10)
+        .build();
+         ColumnVector parts = ColumnVector
+             .fromInts(1, 2, 1, 2, 1, 2, 1, 2, 1, 2);
+         PartitionedTable pt = t.partition(parts, 3);
+         Table expected = new Table.TestBuilder()
+             .column(1, 3, 5, 7, 9, 2, 4, 6, 8, 10)
+             .build()) {
+      int[] partCutoffs = pt.getPartitions();
+      assertArrayEquals(new int[]{0, 0, 5}, partCutoffs);
+      assertTablesAreEqual(expected, pt.getTable());
+    }
+  }
+
+  @Test
   void testIdentityHashPartition() {
     final int count = 1024 * 1024;
     try (ColumnVector aIn = ColumnVector.build(DType.INT64, count, Range.appendLongs(count));
