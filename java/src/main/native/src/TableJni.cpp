@@ -271,8 +271,7 @@ private:
     auto col_meta = cudf::column_metadata{get_column_name(idx)};
     if (cview.type().id() == cudf::type_id::LIST) {
       // list type requires a stub metadata for offset column, index is 0.
-      // It is ok the child metadata uses the same name, so keep `idx` unchanged.
-      col_meta.children_meta = {{}, build_one_column_meta(cview.child(1), idx)};
+      col_meta.children_meta = {{}, build_one_column_meta(cview.child(1), ++idx)};
     } else if (cview.type().id() == cudf::type_id::STRUCT) {
       // struct type
       col_meta.children_meta.reserve(cview.num_children());
