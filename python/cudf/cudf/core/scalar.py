@@ -248,7 +248,10 @@ class Scalar(object):
     def __repr__(self):
         # str() fixes a numpy bug with NaT
         # https://github.com/numpy/numpy/issues/17552
-        return f"Scalar({str(self.value)}, dtype={self.dtype})"
+        return (
+            f"{self.__class__.__name__}"
+            f"({str(self.value)}, dtype={self.dtype})"
+        )
 
     def _binop_result_dtype_or_error(self, other, op):
         if op in {"__eq__", "__ne__", "__lt__", "__gt__", "__le__", "__ge__"}:

@@ -128,9 +128,12 @@ cdef class DeviceScalar:
 
     def __repr__(self):
         if self.value is cudf.NA:
-            return f"Scalar({self.value}, {self.dtype.__repr__()})"
+            return (
+                f"{self.__class__.__name__}"
+                f"({self.value}, {self.dtype.__repr__()})"
+            )
         else:
-            return f"Scalar({self.value.__repr__()})"
+            return f"{self.__class__.__name__}({self.value.__repr__()})"
 
     @staticmethod
     cdef DeviceScalar from_unique_ptr(unique_ptr[scalar] ptr):
