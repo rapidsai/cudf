@@ -34,7 +34,7 @@ namespace cudf {
 namespace lists {
 namespace detail {
 namespace {
-using offset_type = lists_column_view::offset_type;
+
 /**
  * @brief Copy list entries and entry list offsets ignoring duplicates
  *

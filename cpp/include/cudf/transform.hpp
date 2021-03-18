@@ -143,8 +143,11 @@ std::unique_ptr<column> mask_to_bools(
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
- * @brief Returns the cumulative size in bits of all columns in the `table_view` for
+ * @brief Returns an approximate cumulative size in bits of all columns in the `table_view` for
  * each row.
+ *
+ * This function counts bits instead of bytes to account for the null mask which only has one
+ * bit per row.
  *
  * Each row in the returned column is the sum of the per-row size for each column in
  * the table.
@@ -168,7 +171,7 @@ std::unique_ptr<column> mask_to_bools(
  *
  * @param t The table view to perform the computation on.
  * @param mr Device memory resource used to allocate the returned columns's device memory
- * @return A 32-bit integer column containing the per-row byte counts.
+ * @return A 32-bit integer column containing the per-row bit counts.
  */
 std::unique_ptr<column> row_bit_count(
   table_view const& t,

@@ -32,8 +32,6 @@ namespace detail {
 
 namespace {
 
-using offset_type = int32_t;
-
 /**
  * @brief Struct which contains per-column information necessary to
  * traverse a column hierarchy on the gpu.
@@ -86,7 +84,7 @@ using offset_type = int32_t;
  * [4, 8]  [5, 9]   [4, 8]
  * struct< list<>   float>
  *
- * To accomplish this we mantain a stack of spans. Pushing the current span
+ * To accomplish this we maintain a stack of spans. Pushing the current span
  * whenever we enter a branch, and popping a span whenever we leave a branch.
  *
  * `branch_depth_start` represents the branch depth as we reach a new column.
@@ -133,6 +131,14 @@ struct hierarchy_info {
  * of column_views and produces accompanying column_info and hierarchy_info
  * metadata.
  *
+ * @param begin: Beginning of a range of column views
+ * @param end: End of a range of column views
+ * @param out: (output) Flattened vector of output column_views
+ * @param info: (output) Additional per-output column_view metadata needed by the gpu
+ * @param h_info: (output) Information about the hierarchy
+ * @param cur_depth: Current absolute depth in the hierarchy
+ * @param cur_branch_depth: Current branch depth
+ * @param parent_index: Index into `out` representing our owning parent column
  */
 template <typename ColIter>
 void flatten_hierarchy(ColIter begin,
@@ -141,9 +147,9 @@ void flatten_hierarchy(ColIter begin,
                        std::vector<column_info>& info,
                        hierarchy_info& h_info,
                        rmm::cuda_stream_view stream,
-                       size_type cur_depth        = 0,
-                       size_type cur_branch_depth = 0,
-                       int parent_index           = -1);
+                       size_type cur_depth                = 0,
+                       size_type cur_branch_depth         = 0,
+                       thrust::optional<int> parent_index = {});
 
 /**
  * @brief Type-dispatched functor called by flatten_hierarchy.
@@ -161,11 +167,12 @@ struct flatten_functor {
                   rmm::cuda_stream_view stream,
                   size_type cur_depth,
                   size_type cur_branch_depth,
-                  int parent_index)
+                  thrust::optional<int> parent_index)
   {
     out.push_back(col);
     info.push_back({cur_depth, cur_branch_depth, cur_branch_depth});
-    h_info.simple_per_row_size += (sizeof(device_storage_type_t<T>) * 8) + (col.nullable() ? 1 : 0);
+    h_info.simple_per_row_size +=
+      (sizeof(device_storage_type_t<T>) * CHAR_BIT) + (col.nullable() ? 1 : 0);
   }
 
   // strings
@@ -177,7 +184,7 @@ struct flatten_functor {
                   rmm::cuda_stream_view stream,
                   size_type cur_depth,
                   size_type cur_branch_depth,
-                  int parent_index)
+                  thrust::optional<int> parent_index)
   {
     out.push_back(col);
     info.push_back({cur_depth, cur_branch_depth, cur_branch_depth});
@@ -193,15 +200,15 @@ struct flatten_functor {
                   rmm::cuda_stream_view stream,
                   size_type cur_depth,
                   size_type cur_branch_depth,
-                  int parent_index)
+                  thrust::optional<int> parent_index)
   {
     // track branch depth as we reach this list and after we pass it
     size_type const branch_depth_start = cur_branch_depth;
-    if (parent_index >= 0 && out[parent_index].type().id() == type_id::STRUCT) {
+    auto const is_list_inside_struct =
+      parent_index && out[parent_index.value()].type().id() == type_id::STRUCT;
+    if (is_list_inside_struct) {
       cur_branch_depth++;
-      if (cur_branch_depth > h_info.max_branch_depth) {
-        h_info.max_branch_depth = cur_branch_depth;
-      }
+      h_info.max_branch_depth = max(h_info.max_branch_depth, cur_branch_depth);
     }
     size_type const branch_depth_end = cur_branch_depth;
 
@@ -226,7 +233,7 @@ struct flatten_functor {
                   rmm::cuda_stream_view stream,
                   size_type cur_depth,
                   size_type cur_branch_depth,
-                  int parent_index)
+                  thrust::optional<int> parent_index)
   {
     out.push_back(col);
     info.push_back({cur_depth, cur_branch_depth, cur_branch_depth});
@@ -259,7 +266,7 @@ struct flatten_functor {
                   rmm::cuda_stream_view stream,
                   size_type cur_depth,
                   size_type cur_branch_depth,
-                  int parent_index)
+                  thrust::optional<int> parent_index)
   {
     CUDF_FAIL("Unsupported column type in row_bit_count");
   }
@@ -274,7 +281,7 @@ void flatten_hierarchy(ColIter begin,
                        rmm::cuda_stream_view stream,
                        size_type cur_depth,
                        size_type cur_branch_depth,
-                       int parent_index)
+                       thrust::optional<int> parent_index)
 {
   std::for_each(begin, end, [&](column_view const& col) {
     cudf::type_dispatcher(col.type(),
@@ -304,16 +311,30 @@ struct row_span {
  *
  */
 struct row_size_functor {
+  /**
+   * @brief Computes size in bits of a span of rows in a fixed-width column.
+   *
+   * Computed as :   ((# of rows) * sizeof(data type) * 8)
+   *                 +
+   *                 1 bit per row for validity if applicable.
+   */
   template <typename T>
   __device__ size_type operator()(column_device_view const& col, row_span const& span)
   {
     auto const num_rows{span.row_end - span.row_start};
-    auto const element_size  = sizeof(device_storage_type_t<T>) * 8;
+    auto const element_size  = sizeof(device_storage_type_t<T>) * CHAR_BIT;
     auto const validity_size = col.nullable() ? 1 : 0;
     return (element_size + validity_size) * num_rows;
   }
 };
 
+/**
+ * @brief Computes size in bits of a span of rows in a strings column.
+ *
+ * Computed as :   ((# of rows) * sizeof(offset) * 8) + (total # of characters * 8))
+ *                 +
+ *                 1 bit per row for validity if applicable.
+ */
 template <>
 __device__ size_type row_size_functor::operator()<string_view>(column_device_view const& col,
                                                                row_span const& span)
@@ -323,13 +344,20 @@ __device__ size_type row_size_functor::operator()<string_view>(column_device_vie
   auto const row_start{span.row_start + col.offset()};
   auto const row_end{span.row_end + col.offset()};
 
-  auto const offsets_size  = sizeof(offset_type) * 8;
+  auto const offsets_size  = sizeof(offset_type) * CHAR_BIT;
   auto const validity_size = col.nullable() ? 1 : 0;
   auto const chars_size =
-    (offsets.data<offset_type>()[row_end] - offsets.data<offset_type>()[row_start]) * 8;
+    (offsets.data<offset_type>()[row_end] - offsets.data<offset_type>()[row_start]) * CHAR_BIT;
   return ((offsets_size + validity_size) * num_rows) + chars_size;
 }
 
+/**
+ * @brief Computes size in bits of a span of rows in a list column.
+ *
+ * Computed as :   ((# of rows) * sizeof(offset) * 8)
+ *                 +
+ *                 1 bit per row for validity if applicable.
+ */
 template <>
 __device__ size_type row_size_functor::operator()<list_view>(column_device_view const& col,
                                                              row_span const& span)
@@ -337,11 +365,16 @@ __device__ size_type row_size_functor::operator()<list_view>(column_device_view 
   column_device_view const& offsets = col.child(lists_column_view::offsets_column_index);
   auto const num_rows{span.row_end - span.row_start};
 
-  auto const offsets_size  = sizeof(offset_type) * 8;
+  auto const offsets_size  = sizeof(offset_type) * CHAR_BIT;
   auto const validity_size = col.nullable() ? 1 : 0;
   return (offsets_size + validity_size) * num_rows;
 }
 
+/**
+ * @brief Computes size in bits of a span of rows in a struct column.
+ *
+ * Computed as :   1 bit per row for validity if applicable.
+ */
 template <>
 __device__ size_type row_size_functor::operator()<struct_view>(column_device_view const& col,
                                                                row_span const& span)
@@ -353,48 +386,46 @@ __device__ size_type row_size_functor::operator()<struct_view>(column_device_vie
 /**
  * @brief Kernel for computing per-row sizes in bits.
  *
- * @param cols An array of column_device_views represeting a column hierarcy
- * @param info An array of column_info structs corresponding the elements in `cols`
- * @param num_columns The number of columns
- * @param num_rows The number of rows in the root column
- * @param output Output buffer of size `num_rows` where per-row bit sizes are stored
+ * @param cols An span of column_device_views represeting a column hierarcy
+ * @param info An span of column_info structs corresponding the elements in `cols`
+ * @param output Output span of size (# rows) where per-row bit sizes are stored
  * @param max_branch_depth Maximum depth of the span stack needed per-thread
- *
  */
-__global__ void compute_row_sizes(column_device_view* cols,
-                                  column_info* info,
-                                  size_type num_columns,
-                                  size_type num_rows,
-                                  size_type* output,
+__global__ void compute_row_sizes(device_span<column_device_view const> cols,
+                                  device_span<column_info const> info,
+                                  device_span<size_type> output,
                                   size_type max_branch_depth)
 {
-  extern __shared__ row_span branch_shared[];
+  extern __shared__ row_span thread_branch_stacks[];
   int const tid = threadIdx.x + blockIdx.x * blockDim.x;
 
+  auto const num_rows = output.size();
   if (tid >= num_rows) { return; }
 
   // branch stack. points to the last list prior to branching.
-  row_span* branch = branch_shared + (tid * max_branch_depth);
+  row_span* my_branch_stack = thread_branch_stacks + (tid * max_branch_depth);
   size_type branch_depth{0};
 
   // current row span - always starts at 1 row.
   row_span cur_span{tid, tid + 1};
 
   // output size
-  size_type& size = *(output + tid);
+  size_type& size = output[tid];
   size            = 0;
 
   size_type last_branch_depth{0};
-  for (size_type idx = 0; idx < num_columns; idx++) {
+  for (size_type idx = 0; idx < cols.size(); idx++) {
     column_device_view const& col = cols[idx];
 
     // if we've returned from a branch
-    if (info[idx].branch_depth_start < last_branch_depth) { cur_span = branch[--branch_depth]; }
+    if (info[idx].branch_depth_start < last_branch_depth) {
+      cur_span = my_branch_stack[--branch_depth];
+    }
     // if we're entering a new branch.
     // NOTE: this case can happen (a pop and a push by the same column)
     // when we have a struct<list, list>
     if (info[idx].branch_depth_end > info[idx].branch_depth_start) {
-      branch[branch_depth++] = cur_span;
+      my_branch_stack[branch_depth++] = cur_span;
     }
 
     // if we're back at depth 0, this is a new top-level column, so reset
@@ -436,6 +467,7 @@ std::unique_ptr<column> row_bit_count(table_view const& t,
   std::vector<column_info> info;
   hierarchy_info h_info;
   flatten_hierarchy(t.begin(), t.end(), cols, info, h_info, stream);
+  CUDF_EXPECTS(info.size() == cols.size(), "Size/info mismatch");
 
   // create output buffer and view
   auto output = cudf::make_fixed_width_column(
@@ -462,7 +494,6 @@ std::unique_ptr<column> row_bit_count(table_view const& t,
                            sizeof(column_info) * info.size(),
                            cudaMemcpyHostToDevice,
                            stream.value()));
-  CUDF_EXPECTS(info.size() == cols.size(), "Size/info mismatch");
 
   // each thread needs to maintain a stack of row spans of size max_branch_depth. we will use
   // shared memory to do this rather than allocating a potentially gigantic temporary buffer
@@ -484,11 +515,9 @@ std::unique_ptr<column> row_bit_count(table_view const& t,
 
   cudf::detail::grid_1d grid{t.num_rows(), block_size, 1};
   compute_row_sizes<<<grid.num_blocks, block_size, shared_mem_size, stream.value()>>>(
-    std::get<1>(d_cols),
-    d_info.data(),
-    info.size(),
-    t.num_rows(),
-    mcv.data<size_type>(),
+    {std::get<1>(d_cols), cols.size()},
+    {d_info.data(), info.size()},
+    {mcv.data<size_type>(), static_cast<std::size_t>(t.num_rows())},
     h_info.max_branch_depth);
 
   return output;
