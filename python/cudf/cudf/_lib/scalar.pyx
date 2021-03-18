@@ -47,7 +47,7 @@ cdef class DeviceScalar:
 
     def __init__(self, value, dtype):
         """
-        cudf.Scalar: Type representing a scalar value on the device
+        Type representing an *immutable* scalar value on the device
 
         Parameters
         ----------
@@ -63,6 +63,7 @@ cdef class DeviceScalar:
         self._set_value(value, dtype)
 
     def _set_value(self, value, dtype):
+        # IMPORTANT: this should only ever be called from __init__
         valid = not _is_null_host_scalar(value)
 
         if pd.api.types.is_string_dtype(dtype):
