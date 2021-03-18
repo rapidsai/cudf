@@ -193,6 +193,7 @@ fi
 if hasArg libcudf_kafka; then
     cmake -S $REPODIR/cpp/libcudf_kafka -B ${KAFKA_LIB_BUILD_DIR} \
           -DCMAKE_INSTALL_PREFIX=${INSTALL_PREFIX} \
+          -DBUILD_TESTS=${BUILD_TESTS} \
           -DCMAKE_BUILD_TYPE=${BUILD_TYPE}
 
     cd ${KAFKA_LIB_BUILD_DIR}

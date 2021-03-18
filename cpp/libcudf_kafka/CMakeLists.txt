@@ -40,7 +40,7 @@ option(BUILD_TESTS "Build tests for libcudf_kafka" ON)
 message(VERBOSE "CUDF_KAFKA: Build gtests: ${BUILD_TESTS}")
 
 # Set CUDF_SOURCE_DIR to ensure that cmake Modules from parent cudf have the correct context
-set(CUDF_SOURCE_DIR "${CMAKE_CURRENT_SOURCE_DIR}../")
+set(CUDF_SOURCE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../")
 
 ###################################################################################################
 # - compiler options ------------------------------------------------------------------------------
