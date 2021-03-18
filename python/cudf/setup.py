@@ -106,6 +106,7 @@ extensions = [
             "../../cpp/include",
             os.path.join(CUDF_ROOT, "include"),
             os.path.join(CUDF_ROOT, "_deps/libcudacxx-src/include"),
+            os.path.join(CUDF_ROOT, "_deps/dlpack-src/include"),
             os.path.join(
                 os.path.dirname(sysconfig.get_path("include")),
                 "libcudf/libcudacxx",
