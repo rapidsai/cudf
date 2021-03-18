@@ -43,11 +43,13 @@ function(find_and_configure_rmm VERSION)
         OPTIONS         "BUILD_TESTS OFF"
                         "BUILD_BENCHMARKS OFF"
                         "CUDA_STATIC_RUNTIME ${CUDA_STATIC_RUNTIME}"
-                        "CMAKE_CUDA_ARCHITECTURES ${CMAKE_CUDA_ARCHITECTURES}"
                         "DISABLE_DEPRECATION_WARNING ${DISABLE_DEPRECATION_WARNING}"
     )
     cudf_restore_if_enabled(BUILD_TESTS)
     cudf_restore_if_enabled(BUILD_BENCHMARKS)
+
+    # Make sure consumers of cudf can also see rmm::rmm
+    fix_cmake_global_defaults(rmm::rmm)
 
     if(NOT rmm_BINARY_DIR IN_LIST CMAKE_PREFIX_PATH)
         list(APPEND CMAKE_PREFIX_PATH "${rmm_BINARY_DIR}")

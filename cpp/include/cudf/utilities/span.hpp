@@ -135,6 +135,16 @@ struct host_span : public cudf::detail::span_base<T, Extent, host_span<T, Extent
   constexpr host_span(C const& in) : base(in.data(), in.size())
   {
   }
+
+  template <typename OtherT,
+            std::size_t OtherExtent,
+            typename std::enable_if<(Extent == OtherExtent || Extent == dynamic_extent) &&
+                                      std::is_convertible<OtherT (*)[], T (*)[]>::value,
+                                    void>::type* = nullptr>
+  constexpr host_span(const host_span<OtherT, OtherExtent>& other) noexcept
+    : base(other.data(), other.size())
+  {
+  }
 };
 
 // ===== device_span ===============================================================================
@@ -174,6 +184,83 @@ struct device_span : public cudf::detail::span_base<T, Extent, device_span<T, Ex
   constexpr device_span(C const& in) : base(thrust::raw_pointer_cast(in.data()), in.size())
   {
   }
+
+  template <typename OtherT,
+            std::size_t OtherExtent,
+            typename std::enable_if<(Extent == OtherExtent || Extent == dynamic_extent) &&
+                                      std::is_convertible<OtherT (*)[], T (*)[]>::value,
+                                    void>::type* = nullptr>
+  constexpr device_span(const device_span<OtherT, OtherExtent>& other) noexcept
+    : base(other.data(), other.size())
+  {
+  }
 };
 
+namespace detail {
+
+/**
+ * @brief Generic class for row-major 2D spans. Not compliant with STL container semantics/syntax.
+ *
+ * The index operator returns the corresponding row.
+ */
+template <typename T, template <typename, std::size_t> typename RowType>
+class base_2dspan {
+ public:
+  using size_type = std::pair<size_t, size_t>;
+
+  constexpr base_2dspan() noexcept = default;
+  constexpr base_2dspan(T* data, size_t rows, size_t columns) noexcept
+    : _data{data}, _size{rows, columns}
+  {
+  }
+  base_2dspan(T* data, size_type size) noexcept : _data{data}, _size{size} {}
+
+  constexpr auto data() const noexcept { return _data; }
+  constexpr auto size() const noexcept { return _size; }
+  constexpr auto count() const noexcept { return size().first * size().second; }
+  constexpr bool is_empty() const noexcept { return count() == 0; }
+
+  static constexpr size_t flatten_index(size_t row, size_t column, size_type size) noexcept
+  {
+    return row * size.second + column;
+  }
+
+  constexpr RowType<T, dynamic_extent> operator[](size_t row)
+  {
+    return {this->data() + flatten_index(row, 0, this->size()), this->size().second};
+  }
+
+  template <typename OtherT,
+            template <typename, size_t>
+            typename OtherRowType,
+            typename std::enable_if<std::is_convertible<OtherRowType<OtherT, dynamic_extent>,
+                                                        RowType<T, dynamic_extent>>::value,
+                                    void>::type* = nullptr>
+  constexpr base_2dspan(base_2dspan<OtherT, OtherRowType> const& other) noexcept
+    : _data{other.data()}, _size{other.size()}
+  {
+  }
+
+ protected:
+  T* _data = nullptr;
+  size_type _size{0, 0};
+};
+
+/**
+ * @brief Alias for the 2D span for host data.
+ *
+ * Index operator returns rows as `host_span`.
+ */
+template <class T>
+using host_2dspan = base_2dspan<T, host_span>;
+
+/**
+ * @brief Alias for the 2D span for device data.
+ *
+ * Index operator returns rows as `device_span`.
+ */
+template <class T>
+using device_2dspan = base_2dspan<T, device_span>;
+
+}  // namespace detail
 }  // namespace cudf

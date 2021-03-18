@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018-2020, NVIDIA CORPORATION.
+ * Copyright (c) 2018-2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -184,7 +184,7 @@ struct ColumnChunkDesc {
   {
   }
 
-  uint8_t *compressed_data;                        // pointer to compressed column chunk data
+  uint8_t const *compressed_data;                  // pointer to compressed column chunk data
   size_t compressed_size;                          // total compressed data size for this chunk
   size_t num_values;                               // total number of values in this column
   size_t start_row;                                // starting row of this chunk
@@ -229,9 +229,6 @@ struct EncColumnDesc : stats_column_desc {
   size_type const *level_offsets;  //!< Offset array for per-row pre-calculated rep/def level values
   uint8_t const *rep_values;       //!< Pre-calculated repetition level values
   uint8_t const *def_values;       //!< Pre-calculated definition level values
-
-  column_device_view *leaf_column;    //!< Pointer to leaf column
-  column_device_view *parent_column;  //!< Pointer to parent column. Is nullptr if not list type.
 };
 
 constexpr int max_page_fragment_size = 5000;  //!< Max number of rows in a page fragment
@@ -447,19 +444,6 @@ void InitPageFragments(PageFragment *frag,
                        uint32_t fragment_size,
                        uint32_t num_rows,
                        rmm::cuda_stream_view stream);
-
-/**
- * @brief Set column_device_view pointers in column description array
- *
- * @param[out] col_desc Column description array [column_id]
- * @param[out] leaf_column_views Device array to store leaf columns
- * @param[in] parent_table_device_view Table device view containing parent columns
- * @param[in] stream CUDA stream to use, default 0
- */
-void init_column_device_views(EncColumnDesc *col_desc,
-                              column_device_view *leaf_column_views,
-                              const table_device_view &parent_table_device_view,
-                              rmm::cuda_stream_view stream);
 
 /**
  * @brief Launches kernel for initializing fragment statistics groups

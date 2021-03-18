@@ -37,7 +37,6 @@
 #include <cudf/strings/attributes.hpp>
 #include <cudf/strings/capitalize.hpp>
 #include <cudf/strings/case.hpp>
-#include <cudf/strings/char_types/char_types.hpp>
 #include <cudf/strings/combine.hpp>
 #include <cudf/strings/contains.hpp>
 #include <cudf/strings/convert/convert_booleans.hpp>
@@ -60,6 +59,7 @@
 #include <cudf/lists/lists_column_view.hpp>
 #include <cudf/structs/structs_column_view.hpp>
 #include <map_lookup.hpp>
+#include "cudf/types.hpp"
 
 #include "cudf_jni_apis.hpp"
 #include "dtype_utils.hpp"
@@ -1026,6 +1026,18 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_binaryOpVV(JNIEnv *env, j
   CATCH_STD(env, 0);
 }
 
+JNIEXPORT jint JNICALL Java_ai_rapids_cudf_ColumnView_fixedPointOutputScale(JNIEnv *env, jclass,
+                                                                            jint int_op,
+                                                                            jint lhs_scale,
+                                                                            jint rhs_scale) {
+  try {
+    // we just return the scale as the types will be the same as the lhs input
+    return cudf::binary_operation_fixed_point_scale(static_cast<cudf::binary_operator>(int_op),
+                                                    lhs_scale, rhs_scale);
+  }
+  CATCH_STD(env, 0);
+}
+
 JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_binaryOpVS(JNIEnv *env, jclass,
                                                                   jlong lhs_view, jlong rhs_ptr,
                                                                   jint int_op, jint out_dtype,
@@ -1305,8 +1317,15 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_bitwiseMergeAndSetValidit
     cudf::table_view *input_table = new cudf::table_view(column_views);
 
     cudf::binary_operator op = static_cast<cudf::binary_operator>(bin_op);
-    if(op == cudf::binary_operator::BITWISE_AND) {
-      copy->set_null_mask(cudf::bitmask_and(*input_table));
+    switch(op) {
+      case cudf::binary_operator::BITWISE_AND:
+        copy->set_null_mask(cudf::bitmask_and(*input_table));
+        break;
+      case cudf::binary_operator::BITWISE_OR:
+        copy->set_null_mask(cudf::bitmask_or(*input_table));
+        break;
+      default:
+        JNI_THROW_NEW(env, cudf::jni::ILLEGAL_ARG_CLASS, "Unsupported merge operation", 0);
     }
 
     return reinterpret_cast<jlong>(copy.release());

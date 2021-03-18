@@ -1742,7 +1742,7 @@ public class TableTest extends CudfTestBase {
     final int PARTS = 5;
     int expectedPart = -1;
     try (Table start = new Table.TestBuilder().column(0).build();
-         PartitionedTable out = start.onColumns(0).partition(PARTS)) {
+         PartitionedTable out = start.onColumns(0).hashPartition(PARTS)) {
       // Lets figure out what partitions this is a part of.
       int[] parts = out.getPartitions();
       for (int i = 0; i < parts.length; i++) {
@@ -1755,7 +1755,7 @@ public class TableTest extends CudfTestBase {
     for (int numEntries = 1; numEntries < COUNT; numEntries++) {
       try (ColumnVector data = ColumnVector.build(DType.INT32, numEntries, Range.appendInts(0, numEntries));
            Table t = new Table(data);
-           PartitionedTable out = t.onColumns(0).partition(PARTS);
+           PartitionedTable out = t.onColumns(0).hashPartition(PARTS);
            HostColumnVector tmp = out.getColumn(0).copyToHost()) {
         // Now we need to get the range out for the partition we expect
         int[] parts = out.getPartitions();
@@ -1775,6 +1775,23 @@ public class TableTest extends CudfTestBase {
 
   @Test
   void testPartition() {
+    try (Table t = new Table.TestBuilder()
+        .column(1, 2, 3, 4, 5, 6, 7, 8, 9, 10)
+        .build();
+         ColumnVector parts = ColumnVector
+             .fromInts(1, 2, 1, 2, 1, 2, 1, 2, 1, 2);
+         PartitionedTable pt = t.partition(parts, 3);
+         Table expected = new Table.TestBuilder()
+             .column(1, 3, 5, 7, 9, 2, 4, 6, 8, 10)
+             .build()) {
+      int[] partCutoffs = pt.getPartitions();
+      assertArrayEquals(new int[]{0, 0, 5}, partCutoffs);
+      assertTablesAreEqual(expected, pt.getTable());
+    }
+  }
+
+  @Test
+  void testIdentityHashPartition() {
     final int count = 1024 * 1024;
     try (ColumnVector aIn = ColumnVector.build(DType.INT64, count, Range.appendLongs(count));
          ColumnVector bIn = ColumnVector.build(DType.INT32, count, (b) -> {
@@ -1793,7 +1810,57 @@ public class TableTest extends CudfTestBase {
         expected.add(i);
       }
       try (Table input = new Table(new ColumnVector[]{aIn, bIn, cIn});
-           PartitionedTable output = input.onColumns(0).partition(5)) {
+           PartitionedTable output = input.onColumns(0).hashPartition(HashType.IDENTITY, 5)) {
+        int[] parts = output.getPartitions();
+        assertEquals(5, parts.length);
+        assertEquals(0, parts[0]);
+        int previous = 0;
+        long rows = 0;
+        for (int i = 1; i < parts.length; i++) {
+          assertTrue(parts[i] >= previous);
+          rows += parts[i] - previous;
+          previous = parts[i];
+        }
+        assertTrue(rows <= count);
+        try (HostColumnVector aOut = output.getColumn(0).copyToHost();
+             HostColumnVector bOut = output.getColumn(1).copyToHost();
+             HostColumnVector cOut = output.getColumn(2).copyToHost()) {
+
+          for (int i = 0; i < count; i++) {
+            long fromA = aOut.getLong(i);
+            long fromB = bOut.getInt(i);
+            String fromC = cOut.getJavaString(i);
+            assertTrue(expected.remove(fromA));
+            assertEquals(fromA / 2, fromB);
+            assertEquals(String.valueOf(fromA), fromC, "At Index " + i);
+          }
+          assertTrue(expected.isEmpty());
+        }
+      }
+    }
+  }
+
+  @Test
+  void testHashPartition() {
+    final int count = 1024 * 1024;
+    try (ColumnVector aIn = ColumnVector.build(DType.INT64, count, Range.appendLongs(count));
+         ColumnVector bIn = ColumnVector.build(DType.INT32, count, (b) -> {
+           for (int i = 0; i < count; i++) {
+             b.append(i / 2);
+           }
+         });
+         ColumnVector cIn = ColumnVector.build(DType.STRING, count, (b) -> {
+           for (int i = 0; i < count; i++) {
+             b.appendUTF8String(String.valueOf(i).getBytes());
+           }
+         })) {
+
+      HashSet<Long> expected = new HashSet<>();
+      for (long i = 0; i < count; i++) {
+        expected.add(i);
+      }
+      try (Table input = new Table(new ColumnVector[]{aIn, bIn, cIn});
+           PartitionedTable output = input.onColumns(0).hashPartition(5)) {
         int[] parts = output.getPartitions();
         assertEquals(5, parts.length);
         assertEquals(0, parts[0]);
@@ -2503,6 +2570,7 @@ public class TableTest extends CudfTestBase {
 
   @Test
   void testWindowingCollect() {
+    Aggregation aggCollectWithNulls = Aggregation.collect(Aggregation.NullPolicy.INCLUDE);
     Aggregation aggCollect = Aggregation.collect();
     WindowOptions winOpts = WindowOptions.builder()
                                          .minPeriods(1)
@@ -2513,26 +2581,38 @@ public class TableTest extends CudfTestBase {
              .column( 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1) // GBY Key
              .column( 1, 1, 1, 1, 2, 2, 2, 2, 3, 3, 3, 3) // GBY Key
              .column( 1, 2, 3, 4, 1, 2, 3, 4, 5, 6, 7, 8) // OBY Key
-             .column( 7, 5, 1, 9, 7, 9, 8, 2, 8, 0, 6, 6) // Agg Column of INT32
+             .column( 7, 5, 1, 9, 7, 9, 8, 2, null, 0, 6, null) // Agg Column of INT32
              .column(nestedType,                          // Agg Column of Struct
                  new StructData(1, "s1"), new StructData(2, "s2"), new StructData(3, "s3"),
                  new StructData(4, "s4"), new StructData(11, "s11"), new StructData(22, "s22"),
                  new StructData(33, "s33"), new StructData(44, "s44"), new StructData(111, "s111"),
                  new StructData(222, "s222"), new StructData(333, "s333"), new StructData(444, "s444")
               ).build();
-         ColumnVector expectSortedAggColumn = ColumnVector.fromBoxedInts(7, 5, 1, 9, 7, 9, 8, 2, 8, 0, 6, 6)) {
+         ColumnVector expectSortedAggColumn = ColumnVector
+             .fromBoxedInts(7, 5, 1, 9, 7, 9, 8, 2, null, 0, 6, null)) {
       try (Table sorted = raw.orderBy(Table.asc(0), Table.asc(1), Table.asc(2))) {
         ColumnVector sortedAggColumn = sorted.getColumn(3);
         assertColumnsAreEqual(expectSortedAggColumn, sortedAggColumn);
 
         // Primitive type: INT32
+        //  a) including nulls
+        try (Table windowAggResults = sorted.groupBy(0, 1)
+                 .aggregateWindows(aggCollectWithNulls.onColumn(3).overWindow(winOpts));
+             ColumnVector expected = ColumnVector.fromLists(
+                 new ListType(false, new BasicType(false, DType.INT32)),
+                 Arrays.asList(7,5), Arrays.asList(7,5,1), Arrays.asList(5,1,9), Arrays.asList(1,9),
+                 Arrays.asList(7,9), Arrays.asList(7,9,8), Arrays.asList(9,8,2), Arrays.asList(8,2),
+                 Arrays.asList(null,0), Arrays.asList(null,0,6), Arrays.asList(0,6,null), Arrays.asList(6,null))) {
+          assertColumnsAreEqual(expected, windowAggResults.getColumn(0));
+        }
+        //  b) excluding nulls
         try (Table windowAggResults = sorted.groupBy(0, 1)
                  .aggregateWindows(aggCollect.onColumn(3).overWindow(winOpts));
              ColumnVector expected = ColumnVector.fromLists(
                  new ListType(false, new BasicType(false, DType.INT32)),
                  Arrays.asList(7,5), Arrays.asList(7,5,1), Arrays.asList(5,1,9), Arrays.asList(1,9),
                  Arrays.asList(7,9), Arrays.asList(7,9,8), Arrays.asList(9,8,2), Arrays.asList(8,2),
-                 Arrays.asList(8,0), Arrays.asList(8,0,6), Arrays.asList(0,6,6), Arrays.asList(6,6))) {
+                 Arrays.asList(0), Arrays.asList(0,6), Arrays.asList(0,6), Arrays.asList(6))) {
           assertColumnsAreEqual(expected, windowAggResults.getColumn(0));
         }
 
@@ -4572,7 +4652,7 @@ public class TableTest extends CudfTestBase {
     }
   }
 
-  private Table[] buildExplodeTestTableWithNestedTypes(boolean pos) {
+  private Table[] buildExplodeTestTableWithNestedTypes(boolean pos, boolean outer) {
     StructType nestedType = new StructType(true,
         new BasicType(false, DType.INT32), new BasicType(false, DType.STRING));
     try (Table input = new Table.TestBuilder()
@@ -4581,23 +4661,42 @@ public class TableTest extends CudfTestBase {
             Arrays.asList(struct(4, "k4"), struct(5, "k5")),
             Arrays.asList(struct(6, "k6")),
             Arrays.asList(new HostColumnVector.StructData((List) null)),
-            Arrays.asList())
+            null)
         .column("s1", "s2", "s3", "s4", "s5")
         .column(1, 3, 5, 7, 9)
         .column(12.0, 14.0, 13.0, 11.0, 15.0)
         .build()) {
       Table.TestBuilder expectedBuilder = new Table.TestBuilder();
       if (pos) {
-        expectedBuilder.column(0, 1, 2, 0, 1, 0, 0);
+        if (!outer)
+          expectedBuilder.column(0, 1, 2, 0, 1, 0, 0);
+        else
+          expectedBuilder.column(0, 1, 2, 0, 1, 0, 0, 0);
       }
-      try (Table expected = expectedBuilder
-          .column(nestedType,
+      List<Object[]> expectedData = new ArrayList<Object[]>(){{
+        if (!outer) {
+          this.add(new HostColumnVector.StructData[]{
               struct(1, "k1"), struct(2, "k2"), struct(3, "k3"),
               struct(4, "k4"), struct(5, "k5"), struct(6, "k6"),
-              new HostColumnVector.StructData((List) null))
-          .column("s1", "s1", "s1", "s2", "s2", "s3", "s4")
-          .column(1, 1, 1, 3, 3, 5, 7)
-          .column(12.0, 12.0, 12.0, 14.0, 14.0, 13.0, 11.0)
+              new HostColumnVector.StructData((List) null)});
+          this.add(new String[]{"s1", "s1", "s1", "s2", "s2", "s3", "s4"});
+          this.add(new Integer[]{1, 1, 1, 3, 3, 5, 7});
+          this.add(new Double[]{12.0, 12.0, 12.0, 14.0, 14.0, 13.0, 11.0});
+        } else {
+          this.add(new HostColumnVector.StructData[]{
+              struct(1, "k1"), struct(2, "k2"), struct(3, "k3"),
+              struct(4, "k4"), struct(5, "k5"), struct(6, "k6"),
+              new HostColumnVector.StructData((List) null), null});
+          this.add(new String[]{"s1", "s1", "s1", "s2", "s2", "s3", "s4", "s5"});
+          this.add(new Integer[]{1, 1, 1, 3, 3, 5, 7, 9});
+          this.add(new Double[]{12.0, 12.0, 12.0, 14.0, 14.0, 13.0, 11.0, 15.0});
+        }
+      }};
+      try (Table expected = expectedBuilder
+          .column(nestedType, (HostColumnVector.StructData[]) expectedData.get(0))
+          .column((String[]) expectedData.get(1))
+          .column((Integer[]) expectedData.get(2))
+          .column((Double[]) expectedData.get(3))
           .build()) {
         return new Table[]{new Table(input.getColumns()), new Table(expected.getColumns())};
       }
@@ -4616,7 +4715,7 @@ public class TableTest extends CudfTestBase {
     }
 
     // Child is nested type
-    Table[] testTables2 = buildExplodeTestTableWithNestedTypes(false);
+    Table[] testTables2 = buildExplodeTestTableWithNestedTypes(false, false);
     try (Table input = testTables2[0];
          Table expected = testTables2[1]) {
       try (Table exploded = input.explode(0)) {
@@ -4626,7 +4725,7 @@ public class TableTest extends CudfTestBase {
   }
 
   @Test
-  void testPosExplode() {
+  void testExplodePosition() {
     // Child is primitive type
     Table[] testTables = buildExplodeTestTableWithPrimitiveTypes(true, false);
     try (Table input = testTables[0];
@@ -4636,8 +4735,8 @@ public class TableTest extends CudfTestBase {
       }
     }
 
-    // Child is primitive type
-    Table[] testTables2 = buildExplodeTestTableWithNestedTypes(true);
+    // Child is nested type
+    Table[] testTables2 = buildExplodeTestTableWithNestedTypes(true, false);
     try (Table input = testTables2[0];
          Table expected = testTables2[1]) {
       try (Table exploded = input.explodePosition(0)) {
@@ -4646,4 +4745,45 @@ public class TableTest extends CudfTestBase {
     }
   }
 
+  @Test
+  void testExplodeOuter() {
+    // Child is primitive type
+    Table[] testTables = buildExplodeTestTableWithPrimitiveTypes(false, true);
+    try (Table input = testTables[0];
+         Table expected = testTables[1]) {
+      try (Table exploded = input.explodeOuter(0)) {
+        assertTablesAreEqual(expected, exploded);
+      }
+    }
+
+    // Child is nested type
+    Table[] testTables2 = buildExplodeTestTableWithNestedTypes(false, true);
+    try (Table input = testTables2[0];
+         Table expected = testTables2[1]) {
+      try (Table exploded = input.explodeOuter(0)) {
+        assertTablesAreEqual(expected, exploded);
+      }
+    }
+  }
+
+  @Test
+  void testExplodeOuterPosition() {
+    // Child is primitive type
+    Table[] testTables = buildExplodeTestTableWithPrimitiveTypes(true, true);
+    try (Table input = testTables[0];
+         Table expected = testTables[1]) {
+      try (Table exploded = input.explodeOuterPosition(0)) {
+        assertTablesAreEqual(expected, exploded);
+      }
+    }
+
+    // Child is nested type
+    Table[] testTables2 = buildExplodeTestTableWithNestedTypes(true, true);
+    try (Table input = testTables2[0];
+         Table expected = testTables2[1]) {
+      try (Table exploded = input.explodeOuterPosition(0)) {
+        assertTablesAreEqual(expected, exploded);
+      }
+    }
+  }
 }
