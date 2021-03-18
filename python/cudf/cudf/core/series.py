@@ -1501,9 +1501,7 @@ class Series(Frame, Serializable):
         If ``reflect`` is ``True``, swap the order of the operands.
         """
         if isinstance(other, cudf.DataFrame):
-            # TODO: fn is not the same as arg expected by _apply_op
-            # e.g. for fn = 'and', _apply_op equivalent is '__and__'
-            return other._apply_op(self, fn)
+            return NotImplemented
 
         result_name = utils.get_result_name(self, other)
         if isinstance(other, Series):
@@ -3120,8 +3118,10 @@ class Series(Frame, Serializable):
                 "bool_only parameter is not implemented yet"
             )
 
-        if self.empty:
-            return False
+        skipna = False if skipna is None else skipna
+
+        if skipna is False and self.has_nulls:
+            return True
 
         if skipna:
             result_series = self.nans_to_nulls()

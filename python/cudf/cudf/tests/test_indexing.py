@@ -755,17 +755,6 @@ def test_dataframe_masked_slicing(nelem, slice_start, slice_end):
     assert_eq(expect, got, check_dtype=False)
 
 
-def test_dataframe_boolean_mask_with_None():
-    pdf = pd.DataFrame({"a": [0, 1, 2, 3], "b": [0.1, 0.2, None, 0.3]})
-    gdf = cudf.DataFrame.from_pandas(pdf)
-    pdf_masked = pdf[[True, False, True, False]]
-    gdf_masked = gdf[[True, False, True, False]]
-    assert_eq(pdf_masked, gdf_masked)
-
-    with pytest.raises(ValueError):
-        gdf[cudf.Series([True, False, None, False])]
-
-
 @pytest.mark.parametrize("dtype", [int, float, str])
 def test_empty_boolean_mask(dtype):
     gdf = cudf.datasets.randomdata(nrows=0, dtypes={"a": dtype})

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2020, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -91,7 +91,7 @@ class reader::impl {
    * @param stream CUDA stream used for device memory operations and kernel launches.
    *
    */
-  void read_column_chunks(std::vector<rmm::device_buffer> &page_data,
+  void read_column_chunks(std::vector<std::unique_ptr<datasource::buffer>> &page_data,
                           hostdevice_vector<gpu::ColumnChunkDesc> &chunks,
                           size_t begin_chunk,
                           size_t end_chunk,

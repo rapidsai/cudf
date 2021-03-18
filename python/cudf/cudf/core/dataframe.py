@@ -1518,11 +1518,7 @@ class DataFrame(Frame, Serializable):
                 else:
                     if col not in df_cols:
                         r_opr = other_cols[col]
-                        l_opr = Series(
-                            column_empty(
-                                len(self), masked=True, dtype=other.dtype
-                            )
-                        )
+                        l_opr = Series(as_column(np.nan, length=len(self)))
                     if col not in other_cols_keys:
                         r_opr = None
                         l_opr = self[col]
@@ -2198,7 +2194,7 @@ class DataFrame(Frame, Serializable):
         return self._apply_op("rpow", other, fill_value)
 
     def __rpow__(self, other):
-        return self._apply_op("__pow__", other)
+        return self._apply_op("__rpow__", other)
 
     def floordiv(self, other, axis="columns", level=None, fill_value=None):
         """
@@ -6031,7 +6027,6 @@ class DataFrame(Frame, Serializable):
         falcon      True       True
         dog        False      False
         """
-
         if isinstance(values, dict):
 
             result_df = DataFrame()
@@ -6051,14 +6046,15 @@ class DataFrame(Frame, Serializable):
             values = values.reindex(self.index)
 
             result = DataFrame()
-
+            # TODO: propagate nulls through isin
+            # https://github.com/rapidsai/cudf/issues/7556
             for col in self._data.names:
                 if isinstance(
                     self[col]._column, cudf.core.column.CategoricalColumn
                 ) and isinstance(
                     values._column, cudf.core.column.CategoricalColumn
                 ):
-                    res = self._data[col] == values._column
+                    res = (self._data[col] == values._column).fillna(False)
                     result[col] = res
                 elif (
                     isinstance(
@@ -6073,7 +6069,9 @@ class DataFrame(Frame, Serializable):
                 ):
                     result[col] = utils.scalar_broadcast_to(False, len(self))
                 else:
-                    result[col] = self._data[col] == values._column
+                    result[col] = (self._data[col] == values._column).fillna(
+                        False
+                    )
 
             result.index = self.index
             return result
@@ -6083,7 +6081,9 @@ class DataFrame(Frame, Serializable):
             result = DataFrame()
             for col in self._data.names:
                 if col in values.columns:
-                    result[col] = self._data[col] == values[col]._column
+                    result[col] = (
+                        self._data[col] == values[col]._column
+                    ).fillna(False)
                 else:
                     result[col] = utils.scalar_broadcast_to(False, len(self))
             result.index = self.index

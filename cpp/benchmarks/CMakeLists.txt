@@ -185,9 +185,11 @@ ConfigureBench(STRINGS_BENCH
   string/convert_floats_benchmark.cpp
   string/copy_benchmark.cpp
   string/extract_benchmark.cpp
+  string/factory_benchmark.cu
   string/filter_benchmark.cpp
   string/find_benchmark.cpp
   string/replace_benchmark.cpp
   string/replace_re_benchmark.cpp
   string/split_benchmark.cpp
+  string/substring_benchmark.cpp
   string/url_decode_benchmark.cpp)

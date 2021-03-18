@@ -93,6 +93,9 @@ class BinaryOperation(IntEnum):
     GENERIC_BINARY = (
         <underlying_type_t_binary_operator> binary_operator.GENERIC_BINARY
     )
+    NULL_EQUALS = (
+        <underlying_type_t_binary_operator> binary_operator.NULL_EQUALS
+    )
 
 
 cdef binaryop_v_v(Column lhs, Column rhs,
@@ -154,17 +157,6 @@ cdef binaryop_s_v(DeviceScalar lhs, Column rhs,
     return Column.from_unique_ptr(move(c_result))
 
 
-def handle_null_for_string_column(Column input_col, op):
-    if op in ('eq', 'lt', 'le', 'gt', 'ge'):
-        return replace_nulls(input_col, DeviceScalar(False, 'bool'))
-
-    elif op == 'ne':
-        return replace_nulls(input_col, DeviceScalar(True, 'bool'))
-
-    # Nothing needs to be done
-    return input_col
-
-
 def binaryop(lhs, rhs, op, dtype):
     """
     Dispatches a binary op call to the appropriate libcudf function:
@@ -205,11 +197,7 @@ def binaryop(lhs, rhs, op, dtype):
             c_op,
             c_dtype
         )
-
-    if is_string_col is True:
-        return handle_null_for_string_column(result, op.name.lower())
-    else:
-        return result
+    return result
 
 
 def binaryop_udf(Column lhs, Column rhs, udf_ptx, dtype):
