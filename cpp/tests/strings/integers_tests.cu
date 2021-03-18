@@ -159,54 +159,33 @@ TEST_F(StringsConvertTest, ToInteger)
     thrust::make_transform_iterator(h_strings.begin(), [](auto str) { return str != nullptr; }));
 
   auto results = cudf::strings::to_integers(STR_CV(strings), cudf::data_type{cudf::type_id::INT16});
-  auto const expected_i16 = FCW_I16(
-    INZ_I16{NULL_VAL,
-            1234,
-            NULL_VAL,
-            NULL_VAL,
-            -9832,
-            NULL_VAL,
-            NULL_VAL,
-            NULL_VAL,
-            NULL_VAL,
-            NULL_VAL,
-            NULL_VAL,
-            NULL_VAL},
-    INZ_B{false, true, false, false, true, false, false, false, false, false, false, false});
+  auto const expected_i16 =
+    FCW_I16(INZ_I16{0, 1234, NULL_VAL, 0, -9832, 93, 765, NULL_VAL, -1, -1, 0, 0},
+            INZ_B{true, true, false, true, true, true, true, false, true, true, true, true});
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected_i16, true);
 
   results = cudf::strings::to_integers(STR_CV(strings), cudf::data_type{cudf::type_id::INT32});
-  auto const expected_i32 =
-    FCW_I32(INZ_I32{NULL_VAL,
-                    1234,
-                    NULL_VAL,
-                    NULL_VAL,
-                    -9832,
-                    NULL_VAL,
-                    NULL_VAL,
-                    NULL_VAL,
-                    NULL_VAL,
-                    2147483647,
-                    -2147483648,
-                    NULL_VAL},
-            INZ_B{false, true, false, false, true, false, false, false, false, true, true, false});
+  auto const expected_i32 = FCW_I32(
+    INZ_I32{
+      0, 1234, NULL_VAL, 0, -9832, 93, 765, NULL_VAL, -1, 2147483647, -2147483648, -2147483648},
+    INZ_B{true, true, false, true, true, true, true, false, true, true, true, true});
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected_i32, true);
 
   results = cudf::strings::to_integers(STR_CV(strings), cudf::data_type{cudf::type_id::UINT32});
   auto const expected_u32 =
-    FCW_U32(INZ_U32{NULL_VAL,
+    FCW_U32(INZ_U32{0,
                     1234,
                     NULL_VAL,
+                    0,
+                    4294957464,
+                    93,
+                    765,
                     NULL_VAL,
-                    NULL_VAL,
-                    NULL_VAL,
-                    NULL_VAL,
-                    NULL_VAL,
-                    NULL_VAL,
+                    4294967295,
                     2147483647,
-                    NULL_VAL,
+                    2147483648,
                     2147483648},
-            INZ_B{false, true, false, false, false, false, false, false, false, true, false, true});
+            INZ_B{true, true, false, true, true, true, true, false, true, true, true, true});
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected_u32, true);
 }
 
@@ -254,8 +233,7 @@ TEST_F(StringsConvertTest, EmptyStringsColumn)
   // Empty strings will all result in null elements
   STR_CW strings({"", "", ""});
   auto results = cudf::strings::to_integers(STR_CV(strings), cudf::data_type{cudf::type_id::INT64});
-  FCW_I64 expected(std::initializer_list<int32_t>{0, 0, 0},
-                   std::initializer_list<bool>{false, false, false});
+  FCW_I64 expected{0, 0, 0};
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(results->view(), expected, true);
 }
 
