@@ -151,7 +151,6 @@ class Merge(object):
         if suffixes:
             self.lsuffix, self.rsuffix = suffixes
         self._compute_join_keys()
-        self.preprocess_merge_params()
 
     @property
     def _out_class(self):
@@ -190,7 +189,7 @@ class Merge(object):
         if self.sort:
             result = self._sort_result(result)
         return result
-    
+
     def _compute_join_keys(self):
         # Computes self._keys
         if (
@@ -201,36 +200,74 @@ class Merge(object):
         ):
             left_keys = []
             right_keys = []
-            if self.left_index:
-                left_keys.extend(
-                    [
-                        _Indexer(name=on, index=True)
-                        for on in self.lhs.index.names
-                    ]
-                )
             if self.left_on:
-                # TODO: require left_on or left_index to be specified
                 left_keys.extend(
                     [
                         _Indexer(name=on, column=True)
                         for on in _coerce_to_tuple(self.left_on)
                     ]
                 )
-            if self.right_index:
-                right_keys.extend(
-                    [
-                        _Indexer(name=on, index=True)
-                        for on in self.rhs.index.names
-                    ]
-                )
+                if self.right_index:
+                    right_keys.extend(
+                        [
+                            _Indexer(name=on, index=True)
+                            for on in self.rhs.index.names
+                        ]
+                    )
+                if self.right_on:
+                    right_keys.extend(
+                        [
+                            _Indexer(name=on, column=True)
+                            for on in _coerce_to_tuple(self.right_on)
+                        ]
+                    )
+                else:
+                    raise KeyError(
+                        "must specify right_on or right_index parameters"
+                    )
+
             if self.right_on:
-                # TODO: require right_on or right_index to be specified
                 right_keys.extend(
                     [
                         _Indexer(name=on, column=True)
                         for on in _coerce_to_tuple(self.right_on)
                     ]
                 )
+                if self.left_index:
+                    left_keys.extend(
+                        [
+                            _Indexer(name=on, index=True)
+                            for on in self.lhs.index.names
+                        ]
+                    )
+                if self.left_on:
+                    left_keys.extend(
+                        [
+                            _Indexer(name=on, column=True)
+                            for on in _coerce_to_tuple(self.left_on)
+                        ]
+                    )
+                else:
+                    raise KeyError(
+                        "must specify left_on or left_index parameters"
+                    )
+
+            if not (self.right_on and self.left_on):
+                if self.left_index and self.right_index:
+                    left_keys.extend(
+                        [
+                            _Indexer(name=on, index=True)
+                            for on in self.lhs.index.names
+                        ]
+                    )
+                    right_keys.extend(
+                        [
+                            _Indexer(name=on, index=True)
+                            for on in self.rhs.index.names
+                        ]
+                    )
+                else:
+                    raise KeyError("message")
         else:
             # Use `on` if provided. Otherwise,
             # implicitly use identically named columns as the key columns:
