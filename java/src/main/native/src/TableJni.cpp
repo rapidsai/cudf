@@ -1637,7 +1637,7 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_partition(JNIEnv *env, jc
 
     for (size_t i = 0; i < result.second.size() - 1; i++) {
       // for what ever reason partition returns the length of the result at then
-      // end and hash partition/round robing do not, so skip the last entry for
+      // end and hash partition/round robin do not, so skip the last entry for
       // consistency
       n_output_offsets[i] = result.second[i];
     }
