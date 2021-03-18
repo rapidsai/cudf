@@ -1,5 +1,6 @@
 # Copyright (c) 2021, NVIDIA CORPORATION.
 
+from libcpp cimport bool
 from libcpp.memory cimport unique_ptr, shared_ptr, make_shared
 from libcpp.utility cimport move
 
@@ -41,8 +42,10 @@ def count_elements(Column col):
     return result
 
 
-def explode_outer(Table tbl, int explode_column_idx):
-    cdef table_view c_table_view = tbl.view()
+def explode_outer(Table tbl, int explode_column_idx, bool ignore_index=False):
+    cdef table_view c_table_view = (
+        tbl.data_view() if ignore_index else tbl.view()
+    )
     cdef size_type c_explode_column_idx = explode_column_idx
 
     cdef unique_ptr[table] c_result
@@ -53,5 +56,5 @@ def explode_outer(Table tbl, int explode_column_idx):
     return Table.from_unique_ptr(
         move(c_result),
         column_names=tbl._column_names,
-        index_names=tbl._index_names
+        index_names=None if ignore_index else tbl._index_names
     )

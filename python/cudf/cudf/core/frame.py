@@ -579,7 +579,7 @@ class Frame(libcudf.table.Table):
         if the designated column to explode is non-nested, a copy
         of the frame is returned. Otherwise, if ignore_index is
         set, the original index is not exploded and will use
-        a `RangeIndex` instead.
+        a `RangeIndex`.
         """
         if not is_list_dtype(self._data[explode_column].dtype):
             copy = self.copy()
@@ -588,20 +588,18 @@ class Frame(libcudf.table.Table):
             return copy
 
         explode_column_num = self._column_names.index(explode_column)
-        if ignore_index:
-            tmp_index, self._index = self._index, None
-        elif self._index is not None:
+        if not ignore_index and self._index is not None:
             explode_column_num += self._index.nlevels
 
-        res_tbl = libcudf.lists.explode_outer(self, explode_column_num)
+        res_tbl = libcudf.lists.explode_outer(
+            self, explode_column_num, ignore_index
+        )
         res = self.__class__._from_table(res_tbl)
 
         res._data.multiindex = self._data.multiindex
         res._data._level_names = self._data._level_names
 
-        if ignore_index:
-            self._index = tmp_index
-        elif self._index is not None:
+        if not ignore_index and self._index is not None:
             res.index.names = self._index.names
         return res
 
