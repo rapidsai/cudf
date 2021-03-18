@@ -103,7 +103,6 @@ struct dispatch_is_integer_fn {
                       thrust::make_counting_iterator<size_type>(input.size()),
                       results->mutable_view().data<bool>(),
                       string_to_integer_check_fn<T>{*d_column});
-    results->set_null_count(input.null_count());
     return results;
   }
 
@@ -122,7 +121,7 @@ std::unique_ptr<column> is_integer(
   rmm::cuda_stream_view stream,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
 {
-  if (strings.is_empty()) return cudf::make_empty_column(data_type{type_id::BOOL8});
+  if (strings.is_empty()) { return cudf::make_empty_column(data_type{type_id::BOOL8}); }
   return type_dispatcher(int_type, dispatch_is_integer_fn{}, strings, stream, mr);
 }
 
