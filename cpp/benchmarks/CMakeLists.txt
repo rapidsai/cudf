@@ -181,6 +181,7 @@ ConfigureBench(SUBWORD_TOKENIZER_BENCH text/subword_benchmark.cpp)
 ConfigureBench(STRINGS_BENCH
   string/case_benchmark.cpp
   string/contains_benchmark.cpp
+  string/convert_datetime_benchmark.cpp
   string/convert_durations_benchmark.cpp
   string/convert_floats_benchmark.cpp
   string/copy_benchmark.cpp
