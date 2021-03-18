@@ -228,7 +228,7 @@ class writer::impl {
   // Overall file metadata.  Filled in during the process and written during write_chunked_end()
   cudf::io::parquet::FileMetaData md;
   // optional user metadata
-  table_input_metadata const* table_meta = nullptr;
+  std::unique_ptr<table_input_metadata> table_meta;
   // to track if the output has been written to sink
   bool closed = false;
   // current write position for rowgroups/chunks

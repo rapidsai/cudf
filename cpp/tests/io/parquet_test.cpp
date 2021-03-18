@@ -1547,8 +1547,7 @@ TEST_F(ParquetChunkedWriterTest, MismatchedStructureList)
     cudf_io::chunked_parquet_writer_options::builder(cudf_io::sink_info{filepath});
   cudf_io::parquet_chunked_writer writer(args);
   writer.write(tbl0);
-  CUDF_EXPECT_THROW_MESSAGE(writer.write(tbl1),
-                            "Mismatch in schema between multiple calls to write_chunk");
+  EXPECT_THROW(writer.write(tbl1), cudf::logic_error);
 }
 
 TEST_F(ParquetChunkedWriterTest, DifferentNullability)

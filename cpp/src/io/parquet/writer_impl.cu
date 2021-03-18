@@ -871,9 +871,11 @@ writer::impl::impl(std::unique_ptr<data_sink> sink,
     stats_granularity_(options.get_stats_level()),
     int96_timestamps(options.is_enabled_int96_timestamps()),
     out_sink_(std::move(sink)),
-    single_write_mode(mode == SingleWriteMode::YES),
-    table_meta(options.get_metadata())
+    single_write_mode(mode == SingleWriteMode::YES)
 {
+  if (options.get_metadata()) {
+    table_meta = std::make_unique<table_input_metadata>(*options.get_metadata());
+  }
   init_state();
 }
 
@@ -888,9 +890,11 @@ writer::impl::impl(std::unique_ptr<data_sink> sink,
     stats_granularity_(options.get_stats_level()),
     int96_timestamps(options.is_enabled_int96_timestamps()),
     single_write_mode(mode == SingleWriteMode::YES),
-    table_meta(options.get_metadata()),
     out_sink_(std::move(sink))
 {
+  if (options.get_metadata()) {
+    table_meta = std::make_unique<table_input_metadata>(*options.get_metadata());
+  }
   init_state();
 }
 
@@ -911,8 +915,9 @@ void writer::impl::write(table_view const &table)
 
   size_type num_rows = table.num_rows();
 
-  auto tbl_meta = (table_meta == nullptr) ? table_input_metadata(table) : *table_meta;
-  // Fill unnamed columns' names in tbl_meta
+  if (not table_meta) { table_meta = std::make_unique<table_input_metadata>(table); }
+
+  // Fill unnamed columns' names in table_meta
   std::function<void(column_in_metadata &, std::string)> add_default_name =
     [&](column_in_metadata &col_meta, std::string default_name) {
       if (col_meta.get_name().empty()) col_meta.set_name(default_name);
@@ -920,12 +925,12 @@ void writer::impl::write(table_view const &table)
         add_default_name(col_meta.child(i), col_meta.get_name() + "_" + std::to_string(i));
       }
     };
-  for (size_t i = 0; i < tbl_meta.column_metadata.size(); ++i) {
-    add_default_name(tbl_meta.column_metadata[i], "_col" + std::to_string(i));
+  for (size_t i = 0; i < table_meta->column_metadata.size(); ++i) {
+    add_default_name(table_meta->column_metadata[i], "_col" + std::to_string(i));
   }
 
   auto vec         = input_table_to_linked_columns(table);
-  auto schema_tree = construct_schema_tree(vec, tbl_meta, single_write_mode, int96_timestamps);
+  auto schema_tree = construct_schema_tree(vec, *table_meta, single_write_mode, int96_timestamps);
   // Construct parquet_column_views from the schema tree leaf nodes.
   std::vector<parquet_column_view> parquet_columns;
 
@@ -947,8 +952,8 @@ void writer::impl::write(table_view const &table)
     md.num_rows = num_rows;
     md.column_order_listsize =
       (stats_granularity_ != statistics_freq::STATISTICS_NONE) ? num_columns : 0;
-    std::transform(tbl_meta.user_data.begin(),
-                   tbl_meta.user_data.end(),
+    std::transform(table_meta->user_data.begin(),
+                   table_meta->user_data.end(),
                    std::back_inserter(md.key_value_metadata),
                    [](auto const &kv) {
                      return KeyValue{kv.first, kv.second};
