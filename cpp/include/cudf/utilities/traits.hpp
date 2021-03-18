@@ -225,6 +225,18 @@ constexpr inline bool is_unsigned(data_type type)
 }
 
 /**
+ * @brief Indicates whether the `Iterator` value type is unsigned.
+ *
+ * @tparam Iterator  The type to verify
+ * @return true if the iterator's value type is unsigned
+ */
+template <typename Iterator>
+constexpr inline bool is_signed_iterator()
+{
+  return std::is_signed<typename std::iterator_traits<Iterator>::value_type>::value;
+}
+
+/**
  * @brief Indicates whether the type `T` is a floating point type.
  *
  * @tparam T  The type to verify
