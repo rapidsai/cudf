@@ -581,27 +581,32 @@ class Frame(libcudf.table.Table):
         set, the original index is not exploded and will use
         a `RangeIndex`.
         """
-        if not is_list_dtype(self._data[explode_column].dtype):
-            copy = self.copy()
-            if ignore_index:
-                copy._index = cudf.RangeIndex(copy._num_rows)
-            return copy
+        if (
+            isinstance(self, (cudf.Series, cudf.DataFrame))
+            and self._index is not None
+        ):
+            if not is_list_dtype(self._data[explode_column].dtype):
+                data = self._data.copy(deep=True)
+                idx = None if ignore_index else self._index.copy(deep=True)
+                return self.__class__._from_data(data, index=idx)
 
-        explode_column_num = self._column_names.index(explode_column)
-        if not ignore_index and self._index is not None:
-            explode_column_num += self._index.nlevels
+            explode_column_num = self._column_names.index(explode_column)
+            if not ignore_index:
+                explode_column_num += self._index.nlevels
 
-        res_tbl = libcudf.lists.explode_outer(
-            self, explode_column_num, ignore_index
-        )
-        res = self.__class__._from_table(res_tbl)
+            res_tbl = libcudf.lists.explode_outer(
+                self, explode_column_num, ignore_index
+            )
+            res = self.__class__._from_table(res_tbl)
 
-        res._data.multiindex = self._data.multiindex
-        res._data._level_names = self._data._level_names
+            res._data.multiindex = self._data.multiindex
+            res._data._level_names = self._data._level_names
 
-        if not ignore_index and self._index is not None:
-            res.index.names = self._index.names
-        return res
+            if not ignore_index:
+                res.index.names = self._index.names
+            return res
+        else:
+            raise NotImplementedError("_explode is not implemented for Index.")
 
     def _get_columns_by_label(self, labels, downcast):
         """
