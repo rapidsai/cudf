@@ -548,6 +548,7 @@ std::vector<int> metadata::select_columns(std::vector<std::string> use_names,
         }
       }
     }
+    CUDF_EXPECTS(selection.size() > 0, "Filtered out all columns");
   } else {
     // For now, only select all leaf nodes
     for (int i = 1; i < get_num_columns(); ++i) {
@@ -557,7 +558,6 @@ std::vector<int> metadata::select_columns(std::vector<std::string> use_names,
       }
     }
   }
-  CUDF_EXPECTS(use_names.empty() or selection.size() > 0, "Filtered out all columns");
 
   return selection;
 }
