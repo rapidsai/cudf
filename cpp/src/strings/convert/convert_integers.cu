@@ -159,22 +159,6 @@ struct string_to_integer_fn {
 };
 
 /**
- * @brief Check the validity of the elements
- *
- * An element in the data_column will be valid only is is not null and
- * the corresponding value in the validity_column is not zero.
- */
-struct bitmask_and_fn {
-  const column_device_view data_column;
-  const column_device_view validity_column;
-
-  __device__ bool operator()(size_type idx)
-  {
-    return !data_column.is_null(idx) && validity_column.element<int8_t>(idx);
-  }
-};
-
-/**
  * @brief The dispatch functions for converting strings to integers.
  *
  * The output_column is expected to be one of the integer types only.
@@ -219,7 +203,6 @@ std::unique_ptr<column> to_integers(strings_column_view const& strings,
 {
   size_type strings_count = strings.size();
   if (strings_count == 0) return make_numeric_column(output_type, 0);
-  auto const strings_dev_view = column_device_view::create(strings.parent(), stream);
 
   // Create integer output column copying the strings null-mask
   auto results = make_numeric_column(output_type,
@@ -229,21 +212,9 @@ std::unique_ptr<column> to_integers(strings_column_view const& strings,
                                      stream,
                                      mr);
   // Fill output column with integers
+  auto const strings_dev_view = column_device_view::create(strings.parent(), stream);
   type_dispatcher(
     output_type, dispatch_to_integers_fn{}, *strings_dev_view, results->mutable_view(), stream);
-
-  // Check for validity of the conversion
-  auto const validity_col      = detail::is_integer(strings, output_type, stream, mr);
-  auto const validity_dev_view = column_device_view::create(validity_col->view(), stream);
-
-  // Generate new null mask as the AND result of the previous null mask and the is_integer validity
-  auto validity = cudf::detail::valid_if(thrust::make_counting_iterator<size_type>(0),
-                                         thrust::make_counting_iterator<size_type>(strings.size()),
-                                         bitmask_and_fn{*strings_dev_view, *validity_dev_view},
-                                         stream,
-                                         mr);
-
-  if (validity.second) { results->set_null_mask(std::move(validity.first), validity.second); }
   return results;
 }
 
