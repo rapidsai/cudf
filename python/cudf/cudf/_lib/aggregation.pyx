@@ -49,7 +49,7 @@ class AggregationKind(Enum):
     ARGMIN = libcudf_aggregation.aggregation.Kind.ARGMIN
     NUNIQUE = libcudf_aggregation.aggregation.Kind.NUNIQUE
     NTH = libcudf_aggregation.aggregation.Kind.NTH_ELEMENT
-    COLLECT = libcudf_aggregation.aggregation.Kind.COLLECT_LIST
+    COLLECT = libcudf_aggregation.aggregation.Kind.COLLECT
     COLLECT_SET = libcudf_aggregation.aggregation.Kind.COLLECT_SET
     PTX = libcudf_aggregation.aggregation.Kind.PTX
     CUDA = libcudf_aggregation.aggregation.Kind.CUDA
