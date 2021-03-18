@@ -120,6 +120,6 @@ function(find_and_configure_arrow VERSION BUILD_STATIC)
 
 endfunction()
 
-set(CUDF_VERSION_Arrow 1.0.1)
+set(CUDF_VERSION_Arrow 3.0.0)
 
 find_and_configure_arrow(${CUDF_VERSION_Arrow} ${CUDF_USE_ARROW_STATIC})
