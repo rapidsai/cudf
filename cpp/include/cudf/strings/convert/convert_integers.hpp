@@ -96,7 +96,7 @@ std::unique_ptr<column> from_integers(
  * Any null row results in a null entry for that row in the output column.
  *
  * @param strings  Strings instance for this operation.
- * @param int_type Integer type used for checking overflow.
+ * @param int_type Integer type used for checking underflow and overflow.
  * @param mr       Device memory resource used to allocate the returned column's device memory.
  * @return         New column of boolean results for each string.
  */
