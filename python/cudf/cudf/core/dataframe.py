@@ -1518,11 +1518,7 @@ class DataFrame(Frame, Serializable):
                 else:
                     if col not in df_cols:
                         r_opr = other_cols[col]
-                        l_opr = Series(
-                            column_empty(
-                                len(self), masked=True, dtype=other.dtype
-                            )
-                        )
+                        l_opr = Series(as_column(np.nan, length=len(self)))
                     if col not in other_cols_keys:
                         r_opr = None
                         l_opr = self[col]
@@ -2198,7 +2194,7 @@ class DataFrame(Frame, Serializable):
         return self._apply_op("rpow", other, fill_value)
 
     def __rpow__(self, other):
-        return self._apply_op("__pow__", other)
+        return self._apply_op("__rpow__", other)
 
     def floordiv(self, other, axis="columns", level=None, fill_value=None):
         """
