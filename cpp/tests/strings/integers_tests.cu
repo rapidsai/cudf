@@ -26,6 +26,10 @@
 #include <string>
 #include <vector>
 
+// Using an alias variable for the null elements
+// This will make the code looks cleaner
+constexpr auto NULL_VAL = 0;
+
 using FCW_B   = cudf::test::fixed_width_column_wrapper<bool>;
 using FCW_I16 = cudf::test::fixed_width_column_wrapper<int16_t>;
 using FCW_I32 = cudf::test::fixed_width_column_wrapper<int32_t>;
@@ -34,6 +38,7 @@ using FCW_U32 = cudf::test::fixed_width_column_wrapper<uint32_t>;
 using STR_CW  = cudf::test::strings_column_wrapper;
 using STR_CV  = cudf::strings_column_view;
 using INZ_B   = std::initializer_list<bool>;
+using INZ_I8  = std::initializer_list<int8_t>;
 using INZ_I16 = std::initializer_list<int16_t>;
 using INZ_I32 = std::initializer_list<int32_t>;
 using INZ_U32 = std::initializer_list<uint32_t>;
@@ -58,6 +63,18 @@ TEST_F(StringsConvertTest, IsInteger)
   strings  = STR_CW({"0", "+0", "-0", "1234567890", "-27341132", "+012", "023", "-045"});
   results  = cudf::strings::is_integer(STR_CV(strings), cudf::data_type{cudf::type_id::INT32});
   expected = FCW_B({1, 1, 1, 1, 1, 1, 1, 1});
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected, true);
+
+  // Input with null elements: the output should have the same null mask
+  std::vector<const char*> const h_strings{
+    "eee", "1234", nullptr, "", "-9832", "93.24", "765é", nullptr};
+  strings = STR_CW(
+    h_strings.begin(),
+    h_strings.end(),
+    thrust::make_transform_iterator(h_strings.begin(), [](auto str) { return str != nullptr; }));
+  results  = cudf::strings::is_integer(STR_CV(strings), cudf::data_type{cudf::type_id::INT32});
+  expected = FCW_B(INZ_I8{0, 1, NULL_VAL, 0, 1, 0, 0, NULL_VAL},
+                   INZ_B{true, true, false, true, true, true, true, false});
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected, true);
 }
 
@@ -124,10 +141,6 @@ TEST_F(StringsConvertTest, IsIntegerBoundCheck)
 
 TEST_F(StringsConvertTest, ToInteger)
 {
-  // Using an alias variable for the null elements
-  // This will make the code looks cleaner
-  constexpr auto NULL_INT = 0;
-
   std::vector<const char*> h_strings{"eee",
                                      "1234",
                                      nullptr,
@@ -147,51 +160,51 @@ TEST_F(StringsConvertTest, ToInteger)
 
   auto results = cudf::strings::to_integers(STR_CV(strings), cudf::data_type{cudf::type_id::INT16});
   auto const expected_i16 = FCW_I16(
-    INZ_I16{NULL_INT,
+    INZ_I16{NULL_VAL,
             1234,
-            NULL_INT,
-            NULL_INT,
+            NULL_VAL,
+            NULL_VAL,
             -9832,
-            NULL_INT,
-            NULL_INT,
-            NULL_INT,
-            NULL_INT,
-            NULL_INT,
-            NULL_INT,
-            NULL_INT},
+            NULL_VAL,
+            NULL_VAL,
+            NULL_VAL,
+            NULL_VAL,
+            NULL_VAL,
+            NULL_VAL,
+            NULL_VAL},
     INZ_B{false, true, false, false, true, false, false, false, false, false, false, false});
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected_i16, true);
 
   results = cudf::strings::to_integers(STR_CV(strings), cudf::data_type{cudf::type_id::INT32});
   auto const expected_i32 =
-    FCW_I32(INZ_I32{NULL_INT,
+    FCW_I32(INZ_I32{NULL_VAL,
                     1234,
-                    NULL_INT,
-                    NULL_INT,
+                    NULL_VAL,
+                    NULL_VAL,
                     -9832,
-                    NULL_INT,
-                    NULL_INT,
-                    NULL_INT,
-                    NULL_INT,
+                    NULL_VAL,
+                    NULL_VAL,
+                    NULL_VAL,
+                    NULL_VAL,
                     2147483647,
                     -2147483648,
-                    NULL_INT},
+                    NULL_VAL},
             INZ_B{false, true, false, false, true, false, false, false, false, true, true, false});
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected_i32, true);
 
   results = cudf::strings::to_integers(STR_CV(strings), cudf::data_type{cudf::type_id::UINT32});
   auto const expected_u32 =
-    FCW_U32(INZ_U32{NULL_INT,
+    FCW_U32(INZ_U32{NULL_VAL,
                     1234,
-                    NULL_INT,
-                    NULL_INT,
-                    NULL_INT,
-                    NULL_INT,
-                    NULL_INT,
-                    NULL_INT,
-                    NULL_INT,
+                    NULL_VAL,
+                    NULL_VAL,
+                    NULL_VAL,
+                    NULL_VAL,
+                    NULL_VAL,
+                    NULL_VAL,
+                    NULL_VAL,
                     2147483647,
-                    NULL_INT,
+                    NULL_VAL,
                     2147483648},
             INZ_B{false, true, false, false, false, false, false, false, false, true, false, true});
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected_u32, true);
