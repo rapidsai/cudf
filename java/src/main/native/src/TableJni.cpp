@@ -285,7 +285,7 @@ private:
     return col_meta;
   }
 
-  std::string& get_column_name(size_t idx) {
+  std::string& get_column_name(const size_t idx) {
     if (idx < 0 || idx >= column_names.size()) {
       throw cudf::jni::jni_exception(
         "Missing column names for struct columns or nested struct columns");
