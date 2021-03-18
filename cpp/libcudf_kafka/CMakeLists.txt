@@ -46,13 +46,13 @@ message(VERBOSE "CUDF_KAFKA: Build gtests: ${BUILD_TESTS}")
 # * determine GPU architectures
 # * enable the CMake CUDA language
 # * set other CUDA compilation flags
-include(cmake/Modules/ConfigureCUDA.cmake)
+include(../cmake/Modules/ConfigureCUDA.cmake)
 
 ###################################################################################################
 # - Dependencies
 
 # CPM
-include(cmake/thirdparty/CUDF_KAFKA_GetCPM.cmake)
+include(../cmake/thirdparty/CUDF_GetCPM.cmake)
 
 # libcudf
 include(cmake/thirdparty/CUDF_KAFKA_GetCUDF.cmake)
