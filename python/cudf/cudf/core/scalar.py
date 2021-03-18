@@ -56,7 +56,14 @@ class Scalar(object):
         self._host_value = None
         self._host_dtype = None
         self._device_value = None
-        if isinstance(value, DeviceScalar):
+
+        if isinstance(value, Scalar):
+            if value._is_host_value_current:
+                self._host_value = value._host_value
+                self._host_dtype = value._host_dtype
+            else:
+                self._device_value = value._device_value
+        elif isinstance(value, DeviceScalar):
             self._device_value = value
         else:
             self._host_value, self._host_dtype = self._preprocess_host_value(

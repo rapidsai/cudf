@@ -289,3 +289,14 @@ def test_device_scalar_direct_construction(value):
         assert s.dtype == "object"
     else:
         assert s.dtype == dtype
+
+
+@pytest.mark.parametrize("value", SCALAR_VALUES)
+def test_construct_from_scalar(value):
+    value = cudf.utils.utils.to_cudf_compatible_scalar(value)
+    x = cudf.Scalar(1, value.dtype)
+    y = cudf.Scalar(x)
+    assert x.value == y.value
+
+    # check that this works:
+    y.device_value
