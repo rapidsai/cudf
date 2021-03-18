@@ -300,3 +300,6 @@ def test_construct_from_scalar(value):
 
     # check that this works:
     y.device_value
+
+    x._is_host_value_current == y._is_host_value_current
+    x._is_device_value_current == y._is_device_value_current
