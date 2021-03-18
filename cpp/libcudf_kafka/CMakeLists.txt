@@ -92,14 +92,8 @@ add_library(cudf_kafka SHARED
 )
 
 ###################################################################################################
-# cudf_kafka - librdkafka -------------------------------------------------------------------------
-
-target_link_libraries(cudf_kafka ${RDKAFKA++_LIBRARY})
-include_directories("${RDKAFKA_INCLUDE}")
-
-###################################################################################################
 # - cudf_kafka Install ----------------------------------------------------------------------------
-target_link_libraries(cudf_kafka cudf::cudf)
+target_link_libraries(cudf_kafka cudf::cudf RDKAFKA::RDKAFKA)
 
 install(TARGETS cudf_kafka
         DESTINATION lib)
