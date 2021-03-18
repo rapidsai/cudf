@@ -310,7 +310,7 @@ cpdef write_parquet(
 
     for i, name in enumerate(table._column_names, num_index_cols_meta):
         tbl_meta.get().column_metadata[i].set_name(name.encode())
-        _get_col_children_names(
+        _set_col_children_names(
             table[name]._column, tbl_meta.get().column_metadata[i]
         )
 
@@ -448,7 +448,7 @@ cdef class ParquetWriter:
 
         for i, name in enumerate(table._column_names, num_index_cols_meta):
             self.tbl_meta.get().column_metadata[i].set_name(name.encode())
-            _get_col_children_names(
+            _set_col_children_names(
                 table[name]._column, self.tbl_meta.get().column_metadata[i]
             )
 
@@ -546,14 +546,14 @@ cdef Column _update_column_struct_field_names(
         col.set_base_children(tuple(children))
     return col
 
-cdef _get_col_children_names(Column col, column_in_metadata& col_meta):
+cdef _set_col_children_names(Column col, column_in_metadata& col_meta):
     if is_struct_dtype(col):
         for i, (child_col, name) in enumerate(
             zip(col.children, list(col.dtype.fields))
         ):
             col_meta.child(i).set_name(name.encode())
-            _get_col_children_names(child_col, col_meta.child(i))
+            _set_col_children_names(child_col, col_meta.child(i))
     elif is_list_dtype(col):
-        _get_col_children_names(col.children[1], col_meta.child(1))
+        _set_col_children_names(col.children[1], col_meta.child(1))
     else:
         return
