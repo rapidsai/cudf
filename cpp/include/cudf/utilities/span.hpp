@@ -129,7 +129,8 @@ struct host_span : public cudf::detail::span_base<T, Extent, host_span<T, Extent
   // Constructor from container
   template <
     typename C,
-    std::enable_if_t<is_host_span_supported_container<C>::value &&  // only supported containers
+    // Only supported containers of types convertible to T
+    std::enable_if_t<is_host_span_supported_container<C>::value &&
                      std::is_convertible<std::remove_pointer_t<decltype(thrust::raw_pointer_cast(
                                            std::declval<C&>().data()))> (*)[],
                                          T (*)[]>::value>* = nullptr>
@@ -137,8 +138,10 @@ struct host_span : public cudf::detail::span_base<T, Extent, host_span<T, Extent
   {
   }
 
+  // Constructor from const container
   template <
     typename C,
+    // Only supported containers of types convertible to T
     std::enable_if_t<is_host_span_supported_container<C>::value &&
                      std::is_convertible<std::remove_pointer_t<decltype(thrust::raw_pointer_cast(
                                            std::declval<C&>().data()))> (*)[],
@@ -147,6 +150,7 @@ struct host_span : public cudf::detail::span_base<T, Extent, host_span<T, Extent
   {
   }
 
+  // Copy construction to support const conversion
   template <typename OtherT,
             std::size_t OtherExtent,
             typename std::enable_if<(Extent == OtherExtent || Extent == dynamic_extent) &&
