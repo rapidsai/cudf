@@ -129,6 +129,13 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
     return viewHandle;
   }
 
+  static int getFixedPointOutputScale(BinaryOp op, DType lhsType, DType rhsType) {
+    assert (lhsType.isDecimalType() && rhsType.isDecimalType());
+    return fixedPointOutputScale(op.nativeId, lhsType.getScale(), rhsType.getScale());
+  }
+
+  private static native int fixedPointOutputScale(int op, int lhsScale, int rhsScale);
+
   public final DType getType() {
     return type;
   }
@@ -1394,9 +1401,13 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
     List<ColumnView> newChildren = new ArrayList<>(getNumChildren());
     IntStream.range(0, getNumChildren()).forEach(i -> {
       ColumnView view = map.remove(i);
+      ColumnView child = getChildColumnView(i);
       if (view == null) {
-        newChildren.add(getChildColumnView(i));
+        newChildren.add(child);
       } else {
+        if (child.getRowCount() != view.getRowCount()) {
+          throw new IllegalArgumentException("Child row count doesn't match the old child");
+        }
         newChildren.add(view);
       }
     });
@@ -1431,7 +1442,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    */
   public ColumnView replaceListChild(ColumnView child) {
     assert(type == DType.LIST);
-    return replaceChildrenWithViews(new int[]{1}, new ColumnView[]{child});
+    return replaceChildrenWithViews(new int[]{0}, new ColumnView[]{child});
   }
 
   /**
