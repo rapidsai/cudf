@@ -34,7 +34,7 @@ cdef extern from "cudf/aggregation.hpp" namespace "cudf" nogil:
             ARGMIN 'cudf::aggregation::ARGMIN'
             NUNIQUE 'cudf::aggregation::NUNIQUE'
             NTH_ELEMENT 'cudf::aggregation::NTH_ELEMENT'
-            COLLECT_LIST 'cudf::aggregation::COLLECT_LIST'
+            COLLECT 'cudf::aggregation::COLLECT_LIST'
             COLLECT_SET 'cudf::aggregation::COLLECT_SET'
             PTX 'cudf::aggregation::PTX'
             CUDA 'cudf::aggregation::CUDA'
