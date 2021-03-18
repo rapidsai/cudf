@@ -6379,7 +6379,7 @@ class Series(Frame, Serializable):
         DataFrame
 
         Examples
-        -------
+        --------
         >>> import cudf
         >>> s = cudf.Series([[1, 2, 3], [], None, [4, 5]])
         >>> s

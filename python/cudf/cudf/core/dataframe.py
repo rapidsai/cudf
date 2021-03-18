@@ -7726,7 +7726,7 @@ class DataFrame(Frame, Serializable):
         DataFrame
 
         Examples
-        -------
+        --------
         >>> import cudf
         >>> cudf.DataFrame(
                 {"a": [[1, 2, 3], [], None, [4, 5]], "b": [11, 22, 33, 44]})
