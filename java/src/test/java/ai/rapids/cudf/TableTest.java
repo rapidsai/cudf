@@ -4635,7 +4635,7 @@ public class TableTest extends CudfTestBase {
     }
   }
 
-  private Table[] buildExplodeTestTableWithNestedTypes(boolean pos) {
+  private Table[] buildExplodeTestTableWithNestedTypes(boolean pos, boolean outer) {
     StructType nestedType = new StructType(true,
         new BasicType(false, DType.INT32), new BasicType(false, DType.STRING));
     try (Table input = new Table.TestBuilder()
@@ -4644,23 +4644,42 @@ public class TableTest extends CudfTestBase {
             Arrays.asList(struct(4, "k4"), struct(5, "k5")),
             Arrays.asList(struct(6, "k6")),
             Arrays.asList(new HostColumnVector.StructData((List) null)),
-            Arrays.asList())
+            null)
         .column("s1", "s2", "s3", "s4", "s5")
         .column(1, 3, 5, 7, 9)
         .column(12.0, 14.0, 13.0, 11.0, 15.0)
         .build()) {
       Table.TestBuilder expectedBuilder = new Table.TestBuilder();
       if (pos) {
-        expectedBuilder.column(0, 1, 2, 0, 1, 0, 0);
+        if (!outer)
+          expectedBuilder.column(0, 1, 2, 0, 1, 0, 0);
+        else
+          expectedBuilder.column(0, 1, 2, 0, 1, 0, 0, 0);
       }
-      try (Table expected = expectedBuilder
-          .column(nestedType,
+      List<Object[]> expectedData = new ArrayList<Object[]>(){{
+        if (!outer) {
+          this.add(new HostColumnVector.StructData[]{
               struct(1, "k1"), struct(2, "k2"), struct(3, "k3"),
               struct(4, "k4"), struct(5, "k5"), struct(6, "k6"),
-              new HostColumnVector.StructData((List) null))
-          .column("s1", "s1", "s1", "s2", "s2", "s3", "s4")
-          .column(1, 1, 1, 3, 3, 5, 7)
-          .column(12.0, 12.0, 12.0, 14.0, 14.0, 13.0, 11.0)
+              new HostColumnVector.StructData((List) null)});
+          this.add(new String[]{"s1", "s1", "s1", "s2", "s2", "s3", "s4"});
+          this.add(new Integer[]{1, 1, 1, 3, 3, 5, 7});
+          this.add(new Double[]{12.0, 12.0, 12.0, 14.0, 14.0, 13.0, 11.0});
+        } else {
+          this.add(new HostColumnVector.StructData[]{
+              struct(1, "k1"), struct(2, "k2"), struct(3, "k3"),
+              struct(4, "k4"), struct(5, "k5"), struct(6, "k6"),
+              new HostColumnVector.StructData((List) null), null});
+          this.add(new String[]{"s1", "s1", "s1", "s2", "s2", "s3", "s4", "s5"});
+          this.add(new Integer[]{1, 1, 1, 3, 3, 5, 7, 9});
+          this.add(new Double[]{12.0, 12.0, 12.0, 14.0, 14.0, 13.0, 11.0, 15.0});
+        }
+      }};
+      try (Table expected = expectedBuilder
+          .column(nestedType, (HostColumnVector.StructData[]) expectedData.get(0))
+          .column((String[]) expectedData.get(1))
+          .column((Integer[]) expectedData.get(2))
+          .column((Double[]) expectedData.get(3))
           .build()) {
         return new Table[]{new Table(input.getColumns()), new Table(expected.getColumns())};
       }
@@ -4679,7 +4698,7 @@ public class TableTest extends CudfTestBase {
     }
 
     // Child is nested type
-    Table[] testTables2 = buildExplodeTestTableWithNestedTypes(false);
+    Table[] testTables2 = buildExplodeTestTableWithNestedTypes(false, false);
     try (Table input = testTables2[0];
          Table expected = testTables2[1]) {
       try (Table exploded = input.explode(0)) {
@@ -4689,7 +4708,7 @@ public class TableTest extends CudfTestBase {
   }
 
   @Test
-  void testPosExplode() {
+  void testExplodePosition() {
     // Child is primitive type
     Table[] testTables = buildExplodeTestTableWithPrimitiveTypes(true, false);
     try (Table input = testTables[0];
@@ -4699,8 +4718,8 @@ public class TableTest extends CudfTestBase {
       }
     }
 
-    // Child is primitive type
-    Table[] testTables2 = buildExplodeTestTableWithNestedTypes(true);
+    // Child is nested type
+    Table[] testTables2 = buildExplodeTestTableWithNestedTypes(true, false);
     try (Table input = testTables2[0];
          Table expected = testTables2[1]) {
       try (Table exploded = input.explodePosition(0)) {
@@ -4709,4 +4728,45 @@ public class TableTest extends CudfTestBase {
     }
   }
 
+  @Test
+  void testExplodeOuter() {
+    // Child is primitive type
+    Table[] testTables = buildExplodeTestTableWithPrimitiveTypes(false, true);
+    try (Table input = testTables[0];
+         Table expected = testTables[1]) {
+      try (Table exploded = input.explodeOuter(0)) {
+        assertTablesAreEqual(expected, exploded);
+      }
+    }
+
+    // Child is nested type
+    Table[] testTables2 = buildExplodeTestTableWithNestedTypes(false, true);
+    try (Table input = testTables2[0];
+         Table expected = testTables2[1]) {
+      try (Table exploded = input.explodeOuter(0)) {
+        assertTablesAreEqual(expected, exploded);
+      }
+    }
+  }
+
+  @Test
+  void testExplodeOuterPosition() {
+    // Child is primitive type
+    Table[] testTables = buildExplodeTestTableWithPrimitiveTypes(true, true);
+    try (Table input = testTables[0];
+         Table expected = testTables[1]) {
+      try (Table exploded = input.explodeOuterPosition(0)) {
+        assertTablesAreEqual(expected, exploded);
+      }
+    }
+
+    // Child is nested type
+    Table[] testTables2 = buildExplodeTestTableWithNestedTypes(true, true);
+    try (Table input = testTables2[0];
+         Table expected = testTables2[1]) {
+      try (Table exploded = input.explodeOuterPosition(0)) {
+        assertTablesAreEqual(expected, exploded);
+      }
+    }
+  }
 }

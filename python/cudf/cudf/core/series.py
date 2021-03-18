@@ -1501,9 +1501,7 @@ class Series(Frame, Serializable):
         If ``reflect`` is ``True``, swap the order of the operands.
         """
         if isinstance(other, cudf.DataFrame):
-            # TODO: fn is not the same as arg expected by _apply_op
-            # e.g. for fn = 'and', _apply_op equivalent is '__and__'
-            return other._apply_op(self, fn)
+            return NotImplemented
 
         result_name = utils.get_result_name(self, other)
         if isinstance(other, Series):
