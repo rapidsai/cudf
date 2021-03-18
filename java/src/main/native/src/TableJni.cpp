@@ -265,8 +265,8 @@ public:
   }
 
 private:
-  // `column_metadata` has no move constructor,
-  // still return a local var instead of passing as an out argument ?
+  // Still return an oject instead of being passed as an out argument, even
+  // `column_metadata` has no move constructor and would be copied.
   cudf::column_metadata build_one_column_meta(const column_view& cview, size_t& idx) {
     auto col_meta = cudf::column_metadata{get_column_name(idx)};
     if (cview.type().id() == cudf::type_id::LIST) {
