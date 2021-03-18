@@ -1614,6 +1614,39 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_concatenate(JNIEnv *env, 
   CATCH_STD(env, NULL);
 }
 
+JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_partition(JNIEnv *env, jclass,
+                                                                 jlong input_table,
+                                                                 jlong partition_column,
+                                                                 jint number_of_partitions,
+                                                                 jintArray output_offsets) {
+
+  JNI_NULL_CHECK(env, input_table, "input table is null", NULL);
+  JNI_NULL_CHECK(env, partition_column, "partition_column is null", NULL);
+  JNI_NULL_CHECK(env, output_offsets, "output_offsets is null", NULL);
+  JNI_ARG_CHECK(env, number_of_partitions > 0, "number_of_partitions is zero", NULL);
+
+  try {
+    cudf::jni::auto_set_device(env);
+    cudf::table_view *n_input_table = reinterpret_cast<cudf::table_view *>(input_table);
+    cudf::column_view *n_part_column = reinterpret_cast<cudf::column_view *>(partition_column);
+    cudf::jni::native_jintArray n_output_offsets(env, output_offsets);
+
+    auto result = cudf::partition(*n_input_table,
+                                  *n_part_column,
+                                  number_of_partitions);
+
+    for (size_t i = 0; i < result.second.size() - 1; i++) {
+      // for what ever reason partition returns the length of the result at then
+      // end and hash partition/round robin do not, so skip the last entry for
+      // consistency
+      n_output_offsets[i] = result.second[i];
+    }
+
+    return cudf::jni::convert_table_for_return(env, result.first);
+  }
+  CATCH_STD(env, NULL);
+}
+
 JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_hashPartition(JNIEnv *env, jclass,
                                                                      jlong input_table,
                                                                      jintArray columns_to_hash,
