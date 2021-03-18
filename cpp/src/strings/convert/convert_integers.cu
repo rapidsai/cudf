@@ -19,6 +19,7 @@
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/utilities/integer_utils.hpp>
+#include <cudf/detail/valid_if.cuh>
 #include <cudf/strings/convert/convert_integers.hpp>
 #include <cudf/strings/detail/converters.hpp>
 #include <cudf/strings/detail/utilities.hpp>
@@ -37,6 +38,106 @@
 
 namespace cudf {
 namespace strings {
+
+namespace detail {
+namespace {
+
+/**
+ * @brief This only checks if a string is a valid integer within the bounds of its storage type.
+ */
+template <typename IntegerType>
+struct string_to_integer_check_fn {
+  column_device_view const d_strings;
+  __device__ bool operator()(size_type idx) const
+  {
+    if (d_strings.is_null(idx)) { return false; }
+    auto const d_str = d_strings.element<string_view>(idx);
+    if (d_str.empty() || (d_str.data()[0] == '-' && std::is_unsigned<IntegerType>::value)) {
+      return false;
+    }
+
+    auto iter = d_str.data() + static_cast<int>((d_str.data()[0] == '-' || d_str.data()[0] == '+'));
+    auto const iter_end = d_str.data() + d_str.size_bytes();
+    if (iter == iter_end) { return false; }
+
+    auto const sign = d_str.data()[0] == '-' ? IntegerType{-1} : IntegerType{1};
+    auto const bound_val =
+      sign > 0 ? std::numeric_limits<IntegerType>::max() : std::numeric_limits<IntegerType>::min();
+
+    IntegerType value = 0;      // parse the string to integer and check for overflow along the way
+    while (iter != iter_end) {  // check all bytes for valid characters
+      auto const chr = *iter++;
+      // Check for valid character
+      if (chr < '0' || chr > '9') { return false; }
+
+      // Check for underflow and overflow:
+      auto const digit       = static_cast<IntegerType>(chr - '0');
+      auto const bound_check = (bound_val - sign * digit) / IntegerType{10} * sign;
+      if (value > bound_check) return false;
+      value = value * IntegerType{10} + digit;
+    }
+
+    return true;
+  }
+};
+
+/**
+ * @brief The dispatch functions for checking if strings are valid integers.
+ */
+struct dispatch_is_integer_fn {
+  template <typename T, std::enable_if_t<std::is_integral<T>::value>* = nullptr>
+  std::unique_ptr<column> operator()(strings_column_view const& input,
+                                     rmm::cuda_stream_view stream,
+                                     rmm::mr::device_memory_resource* mr) const
+  {
+    auto const d_column = column_device_view::create(input.parent(), stream);
+    auto results        = make_numeric_column(data_type{type_id::BOOL8},
+                                       input.size(),
+                                       cudf::detail::copy_bitmask(input.parent(), stream, mr),
+                                       input.null_count(),
+                                       stream,
+                                       mr);
+
+    thrust::transform(rmm::exec_policy(stream),
+                      thrust::make_counting_iterator<size_type>(0),
+                      thrust::make_counting_iterator<size_type>(input.size()),
+                      results->mutable_view().data<bool>(),
+                      string_to_integer_check_fn<T>{*d_column});
+    results->set_null_count(input.null_count());
+    return results;
+  }
+
+  template <typename T, std::enable_if_t<not std::is_integral<T>::value>* = nullptr>
+  std::unique_ptr<column> operator()(strings_column_view const&,
+                                     rmm::cuda_stream_view,
+                                     rmm::mr::device_memory_resource*) const
+  {
+    CUDF_FAIL("is_integer is expecting an integer type");
+  }
+};
+
+std::unique_ptr<column> is_integer(
+  strings_column_view const& strings,
+  data_type int_type,
+  rmm::cuda_stream_view stream,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
+{
+  if (strings.is_empty()) return cudf::make_empty_column(data_type{type_id::BOOL8});
+  return type_dispatcher(int_type, dispatch_is_integer_fn{}, strings, stream, mr);
+}
+
+}  // namespace
+}  // namespace detail
+
+// external API
+std::unique_ptr<column> is_integer(strings_column_view const& strings,
+                                   data_type int_type,
+                                   rmm::mr::device_memory_resource* mr)
+{
+  CUDF_FUNC_RANGE();
+  return detail::is_integer(strings, int_type, rmm::cuda_stream_default, mr);
+}
+
 namespace detail {
 namespace {
 /**
@@ -58,6 +159,22 @@ struct string_to_integer_fn {
 };
 
 /**
+ * @brief Check the validity of the elements
+ *
+ * An element in the data_column will be valid only is is not null and
+ * the corresponding value in the validity_column is not zero.
+ */
+struct bitmask_and_fn {
+  const column_device_view data_column;
+  const column_device_view validity_column;
+
+  __device__ bool operator()(size_type idx)
+  {
+    return !data_column.is_null(idx) && validity_column.element<int8_t>(idx);
+  }
+};
+
+/**
  * @brief The dispatch functions for converting strings to integers.
  *
  * The output_column is expected to be one of the integer types only.
@@ -65,19 +182,20 @@ struct string_to_integer_fn {
 struct dispatch_to_integers_fn {
   template <typename IntegerType, std::enable_if_t<std::is_integral<IntegerType>::value>* = nullptr>
   void operator()(column_device_view const& strings_column,
-                  mutable_column_view& output_column,
+                  mutable_column_view const& output_column,
                   rmm::cuda_stream_view stream) const
   {
-    auto d_results = output_column.data<IntegerType>();
     thrust::transform(rmm::exec_policy(stream),
                       thrust::make_counting_iterator<size_type>(0),
                       thrust::make_counting_iterator<size_type>(strings_column.size()),
-                      d_results,
+                      output_column.data<IntegerType>(),
                       string_to_integer_fn<IntegerType>{strings_column});
   }
   // non-integral types throw an exception
   template <typename T, std::enable_if_t<not std::is_integral<T>::value>* = nullptr>
-  void operator()(column_device_view const&, mutable_column_view&, rmm::cuda_stream_view) const
+  void operator()(column_device_view const&,
+                  mutable_column_view const&,
+                  rmm::cuda_stream_view) const
   {
     CUDF_FAIL("Output for to_integers must be an integral type.");
   }
@@ -85,7 +203,7 @@ struct dispatch_to_integers_fn {
 
 template <>
 void dispatch_to_integers_fn::operator()<bool>(column_device_view const&,
-                                               mutable_column_view&,
+                                               mutable_column_view const&,
                                                rmm::cuda_stream_view) const
 {
   CUDF_FAIL("Output for to_integers must not be a boolean type.");
@@ -101,19 +219,31 @@ std::unique_ptr<column> to_integers(strings_column_view const& strings,
 {
   size_type strings_count = strings.size();
   if (strings_count == 0) return make_numeric_column(output_type, 0);
-  auto strings_column = column_device_view::create(strings.parent(), stream);
-  auto d_strings      = *strings_column;
-  // create integer output column copying the strings null-mask
-  auto results      = make_numeric_column(output_type,
+  auto const strings_dev_view = column_device_view::create(strings.parent(), stream);
+
+  // Create integer output column copying the strings null-mask
+  auto results = make_numeric_column(output_type,
                                      strings_count,
                                      cudf::detail::copy_bitmask(strings.parent(), stream, mr),
                                      strings.null_count(),
                                      stream,
                                      mr);
-  auto results_view = results->mutable_view();
-  // fill output column with integers
-  type_dispatcher(output_type, dispatch_to_integers_fn{}, d_strings, results_view, stream);
-  results->set_null_count(strings.null_count());
+  // Fill output column with integers
+  type_dispatcher(
+    output_type, dispatch_to_integers_fn{}, *strings_dev_view, results->mutable_view(), stream);
+
+  // Check for validity of the conversion
+  auto const validity_col      = detail::is_integer(strings, output_type, stream, mr);
+  auto const validity_dev_view = column_device_view::create(validity_col->view(), stream);
+
+  // Generate new null mask as the AND result of the previous null mask and the is_integer validity
+  auto validity = cudf::detail::valid_if(thrust::make_counting_iterator<size_type>(0),
+                                         thrust::make_counting_iterator<size_type>(strings.size()),
+                                         bitmask_and_fn{*strings_dev_view, *validity_dev_view},
+                                         stream,
+                                         mr);
+
+  if (validity.second) { results->set_null_mask(std::move(validity.first), validity.second); }
   return results;
 }
 
@@ -250,105 +380,6 @@ std::unique_ptr<column> from_integers(column_view const& integers,
 {
   CUDF_FUNC_RANGE();
   return detail::from_integers(integers, rmm::cuda_stream_default, mr);
-}
-
-namespace detail {
-namespace {
-
-/**
- * @brief This only checks if a string is a valid integer within the bounds of its storage type.
- */
-template <typename IntegerType>
-struct string_to_integer_check_fn {
-  column_device_view const d_strings;
-  __device__ bool operator()(size_type idx) const
-  {
-    if (d_strings.is_null(idx)) { return false; }
-    auto const d_str = d_strings.element<string_view>(idx);
-    if (d_str.empty() || (d_str.data()[0] == '-' && std::is_unsigned<IntegerType>::value)) {
-      return false;
-    }
-
-    auto iter = d_str.data() + static_cast<int>((d_str.data()[0] == '-' || d_str.data()[0] == '+'));
-    auto const iter_end = d_str.data() + d_str.size_bytes();
-    if (iter == iter_end) { return false; }
-
-    auto const sign = d_str.data()[0] == '-' ? IntegerType{-1} : IntegerType{1};
-    auto const bound_val =
-      sign > 0 ? std::numeric_limits<IntegerType>::max() : std::numeric_limits<IntegerType>::min();
-
-    IntegerType value = 0;      // parse the string to integer and check for overflow along the way
-    while (iter != iter_end) {  // check all bytes for valid characters
-      auto const chr = *iter++;
-      // Check for valid character
-      if (chr < '0' || chr > '9') { return false; }
-
-      // Check for underflow and overflow:
-      auto const digit       = static_cast<IntegerType>(chr - '0');
-      auto const bound_check = (bound_val - sign * digit) / IntegerType{10} * sign;
-      if (value > bound_check) return false;
-      value = value * IntegerType{10} + digit;
-    }
-
-    return true;
-  }
-};
-
-/**
- * @brief The dispatch functions for checking if strings are valid integers.
- */
-struct dispatch_is_integer_fn {
-  template <typename T, std::enable_if_t<std::is_integral<T>::value>* = nullptr>
-  std::unique_ptr<column> operator()(strings_column_view const& input,
-                                     rmm::cuda_stream_view stream,
-                                     rmm::mr::device_memory_resource* mr) const
-  {
-    auto const d_column = column_device_view::create(input.parent(), stream);
-    auto results        = make_numeric_column(data_type{type_id::BOOL8},
-                                       input.size(),
-                                       cudf::detail::copy_bitmask(input.parent(), stream, mr),
-                                       input.null_count(),
-                                       stream,
-                                       mr);
-
-    thrust::transform(rmm::exec_policy(stream),
-                      thrust::make_counting_iterator<size_type>(0),
-                      thrust::make_counting_iterator<size_type>(input.size()),
-                      results->mutable_view().data<bool>(),
-                      string_to_integer_check_fn<T>{*d_column});
-    results->set_null_count(input.null_count());
-    return results;
-  }
-
-  template <typename T, std::enable_if_t<not std::is_integral<T>::value>* = nullptr>
-  std::unique_ptr<column> operator()(strings_column_view const&,
-                                     rmm::cuda_stream_view,
-                                     rmm::mr::device_memory_resource*) const
-  {
-    CUDF_FAIL("is_integer is expecting an integer type");
-  }
-};
-
-std::unique_ptr<column> is_integer(
-  strings_column_view const& strings,
-  data_type int_type,
-  rmm::cuda_stream_view stream,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
-{
-  if (strings.is_empty()) return cudf::make_empty_column(data_type{type_id::BOOL8});
-  return type_dispatcher(int_type, dispatch_is_integer_fn{}, strings, stream, mr);
-}
-
-}  // namespace
-}  // namespace detail
-
-// external API
-std::unique_ptr<column> is_integer(strings_column_view const& strings,
-                                   data_type int_type,
-                                   rmm::mr::device_memory_resource* mr)
-{
-  CUDF_FUNC_RANGE();
-  return detail::is_integer(strings, int_type, rmm::cuda_stream_default, mr);
 }
 
 }  // namespace strings
