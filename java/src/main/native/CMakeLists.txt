@@ -241,7 +241,6 @@ set(SOURCE_FILES
     "src/AggregationJni.cpp"
     "src/CudfJni.cpp"
     "src/CudaJni.cpp"
-    "src/ColumnMetadataJni.cpp"
     "src/ColumnVectorJni.cpp"
     "src/ColumnViewJni.cpp"
     "src/ContiguousTableJni.cpp"

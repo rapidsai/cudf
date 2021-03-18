@@ -4297,19 +4297,11 @@ public class TableTest extends CudfTestBase {
   void testArrowIPCWriteToBufferChunked() {
     try (Table table0 = getExpectedFileTable(true);
          MyBufferConsumer consumer = new MyBufferConsumer()) {
-      ColumnMetadata[] colMeta = Arrays.asList("first", "second", "third", "fourth", "fifth",
-              "sixth", "seventh").stream().map(ColumnMetadata::new)
-              .toArray(ColumnMetadata[]::new);
-      ColumnMetadata structCM = new ColumnMetadata("eighth");
-      structCM.addChildren(new ColumnMetadata("id"), new ColumnMetadata("name"));
-      ColumnMetadata arrayPriCM = new ColumnMetadata("ninth");
-      // Array type needs a stub metadata for the offset column
-      arrayPriCM.addChildren(new ColumnMetadata(null), new ColumnMetadata("aid"));
-      ColumnMetadata arrayStructCM = new ColumnMetadata("tenth");
-      arrayStructCM.addChildren(new ColumnMetadata(null), structCM);
       ArrowIPCWriterOptions options = ArrowIPCWriterOptions.builder()
-              .withColumnMetadata(colMeta)
-              .withColumnMetadata(structCM, arrayPriCM, arrayStructCM)
+              .withColumnNames("first", "second", "third", "fourth", "fifth", "sixth", "seventh")
+              .withColumnNames("eighth", "eighth_id", "eighth_name")
+              .withColumnNames("ninth")
+              .withColumnNames("tenth", "tenth_id", "tenth_name")
               .build();
       try (TableWriter writer = Table.writeArrowIPCChunked(options, consumer)) {
         writer.write(table0);

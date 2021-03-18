@@ -203,20 +203,23 @@ typedef jni_table_writer_handle<cudf::io::orc_chunked_writer> native_orc_writer_
 
 class native_arrow_ipc_writer_handle final {
 public:
-  explicit native_arrow_ipc_writer_handle(const std::vector<cudf::column_metadata> &col_meta,
+  explicit native_arrow_ipc_writer_handle(const std::vector<std::string> &col_names,
                                           const std::string &file_name)
-      : initialized(false), column_metadata(col_meta), file_name(file_name) {}
+      : initialized(false), column_names(col_names), file_name(file_name) {}
 
-  explicit native_arrow_ipc_writer_handle(const std::vector<cudf::column_metadata> &col_meta,
+  explicit native_arrow_ipc_writer_handle(const std::vector<std::string> &col_names,
                                           const std::shared_ptr<arrow::io::OutputStream> &sink)
-      : initialized(false), column_metadata(col_meta), file_name(""), sink(sink) {}
+      : initialized(false), column_names(col_names), file_name(""), sink(sink) {}
 
+private:
   bool initialized;
-  std::vector<cudf::column_metadata> column_metadata;
+  std::vector<std::string> column_names;
+  std::vector<cudf::column_metadata> columns_meta;
   std::string file_name;
   std::shared_ptr<arrow::io::OutputStream> sink;
   std::shared_ptr<arrow::ipc::RecordBatchWriter> writer;
 
+public:
   void write(std::shared_ptr<arrow::Table> &arrow_tab, int64_t max_chunk) {
     if (!initialized) {
       if (!sink) {
@@ -244,6 +247,50 @@ public:
       sink->Close();
     }
     initialized = false;
+  }
+
+  std::vector<cudf::column_metadata> get_column_metadata(const table_view& tview) {
+    if (!column_names.empty() && columns_meta.empty()) {
+      // Rebuild the structure of column meta according to table schema.
+      // All the tables written by this writer should share the same schema,
+      // so build column metadata only once.
+      columns_meta.reserve(tview.num_columns());
+      size_t idx = 0;
+      for (auto itr = tview.begin(); itr < tview.end(); ++itr) {
+        columns_meta.push_back(std::move(build_one_column_meta(*itr, idx)));
+        idx ++;
+      }
+    }
+    return columns_meta;
+  }
+
+private:
+  // `column_metadata` has no move constructor,
+  // still return a local var instead of passing as an out argument ?
+  cudf::column_metadata build_one_column_meta(const column_view& cview, size_t& idx) {
+    auto col_meta = cudf::column_metadata{get_column_name(idx)};
+    if (cview.type().id() == cudf::type_id::LIST) {
+      // list type requires a stub metadata for offset column.
+      // It is ok the child metadata uses the same name, so keep `idx` unchanged.
+      col_meta.children_meta = {{}, build_one_column_meta(cview.child(0), idx)};
+    } else if (cview.type().id() == cudf::type_id::STRUCT) {
+      // struct type
+      col_meta.children_meta.reserve(cview.num_children());
+      for (auto itr = cview.child_begin(); itr < cview.child_end(); ++itr) {
+        col_meta.children_meta.push_back(std::move(build_one_column_meta(*itr, ++idx)));
+      }
+    } else if (cview.type().id() == cudf::type_id::DICTIONARY32) {
+      // not supported yet in JNI, nested type?
+    }
+    return col_meta;
+  }
+
+  std::string get_column_name(size_t idx) {
+    if (idx < 0 || idx >= column_names.size()) {
+      throw cudf::jni::jni_exception(
+        "Missing column names for struct columns or nested struct columns");
+    }
+    return column_names[idx];
   }
 };
 
@@ -561,16 +608,6 @@ bool valid_window_parameters(native_jintArray const &values,
                              native_jintArray const &following) {
   return values.size() == ops.size() && values.size() == min_periods.size() &&
          values.size() == preceding.size() && values.size() == following.size();
-}
-
-static void build_column_metadata_from_handle(JNIEnv *env, jlongArray j_meta_handles,
-                                              std::vector<cudf::column_metadata>& out_meta) {
-  cudf::jni::native_jlongArray meta_handles(env, j_meta_handles);
-  for (int i = 0; i < meta_handles.size(); i++) {
-    cudf::column_metadata *cm = reinterpret_cast<cudf::column_metadata *>(meta_handles[i]);
-    // copy to `out_meta`.
-    out_meta.push_back(*cm);
-  }
 }
 
 } // namespace
@@ -1206,37 +1243,36 @@ JNIEXPORT void JNICALL Java_ai_rapids_cudf_Table_writeORCEnd(JNIEnv *env, jclass
 }
 
 JNIEXPORT long JNICALL Java_ai_rapids_cudf_Table_writeArrowIPCBufferBegin(JNIEnv *env, jclass,
-                                                                          jlongArray j_col_meta,
+                                                                          jobjectArray j_col_names,
                                                                           jobject consumer) {
-  JNI_NULL_CHECK(env, j_col_meta, "null columns", 0);
+  JNI_NULL_CHECK(env, j_col_names, "null columns", 0);
   JNI_NULL_CHECK(env, consumer, "null consumer", 0);
   try {
     cudf::jni::auto_set_device(env);
+    cudf::jni::native_jstringArray col_names(env, j_col_names);
+
     std::shared_ptr<cudf::jni::jni_arrow_output_stream> data_sink(
         new cudf::jni::jni_arrow_output_stream(env, consumer));
-    std::vector<cudf::column_metadata> col_meta;
-    cudf::jni::build_column_metadata_from_handle(env, j_col_meta, col_meta);
 
     cudf::jni::native_arrow_ipc_writer_handle *ret =
-        new cudf::jni::native_arrow_ipc_writer_handle(col_meta, data_sink);
+        new cudf::jni::native_arrow_ipc_writer_handle(col_names.as_cpp_vector(), data_sink);
     return reinterpret_cast<jlong>(ret);
   }
   CATCH_STD(env, 0)
 }
 
 JNIEXPORT long JNICALL Java_ai_rapids_cudf_Table_writeArrowIPCFileBegin(JNIEnv *env, jclass,
-                                                                        jlongArray j_col_meta,
+                                                                        jobjectArray j_col_names,
                                                                         jstring j_output_path) {
-  JNI_NULL_CHECK(env, j_col_meta, "null columns", 0);
+  JNI_NULL_CHECK(env, j_col_names, "null columns", 0);
   JNI_NULL_CHECK(env, j_output_path, "null output path", 0);
   try {
     cudf::jni::auto_set_device(env);
+    cudf::jni::native_jstringArray col_names(env, j_col_names);
     cudf::jni::native_jstring output_path(env, j_output_path);
-    std::vector<cudf::column_metadata> col_meta;
-    cudf::jni::build_column_metadata_from_handle(env, j_col_meta, col_meta);
 
     cudf::jni::native_arrow_ipc_writer_handle *ret =
-        new cudf::jni::native_arrow_ipc_writer_handle(col_meta, output_path.get());
+        new cudf::jni::native_arrow_ipc_writer_handle(col_names.as_cpp_vector(), output_path.get());
     return reinterpret_cast<jlong>(ret);
   }
   CATCH_STD(env, 0)
@@ -1256,7 +1292,7 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Table_convertCudfToArrowTable(JNIEnv
     cudf::jni::auto_set_device(env);
     std::unique_ptr<std::shared_ptr<arrow::Table>> result(
         new std::shared_ptr<arrow::Table>(nullptr));
-    *result = cudf::to_arrow(*tview, state->column_metadata);
+    *result = cudf::to_arrow(*tview, state->get_column_metadata(*tview));
     if (!result->get()) {
       return 0;
     }
