@@ -19,6 +19,8 @@
 
 #include <cudf/types.hpp>
 
+#include <limits>
+
 /**
  * @brief Generate row count and row length argument ranges for a string benchmark.
  *

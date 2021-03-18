@@ -14,6 +14,8 @@
  * limitations under the License.
  */
 
+#include "string_bench_args.hpp"
+
 #include <benchmark/benchmark.h>
 #include <benchmarks/common/generate_benchmark_input.hpp>
 #include <benchmarks/fixture/benchmark_fixture.hpp>
@@ -23,10 +25,6 @@
 #include <cudf/strings/combine.hpp>
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf_test/column_wrapper.hpp>
-
-#include <limits>
-
-#include "string_bench_args.hpp"
 
 class StringCombine : public cudf::benchmark {
 };
