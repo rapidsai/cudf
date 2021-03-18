@@ -126,12 +126,23 @@ struct host_span : public cudf::detail::span_base<T, Extent, host_span<T, Extent
 
   constexpr host_span() noexcept : base() {}  // required to compile on centos
 
-  template <typename C, std::enable_if_t<is_host_span_supported_container<C>::value>* = nullptr>
+  // Constructor from container
+  template <
+    typename C,
+    std::enable_if_t<is_host_span_supported_container<C>::value &&  // only supported containers
+                     std::is_convertible<std::remove_pointer_t<decltype(thrust::raw_pointer_cast(
+                                           std::declval<C&>().data()))> (*)[],
+                                         T (*)[]>::value>* = nullptr>
   constexpr host_span(C& in) : base(in.data(), in.size())
   {
   }
 
-  template <typename C, std::enable_if_t<is_host_span_supported_container<C>::value>* = nullptr>
+  template <
+    typename C,
+    std::enable_if_t<is_host_span_supported_container<C>::value &&
+                     std::is_convertible<std::remove_pointer_t<decltype(thrust::raw_pointer_cast(
+                                           std::declval<C&>().data()))> (*)[],
+                                         T (*)[]>::value>* = nullptr>
   constexpr host_span(C const& in) : base(in.data(), in.size())
   {
   }
