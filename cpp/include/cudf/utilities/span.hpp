@@ -190,12 +190,24 @@ struct device_span : public cudf::detail::span_base<T, Extent, device_span<T, Ex
 
   constexpr device_span() noexcept : base() {}  // required to compile on centos
 
-  template <typename C, std::enable_if_t<is_device_span_supported_container<C>::value>* = nullptr>
+  template <
+    typename C,
+    // Only supported containers of types convertible to T
+    std::enable_if_t<is_host_span_supported_container<C>::value &&
+                     std::is_convertible<std::remove_pointer_t<decltype(thrust::raw_pointer_cast(
+                                           std::declval<C&>().data()))> (*)[],
+                                         T (*)[]>::value>* = nullptr>
   constexpr device_span(C& in) : base(thrust::raw_pointer_cast(in.data()), in.size())
   {
   }
 
-  template <typename C, std::enable_if_t<is_device_span_supported_container<C>::value>* = nullptr>
+  template <
+    typename C,
+    // Only supported containers of types convertible to T
+    std::enable_if_t<is_host_span_supported_container<C>::value &&
+                     std::is_convertible<std::remove_pointer_t<decltype(thrust::raw_pointer_cast(
+                                           std::declval<C&>().data()))> (*)[],
+                                         T (*)[]>::value>* = nullptr>
   constexpr device_span(C const& in) : base(thrust::raw_pointer_cast(in.data()), in.size())
   {
   }
