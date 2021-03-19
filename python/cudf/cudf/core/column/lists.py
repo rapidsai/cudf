@@ -194,19 +194,21 @@ class ListMethods(ColumnMethodsMixin):
         Examples
         --------
         >>> s = cudf.Series([[1, 2, 3], [3, 4, 5], [4, 5, 6]])
-        >>> s.list.extract(-1)
+        >>> s.list.get(-1)
         0    3
         1    5
         2    6
         dtype: int64
         """
-        if abs(index) >= self.len().min():
-            # TODO: handle case when  index == -self.len().min()
-            # e.g: index= -3 should return [1,3,4]
-            # instead of IndexError
-            raise IndexError("IndexError: list index out of range")
-
-        return self._return_or_inplace(extract_element(self._column, index))
+        min_col_list_len = self.len().min()
+        if abs(index) > min_col_list_len:
+            raise IndexError("list index out of range")
+        if (index >= 0 and index < min_col_list_len) or (
+            index < 0 and abs(index) <= min_col_list_len
+        ):
+            return self._return_or_inplace(
+                extract_element(self._column, index)
+            )
 
     @property
     def leaves(self):

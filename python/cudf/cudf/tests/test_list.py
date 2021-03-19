@@ -115,8 +115,6 @@ def test_len(data):
 
 
 @pytest.mark.parametrize(
-    # TODO: Add tests for series of strings and tuples
-    # similar to pandas get() method
     "data, index, expect",
     [
         ([[None, None], [None, None]], 0, [None, None]),
@@ -146,9 +144,6 @@ def test_get_nested_lists():
 
 
 def test_get_nulls():
-    # TODO: do we really want this?
-    # this test fails because 100 (index) > 0 (min)
-    sr = cudf.Series([[], [], []])
-    got = sr.list.get(100)
-    expect = cudf.Series([None, None, None], dtype="int8")
-    assert_eq(expect, got)
+    with pytest.raises(IndexError, match="list index out of range"):
+        sr = cudf.Series([[], [], []])
+        sr.list.get(100)
