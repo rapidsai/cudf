@@ -212,9 +212,7 @@ std::unique_ptr<column> bin(column_view const& input,
                "The left and right edge columns cannot contain nulls.");
 
   // Handle empty inputs.
-  if (input.is_empty()) {
-    return make_empty_column( data_type(type_to_id<size_type>()) );
-  }
+  if (input.is_empty()) { return make_empty_column(data_type(type_to_id<size_type>())); }
 
   return type_dispatcher<dispatch_storage_type>(input.type(),
                                                 detail::bin_type_dispatcher{},
