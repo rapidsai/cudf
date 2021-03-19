@@ -16,21 +16,6 @@
 cmake_minimum_required(VERSION 3.18 FATAL_ERROR)
 project(CUDA_KAFKA VERSION 0.19.0 LANGUAGES C CXX)
 
-#################################################################################################
-# - CUDA architectures
-
-# If CMAKE_CUDA_ARCHITECTURES is not defined, build for all supported architectures. If
-# CMAKE_CUDA_ARCHITECTURES is set to an empty string (""), build for only the current
-# architecture. If `CMAKE_CUDA_ARCHITECTURES` is specified by the user, use user setting.
-
-# This needs to be run before enabling the CUDA language due to the default initialization behavior
-# of CMAKE_CUDA_ARCHITECTURES, https://gitlab.kitware.com/cmake/cmake/-/issues/21302
-if(NOT DEFINED CMAKE_CUDA_ARCHITECTURES)
-  set(CUDF_BUILD_FOR_ALL_ARCHS TRUE)
-elseif(CMAKE_CUDA_ARCHITECTURES STREQUAL "")
-  set(CUDF_BUILD_FOR_DETECTED_ARCHS TRUE)
-endif()
-
 ###################################################################################################
 # - Build options
 
@@ -99,10 +84,3 @@ install(TARGETS cudf_kafka
 
 install(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/include
         DESTINATION include)
-
-add_custom_target(build_tests_libcudf_kafka
-                    DEPENDS ${CUDF_KAFKA_TEST_LIST})
-
-add_custom_target(test_libcudf_kafka
-                    COMMAND ctest
-                    DEPENDS build_tests_libcudf_kafka)
