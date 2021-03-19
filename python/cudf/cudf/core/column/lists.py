@@ -8,6 +8,7 @@ import pyarrow as pa
 import cudf
 from cudf._lib.copying import segmented_gather
 from cudf._lib.lists import count_elements, sort_lists
+from cudf._lib.types import NullOrder, Order
 from cudf.core.buffer import Buffer
 from cudf.core.column import ColumnBase, as_column, column
 from cudf.core.column.methods import ColumnMethodsMixin
@@ -321,7 +322,7 @@ class ListMethods(ColumnMethodsMixin):
         --------
         >>> import cudf
         >>> s = cudf.Series([[4, 2, None, 9], [8, 8, 2], [2, 1]])
-        >>> s.sort_values(ascending=True, na_position="last")
+        >>> s.list.sort_values(ascending=True, na_position="last")
         [2, 4, 9, None],
         [2, 8, 8],
         [1, 2]
@@ -334,7 +335,12 @@ class ListMethods(ColumnMethodsMixin):
         if na_position not in {"first", "last"}:
             raise ValueError(f"Unknown `na_position` value {na_position}")
 
+        sort_order = Order.ASCENDING if ascending else Order.DESCENDING
+        null_order = (
+            NullOrder.BEFORE if na_position == "first" else NullOrder.AFTER
+        )
+
         return self._return_or_inplace(
-            sort_lists(self._column, ascending, na_position),
+            sort_lists(self._column, sort_order, null_order),
             retain_index=not ignore_index,
         )

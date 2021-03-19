@@ -24,12 +24,14 @@ from cudf._lib.cpp.types cimport size_type, order, null_order
 from cudf._lib.column cimport Column
 from cudf._lib.table cimport Table
 
+from cudf._lib.types cimport (
+    underlying_type_t_null_order, underlying_type_t_order
+)
+from cudf._lib.types import Order, NullOrder
 from cudf.core.dtypes import ListDtype
 
 
 def count_elements(Column col):
-    if not isinstance(col.dtype, ListDtype):
-        raise TypeError("col is not a list column.")
 
     # shared_ptr required because lists_column_view has no default
     # ctor
@@ -63,18 +65,13 @@ def explode_outer(Table tbl, int explode_column_idx, bool ignore_index=False):
     )
 
 
-def sort_lists(Column col, bool ascending, object na_position):
-    if not isinstance(col.dtype, ListDtype):
-        raise TypeError("col is not a list column.")
-
+def sort_lists(Column col, object order_enum, object null_order_enum):
     cdef shared_ptr[lists_column_view] list_view = (
         make_shared[lists_column_view](col.view())
     )
-    cdef order c_sort_order = (
-        order.ASCENDING if ascending else order.DESCENDING
-    )
+    cdef order c_sort_order = <order><underlying_type_t_order>order_enum.value
     cdef null_order c_null_prec = (
-        null_order.BEFORE if na_position == "first" else null_order.AFTER
+        <null_order><underlying_type_t_null_order>null_order_enum.value
     )
 
     cdef unique_ptr[column] c_result
