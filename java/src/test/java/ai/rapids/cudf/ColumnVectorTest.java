@@ -1667,6 +1667,18 @@ public class ColumnVectorTest extends CudfTestBase {
   }
 
   @Test
+  void testCountElements() {
+    DataType dt = new ListType(true, new BasicType(true, DType.INT32));
+    try (ColumnVector cv = ColumnVector.fromLists(dt, Arrays.asList(1),
+        Arrays.asList(1, 2), null, Arrays.asList(null, null),
+        Arrays.asList(1, 2, 3), Arrays.asList(1, 2, 3, 4));
+         ColumnVector lengths = cv.countElements();
+         ColumnVector expected = ColumnVector.fromBoxedInts(1, 2, null, 2, 3, 4)) {
+      TableTest.assertColumnsAreEqual(expected, lengths);
+    }
+  }
+
+  @Test
   void testStringLengths() {
     try (ColumnVector cv = ColumnVector.fromStrings("1", "12", null, "123", "1234");
       ColumnVector lengths = cv.getCharLengths();
