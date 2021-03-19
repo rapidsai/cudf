@@ -7,7 +7,7 @@ ENV LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/usr/local/cuda/lib64:/usr/local/lib
 # Needed for cudf.concat(), avoids "OSError: library nvvm not found"
 ENV NUMBAPRO_NVVM=/usr/local/cuda/nvvm/lib64/libnvvm.so
 ENV NUMBAPRO_LIBDEVICE=/usr/local/cuda/nvvm/libdevice/
-# ENV DEBIAN_FRONTEND=noninteractive
+ENV DEBIAN_FRONTEND=noninteractive
 
 ENV CC=/usr/bin/gcc
 ENV CXX=/usr/bin/g++
@@ -17,6 +17,8 @@ ENV CMAKE_BUILD_TYPE=release
 ENV PYARROW_WITH_PARQUET=1
 ENV PYARROW_WITH_CUDA=1
 ENV PYARROW_WITH_ORC=1
+ENV PYARROW_WITH_DATASET=1
+
 ENV ARROW_HOME=/repos/dist
 ENV LD_LIBRARY_PATH=/repos/dist/lib:$LD_LIBRARY_PATH
 
