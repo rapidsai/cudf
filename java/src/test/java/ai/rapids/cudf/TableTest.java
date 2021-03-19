@@ -4148,19 +4148,6 @@ public class TableTest extends CudfTestBase {
         .build();
   }
 
-  @Test
-  void testParquetWriteToFileNoNames() throws IOException {
-    File tempFile = File.createTempFile("test-nonames", ".parquet");
-    try (Table table0 = getExpectedFileTable()) {
-      table0.writeParquet(tempFile.getAbsoluteFile());
-      try (Table table1 = Table.readParquet(tempFile.getAbsoluteFile())) {
-        assertTablesAreEqual(table0, table1);
-      }
-    } finally {
-      tempFile.delete();
-    }
-  }
-
   private final class MyBufferConsumer implements HostBufferConsumer, AutoCloseable {
     public final HostMemoryBuffer buffer;
     long offset = 0;
@@ -4210,8 +4197,9 @@ public class TableTest extends CudfTestBase {
     try (Table table0 = getExpectedFileTableWithDecimals();
          MyBufferConsumer consumer = new MyBufferConsumer()) {
       ParquetWriterOptions options = ParquetWriterOptions.builder()
+          .withColumnNames("_c1", "_c2", "_c3", "_c4", "_c5", "_c6", "_c7", "_c8", "_c9")
           .withTimestampInt96(true)
-          .withPrecisionValues(5, 5)
+          .withDecimalPrecisions(0, 0, 0, 0, 0, 0, 0, 5, 5)
           .build();
 
       try (TableWriter writer = Table.writeParquetChunked(options, consumer)) {
@@ -4228,9 +4216,13 @@ public class TableTest extends CudfTestBase {
 
   @Test
   void testParquetWriteToBufferChunked() {
+    ParquetWriterOptions options = ParquetWriterOptions.builder()
+        .withColumnNames("_c1", "_c2", "_c3", "_c4", "_c5", "_c6", "_c7")
+        .withTimestampInt96(true)
+        .build();
     try (Table table0 = getExpectedFileTable();
          MyBufferConsumer consumer = new MyBufferConsumer()) {
-         try (TableWriter writer = Table.writeParquetChunked(ParquetWriterOptions.DEFAULT, consumer)) {
+         try (TableWriter writer = Table.writeParquetChunked(options, consumer)) {
            writer.write(table0);
            writer.write(table0);
            writer.write(table0);
@@ -4251,7 +4243,7 @@ public class TableTest extends CudfTestBase {
               "eighth", "nineth")
           .withCompressionType(CompressionType.NONE)
           .withStatisticsFrequency(ParquetWriterOptions.StatisticsFrequency.NONE)
-          .withPrecisionValues(5, 6)
+          .withDecimalPrecisions(0, 0, 0, 0, 0, 0, 0, 5, 6)
           .build();
       try (TableWriter writer = Table.writeParquetChunked(options, tempFile.getAbsoluteFile())) {
         writer.write(table0);
@@ -4274,7 +4266,7 @@ public class TableTest extends CudfTestBase {
           .withMetadata("somekey", "somevalue")
           .withCompressionType(CompressionType.NONE)
           .withStatisticsFrequency(ParquetWriterOptions.StatisticsFrequency.NONE)
-          .withPrecisionValues(6, 8)
+          .withDecimalPrecisions(0, 0, 0, 0, 0, 0, 0, 6, 8)
           .build();
       try (TableWriter writer = Table.writeParquetChunked(options, tempFile.getAbsoluteFile())) {
         writer.write(table0);
@@ -4292,9 +4284,10 @@ public class TableTest extends CudfTestBase {
     File tempFile = File.createTempFile("test-uncompressed", ".parquet");
     try (Table table0 = getExpectedFileTableWithDecimals()) {
       ParquetWriterOptions options = ParquetWriterOptions.builder()
+          .withColumnNames("_c1", "_c2", "_c3", "_c4", "_c5", "_c6", "_c7", "_c8", "_c9")
           .withCompressionType(CompressionType.NONE)
           .withStatisticsFrequency(ParquetWriterOptions.StatisticsFrequency.NONE)
-          .withPrecisionValues(4, 6)
+          .withDecimalPrecisions(0, 0, 0, 0, 0, 0, 0, 4, 6)
           .build();
       try (TableWriter writer = Table.writeParquetChunked(options, tempFile.getAbsoluteFile())) {
         writer.write(table0);
