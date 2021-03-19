@@ -32,7 +32,7 @@ enum class direction { to, from };
 template <class TypeParam>
 void BM_convert_datetime(benchmark::State& state, direction dir)
 {
-  cudf::size_type const n_rows{static_cast<cudf::size_type>(state.range(0))};
+  auto const n_rows    = static_cast<cudf::size_type>(state.range(0));
   auto const data_type = cudf::data_type(cudf::type_to_id<TypeParam>());
 
   auto const table = create_random_table({data_type.id()}, 1, row_count{n_rows});
