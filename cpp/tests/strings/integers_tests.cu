@@ -33,7 +33,31 @@ constexpr auto NULL_VAL = 0;
 struct StringsConvertTest : public cudf::test::BaseFixture {
 };
 
-TEST_F(StringsConvertTest, IsIntegerNoNull)
+TEST_F(StringsConvertTest, IsIntegerBasicCheck)
+{
+  cudf::test::strings_column_wrapper strings1(
+    {"+175", "-34", "9.8", "17+2", "+-14", "1234567890", "67de", "", "1e10", "-", "++", ""});
+  auto results = cudf::strings::is_integer(cudf::strings_column_view(strings1));
+  cudf::test::fixed_width_column_wrapper<bool> expected1({1, 1, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0});
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected1);
+
+  cudf::test::strings_column_wrapper strings2(
+    {"0", "+0", "-0", "1234567890", "-27341132", "+012", "023", "-045"});
+  results = cudf::strings::is_integer(cudf::strings_column_view(strings2));
+  cudf::test::fixed_width_column_wrapper<bool> expected2({1, 1, 1, 1, 1, 1, 1, 1});
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected2);
+}
+
+TEST_F(StringsConvertTest, ZeroSizeIsIntegerBasicCheck)
+{
+  cudf::test::strings_column_wrapper strings;
+  auto strings_view = cudf::strings_column_view(strings);
+  auto results      = cudf::strings::is_integer(strings_view);
+  EXPECT_EQ(cudf::type_id::BOOL8, results->view().type().id());
+  EXPECT_EQ(0, results->view().size());
+}
+
+TEST_F(StringsConvertTest, IsIntegerBoundCheckNoNull)
 {
   auto strings = cudf::test::strings_column_wrapper(
     {"+175", "-34", "9.8", "17+2", "+-14", "1234567890", "67de", "", "1e10", "-", "++", ""});
@@ -51,24 +75,24 @@ TEST_F(StringsConvertTest, IsIntegerNoNull)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
 }
 
-TEST_F(StringsConvertTest, IsIntegerWithNulls)
+TEST_F(StringsConvertTest, IsIntegerBoundCheckWithNulls)
 {
-  // Input with null elements: the output should have the same null mask
   std::vector<const char*> const h_strings{
     "eee", "1234", nullptr, "", "-9832", "93.24", "765é", nullptr};
   auto const strings = cudf::test::strings_column_wrapper(
     h_strings.begin(),
     h_strings.end(),
     thrust::make_transform_iterator(h_strings.begin(), [](auto str) { return str != nullptr; }));
-  auto const results  = cudf::strings::is_integer(cudf::strings_column_view(strings),
+  auto const results = cudf::strings::is_integer(cudf::strings_column_view(strings),
                                                  cudf::data_type{cudf::type_id::INT32});
+  // Input has null elements then the output should have the same null mask
   auto const expected = cudf::test::fixed_width_column_wrapper<bool>(
     std::initializer_list<int8_t>{0, 1, NULL_VAL, 0, 1, 0, 0, NULL_VAL},
-    std::initializer_list<bool>{true, true, false, true, true, true, true, false});
+    thrust::make_transform_iterator(h_strings.begin(), [](auto str) { return str != nullptr; }));
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
 }
 
-TEST_F(StringsConvertTest, ZeroSizeIsInteger)
+TEST_F(StringsConvertTest, ZeroSizeIsIntegerBoundCheck)
 {
   // Empty input
   auto strings = cudf::test::strings_column_wrapper{};
@@ -177,8 +201,7 @@ TEST_F(StringsConvertTest, ToInteger)
                                             cudf::data_type{cudf::type_id::INT16});
   auto const expected_i16 = cudf::test::fixed_width_column_wrapper<int16_t>(
     std::initializer_list<int16_t>{0, 1234, NULL_VAL, 0, -9832, 93, 765, NULL_VAL, -1, -1, 0, 0},
-    std::initializer_list<bool>{
-      true, true, false, true, true, true, true, false, true, true, true, true});
+    thrust::make_transform_iterator(h_strings.begin(), [](auto str) { return str != nullptr; }));
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected_i16, true);
 
   results                 = cudf::strings::to_integers(cudf::strings_column_view(strings),
@@ -186,8 +209,7 @@ TEST_F(StringsConvertTest, ToInteger)
   auto const expected_i32 = cudf::test::fixed_width_column_wrapper<int32_t>(
     std::initializer_list<int32_t>{
       0, 1234, NULL_VAL, 0, -9832, 93, 765, NULL_VAL, -1, 2147483647, -2147483648, -2147483648},
-    std::initializer_list<bool>{
-      true, true, false, true, true, true, true, false, true, true, true, true});
+    thrust::make_transform_iterator(h_strings.begin(), [](auto str) { return str != nullptr; }));
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected_i32, true);
 
   results                 = cudf::strings::to_integers(cudf::strings_column_view(strings),
@@ -205,8 +227,7 @@ TEST_F(StringsConvertTest, ToInteger)
                                     2147483647,
                                     2147483648,
                                     2147483648},
-    std::initializer_list<bool>{
-      true, true, false, true, true, true, true, false, true, true, true, true});
+    thrust::make_transform_iterator(h_strings.begin(), [](auto str) { return str != nullptr; }));
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected_u32, true);
 }
 
