@@ -41,14 +41,14 @@ TEST_F(StringsConvertTest, IsIntegerNoNull)
                                            cudf::data_type{cudf::type_id::INT32});
   auto expected =
     cudf::test::fixed_width_column_wrapper<bool>({1, 1, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0});
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected, true);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
 
   strings = cudf::test::strings_column_wrapper(
     {"0", "+0", "-0", "1234567890", "-27341132", "+012", "023", "-045"});
   results  = cudf::strings::is_integer(cudf::strings_column_view(strings),
                                       cudf::data_type{cudf::type_id::INT32});
   expected = cudf::test::fixed_width_column_wrapper<bool>({1, 1, 1, 1, 1, 1, 1, 1});
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected, true);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
 }
 
 TEST_F(StringsConvertTest, IsIntegerWithNulls)
@@ -65,7 +65,7 @@ TEST_F(StringsConvertTest, IsIntegerWithNulls)
   auto const expected = cudf::test::fixed_width_column_wrapper<bool>(
     std::initializer_list<int8_t>{0, 1, NULL_VAL, 0, 1, 0, 0, NULL_VAL},
     std::initializer_list<bool>{true, true, false, true, true, true, true, false});
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected, true);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
 }
 
 TEST_F(StringsConvertTest, ZeroSizeIsInteger)
@@ -86,29 +86,29 @@ TEST_F(StringsConvertTest, IsIntegerBoundCheckSmallNumbers)
                                            cudf::data_type{cudf::type_id::INT8});
   auto expected =
     cudf::test::fixed_width_column_wrapper<bool>({0, 0, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0});
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected, true);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
 
   results  = cudf::strings::is_integer(cudf::strings_column_view(strings),
                                       cudf::data_type{cudf::type_id::UINT8});
   expected = cudf::test::fixed_width_column_wrapper<bool>({0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 0, 0});
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected, true);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
 
   strings = cudf::test::strings_column_wrapper(
     {"-40000", "-32769", "-32768", "-32767", "-32766", "32765", "32766", "32767", "32768"});
   results  = cudf::strings::is_integer(cudf::strings_column_view(strings),
                                       cudf::data_type{cudf::type_id::INT16});
   expected = cudf::test::fixed_width_column_wrapper<bool>({0, 0, 1, 1, 1, 1, 1, 1, 0});
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected, true);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
 
   results  = cudf::strings::is_integer(cudf::strings_column_view(strings),
                                       cudf::data_type{cudf::type_id::UINT16});
   expected = cudf::test::fixed_width_column_wrapper<bool>({0, 0, 0, 0, 0, 1, 1, 1, 1});
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected, true);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
 
   results  = cudf::strings::is_integer(cudf::strings_column_view(strings),
                                       cudf::data_type{cudf::type_id::INT32});
   expected = cudf::test::fixed_width_column_wrapper<bool>({1, 1, 1, 1, 1, 1, 1, 1, 1});
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected, true);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
 }
 
 TEST_F(StringsConvertTest, IsIntegerBoundCheckLargeNumbers)
@@ -126,12 +126,12 @@ TEST_F(StringsConvertTest, IsIntegerBoundCheckLargeNumbers)
   auto results  = cudf::strings::is_integer(cudf::strings_column_view(strings),
                                            cudf::data_type{cudf::type_id::INT32});
   auto expected = cudf::test::fixed_width_column_wrapper<bool>({0, 1, 1, 1, 1, 0, 0, 0, 0});
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected, true);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
 
   results  = cudf::strings::is_integer(cudf::strings_column_view(strings),
                                       cudf::data_type{cudf::type_id::UINT32});
   expected = cudf::test::fixed_width_column_wrapper<bool>({0, 0, 0, 1, 1, 1, 1, 1, 0});
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected, true);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
 
   strings = cudf::test::strings_column_wrapper(
     {"-9223372036854775809",    // std::numeric_limits<int64_t>::min() - 1
@@ -146,12 +146,12 @@ TEST_F(StringsConvertTest, IsIntegerBoundCheckLargeNumbers)
   results  = cudf::strings::is_integer(cudf::strings_column_view(strings),
                                       cudf::data_type{cudf::type_id::INT64});
   expected = cudf::test::fixed_width_column_wrapper<bool>({0, 1, 1, 1, 1, 0, 0, 0, 0});
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected, true);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
 
   results  = cudf::strings::is_integer(cudf::strings_column_view(strings),
                                       cudf::data_type{cudf::type_id::UINT64});
   expected = cudf::test::fixed_width_column_wrapper<bool>({0, 0, 0, 1, 1, 1, 1, 1, 0});
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected, true);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
 }
 
 TEST_F(StringsConvertTest, ToInteger)
@@ -230,7 +230,7 @@ TEST_F(StringsConvertTest, FromInteger)
     h_expected.end(),
     thrust::make_transform_iterator(h_expected.begin(), [](auto str) { return str != nullptr; }));
 
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected, true);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
 }
 
 TEST_F(StringsConvertTest, ZeroSizeStringsColumn)
@@ -341,7 +341,7 @@ TEST_F(StringsConvertTest, HexToInteger)
       h_expected.begin(),
       h_expected.end(),
       thrust::make_transform_iterator(h_strings.begin(), [](auto str) { return str != nullptr; }));
-    CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected, true);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
   }
   {
     std::vector<int64_t> h_expected;
@@ -358,7 +358,7 @@ TEST_F(StringsConvertTest, HexToInteger)
       h_expected.begin(),
       h_expected.end(),
       thrust::make_transform_iterator(h_strings.begin(), [](auto str) { return str != nullptr; }));
-    CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected, true);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
   }
 }
 
@@ -383,5 +383,5 @@ TEST_F(StringsConvertTest, IsHex)
   cudf::test::fixed_width_column_wrapper<bool> expected({0, 1, 0, 1, 1, 1, 1, 1, 0, 1, 0, 0},
                                                         {1, 1, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1});
   auto results = cudf::strings::is_hex(cudf::strings_column_view(strings));
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected, true);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
 }
