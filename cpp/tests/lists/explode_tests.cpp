@@ -547,6 +547,34 @@ TEST_F(ExplodeOuterTest, Nulls)
   CUDF_TEST_EXPECT_TABLES_EQUAL(pos_ret->view(), pos_expected);
 }
 
+TEST_F(ExplodeOuterTest, AllNulls)
+{
+  //    a                   b
+  //    [1, 2, 7]           100
+  //    [5, 6]              200
+  //    [0, 3]              300
+
+  auto non_valid = cudf::detail::make_counting_transform_iterator(0, [](auto i) { return false; });
+
+  LCW a({LCW{0}, LCW{0}, LCW{0}}, non_valid);
+  FCW b({100, 200, 300});
+
+  FCW expected_a({0, 0, 0}, {0, 0, 0});
+  FCW expected_b({100, 200, 300});
+
+  cudf::table_view t({a, b});
+  cudf::table_view expected({expected_a, expected_b});
+
+  auto ret = cudf::explode_outer(t, 0);
+  CUDF_TEST_EXPECT_TABLES_EQUAL(ret->view(), expected);
+
+  FCW expected_pos_col{0, 0, 0};
+  cudf::table_view pos_expected({expected_pos_col, expected_a, expected_b});
+
+  auto pos_ret = cudf::explode_outer_position(t, 0);
+  CUDF_TEST_EXPECT_TABLES_EQUAL(pos_ret->view(), pos_expected);
+}
+
 TEST_F(ExplodeOuterTest, NullsInList)
 {
   //    a                   b
