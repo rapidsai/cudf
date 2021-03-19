@@ -85,8 +85,9 @@ std::unique_ptr<column> from_integers(
  *
  * @code{.pseudo}
  * Example:
- * s = ['123456', '-456', '', 'A', '+7']
- * output1 is [true, true, false, false, true]
+ * s = ['123', '-456', '', 'A', '+7']
+ * b = s.is_integer(s)
+ * b is [true, true, false, false, true]
  * @endcode
  *
  * Any null row results in a null entry for that row in the output column.
