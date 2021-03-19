@@ -257,16 +257,18 @@ public:
       columns_meta.reserve(tview.num_columns());
       size_t idx = 0;
       for (auto itr = tview.begin(); itr < tview.end(); ++itr) {
-        columns_meta.push_back(std::move(build_one_column_meta(*itr, idx)));
+        columns_meta.push_back(build_one_column_meta(*itr, idx));
         idx ++;
+      }
+      if (idx < column_names.size()) {
+        throw cudf::jni::jni_exception(
+          "The number of column names is bigger than the columns number in the table.");
       }
     }
     return columns_meta;
   }
 
 private:
-  // Still return an oject instead of being passed as an out argument, even
-  // `column_metadata` has no move constructor and would be copied.
   cudf::column_metadata build_one_column_meta(const column_view& cview, size_t& idx) {
     auto col_meta = cudf::column_metadata{get_column_name(idx)};
     if (cview.type().id() == cudf::type_id::LIST) {
@@ -276,10 +278,11 @@ private:
       // struct type
       col_meta.children_meta.reserve(cview.num_children());
       for (auto itr = cview.child_begin(); itr < cview.child_end(); ++itr) {
-        col_meta.children_meta.push_back(std::move(build_one_column_meta(*itr, ++idx)));
+        col_meta.children_meta.push_back(build_one_column_meta(*itr, ++idx));
       }
     } else if (cview.type().id() == cudf::type_id::DICTIONARY32) {
       // not supported yet in JNI, nested type?
+      throw cudf::jni::jni_exception("Unsupported type 'DICTIONARY32'");
     }
     return col_meta;
   }
