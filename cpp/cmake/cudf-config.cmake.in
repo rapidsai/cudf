@@ -16,6 +16,8 @@ find_dependency(Threads)
 find_dependency(ZLIB)
 
 find_dependency(Arrow @CUDF_VERSION_Arrow@)
+
+set(ArrowCUDA_DIR "${Arrow_DIR}")
 find_dependency(ArrowCUDA @CUDF_VERSION_Arrow@)
 find_dependency(Boost @CUDF_MIN_VERSION_Boost@)
 
