@@ -215,7 +215,7 @@ struct ColumnChunkDesc {
 /**
  * @brief Struct describing an encoder column
  */
-struct EncColumnDesc : stats_column_desc {
+struct parquet_column_device_view : stats_column_desc {
   uint32_t *dict_index;    //!< Dictionary index [row]
   uint32_t *dict_data;     //!< Dictionary data (unique row indices)
   uint8_t physical_type;   //!< physical data type
@@ -223,12 +223,17 @@ struct EncColumnDesc : stats_column_desc {
   // TODO (dm): Evaluate if this is sufficient. At 4 bits, this allows a maximum 16 level nesting
   uint8_t level_bits;  //!< bits to encode max definition (lower nibble) & repetition (upper nibble)
                        //!< levels
+  constexpr uint8_t num_def_level_bits() { return level_bits & 0xf; }
+  constexpr uint8_t num_rep_level_bits() { return level_bits >> 4; }
   size_type const *const
     *nesting_offsets;  //!< If column is a nested type, contains offset array of each nesting level
 
   size_type const *level_offsets;  //!< Offset array for per-row pre-calculated rep/def level values
   uint8_t const *rep_values;       //!< Pre-calculated repetition level values
   uint8_t const *def_values;       //!< Pre-calculated definition level values
+  uint8_t *nullability;  //!< Array of nullability of each nesting level. e.g. nullable[0] is
+                         //!< nullability of parent_column. May be different from col.nullable() in
+                         //!< case of chunked writing.
 };
 
 constexpr int max_page_fragment_size = 5000;  //!< Max number of rows in a page fragment
@@ -299,15 +304,15 @@ inline size_t __device__ __host__ GetMaxCompressedBfrSize(size_t uncomp_size,
  * @brief Struct describing an encoder column chunk
  */
 struct EncColumnChunk {
-  const EncColumnDesc *col_desc;  //!< Column description
-  PageFragment *fragments;        //!< First fragment in chunk
-  uint8_t *uncompressed_bfr;      //!< Uncompressed page data
-  uint8_t *compressed_bfr;        //!< Compressed page data
-  const statistics_chunk *stats;  //!< Fragment statistics
-  uint32_t bfr_size;              //!< Uncompressed buffer size
-  uint32_t compressed_size;       //!< Compressed buffer size
-  uint32_t start_row;             //!< First row of chunk
-  uint32_t num_rows;              //!< Number of rows in chunk
+  const parquet_column_device_view *col_desc;  //!< Column description
+  PageFragment *fragments;                     //!< First fragment in chunk
+  uint8_t *uncompressed_bfr;                   //!< Uncompressed page data
+  uint8_t *compressed_bfr;                     //!< Compressed page data
+  const statistics_chunk *stats;               //!< Fragment statistics
+  uint32_t bfr_size;                           //!< Uncompressed buffer size
+  uint32_t compressed_size;                    //!< Compressed buffer size
+  uint32_t start_row;                          //!< First row of chunk
+  uint32_t num_rows;                           //!< Number of rows in chunk
   uint32_t num_values;      //!< Number of values in chunk. Different from num_rows for nested types
   uint32_t first_fragment;  //!< First fragment of chunk
   uint32_t first_page;      //!< First page of chunk
@@ -398,9 +403,7 @@ struct dremel_data {
   rmm::device_uvector<uint8_t> rep_level;
   rmm::device_uvector<uint8_t> def_level;
 
-  size_type leaf_col_offset;
   size_type leaf_data_size;
-  uint8_t max_def_level;
 };
 
 /**
@@ -423,8 +426,9 @@ struct dremel_data {
  * @return A struct containing dremel data
  */
 dremel_data get_dremel_data(column_view h_col,
-                            std::vector<bool> const &level_nullability = {},
-                            rmm::cuda_stream_view stream               = rmm::cuda_stream_default);
+                            rmm::device_uvector<uint8_t> const &d_nullability,
+                            std::vector<uint8_t> const &nullability,
+                            rmm::cuda_stream_view stream = rmm::cuda_stream_default);
 
 /**
  * @brief Launches kernel for initializing encoder page fragments
@@ -438,7 +442,7 @@ dremel_data get_dremel_data(column_view h_col,
  * @param[in] stream CUDA stream to use, default 0
  */
 void InitPageFragments(PageFragment *frag,
-                       const EncColumnDesc *col_desc,
+                       const parquet_column_device_view *col_desc,
                        int32_t num_fragments,
                        int32_t num_columns,
                        uint32_t fragment_size,
@@ -458,7 +462,7 @@ void InitPageFragments(PageFragment *frag,
  */
 void InitFragmentStatistics(statistics_group *groups,
                             const PageFragment *fragments,
-                            const EncColumnDesc *col_desc,
+                            const parquet_column_device_view *col_desc,
                             int32_t num_fragments,
                             int32_t num_columns,
                             uint32_t fragment_size,
@@ -478,7 +482,7 @@ void InitFragmentStatistics(statistics_group *groups,
  */
 void InitEncoderPages(EncColumnChunk *chunks,
                       EncPage *pages,
-                      const EncColumnDesc *col_desc,
+                      const parquet_column_device_view *col_desc,
                       int32_t num_rowgroups,
                       int32_t num_columns,
                       statistics_merge_group *page_grstats  = nullptr,

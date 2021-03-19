@@ -257,6 +257,15 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
   }
 
   /**
+   * Get the number of elements for each list. Null lists will have a value of null.
+   * @return the number of elements in each list as an INT32 value.
+   */
+  public final ColumnVector countElements() {
+    assert DType.LIST.equals(type) : "Only lists are supported";
+    return new ColumnVector(countElements(getNativeView()));
+  }
+
+  /**
    * Returns a Boolean vector with the same number of rows as this instance, that has
    * TRUE for any entry that is not null, and FALSE for any null entry (as per the validity mask)
    *
@@ -2748,6 +2757,8 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
   private static native long binaryOpVS(long lhs, long rhs, int op, int dtype, int scale);
 
   private static native long binaryOpVV(long lhs, long rhs, int op, int dtype, int scale);
+
+  private static native long countElements(long viewHandle);
 
   private static native long byteCount(long viewHandle) throws CudfException;
 
