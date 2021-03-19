@@ -115,6 +115,53 @@ def test_len(data):
 
 
 @pytest.mark.parametrize(
+    ("data", "idx"),
+    [
+        ([[1, 2, 3], [3, 4, 5], [4, 5, 6]], [[0, 1], [2], [1, 2]]),
+        ([[1, 2, 3], [3, 4, 5], [4, 5, 6]], [[1, 2, 0], [1, 0, 2], [0, 1, 2]]),
+        ([[1, 2, 3], []], [[0, 1], []]),
+        ([[1, 2, 3], [None]], [[0, 1], []]),
+        ([[1, None, 3], None], [[0, 1], []]),
+    ],
+)
+def test_take(data, idx):
+    ps = pd.Series(data)
+    gs = cudf.from_pandas(ps)
+
+    expected = pd.Series(zip(ps, idx)).map(
+        lambda x: [x[0][i] for i in x[1]] if x[0] is not None else None
+    )
+    got = gs.list.take(idx)
+    assert_eq(expected, got)
+
+
+@pytest.mark.parametrize(
+    ("invalid", "exception"),
+    [
+        ([[0]], pytest.raises(ValueError, match="different size")),
+        ([1, 2, 3, 4], pytest.raises(ValueError, match="should be list type")),
+        (
+            [["a", "b"], ["c"]],
+            pytest.raises(
+                TypeError, match="should be column of values of index types"
+            ),
+        ),
+        (
+            [[[1], [0]], [[0]]],
+            pytest.raises(
+                TypeError, match="should be column of values of index types"
+            ),
+        ),
+        ([[0, 1], None], pytest.raises(ValueError, match="contains null")),
+    ],
+)
+def test_take_invalid(invalid, exception):
+    gs = cudf.Series([[0, 1], [2, 3]])
+    with exception:
+        gs.list.take(invalid)
+
+
+@pytest.mark.parametrize(
     "data, index, expect",
     [
         ([[None, None], [None, None]], 0, [None, None]),

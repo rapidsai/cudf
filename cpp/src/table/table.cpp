@@ -81,12 +81,4 @@ std::vector<std::unique_ptr<column>> table::release()
   return std::move(_columns);
 }
 
-// Returns a table_view with set of specified columns
-table_view table::select(std::vector<cudf::size_type> const& column_indices) const
-{
-  std::vector<column_view> columns;
-  for (auto index : column_indices) { columns.push_back(_columns.at(index)->view()); }
-  return table_view(columns);
-}
-
 }  // namespace cudf
