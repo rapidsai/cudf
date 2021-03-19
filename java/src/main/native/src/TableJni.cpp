@@ -263,8 +263,7 @@ public:
         columns_meta.push_back(build_one_column_meta(*itr, idx));
       }
       if (idx < column_names.size()) {
-        throw cudf::jni::jni_exception(
-          "The number of column names is bigger than the columns number in the table.");
+        throw cudf::jni::jni_exception("Too many column names are provided.");
       }
     }
     return columns_meta;
