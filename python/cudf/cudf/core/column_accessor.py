@@ -283,17 +283,24 @@ class ColumnAccessor(MutableMapping):
                 raise ValueError("All columns must be of equal length")
         return value
 
-    def set_by_label(self, key: Any, value: Any):
+    def set_by_label(self, key: Any, value: Any, validate: bool = True):
         """
         Add (or modify) column by name.
 
         Parameters
         ----------
-        key : name of the column
+        key
+            name of the column
         value : column-like
+            The value to insert into the column.
+        validate : bool
+            If True, the provided value will be coerced to a column and
+            validated before setting (Default value = True).
         """
         key = self._pad_key(key)
-        self._data[key] = self._convert_and_validate(value)
+        if validate:
+            value = self._convert_and_validate(value)
+        self._data[key] = value
         self._clear_cache()
 
     def _select_by_label_list_like(self, key: Any) -> ColumnAccessor:
