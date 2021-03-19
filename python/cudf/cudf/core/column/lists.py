@@ -331,9 +331,10 @@ class ListMethods(ColumnMethodsMixin):
             raise NotImplementedError("`inplace` not currently implemented.")
         if kind != "quicksort":
             raise NotImplementedError("`kind` not currently implemented.")
+        if na_position not in {"first", "last"}:
+            raise ValueError(f"Unknown `na_position` value {na_position}")
 
         return self._return_or_inplace(
             sort_lists(self._column, ascending, na_position),
-            inplace=inplace,
             retain_index=not ignore_index,
         )
