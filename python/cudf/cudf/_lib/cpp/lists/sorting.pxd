@@ -12,4 +12,4 @@ cdef extern from "cudf/lists/sorting.hpp" namespace "cudf::lists" nogil:
         const lists_column_view source_column,
         order column_order,
         null_order null_precedence
-    )
+    ) except +
