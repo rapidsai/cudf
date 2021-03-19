@@ -22,6 +22,10 @@ find_dependency(Boost @CUDF_MIN_VERSION_Boost@)
 find_dependency(rmm @CUDF_MIN_VERSION_rmm@)
 find_dependency(gtest @CUDF_MIN_VERSION_gtest@)
 
+set(Thrust_ROOT "${CMAKE_CURRENT_LIST_DIR}/../../../include/libcudf/Thrust")
+find_dependency(Thrust @CUDF_MIN_VERSION_Thrust@)
+thrust_create_target(cudf::Thrust FROM_OPTIONS)
+
 list(POP_FRONT CMAKE_MODULE_PATH)
 
 include("${CMAKE_CURRENT_LIST_DIR}/cudf-targets.cmake")

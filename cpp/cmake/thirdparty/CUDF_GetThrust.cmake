@@ -24,6 +24,7 @@ function(find_and_configure_thrust VERSION)
 
     thrust_create_target(cudf::Thrust FROM_OPTIONS)
     set(THRUST_LIBRARY "cudf::Thrust" PARENT_SCOPE)
+    set(Thrust_SOURCE_DIR "${Thrust_SOURCE_DIR}" PARENT_SCOPE)
 endfunction()
 
 set(CUDF_MIN_VERSION_Thrust 1.10.0)
