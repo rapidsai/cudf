@@ -103,7 +103,10 @@ struct dispatch_is_integer_fn {
                       thrust::make_counting_iterator<size_type>(input.size()),
                       results->mutable_view().data<bool>(),
                       string_to_integer_check_fn<T>{*d_column});
+
+    // Calling mutable_view() on a column invalidates it's null count so we need to set it back
     results->set_null_count(input.null_count());
+
     return results;
   }
 
@@ -139,7 +142,10 @@ std::unique_ptr<column> is_integer(
                       if (d_column.is_null(idx)) return false;
                       return string::is_integer(d_column.element<string_view>(idx));
                     });
+
+  // Calling mutable_view() on a column invalidates it's null count so we need to set it back
   results->set_null_count(strings.null_count());
+
   return results;
 }
 
@@ -247,7 +253,10 @@ std::unique_ptr<column> to_integers(strings_column_view const& strings,
   auto const strings_dev_view = column_device_view::create(strings.parent(), stream);
   auto results_view           = results->mutable_view();
   type_dispatcher(output_type, dispatch_to_integers_fn{}, *strings_dev_view, results_view, stream);
+
+  // Calling mutable_view() on a column invalidates it's null count so we need to set it back
   results->set_null_count(strings.null_count());
+
   return results;
 }
 
