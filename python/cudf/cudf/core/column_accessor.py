@@ -63,7 +63,9 @@ class ColumnAccessor(MutableMapping):
             self.multiindex = multiindex
             self._level_names = level_names
 
-        self._data = {k: self._convert_and_validate(v) for k, v in data.items()}
+        self._data = {
+            k: self._convert_and_validate(v) for k, v in data.items()
+        }
         self.multiindex = multiindex
         self._level_names = level_names
 
