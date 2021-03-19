@@ -110,8 +110,8 @@ struct flatten_table {
   /**
    * @copydoc flatten_table
    *
-   * @return tuple with flattened table, vector of boolean columns (struct validity),
-   * flattened column order, flattened null precedence.
+   * @return tuple with flattened table, flattened column order, flattened null precedence,
+   * vector of boolean columns (struct validity).
    */
   auto operator()()
   {
@@ -129,9 +129,9 @@ struct flatten_table {
     }
 
     return std::make_tuple(table_view{flat_columns},
-                           std::move(validity_as_column),
                            std::move(flat_column_order),
-                           std::move(flat_null_precedence));
+                           std::move(flat_null_precedence),
+                           std::move(validity_as_column));
   }
 };
 
@@ -139,9 +139,9 @@ struct flatten_table {
  * @copydoc cudf::detail::flatten_nested_columns
  */
 std::tuple<table_view,
-           std::vector<std::unique_ptr<column>>,
            std::vector<order>,
-           std::vector<null_order>>
+           std::vector<null_order>,
+           std::vector<std::unique_ptr<column>>>
 flatten_nested_columns(table_view const& input,
                        std::vector<order> const& column_order,
                        std::vector<null_order> const& null_precedence)
@@ -150,7 +150,7 @@ flatten_nested_columns(table_view const& input,
   auto const has_struct = std::any_of(
     input.begin(), input.end(), [](auto const& col) { return col.type().id() == type_id::STRUCT; });
   if (not has_struct)
-    return std::make_tuple(input, std::move(validity_as_column), column_order, null_precedence);
+    return std::make_tuple(input, column_order, null_precedence, std::move(validity_as_column));
 
   return flatten_table{input, column_order, null_precedence}();
 }

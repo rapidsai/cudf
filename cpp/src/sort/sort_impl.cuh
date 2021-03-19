@@ -125,10 +125,10 @@ std::unique_ptr<column> sorted_order(table_view input,
   auto flattened = structs::detail::flatten_nested_columns(input, column_order, null_precedence);
   auto& input_flattened = std::get<0>(flattened);
   auto device_table     = table_device_view::create(input_flattened, stream);
-  rmm::device_vector<order> d_column_order(std::get<2>(flattened));
+  rmm::device_vector<order> d_column_order(std::get<1>(flattened));
 
   if (has_nulls(input_flattened)) {
-    rmm::device_vector<null_order> d_null_precedence(std::get<3>(flattened));
+    rmm::device_vector<null_order> d_null_precedence(std::get<2>(flattened));
     auto comparator = row_lexicographic_comparator<true>(
       *device_table, *device_table, d_column_order.data().get(), d_null_precedence.data().get());
     if (stable) {
