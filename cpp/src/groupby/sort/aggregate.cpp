@@ -15,8 +15,8 @@
  */
 
 #include <groupby/common/utils.hpp>
-#include <groupby/sort/functors.hpp>
-#include <groupby/sort/group_reductions.hpp>
+#include "functors.hpp"
+#include "group_reductions.hpp"
 
 #include <cudf/aggregation.hpp>
 #include <cudf/column/column.hpp>
