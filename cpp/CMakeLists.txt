@@ -383,9 +383,9 @@ add_library(cudf
     src/transform/jit/code/kernel.cpp
     src/transform/mask_to_bools.cu
     src/transform/nans_to_nulls.cu
-    src/transform/transform.cpp
     src/transform/row_bit_count.cu
-    src/transpose/transpose.cu    
+    src/transform/transform.cpp
+    src/transpose/transpose.cu
     src/unary/cast_ops.cu
     src/unary/math_ops.cu
     src/unary/nan_ops.cu
