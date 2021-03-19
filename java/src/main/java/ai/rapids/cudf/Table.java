@@ -803,6 +803,12 @@ public final class Table implements AutoCloseable {
     HostBufferConsumer consumer;
 
     private ParquetTableWriter(ParquetWriterOptions options, File outputFile) {
+      int numColumns = options.getColumnNames().length;
+      assert (numColumns == options.getColumnNullability().length);
+      int[] precisions = options.getPrecisions();
+      if (precisions != null) {
+        assert (numColumns >= options.getPrecisions().length);
+      }
       this.consumer = null;
       this.handle = writeParquetFileBegin(options.getColumnNames(),
           options.getColumnNullability(),
@@ -869,17 +875,6 @@ public final class Table implements AutoCloseable {
   public static TableWriter writeParquetChunked(ParquetWriterOptions options,
                                                 HostBufferConsumer consumer) {
     return new ParquetTableWriter(options, consumer);
-  }
-
-  /**
-   * Writes this table to a Parquet file on the host
-   *
-   * @param outputFile file to write the table to
-   * @deprecated please use writeParquetChunked instead
-   */
-  @Deprecated
-  public void writeParquet(File outputFile) {
-    writeParquet(ParquetWriterOptions.DEFAULT, outputFile);
   }
 
   /**
