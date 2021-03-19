@@ -8,6 +8,7 @@ from typing import (
     TYPE_CHECKING,
     Any,
     Callable,
+    Dict,
     Mapping,
     Optional,
     Tuple,
@@ -30,7 +31,7 @@ if TYPE_CHECKING:
 
 class ColumnAccessor(MutableMapping):
 
-    _data: "dict[Any, ColumnBase]"
+    _data: "Dict[Any, ColumnBase]"
     multiindex: bool
     _level_names: Tuple[Any, ...]
     _column_length: int
@@ -63,7 +64,7 @@ class ColumnAccessor(MutableMapping):
             self._data = data._data
             self.multiindex = multiindex
             self._level_names = level_names
-            self._column_length = column_length
+            self._column_length = data._column_length
         else:
             # This code path is performance-critical for copies and should be
             # modified with care.
@@ -82,8 +83,6 @@ class ColumnAccessor(MutableMapping):
                         raise ValueError("All columns must be of equal length")
                     self._data[k] = v
                 self._column_length = column_length
-            else:
-                self._column_length = None
 
             self.multiindex = multiindex
             self._level_names = level_names
