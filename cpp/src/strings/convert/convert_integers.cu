@@ -86,26 +86,26 @@ struct string_to_integer_check_fn {
  */
 struct dispatch_is_integer_fn {
   template <typename T, std::enable_if_t<std::is_integral<T>::value>* = nullptr>
-  std::unique_ptr<column> operator()(strings_column_view const& input,
+  std::unique_ptr<column> operator()(strings_column_view const& strings,
                                      rmm::cuda_stream_view stream,
                                      rmm::mr::device_memory_resource* mr) const
   {
-    auto const d_column = column_device_view::create(input.parent(), stream);
+    auto const d_column = column_device_view::create(strings.parent(), stream);
     auto results        = make_numeric_column(data_type{type_id::BOOL8},
-                                       input.size(),
-                                       cudf::detail::copy_bitmask(input.parent(), stream, mr),
-                                       input.null_count(),
+                                       strings.size(),
+                                       cudf::detail::copy_bitmask(strings.parent(), stream, mr),
+                                       strings.null_count(),
                                        stream,
                                        mr);
 
     thrust::transform(rmm::exec_policy(stream),
                       thrust::make_counting_iterator<size_type>(0),
-                      thrust::make_counting_iterator<size_type>(input.size()),
+                      thrust::make_counting_iterator<size_type>(strings.size()),
                       results->mutable_view().data<bool>(),
                       string_to_integer_check_fn<T>{*d_column});
 
     // Calling mutable_view() on a column invalidates it's null count so we need to set it back
-    results->set_null_count(input.null_count());
+    results->set_null_count(strings.null_count());
 
     return results;
   }
