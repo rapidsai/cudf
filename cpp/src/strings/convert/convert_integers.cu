@@ -19,7 +19,6 @@
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/utilities/integer_utils.hpp>
-#include <cudf/detail/valid_if.cuh>
 #include <cudf/strings/convert/convert_integers.hpp>
 #include <cudf/strings/detail/converters.hpp>
 #include <cudf/strings/detail/utilities.hpp>
