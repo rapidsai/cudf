@@ -165,7 +165,7 @@ struct string_to_integer_fn {
 struct dispatch_to_integers_fn {
   template <typename IntegerType, std::enable_if_t<std::is_integral<IntegerType>::value>* = nullptr>
   void operator()(column_device_view const& strings_column,
-                  mutable_column_view const& output_column,
+                  mutable_column_view& output_column,
                   rmm::cuda_stream_view stream) const
   {
     thrust::transform(rmm::exec_policy(stream),
@@ -176,9 +176,7 @@ struct dispatch_to_integers_fn {
   }
   // non-integral types throw an exception
   template <typename T, std::enable_if_t<not std::is_integral<T>::value>* = nullptr>
-  void operator()(column_device_view const&,
-                  mutable_column_view const&,
-                  rmm::cuda_stream_view) const
+  void operator()(column_device_view const&, mutable_column_view&, rmm::cuda_stream_view) const
   {
     CUDF_FAIL("Output for to_integers must be an integral type.");
   }
@@ -186,7 +184,7 @@ struct dispatch_to_integers_fn {
 
 template <>
 void dispatch_to_integers_fn::operator()<bool>(column_device_view const&,
-                                               mutable_column_view const&,
+                                               mutable_column_view&,
                                                rmm::cuda_stream_view) const
 {
   CUDF_FAIL("Output for to_integers must not be a boolean type.");
