@@ -70,13 +70,15 @@ from cudf._lib.strings.char_types import (
     is_alpha as cpp_is_alpha,
     is_decimal as cpp_is_decimal,
     is_digit as cpp_is_digit,
-    is_float as cpp_is_float,
-    is_integer as cpp_is_integer,
     is_lower as cpp_is_lower,
     is_numeric as cpp_is_numeric,
     is_space as cpp_isspace,
     is_upper as cpp_is_upper,
 )
+from cudf._lib.strings.convert.convert_integers import (
+    is_integer as cpp_is_integer,
+)
+from cudf._lib.strings.convert.convert_floats import is_float as cpp_is_float
 from cudf._lib.strings.combine import (
     concatenate as cpp_concatenate,
     join as cpp_join,
@@ -434,7 +436,6 @@ class StringMethods(ColumnMethodsMixin):
         3    dD
         dtype: object
         """
-
         if sep is None:
             sep = ""
 
@@ -5109,7 +5110,7 @@ class StringColumn(column.ColumnBase):
         if isinstance(rhs, (StringColumn, str, cudf.Scalar)):
             if op == "add":
                 return cast("column.ColumnBase", lhs.str().cat(others=rhs))
-            elif op in ("eq", "ne", "gt", "lt", "ge", "le"):
+            elif op in ("eq", "ne", "gt", "lt", "ge", "le", "NULL_EQUALS"):
                 return _string_column_binop(self, rhs, op=op, out_dtype="bool")
 
         raise TypeError(

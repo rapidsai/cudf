@@ -1,9 +1,10 @@
 # Copyright (c) 2018-2021, NVIDIA CORPORATION.
+from pickle import dumps
+
 import cachetools
 import cupy
 import numpy as np
 from numba import cuda
-from pickle import dumps
 
 import cudf
 from cudf.utils.utils import check_equals_float, check_equals_int
@@ -239,7 +240,7 @@ def grouped_window_sizes_from_offset(arr, group_starts, offset):
 # it can hit for distinct functions that are similar. The lru_cache wrapping
 # compile_udf misses for these similar functions, but doesn't need to serialize
 # closure variables to check for a hit.
-_udf_code_cache = cachetools.LRUCache(maxsize=32)
+_udf_code_cache: cachetools.LRUCache = cachetools.LRUCache(maxsize=32)
 
 
 def compile_udf(udf, type_signature):
