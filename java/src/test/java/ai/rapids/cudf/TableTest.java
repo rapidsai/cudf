@@ -4300,8 +4300,8 @@ public class TableTest extends CudfTestBase {
       ArrowIPCWriterOptions options = ArrowIPCWriterOptions.builder()
               .withColumnNames("first", "second", "third", "fourth", "fifth", "sixth", "seventh")
               .withColumnNames("eighth", "eighth_id", "eighth_name")
-              .withColumnNames("ninth", "ninth_child")
-              .withColumnNames("tenth", "tenth_child", "child_id", "child_name")
+              .withColumnNames("ninth")
+              .withColumnNames("tenth", "child_id", "child_name")
               .build();
       try (TableWriter writer = Table.writeArrowIPCChunked(options, consumer)) {
         writer.write(table0);

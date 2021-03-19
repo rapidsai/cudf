@@ -70,24 +70,24 @@ public class ArrowIPCWriterOptions extends WriterOptions {
     /**
      * Add the name(s) for nullable column(s).
      *
-     * Column names should be flattened for the columns of nested type. For examples,
+     * Please note the column names of the nested struct columns should be flattened in sequence.
+     * For examples,
      * <pre>
-     *   a struct column:
-     *                   ("struct_col": {"field_1", "field_2"}),
+     *   A table with an int column and a struct column:
+     *                   ["int_col", "struct_col":{"field_1", "field_2"}]
      *   output:
-     *                   ["struct_col", "field_1", "field_2"]
+     *                   ["int_col", "struct_col", "field_1", "field_2"]
      *
-     *   a list column:
-     *                   ("list_col": [])
+     *   A table with an int column and a list of non-nested type column:
+     *                   ["int_col", "list_col":[]]
      *   output:
-     *                   ("list_col", "list_child")
+     *                   ["int_col", "list_col"]
      *
-     *   a list of struct column:
-     *                   ("list_struct_col": [{"field_1", "field_2"}])
+     *   A table with an int column and a list of struct column:
+     *                   ["int_col", "list_struct_col":[{"field_1", "field_2"}]]
      *   output:
-     *                   ["list_struct_col", "list_struct_child", "field_1", "field_2"]
+     *                   ["int_col", "list_struct_col", "field_1", "field_2"]
      * </pre>
-     * Even the child of list column has no name by default, it should be assigned a name.
      *
      * @param columnNames The column names corresponding to the written table(s).
      */
@@ -99,25 +99,24 @@ public class ArrowIPCWriterOptions extends WriterOptions {
     /**
      * Add the name(s) for non-nullable column(s).
      *
-     * Column names should be flattened in sequence for the columns of nested type to make
-     * sure each column (including children columns) has a name. For examples,
+     * Please note the column names of the nested struct columns should be flattened in sequence.
+     * For examples,
      * <pre>
-     *   a struct column:
-     *                   ("struct_col": {"field_1", "field_2"})
+     *   A table with an int column and a struct column:
+     *                   ["int_col", "struct_col":{"field_1", "field_2"}]
      *   output:
-     *                   ["struct_col", "field_1", "field_2"]
+     *                   ["int_col", "struct_col", "field_1", "field_2"]
      *
-     *   a list column:
-     *                   ("list_col": [])
+     *   A table with an int column and a list of non-nested type column:
+     *                   ["int_col", "list_col":[]]
      *   output:
-     *                   ("list_col", "list_child")
+     *                   ["int_col", "list_col"]
      *
-     *   a list of struct column:
-     *                   ("list_struct_col": [{"field_1", "field_2"}])
+     *   A table with an int column and a list of struct column:
+     *                   ["int_col", "list_struct_col":[{"field_1", "field_2"}]]
      *   output:
-     *                   ["list_struct_col", "list_struct_child", "field_1", "field_2"]
+     *                   ["int_col", "list_struct_col", "field_1", "field_2"]
      * </pre>
-     * Even the child of list column has no name by default, it should be assigned a name as well.
      *
      * @param columnNames The column names corresponding to the written table(s).
      */

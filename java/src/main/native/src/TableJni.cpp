@@ -249,7 +249,7 @@ public:
     initialized = false;
   }
 
-  std::vector<cudf::column_metadata> get_column_metadata(const table_view& tview) {
+  std::vector<cudf::column_metadata> get_column_metadata(const cudf::table_view& tview) {
     if (!column_names.empty() && columns_meta.empty()) {
       // Rebuild the structure of column meta according to table schema.
       // All the tables written by this writer should share the same schema,
@@ -257,8 +257,10 @@ public:
       columns_meta.reserve(tview.num_columns());
       size_t idx = 0;
       for (auto itr = tview.begin(); itr < tview.end(); ++itr) {
+        // It should consume the column names only when a column is
+        //   - type of struct, or
+        //   - not a child.
         columns_meta.push_back(build_one_column_meta(*itr, idx));
-        idx ++;
       }
       if (idx < column_names.size()) {
         throw cudf::jni::jni_exception(
@@ -269,16 +271,23 @@ public:
   }
 
 private:
-  cudf::column_metadata build_one_column_meta(const column_view& cview, size_t& idx) {
-    auto col_meta = cudf::column_metadata{get_column_name(idx)};
+  cudf::column_metadata build_one_column_meta(const cudf::column_view& cview, size_t& idx,
+                                              const bool consume_name = true) {
+    auto col_meta = cudf::column_metadata{};
+    if (consume_name) {
+      col_meta.name = get_column_name(idx++);
+    }
+    // Process children
     if (cview.type().id() == cudf::type_id::LIST) {
-      // list type requires a stub metadata for offset column, index is 0.
-      col_meta.children_meta = {{}, build_one_column_meta(cview.child(1), ++idx)};
+      // list type:
+      //   - requires a stub metadata for offset column(index: 0).
+      //   - does not require a name for the child column(index 1).
+      col_meta.children_meta = {{}, build_one_column_meta(cview.child(1), idx, false)};
     } else if (cview.type().id() == cudf::type_id::STRUCT) {
-      // struct type
+      // struct type always consumes the column names.
       col_meta.children_meta.reserve(cview.num_children());
       for (auto itr = cview.child_begin(); itr < cview.child_end(); ++itr) {
-        col_meta.children_meta.push_back(build_one_column_meta(*itr, ++idx));
+        col_meta.children_meta.push_back(build_one_column_meta(*itr, idx));
       }
     } else if (cview.type().id() == cudf::type_id::DICTIONARY32) {
       // not supported yet in JNI, nested type?
@@ -289,7 +298,7 @@ private:
 
   std::string& get_column_name(const size_t idx) {
     if (idx < 0 || idx >= column_names.size()) {
-      throw cudf::jni::jni_exception("Missing names for columns or nested columns");
+      throw cudf::jni::jni_exception("Missing names for columns or nested struct columns");
     }
     return column_names[idx];
   }
