@@ -63,9 +63,12 @@ class ColumnAccessor(MutableMapping):
             self.multiindex = multiindex
             self._level_names = level_names
 
-        self._data = {
-            k: self._convert_and_validate(v) for k, v in dict(data).items()
-        }
+        # Explicitly initialize an empty data dict so that we can validate each
+        # new column.
+        self._data = {}
+        for k, v in dict(data).items():
+            self._data[k] =  self._convert_and_validate(v)
+
         self.multiindex = multiindex
         self._level_names = level_names
 
@@ -277,7 +280,7 @@ class ColumnAccessor(MutableMapping):
         # that it is the same type as other columns in the accessor.
 
         value = column.as_column(value)
-        if len(self._data) > 0:
+        if hasattr(self, '_data') and len(self._data) > 0:
             first = next(iter(self._data.values()))
             if len(value) != len(first):
                 raise ValueError("All columns must be of equal length")
