@@ -1,4 +1,5 @@
 # Copyright (c) 2020-2021, NVIDIA CORPORATION.
+import functools
 
 import pandas as pd
 import pyarrow as pa
@@ -159,3 +160,54 @@ def test_take_invalid(invalid, exception):
     gs = cudf.Series([[0, 1], [2, 3]])
     with exception:
         gs.list.take(invalid)
+
+
+def key_func_builder(x, na_position):
+    if x is None:
+        if na_position == "first":
+            return -1e8
+        else:
+            return 1e8
+    else:
+        return x
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        [[4, 2, None, 9], [8, 8, 2], [2, 1]],
+        [[4, 2, None, 9], [8, 8, 2], None],
+        [[4, 2, None, 9], [], None],
+    ],
+)
+@pytest.mark.parametrize(
+    "index",
+    [
+        None,
+        pd.Index(["a", "b", "c"]),
+        pd.MultiIndex.from_tuples(
+            [(0, "a"), (0, "b"), (1, "a")], names=["l0", "l1"]
+        ),
+    ],
+)
+@pytest.mark.parametrize("ascending", [True, False])
+@pytest.mark.parametrize("na_position", ["first", "last"])
+@pytest.mark.parametrize("ignore_index", [True, False])
+def test_sort_values(data, index, ascending, na_position, ignore_index):
+    key_func = functools.partial(key_func_builder, na_position=na_position)
+
+    ps = pd.Series(data, index=index)
+    gs = cudf.from_pandas(ps)
+
+    expected = ps.apply(
+        lambda x: sorted(x, key=key_func, reverse=not ascending)
+        if x is not None
+        else None
+    )
+    if ignore_index:
+        expected.reset_index(drop=True, inplace=True)
+    got = gs.list.sort_values(
+        ascending=ascending, na_position=na_position, ignore_index=ignore_index
+    )
+
+    assert_eq(expected, got)

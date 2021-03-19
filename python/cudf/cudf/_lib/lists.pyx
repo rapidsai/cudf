@@ -10,13 +10,16 @@ from cudf._lib.cpp.lists.count_elements cimport (
 from cudf._lib.cpp.lists.explode cimport (
     explode_outer as cpp_explode_outer
 )
+from cudf._lib.cpp.lists.sorting cimport (
+    sort_lists as cpp_sort_lists
+)
 from cudf._lib.cpp.lists.lists_column_view cimport lists_column_view
 from cudf._lib.cpp.column.column_view cimport column_view
 from cudf._lib.cpp.column.column cimport column
 
 from cudf._lib.cpp.table.table cimport table
 from cudf._lib.cpp.table.table_view cimport table_view
-from cudf._lib.cpp.types cimport size_type
+from cudf._lib.cpp.types cimport size_type, order, null_order
 
 from cudf._lib.column cimport Column
 from cudf._lib.table cimport Table
@@ -58,3 +61,27 @@ def explode_outer(Table tbl, int explode_column_idx, bool ignore_index=False):
         column_names=tbl._column_names,
         index_names=None if ignore_index else tbl._index_names
     )
+
+
+def sort_lists(Column col, bool ascending, object na_position):
+    if not isinstance(col.dtype, ListDtype):
+        raise TypeError("col is not a list column.")
+
+    cdef shared_ptr[lists_column_view] list_view = (
+        make_shared[lists_column_view](col.view())
+    )
+    cdef order c_sort_order = (
+        order.ASCENDING if ascending else order.DESCENDING
+    )
+    cdef null_order c_null_prec = (
+        null_order.BEFORE if na_position == "first" else null_order.AFTER
+    )
+
+    cdef unique_ptr[column] c_result
+
+    with nogil:
+        c_result = move(
+            cpp_sort_lists(list_view.get()[0], c_sort_order, c_null_prec)
+        )
+
+    return Column.from_unique_ptr(move(c_result))

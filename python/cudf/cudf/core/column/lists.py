@@ -7,7 +7,7 @@ import pyarrow as pa
 
 import cudf
 from cudf._lib.copying import segmented_gather
-from cudf._lib.lists import count_elements
+from cudf._lib.lists import count_elements, sort_lists
 from cudf.core.buffer import Buffer
 from cudf.core.column import ColumnBase, as_column, column
 from cudf.core.column.methods import ColumnMethodsMixin
@@ -285,3 +285,55 @@ class ListMethods(ColumnMethodsMixin):
             raise
         else:
             return res
+
+    def sort_values(
+        self,
+        ascending=True,
+        inplace=False,
+        kind="quicksort",
+        na_position="last",
+        ignore_index=False,
+    ):
+        """
+        Sort each list by the values.
+
+        Sort the lists in ascending or descending order by some criterion.
+
+        Parameters
+        ----------
+        ascending : bool, default True
+            If True, sort values in ascending order, otherwise descending.
+        na_position : {'first', 'last'}, default 'last'
+            'first' puts nulls at the beginning, 'last' puts nulls at the end.
+        ignore_index : bool, default False
+            If True, the resulting axis will be labeled 0, 1, ..., n - 1.
+
+        Returns
+        -------
+        ListColumn with each list sorted
+
+        Notes
+        -----
+        Difference from pandas:
+          * Not supporting: `inplace`, `kind`
+
+        Examples
+        --------
+        >>> import cudf
+        >>> s = cudf.Series([[4, 2, None, 9], [8, 8, 2], [2, 1]])
+        >>> s.sort_values(ascending=True, na_position="last")
+        [2, 4, 9, None],
+        [2, 8, 8],
+        [1, 2]
+        type: list
+        """
+        if inplace:
+            raise NotImplementedError("`inplace` not currently implemented.")
+        if kind != "quicksort":
+            raise NotImplementedError("`kind` not currently implemented.")
+
+        return self._return_or_inplace(
+            sort_lists(self._column, ascending, na_position),
+            inplace=inplace,
+            retain_index=not ignore_index,
+        )
