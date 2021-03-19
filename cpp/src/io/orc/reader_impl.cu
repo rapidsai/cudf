@@ -535,9 +535,7 @@ table_with_metadata reader::impl::read(size_type skip_rows,
           chunk.ts_clock_rate = to_clockrate(_timestamp_type.id());
         }
         for (int k = 0; k < gpu::CI_NUM_STREAMS; k++) {
-          if (chunk.strm_len[k] > 0) {
-            chunk.streams[k] = dst_base + stream_info[chunk.strm_id[k]].dst_pos;
-          }
+          chunk.streams[k] = dst_base + stream_info[chunk.strm_id[k]].dst_pos;
         }
       }
       stripe_start_row += stripe_info->numberOfRows;
