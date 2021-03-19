@@ -38,12 +38,12 @@ template <typename T>
 using fpc_wrapper = cudf::test::fixed_point_column_wrapper<T>;
 
 // TODO: Should we move these into type_lists? They seem generally useful.
-using cudf::test::FloatingPointTypes;
 using cudf::test::FixedPointTypes;
-using NumericTypesNotBool = cudf::test::Concat<cudf::test::IntegralTypesNotBool, FloatingPointTypes>;
+using cudf::test::FloatingPointTypes;
+using NumericTypesNotBool =
+  cudf::test::Concat<cudf::test::IntegralTypesNotBool, FloatingPointTypes>;
 using SignedNumericTypesNotBool =
   cudf::test::Types<int8_t, int16_t, int32_t, int64_t, float, double>;
-
 
 struct BinTestFixture : public cudf::test::BaseFixture {
 };
@@ -131,8 +131,8 @@ struct GenericExceptionCasesBinTestFixture : public BinTestFixture {
             fwc_wrapper<T> left_edges,
             fwc_wrapper<T> right_edges)
   {
-    auto result = cudf::bin(
-      input, left_edges, cudf::inclusive::NO, right_edges, cudf::inclusive::NO);
+    auto result =
+      cudf::bin(input, left_edges, cudf::inclusive::NO, right_edges, cudf::inclusive::NO);
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
   }
 };
@@ -368,20 +368,20 @@ TEST(TestStringData, NonAsciiStringTest)
   cudf::test::strings_column_wrapper left_edges{"A"};
   cudf::test::strings_column_wrapper right_edges{"z"};
   cudf::test::strings_column_wrapper input{"Héllo",
-                               "thesé",
-                               "HERE",
-                               "tést strings",
-                               "",
-                               "1.75",
-                               "-34",
-                               "+9.8",
-                               "17¼",
-                               "x³",
-                               "2³",
-                               " 12⅝",
-                               "1234567890",
-                               "de",
-                               "\t\r\n\f "};
+                                           "thesé",
+                                           "HERE",
+                                           "tést strings",
+                                           "",
+                                           "1.75",
+                                           "-34",
+                                           "+9.8",
+                                           "17¼",
+                                           "x³",
+                                           "2³",
+                                           " 12⅝",
+                                           "1234567890",
+                                           "de",
+                                           "\t\r\n\f "};
 
   auto result = cudf::bin(input, left_edges, cudf::inclusive::NO, right_edges, cudf::inclusive::NO);
 
@@ -396,35 +396,35 @@ TEST(TestStringData, SlicedNonAsciiStringTest)
   cudf::test::strings_column_wrapper left_edges{"A"};
   cudf::test::strings_column_wrapper right_edges{"z"};
   cudf::test::strings_column_wrapper input{"Héllo",
-                               "thesé",
-                               "HERE",
-                               "tést strings",
-                               "",
-                               "1.75",
-                               "-34",
-                               "+9.8",
-                               "17¼",
-                               "x³",
-                               "2³",
-                               " 12⅝",
-                               "1234567890",
-                               "de",
-                               "\t\r\n\f "};
+                                           "thesé",
+                                           "HERE",
+                                           "tést strings",
+                                           "",
+                                           "1.75",
+                                           "-34",
+                                           "+9.8",
+                                           "17¼",
+                                           "x³",
+                                           "2³",
+                                           " 12⅝",
+                                           "1234567890",
+                                           "de",
+                                           "\t\r\n\f "};
 
   auto sliced_inputs = cudf::slice(input, {1, 5, 5, 11});
 
   {
-      auto result = cudf::bin(sliced_inputs[0], left_edges, cudf::inclusive::NO, right_edges, cudf::inclusive::NO);
-      fwc_wrapper<cudf::size_type> expected{{0, 0, 0, 0},
-                                            {1, 1, 1, 0}};
-      CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
+    auto result = cudf::bin(
+      sliced_inputs[0], left_edges, cudf::inclusive::NO, right_edges, cudf::inclusive::NO);
+    fwc_wrapper<cudf::size_type> expected{{0, 0, 0, 0}, {1, 1, 1, 0}};
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
   }
 
   {
-      auto result = cudf::bin(sliced_inputs[1], left_edges, cudf::inclusive::NO, right_edges, cudf::inclusive::NO);
-      fwc_wrapper<cudf::size_type> expected{{0, 0, 0, 0, 0, 0},
-                                            {0, 0, 0, 0, 1, 0}};
-      CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
+    auto result = cudf::bin(
+      sliced_inputs[1], left_edges, cudf::inclusive::NO, right_edges, cudf::inclusive::NO);
+    fwc_wrapper<cudf::size_type> expected{{0, 0, 0, 0, 0, 0}, {0, 0, 0, 0, 1, 0}};
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
   }
 }
 
