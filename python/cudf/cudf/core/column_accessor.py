@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import itertools
-from collections import OrderedDict
 from collections.abc import MutableMapping
 from typing import (
     TYPE_CHECKING,
@@ -18,8 +17,8 @@ from typing import (
 import pandas as pd
 
 import cudf
+from cudf.core import column
 from cudf.utils.utils import (
-    OrderedColumnDict,
     cached_property,
     to_flat_dict,
     to_nested_dict,
@@ -31,7 +30,7 @@ if TYPE_CHECKING:
 
 class ColumnAccessor(MutableMapping):
 
-    _data: "OrderedDict[Any, ColumnBase]"
+    _data: "dict[Any, ColumnBase]"
     multiindex: bool
     _level_names: Tuple[Any, ...]
 
@@ -64,7 +63,7 @@ class ColumnAccessor(MutableMapping):
             self.multiindex = multiindex
             self._level_names = level_names
 
-        self._data = OrderedColumnDict(data)
+        self._data = dict(data)
         self.multiindex = multiindex
         self._level_names = level_names
 
@@ -280,6 +279,15 @@ class ColumnAccessor(MutableMapping):
         value : column-like
         """
         key = self._pad_key(key)
+
+        # Convert all types to columns and ensure that values are of equal
+        # length.
+        value = column.as_column(value)
+        if len(self._data) > 0:
+            first = next(iter(self._data.values()))
+            if len(value) != len(first):
+                raise ValueError("All columns must be of equal length")
+
         self._data[key] = value
         self._clear_cache()
 
