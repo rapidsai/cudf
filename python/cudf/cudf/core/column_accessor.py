@@ -33,6 +33,7 @@ class ColumnAccessor(MutableMapping):
     _data: "dict[Any, ColumnBase]"
     multiindex: bool
     _level_names: Tuple[Any, ...]
+    _column_length: int
 
     def __init__(
         self,
@@ -62,15 +63,30 @@ class ColumnAccessor(MutableMapping):
             self._data = data._data
             self.multiindex = multiindex
             self._level_names = level_names
+            self._column_length = column_length
+        else:
+            # This code path is performance-critical for copies and should be
+            # modified with care.
+            self._data = {}
+            if data:
+                data = dict(data)
+                # Faster than next(iter(data.values()))
+                column_length = len(data[next(iter(data))])
+                for k, v in data.items():
+                    # Much faster to avoid the function call if possible; the
+                    # extra isinstance is negligible if we do have to make a
+                    # column from something else.
+                    if not isinstance(v, column.ColumnBase):
+                        v = column.as_column(v)
+                    if len(v) != column_length:
+                        raise ValueError("All columns must be of equal length")
+                    self._data[k] = v
+                self._column_length = column_length
+            else:
+                self._column_length = None
 
-        # Explicitly initialize an empty data dict so that we can validate each
-        # new column.
-        self._data = {}
-        for k, v in dict(data).items():
-            self._data[k] =  self._convert_and_validate(v)
-
-        self.multiindex = multiindex
-        self._level_names = level_names
+            self.multiindex = multiindex
+            self._level_names = level_names
 
     def __iter__(self):
         return self._data.__iter__()
@@ -274,18 +290,6 @@ class ColumnAccessor(MutableMapping):
             data, multiindex=self.multiindex, level_names=self.level_names,
         )
 
-    def _convert_and_validate(self, value: Any):
-        # Make sure that the provided value can be stored as a column. This
-        # method will convert the column to an appropriate type and make sure
-        # that it is the same type as other columns in the accessor.
-
-        value = column.as_column(value)
-        if hasattr(self, '_data') and len(self._data) > 0:
-            first = next(iter(self._data.values()))
-            if len(value) != len(first):
-                raise ValueError("All columns must be of equal length")
-        return value
-
     def set_by_label(self, key: Any, value: Any, validate: bool = True):
         """
         Add (or modify) column by name.
@@ -302,7 +306,13 @@ class ColumnAccessor(MutableMapping):
         """
         key = self._pad_key(key)
         if validate:
-            value = self._convert_and_validate(value)
+            value = column.as_column(value)
+            if len(self._data) > 0:
+                if len(value) != self._column_length:
+                    raise ValueError("All columns must be of equal length")
+            else:
+                self._column_length = len(value)
+
         self._data[key] = value
         self._clear_cache()
 
