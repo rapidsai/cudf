@@ -333,6 +333,8 @@ class ListMethods(ColumnMethodsMixin):
             raise NotImplementedError("`kind` not currently implemented.")
         if na_position not in {"first", "last"}:
             raise ValueError(f"Unknown `na_position` value {na_position}")
+        if is_list_dtype(self._column.children[1].dtype):
+            raise NotImplementedError("Nested lists sort is not supported.")
 
         sort_order = Order.ASCENDING if ascending else Order.DESCENDING
         null_order = (
