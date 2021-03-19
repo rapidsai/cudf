@@ -63,7 +63,7 @@ class ColumnAccessor(MutableMapping):
             self.multiindex = multiindex
             self._level_names = level_names
 
-        self._data = dict(data)
+        self._data = {k: self._convert_and_validate(v) for k, v in data.items()}
         self.multiindex = multiindex
         self._level_names = level_names
 
@@ -269,6 +269,18 @@ class ColumnAccessor(MutableMapping):
             data, multiindex=self.multiindex, level_names=self.level_names,
         )
 
+    def _convert_and_validate(self, value: Any):
+        # Make sure that the provided value can be stored as a column. This
+        # method will convert the column to an appropriate type and make sure
+        # that it is the same type as other columns in the accessor.
+
+        value = column.as_column(value)
+        if len(self._data) > 0:
+            first = next(iter(self._data.values()))
+            if len(value) != len(first):
+                raise ValueError("All columns must be of equal length")
+        return value
+
     def set_by_label(self, key: Any, value: Any):
         """
         Add (or modify) column by name.
@@ -279,16 +291,7 @@ class ColumnAccessor(MutableMapping):
         value : column-like
         """
         key = self._pad_key(key)
-
-        # Convert all types to columns and ensure that values are of equal
-        # length.
-        value = column.as_column(value)
-        if len(self._data) > 0:
-            first = next(iter(self._data.values()))
-            if len(value) != len(first):
-                raise ValueError("All columns must be of equal length")
-
-        self._data[key] = value
+        self._data[key] = self._convert_and_validate(value)
         self._clear_cache()
 
     def _select_by_label_list_like(self, key: Any) -> ColumnAccessor:
