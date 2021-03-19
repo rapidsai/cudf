@@ -213,8 +213,7 @@ std::unique_ptr<column> bin(column_view const& input,
 
   // Handle empty inputs.
   if (input.is_empty()) {
-    return make_numeric_column(
-      data_type(type_to_id<size_type>()), 0, mask_state::UNALLOCATED, rmm::cuda_stream_default, mr);
+    return make_empty_column( data_type(type_to_id<size_type>()) );
   }
 
   return type_dispatcher<dispatch_storage_type>(input.type(),
