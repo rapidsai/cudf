@@ -24,6 +24,7 @@
 #include <cudf/types.hpp>
 #include <cudf/utilities/error.hpp>
 #include <cudf/utilities/span.hpp>
+#include <cudf/utilities/traits.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
@@ -156,8 +157,7 @@ std::unique_ptr<column> bin(column_view const& input,
 template <typename T>
 constexpr auto is_supported_bin_type()
 {
-  return ((is_numeric<T>() && !std::is_same<T, bool>::value)) ||
-         std::is_same<T, string_view>::value;
+  return cudf::is_relationally_comparable<T, T>() && cudf::is_equality_comparable<T, T>();
 }
 
 struct bin_type_dispatcher {

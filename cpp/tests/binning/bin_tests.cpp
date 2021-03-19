@@ -30,8 +30,6 @@
 
 namespace {
 
-using namespace cudf::test;
-
 template <typename T>
 using fwc_wrapper = cudf::test::fixed_width_column_wrapper<T>;
 
@@ -39,11 +37,14 @@ template <typename T>
 using fpc_wrapper = cudf::test::fixed_point_column_wrapper<T>;
 
 // TODO: Should we move these into type_lists? They seem generally useful.
-using NumericTypesNotBool = Concat<IntegralTypesNotBool, FloatingPointTypes>;
+using cudf::test::FloatingPointTypes;
+using cudf::test::FixedPointTypes;
+using NumericTypesNotBool = cudf::test::Concat<cudf::test::IntegralTypesNotBool, FloatingPointTypes>;
 using SignedNumericTypesNotBool =
   cudf::test::Types<int8_t, int16_t, int32_t, int64_t, float, double>;
 
-struct BinTestFixture : public BaseFixture {
+
+struct BinTestFixture : public cudf::test::BaseFixture {
 };
 
 /*
@@ -349,9 +350,9 @@ TYPED_TEST(FixedPointBinTestFixture, TestFixedPointData)
 // Basic test of strings of lowercase alphanumerics.
 TEST(TestStringData, SimpleStringTest)
 {
-  strings_column_wrapper left_edges{"a", "b", "c", "d", "e"};
-  strings_column_wrapper right_edges{"b", "c", "d", "e", "f"};
-  strings_column_wrapper input{"abc", "bcd", "cde", "def", "efg"};
+  cudf::test::strings_column_wrapper left_edges{"a", "b", "c", "d", "e"};
+  cudf::test::strings_column_wrapper right_edges{"b", "c", "d", "e", "f"};
+  cudf::test::strings_column_wrapper input{"abc", "bcd", "cde", "def", "efg"};
 
   auto result =
     cudf::bin(input, left_edges, cudf::inclusive::YES, right_edges, cudf::inclusive::NO);
@@ -363,9 +364,9 @@ TEST(TestStringData, SimpleStringTest)
 // Test non-ASCII characters.
 TEST(TestStringData, NonAsciiStringTest)
 {
-  strings_column_wrapper left_edges{"A"};
-  strings_column_wrapper right_edges{"z"};
-  strings_column_wrapper input{"Héllo",
+  cudf::test::strings_column_wrapper left_edges{"A"};
+  cudf::test::strings_column_wrapper right_edges{"z"};
+  cudf::test::strings_column_wrapper input{"Héllo",
                                "thesé",
                                "HERE",
                                "tést strings",
