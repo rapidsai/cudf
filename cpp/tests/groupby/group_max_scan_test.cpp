@@ -138,7 +138,7 @@ TYPED_TEST(FixedPointTestBothReps, GroupBySortMaxScanDecimalAsValue)
   using namespace numeric;
   using decimalXX  = TypeParam;
   using RepType    = cudf::device_storage_type_t<decimalXX>;
-  using fp_wrapper = cudf::test::fixed_point_column_wrapper<RepType>;
+  using fp_wrapper = fixed_point_column_wrapper<RepType>;
 
   using K = int32_t;
 
