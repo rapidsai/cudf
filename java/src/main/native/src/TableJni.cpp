@@ -915,12 +915,24 @@ JNIEXPORT long JNICALL Java_ai_rapids_cudf_Table_writeParquetBufferBegin(
     cudf::jni::native_jbooleanArray col_nullability(env, j_col_nullability);
     cudf::jni::native_jstringArray meta_keys(env, j_metadata_keys);
     cudf::jni::native_jstringArray meta_values(env, j_metadata_values);
+    cudf::jni::native_jintArray precisions(env, j_precisions);
 
-    auto d = col_nullability.data();
-    std::vector<bool> nullability(d, d + col_nullability.size());
-    table_metadata_with_nullability metadata;
-    metadata.column_nullable = nullability;
-    metadata.column_names = col_names.as_cpp_vector();
+    auto cpp_names = col_names.as_cpp_vector();
+    table_input_metadata metadata;
+    metadata.column_metadata.resize(col_nullability.size());
+    for (int i = 0; i < col_nullability.size(); i++) {
+       metadata.column_metadata[i]
+           .set_name(cpp_names[i])
+           .set_nullability(col_nullability[i])
+           .set_int96_timestamps(j_isInt96);
+    }
+
+    // Precisions is not always set
+    for (int i = 0; i < precisions.size(); i++) {
+       metadata.column_metadata[i]
+           .set_decimal_precision(precisions[i]);
+    }
+
     for (auto i = 0; i < meta_keys.size(); ++i) {
       metadata.user_data[meta_keys[i].get()] = meta_values[i].get();
     }
@@ -928,16 +940,13 @@ JNIEXPORT long JNICALL Java_ai_rapids_cudf_Table_writeParquetBufferBegin(
     std::unique_ptr<cudf::jni::jni_writer_data_sink> data_sink(
         new cudf::jni::jni_writer_data_sink(env, consumer));
     sink_info sink{data_sink.get()};
-    cudf::jni::native_jintArray precisions(env, j_precisions);
     std::vector<uint8_t> const v_precisions(
         precisions.data(), precisions.data() + precisions.size());
     chunked_parquet_writer_options opts =
         chunked_parquet_writer_options::builder(sink)
-            .nullable_metadata(&metadata)
+            .metadata(&metadata)
             .compression(static_cast<compression_type>(j_compression))
             .stats_level(static_cast<statistics_freq>(j_stats_freq))
-            .int96_timestamps(static_cast<bool>(j_isInt96))
-            .decimal_precision(v_precisions)
             .build();
 
     auto writer_ptr = std::make_unique<cudf::io::parquet_chunked_writer>(opts);
@@ -965,27 +974,34 @@ JNIEXPORT long JNICALL Java_ai_rapids_cudf_Table_writeParquetFileBegin(
     cudf::jni::native_jstringArray meta_keys(env, j_metadata_keys);
     cudf::jni::native_jstringArray meta_values(env, j_metadata_values);
     cudf::jni::native_jstring output_path(env, j_output_path);
+    cudf::jni::native_jintArray precisions(env, j_precisions);
 
-    auto d = col_nullability.data();
-    std::vector<bool> nullability(d, d + col_nullability.size());
-    table_metadata_with_nullability metadata;
-    metadata.column_nullable = nullability;
-    metadata.column_names = col_names.as_cpp_vector();
-    for (int i = 0; i < meta_keys.size(); ++i) {
+    auto cpp_names = col_names.as_cpp_vector();
+    table_input_metadata metadata;
+    metadata.column_metadata.resize(col_nullability.size());
+    for (int i = 0; i < col_nullability.size(); i++) {
+       metadata.column_metadata[i]
+           .set_name(cpp_names[i])
+           .set_nullability(col_nullability[i])
+           .set_int96_timestamps(j_isInt96);
+    }
+
+    // Precisions is not always set
+    for (int i = 0; i < precisions.size(); i++) {
+       metadata.column_metadata[i]
+           .set_decimal_precision(precisions[i]);
+    }
+
+    for (auto i = 0; i < meta_keys.size(); ++i) {
       metadata.user_data[meta_keys[i].get()] = meta_values[i].get();
     }
-    cudf::jni::native_jintArray precisions(env, j_precisions);
-    std::vector<uint8_t> v_precisions(
-        precisions.data(), precisions.data() + precisions.size());
- 
+
     sink_info sink{output_path.get()};
     chunked_parquet_writer_options opts =
         chunked_parquet_writer_options::builder(sink)
-            .nullable_metadata(&metadata)
+            .metadata(&metadata)
             .compression(static_cast<compression_type>(j_compression))
             .stats_level(static_cast<statistics_freq>(j_stats_freq))
-            .int96_timestamps(static_cast<bool>(j_isInt96))
-            .decimal_precision(v_precisions)
             .build();
 
     auto writer_ptr = std::make_unique<cudf::io::parquet_chunked_writer>(opts);
