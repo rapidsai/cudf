@@ -115,9 +115,9 @@ struct column_info {
 struct hierarchy_info {
   hierarchy_info() : simple_per_row_size(0), complex_type_count(0), max_branch_depth(0) {}
 
-  // these two fields act as an optimization. if we find that the entire table
+  // These two fields act as an optimization. If we find that the entire table
   // is just fixed-width types, we do not need to do the more expensive kernel call that
-  // traverses the individual columns. so if complex_type_count is 0, we can just
+  // traverses the individual columns. So if complex_type_count is 0, we can just
   // return a column where every row contains the value simple_per_row_size
   size_type simple_per_row_size;  // in bits
   size_type complex_type_count;
