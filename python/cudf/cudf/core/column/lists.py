@@ -320,13 +320,12 @@ class ListMethods(ColumnMethodsMixin):
 
         Examples
         --------
-        >>> import cudf
         >>> s = cudf.Series([[4, 2, None, 9], [8, 8, 2], [2, 1]])
         >>> s.list.sort_values(ascending=True, na_position="last")
-        [2, 4, 9, None],
-        [2, 8, 8],
-        [1, 2]
-        type: list
+        0    [2.0, 4.0, 9.0, nan]
+        1         [2.0, 8.0, 8.0]
+        2              [1.0, 2.0]
+        dtype: list
         """
         if inplace:
             raise NotImplementedError("`inplace` not currently implemented.")
