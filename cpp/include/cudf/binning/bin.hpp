@@ -54,12 +54,11 @@ enum class inclusive { YES, NO };
  *   - NaN elements in `input` belong to no bin and their corresponding label is NULL.
  *   - Bins must be provided in monotonically increasing order, otherwise behavior is undefined.
  *   - If two or more bins overlap, behavior is undefined.
- *   - If nulls are interspersed throughout the edges rather than being at the beginning or end
- *     (as set by @p edge_null_precedence), behavior is undefined.
  *
  * @throws cudf::logic_error if `input.type() == left_edges.type() == right_edges.type()` is
  * violated.
  * @throws cudf::logic_error if `left_edges.size() != right_edges.size()`
+ * @throws cudf::logic_error if `left_edges.has_nulls()` or `right_edges.has_nulls()`
  *
  * @param input The input elements to label according to the specified bins.
  * @param left_edges Values of the left edge of each bin.
@@ -77,7 +76,6 @@ std::unique_ptr<column> bin(
   inclusive left_inclusive,
   column_view const& right_edges,
   inclusive right_inclusive,
-  null_order edge_null_precedence     = null_order::BEFORE,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /** @} */  // end of group

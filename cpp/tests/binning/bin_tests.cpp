@@ -53,7 +53,7 @@ struct BinTestFixture : public BaseFixture {
  */
 
 // Left edges type check.
-TEST(BinColumnTest, TestInvalidLeft)
+TEST(BinColumnErrorTests, TestInvalidLeft)
 {
   fwc_wrapper<double> left_edges{0, 1, 2, 3, 4, 5, 6, 7, 8, 9};
   fwc_wrapper<float> right_edges{1, 2, 3, 4, 5, 6, 7, 8, 9, 10};
@@ -64,7 +64,7 @@ TEST(BinColumnTest, TestInvalidLeft)
 };
 
 // Right edges type check.
-TEST(BinColumnTest, TestInvalidRight)
+TEST(BinColumnErrorTests, TestInvalidRight)
 {
   fwc_wrapper<float> left_edges{0, 1, 2, 3, 4, 5, 6, 7, 8, 9};
   fwc_wrapper<double> right_edges{1, 2, 3, 4, 5, 6, 7, 8, 9, 10};
@@ -75,7 +75,7 @@ TEST(BinColumnTest, TestInvalidRight)
 };
 
 // Input type check.
-TEST(BinColumnTest, TestInvalidInput)
+TEST(BinColumnErrorTests, TestInvalidInput)
 {
   fwc_wrapper<float> left_edges{0, 1, 2, 3, 4, 5, 6, 7, 8, 9};
   fwc_wrapper<float> right_edges{1, 2, 3, 4, 5, 6, 7, 8, 9, 10};
@@ -86,13 +86,35 @@ TEST(BinColumnTest, TestInvalidInput)
 };
 
 // Number of left and right edges must match.
-TEST(BinColumnTest, TestMismatchedEdges)
+TEST(BinColumnErrorTests, TestMismatchedEdges)
 {
   fwc_wrapper<float> left_edges{0, 1, 2, 3, 4, 5, 6, 7, 8, 9};
   fwc_wrapper<float> right_edges{1, 2, 3, 4, 5, 6, 7, 8, 9};
   fwc_wrapper<float> input{0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5};
 
   EXPECT_THROW(cudf::bin(input, left_edges, cudf::inclusive::YES, right_edges, cudf::inclusive::NO),
+               cudf::logic_error);
+};
+
+// Left edges with nulls.
+TEST(BinColumnErrorTests, TestLeftEdgesWithNullsBefore)
+{
+  fwc_wrapper<float> left_edges{{0, 1, 2, 3, 4, 5, 6, 7, 8, 9}, {0, 1, 1, 1, 1, 1, 1, 1, 1, 1}};
+  fwc_wrapper<float> right_edges{1, 2, 3, 4, 5, 6, 7, 8, 9};
+  fwc_wrapper<float> input{0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5};
+
+  EXPECT_THROW(cudf::bin(input, left_edges, cudf::inclusive::NO, right_edges, cudf::inclusive::NO),
+               cudf::logic_error);
+};
+
+// Right edges with nulls.
+TEST(BinColumnErrorTests, TestRightEdgesWithNullsBefore)
+{
+  fwc_wrapper<float> left_edges{0, 1, 2, 3, 4, 5, 6, 7, 8, 9};
+  fwc_wrapper<float> right_edges{{1, 2, 3, 4, 5, 6, 7, 8, 9}, {0, 1, 1, 1, 1, 1, 1, 1, 1, 1}};
+  fwc_wrapper<float> input{0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5};
+
+  EXPECT_THROW(cudf::bin(input, left_edges, cudf::inclusive::NO, right_edges, cudf::inclusive::NO),
                cudf::logic_error);
 };
 
@@ -105,11 +127,10 @@ struct GenericExceptionCasesBinTestFixture : public BinTestFixture {
   void test(fwc_wrapper<T> input,
             fwc_wrapper<cudf::size_type> expected,
             fwc_wrapper<T> left_edges,
-            fwc_wrapper<T> right_edges,
-            cudf::null_order null_precedence = cudf::null_order::BEFORE)
+            fwc_wrapper<T> right_edges)
   {
     auto result = cudf::bin(
-      input, left_edges, cudf::inclusive::NO, right_edges, cudf::inclusive::NO, null_precedence);
+      input, left_edges, cudf::inclusive::NO, right_edges, cudf::inclusive::NO);
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
   }
 };
@@ -143,63 +164,6 @@ TYPED_TEST(ExceptionCasesBinTestFixture, TestInputWithNulls)
 {
   this->test(
     {{1, 3, 5, 7}, {0, 1, 0, 1}}, {{0, 1, 0, 3}, {0, 1, 0, 1}}, {0, 2, 4, 6, 8}, {2, 4, 6, 8, 10});
-};
-
-// Left edges with nulls at the beginning.
-TYPED_TEST(ExceptionCasesBinTestFixture, TestLeftEdgesWithNullsBefore)
-{
-  this->test({1, 3, 5, 7},
-             {{0, 1, 2, 3}, {0, 1, 1, 1}},
-             {{0, 2, 4, 6, 8}, {0, 1, 1, 1, 1}},
-             {2, 4, 6, 8, 10});
-};
-
-// Left edges with nulls at the end.
-TYPED_TEST(ExceptionCasesBinTestFixture, TestLeftEdgesWithNullsAfter)
-{
-  this->test({3, 5, 7, 9},
-             {{1, 2, 3, 0}, {1, 1, 1, 0}},
-             {{0, 2, 4, 6, 8}, {1, 1, 1, 1, 0}},
-             {2, 4, 6, 8, 10},
-             cudf::null_order::AFTER);
-};
-
-// Right edges with nulls at the beginning.
-TYPED_TEST(ExceptionCasesBinTestFixture, TestRightEdgesWithNullsBefore)
-{
-  this->test({1, 3, 5, 7},
-             {{0, 1, 2, 3}, {0, 1, 1, 1}},
-             {0, 2, 4, 6, 8},
-             {{2, 4, 6, 8, 10}, {0, 1, 1, 1, 1}});
-};
-
-// Right edges with nulls at the end.
-TYPED_TEST(ExceptionCasesBinTestFixture, TestRightEdgesWithNullsAfter)
-{
-  this->test({3, 5, 7, 9},
-             {{1, 2, 3, 0}, {1, 1, 1, 0}},
-             {0, 2, 4, 6, 8},
-             {{2, 4, 6, 8, 10}, {1, 1, 1, 1, 0}},
-             cudf::null_order::AFTER);
-};
-
-// Both edges with nulls at the beginning.
-TYPED_TEST(ExceptionCasesBinTestFixture, TestBothEdgesWithNullsBeforeDifferentAmount)
-{
-  this->test({1, 3, 5, 7},
-             {{0, 0, 2, 3}, {0, 0, 1, 1}},
-             {{0, 2, 4, 6, 8}, {0, 1, 1, 1, 1}},
-             {{2, 4, 6, 8, 10}, {0, 0, 1, 1, 1}});
-};
-
-// Both edges with nulls at the end.
-TYPED_TEST(ExceptionCasesBinTestFixture, TestBothEdgesWithNullsAfterDifferentAmount)
-{
-  this->test({3, 5, 7, 9},
-             {{1, 2, 0, 0}, {1, 1, 0, 0}},
-             {{0, 2, 4, 6, 8}, {1, 1, 1, 1, 0}},
-             {{2, 4, 6, 8, 10}, {1, 1, 1, 0, 0}},
-             cudf::null_order::AFTER);
 };
 
 // Test that nan values are assigned the NULL label.
