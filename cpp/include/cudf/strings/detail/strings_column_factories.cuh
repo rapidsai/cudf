@@ -93,8 +93,8 @@ std::unique_ptr<column> make_strings_column(IndexPairIterator begin,
   auto null_mask =
     (null_count > 0) ? std::move(new_nulls.first) : rmm::device_buffer{0, stream, mr};
 
-  // build chars column
   auto const avg_bytes_per_row = bytes / std::max(strings_count - null_count, 1);
+  // build chars column
   std::unique_ptr<column> chars_column = [&] {
     // use a character-parallel kernel for long string lengths
     if (avg_bytes_per_row > FACTORY_BYTES_PER_ROW_THRESHOLD) {
