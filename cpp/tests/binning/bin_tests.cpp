@@ -17,6 +17,7 @@
 #include <cudf/binning/bin.hpp>
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_view.hpp>
+#include <cudf/copying.hpp>
 #include <cudf/types.hpp>
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_wrapper.hpp>
@@ -387,6 +388,44 @@ TEST(TestStringData, NonAsciiStringTest)
   fwc_wrapper<cudf::size_type> expected{{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
                                         {1, 1, 1, 1, 0, 0, 0, 0, 0, 1, 0, 0, 0, 1, 0}};
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
+}
+
+// Test sliced non-ASCII characters.
+TEST(TestStringData, SlicedNonAsciiStringTest)
+{
+  cudf::test::strings_column_wrapper left_edges{"A"};
+  cudf::test::strings_column_wrapper right_edges{"z"};
+  cudf::test::strings_column_wrapper input{"Héllo",
+                               "thesé",
+                               "HERE",
+                               "tést strings",
+                               "",
+                               "1.75",
+                               "-34",
+                               "+9.8",
+                               "17¼",
+                               "x³",
+                               "2³",
+                               " 12⅝",
+                               "1234567890",
+                               "de",
+                               "\t\r\n\f "};
+
+  auto sliced_inputs = cudf::slice(input, {1, 5, 5, 11});
+
+  {
+      auto result = cudf::bin(sliced_inputs[0], left_edges, cudf::inclusive::NO, right_edges, cudf::inclusive::NO);
+      fwc_wrapper<cudf::size_type> expected{{0, 0, 0, 0},
+                                            {1, 1, 1, 0}};
+      CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
+  }
+
+  {
+      auto result = cudf::bin(sliced_inputs[1], left_edges, cudf::inclusive::NO, right_edges, cudf::inclusive::NO);
+      fwc_wrapper<cudf::size_type> expected{{0, 0, 0, 0, 0, 0},
+                                            {0, 0, 0, 0, 1, 0}};
+      CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
+  }
 }
 
 }  // anonymous namespace
