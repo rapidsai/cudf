@@ -52,7 +52,6 @@ from cudf.utils.dtypes import (
     is_struct_dtype,
     numeric_normalize_types,
 )
-from cudf.utils.utils import OrderedColumnDict
 
 T = TypeVar("T", bound="DataFrame")
 
@@ -4599,7 +4598,7 @@ class DataFrame(Frame, Serializable):
             table_to_hash = self
         else:
             cols = [self[k]._column for k in columns]
-            table_to_hash = Frame(data=OrderedColumnDict(zip(columns, cols)))
+            table_to_hash = Frame(data=dict(zip(columns, cols)))
 
         return Series(table_to_hash._hash()).values
 

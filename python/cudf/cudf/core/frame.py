@@ -39,8 +39,8 @@ class Frame(libcudf.table.Table):
 
     Parameters
     ----------
-    data : OrderedColumnDict
-        An OrderedColumnDict mapping column names to Columns
+    data : dict
+        An dict mapping column names to Columns
     index : Table
         A Frame representing the (optional) index columns.
     """
