@@ -35,6 +35,90 @@ namespace lists {
 namespace detail {
 namespace {
 using offset_type = lists_column_view::offset_type;
+
+/**
+ * @brief Performs an equality comparison between two elements in two columns.
+ *
+ * @tparam has_nulls Indicates the potential for null values in either column.
+ */
+template <bool has_nulls = true>
+class customized_element_comparator {
+ public:
+  /**
+   * @brief Construct type-dispatched function object for comparing equality
+   * between two elements.
+   *
+   * @note `lhs` and `rhs` may be the same.
+   *
+   * @param lhs The column containing the first element
+   * @param rhs The column containing the second element (may be the same as lhs)
+   * @param nulls_are_equal Indicates if two null elements are treated as equivalent
+   */
+  __host__ __device__ customized_element_comparator(column_device_view _d_view,
+                                                    bool _nulls_are_equal)
+    : d_view{_d_view}, nulls_are_equal{_nulls_are_equal}
+  {
+  }
+
+  /**
+   * @brief Compares the specified elements for equality.
+   *
+   * @param i The index of the first element
+   * @param j The index of the second element
+   *
+   */
+  template <typename Element,
+            std::enable_if_t<cudf::is_equality_comparable<Element, Element>()>* = nullptr>
+  __device__ bool operator()(size_type i, size_type j) const noexcept
+  {
+    if (has_nulls) {
+      bool const lhs_is_null{d_view.nullable() and d_view.is_null(i)};
+      bool const rhs_is_null{d_view.nullable() and d_view.is_null(j)};
+      if (lhs_is_null and rhs_is_null) {
+        return nulls_are_equal;
+      } else if (lhs_is_null != rhs_is_null) {
+        return false;
+      }
+    }
+
+    return d_view.element<Element>(i) == d_view.element<Element>(j);
+  }
+
+  template <typename Element,
+            std::enable_if_t<not cudf::is_equality_comparable<Element, Element>()>* = nullptr>
+  __device__ bool operator()(size_type, size_type)
+  {
+    release_assert(false && "Attempted to compare elements of uncomparable types.");
+    return false;
+  }
+
+ private:
+  column_device_view d_view;
+  bool nulls_are_equal;
+};
+
+template <bool has_nulls = true>
+class customized_row_comparator {
+ public:
+  customized_row_comparator(column_device_view _d_view, null_equality _nulls_equal)
+    : d_view{_d_view}, nulls_equal{_nulls_equal}
+  {
+  }
+
+  __device__ bool operator()(size_type i, size_type j) const noexcept
+  {
+    return cudf::type_dispatcher(
+      d_view.type(),
+      customized_element_comparator<has_nulls>{d_view, nulls_equal == null_equality::EQUAL},
+      i,
+      j);
+  }
+
+ private:
+  column_device_view d_view;
+  null_equality nulls_equal;
+};
+
 /**
  * @brief Copy list entries and entry list offsets ignoring duplicates
  *
@@ -51,7 +135,6 @@ using offset_type = lists_column_view::offset_type;
  * @return A pair of columns, the first one contains unique list entries and the second one
  * contains their corresponding list offsets
  */
-template <bool has_nulls>
 std::vector<std::unique_ptr<column>> get_unique_entries_and_list_offsets(
   column_view const& all_lists_entries,
   column_view const& entries_list_offsets,
@@ -59,26 +142,35 @@ std::vector<std::unique_ptr<column>> get_unique_entries_and_list_offsets(
   rmm::cuda_stream_view stream,
   rmm::mr::device_memory_resource* mr)
 {
-  // Create an intermediate table, since the comparator only work on tables
-  auto const device_input_table =
-    cudf::table_device_view::create(table_view{{all_lists_entries}}, stream);
-  auto const comp = row_equality_comparator<has_nulls>(
-    *device_input_table, *device_input_table, nulls_equal == null_equality::EQUAL);
-
   auto const num_entries = all_lists_entries.size();
   // Allocate memory to store the indices of the unique entries
   auto const unique_indices = cudf::make_numeric_column(
     entries_list_offsets.type(), num_entries, mask_state::UNALLOCATED, stream);
   auto const unique_indices_begin = unique_indices->mutable_view().begin<offset_type>();
 
-  auto const copy_end = thrust::unique_copy(
-    rmm::exec_policy(stream),
-    thrust::make_counting_iterator(0),
-    thrust::make_counting_iterator(num_entries),
-    unique_indices_begin,
-    [list_offsets = entries_list_offsets.begin<offset_type>(), comp] __device__(auto i, auto j) {
-      return list_offsets[i] == list_offsets[j] && comp(i, j);
-    });
+  offset_type* copy_end{0};
+  auto const d_view = column_device_view::create(all_lists_entries, stream);
+  if (all_lists_entries.has_nulls()) {
+    auto const comp = customized_row_comparator<true>(*d_view, nulls_equal);
+    copy_end        = thrust::unique_copy(
+      rmm::exec_policy(stream),
+      thrust::make_counting_iterator(0),
+      thrust::make_counting_iterator(num_entries),
+      unique_indices_begin,
+      [list_offsets = entries_list_offsets.begin<offset_type>(), comp] __device__(auto i, auto j) {
+        return list_offsets[i] == list_offsets[j] && comp(i, j);
+      });
+  } else {
+    auto const comp = customized_row_comparator<false>(*d_view, nulls_equal);
+    copy_end        = thrust::unique_copy(
+      rmm::exec_policy(stream),
+      thrust::make_counting_iterator(0),
+      thrust::make_counting_iterator(num_entries),
+      unique_indices_begin,
+      [list_offsets = entries_list_offsets.begin<offset_type>(), comp] __device__(auto i, auto j) {
+        return list_offsets[i] == list_offsets[j] && comp(i, j);
+      });
+  }
 
   // Collect unique entries and entry list offsets
   auto const indices = cudf::detail::slice(
@@ -255,12 +347,8 @@ std::unique_ptr<column> drop_list_duplicates(lists_column_view const& lists_colu
     detail::generate_entry_list_offsets(all_lists_entries.size(), lists_offsets->view(), stream);
 
   // Copy non-duplicated entries (along with their list offsets) to new arrays
-  auto unique_entries_and_list_offsets =
-    all_lists_entries.has_nulls()
-      ? detail::get_unique_entries_and_list_offsets<true>(
-          all_lists_entries, entries_list_offsets->view(), nulls_equal, stream, mr)
-      : detail::get_unique_entries_and_list_offsets<false>(
-          all_lists_entries, entries_list_offsets->view(), nulls_equal, stream, mr);
+  auto unique_entries_and_list_offsets = detail::get_unique_entries_and_list_offsets(
+    all_lists_entries, entries_list_offsets->view(), nulls_equal, stream, mr);
 
   // Generate offsets for the new lists column
   detail::generate_offsets(unique_entries_and_list_offsets.front()->size(),
