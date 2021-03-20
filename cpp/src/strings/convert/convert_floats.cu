@@ -21,6 +21,7 @@
 #include <cudf/strings/convert/convert_floats.hpp>
 #include <cudf/strings/detail/converters.hpp>
 #include <cudf/strings/detail/utilities.hpp>
+#include <cudf/strings/string.cuh>
 #include <cudf/strings/string_view.cuh>
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/utilities/traits.hpp>
@@ -536,11 +537,49 @@ std::unique_ptr<column> from_floats(column_view const& floats,
 }  // namespace detail
 
 // external API
-
 std::unique_ptr<column> from_floats(column_view const& floats, rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
   return detail::from_floats(floats, rmm::cuda_stream_default, mr);
+}
+
+namespace detail {
+std::unique_ptr<column> is_float(
+  strings_column_view const& strings,
+  rmm::cuda_stream_view stream,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
+{
+  auto strings_column = column_device_view::create(strings.parent(), stream);
+  auto d_column       = *strings_column;
+  // create output column
+  auto results   = make_numeric_column(data_type{type_id::BOOL8},
+                                     strings.size(),
+                                     cudf::detail::copy_bitmask(strings.parent(), stream, mr),
+                                     strings.null_count(),
+                                     stream,
+                                     mr);
+  auto d_results = results->mutable_view().data<bool>();
+  // check strings for valid float chars
+  thrust::transform(rmm::exec_policy(stream),
+                    thrust::make_counting_iterator<size_type>(0),
+                    thrust::make_counting_iterator<size_type>(strings.size()),
+                    d_results,
+                    [d_column] __device__(size_type idx) {
+                      if (d_column.is_null(idx)) return false;
+                      return string::is_float(d_column.element<string_view>(idx));
+                    });
+  results->set_null_count(strings.null_count());
+  return results;
+}
+
+}  // namespace detail
+
+// external API
+std::unique_ptr<column> is_float(strings_column_view const& strings,
+                                 rmm::mr::device_memory_resource* mr)
+{
+  CUDF_FUNC_RANGE();
+  return detail::is_float(strings, rmm::cuda_stream_default, mr);
 }
 
 }  // namespace strings

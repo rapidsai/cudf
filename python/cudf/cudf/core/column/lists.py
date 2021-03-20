@@ -2,14 +2,16 @@
 
 import pickle
 
+import numpy as np
 import pyarrow as pa
 
 import cudf
+from cudf._lib.copying import segmented_gather
 from cudf._lib.lists import contains_scalar, count_elements
 from cudf.core.buffer import Buffer
-from cudf.core.column import ColumnBase, column
+from cudf.core.column import ColumnBase, as_column, column
 from cudf.core.column.methods import ColumnMethodsMixin
-from cudf.utils.dtypes import is_list_dtype
+from cudf.utils.dtypes import is_list_dtype, is_numerical_dtype
 
 
 class ListColumn(ColumnBase):
@@ -257,3 +259,58 @@ class ListMethods(ColumnMethodsMixin):
         dtype: int32
         """
         return self._return_or_inplace(count_elements(self._column))
+
+    def take(self, lists_indices):
+        """
+        Collect list elements based on given indices.
+
+        Parameters
+        ----------
+        lists_indices: List type arrays
+            Specifies what to collect from each row
+
+        Returns
+        -------
+        ListColumn
+
+        Examples
+        --------
+        >>> s = cudf.Series([[1, 2, 3], None, [4, 5]])
+        >>> s
+        0    [1, 2, 3]
+        1         None
+        2       [4, 5]
+        dtype: list
+        >>> s.list.take([[0, 1], [], []])
+        0    [1, 2]
+        1      None
+        2        []
+        dtype: list
+        """
+
+        lists_indices_col = as_column(lists_indices)
+        if not isinstance(lists_indices_col, ListColumn):
+            raise ValueError("lists_indices should be list type array.")
+        if not lists_indices_col.size == self._column.size:
+            raise ValueError(
+                "lists_indices and list column is of different " "size."
+            )
+        if not is_numerical_dtype(
+            lists_indices_col.children[1].dtype
+        ) or not np.issubdtype(
+            lists_indices_col.children[1].dtype, np.integer
+        ):
+            raise TypeError(
+                "lists_indices should be column of values of index types."
+            )
+
+        try:
+            res = self._return_or_inplace(
+                segmented_gather(self._column, lists_indices_col)
+            )
+        except RuntimeError as e:
+            if "contains nulls" in str(e):
+                raise ValueError("lists_indices contains null.") from e
+            raise
+        else:
+            return res

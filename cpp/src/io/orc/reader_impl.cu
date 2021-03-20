@@ -139,7 +139,7 @@ struct orc_stream_info {
   }
   uint64_t offset;      // offset in file
   size_t dst_pos;       // offset in memory relative to start of compressed stripe data
-  uint32_t length;      // length in file
+  size_t length;        // length in file
   uint32_t gdf_idx;     // column index
   uint32_t stripe_idx;  // stripe index
 };
@@ -535,9 +535,7 @@ table_with_metadata reader::impl::read(size_type skip_rows,
           chunk.ts_clock_rate = to_clockrate(_timestamp_type.id());
         }
         for (int k = 0; k < gpu::CI_NUM_STREAMS; k++) {
-          if (chunk.strm_len[k] > 0) {
-            chunk.streams[k] = dst_base + stream_info[chunk.strm_id[k]].dst_pos;
-          }
+          chunk.streams[k] = dst_base + stream_info[chunk.strm_id[k]].dst_pos;
         }
       }
       stripe_start_row += stripe_info->numberOfRows;
