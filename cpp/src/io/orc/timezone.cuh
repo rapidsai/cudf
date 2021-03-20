@@ -20,8 +20,8 @@
 #include <cudf/utilities/span.hpp>
 
 #include <thrust/binary_search.h>
-#include <thrust/device_vector.h>
 #include <thrust/execution_policy.h>
+#include <rmm/device_uvector.hpp>
 
 #include <stdint.h>
 #include <string>
@@ -108,8 +108,15 @@ inline __device__ int32_t get_gmt_offset(cudf::device_span<int64_t const> ttimes
 
 struct timezone_table {
   int32_t gmt_offset = 0;
-  rmm::device_vector<int64_t> ttimes;
-  rmm::device_vector<int32_t> offsets;
+  rmm::device_uvector<int64_t> ttimes;
+  rmm::device_uvector<int32_t> offsets;
+  timezone_table() : ttimes{0, rmm::cuda_stream_default}, offsets{0, rmm::cuda_stream_default} {}
+  timezone_table(int32_t gmt_offset,
+                 rmm::device_uvector<int64_t> &&ttimes,
+                 rmm::device_uvector<int32_t> &&offsets)
+    : gmt_offset{gmt_offset}, ttimes{std::move(ttimes)}, offsets{std::move(offsets)}
+  {
+  }
   timezone_table_view view() const { return {gmt_offset, ttimes, offsets}; }
 };
 
@@ -119,10 +126,12 @@ struct timezone_table {
  * Uses system's TZif files. Assumes little-endian platform when parsing these files.
  *
  * @param timezone_name standard timezone name (for example, "US/Pacific")
+ * @param stream CUDA stream used for any device memory operations and kernel launches
  *
  * @return The transition table for the given timezone
  */
-timezone_table build_timezone_transition_table(std::string const &timezone_name);
+timezone_table build_timezone_transition_table(std::string const &timezone_name,
+                                               rmm::cuda_stream_view stream);
 
 }  // namespace io
 }  // namespace cudf
