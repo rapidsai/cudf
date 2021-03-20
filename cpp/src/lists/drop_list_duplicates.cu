@@ -22,7 +22,6 @@
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/lists/detail/sorting.hpp>
 #include <cudf/lists/drop_list_duplicates.hpp>
-#include <cudf/table/row_operators.cuh>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
@@ -80,7 +79,6 @@ class customized_element_comparator {
         return false;
       }
     }
-
     return d_view.element<Element>(i) == d_view.element<Element>(j);
   }
 
@@ -97,7 +95,7 @@ class customized_element_comparator {
   bool nulls_are_equal;
 };
 
-template <bool has_nulls = true>
+template <bool has_nulls>
 class customized_row_comparator {
  public:
   customized_row_comparator(column_device_view _d_view, null_equality _nulls_equal)
@@ -149,27 +147,26 @@ std::vector<std::unique_ptr<column>> get_unique_entries_and_list_offsets(
   auto const unique_indices_begin = unique_indices->mutable_view().begin<offset_type>();
 
   offset_type* copy_end{0};
-  auto const d_view = column_device_view::create(all_lists_entries, stream);
+  auto const d_view       = column_device_view::create(all_lists_entries, stream);
+  auto const list_offsets = entries_list_offsets.begin<offset_type>();
   if (all_lists_entries.has_nulls()) {
-    auto const comp = customized_row_comparator<true>(*d_view, nulls_equal);
-    copy_end        = thrust::unique_copy(
-      rmm::exec_policy(stream),
-      thrust::make_counting_iterator(0),
-      thrust::make_counting_iterator(num_entries),
-      unique_indices_begin,
-      [list_offsets = entries_list_offsets.begin<offset_type>(), comp] __device__(auto i, auto j) {
-        return list_offsets[i] == list_offsets[j] && comp(i, j);
-      });
+    customized_row_comparator<true> const comp{*d_view, nulls_equal};
+    copy_end = thrust::unique_copy(rmm::exec_policy(stream),
+                                   thrust::make_counting_iterator(0),
+                                   thrust::make_counting_iterator(num_entries),
+                                   unique_indices_begin,
+                                   [list_offsets, comp] __device__(auto i, auto j) {
+                                     return list_offsets[i] == list_offsets[j] && comp(i, j);
+                                   });
   } else {
-    auto const comp = customized_row_comparator<false>(*d_view, nulls_equal);
-    copy_end        = thrust::unique_copy(
-      rmm::exec_policy(stream),
-      thrust::make_counting_iterator(0),
-      thrust::make_counting_iterator(num_entries),
-      unique_indices_begin,
-      [list_offsets = entries_list_offsets.begin<offset_type>(), comp] __device__(auto i, auto j) {
-        return list_offsets[i] == list_offsets[j] && comp(i, j);
-      });
+    customized_row_comparator<false> const comp{*d_view, nulls_equal};
+    copy_end = thrust::unique_copy(rmm::exec_policy(stream),
+                                   thrust::make_counting_iterator(0),
+                                   thrust::make_counting_iterator(num_entries),
+                                   unique_indices_begin,
+                                   [list_offsets, comp] __device__(auto i, auto j) {
+                                     return list_offsets[i] == list_offsets[j] && comp(i, j);
+                                   });
   }
 
   // Collect unique entries and entry list offsets
