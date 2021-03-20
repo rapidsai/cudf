@@ -36,55 +36,51 @@ namespace {
 using offset_type = lists_column_view::offset_type;
 
 /**
- * @brief Performs an equality comparison between two elements in two columns.
+ * @brief Performs an equality comparison between two rows in a single column
  *
- * @tparam has_nulls Indicates the potential for null values in either column.
+ * If the row elements are not of floating point types, this functor will return the
+ * same comparison result as `cudf::element_equality_comparator`.
+ * For floating point types, elements that hold NaN value will be considered as unequal.
+ *
+ * @tparam has_nulls Indicates the potential for null values in the column
  */
 template <bool has_nulls = true>
-class customized_element_comparator {
+class element_comparator_fn {
  public:
   /**
    * @brief Construct type-dispatched function object for comparing equality
-   * between two elements.
+   * between two rows
    *
-   * @note `lhs` and `rhs` may be the same.
-   *
-   * @param lhs The column containing the first element
-   * @param rhs The column containing the second element (may be the same as lhs)
-   * @param nulls_are_equal Indicates if two null elements are treated as equivalent
+   * @param d_view The column containing the rows to compare
+   * @param nulls_are_equal Indicates if two null rows are treated as having the same value
    */
-  __host__ __device__ customized_element_comparator(column_device_view _d_view,
-                                                    bool _nulls_are_equal)
-    : d_view{_d_view}, nulls_are_equal{_nulls_are_equal}
+  __host__ __device__ element_comparator_fn(column_device_view d_view, bool nulls_are_equal)
+    : d_view{d_view}, nulls_are_equal{nulls_are_equal}
   {
   }
 
-  /**
-   * @brief Compares the specified elements for equality.
-   *
-   * @param i The index of the first element
-   * @param j The index of the second element
-   *
-   */
-  template <typename Element,
-            std::enable_if_t<cudf::is_equality_comparable<Element, Element>()>* = nullptr>
+  template <class T, std::enable_if_t<cudf::is_equality_comparable<T, T>()>* = nullptr>
   __device__ bool operator()(size_type i, size_type j) const noexcept
   {
     if (has_nulls) {
-      bool const lhs_is_null{d_view.nullable() and d_view.is_null(i)};
-      bool const rhs_is_null{d_view.nullable() and d_view.is_null(j)};
+      bool const nullable = d_view.nullable();
+      bool const lhs_is_null{nullable and d_view.is_null(i)};
+      bool const rhs_is_null{nullable and d_view.is_null(j)};
       if (lhs_is_null and rhs_is_null) {
         return nulls_are_equal;
       } else if (lhs_is_null != rhs_is_null) {
         return false;
       }
     }
-    return d_view.element<Element>(i) == d_view.element<Element>(j);
+
+    // For floating point types, if both element(i) and element(j) are NaNs then this comparison
+    // will return `false`. This is the desired behavior for `drop_list_duplicates`.
+    return d_view.element<T>(i) == d_view.element<T>(j);
   }
 
   template <typename Element,
             std::enable_if_t<not cudf::is_equality_comparable<Element, Element>()>* = nullptr>
-  __device__ bool operator()(size_type, size_type)
+  __device__ bool operator()(size_type, size_type) const
   {
     release_assert(false && "Attempted to compare elements of uncomparable types.");
     return false;
@@ -95,10 +91,15 @@ class customized_element_comparator {
   bool nulls_are_equal;
 };
 
+/**
+ * @brief Perform an equality comparison between two rows in a single column
+ *
+ * @tparam has_nulls Indicates the potential for null values in the column
+ */
 template <bool has_nulls>
-class customized_row_comparator {
+class element_comparator {
  public:
-  customized_row_comparator(column_device_view _d_view, null_equality _nulls_equal)
+  element_comparator(column_device_view _d_view, null_equality _nulls_equal)
     : d_view{_d_view}, nulls_equal{_nulls_equal}
   {
   }
@@ -107,7 +108,7 @@ class customized_row_comparator {
   {
     return cudf::type_dispatcher(
       d_view.type(),
-      customized_element_comparator<has_nulls>{d_view, nulls_equal == null_equality::EQUAL},
+      element_comparator_fn<has_nulls>{d_view, nulls_equal == null_equality::EQUAL},
       i,
       j);
   }
@@ -141,16 +142,17 @@ std::vector<std::unique_ptr<column>> get_unique_entries_and_list_offsets(
   rmm::mr::device_memory_resource* mr)
 {
   auto const num_entries = all_lists_entries.size();
+
   // Allocate memory to store the indices of the unique entries
   auto const unique_indices = cudf::make_numeric_column(
     entries_list_offsets.type(), num_entries, mask_state::UNALLOCATED, stream);
   auto const unique_indices_begin = unique_indices->mutable_view().begin<offset_type>();
 
-  offset_type* copy_end{0};
-  auto const d_view       = column_device_view::create(all_lists_entries, stream);
-  auto const list_offsets = entries_list_offsets.begin<offset_type>();
+  offset_type* copy_end{nullptr};
+  auto const d_view_entries = column_device_view::create(all_lists_entries, stream);
+  auto const list_offsets   = entries_list_offsets.begin<offset_type>();
   if (all_lists_entries.has_nulls()) {
-    customized_row_comparator<true> const comp{*d_view, nulls_equal};
+    element_comparator<true> const comp{*d_view_entries, nulls_equal};
     copy_end = thrust::unique_copy(rmm::exec_policy(stream),
                                    thrust::make_counting_iterator(0),
                                    thrust::make_counting_iterator(num_entries),
@@ -159,7 +161,7 @@ std::vector<std::unique_ptr<column>> get_unique_entries_and_list_offsets(
                                      return list_offsets[i] == list_offsets[j] && comp(i, j);
                                    });
   } else {
-    customized_row_comparator<false> const comp{*d_view, nulls_equal};
+    element_comparator<false> const comp{*d_view_entries, nulls_equal};
     copy_end = thrust::unique_copy(rmm::exec_policy(stream),
                                    thrust::make_counting_iterator(0),
                                    thrust::make_counting_iterator(num_entries),
@@ -170,6 +172,8 @@ std::vector<std::unique_ptr<column>> get_unique_entries_and_list_offsets(
   }
 
   // Collect unique entries and entry list offsets
+  // The new null_count and bitmask of the unique entries will also be generated
+  // by the gather function
   auto const indices = cudf::detail::slice(
     unique_indices->view(), 0, thrust::distance(unique_indices_begin, copy_end));
   return cudf::detail::gather(table_view{{all_lists_entries, entries_list_offsets}},
@@ -354,6 +358,10 @@ std::unique_ptr<column> drop_list_duplicates(lists_column_view const& lists_colu
                            stream);
 
   // Construct a new lists column without duplicated entries
+  // Reuse the null_count and bitmask of the lists_column: those are the null information for
+  // the list elements (rows)
+  // For the entries of those lists (rows), their null_count and bitmask were generated separately
+  // during the step `get_unique_entries_and_list_offsets` above
   return make_lists_column(lists_column.size(),
                            std::move(lists_offsets),
                            std::move(unique_entries_and_list_offsets.front()),
