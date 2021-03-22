@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -56,6 +56,10 @@ class lists_column_view : private column_view {
   using column_view::null_mask;
   using column_view::offset;
   using column_view::size;
+  using offset_type = int32_t;
+  static_assert(std::is_same<offset_type, size_type>::value,
+                "offset_type is expected to be the same as size_type.");
+  using offset_iterator = offset_type const*;
 
   /**
    * @brief Returns the parent column.
@@ -87,6 +91,28 @@ class lists_column_view : private column_view {
    * @throw cudf::logic error if this is an empty column
    */
   column_view get_sliced_child(rmm::cuda_stream_view stream) const;
+
+  /**
+   * @brief Return first offset (accounting for column offset)
+   *
+   * @return int32_t const* Pointer to the first offset
+   */
+  offset_iterator offsets_begin() const noexcept
+  {
+    return offsets().begin<offset_type>() + offset();
+  }
+
+  /**
+   * @brief Return pointer to the position that is one past the last offset
+   *
+   * This function return the position that is one past the last offset of the lists column.
+   * Since the current lists column may be a sliced column, this offsets_end() iterator should not
+   * be computed using the size of the offsets() child column, which is also the offsets of the
+   * entire original (non-sliced) lists column.
+   *
+   * @return int32_t const* Pointer to one past the last offset
+   */
+  offset_iterator offsets_end() const noexcept { return offsets_begin() + size() + 1; }
 };
 /** @} */  // end of group
 }  // namespace cudf

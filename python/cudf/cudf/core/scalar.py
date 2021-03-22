@@ -1,4 +1,5 @@
-# Copyright (c) 2020, NVIDIA CORPORATION.
+# Copyright (c) 2020-2021, NVIDIA CORPORATION.
+
 import numpy as np
 
 from cudf._lib.scalar import DeviceScalar, _is_null_host_scalar
@@ -55,7 +56,14 @@ class Scalar(object):
         self._host_value = None
         self._host_dtype = None
         self._device_value = None
-        if isinstance(value, DeviceScalar):
+
+        if isinstance(value, Scalar):
+            if value._is_host_value_current:
+                self._host_value = value._host_value
+                self._host_dtype = value._host_dtype
+            else:
+                self._device_value = value._device_value
+        elif isinstance(value, DeviceScalar):
             self._device_value = value
         else:
             self._host_value, self._host_dtype = self._preprocess_host_value(
@@ -247,11 +255,14 @@ class Scalar(object):
     def __repr__(self):
         # str() fixes a numpy bug with NaT
         # https://github.com/numpy/numpy/issues/17552
-        return f"Scalar({str(self.value)}, dtype={self.dtype})"
+        return (
+            f"{self.__class__.__name__}"
+            f"({str(self.value)}, dtype={self.dtype})"
+        )
 
     def _binop_result_dtype_or_error(self, other, op):
         if op in {"__eq__", "__ne__", "__lt__", "__gt__", "__le__", "__ge__"}:
-            return np.bool
+            return np.bool_
 
         out_dtype = get_allowed_combinations_for_operator(
             self.dtype, other.dtype, op

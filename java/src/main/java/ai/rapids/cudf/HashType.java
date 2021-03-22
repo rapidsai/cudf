@@ -1,6 +1,6 @@
 /*
  *
- *  Copyright (c) 2020, NVIDIA CORPORATION.
+ *  Copyright (c) 2020-2021, NVIDIA CORPORATION.
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -22,8 +22,8 @@ package ai.rapids.cudf;
  * Hash algorithm identifiers, mirroring native enum cudf::hash_id
  */
 public enum HashType {
-  // TODO IDENTITY(0),
-  // TODO MURMUR3(1),
+  IDENTITY(0),
+  MURMUR3(1),
   HASH_MD5(2),
   HASH_SERIAL_MURMUR3(3),
   HASH_SPARK_MURMUR3(4);

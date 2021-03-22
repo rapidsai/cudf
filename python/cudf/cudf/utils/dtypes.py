@@ -13,7 +13,8 @@ from pandas.core.dtypes.common import infer_dtype_from_object
 from pandas.core.dtypes.dtypes import CategoricalDtype, CategoricalDtypeType
 
 import cudf
-from cudf._lib.scalar import DeviceScalar, _is_null_host_scalar
+from cudf._lib.scalar import DeviceScalar
+from cudf.core._compat import PANDAS_GE_120
 
 _NA_REP = "<NA>"
 _np_pa_dtypes = {
@@ -72,6 +73,12 @@ pandas_dtypes_to_cudf_dtypes = {
     pd.BooleanDtype(): np.dtype("bool_"),
     pd.StringDtype(): np.dtype("object"),
 }
+
+if PANDAS_GE_120:
+    cudf_dtypes_to_pandas_dtypes[np.dtype("float32")] = pd.Float32Dtype()
+    cudf_dtypes_to_pandas_dtypes[np.dtype("float64")] = pd.Float64Dtype()
+    pandas_dtypes_to_cudf_dtypes[pd.Float32Dtype()] = np.dtype("float32")
+    pandas_dtypes_to_cudf_dtypes[pd.Float64Dtype()] = np.dtype("float64")
 
 SIGNED_INTEGER_TYPES = {"int8", "int16", "int32", "int64"}
 UNSIGNED_TYPES = {"uint8", "uint16", "uint32", "uint64"}
@@ -324,7 +331,10 @@ def to_cudf_compatible_scalar(val, dtype=None):
 
     If `val` is None, returns None.
     """
-    if _is_null_host_scalar(val) or isinstance(val, cudf.Scalar):
+
+    if cudf._lib.scalar._is_null_host_scalar(val) or isinstance(
+        val, cudf.Scalar
+    ):
         return val
 
     if not is_scalar(val):

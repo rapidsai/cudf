@@ -1,4 +1,5 @@
-# Copyright (c) 2018-2020, NVIDIA CORPORATION.
+# Copyright (c) 2018-2021, NVIDIA CORPORATION.
+
 from __future__ import annotations, division, print_function
 
 import pickle
@@ -156,7 +157,16 @@ class Index(Frame, Serializable):
         Returns
         -------
         deduplicated : Index
-        """
+
+        Examples
+        --------
+        >>> import cudf
+        >>> idx = cudf.Index(['lama', 'cow', 'lama', 'beetle', 'lama', 'hippo'])
+        >>> idx
+        StringIndex(['lama' 'cow' 'lama' 'beetle' 'lama' 'hippo'], dtype='object')
+        >>> idx.drop_duplicates()
+        StringIndex(['beetle' 'cow' 'hippo' 'lama'], dtype='object')
+        """  # noqa: E501
         return super().drop_duplicates(keep=keep)
 
     @property
@@ -1169,6 +1179,19 @@ class Index(Frame, Serializable):
         -------
         Index
 
+        Examples
+        --------
+        >>> import cudf
+        >>> index = cudf.Index([1, 2, 3], name='one')
+        >>> index
+        Int64Index([1, 2, 3], dtype='int64', name='one')
+        >>> index.name
+        'one'
+        >>> renamed_index = index.rename('two')
+        >>> renamed_index
+        Int64Index([1, 2, 3], dtype='int64', name='two')
+        >>> renamed_index.name
+        'two'
         """
         if inplace is True:
             self.name = name
@@ -1198,6 +1221,15 @@ class Index(Frame, Serializable):
         -------
         Index
             Index with values cast to specified dtype.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> index = cudf.Index([1, 2, 3])
+        >>> index
+        Int64Index([1, 2, 3], dtype='int64')
+        >>> index.astype('float64')
+        Float64Index([1.0, 2.0, 3.0], dtype='float64')
         """
         if pd.api.types.is_dtype_equal(dtype, self.dtype):
             return self.copy(deep=copy)
@@ -1290,6 +1322,15 @@ class Index(Frame, Serializable):
         -------
         out : bool
             If Index is empty, return True, if not return False.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> index = cudf.Index([])
+        >>> index
+        Float64Index([], dtype='float64')
+        >>> index.empty
+        True
         """
         return not self.size
 
@@ -1362,6 +1403,16 @@ class Index(Frame, Serializable):
         is_contained : cupy array
             CuPy array of boolean values.
 
+        Examples
+        --------
+        >>> idx = cudf.Index([1,2,3])
+        >>> idx
+        Int64Index([1, 2, 3], dtype='int64')
+
+        Check whether each index value in a list of values.
+
+        >>> idx.isin([1, 4])
+        array([ True, False, False])
         """
 
         result = self.to_series().isin(values).values
@@ -1993,7 +2044,27 @@ class GenericIndex(Index):
         # utilize `Index.to_string` once it is implemented
         # related issue : https://github.com/pandas-dev/pandas/issues/35389
         if isinstance(preprocess, CategoricalIndex):
-            output = preprocess.to_pandas().__repr__()
+            if preprocess.categories.dtype.kind == "f":
+                output = (
+                    preprocess.astype("str")
+                    .to_pandas()
+                    .astype(
+                        dtype=pd.CategoricalDtype(
+                            categories=preprocess.dtype.categories.astype(
+                                "str"
+                            ).to_pandas(),
+                            ordered=preprocess.dtype.ordered,
+                        )
+                    )
+                    .__repr__()
+                )
+                break_idx = output.find("ordered=")
+                output = (
+                    output[:break_idx].replace("'", "") + output[break_idx:]
+                )
+            else:
+                output = preprocess.to_pandas().__repr__()
+
             output = output.replace("nan", cudf._NA_REP)
         elif preprocess._values.nullable:
             output = self._clean_nulls_from_index().to_pandas().__repr__()

@@ -1,4 +1,5 @@
 # Copyright (c) 2020-2021, NVIDIA CORPORATION.
+
 import operator
 import re
 from string import ascii_letters, digits
@@ -28,7 +29,7 @@ def _series_na_data():
         pd.Series([0, 1, 2, 3, 4]),
         pd.Series(["a", "b", "u", "h", "d"]),
         pd.Series([None, None, np.nan, None, np.inf, -np.inf]),
-        pd.Series([]),
+        pd.Series([], dtype="float64"),
         pd.Series(
             [pd.NaT, pd.Timestamp("1939-05-27"), pd.Timestamp("1940-04-25")]
         ),
@@ -383,7 +384,7 @@ def test_series_tolist(data):
     [[], [None, None], ["a"], ["a", "b", "c"] * 500, [1.0, 2.0, 0.3] * 57],
 )
 def test_series_size(data):
-    psr = pd.Series(data)
+    psr = cudf.utils.utils._create_pandas_series(data=data)
     gsr = cudf.Series(data)
 
     assert_eq(psr.size, gsr.size)
@@ -481,7 +482,7 @@ def test_series_factorize(data, na_sentinel):
 @pytest.mark.parametrize(
     "data",
     [
-        [],
+        pd.Series([], dtype="datetime64[ns]"),
         pd.Series(pd.date_range("2010-01-01", "2010-02-01")),
         pd.Series([None, None], dtype="datetime64[ns]"),
     ],
@@ -490,7 +491,7 @@ def test_series_factorize(data, na_sentinel):
 @pytest.mark.parametrize("normalize", [True, False])
 @pytest.mark.parametrize("nulls", ["none", "some"])
 def test_series_datetime_value_counts(data, nulls, normalize, dropna):
-    psr = pd.Series(data)
+    psr = data.copy()
 
     if len(data) > 0:
         if nulls == "one":
@@ -733,7 +734,8 @@ def test_series_notnull_notna(ps, nan_as_null):
     "sr1", [pd.Series([10, 11, 12], index=["a", "b", "z"]), pd.Series(["a"])]
 )
 @pytest.mark.parametrize(
-    "sr2", [pd.Series([]), pd.Series(["a", "a", "c", "z", "A"])]
+    "sr2",
+    [pd.Series([], dtype="float64"), pd.Series(["a", "a", "c", "z", "A"])],
 )
 @pytest.mark.parametrize(
     "op",
@@ -852,6 +854,10 @@ def test_series_memory_usage():
                 dtype=pd.StringDtype(),
             ),
         ),
+        (
+            cudf.Series([1, 2, None, 10.2, None], dtype="float32",),
+            pd.Series([1, 2, None, 10.2, None], dtype=pd.Float32Dtype(),),
+        ),
     ],
 )
 def test_series_to_pandas_nullable_dtypes(sr, expected_psr):
@@ -934,3 +940,210 @@ def test_fillna_with_nan(data, nan_as_null, fill_value):
     actual = gs.fillna(fill_value)
 
     assert_eq(expected, actual)
+
+
+@pytest.mark.parametrize(
+    "ps",
+    [
+        pd.Series(["a"] * 20, index=range(0, 20)),
+        pd.Series(["b", None] * 10, index=range(0, 20), name="ASeries"),
+    ],
+)
+@pytest.mark.parametrize(
+    "labels",
+    [[1], [0], 1, 5, [5, 9], pd.Index([0, 1, 2, 3, 4, 5, 6, 7, 8, 9])],
+)
+@pytest.mark.parametrize("inplace", [True, False])
+def test_series_drop_labels(ps, labels, inplace):
+    ps = ps.copy()
+    gs = cudf.from_pandas(ps)
+
+    expected = ps.drop(labels=labels, axis=0, inplace=inplace)
+    actual = gs.drop(labels=labels, axis=0, inplace=inplace)
+
+    if inplace:
+        expected = ps
+        actual = gs
+
+    assert_eq(expected, actual)
+
+
+@pytest.mark.parametrize(
+    "ps",
+    [
+        pd.Series(["a"] * 20, index=range(0, 20)),
+        pd.Series(["b", None] * 10, index=range(0, 20), name="ASeries"),
+    ],
+)
+@pytest.mark.parametrize(
+    "index",
+    [[1], [0], 1, 5, [5, 9], pd.Index([0, 1, 2, 3, 4, 5, 6, 7, 8, 9])],
+)
+@pytest.mark.parametrize("inplace", [True, False])
+def test_series_drop_index(ps, index, inplace):
+    ps = ps.copy()
+    gs = cudf.from_pandas(ps)
+
+    expected = ps.drop(index=index, inplace=inplace)
+    actual = gs.drop(index=index, inplace=inplace)
+
+    if inplace:
+        expected = ps
+        actual = gs
+
+    assert_eq(expected, actual)
+
+
+@pytest.mark.parametrize(
+    "ps",
+    [
+        pd.Series(
+            ["a" if i % 2 == 0 else "b" for i in range(0, 10)],
+            index=pd.MultiIndex(
+                levels=[
+                    ["lama", "cow", "falcon"],
+                    ["speed", "weight", "length"],
+                ],
+                codes=[
+                    [0, 0, 0, 1, 1, 1, 2, 2, 2, 1],
+                    [0, 1, 2, 0, 1, 2, 0, 1, 2, 1],
+                ],
+            ),
+            name="abc",
+        )
+    ],
+)
+@pytest.mark.parametrize(
+    "index,level",
+    [
+        ("cow", 0),
+        ("lama", 0),
+        ("falcon", 0),
+        ("speed", 1),
+        ("weight", 1),
+        ("length", 1),
+        pytest.param(
+            "cow",
+            None,
+            marks=pytest.mark.xfail(
+                reason="https://github.com/pandas-dev/pandas/issues/36293"
+            ),
+        ),
+        pytest.param(
+            "lama",
+            None,
+            marks=pytest.mark.xfail(
+                reason="https://github.com/pandas-dev/pandas/issues/36293"
+            ),
+        ),
+        pytest.param(
+            "falcon",
+            None,
+            marks=pytest.mark.xfail(
+                reason="https://github.com/pandas-dev/pandas/issues/36293"
+            ),
+        ),
+    ],
+)
+@pytest.mark.parametrize("inplace", [True, False])
+def test_series_drop_multiindex(ps, index, level, inplace):
+    ps = ps.copy()
+    gs = cudf.from_pandas(ps)
+
+    expected = ps.drop(index=index, inplace=inplace, level=level)
+    actual = gs.drop(index=index, inplace=inplace, level=level)
+
+    if inplace:
+        expected = ps
+        actual = gs
+
+    assert_eq(expected, actual)
+
+
+def test_series_drop_edge_inputs():
+    gs = cudf.Series([42], name="a")
+    ps = gs.to_pandas()
+
+    assert_eq(ps.drop(columns=["b"]), gs.drop(columns=["b"]))
+
+    assert_eq(ps.drop(columns="b"), gs.drop(columns="b"))
+
+    assert_exceptions_equal(
+        lfunc=ps.drop,
+        rfunc=gs.drop,
+        lfunc_args_and_kwargs=(["a"], {"columns": "a", "axis": 1}),
+        rfunc_args_and_kwargs=(["a"], {"columns": "a", "axis": 1}),
+        expected_error_message="Cannot specify both",
+    )
+
+    assert_exceptions_equal(
+        lfunc=ps.drop,
+        rfunc=gs.drop,
+        lfunc_args_and_kwargs=([], {}),
+        rfunc_args_and_kwargs=([], {}),
+        expected_error_message="Need to specify at least one",
+    )
+
+    assert_exceptions_equal(
+        lfunc=ps.drop,
+        rfunc=gs.drop,
+        lfunc_args_and_kwargs=(["b"], {"axis": 1}),
+        rfunc_args_and_kwargs=(["b"], {"axis": 1}),
+        expected_error_message="No axis named 1",
+    )
+
+
+def test_series_drop_raises():
+    gs = cudf.Series([10, 20, 30], index=["x", "y", "z"], name="c")
+    ps = gs.to_pandas()
+
+    assert_exceptions_equal(
+        lfunc=ps.drop,
+        rfunc=gs.drop,
+        lfunc_args_and_kwargs=(["p"],),
+        rfunc_args_and_kwargs=(["p"],),
+        expected_error_message="One or more values not found in axis",
+    )
+
+    # dtype specified mismatch
+    assert_exceptions_equal(
+        lfunc=ps.drop,
+        rfunc=gs.drop,
+        lfunc_args_and_kwargs=([3],),
+        rfunc_args_and_kwargs=([3],),
+        expected_error_message="One or more values not found in axis",
+    )
+
+    expect = ps.drop("p", errors="ignore")
+    actual = gs.drop("p", errors="ignore")
+
+    assert_eq(actual, expect)
+
+
+@pytest.mark.parametrize(
+    "data", [[[1, 2, 3], None, [4], [], [5, 6]], [1, 2, 3, 4, 5]],
+)
+@pytest.mark.parametrize("ignore_index", [True, False])
+@pytest.mark.parametrize(
+    "p_index",
+    [
+        None,
+        ["ia", "ib", "ic", "id", "ie"],
+        pd.MultiIndex.from_tuples(
+            [(0, "a"), (0, "b"), (0, "c"), (1, "a"), (1, "b")]
+        ),
+    ],
+)
+def test_explode(data, ignore_index, p_index):
+    pdf = pd.Series(data, index=p_index, name="someseries")
+    gdf = cudf.from_pandas(pdf)
+
+    expect = pdf.explode(ignore_index)
+    got = gdf.explode(ignore_index)
+
+    if data == [1, 2, 3, 4, 5] and ignore_index and p_index is not None:
+        # https://github.com/pandas-dev/pandas/issues/40487
+        with pytest.raises(AssertionError, match="different"):
+            assert_eq(expect, got, check_dtype=False)
+    else:
+        assert_eq(expect, got, check_dtype=False)

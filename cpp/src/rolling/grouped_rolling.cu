@@ -110,8 +110,8 @@ std::unique_ptr<column> grouped_rolling_window(table_view const& group_keys,
   using sort_groupby_helper = cudf::groupby::detail::sort::sort_groupby_helper;
 
   sort_groupby_helper helper{group_keys, cudf::null_policy::INCLUDE, cudf::sorted::YES};
-  auto group_offsets{helper.group_offsets()};
-  auto const& group_labels{helper.group_labels()};
+  auto const& group_offsets{helper.group_offsets(stream)};
+  auto const& group_labels{helper.group_labels(stream)};
 
   // `group_offsets` are interpreted in adjacent pairs, each pair representing the offsets
   // of the first, and one past the last elements in a group.
@@ -127,12 +127,12 @@ std::unique_ptr<column> grouped_rolling_window(table_view const& group_keys,
   //   groups.)
   //   3. [0, 500, 1000] indicates two equal-sized groups: [0,500), and [500,1000).
 
-  assert(group_offsets.size() >= 2 && group_offsets[0] == 0 &&
-         group_offsets[group_offsets.size() - 1] == input.size() &&
+  assert(group_offsets.size() >= 2 && group_offsets.element(0, stream) == 0 &&
+         group_offsets.element(group_offsets.size() - 1, stream) == input.size() &&
          "Must have at least one group.");
 
-  auto preceding_calculator = [d_group_offsets = group_offsets.data().get(),
-                               d_group_labels  = group_labels.data().get(),
+  auto preceding_calculator = [d_group_offsets = group_offsets.data(),
+                               d_group_labels  = group_labels.data(),
                                preceding_window] __device__(size_type idx) {
     auto group_label = d_group_labels[idx];
     auto group_start = d_group_offsets[group_label];
@@ -140,8 +140,8 @@ std::unique_ptr<column> grouped_rolling_window(table_view const& group_keys,
                                         idx - group_start + 1);  // Preceding includes current row.
   };
 
-  auto following_calculator = [d_group_offsets = group_offsets.data().get(),
-                               d_group_labels  = group_labels.data().get(),
+  auto following_calculator = [d_group_offsets = group_offsets.data(),
+                               d_group_labels  = group_labels.data(),
                                following_window] __device__(size_type idx) {
     auto group_label = d_group_labels[idx];
     auto group_end =
@@ -152,10 +152,10 @@ std::unique_ptr<column> grouped_rolling_window(table_view const& group_keys,
 
   if (aggr->kind == aggregation::CUDA || aggr->kind == aggregation::PTX) {
     cudf::detail::preceding_window_wrapper grouped_preceding_window{
-      group_offsets.data().get(), group_labels.data().get(), preceding_window};
+      group_offsets.data(), group_labels.data(), preceding_window};
 
     cudf::detail::following_window_wrapper grouped_following_window{
-      group_offsets.data().get(), group_labels.data().get(), following_window};
+      group_offsets.data(), group_labels.data(), following_window};
 
     return cudf::detail::rolling_window_udf(input,
                                             grouped_preceding_window,
@@ -371,7 +371,7 @@ std::unique_ptr<column> time_range_window_ASC(column_view const& input,
 /// If there are no nulls for any given group, (nulls_begin, nulls_end) == (0,0).
 std::tuple<rmm::device_vector<size_type>, rmm::device_vector<size_type>>
 get_null_bounds_for_timestamp_column(column_view const& timestamp_column,
-                                     rmm::device_vector<size_type> const& group_offsets)
+                                     rmm::device_uvector<size_type> const& group_offsets)
 {
   // For each group, the null values are themselves clustered
   // at the beginning or the end of the group.
@@ -384,7 +384,7 @@ get_null_bounds_for_timestamp_column(column_view const& timestamp_column,
 
   if (timestamp_column.has_nulls()) {
     auto p_timestamps_device_view = column_device_view::create(timestamp_column);
-    auto num_groups               = group_offsets.size();
+    auto num_groups               = group_offsets.size() - 1;
 
     // Null timestamps exist. Find null bounds, per group.
     thrust::for_each(
@@ -392,7 +392,7 @@ get_null_bounds_for_timestamp_column(column_view const& timestamp_column,
       thrust::make_counting_iterator(static_cast<size_type>(0)),
       thrust::make_counting_iterator(static_cast<size_type>(num_groups)),
       [d_timestamps    = *p_timestamps_device_view,
-       d_group_offsets = group_offsets.data().get(),
+       d_group_offsets = group_offsets.data(),
        d_null_start    = null_start.data(),
        d_null_end      = null_end.data()] __device__(auto group_label) {
         auto group_start           = d_group_offsets[group_label];
@@ -434,8 +434,8 @@ get_null_bounds_for_timestamp_column(column_view const& timestamp_column,
 std::unique_ptr<column> time_range_window_ASC(
   column_view const& input,
   column_view const& timestamp_column,
-  rmm::device_vector<cudf::size_type> const& group_offsets,
-  rmm::device_vector<cudf::size_type> const& group_labels,
+  rmm::device_uvector<cudf::size_type> const& group_offsets,
+  rmm::device_uvector<cudf::size_type> const& group_labels,
   TimeT preceding_window,
   bool preceding_window_is_unbounded,
   TimeT following_window,
@@ -450,8 +450,8 @@ std::unique_ptr<column> time_range_window_ASC(
     get_null_bounds_for_timestamp_column(timestamp_column, group_offsets);
 
   auto preceding_calculator =
-    [d_group_offsets = group_offsets.data().get(),
-     d_group_labels  = group_labels.data().get(),
+    [d_group_offsets = group_offsets.data(),
+     d_group_labels  = group_labels.data(),
      d_timestamps    = timestamp_column.data<TimeT>(),
      d_nulls_begin   = null_start.data().get(),
      d_nulls_end     = null_end.data().get(),
@@ -490,8 +490,8 @@ std::unique_ptr<column> time_range_window_ASC(
   auto preceding_column = expand_to_column(preceding_calculator, input.size(), stream, mr);
 
   auto following_calculator =
-    [d_group_offsets = group_offsets.data().get(),
-     d_group_labels  = group_labels.data().get(),
+    [d_group_offsets = group_offsets.data(),
+     d_group_labels  = group_labels.data(),
      d_timestamps    = timestamp_column.data<TimeT>(),
      d_nulls_begin   = null_start.data().get(),
      d_nulls_end     = null_end.data().get(),
@@ -633,8 +633,8 @@ std::unique_ptr<column> time_range_window_DESC(column_view const& input,
 std::unique_ptr<column> time_range_window_DESC(
   column_view const& input,
   column_view const& timestamp_column,
-  rmm::device_vector<cudf::size_type> const& group_offsets,
-  rmm::device_vector<cudf::size_type> const& group_labels,
+  rmm::device_uvector<cudf::size_type> const& group_offsets,
+  rmm::device_uvector<cudf::size_type> const& group_labels,
   TimeT preceding_window,
   bool preceding_window_is_unbounded,
   TimeT following_window,
@@ -649,8 +649,8 @@ std::unique_ptr<column> time_range_window_DESC(
     get_null_bounds_for_timestamp_column(timestamp_column, group_offsets);
 
   auto preceding_calculator =
-    [d_group_offsets = group_offsets.data().get(),
-     d_group_labels  = group_labels.data().get(),
+    [d_group_offsets = group_offsets.data(),
+     d_group_labels  = group_labels.data(),
      d_timestamps    = timestamp_column.data<TimeT>(),
      d_nulls_begin   = null_start.data().get(),
      d_nulls_end     = null_end.data().get(),
@@ -691,8 +691,8 @@ std::unique_ptr<column> time_range_window_DESC(
   auto preceding_column = expand_to_column(preceding_calculator, input.size(), stream, mr);
 
   auto following_calculator =
-    [d_group_offsets = group_offsets.data().get(),
-     d_group_labels  = group_labels.data().get(),
+    [d_group_offsets = group_offsets.data(),
+     d_group_labels  = group_labels.data(),
      d_timestamps    = timestamp_column.data<TimeT>(),
      d_nulls_begin   = null_start.data().get(),
      d_nulls_end     = null_end.data().get(),
@@ -745,8 +745,8 @@ std::unique_ptr<column> grouped_time_range_rolling_window_impl(
   column_view const& input,
   column_view const& timestamp_column,
   cudf::order const& timestamp_ordering,
-  rmm::device_vector<cudf::size_type> const& group_offsets,
-  rmm::device_vector<cudf::size_type> const& group_labels,
+  rmm::device_uvector<cudf::size_type> const& group_offsets,
+  rmm::device_uvector<cudf::size_type> const& group_labels,
   window_bounds preceding_window_in_days,  // TODO: Consider taking offset-type as type_id. Assumes
                                            // days for now.
   window_bounds following_window_in_days,
@@ -758,7 +758,7 @@ std::unique_ptr<column> grouped_time_range_rolling_window_impl(
   TimeT mult_factor{static_cast<TimeT>(multiplication_factor(timestamp_column.type()))};
 
   if (timestamp_ordering == cudf::order::ASCENDING) {
-    return group_offsets.empty()
+    return group_offsets.is_empty()
              ? time_range_window_ASC(input,
                                      timestamp_column,
                                      preceding_window_in_days.value * mult_factor,
@@ -782,7 +782,7 @@ std::unique_ptr<column> grouped_time_range_rolling_window_impl(
                                      stream,
                                      mr);
   } else {
-    return group_offsets.empty()
+    return group_offsets.is_empty()
              ? time_range_window_DESC(input,
                                       timestamp_column,
                                       preceding_window_in_days.value * mult_factor,
@@ -835,11 +835,11 @@ std::unique_ptr<column> grouped_time_range_rolling_window(table_view const& grou
   using sort_groupby_helper = cudf::groupby::detail::sort::sort_groupby_helper;
   using index_vector        = sort_groupby_helper::index_vector;
 
-  index_vector group_offsets, group_labels;
+  index_vector group_offsets(0, stream), group_labels(0, stream);
   if (group_keys.num_columns() > 0) {
     sort_groupby_helper helper{group_keys, cudf::null_policy::INCLUDE, cudf::sorted::YES};
-    group_offsets = helper.group_offsets();
-    group_labels  = helper.group_labels();
+    group_offsets = index_vector(helper.group_offsets(), stream);
+    group_labels  = index_vector(helper.group_labels(), stream);
   }
 
   // Assumes that `timestamp_column` is actually of a timestamp type.
