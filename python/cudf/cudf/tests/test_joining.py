@@ -1180,28 +1180,28 @@ def test_decimal_typecast_inner(dtype_l, dtype_r):
 
 @pytest.mark.parametrize(
     "dtype_l",
-    [Decimal64Dtype(6, 3), Decimal64Dtype(8, 5), Decimal64Dtype(14, 10)],
+    [Decimal64Dtype(6, 2), Decimal64Dtype(9, 5), Decimal64Dtype(14, 10)],
 )
 @pytest.mark.parametrize(
     "dtype_r",
-    [Decimal64Dtype(14, 10), Decimal64Dtype(8, 5), Decimal64Dtype(6, 3)],
+    [Decimal64Dtype(8, 4), Decimal64Dtype(9, 5), Decimal64Dtype(16, 12)],
 )
 def test_decimal_typecast_left(dtype_l, dtype_r):
     other_data = ["a", "b", "c", "d"]
 
-    join_data_l = cudf.Series(["95.05", "384.26", "74.22", "187.33"]).astype(
+    join_data_l = cudf.Series(["95.05", "384.26", "74.22", "1456.94"]).astype(
         dtype_l
     )
-    join_data_r = cudf.Series(["95.05", "62.40", "74.22", "456.94"]).astype(
-        dtype_r
-    )
+    join_data_r = cudf.Series(
+        ["95.05", "62.4056", "74.22", "1456.9472"]
+    ).astype(dtype_r)
 
     gdf_l = cudf.DataFrame({"join_col": join_data_l, "B": other_data})
     gdf_r = cudf.DataFrame({"join_col": join_data_r, "B": other_data})
 
     exp_dtype = dtype_l
 
-    exp_join_data = ["95.05", "74.22", "384.26", "187.33"]
+    exp_join_data = ["95.05", "74.22", "384.26", "1456.94"]
     exp_other_data_x = ["a", "c", "b", "d"]
     exp_other_data_y = ["a", "c", None, None]
 
