@@ -97,7 +97,7 @@ __device__ weak_ordering relational_compare(Element lhs, Element rhs)
  * @param lhs_is_null boolean representing if lhs is null
  * @param rhs_is_null boolean representing if lhs is null
  * @param null_precedence null order
- * @return weak_ordering Indicates the relationship between null in lhs and rhs columns.
+ * @return Indicates the relationship between null in lhs and rhs columns.
  */
 inline __device__ auto null_compare(bool lhs_is_null, bool rhs_is_null, null_order null_precedence)
 {
@@ -338,6 +338,7 @@ class row_lexicographic_comparator {
    * comparison between the rows of two tables.
    *
    * @throws cudf::logic_error if `lhs.num_columns() != rhs.num_columns()`
+   * @throws cudf::logic_error if column types of `lhs` and `rhs` are not comparable.
    *
    * @param lhs The first table
    * @param rhs The second table (may be the same table as `lhs`)
@@ -357,6 +358,8 @@ class row_lexicographic_comparator {
   {
     // Add check for types to be the same.
     CUDF_EXPECTS(_lhs.num_columns() == _rhs.num_columns(), "Mismatched number of columns.");
+    CUDF_EXPECTS(detail::is_relationally_comparable(_lhs, _rhs),
+                 "Attempted to compare elements of uncomparable types.");
   }
 
   /**

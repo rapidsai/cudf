@@ -149,4 +149,22 @@ auto contiguous_copy_column_device_views(HostTableView source_view, rmm::cuda_st
   return std::make_tuple(std::move(descendant_storage), d_columns);
 }
 
+namespace detail {
+/**
+ * @brief Indicates whether respective columns in input tables are relationally comparable.
+ *
+ * @param lhs The first table
+ * @param rhs The second table (may be the same table as `lhs`)
+ * @return true all of respective columns on `lhs` and 'rhs` tables are comparable.
+ * @return false any of respective columns on `lhs` and 'rhs` tables are not comparable.
+ */
+template <typename TableDeviceView>
+bool is_relationally_comparable(TableDeviceView const& lhs, TableDeviceView const& rhs);
+
+extern template bool is_relationally_comparable<table_device_view>(table_device_view const& lhs,
+                                                                   table_device_view const& rhs);
+extern template bool is_relationally_comparable<mutable_table_device_view>(
+  mutable_table_device_view const& lhs, mutable_table_device_view const& rhs);
+
+}  // namespace detail
 }  // namespace cudf
