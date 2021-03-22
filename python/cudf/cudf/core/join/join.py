@@ -299,9 +299,13 @@ class Merge(object):
         data = left_result._data.__class__()
 
         for lcol in left_names:
-            data[left_names[lcol]] = left_result._data[lcol]
+            data.set_by_label(
+                left_names[lcol], left_result._data[lcol], validate=False
+            )
         for rcol in right_names:
-            data[right_names[rcol]] = right_result._data[rcol]
+            data.set_by_label(
+                right_names[rcol], right_result._data[rcol], validate=False
+            )
 
         # Index of the result:
         if self.left_index and self.right_index:
