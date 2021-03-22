@@ -158,8 +158,8 @@ std::unique_ptr<column> is_integer(
   return type_dispatcher(int_type, dispatch_is_integer_fn{}, strings, stream, mr);
 }
 
-}  // namespace
 }  // namespace detail
+}  // namespace anonymous
 
 // external APIs
 std::unique_ptr<column> is_integer(strings_column_view const& strings,
