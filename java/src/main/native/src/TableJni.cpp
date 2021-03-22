@@ -212,12 +212,15 @@ public:
                                           const std::shared_ptr<arrow::io::OutputStream> &sink)
       : initialized(false), column_names(col_names), file_name(""), sink(sink) {}
 
+private:
   bool initialized;
   std::vector<std::string> column_names;
+  std::vector<cudf::column_metadata> columns_meta;
   std::string file_name;
   std::shared_ptr<arrow::io::OutputStream> sink;
   std::shared_ptr<arrow::ipc::RecordBatchWriter> writer;
 
+public:
   void write(std::shared_ptr<arrow::Table> &arrow_tab, int64_t max_chunk) {
     if (!initialized) {
       if (!sink) {
@@ -245,6 +248,59 @@ public:
       sink->Close();
     }
     initialized = false;
+  }
+
+  std::vector<cudf::column_metadata> get_column_metadata(const cudf::table_view& tview) {
+    if (!column_names.empty() && columns_meta.empty()) {
+      // Rebuild the structure of column meta according to table schema.
+      // All the tables written by this writer should share the same schema,
+      // so build column metadata only once.
+      columns_meta.reserve(tview.num_columns());
+      size_t idx = 0;
+      for (auto itr = tview.begin(); itr < tview.end(); ++itr) {
+        // It should consume the column names only when a column is
+        //   - type of struct, or
+        //   - not a child.
+        columns_meta.push_back(build_one_column_meta(*itr, idx));
+      }
+      if (idx < column_names.size()) {
+        throw cudf::jni::jni_exception("Too many column names are provided.");
+      }
+    }
+    return columns_meta;
+  }
+
+private:
+  cudf::column_metadata build_one_column_meta(const cudf::column_view& cview, size_t& idx,
+                                              const bool consume_name = true) {
+    auto col_meta = cudf::column_metadata{};
+    if (consume_name) {
+      col_meta.name = get_column_name(idx++);
+    }
+    // Process children
+    if (cview.type().id() == cudf::type_id::LIST) {
+      // list type:
+      //   - requires a stub metadata for offset column(index: 0).
+      //   - does not require a name for the child column(index 1).
+      col_meta.children_meta = {{}, build_one_column_meta(cview.child(1), idx, false)};
+    } else if (cview.type().id() == cudf::type_id::STRUCT) {
+      // struct type always consumes the column names.
+      col_meta.children_meta.reserve(cview.num_children());
+      for (auto itr = cview.child_begin(); itr < cview.child_end(); ++itr) {
+        col_meta.children_meta.push_back(build_one_column_meta(*itr, idx));
+      }
+    } else if (cview.type().id() == cudf::type_id::DICTIONARY32) {
+      // not supported yet in JNI, nested type?
+      throw cudf::jni::jni_exception("Unsupported type 'DICTIONARY32'");
+    }
+    return col_meta;
+  }
+
+  std::string& get_column_name(const size_t idx) {
+    if (idx < 0 || idx >= column_names.size()) {
+      throw cudf::jni::jni_exception("Missing names for columns or nested struct columns");
+    }
+    return column_names[idx];
   }
 };
 
@@ -1262,12 +1318,7 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Table_convertCudfToArrowTable(JNIEnv
     cudf::jni::auto_set_device(env);
     std::unique_ptr<std::shared_ptr<arrow::Table>> result(
         new std::shared_ptr<arrow::Table>(nullptr));
-    auto column_metadata = std::vector<cudf::column_metadata>{};
-    column_metadata.reserve(state->column_names.size());
-    std::transform(std::begin(state->column_names), std::end(state->column_names),
-                   std::back_inserter(column_metadata),
-                   [](auto const &column_name) { return cudf::column_metadata{column_name}; });
-    *result = cudf::to_arrow(*tview, column_metadata);
+    *result = cudf::to_arrow(*tview, state->get_column_metadata(*tview));
     if (!result->get()) {
       return 0;
     }
