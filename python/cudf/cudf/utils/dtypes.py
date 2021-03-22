@@ -144,16 +144,16 @@ def numeric_normalize_types(*args):
 
 
 def is_numerical_dtype(obj):
-    if is_categorical_dtype(obj):
+    if np.issubdtype(obj, np.bool_):
+        return True
+    elif np.issubdtype(obj, np.floating):
+        return True
+    elif np.issubdtype(obj, np.signedinteger):
+        return True
+    elif np.issubdtype(obj, np.unsignedinteger):
+        return True
+    else:
         return False
-    if is_list_dtype(obj):
-        return False
-    return (
-        np.issubdtype(obj, np.bool_)
-        or np.issubdtype(obj, np.floating)
-        or np.issubdtype(obj, np.signedinteger)
-        or np.issubdtype(obj, np.unsignedinteger)
-    )
 
 
 def is_string_dtype(obj):

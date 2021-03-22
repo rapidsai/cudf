@@ -80,6 +80,19 @@ class ColumnAccessor(MutableMapping):
             self.multiindex = multiindex
             self._level_names = level_names
 
+    @classmethod
+    def _init_unsafe(
+        cls,
+        data: Dict[Any, ColumnBase],
+        multiindex: bool = False,
+        level_names=None,
+    ) -> ColumnAccessor:
+        obj = cls()
+        obj._data = data
+        obj.multiindex = multiindex
+        obj._level_names = level_names
+        return obj
+
     def __iter__(self):
         return self._data.__iter__()
 
