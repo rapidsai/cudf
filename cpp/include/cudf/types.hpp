@@ -24,8 +24,6 @@
 #define CUDA_DEVICE_CALLABLE inline
 #endif
 
-#include <thrust/optional.h>  // TODO no idea why this is needed ¯\_(ツ)_/¯
-
 #include <cassert>
 #include <cstddef>
 #include <cstdint>
