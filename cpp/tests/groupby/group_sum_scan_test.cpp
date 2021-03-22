@@ -24,8 +24,15 @@
 
 namespace cudf {
 namespace test {
-template <typename V>
+using K           = int32_t;
+using key_wrapper = fixed_width_column_wrapper<K>;
+
+template <typename T>
 struct groupby_sum_scan_test : public cudf::test::BaseFixture {
+  using V              = T;
+  using R              = cudf::detail::target_type_t<V, aggregation::SUM>;
+  using value_wrapper  = fixed_width_column_wrapper<V, int32_t>;
+  using result_wrapper = fixed_width_column_wrapper<R, int32_t>;
 };
 
 using supported_types =
@@ -36,17 +43,16 @@ TYPED_TEST_CASE(groupby_sum_scan_test, supported_types);
 
 TYPED_TEST(groupby_sum_scan_test, basic)
 {
-  using K = int32_t;
-  using V = TypeParam;
-  using R = cudf::detail::target_type_t<V, aggregation::SUM>;
+  using value_wrapper  = typename TestFixture::value_wrapper;
+  using result_wrapper = typename TestFixture::result_wrapper;
 
   // clang-format off
-  fixed_width_column_wrapper<K> keys            {1, 2, 3, 1, 2, 2, 1, 3, 3, 2};
-  fixed_width_column_wrapper<V, int> vals       {0, 1, 2, 3, 4, 5, 6, 7, 8, 9};
+  key_wrapper keys  {1, 2, 3, 1, 2, 2, 1, 3, 3, 2};
+  value_wrapper vals{0, 1, 2, 3, 4, 5, 6, 7, 8, 9};
 
-  fixed_width_column_wrapper<K> expect_keys     {1, 1, 1, 2, 2, 2, 2, 3, 3, 3};
-                                             // { 0, 3, 6, 1, 4, 5, 9, 2, 7, 8}
-  fixed_width_column_wrapper<R, int> expect_vals{0, 3, 9, 1, 5, 10, 19, 2, 9, 17};
+  key_wrapper expect_keys   {1, 1, 1, 2, 2, 2, 2, 3, 3, 3};
+  //                        {0, 3, 6, 1, 4, 5, 9, 2, 7, 8}
+  result_wrapper expect_vals{0, 3, 9, 1, 5, 10, 19, 2, 9, 17};
   // clang-format on
   auto agg = cudf::make_sum_aggregation();
   test_single_scan(keys, vals, expect_keys, expect_vals, std::move(agg));
@@ -54,16 +60,15 @@ TYPED_TEST(groupby_sum_scan_test, basic)
 
 TYPED_TEST(groupby_sum_scan_test, empty_cols)
 {
-  using K = int32_t;
-  using V = TypeParam;
-  using R = cudf::detail::target_type_t<V, aggregation::SUM>;
+  using value_wrapper  = typename TestFixture::value_wrapper;
+  using result_wrapper = typename TestFixture::result_wrapper;
 
   // clang-format off
-  fixed_width_column_wrapper<K> keys     {};
-  fixed_width_column_wrapper<V, int> vals{};
+  key_wrapper keys{};
+  value_wrapper vals{};
 
-  fixed_width_column_wrapper<K> expect_keys     {};
-  fixed_width_column_wrapper<R, int> expect_vals{};
+  key_wrapper expect_keys{};
+  result_wrapper expect_vals{};
   // clang-format on
 
   auto agg = cudf::make_sum_aggregation();
@@ -72,16 +77,15 @@ TYPED_TEST(groupby_sum_scan_test, empty_cols)
 
 TYPED_TEST(groupby_sum_scan_test, zero_valid_keys)
 {
-  using K = int32_t;
-  using V = TypeParam;
-  using R = cudf::detail::target_type_t<V, aggregation::SUM>;
+  using value_wrapper  = typename TestFixture::value_wrapper;
+  using result_wrapper = typename TestFixture::result_wrapper;
 
   // clang-format off
-  fixed_width_column_wrapper<K> keys    ({1, 2, 3}, all_null());
-  fixed_width_column_wrapper<V, int> vals{3, 4, 5};
+  key_wrapper keys({1, 2, 3}, all_null());
+  value_wrapper vals{3, 4, 5};
 
-  fixed_width_column_wrapper<K> expect_keys     {};
-  fixed_width_column_wrapper<R, int> expect_vals{};
+  key_wrapper expect_keys{};
+  result_wrapper expect_vals{};
   // clang-format on
 
   auto agg = cudf::make_sum_aggregation();
@@ -90,16 +94,15 @@ TYPED_TEST(groupby_sum_scan_test, zero_valid_keys)
 
 TYPED_TEST(groupby_sum_scan_test, zero_valid_values)
 {
-  using K = int32_t;
-  using V = TypeParam;
-  using R = cudf::detail::target_type_t<V, aggregation::SUM>;
+  using value_wrapper  = typename TestFixture::value_wrapper;
+  using result_wrapper = typename TestFixture::result_wrapper;
 
   // clang-format off
-  fixed_width_column_wrapper<K> keys            {1, 1, 1};
-  fixed_width_column_wrapper<V, int> vals      ({3, 4, 5}, all_null());
+  key_wrapper keys   {1, 1, 1};
+  value_wrapper vals({3, 4, 5}, all_null());
 
-  fixed_width_column_wrapper<K> expect_keys      {1, 1, 1};
-  fixed_width_column_wrapper<R, int> expect_vals({3, 4, 5}, all_null());
+  key_wrapper expect_keys    {1, 1, 1};
+  result_wrapper expect_vals({3, 4, 5}, all_null());
   // clang-format on
 
   auto agg = cudf::make_sum_aggregation();
@@ -108,21 +111,18 @@ TYPED_TEST(groupby_sum_scan_test, zero_valid_values)
 
 TYPED_TEST(groupby_sum_scan_test, null_keys_and_values)
 {
-  using K = int32_t;
-  using V = TypeParam;
-  using R = cudf::detail::target_type_t<V, aggregation::SUM>;
+  using value_wrapper  = typename TestFixture::value_wrapper;
+  using result_wrapper = typename TestFixture::result_wrapper;
 
   // clang-format off
-  fixed_width_column_wrapper<K> keys     ({1, 2, 3, 1, 2, 2, 1, 3, 3, 2, 4},
-                                          {1, 1, 1, 1, 1, 1, 1, 0, 1, 1, 1});
-  fixed_width_column_wrapper<V, int> vals({0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 4},
-                                          {0, 1, 1, 1, 1, 0, 1, 1, 1, 1, 0});
+  key_wrapper keys(  {1, 2, 3, 1, 2, 2, 1, 3, 3, 2, 4}, {1, 1, 1, 1, 1, 1, 1, 0, 1, 1, 1});
+  value_wrapper vals({0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 4}, {0, 1, 1, 1, 1, 0, 1, 1, 1, 1, 0});
 
-                                              // {1, 1, 1, 2, 2, 2, 2, 3, *, 3, 4};
-  fixed_width_column_wrapper<K> expect_keys     ({1, 1, 1, 2, 2, 2, 2, 3,    3, 4}, all_valid());
-                                              // {-, 3, 6, 1, 4, -, 9, 2, _, 8, -}
-  fixed_width_column_wrapper<R, int> expect_vals({-1, 3, 9, 1, 5, -1, 14, 2, /**/ 10, -1},
-                                                 { 0, 1, 1, 1, 1,  0,  1, 1, /**/ 1, 0});
+  //                         { 1, 1, 1, 2, 2,  2,  2, 3, *, 3, 4};
+  key_wrapper expect_keys(   { 1, 1, 1, 2, 2,  2,  2, 3,    3, 4}, all_valid());
+                          // { -, 3, 6, 1, 4,  -,  9, 2, _, 8, -}
+  result_wrapper expect_vals({-1, 3, 9, 1, 5, -1, 14, 2,   10, -1},
+                             { 0, 1, 1, 1, 1,  0,  1, 1,    1, 0});
   // clang-format on
 
   auto agg = cudf::make_sum_aggregation();
@@ -143,16 +143,14 @@ TYPED_TEST(FixedPointTestBothReps, GroupBySortSumScanDecimalAsValue)
   using fp_wrapper     = fixed_point_column_wrapper<RepType>;
   using out_fp_wrapper = fixed_point_column_wrapper<int64_t>;
 
-  using K = int32_t;
-
   for (auto const i : {2, 1, 0, -1, -2}) {
     auto const scale = scale_type{i};
     // clang-format off
-    auto const keys  = fixed_width_column_wrapper<K>{1, 2, 3, 1, 2, 2, 1, 3, 3, 2};
-    auto const vals  = fp_wrapper{                  {0, 1, 2, 3, 4, 5, 6, 7, 8, 9}, scale};
+    auto const keys = key_wrapper{1, 2, 3, 1, 2, 2, 1, 3, 3, 2};
+    auto const vals = fp_wrapper{{0, 1, 2, 3, 4, 5, 6, 7, 8, 9}, scale};
 
-    auto const expect_keys     = fixed_width_column_wrapper<K>{1, 1, 1, 2, 2, 2, 2, 3, 3, 3};
-    auto const expect_vals_sum = out_fp_wrapper{              {0, 3, 9, 1, 5, 10, 19, 2, 9, 17}, scale};
+    auto const expect_keys     = key_wrapper    {1, 1, 1, 2, 2, 2, 2, 3, 3, 3};
+    auto const expect_vals_sum = out_fp_wrapper{{0, 3, 9, 1, 5, 10, 19, 2, 9, 17}, scale};
     // clang-format on
 
     auto agg2 = cudf::make_sum_aggregation();
