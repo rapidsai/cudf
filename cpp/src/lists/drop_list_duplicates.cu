@@ -36,38 +36,38 @@ namespace {
 using offset_type = lists_column_view::offset_type;
 
 /**
- * @brief Performs an equality comparison between two rows in a single column
+ * @brief Performs an equality comparison between two entries in a lists column
  *
- * If the row elements are not of floating point types, this functor will return the
- * same comparison result as `cudf::element_equality_comparator`.
- * For floating point types, elements that hold NaN value will be considered as unequal.
+ * For the two elements that are in the same list in the lists column, they will always be
+ * considered as different. If they are from the same list, and their type is one of floating
+ * point types, this functor will return the same comparison result as
+ * `cudf::element_equality_comparator`. For floating point types, entries holding NaN value will
+ * be considered as different.
  *
  * @tparam has_nulls Indicates the potential for null values in the column
+ * @tparam Type      The data type of entries
  */
-template <bool has_nulls = true>
-class element_comparator_fn {
+template <bool has_nulls, class Type>
+class list_entry_comparator {
  public:
-  /**
-   * @brief Construct type-dispatched function object for comparing equality
-   * between two rows
-   *
-   * @param d_view The column containing the rows to compare
-   * @param nulls_are_equal Indicates if two null rows are treated as having the same value
-   */
-  __host__ __device__ element_comparator_fn(column_device_view d_view, bool nulls_are_equal)
-    : d_view{d_view}, nulls_are_equal{nulls_are_equal}
+  __host__ __device__ list_entry_comparator(offset_type const* list_offsets,
+                                            column_device_view const& d_view,
+                                            null_equality nulls_equal)
+    : list_offsets(list_offsets), d_view{d_view}, nulls_equal{nulls_equal}
   {
   }
 
-  template <class T, std::enable_if_t<cudf::is_equality_comparable<T, T>()>* = nullptr>
   __device__ bool operator()(size_type i, size_type j) const noexcept
   {
+    // Two entries are not considered for equality if they belong to different lists
+    if (list_offsets[i] != list_offsets[j]) { return false; }
+
     if (has_nulls) {
       bool const nullable = d_view.nullable();
       bool const lhs_is_null{nullable and d_view.is_null(i)};
       bool const rhs_is_null{nullable and d_view.is_null(j)};
       if (lhs_is_null and rhs_is_null) {
-        return nulls_are_equal;
+        return nulls_equal == null_equality::EQUAL;
       } else if (lhs_is_null != rhs_is_null) {
         return false;
       }
@@ -75,47 +75,55 @@ class element_comparator_fn {
 
     // For floating point types, if both element(i) and element(j) are NaNs then this comparison
     // will return `false`. This is the desired behavior for `drop_list_duplicates`.
-    return d_view.element<T>(i) == d_view.element<T>(j);
-  }
-
-  template <typename Element,
-            std::enable_if_t<not cudf::is_equality_comparable<Element, Element>()>* = nullptr>
-  __device__ bool operator()(size_type, size_type) const
-  {
-    release_assert(false && "Attempted to compare elements of uncomparable types.");
-    return false;
+    return d_view.element<Type>(i) == d_view.element<Type>(j);
   }
 
  private:
-  column_device_view d_view;
-  bool nulls_are_equal;
+  offset_type const* list_offsets;
+  column_device_view const& d_view;
+  null_equality nulls_equal;
 };
 
 /**
- * @brief Perform an equality comparison between two rows in a single column
- *
- * @tparam has_nulls Indicates the potential for null values in the column
+ *  @brief Construct type-dispatched function object for copying indices of the list entries
+ * ignoring duplicates
  */
-template <bool has_nulls>
-class element_comparator {
+class get_unique_entries_fn {
  public:
-  element_comparator(column_device_view _d_view, null_equality _nulls_equal)
-    : d_view{_d_view}, nulls_equal{_nulls_equal}
+  template <class Type, std::enable_if_t<not cudf::is_equality_comparable<Type, Type>()>* = nullptr>
+  offset_type* operator()(offset_type const*,
+                          column_device_view&,
+                          size_type,
+                          offset_type*,
+                          bool,
+                          null_equality,
+                          rmm::cuda_stream_view) const
   {
+    CUDF_FAIL("Cannot operate on types that are not equally comparable.");
   }
 
-  __device__ bool operator()(size_type i, size_type j) const noexcept
+  template <class Type, std::enable_if_t<cudf::is_equality_comparable<Type, Type>()>* = nullptr>
+  offset_type* operator()(offset_type const* list_offsets,
+                          column_device_view& d_view,
+                          size_type num_entries,
+                          offset_type* output_begin,
+                          bool has_nulls,
+                          null_equality nulls_equal,
+                          rmm::cuda_stream_view stream) const noexcept
   {
-    return cudf::type_dispatcher(
-      d_view.type(),
-      element_comparator_fn<has_nulls>{d_view, nulls_equal == null_equality::EQUAL},
-      i,
-      j);
+    return has_nulls ? thrust::unique_copy(
+                         rmm::exec_policy(stream),
+                         thrust::make_counting_iterator(0),
+                         thrust::make_counting_iterator(num_entries),
+                         output_begin,
+                         list_entry_comparator<true, Type>{list_offsets, d_view, nulls_equal})
+                     : thrust::unique_copy(
+                         rmm::exec_policy(stream),
+                         thrust::make_counting_iterator(0),
+                         thrust::make_counting_iterator(num_entries),
+                         output_begin,
+                         list_entry_comparator<false, Type>{list_offsets, d_view, nulls_equal});
   }
-
- private:
-  column_device_view d_view;
-  null_equality nulls_equal;
 };
 
 /**
@@ -141,35 +149,23 @@ std::vector<std::unique_ptr<column>> get_unique_entries_and_list_offsets(
   rmm::cuda_stream_view stream,
   rmm::mr::device_memory_resource* mr)
 {
-  auto const num_entries = all_lists_entries.size();
+  auto const num_entries    = all_lists_entries.size();
+  auto const d_view_entries = column_device_view::create(all_lists_entries, stream);
 
   // Allocate memory to store the indices of the unique entries
   auto const unique_indices = cudf::make_numeric_column(
     entries_list_offsets.type(), num_entries, mask_state::UNALLOCATED, stream);
   auto const unique_indices_begin = unique_indices->mutable_view().begin<offset_type>();
 
-  offset_type* copy_end{nullptr};
-  auto const d_view_entries = column_device_view::create(all_lists_entries, stream);
-  auto const list_offsets   = entries_list_offsets.begin<offset_type>();
-  if (all_lists_entries.has_nulls()) {
-    element_comparator<true> const comp{*d_view_entries, nulls_equal};
-    copy_end = thrust::unique_copy(rmm::exec_policy(stream),
-                                   thrust::make_counting_iterator(0),
-                                   thrust::make_counting_iterator(num_entries),
-                                   unique_indices_begin,
-                                   [list_offsets, comp] __device__(auto i, auto j) {
-                                     return list_offsets[i] == list_offsets[j] && comp(i, j);
-                                   });
-  } else {
-    element_comparator<false> const comp{*d_view_entries, nulls_equal};
-    copy_end = thrust::unique_copy(rmm::exec_policy(stream),
-                                   thrust::make_counting_iterator(0),
-                                   thrust::make_counting_iterator(num_entries),
-                                   unique_indices_begin,
-                                   [list_offsets, comp] __device__(auto i, auto j) {
-                                     return list_offsets[i] == list_offsets[j] && comp(i, j);
-                                   });
-  }
+  auto const copy_end = type_dispatcher(all_lists_entries.type(),
+                                        get_unique_entries_fn{},
+                                        entries_list_offsets.begin<offset_type>(),
+                                        *d_view_entries,
+                                        num_entries,
+                                        unique_indices_begin,
+                                        all_lists_entries.has_nulls(),
+                                        nulls_equal,
+                                        stream);
 
   // Collect unique entries and entry list offsets
   // The new null_count and bitmask of the unique entries will also be generated
