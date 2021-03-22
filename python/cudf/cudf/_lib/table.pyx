@@ -34,8 +34,8 @@ cdef class Table:
 
         Parameters
         ----------
-        data : OrderedColumnDict
-            An OrderedColumnDict mapping column names to Columns
+        data : dict
+            An dict mapping column names to Columns
         index : Table
             A Table representing the (optional) index columns.
         """
@@ -109,7 +109,7 @@ cdef class Table:
                 it += 1
             index = Table(dict(zip(index_names, index_columns)))
 
-        # Construct the data OrderedColumnDict
+        # Construct the data dict
         data_columns = []
         for _ in column_names:
             data_columns.append(Column.from_unique_ptr(move(dereference(it))))
@@ -154,7 +154,7 @@ cdef class Table:
                 column_idx += 1
             index = Table(dict(zip(index_names, index_columns)))
 
-        # Construct the data OrderedColumnDict
+        # Construct the data dict
         cdef size_type source_column_idx = 0
         data_columns = []
         for _ in column_names:

@@ -3,12 +3,12 @@
 from __future__ import annotations
 
 import itertools
-from collections import OrderedDict
 from collections.abc import MutableMapping
 from typing import (
     TYPE_CHECKING,
     Any,
     Callable,
+    Dict,
     Mapping,
     Optional,
     Tuple,
@@ -18,12 +18,8 @@ from typing import (
 import pandas as pd
 
 import cudf
-from cudf.utils.utils import (
-    OrderedColumnDict,
-    cached_property,
-    to_flat_dict,
-    to_nested_dict,
-)
+from cudf.core import column
+from cudf.utils.utils import cached_property, to_flat_dict, to_nested_dict
 
 if TYPE_CHECKING:
     from cudf.core.column import ColumnBase
@@ -31,7 +27,7 @@ if TYPE_CHECKING:
 
 class ColumnAccessor(MutableMapping):
 
-    _data: "OrderedDict[Any, ColumnBase]"
+    _data: "Dict[Any, ColumnBase]"
     multiindex: bool
     _level_names: Tuple[Any, ...]
 
@@ -63,10 +59,24 @@ class ColumnAccessor(MutableMapping):
             self._data = data._data
             self.multiindex = multiindex
             self._level_names = level_names
-
-        self._data = OrderedColumnDict(data)
-        self.multiindex = multiindex
-        self._level_names = level_names
+        else:
+            # This code path is performance-critical for copies and should be
+            # modified with care.
+            self._data = {}
+            if data:
+                data = dict(data)
+                column_length = _length_of_first_value(data)
+                for k, v in data.items():
+                    # Much faster to avoid the function call if possible; the
+                    # extra isinstance is negligible if we do have to make a
+                    # column from something else.
+                    if not isinstance(v, column.ColumnBase):
+                        v = column.as_column(v)
+                    if len(v) != column_length:
+                        raise ValueError("All columns must be of equal length")
+                    self._data[k] = v
+            self.multiindex = multiindex
+            self._level_names = level_names
 
     def __iter__(self):
         return self._data.__iter__()
@@ -126,6 +136,10 @@ class ColumnAccessor(MutableMapping):
             return len(next(iter(self.values())))
 
     @cached_property
+    def _column_length(self) -> int:
+        return _length_of_first_value(self._data)
+
+    @cached_property
     def names(self) -> Tuple[Any, ...]:
         return tuple(self.keys())
 
@@ -145,7 +159,12 @@ class ColumnAccessor(MutableMapping):
             return self._data
 
     def _clear_cache(self):
-        cached_properties = "columns", "names", "_grouped_data"
+        cached_properties = (
+            "columns",
+            "names",
+            "_grouped_data",
+            "_column_length",
+        )
         for attr in cached_properties:
             try:
                 self.__delattr__(attr)
@@ -270,16 +289,29 @@ class ColumnAccessor(MutableMapping):
             data, multiindex=self.multiindex, level_names=self.level_names,
         )
 
-    def set_by_label(self, key: Any, value: Any):
+    def set_by_label(self, key: Any, value: Any, validate: bool = True):
         """
         Add (or modify) column by name.
 
         Parameters
         ----------
-        key : name of the column
+        key
+            name of the column
         value : column-like
+            The value to insert into the column.
+        validate : bool
+            If True, the provided value will be coerced to a column and
+            validated before setting (Default value = True).
         """
         key = self._pad_key(key)
+        if validate:
+            value = column.as_column(value)
+            if len(self._data) > 0:
+                if len(value) != self._column_length:
+                    raise ValueError("All columns must be of equal length")
+            else:
+                self._column_length = len(value)
+
         self._data[key] = value
         self._clear_cache()
 
@@ -441,3 +473,8 @@ def _compare_keys(target: Any, key: Any) -> bool:
         if k1 != k2:
             return False
     return True
+
+
+def _length_of_first_value(data: Dict[Any, Any]) -> int:
+    # faster than next(iter(data.values())):
+    return 0 if not data else len(data[next(iter(data))])
