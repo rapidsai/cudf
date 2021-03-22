@@ -36,6 +36,8 @@ include(@CUDF_SOURCE_DIR@/cmake/thirdparty/CUDF_GetThrust.cmake)
 # find rmm
 set(CUDF_MIN_VERSION_rmm "${CUDF_VERSION_MAJOR}.${CUDF_VERSION_MINOR}")
 include(@CUDF_SOURCE_DIR@/cmake/thirdparty/CUDF_GetRMM.cmake)
+# find gtest
+include(@CUDF_SOURCE_DIR@/cmake/thirdparty/CUDF_GetGTest.cmake)
 
 # find arrow
 if(NOT EXISTS "${CMAKE_CURRENT_LIST_DIR}/cudf-arrow-targets.cmake")

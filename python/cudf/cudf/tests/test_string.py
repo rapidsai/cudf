@@ -3,6 +3,7 @@
 import re
 import urllib.parse
 from contextlib import ExitStack as does_not_raise
+from decimal import Decimal
 from sys import getsizeof
 
 import cupy
@@ -206,6 +207,60 @@ def test_string_astype(dtype):
     got = gs.astype(dtype)
 
     assert_eq(expect, got)
+
+
+@pytest.mark.parametrize(
+    "data, scale, precision",
+    [
+        (["1.11", "2.22", "3.33"], 2, 3),
+        (["111", "222", "33"], 0, 3),
+        (["111000", "22000", "3000"], -3, 3),
+        ([None, None, None], 0, 5),
+        ([None, "-2345", None], 0, 5),
+        ([], 0, 5),
+    ],
+)
+def test_string_to_decimal(data, scale, precision):
+    gs = cudf.Series(data, dtype="str")
+    fp = gs.astype(cudf.Decimal64Dtype(scale=scale, precision=precision))
+    got = fp.astype("str")
+    assert_eq(gs, got)
+
+
+def test_string_empty_to_decimal():
+    gs = cudf.Series(["", "-85", ""], dtype="str")
+    got = gs.astype(cudf.Decimal64Dtype(scale=0, precision=5))
+    expected = cudf.Series(
+        [0, -85, 0], dtype=cudf.Decimal64Dtype(scale=0, precision=5),
+    )
+    assert_eq(expected, got)
+
+
+@pytest.mark.parametrize(
+    "data, scale, precision",
+    [
+        (["1.23", "-2.34", "3.45"], 2, 3),
+        (["123", "-234", "345"], 0, 3),
+        (["12300", "-400", "5000.0"], -2, 5),
+        ([None, None, None], 0, 5),
+        ([None, "-100", None], 0, 5),
+        ([], 0, 5),
+    ],
+)
+def test_string_from_decimal(data, scale, precision):
+    decimal_data = []
+    for d in data:
+        if d is None:
+            decimal_data.append(None)
+        else:
+            decimal_data.append(Decimal(d))
+    fp = cudf.Series(
+        decimal_data,
+        dtype=cudf.Decimal64Dtype(scale=scale, precision=precision),
+    )
+    gs = fp.astype("str")
+    got = gs.astype(cudf.Decimal64Dtype(scale=scale, precision=precision))
+    assert_eq(fp, got)
 
 
 @pytest.mark.parametrize(

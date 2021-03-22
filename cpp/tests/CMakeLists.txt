@@ -15,47 +15,13 @@
 #=============================================================================
 
 ###################################################################################################
-# - common test utils -----------------------------------------------------------------------------
-
-find_package(Threads REQUIRED)
-
-add_library(cudftestutil STATIC
-            utilities/base_fixture.cpp
-            utilities/column_utilities.cu
-            utilities/table_utilities.cu
-            strings/utilities.cu)
-
-target_compile_options(cudftestutil
-            PUBLIC "$<$<COMPILE_LANGUAGE:CXX>:${CUDF_CXX_FLAGS}>"
-                   "$<$<COMPILE_LANGUAGE:CUDA>:${CUDF_CUDA_FLAGS}>"
-)
-
-target_compile_features(cudftestutil PUBLIC cxx_std_14 cuda_std_14)
-
-target_link_libraries(cudftestutil
-               PUBLIC GTest::gmock
-                      GTest::gtest
-                      GTest::gmock_main
-                      GTest::gtest_main
-                      Threads::Threads
-                      cudf)
-
-target_include_directories(cudftestutil
-    PUBLIC "$<BUILD_INTERFACE:${CUDF_SOURCE_DIR}>"
-           "$<BUILD_INTERFACE:${CUDF_SOURCE_DIR}/src>")
-
-install(TARGETS cudftestutil
-        DESTINATION lib
-        EXPORT cudf-targets)
-
-###################################################################################################
 # - compiler function -----------------------------------------------------------------------------
 
 function(ConfigureTest CMAKE_TEST_NAME )
     add_executable(${CMAKE_TEST_NAME} ${ARGN})
     set_target_properties(${CMAKE_TEST_NAME}
         PROPERTIES RUNTIME_OUTPUT_DIRECTORY "$<BUILD_INTERFACE:${CUDF_BINARY_DIR}/gtests>")
-    target_link_libraries(${CMAKE_TEST_NAME} PRIVATE cudftestutil)
+    target_link_libraries(${CMAKE_TEST_NAME} PRIVATE cudftestutil GTest::gmock_main GTest::gtest_main)
     add_test(NAME ${CMAKE_TEST_NAME} COMMAND ${CMAKE_TEST_NAME})
 endfunction()
 
@@ -66,8 +32,8 @@ endfunction()
 ###################################################################################################
 # - column tests ----------------------------------------------------------------------------------
 ConfigureTest(COLUMN_TEST
+    column/bit_cast_test.cpp
     column/column_test.cu
-    column/column_view_test.cpp
     column/column_device_view_test.cu
     column/compound_test.cu)
 
@@ -300,19 +266,11 @@ ConfigureTest(STREAM_COMPACTION_TEST
 
 ###################################################################################################
 # - rolling tests ---------------------------------------------------------------------------------
-ConfigureTest(ROLLING_TEST rolling/rolling_test.cpp)
-
-###################################################################################################
-# - grouped rolling tests -------------------------------------------------------------------------
-ConfigureTest(GROUPED_ROLLING_TEST grouped_rolling/grouped_rolling_test.cpp)
-
-###################################################################################################
-# - lead/lag rolling tests ------------------------------------------------------------------------
-ConfigureTest(LEAD_LAG_TEST lead_lag/lead_lag_test.cpp)
-
-###################################################################################################
-# - collect_list rolling tests --------------------------------------------------------------------
-ConfigureTest(COLLECT_LIST_TEST collect_list/collect_list_test.cpp)
+ConfigureTest(ROLLING_TEST 
+    rolling/rolling_test.cpp 
+    rolling/grouped_rolling_test.cpp
+    rolling/lead_lag_test.cpp
+    rolling/collect_list_test.cpp)
 
 ###################################################################################################
 # - filling test ----------------------------------------------------------------------------------
@@ -329,7 +287,6 @@ ConfigureTest(SEARCH_TEST search/search_test.cpp)
 # - reshape test ----------------------------------------------------------------------------------
 ConfigureTest(RESHAPE_TEST
     reshape/byte_cast_tests.cpp
-    reshape/explode_tests.cpp
     reshape/interleave_columns_tests.cpp
     reshape/tile_tests.cpp)
 
@@ -432,6 +389,8 @@ ConfigureTest(AST_TEST ast/transform_tests.cpp)
 ConfigureTest(LISTS_TEST
     lists/contains_tests.cpp
     lists/count_elements_tests.cpp
+    lists/explode_tests.cpp
+    lists/drop_list_duplicates_tests.cpp
     lists/extract_tests.cpp
     lists/sort_lists_tests.cpp)
 

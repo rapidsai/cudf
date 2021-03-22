@@ -29,7 +29,6 @@ target_link_libraries(cudf_datagen
                       GTest::gmock_main
                       GTest::gtest_main
                       benchmark::benchmark
-                      benchmark::benchmark_main
                       Threads::Threads
                       cudf)
 
@@ -52,7 +51,8 @@ function(ConfigureBench CMAKE_BENCH_NAME)
     add_executable(${CMAKE_BENCH_NAME} ${ARGN})
     set_target_properties(${CMAKE_BENCH_NAME}
         PROPERTIES RUNTIME_OUTPUT_DIRECTORY "$<BUILD_INTERFACE:${CUDF_BINARY_DIR}/gbenchmarks>")
-    target_link_libraries(${CMAKE_BENCH_NAME} PRIVATE cudf_benchmark_common cudf_datagen)
+    target_link_libraries(${CMAKE_BENCH_NAME}
+        PRIVATE cudf_benchmark_common cudf_datagen benchmark::benchmark_main)
 endfunction()
 
 ###################################################################################################
@@ -115,6 +115,7 @@ ConfigureBench(REDUCTION_BENCH
   reduction/anyall_benchmark.cpp
   reduction/dictionary_benchmark.cpp
   reduction/reduce_benchmark.cpp
+  reduction/scan_benchmark.cpp
   reduction/minmax_benchmark.cpp)
 
 ###################################################################################################
@@ -179,12 +180,17 @@ ConfigureBench(SUBWORD_TOKENIZER_BENCH text/subword_benchmark.cpp)
 # - strings benchmark -------------------------------------------------------------------
 ConfigureBench(STRINGS_BENCH
   string/case_benchmark.cpp
+  string/combine_benchmark.cpp
   string/contains_benchmark.cpp
+  string/convert_datetime_benchmark.cpp
   string/convert_durations_benchmark.cpp
   string/convert_floats_benchmark.cpp
   string/copy_benchmark.cpp
+  string/extract_benchmark.cpp
+  string/factory_benchmark.cu
   string/filter_benchmark.cpp
   string/find_benchmark.cpp
   string/replace_benchmark.cpp
   string/split_benchmark.cpp
+  string/substring_benchmark.cpp
   string/url_decode_benchmark.cpp)
