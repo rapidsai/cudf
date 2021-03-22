@@ -39,12 +39,12 @@ Here I choose to download again in the container.
 git clone --recursive https://github.com/rapidsai/cudf.git -b branch-0.19
 ```
 
-### Build cuDF jar
+### Build cuDF jar with devtoolset
 
 ```bash
 cd cudf
 export WORKSPACE=`pwd`
-scl enable devtoolset-7 "java/ci/build-in-docker.sh"
+scl enable devtoolset-8 "java/ci/build-in-docker.sh"
 ```
 
 ### The output
