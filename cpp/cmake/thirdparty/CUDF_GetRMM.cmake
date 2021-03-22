@@ -32,7 +32,7 @@ function(find_and_configure_rmm VERSION)
     # Check for an existing rmm::rmm target
     if(TARGET rmm::rmm)
         return()
-    endif
+    endif()
 
     # Consumers have two options for local source builds:
     # 1. Pass `-D CPM_rmm_SOURCE=/path/to/rmm` to build a local RMM source tree
