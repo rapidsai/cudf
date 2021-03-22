@@ -125,7 +125,8 @@ find_path(LIBCUDACXX_INCLUDE "cuda"
           "${CUDF_CPP_BUILD_DIR}/_deps/libcudacxx-src/include")
 
 find_path(SPDLOG_INCLUDE "spdlog"
-    HINTS "$ENV{RMM_ROOT}/_deps/spdlog-src/include"
+    HINTS "${CUDF_CPP_BUILD_DIR}/_deps/spdlog-src/include"
+          "$ENV{RMM_ROOT}/_deps/spdlog-src/include"
           "$ENV{RMM_ROOT}/include"
           "$ENV{CONDA_PREFIX}/include")
 
@@ -147,7 +148,8 @@ find_library(CUDF_LIB "cudf" REQUIRED HINTS ${CUDF_LIB_HINTS})
 # - RMM -------------------------------------------------------------------------------------------
 
 find_path(RMM_INCLUDE "rmm"
-          HINTS "$ENV{RMM_ROOT}/include"
+          HINTS "${CUDF_CPP_BUILD_DIR}/_deps/rmm-src/include"
+                "$ENV{RMM_ROOT}/include"
                 "$ENV{RMM_HOME}/include"
                 "$ENV{CONDA_PREFIX}/include/rmm"
                 "$ENV{CONDA_PREFIX}/include")
