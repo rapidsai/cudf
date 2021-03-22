@@ -2252,6 +2252,8 @@ public class ColumnVectorTest extends CudfTestBase {
    * Helper function to create decimal strings which can be processed by castStringToDecimal functor.
    * We can not simply create decimal string via `String.valueOf`, because castStringToDecimal doesn't
    * support scientific notations so far.
+   *
+   * issue for scientific notation: https://github.com/rapidsai/cudf/issues/7665
    */
   private static String dumpDecimal(Long unscaledValue, int scale) {
     if (unscaledValue == null) return null;
