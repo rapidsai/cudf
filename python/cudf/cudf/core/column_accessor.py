@@ -19,11 +19,7 @@ import pandas as pd
 
 import cudf
 from cudf.core import column
-from cudf.utils.utils import (
-    cached_property,
-    to_flat_dict,
-    to_nested_dict,
-)
+from cudf.utils.utils import cached_property, to_flat_dict, to_nested_dict
 
 if TYPE_CHECKING:
     from cudf.core.column import ColumnBase
@@ -34,7 +30,6 @@ class ColumnAccessor(MutableMapping):
     _data: "Dict[Any, ColumnBase]"
     multiindex: bool
     _level_names: Tuple[Any, ...]
-    _column_length: int
 
     def __init__(
         self,
@@ -64,15 +59,13 @@ class ColumnAccessor(MutableMapping):
             self._data = data._data
             self.multiindex = multiindex
             self._level_names = level_names
-            self._column_length = data._column_length
         else:
             # This code path is performance-critical for copies and should be
             # modified with care.
             self._data = {}
             if data:
                 data = dict(data)
-                # Faster than next(iter(data.values()))
-                column_length = len(data[next(iter(data))])
+                column_length = _length_of_first_value(data)
                 for k, v in data.items():
                     # Much faster to avoid the function call if possible; the
                     # extra isinstance is negligible if we do have to make a
@@ -82,8 +75,6 @@ class ColumnAccessor(MutableMapping):
                     if len(v) != column_length:
                         raise ValueError("All columns must be of equal length")
                     self._data[k] = v
-                self._column_length = column_length
-
             self.multiindex = multiindex
             self._level_names = level_names
 
@@ -145,6 +136,10 @@ class ColumnAccessor(MutableMapping):
             return len(next(iter(self.values())))
 
     @cached_property
+    def _column_length(self) -> int:
+        return _length_of_first_value(self._data)
+
+    @cached_property
     def names(self) -> Tuple[Any, ...]:
         return tuple(self.keys())
 
@@ -164,7 +159,12 @@ class ColumnAccessor(MutableMapping):
             return self._data
 
     def _clear_cache(self):
-        cached_properties = "columns", "names", "_grouped_data"
+        cached_properties = (
+            "columns",
+            "names",
+            "_grouped_data",
+            "_column_length",
+        )
         for attr in cached_properties:
             try:
                 self.__delattr__(attr)
@@ -473,3 +473,8 @@ def _compare_keys(target: Any, key: Any) -> bool:
         if k1 != k2:
             return False
     return True
+
+
+def _length_of_first_value(data: Dict[Any, Any]) -> int:
+    # faster than next(iter(data.values())):
+    return 0 if not data else len(data[next(iter(data))])
