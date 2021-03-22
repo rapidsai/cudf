@@ -125,8 +125,8 @@ def _match_categorical_dtypes(
     # when at least one of them is a categorical type
     ltype, rtype = lcol.dtype, rcol.dtype
 
-    if isinstance(lcol, CategoricalColumn) and isinstance(
-        rcol, CategoricalColumn
+    if isinstance(lcol, cudf.core.column.CategoricalColumn) and isinstance(
+        rcol, cudf.core.column.CategoricalColumn
     ):
         # if both are categoricals, logic is complicated:
         return _match_categorical_dtypes_both(lcol, rcol, how)
