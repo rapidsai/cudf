@@ -334,7 +334,7 @@ class Merge(object):
     def compute_output_dtypes(self):
         """
         Determine what datatypes should be applied to the result
-        of a libcudf join, baesd on the original left and right
+        of a libcudf join, based on the original left and right
         frames.
         """
 

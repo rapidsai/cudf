@@ -6,7 +6,7 @@ import numpy as np
 import pandas as pd
 
 import cudf
-from cudf.core.dtypes import CategoricalDtype
+from cudf.core.dtypes import CategoricalDtype, Decimal64Dtype
 
 
 def _input_to_libcudf_castrules_both_cat(lcol, rcol, how):
@@ -99,6 +99,30 @@ def _input_to_libcudf_castrules_any_cat(lcol, rcol, how):
         raise ValueError("Neither operand is categorical")
 
 
+def _decimal_castrules(lcol, rcol, how):
+    ltype = lcol.dtype
+    rtype = rcol.dtype
+
+    if ltype == rtype:
+        return ltype
+
+    p1, p2 = ltype.precision, rtype.precision
+    s1, s2 = ltype.scale, rtype.scale
+
+    if how == "inner":
+        scale = min(s1, s2)
+        precision = scale + min(p1 - s1, p2 - s2)
+        return Decimal64Dtype(precision, scale)
+    elif how == "left":
+        return ltype
+    elif how == "right":
+        return rtype
+    elif how == "outer":
+        scale = max(s1, s2)
+        precision = scale + max(p1 - s1, p2 - s2)
+        return Decimal64Dtype(precision, scale)
+
+
 def _input_to_libcudf_castrules_any(lcol, rcol, how):
     """
     Determine what dtype the left and right hand
@@ -119,6 +143,9 @@ def _input_to_libcudf_castrules_any(lcol, rcol, how):
         rtype, CategoricalDtype
     ):
         return _input_to_libcudf_castrules_any_cat(lcol, rcol, how)
+
+    if isinstance(ltype, Decimal64Dtype) and isinstance(rtype, Decimal64Dtype):
+        return _decimal_castrules(lcol, rcol, how)
 
     libcudf_join_type = None
     if pd.api.types.is_dtype_equal(ltype, rtype):
@@ -182,6 +209,9 @@ def _libcudf_to_output_castrules(lcol, rcol, how):
 
     if pd.api.types.is_dtype_equal(ltype, rtype):
         return ltype
+
+    if isinstance(ltype, Decimal64Dtype) and isinstance(rtype, Decimal64Dtype):
+        return _decimal_castrules(lcol, rcol, how)
 
     l_is_cat = isinstance(ltype, CategoricalDtype)
     r_is_cat = isinstance(rtype, CategoricalDtype)
