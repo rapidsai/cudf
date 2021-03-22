@@ -30,8 +30,6 @@
 #include <rmm/cuda_stream_view.hpp>
 
 #include <memory>
-#include <unordered_map>
-#include <utility>
 
 namespace cudf {
 namespace groupby {
