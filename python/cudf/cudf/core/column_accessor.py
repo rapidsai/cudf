@@ -34,7 +34,6 @@ class ColumnAccessor(MutableMapping):
     _data: "Dict[Any, ColumnBase]"
     multiindex: bool
     _level_names: Tuple[Any, ...]
-    _column_length: int
 
     def __init__(
         self,
