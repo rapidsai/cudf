@@ -118,6 +118,8 @@ struct dispatch_is_integer_fn {
   }
 };
 
+}  // namespace
+
 std::unique_ptr<column> is_integer(
   strings_column_view const& strings,
   rmm::cuda_stream_view stream,
@@ -159,7 +161,6 @@ std::unique_ptr<column> is_integer(
 }
 
 }  // namespace detail
-}  // namespace anonymous
 
 // external APIs
 std::unique_ptr<column> is_integer(strings_column_view const& strings,
