@@ -64,7 +64,6 @@ class ColumnAccessor(MutableMapping):
             self._data = data._data
             self.multiindex = multiindex
             self._level_names = level_names
-            self._column_length = data._column_length
         else:
             # This code path is performance-critical for copies and should be
             # modified with care.
@@ -82,7 +81,6 @@ class ColumnAccessor(MutableMapping):
                     if len(v) != column_length:
                         raise ValueError("All columns must be of equal length")
                     self._data[k] = v
-                self._column_length = column_length
 
             self.multiindex = multiindex
             self._level_names = level_names
@@ -163,6 +161,13 @@ class ColumnAccessor(MutableMapping):
         else:
             return self._data
 
+    @cached_property
+    def _column_length(self):
+        try:
+            return len(self._data[next(iter(self._data))])
+        except StopIteration:
+            return 0
+
     def _clear_cache(self):
         cached_properties = "columns", "names", "_grouped_data"
         for attr in cached_properties:
@@ -170,6 +175,10 @@ class ColumnAccessor(MutableMapping):
                 self.__delattr__(attr)
             except AttributeError:
                 pass
+
+        # Column length should only be cleared if no data is present.
+        if len(self._data) == 0 and hasattr(self, "_column_length"):
+            del self._column_length
 
     def to_pandas_index(self) -> pd.Index:
         """"
