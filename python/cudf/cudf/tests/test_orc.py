@@ -738,3 +738,19 @@ def test_nanoseconds_overflow():
 
     pyarrow_got = pa.orc.ORCFile(buffer).read()
     assert_eq(expected.to_pandas(), pyarrow_got.to_pandas())
+
+
+@pytest.mark.parametrize(
+    "data", [[None, ""], ["", None], [None, None], ["", ""]]
+)
+def test_empty_string_columns(data):
+    buffer = BytesIO()
+
+    expected = cudf.DataFrame({"string": data}, dtype="str")
+    expected.to_orc(buffer)
+
+    expected_pdf = pd.read_orc(buffer)
+    got_df = cudf.read_orc(buffer)
+
+    assert_eq(expected, got_df)
+    assert_eq(expected_pdf, got_df)

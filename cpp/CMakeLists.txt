@@ -426,7 +426,8 @@ target_include_directories(cudf
                        "$<BUILD_INTERFACE:${CUDF_GENERATED_INCLUDE_DIR}/include>"
            PRIVATE     "$<BUILD_INTERFACE:${CUDF_SOURCE_DIR}/src>"
            INTERFACE   "$<INSTALL_INTERFACE:include>"
-                       "$<INSTALL_INTERFACE:include/libcudf/libcudaxx>")
+                       "$<INSTALL_INTERFACE:include/libcudf/libcudacxx>"
+                       "$<INSTALL_INTERFACE:include/libcudf/Thrust>")
 
 # Add Conda library paths if specified
 if(CONDA_LINK_DIRS)
@@ -578,6 +579,9 @@ install(DIRECTORY
             ${CUDF_GENERATED_INCLUDE_DIR}/include/libcxx
             ${CUDF_GENERATED_INCLUDE_DIR}/include/libcudacxx
         DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/libcudf)
+
+install(DIRECTORY ${Thrust_SOURCE_DIR}/
+  DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/libcudf/Thrust)
 
 include(CMakePackageConfigHelpers)
 
