@@ -1,7 +1,7 @@
 #!/bin/bash
 
 #
-# Copyright (c) 2020, NVIDIA CORPORATION. All rights reserved.
+# Copyright (c) 2020-2021, NVIDIA CORPORATION. All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -31,12 +31,7 @@ SIGN_FILE=$1
 OUT_PATH=$WORKSPACE/$OUT
 
 # set on Jenkins parameter
-if [ -z $RMM_VERSION ]
-then
-RMM_VERSION=`git describe --tags | grep -o -E '([0-9]+\.[0-9]+)'`
-fi
-echo "RMM_VERSION: $RMM_VERSION,\
- SIGN_FILE: $SIGN_FILE,\
+echo "SIGN_FILE: $SIGN_FILE,\
  SKIP_JAVA_TESTS: $SKIP_JAVA_TESTS,\
  BUILD_CPP_TESTS: $BUILD_CPP_TESTS,\
  ENABLED_PTDS: $ENABLE_PTDS,\
@@ -47,35 +42,16 @@ INSTALL_PREFIX=/usr/local/rapids
 export GIT_COMMITTER_NAME="ci"
 export GIT_COMMITTER_EMAIL="ci@nvidia.com"
 export CUDACXX=/usr/local/cuda/bin/nvcc
-export RMM_ROOT=$INSTALL_PREFIX
-export DLPACK_ROOT=$INSTALL_PREFIX
 export LIBCUDF_KERNEL_CACHE_PATH=/rapids
 
 # add cmake 3.19 to PATH
 export PATH=/usr/local/cmake-3.19.0-Linux-x86_64/bin:$PATH
 
-cd /rapids/
-git clone --recurse-submodules https://github.com/rapidsai/rmm.git -b branch-$RMM_VERSION
-git clone --recurse-submodules https://github.com/rapidsai/dlpack.git -b cudf
-
-###### Build rmm/dlpack ######
-mkdir -p /rapids/rmm/build
-cd /rapids/rmm/build
-echo "RMM SHA: `git rev-parse HEAD`"
-cmake .. -DCMAKE_INSTALL_PREFIX=$INSTALL_PREFIX -DBUILD_TESTS=$BUILD_CPP_TESTS
-make -j$PARALLEL_LEVEL install
-
-mkdir -p /rapids/dlpack/build
-cd /rapids/dlpack/build
-echo "DLPACK SHA: `git rev-parse HEAD`"
-cmake .. -DCMAKE_INSTALL_PREFIX=$INSTALL_PREFIX -DBUILD_TESTS=$BUILD_CPP_TESTS
-make -j$PARALLEL_LEVEL install
-
 ###### Build libcudf ######
 rm -rf $WORKSPACE/cpp/build
 mkdir -p $WORKSPACE/cpp/build
 cd $WORKSPACE/cpp/build
-cmake .. -DUSE_NVTX=OFF -DARROW_STATIC_LIB=ON -DBoost_USE_STATIC_LIBS=ON -DBUILD_TESTS=$SKIP_CPP_TESTS -DPER_THREAD_DEFAULT_STREAM=$ENABLE_PTDS -DRMM_LOGGING_LEVEL=$RMM_LOGGING_LEVEL
+cmake .. -DUSE_NVTX=OFF -DCUDF_USE_ARROW_STATIC=ON -DBoost_USE_STATIC_LIBS=ON -DBUILD_TESTS=$SKIP_CPP_TESTS -DPER_THREAD_DEFAULT_STREAM=$ENABLE_PTDS -DRMM_LOGGING_LEVEL=$RMM_LOGGING_LEVEL
 make -j$PARALLEL_LEVEL
 make install DESTDIR=$INSTALL_PREFIX
 

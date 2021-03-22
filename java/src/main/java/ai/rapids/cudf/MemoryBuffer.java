@@ -46,7 +46,7 @@ abstract public class MemoryBuffer implements AutoCloseable {
     }
 
     @Override
-    protected boolean cleanImpl(boolean logErrorIfNotClean) {
+    protected synchronized boolean cleanImpl(boolean logErrorIfNotClean) {
       if (parent != null) {
         if (logErrorIfNotClean) {
           log.error("A SLICED BUFFER WAS LEAKED(ID: " + id + " parent: " + parent + ")");

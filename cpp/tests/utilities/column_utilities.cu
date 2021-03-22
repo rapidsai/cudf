@@ -190,7 +190,8 @@ std::string stringify_column_differences(thrust::device_vector<int> const& diffe
       fixed_width_column_wrapper<int32_t>(h_differences.begin(), h_differences.end());
     auto diff_table = cudf::gather(source_table, diff_column);
     //  Need to pull back the differences
-    auto const h_left_strings  = to_strings(diff_table->get_column(0));
+    auto const h_left_strings = to_strings(diff_table->get_column(0));
+
     auto const h_right_strings = to_strings(diff_table->get_column(1));
     for (size_t i = 0; i < h_differences.size(); ++i)
       buffer << depth_str << "lhs[" << h_differences[i] << "] = " << h_left_strings[i] << ", rhs["
