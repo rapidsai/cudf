@@ -357,50 +357,54 @@ TEST_F(FromArrowTest, FixedPointTable)
 {
   using namespace numeric;
 
-  auto const data     = std::vector<int64_t>{1, 0, 2, 0, 3, 0, 4, 0, 5, 0, 6, 0};
-  auto const col      = fp_wrapper<int64_t>({1, 2, 3, 4, 5, 6}, scale_type{0});
-  auto const expected = cudf::table_view({col});
+  for (auto const i : {3, 2, 1, 0, -1, -2, -3}) {
+    auto const data     = std::vector<int64_t>{1, 0, 2, 0, 3, 0, 4, 0, 5, 0, 6, 0};
+    auto const col      = fp_wrapper<int64_t>({1, 2, 3, 4, 5, 6}, scale_type{i});
+    auto const expected = cudf::table_view({col});
 
-  std::shared_ptr<arrow::Array> arr;
-  arrow::Decimal128Builder decimal_builder(arrow::decimal(1, 0), arrow::default_memory_pool());
-  decimal_builder.AppendValues(reinterpret_cast<const uint8_t*>(data.data()), data.size() / 2);
-  CUDF_EXPECTS(decimal_builder.Finish(&arr).ok(), "Failed to build array");
+    std::shared_ptr<arrow::Array> arr;
+    arrow::Decimal128Builder decimal_builder(arrow::decimal(10, i), arrow::default_memory_pool());
+    decimal_builder.AppendValues(reinterpret_cast<const uint8_t*>(data.data()), data.size() / 2);
+    CUDF_EXPECTS(decimal_builder.Finish(&arr).ok(), "Failed to build array");
 
-  auto const field         = arrow::field("a", arr->type());
-  auto const schema_vector = std::vector<std::shared_ptr<arrow::Field>>({field});
-  auto const schema        = std::make_shared<arrow::Schema>(schema_vector);
-  auto const arrow_table   = arrow::Table::Make(schema, {arr});
+    auto const field         = arrow::field("a", arr->type());
+    auto const schema_vector = std::vector<std::shared_ptr<arrow::Field>>({field});
+    auto const schema        = std::make_shared<arrow::Schema>(schema_vector);
+    auto const arrow_table   = arrow::Table::Make(schema, {arr});
 
-  auto got_cudf_table = cudf::from_arrow(*arrow_table);
+    auto got_cudf_table = cudf::from_arrow(*arrow_table);
 
-  CUDF_TEST_EXPECT_TABLES_EQUAL(expected, got_cudf_table->view());
+    CUDF_TEST_EXPECT_TABLES_EQUAL(expected, got_cudf_table->view());
+  }
 }
 
 TEST_F(FromArrowTest, FixedPointTableNulls)
 {
   using namespace numeric;
 
-  auto const data = std::vector<int64_t>{1, 0, 2, 0, 3, 0, 4, 0, 5, 0, 6, 0};
-  auto const col =
-    fp_wrapper<int64_t>({1, 2, 3, 4, 5, 6, 0, 0}, {1, 1, 1, 1, 1, 1, 0, 0}, scale_type{0});
-  auto const expected = cudf::table_view({col});
+  for (auto const i : {3, 2, 1, 0, -1, -2, -3}) {
+    auto const data = std::vector<int64_t>{1, 0, 2, 0, 3, 0, 4, 0, 5, 0, 6, 0};
+    auto const col =
+      fp_wrapper<int64_t>({1, 2, 3, 4, 5, 6, 0, 0}, {1, 1, 1, 1, 1, 1, 0, 0}, scale_type{i});
+    auto const expected = cudf::table_view({col});
 
-  std::shared_ptr<arrow::Array> arr;
-  arrow::Decimal128Builder decimal_builder(arrow::decimal(1, 0), arrow::default_memory_pool());
-  decimal_builder.AppendValues(reinterpret_cast<const uint8_t*>(data.data()), data.size() / 2);
-  decimal_builder.AppendNull();
-  decimal_builder.AppendNull();
+    std::shared_ptr<arrow::Array> arr;
+    arrow::Decimal128Builder decimal_builder(arrow::decimal(10, i), arrow::default_memory_pool());
+    decimal_builder.AppendValues(reinterpret_cast<const uint8_t*>(data.data()), data.size() / 2);
+    decimal_builder.AppendNull();
+    decimal_builder.AppendNull();
 
-  CUDF_EXPECTS(decimal_builder.Finish(&arr).ok(), "Failed to build array");
+    CUDF_EXPECTS(decimal_builder.Finish(&arr).ok(), "Failed to build array");
 
-  auto const field         = arrow::field("a", arr->type());
-  auto const schema_vector = std::vector<std::shared_ptr<arrow::Field>>({field});
-  auto const schema        = std::make_shared<arrow::Schema>(schema_vector);
-  auto const arrow_table   = arrow::Table::Make(schema, {arr});
+    auto const field         = arrow::field("a", arr->type());
+    auto const schema_vector = std::vector<std::shared_ptr<arrow::Field>>({field});
+    auto const schema        = std::make_shared<arrow::Schema>(schema_vector);
+    auto const arrow_table   = arrow::Table::Make(schema, {arr});
 
-  auto got_cudf_table = cudf::from_arrow(*arrow_table);
+    auto got_cudf_table = cudf::from_arrow(*arrow_table);
 
-  CUDF_TEST_EXPECT_TABLES_EQUAL(expected, got_cudf_table->view());
+    CUDF_TEST_EXPECT_TABLES_EQUAL(expected, got_cudf_table->view());
+  }
 }
 
 INSTANTIATE_TEST_CASE_P(FromArrowTest,
