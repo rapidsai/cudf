@@ -466,10 +466,10 @@ public final class Table implements AutoCloseable {
       int[] following,
       boolean ignoreNullKeys) throws CudfException;
 
-  private static native long[] timeRangeRollingWindowAggregate(long inputTable, int[] keyIndices, int[] timestampIndices, boolean[] isTimesampAscending,
-                                                               int[] aggColumnsIndices, long[] aggInstances, int[] minPeriods,
-                                                               int[] preceding, int[] following, boolean[] unboundedPreceding, boolean[] unboundedFollowing, 
-                                                               boolean ignoreNullKeys) throws CudfException;
+  private static native long[] rangeRollingWindowAggregate(long inputTable, int[] keyIndices, int[] orderByIndices, boolean[] isOrderByAscending,
+                                                           int[] aggColumnsIndices, long[] aggInstances, int[] minPeriods,
+                                                           int[] preceding, int[] following, boolean[] unboundedPreceding, boolean[] unboundedFollowing,
+                                                           boolean ignoreNullKeys) throws CudfException;
 
   private static native long sortOrder(long inputTable, long[] sortKeys, boolean[] isDescending,
       boolean[] areNullsSmallest) throws CudfException;
@@ -2492,18 +2492,20 @@ public final class Table implements AutoCloseable {
             aggFollowingWindowsUnbounded[opIndex] = operation.getWindowOptions().isUnboundedFollowing();
             aggMinPeriods[opIndex] = operation.getWindowOptions().getMinPeriods();
             assert (operation.getWindowOptions().getFrameType() == WindowOptions.FrameType.RANGE);
+            int orderByColumnIndex = operation.getWindowOptions().getTimestampColumnIndex();
             timestampColumnIndexes[opIndex] = operation.getWindowOptions().getTimestampColumnIndex();
             isTimestampOrderAscending[opIndex] = operation.getWindowOptions().isTimestampOrderAscending();
             if (operation.getDefaultOutput() != 0) {
               throw new IllegalArgumentException("Operations with a default output are not " +
                   "supported on time based rolling windows");
             }
+
             opIndex++;
           }
         }
         assert opIndex == totalOps : opIndex + " == " + totalOps;
 
-        try (Table aggregate = new Table(timeRangeRollingWindowAggregate(
+        try (Table aggregate = new Table(rangeRollingWindowAggregate(
             operation.table.nativeHandle,
             operation.indices,
             timestampColumnIndexes,
