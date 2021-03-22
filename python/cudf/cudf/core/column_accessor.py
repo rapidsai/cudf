@@ -167,7 +167,6 @@ class ColumnAccessor(MutableMapping):
             "columns",
             "names",
             "_grouped_data",
-            "_column_length",
         )
         for attr in cached_properties:
             try:
