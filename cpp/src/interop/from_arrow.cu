@@ -192,7 +192,25 @@ struct dispatch_to_cudf_column {
                    buf.data(),
                    out_buf.data());
 
-    return std::make_unique<cudf::column>(type, num_rows, out_buf.release());
+    auto null_mask = [&] {
+      // When C++17, use if statement with initialization
+      auto const has_nulls = skip_mask ? false : array.null_bitmap_data() != nullptr;
+      if (has_nulls) {
+        auto tmp_mask = get_mask_buffer(array, stream, mr);
+
+        // If array is sliced, we have to copy whole mask and then take copy.
+        return (num_rows == static_cast<size_type>(data_buffer->size() / sizeof(DeviceType)))
+                 ? *tmp_mask
+                 : cudf::detail::copy_bitmask(static_cast<bitmask_type*>(tmp_mask->data()),
+                                              array.offset(),
+                                              array.offset() + num_rows,
+                                              stream,
+                                              mr);
+      }
+      return rmm::device_buffer{};
+    }();
+
+    return std::make_unique<cudf::column>(type, num_rows, out_buf.release(), null_mask);
   }
 };
 
