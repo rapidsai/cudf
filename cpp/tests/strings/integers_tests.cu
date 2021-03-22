@@ -202,7 +202,7 @@ TEST_F(StringsConvertTest, ToInteger)
   auto const expected_i16 = cudf::test::fixed_width_column_wrapper<int16_t>(
     std::initializer_list<int16_t>{0, 1234, NULL_VAL, 0, -9832, 93, 765, NULL_VAL, -1, -1, 0, 0},
     thrust::make_transform_iterator(h_strings.begin(), [](auto str) { return str != nullptr; }));
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected_i16, true);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected_i16);
 
   results                 = cudf::strings::to_integers(cudf::strings_column_view(strings),
                                        cudf::data_type{cudf::type_id::INT32});
@@ -210,7 +210,7 @@ TEST_F(StringsConvertTest, ToInteger)
     std::initializer_list<int32_t>{
       0, 1234, NULL_VAL, 0, -9832, 93, 765, NULL_VAL, -1, 2147483647, -2147483648, -2147483648},
     thrust::make_transform_iterator(h_strings.begin(), [](auto str) { return str != nullptr; }));
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected_i32, true);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected_i32);
 
   results                 = cudf::strings::to_integers(cudf::strings_column_view(strings),
                                        cudf::data_type{cudf::type_id::UINT32});
@@ -228,7 +228,7 @@ TEST_F(StringsConvertTest, ToInteger)
                                     2147483648,
                                     2147483648},
     thrust::make_transform_iterator(h_strings.begin(), [](auto str) { return str != nullptr; }));
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected_u32, true);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected_u32);
 }
 
 TEST_F(StringsConvertTest, FromInteger)
@@ -277,7 +277,7 @@ TEST_F(StringsConvertTest, EmptyStringsColumn)
   auto results = cudf::strings::to_integers(cudf::strings_column_view(strings),
                                             cudf::data_type{cudf::type_id::INT64});
   cudf::test::fixed_width_column_wrapper<int64_t> expected{0, 0, 0};
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(results->view(), expected, true);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(results->view(), expected);
 }
 
 template <typename T>
