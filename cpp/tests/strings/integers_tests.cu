@@ -272,7 +272,6 @@ TEST_F(StringsConvertTest, ZeroSizeIntegersColumn)
 
 TEST_F(StringsConvertTest, EmptyStringsColumn)
 {
-  // Empty strings will all result in null elements
   cudf::test::strings_column_wrapper strings({"", "", ""});
   auto results = cudf::strings::to_integers(cudf::strings_column_view(strings),
                                             cudf::data_type{cudf::type_id::INT64});
