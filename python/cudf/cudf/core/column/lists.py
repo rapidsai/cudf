@@ -7,7 +7,7 @@ import pyarrow as pa
 
 import cudf
 from cudf._lib.copying import segmented_gather
-from cudf._lib.lists import count_elements
+from cudf._lib.lists import count_elements, drop_list_duplicates
 from cudf.core.buffer import Buffer
 from cudf.core.column import ColumnBase, as_column, column
 from cudf.core.column.methods import ColumnMethodsMixin
@@ -285,3 +285,31 @@ class ListMethods(ColumnMethodsMixin):
             raise
         else:
             return res
+
+    def unique(self):
+        """
+        Returns unique values for each list in the column, order for each
+        unique value is not gaurenteed.
+
+        Returns
+        -------
+        ListColumn
+
+        Examples
+        --------
+        >>> s = cudf.Series([[1, 1, 2, None, None], None, [4, 4], []])
+        >>> s
+        0    [1.0, 1.0, 2.0, nan, nan]
+        1                         None
+        2                   [4.0, 4.0]
+        3                           []
+        dtype: list
+        >>> s.list.unique() # Order of list elements is not gaurenteed
+        0              [1.0, 2.0, nan]
+        1                         None
+        2                        [4.0]
+        3                           []
+        dtype: list
+        """
+
+        return self._return_or_inplace(drop_list_duplicates(self._column, nulls_equal=True))

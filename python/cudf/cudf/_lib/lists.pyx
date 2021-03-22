@@ -10,13 +10,16 @@ from cudf._lib.cpp.lists.count_elements cimport (
 from cudf._lib.cpp.lists.explode cimport (
     explode_outer as cpp_explode_outer
 )
+from cudf._lib.cpp.lists.drop_list_duplicates cimport (
+    drop_list_duplicates as cpp_drop_list_duplicates
+)
 from cudf._lib.cpp.lists.lists_column_view cimport lists_column_view
 from cudf._lib.cpp.column.column_view cimport column_view
 from cudf._lib.cpp.column.column cimport column
 
 from cudf._lib.cpp.table.table cimport table
 from cudf._lib.cpp.table.table_view cimport table_view
-from cudf._lib.cpp.types cimport size_type
+from cudf._lib.cpp.types cimport size_type, null_equality
 
 from cudf._lib.column cimport Column
 from cudf._lib.table cimport Table
@@ -58,3 +61,20 @@ def explode_outer(Table tbl, int explode_column_idx, bool ignore_index=False):
         column_names=tbl._column_names,
         index_names=None if ignore_index else tbl._index_names
     )
+
+def drop_list_duplicates(Column col, bool nulls_equal):
+    cdef shared_ptr[lists_column_view] list_view = (
+        make_shared[lists_column_view](col.view())
+    )
+    cdef null_equality c_nulls_equal = (
+        null_equality.EQUAL if nulls_equal else null_equality.UNEQUAL
+    )
+    cdef unique_ptr[column] c_result
+
+    with nogil:
+        c_result = move(
+            cpp_drop_list_duplicates(list_view.get()[0], c_nulls_equal)
+        )
+
+    result = Column.from_unique_ptr(move(c_result))
+    return result

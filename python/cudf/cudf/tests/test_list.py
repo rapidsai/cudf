@@ -159,3 +159,23 @@ def test_take_invalid(invalid, exception):
     gs = cudf.Series([[0, 1], [2, 3]])
     with exception:
         gs.list.take(invalid)
+
+
+@pytest.mark.parametrize(
+    ("data", "expected"),
+    [
+        ([[1, 1, 2, 2], [], None, [3, 4, 5]], [[1, 2], [], None, [3, 4, 5]]),
+        ([[1, 1, 2, 2, None, None]], [[1, 2, None]])
+        ([[2, None, 1, None, 2]], [[1, 2, None]])
+        ([[[2, None, 1, None], [2, 2]]], [[[2, None, 1], [2, 2]]]) # 2-level nested?
+    ],
+)
+def test_unique(data, expected):
+    gs = cudf.Series(data)
+
+    got = gs.list.unique()
+    expected = cudf.Series(expected).list.sort_values()
+
+    got = got.list.sort_values()
+
+    assert_eq(expected, got)
