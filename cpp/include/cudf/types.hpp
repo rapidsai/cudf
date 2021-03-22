@@ -117,7 +117,7 @@ static constexpr size_type UNKNOWN_NULL_COUNT{-1};
 /**
  * @brief Indicates the whether a scalar is valid or not
  */
-enum class validity : bool {
+enum class scalar_validity : bool {
   VALID,   ///< Scalar is valid
   INVALID  ///< Scalar is invalid
 };
