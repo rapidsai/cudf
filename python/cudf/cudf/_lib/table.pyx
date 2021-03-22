@@ -114,7 +114,9 @@ cdef class Table:
         for _ in column_names:
             data_columns.append(Column.from_unique_ptr(move(dereference(it))))
             it += 1
-        data = dict(zip(column_names, data_columns))
+        data = ColumnAccessor._init_unsafe(
+            dict(zip(column_names, data_columns))
+        )
 
         return Table(data=data, index=index)
 
