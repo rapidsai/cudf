@@ -32,6 +32,8 @@
 #include <cudf_test/table_utilities.hpp>
 #include <cudf_test/type_lists.hpp>
 
+#include <thrust/iterator/counting_iterator.h>
+
 #include <tests/interop/arrow_utils.hpp>
 
 std::unique_ptr<cudf::table> get_cudf_table()
@@ -360,6 +362,34 @@ TEST_F(FromArrowTest, FixedPointTable)
   for (auto const i : {3, 2, 1, 0, -1, -2, -3}) {
     auto const data     = std::vector<int64_t>{1, 0, 2, 0, 3, 0, 4, 0, 5, 0, 6, 0};
     auto const col      = fp_wrapper<int64_t>({1, 2, 3, 4, 5, 6}, scale_type{i});
+    auto const expected = cudf::table_view({col});
+
+    std::shared_ptr<arrow::Array> arr;
+    arrow::Decimal128Builder decimal_builder(arrow::decimal(10, i), arrow::default_memory_pool());
+    decimal_builder.AppendValues(reinterpret_cast<const uint8_t*>(data.data()), data.size() / 2);
+    CUDF_EXPECTS(decimal_builder.Finish(&arr).ok(), "Failed to build array");
+
+    auto const field         = arrow::field("a", arr->type());
+    auto const schema_vector = std::vector<std::shared_ptr<arrow::Field>>({field});
+    auto const schema        = std::make_shared<arrow::Schema>(schema_vector);
+    auto const arrow_table   = arrow::Table::Make(schema, {arr});
+
+    auto got_cudf_table = cudf::from_arrow(*arrow_table);
+
+    CUDF_TEST_EXPECT_TABLES_EQUAL(expected, got_cudf_table->view());
+  }
+}
+
+TEST_F(FromArrowTest, FixedPointTableLarge)
+{
+  using namespace numeric;
+
+  for (auto const i : {3, 2, 1, 0, -1, -2, -3}) {
+    auto every_other    = [](auto i) { return i % 2 ? 0 : i / 2; };
+    auto transform      = cudf::detail::make_counting_transform_iterator(2, every_other);
+    auto const data     = std::vector<int64_t>(transform, transform + 2000);
+    auto iota           = thrust::make_counting_iterator(1);
+    auto const col      = fp_wrapper<int64_t>(iota, iota + 1000, scale_type{i});  // TODO
     auto const expected = cudf::table_view({col});
 
     std::shared_ptr<arrow::Array> arr;
