@@ -419,6 +419,9 @@ table_with_metadata reader::impl::read(size_type skip_rows,
   std::vector<std::unique_ptr<column>> out_columns;
   table_metadata out_metadata;
 
+  // There are no columns in table
+  if (_selected_columns.size() == 0) return {std::make_unique<table>(), std::move(out_metadata)};
+
   // Select only stripes required (aka row groups)
   const auto selected_stripes = _metadata->select_stripes(stripes, skip_rows, num_rows);
 
