@@ -171,7 +171,6 @@ struct dispatch_to_cudf_column {
     auto const num_rows = static_cast<size_type>(array.length());
 
     // TODO clean up this function (remove magic constants)
-    // TODO add back null logic
     // auto const has_nulls     = skip_mask ? false : array.null_bitmap_data() != nullptr;
 
     rmm::device_uvector<DeviceType> buf(num_rows * 2, stream);
