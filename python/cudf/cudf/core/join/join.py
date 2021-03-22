@@ -416,10 +416,13 @@ class Merge(object):
         out_rhs = rhs.copy(deep=False)
         for left_key, right_key in zip(*self._keys):
             lcol, rcol = left_key.get(lhs), right_key.get(rhs)
-            dtype = _match_join_keys(lcol, rcol, how=self.how)
-            if dtype:
-                left_key.set(out_lhs, lcol.astype(dtype))
-                right_key.set(out_rhs, rcol.astype(dtype))
+            lcol_casted, rcol_casted = _match_join_keys(
+                lcol, rcol, how=self.how
+            )
+            if lcol is not lcol_casted:
+                left_key.set(out_lhs, lcol_casted)
+            if rcol is not rcol_casted:
+                right_key.set(out_rhs, rcol_casted)
         return out_lhs, out_rhs
 
     def _restore_categorical_keys(
