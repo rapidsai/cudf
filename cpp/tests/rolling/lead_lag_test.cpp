@@ -541,5 +541,3 @@ TEST_F(LeadLagWindowTest, LeadLagWithoutFixedWidthInput)
                                             cudf::make_lead_aggregation(4)),
                cudf::logic_error);
 }
-
-CUDF_TEST_PROGRAM_MAIN()

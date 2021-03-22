@@ -724,3 +724,33 @@ def test_orc_bool_encode_fail():
     # Also validate data
     pdf = pa.orc.ORCFile(buffer).read().to_pandas()
     assert_eq(okay_df, pdf)
+
+
+def test_nanoseconds_overflow():
+    buffer = BytesIO()
+    # Use nanosecond values that take more than 32 bits to encode
+    s = cudf.Series([710424008, -1338482640], dtype="datetime64[ns]")
+    expected = cudf.DataFrame({"s": s})
+    expected.to_orc(buffer)
+
+    cudf_got = cudf.read_orc(buffer)
+    assert_eq(expected, cudf_got)
+
+    pyarrow_got = pa.orc.ORCFile(buffer).read()
+    assert_eq(expected.to_pandas(), pyarrow_got.to_pandas())
+
+
+@pytest.mark.parametrize(
+    "data", [[None, ""], ["", None], [None, None], ["", ""]]
+)
+def test_empty_string_columns(data):
+    buffer = BytesIO()
+
+    expected = cudf.DataFrame({"string": data}, dtype="str")
+    expected.to_orc(buffer)
+
+    expected_pdf = pd.read_orc(buffer)
+    got_df = cudf.read_orc(buffer)
+
+    assert_eq(expected, got_df)
+    assert_eq(expected_pdf, got_df)

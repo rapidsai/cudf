@@ -1374,7 +1374,7 @@ static const __device__ __constant__ uint32_t kTimestampNanoScale[8] = {
 // blockDim {block_size,1,1}
 template <int block_size>
 __global__ void __launch_bounds__(block_size)
-  gpuDecodeOrcColumnData(ColumnDesc *chunks,
+  gpuDecodeOrcColumnData(ColumnDesc const *chunks,
                          DictionaryEntry *global_dictionary,
                          timezone_table_view tz_table,
                          const RowGroup *row_groups,
@@ -1455,8 +1455,9 @@ __global__ void __launch_bounds__(block_size)
     __syncthreads();
     // Decode data streams
     {
-      uint32_t numvals      = s->top.data.max_vals, secondary_val;
-      uint32_t vals_skipped = 0;
+      uint32_t numvals       = s->top.data.max_vals;
+      uint64_t secondary_val = 0;
+      uint32_t vals_skipped  = 0;
       if (s->is_string || s->chunk.type_kind == TIMESTAMP) {
         // For these data types, we have a secondary unsigned 32-bit data stream
         orc_bytestream_s *bs = (is_dictionary(s->chunk.encoding_kind)) ? &s->bs : &s->bs2;
@@ -1471,9 +1472,15 @@ __global__ void __launch_bounds__(block_size)
         }
         if (numvals > ofs) {
           if (is_rlev1(s->chunk.encoding_kind)) {
-            numvals = ofs + Integer_RLEv1(bs, &s->u.rlev1, &s->vals.u32[ofs], numvals - ofs, t);
+            if (s->chunk.type_kind == TIMESTAMP)
+              numvals = ofs + Integer_RLEv1(bs, &s->u.rlev1, &s->vals.u64[ofs], numvals - ofs, t);
+            else
+              numvals = ofs + Integer_RLEv1(bs, &s->u.rlev1, &s->vals.u32[ofs], numvals - ofs, t);
           } else {
-            numvals = ofs + Integer_RLEv2(bs, &s->u.rlev2, &s->vals.u32[ofs], numvals - ofs, t);
+            if (s->chunk.type_kind == TIMESTAMP)
+              numvals = ofs + Integer_RLEv2(bs, &s->u.rlev2, &s->vals.u64[ofs], numvals - ofs, t);
+            else
+              numvals = ofs + Integer_RLEv2(bs, &s->u.rlev2, &s->vals.u32[ofs], numvals - ofs, t);
           }
           __syncthreads();
           if (numvals <= ofs && t >= ofs && t < s->top.data.max_vals) { s->vals.u32[t] = 0; }
@@ -1487,15 +1494,24 @@ __global__ void __launch_bounds__(block_size)
             __syncthreads();
             if (t == 0) { s->top.data.index.run_pos[cid] = 0; }
             numvals -= vals_skipped;
-            if (t < numvals) { secondary_val = s->vals.u32[vals_skipped + t]; }
+            if (t < numvals) {
+              secondary_val = (s->chunk.type_kind == TIMESTAMP) ? s->vals.u64[vals_skipped + t]
+                                                                : s->vals.u32[vals_skipped + t];
+            }
             __syncthreads();
-            if (t < numvals) { s->vals.u32[t] = secondary_val; }
+            if (t < numvals) {
+              if (s->chunk.type_kind == TIMESTAMP)
+                s->vals.u64[t] = secondary_val;
+              else
+                s->vals.u32[t] = secondary_val;
+            }
           }
         }
         __syncthreads();
         // For strings with direct encoding, we need to convert the lengths into an offset
         if (!is_dictionary(s->chunk.encoding_kind)) {
-          secondary_val = (t < numvals) ? s->vals.u32[t] : 0;
+          if (t < numvals)
+            secondary_val = (s->chunk.type_kind == TIMESTAMP) ? s->vals.u64[t] : s->vals.u32[t];
           if (s->chunk.type_kind != TIMESTAMP) {
             lengths_to_positions(s->vals.u32, numvals, t);
             __syncthreads();
@@ -1556,7 +1572,7 @@ __global__ void __launch_bounds__(block_size)
           if (t == 0) { s->top.data.buffered_count = n; }
         }
 
-        numvals = min(numvals * 8, is_last_set ? s->top.data.max_vals : blockDim.x);
+        numvals = min(numvals * 8, is_last_set ? (s->top.data.max_vals + 7) & (~0x7) : blockDim.x);
 
       } else if (s->chunk.type_kind == LONG || s->chunk.type_kind == TIMESTAMP ||
                  s->chunk.type_kind == DECIMAL) {
@@ -1693,7 +1709,7 @@ __global__ void __launch_bounds__(block_size)
             }
             case TIMESTAMP: {
               int64_t seconds = s->vals.i64[t + vals_skipped] + s->top.data.utc_epoch;
-              uint32_t nanos  = secondary_val;
+              uint64_t nanos  = secondary_val;
               nanos           = (nanos >> 3) * kTimestampNanoScale[nanos & 7];
               if (!tz_table.ttimes.empty()) {
                 seconds += get_gmt_offset(tz_table.ttimes, tz_table.offsets, seconds);
@@ -1716,7 +1732,7 @@ __global__ void __launch_bounds__(block_size)
       if (s->chunk.type_kind == TIMESTAMP) {
         int buffer_pos = s->top.data.max_vals;
         if (t >= buffer_pos && t < buffer_pos + s->top.data.buffered_count) {
-          s->vals.u32[t - buffer_pos] = secondary_val;
+          s->vals.u64[t - buffer_pos] = secondary_val;
         }
       } else if (s->chunk.type_kind == BOOLEAN && t < s->top.data.buffered_count) {
         s->vals.u8[t] = secondary_val;
@@ -1742,7 +1758,7 @@ __global__ void __launch_bounds__(block_size)
  * @param[in] num_stripes Number of stripes
  * @param[in] max_rows Maximum number of rows to load
  * @param[in] first_row Crop all rows below first_row
- * @param[in] stream CUDA stream to use, default 0
+ * @param[in] stream CUDA stream to use, default `rmm::cuda_stream_default`
  */
 void __host__ DecodeNullsAndStringDictionaries(ColumnDesc *chunks,
                                                DictionaryEntry *global_dictionary,
@@ -1771,9 +1787,9 @@ void __host__ DecodeNullsAndStringDictionaries(ColumnDesc *chunks,
  * @param[in] row_groups Optional row index data
  * @param[in] num_rowgroups Number of row groups in row index data
  * @param[in] rowidx_stride Row index stride
- * @param[in] stream CUDA stream to use, default 0
+ * @param[in] stream CUDA stream to use, default `rmm::cuda_stream_default`
  */
-void __host__ DecodeOrcColumnData(ColumnDesc *chunks,
+void __host__ DecodeOrcColumnData(ColumnDesc const *chunks,
                                   DictionaryEntry *global_dictionary,
                                   uint32_t num_columns,
                                   uint32_t num_stripes,

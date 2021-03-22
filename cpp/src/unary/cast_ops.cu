@@ -178,11 +178,13 @@ std::unique_ptr<column> rescale(column_view input,
 
   if (input.type().scale() > scale) {
     auto const scalar = make_fixed_point_scalar<T>(0, scale_type{scale});
-    return detail::binary_operation(input, *scalar, binary_operator::ADD, {}, stream, mr);
+    auto const type   = cudf::data_type{cudf::type_to_id<T>(), scale};
+    return detail::binary_operation(input, *scalar, binary_operator::ADD, type, stream, mr);
   } else {
     auto const diff   = input.type().scale() - scale;
     auto const scalar = make_fixed_point_scalar<T>(std::pow(10, -diff), scale_type{diff});
-    return detail::binary_operation(input, *scalar, binary_operator::DIV, {}, stream, mr);
+    auto const type   = cudf::data_type{cudf::type_to_id<T>(), scale};
+    return detail::binary_operation(input, *scalar, binary_operator::DIV, type, stream, mr);
   }
 };
 

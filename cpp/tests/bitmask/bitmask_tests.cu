@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -25,6 +25,7 @@
 
 #include <thrust/device_ptr.h>
 #include <thrust/device_vector.h>
+#include <rmm/device_buffer.hpp>
 
 struct BitmaskUtilitiesTest : public cudf::test::BaseFixture {
 };
@@ -413,7 +414,7 @@ TEST_F(CopyBitmaskTest, TestZeroOffset)
   cleanEndWord(splice_mask, begin_bit, end_bit);
   auto number_of_bits = end_bit - begin_bit;
   CUDF_TEST_EXPECT_EQUAL_BUFFERS(
-    gold_splice_mask.data(), splice_mask.data(), number_of_bits / CHAR_BIT);
+    gold_splice_mask.data(), splice_mask.data(), cudf::num_bitmask_words(number_of_bits));
 }
 
 TEST_F(CopyBitmaskTest, TestNonZeroOffset)
@@ -433,7 +434,7 @@ TEST_F(CopyBitmaskTest, TestNonZeroOffset)
   cleanEndWord(splice_mask, begin_bit, end_bit);
   auto number_of_bits = end_bit - begin_bit;
   CUDF_TEST_EXPECT_EQUAL_BUFFERS(
-    gold_splice_mask.data(), splice_mask.data(), number_of_bits / CHAR_BIT);
+    gold_splice_mask.data(), splice_mask.data(), cudf::num_bitmask_words(number_of_bits));
 }
 
 TEST_F(CopyBitmaskTest, TestCopyColumnViewVectorContiguous)
@@ -468,7 +469,7 @@ TEST_F(CopyBitmaskTest, TestCopyColumnViewVectorContiguous)
   rmm::device_buffer concatenated_bitmask = cudf::concatenate_masks(views);
   cleanEndWord(concatenated_bitmask, 0, num_elements);
   CUDF_TEST_EXPECT_EQUAL_BUFFERS(
-    concatenated_bitmask.data(), gold_mask.data(), num_elements / CHAR_BIT);
+    concatenated_bitmask.data(), gold_mask.data(), cudf::num_bitmask_words(num_elements));
 }
 
 TEST_F(CopyBitmaskTest, TestCopyColumnViewVectorDiscontiguous)
@@ -493,7 +494,60 @@ TEST_F(CopyBitmaskTest, TestCopyColumnViewVectorDiscontiguous)
   rmm::device_buffer concatenated_bitmask = cudf::concatenate_masks(views);
   cleanEndWord(concatenated_bitmask, 0, num_elements);
   CUDF_TEST_EXPECT_EQUAL_BUFFERS(
-    concatenated_bitmask.data(), gold_mask.data(), num_elements / CHAR_BIT);
+    concatenated_bitmask.data(), gold_mask.data(), cudf::num_bitmask_words(num_elements));
+}
+
+struct MergeBitmaskTest : public cudf::test::BaseFixture {
+};
+
+TEST_F(MergeBitmaskTest, TestBitmaskAnd)
+{
+  cudf::test::fixed_width_column_wrapper<bool> const bools_col1({0, 1, 0, 1, 1}, {0, 1, 1, 1, 0});
+  cudf::test::fixed_width_column_wrapper<bool> const bools_col2({0, 2, 1, 0, 255}, {1, 1, 0, 1, 0});
+  cudf::test::fixed_width_column_wrapper<bool> const bools_col3({0, 2, 1, 0, 255});
+
+  auto const input1 = cudf::table_view({bools_col3});
+  auto const input2 = cudf::table_view({bools_col1, bools_col2});
+  auto const input3 = cudf::table_view({bools_col1, bools_col2, bools_col3});
+
+  rmm::device_buffer result1 = cudf::bitmask_and(input1);
+  rmm::device_buffer result2 = cudf::bitmask_and(input2);
+  rmm::device_buffer result3 = cudf::bitmask_and(input3);
+
+  auto odd_indices =
+    cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i % 2; });
+  auto odd = cudf::test::detail::make_null_mask(odd_indices, odd_indices + input2.num_rows());
+
+  EXPECT_EQ(nullptr, result1.data());
+  CUDF_TEST_EXPECT_EQUAL_BUFFERS(
+    result2.data(), odd.data(), cudf::num_bitmask_words(input2.num_rows()));
+  CUDF_TEST_EXPECT_EQUAL_BUFFERS(
+    result3.data(), odd.data(), cudf::num_bitmask_words(input2.num_rows()));
+}
+
+TEST_F(MergeBitmaskTest, TestBitmaskOr)
+{
+  cudf::test::fixed_width_column_wrapper<bool> const bools_col1({0, 1, 0, 1, 1}, {1, 1, 0, 0, 1});
+  cudf::test::fixed_width_column_wrapper<bool> const bools_col2({0, 2, 1, 0, 255}, {0, 0, 1, 0, 1});
+  cudf::test::fixed_width_column_wrapper<bool> const bools_col3({0, 2, 1, 0, 255});
+
+  auto const input1 = cudf::table_view({bools_col3});
+  auto const input2 = cudf::table_view({bools_col1, bools_col2});
+  auto const input3 = cudf::table_view({bools_col1, bools_col2, bools_col3});
+
+  rmm::device_buffer result1 = cudf::bitmask_or(input1);
+  rmm::device_buffer result2 = cudf::bitmask_or(input2);
+  rmm::device_buffer result3 = cudf::bitmask_or(input3);
+
+  auto all_but_index3 =
+    cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i != 3; });
+  auto null3 =
+    cudf::test::detail::make_null_mask(all_but_index3, all_but_index3 + input2.num_rows());
+
+  EXPECT_EQ(nullptr, result1.data());
+  CUDF_TEST_EXPECT_EQUAL_BUFFERS(
+    result2.data(), null3.data(), cudf::num_bitmask_words(input2.num_rows()));
+  EXPECT_EQ(nullptr, result3.data());
 }
 
 CUDF_TEST_PROGRAM_MAIN()

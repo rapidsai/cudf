@@ -200,6 +200,37 @@ TEST_F(StringsReplaceTest, ReplaceNullInput)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, strings);
 }
 
+TEST_F(StringsReplaceTest, ReplaceEndOfString)
+{
+  auto strings      = build_corpus();
+  auto strings_view = cudf::strings_column_view(strings);
+  // replace all occurrences of 'in' with  ' '
+  std::vector<const char*> h_expected{"the quick brown fox jumps over the lazy dog",
+                                      "the fat cat lays next to the other accénted cat",
+                                      "a slow mov g turtlé cannot catch the bird",
+                                      "which can be composéd together to form a more complete",
+                                      "The result does not  clude the value   the sum  ",
+                                      "",
+                                      nullptr};
+
+  cudf::test::strings_column_wrapper expected(
+    h_expected.begin(),
+    h_expected.end(),
+    thrust::make_transform_iterator(h_expected.begin(), [](auto str) { return str != nullptr; }));
+
+  auto results =
+    cudf::strings::replace(strings_view, cudf::string_scalar("in"), cudf::string_scalar(" "));
+  cudf::test::expect_columns_equal(*results, expected);
+
+  results = cudf::strings::detail::replace<cudf::strings::detail::replace_algorithm::CHAR_PARALLEL>(
+    strings_view, cudf::string_scalar("in"), cudf::string_scalar(" "));
+  cudf::test::expect_columns_equal(*results, expected);
+
+  results = cudf::strings::detail::replace<cudf::strings::detail::replace_algorithm::ROW_PARALLEL>(
+    strings_view, cudf::string_scalar("in"), cudf::string_scalar(" "));
+  cudf::test::expect_columns_equal(*results, expected);
+}
+
 TEST_F(StringsReplaceTest, ReplaceSlice)
 {
   std::vector<const char*> h_strings{"Héllo", "thesé", nullptr, "ARE THE", "tést strings", ""};

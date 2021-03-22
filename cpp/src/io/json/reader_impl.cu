@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -27,6 +27,7 @@
 
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/utilities/trie.cuh>
+#include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/groupby.hpp>
 #include <cudf/sorting.hpp>
 #include <cudf/strings/detail/replace.hpp>
@@ -41,7 +42,7 @@
 
 #include <thrust/optional.h>
 
-using cudf::detail::host_span;
+using cudf::host_span;
 
 namespace cudf {
 namespace io {
@@ -157,7 +158,7 @@ std::unique_ptr<table> create_json_keys_info_table(const parse_options_view &opt
   auto const info_table_mdv = mutable_table_device_view::create(info_table->mutable_view(), stream);
 
   // Reset the key counter - now used for indexing
-  key_counter.set_value(0, stream);
+  key_counter.set_value_zero(stream);
   // Fill the allocated columns
   cudf::io::json::gpu::collect_keys_info(
     options, data, row_offsets, key_counter.data(), {*info_table_mdv}, stream);
@@ -600,9 +601,22 @@ table_with_metadata reader::impl::convert_data_to_table(rmm::cuda_stream_view st
   stream.synchronize();
 
   // postprocess columns
-  auto target = make_strings_column(
-    std::vector<char>{'\\', '"', '\\', '\\', '\\', 't', '\\', 'r', '\\', 'b'}, {0, 2, 4, 6, 8, 10});
-  auto repl = make_strings_column({'"', '\\', '\t', '\r', '\b'}, {0, 1, 2, 3, 4, 5});
+  auto target_chars   = std::vector<char>{'\\', '"', '\\', '\\', '\\', 't', '\\', 'r', '\\', 'b'};
+  auto target_offsets = std::vector<size_type>{0, 2, 4, 6, 8, 10};
+
+  auto repl_chars   = std::vector<char>{'"', '\\', '\t', '\r', '\b'};
+  auto repl_offsets = std::vector<size_type>{0, 1, 2, 3, 4, 5};
+
+  auto target = make_strings_column(cudf::detail::make_device_uvector_async(target_chars, stream),
+                                    cudf::detail::make_device_uvector_async(target_offsets, stream),
+                                    {},
+                                    0,
+                                    stream);
+  auto repl   = make_strings_column(cudf::detail::make_device_uvector_async(repl_chars, stream),
+                                  cudf::detail::make_device_uvector_async(repl_offsets, stream),
+                                  {},
+                                  0,
+                                  stream);
 
   thrust::host_vector<cudf::size_type> h_valid_counts = d_valid_counts;
   std::vector<std::unique_ptr<column>> out_columns;
@@ -618,6 +632,10 @@ table_with_metadata reader::impl::convert_data_to_table(rmm::cuda_stream_view st
       out_columns.emplace_back(std::move(out_column));
     }
   }
+
+  // This is to ensure the stream-ordered make_stream_column calls above complete before
+  // the temporary std::vectors are destroyed on exit from this function.
+  stream.synchronize();
 
   CUDF_EXPECTS(!out_columns.empty(), "No columns created from json input");
 

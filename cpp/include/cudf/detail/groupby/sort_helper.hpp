@@ -22,7 +22,7 @@
 #include <cudf/types.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
-#include <rmm/device_vector.hpp>
+#include <rmm/device_uvector.hpp>
 
 namespace cudf {
 namespace groupby {
@@ -40,8 +40,8 @@ namespace sort {
  *   value column
  */
 struct sort_groupby_helper {
-  using index_vector       = rmm::device_vector<size_type>;
-  using bitmask_vector     = rmm::device_vector<bitmask_type>;
+  using index_vector       = rmm::device_uvector<size_type>;
+  using bitmask_vector     = rmm::device_uvector<bitmask_type>;
   using column_ptr         = std::unique_ptr<column>;
   using index_vector_ptr   = std::unique_ptr<index_vector>;
   using bitmask_vector_ptr = std::unique_ptr<bitmask_vector>;
