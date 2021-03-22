@@ -65,7 +65,8 @@ class ColumnAccessor(MutableMapping):
             self._data = {}
             if data:
                 data = dict(data)
-                column_length = _length_of_first_value(data)
+                # Faster than next(iter(data.values()))
+                column_length = len(data[next(iter(data))])
                 for k, v in data.items():
                     # Much faster to avoid the function call if possible; the
                     # extra isinstance is negligible if we do have to make a
@@ -75,6 +76,7 @@ class ColumnAccessor(MutableMapping):
                     if len(v) != column_length:
                         raise ValueError("All columns must be of equal length")
                     self._data[k] = v
+
             self.multiindex = multiindex
             self._level_names = level_names
 
@@ -86,7 +88,6 @@ class ColumnAccessor(MutableMapping):
 
     def __setitem__(self, key: Any, value: Any):
         self.set_by_label(key, value)
-        self._clear_cache()
 
     def __delitem__(self, key: Any):
         self._data.__delitem__(key)
@@ -136,10 +137,6 @@ class ColumnAccessor(MutableMapping):
             return len(next(iter(self.values())))
 
     @cached_property
-    def _column_length(self) -> int:
-        return _length_of_first_value(self._data)
-
-    @cached_property
     def names(self) -> Tuple[Any, ...]:
         return tuple(self.keys())
 
@@ -158,6 +155,13 @@ class ColumnAccessor(MutableMapping):
         else:
             return self._data
 
+    @cached_property
+    def _column_length(self):
+        try:
+            return len(self._data[next(iter(self._data))])
+        except StopIteration:
+            return 0
+
     def _clear_cache(self):
         cached_properties = (
             "columns",
@@ -170,6 +174,10 @@ class ColumnAccessor(MutableMapping):
                 self.__delattr__(attr)
             except AttributeError:
                 pass
+
+        # Column length should only be cleared if no data is present.
+        if len(self._data) == 0 and hasattr(self, "_column_length"):
+            del self._column_length
 
     def to_pandas_index(self) -> pd.Index:
         """"
@@ -473,8 +481,3 @@ def _compare_keys(target: Any, key: Any) -> bool:
         if k1 != k2:
             return False
     return True
-
-
-def _length_of_first_value(data: Dict[Any, Any]) -> int:
-    # faster than next(iter(data.values())):
-    return 0 if not data else len(data[next(iter(data))])
