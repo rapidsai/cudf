@@ -7313,15 +7313,6 @@ class DataFrame(Frame, Serializable):
         """{docstring}"""
         from cudf.io import parquet as pq
 
-        if any(
-            isinstance(col, cudf.core.column.StructColumn)
-            for col in self._data.columns
-        ):
-            raise NotImplementedError(
-                "Writing to parquet format is not yet supported "
-                "with Struct columns."
-            )
-
         return pq.to_parquet(self, path, *args, **kwargs)
 
     @ioutils.doc_to_feather()
@@ -7699,6 +7690,52 @@ class DataFrame(Frame, Serializable):
             if self_name != other_name:
                 return False
         return super().equals(other)
+
+    def explode(self, column, ignore_index=False):
+        """
+        Transform each element of a list-like to a row, replicating index
+        values.
+
+        Parameters
+        ----------
+        column : str or tuple
+            Column to explode.
+        ignore_index : bool, default False
+            If True, the resulting index will be labeled 0, 1, …, n - 1.
+
+        Returns
+        -------
+        DataFrame
+
+        Examples
+        --------
+        >>> import cudf
+        >>> cudf.DataFrame(
+                {"a": [[1, 2, 3], [], None, [4, 5]], "b": [11, 22, 33, 44]})
+                   a   b
+        0  [1, 2, 3]  11
+        1         []  22
+        2       None  33
+        3     [4, 5]  44
+        >>> df.explode('a')
+              a   b
+        0     1  11
+        0     2  11
+        0     3  11
+        1  <NA>  22
+        2  <NA>  33
+        3     4  44
+        3     5  44
+        """
+        if column not in self._column_names:
+            raise KeyError(column)
+
+        if not is_list_dtype(self._data[column].dtype):
+            data = self._data.copy(deep=True)
+            idx = None if ignore_index else self._index.copy(deep=True)
+            return self.__class__._from_data(data, index=idx)
+
+        return super()._explode(column, ignore_index)
 
     _accessors = set()  # type: Set[Any]
 
