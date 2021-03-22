@@ -610,10 +610,10 @@ class list_scalar : public scalar {
   /**
    * @brief Construct a new list scalar object from existing device data
    *
-   * @param[in] value The value of the list
-   * @param[in] is_valid Whether the value held by the scalar is valid
-   * @param[in] stream CUDA stream used for device memory operations.
-   * @param[in] mr Device memory resource to use for device memory allocation
+   * @param value The value of the list
+   * @param is_valid Whether the value held by the scalar is valid
+   * @param stream CUDA stream used for device memory operations.
+   * @param mr Device memory resource to use for device memory allocation
    */
   list_scalar(cudf::column_view const& value,
               bool is_valid                       = true,
