@@ -2387,4 +2387,3 @@ TYPED_TEST(TypedUnboundedWindowTest, UnboundedPrecedingAndFollowingWindowMultiGr
                                  fixed_width_column_wrapper<cudf::size_type>{
                                    {3, 3, 3, 3, 3, 4, 4, 4, 4, 4}, {1, 1, 1, 1, 1, 1, 1, 1, 1, 1}});
 }
-CUDF_TEST_PROGRAM_MAIN()

@@ -67,7 +67,7 @@ cd boost_1_74_0
 sudo cp stage/lib/libboost_filesystem.a /usr/local/lib/
 ```
 and pass in the cmake options
-`-DARROW_STATIC_LIB=ON -DBoost_USE_STATIC_LIBS=ON` so that Apache Arrow and Boost libraries are
+`-DCUDF_USE_ARROW_STATIC=ON -DBoost_USE_STATIC_LIBS=ON` so that Apache Arrow and Boost libraries are
 linked statically.
 
 If you use the default cmake options libcudart will be dynamically linked to libcudf

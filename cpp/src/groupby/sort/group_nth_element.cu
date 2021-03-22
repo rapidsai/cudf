@@ -23,6 +23,7 @@
 #include <cudf/detail/gather.cuh>
 #include <cudf/detail/iterator.cuh>
 #include <cudf/types.hpp>
+#include <cudf/utilities/span.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 
@@ -31,8 +32,8 @@ namespace groupby {
 namespace detail {
 std::unique_ptr<column> group_nth_element(column_view const &values,
                                           column_view const &group_sizes,
-                                          rmm::device_vector<size_type> const &group_labels,
-                                          rmm::device_vector<size_type> const &group_offsets,
+                                          cudf::device_span<size_type const> group_labels,
+                                          cudf::device_span<size_type const> group_offsets,
                                           size_type num_groups,
                                           size_type n,
                                           null_policy null_handling,

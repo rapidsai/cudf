@@ -514,7 +514,7 @@ public class HostColumnVectorCore implements AutoCloseable {
    * Close method for the column
    */
   @Override
-  public void close() {
+  public synchronized void close() {
     for (HostColumnVectorCore child : children) {
       if (child != null) {
         child.close();
@@ -553,7 +553,7 @@ public class HostColumnVectorCore implements AutoCloseable {
     }
 
     @Override
-    protected boolean cleanImpl(boolean logErrorIfNotClean) {
+    protected synchronized boolean cleanImpl(boolean logErrorIfNotClean) {
       boolean neededCleanup = false;
       if (data != null || valid != null || offsets != null) {
         try {

@@ -15,6 +15,8 @@
  */
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/interop.hpp>
+#include <cudf/lists/list_view.cuh>
+#include <cudf/structs/struct_view.hpp>
 #include <cudf/utilities/error.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
 
