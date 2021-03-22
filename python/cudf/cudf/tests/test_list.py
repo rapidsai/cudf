@@ -165,9 +165,10 @@ def test_take_invalid(invalid, exception):
     ("data", "expected"),
     [
         ([[1, 1, 2, 2], [], None, [3, 4, 5]], [[1, 2], [], None, [3, 4, 5]]),
-        ([[1, 1, 2, 2, None, None]], [[1, 2, None]])
-        ([[2, None, 1, None, 2]], [[1, 2, None]])
-        ([[[2, None, 1, None], [2, 2]]], [[[2, None, 1], [2, 2]]]) # 2-level nested?
+        ([[1, 1, 2, 2, None, None]], [[1, 2, None]]),
+        ([[2, None, 1, None, 2]], [[1, 2, None]]),
+        ([[], []], [[], []]),
+        ([[], None], [[], None]),
     ],
 )
 def test_unique(data, expected):

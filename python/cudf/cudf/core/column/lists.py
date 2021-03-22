@@ -312,4 +312,9 @@ class ListMethods(ColumnMethodsMixin):
         dtype: list
         """
 
-        return self._return_or_inplace(drop_list_duplicates(self._column, nulls_equal=True))
+        if is_list_dtype(self._column.children[1].dtype):
+            raise NotImplementedError("Nested lists unique is not supported.")
+
+        return self._return_or_inplace(
+            drop_list_duplicates(self._column, nulls_equal=True)
+        )

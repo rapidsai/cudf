@@ -62,6 +62,7 @@ def explode_outer(Table tbl, int explode_column_idx, bool ignore_index=False):
         index_names=None if ignore_index else tbl._index_names
     )
 
+
 def drop_list_duplicates(Column col, bool nulls_equal):
     cdef shared_ptr[lists_column_view] list_view = (
         make_shared[lists_column_view](col.view())
