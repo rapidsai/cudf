@@ -93,7 +93,6 @@ class ColumnAccessor(MutableMapping):
 
     def __setitem__(self, key: Any, value: Any):
         self.set_by_label(key, value)
-        self._clear_cache()
 
     def __delitem__(self, key: Any):
         self._data.__delitem__(key)
