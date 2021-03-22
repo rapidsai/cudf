@@ -52,6 +52,13 @@ void test_once(cudf::column_view const& input,
 struct DropListDuplicatesTest : public cudf::test::BaseFixture {
 };
 
+TEST_F(DropListDuplicatesTest, FloatingPointTestsWithSignedZero)
+{
+  // -0.0 and 0.0 should be considered equal
+  test_once(LIST_COL_FLT{0.0, 1, 2, -0.0, 1, 2, 0.0, 1, 2, -0.0, -0.0, 0.0, 0.0},
+            LIST_COL_FLT{0, 1, 2});
+}
+
 TEST_F(DropListDuplicatesTest, FloatingPointTestsWithInf)
 {
   // Lists contain inf
