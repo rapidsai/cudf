@@ -39,7 +39,7 @@ using offset_type = lists_column_view::offset_type;
  * @brief Performs an equality comparison between two entries in a lists column
  *
  * For the two elements that are in the same list in the lists column, they will always be
- * considered as different. If they are from the same list, and their type is one of floating
+ * considered as different. If they are from the same list and their type is one of floating
  * point types, this functor will return the same comparison result as
  * `cudf::element_equality_comparator`. For floating point types, entries holding NaN value will
  * be considered as different.
@@ -51,7 +51,7 @@ template <bool has_nulls, class Type>
 class list_entry_comparator {
  public:
   __host__ __device__ list_entry_comparator(offset_type const* list_offsets,
-                                            column_device_view const& d_view,
+                                            column_device_view d_view,
                                             null_equality nulls_equal)
     : list_offsets(list_offsets), d_view{d_view}, nulls_equal{nulls_equal}
   {
@@ -80,7 +80,7 @@ class list_entry_comparator {
 
  private:
   offset_type const* list_offsets;
-  column_device_view const& d_view;
+  column_device_view d_view;
   null_equality nulls_equal;
 };
 
@@ -111,18 +111,21 @@ class get_unique_entries_fn {
                           null_equality nulls_equal,
                           rmm::cuda_stream_view stream) const noexcept
   {
-    return has_nulls ? thrust::unique_copy(
-                         rmm::exec_policy(stream),
-                         thrust::make_counting_iterator(0),
-                         thrust::make_counting_iterator(num_entries),
-                         output_begin,
-                         list_entry_comparator<true, Type>{list_offsets, d_view, nulls_equal})
-                     : thrust::unique_copy(
-                         rmm::exec_policy(stream),
-                         thrust::make_counting_iterator(0),
-                         thrust::make_counting_iterator(num_entries),
-                         output_begin,
-                         list_entry_comparator<false, Type>{list_offsets, d_view, nulls_equal});
+    if (has_nulls) {
+      list_entry_comparator<true, Type> const comp{list_offsets, d_view, nulls_equal};
+      return thrust::unique_copy(rmm::exec_policy(stream),
+                                 thrust::make_counting_iterator(0),
+                                 thrust::make_counting_iterator(num_entries),
+                                 output_begin,
+                                 comp);
+    } else {
+      list_entry_comparator<false, Type> const comp{list_offsets, d_view, nulls_equal};
+      return thrust::unique_copy(rmm::exec_policy(stream),
+                                 thrust::make_counting_iterator(0),
+                                 thrust::make_counting_iterator(num_entries),
+                                 output_begin,
+                                 comp);
+    }
   }
 };
 
