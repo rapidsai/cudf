@@ -54,13 +54,11 @@ TYPED_TEST(groupby_min_scan_test, empty_cols)
   using V = TypeParam;
   using R = cudf::detail::target_type_t<V, aggregation::MIN>;
 
-  // clang-format off
-  fixed_width_column_wrapper<K> keys        { };
-  fixed_width_column_wrapper<V> vals        { };
+  fixed_width_column_wrapper<K> keys{};
+  fixed_width_column_wrapper<V> vals{};
 
-  fixed_width_column_wrapper<K> expect_keys { };
-  fixed_width_column_wrapper<R> expect_vals { };
-  // clang-format on
+  fixed_width_column_wrapper<K> expect_keys{};
+  fixed_width_column_wrapper<R> expect_vals{};
 
   auto agg = cudf::make_min_aggregation();
   test_single_scan(keys, vals, expect_keys, expect_vals, std::move(agg));

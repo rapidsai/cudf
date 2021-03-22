@@ -68,9 +68,6 @@ TYPED_TEST(groupby_sum_scan_test, empty_cols)
 
   auto agg = cudf::make_sum_aggregation();
   test_single_scan(keys, vals, expect_keys, expect_vals, std::move(agg));
-
-  auto agg2 = cudf::make_sum_aggregation();
-  test_single_scan(keys, vals, expect_keys, expect_vals, std::move(agg2));
 }
 
 TYPED_TEST(groupby_sum_scan_test, zero_valid_keys)
@@ -89,9 +86,6 @@ TYPED_TEST(groupby_sum_scan_test, zero_valid_keys)
 
   auto agg = cudf::make_sum_aggregation();
   test_single_scan(keys, vals, expect_keys, expect_vals, std::move(agg));
-
-  auto agg2 = cudf::make_sum_aggregation();
-  test_single_scan(keys, vals, expect_keys, expect_vals, std::move(agg2));
 }
 
 TYPED_TEST(groupby_sum_scan_test, zero_valid_values)
@@ -110,9 +104,6 @@ TYPED_TEST(groupby_sum_scan_test, zero_valid_values)
 
   auto agg = cudf::make_sum_aggregation();
   test_single_scan(keys, vals, expect_keys, expect_vals, std::move(agg));
-
-  auto agg2 = cudf::make_sum_aggregation();
-  test_single_scan(keys, vals, expect_keys, expect_vals, std::move(agg2));
 }
 
 TYPED_TEST(groupby_sum_scan_test, null_keys_and_values)
@@ -136,9 +127,6 @@ TYPED_TEST(groupby_sum_scan_test, null_keys_and_values)
 
   auto agg = cudf::make_sum_aggregation();
   test_single_scan(keys, vals, expect_keys, expect_vals, std::move(agg));
-
-  auto agg2 = cudf::make_sum_aggregation();
-  test_single_scan(keys, vals, expect_keys, expect_vals, std::move(agg2));
 }
 
 template <typename T>
