@@ -115,6 +115,14 @@ size_type distance(T f, T l)
 static constexpr size_type UNKNOWN_NULL_COUNT{-1};
 
 /**
+ * @brief Indicates the whether a scalar is valid or not
+ */
+enum class validity : bool {
+  VALID,   ///< Scalar is valid
+  INVALID  ///< Scalar is invalid
+};
+
+/**
  * @brief Indicates the order in which elements should be sorted.
  */
 enum class order : bool {

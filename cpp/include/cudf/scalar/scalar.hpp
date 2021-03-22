@@ -616,10 +616,11 @@ class list_scalar : public scalar {
    * @param mr Device memory resource to use for device memory allocation
    */
   list_scalar(cudf::column_view const& value,
-              bool is_valid                       = true,
+              validity is_valid                   = validity::VALID,
               rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
               rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
-    : scalar(data_type(type_id::LIST), is_valid), _data(value, stream, mr)
+    : scalar(data_type(type_id::LIST), is_valid == validity::VALID ? true : false),
+      _data(value, stream, mr)
   {
   }
 
@@ -638,7 +639,7 @@ class list_scalar : public scalar {
   /**
    * @brief Returns a immutable view to the underlying list_scalar data
    */
-  cudf::column_view data() const { return _data.view(); }
+  cudf::column_view view() const { return _data.view(); }
 
  private:
   cudf::column _data;
