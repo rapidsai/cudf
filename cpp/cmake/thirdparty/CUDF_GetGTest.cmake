@@ -44,7 +44,7 @@ function(find_and_configure_gtest VERSION)
                         gmock_main
                         gtest_main
             DESTINATION lib
-            EXPORT cudf-targets)
+            EXPORT cudf-testing-targets)
     endif()
 endfunction()
 
