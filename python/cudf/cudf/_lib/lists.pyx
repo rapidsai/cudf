@@ -27,7 +27,6 @@ from cudf._lib.table cimport Table
 from cudf._lib.types cimport (
     underlying_type_t_null_order, underlying_type_t_order
 )
-from cudf._lib.types import Order, NullOrder
 from cudf.core.dtypes import ListDtype
 
 from cudf._lib.cpp.lists.extract cimport extract_list_element
@@ -67,13 +66,15 @@ def explode_outer(Table tbl, int explode_column_idx, bool ignore_index=False):
     )
 
 
-def sort_lists(Column col, object order_enum, object null_order_enum):
+def sort_lists(Column col, bool ascending, str na_position):
     cdef shared_ptr[lists_column_view] list_view = (
         make_shared[lists_column_view](col.view())
     )
-    cdef order c_sort_order = <order><underlying_type_t_order>order_enum.value
+    cdef order c_sort_order = (
+        order.ASCENDING if ascending else order.DESCENDING
+    )
     cdef null_order c_null_prec = (
-        <null_order><underlying_type_t_null_order>null_order_enum.value
+        null_order.BEFORE if na_position == "first" else null_order.AFTER
     )
 
     cdef unique_ptr[column] c_result

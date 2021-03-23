@@ -8,7 +8,6 @@ import pyarrow as pa
 import cudf
 from cudf._lib.copying import segmented_gather
 from cudf._lib.lists import count_elements, extract_element, sort_lists
-from cudf._lib.types import NullOrder, Order
 from cudf.core.buffer import Buffer
 from cudf.core.column import ColumnBase, as_column, column
 from cudf.core.column.methods import ColumnMethodsMixin
@@ -368,12 +367,7 @@ class ListMethods(ColumnMethodsMixin):
         if is_list_dtype(self._column.children[1].dtype):
             raise NotImplementedError("Nested lists sort is not supported.")
 
-        sort_order = Order.ASCENDING if ascending else Order.DESCENDING
-        null_order = (
-            NullOrder.BEFORE if na_position == "first" else NullOrder.AFTER
-        )
-
         return self._return_or_inplace(
-            sort_lists(self._column, sort_order, null_order),
+            sort_lists(self._column, ascending, na_position),
             retain_index=not ignore_index,
         )
