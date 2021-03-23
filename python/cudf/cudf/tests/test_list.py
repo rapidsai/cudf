@@ -159,3 +159,38 @@ def test_take_invalid(invalid, exception):
     gs = cudf.Series([[0, 1], [2, 3]])
     with exception:
         gs.list.take(invalid)
+
+
+@pytest.mark.parametrize(
+    "data, index, expect",
+    [
+        ([[None, None], [None, None]], 0, [None, None]),
+        ([[1, 2], [3, 4]], 0, [1, 3]),
+        ([["a", "b"], ["c", "d"]], 1, ["b", "d"]),
+        ([[1, None], [None, 2]], 1, [None, 2]),
+        ([[[1, 2], [3, 4]], [[5, 6], [7, 8]]], 1, [[3, 4], [7, 8]]),
+    ],
+)
+def test_get(data, index, expect):
+    sr = cudf.Series(data)
+    expect = cudf.Series(expect)
+    got = sr.list.get(index)
+    assert_eq(expect, got)
+
+
+def test_get_nested_lists():
+    sr = cudf.Series(
+        [
+            [[[1, 2], [3, 4]], [[5, 6], [7, 8]], [], [[3, 4], [7, 8]]],
+            [[], [[9, 10]], [[11, 12], [13, 14]]],
+        ]
+    )
+    expect = cudf.Series([[[1, 2], [3, 4]], []])
+    got = sr.list.get(0)
+    assert_eq(expect, got)
+
+
+def test_get_nulls():
+    with pytest.raises(IndexError, match="list index out of range"):
+        sr = cudf.Series([[], [], []])
+        sr.list.get(100)

@@ -309,6 +309,8 @@ void generate_offsets(size_type num_entries,
                       return offsets[i - prefix_sum_empty_lists[i]];
                     });
 }
+}  // anonymous namespace
+
 /**
  * @copydoc cudf::lists::drop_list_duplicates
  *
@@ -360,7 +362,6 @@ std::unique_ptr<column> drop_list_duplicates(lists_column_view const& lists_colu
                            cudf::detail::copy_bitmask(lists_column.parent(), stream, mr));
 }
 
-}  // anonymous namespace
 }  // namespace detail
 
 /**
