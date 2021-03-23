@@ -148,9 +148,10 @@ __global__ void __launch_bounds__(block_size, 2)
     column_device_view *leaf_column_view = view.begin() + str_col_ids[col_id];
     s->chunk                             = chunks[group_id * num_columns + col_id];
     s->chunk.leaf_column                 = leaf_column_view;
-    s->chunk.dict_data                   = dict_data;
-    s->chunk.dict_index                  = dict_index;
-    s->chunk.start_row                   = group_id * row_index_stride;
+    s->chunk.dict_data =
+      dict_data + col_id * leaf_column_view->size() + group_id * row_index_stride;
+    s->chunk.dict_index = dict_index + col_id * leaf_column_view->size();
+    s->chunk.start_row  = group_id * row_index_stride;
     s->chunk.num_rows =
       min(row_index_stride,
           max(static_cast<size_t>(leaf_column_view->size() - s->chunk.start_row), size_t{0}));
