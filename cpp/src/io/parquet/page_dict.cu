@@ -55,7 +55,7 @@ inline __device__ uint32_t uint64_hash16(uint64_t v)
 inline __device__ uint32_t hash_string(const string_view &val)
 {
   const char *p = val.data();
-  uint32_t len = val.size_bytes();
+  uint32_t len  = val.size_bytes();
   uint32_t hash = len;
   if (len > 0) {
     uint32_t align_p    = 3 & reinterpret_cast<uintptr_t>(p);

@@ -82,7 +82,7 @@ struct page_enc_state_s {
 inline __device__ uint32_t hash_string(const string_view &val)
 {
   char const *ptr = val.data();
-  uint32_t len = val.size_bytes();
+  uint32_t len    = val.size_bytes();
   if (len != 0) {
     return (ptr[0] + (ptr[len - 1] << 5) + (len << 10)) & ((1 << init_hash_bits) - 1);
   } else {
