@@ -14,10 +14,10 @@
  * limitations under the License.
  */
 
-#include <cudf/labeling/label_bins.hpp>
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_view.hpp>
 #include <cudf/copying.hpp>
+#include <cudf/labeling/label_bins.hpp>
 #include <cudf/types.hpp>
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_wrapper.hpp>
@@ -61,8 +61,9 @@ TEST(BinColumnErrorTests, TestInvalidLeft)
   fwc_wrapper<float> right_edges{1, 2, 3, 4, 5, 6, 7, 8, 9, 10};
   fwc_wrapper<float> input{0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5};
 
-  EXPECT_THROW(cudf::label_bins(input, left_edges, cudf::inclusive::YES, right_edges, cudf::inclusive::NO),
-               cudf::logic_error);
+  EXPECT_THROW(
+    cudf::label_bins(input, left_edges, cudf::inclusive::YES, right_edges, cudf::inclusive::NO),
+    cudf::logic_error);
 };
 
 // Right edges type check.
@@ -72,8 +73,9 @@ TEST(BinColumnErrorTests, TestInvalidRight)
   fwc_wrapper<double> right_edges{1, 2, 3, 4, 5, 6, 7, 8, 9, 10};
   fwc_wrapper<float> input{0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5};
 
-  EXPECT_THROW(cudf::label_bins(input, left_edges, cudf::inclusive::YES, right_edges, cudf::inclusive::NO),
-               cudf::logic_error);
+  EXPECT_THROW(
+    cudf::label_bins(input, left_edges, cudf::inclusive::YES, right_edges, cudf::inclusive::NO),
+    cudf::logic_error);
 };
 
 // Input type check.
@@ -83,8 +85,9 @@ TEST(BinColumnErrorTests, TestInvalidInput)
   fwc_wrapper<float> right_edges{1, 2, 3, 4, 5, 6, 7, 8, 9, 10};
   fwc_wrapper<double> input{0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5};
 
-  EXPECT_THROW(cudf::label_bins(input, left_edges, cudf::inclusive::YES, right_edges, cudf::inclusive::NO),
-               cudf::logic_error);
+  EXPECT_THROW(
+    cudf::label_bins(input, left_edges, cudf::inclusive::YES, right_edges, cudf::inclusive::NO),
+    cudf::logic_error);
 };
 
 // Number of left and right edges must match.
@@ -94,8 +97,9 @@ TEST(BinColumnErrorTests, TestMismatchedEdges)
   fwc_wrapper<float> right_edges{1, 2, 3, 4, 5, 6, 7, 8, 9};
   fwc_wrapper<float> input{0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5};
 
-  EXPECT_THROW(cudf::label_bins(input, left_edges, cudf::inclusive::YES, right_edges, cudf::inclusive::NO),
-               cudf::logic_error);
+  EXPECT_THROW(
+    cudf::label_bins(input, left_edges, cudf::inclusive::YES, right_edges, cudf::inclusive::NO),
+    cudf::logic_error);
 };
 
 // Left edges with nulls.
@@ -105,8 +109,9 @@ TEST(BinColumnErrorTests, TestLeftEdgesWithNullsBefore)
   fwc_wrapper<float> right_edges{1, 2, 3, 4, 5, 6, 7, 8, 9};
   fwc_wrapper<float> input{0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5};
 
-  EXPECT_THROW(cudf::label_bins(input, left_edges, cudf::inclusive::NO, right_edges, cudf::inclusive::NO),
-               cudf::logic_error);
+  EXPECT_THROW(
+    cudf::label_bins(input, left_edges, cudf::inclusive::NO, right_edges, cudf::inclusive::NO),
+    cudf::logic_error);
 };
 
 // Right edges with nulls.
@@ -116,8 +121,9 @@ TEST(BinColumnErrorTests, TestRightEdgesWithNullsBefore)
   fwc_wrapper<float> right_edges{{1, 2, 3, 4, 5, 6, 7, 8, 9}, {0, 1, 1, 1, 1, 1, 1, 1, 1, 1}};
   fwc_wrapper<float> input{0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5};
 
-  EXPECT_THROW(cudf::label_bins(input, left_edges, cudf::inclusive::NO, right_edges, cudf::inclusive::NO),
-               cudf::logic_error);
+  EXPECT_THROW(
+    cudf::label_bins(input, left_edges, cudf::inclusive::NO, right_edges, cudf::inclusive::NO),
+    cudf::logic_error);
 };
 
 /*
@@ -383,7 +389,8 @@ TEST(TestStringData, NonAsciiStringTest)
                                            "de",
                                            "\t\r\n\f "};
 
-  auto result = cudf::label_bins(input, left_edges, cudf::inclusive::NO, right_edges, cudf::inclusive::NO);
+  auto result =
+    cudf::label_bins(input, left_edges, cudf::inclusive::NO, right_edges, cudf::inclusive::NO);
 
   fwc_wrapper<cudf::size_type> expected{{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
                                         {1, 1, 1, 1, 0, 0, 0, 0, 0, 1, 0, 0, 0, 1, 0}};

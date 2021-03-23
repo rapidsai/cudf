@@ -14,13 +14,13 @@
  * limitations under the License.
  */
 
-#include <cudf/labeling/label_bins.hpp>
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_factories.hpp>
 #include <cudf/column/column_view.hpp>
 #include <cudf/detail/label_bins.hpp>
 #include <cudf/detail/valid_if.cuh>
+#include <cudf/labeling/label_bins.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/error.hpp>
 #include <cudf/utilities/span.hpp>
@@ -186,7 +186,8 @@ struct bin_type_dispatcher {
       return label_bins<T, thrust::less<T>, thrust::less_equal<T>>(
         input, left_edges, right_edges, stream, mr);
     if ((left_inclusive == inclusive::NO) && (right_inclusive == inclusive::NO))
-      return label_bins<T, thrust::less<T>, thrust::less<T>>(input, left_edges, right_edges, stream, mr);
+      return label_bins<T, thrust::less<T>, thrust::less<T>>(
+        input, left_edges, right_edges, stream, mr);
 
     CUDF_FAIL("Undefined inclusive setting.");
   }
