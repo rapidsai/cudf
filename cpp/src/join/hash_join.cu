@@ -307,6 +307,8 @@ hash_join::hash_join_impl::hash_join_impl(cudf::table_view const &build,
   CUDF_EXPECTS(0 != _build.num_columns(), "Hash join build table is empty");
   CUDF_EXPECTS(_build.num_rows() < cudf::detail::MAX_JOIN_SIZE,
                "Build column size is too big for hash join");
+  CUDF_EXPECTS(_build.num_rows() == _build_join.num_rows(),
+               "Build column and build join column must match");
 
   if (0 == build.num_rows()) { return; }
 
