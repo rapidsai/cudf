@@ -19,7 +19,6 @@
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_factories.hpp>
-#include <cudf/detail/iterator.cuh>
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/strings/detail/utilities.hpp>
@@ -30,7 +29,8 @@
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
 
-#include <thrust/find.h>
+#include <thrust/binary_search.h>
+#include <thrust/sort.h>
 
 #include <algorithm>
 
@@ -46,31 +46,37 @@ namespace {
  */
 struct translate_fn {
   column_device_view const d_strings;
-  rmm::device_vector<translate_table>::iterator table_begin;
-  rmm::device_vector<translate_table>::iterator table_end;
-  int32_t const* d_offsets{};
+  rmm::device_uvector<translate_table>::iterator table_begin;
+  rmm::device_uvector<translate_table>::iterator table_end;
+  int32_t* d_offsets{};
   char* d_chars{};
 
-  __device__ size_type operator()(size_type idx)
+  __device__ void operator()(size_type idx)
   {
-    if (d_strings.is_null(idx)) return 0;
-    string_view d_str = d_strings.element<string_view>(idx);
-    size_type bytes   = d_str.size_bytes();
-    char* out_ptr     = d_offsets ? d_chars + d_offsets[idx] : nullptr;
+    if (d_strings.is_null(idx)) {
+      if (!d_chars) d_offsets[idx] = 0;
+      return;
+    }
+    string_view const d_str = d_strings.element<string_view>(idx);
+
+    size_type bytes = d_str.size_bytes();
+    char* out_ptr   = d_chars ? d_chars + d_offsets[idx] : nullptr;
     for (auto chr : d_str) {
-      auto entry =
-        thrust::find_if(thrust::seq, table_begin, table_end, [chr] __device__(auto const& te) {
-          return te.first == chr;
-        });
-      if (entry != table_end) {
+      auto const entry =
+        thrust::lower_bound(thrust::seq,
+                            table_begin,
+                            table_end,
+                            translate_table{chr, 0},
+                            [](auto const& lhs, auto const& rhs) { return lhs.first < rhs.first; });
+      if (entry != table_end && entry->first == chr) {
         bytes -= bytes_in_char_utf8(chr);
-        chr = static_cast<translate_table>(*entry).second;
+        chr = entry->second;
         if (chr)  // if null, skip the character
           bytes += bytes_in_char_utf8(chr);
       }
       if (chr && out_ptr) out_ptr += from_char_utf8(chr, out_ptr);
     }
-    return bytes;
+    if (!d_chars) d_offsets[idx] = bytes;
   }
 };
 
@@ -83,8 +89,7 @@ std::unique_ptr<column> translate(
   rmm::cuda_stream_view stream,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
 {
-  size_type strings_count = strings.size();
-  if (strings_count == 0) return make_empty_strings_column(stream, mr);
+  if (strings.is_empty()) return make_empty_strings_column(stream, mr);
 
   size_type table_size = static_cast<size_type>(chars_table.size());
   // convert input table
@@ -92,35 +97,32 @@ std::unique_ptr<column> translate(
   std::transform(chars_table.begin(), chars_table.end(), htable.begin(), [](auto entry) {
     return translate_table{entry.first, entry.second};
   });
+  // The size of this table is usually much less than 100 so it is was
+  // found to be more efficient to sort on the CPU than the GPU.
+  thrust::sort(htable.begin(), htable.end(), [](auto const& lhs, auto const& rhs) {
+    return lhs.first < rhs.first;
+  });
   // copy translate table to device memory
-  rmm::device_vector<translate_table> table(htable);
+  rmm::device_uvector<translate_table> table(htable.size(), stream);
+  CUDA_TRY(cudaMemcpyAsync(table.data(),
+                           htable.data(),
+                           sizeof(translate_table) * htable.size(),
+                           cudaMemcpyHostToDevice,
+                           stream.value()));
 
-  auto strings_column = column_device_view::create(strings.parent(), stream);
-  auto d_strings      = *strings_column;
-  // create null mask
-  rmm::device_buffer null_mask = cudf::detail::copy_bitmask(strings.parent(), stream, mr);
-  // create offsets column
-  auto offsets_transformer_itr = cudf::detail::make_counting_transform_iterator(
-    0, translate_fn{d_strings, table.begin(), table.end()});
-  auto offsets_column = make_offsets_child_column(
-    offsets_transformer_itr, offsets_transformer_itr + strings_count, stream, mr);
-  auto d_offsets = offsets_column->view().data<int32_t>();
+  auto d_strings = column_device_view::create(strings.parent(), stream);
 
-  // build chars column
-  size_type bytes   = thrust::device_pointer_cast(d_offsets)[strings_count];
-  auto chars_column = strings::detail::create_chars_child_column(
-    strings_count, strings.null_count(), bytes, stream, mr);
-  auto d_chars = chars_column->mutable_view().data<char>();
-  thrust::for_each_n(rmm::exec_policy(stream),
-                     thrust::make_counting_iterator<cudf::size_type>(0),
-                     strings_count,
-                     translate_fn{d_strings, table.begin(), table.end(), d_offsets, d_chars});
+  auto children = make_strings_children(translate_fn{*d_strings, table.begin(), table.end()},
+                                        strings.size(),
+                                        strings.null_count(),
+                                        stream,
+                                        mr);
 
-  return make_strings_column(strings_count,
-                             std::move(offsets_column),
-                             std::move(chars_column),
+  return make_strings_column(strings.size(),
+                             std::move(children.first),
+                             std::move(children.second),
                              strings.null_count(),
-                             std::move(null_mask),
+                             cudf::detail::copy_bitmask(strings.parent(), stream, mr),
                              stream,
                              mr);
 }
