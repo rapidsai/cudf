@@ -78,7 +78,7 @@ class ColumnAccessor(MutableMapping):
                     if not isinstance(v, column.ColumnBase):
                         v = column.as_column(v)
                     if len(v) != column_length:
-                        raise ValueError("All values must be of equal length")
+                        raise ValueError("All columns must be of equal length")
                     self._data[k] = v
 
             self.multiindex = multiindex
@@ -195,7 +195,7 @@ class ColumnAccessor(MutableMapping):
             result = pd.Index(self.names, name=self.name, tupleize_cols=False)
         return result
 
-    def insert(self, name: Any, value: Any, loc: int = -1):
+    def insert(self, name: Any, value: Any, loc: int = -1, validate: bool = True):
         """
         Insert column into the ColumnAccessor at the specified location.
 
@@ -225,6 +225,13 @@ class ColumnAccessor(MutableMapping):
         if name in self._data:
             raise ValueError(f"Cannot insert '{name}', already exists")
         if loc == len(self._data):
+            if validate:
+                value = column.as_column(value)
+                if len(self._data) > 0:
+                    if len(value) != self._column_length:
+                        raise ValueError("All columns must be of equal length")
+                else:
+                    self._column_length = len(value)
             self._data[name] = value
         else:
             new_keys = self.names[:loc] + (name,) + self.names[loc:]
