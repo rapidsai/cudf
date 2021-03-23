@@ -17,8 +17,8 @@
 #include "orc_common.h"
 #include "orc_gpu.h"
 
-#include <io/utilities/block_utils.cuh>
 #include <cudf/table/table_device_view.cuh>
+#include <io/utilities/block_utils.cuh>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
@@ -47,18 +47,6 @@ struct dictinit_state_s {
 };
 
 /**
- * @brief Return a 12-bit hash from a byte sequence
- */
-//static inline __device__ uint32_t nvstr_init_hash(char const *ptr, uint32_t len)
-//{
-//  if (len != 0) {
-//    return (ptr[0] + (ptr[len - 1] << 5) + (len << 10)) & ((1 << init_hash_bits) - 1);
-//  } else {
-//    return 0;
-//  }
-//}
-
-/**
  * @brief Return a 12-bit hash from a string
  */
 static inline __device__ uint32_t hash_string(const string_view &val)
@@ -67,7 +55,7 @@ static inline __device__ uint32_t hash_string(const string_view &val)
     return 0;
   } else {
     char const *ptr = val.data();
-    uint32_t len = val.size_bytes();
+    uint32_t len    = val.size_bytes();
     return (ptr[0] + (ptr[len - 1] << 5) + (len << 10)) & ((1 << init_hash_bits) - 1);
   }
 }
@@ -87,7 +75,7 @@ static __device__ void LoadNonNullIndices(volatile dictinit_state_s *s,
   if (t == 0) { s->nnz = 0; }
   for (uint32_t i = 0; i < s->chunk.num_rows; i += block_size) {
     const uint32_t *valid_map = s->chunk.leaf_column->null_mask();
-    auto column_offset = s->chunk.leaf_column->offset();
+    auto column_offset        = s->chunk.leaf_column->offset();
     uint32_t is_valid, nz_pos;
     if (t < block_size / 32) {
       if (!valid_map) {
@@ -133,12 +121,12 @@ static __device__ void LoadNonNullIndices(volatile dictinit_state_s *s,
 template <int block_size>
 __global__ void __launch_bounds__(block_size, 2)
   gpuInitDictionaryIndices(DictionaryChunk *chunks,
-      const table_device_view view,
-      uint32_t *dict_data,
-      uint32_t *dict_index,
-      size_t row_index_stride,
-      size_type* str_col_ids,
-      uint32_t num_columns)
+                           const table_device_view view,
+                           uint32_t *dict_data,
+                           uint32_t *dict_index,
+                           size_t row_index_stride,
+                           size_type *str_col_ids,
+                           uint32_t num_columns)
 {
   __shared__ __align__(16) dictinit_state_s state_g;
 
@@ -158,13 +146,14 @@ __global__ void __launch_bounds__(block_size, 2)
 
   if (t == 0) {
     column_device_view *leaf_column_view = view.begin() + str_col_ids[col_id];
-    s->chunk = chunks[group_id * num_columns + col_id];
-    s->chunk.leaf_column = leaf_column_view;
-    s->chunk.dict_data = dict_data;
-    s->chunk.dict_index = dict_index;
-    s->chunk.start_row = group_id * row_index_stride;
-    s->chunk.num_rows = min(row_index_stride,
-        max(static_cast<size_t>(leaf_column_view->size() - s->chunk.start_row), size_t{0}));
+    s->chunk                             = chunks[group_id * num_columns + col_id];
+    s->chunk.leaf_column                 = leaf_column_view;
+    s->chunk.dict_data                   = dict_data;
+    s->chunk.dict_index                  = dict_index;
+    s->chunk.start_row                   = group_id * row_index_stride;
+    s->chunk.num_rows =
+      min(row_index_stride,
+          max(static_cast<size_t>(leaf_column_view->size() - s->chunk.start_row), size_t{0}));
   }
   for (uint32_t i = 0; i < sizeof(s->map) / sizeof(uint32_t); i += block_size) {
     if (i + t < sizeof(s->map) / sizeof(uint32_t)) s->map.u32[i + t] = 0;
@@ -186,10 +175,10 @@ __global__ void __launch_bounds__(block_size, 2)
     uint32_t hash   = 0;
     uint32_t len    = 0;
     if (i + t < nnz) {
-      ck_row = s->dict[i + t];
+      ck_row                 = s->dict[i + t];
       string_view string_val = s->chunk.leaf_column->element<string_view>(ck_row + start_row);
-      len    = static_cast<uint32_t>(string_val.size_bytes());
-      hash   = hash_string(string_val);
+      len                    = static_cast<uint32_t>(string_val.size_bytes());
+      hash                   = hash_string(string_val);
     }
     len = block_reduce(temp_storage.reduce_storage).Sum(len);
     if (t == 0) s->chunk.string_char_count += len;
@@ -229,11 +218,11 @@ __global__ void __launch_bounds__(block_size, 2)
     uint32_t ck_row = 0, pos = 0, hash = 0, pos_old, pos_new, sh, colliding_row;
     bool collision;
     if (i + t < nnz) {
-      ck_row  = dict_data[i + t] - start_row;
+      ck_row                 = dict_data[i + t] - start_row;
       string_view string_val = s->chunk.leaf_column->element<string_view>(ck_row + start_row);
-      hash    = hash_string(string_val);
-      sh      = (hash & 1) ? 16 : 0;
-      pos_old = s->map.u16[hash];
+      hash                   = hash_string(string_val);
+      sh                     = (hash & 1) ? 16 : 0;
+      pos_old                = s->map.u16[hash];
     }
     // The isolation of the atomicAdd, along with pos_old/pos_new is to guarantee deterministic
     // behavior for the first row in the hash map that will be used for early duplicate detection
@@ -264,13 +253,14 @@ __global__ void __launch_bounds__(block_size, 2)
     uint32_t ck_row = 0, ck_row_ref = 0, is_dupe = 0;
     if (i + t < nnz) {
       uint32_t string_length, hash;
-      ck_row = s->dict[i + t];
+      ck_row                   = s->dict[i + t];
       string_view string_value = s->chunk.leaf_column->element<string_view>(ck_row + start_row);
-      string_length = static_cast<uint32_t>(string_value.size_bytes());
-      hash = hash_string(string_value);
-      ck_row_ref = s->dict[(hash > 0) ? s->map.u16[hash - 1] : 0];
+      string_length            = static_cast<uint32_t>(string_value.size_bytes());
+      hash                     = hash_string(string_value);
+      ck_row_ref               = s->dict[(hash > 0) ? s->map.u16[hash - 1] : 0];
       if (ck_row_ref != ck_row) {
-        string_view reference_string = s->chunk.leaf_column->element<string_view>(ck_row_ref + start_row);
+        string_view reference_string =
+          s->chunk.leaf_column->element<string_view>(ck_row_ref + start_row);
         is_dupe = (string_value == reference_string);
         dict_char_count += (is_dupe) ? 0 : string_length;
       }
@@ -297,12 +287,12 @@ __global__ void __launch_bounds__(block_size, 2)
     chunks[group_id * num_columns + col_id].string_char_count = s->chunk.string_char_count;
     chunks[group_id * num_columns + col_id].num_dict_strings  = nnz - s->total_dupes;
     chunks[group_id * num_columns + col_id].dict_char_count   = dict_char_count;
-    chunks[group_id * num_columns + col_id].leaf_column = s->chunk.leaf_column;
+    chunks[group_id * num_columns + col_id].leaf_column       = s->chunk.leaf_column;
 
-    chunks[group_id * num_columns + col_id].dict_data = s->chunk.dict_data;
+    chunks[group_id * num_columns + col_id].dict_data  = s->chunk.dict_data;
     chunks[group_id * num_columns + col_id].dict_index = s->chunk.dict_index;
-    chunks[group_id * num_columns + col_id].start_row = s->chunk.start_row;
-    chunks[group_id * num_columns + col_id].num_rows = s->chunk.num_rows;
+    chunks[group_id * num_columns + col_id].start_row  = s->chunk.start_row;
+    chunks[group_id * num_columns + col_id].num_rows   = s->chunk.num_rows;
   }
 }
 
@@ -399,19 +389,17 @@ __global__ void __launch_bounds__(block_size)
   num_strings = s->stripe.num_strings;
   dict_data   = s->stripe.dict_data;
   if (!dict_data) return;
-  dict_index      = s->stripe.dict_index;
+  dict_index                 = s->stripe.dict_index;
   string_view current_string = string_view::min();
-  dict_char_count = 0;
+  dict_char_count            = 0;
   for (uint32_t i = 0; i < num_strings; i += block_size) {
     uint32_t cur     = (i + t < num_strings) ? dict_data[i + t] : 0;
     uint32_t cur_len = 0;
-    bool is_dupe = false;
-    if (i + t < num_strings) {
-      current_string = s->stripe.leaf_column->element<string_view>(cur);
-    }
+    bool is_dupe     = false;
+    if (i + t < num_strings) { current_string = s->stripe.leaf_column->element<string_view>(cur); }
     if (i + t != 0 && i + t < num_strings) {
       uint32_t prev = dict_data[i + t - 1];
-      is_dupe = (current_string == (s->stripe.leaf_column->element<string_view>(prev)));
+      is_dupe       = (current_string == (s->stripe.leaf_column->element<string_view>(prev)));
     }
     dict_char_count += (is_dupe) ? 0 : cur_len;
     uint32_t dupes_in_block;
@@ -448,7 +436,7 @@ void InitDictionaryIndices(const table_device_view &view,
                            uint32_t *dict_data,
                            uint32_t *dict_index,
                            size_t row_index_stride,
-                           size_type* str_col_ids,
+                           size_type *str_col_ids,
                            uint32_t num_columns,
                            uint32_t num_rowgroups,
                            rmm::cuda_stream_view stream)
@@ -456,8 +444,8 @@ void InitDictionaryIndices(const table_device_view &view,
   static constexpr int block_size = 512;
   dim3 dim_block(block_size, 1);
   dim3 dim_grid(num_columns, num_rowgroups);
-  gpuInitDictionaryIndices<block_size>
-    <<<dim_grid, dim_block, 0, stream.value()>>>(chunks, view, dict_data, dict_index, row_index_stride, str_col_ids, num_columns);
+  gpuInitDictionaryIndices<block_size><<<dim_grid, dim_block, 0, stream.value()>>>(
+    chunks, view, dict_data, dict_index, row_index_stride, str_col_ids, num_columns);
 }
 
 /**
@@ -494,7 +482,7 @@ void BuildStripeDictionaries(StripeDictionary *stripes,
                    dict_data_ptr + stripes_host[i].num_strings,
                    [string_column] __device__(const uint32_t &lhs, const uint32_t &rhs) {
                      return string_column->element<string_view>(lhs) <
-                     string_column->element<string_view>(rhs);
+                            string_column->element<string_view>(rhs);
                    });
     }
   }

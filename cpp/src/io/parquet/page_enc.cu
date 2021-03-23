@@ -79,8 +79,10 @@ struct page_enc_state_s {
 /**
  * @brief Return a 12-bit hash from a byte sequence
  */
-inline __device__ uint32_t nvstr_init_hash(const uint8_t *ptr, uint32_t len)
+inline __device__ uint32_t hash_string(const string_view &val)
 {
+  char const *ptr = val.data();
+  uint32_t len = val.size_bytes();
   if (len != 0) {
     return (ptr[0] + (ptr[len - 1] << 5) + (len << 10)) & ((1 << init_hash_bits) - 1);
   } else {
@@ -211,7 +213,7 @@ __global__ void __launch_bounds__(block_size) gpuInitPageFragments(PageFragment 
         if (dtype == BYTE_ARRAY) {
           auto str = s->col.leaf_column->element<string_view>(val_idx);
           len += str.size_bytes();
-          hash = nvstr_init_hash(reinterpret_cast<const uint8_t *>(str.data()), str.size_bytes());
+          hash = hash_string(str);
         } else if (dtype_len_in == 8) {
           hash = uint64_init_hash(s->col.leaf_column->element<uint64_t>(val_idx));
         } else {

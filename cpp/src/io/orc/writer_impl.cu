@@ -196,8 +196,8 @@ class orc_column_view {
 
  private:
   // Identifier within set of columns and string columns, respectively
-  size_t _id        = 0;
-  size_t _str_id    = 0;
+  size_t _id           = 0;
+  size_t _str_id       = 0;
   bool _is_string_type = false;
 
   size_t _type_width       = 0;
@@ -275,10 +275,15 @@ void writer::impl::init_dictionaries(const table_device_view &view,
     str_column.attach_dict_chunk(dict->host_ptr(), dict->device_ptr());
   }
 
-  gpu::InitDictionaryIndices(view, dict->device_ptr(),
-      dict_data, dict_index, row_index_stride_,
-      d_str_col_ids.data(), d_str_col_ids.size(),
-      num_rowgroups, stream);
+  gpu::InitDictionaryIndices(view,
+                             dict->device_ptr(),
+                             dict_data,
+                             dict_index,
+                             row_index_stride_,
+                             d_str_col_ids.data(),
+                             d_str_col_ids.size(),
+                             num_rowgroups,
+                             stream);
   dict->device_to_host(stream, true);
 }
 
@@ -296,19 +301,19 @@ void writer::impl::build_dictionaries(orc_column_view *columns,
     str_column.attach_stripe_dict(stripe_dict.host_ptr(), stripe_dict.device_ptr());
 
     for (auto const &stripe : stripe_bounds) {
-      auto &sd            = stripe_dict[stripe.id * str_col_ids.size() + col_idx];
-      sd.dict_data        = str_column.host_dict_chunk(stripe.first)->dict_data;
-      sd.dict_index       = dict_index + col_idx * str_column.data_count();  // Indexed by abs row
-      sd.column_id        = str_col_ids[col_idx];
-      sd.start_chunk      = stripe.first;
-      sd.num_chunks       = stripe.size;
-      sd.dict_char_count  = 0;
+      auto &sd           = stripe_dict[stripe.id * str_col_ids.size() + col_idx];
+      sd.dict_data       = str_column.host_dict_chunk(stripe.first)->dict_data;
+      sd.dict_index      = dict_index + col_idx * str_column.data_count();  // Indexed by abs row
+      sd.column_id       = str_col_ids[col_idx];
+      sd.start_chunk     = stripe.first;
+      sd.num_chunks      = stripe.size;
+      sd.dict_char_count = 0;
       sd.num_strings =
         std::accumulate(stripe.cbegin(), stripe.cend(), 0, [&](auto dt_str_cnt, auto rg_idx) {
           const auto &dt = dict[rg_idx * str_col_ids.size() + col_idx];
           return dt_str_cnt + dt.num_dict_strings;
         });
-      sd.leaf_column      = dict[col_idx].leaf_column;
+      sd.leaf_column = dict[col_idx].leaf_column;
     }
 
     if (enable_dictionary_) {
@@ -550,17 +555,17 @@ encoded_data writer::impl::encode_columns(const table_device_view &view,
         auto const rg_idx = *rg_idx_it;
         auto &ck          = chunks[column.id()][rg_idx];
 
-        ck.start_row  = (rg_idx * row_index_stride_);
-        ck.num_rows   = std::min<uint32_t>(row_index_stride_, column.data_count() - ck.start_row);
+        ck.start_row = (rg_idx * row_index_stride_);
+        ck.num_rows  = std::min<uint32_t>(row_index_stride_, column.data_count() - ck.start_row);
         ck.encoding_kind = column.orc_encoding();
         ck.type_kind     = column.orc_kind();
         if (ck.type_kind == TypeKind::STRING) {
           ck.dict_index = (ck.encoding_kind == DICTIONARY_V2)
-                                 ? column.host_stripe_dict(stripe.id)->dict_index
-                                 : nullptr;
+                            ? column.host_stripe_dict(stripe.id)->dict_index
+                            : nullptr;
           ck.dtype_len = 1;
         } else {
-          ck.dtype_len        = column.type_width();
+          ck.dtype_len = column.type_width();
         }
         ck.scale = column.clockscale();
         // Only need to check row groups that end within the stripe
@@ -743,8 +748,8 @@ std::vector<std::vector<uint8_t>> writer::impl::gather_statistic_blobs(
       case TypeKind::STRING: desc->stats_dtype = dtype_string; break;
       default: desc->stats_dtype = dtype_none; break;
     }
-    desc->num_rows         = column.data_count();
-    desc->num_values       = column.data_count();
+    desc->num_rows   = column.data_count();
+    desc->num_values = column.data_count();
     if (desc->stats_dtype == dtype_timestamp64) {
       // Timestamp statistics are in milliseconds
       switch (column.clockscale()) {
@@ -990,16 +995,18 @@ void writer::impl::init_state()
   out_sink_->host_write(MAGIC, std::strlen(MAGIC));
 }
 
-rmm::device_uvector<size_type>
-get_string_column_ids(const table_device_view &view, rmm::cuda_stream_view stream) {
+rmm::device_uvector<size_type> get_string_column_ids(const table_device_view &view,
+                                                     rmm::cuda_stream_view stream)
+{
   rmm::device_uvector<size_type> string_column_ids(view.num_columns(), stream);
-  auto iter = thrust::make_counting_iterator<size_type>(0);
+  auto iter     = thrust::make_counting_iterator<size_type>(0);
   auto end_iter = thrust::copy_if(rmm::exec_policy(stream),
-      iter, iter + view.num_columns(),
-      string_column_ids.begin(),
-      [view] __device__ (size_type index) {
-      return (view.column(index).type().id() == type_id::STRING);
-      });
+                                  iter,
+                                  iter + view.num_columns(),
+                                  string_column_ids.begin(),
+                                  [view] __device__(size_type index) {
+                                    return (view.column(index).type().id() == type_id::STRING);
+                                  });
   string_column_ids.resize(end_iter - string_column_ids.begin(), stream);
   return string_column_ids;
 }
@@ -1017,7 +1024,7 @@ void writer::impl::write(table_view const &table)
       "be specified");
   }
 
-  auto device_columns = table_device_view::create(table);
+  auto device_columns    = table_device_view::create(table);
   auto string_column_ids = get_string_column_ids(*device_columns, stream);
 
   // Wrapper around cudf columns to attach ORC-specific type info
@@ -1041,7 +1048,13 @@ void writer::impl::write(table_view const &table)
   const auto num_dict_chunks = num_rowgroups * str_col_ids.size();
   hostdevice_vector<gpu::DictionaryChunk> dict(num_dict_chunks);
   if (!str_col_ids.empty()) {
-    init_dictionaries(*device_columns, orc_columns.data(), str_col_ids, string_column_ids, dict_data.data(), dict_index.data(), &dict);
+    init_dictionaries(*device_columns,
+                      orc_columns.data(),
+                      str_col_ids,
+                      string_column_ids,
+                      dict_data.data(),
+                      dict_index.data(),
+                      &dict);
   }
 
   // Decide stripe boundaries early on, based on uncompressed size

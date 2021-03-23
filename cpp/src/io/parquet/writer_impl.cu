@@ -812,10 +812,10 @@ void writer::impl::write(table_view const &table)
   for (auto i = 0; i < num_columns; i++) {
     auto &col = parquet_columns[i];
     // GPU column description
-    auto *desc             = &col_desc[i];
-    *desc                  = gpu::EncColumnDesc{};  // Zero out all fields
-    desc->stats_dtype      = col.stats_type();
-    desc->ts_scale         = col.ts_scale();
+    auto *desc        = &col_desc[i];
+    *desc             = gpu::EncColumnDesc{};  // Zero out all fields
+    desc->stats_dtype = col.stats_type();
+    desc->ts_scale    = col.ts_scale();
     // TODO (dm): Enable dictionary for list after refactor
     if (col.physical_type() != BOOLEAN && col.physical_type() != UNDEFINED_TYPE && !col.is_list()) {
       col.alloc_dictionary(col.data_count());

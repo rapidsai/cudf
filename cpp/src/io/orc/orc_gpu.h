@@ -21,8 +21,8 @@
 #include <io/comp/gpuinflate.h>
 #include <io/orc/orc_common.h>
 #include <io/statistics/column_stats.h>
-#include <cudf/types.hpp>
 #include <cudf/table/table_device_view.cuh>
+#include <cudf/types.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 
@@ -125,15 +125,15 @@ struct RowGroup {
  * @brief Struct to describe an encoder data chunk
  */
 struct EncChunk {
-  uint32_t start_row;              // start row of this chunk
-  uint32_t num_rows;               // number of rows in this chunk
-  uint8_t encoding_kind;           // column encoding kind (orc::ColumnEncodingKind)
-  uint8_t type_kind;               // column data type (orc::TypeKind)
-  uint8_t dtype_len;               // data type length
-  uint8_t scale;                   // scale for decimals or timestamps
+  uint32_t start_row;     // start row of this chunk
+  uint32_t num_rows;      // number of rows in this chunk
+  uint8_t encoding_kind;  // column encoding kind (orc::ColumnEncodingKind)
+  uint8_t type_kind;      // column data type (orc::TypeKind)
+  uint8_t dtype_len;      // data type length
+  uint8_t scale;          // scale for decimals or timestamps
 
-  uint32_t *dict_index;          // dictionary index from row index
-  column_device_view * leaf_column;
+  uint32_t *dict_index;  // dictionary index from row index
+  column_device_view *leaf_column;
 };
 
 /**
@@ -163,7 +163,7 @@ struct StripeStream {
  * @brief Struct to describe a dictionary chunk
  */
 struct DictionaryChunk {
-  uint32_t *dict_data;             // dictionary data (index of non-null rows)
+  uint32_t *dict_data;   // dictionary data (index of non-null rows)
   uint32_t *dict_index;  // row indices of corresponding string (row from dictionary index)
   uint32_t start_row;    // start row of this chunk
   uint32_t num_rows;     // num rows in this chunk
@@ -173,22 +173,22 @@ struct DictionaryChunk {
   uint32_t num_dict_strings;  // number of strings in dictionary
   uint32_t dict_char_count;   // size of dictionary string data for this chunk
 
-  column_device_view *leaf_column;    //!< Pointer to string column
+  column_device_view *leaf_column;  //!< Pointer to string column
 };
 
 /**
  * @brief Struct to describe a dictionary
  */
 struct StripeDictionary {
-  uint32_t *dict_data;           // row indices of corresponding string (row from dictionary index)
-  uint32_t *dict_index;          // dictionary index from row index
-  uint32_t column_id;            // real column id
-  uint32_t start_chunk;          // first chunk in stripe
-  uint32_t num_chunks;           // number of chunks in the stripe
-  uint32_t num_strings;          // number of unique strings in the dictionary
-  uint32_t dict_char_count;      // total size of dictionary string data
+  uint32_t *dict_data;       // row indices of corresponding string (row from dictionary index)
+  uint32_t *dict_index;      // dictionary index from row index
+  uint32_t column_id;        // real column id
+  uint32_t start_chunk;      // first chunk in stripe
+  uint32_t num_chunks;       // number of chunks in the stripe
+  uint32_t num_strings;      // number of unique strings in the dictionary
+  uint32_t dict_char_count;  // total size of dictionary string data
 
-  column_device_view *leaf_column;    //!< Pointer to string column
+  column_device_view *leaf_column;  //!< Pointer to string column
 };
 
 /**
@@ -369,7 +369,7 @@ void InitDictionaryIndices(const table_device_view &view,
                            uint32_t *dict_data,
                            uint32_t *dict_index,
                            size_t row_index_stride,
-                           size_type* str_col_ids,
+                           size_type *str_col_ids,
                            uint32_t num_columns,
                            uint32_t num_rowgroups,
                            rmm::cuda_stream_view stream);

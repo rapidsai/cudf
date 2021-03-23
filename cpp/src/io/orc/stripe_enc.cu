@@ -691,7 +691,8 @@ __global__ void __launch_bounds__(block_size)
         if (row < s->chunk.leaf_column->size()) {
           if (s->chunk.leaf_column->nullable()) {
             size_type current_valid_offset = row + s->chunk.leaf_column->offset();
-            size_type next_valid_offset    = current_valid_offset + min(32, s->chunk.leaf_column->size());
+            size_type next_valid_offset =
+              current_valid_offset + min(32, s->chunk.leaf_column->size());
 
             bitmask_type mask = cudf::detail::get_mask_offset_word(
               s->chunk.leaf_column->null_mask(), 0, current_valid_offset, next_valid_offset);
@@ -748,7 +749,7 @@ __global__ void __launch_bounds__(block_size)
       lengths_to_positions(s->buf.u32, 512, t);
       __syncthreads();
       if (valid) {
-        int nz_idx       = (s->nnz + s->buf.u32[t] - 1) & (maxnumvals - 1);
+        int nz_idx = (s->nnz + s->buf.u32[t] - 1) & (maxnumvals - 1);
         switch (s->chunk.type_kind) {
           case INT:
           case DATE:
@@ -791,8 +792,7 @@ __global__ void __launch_bounds__(block_size)
           case STRING:
             if (s->chunk.encoding_kind == DICTIONARY_V2) {
               uint32_t dict_idx = s->chunk.dict_index[row];
-              if (dict_idx > 0x7fffffffu)
-                dict_idx = s->chunk.dict_index[dict_idx & 0x7fffffffu];
+              if (dict_idx > 0x7fffffffu) dict_idx = s->chunk.dict_index[dict_idx & 0x7fffffffu];
               s->vals.u32[nz_idx] = dict_idx;
             } else {
               string_view value = s->chunk.leaf_column->element<string_view>(row);
@@ -952,8 +952,8 @@ __global__ void __launch_bounds__(block_size)
     s->nrows         = s->u.dict_stripe.num_strings;
     s->cur_row       = 0;
   }
-  column_device_view * string_column = s->u.dict_stripe.leaf_column;
-  auto const dict_data = s->u.dict_stripe.dict_data;
+  column_device_view *string_column = s->u.dict_stripe.leaf_column;
+  auto const dict_data              = s->u.dict_stripe.dict_data;
   __syncthreads();
   if (s->chunk.encoding_kind != DICTIONARY_V2) {
     return;  // This column isn't using dictionary encoding -> bail out
@@ -968,8 +968,8 @@ __global__ void __launch_bounds__(block_size)
       uint32_t count  = 0;
       if (t < numvals) {
         auto string_val = string_column->element<string_view>(string_idx);
-        ptr = string_val.data();
-        count = string_val.size_bytes();
+        ptr             = string_val.data();
+        count           = string_val.size_bytes();
       }
       s->u.strenc.str_data[t] = ptr;
       StoreStringData(s->stream.data_ptrs[CI_DICTIONARY] + s->strm_pos[CI_DICTIONARY],
@@ -979,7 +979,10 @@ __global__ void __launch_bounds__(block_size)
       if (!t) { s->strm_pos[CI_DICTIONARY] += s->u.strenc.char_count; }
     } else {
       // Encoding string lengths
-      uint32_t count  = (t < numvals) ? static_cast<uint32_t>(string_column->element<string_view>(string_idx).size_bytes()) : 0;
+      uint32_t count =
+        (t < numvals)
+          ? static_cast<uint32_t>(string_column->element<string_view>(string_idx).size_bytes())
+          : 0;
       uint32_t nz_idx = (s->cur_row + t) & 0x3ff;
       if (t < numvals) s->lengths.u32[nz_idx] = count;
       __syncthreads();
@@ -1001,10 +1004,9 @@ __global__ void __launch_bounds__(block_size)
 }
 
 __global__ void __launch_bounds__(512)
-  gpu_set_chunk_columns(const table_device_view view,
-                        device_2dspan<EncChunk> chunks)
+  gpu_set_chunk_columns(const table_device_view view, device_2dspan<EncChunk> chunks)
 {
-  //Set leaf_column member of EncChunk
+  // Set leaf_column member of EncChunk
   for (size_type i = threadIdx.x; i < chunks.size().second; i += blockDim.x) {
     chunks[blockIdx.x][i].leaf_column = view.begin() + blockIdx.x;
   }

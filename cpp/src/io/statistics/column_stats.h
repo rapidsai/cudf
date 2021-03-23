@@ -45,7 +45,7 @@ struct stats_column_desc {
   uint32_t num_rows;             //!< number of rows in column
   uint32_t num_values;  //!< Number of data values in column. Different from num_rows in case of
                         //!< nested columns
-  int32_t ts_scale;  //!< timestamp scale (>0: multiply by scale, <0: divide by -scale)
+  int32_t ts_scale;     //!< timestamp scale (>0: multiply by scale, <0: divide by -scale)
 
   column_device_view *leaf_column;    //!< Pointer to leaf column
   column_device_view *parent_column;  //!< Pointer to parent column. Is nullptr if not list type.
