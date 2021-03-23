@@ -104,11 +104,11 @@ struct filter_null_sentinel {
 
 // Bin the input by the edges in left_edges and right_edges.
 template <typename T, typename LeftComparator, typename RightComparator>
-std::unique_ptr<column> bin(column_view const& input,
-                            column_view const& left_edges,
-                            column_view const& right_edges,
-                            rmm::cuda_stream_view stream,
-                            rmm::mr::device_memory_resource* mr)
+std::unique_ptr<column> label_bins(column_view const& input,
+                                   column_view const& left_edges,
+                                   column_view const& right_edges,
+                                   rmm::cuda_stream_view stream,
+                                   rmm::mr::device_memory_resource* mr)
 {
   auto output = make_numeric_column(
     data_type(type_to_id<size_type>()), input.size(), mask_state::UNALLOCATED, stream, mr);
@@ -177,16 +177,16 @@ struct bin_type_dispatcher {
     rmm::mr::device_memory_resource* mr)
   {
     if ((left_inclusive == inclusive::YES) && (right_inclusive == inclusive::YES))
-      return bin<T, thrust::less_equal<T>, thrust::less_equal<T>>(
+      return label_bins<T, thrust::less_equal<T>, thrust::less_equal<T>>(
         input, left_edges, right_edges, stream, mr);
     if ((left_inclusive == inclusive::YES) && (right_inclusive == inclusive::NO))
-      return bin<T, thrust::less_equal<T>, thrust::less<T>>(
+      return label_bins<T, thrust::less_equal<T>, thrust::less<T>>(
         input, left_edges, right_edges, stream, mr);
     if ((left_inclusive == inclusive::NO) && (right_inclusive == inclusive::YES))
-      return bin<T, thrust::less<T>, thrust::less_equal<T>>(
+      return label_bins<T, thrust::less<T>, thrust::less_equal<T>>(
         input, left_edges, right_edges, stream, mr);
     if ((left_inclusive == inclusive::NO) && (right_inclusive == inclusive::NO))
-      return bin<T, thrust::less<T>, thrust::less<T>>(input, left_edges, right_edges, stream, mr);
+      return label_bins<T, thrust::less<T>, thrust::less<T>>(input, left_edges, right_edges, stream, mr);
 
     CUDF_FAIL("Undefined inclusive setting.");
   }
@@ -195,13 +195,13 @@ struct bin_type_dispatcher {
 }  // anonymous namespace
 
 /// Bin the input by the edges in left_edges and right_edges.
-std::unique_ptr<column> bin(column_view const& input,
-                            column_view const& left_edges,
-                            inclusive left_inclusive,
-                            column_view const& right_edges,
-                            inclusive right_inclusive,
-                            rmm::cuda_stream_view stream,
-                            rmm::mr::device_memory_resource* mr)
+std::unique_ptr<column> label_bins(column_view const& input,
+                                   column_view const& left_edges,
+                                   inclusive left_inclusive,
+                                   column_view const& right_edges,
+                                   inclusive right_inclusive,
+                                   rmm::cuda_stream_view stream,
+                                   rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE()
   CUDF_EXPECTS((input.type() == left_edges.type()) && (input.type() == right_edges.type()),
@@ -228,14 +228,14 @@ std::unique_ptr<column> bin(column_view const& input,
 }  // namespace detail
 
 /// Bin the input by the edges in left_edges and right_edges.
-std::unique_ptr<column> bin(column_view const& input,
-                            column_view const& left_edges,
-                            inclusive left_inclusive,
-                            column_view const& right_edges,
-                            inclusive right_inclusive,
-                            rmm::mr::device_memory_resource* mr)
+std::unique_ptr<column> label_bins(column_view const& input,
+                                   column_view const& left_edges,
+                                   inclusive left_inclusive,
+                                   column_view const& right_edges,
+                                   inclusive right_inclusive,
+                                   rmm::mr::device_memory_resource* mr)
 {
-  return detail::bin(
+  return detail::label_bins(
     input, left_edges, left_inclusive, right_edges, right_inclusive, rmm::cuda_stream_default, mr);
 }
 }  // namespace cudf

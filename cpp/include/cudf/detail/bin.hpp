@@ -44,7 +44,7 @@ namespace detail {
  *
  * @param stream Stream view on which to allocate resources and queue execution.
  */
-std::unique_ptr<column> bin(
+std::unique_ptr<column> label_bins(
   column_view const& input,
   column_view const& left_edges,
   inclusive left_inclusive,

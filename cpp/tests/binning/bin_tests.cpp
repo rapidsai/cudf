@@ -61,7 +61,7 @@ TEST(BinColumnErrorTests, TestInvalidLeft)
   fwc_wrapper<float> right_edges{1, 2, 3, 4, 5, 6, 7, 8, 9, 10};
   fwc_wrapper<float> input{0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5};
 
-  EXPECT_THROW(cudf::bin(input, left_edges, cudf::inclusive::YES, right_edges, cudf::inclusive::NO),
+  EXPECT_THROW(cudf::label_bins(input, left_edges, cudf::inclusive::YES, right_edges, cudf::inclusive::NO),
                cudf::logic_error);
 };
 
@@ -72,7 +72,7 @@ TEST(BinColumnErrorTests, TestInvalidRight)
   fwc_wrapper<double> right_edges{1, 2, 3, 4, 5, 6, 7, 8, 9, 10};
   fwc_wrapper<float> input{0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5};
 
-  EXPECT_THROW(cudf::bin(input, left_edges, cudf::inclusive::YES, right_edges, cudf::inclusive::NO),
+  EXPECT_THROW(cudf::label_bins(input, left_edges, cudf::inclusive::YES, right_edges, cudf::inclusive::NO),
                cudf::logic_error);
 };
 
@@ -83,7 +83,7 @@ TEST(BinColumnErrorTests, TestInvalidInput)
   fwc_wrapper<float> right_edges{1, 2, 3, 4, 5, 6, 7, 8, 9, 10};
   fwc_wrapper<double> input{0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5};
 
-  EXPECT_THROW(cudf::bin(input, left_edges, cudf::inclusive::YES, right_edges, cudf::inclusive::NO),
+  EXPECT_THROW(cudf::label_bins(input, left_edges, cudf::inclusive::YES, right_edges, cudf::inclusive::NO),
                cudf::logic_error);
 };
 
@@ -94,7 +94,7 @@ TEST(BinColumnErrorTests, TestMismatchedEdges)
   fwc_wrapper<float> right_edges{1, 2, 3, 4, 5, 6, 7, 8, 9};
   fwc_wrapper<float> input{0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5};
 
-  EXPECT_THROW(cudf::bin(input, left_edges, cudf::inclusive::YES, right_edges, cudf::inclusive::NO),
+  EXPECT_THROW(cudf::label_bins(input, left_edges, cudf::inclusive::YES, right_edges, cudf::inclusive::NO),
                cudf::logic_error);
 };
 
@@ -105,7 +105,7 @@ TEST(BinColumnErrorTests, TestLeftEdgesWithNullsBefore)
   fwc_wrapper<float> right_edges{1, 2, 3, 4, 5, 6, 7, 8, 9};
   fwc_wrapper<float> input{0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5};
 
-  EXPECT_THROW(cudf::bin(input, left_edges, cudf::inclusive::NO, right_edges, cudf::inclusive::NO),
+  EXPECT_THROW(cudf::label_bins(input, left_edges, cudf::inclusive::NO, right_edges, cudf::inclusive::NO),
                cudf::logic_error);
 };
 
@@ -116,7 +116,7 @@ TEST(BinColumnErrorTests, TestRightEdgesWithNullsBefore)
   fwc_wrapper<float> right_edges{{1, 2, 3, 4, 5, 6, 7, 8, 9}, {0, 1, 1, 1, 1, 1, 1, 1, 1, 1}};
   fwc_wrapper<float> input{0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5};
 
-  EXPECT_THROW(cudf::bin(input, left_edges, cudf::inclusive::NO, right_edges, cudf::inclusive::NO),
+  EXPECT_THROW(cudf::label_bins(input, left_edges, cudf::inclusive::NO, right_edges, cudf::inclusive::NO),
                cudf::logic_error);
 };
 
@@ -132,7 +132,7 @@ struct GenericExceptionCasesBinTestFixture : public BinTestFixture {
             fwc_wrapper<T> right_edges)
   {
     auto result =
-      cudf::bin(input, left_edges, cudf::inclusive::NO, right_edges, cudf::inclusive::NO);
+      cudf::label_bins(input, left_edges, cudf::inclusive::NO, right_edges, cudf::inclusive::NO);
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
   }
 };
@@ -197,7 +197,7 @@ struct BoundaryExclusionBinTestFixture : public BinTestFixture {
     fwc_wrapper<T> right_edges{2, 4, 6, 8, 10};
     fwc_wrapper<T> input{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10};
 
-    auto result = cudf::bin(input, left_edges, left_inc, right_edges, right_inc);
+    auto result = cudf::label_bins(input, left_edges, left_inc, right_edges, right_inc);
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
   }
 };
@@ -289,7 +289,7 @@ struct RealDataBinTestFixture : public BinTestFixture {
       expected_vector.begin(), expected_vector.end(), expected_validity.begin());
 
     auto result =
-      cudf::bin(input, left_edges, cudf::inclusive::YES, right_edges, cudf::inclusive::NO);
+      cudf::label_bins(input, left_edges, cudf::inclusive::YES, right_edges, cudf::inclusive::NO);
 
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
   }
@@ -336,7 +336,7 @@ TYPED_TEST(FixedPointBinTestFixture, TestFixedPointData)
   fpc_type_wrapper input{{25, 25, 25, 25, 25, 25, 25, 25, 25, 25}, numeric::scale_type{0}};
 
   auto result =
-    cudf::bin(input, left_edges, cudf::inclusive::YES, right_edges, cudf::inclusive::NO);
+    cudf::label_bins(input, left_edges, cudf::inclusive::YES, right_edges, cudf::inclusive::NO);
 
   // Check that every element is placed in bin 2.
   fwc_wrapper<cudf::size_type> expected{{2, 2, 2, 2, 2, 2, 2, 2, 2, 2},
@@ -356,7 +356,7 @@ TEST(TestStringData, SimpleStringTest)
   cudf::test::strings_column_wrapper input{"abc", "bcd", "cde", "def", "efg"};
 
   auto result =
-    cudf::bin(input, left_edges, cudf::inclusive::YES, right_edges, cudf::inclusive::NO);
+    cudf::label_bins(input, left_edges, cudf::inclusive::YES, right_edges, cudf::inclusive::NO);
 
   fwc_wrapper<cudf::size_type> expected{{0, 1, 2, 3, 4}, {1, 1, 1, 1, 1}};
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
@@ -383,7 +383,7 @@ TEST(TestStringData, NonAsciiStringTest)
                                            "de",
                                            "\t\r\n\f "};
 
-  auto result = cudf::bin(input, left_edges, cudf::inclusive::NO, right_edges, cudf::inclusive::NO);
+  auto result = cudf::label_bins(input, left_edges, cudf::inclusive::NO, right_edges, cudf::inclusive::NO);
 
   fwc_wrapper<cudf::size_type> expected{{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
                                         {1, 1, 1, 1, 0, 0, 0, 0, 0, 1, 0, 0, 0, 1, 0}};
@@ -414,14 +414,14 @@ TEST(TestStringData, SlicedNonAsciiStringTest)
   auto sliced_inputs = cudf::slice(input, {1, 5, 5, 11});
 
   {
-    auto result = cudf::bin(
+    auto result = cudf::label_bins(
       sliced_inputs[0], left_edges, cudf::inclusive::NO, right_edges, cudf::inclusive::NO);
     fwc_wrapper<cudf::size_type> expected{{0, 0, 0, 0}, {1, 1, 1, 0}};
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
   }
 
   {
-    auto result = cudf::bin(
+    auto result = cudf::label_bins(
       sliced_inputs[1], left_edges, cudf::inclusive::NO, right_edges, cudf::inclusive::NO);
     fwc_wrapper<cudf::size_type> expected{{0, 0, 0, 0, 0, 0}, {0, 0, 0, 0, 1, 0}};
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());

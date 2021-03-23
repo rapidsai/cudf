@@ -70,7 +70,7 @@ enum class inclusive { YES, NO };
  * @param mr Device memory resource used to allocate the returned column's device.
  * @return The integer labels of the elements in `input` according to the specified bins.
  */
-std::unique_ptr<column> bin(
+std::unique_ptr<column> label_bins(
   column_view const& input,
   column_view const& left_edges,
   inclusive left_inclusive,
