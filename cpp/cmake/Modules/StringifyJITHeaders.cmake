@@ -14,7 +14,15 @@
 # limitations under the License.
 #=============================================================================
 
+cmake_minimum_required(VERSION 3.18)
+
 file(MAKE_DIRECTORY "${CUDF_GENERATED_INCLUDE_DIR}/include")
+
+# Create `jitify_preprocess` executable
+project(jitify_preprocess VERSION 2.0 LANGUAGES CXX CUDA)
+add_executable(jitify_preprocess "${JITIFY_INCLUDE_DIR}/jitify2_preprocess.cpp")
+target_link_libraries(jitify_preprocess CUDA::cudart_static)
+
 
 # Create `stringify` executable
 add_executable(stringify "${JITIFY_INCLUDE_DIR}/stringify.cpp")
@@ -34,14 +42,13 @@ function(jit_pre)
                           ${ARGN}
                           )
 
-    message("Provided sources are:")
     foreach(ARG_FILE ${ARG_FILES})
         set(ARG_OUTPUT ${CUDF_GENERATED_INCLUDE_DIR}/include/jit_pre/${ARG_FILE}.jit)
         set(JIT_PRE_FILES "${ARG_OUTPUT};${JIT_PRE_FILES}")
         add_custom_command(WORKING_DIRECTORY ${ARG_SOURCE_DIRECTORY}
                            DEPENDS stringify
                            OUTPUT ${ARG_OUTPUT}
-                           COMMAND ${CUDF_BINARY_DIR}/stringify ${ARG_FILE} > ${ARG_OUTPUT}
+                           COMMAND ${CUDF_BINARY_DIR}/stringify ${ARG_FILE} > ${ARG_OUTPUT}_old
                            )
     endforeach()
     set(JIT_PRE_FILES "${JIT_PRE_FILES}" PARENT_SCOPE)
@@ -87,8 +94,6 @@ jit_pre(SOURCE_DIRECTORY      ${LIBCUDACXX_INCLUDE_DIR}
 jit_pre(SOURCE_DIRECTORY      ${CUDF_SOURCE_DIR}/..
         FILES                 cudf/src/rolling/rolling_jit_detail.hpp
         )
-
-# message(FATAL_ERROR "files: ${JIT_PRE_FILES}")
 
 add_custom_target(stringify_run DEPENDS ${JIT_PRE_FILES})
 
