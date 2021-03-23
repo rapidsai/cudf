@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-#include <cudf/binning/bin.hpp>
+#include <cudf/labeling/label_bins.hpp>
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_view.hpp>
 #include <cudf/copying.hpp>

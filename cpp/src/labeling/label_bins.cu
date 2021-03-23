@@ -14,12 +14,12 @@
  * limitations under the License.
  */
 
-#include <cudf/binning/bin.hpp>
+#include <cudf/labeling/label_bins.hpp>
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_factories.hpp>
 #include <cudf/column/column_view.hpp>
-#include <cudf/detail/bin.hpp>
+#include <cudf/detail/label_bins.hpp>
 #include <cudf/detail/valid_if.cuh>
 #include <cudf/types.hpp>
 #include <cudf/utilities/error.hpp>

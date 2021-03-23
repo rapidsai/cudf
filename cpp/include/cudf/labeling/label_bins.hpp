@@ -29,7 +29,7 @@ namespace cudf {
  * @addtogroup label_bins
  * @{
  * @file
- * @brief APIs for binning values.
+ * @brief APIs for labeling values by bin.
  */
 
 /**

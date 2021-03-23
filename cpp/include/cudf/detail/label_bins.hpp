@@ -16,7 +16,7 @@
 
 #pragma once
 
-#include <cudf/binning/bin.hpp>
+#include <cudf/labeling/label_bins.hpp>
 
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_view.hpp>
@@ -34,11 +34,11 @@ namespace detail {
  * @addtogroup label_bins
  * @{
  * @file
- * @brief Internal APIs for binning values.
+ * @brief Internal APIs for labeling values by bin.
  */
 
 /**
- * @copydoc cudf::bin(column_view const& input, column_view const& left_edges, inclusive
+ * @copydoc cudf::label_bins(column_view const& input, column_view const& left_edges, inclusive
  * left_inclusive, column_view const& right_edges, inclusive right_inclusive, null_order
  * edge_null_precedence null_order::BEFORE, rmm::mr::device_memory_resource* mr)
  *
