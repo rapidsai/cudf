@@ -30,10 +30,10 @@ using float_type = float;
 using LIST_COL_FLT = cudf::test::lists_column_wrapper<float_type>;
 using LIST_COL_STR = cudf::test::lists_column_wrapper<cudf::string_view>;
 
-auto constexpr m_NaN = -std::numeric_limits<float_type>::quiet_NaN();
-auto constexpr m_inf = -std::numeric_limits<float_type>::infinity();
-auto constexpr p_inf = std::numeric_limits<float_type>::infinity();
-auto constexpr p_NaN = std::numeric_limits<float_type>::quiet_NaN();
+auto constexpr neg_NaN = -std::numeric_limits<float_type>::quiet_NaN();
+auto constexpr neg_Inf = -std::numeric_limits<float_type>::infinity();
+auto constexpr NaN     = std::numeric_limits<float_type>::quiet_NaN();
+auto constexpr Inf     = std::numeric_limits<float_type>::infinity();
 
 template <class LCW>
 void test_once(cudf::column_view const& input,
@@ -62,10 +62,9 @@ TEST_F(DropListDuplicatesTest, FloatingPointTestsWithSignedZero)
 TEST_F(DropListDuplicatesTest, FloatingPointTestsWithInf)
 {
   // Lists contain inf
-  test_once(LIST_COL_FLT{0, 1, 2, 0, 1, 2, 0, 1, 2, p_inf, p_inf, p_inf},
-            LIST_COL_FLT{0, 1, 2, p_inf});
-  test_once(LIST_COL_FLT{p_inf, 0, m_inf, 0, p_inf, 0, m_inf, 0, p_inf, 0, m_inf},
-            LIST_COL_FLT{m_inf, 0, p_inf});
+  test_once(LIST_COL_FLT{0, 1, 2, 0, 1, 2, 0, 1, 2, Inf, Inf, Inf}, LIST_COL_FLT{0, 1, 2, Inf});
+  test_once(LIST_COL_FLT{Inf, 0, neg_Inf, 0, Inf, 0, neg_Inf, 0, Inf, 0, neg_Inf},
+            LIST_COL_FLT{neg_Inf, 0, Inf});
 }
 
 // The position of NaN is undefined after sorting, thus we need to offload the data to CPU to
@@ -100,17 +99,17 @@ void test_floating_point(std::vector<float_type> const& h_input,
 TEST_F(DropListDuplicatesTest, FloatingPointTestsWithNaN)
 {
   std::vector<float_type> h_input{
-    0, -1, 1, p_NaN, 2, 0, m_NaN, 1, -2, 2, 0, 1, 2, m_NaN, p_NaN, p_NaN, p_NaN, m_NaN};
+    0, -1, 1, NaN, 2, 0, neg_NaN, 1, -2, 2, 0, 1, 2, neg_NaN, NaN, NaN, NaN, neg_NaN};
   std::unordered_set<float_type> results_expected{-2, -1, 0, 1, 2};
   test_floating_point(h_input, results_expected);
 }
 
 TEST_F(DropListDuplicatesTest, FloatingPointTestsWithInfAndNaN)
 {
-  std::vector<float_type> h_input{m_inf, 0, m_NaN, 1,     -1,    -2,    p_NaN, p_NaN, p_inf, p_NaN,
-                                  m_NaN, 2, -1,    0,     m_NaN, 1,     2,     p_inf, 0,     1,
-                                  m_inf, 2, m_NaN, p_inf, m_NaN, m_NaN, p_NaN, m_inf};
-  std::unordered_set<float_type> results_expected{-2, -1, 0, 1, 2, m_inf, p_inf};
+  std::vector<float_type> h_input{neg_Inf, 0, neg_NaN, 1,   -1,      -2,      NaN, NaN,    Inf, NaN,
+                                  neg_NaN, 2, -1,      0,   neg_NaN, 1,       2,   Inf,    0,   1,
+                                  neg_Inf, 2, neg_NaN, Inf, neg_NaN, neg_NaN, NaN, neg_Inf};
+  std::unordered_set<float_type> results_expected{-2, -1, 0, 1, 2, neg_Inf, Inf};
   test_floating_point(h_input, results_expected);
 }
 
