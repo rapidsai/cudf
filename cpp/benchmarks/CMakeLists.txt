@@ -193,4 +193,5 @@ ConfigureBench(STRINGS_BENCH
   string/replace_benchmark.cpp
   string/split_benchmark.cpp
   string/substring_benchmark.cpp
+  string/translate_benchmark.cpp
   string/url_decode_benchmark.cpp)

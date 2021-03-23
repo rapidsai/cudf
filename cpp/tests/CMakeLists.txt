@@ -70,7 +70,11 @@ ConfigureTest(GROUPBY_TEST
     groupby/group_quantile_test.cpp
     groupby/group_nunique_test.cpp
     groupby/group_nth_element_test.cpp
-    groupby/group_collect_test.cpp)
+    groupby/group_collect_test.cpp
+    groupby/group_sum_scan_test.cpp
+    groupby/group_min_scan_test.cpp
+    groupby/group_max_scan_test.cpp
+    groupby/group_count_scan_test.cpp)
 
 ###################################################################################################
 # - join tests ------------------------------------------------------------------------------------

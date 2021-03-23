@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,26 +14,21 @@
  * limitations under the License.
  */
 
-#include <groupby/sort/group_single_pass_reduction_util.cuh>
+#include <groupby/sort/group_scan_util.cuh>
 
 #include <rmm/cuda_stream_view.hpp>
 
 namespace cudf {
 namespace groupby {
 namespace detail {
-std::unique_ptr<column> group_max(column_view const& values,
-                                  size_type num_groups,
-                                  cudf::device_span<size_type const> group_labels,
-                                  rmm::cuda_stream_view stream,
-                                  rmm::mr::device_memory_resource* mr)
+std::unique_ptr<column> sum_scan(column_view const& values,
+                                 size_type num_groups,
+                                 cudf::device_span<size_type const> group_labels,
+                                 rmm::cuda_stream_view stream,
+                                 rmm::mr::device_memory_resource* mr)
 {
-  return type_dispatcher(values.type(),
-                         reduce_functor<aggregation::MAX>{},
-                         values,
-                         num_groups,
-                         group_labels,
-                         stream,
-                         mr);
+  return type_dispatcher(
+    values.type(), scan_functor<aggregation::SUM>{}, values, num_groups, group_labels, stream, mr);
 }
 
 }  // namespace detail
