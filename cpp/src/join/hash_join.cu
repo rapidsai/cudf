@@ -441,9 +441,10 @@ std::pair<std::unique_ptr<table>, std::unique_ptr<table>> construct_join_output_
                                               bounds_policy,
                                               stream,
                                               rmm::mr::get_current_device_resource());
-      auto const common_table_views =
-        std::vector<table_view>({{common_from_build->view(), common_from_probe->view()}});
-      auto common_table = cudf::detail::concatenate(common_table_views, stream, mr);
+      common_table           = cudf::detail::concatenate(
+        std::vector<table_view>({common_from_build->view(), common_from_probe->view()}),
+        stream,
+        mr);
     }
     joined_indices = concatenate_vector_pairs(complement_indices, joined_indices);
   } else {
