@@ -148,12 +148,11 @@ def is_numerical_dtype(obj):
         return False
     if is_list_dtype(obj):
         return False
-    return (
-        np.issubdtype(obj, np.bool_)
-        or np.issubdtype(obj, np.floating)
-        or np.issubdtype(obj, np.signedinteger)
-        or np.issubdtype(obj, np.unsignedinteger)
-    )
+    try:
+        dtype = np.dtype(obj)
+    except TypeError:
+        return False
+    return dtype.kind in "biuf"
 
 
 def is_string_dtype(obj):
