@@ -35,7 +35,7 @@ Result Variables
 
 This module will set the following variables in your project::
 
-  cudf_FOUND
+  CUDF_FOUND
   CUDF_VERSION
   CUDF_VERSION_MAJOR
   CUDF_VERSION_MINOR
