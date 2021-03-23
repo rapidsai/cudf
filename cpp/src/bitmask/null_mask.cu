@@ -44,8 +44,6 @@
 #include <numeric>
 #include <type_traits>
 
-using cudf::device_span;
-
 namespace cudf {
 size_type state_null_count(mask_state state, size_type size)
 {

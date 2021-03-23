@@ -17,7 +17,7 @@
 #pragma once
 
 #include <cudf/column/column_device_view.cuh>
-#include <cudf/detail/utilities/release_assert.cuh>
+#include <cudf/detail/utilities/assert.cuh>
 #include <cudf/strings/string_view.cuh>
 #include <hash/hash_constants.hpp>
 
@@ -154,7 +154,7 @@ struct MD5ListHasher {
                              size_type offset_end,
                              md5_intermediate_data* hash_state) const
   {
-    release_assert(false && "MD5 Unsupported chrono type column");
+    cudf_assert(false && "MD5 Unsupported chrono type column");
   }
 
   template <typename T, std::enable_if_t<!is_fixed_width<T>()>* = nullptr>
@@ -163,7 +163,7 @@ struct MD5ListHasher {
                              size_type offset_end,
                              md5_intermediate_data* hash_state) const
   {
-    release_assert(false && "MD5 Unsupported non-fixed-width type column");
+    cudf_assert(false && "MD5 Unsupported non-fixed-width type column");
   }
 
   template <typename T, std::enable_if_t<is_floating_point<T>()>* = nullptr>
@@ -273,7 +273,7 @@ struct MD5Hash {
                              size_type row_index,
                              md5_intermediate_data* hash_state) const
   {
-    release_assert(false && "MD5 Unsupported chrono type column");
+    cudf_assert(false && "MD5 Unsupported chrono type column");
   }
 
   template <typename T, std::enable_if_t<!is_fixed_width<T>()>* = nullptr>
@@ -281,7 +281,7 @@ struct MD5Hash {
                              size_type row_index,
                              md5_intermediate_data* hash_state) const
   {
-    release_assert(false && "MD5 Unsupported non-fixed-width type column");
+    cudf_assert(false && "MD5 Unsupported non-fixed-width type column");
   }
 
   template <typename T, std::enable_if_t<is_floating_point<T>()>* = nullptr>
@@ -344,7 +344,7 @@ void CUDA_DEVICE_CALLABLE MD5Hash::operator()<list_view>(column_device_view col,
   column_device_view offsets = col.child(offsets_column_index);
   column_device_view data    = col.child(data_column_index);
 
-  if (data.type().id() == type_id::LIST) release_assert(false && "Nested list unsupported");
+  if (data.type().id() == type_id::LIST) cudf_assert(false && "Nested list unsupported");
 
   cudf::type_dispatcher(data.type(),
                         MD5ListHasher{},
@@ -724,7 +724,7 @@ struct IdentityHash {
   CUDA_HOST_DEVICE_CALLABLE std::enable_if_t<!std::is_arithmetic<Key>::value, return_type>
   operator()(Key const& key) const
   {
-    release_assert(false && "IdentityHash does not support this data type");
+    cudf_assert(false && "IdentityHash does not support this data type");
     return 0;
   }
 
