@@ -11,4 +11,4 @@ cdef extern from "cudf/lists/extract.hpp" namespace "cudf::lists" nogil:
     cdef unique_ptr[column] extract_list_element(
         const lists_column_view,
         size_type
-    )except +
+    ) except +
