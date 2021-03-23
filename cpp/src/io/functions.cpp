@@ -419,6 +419,22 @@ std::unique_ptr<std::vector<uint8_t>> merge_rowgroup_metadata(
   return detail_parquet::writer::merge_rowgroup_metadata(metadata_list);
 }
 
+table_input_metadata::table_input_metadata(table_view const& table,
+                                           std::map<std::string, std::string> user_data)
+  : user_data{std::move(user_data)}
+{
+  // Create a metadata hierarchy using `table`
+  std::function<column_in_metadata(column_view const&)> get_children = [&](column_view const& col) {
+    auto col_meta = column_in_metadata{};
+    std::transform(
+      col.child_begin(), col.child_end(), std::back_inserter(col_meta.children), get_children);
+    return col_meta;
+  };
+
+  std::transform(
+    table.begin(), table.end(), std::back_inserter(this->column_metadata), get_children);
+}
+
 /**
  * @copydoc cudf::io::write_parquet
  */

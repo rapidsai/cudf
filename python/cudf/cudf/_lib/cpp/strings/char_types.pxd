@@ -1,4 +1,4 @@
-# Copyright (c) 2020, NVIDIA CORPORATION.
+# Copyright (c) 2021, NVIDIA CORPORATION.
 
 from libcpp.memory cimport unique_ptr
 from cudf._lib.cpp.column.column_view cimport column_view
@@ -33,11 +33,3 @@ cdef extern from "cudf/strings/char_types/char_types.hpp" \
         string_character_types types_to_remove,
         string_scalar replacement,
         string_character_types types_to_keep) except +
-
-    cdef unique_ptr[column] is_integer(
-        column_view source_strings
-    ) except +
-
-    cdef unique_ptr[column] is_float(
-        column_view source_strings
-    ) except +

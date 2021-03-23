@@ -36,7 +36,7 @@ struct dict_state_s {
   uint32_t num_dict_entries;    //!< Dictionary entries in current fragment to add
   uint32_t frag_dict_size;
   EncColumnChunk ck;
-  EncColumnDesc col;
+  parquet_column_device_view col;
   PageFragment frag;
   volatile uint32_t scratch_red[32];
   uint16_t frag_dict[max_page_fragment_size];
