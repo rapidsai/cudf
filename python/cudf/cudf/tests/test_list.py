@@ -175,36 +175,31 @@ def test_take_invalid(invalid, exception):
             "b",
             [True, True, False],
         ),
-        (
-            [[False, True, True], [False, False, False], [True, True, False]],
-            True,
-            [True, False, True],
-        ),
     ],
 )
-def test_contains(data, key, expect):
+def test_contains_scalar(data, key, expect):
     sr = cudf.Series(data)
     expect = cudf.Series(expect)
-    got = sr.list.contains(key)
+    got = sr.list.contains(key=key, _dtype=sr.dtype.element_type)
     assert_eq(expect, got)
 
 
 def test_contains_null_search_key():
     sr = cudf.Series([[1, 2, 3], [3, 4, 5], [4, 5, 6]])
     expect = cudf.Series([False, False, False])
-    got = sr.list.contains(key=cudf.Scalar(None))
+    got = sr.list.contains(key=cudf.NA, _dtype=sr.dtype.element_type)
     assert_eq(expect, got)
 
 
 def test_contains_null_rows():
     sr = cudf.Series([[], [], []])
-    expect = cudf.Series([True, True, True])
-    got = sr.list.contains(key=cudf.Scalar(None, dtype="object"))
+    expect = cudf.Series([False, False, False])
+    got = sr.list.contains(key=cudf.NA, _dtype=sr.dtype.element_type)
     assert_eq(expect, got)
 
 
 def test_contains_invalid_search_key():
     sr = cudf.Series([[1.0, 2.0, 3.0], [], [5.0, 7.0, 8.0]])
     expect = cudf.Series([False, False, False])
-    got = sr.list.contains(4.0)
+    got = sr.list.contains(key=4.0, _dtype=sr.dtype.element_type)
     assert_eq(expect, got)
