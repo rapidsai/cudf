@@ -16,7 +16,7 @@
 
 #pragma once
 
-#include <cudf/detail/utilities/release_assert.cuh>
+#include <cudf/detail/utilities/assert.cuh>
 #include <cudf/fixed_point/fixed_point.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/error.hpp>
@@ -501,7 +501,7 @@ CUDA_HOST_DEVICE_CALLABLE constexpr decltype(auto) type_dispatcher(cudf::data_ty
 #ifndef __CUDA_ARCH__
       CUDF_FAIL("Unsupported type_id.");
 #else
-      release_assert(false && "Unsupported type_id.");
+      cudf_assert(false && "Unsupported type_id.");
 
       // The following code will never be reached, but the compiler generates a
       // warning if there isn't a return value.

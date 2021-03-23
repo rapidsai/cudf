@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2020, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -167,6 +167,61 @@ class groupby {
     rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
   /**
+   * @brief Performs grouped scans on the specified values.
+   *
+   * The values to aggregate and the aggregations to perform are specifed in an
+   * `aggregation_request`. Each request contains a `column_view` of values to
+   * aggregate and a set of `aggregation`s to perform on those elements.
+   *
+   * For each `aggregation` in a request, `values[i]` is scan aggregated with
+   * all previous `values[j]` where rows `i` and `j` in `keys` are equivalent.
+   *
+   * The `size()` of the request column must equal `keys.num_rows()`.
+   *
+   * For every `aggregation_request` an `aggregation_result` will be returned.
+   * The `aggregation_result` holds the resulting column(s) for each requested
+   * aggregation on the `request`s values. The order of the columns in each
+   * result is the same order as was specified in the request.
+   *
+   * The returned `table` contains the group labels for each row, i.e., the
+   * `keys` given to groupby object. Element `i` across all aggregation results
+   * belongs to the group at row `i` in the group labels table.
+   *
+   * The order of the rows in the group labels is arbitrary. Furthermore,
+   * successive `groupby::scan` calls may return results in different orders.
+   *
+   * @throws cudf::logic_error If `requests[i].values.size() !=
+   * keys.num_rows()`.
+   *
+   * Example:
+   * ```
+   * Input:
+   * keys:     {1 2 1 3 1}
+   *           {1 2 1 4 1}
+   * request:
+   *   values: {3 1 4 9 2}
+   *   aggregations: {{SUM}, {MIN}}
+   *
+   * result:
+   *
+   * keys:  {3 1 1 1 2}
+   *        {4 1 1 1 2}
+   * values:
+   *   SUM: {9 3 7 9 1}
+   *   MIN: {9 3 3 2 1}
+   * ```
+   *
+   * @param requests The set of columns to scan and the scans to perform
+   * @param mr Device memory resource used to allocate the returned table and columns' device memory
+   * @return Pair containing the table with each group's key and
+   * a vector of aggregation_results for each request in the same order as
+   * specified in `requests`.
+   */
+  std::pair<std::unique_ptr<table>, std::vector<aggregation_result>> scan(
+    std::vector<aggregation_request> const& requests,
+    rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+
+  /**
    * @brief The grouped data corresponding to a groupby operation on a set of values.
    *
    * A `groups` object holds two tables of identical number of rows:
@@ -228,6 +283,11 @@ class groupby {
 
   // Sort-based groupby
   std::pair<std::unique_ptr<table>, std::vector<aggregation_result>> sort_aggregate(
+    std::vector<aggregation_request> const& requests,
+    rmm::cuda_stream_view stream,
+    rmm::mr::device_memory_resource* mr);
+
+  std::pair<std::unique_ptr<table>, std::vector<aggregation_result>> sort_scan(
     std::vector<aggregation_request> const& requests,
     rmm::cuda_stream_view stream,
     rmm::mr::device_memory_resource* mr);

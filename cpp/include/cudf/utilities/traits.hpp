@@ -16,8 +16,6 @@
 
 #pragma once
 
-#include <cudf/lists/list_view.cuh>
-#include <cudf/structs/struct_view.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
 #include <cudf/wrappers/durations.hpp>
@@ -224,6 +222,18 @@ struct is_unsigned_impl {
 constexpr inline bool is_unsigned(data_type type)
 {
   return cudf::type_dispatcher(type, is_unsigned_impl{});
+}
+
+/**
+ * @brief Indicates whether the `Iterator` value type is unsigned.
+ *
+ * @tparam Iterator  The type to verify
+ * @return true if the iterator's value type is unsigned
+ */
+template <typename Iterator>
+constexpr inline bool is_signed_iterator()
+{
+  return std::is_signed<typename std::iterator_traits<Iterator>::value_type>::value;
 }
 
 /**

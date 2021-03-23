@@ -183,8 +183,12 @@ public final class Table implements AutoCloseable {
   
   private static native ContiguousTable[] contiguousSplit(long inputTable, int[] indices);
 
+  private static native long[] partition(long inputTable, long partitionView,
+      int numberOfPartitions, int[] outputOffsets);
+
   private static native long[] hashPartition(long inputTable,
                                              int[] columnsToHash,
+                                             int hashTypeId,
                                              int numberOfPartitions,
                                              int[] outputOffsets) throws CudfException;
 
@@ -515,6 +519,10 @@ public final class Table implements AutoCloseable {
 
   private static native long[] explodePosition(long tableHandle, int index);
 
+  private static native long[] explodeOuter(long tableHandle, int index);
+
+  private static native long[] explodeOuterPosition(long tableHandle, int index);
+
   private static native long createCudfTableView(long[] nativeColumnViewHandles);
 
   private static native long[] columnViewsFromPacked(ByteBuffer metadata, long dataAddress);
@@ -795,6 +803,12 @@ public final class Table implements AutoCloseable {
     HostBufferConsumer consumer;
 
     private ParquetTableWriter(ParquetWriterOptions options, File outputFile) {
+      int numColumns = options.getColumnNames().length;
+      assert (numColumns == options.getColumnNullability().length);
+      int[] precisions = options.getPrecisions();
+      if (precisions != null) {
+        assert (numColumns >= options.getPrecisions().length);
+      }
       this.consumer = null;
       this.handle = writeParquetFileBegin(options.getColumnNames(),
           options.getColumnNullability(),
@@ -861,17 +875,6 @@ public final class Table implements AutoCloseable {
   public static TableWriter writeParquetChunked(ParquetWriterOptions options,
                                                 HostBufferConsumer consumer) {
     return new ParquetTableWriter(options, consumer);
-  }
-
-  /**
-   * Writes this table to a Parquet file on the host
-   *
-   * @param outputFile file to write the table to
-   * @deprecated please use writeParquetChunked instead
-   */
-  @Deprecated
-  public void writeParquet(File outputFile) {
-    writeParquet(ParquetWriterOptions.DEFAULT, outputFile);
   }
 
   /**
@@ -1250,6 +1253,24 @@ public final class Table implements AutoCloseable {
    */
   public Table repeat(ColumnVector counts, boolean checkCount) {
     return new Table(repeatColumnCount(this.nativeHandle, counts.getNativeView(), checkCount));
+  }
+
+  /**
+   * Partition this table using the mapping in partitionMap. partitionMap must be an integer
+   * column. The number of rows in partitionMap must be the same as this table.  Each row
+   * in the map will indicate which partition the rows in the table belong to.
+   * @param partitionMap the partitions for each row.
+   * @param numberOfPartitions number of partitions
+   * @return {@link PartitionedTable} Table that exposes a limited functionality of the
+   * {@link Table} class
+   */
+  public PartitionedTable partition(ColumnView partitionMap, int numberOfPartitions) {
+    int[] partitionOffsets = new int[numberOfPartitions];
+    return new PartitionedTable(new Table(partition(
+        getNativeView(),
+        partitionMap.getNativeView(),
+        partitionOffsets.length,
+        partitionOffsets)), partitionOffsets);
   }
 
   /**
@@ -1724,7 +1745,7 @@ public final class Table implements AutoCloseable {
    * Example:
    * input:  [[5,10,15], 100],
    *         [[20,25],   200],
-   *         [[30],      300],
+   *         [[30],      300]
    * index: 0
    * output: [5,         100],
    *         [10,        100],
@@ -1736,12 +1757,12 @@ public final class Table implements AutoCloseable {
    *
    * Nulls propagate in different ways depending on what is null.
    * <code>
-   *     [[5,null,15], 100],
-   *     [null,        200]
-   * returns:
-   *     [5,           100],
-   *     [null,        100],
-   *     [15,          100]
+   * input:  [[5,null,15], 100],
+   *         [null,        200]
+   * index: 0
+   * output: [5,           100],
+   *         [null,        100],
+   *         [15,          100]
    * </code>
    * Note that null lists are completely removed from the output
    * and nulls inside lists are pulled out and remain.
@@ -1762,27 +1783,26 @@ public final class Table implements AutoCloseable {
    * in the output. The corresponding rows for other columns in the input are duplicated. A position
    * column is added that has the index inside the original list for each row. Example:
    * <code>
-   * [[5,10,15], 100],
-   * [[20,25],   200],
-   * [[30],      300],
-   * returns
-   * [0,   5,    100],
-   * [1,   10,   100],
-   * [2,   15,    100],
-   * [0,   20,    200],
-   * [1,   25,    200],
-   * [0,   30,    300],
+   * input:  [[5,10,15], 100],
+   *         [[20,25],   200],
+   *         [[30],      300]
+   * index: 0
+   * output: [0,   5,    100],
+   *         [1,   10,   100],
+   *         [2,   15,   100],
+   *         [0,   20,   200],
+   *         [1,   25,   200],
+   *         [0,   30,   300]
    * </code>
    *
    * Nulls and empty lists propagate in different ways depending on what is null or empty.
    * <code>
-   * [[5,null,15], 100],
-   * [null,        200],
-   * [[],          300],
-   * returns
-   * [0,    5,     100],
-   * [1,    null,  100],
-   * [2,    15,    100],
+   * input:  [[5,null,15], 100],
+   *         [null,        200]
+   * index: 0
+   * output: [5,           100],
+   *         [null,        100],
+   *         [15,          100]
    * </code>
    *
    * Note that null lists are not included in the resulting table, but nulls inside
@@ -1796,6 +1816,96 @@ public final class Table implements AutoCloseable {
     assert 0 <= index && index < columns.length : "Column index is out of range";
     assert columns[index].getType().equals(DType.LIST) : "Column to explode must be of type LIST";
     return new Table(explodePosition(nativeHandle, index));
+  }
+
+  /**
+   * Explodes a list column's elements.
+   *
+   * Any list is exploded, which means the elements of the list in each row are expanded
+   * into new rows in the output. The corresponding rows for other columns in the input
+   * are duplicated.
+   *
+   * <code>
+   * Example:
+   * input:  [[5,10,15], 100],
+   *         [[20,25],   200],
+   *         [[30],      300],
+   * index: 0
+   * output: [5,         100],
+   *         [10,        100],
+   *         [15,        100],
+   *         [20,        200],
+   *         [25,        200],
+   *         [30,        300]
+   * </code>
+   *
+   * Nulls propagate in different ways depending on what is null.
+   * <code>
+   *  input:  [[5,null,15], 100],
+   *          [null,        200]
+   * index: 0
+   * output:  [5,           100],
+   *          [null,        100],
+   *          [15,          100],
+   *          [null,        200]
+   * </code>
+   * Note that null lists are completely removed from the output
+   * and nulls inside lists are pulled out and remain.
+   *
+   * @param index Column index to explode inside the table.
+   * @return A new table with explode_col exploded.
+   */
+  public Table explodeOuter(int index) {
+    assert 0 <= index && index < columns.length : "Column index is out of range";
+    assert columns[index].getType().equals(DType.LIST) : "Column to explode must be of type LIST";
+    return new Table(explodeOuter(nativeHandle, index));
+  }
+
+  /**
+   * Explodes a list column's elements retaining any null entries or empty lists and includes a
+   * position column.
+   *
+   * Any list is exploded, which means the elements of the list in each row are expanded into new rows
+   * in the output. The corresponding rows for other columns in the input are duplicated. A position
+   * column is added that has the index inside the original list for each row. Example:
+   *
+   * <code>
+   * Example:
+   * input:  [[5,10,15], 100],
+   *         [[20,25],   200],
+   *         [[30],      300],
+   * index: 0
+   * output: [0,   5,    100],
+   *         [1,   10,   100],
+   *         [2,   15,   100],
+   *         [0,   20,   200],
+   *         [1,   25,   200],
+   *         [0,   30,   300]
+   * </code>
+   *
+   * Nulls and empty lists propagate as null entries in the result.
+   * <code>
+   * input:  [[5,null,15], 100],
+   *         [null,        200],
+   *         [[],          300]
+   * index: 0
+   * output: [0,     5,    100],
+   *         [1,  null,    100],
+   *         [2,    15,    100],
+   *         [0,  null,    200],
+   *         [0,  null,    300]
+   * </code>
+   *
+   *    returns
+   *
+   * @param index Column index to explode inside the table.
+   * @return A new table with exploded value and position. The column order of return table is
+   *         [cols before explode_input, explode_position, explode_value, cols after explode_input].
+   */
+  public Table explodeOuterPosition(int index) {
+    assert 0 <= index && index < columns.length : "Column index is out of range";
+    assert columns[index].getType().equals(DType.LIST) : "Column to explode must be of type LIST";
+    return new Table(explodeOuterPosition(nativeHandle, index));
   }
 
   /**
@@ -2587,15 +2697,31 @@ public final class Table implements AutoCloseable {
     }
 
     /**
-     * Hash partition a table into the specified number of partitions.
+     * Hash partition a table into the specified number of partitions. Uses the default MURMUR3
+     * hashing.
      * @param numberOfPartitions - number of partitions to use
      * @return - {@link PartitionedTable} - Table that exposes a limited functionality of the
      * {@link Table} class
      */
     public PartitionedTable hashPartition(int numberOfPartitions) {
+      return hashPartition(HashType.MURMUR3, numberOfPartitions);
+    }
+
+    /**
+     * Hash partition a table into the specified number of partitions.
+     * @param type the type of hash to use. Depending on the type of hash different restrictions
+     *             on the hash column(s) may exist. Not all hash functions are guaranteed to work
+     *             besides IDENTITY and MURMUR3.
+     * @param numberOfPartitions - number of partitions to use
+     * @return {@link PartitionedTable} - Table that exposes a limited functionality of the
+     * {@link Table} class
+     */
+    public PartitionedTable hashPartition(HashType type, int numberOfPartitions) {
       int[] partitionOffsets = new int[numberOfPartitions];
-      return new PartitionedTable(new Table(Table.hashPartition(operation.table.nativeHandle,
+      return new PartitionedTable(new Table(Table.hashPartition(
+          operation.table.nativeHandle,
           operation.indices,
+          type.nativeId,
           partitionOffsets.length,
           partitionOffsets)), partitionOffsets);
     }
