@@ -1807,8 +1807,7 @@ def test_column_null_scalar_comparison(dtype, null_scalar, cmpop):
     if isinstance(null_scalar, np.datetime64):
         if np.dtype(dtype).kind not in "mM":
             pytest.skip()
-        else:
-            null_scalar = null_scalar.astype(dtype)
+        null_scalar = null_scalar.astype(dtype)
 
     dtype = np.dtype(dtype)
 
