@@ -19,11 +19,17 @@
 #include <cudf/copying.hpp>
 #include <cudf/scalar/scalar.hpp>
 #include <cudf/scalar/scalar_factories.hpp>
+#include <cudf/strings/string_view.cuh>
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/types.hpp>
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_utilities.hpp>
 #include <cudf_test/column_wrapper.hpp>
+
+#include <rmm/device_uvector.hpp>
+
+#include <thrust/execution_policy.h>
+#include <thrust/transform.h>
 
 #include <cstring>
 #include <vector>
@@ -197,4 +203,32 @@ TEST_F(StringsFactoriesTest, CreateOffsets)
       EXPECT_EQ(str, expected_strings[jdx]);
     }
   }
+}
+
+namespace {
+using string_pair = thrust::pair<char const*, cudf::size_type>;
+struct string_view_to_pair {
+  __device__ string_pair operator()(thrust::pair<cudf::string_view, bool> const& p)
+  {
+    return (p.second) ? string_pair{p.first.data(), p.first.size_bytes()} : string_pair{nullptr, 0};
+  }
+};
+}  // namespace
+
+TEST_F(StringsFactoriesTest, StringPairWithNullsAndEmpty)
+{
+  cudf::test::strings_column_wrapper data(
+    {"", "this", "is", "", "a", "", "column", "of", "strings", "", ""},
+    {0, 1, 1, 1, 1, 0, 1, 1, 1, 0, 1});
+
+  auto d_column = cudf::column_device_view::create(data);
+  rmm::device_vector<string_pair> pairs(d_column->size());
+  thrust::transform(thrust::device,
+                    d_column->pair_begin<cudf::string_view, true>(),
+                    d_column->pair_end<cudf::string_view, true>(),
+                    pairs.data(),
+                    string_view_to_pair{});
+
+  auto result = cudf::make_strings_column(pairs);
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(result->view(), data);
 }
