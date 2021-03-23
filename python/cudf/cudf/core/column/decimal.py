@@ -85,10 +85,10 @@ class DecimalColumn(ColumnBase):
     def as_numerical_column(
         self, dtype: Dtype
     ) -> "cudf.core.column.NumericalColumn":
-        if is_integer_dtype(dtype):
+        if is_integer_dtype(dtype) and dtype != np.dtype("int64"):
             raise NotImplementedError(
-                "Casting from decimal types to integer "
-                "types not currently supported"
+                "Casting from decimal types to integer types "
+                "other than int64 not currently supported"
             )
         return libcudf.unary.cast(self, dtype)
 
