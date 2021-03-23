@@ -195,7 +195,9 @@ class ColumnAccessor(MutableMapping):
             result = pd.Index(self.names, name=self.name, tupleize_cols=False)
         return result
 
-    def insert(self, name: Any, value: Any, loc: int = -1, validate: bool = True):
+    def insert(
+        self, name: Any, value: Any, loc: int = -1, validate: bool = True
+    ):
         """
         Insert column into the ColumnAccessor at the specified location.
 
