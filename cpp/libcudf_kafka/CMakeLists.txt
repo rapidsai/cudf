@@ -22,9 +22,9 @@ cmake_minimum_required(VERSION 3.18 FATAL_ERROR)
 # This needs to be run before enabling the CUDA language due to the default initialization behavior
 # of `CMAKE_CUDA_ARCHITECTURES`, https://gitlab.kitware.com/cmake/cmake/-/issues/21302
 if(NOT DEFINED CMAKE_CUDA_ARCHITECTURES OR CMAKE_CUDA_ARCHITECTURES STREQUAL "ALL")
-  set(CUDF_BUILD_FOR_ALL_ARCHS TRUE)
+  set(CUDA_KAFKA_BUILD_FOR_ALL_ARCHS TRUE)
 elseif(CMAKE_CUDA_ARCHITECTURES STREQUAL "")
-  set(CUDF_BUILD_FOR_DETECTED_ARCHS TRUE)
+  set(CUDA_KAFKA_BUILD_FOR_DETECTED_ARCHS TRUE)
 endif()
 
 project(CUDA_KAFKA VERSION 0.19.0 LANGUAGES C CXX)
@@ -35,9 +35,6 @@ project(CUDA_KAFKA VERSION 0.19.0 LANGUAGES C CXX)
 option(BUILD_TESTS "Build tests for libcudf_kafka" ON)
 
 message(VERBOSE "CUDF_KAFKA: Build gtests: ${BUILD_TESTS}")
-
-# Set CUDF_SOURCE_DIR to ensure that cmake Modules from parent cudf have the correct context
-set(CUDF_SOURCE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../")
 
 ###################################################################################################
 # - compiler options ------------------------------------------------------------------------------
