@@ -435,7 +435,7 @@ std::unique_ptr<table> concatenate(host_span<table_view const> tables_to_concat,
 
     // verify all types match and that we won't overflow size_type in output size
     bounds_and_type_check(cols.begin(), cols.end());
-    concat_columns.emplace_back(detail::concatenate(host_span<column_view>{cols}, stream, mr));
+    concat_columns.emplace_back(detail::concatenate(cols, stream, mr));
   }
   return std::make_unique<table>(std::move(concat_columns));
 }

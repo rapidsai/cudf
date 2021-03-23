@@ -55,7 +55,6 @@ std::unique_ptr<column> add_keys(
   CUDF_EXPECTS(new_keys.type() == old_keys.type(), "Keys must be the same type");
   // first, concatenate the keys together
   // [a,b,c,d,f] + [d,b,e] = [a,b,c,d,f,d,b,e]
-  auto keys_vector = std::vector<column_view>{old_keys, new_keys};
   auto combined_keys =
     cudf::detail::concatenate(std::vector<column_view>{old_keys, new_keys}, stream);
   // sort and remove any duplicates from the combined keys
