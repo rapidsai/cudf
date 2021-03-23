@@ -125,16 +125,15 @@ struct RowGroup {
  * @brief Struct to describe an encoder data chunk
  */
 struct EncChunk {
-  const uint32_t *valid_map_base;  // base ptr of input valid bit map
-  size_type column_offset;         // index of the first element relative to the base memory
-  const void *column_data_base;    // base ptr of input column data
   uint32_t start_row;              // start row of this chunk
   uint32_t num_rows;               // number of rows in this chunk
-  uint32_t valid_rows;             // max number of valid rows
   uint8_t encoding_kind;           // column encoding kind (orc::ColumnEncodingKind)
   uint8_t type_kind;               // column data type (orc::TypeKind)
   uint8_t dtype_len;               // data type length
   uint8_t scale;                   // scale for decimals or timestamps
+
+  uint32_t *dict_index;          // dictionary index from row index
+  column_device_view * leaf_column;
 };
 
 /**
@@ -164,9 +163,6 @@ struct StripeStream {
  * @brief Struct to describe a dictionary chunk
  */
 struct DictionaryChunk {
-  const uint32_t *valid_map_base;  // base ptr of input valid bit map
-  size_type column_offset;         // index of the first element relative to the base memory
-  const void *column_data_base;    // base ptr of column data (ptr,len pair)
   uint32_t *dict_data;             // dictionary data (index of non-null rows)
   uint32_t *dict_index;  // row indices of corresponding string (row from dictionary index)
   uint32_t start_row;    // start row of this chunk
@@ -184,7 +180,6 @@ struct DictionaryChunk {
  * @brief Struct to describe a dictionary
  */
 struct StripeDictionary {
-  const void *column_data_base;  // base ptr of column data (ptr,len pair)
   uint32_t *dict_data;           // row indices of corresponding string (row from dictionary index)
   uint32_t *dict_index;          // dictionary index from row index
   uint32_t column_id;            // real column id
@@ -317,6 +312,10 @@ void EncodeStripeDictionaries(StripeDictionary *stripes,
                               uint32_t num_stripes,
                               detail::device_2dspan<encoder_chunk_streams> enc_streams,
                               rmm::cuda_stream_view stream = rmm::cuda_stream_default);
+
+void set_chunk_columns(const table_device_view &view,
+                       detail::device_2dspan<EncChunk> chunks,
+                       rmm::cuda_stream_view stream);
 
 /**
  * @brief Launches kernel for compacting chunked column data prior to compression

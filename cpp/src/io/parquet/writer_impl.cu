@@ -123,36 +123,6 @@ column_view get_leaf_col(column_view col)
 }  // namespace
 
 /**
- * @brief Helper kernel for converting string data/offsets into nvstrdesc
- * REMOVEME: Once we eliminate the legacy readers/writers, the kernels could be
- * made to use the native offset+data layout.
- */
-__global__ void stringdata_to_nvstrdesc(gpu::nvstrdesc_s *dst,
-                                        const size_type *offsets,
-                                        const char *strdata,
-                                        const uint32_t *nulls,
-                                        size_type column_size)
-{
-  size_type row = blockIdx.x * blockDim.x + threadIdx.x;
-  if (row < column_size) {
-    uint32_t is_valid = (nulls) ? (nulls[row >> 5] >> (row & 0x1f)) & 1 : 1;
-    size_t count;
-    const char *ptr;
-    if (is_valid) {
-      size_type cur  = offsets[row];
-      size_type next = offsets[row + 1];
-      ptr            = strdata + cur;
-      count          = (next > cur) ? next - cur : 0;
-    } else {
-      ptr   = nullptr;
-      count = 0;
-    }
-    dst[row].ptr   = ptr;
-    dst[row].count = count;
-  }
-}
-
-/**
  * @brief Helper class that adds parquet-specific column info
  */
 class parquet_column_view {
@@ -371,20 +341,6 @@ class parquet_column_view {
       if (_nullability.empty()) { _nullability = {col.nullable()}; }
       _max_def_level = (_nullability[0]) ? 1 : 0;
     }
-    if (_string_type && _data_count > 0) {
-      strings_column_view view{_leaf_col};
-      _indexes = rmm::device_buffer(_data_count * sizeof(gpu::nvstrdesc_s), stream);
-
-      stringdata_to_nvstrdesc<<<((_data_count - 1) >> 8) + 1, 256, 0, stream.value()>>>(
-        reinterpret_cast<gpu::nvstrdesc_s *>(_indexes.data()),
-        view.offsets().data<size_type>() + leaf_col_offset,
-        view.chars().data<char>(),
-        _nulls,
-        _data_count);
-      _data = _indexes.data();
-
-      stream.synchronize();
-    }
 
     // Generating default name if name isn't present in metadata
     if (metadata && _id < metadata->column_names.size()) {
@@ -487,9 +443,6 @@ class parquet_column_view {
   std::vector<bool> _nullability;
   size_type _max_def_level  = -1;
   size_type _nesting_levels = 0;
-
-  // String-related members
-  rmm::device_buffer _indexes;
 
   // Decimal-related members
   int32_t _decimal_scale     = 0;
@@ -861,9 +814,6 @@ void writer::impl::write(table_view const &table)
     // GPU column description
     auto *desc             = &col_desc[i];
     *desc                  = gpu::EncColumnDesc{};  // Zero out all fields
-    desc->column_data_base = col.data();
-    desc->valid_map_base   = col.nulls();
-    desc->column_offset    = col.offset();
     desc->stats_dtype      = col.stats_type();
     desc->ts_scale         = col.ts_scale();
     // TODO (dm): Enable dictionary for list after refactor

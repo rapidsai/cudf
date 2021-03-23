@@ -86,7 +86,8 @@ static __device__ void LoadNonNullIndices(volatile dictinit_state_s *s,
 {
   if (t == 0) { s->nnz = 0; }
   for (uint32_t i = 0; i < s->chunk.num_rows; i += block_size) {
-    const uint32_t *valid_map = s->chunk.valid_map_base;
+    const uint32_t *valid_map = s->chunk.leaf_column->null_mask();
+    auto column_offset = s->chunk.leaf_column->offset();
     uint32_t is_valid, nz_pos;
     if (t < block_size / 32) {
       if (!valid_map) {
@@ -95,10 +96,10 @@ static __device__ void LoadNonNullIndices(volatile dictinit_state_s *s,
         uint32_t const row   = s->chunk.start_row + i + t * 32;
         auto const chunk_end = s->chunk.start_row + s->chunk.num_rows;
 
-        auto const valid_map_idx = (row + s->chunk.column_offset) / 32;
+        auto const valid_map_idx = (row + column_offset) / 32;
         uint32_t valid           = (row < chunk_end) ? valid_map[valid_map_idx] : 0;
 
-        auto const rows_in_next_word = (row + s->chunk.column_offset) & 0x1f;
+        auto const rows_in_next_word = (row + column_offset) & 0x1f;
         if (rows_in_next_word != 0) {
           auto const rows_in_current_word = 32 - rows_in_next_word;
           // Read next word if any rows are within the chunk
@@ -159,9 +160,6 @@ __global__ void __launch_bounds__(block_size, 2)
     column_device_view *leaf_column_view = view.begin() + str_col_ids[col_id];
     s->chunk = chunks[group_id * num_columns + col_id];
     s->chunk.leaf_column = leaf_column_view;
-    s->chunk.valid_map_base = leaf_column_view->null_mask();
-    s->chunk.column_offset = leaf_column_view->offset();
-    //s->chunk.column_data_base = static_cast<const void*>(leaf_column_view->head());
     s->chunk.dict_data = dict_data;
     s->chunk.dict_index = dict_index;
     s->chunk.start_row = group_id * row_index_stride;
@@ -301,9 +299,6 @@ __global__ void __launch_bounds__(block_size, 2)
     chunks[group_id * num_columns + col_id].dict_char_count   = dict_char_count;
     chunks[group_id * num_columns + col_id].leaf_column = s->chunk.leaf_column;
 
-    chunks[group_id * num_columns + col_id].valid_map_base = s->chunk.valid_map_base;
-    chunks[group_id * num_columns + col_id].column_offset = s->chunk.column_offset;
-    chunks[group_id * num_columns + col_id].column_data_base = s->chunk.column_data_base;
     chunks[group_id * num_columns + col_id].dict_data = s->chunk.dict_data;
     chunks[group_id * num_columns + col_id].dict_index = s->chunk.dict_index;
     chunks[group_id * num_columns + col_id].start_row = s->chunk.start_row;
