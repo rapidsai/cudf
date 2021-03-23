@@ -194,17 +194,15 @@ if hasArg libcudf_kafka; then
     cmake -S $REPODIR/cpp/libcudf_kafka -B ${KAFKA_LIB_BUILD_DIR} \
           ${CUDF_CMAKE_CUDA_ARCHITECTURES} \
           -DCMAKE_INSTALL_PREFIX=${INSTALL_PREFIX} \
+          -DBUILD_TESTS=${BUILD_TESTS} \
           -DCMAKE_BUILD_TYPE=${BUILD_TYPE}
 
+
     cd ${KAFKA_LIB_BUILD_DIR}
+    cmake --build . -j${PARALLEL_LEVEL} ${VERBOSE_FLAG}
+
     if [[ ${INSTALL_TARGET} != "" ]]; then
         cmake --build . -j${PARALLEL_LEVEL} --target install ${VERBOSE_FLAG}
-    else
-        cmake --build . -j${PARALLEL_LEVEL} --target  libcudf_kafka ${VERBOSE_FLAG}
-    fi
-
-    if [[ ${BUILD_TESTS} == "ON" ]]; then
-        cmake --build . -j${PARALLEL_LEVEL} --target  build_tests_libcudf_kafka ${VERBOSE_FLAG}
     fi
 fi
 
