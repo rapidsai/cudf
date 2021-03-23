@@ -74,8 +74,8 @@ struct flattened_table {
   std::vector<null_order> flat_null_precedence;
 
   flattened_table(table_view const& input,
-                std::vector<order> const& column_order,
-                std::vector<null_order> const& null_precedence)
+                  std::vector<order> const& column_order,
+                  std::vector<null_order> const& null_precedence)
     : input(input), column_order(column_order), null_precedence(null_precedence)
   {
   }
