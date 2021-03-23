@@ -23,7 +23,7 @@ targets:
  cudf::cudf             - The main cudf library.
 
 This module offers an optional testing component which defines the
-following IMPORTED GLOBAL  targets:
+following IMPORTED GLOBAL targets:
 
  cudf::cudftestutil     - The main cudf testing library
  cudf::gmock_main
