@@ -203,14 +203,12 @@ class ListMethods(ColumnMethodsMixin):
         dtype: int64
         """
         min_col_list_len = self.len().min()
-        if abs(index) > min_col_list_len:
-            raise IndexError("list index out of range")
-        if (index >= 0 and index < min_col_list_len) or (
-            index < 0 and abs(index) <= min_col_list_len
-        ):
+        if -min_col_list_len <= index < min_col_list_len:
             return self._return_or_inplace(
                 extract_element(self._column, index)
             )
+        else:
+            raise IndexError("list index out of range")
 
     @property
     def leaves(self):
