@@ -206,7 +206,7 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Aggregation_createCollectAgg(JNIEnv 
     cudf::jni::auto_set_device(env);
     cudf::null_policy policy =
         include_nulls ? cudf::null_policy::INCLUDE : cudf::null_policy::EXCLUDE;
-    std::unique_ptr<cudf::aggregation> ret = cudf::make_collect_aggregation(policy);
+    std::unique_ptr<cudf::aggregation> ret = cudf::make_collect_list_aggregation(policy);
     return reinterpret_cast<jlong>(ret.release());
   }
   CATCH_STD(env, 0);
