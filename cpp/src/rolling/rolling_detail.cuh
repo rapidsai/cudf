@@ -48,7 +48,7 @@
 #include <jit/parser.h>
 #include <jit/type.h>
 
-#include <jit_pre/cudf/rolling_jit_detail.hpp.jit>
+#include <jit_pre/cudf/src/rolling/rolling_jit_detail.hpp.jit>
 #include <jit_pre/cudf/types.hpp.jit>
 #include <jit_pre/cudf/utilities/bit.hpp.jit>
 
@@ -1306,7 +1306,7 @@ std::unique_ptr<column> rolling_window_udf(column_view const& input,
                       {cudf_types_hpp,
                        cudf_utilities_bit_hpp,
                        cudf::rolling::jit::code::operation_h,
-                       ___src_rolling_rolling_jit_detail_hpp},
+                       cudf_src_rolling_rolling_jit_detail_hpp},
                       compiler_flags,
                       nullptr,
                       stream)
