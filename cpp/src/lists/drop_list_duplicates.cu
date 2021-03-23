@@ -44,16 +44,16 @@ using offset_type = lists_column_view::offset_type;
  * `cudf::element_equality_comparator`. For floating point types, entries holding NaN value will
  * be considered as different.
  *
- * @tparam has_nulls Indicates the potential for null values in the column
- * @tparam Type      The data type of entries
+ * @tparam Type The data type of entries
  */
-template <bool has_nulls, class Type>
+template <class Type>
 class list_entry_comparator {
  public:
   __host__ __device__ list_entry_comparator(offset_type const* list_offsets,
                                             column_device_view d_view,
-                                            null_equality nulls_equal)
-    : list_offsets(list_offsets), d_view{d_view}, nulls_equal{nulls_equal}
+                                            null_equality nulls_equal,
+                                            bool has_nulls)
+    : list_offsets(list_offsets), d_view{d_view}, nulls_equal{nulls_equal}, has_nulls(has_nulls)
   {
   }
 
@@ -82,6 +82,7 @@ class list_entry_comparator {
   offset_type const* list_offsets;
   column_device_view d_view;
   null_equality nulls_equal;
+  bool has_nulls;
 };
 
 /**
@@ -95,8 +96,8 @@ class get_unique_entries_fn {
                           column_device_view&,
                           size_type,
                           offset_type*,
-                          bool,
                           null_equality,
+                          bool,
                           rmm::cuda_stream_view) const
   {
     CUDF_FAIL("Cannot operate on types that are not equally comparable.");
@@ -107,25 +108,16 @@ class get_unique_entries_fn {
                           column_device_view& d_view,
                           size_type num_entries,
                           offset_type* output_begin,
-                          bool has_nulls,
                           null_equality nulls_equal,
+                          bool has_nulls,
                           rmm::cuda_stream_view stream) const noexcept
   {
-    if (has_nulls) {
-      list_entry_comparator<true, Type> const comp{list_offsets, d_view, nulls_equal};
-      return thrust::unique_copy(rmm::exec_policy(stream),
-                                 thrust::make_counting_iterator(0),
-                                 thrust::make_counting_iterator(num_entries),
-                                 output_begin,
-                                 comp);
-    } else {
-      list_entry_comparator<false, Type> const comp{list_offsets, d_view, nulls_equal};
-      return thrust::unique_copy(rmm::exec_policy(stream),
-                                 thrust::make_counting_iterator(0),
-                                 thrust::make_counting_iterator(num_entries),
-                                 output_begin,
-                                 comp);
-    }
+    list_entry_comparator<Type> const comp{list_offsets, d_view, nulls_equal, has_nulls};
+    return thrust::unique_copy(rmm::exec_policy(stream),
+                               thrust::make_counting_iterator(0),
+                               thrust::make_counting_iterator(num_entries),
+                               output_begin,
+                               comp);
   }
 };
 
@@ -166,8 +158,8 @@ std::vector<std::unique_ptr<column>> get_unique_entries_and_list_offsets(
                                         *d_view_entries,
                                         num_entries,
                                         unique_indices_begin,
-                                        all_lists_entries.has_nulls(),
                                         nulls_equal,
+                                        all_lists_entries.has_nulls(),
                                         stream);
 
   // Collect unique entries and entry list offsets
