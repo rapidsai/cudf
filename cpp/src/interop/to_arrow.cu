@@ -129,6 +129,42 @@ struct dispatch_to_arrow {
 };
 
 template <>
+std::shared_ptr<arrow::Array> dispatch_to_arrow::operator()<numeric::decimal64>(
+  column_view input,
+  cudf::type_id id,
+  column_metadata const& metadata,
+  arrow::MemoryPool* ar_mr,
+  rmm::cuda_stream_view stream)
+{
+  using DeviceType                = device_storage_type_t<T>;
+  size_type const BIT_WIDTH_RATIO = 2;  // Array::Type:type::DECIMAL (128) / int64_t
+
+  rmm::device_uvector<DeviceType> buf(input.size() * BIT_WIDTH_RATIO, stream);
+
+  thrust::gather(rmm::exec_policy(stream),  // scatter values from input to buf
+                 gather_map,                //
+                 gather_map + num_rows,
+                 buf.data(),
+                 out_buf.data());
+
+  auto result = arrow::AllocateBuffer(static_cast<int64_t>(buf->size()), ar_mr);
+  CUDF_EXPECTS(result.ok(), "Failed to allocate Arrow buffer for data");
+
+  std::shared_ptr<arrow::Buffer> data_buffer = std::move(result.ValueOrDie());
+
+  CUDA_TRY(cudaMemcpyAsync(data_buffer->mutable_data(),
+                           bitmask.first->data(),
+                           bitmask.first->size(),
+                           cudaMemcpyDeviceToHost,
+                           stream.value()));
+  return to_arrow_array(id,
+                        static_cast<int64_t>(input.size()),
+                        data_buffer,
+                        fetch_mask_buffer(input, ar_mr, stream),
+                        static_cast<int64_t>(input.null_count()));
+}
+
+template <>
 std::shared_ptr<arrow::Array> dispatch_to_arrow::operator()<bool>(column_view input,
                                                                   cudf::type_id id,
                                                                   column_metadata const& metadata,
