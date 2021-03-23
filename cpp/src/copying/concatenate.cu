@@ -30,7 +30,6 @@
 #include <cudf/table/table_device_view.cuh>
 
 #include <rmm/cuda_stream_view.hpp>
-#include <rmm/device_vector.hpp>
 #include <rmm/exec_policy.hpp>
 
 #include <thrust/binary_search.h>
