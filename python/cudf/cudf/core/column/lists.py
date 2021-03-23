@@ -7,7 +7,7 @@ import pyarrow as pa
 
 import cudf
 from cudf._lib.copying import segmented_gather
-from cudf._lib.lists import count_elements, sort_lists
+from cudf._lib.lists import count_elements, sort_lists, extract_element
 from cudf._lib.types import NullOrder, Order
 from cudf.core.buffer import Buffer
 from cudf.core.column import ColumnBase, as_column, column
@@ -178,6 +178,38 @@ class ListMethods(ColumnMethodsMixin):
                 "Can only use .list accessor with a 'list' dtype"
             )
         super().__init__(column=column, parent=parent)
+
+    def get(self, index):
+        """
+        Extract element at the given index from each component
+
+        Extract element from lists, tuples, or strings in
+        each element in the Series/Index.
+
+        Parameters
+        ----------
+        index : int
+
+        Returns
+        -------
+        Series or Index
+
+        Examples
+        --------
+        >>> s = cudf.Series([[1, 2, 3], [3, 4, 5], [4, 5, 6]])
+        >>> s.list.get(-1)
+        0    3
+        1    5
+        2    6
+        dtype: int64
+        """
+        min_col_list_len = self.len().min()
+        if -min_col_list_len <= index < min_col_list_len:
+            return self._return_or_inplace(
+                extract_element(self._column, index)
+            )
+        else:
+            raise IndexError("list index out of range")
 
     @property
     def leaves(self):

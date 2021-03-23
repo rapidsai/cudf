@@ -30,6 +30,8 @@ from cudf._lib.types cimport (
 from cudf._lib.types import Order, NullOrder
 from cudf.core.dtypes import ListDtype
 
+from cudf._lib.cpp.lists.extract cimport extract_list_element
+
 
 def count_elements(Column col):
 
@@ -82,3 +84,18 @@ def sort_lists(Column col, object order_enum, object null_order_enum):
         )
 
     return Column.from_unique_ptr(move(c_result))
+
+
+def extract_element(Column col, size_type index):
+    # shared_ptr required because lists_column_view has no default
+    # ctor
+    cdef shared_ptr[lists_column_view] list_view = (
+        make_shared[lists_column_view](col.view())
+    )
+    cdef unique_ptr[column] c_result
+
+    with nogil:
+        c_result = move(extract_list_element(list_view.get()[0], index))
+
+    result = Column.from_unique_ptr(move(c_result))
+    return result
