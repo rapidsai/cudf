@@ -166,18 +166,17 @@ struct dispatch_to_cudf_column {
   {
     using DeviceType = device_storage_type_t<T>;
 
-    auto data_buffer    = array.data()->buffers[1];
-    auto const num_rows = static_cast<size_type>(array.length());
+    size_type const BIT_WIDTH_RATIO = 2;  // Array::Type:type::DECIMAL (128) / int64_t
+    auto data_buffer                = array.data()->buffers[1];
+    auto const num_rows             = static_cast<size_type>(array.length());
 
-    // TODO clean up this function (remove magic constants)
-
-    rmm::device_uvector<DeviceType> buf(num_rows * 2, stream);
+    rmm::device_uvector<DeviceType> buf(num_rows * BIT_WIDTH_RATIO, stream);
     rmm::device_uvector<DeviceType> out_buf(num_rows, stream, mr);
 
     CUDA_TRY(cudaMemcpyAsync(reinterpret_cast<uint8_t*>(buf.data()),
                              reinterpret_cast<const uint8_t*>(data_buffer->address()) +
                                array.offset() * sizeof(DeviceType),
-                             sizeof(DeviceType) * num_rows * 2,
+                             sizeof(DeviceType) * num_rows * BIT_WIDTH_RATIO,
                              cudaMemcpyDefault,
                              stream.value()));
 
@@ -190,11 +189,8 @@ struct dispatch_to_cudf_column {
                    out_buf.data());
 
     auto null_mask = [&] {
-      // When C++17, use if statement with initialization
-      auto const has_nulls = skip_mask ? false : array.null_bitmap_data() != nullptr;
-      if (has_nulls) {
+      if (not skip_mask and array.null_bitmap_data()) {
         auto tmp_mask = get_mask_buffer(array, stream, mr);
-
         // If array is sliced, we have to copy whole mask and then take copy.
         return (num_rows == static_cast<size_type>(data_buffer->size() / sizeof(DeviceType)))
                  ? *tmp_mask
