@@ -69,15 +69,15 @@ fi
 
 if [ "$BUILD_LIBCUDF" == '1' ]; then
   gpuci_logger "Build conda pkg for libcudf"
-  gpuci_conda_retry build --no-build-id --croot ${CONDA_BLD_DIR} conda/recipes/libcudf $CONDA_BUILD_ARGS
-  mkdir -p ${CONDA_BLD_DIR}/libcudf/work
-  cp -r ${CONDA_BLD_DIR}/work/* ${CONDA_BLD_DIR}/libcudf/work
+  gpuci_conda_retry build --old-build-string --prefix-length 16 --no-build-id --croot ${CONDA_BLD_DIR} conda/recipes/libcudf $CONDA_BUILD_ARGS
+  # mkdir -p ${CONDA_BLD_DIR}/libcudf/work
+  # cp -r ${CONDA_BLD_DIR}/work/* ${CONDA_BLD_DIR}/libcudf/work
 
 
   gpuci_logger "Build conda pkg for libcudf_kafka"
-  gpuci_conda_retry build --no-build-id --croot ${CONDA_BLD_DIR} conda/recipes/libcudf_kafka $CONDA_BUILD_ARGS
-  mkdir -p ${CONDA_BLD_DIR}/libcudf_kafka/work
-  cp -r ${CONDA_BLD_DIR}/work/* ${CONDA_BLD_DIR}/libcudf_kafka/work
+  gpuci_conda_retry build --old-build-string --prefix-length 16 --no-build-id --croot ${CONDA_BLD_DIR} conda/recipes/libcudf_kafka $CONDA_BUILD_ARGS
+  # mkdir -p ${CONDA_BLD_DIR}/libcudf_kafka/work
+  # cp -r ${CONDA_BLD_DIR}/work/* ${CONDA_BLD_DIR}/libcudf_kafka/work
 fi
 
 if [ "$BUILD_CUDF" == '1' ]; then
