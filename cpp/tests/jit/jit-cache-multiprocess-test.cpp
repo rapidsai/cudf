@@ -49,8 +49,10 @@ TEST_F(JitCacheMultiProcessTest, MultiProcessTest)
     // Brand new cache object that has nothing in in-memory cache
     cudf::jit::cudfJitCache cache;
 
-    input->set_value(4);
-    output->set_value(1);
+    auto const in{4};
+    auto const out{1};
+    input->set_value(in);
+    output->set_value(out);
 
     // make program
     auto program = cache.getProgram("FileCacheTestProg3", program3_source);

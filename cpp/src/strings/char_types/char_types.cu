@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2020, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -186,91 +186,6 @@ std::unique_ptr<column> filter_characters_of_type(strings_column_view const& str
                              mr);
 }
 
-std::unique_ptr<column> is_integer(
-  strings_column_view const& strings,
-  rmm::cuda_stream_view stream,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
-{
-  auto strings_column = column_device_view::create(strings.parent(), stream);
-  auto d_column       = *strings_column;
-  // create output column
-  auto results   = make_numeric_column(data_type{type_id::BOOL8},
-                                     strings.size(),
-                                     cudf::detail::copy_bitmask(strings.parent(), stream, mr),
-                                     strings.null_count(),
-                                     stream,
-                                     mr);
-  auto d_results = results->mutable_view().data<bool>();
-  thrust::transform(rmm::exec_policy(stream),
-                    thrust::make_counting_iterator<size_type>(0),
-                    thrust::make_counting_iterator<size_type>(strings.size()),
-                    d_results,
-                    [d_column] __device__(size_type idx) {
-                      if (d_column.is_null(idx)) return false;
-                      return string::is_integer(d_column.element<string_view>(idx));
-                    });
-  results->set_null_count(strings.null_count());
-  return results;
-}
-
-bool all_integer(strings_column_view const& strings, rmm::cuda_stream_view stream)
-{
-  auto strings_column  = column_device_view::create(strings.parent(), stream);
-  auto d_column        = *strings_column;
-  auto transformer_itr = thrust::make_transform_iterator(
-    thrust::make_counting_iterator<size_type>(0), [d_column] __device__(size_type idx) {
-      if (d_column.is_null(idx)) return false;
-      return string::is_integer(d_column.element<string_view>(idx));
-    });
-  return thrust::all_of(rmm::exec_policy(stream),
-                        transformer_itr,
-                        transformer_itr + strings.size(),
-                        thrust::identity<bool>());
-}
-
-std::unique_ptr<column> is_float(
-  strings_column_view const& strings,
-  rmm::cuda_stream_view stream,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
-{
-  auto strings_column = column_device_view::create(strings.parent(), stream);
-  auto d_column       = *strings_column;
-  // create output column
-  auto results   = make_numeric_column(data_type{type_id::BOOL8},
-                                     strings.size(),
-                                     cudf::detail::copy_bitmask(strings.parent(), stream, mr),
-                                     strings.null_count(),
-                                     stream,
-                                     mr);
-  auto d_results = results->mutable_view().data<bool>();
-  // check strings for valid float chars
-  thrust::transform(rmm::exec_policy(stream),
-                    thrust::make_counting_iterator<size_type>(0),
-                    thrust::make_counting_iterator<size_type>(strings.size()),
-                    d_results,
-                    [d_column] __device__(size_type idx) {
-                      if (d_column.is_null(idx)) return false;
-                      return string::is_float(d_column.element<string_view>(idx));
-                    });
-  results->set_null_count(strings.null_count());
-  return results;
-}
-
-bool all_float(strings_column_view const& strings, rmm::cuda_stream_view stream)
-{
-  auto strings_column  = column_device_view::create(strings.parent(), stream);
-  auto d_column        = *strings_column;
-  auto transformer_itr = thrust::make_transform_iterator(
-    thrust::make_counting_iterator<size_type>(0), [d_column] __device__(size_type idx) {
-      if (d_column.is_null(idx)) return false;
-      return string::is_float(d_column.element<string_view>(idx));
-    });
-  return thrust::all_of(rmm::exec_policy(stream),
-                        transformer_itr,
-                        transformer_itr + strings.size(),
-                        thrust::identity<bool>());
-}
-
 }  // namespace detail
 
 // external API
@@ -293,32 +208,6 @@ std::unique_ptr<column> filter_characters_of_type(strings_column_view const& str
   CUDF_FUNC_RANGE();
   return detail::filter_characters_of_type(
     strings, types_to_remove, replacement, types_to_keep, rmm::cuda_stream_default, mr);
-}
-
-std::unique_ptr<column> is_integer(strings_column_view const& strings,
-                                   rmm::mr::device_memory_resource* mr)
-{
-  CUDF_FUNC_RANGE();
-  return detail::is_integer(strings, rmm::cuda_stream_default, mr);
-}
-
-std::unique_ptr<column> is_float(strings_column_view const& strings,
-                                 rmm::mr::device_memory_resource* mr)
-{
-  CUDF_FUNC_RANGE();
-  return detail::is_float(strings, rmm::cuda_stream_default, mr);
-}
-
-bool all_integer(strings_column_view const& strings)
-{
-  CUDF_FUNC_RANGE();
-  return detail::all_integer(strings, rmm::cuda_stream_default);
-}
-
-bool all_float(strings_column_view const& strings)
-{
-  CUDF_FUNC_RANGE();
-  return detail::all_float(strings, rmm::cuda_stream_default);
 }
 
 }  // namespace strings

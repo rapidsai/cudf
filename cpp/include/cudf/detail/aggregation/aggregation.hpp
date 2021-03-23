@@ -17,7 +17,7 @@
 #pragma once
 
 #include <cudf/aggregation.hpp>
-#include <cudf/detail/utilities/release_assert.cuh>
+#include <cudf/detail/utilities/assert.cuh>
 #include <cudf/types.hpp>
 #include <cudf/utilities/error.hpp>
 #include <cudf/utilities/traits.hpp>
@@ -661,7 +661,7 @@ CUDA_HOST_DEVICE_CALLABLE decltype(auto) aggregation_dispatcher(aggregation::Kin
 #ifndef __CUDA_ARCH__
       CUDF_FAIL("Unsupported aggregation.");
 #else
-      release_assert(false && "Unsupported aggregation.");
+      cudf_assert(false && "Unsupported aggregation.");
 
       // The following code will never be reached, but the compiler generates a
       // warning if there isn't a return value.
