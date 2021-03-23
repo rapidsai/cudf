@@ -17,10 +17,7 @@ cmake_minimum_required(VERSION 3.18 FATAL_ERROR)
 
 # Use GPU_ARCHS if it is defined
 if(DEFINED GPU_ARCHS)
-  unset(CMAKE_CUDA_ARCHITECTURES CACHE)
-  if(NOT "${GPU_ARCHS}" STREQUAL "ALL")
-    set(CMAKE_CUDA_ARCHITECTURES "${GPU_ARCHS}")
-  endif()
+  set(CMAKE_CUDA_ARCHITECTURES "${GPU_ARCHS}")
 endif()
 
 # If `CMAKE_CUDA_ARCHITECTURES` is not defined, build for all supported architectures. If
@@ -29,11 +26,10 @@ endif()
 
 # This needs to be run before enabling the CUDA language due to the default initialization behavior
 # of `CMAKE_CUDA_ARCHITECTURES`, https://gitlab.kitware.com/cmake/cmake/-/issues/21302
-if(NOT DEFINED CMAKE_CUDA_ARCHITECTURES)
-  set(CUDF_BUILD_FOR_ALL_ARCHS TRUE)
+if(NOT DEFINED CMAKE_CUDA_ARCHITECTURES OR CMAKE_CUDA_ARCHITECTURES STREQUAL "ALL")
+  set(CUDF_JNI_BUILD_FOR_ALL_ARCHS TRUE)
 elseif(CMAKE_CUDA_ARCHITECTURES STREQUAL "")
-  unset(CMAKE_CUDA_ARCHITECTURES CACHE)
-  set(CUDF_BUILD_FOR_DETECTED_ARCHS TRUE)
+  set(CUDF_JNI_BUILD_FOR_DETECTED_ARCHS TRUE)
 endif()
 
 project(CUDF_JNI VERSION 0.19 LANGUAGES C CXX)
@@ -129,7 +125,8 @@ find_path(LIBCUDACXX_INCLUDE "cuda"
           "${CUDF_CPP_BUILD_DIR}/_deps/libcudacxx-src/include")
 
 find_path(SPDLOG_INCLUDE "spdlog"
-    HINTS "$ENV{RMM_ROOT}/_deps/spdlog-src/include"
+    HINTS "${CUDF_CPP_BUILD_DIR}/_deps/spdlog-src/include"
+          "$ENV{RMM_ROOT}/_deps/spdlog-src/include"
           "$ENV{RMM_ROOT}/include"
           "$ENV{CONDA_PREFIX}/include")
 
@@ -151,7 +148,8 @@ find_library(CUDF_LIB "cudf" REQUIRED HINTS ${CUDF_LIB_HINTS})
 # - RMM -------------------------------------------------------------------------------------------
 
 find_path(RMM_INCLUDE "rmm"
-          HINTS "$ENV{RMM_ROOT}/include"
+          HINTS "${CUDF_CPP_BUILD_DIR}/_deps/rmm-src/include"
+                "$ENV{RMM_ROOT}/include"
                 "$ENV{RMM_HOME}/include"
                 "$ENV{CONDA_PREFIX}/include/rmm"
                 "$ENV{CONDA_PREFIX}/include")

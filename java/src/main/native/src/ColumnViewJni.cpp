@@ -20,16 +20,17 @@
 #include <cudf/binaryop.hpp>
 #include <cudf/column/column_factories.hpp>
 #include <cudf/concatenate.hpp>
-#include <cudf/lists/extract.hpp>
-#include <cudf/reshape.hpp>
-#include <cudf/lists/detail/concatenate.hpp>
 #include <cudf/datetime.hpp>
 #include <cudf/filling.hpp>
 #include <cudf/hashing.hpp>
+#include <cudf/lists/count_elements.hpp>
+#include <cudf/lists/detail/concatenate.hpp>
+#include <cudf/lists/extract.hpp>
 #include <cudf/null_mask.hpp>
 #include <cudf/quantiles.hpp>
 #include <cudf/reduction.hpp>
 #include <cudf/replace.hpp>
+#include <cudf/reshape.hpp>
 #include <cudf/rolling.hpp>
 #include <cudf/round.hpp>
 #include <cudf/scalar/scalar_factories.hpp>
@@ -37,11 +38,11 @@
 #include <cudf/strings/attributes.hpp>
 #include <cudf/strings/capitalize.hpp>
 #include <cudf/strings/case.hpp>
-#include <cudf/strings/char_types/char_types.hpp>
 #include <cudf/strings/combine.hpp>
 #include <cudf/strings/contains.hpp>
 #include <cudf/strings/convert/convert_booleans.hpp>
 #include <cudf/strings/convert/convert_datetime.hpp>
+#include <cudf/strings/convert/convert_fixed_point.hpp>
 #include <cudf/strings/convert/convert_floats.hpp>
 #include <cudf/strings/convert/convert_integers.hpp>
 #include <cudf/strings/convert/convert_urls.hpp>
@@ -60,6 +61,7 @@
 #include <cudf/lists/lists_column_view.hpp>
 #include <cudf/structs/structs_column_view.hpp>
 #include <map_lookup.hpp>
+#include "cudf/types.hpp"
 
 #include "cudf_jni_apis.hpp"
 #include "dtype_utils.hpp"
@@ -430,6 +432,19 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_ColumnView_split(JNIEnv *env, j
   CATCH_STD(env, NULL);
 }
 
+JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_countElements(JNIEnv *env, jclass clazz,
+                                                                     jlong view_handle) {
+  JNI_NULL_CHECK(env, view_handle, "input column is null", 0);
+  try {
+    cudf::jni::auto_set_device(env);
+    cudf::column_view *n_column = reinterpret_cast<cudf::column_view *>(view_handle);
+    std::unique_ptr<cudf::column> result =
+        cudf::lists::count_elements(cudf::lists_column_view(*n_column));
+    return reinterpret_cast<jlong>(result.release());
+  }
+  CATCH_STD(env, 0);
+}
+
 JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_charLengths(JNIEnv *env, jclass clazz,
                                                                    jlong view_handle) {
   JNI_NULL_CHECK(env, view_handle, "input column is null", 0);
@@ -698,6 +713,10 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_castTo(JNIEnv *env, jclas
         case cudf::type_id::UINT64:
           result = cudf::strings::from_integers(*column);
           break;
+        case cudf::type_id::DECIMAL32:
+        case cudf::type_id::DECIMAL64:
+          result = cudf::strings::from_fixed_point(*column);
+          break;
         default: JNI_THROW_NEW(env, "java/lang/IllegalArgumentException", "Invalid data type", 0);
       }
     } else if (column->type().id() == cudf::type_id::STRING) {
@@ -718,6 +737,10 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_castTo(JNIEnv *env, jclas
         case cudf::type_id::INT64:
         case cudf::type_id::UINT64:
           result = cudf::strings::to_integers(*column, n_data_type);
+          break;
+        case cudf::type_id::DECIMAL32:
+        case cudf::type_id::DECIMAL64:
+          result = cudf::strings::to_fixed_point(*column, n_data_type);
           break;
         default: JNI_THROW_NEW(env, "java/lang/IllegalArgumentException", "Invalid data type", 0);
       }
@@ -1022,6 +1045,18 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_binaryOpVV(JNIEnv *env, j
     std::unique_ptr<cudf::column> result = cudf::binary_operation(
         *lhs, *rhs, op, n_data_type);
     return reinterpret_cast<jlong>(result.release());
+  }
+  CATCH_STD(env, 0);
+}
+
+JNIEXPORT jint JNICALL Java_ai_rapids_cudf_ColumnView_fixedPointOutputScale(JNIEnv *env, jclass,
+                                                                            jint int_op,
+                                                                            jint lhs_scale,
+                                                                            jint rhs_scale) {
+  try {
+    // we just return the scale as the types will be the same as the lhs input
+    return cudf::binary_operation_fixed_point_scale(static_cast<cudf::binary_operator>(int_op),
+                                                    lhs_scale, rhs_scale);
   }
   CATCH_STD(env, 0);
 }

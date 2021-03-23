@@ -27,6 +27,7 @@
 #include <cudf/io/orc.hpp>
 #include <cudf/io/parquet.hpp>
 #include <cudf/join.hpp>
+#include <cudf/lists/explode.hpp>
 #include <cudf/merge.hpp>
 #include <cudf/partitioning.hpp>
 #include <cudf/reshape.hpp>
@@ -211,12 +212,15 @@ public:
                                           const std::shared_ptr<arrow::io::OutputStream> &sink)
       : initialized(false), column_names(col_names), file_name(""), sink(sink) {}
 
+private:
   bool initialized;
   std::vector<std::string> column_names;
+  std::vector<cudf::column_metadata> columns_meta;
   std::string file_name;
   std::shared_ptr<arrow::io::OutputStream> sink;
   std::shared_ptr<arrow::ipc::RecordBatchWriter> writer;
 
+public:
   void write(std::shared_ptr<arrow::Table> &arrow_tab, int64_t max_chunk) {
     if (!initialized) {
       if (!sink) {
@@ -244,6 +248,59 @@ public:
       sink->Close();
     }
     initialized = false;
+  }
+
+  std::vector<cudf::column_metadata> get_column_metadata(const cudf::table_view& tview) {
+    if (!column_names.empty() && columns_meta.empty()) {
+      // Rebuild the structure of column meta according to table schema.
+      // All the tables written by this writer should share the same schema,
+      // so build column metadata only once.
+      columns_meta.reserve(tview.num_columns());
+      size_t idx = 0;
+      for (auto itr = tview.begin(); itr < tview.end(); ++itr) {
+        // It should consume the column names only when a column is
+        //   - type of struct, or
+        //   - not a child.
+        columns_meta.push_back(build_one_column_meta(*itr, idx));
+      }
+      if (idx < column_names.size()) {
+        throw cudf::jni::jni_exception("Too many column names are provided.");
+      }
+    }
+    return columns_meta;
+  }
+
+private:
+  cudf::column_metadata build_one_column_meta(const cudf::column_view& cview, size_t& idx,
+                                              const bool consume_name = true) {
+    auto col_meta = cudf::column_metadata{};
+    if (consume_name) {
+      col_meta.name = get_column_name(idx++);
+    }
+    // Process children
+    if (cview.type().id() == cudf::type_id::LIST) {
+      // list type:
+      //   - requires a stub metadata for offset column(index: 0).
+      //   - does not require a name for the child column(index 1).
+      col_meta.children_meta = {{}, build_one_column_meta(cview.child(1), idx, false)};
+    } else if (cview.type().id() == cudf::type_id::STRUCT) {
+      // struct type always consumes the column names.
+      col_meta.children_meta.reserve(cview.num_children());
+      for (auto itr = cview.child_begin(); itr < cview.child_end(); ++itr) {
+        col_meta.children_meta.push_back(build_one_column_meta(*itr, idx));
+      }
+    } else if (cview.type().id() == cudf::type_id::DICTIONARY32) {
+      // not supported yet in JNI, nested type?
+      throw cudf::jni::jni_exception("Unsupported type 'DICTIONARY32'");
+    }
+    return col_meta;
+  }
+
+  std::string& get_column_name(const size_t idx) {
+    if (idx < 0 || idx >= column_names.size()) {
+      throw cudf::jni::jni_exception("Missing names for columns or nested struct columns");
+    }
+    return column_names[idx];
   }
 };
 
@@ -914,12 +971,24 @@ JNIEXPORT long JNICALL Java_ai_rapids_cudf_Table_writeParquetBufferBegin(
     cudf::jni::native_jbooleanArray col_nullability(env, j_col_nullability);
     cudf::jni::native_jstringArray meta_keys(env, j_metadata_keys);
     cudf::jni::native_jstringArray meta_values(env, j_metadata_values);
+    cudf::jni::native_jintArray precisions(env, j_precisions);
 
-    auto d = col_nullability.data();
-    std::vector<bool> nullability(d, d + col_nullability.size());
-    table_metadata_with_nullability metadata;
-    metadata.column_nullable = nullability;
-    metadata.column_names = col_names.as_cpp_vector();
+    auto cpp_names = col_names.as_cpp_vector();
+    table_input_metadata metadata;
+    metadata.column_metadata.resize(col_nullability.size());
+    for (int i = 0; i < col_nullability.size(); i++) {
+       metadata.column_metadata[i]
+           .set_name(cpp_names[i])
+           .set_nullability(col_nullability[i])
+           .set_int96_timestamps(j_isInt96);
+    }
+
+    // Precisions is not always set
+    for (int i = 0; i < precisions.size(); i++) {
+       metadata.column_metadata[i]
+           .set_decimal_precision(precisions[i]);
+    }
+
     for (auto i = 0; i < meta_keys.size(); ++i) {
       metadata.user_data[meta_keys[i].get()] = meta_values[i].get();
     }
@@ -927,16 +996,13 @@ JNIEXPORT long JNICALL Java_ai_rapids_cudf_Table_writeParquetBufferBegin(
     std::unique_ptr<cudf::jni::jni_writer_data_sink> data_sink(
         new cudf::jni::jni_writer_data_sink(env, consumer));
     sink_info sink{data_sink.get()};
-    cudf::jni::native_jintArray precisions(env, j_precisions);
     std::vector<uint8_t> const v_precisions(
         precisions.data(), precisions.data() + precisions.size());
     chunked_parquet_writer_options opts =
         chunked_parquet_writer_options::builder(sink)
-            .nullable_metadata(&metadata)
+            .metadata(&metadata)
             .compression(static_cast<compression_type>(j_compression))
             .stats_level(static_cast<statistics_freq>(j_stats_freq))
-            .int96_timestamps(static_cast<bool>(j_isInt96))
-            .decimal_precision(v_precisions)
             .build();
 
     auto writer_ptr = std::make_unique<cudf::io::parquet_chunked_writer>(opts);
@@ -964,27 +1030,34 @@ JNIEXPORT long JNICALL Java_ai_rapids_cudf_Table_writeParquetFileBegin(
     cudf::jni::native_jstringArray meta_keys(env, j_metadata_keys);
     cudf::jni::native_jstringArray meta_values(env, j_metadata_values);
     cudf::jni::native_jstring output_path(env, j_output_path);
+    cudf::jni::native_jintArray precisions(env, j_precisions);
 
-    auto d = col_nullability.data();
-    std::vector<bool> nullability(d, d + col_nullability.size());
-    table_metadata_with_nullability metadata;
-    metadata.column_nullable = nullability;
-    metadata.column_names = col_names.as_cpp_vector();
-    for (int i = 0; i < meta_keys.size(); ++i) {
+    auto cpp_names = col_names.as_cpp_vector();
+    table_input_metadata metadata;
+    metadata.column_metadata.resize(col_nullability.size());
+    for (int i = 0; i < col_nullability.size(); i++) {
+       metadata.column_metadata[i]
+           .set_name(cpp_names[i])
+           .set_nullability(col_nullability[i])
+           .set_int96_timestamps(j_isInt96);
+    }
+
+    // Precisions is not always set
+    for (int i = 0; i < precisions.size(); i++) {
+       metadata.column_metadata[i]
+           .set_decimal_precision(precisions[i]);
+    }
+
+    for (auto i = 0; i < meta_keys.size(); ++i) {
       metadata.user_data[meta_keys[i].get()] = meta_values[i].get();
     }
-    cudf::jni::native_jintArray precisions(env, j_precisions);
-    std::vector<uint8_t> v_precisions(
-        precisions.data(), precisions.data() + precisions.size());
- 
+
     sink_info sink{output_path.get()};
     chunked_parquet_writer_options opts =
         chunked_parquet_writer_options::builder(sink)
-            .nullable_metadata(&metadata)
+            .metadata(&metadata)
             .compression(static_cast<compression_type>(j_compression))
             .stats_level(static_cast<statistics_freq>(j_stats_freq))
-            .int96_timestamps(static_cast<bool>(j_isInt96))
-            .decimal_precision(v_precisions)
             .build();
 
     auto writer_ptr = std::make_unique<cudf::io::parquet_chunked_writer>(opts);
@@ -1245,12 +1318,7 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Table_convertCudfToArrowTable(JNIEnv
     cudf::jni::auto_set_device(env);
     std::unique_ptr<std::shared_ptr<arrow::Table>> result(
         new std::shared_ptr<arrow::Table>(nullptr));
-    auto column_metadata = std::vector<cudf::column_metadata>{};
-    column_metadata.reserve(state->column_names.size());
-    std::transform(std::begin(state->column_names), std::end(state->column_names),
-                   std::back_inserter(column_metadata),
-                   [](auto const &column_name) { return cudf::column_metadata{column_name}; });
-    *result = cudf::to_arrow(*tview, column_metadata);
+    *result = cudf::to_arrow(*tview, state->get_column_metadata(*tview));
     if (!result->get()) {
       return 0;
     }
@@ -1613,9 +1681,43 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_concatenate(JNIEnv *env, 
   CATCH_STD(env, NULL);
 }
 
+JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_partition(JNIEnv *env, jclass,
+                                                                 jlong input_table,
+                                                                 jlong partition_column,
+                                                                 jint number_of_partitions,
+                                                                 jintArray output_offsets) {
+
+  JNI_NULL_CHECK(env, input_table, "input table is null", NULL);
+  JNI_NULL_CHECK(env, partition_column, "partition_column is null", NULL);
+  JNI_NULL_CHECK(env, output_offsets, "output_offsets is null", NULL);
+  JNI_ARG_CHECK(env, number_of_partitions > 0, "number_of_partitions is zero", NULL);
+
+  try {
+    cudf::jni::auto_set_device(env);
+    cudf::table_view *n_input_table = reinterpret_cast<cudf::table_view *>(input_table);
+    cudf::column_view *n_part_column = reinterpret_cast<cudf::column_view *>(partition_column);
+    cudf::jni::native_jintArray n_output_offsets(env, output_offsets);
+
+    auto result = cudf::partition(*n_input_table,
+                                  *n_part_column,
+                                  number_of_partitions);
+
+    for (size_t i = 0; i < result.second.size() - 1; i++) {
+      // for what ever reason partition returns the length of the result at then
+      // end and hash partition/round robin do not, so skip the last entry for
+      // consistency
+      n_output_offsets[i] = result.second[i];
+    }
+
+    return cudf::jni::convert_table_for_return(env, result.first);
+  }
+  CATCH_STD(env, NULL);
+}
+
 JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_hashPartition(JNIEnv *env, jclass,
                                                                      jlong input_table,
                                                                      jintArray columns_to_hash,
+                                                                     jint hash_function,
                                                                      jint number_of_partitions,
                                                                      jintArray output_offsets) {
 
@@ -1626,6 +1728,7 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_hashPartition(JNIEnv *env
 
   try {
     cudf::jni::auto_set_device(env);
+    cudf::hash_id hash_func = static_cast<cudf::hash_id>(hash_function);
     cudf::table_view *n_input_table = reinterpret_cast<cudf::table_view *>(input_table);
     cudf::jni::native_jintArray n_columns_to_hash(env, columns_to_hash);
     cudf::jni::native_jintArray n_output_offsets(env, output_offsets);
@@ -1638,7 +1741,10 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_hashPartition(JNIEnv *env
     }
 
     std::pair<std::unique_ptr<cudf::table>, std::vector<cudf::size_type>> result =
-        cudf::hash_partition(*n_input_table, columns_to_hash_vec, number_of_partitions);
+        cudf::hash_partition(*n_input_table,
+                             columns_to_hash_vec,
+                             number_of_partitions,
+                             hash_func);
 
     for (size_t i = 0; i < result.second.size(); i++) {
       n_output_offsets[i] = result.second[i];
@@ -2041,6 +2147,34 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_explodePosition(JNIEnv *e
     cudf::table_view *input_table = reinterpret_cast<cudf::table_view *>(input_jtable);
     cudf::size_type col_index = static_cast<cudf::size_type>(column_index);
     std::unique_ptr<cudf::table> exploded = cudf::explode_position(*input_table, col_index);
+    return cudf::jni::convert_table_for_return(env, exploded);
+  }
+  CATCH_STD(env, 0);
+}
+
+JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_explodeOuter(JNIEnv *env, jclass,
+                                                                    jlong input_jtable,
+                                                                    jint column_index) {
+  JNI_NULL_CHECK(env, input_jtable, "explode: input table is null", 0);
+  try {
+    cudf::jni::auto_set_device(env);
+    cudf::table_view *input_table = reinterpret_cast<cudf::table_view *>(input_jtable);
+    cudf::size_type col_index = static_cast<cudf::size_type>(column_index);
+    std::unique_ptr<cudf::table> exploded = cudf::explode_outer(*input_table, col_index);
+    return cudf::jni::convert_table_for_return(env, exploded);
+  }
+  CATCH_STD(env, 0);
+}
+
+JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_explodeOuterPosition(JNIEnv *env, jclass,
+                                                                            jlong input_jtable,
+                                                                            jint column_index) {
+  JNI_NULL_CHECK(env, input_jtable, "explode: input table is null", 0);
+  try {
+    cudf::jni::auto_set_device(env);
+    cudf::table_view *input_table = reinterpret_cast<cudf::table_view *>(input_jtable);
+    cudf::size_type col_index = static_cast<cudf::size_type>(column_index);
+    std::unique_ptr<cudf::table> exploded = cudf::explode_outer_position(*input_table, col_index);
     return cudf::jni::convert_table_for_return(env, exploded);
   }
   CATCH_STD(env, 0);

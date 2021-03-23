@@ -18,7 +18,7 @@
 #include <io/utilities/block_utils.cuh>
 #include <io/utilities/column_buffer.hpp>
 
-#include <cudf/detail/utilities/release_assert.cuh>
+#include <cudf/detail/utilities/assert.cuh>
 #include <cudf/utilities/bit.hpp>
 
 #include <rmm/cuda_stream_view.hpp>

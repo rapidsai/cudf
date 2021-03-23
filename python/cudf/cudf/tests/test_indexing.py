@@ -755,17 +755,6 @@ def test_dataframe_masked_slicing(nelem, slice_start, slice_end):
     assert_eq(expect, got, check_dtype=False)
 
 
-def test_dataframe_boolean_mask_with_None():
-    pdf = pd.DataFrame({"a": [0, 1, 2, 3], "b": [0.1, 0.2, None, 0.3]})
-    gdf = cudf.DataFrame.from_pandas(pdf)
-    pdf_masked = pdf[[True, False, True, False]]
-    gdf_masked = gdf[[True, False, True, False]]
-    assert_eq(pdf_masked, gdf_masked)
-
-    with pytest.raises(ValueError):
-        gdf[cudf.Series([True, False, None, False])]
-
-
 @pytest.mark.parametrize("dtype", [int, float, str])
 def test_empty_boolean_mask(dtype):
     gdf = cudf.datasets.randomdata(nrows=0, dtypes={"a": dtype})
@@ -1043,6 +1032,10 @@ def test_series_setitem_string(key, value):
     [
         ("a", 4),
         ("b", 4),
+        ("b", np.int8(8)),
+        ("d", 4),
+        ("d", np.int8(16)),
+        ("d", np.float32(16)),
         (["a", "b"], 4),
         (["a", "b"], [4, 5]),
         ([True, False, True], 4),
@@ -1052,6 +1045,27 @@ def test_series_setitem_string(key, value):
 )
 def test_series_setitem_loc(key, value):
     psr = pd.Series([1, 2, 3], ["a", "b", "c"])
+    gsr = cudf.from_pandas(psr)
+    psr.loc[key] = value
+    gsr.loc[key] = value
+    assert_eq(psr, gsr)
+
+
+@pytest.mark.parametrize(
+    "key, value",
+    [
+        (1, "d"),
+        (2, "e"),
+        (4, "f"),
+        ([1, 3], "g"),
+        ([1, 3], ["g", "h"]),
+        ([True, False, True], "i"),
+        ([False, False, False], "j"),
+        ([True, False, True], ["k", "l"]),
+    ],
+)
+def test_series_setitem_loc_numeric_index(key, value):
+    psr = pd.Series(["a", "b", "c"], [1, 2, 3])
     gsr = cudf.from_pandas(psr)
     psr.loc[key] = value
     gsr.loc[key] = value

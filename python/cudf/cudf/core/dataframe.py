@@ -1,6 +1,6 @@
 # Copyright (c) 2018-2021, NVIDIA CORPORATION.
 
-from __future__ import division
+from __future__ import annotations, division
 
 import inspect
 import itertools
@@ -10,7 +10,7 @@ import sys
 import warnings
 from collections import OrderedDict, defaultdict
 from collections.abc import Iterable, Sequence
-from typing import Any, Set, TypeVar
+from typing import Any, Optional, Set, TypeVar
 
 import cupy
 import numpy as np
@@ -30,7 +30,7 @@ from cudf.core import column, reshape
 from cudf.core.abc import Serializable
 from cudf.core.column import as_column, column_empty
 from cudf.core.column_accessor import ColumnAccessor
-from cudf.core.frame import Frame
+from cudf.core.frame import Frame, _drop_rows_by_labels
 from cudf.core.groupby.groupby import DataFrameGroupBy
 from cudf.core.index import Index, RangeIndex, as_index
 from cudf.core.indexing import _DataFrameIlocIndexer, _DataFrameLocIndexer
@@ -495,7 +495,12 @@ class DataFrame(Frame, Serializable):
         return out
 
     @classmethod
-    def _from_data(cls, data, index=None, columns=None):
+    def _from_data(
+        cls,
+        data: ColumnAccessor,
+        index: Optional[Index] = None,
+        columns: Any = None,
+    ) -> DataFrame:
         out = cls.__new__(cls)
         out._data = data
         if index is None:
@@ -1513,11 +1518,7 @@ class DataFrame(Frame, Serializable):
                 else:
                     if col not in df_cols:
                         r_opr = other_cols[col]
-                        l_opr = Series(
-                            column_empty(
-                                len(self), masked=True, dtype=other.dtype
-                            )
-                        )
+                        l_opr = Series(as_column(np.nan, length=len(self)))
                     if col not in other_cols_keys:
                         r_opr = None
                         l_opr = self[col]
@@ -2193,7 +2194,7 @@ class DataFrame(Frame, Serializable):
         return self._apply_op("rpow", other, fill_value)
 
     def __rpow__(self, other):
-        return self._apply_op("__pow__", other)
+        return self._apply_op("__rpow__", other)
 
     def floordiv(self, other, axis="columns", level=None, fill_value=None):
         """
@@ -3364,46 +3365,26 @@ class DataFrame(Frame, Serializable):
             )
 
         if inplace:
-            outdf = self
+            out = self
         else:
-            outdf = self.copy()
+            out = self.copy()
 
         if axis in (1, "columns"):
             target = _get_host_unique(target)
 
-            _drop_columns(outdf, target, errors)
+            _drop_columns(out, target, errors)
         elif axis in (0, "index"):
-            if not isinstance(target, (cudf.Series, cudf.Index)):
-                target = column.as_column(target)
-
-            if isinstance(self._index, cudf.MultiIndex):
-                if level is None:
-                    level = 0
-
-                levels_index = outdf.index.get_level_values(level)
-                if errors == "raise" and not target.isin(levels_index).all():
-                    raise KeyError("One or more values not found in axis")
-
-                # TODO : Could use anti-join as a future optimization
-                sliced_df = outdf.take(~levels_index.isin(target))
-                sliced_df._index.names = self._index.names
-            else:
-                if errors == "raise" and not target.isin(outdf.index).all():
-                    raise KeyError("One or more values not found in axis")
-
-                sliced_df = outdf.join(
-                    cudf.DataFrame(index=target), how="leftanti"
-                )
+            dropped = _drop_rows_by_labels(out, target, level, errors)
 
             if columns is not None:
                 columns = _get_host_unique(columns)
-                _drop_columns(sliced_df, columns, errors)
+                _drop_columns(dropped, columns, errors)
 
-            outdf._data = sliced_df._data
-            outdf._index = sliced_df._index
+            out._data = dropped._data
+            out._index = dropped._index
 
         if not inplace:
-            return outdf
+            return out
 
     def _drop_column(self, name):
         """Drop a column by *name*
@@ -6046,7 +6027,6 @@ class DataFrame(Frame, Serializable):
         falcon      True       True
         dog        False      False
         """
-
         if isinstance(values, dict):
 
             result_df = DataFrame()
@@ -6066,14 +6046,15 @@ class DataFrame(Frame, Serializable):
             values = values.reindex(self.index)
 
             result = DataFrame()
-
+            # TODO: propagate nulls through isin
+            # https://github.com/rapidsai/cudf/issues/7556
             for col in self._data.names:
                 if isinstance(
                     self[col]._column, cudf.core.column.CategoricalColumn
                 ) and isinstance(
                     values._column, cudf.core.column.CategoricalColumn
                 ):
-                    res = self._data[col] == values._column
+                    res = (self._data[col] == values._column).fillna(False)
                     result[col] = res
                 elif (
                     isinstance(
@@ -6088,7 +6069,9 @@ class DataFrame(Frame, Serializable):
                 ):
                     result[col] = utils.scalar_broadcast_to(False, len(self))
                 else:
-                    result[col] = self._data[col] == values._column
+                    result[col] = (self._data[col] == values._column).fillna(
+                        False
+                    )
 
             result.index = self.index
             return result
@@ -6098,7 +6081,9 @@ class DataFrame(Frame, Serializable):
             result = DataFrame()
             for col in self._data.names:
                 if col in values.columns:
-                    result[col] = self._data[col] == values[col]._column
+                    result[col] = (
+                        self._data[col] == values[col]._column
+                    ).fillna(False)
                 else:
                     result[col] = utils.scalar_broadcast_to(False, len(self))
             result.index = self.index
@@ -7333,15 +7318,6 @@ class DataFrame(Frame, Serializable):
         """{docstring}"""
         from cudf.io import parquet as pq
 
-        if any(
-            isinstance(col, cudf.core.column.StructColumn)
-            for col in self._data.columns
-        ):
-            raise NotImplementedError(
-                "Writing to parquet format is not yet supported "
-                "with Struct columns."
-            )
-
         return pq.to_parquet(self, path, *args, **kwargs)
 
     @ioutils.doc_to_feather()
@@ -7720,6 +7696,52 @@ class DataFrame(Frame, Serializable):
                 return False
         return super().equals(other)
 
+    def explode(self, column, ignore_index=False):
+        """
+        Transform each element of a list-like to a row, replicating index
+        values.
+
+        Parameters
+        ----------
+        column : str or tuple
+            Column to explode.
+        ignore_index : bool, default False
+            If True, the resulting index will be labeled 0, 1, …, n - 1.
+
+        Returns
+        -------
+        DataFrame
+
+        Examples
+        --------
+        >>> import cudf
+        >>> cudf.DataFrame(
+                {"a": [[1, 2, 3], [], None, [4, 5]], "b": [11, 22, 33, 44]})
+                   a   b
+        0  [1, 2, 3]  11
+        1         []  22
+        2       None  33
+        3     [4, 5]  44
+        >>> df.explode('a')
+              a   b
+        0     1  11
+        0     2  11
+        0     3  11
+        1  <NA>  22
+        2  <NA>  33
+        3     4  44
+        3     5  44
+        """
+        if column not in self._column_names:
+            raise KeyError(column)
+
+        if not is_list_dtype(self._data[column].dtype):
+            data = self._data.copy(deep=True)
+            idx = None if ignore_index else self._index.copy(deep=True)
+            return self.__class__._from_data(data, index=idx)
+
+        return super()._explode(column, ignore_index)
+
     _accessors = set()  # type: Set[Any]
 
 
@@ -7967,17 +7989,6 @@ def _get_union_of_series_names(series_list):
     return names_list
 
 
-def _drop_columns(df, columns, errors):
-    for c in columns:
-        try:
-            df._drop_column(c)
-        except KeyError as e:
-            if errors == "ignore":
-                pass
-            else:
-                raise e
-
-
 def _get_host_unique(array):
     if isinstance(
         array, (cudf.Series, cudf.Index, cudf.core.column.ColumnBase)
@@ -7987,3 +7998,14 @@ def _get_host_unique(array):
         return [array]
     else:
         return set(array)
+
+
+def _drop_columns(df: DataFrame, columns: Iterable, errors: str):
+    for c in columns:
+        try:
+            df._drop_column(c)
+        except KeyError as e:
+            if errors == "ignore":
+                pass
+            else:
+                raise e
