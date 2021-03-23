@@ -178,7 +178,7 @@ class ListMethods(ColumnMethodsMixin):
             )
         super().__init__(column=column, parent=parent)
 
-    def contains(self, key):
+    def contains(self, key, _dtype):
         """
         Creates a column of bool values indicating whether the specified scalar
         is an element of each row of a list column.
@@ -199,10 +199,7 @@ class ListMethods(ColumnMethodsMixin):
         Series([False, True, True])
         dtype: bool
         """
-        # if key is not None:
-        search_key = cudf.Scalar(key).device_value
-        # else:
-        # search_key = key
+        search_key = cudf.Scalar(key, _dtype).device_value
         return self._return_or_inplace(
             contains_scalar(self._column, search_key)
         )
