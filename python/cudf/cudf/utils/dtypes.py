@@ -144,6 +144,8 @@ def numeric_normalize_types(*args):
 
 
 def is_numerical_dtype(obj):
+    # TODO: we should handle objects with a `.dtype` attribute,
+    # e.g., arrays, here.
     try:
         dtype = np.dtype(obj)
     except TypeError:
