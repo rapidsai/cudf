@@ -288,8 +288,8 @@ class ListMethods(ColumnMethodsMixin):
 
     def unique(self):
         """
-        Returns unique values for each list in the column, order for each
-        unique value is not gaurenteed.
+        Returns unique element for each list in the column, order for each
+        unique element is not guaranteed.
 
         Returns
         -------
@@ -304,7 +304,7 @@ class ListMethods(ColumnMethodsMixin):
         2                   [4.0, 4.0]
         3                           []
         dtype: list
-        >>> s.list.unique() # Order of list elements is not gaurenteed
+        >>> s.list.unique() # Order of list element is not guaranteed
         0              [1.0, 2.0, nan]
         1                         None
         2                        [4.0]
