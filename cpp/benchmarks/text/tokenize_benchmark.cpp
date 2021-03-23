@@ -68,8 +68,8 @@ static void BM_tokenize(benchmark::State& state, tokenize_type tt)
 
 static void generate_bench_args(benchmark::internal::Benchmark* b)
 {
-  int const min_rows   = 1 << 10;  // 12
-  int const max_rows   = 1 << 14;  // 24
+  int const min_rows   = 1 << 12;
+  int const max_rows   = 1 << 24;
   int const row_mult   = 8;
   int const min_rowlen = 1 << 5;
   int const max_rowlen = 1 << 13;
