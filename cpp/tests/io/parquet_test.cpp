@@ -2311,11 +2311,13 @@ TEST_F(ParquetReaderTest, UserBoundsWithNulls)
 TEST_F(ParquetReaderTest, UserBoundsWithNullsLarge)
 {
   constexpr int num_rows = 30 * 1000000;
-  srand(7562);
-  auto frand  = []() { return static_cast<float>(rand()) / static_cast<float>(RAND_MAX); };
-  auto valids = cudf::detail::make_counting_transform_iterator(
-    0, [&](int index) { return frand() >= 0.3 ? 1 : 0; });
+
+  std::mt19937 gen(6747);
+  std::bernoulli_distribution bn(0.7f);
+  auto valids =
+    cudf::detail::make_counting_transform_iterator(0, [&](int index) { return bn(gen); });
   auto values = thrust::make_counting_iterator(0);
+
   cudf::test::fixed_width_column_wrapper<int> col(values, values + num_rows, valids);
 
   // this file will have row groups of 1,000,000 each
