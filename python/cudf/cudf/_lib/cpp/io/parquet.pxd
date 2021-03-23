@@ -3,6 +3,7 @@
 from libcpp cimport bool
 from libcpp.string cimport string
 from libcpp.vector cimport vector
+from libcpp.map cimport map
 from libcpp.memory cimport shared_ptr, unique_ptr
 from libc.stdint cimport uint8_t
 
@@ -64,17 +65,36 @@ cdef extern from "cudf/io/parquet.hpp" namespace "cudf::io" nogil:
     cdef cudf_io_types.table_with_metadata read_parquet(
         parquet_reader_options args) except +
 
+    cdef cppclass column_in_metadata:
+        column_in_metadata& set_name(const string& name)
+        column_in_metadata& set_nullability(bool nullable)
+        column_in_metadata& set_list_column_as_map()
+        column_in_metadata& set_int96_timestamps(bool req)
+        column_in_metadata& set_decimal_precision(uint8_t precision)
+        column_in_metadata& child(size_type i)
+
+    cdef cppclass table_input_metadata:
+        table_input_metadata() except +
+        table_input_metadata(const cudf_table_view.table_view& table) except +
+        table_input_metadata(
+            const cudf_table_view.table_view& table,
+            map[string, string] user_data
+        ) except +
+
+        vector[column_in_metadata] column_metadata
+        map[string, string] user_data
+
     cdef cppclass parquet_writer_options:
         parquet_writer_options() except +
         cudf_io_types.sink_info get_sink_info() except +
         cudf_io_types.compression_type get_compression() except +
         cudf_io_types.statistics_freq get_stats_level() except +
         cudf_table_view.table_view get_table() except +
-        const cudf_io_types.table_metadata get_metadata() except +
+        const table_input_metadata get_metadata() except +
         string get_column_chunks_file_path() except+
 
         void set_metadata(
-            cudf_io_types.table_metadata *m
+            table_input_metadata *m
         ) except +
         void set_stats_level(
             cudf_io_types.statistics_freq sf
@@ -100,7 +120,7 @@ cdef extern from "cudf/io/parquet.hpp" namespace "cudf::io" nogil:
             cudf_table_view.table_view table_
         ) except +
         parquet_writer_options_builder& metadata(
-            cudf_io_types.table_metadata *m
+            table_input_metadata *m
         ) except +
         parquet_writer_options_builder& stats_level(
             cudf_io_types.statistics_freq sf
@@ -126,11 +146,11 @@ cdef extern from "cudf/io/parquet.hpp" namespace "cudf::io" nogil:
         cudf_io_types.sink_info get_sink() except +
         cudf_io_types.compression_type get_compression() except +
         cudf_io_types.statistics_freq get_stats_level() except +
-        cudf_io_types.table_metadata_with_nullability* get_nullable_metadata(
+        table_input_metadata* get_metadata(
         ) except+
 
-        void set_nullable_metadata(
-            cudf_io_types.table_metadata_with_nullability *m
+        void set_metadata(
+            table_input_metadata *m
         ) except +
         void set_stats_level(
             cudf_io_types.statistics_freq sf
@@ -149,8 +169,8 @@ cdef extern from "cudf/io/parquet.hpp" namespace "cudf::io" nogil:
         chunked_parquet_writer_options_builder(
             cudf_io_types.sink_info sink_,
         ) except +
-        chunked_parquet_writer_options_builder& nullable_metadata(
-            cudf_io_types.table_metadata_with_nullability *m
+        chunked_parquet_writer_options_builder& metadata(
+            table_input_metadata *m
         ) except +
         chunked_parquet_writer_options_builder& stats_level(
             cudf_io_types.statistics_freq sf

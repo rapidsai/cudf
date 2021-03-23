@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2020, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -74,7 +74,8 @@ class aggregation {
     NUNIQUE,         ///< count number of unique elements
     NTH_ELEMENT,     ///< get the nth element
     ROW_NUMBER,      ///< get row-number of current index (relative to rolling window)
-    COLLECT,         ///< collect values into a list
+    COLLECT_LIST,    ///< collect values into a list
+    COLLECT_SET,     ///< collect values into a list without duplicate entries
     LEAD,            ///< window function, accesses row at specified offset following current row
     LAG,             ///< window function, accesses row at specified offset preceding current row
     PTX,             ///< PTX  UDF based reduction
@@ -205,17 +206,34 @@ std::unique_ptr<aggregation> make_nth_element_aggregation(
 std::unique_ptr<aggregation> make_row_number_aggregation();
 
 /**
- * @brief Factory to create a COLLECT aggregation
+ * @brief Factory to create a COLLECT_LIST aggregation
  *
- * `COLLECT` returns a list column of all included elements in the group/series.
+ * `COLLECT_LIST` returns a list column of all included elements in the group/series.
  *
  * If `null_handling` is set to `EXCLUDE`, null elements are dropped from each
  * of the list rows.
  *
  * @param null_handling Indicates whether to include/exclude nulls in list elements.
  */
-std::unique_ptr<aggregation> make_collect_aggregation(
+std::unique_ptr<aggregation> make_collect_list_aggregation(
   null_policy null_handling = null_policy::INCLUDE);
+
+/**
+ * @brief Factory to create a COLLECT_SET aggregation
+ *
+ * `COLLECT_SET` returns a lists column of all included elements in the group/series. Within each
+ * list, the duplicated entries are dropped out such that each entry appears only once.
+ *
+ * If `null_handling` is set to `EXCLUDE`, null elements are dropped from each
+ * of the list rows.
+ *
+ * @param null_handling Indicates whether to include/exclude nulls during collection
+ * @param nulls_equal   Flag to specify whether null entries within each list should be considered
+ * equal
+ */
+std::unique_ptr<aggregation> make_collect_set_aggregation(
+  null_policy null_handling = null_policy::INCLUDE,
+  null_equality null_equal  = null_equality::EQUAL);
 
 /// Factory to create a LAG aggregation
 std::unique_ptr<aggregation> make_lag_aggregation(size_type offset);

@@ -22,6 +22,8 @@ from cudf.utils.dtypes import (
     np_to_pa_dtype,
     is_categorical_dtype,
     is_list_dtype,
+    is_struct_dtype,
+    is_decimal_dtype,
 )
 
 
@@ -79,7 +81,11 @@ cpdef generate_pandas_metadata(Table table, index):
                 "'category' column dtypes are currently not "
                 + "supported by the gpu accelerated parquet writer"
             )
-        elif is_list_dtype(col):
+        elif (
+            is_list_dtype(col)
+            or is_struct_dtype(col)
+            or is_decimal_dtype(col)
+        ):
             types.append(col.dtype.to_arrow())
         else:
             types.append(np_to_pa_dtype(col.dtype))

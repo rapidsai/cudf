@@ -129,6 +129,13 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
     return viewHandle;
   }
 
+  static int getFixedPointOutputScale(BinaryOp op, DType lhsType, DType rhsType) {
+    assert (lhsType.isDecimalType() && rhsType.isDecimalType());
+    return fixedPointOutputScale(op.nativeId, lhsType.getScale(), rhsType.getScale());
+  }
+
+  private static native int fixedPointOutputScale(int op, int lhsScale, int rhsScale);
+
   public final DType getType() {
     return type;
   }
@@ -247,6 +254,15 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
   public final ColumnVector getByteCount() {
     assert type.equals(DType.STRING) : "type has to be a String";
     return new ColumnVector(byteCount(getNativeView()));
+  }
+
+  /**
+   * Get the number of elements for each list. Null lists will have a value of null.
+   * @return the number of elements in each list as an INT32 value.
+   */
+  public final ColumnVector countElements() {
+    assert DType.LIST.equals(type) : "Only lists are supported";
+    return new ColumnVector(countElements(getNativeView()));
   }
 
   /**
@@ -2741,6 +2757,8 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
   private static native long binaryOpVS(long lhs, long rhs, int op, int dtype, int scale);
 
   private static native long binaryOpVV(long lhs, long rhs, int op, int dtype, int scale);
+
+  private static native long countElements(long viewHandle);
 
   private static native long byteCount(long viewHandle) throws CudfException;
 
