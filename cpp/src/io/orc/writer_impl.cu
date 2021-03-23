@@ -1027,7 +1027,7 @@ void writer::impl::write(table_view const &table)
       "be specified");
   }
 
-  auto device_columns    = table_device_view::create(table);
+  auto device_columns    = table_device_view::create(table, stream);
   auto string_column_ids = get_string_column_ids(*device_columns, stream);
 
   // Wrapper around cudf columns to attach ORC-specific type info
