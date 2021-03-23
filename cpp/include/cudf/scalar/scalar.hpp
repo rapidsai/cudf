@@ -615,11 +615,10 @@ class list_scalar : public scalar {
    * @param mr Device memory resource to use for device memory allocation
    */
   list_scalar(cudf::column_view const& elements,
-              scalar_validity validity            = scalar_validity::VALID,
+              bool is_valid                       = true,
               rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
               rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
-    : scalar(data_type(type_id::LIST), validity == scalar_validity::VALID ? true : false),
-      _data(elements, stream, mr)
+    : scalar(data_type(type_id::LIST), is_valid), _data(elements, stream, mr)
   {
   }
 
