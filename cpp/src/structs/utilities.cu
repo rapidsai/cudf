@@ -62,7 +62,7 @@ std::vector<std::vector<column_view>> extract_ordered_struct_children(
  * @brief Flattens struct columns to constituent non-struct columns in the input table.
  *
  */
-struct flatten_table {
+struct flattened_table {
   // reference variables
   table_view const& input;
   std::vector<order> const& column_order;
@@ -73,7 +73,7 @@ struct flatten_table {
   std::vector<order> flat_column_order;
   std::vector<null_order> flat_null_precedence;
 
-  flatten_table(table_view const& input,
+  flattened_table(table_view const& input,
                 std::vector<order> const& column_order,
                 std::vector<null_order> const& null_precedence)
     : input(input), column_order(column_order), null_precedence(null_precedence)
@@ -108,14 +108,14 @@ struct flatten_table {
   // Note: possibly expand for flattening list columns too.
 
   /**
-   * @copydoc flatten_table
+   * @copydoc flattened_table
    *
    * @return tuple with flattened table, flattened column order, flattened null precedence,
    * vector of boolean columns (struct validity).
    */
   auto operator()()
   {
-    for (decltype(input.num_columns()) i = 0; i < input.num_columns(); ++i) {
+    for (auto i = 0; i < input.num_columns(); ++i) {
       auto const& col = input.column(i);
       if (col.type().id() == type_id::STRUCT) {
         flatten_struct_column(structs_column_view{col},
@@ -152,7 +152,7 @@ flatten_nested_columns(table_view const& input,
   if (not has_struct)
     return std::make_tuple(input, column_order, null_precedence, std::move(validity_as_column));
 
-  return flatten_table{input, column_order, null_precedence}();
+  return flattened_table{input, column_order, null_precedence}();
 }
 
 }  // namespace detail
