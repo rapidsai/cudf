@@ -459,6 +459,6 @@ class MergeSemi(Merge):
     def _merge_results(self, lhs: Frame, rhs: Frame) -> Frame:
         # semi-join result includes only lhs columns
         if issubclass(self._out_class, cudf.Index):
-            return self._out_class._from_data(lhs)
+            return self._out_class._from_data(lhs._data)
         else:
             return self._out_class._from_data(lhs._data, index=lhs._index)
