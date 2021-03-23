@@ -1026,7 +1026,7 @@ def test_parquet_reader_list_skiprows(skip, tmpdir):
     assert_eq(expect, got, check_dtype=False)
 
 
-@pytest.mark.parametrize("skip", range(0, 128))
+@pytest.mark.parametrize("skip", range(0, 120))
 def test_parquet_reader_list_num_rows(skip, tmpdir):
     num_rows = 128
     src = pd.DataFrame(
@@ -1043,7 +1043,8 @@ def test_parquet_reader_list_num_rows(skip, tmpdir):
     src.to_parquet(fname)
     assert os.path.exists(fname)
 
-    rows_to_read = min(3, num_rows - skip)
+    # make sure to leave a few rows at the end that we don't read
+    rows_to_read = min(3, (num_rows - skip) - 5)
     expect = src.iloc[skip:].head(rows_to_read)
     got = cudf.read_parquet(fname, skiprows=skip, num_rows=rows_to_read)
     assert_eq(expect, got, check_dtype=False)
