@@ -1834,3 +1834,104 @@ def test_parquet_writer_list_statistics(tmpdir):
             actual_max = cudf.Series(pd_slice[col].explode().explode()).max()
             stats_max = stats.max
             assert normalized_equals(actual_max, stats_max)
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        # Structs
+        {
+            "being": [
+                None,
+                {"human?": True, "Deets": {"Name": "Carrot", "Age": 27}},
+                {"human?": None, "Deets": {"Name": "Angua", "Age": 25}},
+                {"human?": False, "Deets": {"Name": "Cheery", "Age": 31}},
+                {"human?": False, "Deets": None},
+                {"human?": None, "Deets": {"Name": "Mr", "Age": None}},
+            ]
+        },
+        # List of Structs
+        pytest.param(
+            {
+                "family": [
+                    [
+                        None,
+                        {"human?": True, "deets": {"weight": 2.4, "age": 27}},
+                    ],
+                    [
+                        {"human?": None, "deets": {"weight": 5.3, "age": 25}},
+                        {"human?": False, "deets": {"weight": 8.0, "age": 31}},
+                        {"human?": False, "deets": None},
+                    ],
+                    [],
+                    [{"human?": None, "deets": {"weight": 6.9, "age": None}}],
+                ]
+            },
+            marks=pytest.mark.xfail(
+                reason="https://github.com/rapidsai/cudf/issues/7561"
+            ),
+        ),
+        # Struct of Lists
+        pytest.param(
+            {
+                "Real estate records": [
+                    None,
+                    {
+                        "Status": "NRI",
+                        "Ownerships": {
+                            "land_unit": [None, 2, None],
+                            "flats": [[1, 2, 3], [], [4, 5], [], [0, 6, 0]],
+                        },
+                    },
+                    {
+                        "Status": None,
+                        "Ownerships": {
+                            "land_unit": [4, 5],
+                            "flats": [[7, 8], []],
+                        },
+                    },
+                    {
+                        "Status": "RI",
+                        "Ownerships": {"land_unit": None, "flats": [[]]},
+                    },
+                    {"Status": "RI", "Ownerships": None},
+                    {
+                        "Status": None,
+                        "Ownerships": {
+                            "land_unit": [7, 8, 9],
+                            "flats": [[], [], []],
+                        },
+                    },
+                ]
+            },
+            marks=pytest.mark.xfail(
+                reason="https://github.com/rapidsai/cudf/issues/7562"
+            ),
+        ),
+    ],
+)
+def test_parquet_writer_nested(tmpdir, data):
+    expect = pd.DataFrame(data)
+    gdf = cudf.from_pandas(expect)
+
+    fname = tmpdir.join("test_parquet_writer_nested.parquet")
+    gdf.to_parquet(fname)
+    assert os.path.exists(fname)
+
+    got = pd.read_parquet(fname)
+    assert_eq(expect, got)
+
+
+def test_parquet_writer_decimal(tmpdir):
+    from cudf.core.dtypes import Decimal64Dtype
+
+    gdf = cudf.DataFrame({"val": [0.00, 0.01, 0.02]})
+
+    gdf["dec_val"] = gdf["val"].astype(Decimal64Dtype(7, 2))
+
+    fname = tmpdir.join("test_parquet_writer_decimal.parquet")
+    gdf.to_parquet(fname)
+    assert os.path.exists(fname)
+
+    got = pd.read_parquet(fname)
+    assert_eq(gdf, got)
