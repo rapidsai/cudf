@@ -187,7 +187,7 @@ CUDA_HOST_DEVICE_CALLABLE constexpr void ast_operator_dispatcher(ast_operator op
 #ifndef __CUDA_ARCH__
       CUDF_FAIL("Invalid operator.");
 #else
-      release_assert(false && "Invalid operator.");
+      cudf_assert(false && "Invalid operator.");
 #endif
       break;
   }
@@ -784,7 +784,7 @@ struct double_dispatch_binary_operator_types {
 #ifndef __CUDA_ARCH__
     CUDF_FAIL("Invalid binary operation.");
 #else
-    release_assert(false && "Invalid binary operation.");
+    cudf_assert(false && "Invalid binary operation.");
 #endif
   }
 };
@@ -819,7 +819,7 @@ struct single_dispatch_binary_operator_types {
 #ifndef __CUDA_ARCH__
     CUDF_FAIL("Invalid binary operation.");
 #else
-    release_assert(false && "Invalid binary operation.");
+    cudf_assert(false && "Invalid binary operation.");
 #endif
   }
 };
@@ -924,7 +924,7 @@ struct dispatch_unary_operator_types {
 #ifndef __CUDA_ARCH__
     CUDF_FAIL("Invalid unary operation.");
 #else
-    release_assert(false && "Invalid unary operation.");
+    cudf_assert(false && "Invalid unary operation.");
 #endif
   }
 };
@@ -996,7 +996,7 @@ struct return_type_functor {
 #ifndef __CUDA_ARCH__
     CUDF_FAIL("Invalid binary operation. Return type cannot be determined.");
 #else
-    release_assert(false && "Invalid binary operation. Return type cannot be determined.");
+    cudf_assert(false && "Invalid binary operation. Return type cannot be determined.");
 #endif
   }
 
@@ -1024,7 +1024,7 @@ struct return_type_functor {
 #ifndef __CUDA_ARCH__
     CUDF_FAIL("Invalid unary operation. Return type cannot be determined.");
 #else
-    release_assert(false && "Invalid unary operation. Return type cannot be determined.");
+    cudf_assert(false && "Invalid unary operation. Return type cannot be determined.");
 #endif
   }
 };
