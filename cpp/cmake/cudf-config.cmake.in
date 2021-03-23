@@ -26,7 +26,9 @@ This module offers an optional testing component which defines the
 following IMPORTED GLOBAL targets:
 
  cudf::cudftestutil     - The main cudf testing library
+ cudf::gmock
  cudf::gmock_main
+ cudf::gtest
  cudf::gtest_main
 
 
