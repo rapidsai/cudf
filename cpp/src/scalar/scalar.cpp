@@ -14,7 +14,6 @@
  * limitations under the License.
  */
 
-#include <cudf/lists/list_view.cuh>
 #include <cudf/scalar/scalar.hpp>
 #include <cudf/strings/string_view.hpp>
 
@@ -55,11 +54,6 @@ std::string string_scalar::to_string(rmm::cuda_stream_view stream) const
     &result[0], _data.data(), _data.size(), cudaMemcpyDeviceToHost, stream.value()));
   stream.synchronize();
   return result;
-}
-
-list_scalar::value_type list_scalar::value(rmm::cuda_stream_view stream) const
-{
-  return list_view{};
 }
 
 }  // namespace cudf

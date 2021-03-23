@@ -15,6 +15,7 @@
  */
 #pragma once
 
+#include <cudf/lists/list_view.cuh>
 #include <cudf/types.hpp>
 #include <cudf/utilities/traits.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
@@ -598,8 +599,6 @@ struct duration_scalar : chrono_scalar<T> {
  */
 class list_scalar : public scalar {
  public:
-  using value_type = cudf::list_view;
-
   list_scalar() : scalar(data_type(type_id::LIST)) {}
   ~list_scalar()                        = default;
   list_scalar(list_scalar&& other)      = default;
@@ -625,21 +624,9 @@ class list_scalar : public scalar {
   }
 
   /**
-   * @brief Get the value of the scalar as a list_view
-   *
-   * @param stream CUDA stream used for device memory operations.
+   * @brief Returns a non-owning, immutable view to underlying device data
    */
-  value_type value(rmm::cuda_stream_view stream = rmm::cuda_stream_default) const;
-
-  /**
-   * @brief Returns the number of elements in the list
-   */
-  size_type size() const { return _data.size(); }
-
-  /**
-   * @brief Returns a immutable view to the underlying list_scalar data
-   */
-  cudf::column_view view() const { return _data.view(); }
+  list_view view() const { return list_view{}; }
 
  private:
   cudf::column _data;
