@@ -173,8 +173,11 @@ ConfigureBench(AST_BENCH ast/transform_benchmark.cpp)
 ConfigureBench(BINARYOP_BENCH binaryop/binaryop_benchmark.cu)
 
 ###################################################################################################
-# - subword tokenizer benchmark -------------------------------------------------------------------
-ConfigureBench(SUBWORD_TOKENIZER_BENCH text/subword_benchmark.cpp)
+# - nvtext benchmark -------------------------------------------------------------------
+ConfigureBench(TEXT_BENCH
+  text/normalize_benchmark.cpp
+  text/normalize_spaces_benchmark.cpp
+  text/subword_benchmark.cpp)
 
 ###################################################################################################
 # - strings benchmark -------------------------------------------------------------------
