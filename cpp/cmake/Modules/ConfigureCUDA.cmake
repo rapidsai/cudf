@@ -18,7 +18,7 @@
 find_package(CUDAToolkit REQUIRED)
 
 # Auto-detect available GPU compute architectures
-include(${CUDF_SOURCE_DIR}/cmake/Modules/SetGPUArchs.cmake)
+include(${CMAKE_CURRENT_LIST_DIR}/SetGPUArchs.cmake)
 message(STATUS "CUDF: Building CUDF for GPU architectures: ${CMAKE_CUDA_ARCHITECTURES}")
 
 # Must come after find_package(CUDAToolkit) because we symlink
