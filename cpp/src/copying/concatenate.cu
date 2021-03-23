@@ -154,8 +154,8 @@ void concatenate_masks(host_span<column_view const> views,
 {
   // Preprocess and upload inputs to device memory
   auto const device_views = create_device_views(views, stream);
-  auto& d_views           = std::get<1>(device_views);
-  auto& d_offsets         = std::get<2>(device_views);
+  auto const& d_views     = std::get<1>(device_views);
+  auto const& d_offsets   = std::get<2>(device_views);
   auto const output_size  = std::get<3>(device_views);
 
   concatenate_masks(d_views, d_offsets, dest_mask, output_size, stream);

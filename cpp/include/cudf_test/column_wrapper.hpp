@@ -1503,8 +1503,7 @@ class lists_column_wrapper : public detail::column_wrapper {
                     std::back_inserter(children),
                     thrust::identity<bool>{});
 
-    auto data = children.empty() ? cudf::empty_like(expected_hierarchy)
-                                 : concatenate(host_span<column_view const>{children});
+    auto data = children.empty() ? cudf::empty_like(expected_hierarchy) : concatenate(children);
 
     // increment depth
     depth = expected_depth + 1;

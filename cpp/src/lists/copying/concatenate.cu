@@ -112,7 +112,7 @@ std::unique_ptr<column> concatenate(
                   total_list_count += l.size();
                   children.push_back(l.get_sliced_child(stream));
                 });
-  auto data = cudf::detail::concatenate(host_span<column_view>{children}, stream, mr);
+  auto data = cudf::detail::concatenate(children, stream, mr);
 
   // merge offsets
   auto offsets = merge_offsets(lists_columns, total_list_count, stream, mr);
