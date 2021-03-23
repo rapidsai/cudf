@@ -1331,7 +1331,7 @@ TEST_F(ParquetChunkedWriterTest, ListOfStruct)
 
   auto table_2 = table_view({*list_col_2});
 
-  auto full_table = cudf::concatenate({table_1, table_2});
+  auto full_table = cudf::concatenate(std::vector<table_view>({table_1, table_2}));
 
   cudf_io::table_input_metadata expected_metadata(table_1);
   expected_metadata.column_metadata[0].set_name("family");
@@ -1422,7 +1422,7 @@ TEST_F(ParquetChunkedWriterTest, ListOfStructOfStructOfListOfList)
 
   auto table_2 = table_view({*list_col_2});
 
-  auto full_table = cudf::concatenate({table_1, table_2});
+  auto full_table = cudf::concatenate(std::vector<table_view>({table_1, table_2}));
 
   cudf_io::table_input_metadata expected_metadata(table_1);
   expected_metadata.column_metadata[0].set_name("family");
@@ -1596,7 +1596,7 @@ TEST_F(ParquetChunkedWriterTest, DifferentNullabilityStruct)
   auto struct_2_2 = cudf::test::structs_column_wrapper{{is_human_2, struct_1_2}};
   auto table_2    = cudf::table_view({struct_2_2});
 
-  auto full_table = cudf::concatenate({table_1, table_2});
+  auto full_table = cudf::concatenate(std::vector<table_view>({table_1, table_2}));
 
   cudf_io::table_input_metadata expected_metadata(table_1);
   expected_metadata.column_metadata[0].set_name("being");
@@ -1727,7 +1727,7 @@ TEST_F(ParquetChunkedWriterTest, ForcedNullabilityStruct)
   auto struct_2_2 = cudf::test::structs_column_wrapper{{is_human_2, struct_1_2}};
   auto table_2    = cudf::table_view({struct_2_2});
 
-  auto full_table = cudf::concatenate({table_1, table_2});
+  auto full_table = cudf::concatenate(std::vector<table_view>({table_1, table_2}));
 
   cudf_io::table_input_metadata expected_metadata(table_1);
   expected_metadata.column_metadata[0].set_name("being").set_nullability(false);
