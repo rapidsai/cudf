@@ -41,8 +41,7 @@ enum class inclusive { YES, NO };
  * @brief Labels elements based on membership in the specified bins.
  *
  * A bin `i` is defined by `left_edges[i], right_edges[i]`. Whether the edges are inclusive or
- * not is determined by `left_inclusive` and `right_inclusive`, respectively. If either
- * `left_edges[i]` or `right_edges[i]` is NULL, no value in `input` can be placed in bin `i`.
+ * not is determined by `left_inclusive` and `right_inclusive`, respectively.
  *
  * A value `input[j]` belongs to bin `i` if `value[j]` is contained in the range `left_edges[i],
  * right_edges[i]` (with the specified inclusiveness) and `label[j] == i`. If  `input[j]` does not
