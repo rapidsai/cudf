@@ -49,10 +49,10 @@ using offset_type = lists_column_view::offset_type;
 template <class Type>
 class list_entry_comparator {
  public:
-  __host__ __device__ list_entry_comparator(offset_type const* list_offsets,
-                                            column_device_view d_view,
-                                            null_equality nulls_equal,
-                                            bool has_nulls)
+  list_entry_comparator(offset_type const* list_offsets,
+                        column_device_view d_view,
+                        null_equality nulls_equal,
+                        bool has_nulls)
     : list_offsets(list_offsets), d_view{d_view}, nulls_equal{nulls_equal}, has_nulls(has_nulls)
   {
   }
