@@ -17,6 +17,7 @@
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_view.hpp>
 #include <cudf/detail/interop.hpp>
+#include <cudf/detail/iterator.cuh>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/unary.hpp>
 #include <cudf/dictionary/dictionary_column_view.hpp>
@@ -29,6 +30,8 @@
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/mr/device/per_device_resource.hpp>
+
+#include <thrust/scatter.h>
 
 namespace cudf {
 namespace detail {
@@ -128,6 +131,10 @@ struct dispatch_to_arrow {
   }
 };
 
+struct every_other {
+  __device__ size_type operator()(size_type i) { return 2 * i; }
+};
+
 template <>
 std::shared_ptr<arrow::Array> dispatch_to_arrow::operator()<numeric::decimal64>(
   column_view input,
@@ -136,27 +143,27 @@ std::shared_ptr<arrow::Array> dispatch_to_arrow::operator()<numeric::decimal64>(
   arrow::MemoryPool* ar_mr,
   rmm::cuda_stream_view stream)
 {
-  using DeviceType                = device_storage_type_t<T>;
+  using DeviceType                = int64_t;
   size_type const BIT_WIDTH_RATIO = 2;  // Array::Type:type::DECIMAL (128) / int64_t
 
   rmm::device_uvector<DeviceType> buf(input.size() * BIT_WIDTH_RATIO, stream);
 
-  thrust::gather(rmm::exec_policy(stream),  // scatter values from input to buf
-                 gather_map,                //
-                 gather_map + num_rows,
-                 buf.data(),
-                 out_buf.data());
+  auto scatter_map = cudf::detail::make_counting_transform_iterator(0, every_other{});
 
-  auto result = arrow::AllocateBuffer(static_cast<int64_t>(buf->size()), ar_mr);
+  thrust::scatter(rmm::exec_policy(stream),
+                  input.begin<DeviceType>(),
+                  input.end<DeviceType>(),
+                  scatter_map,
+                  buf.data());
+
+  auto result = arrow::AllocateBuffer(static_cast<int64_t>(buf.size()), ar_mr);
   CUDF_EXPECTS(result.ok(), "Failed to allocate Arrow buffer for data");
 
   std::shared_ptr<arrow::Buffer> data_buffer = std::move(result.ValueOrDie());
 
-  CUDA_TRY(cudaMemcpyAsync(data_buffer->mutable_data(),
-                           bitmask.first->data(),
-                           bitmask.first->size(),
-                           cudaMemcpyDeviceToHost,
-                           stream.value()));
+  CUDA_TRY(cudaMemcpyAsync(
+    data_buffer->mutable_data(), buf.data(), buf.size(), cudaMemcpyDeviceToHost, stream.value()));
+
   return to_arrow_array(id,
                         static_cast<int64_t>(input.size()),
                         data_buffer,
