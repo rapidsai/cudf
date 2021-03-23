@@ -182,6 +182,7 @@ ConfigureBench(STRINGS_BENCH
   string/case_benchmark.cpp
   string/combine_benchmark.cpp
   string/contains_benchmark.cpp
+  string/convert_datetime_benchmark.cpp
   string/convert_durations_benchmark.cpp
   string/convert_floats_benchmark.cpp
   string/copy_benchmark.cpp
@@ -192,4 +193,5 @@ ConfigureBench(STRINGS_BENCH
   string/replace_benchmark.cpp
   string/split_benchmark.cpp
   string/substring_benchmark.cpp
+  string/translate_benchmark.cpp
   string/url_decode_benchmark.cpp)

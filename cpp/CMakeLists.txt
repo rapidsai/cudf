@@ -1,5 +1,5 @@
 #=============================================================================
-# Copyright (c) 2018-2020, NVIDIA CORPORATION.
+# Copyright (c) 2018-2021, NVIDIA CORPORATION.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -194,7 +194,7 @@ add_library(cudf
     src/groupby/hash/groupby.cu
     src/groupby/sort/group_argmax.cu
     src/groupby/sort/group_argmin.cu
-    src/groupby/sort/groupby.cu
+    src/groupby/sort/aggregate.cpp
     src/groupby/sort/group_collect.cu
     src/groupby/sort/group_count.cu
     src/groupby/sort/group_max.cu
@@ -204,6 +204,11 @@ add_library(cudf
     src/groupby/sort/group_quantiles.cu
     src/groupby/sort/group_std.cu
     src/groupby/sort/group_sum.cu
+    src/groupby/sort/scan.cpp
+    src/groupby/sort/group_count_scan.cu
+    src/groupby/sort/group_max_scan.cu
+    src/groupby/sort/group_min_scan.cu
+    src/groupby/sort/group_sum_scan.cu
     src/groupby/sort/sort_helper.cu
     src/hash/hashing.cu
     src/interop/dlpack.cpp
@@ -425,7 +430,8 @@ target_include_directories(cudf
                        "$<BUILD_INTERFACE:${CUDF_GENERATED_INCLUDE_DIR}/include>"
            PRIVATE     "$<BUILD_INTERFACE:${CUDF_SOURCE_DIR}/src>"
            INTERFACE   "$<INSTALL_INTERFACE:include>"
-                       "$<INSTALL_INTERFACE:include/libcudf/libcudaxx>")
+                       "$<INSTALL_INTERFACE:include/libcudf/libcudacxx>"
+                       "$<INSTALL_INTERFACE:include/libcudf/Thrust>")
 
 # Add Conda library paths if specified
 if(CONDA_LINK_DIRS)
@@ -577,6 +583,9 @@ install(DIRECTORY
             ${CUDF_GENERATED_INCLUDE_DIR}/include/libcxx
             ${CUDF_GENERATED_INCLUDE_DIR}/include/libcudacxx
         DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/libcudf)
+
+install(DIRECTORY ${Thrust_SOURCE_DIR}/
+  DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/libcudf/Thrust)
 
 include(CMakePackageConfigHelpers)
 

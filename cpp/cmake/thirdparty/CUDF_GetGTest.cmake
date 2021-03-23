@@ -48,6 +48,6 @@ function(find_and_configure_gtest VERSION)
     endif()
 endfunction()
 
-set(CUDF_MIN_VERSION_gtest 1.10.0)
+set(CUDF_MIN_VERSION_GTest 1.10.0)
 
-find_and_configure_gtest(${CUDF_MIN_VERSION_gtest})
+find_and_configure_gtest(${CUDF_MIN_VERSION_GTest})
