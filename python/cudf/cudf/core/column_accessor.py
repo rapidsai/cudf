@@ -78,7 +78,7 @@ class ColumnAccessor(MutableMapping):
                     if not isinstance(v, column.ColumnBase):
                         v = column.as_column(v)
                     if len(v) != column_length:
-                        raise ValueError("All columns must be of equal length")
+                        raise ValueError("All values must be of equal length")
                     self._data[k] = v
 
             self.multiindex = multiindex
