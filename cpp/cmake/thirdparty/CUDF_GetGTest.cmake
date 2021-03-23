@@ -15,6 +15,11 @@
 #=============================================================================
 
 function(find_and_configure_gtest VERSION)
+
+    if(TARGET GTest::gtest)
+        return()
+    endif()
+
     # Find or install GoogleTest
     CPMFindPackage(NAME GTest
         VERSION         ${VERSION}
