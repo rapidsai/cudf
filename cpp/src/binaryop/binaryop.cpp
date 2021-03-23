@@ -24,13 +24,13 @@
 #include <jit/launcher.h>
 #include <jit/parser.h>
 #include <jit/type.h>
-
-#include <jit/bit.hpp.jit>
 #include <jit/common_headers.hpp>
-#include <jit/durations.hpp.jit>
-#include <jit/fixed_point.hpp.jit>
-#include <jit/timestamps.hpp.jit>
-#include <jit/types.hpp.jit>
+
+#include <jit_pre/cudf/fixed_point/fixed_point.hpp.jit>
+#include <jit_pre/cudf/types.hpp.jit>
+#include <jit_pre/cudf/utilities/bit.hpp.jit>
+#include <jit_pre/cudf/wrappers/durations.hpp.jit>
+#include <jit_pre/cudf/wrappers/timestamps.hpp.jit>
 
 #include <cudf/binaryop.hpp>
 #include <cudf/column/column_factories.hpp>

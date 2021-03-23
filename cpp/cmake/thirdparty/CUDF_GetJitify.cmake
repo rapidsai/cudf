@@ -26,4 +26,14 @@ function(find_and_configure_jitify)
     set(JITIFY_INCLUDE_DIR "${jitify_SOURCE_DIR}" PARENT_SCOPE)
 endfunction()
 
-find_and_configure_jitify()
+function(find_and_configure_jitify_v2)
+    CPMFindPackage(NAME     jitify
+            VERSION         2.0.0
+            GIT_REPOSITORY  https://github.com/nvidia/jitify.git
+            GIT_TAG         jitify2
+            GIT_SHALLOW     TRUE
+            DOWNLOAD_ONLY   TRUE)
+    set(JITIFY_INCLUDE_DIR "${jitify_SOURCE_DIR}" PARENT_SCOPE)
+endfunction()
+
+find_and_configure_jitify_v2()
