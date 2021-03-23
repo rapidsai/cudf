@@ -46,20 +46,18 @@ namespace {
  */
 template <typename IntegerType>
 struct string_to_integer_check_fn {
-  column_device_view const d_strings;
-  __device__ bool operator()(size_type idx) const
+  __device__ bool operator()(thrust::pair<string_view, bool> const& p) const
   {
-    if (d_strings.is_null(idx)) { return false; }
-    auto const d_str = d_strings.element<string_view>(idx);
-    if (d_str.empty() || (d_str.data()[0] == '-' && std::is_unsigned<IntegerType>::value)) {
-      return false;
-    }
+    if (!p.second || p.first.empty()) { return false; }
 
-    auto iter = d_str.data() + static_cast<int>((d_str.data()[0] == '-' || d_str.data()[0] == '+'));
-    auto const iter_end = d_str.data() + d_str.size_bytes();
+    auto const d_str = p.first.data();
+    if (d_str[0] == '-' && std::is_unsigned<IntegerType>::value) { return false; }
+
+    auto iter           = d_str + static_cast<int>((d_str[0] == '-' || d_str[0] == '+'));
+    auto const iter_end = d_str + p.first.size_bytes();
     if (iter == iter_end) { return false; }
 
-    auto const sign = d_str.data()[0] == '-' ? IntegerType{-1} : IntegerType{1};
+    auto const sign = d_str[0] == '-' ? IntegerType{-1} : IntegerType{1};
     auto const bound_val =
       sign > 0 ? std::numeric_limits<IntegerType>::max() : std::numeric_limits<IntegerType>::min();
 
@@ -97,11 +95,20 @@ struct dispatch_is_integer_fn {
                                        stream,
                                        mr);
 
-    thrust::transform(rmm::exec_policy(stream),
-                      thrust::make_counting_iterator<size_type>(0),
-                      thrust::make_counting_iterator<size_type>(strings.size()),
-                      results->mutable_view().data<bool>(),
-                      string_to_integer_check_fn<T>{*d_column});
+    auto d_results = results->mutable_view().data<bool>();
+    if (strings.has_nulls()) {
+      thrust::transform(rmm::exec_policy(stream),
+                        d_column->pair_begin<string_view, true>(),
+                        d_column->pair_end<string_view, true>(),
+                        d_results,
+                        string_to_integer_check_fn<T>{});
+    } else {
+      thrust::transform(rmm::exec_policy(stream),
+                        d_column->pair_begin<string_view, false>(),
+                        d_column->pair_end<string_view, false>(),
+                        d_results,
+                        string_to_integer_check_fn<T>{});
+    }
 
     // Calling mutable_view() on a column invalidates it's null count so we need to set it back
     results->set_null_count(strings.null_count());
@@ -125,24 +132,30 @@ std::unique_ptr<column> is_integer(
   rmm::cuda_stream_view stream,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
 {
-  auto strings_column = column_device_view::create(strings.parent(), stream);
-  auto d_column       = *strings_column;
-  // create output column
-  auto results   = make_numeric_column(data_type{type_id::BOOL8},
+  auto const d_column = column_device_view::create(strings.parent(), stream);
+  auto results        = make_numeric_column(data_type{type_id::BOOL8},
                                      strings.size(),
                                      cudf::detail::copy_bitmask(strings.parent(), stream, mr),
                                      strings.null_count(),
                                      stream,
                                      mr);
+
   auto d_results = results->mutable_view().data<bool>();
-  thrust::transform(rmm::exec_policy(stream),
-                    thrust::make_counting_iterator<size_type>(0),
-                    thrust::make_counting_iterator<size_type>(strings.size()),
-                    d_results,
-                    [d_column] __device__(size_type idx) {
-                      if (d_column.is_null(idx)) return false;
-                      return string::is_integer(d_column.element<string_view>(idx));
-                    });
+  if (strings.has_nulls()) {
+    thrust::transform(
+      rmm::exec_policy(stream),
+      d_column->pair_begin<string_view, true>(),
+      d_column->pair_end<string_view, true>(),
+      d_results,
+      [] __device__(auto const& p) { return p.second ? string::is_integer(p.first) : false; });
+  } else {
+    thrust::transform(
+      rmm::exec_policy(stream),
+      d_column->pair_begin<string_view, false>(),
+      d_column->pair_end<string_view, false>(),
+      d_results,
+      [] __device__(auto const& p) { return p.second ? string::is_integer(p.first) : false; });
+  }
 
   // Calling mutable_view() on a column invalidates it's null count so we need to set it back
   results->set_null_count(strings.null_count());
