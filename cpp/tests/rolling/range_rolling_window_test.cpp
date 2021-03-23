@@ -251,12 +251,12 @@ TYPED_TEST(TypedTimeRangeRollingTest, TimeScalingDESC)
 }
 
 template <typename T>
-struct TypedRangeRollingTest : public RangeRollingTest {
+struct TypedRangeRollingNullsTest : public RangeRollingTest {
 };
 
 using TypesUnderTest = IntegralTypesNotBool;
 
-TYPED_TEST_CASE(TypedRangeRollingTest, TypesUnderTest);
+TYPED_TEST_CASE(TypedRangeRollingNullsTest, TypesUnderTest);
 
 template <typename T>
 auto do_count_over_window(
@@ -280,7 +280,7 @@ auto do_count_over_window(
                                             cudf::make_count_aggregation());
 }
 
-TYPED_TEST(TypedRangeRollingTest, CountSingleGroupOrderByASCNullsFirst)
+TYPED_TEST(TypedRangeRollingNullsTest, CountSingleGroupOrderByASCNullsFirst)
 {
   using T = TypeParam;
 
@@ -300,7 +300,7 @@ TYPED_TEST(TypedRangeRollingTest, CountSingleGroupOrderByASCNullsFirst)
                                    {4, 4, 4, 4, 1, 2, 2, 3, 3, 2}, {1, 1, 1, 1, 1, 1, 1, 1, 1, 1}});
 }
 
-TYPED_TEST(TypedRangeRollingTest, CountSingleGroupOrderByASCNullsLast)
+TYPED_TEST(TypedRangeRollingNullsTest, CountSingleGroupOrderByASCNullsLast)
 {
   using namespace cudf::test;
   using T = TypeParam;
@@ -322,7 +322,7 @@ TYPED_TEST(TypedRangeRollingTest, CountSingleGroupOrderByASCNullsLast)
                                    {2, 3, 3, 3, 2, 1, 4, 4, 4, 4}, {1, 1, 1, 1, 1, 1, 1, 1, 1, 1}});
 }
 
-TYPED_TEST(TypedRangeRollingTest, CountMultiGroupOrderByASCNullsFirst)
+TYPED_TEST(TypedRangeRollingNullsTest, CountMultiGroupOrderByASCNullsFirst)
 {
   using namespace cudf::test;
   using T = TypeParam;
@@ -342,7 +342,7 @@ TYPED_TEST(TypedRangeRollingTest, CountMultiGroupOrderByASCNullsFirst)
                                    {3, 3, 3, 2, 2, 2, 2, 2, 3, 2}, {1, 1, 1, 1, 1, 1, 1, 1, 1, 1}});
 }
 
-TYPED_TEST(TypedRangeRollingTest, CountMultiGroupOrderByASCNullsLast)
+TYPED_TEST(TypedRangeRollingNullsTest, CountMultiGroupOrderByASCNullsLast)
 {
   using namespace cudf::test;
   using T = int32_t;
@@ -362,7 +362,7 @@ TYPED_TEST(TypedRangeRollingTest, CountMultiGroupOrderByASCNullsLast)
                                    {3, 3, 3, 2, 2, 2, 3, 2, 2, 2}, {1, 1, 1, 1, 1, 1, 1, 1, 1, 1}});
 }
 
-TYPED_TEST(TypedRangeRollingTest, CountSingleGroupOrderByDESCNullsFirst)
+TYPED_TEST(TypedRangeRollingNullsTest, CountSingleGroupOrderByDESCNullsFirst)
 {
   using namespace cudf::test;
   using T = TypeParam;
@@ -384,7 +384,7 @@ TYPED_TEST(TypedRangeRollingTest, CountSingleGroupOrderByDESCNullsFirst)
                                    {4, 4, 4, 4, 1, 2, 2, 3, 3, 2}, {1, 1, 1, 1, 1, 1, 1, 1, 1, 1}});
 }
 
-TYPED_TEST(TypedRangeRollingTest, CountSingleGroupOrderByDESCNullsLast)
+TYPED_TEST(TypedRangeRollingNullsTest, CountSingleGroupOrderByDESCNullsLast)
 {
   using namespace cudf::test;
   using T = TypeParam;
@@ -406,7 +406,7 @@ TYPED_TEST(TypedRangeRollingTest, CountSingleGroupOrderByDESCNullsLast)
                                    {2, 3, 3, 3, 2, 1, 4, 4, 4, 4}, {1, 1, 1, 1, 1, 1, 1, 1, 1, 1}});
 }
 
-TYPED_TEST(TypedRangeRollingTest, CountMultiGroupOrderByDESCNullsFirst)
+TYPED_TEST(TypedRangeRollingNullsTest, CountMultiGroupOrderByDESCNullsFirst)
 {
   using namespace cudf::test;
   using T = TypeParam;
@@ -426,7 +426,7 @@ TYPED_TEST(TypedRangeRollingTest, CountMultiGroupOrderByDESCNullsFirst)
                                    {3, 3, 3, 2, 2, 2, 2, 2, 3, 2}, {1, 1, 1, 1, 1, 1, 1, 1, 1, 1}});
 }
 
-TYPED_TEST(TypedRangeRollingTest, CountMultiGroupOrderByDESCNullsLast)
+TYPED_TEST(TypedRangeRollingNullsTest, CountMultiGroupOrderByDESCNullsLast)
 {
   using namespace cudf::test;
   using T = TypeParam;
@@ -446,7 +446,7 @@ TYPED_TEST(TypedRangeRollingTest, CountMultiGroupOrderByDESCNullsLast)
                                    {2, 3, 2, 2, 2, 2, 3, 2, 2, 2}, {1, 1, 1, 1, 1, 1, 1, 1, 1, 1}});
 }
 
-TYPED_TEST(TypedRangeRollingTest, CountSingleGroupAllNullOrderBys)
+TYPED_TEST(TypedRangeRollingNullsTest, CountSingleGroupAllNullOrderBys)
 {
   using namespace cudf::test;
   using T = TypeParam;
@@ -468,7 +468,7 @@ TYPED_TEST(TypedRangeRollingTest, CountSingleGroupAllNullOrderBys)
                                    {9, 9, 9, 9, 9, 9, 9, 9, 9, 9}, {1, 1, 1, 1, 1, 1, 1, 1, 1, 1}});
 }
 
-TYPED_TEST(TypedRangeRollingTest, CountMultiGroupAllNullOrderBys)
+TYPED_TEST(TypedRangeRollingNullsTest, CountMultiGroupAllNullOrderBys)
 {
   using namespace cudf::test;
   using T = TypeParam;
@@ -490,7 +490,7 @@ TYPED_TEST(TypedRangeRollingTest, CountMultiGroupAllNullOrderBys)
                                    {2, 3, 3, 3, 2, 4, 4, 4, 4, 4}, {1, 1, 1, 1, 1, 1, 1, 1, 1, 1}});
 }
 
-TYPED_TEST(TypedRangeRollingTest, UnboundedPrecedingWindowSingleGroupOrderByASCNullsFirst)
+TYPED_TEST(TypedRangeRollingNullsTest, UnboundedPrecedingWindowSingleGroupOrderByASCNullsFirst)
 {
   using namespace cudf::test;
   using T = TypeParam;
@@ -514,7 +514,7 @@ TYPED_TEST(TypedRangeRollingTest, UnboundedPrecedingWindowSingleGroupOrderByASCN
                                    {4, 4, 4, 4, 5, 6, 7, 8, 9, 9}, {1, 1, 1, 1, 1, 1, 1, 1, 1, 1}});
 }
 
-TYPED_TEST(TypedRangeRollingTest, UnboundedFollowingWindowSingleGroupOrderByASCNullsFirst)
+TYPED_TEST(TypedRangeRollingNullsTest, UnboundedFollowingWindowSingleGroupOrderByASCNullsFirst)
 {
   using namespace cudf::test;
   using T = TypeParam;
