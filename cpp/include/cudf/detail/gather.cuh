@@ -18,8 +18,8 @@
 #include <cudf/detail/copy.hpp>
 #include <cudf/detail/indexalator.cuh>
 #include <cudf/detail/null_mask.hpp>
+#include <cudf/detail/utilities/assert.cuh>
 #include <cudf/detail/utilities/cuda.cuh>
-#include <cudf/detail/utilities/release_assert.cuh>
 #include <cudf/detail/valid_if.cuh>
 #include <cudf/dictionary/dictionary_column_view.hpp>
 #include <cudf/dictionary/dictionary_factories.hpp>

@@ -20,13 +20,14 @@ from cudf._lib.cpp.scalar.scalar cimport scalar
 from cudf._lib.cpp.table.table cimport table
 from cudf._lib.cpp.table.table_view cimport table_view
 from cudf._lib.cpp.types cimport size_type
-
 from cudf._lib.column cimport Column
 from cudf._lib.table cimport Table
 
 from cudf.core.dtypes import ListDtype
 
 from cudf._lib.cpp.lists.contains cimport contains
+
+from cudf._lib.cpp.lists.extract cimport extract_list_element
 
 
 def count_elements(Column col):
@@ -65,12 +66,23 @@ def explode_outer(Table tbl, int explode_column_idx, bool ignore_index=False):
     )
 
 
-def contains_scalar(Column col, DeviceScalar search_key):
+def extract_element(Column col, size_type index):
     # shared_ptr required because lists_column_view has no default
     # ctor
     cdef shared_ptr[lists_column_view] list_view = (
         make_shared[lists_column_view](col.view())
     )
+
+    cdef unique_ptr[column] c_result
+
+    with nogil:
+        c_result = move(extract_list_element(list_view.get()[0], index))
+
+    result = Column.from_unique_ptr(move(c_result))
+    return result
+
+
+def contains_scalar(Column col, DeviceScalar search_key):
     cdef const scalar* search_key_value = search_key.get_raw_ptr()
 
     cdef unique_ptr[column] c_result

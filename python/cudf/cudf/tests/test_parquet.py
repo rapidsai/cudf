@@ -1026,7 +1026,7 @@ def test_parquet_reader_list_skiprows(skip, tmpdir):
     assert_eq(expect, got, check_dtype=False)
 
 
-@pytest.mark.parametrize("skip", range(0, 128))
+@pytest.mark.parametrize("skip", range(0, 120))
 def test_parquet_reader_list_num_rows(skip, tmpdir):
     num_rows = 128
     src = pd.DataFrame(
@@ -1043,7 +1043,8 @@ def test_parquet_reader_list_num_rows(skip, tmpdir):
     src.to_parquet(fname)
     assert os.path.exists(fname)
 
-    rows_to_read = min(3, num_rows - skip)
+    # make sure to leave a few rows at the end that we don't read
+    rows_to_read = min(3, (num_rows - skip) - 5)
     expect = src.iloc[skip:].head(rows_to_read)
     got = cudf.read_parquet(fname, skiprows=skip, num_rows=rows_to_read)
     assert_eq(expect, got, check_dtype=False)
@@ -1920,3 +1921,18 @@ def test_parquet_writer_nested(tmpdir, data):
 
     got = pd.read_parquet(fname)
     assert_eq(expect, got)
+
+
+def test_parquet_writer_decimal(tmpdir):
+    from cudf.core.dtypes import Decimal64Dtype
+
+    gdf = cudf.DataFrame({"val": [0.00, 0.01, 0.02]})
+
+    gdf["dec_val"] = gdf["val"].astype(Decimal64Dtype(7, 2))
+
+    fname = tmpdir.join("test_parquet_writer_decimal.parquet")
+    gdf.to_parquet(fname)
+    assert os.path.exists(fname)
+
+    got = pd.read_parquet(fname)
+    assert_eq(gdf, got)
