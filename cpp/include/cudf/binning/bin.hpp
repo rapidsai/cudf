@@ -26,7 +26,7 @@
 namespace cudf {
 
 /**
- * @addtogroup binning
+ * @addtogroup label_bins
  * @{
  * @file
  * @brief APIs for binning values.
