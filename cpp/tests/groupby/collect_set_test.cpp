@@ -47,7 +47,7 @@ using FixedWidthTypesNotBool = cudf::test::Concat<cudf::test::IntegralTypesNotBo
                                                   cudf::test::TimestampTypes>;
 TYPED_TEST_CASE(CollectSetTypedTest, FixedWidthTypesNotBool);
 
-TYPED_TEST(CollectSetTypedTest, ExceptionCases)
+TYPED_TEST(CollectSetTypedTest, ExceptionTests)
 {
   std::vector<groupby::aggregation_request> agg_requests(1);
   agg_requests[0].values = COL_V{{1, 2, 3, 4, 5, 6}, {true, false, true, false, true, false}};
@@ -58,7 +58,7 @@ TYPED_TEST(CollectSetTypedTest, ExceptionCases)
   EXPECT_THROW(gby.aggregate(agg_requests), cudf::logic_error);
 }
 
-TYPED_TEST(CollectSetTypedTest, TrivialCases)
+TYPED_TEST(CollectSetTypedTest, TrivialInput)
 {
   // Empty input
   // TODO: Enable this test after issue#7611 has been fixed
@@ -83,7 +83,7 @@ TYPED_TEST(CollectSetTypedTest, TrivialCases)
   }
 }
 
-TYPED_TEST(CollectSetTypedTest, TypicalCases)
+TYPED_TEST(CollectSetTypedTest, TypicalInput)
 {
   // Pre-sorted keys
   {
@@ -105,7 +105,7 @@ TYPED_TEST(CollectSetTypedTest, TypicalCases)
 }
 
 // Keys and values columns are sliced columns
-TYPED_TEST(CollectSetTypedTest, SlicedColumnsCases)
+TYPED_TEST(CollectSetTypedTest, SlicedColumnsInput)
 {
   COL_K keys_original{1, 1, 1, 1, 2, 2, 2, 2, 3, 3, 3, 3};
   COL_V vals_original{10, 11, 10, 10, 20, 21, 21, 20, 30, 33, 32, 31};
@@ -125,7 +125,7 @@ TYPED_TEST(CollectSetTypedTest, SlicedColumnsCases)
   }
 }
 
-TEST_F(CollectSetTest, StringTest)
+TEST_F(CollectSetTest, StringInput)
 {
   COL_K keys{1, 2, 3, 3, 2, 1, 2, 1, 2, 1, 1, 1, 1};
   COL_S vals{
