@@ -144,10 +144,6 @@ def numeric_normalize_types(*args):
 
 
 def is_numerical_dtype(obj):
-    if is_categorical_dtype(obj):
-        return False
-    if is_list_dtype(obj):
-        return False
     try:
         dtype = np.dtype(obj)
     except TypeError:
