@@ -609,17 +609,17 @@ class list_scalar : public scalar {
   /**
    * @brief Construct a new list scalar object from existing device data
    *
-   * @param value The value of the list
+   * @param elements The elements of the list
    * @param is_valid Whether the value held by the scalar is valid
    * @param stream CUDA stream used for device memory operations.
    * @param mr Device memory resource to use for device memory allocation
    */
-  list_scalar(cudf::column_view const& value,
+  list_scalar(cudf::column_view const& elements,
               scalar_validity validity            = scalar_validity::VALID,
               rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
               rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
     : scalar(data_type(type_id::LIST), validity == scalar_validity::VALID ? true : false),
-      _data(value, stream, mr)
+      _data(elements, stream, mr)
   {
   }
 
