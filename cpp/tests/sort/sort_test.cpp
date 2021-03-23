@@ -203,7 +203,7 @@ TYPED_TEST(Sort, WithStructColumn)
 
   std::initializer_list<std::string> names = {"Samuel Vimes",
                                               "Carrot Ironfoundersson",
-                                              "Angua von Uberwald",
+                                              "Angua von Überwald",
                                               "Cheery Littlebottom",
                                               "Detritus",
                                               "Mr Slant"};
@@ -250,7 +250,7 @@ TYPED_TEST(Sort, WithNestedStructColumn)
 
   std::initializer_list<std::string> names = {"Samuel Vimes",
                                               "Carrot Ironfoundersson",
-                                              "Angua von Uberwald",
+                                              "Angua von Überwald",
                                               "Cheery Littlebottom",
                                               "Detritus",
                                               "Mr Slant"};
@@ -295,7 +295,7 @@ TYPED_TEST(Sort, WithSingleStructColumn)
 
   std::initializer_list<std::string> names = {"Samuel Vimes",
                                               "Carrot Ironfoundersson",
-                                              "Angua von Uberwald",
+                                              "Angua von Überwald",
                                               "Cheery Littlebottom",
                                               "Detritus",
                                               "Mr Slant"};
