@@ -176,11 +176,7 @@ class ColumnAccessor(MutableMapping):
             return 0
 
     def _clear_cache(self):
-        cached_properties = (
-            "columns",
-            "names",
-            "_grouped_data",
-        )
+        cached_properties = ("columns", "names", "_grouped_data")
         for attr in cached_properties:
             try:
                 self.__delattr__(attr)
