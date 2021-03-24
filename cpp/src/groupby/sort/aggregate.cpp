@@ -20,16 +20,15 @@
 
 #include <cudf/aggregation.hpp>
 #include <cudf/column/column.hpp>
-#include <cudf/column/column_factories.hpp>
 #include <cudf/column/column_view.hpp>
 #include <cudf/detail/aggregation/aggregation.hpp>
 #include <cudf/detail/aggregation/result_cache.hpp>
 #include <cudf/detail/binaryop.hpp>
 #include <cudf/detail/gather.hpp>
-#include <cudf/detail/groupby.hpp>
 #include <cudf/detail/groupby/sort_helper.hpp>
 #include <cudf/detail/unary.hpp>
 #include <cudf/groupby.hpp>
+#include <cudf/lists/detail/drop_list_duplicates.hpp>
 #include <cudf/table/table.hpp>
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
@@ -57,6 +56,7 @@ struct aggregrate_result_functor final : store_result_functor {
   template <aggregation::Kind k>
   void operator()(aggregation const& agg)
   {
+    CUDF_FAIL("Unsupported aggregation.");
   }
 };
 
@@ -347,12 +347,12 @@ void aggregrate_result_functor::operator()<aggregation::NTH_ELEMENT>(aggregation
 }
 
 template <>
-void aggregrate_result_functor::operator()<aggregation::COLLECT>(aggregation const& agg)
+void aggregrate_result_functor::operator()<aggregation::COLLECT_LIST>(aggregation const& agg)
 {
   auto null_handling =
     static_cast<cudf::detail::collect_list_aggregation const&>(agg)._null_handling;
   CUDF_EXPECTS(null_handling == null_policy::INCLUDE,
-               "null exclusion is not supported on groupby COLLECT aggregation.");
+               "null exclusion is not supported on groupby COLLECT_LIST aggregation.");
 
   if (cache.has_result(col_idx, agg)) return;
 
@@ -362,6 +362,25 @@ void aggregrate_result_functor::operator()<aggregation::COLLECT>(aggregation con
   cache.add_result(col_idx, agg, std::move(result));
 };
 
+template <>
+void aggregrate_result_functor::operator()<aggregation::COLLECT_SET>(aggregation const& agg)
+{
+  auto const null_handling =
+    static_cast<cudf::detail::collect_set_aggregation const&>(agg)._null_handling;
+  CUDF_EXPECTS(null_handling == null_policy::INCLUDE,
+               "null exclusion is not supported on groupby COLLECT_SET aggregation.");
+
+  if (cache.has_result(col_idx, agg)) { return; }
+
+  auto const collect_result = detail::group_collect(
+    get_grouped_values(), helper.group_offsets(), helper.num_groups(), stream, mr);
+  auto const nulls_equal =
+    static_cast<cudf::detail::collect_set_aggregation const&>(agg)._null_equal;
+  cache.add_result(col_idx,
+                   agg,
+                   lists::detail::drop_list_duplicates(
+                     lists_column_view(collect_result->view()), nulls_equal, stream, mr));
+};
 }  // namespace detail
 
 // Sort-based groupby
