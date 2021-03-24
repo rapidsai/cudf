@@ -12,7 +12,6 @@ from cudf._lib.cpp.concatenate cimport (
 )
 from cudf._lib.cpp.column.column cimport column, column_view
 from cudf._lib.cpp.table.table cimport table, table_view
-from cudf._lib.cpp.utilities.host_span cimport host_span
 
 from cudf._lib.column cimport Column
 from cudf._lib.table cimport Table
