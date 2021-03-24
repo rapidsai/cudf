@@ -47,8 +47,8 @@ void range_window_bounds::scale_to(data_type target_type,
 {
   scalar const& range_scalar = *_range_scalar;
 
-  _range_scalar = std::move(cudf::type_dispatcher(
-    target_type, type_deducing_range_scaler{}, range_scalar, _is_unbounded, stream, mr));
+  _range_scalar = cudf::type_dispatcher(
+    target_type, type_deducing_range_scaler{}, range_scalar, _is_unbounded, stream, mr);
   assert_invariants();
 }
 
