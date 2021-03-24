@@ -20,8 +20,8 @@ cdef extern from "cudf/concatenate.hpp" namespace "cudf" nogil:
         host_span[table_view] tables
     ) except +
 
-    # these don't exist in the C++, but construction from vector is possible since
-    # a host_span can be implicitly constructed from a vector, so we add these for convenience
+    # these don't exist in the C++, but passing a vector works because
+    # a host_span is implicitly constructable from a vector
     cdef device_buffer concatenate_masks "cudf::concatenate_masks"(
         vector[column_view] views
     ) except +
