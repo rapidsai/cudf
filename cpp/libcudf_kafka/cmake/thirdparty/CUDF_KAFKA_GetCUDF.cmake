@@ -32,9 +32,8 @@ function(find_and_configure_cudf VERSION)
     cudfkafka_save_if_enabled(BUILD_BENCHMARKS)
     CPMFindPackage(NAME cudf
         VERSION         ${VERSION}
-        # GIT_REPOSITORY  https://github.com/rapidsai/cudf.git
-        GIT_REPOSITORY  https://github.com/robertmaynard/cudf.git
-        GIT_TAG         fix/link_against_cpm_exports
+        GIT_REPOSITORY  https://github.com/rapidsai/cudf.git
+        GIT_TAG         branch-${VERSION}
         GIT_SHALLOW     TRUE
         SOURCE_SUBDIR   cpp
         OPTIONS         "BUILD_TESTS OFF"
