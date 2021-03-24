@@ -542,6 +542,22 @@ hash_value_type CUDA_DEVICE_CALLABLE MurmurHash3_32<double>::operator()(double c
   return this->compute_floating_point(key);
 }
 
+template <>
+hash_value_type CUDA_DEVICE_CALLABLE
+MurmurHash3_32<cudf::list_view>::operator()(cudf::list_view const& key) const
+{
+  cudf_assert(false && "List column hashing is not supported");
+  return 0;
+}
+
+template <>
+hash_value_type CUDA_DEVICE_CALLABLE
+MurmurHash3_32<cudf::struct_view>::operator()(cudf::struct_view const& key) const
+{
+  cudf_assert(false && "Direct hashing of struct_view is not supported");
+  return 0;
+}
+
 template <typename Key>
 struct SparkMurmurHash3_32 {
   using argument_type = Key;
@@ -669,6 +685,22 @@ hash_value_type CUDA_DEVICE_CALLABLE
 SparkMurmurHash3_32<numeric::decimal64>::operator()(numeric::decimal64 const& key) const
 {
   return this->compute<uint64_t>(key.value());
+}
+
+template <>
+hash_value_type CUDA_DEVICE_CALLABLE
+SparkMurmurHash3_32<cudf::list_view>::operator()(cudf::list_view const& key) const
+{
+  cudf_assert(false && "List column hashing is not supported");
+  return 0;
+}
+
+template <>
+hash_value_type CUDA_DEVICE_CALLABLE
+SparkMurmurHash3_32<cudf::struct_view>::operator()(cudf::struct_view const& key) const
+{
+  cudf_assert(false && "Direct hashing of struct_view is not supported");
+  return 0;
 }
 
 /**
