@@ -3841,10 +3841,32 @@ class DataFrame(Frame, Serializable):
         - Support axis='index' only.
         - Not supporting: inplace, kind
         - Ascending can be a list of bools to control per column
+
+        Examples
+        --------
+        >>> import cudf
+        >>> df = cudf.DataFrame({'a':[10, 0, 2], 'b':[-10, 10, 1]})
+        >>> df
+            a   b
+        0  10 -10
+        1   0  10
+        2   2   1
+        >>> inds = df.argsort()
+        >>> inds
+        0    1
+        1    2
+        2    0
+        dtype: int32
+        >>> df.take(inds)
+            a   b
+        1   0  10
+        2   2   1
+        0  10 -10
         """
-        return self._get_sorted_inds(
+        inds_col = self._get_sorted_inds(
             ascending=ascending, na_position=na_position
         )
+        return cudf.Series(inds_col)
 
     @annotate("SORT_INDEX", color="red", domain="cudf_python")
     def sort_index(
