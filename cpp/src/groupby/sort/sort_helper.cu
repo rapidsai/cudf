@@ -209,7 +209,7 @@ sort_groupby_helper::index_vector const& sort_groupby_helper::group_labels(
   thrust::scatter(rmm::exec_policy(stream),
                   thrust::make_constant_iterator(1, decltype(num_groups())(1)),
                   thrust::make_constant_iterator(1, num_groups()),
-                  group_offsets().begin() + 1,
+                  group_offsets(stream).begin() + 1,
                   group_labels.begin());
 
   thrust::inclusive_scan(
@@ -307,7 +307,7 @@ std::unique_ptr<table> sort_groupby_helper::unique_keys(rmm::cuda_stream_view st
   auto idx_data = key_sort_order().data<size_type>();
 
   auto gather_map_it = thrust::make_transform_iterator(
-    group_offsets().begin(), [idx_data] __device__(size_type i) { return idx_data[i]; });
+    group_offsets(stream).begin(), [idx_data] __device__(size_type i) { return idx_data[i]; });
 
   return cudf::detail::gather(_keys,
                               gather_map_it,

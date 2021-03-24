@@ -71,7 +71,7 @@ void aggregrate_result_functor::operator()<aggregation::COUNT_VALID>(aggregation
     get_grouped_values().nullable()
       ? detail::group_count_valid(
           get_grouped_values(), helper.group_labels(stream), helper.num_groups(), stream, mr)
-      : detail::group_count_all(helper.group_offsets(), helper.num_groups(), stream, mr));
+      : detail::group_count_all(helper.group_offsets(stream), helper.num_groups(), stream, mr));
 }
 
 template <>
@@ -80,7 +80,9 @@ void aggregrate_result_functor::operator()<aggregation::COUNT_ALL>(aggregation c
   if (cache.has_result(col_idx, agg)) return;
 
   cache.add_result(
-    col_idx, agg, detail::group_count_all(helper.group_offsets(), helper.num_groups(), stream, mr));
+    col_idx,
+    agg,
+    detail::group_count_all(helper.group_offsets(stream), helper.num_groups(), stream, mr));
 }
 
 template <>
@@ -272,7 +274,7 @@ void aggregrate_result_functor::operator()<aggregation::QUANTILE>(aggregation co
 
   auto result = detail::group_quantiles(get_sorted_values(),
                                         group_sizes,
-                                        helper.group_offsets(),
+                                        helper.group_offsets(stream),
                                         helper.num_groups(),
                                         quantile_agg._quantiles,
                                         quantile_agg._interpolation,
@@ -292,7 +294,7 @@ void aggregrate_result_functor::operator()<aggregation::MEDIAN>(aggregation cons
 
   auto result = detail::group_quantiles(get_sorted_values(),
                                         group_sizes,
-                                        helper.group_offsets(),
+                                        helper.group_offsets(stream),
                                         helper.num_groups(),
                                         {0.5},
                                         interpolation::LINEAR,
@@ -311,7 +313,7 @@ void aggregrate_result_functor::operator()<aggregation::NUNIQUE>(aggregation con
   auto result = detail::group_nunique(get_sorted_values(),
                                       helper.group_labels(stream),
                                       helper.num_groups(),
-                                      helper.group_offsets(),
+                                      helper.group_offsets(stream),
                                       nunique_agg._null_handling,
                                       stream,
                                       mr);
@@ -339,7 +341,7 @@ void aggregrate_result_functor::operator()<aggregation::NTH_ELEMENT>(aggregation
                    detail::group_nth_element(get_grouped_values(),
                                              group_sizes,
                                              helper.group_labels(stream),
-                                             helper.group_offsets(),
+                                             helper.group_offsets(stream),
                                              helper.num_groups(),
                                              nth_element_agg._n,
                                              nth_element_agg._null_handling,
@@ -358,7 +360,7 @@ void aggregrate_result_functor::operator()<aggregation::COLLECT_LIST>(aggregatio
   if (cache.has_result(col_idx, agg)) return;
 
   auto result = detail::group_collect(
-    get_grouped_values(), helper.group_offsets(), helper.num_groups(), stream, mr);
+    get_grouped_values(), helper.group_offsets(stream), helper.num_groups(), stream, mr);
 
   cache.add_result(col_idx, agg, std::move(result));
 };
@@ -374,7 +376,7 @@ void aggregrate_result_functor::operator()<aggregation::COLLECT_SET>(aggregation
   if (cache.has_result(col_idx, agg)) { return; }
 
   auto const collect_result = detail::group_collect(
-    get_grouped_values(), helper.group_offsets(), helper.num_groups(), stream, mr);
+    get_grouped_values(), helper.group_offsets(stream), helper.num_groups(), stream, mr);
   auto const nulls_equal =
     static_cast<cudf::detail::collect_set_aggregation const&>(agg)._null_equal;
   cache.add_result(col_idx,
