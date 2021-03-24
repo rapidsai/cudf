@@ -3,7 +3,8 @@ ARG CUDA_VERSION=10.2
 ARG CUDA_SHORT_VERSION=${CUDA_VERSION}
 
 FROM nvidia/cuda:${CUDA_VERSION}-devel
-ENV LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/usr/local/cuda/lib64:/usr/local/lib
+SHELL ["/bin/bash", "-c"]
+ENV LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/usr/local/cuda/lib64:/usr/local/cuda/extras/CUPTI/lib64:/usr/local/lib:/repos/dist/lib
 # Needed for cudf.concat(), avoids "OSError: library nvvm not found"
 ENV NUMBAPRO_NVVM=/usr/local/cuda/nvvm/lib64/libnvvm.so
 ENV NUMBAPRO_LIBDEVICE=/usr/local/cuda/nvvm/libdevice/
@@ -11,6 +12,9 @@ ENV DEBIAN_FRONTEND=noninteractive
 
 ENV CC=/usr/bin/gcc
 ENV CXX=/usr/bin/g++
+ENV CUDA_HOME=/usr/local/cuda-10.2
+ENV CUDA_PATH=/usr/local/cuda-10.2
+ENV PATH=/usr/local/cuda-10.2/lib64/:${PATH}:${CUDA_HOME}/bin
 
 # Build env variables for arrow
 ENV CMAKE_BUILD_TYPE=release
@@ -20,7 +24,6 @@ ENV PYARROW_WITH_ORC=1
 ENV PYARROW_WITH_DATASET=1
 
 ENV ARROW_HOME=/repos/dist
-ENV LD_LIBRARY_PATH=/repos/dist/lib:$LD_LIBRARY_PATH
 
 # Build env variables for rmm
 ENV INSTALL_PREFIX=/usr
@@ -66,15 +69,19 @@ RUN wget https://github.com/llvm/llvm-project/releases/download/llvmorg-11.1.0/c
 
 # Install arrow from source
 RUN git clone https://github.com/apache/arrow.git /repos/arrow && mkdir /repos/dist/ && cd /repos/arrow && git checkout apache-arrow-1.0.1 && git submodule init && \
-    git submodule && export PARQUET_TEST_DATA="${PWD}/cpp/submodules/parquet-testing/data" && export ARROW_TEST_DATA="${PWD}/testing/data" && \
+    git submodule update && export PARQUET_TEST_DATA="${PWD}/cpp/submodules/parquet-testing/data" && export ARROW_TEST_DATA="${PWD}/testing/data" && \
     cd /repos/arrow/cpp && mkdir release && cd /repos/arrow/cpp/release && pip install -r /repos/arrow/python/requirements-build.txt && \
     pip install -r /repos/arrow/python/requirements-test.txt && cmake -DCMAKE_INSTALL_PREFIX=$ARROW_HOME -DCMAKE_INSTALL_LIBDIR=lib -DARROW_FLIGHT=ON -DARROW_GANDIVA=ON -DARROW_ORC=ON -DARROW_WITH_BZ2=ON -DARROW_WITH_ZLIB=ON -DARROW_WITH_ZSTD=ON -DARROW_WITH_LZ4=ON -DARROW_WITH_SNAPPY=ON -DARROW_WITH_BROTLI=ON -DARROW_PARQUET=ON -DARROW_PYTHON=ON -DARROW_PLASMA=ON -DARROW_BUILD_TESTS=ON -DARROW_CUDA=ON -DARROW_DATASET=ON .. && \
     make -j6 && make install && cd /repos/arrow/python/ && python setup.py build_ext --build-type=release --bundle-arrow-cpp bdist_wheel && pip install /repos/arrow/python/dist/*.whl
 
 
 # Install rmm from source
-RUN cd /repos/ && git clone https://github.com/rapidsai/rmm.git && cd rmm/ && pip install clang==8.0.1 && pip install cmake==3.18 && pip install numba && ./build.sh
+RUN cd /repos/ && git clone https://github.com/rapidsai/rmm.git && \
+    cd rmm/ && pip install clang==8.0.1 && pip install cmake==3.18 && pip install numba && ./build.sh
 
 ADD . /repos/cudf/
+
 # Install cudf from source
-RUN cd /repos/cudf/ && git submodule update --init --recursive && ./build.sh && pip install -r python/cudf/requirements.txt --ignore-installed
+RUN cd /repos/cudf/ && git submodule update --init --recursive && pip install -r python/cudf/requirements.txt --ignore-installed 
+
+RUN cd /repos/cudf/ && ./build.sh clean && ./build.sh
