@@ -69,6 +69,7 @@ class Scalar(object):
             self._host_value, self._host_dtype = self._preprocess_host_value(
                 value, dtype
             )
+            breakpoint()
 
     @property
     def _is_host_value_current(self):
@@ -113,7 +114,6 @@ class Scalar(object):
 
     def _preprocess_host_value(self, value, dtype):
         value = to_cudf_compatible_scalar(value, dtype=dtype)
-        breakpoint()
         valid = not _is_null_host_scalar(value)
 
         if dtype is None:
@@ -132,10 +132,12 @@ class Scalar(object):
                     )
             else:
                 dtype = value.dtype
-        dtype = np.dtype(dtype)
-
-        # temporary
-        dtype = np.dtype("object") if dtype.char == "U" else dtype
+        from cudf import Decimal64Dtype
+        if not isinstance(dtype, Decimal64Dtype):
+            dtype = np.dtype(dtype)
+        
+            # temporary
+            dtype = np.dtype("object") if dtype.char == "U" else dtype
 
         if not valid:
             value = NA
