@@ -184,9 +184,9 @@ class orc_column_view {
   size_t data_count() const noexcept { return _data_count; }
   size_t null_count() const noexcept { return _null_count; }
   bool nullable() const noexcept { return (_nulls != nullptr); }
-  void const *data() const noexcept { return _data; }
+  // void const *data() const noexcept { return _data; }
   uint32_t const *nulls() const noexcept { return _nulls; }
-  size_type column_offset() const noexcept { return _column_offset; }
+  // size_type column_offset() const noexcept { return _column_offset; }
   uint8_t clockscale() const noexcept { return _clockscale; }
 
   void set_orc_encoding(ColumnEncodingKind e) { _encoding_kind = e; }
@@ -544,8 +544,8 @@ encoded_data writer::impl::encode_columns(const table_device_view &view,
 {
   auto const num_columns   = columns.size();
   auto const num_rowgroups = stripes_size(stripe_bounds);
-  hostdevice_2dvector<gpu::EncChunk> chunks(num_columns, num_rowgroups);
-  hostdevice_2dvector<gpu::encoder_chunk_streams> chunk_streams(num_columns, num_rowgroups);
+  hostdevice_2dvector<gpu::EncChunk> chunks(num_columns, num_rowgroups, stream);
+  hostdevice_2dvector<gpu::encoder_chunk_streams> chunk_streams(num_columns, num_rowgroups, stream);
   auto const stream_offsets = streams.compute_offsets(columns, num_rowgroups);
   rmm::device_uvector<uint8_t> encoded_data(stream_offsets.data_size(), stream);
 
@@ -731,8 +731,8 @@ std::vector<std::vector<uint8_t>> writer::impl::gather_statistic_blobs(
   size_t num_chunks        = num_rowgroups * columns.size();
 
   std::vector<std::vector<uint8_t>> stat_blobs(num_stat_blobs);
-  hostdevice_vector<stats_column_desc> stat_desc(columns.size());
-  hostdevice_vector<statistics_merge_group> stat_merge(num_stat_blobs);
+  hostdevice_vector<stats_column_desc> stat_desc(columns.size(), stream);
+  hostdevice_vector<statistics_merge_group> stat_merge(num_stat_blobs, stream);
   rmm::device_uvector<statistics_chunk> stat_chunks(num_chunks + num_stat_blobs, stream);
   rmm::device_uvector<statistics_group> stat_groups(num_chunks, stream);
 
@@ -806,8 +806,8 @@ std::vector<std::vector<uint8_t>> writer::impl::gather_statistic_blobs(
     stat_merge.device_ptr(), stat_chunks.data() + num_chunks, num_stat_blobs, stream);
   stat_merge.device_to_host(stream, true);
 
-  hostdevice_vector<uint8_t> blobs(stat_merge[num_stat_blobs - 1].start_chunk +
-                                   stat_merge[num_stat_blobs - 1].num_chunks);
+  hostdevice_vector<uint8_t> blobs(
+    stat_merge[num_stat_blobs - 1].start_chunk + stat_merge[num_stat_blobs - 1].num_chunks, stream);
   gpu::orc_encode_statistics(blobs.device_ptr(),
                              stat_merge.device_ptr(),
                              stat_chunks.data() + num_chunks,
@@ -1049,7 +1049,7 @@ void writer::impl::write(table_view const &table)
   // Build per-column dictionary indices
   const auto num_rowgroups   = div_by_rowgroups<size_t>(num_rows);
   const auto num_dict_chunks = num_rowgroups * str_col_ids.size();
-  hostdevice_vector<gpu::DictionaryChunk> dict(num_dict_chunks);
+  hostdevice_vector<gpu::DictionaryChunk> dict(num_dict_chunks, stream);
   if (!str_col_ids.empty()) {
     init_dictionaries(*device_columns,
                       orc_columns.data(),
@@ -1065,7 +1065,7 @@ void writer::impl::write(table_view const &table)
 
   // Build stripe-level dictionaries
   const auto num_stripe_dict = stripe_bounds.size() * str_col_ids.size();
-  hostdevice_vector<gpu::StripeDictionary> stripe_dict(num_stripe_dict);
+  hostdevice_vector<gpu::StripeDictionary> stripe_dict(num_stripe_dict, stream);
   if (!str_col_ids.empty()) {
     build_dictionaries(
       orc_columns.data(), str_col_ids, stripe_bounds, dict, dict_index.data(), stripe_dict);
@@ -1077,7 +1077,7 @@ void writer::impl::write(table_view const &table)
   // Assemble individual disparate column chunks into contiguous data streams
   const auto num_index_streams = (num_columns + 1);
   const auto num_data_streams  = streams.size() - num_index_streams;
-  hostdevice_2dvector<gpu::StripeStream> strm_descs(stripe_bounds.size(), num_data_streams);
+  hostdevice_2dvector<gpu::StripeStream> strm_descs(stripe_bounds.size(), num_data_streams, stream);
   auto stripes =
     gather_stripes(num_rows, num_index_streams, stripe_bounds, &enc_data.streams, &strm_descs);
 
@@ -1121,8 +1121,8 @@ void writer::impl::write(table_view const &table)
 
   // Compress the data streams
   rmm::device_buffer compressed_data(compressed_bfr_size, stream);
-  hostdevice_vector<gpu_inflate_status_s> comp_out(num_compressed_blocks);
-  hostdevice_vector<gpu_inflate_input_s> comp_in(num_compressed_blocks);
+  hostdevice_vector<gpu_inflate_status_s> comp_out(num_compressed_blocks, stream);
+  hostdevice_vector<gpu_inflate_input_s> comp_in(num_compressed_blocks, stream);
   if (compression_kind_ != NONE) {
     strm_descs.host_to_device(stream);
     gpu::CompressOrcDataStreams(static_cast<uint8_t *>(compressed_data.data()),
