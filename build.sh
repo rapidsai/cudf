@@ -192,6 +192,7 @@ fi
 # Build libcudf_kafka library
 if hasArg libcudf_kafka; then
     cmake -S $REPODIR/cpp/libcudf_kafka -B ${KAFKA_LIB_BUILD_DIR} \
+          ${CUDF_CMAKE_CUDA_ARCHITECTURES} \
           -DCMAKE_INSTALL_PREFIX=${INSTALL_PREFIX} \
           -DCMAKE_BUILD_TYPE=${BUILD_TYPE}
 

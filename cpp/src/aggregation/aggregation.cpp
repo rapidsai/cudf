@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2020, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -125,10 +125,16 @@ std::unique_ptr<aggregation> make_row_number_aggregation()
 {
   return std::make_unique<aggregation>(aggregation::ROW_NUMBER);
 }
-/// Factory to create a COLLECT aggregation
-std::unique_ptr<aggregation> make_collect_aggregation(null_policy null_handling)
+/// Factory to create a COLLECT_LIST aggregation
+std::unique_ptr<aggregation> make_collect_list_aggregation(null_policy null_handling)
 {
   return std::make_unique<detail::collect_list_aggregation>(null_handling);
+}
+/// Factory to create a COLLECT_SET aggregation
+std::unique_ptr<aggregation> make_collect_set_aggregation(null_policy null_handling,
+                                                          null_equality null_equal)
+{
+  return std::make_unique<detail::collect_set_aggregation>(null_handling, null_equal);
 }
 /// Factory to create a LAG aggregation
 std::unique_ptr<aggregation> make_lag_aggregation(size_type offset)
