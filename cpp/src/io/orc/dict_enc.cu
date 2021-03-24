@@ -70,24 +70,28 @@ static __device__ void LoadNonNullIndices(volatile dictinit_state_s *s,
                                           Storage &temp_storage)
 {
   if (t == 0) { s->nnz = 0; }
-  for (uint32_t i = 0; i < s->chunk.num_rows; i += 512) {
+  for (uint32_t i = 0; i < s->chunk.num_rows; i += block_size) {
     const uint32_t *valid_map = s->chunk.valid_map_base;
     uint32_t is_valid, nz_pos;
-    if (t < 16) {
+    if (t < block_size / 32) {
       if (!valid_map) {
         s->scratch_red[t] = 0xffffffffu;
       } else {
-        uint32_t row = s->chunk.start_row + i + t * 32;
-        uint32_t v   = (row < s->chunk.start_row + s->chunk.num_rows)
-                       ? valid_map[(row + s->chunk.column_offset) / 32]
-                       : 0;
-        if (row & 0x1f) {
-          uint32_t v1 = (row + 32 < s->chunk.start_row + s->chunk.num_rows)
-                          ? valid_map[((row + s->chunk.column_offset) / 32) + 1]
-                          : 0;
-          v = __funnelshift_r(v, v1, row + s->chunk.column_offset);
+        uint32_t const row   = s->chunk.start_row + i + t * 32;
+        auto const chunk_end = s->chunk.start_row + s->chunk.num_rows;
+
+        auto const valid_map_idx = (row + s->chunk.column_offset) / 32;
+        uint32_t valid           = (row < chunk_end) ? valid_map[valid_map_idx] : 0;
+
+        auto const rows_in_next_word = (row + s->chunk.column_offset) & 0x1f;
+        if (rows_in_next_word != 0) {
+          auto const rows_in_current_word = 32 - rows_in_next_word;
+          // Read next word if any rows are within the chunk
+          uint32_t const valid_next =
+            (row + rows_in_current_word < chunk_end) ? valid_map[valid_map_idx + 1] : 0;
+          valid = __funnelshift_r(valid, valid_next, rows_in_next_word);
         }
-        s->scratch_red[t] = v;
+        s->scratch_red[t] = valid;
       }
     }
     __syncthreads();
@@ -109,7 +113,7 @@ static __device__ void LoadNonNullIndices(volatile dictinit_state_s *s,
  * @param[in] chunks DictionaryChunk device array [rowgroup][column]
  * @param[in] num_columns Number of columns
  */
-// blockDim {512,1,1}
+// blockDim {block_size,1,1}
 template <int block_size>
 __global__ void __launch_bounds__(block_size, 2)
   gpuInitDictionaryIndices(DictionaryChunk *chunks, uint32_t num_columns)
@@ -411,9 +415,11 @@ void InitDictionaryIndices(DictionaryChunk *chunks,
                            uint32_t num_rowgroups,
                            rmm::cuda_stream_view stream)
 {
-  dim3 dim_block(512, 1);  // 512 threads per chunk
+  static constexpr int block_size = 512;
+  dim3 dim_block(block_size, 1);
   dim3 dim_grid(num_columns, num_rowgroups);
-  gpuInitDictionaryIndices<512><<<dim_grid, dim_block, 0, stream.value()>>>(chunks, num_columns);
+  gpuInitDictionaryIndices<block_size>
+    <<<dim_grid, dim_block, 0, stream.value()>>>(chunks, num_columns);
 }
 
 /**

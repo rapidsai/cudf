@@ -15,38 +15,6 @@
 #=============================================================================
 
 ###################################################################################################
-# - common test utils -----------------------------------------------------------------------------
-
-find_package(Threads REQUIRED)
-
-add_library(cudftestutil STATIC
-            utilities/base_fixture.cpp
-            utilities/column_utilities.cu
-            utilities/table_utilities.cu
-            strings/utilities.cu)
-
-target_compile_options(cudftestutil
-            PUBLIC "$<$<COMPILE_LANGUAGE:CXX>:${CUDF_CXX_FLAGS}>"
-                   "$<$<COMPILE_LANGUAGE:CUDA>:${CUDF_CUDA_FLAGS}>"
-)
-
-target_compile_features(cudftestutil PUBLIC cxx_std_14 cuda_std_14)
-
-target_link_libraries(cudftestutil
-               PUBLIC GTest::gmock
-                      GTest::gtest
-                      Threads::Threads
-                      cudf)
-
-target_include_directories(cudftestutil
-    PUBLIC "$<BUILD_INTERFACE:${CUDF_SOURCE_DIR}>"
-           "$<BUILD_INTERFACE:${CUDF_SOURCE_DIR}/src>")
-
-install(TARGETS cudftestutil
-        DESTINATION lib
-        EXPORT cudf-targets)
-
-###################################################################################################
 # - compiler function -----------------------------------------------------------------------------
 
 function(ConfigureTest CMAKE_TEST_NAME )
@@ -86,6 +54,7 @@ ConfigureTest(ERROR_TEST error/error_handling_test.cu)
 ###################################################################################################
 # - groupby tests ---------------------------------------------------------------------------------
 ConfigureTest(GROUPBY_TEST
+    groupby/collect_set_test.cpp
     groupby/groupby_groups_test.cpp
     groupby/group_argmin_test.cpp
     groupby/group_argmax_test.cpp
@@ -102,7 +71,11 @@ ConfigureTest(GROUPBY_TEST
     groupby/group_quantile_test.cpp
     groupby/group_nunique_test.cpp
     groupby/group_nth_element_test.cpp
-    groupby/group_collect_test.cpp)
+    groupby/group_collect_test.cpp
+    groupby/group_sum_scan_test.cpp
+    groupby/group_min_scan_test.cpp
+    groupby/group_max_scan_test.cpp
+    groupby/group_count_scan_test.cpp)
 
 ###################################################################################################
 # - join tests ------------------------------------------------------------------------------------
@@ -319,7 +292,6 @@ ConfigureTest(SEARCH_TEST search/search_test.cpp)
 # - reshape test ----------------------------------------------------------------------------------
 ConfigureTest(RESHAPE_TEST
     reshape/byte_cast_tests.cpp
-    reshape/explode_tests.cpp
     reshape/interleave_columns_tests.cpp
     reshape/tile_tests.cpp)
 
@@ -422,8 +394,15 @@ ConfigureTest(AST_TEST ast/transform_tests.cpp)
 ConfigureTest(LISTS_TEST
     lists/contains_tests.cpp
     lists/count_elements_tests.cpp
+    lists/explode_tests.cpp
+    lists/drop_list_duplicates_tests.cpp
     lists/extract_tests.cpp
     lists/sort_lists_tests.cpp)
+
+###################################################################################################
+# - bin tests ----------------------------------------------------------------------------------
+ConfigureTest(LABEL_BINS_TEST
+    labeling/label_bins_tests.cpp)
 
 ###################################################################################################
 ### enable testing ################################################################################

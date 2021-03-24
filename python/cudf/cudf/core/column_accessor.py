@@ -3,12 +3,12 @@
 from __future__ import annotations
 
 import itertools
-from collections import OrderedDict
 from collections.abc import MutableMapping
 from typing import (
     TYPE_CHECKING,
     Any,
     Callable,
+    Dict,
     Mapping,
     Optional,
     Tuple,
@@ -18,12 +18,8 @@ from typing import (
 import pandas as pd
 
 import cudf
-from cudf.utils.utils import (
-    OrderedColumnDict,
-    cached_property,
-    to_flat_dict,
-    to_nested_dict,
-)
+from cudf.core import column
+from cudf.utils.utils import cached_property, to_flat_dict, to_nested_dict
 
 if TYPE_CHECKING:
     from cudf.core.column import ColumnBase
@@ -31,7 +27,7 @@ if TYPE_CHECKING:
 
 class ColumnAccessor(MutableMapping):
 
-    _data: "OrderedDict[Any, ColumnBase]"
+    _data: "Dict[Any, ColumnBase]"
     multiindex: bool
     _level_names: Tuple[Any, ...]
 
@@ -63,10 +59,41 @@ class ColumnAccessor(MutableMapping):
             self._data = data._data
             self.multiindex = multiindex
             self._level_names = level_names
+        else:
+            # This code path is performance-critical for copies and should be
+            # modified with care.
+            self._data = {}
+            if data:
+                data = dict(data)
+                # Faster than next(iter(data.values()))
+                column_length = len(data[next(iter(data))])
+                for k, v in data.items():
+                    # Much faster to avoid the function call if possible; the
+                    # extra isinstance is negligible if we do have to make a
+                    # column from something else.
+                    if not isinstance(v, column.ColumnBase):
+                        v = column.as_column(v)
+                    if len(v) != column_length:
+                        raise ValueError("All columns must be of equal length")
+                    self._data[k] = v
 
-        self._data = OrderedColumnDict(data)
-        self.multiindex = multiindex
-        self._level_names = level_names
+            self.multiindex = multiindex
+            self._level_names = level_names
+
+    @classmethod
+    def _create_unsafe(
+        cls,
+        data: Dict[Any, ColumnBase],
+        multiindex: bool = False,
+        level_names=None,
+    ) -> ColumnAccessor:
+        # create a ColumnAccessor without verifying column
+        # type or size
+        obj = cls()
+        obj._data = data
+        obj.multiindex = multiindex
+        obj._level_names = level_names
+        return obj
 
     def __iter__(self):
         return self._data.__iter__()
@@ -76,7 +103,6 @@ class ColumnAccessor(MutableMapping):
 
     def __setitem__(self, key: Any, value: Any):
         self.set_by_label(key, value)
-        self._clear_cache()
 
     def __delitem__(self, key: Any):
         self._data.__delitem__(key)
@@ -86,15 +112,15 @@ class ColumnAccessor(MutableMapping):
         return len(self._data)
 
     def __repr__(self) -> str:
-        data_repr = self._data.__repr__()
-        multiindex_repr = self.multiindex.__repr__()
-        level_names_repr = self.level_names.__repr__()
-        return "{}({}, multiindex={}, level_names={})".format(
-            self.__class__.__name__,
-            data_repr,
-            multiindex_repr,
-            level_names_repr,
+        type_info = (
+            f"{self.__class__.__name__}("
+            f"multiindex={self.multiindex}, "
+            f"level_names={self.level_names})"
         )
+        column_info = "\n".join(
+            [f"{name}: {col.dtype}" for name, col in self.items()]
+        )
+        return f"{type_info}\n{column_info}"
 
     @property
     def level_names(self) -> Tuple[Any, ...]:
@@ -144,13 +170,24 @@ class ColumnAccessor(MutableMapping):
         else:
             return self._data
 
+    @cached_property
+    def _column_length(self):
+        try:
+            return len(self._data[next(iter(self._data))])
+        except StopIteration:
+            return 0
+
     def _clear_cache(self):
-        cached_properties = "columns", "names", "_grouped_data"
+        cached_properties = ("columns", "names", "_grouped_data")
         for attr in cached_properties:
             try:
                 self.__delattr__(attr)
             except AttributeError:
                 pass
+
+        # Column length should only be cleared if no data is present.
+        if len(self._data) == 0 and hasattr(self, "_column_length"):
+            del self._column_length
 
     def to_pandas_index(self) -> pd.Index:
         """"
@@ -169,7 +206,9 @@ class ColumnAccessor(MutableMapping):
             result = pd.Index(self.names, name=self.name, tupleize_cols=False)
         return result
 
-    def insert(self, name: Any, value: Any, loc: int = -1):
+    def insert(
+        self, name: Any, value: Any, loc: int = -1, validate: bool = True
+    ):
         """
         Insert column into the ColumnAccessor at the specified location.
 
@@ -199,6 +238,13 @@ class ColumnAccessor(MutableMapping):
         if name in self._data:
             raise ValueError(f"Cannot insert '{name}', already exists")
         if loc == len(self._data):
+            if validate:
+                value = column.as_column(value)
+                if len(self._data) > 0:
+                    if len(value) != self._column_length:
+                        raise ValueError("All columns must be of equal length")
+                else:
+                    self._column_length = len(value)
             self._data[name] = value
         else:
             new_keys = self.names[:loc] + (name,) + self.names[loc:]
@@ -270,16 +316,29 @@ class ColumnAccessor(MutableMapping):
             data, multiindex=self.multiindex, level_names=self.level_names,
         )
 
-    def set_by_label(self, key: Any, value: Any):
+    def set_by_label(self, key: Any, value: Any, validate: bool = True):
         """
         Add (or modify) column by name.
 
         Parameters
         ----------
-        key : name of the column
+        key
+            name of the column
         value : column-like
+            The value to insert into the column.
+        validate : bool
+            If True, the provided value will be coerced to a column and
+            validated before setting (Default value = True).
         """
         key = self._pad_key(key)
+        if validate:
+            value = column.as_column(value)
+            if len(self._data) > 0:
+                if len(value) != self._column_length:
+                    raise ValueError("All columns must be of equal length")
+            else:
+                self._column_length = len(value)
+
         self._data[key] = value
         self._clear_cache()
 

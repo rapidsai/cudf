@@ -374,7 +374,8 @@ static int64_t get_transition_time(dst_transition_s const &trans, int year)
   return trans.time + day * day_seconds;
 }
 
-timezone_table build_timezone_transition_table(std::string const &timezone_name)
+timezone_table build_timezone_transition_table(std::string const &timezone_name,
+                                               rmm::cuda_stream_view stream)
 {
   if (timezone_name == "UTC" || timezone_name.empty()) {
     // Return an empty table for UTC
@@ -459,7 +460,22 @@ timezone_table build_timezone_transition_table(std::string const &timezone_name)
     year_timestamp += (365 + is_leap_year(year)) * day_seconds;
   }
 
-  return {get_gmt_offset(ttimes, offsets, orc_utc_offset), ttimes, offsets};
+  rmm::device_uvector<int64_t> d_ttimes{ttimes.size(), stream};
+  CUDA_TRY(cudaMemcpyAsync(d_ttimes.data(),
+                           ttimes.data(),
+                           ttimes.size() * sizeof(int64_t),
+                           cudaMemcpyDefault,
+                           stream.value()));
+  rmm::device_uvector<int32_t> d_offsets{offsets.size(), stream};
+  CUDA_TRY(cudaMemcpyAsync(d_offsets.data(),
+                           offsets.data(),
+                           offsets.size() * sizeof(int32_t),
+                           cudaMemcpyDefault,
+                           stream.value()));
+  auto const gmt_offset = get_gmt_offset(ttimes, offsets, orc_utc_offset);
+  stream.synchronize();
+
+  return {gmt_offset, std::move(d_ttimes), std::move(d_offsets)};
 }
 
 }  // namespace io

@@ -17,32 +17,18 @@
 # Find the CUDAToolkit
 find_package(CUDAToolkit REQUIRED)
 
+# Auto-detect available GPU compute architectures
+include(${CMAKE_CURRENT_LIST_DIR}/SetGPUArchs.cmake)
+message(STATUS "CUDF: Building CUDF for GPU architectures: ${CMAKE_CUDA_ARCHITECTURES}")
+
 # Must come after find_package(CUDAToolkit) because we symlink
 # ccache as a compiler front-end for nvcc in gpuCI CPU builds.
+# Must also come after we detect and potentially rewrite
+# CMAKE_CUDA_ARCHITECTURES
 enable_language(CUDA)
-
-if(CMAKE_CUDA_COMPILER_VERSION)
-  # Compute the version. from  CMAKE_CUDA_COMPILER_VERSION
-  string(REGEX REPLACE "([0-9]+)\\.([0-9]+).*" "\\1" CUDA_VERSION_MAJOR ${CMAKE_CUDA_COMPILER_VERSION})
-  string(REGEX REPLACE "([0-9]+)\\.([0-9]+).*" "\\2" CUDA_VERSION_MINOR ${CMAKE_CUDA_COMPILER_VERSION})
-  set(CUDA_VERSION "${CUDA_VERSION_MAJOR}.${CUDA_VERSION_MINOR}")
-endif()
-
-message(VERBOSE "CUDF: CUDA_VERSION_MAJOR: ${CUDA_VERSION_MAJOR}")
-message(VERBOSE "CUDF: CUDA_VERSION_MINOR: ${CUDA_VERSION_MINOR}")
-message(STATUS "CUDF: CUDA_VERSION: ${CUDA_VERSION}")
-
-# Auto-detect available GPU compute architectures
-
-include(${CUDF_SOURCE_DIR}/cmake/Modules/SetGPUArchs.cmake)
-message(STATUS "CUDF: Building CUDF for GPU architectures: ${CMAKE_CUDA_ARCHITECTURES}")
 
 if(CMAKE_COMPILER_IS_GNUCXX)
     list(APPEND CUDF_CXX_FLAGS -Wall -Werror -Wno-unknown-pragmas -Wno-error=deprecated-declarations)
-    if(CUDF_BUILD_TESTS OR CUDF_BUILD_BENCHMARKS)
-        # Suppress parentheses warning which causes gmock to fail
-        list(APPEND CUDF_CUDA_FLAGS -Xcompiler=-Wno-parentheses)
-    endif()
 endif()
 
 list(APPEND CUDF_CUDA_FLAGS --expt-extended-lambda --expt-relaxed-constexpr)
@@ -55,6 +41,9 @@ if(DISABLE_DEPRECATION_WARNING)
     list(APPEND CUDF_CXX_FLAGS -Wno-deprecated-declarations)
     list(APPEND CUDF_CUDA_FLAGS -Xcompiler=-Wno-deprecated-declarations)
 endif()
+
+# make sure we produce smallest binary size
+list(APPEND CUDF_CUDA_FLAGS -Xfatbin=-compress-all)
 
 # Option to enable line info in CUDA device compilation to allow introspection when profiling / memchecking
 if(CUDA_ENABLE_LINEINFO)

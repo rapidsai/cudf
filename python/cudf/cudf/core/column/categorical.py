@@ -1014,7 +1014,11 @@ class CategoricalColumn(column.ColumnBase):
     def binary_operator(
         self, op: str, rhs, reflect: bool = False
     ) -> ColumnBase:
-        if not (self.ordered and rhs.ordered) and op not in ("eq", "ne"):
+        if not (self.ordered and rhs.ordered) and op not in (
+            "eq",
+            "ne",
+            "NULL_EQUALS",
+        ):
             if op in ("lt", "gt", "le", "ge"):
                 raise TypeError(
                     "Unordered Categoricals can only compare equality or not"

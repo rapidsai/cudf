@@ -13,7 +13,7 @@ from pandas.core.dtypes.common import infer_dtype_from_object
 from pandas.core.dtypes.dtypes import CategoricalDtype, CategoricalDtypeType
 
 import cudf
-from cudf._lib.scalar import DeviceScalar, _is_null_host_scalar
+from cudf._lib.scalar import DeviceScalar
 from cudf.core._compat import PANDAS_GE_120
 
 _NA_REP = "<NA>"
@@ -144,16 +144,13 @@ def numeric_normalize_types(*args):
 
 
 def is_numerical_dtype(obj):
-    if is_categorical_dtype(obj):
+    # TODO: we should handle objects with a `.dtype` attribute,
+    # e.g., arrays, here.
+    try:
+        dtype = np.dtype(obj)
+    except TypeError:
         return False
-    if is_list_dtype(obj):
-        return False
-    return (
-        np.issubdtype(obj, np.bool_)
-        or np.issubdtype(obj, np.floating)
-        or np.issubdtype(obj, np.signedinteger)
-        or np.issubdtype(obj, np.unsignedinteger)
-    )
+    return dtype.kind in "biuf"
 
 
 def is_string_dtype(obj):
@@ -331,7 +328,10 @@ def to_cudf_compatible_scalar(val, dtype=None):
 
     If `val` is None, returns None.
     """
-    if _is_null_host_scalar(val) or isinstance(val, cudf.Scalar):
+
+    if cudf._lib.scalar._is_null_host_scalar(val) or isinstance(
+        val, cudf.Scalar
+    ):
         return val
 
     if not is_scalar(val):

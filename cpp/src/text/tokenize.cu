@@ -19,6 +19,7 @@
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/get_value.cuh>
 #include <cudf/detail/nvtx/ranges.hpp>
+#include <cudf/strings/detail/strings_column_factories.cuh>
 #include <cudf/strings/string_view.cuh>
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/utilities/error.hpp>
@@ -27,9 +28,10 @@
 #include <text/utilities/tokenize_ops.cuh>
 
 #include <rmm/cuda_stream_view.hpp>
+#include <rmm/device_uvector.hpp>
 #include <rmm/exec_policy.hpp>
 
-#include <thrust/count.h>
+#include <thrust/copy.h>
 #include <thrust/transform.h>
 
 namespace nvtext {
@@ -75,7 +77,8 @@ std::unique_ptr<cudf::column> tokenize_fn(cudf::size_type strings_count,
                          d_token_counts.template begin<int32_t>(),
                          d_token_counts.template end<int32_t>(),
                          token_offsets.begin() + 1);
-  CUDA_TRY(cudaMemsetAsync(token_offsets.data(), 0, sizeof(int32_t), stream.value()));
+  int32_t const zero = 0;
+  token_offsets.set_element_async(0, zero, stream);
   auto const total_tokens = token_offsets.back_element(stream);
   // build a list of pointers to each token
   rmm::device_uvector<string_index_pair> tokens(total_tokens, stream);
@@ -87,7 +90,7 @@ std::unique_ptr<cudf::column> tokenize_fn(cudf::size_type strings_count,
                      strings_count,
                      tokenizer);
   // create the strings column using the tokens pointers
-  return cudf::make_strings_column(tokens, stream, mr);
+  return cudf::strings::detail::make_strings_column(tokens.begin(), tokens.end(), stream, mr);
 }
 
 }  // namespace

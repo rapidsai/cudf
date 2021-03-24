@@ -21,8 +21,11 @@
 
 #include "writer_impl.hpp"
 
+#include <io/utilities/column_utils.cuh>
+
 #include <cudf/null_mask.hpp>
 #include <cudf/strings/strings_column_view.hpp>
+#include <cudf/utilities/span.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_buffer.hpp>
@@ -39,6 +42,7 @@ namespace detail {
 namespace orc {
 using namespace cudf::io::orc;
 using namespace cudf::io;
+using cudf::io::orc::gpu::nvstrdesc_s;
 
 struct row_group_index_info {
   int32_t pos       = -1;  // Position
@@ -472,7 +476,6 @@ orc_streams writer::impl::create_streams(host_span<orc_column_view> columns,
         break;
       case TypeKind::STRING: {
         bool enable_dict           = enable_dictionary_;
-        size_t direct_data_size    = 0;
         size_t dict_data_size      = 0;
         size_t dict_strings        = 0;
         size_t dict_lengths_div512 = 0;
@@ -484,11 +487,15 @@ orc_streams writer::impl::create_streams(host_span<orc_column_view> columns,
             dict_lengths_div512 += (sd->num_strings + 0x1ff) >> 9;
             dict_data_size += sd->dict_char_count;
           }
-          direct_data_size += std::accumulate(
-            stripe.cbegin(), stripe.cend(), direct_data_size, [&](auto data_size, auto rg_idx) {
-              return data_size + column.host_dict_chunk(rg_idx)->string_char_count;
-            });
         }
+
+        auto const direct_data_size =
+          std::accumulate(stripe_bounds.front().cbegin(),
+                          stripe_bounds.back().cend(),
+                          size_t{0},
+                          [&](auto data_size, auto rg_idx) {
+                            return data_size + column.host_dict_chunk(rg_idx)->string_char_count;
+                          });
         if (enable_dict) {
           uint32_t dict_bits = 0;
           for (dict_bits = 1; dict_bits < 32; dict_bits <<= 1) {
@@ -775,7 +782,9 @@ std::vector<StripeInformation> writer::impl::gather_stripes(
 }
 
 std::vector<std::vector<uint8_t>> writer::impl::gather_statistic_blobs(
-  host_span<orc_column_view const> columns, host_span<stripe_rowgroups const> stripe_bounds)
+  const table_device_view &table,
+  host_span<orc_column_view const> columns,
+  host_span<stripe_rowgroups const> stripe_bounds)
 {
   auto const num_rowgroups = stripes_size(stripe_bounds);
   size_t num_stat_blobs    = (1 + stripe_bounds.size()) * columns.size();
@@ -833,6 +842,10 @@ std::vector<std::vector<uint8_t>> writer::impl::gather_statistic_blobs(
   }
   stat_desc.host_to_device(stream);
   stat_merge.host_to_device(stream);
+
+  rmm::device_uvector<column_device_view> leaf_column_views =
+    create_leaf_column_device_views<stats_column_desc>(stat_desc, table, stream);
+
   gpu::orc_init_statistics_groups(stat_groups.data(),
                                   stat_desc.device_ptr(),
                                   columns.size(),
@@ -1106,10 +1119,11 @@ void writer::impl::write(table_view const &table)
   auto stripes =
     gather_stripes(num_rows, num_index_streams, stripe_bounds, &enc_data.streams, &strm_descs);
 
+  auto device_columns = table_device_view::create(table);
   // Gather column statistics
   std::vector<std::vector<uint8_t>> column_stats;
   if (enable_statistics_ && num_columns > 0 && num_rows > 0) {
-    column_stats = gather_statistic_blobs(orc_columns, stripe_bounds);
+    column_stats = gather_statistic_blobs(*device_columns, orc_columns, stripe_bounds);
   }
 
   // Allocate intermediate output stream buffer

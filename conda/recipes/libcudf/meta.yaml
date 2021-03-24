@@ -58,6 +58,7 @@ test:
     - test -f $PREFIX/include/cudf/ast/linearizer.hpp
     - test -f $PREFIX/include/cudf/ast/operators.hpp
     - test -f $PREFIX/include/cudf/binaryop.hpp
+    - test -f $PREFIX/include/cudf/labeling/label_bins.hpp
     - test -f $PREFIX/include/cudf/column/column_factories.hpp
     - test -f $PREFIX/include/cudf/column/column.hpp
     - test -f $PREFIX/include/cudf/column/column_view.hpp
@@ -66,6 +67,7 @@ test:
     - test -f $PREFIX/include/cudf/datetime.hpp
     - test -f $PREFIX/include/cudf/detail/aggregation/aggregation.hpp
     - test -f $PREFIX/include/cudf/detail/aggregation/result_cache.hpp
+    - test -f $PREFIX/include/cudf/detail/label_bins.hpp
     - test -f $PREFIX/include/cudf/detail/binaryop.hpp
     - test -f $PREFIX/include/cudf/detail/concatenate.hpp
     - test -f $PREFIX/include/cudf/detail/copy.hpp
@@ -132,7 +134,11 @@ test:
     - test -f $PREFIX/include/cudf/join.hpp
     - test -f $PREFIX/include/cudf/lists/detail/concatenate.hpp
     - test -f $PREFIX/include/cudf/lists/detail/copying.hpp
+    - test -f $PREFIX/include/cudf/lists/detail/drop_list_duplicates.hpp
+    - test -f $PREFIX/include/cudf/lists/detail/sorting.hpp
     - test -f $PREFIX/include/cudf/lists/count_elements.hpp
+    - test -f $PREFIX/include/cudf/lists/explode.hpp
+    - test -f $PREFIX/include/cudf/lists/drop_list_duplicates.hpp
     - test -f $PREFIX/include/cudf/lists/extract.hpp
     - test -f $PREFIX/include/cudf/lists/contains.hpp
     - test -f $PREFIX/include/cudf/lists/gather.hpp
@@ -167,10 +173,10 @@ test:
     - test -f $PREFIX/include/cudf/strings/convert/convert_integers.hpp
     - test -f $PREFIX/include/cudf/strings/convert/convert_ipv4.hpp
     - test -f $PREFIX/include/cudf/strings/convert/convert_urls.hpp
-    - test -f $PREFIX/include/cudf/strings/copying.hpp
     - test -f $PREFIX/include/cudf/strings/detail/combine.hpp
     - test -f $PREFIX/include/cudf/strings/detail/concatenate.hpp
     - test -f $PREFIX/include/cudf/strings/detail/converters.hpp
+    - test -f $PREFIX/include/cudf/strings/detail/copying.hpp
     - test -f $PREFIX/include/cudf/strings/detail/fill.hpp
     - test -f $PREFIX/include/cudf/strings/detail/replace.hpp
     - test -f $PREFIX/include/cudf/strings/detail/utilities.hpp
