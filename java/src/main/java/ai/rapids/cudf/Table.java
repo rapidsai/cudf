@@ -2451,7 +2451,7 @@ public final class Table implements AutoCloseable {
      * {@link WindowOptions.FrameType#RANGE},
      * i.e. the timestamp-column was not specified for the aggregation.
      */
-    public Table aggregateWindowsOverTimeRanges(AggregationOverWindow... windowAggregates) {
+    public Table aggregateWindowsOverRanges(AggregationOverWindow... windowAggregates) {
       // To improve performance and memory we want to remove duplicate operations
       // and also group the operations by column so hopefully cudf can do multiple aggregations
       // in a single pass.
@@ -2463,16 +2463,16 @@ public final class Table implements AutoCloseable {
       for (int outputIndex = 0; outputIndex < windowAggregates.length; outputIndex++) {
         AggregationOverWindow agg = windowAggregates[outputIndex];
         if (agg.getWindowOptions().getFrameType() != WindowOptions.FrameType.RANGE) {
-          throw new IllegalArgumentException("Expected time-range-based window specification. Unexpected window type: " 
-                  + agg.getWindowOptions().getFrameType());
+          throw new IllegalArgumentException("Expected time-range-based window specification. Unexpected window type: "
+              + agg.getWindowOptions().getFrameType());
         }
         ColumnWindowOps ops = groupedOps.computeIfAbsent(agg.getColumnIndex(), (idx) -> new ColumnWindowOps());
         totalOps += ops.add(agg, outputIndex);
       }
 
       int[] aggColumnIndexes = new int[totalOps];
-      int[] timestampColumnIndexes = new int[totalOps];
-      boolean[] isTimestampOrderAscending = new boolean[totalOps];
+      int[] orderByColumnIndexes = new int[totalOps];
+      boolean[] isOrderByOrderAscending = new boolean[totalOps];
       long[] aggInstances = new long[totalOps];
       try {
         int[] aggPrecedingWindows = new int[totalOps];
@@ -2492,8 +2492,8 @@ public final class Table implements AutoCloseable {
             aggFollowingWindowsUnbounded[opIndex] = operation.getWindowOptions().isUnboundedFollowing();
             aggMinPeriods[opIndex] = operation.getWindowOptions().getMinPeriods();
             assert (operation.getWindowOptions().getFrameType() == WindowOptions.FrameType.RANGE);
-            timestampColumnIndexes[opIndex] = operation.getWindowOptions().getTimestampColumnIndex();
-            isTimestampOrderAscending[opIndex] = operation.getWindowOptions().isTimestampOrderAscending();
+            orderByColumnIndexes[opIndex] = operation.getWindowOptions().getTimestampColumnIndex();
+            isOrderByOrderAscending[opIndex] = operation.getWindowOptions().isTimestampOrderAscending();
             if (operation.getDefaultOutput() != 0) {
               throw new IllegalArgumentException("Operations with a default output are not " +
                   "supported on time based rolling windows");
@@ -2506,8 +2506,8 @@ public final class Table implements AutoCloseable {
         try (Table aggregate = new Table(rangeRollingWindowAggregate(
             operation.table.nativeHandle,
             operation.indices,
-            timestampColumnIndexes,
-            isTimestampOrderAscending,
+            orderByColumnIndexes,
+            isOrderByOrderAscending,
             aggColumnIndexes,
             aggInstances, aggMinPeriods, aggPrecedingWindows, aggFollowingWindows,
             aggPrecedingWindowsUnbounded, aggFollowingWindowsUnbounded,
@@ -2530,6 +2530,16 @@ public final class Table implements AutoCloseable {
       } finally {
         Aggregation.close(aggInstances);
       }
+    }
+
+    /**
+     * @deprecated use aggregateWindowsOverRanges
+     * @param windowAggregates
+     * @return
+     */
+    @Deprecated
+    public Table aggregateWindowsOverTimeRanges(AggregationOverWindow... windowAggregates) {
+      return aggregateWindowsOverRanges(windowAggregates);
     }
   }
 
