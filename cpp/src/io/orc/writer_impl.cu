@@ -261,7 +261,7 @@ std::vector<stripe_rowgroups> writer::impl::gather_stripe_info(
 void writer::impl::init_dictionaries(const table_device_view &view,
                                      orc_column_view *columns,
                                      std::vector<int> const &str_col_ids,
-                                     rmm::device_uvector<size_type> &d_str_col_ids,
+                                     device_span<size_type> d_str_col_ids,
                                      uint32_t *dict_data,
                                      uint32_t *dict_index,
                                      hostdevice_vector<gpu::DictionaryChunk> *dict)

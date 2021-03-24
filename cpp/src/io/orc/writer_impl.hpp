@@ -186,9 +186,10 @@ class writer::impl {
   /**
    * @brief Builds up column dictionaries indices
    *
-   * @param view TODO
+   * @param view Table device view representing input table
    * @param columns List of columns
    * @param str_col_ids List of columns that are strings type
+   * @param d_str_col_ids List of columns that are strings type in device memory
    * @param dict_data Dictionary data memory
    * @param dict_index Dictionary index memory
    * @param dict List of dictionary chunks
@@ -196,7 +197,7 @@ class writer::impl {
   void init_dictionaries(const table_device_view& view,
                          orc_column_view* columns,
                          std::vector<int> const& str_col_ids,
-                         rmm::device_uvector<size_type>& d_str_col_ids,
+                         device_span<size_type> d_str_col_ids,
                          uint32_t* dict_data,
                          uint32_t* dict_index,
                          hostdevice_vector<gpu::DictionaryChunk>* dict);
@@ -241,7 +242,7 @@ class writer::impl {
   /**
    * @brief Encodes the input columns into streams.
    *
-   * @param view TODO
+   * @param view Table device view representing input table
    * @param columns List of columns
    * @param str_col_ids List of columns that are strings type
    * @param stripe_bounds List of stripe boundaries

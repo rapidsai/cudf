@@ -354,12 +354,12 @@ void CompressOrcDataStreams(uint8_t *compressed_data,
 /**
  * @brief Launches kernel for initializing dictionary chunks
  *
- * @param[in] view TODO:
+ * @param[in] view table device view representing input table
  * @param[in,out] chunks DictionaryChunk device array [rowgroup][column]
- * @param[in] dict_data TODO:
- * @param[in] dict_index TODO:
- * @param[in] row_index_stride TODO:
- * @param[in] str_col_ids TODO:
+ * @param[in] dict_data dictionary data (index of non-null rows)
+ * @param[in] dict_index row indices of corresponding string (row from dictionary index)
+ * @param[in] row_index_stride Rowgroup size in rows
+ * @param[in] str_col_ids List of columns that are strings type
  * @param[in] num_columns Number of columns
  * @param[in] num_rowgroups Number of row groups
  * @param[in] stream CUDA stream to use, default `rmm::cuda_stream_default`

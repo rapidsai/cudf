@@ -253,11 +253,10 @@ __global__ void __launch_bounds__(block_size, 2)
   for (uint32_t i = 0; i < nnz; i += block_size) {
     uint32_t ck_row = 0, ck_row_ref = 0, is_dupe = 0;
     if (i + t < nnz) {
-      uint32_t string_length, hash;
       ck_row                   = s->dict[i + t];
       string_view string_value = s->chunk.leaf_column->element<string_view>(ck_row + start_row);
-      string_length            = static_cast<uint32_t>(string_value.size_bytes());
-      hash                     = hash_string(string_value);
+      auto const string_length = static_cast<uint32_t>(string_value.size_bytes());
+      auto const hash          = hash_string(string_value);
       ck_row_ref               = s->dict[(hash > 0) ? s->map.u16[hash - 1] : 0];
       if (ck_row_ref != ck_row) {
         string_view reference_string =
@@ -423,14 +422,7 @@ __global__ void __launch_bounds__(block_size)
 }
 
 /**
- * @brief Launches kernel for initializing dictionary chunks
- *
- * @param[in] view TODO:
- * @param[in] chunks DictionaryChunk device array [rowgroup][column]
- * @param[in] str_col_ids TODO:
- * @param[in] num_columns Number of columns
- * @param[in] num_rowgroups Number of row groups
- * @param[in] stream CUDA stream to use, default `rmm::cuda_stream_default`
+ * @copydoc cudf::io::orc::gpu::InitDictionaryIndices
  */
 void InitDictionaryIndices(const table_device_view &view,
                            DictionaryChunk *chunks,
@@ -450,15 +442,7 @@ void InitDictionaryIndices(const table_device_view &view,
 }
 
 /**
- * @brief Launches kernel for building stripe dictionaries
- *
- * @param[in] stripes StripeDictionary device array [stripe][column]
- * @param[in] stripes_host StripeDictionary host array [stripe][column]
- * @param[in] chunks DictionaryChunk device array [rowgroup][column]
- * @param[in] num_stripes Number of stripes
- * @param[in] num_rowgroups Number of row groups
- * @param[in] num_columns Number of columns
- * @param[in] stream CUDA stream to use, default `rmm::cuda_stream_default`
+ * @copydoc cudf::io::orc::gpu::BuildStripeDictionaries
  */
 void BuildStripeDictionaries(StripeDictionary *stripes,
                              StripeDictionary *stripes_host,
