@@ -207,8 +207,8 @@ sort_groupby_helper::index_vector const& sort_groupby_helper::group_labels(
                              group_labels.end(),
                              index_vector::value_type{0});
   thrust::scatter(rmm::exec_policy(stream),
-                  thrust::make_constant_iterator(1, decltype(num_groups())(1)),
-                  thrust::make_constant_iterator(1, num_groups()),
+                  thrust::make_constant_iterator(1, decltype(num_groups(stream))(1)),
+                  thrust::make_constant_iterator(1, num_groups(stream)),
                   group_offsets(stream).begin() + 1,
                   group_labels.begin());
 
@@ -311,7 +311,7 @@ std::unique_ptr<table> sort_groupby_helper::unique_keys(rmm::cuda_stream_view st
 
   return cudf::detail::gather(_keys,
                               gather_map_it,
-                              gather_map_it + num_groups(),
+                              gather_map_it + num_groups(stream),
                               out_of_bounds_policy::DONT_CHECK,
                               stream,
                               mr);

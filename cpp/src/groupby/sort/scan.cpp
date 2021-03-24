@@ -72,7 +72,7 @@ void scan_result_functor::operator()<aggregation::SUM>(aggregation const& agg)
     col_idx,
     agg,
     detail::sum_scan(
-      get_grouped_values(), helper.num_groups(), helper.group_labels(stream), stream, mr));
+      get_grouped_values(), helper.num_groups(stream), helper.group_labels(stream), stream, mr));
 }
 
 template <>
@@ -84,7 +84,7 @@ void scan_result_functor::operator()<aggregation::MIN>(aggregation const& agg)
     col_idx,
     agg,
     detail::min_scan(
-      get_grouped_values(), helper.num_groups(), helper.group_labels(stream), stream, mr));
+      get_grouped_values(), helper.num_groups(stream), helper.group_labels(stream), stream, mr));
 }
 
 template <>
@@ -96,7 +96,7 @@ void scan_result_functor::operator()<aggregation::MAX>(aggregation const& agg)
     col_idx,
     agg,
     detail::max_scan(
-      get_grouped_values(), helper.num_groups(), helper.group_labels(stream), stream, mr));
+      get_grouped_values(), helper.num_groups(stream), helper.group_labels(stream), stream, mr));
 }
 
 template <>

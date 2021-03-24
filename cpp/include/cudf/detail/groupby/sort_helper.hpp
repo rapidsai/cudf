@@ -132,7 +132,10 @@ struct sort_groupby_helper {
   /**
    * @brief Get the number of groups in `keys`
    */
-  size_type num_groups() { return group_offsets().size() - 1; }
+  size_type num_groups(rmm::cuda_stream_view stream = rmm::cuda_stream_default)
+  {
+    return group_offsets(stream).size() - 1;
+  }
 
   /**
    * @brief Return the effective number of keys
@@ -175,7 +178,7 @@ struct sort_groupby_helper {
    * @brief Get the group labels corresponding to the sorted order of `keys`.
    *
    * Each group is assigned a unique numerical "label" in
-   * `[0, 1, 2, ... , num_groups() - 1, num_groups())`.
+   * `[0, 1, 2, ... , num_groups() - 1, num_groups(stream))`.
    * For a row in sorted `keys`, its corresponding group label indicates which
    * group it belongs to.
    *
