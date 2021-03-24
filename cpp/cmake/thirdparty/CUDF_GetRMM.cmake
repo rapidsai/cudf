@@ -28,6 +28,11 @@ function(cudf_restore_if_enabled var)
 endfunction()
 
 function(find_and_configure_rmm VERSION)
+
+    if(TARGET rmm::rmm)
+        return()
+    endif()
+
     # Consumers have two options for local source builds:
     # 1. Pass `-D CPM_rmm_SOURCE=/path/to/rmm` to build a local RMM source tree
     # 2. Pass `-D CMAKE_PREFIX_PATH=/path/to/rmm/build` to use an existing local
