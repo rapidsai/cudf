@@ -606,6 +606,91 @@ TEST_F(ExplodeOuterTest, SequentialNulls)
   CUDF_TEST_EXPECT_TABLES_EQUAL(pos_ret->view(), pos_expected);
 }
 
+TEST_F(ExplodeOuterTest, MoreNullsThanData)
+{
+  //    a               b
+  //    [1, 2]          100
+  //    []              200
+  //    []              300
+  //    []              400
+  //    []              500
+  //    [3]             600
+
+  LCW a{ LCW{1,2}, LCW{}, LCW{}, LCW{}, LCW{}, LCW{3} };
+  FCW b{100, 200, 300, 400, 500, 600};
+
+  FCW expected_a({1, 2, 0, 0, 0, 0, 3}, {1, 1, 0, 0, 0, 0, 1});
+  FCW expected_b({100, 100, 200, 300, 400, 500, 600});
+
+  cudf::table_view t({a, b});
+  cudf::table_view expected({expected_a, expected_b});
+
+  auto ret = cudf::explode_outer(t, 0);
+  CUDF_TEST_EXPECT_TABLES_EQUAL(ret->view(), expected);
+
+  FCW expected_pos_col{0, 1, 0, 0, 0, 0, 0};
+  cudf::table_view pos_expected({expected_pos_col, expected_a, expected_b});
+
+  auto pos_ret = cudf::explode_outer_position(t, 0);
+  CUDF_TEST_EXPECT_TABLES_EQUAL(pos_ret->view(), pos_expected);
+}
+
+TEST_F(ExplodeOuterTest, TrailingNulls)
+{
+  //    a               b
+  //    [1, 2]          100
+  //    []              200
+  //    []              300
+  //    []              400
+  //    []              500
+
+  LCW a{ LCW{1,2}, LCW{}, LCW{}, LCW{}, LCW{} };
+  FCW b{100, 200, 300, 400, 500};
+
+  FCW expected_a({1, 2, 0, 0, 0, 0}, {1, 1, 0, 0, 0, 0});
+  FCW expected_b({100, 100, 200, 300, 400, 500});
+
+  cudf::table_view t({a, b});
+  cudf::table_view expected({expected_a, expected_b});
+
+  auto ret = cudf::explode_outer(t, 0);
+  CUDF_TEST_EXPECT_TABLES_EQUAL(ret->view(), expected);
+
+  FCW expected_pos_col{0, 1, 0, 0, 0, 0};
+  cudf::table_view pos_expected({expected_pos_col, expected_a, expected_b});
+
+  auto pos_ret = cudf::explode_outer_position(t, 0);
+  CUDF_TEST_EXPECT_TABLES_EQUAL(pos_ret->view(), pos_expected);
+}
+
+TEST_F(ExplodeOuterTest, LeadingNulls)
+{
+  //    a               b
+  //    []              100
+  //    []              200
+  //    []              300
+  //    []              400
+  //    [1, 2]          500
+
+  LCW a{ LCW{}, LCW{}, LCW{}, LCW{}, LCW{1,2} };
+  FCW b{100, 200, 300, 400, 500};
+
+  FCW expected_a({0, 0, 0, 0, 1, 2}, {0, 0, 0, 0, 1, 1});
+  FCW expected_b({100, 200, 300, 400, 500, 500});
+
+  cudf::table_view t({a, b});
+  cudf::table_view expected({expected_a, expected_b});
+
+  auto ret = cudf::explode_outer(t, 0);
+  CUDF_TEST_EXPECT_TABLES_EQUAL(ret->view(), expected);
+
+  FCW expected_pos_col{0, 0, 0, 0, 0, 1};
+  cudf::table_view pos_expected({expected_pos_col, expected_a, expected_b});
+
+  auto pos_ret = cudf::explode_outer_position(t, 0);
+  CUDF_TEST_EXPECT_TABLES_EQUAL(pos_ret->view(), pos_expected);
+}
+
 TEST_F(ExplodeOuterTest, NullsInList)
 {
   //    a                   b
