@@ -49,8 +49,7 @@ std::shared_ptr<arrow::Array> toArrowArray(JNIEnv *env, jlong handle) {
       cudf::jni::throw_java_exception(env, "java/lang/IllegalArgumentException",
         "Must result in one column");
     }
-    // cudf puts everything into 1 chunk, validate that
-    // TODO - perhaps we should handle if not?
+    // cudf puts everything into 1 chunk
     std::shared_ptr<arrow::ChunkedArray> chunked_array = result->get()->column(0);
     if (chunked_array->chunks().size() > 1) {
       cudf::jni::throw_java_exception(env, "java/lang/IllegalArgumentException",
@@ -135,7 +134,7 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_fromArrow(JNIEnv *env, 
         JNI_THROW_NEW(env, cudf::jni::ILLEGAL_ARG_CLASS, "Don't support converting DICTIONARY32 yet", 0);
         break;
       case cudf::type_id::STRING:
-        arrow_array = std::make_shared<arrow::StringArray>(j_col_length, offsets_buffer, data_buffer, null_buffer, j_null_count);
+        arrow_array = std::make_shared<arrow::StringArray>(j_col_length, offsets_buffer, data_buffer);
         break;
       default:
         // this handles the primitive types
@@ -155,7 +154,7 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_fromArrow(JNIEnv *env, 
   CATCH_STD(env, 0);
 }
 
-JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_ColumnVector_toArrowPrimitive(JNIEnv *env, jclass, jlong handle) {
+JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_ColumnVector_toArrowFromPrimitive(JNIEnv *env, jclass, jlong handle) {
   JNI_NULL_CHECK(env, handle, "null column view", 0);
   try {
     cudf::jni::auto_set_device(env);
@@ -180,7 +179,7 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_ColumnVector_toArrowPrimitive(J
   CATCH_STD(env, nullptr);
 }
 
-JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_ColumnVector_toArrowString(JNIEnv *env, jclass, jlong handle) {
+JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_ColumnVector_toArrowFromString(JNIEnv *env, jclass, jlong handle) {
   JNI_NULL_CHECK(env, handle, "null column view", 0);
   try {
     cudf::jni::auto_set_device(env);

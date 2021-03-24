@@ -355,13 +355,34 @@ public final class ColumnVector extends ColumnView {
     return vec;
   }
 
-  public static ArrowColumnInfo toArrowPrimitive(ColumnVector vec) {
-    long[] res = toArrowPrimitive(vec.getNativeView());
+  /**
+   * Convert a ColumnVector to Arrow and return the metadata about the Arrow
+   * column.
+   * @param vec - ColumnVector to convert
+   * @return - ArrowColumnInfo
+   */
+  public static ArrowColumnInfo toArrow(ColumnVector vec) {
+    long[] res = toArrowFromPrimitive(vec.getNativeView());
     return new ArrowColumnInfo(res[0], res[1], res[2], res[3], res[4], res[5]);
   }
 
-  public static ArrowColumnInfo toArrowString(ColumnVector vec) {
-    long[] res = toArrowString(vec.getNativeView());
+  /**
+   * Convert a ColumnVector of primitive type to Arrow.
+   * @param vec - ColumnVector to convert
+   * @return - ArrowColumnInfo
+   */
+  public static ArrowColumnInfo toArrowFromPrimitiveVector(ColumnVector vec) {
+    long[] res = toArrowFromPrimitive(vec.getNativeView());
+    return new ArrowColumnInfo(res[0], res[1], res[2], res[3], res[4], res[5]);
+  }
+
+  /**
+   * Convert a String ColumnVector to Arrow.
+   * @param vec - ColumnVector to convert
+   * @return - ArrowColumnInfo
+   */
+  public static ArrowColumnInfo toArrowFromStringVector(ColumnVector vec) {
+    long[] res = toArrowFromString(vec.getNativeView());
     return new ArrowColumnInfo(res[0], res[1], res[2], res[3], res[4], res[5], res[6], res[7]);
   }
 
@@ -674,8 +695,8 @@ public final class ColumnVector extends ColumnView {
       long null_count, ByteBuffer data, ByteBuffer validity,
       ByteBuffer offsets) throws CudfException;
 
-  private static native long[] toArrowPrimitive(long handle) throws CudfException;
-  private static native long[] toArrowString(long handle) throws CudfException;
+  private static native long[] toArrowFromPrimitive(long handle) throws CudfException;
+  private static native long[] toArrowFromString(long handle) throws CudfException;
 
   private static native long fromScalar(long scalarHandle, int rowCount) throws CudfException;
 

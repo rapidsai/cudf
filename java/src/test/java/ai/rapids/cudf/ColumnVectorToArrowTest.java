@@ -73,7 +73,7 @@ public class ColumnVectorToArrowTest extends CudfTestBase {
       vector.setValueCount(count);
       try (ColumnVector toConvert = ColumnVector.fromBoxedInts(expectedArr.toArray(new Integer[0]))) {
         assertEquals(toConvert.getNullCount(), 1);
-        ArrowColumnInfo res = ColumnVector.toArrowPrimitive(toConvert);
+        ArrowColumnInfo res = ColumnVector.toArrowFromPrimitiveVector(toConvert);
         ArrowBuf validityBuf = null;
         if (res.getValidityBufferAddress() != 0) {
           validityBuf = new ArrowBuf(ReferenceManager.NO_OP, null,
@@ -91,30 +91,44 @@ public class ColumnVectorToArrowTest extends CudfTestBase {
     }
   }
 
-  /*
   @Test
   void testArrowLong() {
-    ArrowColumnBuilder builder = new ArrowColumnBuilder(new HostColumnVector.BasicType(true, DType.INT64));
     BufferAllocator allocator = new RootAllocator(Long.MAX_VALUE);
     try (BigIntVector vector = new BigIntVector("vec", allocator)) {
       ArrayList<Long> expectedArr = new ArrayList<Long>();
       int count = 10000;
       for (int i = 0; i < count; i++) {
-        expectedArr.add(new Long(i));
-        ((BigIntVector) vector).setSafe(i, i);
+        if (i == 3) {
+          // add a null in there somewhere
+          vector.setNull(i);
+          expectedArr.add(null);
+        } else {
+          expectedArr.add(new Long(i));
+          ((BigIntVector) vector).setSafe(i, i);
+        }
       }
       vector.setValueCount(count);
-      ByteBuffer data = vector.getDataBuffer().nioBuffer();
-      ByteBuffer valid = vector.getValidityBuffer().nioBuffer();
-      builder.addBatch(vector.getValueCount(), vector.getNullCount(), data, valid, null);
-      try (ColumnVector cv = builder.buildAndPutOnDevice();
-           ColumnVector expected = ColumnVector.fromBoxedLongs(expectedArr.toArray(new Long[0]))) {
-        assertEquals(cv.getType(), DType.INT64);
-        assertColumnsAreEqual(expected, cv, "Longs");
+      try (ColumnVector toConvert = ColumnVector.fromBoxedLongs(expectedArr.toArray(new Long[0]))) {
+        assertEquals(toConvert.getNullCount(), 1);
+        ArrowColumnInfo res = ColumnVector.toArrowFromPrimitiveVector(toConvert);
+        ArrowBuf validityBuf = null;
+        if (res.getValidityBufferAddress() != 0) {
+          validityBuf = new ArrowBuf(ReferenceManager.NO_OP, null,
+            (int)res.getValidityBufferSize(), res.getValidityBufferAddress(), false);
+        }
+        ArrowBuf dataBuf = new ArrowBuf(ReferenceManager.NO_OP, null, (int)res.getDataBufferSize(),
+          res.getDataBufferAddress(), false);
+        ArrowFieldNode fieldNode = new ArrowFieldNode((int)res.getNumRows(), (int)res.getNullCount());
+        BigIntVector v1 = new BigIntVector("col1", allocator);
+        v1.loadFieldBuffers(fieldNode, Stream.of(validityBuf, dataBuf).collect(Collectors.toList()));
+        assertEquals(v1.getNullCount(), 1);
+        assertEquals(vector.getNullCount(), 1);
+        assertTrue(VectorEqualsVisitor.vectorEquals(v1, vector));
       }
     }
   }
 
+/*
   @Test
   void testArrowLongOnHeap() {
     ArrowColumnBuilder builder = new ArrowColumnBuilder(new HostColumnVector.BasicType(true, DType.INT64));
@@ -196,8 +210,7 @@ public class ColumnVectorToArrowTest extends CudfTestBase {
       }
     }
   }
-
-  */
+*/
 
   @Test
   void testArrowString() {
@@ -219,7 +232,7 @@ public class ColumnVectorToArrowTest extends CudfTestBase {
       vector.setValueCount(count);
       try (ColumnVector toConvert = ColumnVector.fromStrings(expectedArr.toArray(new String[0]))) {
         assertEquals(toConvert.getNullCount(), 1);
-        ArrowColumnInfo res = ColumnVector.toArrowString(toConvert);
+        ArrowColumnInfo res = ColumnVector.toArrowFromStringVector(toConvert);
         ArrowBuf validityBuf = null;
         if (res.getValidityBufferAddress() != 0) {
           validityBuf = new ArrowBuf(ReferenceManager.NO_OP, null,
@@ -239,8 +252,8 @@ public class ColumnVectorToArrowTest extends CudfTestBase {
       }
     }
   }
-  /*
 
+/*
   @Test
   void testArrowStringOnHeap() {
     ArrowColumnBuilder builder = new ArrowColumnBuilder(new HostColumnVector.BasicType(true, DType.STRING));
@@ -363,5 +376,5 @@ public class ColumnVectorToArrowTest extends CudfTestBase {
       });
     }
   }
-  */
+*/
 }
