@@ -83,11 +83,13 @@ TEST(StreamCheck, CatchFailedKernel)
                             "invalid configuration argument");
 }
 
-__global__ void assert_false_kernel() { release_assert(false && "this kernel should die"); }
+#ifndef NDEBUG
 
-__global__ void assert_true_kernel() { release_assert(true && "this kernel should live"); }
+__global__ void assert_false_kernel() { cudf_assert(false && "this kernel should die"); }
 
-TEST(ReleaseAssertDeathTest, release_assert_false)
+__global__ void assert_true_kernel() { cudf_assert(true && "this kernel should live"); }
+
+TEST(DebugAssertDeathTest, cudf_assert_false)
 {
   testing::FLAGS_gtest_death_test_style = "threadsafe";
 
@@ -100,18 +102,20 @@ TEST(ReleaseAssertDeathTest, release_assert_false)
     // each attempted kernel launch
     if (cudaErrorAssert == cudaDeviceSynchronize()) { std::abort(); }
 
-    // If we reach this point, the release_assert didn't work so we exit normally, which will cause
+    // If we reach this point, the cudf_assert didn't work so we exit normally, which will cause
     // EXPECT_DEATH to fail.
   };
 
   EXPECT_DEATH(call_kernel(), "this kernel should die");
 }
 
-TEST(ReleaseAssert, release_assert_true)
+TEST(DebugAssert, cudf_assert_true)
 {
   assert_true_kernel<<<1, 1>>>();
   ASSERT_EQ(cudaSuccess, cudaDeviceSynchronize());
 }
+
+#endif
 
 // These tests don't use CUDF_TEST_PROGRAM_MAIN because :
 // 1.) They don't need the RMM Pool

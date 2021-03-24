@@ -135,7 +135,7 @@ if hasArg clean; then
 fi
 
 if (( ${BUILD_ALL_GPU_ARCH} == 0 )); then
-    CUDF_CMAKE_CUDA_ARCHITECTURES="-DCMAKE_CUDA_ARCHITECTURES=ALL"
+    CUDF_CMAKE_CUDA_ARCHITECTURES="-DCMAKE_CUDA_ARCHITECTURES="
     echo "Building for the architecture of the GPU in the system..."
 else
     CUDF_CMAKE_CUDA_ARCHITECTURES=""
@@ -192,6 +192,7 @@ fi
 # Build libcudf_kafka library
 if hasArg libcudf_kafka; then
     cmake -S $REPODIR/cpp/libcudf_kafka -B ${KAFKA_LIB_BUILD_DIR} \
+          ${CUDF_CMAKE_CUDA_ARCHITECTURES} \
           -DCMAKE_INSTALL_PREFIX=${INSTALL_PREFIX} \
           -DCMAKE_BUILD_TYPE=${BUILD_TYPE}
 

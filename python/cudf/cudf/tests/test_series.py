@@ -1118,3 +1118,32 @@ def test_series_drop_raises():
     actual = gs.drop("p", errors="ignore")
 
     assert_eq(actual, expect)
+
+
+@pytest.mark.parametrize(
+    "data", [[[1, 2, 3], None, [4], [], [5, 6]], [1, 2, 3, 4, 5]],
+)
+@pytest.mark.parametrize("ignore_index", [True, False])
+@pytest.mark.parametrize(
+    "p_index",
+    [
+        None,
+        ["ia", "ib", "ic", "id", "ie"],
+        pd.MultiIndex.from_tuples(
+            [(0, "a"), (0, "b"), (0, "c"), (1, "a"), (1, "b")]
+        ),
+    ],
+)
+def test_explode(data, ignore_index, p_index):
+    pdf = pd.Series(data, index=p_index, name="someseries")
+    gdf = cudf.from_pandas(pdf)
+
+    expect = pdf.explode(ignore_index)
+    got = gdf.explode(ignore_index)
+
+    if data == [1, 2, 3, 4, 5] and ignore_index and p_index is not None:
+        # https://github.com/pandas-dev/pandas/issues/40487
+        with pytest.raises(AssertionError, match="different"):
+            assert_eq(expect, got, check_dtype=False)
+    else:
+        assert_eq(expect, got, check_dtype=False)

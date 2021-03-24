@@ -143,15 +143,14 @@ def test_setitem_dataframe_series_inplace(df):
 )
 def test_series_set_equal_length_object_by_mask(replace_data):
 
-    psr = pd.Series([1, 2, 3, 4, 5])
+    psr = pd.Series([1, 2, 3, 4, 5], dtype="Int64")
     gsr = cudf.from_pandas(psr)
 
     # Lengths match in trivial case
-    pd_bool_col = pd.Series([True] * len(psr))
+    pd_bool_col = pd.Series([True] * len(psr), dtype="boolean")
     gd_bool_col = cudf.from_pandas(pd_bool_col)
-
     psr[pd_bool_col] = (
-        replace_data.to_pandas()
+        replace_data.to_pandas(nullable=True)
         if hasattr(replace_data, "to_pandas")
         else replace_data
     )

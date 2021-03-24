@@ -40,8 +40,8 @@ class Frame(libcudf.table.Table):
 
     Parameters
     ----------
-    data : OrderedColumnDict
-        An OrderedColumnDict mapping column names to Columns
+    data : dict
+        An dict mapping column names to Columns
     index : Table
         A Frame representing the (optional) index columns.
     """
@@ -572,6 +572,28 @@ class Frame(libcudf.table.Table):
             return other._index is None
         else:
             return self._index.equals(other._index)
+
+    def _explode(self, explode_column: Any, ignore_index: bool):
+        """Helper function for `explode` in `Series` and `Dataframe`, explodes
+        a specified nested column. Other columns' corresponding rows are
+        duplicated. If ignore_index is set, the original index is not exploded
+        and will be replaced with a `RangeIndex`.
+        """
+        explode_column_num = self._column_names.index(explode_column)
+        if not ignore_index and self._index is not None:
+            explode_column_num += self._index.nlevels
+
+        res_tbl = libcudf.lists.explode_outer(
+            self, explode_column_num, ignore_index
+        )
+        res = self.__class__._from_table(res_tbl)
+
+        res._data.multiindex = self._data.multiindex
+        res._data._level_names = self._data._level_names
+
+        if not ignore_index and self._index is not None:
+            res.index.names = self._index.names
+        return res
 
     def _get_columns_by_label(self, labels, downcast):
         """
@@ -1566,10 +1588,7 @@ class Frame(libcudf.table.Table):
         rows corresponding to `False` is dropped
         """
         boolean_mask = as_column(boolean_mask)
-        if boolean_mask.has_nulls:
-            raise ValueError(
-                "cannot mask with boolean_mask containing null values"
-            )
+
         result = self.__class__._from_table(
             libcudf.stream_compaction.apply_boolean_mask(
                 self, as_column(boolean_mask)
@@ -2389,7 +2408,9 @@ class Frame(libcudf.table.Table):
         for name, col, other_col in zip(
             self._data.keys(), self._data.values(), other._data.values()
         ):
-            self._data[name] = other_col._copy_type_metadata(col)
+            self._data.set_by_label(
+                name, other_col._copy_type_metadata(col), validate=False
+            )
 
         if include_index:
             if self._index is not None and other._index is not None:

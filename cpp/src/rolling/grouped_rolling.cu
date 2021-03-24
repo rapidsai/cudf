@@ -110,8 +110,8 @@ std::unique_ptr<column> grouped_rolling_window(table_view const& group_keys,
   using sort_groupby_helper = cudf::groupby::detail::sort::sort_groupby_helper;
 
   sort_groupby_helper helper{group_keys, cudf::null_policy::INCLUDE, cudf::sorted::YES};
-  auto const& group_offsets{helper.group_offsets()};
-  auto const& group_labels{helper.group_labels()};
+  auto const& group_offsets{helper.group_offsets(stream)};
+  auto const& group_labels{helper.group_labels(stream)};
 
   // `group_offsets` are interpreted in adjacent pairs, each pair representing the offsets
   // of the first, and one past the last elements in a group.
@@ -127,8 +127,8 @@ std::unique_ptr<column> grouped_rolling_window(table_view const& group_keys,
   //   groups.)
   //   3. [0, 500, 1000] indicates two equal-sized groups: [0,500), and [500,1000).
 
-  assert(group_offsets.size() >= 2 && group_offsets[0] == 0 &&
-         group_offsets[group_offsets.size() - 1] == input.size() &&
+  assert(group_offsets.size() >= 2 && group_offsets.element(0, stream) == 0 &&
+         group_offsets.element(group_offsets.size() - 1, stream) == input.size() &&
          "Must have at least one group.");
 
   auto preceding_calculator = [d_group_offsets = group_offsets.data(),
@@ -384,7 +384,7 @@ get_null_bounds_for_timestamp_column(column_view const& timestamp_column,
 
   if (timestamp_column.has_nulls()) {
     auto p_timestamps_device_view = column_device_view::create(timestamp_column);
-    auto num_groups               = group_offsets.size();
+    auto num_groups               = group_offsets.size() - 1;
 
     // Null timestamps exist. Find null bounds, per group.
     thrust::for_each(

@@ -8,7 +8,9 @@ import pandas as pd
 from pandas.core.tools.datetimes import _unit_map
 
 import cudf
-from cudf._lib.strings.char_types import is_integer as cpp_is_integer
+from cudf._lib.strings.convert.convert_integers import (
+    is_integer as cpp_is_integer,
+)
 from cudf.core import column
 from cudf.core.index import as_index
 from cudf.utils.dtypes import is_scalar
