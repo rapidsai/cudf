@@ -3571,6 +3571,7 @@ class Series(Frame, Serializable):
         4    3
         3    4
         1    5
+        dtype: int64
         """
 
         if inplace:

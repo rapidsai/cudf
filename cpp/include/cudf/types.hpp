@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018-2020, NVIDIA CORPORATION.
+ * Copyright (c) 2018-2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -23,8 +23,6 @@
 #define CUDA_HOST_DEVICE_CALLABLE inline
 #define CUDA_DEVICE_CALLABLE inline
 #endif
-
-#include <thrust/optional.h>  // TODO no idea why this is needed ¯\_(ツ)_/¯
 
 #include <cassert>
 #include <cstddef>
