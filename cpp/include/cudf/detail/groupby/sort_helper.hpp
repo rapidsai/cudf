@@ -192,7 +192,7 @@ struct sort_groupby_helper {
    *
    * Returns the group label for every row in the original `keys` table. For a
    * given unique key row, its group label is equivalent to what is returned by
-   * `group_labels()`. However, if a row contains a null value, and
+   * `group_labels(stream)`. However, if a row contains a null value, and
    * `include_null_keys == NO`, then its label is NULL.
    *
    * Computes and stores unsorted labels on first invocation and returns stored

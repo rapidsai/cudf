@@ -839,7 +839,7 @@ std::unique_ptr<column> grouped_time_range_rolling_window(table_view const& grou
   if (group_keys.num_columns() > 0) {
     sort_groupby_helper helper{group_keys, cudf::null_policy::INCLUDE, cudf::sorted::YES};
     group_offsets = index_vector(helper.group_offsets(), stream);
-    group_labels  = index_vector(helper.group_labels(), stream);
+    group_labels  = index_vector(helper.group_labels(stream), stream);
   }
 
   // Assumes that `timestamp_column` is actually of a timestamp type.

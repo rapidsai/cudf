@@ -70,7 +70,7 @@ void aggregrate_result_functor::operator()<aggregation::COUNT_VALID>(aggregation
     agg,
     get_grouped_values().nullable()
       ? detail::group_count_valid(
-          get_grouped_values(), helper.group_labels(), helper.num_groups(), stream, mr)
+          get_grouped_values(), helper.group_labels(stream), helper.num_groups(), stream, mr)
       : detail::group_count_all(helper.group_offsets(), helper.num_groups(), stream, mr));
 }
 
@@ -88,10 +88,11 @@ void aggregrate_result_functor::operator()<aggregation::SUM>(aggregation const& 
 {
   if (cache.has_result(col_idx, agg)) return;
 
-  cache.add_result(col_idx,
-                   agg,
-                   detail::group_sum(
-                     get_grouped_values(), helper.num_groups(), helper.group_labels(), stream, mr));
+  cache.add_result(
+    col_idx,
+    agg,
+    detail::group_sum(
+      get_grouped_values(), helper.num_groups(), helper.group_labels(stream), stream, mr));
 };
 
 template <>
@@ -103,7 +104,7 @@ void aggregrate_result_functor::operator()<aggregation::ARGMAX>(aggregation cons
                    agg,
                    detail::group_argmax(get_grouped_values(),
                                         helper.num_groups(),
-                                        helper.group_labels(),
+                                        helper.group_labels(stream),
                                         helper.key_sort_order(),
                                         stream,
                                         mr));
@@ -118,7 +119,7 @@ void aggregrate_result_functor::operator()<aggregation::ARGMIN>(aggregation cons
                    agg,
                    detail::group_argmin(get_grouped_values(),
                                         helper.num_groups(),
-                                        helper.group_labels(),
+                                        helper.group_labels(stream),
                                         helper.key_sort_order(),
                                         stream,
                                         mr));
@@ -132,7 +133,7 @@ void aggregrate_result_functor::operator()<aggregation::MIN>(aggregation const& 
   auto result = [&]() {
     if (cudf::is_fixed_width(values.type())) {
       return detail::group_min(
-        get_grouped_values(), helper.num_groups(), helper.group_labels(), stream, mr);
+        get_grouped_values(), helper.num_groups(), helper.group_labels(stream), stream, mr);
     } else {
       auto argmin_agg = make_argmin_aggregation();
       operator()<aggregation::ARGMIN>(*argmin_agg);
@@ -169,7 +170,7 @@ void aggregrate_result_functor::operator()<aggregation::MAX>(aggregation const& 
   auto result = [&]() {
     if (cudf::is_fixed_width(values.type())) {
       return detail::group_max(
-        get_grouped_values(), helper.num_groups(), helper.group_labels(), stream, mr);
+        get_grouped_values(), helper.num_groups(), helper.group_labels(stream), stream, mr);
     } else {
       auto argmax_agg = make_argmax_aggregation();
       operator()<aggregation::ARGMAX>(*argmax_agg);
@@ -238,7 +239,7 @@ void aggregrate_result_functor::operator()<aggregation::VARIANCE>(aggregation co
   auto result = detail::group_var(get_grouped_values(),
                                   mean_result,
                                   group_sizes,
-                                  helper.group_labels(),
+                                  helper.group_labels(stream),
                                   var_agg._ddof,
                                   stream,
                                   mr);
@@ -308,7 +309,7 @@ void aggregrate_result_functor::operator()<aggregation::NUNIQUE>(aggregation con
   auto nunique_agg = static_cast<cudf::detail::nunique_aggregation const&>(agg);
 
   auto result = detail::group_nunique(get_sorted_values(),
-                                      helper.group_labels(),
+                                      helper.group_labels(stream),
                                       helper.num_groups(),
                                       helper.group_offsets(),
                                       nunique_agg._null_handling,
@@ -337,7 +338,7 @@ void aggregrate_result_functor::operator()<aggregation::NTH_ELEMENT>(aggregation
                    agg,
                    detail::group_nth_element(get_grouped_values(),
                                              group_sizes,
-                                             helper.group_labels(),
+                                             helper.group_labels(stream),
                                              helper.group_offsets(),
                                              helper.num_groups(),
                                              nth_element_agg._n,

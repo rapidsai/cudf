@@ -71,7 +71,8 @@ void scan_result_functor::operator()<aggregation::SUM>(aggregation const& agg)
   cache.add_result(
     col_idx,
     agg,
-    detail::sum_scan(get_grouped_values(), helper.num_groups(), helper.group_labels(), stream, mr));
+    detail::sum_scan(
+      get_grouped_values(), helper.num_groups(), helper.group_labels(stream), stream, mr));
 }
 
 template <>
@@ -82,7 +83,8 @@ void scan_result_functor::operator()<aggregation::MIN>(aggregation const& agg)
   cache.add_result(
     col_idx,
     agg,
-    detail::min_scan(get_grouped_values(), helper.num_groups(), helper.group_labels(), stream, mr));
+    detail::min_scan(
+      get_grouped_values(), helper.num_groups(), helper.group_labels(stream), stream, mr));
 }
 
 template <>
@@ -93,7 +95,8 @@ void scan_result_functor::operator()<aggregation::MAX>(aggregation const& agg)
   cache.add_result(
     col_idx,
     agg,
-    detail::max_scan(get_grouped_values(), helper.num_groups(), helper.group_labels(), stream, mr));
+    detail::max_scan(
+      get_grouped_values(), helper.num_groups(), helper.group_labels(stream), stream, mr));
 }
 
 template <>
@@ -101,7 +104,7 @@ void scan_result_functor::operator()<aggregation::COUNT_ALL>(aggregation const& 
 {
   if (cache.has_result(col_idx, agg)) return;
 
-  cache.add_result(col_idx, agg, detail::count_scan(helper.group_labels(), stream, mr));
+  cache.add_result(col_idx, agg, detail::count_scan(helper.group_labels(stream), stream, mr));
 }
 }  // namespace detail
 
