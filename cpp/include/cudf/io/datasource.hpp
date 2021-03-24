@@ -235,6 +235,34 @@ class arrow_io_source : public datasource {
 
  public:
   /**
+   * @brief Constructs an object from an Apache Arrow Filesystem URI
+   *
+   * @param Apache Arrow Filesystem URI
+   */
+  explicit arrow_io_source(std::string arrow_filesystem_uri,
+                           std::string file_path,
+                           std::map<std::string, std::string> const& configs)
+  {
+    arrow::Result<std::shared_ptr<arrow::fs::FileSystem>> result =
+      arrow::fs::FileSystemFromUri(arrow_filesystem_uri);
+    CUDF_EXPECTS(result.ok(), "Failed to generate Arrow Filesystem instance from URI");
+
+    std::shared_ptr<arrow::fs::FileSystem> filesystem = result.ValueOrDie();
+
+    // XXX Still need to parse and populate configuration value here!
+
+    // Retrieve the FileInfo for the target path
+    arrow::Result<arrow::fs::FileInfo> file_info_result = filesystem->GetFileInfo(file_path);
+    CUDF_EXPECTS(file_info_result.ok(), "Failed to retrieve FileInfo for provided path");
+
+    arrow::Result<std::shared_ptr<arrow::io::RandomAccessFile>> in_stream =
+      filesystem->OpenInputFile(file_info_result.ValueOrDie());
+    CUDF_EXPECTS(in_stream.ok(), "Failed to open InputStream");
+
+    arrow_file = in_stream.ValueOrDie();
+  }
+
+  /**
    * @brief Constructs an object from an `arrow` source object.
    *
    * @param file The `arrow` object from which the data is read
