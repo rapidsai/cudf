@@ -356,7 +356,6 @@ class row_lexicographic_comparator {
                                null_order const* null_precedence = nullptr)
     : _lhs{lhs}, _rhs{rhs}, _column_order{column_order}, _null_precedence{null_precedence}
   {
-    // Add check for types to be the same.
     CUDF_EXPECTS(_lhs.num_columns() == _rhs.num_columns(), "Mismatched number of columns.");
     CUDF_EXPECTS(detail::is_relationally_comparable(_lhs, _rhs),
                  "Attempted to compare elements of uncomparable types.");

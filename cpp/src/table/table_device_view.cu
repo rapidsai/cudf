@@ -64,8 +64,8 @@ struct is_relationally_comparable_impl {
 };
 }  // namespace
 
-template <typename TableDeviceView>
-bool is_relationally_comparable(TableDeviceView const& lhs, TableDeviceView const& rhs)
+template <typename TableView>
+bool is_relationally_comparable(TableView const& lhs, TableView const& rhs)
 {
   return thrust::all_of(thrust::counting_iterator<size_type>(0),
                         thrust::counting_iterator<size_type>(lhs.num_columns()),
@@ -77,6 +77,15 @@ bool is_relationally_comparable(TableDeviceView const& lhs, TableDeviceView cons
                                                  is_relationally_comparable_impl{});
                         });
 }
+
+// Explicit extern template instantiation for a table of immutable views
+extern template bool is_relationally_comparable<table_view>(table_view const& lhs,
+                                                            table_view const& rhs);
+
+// Explicit extern template instantiation for a table of mutable views
+extern template bool is_relationally_comparable<mutable_table_view>(mutable_table_view const& lhs,
+                                                                    mutable_table_view const& rhs);
+
 // Explicit extern template instantiation for a device table of immutable views
 template bool is_relationally_comparable<table_device_view>(table_device_view const& lhs,
                                                             table_device_view const& rhs);
