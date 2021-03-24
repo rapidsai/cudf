@@ -199,7 +199,7 @@ void remove_blank_rows(const cudf::io::parse_options_view &options,
  *
  * @return stats Histogram of each dtypes' occurrence for each column
  */
-thrust::host_vector<column_type_histogram> detect_column_types(
+std::vector<column_type_histogram> detect_column_types(
   cudf::io::parse_options_view const &options,
   device_span<char const> data,
   device_span<column_parse::flags const> column_flags,
@@ -224,8 +224,8 @@ void decode_row_column_data(cudf::io::parse_options_view const &options,
                             device_span<column_parse::flags const> column_flags,
                             device_span<uint64_t const> row_offsets,
                             device_span<cudf::data_type const> dtypes,
-                            device_span<void *> columns,
-                            device_span<cudf::bitmask_type *> valids,
+                            device_span<void *const> columns,
+                            device_span<cudf::bitmask_type *const> valids,
                             rmm::cuda_stream_view stream);
 
 }  // namespace gpu

@@ -140,7 +140,7 @@ class reader::impl {
    *
    * @return list of column buffers of decoded data, or ptr/size in the case of strings.
    */
-  std::vector<column_buffer> decode_data(std::vector<data_type> const &column_types,
+  std::vector<column_buffer> decode_data(host_span<data_type const> column_types,
                                          rmm::cuda_stream_view stream);
 
  private:
@@ -158,8 +158,7 @@ class reader::impl {
 
   // Parsing options
   parse_options opts{};
-  thrust::host_vector<column_parse::flags> h_column_flags_;
-  rmm::device_vector<column_parse::flags> d_column_flags_;
+  std::vector<column_parse::flags> column_flags_;
 
   // Intermediate data
   std::vector<std::string> col_names_;

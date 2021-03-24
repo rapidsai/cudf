@@ -536,8 +536,8 @@ __global__ void __launch_bounds__(csvparse_block_dim)
                       device_span<column_parse::flags const> column_flags,
                       device_span<uint64_t const> row_offsets,
                       device_span<cudf::data_type const> dtypes,
-                      device_span<void *> columns,
-                      device_span<cudf::bitmask_type *> valids)
+                      device_span<void *const> columns,
+                      device_span<cudf::bitmask_type *const> valids)
 {
   auto const raw_csv = data.data();
   // thread IDs range per block, so also need the block id.
@@ -1007,7 +1007,7 @@ void __host__ remove_blank_rows(cudf::io::parse_options_view const &options,
   row_offsets.resize(new_end - row_offsets.begin());
 }
 
-thrust::host_vector<column_type_histogram> detect_column_types(
+std::vector<column_type_histogram> detect_column_types(
   cudf::io::parse_options_view const &options,
   device_span<char const> const data,
   device_span<column_parse::flags const> const column_flags,
@@ -1019,21 +1019,30 @@ thrust::host_vector<column_type_histogram> detect_column_types(
   const int block_size = csvparse_block_dim;
   const int grid_size  = (row_starts.size() + block_size - 1) / block_size;
 
-  auto d_stats = rmm::device_vector<column_type_histogram>(num_active_columns);
+  auto d_stats = rmm::device_uvector<column_type_histogram>(num_active_columns, stream);
+  CUDA_TRY(cudaMemsetAsync(
+    d_stats.data(), 0, num_active_columns * sizeof(column_type_histogram), stream.value()));
 
   data_type_detection<<<grid_size, block_size, 0, stream.value()>>>(
     options, data, column_flags, row_starts, d_stats);
 
-  return thrust::host_vector<column_type_histogram>(d_stats);
+  std::vector<column_type_histogram> h_stats(num_active_columns);
+  CUDA_TRY(cudaMemcpyAsync(h_stats.data(),
+                           d_stats.data(),
+                           num_active_columns * sizeof(column_type_histogram),
+                           cudaMemcpyDefault,
+                           stream.value()));
+  stream.synchronize();
+  return h_stats;
 }
 
 void __host__ decode_row_column_data(cudf::io::parse_options_view const &options,
-                                     device_span<char const> const data,
-                                     device_span<column_parse::flags const> const column_flags,
-                                     device_span<uint64_t const> const row_offsets,
-                                     device_span<cudf::data_type const> const dtypes,
-                                     device_span<void *> const columns,
-                                     device_span<cudf::bitmask_type *> const valids,
+                                     device_span<char const> data,
+                                     device_span<column_parse::flags const> column_flags,
+                                     device_span<uint64_t const> row_offsets,
+                                     device_span<cudf::data_type const> dtypes,
+                                     device_span<void *const> columns,
+                                     device_span<cudf::bitmask_type *const> valids,
                                      rmm::cuda_stream_view stream)
 {
   // Calculate actual block count to use based on records count
