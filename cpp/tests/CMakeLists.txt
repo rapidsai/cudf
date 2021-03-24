@@ -340,7 +340,8 @@ ConfigureTest(STRINGS_TEST
     strings/strip_tests.cpp
     strings/substring_tests.cpp
     strings/translate_tests.cpp
-    strings/urls_tests.cpp)
+    strings/urls_tests.cpp
+    strings/json_tests.cpp)
 
 ###################################################################################################
 # - structs test ----------------------------------------------------------------------------------

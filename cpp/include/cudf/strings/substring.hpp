@@ -197,6 +197,10 @@ std::unique_ptr<column> slice_strings(
   size_type count,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
+std::unique_ptr<cudf::column> json_to_array(
+  cudf::strings_column_view const& col,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+
 /** @} */  // end of doxygen group
 }  // namespace strings
 }  // namespace cudf
