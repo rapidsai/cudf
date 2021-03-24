@@ -99,14 +99,16 @@ cdef class Table:
         cdef vector[unique_ptr[column]].iterator it = columns.begin()
 
         # First construct the index, if any
+        cdef int i
+
         index = None
         if index_names is not None:
             index_data = ColumnAccessor._create_unsafe(
                 {
-                    index_names[i]: Column.from_unique_ptr(
+                    name: Column.from_unique_ptr(
                         move(dereference(it + i))
                     )
-                    for i in range(len(index_names))
+                    for i, name in enumerate(index_names)
                 }
             )
             index = Table(data=index_data)
@@ -115,10 +117,10 @@ cdef class Table:
         cdef int n_index_columns = len(index_names) if index_names else 0
         data = ColumnAccessor._create_unsafe(
             {
-                column_names[i]: Column.from_unique_ptr(
+                name: Column.from_unique_ptr(
                     move(dereference(it + i + n_index_columns))
                 )
-                for i in range(len(column_names))
+                for i, name in enumerate(column_names)
             }
         )
 
