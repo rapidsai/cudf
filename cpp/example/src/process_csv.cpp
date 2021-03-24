@@ -1,4 +1,5 @@
 #include <iostream>
+#include <iterator>
 #include <memory>
 #include <string>
 #include <utility>
@@ -31,28 +32,15 @@ void write_csv(cudf::table_view const& tbl_view, std::string const& file_path)
   cudf::io::write_csv(options);
 }
 
-std::unique_ptr<cudf::table> get_columns_from_table(cudf::table_view table,
-                                                    std::vector<int> const& indices)
-{
-  std::vector<std::unique_ptr<cudf::column>> cols;
-  for (auto i : indices) {
-    cols.push_back(std::move(std::make_unique<cudf::column>(table.column(i))));
-  }
-  return std::make_unique<cudf::table>(std::move(cols));
-}
-
 std::unique_ptr<cudf::table> average_closing_price(cudf::table_view stock_info_table)
 {
   // Schema: | Company | Date | Open | High | Low | Close | Volume |
-  std::vector<int> key_cols{0};  // Company
-  std::vector<int> val_cols{5};  // Close
+  auto keys = cudf::table_view{{stock_info_table.column(0)}};  // Company
+  auto val  = stock_info_table.column(5);                      // Close
 
-  auto keys = get_columns_from_table(stock_info_table, key_cols);
-  auto vals = get_columns_from_table(stock_info_table, val_cols);
-
-  // Compute the average of each company's closing price across 5 day span
-  cudf::groupby::groupby grpby_obj(*keys);
-  cudf::groupby::aggregation_request agg_request{vals->get_column(0), {}};
+  // Compute the average of each company's closing price with entire column
+  cudf::groupby::groupby grpby_obj(keys);
+  cudf::groupby::aggregation_request agg_request{val, {}};
   agg_request.aggregations.push_back(cudf::make_mean_aggregation());
   std::vector<cudf::groupby::aggregation_request> requests;
   requests.push_back(std::move(agg_request));
