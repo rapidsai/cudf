@@ -25,7 +25,7 @@ import java.util.ArrayList;
  * Column information from Arrow data. 
  * This currently only supports primitive types and Strings, Decimals and nested types
  * such as list and struct are not supported.
- * The caller is responsible for eventually freeing the underlying Arrow Array.
+ * The caller is responsible for eventually freeing the underlying Arrow array.
  */
 public final class ArrowColumnInfo {
   private long arrowArrayHandle;
@@ -56,6 +56,10 @@ public final class ArrowColumnInfo {
     this(arrowArrayHandle, dataAddr, dataSize, rows, validityAddr, validitySize, nullCount);
     this.offsetsBufferAddr = offsetsAddr;
     this.offsetsBufferSize = offsetsSize;
+  }
+
+  public long getArrowArrayHandle() {
+    return arrowArrayHandle;
   }
 
   public long getDataBufferAddress() {

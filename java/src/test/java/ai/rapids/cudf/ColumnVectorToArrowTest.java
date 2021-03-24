@@ -87,11 +87,11 @@ public class ColumnVectorToArrowTest extends CudfTestBase {
         assertEquals(1, v1.getNullCount());
         assertEquals(1, vector.getNullCount());
         assertTrue(VectorEqualsVisitor.vectorEquals(v1, vector));
+        // ColumnVector.closeArrowArray(res.getArrowArrayHandle());
       }
     }
   }
 
-/*
   @Test
   void testArrowLong() {
     BufferAllocator allocator = new RootAllocator(Long.MAX_VALUE);
@@ -128,7 +128,6 @@ public class ColumnVectorToArrowTest extends CudfTestBase {
       }
     }
   }
-*/
 
 /*
   @Test
@@ -214,7 +213,6 @@ public class ColumnVectorToArrowTest extends CudfTestBase {
   }
 */
 
-/*
   @Test
   void testArrowString() {
     BufferAllocator allocator = new RootAllocator(Long.MAX_VALUE);
@@ -255,7 +253,6 @@ public class ColumnVectorToArrowTest extends CudfTestBase {
       }
     }
   }
-*/
 
 /*
   @Test

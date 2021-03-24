@@ -371,14 +371,18 @@ public final class ColumnVector extends ColumnView {
     // assert !vec.getType().isNestedType(): "Unsupported nested column type";
     // assert !vec.getType().isDecimalType() : "Unsupported decimal column type";
     if (vec.getType().equals(DType.STRING)) {
-        long[] res = toArrowFromPrimitiveVec(vec.getNativeView());
-        columnInfo = new ArrowColumnInfo(res[0], res[1], res[2], res[3], res[4], res[5], res[6]);
-    } else {
         long[] res = toArrowFromStringVec(vec.getNativeView());
         columnInfo = new ArrowColumnInfo(res[0], res[1], res[2], res[3], res[4], res[5], res[6],
             res[7], res[8]);
+    } else {
+        long[] res = toArrowFromPrimitiveVec(vec.getNativeView());
+        columnInfo = new ArrowColumnInfo(res[0], res[1], res[2], res[3], res[4], res[5], res[6]);
     }
     return columnInfo;
+  }
+
+  public static void closeArrowArray(long handle) {
+    closeArrowArrayNative(handle);
   }
 
   /**
@@ -691,6 +695,11 @@ public final class ColumnVector extends ColumnView {
       ByteBuffer offsets) throws CudfException;
 
   /**
+   * Close the arrow array handle. 
+   */
+  private static native void closeArrowArrayNative(long arrowArrayHandle);
+
+  /**
    * Convert the ColumnVector of primitive a type to Arrow.
    * @param handle the handle of the ColumnVector
    * @return long array with values: [Arrow array handle, data buffer address, data buffer size,
@@ -705,11 +714,6 @@ public final class ColumnVector extends ColumnView {
    *     number of rows, validity address, validity size, null count]
    */
   private static native long[] toArrowFromStringVec(long handle) throws CudfException;
-
-  /**
-   * Close the Arrow array handle returned by toArrow.
-   */
-  private static native void closeArrowArray(long arrowHandle);
 
   private static native long fromScalar(long scalarHandle, int rowCount) throws CudfException;
 
