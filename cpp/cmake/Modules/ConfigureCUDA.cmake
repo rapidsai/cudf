@@ -18,7 +18,7 @@
 find_package(CUDAToolkit REQUIRED)
 
 # Auto-detect available GPU compute architectures
-include(${CUDF_SOURCE_DIR}/cmake/Modules/SetGPUArchs.cmake)
+include(${CMAKE_CURRENT_LIST_DIR}/SetGPUArchs.cmake)
 message(STATUS "CUDF: Building CUDF for GPU architectures: ${CMAKE_CUDA_ARCHITECTURES}")
 
 # Must come after find_package(CUDAToolkit) because we symlink
@@ -45,6 +45,9 @@ if(DISABLE_DEPRECATION_WARNING)
     list(APPEND CUDF_CXX_FLAGS -Wno-deprecated-declarations)
     list(APPEND CUDF_CUDA_FLAGS -Xcompiler=-Wno-deprecated-declarations)
 endif()
+
+# make sure we produce smallest binary size
+list(APPEND CUDF_CUDA_FLAGS -Xfatbin=-compress-all)
 
 # Option to enable line info in CUDA device compilation to allow introspection when profiling / memchecking
 if(CUDA_ENABLE_LINEINFO)

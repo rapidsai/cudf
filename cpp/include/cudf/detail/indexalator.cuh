@@ -268,7 +268,7 @@ struct input_indexalator : base_indexalator<input_indexalator> {
     template <typename T, std::enable_if_t<not is_index_type<T>()>* = nullptr>
     __device__ size_type operator()(void const* tp)
     {
-      release_assert(false and "only index types are supported");
+      cudf_assert(false and "only index types are supported");
       return 0;
     }
   };
@@ -366,7 +366,7 @@ struct output_indexalator : base_indexalator<output_indexalator> {
     template <typename T, std::enable_if_t<not is_index_type<T>()>* = nullptr>
     __device__ void operator()(void* tp, size_type const value)
     {
-      release_assert(false and "only index types are supported");
+      cudf_assert(false and "only index types are supported");
     }
   };
 
