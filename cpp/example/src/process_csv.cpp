@@ -56,16 +56,9 @@ std::unique_ptr<cudf::table> average_closing_price(cudf::table_view stock_info_t
 
 int main(int argc, char** argv)
 {
-  // Init memory pool
-  size_t available_mem, total_mem, prealloc_mem;
-  cudaMemGetInfo(&available_mem, &total_mem);
-  prealloc_mem = available_mem * 0.5;
-  prealloc_mem = prealloc_mem - prealloc_mem % 256;
-
-  auto cuda_mr = std::make_unique<rmm::mr::cuda_memory_resource>();
-  auto pool_mr = std::make_unique<rmm::mr::pool_memory_resource<rmm::mr::cuda_memory_resource>>(
-    cuda_mr.get(), prealloc_mem);
-  rmm::mr::set_current_device_resource(pool_mr.get());
+  // Init cuda memory resource
+  rmm::mr::cuda_memory_resource cuda_mr;
+  rmm::mr::set_current_device_resource(&cuda_mr);
 
   // Read data
   auto stock_info_table = read_csv("4stock_5day.csv");
