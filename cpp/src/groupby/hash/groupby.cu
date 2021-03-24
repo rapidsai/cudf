@@ -110,7 +110,7 @@ class hash_compound_agg_finalizer final : public cudf::detail::aggregation_final
   data_type result_type;
   cudf::detail::result_cache* sparse_results;
   cudf::detail::result_cache* dense_results;
-  rmm::device_vector<size_type> const& gather_map;
+  device_span<size_type const> gather_map;
   size_type const map_size;
   Map const& map;
   bitmask_type const* __restrict__ row_bitmask;
@@ -122,7 +122,7 @@ class hash_compound_agg_finalizer final : public cudf::detail::aggregation_final
                               column_view col,
                               cudf::detail::result_cache* sparse_results,
                               cudf::detail::result_cache* dense_results,
-                              rmm::device_vector<size_type> const& gather_map,
+                              device_span<size_type const> gather_map,
                               size_type map_size,
                               Map const& map,
                               bitmask_type const* row_bitmask,
@@ -314,7 +314,7 @@ void sparse_to_dense_results(table_view const& keys,
                              host_span<aggregation_request const> requests,
                              cudf::detail::result_cache* sparse_results,
                              cudf::detail::result_cache* dense_results,
-                             rmm::device_vector<size_type> const& gather_map,
+                             device_span<size_type const> gather_map,
                              size_type map_size,
                              Map const& map,
                              bool keys_have_nulls,
@@ -469,10 +469,10 @@ void compute_single_pass_aggs(table_view const& keys,
  * `map`.
  */
 template <typename Map>
-std::pair<rmm::device_vector<size_type>, size_type> extract_populated_keys(
+std::pair<rmm::device_uvector<size_type>, size_type> extract_populated_keys(
   Map map, size_type num_keys, rmm::cuda_stream_view stream)
 {
-  rmm::device_vector<size_type> populated_keys(num_keys);
+  rmm::device_uvector<size_type> populated_keys(num_keys, stream);
 
   auto get_key = [] __device__(auto const& element) {
     size_type key, value;
@@ -539,7 +539,7 @@ std::unique_ptr<table> groupby_null_templated(table_view const& keys,
 
   // Extract the populated indices from the hash map and create a gather map.
   // Gathering using this map from sparse results will give dense results.
-  rmm::device_vector<size_type> gather_map;
+  rmm::device_uvector<size_type> gather_map(0, stream);
   size_type map_size;
   std::tie(gather_map, map_size) = extract_populated_keys(*map, keys.num_rows(), stream);
 
