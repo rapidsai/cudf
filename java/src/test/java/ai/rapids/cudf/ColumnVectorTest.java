@@ -538,6 +538,26 @@ public class ColumnVectorTest extends CudfTestBase {
   }
 
   @Test
+  void testSpark32BitMurmur3HashDecimal64() {
+    try (ColumnVector v = ColumnVector.decimalFromLongs(-7,
+        0L, 100L, -100L, 0x123456789abcdefL, -0x123456789abcdefL);
+         ColumnVector result = ColumnVector.spark32BitMurmurHash3(42, new ColumnVector[]{v});
+         ColumnVector expected = ColumnVector.fromBoxedInts(-1670924195, 1114849490, 904948192, 657182333, -57193045)) {
+      assertColumnsAreEqual(expected, result);
+    }
+  }
+
+  @Test
+  void testSpark32BitMurmur3HashDecimal32() {
+    try (ColumnVector v = ColumnVector.decimalFromInts(-3,
+        0, 100, -100, 0x12345678, -0x12345678);
+         ColumnVector result = ColumnVector.spark32BitMurmurHash3(42, new ColumnVector[]{v});
+         ColumnVector expected = ColumnVector.fromBoxedInts(-1670924195, 1114849490, 904948192, -958054811, -1447702630)) {
+      assertColumnsAreEqual(expected, result);
+    }
+  }
+
+  @Test
   void testSpark32BitMurmur3HashDates() {
     try (ColumnVector v = ColumnVector.timestampDaysFromBoxedInts(
         0, null, 100, -100, 0x12345678, null, -0x12345678);

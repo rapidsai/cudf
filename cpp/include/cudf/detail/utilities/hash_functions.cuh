@@ -18,6 +18,7 @@
 
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/detail/utilities/release_assert.cuh>
+#include <cudf/fixed_point/fixed_point.hpp>
 #include <cudf/strings/string_view.cuh>
 #include <hash/hash_constants.hpp>
 
@@ -654,6 +655,20 @@ hash_value_type CUDA_DEVICE_CALLABLE
 SparkMurmurHash3_32<uint16_t>::operator()(uint16_t const& key) const
 {
   return this->compute<uint32_t>(key);
+}
+
+template <>
+hash_value_type CUDA_DEVICE_CALLABLE
+SparkMurmurHash3_32<numeric::decimal32>::operator()(numeric::decimal32 const& key) const
+{
+  return this->compute<uint64_t>(key.value());
+}
+
+template <>
+hash_value_type CUDA_DEVICE_CALLABLE
+SparkMurmurHash3_32<numeric::decimal64>::operator()(numeric::decimal64 const& key) const
+{
+  return this->compute<uint64_t>(key.value());
 }
 
 /**
