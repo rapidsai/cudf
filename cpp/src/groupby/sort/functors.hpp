@@ -76,7 +76,7 @@ struct store_result_functor {
   column_view get_sorted_values()
   {
     return sorted_values ? sorted_values->view()
-                         : (sorted_values = helper.sorted_values(values))->view();
+                         : (sorted_values = helper.sorted_values(values, stream))->view();
   };
 
  protected:
