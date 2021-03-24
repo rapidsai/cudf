@@ -7,9 +7,12 @@ import pyarrow as pa
 
 import cudf
 from cudf._lib.copying import segmented_gather
-
-from cudf._lib.lists import contains_scalar, count_elements, extract_element, sort_lists
-
+from cudf._lib.lists import (
+    contains_scalar,
+    count_elements,
+    extract_element,
+    sort_lists,
+)
 from cudf.core.buffer import Buffer
 from cudf.core.column import ColumnBase, as_column, column
 from cudf.core.column.methods import ColumnMethodsMixin
