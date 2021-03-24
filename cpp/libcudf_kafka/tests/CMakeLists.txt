@@ -20,7 +20,7 @@
 function(ConfigureTest CMAKE_TEST_NAME )
     add_executable(${CMAKE_TEST_NAME} ${ARGN})
     set_target_properties(${CMAKE_TEST_NAME}
-        PROPERTIES RUNTIME_OUTPUT_DIRECTORY "$<BUILD_INTERFACE:${CUDF_BINARY_DIR}/gtests>")
+        PROPERTIES RUNTIME_OUTPUT_DIRECTORY "$<BUILD_INTERFACE:${CUDA_KAFKA_BINARY_DIR}/gtests>")
     if(TARGET cudf::gmock_main)
 		target_link_libraries(${CMAKE_TEST_NAME} PRIVATE cudf::gmock_main cudf::gtest_main cudf_kafka)
     else()
