@@ -20,11 +20,11 @@ cdef extern from "cudf/concatenate.hpp" namespace "cudf" nogil:
     # ) except +
 
     cdef device_buffer concatenate_masks "cudf::concatenate_masks"(
-        vector[column_view] views
+        const vector[column_view] views
     ) except +
     cdef unique_ptr[column] concatenate_columns "cudf::concatenate"(
-        vector[column_view] columns
+        const vector[column_view] columns
     ) except +
     cdef unique_ptr[table] concatenate_tables "cudf::concatenate"(
-        vector[table_view] tables
+        const vector[table_view] tables
     ) except +
