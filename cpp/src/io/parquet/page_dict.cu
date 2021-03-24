@@ -183,7 +183,7 @@ __global__ void __launch_bounds__(block_size, 1)
   } else if (dtype == INT96) {
     dtype_len_in = 8;
   } else {
-    dtype_len_in = (dtype == BYTE_ARRAY) ? sizeof(nvstrdesc_s) : dtype_len;
+    dtype_len_in = dtype_len;
   }
   __syncthreads();
   while (s->row_cnt < s->ck.num_rows) {

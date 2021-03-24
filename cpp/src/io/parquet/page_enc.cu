@@ -201,7 +201,7 @@ __global__ void __launch_bounds__(block_size)
     // dtype_len, which determines how much memory we need to allocate for the fragment.
     dtype_len_in = 8;
   } else {
-    dtype_len_in = (dtype == BYTE_ARRAY) ? sizeof(nvstrdesc_s) : dtype_len;
+    dtype_len_in = dtype_len;
   }
   __syncthreads();
 
@@ -1061,7 +1061,7 @@ __global__ void __launch_bounds__(128, 8) gpuEncodePages(EncPage *pages,
   } else if (dtype == INT96) {
     dtype_len_in = 8;
   } else {
-    dtype_len_in = (dtype == BYTE_ARRAY) ? sizeof(nvstrdesc_s) : dtype_len_out;
+    dtype_len_in = dtype_len_out;
   }
   dict_bits = (dtype == BOOLEAN) ? 1 : (s->page.dict_bits_plus1 - 1);
   if (t == 0) {
