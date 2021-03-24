@@ -34,7 +34,7 @@
 namespace cudf {
 namespace jni {
 
-std::shared_ptr<arrow::Array> toArrowArray(JNIEnv *env, jlong handle) {
+std::shared_ptr<arrow::Array> toArrowTable(JNIEnv *env, jlong handle) {
     cudf::column_view *column = reinterpret_cast<cudf::column_view *>(handle);
     auto table_view = cudf::table_view({*column});
 
@@ -55,8 +55,10 @@ std::shared_ptr<arrow::Array> toArrowArray(JNIEnv *env, jlong handle) {
       cudf::jni::throw_java_exception(env, "java/lang/IllegalArgumentException",
         "Should only have 1 chunk");
     }
+    std::shared_ptr<arrow::Array> array = chunked_array->chunk(0);
+
     result.release();
-  return chunked_array->chunk(0);
+    return array;
 }
 
 }
@@ -154,11 +156,12 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_fromArrow(JNIEnv *env, 
   CATCH_STD(env, 0);
 }
 
-JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_ColumnVector_toArrowFromPrimitive(JNIEnv *env, jclass, jlong handle) {
+JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_ColumnVector_toArrowFromPrimitiveVec(JNIEnv *env, jclass, jlong handle) {
   JNI_NULL_CHECK(env, handle, "null column view", 0);
   try {
     cudf::jni::auto_set_device(env);
-    std::shared_ptr<arrow::Array> array = cudf::jni::toArrowArray(env, handle);
+    std::shared_ptr<arrow::Array> array = cudf::jni::toArrowTable(env, handle);
+
     auto data_buffer = array->data()->buffers[1];
     const uint8_t* validity_address = nullptr;
     int64_t validity_size = 0;
@@ -166,24 +169,28 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_ColumnVector_toArrowFromPrimiti
       validity_address = reinterpret_cast<const uint8_t*>(array->null_bitmap()->address());
       validity_size = array->null_bitmap()->size();
     }
-    cudf::jni::native_jlongArray array_handles(env, 6);
-    array_handles[0] = static_cast<jlong>(data_buffer->address());
-    array_handles[1] = static_cast<jlong>(data_buffer->size());
-    array_handles[2] = static_cast<jlong>(array->length());
-    array_handles[3] = reinterpret_cast<jlong>(validity_address);
-    array_handles[4] = static_cast<jlong>(validity_size);
-    array_handles[5] = static_cast<jlong>(array->null_count());
-    // return format: [data buffer address, data buffer size, number of rows, validity address, validity size, null count]
+    cudf::jni::native_jlongArray array_handles(env, 7);
+    // keep the handle to the Arrow array so we can release it when done with it
+    array_handles[0] = 1;
+    array_handles[1] = static_cast<jlong>(data_buffer->address());
+    array_handles[2] = static_cast<jlong>(data_buffer->size());
+    array_handles[3] = static_cast<jlong>(array->length());
+    array_handles[4] = reinterpret_cast<jlong>(validity_address);
+    array_handles[5] = static_cast<jlong>(validity_size);
+    array_handles[6] = static_cast<jlong>(array->null_count());
+    // return format: [Arrow array handle, data buffer address, data buffer size, number of rows,
+    //                 validity address, validity size, null count]
     return array_handles.get_jArray();
   }
   CATCH_STD(env, nullptr);
 }
 
-JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_ColumnVector_toArrowFromString(JNIEnv *env, jclass, jlong handle) {
+JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_ColumnVector_toArrowFromStringVec(JNIEnv *env, jclass, jlong handle) {
   JNI_NULL_CHECK(env, handle, "null column view", 0);
   try {
     cudf::jni::auto_set_device(env);
-    std::shared_ptr<arrow::Array> array = cudf::jni::toArrowArray(env, handle);
+    std::shared_ptr<arrow::Array> array = cudf::jni::toArrowTable(env, handle);
+
     auto str_array = std::static_pointer_cast<arrow::StringArray>(array);
     auto data_buffer = str_array->value_data();
     const uint8_t* validity_address = nullptr;
@@ -194,16 +201,19 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_ColumnVector_toArrowFromString(
     }
     auto offsets_addr = str_array->value_offsets()->address();
     auto offsets_size = str_array->value_offsets()->size();
-    cudf::jni::native_jlongArray array_handles(env, 8);
-    array_handles[0] = static_cast<jlong>(data_buffer->address());
-    array_handles[1] = static_cast<jlong>(data_buffer->size());
-    array_handles[2] = static_cast<jlong>(array->length());
-    array_handles[3] = reinterpret_cast<jlong>(validity_address);
-    array_handles[4] = static_cast<jlong>(validity_size);
-    array_handles[5] = static_cast<jlong>(array->null_count());
-    array_handles[6] = static_cast<jlong>(offsets_addr);
-    array_handles[7] = static_cast<jlong>(offsets_size);
-    // return format: [data buffer address, data buffer size, number of rows, validity address, validity size, null count]
+    cudf::jni::native_jlongArray array_handles(env, 9);
+    // keep the handle to the Arrow array so we can release it when done with it
+    array_handles[0] = 1;
+    array_handles[1] = static_cast<jlong>(data_buffer->address());
+    array_handles[2] = static_cast<jlong>(data_buffer->size());
+    array_handles[3] = static_cast<jlong>(array->length());
+    array_handles[4] = reinterpret_cast<jlong>(validity_address);
+    array_handles[5] = static_cast<jlong>(validity_size);
+    array_handles[6] = static_cast<jlong>(array->null_count());
+    array_handles[7] = static_cast<jlong>(offsets_addr);
+    array_handles[8] = static_cast<jlong>(offsets_size);
+    // return format: [Arrow array handle, data buffer address, data buffer size, number of rows,
+    //                 validity address, validity size, null count]
     return array_handles.get_jArray();
   }
   CATCH_STD(env, nullptr);

@@ -25,8 +25,10 @@ import java.util.ArrayList;
  * Column information from Arrow data. 
  * This currently only supports primitive types and Strings, Decimals and nested types
  * such as list and struct are not supported.
+ * The caller is responsible for eventually freeing the underlying Arrow Array.
  */
 public final class ArrowColumnInfo {
+  private long arrowArrayHandle;
   private long dataBufferAddr;
   private long dataBufferSize;
   private long numRows;
@@ -36,8 +38,9 @@ public final class ArrowColumnInfo {
   private long offsetsBufferAddr;
   private long offsetsBufferSize;
 
-  public ArrowColumnInfo(long dataAddr, long dataSize, long rows, long validityAddr,
-      long validitySize, long nullCount) {
+  public ArrowColumnInfo(long arrowArrayHandle, long dataAddr, long dataSize, long rows,
+      long validityAddr, long validitySize, long nullCount) {
+    this.arrowArrayHandle = arrowArrayHandle;
     this.dataBufferAddr = dataAddr;
     this.dataBufferSize = dataSize;
     this.numRows = rows;
@@ -48,9 +51,9 @@ public final class ArrowColumnInfo {
     this.offsetsBufferSize = 0;
   }
 
-  public ArrowColumnInfo(long dataAddr, long dataSize, long rows, long validityAddr,
-      long validitySize, long nullCount, long offsetsAddr, long offsetsSize) {
-    this(dataAddr, dataSize, rows, validityAddr, validitySize, nullCount);
+  public ArrowColumnInfo(long arrowArrayHandle, long dataAddr, long dataSize, long rows,
+      long validityAddr, long validitySize, long nullCount, long offsetsAddr, long offsetsSize) {
+    this(arrowArrayHandle, dataAddr, dataSize, rows, validityAddr, validitySize, nullCount);
     this.offsetsBufferAddr = offsetsAddr;
     this.offsetsBufferSize = offsetsSize;
   }

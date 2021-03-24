@@ -72,7 +72,7 @@ public class ColumnVectorToArrowTest extends CudfTestBase {
       }
       vector.setValueCount(count);
       try (ColumnVector toConvert = ColumnVector.fromBoxedInts(expectedArr.toArray(new Integer[0]))) {
-        assertEquals(toConvert.getNullCount(), 1);
+        assertEquals(1, toConvert.getNullCount());
         ArrowColumnInfo res = ColumnVector.toArrow(toConvert);
         ArrowBuf validityBuf = null;
         if (res.getValidityBufferAddress() != 0) {
@@ -84,13 +84,14 @@ public class ColumnVectorToArrowTest extends CudfTestBase {
         ArrowFieldNode fieldNode = new ArrowFieldNode((int)res.getNumRows(), (int)res.getNullCount());
         IntVector v1 = new IntVector("col1", allocator);
         v1.loadFieldBuffers(fieldNode, Stream.of(validityBuf, dataBuf).collect(Collectors.toList()));
-        assertEquals(v1.getNullCount(), 1);
-        assertEquals(vector.getNullCount(), 1);
+        assertEquals(1, v1.getNullCount());
+        assertEquals(1, vector.getNullCount());
         assertTrue(VectorEqualsVisitor.vectorEquals(v1, vector));
       }
     }
   }
 
+/*
   @Test
   void testArrowLong() {
     BufferAllocator allocator = new RootAllocator(Long.MAX_VALUE);
@@ -127,6 +128,7 @@ public class ColumnVectorToArrowTest extends CudfTestBase {
       }
     }
   }
+*/
 
 /*
   @Test
@@ -212,6 +214,7 @@ public class ColumnVectorToArrowTest extends CudfTestBase {
   }
 */
 
+/*
   @Test
   void testArrowString() {
     BufferAllocator allocator = new RootAllocator(Long.MAX_VALUE);
@@ -252,6 +255,7 @@ public class ColumnVectorToArrowTest extends CudfTestBase {
       }
     }
   }
+*/
 
 /*
   @Test

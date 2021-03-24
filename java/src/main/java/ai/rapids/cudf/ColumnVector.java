@@ -357,40 +357,28 @@ public final class ColumnVector extends ColumnView {
 
   /**
    * Convert a ColumnVector to Arrow and return the metadata about the Arrow
-   * column.
+   * column. The caller is responsible for building up the actual ArrowBuffer
+   * and Vectors from the metadata supplied here.
+   * The caller is responsible for freeing the underlying Arrow Array retruned
+   * by the handle in ArrowColumnInfo.
+   * Currently supports primitive types and Strings, Decimals and nested
+   * types are not supported.
    * @param vec - ColumnVector to convert
    * @return - ArrowColumnInfo
    */
   public static ArrowColumnInfo toArrow(ColumnVector vec) {
-    ArrowColumnInfo res = null;
-    assert !vec.getType().isNestedType(): "Unsupported nested column type";
-    assert !vec.getType().isDecimalType() : "Unsupported decimal column type";
+    ArrowColumnInfo columnInfo = null;
+    // assert !vec.getType().isNestedType(): "Unsupported nested column type";
+    // assert !vec.getType().isDecimalType() : "Unsupported decimal column type";
     if (vec.getType().equals(DType.STRING)) {
-        res = toArrowFromStringVector(vec);
+        long[] res = toArrowFromPrimitiveVec(vec.getNativeView());
+        columnInfo = new ArrowColumnInfo(res[0], res[1], res[2], res[3], res[4], res[5], res[6]);
     } else {
-        res = toArrowFromPrimitiveVector(vec);
+        long[] res = toArrowFromStringVec(vec.getNativeView());
+        columnInfo = new ArrowColumnInfo(res[0], res[1], res[2], res[3], res[4], res[5], res[6],
+            res[7], res[8]);
     }
-    return res;
-  }
-
-  /**
-   * Convert a ColumnVector of primitive type to Arrow.
-   * @param vec - ColumnVector to convert
-   * @return - ArrowColumnInfo
-   */
-  private static ArrowColumnInfo toArrowFromPrimitiveVector(ColumnVector vec) {
-    long[] res = toArrowFromPrimitive(vec.getNativeView());
-    return new ArrowColumnInfo(res[0], res[1], res[2], res[3], res[4], res[5]);
-  }
-
-  /**
-   * Convert a String ColumnVector to Arrow.
-   * @param vec - ColumnVector to convert
-   * @return - ArrowColumnInfo
-   */
-  private static ArrowColumnInfo toArrowFromStringVector(ColumnVector vec) {
-    long[] res = toArrowFromString(vec.getNativeView());
-    return new ArrowColumnInfo(res[0], res[1], res[2], res[3], res[4], res[5], res[6], res[7]);
+    return columnInfo;
   }
 
   /**
@@ -702,8 +690,26 @@ public final class ColumnVector extends ColumnView {
       long null_count, ByteBuffer data, ByteBuffer validity,
       ByteBuffer offsets) throws CudfException;
 
-  private static native long[] toArrowFromPrimitive(long handle) throws CudfException;
-  private static native long[] toArrowFromString(long handle) throws CudfException;
+  /**
+   * Convert the ColumnVector of primitive a type to Arrow.
+   * @param handle the handle of the ColumnVector
+   * @return long array with values: [Arrow array handle, data buffer address, data buffer size,
+   *     number of rows, validity address, validity size, null count]
+   */
+  private static native long[] toArrowFromPrimitiveVec(long handle) throws CudfException;
+
+  /**
+   * Convert the ColumnVector of string type to Arrow.
+   * @param handle the handle of the ColumnVector
+   * @return long array with values: [Arrow array handle, data buffer address, data buffer size,
+   *     number of rows, validity address, validity size, null count]
+   */
+  private static native long[] toArrowFromStringVec(long handle) throws CudfException;
+
+  /**
+   * Close the Arrow array handle returned by toArrow.
+   */
+  private static native void closeArrowArray(long arrowHandle);
 
   private static native long fromScalar(long scalarHandle, int rowCount) throws CudfException;
 
