@@ -81,12 +81,14 @@ class ColumnAccessor(MutableMapping):
             self._level_names = level_names
 
     @classmethod
-    def _init_unsafe(
+    def _create_unsafe(
         cls,
         data: Dict[Any, ColumnBase],
         multiindex: bool = False,
         level_names=None,
     ) -> ColumnAccessor:
+        # create a ColumnAccessor without verifying column
+        # type or size
         obj = cls()
         obj._data = data
         obj.multiindex = multiindex
