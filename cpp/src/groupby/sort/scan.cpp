@@ -59,7 +59,7 @@ struct scan_result_functor final : store_result_functor {
     if (grouped_values)
       return grouped_values->view();
     else
-      return (grouped_values = helper.grouped_values(values))->view();
+      return (grouped_values = helper.grouped_values(values, stream))->view();
   };
 };
 
