@@ -267,7 +267,7 @@ sort_groupby_helper::column_ptr sort_groupby_helper::sorted_values(
   column_view const& values, rmm::cuda_stream_view stream, rmm::mr::device_memory_resource* mr)
 {
   column_ptr values_sort_order =
-    cudf::detail::stable_sorted_order(table_view({unsorted_keys_labels(), values}),
+    cudf::detail::stable_sorted_order(table_view({unsorted_keys_labels(stream), values}),
                                       {},
                                       std::vector<null_order>(2, null_order::AFTER),
                                       stream,
