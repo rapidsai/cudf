@@ -20,8 +20,7 @@ std::unique_ptr<cudf::table> read_csv(std::string const& file_path)
   auto builder        = cudf::io::csv_reader_options::builder(source_info);
   auto options        = builder.build();
   auto data_with_meta = cudf::io::read_csv(options);
-  auto data           = std::move(data_with_meta.tbl);
-  return data;
+  return data_with_meta.tbl;
 }
 
 void write_csv(cudf::table_view const& tbl_view, std::string const& file_path)
@@ -39,8 +38,7 @@ std::unique_ptr<cudf::table> get_columns_from_table(cudf::table_view table,
   for (auto i : indices) {
     cols.push_back(std::move(std::make_unique<cudf::column>(table.column(i))));
   }
-  auto res = std::make_unique<cudf::table>(std::move(cols));
-  return res;
+  return std::make_unique<cudf::table>(std::move(cols));
 }
 
 int main(int argc, char** argv)
@@ -59,17 +57,17 @@ int main(int argc, char** argv)
   // Read data
   auto table = read_csv("4stock_5day.csv");
 
-  // Scheme: | Company | Date | Open | High | Low | Close | Volume |
+  // Schema: | Company | Date | Open | High | Low | Close | Volume |
   std::vector<int> key_cols{0};  // Company
   std::vector<int> val_cols{2, 3, 4, 5, 6};
 
-  auto keys = get_columns_from_table(table->view(), key_cols);
-  auto vals = get_columns_from_table(table->view(), val_cols);
+  auto keys = get_columns_from_table(table, key_cols);
+  auto vals = get_columns_from_table(table, val_cols);
 
   // Compute the average of each company's closing price across 5 day span
-  cudf::groupby::groupby grpby_obj(keys->view());
+  cudf::groupby::groupby grpby_obj(keys);
   cudf::groupby::aggregation_request agg_req;
-  agg_req.values = vals->view().column(3);
+  agg_req.values = vals.column(3);
   agg_req.aggregations.push_back(cudf::make_mean_aggregation());
   std::vector<cudf::groupby::aggregation_request> reqs;
   reqs.push_back(std::move(agg_req));
@@ -80,8 +78,7 @@ int main(int argc, char** argv)
   auto res_key = std::move(agg_res.first);
   auto res_val = std::move(agg_res.second[0].results[0]);
 
-  auto res_key_view = res_key->view();
-  std::vector<cudf::column_view> cols(res_key_view.begin(), res_key_view.end());
+  std::vector<cudf::column_view> cols(res_key->view().begin(), res_key->view().end());
   cols.push_back(res_val->view());
   auto res = cudf::table_view(cols);
 
