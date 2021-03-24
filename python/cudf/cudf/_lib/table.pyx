@@ -101,21 +101,25 @@ cdef class Table:
         # First construct the index, if any
         index = None
         if index_names is not None:
-            index_columns = []
-            for _ in index_names:
-                index_columns.append(Column.from_unique_ptr(
-                    move(dereference(it))
-                ))
-                it += 1
-            index = Table(dict(zip(index_names, index_columns)))
+            index_data = ColumnAccessor._create_unsafe(
+                {
+                    index_names[i]: Column.from_unique_ptr(
+                        move(dereference(it + i))
+                    )
+                    for i in range(len(index_names))
+                }
+            )
+            index = Table(data=index_data)
 
         # Construct the data dict
-        data_columns = []
-        for _ in column_names:
-            data_columns.append(Column.from_unique_ptr(move(dereference(it))))
-            it += 1
+        cdef int n_index_columns = len(index_names) if index_names else 0
         data = ColumnAccessor._create_unsafe(
-            dict(zip(column_names, data_columns))
+            {
+                column_names[i]: Column.from_unique_ptr(
+                    move(dereference(it + i + n_index_columns))
+                )
+                for i in range(len(column_names))
+            }
         )
 
         return Table(data=data, index=index)
