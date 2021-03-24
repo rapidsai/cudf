@@ -2492,14 +2492,12 @@ public final class Table implements AutoCloseable {
             aggFollowingWindowsUnbounded[opIndex] = operation.getWindowOptions().isUnboundedFollowing();
             aggMinPeriods[opIndex] = operation.getWindowOptions().getMinPeriods();
             assert (operation.getWindowOptions().getFrameType() == WindowOptions.FrameType.RANGE);
-            int orderByColumnIndex = operation.getWindowOptions().getTimestampColumnIndex();
             timestampColumnIndexes[opIndex] = operation.getWindowOptions().getTimestampColumnIndex();
             isTimestampOrderAscending[opIndex] = operation.getWindowOptions().isTimestampOrderAscending();
             if (operation.getDefaultOutput() != 0) {
               throw new IllegalArgumentException("Operations with a default output are not " +
                   "supported on time based rolling windows");
             }
-
             opIndex++;
           }
         }
