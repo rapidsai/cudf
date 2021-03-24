@@ -36,6 +36,7 @@ if not os.path.isdir(CUDA_HOME):
     raise OSError(f"Invalid CUDA_HOME: directory does not exist: {CUDA_HOME}")
 
 cuda_include_dir = os.path.join(CUDA_HOME, "include")
+cuda_lib_dir = os.path.join(CUDA_HOME, "lib64")
 
 CUDF_ROOT = os.environ.get("CUDF_ROOT", "../../cpp/build/")
 
@@ -118,9 +119,13 @@ extensions = [
         ],
         library_dirs=(
             pa.get_library_dirs()
-            + [get_python_lib(), os.path.join(os.sys.prefix, "lib")]
+            + [
+                get_python_lib(),
+                os.path.join(os.sys.prefix, "lib"),
+                cuda_lib_dir,
+            ]
         ),
-        libraries=["cudf"] + pa.get_libraries() + ["arrow_cuda"],
+        libraries=["cudart", "cudf"] + pa.get_libraries() + ["arrow_cuda"],
         language="c++",
         extra_compile_args=["-std=c++14"],
     )
