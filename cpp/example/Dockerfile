@@ -10,8 +10,6 @@ RUN GCC_VERSION=9 \
  && apt install -y \
     gcc-${GCC_VERSION} g++-${GCC_VERSION} \
     git nano sudo wget ninja-build bash-completion \
-    # ccache dependencies
-    unzip automake autoconf libb2-dev libzstd-dev \
     # CMake dependencies
     curl libssl-dev libcurl4-openssl-dev zlib1g-dev \
     # cuDF dependencies
@@ -46,20 +44,6 @@ RUN cd /tmp \
  && cd /tmp && rm -rf /tmp/cmake-$CMAKE_VERSION*
 
 ARG CCACHE_VERSION=4.1
-
-# Install ccache
-RUN cd /tmp \
- && curl -fsSLO --compressed https://github.com/ccache/ccache/releases/download/v$CCACHE_VERSION/ccache-$CCACHE_VERSION.tar.gz -o /tmp/ccache-$CCACHE_VERSION.tar.gz \
- && tar -xvzf /tmp/ccache-$CCACHE_VERSION.tar.gz && cd /tmp/ccache-$CCACHE_VERSION \
- && mkdir -p /tmp/ccache-$CCACHE_VERSION/build \
- && cd /tmp/ccache-$CCACHE_VERSION/build \
- && cmake \
-    -DCMAKE_BUILD_TYPE=Release \
-    -DZSTD_FROM_INTERNET=ON \
-    -DENABLE_TESTING=OFF \
-    /tmp/ccache-$CCACHE_VERSION \
- && make install -j$PARALLEL_LEVEL \
- && cd /tmp && rm -rf /tmp/ccache-$CCACHE_VERSION*
 
 ENV CUDA_HOME="/usr/local/cuda"
 
