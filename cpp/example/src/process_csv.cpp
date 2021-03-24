@@ -3,9 +3,6 @@
 #include <cudf/io/csv.hpp>
 #include <cudf/table/table.hpp>
 
-#include <rmm/mr/device/cuda_memory_resource.hpp>
-#include <rmm/mr/device/per_device_resource.hpp>
-
 #include <memory>
 #include <string>
 #include <utility>
@@ -52,10 +49,6 @@ std::unique_ptr<cudf::table> average_closing_price(cudf::table_view stock_info_t
 
 int main(int argc, char** argv)
 {
-  // Init cuda memory resource
-  rmm::mr::cuda_memory_resource cuda_mr;
-  rmm::mr::set_current_device_resource(&cuda_mr);
-
   // Read data
   auto stock_info_table = read_csv("4stock_5day.csv");
 
