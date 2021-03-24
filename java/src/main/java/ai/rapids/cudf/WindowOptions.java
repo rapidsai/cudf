@@ -30,8 +30,8 @@ public class WindowOptions {
   private final int following;
   private final ColumnVector precedingCol;
   private final ColumnVector followingCol;
-  private final int timestampColumnIndex;
-  private final boolean timestampOrderAscending;
+  private final int orderByColumnIndex;
+  private final boolean orderByOrderAscending;
   private final FrameType frameType;
   private final boolean isUnboundedPreceding;
   private final boolean isUnboundedFollowing;
@@ -43,9 +43,9 @@ public class WindowOptions {
     this.following = builder.following;
     this.precedingCol = builder.precedingCol;
     this.followingCol = builder.followingCol;
-    this.timestampColumnIndex = builder.timestampColumnIndex;
-    this.timestampOrderAscending = builder.timestampOrderAscending;
-    this.frameType = timestampColumnIndex == -1? FrameType.ROWS : FrameType.RANGE; 
+    this.orderByColumnIndex = builder.orderByColumnIndex;
+    this.orderByOrderAscending = builder.orderByOrderAscending;
+    this.frameType = orderByColumnIndex == -1? FrameType.ROWS : FrameType.RANGE;
     this.isUnboundedPreceding = builder.isUnboundedPreceding;
     this.isUnboundedFollowing = builder.isUnboundedFollowing;
   }
@@ -59,8 +59,8 @@ public class WindowOptions {
       boolean ret = this.preceding == o.preceding &&
               this.following == o.following &&
               this.minPeriods == o.minPeriods &&
-              this.timestampColumnIndex == o.timestampColumnIndex &&
-              this.timestampOrderAscending == o.timestampOrderAscending &&
+              this.orderByColumnIndex == o.orderByColumnIndex &&
+              this.orderByOrderAscending == o.orderByOrderAscending &&
               this.frameType == o.frameType &&
               this.isUnboundedPreceding == o.isUnboundedPreceding &&
               this.isUnboundedFollowing == o.isUnboundedFollowing;
@@ -81,8 +81,8 @@ public class WindowOptions {
     ret = 31 * ret + preceding;
     ret = 31 * ret + following;
     ret = 31 * ret + minPeriods;
-    ret = 31 * ret + timestampColumnIndex;
-    ret = 31 * ret + Boolean.hashCode(timestampOrderAscending);
+    ret = 31 * ret + orderByColumnIndex;
+    ret = 31 * ret + Boolean.hashCode(orderByOrderAscending);
     ret = 31 * ret + frameType.hashCode();
     if (precedingCol != null) {
       ret = 31 * ret + precedingCol.hashCode();
@@ -109,9 +109,15 @@ public class WindowOptions {
 
   ColumnVector getFollowingCol() { return this.followingCol; }
 
-  int getTimestampColumnIndex() { return this.timestampColumnIndex; }
+  @Deprecated
+  int getTimestampColumnIndex() { return getOrderByColumnIndex(); }
 
-  boolean isTimestampOrderAscending() { return this.timestampOrderAscending; }
+  int getOrderByColumnIndex() { return this.orderByColumnIndex; }
+
+  @Deprecated
+  boolean isTimestampOrderAscending() { return isOrderByOrderAscending(); }
+
+  boolean isOrderByOrderAscending() { return this.orderByOrderAscending; }
 
   boolean isUnboundedPreceding() { return this.isUnboundedPreceding; }
 
@@ -126,8 +132,8 @@ public class WindowOptions {
     boolean staticSet = false;
     private ColumnVector precedingCol = null;
     private ColumnVector followingCol = null;
-    private int timestampColumnIndex = -1;
-    private boolean timestampOrderAscending = true;
+    private int orderByColumnIndex = -1;
+    private boolean orderByOrderAscending = true;
     private boolean isUnboundedPreceding = false;
     private boolean isUnboundedFollowing = false;
 
@@ -158,19 +164,46 @@ public class WindowOptions {
       return this;
     }
 
+    /**
+     * @deprecated use orderByColumnIndex(int index)
+     * @return
+     */
+    @Deprecated
     public Builder timestampColumnIndex(int index) {
-      this.timestampColumnIndex = index;
+      return orderByColumnIndex(index);
+    }
+
+    public Builder orderByColumnIndex(int index) {
+      this.orderByColumnIndex = index;
       return this;
     }
 
+    /**
+     * @deprecated use orderByAscending()
+     * @return
+     */
+    @Deprecated
     public Builder timestampAscending() {
-      this.timestampOrderAscending = true;
+      return orderByAscending();
+    }
+
+    public Builder orderByAscending() {
+      this.orderByOrderAscending = true;
       return this;
     }
 
-    public Builder timestampDescending() {
-      this.timestampOrderAscending = false;
+    public Builder orderByDescending() {
+      this.orderByOrderAscending = false;
       return this;
+    }
+
+    /**
+     * @deprecated use orderByDescending()
+     * @return
+     */
+    @Deprecated
+    public Builder timestampDescending() {
+      return orderByDescending();
     }
 
     public Builder unboundedPreceding() {

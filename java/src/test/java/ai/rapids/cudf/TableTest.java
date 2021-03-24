@@ -2950,10 +2950,10 @@ public class TableTest extends CudfTestBase {
           WindowOptions window = WindowOptions.builder()
               .minPeriods(1)
               .window(1, 1)
-              .timestampColumnIndex(orderIndex)
+              .orderByColumnIndex(orderIndex)
               .build();
           try (Table windowAggResults = sorted.groupBy(0, 1)
-              .aggregateWindowsOverTimeRanges(WindowAggregate.count(2, window));
+              .aggregateWindowsOverRanges(WindowAggregate.count(2, window));
                ColumnVector expect = ColumnVector.fromBoxedInts(3, 3, 4, 2, 4, 4, 4, 4, 4, 4, 5, 5, 3)) {
             assertColumnsAreEqual(expect, windowAggResults.getColumn(0));
           }
@@ -2985,11 +2985,11 @@ public class TableTest extends CudfTestBase {
           WindowOptions window = WindowOptions.builder()
               .minPeriods(1)
               .window(1, 1)
-              .timestampColumnIndex(orderIndex)
+              .orderByColumnIndex(orderIndex)
               .build();
 
           try (Table windowAggResults = sorted.groupBy(0, 1)
-              .aggregateWindowsOverTimeRanges(Aggregation.lead(1)
+              .aggregateWindowsOverRanges(Aggregation.lead(1)
                   .onColumn(2)
                   .overWindow(window));
                ColumnVector expect = ColumnVector.fromBoxedInts(5, 1, 9, null, 9, 8, 2, null, 0, 6, 6, 8, null)) {
@@ -3023,11 +3023,11 @@ public class TableTest extends CudfTestBase {
           WindowOptions window = WindowOptions.builder()
               .minPeriods(1)
               .window(1, 1)
-              .timestampColumnIndex(orderIndex)
+              .orderByColumnIndex(orderIndex)
               .build();
 
           try (Table windowAggResults = sorted.groupBy(0, 1)
-              .aggregateWindowsOverTimeRanges(WindowAggregate.max(2, window));
+              .aggregateWindowsOverRanges(WindowAggregate.max(2, window));
                ColumnVector expect = ColumnVector.fromBoxedInts(7, 7, 9, 9, 9, 9, 9, 9, 8, 8, 8, 8, 8)) {
             assertColumnsAreEqual(expect, windowAggResults.getColumn(0));
           }
@@ -3070,11 +3070,11 @@ public class TableTest extends CudfTestBase {
           WindowOptions window = WindowOptions.builder()
               .minPeriods(1)
               .window(2, 0)
-              .timestampColumnIndex(orderIndex)
+              .orderByColumnIndex(orderIndex)
               .build();
 
           try (Table windowAggResults = sorted.groupBy(0, 1)
-              .aggregateWindowsOverTimeRanges(WindowAggregate.row_number(2, window));
+              .aggregateWindowsOverRanges(WindowAggregate.row_number(2, window));
                ColumnVector expect = ColumnVector.fromBoxedInts(1, 2, 3, 4, 1, 2, 3, 4, 1, 2, 3, 4, 5)) {
             assertColumnsAreEqual(expect, windowAggResults.getColumn(0));
           }
@@ -3105,19 +3105,19 @@ public class TableTest extends CudfTestBase {
           WindowOptions window_0 = WindowOptions.builder()
               .minPeriods(1)
               .window(2, 1)
-              .timestampColumnIndex(orderIndex)
-              .timestampDescending()
+              .orderByColumnIndex(orderIndex)
+              .orderByDescending()
               .build();
 
           WindowOptions window_1 = WindowOptions.builder()
               .minPeriods(1)
               .window(3, 0)
-              .timestampColumnIndex(orderIndex)
-              .timestampDescending()
+              .orderByColumnIndex(orderIndex)
+              .orderByDescending()
               .build();
 
           try (Table windowAggResults = sorted.groupBy(0, 1)
-              .aggregateWindowsOverTimeRanges(
+              .aggregateWindowsOverRanges(
                   WindowAggregate.count(2, window_0),
                   WindowAggregate.sum(2, window_1));
                ColumnVector expect_0 = ColumnVector.fromBoxedInts(3, 4, 4, 4, 3, 4, 4, 4, 3, 3, 5, 5, 5);
@@ -3151,11 +3151,11 @@ public class TableTest extends CudfTestBase {
           WindowOptions window = WindowOptions.builder()
               .minPeriods(1)
               .window(1, 1)
-              .timestampColumnIndex(orderIndex)
+              .orderByColumnIndex(orderIndex)
               .build();
 
           try (Table windowAggResults = sorted.groupBy()
-              .aggregateWindowsOverTimeRanges(WindowAggregate.count(0, window));
+              .aggregateWindowsOverRanges(WindowAggregate.count(0, window));
                ColumnVector expect = ColumnVector.fromBoxedInts(3, 3, 6, 6, 6, 6, 7, 7, 6, 6, 5, 5, 3)) {
             assertColumnsAreEqual(expect, windowAggResults.getColumn(0));
           }
@@ -3173,9 +3173,9 @@ public class TableTest extends CudfTestBase {
                                                 .build()) {
 
         WindowOptions rowBasedWindow = WindowOptions.builder().minPeriods(1).window(1,1).build();
-        assertThrows(IllegalArgumentException.class, () -> table.groupBy(0, 1).aggregateWindowsOverTimeRanges(WindowAggregate.max(3, rowBasedWindow)));
+        assertThrows(IllegalArgumentException.class, () -> table.groupBy(0, 1).aggregateWindowsOverRanges(WindowAggregate.max(3, rowBasedWindow)));
 
-        WindowOptions rangeBasedWindow = WindowOptions.builder().minPeriods(1).window(1,1).timestampColumnIndex(2).build();
+        WindowOptions rangeBasedWindow = WindowOptions.builder().minPeriods(1).window(1,1).orderByColumnIndex(2).build();
         assertThrows(IllegalArgumentException.class, () -> table.groupBy(0, 1).aggregateWindows(WindowAggregate.max(3, rangeBasedWindow)));
 
       }
@@ -3204,11 +3204,11 @@ public class TableTest extends CudfTestBase {
               .minPeriods(1)
               .unboundedPreceding()
               .following(1)
-              .timestampColumnIndex(orderIndex)
+              .orderByColumnIndex(orderIndex)
               .build();
 
           try (Table windowAggResults = sorted.groupBy(0, 1)
-              .aggregateWindowsOverTimeRanges(WindowAggregate.count(2, window));
+              .aggregateWindowsOverRanges(WindowAggregate.count(2, window));
                ColumnVector expect = ColumnVector.fromBoxedInts(3, 3, 4, 4, 4, 4, 4, 4, 4, 4, 5, 5, 5)) {
             assertColumnsAreEqual(expect, windowAggResults.getColumn(0));
           }
@@ -3241,39 +3241,39 @@ public class TableTest extends CudfTestBase {
               .minPeriods(1)
               .unboundedPreceding()
               .following(1)
-              .timestampColumnIndex(orderIndex)
+              .orderByColumnIndex(orderIndex)
               .build();
 
           WindowOptions onePrecedingUnboundedFollowing = WindowOptions.builder()
               .minPeriods(1)
               .preceding(1)
               .unboundedFollowing()
-              .timestampColumnIndex(orderIndex)
+              .orderByColumnIndex(orderIndex)
               .build();
 
           WindowOptions unboundedPrecedingAndFollowing = WindowOptions.builder()
               .minPeriods(1)
               .unboundedPreceding()
               .unboundedFollowing()
-              .timestampColumnIndex(orderIndex)
+              .orderByColumnIndex(orderIndex)
               .build();
 
           WindowOptions unboundedPrecedingAndCurrentRow = WindowOptions.builder()
               .minPeriods(1)
               .unboundedPreceding()
               .following(0)
-              .timestampColumnIndex(orderIndex)
+              .orderByColumnIndex(orderIndex)
               .build();
 
           WindowOptions currentRowAndUnboundedFollowing = WindowOptions.builder()
               .minPeriods(1)
               .preceding(0)
               .unboundedFollowing()
-              .timestampColumnIndex(orderIndex)
+              .orderByColumnIndex(orderIndex)
               .build();
 
           try (Table windowAggResults = sorted.groupBy(0, 1)
-              .aggregateWindowsOverTimeRanges(
+              .aggregateWindowsOverRanges(
                   Aggregation.count().onColumn(2).overWindow(unboundedPrecedingOneFollowing),
                   Aggregation.count().onColumn(2).overWindow(onePrecedingUnboundedFollowing),
                   Aggregation.count().onColumn(2).overWindow(unboundedPrecedingAndFollowing),
@@ -3320,44 +3320,44 @@ public class TableTest extends CudfTestBase {
               .minPeriods(1)
               .unboundedPreceding()
               .following(1)
-              .timestampColumnIndex(orderIndex)
-              .timestampDescending()
+              .orderByColumnIndex(orderIndex)
+              .orderByDescending()
               .build();
 
           WindowOptions onePrecedingUnboundedFollowing = WindowOptions.builder()
               .minPeriods(1)
               .preceding(1)
               .unboundedFollowing()
-              .timestampColumnIndex(orderIndex)
-              .timestampDescending()
+              .orderByColumnIndex(orderIndex)
+              .orderByDescending()
               .build();
 
           WindowOptions unboundedPrecedingAndFollowing = WindowOptions.builder()
               .minPeriods(1)
               .unboundedPreceding()
               .unboundedFollowing()
-              .timestampColumnIndex(orderIndex)
-              .timestampDescending()
+              .orderByColumnIndex(orderIndex)
+              .orderByDescending()
               .build();
 
           WindowOptions unboundedPrecedingAndCurrentRow = WindowOptions.builder()
               .minPeriods(1)
               .unboundedPreceding()
               .following(0)
-              .timestampColumnIndex(orderIndex)
-              .timestampDescending()
+              .orderByColumnIndex(orderIndex)
+              .orderByDescending()
               .build();
 
           WindowOptions currentRowAndUnboundedFollowing = WindowOptions.builder()
               .minPeriods(1)
               .preceding(0)
               .unboundedFollowing()
-              .timestampColumnIndex(orderIndex)
-              .timestampDescending()
+              .orderByColumnIndex(orderIndex)
+              .orderByDescending()
               .build();
 
           try (Table windowAggResults = sorted.groupBy(0, 1)
-              .aggregateWindowsOverTimeRanges(
+              .aggregateWindowsOverRanges(
                   Aggregation.count().onColumn(2).overWindow(unboundedPrecedingOneFollowing),
                   Aggregation.count().onColumn(2).overWindow(onePrecedingUnboundedFollowing),
                   Aggregation.count().onColumn(2).overWindow(unboundedPrecedingAndFollowing),
@@ -3402,39 +3402,39 @@ public class TableTest extends CudfTestBase {
               .minPeriods(1)
               .unboundedPreceding()
               .following(1)
-              .timestampColumnIndex(orderIndex)
+              .orderByColumnIndex(orderIndex)
               .build();
 
           WindowOptions onePrecedingUnboundedFollowing = WindowOptions.builder()
               .minPeriods(1)
               .preceding(1)
               .unboundedFollowing()
-              .timestampColumnIndex(orderIndex)
+              .orderByColumnIndex(orderIndex)
               .build();
 
           WindowOptions unboundedPrecedingAndFollowing = WindowOptions.builder()
               .minPeriods(1)
               .unboundedPreceding()
               .unboundedFollowing()
-              .timestampColumnIndex(orderIndex)
+              .orderByColumnIndex(orderIndex)
               .build();
 
           WindowOptions unboundedPrecedingAndCurrentRow = WindowOptions.builder()
               .minPeriods(1)
               .unboundedPreceding()
               .following(0)
-              .timestampColumnIndex(orderIndex)
+              .orderByColumnIndex(orderIndex)
               .build();
 
           WindowOptions currentRowAndUnboundedFollowing = WindowOptions.builder()
               .minPeriods(1)
               .preceding(0)
               .unboundedFollowing()
-              .timestampColumnIndex(orderIndex)
+              .orderByColumnIndex(orderIndex)
               .build();
 
           try (Table windowAggResults = sorted.groupBy(0, 1)
-              .aggregateWindowsOverTimeRanges(
+              .aggregateWindowsOverRanges(
                   Aggregation.count().onColumn(2).overWindow(unboundedPrecedingOneFollowing),
                   Aggregation.count().onColumn(2).overWindow(onePrecedingUnboundedFollowing),
                   Aggregation.count().onColumn(2).overWindow(unboundedPrecedingAndFollowing),
@@ -3481,44 +3481,44 @@ public class TableTest extends CudfTestBase {
               .minPeriods(1)
               .unboundedPreceding()
               .following(1)
-              .timestampColumnIndex(orderIndex)
-              .timestampDescending()
+              .orderByColumnIndex(orderIndex)
+              .orderByDescending()
               .build();
 
           WindowOptions onePrecedingUnboundedFollowing = WindowOptions.builder()
               .minPeriods(1)
               .preceding(1)
               .unboundedFollowing()
-              .timestampColumnIndex(orderIndex)
-              .timestampDescending()
+              .orderByColumnIndex(orderIndex)
+              .orderByDescending()
               .build();
 
           WindowOptions unboundedPrecedingAndFollowing = WindowOptions.builder()
               .minPeriods(1)
               .unboundedPreceding()
               .unboundedFollowing()
-              .timestampColumnIndex(orderIndex)
-              .timestampDescending()
+              .orderByColumnIndex(orderIndex)
+              .orderByDescending()
               .build();
 
           WindowOptions unboundedPrecedingAndCurrentRow = WindowOptions.builder()
               .minPeriods(1)
               .unboundedPreceding()
               .following(0)
-              .timestampColumnIndex(orderIndex)
-              .timestampDescending()
+              .orderByColumnIndex(orderIndex)
+              .orderByDescending()
               .build();
 
           WindowOptions currentRowAndUnboundedFollowing = WindowOptions.builder()
               .minPeriods(1)
               .preceding(0)
               .unboundedFollowing()
-              .timestampColumnIndex(orderIndex)
-              .timestampDescending()
+              .orderByColumnIndex(orderIndex)
+              .orderByDescending()
               .build();
 
           try (Table windowAggResults = sorted.groupBy(0, 1)
-              .aggregateWindowsOverTimeRanges(
+              .aggregateWindowsOverRanges(
                   Aggregation.count().onColumn(2).overWindow(unboundedPrecedingOneFollowing),
                   Aggregation.count().onColumn(2).overWindow(onePrecedingUnboundedFollowing),
                   Aggregation.count().onColumn(2).overWindow(unboundedPrecedingAndFollowing),

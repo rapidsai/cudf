@@ -2463,9 +2463,26 @@ public final class Table implements AutoCloseable {
       for (int outputIndex = 0; outputIndex < windowAggregates.length; outputIndex++) {
         AggregationOverWindow agg = windowAggregates[outputIndex];
         if (agg.getWindowOptions().getFrameType() != WindowOptions.FrameType.RANGE) {
-          throw new IllegalArgumentException("Expected time-range-based window specification. Unexpected window type: "
+          throw new IllegalArgumentException("Expected range-based window specification. Unexpected window type: "
               + agg.getWindowOptions().getFrameType());
         }
+
+        DType orderByType = operation.table.getColumn(agg.getWindowOptions().getOrderByColumnIndex()).getType();
+        switch (orderByType.getTypeId()) {
+          case INT8:
+          case INT16:
+          case INT32:
+          case INT64:
+          case UINT8:
+          case UINT16:
+          case UINT32:
+          case UINT64:
+          case TIMESTAMP_DAYS:
+            break;
+          default:
+            throw new IllegalArgumentException("Expected range-based window order by type: integral (Boolean exclusive) and timestamp");
+        }
+
         ColumnWindowOps ops = groupedOps.computeIfAbsent(agg.getColumnIndex(), (idx) -> new ColumnWindowOps());
         totalOps += ops.add(agg, outputIndex);
       }
@@ -2483,21 +2500,22 @@ public final class Table implements AutoCloseable {
         int opIndex = 0;
         for (Map.Entry<Integer, ColumnWindowOps> entry: groupedOps.entrySet()) {
           int columnIndex = entry.getKey();
-          for (AggregationOverWindow operation: entry.getValue().operations()) {
+          for (AggregationOverWindow op: entry.getValue().operations()) {
             aggColumnIndexes[opIndex] = columnIndex;
-            aggInstances[opIndex] = operation.createNativeInstance();
-            aggPrecedingWindows[opIndex] = operation.getWindowOptions().getPreceding();
-            aggFollowingWindows[opIndex] = operation.getWindowOptions().getFollowing();
-            aggPrecedingWindowsUnbounded[opIndex] = operation.getWindowOptions().isUnboundedPreceding();
-            aggFollowingWindowsUnbounded[opIndex] = operation.getWindowOptions().isUnboundedFollowing();
-            aggMinPeriods[opIndex] = operation.getWindowOptions().getMinPeriods();
-            assert (operation.getWindowOptions().getFrameType() == WindowOptions.FrameType.RANGE);
-            orderByColumnIndexes[opIndex] = operation.getWindowOptions().getTimestampColumnIndex();
-            isOrderByOrderAscending[opIndex] = operation.getWindowOptions().isTimestampOrderAscending();
-            if (operation.getDefaultOutput() != 0) {
+            aggInstances[opIndex] = op.createNativeInstance();
+            aggPrecedingWindows[opIndex] = op.getWindowOptions().getPreceding();
+            aggFollowingWindows[opIndex] = op.getWindowOptions().getFollowing();
+            aggPrecedingWindowsUnbounded[opIndex] = op.getWindowOptions().isUnboundedPreceding();
+            aggFollowingWindowsUnbounded[opIndex] = op.getWindowOptions().isUnboundedFollowing();
+            aggMinPeriods[opIndex] = op.getWindowOptions().getMinPeriods();
+            assert (op.getWindowOptions().getFrameType() == WindowOptions.FrameType.RANGE);
+            orderByColumnIndexes[opIndex] = op.getWindowOptions().getOrderByColumnIndex();
+            isOrderByOrderAscending[opIndex] = op.getWindowOptions().isOrderByOrderAscending();
+            if (op.getDefaultOutput() != 0) {
               throw new IllegalArgumentException("Operations with a default output are not " +
                   "supported on time based rolling windows");
             }
+
             opIndex++;
           }
         }

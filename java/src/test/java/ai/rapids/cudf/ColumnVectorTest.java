@@ -2021,7 +2021,7 @@ public class ColumnVectorTest extends CudfTestBase {
                                                       WindowOptions.builder()
                                                               .window(2, 1)
                                                               .minPeriods(1)
-                                                              .timestampColumnIndex(0)
+                                                              .orderByColumnIndex(0)
                                                               .build()));
     }
   }
