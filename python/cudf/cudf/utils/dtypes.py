@@ -154,7 +154,11 @@ def is_numerical_dtype(obj):
 
 
 def is_string_dtype(obj):
-    return pd.api.types.is_string_dtype(obj) and not is_categorical_dtype(obj)
+    return (
+        not is_decimal_dtype(obj)
+        and pd.api.types.is_string_dtype(obj)
+        and not is_categorical_dtype(obj)
+    )
 
 
 def is_datetime_dtype(obj):
