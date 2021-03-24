@@ -272,7 +272,7 @@ class hash_compound_agg_finalizer final : public cudf::detail::aggregation_final
 
 // flatten aggs to filter in single pass aggs
 std::tuple<table_view, std::vector<aggregation::Kind>, std::vector<size_t>>
-flatten_single_pass_aggs(std::vector<aggregation_request> const& requests)
+flatten_single_pass_aggs(host_span<aggregation_request const> requests)
 {
   std::vector<column_view> columns;
   std::vector<aggregation::Kind> agg_kinds;
@@ -311,7 +311,7 @@ flatten_single_pass_aggs(std::vector<aggregation_request> const& requests)
  */
 template <typename Map>
 void sparse_to_dense_results(table_view const& keys,
-                             std::vector<aggregation_request> const& requests,
+                             host_span<aggregation_request const> requests,
                              cudf::detail::result_cache* sparse_results,
                              cudf::detail::result_cache* dense_results,
                              rmm::device_vector<size_type> const& gather_map,
@@ -421,7 +421,7 @@ auto create_sparse_results_table(table_view const& flattened_values,
  */
 template <bool keys_have_nulls, typename Map>
 void compute_single_pass_aggs(table_view const& keys,
-                              std::vector<aggregation_request> const& requests,
+                              host_span<aggregation_request const> requests,
                               cudf::detail::result_cache* sparse_results,
                               Map& map,
                               null_policy include_null_keys,
@@ -520,7 +520,7 @@ std::pair<rmm::device_vector<size_type>, size_type> extract_populated_keys(
  */
 template <bool keys_have_nulls>
 std::unique_ptr<table> groupby_null_templated(table_view const& keys,
-                                              std::vector<aggregation_request> const& requests,
+                                              host_span<aggregation_request const> requests,
                                               cudf::detail::result_cache* cache,
                                               null_policy include_null_keys,
                                               rmm::cuda_stream_view stream,
@@ -576,7 +576,7 @@ std::unique_ptr<table> groupby_null_templated(table_view const& keys,
  * @return true A hash-based groupby should be used
  * @return false A hash-based groupby should not be used
  */
-bool can_use_hash_groupby(table_view const& keys, std::vector<aggregation_request> const& requests)
+bool can_use_hash_groupby(table_view const& keys, host_span<aggregation_request const> requests)
 {
   return std::all_of(requests.begin(), requests.end(), [](aggregation_request const& r) {
     return std::all_of(r.aggregations.begin(), r.aggregations.end(), [](auto const& a) {
@@ -588,7 +588,7 @@ bool can_use_hash_groupby(table_view const& keys, std::vector<aggregation_reques
 // Hash-based groupby
 std::pair<std::unique_ptr<table>, std::vector<aggregation_result>> groupby(
   table_view const& keys,
-  std::vector<aggregation_request> const& requests,
+  host_span<aggregation_request const> requests,
   null_policy include_null_keys,
   rmm::cuda_stream_view stream,
   rmm::mr::device_memory_resource* mr)
