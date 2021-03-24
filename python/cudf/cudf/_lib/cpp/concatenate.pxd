@@ -19,3 +19,15 @@ cdef extern from "cudf/concatenate.hpp" namespace "cudf" nogil:
     cdef unique_ptr[table] concatenate_tables "cudf::concatenate"(
         host_span[table_view] tables
     ) except +
+
+    # these don't exist in the C++, but construction from vector is possible since
+    # a host_span can be implicitly constructed from a vector, so we add these for convenience
+    cdef device_buffer concatenate_masks "cudf::concatenate_masks"(
+        vector[column_view] views
+    ) except +
+    cdef unique_ptr[column] concatenate_columns "cudf::concatenate"(
+        vector[column_view] columns
+    ) except +
+    cdef unique_ptr[table] concatenate_tables "cudf::concatenate"(
+        vector[table_view] tables
+    ) except +
