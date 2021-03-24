@@ -25,9 +25,10 @@ import java.util.ArrayList;
  * Column information from Arrow data. 
  * This currently only supports primitive types and Strings, Decimals and nested types
  * such as list and struct are not supported.
- * The caller is responsible for eventually freeing the underlying Arrow array.
+ * The caller is responsible for eventually freeing the underlying Arrow array by 
+ * calling close().
  */
-public final class ArrowColumnInfo {
+public final class ArrowColumnInfo implements AutoCloseable {
   private long arrowArrayHandle;
   private long dataBufferAddr;
   private long dataBufferSize;
@@ -56,6 +57,11 @@ public final class ArrowColumnInfo {
     this(arrowArrayHandle, dataAddr, dataSize, rows, validityAddr, validitySize, nullCount);
     this.offsetsBufferAddr = offsetsAddr;
     this.offsetsBufferSize = offsetsSize;
+  }
+
+  @Override
+  public void close() {
+    ColumnVector.closeArrowArray(arrowArrayHandle);
   }
 
   public long getArrowArrayHandle() {

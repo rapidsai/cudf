@@ -368,8 +368,9 @@ public final class ColumnVector extends ColumnView {
    */
   public static ArrowColumnInfo toArrow(ColumnVector vec) {
     ArrowColumnInfo columnInfo = null;
-    // assert !vec.getType().isNestedType(): "Unsupported nested column type";
-    // assert !vec.getType().isDecimalType() : "Unsupported decimal column type";
+    if (vec.getType().isNestedType() || vec.getType().isDecimalType()) {
+        throw new IllegalArgumentException("Column type: " + vec.getType() + " is not supports");
+    }
     if (vec.getType().equals(DType.STRING)) {
         long[] res = toArrowFromStringVec(vec.getNativeView());
         columnInfo = new ArrowColumnInfo(res[0], res[1], res[2], res[3], res[4], res[5], res[6],
