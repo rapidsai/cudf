@@ -141,7 +141,7 @@ column_view sort_groupby_helper::key_sort_order(rmm::cuda_stream_view stream)
     // presence of a null value within a row. This allows moving all rows that
     // contain a null value to the end of the sorted order.
 
-    auto augmented_keys = table_view({table_view({keys_bitmask_column()}), _keys});
+    auto augmented_keys = table_view({table_view({keys_bitmask_column(stream)}), _keys});
 
     _key_sorted_order = cudf::detail::stable_sorted_order(
       augmented_keys,
