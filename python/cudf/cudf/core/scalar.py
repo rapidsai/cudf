@@ -113,6 +113,7 @@ class Scalar(object):
 
     def _preprocess_host_value(self, value, dtype):
         value = to_cudf_compatible_scalar(value, dtype=dtype)
+        breakpoint()
         valid = not _is_null_host_scalar(value)
 
         if dtype is None:

@@ -39,9 +39,12 @@ from cudf._lib.cpp.scalar.scalar cimport (
     numeric_scalar,
     timestamp_scalar,
     duration_scalar,
-    string_scalar
+    string_scalar,
+    fixed_point_scalar
 )
 cimport cudf._lib.cpp.types as libcudf_types
+
+from cudf._lib.cpp.wrappers.decimals cimport decimal64
 
 cdef class DeviceScalar:
 
@@ -80,6 +83,10 @@ cdef class DeviceScalar:
         elif pd.api.types.is_timedelta64_dtype(dtype):
             _set_timedelta64_from_np_scalar(
                 self.c_value, value, dtype, valid
+            )
+        elif isinstance(dtype, cudf.Decimal64Dtype):
+            _set_decimal64_from_scalar(
+                self.c_value, value, dtype#, valid
             )
         else:
             raise ValueError(
@@ -234,6 +241,15 @@ cdef _set_timedelta64_from_np_scalar(unique_ptr[scalar]& s,
         )
     else:
         raise ValueError(f"dtype not supported: {dtype}")
+
+cdef _set_decimal64_from_scalar(unique_ptr[scalar]& s,
+                                object value,
+                                object dtype,
+                                bool valid=True):
+    value = value if valid else 0
+    s.reset(
+        new fixed_point_scalar[decimal64](<int64_t>np.int64(value), valid)
+    )
 
 cdef _get_py_string_from_string(unique_ptr[scalar]& s):
     if not s.get()[0].is_valid():

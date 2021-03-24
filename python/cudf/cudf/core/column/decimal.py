@@ -72,6 +72,13 @@ class DecimalColumn(ColumnBase):
         result.dtype.precision = _binop_precision(self.dtype, other.dtype, op)
         return result
 
+    def normalize_binop_value(self, other):
+        from cudf.utils.dtypes import is_scalar
+        if is_scalar(other):
+            other = cudf.Scalar(other, dtype=self.dtype)
+        else:
+            raise TypeError(f"cannot normalize {type(other)}")
+
     def as_decimal_column(
         self, dtype: Dtype, **kwargs
     ) -> "cudf.core.column.DecimalColumn":

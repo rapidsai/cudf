@@ -51,3 +51,7 @@ cdef extern from "cudf/scalar/scalar.hpp" namespace "cudf" nogil:
         string_scalar(string st, bool is_valid) except +
         string_scalar(string_scalar other) except +
         string to_string() except +
+
+    cdef cppclass fixed_point_scalar[T](scalar):
+        fixed_point_scalar() except +
+        fixed_point_scalar(int64_t value, bool is_valid) except +
