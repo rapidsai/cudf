@@ -4725,8 +4725,9 @@ class Series(Frame, Serializable):
                 result_col[first_index:] = None
 
         # pandas always returns int64 dtype if original dtype is int or `bool`
-        if np.issubdtype(result_col.dtype, np.integer) or np.issubdtype(
-            result_col.dtype, np.bool_
+        if not is_decimal_dtype(result_col.dtype) and (
+            np.issubdtype(result_col.dtype, np.integer)
+            or np.issubdtype(result_col.dtype, np.bool_)
         ):
             return Series(
                 result_col.astype(np.int64)._apply_scan_op("sum"),
@@ -4785,6 +4786,11 @@ class Series(Frame, Serializable):
                     result_col.isnull().astype("int8").find_first_value(1)
                 )
                 result_col[first_index:] = None
+
+        if is_decimal_dtype(result_col.dtype):
+            raise NotImplementedError(
+                "cumprod does not currently support decimal types"
+            )
 
         # pandas always returns int64 dtype if original dtype is int or `bool`
         if np.issubdtype(result_col.dtype, np.integer) or np.issubdtype(
