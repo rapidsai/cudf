@@ -10,18 +10,15 @@ from cudf._lib.cpp.utilities.host_span cimport host_span
 from rmm._lib.device_buffer cimport device_buffer
 
 cdef extern from "cudf/concatenate.hpp" namespace "cudf" nogil:
-    cdef device_buffer concatenate_masks "cudf::concatenate_masks"(
-        host_span[column_view] views
-    ) except +
-    cdef unique_ptr[column] concatenate_columns "cudf::concatenate"(
-        host_span[column_view] columns
-    ) except +
-    cdef unique_ptr[table] concatenate_tables "cudf::concatenate"(
-        host_span[table_view] tables
-    ) except +
+    # The versions of concatenate taking vectors don't exist in libcudf
+    # C++, but passing a vector works because a host_span is implicitly
+    # constructable from a vector. In case they are needed in the future,
+    # host_span versions can be added, e.g:
+    #
+    # cdef device_buffer concatenate_masks "cudf::concatenate_masks"(
+    #    host_span[column_view] views
+    # ) except +
 
-    # these don't exist in the C++, but passing a vector works because
-    # a host_span is implicitly constructable from a vector
     cdef device_buffer concatenate_masks "cudf::concatenate_masks"(
         vector[column_view] views
     ) except +
