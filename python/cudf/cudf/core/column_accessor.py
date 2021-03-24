@@ -19,11 +19,7 @@ import pandas as pd
 
 import cudf
 from cudf.core import column
-from cudf.utils.utils import (
-    cached_property,
-    to_flat_dict,
-    to_nested_dict,
-)
+from cudf.utils.utils import cached_property, to_flat_dict, to_nested_dict
 
 if TYPE_CHECKING:
     from cudf.core.column import ColumnBase
@@ -83,6 +79,21 @@ class ColumnAccessor(MutableMapping):
 
             self.multiindex = multiindex
             self._level_names = level_names
+
+    @classmethod
+    def _create_unsafe(
+        cls,
+        data: Dict[Any, ColumnBase],
+        multiindex: bool = False,
+        level_names=None,
+    ) -> ColumnAccessor:
+        # create a ColumnAccessor without verifying column
+        # type or size
+        obj = cls()
+        obj._data = data
+        obj.multiindex = multiindex
+        obj._level_names = level_names
+        return obj
 
     def __iter__(self):
         return self._data.__iter__()
@@ -167,7 +178,7 @@ class ColumnAccessor(MutableMapping):
             return 0
 
     def _clear_cache(self):
-        cached_properties = "columns", "names", "_grouped_data"
+        cached_properties = ("columns", "names", "_grouped_data")
         for attr in cached_properties:
             try:
                 self.__delattr__(attr)
