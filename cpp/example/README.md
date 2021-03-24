@@ -1,8 +1,7 @@
-# Basic Standalone libcudf application
+# Basic Standalone libcudf C++ application
 
-This project contains a simple example demonstrating basic libcudf use case. It
-also show case ways to build your own application based on libcudf in
-minimalistic style.
+This simple C++ example demonstrates a basic libcudf use case and provides a
+minimal example of building your own application based on libcudf using CMake.
 
 The example source code loads a csv file that contains stock prices from 4
 companies spanning across 5 days, computes the average of the closing price
