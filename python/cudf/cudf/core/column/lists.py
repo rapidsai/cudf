@@ -210,7 +210,7 @@ class ListMethods(ColumnMethodsMixin):
         else:
             raise IndexError("list index out of range")
 
-    def contains(self, key, _dtype):
+    def contains(self, search_key):
         """
         Creates a column of bool values indicating whether the specified scalar
         is an element of each row of a list column.
@@ -231,10 +231,22 @@ class ListMethods(ColumnMethodsMixin):
         Series([False, True, True])
         dtype: bool
         """
-        search_key = cudf.Scalar(key, _dtype).device_value
-        return self._return_or_inplace(
-            contains_scalar(self._column, search_key)
-        )
+        try:
+            res = self._return_or_inplace(
+                contains_scalar(self._column, search_key.device_value)
+            )
+        except RuntimeError as e:
+            if (
+                "Type/Scale of search key does not"
+                "match list column element type" in str(e)
+            ):
+                raise TypeError(
+                    "Type/Scale of search key does not"
+                    "match list column element type"
+                ) from e
+            raise
+        else:
+            return res
 
     @property
     def leaves(self):

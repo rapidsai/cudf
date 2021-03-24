@@ -197,7 +197,7 @@ def test_get_nulls():
 
 
 @pytest.mark.parametrize(
-    "data, key, expect",
+    "data, value, expect",
     [
         ([[1, 2, 3], [3, 4, 5], [4, 5, 6]], 4, [False, True, True]),
         (
@@ -212,29 +212,33 @@ def test_get_nulls():
         ),
     ],
 )
-def test_contains_scalar(data, key, expect):
+def test_contains_scalar(data, value, expect):
     sr = cudf.Series(data)
+    search_key = cudf.Scalar(value, sr.dtype.element_type)
     expect = cudf.Series(expect)
-    got = sr.list.contains(key=key, _dtype=sr.dtype.element_type)
-    assert_eq(expect, got)
-
-
-def test_contains_null_search_key():
-    sr = cudf.Series([[1, 2, 3], [3, 4, 5], [4, 5, 6]])
-    expect = cudf.Series([False, False, False])
-    got = sr.list.contains(key=cudf.NA, _dtype=sr.dtype.element_type)
-    assert_eq(expect, got)
-
-
-def test_contains_null_rows():
-    sr = cudf.Series([[], [], []])
-    expect = cudf.Series([False, False, False])
-    got = sr.list.contains(key=cudf.NA, _dtype=sr.dtype.element_type)
+    got = sr.list.contains(search_key)
     assert_eq(expect, got)
 
 
 def test_contains_invalid_search_key():
     sr = cudf.Series([[1.0, 2.0, 3.0], [], [5.0, 7.0, 8.0]])
+    search_key = cudf.Scalar(4.0, sr.dtype.element_type)
     expect = cudf.Series([False, False, False])
-    got = sr.list.contains(key=4.0, _dtype=sr.dtype.element_type)
+    got = sr.list.contains(search_key)
+    assert_eq(expect, got)
+
+
+def test_contains_null_search_key():
+    sr = cudf.Series([[1, 2, 3], [3, 4, 5], [4, 5, 6]])
+    search_key = cudf.Scalar(cudf.NA, sr.dtype.element_type)
+    expect = cudf.Series([False, False, False])
+    got = sr.list.contains(search_key)
+    assert_eq(expect, got)
+
+
+def test_contains_null_rows():
+    sr = cudf.Series([[], [], []])
+    search_key = cudf.Scalar(cudf.NA, sr.dtype.element_type)
+    expect = cudf.Series([False, False, False])
+    got = sr.list.contains(search_key)
     assert_eq(expect, got)

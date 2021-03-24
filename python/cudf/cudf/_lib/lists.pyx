@@ -83,6 +83,9 @@ def extract_element(Column col, size_type index):
 
 
 def contains_scalar(Column col, DeviceScalar search_key):
+    cdef shared_ptr[lists_column_view] list_view = (
+        make_shared[lists_column_view](col.view())
+    )
     cdef const scalar* search_key_value = search_key.get_raw_ptr()
 
     cdef unique_ptr[column] c_result
