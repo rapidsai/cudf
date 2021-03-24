@@ -59,6 +59,9 @@ include(cmake/thirdparty/CUDF_KAFKA_GetRDKafka.cmake)
 
 # # GTests if enabled
 if (BUILD_TESTS)
+    # GoogleTest
+    include(cmake/thirdparty/CUDF_GetGTest.cmake)
+
     # include CTest module -- automatically calls enable_testing()
     include(CTest)
     add_subdirectory(tests)
