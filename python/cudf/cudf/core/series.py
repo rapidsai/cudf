@@ -4775,6 +4775,11 @@ class Series(Frame, Serializable):
         if axis not in (None, 0):
             raise NotImplementedError("axis parameter is not implemented yet")
 
+        if is_decimal_dtype(self.dtype):
+            raise NotImplementedError(
+                "cumprod does not currently support decimal types"
+            )
+
         skipna = True if skipna is None else skipna
 
         if skipna:
@@ -4786,11 +4791,6 @@ class Series(Frame, Serializable):
                     result_col.isnull().astype("int8").find_first_value(1)
                 )
                 result_col[first_index:] = None
-
-        if is_decimal_dtype(result_col.dtype):
-            raise NotImplementedError(
-                "cumprod does not currently support decimal types"
-            )
 
         # pandas always returns int64 dtype if original dtype is int or `bool`
         if np.issubdtype(result_col.dtype, np.integer) or np.issubdtype(
