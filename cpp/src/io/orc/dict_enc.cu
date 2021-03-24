@@ -49,7 +49,7 @@ struct dictinit_state_s {
 /**
  * @brief Return a 12-bit hash from a string
  */
-static inline __device__ uint32_t hash_string(const string_view &val)
+static inline __device__ uint32_t hash_string(const string_view val)
 {
   if (val.empty()) {
     return 0;
