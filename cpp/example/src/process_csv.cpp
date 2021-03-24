@@ -1,15 +1,15 @@
-#include <memory>
-#include <string>
-#include <utility>
-#include <vector>
-
-#include <rmm/mr/device/cuda_memory_resource.hpp>
-#include <rmm/mr/device/per_device_resource.hpp>
-
 #include <cudf/aggregation.hpp>
 #include <cudf/groupby.hpp>
 #include <cudf/io/csv.hpp>
 #include <cudf/table/table.hpp>
+
+#include <rmm/mr/device/cuda_memory_resource.hpp>
+#include <rmm/mr/device/per_device_resource.hpp>
+
+#include <memory>
+#include <string>
+#include <utility>
+#include <vector>
 
 std::unique_ptr<cudf::table> read_csv(std::string const& file_path)
 {

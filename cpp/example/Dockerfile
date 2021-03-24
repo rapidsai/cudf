@@ -43,8 +43,6 @@ RUN cd /tmp \
  && make install -j$PARALLEL_LEVEL \
  && cd /tmp && rm -rf /tmp/cmake-$CMAKE_VERSION*
 
-ARG CCACHE_VERSION=4.1
-
 ENV CUDA_HOME="/usr/local/cuda"
 
 RUN mkdir -p /workspace
