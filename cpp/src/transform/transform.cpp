@@ -29,8 +29,8 @@
 #include <cudf/utilities/traits.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
 
-#include <jit_pre/cudf/types.hpp.jit>
-#include <jit_pre/cudf/wrappers/timestamps.hpp.jit>
+#include <jit_stringified/cudf/types.hpp.jit>
+#include <jit_stringified/cudf/wrappers/timestamps.hpp.jit>
 
 #include <rmm/cuda_stream_view.hpp>
 

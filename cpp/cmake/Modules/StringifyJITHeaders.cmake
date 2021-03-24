@@ -16,25 +16,19 @@
 
 cmake_minimum_required(VERSION 3.18)
 
-file(MAKE_DIRECTORY "${CUDF_GENERATED_INCLUDE_DIR}/include")
-
-# Create `jitify_preprocess` executable
-project(jitify_preprocess VERSION 2.0 LANGUAGES CXX CUDA)
-add_executable(jitify_preprocess "${JITIFY_INCLUDE_DIR}/jitify2_preprocess.cpp")
-target_link_libraries(jitify_preprocess CUDA::cudart_static)
-
+file(MAKE_DIRECTORY "${CUDF_GENERATED_INCLUDE_DIR}/include/jit_stringified")
 
 # Create `stringify` executable
 add_executable(stringify "${JITIFY_INCLUDE_DIR}/stringify.cpp")
 
 execute_process(WORKING_DIRECTORY ${CUDF_GENERATED_INCLUDE_DIR}
     COMMAND ${CMAKE_COMMAND} -E make_directory
-        ${CUDF_GENERATED_INCLUDE_DIR}/include/jit_pre/cuda/std/detail/libcxx/include
+        ${CUDF_GENERATED_INCLUDE_DIR}/include/jit_stringified/cuda/std/detail/libcxx/include
     )
 
-set(JIT_PRE_FILES)
+set(JIT_STRINGIFIED_FILES)
 
-function(jit_pre)
+function(jit_stringify_files)
     cmake_parse_arguments(ARG
                           ""
                           "SOURCE_DIRECTORY"
@@ -43,59 +37,59 @@ function(jit_pre)
                           )
 
     foreach(ARG_FILE ${ARG_FILES})
-        set(ARG_OUTPUT ${CUDF_GENERATED_INCLUDE_DIR}/include/jit_pre/${ARG_FILE}.jit)
-        set(JIT_PRE_FILES "${ARG_OUTPUT};${JIT_PRE_FILES}")
+        set(ARG_OUTPUT ${CUDF_GENERATED_INCLUDE_DIR}/include/jit_stringified/${ARG_FILE}.jit)
+        set(JIT_STRINGIFIED_FILES "${ARG_OUTPUT};${JIT_STRINGIFIED_FILES}")
         add_custom_command(WORKING_DIRECTORY ${ARG_SOURCE_DIRECTORY}
                            DEPENDS stringify
                            OUTPUT ${ARG_OUTPUT}
-                           COMMAND ${CUDF_BINARY_DIR}/stringify ${ARG_FILE} > ${ARG_OUTPUT}_old
+                           COMMAND ${CUDF_BINARY_DIR}/stringify ${ARG_FILE} > ${ARG_OUTPUT}
                            )
     endforeach()
-    set(JIT_PRE_FILES "${JIT_PRE_FILES}" PARENT_SCOPE)
+    set(JIT_STRINGIFIED_FILES "${JIT_STRINGIFIED_FILES}" PARENT_SCOPE)
 endfunction()
 
-jit_pre(SOURCE_DIRECTORY      ${CUDF_SOURCE_DIR}/include
-        FILES                 cudf/types.hpp
-                              cudf/utilities/bit.hpp
-                              cudf/wrappers/timestamps.hpp
-                              cudf/fixed_point/fixed_point.hpp
-                              cudf/wrappers/durations.hpp
-        )
+jit_stringify_files(SOURCE_DIRECTORY      ${CUDF_SOURCE_DIR}/include
+                    FILES                 cudf/types.hpp
+                                          cudf/utilities/bit.hpp
+                                          cudf/wrappers/timestamps.hpp
+                                          cudf/fixed_point/fixed_point.hpp
+                                          cudf/wrappers/durations.hpp
+                    )
 
-jit_pre(SOURCE_DIRECTORY      ${LIBCUDACXX_INCLUDE_DIR}
-        FILES                 cuda/std/chrono
-                              cuda/std/climits
-                              cuda/std/cstddef
-                              cuda/std/cstdint
-                              cuda/std/ctime
-                              cuda/std/limits
-                              cuda/std/ratio
-                              cuda/std/type_traits
-                              cuda/std/version
-                              cuda/std/detail/__config
-                              cuda/std/detail/__pragma_pop
-                              cuda/std/detail/__pragma_push
-                              cuda/std/detail/libcxx/include/__config
-                              cuda/std/detail/libcxx/include/__pragma_pop
-                              cuda/std/detail/libcxx/include/__pragma_push
-                              cuda/std/detail/libcxx/include/__undef_macros
-                              cuda/std/detail/libcxx/include/chrono
-                              cuda/std/detail/libcxx/include/climits
-                              cuda/std/detail/libcxx/include/cstddef
-                              cuda/std/detail/libcxx/include/cstdint
-                              cuda/std/detail/libcxx/include/ctime
-                              cuda/std/detail/libcxx/include/limits
-                              cuda/std/detail/libcxx/include/ratio
-                              cuda/std/detail/libcxx/include/type_traits
-                              cuda/std/detail/libcxx/include/version
-        )
+jit_stringify_files(SOURCE_DIRECTORY      ${LIBCUDACXX_INCLUDE_DIR}
+                    FILES                 cuda/std/chrono
+                                          cuda/std/climits
+                                          cuda/std/cstddef
+                                          cuda/std/cstdint
+                                          cuda/std/ctime
+                                          cuda/std/limits
+                                          cuda/std/ratio
+                                          cuda/std/type_traits
+                                          cuda/std/version
+                                          cuda/std/detail/__config
+                                          cuda/std/detail/__pragma_pop
+                                          cuda/std/detail/__pragma_push
+                                          cuda/std/detail/libcxx/include/__config
+                                          cuda/std/detail/libcxx/include/__pragma_pop
+                                          cuda/std/detail/libcxx/include/__pragma_push
+                                          cuda/std/detail/libcxx/include/__undef_macros
+                                          cuda/std/detail/libcxx/include/chrono
+                                          cuda/std/detail/libcxx/include/climits
+                                          cuda/std/detail/libcxx/include/cstddef
+                                          cuda/std/detail/libcxx/include/cstdint
+                                          cuda/std/detail/libcxx/include/ctime
+                                          cuda/std/detail/libcxx/include/limits
+                                          cuda/std/detail/libcxx/include/ratio
+                                          cuda/std/detail/libcxx/include/type_traits
+                                          cuda/std/detail/libcxx/include/version
+                    )
 
 # hacky way around using internal headers in jit files. should probably be moved to a public header.
-jit_pre(SOURCE_DIRECTORY      ${CUDF_SOURCE_DIR}/..
-        FILES                 cudf/src/rolling/rolling_jit_detail.hpp
-        )
+jit_stringify_files(SOURCE_DIRECTORY      ${CUDF_SOURCE_DIR}/..
+                    FILES                 cudf/src/rolling/rolling_jit_detail.hpp
+                    )
 
-add_custom_target(stringify_run DEPENDS ${JIT_PRE_FILES})
+add_custom_target(stringify_run DEPENDS ${JIT_STRINGIFIED_FILES})
 
 ###################################################################################################
 # - copy libcu++ ----------------------------------------------------------------------------------

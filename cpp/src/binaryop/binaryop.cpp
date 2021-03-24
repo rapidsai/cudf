@@ -26,11 +26,11 @@
 #include <jit/type.h>
 #include <jit/common_headers.hpp>
 
-#include <jit_pre/cudf/fixed_point/fixed_point.hpp.jit>
-#include <jit_pre/cudf/types.hpp.jit>
-#include <jit_pre/cudf/utilities/bit.hpp.jit>
-#include <jit_pre/cudf/wrappers/durations.hpp.jit>
-#include <jit_pre/cudf/wrappers/timestamps.hpp.jit>
+#include <jit_stringified/cudf/fixed_point/fixed_point.hpp.jit>
+#include <jit_stringified/cudf/types.hpp.jit>
+#include <jit_stringified/cudf/utilities/bit.hpp.jit>
+#include <jit_stringified/cudf/wrappers/durations.hpp.jit>
+#include <jit_stringified/cudf/wrappers/timestamps.hpp.jit>
 
 #include <cudf/binaryop.hpp>
 #include <cudf/column/column_factories.hpp>
@@ -50,6 +50,8 @@
 #include <string>
 
 #include <thrust/optional.h>
+
+#include <jitify2.hpp>
 
 namespace cudf {
 

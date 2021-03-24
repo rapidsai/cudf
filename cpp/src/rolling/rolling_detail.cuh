@@ -48,9 +48,9 @@
 #include <jit/parser.h>
 #include <jit/type.h>
 
-#include <jit_pre/cudf/src/rolling/rolling_jit_detail.hpp.jit>
-#include <jit_pre/cudf/types.hpp.jit>
-#include <jit_pre/cudf/utilities/bit.hpp.jit>
+#include <jit_stringified/cudf/src/rolling/rolling_jit_detail.hpp.jit>
+#include <jit_stringified/cudf/types.hpp.jit>
+#include <jit_stringified/cudf/utilities/bit.hpp.jit>
 
 #include <rmm/thrust_rmm_allocator.h>
 #include <rmm/cuda_stream_view.hpp>
