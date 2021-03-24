@@ -88,4 +88,4 @@ class benchmark : public ::benchmark::Fixture {
   std::shared_ptr<rmm::mr::device_memory_resource> mr;
 };
 
-};  // namespace cudf
+}  // namespace cudf

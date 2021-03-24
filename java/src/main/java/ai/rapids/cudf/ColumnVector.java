@@ -167,16 +167,16 @@ public final class ColumnVector extends ColumnView {
     }
   }
 
-
-  private static long initViewHandle(DType type, int rows, int nc, DeviceMemoryBuffer dataBuffer,
-                                     DeviceMemoryBuffer validityBuffer,
-                                     DeviceMemoryBuffer offsetBuffer, long[] childHandles) {
+  static long initViewHandle(DType type, int rows, int nc,
+                                       BaseDeviceMemoryBuffer dataBuffer,
+                                       BaseDeviceMemoryBuffer validityBuffer,
+                                       BaseDeviceMemoryBuffer offsetBuffer, long[] childHandles) {
     long cd = dataBuffer == null ? 0 : dataBuffer.address;
     long cdSize = dataBuffer == null ? 0 : dataBuffer.length;
     long od = offsetBuffer == null ? 0 : offsetBuffer.address;
     long vd = validityBuffer == null ? 0 : validityBuffer.address;
     return makeCudfColumnView(type.typeId.getNativeId(), type.getScale(), cd, cdSize,
-        od, vd, nc, rows, childHandles) ;
+        od, vd, nc, rows, childHandles);
   }
 
   static ColumnVector fromViewWithContiguousAllocation(long columnViewAddress, DeviceMemoryBuffer buffer) {
@@ -606,7 +606,6 @@ public final class ColumnVector extends ColumnView {
       assert columns[i] != null : "Column vectors passed may not be null";
       assert columns[i].getRowCount() == size : "Row count mismatch, all columns must be the same size";
       assert !columns[i].getType().isDurationType() : "Unsupported column type Duration";
-      assert !columns[i].getType().isTimestampType() : "Unsupported column type Timestamp";
       assert !columns[i].getType().isNestedType() : "Unsupported column of nested type";
       columnViews[i] = columns[i].getNativeView();
     }
@@ -858,7 +857,7 @@ public final class ColumnVector extends ColumnView {
     }
 
     @Override
-    protected boolean cleanImpl(boolean logErrorIfNotClean) {
+    protected synchronized boolean cleanImpl(boolean logErrorIfNotClean) {
       boolean neededCleanup = false;
       long address = 0;
 
@@ -1165,12 +1164,34 @@ public final class ColumnVector extends ColumnView {
   }
 
   /**
+   * Create a new decimal vector from boxed unscaled values (Integer array) and scale.
+   * The created vector is of type DType.DECIMAL32, whose max precision is 9.
+   * Compared with scale of [[java.math.BigDecimal]], the scale here represents the opposite meaning.
+   */
+  public static ColumnVector decimalFromBoxedInts(int scale, Integer... values) {
+    try (HostColumnVector host = HostColumnVector.decimalFromBoxedInts(scale, values)) {
+      return host.copyToDevice();
+    }
+  }
+
+  /**
    * Create a new decimal vector from unscaled values (long array) and scale.
    * The created vector is of type DType.DECIMAL64, whose max precision is 18.
    * Compared with scale of [[java.math.BigDecimal]], the scale here represents the opposite meaning.
    */
   public static ColumnVector decimalFromLongs(int scale, long... values) {
     try (HostColumnVector host = HostColumnVector.decimalFromLongs(scale, values)) {
+      return host.copyToDevice();
+    }
+  }
+
+  /**
+   * Create a new decimal vector from boxed unscaled values (Long array) and scale.
+   * The created vector is of type DType.DECIMAL64, whose max precision is 18.
+   * Compared with scale of [[java.math.BigDecimal]], the scale here represents the opposite meaning.
+   */
+  public static ColumnVector decimalFromBoxedLongs(int scale, Long... values) {
+    try (HostColumnVector host = HostColumnVector.decimalFromBoxedLongs(scale, values)) {
       return host.copyToDevice();
     }
   }

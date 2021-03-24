@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -22,7 +22,7 @@
 #include <cudf/types.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
-#include <rmm/device_vector.hpp>
+#include <rmm/device_uvector.hpp>
 
 namespace cudf {
 namespace groupby {
@@ -40,8 +40,8 @@ namespace sort {
  *   value column
  */
 struct sort_groupby_helper {
-  using index_vector       = rmm::device_vector<size_type>;
-  using bitmask_vector     = rmm::device_vector<bitmask_type>;
+  using index_vector       = rmm::device_uvector<size_type>;
+  using bitmask_vector     = rmm::device_uvector<bitmask_type>;
   using column_ptr         = std::unique_ptr<column>;
   using index_vector_ptr   = std::unique_ptr<index_vector>;
   using bitmask_vector_ptr = std::unique_ptr<bitmask_vector>;
@@ -63,8 +63,8 @@ struct sort_groupby_helper {
                       sorted keys_pre_sorted        = sorted::NO)
     : _keys(keys),
       _num_keys(-1),
-      _include_null_keys(include_null_keys),
-      _keys_pre_sorted(keys_pre_sorted)
+      _keys_pre_sorted(keys_pre_sorted),
+      _include_null_keys(include_null_keys)
   {
     if (keys_pre_sorted == sorted::YES and include_null_keys == null_policy::EXCLUDE and
         has_nulls(keys)) {
@@ -99,7 +99,7 @@ struct sort_groupby_helper {
   /**
    * @brief Groups a column of values according to `keys`
    *
-   * The order of values within each group is undefined.
+   * The values within each group maintain their original order.
    *
    * @throw cudf::logic_error if `values.size() != keys.num_rows()`
    *

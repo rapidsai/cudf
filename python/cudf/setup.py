@@ -48,6 +48,14 @@ cmdclass = versioneer.get_cmdclass()
 
 
 class build_ext_and_proto(build_ext):
+    def build_extensions(self):
+        try:
+            # Silence the '-Wstrict-prototypes' warning
+            self.compiler.compiler_so.remove("-Wstrict-prototypes")
+        except Exception:
+            pass
+        build_ext.build_extensions(self)
+
     def run(self):
         # Get protoc
         protoc = None

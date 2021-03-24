@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -91,15 +91,13 @@ struct column_scatterer_impl {
     auto result      = std::make_unique<column>(target, stream, mr);
     auto result_view = result->mutable_view();
 
-    using Type = device_storage_type_t<Element>;
-
     // NOTE use source.begin + scatter rows rather than source.end in case the
     // scatter map is smaller than the number of source rows
     thrust::scatter(rmm::exec_policy(stream),
-                    source.begin<Type>(),
-                    source.begin<Type>() + cudf::distance(scatter_map_begin, scatter_map_end),
+                    source.begin<Element>(),
+                    source.begin<Element>() + cudf::distance(scatter_map_begin, scatter_map_end),
                     scatter_map_begin,
-                    result_view.begin<Type>());
+                    result_view.begin<Element>());
 
     return result;
   }
@@ -114,10 +112,9 @@ struct column_scatterer_impl<string_view, MapIterator> {
                                      rmm::cuda_stream_view stream,
                                      rmm::mr::device_memory_resource* mr) const
   {
-    using strings::detail::create_string_vector_from_column;
-    auto const source_vector = create_string_vector_from_column(source, stream.value());
-    auto const begin         = source_vector.begin();
-    auto const end           = begin + std::distance(scatter_map_begin, scatter_map_end);
+    auto d_column    = column_device_view::create(source, stream);
+    auto const begin = d_column->begin<string_view>();
+    auto const end   = begin + cudf::distance(scatter_map_begin, scatter_map_end);
     return strings::detail::scatter(begin, end, scatter_map_begin, target, stream, mr);
   }
 };
@@ -286,14 +283,14 @@ std::unique_ptr<table> scatter(
                  target.begin(),
                  result.begin(),
                  [=](auto const& source_col, auto const& target_col) {
-                   return type_dispatcher(source_col.type(),
-                                          scatter_functor,
-                                          source_col,
-                                          updated_scatter_map_begin,
-                                          updated_scatter_map_end,
-                                          target_col,
-                                          stream,
-                                          mr);
+                   return type_dispatcher<dispatch_storage_type>(source_col.type(),
+                                                                 scatter_functor,
+                                                                 source_col,
+                                                                 updated_scatter_map_begin,
+                                                                 updated_scatter_map_end,
+                                                                 target_col,
+                                                                 stream,
+                                                                 mr);
                  });
 
   auto gather_map = scatter_to_gather(

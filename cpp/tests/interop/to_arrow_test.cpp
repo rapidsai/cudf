@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,17 +18,20 @@
 #include <cudf/column/column_view.hpp>
 #include <cudf/copying.hpp>
 #include <cudf/detail/copy.hpp>
+#include <cudf/detail/iterator.cuh>
 #include <cudf/dictionary/dictionary_column_view.hpp>
 #include <cudf/dictionary/encode.hpp>
 #include <cudf/interop.hpp>
 #include <cudf/table/table.hpp>
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
+
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_utilities.hpp>
 #include <cudf_test/column_wrapper.hpp>
 #include <cudf_test/table_utilities.hpp>
 #include <cudf_test/type_lists.hpp>
+
 #include <tests/interop/arrow_utils.hpp>
 
 using vector_of_columns = std::vector<std::unique_ptr<cudf::column>>;
@@ -235,8 +238,9 @@ TYPED_TEST(ToArrowTestDurationsTest, DurationTable)
 
 TEST_F(ToArrowTest, NestedList)
 {
-  auto valids = cudf::test::make_counting_transform_iterator(0, [](auto i) { return i % 3 != 0; });
-  auto col    = cudf::test::lists_column_wrapper<int64_t>(
+  auto valids =
+    cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i % 3 != 0; });
+  auto col = cudf::test::lists_column_wrapper<int64_t>(
     {{{{{1, 2}, valids}, {{3, 4}, valids}, {5}}, {{6}, {{7, 8, 9}, valids}}}, valids});
   cudf::table_view input_view({col});
 

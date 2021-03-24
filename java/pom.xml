@@ -21,7 +21,7 @@
 
     <groupId>ai.rapids</groupId>
     <artifactId>cudf</artifactId>
-    <version>0.18-SNAPSHOT</version>
+    <version>0.19-SNAPSHOT</version>
 
     <name>cudfjni</name>
     <description>
@@ -330,7 +330,7 @@
                         <dependency>
                             <groupId>org.junit.jupiter</groupId>
                             <artifactId>junit-jupiter-engine</artifactId>
-                            <version>5.2.0</version>
+                            <version>5.4.2</version>
                         </dependency>
                     </dependencies>
                 </plugin>
@@ -365,6 +365,7 @@
         <plugins>
             <plugin>
                 <artifactId>maven-antrun-plugin</artifactId>
+                <version>1.8</version>
                 <executions>
                     <execution>
                         <id>cmake</id>
@@ -517,18 +518,7 @@
                                     <!--Set by groovy script-->
                                     <directory>${native.cudf.path}</directory>
                                     <includes>
-                                        <include>libcudf_ast.so</include>
-                                        <include>libcudf_base.so</include>
-                                        <include>libcudf_comms.so</include>
-                                        <include>libcudf_hash.so</include>
-                                        <include>libcudf_interop.so</include>
-                                        <include>libcudf_io.so</include>
-                                        <include>libcudf_join.so</include>
-                                        <include>libcudf_merge.so</include>
-                                        <include>libcudf_partitioning.so</include>
-                                        <include>libcudf_reductions.so</include>
-                                        <include>libcudf_replace.so</include>
-                                        <include>libcudf_rolling.so</include>
+                                        <include>libcudf.so</include>
                                     </includes>
                                 </resource>
                                 <resource>

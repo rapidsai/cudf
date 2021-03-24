@@ -94,7 +94,7 @@ class launcher {
   template <typename... Args>
   void launch(Args... args)
   {
-    get_kernel().configure_1d_max_occupancy(0, 0, 0, stream.value()).launch(args...);
+    get_kernel().configure_1d_max_occupancy(0, 0, 0, stream.value()).safe_launch(args...);
   }
 
  private:

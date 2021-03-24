@@ -1,4 +1,5 @@
 # Copyright (c) 2018-2021, NVIDIA CORPORATION.
+
 from __future__ import annotations
 
 import builtins
@@ -49,6 +50,7 @@ from cudf.utils.dtypes import (
     get_time_unit,
     is_categorical_dtype,
     is_decimal_dtype,
+    is_interval_dtype,
     is_list_dtype,
     is_numerical_dtype,
     is_scalar,
@@ -107,6 +109,13 @@ class ColumnBase(Column, Serializable):
     def __len__(self) -> int:
         return self.size
 
+    def __repr__(self):
+        return (
+            f"{object.__repr__(self)}\n"
+            f"{self.to_arrow().to_string()}\n"
+            f"dtype: {self.dtype}"
+        )
+
     def to_pandas(
         self, index: ColumnLike = None, nullable: bool = False, **kwargs
     ) -> "pd.Series":
@@ -117,6 +126,10 @@ class ColumnBase(Column, Serializable):
             pd_series = pd.Series(pandas_array, copy=False)
         elif str(self.dtype) in NUMERIC_TYPES and self.null_count == 0:
             pd_series = pd.Series(cupy.asnumpy(self.values), copy=False)
+        elif is_interval_dtype(self.dtype):
+            pd_series = pd.Series(
+                pd.IntervalDtype().__from_arrow__(self.to_arrow())
+            )
         else:
             pd_series = self.to_arrow().to_pandas(**kwargs)
 
@@ -166,7 +179,11 @@ class ColumnBase(Column, Serializable):
         if check_dtypes:
             if self.dtype != other.dtype:
                 return False
-        return (self == other).min()
+        null_equals = self._null_equals(other)
+        return null_equals.all()
+
+    def _null_equals(self, other: ColumnBase) -> ColumnBase:
+        return self.binary_operator("NULL_EQUALS", other)
 
     def all(self) -> bool:
         return bool(libcudf.reduce.reduce("all", self, dtype=np.bool_))
@@ -370,7 +387,6 @@ class ColumnBase(Column, Serializable):
         """
         if not isinstance(array, (pa.Array, pa.ChunkedArray)):
             raise TypeError("array should be PyArrow array or chunked array")
-
         data = pa.table([array], [None])
         if isinstance(array.type, pa.DictionaryType):
             indices_table = pa.table(
@@ -406,6 +422,10 @@ class ColumnBase(Column, Serializable):
             )
         elif isinstance(array.type, pa.StructType):
             return cudf.core.column.StructColumn.from_arrow(array)
+        elif isinstance(
+            array.type, pd.core.arrays._arrow_utils.ArrowIntervalType
+        ):
+            return cudf.core.column.IntervalColumn.from_arrow(array)
 
         return libcudf.interop.from_arrow(data, data.column_names)._data[
             "None"
@@ -520,7 +540,8 @@ class ColumnBase(Column, Serializable):
         copies the references of the data and mask.
         """
         if deep:
-            return libcudf.copying.copy_column(self)
+            result = libcudf.copying.copy_column(self)
+            return cast(T, self._copy_type_metadata(result))
         else:
             return cast(
                 T,
@@ -604,14 +625,15 @@ class ColumnBase(Column, Serializable):
         return libcudf.copying.get_element(self, idx).value
 
     def slice(self, start: int, stop: int, stride: int = None) -> ColumnBase:
+        stride = 1 if stride is None else stride
         if start < 0:
             start = start + len(self)
-        if stop < 0:
+        if stop < 0 and not (stride < 0 and stop == -1):
             stop = stop + len(self)
-        if start >= stop:
+        if (stride > 0 and start >= stop) or (stride < 0 and start <= stop):
             return column_empty(0, self.dtype, masked=True)
         # compute mask slice
-        if stride == 1 or stride is None:
+        if stride == 1:
             return libcudf.copying.column_slice(self, [start, stop])[0]
         else:
             # Need to create a gather map for given slice with stride
@@ -838,55 +860,65 @@ class ColumnBase(Column, Serializable):
         -------
         result: Column
             Column of booleans indicating if each element is in values.
-        Raises
-        -------
-        TypeError
-            If values is a string
         """
-        if is_scalar(values):
-            raise TypeError(
-                "only list-like objects are allowed to be passed "
-                f"to isin(), you passed a [{type(values).__name__}]"
-            )
-
         lhs = self
         rhs = None
 
         try:
-            # We need to convert values to same type as self,
-            # hence passing dtype=self.dtype
-            rhs = as_column(values, dtype=self.dtype)
-
-            # Short-circuit if rhs is all null.
-            if lhs.null_count == 0 and (rhs.null_count == len(rhs)):
-                return full(len(self), False, dtype="bool")
+            lhs, rhs = self._process_values_for_isin(values)
+            res = lhs._isin_earlystop(rhs)
+            if res is not None:
+                return res
         except ValueError:
             # pandas functionally returns all False when cleansing via
             # typecasting fails
             return full(len(self), False, dtype="bool")
 
-        # If categorical, combine categories first
-        if is_categorical_dtype(lhs):
-            lhs_cats = lhs.cat().categories._values
-            rhs_cats = rhs.cat().categories._values
+        res = lhs._obtain_isin_result(rhs)
 
-            if not np.issubdtype(rhs_cats.dtype, lhs_cats.dtype):
-                # If they're not the same dtype, short-circuit if the values
-                # list doesn't have any nulls. If it does have nulls, make
-                # the values list a Categorical with a single null
-                if not rhs.has_nulls:
-                    return full(len(self), False, dtype="bool")
-                rhs = as_column(pd.Categorical.from_codes([-1], categories=[]))
-                rhs = rhs.cat().set_categories(lhs_cats).astype(self.dtype)
+        return res
 
-        ldf = cudf.DataFrame({"x": lhs, "orig_order": arange(len(lhs))})
+    def _process_values_for_isin(
+        self, values: Sequence
+    ) -> Tuple[ColumnBase, ColumnBase]:
+        """
+        Helper function for `isin` which pre-process `values` based on `self`.
+        """
+        lhs = self
+        rhs = as_column(values, nan_as_null=False)
+        if lhs.null_count == len(lhs):
+            lhs = lhs.astype(rhs.dtype)
+        elif rhs.null_count == len(rhs):
+            rhs = rhs.astype(lhs.dtype)
+        return lhs, rhs
+
+    def _isin_earlystop(self, rhs: ColumnBase) -> Union[ColumnBase, None]:
+        """
+        Helper function for `isin` which determines possibility of
+        early-stopping or not.
+        """
+        if self.dtype != rhs.dtype:
+            if self.null_count and rhs.null_count:
+                return self.isna()
+            else:
+                return cudf.core.column.full(len(self), False, dtype="bool")
+        elif self.null_count == 0 and (rhs.null_count == len(rhs)):
+            return cudf.core.column.full(len(self), False, dtype="bool")
+        else:
+            return None
+
+    def _obtain_isin_result(self, rhs: ColumnBase) -> ColumnBase:
+        """
+        Helper function for `isin` which merges `self` & `rhs`
+        to determine what values of `rhs` exist in `self`.
+        """
+        ldf = cudf.DataFrame({"x": self, "orig_order": arange(len(self))})
         rdf = cudf.DataFrame(
             {"x": rhs, "bool": full(len(rhs), True, dtype="bool")}
         )
         res = ldf.merge(rdf, on="x", how="left").sort_values(by="orig_order")
         res = res.drop_duplicates(subset="orig_order", ignore_index=True)
         res = res._data["bool"].fillna(False)
-
         return res
 
     def as_mask(self) -> Buffer:
@@ -985,7 +1017,9 @@ class ColumnBase(Column, Serializable):
         return cpp_distinct_count(self, ignore_nulls=dropna)
 
     def astype(self, dtype: Dtype, **kwargs) -> ColumnBase:
-        if is_categorical_dtype(dtype):
+        if is_numerical_dtype(dtype):
+            return self.as_numerical_column(dtype)
+        elif is_categorical_dtype(dtype):
             return self.as_categorical_column(dtype, **kwargs)
         elif pd.api.types.pandas_dtype(dtype).type in {
             np.str_,
@@ -999,6 +1033,14 @@ class ColumnBase(Column, Serializable):
                     "Casting list columns not currently supported"
                 )
             return self
+        elif is_interval_dtype(self.dtype):
+            if not self.dtype == dtype:
+                raise NotImplementedError(
+                    "Casting interval columns not currently supported"
+                )
+            return self
+        elif is_decimal_dtype(dtype):
+            return self.as_decimal_column(dtype, **kwargs)
         elif np.issubdtype(dtype, np.datetime64):
             return self.as_datetime_column(dtype, **kwargs)
         elif np.issubdtype(dtype, np.timedelta64):
@@ -1036,14 +1078,14 @@ class ColumnBase(Column, Serializable):
 
         # columns include null index in factorization; remove:
         if self.has_nulls:
-            cats = cats.dropna()
+            cats = cats._column.dropna(drop_nan=False)
             min_type = min_unsigned_type(len(cats), 8)
             labels = labels - 1
             if np.dtype(min_type).itemsize < labels.dtype.itemsize:
                 labels = labels.astype(min_type)
 
         return build_categorical_column(
-            categories=cats._column,
+            categories=cats,
             codes=labels._column,
             mask=self.mask,
             ordered=ordered,
@@ -1067,6 +1109,11 @@ class ColumnBase(Column, Serializable):
     def as_string_column(
         self, dtype: Dtype, format=None
     ) -> "cudf.core.column.StringColumn":
+        raise NotImplementedError
+
+    def as_decimal_column(
+        self, dtype: Dtype, **kwargs
+    ) -> "cudf.core.column.DecimalColumn":
         raise NotImplementedError
 
     def apply_boolean_mask(self, mask) -> ColumnBase:
@@ -1234,7 +1281,7 @@ class ColumnBase(Column, Serializable):
     def product(
         self, skipna: bool = None, dtype: Dtype = None, min_count: int = 0
     ):
-        raise TypeError(f"cannot perform prod with type {self.dtype}")
+        raise TypeError(f"cannot perform product with type {self.dtype}")
 
     def mean(self, skipna: bool = None, dtype: Dtype = None):
         raise TypeError(f"cannot perform mean with type {self.dtype}")
@@ -1246,7 +1293,7 @@ class ColumnBase(Column, Serializable):
         raise TypeError(f"cannot perform var with type {self.dtype}")
 
     def kurtosis(self, skipna: bool = None):
-        raise TypeError(f"cannot perform kurt with type {self.dtype}")
+        raise TypeError(f"cannot perform kurtosis with type {self.dtype}")
 
     def skew(self, skipna: bool = None):
         raise TypeError(f"cannot perform skew with type {self.dtype}")
@@ -1345,6 +1392,50 @@ class ColumnBase(Column, Serializable):
                 for name, f in zip(names, result_frames)
             }
         )
+
+    def _copy_type_metadata(self: T, other: ColumnBase) -> ColumnBase:
+        """
+        Copies type metadata from self onto other, returning a new column.
+
+        * when `self` is a CategoricalColumn and `other` is not, we assume
+          other is a column of codes, and return a CategoricalColumn composed
+          of `other`  and the categories of `self`.
+        * when both `self` and `other` are StructColumns, rename the fields
+          of `other` to the field names of `self`.
+        * when `self` and `other` are nested columns of the same type,
+          recursively apply this function on the children of `self` to the
+          and the children of `other`.
+        * if none of the above, return `other` without any changes
+        """
+        if isinstance(self, cudf.core.column.CategoricalColumn) and not (
+            isinstance(other, cudf.core.column.CategoricalColumn)
+        ):
+            other = build_categorical_column(
+                categories=self.categories,
+                codes=as_column(other.base_data, dtype=other.dtype),
+                mask=other.base_mask,
+                ordered=self.ordered,
+                size=other.size,
+                offset=other.offset,
+                null_count=other.null_count,
+            )
+
+        if isinstance(other, cudf.core.column.StructColumn) and isinstance(
+            self, cudf.core.column.StructColumn
+        ):
+            other = other._rename_fields(self.dtype.fields.keys())
+
+        if type(self) is type(other):
+            if self.base_children and other.base_children:
+                base_children = tuple(
+                    self.base_children[i]._copy_type_metadata(
+                        other.base_children[i]
+                    )
+                    for i in range(len(self.base_children))
+                )
+                other.set_base_children(base_children)
+
+        return other
 
 
 def column_empty_like(
@@ -1459,6 +1550,16 @@ def build_column(
     """
     dtype = pd.api.types.pandas_dtype(dtype)
 
+    if is_numerical_dtype(dtype):
+        assert data is not None
+        return cudf.core.column.NumericalColumn(
+            data=data,
+            dtype=dtype,
+            mask=mask,
+            size=size,
+            offset=offset,
+            null_count=null_count,
+        )
     if is_categorical_dtype(dtype):
         if not len(children) == 1:
             raise ValueError(
@@ -1535,16 +1636,17 @@ def build_column(
             null_count=null_count,
             children=children,
         )
-    else:
-        assert data is not None
-        return cudf.core.column.NumericalColumn(
-            data=data,
+    elif is_interval_dtype(dtype):
+        return cudf.core.column.IntervalColumn(
             dtype=dtype,
             mask=mask,
             size=size,
             offset=offset,
             null_count=null_count,
+            children=children,
         )
+    else:
+        raise TypeError(f"Unrecognized dtype: {dtype}")
 
 
 def build_categorical_column(
@@ -1573,7 +1675,6 @@ def build_categorical_column(
     ordered : bool
         Indicates whether the categories are ordered
     """
-
     codes_dtype = min_unsigned_type(len(categories))
     codes = as_column(codes)
     if codes.dtype != codes_dtype:
@@ -1719,6 +1820,8 @@ def as_column(
             return as_column(arbitrary.array)
         if is_categorical_dtype(arbitrary):
             data = as_column(pa.array(arbitrary, from_pandas=True))
+        elif is_interval_dtype(arbitrary.dtype):
+            data = as_column(pa.array(arbitrary, from_pandas=True))
         elif arbitrary.dtype == np.bool_:
             data = as_column(cupy.asarray(arbitrary), dtype=arbitrary.dtype)
         elif arbitrary.dtype.kind in ("f"):
@@ -1840,6 +1943,18 @@ def as_column(
                 mask=mask,
                 dtype=arbitrary.dtype,
             )
+        elif (
+            arbitrary.size != 0
+            and arb_dtype.kind in ("O")
+            and isinstance(arbitrary[0], pd._libs.interval.Interval)
+        ):
+            # changing from pd array to series,possible arrow bug
+            interval_series = pd.Series(arbitrary)
+            data = as_column(
+                pa.Array.from_pandas(interval_series), dtype=arbitrary.dtype,
+            )
+            if dtype is not None:
+                data = data.astype(dtype)
         elif arb_dtype.kind in ("O", "U"):
             data = as_column(
                 pa.Array.from_pandas(arbitrary), dtype=arbitrary.dtype
@@ -1870,7 +1985,17 @@ def as_column(
                 arb_dtype = check_cast_unsupported_dtype(arbitrary.dtype)
                 if arb_dtype != arbitrary.dtype.numpy_dtype:
                     arbitrary = arbitrary.astype(arb_dtype)
-        if arb_dtype.kind in ("O", "U"):
+        if (
+            arbitrary.size != 0
+            and isinstance(arbitrary[0], pd._libs.interval.Interval)
+            and arb_dtype.kind in ("O")
+        ):
+            # changing from pd array to series,possible arrow bug
+            interval_series = pd.Series(arbitrary)
+            data = as_column(
+                pa.Array.from_pandas(interval_series), dtype=arb_dtype
+            )
+        elif arb_dtype.kind in ("O", "U"):
             data = as_column(pa.Array.from_pandas(arbitrary), dtype=arb_dtype)
         else:
             data = as_column(
@@ -1925,7 +2050,7 @@ def as_column(
                         )
                         return cudf.core.column.DecimalColumn.from_arrow(data)
                     dtype = pd.api.types.pandas_dtype(dtype)
-                    if is_categorical_dtype(dtype):
+                    if is_categorical_dtype(dtype) or is_interval_dtype(dtype):
                         raise TypeError
                     else:
                         np_type = np.dtype(dtype).type
@@ -1951,6 +2076,9 @@ def as_column(
                 elif np_type == np.str_:
                     sr = pd.Series(arbitrary, dtype="str")
                     data = as_column(sr, nan_as_null=nan_as_null)
+                elif is_interval_dtype(dtype):
+                    sr = pd.Series(arbitrary, dtype="interval")
+                    data = as_column(sr, nan_as_null=nan_as_null)
                 else:
                     data = as_column(
                         _construct_array(arbitrary, dtype),
@@ -1971,9 +2099,11 @@ def _construct_array(
         arbitrary = cupy.asarray(arbitrary, dtype=dtype)
     except (TypeError, ValueError):
         native_dtype = dtype
-        if dtype is None and pd.api.types.infer_dtype(arbitrary) in (
-            "mixed",
-            "mixed-integer",
+        if (
+            dtype is None
+            and not cudf._lib.scalar._is_null_host_scalar(arbitrary)
+            and pd.api.types.infer_dtype(arbitrary)
+            in ("mixed", "mixed-integer",)
         ):
             native_dtype = "object"
         arbitrary = np.asarray(

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -308,17 +308,16 @@ struct replace_nulls_scalar_kernel_forwarder {
       cudf::allocate_like(input, cudf::mask_allocation_policy::NEVER, mr);
     auto output_view = output->mutable_view();
 
-    using Type       = cudf::device_storage_type_t<col_type>;
     using ScalarType = cudf::scalar_type_t<col_type>;
     auto s1          = static_cast<ScalarType const&>(replacement);
     auto device_in   = cudf::column_device_view::create(input);
 
-    auto func = replace_nulls_functor<Type>{s1.data()};
+    auto func = replace_nulls_functor<col_type>{s1.data()};
     thrust::transform(rmm::exec_policy(stream),
-                      input.data<Type>(),
-                      input.data<Type>() + input.size(),
+                      input.data<col_type>(),
+                      input.data<col_type>() + input.size(),
                       cudf::detail::make_validity_iterator(*device_in),
-                      output_view.data<Type>(),
+                      output_view.data<col_type>(),
                       func);
     return output;
   }
@@ -387,7 +386,7 @@ std::unique_ptr<cudf::column> replace_nulls_policy_impl(cudf::column_view const&
   auto valid_it  = cudf::detail::make_validity_iterator(*device_in);
   auto in_begin  = thrust::make_zip_iterator(thrust::make_tuple(index, valid_it));
 
-  rmm::device_vector<cudf::size_type> gather_map(input.size());
+  rmm::device_uvector<cudf::size_type> gather_map(input.size(), stream);
   auto gm_begin = thrust::make_zip_iterator(
     thrust::make_tuple(gather_map.begin(), thrust::make_discard_iterator()));
 
@@ -405,7 +404,8 @@ std::unique_ptr<cudf::column> replace_nulls_policy_impl(cudf::column_view const&
   auto output = cudf::detail::gather(cudf::table_view({input}),
                                      gather_map.begin(),
                                      gather_map.end(),
-                                     cudf::out_of_bounds_policy::DONT_CHECK);
+                                     cudf::out_of_bounds_policy::DONT_CHECK,
+                                     stream);
 
   return std::move(output->release()[0]);
 }
@@ -423,7 +423,6 @@ std::unique_ptr<cudf::column> replace_nulls(cudf::column_view const& input,
   CUDF_EXPECTS(replacement.size() == input.size(), "Column size mismatch");
 
   if (input.is_empty()) { return cudf::empty_like(input); }
-
   if (!input.has_nulls()) { return std::make_unique<cudf::column>(input); }
 
   return cudf::type_dispatcher(
@@ -436,12 +435,11 @@ std::unique_ptr<cudf::column> replace_nulls(cudf::column_view const& input,
                                             rmm::mr::device_memory_resource* mr)
 {
   if (input.is_empty()) { return cudf::empty_like(input); }
-
   if (!input.has_nulls() || !replacement.is_valid()) {
     return std::make_unique<cudf::column>(input, stream, mr);
   }
 
-  return cudf::type_dispatcher(
+  return cudf::type_dispatcher<dispatch_storage_type>(
     input.type(), replace_nulls_scalar_kernel_forwarder{}, input, replacement, stream, mr);
 }
 
@@ -451,7 +449,6 @@ std::unique_ptr<cudf::column> replace_nulls(cudf::column_view const& input,
                                             rmm::mr::device_memory_resource* mr)
 {
   if (input.is_empty()) { return cudf::empty_like(input); }
-
   if (!input.has_nulls()) { return std::make_unique<cudf::column>(input, stream, mr); }
 
   return replace_nulls_policy_impl(input, replace_policy, stream, mr);
