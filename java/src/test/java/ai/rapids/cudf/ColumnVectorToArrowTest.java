@@ -87,7 +87,8 @@ public class ColumnVectorToArrowTest extends CudfTestBase {
         assertEquals(1, v1.getNullCount());
         assertEquals(1, vector.getNullCount());
         assertTrue(VectorEqualsVisitor.vectorEquals(v1, vector));
-        // ColumnVector.closeArrowArray(res.getArrowArrayHandle());
+        // assertEquals(1, res.getArrowArrayHandle());
+        ColumnVector.closeArrowArray(res.getArrowArrayHandle());
       }
     }
   }

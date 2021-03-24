@@ -150,7 +150,7 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_fromArrow(JNIEnv *env, 
   CATCH_STD(env, 0);
 }
 
-JNIEXPORT void JNICALL Java_ai_rapids_cudf_Table_closeArrowArrayNative(JNIEnv *env, jclass,
+JNIEXPORT void JNICALL Java_ai_rapids_cudf_ColumnVector_closeArrowArrayNative(JNIEnv *env, jclass,
                                                                  jlong arrow_array_handle) {
   std::shared_ptr<arrow::Array> *handle =
       reinterpret_cast<std::shared_ptr<arrow::Array> *>(arrow_array_handle);
