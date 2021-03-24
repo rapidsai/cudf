@@ -2936,10 +2936,11 @@ public class TableTest extends CudfTestBase {
         .column((long) 1, (long)1, (long)2, (long)3, (long)3, (long)3, (long)4, (long)4, (long)5, (long)5, (long)6, (long)6, (long)7) // orderBy Key
         .column((short) 1, (short)1, (short)2, (short)3, (short)3, (short)3, (short)4, (short)4, (short)5, (short)5, (short)6, (short)6, (short)7) // orderBy Key
         .column((int) 1, (int)1, (int)2, (int)3, (int)3, (int)3, (int)4, (int)4, (int)5, (int)5, (int)6, (int)6, (int)7) // orderBy Key
+        .column((byte) 1, (byte)1, (byte)2, (byte)3, (byte)3, (byte)3, (byte)4, (byte)4, (byte)5, (byte)5, (byte)6, (byte)6, (byte)7) // orderBy Key
         .timestampDayColumn( 1, 1, 2, 3, 3, 3, 4, 4, 5, 5, 6, 6, 7) // timestamp orderBy Key
         .build()) {
 
-      int[] orderByIndices = {3, 4, 5, 6};
+      int[] orderByIndices = {3, 4, 5, 6, 7};
       for (int orderIndex : orderByIndices) {
         try (Table sorted = unsorted.orderBy(Table.asc(0), Table.asc(1), Table.asc(orderIndex));
              ColumnVector expectSortedAggColumn = ColumnVector.fromBoxedInts(7, 5, 1, 9, 7, 9, 8, 2, 8, 0, 6, 6, 8)) {
@@ -2970,10 +2971,11 @@ public class TableTest extends CudfTestBase {
         .column((long) 1, (long)1, (long)2, (long)3, (long)3, (long)3, (long)4, (long)4, (long)5, (long)5, (long)6, (long)6, (long)7) // orderBy Key
         .column((short) 1, (short)1, (short)2, (short)3, (short)3, (short)3, (short)4, (short)4, (short)5, (short)5, (short)6, (short)6, (short)7) // orderBy Key
         .column((int) 1, (int)1, (int)2, (int)3, (int)3, (int)3, (int)4, (int)4, (int)5, (int)5, (int)6, (int)6, (int)7) // orderBy Key
+        .column((byte) 1, (byte)1, (byte)2, (byte)3, (byte)3, (byte)3, (byte)4, (byte)4, (byte)5, (byte)5, (byte)6, (byte)6, (byte)7) // orderBy Key
         .timestampDayColumn( 1, 1, 2, 3, 3, 3, 4, 4, 5, 5, 6, 6, 7) // Timestamp orderBy Key
         .build()) {
 
-      int[] orderByIndices = {3, 4, 5, 6};
+      int[] orderByIndices = {3, 4, 5, 6, 7};
       for (int orderIndex : orderByIndices) {
         try (Table sorted = unsorted.orderBy(Table.asc(0), Table.asc(1), Table.asc(orderIndex));
              ColumnVector expectSortedAggColumn = ColumnVector.fromBoxedInts(7, 5, 1, 9, 7, 9, 8, 2, 8, 0, 6, 6, 8)) {
@@ -3007,10 +3009,11 @@ public class TableTest extends CudfTestBase {
         .column((long) 1, (long)1, (long)2, (long)3, (long)3, (long)3, (long)4, (long)4, (long)5, (long)5, (long)6, (long)6, (long)7) // orderBy Key
         .column((short) 1, (short)1, (short)2, (short)3, (short)3, (short)3, (short)4, (short)4, (short)5, (short)5, (short)6, (short)6, (short)7) // orderBy Key
         .column((int) 1, (int)1, (int)2, (int)3, (int)3, (int)3, (int)4, (int)4, (int)5, (int)5, (int)6, (int)6, (int)7) // orderBy Key
+        .column((byte) 1, (byte)1, (byte)2, (byte)3, (byte)3, (byte)3, (byte)4, (byte)4, (byte)5, (byte)5, (byte)6, (byte)6, (byte)7) // orderBy Key
         .timestampDayColumn( 1, 1, 2, 3, 3, 3, 4, 4, 5, 5, 6, 6, 7) // Timestamp orderBy Key
         .build()) {
 
-      int[] orderByIndices = {3, 4, 5, 6};
+      int[] orderByIndices = {3, 4, 5, 6, 7};
       for (int orderIndex : orderByIndices) {
         try (Table sorted = unsorted.orderBy(Table.asc(0), Table.asc(1), Table.asc(orderIndex));
              ColumnVector expectSortedAggColumn = ColumnVector.fromBoxedInts(7, 5, 1, 9, 7, 9, 8, 2, 8, 0, 6, 6, 8)) {
@@ -3053,10 +3056,11 @@ public class TableTest extends CudfTestBase {
         .column((long) 1, (long)1, (long)2, (long)3, (long)3, (long)3, (long)4, (long)4, (long)5, (long)5, (long)6, (long)6, (long)7) // orderBy Key
         .column((short) 1, (short)1, (short)2, (short)3, (short)3, (short)3, (short)4, (short)4, (short)5, (short)5, (short)6, (short)6, (short)7) // orderBy Key
         .column((int) 1, (int)1, (int)2, (int)3, (int)3, (int)3, (int)4, (int)4, (int)5, (int)5, (int)6, (int)6, (int)7) // orderBy Key
+        .column((byte) 1, (byte)1, (byte)2, (byte)3, (byte)3, (byte)3, (byte)4, (byte)4, (byte)5, (byte)5, (byte)6, (byte)6, (byte)7) // orderBy Key
         .timestampDayColumn( 1, 1, 2, 3, 3, 3, 4, 4, 5, 5, 6, 6, 7) // Timestamp orderBy Key
         .build()) {
 
-      int[] orderByIndices = {3, 4, 5, 6};
+      int[] orderByIndices = {3, 4, 5, 6, 7};
       for (int orderIndex : orderByIndices) {
         try (Table sorted = unsorted.orderBy(Table.asc(0), Table.asc(1), Table.asc(orderIndex));
              ColumnVector expectSortedAggColumn = ColumnVector.fromBoxedInts(7, 5, 1, 9, 7, 9, 8, 2, 8, 0, 6, 6, 8)) {
@@ -3088,9 +3092,10 @@ public class TableTest extends CudfTestBase {
         .column((long)7, (long)6, (long)6, (long)5,  (long)5, (long)4, (long)4, (long)3,  (long)3, (long)3, (long)2, (long)1, (long)1)
         .column((short)7, (short)6, (short)6, (short)5,  (short)5, (short)4, (short)4, (short)3,  (short)3, (short)3, (short)2, (short)1, (short)1)
         .column((int)7, (int)6, (int)6, (int)5,  (int)5, (int)4, (int)4, (int)3,  (int)3, (int)3, (int)2, (int)1, (int)1)
+        .column((byte)7, (byte)6, (byte)6, (byte)5,  (byte)5, (byte)4, (byte)4, (byte)3,  (byte)3, (byte)3, (byte)2, (byte)1, (byte)1)
         .timestampDayColumn( 7, 6, 6, 5,  5, 4, 4, 3,  3, 3, 2, 1, 1) // Timestamp Key
         .build()) {
-      int[] orderByIndices = {3, 4, 5, 6};
+      int[] orderByIndices = {3, 4, 5, 6, 7};
       for (int orderIndex : orderByIndices) {
         try (Table sorted = unsorted.orderBy(Table.asc(0), Table.asc(1), Table.desc(orderIndex));
              ColumnVector expectSortedAggColumn = ColumnVector.fromBoxedInts(7, 5, 1, 9, 7, 9, 8, 2, 8, 0, 6, 6, 8)) {
@@ -3132,10 +3137,11 @@ public class TableTest extends CudfTestBase {
         .column((long) 1, (long)1, (long)2, (long)3, (long)3, (long)3, (long)4, (long)4, (long)5, (long)5, (long)6, (long)6, (long)7) // orderBy Key
         .column((short) 1, (short)1, (short)2, (short)3, (short)3, (short)3, (short)4, (short)4, (short)5, (short)5, (short)6, (short)6, (short)7) // orderBy Key
         .column((int) 1, (int)1, (int)2, (int)3, (int)3, (int)3, (int)4, (int)4, (int)5, (int)5, (int)6, (int)6, (int)7) // orderBy Key
+        .column((byte) 1, (byte)1, (byte)2, (byte)3, (byte)3, (byte)3, (byte)4, (byte)4, (byte)5, (byte)5, (byte)6, (byte)6, (byte)7) // orderBy Key
         .timestampDayColumn( 1, 1, 2, 3, 3, 3, 4, 4, 5, 5, 6, 6, 7) // Timestamp orderBy Key
         .build()) {
 
-      int[] orderByIndices = {1, 2, 3, 4};
+      int[] orderByIndices = {1, 2, 3, 4, 5};
       for (int orderIndex : orderByIndices) {
         try (Table sorted = unsorted.orderBy(Table.asc(orderIndex));
              ColumnVector expectSortedAggColumn = ColumnVector.fromBoxedInts(7, 5, 1, 9, 7, 9, 8, 2, 8, 0, 6, 6, 8)) {
@@ -3184,9 +3190,10 @@ public class TableTest extends CudfTestBase {
         .column((long) 1, (long)1, (long)2, (long)3, (long)3, (long)3, (long)4, (long)4, (long)5, (long)5, (long)6, (long)6, (long)7) // orderBy Key
         .column((short) 1, (short)1, (short)2, (short)3, (short)3, (short)3, (short)4, (short)4, (short)5, (short)5, (short)6, (short)6, (short)7) // orderBy Key
         .column((int) 1, (int)1, (int)2, (int)3, (int)3, (int)3, (int)4, (int)4, (int)5, (int)5, (int)6, (int)6, (int)7) // orderBy Key
+        .column((byte) 1, (byte)1, (byte)2, (byte)3, (byte)3, (byte)3, (byte)4, (byte)4, (byte)5, (byte)5, (byte)6, (byte)6, (byte)7) // orderBy Key
         .timestampDayColumn( 1, 1, 2, 3, 3, 3, 4, 4, 5, 5, 6, 6, 7) // Timestamp orderBy Key
         .build()) {
-      int[] orderByIndices = {3, 4, 5, 6};
+      int[] orderByIndices = {3, 4, 5, 6, 7};
       for (int orderIndex : orderByIndices) {
         try (Table sorted = unsorted.orderBy(Table.asc(0), Table.asc(1), Table.asc(orderIndex));
              ColumnVector expectSortedAggColumn = ColumnVector.fromBoxedInts(7, 5, 1, 9, 7, 9, 8, 2, 8, 0, 6, 6, 8)) {
@@ -3219,10 +3226,11 @@ public class TableTest extends CudfTestBase {
         .column( null, null, null, 2, 3, 5,  null, null, 1, 2, 4, 5, 7) // Timestamp Key
         .column( null, null, null, (long)2, (long)3, (long)5,  null, null, (long)1, (long)2, (long)4, (long)5, (long)7) // orderBy Key
         .column( null, null, null, (short)2, (short)3, (short)5,  null, null, (short)1, (short)2, (short)4, (short)5, (short)7) // orderBy Key
+        .column( null, null, null, (byte)2, (byte)3, (byte)5,  null, null, (byte)1, (byte)2, (byte)4, (byte)5, (byte)7) // orderBy Key
         .timestampDayColumn( null, null, null, 2, 3, 5,  null, null, 1, 2, 4, 5, 7) // Timestamp orderBy Key
         .build()) {
 
-      int[] orderByIndices = {3, 4, 5, 6};
+      int[] orderByIndices = {3, 4, 5, 6, 7};
       for (int orderIndex : orderByIndices) {
         try (Table sorted = unsorted.orderBy(Table.asc(0), Table.asc(1), Table.asc(orderIndex, true));
              ColumnVector expectSortedAggColumn = ColumnVector.fromBoxedInts(7, 5, 1, 9, 7, 9, 8, 2, 8, 0, 6, 6, 8)) {
@@ -3297,10 +3305,11 @@ public class TableTest extends CudfTestBase {
         .column(null, null, null, 5, 3, 2,  null, null, 7, 5, 4, 2, 1) // Timestamp Key
         .column(null, null, null, (long)5, (long)3, (long)2,  null, null, (long)7, (long)5, (long)4, (long)2, (long)1) // orderby Key
         .column(null, null, null, (short)5, (short)3, (short)2,  null, null, (short)7, (short)5, (short)4, (short)2, (short)1) // orderby Key
+        .column(null, null, null, (byte)5, (byte)3, (byte)2,  null, null, (byte)7, (byte)5, (byte)4, (byte)2, (byte)1) // orderby Key
         .timestampDayColumn(null, null, null, 5, 3, 2, null, null, 7, 5, 4, 2, 1) // Timestamp orderby Key
         .build()) {
 
-      int[] orderByIndices = {3, 4, 5, 6};
+      int[] orderByIndices = {3, 4, 5, 6, 7};
       for (int orderIndex : orderByIndices) {
         try (Table sorted = unsorted.orderBy(Table.asc(0), Table.asc(1), Table.desc(orderIndex, false));
              ColumnVector expectSortedAggColumn = ColumnVector.fromBoxedInts(7, 5, 1, 9, 7, 9, 8, 2, 8, 0, 6, 6, 8)) {
@@ -3380,9 +3389,10 @@ public class TableTest extends CudfTestBase {
         .column(2, 3, 5, null, null, null,  1, 2, 4, 5, 7, null, null) // Timestamp Key
         .column((long)2, (long)3, (long)5, null, null, null, (long)1, (long)2, (long)4, (long)5, (long)7, null, null) // order by Key
         .column((short)2, (short)3, (short)5, null, null, null, (short)1, (short)2, (short)4, (short)5, (short)7, null, null) // order by Key
+        .column((byte)2, (byte)3, (byte)5, null, null, null, (byte)1, (byte)2, (byte)4, (byte)5, (byte)7, null, null) // order by Key
         .timestampDayColumn( 2, 3, 5, null, null, null,  1, 2, 4, 5, 7, null, null) // Timestamp order by Key
         .build()) {
-      int[] orderByIndices = {3, 4, 5, 6};
+      int[] orderByIndices = {3, 4, 5, 6, 7};
       for (int orderIndex : orderByIndices) {
         try (Table sorted = unsorted.orderBy(Table.asc(0), Table.asc(1), Table.asc(orderIndex, false));
              ColumnVector expectSortedAggColumn = ColumnVector.fromBoxedInts(7, 5, 1, 9, 7, 9, 8, 2, 8, 0, 6, 6, 8)) {
@@ -3457,9 +3467,10 @@ public class TableTest extends CudfTestBase {
         .column( 5, 3, 2, null, null, null, 7, 5, 4, 2, 1, null, null) // Timestamp Key
         .column((long)5, (long)3, (long)2, null, null, null, (long)7, (long)5, (long)4, (long)2, (long)1, null, null) // Timestamp Key
         .column((short)5, (short)3, (short)2, null, null, null, (short)7, (short)5, (short)4, (short)2, (short)1, null, null) // Timestamp Key
+        .column((byte)5, (byte)3, (byte)2, null, null, null, (byte)7, (byte)5, (byte)4, (byte)2, (byte)1, null, null) // Timestamp Key
         .timestampDayColumn( 5, 3, 2, X, X, X,  7, 5, 4, 2, 1, X, X) // Timestamp Key
         .build()) {
-      int[] orderByIndices = {3, 4, 5, 6};
+      int[] orderByIndices = {3, 4, 5, 6, 7};
       for (int orderIndex : orderByIndices) {
         try (Table sorted = unsorted.orderBy(Table.asc(0), Table.asc(1), Table.desc(orderIndex, true));
              ColumnVector expectSortedAggColumn = ColumnVector.fromBoxedInts(7, 5, 1, 9, 7, 9, 8, 2, 8, 0, 6, 6, 8)) {

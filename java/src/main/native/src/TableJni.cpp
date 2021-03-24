@@ -622,60 +622,29 @@ bool valid_window_parameters(native_jintArray const &values,
          values.size() == preceding.size() && values.size() == following.size();
 }
 
-std::unique_ptr<cudf::scalar> make_range_window_offset_scalar(data_type type, int value, bool validity = true) {
-  std::unique_ptr<cudf::scalar> scalar{nullptr};
-
-  if (cudf::is_numeric(type)) {
-    scalar = cudf::make_numeric_scalar(type);
-  } else if (cudf::is_timestamp(type)) {
-    scalar = cudf::make_timestamp_scalar(type);
-  } else if (cudf::is_duration(type)) {
-    scalar = cudf::make_timestamp_scalar(type);
-  } else {
-    // TODO not supported type yet
+struct scalar_construction_helper {
+  template <typename T,
+           typename ScalarType = cudf::scalar_type_t<T>,
+           typename std::enable_if_t<!(std::is_integral<T>() && !cudf::is_boolean<T>())>* = nullptr>
+  std::unique_ptr<cudf::scalar> operator()(int value, bool validify = true) {
+    CUDF_FAIL("only support numeric type except bool");
   }
 
-  switch (type.id()) {
-    case type_id::INT8:
-      static_cast<cudf::scalar_type_t<int8_t> *>(scalar.get())->set_value(static_cast<int8_t>(value));
-      break;
-    case type_id::INT16:
-      static_cast<cudf::scalar_type_t<int16_t> *>(scalar.get())->set_value(static_cast<int16_t>(value));
-      break;
-    case type_id::INT32:
-      static_cast<cudf::scalar_type_t<int32_t> *>(scalar.get())->set_value(static_cast<int32_t>(value));
-      break;
-    case type_id::INT64:
-      static_cast<cudf::scalar_type_t<int64_t> *>(scalar.get())->set_value(static_cast<int64_t>(value));
-      break;
-    case type_id::UINT16:
-      static_cast<cudf::scalar_type_t<uint16_t> *>(scalar.get())->set_value(static_cast<uint16_t>(value));
-      break;
-    case type_id::UINT32:
-      static_cast<cudf::scalar_type_t<uint32_t> *>(scalar.get())->set_value(static_cast<uint32_t>(value));
-      break;
-    case type_id::UINT64:
-      static_cast<cudf::scalar_type_t<uint64_t> *>(scalar.get())->set_value(static_cast<uint64_t>(value));
-      break;
-
-    case type_id::TIMESTAMP_DAYS:
-    case type_id::TIMESTAMP_SECONDS:
-    case type_id::TIMESTAMP_MILLISECONDS:
-    case type_id::TIMESTAMP_MICROSECONDS:
-    case type_id::TIMESTAMP_NANOSECONDS:
-    case type_id::DURATION_DAYS:
-    case type_id::DURATION_SECONDS:
-    case type_id::DURATION_MILLISECONDS:
-    case type_id::DURATION_MICROSECONDS:
-    case type_id::DURATION_NANOSECONDS:
-      //todo
-      break;
-    default:
-      break;
+  template <typename T,
+            typename ScalarType = cudf::scalar_type_t<T>,
+            typename std::enable_if_t<std::is_integral<T>() && !cudf::is_boolean<T>()>* = nullptr>
+  std::unique_ptr<cudf::scalar> operator()(int value, bool validify = true) {
+    using Type = device_storage_type_t<T>;
+    auto s     = new ScalarType(Type{}, validify);
+    s->set_value(static_cast<T> (value));
+    return std::unique_ptr<scalar>(s);
   }
+};
 
-  scalar->set_valid(validity);
-  return scalar;
+std::unique_ptr<cudf::scalar> make_range_window_scalar(data_type type,
+                                                       int value,
+                                                       bool validity = true) {
+  return cudf::type_dispatcher(type, scalar_construction_helper{}, value, validity);
 }
 
 } // namespace
@@ -2136,7 +2105,7 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_rangeRollingWindowAggrega
     cudf::jni::auto_set_device(env);
 
     using cudf::jni::valid_window_parameters;
-    using cudf::jni::make_range_window_offset_scalar;
+    using cudf::jni::make_range_window_scalar;
 
     // Convert from j-types to native.
     cudf::table_view *input_table{reinterpret_cast<cudf::table_view *>(j_input_table)};
@@ -2193,10 +2162,10 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_rangeRollingWindowAggrega
                 input_table->column(agg_column_index),
                 unbounded_preceding[i] ? cudf::range_window_bounds::unbounded(order_by_type) :
                 cudf::range_window_bounds::get(
-                    make_range_window_offset_scalar(order_by_column.type(), preceding[i], true)),
+                    make_range_window_scalar(order_by_column.type(), preceding[i], true)),
                 unbounded_following[i] ? cudf::range_window_bounds::unbounded(order_by_type) :
                 cudf::range_window_bounds::get(
-                    make_range_window_offset_scalar(order_by_column.type(), following[i], true)),
+                    make_range_window_scalar(order_by_column.type(), following[i], true)),
                 min_periods[i],
                 agg_instances[i]->clone()
             )
