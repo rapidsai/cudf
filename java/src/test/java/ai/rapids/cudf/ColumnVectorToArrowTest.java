@@ -73,7 +73,7 @@ public class ColumnVectorToArrowTest extends CudfTestBase {
       vector.setValueCount(count);
       try (ColumnVector toConvert = ColumnVector.fromBoxedInts(expectedArr.toArray(new Integer[0]))) {
         assertEquals(toConvert.getNullCount(), 1);
-        ArrowColumnInfo res = ColumnVector.toArrowFromPrimitiveVector(toConvert);
+        ArrowColumnInfo res = ColumnVector.toArrow(toConvert);
         ArrowBuf validityBuf = null;
         if (res.getValidityBufferAddress() != 0) {
           validityBuf = new ArrowBuf(ReferenceManager.NO_OP, null,
@@ -110,7 +110,7 @@ public class ColumnVectorToArrowTest extends CudfTestBase {
       vector.setValueCount(count);
       try (ColumnVector toConvert = ColumnVector.fromBoxedLongs(expectedArr.toArray(new Long[0]))) {
         assertEquals(toConvert.getNullCount(), 1);
-        ArrowColumnInfo res = ColumnVector.toArrowFromPrimitiveVector(toConvert);
+        ArrowColumnInfo res = ColumnVector.toArrow(toConvert);
         ArrowBuf validityBuf = null;
         if (res.getValidityBufferAddress() != 0) {
           validityBuf = new ArrowBuf(ReferenceManager.NO_OP, null,
@@ -232,7 +232,7 @@ public class ColumnVectorToArrowTest extends CudfTestBase {
       vector.setValueCount(count);
       try (ColumnVector toConvert = ColumnVector.fromStrings(expectedArr.toArray(new String[0]))) {
         assertEquals(toConvert.getNullCount(), 1);
-        ArrowColumnInfo res = ColumnVector.toArrowFromStringVector(toConvert);
+        ArrowColumnInfo res = ColumnVector.toArrow(toConvert);
         ArrowBuf validityBuf = null;
         if (res.getValidityBufferAddress() != 0) {
           validityBuf = new ArrowBuf(ReferenceManager.NO_OP, null,

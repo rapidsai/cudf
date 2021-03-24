@@ -362,8 +362,15 @@ public final class ColumnVector extends ColumnView {
    * @return - ArrowColumnInfo
    */
   public static ArrowColumnInfo toArrow(ColumnVector vec) {
-    long[] res = toArrowFromPrimitive(vec.getNativeView());
-    return new ArrowColumnInfo(res[0], res[1], res[2], res[3], res[4], res[5]);
+    ArrowColumnInfo res = null;
+    assert !vec.getType().isNestedType(): "Unsupported nested column type";
+    assert !vec.getType().isDecimalType() : "Unsupported decimal column type";
+    if (vec.getType().equals(DType.STRING)) {
+        res = toArrowFromStringVector(vec);
+    } else {
+        res = toArrowFromPrimitiveVector(vec);
+    }
+    return res;
   }
 
   /**
@@ -371,7 +378,7 @@ public final class ColumnVector extends ColumnView {
    * @param vec - ColumnVector to convert
    * @return - ArrowColumnInfo
    */
-  public static ArrowColumnInfo toArrowFromPrimitiveVector(ColumnVector vec) {
+  private static ArrowColumnInfo toArrowFromPrimitiveVector(ColumnVector vec) {
     long[] res = toArrowFromPrimitive(vec.getNativeView());
     return new ArrowColumnInfo(res[0], res[1], res[2], res[3], res[4], res[5]);
   }
@@ -381,7 +388,7 @@ public final class ColumnVector extends ColumnView {
    * @param vec - ColumnVector to convert
    * @return - ArrowColumnInfo
    */
-  public static ArrowColumnInfo toArrowFromStringVector(ColumnVector vec) {
+  private static ArrowColumnInfo toArrowFromStringVector(ColumnVector vec) {
     long[] res = toArrowFromString(vec.getNativeView());
     return new ArrowColumnInfo(res[0], res[1], res[2], res[3], res[4], res[5], res[6], res[7]);
   }
