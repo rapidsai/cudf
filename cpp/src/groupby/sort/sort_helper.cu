@@ -164,7 +164,7 @@ sort_groupby_helper::index_vector const& sort_groupby_helper::group_offsets(
   _group_offsets = std::make_unique<index_vector>(num_keys(stream) + 1, stream);
 
   auto device_input_table = table_device_view::create(_keys, stream);
-  auto sorted_order       = key_sort_order().data<size_type>();
+  auto sorted_order       = key_sort_order(stream).data<size_type>();
   decltype(_group_offsets->begin()) result_end;
 
   if (has_nulls(_keys)) {
@@ -228,7 +228,7 @@ column_view sort_groupby_helper::unsorted_keys_labels(rmm::cuda_stream_view stre
   auto group_labels_view = cudf::column_view(
     data_type(type_to_id<size_type>()), group_labels(stream).size(), group_labels(stream).data());
 
-  auto scatter_map = key_sort_order();
+  auto scatter_map = key_sort_order(stream);
 
   std::unique_ptr<table> t_unsorted_keys_labels =
     cudf::detail::scatter(table_view({group_labels_view}),
@@ -289,7 +289,7 @@ sort_groupby_helper::column_ptr sort_groupby_helper::sorted_values(
 sort_groupby_helper::column_ptr sort_groupby_helper::grouped_values(
   column_view const& values, rmm::cuda_stream_view stream, rmm::mr::device_memory_resource* mr)
 {
-  auto gather_map = key_sort_order();
+  auto gather_map = key_sort_order(stream);
 
   auto grouped_values_table = cudf::detail::gather(table_view({values}),
                                                    gather_map,
@@ -304,7 +304,7 @@ sort_groupby_helper::column_ptr sort_groupby_helper::grouped_values(
 std::unique_ptr<table> sort_groupby_helper::unique_keys(rmm::cuda_stream_view stream,
                                                         rmm::mr::device_memory_resource* mr)
 {
-  auto idx_data = key_sort_order().data<size_type>();
+  auto idx_data = key_sort_order(stream).data<size_type>();
 
   auto gather_map_it = thrust::make_transform_iterator(
     group_offsets(stream).begin(), [idx_data] __device__(size_type i) { return idx_data[i]; });
@@ -321,7 +321,7 @@ std::unique_ptr<table> sort_groupby_helper::sorted_keys(rmm::cuda_stream_view st
                                                         rmm::mr::device_memory_resource* mr)
 {
   return cudf::detail::gather(_keys,
-                              key_sort_order(),
+                              key_sort_order(stream),
                               cudf::out_of_bounds_policy::DONT_CHECK,
                               cudf::detail::negative_index_policy::NOT_ALLOWED,
                               stream,

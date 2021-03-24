@@ -107,7 +107,7 @@ void aggregrate_result_functor::operator()<aggregation::ARGMAX>(aggregation cons
                    detail::group_argmax(get_grouped_values(),
                                         helper.num_groups(),
                                         helper.group_labels(stream),
-                                        helper.key_sort_order(),
+                                        helper.key_sort_order(stream),
                                         stream,
                                         mr));
 };
@@ -122,7 +122,7 @@ void aggregrate_result_functor::operator()<aggregation::ARGMIN>(aggregation cons
                    detail::group_argmin(get_grouped_values(),
                                         helper.num_groups(),
                                         helper.group_labels(stream),
-                                        helper.key_sort_order(),
+                                        helper.key_sort_order(stream),
                                         stream,
                                         mr));
 };
