@@ -190,7 +190,7 @@ groupby::groups groupby::get_groups(table_view values, rmm::mr::device_memory_re
 
   if (values.num_columns()) {
     auto grouped_values = cudf::detail::gather(values,
-                                               helper().key_sort_order(),
+                                               helper().key_sort_order(rmm::cuda_stream_default),
                                                cudf::out_of_bounds_policy::DONT_CHECK,
                                                cudf::detail::negative_index_policy::NOT_ALLOWED,
                                                rmm::cuda_stream_default,
