@@ -25,29 +25,26 @@ namespace cudf {
 namespace io {
 namespace detail {
 
+size_t get_file_size(int fd)
+{
+  struct stat st;
+  CUDF_EXPECTS(fstat(fd, &st) != -1, "Cannot query file size");
+  return static_cast<size_t>(st.st_size);
+}
+
 file_wrapper::file_wrapper(std::string const &filepath, int flags)
-  : fd(open(filepath.c_str(), flags))
+  : fd(open(filepath.c_str(), flags)), _size{get_file_size(fd)}
 {
   CUDF_EXPECTS(fd != -1, "Cannot open file " + filepath);
 }
 
 file_wrapper::file_wrapper(std::string const &filepath, int flags, mode_t mode)
-  : fd(open(filepath.c_str(), flags, mode))
+  : fd(open(filepath.c_str(), flags, mode)), _size{get_file_size(fd)}
 {
   CUDF_EXPECTS(fd != -1, "Cannot open file " + filepath);
 }
 
 file_wrapper::~file_wrapper() { close(fd); }
-
-long file_wrapper::size() const
-{
-  if (_size < 0) {
-    struct stat st;
-    CUDF_EXPECTS(fstat(fd, &st) != -1, "Cannot query file size");
-    _size = static_cast<size_t>(st.st_size);
-  }
-  return _size;
-}
 
 std::string getenv_or(std::string const &env_var_name, std::string const &default_val)
 {
