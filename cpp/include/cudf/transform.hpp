@@ -152,20 +152,14 @@ std::unique_ptr<column> mask_to_bools(
  * Each row in the returned column is the sum of the per-row size for each column in
  * the table.
  *
- * In some cases, this is an inexact approximation. Specifically, with
- * lists or strings, the cost of a row includes 32 bits for a single offset. However, two
- * offsets is required to represent an entire row.  But this presents a problem, because to
- * represent 2 rows, you need 3 offsets.  3 rows 4 offsets, etc.  Therefore it would not
- * be accurate to say each row of a string column costs 2 offsets because summing multiple row
- * sizes would give you a number too large. It is up to the caller to understand the schema
- * of the input column to be able to calculate the small additional overhead of the
- * terminating offset for any group of rows being considered.
+ * In some cases, this is an inexact approximation. Specifically, columns of lists and strings
+ * require N+1 offsets to represent N rows. It is up to the caller to calculate the small
+ * additional overhead of the terminating offset for any group of rows being considered.
  *
- * This function returns the per-row sizes as the columns are currently formed.  This can
- * end up being different than the number you would get by gathering the rows under
- * certain circumstances.  Specifically, the pushdown of validity masks by struct
- * columns can nullify rows that actually contain underlying data for string or list
- * columns. In these cases, the sized returned will be strictly:
+ * This function returns the per-row sizes as the columns are currently formed. This can
+ * end up being larger than the number you would get by gathering the rows. Specifically,
+ * the push-down of struct column validity masks can nullify rows that contain data for
+ * string or list columns. In these cases, the size returned is conservative:
  *
  * row_bit_count(column(x)) >= row_bit_count(gather(column(x)))
  *
