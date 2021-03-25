@@ -708,6 +708,11 @@ class DataFrameGroupBy(GroupBy):
         )
 
     def __getattr__(self, key):
+        # Without this check, copying can trigger a RecursionError. See
+        # https://nedbatchelder.com/blog/201010/surprising_getattr_recursion.html  #noqa: E501
+        # for an explanation.
+        if key == "obj":
+            raise AttributeError
         try:
             return self[key]
         except KeyError:
