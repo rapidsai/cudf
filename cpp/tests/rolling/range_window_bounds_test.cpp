@@ -11,7 +11,6 @@
 #include <cuda/std/ratio>
 #include <vector>
 
-// TODO: Add to rolling.hpp.
 #include <cudf/rolling/range_window_bounds.hpp>
 #include <src/rolling/range_window_bounds_detail.hpp>
 
