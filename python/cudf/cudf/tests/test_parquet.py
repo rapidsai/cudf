@@ -1,4 +1,5 @@
-# Copyright (c) 2019-2020, NVIDIA CORPORATION.
+# Copyright (c) 2019-2021, NVIDIA CORPORATION.
+
 import datetime
 import math
 import os
@@ -1026,7 +1027,7 @@ def test_parquet_reader_list_skiprows(skip, tmpdir):
     assert_eq(expect, got, check_dtype=False)
 
 
-@pytest.mark.parametrize("skip", range(0, 128))
+@pytest.mark.parametrize("skip", range(0, 120))
 def test_parquet_reader_list_num_rows(skip, tmpdir):
     num_rows = 128
     src = pd.DataFrame(
@@ -1043,7 +1044,8 @@ def test_parquet_reader_list_num_rows(skip, tmpdir):
     src.to_parquet(fname)
     assert os.path.exists(fname)
 
-    rows_to_read = min(3, num_rows - skip)
+    # make sure to leave a few rows at the end that we don't read
+    rows_to_read = min(3, (num_rows - skip) - 5)
     expect = src.iloc[skip:].head(rows_to_read)
     got = cudf.read_parquet(fname, skiprows=skip, num_rows=rows_to_read)
     assert_eq(expect, got, check_dtype=False)
@@ -1717,24 +1719,24 @@ def test_parquet_nullable_boolean(tmpdir, engine):
     ],
 )
 @pytest.mark.parametrize("index", [None, True, False])
-def test_parquet_index(tmpdir, pdf, index):
-    pandas_path = tmpdir.join("pandas_index.parquet")
-    cudf_path = tmpdir.join("pandas_index.parquet")
+def test_parquet_index(pdf, index):
+    pandas_buffer = BytesIO()
+    cudf_buffer = BytesIO()
 
     gdf = cudf.from_pandas(pdf)
 
-    pdf.to_parquet(pandas_path, index=index)
-    gdf.to_parquet(cudf_path, index=index)
+    pdf.to_parquet(pandas_buffer, index=index)
+    gdf.to_parquet(cudf_buffer, index=index)
 
-    expected = pd.read_parquet(cudf_path)
-    actual = cudf.read_parquet(cudf_path)
+    expected = pd.read_parquet(cudf_buffer)
+    actual = cudf.read_parquet(pandas_buffer)
 
-    assert_eq(expected, actual)
+    assert_eq(expected, actual, check_index_type=True)
 
-    expected = pd.read_parquet(pandas_path)
-    actual = cudf.read_parquet(pandas_path)
+    expected = pd.read_parquet(pandas_buffer)
+    actual = cudf.read_parquet(cudf_buffer)
 
-    assert_eq(expected, actual)
+    assert_eq(expected, actual, check_index_type=True)
 
 
 @pytest.mark.parametrize("engine", ["cudf", "pyarrow"])
@@ -1834,3 +1836,104 @@ def test_parquet_writer_list_statistics(tmpdir):
             actual_max = cudf.Series(pd_slice[col].explode().explode()).max()
             stats_max = stats.max
             assert normalized_equals(actual_max, stats_max)
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        # Structs
+        {
+            "being": [
+                None,
+                {"human?": True, "Deets": {"Name": "Carrot", "Age": 27}},
+                {"human?": None, "Deets": {"Name": "Angua", "Age": 25}},
+                {"human?": False, "Deets": {"Name": "Cheery", "Age": 31}},
+                {"human?": False, "Deets": None},
+                {"human?": None, "Deets": {"Name": "Mr", "Age": None}},
+            ]
+        },
+        # List of Structs
+        pytest.param(
+            {
+                "family": [
+                    [
+                        None,
+                        {"human?": True, "deets": {"weight": 2.4, "age": 27}},
+                    ],
+                    [
+                        {"human?": None, "deets": {"weight": 5.3, "age": 25}},
+                        {"human?": False, "deets": {"weight": 8.0, "age": 31}},
+                        {"human?": False, "deets": None},
+                    ],
+                    [],
+                    [{"human?": None, "deets": {"weight": 6.9, "age": None}}],
+                ]
+            },
+            marks=pytest.mark.xfail(
+                reason="https://github.com/rapidsai/cudf/issues/7561"
+            ),
+        ),
+        # Struct of Lists
+        pytest.param(
+            {
+                "Real estate records": [
+                    None,
+                    {
+                        "Status": "NRI",
+                        "Ownerships": {
+                            "land_unit": [None, 2, None],
+                            "flats": [[1, 2, 3], [], [4, 5], [], [0, 6, 0]],
+                        },
+                    },
+                    {
+                        "Status": None,
+                        "Ownerships": {
+                            "land_unit": [4, 5],
+                            "flats": [[7, 8], []],
+                        },
+                    },
+                    {
+                        "Status": "RI",
+                        "Ownerships": {"land_unit": None, "flats": [[]]},
+                    },
+                    {"Status": "RI", "Ownerships": None},
+                    {
+                        "Status": None,
+                        "Ownerships": {
+                            "land_unit": [7, 8, 9],
+                            "flats": [[], [], []],
+                        },
+                    },
+                ]
+            },
+            marks=pytest.mark.xfail(
+                reason="https://github.com/rapidsai/cudf/issues/7562"
+            ),
+        ),
+    ],
+)
+def test_parquet_writer_nested(tmpdir, data):
+    expect = pd.DataFrame(data)
+    gdf = cudf.from_pandas(expect)
+
+    fname = tmpdir.join("test_parquet_writer_nested.parquet")
+    gdf.to_parquet(fname)
+    assert os.path.exists(fname)
+
+    got = pd.read_parquet(fname)
+    assert_eq(expect, got)
+
+
+def test_parquet_writer_decimal(tmpdir):
+    from cudf.core.dtypes import Decimal64Dtype
+
+    gdf = cudf.DataFrame({"val": [0.00, 0.01, 0.02]})
+
+    gdf["dec_val"] = gdf["val"].astype(Decimal64Dtype(7, 2))
+
+    fname = tmpdir.join("test_parquet_writer_decimal.parquet")
+    gdf.to_parquet(fname)
+    assert os.path.exists(fname)
+
+    got = pd.read_parquet(fname)
+    assert_eq(gdf, got)

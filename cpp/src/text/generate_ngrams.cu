@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -21,6 +21,7 @@
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/copy_if.cuh>
 #include <cudf/detail/get_value.cuh>
+#include <cudf/detail/iterator.cuh>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/strings/detail/utilities.hpp>
 #include <cudf/strings/string_view.cuh>
@@ -131,9 +132,8 @@ std::unique_ptr<cudf::column> generate_ngrams(
   auto const ngrams_count = strings_count - ngrams + 1;
 
   // build output offsets by computing the output bytes for each generated ngram
-  auto offsets_transformer_itr =
-    thrust::make_transform_iterator(thrust::make_counting_iterator<cudf::size_type>(0),
-                                    ngram_generator_fn{d_strings, ngrams, d_separator});
+  auto offsets_transformer_itr = cudf::detail::make_counting_transform_iterator(
+    0, ngram_generator_fn{d_strings, ngrams, d_separator});
   auto offsets_column = cudf::strings::detail::make_offsets_child_column(
     offsets_transformer_itr, offsets_transformer_itr + ngrams_count, stream, mr);
   auto d_offsets = offsets_column->view().data<int32_t>();
@@ -221,7 +221,7 @@ std::unique_ptr<cudf::column> generate_character_ngrams(cudf::strings_column_vie
   auto const d_strings      = *strings_column;
 
   // create a vector of ngram offsets for each string
-  rmm::device_vector<int32_t> ngram_offsets(strings_count + 1);
+  rmm::device_uvector<int32_t> ngram_offsets(strings_count + 1, stream);
   thrust::transform_exclusive_scan(
     rmm::exec_policy(stream),
     thrust::make_counting_iterator<cudf::size_type>(0),
@@ -235,14 +235,8 @@ std::unique_ptr<cudf::column> generate_character_ngrams(cudf::strings_column_vie
     cudf::size_type{0},
     thrust::plus<cudf::size_type>());
 
-  // total count is the last entry
-  auto const d_ngram_offsets   = ngram_offsets.data().get();
-  cudf::size_type total_ngrams = 0;
-  CUDA_TRY(cudaMemcpyAsync(&total_ngrams,
-                           d_ngram_offsets + strings_count,
-                           sizeof(cudf::size_type),
-                           cudaMemcpyDeviceToHost,
-                           stream.value()));
+  // total ngrams count is the last entry
+  cudf::size_type const total_ngrams = ngram_offsets.back_element(stream);
   CUDF_EXPECTS(total_ngrams > 0,
                "Insufficient number of characters in each string to generate ngrams");
 
@@ -254,7 +248,7 @@ std::unique_ptr<cudf::column> generate_character_ngrams(cudf::strings_column_vie
                                                   mr);
   auto d_offsets      = offsets_column->mutable_view().data<int32_t>();
   // compute the size of each ngram -- output goes in d_offsets
-  character_ngram_generator_fn generator{d_strings, ngrams, d_ngram_offsets, d_offsets};
+  character_ngram_generator_fn generator{d_strings, ngrams, ngram_offsets.data(), d_offsets};
   thrust::for_each_n(rmm::exec_policy(stream),
                      thrust::make_counting_iterator<cudf::size_type>(0),
                      strings_count,

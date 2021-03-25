@@ -16,8 +16,6 @@
 
 #pragma once
 
-#include <cudf/lists/list_view.cuh>
-#include <cudf/structs/struct_view.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
 #include <cudf/wrappers/durations.hpp>
@@ -224,6 +222,18 @@ struct is_unsigned_impl {
 constexpr inline bool is_unsigned(data_type type)
 {
   return cudf::type_dispatcher(type, is_unsigned_impl{});
+}
+
+/**
+ * @brief Indicates whether the `Iterator` value type is unsigned.
+ *
+ * @tparam Iterator  The type to verify
+ * @return true if the iterator's value type is unsigned
+ */
+template <typename Iterator>
+constexpr inline bool is_signed_iterator()
+{
+  return std::is_signed<typename std::iterator_traits<Iterator>::value_type>::value;
 }
 
 /**
@@ -591,74 +601,57 @@ constexpr inline bool is_nested(data_type type)
   return cudf::type_dispatcher(type, is_nested_impl{});
 }
 
-template <typename FromType, typename ToType>
-struct is_logically_castable_impl : std::false_type {
-};
-
-// Allow cast to same type
-template <typename Type>
-struct is_logically_castable_impl<Type, Type> : std::true_type {
-};
-
-#ifndef MAP_CASTABLE_TYPES
-#define MAP_CASTABLE_TYPES(Type1, Type2)                             \
-  template <>                                                        \
-  struct is_logically_castable_impl<Type1, Type2> : std::true_type { \
-  };                                                                 \
-  template <>                                                        \
-  struct is_logically_castable_impl<Type2, Type1> : std::true_type { \
-  };
-#endif
-
-// Allow cast between timestamp and integer representation
-MAP_CASTABLE_TYPES(cudf::timestamp_D, cudf::timestamp_D::duration::rep);
-MAP_CASTABLE_TYPES(cudf::timestamp_s, cudf::timestamp_s::duration::rep);
-MAP_CASTABLE_TYPES(cudf::timestamp_ms, cudf::timestamp_ms::duration::rep);
-MAP_CASTABLE_TYPES(cudf::timestamp_us, cudf::timestamp_us::duration::rep);
-MAP_CASTABLE_TYPES(cudf::timestamp_ns, cudf::timestamp_ns::duration::rep);
-// Allow cast between durations and integer representation
-MAP_CASTABLE_TYPES(cudf::duration_D, cudf::duration_D::rep);
-MAP_CASTABLE_TYPES(cudf::duration_s, cudf::duration_s::rep);
-MAP_CASTABLE_TYPES(cudf::duration_ms, cudf::duration_ms::rep);
-MAP_CASTABLE_TYPES(cudf::duration_us, cudf::duration_us::rep);
-MAP_CASTABLE_TYPES(cudf::duration_ns, cudf::duration_ns::rep);
-// Allow cast between decimals and integer representation
-MAP_CASTABLE_TYPES(numeric::decimal32, numeric::decimal32::rep);
-MAP_CASTABLE_TYPES(numeric::decimal64, numeric::decimal64::rep);
-
 template <typename FromType>
-struct is_logically_castable_to_impl {
-  template <typename ToType>
+struct is_bit_castable_to_impl {
+  template <typename ToType, typename std::enable_if_t<is_compound<ToType>()>* = nullptr>
   constexpr bool operator()()
   {
-    return is_logically_castable_impl<FromType, ToType>::value;
+    return false;
+  }
+
+  template <typename ToType, typename std::enable_if_t<not is_compound<ToType>()>* = nullptr>
+  constexpr bool operator()()
+  {
+    if (not cuda::std::is_trivially_copyable_v<FromType> ||
+        not cuda::std::is_trivially_copyable_v<ToType>) {
+      return false;
+    }
+    constexpr auto from_size = sizeof(cudf::device_storage_type_t<FromType>);
+    constexpr auto to_size   = sizeof(cudf::device_storage_type_t<ToType>);
+    return from_size == to_size;
   }
 };
 
-struct is_logically_castable_from_impl {
-  template <typename FromType>
+struct is_bit_castable_from_impl {
+  template <typename FromType, typename std::enable_if_t<is_compound<FromType>()>* = nullptr>
+  constexpr bool operator()(data_type)
+  {
+    return false;
+  }
+
+  template <typename FromType, typename std::enable_if_t<not is_compound<FromType>()>* = nullptr>
   constexpr bool operator()(data_type to)
   {
-    return type_dispatcher(to, is_logically_castable_to_impl<FromType>{});
+    return cudf::type_dispatcher(to, is_bit_castable_to_impl<FromType>{});
   }
 };
 
 /**
- * @brief Indicates whether `from` is logically castable to `to`.
+ * @brief Indicates whether `from` is bit-castable to `to`.
  *
- * Data types that have the same size and underlying representation, e.g. INT32 and TIMESTAMP_DAYS
- * which are both represented as 32-bit integers in memory, are eligible for logical cast.
+ * This casting is based on std::bit_cast. Data types that have the same size and are trivially
+ * copyable are eligible for this casting.
  *
- * See `cudf::logical_cast()` which returns a zero-copy `column_view` when casting between
- * logically castable types.
+ * See `cudf::bit_cast()` which returns a zero-copy `column_view` when casting between
+ * bit-castable types.
  *
  * @param from The `data_type` to convert from
  * @param to The `data_type` to convert to
- * @return `true` if the types are logically castable
+ * @return `true` if the types are castable
  */
-constexpr bool is_logically_castable(data_type from, data_type to)
+constexpr bool is_bit_castable(data_type from, data_type to)
 {
-  return type_dispatcher(from, is_logically_castable_from_impl{}, to);
+  return type_dispatcher(from, is_bit_castable_from_impl{}, to);
 }
 
 template <typename From, typename To>

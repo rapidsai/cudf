@@ -57,6 +57,8 @@ def reduce(reduction_op, Column incol, dtype=None, **kwargs):
             return incol.dtype.type(0)
         if reduction_op == 'product':
             return incol.dtype.type(1)
+        if reduction_op == "any":
+            return False
 
         return cudf.utils.dtypes._get_nan_for_dtype(col_dtype)
 

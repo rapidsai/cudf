@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2020, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,6 +16,7 @@
 #include <io/parquet/parquet_gpu.hpp>
 #include <io/utilities/block_utils.cuh>
 
+#include <cudf/detail/iterator.cuh>
 #include <cudf/detail/utilities/cuda.cuh>
 
 #include <rmm/cuda_stream_view.hpp>
@@ -43,7 +44,7 @@ constexpr int init_hash_bits       = 12;
 constexpr uint32_t rle_buffer_size = (1 << 9);
 
 struct frag_init_state_s {
-  EncColumnDesc col;
+  parquet_column_device_view col;
   PageFragment frag;
   uint32_t total_dupes;
   size_type start_value_idx;
@@ -69,7 +70,7 @@ struct page_enc_state_s {
   volatile uint32_t scratch_red[32];
   EncPage page;
   EncColumnChunk ck;
-  EncColumnDesc col;
+  parquet_column_device_view col;
   gpu_inflate_input_s comp_in;
   gpu_inflate_status_s comp_out;
   uint16_t vals[rle_buffer_size];
@@ -110,20 +111,21 @@ inline __device__ uint32_t uint64_init_hash(uint64_t v)
  */
 // blockDim {512,1,1}
 template <int block_size>
-__global__ void __launch_bounds__(block_size) gpuInitPageFragments(PageFragment *frag,
-                                                                   const EncColumnDesc *col_desc,
-                                                                   int32_t num_fragments,
-                                                                   int32_t num_columns,
-                                                                   uint32_t fragment_size,
-                                                                   uint32_t max_num_rows)
+__global__ void __launch_bounds__(block_size)
+  gpuInitPageFragments(PageFragment *frag,
+                       const parquet_column_device_view *col_desc,
+                       int32_t num_fragments,
+                       int32_t num_columns,
+                       uint32_t fragment_size,
+                       uint32_t max_num_rows)
 {
   __shared__ __align__(16) frag_init_state_s state_g;
 
-  using warp_reduce      = cub::WarpReduce<uint32_t>;
-  using half_warp_reduce = cub::WarpReduce<uint32_t, 16>;
+  using block_reduce = cub::BlockReduce<uint32_t, block_size>;
+  using block_scan   = cub::BlockScan<uint32_t, block_size>;
   __shared__ union {
-    typename warp_reduce::TempStorage full[block_size / 32];
-    typename half_warp_reduce::TempStorage half;
+    typename block_reduce::TempStorage reduce_storage;
+    typename block_scan::TempStorage scan_storage;
   } temp_storage;
 
   frag_init_state_s *const s = &state_g;
@@ -157,12 +159,18 @@ __global__ void __launch_bounds__(block_size) gpuInitPageFragments(PageFragment 
     } else {
       auto col                     = *(s->col.parent_column);
       auto current_start_value_idx = start_row;
-      while (col.type().id() == type_id::LIST) {
-        auto offset_col = col.child(lists_column_view::offsets_column_index);
-        current_start_value_idx =
-          offset_col.element<size_type>(current_start_value_idx + col.offset());
-        end_value_idx = offset_col.element<size_type>(end_value_idx + col.offset());
-        col           = col.child(lists_column_view::child_column_index);
+      while (col.type().id() == type_id::LIST or col.type().id() == type_id::STRUCT) {
+        if (col.type().id() == type_id::STRUCT) {
+          current_start_value_idx += col.offset();
+          end_value_idx += col.offset();
+          col = col.child(0);
+        } else {
+          auto offset_col = col.child(lists_column_view::offsets_column_index);
+          current_start_value_idx =
+            offset_col.element<size_type>(current_start_value_idx + col.offset());
+          end_value_idx = offset_col.element<size_type>(end_value_idx + col.offset());
+          col           = col.child(lists_column_view::child_column_index);
+        }
       }
       s->start_value_idx = current_start_value_idx;
     }
@@ -203,7 +211,6 @@ __global__ void __launch_bounds__(block_size) gpuInitPageFragments(PageFragment 
     uint32_t is_valid = (i + t < nvals && val_idx < s->col.leaf_column->size())
                           ? s->col.leaf_column->is_valid(val_idx)
                           : 0;
-    uint32_t valid_warp = ballot(is_valid);
     uint32_t len, nz_pos, hash;
     if (is_valid) {
       len = dtype_len;
@@ -226,28 +233,18 @@ __global__ void __launch_bounds__(block_size) gpuInitPageFragments(PageFragment 
       len = 0;
     }
 
-    nz_pos =
-      s->frag.non_nulls + __popc(valid_warp & (0x7fffffffu >> (0x1fu - ((uint32_t)t & 0x1f))));
-    len = warp_reduce(temp_storage.full[t / 32]).Sum(len);
-    if (!(t & 0x1f)) {
-      s->scratch_red[(t >> 5) + 0]  = __popc(valid_warp);
-      s->scratch_red[(t >> 5) + 16] = len;
-    }
+    uint32_t non_nulls;
+    block_scan(temp_storage.scan_storage).ExclusiveSum(is_valid, nz_pos, non_nulls);
+    nz_pos += s->frag.non_nulls;
     __syncthreads();
-    if (t < 32) {
-      uint32_t warp_pos  = WarpReducePos16((t < 16) ? s->scratch_red[t] : 0, t);
-      uint32_t non_nulls = shuffle(warp_pos, 0xf);
-      len = half_warp_reduce(temp_storage.half).Sum((t < 16) ? s->scratch_red[t + 16] : 0);
-      if (t < 16) { s->scratch_red[t] = warp_pos; }
-      if (!t) {
-        s->frag.non_nulls = s->frag.non_nulls + non_nulls;
-        s->frag.fragment_data_size += len;
-      }
+    len = block_reduce(temp_storage.reduce_storage).Sum(len);
+    if (!t) {
+      s->frag.non_nulls += non_nulls;
+      s->frag.fragment_data_size += len;
     }
     __syncthreads();
     if (is_valid && dtype != BOOLEAN) {
       uint32_t *dict_index = s->col.dict_index;
-      if (t >= 32) { nz_pos += s->scratch_red[(t - 32) >> 5]; }
       if (dict_index) {
         atomicAdd(&s->map.u32[hash >> 1], (hash & 1) ? 1 << 16 : 1);
         dict_index[start_value_idx + nz_pos] =
@@ -270,27 +267,18 @@ __global__ void __launch_bounds__(block_size) gpuInitPageFragments(PageFragment 
     uint32_t sum23   = count23 + (count23 << 16);
     uint32_t sum45   = count45 + (count45 << 16);
     uint32_t sum67   = count67 + (count67 << 16);
-    uint32_t sum_w, tmp;
     sum23 += (sum01 >> 16) * 0x10001;
     sum45 += (sum23 >> 16) * 0x10001;
     sum67 += (sum45 >> 16) * 0x10001;
-    sum_w = sum67 >> 16;
-    sum_w = WarpReducePos16(sum_w, t);
-    if ((t & 0xf) == 0xf) { s->scratch_red[t >> 4] = sum_w; }
-    __syncthreads();
-    if (t < 32) {
-      uint32_t sum_b    = WarpReducePos32(s->scratch_red[t], t);
-      s->scratch_red[t] = sum_b;
-    }
-    __syncthreads();
-    tmp                   = (t >= 16) ? s->scratch_red[(t >> 4) - 1] : 0;
-    sum_w                 = (sum_w - (sum67 >> 16) + tmp) * 0x10001;
+    uint32_t sum_w = sum67 >> 16;
+    block_scan(temp_storage.scan_storage).InclusiveSum(sum_w, sum_w);
+    sum_w                 = (sum_w - (sum67 >> 16)) * 0x10001;
     s->map.u32[t * 4 + 0] = sum_w + sum01 - count01;
     s->map.u32[t * 4 + 1] = sum_w + sum23 - count23;
     s->map.u32[t * 4 + 2] = sum_w + sum45 - count45;
     s->map.u32[t * 4 + 3] = sum_w + sum67 - count67;
-    __syncthreads();
   }
+  __syncthreads();
   // Put the indices back in hash order
   if (s->col.dict_index) {
     uint32_t *dict_index = s->col.dict_index + start_row;
@@ -329,7 +317,7 @@ __global__ void __launch_bounds__(block_size) gpuInitPageFragments(PageFragment 
     // map, the position of the first entry can be inferred from the hash map counts
     uint32_t dupe_data_size = 0;
     for (uint32_t i = 0; i < nnz; i += block_size) {
-      uint32_t ck_row = 0, ck_row_ref = 0, is_dupe = 0, dupe_mask, dupes_before;
+      uint32_t ck_row = 0, ck_row_ref = 0, is_dupe = 0;
       if (i + t < nnz) {
         uint32_t dict_val = s->dict[i + t];
         uint32_t hash     = dict_val & ((1 << init_hash_bits) - 1);
@@ -365,20 +353,14 @@ __global__ void __launch_bounds__(block_size) gpuInitPageFragments(PageFragment 
           }
         }
       }
-      dupe_mask    = ballot(is_dupe);
-      dupes_before = s->total_dupes + __popc(dupe_mask & ((2 << (t & 0x1f)) - 1));
-      if (!(t & 0x1f)) { s->scratch_red[t >> 5] = __popc(dupe_mask); }
+      uint32_t dupes_in_block;
+      uint32_t dupes_before;
+      block_scan(temp_storage.scan_storage).InclusiveSum(is_dupe, dupes_before, dupes_in_block);
+      dupes_before += s->total_dupes;
       __syncthreads();
-      if (t < 32) {
-        uint32_t warp_dupes = (t < 16) ? s->scratch_red[t] : 0;
-        uint32_t warp_pos   = WarpReducePos16(warp_dupes, t);
-        if (t == 0xf) { s->total_dupes += warp_pos; }
-        if (t < 16) { s->scratch_red[t] = warp_pos - warp_dupes; }
-      }
-      __syncthreads();
+      if (t == 0) { s->total_dupes += dupes_in_block; }
       if (i + t < nnz) {
         if (!is_dupe) {
-          dupes_before += s->scratch_red[t >> 5];
           s->col.dict_data[start_row + i + t - dupes_before] = ck_row;
         } else {
           s->col.dict_index[ck_row] = ck_row_ref | (1u << 31);
@@ -386,15 +368,10 @@ __global__ void __launch_bounds__(block_size) gpuInitPageFragments(PageFragment 
       }
     }
     __syncthreads();
-    dupe_data_size = warp_reduce(temp_storage.full[t / 32]).Sum(dupe_data_size);
-    if (!(t & 0x1f)) { s->scratch_red[t >> 5] = dupe_data_size; }
-    __syncthreads();
-    if (t < 32) {
-      dupe_data_size = half_warp_reduce(temp_storage.half).Sum((t < 16) ? s->scratch_red[t] : 0);
-      if (!t) {
-        s->frag.dict_data_size = s->frag.fragment_data_size - dupe_data_size;
-        s->frag.num_dict_vals  = s->frag.non_nulls - s->total_dupes;
-      }
+    dupe_data_size = block_reduce(temp_storage.reduce_storage).Sum(dupe_data_size);
+    if (!t) {
+      s->frag.dict_data_size = s->frag.fragment_data_size - dupe_data_size;
+      s->frag.num_dict_vals  = s->frag.non_nulls - s->total_dupes;
     }
   }
   __syncthreads();
@@ -402,12 +379,13 @@ __global__ void __launch_bounds__(block_size) gpuInitPageFragments(PageFragment 
 }
 
 // blockDim {128,1,1}
-__global__ void __launch_bounds__(128) gpuInitFragmentStats(statistics_group *groups,
-                                                            const PageFragment *fragments,
-                                                            const EncColumnDesc *col_desc,
-                                                            int32_t num_fragments,
-                                                            int32_t num_columns,
-                                                            uint32_t fragment_size)
+__global__ void __launch_bounds__(128)
+  gpuInitFragmentStats(statistics_group *groups,
+                       const PageFragment *fragments,
+                       const parquet_column_device_view *col_desc,
+                       int32_t num_fragments,
+                       int32_t num_columns,
+                       uint32_t fragment_size)
 {
   __shared__ __align__(8) statistics_group group_g[4];
 
@@ -427,13 +405,13 @@ __global__ void __launch_bounds__(128) gpuInitFragmentStats(statistics_group *gr
 // blockDim {128,1,1}
 __global__ void __launch_bounds__(128) gpuInitPages(EncColumnChunk *chunks,
                                                     EncPage *pages,
-                                                    const EncColumnDesc *col_desc,
+                                                    const parquet_column_device_view *col_desc,
                                                     statistics_merge_group *page_grstats,
                                                     statistics_merge_group *chunk_grstats,
                                                     int32_t num_rowgroups,
                                                     int32_t num_columns)
 {
-  __shared__ __align__(8) EncColumnDesc col_g;
+  __shared__ __align__(8) parquet_column_device_view col_g;
   __shared__ __align__(8) EncColumnChunk ck_g;
   __shared__ __align__(8) PageFragment frag_g;
   __shared__ __align__(8) EncPage page_g;
@@ -571,8 +549,8 @@ __global__ void __launch_bounds__(128) gpuInitPages(EncColumnChunk *chunks,
           page_g.num_rows         = rows_in_page;
           page_g.num_leaf_values  = leaf_values_in_page;
           page_g.num_values       = values_in_page;
-          uint32_t def_level_bits = col_g.level_bits & 0xf;
-          uint32_t rep_level_bits = col_g.level_bits >> 4;
+          uint32_t def_level_bits = col_g.num_def_level_bits();
+          uint32_t rep_level_bits = col_g.num_rep_level_bits();
           // Run length = 4, max(rle/bitpack header) = 5, add one byte per 256 values for overhead
           // TODO (dm): Improve readability of these calculations.
           uint32_t def_level_size =
@@ -941,6 +919,7 @@ convert_nanoseconds(cuda::std::chrono::sys_time<cuda::std::chrono::nanoseconds> 
 }
 
 // blockDim(128, 1, 1)
+template <int block_size>
 __global__ void __launch_bounds__(128, 8) gpuEncodePages(EncPage *pages,
                                                          const EncColumnChunk *chunks,
                                                          gpu_inflate_input_s *comp_in,
@@ -948,6 +927,8 @@ __global__ void __launch_bounds__(128, 8) gpuEncodePages(EncPage *pages,
                                                          uint32_t start_page)
 {
   __shared__ __align__(8) page_enc_state_s state_g;
+  using block_scan = cub::BlockScan<uint32_t, block_size>;
+  __shared__ typename block_scan::TempStorage temp_storage;
 
   page_enc_state_s *const s = &state_g;
   uint32_t t                = threadIdx.x;
@@ -963,10 +944,12 @@ __global__ void __launch_bounds__(128, 8) gpuEncodePages(EncPage *pages,
   __syncthreads();
 
   // Encode Repetition and Definition levels
-  if (s->page.page_type != PageType::DICTIONARY_PAGE && s->col.level_bits != 0 &&
-      s->col.parent_column == nullptr) {
+  if (s->page.page_type != PageType::DICTIONARY_PAGE &&
+      (s->col.num_def_level_bits()) != 0 &&  // This means max definition level is not 0 (nullable)
+      (s->col.num_rep_level_bits()) == 0     // This means there are no repetition levels (non-list)
+  ) {
     // Calculate definition levels from validity
-    uint32_t def_lvl_bits = s->col.level_bits & 0xf;
+    uint32_t def_lvl_bits = s->col.num_def_level_bits();
     if (def_lvl_bits != 0) {
       if (!t) {
         s->rle_run     = 0;
@@ -981,9 +964,32 @@ __global__ void __launch_bounds__(128, 8) gpuEncodePages(EncPage *pages,
         uint32_t row         = s->page.start_row + rle_numvals + t;
         // Definition level encodes validity. Checks the valid map and if it is valid, then sets the
         // def_lvl accordingly and sets it in s->vals which is then given to RleEncode to encode
-        uint32_t def_lvl = (rle_numvals + t < s->page.num_rows && row < s->col.num_rows)
-                             ? s->col.leaf_column->is_valid(row)
-                             : 0;
+        uint32_t def_lvl = [&]() {
+          bool within_bounds = rle_numvals + t < s->page.num_rows && row < s->col.num_rows;
+          if (not within_bounds) { return 0u; }
+          uint32_t def       = 0;
+          size_type l        = 0;
+          bool is_col_struct = false;
+          auto col           = *s->col.parent_column;
+          do {
+            // If col not nullable then it does not contribute to def levels
+            if (s->col.nullability[l]) {
+              if (col.is_valid(row)) {
+                ++def;
+              } else {
+                // We have found the shallowest level at which this row is null
+                break;
+              }
+            }
+            is_col_struct = (col.type().id() == type_id::STRUCT);
+            if (is_col_struct) {
+              row += col.offset();
+              col = col.child(0);
+              ++l;
+            }
+          } while (is_col_struct);
+          return def;
+        }();
         s->vals[(rle_numvals + t) & (rle_buffer_size - 1)] = def_lvl;
         __syncthreads();
         rle_numvals += nrows;
@@ -1001,7 +1007,9 @@ __global__ void __launch_bounds__(128, 8) gpuEncodePages(EncPage *pages,
         if (t == 0) { s->cur = rle_out; }
       }
     }
-  } else if (s->page.page_type != PageType::DICTIONARY_PAGE && s->col.parent_column != nullptr) {
+  } else if (s->page.page_type != PageType::DICTIONARY_PAGE &&
+             s->col.num_rep_level_bits() != 0  // This means there ARE repetition levels (has list)
+  ) {
     auto encode_levels = [&](uint8_t const *lvl_val_data, uint32_t nbits) {
       // For list types, the repetition and definition levels are pre-calculated. We just need to
       // encode and write them now.
@@ -1037,9 +1045,9 @@ __global__ void __launch_bounds__(128, 8) gpuEncodePages(EncPage *pages,
         if (t == 0) { s->cur = rle_out; }
       }
     };
-    encode_levels(s->col.rep_values, s->col.level_bits >> 4);
+    encode_levels(s->col.rep_values, s->col.num_rep_level_bits());
     __syncthreads();
-    encode_levels(s->col.def_values, s->col.level_bits & 0xf);
+    encode_levels(s->col.def_values, s->col.num_def_level_bits());
   }
   // Encode data values
   __syncthreads();
@@ -1068,10 +1076,15 @@ __global__ void __launch_bounds__(128, 8) gpuEncodePages(EncPage *pages,
     if (s->col.parent_column != nullptr) {
       auto col                    = *(s->col.parent_column);
       auto current_page_start_val = s->page_start_val;
-      while (col.type().id() == type_id::LIST) {
-        current_page_start_val = col.child(lists_column_view::offsets_column_index)
-                                   .element<size_type>(current_page_start_val + col.offset());
-        col = col.child(lists_column_view::child_column_index);
+      while (col.type().id() == type_id::LIST or col.type().id() == type_id::STRUCT) {
+        if (col.type().id() == type_id::STRUCT) {
+          current_page_start_val += col.offset();
+          col = col.child(0);
+        } else {
+          current_page_start_val = col.child(lists_column_view::offsets_column_index)
+                                     .element<size_type>(current_page_start_val + col.offset());
+          col = col.child(lists_column_view::child_column_index);
+        }
       }
       s->page_start_val = current_page_start_val;
     }
@@ -1080,7 +1093,7 @@ __global__ void __launch_bounds__(128, 8) gpuEncodePages(EncPage *pages,
   for (uint32_t cur_val_idx = 0; cur_val_idx < s->page.num_leaf_values;) {
     uint32_t nvals   = min(s->page.num_leaf_values - cur_val_idx, 128);
     uint32_t val_idx = s->page_start_val + cur_val_idx + t;
-    uint32_t is_valid, warp_valids, len, pos;
+    uint32_t is_valid, len, pos;
 
     if (s->page.page_type == PageType::DICTIONARY_PAGE) {
       is_valid = (cur_val_idx + t < s->page.num_leaf_values);
@@ -1090,19 +1103,13 @@ __global__ void __launch_bounds__(128, 8) gpuEncodePages(EncPage *pages,
                    ? s->col.leaf_column->is_valid(val_idx)
                    : 0;
     }
-    warp_valids = ballot(is_valid);
     cur_val_idx += nvals;
     if (dict_bits >= 0) {
       // Dictionary encoding
       if (dict_bits > 0) {
         uint32_t rle_numvals;
-
-        pos = __popc(warp_valids & ((1 << (t & 0x1f)) - 1));
-        if (!(t & 0x1f)) { s->scratch_red[t >> 5] = __popc(warp_valids); }
-        __syncthreads();
-        if (t < 32) { s->scratch_red[t] = WarpReducePos4((t < 4) ? s->scratch_red[t] : 0, t); }
-        __syncthreads();
-        pos         = pos + ((t >= 32) ? s->scratch_red[(t - 32) >> 5] : 0);
+        uint32_t rle_numvals_in_block;
+        block_scan(temp_storage).ExclusiveSum(is_valid, pos, rle_numvals_in_block);
         rle_numvals = s->rle_numvals;
         if (is_valid) {
           uint32_t v;
@@ -1113,7 +1120,7 @@ __global__ void __launch_bounds__(128, 8) gpuEncodePages(EncPage *pages,
           }
           s->vals[(rle_numvals + pos) & (rle_buffer_size - 1)] = v;
         }
-        rle_numvals += s->scratch_red[3];
+        rle_numvals += rle_numvals_in_block;
         __syncthreads();
         if ((!enable_bool_rle) && (dtype == BOOLEAN)) {
           PlainBoolEncode(s, rle_numvals, (cur_val_idx == s->page.num_leaf_values), t);
@@ -1136,13 +1143,10 @@ __global__ void __launch_bounds__(128, 8) gpuEncodePages(EncPage *pages,
       } else {
         len = 0;
       }
-      pos = WarpReducePos32(len, t);
-      if ((t & 0x1f) == 0x1f) { s->scratch_red[t >> 5] = pos; }
+      uint32_t total_len = 0;
+      block_scan(temp_storage).ExclusiveSum(len, pos, total_len);
       __syncthreads();
-      if (t < 32) { s->scratch_red[t] = WarpReducePos4((t < 4) ? s->scratch_red[t] : 0, t); }
-      __syncthreads();
-      if (t == 0) { s->cur = dst + s->scratch_red[3]; }
-      pos = pos + ((t >= 32) ? s->scratch_red[(t - 32) >> 5] : 0) - len;
+      if (t == 0) { s->cur = dst + total_len; }
       if (is_valid) {
         switch (dtype) {
           case INT32:
@@ -1192,11 +1196,13 @@ __global__ void __launch_bounds__(128, 8) gpuEncodePages(EncPage *pages,
             auto const ret = convert_nanoseconds([&]() {
               using namespace cuda::std::chrono;
 
-              switch (s->col.converted_type) {
-                case TIMESTAMP_MILLIS: {
+              switch (s->col.leaf_column->type().id()) {
+                case type_id::TIMESTAMP_SECONDS:
+                case type_id::TIMESTAMP_MILLISECONDS: {
                   return sys_time<nanoseconds>{milliseconds{v}};
                 } break;
-                case TIMESTAMP_MICROS: {
+                case type_id::TIMESTAMP_MICROSECONDS:
+                case type_id::TIMESTAMP_NANOSECONDS: {
                   return sys_time<nanoseconds>{microseconds{v}};
                 } break;
               }
@@ -1419,7 +1425,7 @@ class header_encoder {
 
 __device__ uint8_t *EncodeStatistics(uint8_t *start,
                                      const statistics_chunk *s,
-                                     const EncColumnDesc *col,
+                                     const parquet_column_device_view *col,
                                      float *fp_scratch)
 {
   uint8_t *end, dtype, dtype_len;
@@ -1477,7 +1483,7 @@ __global__ void __launch_bounds__(128) gpuEncodePageHeaders(EncPage *pages,
                                                             const statistics_chunk *chunk_stats,
                                                             uint32_t start_page)
 {
-  __shared__ __align__(8) EncColumnDesc col_g;
+  __shared__ __align__(8) parquet_column_device_view col_g;
   __shared__ __align__(8) EncColumnChunk ck_g;
   __shared__ __align__(8) EncPage page_g;
   __shared__ __align__(8) float fp_scratch[2];
@@ -1604,6 +1610,42 @@ __global__ void __launch_bounds__(1024) gpuGatherPages(EncColumnChunk *chunks, c
 }
 
 /**
+ * @brief Functor to get definition level value for a nested struct column until the leaf level or
+ * the first list level.
+ *
+ */
+struct def_level_fn {
+  column_device_view const *parent_col;
+  uint8_t const *d_nullability;
+  uint8_t sub_level_start;
+  uint8_t curr_def_level;
+
+  __device__ uint32_t operator()(size_type i)
+  {
+    uint32_t def       = curr_def_level;
+    uint8_t l          = sub_level_start;
+    bool is_col_struct = false;
+    auto col           = *parent_col;
+    do {
+      // If col not nullable then it does not contribute to def levels
+      if (d_nullability[l]) {
+        if (not col.nullable() or bit_is_set(col.null_mask(), i)) {
+          ++def;
+        } else {  // We have found the shallowest level at which this row is null
+          break;
+        }
+      }
+      is_col_struct = (col.type().id() == type_id::STRUCT);
+      if (is_col_struct) {
+        col = col.child(0);
+        ++l;
+      }
+    } while (is_col_struct);
+    return def;
+  }
+};
+
+/**
  * @brief Get the dremel offsets and repetition and definition levels for a LIST column
  *
  * The repetition and definition level values are ideally computed using a recursive call over a
@@ -1669,16 +1711,53 @@ __global__ void __launch_bounds__(1024) gpuGatherPages(EncColumnChunk *chunks, c
  * ```
  *
  * Similarly we merge up all the way till level 0 offsets
+ *
+ * STRUCT COLUMNS :
+ * In case of struct columns, we don't have to merge struct levels with their children because a
+ * struct is the same size as its children. e.g. for a column `struct<int, float>`, if the row `i`
+ * is null, then the children columns `int` and `float` are also null at `i`. They also have the
+ * null entry represented in their respective null masks. So for any case of strictly struct based
+ * nesting, we can get the definition levels merely by iterating over the nesting for the same row.
+ *
+ * In case struct and lists are intermixed, the definition levels of all the contiguous struct
+ * levels can be constructed using the aforementioned iterative method. Only when we reach a list
+ * level, we need to do a merge with the subsequent level.
+ *
+ * So, for a column like `struct<list<int>>`, we are going to merge between the levels `struct<list`
+ * and `int`.
+ * For a column like `list<struct<int>>`, we are going to merge between `list` and `struct<int>`.
+ *
+ * In general, one nesting level is the list level and any struct level that precedes it.
+ *
+ * A few more examples to visualize the partitioning of column hierarchy into nesting levels:
+ * (L is list, S is struct, i is integer(leaf data level), angle brackets omitted)
+ * ```
+ * 1. LSi     = L   Si
+ *              - | --
+ *
+ * 2. LLSi    = L   L   Si
+ *              - | - | --
+ *
+ * 3. SSLi    = SSL   i
+ *              --- | -
+ *
+ * 4. LLSLSSi = L   L   SL   SSi
+ *              - | - | -- | ---
+```
  */
 dremel_data get_dremel_data(column_view h_col,
-                            std::vector<bool> const &level_nullability,
+                            // TODO(cp): use device_span once it is converted to a single hd_vec
+                            rmm::device_uvector<uint8_t> const &d_nullability,
+                            std::vector<uint8_t> const &nullability,
                             rmm::cuda_stream_view stream)
 {
-  CUDF_EXPECTS(h_col.type().id() == type_id::LIST,
-               "Can only get rep/def levels for LIST type column");
+  auto get_list_level = [](column_view col) {
+    while (col.type().id() == type_id::STRUCT) { col = col.child(0); }
+    return col;
+  };
 
   auto get_empties = [&](column_view col, size_type start, size_type end) {
-    auto lcv = lists_column_view(col);
+    auto lcv = lists_column_view(get_list_level(col));
     rmm::device_uvector<size_type> empties_idx(lcv.size(), stream);
     rmm::device_uvector<size_type> empties(lcv.size(), stream);
     auto d_off = lcv.offsets().data<size_type>();
@@ -1699,38 +1778,60 @@ dremel_data get_dremel_data(column_view h_col,
     return std::make_tuple(std::move(empties), std::move(empties_idx), empties_size);
   };
 
-  // Reverse the nesting in order to merge the deepest level with the leaf first and merge bottom
-  // up
-  auto curr_col        = h_col;
-  size_t max_vals_size = 0;
+  auto curr_col = h_col;
   std::vector<column_view> nesting_levels;
   std::vector<uint8_t> def_at_level;
-  size_type level       = 0;
-  auto add_def_at_level = [&](size_type level) {
-    auto is_level_nullable =
-      curr_col.nullable() or (not level_nullability.empty() and level_nullability[level]);
-    def_at_level.push_back(is_level_nullable ? 2 : 1);
-  };
-  while (curr_col.type().id() == type_id::LIST) {
-    nesting_levels.push_back(curr_col);
-    add_def_at_level(level);
-    auto lcv = lists_column_view(curr_col);
-    max_vals_size += lcv.offsets().size();
-    curr_col = lcv.child();
-    level++;
-  }
-  // One more entry for leaf col
-  add_def_at_level(level);
-  max_vals_size += curr_col.size();
+  std::vector<uint8_t> start_at_sub_level;
+  uint8_t curr_nesting_level_idx = 0;
 
-  // Add one more value at the end so that we can have the max def level
-  def_at_level.push_back(0);
+  auto add_def_at_level = [&](column_view col) {
+    // Add up all def level contributions in this column all the way till the first list column
+    // appears in the hierarchy or until we get to leaf
+    uint32_t def = 0;
+    start_at_sub_level.push_back(curr_nesting_level_idx);
+    while (col.type().id() == type_id::STRUCT) {
+      def += (nullability[curr_nesting_level_idx]) ? 1 : 0;
+      col = col.child(0);
+      ++curr_nesting_level_idx;
+    }
+    // At the end of all those structs is either a list column or the leaf. Leaf column contributes
+    // at least one def level. It doesn't matter what the leaf contributes because it'll be at the
+    // end of the exclusive scan.
+    def += (nullability[curr_nesting_level_idx]) ? 2 : 1;
+    def_at_level.push_back(def);
+    ++curr_nesting_level_idx;
+  };
+  while (cudf::is_nested(curr_col.type())) {
+    nesting_levels.push_back(curr_col);
+    add_def_at_level(curr_col);
+    while (curr_col.type().id() == type_id::STRUCT) {
+      // Go down the hierarchy until we get to the LIST or the leaf level
+      curr_col = curr_col.child(0);
+    }
+    if (curr_col.type().id() == type_id::LIST) {
+      curr_col = curr_col.child(lists_column_view::child_column_index);
+      if (not is_nested(curr_col.type())) {
+        // Special case: when the leaf data column is the immediate child of the list col then we
+        // want it to be included right away. Otherwise the struct containing it will be included in
+        // the next iteration of this loop.
+        nesting_levels.push_back(curr_col);
+        add_def_at_level(curr_col);
+        break;
+      }
+    }
+  }
+
+  std::unique_ptr<rmm::device_buffer> device_view_owners;
+  column_device_view *d_nesting_levels;
+  std::tie(device_view_owners, d_nesting_levels) =
+    contiguous_copy_column_device_views<column_device_view>(nesting_levels, stream);
+
   thrust::exclusive_scan(
     thrust::host, def_at_level.begin(), def_at_level.end(), def_at_level.begin());
 
   // Sliced list column views only have offsets applied to top level. Get offsets for each level.
-  rmm::device_uvector<size_type> d_column_offsets(nesting_levels.size() + 1, stream);
-  rmm::device_uvector<size_type> d_column_ends(nesting_levels.size() + 1, stream);
+  rmm::device_uvector<size_type> d_column_offsets(nesting_levels.size(), stream);
+  rmm::device_uvector<size_type> d_column_ends(nesting_levels.size(), stream);
 
   auto d_col = column_device_view::create(h_col, stream);
   cudf::detail::device_single_thread(
@@ -1745,24 +1846,29 @@ dremel_data get_dremel_data(column_view h_col,
       end_idx_at_level[level] = end;
       ++level;
       // Apply offset recursively until we get to leaf data
-      while (curr_col.type().id() == type_id::LIST) {
-        off = curr_col.child(lists_column_view::offsets_column_index).element<size_type>(off);
-        end = curr_col.child(lists_column_view::offsets_column_index).element<size_type>(end);
-        offset_at_level[level]  = off;
-        end_idx_at_level[level] = end;
-        ++level;
-        curr_col = curr_col.child(lists_column_view::child_column_index);
+      // Skip doing the following for any structs we encounter in between.
+      while (curr_col.type().id() == type_id::LIST or curr_col.type().id() == type_id::STRUCT) {
+        if (curr_col.type().id() == type_id::LIST) {
+          off = curr_col.child(lists_column_view::offsets_column_index).element<size_type>(off);
+          end = curr_col.child(lists_column_view::offsets_column_index).element<size_type>(end);
+          offset_at_level[level]  = off;
+          end_idx_at_level[level] = end;
+          ++level;
+          curr_col = curr_col.child(lists_column_view::child_column_index);
+        } else {
+          curr_col = curr_col.child(0);
+        }
       }
     },
     stream);
 
-  thrust::host_vector<size_type> column_offsets(nesting_levels.size() + 1);
+  thrust::host_vector<size_type> column_offsets(d_column_offsets.size());
   CUDA_TRY(cudaMemcpyAsync(column_offsets.data(),
                            d_column_offsets.data(),
                            d_column_offsets.size() * sizeof(size_type),
                            cudaMemcpyDeviceToHost,
                            stream.value()));
-  thrust::host_vector<size_type> column_ends(nesting_levels.size() + 1);
+  thrust::host_vector<size_type> column_ends(d_column_ends.size());
   CUDA_TRY(cudaMemcpyAsync(column_ends.data(),
                            d_column_ends.data(),
                            d_column_ends.size() * sizeof(size_type),
@@ -1770,6 +1876,11 @@ dremel_data get_dremel_data(column_view h_col,
                            stream.value()));
 
   stream.synchronize();
+
+  size_t max_vals_size = 0;
+  for (size_t l = 0; l < column_offsets.size(); ++l) {
+    max_vals_size += column_ends[l] - column_offsets[l];
+  }
 
   rmm::device_uvector<uint8_t> rep_level(max_vals_size, stream);
   rmm::device_uvector<uint8_t> def_level(max_vals_size, stream);
@@ -1781,9 +1892,13 @@ dremel_data get_dremel_data(column_view h_col,
   {
     // At this point, curr_col contains the leaf column. Max nesting level is
     // nesting_levels.size().
-    size_t level              = nesting_levels.size() - 1;
+
+    // We are going to start by merging the last column in nesting_levels (the leaf, which is at the
+    // index `nesting_levels.size() - 1`) with the second-to-last (which is at
+    // `nesting_levels.size() - 2`).
+    size_t level              = nesting_levels.size() - 2;
     curr_col                  = nesting_levels[level];
-    auto lcv                  = lists_column_view(curr_col);
+    auto lcv                  = lists_column_view(get_list_level(curr_col));
     auto offset_size_at_level = column_ends[level] - column_offsets[level] + 1;
 
     // Get empties at this level
@@ -1796,25 +1911,21 @@ dremel_data get_dremel_data(column_view h_col,
     // Merge empty at deepest parent level with the rep, def level vals at leaf level
 
     auto input_parent_rep_it = thrust::make_constant_iterator(level);
-    auto input_parent_def_it = thrust::make_transform_iterator(
-      thrust::make_counting_iterator(0),
-      [idx            = empties_idx.data(),
-       mask           = lcv.null_mask(),
-       level_nullable = level_nullability.empty() ? false : level_nullability[level],
-       curr_def_level = def_at_level[level]] __device__(auto i) {
-        return curr_def_level +
-               ((mask && bit_is_set(mask, idx[i]) or (!mask && level_nullable)) ? 1 : 0);
-      });
+    auto input_parent_def_it =
+      thrust::make_transform_iterator(empties_idx.begin(),
+                                      def_level_fn{d_nesting_levels + level,
+                                                   d_nullability.data(),
+                                                   start_at_sub_level[level],
+                                                   def_at_level[level]});
 
-    auto input_child_rep_it = thrust::make_constant_iterator(nesting_levels.size());
-    auto input_child_def_it = thrust::make_transform_iterator(
-      thrust::make_counting_iterator(column_offsets[level + 1]),
-      [mask           = lcv.child().null_mask(),
-       level_nullable = level_nullability.empty() ? false : level_nullability[level + 1],
-       curr_def_level = def_at_level[level + 1]] __device__(auto i) {
-        return curr_def_level +
-               ((mask && bit_is_set(mask, i) or (!mask && level_nullable)) ? 1 : 0);
-      });
+    // `nesting_levels.size()` == no of list levels + leaf. Max repetition level = no of list levels
+    auto input_child_rep_it = thrust::make_constant_iterator(nesting_levels.size() - 1);
+    auto input_child_def_it =
+      thrust::make_transform_iterator(thrust::make_counting_iterator(column_offsets[level + 1]),
+                                      def_level_fn{d_nesting_levels + level + 1,
+                                                   d_nullability.data(),
+                                                   start_at_sub_level[level + 1],
+                                                   def_at_level[level + 1]});
 
     // Zip the input and output value iterators so that merge operation is done only once
     auto input_parent_zip_it =
@@ -1839,10 +1950,10 @@ dremel_data get_dremel_data(column_view h_col,
     curr_rep_values_size = ends.second - output_zip_it;
 
     // Scan to get distance by which each offset value is shifted due to the insertion of empties
-    auto scan_it =
-      thrust::make_transform_iterator(thrust::make_counting_iterator(column_offsets[level]),
-                                      [off = lcv.offsets().data<size_type>()] __device__(
-                                        auto i) -> int { return off[i] == off[i + 1]; });
+    auto scan_it = cudf::detail::make_counting_transform_iterator(
+      column_offsets[level], [off = lcv.offsets().data<size_type>()] __device__(auto i) -> int {
+        return off[i] == off[i + 1];
+      });
     rmm::device_uvector<size_type> scan_out(offset_size_at_level, stream);
     thrust::exclusive_scan(
       rmm::exec_policy(stream), scan_it, scan_it + offset_size_at_level, scan_out.begin());
@@ -1867,9 +1978,11 @@ dremel_data get_dremel_data(column_view h_col,
                     rep_level.begin());
   }
 
-  for (int level = nesting_levels.size() - 2; level >= 0; level--) {
+  // Having already merged the last two levels, we are now going to merge the result with the
+  // third-last level which is at index `nesting_levels.size() - 3`.
+  for (int level = nesting_levels.size() - 3; level >= 0; level--) {
     curr_col                  = nesting_levels[level];
-    auto lcv                  = lists_column_view(curr_col);
+    auto lcv                  = lists_column_view(get_list_level(curr_col));
     auto offset_size_at_level = column_ends[level] - column_offsets[level] + 1;
 
     // Get empties at this level
@@ -1893,15 +2006,12 @@ dremel_data get_dremel_data(column_view h_col,
     auto transformed_empties = thrust::make_transform_iterator(empties.begin(), offset_transformer);
 
     auto input_parent_rep_it = thrust::make_constant_iterator(level);
-    auto input_parent_def_it = thrust::make_transform_iterator(
-      thrust::make_counting_iterator(0),
-      [idx            = empties_idx.data(),
-       mask           = lcv.null_mask(),
-       level_nullable = level_nullability.empty() ? false : level_nullability[level],
-       curr_def_level = def_at_level[level]] __device__(auto i) {
-        return curr_def_level +
-               ((mask && bit_is_set(mask, idx[i]) or (!mask && level_nullable)) ? 1 : 0);
-      });
+    auto input_parent_def_it =
+      thrust::make_transform_iterator(empties_idx.begin(),
+                                      def_level_fn{d_nesting_levels + level,
+                                                   d_nullability.data(),
+                                                   start_at_sub_level[level],
+                                                   def_at_level[level]});
 
     // Zip the input and output value iterators so that merge operation is done only once
     auto input_parent_zip_it =
@@ -1927,10 +2037,10 @@ dremel_data get_dremel_data(column_view h_col,
 
     // Scan to get distance by which each offset value is shifted due to the insertion of dremel
     // level value fof an empty list
-    auto scan_it =
-      thrust::make_transform_iterator(thrust::make_counting_iterator(column_offsets[level]),
-                                      [off = lcv.offsets().data<size_type>()] __device__(
-                                        auto i) -> int { return off[i] == off[i + 1]; });
+    auto scan_it = cudf::detail::make_counting_transform_iterator(
+      column_offsets[level], [off = lcv.offsets().data<size_type>()] __device__(auto i) -> int {
+        return off[i] == off[i + 1];
+      });
     rmm::device_uvector<size_type> scan_out(offset_size_at_level, stream);
     thrust::exclusive_scan(
       rmm::exec_policy(stream), scan_it, scan_it + offset_size_at_level, scan_out.begin());
@@ -1963,16 +2073,10 @@ dremel_data get_dremel_data(column_view h_col,
 
   stream.synchronize();
 
-  size_type leaf_col_offset = column_offsets[column_offsets.size() - 1];
-  size_type leaf_data_size  = column_ends[column_ends.size() - 1] - leaf_col_offset;
-  uint8_t max_def_level     = def_at_level.back() - 1;
+  size_type leaf_data_size = column_ends.back() - column_offsets.back();
 
-  return dremel_data{std::move(new_offsets),
-                     std::move(rep_level),
-                     std::move(def_level),
-                     leaf_col_offset,
-                     leaf_data_size,
-                     max_def_level};
+  return dremel_data{
+    std::move(new_offsets), std::move(rep_level), std::move(def_level), leaf_data_size};
 }
 
 /**
@@ -1985,7 +2089,7 @@ dremel_data get_dremel_data(column_view h_col,
  * @param[in] stream CUDA stream to use, default 0
  */
 void InitPageFragments(PageFragment *frag,
-                       const EncColumnDesc *col_desc,
+                       const parquet_column_device_view *col_desc,
                        int32_t num_fragments,
                        int32_t num_columns,
                        uint32_t fragment_size,
@@ -1995,41 +2099,6 @@ void InitPageFragments(PageFragment *frag,
   dim3 dim_grid(num_columns, num_fragments);  // 1 threadblock per fragment
   gpuInitPageFragments<512><<<dim_grid, 512, 0, stream.value()>>>(
     frag, col_desc, num_fragments, num_columns, fragment_size, num_rows);
-}
-
-/**
- * @copydoc void init_column_device_views(EncColumnDesc *col_desc,
- *            column_device_view *leaf_column_views,
- *            const table_device_view &parent_table_device_view,
- *            rmm::cuda_stream_view stream)
- */
-void init_column_device_views(EncColumnDesc *col_desc,
-                              column_device_view *leaf_column_views,
-                              const table_device_view &parent_column_table_device_view,
-                              rmm::cuda_stream_view stream)
-{
-  cudf::detail::device_single_thread(
-    [col_desc,
-     parent_col_view = parent_column_table_device_view,
-     leaf_column_views] __device__() mutable {
-      for (size_type i = 0; i < parent_col_view.num_columns(); ++i) {
-        column_device_view col = parent_col_view.column(i);
-        if (col.type().id() == type_id::LIST) {
-          col_desc[i].parent_column = parent_col_view.begin() + i;
-        } else {
-          col_desc[i].parent_column = nullptr;
-        }
-        // traverse till leaf column
-        while (col.type().id() == type_id::LIST) {
-          col = col.child(lists_column_view::child_column_index);
-        }
-        // Store leaf_column to device storage
-        column_device_view *leaf_col_ptr = leaf_column_views + i;
-        *leaf_col_ptr                    = col;
-        col_desc[i].leaf_column          = leaf_col_ptr;
-      }
-    },
-    stream);
 }
 
 /**
@@ -2045,7 +2114,7 @@ void init_column_device_views(EncColumnDesc *col_desc,
  */
 void InitFragmentStatistics(statistics_group *groups,
                             const PageFragment *fragments,
-                            const EncColumnDesc *col_desc,
+                            const parquet_column_device_view *col_desc,
                             int32_t num_fragments,
                             int32_t num_columns,
                             uint32_t fragment_size,
@@ -2070,7 +2139,7 @@ void InitFragmentStatistics(statistics_group *groups,
  */
 void InitEncoderPages(EncColumnChunk *chunks,
                       EncPage *pages,
-                      const EncColumnDesc *col_desc,
+                      const parquet_column_device_view *col_desc,
                       int32_t num_rowgroups,
                       int32_t num_columns,
                       statistics_merge_group *page_grstats,
@@ -2103,8 +2172,8 @@ void EncodePages(EncPage *pages,
 {
   // A page is part of one column. This is launching 1 block per page. 1 block will exclusively
   // deal with one datatype.
-  gpuEncodePages<<<num_pages, 128, 0, stream.value()>>>(
-    pages, chunks, comp_in, comp_out, start_page);
+  gpuEncodePages<128>
+    <<<num_pages, 128, 0, stream.value()>>>(pages, chunks, comp_in, comp_out, start_page);
 }
 
 /**

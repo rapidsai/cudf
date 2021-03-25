@@ -315,7 +315,7 @@ template <typename InputType,
           std::enable_if_t<!std::is_same<InputType, cudf::string_view>::value and
                            !(op == aggregation::COUNT_VALID || op == aggregation::COUNT_ALL ||
                              op == aggregation::ROW_NUMBER || op == aggregation::LEAD ||
-                             op == aggregation::LAG || op == aggregation::COLLECT)>* = nullptr>
+                             op == aggregation::LAG || op == aggregation::COLLECT_LIST)>* = nullptr>
 bool __device__ process_rolling_window(column_device_view input,
                                        column_device_view ignored_default_outputs,
                                        mutable_column_device_view output,
@@ -814,7 +814,7 @@ struct rolling_window_launcher {
             typename PrecedingWindowIterator,
             typename FollowingWindowIterator>
   std::enable_if_t<!(op == aggregation::MEAN || op == aggregation::LEAD || op == aggregation::LAG ||
-                     op == aggregation::COLLECT),
+                     op == aggregation::COLLECT_LIST),
                    std::unique_ptr<column>>
   operator()(column_view const& input,
              column_view const& default_outputs,
@@ -897,11 +897,11 @@ struct rolling_window_launcher {
   }
 
   /**
-   * @brief Creates the offsets child of the result of the `COLLECT` window aggregation
+   * @brief Creates the offsets child of the result of the `COLLECT_LIST` window aggregation
    *
    * Given the input column, the preceding/following window bounds, and `min_periods`,
    * the sizes of each list row may be computed. These values can then be used to
-   * calculate the offsets for the result of `COLLECT`.
+   * calculate the offsets for the result of `COLLECT_LIST`.
    *
    * Note: If `min_periods` exceeds the number of observations for a window, the size
    * is set to `0` (since the result is `null`).
@@ -945,7 +945,7 @@ struct rolling_window_launcher {
   }
 
   /**
-   * @brief Generate mapping of each row in the COLLECT result's child column
+   * @brief Generate mapping of each row in the COLLECT_LIST result's child column
    * to the index of the row it belongs to.
    *
    *  If
@@ -1030,7 +1030,7 @@ struct rolling_window_launcher {
 
   /**
    * @brief Create gather map to generate the child column of the result of
-   * the `COLLECT` window aggregation.
+   * the `COLLECT_LIST` window aggregation.
    */
   template <typename PrecedingIter>
   std::unique_ptr<column> create_collect_gather_map(column_view const& child_offsets,
@@ -1063,8 +1063,83 @@ struct rolling_window_launcher {
     return gather_map;
   }
 
+  /**
+   * @brief Count null entries in result of COLLECT_LIST.
+   */
+  size_type count_child_nulls(column_view const& input,
+                              std::unique_ptr<column> const& gather_map,
+                              rmm::cuda_stream_view stream)
+  {
+    auto input_device_view = column_device_view::create(input, stream);
+
+    auto input_row_is_null = [d_input = *input_device_view] __device__(auto i) {
+      return d_input.is_null_nocheck(i);
+    };
+
+    return thrust::count_if(rmm::exec_policy(stream),
+                            gather_map->view().template begin<size_type>(),
+                            gather_map->view().template end<size_type>(),
+                            input_row_is_null);
+  }
+
+  /**
+   * @brief Purge entries for null inputs from gather_map, and adjust offsets.
+   */
+  std::pair<std::unique_ptr<column>, std::unique_ptr<column>> purge_null_entries(
+    column_view const& input,
+    column_view const& gather_map,
+    column_view const& offsets,
+    size_type num_child_nulls,
+    rmm::cuda_stream_view stream,
+    rmm::mr::device_memory_resource* mr)
+  {
+    auto input_device_view = column_device_view::create(input, stream);
+
+    auto input_row_not_null = [d_input = *input_device_view] __device__(auto i) {
+      return d_input.is_valid_nocheck(i);
+    };
+
+    // Purge entries in gather_map that correspond to null input.
+    auto new_gather_map = make_fixed_width_column(data_type{type_to_id<size_type>()},
+                                                  gather_map.size() - num_child_nulls,
+                                                  mask_state::UNALLOCATED,
+                                                  stream,
+                                                  mr);
+    thrust::copy_if(rmm::exec_policy(stream),
+                    gather_map.template begin<size_type>(),
+                    gather_map.template end<size_type>(),
+                    new_gather_map->mutable_view().template begin<size_type>(),
+                    input_row_not_null);
+
+    // Recalculate offsets after null entries are purged.
+    auto new_sizes = make_fixed_width_column(
+      data_type{type_to_id<size_type>()}, input.size(), mask_state::UNALLOCATED, stream, mr);
+
+    thrust::transform(rmm::exec_policy(stream),
+                      thrust::make_counting_iterator<size_type>(0),
+                      thrust::make_counting_iterator<size_type>(input.size()),
+                      new_sizes->mutable_view().template begin<size_type>(),
+                      [d_gather_map  = gather_map.template begin<size_type>(),
+                       d_old_offsets = offsets.template begin<size_type>(),
+                       input_row_not_null] __device__(auto i) {
+                        return thrust::count_if(thrust::seq,
+                                                d_gather_map + d_old_offsets[i],
+                                                d_gather_map + d_old_offsets[i + 1],
+                                                input_row_not_null);
+                      });
+
+    auto new_offsets =
+      strings::detail::make_offsets_child_column(new_sizes->view().template begin<size_type>(),
+                                                 new_sizes->view().template end<size_type>(),
+                                                 stream,
+                                                 mr);
+
+    return std::make_pair<std::unique_ptr<column>, std::unique_ptr<column>>(
+      std::move(new_gather_map), std::move(new_offsets));
+  }
+
   template <aggregation::Kind op, typename PrecedingIter, typename FollowingIter>
-  std::enable_if_t<(op == aggregation::COLLECT), std::unique_ptr<column>> operator()(
+  std::enable_if_t<(op == aggregation::COLLECT_LIST), std::unique_ptr<column>> operator()(
     column_view const& input,
     column_view const& default_outputs,
     PrecedingIter preceding_begin_raw,
@@ -1075,7 +1150,7 @@ struct rolling_window_launcher {
     rmm::mr::device_memory_resource* mr)
   {
     CUDF_EXPECTS(default_outputs.is_empty(),
-                 "COLLECT window function does not support default values.");
+                 "COLLECT_LIST window function does not support default values.");
 
     if (input.is_empty()) return empty_like(input);
 
@@ -1105,6 +1180,17 @@ struct rolling_window_launcher {
     // Generate gather map to produce the collect() result's child column.
     auto gather_map = create_collect_gather_map(
       offsets->view(), per_row_mapping->view(), preceding_begin, stream, mr);
+
+    // If gather_map collects null elements, and null_policy == EXCLUDE,
+    // those elements must be filtered out, and offsets recomputed.
+    auto null_handling = static_cast<collect_list_aggregation*>(agg.get())->_null_handling;
+    if (null_handling == null_policy::EXCLUDE && input.has_nulls()) {
+      auto num_child_nulls = count_child_nulls(input, gather_map, stream);
+      if (num_child_nulls != 0) {
+        std::tie(gather_map, offsets) =
+          purge_null_entries(input, *gather_map, *offsets, num_child_nulls, stream, mr);
+      }
+    }
 
     // gather(), to construct child column.
     auto gather_output =
@@ -1284,6 +1370,7 @@ std::unique_ptr<column> rolling_window(column_view const& input,
   auto input_col = cudf::is_dictionary(input.type())
                      ? dictionary_column_view(input).get_indices_annotated()
                      : input;
+
   auto output = cudf::type_dispatcher(input_col.type(),
                                       dispatch_rolling{},
                                       input_col,

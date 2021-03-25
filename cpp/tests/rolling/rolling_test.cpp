@@ -22,6 +22,7 @@
 
 #include <cudf/aggregation.hpp>
 #include <cudf/detail/aggregation/aggregation.hpp>
+#include <cudf/detail/iterator.cuh>
 #include <cudf/dictionary/encode.hpp>
 #include <cudf/rolling.hpp>
 #include <cudf/utilities/bit.hpp>
@@ -878,13 +879,13 @@ TEST_F(RollingTestUdf, StaticWindow)
 
   std::unique_ptr<cudf::column> output;
 
-  auto start = cudf::test::make_counting_transform_iterator(0, [size] __device__(size_type row) {
+  auto start = cudf::detail::make_counting_transform_iterator(0, [size] __device__(size_type row) {
     return std::accumulate(thrust::make_counting_iterator(std::max(0, row - 2 + 1)),
                            thrust::make_counting_iterator(std::min(size, row + 2 + 1)),
                            0);
   });
 
-  auto valid = cudf::test::make_counting_transform_iterator(0, [size] __device__(size_type row) {
+  auto valid = cudf::detail::make_counting_transform_iterator(0, [size] __device__(size_type row) {
     return (row != 0 && row != size - 2 && row != size - 1);
   });
 
@@ -915,23 +916,23 @@ TEST_F(RollingTestUdf, DynamicWindow)
                                             thrust::make_counting_iterator(size),
                                             thrust::make_constant_iterator(true));
 
-  auto prec = cudf::test::make_counting_transform_iterator(
+  auto prec = cudf::detail::make_counting_transform_iterator(
     0, [size] __device__(size_type row) { return row % 2 + 2; });
 
-  auto follow = cudf::test::make_counting_transform_iterator(
+  auto follow = cudf::detail::make_counting_transform_iterator(
     0, [size] __device__(size_type row) { return row % 2; });
 
   fixed_width_column_wrapper<int32_t> preceding(prec, prec + size);
   fixed_width_column_wrapper<int32_t> following(follow, follow + size);
   std::unique_ptr<cudf::column> output;
 
-  auto start = cudf::test::make_counting_transform_iterator(0, [size] __device__(size_type row) {
+  auto start = cudf::detail::make_counting_transform_iterator(0, [size] __device__(size_type row) {
     return std::accumulate(thrust::make_counting_iterator(std::max(0, row - (row % 2 + 2) + 1)),
                            thrust::make_counting_iterator(std::min(size, row + (row % 2) + 1)),
                            0);
   });
 
-  auto valid = cudf::test::make_counting_transform_iterator(
+  auto valid = cudf::detail::make_counting_transform_iterator(
     0, [size] __device__(size_type row) { return row != 0; });
 
   fixed_width_column_wrapper<int64_t> expected{start, start + size, valid};

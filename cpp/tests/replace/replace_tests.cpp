@@ -1,5 +1,5 @@
 /*
- * Copyright 2019-20, NVIDIA CORPORATION.
+ * Copyright 2019-2021, NVIDIA CORPORATION.
  *
  * Copyright 2018 BlazingDB, Inc.
  *     Copyright 2018 Cristhian Alberto Gonzales Castillo <cristhian@blazingdb.com>
@@ -16,12 +16,14 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_utilities.hpp>
 #include <cudf_test/column_wrapper.hpp>
 #include <cudf_test/cudf_gtest.hpp>
 #include <cudf_test/type_lists.hpp>
 
+#include <cudf/detail/iterator.cuh>
 #include <cudf/dictionary/encode.hpp>
 #include <cudf/null_mask.hpp>
 #include <cudf/replace.hpp>
@@ -550,7 +552,7 @@ TYPED_TEST(FixedPointTestBothReps, FixedPointReplace)
   auto const sz  = std::size_t{1000};
 
   auto mod2            = [&](auto e) { return e % 2 ? ONE : TWO; };
-  auto transform_begin = cudf::test::make_counting_transform_iterator(0, mod2);
+  auto transform_begin = cudf::detail::make_counting_transform_iterator(0, mod2);
   auto const vec1      = std::vector<decimalXX>(transform_begin, transform_begin + sz);
   auto const vec2      = std::vector<decimalXX>(sz, TWO);
 
