@@ -140,9 +140,9 @@ enum class nan_policy : bool {
  * @brief Enum to consider different elements (of floating point types) holding NaN value as equal
  * or unequal
  */
-enum class nan_equality : bool {
-  EQUAL,   ///< NaNs compare equal
-  UNEQUAL  ///< NaNs compare unequal
+enum class nan_equality /*unspecified*/ {
+  ALL_EQUAL,  ///< All NaNs compare equal, regardless of sign
+  UNEQUAL     ///< All NaNs compare unequal (IEE754 behavior)
 };
 
 /**

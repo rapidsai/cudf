@@ -42,7 +42,7 @@ struct has_negative_nans {
   column_device_view const d_entries;
   bool const has_nulls;
 
-  __device__ Type operator()(size_type idx)
+  __device__ Type operator()(size_type idx) const noexcept
   {
     if (has_nulls && d_entries.is_null(idx)) { return false; }
 
@@ -330,7 +330,7 @@ struct get_unique_entries_fn {
                           bool has_nulls,
                           rmm::cuda_stream_view stream) const noexcept
   {
-    if (nans_equal == nan_equality::EQUAL) {
+    if (nans_equal == nan_equality::ALL_EQUAL) {
       list_entry_comparator<Type, true> const comp{list_offsets, d_view, nulls_equal, has_nulls};
       return thrust::unique_copy(rmm::exec_policy(stream),
                                  thrust::make_counting_iterator(0),
