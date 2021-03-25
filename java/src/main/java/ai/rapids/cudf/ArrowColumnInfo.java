@@ -24,7 +24,7 @@ import java.util.ArrayList;
 /**
  * Column information from Arrow data. 
  * This currently only supports primitive types and Strings, Decimals and nested types
- * such as list and struct are not supported.
+ * such as list and struct are not supported. DURATION_DAYS is also not supported by cudf.
  * The caller is responsible for eventually freeing the underlying Arrow array by 
  * calling close().
  */

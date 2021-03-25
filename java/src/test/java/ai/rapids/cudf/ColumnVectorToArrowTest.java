@@ -37,6 +37,7 @@ import org.apache.arrow.vector.BigIntVector;
 import org.apache.arrow.vector.BitVector;
 import org.apache.arrow.vector.DateDayVector;
 import org.apache.arrow.vector.DecimalVector;
+import org.apache.arrow.vector.DurationVector;
 import org.apache.arrow.vector.Float4Vector;
 import org.apache.arrow.vector.Float8Vector;
 import org.apache.arrow.vector.IntVector;
@@ -46,6 +47,9 @@ import org.apache.arrow.vector.compare.VectorEqualsVisitor;
 import org.apache.arrow.vector.complex.ListVector;
 import org.apache.arrow.vector.complex.StructVector;
 import org.apache.arrow.vector.ipc.message.ArrowFieldNode;
+import org.apache.arrow.vector.types.TimeUnit;
+import org.apache.arrow.vector.types.pojo.ArrowType;
+import org.apache.arrow.vector.types.pojo.FieldType;
 import org.apache.arrow.vector.util.Text;
 
 import org.junit.jupiter.api.Test;
@@ -292,7 +296,7 @@ public class ColumnVectorToArrowTest extends CudfTestBase {
   }
 
   @Test
-  void testArrowDays() {
+  void testArrowTimestampDays() {
     BufferAllocator allocator = new RootAllocator(Long.MAX_VALUE);
     try (DateDayVector vector = new DateDayVector("vec", allocator)) {
       ArrayList<Integer> expectedArr = new ArrayList<Integer>();
@@ -320,6 +324,43 @@ public class ColumnVectorToArrowTest extends CudfTestBase {
           res.getDataBufferAddress(), false);
         ArrowFieldNode fieldNode = new ArrowFieldNode((int)res.getNumRows(), (int)res.getNullCount());
         DateDayVector v1 = new DateDayVector("col1", allocator);
+        v1.loadFieldBuffers(fieldNode, Stream.of(validityBuf, dataBuf).collect(Collectors.toList()));
+        assertEquals(v1.getNullCount(), 1);
+        assertEquals(vector.getNullCount(), 1);
+        assertTrue(VectorEqualsVisitor.vectorEquals(v1, vector));
+      }
+    }
+  }
+
+  @Test
+  void testArrowDurationSeconds() {
+    BufferAllocator allocator = new RootAllocator(Long.MAX_VALUE);
+    try (DurationVector vector = new DurationVector("vec", FieldType.nullable(new ArrowType.Duration(TimeUnit.SECOND)), allocator)) {
+      ArrayList<Long> expectedArr = new ArrayList<Long>();
+      int count = 10000;
+      for (int i = 0; i < count; i++) {
+        if (i == 3) {
+          // add a null in there somewhere
+          vector.setNull(i);
+          expectedArr.add(null);
+        } else {
+          expectedArr.add(new Long(i));
+          ((DurationVector) vector).setSafe(i, new Long(i));
+        }
+      }
+      vector.setValueCount(count);
+      try (ColumnVector toConvert = ColumnVector.durationSecondsFromBoxedLongs(expectedArr.toArray(new Long[0]));
+           ArrowColumnInfo res = ColumnVector.toArrow(toConvert)) {
+        assertEquals(toConvert.getNullCount(), 1);
+        ArrowBuf validityBuf = null;
+        if (res.getValidityBufferAddress() != 0) {
+          validityBuf = new ArrowBuf(ReferenceManager.NO_OP, null,
+            (int)res.getValidityBufferSize(), res.getValidityBufferAddress(), false);
+        }
+        ArrowBuf dataBuf = new ArrowBuf(ReferenceManager.NO_OP, null, (int)res.getDataBufferSize(),
+          res.getDataBufferAddress(), false);
+        ArrowFieldNode fieldNode = new ArrowFieldNode((int)res.getNumRows(), (int)res.getNullCount());
+        DurationVector v1 = new DurationVector("col1", FieldType.nullable(new ArrowType.Duration(TimeUnit.SECOND)), allocator);
         v1.loadFieldBuffers(fieldNode, Stream.of(validityBuf, dataBuf).collect(Collectors.toList()));
         assertEquals(v1.getNullCount(), 1);
         assertEquals(vector.getNullCount(), 1);
