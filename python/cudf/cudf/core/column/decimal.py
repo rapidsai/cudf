@@ -75,7 +75,7 @@ class DecimalColumn(ColumnBase):
 
     def normalize_binop_value(self, other):
         from cudf.utils.dtypes import is_scalar
-        if is_scalar(other):
+        if is_scalar(other) and isinstance(other, (int, np.int, Decimal)):
             other = cudf.Scalar(Decimal(other))
             return other
         else:
@@ -140,18 +140,6 @@ def _binop_precision(l_dtype, r_dtype, op):
     else:
         raise NotImplementedError()
 
-def _decimalize_scalar(slr):
-    """
-    Take an Int, or a decimal.Decimal and return
-    a decimal.Decimal and a corresponding cudf.Decimal64Dtype
-    """
-    if isinstance(slr, int)):
-        dcml = Decimal(slr)
-        dcml_int = int(dcml * (10**(-dcml.as_tuple().exponent)))
-        scale = len(str(dcml_int))        
-        return dcml_int, scale
-    else:
-        raise TypeError(f"No equiavalent Decimal value for {slr}")
 
 def _decimal_to_int64(decimal: Decimal) -> int:
     """

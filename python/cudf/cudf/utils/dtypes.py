@@ -345,9 +345,6 @@ def to_cudf_compatible_scalar(val, dtype=None):
             " to cudf scalar"
         )
 
-    if isinstance(dtype, cudf.Decimal64Dtype):
-        return Decimal(np.format_float_positional(val, dtype.scale))
-
     if isinstance(val, (np.ndarray, cp.ndarray)) and val.ndim == 0:
         val = val.item()
 

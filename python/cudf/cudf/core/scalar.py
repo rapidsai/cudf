@@ -1,4 +1,5 @@
 # Copyright (c) 2020-2021, NVIDIA CORPORATION.
+import decimal
 
 import numpy as np
 
@@ -6,6 +7,7 @@ from cudf._lib.scalar import DeviceScalar, _is_null_host_scalar
 from cudf.core.column.column import ColumnBase
 from cudf.core.index import Index
 from cudf.core.series import Series
+from cudf.core.dtypes import Decimal64Dtype
 from cudf.utils.dtypes import (
     get_allowed_combinations_for_operator,
     to_cudf_compatible_scalar,
@@ -112,29 +114,37 @@ class Scalar(object):
         self._host_value = self._device_value._to_host_scalar()
 
     def _preprocess_host_value(self, value, dtype):
+        if isinstance(dtype, Decimal64Dtype):
+            raise NotImplementedError(
+                "dtype as cudf.Decimal64Dtype is not supported. Use Decimal "
+                "to construct a DecimalScalar."
+            )
+        
         value = to_cudf_compatible_scalar(value, dtype=dtype)
         valid = not _is_null_host_scalar(value)
 
-        if dtype is None:
-            if not valid:
-                if isinstance(value, (np.datetime64, np.timedelta64)):
-                    unit, _ = np.datetime_data(value)
-                    if unit == "generic":
-                        raise TypeError(
-                            "Cant convert generic NaT to null scalar"
-                        )
+        if isinstance(value, decimal.Decimal):
+            # TODO: construct DecimalScalar from decimal.Decimal
+            pass
+        else:
+            if dtype is None:
+                if not valid:
+                    if isinstance(value, (np.datetime64, np.timedelta64)):
+                        unit, _ = np.datetime_data(value)
+                        if unit == "generic":
+                            raise TypeError(
+                                "Cant convert generic NaT to null scalar"
+                            )
+                        else:
+                            dtype = value.dtype
                     else:
-                        dtype = value.dtype
+                        raise TypeError(
+                            "dtype required when constructing a null scalar"
+                        )
                 else:
-                    raise TypeError(
-                        "dtype required when constructing a null scalar"
-                    )
-            else:
-                dtype = value.dtype
-        from cudf import Decimal64Dtype
-        if not isinstance(dtype, Decimal64Dtype):
+                    dtype = value.dtype
             dtype = np.dtype(dtype)
-        
+            
             # temporary
             dtype = np.dtype("object") if dtype.char == "U" else dtype
 
