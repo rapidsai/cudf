@@ -44,7 +44,8 @@ _LIST_AGGS = {
     "collect"
 }
 
-# TODO: For now, the aggs for all of these extension types are the same as strings until we can find a way to fix that.
+# TODO: For now, the aggs for struct and interval types are the same as strings.
+# Need to evaluate what's actually reasonable.
 _STRUCT_AGGS = {
     "count",
     "size",

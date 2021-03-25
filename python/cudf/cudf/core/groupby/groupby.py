@@ -705,15 +705,11 @@ class DataFrameGroupBy(GroupBy):
             dropna=dropna,
         )
 
-    def __getattribute__(self, key):
-        try:
-            return super().__getattribute__(key)
-        except AttributeError:
-            if key in self.obj:
-                return self.obj[key].groupby(
-                    self.grouping, dropna=self._dropna, sort=self._sort
-                )
-            raise
+    def __getattr__(self, key):
+        if key in self.obj:
+            return self.obj[key].groupby(
+                self.grouping, dropna=self._dropna, sort=self._sort
+            )
 
     def __getitem__(self, key):
         return self.obj[key].groupby(
