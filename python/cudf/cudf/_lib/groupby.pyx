@@ -83,13 +83,13 @@ _INTERVAL_AGGS = {
 _DECIMAL_AGGS = {
     "count",
     "sum",
-    "idxmin",  # Silently fails.
-    "idxmax",  # Silently fails.
+    "argmin",
+    "argmax",
     "min",
     "max",
     "mean",  # Errors internally in C++
-    "var",  # Silently fails.
-    "std",
+    "var",  # Column silently vanishes.
+    "std",  # Gives all nulls.
     "quantile",  # Errors internally in C++
     "median",  # Errors internally in C++
     "nunique",
