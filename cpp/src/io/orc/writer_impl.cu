@@ -130,9 +130,7 @@ class orc_column_view {
       _type_width(_is_string_type ? 0 : cudf::size_of(col.type())),
       _data_count(col.size()),
       _null_count(col.null_count()),
-      _data(col.head<uint8_t>() + col.offset() * _type_width),
       _nulls(col.null_mask()),
-      _column_offset(col.offset()),
       _clockscale(to_clockscale<uint8_t>(col.type().id())),
       _type_kind(to_orc_type(col.type().id()))
   {
@@ -184,9 +182,7 @@ class orc_column_view {
   size_t data_count() const noexcept { return _data_count; }
   size_t null_count() const noexcept { return _null_count; }
   bool nullable() const noexcept { return (_nulls != nullptr); }
-  // void const *data() const noexcept { return _data; }
   uint32_t const *nulls() const noexcept { return _nulls; }
-  // size_type column_offset() const noexcept { return _column_offset; }
   uint8_t clockscale() const noexcept { return _clockscale; }
 
   void set_orc_encoding(ColumnEncodingKind e) { _encoding_kind = e; }
@@ -200,13 +196,11 @@ class orc_column_view {
   size_t _str_id       = 0;
   bool _is_string_type = false;
 
-  size_t _type_width       = 0;
-  size_t _data_count       = 0;
-  size_t _null_count       = 0;
-  void const *_data        = nullptr;
-  uint32_t const *_nulls   = nullptr;
-  size_type _column_offset = 0;
-  uint8_t _clockscale      = 0;
+  size_t _type_width     = 0;
+  size_t _data_count     = 0;
+  size_t _null_count     = 0;
+  uint32_t const *_nulls = nullptr;
+  uint8_t _clockscale    = 0;
 
   // ORC-related members
   std::string _name{};

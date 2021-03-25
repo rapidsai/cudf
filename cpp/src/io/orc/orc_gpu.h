@@ -313,6 +313,13 @@ void EncodeStripeDictionaries(StripeDictionary *stripes,
                               detail::device_2dspan<encoder_chunk_streams> enc_streams,
                               rmm::cuda_stream_view stream = rmm::cuda_stream_default);
 
+/**
+ * @brief Set leaf column element of EncChunk
+ *
+ * @param[in] view table device view representing input table
+ * @param[in,out] chunks encoder chunk device array [column][rowgroup]
+ * @param[in] stream CUDA stream to use, default `rmm::cuda_stream_default`
+ */
 void set_chunk_columns(const table_device_view &view,
                        detail::device_2dspan<EncChunk> chunks,
                        rmm::cuda_stream_view stream);
