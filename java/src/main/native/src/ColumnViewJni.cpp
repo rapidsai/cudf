@@ -1796,7 +1796,7 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_copyColumnViewToCV(JNIEnv
   CATCH_STD(env, 0)
 }
 
-JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_getJSONObject(JNIEnv *env, jobject j_object, 
+JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_getJSONObject(JNIEnv *env, jclass, 
                                                                      jlong j_view_handle, jlong j_scalar_handle) {
 
    JNI_NULL_CHECK(env, j_view_handle, "view cannot be null", 0);
