@@ -1827,9 +1827,9 @@ def test_binops_with_NA_consistent(dtype, op):
         ),
         (
             operator.gt,
-            ["300", None, "150"],
+            ["300", None, "100"],
             cudf.Decimal64Dtype(scale=-2, precision=3),
-            ["100", "200", "150"],
+            ["100", "200", "100"],
             cudf.Decimal64Dtype(scale=-1, precision=4),
             [True, None, False],
             bool,
@@ -1854,9 +1854,9 @@ def test_binops_with_NA_consistent(dtype, op):
         ),
         (
             operator.le,
-            ["300", None, "150"],
+            ["300", None, "100"],
             cudf.Decimal64Dtype(scale=-2, precision=3),
-            ["100", "200", "150"],
+            ["100", "200", "100"],
             cudf.Decimal64Dtype(scale=-1, precision=4),
             [False, None, True],
             bool,
@@ -1881,9 +1881,9 @@ def test_binops_with_NA_consistent(dtype, op):
         ),
         (
             operator.ge,
-            ["300", None, "150"],
+            ["300", None, "100"],
             cudf.Decimal64Dtype(scale=-2, precision=3),
-            ["100", "200", "150"],
+            ["100", "200", "100"],
             cudf.Decimal64Dtype(scale=-1, precision=4),
             [True, None, True],
             bool,
@@ -1901,7 +1901,11 @@ def test_binops_decimal(args):
 
     a = decimal_series(lhs, l_dtype)
     b = decimal_series(rhs, r_dtype)
-    expect = decimal_series(expect, expect_dtype)
+    expect = (
+        decimal_series(expect, expect_dtype)
+        if isinstance(expect_dtype, cudf.Decimal64Dtype)
+        else cudf.Series(expect, dtype=expect_dtype)
+    )
 
     got = op(a, b)
     assert expect.dtype == got.dtype
