@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,9 +17,9 @@
 
 #include <cudf/column/column_view.hpp>
 #include <cudf/table/table_view.hpp>
+#include <cudf/utilities/span.hpp>
 
 #include <memory>
-#include <vector>
 
 namespace cudf {
 /**
@@ -36,13 +36,13 @@ namespace cudf {
  *
  * Returns empty `device_buffer` if the column is not nullable
  *
- * @param views Vector of column views whose bitmask will to be concatenated
+ * @param views host_span of column views whose bitmask will to be concatenated
  * @param mr Device memory resource used for allocating the new device_buffer
  * @return rmm::device_buffer A `device_buffer` containing the bitmasks of all
  * the column views in the views vector
  */
 rmm::device_buffer concatenate_masks(
-  std::vector<column_view> const& views,
+  host_span<column_view const> views,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
@@ -51,14 +51,13 @@ rmm::device_buffer concatenate_masks(
  * @throws cudf::logic_error
  * If types of the input columns mismatch
  *
- * @param columns_to_concat The column views to be concatenated into a single
- * column
+ * @param columns_to_concat host_span of column views to be concatenated into a single column
  * @param mr Device memory resource used to allocate the returned column's device memory.
  * @return Unique pointer to a single table having all the rows from the
  * elements of `columns_to_concat` respectively in the same order.
  */
 std::unique_ptr<column> concatenate(
-  std::vector<column_view> const& columns_to_concat,
+  host_span<column_view const> columns_to_concat,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
@@ -82,14 +81,13 @@ std::unique_ptr<column> concatenate(
  * @throws cudf::logic_error
  * If number of columns mismatch
  *
- * @param tables_to_concat The table views to be concatenated into a single
- * table
+ * @param tables_to_concat host_span of table views to be concatenated into a single table
  * @param mr Device memory resource used to allocate the returned table's device memory.
  * @return Unique pointer to a single table having all the rows from the
  * elements of `tables_to_concat` respectively in the same order.
  */
 std::unique_ptr<table> concatenate(
-  std::vector<table_view> const& tables_to_concat,
+  host_span<table_view const> tables_to_concat,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /** @} */  // end of group
