@@ -177,7 +177,8 @@ std::unique_ptr<cudf::table> left_semi_anti_join(
   // flatten any structs out. Note this happens before dictionary matching because
   // structs can contain dictionaries.
   auto const flattened_left = structs::detail::flatten_nested_columns(left.select(left_on), {}, {});
-  auto const flattened_right = structs::detail::flatten_nested_columns(right.select(right_on), {}, {});
+  auto const flattened_right =
+    structs::detail::flatten_nested_columns(right.select(right_on), {}, {});
 
   // Make sure any dictionary columns have matched key sets.
   // This will return any new dictionary columns created as well as updated table_views.

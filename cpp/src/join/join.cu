@@ -37,7 +37,7 @@ inner_join(table_view const& left_input,
 {
   // flatten any structs out. Note this happens before dictionary matching because
   // structs can contain dictionaries.
-  auto const flattened_left = structs::detail::flatten_nested_columns(left_input, {}, {});
+  auto const flattened_left  = structs::detail::flatten_nested_columns(left_input, {}, {});
   auto const flattened_right = structs::detail::flatten_nested_columns(right_input, {}, {});
 
   // Make sure any dictionary columns have matched key sets.
@@ -72,15 +72,10 @@ std::unique_ptr<table> inner_join(table_view const& left_input,
                                   rmm::cuda_stream_view stream,
                                   rmm::mr::device_memory_resource* mr)
 {
-  // flatten any structs out. Note this happens before dictionary matching because
-  // structs can contain dictionaries.
-  auto const flattened_left = structs::detail::flatten_nested_columns(left_input.select(left_on), {}, {});
-  auto const flattened_right = structs::detail::flatten_nested_columns(right_input.select(right_on), {}, {});
-
   // Make sure any dictionary columns have matched key sets.
   // This will return any new dictionary columns created as well as updated table_views.
   auto matched = cudf::dictionary::detail::match_dictionaries(
-    {std::get<0>(flattened_left), std::get<0>(flattened_right)},
+    {left_input.select(left_on), right_input.select(right_on)},
     stream,
     rmm::mr::get_current_device_resource());  // temporary objects returned
 
@@ -114,7 +109,7 @@ left_join(table_view const& left_input,
 {
   // flatten any structs out. Note this happens before dictionary matching because
   // structs can contain dictionaries.
-  auto const flattened_left = structs::detail::flatten_nested_columns(left_input, {}, {});
+  auto const flattened_left  = structs::detail::flatten_nested_columns(left_input, {}, {});
   auto const flattened_right = structs::detail::flatten_nested_columns(right_input, {}, {});
 
   // Make sure any dictionary columns have matched key sets.
@@ -139,15 +134,10 @@ std::unique_ptr<table> left_join(table_view const& left_input,
                                  rmm::cuda_stream_view stream,
                                  rmm::mr::device_memory_resource* mr)
 {
-  // flatten any structs out. Note this happens before dictionary matching because
-  // structs can contain dictionaries.
-  auto const flattened_left = structs::detail::flatten_nested_columns(left_input.select(left_on), {}, {});
-  auto const flattened_right = structs::detail::flatten_nested_columns(right_input.select(right_on), {}, {});
-
   // Make sure any dictionary columns have matched key sets.
   // This will return any new dictionary columns created as well as updated table_views.
   auto matched = cudf::dictionary::detail::match_dictionaries(
-    {std::get<0>(flattened_left), std::get<0>(flattened_right)},  // these should match
+    {left_input.select(left_on), right_input.select(right_on)},  // these should match
     stream,
     rmm::mr::get_current_device_resource());  // temporary objects returned
   // now rebuild the table views with the updated ones
@@ -187,7 +177,7 @@ full_join(table_view const& left_input,
 {
   // flatten any structs out. Note this happens before dictionary matching because
   // structs can contain dictionaries.
-  auto const flattened_left = structs::detail::flatten_nested_columns(left_input, {}, {});
+  auto const flattened_left  = structs::detail::flatten_nested_columns(left_input, {}, {});
   auto const flattened_right = structs::detail::flatten_nested_columns(right_input, {}, {});
 
   // Make sure any dictionary columns have matched key sets.
@@ -212,15 +202,10 @@ std::unique_ptr<table> full_join(table_view const& left_input,
                                  rmm::cuda_stream_view stream,
                                  rmm::mr::device_memory_resource* mr)
 {
-  // flatten any structs out. Note this happens before dictionary matching because
-  // structs can contain dictionaries.
-  auto const flattened_left = structs::detail::flatten_nested_columns(left_input.select(left_on), {}, {});
-  auto const flattened_right = structs::detail::flatten_nested_columns(right_input.select(right_on), {}, {});
-
   // Make sure any dictionary columns have matched key sets.
   // This will return any new dictionary columns created as well as updated table_views.
   auto matched = cudf::dictionary::detail::match_dictionaries(
-    {std::get<0>(flattened_left), std::get<0>(flattened_right)},  // these should match
+    {left_input.select(left_on), right_input.select(right_on)},  // these should match
     stream,
     rmm::mr::get_current_device_resource());  // temporary objects returned
   // now rebuild the table views with the updated ones
