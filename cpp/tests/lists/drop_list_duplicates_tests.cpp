@@ -72,19 +72,27 @@ TEST_F(DropListDuplicatesTest, FloatingPointTestsWithInf)
 // We will not store NaN in the results_expected variable (an unordered_set) because we can't check
 // for NaN existence in a set. Instead, we will count the number of NaNs in the input and compare
 // with the number of NaNs in the output.
-void test_floating_point(std::vector<float_type> const& h_input,
-                         std::unordered_set<float_type> const& results_expected)
+static void test_floating_point(std::vector<float_type> const& h_input,
+                                std::unordered_set<float_type> const& results_expected,
+                                cudf::nan_equality nans_equal)
 {
-  const auto num_NaNs =
-    std::count_if(h_input.begin(), h_input.end(), [](auto x) { return std::isnan(x); });
+  // If NaNs are considered as equal value, the final result should always contain at max ONE NaN
+  // entry per list
+  std::size_t const num_NaNs =
+    nans_equal == cudf::nan_equality::EQUAL
+      ? std::size_t{1}
+      : std::count_if(h_input.begin(), h_input.end(), [](auto x) { return std::isnan(x); });
 
   auto const results_col = cudf::lists::drop_list_duplicates(
-    cudf::lists_column_view{LIST_COL_FLT(h_input.begin(), h_input.end())});
+    cudf::lists_column_view{LIST_COL_FLT(h_input.begin(), h_input.end())},
+    cudf::null_equality::EQUAL,
+    nans_equal);
   auto const results_arr =
     cudf::test::to_host<float_type>(cudf::lists_column_view(results_col->view()).child()).first;
+
   EXPECT_EQ(results_arr.size(), results_expected.size() + num_NaNs);
 
-  int NaN_count{0};
+  std::size_t NaN_count{0};
   std::unordered_set<float_type> results;
   for (auto const x : results_arr) {
     if (std::isnan(x)) {
@@ -96,21 +104,23 @@ void test_floating_point(std::vector<float_type> const& h_input,
   EXPECT_TRUE(results_expected.size() == results.size() && NaN_count == num_NaNs);
 }
 
-TEST_F(DropListDuplicatesTest, FloatingPointTestsWithNaN)
+TEST_F(DropListDuplicatesTest, FloatingPointTestsWithNaNs)
 {
   std::vector<float_type> h_input{
     0, -1, 1, NaN, 2, 0, neg_NaN, 1, -2, 2, 0, 1, 2, neg_NaN, NaN, NaN, NaN, neg_NaN};
   std::unordered_set<float_type> results_expected{-2, -1, 0, 1, 2};
-  test_floating_point(h_input, results_expected);
+  test_floating_point(h_input, results_expected, cudf::nan_equality::UNEQUAL);
+  test_floating_point(h_input, results_expected, cudf::nan_equality::EQUAL);
 }
 
-TEST_F(DropListDuplicatesTest, FloatingPointTestsWithInfAndNaN)
+TEST_F(DropListDuplicatesTest, FloatingPointTestsWithInfsAndNaNs)
 {
   std::vector<float_type> h_input{neg_Inf, 0, neg_NaN, 1,   -1,      -2,      NaN, NaN,    Inf, NaN,
                                   neg_NaN, 2, -1,      0,   neg_NaN, 1,       2,   Inf,    0,   1,
                                   neg_Inf, 2, neg_NaN, Inf, neg_NaN, neg_NaN, NaN, neg_Inf};
   std::unordered_set<float_type> results_expected{-2, -1, 0, 1, 2, neg_Inf, Inf};
-  test_floating_point(h_input, results_expected);
+  test_floating_point(h_input, results_expected, cudf::nan_equality::UNEQUAL);
+  test_floating_point(h_input, results_expected, cudf::nan_equality::EQUAL);
 }
 
 TEST_F(DropListDuplicatesTest, StringTestsNonNull)
