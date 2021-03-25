@@ -2858,6 +2858,7 @@ class IntervalIndex(GenericIndex):
     Immutable index of intervals that are closed on the same side.
 
     Parameters
+    ----------
     data : array-like (1-dimensional)
     Array-like containing Interval objects from which to build the
     IntervalIndex.
