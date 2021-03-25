@@ -294,9 +294,8 @@ def cudf_dtype_to_pa_type(dtype):
     """
     if is_categorical_dtype(dtype):
         raise NotImplementedError()
-    elif is_list_dtype(dtype):
-        return dtype.to_arrow()
-    elif is_struct_dtype(dtype):
+    elif (is_list_dtype(dtype) or is_struct_dtype(dtype)
+          or is_decimal_dtype(dtype)):
         return dtype.to_arrow()
     else:
         return np_to_pa_dtype(np.dtype(dtype))

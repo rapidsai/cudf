@@ -94,7 +94,7 @@ _DECIMAL_AGGS = {
     "median",  # Errors internally in C++
     "nunique",
     "nth",
-    "collect"  # Errors internally in Python
+    "collect"
 }
 
 cdef class GroupBy:
