@@ -1,6 +1,6 @@
 # Copyright (c) 2018-2021, NVIDIA CORPORATION.
 
-from __future__ import division
+from __future__ import annotations, division
 
 import inspect
 import itertools
@@ -10,7 +10,7 @@ import sys
 import warnings
 from collections import OrderedDict, defaultdict
 from collections.abc import Iterable, Sequence
-from typing import Any, Set, TypeVar
+from typing import Any, Optional, Set, TypeVar
 
 import cupy
 import numpy as np
@@ -30,7 +30,7 @@ from cudf.core import column, reshape
 from cudf.core.abc import Serializable
 from cudf.core.column import as_column, column_empty
 from cudf.core.column_accessor import ColumnAccessor
-from cudf.core.frame import Frame
+from cudf.core.frame import Frame, _drop_rows_by_labels
 from cudf.core.groupby.groupby import DataFrameGroupBy
 from cudf.core.index import Index, RangeIndex, as_index
 from cudf.core.indexing import _DataFrameIlocIndexer, _DataFrameLocIndexer
@@ -52,7 +52,6 @@ from cudf.utils.dtypes import (
     is_struct_dtype,
     numeric_normalize_types,
 )
-from cudf.utils.utils import OrderedColumnDict
 
 T = TypeVar("T", bound="DataFrame")
 
@@ -495,7 +494,12 @@ class DataFrame(Frame, Serializable):
         return out
 
     @classmethod
-    def _from_data(cls, data, index=None, columns=None):
+    def _from_data(
+        cls,
+        data: ColumnAccessor,
+        index: Optional[Index] = None,
+        columns: Any = None,
+    ) -> DataFrame:
         out = cls.__new__(cls)
         out._data = data
         if index is None:
@@ -583,7 +587,32 @@ class DataFrame(Frame, Serializable):
 
     @property
     def dtypes(self):
-        """Return the dtypes in this object."""
+        """
+        Return the dtypes in this object.
+
+        Returns
+        -------
+        pandas.Series
+            The data type of each column.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> import pandas as pd
+        >>> df = cudf.DataFrame({'float': [1.0],
+        ...                    'int': [1],
+        ...                    'datetime': [pd.Timestamp('20180310')],
+        ...                    'string': ['foo']})
+        >>> df
+           float  int   datetime string
+        0    1.0    1 2018-03-10    foo
+        >>> df.dtypes
+        float              float64
+        int                  int64
+        datetime    datetime64[us]
+        string              object
+        dtype: object
+        """
         return cudf.utils.utils._create_pandas_series(
             data=[x.dtype for x in self._data.columns], index=self._data.names,
         )
@@ -1133,6 +1162,39 @@ class DataFrame(Frame, Serializable):
         Returns
         -------
         casted : DataFrame
+
+        Examples
+        --------
+        >>> import cudf
+        >>> df = cudf.DataFrame({'a': [10, 20, 30], 'b': [1, 2, 3]})
+        >>> df
+            a  b
+        0  10  1
+        1  20  2
+        2  30  3
+        >>> df.dtypes
+        a    int64
+        b    int64
+        dtype: object
+
+        Cast all columns to `int32`:
+
+        >>> df.astype('int32').dtypes
+        a    int32
+        b    int32
+        dtype: object
+
+        Cast `a` to `float32` using a dictionary:
+
+        >>> df.astype({'a': 'float32'}).dtypes
+        a    float32
+        b      int64
+        dtype: object
+        >>> df.astype({'a': 'float32'})
+            a  b
+        0  10.0  1
+        1  20.0  2
+        2  30.0  3
         """
         result = DataFrame(index=self.index)
 
@@ -1455,11 +1517,7 @@ class DataFrame(Frame, Serializable):
                 else:
                     if col not in df_cols:
                         r_opr = other_cols[col]
-                        l_opr = Series(
-                            column_empty(
-                                len(self), masked=True, dtype=other.dtype
-                            )
-                        )
+                        l_opr = Series(as_column(np.nan, length=len(self)))
                     if col not in other_cols_keys:
                         r_opr = None
                         l_opr = self[col]
@@ -2135,7 +2193,7 @@ class DataFrame(Frame, Serializable):
         return self._apply_op("rpow", other, fill_value)
 
     def __rpow__(self, other):
-        return self._apply_op("__pow__", other)
+        return self._apply_op("__rpow__", other)
 
     def floordiv(self, other, axis="columns", level=None, fill_value=None):
         """
@@ -3306,46 +3364,26 @@ class DataFrame(Frame, Serializable):
             )
 
         if inplace:
-            outdf = self
+            out = self
         else:
-            outdf = self.copy()
+            out = self.copy()
 
         if axis in (1, "columns"):
             target = _get_host_unique(target)
 
-            _drop_columns(outdf, target, errors)
+            _drop_columns(out, target, errors)
         elif axis in (0, "index"):
-            if not isinstance(target, (cudf.Series, cudf.Index)):
-                target = column.as_column(target)
-
-            if isinstance(self._index, cudf.MultiIndex):
-                if level is None:
-                    level = 0
-
-                levels_index = outdf.index.get_level_values(level)
-                if errors == "raise" and not target.isin(levels_index).all():
-                    raise KeyError("One or more values not found in axis")
-
-                # TODO : Could use anti-join as a future optimization
-                sliced_df = outdf.take(~levels_index.isin(target))
-                sliced_df._index.names = self._index.names
-            else:
-                if errors == "raise" and not target.isin(outdf.index).all():
-                    raise KeyError("One or more values not found in axis")
-
-                sliced_df = outdf.join(
-                    cudf.DataFrame(index=target), how="leftanti"
-                )
+            dropped = _drop_rows_by_labels(out, target, level, errors)
 
             if columns is not None:
                 columns = _get_host_unique(columns)
-                _drop_columns(sliced_df, columns, errors)
+                _drop_columns(dropped, columns, errors)
 
-            outdf._data = sliced_df._data
-            outdf._index = sliced_df._index
+            out._data = dropped._data
+            out._index = dropped._index
 
         if not inplace:
-            return outdf
+            return out
 
     def _drop_column(self, name):
         """Drop a column by *name*
@@ -3360,7 +3398,71 @@ class DataFrame(Frame, Serializable):
         """
         Return DataFrame with duplicate rows removed, optionally only
         considering certain subset of columns.
-        """
+
+        Parameters
+        ----------
+        subset : column label or sequence of labels, optional
+            Only consider certain columns for identifying duplicates, by
+            default use all of the columns.
+        keep : {'first', 'last', False}, default 'first'
+            Determines which duplicates (if any) to keep.
+            - ``first`` : Drop duplicates except for the first occurrence.
+            - ``last`` : Drop duplicates except for the last occurrence.
+            - False : Drop all duplicates.
+        inplace : bool, default False
+            Whether to drop duplicates in place or to return a copy.
+        ignore_index : bool, default False
+            If True, the resulting axis will be labeled 0, 1, …, n - 1.
+
+        Returns
+        -------
+        DataFrame or None
+            DataFrame with duplicates removed or None if ``inplace=True``.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> df = cudf.DataFrame({
+        ...     'brand': ['Yum Yum', 'Yum Yum', 'Indomie', 'Indomie', 'Indomie'],
+        ...     'style': ['cup', 'cup', 'cup', 'pack', 'pack'],
+        ...     'rating': [4, 4, 3.5, 15, 5]
+        ... })
+        >>> df
+             brand style  rating
+        0  Yum Yum   cup     4.0
+        1  Yum Yum   cup     4.0
+        2  Indomie   cup     3.5
+        3  Indomie  pack    15.0
+        4  Indomie  pack     5.0
+
+        By default, it removes duplicate rows based
+        on all columns. Note that order of
+        the rows being returned is not guaranteed
+        to be sorted.
+
+        >>> df.drop_duplicates()
+             brand style  rating
+        2  Indomie   cup     3.5
+        4  Indomie  pack     5.0
+        3  Indomie  pack    15.0
+        0  Yum Yum   cup     4.0
+
+        To remove duplicates on specific column(s),
+        use `subset`.
+
+        >>> df.drop_duplicates(subset=['brand'])
+             brand style  rating
+        2  Indomie   cup     3.5
+        0  Yum Yum   cup     4.0
+
+        To remove duplicates and keep last occurrences, use `keep`.
+
+        >>> df.drop_duplicates(subset=['brand', 'style'], keep='last')
+             brand style  rating
+        2  Indomie   cup     3.5
+        4  Indomie  pack     5.0
+        1  Yum Yum   cup     4.0
+        """  # noqa: E501
         outdf = super().drop_duplicates(
             subset=subset, keep=keep, ignore_index=ignore_index
         )
@@ -3439,6 +3541,32 @@ class DataFrame(Frame, Serializable):
 
         Rename will not overwite column names. If a list with duplicates is
         passed, column names will be postfixed with a number.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> df = cudf.DataFrame({"A": [1, 2, 3], "B": [4, 5, 6]})
+        >>> df
+           A  B
+        0  1  4
+        1  2  5
+        2  3  6
+
+        Rename columns using a mapping:
+
+        >>> df.rename(columns={"A": "a", "B": "c"})
+           a  c
+        0  1  4
+        1  2  5
+        2  3  6
+
+        Rename index using a mapping:
+
+        >>> df.rename(index={0: 10, 1: 20, 2: 30})
+            A  B
+        10  1  4
+        20  2  5
+        30  3  6
         """
         if errors != "ignore":
             raise NotImplementedError(
@@ -3663,6 +3791,21 @@ class DataFrame(Frame, Serializable):
         Returns
         -------
         a new dataframe with a new column append for the coded values.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> df = cudf.DataFrame({'a':[1, 2, 3], 'b':[10, 10, 20]})
+        >>> df
+           a   b
+        0  1  10
+        1  2  10
+        2  3  20
+        >>> df.label_encoding(column="b", prefix="b_col", cats=[10, 20])
+           a   b  b_col_labels
+        0  1  10             0
+        1  2  10             0
+        2  3  20             1
         """
 
         newname = prefix_sep.join([prefix, "labels"])
@@ -3698,10 +3841,32 @@ class DataFrame(Frame, Serializable):
         - Support axis='index' only.
         - Not supporting: inplace, kind
         - Ascending can be a list of bools to control per column
+
+        Examples
+        --------
+        >>> import cudf
+        >>> df = cudf.DataFrame({'a':[10, 0, 2], 'b':[-10, 10, 1]})
+        >>> df
+            a   b
+        0  10 -10
+        1   0  10
+        2   2   1
+        >>> inds = df.argsort()
+        >>> inds
+        0    1
+        1    2
+        2    0
+        dtype: int32
+        >>> df.take(inds)
+            a   b
+        1   0  10
+        2   2   1
+        0  10 -10
         """
-        return self._get_sorted_inds(
+        inds_col = self._get_sorted_inds(
             ascending=ascending, na_position=na_position
         )
+        return cudf.Series(inds_col)
 
     @annotate("SORT_INDEX", color="red", domain="cudf_python")
     def sort_index(
@@ -3992,20 +4157,131 @@ class DataFrame(Frame, Serializable):
     def nlargest(self, n, columns, keep="first"):
         """Get the rows of the DataFrame sorted by the n largest value of *columns*
 
+        Parameters
+        ----------
+        n : int
+            Number of rows to return.
+        columns : label or list of labels
+            Column label(s) to order by.
+        keep : {'first', 'last'}, default 'first'
+            Where there are duplicate values:
+
+            - `first` : prioritize the first occurrence(s)
+            - `last` : prioritize the last occurrence(s)
+
+        Returns
+        -------
+        DataFrame
+            The first `n` rows ordered by the given columns in descending
+            order.
+
         Notes
         -----
         Difference from pandas:
             - Only a single column is supported in *columns*
+
+        Examples
+        --------
+        >>> import cudf
+        >>> df = cudf.DataFrame({'population': [59000000, 65000000, 434000,
+        ...                                   434000, 434000, 337000, 11300,
+        ...                                   11300, 11300],
+        ...                    'GDP': [1937894, 2583560 , 12011, 4520, 12128,
+        ...                            17036, 182, 38, 311],
+        ...                    'alpha-2': ["IT", "FR", "MT", "MV", "BN",
+        ...                                "IS", "NR", "TV", "AI"]},
+        ...                   index=["Italy", "France", "Malta",
+        ...                          "Maldives", "Brunei", "Iceland",
+        ...                          "Nauru", "Tuvalu", "Anguilla"])
+        >>> df
+                  population      GDP alpha-2
+        Italy       59000000  1937894      IT
+        France      65000000  2583560      FR
+        Malta         434000    12011      MT
+        Maldives      434000     4520      MV
+        Brunei        434000    12128      BN
+        Iceland       337000    17036      IS
+        Nauru          11300      182      NR
+        Tuvalu         11300       38      TV
+        Anguilla       11300      311      AI
+        >>> df.nlargest(3, 'population')
+                population      GDP alpha-2
+        France    65000000  2583560      FR
+        Italy     59000000  1937894      IT
+        Malta       434000    12011      MT
+        >>> df.nlargest(3, 'population', keep='last')
+                population      GDP alpha-2
+        France    65000000  2583560      FR
+        Italy     59000000  1937894      IT
+        Brunei      434000    12128      BN
         """
         return self._n_largest_or_smallest("nlargest", n, columns, keep)
 
     def nsmallest(self, n, columns, keep="first"):
         """Get the rows of the DataFrame sorted by the n smallest value of *columns*
 
+        Parameters
+        ----------
+        n : int
+            Number of items to retrieve.
+        columns : list or str
+            Column name or names to order by.
+        keep : {'first', 'last'}, default 'first'
+            Where there are duplicate values:
+
+            - ``first`` : take the first occurrence.
+            - ``last`` : take the last occurrence.
+
+        Returns
+        -------
+        DataFrame
+
         Notes
         -----
         Difference from pandas:
             - Only a single column is supported in *columns*
+
+        Examples
+        --------
+        >>> import cudf
+        >>> df = cudf.DataFrame({'population': [59000000, 65000000, 434000,
+        ...                                   434000, 434000, 337000, 337000,
+        ...                                   11300, 11300],
+        ...                    'GDP': [1937894, 2583560 , 12011, 4520, 12128,
+        ...                            17036, 182, 38, 311],
+        ...                    'alpha-2': ["IT", "FR", "MT", "MV", "BN",
+        ...                                "IS", "NR", "TV", "AI"]},
+        ...                   index=["Italy", "France", "Malta",
+        ...                          "Maldives", "Brunei", "Iceland",
+        ...                          "Nauru", "Tuvalu", "Anguilla"])
+        >>> df
+                  population      GDP alpha-2
+        Italy       59000000  1937894      IT
+        France      65000000  2583560      FR
+        Malta         434000    12011      MT
+        Maldives      434000     4520      MV
+        Brunei        434000    12128      BN
+        Iceland       337000    17036      IS
+        Nauru         337000      182      NR
+        Tuvalu         11300       38      TV
+        Anguilla       11300      311      AI
+
+        In the following example, we will use ``nsmallest`` to select the
+        three rows having the smallest values in column "population".
+
+        >>> df.nsmallest(3, 'population')
+                  population    GDP alpha-2
+        Tuvalu         11300     38      TV
+        Anguilla       11300    311      AI
+        Iceland       337000  17036      IS
+
+        When using ``keep='last'``, ties are resolved in reverse order:
+
+        >>> df.nsmallest(3, 'population', keep='last')
+                  population  GDP alpha-2
+        Anguilla       11300  311      AI
+        Tuvalu         11300   38      TV
+        Nauru         337000  182      NR
         """
         return self._n_largest_or_smallest("nsmallest", n, columns, keep)
 
@@ -4599,7 +4875,7 @@ class DataFrame(Frame, Serializable):
             table_to_hash = self
         else:
             cols = [self[k]._column for k in columns]
-            table_to_hash = Frame(data=OrderedColumnDict(zip(columns, cols)))
+            table_to_hash = Frame(data=dict(zip(columns, cols)))
 
         return Series(table_to_hash._hash()).values
 
@@ -5608,7 +5884,28 @@ class DataFrame(Frame, Serializable):
         non-numeric types and result is expected to be a Series in case of
         Pandas. cuDF will return a DataFrame as it doesn't support mixed
         types under Series.
-        """
+
+        Examples
+        --------
+        >>> import cupy as cp
+        >>> import cudf
+        >>> df = cudf.DataFrame(cp.array([[1, 1], [2, 10], [3, 100], [4, 100]]),
+        ...                   columns=['a', 'b'])
+        >>> df
+           a    b
+        0  1    1
+        1  2   10
+        2  3  100
+        3  4  100
+        >>> df.quantile(0.1)
+        a    1.3
+        b    3.7
+        Name: 0.1, dtype: float64
+        >>> df.quantile([.1, .5])
+            a     b
+        0.1  1.3   3.7
+        0.5  2.5  55.0
+        """  # noqa: E501
         if axis not in (0, None):
             raise NotImplementedError("axis is not implemented yet")
 
@@ -5751,7 +6048,6 @@ class DataFrame(Frame, Serializable):
         falcon      True       True
         dog        False      False
         """
-
         if isinstance(values, dict):
 
             result_df = DataFrame()
@@ -5771,14 +6067,15 @@ class DataFrame(Frame, Serializable):
             values = values.reindex(self.index)
 
             result = DataFrame()
-
+            # TODO: propagate nulls through isin
+            # https://github.com/rapidsai/cudf/issues/7556
             for col in self._data.names:
                 if isinstance(
                     self[col]._column, cudf.core.column.CategoricalColumn
                 ) and isinstance(
                     values._column, cudf.core.column.CategoricalColumn
                 ):
-                    res = self._data[col] == values._column
+                    res = (self._data[col] == values._column).fillna(False)
                     result[col] = res
                 elif (
                     isinstance(
@@ -5793,7 +6090,9 @@ class DataFrame(Frame, Serializable):
                 ):
                     result[col] = utils.scalar_broadcast_to(False, len(self))
                 else:
-                    result[col] = self._data[col] == values._column
+                    result[col] = (self._data[col] == values._column).fillna(
+                        False
+                    )
 
             result.index = self.index
             return result
@@ -5803,7 +6102,9 @@ class DataFrame(Frame, Serializable):
             result = DataFrame()
             for col in self._data.names:
                 if col in values.columns:
-                    result[col] = self._data[col] == values[col]._column
+                    result[col] = (
+                        self._data[col] == values[col]._column
+                    ).fillna(False)
                 else:
                     result[col] = utils.scalar_broadcast_to(False, len(self))
             result.index = self.index
@@ -7038,15 +7339,6 @@ class DataFrame(Frame, Serializable):
         """{docstring}"""
         from cudf.io import parquet as pq
 
-        if any(
-            isinstance(col, cudf.core.column.StructColumn)
-            for col in self._data.columns
-        ):
-            raise NotImplementedError(
-                "Writing to parquet format is not yet supported "
-                "with Struct columns."
-            )
-
         return pq.to_parquet(self, path, *args, **kwargs)
 
     @ioutils.doc_to_feather()
@@ -7425,6 +7717,52 @@ class DataFrame(Frame, Serializable):
                 return False
         return super().equals(other)
 
+    def explode(self, column, ignore_index=False):
+        """
+        Transform each element of a list-like to a row, replicating index
+        values.
+
+        Parameters
+        ----------
+        column : str or tuple
+            Column to explode.
+        ignore_index : bool, default False
+            If True, the resulting index will be labeled 0, 1, …, n - 1.
+
+        Returns
+        -------
+        DataFrame
+
+        Examples
+        --------
+        >>> import cudf
+        >>> cudf.DataFrame(
+                {"a": [[1, 2, 3], [], None, [4, 5]], "b": [11, 22, 33, 44]})
+                   a   b
+        0  [1, 2, 3]  11
+        1         []  22
+        2       None  33
+        3     [4, 5]  44
+        >>> df.explode('a')
+              a   b
+        0     1  11
+        0     2  11
+        0     3  11
+        1  <NA>  22
+        2  <NA>  33
+        3     4  44
+        3     5  44
+        """
+        if column not in self._column_names:
+            raise KeyError(column)
+
+        if not is_list_dtype(self._data[column].dtype):
+            data = self._data.copy(deep=True)
+            idx = None if ignore_index else self._index.copy(deep=True)
+            return self.__class__._from_data(data, index=idx)
+
+        return super()._explode(column, ignore_index)
+
     _accessors = set()  # type: Set[Any]
 
 
@@ -7672,17 +8010,6 @@ def _get_union_of_series_names(series_list):
     return names_list
 
 
-def _drop_columns(df, columns, errors):
-    for c in columns:
-        try:
-            df._drop_column(c)
-        except KeyError as e:
-            if errors == "ignore":
-                pass
-            else:
-                raise e
-
-
 def _get_host_unique(array):
     if isinstance(
         array, (cudf.Series, cudf.Index, cudf.core.column.ColumnBase)
@@ -7692,3 +8019,14 @@ def _get_host_unique(array):
         return [array]
     else:
         return set(array)
+
+
+def _drop_columns(df: DataFrame, columns: Iterable, errors: str):
+    for c in columns:
+        try:
+            df._drop_column(c)
+        except KeyError as e:
+            if errors == "ignore":
+                pass
+            else:
+                raise e

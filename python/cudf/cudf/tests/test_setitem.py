@@ -5,7 +5,7 @@ import pandas as pd
 import pytest
 
 import cudf
-from cudf.core._compat import PANDAS_GE_120
+from cudf.core._compat import PANDAS_EQ_123, PANDAS_GE_120
 from cudf.tests.utils import assert_eq, assert_exceptions_equal
 
 
@@ -21,9 +21,8 @@ def test_dataframe_setitem_bool_mask_scaler(df, arg, value):
 
 
 @pytest.mark.xfail(
-    condition=not PANDAS_GE_120,
-    reason="pandas incorrectly adds nulls with dataframes "
-    "but works fine with scalars",
+    condition=PANDAS_EQ_123 or not PANDAS_GE_120,
+    reason="https://github.com/pandas-dev/pandas/issues/40204",
 )
 def test_dataframe_setitem_scaler_bool():
     df = pd.DataFrame({"a": [1, 2, 3]})
@@ -144,15 +143,14 @@ def test_setitem_dataframe_series_inplace(df):
 )
 def test_series_set_equal_length_object_by_mask(replace_data):
 
-    psr = pd.Series([1, 2, 3, 4, 5])
+    psr = pd.Series([1, 2, 3, 4, 5], dtype="Int64")
     gsr = cudf.from_pandas(psr)
 
     # Lengths match in trivial case
-    pd_bool_col = pd.Series([True] * len(psr))
+    pd_bool_col = pd.Series([True] * len(psr), dtype="boolean")
     gd_bool_col = cudf.from_pandas(pd_bool_col)
-
     psr[pd_bool_col] = (
-        replace_data.to_pandas()
+        replace_data.to_pandas(nullable=True)
         if hasattr(replace_data, "to_pandas")
         else replace_data
     )

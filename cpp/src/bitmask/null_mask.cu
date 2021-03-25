@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2020, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -15,6 +15,7 @@
  */
 
 #include <cudf/column/column_device_view.cuh>
+#include <cudf/detail/null_mask.cuh>
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/utilities/cuda.cuh>
@@ -23,10 +24,12 @@
 #include <cudf/table/table_view.hpp>
 #include <cudf/utilities/bit.hpp>
 #include <cudf/utilities/error.hpp>
+#include <cudf/utilities/span.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_buffer.hpp>
 #include <rmm/device_scalar.hpp>
+#include <rmm/device_uvector.hpp>
 #include <rmm/device_vector.hpp>
 #include <rmm/mr/device/device_memory_resource.hpp>
 
@@ -316,37 +319,6 @@ __global__ void copy_offset_bitmask(bitmask_type *__restrict__ destination,
   }
 }
 
-/**
- * @brief Computes the bitwise AND of an array of bitmasks
- *
- * @param destination The bitmask to write result into
- * @param source Array of source mask pointers. All masks must be of same size
- * @param begin_bit Array of offsets into corresponding @p source masks.
- *                  Must be same size as source array
- * @param num_sources Number of masks in @p source array
- * @param source_size Number of bits in each mask in @p source
- * @param number_of_mask_words The number of words of type bitmask_type to copy
- */
-__global__ void offset_bitmask_and(bitmask_type *__restrict__ destination,
-                                   bitmask_type const *const *__restrict__ source,
-                                   size_type const *__restrict__ begin_bit,
-                                   size_type num_sources,
-                                   size_type source_size,
-                                   size_type number_of_mask_words)
-{
-  for (size_type destination_word_index = threadIdx.x + blockIdx.x * blockDim.x;
-       destination_word_index < number_of_mask_words;
-       destination_word_index += blockDim.x * gridDim.x) {
-    bitmask_type destination_word = ~bitmask_type{0};  // All bits 1
-    for (size_type i = 0; i < num_sources; i++) {
-      destination_word &= detail::get_mask_offset_word(
-        source[i], destination_word_index, begin_bit[i], begin_bit[i] + source_size);
-    }
-
-    destination[destination_word_index] = destination_word;
-  }
-}
-
 // convert [first_bit_index,last_bit_index) to
 // [first_word_index,last_word_index)
 struct to_word_index : public thrust::unary_function<size_type, size_type> {
@@ -422,51 +394,37 @@ rmm::device_buffer copy_bitmask(column_view const &view,
 }
 
 // Inplace Bitwise AND of the masks
-void inplace_bitmask_and(bitmask_type *dest_mask,
-                         std::vector<bitmask_type const *> const &masks,
-                         std::vector<size_type> const &begin_bits,
+void inplace_bitmask_and(device_span<bitmask_type> dest_mask,
+                         host_span<bitmask_type const *> masks,
+                         host_span<size_type const> begin_bits,
                          size_type mask_size,
                          rmm::cuda_stream_view stream,
                          rmm::mr::device_memory_resource *mr)
 {
-  CUDF_EXPECTS(std::all_of(begin_bits.begin(), begin_bits.end(), [](auto b) { return b >= 0; }),
-               "Invalid range.");
-  CUDF_EXPECTS(mask_size > 0, "Invalid bit range.");
-  CUDF_EXPECTS(std::all_of(masks.begin(), masks.end(), [](auto p) { return p != nullptr; }),
-               "Mask pointer cannot be null");
-
-  auto number_of_mask_words = num_bitmask_words(mask_size);
-
-  rmm::device_vector<bitmask_type const *> d_masks(masks);
-  rmm::device_vector<size_type> d_begin_bits(begin_bits);
-
-  cudf::detail::grid_1d config(number_of_mask_words, 256);
-  offset_bitmask_and<<<config.num_blocks, config.num_threads_per_block, 0, stream.value()>>>(
+  inplace_bitmask_binop(
+    [] __device__(bitmask_type left, bitmask_type right) { return left & right; },
     dest_mask,
-    d_masks.data().get(),
-    d_begin_bits.data().get(),
-    d_masks.size(),
+    masks,
+    begin_bits,
     mask_size,
-    number_of_mask_words);
-
-  CHECK_CUDA(stream.value());
+    stream,
+    mr);
 }
 
 // Bitwise AND of the masks
-rmm::device_buffer bitmask_and(std::vector<bitmask_type const *> const &masks,
-                               std::vector<size_type> const &begin_bits,
+rmm::device_buffer bitmask_and(host_span<bitmask_type const *> masks,
+                               host_span<size_type const> begin_bits,
                                size_type mask_size,
                                rmm::cuda_stream_view stream,
                                rmm::mr::device_memory_resource *mr)
 {
-  rmm::device_buffer dest_mask{};
-  auto num_bytes = bitmask_allocation_size_bytes(mask_size);
-
-  dest_mask = rmm::device_buffer{num_bytes, stream, mr};
-  inplace_bitmask_and(
-    static_cast<bitmask_type *>(dest_mask.data()), masks, begin_bits, mask_size, stream, mr);
-
-  return dest_mask;
+  return bitmask_binop(
+    [] __device__(bitmask_type left, bitmask_type right) { return left & right; },
+    masks,
+    begin_bits,
+    mask_size,
+    stream,
+    mr);
 }
 
 cudf::size_type count_set_bits(bitmask_type const *bitmask,
@@ -651,12 +609,48 @@ rmm::device_buffer bitmask_and(table_view const &view,
   }
 
   if (masks.size() > 0) {
-    return cudf::detail::bitmask_and(masks, offsets, view.num_rows(), stream, mr);
+    return cudf::detail::bitmask_binop(
+      [] __device__(bitmask_type left, bitmask_type right) { return left & right; },
+      masks,
+      offsets,
+      view.num_rows(),
+      stream,
+      mr);
   }
 
   return null_mask;
 }
 
+// Returns the bitwise OR of the null masks of all columns in the table view
+rmm::device_buffer bitmask_or(table_view const &view,
+                              rmm::cuda_stream_view stream,
+                              rmm::mr::device_memory_resource *mr)
+{
+  CUDF_FUNC_RANGE();
+  rmm::device_buffer null_mask{0, stream, mr};
+  if (view.num_rows() == 0 or view.num_columns() == 0) { return null_mask; }
+
+  std::vector<bitmask_type const *> masks;
+  std::vector<size_type> offsets;
+  for (auto &&col : view) {
+    if (col.nullable()) {
+      masks.push_back(col.null_mask());
+      offsets.push_back(col.offset());
+    }
+  }
+
+  if (static_cast<size_type>(masks.size()) == view.num_columns()) {
+    return cudf::detail::bitmask_binop(
+      [] __device__(bitmask_type left, bitmask_type right) { return left | right; },
+      masks,
+      offsets,
+      view.num_rows(),
+      stream,
+      mr);
+  }
+
+  return null_mask;
+}
 }  // namespace detail
 
 // Count non-zero bits in the specified range
@@ -707,6 +701,11 @@ rmm::device_buffer copy_bitmask(column_view const &view, rmm::mr::device_memory_
 rmm::device_buffer bitmask_and(table_view const &view, rmm::mr::device_memory_resource *mr)
 {
   return detail::bitmask_and(view, rmm::cuda_stream_default, mr);
+}
+
+rmm::device_buffer bitmask_or(table_view const &view, rmm::mr::device_memory_resource *mr)
+{
+  return detail::bitmask_or(view, rmm::cuda_stream_default, mr);
 }
 
 }  // namespace cudf

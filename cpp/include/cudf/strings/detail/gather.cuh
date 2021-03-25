@@ -31,15 +31,60 @@
 #include <thrust/transform.h>
 
 namespace cudf {
-
-template <typename Iterator>
-constexpr inline bool is_signed_iterator()
-{
-  return std::is_signed<typename std::iterator_traits<Iterator>::value_type>::value;
-}
-
 namespace strings {
 namespace detail {
+
+/**
+ * @brief Returns a new chars column using the specified indices to select
+ * strings from the input iterator.
+ *
+ * This uses a character-parallel gather CUDA kernel that performs very
+ * well on a strings column with long strings (e.g. average > 64 bytes).
+ *
+ * @tparam StringIterator Iterator should produce `string_view` objects.
+ * @tparam MapIterator Iterator for retrieving integer indices of the `StringIterator`.
+ *
+ * @param strings_begin Start of the iterator to retrieve `string_view` instances
+ * @param map_begin Start of index iterator.
+ * @param map_end End of index iterator.
+ * @param offsets The offset values to be associated with the output chars column.
+ * @param chars_bytes The total number of bytes for the output chars column.
+ * @param mr Device memory resource used to allocate the returned column's device memory.
+ * @param stream CUDA stream used for device memory operations and kernel launches.
+ * @return New chars column fit for a strings column.
+ */
+template <typename StringIterator, typename MapIterator>
+std::unique_ptr<cudf::column> gather_chars(StringIterator strings_begin,
+                                           MapIterator map_begin,
+                                           MapIterator map_end,
+                                           cudf::device_span<int32_t const> const offsets,
+                                           size_type chars_bytes,
+                                           rmm::cuda_stream_view stream,
+                                           rmm::mr::device_memory_resource* mr)
+{
+  auto const output_count = std::distance(map_begin, map_end);
+  if (output_count == 0) return make_empty_column(data_type{type_id::INT8});
+
+  auto chars_column  = create_chars_child_column(output_count, 0, chars_bytes, stream, mr);
+  auto const d_chars = chars_column->mutable_view().template data<char>();
+
+  auto gather_chars_fn = [strings_begin, map_begin, offsets] __device__(size_type out_idx) -> char {
+    auto const out_row =
+      thrust::prev(thrust::upper_bound(thrust::seq, offsets.begin(), offsets.end(), out_idx));
+    auto const row_idx = map_begin[thrust::distance(offsets.begin(), out_row)];  // get row index
+    auto const d_str   = strings_begin[row_idx];                                 // get row's string
+    auto const offset  = out_idx - *out_row;  // get string's char
+    return d_str.data()[offset];
+  };
+
+  thrust::transform(rmm::exec_policy(stream),
+                    thrust::make_counting_iterator<size_type>(0),
+                    thrust::make_counting_iterator<size_type>(chars_bytes),
+                    d_chars,
+                    gather_chars_fn);
+
+  return chars_column;
+}
 
 /**
  * @brief Returns a new strings column using the specified indices to select
@@ -107,30 +152,15 @@ std::unique_ptr<cudf::column> gather(
     rmm::exec_policy(stream), d_out_offsets, d_out_offsets + output_count + 1, d_out_offsets);
 
   // build chars column
-  size_type const out_chars_bytes = static_cast<size_type>(total_bytes);
-  auto out_chars_column  = create_chars_child_column(output_count, 0, out_chars_bytes, stream, mr);
-  auto const d_out_chars = out_chars_column->mutable_view().template data<char>();
-
-  // fill in chars
-  cudf::detail::device_span<int32_t const> const d_out_offsets_span(d_out_offsets,
-                                                                    output_count + 1);
-  auto const d_in_chars = (strings_count > 0) ? strings.chars().data<char>() : nullptr;
-  auto gather_chars_fn =
-    [d_out_offsets_span, begin, d_in_offsets, d_in_chars] __device__(size_type out_char_idx) {
-      // find output row index for this output char index
-      auto const next_row_ptr = thrust::upper_bound(
-        thrust::seq, d_out_offsets_span.begin(), d_out_offsets_span.end(), out_char_idx);
-      auto const out_row_idx     = thrust::distance(d_out_offsets_span.begin(), next_row_ptr) - 1;
-      auto const str_char_offset = out_char_idx - d_out_offsets_span[out_row_idx];
-      auto const in_row_idx      = begin[out_row_idx];
-      auto const in_char_offset  = d_in_offsets[in_row_idx] + str_char_offset;
-      return d_in_chars[in_char_offset];
-    };
-  thrust::transform(rmm::exec_policy(stream),
-                    thrust::make_counting_iterator<size_type>(0),
-                    thrust::make_counting_iterator<size_type>(out_chars_bytes),
-                    d_out_chars,
-                    gather_chars_fn);
+  cudf::device_span<int32_t const> const d_out_offsets_span(d_out_offsets, output_count + 1);
+  auto const d_strings  = column_device_view::create(strings.parent(), stream);
+  auto out_chars_column = gather_chars(d_strings->begin<string_view>(),
+                                       begin,
+                                       end,
+                                       d_out_offsets_span,
+                                       static_cast<size_type>(total_bytes),
+                                       stream,
+                                       mr);
 
   return make_strings_column(output_count,
                              std::move(out_offsets_column),

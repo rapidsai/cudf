@@ -13,13 +13,11 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 #=============================================================================
-cmake_minimum_required(VERSION 3.12 FATAL_ERROR)
+cmake_minimum_required(VERSION 3.18 FATAL_ERROR)
 
-# Use GPU_ARCHS if CMAKE_CUDA_ARCHITECTURES is not defined
-if(NOT DEFINED CMAKE_CUDA_ARCHITECTURES AND DEFINED GPU_ARCHS)
-  if(NOT "${GPU_ARCHS}" STREQUAL "ALL")
-    set(CMAKE_CUDA_ARCHITECTURES "${GPU_ARCHS}")
-  endif()
+# Use GPU_ARCHS if it is defined
+if(DEFINED GPU_ARCHS)
+  set(CMAKE_CUDA_ARCHITECTURES "${GPU_ARCHS}")
 endif()
 
 # If `CMAKE_CUDA_ARCHITECTURES` is not defined, build for all supported architectures. If
@@ -28,22 +26,60 @@ endif()
 
 # This needs to be run before enabling the CUDA language due to the default initialization behavior
 # of `CMAKE_CUDA_ARCHITECTURES`, https://gitlab.kitware.com/cmake/cmake/-/issues/21302
-if(NOT DEFINED CMAKE_CUDA_ARCHITECTURES)
+if(NOT DEFINED CMAKE_CUDA_ARCHITECTURES OR CMAKE_CUDA_ARCHITECTURES STREQUAL "ALL")
   set(CUDF_JNI_BUILD_FOR_ALL_ARCHS TRUE)
 elseif(CMAKE_CUDA_ARCHITECTURES STREQUAL "")
-  unset(CMAKE_CUDA_ARCHITECTURES CACHE)
   set(CUDF_JNI_BUILD_FOR_DETECTED_ARCHS TRUE)
 endif()
 
-project(CUDF_JNI VERSION 0.7.0 LANGUAGES C CXX CUDA)
+project(CUDF_JNI VERSION 0.19 LANGUAGES C CXX)
 
-set(CUDA_DATAFRAME_SOURCE_DIR "${PROJECT_SOURCE_DIR}/../../../../cpp")
-set(CUDF_CPP_BUILD_DIR "${CUDA_DATAFRAME_SOURCE_DIR}/build")
+###################################################################################################
+# - build options ---------------------------------------------------------------------------------
+
+option(USE_NVTX "Build with NVTX support" ON)
+option(BUILD_TESTS "Configure CMake to build tests" ON)
+option(PER_THREAD_DEFAULT_STREAM "Build with per-thread default stream" OFF)
+option(CUDA_STATIC_RUNTIME "Statically link the CUDA runtime" OFF)
+option(USE_GDS "Build with GPUDirect Storage (GDS)/cuFile support" OFF)
+
+message(VERBOSE "CUDF_JNI: Build with NVTX support: ${USE_NVTX}")
+message(VERBOSE "CUDF_JNI: Configure CMake to build tests: ${BUILD_TESTS}")
+message(VERBOSE "CUDF_JNI: Build with per-thread default stream: ${PER_THREAD_DEFAULT_STREAM}")
+message(VERBOSE "CUDF_JNI: Statically link the CUDA runtime: ${CUDA_STATIC_RUNTIME}")
+message(VERBOSE "CUDF_JNI: Build with GPUDirect Storage support: ${USE_GDS}")
+
+set(CUDF_SOURCE_DIR "${PROJECT_SOURCE_DIR}/../../../../cpp")
+set(CUDF_CPP_BUILD_DIR "${CUDF_SOURCE_DIR}/build")
 
 set(CMAKE_MODULE_PATH
     "${CMAKE_CURRENT_SOURCE_DIR}/cmake/Modules/"
-    "${CUDA_DATAFRAME_SOURCE_DIR}/cmake/Modules/"
+    "${CUDF_SOURCE_DIR}/cmake/Modules/"
     ${CMAKE_MODULE_PATH})
+
+###################################################################################################
+# - compiler options ------------------------------------------------------------------------------
+
+set(CUDF_CXX_FLAGS "")
+set(CUDF_CUDA_FLAGS "")
+set(CUDF_CXX_DEFINITIONS "")
+set(CUDF_CUDA_DEFINITIONS "")
+
+# * find CUDAToolkit package
+# * determine GPU architectures
+# * enable the CMake CUDA language
+# * set other CUDA compilation flags
+include(ConfigureCUDA)
+
+# Disable NVTX if necessary
+if(NOT USE_NVTX)
+    target_compile_definitions(cudfjni PUBLIC NVTX_DISABLE)
+endif()
+
+if(PER_THREAD_DEFAULT_STREAM)
+    message(STATUS "Using per-thread default stream")
+    add_compile_definitions(CUDA_API_PER_THREAD_DEFAULT_STREAM)
+endif(PER_THREAD_DEFAULT_STREAM)
 
 ###################################################################################################
 # - build type ------------------------------------------------------------------------------------
@@ -61,24 +97,8 @@ if(NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
 endif()
 
 ###################################################################################################
-# - compiler options ------------------------------------------------------------------------------
-
-set(CMAKE_CXX_STANDARD 14)
-set(CMAKE_C_COMPILER $ENV{CC})
-set(CMAKE_CXX_COMPILER $ENV{CXX})
-set(CMAKE_CXX_STANDARD_REQUIRED ON)
-
-set(CMAKE_CUDA_STANDARD 14)
-set(CMAKE_CUDA_STANDARD_REQUIRED ON)
-
-option(BUILD_TESTS "Configure CMake to build tests"
-       ON)
-
-###################################################################################################
 # - cudart options --------------------------------------------------------------------------------
 # cudart can be statically linked or dynamically linked. The python ecosystem wants dynamic linking
-
-option(CUDA_STATIC_RUNTIME "Statically link the CUDA runtime" OFF)
 
 if(CUDA_STATIC_RUNTIME)
     message(STATUS "Enabling static linking of cudart")
@@ -86,14 +106,6 @@ if(CUDA_STATIC_RUNTIME)
 else()
     set(CUDART_LIBRARY "cudart")
 endif(CUDA_STATIC_RUNTIME)
-
-###################################################################################################
-# - cmake modules ---------------------------------------------------------------------------------
-
-include(ConfigureCUDA)
-include(FeatureSummary)
-include(CheckIncludeFiles)
-include(CheckLibraryExists)
 
 ###################################################################################################
 # - Thrust/CUB/libcudacxx ------------------------------------------------------------------------------------
@@ -113,7 +125,8 @@ find_path(LIBCUDACXX_INCLUDE "cuda"
           "${CUDF_CPP_BUILD_DIR}/_deps/libcudacxx-src/include")
 
 find_path(SPDLOG_INCLUDE "spdlog"
-    HINTS "$ENV{RMM_ROOT}/_deps/spdlog-src/include"
+    HINTS "${CUDF_CPP_BUILD_DIR}/_deps/spdlog-src/include"
+          "$ENV{RMM_ROOT}/_deps/spdlog-src/include"
           "$ENV{RMM_ROOT}/include"
           "$ENV{CONDA_PREFIX}/include")
 
@@ -123,39 +136,20 @@ find_path(SPDLOG_INCLUDE "spdlog"
 set(CUDF_INCLUDE "${PROJECT_SOURCE_DIR}/../../../../cpp/include"
                  "${PROJECT_SOURCE_DIR}/../../../../cpp/src/")
 
-set(CUDF_LIBS_HINTS
+set(CUDF_LIB_HINTS
     HINTS "$ENV{CUDF_ROOT}"
           "$ENV{CUDF_ROOT}/lib"
           "$ENV{CONDA_PREFIX}/lib"
           "${CUDF_CPP_BUILD_DIR}")
 
-# This list of cudf libraries needs to be kept in sync with the lists
-# in pom.xml and NativeDepsLoader.java
-set(CUDF_LIB_BASES
-  "cudf_ast"
-  "cudf_base"
-  "cudf_comms"
-  "cudf_hash"
-  "cudf_interop"
-  "cudf_io"
-  "cudf_join"
-  "cudf_merge"
-  "cudf_partitioning"
-  "cudf_reductions"
-  "cudf_replace"
-  "cudf_rolling")
-
-set(CUDF_LIBS "")
-foreach(CUDF_LIB_BASE ${CUDF_LIB_BASES})
-    find_library(LIB_${CUDF_LIB_BASE} ${CUDF_LIB_BASE} REQUIRED HINTS ${CUDF_LIBS_HINTS})
-    list(APPEND CUDF_LIBS ${LIB_${CUDF_LIB_BASE}})
-endforeach()
+find_library(CUDF_LIB "cudf" REQUIRED HINTS ${CUDF_LIB_HINTS})
 
 ###################################################################################################
 # - RMM -------------------------------------------------------------------------------------------
 
 find_path(RMM_INCLUDE "rmm"
-          HINTS "$ENV{RMM_ROOT}/include"
+          HINTS "${CUDF_CPP_BUILD_DIR}/_deps/rmm-src/include"
+                "$ENV{RMM_ROOT}/include"
                 "$ENV{RMM_HOME}/include"
                 "$ENV{CONDA_PREFIX}/include/rmm"
                 "$ENV{CONDA_PREFIX}/include")
@@ -168,7 +162,7 @@ message(STATUS "RMM: RMM_INCLUDE set to ${RMM_INCLUDE}")
 find_path(ARROW_INCLUDE "arrow"
           HINTS "$ENV{ARROW_ROOT}/include"
                 "$ENV{CONDA_PREFIX}/include"
-                "${CUDF_CPP_BUILD_DIR}/arrow/install/include")
+                "${CUDF_CPP_BUILD_DIR}/_deps/arrow-src/cpp/src")
 
 message(STATUS "ARROW: ARROW_INCLUDE set to ${ARROW_INCLUDE}")
 
@@ -176,10 +170,10 @@ message(STATUS "ARROW: ARROW_INCLUDE set to ${ARROW_INCLUDE}")
 find_library(ARROW_LIBRARY libarrow.a
   HINTS "$ENV{ARROW_ROOT}/lib"
         "$ENV{CONDA_PREFIX}/lib"
-        "${CUDF_CPP_BUILD_DIR}/arrow/install/lib")
+        "${CUDF_CPP_BUILD_DIR}/_deps/arrow-build/release")
 
 if(NOT ARROW_LIBRARY)
-  message(FATAL_ERROR "Arrow static libs not found. Was libcudf built with ARROW_STATIC_LIB=ON?")
+  message(FATAL_ERROR "Arrow static libs not found. Was libcudf built with CUDF_USE_ARROW_STATIC=ON?")
 else()
   message(STATUS "ARROW: ARROW_LIBRARY set to ${ARROW_LIBRARY}")
 endif(NOT ARROW_LIBRARY)
@@ -208,7 +202,6 @@ add_library(nvcomp STATIC IMPORTED ${NVCOMP_LIB})
 ###################################################################################################
 # - GDS/cufile ------------------------------------------------------------------------------------
 
-option(USE_GDS "Build with GPUDirect Storage (GDS)/cuFile support" OFF)
 if(USE_GDS)
     message(STATUS "Building with GPUDirect Storage (GDS)/cuFile support")
     find_package(cuFile REQUIRED)
@@ -261,28 +254,21 @@ add_library(cudfjni SHARED ${SOURCE_FILES})
 #Override RPATH for cudfjni
 SET_TARGET_PROPERTIES(cudfjni PROPERTIES BUILD_RPATH "\$ORIGIN")
 
+target_compile_options(cudfjni
+            PRIVATE "$<$<COMPILE_LANGUAGE:CXX>:${CUDF_CXX_FLAGS}>"
+                    "$<$<COMPILE_LANGUAGE:CUDA>:${CUDF_CUDA_FLAGS}>"
+)
+
+target_compile_definitions(cudfjni
+            PUBLIC "$<$<COMPILE_LANGUAGE:CXX>:${CUDF_CXX_DEFINITIONS}>"
+                   "$<$<COMPILE_LANGUAGE:CUDA>:${CUDF_CUDA_DEFINITIONS}>"
+)
+
 if(USE_GDS)
     add_library(cufilejni SHARED "src/CuFileJni.cpp")
     target_include_directories(cufilejni PRIVATE "${cuFile_INCLUDE_DIRS}")
     target_link_libraries(cufilejni PRIVATE "${cuFile_LIBRARIES}")
 endif(USE_GDS)
-
-###################################################################################################
-# - build options ---------------------------------------------------------------------------------
-
-option(USE_NVTX "Build with NVTX support" ON)
-if(USE_NVTX)
-    message(STATUS "Using Nvidia Tools Extension")
-    find_library(NVTX_LIBRARY nvToolsExt PATH ${CMAKE_CUDA_IMPLICIT_LINK_DIRECTORIES})
-    target_link_libraries(cudfjni ${NVTX_LIBRARY})
-    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DUSE_NVTX")
-endif(USE_NVTX)
-
-option(PER_THREAD_DEFAULT_STREAM "Build with per-thread default stream" OFF)
-if(PER_THREAD_DEFAULT_STREAM)
-    message(STATUS "Using per-thread default stream")
-    add_compile_definitions(CUDA_API_PER_THREAD_DEFAULT_STREAM)
-endif(PER_THREAD_DEFAULT_STREAM)
 
 ###################################################################################################
 # - rmm logging level -----------------------------------------------------------------------------
@@ -298,4 +284,4 @@ target_compile_definitions(cudfjni PUBLIC SPDLOG_ACTIVE_LEVEL=SPDLOG_LEVEL_${RMM
 ###################################################################################################
 # - link libraries --------------------------------------------------------------------------------
 
-target_link_libraries(cudfjni ${CUDF_LIBS} ${ARROW_LIBRARY} ${NVCOMP_LIB} ${CUDART_LIBRARY} cuda nvrtc)
+target_link_libraries(cudfjni ${CUDF_LIB} ${ARROW_LIBRARY} ${NVCOMP_LIB} ${CUDART_LIBRARY} cuda nvrtc)

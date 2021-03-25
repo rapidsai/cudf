@@ -35,6 +35,7 @@
 #include <rmm/device_uvector.hpp>
 
 #include <thrust/logical.h>
+#include <thrust/optional.h>
 
 #include <map>
 #include <vector>

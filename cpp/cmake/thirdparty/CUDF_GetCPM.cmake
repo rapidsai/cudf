@@ -17,3 +17,15 @@ if(NOT (EXISTS ${CPM_DOWNLOAD_LOCATION}))
 endif()
 
 include(${CPM_DOWNLOAD_LOCATION})
+
+# If a target is installed, found by the `find_package` step of CPMFindPackage,
+# and marked as IMPORTED, make it globally accessible to consumers of our libs.
+function(fix_cmake_global_defaults target)
+    if(TARGET ${target})
+        get_target_property(_is_imported ${target} IMPORTED)
+        get_target_property(_already_global ${target} IMPORTED_GLOBAL)
+        if(_is_imported AND NOT _already_global)
+            set_target_properties(${target} PROPERTIES IMPORTED_GLOBAL TRUE)
+        endif()
+    endif()
+endfunction()

@@ -29,6 +29,7 @@
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/table/table.hpp>
 #include <cudf/table/table_view.hpp>
+#include <cudf/utilities/span.hpp>
 
 #include <type_traits>
 
@@ -395,7 +396,7 @@ TEST_F(OrcWriterTest, MultiColumnWithNulls)
   auto col3_mask =
     cudf::detail::make_counting_transform_iterator(0, [](auto i) { return (i == (num_rows - 1)); });
   auto col4_mask =
-    cudf::detail::make_counting_transform_iterator(0, [](auto i) { return (i >= 40 || i <= 60); });
+    cudf::detail::make_counting_transform_iterator(0, [](auto i) { return (i >= 40 && i <= 60); });
   auto col5_mask =
     cudf::detail::make_counting_transform_iterator(0, [](auto i) { return (i > 80); });
 
@@ -657,7 +658,7 @@ TEST_F(OrcChunkedWriterTest, SimpleTable)
   auto table1 = create_random_fixed_table<int>(5, 5, true);
   auto table2 = create_random_fixed_table<int>(5, 5, true);
 
-  auto full_table = cudf::concatenate({*table1, *table2});
+  auto full_table = cudf::concatenate(std::vector<table_view>({*table1, *table2}));
 
   auto filepath = temp_env->get_temp_filepath("ChunkedSimple.orc");
   cudf_io::chunked_orc_writer_options opts =
@@ -677,7 +678,7 @@ TEST_F(OrcChunkedWriterTest, LargeTables)
   auto table1 = create_random_fixed_table<int>(512, 4096, true);
   auto table2 = create_random_fixed_table<int>(512, 8192, true);
 
-  auto full_table = cudf::concatenate({*table1, *table2});
+  auto full_table = cudf::concatenate(std::vector<table_view>({*table1, *table2}));
 
   auto filepath = temp_env->get_temp_filepath("ChunkedLarge.orc");
   cudf_io::chunked_orc_writer_options opts =
@@ -737,7 +738,7 @@ TEST_F(OrcChunkedWriterTest, Strings)
   cols.push_back(strings2.release());
   cudf::table tbl2(std::move(cols));
 
-  auto expected = cudf::concatenate({tbl1, tbl2});
+  auto expected = cudf::concatenate(std::vector<table_view>({tbl1, tbl2}));
 
   auto filepath = temp_env->get_temp_filepath("ChunkedStrings.orc");
   cudf_io::chunked_orc_writer_options opts =
@@ -799,7 +800,7 @@ TEST_F(OrcChunkedWriterTest, ReadStripes)
   auto table1 = create_random_fixed_table<int>(5, 5, true);
   auto table2 = create_random_fixed_table<int>(5, 5, true);
 
-  auto full_table = cudf::concatenate({*table2, *table1, *table2});
+  auto full_table = cudf::concatenate(std::vector<table_view>({*table2, *table1, *table2}));
 
   auto filepath = temp_env->get_temp_filepath("ChunkedStripes.orc");
   cudf_io::chunked_orc_writer_options opts =
@@ -863,7 +864,7 @@ TYPED_TEST(OrcChunkedWriterNumericTypeTest, UnalignedSize)
   cols.push_back(c2b_w.release());
   cudf::table tbl2(std::move(cols));
 
-  auto expected = cudf::concatenate({tbl1, tbl2});
+  auto expected = cudf::concatenate(std::vector<table_view>({tbl1, tbl2}));
 
   auto filepath = temp_env->get_temp_filepath("ChunkedUnalignedSize.orc");
   cudf_io::chunked_orc_writer_options opts =
@@ -910,7 +911,7 @@ TYPED_TEST(OrcChunkedWriterNumericTypeTest, UnalignedSize2)
   cols.push_back(c2b_w.release());
   cudf::table tbl2(std::move(cols));
 
-  auto expected = cudf::concatenate({tbl1, tbl2});
+  auto expected = cudf::concatenate(std::vector<table_view>({tbl1, tbl2}));
 
   auto filepath = temp_env->get_temp_filepath("ChunkedUnalignedSize2.orc");
   cudf_io::chunked_orc_writer_options opts =
@@ -1023,6 +1024,42 @@ TEST_F(OrcStatisticsTest, Basic)
   validate_statistics(stats.file_stats);
   // There's only one stripe, so column stats are the same as stripe stats
   validate_statistics(stats.stripes_stats[0]);
+}
+
+TEST_F(OrcWriterTest, SlicedValidMask)
+{
+  std::vector<const char*> strings;
+  // Need more than 32 elements to reproduce the issue
+  for (int i = 0; i < 34; ++i)
+    strings.emplace_back("a long string to make sure overflow affects the output");
+  // An element is null only to enforce the output column to be nullable
+  auto validity = cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i != 32; });
+
+  column_wrapper<cudf::string_view> col{strings.begin(), strings.end(), validity};
+
+  std::vector<std::unique_ptr<column>> cols;
+  cols.push_back(col.release());
+
+  cudf_io::table_metadata expected_metadata;
+  expected_metadata.column_names.emplace_back("col_string");
+
+  // Bug tested here is easiest to reproduce when column_offset % 32 is 31
+  std::vector<cudf::size_type> indices{31, 34};
+  std::vector<cudf::column_view> sliced_col = cudf::slice(cols[0]->view(), indices);
+  cudf::table_view tbl{sliced_col};
+
+  auto filepath = temp_env->get_temp_filepath("OrcStrings.orc");
+  cudf_io::orc_writer_options out_opts =
+    cudf_io::orc_writer_options::builder(cudf_io::sink_info{filepath}, tbl)
+      .metadata(&expected_metadata);
+  cudf_io::write_orc(out_opts);
+
+  cudf_io::orc_reader_options in_opts =
+    cudf_io::orc_reader_options::builder(cudf_io::source_info{filepath}).use_index(false);
+  auto result = cudf_io::read_orc(in_opts);
+
+  CUDF_TEST_EXPECT_TABLES_EQUAL(tbl, result.tbl->view());
+  EXPECT_EQ(expected_metadata.column_names, result.metadata.column_names);
 }
 
 CUDF_TEST_PROGRAM_MAIN()

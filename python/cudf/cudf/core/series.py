@@ -1,4 +1,5 @@
 # Copyright (c) 2018-2021, NVIDIA CORPORATION.
+
 from __future__ import annotations
 
 import pickle
@@ -36,7 +37,7 @@ from cudf.core.column.categorical import (
 from cudf.core.column.lists import ListMethods
 from cudf.core.column.string import StringMethods
 from cudf.core.column_accessor import ColumnAccessor
-from cudf.core.frame import Frame
+from cudf.core.frame import Frame, _drop_rows_by_labels
 from cudf.core.groupby.groupby import SeriesGroupBy
 from cudf.core.index import Index, RangeIndex, as_index
 from cudf.core.indexing import _SeriesIlocIndexer, _SeriesLocIndexer
@@ -79,8 +80,37 @@ class Series(Frame, Serializable):
     def from_categorical(cls, categorical, codes=None):
         """Creates from a pandas.Categorical
 
-        If ``codes`` is defined, use it instead of ``categorical.codes``
-        """
+        Parameters
+        ----------
+        categorical : pandas.Categorical
+            Contains data stored in a pandas Categorical.
+
+        codes : array-like, optional.
+            The category codes of this categorical. If ``codes`` are
+            defined, they are used instead of ``categorical.codes``
+
+        Returns
+        -------
+        Series
+            A cudf categorical series.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> import pandas as pd
+        >>> pd_categorical = pd.Categorical(pd.Series(['a', 'b', 'c', 'a'], dtype='category'))
+        >>> pd_categorical
+        ['a', 'b', 'c', 'a']
+        Categories (3, object): ['a', 'b', 'c']
+        >>> series = cudf.Series.from_categorical(pd_categorical)
+        >>> series
+        0    a
+        1    b
+        2    c
+        3    a
+        dtype: category
+        Categories (3, object): ['a', 'b', 'c']
+        """  # noqa: E501
         col = cudf.core.column.categorical.pandas_categorical_as_column(
             categorical, codes=codes
         )
@@ -106,6 +136,31 @@ class Series(Frame, Serializable):
         null_count : int, optional
             The number of null values.
             If None, it is calculated automatically.
+
+        Returns
+        -------
+        Series
+
+        Examples
+        --------
+        >>> import cudf
+        >>> a = cudf.Series([1, 2, 3, None, 4, None])
+        >>> a
+        0       1
+        1       2
+        2       3
+        3    <NA>
+        4       4
+        5    <NA>
+        dtype: int64
+        >>> b = cudf.Series([10, 11, 12, 13, 14])
+        >>> cudf.Series.from_masked_array(data=b, mask=a._column.mask)
+        0      10
+        1      11
+        2      12
+        3    <NA>
+        4      14
+        dtype: int64
         """
         col = column.as_column(data).set_mask(mask)
         return cls(data=col)
@@ -490,6 +545,128 @@ class Series(Frame, Serializable):
         """
         return self._column.to_arrow()
 
+    def drop(
+        self,
+        labels=None,
+        axis=0,
+        index=None,
+        columns=None,
+        level=None,
+        inplace=False,
+        errors="raise",
+    ):
+        """
+        Return Series with specified index labels removed.
+
+        Remove elements of a Series based on specifying the index labels.
+        When using a multi-index, labels on different levels can be removed by
+        specifying the level.
+
+        Parameters
+        ----------
+        labels : single label or list-like
+            Index labels to drop.
+        axis : 0, default 0
+            Redundant for application on Series.
+        index : single label or list-like
+            Redundant for application on Series. But ``index`` can be used
+            instead of ``labels``
+        columns : single label or list-like
+            This parameter is ignored. Use ``index`` or ``labels`` to specify.
+        level : int or level name, optional
+            For MultiIndex, level from which the labels will be removed.
+        inplace : bool, default False
+            If False, return a copy. Otherwise, do operation
+            inplace and return None.
+        errors : {'ignore', 'raise'}, default 'raise'
+            If 'ignore', suppress error and only existing labels are
+            dropped.
+
+        Returns
+        -------
+        Series or None
+            Series with specified index labels removed or None if
+            ``inplace=True``
+
+        Raises
+        ------
+        KeyError
+            If any of the labels is not found in the selected axis and
+            ``error='raise'``
+
+        See Also
+        --------
+        Series.reindex
+            Return only specified index labels of Series
+        Series.dropna
+            Return series without null values
+        Series.drop_duplicates
+            Return series with duplicate values removed
+        cudf.core.dataframe.DataFrame.drop
+            Drop specified labels from rows or columns in dataframe
+
+        Examples
+        --------
+        >>> s = cudf.Series([1,2,3], index=['x', 'y', 'z'])
+        >>> s
+        x    1
+        y    2
+        z    3
+        dtype: int64
+
+        Drop labels x and z
+
+        >>> s.drop(labels=['x', 'z'])
+        y    2
+        dtype: int64
+
+        Drop a label from the second level in MultiIndex Series.
+
+        >>> midx = cudf.MultiIndex.from_product([[0, 1, 2], ['x', 'y']])
+        >>> s = cudf.Series(range(6), index=midx)
+        >>> s
+        0  x    0
+           y    1
+        1  x    2
+           y    3
+        2  x    4
+           y    5
+        >>> s.drop(labels='y', level=1)
+        0  x    0
+        1  x    2
+        2  x    4
+        """
+        if labels is not None:
+            if index is not None or columns is not None:
+                raise ValueError(
+                    "Cannot specify both 'labels' and 'index'/'columns'"
+                )
+            if axis == 1:
+                raise ValueError("No axis named 1 for object type Series")
+            target = labels
+        elif index is not None:
+            target = index
+        elif columns is not None:
+            target = []  # Ignore parameter columns
+        else:
+            raise ValueError(
+                "Need to specify at least one of 'labels', "
+                "'index' or 'columns'"
+            )
+
+        if inplace:
+            out = self
+        else:
+            out = self.copy()
+
+        dropped = _drop_rows_by_labels(out, target, level, errors)
+
+        out._data = dropped._data
+        out._index = dropped._index
+
+        if not inplace:
+            return out
+
     def __copy__(self, deep=True):
         return self.copy(deep)
 
@@ -595,13 +772,74 @@ class Series(Frame, Serializable):
         Returns
         -------
         A new Series that conforms to the supplied index
+
+        Examples
+        --------
+        >>> import cudf
+        >>> series = cudf.Series([10, 20, 30, 40], index=['a', 'b', 'c', 'd'])
+        >>> series
+        a    10
+        b    20
+        c    30
+        d    40
+        dtype: int64
+        >>> series.reindex(['a', 'b', 'y', 'z'])
+        a      10
+        b      20
+        y    <NA>
+        z    <NA>
+        dtype: int64
         """
         name = self.name or 0
         idx = self._index if index is None else index
-        return self.to_frame(name).reindex(idx, copy=copy)[name]
+        series = self.to_frame(name).reindex(idx, copy=copy)[name]
+        series.name = self.name
+        return series
 
     def reset_index(self, drop=False, inplace=False):
-        """ Reset index to RangeIndex """
+        """
+        Reset index to RangeIndex
+
+        Parameters
+        ----------
+        drop : bool, default False
+            Just reset the index, without inserting it as a column in
+            the new DataFrame.
+        inplace : bool, default False
+            Modify the Series in place (do not create a new object).
+
+        Returns
+        -------
+        Series or DataFrame or None
+            When `drop` is False (the default), a DataFrame is returned.
+            The newly created columns will come first in the DataFrame,
+            followed by the original Series values.
+            When `drop` is True, a `Series` is returned.
+            In either case, if ``inplace=True``, no value is returned.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> series = cudf.Series(['a', 'b', 'c', 'd'], index=[10, 11, 12, 13])
+        >>> series
+        10    a
+        11    b
+        12    c
+        13    d
+        dtype: object
+        >>> series.reset_index()
+           index  0
+        0     10  a
+        1     11  b
+        2     12  c
+        3     13  d
+        >>> series.reset_index(drop=True)
+        0    a
+        1    b
+        2    c
+        3    d
+        dtype: object
+        """
         if not drop:
             if inplace is True:
                 raise TypeError(
@@ -622,6 +860,30 @@ class Series(Frame, Serializable):
         ----------
         index : Index, Series-convertible
             the new index or values for the new index
+
+        Returns
+        -------
+        Series
+            A new Series with assigned index.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> series = cudf.Series([10, 11, 12, 13, 14])
+        >>> series
+        0    10
+        1    11
+        2    12
+        3    13
+        4    14
+        dtype: int64
+        >>> series.set_index(['a', 'b', 'c', 'd', 'e'])
+        a    10
+        b    11
+        c    12
+        d    13
+        e    14
+        dtype: int64
         """
         index = index if isinstance(index, Index) else as_index(index)
         return self._copy_construct(index=index)
@@ -657,7 +919,26 @@ class Series(Frame, Serializable):
         -------
         DataFrame
             cudf DataFrame
-        """
+
+        Examples
+        --------
+        >>> import cudf
+        >>> series = cudf.Series(['a', 'b', 'c', None, 'd'], name='sample', index=[10, 11, 12, 13, 15])
+        >>> series
+        10       a
+        11       b
+        12       c
+        13    <NA>
+        15       d
+        Name: sample, dtype: object
+        >>> series.to_frame()
+           sample
+        10      a
+        11      b
+        12      c
+        13   <NA>
+        15      d
+        """  # noqa: E501
 
         if name is not None:
             col = name
@@ -684,6 +965,38 @@ class Series(Frame, Serializable):
         null_count : int, optional
             The number of null values.
             If None, it is calculated automatically.
+
+        Returns
+        -------
+        Series
+            A new series with the applied mask.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> series = cudf.Series([1, 2, 3, 4, 5])
+        >>> ref_array = cudf.Series([10, None, 11, None, 16])
+        >>> series
+        0    1
+        1    2
+        2    3
+        3    4
+        4    5
+        dtype: int64
+        >>> ref_array
+        0      10
+        1    <NA>
+        2      11
+        3    <NA>
+        4      16
+        dtype: int64
+        >>> series.set_mask(ref_array._column.mask)
+        0       1
+        1    <NA>
+        2       3
+        3    <NA>
+        4       5
+        dtype: int64
         """
         col = self._column.set_mask(mask)
         return self._copy_construct(data=col)
@@ -894,30 +1207,55 @@ class Series(Frame, Serializable):
             self.loc[key] = value
 
     def take(self, indices, keep_index=True):
-        """Return Series by taking values from the corresponding *indices*.
+        """
+        Return Series by taking values from the corresponding *indices*.
+
+        Parameters
+        ----------
+        indices : array-like or scalar
+            An array/scalar like integers indicating which positions to take.
+        keep_index : bool, default True
+            Whethere to retain the index in result Series or not.
+
+        Returns
+        -------
+        Series
+
+        Examples
+        --------
+        >>> import cudf
+        >>> series = cudf.Series([10, 11, 12, 13, 14])
+        >>> series
+        0    10
+        1    11
+        2    12
+        3    13
+        4    14
+        dtype: int64
+        >>> series.take([0, 4])
+        0    10
+        4    14
+        dtype: int64
+
+        If you want to drop the index, pass `keep_index=False`
+
+        >>> series.take([0, 4], keep_index=False)
+        0    10
+        1    14
+        dtype: int64
         """
         if keep_index is True or is_scalar(indices):
             return self.iloc[indices]
         else:
             col_inds = as_column(indices)
             data = self._column.take(col_inds, keep_index=False)
-            return self._copy_construct(data=data)
+            return self._copy_construct(data=data, index=None)
 
     def __bool__(self):
         """Always raise TypeError when converting a Series
         into a boolean.
         """
         raise TypeError(f"can't compute boolean for {type(self)}")
-
-    def values_to_string(self, nrows=None):
-        """Returns a list of string for each element.
-        """
-        values = self[:nrows]
-        if self.dtype == np.dtype("object"):
-            out = [str(v) for v in values]
-        else:
-            out = ["" if v is None else str(v) for v in values]
-        return out
 
     def tolist(self):
 
@@ -1022,7 +1360,26 @@ class Series(Frame, Serializable):
         Uses Pandas formatting internals to produce output identical to Pandas.
         Use the Pandas formatting settings directly in Pandas to control cuDF
         output.
-        """
+
+        Returns
+        -------
+        str
+            String representation of Series
+
+        Examples
+        --------
+        >>> import cudf
+        >>> series = cudf.Series(['a', None, 'b', 'c', None])
+        >>> series
+        0       a
+        1    <NA>
+        2       b
+        3       c
+        4    <NA>
+        dtype: object
+        >>> series.to_string()
+        '0       a\\n1    <NA>\\n2       b\\n3       c\\n4    <NA>\\ndtype: object'
+        """  # noqa : E501
         return self.__repr__()
 
     def __str__(self):
@@ -1133,7 +1490,9 @@ class Series(Frame, Serializable):
         return "\n".join(lines)
 
     @annotate("BINARY_OP", color="orange", domain="cudf_python")
-    def _binaryop(self, other, fn, fill_value=None, reflect=False):
+    def _binaryop(
+        self, other, fn, fill_value=None, reflect=False, can_reindex=False
+    ):
         """
         Internal util to call a binary operator *fn* on operands *self*
         and *other*.  Return the output Series.  The output dtype is
@@ -1142,13 +1501,11 @@ class Series(Frame, Serializable):
         If ``reflect`` is ``True``, swap the order of the operands.
         """
         if isinstance(other, cudf.DataFrame):
-            # TODO: fn is not the same as arg expected by _apply_op
-            # e.g. for fn = 'and', _apply_op equivalent is '__and__'
-            return other._apply_op(self, fn)
+            return NotImplemented
 
         result_name = utils.get_result_name(self, other)
         if isinstance(other, Series):
-            if fn in cudf.utils.utils._EQUALITY_OPS:
+            if not can_reindex and fn in cudf.utils.utils._EQUALITY_OPS:
                 if not self.index.equals(other.index):
                     raise ValueError(
                         "Can only compare identically-labeled "
@@ -1189,7 +1546,8 @@ class Series(Frame, Serializable):
         return result
 
     def add(self, other, fill_value=None, axis=0):
-        """Addition of series and other, element-wise
+        """
+        Addition of series and other, element-wise
         (binary operator add).
 
         Parameters
@@ -1198,6 +1556,43 @@ class Series(Frame, Serializable):
         fill_value : None or value
             Value to fill nulls with before computation. If data in both
             corresponding Series locations is null the result will be null
+
+        Returns
+        -------
+        Series
+            The result of the addition.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> a = cudf.Series([1, 1, 1, None], index=['a', 'b', 'c', 'd'])
+        >>> a
+        a       1
+        b       1
+        c       1
+        d    <NA>
+        dtype: int64
+        >>> b = cudf.Series([1, None, 1, None], index=['a', 'b', 'd', 'e'])
+        >>> b
+        a       1
+        b    <NA>
+        d       1
+        e    <NA>
+        dtype: int64
+        >>> a.add(b)
+        a       2
+        b    <NA>
+        c    <NA>
+        d    <NA>
+        e    <NA>
+        dtype: int64
+        >>> a.add(b, fill_value=0)
+        a       2
+        b       1
+        c       1
+        d       1
+        e    <NA>
+        dtype: int64
         """
         if axis != 0:
             raise NotImplementedError("Only axis=0 supported at this time.")
@@ -1216,6 +1611,36 @@ class Series(Frame, Serializable):
         fill_value : None or value
             Value to fill nulls with before computation. If data in both
             corresponding Series locations is null the result will be null
+
+        Returns
+        -------
+        Series
+            The result of the operation.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> a = cudf.Series([1, 2, 3, None], index=['a', 'b', 'c', 'd'])
+        >>> a
+        a       1
+        b       2
+        c       3
+        d    <NA>
+        dtype: int64
+        >>> b = cudf.Series([1, None, 1, None], index=['a', 'b', 'd', 'e'])
+        >>> b
+        a       1
+        b    <NA>
+        d       1
+        e    <NA>
+        dtype: int64
+        >>> a.add(b, fill_value=0)
+        a       2
+        b       2
+        c       3
+        d       1
+        e    <NA>
+        dtype: int64
         """
         if axis != 0:
             raise NotImplementedError("Only axis=0 supported at this time.")
@@ -1226,7 +1651,7 @@ class Series(Frame, Serializable):
     def __radd__(self, other):
         return self._binaryop(other, "add", reflect=True)
 
-    def sub(self, other, fill_value=None, axis=0):
+    def subtract(self, other, fill_value=None, axis=0):
         """Subtraction of series and other, element-wise
         (binary operator sub).
 
@@ -1236,10 +1661,43 @@ class Series(Frame, Serializable):
         fill_value : None or value
             Value to fill nulls with before computation. If data in both
             corresponding Series locations is null the result will be null
-        """
+
+        Returns
+        -------
+        Series
+            The result of the operation.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> a = cudf.Series([10, 20, None, 30, None], index=['a', 'b', 'c', 'd', 'e'])
+        >>> a
+        a      10
+        b      20
+        c    <NA>
+        d      30
+        e    <NA>
+        dtype: int64
+        >>> b = cudf.Series([1, None, 2, 30], index=['a', 'c', 'b', 'd'])
+        >>> b
+        a       1
+        c    <NA>
+        b       2
+        d      30
+        dtype: int64
+        >>> a.subtract(b, fill_value=2)
+        a       9
+        b      18
+        c    <NA>
+        d       0
+        e    <NA>
+        dtype: int64
+        """  # noqa: E501
         if axis != 0:
             raise NotImplementedError("Only axis=0 supported at this time.")
         return self._binaryop(other, "sub", fill_value)
+
+    sub = subtract
 
     def __sub__(self, other):
         return self._binaryop(other, "sub")
@@ -1254,6 +1712,36 @@ class Series(Frame, Serializable):
         fill_value : None or value
             Value to fill nulls with before computation. If data in both
             corresponding Series locations is null the result will be null
+
+        Returns
+        -------
+        Series
+            The result of the operation.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> a = cudf.Series([1, 2, 3, None], index=['a', 'b', 'c', 'd'])
+        >>> a
+        a       1
+        b       2
+        c       3
+        d    <NA>
+        dtype: int64
+        >>> b = cudf.Series([1, None, 2, None], index=['a', 'b', 'd', 'e'])
+        >>> b
+        a       1
+        b    <NA>
+        d       2
+        e    <NA>
+        dtype: int64
+        >>> a.rsub(b, fill_value=10)
+        a       0
+        b       8
+        c       7
+        d      -8
+        e    <NA>
+        dtype: int64
         """
         if axis != 0:
             raise NotImplementedError("Only axis=0 supported at this time.")
@@ -1262,7 +1750,7 @@ class Series(Frame, Serializable):
     def __rsub__(self, other):
         return self._binaryop(other, "sub", reflect=True)
 
-    def mul(self, other, fill_value=None, axis=0):
+    def multiply(self, other, fill_value=None, axis=0):
         """Multiplication of series and other, element-wise
         (binary operator mul).
 
@@ -1272,10 +1760,42 @@ class Series(Frame, Serializable):
         fill_value : None or value
             Value to fill nulls with before computation. If data in both
             corresponding Series locations is null the result will be null
+
+        Returns
+        -------
+        Series
+            The result of the operation.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> a = cudf.Series([1, 2, 3, None], index=['a', 'b', 'c', 'd'])
+        >>> a
+        a       1
+        b       2
+        c       3
+        d    <NA>
+        dtype: int64
+        >>> b = cudf.Series([1, None, 2, None], index=['a', 'b', 'd', 'e'])
+        >>> b
+        a       1
+        b    <NA>
+        d       2
+        e    <NA>
+        dtype: int64
+        >>> a.multiply(b, fill_value=0)
+        a       1
+        b       0
+        c       0
+        d       0
+        e    <NA>
+        dtype: int64
         """
         if axis != 0:
             raise NotImplementedError("Only axis=0 supported at this time.")
         return self._binaryop(other, "mul", fill_value=fill_value)
+
+    mul = multiply
 
     def __mul__(self, other):
         return self._binaryop(other, "mul")
@@ -1290,7 +1810,40 @@ class Series(Frame, Serializable):
         fill_value : None or value
             Value to fill nulls with before computation. If data in both
             corresponding Series locations is null the result will be null
-        """
+
+        Returns
+        -------
+        Series
+            The result of the operation.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> a = cudf.Series([10, 20, None, 30, 40], index=['a', 'b', 'c', 'd', 'e'])
+        >>> a
+        a      10
+        b      20
+        c    <NA>
+        d      30
+        e      40
+        dtype: int64
+        >>> b = cudf.Series([None, 1, 20, 5, 4], index=['a', 'b', 'd', 'e', 'f'])
+        >>> b
+        a    <NA>
+        b       1
+        d      20
+        e       5
+        f       4
+        dtype: int64
+        >>> a.rmul(b, fill_value=2)
+        a      20
+        b      20
+        c    <NA>
+        d     600
+        e     200
+        f       8
+        dtype: int64
+        """  # noqa: E501
         if axis != 0:
             raise NotImplementedError("Only axis=0 supported at this time.")
         return self._binaryop(other, "mul", fill_value, True)
@@ -1308,6 +1861,26 @@ class Series(Frame, Serializable):
         fill_value : None or value
             Value to fill nulls with before computation. If data in both
             corresponding Series locations is null the result will be null
+
+        Returns
+        -------
+        Series
+            The result of the operation.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> series = cudf.Series([10, 20, 30])
+        >>> series
+        0    10
+        1    20
+        2    30
+        dtype: int64
+        >>> series.mod(4)
+        0    2
+        1    0
+        2    2
+        dtype: int64
         """
         if axis != 0:
             raise NotImplementedError("Only axis=0 supported at this time.")
@@ -1326,7 +1899,40 @@ class Series(Frame, Serializable):
         fill_value : None or value
             Value to fill nulls with before computation. If data in both
             corresponding Series locations is null the result will be null
-        """
+
+        Returns
+        -------
+        Series
+            The result of the operation.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> a = cudf.Series([10, 20, None, 30, 40], index=['a', 'b', 'c', 'd', 'e'])
+        >>> a
+        a      10
+        b      20
+        c    <NA>
+        d      30
+        e      40
+        dtype: int64
+        >>> b = cudf.Series([None, 1, 20, 5, 4], index=['a', 'b', 'd', 'e', 'f'])
+        >>> b
+        a    <NA>
+        b       1
+        d      20
+        e       5
+        f       4
+        dtype: int64
+        >>> a.rmod(b, fill_value=10)
+        a       0
+        b       1
+        c    <NA>
+        d      20
+        e       5
+        f       4
+        dtype: int64
+        """  # noqa: E501
         if axis != 0:
             raise NotImplementedError("Only axis=0 supported at this time.")
         return self._binaryop(other, "mod", fill_value, True)
@@ -1344,6 +1950,36 @@ class Series(Frame, Serializable):
         fill_value : None or value
             Value to fill nulls with before computation. If data in both
             corresponding Series locations is null the result will be null
+
+        Returns
+        -------
+        Series
+            The result of the operation.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> a = cudf.Series([1, 2, 3, None], index=['a', 'b', 'c', 'd'])
+        >>> a
+        a       1
+        b       2
+        c       3
+        d    <NA>
+        dtype: int64
+        >>> b = cudf.Series([10, None, 12, None], index=['a', 'b', 'd', 'e'])
+        >>> b
+        a      10
+        b    <NA>
+        d      12
+        e    <NA>
+        dtype: int64
+        >>> a.pow(b, fill_value=0)
+        a       1
+        b       1
+        c       1
+        d       0
+        e    <NA>
+        dtype: int64
         """
         if axis != 0:
             raise NotImplementedError("Only axis=0 supported at this time.")
@@ -1362,6 +1998,36 @@ class Series(Frame, Serializable):
         fill_value : None or value
             Value to fill nulls with before computation. If data in both
             corresponding Series locations is null the result will be null
+
+        Returns
+        -------
+        Series
+            The result of the operation.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> a = cudf.Series([1, 2, 3, None], index=['a', 'b', 'c', 'd'])
+        >>> a
+        a       1
+        b       2
+        c       3
+        d    <NA>
+        dtype: int64
+        >>> b = cudf.Series([10, None, 12, None], index=['a', 'b', 'd', 'e'])
+        >>> b
+        a      10
+        b    <NA>
+        d      12
+        e    <NA>
+        dtype: int64
+        >>> a.rpow(b, fill_value=0)
+        a      10
+        b       0
+        c       0
+        d       1
+        e    <NA>
+        dtype: int64
         """
         if axis != 0:
             raise NotImplementedError("Only axis=0 supported at this time.")
@@ -1380,6 +2046,36 @@ class Series(Frame, Serializable):
         fill_value : None or value
             Value to fill nulls with before computation. If data in both
             corresponding Series locations is null the result will be null
+
+        Returns
+        -------
+        Series
+            The result of the operation.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> a = cudf.Series([1, 1, 1, None], index=['a', 'b', 'c', 'd'])
+        >>> a
+        a       1
+        b       1
+        c       1
+        d    <NA>
+        dtype: int64
+        >>> b = cudf.Series([1, None, 1, None], index=['a', 'b', 'd', 'e'])
+        >>> b
+        a       1
+        b    <NA>
+        d       1
+        e    <NA>
+        dtype: int64
+        >>> a.floordiv(b)
+        a       1
+        b    <NA>
+        c    <NA>
+        d    <NA>
+        e    <NA>
+        dtype: int64
         """
         if axis != 0:
             raise NotImplementedError("Only axis=0 supported at this time.")
@@ -1454,6 +2150,36 @@ class Series(Frame, Serializable):
         fill_value : None or value
             Value to fill nulls with before computation. If data in both
             corresponding Series locations is null the result will be null
+
+        Returns
+        -------
+        Series
+            The reuslt of the operation.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> a = cudf.Series([1, 10, 20, None], index=['a', 'b', 'c', 'd'])
+        >>> a
+        a       1
+        b      10
+        c      20
+        d    <NA>
+        dtype: int64
+        >>> b = cudf.Series([1, None, 2, None], index=['a', 'b', 'd', 'e'])
+        >>> b
+        a       1
+        b    <NA>
+        d       2
+        e    <NA>
+        dtype: int64
+        >>> a.truediv(b, fill_value=0)
+        a     1.0
+        b     Inf
+        c     Inf
+        d     0.0
+        e    <NA>
+        dtype: float64
         """
         if axis != 0:
             raise NotImplementedError("Only axis=0 supported at this time.")
@@ -1472,6 +2198,36 @@ class Series(Frame, Serializable):
         fill_value : None or value
             Value to fill nulls with before computation. If data in both
             corresponding Series locations is null the result will be null
+
+        Returns
+        -------
+        Series
+            The result of the operation.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> a = cudf.Series([10, 20, None, 30], index=['a', 'b', 'c', 'd'])
+        >>> a
+        a      10
+        b      20
+        c    <NA>
+        d      30
+        dtype: int64
+        >>> b = cudf.Series([1, None, 2, 3], index=['a', 'b', 'd', 'e'])
+        >>> b
+        a       1
+        b    <NA>
+        d       2
+        e       3
+        dtype: int64
+        >>> a.rtruediv(b, fill_value=0)
+        a            0.1
+        b            0.0
+        c           <NA>
+        d    0.066666667
+        e            Inf
+        dtype: float64
         """
         if axis != 0:
             raise NotImplementedError("Only axis=0 supported at this time.")
@@ -1562,10 +2318,47 @@ class Series(Frame, Serializable):
         fill_value : None or value
             Value to fill nulls with before computation. If data in both
             corresponding Series locations is null the result will be null
-        """
+
+        Returns
+        -------
+        Series
+            The result of the operation.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> a = cudf.Series([1, 2, 3, None, 10, 20], index=['a', 'c', 'd', 'e', 'f', 'g'])
+        >>> a
+        a       1
+        c       2
+        d       3
+        e    <NA>
+        f      10
+        g      20
+        dtype: int64
+        >>> b = cudf.Series([-10, 23, -1, None, None], index=['a', 'b', 'c', 'd', 'e'])
+        >>> b
+        a     -10
+        b      23
+        c      -1
+        d    <NA>
+        e    <NA>
+        dtype: int64
+        >>> a.eq(b, fill_value=2)
+        a    False
+        b    False
+        c    False
+        d    False
+        e     <NA>
+        f    False
+        g    False
+        dtype: bool
+        """  # noqa: E501
         if axis != 0:
             raise NotImplementedError("Only axis=0 supported at this time.")
-        return self._binaryop(other, "eq", fill_value)
+        return self._binaryop(
+            other=other, fn="eq", fill_value=fill_value, can_reindex=True
+        )
 
     def __eq__(self, other):
         return self._binaryop(other, "eq")
@@ -1580,10 +2373,47 @@ class Series(Frame, Serializable):
         fill_value : None or value
             Value to fill nulls with before computation. If data in both
             corresponding Series locations is null the result will be null
-        """
+
+        Returns
+        -------
+        Series
+            The result of the operation.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> a = cudf.Series([1, 2, 3, None, 10, 20], index=['a', 'c', 'd', 'e', 'f', 'g'])
+        >>> a
+        a       1
+        c       2
+        d       3
+        e    <NA>
+        f      10
+        g      20
+        dtype: int64
+        >>> b = cudf.Series([-10, 23, -1, None, None], index=['a', 'b', 'c', 'd', 'e'])
+        >>> b
+        a     -10
+        b      23
+        c      -1
+        d    <NA>
+        e    <NA>
+        dtype: int64
+        >>> a.ne(b, fill_value=2)
+        a    True
+        b    True
+        c    True
+        d    True
+        e    <NA>
+        f    True
+        g    True
+        dtype: bool
+        """  # noqa: E501
         if axis != 0:
             raise NotImplementedError("Only axis=0 supported at this time.")
-        return self._binaryop(other, "ne", fill_value)
+        return self._binaryop(
+            other=other, fn="ne", fill_value=fill_value, can_reindex=True
+        )
 
     def __ne__(self, other):
         return self._binaryop(other, "ne")
@@ -1598,10 +2428,47 @@ class Series(Frame, Serializable):
         fill_value : None or value
             Value to fill nulls with before computation. If data in both
             corresponding Series locations is null the result will be null
-        """
+
+        Returns
+        -------
+        Series
+            The result of the operation.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> a = cudf.Series([1, 2, 3, None, 10, 20], index=['a', 'c', 'd', 'e', 'f', 'g'])
+        >>> a
+        a       1
+        c       2
+        d       3
+        e    <NA>
+        f      10
+        g      20
+        dtype: int64
+        >>> b = cudf.Series([-10, 23, -1, None, None], index=['a', 'b', 'c', 'd', 'e'])
+        >>> b
+        a     -10
+        b      23
+        c      -1
+        d    <NA>
+        e    <NA>
+        dtype: int64
+        >>> a.lt(b, fill_value=-10)
+        a    False
+        b     True
+        c    False
+        d    False
+        e     <NA>
+        f    False
+        g    False
+        dtype: bool
+        """  # noqa: E501
         if axis != 0:
             raise NotImplementedError("Only axis=0 supported at this time.")
-        return self._binaryop(other, "lt", fill_value)
+        return self._binaryop(
+            other=other, fn="lt", fill_value=fill_value, can_reindex=True
+        )
 
     def __lt__(self, other):
         return self._binaryop(other, "lt")
@@ -1616,10 +2483,47 @@ class Series(Frame, Serializable):
         fill_value : None or value
             Value to fill nulls with before computation. If data in both
             corresponding Series locations is null the result will be null
-        """
+
+        Returns
+        -------
+        Series
+            The result of the operation.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> a = cudf.Series([1, 2, 3, None, 10, 20], index=['a', 'c', 'd', 'e', 'f', 'g'])
+        >>> a
+        a       1
+        c       2
+        d       3
+        e    <NA>
+        f      10
+        g      20
+        dtype: int64
+        >>> b = cudf.Series([-10, 23, -1, None, None], index=['a', 'b', 'c', 'd', 'e'])
+        >>> b
+        a     -10
+        b      23
+        c      -1
+        d    <NA>
+        e    <NA>
+        dtype: int64
+        >>> a.le(b, fill_value=-10)
+        a    False
+        b     True
+        c    False
+        d    False
+        e     <NA>
+        f    False
+        g    False
+        dtype: bool
+        """  # noqa: E501
         if axis != 0:
             raise NotImplementedError("Only axis=0 supported at this time.")
-        return self._binaryop(other, "le", fill_value)
+        return self._binaryop(
+            other=other, fn="le", fill_value=fill_value, can_reindex=True
+        )
 
     def __le__(self, other):
         return self._binaryop(other, "le")
@@ -1634,10 +2538,47 @@ class Series(Frame, Serializable):
         fill_value : None or value
             Value to fill nulls with before computation. If data in both
             corresponding Series locations is null the result will be null
-        """
+
+        Returns
+        -------
+        Series
+            The result of the operation.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> a = cudf.Series([1, 2, 3, None, 10, 20], index=['a', 'c', 'd', 'e', 'f', 'g'])
+        >>> a
+        a       1
+        c       2
+        d       3
+        e    <NA>
+        f      10
+        g      20
+        dtype: int64
+        >>> b = cudf.Series([-10, 23, -1, None, None], index=['a', 'b', 'c', 'd', 'e'])
+        >>> b
+        a     -10
+        b      23
+        c      -1
+        d    <NA>
+        e    <NA>
+        dtype: int64
+        >>> a.gt(b)
+        a     True
+        b    False
+        c     True
+        d    False
+        e    False
+        f    False
+        g    False
+        dtype: bool
+        """  # noqa: E501
         if axis != 0:
             raise NotImplementedError("Only axis=0 supported at this time.")
-        return self._binaryop(other, "gt", fill_value)
+        return self._binaryop(
+            other=other, fn="gt", fill_value=fill_value, can_reindex=True
+        )
 
     def __gt__(self, other):
         return self._binaryop(other, "gt")
@@ -1652,10 +2593,47 @@ class Series(Frame, Serializable):
         fill_value : None or value
             Value to fill nulls with before computation. If data in both
             corresponding Series locations is null the result will be null
-        """
+
+        Returns
+        -------
+        Series
+            The result of the operation.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> a = cudf.Series([1, 2, 3, None, 10, 20], index=['a', 'c', 'd', 'e', 'f', 'g'])
+        >>> a
+        a       1
+        c       2
+        d       3
+        e    <NA>
+        f      10
+        g      20
+        dtype: int64
+        >>> b = cudf.Series([-10, 23, -1, None, None], index=['a', 'b', 'c', 'd', 'e'])
+        >>> b
+        a     -10
+        b      23
+        c      -1
+        d    <NA>
+        e    <NA>
+        dtype: int64
+        >>> a.ge(b)
+        a     True
+        b    False
+        c     True
+        d    False
+        e    False
+        f    False
+        g    False
+        dtype: bool
+        """  # noqa: E501
         if axis != 0:
             raise NotImplementedError("Only axis=0 supported at this time.")
-        return self._binaryop(other, "ge", fill_value)
+        return self._binaryop(
+            other=other, fn="ge", fill_value=fill_value, can_reindex=True
+        )
 
     def __ge__(self, other):
         return self._binaryop(other, "ge")
@@ -1783,6 +2761,22 @@ class Series(Frame, Serializable):
         out : bool
             If Series has atleast one null value, return True, if not
             return False.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> series = cudf.Series([1, 2, None, 3, 4])
+        >>> series
+        0       1
+        1       2
+        2    <NA>
+        3       3
+        4       4
+        dtype: int64
+        >>> series.has_nulls
+        True
+        >>> series.dropna().has_nulls
+        False
         """
         return self._column.has_nulls
 
@@ -1867,7 +2861,72 @@ class Series(Frame, Serializable):
 
     def drop_duplicates(self, keep="first", inplace=False, ignore_index=False):
         """
-        Return Series with duplicate values removed
+        Return Series with duplicate values removed.
+
+        Parameters
+        ----------
+        keep : {'first', 'last', ``False``}, default 'first'
+            Method to handle dropping duplicates:
+
+            - 'first' : Drop duplicates except for the first occurrence.
+            - 'last' : Drop duplicates except for the last occurrence.
+            - ``False`` : Drop all duplicates.
+
+        inplace : bool, default ``False``
+            If ``True``, performs operation inplace and returns None.
+
+        Returns
+        -------
+        Series or None
+            Series with duplicates dropped or None if ``inplace=True``.
+
+        Examples
+        --------
+        >>> s = cudf.Series(['lama', 'cow', 'lama', 'beetle', 'lama', 'hippo'],
+        ...               name='animal')
+        >>> s
+        0      lama
+        1       cow
+        2      lama
+        3    beetle
+        4      lama
+        5     hippo
+        Name: animal, dtype: object
+
+        With the `keep` parameter, the selection behaviour of duplicated
+        values can be changed. The value ‘first’ keeps the first
+        occurrence for each set of duplicated entries.
+        The default value of keep is ‘first’. Note that order of
+        the rows being returned is not guaranteed
+        to be sorted.
+
+        >>> s.drop_duplicates()
+        3    beetle
+        1       cow
+        5     hippo
+        0      lama
+        Name: animal, dtype: object
+
+        The value ‘last’ for parameter `keep` keeps the last occurrence
+        for each set of duplicated entries.
+
+        >>> s.drop_duplicates(keep='last')
+        3    beetle
+        1       cow
+        5     hippo
+        4      lama
+        Name: animal, dtype: object
+
+        The value `False` for parameter `keep` discards all sets
+        of duplicated entries. Setting the value of ‘inplace’ to
+        `True` performs the operation inplace and returns `None`.
+
+        >>> s.drop_duplicates(keep=False, inplace=True)
+        >>> s
+        3    beetle
+        1       cow
+        5     hippo
+        Name: animal, dtype: object
         """
         result = super().drop_duplicates(keep=keep, ignore_index=ignore_index)
 
@@ -1909,17 +2968,62 @@ class Series(Frame, Serializable):
             If it equals "pandas", null values are filled with NaNs.
             Non integral dtype is promoted to np.float64.
 
+        Returns
+        -------
+        numpy.ndarray
+            A numpy array representation of the elements in the Series.
+
         Notes
         -----
-
         If ``fillna`` is ``None``, null values are skipped.  Therefore, the
         output size could be smaller.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> series = cudf.Series([10, 11, 12, 13, 14])
+        >>> series
+        0    10
+        1    11
+        2    12
+        3    13
+        4    14
+        dtype: int64
+        >>> array = series.to_array()
+        >>> array
+        array([10, 11, 12, 13, 14])
+        >>> type(array)
+        <class 'numpy.ndarray'>
         """
         return self._column.to_array(fillna=fillna)
 
     def nans_to_nulls(self):
         """
         Convert nans (if any) to nulls
+
+        Returns
+        -------
+        Series
+
+        Examples
+        --------
+        >>> import cudf
+        >>> import numpy as np
+        >>> series = cudf.Series([1, 2, np.nan, None, 10], nan_as_null=False)
+        >>> series
+        0     1.0
+        1     2.0
+        2     NaN
+        3    <NA>
+        4    10.0
+        dtype: float64
+        >>> series.nans_to_nulls()
+        0     1.0
+        1     2.0
+        2    <NA>
+        3    <NA>
+        4    10.0
+        dtype: float64
         """
         result_col = self._column.nans_to_nulls()
         return self._copy_construct(data=result_col)
@@ -2014,8 +3118,10 @@ class Series(Frame, Serializable):
                 "bool_only parameter is not implemented yet"
             )
 
-        if self.empty:
-            return False
+        skipna = False if skipna is None else skipna
+
+        if skipna is False and self.has_nulls:
+            return True
 
         if skipna:
             result_series = self.nans_to_nulls()
@@ -2040,6 +3146,24 @@ class Series(Frame, Serializable):
 
         if ``fillna`` is ``None``, null values are skipped.  Therefore, the
         output size could be smaller.
+
+        Returns
+        -------
+        numba DeviceNDArray
+
+        Examples
+        --------
+        >>> import cudf
+        >>> s = cudf.Series([10, 20, 30, 40, 50])
+        >>> s
+        0    10
+        1    20
+        2    30
+        3    40
+        4    50
+        dtype: int64
+        >>> s.to_gpu_array()
+        <numba.cuda.cudadrv.devicearray.DeviceNDArray object at 0x7f1840858890>
         """
         return self._column.to_gpu_array(fillna=fillna)
 
@@ -2110,7 +3234,27 @@ class Series(Frame, Serializable):
     @property
     def data(self):
         """The gpu buffer for the data
-        """
+
+        Returns
+        -------
+        out : The GPU buffer of the Series.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> series = cudf.Series([1, 2, 3, 4])
+        >>> series
+        0    1
+        1    2
+        2    3
+        3    4
+        dtype: int64
+        >>> series.data
+        <cudf.core.buffer.Buffer object at 0x7f23c192d110>
+        >>> series.data.to_host_array()
+        array([1, 0, 0, 0, 0, 0, 0, 0, 2, 0, 0, 0, 0, 0, 0, 0, 3, 0, 0, 0, 0, 0,
+               0, 0, 4, 0, 0, 0, 0, 0, 0, 0], dtype=uint8)
+        """  # noqa: E501
         return self._column.data
 
     @property
@@ -2131,6 +3275,18 @@ class Series(Frame, Serializable):
         See also
         --------
         cudf.core.dataframe.DataFrame.loc
+
+        Examples
+        --------
+        >>> import cudf
+        >>> series = cudf.Series([10, 11, 12], index=['a', 'b', 'c'])
+        >>> series
+        a    10
+        b    11
+        c    12
+        dtype: int64
+        >>> series.loc['b']
+        11
         """
         return _SeriesLocIndexer(self)
 
@@ -2142,6 +3298,18 @@ class Series(Frame, Serializable):
         See also
         --------
         cudf.core.dataframe.DataFrame.iloc
+
+        Examples
+        --------
+        >>> import cudf
+        >>> s = cudf.Series([10, 20, 30])
+        >>> s
+        0    10
+        1    20
+        2    30
+        dtype: int64
+        >>> s.iloc[2]
+        30
         """
         return _SeriesIlocIndexer(self)
 
@@ -2157,7 +3325,26 @@ class Series(Frame, Serializable):
         Returns
         -------
         device array
+
+        Examples
+        --------
+        >>> import cudf
+        >>> s = cudf.Series([True, False, True])
+        >>> s.as_mask()
+        <cudf.core.buffer.Buffer object at 0x7f23c3eed0d0>
+        >>> s.as_mask().to_host_array()
+        array([  5,   0,   0,   0,   0,   0,   0,   0,   1,   0,   0,   0,   0,
+                 0,   0,   0,   2,   0,   0,   0,   0,   0,   0,   0, 181, 164,
+               188,   1,   0,   0,   0,   0, 255, 255, 255, 255, 255, 255, 255,
+               127, 253, 214,  62, 241,   1,   0,   0,   0,   0,   0,   0,   0,
+                 0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0],
+             dtype=uint8)
         """
+        if not pd.api.types.is_bool_dtype(self.dtype):
+            raise TypeError(
+                f"Series must of boolean dtype, found: {self.dtype}"
+            )
+
         return self._column.as_mask()
 
     def astype(self, dtype, copy=False, errors="raise"):
@@ -2177,17 +3364,64 @@ class Series(Frame, Serializable):
             values then may propagate to other cudf objects.
         errors : {'raise', 'ignore', 'warn'}, default 'raise'
             Control raising of exceptions on invalid data for provided dtype.
+
             - ``raise`` : allow exceptions to be raised
             - ``ignore`` : suppress exceptions. On error return original
-            object.
+              object.
             - ``warn`` : prints last exceptions as warnings and
-            return original object.
+              return original object.
 
         Returns
         -------
         out : Series
             Returns ``self.copy(deep=copy)`` if ``dtype`` is the same
             as ``self.dtype``.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> series = cudf.Series([1, 2], dtype='int32')
+        >>> series
+        0    1
+        1    2
+        dtype: int32
+        >>> series.astype('int64')
+        0    1
+        1    2
+        dtype: int64
+
+        Convert to categorical type:
+
+        >>> series.astype('category')
+        0    1
+        1    2
+        dtype: category
+        Categories (2, int64): [1, 2]
+
+        Convert to ordered categorical type with custom ordering:
+
+        >>> cat_dtype = cudf.CategoricalDtype(categories=[2, 1], ordered=True)
+        >>> series.astype(cat_dtype)
+        0    1
+        1    2
+        dtype: category
+        Categories (2, int64): [2 < 1]
+
+        Note that using ``copy=False`` (enabled by default)
+        and changing data on a new Series will
+        propagate changes:
+
+        >>> s1 = cudf.Series([1, 2])
+        >>> s1
+        0    1
+        1    2
+        dtype: int64
+        >>> s2 = s1.astype('int64', copy=False)
+        >>> s2[0] = 10
+        >>> s1
+        0    10
+        1     2
+        dtype: int64
         """
         if errors not in ("ignore", "raise", "warn"):
             raise ValueError("invalid error value specified")
@@ -2229,11 +3463,68 @@ class Series(Frame, Serializable):
         Returns
         -------
         result: Series
+
+        Examples
+        --------
+        >>> import cudf
+        >>> s = cudf.Series([3, 1, 2])
+        >>> s
+        0    3
+        1    1
+        2    2
+        dtype: int64
+        >>> s.argsort()
+        0    1
+        1    2
+        2    0
+        dtype: int32
+        >>> s[s.argsort()]
+        1    1
+        2    2
+        0    3
+        dtype: int64
         """
         return self._sort(ascending=ascending, na_position=na_position)[1]
 
     def sort_index(self, ascending=True):
-        """Sort by the index.
+        """
+        Sort by the index.
+
+        Parameters
+        ----------
+        ascending : bool, default True
+            Sort ascending vs. descending.
+
+        Returns
+        -------
+        Series
+            The original Series sorted by the labels.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> series = cudf.Series(['a', 'b', 'c', 'd'], index=[3, 2, 1, 4])
+        >>> series
+        3    a
+        2    b
+        1    c
+        4    d
+        dtype: object
+        >>> series.sort_index()
+        1    c
+        2    b
+        3    a
+        4    d
+        dtype: object
+
+        Sort Descending
+
+        >>> series.sort_index(ascending=False)
+        4    d
+        3    a
+        2    b
+        1    c
+        dtype: object
         """
         inds = self.index.argsort(ascending=ascending)
         return self.take(inds)
@@ -2280,6 +3571,7 @@ class Series(Frame, Serializable):
         4    3
         3    4
         1    5
+        dtype: int64
         """
 
         if inplace:
@@ -2316,11 +3608,138 @@ class Series(Frame, Serializable):
 
     def nlargest(self, n=5, keep="first"):
         """Returns a new Series of the *n* largest element.
+
+        Parameters
+        ----------
+        n : int, default 5
+            Return this many descending sorted values.
+        keep : {'first', 'last'}, default 'first'
+            When there are duplicate values that cannot all fit in a
+            Series of `n` elements:
+
+            - ``first`` : return the first `n` occurrences in order
+              of appearance.
+            - ``last`` : return the last `n` occurrences in reverse
+              order of appearance.
+
+        Returns
+        -------
+        Series
+            The `n` largest values in the Series, sorted in decreasing order.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> countries_population = {"Italy": 59000000, "France": 65000000,
+        ...                         "Malta": 434000, "Maldives": 434000,
+        ...                         "Brunei": 434000, "Iceland": 337000,
+        ...                         "Nauru": 11300, "Tuvalu": 11300,
+        ...                         "Anguilla": 11300, "Montserrat": 5200}
+        >>> series = cudf.Series(countries_population)
+        >>> series
+        Italy         59000000
+        France        65000000
+        Malta           434000
+        Maldives        434000
+        Brunei          434000
+        Iceland         337000
+        Nauru            11300
+        Tuvalu           11300
+        Anguilla         11300
+        Montserrat        5200
+        dtype: int64
+        >>> series.nlargest()
+        France      65000000
+        Italy       59000000
+        Malta         434000
+        Maldives      434000
+        Brunei        434000
+        dtype: int64
+        >>> series.nlargest(3)
+        France    65000000
+        Italy     59000000
+        Malta       434000
+        dtype: int64
+        >>> series.nlargest(3, keep='last')
+        France    65000000
+        Italy     59000000
+        Brunei      434000
+        dtype: int64
         """
         return self._n_largest_or_smallest(n=n, keep=keep, largest=True)
 
     def nsmallest(self, n=5, keep="first"):
-        """Returns a new Series of the *n* smallest element.
+        """
+        Returns a new Series of the *n* smallest element.
+
+        Parameters
+        ----------
+        n : int, default 5
+            Return this many ascending sorted values.
+        keep : {'first', 'last'}, default 'first'
+            When there are duplicate values that cannot all fit in a
+            Series of `n` elements:
+
+            - ``first`` : return the first `n` occurrences in order
+              of appearance.
+            - ``last`` : return the last `n` occurrences in reverse
+              order of appearance.
+
+        Returns
+        -------
+        Series
+            The `n` smallest values in the Series, sorted in increasing order.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> countries_population = {"Italy": 59000000, "France": 65000000,
+        ...                         "Brunei": 434000, "Malta": 434000,
+        ...                         "Maldives": 434000, "Iceland": 337000,
+        ...                         "Nauru": 11300, "Tuvalu": 11300,
+        ...                         "Anguilla": 11300, "Montserrat": 5200}
+        >>> s = cudf.Series(countries_population)
+        >>> s
+        Italy       59000000
+        France      65000000
+        Brunei        434000
+        Malta         434000
+        Maldives      434000
+        Iceland       337000
+        Nauru          11300
+        Tuvalu         11300
+        Anguilla       11300
+        Montserrat      5200
+        dtype: int64
+
+        The `n` smallest elements where ``n=5`` by default.
+
+        >>> s.nsmallest()
+        Montserrat    5200
+        Nauru        11300
+        Tuvalu       11300
+        Anguilla     11300
+        Iceland     337000
+        dtype: int64
+
+        The `n` smallest elements where ``n=3``. Default `keep` value is
+        'first' so Nauru and Tuvalu will be kept.
+
+        >>> s.nsmallest(3)
+        Montserrat   5200
+        Nauru       11300
+        Tuvalu      11300
+        dtype: int64
+
+        The `n` smallest elements where ``n=3`` and keeping the last
+        duplicates. Anguilla and Tuvalu will be kept since they are the last
+        with value 11300 based on the index order.
+
+        >>> s.nsmallest(3, keep='last')
+        Montserrat   5200
+        Anguilla    11300
+        Tuvalu      11300
+        dtype: int64
         """
         return self._n_largest_or_smallest(n=n, keep=keep, largest=False)
 
@@ -2505,7 +3924,34 @@ class Series(Frame, Serializable):
         return self._mimic_inplace(result, inplace=inplace)
 
     def reverse(self):
-        """Reverse the Series
+        """
+        Reverse the Series
+
+        Returns
+        -------
+        Series
+            A reversed Series.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> series = cudf.Series([1, 2, 3, 4, 5, 6])
+        >>> series
+        0    1
+        1    2
+        2    3
+        3    4
+        4    5
+        5    6
+        dtype: int64
+        >>> series.reverse()
+        5    6
+        4    5
+        3    4
+        2    3
+        1    2
+        0    1
+        dtype: int64
         """
         rinds = column.arange((self._column.size - 1), -1, -1, dtype=np.int32)
         col = self._column[rinds]
@@ -2527,6 +3973,31 @@ class Series(Frame, Serializable):
         Sequence
             A sequence of new series for each category. Its length is
             determined by the length of ``cats``.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> s = cudf.Series(['a', 'b', 'c', 'a'])
+        >>> s
+        0    a
+        1    b
+        2    c
+        3    a
+        dtype: object
+        >>> s.one_hot_encoding(['a', 'c', 'b'])
+        [0    1.0
+        1    0.0
+        2    0.0
+        3    1.0
+        dtype: float64, 0    0.0
+        1    0.0
+        2    1.0
+        3    0.0
+        dtype: float64, 0    0.0
+        1    1.0
+        2    0.0
+        3    0.0
+        dtype: float64]
         """
         if hasattr(cats, "to_arrow"):
             cats = cats.to_pandas()
@@ -3254,8 +4725,9 @@ class Series(Frame, Serializable):
                 result_col[first_index:] = None
 
         # pandas always returns int64 dtype if original dtype is int or `bool`
-        if np.issubdtype(result_col.dtype, np.integer) or np.issubdtype(
-            result_col.dtype, np.bool_
+        if not is_decimal_dtype(result_col.dtype) and (
+            np.issubdtype(result_col.dtype, np.integer)
+            or np.issubdtype(result_col.dtype, np.bool_)
         ):
             return Series(
                 result_col.astype(np.int64)._apply_scan_op("sum"),
@@ -3302,6 +4774,11 @@ class Series(Frame, Serializable):
 
         if axis not in (None, 0):
             raise NotImplementedError("axis parameter is not implemented yet")
+
+        if is_decimal_dtype(self.dtype):
+            raise NotImplementedError(
+                "cumprod does not currently support decimal types"
+            )
 
         skipna = True if skipna is None else skipna
 
@@ -3407,6 +4884,22 @@ class Series(Frame, Serializable):
         -----
         Parameters currently not supported are `axis`, `level` and
         `numeric_only`
+
+        Examples
+        --------
+        >>> import cudf
+        >>> series = cudf.Series([10, 10, 20, 30, 40])
+        >>> series
+        0    10
+        1    10
+        2    20
+        3    30
+        4    40
+        dtype: int64
+        >>> series.std()
+        13.038404810405298
+        >>> series.std(ddof=2)
+        15.05545305418162
         """
 
         if axis not in (None, 0):
@@ -3456,6 +4949,20 @@ class Series(Frame, Serializable):
         -----
         Parameters currently not supported are `axis`, `level` and
         `numeric_only`
+
+        Examples
+        --------
+        >>> import cudf
+        >>> series = cudf.Series([10, 11, 12, 0, 1])
+        >>> series
+        0    10
+        1    11
+        2    12
+        3     0
+        4     1
+        dtype: int64
+        >>> series.var()
+        33.7
         """
 
         if axis not in (None, 0):
@@ -3647,6 +5154,13 @@ class Series(Frame, Serializable):
         -----
         Parameters currently not supported are `axis`, `level` and
         `numeric_only`
+
+        Examples
+        --------
+        >>> import cudf
+        >>> series = cudf.Series([1, 2, 3, 4])
+        >>> series.kurtosis()
+        -1.1999999999999904
         """
         if axis not in (None, 0):
             raise NotImplementedError("axis parameter is not implemented yet")
@@ -3683,6 +5197,22 @@ class Series(Frame, Serializable):
         -----
         Parameters currently not supported are `axis`, `level` and
         `numeric_only`
+
+        Examples
+        --------
+        >>> import cudf
+        >>> series = cudf.Series([1, 2, 3, 4, 5, 6, 6])
+        >>> series
+        0    1
+        1    2
+        2    3
+        3    4
+        4    5
+        5    6
+        6    6
+        dtype: int64
+        >>> series.skew()
+        -0.288195490292614
         """
 
         if axis not in (None, 0):
@@ -3834,6 +5364,31 @@ class Series(Frame, Serializable):
     def unique(self):
         """
         Returns unique values of this Series.
+
+        Returns
+        -------
+        Series
+            A series with only the unique values.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> series = cudf.Series(['a', 'a', 'b', None, 'b', None, 'c'])
+        >>> series
+        0       a
+        1       a
+        2       b
+        3    <NA>
+        4       b
+        5    <NA>
+        6       c
+        dtype: object
+        >>> series.unique()
+        0    <NA>
+        1       a
+        2       b
+        3       c
+        dtype: object
         """
         res = self._column.unique()
         return Series(res, name=self.name)
@@ -3841,6 +5396,31 @@ class Series(Frame, Serializable):
     def nunique(self, method="sort", dropna=True):
         """Returns the number of unique values of the Series: approximate version,
         and exact version to be moved to libgdf
+
+        Excludes NA values by default.
+
+        Parameters
+        ----------
+        dropna : bool, default True
+            Don't include NA values in the count.
+
+        Returns
+        -------
+        int
+
+        Examples
+        --------
+        >>> import cudf
+        >>> s = cudf.Series([1, 3, 5, 7, 7])
+        >>> s
+        0    1
+        1    3
+        2    5
+        3    7
+        4    7
+        dtype: int64
+        >>> s.nunique()
+        4
         """
         if method != "sort":
             msg = "non sort based distinct_count() not implemented yet"
@@ -3973,7 +5553,32 @@ class Series(Frame, Serializable):
         return res
 
     def scale(self):
-        """Scale values to [0, 1] in float64
+        """
+        Scale values to [0, 1] in float64
+
+        Returns
+        -------
+        Series
+            A new series with values scaled to [0, 1].
+
+        Examples
+        --------
+        >>> import cudf
+        >>> series = cudf.Series([10, 11, 12, 0.5, 1])
+        >>> series
+        0    10.0
+        1    11.0
+        2    12.0
+        3     0.5
+        4     1.0
+        dtype: float64
+        >>> series.scale()
+        0    0.826087
+        1    0.913043
+        2    1.000000
+        3    0.000000
+        4    0.043478
+        dtype: float64
         """
         vmin = self.min()
         vmax = self.max()
@@ -3984,7 +5589,27 @@ class Series(Frame, Serializable):
     def abs(self):
         """Absolute value of each element of the series.
 
-        Returns a new Series.
+        Returns
+        -------
+        abs
+            Series containing the absolute value of each element.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> series = cudf.Series([-1.10, 2, -3.33, 4])
+        >>> series
+        0   -1.10
+        1    2.00
+        2   -3.33
+        3    4.00
+        dtype: float64
+        >>> series.abs()
+        0    1.10
+        1    2.00
+        2    3.33
+        3    4.00
+        dtype: float64
         """
         return self._unaryop("abs")
 
@@ -3993,10 +5618,31 @@ class Series(Frame, Serializable):
 
     # Rounding
     def ceil(self):
-        """Rounds each value upward to the smallest integral value not less
+        """
+        Rounds each value upward to the smallest integral value not less
         than the original.
 
-        Returns a new Series.
+        Returns
+        -------
+        res
+            Returns a new Series with ceiling value of each element.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> series = cudf.Series([1.1, 2.8, 3.5, 4.5])
+        >>> series
+        0    1.1
+        1    2.8
+        2    3.5
+        3    4.5
+        dtype: float64
+        >>> series.ceil()
+        0    2.0
+        1    3.0
+        2    4.0
+        3    5.0
+        dtype: float64
         """
         return self._unaryop("ceil")
 
@@ -4004,12 +5650,53 @@ class Series(Frame, Serializable):
         """Rounds each value downward to the largest integral value not greater
         than the original.
 
-        Returns a new Series.
+        Returns
+        -------
+        res
+            Returns a new Series with floor of each element.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> series = cudf.Series([-1.9, 2, 0.2, 1.5, 0.0, 3.0])
+        >>> series
+        0   -1.9
+        1    2.0
+        2    0.2
+        3    1.5
+        4    0.0
+        5    3.0
+        dtype: float64
+        >>> series.floor()
+        0   -2.0
+        1    2.0
+        2    0.0
+        3    1.0
+        4    0.0
+        5    3.0
+        dtype: float64
         """
         return self._unaryop("floor")
 
     def hash_values(self):
         """Compute the hash of values in this column.
+
+        Returns
+        -------
+        cupy array
+            A cupy array with hash values.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> series = cudf.Series([10, 120, 30])
+        >>> series
+        0     10
+        1    120
+        2     30
+        dtype: int64
+        >>> series.hash_values()
+        array([-1930516747,   422619251,  -941520876], dtype=int32)
         """
         return Series(self._hash()).values
 
@@ -4030,6 +5717,25 @@ class Series(Frame, Serializable):
         -------
         result : Series
             The encoded Series.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> series = cudf.Series([10, 120, 30])
+        >>> series.hash_encode(stop=200)
+        0     53
+        1     51
+        2    124
+        dtype: int32
+
+        You can choose to include name while hash
+        encoding by specifying `use_name=True`
+
+        >>> series.hash_encode(stop=200, use_name=True)
+        0    131
+        1     29
+        2     76
+        dtype: int32
         """
         assert stop > 0
 
@@ -4069,6 +5775,24 @@ class Series(Frame, Serializable):
             If ``q`` is an array, a Series will be returned where the
             index is ``q`` and the values are the quantiles, otherwise
             a float will be returned.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> series = cudf.Series([1, 2, 3, 4])
+        >>> series
+        0    1
+        1    2
+        2    3
+        3    4
+        dtype: int64
+        >>> series.quantile(0.5)
+        2.5
+        >>> series.quantile([0.25, 0.5, 0.75])
+        0.25    1.75
+        0.50    2.50
+        0.75    3.25
+        dtype: float64
         """
 
         result = self._column.quantile(q, interpolation, exact)
@@ -4252,6 +5976,19 @@ class Series(Frame, Serializable):
         Returns
         -------
         A new Series containing the indices.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> s = cudf.Series([0.2, 6.4, 3.0, 1.6])
+        >>> bins = cudf.Series([0.0, 1.0, 2.5, 4.0, 10.0])
+        >>> inds = s.digitize(bins)
+        >>> inds
+        0    1
+        1    4
+        2    3
+        3    2
+        dtype: int32
         """
         return Series(
             cudf.core.column.numerical.digitize(self._column, bins, right)
@@ -4261,10 +5998,61 @@ class Series(Frame, Serializable):
         """Calculate the difference between values at positions i and i - N in
         an array and store the output in a new array.
 
+        Returns
+        -------
+        Series
+            First differences of the Series.
+
         Notes
         -----
         Diff currently only supports float and integer dtype columns with
         no null values.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> series = cudf.Series([1, 1, 2, 3, 5, 8])
+        >>> series
+        0    1
+        1    1
+        2    2
+        3    3
+        4    5
+        5    8
+        dtype: int64
+
+        Difference with previous row
+
+        >>> series.diff()
+        0    <NA>
+        1       0
+        2       1
+        3       1
+        4       2
+        5       3
+        dtype: int64
+
+        Difference with 3rd previous row
+
+        >>> series.diff(periods=3)
+        0    <NA>
+        1    <NA>
+        2    <NA>
+        3       2
+        4       4
+        5       6
+        dtype: int64
+
+        Difference with following row
+
+        >>> series.diff(periods=-1)
+        0       0
+        1      -1
+        2      -1
+        3      -2
+        4      -3
+        5    <NA>
+        dtype: int64
         """
         if self.has_nulls:
             raise AssertionError(
@@ -4388,6 +6176,25 @@ class Series(Frame, Serializable):
         Difference from pandas:
           - Supports scalar values only for changing name attribute
           - Not supporting : inplace, level
+
+        Examples
+        --------
+        >>> import cudf
+        >>> series = cudf.Series([10, 20, 30])
+        >>> series
+        0    10
+        1    20
+        2    30
+        dtype: int64
+        >>> series.name
+        >>> renamed_series = series.rename('numeric_series')
+        >>> renamed_series
+        0    10
+        1    20
+        2    30
+        Name: numeric_series, dtype: int64
+        >>> renamed_series.name
+        'numeric_series'
         """
         out = self.copy(deep=False)
         out = out.set_index(self.index)
@@ -4561,6 +6368,47 @@ class Series(Frame, Serializable):
         StringIndex(['a' 'b' 'c'], dtype='object')
         """
         return self.index
+
+    def explode(self, ignore_index=False):
+        """
+        Transform each element of a list-like to a row, replicating index
+        values.
+
+        Parameters
+        ----------
+        ignore_index : bool, default False
+            If True, the resulting index will be labeled 0, 1, …, n - 1.
+
+        Returns
+        -------
+        DataFrame
+
+        Examples
+        --------
+        >>> import cudf
+        >>> s = cudf.Series([[1, 2, 3], [], None, [4, 5]])
+        >>> s
+        0    [1, 2, 3]
+        1           []
+        2         None
+        3       [4, 5]
+        dtype: list
+        >>> s.explode()
+        0       1
+        0       2
+        0       3
+        1    <NA>
+        2    <NA>
+        3       4
+        3       5
+        dtype: int64
+        """
+        if not is_list_dtype(self._column.dtype):
+            data = self._data.copy(deep=True)
+            idx = None if ignore_index else self._index.copy(deep=True)
+            return self.__class__._from_data(data, index=idx)
+
+        return super()._explode(self._column_names[0], ignore_index)
 
     _accessors = set()  # type: Set[Any]
 
