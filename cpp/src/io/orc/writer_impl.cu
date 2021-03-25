@@ -1067,6 +1067,10 @@ void writer::impl::write(table_view const &table)
 
   auto streams  = create_streams(orc_columns, stripe_bounds);
   auto enc_data = encode_columns(*device_columns, orc_columns, str_col_ids, stripe_bounds, streams);
+  {
+    dict_index.release();
+    dict_data.release();
+  }
 
   // Assemble individual disparate column chunks into contiguous data streams
   const auto num_index_streams = (num_columns + 1);
