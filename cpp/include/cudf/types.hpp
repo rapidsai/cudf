@@ -137,6 +137,15 @@ enum class nan_policy : bool {
 };
 
 /**
+ * @brief Enum to consider different elements (of floating point types) holding NaN value as equal
+ * or unequal
+ */
+enum class nan_equality : bool {
+  EQUAL,   ///< NaNs compare equal
+  UNEQUAL  ///< NaNs compare unequal
+};
+
+/**
  * @brief
  */
 enum class null_equality : bool {
