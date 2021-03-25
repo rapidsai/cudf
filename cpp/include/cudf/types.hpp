@@ -141,9 +141,8 @@ enum class nan_policy : bool {
  * or unequal
  */
 enum class nan_equality /*unspecified*/ {
-  ALL_EQUAL,       ///< All NaNs compare equal, regardless of sign
-  UNEQUAL,         ///< All NaNs compare unequal (IEE754 behavior)
-  SAME_SIGN_EQUAL  ///< NaNs compare equal only if they have the same sign
+  ALL_EQUAL,  ///< All NaNs compare equal, regardless of sign
+  UNEQUAL     ///< All NaNs compare unequal (IEE754 behavior)
 };
 
 /**
