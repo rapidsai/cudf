@@ -2877,6 +2877,7 @@ class IntervalIndex(GenericIndex):
     Name to be stored in the index.
 
     Returns
+    -------
     IntervalIndex
     """
 
