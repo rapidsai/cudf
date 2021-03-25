@@ -20,6 +20,9 @@ cimport cudf._lib.cpp.groupby as libcudf_groupby
 cimport cudf._lib.cpp.aggregation as libcudf_aggregation
 
 
+# The sets below define the possible aggregations that can be performed on
+# different dtypes. The uppercased versions of these strings correspond to
+# elements of the AggregationKind enum.
 _CATEGORICAL_AGGS = {
     "count",
     "size",

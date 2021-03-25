@@ -261,19 +261,6 @@ class GroupBy(Serializable):
         group_names = grouped_keys.unique()
         return (group_names, offsets, grouped_keys, grouped_values)
 
-    def _agg_func_name_with_args(self, func_name, *args, **kwargs):
-        """
-        Aggregate given an aggregate function name
-        and arguments to the function, e.g.,
-        `_agg_func_name_with_args("quantile", 0.5)`
-        """
-
-        def func(x):
-            return getattr(x, func_name)(*args, **kwargs)
-
-        func.__name__ = func_name
-        return self.agg(func)
-
     def _normalize_aggs(self, aggs):
         """
         Normalize aggs to a dict mapping column names
@@ -584,10 +571,10 @@ class GroupBy(Serializable):
         return cudf.core.window.rolling.RollingGroupby(self, *args, **kwargs)
 
 
-# Set of valid groupby aggregations.
+# Set of valid groupby aggregations that are monkey-patched into the GroupBy
+# namespace.
 _VALID_GROUPBY_AGGS = {
     "count",
-    # "size",  # This aggregation will never happen because GroupBy.Size exists
     "sum",
     "idxmin",
     "idxmax",
@@ -599,15 +586,28 @@ _VALID_GROUPBY_AGGS = {
     "quantile",
     "median",
     "nunique",
-    # "nth",  # This aggregation will never happen because GroupBy.Size exists
     "collect"
 }
 
 
 # Dynamically bind the different aggregation methods.
 for key in _VALID_GROUPBY_AGGS:
+    def _agg_func_name_with_args(self, func_name, *args, **kwargs):
+        """
+        Aggregate given an aggregate function name and arguments to the
+        function, e.g., `_agg_func_name_with_args("quantile", 0.5)`. The named
+        aggregations must be members of _AggregationFactory.
+        """
+
+        def func(x):
+            """Compute the {} of the group.""".format(func_name)
+            return getattr(x, func_name)(*args, **kwargs)
+
+        func.__name__ = func_name
+        return self.agg(func)
+
     setattr(GroupBy, key,
-            functools.partialmethod(GroupBy._agg_func_name_with_args, key))
+            functools.partialmethod(_agg_func_name_with_args, key))
 
 
 class DataFrameGroupBy(GroupBy):
