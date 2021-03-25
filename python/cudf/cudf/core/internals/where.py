@@ -8,7 +8,7 @@ import cudf
 
 def _normalize_scalars(col, other):
     """
-    Try to normalizes scalar values as per col dtype
+    Try to normalize scalar values as per col dtype
     """
     if (
         other is not None
