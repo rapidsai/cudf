@@ -2864,8 +2864,8 @@ class IntervalIndex(GenericIndex):
         IntervalIndex.
 
     closed : {"left", "right", "both", "neither"}, default "right"
-    Whether the intervals are closed on the left-side, right-side,
-    both or neither.
+        Whether the intervals are closed on the left-side, right-side,
+        both or neither.
 
     dtype : dtype or None, default None
     If None, dtype will be inferred.
