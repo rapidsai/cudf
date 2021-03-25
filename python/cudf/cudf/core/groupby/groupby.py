@@ -13,6 +13,8 @@ from cudf.core.abc import Serializable
 from cudf.utils.utils import cached_property
 
 
+# Note that all valid aggregation methods (e.g. GroupBy.min) are bound to the
+# class after its definition (see below).
 class GroupBy(Serializable):
 
     _MAX_GROUPS_BEFORE_WARN = 100
@@ -57,14 +59,6 @@ class GroupBy(Serializable):
             self.grouping = by
         else:
             self.grouping = _Grouping(obj, by, level)
-
-    def __getattribute__(self, key):
-        try:
-            return super().__getattribute__(key)
-        except AttributeError:
-            if key in libgroupby._GROUPBY_AGGS:
-                return functools.partial(self._agg_func_name_with_args, key)
-            raise
 
     def __iter__(self):
         group_names, offsets, _, grouped_values = self._grouped()
@@ -588,6 +582,32 @@ class GroupBy(Serializable):
         cudf.core.window.Rolling
         """
         return cudf.core.window.rolling.RollingGroupby(self, *args, **kwargs)
+
+
+# Set of valid groupby aggregations.
+_VALID_GROUPBY_AGGS = {
+    "count",
+    "size",
+    "sum",
+    "idxmin",
+    "idxmax",
+    "min",
+    "max",
+    "mean",
+    "var",
+    "std",
+    "quantile",
+    "median",
+    "nunique",
+    "nth",
+    "collect"
+}
+
+
+# Dynamically bind the different aggregation methods.
+for key in _VALID_GROUPBY_AGGS:
+    setattr(GroupBy, key,
+            functools.partialmethod(GroupBy._agg_func_name_with_args, key))
 
 
 class DataFrameGroupBy(GroupBy):

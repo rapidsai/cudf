@@ -20,24 +20,6 @@ cimport cudf._lib.cpp.groupby as libcudf_groupby
 cimport cudf._lib.cpp.aggregation as libcudf_aggregation
 
 
-_GROUPBY_AGGS = {
-    "count",
-    "size",
-    "sum",
-    "idxmin",
-    "idxmax",
-    "min",
-    "max",
-    "mean",
-    "var",
-    "std",
-    "quantile",
-    "median",
-    "nunique",
-    "nth",
-    "collect"
-}
-
 _CATEGORICAL_AGGS = {
     "count",
     "size",
