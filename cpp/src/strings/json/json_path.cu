@@ -702,7 +702,7 @@ __device__ parse_result parse_json_path(json_state& j_state,
               PARSE_TRY(ctx.j_state.next_matching_element(any, false));
               if (last_result == parse_result::EMPTY) { break; }
             }
-            // if we didn't end up at the index we requested, this is an invalid indexe
+            // if we didn't end up at the index we requested, this is an invalid index
             if (idx - 1 != op.index) { return parse_result::ERROR; }
             push_context(ctx.j_state, ctx.commands + 1, ctx.list_element);
           }
