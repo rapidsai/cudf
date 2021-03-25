@@ -34,11 +34,13 @@ import org.apache.arrow.memory.BufferAllocator;
 import org.apache.arrow.memory.ReferenceManager;
 import org.apache.arrow.memory.RootAllocator;
 import org.apache.arrow.vector.BigIntVector;
+import org.apache.arrow.vector.BitVector;
 import org.apache.arrow.vector.DateDayVector;
 import org.apache.arrow.vector.DecimalVector;
 import org.apache.arrow.vector.Float4Vector;
 import org.apache.arrow.vector.Float8Vector;
 import org.apache.arrow.vector.IntVector;
+import org.apache.arrow.vector.TimeStampMilliVector;
 import org.apache.arrow.vector.VarCharVector;
 import org.apache.arrow.vector.compare.VectorEqualsVisitor;
 import org.apache.arrow.vector.complex.ListVector;
@@ -54,6 +56,51 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class ColumnVectorToArrowTest extends CudfTestBase {
+
+  @Test
+  void testArrowBool() {
+    BufferAllocator allocator = new RootAllocator(Long.MAX_VALUE);
+    try (BitVector vector = new BitVector("vec", allocator)) {
+      ArrayList<Boolean> expectedArr = new ArrayList<Boolean>();
+      int count = 10000;
+      for (int i = 0; i < count; i++) {
+        if (i == 3) {
+          // add a null in there somewhere
+          vector.setNull(i);
+          expectedArr.add(null);
+        } else {
+          if (i % 2 == 0) {
+            expectedArr.add(true);
+            ((BitVector) vector).setSafe(i, 1);
+          } else {
+            expectedArr.add(false);
+            ((BitVector) vector).setSafe(i, 0);
+          }
+        }
+      }
+      vector.setValueCount(count);
+      try (ColumnVector toConvert = ColumnVector.fromBoxedBooleans(expectedArr.toArray(new Boolean[0]));
+           ArrowColumnInfo res = ColumnVector.toArrow(toConvert)) {
+        assertEquals(1, toConvert.getNullCount());
+        ArrowBuf validityBuf = null;
+        if (res.getValidityBufferAddress() != 0) {
+          validityBuf = new ArrowBuf(ReferenceManager.NO_OP, null,
+            (int)res.getValidityBufferSize(), res.getValidityBufferAddress(), false);
+        }
+        ArrowBuf dataBuf = new ArrowBuf(ReferenceManager.NO_OP, null, (int)res.getDataBufferSize(),
+          res.getDataBufferAddress(), false);
+        ArrowFieldNode fieldNode = new ArrowFieldNode((int)res.getNumRows(), (int)res.getNullCount());
+        BitVector v1 = new BitVector("col1", allocator);
+        v1.loadFieldBuffers(fieldNode, Stream.of(validityBuf, dataBuf).collect(Collectors.toList()));
+        assertEquals(1, v1.getNullCount());
+        assertEquals(1, vector.getNullCount());
+        assertEquals(1, v1.get(0));
+        assertEquals(0, v1.get(1));
+        assertEquals(1, v1.get(2));
+        assertTrue(VectorEqualsVisitor.vectorEquals(v1, vector));
+      }
+    }
+  }
 
   @Test
   void testArrowInt() {
@@ -276,6 +323,43 @@ public class ColumnVectorToArrowTest extends CudfTestBase {
         v1.loadFieldBuffers(fieldNode, Stream.of(validityBuf, dataBuf).collect(Collectors.toList()));
         assertEquals(v1.getNullCount(), 1);
         assertEquals(vector.getNullCount(), 1);
+        assertTrue(VectorEqualsVisitor.vectorEquals(v1, vector));
+      }
+    }
+  }
+
+  @Test
+  void testArrowTimestampMs() {
+    BufferAllocator allocator = new RootAllocator(Long.MAX_VALUE);
+    try (TimeStampMilliVector vector = new TimeStampMilliVector("vec", allocator)) {
+      ArrayList<Long> expectedArr = new ArrayList<Long>();
+      int count = 10000;
+      for (int i = 0; i < count; i++) {
+        if (i == 3) {
+          // add a null in there somewhere
+          vector.setNull(i);
+          expectedArr.add(null);
+        } else {
+          expectedArr.add(new Long(i));
+          ((TimeStampMilliVector) vector).setSafe(i, i);
+        }
+      }
+      vector.setValueCount(count);
+      try (ColumnVector toConvert = ColumnVector.timestampMilliSecondsFromBoxedLongs(expectedArr.toArray(new Long[0]));
+           ArrowColumnInfo res = ColumnVector.toArrow(toConvert)) {
+        assertEquals(1, toConvert.getNullCount());
+        ArrowBuf validityBuf = null;
+        if (res.getValidityBufferAddress() != 0) {
+          validityBuf = new ArrowBuf(ReferenceManager.NO_OP, null,
+            (int)res.getValidityBufferSize(), res.getValidityBufferAddress(), false);
+        }
+        ArrowBuf dataBuf = new ArrowBuf(ReferenceManager.NO_OP, null, (int)res.getDataBufferSize(),
+          res.getDataBufferAddress(), false);
+        ArrowFieldNode fieldNode = new ArrowFieldNode((int)res.getNumRows(), (int)res.getNullCount());
+        TimeStampMilliVector v1 = new TimeStampMilliVector("col1", allocator);
+        v1.loadFieldBuffers(fieldNode, Stream.of(validityBuf, dataBuf).collect(Collectors.toList()));
+        assertEquals(1, v1.getNullCount());
+        assertEquals(1, vector.getNullCount());
         assertTrue(VectorEqualsVisitor.vectorEquals(v1, vector));
       }
     }
