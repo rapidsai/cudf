@@ -27,7 +27,7 @@ namespace strings {
 namespace detail {
 
 /**
- * @copydoc cudf::get_json_object
+ * @copydoc cudf::strings::get_json_object
  *
  * @param stream CUDA stream used for device memory operations and kernel launches
  */

@@ -53,7 +53,7 @@ constexpr int DEBUG_NEWLINE_LEN = 0;
 using namespace cudf;
 
 /**
- * @brief Result of calling a parse type function.
+ * @brief Result of calling a parse function.
  *
  * The primary use of this is to distinguish between "success" and
  * "success but no data" return cases.  For example, if you are reading the
@@ -193,6 +193,10 @@ class parser {
   }
 };
 
+/**
+ * @brief Output buffer object.  Used during the preprocess/size-computation step
+ * and the actual output step.
+ */
 struct json_output {
   size_t output_max_len;
   size_t output_len;
@@ -210,25 +214,20 @@ struct json_output {
 
 enum json_element_type { NONE, OBJECT, ARRAY, VALUE };
 
+/**
+ * @brief Parsing class that holds the current state of the json to be parse and provides
+ * functions for navigating through it.
+ */
 class json_state : private parser {
  public:
-  constexpr json_state()
-    : parser(),
-      element(json_element_type::NONE),
-      cur_el_start(nullptr),
-      cur_el_type(json_element_type::NONE)
-  {
-  }
+  constexpr json_state() : parser(), cur_el_start(nullptr), cur_el_type(json_element_type::NONE) {}
   constexpr json_state(const char* _input, int64_t _input_len)
-    : parser(_input, _input_len),
-      element(json_element_type::NONE),
-      cur_el_start(nullptr),
-      cur_el_type(json_element_type::NONE)
+    : parser(_input, _input_len), cur_el_start(nullptr), cur_el_type(json_element_type::NONE)
   {
   }
 
   constexpr json_state(json_state const& j)
-    : parser(j), element(j.element), cur_el_start(j.cur_el_start), cur_el_type(j.cur_el_type)
+    : parser(j), cur_el_start(j.cur_el_start), cur_el_type(j.cur_el_type)
   {
   }
 
@@ -287,10 +286,13 @@ class json_state : private parser {
     return parse_result::SUCCESS;
   }
 
+  // skip the next element
   constexpr parse_result skip_element() { return extract_element(nullptr, false); }
 
+  // advance to the next element
   constexpr parse_result next_element() { return next_element_internal(false); }
 
+  // advance inside the current element
   constexpr parse_result child_element(bool as_field = false)
   {
     // cannot retrieve a field from an array
@@ -298,6 +300,7 @@ class json_state : private parser {
     return next_element_internal(true);
   }
 
+  // return the next element that matches the specified name.
   constexpr parse_result next_matching_element(json_string const& name, bool inclusive)
   {
     // if we're not including the current element, skip it
@@ -323,6 +326,7 @@ class json_state : private parser {
   }
 
  private:
+  // parse a value - either a string or a number/null/bool
   constexpr parse_result parse_value()
   {
     if (!parse_whitespace()) { return parse_result::ERROR; }
@@ -376,28 +380,37 @@ class json_state : private parser {
     return parse_result::SUCCESS;
   }
 
-  json_element_type element;
-  const char* cur_el_start;
-  json_string cur_el_name;
-  json_element_type cur_el_type;
+  const char* cur_el_start;       // pointer to the first character of the -value- of the current
+                                  // element - not the name
+  json_string cur_el_name;        // name of the current element (if applicable)
+  json_element_type cur_el_type;  // type of the current element
 };
 
 enum class path_operator_type { ROOT, CHILD, CHILD_WILDCARD, CHILD_INDEX, ERROR, END };
 
+/**
+ * @brief A "command" operator used to query a json string.  A full query is
+ * an array of these operators applied to the incoming json string,
+ */
 struct path_operator {
   constexpr path_operator() : type(path_operator_type::ERROR), index(-1) {}
   constexpr path_operator(path_operator_type _type) : type(_type), index(-1) {}
 
-  path_operator_type type;
-  json_string name;
-  int index;
+  path_operator_type type;  // operator type
+  json_string name;         // name to match against (if applicable)
+  int index;                // index for subscript operator
 };
 
-// current state of the JSONPath
+/**
+ * @brief Parsing class that holds the current state of the JSONPath string to be parsed
+ * and provides functions for navigating through it. This is only called on the host
+ * during the preprocess step which builds a command buffer that the gpu uses.
+ */
 class path_state : private parser {
  public:
   path_state(const char* _path, size_t _path_len) : parser(_path, _path_len) {}
 
+  // get the next operator in the JSONPath string
   path_operator get_next_operator()
   {
     if (eof()) { return {path_operator_type::END}; }
@@ -498,6 +511,15 @@ class path_state : private parser {
   }
 };
 
+/**
+ * @brief Preprocess the incoming JSONPath string on the host to generate a
+ * command buffer for use by the GPU.
+ *
+ * @param json_path The incoming json path
+ * @param stream Cuda stream to perform any gpu actions on
+ * @returns A tuple containing the command buffer, the maximum stack depth required and whether or
+ * not the command buffer is empty.
+ */
 std::tuple<rmm::device_uvector<path_operator>, int, bool> build_command_buffer(
   cudf::string_scalar const& json_path, rmm::cuda_stream_view stream)
 {
@@ -547,18 +569,25 @@ std::tuple<rmm::device_uvector<path_operator>, int, bool> build_command_buffer(
     if (last_result == parse_result::ERROR) { return parse_result::ERROR; } \
   } while (0)
 
+/**
+ * @brief Parse a single json string using the provided command buffer
+ *
+ * @param j_state The incoming json string and associated parser
+ * @param commands The command buffer to be applied to the string. Always ends with a
+ * path_operator_type::END
+ * @param output Buffer user to store the results of the query
+ * @returns A result code indicating success/fail/empty.
+ */
 template <int max_command_stack_depth>
-__device__ parse_result parse_json_path(json_state& _j_state,
-                                        path_operator const* _commands,
-                                        json_output& output,
-                                        bool _list_element = false)
+__device__ parse_result parse_json_path(json_state& j_state,
+                                        path_operator const* commands,
+                                        json_output& output)
 {
   // manually maintained context stack in lieu of calling parse_json_path recursively.
   struct context {
     json_state j_state;
     path_operator const* commands;
     bool list_element;
-    // int element_count;
     bool state_flag;
   };
   context stack[max_command_stack_depth];
@@ -566,11 +595,9 @@ __device__ parse_result parse_json_path(json_state& _j_state,
   auto push_context = [&stack, &stack_pos](json_state const& _j_state,
                                            path_operator const* _commands,
                                            bool _list_element = false,
-                                           /* int _element_count = 0,*/
-                                           bool _state_flag = false) {
+                                           bool _state_flag   = false) {
     if (stack_pos == max_command_stack_depth - 1) { return false; }
-    stack[stack_pos++] =
-      context{_j_state, _commands, _list_element, /*_element_count,*/ _state_flag};
+    stack[stack_pos++] = context{_j_state, _commands, _list_element, _state_flag};
     return true;
   };
   auto pop_context = [&stack, &stack_pos](context& c) {
@@ -580,7 +607,7 @@ __device__ parse_result parse_json_path(json_state& _j_state,
     }
     return false;
   };
-  push_context(_j_state, _commands, _list_element);
+  push_context(j_state, commands, false);
 
   parse_result last_result = parse_result::SUCCESS;
   context ctx;
@@ -703,6 +730,20 @@ __device__ parse_result parse_json_path(json_state& _j_state,
 // a jsonpath containing 7 nested wildcards so this is probably reasonable.
 constexpr int max_command_stack_depth = 8;
 
+/**
+ * @brief Parse a single json string using the provided command buffer
+ *
+ * This function exists primarily as a shim for debugging purposes.
+ *
+ * @param input The incoming json string
+ * @param input_len Size of the incoming json string
+ * @param commands The command buffer to be applied to the string. Always ends with a
+ * path_operator_type::END
+ * @param out_buf Buffer user to store the results of the query (nullptr in the size computation
+ * step)
+ * @param out_buf_size Size of the output buffer
+ * @returns A pair containing the result code the output buffer.
+ */
 __device__ thrust::pair<parse_result, json_output> get_json_object_single(
   char const* input,
   size_t input_len,
@@ -725,6 +766,13 @@ __device__ thrust::pair<parse_result, json_output> get_json_object_single(
  * output sizes.  On the second pass it fills in the provided output buffers
  * (chars and validity)
  *
+ * @param chars The chars child column of the incoming strings column
+ * @param offsets The offsets of the incoming strings column
+ * @param commands JSONPath command buffer
+ * @param out_buf Buffer user to store the results of the query (nullptr in the size computation
+ * step)
+ * @param out_validity Output validity buffer (nullptr in the size computation step)
+ * @param num_rows Number of rows in the input column
  */
 __global__ void get_json_object_kernel(char const* chars,
                                        size_type const* offsets,
@@ -766,6 +814,9 @@ __global__ void get_json_object_kernel(char const* chars,
   }
 }
 
+/**
+ * @copydoc cudf::strings::detail::get_json_object
+ */
 std::unique_ptr<cudf::column> get_json_object(cudf::strings_column_view const& col,
                                               cudf::string_scalar const& json_path,
                                               rmm::cuda_stream_view stream,
@@ -852,6 +903,9 @@ std::unique_ptr<cudf::column> get_json_object(cudf::strings_column_view const& c
 }  // namespace
 }  // namespace detail
 
+/**
+ * @copydoc cudf::strings::get_json_object
+ */
 std::unique_ptr<cudf::column> get_json_object(cudf::strings_column_view const& col,
                                               cudf::string_scalar const& json_path,
                                               rmm::mr::device_memory_resource* mr)
