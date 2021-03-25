@@ -64,6 +64,7 @@ class column_view_base {
   template <typename T = void>
   T const* head() const noexcept
   {
+    // TODO Replace with enable_if
     static_assert(std::is_same<T, void>::value or cudf::is_numeric<T>() or cudf::is_chrono<T>() or
                     cudf::is_boolean<T>(),
                   "");
