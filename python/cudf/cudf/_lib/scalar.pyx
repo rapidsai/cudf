@@ -248,9 +248,9 @@ cdef _set_decimal64_from_scalar(unique_ptr[scalar]& s,
                                 bool valid=True):
 
                             
-    from cudf.utils.dtypes import decimal_as_int64
+    from cudf.core.column.decimal import _decimal_to_int64
     from decimal import Decimal
-    value = decimal_as_int64(Decimal(np.format_float_positional(value, dtype.scale))) if valid else 0
+    value = _decimal_to_int64(value) if valid else 0
     s.reset(
         new fixed_point_scalar[decimal64](<int64_t>np.int64(value), scale_type(dtype.scale), valid)
     )
