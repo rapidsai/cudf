@@ -1659,7 +1659,7 @@ class DataFrame(Frame, Serializable):
             other = other.reindex(self.index, axis=0)
 
         source_df = self.copy(deep=False)
-        for col in source_df.columns:
+        for col in source_df._column_names:
             this = source_df[col]
             that = other[col]
 
