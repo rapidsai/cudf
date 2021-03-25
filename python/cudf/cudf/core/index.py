@@ -2860,8 +2860,8 @@ class IntervalIndex(GenericIndex):
     Parameters
     ----------
     data : array-like (1-dimensional)
-    Array-like containing Interval objects from which to build the
-    IntervalIndex.
+        Array-like containing Interval objects from which to build the
+        IntervalIndex.
 
     closed : {"left", "right", "both", "neither"}, default "right"
     Whether the intervals are closed on the left-side, right-side,
