@@ -19,8 +19,8 @@ from typing_extensions import Literal
 import cudf
 from cudf import _lib as libcudf
 from cudf._typing import ColumnLike, DataFrameOrSeries
+from cudf.core._internals import where as where_internals
 from cudf.core.column import as_column, build_categorical_column, column_empty
-from cudf.core.internals import where as where_internals
 from cudf.utils.dtypes import (
     is_categorical_dtype,
     is_column_like,
