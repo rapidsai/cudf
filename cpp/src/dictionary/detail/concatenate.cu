@@ -62,8 +62,7 @@ struct compute_children_offsets_fn {
    *
    * @param columns The input dictionary columns.
    */
-  compute_children_offsets_fn(std::vector<column_view> const& columns)
-    : columns_ptrs{columns.size()}
+  compute_children_offsets_fn(host_span<column_view const> columns) : columns_ptrs{columns.size()}
   {
     std::transform(
       columns.begin(), columns.end(), columns_ptrs.begin(), [](auto& cv) { return &cv; });
@@ -187,7 +186,7 @@ struct dispatch_compute_indices {
 
 }  // namespace
 
-std::unique_ptr<column> concatenate(std::vector<column_view> const& columns,
+std::unique_ptr<column> concatenate(host_span<column_view const> columns,
                                     rmm::cuda_stream_view stream,
                                     rmm::mr::device_memory_resource* mr)
 {
