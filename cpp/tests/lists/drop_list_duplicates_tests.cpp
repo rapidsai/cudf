@@ -76,12 +76,28 @@ static void test_floating_point(std::vector<float_type> const& h_input,
                                 std::unordered_set<float_type> const& results_expected,
                                 cudf::nan_equality nans_equal)
 {
-  // If NaNs are considered as equal value, the final result should always contain at max ONE NaN
-  // entry per list
-  std::size_t const num_NaNs =
-    nans_equal == cudf::nan_equality::ALL_EQUAL
-      ? std::size_t{1}
-      : std::count_if(h_input.begin(), h_input.end(), [](auto x) { return std::isnan(x); });
+  std::size_t num_NaNs;
+  switch (nans_equal) {
+    case cudf::nan_equality::ALL_EQUAL: {
+      auto const has_nan =
+        std::any_of(h_input.begin(), h_input.end(), [](auto x) { return std::isnan(x); });
+      num_NaNs = static_cast<size_t>(has_nan);
+      break;
+    }
+    case cudf::nan_equality::UNEQUAL: {
+      num_NaNs =
+        std::count_if(h_input.begin(), h_input.end(), [](auto x) { return std::isnan(x); });
+      break;
+    }
+    default: {  // case cudf::nan_equality::SAME_SIGN_EQUAL:
+      auto const has_positive_nan = std::any_of(h_input.begin(), h_input.end(), [](auto x) {
+        return std::isnan(x) and not std::signbit(x);
+      });
+      auto const has_negative_nan = std::any_of(
+        h_input.begin(), h_input.end(), [](auto x) { return std::isnan(x) and std::signbit(x); });
+      num_NaNs = static_cast<size_t>(has_positive_nan) + static_cast<size_t>(has_negative_nan);
+    }
+  }
 
   auto const results_col = cudf::lists::drop_list_duplicates(
     cudf::lists_column_view{LIST_COL_FLT(h_input.begin(), h_input.end())},
@@ -109,8 +125,9 @@ TEST_F(DropListDuplicatesTest, FloatingPointTestsWithNaNs)
   std::vector<float_type> h_input{
     0, -1, 1, NaN, 2, 0, neg_NaN, 1, -2, 2, 0, 1, 2, neg_NaN, NaN, NaN, NaN, neg_NaN};
   std::unordered_set<float_type> results_expected{-2, -1, 0, 1, 2};
-  test_floating_point(h_input, results_expected, cudf::nan_equality::UNEQUAL);
   test_floating_point(h_input, results_expected, cudf::nan_equality::ALL_EQUAL);
+  test_floating_point(h_input, results_expected, cudf::nan_equality::UNEQUAL);
+  test_floating_point(h_input, results_expected, cudf::nan_equality::SAME_SIGN_EQUAL);
 }
 
 TEST_F(DropListDuplicatesTest, FloatingPointTestsWithInfsAndNaNs)
@@ -119,8 +136,9 @@ TEST_F(DropListDuplicatesTest, FloatingPointTestsWithInfsAndNaNs)
                                   neg_NaN, 2, -1,      0,   neg_NaN, 1,       2,   Inf,    0,   1,
                                   neg_Inf, 2, neg_NaN, Inf, neg_NaN, neg_NaN, NaN, neg_Inf};
   std::unordered_set<float_type> results_expected{-2, -1, 0, 1, 2, neg_Inf, Inf};
-  test_floating_point(h_input, results_expected, cudf::nan_equality::UNEQUAL);
   test_floating_point(h_input, results_expected, cudf::nan_equality::ALL_EQUAL);
+  test_floating_point(h_input, results_expected, cudf::nan_equality::UNEQUAL);
+  test_floating_point(h_input, results_expected, cudf::nan_equality::SAME_SIGN_EQUAL);
 }
 
 TEST_F(DropListDuplicatesTest, StringTestsNonNull)
