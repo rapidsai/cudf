@@ -18,6 +18,7 @@
 
 #include <cudf/structs/structs_column_view.hpp>
 #include <cudf/utilities/error.hpp>
+#include <cudf/utilities/span.hpp>
 
 namespace cudf {
 namespace structs {
@@ -27,7 +28,7 @@ namespace detail {
  * @copydoc cudf::structs::detail::extract_ordered_struct_children
  */
 std::vector<std::vector<column_view>> extract_ordered_struct_children(
-  std::vector<column_view> const& struct_cols)
+  host_span<column_view const> struct_cols)
 {
   auto const num_children = struct_cols[0].num_children();
   auto const num_cols     = static_cast<size_type>(struct_cols.size());
