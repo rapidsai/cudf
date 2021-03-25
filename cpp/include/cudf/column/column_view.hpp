@@ -16,6 +16,9 @@
 #pragma once
 
 #include <cudf/types.hpp>
+#include <cudf/utilities/traits.hpp>
+
+
 #include <vector>
 
 /**
@@ -61,6 +64,9 @@ class column_view_base {
   template <typename T = void>
   T const* head() const noexcept
   {
+    static_assert(std::is_same<T, void>::value or cudf::is_numeric<T>() or cudf::is_chrono<T>() or
+                    cudf::is_boolean<T>(),
+                  "");
     return static_cast<T const*>(_data);
   }
 
