@@ -1,4 +1,5 @@
 # Copyright (c) 2020-2021, NVIDIA CORPORATION.
+import functools
 
 import pandas as pd
 import pyarrow as pa
@@ -161,6 +162,57 @@ def test_take_invalid(invalid, exception):
         gs.list.take(invalid)
 
 
+def key_func_builder(x, na_position):
+    if x is None:
+        if na_position == "first":
+            return -1e8
+        else:
+            return 1e8
+    else:
+        return x
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        [[4, 2, None, 9], [8, 8, 2], [2, 1]],
+        [[4, 2, None, 9], [8, 8, 2], None],
+        [[4, 2, None, 9], [], None],
+    ],
+)
+@pytest.mark.parametrize(
+    "index",
+    [
+        None,
+        pd.Index(["a", "b", "c"]),
+        pd.MultiIndex.from_tuples(
+            [(0, "a"), (0, "b"), (1, "a")], names=["l0", "l1"]
+        ),
+    ],
+)
+@pytest.mark.parametrize("ascending", [True, False])
+@pytest.mark.parametrize("na_position", ["first", "last"])
+@pytest.mark.parametrize("ignore_index", [True, False])
+def test_sort_values(data, index, ascending, na_position, ignore_index):
+    key_func = functools.partial(key_func_builder, na_position=na_position)
+
+    ps = pd.Series(data, index=index)
+    gs = cudf.from_pandas(ps)
+
+    expected = ps.apply(
+        lambda x: sorted(x, key=key_func, reverse=not ascending)
+        if x is not None
+        else None
+    )
+    if ignore_index:
+        expected.reset_index(drop=True, inplace=True)
+    got = gs.list.sort_values(
+        ascending=ascending, na_position=na_position, ignore_index=ignore_index
+    )
+
+    assert_eq(expected, got)
+
+
 @pytest.mark.parametrize(
     "data, index, expect",
     [
@@ -197,48 +249,35 @@ def test_get_nulls():
 
 
 @pytest.mark.parametrize(
-    "data, value, expect",
+    "data, scalar, expect",
     [
-        ([[1, 2, 3], [3, 4, 5], [4, 5, 6]], 4, [False, True, True]),
-        (
-            [[1, 2.0, 3.0], [3.0, 4.0, 5], [4.0, 5, 6.0]],
-            4.0,
-            [False, True, True],
-        ),
-        (
-            [["a", "b", "c"], ["b", "e", "f"], ["e", "g", "m"]],
-            "b",
-            [True, True, False],
-        ),
+        ([[1, 2, 3], []], 1, [True, False],),
+        ([[1, 2, 3], [], [3, 4, 5]], 6, [False, False, False],),
+        ([[1.0, 2.0, 3.0], None, []], 2.0, [True, None, False],),
+        ([[None, "b", "c"], [], ["b", "e", "f"]], "b", [True, False, True],),
+        ([[None, 2, 3], None, []], 1, [None, None, False]),
+        ([[None, "b", "c"], [], ["b", "e", "f"]], "d", [None, False, False],),
     ],
 )
-def test_contains_scalar(data, value, expect):
+def test_contains_scalar(data, scalar, expect):
     sr = cudf.Series(data)
-    search_key = cudf.Scalar(value, sr.dtype.element_type)
     expect = cudf.Series(expect)
-    got = sr.list.contains(search_key)
+    got = sr.list.contains(cudf.Scalar(scalar, sr.dtype.element_type))
     assert_eq(expect, got)
 
 
-def test_contains_invalid_search_key():
-    sr = cudf.Series([[1.0, 2.0, 3.0], [], [5.0, 7.0, 8.0]])
-    search_key = cudf.Scalar(4.0, sr.dtype.element_type)
-    expect = cudf.Series([False, False, False])
-    got = sr.list.contains(search_key)
-    assert_eq(expect, got)
-
-
-def test_contains_null_search_key():
-    sr = cudf.Series([[1, 2, 3], [3, 4, 5], [4, 5, 6]])
-    search_key = cudf.Scalar(cudf.NA, sr.dtype.element_type)
-    expect = cudf.Series([False, False, False])
-    got = sr.list.contains(search_key)
-    assert_eq(expect, got)
-
-
-def test_contains_null_rows():
-    sr = cudf.Series([[], [], []])
-    search_key = cudf.Scalar(cudf.NA, sr.dtype.element_type)
-    expect = cudf.Series([False, False, False])
-    got = sr.list.contains(search_key)
+@pytest.mark.parametrize(
+    "data, expect",
+    [
+        ([[1, 2, 3], []], [None, None],),
+        ([[1.0, 2.0, 3.0], None, []], [None, None, None],),
+        ([[None, 2, 3], [], None], [None, None, None],),
+        ([[1, 2, 3], [3, 4, 5]], [None, None],),
+        ([[], [], []], [None, None, None],),
+    ],
+)
+def test_contains_null_search_key(data, expect):
+    sr = cudf.Series(data)
+    expect = cudf.Series(expect)
+    got = sr.list.contains(cudf.Scalar(cudf.NA, sr.dtype.element_type))
     assert_eq(expect, got)
