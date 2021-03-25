@@ -18,6 +18,7 @@
 #include <cudf/scalar/scalar.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
 #include <string>
+#include "cudf/utilities/traits.hpp"
 
 namespace cudf {
 namespace jit {
@@ -26,14 +27,14 @@ struct get_data_ptr_functor {
    * @brief Gets the data pointer from a column_view
    */
   template <typename T>
-  std::enable_if_t<is_fixed_width<T>(), const void*> operator()(column_view const& view)
+  std::enable_if_t<is_rep_layout_compatible<T>(), const void*> operator()(column_view const& view)
   {
     return static_cast<const void*>(view.template data<T>());
   }
 
   // TODO: both the failing operators can be combined into single template
   template <typename T>
-  std::enable_if_t<not is_fixed_width<T>(), const void*> operator()(column_view const& view)
+  std::enable_if_t<not is_rep_layout_compatible<T>(), const void*> operator()(column_view const& view)
   {
     CUDF_FAIL("Invalid data type for JIT operation");
   }
@@ -42,7 +43,7 @@ struct get_data_ptr_functor {
    * @brief Gets the data pointer from a scalar
    */
   template <typename T>
-  std::enable_if_t<is_fixed_width<T>(), const void*> operator()(scalar const& s)
+  std::enable_if_t<is_rep_layout_compatible<T>(), const void*> operator()(scalar const& s)
   {
     using ScalarType = scalar_type_t<T>;
     auto s1          = static_cast<ScalarType const*>(&s);
@@ -50,7 +51,7 @@ struct get_data_ptr_functor {
   }
 
   template <typename T>
-  std::enable_if_t<not is_fixed_width<T>(), const void*> operator()(scalar const& s)
+  std::enable_if_t<not is_rep_layout_compatible<T>(), const void*> operator()(scalar const& s)
   {
     CUDF_FAIL("Invalid data type for JIT operation");
   }
