@@ -385,26 +385,26 @@ std::unique_ptr<column> grouped_time_range_rolling_window(
  * @brief  Applies a grouping-aware, value range-based rolling window function to the values in a
  *         column.
  *
- * This function aggregates rows in a window around each element of a specified `input` column. 
+ * This function aggregates rows in a window around each element of a specified `input` column.
  * The window is determined based on the values of an ordered `orderby` column, and on the values
  * of a `preceding` and `following` scalar representing an inclusive range of orderby column values.
  *
  *   1. The elements of the `input` column are grouped into distinct groups (e.g. the result of a
  *      groupby), determined by the corresponding values of the columns under `group_keys`. The
  *      window-aggregation cannot cross the group boundaries.
- *   2. Within a group, with all rows sorted by the `orderby` column, the aggregation window 
+ *   2. Within a group, with all rows sorted by the `orderby` column, the aggregation window
  *      for a row at index `i` is determined as follows:
- *      a) If `orderby` is ASCENDING, aggregation window for row `i` includes all `input` rows at 
+ *      a) If `orderby` is ASCENDING, aggregation window for row `i` includes all `input` rows at
  *         index `j` such that:
  *         @code{.pseudo}
  *           (orderby[i] - preceding) <= orderby[j] <= orderby[i] + following
  *         @endcode
- *      b) If `orderby` is DESCENDING, aggregation window for row `i` includes all `input` rows at 
+ *      b) If `orderby` is DESCENDING, aggregation window for row `i` includes all `input` rows at
  *         index `j` such that:
  *         @code{.pseudo}
  *           (orderby[i] + preceding) >= orderby[j] >= orderby[i] - following
  *         @endcode
- *     
+ *
  * Note: This method requires that the rows are presorted by the group keys and orderby column
  * values.
  *
@@ -414,7 +414,7 @@ std::unique_ptr<column> grouped_time_range_rolling_window(
  *   1. If `orderby` column is a TIMESTAMP, the `preceding`/`following` windows are specified
  *      in terms of lower resolution `DURATION` scalars.
  *      E.g. For `orderby` column of type `TIMESTAMP_SECONDS`, the intervals may be
- *      `DURATION_SECONDS` or `DURATION_DAYS`. Higher resolution durations (e.g. 
+ *      `DURATION_SECONDS` or `DURATION_DAYS`. Higher resolution durations (e.g.
  *      `DURATION_NANOSECONDS`) cannot be used with lower resolution timestamps.
  *   2. If the `orderby` column is an integral type (e.g. `INT32`), the `preceding`/`following`
  *      should be the exact same type (`INT32`).
@@ -425,12 +425,12 @@ std::unique_ptr<column> grouped_time_range_rolling_window(
  *   2. num_overtakes: (INT32)  Number of times the driver overtook another car in a lap
  *   3. lap_number:    (INT32)  The number of the lap
  *
- * The `group_range_rolling_window()` function allows one to calculate the total number of overtakes 
+ * The `group_range_rolling_window()` function allows one to calculate the total number of overtakes
  * each driver made within any 3 lap window of each entry:
  *   1. Group/partition the dataset by `driver_id` (This is the group_keys argument.)
  *   2. Sort each group by the `lap_number` (i.e. This is the orderby_column.)
  *   3. Calculate the SUM(num_overtakes) over a window (preceding=1, following=1)
- * 
+ *
  * For the following input:
  *
  *  [ // driver_name,  num_overtakes,  lap_number
@@ -445,7 +445,7 @@ std::unique_ptr<column> grouped_time_range_rolling_window(
  *    {   "lewis",         4,            4        }
  *  ]
  *
- * Partitioning (grouping) by `driver_name`, and ordering by `lap_number` yields the following 
+ * Partitioning (grouping) by `driver_name`, and ordering by `lap_number` yields the following
  * `num_overtakes` vector (with 2 groups, one for each distinct `driver_name`):
  *
  * lap_number:      [ 1,  2,  3,  7,  8,   1,  1,   2,  4 ]
