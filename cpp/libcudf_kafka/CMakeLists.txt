@@ -15,7 +15,7 @@
 #=============================================================================
 cmake_minimum_required(VERSION 3.18 FATAL_ERROR)
 
-project(CUDA_KAFKA VERSION 0.19.0 LANGUAGES CXX)
+project(CUDA_KAFKA VERSION 0.20.0 LANGUAGES CXX)
 
 ###################################################################################################
 # - Build options
