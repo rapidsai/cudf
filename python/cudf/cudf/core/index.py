@@ -2874,7 +2874,7 @@ class IntervalIndex(GenericIndex):
     Copy the input data.
 
     name : object, optional
-    Name to be stored in the index.
+        Name to be stored in the index.
 
     Returns
     -------
