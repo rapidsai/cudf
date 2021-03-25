@@ -179,10 +179,15 @@ class Merge(object):
         left_result = cudf.core.frame.Frame()
         right_result = cudf.core.frame.Frame()
 
+        gather_index = self.left_index or self.right_index
         if left_rows is not None:
-            left_result = lhs._gather(left_rows, nullify=True)
+            left_result = lhs._gather(
+                left_rows, nullify=True, keep_index=gather_index
+            )
         if right_rows is not None:
-            right_result = rhs._gather(right_rows, nullify=True)
+            right_result = rhs._gather(
+                right_rows, nullify=True, keep_index=gather_index
+            )
 
         result = self._merge_results(left_result, right_result)
 
