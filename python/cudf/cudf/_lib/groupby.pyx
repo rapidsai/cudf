@@ -43,26 +43,10 @@ _LIST_AGGS = {
     "collect"
 }
 
-# TODO: For now, the aggs for struct and interval types are the same as
-# strings.  Need to evaluate what's actually reasonable.
 _STRUCT_AGGS = {
-    "count",
-    "size",
-    "max",
-    "min",
-    "nunique",
-    "nth",
-    "collect"
 }
 
 _INTERVAL_AGGS = {
-    "count",
-    "size",
-    "max",
-    "min",
-    "nunique",
-    "nth",
-    "collect"
 }
 
 _DECIMAL_AGGS = {
