@@ -99,15 +99,31 @@ cpdef generate_pandas_metadata(Table table, index):
                 idx = table.index
 
             if isinstance(idx, cudf.core.index.RangeIndex):
-                descr = {
-                    "kind": "range",
-                    "name": table.index.name,
-                    "start": table.index.start,
-                    "stop": table.index.stop,
-                    "step": table.index.step,
-                }
+                if index is None:
+                    descr = {
+                        "kind": "range",
+                        "name": table.index.name,
+                        "start": table.index.start,
+                        "stop": table.index.stop,
+                        "step": table.index.step,
+                    }
+                else:
+                    # When `index=True`, RangeIndex needs to be materialized.
+                    materialized_idx = cudf.Index(idx._values, name=idx.name)
+                    descr = \
+                        _index_level_name(
+                            index_name=materialized_idx.name,
+                            level=level,
+                            column_names=col_names
+                        )
+                    index_levels.append(materialized_idx)
             else:
-                descr = _index_level_name(idx.name, level, col_names)
+                descr = \
+                    _index_level_name(
+                        index_name=idx.name,
+                        level=level,
+                        column_names=col_names
+                    )
                 if is_categorical_dtype(idx):
                     raise ValueError(
                         "'category' column dtypes are currently not "

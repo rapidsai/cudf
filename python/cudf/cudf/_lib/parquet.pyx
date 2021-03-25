@@ -294,7 +294,9 @@ cpdef write_parquet(
     cdef unique_ptr[cudf_io_types.data_sink] _data_sink
     cdef cudf_io_types.sink_info sink = make_sink_info(path, _data_sink)
 
-    if index is not False and not isinstance(table._index, cudf.RangeIndex):
+    if index is True or (
+        index is None and not isinstance(table._index, cudf.RangeIndex)
+    ):
         tv = table.view()
         tbl_meta = make_unique[table_input_metadata](tv)
         for level, idx_name in enumerate(table._index.names):
