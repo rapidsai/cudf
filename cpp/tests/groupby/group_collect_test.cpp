@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020, NVIDIA CORPORATION.
+ * Copyright (c) 2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -26,15 +26,15 @@ namespace cudf {
 namespace test {
 
 template <typename V>
-struct groupby_collect_test : public cudf::test::BaseFixture {
+struct groupby_collect_list_test : public cudf::test::BaseFixture {
 };
 
 using FixedWidthTypesNotBool = cudf::test::Concat<cudf::test::IntegralTypesNotBool,
                                                   cudf::test::FloatingPointTypes,
                                                   cudf::test::TimestampTypes>;
-TYPED_TEST_CASE(groupby_collect_test, FixedWidthTypesNotBool);
+TYPED_TEST_CASE(groupby_collect_list_test, FixedWidthTypesNotBool);
 
-TYPED_TEST(groupby_collect_test, CollectWithoutNulls)
+TYPED_TEST(groupby_collect_list_test, CollectWithoutNulls)
 {
   using K = int32_t;
   using V = TypeParam;
@@ -45,11 +45,11 @@ TYPED_TEST(groupby_collect_test, CollectWithoutNulls)
   fixed_width_column_wrapper<K, int32_t> expect_keys{1, 2};
   lists_column_wrapper<V, int32_t> expect_vals{{1, 2, 3}, {4, 5, 6}};
 
-  auto agg = cudf::make_collect_aggregation();
+  auto agg = cudf::make_collect_list_aggregation();
   test_single_agg(keys, values, expect_keys, expect_vals, std::move(agg));
 }
 
-TYPED_TEST(groupby_collect_test, CollectWithNulls)
+TYPED_TEST(groupby_collect_list_test, CollectWithNulls)
 {
   using K = int32_t;
   using V = TypeParam;
@@ -64,11 +64,11 @@ TYPED_TEST(groupby_collect_test, CollectWithNulls)
   lists_column_wrapper<V, int32_t> expect_vals{
     {{1, 2}, validity.begin()}, {{3, 4}, validity.begin()}, {{5, 6}, validity.begin()}};
 
-  auto agg = cudf::make_collect_aggregation();
+  auto agg = cudf::make_collect_list_aggregation();
   test_single_agg(keys, values, expect_keys, expect_vals, std::move(agg));
 }
 
-TYPED_TEST(groupby_collect_test, CollectLists)
+TYPED_TEST(groupby_collect_list_test, CollectLists)
 {
   using K = int32_t;
   using V = TypeParam;
@@ -83,11 +83,11 @@ TYPED_TEST(groupby_collect_test, CollectLists)
   lists_column_wrapper<V, int32_t> expect_vals{
     {{1, 2}, {3, 4}}, {{5, 6, 7}, LCW{}}, {{9, 10}, {11}}};
 
-  auto agg = cudf::make_collect_aggregation();
+  auto agg = cudf::make_collect_list_aggregation();
   test_single_agg(keys, values, expect_keys, expect_vals, std::move(agg));
 }
 
-TYPED_TEST(groupby_collect_test, dictionary)
+TYPED_TEST(groupby_collect_list_test, dictionary)
 {
   using K = int32_t;
   using V = TypeParam;
@@ -105,10 +105,11 @@ TYPED_TEST(groupby_collect_test, dictionary)
                                              0,
                                              rmm::device_buffer{0});
 
-  test_single_agg(keys, vals, expect_keys, expect_vals->view(), cudf::make_collect_aggregation());
+  test_single_agg(
+    keys, vals, expect_keys, expect_vals->view(), cudf::make_collect_list_aggregation());
 }
 
-TYPED_TEST(groupby_collect_test, CollectFailsWithNullExclusion)
+TYPED_TEST(groupby_collect_list_test, CollectFailsWithNullExclusion)
 {
   using K = int32_t;
   using V = TypeParam;
@@ -121,10 +122,10 @@ TYPED_TEST(groupby_collect_test, CollectFailsWithNullExclusion)
 
   std::vector<groupby::aggregation_request> agg_requests(1);
   agg_requests[0].values = values;
-  agg_requests[0].aggregations.push_back(cudf::make_collect_aggregation(null_policy::EXCLUDE));
+  agg_requests[0].aggregations.push_back(cudf::make_collect_list_aggregation(null_policy::EXCLUDE));
 
   CUDF_EXPECT_THROW_MESSAGE(gby.aggregate(agg_requests),
-                            "null exclusion is not supported on groupby COLLECT aggregation.");
+                            "null exclusion is not supported on groupby COLLECT_LIST aggregation.");
 }
 
 }  // namespace test

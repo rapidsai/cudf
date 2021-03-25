@@ -528,6 +528,46 @@ public class ColumnVectorTest extends CudfTestBase {
   }
 
   @Test
+  void testSpark32BitMurmur3HashTimestamps() {
+    try (ColumnVector v = ColumnVector.timestampMicroSecondsFromBoxedLongs(
+        0L, null, 100L, -100L, 0x123456789abcdefL, null, -0x123456789abcdefL);
+         ColumnVector result = ColumnVector.spark32BitMurmurHash3(42, new ColumnVector[]{v});
+         ColumnVector expected = ColumnVector.fromBoxedInts(-1670924195, 42, 1114849490, 904948192, 657182333, 42, -57193045)) {
+      assertColumnsAreEqual(expected, result);
+    }
+  }
+
+  @Test
+  void testSpark32BitMurmur3HashDecimal64() {
+    try (ColumnVector v = ColumnVector.decimalFromLongs(-7,
+        0L, 100L, -100L, 0x123456789abcdefL, -0x123456789abcdefL);
+         ColumnVector result = ColumnVector.spark32BitMurmurHash3(42, new ColumnVector[]{v});
+         ColumnVector expected = ColumnVector.fromBoxedInts(-1670924195, 1114849490, 904948192, 657182333, -57193045)) {
+      assertColumnsAreEqual(expected, result);
+    }
+  }
+
+  @Test
+  void testSpark32BitMurmur3HashDecimal32() {
+    try (ColumnVector v = ColumnVector.decimalFromInts(-3,
+        0, 100, -100, 0x12345678, -0x12345678);
+         ColumnVector result = ColumnVector.spark32BitMurmurHash3(42, new ColumnVector[]{v});
+         ColumnVector expected = ColumnVector.fromBoxedInts(-1670924195, 1114849490, 904948192, -958054811, -1447702630)) {
+      assertColumnsAreEqual(expected, result);
+    }
+  }
+
+  @Test
+  void testSpark32BitMurmur3HashDates() {
+    try (ColumnVector v = ColumnVector.timestampDaysFromBoxedInts(
+        0, null, 100, -100, 0x12345678, null, -0x12345678);
+         ColumnVector result = ColumnVector.spark32BitMurmurHash3(42, new ColumnVector[]{v});
+         ColumnVector expected = ColumnVector.fromBoxedInts(933211791, 42, 751823303, -1080202046, -1721170160, 42, 1852996993)) {
+      assertColumnsAreEqual(expected, result);
+    }
+  }
+
+  @Test
   void testSpark32BitMurmur3HashFloats() {
     try (ColumnVector v = ColumnVector.fromBoxedFloats(
           0f, 100f, -100f, Float.MIN_NORMAL, Float.MAX_VALUE, null,
@@ -2224,6 +2264,73 @@ public class ColumnVectorTest extends CudfTestBase {
     String[] stringBools = getStringArray(booleans);
 
     testCastFixedWidthToStringsAndBack(DType.BOOL8, () -> ColumnVector.fromBoxedBooleans(booleans), () -> ColumnVector.fromStrings(stringBools));
+  }
+
+  @Test
+  void testCastDecimal32ToString() {
+
+    Integer[] unScaledValues = {0, null, 3, 2, -43, null, 5234, -73451, 348093, -234810};
+    String[] strDecimalValues = new String[unScaledValues.length];
+    for (int scale : new int[]{-2, -1, 0, 1, 2}) {
+      for (int i = 0; i < strDecimalValues.length; i++) {
+        Long value = unScaledValues[i] == null ? null : Long.valueOf(unScaledValues[i]);
+        strDecimalValues[i] = dumpDecimal(value, scale);
+      }
+
+      testCastFixedWidthToStringsAndBack(DType.create(DType.DTypeEnum.DECIMAL32, scale),
+          () -> ColumnVector.decimalFromBoxedInts(scale, unScaledValues),
+          () -> ColumnVector.fromStrings(strDecimalValues));
+    }
+  }
+
+  @Test
+  void testCastDecimal64ToString() {
+
+    Long[] unScaledValues = {0l, null, 3l, 2l, -43l, null, 234802l, -94582l, 1234208124l, -2342348023812l};
+    String[] strDecimalValues = new String[unScaledValues.length];
+    for (int scale : new int[]{-5, -2, -1, 0, 1, 2, 5}) {
+      for (int i = 0; i < strDecimalValues.length; i++) {
+        strDecimalValues[i] = dumpDecimal(unScaledValues[i], scale);
+        System.out.println(strDecimalValues[i]);
+      }
+
+      testCastFixedWidthToStringsAndBack(DType.create(DType.DTypeEnum.DECIMAL64, scale),
+          () -> ColumnVector.decimalFromBoxedLongs(scale, unScaledValues),
+          () -> ColumnVector.fromStrings(strDecimalValues));
+    }
+  }
+
+  /**
+   * Helper function to create decimal strings which can be processed by castStringToDecimal functor.
+   * We can not simply create decimal string via `String.valueOf`, because castStringToDecimal doesn't
+   * support scientific notations so far.
+   *
+   * issue for scientific notation: https://github.com/rapidsai/cudf/issues/7665
+   */
+  private static String dumpDecimal(Long unscaledValue, int scale) {
+    if (unscaledValue == null) return null;
+
+    StringBuilder builder = new StringBuilder();
+    if (unscaledValue < 0) builder.append('-');
+    String absValue = String.valueOf(Math.abs(unscaledValue));
+
+    if (scale >= 0) {
+      builder.append(absValue);
+      for (int i = 0; i < scale; i++) builder.append('0');
+      return builder.toString();
+    }
+
+    if (absValue.length() <= -scale) {
+      builder.append('0').append('.');
+      for (int i = 0; i < -scale - absValue.length(); i++) builder.append('0');
+      builder.append(absValue);
+    } else {
+      int split = absValue.length() + scale;
+      builder.append(absValue.substring(0, split))
+          .append('.')
+          .append(absValue.substring(split));
+    }
+    return builder.toString();
   }
 
   private static <T> String[] getStringArray(T[] input) {
