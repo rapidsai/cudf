@@ -2871,7 +2871,7 @@ class IntervalIndex(GenericIndex):
         If None, dtype will be inferred.
 
     copy : bool, default False
-    Copy the input data.
+        Copy the input data.
 
     name : object, optional
         Name to be stored in the index.
