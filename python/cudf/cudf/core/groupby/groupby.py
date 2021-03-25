@@ -586,12 +586,13 @@ _VALID_GROUPBY_AGGS = {
     "quantile",
     "median",
     "nunique",
-    "collect"
+    "collect",
 }
 
 
 # Dynamically bind the different aggregation methods.
 for key in _VALID_GROUPBY_AGGS:
+
     def _agg_func_name_with_args(self, func_name, *args, **kwargs):
         """
         Aggregate given an aggregate function name and arguments to the
@@ -606,8 +607,9 @@ for key in _VALID_GROUPBY_AGGS:
         func.__name__ = func_name
         return self.agg(func)
 
-    setattr(GroupBy, key,
-            functools.partialmethod(_agg_func_name_with_args, key))
+    setattr(
+        GroupBy, key, functools.partialmethod(_agg_func_name_with_args, key)
+    )
 
 
 class DataFrameGroupBy(GroupBy):
