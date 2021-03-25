@@ -25,6 +25,10 @@
 #include <arrow/io/file.h>
 #include <arrow/io/interfaces.h>
 #include <arrow/io/memory.h>
+#include "arrow/filesystem/filesystem.h"
+#include "arrow/filesystem/s3fs.h"
+#include "arrow/result.h"
+#include "arrow/status.h"
 
 #include <memory>
 
