@@ -235,7 +235,7 @@ std::unique_ptr<aggregation> make_collect_list_aggregation(
  */
 std::unique_ptr<aggregation> make_collect_set_aggregation(
   null_policy null_handling = null_policy::INCLUDE,
-  null_equality null_equal  = null_equality::EQUAL,
+  null_equality nulls_equal = null_equality::EQUAL,
   nan_equality nans_equal   = nan_equality::UNEQUAL);
 
 /// Factory to create a LAG aggregation
