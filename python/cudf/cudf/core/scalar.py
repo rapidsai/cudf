@@ -69,7 +69,6 @@ class Scalar(object):
             self._host_value, self._host_dtype = self._preprocess_host_value(
                 value, dtype
             )
-            breakpoint()
 
     @property
     def _is_host_value_current(self):

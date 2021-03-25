@@ -113,6 +113,7 @@ cudf_to_np_types = {
     TypeId.DURATION_MILLISECONDS: np.dtype("timedelta64[ms]"),
     TypeId.DURATION_MICROSECONDS: np.dtype("timedelta64[us]"),
     TypeId.DURATION_NANOSECONDS: np.dtype("timedelta64[ns]"),
+    TypeId.DECIMAL64: np.dtype('float')
 }
 
 duration_unit_map = {

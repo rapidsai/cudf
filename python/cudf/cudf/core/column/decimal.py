@@ -76,6 +76,7 @@ class DecimalColumn(ColumnBase):
         from cudf.utils.dtypes import is_scalar
         if is_scalar(other):
             other = cudf.Scalar(other, dtype=self.dtype)
+            return other
         else:
             raise TypeError(f"cannot normalize {type(other)}")
 

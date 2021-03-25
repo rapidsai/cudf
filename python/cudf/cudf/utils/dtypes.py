@@ -16,6 +16,8 @@ import cudf
 from cudf._lib.scalar import DeviceScalar
 from cudf.core._compat import PANDAS_GE_120
 
+from decimal import Decimal
+
 _NA_REP = "<NA>"
 _np_pa_dtypes = {
     np.float64: pa.float64(),
@@ -344,7 +346,7 @@ def to_cudf_compatible_scalar(val, dtype=None):
         )
 
     if isinstance(dtype, cudf.Decimal64Dtype):
-        return val
+        return Decimal(np.format_float_positional(val, dtype.scale))
 
     if isinstance(val, (np.ndarray, cp.ndarray)) and val.ndim == 0:
         val = val.item()
@@ -376,6 +378,9 @@ def to_cudf_compatible_scalar(val, dtype=None):
             val = val.astype("timedelta64[ns]")
 
     return val
+
+def decimal_as_int64(d):
+    return int(d * (10**(-d.as_tuple().exponent)))
 
 
 def is_list_like(obj):
