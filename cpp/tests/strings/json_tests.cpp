@@ -15,189 +15,299 @@
  */
 
 #include <cudf/scalar/scalar_factories.hpp>
+#include <cudf/strings/replace.hpp>
+#include <cudf/strings/strings_column_view.hpp>
 #include <cudf/strings/substring.hpp>
 
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_wrapper.hpp>
 
+// reference:  https://jsonpath.herokuapp.com/
 /*
-const char* json_string = "{
+  {
     "store": {
         "book": [
-            {
+              {
                 "category": "reference",
                 "author": "Nigel Rees",
                 "title": "Sayings of the Century",
                 "price": 8.95
-            },
-            {
+              },
+              {
                 "category": "fiction",
                 "author": "Evelyn Waugh",
                 "title": "Sword of Honour",
                 "price": 12.99
-            },
-            {
+              },
+              {
                 "category": "fiction",
                 "author": "Herman Melville",
                 "title": "Moby Dick",
                 "isbn": "0-553-21311-3",
                 "price": 8.99
-            },
-            {
+              },
+              {
                 "category": "fiction",
                 "author": "J. R. R. Tolkien",
                 "title": "The Lord of the Rings",
                 "isbn": "0-395-19395-8",
                 "price": 22.99
-            }
+              }
         ],
         "bicycle": {
-            "color": "red",
-            "price": 19.95
+              "color": "red",
+              "price": 19.95
         }
     },
-}";
+    "expensive": 10
+  }
 */
+
+// this string is formatted to result in a reasonably readable debug printf
+std::string json_string{
+  "{\n\"store\": {\n\t\"book\": [\n\t\t{\n\t\t\t\"category\": \"reference\",\n\t\t\t\"author\": "
+  "\"Nigel Rees\",\n\t\t\t\"title\": \"Sayings of the Century\",\n\t\t\t\"price\": "
+  "8.95\n\t\t},\n\t\t{\n\t\t\t\"category\": \"fiction\",\n\t\t\t\"author\": \"Evelyn "
+  "Waugh\",\n\t\t\t\"title\": \"Sword of Honour\",\n\t\t\t\"price\": "
+  "12.99\n\t\t},\n\t\t{\n\t\t\t\"category\": \"fiction\",\n\t\t\t\"author\": \"Herman "
+  "Melville\",\n\t\t\t\"title\": \"Moby Dick\",\n\t\t\t\"isbn\": "
+  "\"0-553-21311-3\",\n\t\t\t\"price\": 8.99\n\t\t},\n\t\t{\n\t\t\t\"category\": "
+  "\"fiction\",\n\t\t\t\"author\": \"J. R. R. Tolkien\",\n\t\t\t\"title\": \"The Lord of the "
+  "Rings\",\n\t\t\t\"isbn\": \"0-395-19395-8\",\n\t\t\t\"price\": "
+  "22.99\n\t\t}\n\t],\n\t\"bicycle\": {\n\t\t\"color\": \"red\",\n\t\t\"price\": "
+  "19.95\n\t}\n},\n\"expensive\": 10\n}"};
+
+std::unique_ptr<cudf::column> drop_whitespace(cudf::column_view const& col)
+{
+  cudf::test::strings_column_wrapper whitespace{"\n", "\r", "\t"};
+  cudf::test::strings_column_wrapper repl{"", "", ""};
+
+  cudf::strings_column_view strings(col);
+  cudf::strings_column_view targets(whitespace);
+  cudf::strings_column_view replacements(repl);
+  return cudf::strings::replace(strings, targets, replacements);
+}
 
 struct JsonTests : public cudf::test::BaseFixture {
 };
 
-TEST_F(JsonTests, GetJsonObject)
+TEST_F(JsonTests, GetJsonObjectRootOp)
 {
-  // reference:  https://jsonpath.herokuapp.com/
-  // clang-format off
-   /*
-   {
-      "store": {
-         "book": [
-               {
-                  "category": "reference",
-                  "author": "Nigel Rees",
-                  "title": "Sayings of the Century",
-                  "price": 8.95
-               },
-               {
-                  "category": "fiction",
-                  "author": "Evelyn Waugh",
-                  "title": "Sword of Honour",
-                  "price": 12.99
-               },
-               {
-                  "category": "fiction",
-                  "author": "Herman Melville",
-                  "title": "Moby Dick",
-                  "isbn": "0-553-21311-3",
-                  "price": 8.99
-               },
-               {
-                  "category": "fiction",
-                  "author": "J. R. R. Tolkien",
-                  "title": "The Lord of the Rings",
-                  "isbn": "0-395-19395-8",
-                  "price": 22.99
-               }
-         ],
-         "bicycle": {
-               "color": "red",
-               "price": 19.95
-         }
-      },
-      "expensive": 10
-   }
-   */
-  // clang-format on
-  // this string is formatted to result in a reasonably readable debug printf
-  const char* json_string =
-    "{\n\"store\": {\n\t\"book\": [\n\t\t{\n\t\t\t\"category\": \"reference\",\n\t\t\t\"author\": "
-    "\"Nigel Rees\",\n\t\t\t\"title\": \"Sayings of the Century\",\n\t\t\t\"price\": "
-    "8.95\n\t\t},\n\t\t{\n\t\t\t\"category\": \"fiction\",\n\t\t\t\"author\": \"Evelyn "
-    "Waugh\",\n\t\t\t\"title\": \"Sword of Honour\",\n\t\t\t\"price\": "
-    "12.99\n\t\t},\n\t\t{\n\t\t\t\"category\": \"fiction\",\n\t\t\t\"author\": \"Herman "
-    "Melville\",\n\t\t\t\"title\": \"Moby Dick\",\n\t\t\t\"isbn\": "
-    "\"0-553-21311-3\",\n\t\t\t\"price\": 8.99\n\t\t},\n\t\t{\n\t\t\t\"category\": "
-    "\"fiction\",\n\t\t\t\"author\": \"J. R. R. Tolkien\",\n\t\t\t\"title\": \"The Lord of the "
-    "Rings\",\n\t\t\t\"isbn\": \"0-395-19395-8\",\n\t\t\t\"price\": "
-    "22.99\n\t\t}\n\t],\n\t\"bicycle\": {\n\t\t\"color\": \"red\",\n\t\t\"price\": "
-    "19.95\n\t}\n},\n\"expensive\": 10\n}";
+  // root
+  cudf::test::strings_column_wrapper input{json_string};
+  std::string json_path("$");
+  auto result_raw = cudf::strings::get_json_object(cudf::strings_column_view(input), json_path);
+  auto result     = drop_whitespace(*result_raw);
 
-  {
-    cudf::test::strings_column_wrapper input{json_string};
-    std::string json_path("$");
-    auto result = cudf::strings::get_json_object(cudf::strings_column_view(input), json_path);
+  auto expected = drop_whitespace(input);
 
-    cudf::test::print(*result);
-  }
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*result, *expected);
+}
 
+TEST_F(JsonTests, GetJsonObjectChildOp)
+{
   {
     cudf::test::strings_column_wrapper input{json_string};
     std::string json_path("$.store");
-    auto result = cudf::strings::get_json_object(cudf::strings_column_view(input), json_path);
+    auto result_raw = cudf::strings::get_json_object(cudf::strings_column_view(input), json_path);
+    auto result     = drop_whitespace(*result_raw);
 
-    cudf::test::print(*result);
+    cudf::test::strings_column_wrapper expected_raw{
+      "{\n\t\"book\": [\n\t\t{\n\t\t\t\"category\": \"reference\",\n\t\t\t\"author\": "
+      "\"Nigel Rees\",\n\t\t\t\"title\": \"Sayings of the Century\",\n\t\t\t\"price\": "
+      "8.95\n\t\t},\n\t\t{\n\t\t\t\"category\": \"fiction\",\n\t\t\t\"author\": \"Evelyn "
+      "Waugh\",\n\t\t\t\"title\": \"Sword of Honour\",\n\t\t\t\"price\": "
+      "12.99\n\t\t},\n\t\t{\n\t\t\t\"category\": \"fiction\",\n\t\t\t\"author\": \"Herman "
+      "Melville\",\n\t\t\t\"title\": \"Moby Dick\",\n\t\t\t\"isbn\": "
+      "\"0-553-21311-3\",\n\t\t\t\"price\": 8.99\n\t\t},\n\t\t{\n\t\t\t\"category\": "
+      "\"fiction\",\n\t\t\t\"author\": \"J. R. R. Tolkien\",\n\t\t\t\"title\": \"The Lord of the "
+      "Rings\",\n\t\t\t\"isbn\": \"0-395-19395-8\",\n\t\t\t\"price\": "
+      "22.99\n\t\t}\n\t],\n\t\"bicycle\": {\n\t\t\"color\": \"red\",\n\t\t\"price\": "
+      "19.95\n\t}\n}"};
+    auto expected = drop_whitespace(expected_raw);
+
+    CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*result, *expected);
   }
 
   {
     cudf::test::strings_column_wrapper input{json_string};
     std::string json_path("$.store.book");
-    auto result = cudf::strings::get_json_object(cudf::strings_column_view(input), json_path);
+    auto result_raw = cudf::strings::get_json_object(cudf::strings_column_view(input), json_path);
+    auto result     = drop_whitespace(*result_raw);
 
-    cudf::test::print(*result);
+    cudf::test::strings_column_wrapper expected_raw{
+      "[\n\t\t{\n\t\t\t\"category\": \"reference\",\n\t\t\t\"author\": "
+      "\"Nigel Rees\",\n\t\t\t\"title\": \"Sayings of the Century\",\n\t\t\t\"price\": "
+      "8.95\n\t\t},\n\t\t{\n\t\t\t\"category\": \"fiction\",\n\t\t\t\"author\": \"Evelyn "
+      "Waugh\",\n\t\t\t\"title\": \"Sword of Honour\",\n\t\t\t\"price\": "
+      "12.99\n\t\t},\n\t\t{\n\t\t\t\"category\": \"fiction\",\n\t\t\t\"author\": \"Herman "
+      "Melville\",\n\t\t\t\"title\": \"Moby Dick\",\n\t\t\t\"isbn\": "
+      "\"0-553-21311-3\",\n\t\t\t\"price\": 8.99\n\t\t},\n\t\t{\n\t\t\t\"category\": "
+      "\"fiction\",\n\t\t\t\"author\": \"J. R. R. Tolkien\",\n\t\t\t\"title\": \"The Lord of the "
+      "Rings\",\n\t\t\t\"isbn\": \"0-395-19395-8\",\n\t\t\t\"price\": "
+      "22.99\n\t\t}\n\t]"};
+    auto expected = drop_whitespace(expected_raw);
+
+    CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*result, *expected);
   }
+}
 
+TEST_F(JsonTests, GetJsonObjectWildcardOp)
+{
   {
     cudf::test::strings_column_wrapper input{json_string};
     std::string json_path("$.store.*");
-    auto result = cudf::strings::get_json_object(cudf::strings_column_view(input), json_path);
+    auto result_raw = cudf::strings::get_json_object(cudf::strings_column_view(input), json_path);
+    auto result     = drop_whitespace(*result_raw);
 
-    cudf::test::print(*result);
+    cudf::test::strings_column_wrapper expected_raw{
+      "[[\n\t\t{\n\t\t\t\"category\": \"reference\",\n\t\t\t\"author\": "
+      "\"Nigel Rees\",\n\t\t\t\"title\": \"Sayings of the Century\",\n\t\t\t\"price\": "
+      "8.95\n\t\t},\n\t\t{\n\t\t\t\"category\": \"fiction\",\n\t\t\t\"author\": \"Evelyn "
+      "Waugh\",\n\t\t\t\"title\": \"Sword of Honour\",\n\t\t\t\"price\": "
+      "12.99\n\t\t},\n\t\t{\n\t\t\t\"category\": \"fiction\",\n\t\t\t\"author\": \"Herman "
+      "Melville\",\n\t\t\t\"title\": \"Moby Dick\",\n\t\t\t\"isbn\": "
+      "\"0-553-21311-3\",\n\t\t\t\"price\": 8.99\n\t\t},\n\t\t{\n\t\t\t\"category\": "
+      "\"fiction\",\n\t\t\t\"author\": \"J. R. R. Tolkien\",\n\t\t\t\"title\": \"The Lord of the "
+      "Rings\",\n\t\t\t\"isbn\": \"0-395-19395-8\",\n\t\t\t\"price\": "
+      "22.99\n\t\t}\n\t],\n\t{\n\t\t\"color\": \"red\",\n\t\t\"price\": "
+      "19.95\n\t}]"};
+    auto expected = drop_whitespace(expected_raw);
+
+    CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*result, *expected);
   }
 
   {
     cudf::test::strings_column_wrapper input{json_string};
-    std::string json_path("$.store.book[*]");
-    auto result = cudf::strings::get_json_object(cudf::strings_column_view(input), json_path);
+    std::string json_path("*");
+    auto result_raw = cudf::strings::get_json_object(cudf::strings_column_view(input), json_path);
+    auto result     = drop_whitespace(*result_raw);
 
-    cudf::test::print(*result);
+    cudf::test::strings_column_wrapper expected_raw{
+      "[{\"book\": [\n\t\t{\n\t\t\t\"category\": \"reference\",\n\t\t\t\"author\": "
+      "\"Nigel Rees\",\n\t\t\t\"title\": \"Sayings of the Century\",\n\t\t\t\"price\": "
+      "8.95\n\t\t},\n\t\t{\n\t\t\t\"category\": \"fiction\",\n\t\t\t\"author\": \"Evelyn "
+      "Waugh\",\n\t\t\t\"title\": \"Sword of Honour\",\n\t\t\t\"price\": "
+      "12.99\n\t\t},\n\t\t{\n\t\t\t\"category\": \"fiction\",\n\t\t\t\"author\": \"Herman "
+      "Melville\",\n\t\t\t\"title\": \"Moby Dick\",\n\t\t\t\"isbn\": "
+      "\"0-553-21311-3\",\n\t\t\t\"price\": 8.99\n\t\t},\n\t\t{\n\t\t\t\"category\": "
+      "\"fiction\",\n\t\t\t\"author\": \"J. R. R. Tolkien\",\n\t\t\t\"title\": \"The Lord of the "
+      "Rings\",\n\t\t\t\"isbn\": \"0-395-19395-8\",\n\t\t\t\"price\": "
+      "22.99\n\t\t}\n\t],\n\t\"bicycle\": {\n\t\t\"color\": \"red\",\n\t\t\"price\": "
+      "19.95\n\t}\n},10]"};
+    auto expected = drop_whitespace(expected_raw);
+
+    CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*result, *expected);
   }
+}
 
+TEST_F(JsonTests, GetJsonObjectSubscriptOp)
+{
   {
     cudf::test::strings_column_wrapper input{json_string};
-    std::string json_path("$.store.book[*].category");
-    auto result = cudf::strings::get_json_object(cudf::strings_column_view(input), json_path);
+    std::string json_path("$.store.book[2]");
+    auto result_raw = cudf::strings::get_json_object(cudf::strings_column_view(input), json_path);
+    auto result     = drop_whitespace(*result_raw);
 
-    cudf::test::print(*result);
-  }
+    cudf::test::strings_column_wrapper expected_raw{
+      "{\n\t\t\t\"category\": \"fiction\",\n\t\t\t\"author\": \"Herman "
+      "Melville\",\n\t\t\t\"title\": \"Moby Dick\",\n\t\t\t\"isbn\": "
+      "\"0-553-21311-3\",\n\t\t\t\"price\": 8.99\n\t\t}"};
+    auto expected = drop_whitespace(expected_raw);
 
-  {
-    cudf::test::strings_column_wrapper input{json_string};
-    std::string json_path("$.store.book[*].title");
-    auto result = cudf::strings::get_json_object(cudf::strings_column_view(input), json_path);
-
-    cudf::test::print(*result);
+    CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*result, *expected);
   }
 
   {
     cudf::test::strings_column_wrapper input{json_string};
     std::string json_path("$.store['bicycle']");
-    auto result = cudf::strings::get_json_object(cudf::strings_column_view(input), json_path);
+    auto result_raw = cudf::strings::get_json_object(cudf::strings_column_view(input), json_path);
+    auto result     = drop_whitespace(*result_raw);
 
-    cudf::test::print(*result);
+    cudf::test::strings_column_wrapper expected_raw{
+      "{\n\t\t\"color\": \"red\",\n\t\t\"price\": "
+      "19.95\n\t}"};
+    auto expected = drop_whitespace(expected_raw);
+
+    CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*result, *expected);
   }
+
+  {
+    cudf::test::strings_column_wrapper input{json_string};
+    std::string json_path("$.store.book[*]");
+    auto result_raw = cudf::strings::get_json_object(cudf::strings_column_view(input), json_path);
+    auto result     = drop_whitespace(*result_raw);
+
+    cudf::test::strings_column_wrapper expected_raw{
+      "[\n\t\t{\n\t\t\t\"category\": \"reference\",\n\t\t\t\"author\": "
+      "\"Nigel Rees\",\n\t\t\t\"title\": \"Sayings of the Century\",\n\t\t\t\"price\": "
+      "8.95\n\t\t},\n\t\t{\n\t\t\t\"category\": \"fiction\",\n\t\t\t\"author\": \"Evelyn "
+      "Waugh\",\n\t\t\t\"title\": \"Sword of Honour\",\n\t\t\t\"price\": "
+      "12.99\n\t\t},\n\t\t{\n\t\t\t\"category\": \"fiction\",\n\t\t\t\"author\": \"Herman "
+      "Melville\",\n\t\t\t\"title\": \"Moby Dick\",\n\t\t\t\"isbn\": "
+      "\"0-553-21311-3\",\n\t\t\t\"price\": 8.99\n\t\t},\n\t\t{\n\t\t\t\"category\": "
+      "\"fiction\",\n\t\t\t\"author\": \"J. R. R. Tolkien\",\n\t\t\t\"title\": \"The Lord of the "
+      "Rings\",\n\t\t\t\"isbn\": \"0-395-19395-8\",\n\t\t\t\"price\": "
+      "22.99\n\t\t}\n\t]"};
+    auto expected = drop_whitespace(expected_raw);
+
+    CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*result, *expected);
+  }
+}
+
+TEST_F(JsonTests, GetJsonObjectFilter)
+{
+  // queries that result in filtering/collating results (mostly meaning - generates new
+  // json instead of just returning parts of the existing string
 
   {
     cudf::test::strings_column_wrapper input{json_string};
     std::string json_path("$.store.book[*]['isbn']");
-    auto result = cudf::strings::get_json_object(cudf::strings_column_view(input), json_path);
+    auto result_raw = cudf::strings::get_json_object(cudf::strings_column_view(input), json_path);
+    auto result     = drop_whitespace(*result_raw);
 
-    cudf::test::print(*result);
+    cudf::test::strings_column_wrapper expected_raw{"[\"0-553-21311-3\",\"0-395-19395-8\"]"};
+    auto expected = drop_whitespace(expected_raw);
+
+    CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*result, *expected);
   }
 
   {
     cudf::test::strings_column_wrapper input{json_string};
-    std::string json_path("$.store.book[2]");
-    auto result = cudf::strings::get_json_object(cudf::strings_column_view(input), json_path);
+    std::string json_path("$.store.book[*].category");
+    auto result_raw = cudf::strings::get_json_object(cudf::strings_column_view(input), json_path);
+    auto result     = drop_whitespace(*result_raw);
 
-    cudf::test::print(*result);
+    cudf::test::strings_column_wrapper expected_raw{
+      "[\"reference\",\"fiction\",\"fiction\",\"fiction\"]"};
+    auto expected = drop_whitespace(expected_raw);
+
+    CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*result, *expected);
+  }
+
+  {
+    cudf::test::strings_column_wrapper input{json_string};
+    std::string json_path("$.store.book[*].title");
+    auto result_raw = cudf::strings::get_json_object(cudf::strings_column_view(input), json_path);
+    auto result     = drop_whitespace(*result_raw);
+
+    cudf::test::strings_column_wrapper expected_raw{
+      "[\"Sayings of the Century\",\"Sword of Honour\",\"Moby Dick\",\"The Lord of the Rings\"]"};
+    auto expected = drop_whitespace(expected_raw);
+
+    CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*result, *expected);
+  }
+
+  {
+    cudf::test::strings_column_wrapper input{json_string};
+    std::string json_path("$.store.book.*.price");
+    auto result_raw = cudf::strings::get_json_object(cudf::strings_column_view(input), json_path);
+    auto result     = drop_whitespace(*result_raw);
+
+    cudf::test::strings_column_wrapper expected_raw{"[8.95,12.99,8.99,22.99]"};
+    auto expected = drop_whitespace(expected_raw);
+
+    CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*result, *expected);
   }
 
   {
@@ -206,46 +316,58 @@ TEST_F(JsonTests, GetJsonObject)
     //  spark:        fiction
     cudf::test::strings_column_wrapper input{json_string};
     std::string json_path("$.store.book[2].category");
-    auto result = cudf::strings::get_json_object(cudf::strings_column_view(input), json_path);
+    auto result_raw = cudf::strings::get_json_object(cudf::strings_column_view(input), json_path);
+    auto result     = drop_whitespace(*result_raw);
 
-    cudf::test::print(*result);
+    cudf::test::strings_column_wrapper expected_raw{"fiction"};
+    auto expected = drop_whitespace(expected_raw);
+
+    CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*result, *expected);
   }
+}
 
+TEST_F(JsonTests, GetJsonObjectNullInputs)
+{
   {
-    char const* str = "{\"a\" : \"b\"}";
-    cudf::test::strings_column_wrapper input{{str, str, str, str}, {1, 0, 1, 0}};
+    std::string str("{\"a\" : \"b\"}");
+    cudf::test::strings_column_wrapper input({str, str, str, str}, {1, 0, 1, 0});
 
     std::string json_path("$.a");
-    auto result = cudf::strings::get_json_object(cudf::strings_column_view(input), json_path);
+    auto result_raw = cudf::strings::get_json_object(cudf::strings_column_view(input), json_path);
+    auto result     = drop_whitespace(*result_raw);
 
-    cudf::test::print(*result);
+    cudf::test::strings_column_wrapper expected_raw({"b", "", "b", ""}, {1, 0, 1, 0});
+    auto expected = drop_whitespace(expected_raw);
+
+    CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*result, *expected);
   }
+}
 
+TEST_F(JsonTests, GetJsonObjectEmptyQuery)
+{
   // empty query -> null
   {
-    cudf::test::strings_column_wrapper input{""};
+    cudf::test::strings_column_wrapper input{"{\"a\" : \"b\"}"};
     std::string json_path("");
     auto result = cudf::strings::get_json_object(cudf::strings_column_view(input), json_path);
 
-    cudf::test::print(*result);
-  }
+    cudf::test::strings_column_wrapper expected({""}, {0});
 
+    CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*result, expected);
+  }
+}
+
+TEST_F(JsonTests, GetJsonObjectEmptyInputsAndOutputs)
+{
   // empty input -> null
   {
     cudf::test::strings_column_wrapper input{""};
     std::string json_path("$");
     auto result = cudf::strings::get_json_object(cudf::strings_column_view(input), json_path);
 
-    cudf::test::print(*result);
-  }
+    cudf::test::strings_column_wrapper expected({""}, {0});
 
-  // empty output -> null
-  {
-    cudf::test::strings_column_wrapper input{"{\"a\": \"b\"}"};
-    std::string json_path("$[*].c");
-    auto result = cudf::strings::get_json_object(cudf::strings_column_view(input), json_path);
-
-    cudf::test::print(*result);
+    CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*result, expected);
   }
 
   // slightly different from "empty output". in this case, we're
@@ -256,6 +378,129 @@ TEST_F(JsonTests, GetJsonObject)
     std::string json_path("$.store.bicycle");
     auto result = cudf::strings::get_json_object(cudf::strings_column_view(input), json_path);
 
-    cudf::test::print(*result);
+    cudf::test::strings_column_wrapper expected({""}, {1});
+
+    CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*result, expected);
+  }
+}
+
+// badly formed JSONpath strings
+TEST_F(JsonTests, GetJsonObjectIllegalQuery)
+{
+  // can't have more than one root operator, or a root operator anywhere other
+  // than the beginning
+  {
+    cudf::test::strings_column_wrapper input{"{\"a\": \"b\"}"};
+    std::string json_path("$$");
+    auto query = [&]() {
+      auto result = cudf::strings::get_json_object(cudf::strings_column_view(input), json_path);
+    };
+    EXPECT_THROW(query(), cudf::logic_error);
+  }
+
+  // invalid index
+  {
+    cudf::test::strings_column_wrapper input{"{\"a\": \"b\"}"};
+    std::string json_path("$[auh46h-]");
+    auto query = [&]() {
+      auto result = cudf::strings::get_json_object(cudf::strings_column_view(input), json_path);
+    };
+    EXPECT_THROW(query(), cudf::logic_error);
+  }
+
+  // invalid index
+  {
+    cudf::test::strings_column_wrapper input{"{\"a\": \"b\"}"};
+    std::string json_path("$[[]]");
+    auto query = [&]() {
+      auto result = cudf::strings::get_json_object(cudf::strings_column_view(input), json_path);
+    };
+    EXPECT_THROW(query(), cudf::logic_error);
+  }
+
+  // negative index
+  {
+    cudf::test::strings_column_wrapper input{"{\"a\": \"b\"}"};
+    std::string json_path("$[-1]");
+    auto query = [&]() {
+      auto result = cudf::strings::get_json_object(cudf::strings_column_view(input), json_path);
+    };
+    EXPECT_THROW(query(), cudf::logic_error);
+  }
+
+  // child operator with no name specified
+  {
+    cudf::test::strings_column_wrapper input{"{\"a\": \"b\"}"};
+    std::string json_path(".");
+    auto query = [&]() {
+      auto result = cudf::strings::get_json_object(cudf::strings_column_view(input), json_path);
+    };
+    EXPECT_THROW(query(), cudf::logic_error);
+  }
+
+  {
+    cudf::test::strings_column_wrapper input{"{\"a\": \"b\"}"};
+    std::string json_path("][");
+    auto query = [&]() {
+      auto result = cudf::strings::get_json_object(cudf::strings_column_view(input), json_path);
+    };
+    EXPECT_THROW(query(), cudf::logic_error);
+  }
+
+  {
+    cudf::test::strings_column_wrapper input{"{\"a\": \"b\"}"};
+    std::string json_path("6hw6,56i3");
+    auto query = [&]() {
+      auto result = cudf::strings::get_json_object(cudf::strings_column_view(input), json_path);
+    };
+    EXPECT_THROW(query(), cudf::logic_error);
+  }
+}
+
+// queries that are legal, but reference invalid parts of the input
+TEST_F(JsonTests, GetJsonObjectInvalidQuery)
+{
+  // non-existent field
+  {
+    cudf::test::strings_column_wrapper input{"{\"a\": \"b\"}"};
+    std::string json_path("$[*].c");
+    auto result = cudf::strings::get_json_object(cudf::strings_column_view(input), json_path);
+
+    cudf::test::strings_column_wrapper expected({""}, {0});
+
+    CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*result, expected);
+  }
+
+  // non-existent field
+  {
+    cudf::test::strings_column_wrapper input{"{\"a\": \"b\"}"};
+    std::string json_path("$[*].c[2]");
+    auto result = cudf::strings::get_json_object(cudf::strings_column_view(input), json_path);
+
+    cudf::test::strings_column_wrapper expected({""}, {0});
+
+    CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*result, expected);
+  }
+
+  // non-existent field
+  {
+    cudf::test::strings_column_wrapper input{json_string};
+    std::string json_path("$.store.book.price");
+    auto result = cudf::strings::get_json_object(cudf::strings_column_view(input), json_path);
+
+    cudf::test::strings_column_wrapper expected({""}, {0});
+
+    CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*result, expected);
+  }
+
+  // out of bounds index
+  {
+    cudf::test::strings_column_wrapper input{json_string};
+    std::string json_path("$.store.book[4]");
+    auto result = cudf::strings::get_json_object(cudf::strings_column_view(input), json_path);
+
+    cudf::test::strings_column_wrapper expected({""}, {0});
+
+    CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*result, expected);
   }
 }
