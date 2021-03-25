@@ -269,6 +269,7 @@ class Merge(object):
                     lkey.set(
                         left_result,
                         lkey.get(left_result).fillna(rkey.get(right_result)),
+                        validate=False,
                     )
 
         # Compute the result column names:
@@ -425,9 +426,9 @@ class Merge(object):
                 lcol, rcol, how=self.how
             )
             if lcol is not lcol_casted:
-                left_key.set(out_lhs, lcol_casted)
+                left_key.set(out_lhs, lcol_casted, validate=False)
             if rcol is not rcol_casted:
-                right_key.set(out_rhs, rcol_casted)
+                right_key.set(out_rhs, rcol_casted, validate=False)
         return out_lhs, out_rhs
 
     def _restore_categorical_keys(
@@ -446,10 +447,14 @@ class Merge(object):
                     right_key.get(self.rhs).dtype, cudf.CategoricalDtype
                 ):
                     left_key.set(
-                        out_lhs, left_key.get(out_lhs).astype("category")
+                        out_lhs,
+                        left_key.get(out_lhs).astype("category"),
+                        validate=False,
                     )
                     right_key.set(
-                        out_rhs, right_key.get(out_rhs).astype("category")
+                        out_rhs,
+                        right_key.get(out_rhs).astype("category"),
+                        validate=False,
                     )
         return out_lhs, out_rhs
 

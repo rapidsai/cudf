@@ -42,13 +42,15 @@ class _Indexer:
                 return obj._index._data[self.name]
         raise KeyError()
 
-    def set(self, obj: Frame, value: ColumnBase):
+    def set(self, obj: Frame, value: ColumnBase, validate=False):
         # set the colum in `obj`
         if self.column:
-            obj._data[self.name] = value
+            obj._data.set_by_label(self.name, value, validate=validate)
         else:
             if obj._index is not None:
-                obj._index._data[self.name] = value
+                obj._index._data.set_by_label(
+                    self.name, value, validate=validate
+                )
             else:
                 raise KeyError()
 
@@ -63,9 +65,9 @@ def _frame_select_by_indexers(
 
     for idx in indexers:
         if idx.index:
-            index_data[idx.name] = idx.get(frame)
+            index_data.set_by_label(idx.name, idx.get(frame), validate=False)
         else:
-            data[idx.name] = idx.get(frame)
+            data.set_by_label(idx.name, idx.get(frame), validate=False)
 
     result_index = cudf.Index._from_data(index_data) if index_data else None
     result = cudf.core.frame.Frame(data=data, index=result_index)
