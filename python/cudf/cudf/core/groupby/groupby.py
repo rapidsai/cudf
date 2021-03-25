@@ -591,22 +591,22 @@ _VALID_GROUPBY_AGGS = {
 
 
 # Dynamically bind the different aggregation methods.
+def _agg_func_name_with_args(self, func_name, *args, **kwargs):
+    """
+    Aggregate given an aggregate function name and arguments to the
+    function, e.g., `_agg_func_name_with_args("quantile", 0.5)`. The named
+    aggregations must be members of _AggregationFactory.
+    """
+
+    def func(x):
+        """Compute the {} of the group.""".format(func_name)
+        return getattr(x, func_name)(*args, **kwargs)
+
+    func.__name__ = func_name
+    return self.agg(func)
+
+
 for key in _VALID_GROUPBY_AGGS:
-
-    def _agg_func_name_with_args(self, func_name, *args, **kwargs):
-        """
-        Aggregate given an aggregate function name and arguments to the
-        function, e.g., `_agg_func_name_with_args("quantile", 0.5)`. The named
-        aggregations must be members of _AggregationFactory.
-        """
-
-        def func(x):
-            """Compute the {} of the group.""".format(func_name)
-            return getattr(x, func_name)(*args, **kwargs)
-
-        func.__name__ = func_name
-        return self.agg(func)
-
     setattr(
         GroupBy, key, functools.partialmethod(_agg_func_name_with_args, key)
     )
@@ -709,7 +709,7 @@ class DataFrameGroupBy(GroupBy):
 
     def __getattr__(self, key):
         # Without this check, copying can trigger a RecursionError. See
-        # https://nedbatchelder.com/blog/201010/surprising_getattr_recursion.html  #noqa: E501
+        # https://nedbatchelder.com/blog/201010/surprising_getattr_recursion.html  # noqa: E501
         # for an explanation.
         if key == "obj":
             raise AttributeError
