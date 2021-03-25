@@ -59,15 +59,15 @@ duration_scalar<T> scale_days_to(cudf::duration_D::rep days)
   return duration_scalar<T>(days_scalar.value(), true);
 }
 
-template <typename T>
-struct time_window_exec {
+template <typename ScalarT>
+struct window_exec_impl {
  public:
-  time_window_exec(cudf::column_view gby,
+  window_exec_impl(cudf::column_view gby,
                    cudf::column_view oby,
                    cudf::order ordering,
                    cudf::column_view agg,
-                   cudf::duration_scalar<T> preceding_scalar,
-                   cudf::duration_scalar<T> following_scalar,
+                   ScalarT preceding_scalar,
+                   ScalarT following_scalar,
                    cudf::size_type min_periods = 1)
     : gby_column(gby),
       oby_column(oby),
@@ -78,6 +78,8 @@ struct time_window_exec {
       min_periods(min_periods)
   {
   }
+
+  size_type num_rows() { return gby_column.size(); }
 
   std::unique_ptr<column> operator()(std::unique_ptr<aggregation> const& agg) const
   {
@@ -94,15 +96,28 @@ struct time_window_exec {
   }
 
  private:
-  cudf::column_view gby_column;        // Groupby column.
-  cudf::column_view oby_column;        // Orderby column.
-  cudf::order order;                   // Ordering for `oby_column`.
-  cudf::column_view agg_column;        // Aggregation column.
-  cudf::duration_scalar<T> preceding;  // Preceding window scalar.
-  cudf::duration_scalar<T> following;  // Following window scalar.
+  cudf::column_view gby_column;  // Groupby column.
+  cudf::column_view oby_column;  // Orderby column.
+  cudf::order order;             // Ordering for `oby_column`.
+  cudf::column_view agg_column;  // Aggregation column.
+  ScalarT preceding;             // Preceding window scalar.
+  ScalarT following;             // Following window scalar.
   cudf::size_type min_periods = 1;
+};  // struct window_exec_impl;
 
-};  // struct time_window_exec;
+// Type deducing helper.
+template <typename ScalarT>
+window_exec_impl<ScalarT> window_exec(cudf::column_view gby,
+                                      cudf::column_view oby,
+                                      cudf::order ordering,
+                                      cudf::column_view agg,
+                                      ScalarT preceding_scalar,
+                                      ScalarT following_scalar,
+                                      cudf::size_type min_periods = 1)
+{
+  return window_exec_impl<ScalarT>(
+    gby, oby, ordering, agg, preceding_scalar, following_scalar, min_periods);
+}
 
 struct RangeRollingTest : public BaseFixture {
 };
@@ -112,6 +127,55 @@ struct TypedTimeRangeRollingTest : RangeRollingTest {
 };
 
 TYPED_TEST_CASE(TypedTimeRangeRollingTest, cudf::test::DurationTypes);
+
+template <typename WindowExecT>
+void verify_results_for_ascending(WindowExecT exec)
+{
+  auto const n_rows       = exec.num_rows();
+  auto const all_valid    = thrust::make_constant_iterator<bool>(true);
+  auto const all_invalid  = thrust::make_constant_iterator<bool>(false);
+  auto const last_invalid = thrust::make_transform_iterator(
+    thrust::make_counting_iterator(0), [&n_rows](auto i) { return i != (n_rows - 1); });
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(exec(make_count_aggregation(null_policy::INCLUDE))->view(),
+                                 size_col{{1, 2, 2, 3, 2, 3, 3, 4, 4, 1}, all_valid});
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(exec(make_count_aggregation())->view(),
+                                 size_col{{1, 2, 2, 3, 2, 3, 3, 4, 4, 0}, all_valid});
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(
+    exec(make_sum_aggregation())->view(),
+    fwcw<int64_t>{{0, 12, 12, 12, 8, 17, 17, 18, 18, 1}, last_invalid});
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(exec(make_min_aggregation())->view(),
+                                 int_col{{0, 4, 4, 2, 2, 3, 3, 1, 1, 1}, last_invalid});
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(exec(make_max_aggregation())->view(),
+                                 int_col{{0, 8, 8, 6, 6, 9, 9, 9, 9, 1}, last_invalid});
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(
+    exec(make_mean_aggregation())->view(),
+    fwcw<double>{{0.0, 6.0, 6.0, 4.0, 4.0, 17.0 / 3, 17.0 / 3, 4.5, 4.5, 1.0}, last_invalid});
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(exec(make_collect_aggregation())->view(),
+                                      lists_col{{{0},
+                                                 {8, 4},
+                                                 {8, 4},
+                                                 {4, 6, 2},
+                                                 {6, 2},
+                                                 {9, 3, 5},
+                                                 {9, 3, 5},
+                                                 {9, 3, 5, 1},
+                                                 {9, 3, 5, 1},
+                                                 {{0}, all_invalid}},
+                                                all_valid});
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(exec(make_collect_aggregation(null_policy::EXCLUDE))->view(),
+                                      lists_col{{{0},
+                                                 {8, 4},
+                                                 {8, 4},
+                                                 {4, 6, 2},
+                                                 {6, 2},
+                                                 {9, 3, 5},
+                                                 {9, 3, 5},
+                                                 {9, 3, 5, 1},
+                                                 {9, 3, 5, 1},
+                                                 {}},
+                                                all_valid});
+}
 
 TYPED_TEST(TypedTimeRangeRollingTest, TimeScalingASC)
 {
@@ -128,58 +192,62 @@ TYPED_TEST(TypedTimeRangeRollingTest, TimeScalingASC)
   auto nano_column = cudf::cast(days_column, data_type{type_id::TIMESTAMP_NANOSECONDS});
   // clang-format on
 
-  auto window_exec = time_window_exec<DurationT>{gby_column,
-                                                 nano_column->view(),
-                                                 order::ASCENDING,
-                                                 agg_column,
-                                                 scale_days_to<DurationT>(2),   // 2 days preceding.
-                                                 scale_days_to<DurationT>(1)};  // 1 day following.
+  auto exec = window_exec(gby_column,
+                          nano_column->view(),
+                          order::ASCENDING,
+                          agg_column,
+                          scale_days_to<DurationT>(2),   // 2 days preceding.
+                          scale_days_to<DurationT>(1));  // 1 day following.
 
-  auto const n_rows       = nano_column->size();
-  auto const all_valid    = thrust::make_constant_iterator<bool>(true);
-  auto const all_invalid  = thrust::make_constant_iterator<bool>(false);
-  auto const last_invalid = thrust::make_transform_iterator(
-    thrust::make_counting_iterator(0), [&n_rows](auto i) { return i != (n_rows - 1); });
+  verify_results_for_ascending(exec);
+}
 
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(window_exec(make_count_aggregation(null_policy::INCLUDE))->view(),
-                                 size_col{{1, 2, 2, 3, 2, 3, 3, 4, 4, 1}, all_valid});
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(window_exec(make_count_aggregation())->view(),
-                                 size_col{{1, 2, 2, 3, 2, 3, 3, 4, 4, 0}, all_valid});
+template <typename WindowExecT>
+void verify_results_for_descending(WindowExecT exec)
+{
+  auto const all_valid     = thrust::make_constant_iterator<bool>(true);
+  auto const all_invalid   = thrust::make_constant_iterator<bool>(false);
+  auto const first_invalid = thrust::make_transform_iterator(thrust::make_counting_iterator(0),
+                                                             [](auto i) { return i != 0; });
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(exec(make_count_aggregation(null_policy::INCLUDE))->view(),
+                                 size_col{{1, 4, 4, 3, 3, 2, 3, 2, 2, 1}, all_valid});
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(exec(make_count_aggregation())->view(),
+                                 size_col{{0, 4, 4, 3, 3, 2, 3, 2, 2, 1}, all_valid});
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(
-    window_exec(make_sum_aggregation())->view(),
-    fwcw<int64_t>{{0, 12, 12, 12, 8, 17, 17, 18, 18, 1}, last_invalid});
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(window_exec(make_min_aggregation())->view(),
-                                 int_col{{0, 4, 4, 2, 2, 3, 3, 1, 1, 1}, last_invalid});
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(window_exec(make_max_aggregation())->view(),
-                                 int_col{{0, 8, 8, 6, 6, 9, 9, 9, 9, 1}, last_invalid});
+    exec(make_sum_aggregation())->view(),
+    fwcw<int64_t>{{1, 18, 18, 17, 17, 8, 12, 12, 12, 0}, first_invalid});
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(exec(make_min_aggregation())->view(),
+                                 int_col{{1, 1, 1, 3, 3, 2, 2, 4, 4, 0}, first_invalid});
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(exec(make_max_aggregation())->view(),
+                                 int_col{{1, 9, 9, 9, 9, 6, 6, 8, 8, 0}, first_invalid});
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(
-    window_exec(make_mean_aggregation())->view(),
-    fwcw<double>{{0.0, 6.0, 6.0, 4.0, 4.0, 17.0 / 3, 17.0 / 3, 4.5, 4.5, 1.0}, last_invalid});
-  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(window_exec(make_collect_aggregation())->view(),
-                                      lists_col{{{0},
-                                                 {8, 4},
-                                                 {8, 4},
-                                                 {4, 6, 2},
-                                                 {6, 2},
-                                                 {9, 3, 5},
-                                                 {9, 3, 5},
-                                                 {9, 3, 5, 1},
-                                                 {9, 3, 5, 1},
-                                                 {{0}, all_invalid}},
+    exec(make_mean_aggregation())->view(),
+    fwcw<double>{{1.0, 4.5, 4.5, 17.0 / 3, 17.0 / 3, 4.0, 4.0, 6.0, 6.0, 0.0}, first_invalid});
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(exec(make_collect_aggregation())->view(),
+                                      lists_col{{{{0}, all_invalid},
+                                                 {1, 5, 3, 9},
+                                                 {1, 5, 3, 9},
+                                                 {5, 3, 9},
+                                                 {5, 3, 9},
+                                                 {2, 6},
+                                                 {2, 6, 4},
+                                                 {4, 8},
+                                                 {4, 8},
+                                                 {0}},
                                                 all_valid});
-  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(
-    window_exec(make_collect_aggregation(null_policy::EXCLUDE))->view(),
-    lists_col{{{0},
-               {8, 4},
-               {8, 4},
-               {4, 6, 2},
-               {6, 2},
-               {9, 3, 5},
-               {9, 3, 5},
-               {9, 3, 5, 1},
-               {9, 3, 5, 1},
-               {}},
-              all_valid});
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(exec(make_collect_aggregation(null_policy::EXCLUDE))->view(),
+                                      lists_col{{{},
+                                                 {1, 5, 3, 9},
+                                                 {1, 5, 3, 9},
+                                                 {5, 3, 9},
+                                                 {5, 3, 9},
+                                                 {2, 6},
+                                                 {2, 6, 4},
+                                                 {4, 8},
+                                                 {4, 8},
+                                                 {0}},
+                                                all_valid});
 }
 
 TYPED_TEST(TypedTimeRangeRollingTest, TimeScalingDESC)
@@ -197,57 +265,68 @@ TYPED_TEST(TypedTimeRangeRollingTest, TimeScalingDESC)
   auto nano_column = cudf::cast(days_column, data_type{type_id::TIMESTAMP_NANOSECONDS});
   // clang-format on
 
-  auto window_exec = time_window_exec<DurationT>{gby_column,
-                                                 nano_column->view(),
-                                                 order::DESCENDING,
-                                                 agg_column,
-                                                 scale_days_to<DurationT>(1),   // 1 day preceding.
-                                                 scale_days_to<DurationT>(2)};  // 2 days following.
+  auto exec = window_exec(gby_column,
+                          nano_column->view(),
+                          order::DESCENDING,
+                          agg_column,
+                          scale_days_to<DurationT>(1),   // 1 day preceding.
+                          scale_days_to<DurationT>(2));  // 2 days following.
 
-  auto const all_valid     = thrust::make_constant_iterator<bool>(true);
-  auto const all_invalid   = thrust::make_constant_iterator<bool>(false);
-  auto const first_invalid = thrust::make_transform_iterator(thrust::make_counting_iterator(0),
-                                                             [](auto i) { return i != 0; });
+  verify_results_for_descending(exec);
+}
 
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(window_exec(make_count_aggregation(null_policy::INCLUDE))->view(),
-                                 size_col{{1, 4, 4, 3, 3, 2, 3, 2, 2, 1}, all_valid});
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(window_exec(make_count_aggregation())->view(),
-                                 size_col{{0, 4, 4, 3, 3, 2, 3, 2, 2, 1}, all_valid});
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(
-    window_exec(make_sum_aggregation())->view(),
-    fwcw<int64_t>{{1, 18, 18, 17, 17, 8, 12, 12, 12, 0}, first_invalid});
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(window_exec(make_min_aggregation())->view(),
-                                 int_col{{1, 1, 1, 3, 3, 2, 2, 4, 4, 0}, first_invalid});
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(window_exec(make_max_aggregation())->view(),
-                                 int_col{{1, 9, 9, 9, 9, 6, 6, 8, 8, 0}, first_invalid});
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(
-    window_exec(make_mean_aggregation())->view(),
-    fwcw<double>{{1.0, 4.5, 4.5, 17.0 / 3, 17.0 / 3, 4.0, 4.0, 6.0, 6.0, 0.0}, first_invalid});
-  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(window_exec(make_collect_aggregation())->view(),
-                                      lists_col{{{{0}, all_invalid},
-                                                 {1, 5, 3, 9},
-                                                 {1, 5, 3, 9},
-                                                 {5, 3, 9},
-                                                 {5, 3, 9},
-                                                 {2, 6},
-                                                 {2, 6, 4},
-                                                 {4, 8},
-                                                 {4, 8},
-                                                 {0}},
-                                                all_valid});
-  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(
-    window_exec(make_collect_aggregation(null_policy::EXCLUDE))->view(),
-    lists_col{{{},
-               {1, 5, 3, 9},
-               {1, 5, 3, 9},
-               {5, 3, 9},
-               {5, 3, 9},
-               {2, 6},
-               {2, 6, 4},
-               {4, 8},
-               {4, 8},
-               {0}},
-              all_valid});
+template <typename T>
+struct TypedIntegralRangeRollingTest : RangeRollingTest {
+};
+
+TYPED_TEST_CASE(TypedIntegralRangeRollingTest, cudf::test::IntegralTypesNotBool);
+
+TYPED_TEST(TypedIntegralRangeRollingTest, OrderByASC)
+{
+  // Confirm that integral ranges work with integral orderby columns,
+  // in ascending order.
+  using namespace cudf;
+  using T = TypeParam;
+
+  // clang-format off
+  auto gby_column = int_col { 0, 0, 0, 0, 0, 1, 1, 1, 1, 1};
+  auto agg_column = int_col {{0, 8, 4, 6, 2, 9, 3, 5, 1, 7},
+                             {1, 1, 1, 1, 1, 1, 1, 1, 1, 0}};
+  auto oby_column = fwcw<T>{  1, 5, 6, 8, 9, 2, 2, 3, 4, 9};
+  // clang-format on
+
+  auto exec = window_exec(gby_column,
+                          oby_column,
+                          order::ASCENDING,
+                          agg_column,
+                          numeric_scalar<T>(2),   // 2 preceding.
+                          numeric_scalar<T>(1));  // 1 following.
+
+  verify_results_for_ascending(exec);
+}
+
+TYPED_TEST(TypedIntegralRangeRollingTest, OrderByDesc)
+{
+  // Confirm that integral ranges work with integral orderby columns,
+  // in descending order.
+  using namespace cudf;
+  using T = TypeParam;
+
+  // clang-format off
+  auto gby_column  = int_col { 5, 5, 5, 5, 5, 1, 1, 1, 1, 1};
+  auto agg_column  = int_col {{7, 1, 5, 3, 9, 2, 6, 4, 8, 0},
+                              {0, 1, 1, 1, 1, 1, 1, 1, 1, 1}};
+  auto oby_column  = fwcw<T>{  9, 4, 3, 2, 2, 9, 8, 6, 5, 1};
+  // clang-format on
+
+  auto exec = window_exec(gby_column,
+                          oby_column,
+                          order::DESCENDING,
+                          agg_column,
+                          numeric_scalar<T>(1),   // 1 preceding.
+                          numeric_scalar<T>(2));  // 2 following.
+
+  verify_results_for_descending(exec);
 }
 
 template <typename T>
