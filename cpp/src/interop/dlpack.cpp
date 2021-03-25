@@ -25,11 +25,19 @@
 #include <dlpack/dlpack.h>
 
 #include <algorithm>
+#include "cudf/utilities/traits.hpp"
 
 namespace cudf {
 namespace {
 struct get_column_data_impl {
-  template <typename T>
+
+  template <typename T, std::enable_if_t<not is_rep_layout_compatible<T>()>* = nullptr>
+  void const* operator()(column_view const& col)
+  {
+    CUDF_FAIL("Unsupported type to convert to dlpack.");
+  }
+
+  template <typename T, std::enable_if_t<is_rep_layout_compatible<T>()>* = nullptr>
   void const* operator()(column_view const& col)
   {
     return col.data<T>();
