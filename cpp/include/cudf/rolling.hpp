@@ -385,71 +385,77 @@ std::unique_ptr<column> grouped_time_range_rolling_window(
  * @brief  Applies a grouping-aware, value range-based rolling window function to the values in a
  *         column.
  *
- * This is a generalization of `grouped_time_range_rolling_window()` to work with non-timestamp
- * columns. Like `grouped_time_range_rolling_window()`, this function aggregates values in a window
- * around each element of a specified `input` column. It differs from
- * `grouped_time_range_rolling_window()` in that instead of a timestamp column, the ordered column
- * can be of integral types as well as timestamps.
+ * This function aggregates rows in a window around each element of a specified `input` column. 
+ * The window is determined based on the values of an ordered `orderby` column, and on the values
+ * of a `preceding` and `following` scalar representing an inclusive range of orderby column values.
  *
  *   1. The elements of the `input` column are grouped into distinct groups (e.g. the result of a
  *      groupby), determined by the corresponding values of the columns under `group_keys`. The
  *      window-aggregation cannot cross the group boundaries.
- *   2. Within a group, the aggregation window is calculated based on an interval (e.g. number
- *      of days preceding/following the current row). The value intervals are applied on the
- *      `orderby_column` argument.
- *
+ *   2. Within a group, with all rows sorted by the `orderby` column, the aggregation window 
+ *      for a row at index `i` is determined as follows:
+ *      a) If `orderby` is ASCENDING, aggregation window for row `i` includes all `input` rows at 
+ *         index `j` such that:
+ *         @code{.pseudo}
+ *           (orderby[i] - preceding) <= orderby[j] <= orderby[i] + following
+ *         @endcode
+ *      b) If `orderby` is DESCENDING, aggregation window for row `i` includes all `input` rows at 
+ *         index `j` such that:
+ *         @code{.pseudo}
+ *           (orderby[i] + preceding) >= orderby[j] >= orderby[i] - following
+ *         @endcode
+ *     
  * Note: This method requires that the rows are presorted by the group keys and orderby column
  * values.
  *
- * The window intervals are specified as scalar values appropriate for the orderby column:
- *   1. If `orderby` column is a timestamp, the `preceding`/`following` windows are specified
- *      in terms of lower resolution `duration` scalars.
+ * The window intervals are specified as scalar values appropriate for the orderby column.
+ * Currently, only the following combinations of `orderby` column type and range types
+ * are supported:
+ *   1. If `orderby` column is a TIMESTAMP, the `preceding`/`following` windows are specified
+ *      in terms of lower resolution `DURATION` scalars.
  *      E.g. For `orderby` column of type `TIMESTAMP_SECONDS`, the intervals may be
- * `DURATION_SECONDS` or `DURATION_DAYS`. Higher resolution durations (e.g. `DURATION_NANOSECONDS`)
- * cannot be used with lower resolution timestamps.
+ *      `DURATION_SECONDS` or `DURATION_DAYS`. Higher resolution durations (e.g. 
+ *      `DURATION_NANOSECONDS`) cannot be used with lower resolution timestamps.
  *   2. If the `orderby` column is an integral type (e.g. `INT32`), the `preceding`/`following`
  *      should be the exact same type (`INT32`).
  *
  * @code{.pseudo}
- * Example: Consider a user-sales dataset, where the rows look as follows:
- *  { "user_id", sales_amt, date }
+ * Example: Consider an motor-racing statistics dataset, containing the following columns:
+ *   1. driver_name:   (STRING) Name of the car driver
+ *   2. num_overtakes: (INT32)  Number of times the driver overtook another car in a lap
+ *   3. lap_number:    (INT32)  The number of the lap
  *
- * This method enables windowing queries such as grouping a dataset by `user_id`, sorting by
- * increasing `date`, and summing up the `sales_amt` column over a window of 3 days (1 preceding
- * day, the current day, and 1 following day).
- *
- * In this example,
- *    1. `group_keys == [ user_id ]` of type `STRING`
- *    2. `orderby_column == date` of type `timestamp_S`
- *    3. `input == sales_amt` of type int
- * The data are grouped by `user_id`, and ordered by `date`. The aggregation
- * (SUM) is then calculated for a window of 3 days around (and including) each row.
- *
+ * The `group_range_rolling_window()` function allows one to calculate the total number of overtakes 
+ * each driver made within any 3 lap window of each entry:
+ *   1. Group/partition the dataset by `driver_id` (This is the group_keys argument.)
+ *   2. Sort each group by the `lap_number` (i.e. This is the orderby_column.)
+ *   3. Calculate the SUM(num_overtakes) over a window (preceding=1, following=1)
+ * 
  * For the following input:
  *
- *  [ // user,  sales_amt,  YYYYMMDDhhmmss (date)
- *    { "user1",   10,      20200101000000    },
- *    { "user2",   20,      20200101000000    },
- *    { "user1",   20,      20200102000000    },
- *    { "user1",   10,      20200103000000    },
- *    { "user2",   30,      20200101000000    },
- *    { "user2",   80,      20200102000000    },
- *    { "user1",   50,      20200107000000    },
- *    { "user1",   60,      20200107000000    },
- *    { "user2",   40,      20200104000000    }
+ *  [ // driver_name,  num_overtakes,  lap_number
+ *    {   "bottas",        1,            1        },
+ *    {   "lewis",         2,            1        },
+ *    {   "bottas",        2,            2        },
+ *    {   "bottas",        1,            3        },
+ *    {   "lewis",         3,            1        },
+ *    {   "lewis",         8,            2        },
+ *    {   "bottas",        5,            7        },
+ *    {   "bottas",        6,            8        },
+ *    {   "lewis",         4,            4        }
  *  ]
  *
- * Partitioning (grouping) by `user_id`, and ordering by `date` yields the following `sales_amt`
- * vector (with 2 groups, one for each distinct `user_id`):
+ * Partitioning (grouping) by `driver_name`, and ordering by `lap_number` yields the following 
+ * `num_overtakes` vector (with 2 groups, one for each distinct `driver_name`):
  *
- * Date :(202001-)  [ 01,  02,  03,  07,  07,    01,   01,   02,  04 ]
- * Input:           [ 10,  20,  10,  50,  60,    20,   30,   80,  40 ]
- *                    <-------user1-------->|<---------user2--------->
+ * lap_number:      [ 1,  2,  3,  7,  8,   1,  1,   2,  4 ]
+ * num_overtakes:   [ 1,  2,  1,  5,  6,   2,  3,   8,  4 ]
+ *                    <-----bottas------>|<----lewis------>
  *
- * The SUM aggregation is applied, with 1 day preceding, and 1 day following, with a minimum of 1
- * period. The aggregation window is thus 3 *days* wide, yielding the following output column:
+ * The SUM aggregation is applied, with 1 preceding, and 1 following, with a minimum of 1
+ * period. The aggregation window is thus 3 (laps) wide, yielding the following output column:
  *
- *  Results:        [ 30,  40,  30,  110, 110,  130,  130,  130,  40 ]
+ *  Results:        [ 3,  4,  3,  11, 11,  13, 13,  13,  4 ]
  *
  * @endcode
  *
@@ -458,7 +464,7 @@ std::unique_ptr<column> grouped_time_range_rolling_window(
  *  1. results[0] considers 2 values, because it is at the beginning of its group, and has no
  *     preceding values.
  *  2. results[5] considers 3 values, despite being at the beginning of its group. It must include 2
- *     following values, based on its datestamp.
+ *     following values, based on its orderby_column value.
  *
  * Each aggregation operation cannot cross group boundaries.
  *
