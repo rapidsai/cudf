@@ -278,6 +278,6 @@ def test_contains_scalar(data, scalar, expect):
 )
 def test_contains_null_search_key(data, expect):
     sr = cudf.Series(data)
-    expect = cudf.Series(expect)
+    expect = cudf.Series(expect, dtype="bool")
     got = sr.list.contains(cudf.Scalar(cudf.NA, sr.dtype.element_type))
     assert_eq(expect, got)
