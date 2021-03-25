@@ -50,6 +50,11 @@ if(EXISTS "${CMAKE_CURRENT_LIST_DIR}/cudf-arrow-targets.cmake")
   include("${CMAKE_CURRENT_LIST_DIR}/cudf-arrow-targets.cmake")
 endif()
 include("${CMAKE_CURRENT_LIST_DIR}/cudf-targets.cmake")
+
+if(EXISTS "${CMAKE_CURRENT_LIST_DIR}/cudf-testing-targets.cmake")
+  include("${CMAKE_CURRENT_LIST_DIR}/cudf-testing-targets.cmake")
+endif()
+
 include("${CMAKE_CURRENT_LIST_DIR}/cudf-config-version.cmake")
 
 check_required_components(cudf)

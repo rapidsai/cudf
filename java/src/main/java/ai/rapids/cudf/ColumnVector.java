@@ -606,7 +606,6 @@ public final class ColumnVector extends ColumnView {
       assert columns[i] != null : "Column vectors passed may not be null";
       assert columns[i].getRowCount() == size : "Row count mismatch, all columns must be the same size";
       assert !columns[i].getType().isDurationType() : "Unsupported column type Duration";
-      assert !columns[i].getType().isTimestampType() : "Unsupported column type Timestamp";
       assert !columns[i].getType().isNestedType() : "Unsupported column of nested type";
       columnViews[i] = columns[i].getNativeView();
     }

@@ -315,7 +315,7 @@ template <typename InputType,
           std::enable_if_t<!std::is_same<InputType, cudf::string_view>::value and
                            !(op == aggregation::COUNT_VALID || op == aggregation::COUNT_ALL ||
                              op == aggregation::ROW_NUMBER || op == aggregation::LEAD ||
-                             op == aggregation::LAG || op == aggregation::COLLECT)>* = nullptr>
+                             op == aggregation::LAG || op == aggregation::COLLECT_LIST)>* = nullptr>
 bool __device__ process_rolling_window(column_device_view input,
                                        column_device_view ignored_default_outputs,
                                        mutable_column_device_view output,
@@ -814,7 +814,7 @@ struct rolling_window_launcher {
             typename PrecedingWindowIterator,
             typename FollowingWindowIterator>
   std::enable_if_t<!(op == aggregation::MEAN || op == aggregation::LEAD || op == aggregation::LAG ||
-                     op == aggregation::COLLECT),
+                     op == aggregation::COLLECT_LIST),
                    std::unique_ptr<column>>
   operator()(column_view const& input,
              column_view const& default_outputs,
@@ -897,11 +897,11 @@ struct rolling_window_launcher {
   }
 
   /**
-   * @brief Creates the offsets child of the result of the `COLLECT` window aggregation
+   * @brief Creates the offsets child of the result of the `COLLECT_LIST` window aggregation
    *
    * Given the input column, the preceding/following window bounds, and `min_periods`,
    * the sizes of each list row may be computed. These values can then be used to
-   * calculate the offsets for the result of `COLLECT`.
+   * calculate the offsets for the result of `COLLECT_LIST`.
    *
    * Note: If `min_periods` exceeds the number of observations for a window, the size
    * is set to `0` (since the result is `null`).
@@ -945,7 +945,7 @@ struct rolling_window_launcher {
   }
 
   /**
-   * @brief Generate mapping of each row in the COLLECT result's child column
+   * @brief Generate mapping of each row in the COLLECT_LIST result's child column
    * to the index of the row it belongs to.
    *
    *  If
@@ -1030,7 +1030,7 @@ struct rolling_window_launcher {
 
   /**
    * @brief Create gather map to generate the child column of the result of
-   * the `COLLECT` window aggregation.
+   * the `COLLECT_LIST` window aggregation.
    */
   template <typename PrecedingIter>
   std::unique_ptr<column> create_collect_gather_map(column_view const& child_offsets,
@@ -1064,7 +1064,7 @@ struct rolling_window_launcher {
   }
 
   /**
-   * @brief Count null entries in result of COLLECT.
+   * @brief Count null entries in result of COLLECT_LIST.
    */
   size_type count_child_nulls(column_view const& input,
                               std::unique_ptr<column> const& gather_map,
@@ -1139,7 +1139,7 @@ struct rolling_window_launcher {
   }
 
   template <aggregation::Kind op, typename PrecedingIter, typename FollowingIter>
-  std::enable_if_t<(op == aggregation::COLLECT), std::unique_ptr<column>> operator()(
+  std::enable_if_t<(op == aggregation::COLLECT_LIST), std::unique_ptr<column>> operator()(
     column_view const& input,
     column_view const& default_outputs,
     PrecedingIter preceding_begin_raw,
@@ -1150,7 +1150,7 @@ struct rolling_window_launcher {
     rmm::mr::device_memory_resource* mr)
   {
     CUDF_EXPECTS(default_outputs.is_empty(),
-                 "COLLECT window function does not support default values.");
+                 "COLLECT_LIST window function does not support default values.");
 
     if (input.is_empty()) return empty_like(input);
 
@@ -1370,6 +1370,7 @@ std::unique_ptr<column> rolling_window(column_view const& input,
   auto input_col = cudf::is_dictionary(input.type())
                      ? dictionary_column_view(input).get_indices_annotated()
                      : input;
+
   auto output = cudf::type_dispatcher(input_col.type(),
                                       dispatch_rolling{},
                                       input_col,

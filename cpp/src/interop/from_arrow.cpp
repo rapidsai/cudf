@@ -150,8 +150,7 @@ struct dispatch_to_cudf_column {
 
 std::unique_ptr<column> get_empty_type_column(size_type size)
 {
-  return std::make_unique<column>(
-    data_type(type_id::EMPTY), size, std::move(rmm::device_buffer(0)));
+  return std::make_unique<column>(data_type(type_id::EMPTY), size, rmm::device_buffer(0));
 }
 
 /**
