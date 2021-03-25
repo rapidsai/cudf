@@ -19,7 +19,7 @@ from cudf._lib.cpp.column.column_view cimport column_view
 # Note that the parameter input shadows a Python built-in in the local scope,
 # but I'm not too concerned about that since there's no use-case for actual
 # input in this context.
-cdef label_bins(Column input, Column left_edges, left_inclusive,
+def label_bins(Column input, Column left_edges, left_inclusive,
          Column right_edges, right_inclusive):
     cdef inclusive c_left_inclusive = inclusive.YES if left_inclusive else inclusive.NO
     cdef inclusive c_right_inclusive = inclusive.YES if right_inclusive else inclusive.NO
