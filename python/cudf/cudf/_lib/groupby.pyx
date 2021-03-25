@@ -51,11 +51,50 @@ _STRING_AGGS = {
     "min",
     "nunique",
     "nth",
-    "collect"
+    "collect",
+    "variance"
 }
 
 _LIST_AGGS = {
     "collect"
+}
+
+# TODO: For now, the aggs for all of these extension types are the same as strings until we can find a way to fix that.
+_STRUCT_AGGS = {
+    "count",
+    "size",
+    "max",
+    "min",
+    "nunique",
+    "nth",
+    "collect"
+}
+
+_INTERVAL_AGGS = {
+    "count",
+    "size",
+    "max",
+    "min",
+    "nunique",
+    "nth",
+    "collect"
+}
+
+_DECIMAL_AGGS = {
+    "count",
+    "sum",
+    "idxmin",  # Silently fails.
+    "idxmax",  # Silently fails.
+    "min",
+    "max",
+    "mean",  # Errors internally in C++
+    "var",  # Silently fails.
+    "std",
+    "quantile",  # Errors internally in C++
+    "median",  # Errors internally in C++
+    "nunique",
+    "nth",
+    "collect"  # Errors internally in Python
 }
 
 cdef class GroupBy:
@@ -182,10 +221,14 @@ def _drop_unsupported_aggs(Table values, aggs):
     from cudf.utils.dtypes import (
         is_categorical_dtype,
         is_string_dtype,
-        is_list_dtype
+        is_list_dtype,
+        is_interval_dtype,
+        is_struct_dtype,
+        is_decimal_dtype,
     )
     result = aggs.copy()
 
+        # and not is_decimal_dtype(obj)
     for col_name in aggs:
         if (
             is_list_dtype(values._data[col_name].dtype)
@@ -204,6 +247,24 @@ def _drop_unsupported_aggs(Table values, aggs):
         ):
             for i, agg_name in enumerate(aggs[col_name]):
                 if Aggregation(agg_name).kind not in _CATEGORICAL_AGGS:
+                    del result[col_name][i]
+        elif (
+                is_struct_dtype(values._data[col_name].dtype)
+        ):
+            for i, agg_name in enumerate(aggs[col_name]):
+                if Aggregation(agg_name).kind not in _STRUCT_AGGS:
+                    del result[col_name][i]
+        elif (
+                is_interval_dtype(values._data[col_name].dtype)
+        ):
+            for i, agg_name in enumerate(aggs[col_name]):
+                if Aggregation(agg_name).kind not in _INTERVAL_AGGS:
+                    del result[col_name][i]
+        elif (
+                is_decimal_dtype(values._data[col_name].dtype)
+        ):
+            for i, agg_name in enumerate(aggs[col_name]):
+                if Aggregation(agg_name).kind not in _DECIMAL_AGGS:
                     del result[col_name][i]
 
     if all(len(v) == 0 for v in result.values()):
