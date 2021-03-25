@@ -138,15 +138,6 @@ class memory_mapped_source : public file_source {
 };
 
 class direct_read_source : public file_source {
-  class vector_buffer : public buffer {
-    std::vector<uint8_t> _data;
-
-   public:
-    explicit vector_buffer(std::vector<uint8_t> &&data) : _data(std::move(data)) {}
-    size_t size() const override { return _data.size(); }
-    const uint8_t *data() const override { return _data.data(); }
-  };
-
  public:
   explicit direct_read_source(const char *filepath)
     : file_source(filepath), _file(filepath, O_RDONLY)
@@ -163,7 +154,7 @@ class direct_read_source : public file_source {
     ssize_t const read_size = std::min(size, _file_size - offset);
     std::vector<uint8_t> v(read_size);
     CUDF_EXPECTS(read(_file.desc(), v.data(), read_size) == read_size, "read failed");
-    return std::make_unique<vector_buffer>(std::move(v));
+    return buffer::create(std::move(v));
   }
 
   size_t host_read(size_t offset, size_t size, uint8_t *dst) override
