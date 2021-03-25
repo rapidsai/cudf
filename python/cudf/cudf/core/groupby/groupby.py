@@ -708,10 +708,10 @@ class DataFrameGroupBy(GroupBy):
         )
 
     def __getattr__(self, key):
-        if key in self.obj:
-            return self.obj[key].groupby(
-                self.grouping, dropna=self._dropna, sort=self._sort
-            )
+        try:
+            return self[key]
+        except KeyError:
+            raise AttributeError
 
     def __getitem__(self, key):
         return self.obj[key].groupby(
