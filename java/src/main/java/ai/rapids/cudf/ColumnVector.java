@@ -359,7 +359,7 @@ public final class ColumnVector extends ColumnView {
    * Convert a ColumnVector to Arrow and return the metadata about the Arrow
    * column. The caller is responsible for building up the actual ArrowBuffer
    * and Vectors from the metadata supplied here.
-   * The caller is responsible for freeing the underlying Arrow Array retruned
+   * The caller is responsible for freeing the underlying Arrow Array retrurned
    * by the handle in ArrowColumnInfo.
    * Currently supports primitive types and Strings, Decimals and nested
    * types are not supported.
@@ -382,6 +382,10 @@ public final class ColumnVector extends ColumnView {
     return columnInfo;
   }
 
+  /**
+   * Closes the Arrow Array to free the memory it uses.
+   * @param handle - handle to the Arrow Array
+   */
   public static void closeArrowArray(long handle) {
     closeArrowArrayNative(handle);
   }
@@ -696,7 +700,7 @@ public final class ColumnVector extends ColumnView {
       ByteBuffer offsets) throws CudfException;
 
   /**
-   * Close the arrow array handle. 
+   * Close the Arrow array.
    */
   private static native void closeArrowArrayNative(long arrowArrayHandle);
 

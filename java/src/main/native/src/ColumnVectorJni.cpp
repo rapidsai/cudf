@@ -130,7 +130,7 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_fromArrow(JNIEnv *env, 
         JNI_THROW_NEW(env, cudf::jni::ILLEGAL_ARG_CLASS, "Don't support converting DICTIONARY32 yet", 0);
         break;
       case cudf::type_id::STRING:
-        arrow_array = std::make_shared<arrow::StringArray>(j_col_length, offsets_buffer, data_buffer);
+        arrow_array = std::make_shared<arrow::StringArray>(j_col_length, offsets_buffer, data_buffer, null_buffer, j_null_count);
         break;
       default:
         // this handles the primitive types
