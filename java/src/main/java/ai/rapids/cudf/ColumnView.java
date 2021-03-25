@@ -288,17 +288,32 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
   /**
    * Returns a Boolean vector with the same number of rows as this instance, that has
    * TRUE for any entry that is an integer, and FALSE if its not an integer. A null will be returned
-   * for null entries
+   * for null entries.
    *
    * NOTE: Integer doesn't mean a 32-bit integer. It means a number that is not a fraction.
    * i.e. If this method returns true for a value it could still result in an overflow or underflow
    * if you convert it to a Java integral type
    *
-   * @return - Boolean vector
+   * @return Boolean vector
    */
   public final ColumnVector isInteger() {
     assert type.equals(DType.STRING);
     return new ColumnVector(isInteger(getNativeView()));
+  }
+
+  /**
+   * Returns a Boolean vector with the same number of rows as this instance, that has
+   * TRUE for any entry that is an integer, and FALSE if its not an integer. A null will be returned
+   * for null entries.
+   *
+   * @param intType the data type that should be used for bounds checking. Note that only
+   *                integer types are allowed.
+   * @return Boolean vector
+   */
+  public final ColumnVector isInteger(DType intType) {
+    assert type.equals(DType.STRING);
+    return new ColumnVector(isIntegerWithType(getNativeView(),
+        intType.getTypeId().getNativeId(), intType.getScale()));
   }
 
   /**
@@ -2844,6 +2859,8 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
   private static native long isFloat(long viewHandle);
 
   private static native long isInteger(long viewHandle);
+
+  private static native long isIntegerWithType(long viewHandle, int typeId, int typeScale);
 
   private static native long isNotNanNative(long viewHandle);
 
