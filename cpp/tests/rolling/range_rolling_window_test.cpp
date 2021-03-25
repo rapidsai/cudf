@@ -151,7 +151,7 @@ void verify_results_for_ascending(WindowExecT exec)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(
     exec(make_mean_aggregation())->view(),
     fwcw<double>{{0.0, 6.0, 6.0, 4.0, 4.0, 17.0 / 3, 17.0 / 3, 4.5, 4.5, 1.0}, last_invalid});
-  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(exec(make_collect_aggregation())->view(),
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(exec(make_collect_list_aggregation())->view(),
                                       lists_col{{{0},
                                                  {8, 4},
                                                  {8, 4},
@@ -163,18 +163,19 @@ void verify_results_for_ascending(WindowExecT exec)
                                                  {9, 3, 5, 1},
                                                  {{0}, all_invalid}},
                                                 all_valid});
-  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(exec(make_collect_aggregation(null_policy::EXCLUDE))->view(),
-                                      lists_col{{{0},
-                                                 {8, 4},
-                                                 {8, 4},
-                                                 {4, 6, 2},
-                                                 {6, 2},
-                                                 {9, 3, 5},
-                                                 {9, 3, 5},
-                                                 {9, 3, 5, 1},
-                                                 {9, 3, 5, 1},
-                                                 {}},
-                                                all_valid});
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(
+    exec(make_collect_list_aggregation(null_policy::EXCLUDE))->view(),
+    lists_col{{{0},
+               {8, 4},
+               {8, 4},
+               {4, 6, 2},
+               {6, 2},
+               {9, 3, 5},
+               {9, 3, 5},
+               {9, 3, 5, 1},
+               {9, 3, 5, 1},
+               {}},
+              all_valid});
 }
 
 TYPED_TEST(TypedTimeRangeRollingTest, TimeScalingASC)
@@ -224,7 +225,7 @@ void verify_results_for_descending(WindowExecT exec)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(
     exec(make_mean_aggregation())->view(),
     fwcw<double>{{1.0, 4.5, 4.5, 17.0 / 3, 17.0 / 3, 4.0, 4.0, 6.0, 6.0, 0.0}, first_invalid});
-  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(exec(make_collect_aggregation())->view(),
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(exec(make_collect_list_aggregation())->view(),
                                       lists_col{{{{0}, all_invalid},
                                                  {1, 5, 3, 9},
                                                  {1, 5, 3, 9},
@@ -236,18 +237,19 @@ void verify_results_for_descending(WindowExecT exec)
                                                  {4, 8},
                                                  {0}},
                                                 all_valid});
-  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(exec(make_collect_aggregation(null_policy::EXCLUDE))->view(),
-                                      lists_col{{{},
-                                                 {1, 5, 3, 9},
-                                                 {1, 5, 3, 9},
-                                                 {5, 3, 9},
-                                                 {5, 3, 9},
-                                                 {2, 6},
-                                                 {2, 6, 4},
-                                                 {4, 8},
-                                                 {4, 8},
-                                                 {0}},
-                                                all_valid});
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(
+    exec(make_collect_list_aggregation(null_policy::EXCLUDE))->view(),
+    lists_col{{{},
+               {1, 5, 3, 9},
+               {1, 5, 3, 9},
+               {5, 3, 9},
+               {5, 3, 9},
+               {2, 6},
+               {2, 6, 4},
+               {4, 8},
+               {4, 8},
+               {0}},
+              all_valid});
 }
 
 TYPED_TEST(TypedTimeRangeRollingTest, TimeScalingDESC)
