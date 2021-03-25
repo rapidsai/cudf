@@ -1,23 +1,22 @@
 # Copyright (c) 2021, NVIDIA CORPORATION.
 
-import cudf
+from typing import cast
+
 import cupy as cp
 import numpy as np
 import pyarrow as pa
 from pandas.api.types import is_integer_dtype
-from typing import cast
 
+import cudf
 from cudf import _lib as libcudf
-from cudf.core.buffer import Buffer
-from cudf.core.column import ColumnBase
-from cudf.core.dtypes import Decimal64Dtype
-from cudf.utils.utils import pa_mask_buffer_to_mask
-
-from cudf._typing import Dtype
 from cudf._lib.strings.convert.convert_fixed_point import (
     from_decimal as cpp_from_decimal,
 )
-from cudf.core.column import as_column
+from cudf._typing import Dtype
+from cudf.core.buffer import Buffer
+from cudf.core.column import ColumnBase, as_column
+from cudf.core.dtypes import Decimal64Dtype
+from cudf.utils.utils import pa_mask_buffer_to_mask
 
 
 class DecimalColumn(ColumnBase):
@@ -64,12 +63,20 @@ class DecimalColumn(ColumnBase):
     def binary_operator(self, op, other, reflect=False):
         if reflect:
             self, other = other, self
-        scale = _binop_scale(self.dtype, other.dtype, op)
-        output_type = Decimal64Dtype(
-            scale=scale, precision=Decimal64Dtype.MAX_PRECISION
-        )  # precision will be ignored, libcudf has no notion of precision
-        result = libcudf.binaryop.binaryop(self, other, op, output_type)
-        result.dtype.precision = _binop_precision(self.dtype, other.dtype, op)
+
+        # Binary Arithmatics between decimal columns. `Scale` and `precision`
+        # are computed outside of libcudf
+        if op in ("add", "sub", "mul"):
+            scale = _binop_scale(self.dtype, other.dtype, op)
+            output_type = Decimal64Dtype(
+                scale=scale, precision=Decimal64Dtype.MAX_PRECISION
+            )  # precision will be ignored, libcudf has no notion of precision
+            result = libcudf.binaryop.binaryop(self, other, op, output_type)
+            result.dtype.precision = _binop_precision(
+                self.dtype, other.dtype, op
+            )
+        elif op in ("eq", "lt", "gt", "le", "ge"):
+            result = libcudf.binaryop.binaryop(self, other, op, bool)
         return result
 
     def as_decimal_column(
