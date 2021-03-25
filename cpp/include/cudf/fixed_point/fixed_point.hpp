@@ -260,16 +260,30 @@ class fixed_point {
   fixed_point() : _value{0}, _scale{scale_type{0}} {}
 
   /**
-   * @brief Explicit conversion operator
+   * @brief Explicit conversion operator for casting to floating point types
    *
-   * @tparam U The type that is being explicitly converted to (integral or floating)
+   * @tparam U The floating point type that is being explicitly converted to
    * @return The `fixed_point` number in base 10 (aka human readable format)
    */
   template <typename U,
-            typename cuda::std::enable_if_t<is_supported_construction_value_type<U>()>* = nullptr>
+            typename cuda::std::enable_if_t<std::is_floating_point<U>::value>* = nullptr>
   CUDA_HOST_DEVICE_CALLABLE explicit constexpr operator U() const
   {
     return detail::shift<Rep, Rad>(static_cast<U>(_value), detail::negate(_scale));
+  }
+
+  /**
+   * @brief Explicit conversion operator for casting to integral types
+   *
+   * @tparam U The integral type that is being explicitly converted to
+   * @return The `fixed_point` number in base 10 (aka human readable format)
+   */
+  template <typename U, typename cuda::std::enable_if_t<std::is_integral<U>::value>* = nullptr>
+  CUDA_HOST_DEVICE_CALLABLE explicit constexpr operator U() const
+  {
+    // Don't cast to U until converting to Rep because in certain cases casting to U before shifting
+    // will result in integer overflow (i.e. if U = int32_t, Rep = int64_t and _value > 2 billion)
+    return static_cast<U>(detail::shift<Rep, Rad>(_value, detail::negate(_scale)));
   }
 
   CUDA_HOST_DEVICE_CALLABLE operator scaled_integer<Rep>() const
