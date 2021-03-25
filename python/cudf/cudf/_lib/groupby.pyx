@@ -44,8 +44,8 @@ _LIST_AGGS = {
     "collect"
 }
 
-# TODO: For now, the aggs for struct and interval types are the same as strings.
-# Need to evaluate what's actually reasonable.
+# TODO: For now, the aggs for struct and interval types are the same as
+# strings.  Need to evaluate what's actually reasonable.
 _STRUCT_AGGS = {
     "count",
     "size",
@@ -75,22 +75,6 @@ _DECIMAL_AGGS = {
     "argmax",
     "min",
     "max",
-    # TODO: As far as I can tell, variance and std are using the reduction operations
-    # defined in reductions/compound.cuh. reductions/var.cu defines it as using the
-    # element_type_dispatcher, which checks validity using std::is_arithmetic. I assume
-    # that this is intentional, in which case var and std are not supported. However,
-    # instead of raising any errors, I just get columns of NULLs if I try to actually
-    # compute the variance of a GroupBy object containing decimals, so something else
-    # might be wrong as well.
-    "variance",  # Gives all nulls.
-    "std",  # Gives all nulls.
-    # TODO: Need to resolve the three below. They fail with a cudf error, but the error
-    # indicates that the column type is wrong (it wants a fixed point column but isn't
-    # receiving one). I suspect that a special-cased conversion for decimal types is
-    # missing somewhere.
-    "mean",  # Errors internally in C++
-    "quantile",  # Errors internally in C++
-    "median",  # Errors internally in C++
     "nunique",
     "nth",
     "collect"
@@ -227,7 +211,6 @@ def _drop_unsupported_aggs(Table values, aggs):
     )
     result = aggs.copy()
 
-        # and not is_decimal_dtype(obj)
     for col_name in aggs:
         if (
             is_list_dtype(values._data[col_name].dtype)
