@@ -243,7 +243,7 @@ struct column_merger {
     rmm::cuda_stream_view stream,
     rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource()) const
   {
-      CUDF_FAIL("Unsupported type for merge.");
+    CUDF_FAIL("Unsupported type for merge.");
   }
 
   // column merger operator;

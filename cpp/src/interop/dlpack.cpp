@@ -30,7 +30,6 @@
 namespace cudf {
 namespace {
 struct get_column_data_impl {
-
   template <typename T, std::enable_if_t<not is_rep_layout_compatible<T>()>* = nullptr>
   void const* operator()(column_view const& col)
   {

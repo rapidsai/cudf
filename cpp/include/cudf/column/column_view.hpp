@@ -18,7 +18,6 @@
 #include <cudf/types.hpp>
 #include <cudf/utilities/traits.hpp>
 
-
 #include <vector>
 
 /**

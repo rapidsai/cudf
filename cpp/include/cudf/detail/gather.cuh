@@ -369,7 +369,6 @@ struct column_gatherer_impl<list_view> {
   }
 };
 
-
 /**
  * @brief Column gather specialization for dictionary column type.
  */
@@ -487,7 +486,6 @@ struct column_gatherer_impl<struct_view> {
   }
 };
 
-
 /**
  * @brief Function object for applying a transformation on the gathermap
  * that converts negative indices to positive indices
@@ -599,7 +597,6 @@ void gather_bitmask(table_view const& source,
     }
   }
 }
-
 
 /**
  * @brief Gathers the specified rows of a set of columns according to a gather map.

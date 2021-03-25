@@ -34,7 +34,8 @@ struct get_data_ptr_functor {
 
   // TODO: both the failing operators can be combined into single template
   template <typename T>
-  std::enable_if_t<not is_rep_layout_compatible<T>(), const void*> operator()(column_view const& view)
+  std::enable_if_t<not is_rep_layout_compatible<T>(), const void*> operator()(
+    column_view const& view)
   {
     CUDF_FAIL("Invalid data type for JIT operation");
   }

@@ -118,7 +118,7 @@ struct dispatch_to_cudf_column {
                                      rmm::cuda_stream_view stream,
                                      rmm::mr::device_memory_resource* mr)
   {
-      CUDF_FAIL("Unsupported type in from_arrow.");
+    CUDF_FAIL("Unsupported type in from_arrow.");
   }
 
   template <typename T, std::enable_if_t<is_rep_layout_compatible<T>()>* = nullptr>

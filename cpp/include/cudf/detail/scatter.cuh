@@ -81,15 +81,11 @@ auto scatter_to_gather(MapIterator scatter_map_begin,
 
 template <typename Element, typename Enable = void>
 struct column_scatterer_impl {
-  std::unique_ptr<column> operator()(...) const
-  {
-      CUDF_FAIL("Unsupported type for scatter.");
-  }
+  std::unique_ptr<column> operator()(...) const { CUDF_FAIL("Unsupported type for scatter."); }
 };
 
 template <typename Element>
-struct column_scatterer_impl<Element, std::enable_if_t<cudf::is_fixed_width<Element>()> >{
-
+struct column_scatterer_impl<Element, std::enable_if_t<cudf::is_fixed_width<Element>()>> {
   template <typename MapIterator>
   std::unique_ptr<column> operator()(column_view const& source,
                                      MapIterator scatter_map_begin,
@@ -144,7 +140,6 @@ struct column_scatterer_impl<list_view> {
       source, scatter_map_begin, scatter_map_end, target, stream, mr);
   }
 };
-
 
 template <>
 struct column_scatterer_impl<dictionary32> {
