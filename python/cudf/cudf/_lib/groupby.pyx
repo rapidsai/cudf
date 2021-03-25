@@ -88,7 +88,7 @@ _DECIMAL_AGGS = {
     "min",
     "max",
     "mean",  # Errors internally in C++
-    "var",  # Column silently vanishes.
+    "variance",  # Gives all nulls.
     "std",  # Gives all nulls.
     "quantile",  # Errors internally in C++
     "median",  # Errors internally in C++
