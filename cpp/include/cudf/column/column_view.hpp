@@ -65,9 +65,7 @@ class column_view_base {
   T const* head() const noexcept
   {
     // TODO Replace with enable_if
-    static_assert(std::is_same<T, void>::value or cudf::is_numeric<T>() or cudf::is_chrono<T>() or
-                    cudf::is_boolean<T>(),
-                  "");
+    static_assert(std::is_same<T, void>::value or is_rep_layout_compatible<T>(), "");
     return static_cast<T const*>(_data);
   }
 

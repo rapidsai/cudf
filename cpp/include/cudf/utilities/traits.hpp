@@ -444,6 +444,23 @@ constexpr inline bool is_chrono(data_type type)
 }
 
 /**
+ * @brief Indicates whether `T` is layout compatible with its "representation" type.
+ *
+ * For example, in a column, a `decimal32` is concretely represented by a single `int32_t`, but the
+ * `decimal32` type itself contains both the integer representation and the scale. Therefore,
+ * `decimal32` is _not_ layout compatible with `int32_t`.
+ *
+ * As further example, `duration_ns` is distinct from its concrete `int64_t` representation type,
+ * but they are layout compatible.
+ *
+ */
+template <typename T>
+constexpr bool is_rep_layout_compatible()
+{
+  return cudf::is_numeric<T>() or cudf::is_chrono<T>() or cudf::is_boolean<T>();
+}
+
+/**
  * @brief Indicates whether the type `T` is a dictionary type.
  *
  * @tparam T  The type to verify
