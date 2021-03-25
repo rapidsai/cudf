@@ -245,14 +245,14 @@ cdef _set_timedelta64_from_np_scalar(unique_ptr[scalar]& s,
 cdef _set_decimal64_from_scalar(unique_ptr[scalar]& s,
                                 object value,
                                 object dtype,
-                                bool valid=True)
+                                bool valid=True):
 
                             
     from cudf.utils.dtypes import decimal_as_int64
     from decimal import Decimal
     value = decimal_as_int64(Decimal(np.format_float_positional(value, dtype.scale))) if valid else 0
     s.reset(
-        new fixed_point_scalar[decimal64](<int64_t>np.int64(value), dtype.scale, valid)
+        new fixed_point_scalar[decimal64](<int64_t>np.int64(value), scale_type(dtype.scale), valid)
     )
 
 cdef _get_py_string_from_string(unique_ptr[scalar]& s):
@@ -290,8 +290,8 @@ cdef _get_np_scalar_from_numeric(unique_ptr[scalar]& s):
         return np.float64((<numeric_scalar[double]*>s_ptr)[0].value())
     elif cdtype.id() == libcudf_types.BOOL8:
         return np.bool_((<numeric_scalar[bool]*>s_ptr)[0].value())
-    #elif cdtype.id() == libcudf_types.DECIMAL64:
-    #    return (<fixed_point_scalar[decimal64]*>s_ptr)[0].value()
+    elif cdtype.id() == libcudf_types.DECIMAL64:
+        return np.int64((<int64_t*>s_ptr)[0].value())
     else:
         raise ValueError("Could not convert cudf::scalar to numpy scalar")
 

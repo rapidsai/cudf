@@ -379,10 +379,6 @@ def to_cudf_compatible_scalar(val, dtype=None):
 
     return val
 
-def decimal_as_int64(d):
-    return int(d * (10**(-d.as_tuple().exponent)))
-
-
 def is_list_like(obj):
     """
     This function checks if the given `obj`

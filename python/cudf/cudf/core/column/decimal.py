@@ -18,6 +18,7 @@ from cudf._lib.strings.convert.convert_fixed_point import (
     from_decimal as cpp_from_decimal,
 )
 from cudf.core.column import as_column
+from decimal import Decimal
 
 
 class DecimalColumn(ColumnBase):
@@ -75,7 +76,8 @@ class DecimalColumn(ColumnBase):
     def normalize_binop_value(self, other):
         from cudf.utils.dtypes import is_scalar
         if is_scalar(other):
-            other = cudf.Scalar(other, dtype=self.dtype)
+            other, dtype = _decimalize_scalar(other)
+            other = cudf.Scalar(other, dtype=dtype)
             return other
         else:
             raise TypeError(f"cannot normalize {type(other)}")
@@ -138,3 +140,27 @@ def _binop_precision(l_dtype, r_dtype, op):
         return p1 + p2 + 1
     else:
         raise NotImplementedError()
+
+def _decimalize_scalar(slr):
+    if isinstance(slr, (str, int)):
+        dcml = Decimal(slr)
+        dcml_int = int(dcml * (10**(-dcml.as_tuple().exponent)))
+        scale = len(str(dcml_int))        
+        return dcml_int, scale
+    else:
+        raise TypeError(f"No equiavalent Decimal value for {slr}")
+
+def _decimal_to_int64(decimal: Decimal) -> int:
+    """
+    Convert a decimal.Decimal value to the int64
+    expected by libcudf
+    """
+    if int(decimal.radix()) != 10:
+        raise ValueError(
+            "Only base-10 decimals currently supported."
+        )
+    digits = decimal.as_tuple().digits
+    start = 0
+    for power, digit in enumerate(reversed(digits)):
+        start += digit*(10**power)
+    return start
