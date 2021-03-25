@@ -18,7 +18,6 @@
 
 package ai.rapids.cudf;
 
-import java.nio.ByteBuffer;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 import java.util.ArrayList;
@@ -54,7 +53,6 @@ import org.apache.arrow.vector.util.Text;
 
 import org.junit.jupiter.api.Test;
 
-import static ai.rapids.cudf.TableTest.assertColumnsAreEqual;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;

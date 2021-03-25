@@ -18,9 +18,6 @@
 
 package ai.rapids.cudf;
 
-import java.nio.ByteBuffer;
-import java.util.ArrayList;
-
 /**
  * Holds information about the underlying Arrow column. This returns addresses and sizes
  * of the underlying Arrow buffers that can be used to reconstruct the Arrow vector.
