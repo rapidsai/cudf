@@ -139,8 +139,6 @@ class cufile_config {
   std::string const policy = default_policy;
   temp_directory tmp_config_dir{"cudf_cufile_config"};
 
-  std::string getenv_or(std::string const &env_var_name, std::string const &default_val);
-
   cufile_config();
 
  public:

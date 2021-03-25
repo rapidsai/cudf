@@ -49,14 +49,13 @@ long file_wrapper::size() const
   return _size;
 }
 
-#ifdef CUFILE_FOUND
-
-std::string cufile_config::getenv_or(std::string const &env_var_name,
-                                     std::string const &default_val)
+std::string getenv_or(std::string const &env_var_name, std::string const &default_val)
 {
   auto const env_val = std::getenv(env_var_name.c_str());
   return (env_val == nullptr) ? default_val : std::string(env_val);
 }
+
+#ifdef CUFILE_FOUND
 
 cufile_config::cufile_config() : policy{getenv_or("LIBCUDF_CUFILE_POLICY", default_policy)}
 {
