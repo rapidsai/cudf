@@ -235,7 +235,7 @@ std::unique_ptr<column> generate_entry_list_offsets(size_type num_entries,
  * @tparam nans_equal Flag to specify whether NaN entries should be considered as equal value (only
  * applicable for floating point data column)
  */
-template <class Type, bool nans_equal>
+template <class Type, nan_equality nans_equal>
 class list_entry_comparator {
  public:
   list_entry_comparator(offset_type const* list_offsets,
@@ -246,9 +246,10 @@ class list_entry_comparator {
   {
   }
 
-  template <bool nans_equal_ = nans_equal>
-  std::enable_if_t<cuda::std::is_floating_point_v<Type> and nans_equal_, bool> __device__
-  operator()(size_type i, size_type j) const noexcept
+  template <nan_equality nans_equal_ = nans_equal>
+  std::enable_if_t<cuda::std::is_floating_point_v<Type> and nans_equal_ != nan_equality::UNEQUAL,
+                   bool>
+    __device__ operator()(size_type i, size_type j) const noexcept
   {
     // Two entries are not considered for equality if they belong to different lists
     if (list_offsets[i] != list_offsets[j]) { return false; }
@@ -264,17 +265,22 @@ class list_entry_comparator {
       }
     }
 
-    // For floating point types, if both element(i) and element(j) are NaNs then this comparison
-    // will return `true`. This is the desired behavior in Pandas.
+    // For floating point types, if both element(i) and element(j) are NaNs and:
+    //   nans_equal_ == ALL_EQUAL, this will always return `true`
+    //   nans_equal_ == SAME_SIGN_EQUAL: returns `true' only if both elements have the same sign
     auto const lhs = d_view.element<Type>(i);
     auto const rhs = d_view.element<Type>(j);
-    if (std::isnan(lhs) and std::isnan(rhs)) { return true; }
+    if (std::isnan(lhs) and std::isnan(rhs)) {
+      if (nans_equal_ == nan_equality::ALL_EQUAL) { return true; }
+      return std::signbit(lhs) == std::signbit(rhs);
+    }
     return lhs == rhs;
   }
 
-  template <bool nans_equal_ = nans_equal>
-  std::enable_if_t<not cuda::std::is_floating_point_v<Type> or not nans_equal_, bool> __device__
-  operator()(size_type i, size_type j) const noexcept
+  template <nan_equality nans_equal_ = nans_equal>
+  std::enable_if_t<not cuda::std::is_floating_point_v<Type> or nans_equal_ == nan_equality::UNEQUAL,
+                   bool>
+    __device__ operator()(size_type i, size_type j) const noexcept
   {
     // Two entries are not considered for equality if they belong to different lists
     if (list_offsets[i] != list_offsets[j]) { return false; }
@@ -291,7 +297,7 @@ class list_entry_comparator {
     }
 
     // For floating point types, if both element(i) and element(j) are NaNs then this comparison
-    // will return `false`. This is the desired behavior in Apache Spark.
+    // will always return `false`. This is the desired behavior in Apache Spark.
     return d_view.element<Type>(i) == d_view.element<Type>(j);
   }
 
@@ -330,20 +336,34 @@ struct get_unique_entries_fn {
                           bool has_nulls,
                           rmm::cuda_stream_view stream) const noexcept
   {
-    if (nans_equal == nan_equality::ALL_EQUAL) {
-      list_entry_comparator<Type, true> const comp{list_offsets, d_view, nulls_equal, has_nulls};
-      return thrust::unique_copy(rmm::exec_policy(stream),
-                                 thrust::make_counting_iterator(0),
-                                 thrust::make_counting_iterator(num_entries),
-                                 output_begin,
-                                 comp);
-    } else {
-      list_entry_comparator<Type, false> const comp{list_offsets, d_view, nulls_equal, has_nulls};
-      return thrust::unique_copy(rmm::exec_policy(stream),
-                                 thrust::make_counting_iterator(0),
-                                 thrust::make_counting_iterator(num_entries),
-                                 output_begin,
-                                 comp);
+    switch (nans_equal) {
+      case nan_equality::ALL_EQUAL: {
+        list_entry_comparator<Type, nan_equality::ALL_EQUAL> const comp{
+          list_offsets, d_view, nulls_equal, has_nulls};
+        return thrust::unique_copy(rmm::exec_policy(stream),
+                                   thrust::make_counting_iterator(0),
+                                   thrust::make_counting_iterator(num_entries),
+                                   output_begin,
+                                   comp);
+      }
+      case nan_equality::UNEQUAL: {
+        list_entry_comparator<Type, nan_equality::UNEQUAL> const comp{
+          list_offsets, d_view, nulls_equal, has_nulls};
+        return thrust::unique_copy(rmm::exec_policy(stream),
+                                   thrust::make_counting_iterator(0),
+                                   thrust::make_counting_iterator(num_entries),
+                                   output_begin,
+                                   comp);
+      }
+      default: {  // case nan_equality::SAME_SIGN_EQUAL:
+        list_entry_comparator<Type, nan_equality::SAME_SIGN_EQUAL> const comp{
+          list_offsets, d_view, nulls_equal, has_nulls};
+        return thrust::unique_copy(rmm::exec_policy(stream),
+                                   thrust::make_counting_iterator(0),
+                                   thrust::make_counting_iterator(num_entries),
+                                   output_begin,
+                                   comp);
+      }
     }
   }
 };
@@ -492,9 +512,10 @@ std::unique_ptr<column> drop_list_duplicates(lists_column_view const& lists_colu
   // sorted_lists will store the results of the original lists after calling segmented_sort
   std::unique_ptr<column> sorted_lists;
 
-  // If the column contains lists of floating point data type and NaNs are considered as equal, we
-  // need to replace -NaN by NaN before sorting
+  // If the column contains lists of floating point data type and NaNs are considered as all equal
+  // regardless of sign, we need to replace -NaN by NaN before sorting
   auto const has_negative_nan =
+    (nans_equal == nan_equality::ALL_EQUAL) &&
     type_dispatcher(lists_entries.type(), detail::has_negative_nans_fn{}, lists_entries, stream);
   if (has_negative_nan) {
     // The column new_lists_column is temporary, thus we will not pass in `mr`
