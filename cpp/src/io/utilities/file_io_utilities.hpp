@@ -154,11 +154,7 @@ class cufile_config {
    */
   bool is_required() const { return policy == "ALWAYS"; }
 
-  static cufile_config const *instance()
-  {
-    static cufile_config _instance;
-    return &_instance;
-  }
+  static cufile_config const *instance();
 };
 
 /**

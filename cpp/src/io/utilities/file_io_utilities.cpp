@@ -85,6 +85,11 @@ cufile_config::cufile_config() : policy{getenv_or("LIBCUDF_CUFILE_POLICY", defau
     }
   }
 }
+cufile_config const *cufile_config::instance()
+{
+  static cufile_config _instance;
+  return &_instance;
+}
 
 /**
  * @brief Class that dynamically loads the cuFile library and manages the cuFile driver.
