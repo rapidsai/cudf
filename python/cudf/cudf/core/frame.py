@@ -2408,7 +2408,9 @@ class Frame(libcudf.table.Table):
         for name, col, other_col in zip(
             self._data.keys(), self._data.values(), other._data.values()
         ):
-            self._data[name] = other_col._copy_type_metadata(col)
+            self._data.set_by_label(
+                name, other_col._copy_type_metadata(col), validate=False
+            )
 
         if include_index:
             if self._index is not None and other._index is not None:
