@@ -12,10 +12,9 @@ def _normalize_scalars(col, other):
     """
     Try to normalize scalar values as per col dtype
     """
-    if (
-        other is not None
-        and (isinstance(other, float) and not np.isnan(other))
-    ) and (col.dtype.type(other) != other):
+    if (isinstance(other, float) and not np.isnan(other)) and (
+        col.dtype.type(other) != other
+    ):
         raise TypeError(
             f"Cannot safely cast non-equivalent "
             f"{type(other).__name__} to {col.dtype.name}"
@@ -23,10 +22,7 @@ def _normalize_scalars(col, other):
 
     return (
         col.dtype.type(other)
-        if (
-            other is not None
-            and (isinstance(other, float) and not np.isnan(other))
-        )
+        if (isinstance(other, float) and not np.isnan(other))
         else other
     )
 
@@ -288,7 +284,9 @@ def where(frame, cond, other=None, inplace=False):
                         other_column = cudf.Scalar(
                             other_column, dtype=input_col.codes.dtype
                         )
-                    elif hasattr(other_column, "codes"):
+                    elif isinstance(
+                        other_column, cudf.core.column.CategoricalColumn
+                    ):
                         other_column = other_column.codes
                     input_col = input_col.codes
 
@@ -311,10 +309,9 @@ def where(frame, cond, other=None, inplace=False):
                         ordered=frame._data[column_name].ordered,
                     )
             else:
-                from cudf._lib.null_mask import MaskState, create_null_mask
-
-                out_mask = create_null_mask(
-                    len(input_col), state=MaskState.ALL_NULL
+                out_mask = cudf._lib.null_mask.create_null_mask(
+                    len(input_col),
+                    state=cudf._lib.null_mask.MaskState.ALL_NULL,
                 )
                 result = input_col.set_mask(out_mask)
             out_df[column_name] = frame[column_name].__class__(result)
@@ -348,7 +345,7 @@ def where(frame, cond, other=None, inplace=False):
                         # fill with Null.
                         other = None
                     other = cudf.Scalar(other, dtype=input_col.codes.dtype)
-                elif hasattr(other, "codes"):
+                elif isinstance(other, cudf.core.column.CategoricalColumn):
                     other = other.codes
 
                 input_col = input_col.codes
@@ -368,9 +365,7 @@ def where(frame, cond, other=None, inplace=False):
                 )
 
         if isinstance(frame, cudf.Index):
-            from cudf.core.index import as_index
-
-            result = as_index(result, name=frame.name)
+            result = cudf.Index(result, name=frame.name)
         else:
             result = frame._copy_construct(data=result)
 
