@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,6 +16,7 @@
 #pragma once
 
 #include <cudf/structs/structs_column_view.hpp>
+#include <cudf/utilities/span.hpp>
 
 namespace cudf {
 namespace structs {
@@ -45,7 +46,7 @@ namespace detail {
  * @return New column with concatenated results.
  */
 std::vector<std::vector<column_view>> extract_ordered_struct_children(
-  std::vector<column_view> const& struct_cols);
+  host_span<column_view const> struct_cols);
 
 }  // namespace detail
 }  // namespace structs

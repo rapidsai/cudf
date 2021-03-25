@@ -156,6 +156,7 @@ add_library(cudf
     src/binaryop/jit/code/kernel.cpp
     src/binaryop/jit/code/operation.cpp
     src/binaryop/jit/code/traits.cpp
+    src/labeling/label_bins.cu
     src/bitmask/null_mask.cu
     src/column/column.cu
     src/column/column_device_view.cu

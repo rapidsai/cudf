@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -13,39 +13,46 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 #pragma once
 
+#include <cudf/labeling/label_bins.hpp>
+
+#include <cudf/column/column.hpp>
 #include <cudf/column/column_view.hpp>
-#include <cudf/concatenate.hpp>
-#include <cudf/table/table_view.hpp>
-#include <cudf/utilities/span.hpp>
+#include <cudf/types.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
-
-#include <vector>
+#include <rmm/mr/device/device_memory_resource.hpp>
+#include <rmm/mr/device/per_device_resource.hpp>
 
 namespace cudf {
-//! Inner interfaces and implementations
+
 namespace detail {
+
 /**
- * @copydoc cudf::concatenate(host_span<column_view const>,rmm::mr::device_memory_resource*)
- *
- * @param stream CUDA stream used for device memory operations and kernel launches.
+ * @addtogroup label_bins
+ * @{
+ * @file
+ * @brief Internal APIs for labeling values by bin.
  */
-std::unique_ptr<column> concatenate(
-  host_span<column_view const> columns_to_concat,
+
+/**
+ * @copydoc cudf::label_bins(column_view const& input, column_view const& left_edges, inclusive
+ * left_inclusive, column_view const& right_edges, inclusive right_inclusive, null_order
+ * edge_null_precedence null_order::BEFORE, rmm::mr::device_memory_resource* mr)
+ *
+ * @param stream Stream view on which to allocate resources and queue execution.
+ */
+std::unique_ptr<column> label_bins(
+  column_view const& input,
+  column_view const& left_edges,
+  inclusive left_inclusive,
+  column_view const& right_edges,
+  inclusive right_inclusive,
   rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
-/**
- * @copydoc cudf::concatenate(host_span<table_view const>,rmm::mr::device_memory_resource*)
- *
- * @param stream CUDA stream used for device memory operations and kernel launches.
- */
-std::unique_ptr<table> concatenate(
-  host_span<table_view const> tables_to_concat,
-  rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
-
+/** @} */  // end of group
 }  // namespace detail
 }  // namespace cudf

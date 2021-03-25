@@ -29,10 +29,6 @@ enable_language(CUDA)
 
 if(CMAKE_COMPILER_IS_GNUCXX)
     list(APPEND CUDF_CXX_FLAGS -Wall -Werror -Wno-unknown-pragmas -Wno-error=deprecated-declarations)
-    if(CUDF_BUILD_TESTS OR CUDF_BUILD_BENCHMARKS)
-        # Suppress parentheses warning which causes gmock to fail
-        list(APPEND CUDF_CUDA_FLAGS -Xcompiler=-Wno-parentheses)
-    endif()
 endif()
 
 list(APPEND CUDF_CUDA_FLAGS --expt-extended-lambda --expt-relaxed-constexpr)
