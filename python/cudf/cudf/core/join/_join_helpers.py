@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 import warnings
-from typing import TYPE_CHECKING, Any, Iterable
+from typing import TYPE_CHECKING, Any, Iterable, Tuple
 
 import numpy as np
 import pandas as pd
@@ -11,8 +11,7 @@ import cudf
 from cudf.core.dtypes import CategoricalDtype
 
 if TYPE_CHECKING:
-    from cudf._typing import Dtype
-    from cudf.core.column import ColumnBase
+    from cudf.core.column import CategoricalColumn, ColumnBase
     from cudf.core.frame import Frame
 
 
@@ -73,7 +72,13 @@ def _frame_select_by_indexers(
     return result
 
 
-def _match_join_keys(lcol: ColumnBase, rcol: ColumnBase, how: str) -> Dtype:
+def _match_join_keys(
+    lcol: ColumnBase, rcol: ColumnBase, how: str
+) -> Tuple[ColumnBase, ColumnBase]:
+    # returns the common dtype that lcol and rcol should be casted to,
+    # before they can be used as left and right join keys.
+    # If no casting is necessary, returns None
+
     common_type = None
 
     # cast the keys lcol and rcol to a common dtype
@@ -84,10 +89,10 @@ def _match_join_keys(lcol: ColumnBase, rcol: ColumnBase, how: str) -> Dtype:
     if isinstance(ltype, CategoricalDtype) or isinstance(
         rtype, CategoricalDtype
     ):
-        return _match_categorical_dtypes(ltype, rtype, how)
+        return _match_categorical_dtypes(lcol, rcol, how)
 
     if pd.api.types.is_dtype_equal(ltype, rtype):
-        return ltype
+        return lcol, rcol
 
     if (np.issubdtype(ltype, np.number)) and (np.issubdtype(rtype, np.number)):
         common_type = (
@@ -103,45 +108,50 @@ def _match_join_keys(lcol: ColumnBase, rcol: ColumnBase, how: str) -> Dtype:
 
     if how == "left":
         if rcol.fillna(0).can_cast_safely(ltype):
-            return ltype
+            return lcol, rcol.astype(ltype)
         else:
             warnings.warn(
                 f"Can't safely cast column from {rtype} to {ltype}, "
                 "upcasting to {common_type}."
             )
 
-    return common_type
+    return lcol.astype(common_type), rcol.astype(common_type)
 
 
-def _match_categorical_dtypes(ltype: Dtype, rtype: Dtype, how: str) -> Dtype:
+def _match_categorical_dtypes(
+    lcol: ColumnBase, rcol: ColumnBase, how: str
+) -> Tuple[ColumnBase, ColumnBase]:
     # cast the keys lcol and rcol to a common dtype
     # when at least one of them is a categorical type
+    ltype, rtype = lcol.dtype, rcol.dtype
 
-    if isinstance(ltype, CategoricalDtype) and isinstance(
-        rtype, CategoricalDtype
+    if isinstance(lcol, cudf.core.column.CategoricalColumn) and isinstance(
+        rcol, cudf.core.column.CategoricalColumn
     ):
         # if both are categoricals, logic is complicated:
-        return _match_categorical_dtypes_both(ltype, rtype, how)
+        return _match_categorical_dtypes_both(lcol, rcol, how)
 
     if isinstance(ltype, CategoricalDtype):
         if how in {"left", "leftsemi", "leftanti"}:
-            return ltype
+            return lcol, rcol.astype(ltype)
         common_type = ltype.categories.dtype
     elif isinstance(rtype, CategoricalDtype):
         common_type = rtype.categories.dtype
-    return common_type
+    return lcol.astype(common_type), rcol.astype(common_type)
 
 
 def _match_categorical_dtypes_both(
-    ltype: CategoricalDtype, rtype: CategoricalDtype, how: str
-) -> Dtype:
+    lcol: CategoricalColumn, rcol: CategoricalColumn, how: str
+) -> Tuple[ColumnBase, ColumnBase]:
     # The commontype depends on both `how` and the specifics of the
     # categorical variables to be merged.
+
+    ltype, rtype = lcol.dtype, rcol.dtype
 
     # when both are ordered and both have the same categories,
     # no casting required:
     if ltype == rtype:
-        return ltype
+        return lcol, rcol
 
     # Merging categorical variables when only one side is ordered is
     # ambiguous and not allowed.
@@ -167,11 +177,11 @@ def _match_categorical_dtypes_both(
     if how == "inner":
         # cast to category types -- we must cast them back later
         return _match_join_keys(
-            ltype.categories._values, rtype.categories._values, how
+            lcol.cat()._decategorize(), rcol.cat()._decategorize(), how,
         )
     elif how in {"left", "leftanti", "leftsemi"}:
         # always cast to left type
-        return ltype
+        return lcol, rcol.astype(ltype)
     else:
         # merge categories
         merged_categories = cudf.concat(
@@ -180,7 +190,7 @@ def _match_categorical_dtypes_both(
         common_type = cudf.CategoricalDtype(
             categories=merged_categories, ordered=False
         )
-        return common_type
+        return lcol.astype(common_type), rcol.astype(common_type)
 
 
 def _coerce_to_tuple(obj):

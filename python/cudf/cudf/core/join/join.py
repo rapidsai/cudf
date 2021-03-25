@@ -299,9 +299,13 @@ class Merge(object):
         data = left_result._data.__class__()
 
         for lcol in left_names:
-            data[left_names[lcol]] = left_result._data[lcol]
+            data.set_by_label(
+                left_names[lcol], left_result._data[lcol], validate=False
+            )
         for rcol in right_names:
-            data[right_names[rcol]] = right_result._data[rcol]
+            data.set_by_label(
+                right_names[rcol], right_result._data[rcol], validate=False
+            )
 
         # Index of the result:
         if self.left_index and self.right_index:
@@ -412,10 +416,13 @@ class Merge(object):
         out_rhs = rhs.copy(deep=False)
         for left_key, right_key in zip(*self._keys):
             lcol, rcol = left_key.get(lhs), right_key.get(rhs)
-            dtype = _match_join_keys(lcol, rcol, how=self.how)
-            if dtype:
-                left_key.set(out_lhs, lcol.astype(dtype))
-                right_key.set(out_rhs, rcol.astype(dtype))
+            lcol_casted, rcol_casted = _match_join_keys(
+                lcol, rcol, how=self.how
+            )
+            if lcol is not lcol_casted:
+                left_key.set(out_lhs, lcol_casted)
+            if rcol is not rcol_casted:
+                right_key.set(out_rhs, rcol_casted)
         return out_lhs, out_rhs
 
     def _restore_categorical_keys(
