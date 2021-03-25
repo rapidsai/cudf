@@ -2868,7 +2868,7 @@ class IntervalIndex(GenericIndex):
         both or neither.
 
     dtype : dtype or None, default None
-    If None, dtype will be inferred.
+        If None, dtype will be inferred.
 
     copy : bool, default False
     Copy the input data.
