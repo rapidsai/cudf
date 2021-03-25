@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2017-2020, NVIDIA CORPORATION.
+ * Copyright (c) 2017-2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,6 +18,7 @@
 
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/detail/utilities/assert.cuh>
+#include <cudf/fixed_point/fixed_point.hpp>
 #include <cudf/strings/string_view.cuh>
 #include <hash/hash_constants.hpp>
 
@@ -570,9 +571,7 @@ struct SparkMurmurHash3_32 {
   template <typename T, std::enable_if_t<std::is_floating_point<T>::value>* = nullptr>
   hash_value_type CUDA_DEVICE_CALLABLE compute_floating_point(T const& key) const
   {
-    if (key == T{0.0}) {
-      return compute(T{0.0});
-    } else if (isnan(key)) {
+    if (isnan(key)) {
       T nan = std::numeric_limits<T>::quiet_NaN();
       return compute(nan);
     } else {
@@ -628,6 +627,48 @@ template <>
 hash_value_type CUDA_DEVICE_CALLABLE SparkMurmurHash3_32<bool>::operator()(bool const& key) const
 {
   return this->compute<uint32_t>(key);
+}
+
+template <>
+hash_value_type CUDA_DEVICE_CALLABLE
+SparkMurmurHash3_32<int8_t>::operator()(int8_t const& key) const
+{
+  return this->compute<uint32_t>(key);
+}
+
+template <>
+hash_value_type CUDA_DEVICE_CALLABLE
+SparkMurmurHash3_32<uint8_t>::operator()(uint8_t const& key) const
+{
+  return this->compute<uint32_t>(key);
+}
+
+template <>
+hash_value_type CUDA_DEVICE_CALLABLE
+SparkMurmurHash3_32<int16_t>::operator()(int16_t const& key) const
+{
+  return this->compute<uint32_t>(key);
+}
+
+template <>
+hash_value_type CUDA_DEVICE_CALLABLE
+SparkMurmurHash3_32<uint16_t>::operator()(uint16_t const& key) const
+{
+  return this->compute<uint32_t>(key);
+}
+
+template <>
+hash_value_type CUDA_DEVICE_CALLABLE
+SparkMurmurHash3_32<numeric::decimal32>::operator()(numeric::decimal32 const& key) const
+{
+  return this->compute<uint64_t>(key.value());
+}
+
+template <>
+hash_value_type CUDA_DEVICE_CALLABLE
+SparkMurmurHash3_32<numeric::decimal64>::operator()(numeric::decimal64 const& key) const
+{
+  return this->compute<uint64_t>(key.value());
 }
 
 /**

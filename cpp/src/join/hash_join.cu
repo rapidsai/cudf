@@ -283,6 +283,174 @@ probe_join_hash_table(cudf::table_device_view build_table,
   return std::make_pair(std::move(left_indices), std::move(right_indices));
 }
 
+/**
+ * @brief  Combines the non common probe, common probe, non common build and common build
+ * columns in the correct order according to `common_columns_output_side` to form the joined
+ * (`probe`, `build`) table pair.
+ *
+ * @param probe_noncommon_cols Columns obtained by gathering non common probe columns.
+ * @param probe_noncommon_col_indices Output locations of non common probe columns in the probe
+ * portion.
+ * @param probe_common_col_indices Output locations of common probe columns in the probe portion.
+ * @param build_noncommon_cols Columns obtained by gathering non common build columns.
+ * @param build_noncommon_col_indices Output locations of non common build columns in the build
+ * portion.
+ * @param build_common_col_indices Output locations of common build columns in the build portion.
+ * @param common_cols Columns obtained by gathering common columns from `probe` and `build` tables
+ * in the build portion.
+ * @param common_columns_output_side @see cudf::hash_join::common_columns_output_side.
+ *
+ * @return Table pair of (`probe`, `build`).
+ */
+std::pair<std::unique_ptr<table>, std::unique_ptr<table>> combine_join_columns(
+  std::vector<std::unique_ptr<column>> &&probe_noncommon_cols,
+  std::vector<size_type> const &probe_noncommon_col_indices,
+  std::vector<size_type> const &probe_common_col_indices,
+  std::vector<std::unique_ptr<column>> &&build_noncommon_cols,
+  std::vector<size_type> const &build_noncommon_col_indices,
+  std::vector<size_type> const &build_common_col_indices,
+  std::vector<std::unique_ptr<column>> &&common_cols,
+  cudf::hash_join::common_columns_output_side common_columns_output_side)
+{
+  if (common_columns_output_side == cudf::hash_join::common_columns_output_side::PROBE) {
+    std::vector<std::unique_ptr<column>> probe_cols(probe_noncommon_cols.size() +
+                                                    common_cols.size());
+    for (size_t i = 0; i < probe_noncommon_cols.size(); ++i) {
+      probe_cols.at(probe_noncommon_col_indices.at(i)) = std::move(probe_noncommon_cols.at(i));
+    }
+    for (size_t i = 0; i < common_cols.size(); ++i) {
+      probe_cols.at(probe_common_col_indices.at(i)) = std::move(common_cols.at(i));
+    }
+    return std::make_pair(std::make_unique<cudf::table>(std::move(probe_cols)),
+                          std::make_unique<cudf::table>(std::move(build_noncommon_cols)));
+  } else {
+    std::vector<std::unique_ptr<column>> build_cols(build_noncommon_cols.size() +
+                                                    common_cols.size());
+    for (size_t i = 0; i < build_noncommon_cols.size(); ++i) {
+      build_cols.at(build_noncommon_col_indices.at(i)) = std::move(build_noncommon_cols.at(i));
+    }
+    for (size_t i = 0; i < common_cols.size(); ++i) {
+      build_cols.at(build_common_col_indices.at(i)) = std::move(common_cols.at(i));
+    }
+    return std::make_pair(std::make_unique<cudf::table>(std::move(probe_noncommon_cols)),
+                          std::make_unique<cudf::table>(std::move(build_cols)));
+  }
+}
+
+/**
+ * @brief  Gathers rows from `probe` and `build` table and returns a (`probe`, `build`) table pair,
+ * which contains the probe and build portions of the logical joined table respectively.
+ *
+ * @tparam JoinKind The type of join to be performed
+ *
+ * @param probe Probe side table
+ * @param build build side table
+ * @param joined_indices Pair of vectors containing row indices from which
+ * `probe` and `build` tables are gathered. If any row index is out of bounds,
+ * the contribution in the output `table` will be NULL.
+ * @param columns_in_common is a vector of pairs of column indices
+ * from tables `probe` and `build` respectively, that are "in common".
+ * For "common" columns, only a single output column will be produced.
+ * For an inner or left join, the result will be gathered from the column in
+ * `probe`. For a full join, the result will be gathered from both common
+ * columns in `probe` and `build` and concatenated to form a single column.
+ * @param common_columns_output_side @see cudf::hash_join::common_columns_output_side.
+ *
+ * @return Table pair of (`probe`, `build`) containing the rows from `probe` and
+ * `build` specified by `joined_indices`.
+ * Columns in `columns_in_common` will be included in either `probe` or `build` portion as
+ * `common_columns_output_side` indicates. Final form would look like
+ * (`probe(including common columns)`, `build(excluding common columns)`) if
+ * `common_columns_output_side` is `PROBE`, or (`probe(excluding common columns)`,
+ * `build(including common columns)`) if `common_columns_output_side` is `BUILD`.
+ */
+template <join_kind JoinKind>
+std::pair<std::unique_ptr<table>, std::unique_ptr<table>> construct_join_output_df(
+  table_view const &probe,
+  table_view const &build,
+  VectorPair &joined_indices,
+  std::vector<std::pair<size_type, size_type>> const &columns_in_common,
+  cudf::hash_join::common_columns_output_side common_columns_output_side,
+  rmm::cuda_stream_view stream,
+  rmm::mr::device_memory_resource *mr)
+{
+  std::vector<size_type> probe_common_col;
+  probe_common_col.reserve(columns_in_common.size());
+  std::vector<size_type> build_common_col;
+  build_common_col.reserve(columns_in_common.size());
+  for (const auto &c : columns_in_common) {
+    probe_common_col.push_back(c.first);
+    build_common_col.push_back(c.second);
+  }
+  std::vector<size_type> probe_noncommon_col =
+    non_common_column_indices(probe.num_columns(), probe_common_col);
+  std::vector<size_type> build_noncommon_col =
+    non_common_column_indices(build.num_columns(), build_common_col);
+
+  out_of_bounds_policy const bounds_policy = JoinKind != join_kind::INNER_JOIN
+                                               ? out_of_bounds_policy::NULLIFY
+                                               : out_of_bounds_policy::DONT_CHECK;
+
+  std::unique_ptr<table> common_table = std::make_unique<table>();
+  // Construct the joined columns
+  if (join_kind::FULL_JOIN == JoinKind) {
+    auto complement_indices = get_left_join_indices_complement(
+      joined_indices.second, probe.num_rows(), build.num_rows(), stream);
+    if (not columns_in_common.empty()) {
+      auto common_from_build = detail::gather(build.select(build_common_col),
+                                              complement_indices.second.begin(),
+                                              complement_indices.second.end(),
+                                              bounds_policy,
+                                              stream,
+                                              rmm::mr::get_current_device_resource());
+      auto common_from_probe = detail::gather(probe.select(probe_common_col),
+                                              joined_indices.first.begin(),
+                                              joined_indices.first.end(),
+                                              bounds_policy,
+                                              stream,
+                                              rmm::mr::get_current_device_resource());
+      common_table           = cudf::detail::concatenate(
+        std::vector<table_view>({common_from_build->view(), common_from_probe->view()}),
+        stream,
+        mr);
+    }
+    joined_indices = concatenate_vector_pairs(complement_indices, joined_indices);
+  } else {
+    if (not columns_in_common.empty()) {
+      common_table = detail::gather(probe.select(probe_common_col),
+                                    joined_indices.first.begin(),
+                                    joined_indices.first.end(),
+                                    bounds_policy,
+                                    stream,
+                                    mr);
+    }
+  }
+
+  // Construct the probe non common columns
+  std::unique_ptr<table> probe_table = detail::gather(probe.select(probe_noncommon_col),
+                                                      joined_indices.first.begin(),
+                                                      joined_indices.first.end(),
+                                                      bounds_policy,
+                                                      stream,
+                                                      mr);
+
+  std::unique_ptr<table> build_table = detail::gather(build.select(build_noncommon_col),
+                                                      joined_indices.second.begin(),
+                                                      joined_indices.second.end(),
+                                                      bounds_policy,
+                                                      stream,
+                                                      mr);
+
+  return combine_join_columns(probe_table->release(),
+                              probe_noncommon_col,
+                              probe_common_col,
+                              build_table->release(),
+                              build_noncommon_col,
+                              build_common_col,
+                              common_table->release(),
+                              common_columns_output_side);
+}
+
 std::unique_ptr<cudf::table> combine_table_pair(std::unique_ptr<cudf::table> &&left,
                                                 std::unique_ptr<cudf::table> &&right)
 {
