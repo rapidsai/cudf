@@ -623,7 +623,7 @@ class Frame(libcudf.table.Table):
                 nullify=nullify,
             )
         )
-        result._copy_type_metadata(self)
+        result._copy_type_metadata(self, include_index=keep_index)
         if keep_index and self._index is not None:
             result._index.names = self._index.names
         return result
