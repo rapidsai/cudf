@@ -22,11 +22,14 @@ import java.nio.ByteBuffer;
 import java.util.ArrayList;
 
 /**
- * Column information from Arrow data. 
+ * Holds information about the underlying Arrow column. This returns addresses and sizes
+ * of the underlying Arrow buffers that can be used to reconstruct the Arrow vector.
+ *
  * This currently only supports primitive types and Strings, Decimals and nested types
  * such as list and struct are not supported. DURATION_DAYS is also not supported by cudf.
+ *
  * The caller is responsible for eventually freeing the underlying Arrow array by 
- * calling close().
+ * calling close() when they are finished with the Arrow vector.
  */
 public final class ArrowColumnInfo implements AutoCloseable {
   private long arrowArrayHandle;
@@ -64,38 +67,66 @@ public final class ArrowColumnInfo implements AutoCloseable {
     ColumnVector.closeArrowArray(arrowArrayHandle);
   }
 
-  public long getArrowArrayHandle() {
-    return arrowArrayHandle;
-  }
-
+  /**
+   * Get the Arrow data buffer address.
+   * @return arrow data buffer address
+   */
   public long getDataBufferAddress() {
     return dataBufferAddr;
   }
 
+  /**
+   * Get the Arrow data buffer size.
+   * @return arrow data buffer size 
+   */
   public long getDataBufferSize() {
     return dataBufferSize;
   }
 
+  /**
+   * Get the Arrow validity buffer address.
+   * @return arrow validity buffer address
+   */
   public long getValidityBufferAddress() {
     return validityBufferAddr;
   }
 
+  /**
+   * Get the Arrow validity buffer size.
+   * @return arrow validity buffer size
+   */
   public long getValidityBufferSize() {
     return validityBufferSize;
   }
 
+  /**
+   * Get the Arrow offsets buffer address.
+   * @return arrow offsets buffer address
+   */
   public long getOffsetsBufferAddress() {
     return offsetsBufferAddr;
   }
 
+  /**
+   * Get the Arrow offsets buffer size.
+   * @return arrow offsets buffer size
+   */
   public long getOffsetsBufferSize() {
     return offsetsBufferSize;
   }
 
+  /**
+   * Get the number of rows in the Arrow column
+   * @return number of rows
+   */
   public long getNumRows() {
     return numRows;
   }
 
+  /**
+   * Get the Arrow null count
+   * @return null count
+   */
   public long getNullCount() {
     return nullCount;
   }
