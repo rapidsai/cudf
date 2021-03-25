@@ -22,9 +22,9 @@ from cudf._lib.cpp.column.column_view cimport column_view
 def label_bins(Column input, Column left_edges, left_inclusive,
                Column right_edges, right_inclusive):
     cdef inclusive c_left_inclusive = \
-            inclusive.YES if left_inclusive else inclusive.NO
+        inclusive.YES if left_inclusive else inclusive.NO
     cdef inclusive c_right_inclusive = \
-            inclusive.YES if right_inclusive else inclusive.NO
+        inclusive.YES if right_inclusive else inclusive.NO
 
     cdef column_view input_view = input.view()
     cdef column_view left_edges_view = left_edges.view()
