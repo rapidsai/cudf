@@ -1501,9 +1501,7 @@ class Series(Frame, Serializable):
         If ``reflect`` is ``True``, swap the order of the operands.
         """
         if isinstance(other, cudf.DataFrame):
-            # TODO: fn is not the same as arg expected by _apply_op
-            # e.g. for fn = 'and', _apply_op equivalent is '__and__'
-            return other._apply_op(self, fn)
+            return NotImplemented
 
         result_name = utils.get_result_name(self, other)
         if isinstance(other, Series):
@@ -1767,6 +1765,40 @@ class Series(Frame, Serializable):
         -------
         Series
             The result of the operation.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> a = cudf.Series([1, 2, 3, None], index=['a', 'b', 'c', 'd'])
+        >>> a
+        a       1
+        b       2
+        c       3
+        d    <NA>
+        dtype: int64
+        >>> b = cudf.Series([1, None, 2, None], index=['a', 'b', 'd', 'e'])
+        >>> b
+        a       1
+        b    <NA>
+        d       2
+        e    <NA>
+        dtype: int64
+        >>> a.multiply(b, fill_value=0)
+        a       1
+        b       0
+        c       0
+        d       0
+        e    <NA>
+        dtype: int64
+        """
+        if axis != 0:
+            raise NotImplementedError("Only axis=0 supported at this time.")
+        return self._binaryop(other, "mul", fill_value=fill_value)
+
+    mul = multiply
+
+    def __mul__(self, other):
+        return self._binaryop(other, "mul")
 
         Examples
         --------
@@ -3120,8 +3152,10 @@ class Series(Frame, Serializable):
                 "bool_only parameter is not implemented yet"
             )
 
-        if self.empty:
-            return False
+        skipna = False if skipna is None else skipna
+
+        if skipna is False and self.has_nulls:
+            return True
 
         if skipna:
             result_series = self.nans_to_nulls()
@@ -6366,6 +6400,47 @@ class Series(Frame, Serializable):
         StringIndex(['a' 'b' 'c'], dtype='object')
         """
         return self.index
+
+    def explode(self, ignore_index=False):
+        """
+        Transform each element of a list-like to a row, replicating index
+        values.
+
+        Parameters
+        ----------
+        ignore_index : bool, default False
+            If True, the resulting index will be labeled 0, 1, …, n - 1.
+
+        Returns
+        -------
+        DataFrame
+
+        Examples
+        --------
+        >>> import cudf
+        >>> s = cudf.Series([[1, 2, 3], [], None, [4, 5]])
+        >>> s
+        0    [1, 2, 3]
+        1           []
+        2         None
+        3       [4, 5]
+        dtype: list
+        >>> s.explode()
+        0       1
+        0       2
+        0       3
+        1    <NA>
+        2    <NA>
+        3       4
+        3       5
+        dtype: int64
+        """
+        if not is_list_dtype(self._column.dtype):
+            data = self._data.copy(deep=True)
+            idx = None if ignore_index else self._index.copy(deep=True)
+            return self.__class__._from_data(data, index=idx)
+
+        return super()._explode(self._column_names[0], ignore_index)
 
     _accessors = set()  # type: Set[Any]
 

@@ -158,7 +158,7 @@ std::unique_ptr<table> create_json_keys_info_table(const parse_options_view &opt
   auto const info_table_mdv = mutable_table_device_view::create(info_table->mutable_view(), stream);
 
   // Reset the key counter - now used for indexing
-  key_counter.set_value(0, stream);
+  key_counter.set_value_zero(stream);
   // Fill the allocated columns
   cudf::io::json::gpu::collect_keys_info(
     options, data, row_offsets, key_counter.data(), {*info_table_mdv}, stream);

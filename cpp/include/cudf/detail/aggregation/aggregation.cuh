@@ -19,8 +19,8 @@
 #include <cudf/aggregation.hpp>
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/detail/aggregation/aggregation.hpp>
+#include <cudf/detail/utilities/assert.cuh>
 #include <cudf/detail/utilities/device_atomics.cuh>
-#include <cudf/detail/utilities/release_assert.cuh>
 #include <cudf/dictionary/dictionary_column_view.hpp>
 #include <cudf/table/table_device_view.cuh>
 
@@ -103,7 +103,7 @@ struct update_target_element {
                              column_device_view source,
                              size_type source_index) const noexcept
   {
-    release_assert(false and "Invalid source type and aggregation combination.");
+    cudf_assert(false and "Invalid source type and aggregation combination.");
   }
 };
 
