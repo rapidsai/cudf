@@ -32,9 +32,7 @@ namespace io {
 class file_source : public datasource {
  public:
   explicit file_source(const char *filepath)
-    : _file(filepath, O_RDONLY),
-      _file_size{_file.size()},
-      _cufile_in(detail::make_cufile_input(filepath))
+    : _file(filepath, O_RDONLY), _cufile_in(detail::make_cufile_input(filepath))
   {
   }
 

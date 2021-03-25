@@ -25,10 +25,10 @@ namespace cudf {
 namespace io {
 namespace detail {
 
-size_t get_file_size(int fd)
+size_t get_file_size(int file_descriptor)
 {
   struct stat st;
-  CUDF_EXPECTS(fstat(fd, &st) != -1, "Cannot query file size");
+  CUDF_EXPECTS(fstat(file_descriptor, &st) != -1, "Cannot query file size");
   return static_cast<size_t>(st.st_size);
 }
 
