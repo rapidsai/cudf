@@ -231,12 +231,9 @@ struct parquet_column_device_view : stats_column_desc {
   size_type const *level_offsets;  //!< Offset array for per-row pre-calculated rep/def level values
   uint8_t const *rep_values;       //!< Pre-calculated repetition level values
   uint8_t const *def_values;       //!< Pre-calculated definition level values
-<<<<<<< HEAD
-=======
   uint8_t *nullability;  //!< Array of nullability of each nesting level. e.g. nullable[0] is
                          //!< nullability of parent_column. May be different from col.nullable() in
                          //!< case of chunked writing.
->>>>>>> karthik/fea-sort_struct
 };
 
 constexpr int max_page_fragment_size = 5000;  //!< Max number of rows in a page fragment

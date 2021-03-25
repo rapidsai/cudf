@@ -562,8 +562,6 @@ struct parquet_column_view {
   rmm::device_vector<uint32_t> _dict_index;
 };
 
-<<<<<<< HEAD
-=======
 parquet_column_view::parquet_column_view(schema_tree_node const &schema_node,
                                          std::vector<schema_tree_node> const &schema_tree,
                                          rmm::cuda_stream_view stream)
@@ -716,7 +714,6 @@ gpu::parquet_column_device_view parquet_column_view::get_device_view()
   return desc;
 }
 
->>>>>>> karthik/fea-sort_struct
 void writer::impl::init_page_fragments(hostdevice_vector<gpu::PageFragment> &frag,
                                        hostdevice_vector<gpu::parquet_column_device_view> &col_desc,
                                        uint32_t num_columns,
@@ -1001,11 +998,7 @@ void writer::impl::write(table_view const &table)
   if (fragments.size() != 0) {
     // Move column info to device
     col_desc.host_to_device(stream);
-<<<<<<< HEAD
-    leaf_column_views = create_leaf_column_device_views<gpu::EncColumnDesc>(
-=======
     leaf_column_views = create_leaf_column_device_views<gpu::parquet_column_device_view>(
->>>>>>> karthik/fea-sort_struct
       col_desc, *parent_column_table_device_view, stream);
 
     init_page_fragments(fragments, col_desc, num_columns, num_fragments, num_rows, fragment_size);

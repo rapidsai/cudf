@@ -1359,4 +1359,111 @@ TEST_F(JoinDictionaryTest, FullJoinWithNulls)
   CUDF_TEST_EXPECT_TABLES_EQUIVALENT(*gold, cudf::table_view(result_decoded));
 }
 
+TEST_F(JoinTest, FullJoinWithStructsAndNulls)
+{
+  column_wrapper<int32_t> col0_0{{3, 1, 2, 0, 3}};
+  strcol_wrapper col0_1({"s0", "s1", "s2", "s4", "s1"});
+  column_wrapper<int32_t> col0_2{{0, 1, 2, 4, 1}};
+
+  std::initializer_list<std::string> col0_names = {"Samuel Vimes",
+                                                   "Carrot Ironfoundersson",
+                                                   "Angua von Überwald",
+                                                   "Detritus",
+                                                   "Carrot Ironfoundersson"};
+  auto col0_names_col = strcol_wrapper{col0_names.begin(), col0_names.end()};
+  auto col0_ages_col  = column_wrapper<int32_t>{{48, 27, 25, 31, 351}};
+
+  auto col0_is_human_col = column_wrapper<bool>{
+    {true, true, false, false, false}, {1, 1, 0, 1, 1}};
+
+  auto col0_3 =
+    cudf::test::structs_column_wrapper{{col0_names_col, col0_ages_col, col0_is_human_col}};
+
+  column_wrapper<int32_t> col1_0{{2, 2, 0, 4, 3}, {1, 1, 1, 0, 1}};
+  strcol_wrapper col1_1{{"s1", "s0", "s1", "s2", "s1"}};
+  column_wrapper<int32_t> col1_2{{1, 0, 1, 2, 1}};
+
+  std::initializer_list<std::string> col1_names = {"Carrot Ironfoundersson",
+                                                   "Samuel Vimes",
+                                                   "Carrot Ironfoundersson",
+                                                   "Angua von Überwald",
+                                                   "Carrot Ironfoundersson"};
+  auto col1_names_col = strcol_wrapper{col1_names.begin(), col1_names.end()};
+  auto col1_ages_col  = column_wrapper<int32_t>{{27, 48, 27, 25, 27}};
+
+  auto col1_is_human_col = column_wrapper<bool>{
+    {true, true, true, false, true}, {1, 1, 1, 0, 1}};
+
+  auto col1_3 =
+    cudf::test::structs_column_wrapper{{col1_names_col, col1_ages_col, col1_is_human_col}};
+
+  CVector cols0, cols1;
+  cols0.push_back(col0_0.release());
+  cols0.push_back(col0_1.release());
+  cols0.push_back(col0_2.release());
+  cols0.push_back(col0_3.release());
+  cols1.push_back(col1_0.release());
+  cols1.push_back(col1_1.release());
+  cols1.push_back(col1_2.release());
+  cols1.push_back(col1_3.release());
+
+  Table t0(std::move(cols0));
+  Table t1(std::move(cols1));
+
+  auto result            = cudf::full_join(t0, t1, {0, 1, 3}, {0, 1, 3});
+  auto result_sort_order = cudf::sorted_order(result->view());
+  auto sorted_result     = cudf::gather(result->view(), *result_sort_order);
+
+  column_wrapper<int32_t> col_gold_0{{3, 1, 2, 0, 3, -1, -1, -1, -1}, {1, 1, 1, 1, 1, 0, 0, 0, 0}};
+  strcol_wrapper col_gold_1({"s0", "s1", "s2", "s4", "s1", "", "", "", ""},
+                            {1, 1, 1, 1, 1, 0, 0, 0, 0});
+  column_wrapper<int32_t> col_gold_2{{0, 1, 2, 4, 1, -1, -1, -1, -1}, {1, 1, 1, 1, 1, 0, 0, 0, 0}};
+  auto gold_names0_col = strcol_wrapper{{"Samuel Vimes",
+                                                   "Carrot Ironfoundersson",
+                                                   "Angua von Überwald",
+                                                   "Detritus",
+                                                   "Samuel Vimes", "", "", "", ""}, {1, 1, 1, 1, 1, 0, 0, 0, 0}};
+  auto gold_ages0_col  = column_wrapper<int32_t>{{48, 27, 25, 351, 48, -1, -1, -1, -1}, {1, 1, 1, 1, 1, 0, 0, 0, 0}};
+
+  auto gold_is_human0_col = column_wrapper<bool>{
+    {true, true, false, false, true, false, false, false, false}, {1, 1, 0, 1, 1, 0, 0, 0, 0}};
+
+  auto col_gold_3 =
+    cudf::test::structs_column_wrapper{{gold_names0_col, gold_ages0_col, gold_is_human0_col}};
+
+  column_wrapper<int32_t> col_gold_4{{-1, -1, -1, -1, 3, 2, 2, 0, 4}, {0, 0, 0, 0, 1, 1, 1, 1, 0}};
+  strcol_wrapper col_gold_5({"", "", "", "", "s1", "s1", "s0", "s1", "s2"},
+                            {0, 0, 0, 0, 1, 1, 1, 1, 1});
+  column_wrapper<int32_t> col_gold_6{{-1, -1, -1, -1, 1, 1, 0, 1, 2}, {0, 0, 0, 0, 1, 1, 1, 1, 1}};
+  auto gold_names1_col = strcol_wrapper{{"", "", "", "",
+                                                   "Carrot Ironfoundersson",
+                                                   "Carrot Ironfoundersson",
+   "Samuel Vimes",
+                                                   "Carrot Ironfoundersson",
+                                                   "Angua von Überwald"}, {0, 0, 0, 0, 1, 1, 1, 1, 1}};
+  auto gold_ages1_col  = column_wrapper<int32_t>{{-1, -1, -1, -1, 27, 27, 48, 27, 25}, {0, 0, 0, 0, 1, 1, 1, 1, 1}};
+
+  auto gold_is_human1_col = column_wrapper<bool>{
+    {false, false, false, false, true, true, false, false, true}, {0, 0, 0, 0, 1, 1, 0, 1, 1}};
+
+  auto col_gold_7 =
+    cudf::test::structs_column_wrapper{{gold_names1_col, gold_ages1_col, gold_is_human1_col}};
+
+
+  CVector cols_gold;
+  cols_gold.push_back(col_gold_0.release());
+  cols_gold.push_back(col_gold_1.release());
+  cols_gold.push_back(col_gold_2.release());
+  cols_gold.push_back(col_gold_3.release());
+  cols_gold.push_back(col_gold_4.release());
+  cols_gold.push_back(col_gold_5.release());
+  cols_gold.push_back(col_gold_6.release());
+
+  Table gold(std::move(cols_gold));
+
+  auto gold_sort_order = cudf::sorted_order(gold.view());
+  auto sorted_gold     = cudf::gather(gold.view(), *gold_sort_order);
+  CUDF_TEST_EXPECT_TABLES_EQUIVALENT(*sorted_gold, *sorted_result);
+}
+
 CUDF_TEST_PROGRAM_MAIN()

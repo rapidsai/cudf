@@ -28,6 +28,7 @@
 #include <cudf/scalar/scalar_factories.hpp>
 #include <cudf/table/table.hpp>
 #include <cudf/utilities/error.hpp>
+#include <structs/utilities.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_uvector.hpp>
@@ -55,7 +56,7 @@ std::unique_ptr<rmm::device_uvector<cudf::size_type>> left_semi_anti_join(
     auto result =
       std::make_unique<rmm::device_uvector<cudf::size_type>>(left_keys.num_rows(), stream, mr);
     thrust::sequence(thrust::cuda::par.on(stream.value()), result->begin(), result->end());
-    return std::move(result);
+    return result;
   }
 
   auto const left_num_rows  = left_keys.num_rows();
@@ -114,7 +115,7 @@ std::unique_ptr<rmm::device_uvector<cudf::size_type>> left_semi_anti_join(
 
   auto join_size = thrust::distance(gather_map->begin(), gather_map_end);
   gather_map->resize(join_size, stream);
-  return std::move(gather_map);
+  return gather_map;
 }
 
 /**
@@ -173,10 +174,15 @@ std::unique_ptr<cudf::table> left_semi_anti_join(
     return std::make_unique<table>(left, stream, mr);
   }
 
+  // flatten any structs out. Note this happens before dictionary matching because
+  // structs can contain dictionaries.
+  auto const flattened_left = structs::detail::flatten_nested_columns(left.select(left_on), {}, {});
+  auto const flattened_right = structs::detail::flatten_nested_columns(right.select(right_on), {}, {});
+
   // Make sure any dictionary columns have matched key sets.
   // This will return any new dictionary columns created as well as updated table_views.
   auto matched = cudf::dictionary::detail::match_dictionaries(
-    {left.select(left_on), right.select(right_on)},
+    {std::get<0>(flattened_left), std::get<0>(flattened_right)},
     stream,
     rmm::mr::get_current_device_resource());  // temporary objects returned
 
