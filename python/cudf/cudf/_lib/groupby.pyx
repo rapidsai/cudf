@@ -37,7 +37,6 @@ _STRING_AGGS = {
     "nunique",
     "nth",
     "collect",
-    "variance"
 }
 
 _LIST_AGGS = {
@@ -54,7 +53,6 @@ _STRUCT_AGGS = {
     "nunique",
     "nth",
     "collect"
-    "variance"
 }
 
 _INTERVAL_AGGS = {
@@ -65,7 +63,6 @@ _INTERVAL_AGGS = {
     "nunique",
     "nth",
     "collect"
-    "variance"
 }
 
 _DECIMAL_AGGS = {
