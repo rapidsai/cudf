@@ -587,7 +587,7 @@ class GroupBy(Serializable):
 # Set of valid groupby aggregations.
 _VALID_GROUPBY_AGGS = {
     "count",
-    "size",
+    # "size",  # This aggregation will never happen because GroupBy.Size exists
     "sum",
     "idxmin",
     "idxmax",
@@ -599,7 +599,7 @@ _VALID_GROUPBY_AGGS = {
     "quantile",
     "median",
     "nunique",
-    "nth",
+    # "nth",  # This aggregation will never happen because GroupBy.Size exists
     "collect"
 }
 
