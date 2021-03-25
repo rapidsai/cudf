@@ -35,13 +35,15 @@ _GROUPBY_AGGS = {
     "median",
     "nunique",
     "nth",
-    "collect"
+    "collect",
+    "unique",
 }
 
 _CATEGORICAL_AGGS = {
     "count",
     "size",
     "nunique",
+    "unique",
 }
 
 _STRING_AGGS = {
@@ -51,12 +53,14 @@ _STRING_AGGS = {
     "min",
     "nunique",
     "nth",
-    "collect"
+    "collect",
+    "unique",
 }
 
 _LIST_AGGS = {
-    "collect"
+    "collect",
 }
+
 
 cdef class GroupBy:
     cdef unique_ptr[libcudf_groupby.groupby] c_obj
