@@ -235,16 +235,46 @@ class Merge(object):
                         for on in _coerce_to_tuple(self.right_on)
                     ]
                 )
-        else:
+        if self.on:
             # Use `on` if provided. Otherwise,
             # implicitly use identically named columns as the key columns:
-            on_names = (
-                _coerce_to_tuple(self.on)
-                if self.on is not None
-                else set(self.lhs._data) & set(self.rhs._data)
-            )
-            left_keys = [_Indexer(name=on, column=True) for on in on_names]
-            right_keys = [_Indexer(name=on, column=True) for on in on_names]
+            on_names = _coerce_to_tuple(self.on)
+
+            for on in on_names:
+                if (
+                    on in self.lhs._data.keys()
+                    and on not in self.rhs._data.keys()
+                ):
+                    if on in self.rhs.index.names:
+                        left_keys.extend([_Indexer(name=on, column=True)])
+                        right_keys.extend([_Indexer(name=on, index=True)])
+
+                elif (
+                    on not in self.lhs._data.keys()
+                    and on in self.rhs._data.keys()
+                ):
+                    if on in self.lhs.index.names:
+                        left_keys.extend([_Indexer(name=on, index=True)])
+                        right_keys.extend([_Indexer(name=on, column=True)])
+
+                elif (
+                    on not in self.lhs._data.keys()
+                    and on not in self.rhs._data.keys()
+                ):
+                    if (
+                        on in self.lhs.index.names
+                        and on in self.rhs.index.names
+                    ):
+                        left_keys.extend([_Indexer(name=on, Index=True)])
+                        right_keys.extend([_Indexer(name=on, index=True)])
+
+                else:
+                    left_keys = [
+                        _Indexer(name=on, column=True) for on in on_names
+                    ]
+                    right_keys = [
+                        _Indexer(name=on, column=True) for on in on_names
+                    ]
 
         if len(left_keys) != len(right_keys):
             raise ValueError(
