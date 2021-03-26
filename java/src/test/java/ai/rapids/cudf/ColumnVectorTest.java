@@ -3340,6 +3340,69 @@ public class ColumnVectorTest extends CudfTestBase {
   }
 
   @Test
+  void testIsIntegerWithBounds() {
+    String[] intStrings = {"A", "nan", "Inf", "-Inf", "3.5",
+        String.valueOf(Byte.MIN_VALUE),
+        String.valueOf(Byte.MIN_VALUE + 1L),
+        String.valueOf(Byte.MIN_VALUE - 1L),
+        String.valueOf(Byte.MAX_VALUE),
+        String.valueOf(Byte.MAX_VALUE + 1L),
+        String.valueOf(Byte.MAX_VALUE - 1L),
+        String.valueOf(Short.MIN_VALUE),
+        String.valueOf(Short.MIN_VALUE + 1L),
+        String.valueOf(Short.MIN_VALUE - 1L),
+        String.valueOf(Short.MAX_VALUE),
+        String.valueOf(Short.MAX_VALUE + 1L),
+        String.valueOf(Short.MAX_VALUE - 1L),
+        String.valueOf(Integer.MIN_VALUE),
+        String.valueOf(Integer.MIN_VALUE + 1L),
+        String.valueOf(Integer.MIN_VALUE - 1L),
+        String.valueOf(Integer.MAX_VALUE),
+        String.valueOf(Integer.MAX_VALUE + 1L),
+        String.valueOf(Integer.MAX_VALUE - 1L),
+        String.valueOf(Long.MIN_VALUE),
+        String.valueOf(Long.MIN_VALUE + 1L),
+        "-9223372036854775809",
+        String.valueOf(Long.MAX_VALUE),
+        "9223372036854775808",
+        String.valueOf(Long.MAX_VALUE - 1L)};
+    try (ColumnVector intStringCV = ColumnVector.fromStrings(intStrings);
+         ColumnVector isByte = intStringCV.isInteger(DType.INT8);
+         ColumnVector expectedByte = ColumnVector.fromBoxedBooleans(
+             false, false, false, false, false,
+             true, true, false, true, false, true,
+             false, false, false, false, false, false,
+             false, false, false, false, false, false,
+             false, false, false, false, false, false);
+         ColumnVector isShort = intStringCV.isInteger(DType.INT16);
+         ColumnVector expectedShort = ColumnVector.fromBoxedBooleans(
+             false, false, false, false, false,
+             true, true, true, true, true, true,
+             true, true, false, true, false, true,
+             false, false, false, false, false, false,
+             false, false, false, false, false, false);
+         ColumnVector isInt = intStringCV.isInteger(DType.INT32);
+         ColumnVector expectedInt = ColumnVector.fromBoxedBooleans(
+             false, false, false, false, false,
+             true, true, true, true, true, true,
+             true, true, true, true, true, true,
+             true, true, false, true, false, true,
+             false, false, false, false, false, false);
+         ColumnVector isLong = intStringCV.isInteger(DType.INT64);
+         ColumnVector expectedLong = ColumnVector.fromBoxedBooleans(
+             false, false, false, false, false,
+             true, true, true, true, true, true,
+             true, true, true, true, true, true,
+             true, true, true, true, true, true,
+             true, true, false, true, false, true)) {
+      assertColumnsAreEqual(expectedByte, isByte);
+      assertColumnsAreEqual(expectedShort, isShort);
+      assertColumnsAreEqual(expectedInt, isInt);
+      assertColumnsAreEqual(expectedLong, isLong);
+    }
+  }
+
+  @Test
   void testIsInteger() {
     String[] intStrings = {"A", "nan", "Inf", "-Inf", "Infinity", "infinity", "2147483647",
         "2147483648", "-2147483648", "-2147483649", "NULL", "null", null, "1.2", "1.2e-4", "0.00012"};
