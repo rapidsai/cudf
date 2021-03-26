@@ -4,7 +4,7 @@ import numpy as np
 from enum import IntEnum
 
 from libc.stdint cimport uint32_t
-from libcpp.bool cimport bool as cbool
+from libcpp cimport bool as cbool
 from libcpp.memory cimport unique_ptr
 from libcpp.utility cimport move
 
