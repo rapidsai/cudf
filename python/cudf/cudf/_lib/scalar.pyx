@@ -291,7 +291,7 @@ cdef _get_np_scalar_from_numeric(unique_ptr[scalar]& s):
     elif cdtype.id() == libcudf_types.BOOL8:
         return np.bool_((<numeric_scalar[bool]*>s_ptr)[0].value())
     elif cdtype.id() == libcudf_types.DECIMAL64:
-        return np.int64((<int64_t*>s_ptr)[0].value())
+        return np.int64((<fixed_point_scalar[decimal64]*>s_ptr)[0].value())
     else:
         raise ValueError("Could not convert cudf::scalar to numpy scalar")
 
