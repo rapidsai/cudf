@@ -33,7 +33,9 @@ build:
 
 requirements:
   build:
-    - cmake >=3.17.0
+    - cmake >=3.18
+    - gtest
+    - gmock
   host:
     - librmm {{ minor_version }}.*
     - cudatoolkit {{ cuda_version }}.*
