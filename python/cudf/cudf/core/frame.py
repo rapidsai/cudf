@@ -20,6 +20,7 @@ import cudf
 from cudf import _lib as libcudf
 from cudf._typing import ColumnLike, DataFrameOrSeries
 from cudf.core.column import as_column, build_categorical_column, column_empty
+from cudf.core.join import merge
 from cudf.utils.dtypes import (
     is_categorical_dtype,
     is_column_like,
@@ -3364,7 +3365,7 @@ class Frame(libcudf.table.Table):
             left_index, right_index = right_index, left_index
             suffixes = (suffixes[1], suffixes[0])
 
-        return cudf.core.join.merge(
+        return merge(
             lhs,
             rhs,
             on=on,

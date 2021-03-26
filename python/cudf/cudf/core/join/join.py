@@ -2,13 +2,12 @@
 from __future__ import annotations
 
 import functools
-from collections import OrderedDict, namedtuple
+from collections import namedtuple
 from typing import TYPE_CHECKING, Callable, Tuple
 
 import cudf
 from cudf import _lib as libcudf
 from cudf.core.join._join_helpers import (
-    _coerce_to_list,
     _coerce_to_tuple,
     _frame_select_by_indexers,
     _Indexer,
@@ -275,8 +274,8 @@ class Merge(object):
         # Compute the result column names:
         # left_names and right_names will be a mappings of input column names
         # to the corresponding names in the final result.
-        left_names = OrderedDict(zip(left_result._data, left_result._data))
-        right_names = OrderedDict(zip(right_result._data, right_result._data))
+        left_names = dict(zip(left_result._data, left_result._data))
+        right_names = dict(zip(right_result._data, right_result._data))
 
         # For any columns from left_result and right_result that have the same
         # name:
@@ -288,12 +287,14 @@ class Merge(object):
         if self.on:
             key_columns_with_same_name = self.on
         else:
-            key_columns_with_same_name = []
-            for lkey, rkey in zip(*self._keys):
-                if (lkey.index, rkey.index) == (False, False):
-                    if lkey.name == rkey.name:
-                        key_columns_with_same_name.append(lkey.name)
-
+            key_columns_with_same_name = [
+                lkey.name
+                for lkey, rkey in zip(*self._keys)
+                if (
+                    (lkey.index, rkey.index) == (False, False)
+                    and lkey.name == rkey.name
+                )
+            ]
         for name in common_names:
             if name not in key_columns_with_same_name:
                 left_names[name] = f"{name}{self.lsuffix}"
@@ -339,7 +340,10 @@ class Merge(object):
             if isinstance(result, cudf.Index):
                 sort_order = result._get_sorted_inds()
             else:
-                sort_order = result._get_sorted_inds(_coerce_to_list(self.on))
+                # need a list instead of a tuple here because
+                # _get_sorted_inds calls down to ColumnAccessor.get_by_label
+                # which handles lists and tuples differently
+                sort_order = result._get_sorted_inds(list(self.on))
             return result._gather(sort_order, keep_index=False)
         by = []
         if self.left_index and self.right_index:
@@ -347,11 +351,11 @@ class Merge(object):
                 by.extend(result._index._data.columns)
         if self.left_on:
             by.extend(
-                [result._data[col] for col in _coerce_to_list(self.left_on)]
+                [result._data[col] for col in _coerce_to_tuple(self.left_on)]
             )
         if self.right_on:
             by.extend(
-                [result._data[col] for col in _coerce_to_list(self.right_on)]
+                [result._data[col] for col in _coerce_to_tuple(self.right_on)]
             )
         if by:
             to_sort = cudf.DataFrame._from_columns(by)

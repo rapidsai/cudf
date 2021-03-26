@@ -200,7 +200,3 @@ def _coerce_to_tuple(obj):
         return tuple(obj)
     else:
         return (obj,)
-
-
-def _coerce_to_list(obj):
-    return list(_coerce_to_tuple(obj))
