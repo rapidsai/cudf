@@ -34,8 +34,6 @@ build:
 requirements:
   build:
     - cmake >=3.18
-    - gtest
-    - gmock
   host:
     - librmm {{ minor_version }}.*
     - cudatoolkit {{ cuda_version }}.*
@@ -43,6 +41,8 @@ requirements:
     - arrow-cpp-proc * cuda
     - boost-cpp 1.72.0
     - dlpack
+    - gtest
+    - gmock
   run:
     - {{ pin_compatible('cudatoolkit', max_pin='x.x') }}
     - arrow-cpp-proc * cuda
