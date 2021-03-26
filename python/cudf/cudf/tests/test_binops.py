@@ -1614,6 +1614,11 @@ def test_binops_with_NA_consistent(dtype, op):
     elif dtype in DATETIME_TYPES & TIMEDELTA_TYPES:
         assert result._column.null_count == len(data)
 
+def _decimal_series(input, dtype):
+    return cudf.Series(
+        [x if x is None else decimal.Decimal(x) for x in input],
+        dtype=dtype,
+    )
 
 @pytest.mark.parametrize(
     "args",
@@ -1893,16 +1898,10 @@ def test_binops_with_NA_consistent(dtype, op):
 def test_binops_decimal(args):
     op, lhs, l_dtype, rhs, r_dtype, expect, expect_dtype = args
 
-    def decimal_series(input, dtype):
-        return cudf.Series(
-            [x if x is None else decimal.Decimal(x) for x in input],
-            dtype=dtype,
-        )
-
-    a = decimal_series(lhs, l_dtype)
-    b = decimal_series(rhs, r_dtype)
+    a = _decimal_series(lhs, l_dtype)
+    b = _decimal_series(rhs, r_dtype)
     expect = (
-        decimal_series(expect, expect_dtype)
+        _decimal_series(expect, expect_dtype)
         if isinstance(expect_dtype, cudf.Decimal64Dtype)
         else cudf.Series(expect, dtype=expect_dtype)
     )
@@ -1911,6 +1910,159 @@ def test_binops_decimal(args):
     assert expect.dtype == got.dtype
     utils.assert_eq(expect, got)
 
+@pytest.mark.parametrize(
+    "args",
+    [(
+        operator.eq,
+        ["100", "42", None],
+        cudf.Decimal64Dtype(scale=0, precision=5),
+        [100, 42, 12],
+        cudf.Series([True, False, None], dtype=bool),
+        cudf.Series([True, False, None], dtype=bool)
+    ),
+    (
+        operator.eq,
+        ["100.000", "42.001", None],
+        cudf.Decimal64Dtype(scale=3, precision=6),
+        [100, 42, 12],
+        cudf.Series([True, False, None], dtype=bool),
+        cudf.Series([True, False, None], dtype=bool)
+    ),
+    (
+        operator.eq,
+        ["100", "40", None],
+        cudf.Decimal64Dtype(scale=-1, precision=3),
+        [100, 42, 12],
+        cudf.Series([True, False, None], dtype=bool),
+        cudf.Series([True, False, None], dtype=bool)
+    ),
+    (
+        operator.lt,
+        ["100", "40", "28", None],
+        cudf.Decimal64Dtype(scale=0, precision=3),
+        [100, 42, 24, 12],
+        cudf.Series([False, True, False, None], dtype=bool),
+        cudf.Series([False, False, True, None], dtype=bool)
+    ),
+    (
+        operator.lt,
+        ["100.000", "42.002", "23.999", None],
+        cudf.Decimal64Dtype(scale=3, precision=6),
+        [100, 42, 24, 12],
+        cudf.Series([False, False, False, None], dtype=bool),
+        cudf.Series([False, False, False, None], dtype=bool)
+    ),
+    (
+        operator.lt,
+        ["100", "40", "10", None],
+        cudf.Decimal64Dtype(scale=-1, precision=3),
+        [100, 42, 8, 12],
+        cudf.Series([False, True, False, None], dtype=bool),
+        cudf.Series([False, False, True, None], dtype=bool)
+    ),
+    (
+        operator.gt,
+        ["100", "42", "20", None],
+        cudf.Decimal64Dtype(scale=0, precision=3),
+        [100, 40, 24, 12],
+        cudf.Series([False, True, False, None], dtype=bool),
+        cudf.Series([False, False, True, None], dtype=bool)
+    ),
+    (
+        operator.gt,
+        ["100.000", "42.002", "23.999", None],
+        cudf.Decimal64Dtype(scale=3, precision=6),
+        [100, 42, 24, 12],
+        cudf.Series([False, True, False, None], dtype=bool),
+        cudf.Series([False, False, True, None], dtype=bool)
+    ),
+    (
+        operator.gt,
+        ["100", "40", "10", None],
+        cudf.Decimal64Dtype(scale=-1, precision=3),
+        [100, 42, 8, 12],
+        cudf.Series([False, False, True, None], dtype=bool),
+        cudf.Series([False, True, False, None], dtype=bool)
+    ),
+    (
+        operator.le,
+        ["100", "40", "28", None],
+        cudf.Decimal64Dtype(scale=0, precision=3),
+        [100, 42, 24, 12],
+        cudf.Series([True, True, False, None], dtype=bool),
+        cudf.Series([True, False, True, None], dtype=bool)
+    ),
+    (
+        operator.le,
+        ["100.000", "42.002", "23.999", None],
+        cudf.Decimal64Dtype(scale=3, precision=6),
+        [100, 42, 24, 12],
+        cudf.Series([True, False, False, None], dtype=bool),
+        cudf.Series([True, False, False, None], dtype=bool)
+    ),
+    (
+        operator.le,
+        ["100", "40", "10", None],
+        cudf.Decimal64Dtype(scale=-1, precision=3),
+        [100, 42, 8, 12],
+        cudf.Series([True, True, False, None], dtype=bool),
+        cudf.Series([True, False, True, None], dtype=bool)
+    ),
+    (
+        operator.ge,
+        ["100", "42", "20", None],
+        cudf.Decimal64Dtype(scale=0, precision=3),
+        [100, 40, 24, 12],
+        cudf.Series([True, True, False, None], dtype=bool),
+        cudf.Series([True, False, True, None], dtype=bool)
+    ),
+    (
+        operator.ge,
+        ["100.000", "42.002", "23.999", None],
+        cudf.Decimal64Dtype(scale=3, precision=6),
+        [100, 42, 24, 12],
+        cudf.Series([True, True, False, None], dtype=bool),
+        cudf.Series([True, False, True, None], dtype=bool)
+    ),
+    (
+        operator.ge,
+        ["100", "40", "10", None],
+        cudf.Decimal64Dtype(scale=-1, precision=3),
+        [100, 42, 8, 12],
+        cudf.Series([True, False, True, None], dtype=bool),
+        cudf.Series([True, True, False, None], dtype=bool)
+    ),
+    ]
+)
+@pytest.mark.parametrize(
+    "integer_dtype", INTEGER_TYPES
+)
+@pytest.mark.parametrize(
+    "reflected", [True, False]
+)
+def test_binops_decimal_comp_mixed_integer(args, integer_dtype, reflected):
+    """
+    Tested compare operations:
+        eq, lt, gt, le, ge
+    Each operation has 3 decimal data setups, with scale from {==0, >0, <0},
+    decimal precisions are sufficient to contain the digits.
+    For each decimal data setup, there is at least one row that lead to one
+    of the following compare results: {True, False, None}.
+    """
+    if not reflected:
+        op, ldata, ldtype, rdata, expected, _ = args
+    else:
+        op, ldata, ldtype, rdata, _, expected = args
+    
+    lhs = _decimal_series(ldata, ldtype)
+    rhs = cudf.Series(rdata, dtype=integer_dtype)
+
+    if reflected:
+        rhs, lhs = lhs, rhs
+    
+    actual = op(lhs, rhs)
+    
+    utils.assert_eq(expected, actual)
 
 @pytest.mark.parametrize("fn", ["eq", "ne", "lt", "gt", "le", "ge"])
 def test_equality_ops_index_mismatch(fn):
