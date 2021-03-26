@@ -71,7 +71,7 @@ struct in_place_copy_range_dispatch {
   cudf::mutable_column_view& target;
 
   template <typename T>
-  std::enable_if_t<cudf::is_fixed_width<T>(), void> operator()(cudf::size_type source_begin,
+  std::enable_if_t<cudf::is_rep_layout_compatible<T>(), void> operator()(cudf::size_type source_begin,
                                                                cudf::size_type source_end,
                                                                cudf::size_type target_begin,
                                                                rmm::cuda_stream_view stream)
@@ -79,13 +79,9 @@ struct in_place_copy_range_dispatch {
     in_place_copy_range<T>(source, target, source_begin, source_end, target_begin, stream);
   }
 
-  template <typename T>
-  std::enable_if_t<not cudf::is_fixed_width<T>(), void> operator()(cudf::size_type source_begin,
-                                                                   cudf::size_type source_end,
-                                                                   cudf::size_type target_begin,
-                                                                   rmm::cuda_stream_view stream)
-  {
-    CUDF_FAIL("in-place copy does not work for variable width types.");
+  template <typename T, typename... Args>
+  void operator()(Args&&...){
+      CUDF_FAIL("Unsupported type for in-place copy.");
   }
 };
 
@@ -93,7 +89,18 @@ struct out_of_place_copy_range_dispatch {
   cudf::column_view const& source;
   cudf::column_view const& target;
 
-  template <typename T>
+  template <typename T, std::enable_if_t<not cudf::is_rep_layout_compatible<T>()>* = nullptr>
+  std::unique_ptr<cudf::column> operator()(
+    cudf::size_type source_begin,
+    cudf::size_type source_end,
+    cudf::size_type target_begin,
+    rmm::cuda_stream_view stream,
+    rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
+  {
+    CUDF_FAIL("Unsupported type for out of place copy.");
+  }
+
+  template <typename T, std::enable_if_t< cudf::is_rep_layout_compatible<T>() >* = nullptr>
   std::unique_ptr<cudf::column> operator()(
     cudf::size_type source_begin,
     cudf::size_type source_end,
@@ -237,12 +244,12 @@ void copy_range_in_place(column_view const& source,
                "target should be nullable if source has null values.");
 
   if (source_end != source_begin) {  // otherwise no-op
-    cudf::type_dispatcher(target.type(),
-                          in_place_copy_range_dispatch{source, target},
-                          source_begin,
-                          source_end,
-                          target_begin,
-                          stream);
+    cudf::type_dispatcher<dispatch_storage_type>(target.type(),
+                                                 in_place_copy_range_dispatch{source, target},
+                                                 source_begin,
+                                                 source_end,
+                                                 target_begin,
+                                                 stream);
   }
 }
 
