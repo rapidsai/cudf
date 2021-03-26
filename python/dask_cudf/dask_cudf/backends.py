@@ -228,7 +228,6 @@ def tolist_cudf(obj):
     (cudf.Series, cudf.Index, cudf.CategoricalDtype, Series)
 )
 def is_categorical_dtype_cudf(obj):
-    obj = getattr(obj, "dtype", obj)
     return cudf.utils.dtypes.is_categorical_dtype(obj)
 
 
