@@ -2928,7 +2928,7 @@ public class TableTest extends CudfTestBase {
   }
 
   @Test
-  void testTimeRangeWindowingCount() {
+  void testRangeWindowingCount() {
     try (Table unsorted = new Table.TestBuilder()
         .column(1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1) // GBY Key
         .column(0, 0, 0, 0, 1, 1, 1, 1, 2, 2, 2, 2, 2) // GBY Key
@@ -2963,7 +2963,7 @@ public class TableTest extends CudfTestBase {
   }
 
   @Test
-  void testTimeRangeWindowingLead() {
+  void testRangeWindowingLead() {
     try (Table unsorted = new Table.TestBuilder()
         .column(1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1) // GBY Key
         .column(0, 0, 0, 0, 1, 1, 1, 1, 2, 2, 2, 2, 2) // GBY Key
@@ -3001,7 +3001,7 @@ public class TableTest extends CudfTestBase {
   }
 
   @Test
-  void testTimeRangeWindowingMax() {
+  void testRangeWindowingMax() {
     try (Table unsorted = new Table.TestBuilder()
         .column(1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1) // GBY Key
         .column(0, 0, 0, 0, 1, 1, 1, 1, 2, 2, 2, 2, 2) // GBY Key
@@ -3048,7 +3048,7 @@ public class TableTest extends CudfTestBase {
   }
 
   @Test
-  void testTimeRangeWindowingRowNumber() {
+  void testRangeWindowingRowNumber() {
     try (Table unsorted = new Table.TestBuilder()
         .column(1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1) // GBY Key
         .column(0, 0, 0, 0, 1, 1, 1, 1, 2, 2, 2, 2, 2) // GBY Key
@@ -3084,7 +3084,7 @@ public class TableTest extends CudfTestBase {
   }
 
   @Test
-  void testTimeRangeWindowingCountDescendingTimestamps() {
+  void testRangeWindowingCountDescendingTimestamps() {
     try (Table unsorted = new Table.TestBuilder()
         .column(1, 1, 1, 1,  1, 1, 1, 1,  1, 1, 1, 1, 1) // GBY Key
         .column(0, 0, 0, 0,  1, 1, 1, 1,  2, 2, 2, 2, 2) // GBY Key
@@ -3131,7 +3131,7 @@ public class TableTest extends CudfTestBase {
   }
 
   @Test
-  void testTimeRangeWindowingWithoutGroupByColumns() {
+  void testRangeWindowingWithoutGroupByColumns() {
     try (Table unsorted = new Table.TestBuilder()
         .column(             7, 5, 1, 9, 7, 9, 8, 2, 8, 0, 6, 6, 8) // Agg Column
         .column((long) 1, (long)1, (long)2, (long)3, (long)3, (long)3, (long)4, (long)4, (long)5, (long)5, (long)6, (long)6, (long)7) // orderBy Key
@@ -3165,6 +3165,28 @@ public class TableTest extends CudfTestBase {
   }
 
   @Test
+  void testRangeWindowingOrderByUnsupportedDataTypeExceptions() {
+    try (Table table = new Table.TestBuilder()
+        .column(1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1) // GBY Key
+        .column(0, 0, 0, 0, 1, 1, 1, 1, 2, 2, 2, 2, 2) // GBY Key
+        .column(7, 5, 1, 9, 7, 9, 8, 2, 8, 0, 6, 6, 8) // Agg Column
+        .column(true, false, true, false, true, false, true, false, false, false, false, false, false) // orderBy Key
+        .build()) {
+
+      WindowOptions rangeBasedWindow = WindowOptions.builder()
+          .minPeriods(1)
+          .window(1,1)
+          .orderByColumnIndex(3)
+          .build();
+
+      assertThrows(IllegalArgumentException.class,
+          () -> table
+              .groupBy(0, 1)
+              .aggregateWindowsOverRanges(WindowAggregate.max(2, rangeBasedWindow)));
+    }
+  }
+
+  @Test
   void testInvalidWindowTypeExceptions() {
       try (Table table = new Table.TestBuilder().column(             1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1) // GBY Key
                                                 .column(             0, 0, 0, 0, 1, 1, 1, 1, 2, 2, 2, 2, 2) // GBY Key
@@ -3182,7 +3204,7 @@ public class TableTest extends CudfTestBase {
   }
 
   @Test
-  void testTimeRangeWindowingCountUnboundedPreceding() {
+  void testRangeWindowingCountUnboundedPreceding() {
     try (Table unsorted = new Table.TestBuilder()
         .column(1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1) // GBY Key
         .column(0, 0, 0, 0, 1, 1, 1, 1, 2, 2, 2, 2, 2) // GBY Key
@@ -3218,7 +3240,7 @@ public class TableTest extends CudfTestBase {
   }
 
   @Test
-  void testTimeRangeWindowingCountUnboundedASCWithNullsFirst() {
+  void testRangeWindowingCountUnboundedASCWithNullsFirst() {
     try (Table unsorted = new Table.TestBuilder()
         .column(1, 1, 1, 1, 1, 1,  1, 1, 1, 1, 1, 1, 1) // GBY Key
         .column(0, 0, 0, 0, 0, 0,  1, 1, 1, 1, 1, 1, 1) // GBY Key
@@ -3297,7 +3319,7 @@ public class TableTest extends CudfTestBase {
   }
 
   @Test
-  void testTimeRangeWindowingCountUnboundedDESCWithNullsFirst() {
+  void testRangeWindowingCountUnboundedDESCWithNullsFirst() {
     try (Table unsorted = new Table.TestBuilder()
         .column(1, 1, 1, 1, 1, 1,  1, 1, 1, 1, 1, 1, 1) // GBY Key
         .column(0, 0, 0, 0, 0, 0,  1, 1, 1, 1, 1, 1, 1) // GBY Key
@@ -3381,7 +3403,7 @@ public class TableTest extends CudfTestBase {
   }
 
   @Test
-  void testTimeRangeWindowingCountUnboundedASCWithNullsLast() {
+  void testRangeWindowingCountUnboundedASCWithNullsLast() {
     try (Table unsorted = new Table.TestBuilder()
         .column(1, 1, 1, 1, 1, 1,  1, 1, 1, 1, 1, 1, 1) // GBY Key
         .column(0, 0, 0, 0, 0, 0,  1, 1, 1, 1, 1, 1, 1) // GBY Key
@@ -3458,7 +3480,7 @@ public class TableTest extends CudfTestBase {
   }
 
   @Test
-  void testTimeRangeWindowingCountUnboundedDESCWithNullsLast() {
+  void testRangeWindowingCountUnboundedDESCWithNullsLast() {
     Integer X = null;
     try (Table unsorted = new Table.TestBuilder()
         .column(1, 1, 1, 1, 1, 1,  1, 1, 1, 1, 1, 1, 1) // GBY Key

@@ -2448,7 +2448,7 @@ public final class Table implements AutoCloseable {
      * @param windowAggregates the window-aggregations to be performed
      * @return Table instance, with each column containing the result of each aggregation.
      * @throws IllegalArgumentException if the window arguments are not of type
-     * {@link WindowOptions.FrameType#RANGE},
+     * {@link WindowOptions.FrameType#RANGE} or the order by type are not of (Boolean-exclusive) integral
      * i.e. the timestamp-column was not specified for the aggregation.
      */
     public Table aggregateWindowsOverRanges(AggregationOverWindow... windowAggregates) {
@@ -2480,7 +2480,8 @@ public final class Table implements AutoCloseable {
           case TIMESTAMP_DAYS:
             break;
           default:
-            throw new IllegalArgumentException("Expected range-based window order by type: integral (Boolean exclusive) and timestamp");
+            throw new IllegalArgumentException("Expected range-based window orderBy's " +
+                "type: integral (Boolean-exclusive) and timestamp days");
         }
 
         ColumnWindowOps ops = groupedOps.computeIfAbsent(agg.getColumnIndex(), (idx) -> new ColumnWindowOps());

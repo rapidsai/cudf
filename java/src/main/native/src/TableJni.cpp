@@ -627,7 +627,7 @@ struct scalar_construction_helper {
            typename ScalarType = cudf::scalar_type_t<T>,
            typename std::enable_if_t<!(std::is_integral<T>() && !cudf::is_boolean<T>())>* = nullptr>
   std::unique_ptr<cudf::scalar> operator()(int value, bool validify = true) {
-    CUDF_FAIL("only support numeric type except bool");
+    CUDF_FAIL("only support non-bool integral type");
   }
 
   template <typename T,
