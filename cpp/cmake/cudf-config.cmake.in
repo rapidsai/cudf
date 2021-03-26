@@ -26,11 +26,6 @@ This module offers an optional testing component which defines the
 following IMPORTED GLOBAL  targets:
 
  cudf::cudftestutil     - The main cudf testing library
- cudf::gmock
- cudf::gmock_main
- cudf::gtest
- cudf::gtest_main
-
 
 Result Variables
 ^^^^^^^^^^^^^^^^
@@ -51,11 +46,11 @@ set(_possible_targets_to_promote
       cudf::cudf
       cudf::benchmark
       cudf::benchmark_main
-      cudf::gmock
-      cudf::gtest
-      cudf::gmock_main
-      cudf::gtest_main
       cudf::cudftestutil
+      GTest::gmock
+      GTest::gmock_main
+      GTest::gtest
+      GTest::gtest_main
       rmm::rmm
       arrow_shared
       arrow_cuda_shared )
@@ -110,24 +105,10 @@ function(_fix_cmake_global_defaults target)
   endif()
 endfunction()
 
-function(_add_cudf_library_alias alias target)
-  _fix_cmake_global_defaults(${target})
-  if(NOT TARGET ${alias} AND (TARGET ${target}))
-    add_library(${alias} ALIAS ${target})
-  endif()
-endfunction()
-
 if(testing IN_LIST cudf_FIND_COMPONENTS)
   enable_language(CUDA)
 
   find_dependency(GTest @CUDF_MIN_VERSION_GTest@ CONFIG)
-
-  # Add cudf::* alias targets
-  # Unsure what to do about cudf::benchmark/cudf::benchmark_main
-  _add_cudf_library_alias(cudf::gtest GTest::gtest)
-  _add_cudf_library_alias(cudf::gmock GTest::gmock)
-  _add_cudf_library_alias(cudf::gtest_main GTest::gtest_main)
-  _add_cudf_library_alias(cudf::gmock_main GTest::gmock_main)
 
   include("${CMAKE_CURRENT_LIST_DIR}/cudf-testing-targets.cmake")
 

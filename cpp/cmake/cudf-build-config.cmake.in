@@ -6,10 +6,10 @@ set(_possible_targets_to_promote
       cudf::cudf
       cudf::benchmark
       cudf::benchmark_main
-      cudf::gmock
-      cudf::gtest
-      cudf::gmock_main
-      cudf::gtest_main
+      GTest::gmock
+      GTest::gmock_main
+      GTest::gtest
+      GTest::gtest_main
       cudf::cudftestutil
       rmm::rmm
       arrow_shared
@@ -54,46 +54,29 @@ include(@CUDF_SOURCE_DIR@/cmake/thirdparty/CUDF_GetThrust.cmake)
 # find rmm
 set(CUDF_MIN_VERSION_rmm "${CUDF_VERSION_MAJOR}.${CUDF_VERSION_MINOR}")
 include(@CUDF_SOURCE_DIR@/cmake/thirdparty/CUDF_GetRMM.cmake)
-# find gtest
-include(@CUDF_SOURCE_DIR@/cmake/thirdparty/CUDF_GetGTest.cmake)
-# find GoogleBench
-CPMFindPackage(NAME benchmark
-    VERSION         1.5.2
-    GIT_REPOSITORY  https://github.com/google/benchmark.git
-    GIT_TAG         v1.5.2
-    GIT_SHALLOW     TRUE
-    OPTIONS         "BENCHMARK_ENABLE_TESTING OFF"
-                    "BENCHMARK_ENABLE_INSTALL OFF")
-
-function(add_cudf_library_alias alias target)
-    if(NOT TARGET ${alias} AND (TARGET ${target}))
-        add_library(${alias} ALIAS ${target})
-    endif()
-endfunction()
-
-# Add cudf::* aliase targets like using an installed cuDF
-add_cudf_library_alias(cudf::gtest GTest::gtest)
-add_cudf_library_alias(cudf::gmock GTest::gmock)
-add_cudf_library_alias(cudf::benchmark benchmark)
-add_cudf_library_alias(cudf::gtest_main GTest::gtest_main)
-add_cudf_library_alias(cudf::gmock_main GTest::gmock_main)
-add_cudf_library_alias(cudf::benchmark_main benchmark_main)
 
 # find arrow
-if(NOT EXISTS "${CMAKE_CURRENT_LIST_DIR}/cudf-arrow-targets.cmake")
+if(EXISTS "${CMAKE_CURRENT_LIST_DIR}/cudf-arrow-targets.cmake")
+  include("${CMAKE_CURRENT_LIST_DIR}/cudf-arrow-targets.cmake")
+else()
   if(NOT DEFINED CUDF_USE_ARROW_STATIC)
     set(CUDF_USE_ARROW_STATIC OFF)
   endif()
   include(@CUDF_SOURCE_DIR@/cmake/thirdparty/CUDF_GetArrow.cmake)
 endif()
 
+# find GTest
+if(EXISTS "${CMAKE_CURRENT_LIST_DIR}/cudf-gtesting-targets.cmake")
+  include("${CMAKE_CURRENT_LIST_DIR}/cudf-gtesting-targets.cmake")
+else()
+  # find gtest
+  include(@CUDF_SOURCE_DIR@/cmake/thirdparty/CUDF_GetGTest.cmake)
+endif()
+
 list(POP_FRONT CMAKE_MODULE_PATH)
 
-if(EXISTS "${CMAKE_CURRENT_LIST_DIR}/cudf-arrow-targets.cmake")
-  include("${CMAKE_CURRENT_LIST_DIR}/cudf-arrow-targets.cmake")
-endif()
-include("${CMAKE_CURRENT_LIST_DIR}/cudf-targets.cmake")
 
+include("${CMAKE_CURRENT_LIST_DIR}/cudf-targets.cmake")
 if(EXISTS "${CMAKE_CURRENT_LIST_DIR}/cudf-testing-targets.cmake")
   include("${CMAKE_CURRENT_LIST_DIR}/cudf-testing-targets.cmake")
 endif()
