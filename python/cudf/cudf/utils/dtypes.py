@@ -13,7 +13,8 @@ from pandas.core.dtypes.common import infer_dtype_from_object
 from pandas.core.dtypes.dtypes import CategoricalDtype, CategoricalDtypeType
 
 import cudf
-from cudf._lib.scalar import DeviceScalar, _is_null_host_scalar
+from cudf._lib.scalar import DeviceScalar
+from cudf.core._compat import PANDAS_GE_120
 
 _NA_REP = "<NA>"
 _np_pa_dtypes = {
@@ -72,6 +73,12 @@ pandas_dtypes_to_cudf_dtypes = {
     pd.BooleanDtype(): np.dtype("bool_"),
     pd.StringDtype(): np.dtype("object"),
 }
+
+if PANDAS_GE_120:
+    cudf_dtypes_to_pandas_dtypes[np.dtype("float32")] = pd.Float32Dtype()
+    cudf_dtypes_to_pandas_dtypes[np.dtype("float64")] = pd.Float64Dtype()
+    pandas_dtypes_to_cudf_dtypes[pd.Float32Dtype()] = np.dtype("float32")
+    pandas_dtypes_to_cudf_dtypes[pd.Float64Dtype()] = np.dtype("float64")
 
 SIGNED_INTEGER_TYPES = {"int8", "int16", "int32", "int64"}
 UNSIGNED_TYPES = {"uint8", "uint16", "uint32", "uint64"}
@@ -137,20 +144,25 @@ def numeric_normalize_types(*args):
 
 
 def is_numerical_dtype(obj):
-    if is_categorical_dtype(obj):
+    # TODO: we should handle objects with a `.dtype` attribute,
+    # e.g., arrays, here.
+    try:
+        dtype = np.dtype(obj)
+    except TypeError:
         return False
-    if is_list_dtype(obj):
-        return False
-    return (
-        np.issubdtype(obj, np.bool_)
-        or np.issubdtype(obj, np.floating)
-        or np.issubdtype(obj, np.signedinteger)
-        or np.issubdtype(obj, np.unsignedinteger)
-    )
+    return dtype.kind in "biuf"
 
 
 def is_string_dtype(obj):
-    return pd.api.types.is_string_dtype(obj) and not is_categorical_dtype(obj)
+    return (
+        pd.api.types.is_string_dtype(obj)
+        # Reject all cudf extension types.
+        and not is_categorical_dtype(obj)
+        and not is_decimal_dtype(obj)
+        and not is_list_dtype(obj)
+        and not is_struct_dtype(obj)
+        and not is_interval_dtype(obj)
+    )
 
 
 def is_datetime_dtype(obj):
@@ -232,10 +244,22 @@ def is_list_dtype(obj):
 
 def is_struct_dtype(obj):
     return (
-        type(obj) is cudf.core.dtypes.StructDtype
+        isinstance(obj, cudf.core.dtypes.StructDtype)
         or obj is cudf.core.dtypes.StructDtype
         or (isinstance(obj, str) and obj == cudf.core.dtypes.StructDtype.name)
         or (hasattr(obj, "dtype") and is_struct_dtype(obj.dtype))
+    )
+
+
+def is_interval_dtype(obj):
+    return (
+        isinstance(obj, cudf.core.dtypes.IntervalDtype)
+        or isinstance(obj, pd.core.dtypes.dtypes.IntervalDtype)
+        or obj is cudf.core.dtypes.IntervalDtype
+        or (
+            isinstance(obj, str) and obj == cudf.core.dtypes.IntervalDtype.name
+        )
+        or (hasattr(obj, "dtype") and is_interval_dtype(obj.dtype))
     )
 
 
@@ -312,7 +336,10 @@ def to_cudf_compatible_scalar(val, dtype=None):
 
     If `val` is None, returns None.
     """
-    if _is_null_host_scalar(val) or isinstance(val, cudf.Scalar):
+
+    if cudf._lib.scalar._is_null_host_scalar(val) or isinstance(
+        val, cudf.Scalar
+    ):
         return val
 
     if not is_scalar(val):

@@ -17,6 +17,7 @@
 #include "orc_common.h"
 #include "orc_gpu.h"
 
+#include <cudf/table/table_device_view.cuh>
 #include <io/utilities/block_utils.cuh>
 
 #include <rmm/cuda_stream_view.hpp>
@@ -46,14 +47,16 @@ struct dictinit_state_s {
 };
 
 /**
- * @brief Return a 12-bit hash from a byte sequence
+ * @brief Return a 12-bit hash from a string
  */
-static inline __device__ uint32_t nvstr_init_hash(char const *ptr, uint32_t len)
+static inline __device__ uint32_t hash_string(const string_view val)
 {
-  if (len != 0) {
-    return (ptr[0] + (ptr[len - 1] << 5) + (len << 10)) & ((1 << init_hash_bits) - 1);
-  } else {
+  if (val.empty()) {
     return 0;
+  } else {
+    char const *ptr = val.data();
+    uint32_t len    = val.size_bytes();
+    return (ptr[0] + (ptr[len - 1] << 5) + (len << 10)) & ((1 << init_hash_bits) - 1);
   }
 }
 
@@ -62,44 +65,48 @@ static inline __device__ uint32_t nvstr_init_hash(char const *ptr, uint32_t len)
  *
  * @param[in,out] s dictionary builder state
  * @param[in] t thread id
+ * @param[in] temp_storage shared memory storage to scan non-null positions
  */
-static __device__ void LoadNonNullIndices(volatile dictinit_state_s *s, int t)
+template <int block_size, typename Storage>
+static __device__ void LoadNonNullIndices(volatile dictinit_state_s *s,
+                                          int t,
+                                          Storage &temp_storage)
 {
   if (t == 0) { s->nnz = 0; }
-  for (uint32_t i = 0; i < s->chunk.num_rows; i += 512) {
-    const uint32_t *valid_map = s->chunk.valid_map_base;
-    uint32_t is_valid, nz_map, nz_pos;
-    if (t < 16) {
+  for (uint32_t i = 0; i < s->chunk.num_rows; i += block_size) {
+    const uint32_t *valid_map = s->chunk.leaf_column->null_mask();
+    auto column_offset        = s->chunk.leaf_column->offset();
+    uint32_t is_valid, nz_pos;
+    if (t < block_size / 32) {
       if (!valid_map) {
         s->scratch_red[t] = 0xffffffffu;
       } else {
-        uint32_t row = s->chunk.start_row + i + t * 32;
-        uint32_t v   = (row < s->chunk.start_row + s->chunk.num_rows)
-                       ? valid_map[(row + s->chunk.column_offset) / 32]
-                       : 0;
-        if (row & 0x1f) {
-          uint32_t v1 = (row + 32 < s->chunk.start_row + s->chunk.num_rows)
-                          ? valid_map[((row + s->chunk.column_offset) / 32) + 1]
-                          : 0;
-          v = __funnelshift_r(v, v1, row + s->chunk.column_offset);
+        uint32_t const row   = s->chunk.start_row + i + t * 32;
+        auto const chunk_end = s->chunk.start_row + s->chunk.num_rows;
+
+        auto const valid_map_idx = (row + column_offset) / 32;
+        uint32_t valid           = (row < chunk_end) ? valid_map[valid_map_idx] : 0;
+
+        auto const rows_in_next_word = (row + column_offset) & 0x1f;
+        if (rows_in_next_word != 0) {
+          auto const rows_in_current_word = 32 - rows_in_next_word;
+          // Read next word if any rows are within the chunk
+          uint32_t const valid_next =
+            (row + rows_in_current_word < chunk_end) ? valid_map[valid_map_idx + 1] : 0;
+          valid = __funnelshift_r(valid, valid_next, rows_in_next_word);
         }
-        s->scratch_red[t] = v;
+        s->scratch_red[t] = valid;
       }
     }
     __syncthreads();
     is_valid = (i + t < s->chunk.num_rows) ? (s->scratch_red[t >> 5] >> (t & 0x1f)) & 1 : 0;
-    nz_map   = ballot(is_valid);
-    nz_pos   = s->nnz + __popc(nz_map & (0x7fffffffu >> (0x1fu - ((uint32_t)t & 0x1f))));
-    if (!(t & 0x1f)) { s->scratch_red[16 + (t >> 5)] = __popc(nz_map); }
+    uint32_t tmp_nnz;
+    cub::BlockScan<uint32_t, block_size, cub::BLOCK_SCAN_WARP_SCANS>(temp_storage)
+      .ExclusiveSum(is_valid, nz_pos, tmp_nnz);
+    nz_pos += s->nnz;
     __syncthreads();
-    if (t < 32) {
-      uint32_t nnz     = s->scratch_red[16 + (t & 0xf)];
-      uint32_t nnz_pos = WarpReducePos16(nnz, t);
-      if (t == 0xf) { s->nnz += nnz_pos; }
-      if (t <= 0xf) { s->scratch_red[t] = nnz_pos - nnz; }
-    }
-    __syncthreads();
-    if (is_valid) { s->dict[nz_pos + s->scratch_red[t >> 5]] = i + t; }
+    if (!t) { s->nnz += tmp_nnz; }
+    if (is_valid) { s->dict[nz_pos] = i + t; }
     __syncthreads();
   }
 }
@@ -108,37 +115,54 @@ static __device__ void LoadNonNullIndices(volatile dictinit_state_s *s, int t)
  * @brief Gather all non-NULL string rows and compute total character data size
  *
  * @param[in] chunks DictionaryChunk device array [rowgroup][column]
- * @param[in] num_columns Number of columns
+ * @param[in] num_columns Number of string columns
  */
-// blockDim {512,1,1}
+// blockDim {block_size,1,1}
 template <int block_size>
 __global__ void __launch_bounds__(block_size, 2)
-  gpuInitDictionaryIndices(DictionaryChunk *chunks, uint32_t num_columns)
+  gpuInitDictionaryIndices(DictionaryChunk *chunks,
+                           const table_device_view view,
+                           uint32_t *dict_data,
+                           uint32_t *dict_index,
+                           size_t row_index_stride,
+                           size_type *str_col_ids,
+                           uint32_t num_columns)
 {
   __shared__ __align__(16) dictinit_state_s state_g;
-  using warp_reduce      = cub::WarpReduce<uint32_t>;
-  using half_warp_reduce = cub::WarpReduce<uint32_t, 16>;
+
+  using block_reduce = cub::BlockReduce<uint32_t, block_size>;
+  using block_scan   = cub::BlockScan<uint32_t, block_size, cub::BLOCK_SCAN_WARP_SCANS>;
+
   __shared__ union {
-    typename warp_reduce::TempStorage full[block_size / 32];
-    typename half_warp_reduce::TempStorage half[block_size / 32];
+    typename block_reduce::TempStorage reduce_storage;
+    typename block_scan::TempStorage scan_storage;
   } temp_storage;
 
   dictinit_state_s *const s = &state_g;
   uint32_t col_id           = blockIdx.x;
   uint32_t group_id         = blockIdx.y;
-  const nvstrdesc_s *ck_data;
-  uint32_t *dict_data;
   uint32_t nnz, start_row, dict_char_count;
   int t = threadIdx.x;
 
-  if (t == 0) s->chunk = chunks[group_id * num_columns + col_id];
+  if (t == 0) {
+    column_device_view *leaf_column_view = view.begin() + str_col_ids[col_id];
+    s->chunk                             = chunks[group_id * num_columns + col_id];
+    s->chunk.leaf_column                 = leaf_column_view;
+    s->chunk.dict_data =
+      dict_data + col_id * leaf_column_view->size() + group_id * row_index_stride;
+    s->chunk.dict_index = dict_index + col_id * leaf_column_view->size();
+    s->chunk.start_row  = group_id * row_index_stride;
+    s->chunk.num_rows =
+      min(row_index_stride,
+          max(static_cast<size_t>(leaf_column_view->size() - s->chunk.start_row), size_t{0}));
+  }
   for (uint32_t i = 0; i < sizeof(s->map) / sizeof(uint32_t); i += block_size) {
     if (i + t < sizeof(s->map) / sizeof(uint32_t)) s->map.u32[i + t] = 0;
   }
   __syncthreads();
   // First, take care of NULLs, and count how many strings we have (TODO: bypass this step when
   // there are no nulls)
-  LoadNonNullIndices(s, t);
+  LoadNonNullIndices<block_size>(s, t, temp_storage.scan_storage);
   // Sum the lengths of all the strings
   if (t == 0) {
     s->chunk.string_char_count = 0;
@@ -147,23 +171,18 @@ __global__ void __launch_bounds__(block_size, 2)
   nnz       = s->nnz;
   dict_data = s->chunk.dict_data;
   start_row = s->chunk.start_row;
-  ck_data   = static_cast<const nvstrdesc_s *>(s->chunk.column_data_base) + start_row;
   for (uint32_t i = 0; i < nnz; i += block_size) {
     uint32_t ck_row = 0;
     uint32_t hash   = 0;
     uint32_t len    = 0;
     if (i + t < nnz) {
-      ck_row = s->dict[i + t];
-      len    = static_cast<uint32_t>(ck_data[ck_row].count);
-      hash   = nvstr_init_hash(ck_data[ck_row].ptr, len);
+      ck_row                 = s->dict[i + t];
+      string_view string_val = s->chunk.leaf_column->element<string_view>(ck_row + start_row);
+      len                    = static_cast<uint32_t>(string_val.size_bytes());
+      hash                   = hash_string(string_val);
     }
-    len = half_warp_reduce(temp_storage.half[t / 32]).Sum(len);
-    if (!(t & 0xf)) { s->scratch_red[t >> 4] = len; }
-    __syncthreads();
-    if (t < 32) {
-      len = warp_reduce(temp_storage.full[t / 32]).Sum(s->scratch_red[t]);
-      if (t == 0) s->chunk.string_char_count += len;
-    }
+    len = block_reduce(temp_storage.reduce_storage).Sum(len);
+    if (t == 0) s->chunk.string_char_count += len;
     if (i + t < nnz) {
       atomicAdd(&s->map.u32[hash >> 1], 1 << ((hash & 1) ? 16 : 0));
       dict_data[i + t] = start_row + ck_row;
@@ -182,21 +201,13 @@ __global__ void __launch_bounds__(block_size, 2)
     uint32_t sum23   = count23 + (count23 << 16);
     uint32_t sum45   = count45 + (count45 << 16);
     uint32_t sum67   = count67 + (count67 << 16);
-    uint32_t sum_w, tmp;
     sum23 += (sum01 >> 16) * 0x10001;
     sum45 += (sum23 >> 16) * 0x10001;
     sum67 += (sum45 >> 16) * 0x10001;
-    sum_w = sum67 >> 16;
-    sum_w = WarpReducePos16(sum_w, t);
-    if ((t & 0xf) == 0xf) { s->scratch_red[t >> 4] = sum_w; }
+    uint32_t sum_w = sum67 >> 16;
+    block_scan(temp_storage.scan_storage).InclusiveSum(sum_w, sum_w);
     __syncthreads();
-    if (t < 32) {
-      uint32_t sum_b    = WarpReducePos32(s->scratch_red[t], t);
-      s->scratch_red[t] = sum_b;
-    }
-    __syncthreads();
-    tmp                   = (t >= 16) ? s->scratch_red[(t >> 4) - 1] : 0;
-    sum_w                 = (sum_w - (sum67 >> 16) + tmp) * 0x10001;
+    sum_w                 = (sum_w - (sum67 >> 16)) * 0x10001;
     s->map.u32[t * 4 + 0] = sum_w + sum01 - count01;
     s->map.u32[t * 4 + 1] = sum_w + sum23 - count23;
     s->map.u32[t * 4 + 2] = sum_w + sum45 - count45;
@@ -208,10 +219,11 @@ __global__ void __launch_bounds__(block_size, 2)
     uint32_t ck_row = 0, pos = 0, hash = 0, pos_old, pos_new, sh, colliding_row;
     bool collision;
     if (i + t < nnz) {
-      ck_row  = dict_data[i + t] - start_row;
-      hash    = nvstr_init_hash(ck_data[ck_row].ptr, static_cast<uint32_t>(ck_data[ck_row].count));
-      sh      = (hash & 1) ? 16 : 0;
-      pos_old = s->map.u16[hash];
+      ck_row                 = dict_data[i + t] - start_row;
+      string_view string_val = s->chunk.leaf_column->element<string_view>(ck_row + start_row);
+      hash                   = hash_string(string_val);
+      sh                     = (hash & 1) ? 16 : 0;
+      pos_old                = s->map.u16[hash];
     }
     // The isolation of the atomicAdd, along with pos_old/pos_new is to guarantee deterministic
     // behavior for the first row in the hash map that will be used for early duplicate detection
@@ -239,54 +251,48 @@ __global__ void __launch_bounds__(block_size, 2)
   // map, the position of the first string can be inferred from the hash map counts
   dict_char_count = 0;
   for (uint32_t i = 0; i < nnz; i += block_size) {
-    uint32_t ck_row = 0, ck_row_ref = 0, is_dupe = 0, dupe_mask, dupes_before;
+    uint32_t ck_row = 0, ck_row_ref = 0, is_dupe = 0;
     if (i + t < nnz) {
-      const char *str1, *str2;
-      uint32_t len1, len2, hash;
-      ck_row     = s->dict[i + t];
-      str1       = ck_data[ck_row].ptr;
-      len1       = static_cast<uint32_t>(ck_data[ck_row].count);
-      hash       = nvstr_init_hash(str1, len1);
-      ck_row_ref = s->dict[(hash > 0) ? s->map.u16[hash - 1] : 0];
+      ck_row                   = s->dict[i + t];
+      string_view string_value = s->chunk.leaf_column->element<string_view>(ck_row + start_row);
+      auto const string_length = static_cast<uint32_t>(string_value.size_bytes());
+      auto const hash          = hash_string(string_value);
+      ck_row_ref               = s->dict[(hash > 0) ? s->map.u16[hash - 1] : 0];
       if (ck_row_ref != ck_row) {
-        str2    = ck_data[ck_row_ref].ptr;
-        len2    = static_cast<uint32_t>(ck_data[ck_row_ref].count);
-        is_dupe = nvstr_is_equal(str1, len1, str2, len2);
-        dict_char_count += (is_dupe) ? 0 : len1;
+        string_view reference_string =
+          s->chunk.leaf_column->element<string_view>(ck_row_ref + start_row);
+        is_dupe = (string_value == reference_string);
+        dict_char_count += (is_dupe) ? 0 : string_length;
       }
     }
-    dupe_mask    = ballot(is_dupe);
-    dupes_before = s->total_dupes + __popc(dupe_mask & ((2 << (t & 0x1f)) - 1));
-    if (!(t & 0x1f)) { s->scratch_red[t >> 5] = __popc(dupe_mask); }
+    uint32_t dupes_in_block;
+    uint32_t dupes_before;
+    block_scan(temp_storage.scan_storage).InclusiveSum(is_dupe, dupes_before, dupes_in_block);
+    dupes_before += s->total_dupes;
     __syncthreads();
-    if (t < 32) {
-      uint32_t warp_dupes = (t < 16) ? s->scratch_red[t] : 0;
-      uint32_t warp_pos   = WarpReducePos16(warp_dupes, t);
-      if (t == 0xf) { s->total_dupes += warp_pos; }
-      if (t < 16) { s->scratch_red[t] = warp_pos - warp_dupes; }
-    }
-    __syncthreads();
+    if (!t) { s->total_dupes += dupes_in_block; }
     if (i + t < nnz) {
       if (!is_dupe) {
-        dupes_before += s->scratch_red[t >> 5];
         dict_data[i + t - dupes_before] = ck_row + start_row;
       } else {
         s->chunk.dict_index[ck_row + start_row] = (ck_row_ref + start_row) | (1u << 31);
       }
     }
   }
-  dict_char_count = warp_reduce(temp_storage.full[t / 32]).Sum(dict_char_count);
-  if (!(t & 0x1f)) { s->scratch_red[t >> 5] = dict_char_count; }
-  __syncthreads();
-  if (t < 32) {
-    dict_char_count =
-      half_warp_reduce(temp_storage.half[t / 32]).Sum((t < 16) ? s->scratch_red[t] : 0);
-  }
+  // temp_storage is being used twice, so make sure there is `__syncthreads()` between them
+  // while making any future changes.
+  dict_char_count = block_reduce(temp_storage.reduce_storage).Sum(dict_char_count);
   if (!t) {
     chunks[group_id * num_columns + col_id].num_strings       = nnz;
     chunks[group_id * num_columns + col_id].string_char_count = s->chunk.string_char_count;
     chunks[group_id * num_columns + col_id].num_dict_strings  = nnz - s->total_dupes;
     chunks[group_id * num_columns + col_id].dict_char_count   = dict_char_count;
+    chunks[group_id * num_columns + col_id].leaf_column       = s->chunk.leaf_column;
+
+    chunks[group_id * num_columns + col_id].dict_data  = s->chunk.dict_data;
+    chunks[group_id * num_columns + col_id].dict_index = s->chunk.dict_index;
+    chunks[group_id * num_columns + col_id].start_row  = s->chunk.start_row;
+    chunks[group_id * num_columns + col_id].num_rows   = s->chunk.num_rows;
   }
 }
 
@@ -362,8 +368,12 @@ __global__ void __launch_bounds__(block_size)
   gpuBuildStripeDictionaries(StripeDictionary *stripes, uint32_t num_columns)
 {
   __shared__ __align__(16) build_state_s state_g;
-  using warp_reduce = cub::WarpReduce<uint32_t>;
-  __shared__ typename warp_reduce::TempStorage temp_storage[block_size / 32];
+  using block_reduce = cub::BlockReduce<uint32_t, block_size>;
+  using block_scan   = cub::BlockScan<uint32_t, block_size, cub::BLOCK_SCAN_WARP_SCANS>;
+  __shared__ union {
+    typename block_reduce::TempStorage reduce_storage;
+    typename block_scan::TempStorage scan_storage;
+  } temp_storage;
 
   build_state_s *const s = &state_g;
   uint32_t col_id        = blockIdx.x;
@@ -371,7 +381,6 @@ __global__ void __launch_bounds__(block_size)
   uint32_t num_strings;
   uint32_t *dict_data, *dict_index;
   uint32_t dict_char_count;
-  const nvstrdesc_s *str_data;
   int t = threadIdx.x;
 
   if (t == 0) s->stripe = stripes[stripe_id * num_columns + col_id];
@@ -380,45 +389,32 @@ __global__ void __launch_bounds__(block_size)
   num_strings = s->stripe.num_strings;
   dict_data   = s->stripe.dict_data;
   if (!dict_data) return;
-  dict_index      = s->stripe.dict_index;
-  str_data        = static_cast<const nvstrdesc_s *>(s->stripe.column_data_base);
-  dict_char_count = 0;
+  dict_index                 = s->stripe.dict_index;
+  string_view current_string = string_view::min();
+  dict_char_count            = 0;
   for (uint32_t i = 0; i < num_strings; i += block_size) {
-    uint32_t cur = (i + t < num_strings) ? dict_data[i + t] : 0;
-    uint32_t dupe_mask, dupes_before, cur_len = 0;
-    const char *cur_ptr;
-    bool is_dupe = false;
-    if (i + t < num_strings) {
-      cur_ptr = str_data[cur].ptr;
-      cur_len = str_data[cur].count;
-    }
+    uint32_t cur     = (i + t < num_strings) ? dict_data[i + t] : 0;
+    uint32_t cur_len = 0;
+    bool is_dupe     = false;
+    if (i + t < num_strings) { current_string = s->stripe.leaf_column->element<string_view>(cur); }
     if (i + t != 0 && i + t < num_strings) {
       uint32_t prev = dict_data[i + t - 1];
-      is_dupe       = nvstr_is_equal(cur_ptr, cur_len, str_data[prev].ptr, str_data[prev].count);
+      is_dupe       = (current_string == (s->stripe.leaf_column->element<string_view>(prev)));
     }
     dict_char_count += (is_dupe) ? 0 : cur_len;
-    dupe_mask    = ballot(is_dupe);
-    dupes_before = s->total_dupes + __popc(dupe_mask & ((2 << (t & 0x1f)) - 1));
-    if (!(t & 0x1f)) { s->scratch_red[t >> 5] = __popc(dupe_mask); }
+    uint32_t dupes_in_block;
+    uint32_t dupes_before;
+    block_scan(temp_storage.scan_storage).InclusiveSum(is_dupe, dupes_before, dupes_in_block);
+    dupes_before += s->total_dupes;
     __syncthreads();
-    if (t < 32) {
-      uint32_t warp_dupes = s->scratch_red[t];
-      uint32_t warp_pos   = WarpReducePos32(warp_dupes, t);
-      if (t == 0x1f) { s->total_dupes += warp_pos; }
-      s->scratch_red[t] = warp_pos - warp_dupes;
-    }
-    __syncthreads();
+    if (!t) { s->total_dupes += dupes_in_block; }
     if (i + t < num_strings) {
-      dupes_before += s->scratch_red[t >> 5];
       dict_index[cur] = i + t - dupes_before;
       if (!is_dupe && dupes_before != 0) { dict_data[i + t - dupes_before] = cur; }
     }
     __syncthreads();
   }
-  dict_char_count = warp_reduce(temp_storage[t / 32]).Sum(dict_char_count);
-  if (!(t & 0x1f)) { s->scratch_red[t >> 5] = dict_char_count; }
-  __syncthreads();
-  if (t < 32) { dict_char_count = warp_reduce(temp_storage[t / 32]).Sum(s->scratch_red[t]); }
+  dict_char_count = block_reduce(temp_storage.reduce_storage).Sum(dict_char_count);
   if (t == 0) {
     stripes[stripe_id * num_columns + col_id].num_strings     = num_strings - s->total_dupes;
     stripes[stripe_id * num_columns + col_id].dict_char_count = dict_char_count;
@@ -426,33 +422,27 @@ __global__ void __launch_bounds__(block_size)
 }
 
 /**
- * @brief Launches kernel for initializing dictionary chunks
- *
- * @param[in] chunks DictionaryChunk device array [rowgroup][column]
- * @param[in] num_columns Number of columns
- * @param[in] num_rowgroups Number of row groups
- * @param[in] stream CUDA stream to use, default 0
+ * @copydoc cudf::io::orc::gpu::InitDictionaryIndices
  */
-void InitDictionaryIndices(DictionaryChunk *chunks,
+void InitDictionaryIndices(const table_device_view &view,
+                           DictionaryChunk *chunks,
+                           uint32_t *dict_data,
+                           uint32_t *dict_index,
+                           size_t row_index_stride,
+                           size_type *str_col_ids,
                            uint32_t num_columns,
                            uint32_t num_rowgroups,
                            rmm::cuda_stream_view stream)
 {
-  dim3 dim_block(512, 1);  // 512 threads per chunk
+  static constexpr int block_size = 512;
+  dim3 dim_block(block_size, 1);
   dim3 dim_grid(num_columns, num_rowgroups);
-  gpuInitDictionaryIndices<512><<<dim_grid, dim_block, 0, stream.value()>>>(chunks, num_columns);
+  gpuInitDictionaryIndices<block_size><<<dim_grid, dim_block, 0, stream.value()>>>(
+    chunks, view, dict_data, dict_index, row_index_stride, str_col_ids, num_columns);
 }
 
 /**
- * @brief Launches kernel for building stripe dictionaries
- *
- * @param[in] stripes StripeDictionary device array [stripe][column]
- * @param[in] stripes_host StripeDictionary host array [stripe][column]
- * @param[in] chunks DictionaryChunk device array [rowgroup][column]
- * @param[in] num_stripes Number of stripes
- * @param[in] num_rowgroups Number of row groups
- * @param[in] num_columns Number of columns
- * @param[in] stream CUDA stream to use, default 0
+ * @copydoc cudf::io::orc::gpu::BuildStripeDictionaries
  */
 void BuildStripeDictionaries(StripeDictionary *stripes,
                              StripeDictionary *stripes_host,
@@ -468,18 +458,16 @@ void BuildStripeDictionaries(StripeDictionary *stripes,
     stripes, chunks, num_columns);
   for (uint32_t i = 0; i < num_stripes * num_columns; i++) {
     if (stripes_host[i].dict_data != nullptr) {
-      thrust::device_ptr<uint32_t> p = thrust::device_pointer_cast(stripes_host[i].dict_data);
-      const nvstrdesc_s *str_data =
-        static_cast<const nvstrdesc_s *>(stripes_host[i].column_data_base);
+      thrust::device_ptr<uint32_t> dict_data_ptr =
+        thrust::device_pointer_cast(stripes_host[i].dict_data);
+      column_device_view *string_column = stripes_host[i].leaf_column;
       // NOTE: Requires the --expt-extended-lambda nvcc flag
       thrust::sort(rmm::exec_policy(stream),
-                   p,
-                   p + stripes_host[i].num_strings,
-                   [str_data] __device__(const uint32_t &lhs, const uint32_t &rhs) {
-                     return nvstr_is_lesser(str_data[lhs].ptr,
-                                            (uint32_t)str_data[lhs].count,
-                                            str_data[rhs].ptr,
-                                            (uint32_t)str_data[rhs].count);
+                   dict_data_ptr,
+                   dict_data_ptr + stripes_host[i].num_strings,
+                   [string_column] __device__(const uint32_t &lhs, const uint32_t &rhs) {
+                     return string_column->element<string_view>(lhs) <
+                            string_column->element<string_view>(rhs);
                    });
     }
   }

@@ -287,7 +287,7 @@ std::pair<rmm::device_vector<size_type>, rmm::device_vector<size_type>> probe_jo
 
     constexpr int block_size{DEFAULT_JOIN_BLOCK_SIZE};
     detail::grid_1d config(probe_table.num_rows(), block_size);
-    write_index.set_value(0, stream);
+    write_index.set_value_zero(stream);
 
     row_hash hash_probe{probe_table};
     row_equality equality{probe_table, build_table, compare_nulls == null_equality::EQUAL};
@@ -442,7 +442,9 @@ std::pair<std::unique_ptr<table>, std::unique_ptr<table>> construct_join_output_
                                               stream,
                                               rmm::mr::get_current_device_resource());
       common_table           = cudf::detail::concatenate(
-        {common_from_build->view(), common_from_probe->view()}, stream, mr);
+        std::vector<table_view>({common_from_build->view(), common_from_probe->view()}),
+        stream,
+        mr);
     }
     joined_indices = concatenate_vector_pairs(complement_indices, joined_indices);
   } else {

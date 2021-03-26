@@ -87,7 +87,7 @@ struct unary_row_output : public row_output {
                              Input input,
                              detail::device_data_reference output) const
   {
-    release_assert(false && "Invalid unary dispatch operator for the provided input.");
+    cudf_assert(false && "Invalid unary dispatch operator for the provided input.");
   }
 };
 
@@ -116,7 +116,7 @@ struct binary_row_output : public row_output {
                              RHS rhs,
                              detail::device_data_reference output) const
   {
-    release_assert(false && "Invalid binary dispatch operator for the provided input.");
+    cudf_assert(false && "Invalid binary dispatch operator for the provided input.");
   }
 };
 
@@ -239,7 +239,7 @@ struct row_evaluator {
                              detail::device_data_reference rhs,
                              detail::device_data_reference output) const
   {
-    release_assert(false && "Invalid binary dispatch operator for the provided input.");
+    cudf_assert(false && "Invalid binary dispatch operator for the provided input.");
   }
 
  private:
@@ -311,7 +311,7 @@ __device__ void evaluate_row_expression(detail::row_evaluator const& evaluator,
                       output,
                       op);
     } else {
-      release_assert(false && "Invalid operator arity.");
+      cudf_assert(false && "Invalid operator arity.");
     }
   }
 }

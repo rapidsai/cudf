@@ -1,16 +1,20 @@
 # Copyright (c) 2019-2021, NVIDIA CORPORATION.
 
 import warnings
+from typing import Sequence, Union
 
 import numpy as np
 from pandas.core.tools.datetimes import _unit_map
 
 import cudf
-from cudf import _lib as libcudf
-from cudf._lib.strings.char_types import is_integer as cpp_is_integer
+
+from cudf._lib.strings.convert.convert_integers import (
+    is_integer as cpp_is_integer,
+)
 from cudf.core import column
 from cudf.core.index import as_index
 from cudf.utils.dtypes import is_scalar
+import cudf._lib as libcudf
 
 _unit_dtype_map = {
     "ns": "datetime64[ns]",
@@ -604,3 +608,43 @@ class DateOffset:
             raise ValueError(f"Cannot interpret frequency str: {freqstr}")
 
         return cls(**{cls._CODES_TO_UNITS[freq_part]: int(numeric_part)})
+
+
+def _isin_datetimelike(
+    lhs: Union[column.TimeDeltaColumn, column.DatetimeColumn], values: Sequence
+) -> column.ColumnBase:
+    """
+    Check whether values are contained in the
+    DateTimeColumn or TimeDeltaColumn.
+
+    Parameters
+    ----------
+    lhs : TimeDeltaColumn or DatetimeColumn
+        Column to check whether the `values` exist in.
+    values : set or list-like
+        The sequence of values to test. Passing in a single string will
+        raise a TypeError. Instead, turn a single string into a list
+        of one element.
+
+    Returns
+    -------
+    result: Column
+        Column of booleans indicating if each element is in values.
+    """
+    rhs = None
+    try:
+        rhs = cudf.core.column.as_column(values)
+
+        if rhs.dtype.kind in {"f", "i", "u"}:
+            return cudf.core.column.full(len(lhs), False, dtype="bool")
+        rhs = rhs.astype(lhs.dtype)
+        res = lhs._isin_earlystop(rhs)
+        if res is not None:
+            return res
+    except ValueError:
+        # pandas functionally returns all False when cleansing via
+        # typecasting fails
+        return cudf.core.column.full(len(lhs), False, dtype="bool")
+
+    res = lhs._obtain_isin_result(rhs)
+    return res

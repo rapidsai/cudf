@@ -259,7 +259,9 @@ def gen_rand(dtype, size, **kwargs):
     elif dtype.kind == "b":
         low = kwargs.get("low", 0)
         high = kwargs.get("high", 2)
-        return np.random.randint(low=low, high=high, size=size).astype(np.bool)
+        return np.random.randint(low=low, high=high, size=size).astype(
+            np.bool_
+        )
     elif dtype.kind == "M":
         low = kwargs.get("low", 0)
         time_unit, _ = np.datetime_data(dtype)

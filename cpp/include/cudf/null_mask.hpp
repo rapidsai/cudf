@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2020, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,6 +16,7 @@
 #pragma once
 
 #include <cudf/types.hpp>
+#include <cudf/utilities/span.hpp>
 
 #include <rmm/device_buffer.hpp>
 
@@ -136,38 +137,32 @@ cudf::size_type count_unset_bits(bitmask_type const* bitmask, size_type start, s
  * `[indices[2*i], indices[(2*i)+1])` (where 0 <= i < indices.size() / 2).
  *
  * Returns an empty vector if `bitmask == nullptr`.
- * @throws cudf::logic_error if `indices.size() % 2 != 0`
- * @throws cudf::logic_error if `indices[2*i] < 0 or
- * indices[2*i] > indices[(2*i)+1]`
  *
- * @param[in] bitmask Bitmask residing in device memory whose bits will be
- * counted
- * @param[in] indices A vector of indices used to specify ranges to count the
- * number of set bits
- * @return std::vector<size_type> A vector storing the number of non-zero bits
- * in the specified ranges
+ * @throws cudf::logic_error if `indices.size() % 2 != 0`
+ * @throws cudf::logic_error if `indices[2*i] < 0 or indices[2*i] > indices[(2*i)+1]`
+ *
+ * @param[in] bitmask Bitmask residing in device memory whose bits will be counted
+ * @param[in] indices A host_span of indices specifying ranges to count the number of set bits
+ * @return A vector storing the number of non-zero bits in the specified ranges
  */
 std::vector<size_type> segmented_count_set_bits(bitmask_type const* bitmask,
-                                                std::vector<cudf::size_type> const& indices);
+                                                host_span<cudf::size_type const> indices);
 
 /**
  * @brief Given a bitmask, counts the number of unset (0) bits in every range
  * `[indices[2*i], indices[(2*i)+1])` (where 0 <= i < indices.size() / 2).
  *
  * Returns an empty vector if `bitmask == nullptr`.
- * @throws cudf::logic_error if `indices.size() % 2 != 0`
- * @throws cudf::logic_error if `indices[2*i] < 0 or
- * indices[2*i] > indices[(2*i)+1]`
  *
- * @param[in] bitmask Bitmask residing in device memory whose bits will be
- * counted
- * @param[in] indices A vector of indices used to specify ranges to count the
- * number of unset bits
- * @return std::vector<size_type> A vector storing the number of zero bits in
- * the specified ranges
+ * @throws cudf::logic_error if `indices.size() % 2 != 0`
+ * @throws cudf::logic_error if `indices[2*i] < 0 or indices[2*i] > indices[(2*i)+1]`
+ *
+ * @param[in] bitmask Bitmask residing in device memory whose bits will be counted
+ * @param[in] indices A host_span of indices specifying ranges to count the number of unset bits
+ * @return A vector storing the number of zero bits in the specified ranges
  */
 std::vector<size_type> segmented_count_unset_bits(bitmask_type const* bitmask,
-                                                  std::vector<cudf::size_type> const& indices);
+                                                  host_span<cudf::size_type const> indices);
 
 /**
  * @brief Creates a `device_buffer` from a slice of bitmask defined by a range
@@ -217,6 +212,20 @@ rmm::device_buffer copy_bitmask(
  * @return rmm::device_buffer Output bitmask
  */
 rmm::device_buffer bitmask_and(
+  table_view const& view,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+
+/**
+ * @brief Returns a bitwise OR of the bitmasks of columns of a table
+ *
+ * If any of the columns isn't nullable, it is considered all valid.
+ * If no column in the table is nullable, an empty bitmask is returned.
+ *
+ * @param view The table of columns
+ * @param mr Device memory resource used to allocate the returned device_buffer
+ * @return rmm::device_buffer Output bitmask
+ */
+rmm::device_buffer bitmask_or(
   table_view const& view,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 

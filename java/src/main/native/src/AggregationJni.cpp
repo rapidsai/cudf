@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -81,9 +81,7 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Aggregation_createNoParamAgg(JNIEnv 
       case 17: // ROW_NUMBER
         ret = cudf::make_row_number_aggregation();
         break;
-      case 18: // COLLECT
-        ret = cudf::make_collect_aggregation();
-        break;
+      // case 18: COLLECT
       // case 19: LEAD
       // case 20: LAG
       // case 21: PTX
@@ -196,6 +194,19 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Aggregation_createLeadLagAgg(JNIEnv 
         break;
       default: throw std::logic_error("Unsupported Lead/Lag Aggregation Operation");
     }
+    return reinterpret_cast<jlong>(ret.release());
+  }
+  CATCH_STD(env, 0);
+}
+
+JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Aggregation_createCollectAgg(JNIEnv *env,
+                                                                     jclass class_object,
+                                                                     jboolean include_nulls) {
+  try {
+    cudf::jni::auto_set_device(env);
+    cudf::null_policy policy =
+        include_nulls ? cudf::null_policy::INCLUDE : cudf::null_policy::EXCLUDE;
+    std::unique_ptr<cudf::aggregation> ret = cudf::make_collect_list_aggregation(policy);
     return reinterpret_cast<jlong>(ret.release());
   }
   CATCH_STD(env, 0);

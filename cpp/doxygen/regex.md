@@ -62,7 +62,7 @@ The details are based on features documented at https://www.regular-expressions.
 | Shorthand | `\s` | Adds all whitespace to the character class. Matches a single whitespace character if used outside character classes. | `\s` matches any single whitespace character |
 | Shorthand | `\D` | Adds all non-digits to the character class. Matches a single character that is not a digit character if used outside character classes. | `[\D]` matches a single character that is not a digit character |
 | Shorthand | `\W` | Adds all non-word characters to the character class. Matches a single character that is not a word character if used outside character classes. | [`\W`] matches a single character that is not a word character |
-| Shorthand | `\s` | Adds all non-whitespace to the character class. Matches a single character that is not a whitespace character if used outside character classes. | `[\S]` matches a single character that is not a whitespace character |
+| Shorthand | `\S` | Adds all non-whitespace to the character class. Matches a single character that is not a whitespace character if used outside character classes. | `[\S]` matches a single character that is not a whitespace character |
 
 ### Anchors
 

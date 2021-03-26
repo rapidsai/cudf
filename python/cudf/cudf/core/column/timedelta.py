@@ -1,4 +1,5 @@
 # Copyright (c) 2020-2021, NVIDIA CORPORATION.
+
 from __future__ import annotations
 
 import datetime as dt
@@ -127,7 +128,7 @@ class TimeDeltaColumn(column.ColumnBase):
             common_dtype = determine_out_dtype(self.dtype, rhs.dtype)
             lhs = lhs.astype(common_dtype).astype("float64")
             if isinstance(rhs, cudf.Scalar):
-                if rhs.is_valid:
+                if rhs.is_valid():
                     rhs = cudf.Scalar(
                         np.timedelta64(rhs.value)
                         .astype(common_dtype)
@@ -222,7 +223,7 @@ class TimeDeltaColumn(column.ColumnBase):
 
         if op in ("eq", "ne"):
             out_dtype = self._binary_op_eq_ne(rhs)
-        elif op in ("lt", "gt", "le", "ge"):
+        elif op in ("lt", "gt", "le", "ge", "NULL_EQUALS"):
             out_dtype = self._binary_op_lt_gt_le_ge(rhs)
         elif op == "mul":
             out_dtype = self._binary_op_mul(rhs)
@@ -274,6 +275,8 @@ class TimeDeltaColumn(column.ColumnBase):
             return cudf.Scalar(other)
         elif np.isscalar(other):
             return cudf.Scalar(other)
+        elif other is None:
+            return cudf.Scalar(other, dtype=self.dtype)
         else:
             raise TypeError(f"cannot normalize {type(other)}")
 
@@ -367,6 +370,9 @@ class TimeDeltaColumn(column.ColumnBase):
             self.as_numerical.median(skipna=skipna), unit=self.time_unit
         )
 
+    def isin(self, values: Sequence) -> ColumnBase:
+        return cudf.core.tools.datetimes._isin_datetimelike(self, values)
+
     def quantile(
         self, q: Union[float, Sequence[float]], interpolation: str, exact: bool
     ) -> "column.ColumnBase":
@@ -380,15 +386,12 @@ class TimeDeltaColumn(column.ColumnBase):
     def sum(
         self, skipna: bool = None, dtype: Dtype = None, min_count=0
     ) -> pd.Timedelta:
-        if len(self) == 0:
-            return pd.Timedelta(None, unit=self.time_unit)
-        else:
-            return pd.Timedelta(
-                self.as_numerical.sum(
-                    skipna=skipna, dtype=dtype, min_count=min_count
-                ),
-                unit=self.time_unit,
-            )
+        return pd.Timedelta(
+            self.as_numerical.sum(
+                skipna=skipna, dtype=dtype, min_count=min_count
+            ),
+            unit=self.time_unit,
+        )
 
     def std(
         self, skipna: bool = None, ddof: int = 1, dtype: Dtype = np.float64

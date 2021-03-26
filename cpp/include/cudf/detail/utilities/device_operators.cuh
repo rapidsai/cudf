@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2020, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,21 +14,19 @@
  * limitations under the License.
  */
 
-#ifndef DEVICE_OPERATORS_CUH
-#define DEVICE_OPERATORS_CUH
+#pragma once
 
 /**
  * @brief definition of the device operators
  * @file device_operators.cuh
  */
 
+#include <cudf/fixed_point/fixed_point.hpp>
 #include <cudf/scalar/scalar.hpp>
+#include <cudf/strings/string_view.cuh>
 #include <cudf/types.hpp>
 #include <cudf/utilities/error.hpp>
 #include <cudf/utilities/traits.hpp>
-
-// will fail to compile if grouped with the includes above
-#include <cudf/fixed_point/fixed_point.hpp>
 
 #include <type_traits>
 
@@ -86,16 +84,6 @@ struct DeviceCount {
   }
 };
 
-/**
- * @brief string value for sentinel which is used in min, max reduction
- * operators
- * This sentinel string value is the highest possible valid UTF-8 encoded
- * character. This serves as identity value for maximum operator on string
- * values. Also, this char pointer serves as valid device pointer of identity
- * value for minimum operator on string values.
- */
-__constant__ char max_string_sentinel[5]{"\xF7\xBF\xBF\xBF"};
-
 /* @brief binary `min` operator */
 struct DeviceMin {
   template <typename T>
@@ -125,13 +113,7 @@ struct DeviceMin {
             typename std::enable_if_t<std::is_same<T, cudf::string_view>::value>* = nullptr>
   CUDA_HOST_DEVICE_CALLABLE static constexpr T identity()
   {
-    const char* psentinel{nullptr};
-#if defined(__CUDA_ARCH__)
-    psentinel = &max_string_sentinel[0];
-#else
-    CUDA_TRY(cudaGetSymbolAddress((void**)&psentinel, max_string_sentinel));
-#endif
-    return T(psentinel, 4);
+    return string_view::max();
   }
 
   template <typename T, typename std::enable_if_t<cudf::is_dictionary<T>()>* = nullptr>
@@ -169,13 +151,7 @@ struct DeviceMax {
             typename std::enable_if_t<std::is_same<T, cudf::string_view>::value>* = nullptr>
   CUDA_HOST_DEVICE_CALLABLE static constexpr T identity()
   {
-    const char* psentinel{nullptr};
-#if defined(__CUDA_ARCH__)
-    psentinel = &max_string_sentinel[0];
-#else
-    CUDA_TRY(cudaGetSymbolAddress((void**)&psentinel, max_string_sentinel));
-#endif
-    return T(psentinel, 0);
+    return string_view::min();
   }
 
   template <typename T, typename std::enable_if_t<cudf::is_dictionary<T>()>* = nullptr>
@@ -244,5 +220,3 @@ struct DeviceLeadLag {
 };
 
 }  // namespace cudf
-
-#endif
