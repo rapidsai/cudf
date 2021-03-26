@@ -86,7 +86,7 @@ class memory_mapped_source : public file_source {
   explicit memory_mapped_source(const char *filepath, size_t offset, size_t size)
     : file_source(filepath)
   {
-    map(_file.desc(), offset, size);
+    if (_file.size() != 0) map(_file.desc(), offset, size);
   }
 
   virtual ~memory_mapped_source()
@@ -120,12 +120,12 @@ class memory_mapped_source : public file_source {
  private:
   void map(int fd, size_t offset, size_t size)
   {
-    CUDF_EXPECTS(offset + size < _file.size(), "Mapped region is past end of file");
+    CUDF_EXPECTS(offset < _file.size(), "Offset is past end of file");
 
     // Offset for `mmap()` must be page aligned
     _map_offset = offset & ~(sysconf(_SC_PAGESIZE) - 1);
 
-    if (size == 0) { size = _file.size() - offset; }
+    if (size == 0 || (offset + size) > _file.size()) { size = _file.size() - offset; }
 
     // Size for `mmap()` needs to include the page padding
     _map_size = size + (offset - _map_offset);
