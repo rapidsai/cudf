@@ -267,7 +267,7 @@ class fixed_point {
    */
   template <typename U,
             typename cuda::std::enable_if_t<std::is_floating_point<U>::value>* = nullptr>
-  CUDA_HOST_DEVICE_CALLABLE explicit constexpr operator U() const
+  explicit constexpr operator U() const
   {
     return detail::shift<Rep, Rad>(static_cast<U>(_value), detail::negate(_scale));
   }
@@ -279,7 +279,7 @@ class fixed_point {
    * @return The `fixed_point` number in base 10 (aka human readable format)
    */
   template <typename U, typename cuda::std::enable_if_t<std::is_integral<U>::value>* = nullptr>
-  CUDA_HOST_DEVICE_CALLABLE explicit constexpr operator U() const
+  explicit constexpr operator U() const
   {
     // Don't cast to U until converting to Rep because in certain cases casting to U before shifting
     // will result in integer overflow (i.e. if U = int32_t, Rep = int64_t and _value > 2 billion)
