@@ -23,59 +23,48 @@
 #include <cudf_test/column_wrapper.hpp>
 
 // reference:  https://jsonpath.herokuapp.com/
-/*
-  {
-    "store": {
-        "book": [
-              {
-                "category": "reference",
-                "author": "Nigel Rees",
-                "title": "Sayings of the Century",
-                "price": 8.95
-              },
-              {
-                "category": "fiction",
-                "author": "Evelyn Waugh",
-                "title": "Sword of Honour",
-                "price": 12.99
-              },
-              {
-                "category": "fiction",
-                "author": "Herman Melville",
-                "title": "Moby Dick",
-                "isbn": "0-553-21311-3",
-                "price": 8.99
-              },
-              {
-                "category": "fiction",
-                "author": "J. R. R. Tolkien",
-                "title": "The Lord of the Rings",
-                "isbn": "0-395-19395-8",
-                "price": 22.99
-              }
-        ],
-        "bicycle": {
-              "color": "red",
-              "price": 19.95
-        }
-    },
-    "expensive": 10
-  }
-*/
 
-// this string is formatted to result in a reasonably readable debug printf
+// clang-format off
 std::string json_string{
-  "{\n\"store\": {\n\t\"book\": [\n\t\t{\n\t\t\t\"category\": \"reference\",\n\t\t\t\"author\": "
-  "\"Nigel Rees\",\n\t\t\t\"title\": \"Sayings of the Century\",\n\t\t\t\"price\": "
-  "8.95\n\t\t},\n\t\t{\n\t\t\t\"category\": \"fiction\",\n\t\t\t\"author\": \"Evelyn "
-  "Waugh\",\n\t\t\t\"title\": \"Sword of Honour\",\n\t\t\t\"price\": "
-  "12.99\n\t\t},\n\t\t{\n\t\t\t\"category\": \"fiction\",\n\t\t\t\"author\": \"Herman "
-  "Melville\",\n\t\t\t\"title\": \"Moby Dick\",\n\t\t\t\"isbn\": "
-  "\"0-553-21311-3\",\n\t\t\t\"price\": 8.99\n\t\t},\n\t\t{\n\t\t\t\"category\": "
-  "\"fiction\",\n\t\t\t\"author\": \"J. R. R. Tolkien\",\n\t\t\t\"title\": \"The Lord of the "
-  "Rings\",\n\t\t\t\"isbn\": \"0-395-19395-8\",\n\t\t\t\"price\": "
-  "22.99\n\t\t}\n\t],\n\t\"bicycle\": {\n\t\t\"color\": \"red\",\n\t\t\"price\": "
-  "19.95\n\t}\n},\n\"expensive\": 10\n}"};
+  "{" 
+    "\"store\": {"
+      "\"book\": ["
+        "{"
+          "\"category\": \"reference\","
+          "\"author\": \"Nigel Rees\","
+          "\"title\": \"Sayings of the Century\","
+          "\"price\": 8.95"
+        "},"
+        "{"
+          "\"category\": \"fiction\","
+          "\"author\": \"Evelyn Waugh\","
+          "\"title\": \"Sword of Honour\","
+          "\"price\": 12.99"
+        "},"
+        "{"
+          "\"category\": \"fiction\","
+          "\"author\": \"Herman Melville\","
+          "\"title\": \"Moby Dick\","
+          "\"isbn\": \"0-553-21311-3\","
+          "\"price\": 8.99"
+        "},"
+        "{"
+          "\"category\": \"fiction\","
+          "\"author\": \"J. R. R. Tolkien\","
+          "\"title\": \"The Lord of the Rings\","
+          "\"isbn\": \"0-395-19395-8\","
+          "\"price\": 22.99"
+        "}"
+      "],"
+      "\"bicycle\": {"
+        "\"color\": \"red\","
+        "\"price\": 19.95"
+      "}"
+    "},"
+    "\"expensive\": 10"
+  "}"
+};
+// clang-format on
 
 std::unique_ptr<cudf::column> drop_whitespace(cudf::column_view const& col)
 {
@@ -112,18 +101,44 @@ TEST_F(JsonTests, GetJsonObjectChildOp)
     auto result_raw = cudf::strings::get_json_object(cudf::strings_column_view(input), json_path);
     auto result     = drop_whitespace(*result_raw);
 
-    cudf::test::strings_column_wrapper expected_raw{
-      "{\n\t\"book\": [\n\t\t{\n\t\t\t\"category\": \"reference\",\n\t\t\t\"author\": "
-      "\"Nigel Rees\",\n\t\t\t\"title\": \"Sayings of the Century\",\n\t\t\t\"price\": "
-      "8.95\n\t\t},\n\t\t{\n\t\t\t\"category\": \"fiction\",\n\t\t\t\"author\": \"Evelyn "
-      "Waugh\",\n\t\t\t\"title\": \"Sword of Honour\",\n\t\t\t\"price\": "
-      "12.99\n\t\t},\n\t\t{\n\t\t\t\"category\": \"fiction\",\n\t\t\t\"author\": \"Herman "
-      "Melville\",\n\t\t\t\"title\": \"Moby Dick\",\n\t\t\t\"isbn\": "
-      "\"0-553-21311-3\",\n\t\t\t\"price\": 8.99\n\t\t},\n\t\t{\n\t\t\t\"category\": "
-      "\"fiction\",\n\t\t\t\"author\": \"J. R. R. Tolkien\",\n\t\t\t\"title\": \"The Lord of the "
-      "Rings\",\n\t\t\t\"isbn\": \"0-395-19395-8\",\n\t\t\t\"price\": "
-      "22.99\n\t\t}\n\t],\n\t\"bicycle\": {\n\t\t\"color\": \"red\",\n\t\t\"price\": "
-      "19.95\n\t}\n}"};
+    // clang-format off
+    cudf::test::strings_column_wrapper expected_raw{     
+      "{"
+        "\"book\": ["
+          "{"
+            "\"category\": \"reference\","
+            "\"author\": \"Nigel Rees\","
+            "\"title\": \"Sayings of the Century\","
+            "\"price\": 8.95"
+          "},"
+          "{"
+            "\"category\": \"fiction\","
+            "\"author\": \"Evelyn Waugh\","
+            "\"title\": \"Sword of Honour\","
+            "\"price\": 12.99"
+          "},"
+          "{"
+            "\"category\": \"fiction\","
+            "\"author\": \"Herman Melville\","
+            "\"title\": \"Moby Dick\","
+            "\"isbn\": \"0-553-21311-3\","
+            "\"price\": 8.99"
+          "},"
+          "{"
+            "\"category\": \"fiction\","
+            "\"author\": \"J. R. R. Tolkien\","
+            "\"title\": \"The Lord of the Rings\","
+            "\"isbn\": \"0-395-19395-8\","
+            "\"price\": 22.99"
+          "}"
+        "],"
+        "\"bicycle\": {"
+          "\"color\": \"red\","
+          "\"price\": 19.95"
+        "}"
+      "}"
+    };
+    // clang-format on
     auto expected = drop_whitespace(expected_raw);
 
     CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*result, *expected);
@@ -135,17 +150,38 @@ TEST_F(JsonTests, GetJsonObjectChildOp)
     auto result_raw = cudf::strings::get_json_object(cudf::strings_column_view(input), json_path);
     auto result     = drop_whitespace(*result_raw);
 
+    // clang-format off
     cudf::test::strings_column_wrapper expected_raw{
-      "[\n\t\t{\n\t\t\t\"category\": \"reference\",\n\t\t\t\"author\": "
-      "\"Nigel Rees\",\n\t\t\t\"title\": \"Sayings of the Century\",\n\t\t\t\"price\": "
-      "8.95\n\t\t},\n\t\t{\n\t\t\t\"category\": \"fiction\",\n\t\t\t\"author\": \"Evelyn "
-      "Waugh\",\n\t\t\t\"title\": \"Sword of Honour\",\n\t\t\t\"price\": "
-      "12.99\n\t\t},\n\t\t{\n\t\t\t\"category\": \"fiction\",\n\t\t\t\"author\": \"Herman "
-      "Melville\",\n\t\t\t\"title\": \"Moby Dick\",\n\t\t\t\"isbn\": "
-      "\"0-553-21311-3\",\n\t\t\t\"price\": 8.99\n\t\t},\n\t\t{\n\t\t\t\"category\": "
-      "\"fiction\",\n\t\t\t\"author\": \"J. R. R. Tolkien\",\n\t\t\t\"title\": \"The Lord of the "
-      "Rings\",\n\t\t\t\"isbn\": \"0-395-19395-8\",\n\t\t\t\"price\": "
-      "22.99\n\t\t}\n\t]"};
+      "["
+        "{"
+          "\"category\": \"reference\","
+          "\"author\": \"Nigel Rees\","
+          "\"title\": \"Sayings of the Century\","
+          "\"price\": 8.95"
+        "},"
+        "{"
+          "\"category\": \"fiction\","
+          "\"author\": \"Evelyn Waugh\","
+          "\"title\": \"Sword of Honour\","
+          "\"price\": 12.99"
+        "},"
+        "{"
+          "\"category\": \"fiction\","
+          "\"author\": \"Herman Melville\","
+          "\"title\": \"Moby Dick\","
+          "\"isbn\": \"0-553-21311-3\","
+          "\"price\": 8.99"
+        "},"
+        "{"
+          "\"category\": \"fiction\","
+          "\"author\": \"J. R. R. Tolkien\","
+          "\"title\": \"The Lord of the Rings\","
+          "\"isbn\": \"0-395-19395-8\","
+          "\"price\": 22.99"
+        "}"
+      "]"
+    };
+    // clang-format on
     auto expected = drop_whitespace(expected_raw);
 
     CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*result, *expected);
@@ -160,18 +196,44 @@ TEST_F(JsonTests, GetJsonObjectWildcardOp)
     auto result_raw = cudf::strings::get_json_object(cudf::strings_column_view(input), json_path);
     auto result     = drop_whitespace(*result_raw);
 
+    // clang-format off
     cudf::test::strings_column_wrapper expected_raw{
-      "[[\n\t\t{\n\t\t\t\"category\": \"reference\",\n\t\t\t\"author\": "
-      "\"Nigel Rees\",\n\t\t\t\"title\": \"Sayings of the Century\",\n\t\t\t\"price\": "
-      "8.95\n\t\t},\n\t\t{\n\t\t\t\"category\": \"fiction\",\n\t\t\t\"author\": \"Evelyn "
-      "Waugh\",\n\t\t\t\"title\": \"Sword of Honour\",\n\t\t\t\"price\": "
-      "12.99\n\t\t},\n\t\t{\n\t\t\t\"category\": \"fiction\",\n\t\t\t\"author\": \"Herman "
-      "Melville\",\n\t\t\t\"title\": \"Moby Dick\",\n\t\t\t\"isbn\": "
-      "\"0-553-21311-3\",\n\t\t\t\"price\": 8.99\n\t\t},\n\t\t{\n\t\t\t\"category\": "
-      "\"fiction\",\n\t\t\t\"author\": \"J. R. R. Tolkien\",\n\t\t\t\"title\": \"The Lord of the "
-      "Rings\",\n\t\t\t\"isbn\": \"0-395-19395-8\",\n\t\t\t\"price\": "
-      "22.99\n\t\t}\n\t],\n\t{\n\t\t\"color\": \"red\",\n\t\t\"price\": "
-      "19.95\n\t}]"};
+      "["
+        "["
+          "{"
+            "\"category\": \"reference\","
+            "\"author\": \"Nigel Rees\","
+            "\"title\": \"Sayings of the Century\","
+            "\"price\": 8.95"
+          "},"
+          "{"
+            "\"category\": \"fiction\","
+            "\"author\": \"Evelyn Waugh\","
+            "\"title\": \"Sword of Honour\","
+            "\"price\": 12.99"
+          "},"
+          "{"
+            "\"category\": \"fiction\","
+            "\"author\": \"Herman Melville\","
+            "\"title\": \"Moby Dick\","
+            "\"isbn\": \"0-553-21311-3\","
+            "\"price\": 8.99"
+          "},"
+          "{"
+            "\"category\": \"fiction\","
+            "\"author\": \"J. R. R. Tolkien\","
+            "\"title\": \"The Lord of the Rings\","
+            "\"isbn\": \"0-395-19395-8\","
+            "\"price\": 22.99"
+          "}"
+        "],"
+        "{"
+          "\"color\": \"red\","
+          "\"price\": 19.95"
+        "}"
+      "]"
+    };
+    // clang-format on
     auto expected = drop_whitespace(expected_raw);
 
     CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*result, *expected);
@@ -183,18 +245,47 @@ TEST_F(JsonTests, GetJsonObjectWildcardOp)
     auto result_raw = cudf::strings::get_json_object(cudf::strings_column_view(input), json_path);
     auto result     = drop_whitespace(*result_raw);
 
+    // clang-format off
     cudf::test::strings_column_wrapper expected_raw{
-      "[{\"book\": [\n\t\t{\n\t\t\t\"category\": \"reference\",\n\t\t\t\"author\": "
-      "\"Nigel Rees\",\n\t\t\t\"title\": \"Sayings of the Century\",\n\t\t\t\"price\": "
-      "8.95\n\t\t},\n\t\t{\n\t\t\t\"category\": \"fiction\",\n\t\t\t\"author\": \"Evelyn "
-      "Waugh\",\n\t\t\t\"title\": \"Sword of Honour\",\n\t\t\t\"price\": "
-      "12.99\n\t\t},\n\t\t{\n\t\t\t\"category\": \"fiction\",\n\t\t\t\"author\": \"Herman "
-      "Melville\",\n\t\t\t\"title\": \"Moby Dick\",\n\t\t\t\"isbn\": "
-      "\"0-553-21311-3\",\n\t\t\t\"price\": 8.99\n\t\t},\n\t\t{\n\t\t\t\"category\": "
-      "\"fiction\",\n\t\t\t\"author\": \"J. R. R. Tolkien\",\n\t\t\t\"title\": \"The Lord of the "
-      "Rings\",\n\t\t\t\"isbn\": \"0-395-19395-8\",\n\t\t\t\"price\": "
-      "22.99\n\t\t}\n\t],\n\t\"bicycle\": {\n\t\t\"color\": \"red\",\n\t\t\"price\": "
-      "19.95\n\t}\n},10]"};
+      "[" 
+        "{"
+          "\"book\": ["
+            "{"
+              "\"category\": \"reference\","
+              "\"author\": \"Nigel Rees\","
+              "\"title\": \"Sayings of the Century\","
+              "\"price\": 8.95"
+            "},"
+            "{"
+              "\"category\": \"fiction\","
+              "\"author\": \"Evelyn Waugh\","
+              "\"title\": \"Sword of Honour\","
+              "\"price\": 12.99"
+            "},"
+            "{"
+              "\"category\": \"fiction\","
+              "\"author\": \"Herman Melville\","
+              "\"title\": \"Moby Dick\","
+              "\"isbn\": \"0-553-21311-3\","
+              "\"price\": 8.99"
+            "},"
+            "{"
+              "\"category\": \"fiction\","
+              "\"author\": \"J. R. R. Tolkien\","
+              "\"title\": \"The Lord of the Rings\","
+              "\"isbn\": \"0-395-19395-8\","
+              "\"price\": 22.99"
+            "}"
+          "],"
+          "\"bicycle\": {"
+            "\"color\": \"red\","
+            "\"price\": 19.95"
+          "}"
+        "},"
+        "10"
+      "]"
+    };
+    // clang-format on
     auto expected = drop_whitespace(expected_raw);
 
     CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*result, *expected);
@@ -209,10 +300,17 @@ TEST_F(JsonTests, GetJsonObjectSubscriptOp)
     auto result_raw = cudf::strings::get_json_object(cudf::strings_column_view(input), json_path);
     auto result     = drop_whitespace(*result_raw);
 
+    // clang-format off
     cudf::test::strings_column_wrapper expected_raw{
-      "{\n\t\t\t\"category\": \"fiction\",\n\t\t\t\"author\": \"Herman "
-      "Melville\",\n\t\t\t\"title\": \"Moby Dick\",\n\t\t\t\"isbn\": "
-      "\"0-553-21311-3\",\n\t\t\t\"price\": 8.99\n\t\t}"};
+      "{"
+        "\"category\": \"fiction\","
+        "\"author\": \"Herman Melville\","
+        "\"title\": \"Moby Dick\","
+        "\"isbn\": \"0-553-21311-3\","
+        "\"price\": 8.99"
+      "}"
+    };
+    // clang-format on
     auto expected = drop_whitespace(expected_raw);
 
     CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*result, *expected);
@@ -224,9 +322,14 @@ TEST_F(JsonTests, GetJsonObjectSubscriptOp)
     auto result_raw = cudf::strings::get_json_object(cudf::strings_column_view(input), json_path);
     auto result     = drop_whitespace(*result_raw);
 
+    // clang-format off
     cudf::test::strings_column_wrapper expected_raw{
-      "{\n\t\t\"color\": \"red\",\n\t\t\"price\": "
-      "19.95\n\t}"};
+      "{"
+        "\"color\": \"red\","
+        "\"price\": 19.95"
+      "}"
+    };
+    // clang-format on
     auto expected = drop_whitespace(expected_raw);
 
     CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*result, *expected);
@@ -238,17 +341,38 @@ TEST_F(JsonTests, GetJsonObjectSubscriptOp)
     auto result_raw = cudf::strings::get_json_object(cudf::strings_column_view(input), json_path);
     auto result     = drop_whitespace(*result_raw);
 
+    // clang-format off
     cudf::test::strings_column_wrapper expected_raw{
-      "[\n\t\t{\n\t\t\t\"category\": \"reference\",\n\t\t\t\"author\": "
-      "\"Nigel Rees\",\n\t\t\t\"title\": \"Sayings of the Century\",\n\t\t\t\"price\": "
-      "8.95\n\t\t},\n\t\t{\n\t\t\t\"category\": \"fiction\",\n\t\t\t\"author\": \"Evelyn "
-      "Waugh\",\n\t\t\t\"title\": \"Sword of Honour\",\n\t\t\t\"price\": "
-      "12.99\n\t\t},\n\t\t{\n\t\t\t\"category\": \"fiction\",\n\t\t\t\"author\": \"Herman "
-      "Melville\",\n\t\t\t\"title\": \"Moby Dick\",\n\t\t\t\"isbn\": "
-      "\"0-553-21311-3\",\n\t\t\t\"price\": 8.99\n\t\t},\n\t\t{\n\t\t\t\"category\": "
-      "\"fiction\",\n\t\t\t\"author\": \"J. R. R. Tolkien\",\n\t\t\t\"title\": \"The Lord of the "
-      "Rings\",\n\t\t\t\"isbn\": \"0-395-19395-8\",\n\t\t\t\"price\": "
-      "22.99\n\t\t}\n\t]"};
+      "["
+        "{"
+          "\"category\": \"reference\","
+          "\"author\": \"Nigel Rees\","
+          "\"title\": \"Sayings of the Century\","
+          "\"price\": 8.95"
+        "},"
+        "{"
+          "\"category\": \"fiction\","
+          "\"author\": \"Evelyn Waugh\","
+          "\"title\": \"Sword of Honour\","
+          "\"price\": 12.99"
+        "},"
+        "{"
+          "\"category\": \"fiction\","
+          "\"author\": \"Herman Melville\","
+          "\"title\": \"Moby Dick\","
+          "\"isbn\": \"0-553-21311-3\","
+          "\"price\": 8.99"
+        "},"
+        "{"
+          "\"category\": \"fiction\","
+          "\"author\": \"J. R. R. Tolkien\","
+          "\"title\": \"The Lord of the Rings\","
+          "\"isbn\": \"0-395-19395-8\","
+          "\"price\": 22.99"
+        "}"
+      "]"
+    };
+    // clang-format on
     auto expected = drop_whitespace(expected_raw);
 
     CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*result, *expected);
