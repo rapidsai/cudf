@@ -164,12 +164,12 @@ std::shared_ptr<arrow::Array> dispatch_to_arrow::operator()<numeric::decimal64>(
   CUDA_TRY(cudaMemcpyAsync(
     data_buffer->mutable_data(), buf.data(), buf.size(), cudaMemcpyDeviceToHost, stream.value()));
 
-  auto type    = std::make_shared<arrow::DataType>(arrow::Type::DECIMAL);
+  auto type    = arrow::decimal(18, input.type().scale());
   auto mask    = fetch_mask_buffer(input, ar_mr, stream);
   auto buffers = std::vector<std::shared_ptr<arrow::Buffer>>{mask, data_buffer};
   auto data    = std::make_shared<arrow::ArrayData>(type, buf.size(), buffers);
 
-  return to_arrow_array(id, data);
+  return std::make_shared<arrow::Decimal128Array>(data);
 }
 
 template <>
