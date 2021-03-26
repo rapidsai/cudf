@@ -147,6 +147,7 @@ std::shared_ptr<arrow::Array> dispatch_to_arrow::operator()<numeric::decimal64>(
   size_type const BIT_WIDTH_RATIO = 2;  // Array::Type:type::DECIMAL (128) / int64_t
 
   rmm::device_uvector<DeviceType> buf(input.size() * BIT_WIDTH_RATIO, stream);
+  thrust::uninitialized_fill(rmm::exec_policy(stream), buf.begin(), buf.end(), DeviceType{0});
 
   auto scatter_map = cudf::detail::make_counting_transform_iterator(0, every_other{});
 

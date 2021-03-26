@@ -34,8 +34,7 @@
 #pragma once
 
 template <typename T>
-std::enable_if_t<cudf::is_fixed_width<T>() and not std::is_same<T, bool>::value and
-                   not cudf::is_fixed_point<T>(),
+std::enable_if_t<cudf::is_fixed_width<T>() and !std::is_same<T, bool>::value,
                  std::shared_ptr<arrow::Array>>
 get_arrow_array(std::vector<T> const& data, std::vector<uint8_t> const& mask = {})
 {
@@ -50,29 +49,8 @@ get_arrow_array(std::vector<T> const& data, std::vector<uint8_t> const& mask = {
   return cudf::detail::to_arrow_array(cudf::type_to_id<T>(), data.size(), data_buffer, mask_buffer);
 }
 
-// template<typename T>
-// std::shared_ptr<arrow::Array> get_arrow_array_fp(
-//                                                  std::vector<T> const& data, int32_t scale,
-//                                                  std::vector<uint8_t> const& mask = {})
-// {
-//   std::shared_ptr<arrow::Buffer> data_buffer;
-//   arrow::BufferBuilder buff_builder;
-//   buff_builder.Append(data.data(), sizeof(T) * data.size());
-//   CUDF_EXPECTS(buff_builder.Finish(&data_buffer).ok(), "Failed to allocate buffer");
-
-//   std::shared_ptr<arrow::Buffer> mask_buffer =
-//     mask.empty() ? nullptr : arrow::internal::BytesToBits(mask).ValueOrDie();
-
-//   auto type       = arrow::decimal(18, scale);
-//   auto buffers    = std::vector<std::shared_ptr<arrow::Buffer>>{mask_buffer, data_buffer};
-//   auto array_data = std::make_shared<arrow::ArrayData>(type, data.size(), buffers);
-
-//   return cudf::detail::to_arrow_array(cudf::type_to_id<T>(), array_data);
-// }
-
 template <typename T>
-std::enable_if_t<cudf::is_fixed_width<T>() and !std::is_same<T, bool>::value and
-                   !cudf::is_fixed_point<T>(),
+std::enable_if_t<cudf::is_fixed_width<T>() and !std::is_same<T, bool>::value,
                  std::shared_ptr<arrow::Array>>
 get_arrow_array(std::initializer_list<T> elements, std::initializer_list<uint8_t> validity = {})
 {

@@ -367,7 +367,7 @@ TEST_F(ToArrowTest, FixedPointTable)
 
     auto const expect_data = std::vector<int64_t>{1, 0, 2, 0, 3, 0, 4, 0, 5, 0, 6, 0};
     std::shared_ptr<arrow::Array> arr;
-    arrow::Decimal128Builder decimal_builder(arrow::decimal(10, i), arrow::default_memory_pool());
+    arrow::Decimal128Builder decimal_builder(arrow::decimal(18, i), arrow::default_memory_pool());
     decimal_builder.AppendValues(reinterpret_cast<const uint8_t*>(expect_data.data()),
                                  expect_data.size() / BIT_WIDTH_RATIO);
     CUDF_EXPECTS(decimal_builder.Finish(&arr).ok(), "Failed to build array");
