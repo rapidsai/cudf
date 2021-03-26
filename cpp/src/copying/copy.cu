@@ -23,15 +23,20 @@
 #include <cudf/strings/string_view.cuh>
 
 #include <rmm/cuda_stream_view.hpp>
+#include "cudf/utilities/traits.hpp"
 
 namespace cudf {
 namespace detail {
 namespace {
-/**
- * @brief Specialization of copy_if_else_functor for string_views.
- */
-template <typename T, typename Left, typename Right, typename Filter>
+
+template <typename T, typename Enable = void>
 struct copy_if_else_functor_impl {
+  std::unique_ptr<column> operator()(...) { CUDF_FAIL("Unsupported type for copy_if_else."); }
+};
+
+template <typename T>
+struct copy_if_else_functor_impl<T, std::enable_if_t<is_rep_layout_compatible<T>()>> {
+  template <typename Left, typename Right, typename Filter>
   std::unique_ptr<column> operator()(Left const& lhs,
                                      Right const& rhs,
                                      size_type size,
@@ -69,8 +74,9 @@ struct copy_if_else_functor_impl {
 /**
  * @brief Specialization of copy_if_else_functor for string_views.
  */
-template <typename Left, typename Right, typename Filter>
-struct copy_if_else_functor_impl<string_view, Left, Right, Filter> {
+template <>
+struct copy_if_else_functor_impl<string_view> {
+  template <typename Left, typename Right, typename Filter>
   std::unique_ptr<column> operator()(Left const& lhs,
                                      Right const& rhs,
                                      size_type size,
@@ -107,8 +113,9 @@ struct copy_if_else_functor_impl<string_view, Left, Right, Filter> {
 /**
  * @brief Specialization of copy_if_else_functor for list_views.
  */
-template <typename Left, typename Right, typename Filter>
-struct copy_if_else_functor_impl<list_view, Left, Right, Filter> {
+template <>
+struct copy_if_else_functor_impl<list_view> {
+  template <typename Left, typename Right, typename Filter>
   std::unique_ptr<column> operator()(Left const& lhs,
                                      Right const& rhs,
                                      size_type size,
@@ -122,8 +129,9 @@ struct copy_if_else_functor_impl<list_view, Left, Right, Filter> {
   }
 };
 
-template <typename Left, typename Right, typename Filter>
-struct copy_if_else_functor_impl<struct_view, Left, Right, Filter> {
+template <>
+struct copy_if_else_functor_impl<struct_view> {
+  template <typename Left, typename Right, typename Filter>
   std::unique_ptr<column> operator()(Left const& lhs,
                                      Right const& rhs,
                                      size_type size,
@@ -152,7 +160,7 @@ struct copy_if_else_functor {
                                      rmm::cuda_stream_view stream,
                                      rmm::mr::device_memory_resource* mr)
   {
-    copy_if_else_functor_impl<T, Left, Right, Filter> copier{};
+    copy_if_else_functor_impl<T> copier{};
     return copier(lhs, rhs, size, left_nullable, right_nullable, filter, stream, mr);
   }
 };
