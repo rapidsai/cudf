@@ -138,7 +138,8 @@ include(cmake/thirdparty/CUDF_GetLibcudacxx.cmake)
 # find or install GoogleTest
 include(cmake/thirdparty/CUDF_GetGTest.cmake)
 # Stringify libcudf and libcudacxx headers used in JIT operations
-include(cmake/Modules/StringifyJITHeaders.cmake)
+include(cmake/Modules/JitifyStringifyHeaders.cmake)
+include(cmake/Modules/JitifyPreprocessKernels.cmake)
 # find cuFile
 include(cmake/Modules/FindcuFile.cmake)
 
@@ -420,7 +421,7 @@ target_compile_definitions(cudf
 )
 
 # Disable Jitify log printing. See https://github.com/NVIDIA/jitify/issues/79
-target_compile_definitions(cudf PRIVATE "JITIFY_PRINT_LOG=0")
+target_compile_definitions(cudf PRIVATE "JITIFY_PRINT_LOG=1")
 
 # Specify include paths for the current target and dependents
 target_include_directories(cudf
@@ -463,7 +464,7 @@ endif()
 target_compile_definitions(cudf PUBLIC "SPDLOG_ACTIVE_LEVEL=SPDLOG_LEVEL_${RMM_LOGGING_LEVEL}")
 
 # Compile stringified JIT sources first
-add_dependencies(cudf stringify_run)
+add_dependencies(cudf jitify_stringify_run jitify_preprocess_run)
 
 # Specify the target module library dependencies
 target_link_libraries(cudf

@@ -29,7 +29,6 @@
 namespace cudf {
 namespace binops {
 namespace jit {
-namespace code {
 
 template <typename TypeOut, typename TypeLhs, typename TypeRhs, typename TypeOpe>
 __global__ void kernel_v_s_with_validity(cudf::size_type size,
@@ -129,6 +128,7 @@ __global__ void kernel_v_v_with_validity(cudf::size_type size,
     if (output_mask && !output_valid) cudf::clear_bit(output_mask, i);
   }
 }
-}  // namespace code
+
 }  // namespace jit
 }  // namespace binops
+}  // namespace cudf

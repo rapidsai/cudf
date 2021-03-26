@@ -38,23 +38,16 @@ function(jit_preprocess_files)
         set(ARG_OUTPUT ${CUDF_GENERATED_INCLUDE_DIR}/include/jit_preprocessed_files/${ARG_FILE}.jit)
         set(JIT_PREPROCESSED_FILES "${ARG_OUTPUT};${JIT_PREPROCESSED_FILES}")
         add_custom_command(WORKING_DIRECTORY ${ARG_SOURCE_DIRECTORY}
-                           DEPENDS stringify
+                           DEPENDS jitify_preprocess
                            OUTPUT ${ARG_OUTPUT}
-                           COMMAND ${CUDF_BINARY_DIR}/stringify ${ARG_FILE} > ${ARG_OUTPUT}_old
+                           COMMAND ${CUDF_BINARY_DIR}/jitify_preprocess ${ARG_FILE} -i -o ${CUDF_GENERATED_INCLUDE_DIR}/include/jit_preprocessed_files -std=c++14 -I${CUDF_INCLUDE} -remove-unused-globals -D__CUDACC_RTC__ -D__x86_64__ -I${LIBCUDACXX_INCLUDE_DIR} -I${CUDAToolkit_INCLUDE_DIR} --no-preinclude-workarounds
                            )
     endforeach()
     set(JIT_PREPROCESSED_FILES "${JIT_PREPROCESSED_FILES}" PARENT_SCOPE)
 endfunction()
 
-jit_preprocess_files(SOURCE_DIRECTORY      ${CUDF_SOURCE_DIR}/cudf/src
+jit_preprocess_files(SOURCE_DIRECTORY      ${CUDF_SOURCE_DIR}/src
                      FILES                 binaryop/jit/kernel.cu
                      )
 
-add_custom_target(stringify_run DEPENDS ${JIT_PREPROCESSED_FILES})
-
-###################################################################################################
-# - copy libcu++ ----------------------------------------------------------------------------------
-
-# `${LIBCUDACXX_INCLUDE_DIR}/` specifies that the contents of this directory will be installed (not the directory itself)
-file(INSTALL "${LIBCUDACXX_INCLUDE_DIR}/" DESTINATION "${CUDF_GENERATED_INCLUDE_DIR}/include/libcudacxx")
-file(INSTALL "${LIBCXX_INCLUDE_DIR}"      DESTINATION "${CUDF_GENERATED_INCLUDE_DIR}/include/libcxx")
+add_custom_target(jitify_preprocess_run DEPENDS ${JIT_PREPROCESSED_FILES})

@@ -54,6 +54,7 @@ jit_stringify_files(SOURCE_DIRECTORY      ${CUDF_SOURCE_DIR}/include
                                           cudf/wrappers/timestamps.hpp
                                           cudf/fixed_point/fixed_point.hpp
                                           cudf/wrappers/durations.hpp
+                                          cudf/detail/utilities/assert.cuh
                     )
 
 jit_stringify_files(SOURCE_DIRECTORY      ${LIBCUDACXX_INCLUDE_DIR}
@@ -89,7 +90,7 @@ jit_stringify_files(SOURCE_DIRECTORY      ${CUDF_SOURCE_DIR}/..
                     FILES                 cudf/src/rolling/rolling_jit_detail.hpp
                     )
 
-add_custom_target(stringify_run DEPENDS ${JIT_STRINGIFIED_FILES})
+add_custom_target(jitify_stringify_run DEPENDS ${JIT_STRINGIFIED_FILES})
 
 ###################################################################################################
 # - copy libcu++ ----------------------------------------------------------------------------------

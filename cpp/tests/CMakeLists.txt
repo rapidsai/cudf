@@ -151,10 +151,11 @@ ConfigureTest(ROUND_TEST round/round_tests.cpp)
 ###################################################################################################
 # - binary tests ----------------------------------------------------------------------------------
 ConfigureTest(BINARY_TEST
-    binaryop/binop-verify-input-test.cpp
-    binaryop/binop-null-test.cpp
+    # binaryop/binop-verify-input-test.cpp
+    # binaryop/binop-null-test.cpp
     binaryop/binop-integration-test.cpp
-    binaryop/binop-generic-ptx-test.cpp)
+    # binaryop/binop-generic-ptx-test.cpp
+    )
 
 ###################################################################################################
 # - unary transform tests -------------------------------------------------------------------------
