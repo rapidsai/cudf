@@ -472,6 +472,13 @@ class alignas(16) column_device_view : public detail::column_device_view_base {
     return d_children[child_index];
   }
 
+  /**
+   * @brief Returns the number of child columns
+   *
+   * @return The number of child columns
+   */
+  __host__ __device__ size_type num_child_columns() const noexcept { return _num_children; }
+
  protected:
   column_device_view* d_children{};  ///< Array of `column_device_view`
                                      ///< objects in device memory.
