@@ -28,6 +28,7 @@
 #include <cudf/scalar/scalar.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
+#include "cudf/utilities/traits.hpp"
 
 template <typename T>
 struct CopyTest : public cudf::test::BaseFixture {
@@ -66,7 +67,7 @@ TYPED_TEST(CopyTest, CopyIfElseTestManyNulls)
 }
 
 struct copy_if_else_tiny_grid_functor {
-  template <typename T, typename Filter, std::enable_if_t<cudf::is_fixed_width<T>()>* = nullptr>
+  template <typename T, typename Filter, std::enable_if_t<cudf::is_rep_layout_compatible<T>()>* = nullptr>
   std::unique_ptr<cudf::column> operator()(cudf::column_view const& lhs,
                                            cudf::column_view const& rhs,
                                            Filter filter,
@@ -91,7 +92,7 @@ struct copy_if_else_tiny_grid_functor {
     return out;
   }
 
-  template <typename T, typename Filter, std::enable_if_t<not cudf::is_fixed_width<T>()>* = nullptr>
+  template <typename T, typename Filter, std::enable_if_t<not cudf::is_rep_layout_compatible<T>()>* = nullptr>
   std::unique_ptr<cudf::column> operator()(cudf::column_view const& lhs,
                                            cudf::column_view const& rhs,
                                            Filter filter,
