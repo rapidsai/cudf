@@ -54,6 +54,7 @@ ConfigureTest(ERROR_TEST error/error_handling_test.cu)
 ###################################################################################################
 # - groupby tests ---------------------------------------------------------------------------------
 ConfigureTest(GROUPBY_TEST
+    groupby/collect_set_test.cpp
     groupby/groupby_groups_test.cpp
     groupby/group_argmin_test.cpp
     groupby/group_argmax_test.cpp
@@ -397,6 +398,11 @@ ConfigureTest(LISTS_TEST
     lists/drop_list_duplicates_tests.cpp
     lists/extract_tests.cpp
     lists/sort_lists_tests.cpp)
+
+###################################################################################################
+# - bin tests ----------------------------------------------------------------------------------
+ConfigureTest(LABEL_BINS_TEST
+    labeling/label_bins_tests.cpp)
 
 ###################################################################################################
 ### enable testing ################################################################################

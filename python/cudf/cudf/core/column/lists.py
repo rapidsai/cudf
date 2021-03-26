@@ -7,7 +7,12 @@ import pyarrow as pa
 
 import cudf
 from cudf._lib.copying import segmented_gather
-from cudf._lib.lists import count_elements, extract_element
+from cudf._lib.lists import (
+    contains_scalar,
+    count_elements,
+    extract_element,
+    sort_lists,
+)
 from cudf.core.buffer import Buffer
 from cudf.core.column import ColumnBase, as_column, column
 from cudf.core.column.methods import ColumnMethodsMixin
@@ -210,6 +215,44 @@ class ListMethods(ColumnMethodsMixin):
         else:
             raise IndexError("list index out of range")
 
+    def contains(self, search_key):
+        """
+        Creates a column of bool values indicating whether the specified scalar
+        is an element of each row of a list column.
+
+        Parameters
+        ----------
+        search_key : scalar
+            element being searched for in each row of the list column
+
+        Returns
+        -------
+        Column
+
+        Examples
+        --------
+        >>> s = cudf.Series([[1, 2, 3], [3, 4, 5], [4, 5, 6]])
+        >>> s.list.contains(4)
+        Series([False, True, True])
+        dtype: bool
+        """
+        try:
+            res = self._return_or_inplace(
+                contains_scalar(self._column, search_key.device_value)
+            )
+        except RuntimeError as e:
+            if (
+                "Type/Scale of search key does not"
+                "match list column element type" in str(e)
+            ):
+                raise TypeError(
+                    "Type/Scale of search key does not"
+                    "match list column element type"
+                ) from e
+            raise
+        else:
+            return res
+
     @property
     def leaves(self):
         """
@@ -317,3 +360,57 @@ class ListMethods(ColumnMethodsMixin):
             raise
         else:
             return res
+
+    def sort_values(
+        self,
+        ascending=True,
+        inplace=False,
+        kind="quicksort",
+        na_position="last",
+        ignore_index=False,
+    ):
+        """
+        Sort each list by the values.
+
+        Sort the lists in ascending or descending order by some criterion.
+
+        Parameters
+        ----------
+        ascending : bool, default True
+            If True, sort values in ascending order, otherwise descending.
+        na_position : {'first', 'last'}, default 'last'
+            'first' puts nulls at the beginning, 'last' puts nulls at the end.
+        ignore_index : bool, default False
+            If True, the resulting axis will be labeled 0, 1, ..., n - 1.
+
+        Returns
+        -------
+        ListColumn with each list sorted
+
+        Notes
+        -----
+        Difference from pandas:
+          * Not supporting: `inplace`, `kind`
+
+        Examples
+        --------
+        >>> s = cudf.Series([[4, 2, None, 9], [8, 8, 2], [2, 1]])
+        >>> s.list.sort_values(ascending=True, na_position="last")
+        0    [2.0, 4.0, 9.0, nan]
+        1         [2.0, 8.0, 8.0]
+        2              [1.0, 2.0]
+        dtype: list
+        """
+        if inplace:
+            raise NotImplementedError("`inplace` not currently implemented.")
+        if kind != "quicksort":
+            raise NotImplementedError("`kind` not currently implemented.")
+        if na_position not in {"first", "last"}:
+            raise ValueError(f"Unknown `na_position` value {na_position}")
+        if is_list_dtype(self._column.children[1].dtype):
+            raise NotImplementedError("Nested lists sort is not supported.")
+
+        return self._return_or_inplace(
+            sort_lists(self._column, ascending, na_position),
+            retain_index=not ignore_index,
+        )

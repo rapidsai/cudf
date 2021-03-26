@@ -15,6 +15,11 @@
 #=============================================================================
 
 function(find_and_configure_gtest VERSION)
+
+    if(TARGET GTest::gtest)
+        return()
+    endif()
+
     # Find or install GoogleTest
     CPMFindPackage(NAME GTest
         VERSION         ${VERSION}
@@ -44,7 +49,7 @@ function(find_and_configure_gtest VERSION)
                         gmock_main
                         gtest_main
             DESTINATION lib
-            EXPORT cudf-targets)
+            EXPORT cudf-testing-targets)
     endif()
 endfunction()
 

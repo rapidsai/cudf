@@ -275,6 +275,8 @@ class TimeDeltaColumn(column.ColumnBase):
             return cudf.Scalar(other)
         elif np.isscalar(other):
             return cudf.Scalar(other)
+        elif other is None:
+            return cudf.Scalar(other, dtype=self.dtype)
         else:
             raise TypeError(f"cannot normalize {type(other)}")
 

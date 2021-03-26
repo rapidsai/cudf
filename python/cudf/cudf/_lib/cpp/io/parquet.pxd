@@ -70,6 +70,7 @@ cdef extern from "cudf/io/parquet.hpp" namespace "cudf::io" nogil:
         column_in_metadata& set_nullability(bool nullable)
         column_in_metadata& set_list_column_as_map()
         column_in_metadata& set_int96_timestamps(bool req)
+        column_in_metadata& set_decimal_precision(uint8_t precision)
         column_in_metadata& child(size_type i)
 
     cdef cppclass table_input_metadata:

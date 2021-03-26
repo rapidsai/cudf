@@ -280,36 +280,6 @@ class cached_property:
             return value
 
 
-class ColumnValuesMappingMixin:
-    """
-    Coerce provided values for the mapping to Columns.
-    """
-
-    def __setitem__(self, key, value):
-
-        value = column.as_column(value)
-        super().__setitem__(key, value)
-
-
-class EqualLengthValuesMappingMixin:
-    """
-    Require all values in the mapping to have the same length.
-    """
-
-    def __setitem__(self, key, value):
-        if len(self) > 0:
-            first = next(iter(self.values()))
-            if len(value) != len(first):
-                raise ValueError("All values must be of equal length")
-        super().__setitem__(key, value)
-
-
-class OrderedColumnDict(
-    ColumnValuesMappingMixin, EqualLengthValuesMappingMixin, OrderedDict
-):
-    pass
-
-
 class NestedMappingMixin:
     """
     Make missing values of a mapping empty instances

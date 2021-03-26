@@ -79,8 +79,10 @@ struct page_enc_state_s {
 /**
  * @brief Return a 12-bit hash from a byte sequence
  */
-inline __device__ uint32_t nvstr_init_hash(const uint8_t *ptr, uint32_t len)
+inline __device__ uint32_t hash_string(const string_view &val)
 {
+  char const *ptr = val.data();
+  uint32_t len    = val.size_bytes();
   if (len != 0) {
     return (ptr[0] + (ptr[len - 1] << 5) + (len << 10)) & ((1 << init_hash_bits) - 1);
   } else {
@@ -199,7 +201,7 @@ __global__ void __launch_bounds__(block_size)
     // dtype_len, which determines how much memory we need to allocate for the fragment.
     dtype_len_in = 8;
   } else {
-    dtype_len_in = (dtype == BYTE_ARRAY) ? sizeof(nvstrdesc_s) : dtype_len;
+    dtype_len_in = dtype_len;
   }
   __syncthreads();
 
@@ -218,7 +220,7 @@ __global__ void __launch_bounds__(block_size)
         if (dtype == BYTE_ARRAY) {
           auto str = s->col.leaf_column->element<string_view>(val_idx);
           len += str.size_bytes();
-          hash = nvstr_init_hash(reinterpret_cast<const uint8_t *>(str.data()), str.size_bytes());
+          hash = hash_string(str);
         } else if (dtype_len_in == 8) {
           hash = uint64_init_hash(s->col.leaf_column->element<uint64_t>(val_idx));
         } else {
@@ -1059,7 +1061,7 @@ __global__ void __launch_bounds__(128, 8) gpuEncodePages(EncPage *pages,
   } else if (dtype == INT96) {
     dtype_len_in = 8;
   } else {
-    dtype_len_in = (dtype == BYTE_ARRAY) ? sizeof(nvstrdesc_s) : dtype_len_out;
+    dtype_len_in = dtype_len_out;
   }
   dict_bits = (dtype == BOOLEAN) ? 1 : (s->page.dict_bits_plus1 - 1);
   if (t == 0) {
