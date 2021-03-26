@@ -4,8 +4,6 @@ cmake_minimum_required(VERSION 3.18)
 
 set(_possible_targets_to_promote
       cudf::cudf
-      cudf::benchmark
-      cudf::benchmark_main
       GTest::gmock
       GTest::gmock_main
       GTest::gtest
