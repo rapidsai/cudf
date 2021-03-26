@@ -385,7 +385,7 @@ void aggregrate_result_functor::operator()<aggregation::COLLECT_SET>(aggregation
 
 // Sort-based groupby
 std::pair<std::unique_ptr<table>, std::vector<aggregation_result>> groupby::sort_aggregate(
-  std::vector<aggregation_request> const& requests,
+  host_span<aggregation_request const> requests,
   rmm::cuda_stream_view stream,
   rmm::mr::device_memory_resource* mr)
 {
