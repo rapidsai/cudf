@@ -345,6 +345,9 @@ def to_cudf_compatible_scalar(val, dtype=None):
             " to cudf scalar"
         )
 
+    if isinstance(val, Decimal):
+        return val
+
     if isinstance(val, (np.ndarray, cp.ndarray)) and val.ndim == 0:
         val = val.item()
 
@@ -572,6 +575,22 @@ def _get_nan_for_dtype(dtype):
         return dtype.type("nan")
     else:
         return np.float64("nan")
+
+
+def _decimal_to_int64(decimal: Decimal) -> int:
+    """
+    Convert a decimal.Decimal value to the int64
+    expected by libcudf
+    """
+    if int(decimal.radix()) != 10:
+        raise ValueError(
+            "Only base-10 decimals currently supported."
+        )
+    digits = decimal.as_tuple().digits
+    start = 0
+    for power, digit in enumerate(reversed(digits)):
+        start += digit*(10**power)
+    return start
 
 
 def get_allowed_combinations_for_operator(dtype_l, dtype_r, op):

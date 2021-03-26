@@ -115,17 +115,24 @@ class Scalar(object):
 
     def _preprocess_host_value(self, value, dtype):
         if isinstance(dtype, Decimal64Dtype):
+            # TODO: Support coercion from decimal.Decimal to different dtype
+            # TODO: Support coercion from integer to Decimal64Dtype
             raise NotImplementedError(
                 "dtype as cudf.Decimal64Dtype is not supported. Use Decimal "
                 "to construct a DecimalScalar."
             )
-        
+        if isinstance(value, decimal.Decimal) and dtype is not None:
+            raise TypeError(f"Can not coerce decimal to {dtype}")
+
         value = to_cudf_compatible_scalar(value, dtype=dtype)
         valid = not _is_null_host_scalar(value)
 
         if isinstance(value, decimal.Decimal):
-            # TODO: construct DecimalScalar from decimal.Decimal
-            pass
+            # 0.0042 -> Decimal64Dtype(2, 4)
+            metadata = value.as_tuple()
+            precision = max(len(metadata.digits), -metadata.exponent)
+            dtype = Decimal64Dtype(precision, -metadata.exponent)
+
         else:
             if dtype is None:
                 if not valid:

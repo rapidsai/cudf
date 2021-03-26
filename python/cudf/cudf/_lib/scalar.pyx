@@ -45,6 +45,7 @@ from cudf._lib.cpp.scalar.scalar cimport (
 cimport cudf._lib.cpp.types as libcudf_types
 
 from cudf._lib.cpp.wrappers.decimals cimport decimal64, scale_type
+from cudf.utils.dtypes import _decimal_to_int64
 
 cdef class DeviceScalar:
 
@@ -248,11 +249,10 @@ cdef _set_decimal64_from_scalar(unique_ptr[scalar]& s,
                                 bool valid=True):
 
                             
-    from cudf.core.column.decimal import _decimal_to_int64
     from decimal import Decimal
     value = _decimal_to_int64(value) if valid else 0
     s.reset(
-        new fixed_point_scalar[decimal64](<int64_t>np.int64(value), scale_type(dtype.scale), valid)
+        new fixed_point_scalar[decimal64](<int64_t>np.int64(value), scale_type(-dtype.scale), valid)
     )
 
 cdef _get_py_string_from_string(unique_ptr[scalar]& s):

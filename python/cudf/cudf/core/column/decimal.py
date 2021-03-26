@@ -139,19 +139,3 @@ def _binop_precision(l_dtype, r_dtype, op):
         return p1 + p2 + 1
     else:
         raise NotImplementedError()
-
-
-def _decimal_to_int64(decimal: Decimal) -> int:
-    """
-    Convert a decimal.Decimal value to the int64
-    expected by libcudf
-    """
-    if int(decimal.radix()) != 10:
-        raise ValueError(
-            "Only base-10 decimals currently supported."
-        )
-    digits = decimal.as_tuple().digits
-    start = 0
-    for power, digit in enumerate(reversed(digits)):
-        start += digit*(10**power)
-    return start
