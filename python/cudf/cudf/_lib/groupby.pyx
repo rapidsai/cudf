@@ -27,6 +27,7 @@ _CATEGORICAL_AGGS = {
     "count",
     "size",
     "nunique",
+    "unique",
 }
 
 _STRING_AGGS = {
@@ -37,10 +38,11 @@ _STRING_AGGS = {
     "nunique",
     "nth",
     "collect",
+    "unique",
 }
 
 _LIST_AGGS = {
-    "collect"
+    "collect",
 }
 
 _STRUCT_AGGS = {
@@ -60,6 +62,7 @@ _DECIMAL_AGGS = {
     "nth",
     "collect"
 }
+
 
 cdef class GroupBy:
     cdef unique_ptr[libcudf_groupby.groupby] c_obj
@@ -148,12 +151,23 @@ cdef class GroupBy:
             vector[libcudf_groupby.aggregation_result]
         ] c_result
 
-        with nogil:
-            c_result = move(
-                self.c_obj.get()[0].aggregate(
-                    c_agg_requests
+        try:
+            with nogil:
+                c_result = move(
+                    self.c_obj.get()[0].aggregate(
+                        c_agg_requests
+                    )
                 )
-            )
+        except RuntimeError as e:
+            # TODO: remove this try..except after
+            # https://github.com/rapidsai/cudf/issues/7611
+            # is resolved
+            if ("make_empty_column") in str(e):
+                raise NotImplementedError(
+                    "Aggregation not supported for empty columns"
+                ) from e
+            else:
+                raise
 
         grouped_keys = Table.from_unique_ptr(
             move(c_result.first),

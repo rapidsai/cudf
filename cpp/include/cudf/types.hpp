@@ -260,12 +260,12 @@ class data_type {
   /**
    * @brief Returns the type identifier
    */
-  CUDA_HOST_DEVICE_CALLABLE type_id id() const noexcept { return _id; }
+  constexpr type_id id() const noexcept { return _id; }
 
   /**
    * @brief Returns the scale (for fixed_point types)
    */
-  CUDA_HOST_DEVICE_CALLABLE int32_t scale() const noexcept { return _fixed_point_scale; }
+  constexpr int32_t scale() const noexcept { return _fixed_point_scale; }
 
  private:
   type_id _id{type_id::EMPTY};
@@ -287,7 +287,7 @@ class data_type {
  * @return true `lhs` is equal to `rhs`
  * @return false `lhs` is not equal to `rhs`
  */
-inline bool operator==(data_type const& lhs, data_type const& rhs)
+constexpr bool operator==(data_type const& lhs, data_type const& rhs)
 {
   // use std::tie in the future, breaks JITIFY currently
   return lhs.id() == rhs.id() && lhs.scale() == rhs.scale();

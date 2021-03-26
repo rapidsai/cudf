@@ -16,6 +16,7 @@
 #pragma once
 
 #include <cudf/structs/structs_column_view.hpp>
+#include <cudf/types.hpp>
 #include <cudf/utilities/span.hpp>
 
 namespace cudf {
@@ -47,6 +48,25 @@ namespace detail {
  */
 std::vector<std::vector<column_view>> extract_ordered_struct_children(
   host_span<column_view const> struct_cols);
+
+/**
+ * @brief Flatten table with struct columns to table with constituent columns of struct columns.
+ *
+ * If a table does not have struct columns, same input arguments are returned.
+ *
+ * @param input input table to be flattened
+ * @param column_order column order for input table
+ * @param null_precedence null order for input table
+ * @return tuple with flattened table, flattened column order, flattened null precedence,
+ * vector of boolean columns (struct validity).
+ */
+std::tuple<table_view,
+           std::vector<order>,
+           std::vector<null_order>,
+           std::vector<std::unique_ptr<column>>>
+flatten_nested_columns(table_view const& input,
+                       std::vector<order> const& column_order,
+                       std::vector<null_order> const& null_precedence);
 
 }  // namespace detail
 }  // namespace structs

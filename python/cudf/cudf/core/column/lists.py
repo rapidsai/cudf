@@ -7,7 +7,12 @@ import pyarrow as pa
 
 import cudf
 from cudf._lib.copying import segmented_gather
-from cudf._lib.lists import count_elements, extract_element, sort_lists
+from cudf._lib.lists import (
+    contains_scalar,
+    count_elements,
+    extract_element,
+    sort_lists,
+)
 from cudf.core.buffer import Buffer
 from cudf.core.column import ColumnBase, as_column, column
 from cudf.core.column.methods import ColumnMethodsMixin
@@ -209,6 +214,44 @@ class ListMethods(ColumnMethodsMixin):
             )
         else:
             raise IndexError("list index out of range")
+
+    def contains(self, search_key):
+        """
+        Creates a column of bool values indicating whether the specified scalar
+        is an element of each row of a list column.
+
+        Parameters
+        ----------
+        search_key : scalar
+            element being searched for in each row of the list column
+
+        Returns
+        -------
+        Column
+
+        Examples
+        --------
+        >>> s = cudf.Series([[1, 2, 3], [3, 4, 5], [4, 5, 6]])
+        >>> s.list.contains(4)
+        Series([False, True, True])
+        dtype: bool
+        """
+        try:
+            res = self._return_or_inplace(
+                contains_scalar(self._column, search_key.device_value)
+            )
+        except RuntimeError as e:
+            if (
+                "Type/Scale of search key does not"
+                "match list column element type" in str(e)
+            ):
+                raise TypeError(
+                    "Type/Scale of search key does not"
+                    "match list column element type"
+                ) from e
+            raise
+        else:
+            return res
 
     @property
     def leaves(self):

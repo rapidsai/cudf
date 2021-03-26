@@ -587,6 +587,7 @@ _VALID_GROUPBY_AGGS = {
     "median",
     "nunique",
     "collect",
+    "unique",
 }
 
 
