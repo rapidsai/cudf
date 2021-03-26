@@ -81,6 +81,9 @@ add_cudf_library_alias(cudf::benchmark_main benchmark_main)
 
 # find arrow
 if(NOT EXISTS "${CMAKE_CURRENT_LIST_DIR}/cudf-arrow-targets.cmake")
+  if(NOT DEFINED CUDF_USE_ARROW_STATIC)
+    set(CUDF_USE_ARROW_STATIC OFF)
+  endif()
   include(@CUDF_SOURCE_DIR@/cmake/thirdparty/CUDF_GetArrow.cmake)
 endif()
 
