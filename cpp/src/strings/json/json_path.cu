@@ -1,9 +1,27 @@
+/*
+ * Copyright (c) 2021, NVIDIA CORPORATION.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+#include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/get_value.cuh>
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/utilities/cuda.cuh>
 #include <cudf/scalar/scalar.hpp>
 #include <cudf/scalar/scalar_factories.hpp>
+#include <cudf/strings/string_view.cuh>
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/bit.hpp>
@@ -50,8 +68,6 @@ constexpr int DEBUG_NEWLINE_LEN = 0;
 //
 #define SPARK_BEHAVIORS
 
-using namespace cudf;
-
 /**
  * @brief Result of calling a parse function.
  *
@@ -67,6 +83,25 @@ enum class parse_result {
   EMPTY,    // success, but no data
 };
 
+/**
+ * @brief A struct which represents a string.
+ *
+ * Typically used to point into a substring of a larger string, such as
+ * the input json itself.
+ *
+ * @code
+ * // where cur_pos is a pointer to the beginning of a name string in the
+ * // input json and name_size is the computed size.
+ * json_string name{cur_pos, name_size};
+ * @endcode
+ *
+ * Also used for parameter passing in a few cases:
+ *
+ * @code
+ * json_string wildcard{"*", 1};
+ * func(wildcard);
+ * @endcode
+ */
 struct json_string {
   const char* str;
   int64_t len;
@@ -766,36 +801,34 @@ __device__ thrust::pair<parse_result, json_output> get_json_object_single(
  * output sizes.  On the second pass it fills in the provided output buffers
  * (chars and validity)
  *
- * @param chars The chars child column of the incoming strings column
- * @param offsets The offsets of the incoming strings column
+ * @param col Device view of the incoming string
  * @param commands JSONPath command buffer
- * @param out_buf Buffer user to store the results of the query (nullptr in the size computation
+ * @param output_offsets Buffer used to store the string offsets for the results of the query
+ * (nullptr in the size computation step)
+ * @param out_buf Buffer used to store the results of the query (nullptr in the size computation
  * step)
  * @param out_validity Output validity buffer (nullptr in the size computation step)
- * @param num_rows Number of rows in the input column
  */
-__global__ void get_json_object_kernel(char const* chars,
-                                       size_type const* offsets,
+__global__ void get_json_object_kernel(column_device_view col,
                                        path_operator const* const commands,
                                        size_type* output_offsets,
                                        char* out_buf,
-                                       bitmask_type* out_validity,
-                                       size_type num_rows)
+                                       bitmask_type* out_validity)
 {
   uint64_t const tid = threadIdx.x + (blockDim.x * blockIdx.x);
 
   bool is_valid = false;
-  if (tid < num_rows) {
-    size_type const src_size = offsets[tid + 1] - offsets[tid];
-    size_type output_size    = 0;
-    if (src_size > 0) {
+  if (tid < col.size()) {
+    string_view const str = col.element<string_view>(tid);
+    size_type output_size = 0;
+    if (str.size_bytes() > 0) {
       char* dst             = out_buf ? out_buf + output_offsets[tid] : nullptr;
       size_t const dst_size = out_buf ? output_offsets[tid + 1] - output_offsets[tid] : 0;
 
       parse_result result;
       json_output out;
       thrust::tie(result, out) =
-        get_json_object_single(chars + offsets[tid], src_size, commands, dst, dst_size);
+        get_json_object_single(str.data(), str.size_bytes(), commands, dst, dst_size);
       output_size = out.output_len;
       if (out.element_count > 0 && result == parse_result::SUCCESS) { is_valid = true; }
     }
@@ -808,7 +841,7 @@ __global__ void get_json_object_kernel(char const* chars,
   if (out_validity) {
     uint32_t mask = __ballot_sync(0xffffffff, is_valid);
     // 0th lane of the warp writes the validity
-    if (!(tid % cudf::detail::warp_size) && tid < num_rows) {
+    if (!(tid % cudf::detail::warp_size) && tid < col.size()) {
       out_validity[cudf::word_index(tid)] = mask;
     }
   }
@@ -835,32 +868,21 @@ std::unique_ptr<cudf::column> get_json_object(cudf::strings_column_view const& c
 
   // if the query is empty, return a string column containing all nulls
   if (std::get<2>(preprocess)) {
-    thrust::generate(rmm::exec_policy(stream),
-                     offsets_view.head<size_type>(),
-                     offsets_view.head<size_type>() + offsets_view.size(),
-                     [] __device__() { return 0; });
-    return cudf::make_strings_column(
+    return std::make_unique<column>(
+      data_type{type_id::STRING},
       col.size(),
-      std::move(offsets),
-      cudf::make_fixed_width_column(
-        data_type{type_id::INT8}, 0, mask_state::UNALLOCATED, stream, mr),
-      col.size(),
+      rmm::device_buffer{0, stream, mr},  // no data
       cudf::detail::create_null_mask(col.size(), mask_state::ALL_NULL, stream, mr),
-      stream,
-      mr);
+      col.size());  // null count
   }
 
   cudf::detail::grid_1d const grid{col.size(), 512};
 
+  auto cdv = column_device_view::create(col.parent(), stream);
+
   // preprocess sizes (returned in the offsets buffer)
   get_json_object_kernel<<<grid.num_blocks, grid.num_threads_per_block, 0, stream.value()>>>(
-    col.chars().head<char>(),
-    col.offsets().head<size_type>(),
-    std::get<0>(preprocess).data(),
-    offsets_view.head<size_type>(),
-    nullptr,
-    nullptr,
-    col.size());
+    *cdv, std::get<0>(preprocess).data(), offsets_view.head<size_type>(), nullptr, nullptr);
 
   // convert sizes to offsets
   thrust::exclusive_scan(rmm::exec_policy(stream),
@@ -883,13 +905,11 @@ std::unique_ptr<cudf::column> get_json_object(cudf::strings_column_view const& c
   // compute results
   cudf::mutable_column_view chars_view(*chars);
   get_json_object_kernel<<<grid.num_blocks, grid.num_threads_per_block, 0, stream.value()>>>(
-    col.chars().head<char>(),
-    col.offsets().head<size_type>(),
+    *cdv,
     std::get<0>(preprocess).data(),
     offsets_view.head<size_type>(),
     chars_view.head<char>(),
-    static_cast<bitmask_type*>(validity.data()),
-    col.size());
+    static_cast<bitmask_type*>(validity.data()));
 
   return make_strings_column(col.size(),
                              std::move(offsets),
