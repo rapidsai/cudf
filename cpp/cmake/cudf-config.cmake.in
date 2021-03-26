@@ -98,20 +98,51 @@ list(POP_FRONT CMAKE_MODULE_PATH)
 
 include("${CMAKE_CURRENT_LIST_DIR}/cudf-targets.cmake")
 
+# If a target is installed, found by `find_package`, and marked as IMPORTED,
+# make it globally accessible to consumers of our libs.
+function(_fix_cmake_global_defaults target)
+  if(TARGET ${target})
+    get_target_property(_is_imported ${target} IMPORTED)
+    get_target_property(_already_global ${target} IMPORTED_GLOBAL)
+    if(_is_imported AND NOT _already_global)
+      set_target_properties(${target} PROPERTIES IMPORTED_GLOBAL TRUE)
+    endif()
+  endif()
+endfunction()
+
+function(_add_cudf_library_alias alias target)
+  _fix_cmake_global_defaults(${target})
+  if(NOT TARGET ${alias} AND (TARGET ${target}))
+    add_library(${alias} ALIAS ${target})
+  endif()
+endfunction()
+
 if(testing IN_LIST cudf_FIND_COMPONENTS)
   enable_language(CUDA)
 
-  find_dependency(GTest @CUDF_MIN_VERSION_GTest@)
+  find_dependency(GTest @CUDF_MIN_VERSION_GTest@ CONFIG)
+
+  # Add cudf::* alias targets
+  # Unsure what to do about cudf::benchmark/cudf::benchmark_main
+  _add_cudf_library_alias(cudf::gtest GTest::gtest)
+  _add_cudf_library_alias(cudf::gmock GTest::gmock)
+  _add_cudf_library_alias(cudf::gtest_main GTest::gtest_main)
+  _add_cudf_library_alias(cudf::gmock_main GTest::gmock_main)
+
   include("${CMAKE_CURRENT_LIST_DIR}/cudf-testing-targets.cmake")
+
 endif()
 
 include("${CMAKE_CURRENT_LIST_DIR}/cudf-config-version.cmake")
 
 check_required_components(cudf)
 
-foreach(t IN LISTS _targets_to_promote)
-  if(TARGET ${t})
-    set_target_properties(${t} PROPERTIES IMPORTED_GLOBAL TRUE)
+foreach(target IN LISTS _targets_to_promote)
+  if(TARGET ${target})
+    get_target_property(_already_global ${target} IMPORTED_GLOBAL)
+    if(NOT _already_global)
+      set_target_properties(${target} PROPERTIES IMPORTED_GLOBAL TRUE)
+    endif()
   endif()
 endforeach()
 set(${CMAKE_FIND_PACKAGE_NAME}_CONFIG "${CMAKE_CURRENT_LIST_FILE}")
