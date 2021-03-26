@@ -60,12 +60,12 @@ struct get_data_ptr_functor {
 
 const void* get_data_ptr(column_view const& view)
 {
-  return type_dispatcher(view.type(), get_data_ptr_functor{}, view);
+  return type_dispatcher<dispatch_storage_type>(view.type(), get_data_ptr_functor{}, view);
 }
 
 const void* get_data_ptr(scalar const& s)
 {
-  return type_dispatcher(s.type(), get_data_ptr_functor{}, s);
+  return type_dispatcher<dispatch_storage_type>(s.type(), get_data_ptr_functor{}, s);
 }
 
 std::string get_type_name(data_type type)
