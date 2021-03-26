@@ -67,7 +67,9 @@ TYPED_TEST(CopyTest, CopyIfElseTestManyNulls)
 }
 
 struct copy_if_else_tiny_grid_functor {
-  template <typename T, typename Filter, std::enable_if_t<cudf::is_rep_layout_compatible<T>()>* = nullptr>
+  template <typename T,
+            typename Filter,
+            std::enable_if_t<cudf::is_rep_layout_compatible<T>()>* = nullptr>
   std::unique_ptr<cudf::column> operator()(cudf::column_view const& lhs,
                                            cudf::column_view const& rhs,
                                            Filter filter,
@@ -92,7 +94,9 @@ struct copy_if_else_tiny_grid_functor {
     return out;
   }
 
-  template <typename T, typename Filter, std::enable_if_t<not cudf::is_rep_layout_compatible<T>()>* = nullptr>
+  template <typename T,
+            typename Filter,
+            std::enable_if_t<not cudf::is_rep_layout_compatible<T>()>* = nullptr>
   std::unique_ptr<cudf::column> operator()(cudf::column_view const& lhs,
                                            cudf::column_view const& rhs,
                                            Filter filter,

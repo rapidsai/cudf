@@ -855,18 +855,20 @@ __device__ inline numeric::decimal64 const column_device_view::element<numeric::
 }
 
 template <typename T, typename = void>
-struct has_element_accessor_impl : std::false_type { };
+struct has_element_accessor_impl : std::false_type {
+};
 
 template <typename T>
-struct has_element_accessor_impl<T, void_t<decltype(std::declval<column_device_view>().element<T>())>>
+struct has_element_accessor_impl<T,
+                                 void_t<decltype(std::declval<column_device_view>().element<T>())>>
   : std::true_type {
 };
 
 template <typename T>
-constexpr bool has_element_accessor(){
-    return has_element_accessor_impl<T>::value;
+constexpr bool has_element_accessor()
+{
+  return has_element_accessor_impl<T>::value;
 }
-
 
 namespace detail {
 

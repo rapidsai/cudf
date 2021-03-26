@@ -391,7 +391,6 @@ class row_lexicographic_comparator {
 template <template <typename> class hash_function, bool has_nulls = true>
 class element_hasher {
  public:
-
   template <typename T, std::enable_if_t<has_element_accessor<T>()>* = nullptr>
   __device__ inline hash_value_type operator()(column_device_view col, size_type row_index)
   {
@@ -402,11 +401,10 @@ class element_hasher {
   template <typename T, std::enable_if_t<not has_element_accessor<T>()>* = nullptr>
   __device__ inline hash_value_type operator()(column_device_view col, size_type row_index)
   {
-      cudf_assert(false && "Unsupported type in hash.");
-      return {};
+    cudf_assert(false && "Unsupported type in hash.");
+    return {};
   }
 };
-
 
 template <template <typename> class hash_function, bool has_nulls = true>
 class element_hasher_with_seed {
@@ -432,8 +430,8 @@ class element_hasher_with_seed {
   template <typename T, std::enable_if_t<not has_element_accessor<T>()>* = nullptr>
   __device__ inline hash_value_type operator()(column_device_view col, size_type row_index)
   {
-      cudf_assert(false && "Unsupported type in hash.");
-      return {};
+    cudf_assert(false && "Unsupported type in hash.");
+    return {};
   }
 
  private:
