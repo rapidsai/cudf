@@ -199,8 +199,9 @@ class MultiIndex(Index):
             # to unexpected behaviour in some cases. This is
             # definitely buggy, but we can't disallow non-unique
             # names either...
-            self._data = self._data._create_unsafe(
-                dict(zip(value, self._data.values()))
+            self._data = self._data.__class__._create_unsafe(
+                dict(zip(value, self._data.values())),
+                level_names=self._data.level_names,
             )
         self._names = pd.core.indexes.frozen.FrozenList(value)
 
