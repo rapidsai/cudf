@@ -9,36 +9,23 @@ for each company and writes the result in csv format.
 
 ## How to compile and execute
 
-The compilation process is automated by a Dockerfile included in the project.
-
 Prerequisites:
-- docker (API >= 1.40 to support --gpus)
-- nvidia driver >= 450.80.02 (to support cudatoolkit 11.1)
+- Cudatookit 11.0 or later
+- gcc-9
+- cmake 3.18
+- `libboost-filesystem-dev` and `zlib1g-dev`
 
-### Step 1: build environment in docker
 ```bash
-docker build . -t rapidsenv
+# Configure project
+cmake -S . -B build/
+# Build
+cmake --build build/ --parallel $PARALLEL_LEVEL
+# Execute
+build/libcudf_example
 ```
 
-### Step 2: start the container
-```bash
-docker run -t -d -v $PWD:/workspace --gpus all --name rapidsenvrt rapidsenv
-```
+Expect the first build to take some time, as it builds libcudf on the host
+machine. It may be sped up by configuring the proper `PARALLEL_LEVEL` number.
 
-### (When active container running) Configure project
-```bash
-docker exec rapidsenvrt sh -c "cmake -S . -B build/"
-```
-
-### (When active container running) Build project
-```bash
-docker exec rapidsenvrt sh -c "cmake --build build/ --parallel $PARALLEL_LEVEL"
-```
-The first time running this command will take a long time because it will build
-libcudf on the host machine. It may be sped up by configuring the proper
-`PARALLEL_LEVEL` number.
-
-### (When active container running) Execute binary
-```bash
-docker exec rapidsenvrt sh -c "build/libcudf_example"
-```
+We also provide a Dockerfile that helps setup the environment and automate
+the build process.

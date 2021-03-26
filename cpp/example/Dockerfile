@@ -9,7 +9,7 @@ RUN GCC_VERSION=9 \
  && add-apt-repository -y ppa:ubuntu-toolchain-r/test \
  && apt install -y \
     gcc-${GCC_VERSION} g++-${GCC_VERSION} \
-    git nano sudo wget ninja-build bash-completion \
+    git make \
     # CMake dependencies
     curl libssl-dev libcurl4-openssl-dev zlib1g-dev \
     # cuDF dependencies
