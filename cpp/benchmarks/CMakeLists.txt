@@ -177,8 +177,9 @@ ConfigureBench(BINARYOP_BENCH binaryop/binaryop_benchmark.cu)
 ConfigureBench(TEXT_BENCH
   text/normalize_benchmark.cpp
   text/normalize_spaces_benchmark.cpp
-  text/tokenize_benchmark.cpp
-  text/subword_benchmark.cpp)
+  text/replace_benchmark.cpp
+  text/subword_benchmark.cpp
+  text/tokenize_benchmark.cpp)
 
 ###################################################################################################
 # - strings benchmark -------------------------------------------------------------------

@@ -17,6 +17,9 @@ from cudf._lib.cpp.lists.lists_column_view cimport lists_column_view
 from cudf._lib.cpp.column.column_view cimport column_view
 from cudf._lib.cpp.column.column cimport column
 
+from cudf._lib.scalar cimport DeviceScalar
+from cudf._lib.cpp.scalar.scalar cimport scalar
+
 from cudf._lib.cpp.table.table cimport table
 from cudf._lib.cpp.table.table_view cimport table_view
 from cudf._lib.cpp.types cimport size_type, order, null_order
@@ -28,6 +31,8 @@ from cudf._lib.types cimport (
     underlying_type_t_null_order, underlying_type_t_order
 )
 from cudf.core.dtypes import ListDtype
+
+from cudf._lib.cpp.lists.contains cimport contains
 
 from cudf._lib.cpp.lists.extract cimport extract_list_element
 
@@ -93,10 +98,29 @@ def extract_element(Column col, size_type index):
     cdef shared_ptr[lists_column_view] list_view = (
         make_shared[lists_column_view](col.view())
     )
+
     cdef unique_ptr[column] c_result
 
     with nogil:
         c_result = move(extract_list_element(list_view.get()[0], index))
+
+    result = Column.from_unique_ptr(move(c_result))
+    return result
+
+
+def contains_scalar(Column col, DeviceScalar search_key):
+    cdef shared_ptr[lists_column_view] list_view = (
+        make_shared[lists_column_view](col.view())
+    )
+    cdef const scalar* search_key_value = search_key.get_raw_ptr()
+
+    cdef unique_ptr[column] c_result
+
+    with nogil:
+        c_result = move(contains(
+            list_view.get()[0],
+            search_key_value[0],
+        ))
 
     result = Column.from_unique_ptr(move(c_result))
     return result
