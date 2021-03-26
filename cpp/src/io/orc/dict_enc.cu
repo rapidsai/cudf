@@ -398,7 +398,7 @@ __global__ void __launch_bounds__(block_size)
     bool is_dupe     = false;
     if (i + t < num_strings) {
       current_string = s->stripe.leaf_column->element<string_view>(cur);
-      cur_len        = current_string.size_byte();
+      cur_len        = current_string.size_bytes();
     }
     if (i + t != 0 && i + t < num_strings) {
       uint32_t prev = dict_data[i + t - 1];
