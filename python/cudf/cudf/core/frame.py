@@ -3355,8 +3355,6 @@ class Frame(libcudf.table.Table):
         indicator=False,
         suffixes=("_x", "_y"),
     ):
-        from cudf.core.join.join import merge
-
         lhs, rhs = self, right
         if how == "right":
             # Merge doesn't support right, so just swap
@@ -3366,7 +3364,7 @@ class Frame(libcudf.table.Table):
             left_index, right_index = right_index, left_index
             suffixes = (suffixes[1], suffixes[0])
 
-        return merge(
+        return cudf.core.join.merge(
             lhs,
             rhs,
             on=on,
