@@ -343,7 +343,9 @@ class Merge(object):
                 # need a list instead of a tuple here because
                 # _get_sorted_inds calls down to ColumnAccessor.get_by_label
                 # which handles lists and tuples differently
-                sort_order = result._get_sorted_inds(list(self.on))
+                sort_order = result._get_sorted_inds(
+                    list(_coerce_to_tuple(self.on))
+                )
             return result._gather(sort_order, keep_index=False)
         by = []
         if self.left_index and self.right_index:
