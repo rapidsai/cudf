@@ -460,7 +460,8 @@ class mutable_column_view : public detail::column_view_base {
    * @tparam The type to cast to
    * @return T* Typed pointer to underlying data
    */
-  template <typename T = void>
+  template <typename T = void,
+            CUDF_ENABLE_IF(std::is_same<T, void>::value or is_rep_layout_compatible<T>())>
   T* head() const noexcept
   {
     return const_cast<T*>(detail::column_view_base::head<T>());
@@ -477,7 +478,7 @@ class mutable_column_view : public detail::column_view_base {
    * @tparam T The type to cast to
    * @return T* Typed pointer to underlying data, including the offset
    */
-  template <typename T>
+  template <typename T, CUDF_ENABLE_IF(is_rep_layout_compatible<T>())>
   T* data() const noexcept
   {
     return const_cast<T*>(detail::column_view_base::data<T>());
@@ -490,7 +491,7 @@ class mutable_column_view : public detail::column_view_base {
    * @tparam T The desired type
    * @return T* Pointer to the first element after casting
    */
-  template <typename T>
+  template <typename T, CUDF_ENABLE_IF(is_rep_layout_compatible<T>())>
   T* begin() const noexcept
   {
     return const_cast<T*>(detail::column_view_base::begin<T>());
@@ -503,7 +504,7 @@ class mutable_column_view : public detail::column_view_base {
    * @tparam T The desired type
    * @return T* Pointer to one past the last element after casting
    */
-  template <typename T>
+  template <typename T, CUDF_ENABLE_IF(is_rep_layout_compatible<T>())>
   T* end() const noexcept
   {
     return const_cast<T*>(detail::column_view_base::end<T>());
