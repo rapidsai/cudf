@@ -20,11 +20,11 @@
 #include <cudf/ast/operators.hpp>
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_factories.hpp>
+#include <cudf/detail/utilities/assert.cuh>
 #include <cudf/scalar/scalar_device_view.cuh>
 #include <cudf/table/table_device_view.cuh>
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
-#include <cudf/detail/utilities/assert.cuh>
 #include <cudf/utilities/traits.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
@@ -178,7 +178,7 @@ struct row_evaluator {
    * @param row_index Row index of data column.
    * @return Element
    */
-  template <typename Element, std::enable_if_t<has_element_accessor<Element>()>* = nullptr>
+  template <typename Element, CUDF_ENABLE_IF(column_device_view::has_element_accessor<Element>())>
   __device__ Element resolve_input(detail::device_data_reference device_data_reference,
                                    cudf::size_type row_index) const
   {
@@ -198,7 +198,8 @@ struct row_evaluator {
     }
   }
 
-  template <typename Element, std::enable_if_t<not has_element_accessor<Element>()>* = nullptr>
+  template <typename Element,
+            CUDF_ENABLE_IF(not column_device_view::has_element_accessor<Element>())>
   __device__ Element resolve_input(detail::device_data_reference device_data_reference,
                                    cudf::size_type row_index) const
   {

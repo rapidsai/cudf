@@ -28,6 +28,8 @@
 #include <thrust/swap.h>
 #include <thrust/transform_reduce.h>
 
+#include <limits>
+
 namespace cudf {
 
 /**
@@ -391,15 +393,15 @@ class row_lexicographic_comparator {
 template <template <typename> class hash_function, bool has_nulls = true>
 class element_hasher {
  public:
-  template <typename T, std::enable_if_t<has_element_accessor<T>()>* = nullptr>
-  __device__ inline hash_value_type operator()(column_device_view col, size_type row_index)
+  template <typename T, CUDF_ENABLE_IF(column_device_view::has_element_accessor<T>())>
+  __device__ hash_value_type operator()(column_device_view col, size_type row_index) const
   {
     if (has_nulls && col.is_null(row_index)) { return std::numeric_limits<hash_value_type>::max(); }
     return hash_function<T>{}(col.element<T>(row_index));
   }
 
-  template <typename T, std::enable_if_t<not has_element_accessor<T>()>* = nullptr>
-  __device__ inline hash_value_type operator()(column_device_view col, size_type row_index)
+  template <typename T, CUDF_ENABLE_IF(not column_device_view::has_element_accessor<T>())>
+  __device__ hash_value_type operator()(column_device_view col, size_type row_index) const
   {
     cudf_assert(false && "Unsupported type in hash.");
     return {};
@@ -409,34 +411,29 @@ class element_hasher {
 template <template <typename> class hash_function, bool has_nulls = true>
 class element_hasher_with_seed {
  public:
-  __device__ element_hasher_with_seed()
-    : _seed{0}, _null_hash(std::numeric_limits<hash_value_type>::max())
-  {
-  }
-  __device__ element_hasher_with_seed(
-    uint32_t seed = 0, hash_value_type null_hash = std::numeric_limits<hash_value_type>::max())
+  element_hasher_with_seed() = default;
+  __device__ element_hasher_with_seed(uint32_t seed, hash_value_type null_hash)
     : _seed{seed}, _null_hash(null_hash)
   {
   }
 
-  // seed, null_hash, byte endianness
-  template <typename T, std::enable_if_t<has_element_accessor<T>()>* = nullptr>
-  __device__ inline hash_value_type operator()(column_device_view col, size_type row_index)
+  template <typename T, CUDF_ENABLE_IF(column_device_view::has_element_accessor<T>())>
+  __device__ hash_value_type operator()(column_device_view col, size_type row_index) const
   {
     if (has_nulls && col.is_null(row_index)) { return _null_hash; }
     return hash_function<T>{_seed}(col.element<T>(row_index));
   }
 
-  template <typename T, std::enable_if_t<not has_element_accessor<T>()>* = nullptr>
-  __device__ inline hash_value_type operator()(column_device_view col, size_type row_index)
+  template <typename T, CUDF_ENABLE_IF(not column_device_view::has_element_accessor<T>())>
+  __device__ hash_value_type operator()(column_device_view col, size_type row_index) const
   {
     cudf_assert(false && "Unsupported type in hash.");
     return {};
   }
 
  private:
-  uint32_t _seed;
-  hash_value_type _null_hash;
+  uint32_t _seed{0};
+  hash_value_type _null_hash{std::numeric_limits<hash_value_type>::max()};
 };
 
 /**
