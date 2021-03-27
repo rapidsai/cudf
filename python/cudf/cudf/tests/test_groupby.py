@@ -7,7 +7,7 @@ import numpy as np
 import pandas as pd
 import pytest
 from numba import cuda
-from numpy.testing import assert_array_equal
+from numpy.testing import assert_allclose, assert_array_equal
 
 import cudf
 from cudf.core import DataFrame, Series
@@ -146,26 +146,6 @@ def test_groupby_agg_min_max_dictlist(nelem):
         .agg({"a": ["min", "max"], "b": ["min", "max"]})
     )
     assert_eq(got_df, expect_df)
-
-
-@pytest.mark.parametrize("nelem", [2, 3, 100, 1000])
-@pytest.mark.parametrize(
-    "func", ["mean", "min", "max", "idxmin", "idxmax", "count", "sum"]
-)
-def test_groupby_2keys_agg(nelem, func):
-    # gdf (Note: lack of multiIndex)
-    expect_df = (
-        make_frame(pd.DataFrame, nelem=nelem)
-        .groupby(["x", "y"], sort=True)
-        .agg(func)
-    )
-    got_df = (
-        make_frame(DataFrame, nelem=nelem)
-        .groupby(["x", "y"], sort=True)
-        .agg(func)
-    )
-    check_dtype = False if func in _index_type_aggs else True
-    assert_eq(got_df, expect_df, check_dtype=check_dtype)
 
 
 @pytest.mark.parametrize("as_index", [True, False])
@@ -331,26 +311,52 @@ def test_groupby_apply_grouped():
     assert_eq(expect, got)
 
 
-@pytest.mark.parametrize("nelem", [100, 500])
+@pytest.mark.parametrize("nelem", [2, 3, 100, 500, 1000])
 @pytest.mark.parametrize(
     "func",
     ["mean", "std", "var", "min", "max", "idxmin", "idxmax", "count", "sum"],
 )
-def test_groupby_cudf_2keys_agg(nelem, func):
+def test_groupby_2keys_agg(nelem, func):
+    # gdf (Note: lack of multiIndex)
+    expect_df = (
+        make_frame(pd.DataFrame, nelem=nelem)
+        .groupby(["x", "y"], sort=True)
+        .agg(func)
+    )
     got_df = (
         make_frame(DataFrame, nelem=nelem)
         .groupby(["x", "y"], sort=True)
         .agg(func)
     )
 
-    # pandas
-    expect_df = (
-        make_frame(pd.DataFrame, nelem=nelem)
-        .groupby(["x", "y"], sort=True)
-        .agg(func)
-    )
     check_dtype = False if func in _index_type_aggs else True
     assert_eq(got_df, expect_df, check_dtype=check_dtype)
+
+
+@pytest.mark.parametrize("nelem", [2, 3, 100, 500, 1000])
+@pytest.mark.parametrize(
+    "func",
+    ["min", "max", "idxmin", "idxmax", "count", "sum"],
+)
+def test_groupby_agg_decimal(nelem, func):
+    idx_col = np.arange(nelem)
+    x = (np.random.rand(nelem) * 100).round(2)
+    y = (np.random.rand(nelem) * 100).round(2)
+    pdf = pd.DataFrame({'idx': idx_col, 'x': x, 'y': y})
+    gdf = DataFrame({
+        'idx': idx_col,
+        'x': cudf.Series(x).astype(cudf.Decimal64Dtype(3, 2)),
+        'y': cudf.Series(y).astype(cudf.Decimal64Dtype(3, 2)),
+    })
+
+    expect_df = pdf.groupby('idx', sort=True).agg(func)
+    got_df = gdf.groupby('idx', sort=True).agg(func).astype(float)
+
+    check_dtype = False if func in _index_type_aggs else True
+    assert_allclose(got_df['x'].to_array(), expect_df['x'],
+                    atol=1e-2, rtol=1e-2)
+    assert_allclose(got_df['y'].to_array(), expect_df['y'],
+                    atol=1e-2, rtol=1e-2)
 
 
 @pytest.mark.parametrize(
