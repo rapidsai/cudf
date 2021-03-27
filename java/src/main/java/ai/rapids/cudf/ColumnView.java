@@ -2512,6 +2512,42 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
   }
 
   /**
+   * Create a new column view from a raw device buffer. Note that this will NOT copy
+   * the contents of the buffer but only creates a view. The view MUST NOT outlive
+   * the underlying device buffer. The column view will be created without a validity
+   * vector, so it is not possible to create a view containing null elements. Additionally
+   * only fixed-width primitive types are supported.
+   *
+   * @param buffer device memory that will back the column view
+   * @param startOffset byte offset into the device buffer where the column data starts
+   * @param type type of data in the column view
+   * @param rows number of data elements in the column view
+   * @return new column view instance that must not outlive the backing device buffer
+   */
+  public static ColumnView fromDeviceBuffer(BaseDeviceMemoryBuffer buffer,
+                                            long startOffset,
+                                            DType type,
+                                            int rows) {
+    int typeSize = type.getSizeInBytes();
+    if (typeSize <= 0) {
+      throw new IllegalArgumentException("Unsupported type: " + type);
+    }
+    if (startOffset < 0) {
+      throw new IllegalArgumentException("Invalid start offset: " + startOffset);
+    }
+    if (rows < 0) {
+      throw new IllegalArgumentException("Invalid row count: " + rows);
+    }
+    long dataSize = typeSize * rows;
+    if (startOffset + dataSize > buffer.length) {
+      throw new IllegalArgumentException("View extends beyond buffer range");
+    }
+    long dataAddress = buffer.getAddress() + startOffset;
+    return new ColumnView(makeCudfColumnView(type.typeId.getNativeId(), type.getScale(),
+        dataAddress, dataSize, 0, 0, 0, rows, null));
+  }
+
+  /**
    * Create a column of bool values indicating whether the specified scalar
    * is an element of each row of a list column.
    * Output `column[i]` is set to null if one or more of the following are true:
