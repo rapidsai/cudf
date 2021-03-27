@@ -407,6 +407,25 @@ class alignas(16) column_device_view : public detail::column_device_view_base {
     return decimal64{scaled_integer<int64_t>{data<int64_t>()[element_index], scale}};
   }
 
+ private:
+  template <typename T, typename = void>
+  struct has_element_accessor_impl : std::false_type {
+  };
+
+  template <typename T>
+  struct has_element_accessor_impl<T,
+                                   void_t<decltype(std::declval<cudf::column_device_view>()
+                                                     .element<T>(std::declval<size_type>()))>>
+    : std::true_type {
+  };
+
+ public:
+  template <typename T>
+  static constexpr bool has_element_accessor()
+  {
+    return has_element_accessor_impl<T>::value;
+  }
+
   /**
    * @brief Iterator for navigating this column
    */
