@@ -57,14 +57,16 @@ class column_view_base {
    *a column, and instead, accessing the elements should be done via
    *`data<T>()`.
    *
+   * This function only participates in overload resolution when `is_rep_layout_compatible<T>()` or
+   *`std::is_same<T,void>::value` are true.
+   *
    * @tparam The type to cast to
    * @return T const* Typed pointer to underlying data
    */
-  template <typename T = void>
+  template <typename T = void,
+            CUDF_ENABLE_IF(std::is_same<T, void>::value or is_rep_layout_compatible<T>())>
   T const* head() const noexcept
   {
-    // TODO Replace with enable_if
-    static_assert(std::is_same<T, void>::value or is_rep_layout_compatible<T>(), "");
     return static_cast<T const*>(_data);
   }
 
@@ -74,12 +76,14 @@ class column_view_base {
    *
    * @note If `offset() == 0`, then `head<T>() == data<T>()`
    *
-   * @TODO Clarify behavior for variable-width types.
+   * This function only participates in overload resolution when `is_rep_layout_compatible<T>()` is
+   * true.
+   *
    *
    * @tparam T The type to cast to
    * @return T const* Typed pointer to underlying data, including the offset
    */
-  template <typename T>
+  template <typename T, CUDF_ENABLE_IF(is_rep_layout_compatible<T>())>
   T const* data() const noexcept
   {
     return head<T>() + _offset;
@@ -89,10 +93,13 @@ class column_view_base {
    * @brief Return first element (accounting for offset) after underlying data
    * is casted to the specified type.
    *
+   * This function only participates in overload resolution when `is_rep_layout_compatible<T>()` is
+   * true.
+   *
    * @tparam T The desired type
    * @return T const* Pointer to the first element after casting
    */
-  template <typename T>
+  template <typename T, CUDF_ENABLE_IF(is_rep_layout_compatible<T>())>
   T const* begin() const noexcept
   {
     return data<T>();
@@ -102,10 +109,13 @@ class column_view_base {
    * @brief Return one past the last element after underlying data is casted to
    * the specified type.
    *
+   * This function only participates in overload resolution when `is_rep_layout_compatible<T>()` is
+   * true.
+   *
    * @tparam T The desired type
    * @return T const* Pointer to one past the last element after casting
    */
-  template <typename T>
+  template <typename T, CUDF_ENABLE_IF(is_rep_layout_compatible<T>())>
   T const* end() const noexcept
   {
     return begin<T>() + size();
