@@ -197,7 +197,6 @@ class Merge(object):
 
     def _compute_join_keys(self):
         # Computes self._keys
-        # breakpoint()
         left_keys = []
         right_keys = []
         if (
@@ -237,15 +236,15 @@ class Merge(object):
                     ]
                 )
         elif self.on:
-            # Use `on` if provided. Otherwise,
-            # implicitly use identically named columns as the key columns:
             on_names = _coerce_to_tuple(self.on)
-
             for on in on_names:
+                # If `on` if provided, checks whether merging on
+                # columns, indexes or merging  index with column
                 if (
                     on in self.lhs._data.keys()
                     and on not in self.rhs._data.keys()
                 ):
+                    # case1: merge on lhs column with rhs index
                     if on in self.rhs.index.names:
                         left_keys.extend([_Indexer(name=on, column=True)])
                         right_keys.extend([_Indexer(name=on, index=True)])
@@ -254,6 +253,7 @@ class Merge(object):
                     on not in self.lhs._data.keys()
                     and on in self.rhs._data.keys()
                 ):
+                    # case2: merge on rhs column with lhs index
                     if on in self.lhs.index.names:
                         left_keys.extend([_Indexer(name=on, index=True)])
                         right_keys.extend([_Indexer(name=on, column=True)])
@@ -262,16 +262,20 @@ class Merge(object):
                     on not in self.lhs._data.keys()
                     and on not in self.rhs._data.keys()
                 ):
+                    # case3: merge on lhs index with rhs index
                     if (
                         on in self.lhs.index.names
                         and on in self.rhs.index.names
                     ):
-                        left_keys.extend([_Indexer(name=on, Index=True)])
+                        left_keys.extend([_Indexer(name=on, index=True)])
                         right_keys.extend([_Indexer(name=on, index=True)])
                     else:
+                        # if none of the cases, then invalid key "on"
+                        # not found in both frames
                         raise KeyError(on)
 
                 else:
+                    # case4: merge on lhs column with rhs column
                     left_keys = [
                         _Indexer(name=on, column=True) for on in on_names
                     ]
@@ -279,9 +283,8 @@ class Merge(object):
                         _Indexer(name=on, column=True) for on in on_names
                     ]
         else:
-            # if self.on is none and
-            # not merging index with column or on both indexes, then
-            # use intersection  of columns in both frames
+            # if `on` not provided and not merging index with column or on
+            # both indexes, then use intersection  of columns in both frames
             on_names = set(self.lhs._data) & set(self.rhs._data)
             left_keys = [_Indexer(name=on, column=True) for on in on_names]
             right_keys = [_Indexer(name=on, column=True) for on in on_names]
