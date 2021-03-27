@@ -1,0 +1,6 @@
+pytest
+pytest-benchmark
+pytest-xdist
+hypothesis
+mimesis
+pyorc
