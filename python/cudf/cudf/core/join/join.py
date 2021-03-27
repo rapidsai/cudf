@@ -197,14 +197,15 @@ class Merge(object):
 
     def _compute_join_keys(self):
         # Computes self._keys
+        # breakpoint()
+        left_keys = []
+        right_keys = []
         if (
             self.left_index
             or self.right_index
             or self.left_on
             or self.right_on
         ):
-            left_keys = []
-            right_keys = []
             if self.left_index:
                 left_keys.extend(
                     [
@@ -235,7 +236,7 @@ class Merge(object):
                         for on in _coerce_to_tuple(self.right_on)
                     ]
                 )
-        if self.on:
+        elif self.on:
             # Use `on` if provided. Otherwise,
             # implicitly use identically named columns as the key columns:
             on_names = _coerce_to_tuple(self.on)
@@ -267,6 +268,8 @@ class Merge(object):
                     ):
                         left_keys.extend([_Indexer(name=on, Index=True)])
                         right_keys.extend([_Indexer(name=on, index=True)])
+                    else:
+                        raise KeyError(on)
 
                 else:
                     left_keys = [
@@ -275,6 +278,13 @@ class Merge(object):
                     right_keys = [
                         _Indexer(name=on, column=True) for on in on_names
                     ]
+        else:
+            # if self.on is none and
+            # not merging index with column or on both indexes, then
+            # use intersection  of columns in both frames
+            on_names = set(self.lhs._data) & set(self.rhs._data)
+            left_keys = [_Indexer(name=on, column=True) for on in on_names]
+            right_keys = [_Indexer(name=on, column=True) for on in on_names]
 
         if len(left_keys) != len(right_keys):
             raise ValueError(
