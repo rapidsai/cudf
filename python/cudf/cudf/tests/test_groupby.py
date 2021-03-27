@@ -335,28 +335,30 @@ def test_groupby_2keys_agg(nelem, func):
 
 @pytest.mark.parametrize("nelem", [2, 3, 100, 500, 1000])
 @pytest.mark.parametrize(
-    "func",
-    ["min", "max", "idxmin", "idxmax", "count", "sum"],
+    "func", ["min", "max", "idxmin", "idxmax", "count", "sum"],
 )
 def test_groupby_agg_decimal(nelem, func):
     idx_col = np.arange(nelem)
     x = (np.random.rand(nelem) * 100).round(2)
     y = (np.random.rand(nelem) * 100).round(2)
-    pdf = pd.DataFrame({'idx': idx_col, 'x': x, 'y': y})
-    gdf = DataFrame({
-        'idx': idx_col,
-        'x': cudf.Series(x).astype(cudf.Decimal64Dtype(3, 2)),
-        'y': cudf.Series(y).astype(cudf.Decimal64Dtype(3, 2)),
-    })
+    pdf = pd.DataFrame({"idx": idx_col, "x": x, "y": y})
+    gdf = DataFrame(
+        {
+            "idx": idx_col,
+            "x": cudf.Series(x).astype(cudf.Decimal64Dtype(3, 2)),
+            "y": cudf.Series(y).astype(cudf.Decimal64Dtype(3, 2)),
+        }
+    )
 
-    expect_df = pdf.groupby('idx', sort=True).agg(func)
-    got_df = gdf.groupby('idx', sort=True).agg(func).astype(float)
+    expect_df = pdf.groupby("idx", sort=True).agg(func)
+    got_df = gdf.groupby("idx", sort=True).agg(func).astype(float)
 
-    check_dtype = False if func in _index_type_aggs else True
-    assert_allclose(got_df['x'].to_array(), expect_df['x'],
-                    atol=1e-2, rtol=1e-2)
-    assert_allclose(got_df['y'].to_array(), expect_df['y'],
-                    atol=1e-2, rtol=1e-2)
+    assert_allclose(
+        got_df["x"].to_array(), expect_df["x"], atol=1e-2, rtol=1e-2
+    )
+    assert_allclose(
+        got_df["y"].to_array(), expect_df["y"], atol=1e-2, rtol=1e-2
+    )
 
 
 @pytest.mark.parametrize(
