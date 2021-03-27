@@ -43,6 +43,9 @@
 #include <jit_stringified/cuda/std/type_traits.jit>
 #include <jit_stringified/cuda/std/version.jit>
 
+#include <jit_stringified/cudf/src/binaryop/jit/operation.hpp.jit>
+#include <jit_stringified/cudf/src/binaryop/jit/traits.hpp.jit>
+
 #include <cstring>
 #include <iostream>
 #include <string>
@@ -95,6 +98,8 @@ const std::unordered_map<std::string, char const*> stringified_headers{
   {"cuda/std/detail/libcxx/include/ratio", cuda_std_detail_libcxx_include_ratio},
   {"cuda/std/detail/libcxx/include/type_traits", cuda_std_detail_libcxx_include_type_traits},
   {"cuda/std/detail/libcxx/include/version", cuda_std_detail_libcxx_include_version},
+  {"operation.hpp", cudf_src_binaryop_jit_operation_hpp},
+  {"traits.hpp", cudf_src_binaryop_jit_traits_hpp},
 };
 
 inline std::istream* send_stringified_header(std::iostream& stream, char const* header)

@@ -17,7 +17,7 @@
  * limitations under the License.
  */
 
-#include "traits.hpp"
+#include <binaryop/jit/traits.hpp>
 
 #include <cmath>
 

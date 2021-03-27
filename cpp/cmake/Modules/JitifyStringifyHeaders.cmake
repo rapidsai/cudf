@@ -39,6 +39,7 @@ function(jit_stringify_files)
     foreach(ARG_FILE ${ARG_FILES})
         set(ARG_OUTPUT ${CUDF_GENERATED_INCLUDE_DIR}/include/jit_stringified/${ARG_FILE}.jit)
         set(JIT_STRINGIFIED_FILES "${ARG_OUTPUT};${JIT_STRINGIFIED_FILES}")
+        # list(APPEND JIT_STRINGIFIED_FILES "${ARG_OUTPUT}")
         add_custom_command(WORKING_DIRECTORY ${ARG_SOURCE_DIRECTORY}
                            DEPENDS stringify
                            OUTPUT ${ARG_OUTPUT}
@@ -88,6 +89,8 @@ jit_stringify_files(SOURCE_DIRECTORY      ${LIBCUDACXX_INCLUDE_DIR}
 # hacky way around using internal headers in jit files. should probably be moved to a public header.
 jit_stringify_files(SOURCE_DIRECTORY      ${CUDF_SOURCE_DIR}/..
                     FILES                 cudf/src/rolling/rolling_jit_detail.hpp
+                                          cudf/src/binaryop/jit/operation.hpp
+                                          cudf/src/binaryop/jit/traits.hpp
                     )
 
 add_custom_target(jitify_stringify_run DEPENDS ${JIT_STRINGIFIED_FILES})

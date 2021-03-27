@@ -23,7 +23,6 @@ project(jitify_preprocess VERSION 2.0 LANGUAGES CXX CUDA)
 add_executable(jitify_preprocess "${JITIFY_INCLUDE_DIR}/jitify2_preprocess.cpp")
 target_link_libraries(jitify_preprocess CUDA::cudart_static)
 
-
 set(JIT_PREPROCESSED_FILES)
 
 function(jit_preprocess_files)
@@ -40,7 +39,21 @@ function(jit_preprocess_files)
         add_custom_command(WORKING_DIRECTORY ${ARG_SOURCE_DIRECTORY}
                            DEPENDS jitify_preprocess
                            OUTPUT ${ARG_OUTPUT}
-                           COMMAND ${CUDF_BINARY_DIR}/jitify_preprocess ${ARG_FILE} -i -o ${CUDF_GENERATED_INCLUDE_DIR}/include/jit_preprocessed_files -std=c++14 -I${CUDF_INCLUDE} -remove-unused-globals -D__CUDACC_RTC__ -D__x86_64__ -I${LIBCUDACXX_INCLUDE_DIR} -I${CUDAToolkit_INCLUDE_DIR} --no-preinclude-workarounds
+                           VERBATIM
+                           COMMAND ${CUDF_BINARY_DIR}/jitify_preprocess ${ARG_FILE}
+                                    -o ${CUDF_GENERATED_INCLUDE_DIR}/include/jit_preprocessed_files
+                                    -v
+                                    -i
+                                    -m
+                                    -std=c++14
+                                    -remove-unused-globals
+                                    -D__CUDACC_RTC__
+                                    -D__x86_64__
+                                    -I${CUDF_INCLUDE}
+                                    -I${CUDF_SOURCE_DIR}/src
+                                    -I${LIBCUDACXX_INCLUDE_DIR}
+                                    -I${CUDAToolkit_INCLUDE_DIR}
+                                    --no-preinclude-workarounds
                            )
     endforeach()
     set(JIT_PREPROCESSED_FILES "${JIT_PREPROCESSED_FILES}" PARENT_SCOPE)

@@ -160,18 +160,34 @@ void binary_operation(mutable_column_view& out,
     //           rhs.offset(),
     //           lhs.is_valid());
   } else {
-    cudf::jit::launcher(
-      hash, code::kernel, header_names, cudf::jit::compiler_flags, headers_code, stream)
-      .set_kernel_inst("kernel_v_s",                           // name of the kernel we are
-                                                               // launching
-                       {cudf::jit::get_type_name(out.type()),  // list of template arguments
-                        cudf::jit::get_type_name(rhs.type()),
-                        cudf::jit::get_type_name(lhs.type()),
-                        get_operator_name(op, OperatorType::Reverse)})
-      .launch(out.size(),
-              cudf::jit::get_data_ptr(out),
-              cudf::jit::get_data_ptr(rhs),
-              cudf::jit::get_data_ptr(lhs));
+    std::string kernel_name =
+      jitify2::reflection::Template("kernel_v_s")           //
+        .instantiate(cudf::jit::get_type_name(out.type()),  // list of template arguments
+                     cudf::jit::get_type_name(rhs.type()),
+                     cudf::jit::get_type_name(lhs.type()),
+                     get_operator_name(op, OperatorType::Reverse));
+
+    jitify2::LoadedProgram my_prog = binaryop_program_cache.get_program({kernel_name});
+
+    my_prog                                                  //
+      ->get_kernel(kernel_name)                              //
+      ->configure_1d_max_occupancy(0, 0, 0, stream.value())  //
+      ->launch(out.size(),
+               cudf::jit::get_data_ptr(out),
+               cudf::jit::get_data_ptr(rhs),
+               cudf::jit::get_data_ptr(lhs));
+    //   cudf::jit::launcher(
+    //     hash, code::kernel, header_names, cudf::jit::compiler_flags, headers_code, stream)
+    //     .set_kernel_inst("kernel_v_s",                           // name of the kernel we are
+    //                                                              // launching
+    //                      {cudf::jit::get_type_name(out.type()),  // list of template arguments
+    //                       cudf::jit::get_type_name(rhs.type()),
+    //                       cudf::jit::get_type_name(lhs.type()),
+    //                       get_operator_name(op, OperatorType::Reverse)})
+    //     .launch(out.size(),
+    //             cudf::jit::get_data_ptr(out),
+    //             cudf::jit::get_data_ptr(rhs),
+    //             cudf::jit::get_data_ptr(lhs));
   }
 }
 
