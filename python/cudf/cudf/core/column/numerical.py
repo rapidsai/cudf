@@ -208,11 +208,6 @@ class NumericalColumn(ColumnBase):
     def as_decimal_column(
         self, dtype: Dtype, **kwargs
     ) -> "cudf.core.column.DecimalColumn":
-        if is_integer_dtype(self.dtype):
-            raise NotImplementedError(
-                "Casting from integer types to decimal "
-                "types not currently supported"
-            )
         result = libcudf.unary.cast(self, dtype)
         if isinstance(dtype, cudf.core.dtypes.Decimal64Dtype):
             result.dtype.precision = dtype.precision
