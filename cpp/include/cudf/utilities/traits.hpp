@@ -34,6 +34,19 @@ namespace cudf {
 template <typename...>
 using void_t = void;
 
+/**
+ * @brief Convenience macro for SFINAE as an unnamed template parameter.
+ *
+ * Example:
+ * \code{cpp}
+ * // This function will participate in overload resolution only if T is an integral type
+ * template <typename T, CUDF_ENABLE_IF(std::is_integral<T>::value)>
+ * void foo();
+ * \endcode
+ *
+ */
+#define CUDF_ENABLE_IF(...) std::enable_if_t<(__VA_ARGS__), bool> = true
+
 template <typename L, typename R, typename = void>
 struct is_relationally_comparable_impl : std::false_type {
 };
