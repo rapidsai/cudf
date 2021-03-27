@@ -284,6 +284,10 @@ class alignas(16) column_device_view : public detail::column_device_view_base {
    *
    * This function accounts for the offset.
    *
+   * This function does not participate in overload resolution if `is_rep_layout_compatible<T>` is
+   * false. Specializations of this function may exist for types `T` where
+   *`is_rep_layout_compatible<T>` is false.
+   *
    * @tparam T The element type
    * @param element_index Position of the desired element
    */
@@ -420,6 +424,10 @@ class alignas(16) column_device_view : public detail::column_device_view_base {
   };
 
  public:
+  /**
+   * @brief For a given `T`, indicates if `column_device_view::element<T>()` has a valid overload.
+   *
+   */
   template <typename T>
   static constexpr bool has_element_accessor()
   {
@@ -685,7 +693,8 @@ class alignas(16) mutable_column_device_view : public detail::column_device_view
    * @tparam The type to cast to
    * @return T* Typed pointer to underlying data
    */
-  template <typename T = void>
+  template <typename T = void,
+            CUDF_ENABLE_IF(std::is_same<T, void>::value or is_rep_layout_compatible<T>())>
   __host__ __device__ T* head() const noexcept
   {
     return const_cast<T*>(detail::column_device_view_base::head<T>());
@@ -702,7 +711,7 @@ class alignas(16) mutable_column_device_view : public detail::column_device_view
    * @tparam T The type to cast to
    * @return T* Typed pointer to underlying data, including the offset
    */
-  template <typename T>
+  template <typename T, CUDF_ENABLE_IF(is_rep_layout_compatible<T>())>
   __host__ __device__ T* data() const noexcept
   {
     return const_cast<T*>(detail::column_device_view_base::data<T>());
@@ -721,8 +730,8 @@ class alignas(16) mutable_column_device_view : public detail::column_device_view
    * @tparam T The element type
    * @param element_index Position of the desired element
    */
-  template <typename T, std::enable_if_t<is_rep_layout_compatible<T>()>* = nullptr>
-  __device__ T& element(size_type element_index) noexcept
+  template <typename T, CUDF_ENABLE_IF(is_rep_layout_compatible<T>())>
+  __device__ T& element(size_type element_index) const noexcept
   {
     return data<T>()[element_index];
   }
@@ -754,7 +763,7 @@ class alignas(16) mutable_column_device_view : public detail::column_device_view
    * @return T* Pointer to the first element after casting
    */
   template <typename T>
-  std::enable_if_t<is_fixed_width<T>(), iterator<T>> begin()
+  std::enable_if_t<is_rep_layout_compatible<T>(), iterator<T>> begin()
   {
     return iterator<T>{count_it{0}, detail::mutable_value_accessor<T>{*this}};
   }
@@ -767,7 +776,7 @@ class alignas(16) mutable_column_device_view : public detail::column_device_view
    * @return T const* Pointer to one past the last element after casting
    */
   template <typename T>
-  std::enable_if_t<is_fixed_width<T>(), iterator<T>> end()
+  std::enable_if_t<is_rep_layout_compatible<T>(), iterator<T>> end()
   {
     return iterator<T>{count_it{size()}, detail::mutable_value_accessor<T>{*this}};
   }
@@ -1040,8 +1049,8 @@ struct mutable_value_accessor {
 };
 
 /**
- * @brief Helper function for use by column_device_view and mutable_column_device_view constructors
- * to build device_views from views.
+ * @brief Helper function for use by column_device_view and mutable_column_device_view
+ * constructors to build device_views from views.
  *
  * It is used to build the array of child columns in device memory. Since child columns can
  * also have child columns, this uses recursion to build up the flat device buffer to contain
