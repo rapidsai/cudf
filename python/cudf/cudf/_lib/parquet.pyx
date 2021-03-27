@@ -20,7 +20,8 @@ from cudf.utils.dtypes import (
     np_to_pa_dtype,
     is_categorical_dtype,
     is_list_dtype,
-    is_struct_dtype
+    is_struct_dtype,
+    is_decimal_dtype,
 )
 
 from cudf._lib.utils cimport get_column_names
@@ -293,7 +294,9 @@ cpdef write_parquet(
     cdef unique_ptr[cudf_io_types.data_sink] _data_sink
     cdef cudf_io_types.sink_info sink = make_sink_info(path, _data_sink)
 
-    if index is not False and not isinstance(table._index, cudf.RangeIndex):
+    if index is True or (
+        index is None and not isinstance(table._index, cudf.RangeIndex)
+    ):
         tv = table.view()
         tbl_meta = make_unique[table_input_metadata](tv)
         for level, idx_name in enumerate(table._index.names):
@@ -310,7 +313,7 @@ cpdef write_parquet(
 
     for i, name in enumerate(table._column_names, num_index_cols_meta):
         tbl_meta.get().column_metadata[i].set_name(name.encode())
-        _set_col_children_names(
+        _set_col_metadata(
             table[name]._column, tbl_meta.get().column_metadata[i]
         )
 
@@ -448,7 +451,7 @@ cdef class ParquetWriter:
 
         for i, name in enumerate(table._column_names, num_index_cols_meta):
             self.tbl_meta.get().column_metadata[i].set_name(name.encode())
-            _set_col_children_names(
+            _set_col_metadata(
                 table[name]._column, self.tbl_meta.get().column_metadata[i]
             )
 
@@ -546,14 +549,16 @@ cdef Column _update_column_struct_field_names(
         col.set_base_children(tuple(children))
     return col
 
-cdef _set_col_children_names(Column col, column_in_metadata& col_meta):
+cdef _set_col_metadata(Column col, column_in_metadata& col_meta):
     if is_struct_dtype(col):
         for i, (child_col, name) in enumerate(
             zip(col.children, list(col.dtype.fields))
         ):
             col_meta.child(i).set_name(name.encode())
-            _set_col_children_names(child_col, col_meta.child(i))
+            _set_col_metadata(child_col, col_meta.child(i))
     elif is_list_dtype(col):
-        _set_col_children_names(col.children[1], col_meta.child(1))
+        _set_col_metadata(col.children[1], col_meta.child(1))
     else:
+        if is_decimal_dtype(col):
+            col_meta.set_decimal_precision(col.dtype.precision)
         return

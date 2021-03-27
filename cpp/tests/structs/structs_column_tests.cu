@@ -68,7 +68,7 @@ TYPED_TEST(TypedStructColumnWrapperTest, TestColumnFactoryConstruction)
 {
   auto names_col =
     cudf::test::strings_column_wrapper{
-      "Samuel Vimes", "Carrot Ironfoundersson", "Angua von Uberwald"}
+      "Samuel Vimes", "Carrot Ironfoundersson", "Angua von Überwald"}
       .release();
 
   int num_rows{names_col->size()};
@@ -95,7 +95,7 @@ TYPED_TEST(TypedStructColumnWrapperTest, TestColumnFactoryConstruction)
   // Check child columns for exactly correct values.
   vector_of_columns expected_children;
   expected_children.emplace_back(cudf::test::strings_column_wrapper{
-    "Samuel Vimes", "Carrot Ironfoundersson", "Angua von Uberwald"}
+    "Samuel Vimes", "Carrot Ironfoundersson", "Angua von Überwald"}
                                    .release());
   expected_children.emplace_back(
     cudf::test::fixed_width_column_wrapper<TypeParam, int32_t>{48, 27, 25}.release());
@@ -116,7 +116,7 @@ TYPED_TEST(TypedStructColumnWrapperTest, TestColumnWrapperConstruction)
 {
   std::initializer_list<std::string> names = {"Samuel Vimes",
                                               "Carrot Ironfoundersson",
-                                              "Angua von Uberwald",
+                                              "Angua von Überwald",
                                               "Cheery Littlebottom",
                                               "Detritus",
                                               "Mr Slant"};
@@ -174,7 +174,7 @@ TYPED_TEST(TypedStructColumnWrapperTest, TestStructsContainingLists)
 
   std::initializer_list<std::string> names = {"Samuel Vimes",
                                               "Carrot Ironfoundersson",
-                                              "Angua von Uberwald",
+                                              "Angua von Überwald",
                                               "Cheery Littlebottom",
                                               "Detritus",
                                               "Mr Slant"};
@@ -234,7 +234,7 @@ TYPED_TEST(TypedStructColumnWrapperTest, StructOfStructs)
 
   auto names = {"Samuel Vimes",
                 "Carrot Ironfoundersson",
-                "Angua von Uberwald",
+                "Angua von Überwald",
                 "Cheery Littlebottom",
                 "Detritus",
                 "Mr Slant"};
@@ -300,7 +300,7 @@ TYPED_TEST(TypedStructColumnWrapperTest, TestNullMaskPropagationForNonNullStruct
 
   auto names = {"Samuel Vimes",
                 "Carrot Ironfoundersson",
-                "Angua von Uberwald",
+                "Angua von Überwald",
                 "Cheery Littlebottom",
                 "Detritus",
                 "Mr Slant"};
@@ -393,7 +393,7 @@ TYPED_TEST(TypedStructColumnWrapperTest, TestListsOfStructs)
 
   std::initializer_list<std::string> names = {"Samuel Vimes",
                                               "Carrot Ironfoundersson",
-                                              "Angua von Uberwald",
+                                              "Angua von Überwald",
                                               "Cheery Littlebottom",
                                               "Detritus",
                                               "Mr Slant"};
