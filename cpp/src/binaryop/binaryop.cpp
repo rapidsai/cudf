@@ -161,13 +161,13 @@ void binary_operation(mutable_column_view& out,
     //           lhs.is_valid());
   } else {
     std::string kernel_name =
-      jitify2::reflection::Template("kernel_v_s")           //
-        .instantiate(cudf::jit::get_type_name(out.type()),  // list of template arguments
+      jitify2::reflection::Template("cudf::binops::jit::kernel_v_s")  //
+        .instantiate(cudf::jit::get_type_name(out.type()),            // list of template arguments
                      cudf::jit::get_type_name(rhs.type()),
                      cudf::jit::get_type_name(lhs.type()),
                      get_operator_name(op, OperatorType::Reverse));
 
-    jitify2::LoadedProgram my_prog = binaryop_program_cache.get_program({kernel_name});
+    auto my_prog = binaryop_program_cache.get_program({kernel_name});
 
     my_prog                                                  //
       ->get_kernel(kernel_name)                              //
