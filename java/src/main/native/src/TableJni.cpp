@@ -2180,4 +2180,15 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_explodeOuterPosition(JNIE
   CATCH_STD(env, 0);
 }
 
+JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Table_rowBitCount(JNIEnv* env, jclass, jlong j_table) {
+  JNI_NULL_CHECK(env, j_table, "table is null", 0);
+  try {
+    cudf::jni::auto_set_device(env);
+    auto t = reinterpret_cast<cudf::table_view*>(j_table);
+    std::unique_ptr<cudf::column> result = cudf::row_bit_count(*t);
+    return reinterpret_cast<jlong>(result.release());
+  }
+  CATCH_STD(env, 0);
+}
+
 } // extern "C"

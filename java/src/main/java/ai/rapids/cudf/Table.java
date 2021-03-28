@@ -514,6 +514,8 @@ public final class Table implements AutoCloseable {
                                                  long columnHandle,
                                                  boolean checkCount);
 
+  private static native long rowBitCount(long tableHandle) throws CudfException;
+
   private static native long[] explode(long tableHandle, int index);
 
   private static native long[] explodePosition(long tableHandle, int index);
@@ -1889,6 +1891,28 @@ public final class Table implements AutoCloseable {
     assert 0 <= index && index < columns.length : "Column index is out of range";
     assert columns[index].getType().equals(DType.LIST) : "Column to explode must be of type LIST";
     return new Table(explodeOuterPosition(nativeHandle, index));
+  }
+
+  /**
+   * Returns an approximate cumulative size in bits of all columns in the `table_view` for each row.
+   * This function counts bits instead of bytes to account for the null mask which only has one
+   * bit per row. Each row in the returned column is the sum of the per-row bit size for each column
+   * in the table.
+   *
+   * In some cases, this is an inexact approximation. Specifically, columns of lists and strings
+   * require N+1 offsets to represent N rows. It is up to the caller to calculate the small
+   * additional overhead of the terminating offset for any group of rows being considered.
+   *
+   * This function returns the per-row bit sizes as the columns are currently formed. This can
+   * end up being larger than the number you would get by gathering the rows. Specifically,
+   * the push-down of struct column validity masks can nullify rows that contain data for
+   * string or list columns. In these cases, the size returned is conservative such that:
+   * row_bit_count(column(x)) >= row_bit_count(gather(column(x)))
+   *
+   * @return INT32 column of bit size per row of the table
+   */
+  public ColumnVector rowBitCount() {
+    return new ColumnVector(rowBitCount(getNativeView()));
   }
 
   /**
