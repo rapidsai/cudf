@@ -1952,8 +1952,8 @@ def test_binops_decimal(args):
             ["100.000", "42.002", "23.999", None],
             cudf.Decimal64Dtype(scale=3, precision=6),
             [100, 42, 24, 12],
-            cudf.Series([False, False, False, None], dtype=bool),
-            cudf.Series([False, False, False, None], dtype=bool),
+            cudf.Series([False, False, True, None], dtype=bool),
+            cudf.Series([False, True, False, None], dtype=bool),
         ),
         (
             operator.lt,
@@ -2000,7 +2000,7 @@ def test_binops_decimal(args):
             ["100.000", "42.002", "23.999", None],
             cudf.Decimal64Dtype(scale=3, precision=6),
             [100, 42, 24, 12],
-            cudf.Series([True, False, False, None], dtype=bool),
+            cudf.Series([True, False, True, None], dtype=bool),
             cudf.Series([True, False, False, None], dtype=bool),
         ),
         (
