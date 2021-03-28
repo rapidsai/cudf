@@ -19,48 +19,29 @@ cimport cudf._lib.cpp.types as libcudf_types
 cimport cudf._lib.cpp.groupby as libcudf_groupby
 cimport cudf._lib.cpp.aggregation as libcudf_aggregation
 
+from pandas.core.groupby.groupby import DataError
+from cudf.utils.dtypes import (
+    is_categorical_dtype,
+    is_string_dtype,
+    is_list_dtype,
+    is_interval_dtype,
+    is_struct_dtype,
+    is_decimal_dtype,
+)
+
 
 # The sets below define the possible aggregations that can be performed on
 # different dtypes. The uppercased versions of these strings correspond to
 # elements of the AggregationKind enum.
-_CATEGORICAL_AGGS = {
-    "count",
-    "size",
-    "nunique",
-    "unique",
-}
-
-_STRING_AGGS = {
-    "count",
-    "size",
-    "max",
-    "min",
-    "nunique",
-    "nth",
-    "collect",
-    "unique",
-}
-
-_LIST_AGGS = {
-    "collect",
-}
-
-_STRUCT_AGGS = {
-}
-
-_INTERVAL_AGGS = {
-}
-
-_DECIMAL_AGGS = {
-    "count",
-    "sum",
-    "argmin",
-    "argmax",
-    "min",
-    "max",
-    "nunique",
-    "nth",
-    "collect"
+_VALID_AGGS_BY_TYPE = {
+    "CATEGORICAL":  {"count", "size", "nunique", "unique"},
+    "STRING": {"count", "size", "max", "min", "nunique", "nth", "collect",
+               "unique"},
+    "LIST":  {"collect" },
+    "STRUCT": set(),
+    "INTERVAL": set(),
+    "DECIMAL": {"count", "sum", "argmin", "argmax", "min", "max", "nunique",
+                "nth", "collect"},
 }
 
 
@@ -187,61 +168,29 @@ cdef class GroupBy:
         return result
 
 
-def _drop_unsupported_aggs(Table values, aggs):
+def _drop_unsupported_aggregations(Table values, aggregations):
     """
     Drop any aggregations that are not supported.
     """
-    from pandas.core.groupby.groupby import DataError
+    if all(len(v) == 0 for v in aggregations.values()):
+        return aggregations
 
-    if all(len(v) == 0 for v in aggs.values()):
-        return aggs
+    result = aggregations.copy()
 
-    from cudf.utils.dtypes import (
-        is_categorical_dtype,
-        is_string_dtype,
-        is_list_dtype,
-        is_interval_dtype,
-        is_struct_dtype,
-        is_decimal_dtype,
-    )
-    result = aggs.copy()
-
-    for col_name in aggs:
-        if (
-            is_list_dtype(values._data[col_name].dtype)
-        ):
-            for i, agg_name in enumerate(aggs[col_name]):
-                if Aggregation(agg_name).kind not in _LIST_AGGS:
-                    del result[col_name][i]
-        elif (
-            is_string_dtype(values._data[col_name].dtype)
-        ):
-            for i, agg_name in enumerate(aggs[col_name]):
-                if Aggregation(agg_name).kind not in _STRING_AGGS:
-                    del result[col_name][i]
-        elif (
-                is_categorical_dtype(values._data[col_name].dtype)
-        ):
-            for i, agg_name in enumerate(aggs[col_name]):
-                if Aggregation(agg_name).kind not in _CATEGORICAL_AGGS:
-                    del result[col_name][i]
-        elif (
-                is_struct_dtype(values._data[col_name].dtype)
-        ):
-            for i, agg_name in enumerate(aggs[col_name]):
-                if Aggregation(agg_name).kind not in _STRUCT_AGGS:
-                    del result[col_name][i]
-        elif (
-                is_interval_dtype(values._data[col_name].dtype)
-        ):
-            for i, agg_name in enumerate(aggs[col_name]):
-                if Aggregation(agg_name).kind not in _INTERVAL_AGGS:
-                    del result[col_name][i]
-        elif (
-                is_decimal_dtype(values._data[col_name].dtype)
-        ):
-            for i, agg_name in enumerate(aggs[col_name]):
-                if Aggregation(agg_name).kind not in _DECIMAL_AGGS:
+    for col_name in aggregations:
+        valid_aggregations_key = (
+            "LIST" if is_list_dtype(values._data[col_name].dtype)
+            else "STRING" if is_string_dtype(values._data[col_name].dtype)
+            else "CATEGORICAL" if is_categorical_dtype(values._data[col_name].dtype)
+            else "STRUCT" if is_struct_dtype(values._data[col_name].dtype)
+            else "INTERVAL" if is_interval_dtype(values._data[col_name].dtype)
+            else "DECIMAL" if is_decimal_dtype(values._data[col_name].dtype)
+            else None
+        )
+        if valid_aggregations_key is not None:
+            valid_aggregations = _VALID_AGGS_BY_TYPE[valid_aggregations_key]
+            for i, agg_name in enumerate(aggregations[col_name]):
+                if Aggregation(agg_name).kind not in valid_aggregations:
                     del result[col_name][i]
 
     if all(len(v) == 0 for v in result.values()):
