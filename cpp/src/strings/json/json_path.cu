@@ -231,17 +231,30 @@ class parser {
 /**
  * @brief Output buffer object.  Used during the preprocess/size-computation step
  * and the actual output step.
+ *
+ * There is an important distinction between two cases:
+ *
+ * - producing no output at all. that is, the query matched nothing in the input.
+ * - producing empty output. the query matched something in the input, but the
+ *   value of the result is an empty string.
+ *
+ * The `has_output` field is the flag which indicates whether or not the output
+ * from the query should be considered empty or null.
+ *
  */
 struct json_output {
   size_t output_max_len;
   size_t output_len;
-  int element_count;
+  bool has_output;
   char* output;
 
   constexpr void add_output(const char* str, size_t len)
   {
     if (output != nullptr) { memcpy(output + output_len, str, len); }
     output_len += len;
+    // set this to true even if the string is empty. it implies we have
+    // seen actual output
+    has_output = true;
   }
 
   constexpr void add_output(json_string str) { add_output(str.str, str.len); }
@@ -326,10 +339,7 @@ class json_state : private parser {
       if (*pos == ',') { pos++; }
     }
 
-    if (output != nullptr) {
-      output->add_output({start, end - start});
-      output->element_count++;
-    }
+    if (output != nullptr) { output->add_output({start, end - start}); }
     return parse_result::SUCCESS;
   }
 
@@ -823,7 +833,7 @@ __device__ thrust::pair<parse_result, json_output> get_json_object_single(
   size_t out_buf_size)
 {
   json_state j_state(input, input_len);
-  json_output output{out_buf_size, 0, 0, out_buf};
+  json_output output{out_buf_size, 0, false, out_buf};
 
   auto const result = parse_json_path<max_command_stack_depth>(j_state, commands, output);
 
@@ -866,7 +876,7 @@ __global__ void get_json_object_kernel(column_device_view col,
       thrust::tie(result, out) =
         get_json_object_single(str.data(), str.size_bytes(), commands, dst, dst_size);
       output_size = out.output_len;
-      if (out.element_count > 0 && result == parse_result::SUCCESS) { is_valid = true; }
+      if (out.has_output > 0 && result == parse_result::SUCCESS) { is_valid = true; }
     }
 
     // filled in only during the precompute step

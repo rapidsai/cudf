@@ -27,8 +27,7 @@
 // clang-format off
 std::string json_string{
   "{" 
-    "\"store\": {"
-      "\"book\": ["
+    "\"store\": {""\"book\": ["
         "{"
           "\"category\": \"reference\","
           "\"author\": \"Nigel Rees\","
@@ -656,13 +655,12 @@ TEST_F(JsonTests, MixedOutput)
     "{"
       "\"a\": {"
                 "\"z\": {\"i\": 10, \"j\": 100},"
-                "\"b\": [\"c\", null, true, -1]"
+                "\"b\": [\"c\",null,true,-1]"
               "}"
     "}"
   };
   // clang-format on
   cudf::test::strings_column_wrapper input(input_strings.begin(), input_strings.end());
-
   {
     std::string json_path("$.a");
     auto result = cudf::strings::get_json_object(cudf::strings_column_view(input), json_path);
@@ -676,7 +674,7 @@ TEST_F(JsonTests, MixedOutput)
       "",
       "{"
          "\"z\": {\"i\": 10, \"j\": 100},"
-         "\"b\": [\"c\", null, true, -1]"
+         "\"b\": [\"c\",null,true,-1]"
       "}"
       }, 
       {1, 1, 0, 1, 1, 1});
@@ -715,7 +713,7 @@ TEST_F(JsonTests, MixedOutput)
       "", 
       "", 
       "", 
-      "[\"c\", null, true, -1]"},
+      "[\"c\",null,true,-1]"},
       {1, 1, 0, 0, 0, 1});
     // clang-format on
 
@@ -732,15 +730,31 @@ TEST_F(JsonTests, MixedOutput)
       "[\"c\"]", 
       "", 
       "[\"y\",500]", 
-      "", 
+      "[]", 
       "["
         "{\"i\": 10, \"j\": 100},"
-        "[\"c\", null, true, -1]"
+        "[\"c\",null,true,-1]"
       "]" },
-      {1, 1, 0, 1, 0, 1});
+      {1, 1, 0, 1, 1, 1});
     // clang-format on
 
-    cudf::test::print(*result);
+    CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*result, expected);
+  }
+
+  {
+    std::string json_path("$.a.b[*]");
+    auto result = cudf::strings::get_json_object(cudf::strings_column_view(input), json_path);
+
+    // clang-format off
+    cudf::test::strings_column_wrapper expected({
+      "[]", 
+      "[]", 
+      "", 
+      "",
+      "",      
+      "[\"c\",null,true,-1]"},
+      {1, 1, 0, 0, 0, 1});
+    // clang-format on
 
     CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*result, expected);
   }
