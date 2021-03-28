@@ -33,16 +33,14 @@ from cudf.utils.dtypes import (
 # The sets below define the possible aggregations that can be performed on
 # different dtypes. The uppercased versions of these strings correspond to
 # elements of the AggregationKind enum.
-_VALID_AGGS_BY_TYPE = {
-    "CATEGORICAL":  {"count", "size", "nunique", "unique"},
-    "STRING": {"count", "size", "max", "min", "nunique", "nth", "collect",
-               "unique"},
-    "LIST":  {"collect" },
-    "STRUCT": set(),
-    "INTERVAL": set(),
-    "DECIMAL": {"count", "sum", "argmin", "argmax", "min", "max", "nunique",
-                "nth", "collect"},
-}
+_CATEGORICAL_AGGS = {"count", "size", "nunique", "unique"}
+_STRING_AGGS = {"count", "size", "max", "min", "nunique", "nth", "collect",
+                "unique"}
+_LIST_AGGS = {"collect" }
+_STRUCT_AGGS = set()
+_INTERVAL_AGGS = set()
+_DECIMAL_AGGS = {"count", "sum", "argmin", "argmax", "min", "max", "nunique",
+                 "nth", "collect"}
 
 
 cdef class GroupBy:
@@ -114,7 +112,31 @@ cdef class GroupBy:
         cdef vector[libcudf_groupby.aggregation_request] c_agg_requests
         cdef Column col
 
-        aggregations = _drop_unsupported_aggs(values, aggregations)
+        # Drop unsupported aggregations.
+        # TODO: Is allowing users to provide empty aggregations something we do
+        # to support pandas semantics? Whereas we need to throw an error if
+        # some aggregations are requested when in fact none are possible?
+        if any(len(v) for v in aggregations.values()):
+            aggregations = aggregations.copy()
+
+            for col_name in aggregations:
+                valid_aggregations = (
+                    _LIST_AGGS if is_list_dtype(values._data[col_name].dtype)
+                    else _STRING_AGGS if is_string_dtype(values._data[col_name].dtype)
+                    else _CATEGORICAL_AGGS if is_categorical_dtype(values._data[col_name].dtype)
+                    else _STRING_AGGS if is_struct_dtype(values._data[col_name].dtype)
+                    else _INTERVAL_AGGS if is_interval_dtype(values._data[col_name].dtype)
+                    else _DECIMAL_AGGS if is_decimal_dtype(values._data[col_name].dtype)
+                    else None
+                )
+                if valid_aggregations is not None:
+                    for i, agg_name in enumerate(list(aggregations[col_name])):
+                        if Aggregation(agg_name).kind not in valid_aggregations:
+                            del aggregations[col_name][i]
+
+            if all(len(v) == 0 for v in aggregations.values()):
+                raise DataError("No numeric types to aggregate")
+
 
         for i, (col_name, aggs) in enumerate(aggregations.items()):
             col = values._data[col_name]
@@ -166,34 +188,3 @@ cdef class GroupBy:
 
         result = Table(data=result_data, index=grouped_keys)
         return result
-
-
-def _drop_unsupported_aggregations(Table values, aggregations):
-    """
-    Drop any aggregations that are not supported.
-    """
-    if all(len(v) == 0 for v in aggregations.values()):
-        return aggregations
-
-    result = aggregations.copy()
-
-    for col_name in aggregations:
-        valid_aggregations_key = (
-            "LIST" if is_list_dtype(values._data[col_name].dtype)
-            else "STRING" if is_string_dtype(values._data[col_name].dtype)
-            else "CATEGORICAL" if is_categorical_dtype(values._data[col_name].dtype)
-            else "STRUCT" if is_struct_dtype(values._data[col_name].dtype)
-            else "INTERVAL" if is_interval_dtype(values._data[col_name].dtype)
-            else "DECIMAL" if is_decimal_dtype(values._data[col_name].dtype)
-            else None
-        )
-        if valid_aggregations_key is not None:
-            valid_aggregations = _VALID_AGGS_BY_TYPE[valid_aggregations_key]
-            for i, agg_name in enumerate(aggregations[col_name]):
-                if Aggregation(agg_name).kind not in valid_aggregations:
-                    del result[col_name][i]
-
-    if all(len(v) == 0 for v in result.values()):
-        raise DataError("No numeric types to aggregate")
-
-    return result
