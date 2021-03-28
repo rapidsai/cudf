@@ -2001,7 +2001,7 @@ def test_binops_decimal(args):
             cudf.Decimal64Dtype(scale=3, precision=6),
             [100, 42, 24, 12],
             cudf.Series([True, False, True, None], dtype=bool),
-            cudf.Series([True, False, False, None], dtype=bool),
+            cudf.Series([True, True, False, None], dtype=bool),
         ),
         (
             operator.le,
@@ -2038,7 +2038,7 @@ def test_binops_decimal(args):
     ],
 )
 @pytest.mark.parametrize("integer_dtype", INTEGER_TYPES)
-@pytest.mark.parametrize("reflected", [False])
+@pytest.mark.parametrize("reflected", [True, False])
 def test_binops_decimal_comp_mixed_integer(args, integer_dtype, reflected):
     """
     Tested compare operations:

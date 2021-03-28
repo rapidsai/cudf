@@ -15,7 +15,6 @@ from cudf._lib.strings.convert.convert_fixed_point import (
 from cudf._typing import Dtype
 from cudf.core.buffer import Buffer
 from cudf.core.column import ColumnBase, as_column
-from cudf.core.column.numerical import NumericalColumn
 from cudf.core.dtypes import Decimal64Dtype
 from cudf.utils.utils import pa_mask_buffer_to_mask
 
@@ -77,20 +76,23 @@ class DecimalColumn(ColumnBase):
                 self.dtype, other.dtype, op
             )
         elif op in ("eq", "lt", "gt", "le", "ge"):
-            if not isinstance(other, (DecimalColumn, NumericalColumn)):
+            if not isinstance(
+                other, (DecimalColumn, cudf.core.column.NumericalColumn)
+            ):
                 raise TypeError(
                     f"Operator {op} not supported between"
                     f"{str(type(self))} and {str(type(other))}"
                 )
-            if isinstance(other, NumericalColumn) and not is_integer_dtype(
-                other.dtype
-            ):
+            if isinstance(
+                other, cudf.core.column.NumericalColumn
+            ) and not is_integer_dtype(other.dtype):
                 raise TypeError(
                     f"Only decimal and integer column is supported for {op}."
                 )
-            else:
-                dtype = _infer_dtype_from_integer_column(other)
-                other = other.as_decimal_column(dtype)
+            if isinstance(other, cudf.core.column.NumericalColumn):
+                other = other.as_decimal_column(
+                    Decimal64Dtype(Decimal64Dtype.MAX_PRECISION, 0)
+                )
             result = libcudf.binaryop.binaryop(self, other, op, bool)
         return result
 
@@ -152,15 +154,3 @@ def _binop_precision(l_dtype, r_dtype, op):
         return p1 + p2 + 1
     else:
         raise NotImplementedError()
-
-
-def _infer_dtype_from_integer_column(col: NumericalColumn) -> int:
-    """
-    Introspect the integer column, compute the maximum number of digits
-    as precision and construct Decimal64Dtype with scale 0.
-    """
-    minv, maxv = libcudf.reduce.minmax(col)
-    mindigt, maxdigt = len(str(minv._host_value)), len(str(maxv._host_value))
-    mindigt = mindigt - 1 if mindigt < 0 else mindigt
-    maxdigt = maxdigt - 1 if maxdigt < 0 else maxdigt
-    return Decimal64Dtype(max(mindigt, maxdigt), 0)
