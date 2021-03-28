@@ -2931,8 +2931,5 @@ def test_string_slice_with_mask():
     assert actual._column.base_size == 3
     assert_eq(actual._column.base_size, expected._column.base_size)
     assert_eq(actual._column.null_count, expected._column.null_count)
-    assert_eq(
-        actual._column.mask.to_host_array(),
-        expected._column.mask.to_host_array(),
-    )
+
     assert_eq(actual, expected)
