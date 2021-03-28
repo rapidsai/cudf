@@ -255,14 +255,26 @@ enum json_element_type { NONE, OBJECT, ARRAY, VALUE };
  */
 class json_state : private parser {
  public:
-  constexpr json_state() : parser(), cur_el_start(nullptr), cur_el_type(json_element_type::NONE) {}
+  constexpr json_state()
+    : parser(),
+      cur_el_start(nullptr),
+      cur_el_type(json_element_type::NONE),
+      parent_el_type(json_element_type::NONE)
+  {
+  }
   constexpr json_state(const char* _input, int64_t _input_len)
-    : parser(_input, _input_len), cur_el_start(nullptr), cur_el_type(json_element_type::NONE)
+    : parser(_input, _input_len),
+      cur_el_start(nullptr),
+      cur_el_type(json_element_type::NONE),
+      parent_el_type(json_element_type::NONE)
   {
   }
 
   constexpr json_state(json_state const& j)
-    : parser(j), cur_el_start(j.cur_el_start), cur_el_type(j.cur_el_type)
+    : parser(j),
+      cur_el_start(j.cur_el_start),
+      cur_el_type(j.cur_el_type),
+      parent_el_type(j.parent_el_type)
   {
   }
 
@@ -328,11 +340,15 @@ class json_state : private parser {
   constexpr parse_result next_element() { return next_element_internal(false); }
 
   // advance inside the current element
-  constexpr parse_result child_element(bool as_field = false)
+  constexpr parse_result child_element(json_element_type expected_type)
   {
-    // cannot retrieve a field from an array
-    if (as_field && cur_el_type == json_element_type::ARRAY) { return parse_result::ERROR; }
-    return next_element_internal(true);
+    if (expected_type != NONE && cur_el_type != expected_type) { return parse_result::ERROR; }
+
+    // if we succeed, record our parent element type.
+    auto const prev_el_type = cur_el_type;
+    auto const result       = next_element_internal(true);
+    if (result == parse_result::SUCCESS) { parent_el_type = prev_el_type; }
+    return result;
   }
 
   // return the next element that matches the specified name.
@@ -393,8 +409,12 @@ class json_state : private parser {
     char const c = *pos;
     if (c == ']' || c == '}') { return parse_result::EMPTY; }
 
-    // element name, if any
-    if (parse_name(cur_el_name, true, '\"') == parse_result::ERROR) { return parse_result::ERROR; }
+    // if we're not accessing elements of an array, check for name.
+    bool const array_access =
+      (cur_el_type == ARRAY && child) || (parent_el_type == ARRAY && !child);
+    if (!array_access && parse_name(cur_el_name, true, '\"') == parse_result::ERROR) {
+      return parse_result::ERROR;
+    }
 
     // element type
     if (!parse_whitespace()) { return parse_result::EMPTY; }
@@ -415,10 +435,11 @@ class json_state : private parser {
     return parse_result::SUCCESS;
   }
 
-  const char* cur_el_start;       // pointer to the first character of the -value- of the current
-                                  // element - not the name
-  json_string cur_el_name;        // name of the current element (if applicable)
-  json_element_type cur_el_type;  // type of the current element
+  const char* cur_el_start;          // pointer to the first character of the -value- of the current
+                                     // element - not the name
+  json_string cur_el_name;           // name of the current element (if applicable)
+  json_element_type cur_el_type;     // type of the current element
+  json_element_type parent_el_type;  // parent element type
 };
 
 enum class path_operator_type { ROOT, CHILD, CHILD_WILDCARD, CHILD_INDEX, ERROR, END };
@@ -428,12 +449,22 @@ enum class path_operator_type { ROOT, CHILD, CHILD_WILDCARD, CHILD_INDEX, ERROR,
  * an array of these operators applied to the incoming json string,
  */
 struct path_operator {
-  constexpr path_operator() : type(path_operator_type::ERROR), index(-1) {}
-  constexpr path_operator(path_operator_type _type) : type(_type), index(-1) {}
+  constexpr path_operator() : type(path_operator_type::ERROR), index(-1), expected_type{NONE} {}
+  constexpr path_operator(path_operator_type _type, json_element_type _expected_type = NONE)
+    : type(_type), index(-1), expected_type{_expected_type}
+  {
+  }
 
   path_operator_type type;  // operator type
-  json_string name;         // name to match against (if applicable)
-  int index;                // index for subscript operator
+  // the expected element type we're applying this operation to.
+  // for example:
+  //    - you cannot retrieve a subscripted field (eg [5]) from an object.
+  //    - you cannot retrieve a field by name (eg  .book) from an array.
+  //    - you -can- use .* for both arrays and objects
+  // a value of NONE imples any type accepted
+  json_element_type expected_type;  // the expected type of the element we're working with
+  json_string name;                 // name to match against (if applicable)
+  int index;                        // index for subscript operator
 };
 
 /**
@@ -461,9 +492,11 @@ class path_state : private parser {
           // Spark currently only handles the wildcard operator inside [*], it does
           // not handle .*
           if (op.name.len == 1 && op.name.str[0] == '*') {
-            op.type = path_operator_type::CHILD_WILDCARD;
+            op.type          = path_operator_type::CHILD_WILDCARD;
+            op.expected_type = NONE;
           } else {
-            op.type = path_operator_type::CHILD;
+            op.type          = path_operator_type::CHILD;
+            op.expected_type = OBJECT;
           }
           return op;
         }
@@ -480,15 +513,18 @@ class path_state : private parser {
         if (parse_path_name(op.name, term)) {
           pos++;
           if (op.name.len == 1 && op.name.str[0] == '*') {
-            op.type = path_operator_type::CHILD_WILDCARD;
+            op.type          = path_operator_type::CHILD_WILDCARD;
+            op.expected_type = NONE;
           } else {
             if (is_string) {
-              op.type = path_operator_type::CHILD;
+              op.type          = path_operator_type::CHILD;
+              op.expected_type = OBJECT;
             } else {
               op.type = path_operator_type::CHILD_INDEX;
               op.index =
                 cudf::io::parse_numeric<int>(op.name.str, op.name.str + op.name.len, json_opts, -1);
               CUDF_EXPECTS(op.index >= 0, "Invalid numeric index specified in JSONPath");
+              op.expected_type = ARRAY;
             }
           }
           return op;
@@ -662,7 +698,7 @@ __device__ parse_result parse_json_path(json_state& j_state,
       // [1]
       // will return a single thing
       case path_operator_type::CHILD: {
-        PARSE_TRY(ctx.j_state.child_element(true));
+        PARSE_TRY(ctx.j_state.child_element(op.expected_type));
         if (last_result == parse_result::SUCCESS) {
           PARSE_TRY(ctx.j_state.next_matching_element(op.name, true));
           if (last_result == parse_result::SUCCESS) {
@@ -681,7 +717,7 @@ __device__ parse_result parse_json_path(json_state& j_state,
           if (!ctx.list_element) { output.add_output({"[" DEBUG_NEWLINE, 1 + DEBUG_NEWLINE_LEN}); }
 
           // step into the child element
-          PARSE_TRY(ctx.j_state.child_element());
+          PARSE_TRY(ctx.j_state.child_element(op.expected_type));
           if (last_result == parse_result::EMPTY) {
             if (!ctx.list_element) {
               output.add_output({"]" DEBUG_NEWLINE, 1 + DEBUG_NEWLINE_LEN});
@@ -727,7 +763,7 @@ __device__ parse_result parse_json_path(json_state& j_state,
       // etc
       // returns a single thing
       case path_operator_type::CHILD_INDEX: {
-        PARSE_TRY(ctx.j_state.child_element());
+        PARSE_TRY(ctx.j_state.child_element(op.expected_type));
         if (last_result == parse_result::SUCCESS) {
           json_string const any{"*", 1};
           PARSE_TRY(ctx.j_state.next_matching_element(any, true));

@@ -628,3 +628,120 @@ TEST_F(JsonTests, GetJsonObjectInvalidQuery)
     CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*result, expected);
   }
 }
+
+TEST_F(JsonTests, MixedOutput)
+{
+  // various queries on:
+  // clang-format off
+  std::vector<std::string> input_strings {
+    "{\"a\": {\"b\" : \"c\"}}",
+
+    "{"
+      "\"a\": {\"b\" : \"c\"},"
+      "\"d\": [{\"e\":123}, {\"f\":-10}]"
+    "}",
+
+    "{"
+      "\"b\": 123"
+    "}",
+
+    "{"
+      "\"a\": [\"y\",500]"
+    "}",
+
+    "{"
+      "\"a\": \"\""
+    "}",
+
+    "{"
+      "\"a\": {"
+                "\"z\": {\"i\": 10, \"j\": 100},"
+                "\"b\": [\"c\", null, true, -1]"
+              "}"
+    "}"
+  };
+  // clang-format on
+  cudf::test::strings_column_wrapper input(input_strings.begin(), input_strings.end());
+
+  {
+    std::string json_path("$.a");
+    auto result = cudf::strings::get_json_object(cudf::strings_column_view(input), json_path);
+
+    // clang-format off
+    cudf::test::strings_column_wrapper expected({
+      "{\"b\" : \"c\"}",
+      "{\"b\" : \"c\"}",
+      "",
+      "[\"y\",500]",
+      "",
+      "{"
+         "\"z\": {\"i\": 10, \"j\": 100},"
+         "\"b\": [\"c\", null, true, -1]"
+      "}"
+      }, 
+      {1, 1, 0, 1, 1, 1});
+    // clang-format on
+
+    CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*result, expected);
+  }
+
+  {
+    std::string json_path("$.a[1]");
+    auto result = cudf::strings::get_json_object(cudf::strings_column_view(input), json_path);
+
+    // clang-format off
+    cudf::test::strings_column_wrapper expected({
+        "",
+        "",
+        "",
+        "500",
+        "",
+        "",
+      },
+      {0, 0, 0, 1, 0, 0});
+    // clang-format on
+
+    CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*result, expected);
+  }
+
+  {
+    std::string json_path("$.a.b");
+    auto result = cudf::strings::get_json_object(cudf::strings_column_view(input), json_path);
+
+    // clang-format off
+    cudf::test::strings_column_wrapper expected({
+      "c", 
+      "c", 
+      "", 
+      "", 
+      "", 
+      "[\"c\", null, true, -1]"},
+      {1, 1, 0, 0, 0, 1});
+    // clang-format on
+
+    CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*result, expected);
+  }
+
+  {
+    std::string json_path("$.a[*]");
+    auto result = cudf::strings::get_json_object(cudf::strings_column_view(input), json_path);
+
+    // clang-format off
+    cudf::test::strings_column_wrapper expected({
+      "[\"c\"]", 
+      "[\"c\"]", 
+      "", 
+      "[\"y\",500]", 
+      "", 
+      "["
+        "{\"i\": 10, \"j\": 100},"
+        "[\"c\", null, true, -1]"
+      "]" },
+      {1, 1, 0, 1, 0, 1});
+    // clang-format on
+
+    cudf::test::print(*result);
+
+    CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*result, expected);
+  }
+}
