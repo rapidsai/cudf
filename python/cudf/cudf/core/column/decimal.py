@@ -96,6 +96,9 @@ class DecimalColumn(ColumnBase):
             result = libcudf.binaryop.binaryop(self, other, op, bool)
         return result
 
+    def _apply_scan_op(self, op: str) -> ColumnBase:
+        return libcudf.reduce.scan(op, self, True)
+
     def as_decimal_column(
         self, dtype: Dtype, **kwargs
     ) -> "cudf.core.column.DecimalColumn":
