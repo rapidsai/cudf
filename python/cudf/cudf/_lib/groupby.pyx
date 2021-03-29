@@ -139,11 +139,12 @@ cdef class GroupBy:
             )
             c_agg_requests[idx].values = col.view()
             for agg in aggs:
-                if valid_aggregations is None or Aggregation(agg).kind in valid_aggregations:
+                agg_obj = Aggregation(agg)
+                if valid_aggregations is None or agg_obj.kind in valid_aggregations:
                     empty_aggs = False
                     included_aggregations[col_name].append(agg)
                     c_agg_requests[idx].aggregations.push_back(
-                        move(make_aggregation(agg))
+                        move(agg_obj.c_obj)
                     )
             if not c_agg_requests[idx].aggregations.size():
                 c_agg_requests.pop_back()
