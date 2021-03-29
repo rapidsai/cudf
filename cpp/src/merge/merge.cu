@@ -236,7 +236,7 @@ rmm::device_vector<index_type> generate_merged_indices(
 struct column_merger {
   explicit column_merger(index_vector const& row_order) : row_order_(row_order) {}
 
-  template <typename Element, std::enable_if_t<not is_rep_layout_compatible<Element>()>* = nullptr>
+  template <typename Element, CUDF_ENABLE_IF(not is_rep_layout_compatible<Element>())>
   std::unique_ptr<column> operator()(
     column_view const& lcol,
     column_view const& rcol,

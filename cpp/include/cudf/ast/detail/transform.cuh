@@ -57,13 +57,13 @@ struct row_output {
    * @param row_index Row index of data column.
    * @param result Value to assign to output.
    */
-  template <typename Element, std::enable_if_t<is_rep_layout_compatible<Element>()>* = nullptr>
+  template <typename Element, CUDF_ENABLE_IF(is_rep_layout_compatible<Element>())>
   __device__ void resolve_output(detail::device_data_reference device_data_reference,
                                  cudf::size_type row_index,
                                  Element result) const;
   // Definition below after row_evaluator is a complete type
 
-  template <typename Element, std::enable_if_t<not is_rep_layout_compatible<Element>()>* = nullptr>
+  template <typename Element, CUDF_ENABLE_IF(not is_rep_layout_compatible<Element>())>
   __device__ void resolve_output(detail::device_data_reference device_data_reference,
                                  cudf::size_type row_index,
                                  Element result) const

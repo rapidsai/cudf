@@ -45,7 +45,7 @@ using void_t = void;
  * \endcode
  *
  */
-#define CUDF_ENABLE_IF(...) std::enable_if_t<(__VA_ARGS__), bool> = true
+#define CUDF_ENABLE_IF(...) std::enable_if_t<(__VA_ARGS__)>* = nullptr
 
 template <typename L, typename R, typename = void>
 struct is_relationally_comparable_impl : std::false_type {

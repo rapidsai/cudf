@@ -111,7 +111,7 @@ struct dispatch_to_cudf_column {
     return mask;
   }
 
-  template <typename T, std::enable_if_t<not is_rep_layout_compatible<T>()>* = nullptr>
+  template <typename T, CUDF_ENABLE_IF(not is_rep_layout_compatible<T>())>
   std::unique_ptr<column> operator()(arrow::Array const& array,
                                      data_type type,
                                      bool skip_mask,
@@ -121,7 +121,7 @@ struct dispatch_to_cudf_column {
     CUDF_FAIL("Unsupported type in from_arrow.");
   }
 
-  template <typename T, std::enable_if_t<is_rep_layout_compatible<T>()>* = nullptr>
+  template <typename T, CUDF_ENABLE_IF(is_rep_layout_compatible<T>())>
   std::unique_ptr<column> operator()(arrow::Array const& array,
                                      data_type type,
                                      bool skip_mask,

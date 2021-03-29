@@ -94,7 +94,7 @@ struct out_of_place_fill_range_dispatch {
   cudf::scalar const& value;
   cudf::column_view const& input;
 
-  template <typename T, std::enable_if_t<not cudf::is_rep_layout_compatible<T>()>* = nullptr>
+  template <typename T, CUDF_ENABLE_IF(not cudf::is_rep_layout_compatible<T>())>
   std::unique_ptr<cudf::column> operator()(
     cudf::size_type begin,
     cudf::size_type end,
@@ -104,7 +104,7 @@ struct out_of_place_fill_range_dispatch {
     CUDF_FAIL("Unsupported type in fill.");
   }
 
-  template <typename T, std::enable_if_t<cudf::is_rep_layout_compatible<T>()>* = nullptr>
+  template <typename T, CUDF_ENABLE_IF(cudf::is_rep_layout_compatible<T>())>
   std::unique_ptr<cudf::column> operator()(
     cudf::size_type begin,
     cudf::size_type end,

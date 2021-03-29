@@ -26,16 +26,15 @@ struct get_data_ptr_functor {
   /**
    * @brief Gets the data pointer from a column_view
    */
-  template <typename T>
-  std::enable_if_t<is_rep_layout_compatible<T>(), const void*> operator()(column_view const& view)
+  template <typename T, CUDF_ENABLE_IF(is_rep_layout_compatible<T>())>
+  void const* operator()(column_view const& view)
   {
     return static_cast<const void*>(view.template data<T>());
   }
 
   // TODO: both the failing operators can be combined into single template
-  template <typename T>
-  std::enable_if_t<not is_rep_layout_compatible<T>(), const void*> operator()(
-    column_view const& view)
+  template <typename T, CUDF_ENABLE_IF(not is_rep_layout_compatible<T>())>
+  void const* operator()(column_view const& view)
   {
     CUDF_FAIL("Invalid data type for JIT operation");
   }
@@ -43,16 +42,16 @@ struct get_data_ptr_functor {
   /**
    * @brief Gets the data pointer from a scalar
    */
-  template <typename T>
-  std::enable_if_t<is_rep_layout_compatible<T>(), const void*> operator()(scalar const& s)
+  template <typename T, CUDF_ENABLE_IF(is_rep_layout_compatible<T>())>
+  void const* operator()(scalar const& s)
   {
     using ScalarType = scalar_type_t<T>;
     auto s1          = static_cast<ScalarType const*>(&s);
     return static_cast<const void*>(s1->data());
   }
 
-  template <typename T>
-  std::enable_if_t<not is_rep_layout_compatible<T>(), const void*> operator()(scalar const& s)
+  template <typename T, CUDF_ENABLE_IF(not is_rep_layout_compatible<T>())>
+  void const* operator()(scalar const& s)
   {
     CUDF_FAIL("Invalid data type for JIT operation");
   }
