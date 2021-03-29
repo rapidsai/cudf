@@ -36,6 +36,7 @@ class DecimalColumn(ColumnBase):
             data=Buffer(data_64.view("uint8")),
             size=len(data),
             dtype=dtype,
+            offset=data.offset,
             mask=mask,
         )
 
@@ -57,6 +58,7 @@ class DecimalColumn(ColumnBase):
         )
         return pa.Array.from_buffers(
             type=self.dtype.to_arrow(),
+            offset=self._offset,
             length=self.size,
             buffers=[mask_buf, data_buf],
         )
