@@ -218,14 +218,15 @@ class fixed_point {
   using rep = Rep;
 
   /**
-   * @brief Constructor that will perform shifting to store value appropriately
+   * @brief Constructor that will perform shifting to store value appropriately (from floating point
+   * types)
    *
-   * @tparam T The type that you are constructing from (integral or floating)
+   * @tparam T The floating point type that you are constructing from
    * @param value The value that will be constructed from
    * @param scale The exponent that is applied to Rad to perform shifting
    */
   template <typename T,
-            typename cuda::std::enable_if_t<is_supported_construction_value_type<T>() &&
+            typename cuda::std::enable_if_t<cuda::std::is_floating_point<T>() &&
                                             is_supported_representation_type<Rep>()>* = nullptr>
   CUDA_HOST_DEVICE_CALLABLE explicit fixed_point(T const& value, scale_type const& scale)
     : _value{static_cast<Rep>(detail::shift<Rep, Rad>(value, scale))}, _scale{scale}
@@ -233,8 +234,25 @@ class fixed_point {
   }
 
   /**
-   * @brief Constructor that will not perform shifting (assumes value already
-   * shifted)
+   * @brief Constructor that will perform shifting to store value appropriately (from integral
+   * types)
+   *
+   * @tparam T The integral type that you are constructing from
+   * @param value The value that will be constructed from
+   * @param scale The exponent that is applied to Rad to perform shifting
+   */
+  template <typename T,
+            typename cuda::std::enable_if_t<cuda::std::is_integral<T>() &&
+                                            is_supported_representation_type<Rep>()>* = nullptr>
+  CUDA_HOST_DEVICE_CALLABLE explicit fixed_point(T const& value, scale_type const& scale)
+    // `value` is cast to `Rep` to avoid overflow in cases where
+    // constructing to `Rep` that is wider than `T`
+    : _value{detail::shift<Rep, Rad>(static_cast<Rep>(value), scale)}, _scale{scale}
+  {
+  }
+
+  /**
+   * @brief Constructor that will not perform shifting (assumes value already shifted)
    *
    * @param s scaled_integer that contains scale and already shifted value
    */
