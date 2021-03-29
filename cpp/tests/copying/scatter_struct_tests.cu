@@ -104,27 +104,43 @@ auto get_expected_column(std::vector<SourceElementT> const& input_values,
 }
 }  // namespace
 
+TYPED_TEST(TypedStructScatterTest, EmptyInputTest)
+{
+  auto child_col_src     = fixed_width_column_wrapper<TypeParam, int32_t>{};
+  auto const structs_src = structs_column_wrapper{{child_col_src}, std::vector<bool>{}}.release();
+
+  auto child_col_tgt     = fixed_width_column_wrapper<TypeParam, int32_t>{};
+  auto const structs_tgt = structs_column_wrapper{{child_col_tgt}, std::vector<bool>{}}.release();
+
+  auto const source      = cudf::table_view{std::vector<cudf::column_view>{structs_src->view()}};
+  auto const target      = cudf::table_view{std::vector<cudf::column_view>{structs_tgt->view()}};
+  auto const scatter_map = fixed_width_column_wrapper<int32_t>{}.release();
+
+  auto const result = cudf::scatter(source, scatter_map->view(), target);
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(structs_tgt->view(), result->get_column(0));
+}
+
 TYPED_TEST(TypedStructScatterTest, EmptyScatterMapTest)
 {
-  auto const ages_src = std::vector<int32_t>{5, 10, 15, 20, 25, 30};
-  auto const ages_validity_src =
+  auto const data_src = std::vector<int32_t>{5, 10, 15, 20, 25, 30};
+  auto const child_validity_src =
     cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i != 4; });
-  auto ages_col_src = fixed_width_column_wrapper<TypeParam, int32_t>{
-    ages_src.begin(), ages_src.end(), ages_validity_src};
+  auto child_col_src = fixed_width_column_wrapper<TypeParam, int32_t>{
+    data_src.begin(), data_src.end(), child_validity_src};
 
   auto const structs_validity_src =
     cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i != 5; });
-  auto const structs_src = structs_column_wrapper{{ages_col_src}, structs_validity_src}.release();
+  auto const structs_src = structs_column_wrapper{{child_col_src}, structs_validity_src}.release();
 
-  auto const ages_tgt = std::vector<int32_t>{50, 40, 55, 70, 85, 90};
-  auto const ages_validity_tgt =
+  auto const data_tgt = std::vector<int32_t>{50, 40, 55, 70, 85, 90};
+  auto const child_validity_tgt =
     cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i != 1; });
-  auto ages_col_tgt = fixed_width_column_wrapper<TypeParam, int32_t>{
-    ages_tgt.begin(), ages_tgt.end(), ages_validity_tgt};
+  auto child_col_tgt = fixed_width_column_wrapper<TypeParam, int32_t>{
+    data_tgt.begin(), data_tgt.end(), child_validity_tgt};
 
   auto const structs_validity_tgt =
     cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i != 3; });
-  auto const structs_tgt = structs_column_wrapper{{ages_col_tgt}, structs_validity_tgt}.release();
+  auto const structs_tgt = structs_column_wrapper{{child_col_tgt}, structs_validity_tgt}.release();
 
   auto const source      = cudf::table_view{std::vector<cudf::column_view>{structs_src->view()}};
   auto const target      = cudf::table_view{std::vector<cudf::column_view>{structs_tgt->view()}};
