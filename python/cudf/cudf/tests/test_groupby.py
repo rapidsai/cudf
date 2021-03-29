@@ -333,20 +333,35 @@ def test_groupby_2keys_agg(nelem, func):
     assert_eq(got_df, expect_df, check_dtype=check_dtype)
 
 
-@pytest.mark.parametrize("nelem", [2, 3, 100, 500, 1000])
+# @pytest.mark.parametrize("num_groups", [2, 3, 10, 50, 100])
+@pytest.mark.parametrize("num_groups", [50])
+# @pytest.mark.parametrize("nelem_per_group", [1, 10, 100])
+@pytest.mark.parametrize("nelem_per_group", [100])
 @pytest.mark.parametrize(
-    "func", ["min", "max", "idxmin", "idxmax", "count", "sum"],
+    # "func", ["min", "max", "idxmin", "idxmax", "count", "sum"],
+    # "func", ["min", "max", "count", "sum"],
+    # TODO: Fix bug in argmin and argmax, appears to be in libcudf.
+    "func", ["idxmin", "idxmax"],
 )
-def test_groupby_agg_decimal(nelem, func):
-    idx_col = np.arange(nelem)
-    x = (np.random.rand(nelem) * 100).round(2)
-    y = (np.random.rand(nelem) * 100).round(2)
+def test_groupby_agg_decimal(num_groups, nelem_per_group, func):
+    # The number of digits after the decimal to use.
+    decimal_digits = 2
+    # The number of digits before the decimal to use.
+    whole_digits = 2
+
+    scale = 10 ** whole_digits
+    nelem = num_groups * nelem_per_group
+
+    idx_col = np.tile(np.arange(num_groups), nelem_per_group)
+    np.random.seed(42)
+    x = (np.random.rand(nelem) * scale).round(decimal_digits)
+    y = (np.random.rand(nelem) * scale).round(decimal_digits)
     pdf = pd.DataFrame({"idx": idx_col, "x": x, "y": y})
     gdf = DataFrame(
         {
             "idx": idx_col,
-            "x": cudf.Series(x).astype(cudf.Decimal64Dtype(3, 2)),
-            "y": cudf.Series(y).astype(cudf.Decimal64Dtype(3, 2)),
+            "x": cudf.Series(x).astype(cudf.Decimal64Dtype(14, 2)),
+            "y": cudf.Series(y).astype(cudf.Decimal64Dtype(14, 2)),
         }
     )
 
@@ -356,6 +371,8 @@ def test_groupby_agg_decimal(nelem, func):
     assert_allclose(
         got_df["x"].to_array(), expect_df["x"], atol=1e-2, rtol=1e-2
     )
+    # print(got_df["y"].to_array())
+    # print(np.asarray(expect_df["y"]))
     assert_allclose(
         got_df["y"].to_array(), expect_df["y"], atol=1e-2, rtol=1e-2
     )
