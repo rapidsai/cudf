@@ -7,7 +7,8 @@ import numpy as np
 import pandas as pd
 import pytest
 from numba import cuda
-from numpy.testing import assert_allclose, assert_array_equal
+from numpy.testing import assert_array_equal
+from decimal import Decimal
 
 import cudf
 from cudf.core import DataFrame, Series
@@ -333,15 +334,11 @@ def test_groupby_2keys_agg(nelem, func):
     assert_eq(got_df, expect_df, check_dtype=check_dtype)
 
 
-# @pytest.mark.parametrize("num_groups", [2, 3, 10, 50, 100])
-@pytest.mark.parametrize("num_groups", [50])
-# @pytest.mark.parametrize("nelem_per_group", [1, 10, 100])
-@pytest.mark.parametrize("nelem_per_group", [100])
+@pytest.mark.parametrize("num_groups", [2, 3, 10, 50, 100])
+@pytest.mark.parametrize("nelem_per_group", [1, 10, 100])
 @pytest.mark.parametrize(
     # "func", ["min", "max", "idxmin", "idxmax", "count", "sum"],
-    # "func", ["min", "max", "count", "sum"],
-    # TODO: Fix bug in argmin and argmax, appears to be in libcudf.
-    "func", ["idxmin", "idxmax"],
+    "func", ["min", "max", "count", "sum"],
 )
 def test_groupby_agg_decimal(num_groups, nelem_per_group, func):
     # The number of digits after the decimal to use.
@@ -353,28 +350,29 @@ def test_groupby_agg_decimal(num_groups, nelem_per_group, func):
     nelem = num_groups * nelem_per_group
 
     idx_col = np.tile(np.arange(num_groups), nelem_per_group)
-    np.random.seed(42)
     x = (np.random.rand(nelem) * scale).round(decimal_digits)
     y = (np.random.rand(nelem) * scale).round(decimal_digits)
-    pdf = pd.DataFrame({"idx": idx_col, "x": x, "y": y})
+
+    decimal_x = pd.Series([Decimal(str(d)) for d in x])
+    decimal_y = pd.Series([Decimal(str(d)) for d in y])
+
+    pdf = pd.DataFrame({"idx": idx_col, "x": decimal_x, "y": decimal_y})
     gdf = DataFrame(
         {
             "idx": idx_col,
-            "x": cudf.Series(x).astype(cudf.Decimal64Dtype(14, 2)),
-            "y": cudf.Series(y).astype(cudf.Decimal64Dtype(14, 2)),
+            "x": cudf.Series(decimal_x),
+            "y": cudf.Series(decimal_y),
         }
     )
 
     expect_df = pdf.groupby("idx", sort=True).agg(func)
-    got_df = gdf.groupby("idx", sort=True).agg(func).astype(float)
+    got_df = gdf.groupby("idx", sort=True).agg(func)
 
-    assert_allclose(
-        got_df["x"].to_array(), expect_df["x"], atol=1e-2, rtol=1e-2
+    assert_eq(
+        expect_df["x"], got_df["x"], check_dtype=False
     )
-    # print(got_df["y"].to_array())
-    # print(np.asarray(expect_df["y"]))
-    assert_allclose(
-        got_df["y"].to_array(), expect_df["y"], atol=1e-2, rtol=1e-2
+    assert_eq(
+        expect_df["y"], got_df["y"], check_dtype=False
     )
 
 
