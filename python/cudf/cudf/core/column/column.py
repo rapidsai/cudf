@@ -426,6 +426,8 @@ class ColumnBase(Column, Serializable):
             array.type, pd.core.arrays._arrow_utils.ArrowIntervalType
         ):
             return cudf.core.column.IntervalColumn.from_arrow(array)
+        elif isinstance(array.type, pa.Decimal128Type):
+            return cudf.core.column.DecimalColumn.from_arrow(array)
 
         return libcudf.interop.from_arrow(data, data.column_names)._data[
             "None"
@@ -1836,10 +1838,12 @@ def as_column(
                 cupy.asarray(arbitrary), nan_as_null=nan_as_null, dtype=dtype
             )
         else:
-            data = as_column(
-                pa.array(arbitrary, from_pandas=nan_as_null),
-                dtype=arbitrary.dtype,
-            )
+            pyarrow_array = pa.array(arbitrary, from_pandas=nan_as_null)
+            if isinstance(pyarrow_array.type, pa.Decimal128Type):
+                dtype = cudf.Decimal64Dtype.from_arrow(pyarrow_array.type)
+            else:
+                dtype = arbitrary.dtype
+            data = as_column(pyarrow_array, dtype=dtype)
         if dtype is not None:
             data = data.astype(dtype)
 
