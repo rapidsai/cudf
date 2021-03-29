@@ -241,17 +241,22 @@ struct column_scatterer_impl<struct_view, MapItRoot> {
                                                                    mr);
                    });
 
-    auto const gather_map =
-      scatter_to_gather(scatter_map_begin, scatter_map_end, scatter_map_size, stream);
-    gather_bitmask(
-      // Table view of struct column.
-      cudf::table_view{
-        std::vector<cudf::column_view>{structs_src.child_begin(), structs_src.child_end()}},
-      gather_map.begin(),
-      output_struct_members,
-      gather_bitmask_op::NULLIFY,
-      stream,
-      mr);
+    auto const nullable = std::any_of(structs_src.child_begin(),
+                                      structs_src.child_end(),
+                                      [](auto const& col) { return col.nullable(); });
+    if (nullable) {
+      auto const gather_map =
+        scatter_to_gather(scatter_map_begin, scatter_map_end, scatter_map_size, stream);
+      gather_bitmask(
+        // Table view of struct column.
+        cudf::table_view{
+          std::vector<cudf::column_view>{structs_src.child_begin(), structs_src.child_end()}},
+        gather_map.begin(),
+        output_struct_members,
+        gather_bitmask_op::NULLIFY,
+        stream,
+        mr);
+    }
 
     return cudf::make_structs_column(
       source.size(),
@@ -350,11 +355,13 @@ std::unique_ptr<table> scatter(
                                                                  mr);
                  });
 
-  auto gather_map = scatter_to_gather(
-    updated_scatter_map_begin, updated_scatter_map_end, target.num_rows(), stream);
-
-  gather_bitmask(source, gather_map.begin(), result, gather_bitmask_op::PASSTHROUGH, stream, mr);
-
+  auto const nullable =
+    std::any_of(source.begin(), source.end(), [](auto const& col) { return col.nullable(); });
+  if (nullable) {
+    auto gather_map = scatter_to_gather(
+      updated_scatter_map_begin, updated_scatter_map_end, target.num_rows(), stream);
+    gather_bitmask(source, gather_map.begin(), result, gather_bitmask_op::PASSTHROUGH, stream, mr);
+  }
   return std::make_unique<table>(std::move(result));
 }
 }  // namespace detail
