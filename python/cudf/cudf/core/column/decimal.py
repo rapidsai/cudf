@@ -75,12 +75,12 @@ class DecimalColumn(ColumnBase):
 
     def normalize_binop_value(self, other):
         from cudf.utils.dtypes import is_scalar
+
         if is_scalar(other) and isinstance(other, (int, np.int, Decimal)):
             other = cudf.Scalar(Decimal(other))
             return other
         else:
             raise TypeError(f"cannot normalize {type(other)}")
-
 
     def _apply_scan_op(self, op: str) -> ColumnBase:
         return libcudf.reduce.scan(op, self, True)

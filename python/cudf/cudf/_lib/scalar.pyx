@@ -34,6 +34,7 @@ from cudf._lib.cpp.wrappers.durations cimport(
     duration_us,
     duration_ns
 )
+from cudf._lib.cpp.wrappers.decimals cimport decimal64, scale_type
 from cudf._lib.cpp.scalar.scalar cimport (
     scalar,
     numeric_scalar,
@@ -42,10 +43,9 @@ from cudf._lib.cpp.scalar.scalar cimport (
     string_scalar,
     fixed_point_scalar
 )
+from cudf.utils.dtypes import _decimal_to_int64
 cimport cudf._lib.cpp.types as libcudf_types
 
-from cudf._lib.cpp.wrappers.decimals cimport decimal64, scale_type
-from cudf.utils.dtypes import _decimal_to_int64
 
 cdef class DeviceScalar:
 
@@ -69,7 +69,6 @@ cdef class DeviceScalar:
     def _set_value(self, value, dtype):
         # IMPORTANT: this should only ever be called from __init__
         valid = not _is_null_host_scalar(value)
-
 
         if isinstance(dtype, cudf.Decimal64Dtype):
             _set_decimal64_from_scalar(
@@ -120,7 +119,9 @@ cdef class DeviceScalar:
         """
         cdef libcudf_types.data_type cdtype = self.get_raw_ptr()[0].type()
         if cdtype.id() == libcudf_types.DECIMAL64:
-            return cudf.Decimal64Dtype(cudf.Decimal64Dtype.MAX_PRECISION, -cdtype.scale())
+            return cudf.Decimal64Dtype(
+                cudf.Decimal64Dtype.MAX_PRECISION, -cdtype.scale()
+            )
         else:
             return cudf_to_np_types[<underlying_type_t_type_id>(cdtype.id())]
 
@@ -252,12 +253,11 @@ cdef _set_decimal64_from_scalar(unique_ptr[scalar]& s,
                                 object value,
                                 object dtype,
                                 bool valid=True):
-
-                            
-    from decimal import Decimal
     value = _decimal_to_int64(value) if valid else 0
     s.reset(
-        new fixed_point_scalar[decimal64](<int64_t>np.int64(value), scale_type(-dtype.scale), valid)
+        new fixed_point_scalar[decimal64](
+            <int64_t>np.int64(value), scale_type(-dtype.scale), valid
+        )
     )
 
 cdef _get_py_string_from_string(unique_ptr[scalar]& s):

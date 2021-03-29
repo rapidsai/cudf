@@ -1772,7 +1772,10 @@ def test_binops_decimal(args):
     assert expect.dtype == got.dtype
     utils.assert_eq(expect, got)
 
-@pytest.mark.parametrize("args", [
+
+@pytest.mark.parametrize(
+    "args",
+    [
         (
             operator.add,
             ["100", "200"],
@@ -1821,7 +1824,8 @@ def test_binops_decimal(args):
             ["96", "196"],
             cudf.Decimal64Dtype(scale=0, precision=6),
         ),
-])
+    ],
+)
 def test_binops_decimal_scalar(args):
     op, lhs, l_dtype, rhs, expect, expect_dtype = args
 
@@ -1830,6 +1834,7 @@ def test_binops_decimal_scalar(args):
             [x if x is None else decimal.Decimal(x) for x in input],
             dtype=dtype,
         )
+
     a = decimal_series(lhs, l_dtype)
 
     expect = decimal_series(expect, expect_dtype)
@@ -1837,6 +1842,7 @@ def test_binops_decimal_scalar(args):
     got = op(a, rhs)
     assert expect.dtype == got.dtype
     utils.assert_eq(expect, got)
+
 
 @pytest.mark.parametrize(
     "dtype",

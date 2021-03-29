@@ -11,7 +11,7 @@ from cudf.core.dtypes import Decimal64Dtype
 from cudf.utils.dtypes import (
     get_allowed_combinations_for_operator,
     to_cudf_compatible_scalar,
-    _decimal_dtype_from_decimal
+    _decimal_dtype_from_decimal,
 )
 
 
@@ -150,7 +150,7 @@ class Scalar(object):
                 else:
                     dtype = value.dtype
             dtype = np.dtype(dtype)
-            
+
             # temporary
             dtype = np.dtype("object") if dtype.char == "U" else dtype
 

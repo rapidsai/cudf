@@ -385,6 +385,7 @@ def to_cudf_compatible_scalar(val, dtype=None):
 
     return val
 
+
 def is_list_like(obj):
     """
     This function checks if the given `obj`
@@ -589,19 +590,19 @@ def _decimal_to_int64(decimal: Decimal) -> int:
     expected by libcudf
     """
     if int(decimal.radix()) != 10:
-        raise ValueError(
-            "Only base-10 decimals currently supported."
-        )
+        raise ValueError("Only base-10 decimals currently supported.")
     digits = decimal.as_tuple().digits
     start = 0
     for power, digit in enumerate(reversed(digits)):
-        start += digit*(10**power)
+        start += digit * (10 ** power)
     return start
+
 
 def _decimal_dtype_from_decimal(decimal: Decimal) -> Decimal64Dtype:
     metadata = decimal.as_tuple()
     precision = max(len(metadata.digits), -metadata.exponent)
     return Decimal64Dtype(precision, -metadata.exponent)
+
 
 def get_allowed_combinations_for_operator(dtype_l, dtype_r, op):
     error = TypeError(

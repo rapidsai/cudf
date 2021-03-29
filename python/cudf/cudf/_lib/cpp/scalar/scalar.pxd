@@ -55,10 +55,14 @@ cdef extern from "cudf/scalar/scalar.hpp" namespace "cudf" nogil:
 
     cdef cppclass fixed_point_scalar[T](scalar):
         fixed_point_scalar() except +
-        fixed_point_scalar(int64_t value, scale_type scale, bool is_valid) except +
+        fixed_point_scalar(int64_t value,
+                           scale_type scale,
+                           bool is_valid) except +
         int64_t value() except +
-    
+
     cdef cppclass fixed_point_scalar[T](scalar):
         fixed_point_scalar() except +
-        fixed_point_scalar(int32_t value, scale_type scale, bool is_valid) except +
+        fixed_point_scalar(int32_t value,
+                           scale_type scale,
+                           bool is_valid) except +
         int32_t value() except +
