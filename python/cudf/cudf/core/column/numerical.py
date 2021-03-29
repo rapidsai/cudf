@@ -208,15 +208,7 @@ class NumericalColumn(ColumnBase):
     def as_decimal_column(
         self, dtype: Dtype, **kwargs
     ) -> "cudf.core.column.DecimalColumn":
-        if is_integer_dtype(self.dtype) and self.dtype != np.dtype("int64"):
-            raise NotImplementedError(
-                "Casting from integer types other than int64 "
-                "to decimal types not currently supported"
-            )
-        result = libcudf.unary.cast(self, dtype)
-        if isinstance(dtype, cudf.core.dtypes.Decimal64Dtype):
-            result.dtype.precision = dtype.precision
-        return result
+        return libcudf.unary.cast(self, dtype)
 
     def as_numerical_column(self, dtype: Dtype) -> NumericalColumn:
         dtype = np.dtype(dtype)

@@ -11,7 +11,9 @@ from cudf.core.dtypes import Decimal64Dtype
 from cudf.core.column import DecimalColumn, NumericalColumn
 
 from cudf.tests.utils import (
+    NUMERIC_TYPES,
     FLOAT_TYPES,
+    INTEGER_TYPES,
     assert_eq,
 )
 
@@ -75,18 +77,18 @@ def test_from_arrow_max_precision():
     "to_dtype",
     [Decimal64Dtype(7, 2), Decimal64Dtype(11, 4), Decimal64Dtype(18, 9)],
 )
-def test_typecast_to_decimal(data, from_dtype, to_dtype):
-    actual = data.astype(from_dtype)
-    expected = actual
+def test_typecast_from_float_to_decimal(data, from_dtype, to_dtype):
+    got = data.astype(from_dtype)
 
-    actual = actual.astype(to_dtype)
-    pa_arr = expected.to_arrow().cast(
+    pa_arr = got.to_arrow().cast(
         pa.decimal128(to_dtype.precision, to_dtype.scale)
     )
     expected = cudf.Series(DecimalColumn.from_arrow(pa_arr))
 
-    assert_eq(actual, expected)
-    assert_eq(actual.dtype, expected.dtype)
+    got = got.astype(to_dtype)
+
+    assert_eq(got, expected)
+    assert_eq(got.dtype, expected.dtype)
 
 
 @pytest.mark.parametrize(
@@ -109,26 +111,25 @@ def test_typecast_to_decimal(data, from_dtype, to_dtype):
         ),
     ],
 )
-@pytest.mark.parametrize("from_dtype", ["int64"])
+@pytest.mark.parametrize("from_dtype", INTEGER_TYPES)
 @pytest.mark.parametrize(
     "to_dtype",
     [Decimal64Dtype(9, 3), Decimal64Dtype(11, 4), Decimal64Dtype(18, 9)],
 )
 def test_typecast_from_int_to_decimal(data, from_dtype, to_dtype):
-    actual = data.astype(from_dtype)
-    expected = actual
+    got = data.astype(from_dtype)
 
-    actual = actual.astype(to_dtype)
-    print(actual)
     pa_arr = (
-        expected.to_arrow()
+        got.to_arrow()
         .cast("float64")
         .cast(pa.decimal128(to_dtype.precision, to_dtype.scale))
     )
     expected = cudf.Series(DecimalColumn.from_arrow(pa_arr))
 
-    assert_eq(actual, expected)
-    assert_eq(actual.dtype, expected.dtype)
+    got = got.astype(to_dtype)
+
+    assert_eq(got, expected)
+    assert_eq(got.dtype, expected.dtype)
 
 
 @pytest.mark.parametrize(
@@ -159,17 +160,17 @@ def test_typecast_from_int_to_decimal(data, from_dtype, to_dtype):
     [Decimal64Dtype(7, 2), Decimal64Dtype(18, 10), Decimal64Dtype(11, 4)],
 )
 def test_typecast_to_from_decimal(data, from_dtype, to_dtype):
-    actual = data.astype(from_dtype)
-    expected = actual
+    got = data.astype(from_dtype)
 
-    actual = actual.astype(to_dtype)
-    pa_arr = expected.to_arrow().cast(
+    pa_arr = got.to_arrow().cast(
         pa.decimal128(to_dtype.precision, to_dtype.scale), safe=False
     )
     expected = cudf.Series(DecimalColumn.from_arrow(pa_arr))
 
-    assert_eq(actual, expected)
-    assert_eq(actual.dtype, expected.dtype)
+    got = got.astype(to_dtype)
+
+    assert_eq(got, expected)
+    assert_eq(got.dtype, expected.dtype)
 
 
 @pytest.mark.parametrize(
@@ -195,12 +196,13 @@ def test_typecast_to_from_decimal(data, from_dtype, to_dtype):
     "from_dtype",
     [Decimal64Dtype(7, 2), Decimal64Dtype(11, 4), Decimal64Dtype(17, 10)],
 )
-@pytest.mark.parametrize("to_dtype", FLOAT_TYPES + ["int64"])
+@pytest.mark.parametrize("to_dtype", NUMERIC_TYPES)
 def test_typecast_from_decimal(data, from_dtype, to_dtype):
-    actual = data.astype(from_dtype)
-    pa_arr = actual.to_arrow().cast(to_dtype, safe=False)
+    got = data.astype(from_dtype)
+    pa_arr = got.to_arrow().cast(to_dtype, safe=False)
 
-    actual = actual.astype(to_dtype)
+    got = got.astype(to_dtype)
     expected = cudf.Series(NumericalColumn.from_arrow(pa_arr))
 
-    assert_eq(actual, expected)
+    assert_eq(got, expected)
+    assert_eq(got.dtype, expected.dtype)
