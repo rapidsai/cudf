@@ -465,10 +465,7 @@ std::unique_ptr<column> row_bit_count(table_view const& t,
                                       rmm::mr::device_memory_resource* mr)
 {
   // no rows
-  if (t.num_rows() <= 0) {
-    return cudf::make_fixed_width_column(
-      data_type{type_id::INT32}, 0, mask_state::UNALLOCATED, stream, mr);
-  }
+  if (t.num_rows() <= 0) { return cudf::make_empty_column(data_type{type_id::INT32}); }
 
   // flatten the hierarchy and determine some information about it.
   std::vector<cudf::column_view> cols;
