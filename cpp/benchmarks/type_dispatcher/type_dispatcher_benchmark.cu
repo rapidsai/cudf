@@ -31,7 +31,7 @@
 #include <type_traits>
 #include "../fixture/benchmark_fixture.hpp"
 #include "../synchronization/synchronization.hpp"
-#include "cudf/utilities/traits.hpp"
+#include <cudf/utilities/traits.hpp>
 
 using namespace cudf;
 
