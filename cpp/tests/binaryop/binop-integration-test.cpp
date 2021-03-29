@@ -57,23 +57,22 @@ TEST_F(BinaryOperationIntegrationTest, Add_Scalar_Vector_SI32_FP32_SI64)
   ASSERT_BINOP<TypeOut, TypeLhs, TypeRhs>(*out, lhs, rhs, ADD());
 }
 
-// TEST_F(BinaryOperationIntegrationTest, Add_Vector_Vector_SI32_FP32_FP32)
-// {
-//   using TypeOut = int32_t;
-//   using TypeLhs = float;
-//   using TypeRhs = float;
+TEST_F(BinaryOperationIntegrationTest, Add_Vector_Vector_SI32_FP32_FP32)
+{
+  using TypeOut = int32_t;
+  using TypeLhs = float;
+  using TypeRhs = float;
 
-//   using ADD = cudf::library::operation::Add<TypeOut, TypeLhs, TypeRhs>;
+  using ADD = cudf::library::operation::Add<TypeOut, TypeLhs, TypeRhs>;
 
-//   auto lhs = make_random_wrapped_column<TypeLhs>(10000);
-//   auto rhs = make_random_wrapped_column<TypeRhs>(10000);
+  auto lhs = make_random_wrapped_column<TypeLhs>(10000);
+  auto rhs = make_random_wrapped_column<TypeRhs>(10000);
 
-//   auto out =
-//     cudf::binary_operation(lhs, rhs, cudf::binary_operator::ADD,
-//     data_type(type_to_id<TypeOut>()));
+  auto out =
+    cudf::binary_operation(lhs, rhs, cudf::binary_operator::ADD, data_type(type_to_id<TypeOut>()));
 
-//   ASSERT_BINOP<TypeOut, TypeLhs, TypeRhs>(*out, lhs, rhs, ADD());
-// }
+  ASSERT_BINOP<TypeOut, TypeLhs, TypeRhs>(*out, lhs, rhs, ADD());
+}
 
 TEST_F(BinaryOperationIntegrationTest, Sub_Scalar_Vector_SI32_FP32_FP32)
 {
