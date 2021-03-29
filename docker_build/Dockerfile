@@ -86,7 +86,8 @@ RUN cd /repos/ && git clone https://github.com/rapidsai/rmm.git && cd rmm/ && pi
 ADD . /repos/cudf/
 
 # Install cudf from source
-RUN cd /repos/cudf/ && git submodule update --init --recursive && pip install -r python/cudf/requirements/cuda-$CUDA_SHORT_VERSION/requirements-build.txt --ignore-installed && \
-  pip install -r python/cudf/requirements/requirements-test.txt --ignore-installed
+RUN cd /repos/cudf/ && git submodule update --init --recursive && pip install -r python/cudf/requirements/requirements-build.txt --ignore-installed && \
+    pip install -r python/cudf/requirements/cuda-$CUDA_SHORT_VERSION/requirements-run.txt --ignore-installed
+    
 
 RUN cd /repos/cudf/ && ./build.sh clean && ./build.sh

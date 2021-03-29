@@ -1,0 +1,14 @@
+cupy-cuda111
+fastavro>=0.22.9
+notebook>=0.5.0
+cython>=0.29,<0.30
+fsspec>=0.6.0
+ipython
+partd
+flake8==3.8.3
+black==19.10b0
+isort==5.0.7
+pre_commit
+dask>=2.22.0
+distributed>=2.22.0
+streamz
