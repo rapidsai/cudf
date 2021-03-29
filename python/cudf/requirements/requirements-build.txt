@@ -1,4 +1,3 @@
-clang==8.0.1
 cmake
 wheel==0.34.2
 cmake-setuptools>=0.1.3
