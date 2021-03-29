@@ -38,7 +38,6 @@ RUN apt install -y --no-install-recommends \
       libboost-all-dev \
       python3.8-dev \
       build-essential \
-      llvm-7 \
       autoconf \
       bison \
       flex \
@@ -61,20 +60,11 @@ RUN apt install -y --no-install-recommends \
 RUN version=3.18 && build=5 && mkdir ~/temp && cd ~/temp && wget https://cmake.org/files/v$version/cmake-$version.$build.tar.gz && \
     tar -xzvf cmake-$version.$build.tar.gz && cd cmake-$version.$build/ && ./bootstrap && make -j$(nproc) && make install
 
-# Install llvm 11.1 for apache
-RUN wget https://github.com/llvm/llvm-project/releases/download/llvmorg-11.1.0/clang+llvm-11.1.0-x86_64-linux-gnu-ubuntu-16.04.tar.xz && tar -xvf clang+llvm-11.1.0-x86_64-linux-gnu-ubuntu-16.04.tar.xz && \
-    mv clang+llvm-11.1.0-x86_64-linux-gnu-ubuntu-16.04 llvm-11.1 && cp -R llvm-11.1 /usr/lib/ && rm -rf clang+llvm-11.1.0-x86_64-linux-gnu-ubuntu-16.04.tar.xz && \
-    wget -O - https://apt.llvm.org/llvm-snapshot.gpg.key | apt-key add - && \
-    apt-get update && \
-    apt-get install llvm-10-dev llvm-9-dev -y && \
-    apt-get clean && \
-    rm -rf /var/lib/apt/lists/*
-
 # Install arrow from source
 RUN git clone https://github.com/apache/arrow.git /repos/arrow && mkdir /repos/dist/ && cd /repos/arrow && git checkout apache-arrow-1.0.1 && git submodule init && \
     git submodule update && export PARQUET_TEST_DATA="${PWD}/cpp/submodules/parquet-testing/data" && export ARROW_TEST_DATA="${PWD}/testing/data" && \
     cd /repos/arrow/cpp && mkdir release && cd /repos/arrow/cpp/release && pip install -r /repos/arrow/python/requirements-build.txt && \
-    cmake -DCMAKE_INSTALL_PREFIX=$ARROW_HOME -DCMAKE_INSTALL_LIBDIR=lib -DARROW_FLIGHT=ON -DARROW_GANDIVA=ON -DARROW_ORC=ON -DARROW_WITH_BZ2=ON -DARROW_WITH_ZLIB=ON -DARROW_WITH_ZSTD=ON -DARROW_WITH_LZ4=ON -DARROW_WITH_SNAPPY=ON -DARROW_WITH_BROTLI=ON -DARROW_PARQUET=ON -DARROW_PYTHON=ON -DARROW_PLASMA=ON -DARROW_BUILD_TESTS=ON -DARROW_CUDA=ON -DARROW_DATASET=ON .. && \
+    cmake -DCMAKE_INSTALL_PREFIX=$ARROW_HOME -DCMAKE_INSTALL_LIBDIR=lib -DARROW_FLIGHT=ON -DARROW_GANDIVA=OFF -DARROW_ORC=ON -DARROW_WITH_BZ2=ON -DARROW_WITH_ZLIB=ON -DARROW_WITH_ZSTD=ON -DARROW_WITH_LZ4=ON -DARROW_WITH_SNAPPY=ON -DARROW_WITH_BROTLI=ON -DARROW_PARQUET=ON -DARROW_PYTHON=ON -DARROW_PLASMA=ON -DARROW_BUILD_TESTS=ON -DARROW_CUDA=ON -DARROW_DATASET=ON .. && \
     make -j$(nproc) && make install && cd /repos/arrow/python/ && python setup.py build_ext --build-type=release bdist_wheel && pip install /repos/arrow/python/dist/*.whl
 
 
