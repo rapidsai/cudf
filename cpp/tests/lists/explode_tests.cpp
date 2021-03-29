@@ -884,7 +884,8 @@ TEST_F(ExplodeOuterTest, NullsInNestedDoubleExplode)
 
   CUDF_TEST_EXPECT_TABLES_EQUAL(ret->view(), expected);
 
-  FCW expected_pos_col{{0, 1, 0, 0, 1, 2, 0, 1, 0, 1, 0, 0, 1}, {1, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0}};
+  FCW expected_pos_col{{0, 1, 0, 0, 1, 2, 0, 1, 0, 1, 0, 0, 1},
+                       {1, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0}};
   cudf::table_view pos_expected({expected_pos_col, expected_a, expected_b});
 
   auto pos_ret = cudf::explode_outer_position(first_explode_ret->view(), 0);
