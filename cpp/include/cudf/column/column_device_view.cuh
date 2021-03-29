@@ -65,8 +65,6 @@ class alignas(16) column_device_view_base {
    * @brief Returns pointer to the base device memory allocation casted to
    * the specified type.
    *
-   *
-   *
    * @note If `offset() == 0`, then `head<T>() == data<T>()`
    *
    * @note It should be rare to need to access the `head<T>()` allocation of
