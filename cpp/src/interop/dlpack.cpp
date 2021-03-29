@@ -25,7 +25,7 @@
 #include <dlpack/dlpack.h>
 
 #include <algorithm>
-#include "cudf/utilities/traits.hpp"
+#include <cudf/utilities/traits.hpp>
 
 namespace cudf {
 namespace {
