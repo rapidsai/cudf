@@ -1,10 +1,10 @@
 # Copyright (c) 2020-2021, NVIDIA CORPORATION.
 
-from cudf.core.dtypes import Decimal64Dtype
 import datetime as dt
 import numbers
 from collections import namedtuple
 from collections.abc import Sequence
+from decimal import Decimal
 
 import cupy as cp
 import numpy as np
@@ -16,8 +16,7 @@ from pandas.core.dtypes.dtypes import CategoricalDtype, CategoricalDtypeType
 import cudf
 from cudf._lib.scalar import DeviceScalar
 from cudf.core._compat import PANDAS_GE_120
-
-from decimal import Decimal
+from cudf.core.dtypes import Decimal64Dtype
 
 _NA_REP = "<NA>"
 _np_pa_dtypes = {
@@ -599,6 +598,9 @@ def _decimal_to_int64(decimal: Decimal) -> int:
 
 
 def _decimal_dtype_from_decimal(decimal: Decimal) -> Decimal64Dtype:
+    """
+    Create a cudf.Decimal64Dtype from a decimal.Decimal object
+    """
     metadata = decimal.as_tuple()
     precision = max(len(metadata.digits), -metadata.exponent)
     return Decimal64Dtype(precision, -metadata.exponent)
