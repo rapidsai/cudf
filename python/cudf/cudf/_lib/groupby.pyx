@@ -112,42 +112,45 @@ cdef class GroupBy:
         cdef vector[libcudf_groupby.aggregation_request] c_agg_requests
         cdef Column col
 
-        # Drop unsupported aggregations.
         # TODO: Is allowing users to provide empty aggregations something we do
         # to support pandas semantics? Whereas we need to throw an error if
         # some aggregations are requested when in fact none are possible?
-        if any(len(v) for v in aggregations.values()):
-            aggregations = aggregations.copy()
+        allow_empty = all(len(v) == 0 for v in aggregations.values())
+        empty_aggs = True
 
-            for col_name in aggregations:
-                valid_aggregations = (
-                    _LIST_AGGS if is_list_dtype(values._data[col_name].dtype)
-                    else _STRING_AGGS if is_string_dtype(values._data[col_name].dtype)
-                    else _CATEGORICAL_AGGS if is_categorical_dtype(values._data[col_name].dtype)
-                    else _STRING_AGGS if is_struct_dtype(values._data[col_name].dtype)
-                    else _INTERVAL_AGGS if is_interval_dtype(values._data[col_name].dtype)
-                    else _DECIMAL_AGGS if is_decimal_dtype(values._data[col_name].dtype)
-                    else None
-                )
-                if valid_aggregations is not None:
-                    for i, agg_name in enumerate(list(aggregations[col_name])):
-                        if Aggregation(agg_name).kind not in valid_aggregations:
-                            del aggregations[col_name][i]
-
-            if all(len(v) == 0 for v in aggregations.values()):
-                raise DataError("No numeric types to aggregate")
-
-
+        included_aggregations = defaultdict(list)
+        idx = 0
         for i, (col_name, aggs) in enumerate(aggregations.items()):
             col = values._data[col_name]
+            dtype = col.dtype
+
+            valid_aggregations = (
+                _LIST_AGGS if is_list_dtype(dtype)
+                else _STRING_AGGS if is_string_dtype(dtype)
+                else _CATEGORICAL_AGGS if is_categorical_dtype(dtype)
+                else _STRING_AGGS if is_struct_dtype(dtype)
+                else _INTERVAL_AGGS if is_interval_dtype(dtype)
+                else _DECIMAL_AGGS if is_decimal_dtype(dtype)
+                else None
+            )
+
             c_agg_requests.push_back(
                 move(libcudf_groupby.aggregation_request())
             )
-            c_agg_requests[i].values = col.view()
+            c_agg_requests[idx].values = col.view()
             for agg in aggs:
-                c_agg_requests[i].aggregations.push_back(
-                    move(make_aggregation(agg))
-                )
+                if valid_aggregations is None or Aggregation(agg).kind in valid_aggregations:
+                    empty_aggs = False
+                    included_aggregations[col_name].append(agg)
+                    c_agg_requests[idx].aggregations.push_back(
+                        move(make_aggregation(agg))
+                    )
+            if not c_agg_requests[idx].aggregations.size():
+                c_agg_requests.pop_back()
+            else:
+                idx += 1
+        if empty_aggs and not allow_empty:
+            raise DataError("No numeric types to aggregate")
 
         cdef pair[
             unique_ptr[table],
@@ -178,8 +181,8 @@ cdef class GroupBy:
         )
 
         result_data = ColumnAccessor(multiindex=True)
-        for i, col_name in enumerate(aggregations):
-            for j, agg_name in enumerate(aggregations[col_name]):
+        for i, col_name in enumerate(included_aggregations):
+            for j, agg_name in enumerate(included_aggregations[col_name]):
                 if callable(agg_name):
                     agg_name = agg_name.__name__
                 result_data[(col_name, agg_name)] = (
