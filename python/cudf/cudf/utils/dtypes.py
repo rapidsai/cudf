@@ -1,5 +1,6 @@
 # Copyright (c) 2020-2021, NVIDIA CORPORATION.
 
+from cudf.core.dtypes import Decimal64Dtype
 import datetime as dt
 import numbers
 from collections import namedtuple
@@ -592,6 +593,10 @@ def _decimal_to_int64(decimal: Decimal) -> int:
         start += digit*(10**power)
     return start
 
+def _decimal_dtype_from_decimal(decimal: Decimal) -> Decimal64Dtype:
+    metadata = decimal.as_tuple()
+    precision = max(len(metadata.digits), -metadata.exponent)
+    return Decimal64Dtype(precision, -metadata.exponent)
 
 def get_allowed_combinations_for_operator(dtype_l, dtype_r, op):
     error = TypeError(
