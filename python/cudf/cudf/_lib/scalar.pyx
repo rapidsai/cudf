@@ -44,7 +44,7 @@ from cudf._lib.cpp.scalar.scalar cimport (
 )
 cimport cudf._lib.cpp.types as libcudf_types
 
-from cudf._lib.cpp.wrappers.decimals cimport decimal64, scale_type
+from cudf._lib.cpp.wrappers.decimals cimport decimal64, scale_type, fixed_point
 from cudf.utils.dtypes import _decimal_to_int64
 
 cdef class DeviceScalar:
@@ -104,6 +104,8 @@ cdef class DeviceScalar:
             result = _get_np_scalar_from_timestamp64(self.c_value)
         elif pd.api.types.is_timedelta64_dtype(self.dtype):
             result = _get_np_scalar_from_timedelta64(self.c_value)
+        elif self.dtype == np.dtype('V'):
+            result = _get_py_decimal_from_fixed_point(self.c_value)
         else:
             raise ValueError(
                 "Could not convert cudf::scalar to a Python value"
@@ -290,11 +292,22 @@ cdef _get_np_scalar_from_numeric(unique_ptr[scalar]& s):
         return np.float64((<numeric_scalar[double]*>s_ptr)[0].value())
     elif cdtype.id() == libcudf_types.BOOL8:
         return np.bool_((<numeric_scalar[bool]*>s_ptr)[0].value())
-    elif cdtype.id() == libcudf_types.DECIMAL64:
-        return np.int64((<fixed_point_scalar[decimal64]*>s_ptr)[0].value())
     else:
         raise ValueError("Could not convert cudf::scalar to numpy scalar")
 
+
+cdef _get_py_decimal_from_fixed_point(unique_ptr[scalar]& s):
+    cdef scalar* s_ptr = s.get()
+    if not s_ptr[0].is_valid():
+        return cudf.NA
+
+    cdef libcudf_types.data_type cdtype = s_ptr[0].type()
+    cdef fixed_point fp_value
+
+    if cdtype.id() == libcudf_types.DECIMAL64:
+        fp_value = (<fixed_point_scalar[decimal64]*>s_ptr)[0].fixed_point_value()
+    else:
+        raise ValueError("Could not convert cudf::scalar to numpy scalar")
 
 cdef _get_np_scalar_from_timestamp64(unique_ptr[scalar]& s):
 

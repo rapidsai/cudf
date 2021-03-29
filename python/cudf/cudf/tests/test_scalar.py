@@ -1,6 +1,7 @@
 import datetime
 import datetime as dt
 import re
+from decimal import Decimal
 
 import numpy as np
 import pandas as pd
@@ -101,6 +102,9 @@ SCALAR_VALUES = [
     np.bool_(False),
     np.str_("asdf"),
     np.object_("asdf"),
+    Decimal("100"),
+    Decimal("0.0042"),
+    Decimal("1.0042"),
 ]
 
 
