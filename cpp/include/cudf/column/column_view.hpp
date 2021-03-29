@@ -474,7 +474,7 @@ class mutable_column_view : public detail::column_view_base {
    * offset.
    *
    * This function does not participate in overload resolution if `is_rep_layout_compatible<T>` is
-   * false. 
+   * false.
    *
    * @note If `offset() == 0`, then `head<T>() == data<T>()`
    *
