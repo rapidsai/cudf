@@ -2037,14 +2037,14 @@ def test_binops_decimal(args):
         ),
     ],
 )
-@pytest.mark.parametrize("integer_dtype", INTEGER_TYPES)
+@pytest.mark.parametrize("integer_dtype", cudf.tests.utils.INTEGER_TYPES)
 @pytest.mark.parametrize("reflected", [True, False])
 def test_binops_decimal_comp_mixed_integer(args, integer_dtype, reflected):
     """
     Tested compare operations:
         eq, lt, gt, le, ge
-    Each operation has 3 decimal data setups, with scale from {==0, >0, <0},
-    decimal precisions are sufficient to contain the digits.
+    Each operation has 3 decimal data setups, with scale from {==0, >0, <0}.
+    Decimal precisions are sufficient to hold the digits.
     For each decimal data setup, there is at least one row that lead to one
     of the following compare results: {True, False, None}.
     """
