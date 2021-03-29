@@ -396,7 +396,10 @@ __global__ void __launch_bounds__(block_size)
     uint32_t cur     = (i + t < num_strings) ? dict_data[i + t] : 0;
     uint32_t cur_len = 0;
     bool is_dupe     = false;
-    if (i + t < num_strings) { current_string = s->stripe.leaf_column->element<string_view>(cur); }
+    if (i + t < num_strings) {
+      current_string = s->stripe.leaf_column->element<string_view>(cur);
+      cur_len        = current_string.size_bytes();
+    }
     if (i + t != 0 && i + t < num_strings) {
       uint32_t prev = dict_data[i + t - 1];
       is_dupe       = (current_string == (s->stripe.leaf_column->element<string_view>(prev)));
