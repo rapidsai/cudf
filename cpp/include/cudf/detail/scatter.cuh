@@ -32,6 +32,8 @@
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
 
+#include <thrust/uninitialized_fill.h>
+
 namespace cudf {
 namespace detail {
 
@@ -66,7 +68,9 @@ auto scatter_to_gather(MapIterator scatter_map_begin,
   // when calling the gather_bitmask() which applies a pass-through whenever it finds a
   // value outside the range of the target column.
   // We'll use the gather_rows value for this since it should always be outside the valid range.
-  auto gather_map = rmm::device_vector<size_type>(gather_rows, gather_rows);
+  auto gather_map = rmm::device_uvector<size_type>(gather_rows, stream);
+  thrust::uninitialized_fill(
+    rmm::exec_policy(stream), gather_map.begin(), gather_map.end(), gather_rows);
 
   // Convert scatter map to a gather map
   thrust::scatter(
