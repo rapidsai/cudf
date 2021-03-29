@@ -1788,6 +1788,23 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_isInteger(JNIEnv *env, jo
   CATCH_STD(env, 0)
 }
 
+JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_isIntegerWithType(JNIEnv *env, jobject,
+                                                                         jlong handle,
+                                                                         jint j_dtype,
+                                                                         jint scale) {
+
+  JNI_NULL_CHECK(env, handle, "native view handle is null", 0)
+
+  try {
+    cudf::jni::auto_set_device(env);
+    cudf::column_view *view = reinterpret_cast<cudf::column_view *>(handle);
+    cudf::data_type int_dtype = cudf::jni::make_data_type(j_dtype, scale);
+    std::unique_ptr<cudf::column> result = cudf::strings::is_integer(*view, int_dtype);
+    return reinterpret_cast<jlong>(result.release());
+  }
+  CATCH_STD(env, 0)
+}
+
 JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_copyColumnViewToCV(JNIEnv *env, jobject j_object,
                                                                           jlong handle) {
 

@@ -58,7 +58,7 @@ if(${PROJECT_NAME}_BUILD_FOR_ALL_ARCHS)
   list(APPEND CMAKE_CUDA_ARCHITECTURES ${latest_arch})
 
 elseif(${PROJECT_NAME}_BUILD_FOR_DETECTED_ARCHS)
-  include(${PROJECT_SOURCE_DIR}/cmake/Modules/EvalGPUArchs.cmake)
+  include(${CMAKE_CURRENT_LIST_DIR}/EvalGPUArchs.cmake)
   evaluate_gpu_archs(CMAKE_CUDA_ARCHITECTURES)
 
   list(TRANSFORM CMAKE_CUDA_ARCHITECTURES APPEND "-real")

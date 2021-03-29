@@ -72,6 +72,9 @@ class DecimalColumn(ColumnBase):
         result.dtype.precision = _binop_precision(self.dtype, other.dtype, op)
         return result
 
+    def _apply_scan_op(self, op: str) -> ColumnBase:
+        return libcudf.reduce.scan(op, self, True)
+
     def as_decimal_column(
         self, dtype: Dtype, **kwargs
     ) -> "cudf.core.column.DecimalColumn":

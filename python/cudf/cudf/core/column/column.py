@@ -1017,7 +1017,9 @@ class ColumnBase(Column, Serializable):
         return cpp_distinct_count(self, ignore_nulls=dropna)
 
     def astype(self, dtype: Dtype, **kwargs) -> ColumnBase:
-        if is_categorical_dtype(dtype):
+        if is_numerical_dtype(dtype):
+            return self.as_numerical_column(dtype)
+        elif is_categorical_dtype(dtype):
             return self.as_categorical_column(dtype, **kwargs)
         elif pd.api.types.pandas_dtype(dtype).type in {
             np.str_,
@@ -1548,6 +1550,16 @@ def build_column(
     """
     dtype = pd.api.types.pandas_dtype(dtype)
 
+    if is_numerical_dtype(dtype):
+        assert data is not None
+        return cudf.core.column.NumericalColumn(
+            data=data,
+            dtype=dtype,
+            mask=mask,
+            size=size,
+            offset=offset,
+            null_count=null_count,
+        )
     if is_categorical_dtype(dtype):
         if not len(children) == 1:
             raise ValueError(
@@ -1634,15 +1646,7 @@ def build_column(
             children=children,
         )
     else:
-        assert data is not None
-        return cudf.core.column.NumericalColumn(
-            data=data,
-            dtype=dtype,
-            mask=mask,
-            size=size,
-            offset=offset,
-            null_count=null_count,
-        )
+        raise TypeError(f"Unrecognized dtype: {dtype}")
 
 
 def build_categorical_column(
