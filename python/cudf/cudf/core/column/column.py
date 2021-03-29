@@ -1631,6 +1631,7 @@ def build_column(
         return cudf.core.column.DecimalColumn(
             data=data,
             size=size,
+            offset=offset,
             dtype=dtype,
             mask=mask,
             null_count=null_count,
