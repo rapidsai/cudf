@@ -120,7 +120,7 @@ cdef class DeviceScalar:
         """
         cdef libcudf_types.data_type cdtype = self.get_raw_ptr()[0].type()
         if cdtype.id() == libcudf_types.DECIMAL64:
-            return cudf.Decimal64Dtype(cudf.Decimal64Dtype.MAX_PRECISION, cdtype.scale())
+            return cudf.Decimal64Dtype(cudf.Decimal64Dtype.MAX_PRECISION, -cdtype.scale())
         else:
             return cudf_to_np_types[<underlying_type_t_type_id>(cdtype.id())]
 
