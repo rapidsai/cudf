@@ -22,8 +22,8 @@
 #include <cudf/fixed_point/fixed_point.hpp>
 #include <cudf/strings/string_view.cuh>
 
-#include <rmm/cuda_stream_view.hpp>
 #include <cudf/utilities/traits.hpp>
+#include <rmm/cuda_stream_view.hpp>
 
 namespace cudf {
 namespace detail {

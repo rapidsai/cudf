@@ -16,9 +16,9 @@
 
 #include <cudf/column/column_view.hpp>
 #include <cudf/scalar/scalar.hpp>
+#include <cudf/utilities/traits.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
 #include <string>
-#include <cudf/utilities/traits.hpp>
 
 namespace cudf {
 namespace jit {
