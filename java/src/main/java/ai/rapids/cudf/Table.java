@@ -25,7 +25,6 @@ import ai.rapids.cudf.HostColumnVector.StructData;
 import ai.rapids.cudf.HostColumnVector.StructType;
 
 import java.io.File;
-import java.io.Serializable;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.nio.ByteBuffer;
@@ -803,6 +802,12 @@ public final class Table implements AutoCloseable {
     HostBufferConsumer consumer;
 
     private ParquetTableWriter(ParquetWriterOptions options, File outputFile) {
+      int numColumns = options.getColumnNames().length;
+      assert (numColumns == options.getColumnNullability().length);
+      int[] precisions = options.getPrecisions();
+      if (precisions != null) {
+        assert (numColumns >= options.getPrecisions().length);
+      }
       this.consumer = null;
       this.handle = writeParquetFileBegin(options.getColumnNames(),
           options.getColumnNullability(),
@@ -869,17 +874,6 @@ public final class Table implements AutoCloseable {
   public static TableWriter writeParquetChunked(ParquetWriterOptions options,
                                                 HostBufferConsumer consumer) {
     return new ParquetTableWriter(options, consumer);
-  }
-
-  /**
-   * Writes this table to a Parquet file on the host
-   *
-   * @param outputFile file to write the table to
-   * @deprecated please use writeParquetChunked instead
-   */
-  @Deprecated
-  public void writeParquet(File outputFile) {
-    writeParquet(ParquetWriterOptions.DEFAULT, outputFile);
   }
 
   /**
@@ -1449,7 +1443,7 @@ public final class Table implements AutoCloseable {
    * responsible for cleaning up
    * the {@link ColumnVector} returned as part of the output {@link Table}
    * <p>
-   * Example usage: orderBy(true, Table.asc(0), Table.desc(3)...);
+   * Example usage: orderBy(true, OrderByArg.asc(0), OrderByArg.desc(3)...);
    * @param args Suppliers to initialize sortKeys.
    * @return Sorted Table
    */
@@ -1515,22 +1509,6 @@ public final class Table implements AutoCloseable {
    */
   public static Table merge(List<Table> tables, OrderByArg... args) {
     return merge(tables.toArray(new Table[tables.size()]), args);
-  }
-
-  public static OrderByArg asc(final int index) {
-    return new OrderByArg(index, false, false);
-  }
-
-  public static OrderByArg desc(final int index) {
-    return new OrderByArg(index, true, false);
-  }
-
-  public static OrderByArg asc(final int index, final boolean isNullSmallest) {
-    return new OrderByArg(index, false, isNullSmallest);
-  }
-
-  public static OrderByArg desc(final int index, final boolean isNullSmallest) {
-    return new OrderByArg(index, true, isNullSmallest);
   }
 
   /**
@@ -2097,25 +2075,6 @@ public final class Table implements AutoCloseable {
   /////////////////////////////////////////////////////////////////////////////
   // HELPER CLASSES
   /////////////////////////////////////////////////////////////////////////////
-
-  public static final class OrderByArg implements Serializable {
-    final int index;
-    final boolean isDescending;
-    final boolean isNullSmallest;
-
-    OrderByArg(int index, boolean isDescending, boolean isNullSmallest) {
-      this.index = index;
-      this.isDescending = isDescending;
-      this.isNullSmallest = isNullSmallest;
-    }
-
-    @Override
-    public String toString() {
-      return "ORDER BY " + index +
-          (isDescending ? " DESC " : " ASC ") +
-          (isNullSmallest ? "NULL SMALLEST" : "NULL LARGEST");
-    }
-  }
 
   /**
    * class to encapsulate indices and table

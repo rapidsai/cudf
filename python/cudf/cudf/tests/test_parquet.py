@@ -1,4 +1,5 @@
-# Copyright (c) 2019-2020, NVIDIA CORPORATION.
+# Copyright (c) 2019-2021, NVIDIA CORPORATION.
+
 import datetime
 import math
 import os
@@ -1026,7 +1027,7 @@ def test_parquet_reader_list_skiprows(skip, tmpdir):
     assert_eq(expect, got, check_dtype=False)
 
 
-@pytest.mark.parametrize("skip", range(0, 128))
+@pytest.mark.parametrize("skip", range(0, 120))
 def test_parquet_reader_list_num_rows(skip, tmpdir):
     num_rows = 128
     src = pd.DataFrame(
@@ -1043,7 +1044,8 @@ def test_parquet_reader_list_num_rows(skip, tmpdir):
     src.to_parquet(fname)
     assert os.path.exists(fname)
 
-    rows_to_read = min(3, num_rows - skip)
+    # make sure to leave a few rows at the end that we don't read
+    rows_to_read = min(3, (num_rows - skip) - 5)
     expect = src.iloc[skip:].head(rows_to_read)
     got = cudf.read_parquet(fname, skiprows=skip, num_rows=rows_to_read)
     assert_eq(expect, got, check_dtype=False)
@@ -1717,24 +1719,24 @@ def test_parquet_nullable_boolean(tmpdir, engine):
     ],
 )
 @pytest.mark.parametrize("index", [None, True, False])
-def test_parquet_index(tmpdir, pdf, index):
-    pandas_path = tmpdir.join("pandas_index.parquet")
-    cudf_path = tmpdir.join("pandas_index.parquet")
+def test_parquet_index(pdf, index):
+    pandas_buffer = BytesIO()
+    cudf_buffer = BytesIO()
 
     gdf = cudf.from_pandas(pdf)
 
-    pdf.to_parquet(pandas_path, index=index)
-    gdf.to_parquet(cudf_path, index=index)
+    pdf.to_parquet(pandas_buffer, index=index)
+    gdf.to_parquet(cudf_buffer, index=index)
 
-    expected = pd.read_parquet(cudf_path)
-    actual = cudf.read_parquet(cudf_path)
+    expected = pd.read_parquet(cudf_buffer)
+    actual = cudf.read_parquet(pandas_buffer)
 
-    assert_eq(expected, actual)
+    assert_eq(expected, actual, check_index_type=True)
 
-    expected = pd.read_parquet(pandas_path)
-    actual = cudf.read_parquet(pandas_path)
+    expected = pd.read_parquet(pandas_buffer)
+    actual = cudf.read_parquet(cudf_buffer)
 
-    assert_eq(expected, actual)
+    assert_eq(expected, actual, check_index_type=True)
 
 
 @pytest.mark.parametrize("engine", ["cudf", "pyarrow"])
@@ -1920,3 +1922,18 @@ def test_parquet_writer_nested(tmpdir, data):
 
     got = pd.read_parquet(fname)
     assert_eq(expect, got)
+
+
+def test_parquet_writer_decimal(tmpdir):
+    from cudf.core.dtypes import Decimal64Dtype
+
+    gdf = cudf.DataFrame({"val": [0.00, 0.01, 0.02]})
+
+    gdf["dec_val"] = gdf["val"].astype(Decimal64Dtype(7, 2))
+
+    fname = tmpdir.join("test_parquet_writer_decimal.parquet")
+    gdf.to_parquet(fname)
+    assert os.path.exists(fname)
+
+    got = pd.read_parquet(fname)
+    assert_eq(gdf, got)

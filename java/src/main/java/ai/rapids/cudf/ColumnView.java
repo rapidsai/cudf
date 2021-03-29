@@ -288,17 +288,32 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
   /**
    * Returns a Boolean vector with the same number of rows as this instance, that has
    * TRUE for any entry that is an integer, and FALSE if its not an integer. A null will be returned
-   * for null entries
+   * for null entries.
    *
    * NOTE: Integer doesn't mean a 32-bit integer. It means a number that is not a fraction.
    * i.e. If this method returns true for a value it could still result in an overflow or underflow
    * if you convert it to a Java integral type
    *
-   * @return - Boolean vector
+   * @return Boolean vector
    */
   public final ColumnVector isInteger() {
     assert type.equals(DType.STRING);
     return new ColumnVector(isInteger(getNativeView()));
+  }
+
+  /**
+   * Returns a Boolean vector with the same number of rows as this instance, that has
+   * TRUE for any entry that is an integer, and FALSE if its not an integer. A null will be returned
+   * for null entries.
+   *
+   * @param intType the data type that should be used for bounds checking. Note that only
+   *                integer types are allowed.
+   * @return Boolean vector
+   */
+  public final ColumnVector isInteger(DType intType) {
+    assert type.equals(DType.STRING);
+    return new ColumnVector(isIntegerWithType(getNativeView(),
+        intType.getTypeId().getNativeId(), intType.getScale()));
   }
 
   /**
@@ -373,7 +388,19 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * @return - ColumnVector with nulls replaced by scalar
    */
   public final ColumnVector replaceNulls(Scalar scalar) {
-    return new ColumnVector(replaceNulls(getNativeView(), scalar.getScalarHandle()));
+    return new ColumnVector(replaceNullsScalar(getNativeView(), scalar.getScalarHandle()));
+  }
+
+  /**
+   * Returns a ColumnVector with any null values replaced with the corresponding row in the
+   * specified replacement column.
+   * This column and the replacement column must have the same type and number of rows.
+   *
+   * @param replacements column of replacement values
+   * @return column with nulls replaced by corresponding row of replacements column
+   */
+  public final ColumnVector replaceNulls(ColumnView replacements) {
+    return new ColumnVector(replaceNullsColumn(getNativeView(), replacements.getNativeView()));
   }
 
   /**
@@ -2844,7 +2871,9 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
 
   private static native long charLengths(long viewHandle) throws CudfException;
 
-  private static native long replaceNulls(long viewHandle, long scalarHandle) throws CudfException;
+  private static native long replaceNullsScalar(long viewHandle, long scalarHandle) throws CudfException;
+
+  private static native long replaceNullsColumn(long viewHandle, long replaceViewHandle) throws CudfException;
 
   private static native long ifElseVV(long predVec, long trueVec, long falseVec) throws CudfException;
 
@@ -2863,6 +2892,8 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
   private static native long isFloat(long viewHandle);
 
   private static native long isInteger(long viewHandle);
+
+  private static native long isIntegerWithType(long viewHandle, int typeId, int typeScale);
 
   private static native long isNotNanNative(long viewHandle);
 

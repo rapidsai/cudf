@@ -10,23 +10,34 @@ from cudf._lib.cpp.lists.count_elements cimport (
 from cudf._lib.cpp.lists.explode cimport (
     explode_outer as cpp_explode_outer
 )
+from cudf._lib.cpp.lists.sorting cimport (
+    sort_lists as cpp_sort_lists
+)
 from cudf._lib.cpp.lists.lists_column_view cimport lists_column_view
 from cudf._lib.cpp.column.column_view cimport column_view
 from cudf._lib.cpp.column.column cimport column
 
+from cudf._lib.scalar cimport DeviceScalar
+from cudf._lib.cpp.scalar.scalar cimport scalar
+
 from cudf._lib.cpp.table.table cimport table
 from cudf._lib.cpp.table.table_view cimport table_view
-from cudf._lib.cpp.types cimport size_type
+from cudf._lib.cpp.types cimport size_type, order, null_order
 
 from cudf._lib.column cimport Column
 from cudf._lib.table cimport Table
 
+from cudf._lib.types cimport (
+    underlying_type_t_null_order, underlying_type_t_order
+)
 from cudf.core.dtypes import ListDtype
+
+from cudf._lib.cpp.lists.contains cimport contains
+
+from cudf._lib.cpp.lists.extract cimport extract_list_element
 
 
 def count_elements(Column col):
-    if not isinstance(col.dtype, ListDtype):
-        raise TypeError("col is not a list column.")
 
     # shared_ptr required because lists_column_view has no default
     # ctor
@@ -58,3 +69,58 @@ def explode_outer(Table tbl, int explode_column_idx, bool ignore_index=False):
         column_names=tbl._column_names,
         index_names=None if ignore_index else tbl._index_names
     )
+
+
+def sort_lists(Column col, bool ascending, str na_position):
+    cdef shared_ptr[lists_column_view] list_view = (
+        make_shared[lists_column_view](col.view())
+    )
+    cdef order c_sort_order = (
+        order.ASCENDING if ascending else order.DESCENDING
+    )
+    cdef null_order c_null_prec = (
+        null_order.BEFORE if na_position == "first" else null_order.AFTER
+    )
+
+    cdef unique_ptr[column] c_result
+
+    with nogil:
+        c_result = move(
+            cpp_sort_lists(list_view.get()[0], c_sort_order, c_null_prec)
+        )
+
+    return Column.from_unique_ptr(move(c_result))
+
+
+def extract_element(Column col, size_type index):
+    # shared_ptr required because lists_column_view has no default
+    # ctor
+    cdef shared_ptr[lists_column_view] list_view = (
+        make_shared[lists_column_view](col.view())
+    )
+
+    cdef unique_ptr[column] c_result
+
+    with nogil:
+        c_result = move(extract_list_element(list_view.get()[0], index))
+
+    result = Column.from_unique_ptr(move(c_result))
+    return result
+
+
+def contains_scalar(Column col, DeviceScalar search_key):
+    cdef shared_ptr[lists_column_view] list_view = (
+        make_shared[lists_column_view](col.view())
+    )
+    cdef const scalar* search_key_value = search_key.get_raw_ptr()
+
+    cdef unique_ptr[column] c_result
+
+    with nogil:
+        c_result = move(contains(
+            list_view.get()[0],
+            search_key_value[0],
+        ))
+
+    result = Column.from_unique_ptr(move(c_result))
+    return result

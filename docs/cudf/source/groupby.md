@@ -137,6 +137,7 @@ The following table summarizes the available aggregations and the types that sup
 | nunique             | ✅       | ✅       | ✅       | ✅          |      |        |
 | nth                 | ✅       | ✅       | ✅       |             |      |        |
 | collect             | ✅       | ✅       | ✅       |             | ✅   |        |
+| unique              | ✅       | ✅       | ✅       | ✅          |      |        |
 
 ## GroupBy apply
 
