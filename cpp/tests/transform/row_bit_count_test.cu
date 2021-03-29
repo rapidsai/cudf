@@ -17,6 +17,7 @@
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_view.hpp>
 #include <cudf/detail/copy.hpp>
+#include <cudf/strings/detail/utilities.hpp>
 #include <cudf/transform.hpp>
 #include <cudf/types.hpp>
 #include <cudf_test/base_fixture.hpp>
@@ -574,4 +575,22 @@ TEST_F(RowBitCount, SlicedColumnsStructs)
                                                              size_iter + 3 + slice_size);
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, *result);
+}
+
+TEST_F(RowBitCount, EmptyTable)
+{
+  {
+    cudf::table_view empty;
+    auto result = cudf::row_bit_count(empty);
+    CUDF_EXPECTS(result != nullptr && result->size() == 0, "Expected an empty column");
+  }
+
+  {
+    auto strings = cudf::strings::detail::make_empty_strings_column(0);
+    auto ints    = cudf::make_fixed_width_column(data_type{type_id::INT32}, 0);
+    cudf::table_view empty({*strings, *ints});
+
+    auto result = cudf::row_bit_count(empty);
+    CUDF_EXPECTS(result != nullptr && result->size() == 0, "Expected an empty column");
+  }
 }
