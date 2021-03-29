@@ -30,13 +30,14 @@ public class GatherMap implements AutoCloseable {
    */
   public GatherMap(DeviceMemoryBuffer buffer) {
     if (buffer.getLength() % DType.INT32.getSizeInBytes() != 0) {
-      throw new IllegalArgumentException("Buffer length not a multiple of 4");
+      throw new IllegalArgumentException("buffer length not a multiple of 4");
     }
     this.buffer = buffer;
   }
 
   /** Return the number of rows in the gather map */
   public long getRowCount() {
+    ensureOpen();
     return buffer.getLength() / 4;
   }
 
@@ -48,6 +49,7 @@ public class GatherMap implements AutoCloseable {
    * @return column view of gather map data
    */
   public ColumnView toColumnView(long startRow, int numRows) {
+    ensureOpen();
     return ColumnView.fromDeviceBuffer(buffer, startRow * 4, DType.INT32, numRows);
   }
 
@@ -69,6 +71,15 @@ public class GatherMap implements AutoCloseable {
     if (buffer != null) {
       buffer.close();
       buffer = null;
+    }
+  }
+
+  private void ensureOpen() {
+    if (buffer == null) {
+      throw new IllegalStateException("instance is closed");
+    }
+    if (buffer.closed) {
+      throw new IllegalStateException("buffer is closed");
     }
   }
 }

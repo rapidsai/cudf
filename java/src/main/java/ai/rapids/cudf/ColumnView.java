@@ -2528,6 +2528,9 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
                                             long startOffset,
                                             DType type,
                                             int rows) {
+    if (buffer == null) {
+      throw new NullPointerException("buffer is null");
+    }
     int typeSize = type.getSizeInBytes();
     if (typeSize <= 0) {
       throw new IllegalArgumentException("Unsupported type: " + type);
@@ -2543,6 +2546,10 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
       throw new IllegalArgumentException("View extends beyond buffer range");
     }
     long dataAddress = buffer.getAddress() + startOffset;
+    if (dataAddress % typeSize != 0) {
+      throw new IllegalArgumentException("Data address " + Long.toHexString(dataAddress) +
+          " is misaligned relative to type size of " + typeSize + " bytes");
+    }
     return new ColumnView(makeCudfColumnView(type.typeId.getNativeId(), type.getScale(),
         dataAddress, dataSize, 0, 0, 0, rows, null));
   }
