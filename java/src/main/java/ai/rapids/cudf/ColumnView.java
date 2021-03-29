@@ -388,7 +388,19 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * @return - ColumnVector with nulls replaced by scalar
    */
   public final ColumnVector replaceNulls(Scalar scalar) {
-    return new ColumnVector(replaceNulls(getNativeView(), scalar.getScalarHandle()));
+    return new ColumnVector(replaceNullsScalar(getNativeView(), scalar.getScalarHandle()));
+  }
+
+  /**
+   * Returns a ColumnVector with any null values replaced with the corresponding row in the
+   * specified replacement column.
+   * This column and the replacement column must have the same type and number of rows.
+   *
+   * @param replacements column of replacement values
+   * @return column with nulls replaced by corresponding row of replacements column
+   */
+  public final ColumnVector replaceNulls(ColumnView replacements) {
+    return new ColumnVector(replaceNullsColumn(getNativeView(), replacements.getNativeView()));
   }
 
   /**
@@ -2840,7 +2852,9 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
 
   private static native long charLengths(long viewHandle) throws CudfException;
 
-  private static native long replaceNulls(long viewHandle, long scalarHandle) throws CudfException;
+  private static native long replaceNullsScalar(long viewHandle, long scalarHandle) throws CudfException;
+
+  private static native long replaceNullsColumn(long viewHandle, long replaceViewHandle) throws CudfException;
 
   private static native long ifElseVV(long predVec, long trueVec, long falseVec) throws CudfException;
 
