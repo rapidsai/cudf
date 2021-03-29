@@ -20,17 +20,10 @@
 #include "compiled/binary_ops.hpp"
 #include "jit/util.hpp"
 
-#include <jit/launcher.h>
+#include <jit_preprocessed_files/binaryop/jit/kernel.cu.jit.hpp>
+
 #include <jit/parser.h>
 #include <jit/type.h>
-#include <jit/common_headers.hpp>
-
-#include <jit_stringified/cudf/detail/utilities/assert.cuh.jit>
-#include <jit_stringified/cudf/fixed_point/fixed_point.hpp.jit>
-#include <jit_stringified/cudf/types.hpp.jit>
-#include <jit_stringified/cudf/utilities/bit.hpp.jit>
-#include <jit_stringified/cudf/wrappers/durations.hpp.jit>
-#include <jit_stringified/cudf/wrappers/timestamps.hpp.jit>
 
 #include <cudf/binaryop.hpp>
 #include <cudf/column/column_factories.hpp>
@@ -51,10 +44,6 @@
 #include <string>
 
 #include <thrust/optional.h>
-
-#include <jitify2.hpp>
-
-#include <jit_preprocessed_files/binaryop/jit/kernel.cu.jit.hpp>
 
 namespace cudf {
 
