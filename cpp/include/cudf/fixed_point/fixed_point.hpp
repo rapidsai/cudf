@@ -266,7 +266,7 @@ class fixed_point {
    * @return The `fixed_point` number in base 10 (aka human readable format)
    */
   template <typename U,
-            typename cuda::std::enable_if_t<std::is_floating_point<U>::value>* = nullptr>
+            typename cuda::std::enable_if_t<cuda::std::is_floating_point<U>::value>* = nullptr>
   explicit constexpr operator U() const
   {
     return detail::shift<Rep, Rad>(static_cast<U>(_value), detail::negate(_scale));
@@ -278,7 +278,8 @@ class fixed_point {
    * @tparam U The integral type that is being explicitly converted to
    * @return The `fixed_point` number in base 10 (aka human readable format)
    */
-  template <typename U, typename cuda::std::enable_if_t<std::is_integral<U>::value>* = nullptr>
+  template <typename U,
+            typename cuda::std::enable_if_t<cuda::std::is_integral<U>::value>* = nullptr>
   explicit constexpr operator U() const
   {
     // Don't cast to U until converting to Rep because in certain cases casting to U before shifting
