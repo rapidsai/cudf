@@ -1,5 +1,5 @@
 # Copyright (c) 2020, NVIDIA CORPORATION.
-
+import decimal
 import numpy as np
 import pandas as pd
 
@@ -44,7 +44,7 @@ from cudf._lib.cpp.scalar.scalar cimport (
 )
 cimport cudf._lib.cpp.types as libcudf_types
 
-from cudf._lib.cpp.wrappers.decimals cimport decimal64, scale_type, fixed_point
+from cudf._lib.cpp.wrappers.decimals cimport decimal64, scale_type
 from cudf.utils.dtypes import _decimal_to_int64
 
 cdef class DeviceScalar:
@@ -104,7 +104,7 @@ cdef class DeviceScalar:
             result = _get_np_scalar_from_timestamp64(self.c_value)
         elif pd.api.types.is_timedelta64_dtype(self.dtype):
             result = _get_np_scalar_from_timedelta64(self.c_value)
-        elif self.dtype == np.dtype('V'):
+        elif isinstance(self.dtype, cudf.Decimal64Dtype):
             result = _get_py_decimal_from_fixed_point(self.c_value)
         else:
             raise ValueError(
@@ -119,7 +119,10 @@ cdef class DeviceScalar:
         device scalar.
         """
         cdef libcudf_types.data_type cdtype = self.get_raw_ptr()[0].type()
-        return cudf_to_np_types[<underlying_type_t_type_id>(cdtype.id())]
+        if cdtype.id() == libcudf_types.DECIMAL64:
+            return cudf.Decimal64Dtype(cudf.Decimal64Dtype.MAX_PRECISION, cdtype.scale())
+        else:
+            return cudf_to_np_types[<underlying_type_t_type_id>(cdtype.id())]
 
     @property
     def value(self):
@@ -302,10 +305,11 @@ cdef _get_py_decimal_from_fixed_point(unique_ptr[scalar]& s):
         return cudf.NA
 
     cdef libcudf_types.data_type cdtype = s_ptr[0].type()
-    cdef fixed_point fp_value
 
     if cdtype.id() == libcudf_types.DECIMAL64:
-        fp_value = (<fixed_point_scalar[decimal64]*>s_ptr)[0].fixed_point_value()
+        rep_val = np.int64((<fixed_point_scalar[decimal64]*>s_ptr)[0].value())
+        scale = np.int32((<fixed_point_scalar[decimal64]*>s_ptr)[0].type().scale())
+        return decimal.Decimal(rep_val).scaleb(scale)
     else:
         raise ValueError("Could not convert cudf::scalar to numpy scalar")
 
