@@ -243,10 +243,13 @@ struct column_scatterer_impl<struct_view, MapItRoot> {
 
     auto const nullable = std::any_of(structs_src.child_begin(),
                                       structs_src.child_end(),
+                                      [](auto const& col) { return col.nullable(); }) or
+                          std::any_of(structs_target.child_begin(),
+                                      structs_target.child_end(),
                                       [](auto const& col) { return col.nullable(); });
     if (nullable) {
       auto const gather_map =
-        scatter_to_gather(scatter_map_begin, scatter_map_end, scatter_map_size, stream);
+        scatter_to_gather(scatter_map_begin, scatter_map_end, source.size(), stream);
       gather_bitmask(
         // Table view of struct column.
         cudf::table_view{
@@ -356,7 +359,8 @@ std::unique_ptr<table> scatter(
                  });
 
   auto const nullable =
-    std::any_of(source.begin(), source.end(), [](auto const& col) { return col.nullable(); });
+    std::any_of(source.begin(), source.end(), [](auto const& col) { return col.nullable(); }) or
+    std::any_of(target.begin(), target.end(), [](auto const& col) { return col.nullable(); });
   if (nullable) {
     auto gather_map = scatter_to_gather(
       updated_scatter_map_begin, updated_scatter_map_end, target.num_rows(), stream);
