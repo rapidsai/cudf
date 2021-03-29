@@ -236,6 +236,18 @@ class alignas(16) column_device_view_base {
     : _type{type}, _size{size}, _data{data}, _null_mask{null_mask}, _offset{offset}
   {
   }
+
+  template <typename C, typename T, typename = void>
+  struct has_element_accessor_impl : std::false_type {
+  };
+
+  template <typename C, typename T>
+  struct has_element_accessor_impl<
+    C,
+    T,
+    void_t<decltype(std::declval<C>().template element<T>(std::declval<size_type>()))>>
+    : std::true_type {
+  };
 };
 
 // Forward declaration
@@ -431,7 +443,7 @@ class alignas(16) column_device_view : public detail::column_device_view_base {
   template <typename T>
   static constexpr bool has_element_accessor()
   {
-    return has_element_accessor_impl<T>::value;
+    return has_element_accessor_impl<column_device_view, T>::value;
   }
 
   /**
