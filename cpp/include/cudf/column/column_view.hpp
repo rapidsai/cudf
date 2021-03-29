@@ -57,8 +57,8 @@ class column_view_base {
    *a column, and instead, accessing the elements should be done via
    *`data<T>()`.
    *
-   * This function only participates in overload resolution when `is_rep_layout_compatible<T>()` or
-   *`std::is_same<T,void>::value` are true.
+   * This function will only participate in overload resolution if `is_rep_layout_compatible<T>()`
+   * or `std::is_same<T,void>::value` are true.
    *
    * @tparam The type to cast to
    * @return T const* Typed pointer to underlying data
@@ -76,9 +76,8 @@ class column_view_base {
    *
    * @note If `offset() == 0`, then `head<T>() == data<T>()`
    *
-   * This function only participates in overload resolution when `is_rep_layout_compatible<T>()` is
-   * true.
-   *
+   * This function does not participate in overload resolution if `is_rep_layout_compatible<T>` is
+   * false.
    *
    * @tparam T The type to cast to
    * @return T const* Typed pointer to underlying data, including the offset
@@ -93,8 +92,8 @@ class column_view_base {
    * @brief Return first element (accounting for offset) after underlying data
    * is casted to the specified type.
    *
-   * This function only participates in overload resolution when `is_rep_layout_compatible<T>()` is
-   * true.
+   * This function does not participate in overload resolution if `is_rep_layout_compatible<T>` is
+   * false.
    *
    * @tparam T The desired type
    * @return T const* Pointer to the first element after casting
@@ -109,8 +108,8 @@ class column_view_base {
    * @brief Return one past the last element after underlying data is casted to
    * the specified type.
    *
-   * This function only participates in overload resolution when `is_rep_layout_compatible<T>()` is
-   * true.
+   * This function does not participate in overload resolution if `is_rep_layout_compatible<T>` is
+   * false.
    *
    * @tparam T The desired type
    * @return T const* Pointer to one past the last element after casting
@@ -452,6 +451,9 @@ class mutable_column_view : public detail::column_view_base {
    * @brief Returns pointer to the base device memory allocation casted to
    * the specified type.
    *
+   * This function will only participate in overload resolution if `is_rep_layout_compatible<T>()`
+   * or `std::is_same<T,void>::value` are true.
+   *
    * @note If `offset() == 0`, then `head<T>() == data<T>()`
    *
    * @note It should be rare to need to access the `head<T>()` allocation of a
@@ -471,9 +473,10 @@ class mutable_column_view : public detail::column_view_base {
    * @brief Returns the underlying data casted to the specified type, plus the
    * offset.
    *
-   * @note If `offset() == 0`, then `head<T>() == data<T>()`
+   * This function does not participate in overload resolution if `is_rep_layout_compatible<T>` is
+   * false. 
    *
-   * @TODO Clarify behavior for variable-width types.
+   * @note If `offset() == 0`, then `head<T>() == data<T>()`
    *
    * @tparam T The type to cast to
    * @return T* Typed pointer to underlying data, including the offset
@@ -488,6 +491,9 @@ class mutable_column_view : public detail::column_view_base {
    * @brief Return first element (accounting for offset) when underlying data is
    * casted to the specified type.
    *
+   * This function does not participate in overload resolution if `is_rep_layout_compatible<T>` is
+   * false.
+   *
    * @tparam T The desired type
    * @return T* Pointer to the first element after casting
    */
@@ -500,6 +506,9 @@ class mutable_column_view : public detail::column_view_base {
   /**
    * @brief Return one past the last element after underlying data is casted to
    * the specified type.
+   *
+   * This function does not participate in overload resolution if `is_rep_layout_compatible<T>` is
+   * false.
    *
    * @tparam T The desired type
    * @return T* Pointer to one past the last element after casting
