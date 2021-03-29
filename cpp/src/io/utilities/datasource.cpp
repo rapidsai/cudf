@@ -25,6 +25,7 @@
 
 namespace cudf {
 namespace io {
+namespace {
 
 /**
  * @brief Base class for file input. Only implements direct device reads.
@@ -219,6 +220,8 @@ class user_datasource_wrapper : public datasource {
  private:
   datasource *const source;  ///< A non-owning pointer to the user-implemented datasource
 };
+
+}  // namespace
 
 std::unique_ptr<datasource> datasource::create(const std::string &filepath,
                                                size_t offset,
