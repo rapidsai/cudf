@@ -383,6 +383,39 @@ TEST_F(ToArrowTest, FixedPointTable)
   }
 }
 
+TEST_F(ToArrowTest, FixedPointTableNulls)
+{
+  using namespace numeric;
+  cudf::size_type const BIT_WIDTH_RATIO = 2;  // Array::Type:type::DECIMAL (128) / int64_t
+
+  for (auto const i : {3, 2, 1, 0, -1, -2, -3}) {
+    auto const col   = fp_wrapper<int64_t>({1, 2, 3, 4, 5, 6}, {1, 0, 1, 0, 1, 0}, scale_type{i});
+    auto const input = cudf::table_view({col});
+
+    auto const expect_data = std::vector<int64_t>{1, 0, 2, 0, 3, 0, 4, 0, 5, 0, 6, 0};
+    std::shared_ptr<arrow::Array> arr;
+    arrow::Decimal128Builder decimal_builder(arrow::decimal(18, i), arrow::default_memory_pool());
+    for (int64_t i = 0; i < 6; ++i) {
+      decimal_builder.Append(
+        reinterpret_cast<const uint8_t*>(expect_data.data() + BIT_WIDTH_RATIO * i));
+      decimal_builder.AppendNull();
+    }
+
+    CUDF_EXPECTS(decimal_builder.Finish(&arr).ok(), "Failed to build array");
+
+    auto const field                = arrow::field("a", arr->type());
+    auto const schema_vector        = std::vector<std::shared_ptr<arrow::Field>>({field});
+    auto const schema               = std::make_shared<arrow::Schema>(schema_vector);
+    auto const expected_arrow_table = arrow::Table::Make(schema, {arr});
+
+    auto got_arrow_table = cudf::to_arrow(input, {{"a"}});
+
+    std::cout << got_arrow_table->ToString() << std::endl;
+
+    ASSERT_TRUE(expected_arrow_table->Equals(*got_arrow_table, true));
+  }
+}
+
 struct ToArrowTestSlice
   : public ToArrowTest,
     public ::testing::WithParamInterface<std::tuple<cudf::size_type, cudf::size_type>> {
