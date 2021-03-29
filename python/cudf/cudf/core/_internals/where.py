@@ -20,11 +20,7 @@ def _normalize_scalars(col, other):
             f"{type(other).__name__} to {col.dtype.name}"
         )
 
-    return (
-        col.dtype.type(other)
-        if (isinstance(other, float) and not np.isnan(other))
-        else other
-    )
+    return cudf.Scalar(other, dtype=col.dtype if other is None else None)
 
 
 def _check_and_cast_columns(source_col, other_col, inplace):
@@ -62,10 +58,7 @@ def _check_and_cast_columns_with_scalar(source_col, other_scalar, inplace):
     if cudf.utils.dtypes.is_categorical_dtype(source_col.dtype):
         return source_col, other_scalar
 
-    device_scalar = cudf.Scalar(
-        _normalize_scalars(source_col, other_scalar),
-        dtype=source_col.dtype if other_scalar is None else None,
-    )
+    device_scalar = _normalize_scalars(source_col, other_scalar)
 
     if other_scalar is None:
         return source_col, device_scalar
@@ -121,8 +114,8 @@ def _normalize_columns_and_scalars_type(frame, other, inplace=False):
     A dataframe/series/list/scalar form of normalized other
     """
     if isinstance(frame, cudf.DataFrame) and isinstance(other, cudf.DataFrame):
-        source_df = frame.copy()
-        other_df = other.copy()
+        source_df = frame.copy(deep=False)
+        other_df = other.copy(deep=False)
         for self_col in source_df._data.names:
             source_col, other_col = _check_and_cast_columns(
                 source_col=source_df._data[self_col],
@@ -157,7 +150,7 @@ def _normalize_columns_and_scalars_type(frame, other, inplace=False):
             if cudf.utils.dtypes.is_scalar(other):
                 other = [other for i in range(len(frame._data.names))]
 
-            source_df = frame.copy()
+            source_df = frame.copy(deep=False)
             others = []
             for col_name, other_sclr in zip(frame._data.names, other):
 
