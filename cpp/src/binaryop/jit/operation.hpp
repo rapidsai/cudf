@@ -17,6 +17,7 @@
  * limitations under the License.
  */
 
+#include <binaryop/jit/operation-udf.hpp>
 #include <binaryop/jit/traits.hpp>
 
 #include <cmath>
