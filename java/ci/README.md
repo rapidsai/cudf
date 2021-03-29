@@ -14,7 +14,7 @@ In the root path of cuDF repo, run below command to build the docker image.
 docker build -f java/ci/Dockerfile.centos7 --build-arg CUDA_VERSION=11.0 -t cudf-build:11.0-devel-centos7 .
 ```
 
-We support different CUDA versions as below:
+The following CUDA versions are supported:
 * CUDA 11.0
 
 Change the --build-arg CUDA_VERSION to what you need.
