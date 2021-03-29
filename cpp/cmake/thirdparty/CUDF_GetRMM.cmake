@@ -28,6 +28,11 @@ function(cudf_restore_if_enabled var)
 endfunction()
 
 function(find_and_configure_rmm VERSION)
+
+    if(TARGET rmm::rmm)
+        return()
+    endif()
+
     # Consumers have two options for local source builds:
     # 1. Pass `-D CPM_rmm_SOURCE=/path/to/rmm` to build a local RMM source tree
     # 2. Pass `-D CMAKE_PREFIX_PATH=/path/to/rmm/build` to use an existing local
@@ -50,11 +55,6 @@ function(find_and_configure_rmm VERSION)
 
     # Make sure consumers of cudf can also see rmm::rmm
     fix_cmake_global_defaults(rmm::rmm)
-
-    if(NOT rmm_BINARY_DIR IN_LIST CMAKE_PREFIX_PATH)
-        list(APPEND CMAKE_PREFIX_PATH "${rmm_BINARY_DIR}")
-        set(CMAKE_PREFIX_PATH ${CMAKE_PREFIX_PATH} PARENT_SCOPE)
-    endif()
 endfunction()
 
 set(CUDF_MIN_VERSION_rmm "${CUDF_VERSION_MAJOR}.${CUDF_VERSION_MINOR}")

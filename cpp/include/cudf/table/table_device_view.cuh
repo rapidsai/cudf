@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2020, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -149,4 +149,10 @@ auto contiguous_copy_column_device_views(HostTableView source_view, rmm::cuda_st
   return std::make_tuple(std::move(descendant_storage), d_columns);
 }
 
+namespace detail {
+extern template bool is_relationally_comparable<table_device_view>(table_device_view const& lhs,
+                                                                   table_device_view const& rhs);
+extern template bool is_relationally_comparable<mutable_table_device_view>(
+  mutable_table_device_view const& lhs, mutable_table_device_view const& rhs);
+}  // namespace detail
 }  // namespace cudf

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2020, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -92,6 +92,26 @@ __device__ weak_ordering relational_compare(Element lhs, Element rhs)
 }
 
 /**
+ * @brief Compare the nulls according to null order.
+ *
+ * @param lhs_is_null boolean representing if lhs is null
+ * @param rhs_is_null boolean representing if lhs is null
+ * @param null_precedence null order
+ * @return Indicates the relationship between null in lhs and rhs columns.
+ */
+inline __device__ auto null_compare(bool lhs_is_null, bool rhs_is_null, null_order null_precedence)
+{
+  if (lhs_is_null and rhs_is_null) {  // null <? null
+    return weak_ordering::EQUIVALENT;
+  } else if (lhs_is_null) {  // null <? x
+    return (null_precedence == null_order::BEFORE) ? weak_ordering::LESS : weak_ordering::GREATER;
+  } else if (rhs_is_null) {  // x <? null
+    return (null_precedence == null_order::AFTER) ? weak_ordering::LESS : weak_ordering::GREATER;
+  }
+  return weak_ordering::EQUIVALENT;
+}
+
+/**
  * @brief A specialization for non-floating-point `Element` type relational
  * comparison to derive the order of the elements with respect to `lhs`.
  *
@@ -173,8 +193,8 @@ class element_equality_comparator {
     noexcept
   {
     if (has_nulls) {
-      bool const lhs_is_null{lhs.nullable() and lhs.is_null(lhs_element_index)};
-      bool const rhs_is_null{rhs.nullable() and rhs.is_null(rhs_element_index)};
+      bool const lhs_is_null{lhs.is_null(lhs_element_index)};
+      bool const rhs_is_null{rhs.is_null(rhs_element_index)};
       if (lhs_is_null and rhs_is_null) {
         return nulls_are_equal;
       } else if (lhs_is_null != rhs_is_null) {
@@ -269,17 +289,11 @@ class element_relational_comparator {
                                       size_type rhs_element_index) const noexcept
   {
     if (has_nulls) {
-      bool const lhs_is_null{lhs.nullable() and lhs.is_null(lhs_element_index)};
-      bool const rhs_is_null{rhs.nullable() and rhs.is_null(rhs_element_index)};
+      bool const lhs_is_null{lhs.is_null(lhs_element_index)};
+      bool const rhs_is_null{rhs.is_null(rhs_element_index)};
 
-      if (lhs_is_null and rhs_is_null) {  // null <? null
-        return weak_ordering::EQUIVALENT;
-      } else if (lhs_is_null) {  // null <? x
-        return (null_precedence == null_order::BEFORE) ? weak_ordering::LESS
-                                                       : weak_ordering::GREATER;
-      } else if (rhs_is_null) {  // x <? null
-        return (null_precedence == null_order::AFTER) ? weak_ordering::LESS
-                                                      : weak_ordering::GREATER;
+      if (lhs_is_null or rhs_is_null) {  // atleast one is null
+        return null_compare(lhs_is_null, rhs_is_null, null_precedence);
       }
     }
 
@@ -324,6 +338,7 @@ class row_lexicographic_comparator {
    * comparison between the rows of two tables.
    *
    * @throws cudf::logic_error if `lhs.num_columns() != rhs.num_columns()`
+   * @throws cudf::logic_error if column types of `lhs` and `rhs` are not comparable.
    *
    * @param lhs The first table
    * @param rhs The second table (may be the same table as `lhs`)
@@ -341,8 +356,9 @@ class row_lexicographic_comparator {
                                null_order const* null_precedence = nullptr)
     : _lhs{lhs}, _rhs{rhs}, _column_order{column_order}, _null_precedence{null_precedence}
   {
-    // Add check for types to be the same.
     CUDF_EXPECTS(_lhs.num_columns() == _rhs.num_columns(), "Mismatched number of columns.");
+    CUDF_EXPECTS(detail::is_relationally_comparable(_lhs, _rhs),
+                 "Attempted to compare elements of uncomparable types.");
   }
 
   /**
