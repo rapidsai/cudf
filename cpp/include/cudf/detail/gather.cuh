@@ -567,15 +567,20 @@ struct column_gatherer_impl<struct_view, MapItRoot> {
                                                                          mr);
                    });
 
-    gather_bitmask(
-      // Table view of struct column.
-      cudf::table_view{
-        std::vector<cudf::column_view>{structs_column.child_begin(), structs_column.child_end()}},
-      gather_map_begin,
-      output_struct_members,
-      nullify_out_of_bounds ? gather_bitmask_op::NULLIFY : gather_bitmask_op::DONT_CHECK,
-      stream,
-      mr);
+    auto const nullable = std::any_of(structs_column.child_begin(),
+                                      structs_column.child_end(),
+                                      [](auto const& col) { return col.nullable(); });
+    if (nullable) {
+      gather_bitmask(
+        // Table view of struct column.
+        cudf::table_view{
+          std::vector<cudf::column_view>{structs_column.child_begin(), structs_column.child_end()}},
+        gather_map_begin,
+        output_struct_members,
+        nullify_out_of_bounds ? gather_bitmask_op::NULLIFY : gather_bitmask_op::DONT_CHECK,
+        stream,
+        mr);
+    }
 
     return cudf::make_structs_column(
       gather_map_size,
