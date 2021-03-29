@@ -23,7 +23,7 @@
 #include <cudf/strings/string_view.cuh>
 
 #include <rmm/cuda_stream_view.hpp>
-#include "cudf/utilities/traits.hpp"
+#include <cudf/utilities/traits.hpp>
 
 namespace cudf {
 namespace detail {
