@@ -18,7 +18,6 @@
  */
 
 #include "compiled/binary_ops.hpp"
-#include "jit/code/code.h"
 #include "jit/util.hpp"
 
 #include <jit/launcher.h>
@@ -85,32 +84,6 @@ rmm::device_buffer scalar_col_valid_mask_and(column_view const& col,
 namespace jit {
 
 const std::string hash = "prog_binop";
-
-const std::vector<std::string> header_names{"operation.h",
-                                            "traits.h",
-                                            cudf_types_hpp,
-                                            cudf_utilities_bit_hpp,
-                                            cudf_wrappers_timestamps_hpp,
-                                            cudf_wrappers_durations_hpp,
-                                            cudf_fixed_point_fixed_point_hpp,
-                                            cudf_detail_utilities_assert_cuh};
-
-std::istream* headers_code(std::string filename, std::iostream& stream)
-{
-  if (filename == "operation.h") {
-    stream << code::operation;
-    return &stream;
-  }
-  if (filename == "traits.h") {
-    stream << code::traits;
-    return &stream;
-  }
-  auto it = cudf::jit::stringified_headers.find(filename);
-  if (it != cudf::jit::stringified_headers.end()) {
-    return cudf::jit::send_stringified_header(stream, it->second);
-  }
-  return nullptr;
-}
 
 void binary_operation(mutable_column_view& out,
                       column_view const& lhs,

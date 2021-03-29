@@ -18,7 +18,6 @@
  * limitations under the License.
  */
 
-// #include "operation.hpp"
 #include <binaryop/jit/operation.hpp>
 
 #include <cudf/fixed_point/fixed_point.hpp>

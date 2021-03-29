@@ -154,9 +154,6 @@ add_library(cudf
     src/ast/transform.cu
     src/binaryop/binaryop.cpp
     src/binaryop/compiled/binary_ops.cu
-    src/binaryop/jit/code/kernel.cpp
-    src/binaryop/jit/code/operation.cpp
-    src/binaryop/jit/code/traits.cpp
     src/labeling/label_bins.cu
     src/bitmask/null_mask.cu
     src/column/column.cu
