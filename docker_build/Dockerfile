@@ -47,8 +47,7 @@ RUN apt install -y --no-install-recommends \
       libjemalloc-dev \
       wget \
       libssl-dev \
-      protobuf-compiler \
-      clang && \
+      protobuf-compiler && \
     apt-get autoremove -y && \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/* && \
