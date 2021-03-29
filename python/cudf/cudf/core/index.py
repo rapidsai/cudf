@@ -24,6 +24,7 @@ from cudf.core.column import (
     StringColumn,
     TimeDeltaColumn,
     column,
+    arange
 )
 from cudf.core.column.string import StringMethods as StringMethods
 from cudf.core.dtypes import IntervalDtype
@@ -2753,8 +2754,8 @@ def interval_range(
     end: int = None,
     periods: int = None,
     freq: int = None,
-    closed: str = "right",
     name: str = None,
+    closed: str = "right",
 ) -> "IntervalIndex":
     """
     Returns a fixed frequency IntervalIndex.
@@ -2792,7 +2793,7 @@ def interval_range(
     IntervalIndex([[0, 2), [2, 4), [4, 6), [6, 8), [8, 10)],
     ...closed='left',dtype='interval')
 
-    >>> cudf.interval_range(start=0,end=10, periods=2,closed='left')
+    >>> cudf.interval_range(start=0,end=10, periods=3,closed='left')
     ...IntervalIndex([[0.0, 3.3333333333333335),
             [3.3333333333333335, 6.666666666666667),
             [6.666666666666667, 10.0)],
@@ -2808,9 +2809,10 @@ def interval_range(
     elif periods and not freq:
         assert end is not None and start is not None
         end = end + 1
-        periods_array = cupy.asarray(cupy.arange(start, end))
-        _, bin_edges = cupy.histogram(periods_array, periods)
-        # cupy.histogram turns all arrays into a float array
+        periods_array = cupy.asarray(arange(start, end))
+        mn, mx = (periods_array.min(), periods_array.max())
+        bin_edges = cupy.linspace(mn, mx, periods + 1, endpoint=True)
+        # cupy.linspace turns all arrays into a float array
         # this can cause the dtype to be a float instead of an int
         # the below adjusts for this
         if cupy.all(cupy.mod(bin_edges, 1) == 0):
@@ -2822,23 +2824,23 @@ def interval_range(
             start = end - (freq * periods)
         if start:
             end = freq * periods + start
-        left_col = cupy.arange(start, end, freq)
+        left_col = arange(start, end, freq)
         assert end is not None and start is not None
         end = end + 1
         start = start + freq
-        right_col = cupy.arange(start, end, freq)
+        right_col = arange(start, end, freq)
     elif freq and not periods:
         assert end is not None and start is not None
         end = end - freq + 1
-        left_col = cupy.arange(start, end, freq)
+        left_col = arange(start, end, freq)
         end = end + freq + 1
         start = start + freq
-        right_col = cupy.arange(start, end, freq)
+        right_col = arange(start, end, freq)
     elif start is not None and end is not None:
-        left_col = cupy.arange(start, end, freq)
+        left_col = arange(start, end, freq)
         start = start + 1
         end = end + 1
-        right_col = cupy.arange(start, end, freq)
+        right_col = arange(start, end, freq)
     else:
         raise ValueError(
             "Of the four parameters: start, end, periods, and "
@@ -2885,17 +2887,16 @@ class IntervalIndex(GenericIndex):
         cls, data=None, closed=None, dtype=None, copy=False, name=None,
     ) -> "IntervalIndex":
         if copy:
-            data = column.as_column(data, dtype=dtype).copy(deep=True)
+            data = column.as_column(data, dtype=dtype).copy()
         out = Frame.__new__(cls)
         kwargs = _setdefault_name(data, name=name)
         if isinstance(data, IntervalColumn):
             data = data
         elif isinstance(data, pd.Series) and (is_interval_dtype(data.dtype)):
-            data = column.as_column(pa.Array.from_pandas(data), dtype=dtype,)
+            data = column.as_column(data, data.dtype)
         elif isinstance(data, (pd._libs.interval.Interval, pd.IntervalIndex)):
             data = column.as_column(data, dtype=dtype,)
-        else:
-            if data is not None and data != [] and data[0].closed != closed:
+        elif data is not None and data != [] and data[0].closed != closed:
                 # when closed is not the same as the data's closed
                 # we need to change the data closed value,
                 left_col = [data[i].left for i in range(len(data))]
@@ -2908,12 +2909,14 @@ class IntervalIndex(GenericIndex):
                     if dtype is None
                     else dtype,
                 )
-            if not data and closed != "right":
+        elif not data:
                 data = column.build_interval_column([], [], closed=closed)
-            else:
-                data = column.as_column(
-                    data, dtype="interval" if dtype is None else dtype
-                )
+        #the below else block handles the case where a list of intervals is
+        #passed or any other edge cases. 
+        else:
+            data = column.as_column(
+                data, dtype="interval" if dtype is None else dtype
+            )
 
         out._initialize(data, **kwargs)
         return out

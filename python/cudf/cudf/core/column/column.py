@@ -1733,7 +1733,7 @@ def build_interval_column(
     """
     left = as_column(left_col)
     right = as_column(right_col)
-    if not closed:
+    if closed not in {"left", "right", "both", "neither"}:
         closed = "right"
     if type(left_col) is not list:
         dtype = IntervalDtype(left_col.dtype, closed)
