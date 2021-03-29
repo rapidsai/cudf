@@ -84,39 +84,6 @@ enum class parse_result {
 };
 
 /**
- * @brief A struct which represents a string.
- *
- * Typically used to point into a substring of a larger string, such as
- * the input json itself.
- *
- * @code
- * // where cur_pos is a pointer to the beginning of a name string in the
- * // input json and name_size is the computed size.
- * json_string name{cur_pos, name_size};
- * @endcode
- *
- * Also used for parameter passing in a few cases:
- *
- * @code
- * json_string wildcard{"*", 1};
- * func(wildcard);
- * @endcode
- */
-struct json_string {
-  const char* str;
-  int64_t len;
-
-  constexpr json_string() : str(nullptr), len(-1) {}
-  constexpr json_string(const char* _str, int64_t _len) : str(_str), len(_len) {}
-
-  constexpr bool operator==(json_string const& cmp)
-  {
-    return len == cmp.len && str != nullptr && cmp.str != nullptr &&
-           thrust::equal(thrust::seq, str, str + len, cmp.str);
-  }
-};
-
-/**
  * @brief Base parser class inherited by the (device-side) json_state class and
  * (host-side) path_state class.
  *
@@ -125,19 +92,22 @@ struct json_string {
  */
 class parser {
  protected:
-  constexpr parser() : input(nullptr), input_len(0), pos(nullptr) {}
-  constexpr parser(const char* _input, int64_t _input_len)
+  CUDA_HOST_DEVICE_CALLABLE parser() : input(nullptr), input_len(0), pos(nullptr) {}
+  CUDA_HOST_DEVICE_CALLABLE parser(const char* _input, int64_t _input_len)
     : input(_input), input_len(_input_len), pos(_input)
   {
     parse_whitespace();
   }
 
-  constexpr parser(parser const& p) : input(p.input), input_len(p.input_len), pos(p.pos) {}
+  CUDA_HOST_DEVICE_CALLABLE parser(parser const& p)
+    : input(p.input), input_len(p.input_len), pos(p.pos)
+  {
+  }
 
-  constexpr bool eof(const char* p) { return p - input >= input_len; }
-  constexpr bool eof() { return eof(pos); }
+  CUDA_HOST_DEVICE_CALLABLE bool eof(const char* p) { return p - input >= input_len; }
+  CUDA_HOST_DEVICE_CALLABLE bool eof() { return eof(pos); }
 
-  constexpr bool parse_whitespace()
+  CUDA_HOST_DEVICE_CALLABLE bool parse_whitespace()
   {
     while (!eof()) {
       if (is_whitespace(*pos)) {
@@ -149,17 +119,17 @@ class parser {
     return false;
   }
 
-  constexpr parse_result parse_string(json_string& str, bool can_be_empty, char quote)
+  CUDA_HOST_DEVICE_CALLABLE parse_result parse_string(string_view& str,
+                                                      bool can_be_empty,
+                                                      char quote)
   {
-    str.str = nullptr;
-    str.len = 0;
+    str = string_view(nullptr, 0);
 
     if (parse_whitespace() && *pos == quote) {
       const char* start = ++pos;
       while (!eof()) {
         if (*pos == quote) {
-          str.str = start;
-          str.len = pos - start;
+          str = string_view(start, pos - start);
           pos++;
           return parse_result::SUCCESS;
         }
@@ -173,14 +143,16 @@ class parser {
   // a name means:
   // - a string followed by a :
   // - no string
-  constexpr parse_result parse_name(json_string& name, bool can_be_empty, char quote)
+  CUDA_HOST_DEVICE_CALLABLE parse_result parse_name(string_view& name,
+                                                    bool can_be_empty,
+                                                    char quote)
   {
     if (parse_string(name, can_be_empty, quote) == parse_result::ERROR) {
       return parse_result::ERROR;
     }
 
     // if we got a real string, the next char must be a :
-    if (name.len > 0) {
+    if (name.size_bytes() > 0) {
       if (!parse_whitespace()) { return parse_result::ERROR; }
       if (*pos == ':') {
         pos++;
@@ -193,7 +165,7 @@ class parser {
   // numbers, true, false, null.
   // this function is not particularly strong. badly formed values will get
   // consumed without throwing any errors
-  constexpr parse_result parse_non_string_value(json_string& val)
+  CUDA_HOST_DEVICE_CALLABLE parse_result parse_non_string_value(string_view& val)
   {
     if (!parse_whitespace()) { return parse_result::ERROR; }
 
@@ -210,8 +182,7 @@ class parser {
     }
     pos = end;
 
-    val.str = start;
-    val.len = {end - start};
+    val = string_view(start, end - start);
 
     return parse_result::SUCCESS;
   }
@@ -222,7 +193,7 @@ class parser {
   char const* pos;
 
  private:
-  constexpr bool is_whitespace(char c)
+  CUDA_HOST_DEVICE_CALLABLE bool is_whitespace(char c)
   {
     return c == ' ' || c == '\r' || c == '\n' || c == '\t' ? true : false;
   }
@@ -248,7 +219,7 @@ struct json_output {
   bool has_output;
   char* output;
 
-  constexpr void add_output(const char* str, size_t len)
+  __device__ void add_output(const char* str, size_t len)
   {
     if (output != nullptr) { memcpy(output + output_len, str, len); }
     output_len += len;
@@ -257,7 +228,7 @@ struct json_output {
     has_output = true;
   }
 
-  constexpr void add_output(json_string str) { add_output(str.str, str.len); }
+  __device__ void add_output(string_view const& str) { add_output(str.data(), str.size_bytes()); }
 };
 
 enum json_element_type { NONE, OBJECT, ARRAY, VALUE };
@@ -268,14 +239,14 @@ enum json_element_type { NONE, OBJECT, ARRAY, VALUE };
  */
 class json_state : private parser {
  public:
-  constexpr json_state()
+  __device__ json_state()
     : parser(),
       cur_el_start(nullptr),
       cur_el_type(json_element_type::NONE),
       parent_el_type(json_element_type::NONE)
   {
   }
-  constexpr json_state(const char* _input, int64_t _input_len)
+  __device__ json_state(const char* _input, int64_t _input_len)
     : parser(_input, _input_len),
       cur_el_start(nullptr),
       cur_el_type(json_element_type::NONE),
@@ -283,7 +254,7 @@ class json_state : private parser {
   {
   }
 
-  constexpr json_state(json_state const& j)
+  __device__ json_state(json_state const& j)
     : parser(j),
       cur_el_start(j.cur_el_start),
       cur_el_type(j.cur_el_type),
@@ -291,8 +262,8 @@ class json_state : private parser {
   {
   }
 
-  // retrieve the entire current element as a json_string
-  constexpr parse_result extract_element(json_output* output, bool list_element)
+  // retrieve the entire current element into the output
+  __device__ parse_result extract_element(json_output* output, bool list_element)
   {
     char const* start = cur_el_start;
     char const* end   = start;
@@ -339,18 +310,18 @@ class json_state : private parser {
       if (*pos == ',') { pos++; }
     }
 
-    if (output != nullptr) { output->add_output({start, end - start}); }
+    if (output != nullptr) { output->add_output({start, static_cast<size_type>(end - start)}); }
     return parse_result::SUCCESS;
   }
 
   // skip the next element
-  constexpr parse_result skip_element() { return extract_element(nullptr, false); }
+  __device__ parse_result skip_element() { return extract_element(nullptr, false); }
 
   // advance to the next element
-  constexpr parse_result next_element() { return next_element_internal(false); }
+  __device__ parse_result next_element() { return next_element_internal(false); }
 
   // advance inside the current element
-  constexpr parse_result child_element(json_element_type expected_type)
+  __device__ parse_result child_element(json_element_type expected_type)
   {
     if (expected_type != NONE && cur_el_type != expected_type) { return parse_result::ERROR; }
 
@@ -362,7 +333,7 @@ class json_state : private parser {
   }
 
   // return the next element that matches the specified name.
-  constexpr parse_result next_matching_element(json_string const& name, bool inclusive)
+  __device__ parse_result next_matching_element(string_view const& name, bool inclusive)
   {
     // if we're not including the current element, skip it
     if (!inclusive) {
@@ -372,7 +343,7 @@ class json_state : private parser {
     // loop until we find a match or there's nothing left
     do {
       // wildcard matches anything
-      if (name.len == 1 && name.str[0] == '*') {
+      if (name.size_bytes() == 1 && name.data()[0] == '*') {
         return parse_result::SUCCESS;
       } else if (cur_el_name == name) {
         return parse_result::SUCCESS;
@@ -388,16 +359,16 @@ class json_state : private parser {
 
  private:
   // parse a value - either a string or a number/null/bool
-  constexpr parse_result parse_value()
+  __device__ parse_result parse_value()
   {
     if (!parse_whitespace()) { return parse_result::ERROR; }
 
     // string or number?
-    json_string unused;
+    string_view unused;
     return *pos == '\"' ? parse_string(unused, false, '\"') : parse_non_string_value(unused);
   }
 
-  constexpr parse_result next_element_internal(bool child)
+  __device__ parse_result next_element_internal(bool child)
   {
     // if we're not getting a child element, skip the current element.
     // this will leave pos as the first character -after- the close of
@@ -447,7 +418,7 @@ class json_state : private parser {
 
   const char* cur_el_start;          // pointer to the first character of the -value- of the current
                                      // element - not the name
-  json_string cur_el_name;           // name of the current element (if applicable)
+  string_view cur_el_name;           // name of the current element (if applicable)
   json_element_type cur_el_type;     // type of the current element
   json_element_type parent_el_type;  // parent element type
 };
@@ -459,8 +430,12 @@ enum class path_operator_type { ROOT, CHILD, CHILD_WILDCARD, CHILD_INDEX, ERROR,
  * an array of these operators applied to the incoming json string,
  */
 struct path_operator {
-  constexpr path_operator() : type(path_operator_type::ERROR), index(-1), expected_type{NONE} {}
-  constexpr path_operator(path_operator_type _type, json_element_type _expected_type = NONE)
+  CUDA_HOST_DEVICE_CALLABLE path_operator()
+    : type(path_operator_type::ERROR), index(-1), expected_type{NONE}
+  {
+  }
+  CUDA_HOST_DEVICE_CALLABLE path_operator(path_operator_type _type,
+                                          json_element_type _expected_type = NONE)
     : type(_type), index(-1), expected_type{_expected_type}
   {
   }
@@ -473,7 +448,7 @@ struct path_operator {
   //    - you -can- use .* for both arrays and objects
   // a value of NONE imples any type accepted
   json_element_type expected_type;  // the expected type of the element we're working with
-  json_string name;                 // name to match against (if applicable)
+  string_view name;                 // name to match against (if applicable)
   int index;                        // index for subscript operator
 };
 
@@ -496,12 +471,12 @@ class path_state : private parser {
 
       case '.': {
         path_operator op;
-        json_string term{".[", 2};
+        string_view term{".[", 2};
         if (parse_path_name(op.name, term)) {
           // this is another potential use case for __SPARK_BEHAVIORS / configurability
           // Spark currently only handles the wildcard operator inside [*], it does
           // not handle .*
-          if (op.name.len == 1 && op.name.str[0] == '*') {
+          if (op.name.size_bytes() == 1 && op.name.data()[0] == '*') {
             op.type          = path_operator_type::CHILD_WILDCARD;
             op.expected_type = NONE;
           } else {
@@ -518,11 +493,11 @@ class path_state : private parser {
       // wildcard:  [*]
       case '[': {
         path_operator op;
-        json_string term{"]", 1};
+        string_view term{"]", 1};
         bool const is_string = *pos == '\'' ? true : false;
         if (parse_path_name(op.name, term)) {
           pos++;
-          if (op.name.len == 1 && op.name.str[0] == '*') {
+          if (op.name.size_bytes() == 1 && op.name.data()[0] == '*') {
             op.type          = path_operator_type::CHILD_WILDCARD;
             op.expected_type = NONE;
           } else {
@@ -530,9 +505,9 @@ class path_state : private parser {
               op.type          = path_operator_type::CHILD;
               op.expected_type = OBJECT;
             } else {
-              op.type = path_operator_type::CHILD_INDEX;
-              op.index =
-                cudf::io::parse_numeric<int>(op.name.str, op.name.str + op.name.len, json_opts, -1);
+              op.type  = path_operator_type::CHILD_INDEX;
+              op.index = cudf::io::parse_numeric<int>(
+                op.name.data(), op.name.data() + op.name.size_bytes(), json_opts, -1);
               CUDF_EXPECTS(op.index >= 0, "Invalid numeric index specified in JSONPath");
               op.expected_type = ARRAY;
             }
@@ -555,12 +530,11 @@ class path_state : private parser {
  private:
   cudf::io::parse_options_view json_opts{',', '\n', '\"', '.'};
 
-  bool parse_path_name(json_string& name, json_string const& terminators)
+  bool parse_path_name(string_view& name, string_view const& terminators)
   {
     switch (*pos) {
       case '*':
-        name.str = pos;
-        name.len = 1;
+        name = string_view(pos, 1);
         pos++;
         break;
 
@@ -571,22 +545,20 @@ class path_state : private parser {
       default: {
         size_t const chars_left = input_len - (pos - input);
         char const* end         = std::find_first_of(
-          pos, pos + chars_left, terminators.str, terminators.str + terminators.len);
+          pos, pos + chars_left, terminators.data(), terminators.data() + terminators.size_bytes());
         if (end) {
-          name.str = pos;
-          name.len = end - pos;
-          pos      = end;
+          name = string_view(pos, end - pos);
+          pos  = end;
         } else {
-          name.str = pos;
-          name.len = chars_left;
-          pos      = input + input_len;
+          name = string_view(pos, chars_left);
+          pos  = input + input_len;
         }
         break;
       }
     }
 
     // an empty name is not valid
-    CUDF_EXPECTS(name.len > 0, "Invalid empty name in JSONpath query string");
+    CUDF_EXPECTS(name.size_bytes() > 0, "Invalid empty name in JSONpath query string");
 
     return true;
   }
@@ -618,7 +590,10 @@ std::tuple<rmm::device_uvector<path_operator>, int, bool> build_command_buffer(
     }
     if (op.type == path_operator_type::CHILD_WILDCARD) { max_stack_depth++; }
     // convert pointer to device pointer
-    if (op.name.len > 0) { op.name.str = json_path.data() + (op.name.str - h_json_path.data()); }
+    if (op.name.size_bytes() > 0) {
+      op.name =
+        string_view(json_path.data() + (op.name.data() - h_json_path.data()), op.name.size_bytes());
+    }
     if (op.type == path_operator_type::ROOT) {
       CUDF_EXPECTS(h_operators.size() == 0, "Root operator ($) can only exist at the root");
     }
@@ -775,7 +750,7 @@ __device__ parse_result parse_json_path(json_state& j_state,
       case path_operator_type::CHILD_INDEX: {
         PARSE_TRY(ctx.j_state.child_element(op.expected_type));
         if (last_result == parse_result::SUCCESS) {
-          json_string const any{"*", 1};
+          string_view const any{"*", 1};
           PARSE_TRY(ctx.j_state.next_matching_element(any, true));
           if (last_result == parse_result::SUCCESS) {
             int idx;

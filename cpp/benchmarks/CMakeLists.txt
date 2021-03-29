@@ -198,4 +198,3 @@ ConfigureBench(STRINGS_BENCH
 # - json benchmark -------------------------------------------------------------------
 ConfigureBench(JSON_BENCH
   string/json_benchmark.cpp)
-  
