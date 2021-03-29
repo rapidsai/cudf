@@ -10,8 +10,6 @@ ENV NUMBAPRO_NVVM=/usr/local/cuda/nvvm/lib64/libnvvm.so
 ENV NUMBAPRO_LIBDEVICE=/usr/local/cuda/nvvm/libdevice/
 ENV DEBIAN_FRONTEND=noninteractive
 
-ENV CC=/usr/bin/gcc
-ENV CXX=/usr/bin/g++
 ENV CUDA_HOME=/usr/local/cuda
 ENV CUDA_PATH=$CUDA_HOME
 ENV PATH=${CUDA_HOME}/lib64/:${PATH}:${CUDA_HOME}/bin
