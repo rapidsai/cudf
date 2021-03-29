@@ -53,6 +53,7 @@
 #include <cudf/strings/split/split.hpp>
 #include <cudf/strings/strip.hpp>
 #include <cudf/strings/substring.hpp>
+#include <cudf/strings/json.hpp>
 #include <cudf/transform.hpp>
 #include <cudf/unary.hpp>
 #include <cudf/utilities/bit.hpp>

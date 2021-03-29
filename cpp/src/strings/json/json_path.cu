@@ -19,6 +19,7 @@
 #include <cudf/detail/get_value.cuh>
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/utilities/cuda.cuh>
+#include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/scalar/scalar.hpp>
 #include <cudf/scalar/scalar_factories.hpp>
 #include <cudf/strings/string_view.cuh>
@@ -215,17 +216,13 @@ class parser {
  */
 struct json_output {
   size_t output_max_len;
-  size_t output_len;
-  bool has_output;
   char* output;
+  thrust::optional<size_t> output_len;
 
   __device__ void add_output(const char* str, size_t len)
   {
-    if (output != nullptr) { memcpy(output + output_len, str, len); }
-    output_len += len;
-    // set this to true even if the string is empty. it implies we have
-    // seen actual output
-    has_output = true;
+    if (output != nullptr) { memcpy(output + output_len.value_or(0), str, len); }
+    output_len = output_len.value_or(0) + len;
   }
 
   __device__ void add_output(string_view const& str) { add_output(str.data(), str.size_bytes()); }
@@ -570,10 +567,9 @@ class path_state : private parser {
  *
  * @param json_path The incoming json path
  * @param stream Cuda stream to perform any gpu actions on
- * @returns A tuple containing the command buffer, the maximum stack depth required and whether or
- * not the command buffer is empty.
+ * @returns A pair containing the command buffer, and maximum stack depth required.
  */
-std::tuple<rmm::device_uvector<path_operator>, int, bool> build_command_buffer(
+std::pair<thrust::optional<rmm::device_uvector<path_operator>>, int> build_command_buffer(
   cudf::string_scalar const& json_path, rmm::cuda_stream_view stream)
 {
   std::string h_json_path = json_path.to_string(stream);
@@ -606,17 +602,12 @@ std::tuple<rmm::device_uvector<path_operator>, int, bool> build_command_buffer(
     h_operators.push_back(op);
   } while (op.type != path_operator_type::END);
 
-  rmm::device_uvector<path_operator> d_operators(h_operators.size(), stream);
-  CUDA_TRY(cudaMemcpyAsync(d_operators.data(),
-                           h_operators.data(),
-                           sizeof(path_operator) * h_operators.size(),
-                           cudaMemcpyHostToDevice,
-                           stream.value()));
-  stream.synchronize();
-
-  return {std::move(d_operators),
-          max_stack_depth,
-          h_operators.size() == 1 && h_operators[0].type == path_operator_type::END ? true : false};
+  auto const is_empty = h_operators.size() == 1 && h_operators[0].type == path_operator_type::END;
+  return is_empty
+           ? std::make_pair(thrust::nullopt, 0)
+           : std::make_pair(
+               thrust::make_optional(cudf::detail::make_device_uvector_sync(h_operators, stream)),
+               max_stack_depth);
 }
 
 #define PARSE_TRY(_x)                                                       \
@@ -808,7 +799,7 @@ __device__ thrust::pair<parse_result, json_output> get_json_object_single(
   size_t out_buf_size)
 {
   json_state j_state(input, input_len);
-  json_output output{out_buf_size, 0, false, out_buf};
+  json_output output{out_buf_size, out_buf};
 
   auto const result = parse_json_path<max_command_stack_depth>(j_state, commands, output);
 
@@ -829,17 +820,26 @@ __device__ thrust::pair<parse_result, json_output> get_json_object_single(
  * @param out_buf Buffer used to store the results of the query (nullptr in the size computation
  * step)
  * @param out_validity Output validity buffer (nullptr in the size computation step)
+ * @param out_valid_count Output count of # of valid bits (nullptr in the size computation step)
  */
-__global__ void get_json_object_kernel(column_device_view col,
-                                       path_operator const* const commands,
-                                       size_type* output_offsets,
-                                       char* out_buf,
-                                       bitmask_type* out_validity)
+template <int block_size>
+__launch_bounds__(block_size) __global__
+  void get_json_object_kernel(column_device_view col,
+                              path_operator const* const commands,
+                              size_type* output_offsets,
+                              char* out_buf,
+                              bitmask_type* out_validity,
+                              size_type* out_valid_count)
 {
-  uint64_t const tid = threadIdx.x + (blockDim.x * blockIdx.x);
+  size_type tid    = threadIdx.x + (blockDim.x * blockIdx.x);
+  size_type stride = blockDim.x * gridDim.x;
 
-  bool is_valid = false;
-  if (tid < col.size()) {
+  if (out_valid_count) { *out_valid_count = 0; }
+  size_type warp_valid_count{0};
+
+  auto active_threads = __ballot_sync(0xffffffff, tid < col.size());
+  while (tid < col.size()) {
+    bool is_valid         = false;
     string_view const str = col.element<string_view>(tid);
     size_type output_size = 0;
     if (str.size_bytes() > 0) {
@@ -850,21 +850,32 @@ __global__ void get_json_object_kernel(column_device_view col,
       json_output out;
       thrust::tie(result, out) =
         get_json_object_single(str.data(), str.size_bytes(), commands, dst, dst_size);
-      output_size = out.output_len;
-      if (out.has_output > 0 && result == parse_result::SUCCESS) { is_valid = true; }
+      output_size = out.output_len.value_or(0);
+      if (out.output_len.has_value() && result == parse_result::SUCCESS) { is_valid = true; }
     }
 
     // filled in only during the precompute step
     if (!out_buf) { output_offsets[tid] = static_cast<size_type>(output_size); }
+
+    // validity filled in only during the output step
+    if (out_validity) {
+      uint32_t mask = __ballot_sync(active_threads, is_valid);
+      // 0th lane of the warp writes the validity
+      if (!(tid % cudf::detail::warp_size)) {
+        out_validity[cudf::word_index(tid)] = mask;
+        warp_valid_count += __popc(mask);
+      }
+    }
+
+    tid += stride;
+    active_threads = __ballot_sync(active_threads, tid < col.size());
   }
 
-  // validity filled in only during the output step
-  if (out_validity) {
-    uint32_t mask = __ballot_sync(0xffffffff, is_valid);
-    // 0th lane of the warp writes the validity
-    if (!(tid % cudf::detail::warp_size) && tid < col.size()) {
-      out_validity[cudf::word_index(tid)] = mask;
-    }
+  // sum the valid counts across the whole block
+  if (out_valid_count) {
+    size_type block_valid_count =
+      cudf::detail::single_lane_block_sum_reduce<block_size, 0>(warp_valid_count);
+    if (threadIdx.x == 0) { atomicAdd(out_valid_count, block_valid_count); }
   }
 }
 
@@ -877,8 +888,7 @@ std::unique_ptr<cudf::column> get_json_object(cudf::strings_column_view const& c
                                               rmm::mr::device_memory_resource* mr)
 {
   // preprocess the json_path into a command buffer
-  std::tuple<rmm::device_uvector<path_operator>, int, bool> preprocess =
-    build_command_buffer(json_path, stream);
+  auto preprocess = build_command_buffer(json_path, stream);
   CUDF_EXPECTS(std::get<1>(preprocess) <= max_command_stack_depth,
                "Encountered json_path string that is too complex");
 
@@ -888,7 +898,7 @@ std::unique_ptr<cudf::column> get_json_object(cudf::strings_column_view const& c
   cudf::mutable_column_view offsets_view(*offsets);
 
   // if the query is empty, return a string column containing all nulls
-  if (std::get<2>(preprocess)) {
+  if (!std::get<0>(preprocess).has_value()) {
     return std::make_unique<column>(
       data_type{type_id::STRING},
       col.size(),
@@ -897,13 +907,20 @@ std::unique_ptr<cudf::column> get_json_object(cudf::strings_column_view const& c
       col.size());  // null count
   }
 
-  cudf::detail::grid_1d const grid{col.size(), 512};
+  constexpr int block_size = 512;
+  cudf::detail::grid_1d const grid{col.size(), block_size};
 
   auto cdv = column_device_view::create(col.parent(), stream);
 
   // preprocess sizes (returned in the offsets buffer)
-  get_json_object_kernel<<<grid.num_blocks, grid.num_threads_per_block, 0, stream.value()>>>(
-    *cdv, std::get<0>(preprocess).data(), offsets_view.head<size_type>(), nullptr, nullptr);
+  get_json_object_kernel<block_size>
+    <<<grid.num_blocks, grid.num_threads_per_block, 0, stream.value()>>>(
+      *cdv,
+      std::get<0>(preprocess).value().data(),
+      offsets_view.head<size_type>(),
+      nullptr,
+      nullptr,
+      nullptr);
 
   // convert sizes to offsets
   thrust::exclusive_scan(rmm::exec_policy(stream),
@@ -925,17 +942,20 @@ std::unique_ptr<cudf::column> get_json_object(cudf::strings_column_view const& c
 
   // compute results
   cudf::mutable_column_view chars_view(*chars);
-  get_json_object_kernel<<<grid.num_blocks, grid.num_threads_per_block, 0, stream.value()>>>(
-    *cdv,
-    std::get<0>(preprocess).data(),
-    offsets_view.head<size_type>(),
-    chars_view.head<char>(),
-    static_cast<bitmask_type*>(validity.data()));
+  rmm::device_scalar<size_type> d_valid_count{0, stream};
+  get_json_object_kernel<block_size>
+    <<<grid.num_blocks, grid.num_threads_per_block, 0, stream.value()>>>(
+      *cdv,
+      std::get<0>(preprocess).value().data(),
+      offsets_view.head<size_type>(),
+      chars_view.head<char>(),
+      static_cast<bitmask_type*>(validity.data()),
+      d_valid_count.data());
 
   return make_strings_column(col.size(),
                              std::move(offsets),
                              std::move(chars),
-                             UNKNOWN_NULL_COUNT,
+                             col.size() - d_valid_count.value(),
                              std::move(validity),
                              stream,
                              mr);
@@ -951,6 +971,7 @@ std::unique_ptr<cudf::column> get_json_object(cudf::strings_column_view const& c
                                               cudf::string_scalar const& json_path,
                                               rmm::mr::device_memory_resource* mr)
 {
+  CUDF_FUNC_RANGE();
   return detail::get_json_object(col, json_path, 0, mr);
 }
 

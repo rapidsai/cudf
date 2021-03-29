@@ -22,8 +22,8 @@
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_wrapper.hpp>
 
+#include <cudf/strings/json.hpp>
 #include <cudf/strings/strings_column_view.hpp>
-#include <cudf/strings/substring.hpp>
 
 class JsonPath : public cudf::benchmark {
 };
@@ -135,6 +135,6 @@ JSON_BENCHMARK_DEFINE(query2, "$.store.book");
 JSON_BENCHMARK_DEFINE(query3, "$.store.*");
 JSON_BENCHMARK_DEFINE(query4, "$.store.book[*]");
 JSON_BENCHMARK_DEFINE(query5, "$.store.book[*].category");
-JSON_BENCHMARK_DEFINE(query6, "$.store.['bicycle']");
+JSON_BENCHMARK_DEFINE(query6, "$.store['bicycle']");
 JSON_BENCHMARK_DEFINE(query7, "$.store.book[*]['isbn']");
 JSON_BENCHMARK_DEFINE(query8, "$.store.bicycle[1]");
