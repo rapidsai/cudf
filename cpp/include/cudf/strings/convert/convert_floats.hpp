@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, NVIDIA CORPORATION.
+ * Copyright (c) 2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -66,6 +66,30 @@ std::unique_ptr<column> to_floats(
  */
 std::unique_ptr<column> from_floats(
   column_view const& floats,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+
+/**
+ * @brief Returns a boolean column identifying strings in which all
+ * characters are valid for conversion to floats.
+ *
+ * The output row entry will be set to `true` if the corresponding string element
+ * has at least one character in [-+0-9eE.].
+ *
+ * @code{.pseudo}
+ * Example:
+ * s = ['123', '-456', '', 'A', '+7', '8.9' '3.7e+5']
+ * b = s.is_float(s)
+ * b is [true, true, false, false, true, true, true]
+ * @endcode
+ *
+ * Any null row results in a null entry for that row in the output column.
+ *
+ * @param strings Strings instance for this operation.
+ * @param mr Device memory resource used to allocate the returned column's device memory.
+ * @return New column of boolean results for each string.
+ */
+std::unique_ptr<column> is_float(
+  strings_column_view const& strings,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /** @} */  // end of doxygen group

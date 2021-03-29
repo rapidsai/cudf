@@ -129,6 +129,13 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
     return viewHandle;
   }
 
+  static int getFixedPointOutputScale(BinaryOp op, DType lhsType, DType rhsType) {
+    assert (lhsType.isDecimalType() && rhsType.isDecimalType());
+    return fixedPointOutputScale(op.nativeId, lhsType.getScale(), rhsType.getScale());
+  }
+
+  private static native int fixedPointOutputScale(int op, int lhsScale, int rhsScale);
+
   public final DType getType() {
     return type;
   }
@@ -250,6 +257,15 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
   }
 
   /**
+   * Get the number of elements for each list. Null lists will have a value of null.
+   * @return the number of elements in each list as an INT32 value.
+   */
+  public final ColumnVector countElements() {
+    assert DType.LIST.equals(type) : "Only lists are supported";
+    return new ColumnVector(countElements(getNativeView()));
+  }
+
+  /**
    * Returns a Boolean vector with the same number of rows as this instance, that has
    * TRUE for any entry that is not null, and FALSE for any null entry (as per the validity mask)
    *
@@ -272,17 +288,32 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
   /**
    * Returns a Boolean vector with the same number of rows as this instance, that has
    * TRUE for any entry that is an integer, and FALSE if its not an integer. A null will be returned
-   * for null entries
+   * for null entries.
    *
    * NOTE: Integer doesn't mean a 32-bit integer. It means a number that is not a fraction.
    * i.e. If this method returns true for a value it could still result in an overflow or underflow
    * if you convert it to a Java integral type
    *
-   * @return - Boolean vector
+   * @return Boolean vector
    */
   public final ColumnVector isInteger() {
     assert type.equals(DType.STRING);
     return new ColumnVector(isInteger(getNativeView()));
+  }
+
+  /**
+   * Returns a Boolean vector with the same number of rows as this instance, that has
+   * TRUE for any entry that is an integer, and FALSE if its not an integer. A null will be returned
+   * for null entries.
+   *
+   * @param intType the data type that should be used for bounds checking. Note that only
+   *                integer types are allowed.
+   * @return Boolean vector
+   */
+  public final ColumnVector isInteger(DType intType) {
+    assert type.equals(DType.STRING);
+    return new ColumnVector(isIntegerWithType(getNativeView(),
+        intType.getTypeId().getNativeId(), intType.getScale()));
   }
 
   /**
@@ -2742,6 +2773,8 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
 
   private static native long binaryOpVV(long lhs, long rhs, int op, int dtype, int scale);
 
+  private static native long countElements(long viewHandle);
+
   private static native long byteCount(long viewHandle) throws CudfException;
 
   private static native long extractListElement(long nativeView, int index);
@@ -2826,6 +2859,8 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
   private static native long isFloat(long viewHandle);
 
   private static native long isInteger(long viewHandle);
+
+  private static native long isIntegerWithType(long viewHandle, int typeId, int typeScale);
 
   private static native long isNotNanNative(long viewHandle);
 

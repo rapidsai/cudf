@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2020, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,6 +20,7 @@
 #include <cudf/detail/aggregation/aggregation.hpp>
 #include <cudf/dictionary/detail/iterator.cuh>
 #include <cudf/dictionary/dictionary_column_view.hpp>
+#include <cudf/utilities/span.hpp>
 
 #include <groupby/sort/group_reductions.hpp>
 #include <quantiles/quantiles_util.hpp>
@@ -77,9 +78,9 @@ struct quantiles_functor {
   std::enable_if_t<std::is_arithmetic<T>::value, std::unique_ptr<column>> operator()(
     column_view const& values,
     column_view const& group_sizes,
-    rmm::device_vector<size_type> const& group_offsets,
+    cudf::device_span<size_type const> group_offsets,
     size_type const num_groups,
-    rmm::device_vector<double> const& quantile,
+    device_span<double const> quantile,
     interpolation interpolation,
     rmm::cuda_stream_view stream,
     rmm::mr::device_memory_resource* mr)
@@ -110,8 +111,8 @@ struct quantiles_functor {
                            values_iter,
                            *group_size_view,
                            *result_view,
-                           group_offsets.data().get(),
-                           quantile.data().get(),
+                           group_offsets.data(),
+                           quantile.data(),
                            static_cast<size_type>(quantile.size()),
                            interpolation});
     } else {
@@ -123,8 +124,8 @@ struct quantiles_functor {
                            values_iter,
                            *group_size_view,
                            *result_view,
-                           group_offsets.data().get(),
-                           quantile.data().get(),
+                           group_offsets.data(),
+                           quantile.data(),
                            static_cast<size_type>(quantile.size()),
                            interpolation});
     }
@@ -145,7 +146,7 @@ struct quantiles_functor {
 // TODO: add optional check for is_sorted. Use context.flag_sorted
 std::unique_ptr<column> group_quantiles(column_view const& values,
                                         column_view const& group_sizes,
-                                        rmm::device_vector<size_type> const& group_offsets,
+                                        cudf::device_span<size_type const> group_offsets,
                                         size_type const num_groups,
                                         std::vector<double> const& quantiles,
                                         interpolation interp,

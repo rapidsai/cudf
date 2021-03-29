@@ -103,11 +103,16 @@ class lists_column_view : private column_view {
   }
 
   /**
-   * @brief Return one past the last offset
+   * @brief Return pointer to the position that is one past the last offset
+   *
+   * This function return the position that is one past the last offset of the lists column.
+   * Since the current lists column may be a sliced column, this offsets_end() iterator should not
+   * be computed using the size of the offsets() child column, which is also the offsets of the
+   * entire original (non-sliced) lists column.
    *
    * @return int32_t const* Pointer to one past the last offset
    */
-  offset_iterator offsets_end() const noexcept { return offsets_begin() + size(); }
+  offset_iterator offsets_end() const noexcept { return offsets_begin() + size() + 1; }
 };
 /** @} */  // end of group
 }  // namespace cudf

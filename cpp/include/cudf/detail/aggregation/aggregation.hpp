@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2020, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,7 +17,7 @@
 #pragma once
 
 #include <cudf/aggregation.hpp>
-#include <cudf/detail/utilities/release_assert.cuh>
+#include <cudf/detail/utilities/assert.cuh>
 #include <cudf/types.hpp>
 #include <cudf/utilities/error.hpp>
 #include <cudf/utilities/traits.hpp>
@@ -320,11 +320,11 @@ struct udf_aggregation final : derived_aggregation<udf_aggregation> {
 };
 
 /**
- * @brief Derived aggregation class for specifying COLLECT aggregation
+ * @brief Derived aggregation class for specifying COLLECT_LIST aggregation
  */
 struct collect_list_aggregation final : derived_aggregation<nunique_aggregation> {
   explicit collect_list_aggregation(null_policy null_handling = null_policy::INCLUDE)
-    : derived_aggregation{COLLECT}, _null_handling{null_handling}
+    : derived_aggregation{COLLECT_LIST}, _null_handling{null_handling}
   {
   }
   null_policy _null_handling;  ///< include or exclude nulls
@@ -338,6 +338,32 @@ struct collect_list_aggregation final : derived_aggregation<nunique_aggregation>
   }
 
   size_t hash_impl() const { return std::hash<int>{}(static_cast<int>(_null_handling)); }
+};
+
+/**
+ * @brief Derived aggregation class for specifying COLLECT_SET aggregation
+ */
+struct collect_set_aggregation final : derived_aggregation<collect_set_aggregation> {
+  explicit collect_set_aggregation(null_policy null_handling = null_policy::INCLUDE,
+                                   null_equality null_equal  = null_equality::EQUAL)
+    : derived_aggregation{COLLECT_SET}, _null_handling{null_handling}, _null_equal(null_equal)
+  {
+  }
+  null_policy _null_handling;  ///< include or exclude nulls
+  null_equality _null_equal;   ///< whether to consider nulls as equal values
+
+ protected:
+  friend class derived_aggregation<collect_set_aggregation>;
+
+  bool operator==(collect_set_aggregation const& other) const
+  {
+    return _null_handling == other._null_handling && _null_equal == other._null_equal;
+  }
+
+  size_t hash_impl() const
+  {
+    return std::hash<int>{}(static_cast<int>(_null_handling) ^ static_cast<int>(_null_equal));
+  }
 };
 
 /**
@@ -514,9 +540,15 @@ struct target_type_impl<Source, aggregation::ROW_NUMBER> {
   using type = cudf::size_type;
 };
 
-// Always use list for COLLECT
+// Always use list for COLLECT_LIST
 template <typename Source>
-struct target_type_impl<Source, aggregation::COLLECT> {
+struct target_type_impl<Source, aggregation::COLLECT_LIST> {
+  using type = cudf::list_view;
+};
+
+// Always use list for COLLECT_SET
+template <typename Source>
+struct target_type_impl<Source, aggregation::COLLECT_SET> {
   using type = cudf::list_view;
 };
 
@@ -617,8 +649,10 @@ CUDA_HOST_DEVICE_CALLABLE decltype(auto) aggregation_dispatcher(aggregation::Kin
       return f.template operator()<aggregation::NTH_ELEMENT>(std::forward<Ts>(args)...);
     case aggregation::ROW_NUMBER:
       return f.template operator()<aggregation::ROW_NUMBER>(std::forward<Ts>(args)...);
-    case aggregation::COLLECT:
-      return f.template operator()<aggregation::COLLECT>(std::forward<Ts>(args)...);
+    case aggregation::COLLECT_LIST:
+      return f.template operator()<aggregation::COLLECT_LIST>(std::forward<Ts>(args)...);
+    case aggregation::COLLECT_SET:
+      return f.template operator()<aggregation::COLLECT_SET>(std::forward<Ts>(args)...);
     case aggregation::LEAD:
       return f.template operator()<aggregation::LEAD>(std::forward<Ts>(args)...);
     case aggregation::LAG:
@@ -627,7 +661,7 @@ CUDA_HOST_DEVICE_CALLABLE decltype(auto) aggregation_dispatcher(aggregation::Kin
 #ifndef __CUDA_ARCH__
       CUDF_FAIL("Unsupported aggregation.");
 #else
-      release_assert(false && "Unsupported aggregation.");
+      cudf_assert(false && "Unsupported aggregation.");
 
       // The following code will never be reached, but the compiler generates a
       // warning if there isn't a return value.

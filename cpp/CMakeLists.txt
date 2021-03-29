@@ -1,5 +1,5 @@
 #=============================================================================
-# Copyright (c) 2018-2020, NVIDIA CORPORATION.
+# Copyright (c) 2018-2021, NVIDIA CORPORATION.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -22,10 +22,9 @@ cmake_minimum_required(VERSION 3.18 FATAL_ERROR)
 
 # This needs to be run before enabling the CUDA language due to the default initialization behavior
 # of `CMAKE_CUDA_ARCHITECTURES`, https://gitlab.kitware.com/cmake/cmake/-/issues/21302
-if(NOT DEFINED CMAKE_CUDA_ARCHITECTURES)
+if(NOT DEFINED CMAKE_CUDA_ARCHITECTURES OR CMAKE_CUDA_ARCHITECTURES STREQUAL "ALL")
   set(CUDF_BUILD_FOR_ALL_ARCHS TRUE)
 elseif(CMAKE_CUDA_ARCHITECTURES STREQUAL "")
-  unset(CMAKE_CUDA_ARCHITECTURES CACHE)
   set(CUDF_BUILD_FOR_DETECTED_ARCHS TRUE)
 endif()
 
@@ -118,6 +117,8 @@ include(cmake/Modules/ConfigureCUDA.cmake)
 
 # find zlib
 find_package(ZLIB REQUIRED)
+# find Threads (needed by cudftestutil)
+find_package(Threads REQUIRED)
 # add third party dependencies using CPM
 include(cmake/thirdparty/CUDF_GetCPM.cmake)
 # find boost
@@ -134,8 +135,12 @@ include(cmake/thirdparty/CUDF_GetArrow.cmake)
 include(cmake/thirdparty/CUDF_GetDLPack.cmake)
 # find libcu++
 include(cmake/thirdparty/CUDF_GetLibcudacxx.cmake)
+# find or install GoogleTest
+include(cmake/thirdparty/CUDF_GetGTest.cmake)
 # Stringify libcudf and libcudacxx headers used in JIT operations
 include(cmake/Modules/StringifyJITHeaders.cmake)
+# find cuFile
+include(cmake/Modules/FindcuFile.cmake)
 
 ###################################################################################################
 # - library targets -------------------------------------------------------------------------------
@@ -151,6 +156,7 @@ add_library(cudf
     src/binaryop/jit/code/kernel.cpp
     src/binaryop/jit/code/operation.cpp
     src/binaryop/jit/code/traits.cpp
+    src/labeling/label_bins.cu
     src/bitmask/null_mask.cu
     src/column/column.cu
     src/column/column_device_view.cu
@@ -189,7 +195,7 @@ add_library(cudf
     src/groupby/hash/groupby.cu
     src/groupby/sort/group_argmax.cu
     src/groupby/sort/group_argmin.cu
-    src/groupby/sort/groupby.cu
+    src/groupby/sort/aggregate.cpp
     src/groupby/sort/group_collect.cu
     src/groupby/sort/group_count.cu
     src/groupby/sort/group_max.cu
@@ -199,6 +205,11 @@ add_library(cudf
     src/groupby/sort/group_quantiles.cu
     src/groupby/sort/group_std.cu
     src/groupby/sort/group_sum.cu
+    src/groupby/sort/scan.cpp
+    src/groupby/sort/group_count_scan.cu
+    src/groupby/sort/group_max_scan.cu
+    src/groupby/sort/group_min_scan.cu
+    src/groupby/sort/group_sum_scan.cu
     src/groupby/sort/sort_helper.cu
     src/hash/hashing.cu
     src/interop/dlpack.cpp
@@ -241,6 +252,7 @@ add_library(cudf
     src/io/statistics/column_stats.cu
     src/io/utilities/data_sink.cpp
     src/io/utilities/datasource.cpp
+    src/io/utilities/file_io_utilities.cpp
     src/io/utilities/parsing_utils.cu
     src/io/utilities/type_conversion.cpp
     src/jit/cache.cpp
@@ -257,7 +269,9 @@ add_library(cudf
     src/lists/copying/gather.cu
     src/lists/copying/segmented_gather.cu
     src/lists/count_elements.cu
+    src/lists/explode.cu
     src/lists/extract.cu
+    src/lists/drop_list_duplicates.cu
     src/lists/lists_column_factories.cu
     src/lists/lists_column_view.cu
     src/lists/segmented_sort.cu
@@ -285,7 +299,6 @@ add_library(cudf
     src/replace/nulls.cu
     src/replace/replace.cu
     src/reshape/byte_cast.cu
-    src/reshape/explode.cu
     src/reshape/interleave_columns.cu
     src/reshape/tile.cu
     src/rolling/grouped_rolling.cu
@@ -403,7 +416,7 @@ target_compile_options(cudf
 
 target_compile_definitions(cudf
             PUBLIC "$<$<COMPILE_LANGUAGE:CXX>:${CUDF_CXX_DEFINITIONS}>"
-                   "$<$<COMPILE_LANGUAGE:CUDA>:${CUDF_CUDA_DEFINITIONS}>"
+                   "$<BUILD_INTERFACE:$<$<COMPILE_LANGUAGE:CUDA>:${CUDF_CUDA_DEFINITIONS}>>"
 )
 
 # Disable Jitify log printing. See https://github.com/NVIDIA/jitify/issues/79
@@ -417,7 +430,9 @@ target_include_directories(cudf
                        "$<BUILD_INTERFACE:${CUDF_SOURCE_DIR}/include>"
                        "$<BUILD_INTERFACE:${CUDF_GENERATED_INCLUDE_DIR}/include>"
            PRIVATE     "$<BUILD_INTERFACE:${CUDF_SOURCE_DIR}/src>"
-           INTERFACE   "$<INSTALL_INTERFACE:include>")
+           INTERFACE   "$<INSTALL_INTERFACE:include>"
+                       "$<INSTALL_INTERFACE:include/libcudf/libcudacxx>"
+                       "$<INSTALL_INTERFACE:include/libcudf/Thrust>")
 
 # Add Conda library paths if specified
 if(CONDA_LINK_DIRS)
@@ -464,6 +479,11 @@ else()
     target_link_libraries(cudf PUBLIC CUDA::nvrtc CUDA::cudart CUDA::cuda_driver)
 endif()
 
+# Add cuFile interface if available
+if(TARGET cuFile::cuFile_interface)
+    target_link_libraries(cudf PRIVATE cuFile::cuFile_interface)
+endif()
+
 file(WRITE "${CUDF_BINARY_DIR}/fatbin.ld"
 [=[
 SECTIONS
@@ -480,34 +500,38 @@ add_library(cudf::cudf ALIAS cudf)
 # - tests and benchmarks --------------------------------------------------------------------------
 ###################################################################################################
 
-if (CUDF_BUILD_TESTS OR CUDF_BUILD_BENCHMARKS)
-    # Find or install GoogleTest
-    CPMFindPackage(NAME GTest
-        VERSION         1.10.0
-        GIT_REPOSITORY  https://github.com/google/googletest.git
-        GIT_TAG         release-1.10.0
-        GIT_SHALLOW     TRUE
-        OPTIONS         "INSTALL_GTEST OFF"
-        # googletest >= 1.10.0 provides a cmake config file -- use it if it exists
-        FIND_PACKAGE_ARGUMENTS "CONFIG")
-    # Add GTest aliases if they don't already exist.
-    # Assumes if GTest::gtest doesn't exist, the others don't either.
-    # TODO: Is this always a valid assumption?
-    if(NOT TARGET GTest::gtest)
-        add_library(GTest::gtest ALIAS gtest)
-        add_library(GTest::gmock ALIAS gmock)
-        add_library(GTest::gtest_main ALIAS gtest_main)
-        add_library(GTest::gmock_main ALIAS gmock_main)
-    endif()
-    if(GTest_ADDED)
-        install(TARGETS gmock
-                        gtest
-                        gmock_main
-                        gtest_main
-            DESTINATION lib
-            EXPORT cudf-targets)
-    endif()
-endif()
+###################################################################################################
+# - build cudftestutil ----------------------------------------------------------------------------
+
+add_library(cudftestutil STATIC
+            tests/utilities/base_fixture.cpp
+            tests/utilities/column_utilities.cu
+            tests/utilities/table_utilities.cu
+            tests/strings/utilities.cu)
+
+target_compile_options(cudftestutil
+            PUBLIC "$<$<COMPILE_LANGUAGE:CXX>:${CUDF_CXX_FLAGS}>"
+                   "$<BUILD_INTERFACE:$<$<COMPILE_LANGUAGE:CUDA>:${CUDF_CUDA_FLAGS}>>"
+)
+
+target_compile_features(cudftestutil
+    PUBLIC cxx_std_14 $<BUILD_INTERFACE:cuda_std_14>)
+
+target_link_libraries(cudftestutil
+               PUBLIC GTest::gmock
+                      GTest::gtest
+                      Threads::Threads
+                      cudf)
+
+target_include_directories(cudftestutil
+    PUBLIC "$<BUILD_INTERFACE:${CUDF_SOURCE_DIR}>"
+           "$<BUILD_INTERFACE:${CUDF_SOURCE_DIR}/src>")
+
+install(TARGETS cudftestutil
+        DESTINATION lib
+        EXPORT cudf-testing-targets)
+
+add_library(cudf::cudftestutil ALIAS cudftestutil)
 
 ###################################################################################################
 # - add tests -------------------------------------------------------------------------------------
@@ -562,6 +586,9 @@ install(DIRECTORY
             ${CUDF_GENERATED_INCLUDE_DIR}/include/libcudacxx
         DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/libcudf)
 
+install(DIRECTORY ${Thrust_SOURCE_DIR}/
+  DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/libcudf/Thrust)
+
 include(CMakePackageConfigHelpers)
 
 configure_package_config_file(cmake/cudf-config.cmake.in "${CUDF_BINARY_DIR}/cmake/cudf-config.cmake"
@@ -577,6 +604,11 @@ install(FILES   "${CUDF_BINARY_DIR}/cmake/cudf-config.cmake"
 
 install(EXPORT  cudf-targets
     FILE        cudf-targets.cmake
+    NAMESPACE   cudf::
+    DESTINATION "${INSTALL_CONFIGDIR}")
+
+install(EXPORT  cudf-testing-targets
+    FILE        cudf-testing-targets.cmake
     NAMESPACE   cudf::
     DESTINATION "${INSTALL_CONFIGDIR}")
 
@@ -606,6 +638,10 @@ endif()
 
 export(EXPORT cudf-targets
     FILE ${CUDF_BINARY_DIR}/cudf-targets.cmake
+    NAMESPACE   cudf::)
+
+export(EXPORT cudf-testing-targets
+    FILE ${CUDF_BINARY_DIR}/cudf-testing-targets.cmake
     NAMESPACE   cudf::)
 
 

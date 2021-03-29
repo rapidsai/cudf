@@ -6,7 +6,7 @@ import copy
 import functools
 import warnings
 from collections import OrderedDict, abc as abc
-from typing import TYPE_CHECKING, Any, Dict, Tuple, TypeVar, overload
+from typing import TYPE_CHECKING, Any, Dict, Tuple, TypeVar, Union, overload
 
 import cupy
 import numpy as np
@@ -18,6 +18,7 @@ from typing_extensions import Literal
 
 import cudf
 from cudf import _lib as libcudf
+from cudf._typing import ColumnLike, DataFrameOrSeries
 from cudf.core.column import as_column, build_categorical_column, column_empty
 from cudf.utils.dtypes import (
     is_categorical_dtype,
@@ -39,8 +40,8 @@ class Frame(libcudf.table.Table):
 
     Parameters
     ----------
-    data : OrderedColumnDict
-        An OrderedColumnDict mapping column names to Columns
+    data : dict
+        An dict mapping column names to Columns
     index : Table
         A Frame representing the (optional) index columns.
     """
@@ -571,6 +572,28 @@ class Frame(libcudf.table.Table):
             return other._index is None
         else:
             return self._index.equals(other._index)
+
+    def _explode(self, explode_column: Any, ignore_index: bool):
+        """Helper function for `explode` in `Series` and `Dataframe`, explodes
+        a specified nested column. Other columns' corresponding rows are
+        duplicated. If ignore_index is set, the original index is not exploded
+        and will be replaced with a `RangeIndex`.
+        """
+        explode_column_num = self._column_names.index(explode_column)
+        if not ignore_index and self._index is not None:
+            explode_column_num += self._index.nlevels
+
+        res_tbl = libcudf.lists.explode_outer(
+            self, explode_column_num, ignore_index
+        )
+        res = self.__class__._from_table(res_tbl)
+
+        res._data.multiindex = self._data.multiindex
+        res._data._level_names = self._data._level_names
+
+        if not ignore_index and self._index is not None:
+            res.index.names = self._index.names
+        return res
 
     def _get_columns_by_label(self, labels, downcast):
         """
@@ -1565,10 +1588,7 @@ class Frame(libcudf.table.Table):
         rows corresponding to `False` is dropped
         """
         boolean_mask = as_column(boolean_mask)
-        if boolean_mask.has_nulls:
-            raise ValueError(
-                "cannot mask with boolean_mask containing null values"
-            )
+
         result = self.__class__._from_table(
             libcudf.stream_compaction.apply_boolean_mask(
                 self, as_column(boolean_mask)
@@ -2388,7 +2408,9 @@ class Frame(libcudf.table.Table):
         for name, col, other_col in zip(
             self._data.keys(), self._data.values(), other._data.values()
         ):
-            self._data[name] = other_col._copy_type_metadata(col)
+            self._data.set_by_label(
+                name, other_col._copy_type_metadata(col), validate=False
+            )
 
         if include_index:
             if self._index is not None and other._index is not None:
@@ -3852,3 +3874,84 @@ def _is_series(obj):
     instead of checking for isinstance(obj, cudf.Series)
     """
     return isinstance(obj, Frame) and obj.ndim == 1 and obj._index is not None
+
+
+def _drop_rows_by_labels(
+    obj: DataFrameOrSeries,
+    labels: Union[ColumnLike, abc.Iterable, str],
+    level: Union[int, str],
+    errors: str,
+) -> DataFrameOrSeries:
+    """Remove rows specified by `labels`. If `errors=True`, an error is raised
+    if some items in `labels` do not exist in `obj._index`.
+
+    Will raise if level(int) is greater or equal to index nlevels
+    """
+    if isinstance(level, int) and level >= obj.index.nlevels:
+        raise ValueError("Param level out of bounds.")
+
+    if not isinstance(labels, (cudf.Series, cudf.Index)):
+        labels = as_column(labels)
+
+    if isinstance(obj._index, cudf.MultiIndex):
+        if level is None:
+            level = 0
+
+        levels_index = obj.index.get_level_values(level)
+        if errors == "raise" and not labels.isin(levels_index).all():
+            raise KeyError("One or more values not found in axis")
+
+        if isinstance(level, int):
+            ilevel = level
+        else:
+            ilevel = obj._index.names.index(level)
+
+        # 1. Merge Index df and data df along column axis:
+        # | id | ._index df | data column(s) |
+        idx_nlv = obj._index.nlevels
+        working_df = obj._index._source_data
+        working_df.columns = [i for i in range(idx_nlv)]
+        for i, col in enumerate(obj._data):
+            working_df[idx_nlv + i] = obj._data[col]
+        # 2. Set `level` as common index:
+        # | level | ._index df w/o level | data column(s) |
+        working_df = working_df.set_index(level)
+
+        # 3. Use "leftanti" join to drop
+        # TODO: use internal API with "leftanti" and specify left and right
+        # join keys to bypass logic check
+        to_join = cudf.DataFrame(index=cudf.Index(labels, name=level))
+        join_res = working_df.join(to_join, how="leftanti")
+
+        # 4. Reconstruct original layout, and rename
+        join_res.insert(
+            ilevel, name=join_res._index.name, value=join_res._index
+        )
+        join_res = join_res.reset_index(drop=True)
+
+        midx = cudf.MultiIndex.from_frame(
+            join_res.iloc[:, 0:idx_nlv], names=obj._index.names
+        )
+
+        if isinstance(obj, cudf.Series):
+            return obj.__class__._from_data(
+                join_res.iloc[:, idx_nlv:]._data, index=midx, name=obj.name
+            )
+        else:
+            return obj.__class__._from_data(
+                join_res.iloc[:, idx_nlv:]._data,
+                index=midx,
+                columns=obj.columns,
+            )
+
+    else:
+        if errors == "raise" and not labels.isin(obj.index).all():
+            raise KeyError("One or more values not found in axis")
+
+        key_df = cudf.DataFrame(index=labels)
+        if isinstance(obj, cudf.Series):
+            res = obj.to_frame(name="tmp").join(key_df, how="leftanti")["tmp"]
+            res.name = obj.name
+            return res
+        else:
+            return obj.join(key_df, how="leftanti")

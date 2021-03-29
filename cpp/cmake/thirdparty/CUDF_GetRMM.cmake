@@ -28,6 +28,11 @@ function(cudf_restore_if_enabled var)
 endfunction()
 
 function(find_and_configure_rmm VERSION)
+
+    if(TARGET rmm::rmm)
+        return()
+    endif()
+
     # Consumers have two options for local source builds:
     # 1. Pass `-D CPM_rmm_SOURCE=/path/to/rmm` to build a local RMM source tree
     # 2. Pass `-D CMAKE_PREFIX_PATH=/path/to/rmm/build` to use an existing local
@@ -43,19 +48,14 @@ function(find_and_configure_rmm VERSION)
         OPTIONS         "BUILD_TESTS OFF"
                         "BUILD_BENCHMARKS OFF"
                         "CUDA_STATIC_RUNTIME ${CUDA_STATIC_RUNTIME}"
-                        "CMAKE_CUDA_ARCHITECTURES ${CMAKE_CUDA_ARCHITECTURES}"
                         "DISABLE_DEPRECATION_WARNING ${DISABLE_DEPRECATION_WARNING}"
     )
     cudf_restore_if_enabled(BUILD_TESTS)
     cudf_restore_if_enabled(BUILD_BENCHMARKS)
 
-    #Make sure consumers of cudf can also see rmm::rmm
-    if(TARGET rmm::rmm)
-        get_target_property(rmm_is_imported rmm::rmm IMPORTED)
-        if(rmm_is_imported)
-            set_target_properties(rmm::rmm PROPERTIES IMPORTED_GLOBAL TRUE)
-        endif()
-    endif()
+    # Make sure consumers of cudf can also see rmm::rmm
+    fix_cmake_global_defaults(rmm::rmm)
+
     if(NOT rmm_BINARY_DIR IN_LIST CMAKE_PREFIX_PATH)
         list(APPEND CMAKE_PREFIX_PATH "${rmm_BINARY_DIR}")
         set(CMAKE_PREFIX_PATH ${CMAKE_PREFIX_PATH} PARENT_SCOPE)

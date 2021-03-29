@@ -92,6 +92,7 @@ struct orcenc_state_s {
   union {
     uint8_t u8[2048];
     uint32_t u32[1024];
+    uint64_t u64[1024];
   } lengths;
 };
 
@@ -101,6 +102,7 @@ static inline __device__ uint32_t zigzag(int32_t v)
   int32_t s = (v >> 31);
   return ((v ^ s) * 2) - s;
 }
+static inline __device__ uint64_t zigzag(uint64_t v) { return v; }
 static inline __device__ uint64_t zigzag(int64_t v)
 {
   int64_t s = (v < 0) ? 1 : 0;
@@ -286,24 +288,6 @@ static inline __device__ uint32_t StoreVarint(uint8_t *dst, uint64_t v)
   return bytecnt;
 }
 
-static inline __device__ void intrle_minmax(int64_t &vmin, int64_t &vmax)
-{
-  vmin = INT64_MIN;
-  vmax = INT64_MAX;
-}
-// static inline __device__ void intrle_minmax(uint64_t &vmin, uint64_t &vmax) { vmin = UINT64_C(0);
-// vmax = UINT64_MAX; }
-static inline __device__ void intrle_minmax(int32_t &vmin, int32_t &vmax)
-{
-  vmin = INT32_MIN;
-  vmax = INT32_MAX;
-}
-static inline __device__ void intrle_minmax(uint32_t &vmin, uint32_t &vmax)
-{
-  vmin = UINT32_C(0);
-  vmax = UINT32_MAX;
-}
-
 template <class T>
 static inline __device__ void StoreBytesBigEndian(uint8_t *dst, T v, uint32_t w)
 {
@@ -412,13 +396,9 @@ static __device__ uint32_t IntegerRLE(orcenc_state_s *s,
     // Find minimum and maximum values
     if (literal_run > 0) {
       // Find min & max
-      T vmin, vmax;
+      T vmin = (t < literal_run) ? v0 : std::numeric_limits<T>::max();
+      T vmax = (t < literal_run) ? v0 : std::numeric_limits<T>::min();
       uint32_t literal_mode, literal_w;
-      if (t < literal_run) {
-        vmin = vmax = v0;
-      } else {
-        intrle_minmax(vmax, vmin);
-      }
       vmin = block_reduce(temp_storage).Reduce(vmin, cub::Min());
       __syncthreads();
       vmax = block_reduce(temp_storage).Reduce(vmax, cub::Max());
@@ -652,6 +632,7 @@ __global__ void __launch_bounds__(block_size)
     typename cub::BlockReduce<int32_t, block_size>::TempStorage i32;
     typename cub::BlockReduce<int64_t, block_size>::TempStorage i64;
     typename cub::BlockReduce<uint32_t, block_size>::TempStorage u32;
+    typename cub::BlockReduce<uint64_t, block_size>::TempStorage u64;
   } temp_storage;
 
   orcenc_state_s *const s = &state_g;
@@ -688,19 +669,20 @@ __global__ void __launch_bounds__(block_size)
       if (t * 8 < nrows) {
         uint32_t row  = s->chunk.start_row + present_rows + t * 8;
         uint8_t valid = 0;
-        if (row < s->chunk.valid_rows) {
-          if (s->chunk.valid_map_base) {
-            size_type current_valid_offset = row + s->chunk.column_offset;
-            size_type next_valid_offset    = current_valid_offset + min(32, s->chunk.valid_rows);
+        if (row < s->chunk.leaf_column->size()) {
+          if (s->chunk.leaf_column->nullable()) {
+            size_type current_valid_offset = row + s->chunk.leaf_column->offset();
+            size_type next_valid_offset =
+              current_valid_offset + min(32, s->chunk.leaf_column->size());
 
             bitmask_type mask = cudf::detail::get_mask_offset_word(
-              s->chunk.valid_map_base, 0, current_valid_offset, next_valid_offset);
+              s->chunk.leaf_column->null_mask(), 0, current_valid_offset, next_valid_offset);
             valid = 0xff & mask;
           } else {
             valid = 0xff;
           }
-          if (row + 7 > s->chunk.valid_rows) {
-            valid = valid & ((1 << (s->chunk.valid_rows & 7)) - 1);
+          if (row + 7 > s->chunk.leaf_column->size()) {
+            valid = valid & ((1 << (s->chunk.leaf_column->size() & 7)) - 1);
           }
         }
         s->valid_buf[(row >> 3) & 0x1ff] = valid;
@@ -748,22 +730,21 @@ __global__ void __launch_bounds__(block_size)
       lengths_to_positions(s->buf.u32, 512, t);
       __syncthreads();
       if (valid) {
-        int nz_idx       = (s->nnz + s->buf.u32[t] - 1) & (maxnumvals - 1);
-        void const *base = s->chunk.column_data_base;
+        int nz_idx = (s->nnz + s->buf.u32[t] - 1) & (maxnumvals - 1);
         switch (s->chunk.type_kind) {
           case INT:
           case DATE:
-          case FLOAT: s->vals.u32[nz_idx] = static_cast<const uint32_t *>(base)[row]; break;
+          case FLOAT: s->vals.u32[nz_idx] = s->chunk.leaf_column->element<uint32_t>(row); break;
           case DOUBLE:
-          case LONG: s->vals.u64[nz_idx] = static_cast<const uint64_t *>(base)[row]; break;
-          case SHORT: s->vals.u32[nz_idx] = static_cast<const uint16_t *>(base)[row]; break;
+          case LONG: s->vals.u64[nz_idx] = s->chunk.leaf_column->element<uint64_t>(row); break;
+          case SHORT: s->vals.u32[nz_idx] = s->chunk.leaf_column->element<uint16_t>(row); break;
           case BOOLEAN:
-          case BYTE: s->vals.u8[nz_idx] = static_cast<const uint8_t *>(base)[row]; break;
+          case BYTE: s->vals.u8[nz_idx] = s->chunk.leaf_column->element<uint8_t>(row); break;
           case TIMESTAMP: {
-            int64_t ts       = static_cast<const int64_t *>(base)[row];
+            int64_t ts       = s->chunk.leaf_column->element<int64_t>(row);
             int32_t ts_scale = kTimeScale[min(s->chunk.scale, 9)];
             int64_t seconds  = ts / ts_scale;
-            int32_t nanos    = (ts - seconds * ts_scale);
+            int64_t nanos    = (ts - seconds * ts_scale);
             // There is a bug in the ORC spec such that for negative timestamps, it is understood
             // between the writer and reader that nanos will be adjusted to their positive component
             // but the negative seconds will be left alone. This means that -2.6 is encoded as
@@ -786,21 +767,18 @@ __global__ void __launch_bounds__(block_size)
               }
               nanos = (nanos << 3) + zeroes;
             }
-            s->lengths.u32[nz_idx] = nanos;
+            s->lengths.u64[nz_idx] = nanos;
             break;
           }
           case STRING:
             if (s->chunk.encoding_kind == DICTIONARY_V2) {
-              uint32_t dict_idx = static_cast<const uint32_t *>(base)[row];
-              if (dict_idx > 0x7fffffffu)
-                dict_idx = static_cast<const uint32_t *>(base)[dict_idx & 0x7fffffffu];
+              uint32_t dict_idx = s->chunk.dict_index[row];
+              if (dict_idx > 0x7fffffffu) dict_idx = s->chunk.dict_index[dict_idx & 0x7fffffffu];
               s->vals.u32[nz_idx] = dict_idx;
             } else {
-              const nvstrdesc_s *str_desc = static_cast<const nvstrdesc_s *>(base) + row;
-              const char *ptr             = str_desc->ptr;
-              uint32_t count              = static_cast<uint32_t>(str_desc->count);
-              s->u.strenc.str_data[s->buf.u32[t] - 1] = ptr;
-              s->lengths.u32[nz_idx]                  = count;
+              string_view value = s->chunk.leaf_column->element<string_view>(row);
+              s->u.strenc.str_data[s->buf.u32[t] - 1] = value.data();
+              s->lengths.u32[nz_idx]                  = value.size_bytes();
             }
             break;
           default: break;
@@ -897,6 +875,9 @@ __global__ void __launch_bounds__(block_size)
         uint32_t flush = (s->cur_row == s->chunk.num_rows) ? 1 : 0, n;
         switch (s->chunk.type_kind) {
           case TIMESTAMP:
+            n = IntegerRLE<CI_DATA2, uint64_t, false, 0x3ff, block_size>(
+              s, s->lengths.u64, s->nnz - s->numlengths, s->numlengths, flush, t, temp_storage.u64);
+            break;
           case STRING:
             n = IntegerRLE<CI_DATA2, uint32_t, false, 0x3ff, block_size>(
               s, s->lengths.u32, s->nnz - s->numlengths, s->numlengths, flush, t, temp_storage.u32);
@@ -915,8 +896,8 @@ __global__ void __launch_bounds__(block_size)
     streams[col_id][group_id].lengths[t] = s->strm_pos[t];
     if (!s->stream.data_ptrs[t]) {
       streams[col_id][group_id].data_ptrs[t] =
-        static_cast<uint8_t *>(const_cast<void *>(s->chunk.column_data_base)) +
-        s->chunk.start_row * s->chunk.dtype_len;
+        static_cast<uint8_t *>(const_cast<void *>(s->chunk.leaf_column->head())) +
+        (s->chunk.leaf_column->offset() + s->chunk.start_row) * s->chunk.dtype_len;
     }
   }
 }
@@ -955,8 +936,8 @@ __global__ void __launch_bounds__(block_size)
     s->nrows         = s->u.dict_stripe.num_strings;
     s->cur_row       = 0;
   }
-  auto const str_desc  = static_cast<const nvstrdesc_s *>(s->u.dict_stripe.column_data_base);
-  auto const dict_data = s->u.dict_stripe.dict_data;
+  column_device_view *string_column = s->u.dict_stripe.leaf_column;
+  auto const dict_data              = s->u.dict_stripe.dict_data;
   __syncthreads();
   if (s->chunk.encoding_kind != DICTIONARY_V2) {
     return;  // This column isn't using dictionary encoding -> bail out
@@ -967,8 +948,13 @@ __global__ void __launch_bounds__(block_size)
     uint32_t string_idx = (t < numvals) ? dict_data[s->cur_row + t] : 0;
     if (cid == CI_DICTIONARY) {
       // Encoding string contents
-      const char *ptr = (t < numvals) ? str_desc[string_idx].ptr : 0;
-      uint32_t count  = (t < numvals) ? static_cast<uint32_t>(str_desc[string_idx].count) : 0;
+      const char *ptr = 0;
+      uint32_t count  = 0;
+      if (t < numvals) {
+        auto string_val = string_column->element<string_view>(string_idx);
+        ptr             = string_val.data();
+        count           = string_val.size_bytes();
+      }
       s->u.strenc.str_data[t] = ptr;
       StoreStringData(s->stream.data_ptrs[CI_DICTIONARY] + s->strm_pos[CI_DICTIONARY],
                       &s->u.strenc,
@@ -977,7 +963,10 @@ __global__ void __launch_bounds__(block_size)
       if (!t) { s->strm_pos[CI_DICTIONARY] += s->u.strenc.char_count; }
     } else {
       // Encoding string lengths
-      uint32_t count  = (t < numvals) ? static_cast<uint32_t>(str_desc[string_idx].count) : 0;
+      uint32_t count =
+        (t < numvals)
+          ? static_cast<uint32_t>(string_column->element<string_view>(string_idx).size_bytes())
+          : 0;
       uint32_t nz_idx = (s->cur_row + t) & 0x3ff;
       if (t < numvals) s->lengths.u32[nz_idx] = count;
       __syncthreads();
@@ -996,6 +985,15 @@ __global__ void __launch_bounds__(block_size)
     __syncthreads();
   }
   if (t == 0) { strm_ptr->lengths[cid] = s->strm_pos[cid]; }
+}
+
+__global__ void __launch_bounds__(512)
+  gpu_set_chunk_columns(const table_device_view view, device_2dspan<EncChunk> chunks)
+{
+  // Set leaf_column member of EncChunk
+  for (size_type i = threadIdx.x; i < chunks.size().second; i += blockDim.x) {
+    chunks[blockIdx.x][i].leaf_column = view.begin() + blockIdx.x;
+  }
 }
 
 /**
@@ -1203,6 +1201,16 @@ void EncodeStripeDictionaries(StripeDictionary *stripes,
   dim3 dim_grid(num_string_columns * num_stripes, 2);
   gpuEncodeStringDictionaries<512>
     <<<dim_grid, dim_block, 0, stream.value()>>>(stripes, chunks, enc_streams);
+}
+
+void set_chunk_columns(const table_device_view &view,
+                       device_2dspan<EncChunk> chunks,
+                       rmm::cuda_stream_view stream)
+{
+  dim3 dim_block(512, 1);
+  dim3 dim_grid(chunks.size().first, 1);
+
+  gpu_set_chunk_columns<<<dim_grid, dim_block, 0, stream.value()>>>(view, chunks);
 }
 
 void CompactOrcDataStreams(device_2dspan<StripeStream> strm_desc,

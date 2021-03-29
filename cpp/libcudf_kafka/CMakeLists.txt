@@ -13,112 +13,51 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 #=============================================================================
-cmake_minimum_required(VERSION 3.14 FATAL_ERROR)
+cmake_minimum_required(VERSION 3.18 FATAL_ERROR)
 
-project(CUDA_KAFKA VERSION 0.15.0 LANGUAGES C CXX CUDA)
-
-# TODO: Since we have no actual CUDA code in cudf_kafka this should be removed in the future
-# in favor of using FindCUDAToolkit to get the needed CUDA include headers
-if(NOT CMAKE_CUDA_COMPILER)
-  message(SEND_ERROR "CMake cannot locate a CUDA compiler")
-endif(NOT CMAKE_CUDA_COMPILER)
+project(CUDA_KAFKA VERSION 0.19.0 LANGUAGES CXX)
 
 ###################################################################################################
-# - build type ------------------------------------------------------------------------------------
+# - Build options
+option(BUILD_TESTS "Build tests for libcudf_kafka" ON)
 
-# Set a default build type if none was specified
-set(DEFAULT_BUILD_TYPE "Release")
-
-if(NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
-  message(STATUS "Setting build type to '${DEFAULT_BUILD_TYPE}' since none specified.")
-  set(CMAKE_BUILD_TYPE "${DEFAULT_BUILD_TYPE}" CACHE
-      STRING "Choose the type of build." FORCE)
-  # Set the possible values of build type for cmake-gui
-  set_property(CACHE CMAKE_BUILD_TYPE PROPERTY STRINGS
-    "Debug" "Release" "MinSizeRel" "RelWithDebInfo")
-endif(NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
+message(VERBOSE "CUDF_KAFKA: Build gtests: ${BUILD_TESTS}")
 
 ###################################################################################################
-# - compiler options ------------------------------------------------------------------------------
+# - Dependencies
 
-set(CMAKE_CXX_STANDARD 14)
-set(CMAKE_CXX_STANDARD_REQUIRED ON)
+# CPM
+include(../cmake/thirdparty/CUDF_GetCPM.cmake)
 
-# To apply RUNPATH to transitive dependencies (this is a temporary solution)
-set(CMAKE_SHARED_LINKER_FLAGS "-Wl,--disable-new-dtags")
-set(CMAKE_EXE_LINKER_FLAGS "-Wl,--disable-new-dtags")
+# libcudf
+include(cmake/thirdparty/CUDF_KAFKA_GetCUDF.cmake)
 
-# Build options
-option(BUILD_TESTS "Configure CMake to build tests" ON)
+# librdkafka
+include(cmake/thirdparty/CUDF_KAFKA_GetRDKafka.cmake)
 
-###################################################################################################
-# - cmake modules ---------------------------------------------------------------------------------
+# # GTests if enabled
+if (BUILD_TESTS)
+    # GoogleTest
+    include(../cmake/thirdparty/CUDF_GetGTest.cmake)
 
-message(VERBOSE "CMAKE_CURRENT_SOURCE_DIR: ${CMAKE_CURRENT_SOURCE_DIR}")
-set(CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake/Modules/" ${CMAKE_MODULE_PATH})
-
-include(FeatureSummary)
-include(CheckIncludeFiles)
-include(CheckLibraryExists)
-
-###################################################################################################
-# - conda environment -----------------------------------------------------------------------------
-
-if("$ENV{CONDA_BUILD}" STREQUAL "1")
-    set(CMAKE_SYSTEM_PREFIX_PATH "$ENV{BUILD_PREFIX};$ENV{PREFIX};${CMAKE_SYSTEM_PREFIX_PATH}")
-    set(CONDA_INCLUDE_DIRS "$ENV{BUILD_PREFIX}/include" "$ENV{PREFIX}/include")
-    set(CONDA_LINK_DIRS "$ENV{BUILD_PREFIX}/lib" "$ENV{PREFIX}/lib")
-    message(VERBOSE "Conda build detected, CMAKE_SYSTEM_PREFIX_PATH set to: ${CMAKE_SYSTEM_PREFIX_PATH}")
-endif()
-
-###################################################################################################
-# - add gtest -------------------------------------------------------------------------------------
-
-# TODO: This is currently using a nearly duplicate Google Test Module due to CMake source limitations.
-# this should be standardized in the future to use the same Google Test Module as cudf
-if(BUILD_TESTS)
+    # include CTest module -- automatically calls enable_testing()
     include(CTest)
-    include(ConfigureGoogleTest)
-
-    if(GTEST_FOUND)
-        message(VERBOSE "Google C++ Testing Framework (Google Test) found in ${GTEST_ROOT}")
-        include_directories(${GTEST_INCLUDE_DIR})
-        add_subdirectory(${CMAKE_SOURCE_DIR}/tests)
-    else()
-        message(AUTHOR_WARNING "Google C++ Testing Framework (Google Test) not found: automated tests are disabled.")
-    endif(GTEST_FOUND)
-endif(BUILD_TESTS)
-        
-message(VERBOSE "CUDF_KAFKA_TEST_LIST set to: ${CUDF_KAFKA_TEST_LIST}")
+    add_subdirectory(tests)
+endif()
 
 ###################################################################################################
 # - include paths ---------------------------------------------------------------------------------
 
-if(CMAKE_CUDA_TOOLKIT_INCLUDE_DIRECTORIES)
-	include_directories("${CMAKE_CUDA_TOOLKIT_INCLUDE_DIRECTORIES}")
-endif(CMAKE_CUDA_TOOLKIT_INCLUDE_DIRECTORIES)
-
 include_directories("${CMAKE_BINARY_DIR}/include"
-                    "${CMAKE_BINARY_DIR}/include/jit"
                     "${CMAKE_SOURCE_DIR}/include"
                     "${CMAKE_SOURCE_DIR}/src")
-
-if(CONDA_INCLUDE_DIRS)
-    include_directories("${CONDA_INCLUDE_DIRS}")
-endif(CONDA_INCLUDE_DIRS)
 
 ###################################################################################################
 # - library paths ---------------------------------------------------------------------------------
 
 link_directories("${CMAKE_CUDA_IMPLICIT_LINK_DIRECTORIES}" # CMAKE_CUDA_IMPLICIT_LINK_DIRECTORIES is an undocumented/unsupported variable containing the link directories for nvcc
                  "${CMAKE_BINARY_DIR}/lib"
-                 "${CMAKE_BINARY_DIR}"
-                 "${GTEST_LIBRARY_DIR}"
-                 "${RMM_LIBRARY}")
-
-if(CONDA_LINK_DIRS)
-    link_directories("${CONDA_LINK_DIRS}")
-endif(CONDA_LINK_DIRS)
+                 "${CMAKE_BINARY_DIR}")
 
 ###################################################################################################
 # - library target --------------------------------------------------------------------------------
@@ -127,37 +66,12 @@ add_library(cudf_kafka SHARED
     src/kafka_consumer.cpp
 )
 
-set_target_properties(cudf_kafka PROPERTIES BUILD_RPATH "\$ORIGIN")
-
-# Include paths
-include_directories("${CMAKE_SOURCE_DIR}/include"
-                    "${CMAKE_CURRENT_SOURCE_DIR}/include/cudf")
-
-###################################################################################################
-# cudf_kafka - librdkafka -------------------------------------------------------------------------
-
-find_path(RDKAFKA_INCLUDE "librdkafka" HINTS "$ENV{RDKAFKA_ROOT}/include")
-find_library(RDKAFKA++_LIBRARY "rdkafka++" HINTS "$ENV{RDKAFKA_ROOT}/lib" "$ENV{RDKAFKA_ROOT}/build")
-
-message(VERBOSE "RDKAFKA: RDKAFKA++_LIBRARY set to ${RDKAFKA++_LIBRARY}")
-message(VERBOSE "RDKAFKA: RDKAFKA_INCLUDE set to ${RDKAFKA_INCLUDE}")
-
-target_link_libraries(cudf_kafka ${RDKAFKA++_LIBRARY})
-include_directories("${RDKAFKA_INCLUDE}")
-
 ###################################################################################################
 # - cudf_kafka Install ----------------------------------------------------------------------------
-target_link_libraries(cudf_kafka cudf)
+target_link_libraries(cudf_kafka cudf::cudf RDKAFKA::RDKAFKA)
 
 install(TARGETS cudf_kafka
         DESTINATION lib)
 
 install(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/include
         DESTINATION include)
-
-add_custom_target(build_tests_libcudf_kafka
-                    DEPENDS ${CUDF_KAFKA_TEST_LIST})
-
-add_custom_target(test_libcudf_kafka
-                    COMMAND ctest
-                    DEPENDS build_tests_libcudf_kafka)
