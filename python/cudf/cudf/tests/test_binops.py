@@ -1773,6 +1773,51 @@ def test_binops_decimal(args):
     utils.assert_eq(expect, got)
 
 
+@pytest.mark.parametrize(
+    "dtype",
+    [
+        "uint8",
+        "uint16",
+        "uint32",
+        "uint64",
+        "int8",
+        "int16",
+        "int32",
+        "int64",
+        "float32",
+        "float64",
+        "str",
+        "datetime64[ns]",
+        "datetime64[us]",
+        "datetime64[ms]",
+        "datetime64[s]",
+        "timedelta64[ns]",
+        "timedelta64[us]",
+        "timedelta64[ms]",
+        "timedelta64[s]",
+    ],
+)
+@pytest.mark.parametrize("null_scalar", [None, cudf.NA, np.datetime64("NaT")])
+@pytest.mark.parametrize("cmpop", _cmpops)
+def test_column_null_scalar_comparison(dtype, null_scalar, cmpop):
+    # This test is meant to validate that comparing
+    # a series of any dtype with a null scalar produces
+    # a new series where all the elements are <NA>.
+
+    if isinstance(null_scalar, np.datetime64):
+        if np.dtype(dtype).kind not in "mM":
+            pytest.skip()
+        null_scalar = null_scalar.astype(dtype)
+
+    dtype = np.dtype(dtype)
+
+    data = [1, 2, 3, 4, 5]
+    sr = cudf.Series(data, dtype=dtype)
+    result = cmpop(sr, null_scalar)
+
+    assert result.isnull().all()
+
+
 @pytest.mark.parametrize("fn", ["eq", "ne", "lt", "gt", "le", "ge"])
 def test_equality_ops_index_mismatch(fn):
     a = cudf.Series(

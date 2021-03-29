@@ -154,7 +154,15 @@ def is_numerical_dtype(obj):
 
 
 def is_string_dtype(obj):
-    return pd.api.types.is_string_dtype(obj) and not is_categorical_dtype(obj)
+    return (
+        pd.api.types.is_string_dtype(obj)
+        # Reject all cudf extension types.
+        and not is_categorical_dtype(obj)
+        and not is_decimal_dtype(obj)
+        and not is_list_dtype(obj)
+        and not is_struct_dtype(obj)
+        and not is_interval_dtype(obj)
+    )
 
 
 def is_datetime_dtype(obj):

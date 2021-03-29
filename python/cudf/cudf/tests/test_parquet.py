@@ -1,4 +1,5 @@
-# Copyright (c) 2019-2020, NVIDIA CORPORATION.
+# Copyright (c) 2019-2021, NVIDIA CORPORATION.
+
 import datetime
 import math
 import os
@@ -1718,24 +1719,24 @@ def test_parquet_nullable_boolean(tmpdir, engine):
     ],
 )
 @pytest.mark.parametrize("index", [None, True, False])
-def test_parquet_index(tmpdir, pdf, index):
-    pandas_path = tmpdir.join("pandas_index.parquet")
-    cudf_path = tmpdir.join("pandas_index.parquet")
+def test_parquet_index(pdf, index):
+    pandas_buffer = BytesIO()
+    cudf_buffer = BytesIO()
 
     gdf = cudf.from_pandas(pdf)
 
-    pdf.to_parquet(pandas_path, index=index)
-    gdf.to_parquet(cudf_path, index=index)
+    pdf.to_parquet(pandas_buffer, index=index)
+    gdf.to_parquet(cudf_buffer, index=index)
 
-    expected = pd.read_parquet(cudf_path)
-    actual = cudf.read_parquet(cudf_path)
+    expected = pd.read_parquet(cudf_buffer)
+    actual = cudf.read_parquet(pandas_buffer)
 
-    assert_eq(expected, actual)
+    assert_eq(expected, actual, check_index_type=True)
 
-    expected = pd.read_parquet(pandas_path)
-    actual = cudf.read_parquet(pandas_path)
+    expected = pd.read_parquet(pandas_buffer)
+    actual = cudf.read_parquet(cudf_buffer)
 
-    assert_eq(expected, actual)
+    assert_eq(expected, actual, check_index_type=True)
 
 
 @pytest.mark.parametrize("engine", ["cudf", "pyarrow"])
