@@ -34,6 +34,8 @@
 #include <rmm/device_uvector.hpp>
 #include <rmm/exec_policy.hpp>
 
+#include <thrust/optional.h>
+
 namespace cudf {
 namespace strings {
 namespace detail {
@@ -45,29 +47,6 @@ namespace {
 // change to "\n" and 1 to make output more readable
 #define DEBUG_NEWLINE
 constexpr int DEBUG_NEWLINE_LEN = 0;
-
-// temporary? spark doesn't strictly follow the JSONPath spec.
-// I think this probably could be a configurable enum to control
-// the kind of output you get and what features are supported.
-//
-// Current known differences:
-// - When returning a string value as a single element, Spark strips the quotes.
-//   standard:   "whee"
-//   spark:      whee
-//
-// - Spark only supports the wildcard operator when in a subscript, eg  [*]
-//   It does not handle .*
-//
-// Other, non-spark known differences:
-//
-// - In jsonpath_ng, name subscripts can use double quotes instead of the standard
-//   single quotes in the query string.
-//   standard:      $.thing['subscript']
-//   jsonpath_ng:   $.thing["subscript"]
-//
-//  Currently, this code only allows single-quotes but that could be expanded if necessary.
-//
-#define SPARK_BEHAVIORS
 
 /**
  * @brief Result of calling a parse function.
@@ -271,14 +250,13 @@ class json_state : private parser {
       if (parse_value() != parse_result::SUCCESS) { return parse_result::ERROR; }
       end = pos;
 
-#if defined(SPARK_BEHAVIORS)
-      // spark/hive-specific behavior.  if this is a non-list-element wrapped in quotes,
-      // strip them
+      // SPARK-specific behavior.  if this is a non-list-element wrapped in quotes,
+      // strip them. we may need to make this behavior configurable in some way
+      // later on.
       if (!list_element && *start == '\"' && *(end - 1) == '\"') {
         start++;
         end--;
       }
-#endif
     }
     // otherwise, march through everything inside
     else {
@@ -816,25 +794,23 @@ __device__ thrust::pair<parse_result, json_output> get_json_object_single(
  * @param col Device view of the incoming string
  * @param commands JSONPath command buffer
  * @param output_offsets Buffer used to store the string offsets for the results of the query
- * (nullptr in the size computation step)
- * @param out_buf Buffer used to store the results of the query (nullptr in the size computation
- * step)
- * @param out_validity Output validity buffer (nullptr in the size computation step)
- * @param out_valid_count Output count of # of valid bits (nullptr in the size computation step)
+ * @param out_buf Buffer used to store the results of the query
+ * @param out_validity Output validity buffer
+ * @param out_valid_count Output count of # of valid bits
  */
 template <int block_size>
 __launch_bounds__(block_size) __global__
   void get_json_object_kernel(column_device_view col,
                               path_operator const* const commands,
                               size_type* output_offsets,
-                              char* out_buf,
-                              bitmask_type* out_validity,
-                              size_type* out_valid_count)
+                              thrust::optional<char*> out_buf,
+                              thrust::optional<bitmask_type*> out_validity,
+                              thrust::optional<size_type*> out_valid_count)
 {
   size_type tid    = threadIdx.x + (blockDim.x * blockIdx.x);
   size_type stride = blockDim.x * gridDim.x;
 
-  if (out_valid_count) { *out_valid_count = 0; }
+  if (out_valid_count.has_value()) { *(out_valid_count.value()) = 0; }
   size_type warp_valid_count{0};
 
   auto active_threads = __ballot_sync(0xffffffff, tid < col.size());
@@ -843,8 +819,9 @@ __launch_bounds__(block_size) __global__
     string_view const str = col.element<string_view>(tid);
     size_type output_size = 0;
     if (str.size_bytes() > 0) {
-      char* dst             = out_buf ? out_buf + output_offsets[tid] : nullptr;
-      size_t const dst_size = out_buf ? output_offsets[tid + 1] - output_offsets[tid] : 0;
+      char* dst = out_buf.has_value() ? out_buf.value() + output_offsets[tid] : nullptr;
+      size_t const dst_size =
+        out_buf.has_value() ? output_offsets[tid + 1] - output_offsets[tid] : 0;
 
       parse_result result;
       json_output out;
@@ -854,15 +831,16 @@ __launch_bounds__(block_size) __global__
       if (out.output_len.has_value() && result == parse_result::SUCCESS) { is_valid = true; }
     }
 
-    // filled in only during the precompute step
-    if (!out_buf) { output_offsets[tid] = static_cast<size_type>(output_size); }
+    // filled in only during the precompute step. during the compute step, the offsets
+    // are fed back in so we do -not- want to write them out
+    if (!out_buf.has_value()) { output_offsets[tid] = static_cast<size_type>(output_size); }
 
     // validity filled in only during the output step
-    if (out_validity) {
+    if (out_validity.has_value()) {
       uint32_t mask = __ballot_sync(active_threads, is_valid);
       // 0th lane of the warp writes the validity
       if (!(tid % cudf::detail::warp_size)) {
-        out_validity[cudf::word_index(tid)] = mask;
+        out_validity.value()[cudf::word_index(tid)] = mask;
         warp_valid_count += __popc(mask);
       }
     }
@@ -875,7 +853,7 @@ __launch_bounds__(block_size) __global__
   if (out_valid_count) {
     size_type block_valid_count =
       cudf::detail::single_lane_block_sum_reduce<block_size, 0>(warp_valid_count);
-    if (threadIdx.x == 0) { atomicAdd(out_valid_count, block_valid_count); }
+    if (threadIdx.x == 0) { atomicAdd(out_valid_count.value(), block_valid_count); }
   }
 }
 
@@ -918,9 +896,9 @@ std::unique_ptr<cudf::column> get_json_object(cudf::strings_column_view const& c
       *cdv,
       std::get<0>(preprocess).value().data(),
       offsets_view.head<size_type>(),
-      nullptr,
-      nullptr,
-      nullptr);
+      thrust::nullopt,
+      thrust::nullopt,
+      thrust::nullopt);
 
   // convert sizes to offsets
   thrust::exclusive_scan(rmm::exec_policy(stream),
