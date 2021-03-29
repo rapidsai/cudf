@@ -5,9 +5,7 @@ ENV CUDA_SHORT_VERSION=11.2
 
 SHELL ["/bin/bash", "-c"]
 ENV LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/usr/local/cuda/lib64:/usr/local/cuda/extras/CUPTI/lib64:/usr/local/lib:/repos/dist/lib
-# Needed for cudf.concat(), avoids "OSError: library nvvm not found"
-ENV NUMBAPRO_NVVM=/usr/local/cuda/nvvm/lib64/libnvvm.so
-ENV NUMBAPRO_LIBDEVICE=/usr/local/cuda/nvvm/libdevice/
+
 ENV DEBIAN_FRONTEND=noninteractive
 
 ENV CUDA_HOME=/usr/local/cuda
