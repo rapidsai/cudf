@@ -206,6 +206,63 @@ struct column_scatterer_impl<dictionary32, MapIterator> {
   }
 };
 
+template <typename MapItRoot>
+struct column_scatterer_impl<struct_view, MapItRoot> {
+  std::unique_ptr<column> operator()(column_view const& source,
+                                     MapItRoot scatter_map_begin,
+                                     MapItRoot scatter_map_end,
+                                     column_view const& target,
+                                     rmm::cuda_stream_view stream,
+                                     rmm::mr::device_memory_resource* mr) const
+  {
+    CUDF_EXPECTS(source.num_children() == target.num_children(),
+                 "Scatter source and target are not of the same type.");
+
+    auto const scatter_map_size = std::distance(scatter_map_begin, scatter_map_end);
+    if (scatter_map_size == 0) { return empty_like(source); }
+
+    structs_column_view structs_src(source);
+    structs_column_view structs_target(target);
+    std::vector<std::unique_ptr<column>> output_struct_members(structs_src.num_children());
+
+    std::transform(structs_src.child_begin(),
+                   structs_src.child_end(),
+                   structs_target.child_begin(),
+                   output_struct_members.begin(),
+                   [&scatter_map_begin, &scatter_map_end, stream, mr](auto const& source_col,
+                                                                      auto const& target_col) {
+                     return type_dispatcher<dispatch_storage_type>(source_col.type(),
+                                                                   column_scatterer<MapItRoot>{},
+                                                                   source_col,
+                                                                   scatter_map_begin,
+                                                                   scatter_map_end,
+                                                                   target_col,
+                                                                   stream,
+                                                                   mr);
+                   });
+
+    auto const gather_map =
+      scatter_to_gather(scatter_map_begin, scatter_map_end, scatter_map_size, stream);
+    gather_bitmask(
+      // Table view of struct column.
+      cudf::table_view{
+        std::vector<cudf::column_view>{structs_src.child_begin(), structs_src.child_end()}},
+      gather_map.begin(),
+      output_struct_members,
+      gather_bitmask_op::NULLIFY,
+      stream,
+      mr);
+
+    return cudf::make_structs_column(
+      source.size(),
+      std::move(output_struct_members),
+      0,
+      rmm::device_buffer{0, stream, mr},  // Null mask will be fixed up in cudf::scatter().
+      stream,
+      mr);
+  }
+};
+
 /**
  * @brief Scatters the rows of the source table into a copy of the target table
  * according to a scatter map.
