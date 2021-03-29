@@ -337,8 +337,10 @@ def test_groupby_2keys_agg(nelem, func):
 @pytest.mark.parametrize("num_groups", [2, 3, 10, 50, 100])
 @pytest.mark.parametrize("nelem_per_group", [1, 10, 100])
 @pytest.mark.parametrize(
-    # "func", ["min", "max", "idxmin", "idxmax", "count", "sum"],
     "func", ["min", "max", "count", "sum"],
+    # TODO: Replace the above line with the one below once
+    # https://github.com/pandas-dev/pandas/issues/40685 is resolved.
+    # "func", ["min", "max", "idxmin", "idxmax", "count", "sum"],
 )
 def test_groupby_agg_decimal(num_groups, nelem_per_group, func):
     # The number of digits after the decimal to use.
@@ -349,9 +351,25 @@ def test_groupby_agg_decimal(num_groups, nelem_per_group, func):
     scale = 10 ** whole_digits
     nelem = num_groups * nelem_per_group
 
-    idx_col = np.tile(np.arange(num_groups), nelem_per_group)
-    x = (np.random.rand(nelem) * scale).round(decimal_digits)
-    y = (np.random.rand(nelem) * scale).round(decimal_digits)
+    # The unique is necessary because otherwise if there are duplicates idxmin
+    # and idxmax may return different results than pandas. This is not relevant
+    # to the current version of the test, because idxmin and idxmax simply
+    # don't work with pandas Series composed of Decimal objects (see the issue
+    # documented above). However, if that is ever enabled, then this issue will
+    # crop up again so we may as well have it fixed now.
+    x = np.unique((np.random.rand(nelem) * scale).round(decimal_digits))
+    y = np.unique((np.random.rand(nelem) * scale).round(decimal_digits))
+
+    if x.size < y.size:
+        total_elements = x.size
+        y = y[:x.size]
+    else:
+        total_elements = y.size
+        x = x[:y.size]
+
+    # Note that this filtering can lead to one group with fewer elements, but
+    # that shouldn't be a problem.
+    idx_col = np.tile(np.arange(num_groups), nelem_per_group)[:total_elements]
 
     decimal_x = pd.Series([Decimal(str(d)) for d in x])
     decimal_y = pd.Series([Decimal(str(d)) for d in y])
