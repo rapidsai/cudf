@@ -197,25 +197,6 @@ std::unique_ptr<column> slice_strings(
   size_type count,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
-/**
- * @brief Apply a JSONPath string to all rows in an input strings column.
- *
- * Applies a JSONPath string to an incoming strings column where each row in the column
- * is a valid json string.  The output is returned by row as a strings column.
- *
- * https://tools.ietf.org/id/draft-goessner-dispatch-jsonpath-00.html
- * Implements only the operators: $ . [] *
- *
- * @param col The input strings column. Each row must contain a valid json string
- * @param json_path The JSONPath string to be applied to each row
- * @param mr Resource for allocating device memory.
- * @return New strings column containing the retrieved json object strings
- */
-std::unique_ptr<cudf::column> get_json_object(
-  cudf::strings_column_view const& col,
-  cudf::string_scalar const& json_path,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
-
 /** @} */  // end of doxygen group
 }  // namespace strings
 }  // namespace cudf

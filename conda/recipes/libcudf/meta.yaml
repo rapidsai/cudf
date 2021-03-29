@@ -175,13 +175,14 @@ test:
     - test -f $PREFIX/include/cudf/strings/detail/converters.hpp
     - test -f $PREFIX/include/cudf/strings/detail/copying.hpp
     - test -f $PREFIX/include/cudf/strings/detail/fill.hpp
-    - test -f $PREFIX/include/cudf/strings/detail/replace.hpp
-    - test -f $PREFIX/include/cudf/strings/detail/substring.hpp
+    - test -f $PREFIX/include/cudf/strings/detail/json.hpp
+    - test -f $PREFIX/include/cudf/strings/detail/replace.hpp    
     - test -f $PREFIX/include/cudf/strings/detail/utilities.hpp
     - test -f $PREFIX/include/cudf/strings/extract.hpp
     - test -f $PREFIX/include/cudf/strings/findall.hpp
     - test -f $PREFIX/include/cudf/strings/find.hpp
     - test -f $PREFIX/include/cudf/strings/find_multiple.hpp
+    - test -f $PREFIX/include/cudf/strings/json.hpp
     - test -f $PREFIX/include/cudf/strings/padding.hpp
     - test -f $PREFIX/include/cudf/strings/replace.hpp
     - test -f $PREFIX/include/cudf/strings/replace_re.hpp

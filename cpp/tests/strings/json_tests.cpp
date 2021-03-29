@@ -17,7 +17,7 @@
 #include <cudf/scalar/scalar_factories.hpp>
 #include <cudf/strings/replace.hpp>
 #include <cudf/strings/strings_column_view.hpp>
-#include <cudf/strings/substring.hpp>
+#include <cudf/strings/json.hpp>
 
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_wrapper.hpp>
