@@ -12,7 +12,7 @@ from libcpp cimport bool
 
 from cudf._lib.column cimport Column
 from cudf._lib.table cimport Table
-from cudf._lib.aggregation cimport Aggregation, make_aggregation2
+from cudf._lib.aggregation cimport Aggregation, make_aggregation
 
 from cudf._lib.cpp.table.table cimport table, table_view
 cimport cudf._lib.cpp.types as libcudf_types
@@ -140,7 +140,7 @@ cdef class GroupBy:
             )
             c_agg_requests[idx].values = col.view()
             for agg in aggs:
-                agg_obj = make_aggregation2(agg)
+                agg_obj = make_aggregation(agg)
                 if valid_aggregations is None or agg_obj.kind in valid_aggregations:
                     empty_aggs = False
                     included_aggregations[col_name].append(agg)

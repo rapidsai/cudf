@@ -4,9 +4,9 @@ from libcpp.memory cimport unique_ptr
 from cudf._lib.cpp.aggregation cimport aggregation
 
 
-cdef unique_ptr[aggregation] make_aggregation(op, kwargs=*) except *
-
 cdef class Aggregation:
     cdef unique_ptr[aggregation] c_obj
 
-cdef Aggregation make_aggregation2(op, kwargs=*)
+# TODO: the old version of this function was declared as except *, I'm not sure
+# why but I should figure that out before calling this done.
+cdef Aggregation make_aggregation(op, kwargs=*)
