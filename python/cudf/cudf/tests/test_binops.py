@@ -1916,7 +1916,7 @@ def test_binops_decimal(args):
             ["100", "200"],
             cudf.Decimal64Dtype(scale=-2, precision=3),
             decimal.Decimal(2),
-            ["98", "198"],
+            ["-98", "-198"],
             cudf.Decimal64Dtype(scale=0, precision=6),
             True,
         ),
@@ -1925,7 +1925,7 @@ def test_binops_decimal(args):
             ["100", "200"],
             cudf.Decimal64Dtype(scale=-2, precision=3),
             4,
-            ["96", "196"],
+            ["-96", "-196"],
             cudf.Decimal64Dtype(scale=0, precision=6),
             True,
         ),
@@ -1934,7 +1934,7 @@ def test_binops_decimal(args):
             ["100", "200"],
             cudf.Decimal64Dtype(scale=-2, precision=3),
             decimal.Decimal("2.5"),
-            ["97.5", "197.5"],
+            ["-97.5", "-197.5"],
             cudf.Decimal64Dtype(scale=1, precision=7),
             True,
         ),
@@ -1949,11 +1949,13 @@ def test_binops_decimal_scalar(args):
             dtype=dtype,
         )
 
-    a = decimal_series(lhs, l_dtype)
-
+    lhs = decimal_series(lhs, l_dtype)
     expect = decimal_series(expect, expect_dtype)
 
-    got = op(a, rhs)
+    if reflect:
+        lhs, rhs = rhs, lhs
+
+    got = op(lhs, rhs)
     assert expect.dtype == got.dtype
     utils.assert_eq(expect, got)
 
