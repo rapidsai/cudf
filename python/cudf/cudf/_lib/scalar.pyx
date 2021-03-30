@@ -49,6 +49,8 @@ cimport cudf._lib.cpp.types as libcudf_types
 
 cdef class DeviceScalar:
 
+    metadata = {}
+
     def __init__(self, value, dtype):
         """
         Type representing an *immutable* scalar value on the device
@@ -73,6 +75,7 @@ cdef class DeviceScalar:
         if isinstance(dtype, cudf.Decimal64Dtype):
             _set_decimal64_from_scalar(
                 self.c_value, value, dtype, valid)
+            self.metadata['precision'] = dtype.precision
         elif pd.api.types.is_string_dtype(dtype):
             _set_string_from_np_string(self.c_value, value, valid)
         elif pd.api.types.is_numeric_dtype(dtype):
@@ -120,7 +123,11 @@ cdef class DeviceScalar:
         cdef libcudf_types.data_type cdtype = self.get_raw_ptr()[0].type()
         if cdtype.id() == libcudf_types.DECIMAL64:
             return cudf.Decimal64Dtype(
-                cudf.Decimal64Dtype.MAX_PRECISION, -cdtype.scale()
+                self.metadata.get(
+                    'precision',
+                    cudf.Decimal64Dtype.MAX_PRECISION
+                ),
+                -cdtype.scale()
             )
         else:
             return cudf_to_np_types[<underlying_type_t_type_id>(cdtype.id())]

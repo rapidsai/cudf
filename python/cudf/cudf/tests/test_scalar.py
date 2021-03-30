@@ -110,9 +110,6 @@ SCALAR_VALUES = [
     np.bool_(False),
     np.str_("asdf"),
     np.object_("asdf"),
-    Decimal("100"),
-    Decimal("0.0042"),
-    Decimal("1.0042"),
 ]
 
 DECIMAL_VALUES = [
@@ -345,7 +342,7 @@ def test_device_scalar_direct_construction(value):
 
     assert s.value == value or np.isnan(s.value) and np.isnan(value)
     if isinstance(dtype, cudf.Decimal64Dtype):
-        assert s.dtype.precision == 18
+        assert s.dtype.precision == dtype.precision
         assert s.dtype.scale == dtype.scale
     elif dtype.char == "U":
         assert s.dtype == "object"
