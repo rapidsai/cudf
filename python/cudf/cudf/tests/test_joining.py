@@ -1725,3 +1725,16 @@ def test_merge_with_lists(how):
     got = gd_left.merge(gd_right, on="a")
 
     assert_join_results_equal(expect, got, how=how)
+
+
+def test_join_renamed_index():
+    df = cudf.DataFrame(
+        {0: [1, 2, 3, 4, 5], 1: [1, 2, 3, 4, 5], "c": [1, 2, 3, 4, 5]}
+    ).set_index([0, 1])
+    df.index.names = ["a", "b"]  # doesn't actually change df._index._data
+
+    expect = df.to_pandas().merge(
+        df.to_pandas(), left_index=True, right_index=True
+    )
+    got = df.merge(df, left_index=True, right_index=True, how="inner")
+    assert_join_results_equal(expect, got, how="inner")

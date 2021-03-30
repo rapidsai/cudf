@@ -1,6 +1,7 @@
 # Copyright (c) 2021, NVIDIA CORPORATION.
 from __future__ import annotations
 
+import collections
 import warnings
 from typing import TYPE_CHECKING, Any, Iterable, Tuple
 
@@ -196,11 +197,7 @@ def _match_categorical_dtypes_both(
 
 
 def _coerce_to_tuple(obj):
-    if hasattr(obj, "__iter__") and not isinstance(obj, str):
+    if isinstance(obj, collections.abc.Iterable) and not isinstance(obj, str):
         return tuple(obj)
     else:
         return (obj,)
-
-
-def _coerce_to_list(obj):
-    return list(_coerce_to_tuple(obj))

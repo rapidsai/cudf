@@ -107,7 +107,7 @@ void scan_result_functor::operator()<aggregation::COUNT_ALL>(aggregation const& 
 
 // Sort-based groupby
 std::pair<std::unique_ptr<table>, std::vector<aggregation_result>> groupby::sort_scan(
-  std::vector<aggregation_request> const& requests,
+  host_span<aggregation_request const> requests,
   rmm::cuda_stream_view stream,
   rmm::mr::device_memory_resource* mr)
 {

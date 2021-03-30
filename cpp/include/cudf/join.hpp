@@ -78,10 +78,10 @@ inner_join(cudf::table_view const& left_keys,
  *
  * @code{.pseudo}
  *          Left: {{0, 1, 2}}
- *          Right: {{1, 2, 3}, {1, 2, 5}}
+ *          Right: {{4, 9, 3}, {1, 2, 5}}
  *          left_on: {0}
  *          right_on: {1}
- * Result: {{1, 2}, {1, 2}, {1, 2}}
+ * Result: {{1, 2}, {4, 9}, {1, 2}}
  * @endcode
  *
  * @throw cudf::logic_error if number of elements in `left_on` or `right_on`

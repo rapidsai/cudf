@@ -114,10 +114,8 @@ get_left_join_indices_complement(
     // Assume all the indices in invalid_index_map are invalid
     auto invalid_index_map =
       std::make_unique<rmm::device_uvector<size_type>>(right_table_row_count, stream);
-    thrust::uninitialized_fill(thrust::cuda::par.on(stream.value()),
-                               invalid_index_map->begin(),
-                               invalid_index_map->end(),
-                               int32_t{1});
+    thrust::uninitialized_fill(
+      rmm::exec_policy(stream), invalid_index_map->begin(), invalid_index_map->end(), int32_t{1});
 
     // Functor to check for index validity since left joins can create invalid indices
     valid_range<size_type> valid(0, right_table_row_count);
