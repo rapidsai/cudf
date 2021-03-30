@@ -210,7 +210,7 @@ def where(
     >>> import cudf
     >>> df = DataFrame({"A":[1, 4, 5], "B":[3, 5, 8]})
     >>> df.where(df % 2 == 0, [-1, -1])
-        A  B
+       A  B
     0 -1 -1
     1  4 -1
     2 -1  8
@@ -237,6 +237,11 @@ def where(
             cond = DataFrame(
                 cond, columns=frame._column_names, index=frame.index
             )
+        elif (
+            hasattr(cond, "__array_interface__")
+            and cond.__array_interface__["shape"] != frame.shape
+        ):
+            raise ValueError("conditional must be same shape as self")
         elif not isinstance(cond, DataFrame):
             cond = frame.from_pandas(pd.DataFrame(cond))
 
