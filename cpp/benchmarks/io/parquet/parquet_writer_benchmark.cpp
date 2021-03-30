@@ -59,6 +59,9 @@ void BM_parq_write_varying_inout(benchmark::State& state)
   }
 
   state.SetBytesProcessed(data_size * state.iterations());
+  auto mr =
+    dynamic_cast<cudf::memory_tracking_pool_resource_type*>(rmm::mr::get_current_device_resource());
+  state.counters["peak mem"] = mr->max_allocated_size();
 }
 
 void BM_parq_write_varying_options(benchmark::State& state)
