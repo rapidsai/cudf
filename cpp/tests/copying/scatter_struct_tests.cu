@@ -269,8 +269,7 @@ TYPED_TEST(TypedStructScatterTest, ComplexDataScatterTest)
 TYPED_TEST(TypedStructScatterTest, ScatterStructOfListsTest)
 {
   // Testing gather() on struct<list<numeric>>
-  using col_wrapper = cudf::test::fixed_width_column_wrapper<TypeParam, int32_t>;
-  using lists_col   = cudf::test::lists_column_wrapper<TypeParam, int32_t>;
+  using lists_col = cudf::test::lists_column_wrapper<TypeParam, int32_t>;
 
   // Source data
   auto lists_col_src =
