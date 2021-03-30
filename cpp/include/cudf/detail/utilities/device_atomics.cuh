@@ -504,6 +504,28 @@ __forceinline__ __device__ T atomicAdd(T* address, T val)
 }
 
 /**
+ * @brief Overloads for `atomicMul`
+ * reads the `old` located at the `address` in global or shared memory,
+ * computes (old * val), and stores the result back to memory at the same
+ * address. These three operations are performed in one atomic transaction.
+ *
+ * The supported cudf types for `atomicMul` are:
+ * int8_t, int16_t, int32_t, int64_t, float, double, and bool
+ *
+ * All types are implemented by `atomicCAS`.
+ *
+ * @param[in] address The address of old value in global or shared memory
+ * @param[in] val The value to be multiplied
+ *
+ * @returns The old value at `address`
+ */
+template <typename T>
+__forceinline__ __device__ T atomicMul(T* address, T val)
+{
+  return cudf::genericAtomicOperation(address, val, cudf::DeviceProduct{});
+}
+
+/**
  * @brief Overloads for `atomicMin`
  * reads the `old` located at the `address` in global or shared memory,
  * computes the minimum of old and val, and stores the result back to memory
