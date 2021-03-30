@@ -42,7 +42,7 @@ struct has_negative_nans {
 
   __device__ Type operator()(size_type idx) const noexcept
   {
-    if (has_nulls && d_entries.is_null(idx)) { return false; }
+    if (has_nulls && d_entries.is_null_nocheck(idx)) { return false; }
 
     auto const val = d_entries.element<Type>(idx);
     return std::isnan(val) && std::signbit(val);  // std::signbit(x) == true if x is negative
@@ -238,8 +238,8 @@ class list_entry_comparator {
 
     if (has_nulls) {
       bool const nullable = d_view.nullable();
-      bool const lhs_is_null{nullable and d_view.is_null(i)};
-      bool const rhs_is_null{nullable and d_view.is_null(j)};
+      bool const lhs_is_null{nullable and d_view.is_null_nocheck(i)};
+      bool const rhs_is_null{nullable and d_view.is_null_nocheck(j)};
       if (lhs_is_null and rhs_is_null) {
         return nulls_equal == null_equality::EQUAL;
       } else if (lhs_is_null != rhs_is_null) {
@@ -264,8 +264,8 @@ class list_entry_comparator {
 
     if (has_nulls) {
       bool const nullable = d_view.nullable();
-      bool const lhs_is_null{nullable and d_view.is_null(i)};
-      bool const rhs_is_null{nullable and d_view.is_null(j)};
+      bool const lhs_is_null{nullable and d_view.is_null_nocheck(i)};
+      bool const rhs_is_null{nullable and d_view.is_null_nocheck(j)};
       if (lhs_is_null and rhs_is_null) {
         return nulls_equal == null_equality::EQUAL;
       } else if (lhs_is_null != rhs_is_null) {
