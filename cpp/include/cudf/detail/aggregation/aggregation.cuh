@@ -319,13 +319,13 @@ struct update_target_element<dictionary32, aggregation::SUM, target_has_nulls, s
 // Enabling only for 2 types does not segfault. Using for unit tests.
 #if (__CUDACC_VER_MAJOR__ == 10) and (__CUDACC_VER_MINOR__ == 2)
 template <typename T>
-constexpr bool is_SOS_supported()
+constexpr bool is_product_supported()
 {
   return std::is_floating_point<T>::value;
 }
 #else
 template <typename T>
-constexpr bool is_SOS_supported()
+constexpr bool is_product_supported()
 {
   return is_numeric<T>();
 }
@@ -336,7 +336,7 @@ struct update_target_element<Source,
                              aggregation::SUM_OF_SQUARES,
                              target_has_nulls,
                              source_has_nulls,
-                             std::enable_if_t<is_SOS_supported<Source>()>> {
+                             std::enable_if_t<is_product_supported<Source>()>> {
   __device__ void operator()(mutable_column_device_view target,
                              size_type target_index,
                              column_device_view source,
@@ -347,6 +347,26 @@ struct update_target_element<Source,
     using Target = target_type_t<Source, aggregation::SUM_OF_SQUARES>;
     auto value   = static_cast<Target>(source.element<Source>(source_index));
     atomicAdd(&target.element<Target>(target_index), value * value);
+    if (target_has_nulls and target.is_null(target_index)) { target.set_valid(target_index); }
+  }
+};
+
+template <typename Source, bool target_has_nulls, bool source_has_nulls>
+struct update_target_element<Source,
+                             aggregation::PRODUCT,
+                             target_has_nulls,
+                             source_has_nulls,
+                             std::enable_if_t<is_product_supported<Source>()>> {
+  __device__ void operator()(mutable_column_device_view target,
+                             size_type target_index,
+                             column_device_view source,
+                             size_type source_index) const noexcept
+  {
+    if (source_has_nulls and source.is_null(source_index)) { return; }
+
+    using Target = target_type_t<Source, aggregation::SUM_OF_SQUARES>;
+    auto value   = static_cast<Target>(source.element<Source>(source_index));
+    atomicMul(&target.element<Target>(target_index), value);
     if (target_has_nulls and target.is_null(target_index)) { target.set_valid(target_index); }
   }
 };
@@ -559,7 +579,8 @@ struct identity_initializer {
             k == aggregation::COUNT_VALID or k == aggregation::COUNT_ALL or
             k == aggregation::ARGMAX or k == aggregation::ARGMIN or
             k == aggregation::SUM_OF_SQUARES or k == aggregation::STD or
-            k == aggregation::VARIANCE);
+            k == aggregation::VARIANCE or
+            (k == aggregation::PRODUCT and is_product_supported<T>()));
   }
 
   template <typename T, aggregation::Kind k>
