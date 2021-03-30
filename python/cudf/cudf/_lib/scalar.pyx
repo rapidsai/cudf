@@ -156,12 +156,16 @@ cdef class DeviceScalar:
         cdtype = s.get_raw_ptr()[0].type()
 
         if cdtype.id() == libcudf_types.DECIMAL64 and dtype is None:
-            raise TypeError("Must pass a dtype when constructing from a decimal scalar")
+            raise TypeError(
+                "Must pass a dtype when constructing from a fixed-point scalar"
+            )
         else:
             if dtype is not None:
                 s._dtype = dtype
             else:
-                s._dtype = cudf_to_np_types[<underlying_type_t_type_id>(cdtype.id())]
+                s._dtype = cudf_to_np_types[
+                    <underlying_type_t_type_id>(cdtype.id())
+                ]
         return s
 
 
