@@ -12,11 +12,10 @@ from cudf.core.column import ColumnBase
 from cudf.core.dataframe import DataFrame
 from cudf.core.frame import Frame
 from cudf.core.index import Index
-from cudf.core.scalar import Scalar
 from cudf.core.series import Series
 
 
-def _normalize_scalars(col: ColumnBase, other: ScalarLike) -> Scalar:
+def _normalize_scalars(col: ColumnBase, other: ScalarLike) -> ScalarLike:
     """
     Try to normalize scalar values as per col dtype
     """
@@ -28,7 +27,7 @@ def _normalize_scalars(col: ColumnBase, other: ScalarLike) -> Scalar:
             f"{type(other).__name__} to {col.dtype.name}"
         )
 
-    return Scalar(other, dtype=col.dtype if other is None else None)
+    return cudf.Scalar(other, dtype=col.dtype if other is None else None)
 
 
 def _check_and_cast_columns(
@@ -102,7 +101,7 @@ def _check_and_cast_columns_with_scalar(
             )
 
         source_col = source_col.astype(common_dtype)
-        return source_col, Scalar(other_scalar, dtype=common_dtype)
+        return source_col, cudf.Scalar(other_scalar, dtype=common_dtype)
 
 
 def _normalize_columns_and_scalars_type(
@@ -297,7 +296,7 @@ def where(
                             # When other is not present in categories,
                             # fill with Null.
                             other_column = None
-                        other_column = Scalar(
+                        other_column = cudf.Scalar(
                             other_column, dtype=input_col.codes.dtype
                         )
                     elif isinstance(
@@ -360,7 +359,7 @@ def where(
                         # When other is not present in categories,
                         # fill with Null.
                         other = None
-                    other = Scalar(other, dtype=input_col.codes.dtype)
+                    other = cudf.Scalar(other, dtype=input_col.codes.dtype)
                 elif isinstance(other, cudf.core.column.CategoricalColumn):
                     other = other.codes
 

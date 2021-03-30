@@ -18,7 +18,6 @@ from pandas.api.types import is_dict_like, is_dtype_equal
 import cudf
 from cudf import _lib as libcudf
 from cudf._typing import ColumnLike, DataFrameOrSeries
-from cudf.core._internals import where as where_internals
 from cudf.core.column import as_column, build_categorical_column, column_empty
 from cudf.utils.dtypes import (
     is_categorical_dtype,
@@ -836,7 +835,7 @@ class Frame(libcudf.table.Table):
         dtype: int64
         """
 
-        return where_internals.where(
+        return cudf.core._internals.where(
             frame=self, cond=cond, other=other, inplace=inplace
         )
 
