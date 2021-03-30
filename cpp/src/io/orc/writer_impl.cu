@@ -675,8 +675,6 @@ encoded_data writer::impl::encode_columns(const table_device_view &view,
   gpu::EncodeOrcColumnData(chunks, chunk_streams, stream);
   stream.synchronize();
 
-  dict_data.release();
-  dict_index.release();
   return {std::move(encoded_data), std::move(chunk_streams)};
 }
 
