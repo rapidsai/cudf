@@ -6,7 +6,7 @@ This document serves to guide the use of error types when dealing with different
 
 ## Overview
 
-cuDF follows error conventions used by Pandas. Following [Pandas Wiki](https://github.com/pandas-dev/pandas/wiki/Choosing-Exceptions-to-Raise), cuDF uses python [builtin error types](https://docs.python.org/3.9/library/exceptions.html) whenever possible. Common builtin errors used in cuDF and their semantics is listed below.
+cuDF follows error conventions used by Pandas. Following [Pandas Wiki](https://github.com/pandas-dev/pandas/wiki/Choosing-Exceptions-to-Raise), cuDF uses python [builtin error types](https://docs.python.org/3.9/library/exceptions.html) whenever possible. Common builtin errors used in cuDF and their semantics are listed below.
 
 | builtin error type | semantic | example use case |
 | ------------------ | -------- | ---------------- |
