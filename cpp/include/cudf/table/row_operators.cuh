@@ -462,18 +462,20 @@ template <template <typename> class hash_function, bool has_nulls = true>
 class row_hasher {
  public:
   row_hasher() = delete;
-  row_hasher(table_device_view t) : _table{t} {}
+  row_hasher(table_device_view t) : _table{t}, _seed(0) {}
+  row_hasher(table_device_view t, uint32_t seed) : _table{t}, _seed(seed) {}
 
   __device__ auto operator()(size_type row_index) const
   {
-    auto hash_combiner = [](hash_value_type lhs, hash_value_type rhs) {
-      return hash_function<hash_value_type>{}.hash_combine(lhs, rhs);
+    auto hash_combiner = [=](hash_value_type lhs, hash_value_type rhs) {
+      return hash_function<hash_value_type>{_seed}.hash_combine(lhs, rhs);
     };
 
     // Hashes an element in a column
     auto hasher = [=](size_type column_index) {
       return cudf::type_dispatcher(_table.column(column_index).type(),
-                                   element_hasher<hash_function, has_nulls>{},
+                                   element_hasher_with_seed<hash_function, has_nulls>{
+                                     _seed, std::numeric_limits<hash_value_type>::max()},
                                    _table.column(column_index),
                                    row_index);
     };
@@ -489,6 +491,7 @@ class row_hasher {
 
  private:
   table_device_view _table;
+  uint32_t _seed;
 };
 
 /**

@@ -231,6 +231,9 @@ MD5ListHasher::operator()<string_view>(column_device_view data_col,
 }
 
 struct MD5Hash {
+  MD5Hash() = default;
+  CUDA_HOST_DEVICE_CALLABLE MD5Hash(uint32_t seed) : m_seed(seed) {}
+
   void __device__ finalize(md5_intermediate_data* hash_state, char* result_location) const
   {
     auto const full_length = (static_cast<uint64_t>(hash_state->message_length)) << 3;
@@ -302,6 +305,8 @@ struct MD5Hash {
   {
     md5_process(col.element<T>(row_index), hash_state);
   }
+ private:
+  uint32_t m_seed{0};
 };
 
 template <>
@@ -740,6 +745,8 @@ SparkMurmurHash3_32<double>::operator()(double const& key) const
 template <typename Key>
 struct IdentityHash {
   using result_type = hash_value_type;
+  IdentityHash() = default;
+  CUDA_HOST_DEVICE_CALLABLE IdentityHash(uint32_t seed) : m_seed(seed) {}
 
   /**
    * @brief  Combines two hash values into a new single hash value. Called
@@ -775,6 +782,8 @@ struct IdentityHash {
   {
     return static_cast<result_type>(key);
   }
+ private:
+  uint32_t m_seed{0};
 };
 
 template <typename Key>
