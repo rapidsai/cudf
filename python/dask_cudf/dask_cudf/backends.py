@@ -1,4 +1,5 @@
-# Copyright (c) 2020, NVIDIA CORPORATION.
+# Copyright (c) 2020-2021, NVIDIA CORPORATION.
+
 import cupy as cp
 import numpy as np
 import pandas as pd
@@ -209,8 +210,11 @@ def concat_cudf(
     filter_warning=True,
     sort=None,
     ignore_index=False,
+    ignore_order=False,
 ):
     assert join == "outer"
+    if ignore_order:
+        raise NotImplementedError("ignore_order is not yet supported in cudf")
     return cudf.concat(dfs, axis=axis, ignore_index=ignore_index)
 
 
