@@ -72,8 +72,6 @@ rmm::device_buffer scalar_col_valid_mask_and(column_view const& col,
 
 namespace jit {
 
-const std::string hash = "prog_binop";
-
 void binary_operation(mutable_column_view& out,
                       column_view const& lhs,
                       scalar const& rhs,
@@ -92,8 +90,7 @@ void binary_operation(mutable_column_view& out,
                      cudf::jit::get_type_name(rhs.type()),
                      get_operator_name(op, op_type));
 
-    binaryop_program_cache
-      .get_kernel(kernel_name)                               //
+    binaryop_program_cache.get_kernel(kernel_name)
       ->configure_1d_max_occupancy(0, 0, 0, stream.value())  //
       ->launch(out.size(),
                cudf::jit::get_data_ptr(out),
@@ -198,7 +195,7 @@ void binary_operation(mutable_column_view& out,
   std::string const output_type_name = cudf::jit::get_type_name(out.type());
 
   std::string ptx_hash =
-    hash + "." + std::to_string(std::hash<std::string>{}(ptx + output_type_name));
+    "prog_binop." + std::to_string(std::hash<std::string>{}(ptx + output_type_name));
   std::string cuda_source =
     "\n#include <cudf/types.hpp>\n" +
     cudf::jit::parse_single_function_ptx(ptx, "GENERIC_BINARY_OP", output_type_name);
