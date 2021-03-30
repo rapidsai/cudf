@@ -5,15 +5,11 @@ from decimal import Decimal
 import numpy as np
 import pyarrow as pa
 import pytest
+
 import cudf
-
-from cudf.core.dtypes import Decimal64Dtype
 from cudf.core.column import DecimalColumn, NumericalColumn
-
-from cudf.tests.utils import (
-    FLOAT_TYPES,
-    assert_eq,
-)
+from cudf.core.dtypes import Decimal64Dtype
+from cudf.tests.utils import FLOAT_TYPES, assert_eq
 
 
 @pytest.mark.parametrize(
@@ -24,7 +20,14 @@ from cudf.tests.utils import (
         [1],
         [-1],
         [1, 2, 3, 4],
-        [42, 1729, 4104],
+        pytest.param(
+            [42, 1729, 4104],
+            marks=pytest.mark.xfail(
+                reason="pyarrow bug that sometimes "
+                "doesn't allow casting to a higher precision "
+                "then back."
+            ),
+        ),
         [1, 2, None, 4],
         [None, None, None],
         [],

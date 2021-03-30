@@ -368,7 +368,7 @@ class ColumnBase(Column, Serializable):
         if isinstance(self.dtype, cudf.Decimal64Dtype):
             result = result.cast(
                 pa.decimal128(
-                    scale=self.dtype.scale, precision=self.dtype.precision
+                    scale=result.type.scale, precision=self.dtype.precision
                 )
             )
         return result
@@ -435,9 +435,13 @@ class ColumnBase(Column, Serializable):
         ):
             return cudf.core.column.IntervalColumn.from_arrow(array)
 
-        return libcudf.interop.from_arrow(data, data.column_names)._data[
+        result = libcudf.interop.from_arrow(data, data.column_names)._data[
             "None"
         ]
+
+        if isinstance(result.dtype, cudf.Decimal64Dtype):
+            result.dtype.precision = array.type.precision
+        return result
 
     def _get_mask_as_column(self) -> ColumnBase:
         return libcudf.transform.mask_to_bools(
