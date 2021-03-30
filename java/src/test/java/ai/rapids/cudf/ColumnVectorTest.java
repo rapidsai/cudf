@@ -1414,7 +1414,7 @@ public class ColumnVectorTest extends CudfTestBase {
   }
 
   @Test
-  void testReplaceEmptyColumn() {
+  void testReplaceNullsScalarEmptyColumn() {
     try (ColumnVector input = ColumnVector.fromBoxedBooleans();
          ColumnVector expected = ColumnVector.fromBoxedBooleans();
          Scalar s = Scalar.fromBool(false);
@@ -1424,7 +1424,7 @@ public class ColumnVectorTest extends CudfTestBase {
   }
 
   @Test
-  void testReplaceNullBoolsWithAllNulls() {
+  void testReplaceNullsScalarBoolsWithAllNulls() {
     try (ColumnVector input = ColumnVector.fromBoxedBooleans(null, null, null, null);
          ColumnVector expected = ColumnVector.fromBoxedBooleans(false, false, false, false);
          Scalar s = Scalar.fromBool(false);
@@ -1434,7 +1434,7 @@ public class ColumnVectorTest extends CudfTestBase {
   }
 
   @Test
-  void testReplaceSomeNullBools() {
+  void testReplaceNullsScalarSomeNullBools() {
     try (ColumnVector input = ColumnVector.fromBoxedBooleans(false, null, null, false);
          ColumnVector expected = ColumnVector.fromBoxedBooleans(false, true, true, false);
          Scalar s = Scalar.fromBool(true);
@@ -1444,7 +1444,7 @@ public class ColumnVectorTest extends CudfTestBase {
   }
 
   @Test
-  void testReplaceNullIntegersWithAllNulls() {
+  void testReplaceNullsScalarIntegersWithAllNulls() {
     try (ColumnVector input = ColumnVector.fromBoxedInts(null, null, null, null);
          ColumnVector expected = ColumnVector.fromBoxedInts(0, 0, 0, 0);
          Scalar s = Scalar.fromInt(0);
@@ -1454,7 +1454,7 @@ public class ColumnVectorTest extends CudfTestBase {
   }
 
   @Test
-  void testReplaceSomeNullIntegers() {
+  void testReplaceNullsScalarSomeNullIntegers() {
     try (ColumnVector input = ColumnVector.fromBoxedInts(1, 2, null, 4, null);
          ColumnVector expected = ColumnVector.fromBoxedInts(1, 2, 999, 4, 999);
          Scalar s = Scalar.fromInt(999);
@@ -1464,7 +1464,7 @@ public class ColumnVectorTest extends CudfTestBase {
   }
 
   @Test
-  void testReplaceNullsFailsOnTypeMismatch() {
+  void testReplaceNullsScalarFailsOnTypeMismatch() {
     try (ColumnVector input = ColumnVector.fromBoxedInts(1, 2, null, 4, null);
          Scalar s = Scalar.fromBool(true)) {
       assertThrows(CudfException.class, () -> input.replaceNulls(s).close());
@@ -1477,6 +1477,44 @@ public class ColumnVectorTest extends CudfTestBase {
          Scalar s = Scalar.fromNull(input.getType());
          ColumnVector result = input.replaceNulls(s)) {
       assertColumnsAreEqual(input, result);
+    }
+  }
+
+  @Test
+  void testReplaceNullsColumnEmptyColumn() {
+    try (ColumnVector input = ColumnVector.fromBoxedBooleans();
+         ColumnVector r = ColumnVector.fromBoxedBooleans();
+         ColumnVector expected = ColumnVector.fromBoxedBooleans();
+         ColumnVector result = input.replaceNulls(r)) {
+      assertColumnsAreEqual(expected, result);
+    }
+  }
+
+  @Test
+  void testReplaceNullsColumnBools() {
+    try (ColumnVector input = ColumnVector.fromBoxedBooleans(null, true, null, false);
+         ColumnVector r = ColumnVector.fromBoxedBooleans(false, null, true, true);
+         ColumnVector expected = ColumnVector.fromBoxedBooleans(false, true, true, false);
+         ColumnVector result = input.replaceNulls(r)) {
+      assertColumnsAreEqual(expected, result);
+    }
+  }
+
+  @Test
+  void testReplaceNullsColumnIntegers() {
+    try (ColumnVector input = ColumnVector.fromBoxedInts(1, 2, null, 4, null);
+         ColumnVector r = ColumnVector.fromBoxedInts(996, 997, 998, 909, null);
+         ColumnVector expected = ColumnVector.fromBoxedInts(1, 2, 998, 4, null);
+         ColumnVector result = input.replaceNulls(r)) {
+      assertColumnsAreEqual(expected, result);
+    }
+  }
+
+  @Test
+  void testReplaceNullsColumnFailsOnTypeMismatch() {
+    try (ColumnVector input = ColumnVector.fromBoxedInts(1, 2, null, 4, null);
+         ColumnVector r = ColumnVector.fromBoxedBooleans(true)) {
+      assertThrows(CudfException.class, () -> input.replaceNulls(r).close());
     }
   }
 
@@ -3382,6 +3420,69 @@ public class ColumnVectorTest extends CudfTestBase {
          ColumnVector expectedDouble = ColumnVector.fromBoxedDoubles(expectedDoubles)) {
       assertColumnsAreEqual(expectedFloat, resultFloat);
       assertColumnsAreEqual(expectedDouble, resultDouble);
+    }
+  }
+
+  @Test
+  void testIsIntegerWithBounds() {
+    String[] intStrings = {"A", "nan", "Inf", "-Inf", "3.5",
+        String.valueOf(Byte.MIN_VALUE),
+        String.valueOf(Byte.MIN_VALUE + 1L),
+        String.valueOf(Byte.MIN_VALUE - 1L),
+        String.valueOf(Byte.MAX_VALUE),
+        String.valueOf(Byte.MAX_VALUE + 1L),
+        String.valueOf(Byte.MAX_VALUE - 1L),
+        String.valueOf(Short.MIN_VALUE),
+        String.valueOf(Short.MIN_VALUE + 1L),
+        String.valueOf(Short.MIN_VALUE - 1L),
+        String.valueOf(Short.MAX_VALUE),
+        String.valueOf(Short.MAX_VALUE + 1L),
+        String.valueOf(Short.MAX_VALUE - 1L),
+        String.valueOf(Integer.MIN_VALUE),
+        String.valueOf(Integer.MIN_VALUE + 1L),
+        String.valueOf(Integer.MIN_VALUE - 1L),
+        String.valueOf(Integer.MAX_VALUE),
+        String.valueOf(Integer.MAX_VALUE + 1L),
+        String.valueOf(Integer.MAX_VALUE - 1L),
+        String.valueOf(Long.MIN_VALUE),
+        String.valueOf(Long.MIN_VALUE + 1L),
+        "-9223372036854775809",
+        String.valueOf(Long.MAX_VALUE),
+        "9223372036854775808",
+        String.valueOf(Long.MAX_VALUE - 1L)};
+    try (ColumnVector intStringCV = ColumnVector.fromStrings(intStrings);
+         ColumnVector isByte = intStringCV.isInteger(DType.INT8);
+         ColumnVector expectedByte = ColumnVector.fromBoxedBooleans(
+             false, false, false, false, false,
+             true, true, false, true, false, true,
+             false, false, false, false, false, false,
+             false, false, false, false, false, false,
+             false, false, false, false, false, false);
+         ColumnVector isShort = intStringCV.isInteger(DType.INT16);
+         ColumnVector expectedShort = ColumnVector.fromBoxedBooleans(
+             false, false, false, false, false,
+             true, true, true, true, true, true,
+             true, true, false, true, false, true,
+             false, false, false, false, false, false,
+             false, false, false, false, false, false);
+         ColumnVector isInt = intStringCV.isInteger(DType.INT32);
+         ColumnVector expectedInt = ColumnVector.fromBoxedBooleans(
+             false, false, false, false, false,
+             true, true, true, true, true, true,
+             true, true, true, true, true, true,
+             true, true, false, true, false, true,
+             false, false, false, false, false, false);
+         ColumnVector isLong = intStringCV.isInteger(DType.INT64);
+         ColumnVector expectedLong = ColumnVector.fromBoxedBooleans(
+             false, false, false, false, false,
+             true, true, true, true, true, true,
+             true, true, true, true, true, true,
+             true, true, true, true, true, true,
+             true, true, false, true, false, true)) {
+      assertColumnsAreEqual(expectedByte, isByte);
+      assertColumnsAreEqual(expectedShort, isShort);
+      assertColumnsAreEqual(expectedInt, isInt);
+      assertColumnsAreEqual(expectedLong, isLong);
     }
   }
 
