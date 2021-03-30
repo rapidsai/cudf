@@ -1435,6 +1435,11 @@ class ColumnBase(Column, Serializable):
         ):
             other = other._rename_fields(self.dtype.fields.keys())
 
+        if isinstance(self.dtype, cudf.Decimal64Dtype) and isinstance(
+            other.dtype, cudf.Decimal64Dtype
+        ):
+            other.dtype.precision = self.dtype.precision
+
         if type(self) is type(other):
             if self.base_children and other.base_children:
                 base_children = tuple(

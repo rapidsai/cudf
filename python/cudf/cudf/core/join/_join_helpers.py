@@ -97,6 +97,14 @@ def _match_join_keys(
     if pd.api.types.is_dtype_equal(ltype, rtype):
         return lcol, rcol
 
+    if isinstance(ltype, cudf.Decimal64Dtype) or isinstance(
+        rtype, cudf.Decimal64Dtype
+    ):
+        raise TypeError(
+            "Decimal columns can only be merged with decimal columns "
+            "of the same precision and scale"
+        )
+
     if (np.issubdtype(ltype, np.number)) and (np.issubdtype(rtype, np.number)):
         common_type = (
             max(ltype, rtype)
