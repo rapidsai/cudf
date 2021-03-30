@@ -6,6 +6,8 @@ This document serves to guide the use of error types when dealing with different
 
 ## Overview
 
+On a high level, exceptions consist of exception type and exception payload. Each can be standardized by the API. cuDF only standardizes exception type and uses the payload to convey debugging information for users. (Subject to discussion: is it sufficient to only use builtin error types but not the payload to signal all errors?)
+
 cuDF follows error conventions used by Pandas. Following [Pandas Wiki](https://github.com/pandas-dev/pandas/wiki/Choosing-Exceptions-to-Raise), cuDF uses python [builtin error types](https://docs.python.org/3.9/library/exceptions.html) whenever possible. Common builtin errors used in cuDF and their semantics are listed below.
 
 | builtin error type | semantic | example use case |
@@ -38,6 +40,6 @@ cuDF interfaces with c++ libraries through Cython. By default, cuDF builds such 
 
 In an unambiguous situation, for example, the c++ function called by cuDF will only throw one instance of `std::out_of_range` exception, indicating an out of bound array access error, cuDF will skip checks in the python level and surface such error (through automatic Cython error mapping) if occurs.
 
-In an ambiguous situation, for example, the c++ function may raise two instances of `std::invalid_argument` error, each signaling different types of invalid argument combination, cuDF will check the invalid combinations and re-raise with proper user message.
+In an ambiguous situation, for example, the c++ function may raise two instances of `std::invalid_argument` error, each signaling different kinds of invalid argument combination, cuDF will check the invalid combinations and re-raise with proper user message.
 
 In cases when the contents of `what()` is standardized by the supporting library, cuDF will utilize it to disambiguate.
