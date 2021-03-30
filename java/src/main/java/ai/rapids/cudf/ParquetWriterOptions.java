@@ -100,6 +100,10 @@ public class ParquetWriterOptions {
       return this;
     }
 
+    /**
+     * Set column name
+     * @param name
+     */
     public Builder withColumn(String... name) {
       IntStream.range(0, name.length).forEach(
           i -> columnOptions.add(ParquetColumnWriterOptions.builder()
@@ -109,6 +113,11 @@ public class ParquetWriterOptions {
       return this;
     }
 
+    /**
+     * Set the decimal precision
+     * @param name
+     * @param precision
+     */
     public Builder withDecimalColumn(String name, int precision) {
       columnOptions.add(ParquetColumnWriterOptions.builder()
           .withColumnName(name)
@@ -116,6 +125,11 @@ public class ParquetWriterOptions {
       return this;
     }
 
+    /**
+     * Set the nullable decimal precision
+     * @param name
+     * @param precision
+     */
     public Builder withNullableDecimalColumn(String name, int precision) {
       columnOptions.add(ParquetColumnWriterOptions.builder()
           .withColumnName(name)
@@ -124,6 +138,10 @@ public class ParquetWriterOptions {
       return this;
     }
 
+    /**
+     * Set nullable column name
+     * @param name
+     */
     public Builder withNullableColumn(String... name) {
       IntStream.range(0, name.length).forEach(
           i -> columnOptions.add(ParquetColumnWriterOptions.builder()
@@ -134,11 +152,19 @@ public class ParquetWriterOptions {
       return this;
     }
 
+    /**
+     * Set a timestamp column
+     * @param options
+     */
     public Builder withTimestampColumn(ParquetTimestampColumnWriterOptions options) {
       columnOptions.add(options);
       return this;
     }
 
+    /**
+     * Set a struct column
+     * @param options
+     */
     public Builder withStructColumn(ParquetColumnWriterOptions options) {
       columnOptions.add(options);
       return this;
