@@ -490,21 +490,21 @@ std::unique_ptr<column> drop_list_duplicates(lists_column_view const& lists_colu
   auto const lists_entries = lists_column.get_sliced_child(stream);
 
   // sorted_lists will store the results of the original lists after calling segmented_sort
-  std::unique_ptr<column> sorted_lists;
-
-  // If the column contains lists of floating point data type and NaNs are considered as equal, we
-  // need to replace -NaN by NaN before sorting
-  auto const has_negative_nan =
-    type_dispatcher(lists_entries.type(), detail::has_negative_nans_fn{}, lists_entries, stream);
-  if (has_negative_nan) {
-    // The column new_lists_column is temporary, thus we will not pass in `mr`
-    auto const new_lists_column =
-      detail::replace_negative_nans_entries(lists_entries, lists_column, stream);
-    sorted_lists = detail::sort_lists(
-      lists_column_view(new_lists_column->view()), order::ASCENDING, null_order::AFTER, stream);
-  } else {
-    sorted_lists = detail::sort_lists(lists_column, order::ASCENDING, null_order::AFTER, stream);
-  }
+  auto const sorted_lists = [&]() {
+    // If the column contains lists of floating point data type and NaNs are considered as equal, we
+    // need to replace -NaN by NaN before sorting
+    auto const has_negative_nan =
+      type_dispatcher(lists_entries.type(), detail::has_negative_nans_fn{}, lists_entries, stream);
+    if (has_negative_nan) {
+      // The column new_lists_column is temporary, thus we will not pass in `mr`
+      auto const new_lists_column =
+        detail::replace_negative_nans_entries(lists_entries, lists_column, stream);
+      return detail::sort_lists(
+        lists_column_view(new_lists_column->view()), order::ASCENDING, null_order::AFTER, stream);
+    } else {
+      return detail::sort_lists(lists_column, order::ASCENDING, null_order::AFTER, stream);
+    }
+  }();
 
   auto const sorted_lists_entries =
     lists_column_view(sorted_lists->view()).get_sliced_child(stream);
