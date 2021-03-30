@@ -357,13 +357,21 @@ class ColumnBase(Column, Serializable):
                 pa.null(), len(self), [pa.py_buffer((b""))]
             )
 
-        return libcudf.interop.to_arrow(
+        result = libcudf.interop.to_arrow(
             libcudf.table.Table(
                 cudf.core.column_accessor.ColumnAccessor({"None": self})
             ),
             [["None"]],
             keep_index=False,
         )["None"].chunk(0)
+
+        if isinstance(self.dtype, cudf.Decimal64Dtype):
+            result = result.cast(
+                pa.decimal128(
+                    scale=self.dtype.scale, precision=self.dtype.precision
+                )
+            )
+        return result
 
     @classmethod
     def from_arrow(cls, array: pa.Array) -> ColumnBase:
