@@ -144,7 +144,6 @@ std::shared_ptr<arrow::Array> dispatch_to_arrow::operator()<numeric::decimal64>(
   size_type const BIT_WIDTH_RATIO = 2;  // Array::Type:type::DECIMAL (128) / int64_t
 
   rmm::device_uvector<DeviceType> buf(input.size() * BIT_WIDTH_RATIO, stream);
-  thrust::uninitialized_fill(rmm::exec_policy(stream), buf.begin(), buf.end(), DeviceType{0});
 
   auto count = thrust::make_counting_iterator(0);
 
@@ -156,14 +155,15 @@ std::shared_ptr<arrow::Array> dispatch_to_arrow::operator()<numeric::decimal64>(
                      out[out_idx + 1]   = in[in_idx] < 0 ? -1 : 0;
                    });
 
-  auto result = arrow::AllocateBuffer(buf.size() * sizeof(DeviceType), ar_mr);
+  auto const buf_size_in_bytes = buf.size() * sizeof(DeviceType);
+  auto result                  = arrow::AllocateBuffer(buf_size_in_bytes, ar_mr);
   CUDF_EXPECTS(result.ok(), "Failed to allocate Arrow buffer for data");
 
   std::shared_ptr<arrow::Buffer> data_buffer = std::move(result.ValueOrDie());
 
   CUDA_TRY(cudaMemcpyAsync(data_buffer->mutable_data(),
                            buf.data(),
-                           buf.size() * sizeof(DeviceType),
+                           buf_size_in_bytes,
                            cudaMemcpyDeviceToHost,
                            stream.value()));
 

@@ -358,7 +358,7 @@ using fp_wrapper = cudf::test::fixed_point_column_wrapper<T>;
 TEST_F(FromArrowTest, FixedPointTable)
 {
   using namespace numeric;
-  cudf::size_type const BIT_WIDTH_RATIO = 2;  // Array::Type:type::DECIMAL (128) / int64_t
+  auto constexpr BIT_WIDTH_RATIO = 2;  // Array::Type:type::DECIMAL (128) / int64_t
 
   for (auto const i : {3, 2, 1, 0, -1, -2, -3}) {
     auto const data     = std::vector<int64_t>{1, 0, 2, 0, 3, 0, 4, 0, 5, 0, 6, 0};
@@ -385,9 +385,9 @@ TEST_F(FromArrowTest, FixedPointTable)
 TEST_F(FromArrowTest, FixedPointTableLarge)
 {
   using namespace numeric;
-  cudf::size_type const BIT_WIDTH_RATIO = 2;  // Array::Type:type::DECIMAL (128) / int64_t
+  auto constexpr BIT_WIDTH_RATIO = 2;  // Array::Type:type::DECIMAL (128) / int64_t
+  auto constexpr NUM_ELEMENTS    = 1000;
 
-  int64_t constexpr NUM_ELEMENTS = 1000;
   for (auto const i : {3, 2, 1, 0, -1, -2, -3}) {
     auto every_other = [](auto i) { return i % BIT_WIDTH_RATIO ? 0 : i / BIT_WIDTH_RATIO; };
     auto transform   = cudf::detail::make_counting_transform_iterator(BIT_WIDTH_RATIO, every_other);
@@ -415,7 +415,7 @@ TEST_F(FromArrowTest, FixedPointTableLarge)
 TEST_F(FromArrowTest, FixedPointTableNulls)
 {
   using namespace numeric;
-  cudf::size_type const BIT_WIDTH_RATIO = 2;  // Array::Type:type::DECIMAL (128) / int64_t
+  auto constexpr BIT_WIDTH_RATIO = 2;  // Array::Type:type::DECIMAL (128) / int64_t
 
   for (auto const i : {3, 2, 1, 0, -1, -2, -3}) {
     auto const data = std::vector<int64_t>{1, 0, 2, 0, 3, 0, 4, 0, 5, 0, 6, 0};
@@ -446,9 +446,9 @@ TEST_F(FromArrowTest, FixedPointTableNulls)
 TEST_F(FromArrowTest, FixedPointTableNullsLarge)
 {
   using namespace numeric;
-  cudf::size_type const BIT_WIDTH_RATIO = 2;  // Array::Type:type::DECIMAL (128) / int64_t
+  auto constexpr BIT_WIDTH_RATIO = 2;  // Array::Type:type::DECIMAL (128) / int64_t
+  auto constexpr NUM_ELEMENTS    = 1000;
 
-  int64_t constexpr NUM_ELEMENTS = 1000;
   for (auto const i : {3, 2, 1, 0, -1, -2, -3}) {
     auto every_other = [](auto i) { return i % BIT_WIDTH_RATIO ? 0 : i / BIT_WIDTH_RATIO; };
     auto transform   = cudf::detail::make_counting_transform_iterator(BIT_WIDTH_RATIO, every_other);

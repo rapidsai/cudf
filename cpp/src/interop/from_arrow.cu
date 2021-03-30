@@ -79,7 +79,7 @@ data_type arrow_to_cudf_type(arrow::DataType const& arrow_type)
     case arrow::Type::DICTIONARY: return data_type(type_id::DICTIONARY32);
     case arrow::Type::LIST: return data_type(type_id::LIST);
     case arrow::Type::DECIMAL: {
-      auto type = static_cast<arrow::Decimal128Type const*>(&arrow_type);
+      auto const type = static_cast<arrow::Decimal128Type const*>(&arrow_type);
       return data_type{type_id::DECIMAL64, -type->scale()};
     }
     case arrow::Type::STRUCT: return data_type(type_id::STRUCT);
@@ -170,10 +170,6 @@ std::unique_ptr<column> get_column(arrow::Array const& array,
                                    rmm::cuda_stream_view stream,
                                    rmm::mr::device_memory_resource* mr);
 
-struct every_other {
-  __device__ size_type operator()(size_type i) { return 2 * i; }
-};
-
 template <>
 std::unique_ptr<column> dispatch_to_cudf_column::operator()<numeric::decimal64>(
   arrow::Array const& array,
@@ -198,7 +194,8 @@ std::unique_ptr<column> dispatch_to_cudf_column::operator()<numeric::decimal64>(
     cudaMemcpyDefault,
     stream.value()));
 
-  auto gather_map = cudf::detail::make_counting_transform_iterator(0, every_other{});
+  auto every_other = [] __device__(size_type i) { return 2 * i; };
+  auto gather_map  = cudf::detail::make_counting_transform_iterator(0, every_other);
 
   thrust::gather(rmm::exec_policy(stream),
                  gather_map,  //
@@ -208,11 +205,11 @@ std::unique_ptr<column> dispatch_to_cudf_column::operator()<numeric::decimal64>(
 
   auto null_mask = [&] {
     if (not skip_mask and array.null_bitmap_data()) {
-      auto tmp_mask = get_mask_buffer(array, stream, mr);
+      auto temp_mask = get_mask_buffer(array, stream, mr);
       // If array is sliced, we have to copy whole mask and then take copy.
       return (num_rows == static_cast<size_type>(data_buffer->size() / sizeof(DeviceType)))
-               ? *tmp_mask
-               : cudf::detail::copy_bitmask(static_cast<bitmask_type*>(tmp_mask->data()),
+               ? *temp_mask
+               : cudf::detail::copy_bitmask(static_cast<bitmask_type*>(temp_mask->data()),
                                             array.offset(),
                                             array.offset() + num_rows,
                                             stream,
