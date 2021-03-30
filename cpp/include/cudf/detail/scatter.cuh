@@ -25,6 +25,7 @@
 #include <cudf/dictionary/dictionary_column_view.hpp>
 #include <cudf/dictionary/dictionary_factories.hpp>
 #include <cudf/lists/detail/scatter.cuh>
+#include <cudf/null_mask.hpp>
 #include <cudf/strings/detail/scatter.cuh>
 #include <cudf/strings/string_view.cuh>
 #include <cudf/utilities/traits.hpp>
@@ -254,22 +255,21 @@ struct column_scatterer_impl<struct_view, MapItRoot> {
     if (nullable) {
       auto const gather_map =
         scatter_to_gather(scatter_map_begin, scatter_map_end, source.size(), stream);
-      gather_bitmask(
-        // Table view of struct column.
-        cudf::table_view{
-          std::vector<cudf::column_view>{structs_src.child_begin(), structs_src.child_end()}},
-        gather_map.begin(),
-        output_struct_members,
-        gather_bitmask_op::NULLIFY,
-        stream,
-        mr);
+      gather_bitmask(cudf::table_view{std::vector<cudf::column_view>{structs_src.child_begin(),
+                                                                     structs_src.child_end()}},
+                     gather_map.begin(),
+                     output_struct_members,
+                     gather_bitmask_op::PASSTHROUGH,
+                     stream,
+                     mr);
     }
 
     return cudf::make_structs_column(
-      source.size(),
+      target.size(),
       std::move(output_struct_members),
-      0,
-      rmm::device_buffer{0, stream, mr},  // Null mask will be fixed up in cudf::scatter().
+      target.null_count(),
+      cudf::detail::copy_bitmask(
+        target, stream, mr),  // Null mask will be fixed up in cudf::scatter().
       stream,
       mr);
   }
