@@ -13,6 +13,7 @@ from nvtx import annotate
 from pandas._config import get_option
 
 import cudf
+from cudf._typing import DtypeObj
 from cudf.core.abc import Serializable
 from cudf.core.column import (
     CategoricalColumn,
@@ -66,6 +67,9 @@ def _to_frame(this_index, index=True, name=None):
 
 
 class Index(Frame, Serializable):
+
+    dtype: DtypeObj
+
     def __new__(
         cls,
         data=None,
@@ -1543,6 +1547,10 @@ class Index(Frame, Serializable):
                 )
         else:
             return as_index(table)
+
+    @classmethod
+    def _from_data(cls, data, index=None):
+        return cls._from_table(Frame(data=data))
 
     _accessors = set()  # type: Set[Any]
 

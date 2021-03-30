@@ -1,4 +1,5 @@
-# Copyright (c) 2019-2021, NVIDIA CORPORATION.
+# Copyright (c) 2019-2020, NVIDIA CORPORATION.
+from __future__ import annotations
 
 import itertools
 import numbers
@@ -18,6 +19,7 @@ from cudf import _lib as libcudf
 from cudf._typing import DataFrameOrSeries
 from cudf.core._compat import PANDAS_GE_120
 from cudf.core.column import column
+from cudf.core.column_accessor import ColumnAccessor
 from cudf.core.frame import Frame
 from cudf.core.index import Index, as_index
 
@@ -188,6 +190,19 @@ class MultiIndex(Index):
     def names(self, value):
         value = [None] * self.nlevels if value is None else value
         assert len(value) == self.nlevels
+
+        if len(value) == len(set(value)):
+            # IMPORTANT: if the provided names are unique,
+            # we reconstruct self._data with the names as keys.
+            # If they are not unique, the keys of self._data
+            # and self._names will be different, which can lead
+            # to unexpected behaviour in some cases. This is
+            # definitely buggy, but we can't disallow non-unique
+            # names either...
+            self._data = self._data.__class__._create_unsafe(
+                dict(zip(value, self._data.values())),
+                level_names=self._data.level_names,
+            )
         self._names = pd.core.indexes.frozen.FrozenList(value)
 
     def rename(self, names, inplace=False):
@@ -234,7 +249,6 @@ class MultiIndex(Index):
         ValueError: Length of names must match number of levels in MultiIndex.
 
         """
-
         return self.set_names(names, level=None, inplace=inplace)
 
     def set_names(self, names, level=None, inplace=False):
@@ -277,6 +291,10 @@ class MultiIndex(Index):
         names = existing_names
 
         return self._set_names(names=names, inplace=inplace)
+
+    @classmethod
+    def _from_data(cls, data: ColumnAccessor, index=None) -> MultiIndex:
+        return cls.from_frame(cudf.DataFrame._from_data(data))
 
     @classmethod
     def _from_table(cls, table, names=None):
