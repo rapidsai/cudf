@@ -111,8 +111,6 @@ class memory_tracking_resource final : public rmm::mr::device_memory_resource {
    *
    * Updates the current total memory and peak memory allocated with this resource
    *
-   * @throws Nothing.
-   *
    * @param p Pointer to be deallocated
    * @param bytes Size of the allocation
    * @param stream Stream on which to perform the deallocation
