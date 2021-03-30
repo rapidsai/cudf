@@ -367,7 +367,7 @@ TEST_F(ToArrowTest, FixedPointTable)
 
     auto const expect_data = std::vector<int64_t>{1, 0, 2, 0, 3, 0, 4, 0, 5, 0, 6, 0};
     std::shared_ptr<arrow::Array> arr;
-    arrow::Decimal128Builder decimal_builder(arrow::decimal(18, i), arrow::default_memory_pool());
+    arrow::Decimal128Builder decimal_builder(arrow::decimal(18, -i), arrow::default_memory_pool());
     decimal_builder.AppendValues(reinterpret_cast<const uint8_t*>(expect_data.data()),
                                  expect_data.size() / BIT_WIDTH_RATIO);
     CUDF_EXPECTS(decimal_builder.Finish(&arr).ok(), "Failed to build array");
@@ -399,7 +399,7 @@ TEST_F(ToArrowTest, FixedPointTableLarge)
     auto const expect_data =
       std::vector<int64_t>{transform, transform + NUM_ELEMENTS * BIT_WIDTH_RATIO};
     std::shared_ptr<arrow::Array> arr;
-    arrow::Decimal128Builder decimal_builder(arrow::decimal(18, i), arrow::default_memory_pool());
+    arrow::Decimal128Builder decimal_builder(arrow::decimal(18, -i), arrow::default_memory_pool());
 
     // Note: For some reason, decimal_builder.AppendValues with NUM_ELEMENTS >= 1000 doesn't work
     for (int i = 0; i < NUM_ELEMENTS; ++i)
@@ -430,7 +430,7 @@ TEST_F(ToArrowTest, FixedPointTableNullsSimple)
     auto const input = cudf::table_view({col});
 
     std::shared_ptr<arrow::Array> arr;
-    arrow::Decimal128Builder decimal_builder(arrow::decimal(18, i), arrow::default_memory_pool());
+    arrow::Decimal128Builder decimal_builder(arrow::decimal(18, -i), arrow::default_memory_pool());
     decimal_builder.AppendValues(reinterpret_cast<const uint8_t*>(data.data()),
                                  data.size() / BIT_WIDTH_RATIO);
     decimal_builder.AppendNull();
@@ -462,7 +462,7 @@ TEST_F(ToArrowTest, FixedPointTableNulls)
     auto const expect_data =
       std::vector<int64_t>{1, 0, 2, 0, 3, 0, 4, 0, 5, 0, 6, 0, 7, 0, 8, 0, 9, 0, 10, 0};
     std::shared_ptr<arrow::Array> arr;
-    arrow::Decimal128Builder decimal_builder(arrow::decimal(18, i), arrow::default_memory_pool());
+    arrow::Decimal128Builder decimal_builder(arrow::decimal(18, -i), arrow::default_memory_pool());
     for (int64_t i = 0; i < input.column(0).size() / BIT_WIDTH_RATIO; ++i) {
       decimal_builder.Append(reinterpret_cast<const uint8_t*>(expect_data.data() + 4 * i));
       decimal_builder.AppendNull();

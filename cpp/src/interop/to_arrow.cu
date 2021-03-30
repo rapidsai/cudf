@@ -168,7 +168,7 @@ std::shared_ptr<arrow::Array> dispatch_to_arrow::operator()<numeric::decimal64>(
                            cudaMemcpyDeviceToHost,
                            stream.value()));
 
-  auto type    = arrow::decimal(18, input.type().scale());
+  auto type    = arrow::decimal(18, -input.type().scale());
   auto mask    = fetch_mask_buffer(input, ar_mr, stream);
   auto buffers = std::vector<std::shared_ptr<arrow::Buffer>>{mask, data_buffer};
   auto data    = std::make_shared<arrow::ArrayData>(type, input.size(), buffers);
