@@ -71,6 +71,10 @@ public class ParquetColumnWriterOptions implements RapidsSerializable {
       return this;
     }
 
+    /**
+     * Create a column with these options
+     * @return this for chaining
+     */
     public Builder withColumnOptions(ParquetColumnWriterOptions columnOptions) {
       childColumnOptions.add(columnOptions);
       return this;
