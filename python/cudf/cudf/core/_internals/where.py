@@ -71,16 +71,18 @@ def _check_and_cast_columns_with_scalar(source_col, other_scalar, inplace):
             "to same dtypes."
         )
     if inplace:
-        if not np.can_cast(device_scalar, source_col.dtype):
+        if not cudf.utils.dtypes.can_cast(
+            device_scalar.dtype, source_col.dtype
+        ):
             warnings.warn(
                 f"Type-casting from {device_scalar.dtype} "
                 f"to {source_col.dtype}, there could be potential data loss"
             )
         return source_col, device_scalar.astype(source_col.dtype)
     else:
-        if pd.api.types.is_numeric_dtype(source_col.dtype) and np.can_cast(
-            other_scalar, source_col.dtype
-        ):
+        if pd.api.types.is_numeric_dtype(
+            source_col.dtype
+        ) and cudf.utils.dtypes.can_cast(other_scalar, source_col.dtype):
             common_dtype = source_col.dtype
         else:
             common_dtype = cudf.utils.dtypes.find_common_type(

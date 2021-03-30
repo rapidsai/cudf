@@ -637,6 +637,11 @@ def find_common_type(dtypes):
     # Aggregate same types
     dtypes = set(dtypes)
 
+    if any(is_decimal_dtype(dtype) for dtype in dtypes):
+        raise NotImplementedError(
+            "DecimalDtype is not yet supported in find_common_type"
+        )
+
     # Corner case 1:
     # Resort to np.result_type to handle "M" and "m" types separately
     dt_dtypes = set(filter(lambda t: is_datetime_dtype(t), dtypes))
@@ -657,6 +662,49 @@ def find_common_type(dtypes):
         return np.dtype("float32")
     else:
         return common_dtype
+
+
+def can_cast(from_dtype, to_dtype):
+    """
+    Utility function to determine if we can cast
+    from `from_dtype` to `to_dtype`. This function primarily calls
+    `np.can_cast` but with some special handling around
+    cudf specific dtypes.
+    """
+    if isinstance(from_dtype, cudf.core.dtypes.Decimal64Dtype):
+        if isinstance(to_dtype, cudf.core.dtypes.Decimal64Dtype):
+            return True
+        elif isinstance(to_dtype, np.dtype):
+            if to_dtype.kind in {"i", "f", "u", "U", "O"}:
+                return True
+            else:
+                return False
+    elif isinstance(from_dtype, np.dtype):
+        if isinstance(to_dtype, np.dtype):
+            return np.can_cast(from_dtype, to_dtype)
+        elif isinstance(to_dtype, cudf.core.dtypes.Decimal64Dtype):
+            if from_dtype.kind in {"i", "f", "u", "U", "O"}:
+                return True
+            else:
+                return False
+        elif isinstance(to_dtype, cudf.core.types.CategoricalDtype):
+            return True
+        else:
+            return False
+    elif isinstance(from_dtype, cudf.core.dtypes.ListDtype):
+        if isinstance(to_dtype, cudf.core.dtypes.ListDtype):
+            return True
+        else:
+            return False
+    elif isinstance(from_dtype, cudf.core.dtypes.CategoricalDtype):
+        if isinstance(to_dtype, cudf.core.dtypes.CategoricalDtype):
+            return True
+        elif isinstance(to_dtype, np.dtype):
+            return np.can_cast(from_dtype._categories.dtype, to_dtype)
+        else:
+            return False
+    else:
+        return np.can_cast(from_dtype, to_dtype)
 
 
 # Type dispatch loops similar to what are found in `np.add.types`
