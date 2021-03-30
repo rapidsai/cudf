@@ -36,9 +36,11 @@
 #include <cudf/sorting.hpp>
 #include <cudf/stream_compaction.hpp>
 #include <rmm/cuda_stream_view.hpp>
+#include "cudf/types.hpp"
 
 #include "cudf_jni_apis.hpp"
 #include "dtype_utils.hpp"
+#include "jni_utils.hpp"
 #include "row_conversion.hpp"
 
 namespace cudf {
@@ -955,10 +957,32 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_readParquet(
   CATCH_STD(env, NULL);
 }
 
+void set_column_metadata(cudf::io::column_in_metadata &column_metadata,
+                         std::vector<std::string> &col_names, cudf::jni::native_jintArray &types,
+                         cudf::jni::native_jbooleanArray &nullability,
+                         cudf::jni::native_jbooleanArray &isInt96,
+                         cudf::jni::native_jintArray &precisions,
+                         cudf::jni::native_jintArray &children, int read_index) {
+  int write_index = 0;
+  int num_children = children[read_index++];
+  column_metadata.children.resize(num_children);
+  for (int i = read_index; i < read_index + num_children; i++, write_index++) {
+    column_metadata.child(write_index)
+        .set_name(col_names[i])
+        .set_decimal_precision(precisions[i])
+        .set_int96_timestamps(isInt96[i])
+        .set_nullability(nullability[i]);
+    if (children[i] > 0) {
+      set_column_metadata(column_metadata.child(write_index), col_names, children, nullability,
+                          isInt96, precisions, children, i);
+    }
+  }
+}
+
 JNIEXPORT long JNICALL Java_ai_rapids_cudf_Table_writeParquetBufferBegin(
-    JNIEnv *env, jclass, jobjectArray j_col_names, jbooleanArray j_col_nullability,
+    JNIEnv *env, jclass, jobjectArray j_col_names, jintArray j_children, jbooleanArray j_col_nullability,
     jobjectArray j_metadata_keys, jobjectArray j_metadata_values, jint j_compression,
-    jint j_stats_freq, jboolean j_isInt96, jintArray j_precisions, jobject consumer) {
+    jint j_stats_freq, jbooleanArray j_isInt96, jintArray j_precisions, jobject consumer) {
   JNI_NULL_CHECK(env, j_col_names, "null columns", 0);
   JNI_NULL_CHECK(env, j_col_nullability, "null nullability", 0);
   JNI_NULL_CHECK(env, j_metadata_keys, "null metadata keys", 0);
@@ -969,24 +993,31 @@ JNIEXPORT long JNICALL Java_ai_rapids_cudf_Table_writeParquetBufferBegin(
     using namespace cudf::io;
     cudf::jni::native_jstringArray col_names(env, j_col_names);
     cudf::jni::native_jbooleanArray col_nullability(env, j_col_nullability);
+    cudf::jni::native_jbooleanArray isInt96(env, j_isInt96);
     cudf::jni::native_jstringArray meta_keys(env, j_metadata_keys);
     cudf::jni::native_jstringArray meta_values(env, j_metadata_values);
     cudf::jni::native_jintArray precisions(env, j_precisions);
+    cudf::jni::native_jintArray children(env, j_children);
 
     auto cpp_names = col_names.as_cpp_vector();
     table_input_metadata metadata;
-    metadata.column_metadata.resize(col_nullability.size());
-    for (int i = 0; i < col_nullability.size(); i++) {
-       metadata.column_metadata[i]
-           .set_name(cpp_names[i])
-           .set_nullability(col_nullability[i])
-           .set_int96_timestamps(j_isInt96);
-    }
 
-    // Precisions is not always set
-    for (int i = 0; i < precisions.size(); i++) {
-       metadata.column_metadata[i]
-           .set_decimal_precision(precisions[i]);
+    int top_level_children = children[0]; // this should never be 0, because a table can't have no columns
+
+    // first value are dummy when reading 
+    // but we write at index 0
+    metadata.column_metadata.resize(top_level_children);
+    for (int i = 1, write_index = 0; i <= top_level_children; i++, write_index++) {
+      metadata.column_metadata[write_index]
+          .set_name(cpp_names[i])
+          .set_nullability(col_nullability[i])
+          .set_int96_timestamps(isInt96[i])
+          .set_decimal_precision(precisions[i]);
+
+      if (children[i] > 0) {
+        set_column_metadata(metadata.column_metadata[write_index], cpp_names, children,
+                            col_nullability, isInt96, precisions, children, i);
+      }
     }
 
     for (auto i = 0; i < meta_keys.size(); ++i) {
@@ -1014,9 +1045,9 @@ JNIEXPORT long JNICALL Java_ai_rapids_cudf_Table_writeParquetBufferBegin(
 }
 
 JNIEXPORT long JNICALL Java_ai_rapids_cudf_Table_writeParquetFileBegin(
-    JNIEnv *env, jclass, jobjectArray j_col_names, jbooleanArray j_col_nullability,
+    JNIEnv *env, jclass, jobjectArray j_col_names, jintArray j_children, jbooleanArray j_col_nullability,
     jobjectArray j_metadata_keys, jobjectArray j_metadata_values, jint j_compression,
-    jint j_stats_freq, jboolean j_isInt96, jintArray j_precisions, jstring j_output_path) {
+    jint j_stats_freq, jbooleanArray j_isInt96, jintArray j_precisions, jstring j_output_path) {
   JNI_NULL_CHECK(env, j_col_names, "null columns", 0);
   JNI_NULL_CHECK(env, j_col_nullability, "null nullability", 0);
   JNI_NULL_CHECK(env, j_metadata_keys, "null metadata keys", 0);
@@ -1027,25 +1058,32 @@ JNIEXPORT long JNICALL Java_ai_rapids_cudf_Table_writeParquetFileBegin(
     using namespace cudf::io;
     cudf::jni::native_jstringArray col_names(env, j_col_names);
     cudf::jni::native_jbooleanArray col_nullability(env, j_col_nullability);
+    cudf::jni::native_jbooleanArray isInt96(env, j_isInt96);
     cudf::jni::native_jstringArray meta_keys(env, j_metadata_keys);
     cudf::jni::native_jstringArray meta_values(env, j_metadata_values);
     cudf::jni::native_jstring output_path(env, j_output_path);
     cudf::jni::native_jintArray precisions(env, j_precisions);
+    cudf::jni::native_jintArray children(env, j_children);
 
     auto cpp_names = col_names.as_cpp_vector();
     table_input_metadata metadata;
-    metadata.column_metadata.resize(col_nullability.size());
-    for (int i = 0; i < col_nullability.size(); i++) {
-       metadata.column_metadata[i]
-           .set_name(cpp_names[i])
-           .set_nullability(col_nullability[i])
-           .set_int96_timestamps(j_isInt96);
-    }
 
-    // Precisions is not always set
-    for (int i = 0; i < precisions.size(); i++) {
-       metadata.column_metadata[i]
-           .set_decimal_precision(precisions[i]);
+    int top_level_children = children[0]; // this should never be 0, because a table can't have no columns
+
+    // first value are dummy when reading 
+    // but we write at index 0
+    metadata.column_metadata.resize(top_level_children);
+    for (int i = 1, write_index = 0; i <= top_level_children; i++, write_index++) {
+      metadata.column_metadata[write_index]
+          .set_name(cpp_names[i])
+          .set_nullability(col_nullability[i])
+          .set_int96_timestamps(isInt96[i])
+          .set_decimal_precision(precisions[i]);
+
+      if (children[i] > 0) {
+        set_column_metadata(metadata.column_metadata[write_index], cpp_names, children,
+                            col_nullability, isInt96, precisions, children, i);
+      }
     }
 
     for (auto i = 0; i < meta_keys.size(); ++i) {

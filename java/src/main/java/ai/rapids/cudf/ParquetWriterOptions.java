@@ -18,10 +18,16 @@
 
 package ai.rapids.cudf;
 
+import java.util.*;
+import java.util.stream.IntStream;
+
 /**
  * Settings for writing Parquet files.
  */
-public class ParquetWriterOptions extends CompressedMetadataWriterOptions {
+public class ParquetWriterOptions {
+  private final CompressionType compressionType;
+  private final Map<String, String> metadata;
+
   public enum StatisticsFrequency {
     /** Do not generate statistics */
     NONE(0),
@@ -39,32 +45,102 @@ public class ParquetWriterOptions extends CompressedMetadataWriterOptions {
     }
   }
 
-  public static class Builder extends CMWriterBuilder<Builder> {
+  public CompressionType getCompressionType() {
+    return compressionType;
+  }
+
+  public Map<String, String> getMetadata() {
+    return metadata;
+  }
+
+  String[] getMetadataKeys() {
+    return metadata.keySet().toArray(new String[metadata.size()]);
+  }
+
+  String[] getMetadataValues() {
+    return metadata.values().toArray(new String[metadata.size()]);
+  }
+
+  public static class Builder {
+    final Map<String, String> metadata = new LinkedHashMap<>();
+    CompressionType compressionType = CompressionType.AUTO;
     private StatisticsFrequency statsGranularity = StatisticsFrequency.ROWGROUP;
-    private boolean isTimestampTypeInt96 = false;
-    private int[] precisionValues = null;
+    private List<RapidsSerializable> columnOptions = new ArrayList();
+
+    /**
+     * Add a metadata key and a value
+     * @param key
+     * @param value
+     */
+    public Builder withMetadata(String key, String value) {
+      this.metadata.put(key, value);
+      return this;
+    }
+
+    /**
+     * Add a map of metadata keys and values
+     * @param metadata
+     */
+    public Builder withMetadata(Map<String, String> metadata) {
+      this.metadata.putAll(metadata);
+      return this;
+    }
+
+    /**
+     * Set the compression type to use for writing
+     * @param compression
+     */
+    public Builder withCompressionType(CompressionType compression) {
+      this.compressionType = compression;
+      return this;
+    }
 
     public Builder withStatisticsFrequency(StatisticsFrequency statsGranularity) {
       this.statsGranularity = statsGranularity;
       return this;
     }
 
-    /**
-     * Set whether the timestamps should be written in INT96
-     */
-    public Builder withTimestampInt96(boolean int96) {
-      this.isTimestampTypeInt96 = int96;
+    public Builder withColumn(String... name) {
+      IntStream.range(0, name.length).forEach(
+          i -> columnOptions.add(ParquetColumnWriterOptions.builder()
+                  .withColumnName(name[i])
+                  .build())
+      );
       return this;
     }
 
-    /**
-     * This is a temporary hack to make things work.  This API will go away once we can update the
-     * parquet APIs properly.
-     * @param precisionValues a value for each column, non-decimal columns are ignored.
-     * @return this for chaining.
-     */
-    public Builder withDecimalPrecisions(int ... precisionValues) {
-      this.precisionValues = precisionValues;
+    public Builder withDecimalColumn(String name, int precision) {
+      columnOptions.add(ParquetColumnWriterOptions.builder()
+          .withColumnName(name)
+          .withDecimalPrecision(precision).build());
+      return this;
+    }
+
+    public Builder withNullableDecimalColumn(String name, int precision) {
+      columnOptions.add(ParquetColumnWriterOptions.builder()
+          .withColumnName(name)
+          .isNullable(true)
+          .withDecimalPrecision(precision).build());
+      return this;
+    }
+
+    public Builder withNullableColumn(String... name) {
+      IntStream.range(0, name.length).forEach(
+          i -> columnOptions.add(ParquetColumnWriterOptions.builder()
+              .isNullable(true)
+              .withColumnName(name[i])
+              .build())
+      );
+      return this;
+    }
+
+    public Builder withTimestampColumn(ParquetTimestampColumnWriterOptions options) {
+      columnOptions.add(options);
+      return this;
+    }
+
+    public Builder withStructColumn(ParquetColumnWriterOptions options) {
+      columnOptions.add(options);
       return this;
     }
 
@@ -79,33 +155,71 @@ public class ParquetWriterOptions extends CompressedMetadataWriterOptions {
 
   private final StatisticsFrequency statsGranularity;
 
+  private final List<RapidsSerializable> columnOptions;
+
   private ParquetWriterOptions(Builder builder) {
-    super(builder);
     this.statsGranularity = builder.statsGranularity;
-    this.isTimestampTypeInt96 = builder.isTimestampTypeInt96;
-    this.precisions = builder.precisionValues;
+    this.columnOptions = builder.columnOptions;
+    this.compressionType = builder.compressionType;
+    this.metadata = builder.metadata;
   }
 
   public StatisticsFrequency getStatisticsFrequency() {
     return statsGranularity;
   }
 
-  /**
-   * Return the flattened list of precisions if set otherwise empty array will be returned.
-   * For a definition of what `flattened` means please look at {@link Builder#withDecimalPrecisions}
-   */
-  public int[] getPrecisions() {
-    return precisions;
+  public boolean[] getFlatIsTimeTypeInt96() {
+    List<Boolean> a = new ArrayList<>();
+    a.add(false); // dummy value
+    for (RapidsSerializable opt: columnOptions) {
+      a.addAll(opt.getFlatIsTimeTypeInt96());
+    }
+    final boolean[] primitivesBool = new boolean[a.size()];
+    int i = 0;
+    for (Boolean b: a) {
+      primitivesBool[i++] = b;
+    }
+    return primitivesBool;
   }
 
-  /**
-   * Returns true if the writer is expected to write timestamps in INT96
-   */
-  public boolean isTimestampTypeInt96() {
-    return isTimestampTypeInt96;
+  public int[] getFlatPrecision() {
+    List<Integer> a = new ArrayList<>();
+    a.add(0); // dummy value
+    for (RapidsSerializable opt: columnOptions) {
+      a.addAll(opt.getFlatPrecision());
+    }
+    return a.stream().mapToInt(Integer::intValue).toArray();
   }
 
-  private boolean isTimestampTypeInt96;
+  public boolean[] getFlatIsNullable() {
+    List<Boolean> a = new ArrayList<>();
+    a.add(false); // dummy value
+    for (RapidsSerializable opt: columnOptions) {
+      a.addAll(opt.getFlatIsNullable());
+    }
+    final boolean[] primitivesBool = new boolean[a.size()];
+    int i = 0;
+    for (Boolean b: a) {
+      primitivesBool[i++] = b;
+    }
+    return primitivesBool;
+  }
 
-  private int[] precisions;
+  public int[] getFlatNumChildren() {
+    List<Integer> a = new ArrayList<>();
+    a.add(columnOptions.size());
+    for (RapidsSerializable opt: columnOptions) {
+      a.addAll(opt.getFlatNumChildren());
+    }
+    return a.stream().mapToInt(Integer::intValue).toArray();
+  }
+
+  public String[] getFlatColumnNames() {
+    List<String> a = new ArrayList<>();
+    a.add(""); // dummy value to keep the code simple
+    for (RapidsSerializable opt: columnOptions) {
+      a.addAll(opt.getFlatColumnNames());
+    }
+    return a.stream().toArray(String[]::new);
+  }
 }
