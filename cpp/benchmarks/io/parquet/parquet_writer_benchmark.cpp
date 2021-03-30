@@ -17,6 +17,7 @@
 #include <benchmark/benchmark.h>
 
 #include <benchmarks/common/generate_benchmark_input.hpp>
+#include <benchmarks/common/memory_tracking_resource.hpp>
 #include <benchmarks/fixture/benchmark_fixture.hpp>
 #include <benchmarks/io/cuio_benchmark_common.hpp>
 #include <benchmarks/synchronization/synchronization.hpp>
@@ -50,6 +51,10 @@ void BM_parq_write_varying_inout(benchmark::State& state)
   auto const view = tbl->view();
 
   cuio_source_sink_pair source_sink(sink_type);
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource();
+  cudf::memory_tracking_resource<rmm::mr::device_memory_resource> tracking_mr(mr);
+
+  rmm::mr::set_current_device_resource(&tracking_mr);
   for (auto _ : state) {
     cuda_event_timer raii(state, true);  // flush_l2_cache = true, stream = 0
     cudf_io::parquet_writer_options opts =
@@ -57,11 +62,10 @@ void BM_parq_write_varying_inout(benchmark::State& state)
         .compression(compression);
     cudf_io::write_parquet(opts);
   }
+  rmm::mr::set_current_device_resource(mr);
 
   state.SetBytesProcessed(data_size * state.iterations());
-  auto mr =
-    dynamic_cast<cudf::memory_tracking_pool_resource_type*>(rmm::mr::get_current_device_resource());
-  state.counters["peak mem"] = mr->max_allocated_size();
+  state.counters["peak_memory_usage"] = tracking_mr.max_allocated_size();
 }
 
 void BM_parq_write_varying_options(benchmark::State& state)
@@ -79,6 +83,10 @@ void BM_parq_write_varying_options(benchmark::State& state)
   auto const view = tbl->view();
 
   cuio_source_sink_pair source_sink(io_type::FILEPATH);
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource();
+  cudf::memory_tracking_resource<rmm::mr::device_memory_resource> tracking_mr(mr);
+
+  rmm::mr::set_current_device_resource(&tracking_mr);
   for (auto _ : state) {
     cuda_event_timer raii(state, true);  // flush_l2_cache = true, stream = 0
     cudf_io::parquet_writer_options const options =
@@ -88,8 +96,10 @@ void BM_parq_write_varying_options(benchmark::State& state)
         .column_chunks_file_path(file_path);
     cudf_io::write_parquet(options);
   }
+  rmm::mr::set_current_device_resource(mr);
 
   state.SetBytesProcessed(data_size * state.iterations());
+  state.counters["peak_memory_usage"] = tracking_mr.max_allocated_size();
 }
 
 #define PARQ_WR_BM_INOUTS_DEFINE(name, type_or_group, sink_type)                              \
