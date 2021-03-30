@@ -78,10 +78,11 @@ std::unique_ptr<table> build_table(
     // the null mask for position matches the exploded column's gather map, so copy it over
     rmm::device_buffer nullmask =
       explode_col_gather_map ? copy_bitmask(*inserted->get()) : rmm::device_buffer(0, stream);
-    columns.insert(
-      columns.begin() + explode_column_idx,
-      std::make_unique<column>(
-        data_type(type_to_id<size_type>()), position_size, position_array->release(), std::move(nullmask)));
+    columns.insert(columns.begin() + explode_column_idx,
+                   std::make_unique<column>(data_type(type_to_id<size_type>()),
+                                            position_size,
+                                            position_array->release(),
+                                            std::move(nullmask)));
   }
 
   return std::make_unique<table>(std::move(columns));
