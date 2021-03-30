@@ -156,7 +156,7 @@ std::pair<std::unique_ptr<table>, std::vector<aggregation_result>> groupby::aggr
 
   if (_keys.num_rows() == 0) { return std::make_pair(empty_like(_keys), empty_results(requests)); }
 
-  return dispatch_aggregation(requests, 0, mr);
+  return dispatch_aggregation(requests, rmm::cuda_stream_default, mr);
 }
 
 // Compute scan requests
@@ -190,7 +190,7 @@ groupby::groups groupby::get_groups(table_view values, rmm::mr::device_memory_re
 
   if (values.num_columns()) {
     auto grouped_values = cudf::detail::gather(values,
-                                               helper().key_sort_order(),
+                                               helper().key_sort_order(rmm::cuda_stream_default),
                                                cudf::out_of_bounds_policy::DONT_CHECK,
                                                cudf::detail::negative_index_policy::NOT_ALLOWED,
                                                rmm::cuda_stream_default,

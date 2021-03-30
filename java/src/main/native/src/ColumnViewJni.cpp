@@ -121,8 +121,9 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_lowerStrings(JNIEnv *env,
   CATCH_STD(env, 0);
 }
 
-JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_replaceNulls(JNIEnv *env, jclass,
-                                                                    jlong j_col, jlong j_scalar) {
+JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_replaceNullsScalar(JNIEnv *env, jclass,
+                                                                          jlong j_col,
+                                                                          jlong j_scalar) {
   JNI_NULL_CHECK(env, j_col, "column is null", 0);
   JNI_NULL_CHECK(env, j_scalar, "scalar is null", 0);
   try {
@@ -130,6 +131,21 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_replaceNulls(JNIEnv *env,
     cudf::column_view col = *reinterpret_cast<cudf::column_view *>(j_col);
     auto val = reinterpret_cast<cudf::scalar *>(j_scalar);
     std::unique_ptr<cudf::column> result = cudf::replace_nulls(col, *val);
+    return reinterpret_cast<jlong>(result.release());
+  }
+  CATCH_STD(env, 0);
+}
+
+JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_replaceNullsColumn(JNIEnv *env, jclass,
+                                                                          jlong j_col,
+                                                                          jlong j_replace_col) {
+  JNI_NULL_CHECK(env, j_col, "column is null", 0);
+  JNI_NULL_CHECK(env, j_replace_col, "replacement column is null", 0);
+  try {
+    cudf::jni::auto_set_device(env);
+    auto col = reinterpret_cast<cudf::column_view *>(j_col);
+    auto replacements = reinterpret_cast<cudf::column_view *>(j_replace_col);
+    std::unique_ptr<cudf::column> result = cudf::replace_nulls(*col, *replacements);
     return reinterpret_cast<jlong>(result.release());
   }
   CATCH_STD(env, 0);
@@ -1783,6 +1799,23 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_isInteger(JNIEnv *env, jo
     cudf::jni::auto_set_device(env);
     cudf::column_view *view = reinterpret_cast<cudf::column_view *>(handle);
     std::unique_ptr<cudf::column> result = cudf::strings::is_integer(*view);
+    return reinterpret_cast<jlong>(result.release());
+  }
+  CATCH_STD(env, 0)
+}
+
+JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_isIntegerWithType(JNIEnv *env, jobject,
+                                                                         jlong handle,
+                                                                         jint j_dtype,
+                                                                         jint scale) {
+
+  JNI_NULL_CHECK(env, handle, "native view handle is null", 0)
+
+  try {
+    cudf::jni::auto_set_device(env);
+    cudf::column_view *view = reinterpret_cast<cudf::column_view *>(handle);
+    cudf::data_type int_dtype = cudf::jni::make_data_type(j_dtype, scale);
+    std::unique_ptr<cudf::column> result = cudf::strings::is_integer(*view, int_dtype);
     return reinterpret_cast<jlong>(result.release());
   }
   CATCH_STD(env, 0)

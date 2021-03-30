@@ -22,15 +22,15 @@ build:
 requirements:
   host:
     - python
-    - cudf {{ version }}
+    - cudf {{ version }}=*_{{ GIT_DESCRIBE_NUMBER }}
     - dask >=2.22.0
     - distributed >=2.22.0
   run:
     - python
-    - cudf {{ version }}
+    - cudf {{ version }}=*_{{ GIT_DESCRIBE_NUMBER }}
     - dask >=2.22.0
     - distributed >=2.22.0
-  
+
 test:
   requires:
     - cudatoolkit {{ cuda_version }}.*
