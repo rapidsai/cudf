@@ -123,7 +123,7 @@ class datasource {
    * @param[in] offset Bytes from the start
    * @param[in] size Bytes to read
    *
-   * @return The data buffer
+   * @return The data buffer (can be smaller than size)
    */
   virtual std::unique_ptr<datasource::buffer> host_read(size_t offset, size_t size) = 0;
 

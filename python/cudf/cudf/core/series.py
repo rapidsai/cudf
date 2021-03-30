@@ -6403,17 +6403,24 @@ class Series(Frame, Serializable):
         method="hash",
         suffixes=("_x", "_y"),
     ):
-
         if left_on not in (self.name, None):
             raise ValueError(
                 "Series to other merge uses series name as key implicitly"
             )
 
-        lhs = self.copy(deep=False)
-        rhs = other.copy(deep=False)
+        if lsuffix or rsuffix:
+            raise ValueError(
+                "The lsuffix and rsuffix keywords have been replaced with the "
+                "``suffixes=`` keyword.  "
+                "Please provide the following instead: \n\n"
+                "    suffixes=('%s', '%s')"
+                % (lsuffix or "_x", rsuffix or "_y")
+            )
+        else:
+            lsuffix, rsuffix = suffixes
 
-        result = super(Series, lhs)._merge(
-            rhs,
+        result = super()._merge(
+            other,
             on=on,
             left_on=left_on,
             right_on=right_on,
@@ -6421,8 +6428,6 @@ class Series(Frame, Serializable):
             right_index=right_index,
             how=how,
             sort=sort,
-            lsuffix=lsuffix,
-            rsuffix=rsuffix,
             method=method,
             indicator=False,
             suffixes=suffixes,
