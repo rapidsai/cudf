@@ -740,6 +740,22 @@ def test_nanoseconds_overflow():
     assert_eq(expected.to_pandas(), pyarrow_got.to_pandas())
 
 
+def test_empty_dataframe():
+    buffer = BytesIO()
+    expected = cudf.DataFrame()
+    expected.to_orc(buffer)
+
+    # Raise error if column name is mentioned, but it doesn't exist.
+    with pytest.raises(RuntimeError):
+        cudf.read_orc(buffer, columns=["a"])
+
+    got_df = cudf.read_orc(buffer)
+    expected_pdf = pd.read_orc(buffer)
+
+    assert_eq(expected, got_df)
+    assert_eq(expected_pdf, got_df)
+
+
 @pytest.mark.parametrize(
     "data", [[None, ""], ["", None], [None, None], ["", ""]]
 )
