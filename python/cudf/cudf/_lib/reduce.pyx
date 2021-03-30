@@ -10,7 +10,7 @@ from cudf._lib.scalar cimport DeviceScalar
 from cudf._lib.column cimport Column
 from cudf._lib.types import np_to_cudf_types
 from cudf._lib.types cimport underlying_type_t_type_id
-from cudf._lib.aggregation cimport make_aggregation, aggregation, Aggregation
+from cudf._lib.aggregation cimport make_aggregation, Aggregation
 from libcpp.memory cimport unique_ptr
 from libcpp.utility cimport move, pair
 import numpy as np
@@ -39,7 +39,6 @@ def reduce(reduction_op, Column incol, dtype=None, **kwargs):
     cdef column_view c_incol_view = incol.view()
     cdef unique_ptr[scalar] c_result
     cdef Aggregation cython_agg = make_aggregation(reduction_op, kwargs)
-    cdef unique_ptr[aggregation] c_agg = move(cython_agg.c_obj)
     cdef type_id tid = (
         <type_id> (
             <underlying_type_t_type_id> (
@@ -64,7 +63,7 @@ def reduce(reduction_op, Column incol, dtype=None, **kwargs):
     with nogil:
         c_result = move(cpp_reduce(
             c_incol_view,
-            c_agg,
+            cython_agg.c_obj,
             c_out_dtype
         ))
 
@@ -88,7 +87,6 @@ def scan(scan_op, Column incol, inclusive, **kwargs):
     cdef column_view c_incol_view = incol.view()
     cdef unique_ptr[column] c_result
     cdef Aggregation cython_agg = make_aggregation(scan_op, kwargs)
-    cdef unique_ptr[aggregation] c_agg = move(cython_agg.c_obj)
 
     cdef scan_type c_inclusive
     if inclusive is True:
@@ -99,7 +97,7 @@ def scan(scan_op, Column incol, inclusive, **kwargs):
     with nogil:
         c_result = move(cpp_scan(
             c_incol_view,
-            c_agg,
+            cython_agg.c_obj,
             c_inclusive
         ))
 

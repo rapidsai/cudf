@@ -17,7 +17,6 @@ from cudf._lib.aggregation cimport Aggregation, make_aggregation
 from cudf._lib.cpp.table.table cimport table, table_view
 cimport cudf._lib.cpp.types as libcudf_types
 cimport cudf._lib.cpp.groupby as libcudf_groupby
-cimport cudf._lib.cpp.aggregation as libcudf_aggregation
 
 from pandas.core.groupby.groupby import DataError
 from cudf.utils.dtypes import (
