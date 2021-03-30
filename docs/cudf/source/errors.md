@@ -16,7 +16,9 @@ cuDF follows error conventions used by Pandas. Following [Pandas Wiki](https://g
 |     KeyError       | Mapping access with invalid key | [Retrieving rows from column specified by an invalid key](https://github.com/rapidsai/cudf/blob/7d49f75df9681dbe1653029e7d508355884a6d86/python/cudf/cudf/core/indexing.py#L177) |
 | NotImplementedError| Operation of object is planned, but not yet supported | (none) |
 
-Custom error types, should not be used whenever possible. 
+Custom error types, should not be used whenever possible.
+
+Error raised by the API is considered as part of the API interface and should be documented in the docstring. For a specific invalid input, if the error raised has changed, it is considered as a `breaking` change.
 
 ## Handling Exceptions Thrown by Supporting Libraries
 
