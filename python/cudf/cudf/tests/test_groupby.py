@@ -24,7 +24,7 @@ _now = np.datetime64("now")
 _tomorrow = _now + np.timedelta64(1, "D")
 _now = np.int64(_now.astype("datetime64[ns]"))
 _tomorrow = np.int64(_tomorrow.astype("datetime64[ns]"))
-_index_type_aggs = {"count", "idxmin", "idxmax"}
+_index_type_aggs = {"count", "idxmin", "idxmax", "cumcount"}
 
 
 def make_frame(
@@ -1561,3 +1561,22 @@ def test_groupby_unique(by, data, dtype):
     expect = pdf.groupby("by")["data"].unique()
     got = gdf.groupby("by")["data"].unique()
     assert_eq(expect, got)
+
+
+@pytest.mark.parametrize("nelem", [2, 3, 100, 1000])
+@pytest.mark.parametrize("func", ["cummin", "cummax", "cumcount", "cumsum"])
+def test_groupby_2keys_scan(nelem, func):
+    pdf = make_frame(pd.DataFrame, nelem=nelem)
+    expect_df = pdf.groupby(["x", "y"], sort=True).agg(func)
+    got_df = (
+        make_frame(DataFrame, nelem=nelem)
+        .groupby(["x", "y"], sort=True)
+        .agg(func)
+    )
+    # pd.groupby.cumcount returns a series.
+    if isinstance(expect_df, pd.Series):
+        expect_df = expect_df.to_frame("val")
+    expect_df = expect_df.set_index([pdf["x"], pdf["y"]]).sort_index()
+
+    check_dtype = False if func in _index_type_aggs else True
+    assert_eq(got_df, expect_df, check_dtype=check_dtype)
