@@ -112,7 +112,6 @@ std::unique_ptr<column> replace_negative_nans_entries(column_view const& lists_e
                                                       lists_column_view const& lists_column,
                                                       rmm::cuda_stream_view stream)
 {
-  auto const mr    = rmm::mr::get_current_device_resource();
   auto new_offsets = std::make_unique<column>(lists_column.offsets());
   auto new_entries = std::make_unique<column>(lists_entries);
 
@@ -122,11 +121,13 @@ std::unique_ptr<column> replace_negative_nans_entries(column_view const& lists_e
                   new_entries->mutable_view(),
                   stream);
 
-  return make_lists_column(lists_column.size(),
-                           std::move(new_offsets),
-                           std::move(new_entries),
-                           lists_column.null_count(),
-                           cudf::detail::copy_bitmask(lists_column.parent(), stream, mr));
+  return make_lists_column(
+    lists_column.size(),
+    std::move(new_offsets),
+    std::move(new_entries),
+    lists_column.null_count(),
+    cudf::detail::copy_bitmask(
+      lists_column.parent(), stream, rmm::mr::get_current_device_resource()));
 }
 
 /**
