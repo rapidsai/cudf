@@ -36,6 +36,9 @@
 // using cudf::size_type;
 using namespace cudf::test;
 
+struct StructScatterTest : public cudf::test::BaseFixture {
+};
+
 template <typename T>
 struct TypedStructScatterTest : public cudf::test::BaseFixture {
 };
@@ -120,6 +123,7 @@ TYPED_TEST(TypedStructScatterTest, ScatterAsCopyTest)
   // Scatter as copy: the target should be the same as source
   auto const scatter_map = fixed_width_column_wrapper<int32_t>{0, 1, 2, 3, 4, 5}.release();
   auto const result      = cudf::scatter(source, scatter_map->view(), target);
+
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(structs_src->view(), result->get_column(0));
 }
 
@@ -144,7 +148,7 @@ TYPED_TEST(TypedStructScatterTest, ScatterAsLeftShiftTest)
     {child_col_tgt}, cudf::detail::make_counting_transform_iterator(0, [](auto i) {
       return i != 3;
     })}.release();
-  auto target = cudf::table_view{std::vector<cudf::column_view>{structs_tgt->view()}};
+  auto const target = cudf::table_view{std::vector<cudf::column_view>{structs_tgt->view()}};
 
   auto child_col_expected = fixed_width_column_wrapper<TypeParam, int32_t>{
     {2, 3, null, XXX, 0, 1},
@@ -159,7 +163,7 @@ TYPED_TEST(TypedStructScatterTest, ScatterAsLeftShiftTest)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(structs_expected->view(), result->get_column(0));
 }
 
-TYPED_TEST(TypedStructScatterTest, PartiallyScatterTest)
+TYPED_TEST(TypedStructScatterTest, SimpleScatterTests)
 {
   auto constexpr null = std::numeric_limits<TypeParam>::max();  // Null child element
   auto constexpr XXX  = std::numeric_limits<TypeParam>::max();  // Null struct element
@@ -182,50 +186,114 @@ TYPED_TEST(TypedStructScatterTest, PartiallyScatterTest)
     })}.release();
   auto target = cudf::table_view{std::vector<cudf::column_view>{structs_tgt->view()}};
 
-  auto child_col_expected = fixed_width_column_wrapper<TypeParam, int32_t>{
-    {1, null, 70, 80, 0, 100},
+  auto child_col_expected1 = fixed_width_column_wrapper<TypeParam, int32_t>{
+    {1, null, 70, XXX, 0, 2},
     cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i != 1; })};
-  auto structs_expected = structs_column_wrapper{
-    {child_col_expected}, cudf::detail::make_counting_transform_iterator(0, [](auto i) {
+  auto const structs_expected1 = structs_column_wrapper{
+    {child_col_expected1}, cudf::detail::make_counting_transform_iterator(0, [](auto i) {
+      return i != 3;
+    })}.release();
+  auto const scatter_map1 = fixed_width_column_wrapper<int32_t>{-2, 0, 5}.release();
+  auto const result1      = cudf::scatter(source, scatter_map1->view(), target);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(structs_expected1->view(), result1->get_column(0));
+
+  auto child_col_expected2 = fixed_width_column_wrapper<TypeParam, int32_t>{
+    {1, null, 70, 3, 0, 2},
+    cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i != 1; })};
+  auto const structs_expected2 = structs_column_wrapper{
+    {child_col_expected2}, cudf::detail::make_counting_transform_iterator(0, [](auto i) {
       return true;
     })}.release();
-
-  auto const scatter_map = fixed_width_column_wrapper<int32_t>{-2, 0}.release();
-  auto const result      = cudf::scatter(source, scatter_map->view(), target);
-
-  printf("line %d\n\n\n", __LINE__);
-  print(structs_expected->view());
-  printf("line %d\n\n\n", __LINE__);
-  print(result->get_column(0));
-
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(structs_expected->view(), result->get_column(0));
+  auto const scatter_map2 = fixed_width_column_wrapper<int32_t>{-2, 0, 5, 3}.release();
+  auto const result2      = cudf::scatter(source, scatter_map2->view(), target);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(structs_expected2->view(), result2->get_column(0));
 }
 
-TYPED_TEST(TypedStructScatterTest, X)
+TYPED_TEST(TypedStructScatterTest, ComplexDataTest)
 {
-#if 0
-  child_col_expected = fixed_width_column_wrapper<TypeParam, int32_t>{
-    {50, 60, 70, 80, 90, 100},
-    cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i != 1; })};
-  structs_expected = structs_column_wrapper{
-    {child_col_tgt}, cudf::detail::make_counting_transform_iterator(0, [](auto i) {
-      return i != 3;
-    })}.release();
-  scatter_map = fixed_width_column_wrapper<int32_t>{}.release();
-  result      = cudf::scatter(source, scatter_map->view(), target);
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(structs_expected->view(), result->get_column(0));
+  // Testing scatter() on struct<string, numeric, bool>.
 
-  child_col_expected = fixed_width_column_wrapper<TypeParam, int32_t>{
-    {50, 60, 70, 80, 90, 100},
-    cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i != 1; })};
-  structs_expected = structs_column_wrapper{
-    {child_col_tgt}, cudf::detail::make_counting_transform_iterator(0, [](auto i) {
-      return i != 3;
-    })}.release();
-  scatter_map = fixed_width_column_wrapper<int32_t>{}.release();
-  result      = cudf::scatter(source, scatter_map->view(), target);
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(structs_expected->view(), result->get_column(0));
-#endif
+  // 1. String "names" column.
+  auto const names_src =
+    std::vector<std::string>{"Newton", "Washington", "Cherry", "Kiwi", "Lemon", "Tomato"};
+  auto const names_validity_src = std::vector<bool>{1, 1, 1, 1, 1, 1};
+  auto names_column_src =
+    strings_column_wrapper{names_src.begin(), names_src.end(), names_validity_src.begin()};
+
+  // 2. Numeric "ages" column.
+  auto const ages_src          = std::vector<int32_t>{5, 10, 15, 20, 25, 30};
+  auto const ages_validity_src = std::vector<bool>{1, 1, 1, 1, 0, 1};
+  auto ages_column_src         = fixed_width_column_wrapper<TypeParam, int32_t>{
+    ages_src.begin(), ages_src.end(), ages_validity_src.begin()};
+
+  // 3. Boolean "is_human" column.
+  auto const is_human_src          = {true, true, false, false, false, false};
+  auto const is_human_validity_src = std::vector<bool>{1, 1, 1, 0, 1, 1};
+  auto is_human_col_src            = fixed_width_column_wrapper<bool>{
+    is_human_src.begin(), is_human_src.end(), is_human_validity_src.begin()};
+
+  // Assemble struct column.
+  auto const struct_validity_src = std::vector<bool>{1, 1, 1, 1, 1, 0};
+  auto structs_src = structs_column_wrapper{{names_column_src, ages_column_src, is_human_col_src},
+                                            struct_validity_src.begin()}
+                       .release();
+
+  // 1. String "names" column.
+  auto const names_tgt = std::vector<std::string>{
+    "String 0", "String 1", "String 2", "String 3", "String 4", "String 5"};
+  auto const names_validity_tgt = std::vector<bool>{0, 1, 1, 1, 1, 1};
+  auto names_column_tgt =
+    strings_column_wrapper{names_tgt.begin(), names_tgt.end(), names_validity_tgt.begin()};
+
+  // 2. Numeric "ages" column.
+  auto const ages_tgt          = std::vector<int32_t>{50, 60, 70, 80, 90, 100};
+  auto const ages_validity_tgt = std::vector<bool>{1, 0, 1, 1, 1, 1};
+  auto ages_column_tgt         = fixed_width_column_wrapper<TypeParam, int32_t>{
+    ages_tgt.begin(), ages_tgt.end(), ages_validity_tgt.begin()};
+
+  // 3. Boolean "is_human" column.
+  auto const is_human_tgt          = {true, true, true, true, true, true};
+  auto const is_human_validity_tgt = std::vector<bool>{1, 1, 1, 1, 1, 1};
+  auto is_human_col_tgt            = fixed_width_column_wrapper<bool>{
+    is_human_tgt.begin(), is_human_tgt.end(), is_human_validity_tgt.begin()};
+
+  // Assemble struct column.
+  auto const struct_validity_tgt = std::vector<bool>{1, 1, 0, 1, 1, 1};
+  auto structs_tgt = structs_column_wrapper{{names_column_tgt, ages_column_tgt, is_human_col_tgt},
+                                            struct_validity_tgt.begin()}
+                       .release();
+
+  // 1. String "names" column.
+  auto const names_expected =
+    std::vector<std::string>{"String 0", "Lemon", "Kiwi", "Cherry", "Washington", "Newton"};
+  auto const names_validity_expected = std::vector<bool>{0, 1, 1, 1, 1, 1};
+  auto names_column_expected         = strings_column_wrapper{
+    names_expected.begin(), names_expected.end(), names_validity_expected.begin()};
+
+  // 2. Numeric "ages" column.
+  auto const ages_expected          = std::vector<int32_t>{50, 25, 20, 15, 10, 5};
+  auto const ages_validity_expected = std::vector<bool>{1, 0, 1, 1, 1, 1};
+  auto ages_column_expected         = fixed_width_column_wrapper<TypeParam, int32_t>{
+    ages_expected.begin(), ages_expected.end(), ages_validity_expected.begin()};
+
+  // 3. Boolean "is_human" column.
+  auto const is_human_expected          = {true, false, false, false, true, true};
+  auto const is_human_validity_expected = std::vector<bool>{1, 1, 0, 1, 1, 1};
+  auto is_human_col_expected            = fixed_width_column_wrapper<bool>{
+    is_human_expected.begin(), is_human_expected.end(), is_human_validity_expected.begin()};
+
+  // Assemble struct column.
+  auto const struct_validity_expected = std::vector<bool>{1, 1, 1, 1, 1, 1};
+  auto structs_expected =
+    structs_column_wrapper{{names_column_expected, ages_column_expected, is_human_col_expected},
+                           struct_validity_expected.begin()}
+      .release();
+
+  auto const scatter_map = fixed_width_column_wrapper<int32_t>{-1, 4, 3, 2, 1}.release();
+  auto const source      = cudf::table_view{std::vector<cudf::column_view>{structs_src->view()}};
+  auto const target      = cudf::table_view{std::vector<cudf::column_view>{structs_tgt->view()}};
+  auto const result      = cudf::scatter(source, scatter_map->view(), target);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(structs_expected->view(), result->get_column(0), true);
 }
 
 #if 0
