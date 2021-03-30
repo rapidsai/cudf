@@ -4,6 +4,7 @@ import warnings
 from distutils.version import LooseVersion
 
 import numpy as np
+import cupy as cp
 import pandas as pd
 from tlz import partition_all
 
@@ -14,6 +15,7 @@ from dask.compatibility import apply
 from dask.context import _globals
 from dask.core import flatten
 from dask.dataframe.core import Scalar, finalize, handle_out, map_partitions
+from dask.dataframe import methods
 from dask.dataframe.utils import raise_on_meta_error
 from dask.highlevelgraph import HighLevelGraph
 from dask.optimization import cull, fuse
@@ -97,6 +99,12 @@ class _Frame(dd.core._Frame, OperatorMethodMixin):
         return self.map_partitions(
             M.to_pandas, nullable_pd_dtype=nullable_pd_dtype
         )
+
+    @property
+    def values(self):
+        a = self.map_partitions(methods.values)
+        a._meta = cp.asarray(a._meta)
+        return a
 
 
 concat = dd.concat
