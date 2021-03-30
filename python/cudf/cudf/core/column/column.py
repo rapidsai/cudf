@@ -1840,10 +1840,12 @@ def as_column(
         else:
             pyarrow_array = pa.array(arbitrary, from_pandas=nan_as_null)
             if isinstance(pyarrow_array.type, pa.Decimal128Type):
-                dtype = cudf.Decimal64Dtype.from_arrow(pyarrow_array.type)
+                pyarrow_dtype = cudf.Decimal64Dtype.from_arrow(
+                    pyarrow_array.type
+                )
             else:
-                dtype = arbitrary.dtype
-            data = as_column(pyarrow_array, dtype=dtype)
+                pyarrow_dtype = arbitrary.dtype
+            data = as_column(pyarrow_array, dtype=pyarrow_dtype)
         if dtype is not None:
             data = data.astype(dtype)
 
