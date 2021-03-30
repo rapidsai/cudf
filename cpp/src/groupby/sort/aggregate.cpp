@@ -95,6 +95,17 @@ void aggregrate_result_functor::operator()<aggregation::SUM>(aggregation const& 
 };
 
 template <>
+void aggregrate_result_functor::operator()<aggregation::PRODUCT>(aggregation const& agg)
+{
+  if (cache.has_result(col_idx, agg)) return;
+
+  cache.add_result(col_idx,
+                   agg,
+                   detail::group_product(
+                     get_grouped_values(), helper.num_groups(), helper.group_labels(), stream, mr));
+};
+
+template <>
 void aggregrate_result_functor::operator()<aggregation::ARGMAX>(aggregation const& agg)
 {
   if (cache.has_result(col_idx, agg)) return;

@@ -202,6 +202,7 @@ add_library(cudf
     src/groupby/sort/group_min.cu
     src/groupby/sort/group_nth_element.cu
     src/groupby/sort/group_nunique.cu
+    src/groupby/sort/group_product.cu
     src/groupby/sort/group_quantiles.cu
     src/groupby/sort/group_std.cu
     src/groupby/sort/group_sum.cu
