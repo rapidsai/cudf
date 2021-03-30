@@ -153,10 +153,10 @@ public class ParquetWriterOptions {
     }
 
     /**
-     * Set a struct column
+     * Set a column with these options
      * @param options
      */
-    public Builder withStructColumn(ParquetColumnWriterOptions options) {
+    public Builder withColumn(ParquetColumnWriterOptions options) {
       columnOptions.add(options);
       return this;
     }
