@@ -20,6 +20,7 @@ import cudf
 from cudf import _lib as libcudf
 from cudf._typing import ColumnLike, DataFrameOrSeries
 from cudf.core.column import as_column, build_categorical_column, column_empty
+from cudf.core.join import merge
 from cudf.utils.dtypes import (
     is_categorical_dtype,
     is_column_like,
@@ -595,7 +596,7 @@ class Frame(libcudf.table.Table):
             res.index.names = self._index.names
         return res
 
-    def _get_columns_by_label(self, labels, downcast):
+    def _get_columns_by_label(self, labels, downcast=False):
         """
         Returns columns of the Frame specified by `labels`
 
@@ -623,7 +624,7 @@ class Frame(libcudf.table.Table):
                 nullify=nullify,
             )
         )
-        result._copy_type_metadata(self)
+        result._copy_type_metadata(self, include_index=keep_index)
         if keep_index and self._index is not None:
             result._index.names = self._index.names
         return result
@@ -3355,8 +3356,6 @@ class Frame(libcudf.table.Table):
         indicator=False,
         suffixes=("_x", "_y"),
     ):
-        from cudf.core.join.join import merge
-
         lhs, rhs = self, right
         if how == "right":
             # Merge doesn't support right, so just swap

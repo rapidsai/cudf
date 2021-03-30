@@ -34,6 +34,19 @@ namespace cudf {
 template <typename...>
 using void_t = void;
 
+/**
+ * @brief Convenience macro for SFINAE as an unnamed template parameter.
+ *
+ * Example:
+ * \code{cpp}
+ * // This function will participate in overload resolution only if T is an integral type
+ * template <typename T, CUDF_ENABLE_IF(std::is_integral<T>::value)>
+ * void foo();
+ * \endcode
+ *
+ */
+#define CUDF_ENABLE_IF(...) std::enable_if_t<(__VA_ARGS__)>* = nullptr
+
 template <typename L, typename R, typename = void>
 struct is_relationally_comparable_impl : std::false_type {
 };
@@ -441,6 +454,23 @@ struct is_chrono_impl {
 constexpr inline bool is_chrono(data_type type)
 {
   return cudf::type_dispatcher(type, is_chrono_impl{});
+}
+
+/**
+ * @brief Indicates whether `T` is layout compatible with its "representation" type.
+ *
+ * For example, in a column, a `decimal32` is concretely represented by a single `int32_t`, but the
+ * `decimal32` type itself contains both the integer representation and the scale. Therefore,
+ * `decimal32` is _not_ layout compatible with `int32_t`.
+ *
+ * As further example, `duration_ns` is distinct from its concrete `int64_t` representation type,
+ * but they are layout compatible.
+ *
+ */
+template <typename T>
+constexpr bool is_rep_layout_compatible()
+{
+  return cudf::is_numeric<T>() or cudf::is_chrono<T>() or cudf::is_boolean<T>();
 }
 
 /**

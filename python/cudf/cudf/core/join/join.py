@@ -2,13 +2,12 @@
 from __future__ import annotations
 
 import functools
-from collections import OrderedDict, namedtuple
+from collections import namedtuple
 from typing import TYPE_CHECKING, Callable, Tuple
 
 import cudf
 from cudf import _lib as libcudf
 from cudf.core.join._join_helpers import (
-    _coerce_to_list,
     _coerce_to_tuple,
     _frame_select_by_indexers,
     _Indexer,
@@ -179,10 +178,15 @@ class Merge(object):
         left_result = cudf.core.frame.Frame()
         right_result = cudf.core.frame.Frame()
 
+        gather_index = self.left_index or self.right_index
         if left_rows is not None:
-            left_result = lhs._gather(left_rows, nullify=True)
+            left_result = lhs._gather(
+                left_rows, nullify=True, keep_index=gather_index
+            )
         if right_rows is not None:
-            right_result = rhs._gather(right_rows, nullify=True)
+            right_result = rhs._gather(
+                right_rows, nullify=True, keep_index=gather_index
+            )
 
         result = self._merge_results(left_result, right_result)
 
@@ -264,13 +268,14 @@ class Merge(object):
                     lkey.set(
                         left_result,
                         lkey.get(left_result).fillna(rkey.get(right_result)),
+                        validate=False,
                     )
 
         # Compute the result column names:
         # left_names and right_names will be a mappings of input column names
         # to the corresponding names in the final result.
-        left_names = OrderedDict(zip(left_result._data, left_result._data))
-        right_names = OrderedDict(zip(right_result._data, right_result._data))
+        left_names = dict(zip(left_result._data, left_result._data))
+        right_names = dict(zip(right_result._data, right_result._data))
 
         # For any columns from left_result and right_result that have the same
         # name:
@@ -282,12 +287,14 @@ class Merge(object):
         if self.on:
             key_columns_with_same_name = self.on
         else:
-            key_columns_with_same_name = []
-            for lkey, rkey in zip(*self._keys):
-                if (lkey.index, rkey.index) == (False, False):
-                    if lkey.name == rkey.name:
-                        key_columns_with_same_name.append(lkey.name)
-
+            key_columns_with_same_name = [
+                lkey.name
+                for lkey, rkey in zip(*self._keys)
+                if (
+                    (lkey.index, rkey.index) == (False, False)
+                    and lkey.name == rkey.name
+                )
+            ]
         for name in common_names:
             if name not in key_columns_with_same_name:
                 left_names[name] = f"{name}{self.lsuffix}"
@@ -299,9 +306,13 @@ class Merge(object):
         data = left_result._data.__class__()
 
         for lcol in left_names:
-            data[left_names[lcol]] = left_result._data[lcol]
+            data.set_by_label(
+                left_names[lcol], left_result._data[lcol], validate=False
+            )
         for rcol in right_names:
-            data[right_names[rcol]] = right_result._data[rcol]
+            data.set_by_label(
+                right_names[rcol], right_result._data[rcol], validate=False
+            )
 
         # Index of the result:
         if self.left_index and self.right_index:
@@ -329,7 +340,12 @@ class Merge(object):
             if isinstance(result, cudf.Index):
                 sort_order = result._get_sorted_inds()
             else:
-                sort_order = result._get_sorted_inds(_coerce_to_list(self.on))
+                # need a list instead of a tuple here because
+                # _get_sorted_inds calls down to ColumnAccessor.get_by_label
+                # which handles lists and tuples differently
+                sort_order = result._get_sorted_inds(
+                    list(_coerce_to_tuple(self.on))
+                )
             return result._gather(sort_order, keep_index=False)
         by = []
         if self.left_index and self.right_index:
@@ -337,11 +353,11 @@ class Merge(object):
                 by.extend(result._index._data.columns)
         if self.left_on:
             by.extend(
-                [result._data[col] for col in _coerce_to_list(self.left_on)]
+                [result._data[col] for col in _coerce_to_tuple(self.left_on)]
             )
         if self.right_on:
             by.extend(
-                [result._data[col] for col in _coerce_to_list(self.right_on)]
+                [result._data[col] for col in _coerce_to_tuple(self.right_on)]
             )
         if by:
             to_sort = cudf.DataFrame._from_columns(by)
@@ -412,10 +428,13 @@ class Merge(object):
         out_rhs = rhs.copy(deep=False)
         for left_key, right_key in zip(*self._keys):
             lcol, rcol = left_key.get(lhs), right_key.get(rhs)
-            dtype = _match_join_keys(lcol, rcol, how=self.how)
-            if dtype:
-                left_key.set(out_lhs, lcol.astype(dtype))
-                right_key.set(out_rhs, rcol.astype(dtype))
+            lcol_casted, rcol_casted = _match_join_keys(
+                lcol, rcol, how=self.how
+            )
+            if lcol is not lcol_casted:
+                left_key.set(out_lhs, lcol_casted, validate=False)
+            if rcol is not rcol_casted:
+                right_key.set(out_rhs, rcol_casted, validate=False)
         return out_lhs, out_rhs
 
     def _restore_categorical_keys(
@@ -434,10 +453,14 @@ class Merge(object):
                     right_key.get(self.rhs).dtype, cudf.CategoricalDtype
                 ):
                     left_key.set(
-                        out_lhs, left_key.get(out_lhs).astype("category")
+                        out_lhs,
+                        left_key.get(out_lhs).astype("category"),
+                        validate=False,
                     )
                     right_key.set(
-                        out_rhs, right_key.get(out_rhs).astype("category")
+                        out_rhs,
+                        right_key.get(out_rhs).astype("category"),
+                        validate=False,
                     )
         return out_lhs, out_rhs
 
@@ -452,6 +475,6 @@ class MergeSemi(Merge):
     def _merge_results(self, lhs: Frame, rhs: Frame) -> Frame:
         # semi-join result includes only lhs columns
         if issubclass(self._out_class, cudf.Index):
-            return self._out_class._from_data(lhs)
+            return self._out_class._from_data(lhs._data)
         else:
             return self._out_class._from_data(lhs._data, index=lhs._index)

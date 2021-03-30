@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2020, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -241,6 +241,22 @@ public:
   N_TYPE *data() {
     init_data_ptr();
     return data_ptr;
+  }
+
+  const N_TYPE *const begin() const {
+    return data();
+  }
+
+  N_TYPE *begin() {
+    return data();
+  }
+
+  const N_TYPE *const end() const {
+    return data() + size();
+  }
+
+  N_TYPE *end() {
+    return data() + size();
   }
 
   const J_ARRAY_TYPE get_jArray() const { return orig; }

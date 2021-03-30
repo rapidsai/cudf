@@ -190,6 +190,19 @@ class MultiIndex(Index):
     def names(self, value):
         value = [None] * self.nlevels if value is None else value
         assert len(value) == self.nlevels
+
+        if len(value) == len(set(value)):
+            # IMPORTANT: if the provided names are unique,
+            # we reconstruct self._data with the names as keys.
+            # If they are not unique, the keys of self._data
+            # and self._names will be different, which can lead
+            # to unexpected behaviour in some cases. This is
+            # definitely buggy, but we can't disallow non-unique
+            # names either...
+            self._data = self._data.__class__._create_unsafe(
+                dict(zip(value, self._data.values())),
+                level_names=self._data.level_names,
+            )
         self._names = pd.core.indexes.frozen.FrozenList(value)
 
     def rename(self, names, inplace=False):
