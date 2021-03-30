@@ -18,19 +18,19 @@ cuDF follows error conventions used by Pandas. Following [Pandas Wiki](https://g
 
 Custom error types, should not be used whenever possible. 
 
-## Handling exceptions thrown by supporting libraries
+## Handling Exceptions Thrown by Supporting Libraries
 
 cuDF depends on external libraries to function. While cuDF does extensive tests on inputs to make sure data passed to lower level is legal, supporting libraries may also perform their own data checks. Very often such checks are redundant. Double-checking adds unecessary latency to cuDF API calls and is thus unwanted. To allow reusing error checks from supporting libraries, the following section explains how cuDF proposes to map errors from supporting libraries to cuDF errors.
 
 Note that this does not mean cuDF will skip checking errors. As supporting libraries have different performance constraints to cuDF, cuDF should perform checks when necessary. An example is that libcudf [does not introspect data](https://github.com/rapidsai/cudf/issues/5505), but cuDF should.
 
-### Python libraries
+### Python Libraries
 
 If python libraries throws a builtin error type, cuDF will surface such error.
 
 If python libraries throws a custom error type, cuDF will attempt to reinterpret it into builtin error type.
 
-### C++ libraries
+### C++ Libraries
 
 cuDF interfaces with c++ libraries through Cython. By default, cuDF builds such interfaces capturing all exceptions thrown by c++ libraries. Cython maps these exceptions into python errors as outlined by [this document](http://docs.cython.org/en/latest/src/userguide/wrapping_CPlusPlus.html#exceptions).
 
