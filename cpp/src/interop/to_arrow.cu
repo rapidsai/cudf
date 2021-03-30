@@ -31,7 +31,8 @@
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/mr/device/per_device_resource.hpp>
 
-#include <thrust/scatter.h>
+#include <thrust/for_each.h>
+#include <thrust/iterator/counting_iterator.h>
 
 namespace cudf {
 namespace detail {
@@ -131,10 +132,6 @@ struct dispatch_to_arrow {
   }
 };
 
-struct every_other {
-  __device__ size_type operator()(size_type i) { return 2 * i; }
-};
-
 template <>
 std::shared_ptr<arrow::Array> dispatch_to_arrow::operator()<numeric::decimal64>(
   column_view input,
@@ -149,13 +146,15 @@ std::shared_ptr<arrow::Array> dispatch_to_arrow::operator()<numeric::decimal64>(
   rmm::device_uvector<DeviceType> buf(input.size() * BIT_WIDTH_RATIO, stream);
   thrust::uninitialized_fill(rmm::exec_policy(stream), buf.begin(), buf.end(), DeviceType{0});
 
-  auto scatter_map = cudf::detail::make_counting_transform_iterator(0, every_other{});
+  auto count = thrust::make_counting_iterator(0);
 
-  thrust::scatter(rmm::exec_policy(stream),
-                  input.begin<DeviceType>(),
-                  input.end<DeviceType>(),
-                  scatter_map,
-                  buf.data());
+  thrust::for_each(count,
+                   count + input.size(),
+                   [in = input.begin<DeviceType>(), out = buf.data()] __device__(auto in_idx) {
+                     auto const out_idx = in_idx * 2;
+                     out[out_idx]       = in[in_idx];
+                     out[out_idx + 1]   = in[in_idx] < 0 ? -1 : 0;
+                   });
 
   auto result = arrow::AllocateBuffer(buf.size() * sizeof(DeviceType), ar_mr);
   CUDF_EXPECTS(result.ok(), "Failed to allocate Arrow buffer for data");

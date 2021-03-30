@@ -362,10 +362,10 @@ TEST_F(ToArrowTest, FixedPointTable)
   cudf::size_type const BIT_WIDTH_RATIO = 2;  // Array::Type:type::DECIMAL (128) / int64_t
 
   for (auto const i : {3, 2, 1, 0, -1, -2, -3}) {
-    auto const col   = fp_wrapper<int64_t>({1, 2, 3, 4, 5, 6}, scale_type{i});
+    auto const col   = fp_wrapper<int64_t>({-1, 2, 3, 4, 5, 6}, scale_type{i});
     auto const input = cudf::table_view({col});
 
-    auto const expect_data = std::vector<int64_t>{1, 0, 2, 0, 3, 0, 4, 0, 5, 0, 6, 0};
+    auto const expect_data = std::vector<int64_t>{-1, -1, 2, 0, 3, 0, 4, 0, 5, 0, 6, 0};
     std::shared_ptr<arrow::Array> arr;
     arrow::Decimal128Builder decimal_builder(arrow::decimal(18, -i), arrow::default_memory_pool());
     decimal_builder.AppendValues(reinterpret_cast<const uint8_t*>(expect_data.data()),
