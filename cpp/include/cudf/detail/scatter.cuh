@@ -333,6 +333,8 @@ struct column_scatterer_impl<struct_view, MapItRoot> {
     // Only gather bitmask from the target at the positions that have not been scatter onto
     auto const gather_map =
       scatter_to_gather_inv(scatter_map_begin, scatter_map_end, source.size(), stream);
+    int n = (int)std::distance(gather_map.begin(), gather_map.end());
+    for (int i = 0; i < n; ++i) { printf("h n: %d\n", gather_map.element(i, stream)); }
     gather_bitmask(table_view{std::vector<cudf::column_view>{target}},
                    gather_map.begin(),
                    result,
