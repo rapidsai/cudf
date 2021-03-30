@@ -1,18 +1,22 @@
 # Copyright (c) 2021, NVIDIA CORPORATION.
 
 import warnings
-from typing import Any, Tuple, Union
+from typing import Any, Optional, Tuple, Union, cast
 
 import numpy as np
 import pandas as pd
 
 import cudf
-from cudf._typing import ScalarLike
+from cudf._typing import ColumnLike, ScalarLike
+from cudf.core.column import ColumnBase
+from cudf.core.dataframe import DataFrame
+from cudf.core.frame import Frame
+from cudf.core.index import Index
+from cudf.core.scalar import Scalar
+from cudf.core.series import Series
 
 
-def _normalize_scalars(
-    col: cudf.core.column.ColumnBase, other: ScalarLike
-) -> cudf.Scalar:
+def _normalize_scalars(col: ColumnBase, other: ScalarLike) -> Scalar:
     """
     Try to normalize scalar values as per col dtype
     """
@@ -24,14 +28,12 @@ def _normalize_scalars(
             f"{type(other).__name__} to {col.dtype.name}"
         )
 
-    return cudf.Scalar(other, dtype=col.dtype if other is None else None)
+    return Scalar(other, dtype=col.dtype if other is None else None)
 
 
 def _check_and_cast_columns(
-    source_col: cudf.core.column.ColumnBase,
-    other_col: cudf.core.column.ColumnBase,
-    inplace: bool,
-) -> Tuple[cudf.core.column.ColumnBase, cudf.core.column.ColumnBase]:
+    source_col: ColumnBase, other_col: ColumnBase, inplace: bool,
+) -> Tuple[ColumnBase, ColumnBase]:
     """
     Returns type-casted columns of `source_col` & `other_col`
     based on `inplace` parameter.
@@ -59,10 +61,8 @@ def _check_and_cast_columns(
 
 
 def _check_and_cast_columns_with_scalar(
-    source_col: cudf.core.column.ColumnBase,
-    other_scalar: ScalarLike,
-    inplace: bool,
-) -> Tuple[cudf.core.column.ColumnBase, ScalarLike]:
+    source_col: ColumnBase, other_scalar: ScalarLike, inplace: bool,
+) -> Tuple[ColumnBase, ScalarLike]:
     """
     Returns type-casted column `source_col` & scalar `other_scalar`
     based on `inplace` parameter.
@@ -102,14 +102,13 @@ def _check_and_cast_columns_with_scalar(
             )
 
         source_col = source_col.astype(common_dtype)
-        return source_col, cudf.Scalar(other_scalar, dtype=common_dtype)
+        return source_col, Scalar(other_scalar, dtype=common_dtype)
 
 
 def _normalize_columns_and_scalars_type(
-    frame: cudf.core.frame.Frame, other: Any, inplace: bool = False
+    frame: Union[Series, Index, DataFrame], other: Any, inplace: bool = False,
 ) -> Tuple[
-    Union[cudf.core.frame.Frame, cudf.core.column.ColumnBase],
-    Union[cudf.core.frame.Frame, ScalarLike],
+    Union[Series, Index, DataFrame, ColumnLike], Any,
 ]:
     """
     Try to normalize the other's dtypes as per frame.
@@ -132,7 +131,7 @@ def _normalize_columns_and_scalars_type(
     --------
     A dataframe/series/list/scalar form of normalized other
     """
-    if isinstance(frame, cudf.DataFrame) and isinstance(other, cudf.DataFrame):
+    if isinstance(frame, DataFrame) and isinstance(other, DataFrame):
         source_df = frame.copy(deep=False)
         other_df = other.copy(deep=False)
         for self_col in source_df._data.names:
@@ -146,7 +145,7 @@ def _normalize_columns_and_scalars_type(
         return source_df, other_df
 
     elif isinstance(
-        frame, (cudf.Series, cudf.Index)
+        frame, (Series, Index)
     ) and not cudf.utils.dtypes.is_scalar(other):
         other = cudf.core.column.as_column(other)
         input_col = frame._data[frame.name]
@@ -155,9 +154,9 @@ def _normalize_columns_and_scalars_type(
         )
     else:
         # Handles scalar or list/array like scalars
-        if isinstance(
-            frame, (cudf.Series, cudf.Index)
-        ) and cudf.utils.dtypes.is_scalar(other):
+        if isinstance(frame, (Series, Index)) and cudf.utils.dtypes.is_scalar(
+            other
+        ):
             input_col = frame._data[frame.name]
             return _check_and_cast_columns_with_scalar(
                 source_col=frame._data[frame.name],
@@ -165,7 +164,7 @@ def _normalize_columns_and_scalars_type(
                 inplace=inplace,
             )
 
-        elif isinstance(frame, cudf.DataFrame):
+        elif isinstance(frame, DataFrame):
             if cudf.utils.dtypes.is_scalar(other):
                 other = [other for i in range(len(frame._data.names))]
 
@@ -192,8 +191,11 @@ def _normalize_columns_and_scalars_type(
 
 
 def where(
-    frame, cond, other=None, inplace=False,
-):
+    frame: Union[Series, Index, DataFrame],
+    cond: Any,
+    other: Any = None,
+    inplace: bool = False,
+) -> Optional[Union[Frame]]:
     """
     Replace values where the condition is False.
 
@@ -222,14 +224,14 @@ def where(
     Examples
     --------
     >>> import cudf
-    >>> df = cudf.DataFrame({"A":[1, 4, 5], "B":[3, 5, 8]})
+    >>> df = DataFrame({"A":[1, 4, 5], "B":[3, 5, 8]})
     >>> df.where(df % 2 == 0, [-1, -1])
         A  B
     0 -1 -1
     1  4 -1
     2 -1  8
 
-    >>> ser = cudf.Series([4, 3, 2, 1, 0])
+    >>> ser = Series([4, 3, 2, 1, 0])
     >>> ser.where(ser > 2, 10)
     0     4
     1     3
@@ -246,12 +248,12 @@ def where(
     dtype: int64
     """
 
-    if isinstance(frame, cudf.DataFrame):
+    if isinstance(frame, DataFrame):
         if hasattr(cond, "__cuda_array_interface__"):
-            cond = cudf.DataFrame(
+            cond = DataFrame(
                 cond, columns=frame._data.names, index=frame.index
             )
-        elif not isinstance(cond, cudf.DataFrame):
+        elif not isinstance(cond, DataFrame):
             cond = frame.from_pandas(pd.DataFrame(cond))
 
         common_cols = set(frame._data.names).intersection(
@@ -274,10 +276,10 @@ def where(
         (source_df, others,) = _normalize_columns_and_scalars_type(
             frame, other
         )
-        if isinstance(other, cudf.core.frame.Frame):
+        if isinstance(other, Frame):
             others = others._data.columns
 
-        out_df = cudf.DataFrame(index=frame.index)
+        out_df = DataFrame(index=frame.index)
         if len(frame._columns) != len(others):
             raise ValueError(
                 """Replacement list length or number of dataframe columns
@@ -295,7 +297,7 @@ def where(
                             # When other is not present in categories,
                             # fill with Null.
                             other_column = None
-                        other_column = cudf.Scalar(
+                        other_column = Scalar(
                             other_column, dtype=input_col.codes.dtype
                         )
                     elif isinstance(
@@ -333,7 +335,7 @@ def where(
         return frame._mimic_inplace(out_df, inplace=inplace)
 
     else:
-        if isinstance(other, cudf.DataFrame):
+        if isinstance(other, DataFrame):
             raise NotImplementedError(
                 "cannot align with a higher dimensional Frame"
             )
@@ -358,7 +360,7 @@ def where(
                         # When other is not present in categories,
                         # fill with Null.
                         other = None
-                    other = cudf.Scalar(other, dtype=input_col.codes.dtype)
+                    other = Scalar(other, dtype=input_col.codes.dtype)
                 elif isinstance(other, cudf.core.column.CategoricalColumn):
                     other = other.codes
 
@@ -366,20 +368,28 @@ def where(
 
             result = cudf._lib.copying.copy_if_else(input_col, other, cond)
 
-            if cudf.utils.dtypes.is_categorical_dtype(frame.dtype):
+            if isinstance(
+                frame._data[frame.name], cudf.core.column.CategoricalColumn
+            ):
                 result = cudf.core.column.build_categorical_column(
-                    categories=frame._data[frame.name].categories,
+                    categories=cast(
+                        cudf.core.column.CategoricalColumn,
+                        frame._data[frame.name],
+                    ).categories,
                     codes=cudf.core.column.as_column(
                         result.base_data, dtype=result.dtype
                     ),
                     mask=result.base_mask,
                     size=result.size,
                     offset=result.offset,
-                    ordered=frame._data[frame.name].ordered,
+                    ordered=cast(
+                        cudf.core.column.CategoricalColumn,
+                        frame._data[frame.name],
+                    ).ordered,
                 )
 
-        if isinstance(frame, cudf.Index):
-            result = cudf.Index(result, name=frame.name)
+        if isinstance(frame, Index):
+            result = Index(result, name=frame.name)
         else:
             result = frame._copy_construct(data=result)
 

@@ -6,7 +6,7 @@ import copy
 import functools
 import warnings
 from collections import OrderedDict, abc as abc
-from typing import TYPE_CHECKING, Any, Dict, Tuple, TypeVar, Union, overload
+from typing import TYPE_CHECKING, Any, Dict, Optional, Tuple, TypeVar, Union
 
 import cupy
 import numpy as np
@@ -14,7 +14,6 @@ import pandas as pd
 import pyarrow as pa
 from nvtx import annotate
 from pandas.api.types import is_dict_like, is_dtype_equal
-from typing_extensions import Literal
 
 import cudf
 from cudf import _lib as libcudf
@@ -53,19 +52,9 @@ class Frame(libcudf.table.Table):
     def _from_table(cls, table: Frame):
         return cls(table._data, index=table._index)
 
-    @overload
-    def _mimic_inplace(self, result: Frame) -> Frame:
-        ...
-
-    @overload
-    def _mimic_inplace(self, result: Frame, inplace: Literal[True]):
-        ...
-
-    @overload
-    def _mimic_inplace(self, result: Frame, inplace: Literal[False]) -> Frame:
-        ...
-
-    def _mimic_inplace(self, result, inplace=False):
+    def _mimic_inplace(
+        self: T, result: Frame, inplace: bool = False
+    ) -> Optional[Frame]:
         if inplace:
             for col in self._data:
                 if col in result._data:
@@ -74,6 +63,7 @@ class Frame(libcudf.table.Table):
                     )
             self._data = result._data
             self._index = result._index
+            return None
         else:
             return result
 
