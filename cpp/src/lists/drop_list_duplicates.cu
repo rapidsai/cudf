@@ -60,10 +60,10 @@ struct has_negative_nans_fn {
   bool operator()(column_view const& lists_entries, rmm::cuda_stream_view stream) const noexcept
   {
     auto const d_entries = column_device_view::create(lists_entries, stream);
-    return thrust::any_of(rmm::exec_policy(stream),
-                          thrust::make_counting_iterator(0),
-                          thrust::make_counting_iterator(lists_entries.size()),
-                          detail::has_negative_nans<Type>{*d_entries, lists_entries.has_nulls()});
+    return thrust::count_if(rmm::exec_policy(stream),
+                            thrust::make_counting_iterator(0),
+                            thrust::make_counting_iterator(lists_entries.size()),
+                            detail::has_negative_nans<Type>{*d_entries, lists_entries.has_nulls()});
   }
 
   template <typename Type, std::enable_if_t<not cuda::std::is_floating_point_v<Type>>* = nullptr>
