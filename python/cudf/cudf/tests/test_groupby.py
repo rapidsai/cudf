@@ -1580,3 +1580,15 @@ def test_groupby_2keys_scan(nelem, func):
 
     check_dtype = False if func in _index_type_aggs else True
     assert_eq(got_df, expect_df, check_dtype=check_dtype)
+
+
+def test_groupby_mix_agg_scan():
+    err_msg = "Cannot perform both aggregation and scan in one operation"
+    func = ["cumsum", "sum"]
+    gb = make_frame(DataFrame, nelem=10).groupby(["x", "y"], sort=True)
+
+    gb.agg(func[0])
+    gb.agg(func[1])
+    gb.agg(func[1:])
+    with pytest.raises(NotImplementedError, match=err_msg):
+        gb.agg(func)
