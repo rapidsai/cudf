@@ -4247,7 +4247,7 @@ public class TableTest extends CudfTestBase {
   void testParquetWriteToBufferChunked() {
     ParquetWriterOptions options = ParquetWriterOptions.builder()
         .withColumn("_c0", "_c1", "_c2", "_c3", "_c4", "_c5", "_c6")
-        .withStructColumn(ParquetColumnWriterOptions.builder()
+        .withColumn(ParquetColumnWriterOptions.builder()
             .withColumnName("_c7")
             .withColumnOptions(ParquetColumnWriterOptions.builder()
                 .withColumnName("_c7-1")
