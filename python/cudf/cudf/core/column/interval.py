@@ -1,10 +1,10 @@
 # Copyright (c) 2018-2021, NVIDIA CORPORATION.
 import pyarrow as pa
 import cudf
-import pandas as pd
 from cudf.core.column import StructColumn
 from cudf.core.dtypes import IntervalDtype
 from cudf.utils.dtypes import is_interval_dtype
+
 
 class IntervalColumn(StructColumn):
     def __init__(
@@ -95,28 +95,18 @@ class IntervalColumn(StructColumn):
 
     def as_interval_column(self, dtype, **kwargs):
         if is_interval_dtype(dtype):
-            try:
-                return IntervalColumn(
-                    size=self.size,
-                    dtype=dtype,
-                    mask=self.mask,
-                    offset=self.offset,
-                    null_count=self.null_count,
-                    children=self.children,
-                    closed=dtype.closed
-                )
-            except: 
-                #this block is for the case where the dtype does not have 
-                #a closed attribute and therefore throws an error
-                return IntervalColumn(
-                    size=self.size,
-                    dtype=self.dtype,
-                    mask=self.mask,
-                    offset=self.offset,
-                    null_count=self.null_count,
-                    children=self.children,
-                    closed=self.closed
-                )
-
-        if not isinstance(dtype, IntervalDtype):
+            # a user can directly input the string `interval` as the dtype
+            # when creating an interval series or interval dataframe
+            if dtype == "interval":
+                dtype = IntervalDtype(self.dtype.fields["left"], self.closed)
+            return IntervalColumn(
+                size=self.size,
+                dtype=dtype,
+                mask=self.mask,
+                offset=self.offset,
+                null_count=self.null_count,
+                children=self.children,
+                closed=dtype.closed,
+            )
+        else:
             raise ValueError("dtype must be IntervalDtype")

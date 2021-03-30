@@ -9,9 +9,11 @@ from typing import Any, Dict, Set, Type
 import cupy
 import numpy as np
 import pandas as pd
-import pyarrow as pa
 from nvtx import annotate
 from pandas._config import get_option
+import datetime as dt
+from cudf._lib.filling import sequence
+from cudf._lib.scalar import DeviceScalar
 
 import cudf
 from cudf.core.abc import Serializable
@@ -24,7 +26,7 @@ from cudf.core.column import (
     StringColumn,
     TimeDeltaColumn,
     column,
-    arange
+    arange,
 )
 from cudf.core.column.string import StringMethods as StringMethods
 from cudf.core.dtypes import IntervalDtype
@@ -2108,6 +2110,10 @@ class GenericIndex(Index):
         return "\n".join(lines)
 
     def __getitem__(self, index):
+        if type(self) == IntervalIndex:
+            raise NotImplementedError(
+                "Iteration over an IntervalIndex is not yet" " supprted"
+            )
         res = self._values[index]
         if not isinstance(index, int):
             res = as_index(res)
@@ -2788,59 +2794,71 @@ def interval_range(
     >>> cudf.interval_range(start=0,end=5)
     IntervalIndex([(0, 0], (1, 1], (2, 2], (3, 3], (4, 4], (5, 5]],
     ...closed='right',dtype='interval')
-
     >>> cudf.interval_range(start=0,end=10, freq=2,closed='left')
     IntervalIndex([[0, 2), [2, 4), [4, 6), [6, 8), [8, 10)],
     ...closed='left',dtype='interval')
-
     >>> cudf.interval_range(start=0,end=10, periods=3,closed='left')
     ...IntervalIndex([[0.0, 3.3333333333333335),
             [3.3333333333333335, 6.666666666666667),
             [6.666666666666667, 10.0)],
             closed='left',
             dtype='interval')
-
     """
     if freq and periods and start and end:
         raise ValueError(
             "Of the four parameters: start, end, periods, and "
             "freq, exactly three must be specified"
         )
+    if isinstance(start or end, dt.datetime) or isinstance(
+        start or end, dt.timedelta
+    ):
+        raise NotImplementedError(
+            "Datetime-like intervals are not yet supported"
+        )
+    if start and isinstance(start, str):
+        raise ValueError(f"start must be numeric, got {start}")
+    if end and isinstance(end, str):
+        raise ValueError(f"end must be numeric, got {start}")
     elif periods and not freq:
-        assert end is not None and start is not None
-        end = end + 1
-        periods_array = cupy.asarray(arange(start, end))
-        mn, mx = (periods_array.min(), periods_array.max())
-        bin_edges = cupy.linspace(mn, mx, periods + 1, endpoint=True)
-        # cupy.linspace turns all arrays into a float array
-        # this can cause the dtype to be a float instead of an int
-        # the below adjusts for this
-        if cupy.all(cupy.mod(bin_edges, 1) == 0):
-            bin_edges = bin_edges.astype(int)
-        left_col = bin_edges[:-1]
-        right_col = bin_edges[1:]
+        # if statement for mypy to pass
+        if end is not None and start is not None:
+            freq_step = ((end) - start) / periods
+            freq_step = DeviceScalar(freq_step, dtype="float64")
+            start = DeviceScalar(start, dtype="float64")
+            bin_edges = sequence(size=periods + 1, init=start, step=freq_step)
+            if cupy.all(cupy.mod(bin_edges, 1) == 0):
+                bin_edges = bin_edges.astype(int)
+            left_col = bin_edges[:-1]
+            right_col = bin_edges[1:]
     elif freq and periods:
         if end:
             start = end - (freq * periods)
         if start:
             end = freq * periods + start
-        left_col = arange(start, end, freq)
-        assert end is not None and start is not None
-        end = end + 1
-        start = start + freq
-        right_col = arange(start, end, freq)
+        if end is not None and start is not None:
+            left_col = arange(start, end, freq)
+            end = end + 1
+            start = start + freq
+            right_col = arange(start, end, freq)
     elif freq and not periods:
-        assert end is not None and start is not None
-        end = end - freq + 1
-        left_col = arange(start, end, freq)
-        end = end + freq + 1
-        start = start + freq
-        right_col = arange(start, end, freq)
+        if end is not None and start is not None:
+            end = end - freq + 1
+            left_col = arange(start, end, freq)
+            end = end + freq + 1
+            start = start + freq
+            right_col = arange(start, end, freq)
     elif start is not None and end is not None:
-        left_col = arange(start, end, freq)
+        # if statements for mypy to pass
+        if freq:
+            left_col = arange(start, end, freq)
+        else:
+            left_col = arange(start, end)
         start = start + 1
         end = end + 1
-        right_col = arange(start, end, freq)
+        if freq:
+            right_col = arange(start, end, freq)
+        else:
+            right_col = arange(start, end)
     else:
         raise ValueError(
             "Of the four parameters: start, end, periods, and "
@@ -2864,17 +2882,13 @@ class IntervalIndex(GenericIndex):
     data : array-like (1-dimensional)
         Array-like containing Interval objects from which to build the
         IntervalIndex.
-
     closed : {"left", "right", "both", "neither"}, default "right"
         Whether the intervals are closed on the left-side, right-side,
         both or neither.
-
     dtype : dtype or None, default None
         If None, dtype will be inferred.
-
     copy : bool, default False
         Copy the input data.
-
     name : object, optional
         Name to be stored in the index.
 
@@ -2896,27 +2910,18 @@ class IntervalIndex(GenericIndex):
             data = column.as_column(data, data.dtype)
         elif isinstance(data, (pd._libs.interval.Interval, pd.IntervalIndex)):
             data = column.as_column(data, dtype=dtype,)
-        elif data is not None and data != [] and data[0].closed != closed:
-                # when closed is not the same as the data's closed
-                # we need to change the data closed value,
-                left_col = [data[i].left for i in range(len(data))]
-                # creating a col out of the left child so we can get
-                # the correct dtype
-                left = column.as_column(left_col)
-                data = column.as_column(
-                    data,
-                    dtype=IntervalDtype(left.dtype, closed=closed)
-                    if dtype is None
-                    else dtype,
+        elif isinstance(data, list):
+            if not data:
+                dtype = IntervalDtype("int64", closed)
+                data = column.column_empty_like_same_mask(
+                    column.as_column(data), dtype
                 )
-        elif not data:
-                data = column.build_interval_column([], [], closed=closed)
-        #the below else block handles the case where a list of intervals is
-        #passed or any other edge cases. 
-        else:
-            data = column.as_column(
-                data, dtype="interval" if dtype is None else dtype
-            )
+            elif data is not None and data != [] and data[0].closed != closed:
+                data = column.as_column(data)
+                # change closed value to correct value
+                data.dtype.closed = closed
+            else:
+                data = column.as_column(data)
 
         out._initialize(data, **kwargs)
         return out
@@ -2927,13 +2932,17 @@ class IntervalIndex(GenericIndex):
 
         Parameters
         ---------
-
         breaks : array-like (1-dimensional)
             Left and right bounds for each interval.
-
         closed : {"left", "right", "both", "neither"}, default "right"
             Whether the intervals are closed on the left-side, right-side,
             both or neither.
+        copy : bool, default False
+            Copy the input data.
+        name : object, optional
+            Name to be stored in the index.
+        dtype : dtype or None, default None
+            If None, dtype will be inferred.
 
         Returns
         -------
@@ -2948,7 +2957,8 @@ class IntervalIndex(GenericIndex):
                     closed='right',
                     dtype='interval[int64]')
         """
-
+        if copy:
+            breaks = column.as_column(breaks, dtype=dtype).copy()
         left_col = breaks[:-1:]
         right_col = breaks[+1::]
 
@@ -2956,7 +2966,7 @@ class IntervalIndex(GenericIndex):
             left_col, right_col, closed=closed
         )
 
-        return IntervalIndex(interval_col)
+        return IntervalIndex(interval_col, name=name)
 
 
 class StringIndex(GenericIndex):
