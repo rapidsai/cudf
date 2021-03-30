@@ -37,3 +37,5 @@ cuDF interfaces with c++ libraries through Cython. By default, cuDF builds such 
 In an unambiguous situation, for example, the c++ function called by cuDF will only throw one instance of `std::out_of_range` exception, indicating an out of bound array access error, cuDF will skip checks in the python level and surface such error (through automatic Cython error mapping) if occurs.
 
 In an ambiguous situation, for example, the c++ function may raise two instances of `std::invalid_argument` error, each signaling different types of invalid argument combination, cuDF will check the invalid combinations and re-raise with proper user message.
+
+In cases when the contents of `what()` is standardized by the supporting library, cuDF will utilize it to disambiguate.
