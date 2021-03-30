@@ -6,9 +6,12 @@ import numpy as np
 import pandas as pd
 
 import cudf
+from cudf._typing import ScalarLike
 
 
-def _normalize_scalars(col, other):
+def _normalize_scalars(
+    col: cudf.core.column.ColumnBase, other: ScalarLike
+) -> cudf.Scalar:
     """
     Try to normalize scalar values as per col dtype
     """
