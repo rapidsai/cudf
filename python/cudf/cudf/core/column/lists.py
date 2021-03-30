@@ -392,7 +392,9 @@ class ListMethods(ColumnMethodsMixin):
             raise NotImplementedError("Nested lists unique is not supported.")
 
         return self._return_or_inplace(
-            drop_list_duplicates(self._column, nulls_equal=True)
+            drop_list_duplicates(
+                self._column, nulls_equal=True, nans_all_equal=True
+            )
         )
 
     def sort_values(
