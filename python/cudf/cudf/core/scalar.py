@@ -11,7 +11,6 @@ from cudf.core.dtypes import Decimal64Dtype
 from cudf.utils.dtypes import (
     get_allowed_combinations_for_operator,
     to_cudf_compatible_scalar,
-    _decimal_dtype_from_decimal,
 )
 
 
@@ -130,7 +129,7 @@ class Scalar(object):
 
         if isinstance(value, decimal.Decimal):
             # 0.0042 -> Decimal64Dtype(2, 4)
-            dtype = _decimal_dtype_from_decimal(value)
+            dtype = Decimal64Dtype._from_decimal(value)
 
         else:
             if dtype is None:
