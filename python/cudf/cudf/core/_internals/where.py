@@ -118,7 +118,7 @@ def _normalize_columns_and_scalars_type(
     if isinstance(frame, DataFrame) and isinstance(other, DataFrame):
         source_df = frame.copy(deep=False)
         other_df = other.copy(deep=False)
-        for self_col in source_df._data.names:
+        for self_col in source_df._column_names:
             source_col, other_col = _check_and_cast_columns_with_other(
                 source_col=source_df._data[self_col],
                 other=other_df._data[self_col],
@@ -150,11 +150,11 @@ def _normalize_columns_and_scalars_type(
 
         elif isinstance(frame, DataFrame):
             if cudf.utils.dtypes.is_scalar(other):
-                other = [other for i in range(len(frame._data.names))]
+                other = [other for i in range(len(frame._column_names))]
 
             source_df = frame.copy(deep=False)
             others = []
-            for col_name, other_sclr in zip(frame._data.names, other):
+            for col_name, other_sclr in zip(frame._column_names, other):
 
                 (
                     source_col,
@@ -235,13 +235,13 @@ def where(
     if isinstance(frame, DataFrame):
         if hasattr(cond, "__cuda_array_interface__"):
             cond = DataFrame(
-                cond, columns=frame._data.names, index=frame.index
+                cond, columns=frame._column_names, index=frame.index
             )
         elif not isinstance(cond, DataFrame):
             cond = frame.from_pandas(pd.DataFrame(cond))
 
-        common_cols = set(frame._data.names).intersection(
-            set(cond._data.names)
+        common_cols = set(frame._column_names).intersection(
+            set(cond._column_names)
         )
         if len(common_cols) > 0:
             # If `frame` and `cond` are having unequal index,
@@ -269,7 +269,7 @@ def where(
                 """Replacement list length or number of dataframe columns
                 should be equal to Number of columns of dataframe"""
             )
-        for i, column_name in enumerate(frame._data.names):
+        for i, column_name in enumerate(frame._column_names):
             input_col = source_df._data[column_name]
             other_column = others[i]
             if column_name in cond._data:
