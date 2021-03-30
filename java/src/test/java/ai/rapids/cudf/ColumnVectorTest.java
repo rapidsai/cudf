@@ -1368,7 +1368,7 @@ public class ColumnVectorTest extends CudfTestBase {
   }
 
   @Test
-  void testReplaceEmptyColumn() {
+  void testReplaceNullsScalarEmptyColumn() {
     try (ColumnVector input = ColumnVector.fromBoxedBooleans();
          ColumnVector expected = ColumnVector.fromBoxedBooleans();
          Scalar s = Scalar.fromBool(false);
@@ -1378,7 +1378,7 @@ public class ColumnVectorTest extends CudfTestBase {
   }
 
   @Test
-  void testReplaceNullBoolsWithAllNulls() {
+  void testReplaceNullsScalarBoolsWithAllNulls() {
     try (ColumnVector input = ColumnVector.fromBoxedBooleans(null, null, null, null);
          ColumnVector expected = ColumnVector.fromBoxedBooleans(false, false, false, false);
          Scalar s = Scalar.fromBool(false);
@@ -1388,7 +1388,7 @@ public class ColumnVectorTest extends CudfTestBase {
   }
 
   @Test
-  void testReplaceSomeNullBools() {
+  void testReplaceNullsScalarSomeNullBools() {
     try (ColumnVector input = ColumnVector.fromBoxedBooleans(false, null, null, false);
          ColumnVector expected = ColumnVector.fromBoxedBooleans(false, true, true, false);
          Scalar s = Scalar.fromBool(true);
@@ -1398,7 +1398,7 @@ public class ColumnVectorTest extends CudfTestBase {
   }
 
   @Test
-  void testReplaceNullIntegersWithAllNulls() {
+  void testReplaceNullsScalarIntegersWithAllNulls() {
     try (ColumnVector input = ColumnVector.fromBoxedInts(null, null, null, null);
          ColumnVector expected = ColumnVector.fromBoxedInts(0, 0, 0, 0);
          Scalar s = Scalar.fromInt(0);
@@ -1408,7 +1408,7 @@ public class ColumnVectorTest extends CudfTestBase {
   }
 
   @Test
-  void testReplaceSomeNullIntegers() {
+  void testReplaceNullsScalarSomeNullIntegers() {
     try (ColumnVector input = ColumnVector.fromBoxedInts(1, 2, null, 4, null);
          ColumnVector expected = ColumnVector.fromBoxedInts(1, 2, 999, 4, 999);
          Scalar s = Scalar.fromInt(999);
@@ -1418,7 +1418,7 @@ public class ColumnVectorTest extends CudfTestBase {
   }
 
   @Test
-  void testReplaceNullsFailsOnTypeMismatch() {
+  void testReplaceNullsScalarFailsOnTypeMismatch() {
     try (ColumnVector input = ColumnVector.fromBoxedInts(1, 2, null, 4, null);
          Scalar s = Scalar.fromBool(true)) {
       assertThrows(CudfException.class, () -> input.replaceNulls(s).close());
@@ -1431,6 +1431,44 @@ public class ColumnVectorTest extends CudfTestBase {
          Scalar s = Scalar.fromNull(input.getType());
          ColumnVector result = input.replaceNulls(s)) {
       assertColumnsAreEqual(input, result);
+    }
+  }
+
+  @Test
+  void testReplaceNullsColumnEmptyColumn() {
+    try (ColumnVector input = ColumnVector.fromBoxedBooleans();
+         ColumnVector r = ColumnVector.fromBoxedBooleans();
+         ColumnVector expected = ColumnVector.fromBoxedBooleans();
+         ColumnVector result = input.replaceNulls(r)) {
+      assertColumnsAreEqual(expected, result);
+    }
+  }
+
+  @Test
+  void testReplaceNullsColumnBools() {
+    try (ColumnVector input = ColumnVector.fromBoxedBooleans(null, true, null, false);
+         ColumnVector r = ColumnVector.fromBoxedBooleans(false, null, true, true);
+         ColumnVector expected = ColumnVector.fromBoxedBooleans(false, true, true, false);
+         ColumnVector result = input.replaceNulls(r)) {
+      assertColumnsAreEqual(expected, result);
+    }
+  }
+
+  @Test
+  void testReplaceNullsColumnIntegers() {
+    try (ColumnVector input = ColumnVector.fromBoxedInts(1, 2, null, 4, null);
+         ColumnVector r = ColumnVector.fromBoxedInts(996, 997, 998, 909, null);
+         ColumnVector expected = ColumnVector.fromBoxedInts(1, 2, 998, 4, null);
+         ColumnVector result = input.replaceNulls(r)) {
+      assertColumnsAreEqual(expected, result);
+    }
+  }
+
+  @Test
+  void testReplaceNullsColumnFailsOnTypeMismatch() {
+    try (ColumnVector input = ColumnVector.fromBoxedInts(1, 2, null, 4, null);
+         ColumnVector r = ColumnVector.fromBoxedBooleans(true)) {
+      assertThrows(CudfException.class, () -> input.replaceNulls(r).close());
     }
   }
 
