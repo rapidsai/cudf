@@ -31,10 +31,7 @@
 
 namespace cudf {
 namespace transformation {
-//! Jit functions
 namespace jit {
-
-// const std::vector<std::string> header_names{cudf_types_hpp, cudf_wrappers_timestamps_hpp};
 
 void unary_operation(mutable_column_view output,
                      column_view input,
