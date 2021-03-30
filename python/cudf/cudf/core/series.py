@@ -3571,6 +3571,7 @@ class Series(Frame, Serializable):
         4    3
         3    4
         1    5
+        dtype: int64
         """
 
         if inplace:
@@ -4724,8 +4725,9 @@ class Series(Frame, Serializable):
                 result_col[first_index:] = None
 
         # pandas always returns int64 dtype if original dtype is int or `bool`
-        if np.issubdtype(result_col.dtype, np.integer) or np.issubdtype(
-            result_col.dtype, np.bool_
+        if not is_decimal_dtype(result_col.dtype) and (
+            np.issubdtype(result_col.dtype, np.integer)
+            or np.issubdtype(result_col.dtype, np.bool_)
         ):
             return Series(
                 result_col.astype(np.int64)._apply_scan_op("sum"),
@@ -4772,6 +4774,11 @@ class Series(Frame, Serializable):
 
         if axis not in (None, 0):
             raise NotImplementedError("axis parameter is not implemented yet")
+
+        if is_decimal_dtype(self.dtype):
+            raise NotImplementedError(
+                "cumprod does not currently support decimal types"
+            )
 
         skipna = True if skipna is None else skipna
 
@@ -6292,17 +6299,24 @@ class Series(Frame, Serializable):
         method="hash",
         suffixes=("_x", "_y"),
     ):
-
         if left_on not in (self.name, None):
             raise ValueError(
                 "Series to other merge uses series name as key implicitly"
             )
 
-        lhs = self.copy(deep=False)
-        rhs = other.copy(deep=False)
+        if lsuffix or rsuffix:
+            raise ValueError(
+                "The lsuffix and rsuffix keywords have been replaced with the "
+                "``suffixes=`` keyword.  "
+                "Please provide the following instead: \n\n"
+                "    suffixes=('%s', '%s')"
+                % (lsuffix or "_x", rsuffix or "_y")
+            )
+        else:
+            lsuffix, rsuffix = suffixes
 
-        result = super(Series, lhs)._merge(
-            rhs,
+        result = super()._merge(
+            other,
             on=on,
             left_on=left_on,
             right_on=right_on,
@@ -6310,8 +6324,6 @@ class Series(Frame, Serializable):
             right_index=right_index,
             how=how,
             sort=sort,
-            lsuffix=lsuffix,
-            rsuffix=rsuffix,
             method=method,
             indicator=False,
             suffixes=suffixes,

@@ -156,6 +156,7 @@ add_library(cudf
     src/binaryop/jit/code/kernel.cpp
     src/binaryop/jit/code/operation.cpp
     src/binaryop/jit/code/traits.cpp
+    src/labeling/label_bins.cu
     src/bitmask/null_mask.cu
     src/column/column.cu
     src/column/column_device_view.cu
@@ -388,6 +389,7 @@ add_library(cudf
     src/transform/jit/code/kernel.cpp
     src/transform/mask_to_bools.cu
     src/transform/nans_to_nulls.cu
+    src/transform/row_bit_count.cu
     src/transform/transform.cpp
     src/transpose/transpose.cu
     src/unary/cast_ops.cu
@@ -415,7 +417,7 @@ target_compile_options(cudf
 
 target_compile_definitions(cudf
             PUBLIC "$<$<COMPILE_LANGUAGE:CXX>:${CUDF_CXX_DEFINITIONS}>"
-                   "$<$<COMPILE_LANGUAGE:CUDA>:${CUDF_CUDA_DEFINITIONS}>"
+                   "$<BUILD_INTERFACE:$<$<COMPILE_LANGUAGE:CUDA>:${CUDF_CUDA_DEFINITIONS}>>"
 )
 
 # Disable Jitify log printing. See https://github.com/NVIDIA/jitify/issues/79
@@ -510,10 +512,11 @@ add_library(cudftestutil STATIC
 
 target_compile_options(cudftestutil
             PUBLIC "$<$<COMPILE_LANGUAGE:CXX>:${CUDF_CXX_FLAGS}>"
-                   "$<$<COMPILE_LANGUAGE:CUDA>:${CUDF_CUDA_FLAGS}>"
+                   "$<BUILD_INTERFACE:$<$<COMPILE_LANGUAGE:CUDA>:${CUDF_CUDA_FLAGS}>>"
 )
 
-target_compile_features(cudftestutil PUBLIC cxx_std_14 cuda_std_14)
+target_compile_features(cudftestutil
+    PUBLIC cxx_std_14 $<BUILD_INTERFACE:cuda_std_14>)
 
 target_link_libraries(cudftestutil
                PUBLIC GTest::gmock
@@ -527,7 +530,7 @@ target_include_directories(cudftestutil
 
 install(TARGETS cudftestutil
         DESTINATION lib
-        EXPORT cudf-targets)
+        EXPORT cudf-testing-targets)
 
 add_library(cudf::cudftestutil ALIAS cudftestutil)
 
@@ -552,12 +555,6 @@ if(CUDF_BUILD_BENCHMARKS)
         GIT_SHALLOW     TRUE
         OPTIONS         "BENCHMARK_ENABLE_TESTING OFF"
                         "BENCHMARK_ENABLE_INSTALL OFF")
-    if(benchmark_ADDED)
-        install(TARGETS benchmark
-                        benchmark_main
-            DESTINATION lib
-            EXPORT cudf-targets)
-    endif()
     add_subdirectory(benchmarks)
 endif()
 
@@ -605,6 +602,11 @@ install(EXPORT  cudf-targets
     NAMESPACE   cudf::
     DESTINATION "${INSTALL_CONFIGDIR}")
 
+install(EXPORT  cudf-testing-targets
+    FILE        cudf-testing-targets.cmake
+    NAMESPACE   cudf::
+    DESTINATION "${INSTALL_CONFIGDIR}")
+
 ################################################################################################
 # - build export -------------------------------------------------------------------------------
 configure_package_config_file(cmake/cudf-build-config.cmake.in ${CUDF_BINARY_DIR}/cudf-config.cmake
@@ -629,8 +631,21 @@ elseif(TARGET arrow_static)
     endif()
 endif()
 
+if(TARGET gtest)
+    get_target_property(gtest_is_imported gtest IMPORTED)
+    if(NOT gtest_is_imported)
+        export(TARGETS gtest gmock gtest_main gmock_main
+            FILE ${CUDF_BINARY_DIR}/cudf-gtesting-targets.cmake
+            NAMESPACE   GTest::)
+    endif()
+endif()
+
 export(EXPORT cudf-targets
     FILE ${CUDF_BINARY_DIR}/cudf-targets.cmake
+    NAMESPACE   cudf::)
+
+export(EXPORT cudf-testing-targets
+    FILE ${CUDF_BINARY_DIR}/cudf-testing-targets.cmake
     NAMESPACE   cudf::)
 
 

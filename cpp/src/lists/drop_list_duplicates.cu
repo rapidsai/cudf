@@ -35,8 +35,6 @@ namespace cudf {
 namespace lists {
 namespace detail {
 namespace {
-using offset_type = lists_column_view::offset_type;
-
 template <typename Type>
 struct has_negative_nans {
   column_device_view const d_entries;

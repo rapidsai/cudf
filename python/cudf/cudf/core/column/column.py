@@ -827,7 +827,12 @@ class ColumnBase(Column, Serializable):
     def median(self, skipna: bool = None) -> ScalarLike:
         raise TypeError(f"cannot perform median with type {self.dtype}")
 
-    def take(self: T, indices: ColumnBase, keep_index: bool = True) -> T:
+    def take(
+        self: T,
+        indices: ColumnBase,
+        keep_index: bool = True,
+        nullify: bool = False,
+    ) -> T:
         """Return Column by taking values from the corresponding *indices*.
         """
         # Handle zero size
@@ -836,7 +841,7 @@ class ColumnBase(Column, Serializable):
         try:
             return (
                 self.as_frame()
-                ._gather(indices, keep_index=keep_index)
+                ._gather(indices, keep_index=keep_index, nullify=nullify)
                 ._as_column()
             )
         except RuntimeError as e:
@@ -1004,7 +1009,9 @@ class ColumnBase(Column, Serializable):
         ascending: bool = True,
         na_position: builtins.str = "last",
     ) -> Tuple[ColumnBase, "cudf.core.column.NumericalColumn"]:
-        col_inds = self.as_frame()._get_sorted_inds(ascending, na_position)
+        col_inds = self.as_frame()._get_sorted_inds(
+            ascending=ascending, na_position=na_position
+        )
         col_keys = self.take(col_inds)
         return col_keys, col_inds
 
@@ -1016,8 +1023,13 @@ class ColumnBase(Column, Serializable):
             raise NotImplementedError(msg)
         return cpp_distinct_count(self, ignore_nulls=dropna)
 
+    def can_cast_safely(self, to_dtype: Dtype) -> bool:
+        raise NotImplementedError()
+
     def astype(self, dtype: Dtype, **kwargs) -> ColumnBase:
-        if is_categorical_dtype(dtype):
+        if is_numerical_dtype(dtype):
+            return self.as_numerical_column(dtype)
+        elif is_categorical_dtype(dtype):
             return self.as_categorical_column(dtype, **kwargs)
         elif pd.api.types.pandas_dtype(dtype).type in {
             np.str_,
@@ -1548,6 +1560,16 @@ def build_column(
     """
     dtype = pd.api.types.pandas_dtype(dtype)
 
+    if is_numerical_dtype(dtype):
+        assert data is not None
+        return cudf.core.column.NumericalColumn(
+            data=data,
+            dtype=dtype,
+            mask=mask,
+            size=size,
+            offset=offset,
+            null_count=null_count,
+        )
     if is_categorical_dtype(dtype):
         if not len(children) == 1:
             raise ValueError(
@@ -1634,15 +1656,7 @@ def build_column(
             children=children,
         )
     else:
-        assert data is not None
-        return cudf.core.column.NumericalColumn(
-            data=data,
-            dtype=dtype,
-            mask=mask,
-            size=size,
-            offset=offset,
-            null_count=null_count,
-        )
+        raise TypeError(f"Unrecognized dtype: {dtype}")
 
 
 def build_categorical_column(

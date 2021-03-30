@@ -12,7 +12,13 @@ from numpy.testing import assert_array_equal
 import cudf
 from cudf.core import DataFrame, Series
 from cudf.core._compat import PANDAS_GE_110
-from cudf.tests.utils import assert_eq, assert_exceptions_equal
+from cudf.tests.utils import (
+    DATETIME_TYPES,
+    SIGNED_TYPES,
+    TIMEDELTA_TYPES,
+    assert_eq,
+    assert_exceptions_equal,
+)
 
 _now = np.datetime64("now")
 _tomorrow = _now + np.timedelta64(1, "D")
@@ -1532,3 +1538,26 @@ def test_groupby_nonempty_no_keys(pdf):
         lambda: gdf.groupby([]),
         compare_error_message=False,
     )
+
+
+@pytest.mark.parametrize(
+    "by,data",
+    [
+        # ([], []),  # error?
+        ([1, 1, 2, 2], [0, 0, 1, 1]),
+        ([1, 2, 3, 4], [0, 0, 0, 0]),
+        ([1, 2, 1, 2], [0, 1, 1, 1]),
+    ],
+)
+@pytest.mark.parametrize(
+    "dtype",
+    SIGNED_TYPES + DATETIME_TYPES + TIMEDELTA_TYPES + ["string", "category"],
+)
+def test_groupby_unique(by, data, dtype):
+    pdf = pd.DataFrame({"by": by, "data": data})
+    pdf["data"] = pdf["data"].astype(dtype)
+    gdf = cudf.from_pandas(pdf)
+
+    expect = pdf.groupby("by")["data"].unique()
+    got = gdf.groupby("by")["data"].unique()
+    assert_eq(expect, got)

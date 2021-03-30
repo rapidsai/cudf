@@ -85,7 +85,6 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_fromArrow(JNIEnv *env, 
     auto null_buffer = arrow::Buffer::Wrap(static_cast<const char *>(validity_address), static_cast<int>(validity_length));
     auto offsets_buffer = arrow::Buffer::Wrap(static_cast<const char *>(offsets_address), static_cast<int>(offsets_length));
 
-    cudf::jni::native_jlongArray outcol_handles(env, 1);
     std::shared_ptr<arrow::Array> arrow_array;
     switch (n_type) {
       case cudf::type_id::DECIMAL32:
