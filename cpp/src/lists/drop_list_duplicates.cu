@@ -67,6 +67,7 @@ struct has_negative_nans_fn {
   template <typename Type, std::enable_if_t<not cuda::std::is_floating_point_v<Type>>* = nullptr>
   bool operator()(column_view const&, rmm::cuda_stream_view) const noexcept
   {
+    // Columns of non floating-point data will never contain NaN
     return false;
   }
 };
@@ -81,13 +82,13 @@ struct replace_negative_nans {
 
 /**
  * @brief A structure to be used along with type_dispatcher to replace -NaN by NaN for all entries
- * of a floating point data column
+ * of a floating-point data column
  */
 struct replace_negative_nans_fn {
   template <typename Type, std::enable_if_t<not cuda::std::is_floating_point_v<Type>>* = nullptr>
   void operator()(column_view const&, mutable_column_view const&, rmm::cuda_stream_view) const
   {
-    CUDF_FAIL("Cannot operate on a type that is not floating point.");
+    CUDF_FAIL("Cannot operate on a type that is not floating-point.");
   }
 
   template <typename Type, std::enable_if_t<cuda::std::is_floating_point_v<Type>>* = nullptr>
@@ -95,7 +96,7 @@ struct replace_negative_nans_fn {
                   mutable_column_view const& new_entries,
                   rmm::cuda_stream_view stream) const noexcept
   {
-    // Do not care whether an entry is null or not, just consider it as a floating point value
+    // Do not care whether an entry is null or not, just consider it as a floating-point value
     thrust::transform(rmm::exec_policy(stream),
                       lists_entries.begin<Type>(),
                       lists_entries.end<Type>(),
@@ -211,12 +212,12 @@ std::unique_ptr<column> generate_entry_list_offsets(size_type num_entries,
  * point types, this functor will return the same comparison result as
  * `cudf::element_equality_comparator`.
  *
- * For floating point types, entries holding NaN value can be considered as different values or the
+ * For floating-point types, entries holding NaN value can be considered as different values or the
  * same value depending on the nans_equal parameter.
  *
  * @tparam Type       The data type of entries
  * @tparam nans_equal Flag to specify whether NaN entries should be considered as equal value (only
- * applicable for floating point data column)
+ * applicable for floating-point data column)
  */
 template <class Type, bool nans_equal>
 class list_entry_comparator {
@@ -247,7 +248,7 @@ class list_entry_comparator {
       }
     }
 
-    // For floating point types, if both element(i) and element(j) are NaNs then this comparison
+    // For floating-point types, if both element(i) and element(j) are NaNs then this comparison
     // will return `true`. This is the desired behavior in Pandas.
     auto const lhs = d_view.element<Type>(i);
     auto const rhs = d_view.element<Type>(j);
@@ -273,7 +274,7 @@ class list_entry_comparator {
       }
     }
 
-    // For floating point types, if both element(i) and element(j) are NaNs then this comparison
+    // For floating-point types, if both element(i) and element(j) are NaNs then this comparison
     // will return `false`. This is the desired behavior in Apache Spark.
     return d_view.element<Type>(i) == d_view.element<Type>(j);
   }
@@ -342,7 +343,7 @@ struct get_unique_entries_fn {
  * @param entries_list_offsets A map from list entries to their corresponding list offsets
  * @param nulls_equal          Flag to specify whether null entries should be considered equal
  * @param nans_equal           Flag to specify whether NaN entries should be considered as equal
- * value (only applicable for floating point data column)
+ * value (only applicable for floating-point data column)
  * @param stream               CUDA stream used for device memory operations and kernel launches
  * @param mr                   Device resource used to allocate memory
  *
@@ -470,11 +471,12 @@ std::unique_ptr<column> drop_list_duplicates(lists_column_view const& lists_colu
 
   // sorted_lists will store the results of the original lists after calling segmented_sort
   auto const sorted_lists = [&]() {
-    // If the column contains lists of floating point data type and NaNs are considered as equal, we
-    // need to replace -NaN by NaN before sorting
-    auto const has_negative_nan =
+    // If nans_equal == ALL_EQUAL and the column contains lists of floating-point data type,
+    // we need to replace -NaN by NaN before sorting
+    auto const replace_negative_nan =
+      nans_equal == nan_equality::ALL_EQUAL and
       type_dispatcher(lists_entries.type(), detail::has_negative_nans_fn{}, lists_entries, stream);
-    if (has_negative_nan) {
+    if (replace_negative_nan) {
       // The column new_lists_column is temporary, thus we will not pass in `mr`
       auto const new_lists_column =
         detail::replace_negative_nans_entries(lists_entries, lists_column, stream);
