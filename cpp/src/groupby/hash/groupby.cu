@@ -63,7 +63,7 @@ namespace {
  * implementation.
  */
 constexpr std::array<aggregation::Kind, 10> hash_aggregations{
-    aggregation::SUM, aggregation::MIN, aggregation::MAX,
+    aggregation::SUM, aggregation::PRODUCT, aggregation::MIN, aggregation::MAX,
     aggregation::COUNT_VALID, aggregation::COUNT_ALL,
     aggregation::ARGMIN, aggregation::ARGMAX,
     aggregation::SUM_OF_SQUARES,
@@ -96,11 +96,11 @@ bool constexpr is_hash_aggregation(aggregation::Kind t)
   // this is a temporary fix due to compiler bug and we can resort back to
   // constexpr once cuda 10.2 becomes RAPIDS's minimum compiler version
   // return array_contains(hash_aggregations, t);
-  return (t == aggregation::SUM) or (t == aggregation::MIN) or (t == aggregation::MAX) or
-         (t == aggregation::COUNT_VALID) or (t == aggregation::COUNT_ALL) or
-         (t == aggregation::ARGMIN) or (t == aggregation::ARGMAX) or
-         (t == aggregation::SUM_OF_SQUARES) or (t == aggregation::MEAN) or
-         (t == aggregation::STD) or (t == aggregation::VARIANCE);
+  return (t == aggregation::SUM) or (t == aggregation::PRODUCT) or (t == aggregation::MIN) or
+         (t == aggregation::MAX) or (t == aggregation::COUNT_VALID) or
+         (t == aggregation::COUNT_ALL) or (t == aggregation::ARGMIN) or
+         (t == aggregation::ARGMAX) or (t == aggregation::SUM_OF_SQUARES) or
+         (t == aggregation::MEAN) or (t == aggregation::STD) or (t == aggregation::VARIANCE);
 }
 
 template <typename Map>
