@@ -4345,6 +4345,32 @@ public class TableTest extends CudfTestBase {
   }
 
   @Test
+  void testRowBitCount() {
+    try (Table t = new Table.TestBuilder()
+        .column(0, 1, null, 3)                 // 33 bits per row (4 bytes + valid bit)
+        .column(0.0, null, 2.0, 3.0)           // 65 bits per row (8 bytes + valid bit)
+        .column("zero", null, "two", "three")  // 33 bits (4 byte offset + valid bit) + char bits
+        .build();
+         ColumnVector expected = ColumnVector.fromInts(163, 131, 155, 171);
+         ColumnVector actual = t.rowBitCount()) {
+      assertColumnsAreEqual(expected, actual);
+    }
+  }
+
+  @Test
+  void testRowBitCountEmpty() {
+    try (Table t = new Table.TestBuilder()
+            .column(new Integer[0])
+            .column(new Double[0])
+            .column(new String[0])
+            .build();
+         ColumnVector c = t.rowBitCount()) {
+      assertEquals(DType.INT32, c.getType());
+      assertEquals(0, c.getRowCount());
+    }
+  }
+
+  @Test
   void testSimpleGather() {
     try (Table testTable = new Table.TestBuilder()
             .column(1, 2, 3, 4, 5)
