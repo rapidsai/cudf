@@ -23,12 +23,12 @@ requirements:
   host:
     - python
     - cudf {{ version }}=*_{{ GIT_DESCRIBE_NUMBER }}
-    - dask >=2.22.0
+    - dask>=2021.3.1
     - distributed >=2.22.0
   run:
     - python
     - cudf {{ version }}=*_{{ GIT_DESCRIBE_NUMBER }}
-    - dask >=2.22.0
+    - dask>=2021.3.1
     - distributed >=2.22.0
 
 test:
