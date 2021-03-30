@@ -1319,9 +1319,6 @@ class ColumnBase(Column, Serializable):
             f"cannot perform corr with types {self.dtype}, {other.dtype}"
         )
 
-    def can_cast_safely(self, to_dtype: Dtype) -> bool:
-        raise NotImplementedError()
-
     def nans_to_nulls(self: T) -> T:
         if self.dtype.kind == "f":
             newmask = libcudf.transform.nans_to_nulls(self)

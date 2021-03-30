@@ -30,78 +30,63 @@ def _normalize_scalars(col: ColumnBase, other: ScalarLike) -> ScalarLike:
     return cudf.Scalar(other, dtype=col.dtype if other is None else None)
 
 
-def _check_and_cast_columns(
-    source_col: ColumnBase, other_col: ColumnBase, inplace: bool,
-) -> Tuple[ColumnBase, ColumnBase]:
-    """
-    Returns type-casted columns of `source_col` & `other_col`
-    based on `inplace` parameter.
-    """
-    if cudf.utils.dtypes.is_categorical_dtype(source_col.dtype):
-        return source_col, other_col
-    elif cudf.utils.dtypes.is_mixed_with_object_dtype(source_col, other_col):
-        raise TypeError(
-            "cudf does not support mixed types, please type-cast "
-            "the column of dataframe/series and other "
-            "to same dtypes."
-        )
-    if inplace:
-        if not source_col.can_cast_safely(other_col.dtype):
-            warnings.warn(
-                f"Type-casting from {other_col.dtype} "
-                f"to {source_col.dtype}, there could be potential data loss"
-            )
-        return source_col, other_col.astype(source_col.dtype)
-    else:
-        common_dtype = cudf.utils.dtypes.find_common_type(
-            [source_col.dtype, other_col.dtype]
-        )
-        return source_col.astype(common_dtype), other_col.astype(common_dtype)
-
-
-def _check_and_cast_columns_with_scalar(
-    source_col: ColumnBase, other_scalar: ScalarLike, inplace: bool,
-) -> Tuple[ColumnBase, ScalarLike]:
+def _check_and_cast_columns_with_other(
+    source_col: ColumnBase,
+    other: Union[ScalarLike, ColumnBase],
+    inplace: bool,
+) -> Tuple[ColumnBase, Union[ScalarLike, ColumnBase]]:
     """
     Returns type-casted column `source_col` & scalar `other_scalar`
     based on `inplace` parameter.
     """
     if cudf.utils.dtypes.is_categorical_dtype(source_col.dtype):
-        return source_col, other_scalar
+        return source_col, other
 
-    device_scalar = _normalize_scalars(source_col, other_scalar)
+    if cudf.utils.dtypes.is_scalar(other):
+        device_obj = _normalize_scalars(source_col, other)
+    else:
+        device_obj = other
 
-    if other_scalar is None:
-        return source_col, device_scalar
-    elif cudf.utils.dtypes.is_mixed_with_object_dtype(
-        device_scalar, source_col
-    ):
+    if other is None:
+        return source_col, device_obj
+    elif cudf.utils.dtypes.is_mixed_with_object_dtype(device_obj, source_col):
         raise TypeError(
             "cudf does not support mixed types, please type-cast "
             "the column of dataframe/series and other "
             "to same dtypes."
         )
     if inplace:
-        if not cudf.utils.dtypes.can_cast(
-            device_scalar.dtype, source_col.dtype
-        ):
+        if not cudf.utils.dtypes.can_cast(device_obj.dtype, source_col.dtype):
             warnings.warn(
-                f"Type-casting from {device_scalar.dtype} "
+                f"Type-casting from {device_obj.dtype} "
                 f"to {source_col.dtype}, there could be potential data loss"
             )
-        return source_col, device_scalar.astype(source_col.dtype)
+        return source_col, device_obj.astype(source_col.dtype)
     else:
-        if pd.api.types.is_numeric_dtype(
-            source_col.dtype
-        ) and cudf.utils.dtypes.can_cast(other_scalar, source_col.dtype):
+        if (
+            cudf.utils.dtypes.is_scalar(other)
+            and pd.api.types.is_numeric_dtype(source_col.dtype)
+            and cudf.utils.dtypes.can_cast(other, source_col.dtype)
+        ):
             common_dtype = source_col.dtype
+            return (
+                source_col.astype(common_dtype),
+                cudf.Scalar(other, dtype=common_dtype),
+            )
         else:
             common_dtype = cudf.utils.dtypes.find_common_type(
-                [source_col.dtype, np.min_scalar_type(other_scalar)]
+                [
+                    source_col.dtype,
+                    np.min_scalar_type(other)
+                    if cudf.utils.dtypes.is_scalar(other)
+                    else other.dtype,
+                ]
             )
-
-        source_col = source_col.astype(common_dtype)
-        return source_col, cudf.Scalar(other_scalar, dtype=common_dtype)
+            if cudf.utils.dtypes.is_scalar(device_obj):
+                device_obj = cudf.Scalar(other, dtype=common_dtype)
+            else:
+                device_obj = device_obj.astype(common_dtype)
+            return source_col.astype(common_dtype), device_obj
 
 
 def _normalize_columns_and_scalars_type(
@@ -134,9 +119,9 @@ def _normalize_columns_and_scalars_type(
         source_df = frame.copy(deep=False)
         other_df = other.copy(deep=False)
         for self_col in source_df._data.names:
-            source_col, other_col = _check_and_cast_columns(
+            source_col, other_col = _check_and_cast_columns_with_other(
                 source_col=source_df._data[self_col],
-                other_col=other_df._data[self_col],
+                other=other_df._data[self_col],
                 inplace=inplace,
             )
             source_df._data[self_col] = source_col
@@ -148,8 +133,8 @@ def _normalize_columns_and_scalars_type(
     ) and not cudf.utils.dtypes.is_scalar(other):
         other = cudf.core.column.as_column(other)
         input_col = frame._data[frame.name]
-        return _check_and_cast_columns(
-            source_col=input_col, other_col=other, inplace=inplace
+        return _check_and_cast_columns_with_other(
+            source_col=input_col, other=other, inplace=inplace
         )
     else:
         # Handles scalar or list/array like scalars
@@ -157,9 +142,9 @@ def _normalize_columns_and_scalars_type(
             other
         ):
             input_col = frame._data[frame.name]
-            return _check_and_cast_columns_with_scalar(
+            return _check_and_cast_columns_with_other(
                 source_col=frame._data[frame.name],
-                other_scalar=other,
+                other=other,
                 inplace=inplace,
             )
 
@@ -174,9 +159,9 @@ def _normalize_columns_and_scalars_type(
                 (
                     source_col,
                     other_scalar,
-                ) = _check_and_cast_columns_with_scalar(
+                ) = _check_and_cast_columns_with_other(
                     source_col=source_df._data[col_name],
-                    other_scalar=other_sclr,
+                    other=other_sclr,
                     inplace=inplace,
                 )
                 source_df._data[col_name] = source_col
