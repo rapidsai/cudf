@@ -17,8 +17,6 @@ from cudf.tests.utils import (
     TIMEDELTA_TYPES,
 )
 
-from cudf.utils.dtypes import _decimal_dtype_from_decimal
-
 TEST_DECIMAL_TYPES = [
     cudf.Decimal64Dtype(1, 1),
     cudf.Decimal64Dtype(4, 2),
@@ -147,7 +145,7 @@ def test_scalar_device_initialization(value):
 
 @pytest.mark.parametrize("value", DECIMAL_VALUES)
 def test_scalar_device_initialization_decimal(value):
-    dtype = _decimal_dtype_from_decimal(value)
+    dtype = cudf.Decimal64Dtype._from_decimal(value)
     column = cudf.Series([str(value)]).astype(dtype)._column
     dev_slr = get_element(column, 0)
 
@@ -335,7 +333,7 @@ def test_device_scalar_direct_construction(value):
     dtype = (
         value.dtype
         if not isinstance(value, Decimal)
-        else _decimal_dtype_from_decimal(value)
+        else cudf.Decimal64Dtype._from_decimal(value)
     )
 
     s = cudf._lib.scalar.DeviceScalar(value, dtype)
