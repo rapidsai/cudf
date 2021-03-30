@@ -157,21 +157,21 @@ std::shared_ptr<arrow::Array> dispatch_to_arrow::operator()<numeric::decimal64>(
                   scatter_map,
                   buf.data());
 
-  auto result = arrow::AllocateBuffer(buf.size(), ar_mr);
+  auto result = arrow::AllocateBuffer(buf.size() * sizeof(DeviceType), ar_mr);
   CUDF_EXPECTS(result.ok(), "Failed to allocate Arrow buffer for data");
 
   std::shared_ptr<arrow::Buffer> data_buffer = std::move(result.ValueOrDie());
 
   CUDA_TRY(cudaMemcpyAsync(data_buffer->mutable_data(),
                            buf.data(),
-                           buf.size() * BIT_WIDTH_RATIO * sizeof(int64_t),
+                           buf.size() * sizeof(DeviceType),
                            cudaMemcpyDeviceToHost,
                            stream.value()));
 
   auto type    = arrow::decimal(18, input.type().scale());
   auto mask    = fetch_mask_buffer(input, ar_mr, stream);
   auto buffers = std::vector<std::shared_ptr<arrow::Buffer>>{mask, data_buffer};
-  auto data    = std::make_shared<arrow::ArrayData>(type, buf.size() / BIT_WIDTH_RATIO, buffers);
+  auto data    = std::make_shared<arrow::ArrayData>(type, input.size(), buffers);
 
   return std::make_shared<arrow::Decimal128Array>(data);
 }

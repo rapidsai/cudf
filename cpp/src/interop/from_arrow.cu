@@ -176,7 +176,7 @@ struct dispatch_to_cudf_column {
     CUDA_TRY(cudaMemcpyAsync(reinterpret_cast<uint8_t*>(buf.data()),
                              reinterpret_cast<const uint8_t*>(data_buffer->address()) +
                                array.offset() * sizeof(DeviceType),
-                             sizeof(DeviceType) * num_rows * BIT_WIDTH_RATIO,
+                             buf.size() * sizeof(DeviceType),
                              cudaMemcpyDefault,
                              stream.value()));
 
