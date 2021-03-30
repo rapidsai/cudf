@@ -8,3 +8,5 @@ cdef unique_ptr[aggregation] make_aggregation(op, kwargs=*) except *
 
 cdef class Aggregation:
     cdef unique_ptr[aggregation] c_obj
+
+cdef Aggregation make_aggregation2(op, kwargs=*)

@@ -97,6 +97,41 @@ cdef unique_ptr[aggregation] make_aggregation(op, kwargs={}) except *:
         raise TypeError("Unknown aggregation {}".format(op))
     return move(agg.c_obj)
 
+
+cdef Aggregation make_aggregation2(op, kwargs={}):
+    """
+    Parameters
+    ----------
+    op : str or callable
+        If callable, must meet one of the following requirements:
+
+        * Is of the form lambda x: x.agg(*args, **kwargs), where
+          `agg` is the name of a supported aggregation. Used to
+          to specify aggregations that take arguments, e.g.,
+          `lambda x: x.quantile(0.5)`.
+        * Is a user defined aggregation function that operates on
+          group values. In this case, the output dtype must be
+          specified in the `kwargs` dictionary.
+
+    Returns
+    -------
+    unique_ptr[aggregation]
+    """
+    cdef Aggregation agg
+    if isinstance(op, str):
+        agg = getattr(_AggregationFactory, op)(**kwargs)
+    elif callable(op):
+        if op is list:
+            agg = _AggregationFactory.collect()
+        elif "dtype" in kwargs:
+            agg = _AggregationFactory.from_udf(op, **kwargs)
+        else:
+            agg = op(_AggregationFactory)
+    else:
+        raise TypeError("Unknown aggregation {}".format(op))
+    return agg
+
+
 # The Cython pattern below enables us to create an Aggregation
 # without ever calling its `__init__` method, which would otherwise
 # result in a RecursionError.
