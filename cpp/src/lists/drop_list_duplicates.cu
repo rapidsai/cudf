@@ -16,7 +16,7 @@
 
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/copy.hpp>
-#include <cudf/detail/gather.hpp>
+#include <cudf/detail/gather.cuh>
 #include <cudf/detail/iterator.cuh>
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
@@ -25,10 +25,10 @@
 #include <cudf/utilities/type_dispatcher.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
+#include <rmm/device_uvector.hpp>
 #include <rmm/exec_policy.hpp>
 
 #include <thrust/binary_search.h>
-#include <thrust/logical.h>
 #include <thrust/transform.h>
 
 namespace cudf {
@@ -361,30 +361,26 @@ std::vector<std::unique_ptr<column>> get_unique_entries_and_list_offsets(
   auto const d_view_entries = column_device_view::create(all_lists_entries, stream);
 
   // Allocate memory to store the indices of the unique entries
-  auto const unique_indices = cudf::make_numeric_column(
-    entries_list_offsets.type(), num_entries, mask_state::UNALLOCATED, stream);
-  auto const unique_indices_begin = unique_indices->mutable_view().begin<offset_type>();
-
-  auto const copy_end = type_dispatcher(all_lists_entries.type(),
-                                        get_unique_entries_fn{},
-                                        entries_list_offsets.begin<offset_type>(),
-                                        *d_view_entries,
-                                        num_entries,
-                                        unique_indices_begin,
-                                        nulls_equal,
-                                        nans_equal,
-                                        all_lists_entries.has_nulls(),
-                                        stream);
+  auto unique_indices     = rmm::device_uvector<offset_type>(num_entries, stream);
+  auto const output_begin = unique_indices.begin();
+  auto const output_end   = type_dispatcher(all_lists_entries.type(),
+                                          get_unique_entries_fn{},
+                                          entries_list_offsets.begin<offset_type>(),
+                                          *d_view_entries,
+                                          num_entries,
+                                          output_begin,
+                                          nulls_equal,
+                                          nans_equal,
+                                          all_lists_entries.has_nulls(),
+                                          stream);
 
   // Collect unique entries and entry list offsets
   // The new null_count and bitmask of the unique entries will also be generated
   // by the gather function
-  auto const indices = cudf::detail::slice(
-    unique_indices->view(), 0, thrust::distance(unique_indices_begin, copy_end));
   return cudf::detail::gather(table_view{{all_lists_entries, entries_list_offsets}},
-                              indices,
+                              output_begin,
+                              output_end,
                               cudf::out_of_bounds_policy::DONT_CHECK,
-                              cudf::detail::negative_index_policy::NOT_ALLOWED,
                               stream,
                               mr)
     ->release();
