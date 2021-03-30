@@ -35,6 +35,8 @@
 
 #include <thrust/uninitialized_fill.h>
 
+#include <cudf_test/column_utilities.hpp>
+
 namespace cudf {
 namespace detail {
 
@@ -80,6 +82,31 @@ auto scatter_to_gather(MapIterator scatter_map_begin,
     thrust::make_counting_iterator<MapValueType>(std::distance(scatter_map_begin, scatter_map_end)),
     scatter_map_begin,
     gather_map.begin());
+
+  return gather_map;
+}
+
+template <typename MapIterator>
+rmm::device_uvector<size_type> scatter_to_gather_inv(MapIterator scatter_map_begin,
+                                                     MapIterator scatter_map_end,
+                                                     size_type gather_rows,
+                                                     rmm::cuda_stream_view stream)
+{
+  using MapValueType = typename thrust::iterator_traits<MapIterator>::value_type;
+
+  auto gather_map = rmm::device_uvector<size_type>(gather_rows, stream);
+  thrust::sequence(rmm::exec_policy(stream), gather_map.begin(), gather_map.end(), 0);
+
+  // Convert scatter map to a gather map
+  thrust::for_each(
+    rmm::exec_policy(stream),
+    thrust::make_counting_iterator<MapValueType>(0),
+    thrust::make_counting_iterator<MapValueType>(std::distance(scatter_map_begin, scatter_map_end)),
+    [gather_rows, ptr = gather_map.begin(), scatter_map_begin = scatter_map_begin] __device__(
+      MapValueType idx) {
+      MapValueType row = *(scatter_map_begin + idx);
+      ptr[row]         = gather_rows;
+    });
 
   return gather_map;
 }
@@ -255,6 +282,30 @@ struct column_scatterer_impl<struct_view, MapItRoot> {
     if (nullable) {
       auto const gather_map =
         scatter_to_gather(scatter_map_begin, scatter_map_end, source.size(), stream);
+
+      int n = (int)std::distance(gather_map.begin(), gather_map.end());
+      //      thrust::host_vector<int> h(gather_map.begin(), gather_map.end());
+      printf("\n\n");
+      //      for (int i = 0; i < n; ++i) { printf("h: %d\n", gather_map.element(i, stream)); }
+
+      printf("line %d \n\n", __LINE__);
+      cudf::test::print(*structs_src.child_begin());
+
+      printf("line %d \n\n", __LINE__);
+      cudf::test::print(*structs_target.child_begin());
+
+      printf("line %d \n\n", __LINE__);
+      cudf::test::print((*output_struct_members.begin())->view());
+
+      printf("map siE:%d\n", (int)std::distance(gather_map.begin(), gather_map.end()));
+      printf("\n\n");
+      printf("num row: %d\n", source.size());
+      printf("num c row: %d\n", structs_src.child_begin()->size());
+
+      printf("source null count: %d\n", (*structs_src.child_begin()).null_count());
+      printf("target null count: %d\n", (*structs_target.child_begin()).null_count());
+      printf("result null count: %d\n", (*output_struct_members.begin())->view().null_count());
+
       gather_bitmask(cudf::table_view{std::vector<cudf::column_view>{structs_src.child_begin(),
                                                                      structs_src.child_end()}},
                      gather_map.begin(),
@@ -262,16 +313,46 @@ struct column_scatterer_impl<struct_view, MapItRoot> {
                      gather_bitmask_op::PASSTHROUGH,
                      stream,
                      mr);
+
+      printf("result null count again: %d\n",
+             (*output_struct_members.begin())->view().null_count());
+
+      printf("line %d \n\n", __LINE__);
+      cudf::test::print((*output_struct_members.begin())->view());
     }
 
-    return cudf::make_structs_column(
-      target.size(),
+    std::vector<std::unique_ptr<column>> result;
+    result.emplace_back(cudf::make_structs_column(
+      source.size(),
       std::move(output_struct_members),
-      target.null_count(),
-      cudf::detail::copy_bitmask(
-        target, stream, mr),  // Null mask will be fixed up in cudf::scatter().
+      0,
+      rmm::device_buffer{0, stream, mr},  // Null mask will be fixed up in cudf::scatter().
       stream,
-      mr);
+      mr));
+
+    // Only gather bitmask from the target at the positions that have not been scatter onto
+    auto const gather_map =
+      scatter_to_gather_inv(scatter_map_begin, scatter_map_end, source.size(), stream);
+    gather_bitmask(table_view{std::vector<cudf::column_view>{target}},
+                   gather_map.begin(),
+                   result,
+                   gather_bitmask_op::PASSTHROUGH,
+                   stream,
+                   mr);
+
+    return std::move(result.front());
+
+    // std::vector<std::unique_ptr<column>> output_struct_members(structs_src.num_children());
+    //    for (auto& col : output_struct_members) { col->set_null_count(0); }
+    //
+    //    return cudf::make_structs_column(
+    //      source.size(),
+    //      std::move(output_struct_members),
+    //      target.null_count(),
+    //      cudf::detail::copy_bitmask(
+    //        target, stream, mr),  // Null mask will be fixed up in cudf::scatter().
+    //      stream,
+    //      mr);
   }
 };
 
@@ -362,14 +443,29 @@ std::unique_ptr<table> scatter(
                                                                  mr);
                  });
 
+  printf("line %d \n\n", __LINE__);
+
   auto const nullable =
     std::any_of(source.begin(), source.end(), [](auto const& col) { return col.nullable(); }) or
     std::any_of(target.begin(), target.end(), [](auto const& col) { return col.nullable(); });
   if (nullable) {
+    printf("nullable\n");
     auto gather_map = scatter_to_gather(
       updated_scatter_map_begin, updated_scatter_map_end, target.num_rows(), stream);
+
+    int n = (int)std::distance(gather_map.begin(), gather_map.end());
+    //      thrust::host_vector<int> h(gather_map.begin(), gather_map.end());
+    printf("\n\n");
+    //    for (int i = 0; i < n; ++i) { printf("gather map: %d\n", gather_map.element(i, stream)); }
+    printf("source null count: %d\n", (*source.begin()).null_count());
+    printf("target null count: %d\n", (*target.begin()).null_count());
+    printf("result null count: %d\n", (*result.begin())->null_count());
+
     gather_bitmask(source, gather_map.begin(), result, gather_bitmask_op::PASSTHROUGH, stream, mr);
-  }
+
+    printf("result null count again: %d\n", (*result.begin())->null_count());
+  } else
+    printf("no t nullable\n");
   return std::make_unique<table>(std::move(result));
 }
 }  // namespace detail
