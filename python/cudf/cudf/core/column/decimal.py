@@ -19,6 +19,7 @@ from cudf._lib.strings.convert.convert_fixed_point import (
 )
 from cudf.core.column import as_column
 from decimal import Decimal
+from cudf.utils.dtypes import is_scalar
 
 
 class DecimalColumn(ColumnBase):
@@ -74,8 +75,6 @@ class DecimalColumn(ColumnBase):
         return result
 
     def normalize_binop_value(self, other):
-        from cudf.utils.dtypes import is_scalar
-
         if is_scalar(other) and isinstance(other, (int, np.int, Decimal)):
             other = cudf.Scalar(Decimal(other))
             return other
