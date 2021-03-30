@@ -337,7 +337,8 @@ def test_groupby_2keys_agg(nelem, func):
 @pytest.mark.parametrize("num_groups", [2, 3, 10, 50, 100])
 @pytest.mark.parametrize("nelem_per_group", [1, 10, 100])
 @pytest.mark.parametrize(
-    "func", ["min", "max", "count", "sum"],
+    "func",
+    ["min", "max", "count", "sum"],
     # TODO: Replace the above line with the one below once
     # https://github.com/pandas-dev/pandas/issues/40685 is resolved.
     # "func", ["min", "max", "idxmin", "idxmax", "count", "sum"],
@@ -362,10 +363,10 @@ def test_groupby_agg_decimal(num_groups, nelem_per_group, func):
 
     if x.size < y.size:
         total_elements = x.size
-        y = y[:x.size]
+        y = y[: x.size]
     else:
         total_elements = y.size
-        x = x[:y.size]
+        x = x[: y.size]
 
     # Note that this filtering can lead to one group with fewer elements, but
     # that shouldn't be a problem and is probably useful to test.
@@ -375,11 +376,13 @@ def test_groupby_agg_decimal(num_groups, nelem_per_group, func):
     decimal_y = pd.Series([Decimal(str(d)) for d in y])
 
     pdf = pd.DataFrame({"idx": idx_col, "x": decimal_x, "y": decimal_y})
-    gdf = DataFrame({
-        "idx": idx_col,
-        "x": cudf.Series(decimal_x),
-        "y": cudf.Series(decimal_y),
-    })
+    gdf = DataFrame(
+        {
+            "idx": idx_col,
+            "x": cudf.Series(decimal_x),
+            "y": cudf.Series(decimal_y),
+        }
+    )
 
     expect_df = pdf.groupby("idx", sort=True).agg(func)
     got_df = gdf.groupby("idx", sort=True).agg(func)
