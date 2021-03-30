@@ -400,8 +400,11 @@ TEST_F(ToArrowTest, FixedPointTableLarge)
       std::vector<int64_t>{transform, transform + NUM_ELEMENTS * BIT_WIDTH_RATIO};
     std::shared_ptr<arrow::Array> arr;
     arrow::Decimal128Builder decimal_builder(arrow::decimal(18, i), arrow::default_memory_pool());
-    decimal_builder.AppendValues(reinterpret_cast<const uint8_t*>(expect_data.data()),
-                                 expect_data.size() / BIT_WIDTH_RATIO);
+
+    // Note: For some reason, decimal_builder.AppendValues with NUM_ELEMENTS >= 1000 doesn't work
+    for (int i = 0; i < NUM_ELEMENTS; ++i)
+      decimal_builder.Append(reinterpret_cast<const uint8_t*>(expect_data.data() + 2 * i));
+
     CUDF_EXPECTS(decimal_builder.Finish(&arr).ok(), "Failed to build array");
 
     auto const field                = arrow::field("a", arr->type());
@@ -410,9 +413,6 @@ TEST_F(ToArrowTest, FixedPointTableLarge)
     auto const expected_arrow_table = arrow::Table::Make(schema, {arr});
 
     auto got_arrow_table = cudf::to_arrow(input, {{"a"}});
-
-    // std::cout << got_arrow_table->ToString() << '\n';
-    // std::cout << expected_arrow_table->ToString() << '\n';
 
     ASSERT_TRUE(expected_arrow_table->Equals(*got_arrow_table, true));
   }
