@@ -16,11 +16,9 @@
 
 #pragma once
 
-#include <cudf/types.hpp>
+#include <cudf/strings/strings_column_view.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
-
-#include <memory>
 
 namespace cudf {
 namespace strings {

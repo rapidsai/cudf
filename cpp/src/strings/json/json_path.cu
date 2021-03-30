@@ -173,10 +173,7 @@ class parser {
   char const* pos;
 
  private:
-  CUDA_HOST_DEVICE_CALLABLE bool is_whitespace(char c)
-  {
-    return c == ' ' || c == '\r' || c == '\n' || c == '\t' ? true : false;
-  }
+  CUDA_HOST_DEVICE_CALLABLE bool is_whitespace(char c) { return c <= ' ' ? true : false; }
 };
 
 /**
@@ -533,7 +530,7 @@ class path_state : private parser {
     }
 
     // an empty name is not valid
-    CUDF_EXPECTS(name.size_bytes() > 0, "Invalid empty name in JSONpath query string");
+    CUDF_EXPECTS(name.size_bytes() > 0, "Invalid empty name in JSONPath query string");
 
     return true;
   }
@@ -752,7 +749,7 @@ __device__ parse_result parse_json_path(json_state& j_state,
 }
 
 // hardcoding this for now. to reach a stack depth of 8 would require
-// a jsonpath containing 7 nested wildcards so this is probably reasonable.
+// a JSONPath containing 7 nested wildcards so this is probably reasonable.
 constexpr int max_command_stack_depth = 8;
 
 /**
@@ -868,7 +865,7 @@ std::unique_ptr<cudf::column> get_json_object(cudf::strings_column_view const& c
   // preprocess the json_path into a command buffer
   auto preprocess = build_command_buffer(json_path, stream);
   CUDF_EXPECTS(std::get<1>(preprocess) <= max_command_stack_depth,
-               "Encountered json_path string that is too complex");
+               "Encountered JSONPath string that is too complex");
 
   // allocate output offsets buffer.
   auto offsets = cudf::make_fixed_width_column(
