@@ -391,7 +391,6 @@ class column_in_metadata {
   thrust::optional<uint8_t> _decimal_precision;
 
  public:
-
   std::vector<column_in_metadata> children;
 
   /**
