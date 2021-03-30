@@ -248,12 +248,12 @@ table_with_metadata reader::impl::read(rmm::cuda_stream_view stream)
                        stream);
 
     // Exclude the rows that are to be skipped from the end
-    if (skip_end_rows > 0 && static_cast<size_t>(skip_end_rows) < row_offsets_.size()) {
-      row_offsets_.resize(row_offsets_.size() - skip_end_rows);
+    if (skip_end_rows > 0 && static_cast<size_t>(skip_end_rows) < row_offsets.size()) {
+      row_offsets = row_offsets.subspan(0, row_offsets_.size() - skip_end_rows);
     }
 
     // Exclude the end-of-data row from number of rows with actual data
-    num_records_ = row_offsets_.size();
+    num_records_ = row_offsets.size();
     num_records_ -= (num_records_ > 0);
   } else {
     num_records_ = 0;
@@ -406,7 +406,6 @@ void reader::impl::gather_row_offsets(host_span<char const> const data,
   // previous row terminator is within the given range
   range_end += (range_end < data.size());
   data_.resize(0);
-  row_offsets_.resize(0);
   data_.reserve((load_whole_file) ? data.size() : std::min(buffer_size * 2, data.size()));
   do {
     size_t target_pos = std::min(pos + max_chunk_bytes, data.size());
@@ -446,7 +445,7 @@ void reader::impl::gather_row_offsets(host_span<char const> const data,
     size_t total_rows = ctx >> 2;
     if (total_rows > skip_rows) {
       // At least one row in range in this batch
-      row_offsets_.resize(total_rows - skip_rows);
+      row_offsets_.resize(total_rows - skip_rows, stream);
 
       CUDA_TRY(cudaMemcpyAsync(row_ctx.device_ptr(),
                                row_ctx.host_ptr(),
@@ -482,7 +481,7 @@ void reader::impl::gather_row_offsets(host_span<char const> const data,
           // Keep one row out of range (used to infer length of previous row)
           auto new_row_offsets_size =
             row_offsets_.size() - std::min(rows_out_of_range - 1, row_offsets_.size());
-          row_offsets_.resize(new_row_offsets_size);
+          row_offsets_.resize(new_row_offsets_size, stream);
           // Implies we reached the end of the range
           break;
         }
@@ -509,15 +508,17 @@ void reader::impl::gather_row_offsets(host_span<char const> const data,
     pos = target_pos;
   } while (pos < data.size());
 
+  row_offsets = row_offsets_;
+
   // Eliminate blank rows
-  if (row_offsets_.size() != 0) {
-    cudf::io::csv::gpu::remove_blank_rows(opts.view(), data_, row_offsets_, stream);
+  if (row_offsets.size() != 0) {
+    row_offsets = cudf::io::csv::gpu::remove_blank_rows(opts.view(), data_, row_offsets, stream);
   }
   // Remove header rows and extract header
   const size_t header_row_index = std::max<size_t>(header_rows, 1) - 1;
-  if (header_row_index + 1 < row_offsets_.size()) {
+  if (header_row_index + 1 < row_offsets.size()) {
     CUDA_TRY(cudaMemcpyAsync(row_ctx.host_ptr(),
-                             row_offsets_.data().get() + header_row_index,
+                             row_offsets.data() + header_row_index,
                              2 * sizeof(uint64_t),
                              cudaMemcpyDeviceToHost,
                              stream.value()));
@@ -529,11 +530,13 @@ void reader::impl::gather_row_offsets(host_span<char const> const data,
                  "Invalid csv header location");
     header_.assign(data.begin() + header_start, data.begin() + header_end);
     if (header_rows > 0) {
-      row_offsets_.erase(row_offsets_.begin(), row_offsets_.begin() + header_rows);
+      row_offsets = row_offsets.subspan(header_rows, row_offsets.size() - header_rows);
     }
   }
   // Apply num_rows limit
-  if (num_rows >= 0) { row_offsets_.resize(std::min<size_t>(row_offsets_.size(), num_rows + 1)); }
+  if (num_rows >= 0) {
+    row_offsets = row_offsets.subspan(0, std::min<size_t>(row_offsets.size(), num_rows + 1));
+  }
 }
 
 std::vector<data_type> reader::impl::gather_column_types(rmm::cuda_stream_view stream)
@@ -548,7 +551,7 @@ std::vector<data_type> reader::impl::gather_column_types(rmm::cuda_stream_view s
         cudf::io::csv::gpu::detect_column_types(opts.view(),
                                                 data_,
                                                 make_device_uvector_async(column_flags_, stream),
-                                                row_offsets_,
+                                                row_offsets,
                                                 num_active_cols_,
                                                 stream);
 
@@ -692,7 +695,7 @@ std::vector<column_buffer> reader::impl::decode_data(host_span<data_type const> 
   cudf::io::csv::gpu::decode_row_column_data(opts.view(),
                                              data_,
                                              make_device_uvector_async(column_flags_, stream),
-                                             row_offsets_,
+                                             row_offsets,
                                              make_device_uvector_async(column_types, stream),
                                              make_device_uvector_async(h_data, stream),
                                              make_device_uvector_async(h_valid, stream),

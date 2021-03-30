@@ -970,8 +970,8 @@ __global__ void __launch_bounds__(rowofs_block_dim)
 }
 
 size_t __host__ count_blank_rows(const cudf::io::parse_options_view &opts,
-                                 device_span<char const> const data,
-                                 device_span<uint64_t const> const row_offsets,
+                                 device_span<char const> data,
+                                 device_span<uint64_t const> row_offsets,
                                  rmm::cuda_stream_view stream)
 {
   const auto newline  = opts.skipblanklines ? opts.terminator : opts.comment;
@@ -987,10 +987,10 @@ size_t __host__ count_blank_rows(const cudf::io::parse_options_view &opts,
     });
 }
 
-void __host__ remove_blank_rows(cudf::io::parse_options_view const &options,
-                                device_span<char const> const data,
-                                rmm::device_vector<uint64_t> &row_offsets,
-                                rmm::cuda_stream_view stream)
+device_span<uint64_t> __host__ remove_blank_rows(cudf::io::parse_options_view const &options,
+                                                 device_span<char const> const data,
+                                                 device_span<uint64_t> row_offsets,
+                                                 rmm::cuda_stream_view stream)
 {
   size_t d_size       = data.size();
   const auto newline  = options.skipblanklines ? options.terminator : options.comment;
@@ -1004,7 +1004,7 @@ void __host__ remove_blank_rows(cudf::io::parse_options_view const &options,
       return ((pos != d_size) &&
               (data[pos] == newline || data[pos] == comment || data[pos] == carriage));
     });
-  row_offsets.resize(new_end - row_offsets.begin());
+  return row_offsets.subspan(0, new_end - row_offsets.begin());
 }
 
 std::vector<column_type_histogram> detect_column_types(
