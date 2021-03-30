@@ -1800,40 +1800,6 @@ class Series(Frame, Serializable):
     def __mul__(self, other):
         return self._binaryop(other, "mul")
 
-        Examples
-        --------
-        >>> import cudf
-        >>> a = cudf.Series([1, 2, 3, None], index=['a', 'b', 'c', 'd'])
-        >>> a
-        a       1
-        b       2
-        c       3
-        d    <NA>
-        dtype: int64
-        >>> b = cudf.Series([1, None, 2, None], index=['a', 'b', 'd', 'e'])
-        >>> b
-        a       1
-        b    <NA>
-        d       2
-        e    <NA>
-        dtype: int64
-        >>> a.multiply(b, fill_value=0)
-        a       1
-        b       0
-        c       0
-        d       0
-        e    <NA>
-        dtype: int64
-        """
-        if axis != 0:
-            raise NotImplementedError("Only axis=0 supported at this time.")
-        return self._binaryop(other, "mul", fill_value=fill_value)
-
-    mul = multiply
-
-    def __mul__(self, other):
-        return self._binaryop(other, "mul")
-
     def rmul(self, other, fill_value=None, axis=0):
         """Multiplication of series and other, element-wise
         (binary operator rmul).

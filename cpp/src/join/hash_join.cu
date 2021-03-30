@@ -26,7 +26,6 @@
 
 #include <iostream>
 #include <numeric>
-#include <tuple>
 
 namespace cudf {
 namespace detail {

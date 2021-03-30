@@ -13,7 +13,11 @@ from cudf.core.dtypes import CategoricalDtype
 
 if TYPE_CHECKING:
     from cudf.core.column import CategoricalColumn, ColumnBase
+    from cudf.core.frame import Frame
+
+
 class _Indexer:
+    # Indexer into a column (either a data column or index level).
     #
     # >>> df
     #    a
