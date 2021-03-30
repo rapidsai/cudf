@@ -63,17 +63,6 @@ class DecimalColumn(ColumnBase):
             buffers=[mask_buf, data_buf],
         )
 
-    def element_indexing(self, index: int) -> Decimal:
-        idx = np.int32(index)
-        if idx < 0:
-            idx = len(self) + idx
-        if idx > len(self) - 1 or idx < 0:
-            raise IndexError("single positional indexer is out-of-bounds")
-
-        device_scalar = libcudf.copying.get_element(self, idx)
-        device_scalar.dtype_metadata['precision'] = self.dtype.precision
-        return device_scalar.value
-
     def binary_operator(self, op, other, reflect=False):
         if reflect:
             self, other = other, self

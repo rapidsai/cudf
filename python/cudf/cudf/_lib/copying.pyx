@@ -679,7 +679,7 @@ def get_element(Column input_column, size_type index):
             cpp_copying.get_element(col_view, index)
         )
 
-    return DeviceScalar.from_unique_ptr(move(c_output))
+    return DeviceScalar.from_unique_ptr(move(c_output), dtype=input_column.dtype)
 
 
 def sample(Table input, size_type n,

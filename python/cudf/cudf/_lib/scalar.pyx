@@ -49,8 +49,6 @@ cimport cudf._lib.cpp.types as libcudf_types
 
 cdef class DeviceScalar:
 
-    dtype_metadata = {}
-
     def __init__(self, value, dtype):
         """
         Type representing an *immutable* scalar value on the device
@@ -65,8 +63,8 @@ cdef class DeviceScalar:
         dtype : dtype
             A NumPy dtype.
         """
-
-        self._set_value(value, dtype)
+        self._dtype = dtype if dtype.kind != 'U' else np.dtype('object')
+        self._set_value(value, self._dtype)
 
     def _set_value(self, value, dtype):
         # IMPORTANT: this should only ever be called from __init__
@@ -75,7 +73,6 @@ cdef class DeviceScalar:
         if isinstance(dtype, cudf.Decimal64Dtype):
             _set_decimal64_from_scalar(
                 self.c_value, value, dtype, valid)
-            self.dtype_metadata['precision'] = dtype.precision
         elif pd.api.types.is_string_dtype(dtype):
             _set_string_from_np_string(self.c_value, value, valid)
         elif pd.api.types.is_numeric_dtype(dtype):
@@ -120,17 +117,7 @@ cdef class DeviceScalar:
         The NumPy dtype corresponding to the data type of the underlying
         device scalar.
         """
-        cdef libcudf_types.data_type cdtype = self.get_raw_ptr()[0].type()
-        if cdtype.id() == libcudf_types.DECIMAL64:
-            return cudf.Decimal64Dtype(
-                self.dtype_metadata.get(
-                    'precision',
-                    cudf.Decimal64Dtype.MAX_PRECISION
-                ),
-                -cdtype.scale()
-            )
-        else:
-            return cudf_to_np_types[<underlying_type_t_type_id>(cdtype.id())]
+        return self._dtype
 
     @property
     def value(self):
@@ -158,13 +145,23 @@ cdef class DeviceScalar:
             return f"{self.__class__.__name__}({self.value.__repr__()})"
 
     @staticmethod
-    cdef DeviceScalar from_unique_ptr(unique_ptr[scalar] ptr):
+    cdef DeviceScalar from_unique_ptr(unique_ptr[scalar] ptr, dtype=None):
         """
         Construct a Scalar object from a unique_ptr<cudf::scalar>.
         """
         cdef DeviceScalar s = DeviceScalar.__new__(DeviceScalar)
-        s.c_value = move(ptr)
+        cdef libcudf_types.data_type cdtype
 
+        s.c_value = move(ptr)
+        cdtype = s.get_raw_ptr()[0].type()
+
+        if cdtype.id() == libcudf_types.DECIMAL64 and dtype is None:
+            raise TypeError("Must pass a dtype when constructing from a decimal scalar")
+        else:
+            if dtype is not None:
+                s._dtype = dtype
+            else:
+                s._dtype = cudf_to_np_types[<underlying_type_t_type_id>(cdtype.id())]
         return s
 
 
