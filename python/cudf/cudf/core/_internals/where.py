@@ -56,7 +56,7 @@ def _check_and_cast_columns_with_other(
             "to same dtypes."
         )
     if inplace:
-        if not cudf.utils.dtypes.can_cast(device_obj.dtype, source_col.dtype):
+        if not cudf.utils.dtypes._can_cast(device_obj.dtype, source_col.dtype):
             warnings.warn(
                 f"Type-casting from {device_obj.dtype} "
                 f"to {source_col.dtype}, there could be potential data loss"
@@ -66,7 +66,7 @@ def _check_and_cast_columns_with_other(
         if (
             cudf.utils.dtypes.is_scalar(other)
             and pd.api.types.is_numeric_dtype(source_col.dtype)
-            and cudf.utils.dtypes.can_cast(other, source_col.dtype)
+            and cudf.utils.dtypes._can_cast(other, source_col.dtype)
         ):
             common_dtype = source_col.dtype
             return (
@@ -334,48 +334,46 @@ def where(
             raise ValueError(
                 """Array conditional must be same shape as self"""
             )
-        if cond.all():
-            result = input_col
-        else:
-            (input_col, other,) = _normalize_columns_and_scalars_type(
-                frame, other, inplace
+
+        (input_col, other,) = _normalize_columns_and_scalars_type(
+            frame, other, inplace
+        )
+
+        if isinstance(input_col, cudf.core.column.CategoricalColumn):
+            if cudf.utils.dtypes.is_scalar(other):
+                try:
+                    other = input_col._encode(other)
+                except ValueError:
+                    # When other is not present in categories,
+                    # fill with Null.
+                    other = None
+                other = cudf.Scalar(other, dtype=input_col.codes.dtype)
+            elif isinstance(other, cudf.core.column.CategoricalColumn):
+                other = other.codes
+
+            input_col = input_col.codes
+
+        result = cudf._lib.copying.copy_if_else(input_col, other, cond)
+
+        if isinstance(
+            frame._data[frame.name], cudf.core.column.CategoricalColumn
+        ):
+            result = cudf.core.column.build_categorical_column(
+                categories=cast(
+                    cudf.core.column.CategoricalColumn,
+                    frame._data[frame.name],
+                ).categories,
+                codes=cudf.core.column.as_column(
+                    result.base_data, dtype=result.dtype
+                ),
+                mask=result.base_mask,
+                size=result.size,
+                offset=result.offset,
+                ordered=cast(
+                    cudf.core.column.CategoricalColumn,
+                    frame._data[frame.name],
+                ).ordered,
             )
-
-            if isinstance(input_col, cudf.core.column.CategoricalColumn):
-                if cudf.utils.dtypes.is_scalar(other):
-                    try:
-                        other = input_col._encode(other)
-                    except ValueError:
-                        # When other is not present in categories,
-                        # fill with Null.
-                        other = None
-                    other = cudf.Scalar(other, dtype=input_col.codes.dtype)
-                elif isinstance(other, cudf.core.column.CategoricalColumn):
-                    other = other.codes
-
-                input_col = input_col.codes
-
-            result = cudf._lib.copying.copy_if_else(input_col, other, cond)
-
-            if isinstance(
-                frame._data[frame.name], cudf.core.column.CategoricalColumn
-            ):
-                result = cudf.core.column.build_categorical_column(
-                    categories=cast(
-                        cudf.core.column.CategoricalColumn,
-                        frame._data[frame.name],
-                    ).categories,
-                    codes=cudf.core.column.as_column(
-                        result.base_data, dtype=result.dtype
-                    ),
-                    mask=result.base_mask,
-                    size=result.size,
-                    offset=result.offset,
-                    ordered=cast(
-                        cudf.core.column.CategoricalColumn,
-                        frame._data[frame.name],
-                    ).ordered,
-                )
 
         if isinstance(frame, Index):
             result = Index(result, name=frame.name)

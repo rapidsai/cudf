@@ -664,13 +664,15 @@ def find_common_type(dtypes):
         return common_dtype
 
 
-def can_cast(from_dtype, to_dtype):
+def _can_cast(from_dtype, to_dtype):
     """
     Utility function to determine if we can cast
     from `from_dtype` to `to_dtype`. This function primarily calls
     `np.can_cast` but with some special handling around
     cudf specific dtypes.
     """
+    # TODO : Add precision & scale checking for
+    # decimal types in future
     if isinstance(from_dtype, cudf.core.dtypes.Decimal64Dtype):
         if isinstance(to_dtype, cudf.core.dtypes.Decimal64Dtype):
             return True
@@ -680,7 +682,7 @@ def can_cast(from_dtype, to_dtype):
             else:
                 return False
     elif isinstance(from_dtype, np.dtype):
-        if isinstance(to_dtype, np.dtype):
+        if isinstance(to_dtype, (np.dtype, type)):
             return np.can_cast(from_dtype, to_dtype)
         elif isinstance(to_dtype, cudf.core.dtypes.Decimal64Dtype):
             if from_dtype.kind in {"i", "f", "u", "U", "O"}:
@@ -692,14 +694,16 @@ def can_cast(from_dtype, to_dtype):
         else:
             return False
     elif isinstance(from_dtype, cudf.core.dtypes.ListDtype):
+        # TODO: Add level based checks too once casting of
+        # list columns is supported
         if isinstance(to_dtype, cudf.core.dtypes.ListDtype):
-            return True
+            return np.can_cast(from_dtype.leaf_type, to_dtype.leaf_type)
         else:
             return False
     elif isinstance(from_dtype, cudf.core.dtypes.CategoricalDtype):
         if isinstance(to_dtype, cudf.core.dtypes.CategoricalDtype):
             return True
-        elif isinstance(to_dtype, np.dtype):
+        elif isinstance(to_dtype, (np.dtype, type)):
             return np.can_cast(from_dtype._categories.dtype, to_dtype)
         else:
             return False
