@@ -482,17 +482,32 @@ public final class Table implements AutoCloseable {
   private static native long[] leftJoin(long leftTable, int[] leftJoinCols, long rightTable,
                                         int[] rightJoinCols, boolean compareNullsEqual) throws CudfException;
 
+  private static native long[] leftJoinGatherMaps(long leftKeys, long rightKeys,
+                                                  boolean compareNullsEqual) throws CudfException;
+
   private static native long[] innerJoin(long leftTable, int[] leftJoinCols, long rightTable,
                                          int[] rightJoinCols, boolean compareNullsEqual) throws CudfException;
+
+  private static native long[] innerJoinGatherMaps(long leftKeys, long rightKeys,
+                                                   boolean compareNullsEqual) throws CudfException;
 
   private static native long[] fullJoin(long leftTable, int[] leftJoinCols, long rightTable,
                                          int[] rightJoinCols, boolean compareNullsEqual) throws CudfException;
 
+  private static native long[] fullJoinGatherMaps(long leftKeys, long rightKeys,
+                                                  boolean compareNullsEqual) throws CudfException;
+
   private static native long[] leftSemiJoin(long leftTable, int[] leftJoinCols, long rightTable,
       int[] rightJoinCols, boolean compareNullsEqual) throws CudfException;
 
+  private static native long[] leftSemiJoinGatherMap(long leftKeys, long rightKeys,
+                                                     boolean compareNullsEqual) throws CudfException;
+
   private static native long[] leftAntiJoin(long leftTable, int[] leftJoinCols, long rightTable,
       int[] rightJoinCols, boolean compareNullsEqual) throws CudfException;
+
+  private static native long[] leftAntiJoinGatherMap(long leftKeys, long rightKeys,
+                                                     boolean compareNullsEqual) throws CudfException;
 
   private static native long[] crossJoin(long leftTable, long rightTable) throws CudfException;
 
@@ -1923,6 +1938,130 @@ public final class Table implements AutoCloseable {
    */
   public Table gather(ColumnVector gatherMap, boolean checkBounds) {
     return new Table(gather(nativeHandle, gatherMap.getNativeView(), checkBounds));
+  }
+
+  private GatherMap[] buildJoinGatherMaps(long[] gatherMapData) {
+    long bufferSize = gatherMapData[0];
+    long leftAddr = gatherMapData[1];
+    long leftHandle = gatherMapData[2];
+    long rightAddr = gatherMapData[3];
+    long rightHandle = gatherMapData[4];
+    GatherMap[] maps = new GatherMap[2];
+    maps[0] = new GatherMap(DeviceMemoryBuffer.fromRmm(leftAddr, bufferSize, leftHandle));
+    maps[1] = new GatherMap(DeviceMemoryBuffer.fromRmm(rightAddr, bufferSize, rightHandle));
+    return maps;
+  }
+
+  /**
+   * Computes the gather maps that can be used to manifest the result of a left equi-join between
+   * two tables. It is assumed this table instance holds the key columns from the left table, and
+   * the table argument represents the key columns from the right table. Two {@link GatherMap}
+   * instances will be returned that can be used to gather the left and right tables,
+   * respectively, to produce the result of the left join.
+   * It is the responsibility of the caller to close the resulting gather map instances.
+   * @param rightKeys join key columns from the right table
+   * @param compareNullsEqual true if null key values should match otherwise false
+   * @return left and right table gather maps
+   */
+  public GatherMap[] leftJoinGatherMaps(Table rightKeys, boolean compareNullsEqual) {
+    if (getNumberOfColumns() != rightKeys.getNumberOfColumns()) {
+      throw new IllegalArgumentException("column count mismatch, this: " + getNumberOfColumns() +
+          "rightKeys: " + rightKeys.getNumberOfColumns());
+    }
+    long[] gatherMapData =
+        leftJoinGatherMaps(getNativeView(), rightKeys.getNativeView(), compareNullsEqual);
+    return buildJoinGatherMaps(gatherMapData);
+  }
+
+  /**
+   * Computes the gather maps that can be used to manifest the result of an inner equi-join between
+   * two tables. It is assumed this table instance holds the key columns from the left table, and
+   * the table argument represents the key columns from the right table. Two {@link GatherMap}
+   * instances will be returned that can be used to gather the left and right tables,
+   * respectively, to produce the result of the inner join.
+   * It is the responsibility of the caller to close the resulting gather map instances.
+   * @param rightKeys join key columns from the right table
+   * @param compareNullsEqual true if null key values should match otherwise false
+   * @return left and right table gather maps
+   */
+  public GatherMap[] innerJoinGatherMaps(Table rightKeys, boolean compareNullsEqual) {
+    if (getNumberOfColumns() != rightKeys.getNumberOfColumns()) {
+      throw new IllegalArgumentException("column count mismatch, this: " + getNumberOfColumns() +
+          "rightKeys: " + rightKeys.getNumberOfColumns());
+    }
+    long[] gatherMapData =
+        innerJoinGatherMaps(getNativeView(), rightKeys.getNativeView(), compareNullsEqual);
+    return buildJoinGatherMaps(gatherMapData);
+  }
+
+  /**
+   * Computes the gather maps that can be used to manifest the result of an full equi-join between
+   * two tables. It is assumed this table instance holds the key columns from the left table, and
+   * the table argument represents the key columns from the right table. Two {@link GatherMap}
+   * instances will be returned that can be used to gather the left and right tables,
+   * respectively, to produce the result of the full join.
+   * It is the responsibility of the caller to close the resulting gather map instances.
+   * @param rightKeys join key columns from the right table
+   * @param compareNullsEqual true if null key values should match otherwise false
+   * @return left and right table gather maps
+   */
+  public GatherMap[] fullJoinGatherMaps(Table rightKeys, boolean compareNullsEqual) {
+    if (getNumberOfColumns() != rightKeys.getNumberOfColumns()) {
+      throw new IllegalArgumentException("column count mismatch, this: " + getNumberOfColumns() +
+          "rightKeys: " + rightKeys.getNumberOfColumns());
+    }
+    long[] gatherMapData =
+        fullJoinGatherMaps(getNativeView(), rightKeys.getNativeView(), compareNullsEqual);
+    return buildJoinGatherMaps(gatherMapData);
+  }
+
+  private GatherMap buildSemiJoinGatherMap(long[] gatherMapData) {
+    long bufferSize = gatherMapData[0];
+    long leftAddr = gatherMapData[1];
+    long leftHandle = gatherMapData[2];
+    return new GatherMap(DeviceMemoryBuffer.fromRmm(leftAddr, bufferSize, leftHandle));
+  }
+
+  /**
+   * Computes the gather map that can be used to manifest the result of a left semi-join between
+   * two tables. It is assumed this table instance holds the key columns from the left table, and
+   * the table argument represents the key columns from the right table. The {@link GatherMap}
+   * instance returned can be used to gather the left table to produce the result of the
+   * left semi-join.
+   * It is the responsibility of the caller to close the resulting gather map instance.
+   * @param rightKeys join key columns from the right table
+   * @param compareNullsEqual true if null key values should match otherwise false
+   * @return left table gather map
+   */
+  public GatherMap leftSemiJoinGatherMap(Table rightKeys, boolean compareNullsEqual) {
+    if (getNumberOfColumns() != rightKeys.getNumberOfColumns()) {
+      throw new IllegalArgumentException("column count mismatch, this: " + getNumberOfColumns() +
+          "rightKeys: " + rightKeys.getNumberOfColumns());
+    }
+    long[] gatherMapData =
+        leftSemiJoinGatherMap(getNativeView(), rightKeys.getNativeView(), compareNullsEqual);
+    return buildSemiJoinGatherMap(gatherMapData);
+  }
+
+  /**
+   * Computes the gather map that can be used to manifest the result of a left anti-join between
+   * two tables. It is assumed this table instance holds the key columns from the left table, and
+   * the table argument represents the key columns from the right table. The {@link GatherMap}
+   * instance returned can be used to gather the left table to produce the result of the
+   * left anti-join.
+   * It is the responsibility of the caller to close the resulting gather map instance.
+   * @param rightKeys join key columns from the right table
+   * @param compareNullsEqual true if null key values should match otherwise false
+   * @return left table gather map
+   */
+  public GatherMap leftAntiJoinGatherMap(Table rightKeys, boolean compareNullsEqual) {
+    if (getNumberOfColumns() != rightKeys.getNumberOfColumns()) {
+      throw new IllegalArgumentException("column count mismatch, this: " + getNumberOfColumns() +
+          "rightKeys: " + rightKeys.getNumberOfColumns());
+    }
+    long[] gatherMapData =
+        leftAntiJoinGatherMap(getNativeView(), rightKeys.getNativeView(), compareNullsEqual);
+    return buildSemiJoinGatherMap(gatherMapData);
   }
 
   /**
