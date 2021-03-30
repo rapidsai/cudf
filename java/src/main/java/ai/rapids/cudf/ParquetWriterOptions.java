@@ -65,7 +65,7 @@ public class ParquetWriterOptions {
     final Map<String, String> metadata = new LinkedHashMap<>();
     CompressionType compressionType = CompressionType.AUTO;
     private StatisticsFrequency statsGranularity = StatisticsFrequency.ROWGROUP;
-    private List<RapidsSerializable> columnOptions = new ArrayList();
+    private List<ParquetColumnWriterOptions> columnOptions = new ArrayList();
 
     /**
      * Add a metadata key and a value
@@ -133,7 +133,7 @@ public class ParquetWriterOptions {
     public Builder withNullableDecimalColumn(String name, int precision) {
       columnOptions.add(ParquetColumnWriterOptions.builder()
           .withColumnName(name)
-          .isNullable(true)
+          .withNullable(true)
           .withDecimalPrecision(precision).build());
       return this;
     }
@@ -145,19 +145,10 @@ public class ParquetWriterOptions {
     public Builder withNullableColumn(String... name) {
       IntStream.range(0, name.length).forEach(
           i -> columnOptions.add(ParquetColumnWriterOptions.builder()
-              .isNullable(true)
+              .withNullable(true)
               .withColumnName(name[i])
               .build())
       );
-      return this;
-    }
-
-    /**
-     * Set a timestamp column
-     * @param options
-     */
-    public Builder withTimestampColumn(ParquetTimestampColumnWriterOptions options) {
-      columnOptions.add(options);
       return this;
     }
 
@@ -181,7 +172,7 @@ public class ParquetWriterOptions {
 
   private final StatisticsFrequency statsGranularity;
 
-  private final List<RapidsSerializable> columnOptions;
+  private final List<ParquetColumnWriterOptions> columnOptions;
 
   private ParquetWriterOptions(Builder builder) {
     this.statsGranularity = builder.statsGranularity;
@@ -197,7 +188,7 @@ public class ParquetWriterOptions {
   public boolean[] getFlatIsTimeTypeInt96() {
     List<Boolean> a = new ArrayList<>();
     a.add(false); // dummy value
-    for (RapidsSerializable opt: columnOptions) {
+    for (ParquetColumnWriterOptions opt: columnOptions) {
       a.addAll(opt.getFlatIsTimeTypeInt96());
     }
     final boolean[] primitivesBool = new boolean[a.size()];
@@ -211,7 +202,7 @@ public class ParquetWriterOptions {
   public int[] getFlatPrecision() {
     List<Integer> a = new ArrayList<>();
     a.add(0); // dummy value
-    for (RapidsSerializable opt: columnOptions) {
+    for (ParquetColumnWriterOptions opt: columnOptions) {
       a.addAll(opt.getFlatPrecision());
     }
     return a.stream().mapToInt(Integer::intValue).toArray();
@@ -220,7 +211,7 @@ public class ParquetWriterOptions {
   public boolean[] getFlatIsNullable() {
     List<Boolean> a = new ArrayList<>();
     a.add(false); // dummy value
-    for (RapidsSerializable opt: columnOptions) {
+    for (ParquetColumnWriterOptions opt: columnOptions) {
       a.addAll(opt.getFlatIsNullable());
     }
     final boolean[] primitivesBool = new boolean[a.size()];
@@ -234,7 +225,7 @@ public class ParquetWriterOptions {
   public int[] getFlatNumChildren() {
     List<Integer> a = new ArrayList<>();
     a.add(columnOptions.size());
-    for (RapidsSerializable opt: columnOptions) {
+    for (ParquetColumnWriterOptions opt: columnOptions) {
       a.addAll(opt.getFlatNumChildren());
     }
     return a.stream().mapToInt(Integer::intValue).toArray();
@@ -243,7 +234,7 @@ public class ParquetWriterOptions {
   public String[] getFlatColumnNames() {
     List<String> a = new ArrayList<>();
     a.add(""); // dummy value to keep the code simple
-    for (RapidsSerializable opt: columnOptions) {
+    for (ParquetColumnWriterOptions opt: columnOptions) {
       a.addAll(opt.getFlatColumnNames());
     }
     return a.stream().toArray(String[]::new);

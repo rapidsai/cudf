@@ -24,13 +24,13 @@ import java.util.List;
 /**
  * Per column settings for writing Parquet files.
  */
-public class ParquetColumnWriterOptions implements RapidsSerializable {
+public class ParquetColumnWriterOptions {
 
   public static class Builder {
     private String columnName;
     private boolean isTimestampTypeInt96 = false;
     private int precision;
-    private boolean isNullable = false;
+    private boolean isNullable = true;
     private List<ParquetColumnWriterOptions> childColumnOptions = new ArrayList<>();
 
     /**
@@ -48,7 +48,7 @@ public class ParquetColumnWriterOptions implements RapidsSerializable {
      * @param isNullable
      * @return this for chaining.
      */
-    public Builder isNullable(boolean isNullable) {
+    public Builder withNullable(boolean isNullable) {
       this.isNullable = isNullable;
       return this;
     }
@@ -118,8 +118,7 @@ public class ParquetColumnWriterOptions implements RapidsSerializable {
     return precision;
   }
 
-  @Override
-  public List<Boolean> getFlatIsTimeTypeInt96() {
+  List<Boolean> getFlatIsTimeTypeInt96() {
     List<Boolean> a = new ArrayList<>();
     a.add(isTimestampTypeInt96);
     for (ParquetColumnWriterOptions opt: childColumnOptions) {
@@ -128,8 +127,7 @@ public class ParquetColumnWriterOptions implements RapidsSerializable {
     return a;
   }
 
-  @Override
-  public List<Integer> getFlatPrecision() {
+  List<Integer> getFlatPrecision() {
     List<Integer> a = new ArrayList<>();
     a.add(getPrecision());
     for (ParquetColumnWriterOptions opt: childColumnOptions) {
@@ -138,8 +136,7 @@ public class ParquetColumnWriterOptions implements RapidsSerializable {
     return a;
   }
 
-  @Override
-  public List<Boolean> getFlatIsNullable() {
+  List<Boolean> getFlatIsNullable() {
     List<Boolean> a = new ArrayList<>();
     a.add(isNullable());
     for (ParquetColumnWriterOptions opt: childColumnOptions) {
@@ -148,8 +145,7 @@ public class ParquetColumnWriterOptions implements RapidsSerializable {
     return a;
   }
 
-  @Override
-  public List<String> getFlatColumnNames() {
+  List<String> getFlatColumnNames() {
     List<String> a = new ArrayList<>();
     a.add(getColumName());
     for (ParquetColumnWriterOptions opt: childColumnOptions) {
@@ -158,8 +154,7 @@ public class ParquetColumnWriterOptions implements RapidsSerializable {
     return a;
   }
 
-  @Override
-  public List<Integer> getFlatNumChildren() {
+  List<Integer> getFlatNumChildren() {
     List<Integer> a = new ArrayList<>();
     a.add(childColumnOptions.length);
     for (ParquetColumnWriterOptions opt: childColumnOptions) {
