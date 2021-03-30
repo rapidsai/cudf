@@ -1,11 +1,10 @@
 # Copyright (c) 2021, NVIDIA CORPORATION.
 
-from typing import cast
-
 import cupy as cp
 import numpy as np
 import pyarrow as pa
 from pandas.api.types import is_integer_dtype
+from typing import cast
 
 import cudf
 from cudf import _lib as libcudf
@@ -104,19 +103,11 @@ class DecimalColumn(ColumnBase):
     ) -> "cudf.core.column.DecimalColumn":
         if dtype == self.dtype:
             return self
-        result = libcudf.unary.cast(self, dtype)
-        if isinstance(dtype, cudf.core.dtypes.Decimal64Dtype):
-            result.dtype.precision = dtype.precision
-        return result
+        return libcudf.unary.cast(self, dtype)
 
     def as_numerical_column(
         self, dtype: Dtype
     ) -> "cudf.core.column.NumericalColumn":
-        if is_integer_dtype(dtype):
-            raise NotImplementedError(
-                "Casting from decimal types to integer "
-                "types not currently supported"
-            )
         return libcudf.unary.cast(self, dtype)
 
     def as_string_column(

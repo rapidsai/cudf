@@ -221,10 +221,7 @@ class NumericalColumn(ColumnBase):
     def as_decimal_column(
         self, dtype: Dtype, **kwargs
     ) -> "cudf.core.column.DecimalColumn":
-        result = libcudf.unary.cast(self, dtype)
-        if isinstance(dtype, cudf.core.dtypes.Decimal64Dtype):
-            result.dtype.precision = dtype.precision
-        return result
+        return libcudf.unary.cast(self, dtype)
 
     def as_numerical_column(self, dtype: Dtype) -> NumericalColumn:
         dtype = np.dtype(dtype)
@@ -370,7 +367,9 @@ class NumericalColumn(ColumnBase):
     ) -> NumericalColumn:
         quant = [float(q)] if not isinstance(q, (Sequence, np.ndarray)) else q
         # get sorted indices and exclude nulls
-        sorted_indices = self.as_frame()._get_sorted_inds(True, "first")
+        sorted_indices = self.as_frame()._get_sorted_inds(
+            ascending=True, na_position="first"
+        )
         sorted_indices = sorted_indices[self.null_count :]
 
         return cpp_quantile(self, quant, interpolation, sorted_indices, exact)
