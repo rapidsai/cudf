@@ -51,6 +51,7 @@ _CATEGORICAL_AGGS = {
     "size",
     "nunique",
     "unique",
+    "cumcount",
 }
 
 _STRING_AGGS = {
@@ -62,6 +63,7 @@ _STRING_AGGS = {
     "nth",
     "collect",
     "unique",
+    "cumcount",
 }
 
 _LIST_AGGS = {
@@ -139,6 +141,7 @@ cdef class GroupBy:
         cdef Column col
 
         aggregations = _drop_unsupported_aggs(values, aggregations)
+        cdef bool scan = _is_all_scan_aggregate(aggregations)
 
         for i, (col_name, aggs) in enumerate(aggregations.items()):
             col = values._data[col_name]
@@ -158,11 +161,18 @@ cdef class GroupBy:
 
         try:
             with nogil:
-                c_result = move(
-                    self.c_obj.get()[0].aggregate(
-                        c_agg_requests
+                if scan:
+                    c_result = move(
+                        self.c_obj.get()[0].scan(
+                            c_agg_requests
+                        )
                     )
-                )
+                else:
+                    c_result = move(
+                        self.c_obj.get()[0].aggregate(
+                            c_agg_requests
+                        )
+                    )
         except RuntimeError as e:
             # TODO: remove this try..except after
             # https://github.com/rapidsai/cudf/issues/7611
@@ -232,3 +242,35 @@ def _drop_unsupported_aggs(Table values, aggs):
         raise DataError("No numeric types to aggregate")
 
     return result
+
+
+def _is_all_scan_aggregate(aggs):
+    """
+    Returns true if all are scan aggregations.
+    Raises
+    ------
+    NotImplementedError
+        If both reduction aggregations and scan aggregations are present.
+    """
+
+    def get_name(agg):
+        return agg.__name__ if callable(agg) else agg
+
+    all_scan = all(
+        all(
+            get_name(agg_name) in _GROUPBY_SCANS for agg_name in aggs[col_name]
+        )
+        for col_name in aggs
+    )
+    any_scan = any(
+        any(
+            get_name(agg_name) in _GROUPBY_SCANS for agg_name in aggs[col_name]
+        )
+        for col_name in aggs
+    )
+
+    if not all_scan and any_scan:
+        raise NotImplementedError(
+            "Cannot perform both aggregation and scan in one operation"
+        )
+    return all_scan and any_scan
