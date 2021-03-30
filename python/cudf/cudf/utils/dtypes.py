@@ -16,7 +16,6 @@ from pandas.core.dtypes.dtypes import CategoricalDtype, CategoricalDtypeType
 import cudf
 from cudf._lib.scalar import DeviceScalar
 from cudf.core._compat import PANDAS_GE_120
-from cudf.core.dtypes import Decimal64Dtype
 
 _NA_REP = "<NA>"
 _np_pa_dtypes = {
