@@ -368,30 +368,24 @@ def test_groupby_agg_decimal(num_groups, nelem_per_group, func):
         x = x[:y.size]
 
     # Note that this filtering can lead to one group with fewer elements, but
-    # that shouldn't be a problem.
+    # that shouldn't be a problem and is probably useful to test.
     idx_col = np.tile(np.arange(num_groups), nelem_per_group)[:total_elements]
 
     decimal_x = pd.Series([Decimal(str(d)) for d in x])
     decimal_y = pd.Series([Decimal(str(d)) for d in y])
 
     pdf = pd.DataFrame({"idx": idx_col, "x": decimal_x, "y": decimal_y})
-    gdf = DataFrame(
-        {
-            "idx": idx_col,
-            "x": cudf.Series(decimal_x),
-            "y": cudf.Series(decimal_y),
-        }
-    )
+    gdf = DataFrame({
+        "idx": idx_col,
+        "x": cudf.Series(decimal_x),
+        "y": cudf.Series(decimal_y),
+    })
 
     expect_df = pdf.groupby("idx", sort=True).agg(func)
     got_df = gdf.groupby("idx", sort=True).agg(func)
 
-    assert_eq(
-        expect_df["x"], got_df["x"], check_dtype=False
-    )
-    assert_eq(
-        expect_df["y"], got_df["y"], check_dtype=False
-    )
+    assert_eq(expect_df["x"], got_df["x"], check_dtype=False)
+    assert_eq(expect_df["y"], got_df["y"], check_dtype=False)
 
 
 @pytest.mark.parametrize(
