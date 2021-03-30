@@ -368,7 +368,7 @@ class ColumnBase(Column, Serializable):
         if isinstance(self.dtype, cudf.Decimal64Dtype):
             result = result.cast(
                 pa.decimal128(
-                    scale=self.dtype.scale, precision=self.dtype.precision
+                    scale=result.type.scale, precision=self.dtype.precision
                 )
             )
         return result
