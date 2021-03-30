@@ -64,6 +64,8 @@ class GroupBy(Serializable):
         except AttributeError:
             if key in libgroupby._GROUPBY_AGGS:
                 return functools.partial(self._agg_func_name_with_args, key)
+            if key in libgroupby._GROUPBY_SCANS:
+                return functools.partial(self._agg_func_name_with_args, key)
             raise
 
     def __iter__(self):

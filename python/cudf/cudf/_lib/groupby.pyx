@@ -39,6 +39,13 @@ _GROUPBY_AGGS = {
     "unique",
 }
 
+_GROUPBY_SCANS = {
+    "cumcount",
+    "cumsum",
+    "cummin",
+    "cummax",
+}
+
 _CATEGORICAL_AGGS = {
     "count",
     "size",
