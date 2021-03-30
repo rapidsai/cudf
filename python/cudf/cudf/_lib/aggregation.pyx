@@ -254,8 +254,8 @@ cdef class Aggregation:
         return agg
 
 
-cdef Aggregation make_aggregation(op, kwargs={}):
-    """
+cdef Aggregation make_aggregation(op, kwargs=None):
+    r"""
     Parameters
     ----------
     op : str or callable
@@ -268,11 +268,16 @@ cdef Aggregation make_aggregation(op, kwargs={}):
         * Is a user defined aggregation function that operates on
           group values. In this case, the output dtype must be
           specified in the `kwargs` dictionary.
+    \*\*kwargs : dict, optional
+        Any keyword arguments to be passed to the op.
 
     Returns
     -------
     unique_ptr[aggregation]
     """
+    if kwargs is None:
+        kwargs = {}
+
     cdef Aggregation agg
     if isinstance(op, str):
         agg = getattr(Aggregation, op)(**kwargs)
