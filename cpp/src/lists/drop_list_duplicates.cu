@@ -114,25 +114,9 @@ std::unique_ptr<column> replace_negative_nans_entries(column_view const& lists_e
                                                       lists_column_view const& lists_column,
                                                       rmm::cuda_stream_view stream)
 {
-  auto const mr = rmm::mr::get_current_device_resource();
-
-  // Copy list offsets from the given lists column to the new lists column
-  auto new_offsets = std::make_unique<column>(
-    data_type{type_id::INT32},
-    lists_column.size() + 1,
-    rmm::device_buffer{(lists_column.size() + 1) * sizeof(offset_type), stream, mr});
-  thrust::copy_n(rmm::exec_policy(stream),
-                 lists_column.offsets_begin(),
-                 lists_column.size() + 1,
-                 new_offsets->mutable_view().begin<offset_type>());
-
-  // Copy entries from the given lists column to the new lists column, replacing all -NaNs by NaNs
-  auto new_entries = std::make_unique<column>(
-    lists_entries.type(),
-    lists_entries.size(),
-    rmm::device_buffer{lists_entries.size() * cudf::size_of(lists_entries.type()), stream, mr},
-    cudf::detail::copy_bitmask(lists_entries, stream, mr),
-    lists_entries.null_count());
+  auto const mr    = rmm::mr::get_current_device_resource();
+  auto new_offsets = std::make_unique<column>(lists_column.offsets());
+  auto new_entries = std::make_unique<column>(lists_entries);
 
   type_dispatcher(lists_entries.type(),
                   detail::replace_negative_nans_fn{},
