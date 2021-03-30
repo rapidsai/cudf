@@ -81,7 +81,7 @@ std::unique_ptr<table> build_table(
     columns.insert(
       columns.begin() + explode_column_idx,
       std::make_unique<column>(
-        data_type(type_to_id<size_type>()), position_size, position_array->release(), nullmask));
+        data_type(type_to_id<size_type>()), position_size, position_array->release(), std::move(nullmask)));
   }
 
   return std::make_unique<table>(std::move(columns));
