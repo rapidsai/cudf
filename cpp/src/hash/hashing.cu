@@ -29,6 +29,8 @@
 
 #include <rmm/cuda_stream_view.hpp>
 
+#include <algorithm>
+
 namespace cudf {
 namespace {
 
@@ -42,7 +44,7 @@ template <typename IterType>
 std::vector<column_view> to_leaf_columns(IterType iter_begin, IterType iter_end)
 {
   std::vector<column_view> leaf_columns;
-  for_each(iter_begin, iter_end, [&leaf_columns](column_view const& col) {
+  std::for_each(iter_begin, iter_end, [&leaf_columns](column_view const& col) {
     if (is_nested(col.type())) {
       CUDF_EXPECTS(col.type().id() == type_id::STRUCT, "unsupported nested type");
       auto child_columns = to_leaf_columns(col.child_begin(), col.child_end());
