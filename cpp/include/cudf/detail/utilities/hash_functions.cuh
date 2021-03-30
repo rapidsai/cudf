@@ -305,6 +305,7 @@ struct MD5Hash {
   {
     md5_process(col.element<T>(row_index), hash_state);
   }
+
  private:
   uint32_t m_seed{0};
 };
@@ -745,7 +746,7 @@ SparkMurmurHash3_32<double>::operator()(double const& key) const
 template <typename Key>
 struct IdentityHash {
   using result_type = hash_value_type;
-  IdentityHash() = default;
+  IdentityHash()    = default;
   CUDA_HOST_DEVICE_CALLABLE IdentityHash(uint32_t seed) : m_seed(seed) {}
 
   /**
@@ -782,6 +783,7 @@ struct IdentityHash {
   {
     return static_cast<result_type>(key);
   }
+
  private:
   uint32_t m_seed{0};
 };
