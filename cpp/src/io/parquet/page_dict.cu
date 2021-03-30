@@ -52,8 +52,10 @@ inline __device__ uint32_t uint64_hash16(uint64_t v)
   return uint32_hash16((uint32_t)(v + (v >> 32)));
 }
 
-inline __device__ uint32_t nvstr_hash16(const uint8_t *p, uint32_t len)
+inline __device__ uint32_t hash_string(const string_view &val)
 {
+  const char *p = val.data();
+  uint32_t len  = val.size_bytes();
   uint32_t hash = len;
   if (len > 0) {
     uint32_t align_p    = 3 & reinterpret_cast<uintptr_t>(p);
@@ -181,7 +183,7 @@ __global__ void __launch_bounds__(block_size, 1)
   } else if (dtype == INT96) {
     dtype_len_in = 8;
   } else {
-    dtype_len_in = (dtype == BYTE_ARRAY) ? sizeof(nvstrdesc_s) : dtype_len;
+    dtype_len_in = dtype_len;
   }
   __syncthreads();
   while (s->row_cnt < s->ck.num_rows) {
@@ -206,7 +208,7 @@ __global__ void __launch_bounds__(block_size, 1)
         if (dtype == BYTE_ARRAY) {
           auto str1 = s->col.leaf_column->element<string_view>(row);
           len += str1.size_bytes();
-          hash = nvstr_hash16(reinterpret_cast<const uint8_t *>(str1.data()), str1.size_bytes());
+          hash = hash_string(str1);
           // Walk the list of rows with the same hash
           next_addr = &s->hashmap[hash];
           while ((next = atomicCAS(next_addr, 0, row + 1)) != 0) {

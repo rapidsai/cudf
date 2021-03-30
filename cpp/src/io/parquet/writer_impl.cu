@@ -969,7 +969,7 @@ void writer::impl::write(table_view const &table)
   }
   // Create table_device_view so that corresponding column_device_view data
   // can be written into col_desc members
-  auto parent_column_table_device_view = table_device_view::create(single_streams_table);
+  auto parent_column_table_device_view = table_device_view::create(single_streams_table, stream);
   rmm::device_uvector<column_device_view> leaf_column_views(0, stream);
 
   // Initialize column description
