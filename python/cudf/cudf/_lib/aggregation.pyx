@@ -282,3 +282,38 @@ cdef class _AggregationFactory:
             libcudf_aggregation.udf_type.PTX, cpp_str, out_dtype
         ))
         return agg
+
+    # scan aggregations
+    # TODO: update this after adding per algorithm aggregation derived types
+    # https://github.com/rapidsai/cudf/issues/7106
+    @classmethod
+    def cumsum(cls):
+        cdef Aggregation agg = Aggregation.__new__(Aggregation)
+        agg.c_obj = move(libcudf_aggregation.make_sum_aggregation())
+        return agg
+
+    @classmethod
+    def cummin(cls):
+        cdef Aggregation agg = Aggregation.__new__(Aggregation)
+        agg.c_obj = move(libcudf_aggregation.make_min_aggregation())
+        return agg
+
+    @classmethod
+    def cummax(cls):
+        cdef Aggregation agg = Aggregation.__new__(Aggregation)
+        agg.c_obj = move(libcudf_aggregation.make_max_aggregation())
+        return agg
+
+    @classmethod
+    def cumcount(cls, dropna=False):
+        cdef libcudf_types.null_policy c_null_handling
+        if dropna:
+            c_null_handling = libcudf_types.null_policy.EXCLUDE
+        else:
+            c_null_handling = libcudf_types.null_policy.INCLUDE
+
+        cdef Aggregation agg = Aggregation.__new__(Aggregation)
+        agg.c_obj = move(libcudf_aggregation.make_count_aggregation(
+            c_null_handling
+        ))
+        return agg
