@@ -107,7 +107,10 @@ def _check_and_cast_columns_with_scalar(
 
 def _normalize_columns_and_scalars_type(
     frame: cudf.core.frame.Frame, other: Any, inplace: bool = False
-) -> Tuple[Union[cudf.core.frame.Frame, cudf.core.column.ColumnBase], Any]:
+) -> Tuple[
+    Union[cudf.core.frame.Frame, cudf.core.column.ColumnBase],
+    Union[cudf.core.frame.Frame, ScalarLike],
+]:
     """
     Try to normalize the other's dtypes as per frame.
 
@@ -188,7 +191,9 @@ def _normalize_columns_and_scalars_type(
             )
 
 
-def where(frame, cond, other=None, inplace=False):
+def where(
+    frame, cond, other=None, inplace=False,
+):
     """
     Replace values where the condition is False.
 
