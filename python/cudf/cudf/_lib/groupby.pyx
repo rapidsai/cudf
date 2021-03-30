@@ -30,16 +30,15 @@ from cudf.utils.dtypes import (
 
 
 # The sets below define the possible aggregations that can be performed on
-# different dtypes. The uppercased versions of these strings correspond to
-# elements of the AggregationKind enum.
-_CATEGORICAL_AGGS = {"count", "size", "nunique", "unique"}
-_STRING_AGGS = {"count", "size", "max", "min", "nunique", "nth", "collect",
-                "unique"}
-_LIST_AGGS = {"collect" }
+# different dtypes. These strings must be elements of the AggregationKind enum.
+_CATEGORICAL_AGGS = {"COUNT", "SIZE", "NUNIQUE", "UNIQUE"}
+_STRING_AGGS = {"COUNT", "SIZE", "MAX", "MIN", "NUNIQUE", "NTH", "COLLECT",
+                "UNIQUE"}
+_LIST_AGGS = {"COLLECT" }
 _STRUCT_AGGS = set()
 _INTERVAL_AGGS = set()
-_DECIMAL_AGGS = {"count", "sum", "argmin", "argmax", "min", "max", "nunique",
-                 "nth", "collect"}
+_DECIMAL_AGGS = {"COUNT", "SUM", "ARGMIN", "ARGMAX", "MIN", "MAX", "NUNIQUE",
+                 "NTH", "COLLECT"}
 
 
 cdef class GroupBy:

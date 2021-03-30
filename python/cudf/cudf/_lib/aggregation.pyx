@@ -70,7 +70,7 @@ cdef class Aggregation:
     """
     @property
     def kind(self):
-        return AggregationKind(self.c_obj.get()[0].kind).name.lower()
+        return AggregationKind(self.c_obj.get()[0].kind).name
 
     @classmethod
     def sum(cls):
