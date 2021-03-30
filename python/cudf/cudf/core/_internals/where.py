@@ -1,6 +1,7 @@
 # Copyright (c) 2021, NVIDIA CORPORATION.
 
 import warnings
+from typing import Any, Tuple, Union
 
 import numpy as np
 import pandas as pd
@@ -26,7 +27,11 @@ def _normalize_scalars(
     return cudf.Scalar(other, dtype=col.dtype if other is None else None)
 
 
-def _check_and_cast_columns(source_col, other_col, inplace):
+def _check_and_cast_columns(
+    source_col: cudf.core.column.ColumnBase,
+    other_col: cudf.core.column.ColumnBase,
+    inplace: bool,
+) -> Tuple[cudf.core.column.ColumnBase, cudf.core.column.ColumnBase]:
     """
     Returns type-casted columns of `source_col` & `other_col`
     based on `inplace` parameter.
@@ -53,7 +58,11 @@ def _check_and_cast_columns(source_col, other_col, inplace):
         return source_col.astype(common_dtype), other_col.astype(common_dtype)
 
 
-def _check_and_cast_columns_with_scalar(source_col, other_scalar, inplace):
+def _check_and_cast_columns_with_scalar(
+    source_col: cudf.core.column.ColumnBase,
+    other_scalar: ScalarLike,
+    inplace: bool,
+) -> Tuple[cudf.core.column.ColumnBase, ScalarLike]:
     """
     Returns type-casted column `source_col` & scalar `other_scalar`
     based on `inplace` parameter.
@@ -96,7 +105,9 @@ def _check_and_cast_columns_with_scalar(source_col, other_scalar, inplace):
         return source_col, cudf.Scalar(other_scalar, dtype=common_dtype)
 
 
-def _normalize_columns_and_scalars_type(frame, other, inplace=False):
+def _normalize_columns_and_scalars_type(
+    frame: cudf.core.frame.Frame, other: Any, inplace: bool = False
+) -> Tuple[Union[cudf.core.frame.Frame, cudf.core.column.ColumnBase], Any]:
     """
     Try to normalize the other's dtypes as per frame.
 
