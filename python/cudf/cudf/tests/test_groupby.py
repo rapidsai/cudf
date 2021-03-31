@@ -350,7 +350,8 @@ def test_groupby_2keys_agg(nelem, func):
 
 @pytest.mark.skipif(
     NVCC_MAJOR_VERSION < 11,
-    reason="These aggregations are not supported on CUDA 10.x.")
+    reason="These aggregations are not supported on CUDA 10.x.",
+)
 @pytest.mark.parametrize("num_groups", [2, 3, 10, 50, 100])
 @pytest.mark.parametrize("nelem_per_group", [1, 10, 100])
 @pytest.mark.parametrize(
