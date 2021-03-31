@@ -21,14 +21,12 @@
 #include <cudf/detail/utilities/cuda.cuh>
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/scalar/scalar.hpp>
-#include <cudf/scalar/scalar_factories.hpp>
 #include <cudf/strings/string_view.cuh>
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/bit.hpp>
 #include <cudf/utilities/error.hpp>
 
-#include <io/utilities/column_type_histogram.hpp>
 #include <io/utilities/parsing_utils.cuh>
 
 #include <rmm/device_uvector.hpp>
@@ -173,7 +171,7 @@ class parser {
   char const* pos;
 
  private:
-  CUDA_HOST_DEVICE_CALLABLE bool is_whitespace(char c) { return c <= ' ' ? true : false; }
+  CUDA_HOST_DEVICE_CALLABLE bool is_whitespace(char c) { return c <= ' '; }
 };
 
 /**
