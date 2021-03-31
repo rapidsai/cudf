@@ -2820,7 +2820,7 @@ def interval_range(
     elif periods and not freq:
         # if statement for mypy to pass
         if end is not None and start is not None:
-            #determine if periods are float or integer
+            # determine if periods are float or integer
             quotient, remainder = divmod((end - start), periods)
             if remainder:
                 freq_step = cudf.Scalar((end - start) / periods).device_value
