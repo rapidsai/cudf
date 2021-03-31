@@ -8495,3 +8495,24 @@ def test_explode(data, labels, ignore_index, p_index, label_to_explode):
     got = gdf.explode(label_to_explode, ignore_index)
 
     assert_eq(expect, got, check_dtype=False)
+
+
+@pytest.mark.parametrize(
+    "df,ascending,expected",
+    [
+        (
+            cudf.DataFrame({"a": [10, 0, 2], "b": [-10, 10, 1]}),
+            True,
+            cudf.Series([1, 2, 0], dtype="int32"),
+        ),
+        (
+            cudf.DataFrame({"a": [10, 0, 2], "b": [-10, 10, 1]}),
+            False,
+            cudf.Series([0, 2, 1], dtype="int32"),
+        ),
+    ],
+)
+def test_dataframe_argsort(df, ascending, expected):
+    actual = df.argsort(ascending=ascending)
+
+    assert_eq(actual, expected)

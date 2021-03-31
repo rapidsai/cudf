@@ -20,6 +20,7 @@ import cudf
 from cudf import _lib as libcudf
 from cudf._typing import ColumnLike, DataFrameOrSeries
 from cudf.core.column import as_column, build_categorical_column, column_empty
+from cudf.core.join import merge
 from cudf.utils.dtypes import (
     is_categorical_dtype,
     is_column_like,
@@ -595,7 +596,7 @@ class Frame(libcudf.table.Table):
             res.index.names = self._index.names
         return res
 
-    def _get_columns_by_label(self, labels, downcast):
+    def _get_columns_by_label(self, labels, downcast=False):
         """
         Returns columns of the Frame specified by `labels`
 
@@ -612,15 +613,18 @@ class Frame(libcudf.table.Table):
             data, columns=data.to_pandas_index(), index=self.index
         )
 
-    def _gather(self, gather_map, keep_index=True):
+    def _gather(self, gather_map, keep_index=True, nullify=False):
         if not pd.api.types.is_integer_dtype(gather_map.dtype):
             gather_map = gather_map.astype("int32")
         result = self.__class__._from_table(
             libcudf.copying.gather(
-                self, as_column(gather_map), keep_index=keep_index
+                self,
+                as_column(gather_map),
+                keep_index=keep_index,
+                nullify=nullify,
             )
         )
-        result._copy_type_metadata(self)
+        result._copy_type_metadata(self, include_index=keep_index)
         if keep_index and self._index is not None:
             result._index.names = self._index.names
         return result
@@ -2408,7 +2412,9 @@ class Frame(libcudf.table.Table):
         for name, col, other_col in zip(
             self._data.keys(), self._data.values(), other._data.values()
         ):
-            self._data[name] = other_col._copy_type_metadata(col)
+            self._data.set_by_label(
+                name, other_col._copy_type_metadata(col), validate=False
+            )
 
         if include_index:
             if self._index is not None and other._index is not None:
@@ -2752,12 +2758,15 @@ class Frame(libcudf.table.Table):
         else:
             return result
 
-    def _get_sorted_inds(self, ascending=True, na_position="last"):
+    def _get_sorted_inds(self, by=None, ascending=True, na_position="last"):
         """
         Sort by the values.
 
         Parameters
         ----------
+        by: list, optional
+            Labels specifying columns to sort by. By default,
+            sort by all columns of `self`
         ascending : bool or list of bool, default True
             If True, sort values in ascending order, otherwise descending.
         na_position : {‘first’ or ‘last’}, default ‘last’
@@ -2792,11 +2801,17 @@ class Frame(libcudf.table.Table):
             )
             na_position = 0
 
+        to_sort = (
+            self
+            if by is None
+            else self._get_columns_by_label(by, downcast=False)
+        )
+
         # If given a scalar need to construct a sequence of length # of columns
         if np.isscalar(ascending):
-            ascending = [ascending] * self._num_columns
+            ascending = [ascending] * to_sort._num_columns
 
-        return libcudf.sort.order_by(self, ascending, na_position)
+        return libcudf.sort.order_by(to_sort, ascending, na_position)
 
     def sin(self):
         """
@@ -3327,77 +3342,6 @@ class Frame(libcudf.table.Table):
         """
         return self._unaryop("sqrt")
 
-    @staticmethod
-    def _validate_merge_cfg(
-        lhs,
-        rhs,
-        left_on,
-        right_on,
-        on,
-        how,
-        left_index=False,
-        right_index=False,
-        lsuffix=None,
-        rsuffix=None,
-    ):
-        """
-        Error for various combinations of merge input parameters
-        """
-        len_left_on = len(left_on) if left_on is not None else 0
-        len_right_on = len(right_on) if right_on is not None else 0
-
-        # must actually support the requested merge type
-        if how not in ["left", "inner", "outer", "leftanti", "leftsemi"]:
-            raise NotImplementedError(f"{how} merge not supported yet")
-
-        # Passing 'on' with 'left_on' or 'right_on' is potentially ambiguous
-        if on:
-            if left_on or right_on:
-                raise ValueError(
-                    'Can only pass argument "on" OR "left_on" '
-                    'and "right_on", not a combination of both.'
-                )
-
-        # Require same total number of columns to join on in both operands
-        if not (len_left_on + left_index * len(lhs.index.names)) == (
-            len_right_on + right_index * len(rhs.index.names)
-        ):
-            raise ValueError(
-                "Merge operands must have same number of join key columns"
-            )
-
-        # If nothing specified, must have common cols to use implicitly
-        same_named_columns = set(lhs._data.keys()) & set(rhs._data.keys())
-        if not (left_index or right_index):
-            if not (left_on or right_on):
-                if len(same_named_columns) == 0:
-                    raise ValueError("No common columns to perform merge on")
-
-        for name in same_named_columns:
-            if not (
-                name in left_on
-                and name in right_on
-                and (left_on.index(name) == right_on.index(name))
-            ):
-                if not (lsuffix or rsuffix):
-                    raise ValueError(
-                        "there are overlapping columns but "
-                        "lsuffix and rsuffix are not defined"
-                    )
-
-        if on:
-            on_keys = [on] if not isinstance(on, list) else on
-            for key in on_keys:
-                if not (key in lhs._data.keys() and key in rhs._data.keys()):
-                    raise KeyError(f"Key {on} not in both operands")
-        else:
-            for key in left_on:
-                if key not in lhs._data.keys():
-                    raise KeyError(f'Key "{key}" not in left operand')
-            for key in right_on:
-                if key not in rhs._data.keys():
-                    raise KeyError(f'Key "{key}" not in right operand')
-
     def _merge(
         self,
         right,
@@ -3408,84 +3352,33 @@ class Frame(libcudf.table.Table):
         right_index=False,
         how="inner",
         sort=False,
-        lsuffix=None,
-        rsuffix=None,
         method="hash",
         indicator=False,
         suffixes=("_x", "_y"),
     ):
-        # Merge doesn't support right, so just swap
+        lhs, rhs = self, right
         if how == "right":
-            return right._merge(
-                self,
-                on=on,
-                left_on=right_on,
-                right_on=left_on,
-                left_index=right_index,
-                right_index=left_index,
-                how="left",
-                sort=sort,
-                lsuffix=rsuffix,
-                rsuffix=lsuffix,
-                method=method,
-                indicator=indicator,
-                suffixes=suffixes,
-            )
+            # Merge doesn't support right, so just swap
+            how = "left"
+            lhs, rhs = right, self
+            left_on, right_on = right_on, left_on
+            left_index, right_index = right_index, left_index
+            suffixes = (suffixes[1], suffixes[0])
 
-        lhs = self
-        rhs = right
-
-        from cudf.core.join import Merge
-
-        mergeop = Merge(
+        return merge(
             lhs,
             rhs,
-            on,
-            left_on,
-            right_on,
-            left_index,
-            right_index,
-            how,
-            sort,
-            lsuffix,
-            rsuffix,
-            method,
-            indicator,
-            suffixes,
+            on=on,
+            left_on=left_on,
+            right_on=right_on,
+            left_index=left_index,
+            right_index=right_index,
+            how=how,
+            sort=sort,
+            method=method,
+            indicator=indicator,
+            suffixes=suffixes,
         )
-        to_return = mergeop.perform_merge()
-
-        # If sort=True, Pandas would sort on the key columns in the
-        # same order as given in 'on'. If the indices are used as
-        # keys, the index will be sorted. If one index is specified,
-        # the key column on the other side will be used to sort.
-        # If no index is specified, return a new RangeIndex
-        if sort:
-            to_sort = cudf.DataFrame()
-            if left_index and right_index:
-                by = list(to_return._index._data.columns)
-                if left_on and right_on:
-                    by.extend(to_return[mergeop.left_on]._data.columns)
-            elif left_index:
-                by = list(to_return[mergeop.right_on]._data.columns)
-            elif right_index:
-                by = list(to_return[mergeop.left_on]._data.columns)
-            else:
-                # left_on == right_on, or different names but same columns
-                # in both cases we can sort by either
-                by = [to_return._data[name] for name in mergeop.left_on]
-            for i, col in enumerate(by):
-                to_sort[i] = col
-            inds = to_sort.argsort()
-            if isinstance(to_return, cudf.Index):
-                to_return = to_return.take(inds)
-            else:
-                to_return = to_return.take(
-                    inds, keep_index=(left_index or right_index)
-                )
-            return to_return
-        else:
-            return to_return
 
     def _is_sorted(self, ascending=None, null_position=None):
         """

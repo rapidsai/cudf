@@ -116,8 +116,14 @@ rmm::device_uvector<size_type> scatter_to_gather_complement(MapIterator scatter_
   return gather_map;
 }
 
-template <typename Element, typename MapIterator>
+template <typename Element, typename Enable = void>
 struct column_scatterer_impl {
+  std::unique_ptr<column> operator()(...) const { CUDF_FAIL("Unsupported type for scatter."); }
+};
+
+template <typename Element>
+struct column_scatterer_impl<Element, std::enable_if_t<cudf::is_fixed_width<Element>()>> {
+  template <typename MapIterator>
   std::unique_ptr<column> operator()(column_view const& source,
                                      MapIterator scatter_map_begin,
                                      MapIterator scatter_map_end,
@@ -140,8 +146,9 @@ struct column_scatterer_impl {
   }
 };
 
-template <typename MapIterator>
-struct column_scatterer_impl<string_view, MapIterator> {
+template <>
+struct column_scatterer_impl<string_view> {
+  template <typename MapIterator>
   std::unique_ptr<column> operator()(column_view const& source,
                                      MapIterator scatter_map_begin,
                                      MapIterator scatter_map_end,
@@ -156,8 +163,9 @@ struct column_scatterer_impl<string_view, MapIterator> {
   }
 };
 
-template <typename MapIterator>
-struct column_scatterer_impl<list_view, MapIterator> {
+template <>
+struct column_scatterer_impl<list_view> {
+  template <typename MapIterator>
   std::unique_ptr<column> operator()(column_view const& source,
                                      MapIterator scatter_map_begin,
                                      MapIterator scatter_map_end,
@@ -170,23 +178,9 @@ struct column_scatterer_impl<list_view, MapIterator> {
   }
 };
 
-template <typename MapIterator>
-struct column_scatterer {
-  template <typename Element>
-  std::unique_ptr<column> operator()(column_view const& source,
-                                     MapIterator scatter_map_begin,
-                                     MapIterator scatter_map_end,
-                                     column_view const& target,
-                                     rmm::cuda_stream_view stream,
-                                     rmm::mr::device_memory_resource* mr) const
-  {
-    column_scatterer_impl<Element, MapIterator> scatterer{};
-    return scatterer(source, scatter_map_begin, scatter_map_end, target, stream, mr);
-  }
-};
-
-template <typename MapIterator>
-struct column_scatterer_impl<dictionary32, MapIterator> {
+template <>
+struct column_scatterer_impl<dictionary32> {
+  template <typename MapIterator>
   std::unique_ptr<column> operator()(column_view const& source_in,
                                      MapIterator scatter_map_begin,
                                      MapIterator scatter_map_end,
@@ -243,8 +237,9 @@ struct column_scatterer_impl<dictionary32, MapIterator> {
   }
 };
 
-template <typename MapItRoot>
-struct column_scatterer_impl<struct_view, MapItRoot> {
+template <>
+struct column_scatterer_impl<struct_view> {
+  template <typename MapItRoot>
   std::unique_ptr<column> operator()(column_view const& source,
                                      MapItRoot scatter_map_begin,
                                      MapItRoot scatter_map_end,
@@ -322,6 +317,20 @@ struct column_scatterer_impl<struct_view, MapItRoot> {
   }
 };
 
+struct column_scatterer {
+  template <typename Element, typename MapIterator>
+  std::unique_ptr<column> operator()(column_view const& source,
+                                     MapIterator scatter_map_begin,
+                                     MapIterator scatter_map_end,
+                                     column_view const& target,
+                                     rmm::cuda_stream_view stream,
+                                     rmm::mr::device_memory_resource* mr) const
+  {
+    column_scatterer_impl<Element> scatterer{};
+    return scatterer(source, scatter_map_begin, scatter_map_end, target, stream, mr);
+  }
+};
+
 /**
  * @brief Scatters the rows of the source table into a copy of the target table
  * according to a scatter map.
@@ -388,9 +397,7 @@ std::unique_ptr<table> scatter(
     thrust::make_transform_iterator(scatter_map_begin, index_converter<MapType>{target.num_rows()});
   auto updated_scatter_map_end =
     thrust::make_transform_iterator(scatter_map_end, index_converter<MapType>{target.num_rows()});
-
-  auto result                = std::vector<std::unique_ptr<column>>(target.num_columns());
-  auto const scatter_functor = column_scatterer<decltype(updated_scatter_map_begin)>{};
+  auto result = std::vector<std::unique_ptr<column>>(target.num_columns());
 
   std::transform(source.begin(),
                  source.end(),
@@ -398,7 +405,7 @@ std::unique_ptr<table> scatter(
                  result.begin(),
                  [=](auto const& source_col, auto const& target_col) {
                    return type_dispatcher<dispatch_storage_type>(source_col.type(),
-                                                                 scatter_functor,
+                                                                 column_scatterer{},
                                                                  source_col,
                                                                  updated_scatter_map_begin,
                                                                  updated_scatter_map_end,
