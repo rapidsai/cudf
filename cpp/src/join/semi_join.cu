@@ -28,7 +28,6 @@
 #include <cudf/scalar/scalar_factories.hpp>
 #include <cudf/table/table.hpp>
 #include <cudf/utilities/error.hpp>
-#include <structs/utilities.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_uvector.hpp>
@@ -174,16 +173,10 @@ std::unique_ptr<cudf::table> left_semi_anti_join(
     return std::make_unique<table>(left, stream, mr);
   }
 
-  // flatten any structs out. Note this happens before dictionary matching because
-  // structs can contain dictionaries.
-  auto const flattened_left = structs::detail::flatten_nested_columns(left.select(left_on), {}, {});
-  auto const flattened_right =
-    structs::detail::flatten_nested_columns(right.select(right_on), {}, {});
-
   // Make sure any dictionary columns have matched key sets.
   // This will return any new dictionary columns created as well as updated table_views.
   auto matched = cudf::dictionary::detail::match_dictionaries(
-    {std::get<0>(flattened_left), std::get<0>(flattened_right)},
+    {left.select(left_on), right.select(right_on)},
     stream,
     rmm::mr::get_current_device_resource());  // temporary objects returned
 
