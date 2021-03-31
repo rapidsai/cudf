@@ -245,7 +245,7 @@ reader::impl::selected_rows_offsets reader::impl::load_data_and_row_offsets(
 
     // Exclude the rows that are to be skipped from the end
     if (skip_end_rows > 0 && static_cast<size_t>(skip_end_rows) < row_offsets.size()) {
-      row_offsets.resize(row_offsets.size() - skip_end_rows);
+      row_offsets.shrink(row_offsets.size() - skip_end_rows);
     }
     return row_offsets;
   }
@@ -384,12 +384,12 @@ size_t reader::impl::find_first_row_start(host_span<char const> data)
 }
 
 reader::impl::selected_rows_offsets reader::impl::gather_row_offsets(host_span<char const> data,
-                                                                    size_t range_begin,
-                                                                    size_t range_end,
-                                                                    size_t skip_rows,
-                                                                    int64_t num_rows,
-                                                                    bool load_whole_file,
-                                                                    rmm::cuda_stream_view stream)
+                                                                     size_t range_begin,
+                                                                     size_t range_end,
+                                                                     size_t skip_rows,
+                                                                     int64_t num_rows,
+                                                                     bool load_whole_file,
+                                                                     rmm::cuda_stream_view stream)
 {
   constexpr size_t max_chunk_bytes = 64 * 1024 * 1024;  // 64MB
   size_t buffer_size               = std::min(max_chunk_bytes, data.size());
@@ -531,7 +531,7 @@ reader::impl::selected_rows_offsets reader::impl::gather_row_offsets(host_span<c
   }
   // Apply num_rows limit
   if (num_rows >= 0 && static_cast<size_t>(num_rows) < row_offsets.size() - 1) {
-    row_offsets.resize(num_rows + 1);
+    row_offsets.shrink(num_rows + 1);
   }
   return row_offsets;
 }

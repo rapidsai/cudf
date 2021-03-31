@@ -97,15 +97,20 @@ class reader::impl {
 
    public:
     selected_rows_offsets(rmm::device_uvector<uint64_t> &&data,
-                         device_span<uint64_t const> selected_span)
+                          device_span<uint64_t const> selected_span)
       : all{std::move(data)}, selected{selected_span}
     {
     }
 
     operator device_span<uint64_t const>() const { return selected; }
-    void resize(size_t size) { selected = selected.subspan(0, size); }
+    void shrink(size_t size)
+    {
+      CUDF_EXPECTS(size <= selected.size(), "New size must be smaller");
+      selected = selected.subspan(0, size);
+    }
     void erase_first_n(size_t n)
     {
+      CUDF_EXPECTS(n <= selected.size(), "Too many elements to remove");
       selected = selected.subspan(n, selected.size() - n);
     }
     auto size() const { return selected.size(); }
@@ -135,12 +140,12 @@ class reader::impl {
    * @param stream CUDA stream used for device memory operations and kernel launches.
    */
   selected_rows_offsets gather_row_offsets(host_span<char const> data,
-                                          size_t range_begin,
-                                          size_t range_end,
-                                          size_t skip_rows,
-                                          int64_t num_rows,
-                                          bool load_whole_file,
-                                          rmm::cuda_stream_view stream);
+                                           size_t range_begin,
+                                           size_t range_end,
+                                           size_t skip_rows,
+                                           int64_t num_rows,
+                                           bool load_whole_file,
+                                           rmm::cuda_stream_view stream);
 
   /**
    * @brief Find the start position of the first data row
