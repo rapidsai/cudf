@@ -243,7 +243,8 @@ def _drop_unsupported_aggs(Table values, aggs):
         ):
             if rmm._cuda.gpu.runtimeGetVersion() < 11000:
                 raise RuntimeError(
-                    "Decimal aggregations are not supported on CUDA 10.x."
+                    "Decimal aggregations are only supported on CUDA >= 11 "
+                    "due to an nvcc compiler bug."
                 )
             for i, agg_name in enumerate(aggs[col_name]):
                 if Aggregation(agg_name).kind not in _DECIMAL_AGGS:
