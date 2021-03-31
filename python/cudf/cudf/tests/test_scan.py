@@ -6,6 +6,7 @@ import pytest
 
 import cudf
 from cudf.tests.utils import INTEGER_TYPES, NUMERIC_TYPES, assert_eq, gen_rand
+from cudf.core.dtypes import Decimal64Dtype
 
 params_sizes = [0, 1, 2, 5]
 
@@ -61,6 +62,21 @@ def test_cumsum_masked():
         assert_eq(got, expected)
 
 
+@pytest.mark.parametrize(
+    "dtype",
+    [Decimal64Dtype(8, 4), Decimal64Dtype(10, 5), Decimal64Dtype(12, 7)],
+)
+def test_cumsum_decimal(dtype):
+    data = ["243.32", "48.245", "-7234.298", np.nan, "-467.2"]
+    gser = cudf.Series(data).astype(dtype)
+    pser = pd.Series(data, dtype="float64")
+
+    got = gser.cumsum()
+    expected = cudf.Series.from_pandas(pser.cumsum()).astype(dtype)
+
+    assert_eq(got, expected)
+
+
 @pytest.mark.parametrize("dtype,nelem", list(_gen_params()))
 def test_cummin(dtype, nelem):
     if dtype == np.int8:
@@ -103,6 +119,21 @@ def test_cummin_masked():
         assert_eq(gs.cummin(), expected)
 
 
+@pytest.mark.parametrize(
+    "dtype",
+    [Decimal64Dtype(8, 4), Decimal64Dtype(11, 6), Decimal64Dtype(14, 7)],
+)
+def test_cummin_decimal(dtype):
+    data = ["8394.294", np.nan, "-9940.444", np.nan, "-23.928"]
+    gser = cudf.Series(data).astype(dtype)
+    pser = pd.Series(data, dtype="float64")
+
+    got = gser.cummin()
+    expected = cudf.Series.from_pandas(pser.cummin()).astype(dtype)
+
+    assert_eq(got, expected)
+
+
 @pytest.mark.parametrize("dtype,nelem", list(_gen_params()))
 def test_cummax(dtype, nelem):
     if dtype == np.int8:
@@ -143,6 +174,21 @@ def test_cummax_masked():
         gs = cudf.Series(data).astype(type_)
         expected = pd.Series([1, 2, np.nan, 4, 5]).astype("float64")
         assert_eq(gs.cummax(), expected)
+
+
+@pytest.mark.parametrize(
+    "dtype",
+    [Decimal64Dtype(8, 4), Decimal64Dtype(11, 6), Decimal64Dtype(14, 7)],
+)
+def test_cummax_decimal(dtype):
+    data = [np.nan, "54.203", "8.222", "644.32", "-562.272"]
+    gser = cudf.Series(data).astype(dtype)
+    pser = pd.Series(data, dtype="float64")
+
+    got = gser.cummax()
+    expected = cudf.Series.from_pandas(pser.cummax()).astype(dtype)
+
+    assert_eq(got, expected)
 
 
 @pytest.mark.parametrize("dtype,nelem", list(_gen_params()))

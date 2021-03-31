@@ -53,7 +53,7 @@ void set_null_mask(bitmask_type *bitmask,
  * @param[in] stream CUDA stream used for device memory operations and kernel launches.
  */
 std::vector<size_type> segmented_count_set_bits(bitmask_type const *bitmask,
-                                                std::vector<size_type> const &indices,
+                                                host_span<size_type const> indices,
                                                 rmm::cuda_stream_view stream);
 
 /**
@@ -62,7 +62,7 @@ std::vector<size_type> segmented_count_set_bits(bitmask_type const *bitmask,
  * @param[in] stream CUDA stream used for device memory operations and kernel launches.
  */
 std::vector<size_type> segmented_count_unset_bits(bitmask_type const *bitmask,
-                                                  std::vector<size_type> const &indices,
+                                                  host_span<size_type const> indices,
                                                   rmm::cuda_stream_view stream);
 
 /**

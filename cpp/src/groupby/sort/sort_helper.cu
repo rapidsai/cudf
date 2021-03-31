@@ -141,7 +141,7 @@ column_view sort_groupby_helper::key_sort_order(rmm::cuda_stream_view stream)
     // presence of a null value within a row. This allows moving all rows that
     // contain a null value to the end of the sorted order.
 
-    auto augmented_keys = table_view({table_view({keys_bitmask_column()}), _keys});
+    auto augmented_keys = table_view({table_view({keys_bitmask_column(stream)}), _keys});
 
     _key_sorted_order = cudf::detail::stable_sorted_order(
       augmented_keys,
@@ -164,7 +164,7 @@ sort_groupby_helper::index_vector const& sort_groupby_helper::group_offsets(
   _group_offsets = std::make_unique<index_vector>(num_keys(stream) + 1, stream);
 
   auto device_input_table = table_device_view::create(_keys, stream);
-  auto sorted_order       = key_sort_order().data<size_type>();
+  auto sorted_order       = key_sort_order(stream).data<size_type>();
   decltype(_group_offsets->begin()) result_end;
 
   if (has_nulls(_keys)) {
@@ -207,9 +207,9 @@ sort_groupby_helper::index_vector const& sort_groupby_helper::group_labels(
                              group_labels.end(),
                              index_vector::value_type{0});
   thrust::scatter(rmm::exec_policy(stream),
-                  thrust::make_constant_iterator(1, decltype(num_groups())(1)),
-                  thrust::make_constant_iterator(1, num_groups()),
-                  group_offsets().begin() + 1,
+                  thrust::make_constant_iterator(1, decltype(num_groups(stream))(1)),
+                  thrust::make_constant_iterator(1, num_groups(stream)),
+                  group_offsets(stream).begin() + 1,
                   group_labels.begin());
 
   thrust::inclusive_scan(
@@ -226,9 +226,9 @@ column_view sort_groupby_helper::unsorted_keys_labels(rmm::cuda_stream_view stre
     data_type(type_to_id<size_type>()), _keys.num_rows(), mask_state::ALL_NULL, stream);
 
   auto group_labels_view = cudf::column_view(
-    data_type(type_to_id<size_type>()), group_labels().size(), group_labels().data());
+    data_type(type_to_id<size_type>()), group_labels(stream).size(), group_labels(stream).data());
 
-  auto scatter_map = key_sort_order();
+  auto scatter_map = key_sort_order(stream);
 
   std::unique_ptr<table> t_unsorted_keys_labels =
     cudf::detail::scatter(table_view({group_labels_view}),
@@ -267,7 +267,7 @@ sort_groupby_helper::column_ptr sort_groupby_helper::sorted_values(
   column_view const& values, rmm::cuda_stream_view stream, rmm::mr::device_memory_resource* mr)
 {
   column_ptr values_sort_order =
-    cudf::detail::stable_sorted_order(table_view({unsorted_keys_labels(), values}),
+    cudf::detail::stable_sorted_order(table_view({unsorted_keys_labels(stream), values}),
                                       {},
                                       std::vector<null_order>(2, null_order::AFTER),
                                       stream,
@@ -289,7 +289,7 @@ sort_groupby_helper::column_ptr sort_groupby_helper::sorted_values(
 sort_groupby_helper::column_ptr sort_groupby_helper::grouped_values(
   column_view const& values, rmm::cuda_stream_view stream, rmm::mr::device_memory_resource* mr)
 {
-  auto gather_map = key_sort_order();
+  auto gather_map = key_sort_order(stream);
 
   auto grouped_values_table = cudf::detail::gather(table_view({values}),
                                                    gather_map,
@@ -304,14 +304,14 @@ sort_groupby_helper::column_ptr sort_groupby_helper::grouped_values(
 std::unique_ptr<table> sort_groupby_helper::unique_keys(rmm::cuda_stream_view stream,
                                                         rmm::mr::device_memory_resource* mr)
 {
-  auto idx_data = key_sort_order().data<size_type>();
+  auto idx_data = key_sort_order(stream).data<size_type>();
 
   auto gather_map_it = thrust::make_transform_iterator(
-    group_offsets().begin(), [idx_data] __device__(size_type i) { return idx_data[i]; });
+    group_offsets(stream).begin(), [idx_data] __device__(size_type i) { return idx_data[i]; });
 
   return cudf::detail::gather(_keys,
                               gather_map_it,
-                              gather_map_it + num_groups(),
+                              gather_map_it + num_groups(stream),
                               out_of_bounds_policy::DONT_CHECK,
                               stream,
                               mr);
@@ -321,7 +321,7 @@ std::unique_ptr<table> sort_groupby_helper::sorted_keys(rmm::cuda_stream_view st
                                                         rmm::mr::device_memory_resource* mr)
 {
   return cudf::detail::gather(_keys,
-                              key_sort_order(),
+                              key_sort_order(stream),
                               cudf::out_of_bounds_policy::DONT_CHECK,
                               cudf::detail::negative_index_policy::NOT_ALLOWED,
                               stream,
