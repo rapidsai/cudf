@@ -28,7 +28,7 @@ requirements:
     - numba >=0.49.0
     - dlpack
     - pyarrow 1.0.1
-    - libcudf {{ version }}
+    - libcudf {{ version }}=*_{{ GIT_DESCRIBE_NUMBER }}
     - rmm {{ minor_version }}
     - cudatoolkit {{ cuda_version }}
   run:
