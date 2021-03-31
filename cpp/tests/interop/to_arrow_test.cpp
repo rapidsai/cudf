@@ -359,7 +359,7 @@ using fp_wrapper = cudf::test::fixed_point_column_wrapper<T>;
 TEST_F(ToArrowTest, FixedPointTable)
 {
   using namespace numeric;
-  cudf::size_type const BIT_WIDTH_RATIO = 2;  // Array::Type:type::DECIMAL (128) / int64_t
+  auto constexpr const BIT_WIDTH_RATIO = 2;  // Array::Type:type::DECIMAL (128) / int64_t
 
   for (auto const i : {3, 2, 1, 0, -1, -2, -3}) {
     auto const col   = fp_wrapper<int64_t>({-1, 2, 3, 4, 5, 6}, scale_type{i});
@@ -386,8 +386,8 @@ TEST_F(ToArrowTest, FixedPointTable)
 TEST_F(ToArrowTest, FixedPointTableLarge)
 {
   using namespace numeric;
-  cudf::size_type const BIT_WIDTH_RATIO = 2;  // Array::Type:type::DECIMAL (128) / int64_t
-  int32_t constexpr NUM_ELEMENTS        = 1000;
+  auto constexpr BIT_WIDTH_RATIO = 2;  // Array::Type:type::DECIMAL (128) / int64_t
+  auto constexpr NUM_ELEMENTS    = 1000;
 
   for (auto const i : {3, 2, 1, 0, -1, -2, -3}) {
     auto iota        = thrust::make_counting_iterator(1);
@@ -421,7 +421,7 @@ TEST_F(ToArrowTest, FixedPointTableLarge)
 TEST_F(ToArrowTest, FixedPointTableNullsSimple)
 {
   using namespace numeric;
-  cudf::size_type const BIT_WIDTH_RATIO = 2;  // Array::Type:type::DECIMAL (128) / int64_t
+  auto constexpr BIT_WIDTH_RATIO = 2;  // Array::Type:type::DECIMAL (128) / int64_t
 
   for (auto const i : {3, 2, 1, 0, -1, -2, -3}) {
     auto const data = std::vector<int64_t>{1, 0, 2, 0, 3, 0, 4, 0, 5, 0, 6, 0};
@@ -452,7 +452,7 @@ TEST_F(ToArrowTest, FixedPointTableNullsSimple)
 TEST_F(ToArrowTest, FixedPointTableNulls)
 {
   using namespace numeric;
-  cudf::size_type const BIT_WIDTH_RATIO = 2;  // Array::Type:type::DECIMAL (128) / int64_t
+  auto constexpr BIT_WIDTH_RATIO = 2;  // Array::Type:type::DECIMAL (128) / int64_t
 
   for (auto const i : {3, 2, 1, 0, -1, -2, -3}) {
     auto const col = fp_wrapper<int64_t>(
