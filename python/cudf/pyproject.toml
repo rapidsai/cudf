@@ -6,8 +6,6 @@ requires = [
     "wheel",
     "setuptools",
     "cython>=0.29,<0.30",
-    "packaging",
-    "cachetools",
 ]
 
 [tool.black]
