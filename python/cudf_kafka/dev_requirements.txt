@@ -1,0 +1,8 @@
+# Copyright (c) 2021, NVIDIA CORPORATION.
+
+python-confluent-kafka
+pytest
+setuptools
+wheel
+cython>=0.29,<0.30
+python-confluent-kafka

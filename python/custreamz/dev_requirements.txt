@@ -1,0 +1,9 @@
+# Copyright (c) 2021, NVIDIA CORPORATION.
+
+dask>=2021.3.1
+distributed>=2.22.0
+streamz
+python-confluent-kafka
+pytest
+setuptools
+wheel
