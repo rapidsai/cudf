@@ -41,7 +41,7 @@ using TestTypes = cudf::test::Concat<cudf::test::IntegralTypes,
                                      cudf::test::DurationTypes,
                                      cudf::test::TimestampTypes>;
 
-TYPED_TEST_CASE(TypedStructScatterTest, int);
+TYPED_TEST_CASE(TypedStructScatterTest, TestTypes);
 
 namespace {
 void test_scatter(std::unique_ptr<cudf::column> const& structs_src,
