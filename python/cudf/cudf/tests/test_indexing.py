@@ -1401,3 +1401,14 @@ def test_iloc_before_zero_terminate(arg, pobj):
     gobj = cudf.from_pandas(pobj)
 
     assert_eq(pobj.iloc[arg], gobj.iloc[arg])
+
+
+def test_iloc_decimal():
+    sr = cudf.Series(["1.00", "2.00", "3.00", "4.00"]).astype(
+        cudf.Decimal64Dtype(scale=2, precision=3)
+    )
+    got = sr.iloc[[3, 2, 1, 0]]
+    expect = cudf.Series(["4.00", "3.00", "2.00", "1.00"],).astype(
+        cudf.Decimal64Dtype(scale=2, precision=3)
+    )
+    assert_eq(expect.reset_index(drop=True), got.reset_index(drop=True))
