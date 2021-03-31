@@ -162,7 +162,8 @@ ConfigureTest(TRANSFORM_TEST
     transform/integration/unary-transform-test.cpp
     transform/nans_to_null_test.cpp
     transform/mask_to_bools_test.cpp
-    transform/bools_to_mask_test.cpp)
+    transform/bools_to_mask_test.cpp
+    transform/row_bit_count_test.cu)
 
 ###################################################################################################
 # - interop tests -------------------------------------------------------------------------
@@ -398,6 +399,11 @@ ConfigureTest(LISTS_TEST
     lists/drop_list_duplicates_tests.cpp
     lists/extract_tests.cpp
     lists/sort_lists_tests.cpp)
+
+###################################################################################################
+# - bin tests ----------------------------------------------------------------------------------
+ConfigureTest(LABEL_BINS_TEST
+    labeling/label_bins_tests.cpp)
 
 ###################################################################################################
 ### enable testing ################################################################################

@@ -134,11 +134,16 @@ def copy_range(Column input_column,
                            input_begin, input_end, target_begin)
 
 
-def gather(Table source_table, Column gather_map, bool keep_index=True):
+def gather(
+    Table source_table,
+    Column gather_map,
+    bool keep_index=True,
+    bool nullify=False
+):
     if not pd.api.types.is_integer_dtype(gather_map.dtype):
         raise ValueError("Gather map is not integer dtype.")
 
-    if len(gather_map) > 0:
+    if len(gather_map) > 0 and not nullify:
         gm_min, gm_max = minmax(gather_map)
         if gm_min < -len(source_table) or gm_max >= len(source_table):
             raise IndexError(f"Gather map index with min {gm_min},"
@@ -154,7 +159,8 @@ def gather(Table source_table, Column gather_map, bool keep_index=True):
         source_table_view = source_table.data_view()
     cdef column_view gather_map_view = gather_map.view()
     cdef cpp_copying.out_of_bounds_policy policy = (
-        cpp_copying.out_of_bounds_policy.DONT_CHECK
+        cpp_copying.out_of_bounds_policy.NULLIFY if nullify
+        else cpp_copying.out_of_bounds_policy.DONT_CHECK
     )
 
     with nogil:

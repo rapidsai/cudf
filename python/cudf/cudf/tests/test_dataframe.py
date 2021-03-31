@@ -5222,7 +5222,7 @@ def test_memory_usage_multi():
 def test_setitem_diff_size_list(list_input, key):
     gdf = cudf.datasets.randomdata(5)
     with pytest.raises(
-        ValueError, match=("All values must be of equal length")
+        ValueError, match=("All columns must be of equal length")
     ):
         gdf[key] = list_input
 
@@ -8495,3 +8495,24 @@ def test_explode(data, labels, ignore_index, p_index, label_to_explode):
     got = gdf.explode(label_to_explode, ignore_index)
 
     assert_eq(expect, got, check_dtype=False)
+
+
+@pytest.mark.parametrize(
+    "df,ascending,expected",
+    [
+        (
+            cudf.DataFrame({"a": [10, 0, 2], "b": [-10, 10, 1]}),
+            True,
+            cudf.Series([1, 2, 0], dtype="int32"),
+        ),
+        (
+            cudf.DataFrame({"a": [10, 0, 2], "b": [-10, 10, 1]}),
+            False,
+            cudf.Series([0, 2, 1], dtype="int32"),
+        ),
+    ],
+)
+def test_dataframe_argsort(df, ascending, expected):
+    actual = df.argsort(ascending=ascending)
+
+    assert_eq(actual, expected)
