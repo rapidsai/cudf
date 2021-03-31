@@ -50,7 +50,7 @@ function(jit_preprocess_files)
                                     -remove-unused-globals
                                     -D__CUDACC_RTC__
                                     # -D__x86_64__
-                                    -I${CUDF_INCLUDE}
+                                    -I${CUDF_SOURCE_DIR}/include
                                     -I${CUDF_SOURCE_DIR}/src
                                     -I${LIBCUDACXX_INCLUDE_DIR}
                                     -I${CUDAToolkit_INCLUDE_DIR}
