@@ -32,6 +32,17 @@ install_requires = [
     "packaging",
 ]
 
+extras_require = {
+    "test": [
+        "pytest",
+        "pytest-benchmark",
+        "pytest-xdist",
+        "hypothesis" "mimesis",
+        "pyorc",
+        "msgpack",
+    ]
+}
+
 cython_files = ["cudf/**/*.pyx"]
 
 
@@ -203,5 +214,5 @@ setup(
     cmdclass=cmdclass,
     install_requires=install_requires,
     zip_safe=False,
-    extras_requires={"test": ["pytest", "pytest-xdist"]},
+    extras_require=extras_require,
 )

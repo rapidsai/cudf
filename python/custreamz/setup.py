@@ -27,5 +27,5 @@ setup(
     cmdclass=versioneer.get_cmdclass(),
     install_requires=install_requires,
     zip_safe=False,
-    extras_requires={"test": ["pytest", "pytest-xdist"]},
+    extras_require={"test": ["pytest", "pytest-xdist"]},
 )

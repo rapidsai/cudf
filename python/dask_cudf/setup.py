@@ -16,7 +16,8 @@ install_requires = [
     "numpy",
     "pandas>=1.0,<1.3.0dev0",
 ]
-extras_requires = {
+
+extras_require = {
     "test": [
         "numpy",
         "pandas>=1.0,<1.3.0dev0",
@@ -91,5 +92,5 @@ setup(
     packages=find_packages(exclude=["tests", "tests.*"]),
     cmdclass=versioneer.get_cmdclass(),
     install_requires=install_requires,
-    extras_requires=extras_requires,
+    extras_require=extras_require,
 )

@@ -1,6 +1,5 @@
 # Copyright (c) 2021, NVIDIA CORPORATION.
 
-cupy-cuda112
 dask>=2021.3.1
 distributed>=2.22.0
 fsspec>=0.6.0

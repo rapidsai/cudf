@@ -76,5 +76,5 @@ ENV CUDF_ROOT=/repos/cudf/cpp/build/
 
 # Install cudf from source
 RUN cd /repos/cudf/ && git submodule update --init --recursive && ./build.sh libcudf && \
-    cd  /repos/cudf/python/cudf/ && pip install .
+    pip install /repos/cudf/python/cudf/.
 
