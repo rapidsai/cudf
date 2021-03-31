@@ -200,8 +200,6 @@ void binary_operation(mutable_column_view& out,
     "\n#include <cudf/types.hpp>\n" +
     cudf::jit::parse_single_function_ptx(ptx, "GENERIC_BINARY_OP", output_type_name);
 
-  std::cout << cuda_source;
-
   std::string kernel_name =
     jitify2::reflection::Template("cudf::binops::jit::kernel_v_v")  //
       .instantiate(output_type_name,                                // list of template arguments

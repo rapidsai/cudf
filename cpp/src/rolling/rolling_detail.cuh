@@ -528,31 +528,6 @@ struct rolling_window_launcher {
                                                              following_window_begin,
                                                              min_periods);
     } else {
-      // cudf::jit::launcher(input.size(),
-      //                     cudf::jit::get_data_ptr(input),
-      //                     input.null_mask(),
-      //                     cudf::jit::get_data_ptr(output_view),
-      //                     output_view.null_mask(),
-      //                     device_valid_count.data(),
-      //                     preceding_window,
-      //                     following_window,
-      //                     min_periods);
-      // .set_kernel_inst("gpu_rolling_new",                        // name of the kernel we are
-      // launching
-      //                  {cudf::jit::get_type_name(input.type()),  // list of template arguments
-      //                   cudf::jit::get_type_name(output->type()),
-      //                   udf_agg->_operator_name,
-      //                   preceding_window_str.c_str(),
-      //                   following_window_str.c_str()})
-      //   .launch(input.size(),
-      //           cudf::jit::get_data_ptr(input),
-      //           input.null_mask(),
-      //           cudf::jit::get_data_ptr(output_view),
-      //           output_view.null_mask(),
-      //           device_valid_count.data(),
-      //           preceding_window,
-      //           following_window,
-      //           min_periods);
       gpu_rolling<Type, OutType, agg_op, op, block_size, false>
         <<<grid.num_blocks, block_size, 0, stream.value()>>>(*input_device_view,
                                                              *default_outputs_device_view,
@@ -1310,14 +1285,6 @@ std::unique_ptr<column> rolling_window_udf(column_view const& input,
   auto output_view = output->mutable_view();
   rmm::device_scalar<size_type> device_valid_count{0, stream};
 
-  // const std::vector<std::string> compiler_flags{"-std=c++14",
-  //                                               // Have jitify prune unused global variables
-  //                                               "-remove-unused-globals",
-  //                                               // suppress all NVRTC warnings
-  //                                               "-w"};
-
-  std::cout << cuda_source;
-
   jitify2::ProgramCache<> rolling_program_cache(
     /*max_size = */ 100, *rolling_jit_kernel_cu_jit);
 
@@ -1341,33 +1308,6 @@ std::unique_ptr<column> rolling_window_udf(column_view const& input,
              preceding_window,
              following_window,
              min_periods);
-
-  // // Launch the jitify kernel
-  // cudf::jit::launcher(input.size(),
-  //                     cudf::jit::get_data_ptr(input),
-  //                     input.null_mask(),
-  //                     cudf::jit::get_data_ptr(output_view),
-  //                     output_view.null_mask(),
-  //                     device_valid_count.data(),
-  //                     preceding_window,
-  //                     following_window,
-  //                     min_periods);
-  // .set_kernel_inst("gpu_rolling_new",                        // name of the kernel we are
-  // launching
-  //                  {cudf::jit::get_type_name(input.type()),  // list of template arguments
-  //                   cudf::jit::get_type_name(output->type()),
-  //                   udf_agg->_operator_name,
-  //                   preceding_window_str.c_str(),
-  //                   following_window_str.c_str()})
-  //   .launch(input.size(),
-  //           cudf::jit::get_data_ptr(input),
-  //           input.null_mask(),
-  //           cudf::jit::get_data_ptr(output_view),
-  //           output_view.null_mask(),
-  //           device_valid_count.data(),
-  //           preceding_window,
-  //           following_window,
-  //           min_periods);
 
   output->set_null_count(output->size() - device_valid_count.value(stream));
 
