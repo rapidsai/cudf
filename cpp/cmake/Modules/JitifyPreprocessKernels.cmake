@@ -49,12 +49,13 @@ function(jit_preprocess_files)
                                     -std=c++14
                                     -remove-unused-globals
                                     -D__CUDACC_RTC__
-                                    # -D__x86_64__
                                     -I${CUDF_SOURCE_DIR}/include
                                     -I${CUDF_SOURCE_DIR}/src
+                                    # -I${LIBCXX_INCLUDE_DIR}
                                     -I${LIBCUDACXX_INCLUDE_DIR}
                                     -I${CUDAToolkit_INCLUDE_DIR}
                                     --no-preinclude-workarounds
+                                    --no-replace-pragma-once
                            )
     endforeach()
     set(JIT_PREPROCESSED_FILES "${JIT_PREPROCESSED_FILES}" PARENT_SCOPE)
@@ -67,3 +68,6 @@ jit_preprocess_files(SOURCE_DIRECTORY      ${CUDF_SOURCE_DIR}/src
                      )
 
 add_custom_target(jitify_preprocess_run DEPENDS ${JIT_PREPROCESSED_FILES})
+
+file(COPY "${LIBCUDACXX_INCLUDE_DIR}/" DESTINATION "${CUDF_GENERATED_INCLUDE_DIR}/include/libcudacxx")
+file(COPY "${LIBCXX_INCLUDE_DIR}"      DESTINATION "${CUDF_GENERATED_INCLUDE_DIR}/include/libcxx")
