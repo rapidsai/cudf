@@ -24,7 +24,7 @@ _GROUPBY_AGGS = {
     "count",
     "size",
     "sum",
-    "product",
+    "prod",
     "idxmin",
     "idxmax",
     "min",

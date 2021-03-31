@@ -321,7 +321,7 @@ struct update_target_element<dictionary32, aggregation::SUM, target_has_nulls, s
 template <typename T>
 constexpr bool is_product_supported()
 {
-  return std::is_floating_point<T>::value;
+  return std::is_floating_point<T>::value or std::is_same<T, int64_t>::value;
 }
 #else
 template <typename T>

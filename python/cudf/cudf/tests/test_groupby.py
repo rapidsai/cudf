@@ -144,7 +144,7 @@ def test_groupby_agg_min_max_dictlist(nelem):
 
 @pytest.mark.parametrize("nelem", [2, 3, 100, 1000])
 @pytest.mark.parametrize(
-    "func", ["mean", "min", "max", "idxmin", "idxmax", "count", "sum"]
+    "func", ["mean", "min", "max", "idxmin", "idxmax", "count", "sum", "prod"]
 )
 def test_groupby_2keys_agg(nelem, func):
     # gdf (Note: lack of multiIndex)
@@ -328,7 +328,18 @@ def test_groupby_apply_grouped():
 @pytest.mark.parametrize("nelem", [100, 500])
 @pytest.mark.parametrize(
     "func",
-    ["mean", "std", "var", "min", "max", "idxmin", "idxmax", "count", "sum"],
+    [
+        "mean",
+        "std",
+        "var",
+        "min",
+        "max",
+        "idxmin",
+        "idxmax",
+        "count",
+        "sum",
+        "prod",
+    ],
 )
 def test_groupby_cudf_2keys_agg(nelem, func):
     got_df = (
@@ -348,7 +359,7 @@ def test_groupby_cudf_2keys_agg(nelem, func):
 
 
 @pytest.mark.parametrize(
-    "agg", ["min", "max", "idxmin", "idxmax", "count", "sum", "mean"]
+    "agg", ["min", "max", "idxmin", "idxmax", "count", "sum", "prod", "mean"]
 )
 def test_series_groupby(agg):
     s = pd.Series([1, 2, 3])
@@ -362,7 +373,7 @@ def test_series_groupby(agg):
 
 
 @pytest.mark.parametrize(
-    "agg", ["min", "max", "idxmin", "idxmax", "count", "sum", "mean"]
+    "agg", ["min", "max", "idxmin", "idxmax", "count", "sum", "prod", "mean"]
 )
 def test_series_groupby_agg(agg):
     s = pd.Series([1, 2, 3])
@@ -380,6 +391,7 @@ def test_series_groupby_agg(agg):
         "max",
         "count",
         "sum",
+        "prod",
         "mean",
         pytest.param(
             "idxmin",
@@ -409,6 +421,7 @@ def test_groupby_level_zero(agg):
         "max",
         "count",
         "sum",
+        "prod",
         "mean",
         pytest.param(
             "idxmin",
@@ -778,7 +791,7 @@ def test_groupby_multi_agg_hash_groupby(agg):
 
 
 @pytest.mark.parametrize(
-    "agg", ["min", "max", "idxmax", "idxmax", "sum", "count", "mean"]
+    "agg", ["min", "max", "idxmax", "idxmax", "sum", "prod", "count", "mean"]
 )
 def test_groupby_nulls_basic(agg):
     check_dtype = False if agg in _index_type_aggs else True
@@ -818,7 +831,9 @@ def test_groupby_nulls_basic(agg):
     # Pandas' null semantics. Should we change it?
     assert_eq(
         getattr(pdf.groupby("a", sort=True), agg)().fillna(0),
-        getattr(gdf.groupby("a", sort=True), agg)().fillna(0),
+        getattr(gdf.groupby("a", sort=True), agg)().fillna(
+            0 if agg != "prod" else 1
+        ),
         check_dtype=check_dtype,
     )
 
