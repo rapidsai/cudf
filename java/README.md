@@ -38,12 +38,12 @@ In some cases there may be a classifier to indicate the version of cuda required
 Build From Source section below for more information about when this can happen. No official
 release of the jar will have a classifier on it.
 
-CUDA 10.0:
+CUDA 11.0:
 ```xml
 <dependency>
     <groupId>ai.rapids</groupId>
     <artifactId>cudf</artifactId>
-    <classifier>cuda10</classifier>
+    <classifier>cuda11</classifier>
     <version>${cudf.version}</version>
 </dependency>
 ```
