@@ -464,29 +464,6 @@ class Merge(object):
                     )
         return out_lhs, out_rhs
 
-    def _patch_decimal_precision(
-        self, lhs: Frame, rhs: Frame
-    ) -> Tuple[Frame, Frame]:
-        out_lhs = lhs.copy(deep=False)
-        out_rhs = rhs.copy(deep=False)
-        for left_key, right_key in zip(*self._keys):
-            if isinstance(
-                left_key.get(self.lhs).dtype, cudf.Decimal64Dtype
-            ) and isinstance(
-                right_key.get(self.rhs).dtype, cudf.Decimal64Dtype
-            ):
-                left_key.set(
-                    out_lhs,
-                    left_key.get(out_lhs).astype("category"),
-                    validate=False,
-                )
-                right_key.set(
-                    out_rhs,
-                    right_key.get(out_rhs).astype("category"),
-                    validate=False,
-                )
-        return out_lhs, out_rhs
-
 
 class MergeSemi(Merge):
     def __init__(self, *args, **kwargs):

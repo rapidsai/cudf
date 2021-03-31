@@ -1412,6 +1412,8 @@ class ColumnBase(Column, Serializable):
           of `other`  and the categories of `self`.
         * when both `self` and `other` are StructColumns, rename the fields
           of `other` to the field names of `self`.
+        * when `self` and `other` are DecimalColumns, copy the precision
+          over from `self` to `other`.
         * when `self` and `other` are nested columns of the same type,
           recursively apply this function on the children of `self` to the
           and the children of `other`.
