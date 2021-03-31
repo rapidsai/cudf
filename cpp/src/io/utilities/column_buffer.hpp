@@ -28,8 +28,6 @@
 #include <cudf/types.hpp>
 #include <cudf/utilities/traits.hpp>
 
-#include <cudf_test/column_utilities.hpp>
-
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_buffer.hpp>
 #include <rmm/device_uvector.hpp>

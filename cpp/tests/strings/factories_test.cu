@@ -91,8 +91,14 @@ TEST_F(StringsFactoriesTest, CreateColumnFromPair)
 
   // check string data
   auto strings_data = cudf::strings::create_offsets(strings_view);
-  thrust::host_vector<char> h_chars_data(strings_data.first);
-  thrust::host_vector<cudf::size_type> h_offsets_data(strings_data.second);
+  thrust::host_vector<char> h_chars_data(strings_data.first.size());
+  thrust::host_vector<cudf::size_type> h_offsets_data(strings_data.second.size());
+  CUDA_TRY(cudaMemcpy(
+    h_chars_data.data(), strings_data.first.data(), h_chars_data.size(), cudaMemcpyDeviceToHost));
+  CUDA_TRY(cudaMemcpy(h_offsets_data.data(),
+                      strings_data.second.data(),
+                      h_offsets_data.size() * sizeof(cudf::size_type),
+                      cudaMemcpyDeviceToHost));
   EXPECT_EQ(memcmp(h_buffer.data(), h_chars_data.data(), h_buffer.size()), 0);
   EXPECT_EQ(
     memcmp(h_offsets.data(), h_offsets_data.data(), h_offsets.size() * sizeof(cudf::size_type)), 0);
@@ -147,8 +153,14 @@ TEST_F(StringsFactoriesTest, CreateColumnFromOffsets)
 
   // check string data
   auto strings_data = cudf::strings::create_offsets(strings_view);
-  thrust::host_vector<char> h_chars_data(strings_data.first);
-  thrust::host_vector<cudf::size_type> h_offsets_data(strings_data.second);
+  thrust::host_vector<char> h_chars_data(strings_data.first.size());
+  thrust::host_vector<cudf::size_type> h_offsets_data(strings_data.second.size());
+  CUDA_TRY(cudaMemcpy(
+    h_chars_data.data(), strings_data.first.data(), h_chars_data.size(), cudaMemcpyDeviceToHost));
+  CUDA_TRY(cudaMemcpy(h_offsets_data.data(),
+                      strings_data.second.data(),
+                      h_offsets_data.size() * sizeof(cudf::size_type),
+                      cudaMemcpyDeviceToHost));
   EXPECT_EQ(memcmp(h_buffer.data(), h_chars_data.data(), h_buffer.size()), 0);
   EXPECT_EQ(
     memcmp(h_offsets.data(), h_offsets_data.data(), h_offsets.size() * sizeof(cudf::size_type)), 0);
@@ -193,8 +205,14 @@ TEST_F(StringsFactoriesTest, CreateOffsets)
   };
   for (size_t idx = 0; idx < result.size(); idx++) {
     auto strings_data = cudf::strings::create_offsets(cudf::strings_column_view(result[idx]));
-    thrust::host_vector<char> h_chars(strings_data.first);
-    thrust::host_vector<cudf::size_type> h_offsets(strings_data.second);
+    thrust::host_vector<char> h_chars(strings_data.first.size());
+    thrust::host_vector<cudf::size_type> h_offsets(strings_data.second.size());
+    CUDA_TRY(cudaMemcpy(
+      h_chars.data(), strings_data.first.data(), h_chars.size(), cudaMemcpyDeviceToHost));
+    CUDA_TRY(cudaMemcpy(h_offsets.data(),
+                        strings_data.second.data(),
+                        h_offsets.size() * sizeof(cudf::size_type),
+                        cudaMemcpyDeviceToHost));
     auto expected_strings = expecteds[idx];
     for (size_t jdx = 0; jdx < h_offsets.size() - 1; ++jdx) {
       auto offset = h_offsets[jdx];
