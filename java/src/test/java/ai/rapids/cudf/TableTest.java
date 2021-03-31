@@ -930,6 +930,51 @@ public class TableTest extends CudfTestBase {
   }
 
   @Test
+  void testLeftJoinLeftEmpty() {
+    final Integer[] emptyInts = new Integer[0];
+    try (Table leftTable = new Table.TestBuilder()
+        .column(emptyInts)
+        .column(emptyInts)
+        .build();
+         Table rightTable = new Table.TestBuilder()
+             .column(306, 301, 360, 109, 335, 254, 317, 361, 251, 326)
+             .column( 20,  21,  22,  23,  24,  25,  26,  27,  28,  29)
+             .build();
+         Table joinedTable = leftTable.onColumns(0).leftJoin(rightTable.onColumns(0), true);
+         Table expected = new Table.TestBuilder()
+             .column(emptyInts) // common
+             .column(emptyInts) // left
+             .column(emptyInts) // right
+             .build()) {
+      assertTablesAreEqual(expected, joinedTable);
+    }
+  }
+
+  @Test
+  void testLeftJoinRightEmpty() {
+    final Integer[] emptyInts = new Integer[0];
+    final Integer[] nullInts = new Integer[10];
+    Arrays.fill(nullInts, null);
+    try (Table leftTable = new Table.TestBuilder()
+        .column(360, 326, 254, 306, 109, 361, 251, 335, 301, 317)
+        .column( 10,  11,  12,  13,  14,  15,  16,  17,  18,  19)
+        .build();
+         Table rightTable = new Table.TestBuilder()
+             .column(emptyInts)
+             .column(emptyInts)
+             .build();
+         Table joinedTable = leftTable.onColumns(0).leftJoin(rightTable.onColumns(0), true);
+         Table orderedJoinedTable = joinedTable.orderBy(OrderByArg.asc(1, true));
+         Table expected = new Table.TestBuilder()
+             .column(360, 326, 254, 306, 109, 361, 251, 335, 301, 317) // common
+             .column( 10,  11,  12,  13,  14,  15,  16,  17,  18,  19) // left
+             .column(nullInts) // right
+             .build()) {
+      assertTablesAreEqual(expected, orderedJoinedTable);
+    }
+  }
+
+  @Test
   void testFullJoinWithNonCommonKeys() {
     try (Table leftTable = new Table.TestBuilder()
             .column(  2,   3,   9,   0,   1,   7,   4,   6,   5,   8)
@@ -944,6 +989,46 @@ public class TableTest extends CudfTestBase {
                  .column( 103,  104,  100,  101,  106, 108, 107,  105, 109, 102, null, null) // left
                  .column(null, null, null, null, null, 201, 200, null, 203, 202,  204,  205) // right
                  .build();
+         Table joinedTable = leftTable.onColumns(0).fullJoin(rightTable.onColumns(0), true);
+         Table orderedJoinedTable = joinedTable.orderBy(OrderByArg.asc(0, true))) {
+      assertTablesAreEqual(expected, orderedJoinedTable);
+    }
+  }
+
+  @Test
+  void testFullJoinLeftEmpty() {
+    final Integer[] emptyInts = new Integer[0];
+    final Integer[] nullInts = new Integer[6];
+    try (Table leftTable = new Table.TestBuilder().column(emptyInts).column(emptyInts).build();
+         Table rightTable = new Table.TestBuilder()
+             .column(  6,   5,   9,   8,  10,  32)
+             .column(200, 201, 202, 203, 204, 205)
+             .build();
+         Table expected = new Table.TestBuilder()
+             .column(   5,    6,    8,    9,   10,   32) // common
+             .column(nullInts) // left
+             .column( 201,  200,  203,  202,  204,  205) // right
+             .build();
+         Table joinedTable = leftTable.onColumns(0).fullJoin(rightTable.onColumns(0), true);
+         Table orderedJoinedTable = joinedTable.orderBy(OrderByArg.asc(0, true))) {
+      assertTablesAreEqual(expected, orderedJoinedTable);
+    }
+  }
+
+  @Test
+  void testFullJoinRightEmpty() {
+    final Integer[] emptyInts = new Integer[0];
+    final Integer[] nullInts = new Integer[10];
+    try (Table leftTable = new Table.TestBuilder()
+        .column(  2,   3,   9,   0,   1,   7,   4,   6,   5,   8)
+        .column(100, 101, 102, 103, 104, 105, 106, 107, 108, 109)
+        .build();
+         Table rightTable = new Table.TestBuilder().column(emptyInts).column(emptyInts).build();
+         Table expected = new Table.TestBuilder()
+             .column(   0,    1,    2,    3,    4,   5,   6,    7,   8,   9) // common
+             .column( 103,  104,  100,  101,  106, 108, 107,  105, 109, 102) // left
+             .column(nullInts) // right
+             .build();
          Table joinedTable = leftTable.onColumns(0).fullJoin(rightTable.onColumns(0), true);
          Table orderedJoinedTable = joinedTable.orderBy(OrderByArg.asc(0, true))) {
       assertTablesAreEqual(expected, orderedJoinedTable);
@@ -1029,6 +1114,36 @@ public class TableTest extends CudfTestBase {
   }
 
   @Test
+  void testInnerJoinLeftEmpty() {
+    final Integer[] emptyInts = new Integer[0];
+    try (Table leftTable = new Table.TestBuilder()
+        .column(  2,   3,   9,   0,   1,   7,   4,   6,   5,   8)
+        .column(100, 101, 102, 103, 104, 105, 106, 107, 108, 109)
+        .build();
+         Table rightTable = new Table.TestBuilder().column(emptyInts).column(emptyInts).build();
+         Table expected = new Table.TestBuilder()
+             .column(emptyInts).column(emptyInts).column(emptyInts).build();
+         Table joinedTable = leftTable.onColumns(0).innerJoin(rightTable.onColumns(0), true)) {
+      assertTablesAreEqual(expected, joinedTable);
+    }
+  }
+
+  @Test
+  void testInnerJoinRightEmpty() {
+    final Integer[] emptyInts = new Integer[0];
+    try (Table leftTable = new Table.TestBuilder()
+        .column(  2,   3,   9,   0,   1,   7,   4,   6,   5,   8)
+        .column(100, 101, 102, 103, 104, 105, 106, 107, 108, 109)
+        .build();
+         Table rightTable = new Table.TestBuilder().column(emptyInts).column(emptyInts).build();
+         Table expected = new Table.TestBuilder()
+             .column(emptyInts).column(emptyInts).column(emptyInts).build();
+         Table joinedTable = leftTable.onColumns(0).innerJoin(rightTable.onColumns(0), true)) {
+      assertTablesAreEqual(expected, joinedTable);
+    }
+  }
+
+  @Test
   void testInnerJoinOnNullKeys() {
     try (Table leftTable = new Table.TestBuilder()
              .column(  2,   3,   9,   0,   1,   7,   4,   6, null,   8)
@@ -1101,6 +1216,32 @@ public class TableTest extends CudfTestBase {
          Table joinedTable = leftTable.onColumns(0).leftSemiJoin(rightTable.onColumns(0), true);
          Table orderedJoinedTable = joinedTable.orderBy(OrderByArg.asc(1, true))) {
       assertTablesAreEqual(expected, orderedJoinedTable);
+    }
+  }
+
+  @Test
+  void testLeftSemiJoinLeftEmpty() {
+    final Integer[] emptyInts = new Integer[0];
+    try (Table leftTable = new Table.TestBuilder().column(emptyInts).column(emptyInts).build();
+         Table rightTable = new Table.TestBuilder()
+             .column(  6,   5,   9,   8,  10,  32)
+             .column(201, 202, 203, 204, 205, 206)
+             .build();
+         Table joinedTable = leftTable.onColumns(0).leftSemiJoin(rightTable.onColumns(0), true)) {
+      assertTablesAreEqual(leftTable, joinedTable);
+    }
+  }
+
+  @Test
+  void testLeftSemiJoinRightEmpty() {
+    final Integer[] emptyInts = new Integer[0];
+    try (Table leftTable = new Table.TestBuilder()
+        .column(  2,   3,   9,   0,   1,   7,   4,   6,   5,   8)
+        .column(100, 101, 102, 103, 104, 105, 106, 107, 108, 109)
+        .build();
+         Table rightTable = new Table.TestBuilder().column(emptyInts).column(emptyInts).build();
+         Table joinedTable = leftTable.onColumns(0).leftSemiJoin(rightTable.onColumns(0), true)) {
+      assertTablesAreEqual(rightTable, joinedTable);
     }
   }
 
@@ -1180,6 +1321,32 @@ public class TableTest extends CudfTestBase {
   }
 
   @Test
+  void testLeftAntiJoinLeftEmpty() {
+    final Integer[] emptyInts = new Integer[0];
+    try (Table leftTable = new Table.TestBuilder().column(emptyInts).column(emptyInts).build();
+         Table rightTable = new Table.TestBuilder()
+             .column(  6,   5,   9,   8,  10,  32)
+             .column(201, 202, 203, 204, 205, 206)
+             .build();
+         Table joinedTable = leftTable.onColumns(0).leftAntiJoin(rightTable.onColumns(0), true)) {
+      assertTablesAreEqual(leftTable, joinedTable);
+    }
+  }
+
+  @Test
+  void testLeftAntiJoinRightEmpty() {
+    final Integer[] emptyInts = new Integer[0];
+    try (Table leftTable = new Table.TestBuilder()
+        .column(  2,   3,   9,   0,   1,   7,   4,   6,   5,   8)
+        .column(100, 101, 102, 103, 104, 105, 106, 107, 108, 109)
+        .build();
+         Table rightTable = new Table.TestBuilder().column(emptyInts).column(emptyInts).build();
+         Table joinedTable = leftTable.onColumns(0).leftAntiJoin(rightTable.onColumns(0), true)) {
+      assertTablesAreEqual(leftTable, joinedTable);
+    }
+  }
+
+  @Test
   void testLeftAntiJoinOnNullKeys() {
     try (Table leftTable = new Table.TestBuilder()
             .column(  2,   3,   9,   0,   1,   7,   4,   6, null,   8)
@@ -1252,6 +1419,215 @@ public class TableTest extends CudfTestBase {
                      OrderByArg.asc(0, true),
                      OrderByArg.asc(1, true))) {
       assertTablesAreEqual(expected, orderedJoinedTable);
+    }
+  }
+
+  private void verifyJoinGatherMaps(GatherMap[] maps, Table expected) {
+    assertEquals(2, maps.length);
+    int numRows = (int) expected.getRowCount();
+    assertEquals(numRows, maps[0].getRowCount());
+    assertEquals(numRows, maps[1].getRowCount());
+    try (ColumnVector leftMap = maps[0].toColumnView(0, numRows).copyToColumnVector();
+         ColumnVector rightMap = maps[1].toColumnView(0, numRows).copyToColumnVector();
+         Table result = new Table(leftMap, rightMap);
+         Table orderedResult = result.orderBy(OrderByArg.asc(0, true))) {
+      assertTablesAreEqual(expected, orderedResult);
+    }
+  }
+
+  private void verifySemiJoinGatherMap(GatherMap map, Table expected) {
+    int numRows = (int) expected.getRowCount();
+    assertEquals(numRows, map.getRowCount());
+    try (ColumnVector leftMap = map.toColumnView(0, numRows).copyToColumnVector();
+         Table result = new Table(leftMap);
+         Table orderedResult = result.orderBy(OrderByArg.asc(0, true))) {
+      assertTablesAreEqual(expected, orderedResult);
+    }
+  }
+
+  @Test
+  void testLeftJoinGatherMaps() {
+    final int inv = Integer.MIN_VALUE;
+    try (Table leftKeys = new Table.TestBuilder().column(2, 3, 9, 0, 1, 7, 4, 6, 5, 8).build();
+         Table rightKeys = new Table.TestBuilder().column(6, 5, 9, 8, 10, 32).build();
+         Table expected = new Table.TestBuilder()
+             .column(  0,   1, 2,   3,   4,   5,   6, 7, 8, 9)
+             .column(inv, inv, 2, inv, inv, inv, inv, 0, 1, 3)
+             .build()) {
+      GatherMap[] maps = leftKeys.leftJoinGatherMaps(rightKeys, false);
+      try {
+        verifyJoinGatherMaps(maps, expected);
+      } finally {
+        for (GatherMap map : maps) {
+          map.close();
+        }
+      }
+    }
+  }
+
+  @Test
+  void testLeftJoinGatherMapsNulls() {
+    final int inv = Integer.MIN_VALUE;
+    try (Table leftKeys = new Table.TestBuilder()
+            .column(2, 3, 9, 0, 1, 7, 4, null, null, 8)
+            .build();
+         Table rightKeys = new Table.TestBuilder()
+             .column(null, null, 9, 8, 10, 32)
+             .build();
+         Table expected = new Table.TestBuilder()
+             .column(  0,   1, 2,   3,   4,   5,   6, 7, 7, 8, 8, 9) // left
+             .column(inv, inv, 2, inv, inv, inv, inv, 0, 1, 0, 1, 3) // right
+             .build()) {
+      GatherMap[] maps = leftKeys.leftJoinGatherMaps(rightKeys, true);
+      try {
+        verifyJoinGatherMaps(maps, expected);
+      } finally {
+        for (GatherMap map : maps) {
+          map.close();
+        }
+      }
+    }
+  }
+
+  @Test
+  void testInnerJoinGatherMaps() {
+    try (Table leftKeys = new Table.TestBuilder().column(2, 3, 9, 0, 1, 7, 4, 6, 5, 8).build();
+         Table rightKeys = new Table.TestBuilder().column(6, 5, 9, 8, 10, 32).build();
+         Table expected = new Table.TestBuilder()
+             .column(2, 7, 8, 9) // left
+             .column(2, 0, 1, 3) // right
+             .build()) {
+      GatherMap[] maps = leftKeys.innerJoinGatherMaps(rightKeys, false);
+      try {
+        verifyJoinGatherMaps(maps, expected);
+      } finally {
+        for (GatherMap map : maps) {
+          map.close();
+        }
+      }
+    }
+  }
+
+  @Test
+  void testInnerJoinGatherMapsNulls() {
+    try (Table leftKeys = new Table.TestBuilder()
+        .column(2, 3, 9, 0, 1, 7, 4, null, null, 8)
+        .build();
+         Table rightKeys = new Table.TestBuilder()
+             .column(null, null, 9, 8, 10, 32)
+             .build();
+         Table expected = new Table.TestBuilder()
+             .column(2, 7, 7, 8, 8, 9) // left
+             .column(2, 0, 1, 0, 1, 3) // right
+             .build()) {
+      GatherMap[] maps = leftKeys.innerJoinGatherMaps(rightKeys, true);
+      try {
+        verifyJoinGatherMaps(maps, expected);
+      } finally {
+        for (GatherMap map : maps) {
+          map.close();
+        }
+      }
+    }
+  }
+
+  @Test
+  void testFullJoinGatherMaps() {
+    final int inv = Integer.MIN_VALUE;
+    try (Table leftKeys = new Table.TestBuilder().column(2, 3, 9, null, 1, 7, 4, 6, 5, 8).build();
+         Table rightKeys = new Table.TestBuilder().column(6, 5, 9, 8, 10, null).build();
+         Table expected = new Table.TestBuilder()
+             .column(inv, inv,   0,   1, 2,   3,   4,   5,   6, 7, 8, 9) // left
+             .column(  4,   5, inv, inv, 2, inv, inv, inv, inv, 0, 1, 3) // right
+             .build()) {
+      GatherMap[] maps = leftKeys.fullJoinGatherMaps(rightKeys, false);
+      try {
+        verifyJoinGatherMaps(maps, expected);
+      } finally {
+        for (GatherMap map : maps) {
+          map.close();
+        }
+      }
+    }
+  }
+
+  @Test
+  void testFullJoinGatherMapsNulls() {
+    final int inv = Integer.MIN_VALUE;
+    try (Table leftKeys = new Table.TestBuilder()
+             .column(2, 3, 9, 0, 1, 7, 4, null, null, 8)
+             .build();
+         Table rightKeys = new Table.TestBuilder()
+             .column(null, null, 9, 8, 10, 32)
+             .build();
+         Table expected = new Table.TestBuilder()
+             .column(inv, inv,   0,   1, 2,   3,   4,   5,   6, 7, 7, 8, 8, 9) // left
+             .column(  4,   5, inv, inv, 2, inv, inv, inv, inv, 0, 1, 0, 1, 3) // right
+             .build()) {
+      GatherMap[] maps = leftKeys.fullJoinGatherMaps(rightKeys, true);
+      try {
+        verifyJoinGatherMaps(maps, expected);
+      } finally {
+        for (GatherMap map : maps) {
+          map.close();
+        }
+      }
+    }
+  }
+
+  @Test
+  void testLeftSemiJoinGatherMap() {
+    try (Table leftKeys = new Table.TestBuilder().column(2, 3, 9, 0, 1, 7, 4, 6, 5, 8).build();
+         Table rightKeys = new Table.TestBuilder().column(6, 5, 9, 8, 10, 32).build();
+         Table expected = new Table.TestBuilder()
+             .column(2, 7, 8, 9) // left
+             .build();
+         GatherMap map = leftKeys.leftSemiJoinGatherMap(rightKeys, false)) {
+      verifySemiJoinGatherMap(map, expected);
+    }
+  }
+
+  @Test
+  void testLeftSemiJoinGatherMapNulls() {
+    try (Table leftKeys = new Table.TestBuilder()
+        .column(2, 3, 9, 0, 1, 7, 4, null, null, 8)
+        .build();
+         Table rightKeys = new Table.TestBuilder()
+             .column(null, null, 9, 8, 10, 32)
+             .build();
+         Table expected = new Table.TestBuilder()
+             .column(2, 7, 8, 9) // left
+             .build();
+         GatherMap map = leftKeys.leftSemiJoinGatherMap(rightKeys, true)) {
+      verifySemiJoinGatherMap(map, expected);
+    }
+  }
+
+  @Test
+  void testAntiSemiJoinGatherMap() {
+    try (Table leftKeys = new Table.TestBuilder().column(2, 3, 9, 0, 1, 7, 4, 6, 5, 8).build();
+         Table rightKeys = new Table.TestBuilder().column(6, 5, 9, 8, 10, 32).build();
+         Table expected = new Table.TestBuilder()
+             .column(0, 1, 3, 4, 5, 6) // left
+             .build();
+         GatherMap map = leftKeys.leftAntiJoinGatherMap(rightKeys, false)) {
+      verifySemiJoinGatherMap(map, expected);
+    }
+  }
+
+  @Test
+  void testAntiSemiJoinGatherMapNulls() {
+    try (Table leftKeys = new Table.TestBuilder()
+        .column(2, 3, 9, 0, 1, 7, 4, null, null, 8)
+        .build();
+         Table rightKeys = new Table.TestBuilder()
+             .column(null, null, 9, 8, 10, 32)
+             .build();
+         Table expected = new Table.TestBuilder()
+             .column(0, 1, 3, 4, 5, 6) // left
+             .build();
+         GatherMap map = leftKeys.leftAntiJoinGatherMap(rightKeys, true)) {
+      verifySemiJoinGatherMap(map, expected);
     }
   }
 
@@ -3969,6 +4345,32 @@ public class TableTest extends CudfTestBase {
   }
 
   @Test
+  void testRowBitCount() {
+    try (Table t = new Table.TestBuilder()
+        .column(0, 1, null, 3)                 // 33 bits per row (4 bytes + valid bit)
+        .column(0.0, null, 2.0, 3.0)           // 65 bits per row (8 bytes + valid bit)
+        .column("zero", null, "two", "three")  // 33 bits (4 byte offset + valid bit) + char bits
+        .build();
+         ColumnVector expected = ColumnVector.fromInts(163, 131, 155, 171);
+         ColumnVector actual = t.rowBitCount()) {
+      assertColumnsAreEqual(expected, actual);
+    }
+  }
+
+  @Test
+  void testRowBitCountEmpty() {
+    try (Table t = new Table.TestBuilder()
+            .column(new Integer[0])
+            .column(new Double[0])
+            .column(new String[0])
+            .build();
+         ColumnVector c = t.rowBitCount()) {
+      assertEquals(DType.INT32, c.getType());
+      assertEquals(0, c.getRowCount());
+    }
+  }
+
+  @Test
   void testSimpleGather() {
     try (Table testTable = new Table.TestBuilder()
             .column(1, 2, 3, 4, 5)
@@ -3982,6 +4384,26 @@ public class TableTest extends CudfTestBase {
                  .column("A", "AAA", "AAAAA", "AAAA")
                  .decimal32Column(-3, 1, 3, 5, 4)
                  .decimal64Column(-8, 100001L, 300003L, 500005L, 400004L)
+                 .build();
+         Table found = testTable.gather(gatherMap)) {
+      assertTablesAreEqual(expected, found);
+    }
+  }
+
+  @Test
+  void testBoundsCheckedGather() {
+    try (Table testTable = new Table.TestBuilder()
+            .column(1, 2, 3, 4, 5)
+            .column("A", "AA", "AAA", "AAAA", "AAAAA")
+            .decimal32Column(-3, 1, 2, 3, 4, 5)
+            .decimal64Column(-8, 100001L, 200002L, 300003L, 400004L, 500005L)
+            .build();
+         ColumnVector gatherMap = ColumnVector.fromInts(0, 100, 4, -2);
+         Table expected = new Table.TestBuilder()
+                 .column(1, null, 5, 4)
+                 .column("A", null, "AAAAA", "AAAA")
+                 .decimal32Column(-3, 1, null, 5, 4)
+                 .decimal64Column(-8, 100001L, null, 500005L, 400004L)
                  .build();
          Table found = testTable.gather(gatherMap)) {
       assertTablesAreEqual(expected, found);
@@ -4645,7 +5067,7 @@ public class TableTest extends CudfTestBase {
         .build()) {
       Table.TestBuilder expectedBuilder = new Table.TestBuilder();
       if (pos) {
-        Integer[] posData = outer ? new Integer[]{0, 1, 2, 0, 1, 0, 0, 0} : new Integer[]{0, 1, 2, 0, 1, 0};
+        Integer[] posData = outer ? new Integer[]{0, 1, 2, 0, 1, 0, null, null} : new Integer[]{0, 1, 2, 0, 1, 0};
         expectedBuilder.column(posData);
       }
       List<Object[]> expectedData = new ArrayList<Object[]>(){{
@@ -4687,10 +5109,11 @@ public class TableTest extends CudfTestBase {
         .build()) {
       Table.TestBuilder expectedBuilder = new Table.TestBuilder();
       if (pos) {
-        if (!outer)
+        if (outer) {
+          expectedBuilder.column(0, 1, 2, 0, 1, 0, null, null);
+        } else {
           expectedBuilder.column(0, 1, 2, 0, 1, 0, 0);
-        else
-          expectedBuilder.column(0, 1, 2, 0, 1, 0, 0, 0);
+        }
       }
       List<Object[]> expectedData = new ArrayList<Object[]>(){{
         if (!outer) {

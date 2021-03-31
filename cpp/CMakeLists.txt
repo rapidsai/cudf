@@ -346,6 +346,7 @@ add_library(cudf
     src/strings/find.cu
     src/strings/find_multiple.cu
     src/strings/padding.cu
+    src/strings/json/json_path.cu
     src/strings/regex/regcomp.cpp
     src/strings/regex/regexec.cu
     src/strings/replace/backref_re.cu
@@ -389,6 +390,7 @@ add_library(cudf
     src/transform/jit/code/kernel.cpp
     src/transform/mask_to_bools.cu
     src/transform/nans_to_nulls.cu
+    src/transform/row_bit_count.cu
     src/transform/transform.cpp
     src/transpose/transpose.cu
     src/unary/cast_ops.cu

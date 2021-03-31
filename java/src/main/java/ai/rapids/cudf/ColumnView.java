@@ -2083,6 +2083,23 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
     return new ColumnVector(substringColumn(getNativeView(), start.getNativeView(), end.getNativeView()));
   }
 
+   /**
+   * Apply a JSONPath string to all rows in an input strings column.
+   *
+   * Applies a JSONPath string to an incoming strings column where each row in the column
+   * is a valid json string.  The output is returned by row as a strings column.
+   *
+   * For reference, https://tools.ietf.org/id/draft-goessner-dispatch-jsonpath-00.html
+   * Note: Only implements the operators: $ . [] *
+   *
+   * @param path The JSONPath string to be applied to each row
+   * @return new strings ColumnVector containing the retrieved json object strings
+   */
+  public final ColumnVector getJSONObject(Scalar path) {
+    assert(type.equals(DType.STRING)) : "column type must be a String";
+    return new ColumnVector(getJSONObject(getNativeView(), path.getScalarHandle()));
+  }
+
   /**
    * Returns a new strings column where target string within each string is replaced with the specified
    * replacement string.
@@ -2524,6 +2541,49 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
   }
 
   /**
+   * Create a new column view from a raw device buffer. Note that this will NOT copy
+   * the contents of the buffer but only creates a view. The view MUST NOT outlive
+   * the underlying device buffer. The column view will be created without a validity
+   * vector, so it is not possible to create a view containing null elements. Additionally
+   * only fixed-width primitive types are supported.
+   *
+   * @param buffer device memory that will back the column view
+   * @param startOffset byte offset into the device buffer where the column data starts
+   * @param type type of data in the column view
+   * @param rows number of data elements in the column view
+   * @return new column view instance that must not outlive the backing device buffer
+   */
+  public static ColumnView fromDeviceBuffer(BaseDeviceMemoryBuffer buffer,
+                                            long startOffset,
+                                            DType type,
+                                            int rows) {
+    if (buffer == null) {
+      throw new NullPointerException("buffer is null");
+    }
+    int typeSize = type.getSizeInBytes();
+    if (typeSize <= 0) {
+      throw new IllegalArgumentException("Unsupported type: " + type);
+    }
+    if (startOffset < 0) {
+      throw new IllegalArgumentException("Invalid start offset: " + startOffset);
+    }
+    if (rows < 0) {
+      throw new IllegalArgumentException("Invalid row count: " + rows);
+    }
+    long dataSize = typeSize * rows;
+    if (startOffset + dataSize > buffer.length) {
+      throw new IllegalArgumentException("View extends beyond buffer range");
+    }
+    long dataAddress = buffer.getAddress() + startOffset;
+    if (dataAddress % typeSize != 0) {
+      throw new IllegalArgumentException("Data address " + Long.toHexString(dataAddress) +
+          " is misaligned relative to type size of " + typeSize + " bytes");
+    }
+    return new ColumnView(makeCudfColumnView(type.typeId.getNativeId(), type.getScale(),
+        dataAddress, dataSize, 0, 0, 0, rows, null));
+  }
+
+  /**
    * Create a column of bool values indicating whether the specified scalar
    * is an element of each row of a list column.
    * Output `column[i]` is set to null if one or more of the following are true:
@@ -2605,6 +2665,8 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    *         by the timestampToLong method.
    */
   private static native long stringTimestampToTimestamp(long viewHandle, int unit, String format);
+
+  private static native long getJSONObject(long viewHandle, long scalarHandle) throws CudfException;
 
   /**
    * Native method to parse and convert a timestamp column vector to string column vector. A unix
