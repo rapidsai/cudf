@@ -681,7 +681,8 @@ def _can_cast(from_dtype, to_dtype):
                 return True
             else:
                 return False
-    elif isinstance(from_dtype, np.dtype):
+    elif isinstance(from_dtype, (np.dtype, type)):
+        from_dtype = np.dtype(from_dtype)
         if isinstance(to_dtype, (np.dtype, type)):
             return np.can_cast(from_dtype, to_dtype)
         elif isinstance(to_dtype, cudf.core.dtypes.Decimal64Dtype):
