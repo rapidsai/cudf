@@ -21,7 +21,6 @@ null_frequency = [0.1, 0.4, 0.8]
 @pytest.mark.parametrize("skiprows", [0, 1000, 20000])
 def bench_avro(benchmark, dataset_dir, use_buffer, skiprows):
     file_path = glob.glob(dataset_dir + "avro_*")
-    print(" dataset_dir : ", dataset_dir)
     if use_buffer == "True":
         with open(file_path, "rb") as f:
             file_path = io.BytesIO(f.read())
