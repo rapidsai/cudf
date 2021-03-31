@@ -11,9 +11,7 @@ import numpy as np
 import pandas as pd
 from nvtx import annotate
 from pandas._config import get_option
-import datetime as dt
 from cudf._lib.filling import sequence
-from cudf._lib.scalar import DeviceScalar
 
 import cudf
 from cudf._typing import DtypeObj
@@ -2120,7 +2118,7 @@ class GenericIndex(Index):
     def __getitem__(self, index):
         if type(self) == IntervalIndex:
             raise NotImplementedError(
-                "Iteration over an IntervalIndex is not yet" " supprted"
+                "Getting a scalar from an IntervalIndex is not yet supported"
             )
         res = self._values[index]
         if not isinstance(index, int):
@@ -2817,23 +2815,15 @@ def interval_range(
             "Of the four parameters: start, end, periods, and "
             "freq, exactly three must be specified"
         )
-    if isinstance(start or end, dt.datetime) or isinstance(
-        start or end, dt.timedelta
-    ):
-        raise NotImplementedError(
-            "Datetime-like intervals are not yet supported"
-        )
-    if start and isinstance(start, str):
-        raise ValueError(f"start must be numeric, got {start}")
-    if end and isinstance(end, str):
-        raise ValueError(f"end must be numeric, got {start}")
+    if not isinstance(start or freq or end, int or float):
+        raise NotImplementedError("Non-numeric values not yet supported")
     elif periods and not freq:
         # if statement for mypy to pass
         if end is not None and start is not None:
             freq_step = ((end) - start) / periods
-            freq_step = DeviceScalar(freq_step, dtype="float64")
-            start = DeviceScalar(start, dtype="float64")
-            bin_edges = sequence(size=periods + 1, init=start, step=freq_step)
+            freq_step = cudf.Scalar(freq_step, dtype="float64").device_value
+            start = cudf.Scalar(start, dtype="float64").device_value
+            bin_edges = sequence(size=periods + 1, init=start, step=freq_step,)
             if cupy.all(cupy.mod(bin_edges, 1) == 0):
                 bin_edges = bin_edges.astype(int)
             left_col = bin_edges[:-1]
@@ -2918,18 +2908,14 @@ class IntervalIndex(GenericIndex):
             data = column.as_column(data, data.dtype)
         elif isinstance(data, (pd._libs.interval.Interval, pd.IntervalIndex)):
             data = column.as_column(data, dtype=dtype,)
-        elif isinstance(data, list):
-            if not data:
-                dtype = IntervalDtype("int64", closed)
-                data = column.column_empty_like_same_mask(
-                    column.as_column(data), dtype
-                )
-            elif data is not None and data != [] and data[0].closed != closed:
-                data = column.as_column(data)
-                # change closed value to correct value
-                data.dtype.closed = closed
-            else:
-                data = column.as_column(data)
+        elif not data:
+            dtype = IntervalDtype("int64", closed)
+            data = column.column_empty_like_same_mask(
+                column.as_column(data), dtype
+            )
+        else:
+            data = column.as_column(data)
+            data.dtype.closed = closed
 
         out._initialize(data, **kwargs)
         return out
