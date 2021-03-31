@@ -47,9 +47,9 @@ extensions = [
         "*",
         sources=cython_files,
         include_dirs=[
-            "../../cpp/include/cudf",
-            "../../cpp/include",
-            "../../cpp/libcudf_kafka/include/cudf_kafka",
+            os.path.join(CUDF_ROOT, "../include/cudf"),
+            os.path.join(CUDF_ROOT, "../include"),
+            os.path.join(CUDF_ROOT, "../libcudf_kafka/include/cudf_kafka"),
             os.path.join(CUDF_ROOT, "include"),
             os.path.join(CUDF_ROOT, "_deps/libcudacxx-src/include"),
             os.path.join(
