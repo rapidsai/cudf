@@ -1,9 +1,13 @@
-# Copyright (c) 2020, NVIDIA CORPORATION.
+# Copyright (c) 2020-2021, NVIDIA CORPORATION.
+
+from distutils.version import LooseVersion
+
 import cupy as cp
 import numpy as np
 import pandas as pd
 import pyarrow as pa
 
+import dask
 from dask.dataframe.categorical import categorical_dtype_dispatch
 from dask.dataframe.core import get_parallel_type, make_meta, meta_nonempty
 from dask.dataframe.methods import (
@@ -27,6 +31,7 @@ from .core import DataFrame, Index, Series
 get_parallel_type.register(cudf.DataFrame, lambda _: DataFrame)
 get_parallel_type.register(cudf.Series, lambda _: Series)
 get_parallel_type.register(cudf.Index, lambda _: Index)
+DASK_VERSION = LooseVersion(dask.__version__)
 
 
 @meta_nonempty.register(cudf.Index)
@@ -200,18 +205,45 @@ def make_meta_object(x, index=None):
     raise TypeError(f"Don't know how to create metadata from {x}")
 
 
-@concat_dispatch.register((cudf.DataFrame, cudf.Series, cudf.Index))
-def concat_cudf(
-    dfs,
-    axis=0,
-    join="outer",
-    uniform=False,
-    filter_warning=True,
-    sort=None,
-    ignore_index=False,
-):
-    assert join == "outer"
-    return cudf.concat(dfs, axis=axis, ignore_index=ignore_index)
+if DASK_VERSION > "2021.03.1":
+
+    @concat_dispatch.register((cudf.DataFrame, cudf.Series, cudf.Index))
+    def concat_cudf(
+        dfs,
+        axis=0,
+        join="outer",
+        uniform=False,
+        filter_warning=True,
+        sort=None,
+        ignore_index=False,
+        **kwargs,
+    ):
+        assert join == "outer"
+
+        ignore_order = kwargs.get("ignore_order", False)
+        if ignore_order:
+            raise NotImplementedError(
+                "ignore_order parameter is not yet supported in dask-cudf"
+            )
+
+        return cudf.concat(dfs, axis=axis, ignore_index=ignore_index)
+
+
+else:
+
+    @concat_dispatch.register((cudf.DataFrame, cudf.Series, cudf.Index))
+    def concat_cudf(
+        dfs,
+        axis=0,
+        join="outer",
+        uniform=False,
+        filter_warning=True,
+        sort=None,
+        ignore_index=False,
+    ):
+        assert join == "outer"
+
+        return cudf.concat(dfs, axis=axis, ignore_index=ignore_index)
 
 
 @categorical_dtype_dispatch.register((cudf.DataFrame, cudf.Series, cudf.Index))
