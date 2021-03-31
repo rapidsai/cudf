@@ -66,13 +66,14 @@ RUN git clone https://github.com/apache/arrow.git /repos/arrow && mkdir /repos/d
 
 
 # Install rmm from source
-RUN cd /repos/ && git clone https://github.com/rapidsai/rmm.git && cd rmm/ && pip install clang==8.0.1 && pip install numba && ./build.sh
+RUN cd /repos/ && git clone https://github.com/rapidsai/rmm.git && cd /repos/rmm/ && ./build.sh librmm && pip install /repos/rmm/python/.
 
 ADD . /repos/cudf/
 
-# Install cudf from source
-RUN cd /repos/cudf/ && git submodule update --init --recursive && pip install -r python/cudf/requirements/requirements-build.txt --ignore-installed && \
-    pip install -r python/cudf/requirements/cuda-$CUDA_SHORT_VERSION/requirements-run.txt --ignore-installed
-    
+# Build env for CUDF build
+ENV CUDF_ROOT=/repos/cudf/cpp/build/
 
-RUN cd /repos/cudf/ && ./build.sh clean && ./build.sh
+# Install cudf from source
+RUN cd /repos/cudf/ && git submodule update --init --recursive && ./build.sh libcudf && \
+    cd  /repos/cudf/python/cudf/ && pip install .
+
