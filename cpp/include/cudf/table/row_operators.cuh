@@ -462,7 +462,7 @@ template <template <typename> class hash_function, bool has_nulls = true>
 class row_hasher {
  public:
   row_hasher() = delete;
-  row_hasher(table_device_view t) : _table{t}, _seed(DEFAULT_HASH_SEED) {}
+  row_hasher(table_device_view t) : _table{t} {}
   row_hasher(table_device_view t, uint32_t seed) : _table{t}, _seed(seed) {}
 
   __device__ auto operator()(size_type row_index) const
@@ -474,8 +474,7 @@ class row_hasher {
     // Hashes an element in a column
     auto hasher = [=](size_type column_index) {
       return cudf::type_dispatcher(_table.column(column_index).type(),
-                                   element_hasher_with_seed<hash_function, has_nulls>{
-                                     _seed, std::numeric_limits<hash_value_type>::max()},
+                                   element_hasher<hash_function, has_nulls>{},
                                    _table.column(column_index),
                                    row_index);
     };
@@ -485,13 +484,13 @@ class row_hasher {
                                     thrust::make_counting_iterator(0),
                                     thrust::make_counting_iterator(_table.num_columns()),
                                     hasher,
-                                    hash_value_type{0},
+                                    _seed,
                                     hash_combiner);
   }
 
  private:
   table_device_view _table;
-  uint32_t _seed;
+  uint32_t _seed{DEFAULT_HASH_SEED};
 };
 
 /**
