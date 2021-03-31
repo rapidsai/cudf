@@ -91,22 +91,22 @@ class reader::impl {
   table_with_metadata read(rmm::cuda_stream_view stream);
 
  private:
-  class selected_row_offsets {
+  class selected_rows_offsets {
     rmm::device_uvector<uint64_t> all;
     device_span<uint64_t const> selected;
 
    public:
-    selected_row_offsets(rmm::device_uvector<uint64_t> &&data,
+    selected_rows_offsets(rmm::device_uvector<uint64_t> &&data,
                          device_span<uint64_t const> selected_span)
       : all{std::move(data)}, selected{selected_span}
     {
     }
 
     operator device_span<uint64_t const>() const { return selected; }
-    void discard_after(size_t index) { selected = selected.subspan(0, index); }
-    void discard_before(size_t index)
+    void resize(size_t size) { selected = selected.subspan(0, size); }
+    void erase_first_n(size_t n)
     {
-      selected = selected.subspan(index, selected.size() - index);
+      selected = selected.subspan(n, selected.size() - n);
     }
     auto size() const { return selected.size(); }
     auto data() const { return selected.data(); }
@@ -117,7 +117,7 @@ class reader::impl {
    *
    * @param stream CUDA stream used for device memory operations and kernel launches.
    */
-  selected_row_offsets load_data_and_gather_row_offsets(rmm::cuda_stream_view stream);
+  selected_rows_offsets load_data_and_row_offsets(rmm::cuda_stream_view stream);
 
   /**
    * @brief Finds row positions within the specified input data.
@@ -134,7 +134,7 @@ class reader::impl {
    * @param load_whole_file Hint that the entire data will be needed on gpu
    * @param stream CUDA stream used for device memory operations and kernel launches.
    */
-  selected_row_offsets gather_row_offsets(host_span<char const> data,
+  selected_rows_offsets gather_row_offsets(host_span<char const> data,
                                           size_t range_begin,
                                           size_t range_end,
                                           size_t skip_rows,

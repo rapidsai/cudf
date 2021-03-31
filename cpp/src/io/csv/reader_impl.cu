@@ -182,7 +182,7 @@ std::vector<std::string> setColumnNames(std::vector<char> const &header,
   return col_names;
 }
 
-reader::impl::selected_row_offsets reader::impl::load_data_and_gather_row_offsets(
+reader::impl::selected_rows_offsets reader::impl::load_data_and_row_offsets(
   rmm::cuda_stream_view stream)
 {
   auto range_offset  = opts_.get_byte_range_offset();
@@ -245,7 +245,7 @@ reader::impl::selected_row_offsets reader::impl::load_data_and_gather_row_offset
 
     // Exclude the rows that are to be skipped from the end
     if (skip_end_rows > 0 && static_cast<size_t>(skip_end_rows) < row_offsets.size()) {
-      row_offsets.discard_after(row_offsets.size() - skip_end_rows);
+      row_offsets.resize(row_offsets.size() - skip_end_rows);
     }
     return row_offsets;
   }
@@ -254,7 +254,7 @@ reader::impl::selected_row_offsets reader::impl::load_data_and_gather_row_offset
 
 table_with_metadata reader::impl::read(rmm::cuda_stream_view stream)
 {
-  auto const row_offsets = load_data_and_gather_row_offsets(stream);
+  auto const row_offsets = load_data_and_row_offsets(stream);
   // Exclude the end-of-data row from number of rows with actual data
   num_records_ = std::max(row_offsets.size(), 1ul) - 1;
 
@@ -383,7 +383,7 @@ size_t reader::impl::find_first_row_start(host_span<char const> data)
   return std::min(pos + 1, data.size());
 }
 
-reader::impl::selected_row_offsets reader::impl::gather_row_offsets(host_span<char const> data,
+reader::impl::selected_rows_offsets reader::impl::gather_row_offsets(host_span<char const> data,
                                                                     size_t range_begin,
                                                                     size_t range_end,
                                                                     size_t skip_rows,
@@ -510,7 +510,7 @@ reader::impl::selected_row_offsets reader::impl::gather_row_offsets(host_span<ch
 
   auto const non_blank_row_offsets =
     cudf::io::csv::gpu::remove_blank_rows(opts.view(), data_, all_row_offsets, stream);
-  auto row_offsets = selected_row_offsets{std::move(all_row_offsets), non_blank_row_offsets};
+  auto row_offsets = selected_rows_offsets{std::move(all_row_offsets), non_blank_row_offsets};
 
   // Remove header rows and extract header
   const size_t header_row_index = std::max<size_t>(header_rows, 1) - 1;
@@ -527,11 +527,11 @@ reader::impl::selected_row_offsets reader::impl::gather_row_offsets(host_span<ch
     CUDF_EXPECTS(header_start <= header_end && header_end <= data.size(),
                  "Invalid csv header location");
     header_.assign(data.begin() + header_start, data.begin() + header_end);
-    if (header_rows > 0) { row_offsets.discard_before(header_rows); }
+    if (header_rows > 0) { row_offsets.erase_first_n(header_rows); }
   }
   // Apply num_rows limit
   if (num_rows >= 0 && static_cast<size_t>(num_rows) < row_offsets.size() - 1) {
-    row_offsets.discard_after(num_rows + 1);
+    row_offsets.resize(num_rows + 1);
   }
   return row_offsets;
 }
