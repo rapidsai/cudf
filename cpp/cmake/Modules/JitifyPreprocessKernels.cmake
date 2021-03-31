@@ -21,7 +21,8 @@ file(MAKE_DIRECTORY "${CUDF_GENERATED_INCLUDE_DIR}/include/jit_preprocessed_file
 # Create `jitify_preprocess` executable
 project(jitify_preprocess VERSION 2.0 LANGUAGES CXX CUDA)
 add_executable(jitify_preprocess "${JITIFY_INCLUDE_DIR}/jitify2_preprocess.cpp")
-target_link_libraries(jitify_preprocess CUDA::cudart_static)
+
+target_link_libraries(jitify_preprocess CUDA::cudart ${CMAKE_DL_LIBS})
 
 set(JIT_PREPROCESSED_FILES)
 

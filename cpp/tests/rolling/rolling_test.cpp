@@ -890,24 +890,21 @@ TEST_F(RollingTestUdf, StaticWindow)
 
   fixed_width_column_wrapper<int64_t> expected{start, start + size, valid};
 
-  cudf::column_view input_view    = input;
-  cudf::column_view expected_view = expected;
-
   // Test CUDA UDF
   auto cuda_udf_agg = cudf::make_udf_aggregation(
     cudf::udf_type::CUDA, this->cuda_func, cudf::data_type{cudf::type_id::INT64});
 
-  output = cudf::rolling_window(input_view, 2, 2, 4, cuda_udf_agg);
+  output = cudf::rolling_window(input, 2, 2, 4, cuda_udf_agg);
 
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*output, expected_view);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*output, expected);
 
   // Test NUMBA UDF
   auto ptx_udf_agg = cudf::make_udf_aggregation(
     cudf::udf_type::PTX, this->ptx_func, cudf::data_type{cudf::type_id::INT64});
 
-  output = cudf::rolling_window(input_view, 2, 2, 4, ptx_udf_agg);
+  output = cudf::rolling_window(input, 2, 2, 4, ptx_udf_agg);
 
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*output, expected_view);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*output, expected);
 }
 
 TEST_F(RollingTestUdf, DynamicWindow)
