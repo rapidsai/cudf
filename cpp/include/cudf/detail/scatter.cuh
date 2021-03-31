@@ -87,13 +87,13 @@ auto scatter_to_gather(MapIterator scatter_map_begin,
 /**
  * @brief Create a complement map of `scatter_to_gather` map
  *
- * The output result of this mapping is firstly initialized as a identity-mapping (`output[i] = i`).
- * Then, for each `i`, the value `output[scatter_map[i]]` is set to `gather_rows`, where
+ * The output result of this mapping is firstly initialized as an identity-mapping (`output[i] =
+ * i`). Then, for each `i`, the value `output[scatter_map[i]]` is set to `gather_rows`, where
  * `gather_rows` is an out-of-bound index to identify the pass-through entries when calling the
  * `gather_bitmask()` function.
  *
- * The purpose of this map is to create a identity-mapping for the rows that are not touched by the
- * `scatter_map`.
+ * Therefore, the purpose of this map is to create an identity-mapping for the rows that are not
+ * touched by the `scatter_map`.
  */
 template <typename MapIterator>
 rmm::device_uvector<size_type> scatter_to_gather_complement(MapIterator scatter_map_begin,
@@ -303,7 +303,7 @@ struct column_scatterer_impl<struct_view> {
                      mr);
     }
 
-    // Need to put the result column in a vector to call gather_bitmask
+    // Need to put the result column in a vector to call `gather_bitmask`
     std::vector<std::unique_ptr<column>> result;
     result.emplace_back(cudf::make_structs_column(source.size(),
                                                   std::move(output_struct_members),
@@ -312,8 +312,8 @@ struct column_scatterer_impl<struct_view> {
                                                   stream,
                                                   mr));
 
-    // Only gather bitmask from the target column at the rows that have not been scatter onto
-    // bitmask from the source column will be gather at the top level call to `scatter()`
+    // Only gather bitmask from the target column for the rows that have not been scatter onto
+    // The bitmask from the source column will be gathered at the top level `scatter()` call
     if (target.nullable()) {
       auto const gather_map =
         scatter_to_gather_complement(scatter_map_begin, scatter_map_end, target.size(), stream);
