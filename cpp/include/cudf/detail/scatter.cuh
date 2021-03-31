@@ -88,9 +88,10 @@ auto scatter_to_gather(MapIterator scatter_map_begin,
  * @brief Create a complement map of `scatter_to_gather` map
  *
  * The output result of this mapping is firstly initialized as an identity-mapping (`output[i] =
- * i`). Then, for each `i`, the value `output[scatter_map[i]]` is set to `gather_rows`, where
- * `gather_rows` is an out-of-bound index to identify the pass-through entries when calling the
- * `gather_bitmask()` function.
+ * i`). Then, for each index `idx` from `scatter_map`, the value `output[idx]` is set to
+ * `gather_rows`, where `gather_rows` is the number of rows in the target column, which is also an
+ * out-of-bound index to identify the pass-through entries when calling the `gather_bitmask()`
+ * function.
  *
  * Therefore, the purpose of this map is to create an identity-mapping for the rows that are not
  * touched by the `scatter_map`.
@@ -101,16 +102,14 @@ rmm::device_uvector<size_type> scatter_to_gather_complement(MapIterator scatter_
                                                             size_type gather_rows,
                                                             rmm::cuda_stream_view stream)
 {
-  using MapValueType = typename thrust::iterator_traits<MapIterator>::value_type;
-
   auto gather_map = rmm::device_uvector<size_type>(gather_rows, stream);
   thrust::sequence(rmm::exec_policy(stream), gather_map.begin(), gather_map.end(), 0);
-  thrust::for_each(
-    rmm::exec_policy(stream),
-    thrust::make_counting_iterator<MapValueType>(0),
-    thrust::make_counting_iterator<MapValueType>(std::distance(scatter_map_begin, scatter_map_end)),
-    [gather_rows, out_ptr = gather_map.begin(), scatter_map_ptr = scatter_map_begin] __device__(
-      MapValueType idx) { out_ptr[scatter_map_ptr[idx]] = gather_rows; });
+  thrust::for_each(rmm::exec_policy(stream),
+                   scatter_map_begin,
+                   scatter_map_end,
+                   [gather_rows, out_ptr = gather_map.begin()] __device__(auto idx) {
+                     out_ptr[idx] = gather_rows;
+                   });
   return gather_map;
 }
 
