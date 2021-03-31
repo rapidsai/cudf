@@ -18,18 +18,13 @@
 
 package ai.rapids.cudf;
 
-import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.*;
 
 public class MemoryBufferTest extends CudfTestBase {
-  @AfterEach
-  void teardown() {
-    if (PinnedMemoryPool.isInitialized()) {
-      PinnedMemoryPool.shutdown();
-    }
-  }
+  private static final byte[] BYTES = {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15};
+  private static final byte[] EXPECTED = {0, 2, 3, 4, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15};
 
   @Test
   public void testAddressOutOfBoundsExceptionWhenCopying() {
@@ -67,11 +62,12 @@ public class MemoryBufferTest extends CudfTestBase {
          DeviceMemoryBuffer from = DeviceMemoryBuffer.allocate(16);
          DeviceMemoryBuffer to = DeviceMemoryBuffer.allocate(16);
          HostMemoryBuffer out = HostMemoryBuffer.allocate(16)) {
-      in.setLong(0, 123456789);
+      in.setBytes(0, BYTES, 0, 16);
       from.copyFromHostBuffer(in);
       to.copyFromMemoryBuffer(0, from, 0, 16, Cuda.DEFAULT_STREAM);
+      to.copyFromMemoryBuffer(1, from, 2, 3, Cuda.DEFAULT_STREAM);
       out.copyFromDeviceBuffer(to);
-      assertEquals(123456789, out.getLong(0));
+      verifyOutput(out);
     }
   }
 
@@ -81,12 +77,13 @@ public class MemoryBufferTest extends CudfTestBase {
          DeviceMemoryBuffer from = DeviceMemoryBuffer.allocate(16);
          DeviceMemoryBuffer to = DeviceMemoryBuffer.allocate(16);
          HostMemoryBuffer out = HostMemoryBuffer.allocate(16)) {
-      in.setLong(0, 123456789);
+      in.setBytes(0, BYTES, 0, 16);
       from.copyFromHostBuffer(in);
       to.copyFromMemoryBufferAsync(0, from, 0, 16, Cuda.DEFAULT_STREAM);
+      to.copyFromMemoryBufferAsync(1, from, 2, 3, Cuda.DEFAULT_STREAM);
       out.copyFromDeviceBufferAsync(to, Cuda.DEFAULT_STREAM);
       Cuda.DEFAULT_STREAM.sync();
-      assertEquals(123456789, out.getLong(0));
+      verifyOutput(out);
     }
   }
 
@@ -94,9 +91,10 @@ public class MemoryBufferTest extends CudfTestBase {
   public void testCopyingFromHostToHost() {
     try (HostMemoryBuffer from = HostMemoryBuffer.allocate(16);
          HostMemoryBuffer to = HostMemoryBuffer.allocate(16)) {
-      from.setLong(0, 123456789);
-      to.copyFromMemoryBuffer(0, from, 0, 16, Cuda.DEFAULT_STREAM);
-      assertEquals(123456789, to.getLong(0));
+      from.setBytes(0, BYTES, 0, 16);
+      to.setBytes(0, BYTES, 0, 16);
+      to.copyFromMemoryBuffer(1, from, 2, 3, Cuda.DEFAULT_STREAM);
+      verifyOutput(to);
     }
   }
 
@@ -104,9 +102,10 @@ public class MemoryBufferTest extends CudfTestBase {
   public void testCopyingFromHostToHostAsync() {
     try (HostMemoryBuffer from = HostMemoryBuffer.allocate(16);
          HostMemoryBuffer to = HostMemoryBuffer.allocate(16)) {
-      from.setLong(0, 123456789);
-      to.copyFromMemoryBufferAsync(0, from, 0, 16, Cuda.DEFAULT_STREAM);
-      assertEquals(123456789, to.getLong(0));
+      from.setBytes(0, BYTES, 0, 16);
+      to.setBytes(0, BYTES, 0, 16);
+      to.copyFromMemoryBufferAsync(1, from, 2, 3, Cuda.DEFAULT_STREAM);
+      verifyOutput(to);
     }
   }
 
@@ -115,10 +114,11 @@ public class MemoryBufferTest extends CudfTestBase {
     try (HostMemoryBuffer from = HostMemoryBuffer.allocate(16);
          DeviceMemoryBuffer to = DeviceMemoryBuffer.allocate(16);
          HostMemoryBuffer out = HostMemoryBuffer.allocate(16)) {
-      from.setLong(0, 123456789);
+      from.setBytes(0, BYTES, 0, 16);
       to.copyFromMemoryBuffer(0, from, 0, 16, Cuda.DEFAULT_STREAM);
+      to.copyFromMemoryBufferAsync(1, from, 2, 3, Cuda.DEFAULT_STREAM);
       out.copyFromDeviceBuffer(to);
-      assertEquals(123456789, out.getLong(0));
+      verifyOutput(out);
     }
   }
 
@@ -127,11 +127,12 @@ public class MemoryBufferTest extends CudfTestBase {
     try (HostMemoryBuffer from = HostMemoryBuffer.allocate(16);
          DeviceMemoryBuffer to = DeviceMemoryBuffer.allocate(16);
          HostMemoryBuffer out = HostMemoryBuffer.allocate(16)) {
-      from.setLong(0, 123456789);
+      from.setBytes(0, BYTES, 0, 16);
       to.copyFromMemoryBufferAsync(0, from, 0, 16, Cuda.DEFAULT_STREAM);
+      to.copyFromMemoryBufferAsync(1, from, 2, 3, Cuda.DEFAULT_STREAM);
       out.copyFromDeviceBufferAsync(to, Cuda.DEFAULT_STREAM);
       Cuda.DEFAULT_STREAM.sync();
-      assertEquals(123456789, out.getLong(0));
+      verifyOutput(out);
     }
   }
 
@@ -140,10 +141,11 @@ public class MemoryBufferTest extends CudfTestBase {
     try (HostMemoryBuffer in = HostMemoryBuffer.allocate(16);
          DeviceMemoryBuffer from = DeviceMemoryBuffer.allocate(16);
          HostMemoryBuffer to = HostMemoryBuffer.allocate(16)) {
-      in.setLong(0, 123456789);
+      in.setBytes(0, BYTES, 0, 16);
       from.copyFromHostBuffer(in);
-      to.copyFromMemoryBuffer(0, from, 0, 16, Cuda.DEFAULT_STREAM);
-      assertEquals(123456789, to.getLong(0));
+      to.setBytes(0, BYTES, 0, 16);
+      to.copyFromMemoryBuffer(1, from, 2, 3, Cuda.DEFAULT_STREAM);
+      verifyOutput(to);
     }
   }
 
@@ -152,11 +154,18 @@ public class MemoryBufferTest extends CudfTestBase {
     try (HostMemoryBuffer in = HostMemoryBuffer.allocate(16);
          DeviceMemoryBuffer from = DeviceMemoryBuffer.allocate(16);
          HostMemoryBuffer to = HostMemoryBuffer.allocate(16)) {
-      in.setLong(0, 123456789);
+      in.setBytes(0, BYTES, 0, 16);
       from.copyFromHostBuffer(in);
-      to.copyFromMemoryBufferAsync(0, from, 0, 16, Cuda.DEFAULT_STREAM);
+      to.setBytes(0, BYTES, 0, 16);
+      to.copyFromMemoryBufferAsync(1, from, 2, 3, Cuda.DEFAULT_STREAM);
       Cuda.DEFAULT_STREAM.sync();
-      assertEquals(123456789, to.getLong(0));
+      verifyOutput(to);
     }
+  }
+
+  private void verifyOutput(HostMemoryBuffer out) {
+    byte[] bytes = new byte[16];
+    out.getBytes(bytes, 0, 0, 16);
+    assertArrayEquals(EXPECTED, bytes);
   }
 }
