@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021, BAIDU CORPORATION.
+ * Copyright (c) 2019-2021, BAIDU CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,24 +16,34 @@
 
 #pragma once
 
-#include <cudf/types.hpp>
-#include <rmm/cuda_stream_view.hpp>
-
-#include <memory>
+#include <cudf/column/column.hpp>
+#include <cudf/scalar/scalar.hpp>
+#include <cudf/strings/strings_column_view.hpp>
 
 namespace cudf {
 namespace strings {
-namespace detail {
+
 /**
- * @copydoc cudf::strings::json_to_array
+ * @addtogroup strings_json
+ * @{
+ * @file
+ */
+
+/**
+ * @brief Convert input json strings column to lists.
  *
- * @param stream CUDA stream used for device memory operations and kernel launches
+ * Parse input json strings to a list column, which is combined by struct columns of two column, key
+ * and value. and when input json string element type is OBJECT, the list size is 1, while when element
+ * type is ARRAY, the list size is euqal to number of json object in the json arrray.
+ *
+ * @param col The input strings column. Each row must contain a valid json string
+ * @param mr Resource for allocating device memory.
+ * @return A LIST column of STRUCT column of a pair of string columns, key and value.
  */
 std::unique_ptr<cudf::column> json_to_array(
   cudf::strings_column_view const& col,
-  rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
-}  // namespace detail
+/** @} */  // end of doxygen group
 }  // namespace strings
 }  // namespace cudf
