@@ -839,7 +839,12 @@ class ColumnBase(Column, Serializable):
     def median(self, skipna: bool = None) -> ScalarLike:
         raise TypeError(f"cannot perform median with type {self.dtype}")
 
-    def take(self: T, indices: ColumnBase, keep_index: bool = True) -> T:
+    def take(
+        self: T,
+        indices: ColumnBase,
+        keep_index: bool = True,
+        nullify: bool = False,
+    ) -> T:
         """Return Column by taking values from the corresponding *indices*.
         """
         # Handle zero size
@@ -848,7 +853,7 @@ class ColumnBase(Column, Serializable):
         try:
             return (
                 self.as_frame()
-                ._gather(indices, keep_index=keep_index)
+                ._gather(indices, keep_index=keep_index, nullify=nullify)
                 ._as_column()
             )
         except RuntimeError as e:
@@ -1016,7 +1021,9 @@ class ColumnBase(Column, Serializable):
         ascending: bool = True,
         na_position: builtins.str = "last",
     ) -> Tuple[ColumnBase, "cudf.core.column.NumericalColumn"]:
-        col_inds = self.as_frame()._get_sorted_inds(ascending, na_position)
+        col_inds = self.as_frame()._get_sorted_inds(
+            ascending=ascending, na_position=na_position
+        )
         col_keys = self.take(col_inds)
         return col_keys, col_inds
 
@@ -1027,6 +1034,9 @@ class ColumnBase(Column, Serializable):
             msg = "non sort based distinct_count() not implemented yet"
             raise NotImplementedError(msg)
         return cpp_distinct_count(self, ignore_nulls=dropna)
+
+    def can_cast_safely(self, to_dtype: Dtype) -> bool:
+        raise NotImplementedError()
 
     def astype(self, dtype: Dtype, **kwargs) -> ColumnBase:
         if is_numerical_dtype(dtype):

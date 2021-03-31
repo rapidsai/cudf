@@ -389,6 +389,7 @@ add_library(cudf
     src/transform/jit/code/kernel.cpp
     src/transform/mask_to_bools.cu
     src/transform/nans_to_nulls.cu
+    src/transform/row_bit_count.cu
     src/transform/transform.cpp
     src/transpose/transpose.cu
     src/unary/cast_ops.cu
@@ -554,12 +555,6 @@ if(CUDF_BUILD_BENCHMARKS)
         GIT_SHALLOW     TRUE
         OPTIONS         "BENCHMARK_ENABLE_TESTING OFF"
                         "BENCHMARK_ENABLE_INSTALL OFF")
-    if(benchmark_ADDED)
-        install(TARGETS benchmark
-                        benchmark_main
-            DESTINATION lib
-            EXPORT cudf-targets)
-    endif()
     add_subdirectory(benchmarks)
 endif()
 
@@ -633,6 +628,15 @@ elseif(TARGET arrow_static)
         export(TARGETS arrow_static arrow_cuda_static
             FILE ${CUDF_BINARY_DIR}/cudf-arrow-targets.cmake
             NAMESPACE   cudf::)
+    endif()
+endif()
+
+if(TARGET gtest)
+    get_target_property(gtest_is_imported gtest IMPORTED)
+    if(NOT gtest_is_imported)
+        export(TARGETS gtest gmock gtest_main gmock_main
+            FILE ${CUDF_BINARY_DIR}/cudf-gtesting-targets.cmake
+            NAMESPACE   GTest::)
     endif()
 endif()
 
