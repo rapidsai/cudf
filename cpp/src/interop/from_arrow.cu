@@ -190,9 +190,9 @@ std::unique_ptr<column> dispatch_to_cudf_column::operator()<numeric::decimal64>(
 {
   using DeviceType = int64_t;
 
-  size_type const BIT_WIDTH_RATIO = 2;  // Array::Type:type::DECIMAL (128) / int64_t
-  auto data_buffer                = array.data()->buffers[1];
-  auto const num_rows             = static_cast<size_type>(array.length());
+  auto constexpr BIT_WIDTH_RATIO = 2;  // Array::Type:type::DECIMAL (128) / int64_t
+  auto data_buffer               = array.data()->buffers[1];
+  auto const num_rows            = static_cast<size_type>(array.length());
 
   rmm::device_uvector<DeviceType> buf(num_rows * BIT_WIDTH_RATIO, stream);
   rmm::device_uvector<DeviceType> out_buf(num_rows, stream, mr);
@@ -228,7 +228,7 @@ std::unique_ptr<column> dispatch_to_cudf_column::operator()<numeric::decimal64>(
     return rmm::device_buffer{};
   }();
 
-  return std::make_unique<cudf::column>(type, num_rows, out_buf.release(), null_mask);
+  return std::make_unique<cudf::column>(type, num_rows, out_buf.release(), std::move(null_mask));
 }
 
 template <>
