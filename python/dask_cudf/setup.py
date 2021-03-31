@@ -16,14 +16,16 @@ install_requires = [
     "numpy",
     "pandas>=1.0,<1.3.0dev0",
 ]
-extra_requires = [
-    "numpy",
-    "pandas>=1.0,<1.3.0dev0",
-    "pytest",
-    "numba>=0.49.0,!=0.51.0",
-    "dask>=2021.3.1",
-    "distributed>=2.22.0",
-]
+extras_requires = {
+    "test": [
+        "numpy",
+        "pandas>=1.0,<1.3.0dev0",
+        "pytest",
+        "numba>=0.49.0,!=0.51.0",
+        "dask>=2021.3.1",
+        "distributed>=2.22.0",
+    ]
+}
 
 
 def get_cuda_version_from_header(cuda_include_dir, delimeter=""):
@@ -89,5 +91,5 @@ setup(
     packages=find_packages(exclude=["tests", "tests.*"]),
     cmdclass=versioneer.get_cmdclass(),
     install_requires=install_requires,
-    extra_requires=extra_requires,
+    extras_requires=extras_requires,
 )

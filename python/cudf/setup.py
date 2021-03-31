@@ -203,4 +203,5 @@ setup(
     cmdclass=cmdclass,
     install_requires=install_requires,
     zip_safe=False,
+    extras_requires={"test": ["pytest", "pytest-xdist"]},
 )

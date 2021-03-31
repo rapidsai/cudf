@@ -85,7 +85,7 @@ setup(
         "Programming Language :: Python :: 3.8",
     ],
     # Include the separately-compiled shared library
-    setup_requires=["cython"],
+    setup_requires=["Cython>=0.29,<0.30"],
     ext_modules=cythonize(
         extensions,
         nthreads=nthreads,
@@ -99,5 +99,6 @@ setup(
     ),
     cmdclass=versioneer.get_cmdclass(),
     install_requires=install_requires,
+    extras_requires={"test": ["pytest", "pytest-xdist"]},
     zip_safe=False,
 )
