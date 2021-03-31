@@ -2252,6 +2252,116 @@ def test_binops_decimal_scalar(args):
 
 
 @pytest.mark.parametrize(
+    "args",
+    [
+        (
+            operator.eq,
+            ["100.00", "41", None],
+            cudf.Decimal64Dtype(scale=0, precision=5),
+            100,
+            cudf.Series([True, False, None], dtype=bool),
+            cudf.Series([True, False, None], dtype=bool),
+        ),
+        (
+            operator.eq,
+            ["100.123", "41", None],
+            cudf.Decimal64Dtype(scale=3, precision=6),
+            decimal.Decimal("100.123"),
+            cudf.Series([True, False, None], dtype=bool),
+            cudf.Series([True, False, None], dtype=bool),
+        ),
+        (
+            operator.gt,
+            ["100.00", "41", "120.21", None],
+            cudf.Decimal64Dtype(scale=2, precision=5),
+            100,
+            cudf.Series([False, False, True, None], dtype=bool),
+            cudf.Series([False, True, False, None], dtype=bool),
+        ),
+        (
+            operator.gt,
+            ["100.123", "41", "120.21", None],
+            cudf.Decimal64Dtype(scale=3, precision=6),
+            decimal.Decimal("100.123"),
+            cudf.Series([False, False, True, None], dtype=bool),
+            cudf.Series([False, True, False, None], dtype=bool),
+        ),
+        (
+            operator.ge,
+            ["100.00", "41", "120.21", None],
+            cudf.Decimal64Dtype(scale=2, precision=5),
+            100,
+            cudf.Series([True, False, True, None], dtype=bool),
+            cudf.Series([True, True, False, None], dtype=bool),
+        ),
+        (
+            operator.ge,
+            ["100.123", "41", "120.21", None],
+            cudf.Decimal64Dtype(scale=3, precision=6),
+            decimal.Decimal("100.123"),
+            cudf.Series([True, False, True, None], dtype=bool),
+            cudf.Series([True, True, False, None], dtype=bool),
+        ),
+        (
+            operator.lt,
+            ["100.00", "41", "120.21", None],
+            cudf.Decimal64Dtype(scale=2, precision=5),
+            100,
+            cudf.Series([False, True, False, None], dtype=bool),
+            cudf.Series([False, False, True, None], dtype=bool),
+        ),
+        (
+            operator.lt,
+            ["100.123", "41", "120.21", None],
+            cudf.Decimal64Dtype(scale=3, precision=6),
+            decimal.Decimal("100.123"),
+            cudf.Series([False, True, False, None], dtype=bool),
+            cudf.Series([False, False, True, None], dtype=bool),
+        ),
+        (
+            operator.le,
+            ["100.00", "41", "120.21", None],
+            cudf.Decimal64Dtype(scale=2, precision=5),
+            100,
+            cudf.Series([True, True, False, None], dtype=bool),
+            cudf.Series([True, False, True, None], dtype=bool),
+        ),
+        (
+            operator.le,
+            ["100.123", "41", "120.21", None],
+            cudf.Decimal64Dtype(scale=3, precision=6),
+            decimal.Decimal("100.123"),
+            cudf.Series([True, True, False, None], dtype=bool),
+            cudf.Series([True, False, True, None], dtype=bool),
+        ),
+    ],
+)
+@pytest.mark.parametrize("reflected", [True, False])
+def test_binops_decimal_scalar_compare(args, reflected):
+    """
+    Tested compare operations:
+        eq, lt, gt, le, ge
+    Each operation has 2 data setups: integer and decimal.Decimal
+    For each data setup, there is at least one row that lead to one of the
+    following compare results: {True, False, None}.
+    """
+    if not reflected:
+        op, ldata, ldtype, rdata, expected, _ = args
+    else:
+        op, ldata, ldtype, rdata, _, expected = args
+
+    lhs = _decimal_series(ldata, ldtype)
+    rhs = rdata
+
+    if reflected:
+        rhs, lhs = lhs, rhs
+
+    actual = op(lhs, rhs)
+
+    utils.assert_eq(expected, actual)
+
+
+@pytest.mark.parametrize(
     "dtype",
     [
         "uint8",

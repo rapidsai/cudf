@@ -79,7 +79,8 @@ class DecimalColumn(ColumnBase):
             )
         elif op in ("eq", "lt", "gt", "le", "ge"):
             if not isinstance(
-                other, (DecimalColumn, cudf.core.column.NumericalColumn)
+                other,
+                (DecimalColumn, cudf.core.column.NumericalColumn, cudf.Scalar),
             ):
                 raise TypeError(
                     f"Operator {op} not supported between"
