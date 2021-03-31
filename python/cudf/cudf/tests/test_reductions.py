@@ -7,12 +7,14 @@ import re
 from itertools import product
 
 import numpy as np
+import pandas as pd
 import pytest
+from decimal import Decimal
 
 import cudf
 from cudf.core import Series
 from cudf.tests import utils
-from cudf.tests.utils import NUMERIC_TYPES, gen_rand
+from cudf.tests.utils import NUMERIC_TYPES, gen_rand, assert_eq
 
 params_dtype = NUMERIC_TYPES
 
@@ -48,6 +50,18 @@ def test_sum_string():
     expected = "HelloWorld"
 
     assert got == expected
+
+@pytest.mark.parametrize(
+    "dtype",
+    [Decimal64Dtype(6, 3), Decimal64Dtype(10, 6), Decimal64Dtype(16, 7)],
+)
+@pytest.mark.parametrize("nelem", params_sizes)
+def test_sum_decimal(dtype, nelem):
+    data = gen_rand("int64",nelem)/100
+    expected = pd.Series(data).sum()
+    got = cudf.Series([str(x) for x in data]).astype(dtype).sum()
+
+    assert_eq(Decimal(expected), got)
 
 
 @pytest.mark.parametrize("dtype,nelem", params)
@@ -106,6 +120,19 @@ def test_min(dtype, nelem):
     assert expect == got
 
 
+@pytest.mark.parametrize(
+    "dtype",
+    [Decimal64Dtype(6, 3), Decimal64Dtype(10, 6), Decimal64Dtype(16, 7)],
+)
+@pytest.mark.parametrize("nelem", params_sizes)
+def test_min_decimal(dtype, nelem):
+    data = gen_rand("int64",nelem)/100
+    expected = pd.Series(data).min()
+    got = cudf.Series([str(x) for x in data]).astype(dtype).min()
+
+    assert_eq(Decimal(expected), got)
+
+
 @pytest.mark.parametrize("dtype,nelem", params)
 def test_max(dtype, nelem):
     dtype = np.dtype(dtype).type
@@ -116,6 +143,19 @@ def test_max(dtype, nelem):
     expect = dtype(data.max())
 
     assert expect == got
+
+
+@pytest.mark.parametrize(
+    "dtype",
+    [Decimal64Dtype(6, 3), Decimal64Dtype(10, 6), Decimal64Dtype(16, 7)],
+)
+@pytest.mark.parametrize("nelem", params_sizes)
+def test_max_decimal(dtype, nelem):
+    data = gen_rand("int64",nelem)/100
+    expected = pd.Series(data).max()
+    got = cudf.Series([str(x) for x in data]).astype(dtype).max()
+
+    assert_eq(Decimal(expected), got)
 
 
 @pytest.mark.parametrize("nelem", params_sizes)
