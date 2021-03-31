@@ -7,7 +7,13 @@ import pyarrow as pa
 
 import cudf
 from cudf._lib.copying import segmented_gather
-from cudf._lib.lists import count_elements, extract_element, sort_lists
+from cudf._lib.lists import (
+    contains_scalar,
+    count_elements,
+    drop_list_duplicates,
+    extract_element,
+    sort_lists,
+)
 from cudf.core.buffer import Buffer
 from cudf.core.column import ColumnBase, as_column, column
 from cudf.core.column.methods import ColumnMethodsMixin
@@ -210,6 +216,44 @@ class ListMethods(ColumnMethodsMixin):
         else:
             raise IndexError("list index out of range")
 
+    def contains(self, search_key):
+        """
+        Creates a column of bool values indicating whether the specified scalar
+        is an element of each row of a list column.
+
+        Parameters
+        ----------
+        search_key : scalar
+            element being searched for in each row of the list column
+
+        Returns
+        -------
+        Column
+
+        Examples
+        --------
+        >>> s = cudf.Series([[1, 2, 3], [3, 4, 5], [4, 5, 6]])
+        >>> s.list.contains(4)
+        Series([False, True, True])
+        dtype: bool
+        """
+        try:
+            res = self._return_or_inplace(
+                contains_scalar(self._column, search_key.device_value)
+            )
+        except RuntimeError as e:
+            if (
+                "Type/Scale of search key does not"
+                "match list column element type" in str(e)
+            ):
+                raise TypeError(
+                    "Type/Scale of search key does not"
+                    "match list column element type"
+                ) from e
+            raise
+        else:
+            return res
+
     @property
     def leaves(self):
         """
@@ -317,6 +361,41 @@ class ListMethods(ColumnMethodsMixin):
             raise
         else:
             return res
+
+    def unique(self):
+        """
+        Returns unique element for each list in the column, order for each
+        unique element is not guaranteed.
+
+        Returns
+        -------
+        ListColumn
+
+        Examples
+        --------
+        >>> s = cudf.Series([[1, 1, 2, None, None], None, [4, 4], []])
+        >>> s
+        0    [1.0, 1.0, 2.0, nan, nan]
+        1                         None
+        2                   [4.0, 4.0]
+        3                           []
+        dtype: list
+        >>> s.list.unique() # Order of list element is not guaranteed
+        0              [1.0, 2.0, nan]
+        1                         None
+        2                        [4.0]
+        3                           []
+        dtype: list
+        """
+
+        if is_list_dtype(self._column.children[1].dtype):
+            raise NotImplementedError("Nested lists unique is not supported.")
+
+        return self._return_or_inplace(
+            drop_list_duplicates(
+                self._column, nulls_equal=True, nans_all_equal=True
+            )
+        )
 
     def sort_values(
         self,

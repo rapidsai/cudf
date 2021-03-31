@@ -41,7 +41,7 @@ class AggregationKind(Enum):
     ALL = libcudf_aggregation.aggregation.Kind.ALL
     SUM_OF_SQUARES = libcudf_aggregation.aggregation.Kind.SUM_OF_SQUARES
     MEAN = libcudf_aggregation.aggregation.Kind.MEAN
-    VARIANCE = libcudf_aggregation.aggregation.Kind.VARIANCE
+    VAR = libcudf_aggregation.aggregation.Kind.VARIANCE
     STD = libcudf_aggregation.aggregation.Kind.STD
     MEDIAN = libcudf_aggregation.aggregation.Kind.MEDIAN
     QUANTILE = libcudf_aggregation.aggregation.Kind.QUANTILE
@@ -50,13 +50,12 @@ class AggregationKind(Enum):
     NUNIQUE = libcudf_aggregation.aggregation.Kind.NUNIQUE
     NTH = libcudf_aggregation.aggregation.Kind.NTH_ELEMENT
     COLLECT = libcudf_aggregation.aggregation.Kind.COLLECT
-    COLLECT_SET = libcudf_aggregation.aggregation.Kind.COLLECT_SET
+    UNIQUE = libcudf_aggregation.aggregation.Kind.COLLECT_SET
     PTX = libcudf_aggregation.aggregation.Kind.PTX
     CUDA = libcudf_aggregation.aggregation.Kind.CUDA
 
 
 cdef class Aggregation:
-
     def __init__(self, op, **kwargs):
         self.c_obj = move(make_aggregation(op, kwargs))
 
@@ -246,7 +245,7 @@ cdef class _AggregationFactory:
         return agg
 
     @classmethod
-    def collect_set(cls):
+    def unique(cls):
         cdef Aggregation agg = Aggregation.__new__(Aggregation)
         agg.c_obj = move(libcudf_aggregation.make_collect_set_aggregation())
         return agg
