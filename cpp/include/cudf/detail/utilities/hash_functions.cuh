@@ -20,6 +20,7 @@
 #include <cudf/detail/utilities/assert.cuh>
 #include <cudf/fixed_point/fixed_point.hpp>
 #include <cudf/strings/string_view.cuh>
+#include <cudf/types.hpp>
 #include <hash/hash_constants.hpp>
 
 using hash_value_type = uint32_t;
@@ -307,7 +308,7 @@ struct MD5Hash {
   }
 
  private:
-  uint32_t m_seed{0};
+  uint32_t m_seed{cudf::DEFAULT_HASH_SEED};
 };
 
 template <>
@@ -475,7 +476,7 @@ struct MurmurHash3_32 {
   }
 
  private:
-  uint32_t m_seed{0};
+  uint32_t m_seed{cudf::DEFAULT_HASH_SEED};
 };
 
 template <>
@@ -626,7 +627,7 @@ struct SparkMurmurHash3_32 {
   }
 
  private:
-  uint32_t m_seed{0};
+  uint32_t m_seed{cudf::DEFAULT_HASH_SEED};
 };
 
 template <>
@@ -785,7 +786,7 @@ struct IdentityHash {
   }
 
  private:
-  uint32_t m_seed{0};
+  uint32_t m_seed{cudf::DEFAULT_HASH_SEED};
 };
 
 template <typename Key>

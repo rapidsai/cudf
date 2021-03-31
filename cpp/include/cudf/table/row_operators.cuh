@@ -448,7 +448,7 @@ class element_hasher_with_seed {
   }
 
  private:
-  uint32_t _seed{0};
+  uint32_t _seed{DEFAULT_HASH_SEED};
   hash_value_type _null_hash{std::numeric_limits<hash_value_type>::max()};
 };
 
@@ -462,7 +462,7 @@ template <template <typename> class hash_function, bool has_nulls = true>
 class row_hasher {
  public:
   row_hasher() = delete;
-  row_hasher(table_device_view t) : _table{t}, _seed(0) {}
+  row_hasher(table_device_view t) : _table{t}, _seed(DEFAULT_HASH_SEED) {}
   row_hasher(table_device_view t, uint32_t seed) : _table{t}, _seed(seed) {}
 
   __device__ auto operator()(size_type row_index) const
