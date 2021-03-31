@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021, NVIDIA CORPORATION.
+ * Copyright (c) 2021, BAIDU CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,6 +17,7 @@
 #pragma once
 
 #include <cudf/types.hpp>
+
 #include <rmm/cuda_stream_view.hpp>
 
 #include <memory>
@@ -26,7 +27,7 @@ namespace strings {
 namespace detail {
 
 /**
- * @copydoc cudf::json_to_array
+ * @copydoc cudf::strings::json_to_array
  *
  * @param stream CUDA stream used for device memory operations and kernel launches
  */

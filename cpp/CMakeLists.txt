@@ -345,6 +345,7 @@ add_library(cudf
     src/strings/findall.cu
     src/strings/find.cu
     src/strings/find_multiple.cu
+    src/strings/json_to_array.cu
     src/strings/padding.cu
     src/strings/regex/regcomp.cpp
     src/strings/regex/regexec.cu

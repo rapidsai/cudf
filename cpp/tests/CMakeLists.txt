@@ -334,6 +334,7 @@ ConfigureTest(STRINGS_TEST
     strings/hash_string.cu
     strings/integers_tests.cu
     strings/ipv4_tests.cpp
+    strings/json_tests.cpp
     strings/pad_tests.cpp
     strings/replace_regex_tests.cpp
     strings/replace_tests.cpp
@@ -341,8 +342,7 @@ ConfigureTest(STRINGS_TEST
     strings/strip_tests.cpp
     strings/substring_tests.cpp
     strings/translate_tests.cpp
-    strings/urls_tests.cpp
-    strings/json_tests.cpp)
+    strings/urls_tests.cpp)
 
 ###################################################################################################
 # - structs test ----------------------------------------------------------------------------------
