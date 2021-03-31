@@ -1184,7 +1184,7 @@ def test_decimal_typecast_inner(dtype):
 
     got = gdf_l.merge(gdf_r, on="join_col", how="inner")
 
-    assert_eq(got, expected)
+    assert_join_results_equal(got, expected, how="inner")
     assert_eq(got["join_col"].dtype, dtype)
 
 
@@ -1221,7 +1221,38 @@ def test_decimal_typecast_left(dtype):
 
     got = gdf_l.merge(gdf_r, on="join_col", how="left")
 
-    assert_eq(got, expected)
+    assert_join_results_equal(got, expected, how="left")
+    assert_eq(got["join_col"].dtype, dtype)
+
+
+@pytest.mark.parametrize(
+    "dtype",
+    [Decimal64Dtype(7, 3), Decimal64Dtype(10, 5), Decimal64Dtype(18, 9)],
+)
+def test_decimal_typecast_outer(dtype):
+    other_data = ["a", "b", "c"]
+    join_data_l = cudf.Series(["741.248", "1029.528", "3627.292"]).astype(
+        dtype
+    )
+    join_data_r = cudf.Series(["9284.103", "1029.528", "948.637"]).astype(
+        dtype
+    )
+    gdf_l = cudf.DataFrame({"join_col": join_data_l, "B": other_data})
+    gdf_r = cudf.DataFrame({"join_col": join_data_r, "B": other_data})
+    exp_join_data = ["9284.103", "948.637", "1029.528", "741.248", "3627.292"]
+    exp_other_data_x = [None, None, "b", "a", "c"]
+    exp_other_data_y = ["a", "c", "b", None, None]
+    exp_join_col = cudf.Series(exp_join_data).astype(dtype)
+    expected = cudf.DataFrame(
+        {
+            "join_col": exp_join_col,
+            "B_x": exp_other_data_x,
+            "B_y": exp_other_data_y,
+        }
+    )
+    got = gdf_l.merge(gdf_r, on="join_col", how="outer")
+
+    assert_join_results_equal(got, expected, how="outer")
     assert_eq(got["join_col"].dtype, dtype)
 
 
