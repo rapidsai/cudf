@@ -45,10 +45,9 @@ namespace detail {
  * function using the PASSTHROUGH op since the resulting map may contain index
  * values outside the target's range.
  *
- * First, the gather-map is initialized with invalid entries.
- * The gather_rows is used since it should always be outside the target size.
- *
- * Then, the `output[scatter_map[i]] = i`.
+ * First, the gather-map is initialized with an invalid index.
+ * The value `numeric_limits::lowest()` is used since it should always be outside the target size.
+ * Then, `output[scatter_map[i]] = i` for each `i`.
  *
  * @tparam MapIterator Iterator type of the input scatter map.
  * @param scatter_map_begin Beginning of scatter map.
@@ -65,13 +64,16 @@ auto scatter_to_gather(MapIterator scatter_map_begin,
 {
   using MapValueType = typename thrust::iterator_traits<MapIterator>::value_type;
 
-  // The gather_map is initialized with gather_rows value to identify pass-through entries
-  // when calling the gather_bitmask() which applies a pass-through whenever it finds a
+  // The gather_map is initialized with `numeric_limits::lowest()` value to identify pass-through
+  // entries when calling the gather_bitmask() which applies a pass-through whenever it finds a
   // value outside the range of the target column.
-  // We'll use the gather_rows value for this since it should always be outside the valid range.
+  // We'll use the `numeric_limits::lowest()` value for this since it should always be outside the
+  // valid range.
   auto gather_map = rmm::device_uvector<size_type>(gather_rows, stream);
-  thrust::uninitialized_fill(
-    rmm::exec_policy(stream), gather_map.begin(), gather_map.end(), gather_rows);
+  thrust::uninitialized_fill(rmm::exec_policy(stream),
+                             gather_map.begin(),
+                             gather_map.end(),
+                             std::numeric_limits<size_type>::lowest());
 
   // Convert scatter map to a gather map
   thrust::scatter(
@@ -87,14 +89,14 @@ auto scatter_to_gather(MapIterator scatter_map_begin,
 /**
  * @brief Create a complement map of `scatter_to_gather` map
  *
- * The output result of this mapping is firstly initialized as an identity-mapping (`output[i] =
- * i`). Then, for each index `idx` from `scatter_map`, the value `output[idx]` is set to
- * `gather_rows`, where `gather_rows` is the number of rows in the target column, which is also an
- * out-of-bound index to identify the pass-through entries when calling the `gather_bitmask()`
- * function.
- *
- * Therefore, the purpose of this map is to create an identity-mapping for the rows that are not
+ * The purpose of this map is to create an identity-mapping for the rows that are not
  * touched by the `scatter_map`.
+ *
+ * The output result of this mapping is firstly initialized as an identity-mapping
+ * (i.e., `output[i] = i`). Then, for each value `idx` from `scatter_map`, the value `output[idx]`
+ * is set to `numeric_limits::lowest()`, which is an invalid, out-of-bound index to identify the
+ * pass-through entries when calling the `gather_bitmask()` function.
+ *
  */
 template <typename MapIterator>
 auto scatter_to_gather_complement(MapIterator scatter_map_begin,
