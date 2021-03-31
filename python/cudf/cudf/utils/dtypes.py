@@ -4,6 +4,7 @@ import datetime as dt
 import numbers
 from collections import namedtuple
 from collections.abc import Sequence
+from decimal import Decimal
 
 import cupy as cp
 import numpy as np
@@ -348,6 +349,9 @@ def to_cudf_compatible_scalar(val, dtype=None):
             "to cudf scalar"
         )
 
+    if isinstance(val, Decimal):
+        return val
+
     if isinstance(val, (np.ndarray, cp.ndarray)) and val.ndim == 0:
         val = val.item()
 
@@ -576,6 +580,24 @@ def _get_nan_for_dtype(dtype):
         return dtype.type("nan")
     else:
         return np.float64("nan")
+
+
+def _decimal_to_int64(decimal: Decimal) -> int:
+    """
+    Scale a Decimal such that the result is the integer
+    that would result from removing the decimal point.
+
+    Examples
+    --------
+    >>> _decimal_to_int64(Decimal('1.42'))
+    142
+    >>> _decimal_to_int64(Decimal('0.0042'))
+    42
+    >>> _decimal_to_int64(Decimal('-1.004201'))
+    -1004201
+
+    """
+    return int(f"{decimal:0f}".replace(".", ""))
 
 
 def get_allowed_combinations_for_operator(dtype_l, dtype_r, op):
