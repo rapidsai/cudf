@@ -5067,7 +5067,7 @@ public class TableTest extends CudfTestBase {
         .build()) {
       Table.TestBuilder expectedBuilder = new Table.TestBuilder();
       if (pos) {
-        Integer[] posData = outer ? new Integer[]{0, 1, 2, 0, 1, 0, 0, 0} : new Integer[]{0, 1, 2, 0, 1, 0};
+        Integer[] posData = outer ? new Integer[]{0, 1, 2, 0, 1, 0, null, null} : new Integer[]{0, 1, 2, 0, 1, 0};
         expectedBuilder.column(posData);
       }
       List<Object[]> expectedData = new ArrayList<Object[]>(){{
@@ -5109,10 +5109,11 @@ public class TableTest extends CudfTestBase {
         .build()) {
       Table.TestBuilder expectedBuilder = new Table.TestBuilder();
       if (pos) {
-        if (!outer)
+        if (outer) {
+          expectedBuilder.column(0, 1, 2, 0, 1, 0, null, null);
+        } else {
           expectedBuilder.column(0, 1, 2, 0, 1, 0, 0);
-        else
-          expectedBuilder.column(0, 1, 2, 0, 1, 0, 0, 0);
+        }
       }
       List<Object[]> expectedData = new ArrayList<Object[]>(){{
         if (!outer) {
