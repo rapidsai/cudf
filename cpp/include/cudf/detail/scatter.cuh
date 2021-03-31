@@ -35,8 +35,6 @@
 
 #include <thrust/uninitialized_fill.h>
 
-#include <cudf_test/column_utilities.hpp>
-
 namespace cudf {
 namespace detail {
 
