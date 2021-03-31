@@ -81,7 +81,11 @@ auto scatter_to_gather(MapIterator scatter_map_begin,
 
 template <typename Element, typename Enable = void>
 struct column_scatterer_impl {
-  std::unique_ptr<column> operator()(...) const { CUDF_FAIL("Unsupported type for scatter."); }
+  template <typename...>
+  std::unique_ptr<column> operator()(...) const
+  {
+    CUDF_FAIL("Unsupported type for scatter.");
+  }
 };
 
 template <typename Element>
