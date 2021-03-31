@@ -97,19 +97,23 @@ auto scatter_to_gather(MapIterator scatter_map_begin,
  * touched by the `scatter_map`.
  */
 template <typename MapIterator>
-rmm::device_uvector<size_type> scatter_to_gather_complement(MapIterator scatter_map_begin,
-                                                            MapIterator scatter_map_end,
-                                                            size_type gather_rows,
-                                                            rmm::cuda_stream_view stream)
+auto scatter_to_gather_complement(MapIterator scatter_map_begin,
+                                  MapIterator scatter_map_end,
+                                  size_type gather_rows,
+                                  rmm::cuda_stream_view stream)
 {
   auto gather_map = rmm::device_uvector<size_type>(gather_rows, stream);
   thrust::sequence(rmm::exec_policy(stream), gather_map.begin(), gather_map.end(), 0);
-  thrust::for_each(rmm::exec_policy(stream),
-                   scatter_map_begin,
-                   scatter_map_end,
-                   [gather_rows, out_ptr = gather_map.begin()] __device__(auto idx) {
-                     out_ptr[idx] = gather_rows;
-                   });
+
+  auto const out_of_bounds_begin =
+    thrust::make_constant_iterator(std::numeric_limits<size_type>::lowest());
+  auto const out_of_bounds_end =
+    out_of_bounds_begin + thrust::distance(scatter_map_begin, scatter_map_end);
+  thrust::scatter(rmm::exec_policy(stream),
+                  out_of_bounds_begin,
+                  out_of_bounds_end,
+                  scatter_map_begin,
+                  gather_map.begin());
   return gather_map;
 }
 
@@ -311,7 +315,7 @@ struct column_scatterer_impl<struct_view> {
                                                   stream,
                                                   mr));
 
-    // Only gather bitmask from the target column for the rows that have not been scatter onto
+    // Only gather bitmask from the target column for the rows that have not been scattered onto
     // The bitmask from the source column will be gathered at the top level `scatter()` call
     if (target.nullable()) {
       auto const gather_map =
