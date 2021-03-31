@@ -2862,7 +2862,7 @@ def interval_range(
     else:
         raise ValueError(
             "Of the four parameters: start, end, periods, and "
-            "freq, atleast two must be specified"
+            "freq, at least two must be specified"
         )
     if len(right_col) == 0 or len(left_col) == 0:
         return cudf.IntervalIndex([], closed=closed)
