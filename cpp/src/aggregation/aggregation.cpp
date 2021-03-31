@@ -132,9 +132,10 @@ std::unique_ptr<aggregation> make_collect_list_aggregation(null_policy null_hand
 }
 /// Factory to create a COLLECT_SET aggregation
 std::unique_ptr<aggregation> make_collect_set_aggregation(null_policy null_handling,
-                                                          null_equality null_equal)
+                                                          null_equality nulls_equal,
+                                                          nan_equality nans_equal)
 {
-  return std::make_unique<detail::collect_set_aggregation>(null_handling, null_equal);
+  return std::make_unique<detail::collect_set_aggregation>(null_handling, nulls_equal, nans_equal);
 }
 /// Factory to create a LAG aggregation
 std::unique_ptr<aggregation> make_lag_aggregation(size_type offset)

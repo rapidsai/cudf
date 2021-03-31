@@ -31,6 +31,7 @@ namespace detail {
 std::unique_ptr<column> drop_list_duplicates(
   lists_column_view const& lists_column,
   null_equality nulls_equal,
+  nan_equality nans_equal,
   rmm::cuda_stream_view stream,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 }  // namespace detail
