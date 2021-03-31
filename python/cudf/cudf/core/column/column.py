@@ -1510,7 +1510,7 @@ def column_empty(
                 dtype="int32",
             ),
         )
-    elif dtype.kind in "OU":
+    elif dtype.kind in "OU" and not is_decimal_dtype(dtype):
         data = None
         children = (
             full(row_count + 1, 0, dtype="int32"),

@@ -79,7 +79,8 @@ def test_column_offset_and_size(pandas_input, offset, size):
     assert_eq(expect, got)
 
 
-def column_slicing_test(col, sl, cast_to_float=False):
+def column_slicing_test(col, offset, size, cast_to_float=False):
+    sl = slice(offset, offset + size)
     col_slice = col[sl]
     series = cudf.Series(col)
     sliced_series = cudf.Series(col_slice)
@@ -91,9 +92,11 @@ def column_slicing_test(col, sl, cast_to_float=False):
         pd_series = series.to_pandas()
 
     if cudf.utils.dtypes.is_categorical_dtype(col.dtype):
-        # The pandas series is constructed from an already sliced dataset, so
-        # the index should be different and we ignore it, but we must compare
-        # these as frames because numpy comparison of the values won't work.
+        # The cudf.Series is constructed from an already sliced column, whereas
+        # the pandas.Series is constructed from the unsliced series and then
+        # sliced, so the indexes should be different and we must ignore it.
+        # However, we must compare these as frames, not raw arrays,  because
+        # numpy comparison of categorical values won't work.
         assert_eq(pd_series[sl].reset_index(drop=True),
                   sliced_series.reset_index(drop=True))
     else:
@@ -104,21 +107,17 @@ def column_slicing_test(col, sl, cast_to_float=False):
 @pytest.mark.parametrize("size", [50, 10, 0])
 def test_column_slicing(pandas_input, offset, size):
     col = cudf.core.column.as_column(pandas_input)
-    column_slicing_test(col, slice(offset, offset+size))
+    column_slicing_test(col, offset, size)
 
 
-# TODO: I think decimal fails if you go out of bounds, i.e. if offset > size
 @pytest.mark.parametrize("offset", [0, 1, 15])
 @pytest.mark.parametrize("size", [50, 10, 0])
 @pytest.mark.parametrize("precision", [2, 3, 5])
 @pytest.mark.parametrize("scale", [0, 1, 2])
 def test_decimal_column_slicing(offset, size, precision, scale):
-    if offset >= size:
-        return
-    col_orig = cudf.core.column.as_column(pd.Series(np.random.rand(1000)))
-    col = col_orig.astype(cudf.Decimal64Dtype(precision, scale))
-
-    column_slicing_test(col, slice(offset, offset+size), True)
+    col = cudf.core.column.as_column(pd.Series(np.random.rand(1000)))
+    col = col.astype(cudf.Decimal64Dtype(precision, scale))
+    column_slicing_test(col, offset, size, True)
 
 @pytest.mark.parametrize(
     "data",
