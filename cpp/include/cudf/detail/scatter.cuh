@@ -237,6 +237,20 @@ struct column_scatterer_impl<dictionary32> {
   }
 };
 
+struct column_scatterer {
+  template <typename Element, typename MapIterator>
+  std::unique_ptr<column> operator()(column_view const& source,
+                                     MapIterator scatter_map_begin,
+                                     MapIterator scatter_map_end,
+                                     column_view const& target,
+                                     rmm::cuda_stream_view stream,
+                                     rmm::mr::device_memory_resource* mr) const
+  {
+    column_scatterer_impl<Element> scatterer{};
+    return scatterer(source, scatter_map_begin, scatter_map_end, target, stream, mr);
+  }
+};
+
 template <>
 struct column_scatterer_impl<struct_view> {
   template <typename MapItRoot>
@@ -264,7 +278,7 @@ struct column_scatterer_impl<struct_view> {
                    [&scatter_map_begin, &scatter_map_end, stream, mr](auto const& source_col,
                                                                       auto const& target_col) {
                      return type_dispatcher<dispatch_storage_type>(source_col.type(),
-                                                                   column_scatterer<MapItRoot>{},
+                                                                   column_scatterer{},
                                                                    source_col,
                                                                    scatter_map_begin,
                                                                    scatter_map_end,
@@ -314,20 +328,6 @@ struct column_scatterer_impl<struct_view> {
     }
 
     return std::move(result.front());
-  }
-};
-
-struct column_scatterer {
-  template <typename Element, typename MapIterator>
-  std::unique_ptr<column> operator()(column_view const& source,
-                                     MapIterator scatter_map_begin,
-                                     MapIterator scatter_map_end,
-                                     column_view const& target,
-                                     rmm::cuda_stream_view stream,
-                                     rmm::mr::device_memory_resource* mr) const
-  {
-    column_scatterer_impl<Element> scatterer{};
-    return scatterer(source, scatter_map_begin, scatter_map_end, target, stream, mr);
   }
 };
 
