@@ -17,7 +17,6 @@ from libcpp.utility cimport move, pair
 import numpy as np
 
 cimport cudf._lib.cpp.types as libcudf_types
-from cudf._lib.
 
 
 def reduce(reduction_op, Column incol, dtype=None, **kwargs):
@@ -36,7 +35,10 @@ def reduce(reduction_op, Column incol, dtype=None, **kwargs):
     """
 
     col_dtype = incol.dtype
-    if reduction_op in ['sum', 'sum_of_squares', 'product'] and not is_decimal_dtype(col_dtype):
+    if (
+        reduction_op in ['sum', 'sum_of_squares', 'product']
+        and not is_decimal_dtype(col_dtype)
+    ):
         col_dtype = np.find_common_type([col_dtype], [np.uint64])
     col_dtype = col_dtype if dtype is None else dtype
 

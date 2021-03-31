@@ -13,6 +13,7 @@ from decimal import Decimal
 
 import cudf
 from cudf.core import Series
+from cudf.core.dtypes import Decimal64Dtype
 from cudf.tests import utils
 from cudf.tests.utils import NUMERIC_TYPES, gen_rand, assert_eq
 
@@ -51,13 +52,14 @@ def test_sum_string():
 
     assert got == expected
 
+
 @pytest.mark.parametrize(
     "dtype",
     [Decimal64Dtype(6, 3), Decimal64Dtype(10, 6), Decimal64Dtype(16, 7)],
 )
 @pytest.mark.parametrize("nelem", params_sizes)
 def test_sum_decimal(dtype, nelem):
-    data = gen_rand("int64",nelem)/100
+    data = gen_rand("int64", nelem) / 100
     expected = pd.Series(data).sum()
     got = cudf.Series([str(x) for x in data]).astype(dtype).sum()
 
@@ -126,7 +128,7 @@ def test_min(dtype, nelem):
 )
 @pytest.mark.parametrize("nelem", params_sizes)
 def test_min_decimal(dtype, nelem):
-    data = gen_rand("int64",nelem)/100
+    data = gen_rand("int64", nelem) / 100
     expected = pd.Series(data).min()
     got = cudf.Series([str(x) for x in data]).astype(dtype).min()
 
@@ -151,7 +153,7 @@ def test_max(dtype, nelem):
 )
 @pytest.mark.parametrize("nelem", params_sizes)
 def test_max_decimal(dtype, nelem):
-    data = gen_rand("int64",nelem)/100
+    data = gen_rand("int64", nelem) / 100
     expected = pd.Series(data).max()
     got = cudf.Series([str(x) for x in data]).astype(dtype).max()
 
