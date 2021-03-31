@@ -291,7 +291,7 @@ struct column_scatterer_impl<struct_view> {
                    });
 
     // We still need to call `gather_bitmask` even when the source's children are not nullable,
-    // as if the target's children have null_masks, then those null_masks need to be updated after
+    // as if the target's children have null_masks, those null_masks need to be updated after
     // being scattered onto
     auto const child_nullable = std::any_of(structs_src.child_begin(),
                                             structs_src.child_end(),
@@ -421,7 +421,7 @@ std::unique_ptr<table> scatter(
                  });
 
   // We still need to call `gather_bitmask` even when the source columns are not nullable,
-  // as if the target has null_mask, then that null_mask needs to be updated after scattering
+  // as if the target has null_mask, that null_mask needs to be updated after scattering
   auto const nullable =
     std::any_of(source.begin(), source.end(), [](auto const& col) { return col.nullable(); }) or
     std::any_of(target.begin(), target.end(), [](auto const& col) { return col.nullable(); });
