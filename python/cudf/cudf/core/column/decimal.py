@@ -73,7 +73,8 @@ class DecimalColumn(ColumnBase):
         return result
 
     def _apply_scan_op(self, op: str) -> ColumnBase:
-        return libcudf.reduce.scan(op, self, True)
+        result = libcudf.reduce.scan(op, self, True)
+        return self._copy_type_metadata(result)
 
     def as_decimal_column(
         self, dtype: Dtype, **kwargs
