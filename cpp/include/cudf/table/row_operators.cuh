@@ -428,6 +428,7 @@ template <template <typename> class hash_function, bool has_nulls = true>
 class element_hasher_with_seed {
  public:
   element_hasher_with_seed() = default;
+  __device__ element_hasher_with_seed(uint32_t seed) : _seed{seed} {}
   __device__ element_hasher_with_seed(uint32_t seed, hash_value_type null_hash)
     : _seed{seed}, _null_hash(null_hash)
   {
@@ -468,8 +469,15 @@ class row_hasher {
   __device__ auto operator()(size_type row_index) const
   {
     auto hash_combiner = [=](hash_value_type lhs, hash_value_type rhs) {
-      return hash_function<hash_value_type>{_seed}.hash_combine(lhs, rhs);
+      return hash_function<hash_value_type>{}.hash_combine(lhs, rhs);
     };
+
+    // Hash the first column w/ the seed
+    auto const initial_hash =
+      type_dispatcher(_table.column(0).type(),
+                      element_hasher_with_seed<hash_function, has_nulls>{_seed},
+                      _table.column(0),
+                      row_index);
 
     // Hashes an element in a column
     auto hasher = [=](size_type column_index) {
@@ -480,12 +488,14 @@ class row_hasher {
     };
 
     // Hash each element and combine all the hash values together
-    return thrust::transform_reduce(thrust::seq,
-                                    thrust::make_counting_iterator(0),
-                                    thrust::make_counting_iterator(_table.num_columns()),
-                                    hasher,
-                                    _seed,
-                                    hash_combiner);
+    return thrust::transform_reduce(
+      thrust::seq,
+      // note that this starts at 1 and not 0 now since we already hashed the first column
+      thrust::make_counting_iterator(1),
+      thrust::make_counting_iterator(_table.num_columns()),
+      hasher,
+      initial_hash,
+      hash_combiner);
   }
 
  private:
