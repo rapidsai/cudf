@@ -1,5 +1,8 @@
 # Copyright (c) 2021, NVIDIA CORPORATION.
 
+flake8==3.8.3
+black==19.10b0
+isort==5.0.7
 python-confluent-kafka
 pytest
 setuptools
