@@ -505,7 +505,7 @@ void gather_bitmask(table_view const& source,
   auto d_target_masks = make_device_uvector_async(target_masks, stream);
 
   auto const device_source = table_device_view::create(source, stream);
-  auto d_valid_counts      = make_zero_device_uvector_async<size_type>(target.size(), stream);
+  auto d_valid_counts      = make_zeroed_device_uvector_async<size_type>(target.size(), stream);
 
   // Dispatch operation enum to get implementation
   auto const impl = [op]() {

@@ -42,7 +42,7 @@ namespace detail {
  * @return A device_uvector containing zeros
  */
 template <typename T>
-rmm::device_uvector<T> make_zero_device_uvector_async(
+rmm::device_uvector<T> make_zeroed_device_uvector_async(
   std::size_t size,
   rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
@@ -64,7 +64,7 @@ rmm::device_uvector<T> make_zero_device_uvector_async(
  * @return A device_uvector containing zeros
  */
 template <typename T>
-rmm::device_uvector<T> make_zero_device_uvector_sync(
+rmm::device_uvector<T> make_zeroed_device_uvector_sync(
   std::size_t size,
   rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
