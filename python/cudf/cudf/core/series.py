@@ -1501,9 +1501,7 @@ class Series(Frame, Serializable):
         If ``reflect`` is ``True``, swap the order of the operands.
         """
         if isinstance(other, cudf.DataFrame):
-            # TODO: fn is not the same as arg expected by _apply_op
-            # e.g. for fn = 'and', _apply_op equivalent is '__and__'
-            return other._apply_op(self, fn)
+            return NotImplemented
 
         result_name = utils.get_result_name(self, other)
         if isinstance(other, Series):
@@ -3120,8 +3118,10 @@ class Series(Frame, Serializable):
                 "bool_only parameter is not implemented yet"
             )
 
-        if self.empty:
-            return False
+        skipna = False if skipna is None else skipna
+
+        if skipna is False and self.has_nulls:
+            return True
 
         if skipna:
             result_series = self.nans_to_nulls()
@@ -3571,6 +3571,7 @@ class Series(Frame, Serializable):
         4    3
         3    4
         1    5
+        dtype: int64
         """
 
         if inplace:
@@ -4724,8 +4725,9 @@ class Series(Frame, Serializable):
                 result_col[first_index:] = None
 
         # pandas always returns int64 dtype if original dtype is int or `bool`
-        if np.issubdtype(result_col.dtype, np.integer) or np.issubdtype(
-            result_col.dtype, np.bool_
+        if not is_decimal_dtype(result_col.dtype) and (
+            np.issubdtype(result_col.dtype, np.integer)
+            or np.issubdtype(result_col.dtype, np.bool_)
         ):
             return Series(
                 result_col.astype(np.int64)._apply_scan_op("sum"),
@@ -4772,6 +4774,11 @@ class Series(Frame, Serializable):
 
         if axis not in (None, 0):
             raise NotImplementedError("axis parameter is not implemented yet")
+
+        if is_decimal_dtype(self.dtype):
+            raise NotImplementedError(
+                "cumprod does not currently support decimal types"
+            )
 
         skipna = True if skipna is None else skipna
 
@@ -6292,17 +6299,24 @@ class Series(Frame, Serializable):
         method="hash",
         suffixes=("_x", "_y"),
     ):
-
         if left_on not in (self.name, None):
             raise ValueError(
                 "Series to other merge uses series name as key implicitly"
             )
 
-        lhs = self.copy(deep=False)
-        rhs = other.copy(deep=False)
+        if lsuffix or rsuffix:
+            raise ValueError(
+                "The lsuffix and rsuffix keywords have been replaced with the "
+                "``suffixes=`` keyword.  "
+                "Please provide the following instead: \n\n"
+                "    suffixes=('%s', '%s')"
+                % (lsuffix or "_x", rsuffix or "_y")
+            )
+        else:
+            lsuffix, rsuffix = suffixes
 
-        result = super(Series, lhs)._merge(
-            rhs,
+        result = super()._merge(
+            other,
             on=on,
             left_on=left_on,
             right_on=right_on,
@@ -6310,8 +6324,6 @@ class Series(Frame, Serializable):
             right_index=right_index,
             how=how,
             sort=sort,
-            lsuffix=lsuffix,
-            rsuffix=rsuffix,
             method=method,
             indicator=False,
             suffixes=suffixes,
@@ -6361,6 +6373,47 @@ class Series(Frame, Serializable):
         StringIndex(['a' 'b' 'c'], dtype='object')
         """
         return self.index
+
+    def explode(self, ignore_index=False):
+        """
+        Transform each element of a list-like to a row, replicating index
+        values.
+
+        Parameters
+        ----------
+        ignore_index : bool, default False
+            If True, the resulting index will be labeled 0, 1, …, n - 1.
+
+        Returns
+        -------
+        DataFrame
+
+        Examples
+        --------
+        >>> import cudf
+        >>> s = cudf.Series([[1, 2, 3], [], None, [4, 5]])
+        >>> s
+        0    [1, 2, 3]
+        1           []
+        2         None
+        3       [4, 5]
+        dtype: list
+        >>> s.explode()
+        0       1
+        0       2
+        0       3
+        1    <NA>
+        2    <NA>
+        3       4
+        3       5
+        dtype: int64
+        """
+        if not is_list_dtype(self._column.dtype):
+            data = self._data.copy(deep=True)
+            idx = None if ignore_index else self._index.copy(deep=True)
+            return self.__class__._from_data(data, index=idx)
+
+        return super()._explode(self._column_names[0], ignore_index)
 
     _accessors = set()  # type: Set[Any]
 

@@ -23,8 +23,6 @@
 
 #include <rmm/cuda_stream_view.hpp>
 
-using cudf::device_span;
-
 namespace cudf {
 namespace detail {
 /**

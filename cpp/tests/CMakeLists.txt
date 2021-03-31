@@ -15,38 +15,6 @@
 #=============================================================================
 
 ###################################################################################################
-# - common test utils -----------------------------------------------------------------------------
-
-find_package(Threads REQUIRED)
-
-add_library(cudftestutil STATIC
-            utilities/base_fixture.cpp
-            utilities/column_utilities.cu
-            utilities/table_utilities.cu
-            strings/utilities.cu)
-
-target_compile_options(cudftestutil
-            PUBLIC "$<$<COMPILE_LANGUAGE:CXX>:${CUDF_CXX_FLAGS}>"
-                   "$<$<COMPILE_LANGUAGE:CUDA>:${CUDF_CUDA_FLAGS}>"
-)
-
-target_compile_features(cudftestutil PUBLIC cxx_std_14 cuda_std_14)
-
-target_link_libraries(cudftestutil
-               PUBLIC GTest::gmock
-                      GTest::gtest
-                      Threads::Threads
-                      cudf)
-
-target_include_directories(cudftestutil
-    PUBLIC "$<BUILD_INTERFACE:${CUDF_SOURCE_DIR}>"
-           "$<BUILD_INTERFACE:${CUDF_SOURCE_DIR}/src>")
-
-install(TARGETS cudftestutil
-        DESTINATION lib
-        EXPORT cudf-targets)
-
-###################################################################################################
 # - compiler function -----------------------------------------------------------------------------
 
 function(ConfigureTest CMAKE_TEST_NAME )
@@ -89,19 +57,24 @@ ConfigureTest(GROUPBY_TEST
     groupby/argmin_test.cpp
     groupby/argmax_test.cpp
     groupby/collect_list_test.cpp
+    groupby/collect_set_test.cpp
+    groupby/count_scan_test.cpp
     groupby/count_test.cpp
     groupby/groups_test.cpp
-    groupby/keys_test.cpp
-    groupby/min_test.cpp
+    groupby/keys_test.cpp    
+    groupby/min_test.cpp    
+    groupby/max_scan_test.cpp
     groupby/max_test.cpp
     groupby/mean_test.cpp
     groupby/median_test.cpp
-    groupby/nunique_test.cpp
+    groupby/min_scan_test.cpp
     groupby/nth_element_test.cpp
+    groupby/nunique_test.cpp
     groupby/quantile_test.cpp
     groupby/std_test.cpp
-    groupby/sum_test.cpp
     groupby/sum_of_squares_test.cpp
+    groupby/sum_scan_test.cpp
+    groupby/sum_test.cpp
     groupby/var_test.cpp)
 
 ###################################################################################################
@@ -189,7 +162,8 @@ ConfigureTest(TRANSFORM_TEST
     transform/integration/unary-transform-test.cpp
     transform/nans_to_null_test.cpp
     transform/mask_to_bools_test.cpp
-    transform/bools_to_mask_test.cpp)
+    transform/bools_to_mask_test.cpp
+    transform/row_bit_count_test.cu)
 
 ###################################################################################################
 # - interop tests -------------------------------------------------------------------------
@@ -319,7 +293,6 @@ ConfigureTest(SEARCH_TEST search/search_test.cpp)
 # - reshape test ----------------------------------------------------------------------------------
 ConfigureTest(RESHAPE_TEST
     reshape/byte_cast_tests.cpp
-    reshape/explode_tests.cpp
     reshape/interleave_columns_tests.cpp
     reshape/tile_tests.cpp)
 
@@ -361,6 +334,7 @@ ConfigureTest(STRINGS_TEST
     strings/hash_string.cu
     strings/integers_tests.cu
     strings/ipv4_tests.cpp
+    strings/json_tests.cpp
     strings/pad_tests.cpp
     strings/replace_regex_tests.cpp
     strings/replace_tests.cpp
@@ -422,9 +396,15 @@ ConfigureTest(AST_TEST ast/transform_tests.cpp)
 ConfigureTest(LISTS_TEST
     lists/contains_tests.cpp
     lists/count_elements_tests.cpp
+    lists/explode_tests.cpp
     lists/drop_list_duplicates_tests.cpp
     lists/extract_tests.cpp
     lists/sort_lists_tests.cpp)
+
+###################################################################################################
+# - bin tests ----------------------------------------------------------------------------------
+ConfigureTest(LABEL_BINS_TEST
+    labeling/label_bins_tests.cpp)
 
 ###################################################################################################
 ### enable testing ################################################################################
