@@ -20,14 +20,7 @@ from cudf.tests.utils import FLOAT_TYPES, assert_eq
         [1],
         [-1],
         [1, 2, 3, 4],
-        pytest.param(
-            [42, 1729, 4104],
-            marks=pytest.mark.xfail(
-                reason="pyarrow bug that sometimes "
-                "doesn't allow casting to a higher precision "
-                "then back."
-            ),
-        ),
+        [42, 1729, 4104],
         [1, 2, None, 4],
         [None, None, None],
         [],
