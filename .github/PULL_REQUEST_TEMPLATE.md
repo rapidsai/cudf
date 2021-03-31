@@ -19,15 +19,15 @@ Here are some guidelines to help the review process go smoothly.
    noted here: https://help.github.com/articles/closing-issues-using-keywords/
 
 5. If your pull request is not ready for review but you want to make use of the
-   continuous integration testing facilities please label it with `[WIP]`.
+   continuous integration testing facilities please mark your pull request as Draft.
 
 6. If your pull request is ready to be reviewed without requiring additional
-   work on top of it, then remove the `[WIP]` label (if present) and replace
-   it with `[REVIEW]`. If assistance is required to complete the functionality,
-   for example when the C/C++ code of a feature is complete but Python bindings
-   are still required, then add the label `[HELP-REQ]` so that others can triage
-   and assist. The additional changes then can be implemented on top of the
-   same PR. If the assistance is done by members of the rapidsAI team, then no
+   work on top of it, then remove it from "Draft" and make it "Ready for Review".
+   If assistance is required to complete the functionality, for example when the
+   C/C++ code of a feature is complete but Python bindings are still required,
+   then add the label `help wanted` so that others can triage and assist.
+   The additional changes then can be implemented on top of the same PR.
+   If the assistance is done by members of the rapidsAI team, then no
    additional actions are required by the creator of the original PR for this,
    otherwise the original author of the PR needs to give permission to the
    person(s) assisting to commit to their personal fork of the project. If that
