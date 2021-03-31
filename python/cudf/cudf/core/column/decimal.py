@@ -17,7 +17,8 @@ from cudf._lib.strings.convert.convert_fixed_point import (
     from_decimal as cpp_from_decimal,
 )
 from cudf.core.column import as_column
-import decimal
+from decimal import Decimal
+from cudf.utils.dtypes import is_scalar
 
 
 class DecimalColumn(ColumnBase):
@@ -71,6 +72,12 @@ class DecimalColumn(ColumnBase):
         result = libcudf.binaryop.binaryop(self, other, op, output_type)
         result.dtype.precision = _binop_precision(self.dtype, other.dtype, op)
         return result
+
+    def normalize_binop_value(self, other):
+        if is_scalar(other) and isinstance(other, (int, np.int, Decimal)):
+            return cudf.Scalar(Decimal(other))
+        else:
+            raise TypeError(f"cannot normalize {type(other)}")
 
     def _apply_scan_op(self, op: str) -> ColumnBase:
         return libcudf.reduce.scan(op, self, True)
