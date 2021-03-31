@@ -51,7 +51,6 @@ function(jit_preprocess_files)
                                     -D__CUDACC_RTC__
                                     -I${CUDF_SOURCE_DIR}/include
                                     -I${CUDF_SOURCE_DIR}/src
-                                    # -I${LIBCXX_INCLUDE_DIR}
                                     -I${LIBCUDACXX_INCLUDE_DIR}
                                     -I${CUDAToolkit_INCLUDE_DIR}
                                     --no-preinclude-workarounds
