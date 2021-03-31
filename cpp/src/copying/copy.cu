@@ -31,8 +31,8 @@ namespace {
 
 template <typename T, typename Enable = void>
 struct copy_if_else_functor_impl {
-  template <typename...>
-  std::unique_ptr<column> operator()(...)
+  template <typename... Args>
+  std::unique_ptr<column> operator()(Args&&...)
   {
     CUDF_FAIL("Unsupported type for copy_if_else.");
   }

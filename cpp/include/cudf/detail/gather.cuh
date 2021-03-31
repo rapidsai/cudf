@@ -142,8 +142,8 @@ void gather_helper(InputItr source_itr,
 // Error case when no other overload or specialization is available
 template <typename Element, typename Enable = void>
 struct column_gatherer_impl {
-  template <typename...>
-  std::unique_ptr<column> operator()(...)
+  template <typename... Args>
+  std::unique_ptr<column> operator()(Args&&...)
   {
     CUDF_FAIL("Unsupported type in gather.");
   }
