@@ -91,9 +91,6 @@ class memory_tracking_resource final : public rmm::mr::device_memory_resource {
    *
    * The returned pointer has at least 256B alignment.
    *
-   * @throws `rmm::bad_alloc` if the requested allocation could not be fulfilled
-   * by the upstream resource.
-   *
    * @param bytes The size, in bytes, of the allocation
    * @param stream Stream on which to perform the allocation
    * @return void* Pointer to the newly allocated memory
@@ -124,8 +121,6 @@ class memory_tracking_resource final : public rmm::mr::device_memory_resource {
   /**
    * @brief Compare the upstream resource to another.
    *
-   * @throws Nothing.
-   *
    * @param other The other resource to compare to
    * @return true If the two resources are equivalent
    * @return false If the two resources are not equal
@@ -146,8 +141,6 @@ class memory_tracking_resource final : public rmm::mr::device_memory_resource {
 
   /**
    * @brief Get free and available memory from upstream resource.
-   *
-   * @throws `rmm::cuda_error` if unable to retrieve memory info.
    *
    * @param stream Stream on which to get the mem info.
    * @return std::pair contaiing free_size and total_size of memory
