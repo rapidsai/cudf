@@ -2,6 +2,8 @@
 
 import datetime
 import itertools
+import re
+import subprocess
 
 import numpy as np
 import pandas as pd
@@ -20,6 +22,18 @@ from cudf.tests.utils import (
     assert_eq,
     assert_exceptions_equal,
 )
+
+
+# Some decimal aggregations are only supported
+try:
+    version_str = subprocess.check_output(["nvcc", "--version"]).decode()
+except OSError:
+    # Can't imagine anyone running this test on a machine without nvcc... this
+    # is just being pedantic.
+    raise RuntimeError("nvcc must be installed.")
+
+match = re.search(r"release (\d+)\.\d+", version_str)
+NVCC_MAJOR_VERSION = int(match.group(1))
 
 _now = np.datetime64("now")
 _tomorrow = _now + np.timedelta64(1, "D")
@@ -334,6 +348,9 @@ def test_groupby_2keys_agg(nelem, func):
     assert_eq(got_df, expect_df, check_dtype=check_dtype)
 
 
+@pytest.mark.skipif(
+    NVCC_MAJOR_VERSION < 11,
+    reason="These aggregations are not supported on CUDA 10.x.")
 @pytest.mark.parametrize("num_groups", [2, 3, 10, 50, 100])
 @pytest.mark.parametrize("nelem_per_group", [1, 10, 100])
 @pytest.mark.parametrize(
