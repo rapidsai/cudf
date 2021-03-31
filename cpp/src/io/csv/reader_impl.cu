@@ -182,7 +182,8 @@ std::vector<std::string> setColumnNames(std::vector<char> const &header,
   return col_names;
 }
 
-table_with_metadata reader::impl::read(rmm::cuda_stream_view stream)
+reader::impl::selected_row_offsets reader::impl::load_data_and_gather_row_offsets(
+  rmm::cuda_stream_view stream)
 {
   auto range_offset  = opts_.get_byte_range_offset();
   auto range_size    = opts_.get_byte_range_size();
@@ -205,11 +206,6 @@ table_with_metadata reader::impl::read(rmm::cuda_stream_view stream)
   if (source_ == nullptr) {
     assert(!filepath_.empty());
     source_ = datasource::create(filepath_, range_offset, map_range_size);
-  }
-
-  // Return an empty dataframe if no data and no column metadata to process
-  if (source_->is_empty() && (opts_.get_names().empty() || opts_.get_dtypes().empty())) {
-    return {std::make_unique<table>(), {}};
   }
 
   // Transfer source data to GPU
@@ -239,25 +235,28 @@ table_with_metadata reader::impl::read(rmm::cuda_stream_view stream)
                  "byte_range offset with header not supported");
 
     // Gather row offsets
-    gather_row_offsets(h_data,
-                       data_start_offset,
-                       (range_size) ? range_size : h_data.size(),
-                       (skip_rows > 0) ? skip_rows : 0,
-                       num_rows,
-                       load_whole_file,
-                       stream);
+    auto row_offsets = gather_row_offsets(h_data,
+                                          data_start_offset,
+                                          (range_size) ? range_size : h_data.size(),
+                                          (skip_rows > 0) ? skip_rows : 0,
+                                          num_rows,
+                                          load_whole_file,
+                                          stream);
 
     // Exclude the rows that are to be skipped from the end
     if (skip_end_rows > 0 && static_cast<size_t>(skip_end_rows) < row_offsets.size()) {
-      row_offsets = row_offsets.subspan(0, row_offsets_.size() - skip_end_rows);
+      row_offsets.discard_after(row_offsets.size() - skip_end_rows);
     }
-
-    // Exclude the end-of-data row from number of rows with actual data
-    num_records_ = row_offsets.size();
-    num_records_ -= (num_records_ > 0);
-  } else {
-    num_records_ = 0;
+    return row_offsets;
   }
+  return {rmm::device_uvector<uint64_t>{0, stream}, device_span<uint64_t const>{}};
+}
+
+table_with_metadata reader::impl::read(rmm::cuda_stream_view stream)
+{
+  auto const row_offsets = load_data_and_gather_row_offsets(stream);
+  // Exclude the end-of-data row from number of rows with actual data
+  num_records_ = std::max(row_offsets.size(), 1ul) - 1;
 
   // Check if the user gave us a list of column names
   if (not opts_.get_names().empty()) {
@@ -337,12 +336,12 @@ table_with_metadata reader::impl::read(rmm::cuda_stream_view stream)
 
   auto metadata     = table_metadata{};
   auto out_columns  = std::vector<std::unique_ptr<cudf::column>>();
-  auto column_types = gather_column_types(stream);
+  auto column_types = gather_column_types(row_offsets, stream);
 
   out_columns.reserve(column_types.size());
 
   if (num_records_ != 0) {
-    auto out_buffers = decode_data(column_types, stream);
+    auto out_buffers = decode_data(row_offsets, column_types, stream);
     for (size_t i = 0; i < column_types.size(); ++i) {
       metadata.column_names.emplace_back(out_buffers[i].name);
       if (column_types[i].id() == type_id::STRING && opts.quotechar != '\0' &&
@@ -375,7 +374,7 @@ table_with_metadata reader::impl::read(rmm::cuda_stream_view stream)
   return {std::make_unique<table>(std::move(out_columns)), std::move(metadata)};
 }
 
-size_t reader::impl::find_first_row_start(host_span<char const> const data)
+size_t reader::impl::find_first_row_start(host_span<char const> data)
 {
   // For now, look for the first terminator (assume the first terminator isn't within a quote)
   // TODO: Attempt to infer this from the data
@@ -384,13 +383,13 @@ size_t reader::impl::find_first_row_start(host_span<char const> const data)
   return std::min(pos + 1, data.size());
 }
 
-void reader::impl::gather_row_offsets(host_span<char const> const data,
-                                      size_t range_begin,
-                                      size_t range_end,
-                                      size_t skip_rows,
-                                      int64_t num_rows,
-                                      bool load_whole_file,
-                                      rmm::cuda_stream_view stream)
+reader::impl::selected_row_offsets reader::impl::gather_row_offsets(host_span<char const> data,
+                                                                    size_t range_begin,
+                                                                    size_t range_end,
+                                                                    size_t skip_rows,
+                                                                    int64_t num_rows,
+                                                                    bool load_whole_file,
+                                                                    rmm::cuda_stream_view stream)
 {
   constexpr size_t max_chunk_bytes = 64 * 1024 * 1024;  // 64MB
   size_t buffer_size               = std::min(max_chunk_bytes, data.size());
@@ -406,6 +405,7 @@ void reader::impl::gather_row_offsets(host_span<char const> const data,
   // previous row terminator is within the given range
   range_end += (range_end < data.size());
   data_.resize(0);
+  rmm::device_uvector<uint64_t> all_row_offsets{0, stream};
   data_.reserve((load_whole_file) ? data.size() : std::min(buffer_size * 2, data.size()));
   do {
     size_t target_pos = std::min(pos + max_chunk_bytes, data.size());
@@ -445,7 +445,7 @@ void reader::impl::gather_row_offsets(host_span<char const> const data,
     size_t total_rows = ctx >> 2;
     if (total_rows > skip_rows) {
       // At least one row in range in this batch
-      row_offsets_.resize(total_rows - skip_rows, stream);
+      all_row_offsets.resize(total_rows - skip_rows, stream);
 
       CUDA_TRY(cudaMemcpyAsync(row_ctx.device_ptr(),
                                row_ctx.host_ptr(),
@@ -456,7 +456,7 @@ void reader::impl::gather_row_offsets(host_span<char const> const data,
       // Pass 2: Output row offsets
       cudf::io::csv::gpu::gather_row_offsets(opts.view(),
                                              row_ctx.device_ptr(),
-                                             row_offsets_,
+                                             all_row_offsets,
                                              data_,
                                              chunk_size,
                                              pos,
@@ -480,18 +480,18 @@ void reader::impl::gather_row_offsets(host_span<char const> const data,
         if (rows_out_of_range != 0) {
           // Keep one row out of range (used to infer length of previous row)
           auto new_row_offsets_size =
-            row_offsets_.size() - std::min(rows_out_of_range - 1, row_offsets_.size());
-          row_offsets_.resize(new_row_offsets_size, stream);
+            all_row_offsets.size() - std::min(rows_out_of_range - 1, all_row_offsets.size());
+          all_row_offsets.resize(new_row_offsets_size, stream);
           // Implies we reached the end of the range
           break;
         }
       }
       // num_rows does not include blank rows
       if (num_rows >= 0) {
-        if (row_offsets_.size() > header_rows + static_cast<size_t>(num_rows)) {
+        if (all_row_offsets.size() > header_rows + static_cast<size_t>(num_rows)) {
           size_t num_blanks =
-            cudf::io::csv::gpu::count_blank_rows(opts.view(), data_, row_offsets_, stream);
-          if (row_offsets_.size() - num_blanks > header_rows + static_cast<size_t>(num_rows)) {
+            cudf::io::csv::gpu::count_blank_rows(opts.view(), data_, all_row_offsets, stream);
+          if (all_row_offsets.size() - num_blanks > header_rows + static_cast<size_t>(num_rows)) {
             // Got the desired number of rows
             break;
           }
@@ -508,12 +508,10 @@ void reader::impl::gather_row_offsets(host_span<char const> const data,
     pos = target_pos;
   } while (pos < data.size());
 
-  row_offsets = row_offsets_;
+  auto const non_blank_row_offsets =
+    cudf::io::csv::gpu::remove_blank_rows(opts.view(), data_, all_row_offsets, stream);
+  auto row_offsets = selected_row_offsets{std::move(all_row_offsets), non_blank_row_offsets};
 
-  // Eliminate blank rows
-  if (row_offsets.size() != 0) {
-    row_offsets = cudf::io::csv::gpu::remove_blank_rows(opts.view(), data_, row_offsets, stream);
-  }
   // Remove header rows and extract header
   const size_t header_row_index = std::max<size_t>(header_rows, 1) - 1;
   if (header_row_index + 1 < row_offsets.size()) {
@@ -529,17 +527,17 @@ void reader::impl::gather_row_offsets(host_span<char const> const data,
     CUDF_EXPECTS(header_start <= header_end && header_end <= data.size(),
                  "Invalid csv header location");
     header_.assign(data.begin() + header_start, data.begin() + header_end);
-    if (header_rows > 0) {
-      row_offsets = row_offsets.subspan(header_rows, row_offsets.size() - header_rows);
-    }
+    if (header_rows > 0) { row_offsets.discard_before(header_rows); }
   }
   // Apply num_rows limit
-  if (num_rows >= 0) {
-    row_offsets = row_offsets.subspan(0, std::min<size_t>(row_offsets.size(), num_rows + 1));
+  if (num_rows >= 0 && static_cast<size_t>(num_rows) < row_offsets.size() - 1) {
+    row_offsets.discard_after(num_rows + 1);
   }
+  return row_offsets;
 }
 
-std::vector<data_type> reader::impl::gather_column_types(rmm::cuda_stream_view stream)
+std::vector<data_type> reader::impl::gather_column_types(device_span<uint64_t const> row_offsets,
+                                                         rmm::cuda_stream_view stream)
 {
   std::vector<data_type> dtypes;
 
@@ -660,7 +658,8 @@ std::vector<data_type> reader::impl::gather_column_types(rmm::cuda_stream_view s
   return dtypes;
 }
 
-std::vector<column_buffer> reader::impl::decode_data(host_span<data_type const> column_types,
+std::vector<column_buffer> reader::impl::decode_data(device_span<uint64_t const> row_offsets,
+                                                     host_span<data_type const> column_types,
                                                      rmm::cuda_stream_view stream)
 {
   // Alloc output; columns' data memory is still expected for empty dataframe

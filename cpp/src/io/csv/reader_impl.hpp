@@ -91,6 +91,34 @@ class reader::impl {
   table_with_metadata read(rmm::cuda_stream_view stream);
 
  private:
+  class selected_row_offsets {
+    rmm::device_uvector<uint64_t> all;
+    device_span<uint64_t const> selected;
+
+   public:
+    selected_row_offsets(rmm::device_uvector<uint64_t> &&data,
+                         device_span<uint64_t const> selected_span)
+      : all{std::move(data)}, selected{selected_span}
+    {
+    }
+
+    operator device_span<uint64_t const>() const { return selected; }
+    void discard_after(size_t index) { selected = selected.subspan(0, index); }
+    void discard_before(size_t index)
+    {
+      selected = selected.subspan(index, selected.size() - index);
+    }
+    auto size() const { return selected.size(); }
+    auto data() const { return selected.data(); }
+  };
+
+  /**
+   * @brief Loads data on the GPU and gathers offsets of rows to read.
+   *
+   * @param stream CUDA stream used for device memory operations and kernel launches.
+   */
+  selected_row_offsets load_data_and_gather_row_offsets(rmm::cuda_stream_view stream);
+
   /**
    * @brief Finds row positions within the specified input data.
    *
@@ -106,13 +134,13 @@ class reader::impl {
    * @param load_whole_file Hint that the entire data will be needed on gpu
    * @param stream CUDA stream used for device memory operations and kernel launches.
    */
-  void gather_row_offsets(host_span<char const> data,
-                          size_t range_begin,
-                          size_t range_end,
-                          size_t skip_rows,
-                          int64_t num_rows,
-                          bool load_whole_file,
-                          rmm::cuda_stream_view stream);
+  selected_row_offsets gather_row_offsets(host_span<char const> data,
+                                          size_t range_begin,
+                                          size_t range_end,
+                                          size_t skip_rows,
+                                          int64_t num_rows,
+                                          bool load_whole_file,
+                                          rmm::cuda_stream_view stream);
 
   /**
    * @brief Find the start position of the first data row
@@ -130,7 +158,8 @@ class reader::impl {
    *
    * @return `std::vector<data_type>` List of column types
    */
-  std::vector<data_type> gather_column_types(rmm::cuda_stream_view stream);
+  std::vector<data_type> gather_column_types(device_span<uint64_t const> row_offsets,
+                                             rmm::cuda_stream_view stream);
 
   /**
    * @brief Converts the row-column data and outputs to column bufferrs.
@@ -140,7 +169,8 @@ class reader::impl {
    *
    * @return list of column buffers of decoded data, or ptr/size in the case of strings.
    */
-  std::vector<column_buffer> decode_data(host_span<data_type const> column_types,
+  std::vector<column_buffer> decode_data(device_span<uint64_t const> row_offsets,
+                                         host_span<data_type const> column_types,
                                          rmm::cuda_stream_view stream);
 
  private:
@@ -151,8 +181,6 @@ class reader::impl {
   const csv_reader_options opts_;
 
   rmm::device_vector<char> data_;
-  rmm::device_uvector<uint64_t> row_offsets_{0, rmm::cuda_stream_default};
-  device_span<uint64_t> row_offsets;
   cudf::size_type num_records_ = 0;  // Number of rows with actual data
   int num_active_cols_         = 0;  // Number of columns to read
   int num_actual_cols_         = 0;  // Number of columns in the dataset
