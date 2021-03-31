@@ -5,9 +5,9 @@ import numpy as np
 
 from cudf._lib.scalar import DeviceScalar, _is_null_host_scalar
 from cudf.core.column.column import ColumnBase
+from cudf.core.dtypes import Decimal64Dtype
 from cudf.core.index import Index
 from cudf.core.series import Series
-from cudf.core.dtypes import Decimal64Dtype
 from cudf.utils.dtypes import (
     get_allowed_combinations_for_operator,
     to_cudf_compatible_scalar,
@@ -118,8 +118,8 @@ class Scalar(object):
             # TODO: Support coercion from decimal.Decimal to different dtype
             # TODO: Support coercion from integer to Decimal64Dtype
             raise NotImplementedError(
-                "dtype as cudf.Decimal64Dtype is not supported. Use Decimal "
-                "to construct a DecimalScalar."
+                "dtype as cudf.Decimal64Dtype is not supported. Pass a "
+                "decimal.Decimal to construct a DecimalScalar."
             )
         if isinstance(value, decimal.Decimal) and dtype is not None:
             raise TypeError(f"Can not coerce decimal to {dtype}")
