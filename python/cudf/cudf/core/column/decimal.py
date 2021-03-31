@@ -1,5 +1,6 @@
 # Copyright (c) 2021, NVIDIA CORPORATION.
 
+from decimal import Decimal
 from typing import cast
 
 import cupy as cp
@@ -15,6 +16,7 @@ from cudf._typing import Dtype
 from cudf.core.buffer import Buffer
 from cudf.core.column import ColumnBase, as_column
 from cudf.core.dtypes import Decimal64Dtype
+from cudf.utils.dtypes import is_scalar
 from cudf.utils.utils import pa_mask_buffer_to_mask
 
 
@@ -71,6 +73,12 @@ class DecimalColumn(ColumnBase):
         result = libcudf.binaryop.binaryop(self, other, op, output_type)
         result.dtype.precision = _binop_precision(self.dtype, other.dtype, op)
         return result
+
+    def normalize_binop_value(self, other):
+        if is_scalar(other) and isinstance(other, (int, np.int, Decimal)):
+            return cudf.Scalar(Decimal(other))
+        else:
+            raise TypeError(f"cannot normalize {type(other)}")
 
     def _apply_scan_op(self, op: str) -> ColumnBase:
         result = libcudf.reduce.scan(op, self, True)
