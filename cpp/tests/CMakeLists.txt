@@ -63,6 +63,7 @@ ConfigureTest(GROUPBY_TEST
     groupby/group_sum_test.cpp
     groupby/group_min_test.cpp
     groupby/group_max_test.cpp
+    groupby/group_product_test.cpp
     groupby/group_sum_of_squares_test.cpp
     groupby/group_mean_test.cpp
     groupby/group_var_test.cpp

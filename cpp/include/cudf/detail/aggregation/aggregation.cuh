@@ -364,9 +364,9 @@ struct update_target_element<Source,
   {
     if (source_has_nulls and source.is_null(source_index)) { return; }
 
-    using Target = target_type_t<Source, aggregation::SUM_OF_SQUARES>;
-    auto value   = static_cast<Target>(source.element<Source>(source_index));
-    atomicMul(&target.element<Target>(target_index), value);
+    using Target = target_type_t<Source, aggregation::PRODUCT>;
+    atomicMul(&target.element<Target>(target_index),
+              static_cast<Target>(source.element<Source>(source_index)));
     if (target_has_nulls and target.is_null(target_index)) { target.set_valid(target_index); }
   }
 };
