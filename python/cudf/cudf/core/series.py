@@ -1186,6 +1186,7 @@ class Series(Frame, Serializable):
         else:
             return self.loc[arg]
 
+
     def __iter__(self):
         cudf.utils.utils.raise_iteration_error(obj=self)
 
