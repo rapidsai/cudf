@@ -101,6 +101,7 @@ class reader::impl {
       : all{std::move(data)}, selected{selected_span}
     {
     }
+    selected_rows_offsets(rmm::cuda_stream_view stream) : all{0, stream}, selected{all} {}
 
     operator device_span<uint64_t const>() const { return selected; }
     void shrink(size_t size)
@@ -118,18 +119,20 @@ class reader::impl {
   };
 
   /**
-   * @brief Loads data on the GPU and gathers offsets of rows to read.
+   * @brief Selectively loads data on the GPU and gathers offsets of rows to read.
+   *
+   * Selection is based on read options.
    *
    * @param stream CUDA stream used for device memory operations and kernel launches.
    */
-  selected_rows_offsets load_data_and_row_offsets(rmm::cuda_stream_view stream);
+  std::pair<rmm::device_uvector<char>, reader::impl::selected_rows_offsets>
+  select_data_and_row_offsets(rmm::cuda_stream_view stream);
 
   /**
-   * @brief Finds row positions within the specified input data.
+   * @brief Finds row positions in the specified input data, and loads the selected data onto GPU.
    *
-   * This function scans the input data to record the row offsets (relative to
-   * the start of the input data).
-   * A row is actually the data/offset between two termination symbols.
+   * This function scans the input data to record the row offsets (relative to the start of the
+   * input data). A row is actually the data/offset between two termination symbols.
    *
    * @param data Uncompressed input data in host memory
    * @param range_begin Only include rows starting after this position
@@ -137,15 +140,17 @@ class reader::impl {
    * @param skip_rows Number of rows to skip from the start
    * @param num_rows Number of rows to read; -1: all remaining data
    * @param load_whole_file Hint that the entire data will be needed on gpu
-   * @param stream CUDA stream used for device memory operations and kernel launches.
+   * @param stream CUDA stream used for device memory operations and kernel launches
+   * @return Input data and row offsets in the device memory
    */
-  selected_rows_offsets gather_row_offsets(host_span<char const> data,
-                                           size_t range_begin,
-                                           size_t range_end,
-                                           size_t skip_rows,
-                                           int64_t num_rows,
-                                           bool load_whole_file,
-                                           rmm::cuda_stream_view stream);
+  std::pair<rmm::device_uvector<char>, reader::impl::selected_rows_offsets>
+  load_data_and_gather_row_offsets(host_span<char const> data,
+                                   size_t range_begin,
+                                   size_t range_end,
+                                   size_t skip_rows,
+                                   int64_t num_rows,
+                                   bool load_whole_file,
+                                   rmm::cuda_stream_view stream);
 
   /**
    * @brief Find the start position of the first data row
@@ -163,7 +168,8 @@ class reader::impl {
    *
    * @return `std::vector<data_type>` List of column types
    */
-  std::vector<data_type> gather_column_types(device_span<uint64_t const> row_offsets,
+  std::vector<data_type> gather_column_types(device_span<char const> data,
+                                             device_span<uint64_t const> row_offsets,
                                              rmm::cuda_stream_view stream);
 
   /**
@@ -174,7 +180,8 @@ class reader::impl {
    *
    * @return list of column buffers of decoded data, or ptr/size in the case of strings.
    */
-  std::vector<column_buffer> decode_data(device_span<uint64_t const> row_offsets,
+  std::vector<column_buffer> decode_data(device_span<char const> data,
+                                         device_span<uint64_t const> row_offsets,
                                          host_span<data_type const> column_types,
                                          rmm::cuda_stream_view stream);
 
@@ -185,7 +192,6 @@ class reader::impl {
   std::string compression_type_;
   const csv_reader_options opts_;
 
-  rmm::device_vector<char> data_;
   cudf::size_type num_records_ = 0;  // Number of rows with actual data
   int num_active_cols_         = 0;  // Number of columns to read
   int num_actual_cols_         = 0;  // Number of columns in the dataset
