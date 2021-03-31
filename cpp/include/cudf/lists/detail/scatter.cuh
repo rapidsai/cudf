@@ -577,15 +577,15 @@ struct list_child_constructor {
     auto child_offsets = cudf::strings::detail::make_offsets_child_column(
       begin, begin + child_list_views.size(), stream, mr);
 
-    auto child_column =
-      cudf::type_dispatcher(source_lists_column_view.child().child(1).type(),
-                            list_child_constructor{},
-                            child_list_views,
-                            child_offsets->view(),
-                            cudf::lists_column_view(source_lists_column_view.child()),
-                            cudf::lists_column_view(target_lists_column_view.child()),
-                            stream,
-                            mr);
+    auto child_column = cudf::type_dispatcher<dispatch_storage_type>(
+      source_lists_column_view.child().child(1).type(),
+      list_child_constructor{},
+      child_list_views,
+      child_offsets->view(),
+      cudf::lists_column_view(source_lists_column_view.child()),
+      cudf::lists_column_view(target_lists_column_view.child()),
+      stream,
+      mr);
 
     auto child_null_mask =
       source_lists_column_view.child().nullable() || target_lists_column_view.child().nullable()
@@ -672,7 +672,7 @@ struct list_child_constructor {
       iter_target_member_as_list,
       std::back_inserter(child_columns),
       [&](auto source_struct_member_as_list, auto target_struct_member_as_list) {
-        return cudf::type_dispatcher(
+        return cudf::type_dispatcher<dispatch_storage_type>(
           source_struct_member_as_list->child(cudf::lists_column_view::child_column_index).type(),
           list_child_constructor{},
           list_vector,
@@ -780,14 +780,14 @@ std::unique_ptr<column> scatter(
   auto offsets_column = cudf::strings::detail::make_offsets_child_column(
     list_size_begin, list_size_begin + target.size(), stream, mr);
 
-  auto child_column = cudf::type_dispatcher(child_column_type,
-                                            list_child_constructor{},
-                                            target_vector,
-                                            offsets_column->view(),
-                                            source_lists_column_view,
-                                            target_lists_column_view,
-                                            stream,
-                                            mr);
+  auto child_column = cudf::type_dispatcher<dispatch_storage_type>(child_column_type,
+                                                                   list_child_constructor{},
+                                                                   target_vector,
+                                                                   offsets_column->view(),
+                                                                   source_lists_column_view,
+                                                                   target_lists_column_view,
+                                                                   stream,
+                                                                   mr);
 
   auto null_mask =
     target.has_nulls() ? copy_bitmask(target, stream, mr) : rmm::device_buffer{0, stream, mr};
