@@ -174,16 +174,6 @@ ConfigureTest(INTEROP_TEST
     interop/dlpack_test.cpp)
 
 ###################################################################################################
-# - jit cache tests -------------------------------------------------------------------------------
-ConfigureTest(JITCACHE_TEST
-    "${CUDF_SOURCE_DIR}/src/jit/cache.cpp"
-    jit/jit-cache-test.cpp)
-
-ConfigureTest(JITCACHE_MULTIPROC_TEST
-    "${CUDF_SOURCE_DIR}/src/jit/cache.cpp"
-    jit/jit-cache-multiprocess-test.cpp)
-
-###################################################################################################
 # - io tests --------------------------------------------------------------------------------------
 ConfigureTest(DECOMPRESSION_TEST io/comp/decomp_test.cu)
 

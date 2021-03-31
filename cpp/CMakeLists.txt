@@ -137,8 +137,7 @@ include(cmake/thirdparty/CUDF_GetDLPack.cmake)
 include(cmake/thirdparty/CUDF_GetLibcudacxx.cmake)
 # find or install GoogleTest
 include(cmake/thirdparty/CUDF_GetGTest.cmake)
-# Stringify libcudf and libcudacxx headers used in JIT operations
-include(cmake/Modules/JitifyStringifyHeaders.cmake)
+# preprocess jitify-able kernels
 include(cmake/Modules/JitifyPreprocessKernels.cmake)
 # find cuFile
 include(cmake/Modules/FindcuFile.cmake)
@@ -253,8 +252,6 @@ add_library(cudf
     src/io/utilities/file_io_utilities.cpp
     src/io/utilities/parsing_utils.cu
     src/io/utilities/type_conversion.cpp
-    src/jit/cache.cpp
-    src/jit/launcher.cpp
     src/jit/parser.cpp
     src/jit/type.cpp
     src/join/cross_join.cu
@@ -461,7 +458,7 @@ endif()
 target_compile_definitions(cudf PUBLIC "SPDLOG_ACTIVE_LEVEL=SPDLOG_LEVEL_${RMM_LOGGING_LEVEL}")
 
 # Compile stringified JIT sources first
-add_dependencies(cudf jitify_stringify_run jitify_preprocess_run)
+add_dependencies(cudf jitify_preprocess_run)
 
 # Specify the target module library dependencies
 target_link_libraries(cudf
