@@ -19,6 +19,8 @@ cimport cudf._lib.cpp.types as libcudf_types
 cimport cudf._lib.cpp.groupby as libcudf_groupby
 cimport cudf._lib.cpp.aggregation as libcudf_aggregation
 
+import rmm
+
 
 # The sets below define the possible aggregations that can be performed on
 # different dtypes. The uppercased versions of these strings correspond to
@@ -240,6 +242,10 @@ def _drop_unsupported_aggs(Table values, aggs):
         elif (
                 is_decimal_dtype(values._data[col_name].dtype)
         ):
+            if rmm._cuda.gpu.runtimeGetVersion() < 11000:
+                raise RuntimeError(
+                    "Decimal aggregations are not supported on CUDA 10.x."
+                )
             for i, agg_name in enumerate(aggs[col_name]):
                 if Aggregation(agg_name).kind not in _DECIMAL_AGGS:
                     del result[col_name][i]

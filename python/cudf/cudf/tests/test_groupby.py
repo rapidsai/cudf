@@ -336,10 +336,6 @@ def test_groupby_2keys_agg(nelem, func):
     assert_eq(got_df, expect_df, check_dtype=check_dtype)
 
 
-@pytest.mark.skipif(
-    rmm._cuda.gpu.runtimeGetVersion() < 11000,
-    reason="These aggregations are not supported on CUDA 10.x.",
-)
 @pytest.mark.parametrize("num_groups", [2, 3, 10, 50, 100])
 @pytest.mark.parametrize("nelem_per_group", [1, 10, 100])
 @pytest.mark.parametrize(
@@ -393,10 +389,13 @@ def test_groupby_agg_decimal(num_groups, nelem_per_group, func):
     )
 
     expect_df = pdf.groupby("idx", sort=True).agg(func)
-    got_df = gdf.groupby("idx", sort=True).agg(func)
-
-    assert_eq(expect_df["x"], got_df["x"], check_dtype=False)
-    assert_eq(expect_df["y"], got_df["y"], check_dtype=False)
+    if rmm._cuda.gpu.runtimeGetVersion() < 11000:
+        with pytest.raises(RuntimeError):
+            got_df = gdf.groupby("idx", sort=True).agg(func)
+    else:
+        got_df = gdf.groupby("idx", sort=True).agg(func)
+        assert_eq(expect_df["x"], got_df["x"], check_dtype=False)
+        assert_eq(expect_df["y"], got_df["y"], check_dtype=False)
 
 
 @pytest.mark.parametrize(
