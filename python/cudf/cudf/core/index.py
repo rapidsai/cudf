@@ -2820,12 +2820,14 @@ def interval_range(
     elif periods and not freq:
         # if statement for mypy to pass
         if end is not None and start is not None:
-            freq_step = ((end) - start) / periods
-            freq_step = cudf.Scalar(freq_step, dtype="float64").device_value
-            start = cudf.Scalar(start, dtype="float64").device_value
+            #determine if periods are float or integer
+            quotient, remainder = divmod((end - start), periods)
+            if remainder:
+                freq_step = cudf.Scalar((end - start) / periods).device_value
+            else:
+                freq_step = cudf.Scalar(quotient).device_value
+            start = cudf.Scalar(start, dtype=freq_step.dtype).device_value
             bin_edges = sequence(size=periods + 1, init=start, step=freq_step,)
-            if cupy.all(cupy.mod(bin_edges, 1) == 0):
-                bin_edges = bin_edges.astype(int)
             left_col = bin_edges[:-1]
             right_col = bin_edges[1:]
     elif freq and periods:
