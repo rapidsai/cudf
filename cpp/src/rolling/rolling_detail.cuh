@@ -16,7 +16,6 @@
 
 #pragma once
 
-#include <rolling/jit/code/code.h>
 #include <rolling/rolling_detail.hpp>
 
 #include <cudf/aggregation.hpp>
@@ -1292,19 +1291,15 @@ std::unique_ptr<column> rolling_window_udf(column_view const& input,
   std::string cuda_source;
   switch (udf_agg->kind) {
     case aggregation::Kind::PTX:
-      // cuda_source = cudf::rolling::jit::code::kernel_headers;
       cuda_source +=
         cudf::jit::parse_single_function_ptx(udf_agg->_source,
                                              udf_agg->_function_name,
                                              cudf::jit::get_type_name(udf_agg->_output_type),
                                              {0, 5});  // args 0 and 5 are pointers.
-      // cuda_source += cudf::rolling::jit::code::kernel;
       break;
     case aggregation::Kind::CUDA:
-      // cuda_source = cudf::rolling::jit::code::kernel_headers;
       cuda_source +=
         cudf::jit::parse_single_function_cuda(udf_agg->_source, udf_agg->_function_name);
-      // cuda_source += cudf::rolling::jit::code::kernel;
       break;
     default: CUDF_FAIL("Unsupported UDF type.");
   }
@@ -1320,6 +1315,8 @@ std::unique_ptr<column> rolling_window_udf(column_view const& input,
   //                                               "-remove-unused-globals",
   //                                               // suppress all NVRTC warnings
   //                                               "-w"};
+
+  std::cout << cuda_source;
 
   jitify2::ProgramCache<> rolling_program_cache(
     /*max_size = */ 100, *rolling_jit_kernel_cu_jit);

@@ -18,16 +18,6 @@
 
 function(find_and_configure_jitify)
     CPMFindPackage(NAME     jitify
-            VERSION         1.0.0
-            GIT_REPOSITORY  https://github.com/rapidsai/jitify.git
-            GIT_TAG         cudf_0.16
-            GIT_SHALLOW     TRUE
-            DOWNLOAD_ONLY   TRUE)
-    set(JITIFY_INCLUDE_DIR "${jitify_SOURCE_DIR}" PARENT_SCOPE)
-endfunction()
-
-function(find_and_configure_jitify_v2)
-    CPMFindPackage(NAME     jitify
             VERSION         2.0.0
             GIT_REPOSITORY  https://github.com/nvidia/jitify.git
             GIT_TAG         jitify2
@@ -36,4 +26,4 @@ function(find_and_configure_jitify_v2)
     set(JITIFY_INCLUDE_DIR "${jitify_SOURCE_DIR}" PARENT_SCOPE)
 endfunction()
 
-find_and_configure_jitify_v2()
+find_and_configure_jitify()

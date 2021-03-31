@@ -297,8 +297,6 @@ add_library(cudf
     src/reshape/interleave_columns.cu
     src/reshape/tile.cu
     src/rolling/grouped_rolling.cu
-    src/rolling/jit/code/kernel.cpp
-    src/rolling/jit/code/operation.cpp
     src/rolling/rolling.cu
     src/round/round.cu
     src/scalar/scalar.cpp
