@@ -5,9 +5,19 @@ import pyarrow as pa
 
 import cudf
 from cudf.core.column import ColumnBase
+from cudf.core.column.methods import ColumnMethodsMixin
+from cudf.utils.dtypes import is_struct_dtype
 
 
 class StructColumn(ColumnBase):
+    """
+    Column that stores dict-like values
+
+    Every colummn has n children, where n is
+    number of entries in each dictionary
+
+    """
+
     dtype: cudf.core.dtypes.StructDtype
 
     @property
@@ -74,6 +84,9 @@ class StructColumn(ColumnBase):
             result = result._rename_fields(self.dtype.fields.keys())
         return result
 
+    def struct(self, parent=None):
+        return StructMethods(self, parent=parent)
+
     def _rename_fields(self, names):
         """
         Return a StructColumn with the same field values as this StructColumn,
@@ -91,3 +104,40 @@ class StructColumn(ColumnBase):
             null_count=self.null_count,
             children=self.base_children,
         )
+
+
+class StructMethods(ColumnMethodsMixin):
+    """
+    Struct methods for Series
+    """
+
+    def __init__(self, column, parent=None):
+        if not is_struct_dtype(column.dtype):
+            raise AttributeError(
+                "Can only use .struct accessor with a 'struct' dtype"
+            )
+        super().__init__(column=column, parent=parent)
+
+    def field(self, index):
+        """
+        Extract children of the specified struct column
+        in the Series
+
+        Parameters
+        ----------
+        index : int
+
+        Returns
+        -------
+        Series
+
+        Examples
+        --------
+        >>> s = cudf.Series([{'a': 1, 'b': 2}, {'a': 3, 'b': 4}])
+        >>> s.struct.field(0)
+        0    1
+        1    3
+        dtype: int64
+        """
+
+        return self._return_or_inplace(self._column.children[index])

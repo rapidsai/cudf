@@ -34,3 +34,20 @@ def test_struct_of_struct_loc():
     df = cudf.DataFrame({"col": [{"a": {"b": 1}}]})
     expect = cudf.Series([{"a": {"b": 1}}], name="col")
     assert_eq(expect, df["col"])
+
+
+@pytest.mark.parametrize(
+    "data, index, expect",
+    [
+        ([{"a": 1, "b": 2}, {"a": 3, "b": 4}], 0, [1, 3]),
+        ([{"a": 1, "b": 2}, {"a": 3, "b": 4}], 1, [2, 4]),
+        # (),
+        # (),
+        # (),
+    ],
+)
+def test_struct_for_field(data, index, expect):
+    sr = cudf.Series(data)
+    expect = cudf.Series(expect)
+    got = sr.struct.field(index)
+    assert_eq(expect, got)
