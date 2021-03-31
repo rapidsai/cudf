@@ -657,11 +657,15 @@ std::unique_ptr<table> gather(
                                                    mr));
   }
 
-  gather_bitmask_op const op = bounds_policy == out_of_bounds_policy::NULLIFY
-                                 ? gather_bitmask_op::NULLIFY
-                                 : gather_bitmask_op::DONT_CHECK;
-
-  gather_bitmask(source_table, gather_map_begin, destination_columns, op, stream, mr);
+  auto const nullable = bounds_policy == out_of_bounds_policy::NULLIFY ||
+                        std::any_of(source_table.begin(), source_table.end(), [](auto const& col) {
+                          return col.nullable();
+                        });
+  if (nullable) {
+    auto const op = bounds_policy == out_of_bounds_policy::NULLIFY ? gather_bitmask_op::NULLIFY
+                                                                   : gather_bitmask_op::DONT_CHECK;
+    gather_bitmask(source_table, gather_map_begin, destination_columns, op, stream, mr);
+  }
 
   return std::make_unique<table>(std::move(destination_columns));
 }
