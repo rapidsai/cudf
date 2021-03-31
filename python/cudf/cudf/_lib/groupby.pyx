@@ -3,6 +3,7 @@
 from collections import defaultdict
 
 import numpy as np
+import rmm
 
 from libcpp.pair cimport pair
 from libcpp.memory cimport unique_ptr
@@ -18,8 +19,6 @@ from cudf._lib.cpp.table.table cimport table, table_view
 cimport cudf._lib.cpp.types as libcudf_types
 cimport cudf._lib.cpp.groupby as libcudf_groupby
 cimport cudf._lib.cpp.aggregation as libcudf_aggregation
-
-import rmm
 
 
 # The sets below define the possible aggregations that can be performed on
