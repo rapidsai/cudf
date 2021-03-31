@@ -27,10 +27,13 @@
 
 #include <memory>
 
-using namespace cudf::test;
-using bools_col   = fixed_width_column_wrapper<bool>;
-using structs_col = structs_column_wrapper;
-using strings_col = strings_column_wrapper;
+using bools_col   = cudf::test::fixed_width_column_wrapper<bool>;
+using int32s_col  = cudf::test::fixed_width_column_wrapper<int32_t>;
+using structs_col = cudf::test::structs_column_wrapper;
+using strings_col = cudf::test::strings_column_wrapper;
+
+constexpr int32_t null{0};  // Mark for null child elements
+constexpr int32_t XXX{0};   // Mark for null struct elements
 
 template <typename T>
 struct TypedStructScatterTest : public cudf::test::BaseFixture {
@@ -67,7 +70,7 @@ TYPED_TEST(TypedStructScatterTest, EmptyInputTest)
   auto child_col_tgt     = col_wrapper{};
   auto const structs_tgt = structs_col{{child_col_tgt}, std::vector<bool>{}}.release();
 
-  auto const scatter_map = fixed_width_column_wrapper<int32_t>{}.release();
+  auto const scatter_map = int32s_col{}.release();
   test_scatter(structs_src, structs_tgt, structs_src, scatter_map);
   test_scatter(structs_src, structs_tgt, structs_tgt, scatter_map);
 }
@@ -75,9 +78,7 @@ TYPED_TEST(TypedStructScatterTest, EmptyInputTest)
 // Test case when only the scatter map is empty
 TYPED_TEST(TypedStructScatterTest, EmptyScatterMapTest)
 {
-  using col_wrapper   = cudf::test::fixed_width_column_wrapper<TypeParam, int32_t>;
-  auto constexpr null = std::numeric_limits<TypeParam>::max();  // Null child element
-  auto constexpr XXX  = std::numeric_limits<TypeParam>::max();  // Null struct element
+  using col_wrapper = cudf::test::fixed_width_column_wrapper<TypeParam, int32_t>;
 
   auto child_col_src =
     col_wrapper{{0, 1, 2, 3, null, XXX},
@@ -95,15 +96,13 @@ TYPED_TEST(TypedStructScatterTest, EmptyScatterMapTest)
       return i != 3;
     })}.release();
 
-  auto const scatter_map = fixed_width_column_wrapper<int32_t>{}.release();
+  auto const scatter_map = int32s_col{}.release();
   test_scatter(structs_src, structs_tgt, structs_tgt, scatter_map);
 }
 
 TYPED_TEST(TypedStructScatterTest, ScatterAsCopyTest)
 {
-  using col_wrapper   = cudf::test::fixed_width_column_wrapper<TypeParam, int32_t>;
-  auto constexpr null = std::numeric_limits<TypeParam>::max();  // Null child element
-  auto constexpr XXX  = std::numeric_limits<TypeParam>::max();  // Null struct element
+  using col_wrapper = cudf::test::fixed_width_column_wrapper<TypeParam, int32_t>;
 
   auto child_col_src =
     col_wrapper{{0, 1, 2, 3, null, XXX},
@@ -122,15 +121,13 @@ TYPED_TEST(TypedStructScatterTest, ScatterAsCopyTest)
     })}.release();
 
   // Scatter as copy: the target should be the same as source
-  auto const scatter_map = fixed_width_column_wrapper<int32_t>{0, 1, 2, 3, 4, 5}.release();
+  auto const scatter_map = int32s_col{0, 1, 2, 3, 4, 5}.release();
   test_scatter(structs_src, structs_tgt, structs_src, scatter_map);
 }
 
 TYPED_TEST(TypedStructScatterTest, ScatterAsLeftShiftTest)
 {
-  using col_wrapper   = cudf::test::fixed_width_column_wrapper<TypeParam, int32_t>;
-  auto constexpr null = std::numeric_limits<TypeParam>::max();  // Null child element
-  auto constexpr XXX  = std::numeric_limits<TypeParam>::max();  // Null struct element
+  using col_wrapper = cudf::test::fixed_width_column_wrapper<TypeParam, int32_t>;
 
   auto child_col_src =
     col_wrapper{{0, 1, 2, 3, null, XXX},
@@ -156,15 +153,13 @@ TYPED_TEST(TypedStructScatterTest, ScatterAsLeftShiftTest)
       return i != 3;
     })}.release();
 
-  auto const scatter_map = fixed_width_column_wrapper<int32_t>{-2, -1, 0, 1, 2, 3}.release();
+  auto const scatter_map = int32s_col{-2, -1, 0, 1, 2, 3}.release();
   test_scatter(structs_src, structs_tgt, structs_expected, scatter_map);
 }
 
 TYPED_TEST(TypedStructScatterTest, SimpleScatterTests)
 {
-  using col_wrapper   = cudf::test::fixed_width_column_wrapper<TypeParam, int32_t>;
-  auto constexpr null = std::numeric_limits<TypeParam>::max();  // Null child element
-  auto constexpr XXX  = std::numeric_limits<TypeParam>::max();  // Null struct element
+  using col_wrapper = cudf::test::fixed_width_column_wrapper<TypeParam, int32_t>;
 
   // Source data
   auto child_col_src =
@@ -192,7 +187,7 @@ TYPED_TEST(TypedStructScatterTest, SimpleScatterTests)
     {child_col_expected1}, cudf::detail::make_counting_transform_iterator(0, [](auto i) {
       return i != 3;
     })}.release();
-  auto const scatter_map1 = fixed_width_column_wrapper<int32_t>{-2, 0, 5}.release();
+  auto const scatter_map1 = int32s_col{-2, 0, 5}.release();
   test_scatter(structs_src, structs_tgt, structs_expected1, scatter_map1);
 
   // Expected data
@@ -203,7 +198,7 @@ TYPED_TEST(TypedStructScatterTest, SimpleScatterTests)
     {child_col_expected2}, cudf::detail::make_counting_transform_iterator(0, [](auto i) {
       return true;
     })}.release();
-  auto const scatter_map2 = fixed_width_column_wrapper<int32_t>{-2, 0, 5, 3}.release();
+  auto const scatter_map2 = int32s_col{-2, 0, 5, 3}.release();
   test_scatter(structs_src, structs_tgt, structs_expected2, scatter_map2);
 }
 
@@ -262,7 +257,7 @@ TYPED_TEST(TypedStructScatterTest, ComplexDataScatterTest)
     })}.release();
 
   // The first element of the target is not overwritten
-  auto const scatter_map = fixed_width_column_wrapper<int32_t>{-1, 4, 3, 2, 1}.release();
+  auto const scatter_map = int32s_col{-1, 4, 3, 2, 1}.release();
   test_scatter(structs_src, structs_tgt, structs_expected, scatter_map);
 }
 
@@ -293,6 +288,6 @@ TYPED_TEST(TypedStructScatterTest, ScatterStructOfListsTest)
   auto const structs_expected = structs_col{{lists_col_expected}}.release();
 
   // The first 2 elements of the target is not overwritten
-  auto const scatter_map = fixed_width_column_wrapper<int32_t>{-3, -2, -1, 5, 4, 3, 2}.release();
+  auto const scatter_map = int32s_col{-3, -2, -1, 5, 4, 3, 2}.release();
   test_scatter(structs_src, structs_tgt, structs_expected, scatter_map);
 }
