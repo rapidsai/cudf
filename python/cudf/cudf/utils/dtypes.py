@@ -671,6 +671,11 @@ def _can_cast(from_dtype, to_dtype):
     `np.can_cast` but with some special handling around
     cudf specific dtypes.
     """
+    if isinstance(from_dtype, type):
+        from_dtype = np.dtype(from_dtype)
+    if isinstance(to_dtype, type):
+        to_dtype = np.dtype(to_dtype)
+
     # TODO : Add precision & scale checking for
     # decimal types in future
     if isinstance(from_dtype, cudf.core.dtypes.Decimal64Dtype):
@@ -681,9 +686,8 @@ def _can_cast(from_dtype, to_dtype):
                 return True
             else:
                 return False
-    elif isinstance(from_dtype, (np.dtype, type)):
-        from_dtype = np.dtype(from_dtype)
-        if isinstance(to_dtype, (np.dtype, type)):
+    elif isinstance(from_dtype, np.dtype):
+        if isinstance(to_dtype, np.dtype):
             return np.can_cast(from_dtype, to_dtype)
         elif isinstance(to_dtype, cudf.core.dtypes.Decimal64Dtype):
             if from_dtype.kind in {"i", "f", "u", "U", "O"}:
@@ -704,7 +708,7 @@ def _can_cast(from_dtype, to_dtype):
     elif isinstance(from_dtype, cudf.core.dtypes.CategoricalDtype):
         if isinstance(to_dtype, cudf.core.dtypes.CategoricalDtype):
             return True
-        elif isinstance(to_dtype, (np.dtype, type)):
+        elif isinstance(to_dtype, np.dtype):
             return np.can_cast(from_dtype._categories.dtype, to_dtype)
         else:
             return False
