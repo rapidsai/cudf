@@ -311,6 +311,15 @@ class Decimal64Dtype(ExtensionDtype):
         if abs(scale) > precision:
             raise ValueError(f"scale={scale} exceeds precision={precision}")
 
+    @classmethod
+    def _from_decimal(cls, decimal):
+        """
+        Create a cudf.Decimal64Dtype from a decimal.Decimal object
+        """
+        metadata = decimal.as_tuple()
+        precision = max(len(metadata.digits), -metadata.exponent)
+        return cls(precision, -metadata.exponent)
+
 
 class IntervalDtype(StructDtype):
     name = "interval"

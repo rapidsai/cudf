@@ -1774,6 +1774,193 @@ def test_binops_decimal(args):
 
 
 @pytest.mark.parametrize(
+    "args",
+    [
+        (
+            operator.add,
+            ["100", "200"],
+            cudf.Decimal64Dtype(scale=-2, precision=3),
+            decimal.Decimal(1),
+            ["101", "201"],
+            cudf.Decimal64Dtype(scale=0, precision=6),
+            False,
+        ),
+        (
+            operator.add,
+            ["100", "200"],
+            cudf.Decimal64Dtype(scale=-2, precision=3),
+            1,
+            ["101", "201"],
+            cudf.Decimal64Dtype(scale=0, precision=6),
+            False,
+        ),
+        (
+            operator.add,
+            ["100", "200"],
+            cudf.Decimal64Dtype(scale=-2, precision=3),
+            decimal.Decimal("1.5"),
+            ["101.5", "201.5"],
+            cudf.Decimal64Dtype(scale=1, precision=7),
+            False,
+        ),
+        (
+            operator.add,
+            ["100", "200"],
+            cudf.Decimal64Dtype(scale=-2, precision=3),
+            decimal.Decimal(1),
+            ["101", "201"],
+            cudf.Decimal64Dtype(scale=0, precision=6),
+            True,
+        ),
+        (
+            operator.add,
+            ["100", "200"],
+            cudf.Decimal64Dtype(scale=-2, precision=3),
+            1,
+            ["101", "201"],
+            cudf.Decimal64Dtype(scale=0, precision=6),
+            True,
+        ),
+        (
+            operator.add,
+            ["100", "200"],
+            cudf.Decimal64Dtype(scale=-2, precision=3),
+            decimal.Decimal("1.5"),
+            ["101.5", "201.5"],
+            cudf.Decimal64Dtype(scale=1, precision=7),
+            True,
+        ),
+        (
+            operator.mul,
+            ["100", "200"],
+            cudf.Decimal64Dtype(scale=-2, precision=3),
+            1,
+            ["100", "200"],
+            cudf.Decimal64Dtype(scale=-2, precision=5),
+            False,
+        ),
+        (
+            operator.mul,
+            ["100", "200"],
+            cudf.Decimal64Dtype(scale=-2, precision=3),
+            decimal.Decimal(2),
+            ["200", "400"],
+            cudf.Decimal64Dtype(scale=-2, precision=5),
+            False,
+        ),
+        (
+            operator.mul,
+            ["100", "200"],
+            cudf.Decimal64Dtype(scale=-2, precision=3),
+            decimal.Decimal("1.5"),
+            ["150", "300"],
+            cudf.Decimal64Dtype(scale=-1, precision=6),
+            False,
+        ),
+        (
+            operator.mul,
+            ["100", "200"],
+            cudf.Decimal64Dtype(scale=-2, precision=3),
+            1,
+            ["100", "200"],
+            cudf.Decimal64Dtype(scale=-2, precision=5),
+            True,
+        ),
+        (
+            operator.mul,
+            ["100", "200"],
+            cudf.Decimal64Dtype(scale=-2, precision=3),
+            decimal.Decimal(2),
+            ["200", "400"],
+            cudf.Decimal64Dtype(scale=-2, precision=5),
+            True,
+        ),
+        (
+            operator.mul,
+            ["100", "200"],
+            cudf.Decimal64Dtype(scale=-2, precision=3),
+            decimal.Decimal("1.5"),
+            ["150", "300"],
+            cudf.Decimal64Dtype(scale=-1, precision=6),
+            True,
+        ),
+        (
+            operator.sub,
+            ["100", "200"],
+            cudf.Decimal64Dtype(scale=-2, precision=3),
+            decimal.Decimal(2),
+            ["98", "198"],
+            cudf.Decimal64Dtype(scale=0, precision=6),
+            False,
+        ),
+        (
+            operator.sub,
+            ["100", "200"],
+            cudf.Decimal64Dtype(scale=-2, precision=3),
+            decimal.Decimal("2.5"),
+            ["97.5", "197.5"],
+            cudf.Decimal64Dtype(scale=1, precision=7),
+            False,
+        ),
+        (
+            operator.sub,
+            ["100", "200"],
+            cudf.Decimal64Dtype(scale=-2, precision=3),
+            4,
+            ["96", "196"],
+            cudf.Decimal64Dtype(scale=0, precision=6),
+            False,
+        ),
+        (
+            operator.sub,
+            ["100", "200"],
+            cudf.Decimal64Dtype(scale=-2, precision=3),
+            decimal.Decimal(2),
+            ["-98", "-198"],
+            cudf.Decimal64Dtype(scale=0, precision=6),
+            True,
+        ),
+        (
+            operator.sub,
+            ["100", "200"],
+            cudf.Decimal64Dtype(scale=-2, precision=3),
+            4,
+            ["-96", "-196"],
+            cudf.Decimal64Dtype(scale=0, precision=6),
+            True,
+        ),
+        (
+            operator.sub,
+            ["100", "200"],
+            cudf.Decimal64Dtype(scale=-2, precision=3),
+            decimal.Decimal("2.5"),
+            ["-97.5", "-197.5"],
+            cudf.Decimal64Dtype(scale=1, precision=7),
+            True,
+        ),
+    ],
+)
+def test_binops_decimal_scalar(args):
+    op, lhs, l_dtype, rhs, expect, expect_dtype, reflect = args
+
+    def decimal_series(input, dtype):
+        return cudf.Series(
+            [x if x is None else decimal.Decimal(x) for x in input],
+            dtype=dtype,
+        )
+
+    lhs = decimal_series(lhs, l_dtype)
+    expect = decimal_series(expect, expect_dtype)
+
+    if reflect:
+        lhs, rhs = rhs, lhs
+
+    got = op(lhs, rhs)
+    assert expect.dtype == got.dtype
+    utils.assert_eq(expect, got)
+
+
+@pytest.mark.parametrize(
     "dtype",
     [
         "uint8",
