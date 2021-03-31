@@ -1,4 +1,0 @@
-cupy-cuda112
-fastavro>=0.22.9
-cython>=0.29,<0.30
-fsspec>=0.6.0

@@ -1,4 +1,5 @@
-# An integration test & dev container which builds and installs cuDF from main
+# Copyright (c) 2021, NVIDIA CORPORATION.
+
 ARG CUDA_VERSION=11.2.2
 FROM nvidia/cuda:${CUDA_VERSION}-devel
 ENV CUDA_SHORT_VERSION=11.2
