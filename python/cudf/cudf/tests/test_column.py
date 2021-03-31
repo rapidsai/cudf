@@ -97,11 +97,13 @@ def column_slicing_test(col, offset, size, cast_to_float=False):
         # sliced, so the indexes should be different and we must ignore it.
         # However, we must compare these as frames, not raw arrays,  because
         # numpy comparison of categorical values won't work.
-        assert_eq(pd_series[sl].reset_index(drop=True),
-                  sliced_series.reset_index(drop=True))
+        assert_eq(
+            pd_series[sl].reset_index(drop=True),
+            sliced_series.reset_index(drop=True),
+        )
     else:
-        assert_eq(np.asarray(pd_series[sl]),
-                  sliced_series.to_array())
+        assert_eq(np.asarray(pd_series[sl]), sliced_series.to_array())
+
 
 @pytest.mark.parametrize("offset", [0, 1, 15])
 @pytest.mark.parametrize("size", [50, 10, 0])
@@ -118,6 +120,7 @@ def test_decimal_column_slicing(offset, size, precision, scale):
     col = cudf.core.column.as_column(pd.Series(np.random.rand(1000)))
     col = col.astype(cudf.Decimal64Dtype(precision, scale))
     column_slicing_test(col, offset, size, True)
+
 
 @pytest.mark.parametrize(
     "data",
