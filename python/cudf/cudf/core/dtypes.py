@@ -15,6 +15,7 @@ from cudf._typing import Dtype
 
 
 class _BaseDtype(ExtensionDtype):
+    # Base type for all cudf-specific dtypes
     pass
 
 
