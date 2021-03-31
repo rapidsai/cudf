@@ -13,27 +13,28 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 #pragma once
 
-#include <cudf/lists/lists_column_view.hpp>
+#include <cudf/strings/strings_column_view.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 
 namespace cudf {
-namespace lists {
+namespace strings {
 namespace detail {
 
 /**
- * @copydoc cudf::lists::drop_list_duplicates
+ * @copydoc cudf::strings::get_json_object
  *
- * @param stream CUDA stream used for device memory operations and kernel launches.
+ * @param stream CUDA stream used for device memory operations and kernel launches
  */
-std::unique_ptr<column> drop_list_duplicates(
-  lists_column_view const& lists_column,
-  null_equality nulls_equal,
-  nan_equality nans_equal,
-  rmm::cuda_stream_view stream,
+std::unique_ptr<cudf::column> get_json_object(
+  cudf::strings_column_view const& col,
+  cudf::string_scalar const& json_path,
+  rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+
 }  // namespace detail
-}  // namespace lists
+}  // namespace strings
 }  // namespace cudf
