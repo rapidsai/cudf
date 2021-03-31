@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,6 +17,7 @@
 #include <benchmark/benchmark.h>
 
 #include <benchmarks/common/generate_benchmark_input.hpp>
+#include <benchmarks/common/memory_tracking_resource.hpp>
 #include <benchmarks/fixture/benchmark_fixture.hpp>
 #include <benchmarks/io/cuio_benchmark_common.hpp>
 #include <benchmarks/synchronization/synchronization.hpp>
@@ -51,12 +52,18 @@ void BM_csv_read_varying_input(benchmark::State& state)
   cudf_io::csv_reader_options const read_options =
     cudf_io::csv_reader_options::builder(source_sink.make_source_info());
 
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource();
+  cudf::memory_tracking_resource<rmm::mr::device_memory_resource> tracking_mr(mr);
+
+  rmm::mr::set_current_device_resource(&tracking_mr);
   for (auto _ : state) {
     cuda_event_timer raii(state, true);  // flush_l2_cache = true, stream = 0
     cudf_io::read_csv(read_options);
   }
+  rmm::mr::set_current_device_resource(mr);
 
   state.SetBytesProcessed(data_size * state.iterations());
+  state.counters["peak_memory_usage"] = tracking_mr.max_allocated_size();
 }
 
 void BM_csv_read_varying_options(benchmark::State& state)
@@ -94,6 +101,10 @@ void BM_csv_read_varying_options(benchmark::State& state)
 
   size_t const chunk_size             = csv_data.size() / num_chunks;
   cudf::size_type const chunk_row_cnt = view.num_rows() / num_chunks;
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource();
+  cudf::memory_tracking_resource<rmm::mr::device_memory_resource> tracking_mr(mr);
+
+  rmm::mr::set_current_device_resource(&tracking_mr);
   for (auto _ : state) {
     cuda_event_timer raii(state, true);  // flush_l2_cache = true, stream = 0
     for (int32_t chunk = 0; chunk < num_chunks; ++chunk) {
@@ -124,8 +135,11 @@ void BM_csv_read_varying_options(benchmark::State& state)
       cudf_io::read_csv(read_options);
     }
   }
+  rmm::mr::set_current_device_resource(mr);
+
   auto const data_processed = data_size * cols_to_read.size() / view.num_columns();
   state.SetBytesProcessed(data_processed * state.iterations());
+  state.counters["peak_memory_usage"] = tracking_mr.max_allocated_size();
 }
 
 #define CSV_RD_BM_INPUTS_DEFINE(name, type_or_group, src_type)       \

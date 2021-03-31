@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,6 +17,7 @@
 #include <benchmark/benchmark.h>
 
 #include <benchmarks/common/generate_benchmark_input.hpp>
+#include <benchmarks/common/memory_tracking_resource.hpp>
 #include <benchmarks/fixture/benchmark_fixture.hpp>
 #include <benchmarks/io/cuio_benchmark_common.hpp>
 #include <benchmarks/synchronization/synchronization.hpp>
@@ -50,6 +51,10 @@ void BM_orc_write_varying_inout(benchmark::State& state)
   auto const view = tbl->view();
 
   cuio_source_sink_pair source_sink(sink_type);
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource();
+  cudf::memory_tracking_resource<rmm::mr::device_memory_resource> tracking_mr(mr);
+
+  rmm::mr::set_current_device_resource(&tracking_mr);
   for (auto _ : state) {
     cuda_event_timer raii(state, true);  // flush_l2_cache = true, stream = 0
     cudf_io::orc_writer_options options =
@@ -57,8 +62,10 @@ void BM_orc_write_varying_inout(benchmark::State& state)
         .compression(compression);
     cudf_io::write_orc(options);
   }
+  rmm::mr::set_current_device_resource(mr);
 
   state.SetBytesProcessed(data_size * state.iterations());
+  state.counters["peak_memory_usage"] = tracking_mr.max_allocated_size();
 }
 
 void BM_orc_write_varying_options(benchmark::State& state)
@@ -75,6 +82,10 @@ void BM_orc_write_varying_options(benchmark::State& state)
   auto const view = tbl->view();
 
   cuio_source_sink_pair source_sink(io_type::FILEPATH);
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource();
+  cudf::memory_tracking_resource<rmm::mr::device_memory_resource> tracking_mr(mr);
+
+  rmm::mr::set_current_device_resource(&tracking_mr);
   for (auto _ : state) {
     cuda_event_timer raii(state, true);  // flush_l2_cache = true, stream = 0
     cudf_io::orc_writer_options const options =
@@ -83,8 +94,10 @@ void BM_orc_write_varying_options(benchmark::State& state)
         .enable_statistics(enable_stats);
     cudf_io::write_orc(options);
   }
+  rmm::mr::set_current_device_resource(mr);
 
   state.SetBytesProcessed(data_size * state.iterations());
+  state.counters["peak_memory_usage"] = tracking_mr.max_allocated_size();
 }
 
 #define ORC_WR_BM_INOUTS_DEFINE(name, type_or_group, sink_type)                               \

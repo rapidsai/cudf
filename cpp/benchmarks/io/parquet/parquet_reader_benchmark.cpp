@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,6 +17,7 @@
 #include <benchmark/benchmark.h>
 
 #include <benchmarks/common/generate_benchmark_input.hpp>
+#include <benchmarks/common/memory_tracking_resource.hpp>
 #include <benchmarks/fixture/benchmark_fixture.hpp>
 #include <benchmarks/io/cuio_benchmark_common.hpp>
 #include <benchmarks/synchronization/synchronization.hpp>
@@ -58,12 +59,18 @@ void BM_parq_read_varying_input(benchmark::State& state)
   cudf_io::parquet_reader_options read_opts =
     cudf_io::parquet_reader_options::builder(source_sink.make_source_info());
 
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource();
+  cudf::memory_tracking_resource<rmm::mr::device_memory_resource> tracking_mr(mr);
+
+  rmm::mr::set_current_device_resource(&tracking_mr);
   for (auto _ : state) {
     cuda_event_timer const raii(state, true);  // flush_l2_cache = true, stream = 0
     cudf_io::read_parquet(read_opts);
   }
+  rmm::mr::set_current_device_resource(mr);
 
   state.SetBytesProcessed(data_size * state.iterations());
+  state.counters["peak_memory_usage"] = tracking_mr.max_allocated_size();
 }
 
 std::vector<std::string> get_col_names(std::vector<char> const& parquet_data)
@@ -112,6 +119,10 @@ void BM_parq_read_varying_options(benchmark::State& state)
 
   auto const num_row_groups           = data_size / (128 << 20);
   cudf::size_type const chunk_row_cnt = view.num_rows() / num_chunks;
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource();
+  cudf::memory_tracking_resource<rmm::mr::device_memory_resource> tracking_mr(mr);
+
+  rmm::mr::set_current_device_resource(&tracking_mr);
   for (auto _ : state) {
     cuda_event_timer raii(state, true);  // flush_l2_cache = true, stream = 0
 
@@ -141,8 +152,11 @@ void BM_parq_read_varying_options(benchmark::State& state)
 
     CUDF_EXPECTS(rows_read == view.num_rows(), "Benchmark did not read the entire table");
   }
+  rmm::mr::set_current_device_resource(mr);
+
   auto const data_processed = data_size * cols_to_read.size() / view.num_columns();
   state.SetBytesProcessed(data_processed * state.iterations());
+  state.counters["peak_memory_usage"] = tracking_mr.max_allocated_size();
 }
 
 #define PARQ_RD_BM_INPUTS_DEFINE(name, type_or_group, src_type)                              \
