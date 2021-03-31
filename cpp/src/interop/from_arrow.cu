@@ -218,7 +218,7 @@ std::unique_ptr<column> dispatch_to_cudf_column::operator()<numeric::decimal64>(
       auto temp_mask = get_mask_buffer(array, stream, mr);
       // If array is sliced, we have to copy whole mask and then take copy.
       return (num_rows == static_cast<size_type>(data_buffer->size() / sizeof(DeviceType)))
-               ? *temp_mask
+               ? std::move(*temp_mask.release())
                : cudf::detail::copy_bitmask(static_cast<bitmask_type*>(temp_mask->data()),
                                             array.offset(),
                                             array.offset() + num_rows,
