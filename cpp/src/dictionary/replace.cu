@@ -85,7 +85,7 @@ std::unique_ptr<column> replace_nulls(dictionary_column_view const& input,
                                       rmm::mr::device_memory_resource* mr)
 {
   if (input.is_empty()) { return cudf::empty_like(input.parent()); }
-  if (!input.has_nulls()) { return std::make_unique<cudf::column>(input.parent()); }
+  if (!input.has_nulls()) { return std::make_unique<cudf::column>(input.parent(), stream, mr); }
   CUDF_EXPECTS(input.keys().type() == replacement.keys().type(), "keys must match");
   CUDF_EXPECTS(replacement.size() == input.size(), "column sizes must match");
 
@@ -118,7 +118,7 @@ std::unique_ptr<column> replace_nulls(dictionary_column_view const& input,
 {
   if (input.is_empty()) { return cudf::empty_like(input.parent()); }
   if (!input.has_nulls() || !replacement.is_valid()) {
-    return std::make_unique<cudf::column>(input.parent());
+    return std::make_unique<cudf::column>(input.parent(), stream, mr);
   }
   CUDF_EXPECTS(input.keys().type() == replacement.type(), "keys must match scalar type");
 

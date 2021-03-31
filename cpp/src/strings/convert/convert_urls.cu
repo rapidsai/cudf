@@ -355,7 +355,7 @@ std::unique_ptr<column> url_decode(
 
   if (esc_count == 0) {
     // nothing to replace, so just copy the input column
-    return std::make_unique<cudf::column>(strings.parent());
+    return std::make_unique<cudf::column>(strings.parent(), stream, mr);
   }
 
   // create a vector of the potential escape sequence positions
@@ -378,7 +378,7 @@ std::unique_ptr<column> url_decode(
   esc_count = esc_pos_end - d_esc_positions;
   if (esc_count == 0) {
     // nothing to replace, so just copy the input column
-    return std::make_unique<cudf::column>(strings.parent());
+    return std::make_unique<cudf::column>(strings.parent(), stream, mr);
   }
 
   device_span<size_type const> d_esc_positions_span(d_esc_positions, esc_count);

@@ -497,8 +497,8 @@ std::unique_ptr<cudf::column> find_and_replace_all(cudf::column_view const& inpu
     "Columns type mismatch");
   CUDF_EXPECTS(values_to_replace.has_nulls() == false, "values_to_replace must not have nulls");
 
-  if (0 == input_col.size() || 0 == values_to_replace.size() || 0 == replacement_values.size()) {
-    return std::make_unique<cudf::column>(input_col);
+  if (input_col.is_empty() or values_to_replace.is_empty() or replacement_values.is_empty()) {
+    return std::make_unique<cudf::column>(input_col, stream, mr);
   }
 
   return cudf::type_dispatcher<dispatch_storage_type>(input_col.type(),
