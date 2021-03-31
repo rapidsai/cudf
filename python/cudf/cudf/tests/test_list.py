@@ -1,6 +1,7 @@
 # Copyright (c) 2020-2021, NVIDIA CORPORATION.
 import functools
 
+import numpy as np
 import pandas as pd
 import pyarrow as pa
 import pytest
@@ -160,6 +161,39 @@ def test_take_invalid(invalid, exception):
     gs = cudf.Series([[0, 1], [2, 3]])
     with exception:
         gs.list.take(invalid)
+
+
+@pytest.mark.parametrize(
+    ("data", "expected"),
+    [
+        ([[1, 1, 2, 2], [], None, [3, 4, 5]], [[1, 2], [], None, [3, 4, 5]]),
+        (
+            [[1.233, np.nan, 1.234, 3.141, np.nan, 1.234]],
+            [[1.233, 1.234, np.nan, 3.141]],
+        ),  # duplicate nans
+        ([[1, 1, 2, 2, None, None]], [[1, 2, None]]),  # duplicate nulls
+        (
+            [[1.233, np.nan, None, 1.234, 3.141, np.nan, 1.234, None]],
+            [[1.233, 1.234, np.nan, None, 3.141]],
+        ),  # duplicate nans and nulls
+        ([[2, None, 1, None, 2]], [[1, 2, None]]),
+        ([[], []], [[], []]),
+        ([[], None], [[], None]),
+    ],
+)
+def test_unique(data, expected):
+    """
+    Pandas de-duplicates nans and nulls respectively in Series.unique.
+    `expected` is setup to mimic such behavior
+    """
+    gs = cudf.Series(data, nan_as_null=False)
+
+    got = gs.list.unique()
+    expected = cudf.Series(expected, nan_as_null=False).list.sort_values()
+
+    got = got.list.sort_values()
+
+    assert_eq(expected, got)
 
 
 def key_func_builder(x, na_position):

@@ -41,6 +41,8 @@ namespace lists {
  *
  * @param lists_column The input lists_column_view
  * @param nulls_equal  Flag to specify whether null entries should be considered equal
+ * @param nans_equal   Flag to specify whether NaN entries should be considered as equal value (only
+ * applicable for floating point data column)
  * @param mr           Device resource used to allocate memory
  *
  * @code{.pseudo}
@@ -56,6 +58,7 @@ namespace lists {
 std::unique_ptr<column> drop_list_duplicates(
   lists_column_view const& lists_column,
   null_equality nulls_equal           = null_equality::EQUAL,
+  nan_equality nans_equal             = nan_equality::UNEQUAL,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /** @} */  // end of group
