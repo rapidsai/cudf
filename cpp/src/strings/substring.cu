@@ -402,8 +402,9 @@ std::unique_ptr<column> slice_strings(strings_column_view const& strings,
                "Strings and delimiters column sizes do not match");
 
   CUDF_FUNC_RANGE();
-  auto delimiters_dev_view_ptr = cudf::column_device_view::create(delimiters.parent(), 0);
-  auto delimiters_dev_view     = *delimiters_dev_view_ptr;
+  auto delimiters_dev_view_ptr =
+    cudf::column_device_view::create(delimiters.parent(), rmm::cuda_stream_default);
+  auto delimiters_dev_view = *delimiters_dev_view_ptr;
   return (delimiters_dev_view.nullable())
            ? detail::slice_strings(
                strings,

@@ -44,7 +44,7 @@ static void BM_extract(benchmark::State& state, int re_instructions)
   std::string const pattern = "(" + raw_pattern.substr(0, re_instructions) + ")";
 
   for (auto _ : state) {
-    cuda_event_timer raii(state, true, 0);
+    cuda_event_timer raii(state, true, rmm::cuda_stream_default);
     auto results = cudf::strings::extract(input, pattern);
   }
 

@@ -35,7 +35,7 @@ static void BM_contains(benchmark::State& state, contains_type ct)
   cudf::strings_column_view input(table->view().column(0));
 
   for (auto _ : state) {
-    cuda_event_timer raii(state, true, 0);
+    cuda_event_timer raii(state, true, rmm::cuda_stream_default);
     // contains_re(), matches_re(), and count_re() all have similar functions
     // with count_re() being the most regex intensive
     switch (ct) {

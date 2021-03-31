@@ -156,7 +156,7 @@ std::pair<std::unique_ptr<table>, std::vector<aggregation_result>> groupby::aggr
 
   if (_keys.num_rows() == 0) { return std::make_pair(empty_like(_keys), empty_results(requests)); }
 
-  return dispatch_aggregation(requests, 0, mr);
+  return dispatch_aggregation(requests, rmm::cuda_stream_default, mr);
 }
 
 // Compute scan requests

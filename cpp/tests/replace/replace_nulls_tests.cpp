@@ -1,5 +1,5 @@
 /*
- * Copyright 2019, NVIDIA CORPORATION.
+ * Copyright 2019-2021, NVIDIA CORPORATION.
  *
  * Copyright 2018 BlazingDB, Inc.
  *     Copyright 2018 Alexander Ocsa <cristhian@blazingdb.com>
@@ -167,8 +167,9 @@ TEST_F(ReplaceNullsStringsTest, SimpleReplaceScalar)
 {
   std::vector<std::string> input{"", "", "", "", "", "", "", ""};
   std::vector<cudf::valid_type> input_v{0, 0, 0, 0, 0, 0, 0, 0};
-  std::unique_ptr<cudf::scalar> repl = cudf::make_string_scalar("rep", 0, mr());
-  repl->set_valid(true, 0);
+  std::unique_ptr<cudf::scalar> repl =
+    cudf::make_string_scalar("rep", rmm::cuda_stream_default, mr());
+  repl->set_valid(true, rmm::cuda_stream_default);
   std::vector<std::string> expected{"rep", "rep", "rep", "rep", "rep", "rep", "rep", "rep"};
 
   cudf::test::strings_column_wrapper input_w{input.begin(), input.end(), input_v.begin()};

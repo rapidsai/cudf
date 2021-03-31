@@ -54,7 +54,7 @@ static void BM_copy(benchmark::State& state, copy_type ct)
                                                                     host_map_data.end());
 
   for (auto _ : state) {
-    cuda_event_timer raii(state, true, 0);
+    cuda_event_timer raii(state, true, rmm::cuda_stream_default);
     switch (ct) {
       case gather: cudf::gather(source->view(), index_map); break;
       case scatter: cudf::scatter(source->view(), index_map, target->view()); break;

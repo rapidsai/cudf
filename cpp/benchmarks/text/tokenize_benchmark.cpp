@@ -46,7 +46,7 @@ static void BM_tokenize(benchmark::State& state, tokenize_type tt)
   cudf::test::strings_column_wrapper delimiters({" ", "+", "-"});
 
   for (auto _ : state) {
-    cuda_event_timer raii(state, true, 0);
+    cuda_event_timer raii(state, true, rmm::cuda_stream_default);
     switch (tt) {
       case tokenize_type::single: nvtext::tokenize(input); break;
       case tokenize_type::multi:

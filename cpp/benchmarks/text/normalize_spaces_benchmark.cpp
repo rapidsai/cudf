@@ -42,7 +42,7 @@ static void BM_normalize(benchmark::State& state)
   cudf::strings_column_view input(table->view().column(0));
 
   for (auto _ : state) {
-    cuda_event_timer raii(state, true, 0);
+    cuda_event_timer raii(state, true, rmm::cuda_stream_default);
     nvtext::normalize_spaces(input);
   }
 

@@ -93,8 +93,8 @@ struct column_property_comparator {
     // recurse
     cudf::type_dispatcher(lhs_l.child().type(),
                           column_property_comparator<check_exact_equality>{},
-                          lhs_l.get_sliced_child(0),
-                          rhs_l.get_sliced_child(0));
+                          lhs_l.get_sliced_child(rmm::cuda_stream_default),
+                          rhs_l.get_sliced_child(rmm::cuda_stream_default));
   }
 };
 
@@ -283,8 +283,9 @@ struct column_comparator_impl<list_view, check_exact_equality> {
     // compare offsets, taking slicing into account
 
     // left side
-    size_type lhs_shift = cudf::detail::get_value<size_type>(lhs_l.offsets(), lhs_l.offset(), 0);
-    auto lhs_offsets    = thrust::make_transform_iterator(
+    size_type lhs_shift =
+      cudf::detail::get_value<size_type>(lhs_l.offsets(), lhs_l.offset(), rmm::cuda_stream_default);
+    auto lhs_offsets = thrust::make_transform_iterator(
       lhs_l.offsets().begin<size_type>() + lhs_l.offset(),
       [lhs_shift] __device__(size_type offset) { return offset - lhs_shift; });
     auto lhs_valids = thrust::make_transform_iterator(
@@ -294,8 +295,9 @@ struct column_comparator_impl<list_view, check_exact_equality> {
       });
 
     // right side
-    size_type rhs_shift = cudf::detail::get_value<size_type>(rhs_l.offsets(), rhs_l.offset(), 0);
-    auto rhs_offsets    = thrust::make_transform_iterator(
+    size_type rhs_shift =
+      cudf::detail::get_value<size_type>(rhs_l.offsets(), rhs_l.offset(), rmm::cuda_stream_default);
+    auto rhs_offsets = thrust::make_transform_iterator(
       rhs_l.offsets().begin<size_type>() + rhs_l.offset(),
       [rhs_shift] __device__(size_type offset) { return offset - rhs_shift; });
     auto rhs_valids = thrust::make_transform_iterator(
@@ -328,8 +330,8 @@ struct column_comparator_impl<list_view, check_exact_equality> {
         differences, lhs, rhs, print_all_differences, depth);
 
     // recurse
-    auto lhs_child = lhs_l.get_sliced_child(0);
-    auto rhs_child = rhs_l.get_sliced_child(0);
+    auto lhs_child = lhs_l.get_sliced_child(rmm::cuda_stream_default);
+    auto rhs_child = rhs_l.get_sliced_child(rmm::cuda_stream_default);
     cudf::type_dispatcher(lhs_child.type(),
                           column_comparator<check_exact_equality>{},
                           lhs_child,
@@ -518,7 +520,8 @@ std::string nested_offsets_to_string(NestedColumnView const& c, std::string cons
   size_type output_size = c.size() + 1;
 
   // the first offset value to normalize everything against
-  size_type first = cudf::detail::get_value<size_type>(offsets, c.offset(), 0);
+  size_type first =
+    cudf::detail::get_value<size_type>(offsets, c.offset(), rmm::cuda_stream_default);
   rmm::device_vector<size_type> shifted_offsets(output_size);
 
   // normalize the offset values for the column offset
@@ -687,7 +690,7 @@ struct column_view_printer {
     lists_column_view lcv(col);
 
     // propage slicing to the child if necessary
-    column_view child    = lcv.get_sliced_child(0);
+    column_view child    = lcv.get_sliced_child(rmm::cuda_stream_default);
     bool const is_sliced = lcv.offset() > 0 || child.offset() > 0;
 
     std::string tmp =
