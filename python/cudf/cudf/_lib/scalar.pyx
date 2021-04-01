@@ -1,5 +1,5 @@
 # Copyright (c) 2020, NVIDIA CORPORATION.
-
+import decimal
 import numpy as np
 import pandas as pd
 
@@ -34,14 +34,18 @@ from cudf._lib.cpp.wrappers.durations cimport(
     duration_us,
     duration_ns
 )
+from cudf._lib.cpp.wrappers.decimals cimport decimal64, scale_type
 from cudf._lib.cpp.scalar.scalar cimport (
     scalar,
     numeric_scalar,
     timestamp_scalar,
     duration_scalar,
-    string_scalar
+    string_scalar,
+    fixed_point_scalar
 )
+from cudf.utils.dtypes import _decimal_to_int64
 cimport cudf._lib.cpp.types as libcudf_types
+
 
 cdef class DeviceScalar:
 
@@ -59,14 +63,17 @@ cdef class DeviceScalar:
         dtype : dtype
             A NumPy dtype.
         """
-
-        self._set_value(value, dtype)
+        self._dtype = dtype if dtype.kind != 'U' else np.dtype('object')
+        self._set_value(value, self._dtype)
 
     def _set_value(self, value, dtype):
         # IMPORTANT: this should only ever be called from __init__
         valid = not _is_null_host_scalar(value)
 
-        if pd.api.types.is_string_dtype(dtype):
+        if isinstance(dtype, cudf.Decimal64Dtype):
+            _set_decimal64_from_scalar(
+                self.c_value, value, dtype, valid)
+        elif pd.api.types.is_string_dtype(dtype):
             _set_string_from_np_string(self.c_value, value, valid)
         elif pd.api.types.is_numeric_dtype(dtype):
             _set_numeric_from_np_scalar(self.c_value,
@@ -88,7 +95,9 @@ cdef class DeviceScalar:
             )
 
     def _to_host_scalar(self):
-        if pd.api.types.is_string_dtype(self.dtype):
+        if isinstance(self.dtype, cudf.Decimal64Dtype):
+            result = _get_py_decimal_from_fixed_point(self.c_value)
+        elif pd.api.types.is_string_dtype(self.dtype):
             result = _get_py_string_from_string(self.c_value)
         elif pd.api.types.is_numeric_dtype(self.dtype):
             result = _get_np_scalar_from_numeric(self.c_value)
@@ -108,8 +117,7 @@ cdef class DeviceScalar:
         The NumPy dtype corresponding to the data type of the underlying
         device scalar.
         """
-        cdef libcudf_types.data_type cdtype = self.get_raw_ptr()[0].type()
-        return cudf_to_np_types[<underlying_type_t_type_id>(cdtype.id())]
+        return self._dtype
 
     @property
     def value(self):
@@ -137,13 +145,27 @@ cdef class DeviceScalar:
             return f"{self.__class__.__name__}({self.value.__repr__()})"
 
     @staticmethod
-    cdef DeviceScalar from_unique_ptr(unique_ptr[scalar] ptr):
+    cdef DeviceScalar from_unique_ptr(unique_ptr[scalar] ptr, dtype=None):
         """
         Construct a Scalar object from a unique_ptr<cudf::scalar>.
         """
         cdef DeviceScalar s = DeviceScalar.__new__(DeviceScalar)
-        s.c_value = move(ptr)
+        cdef libcudf_types.data_type cdtype
 
+        s.c_value = move(ptr)
+        cdtype = s.get_raw_ptr()[0].type()
+
+        if cdtype.id() == libcudf_types.DECIMAL64 and dtype is None:
+            raise TypeError(
+                "Must pass a dtype when constructing from a fixed-point scalar"
+            )
+        else:
+            if dtype is not None:
+                s._dtype = dtype
+            else:
+                s._dtype = cudf_to_np_types[
+                    <underlying_type_t_type_id>(cdtype.id())
+                ]
         return s
 
 
@@ -235,6 +257,17 @@ cdef _set_timedelta64_from_np_scalar(unique_ptr[scalar]& s,
     else:
         raise ValueError(f"dtype not supported: {dtype}")
 
+cdef _set_decimal64_from_scalar(unique_ptr[scalar]& s,
+                                object value,
+                                object dtype,
+                                bool valid=True):
+    value = _decimal_to_int64(value) if valid else 0
+    s.reset(
+        new fixed_point_scalar[decimal64](
+            <int64_t>np.int64(value), scale_type(-dtype.scale), valid
+        )
+    )
+
 cdef _get_py_string_from_string(unique_ptr[scalar]& s):
     if not s.get()[0].is_valid():
         return cudf.NA
@@ -273,6 +306,20 @@ cdef _get_np_scalar_from_numeric(unique_ptr[scalar]& s):
     else:
         raise ValueError("Could not convert cudf::scalar to numpy scalar")
 
+
+cdef _get_py_decimal_from_fixed_point(unique_ptr[scalar]& s):
+    cdef scalar* s_ptr = s.get()
+    if not s_ptr[0].is_valid():
+        return cudf.NA
+
+    cdef libcudf_types.data_type cdtype = s_ptr[0].type()
+
+    if cdtype.id() == libcudf_types.DECIMAL64:
+        rep_val = int((<fixed_point_scalar[decimal64]*>s_ptr)[0].value())
+        scale = int((<fixed_point_scalar[decimal64]*>s_ptr)[0].type().scale())
+        return decimal.Decimal(rep_val).scaleb(scale)
+    else:
+        raise ValueError("Could not convert cudf::scalar to numpy scalar")
 
 cdef _get_np_scalar_from_timestamp64(unique_ptr[scalar]& s):
 
