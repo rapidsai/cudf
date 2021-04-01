@@ -3,7 +3,7 @@
 from libcpp.memory cimport unique_ptr
 from libcpp.utility cimport move
 
-from cudf.utils.dtypes import is_scalar, is_decimal_dtype
+from cudf.utils.dtypes import is_scalar
 
 from cudf._lib.column cimport Column
 from cudf._lib.scalar import as_device_scalar
@@ -137,18 +137,14 @@ def replace_nulls(
         raise ValueError("Cannot specify both 'value' and 'method'.")
 
     if method:
-        result = replace_nulls_fill(input_col, method)
+        return replace_nulls_fill(input_col, method)
     elif is_scalar(replacement):
-        result = replace_nulls_scalar(
+        return replace_nulls_scalar(
             input_col,
             as_device_scalar(replacement, dtype=dtype)
         )
     else:
-        result = replace_nulls_column(input_col, replacement)
-
-    if is_decimal_dtype(result.dtype) and is_decimal_dtype(input_col.dtype):
-        result.dtype.precision = input_col.dtype.precision
-    return result
+        return replace_nulls_column(input_col, replacement)
 
 
 def clamp(Column input_col, DeviceScalar lo, DeviceScalar lo_replace,

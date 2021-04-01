@@ -3,6 +3,7 @@
 import numpy as np
 import pandas as pd
 import pytest
+import re
 
 import cudf
 from cudf.core._compat import PANDAS_GE_120
@@ -89,7 +90,7 @@ def assert_join_results_equal(expect, got, how, **kwargs):
         ):  # can't sort_values() on a df without columns
             return assert_eq(expect, got, **kwargs)
 
-        return assert_eq(
+        assert_eq(
             expect.sort_values(expect.columns.to_list()).reset_index(
                 drop=True
             ),
@@ -1184,8 +1185,8 @@ def test_decimal_typecast_inner(dtype):
 
     got = gdf_l.merge(gdf_r, on="join_col", how="inner")
 
-    assert_join_results_equal(got, expected, how="inner")
-    assert_eq(got["join_col"].dtype, dtype)
+    assert_join_results_equal(expected, got, how="inner")
+    assert_eq(dtype, got["join_col"].dtype)
 
 
 @pytest.mark.parametrize(
@@ -1221,8 +1222,8 @@ def test_decimal_typecast_left(dtype):
 
     got = gdf_l.merge(gdf_r, on="join_col", how="left")
 
-    assert_join_results_equal(got, expected, how="left")
-    assert_eq(got["join_col"].dtype, dtype)
+    assert_join_results_equal(expected, got, how="left")
+    assert_eq(dtype, got["join_col"].dtype)
 
 
 @pytest.mark.parametrize(
@@ -1252,8 +1253,37 @@ def test_decimal_typecast_outer(dtype):
     )
     got = gdf_l.merge(gdf_r, on="join_col", how="outer")
 
-    assert_join_results_equal(got, expected, how="outer")
-    assert_eq(got["join_col"].dtype, dtype)
+    assert_join_results_equal(expected, got, how="outer")
+    assert_eq(dtype, got["join_col"].dtype)
+
+
+@pytest.mark.parametrize(
+    "dtype_l", [Decimal64Dtype(7, 3), Decimal64Dtype(9, 5)],
+)
+@pytest.mark.parametrize(
+    "dtype_r", [Decimal64Dtype(8, 3), Decimal64Dtype(11, 6)],
+)
+def test_mixed_decimal_typecast(dtype_l, dtype_r):
+    other_data = ["a", "b", "c", "d"]
+
+    join_data_l = cudf.Series(["95.05", "34.6", "74.22", "14.94"]).astype(
+        dtype_r
+    )
+    join_data_r = cudf.Series(["95.05", "62.4056", "74.22", "1.42"]).astype(
+        dtype_l
+    )
+
+    gdf_l = cudf.DataFrame({"join_col": join_data_l, "B": other_data})
+    gdf_r = cudf.DataFrame({"join_col": join_data_r, "B": other_data})
+
+    with pytest.raises(
+        TypeError,
+        match=re.escape(
+            "Decimal columns can only be merged with decimal columns "
+            "of the same precision and scale"
+        ),
+    ):
+        gdf_l.merge(gdf_r, on="join_col", how="inner")
 
 
 @pytest.mark.parametrize(
