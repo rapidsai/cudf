@@ -577,6 +577,7 @@ class GroupBy(Serializable):
         dropna : bool
             If ``True``, don't include null values in the count.
         """
+
         def func(x):
             return getattr(x, "count")(dropna=dropna)
 
@@ -619,6 +620,7 @@ class GroupBy(Serializable):
             The delta degrees of freedom. N - ddof is the divisor used to
             normalize the variance.
         """
+
         def func(x):
             return getattr(x, "var")(ddof=ddof)
 
@@ -633,6 +635,7 @@ class GroupBy(Serializable):
             The delta degrees of freedom. N - ddof is the divisor used to
             normalize the standard deviation.
         """
+
         def func(x):
             return getattr(x, "std")(ddof=ddof)
 
@@ -649,6 +652,7 @@ class GroupBy(Serializable):
             The interpolation method to use when the desired quantile lies
             between two data points. Defaults to "linear".
        """
+
         def func(x):
             return getattr(x, "quantile")(q=q, interpolation=interpolation)
 
