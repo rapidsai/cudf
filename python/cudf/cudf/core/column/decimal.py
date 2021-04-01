@@ -22,6 +22,8 @@ from cudf.utils.utils import pa_mask_buffer_to_mask
 
 
 class DecimalColumn(ColumnBase):
+    dtype: Decimal64Dtype
+
     @classmethod
     def from_arrow(cls, data: pa.Array):
         dtype = Decimal64Dtype.from_arrow(data.type)
@@ -112,7 +114,8 @@ class DecimalColumn(ColumnBase):
             raise TypeError(f"cannot normalize {type(other)}")
 
     def _apply_scan_op(self, op: str) -> ColumnBase:
-        return libcudf.reduce.scan(op, self, True)
+        result = libcudf.reduce.scan(op, self, True)
+        return self._copy_type_metadata(result)
 
     def as_decimal_column(
         self, dtype: Dtype, **kwargs
@@ -135,6 +138,37 @@ class DecimalColumn(ColumnBase):
             return cast(
                 "cudf.core.column.StringColumn", as_column([], dtype="object")
             )
+
+    def reduce(self, op: str, skipna: bool = None, **kwargs) -> Decimal:
+        min_count = kwargs.pop("min_count", 0)
+        preprocessed = self._process_for_reduction(
+            skipna=skipna, min_count=min_count
+        )
+        if isinstance(preprocessed, ColumnBase):
+            return libcudf.reduce.reduce(op, preprocessed, **kwargs)
+        else:
+            return preprocessed
+
+    def sum(
+        self, skipna: bool = None, dtype: Dtype = None, min_count: int = 0
+    ) -> Decimal:
+        return self.reduce(
+            "sum", skipna=skipna, dtype=dtype, min_count=min_count
+        )
+
+    def product(
+        self, skipna: bool = None, dtype: Dtype = None, min_count: int = 0
+    ) -> Decimal:
+        return self.reduce(
+            "product", skipna=skipna, dtype=dtype, min_count=min_count
+        )
+
+    def sum_of_squares(
+        self, skipna: bool = None, dtype: Dtype = None, min_count: int = 0
+    ) -> Decimal:
+        return self.reduce(
+            "sum_of_squares", skipna=skipna, dtype=dtype, min_count=min_count
+        )
 
 
 def _binop_scale(l_dtype, r_dtype, op):
