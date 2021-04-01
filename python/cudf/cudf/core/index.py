@@ -2826,34 +2826,15 @@ def interval_range(
             # determine if periods are float or integer
             quotient, remainder = divmod((end - start), periods)
             if remainder:
-                step_input = (end - start) / periods
-                if (
-                    step_input % 1 == 0
-                    and type(start) == int
-                    and type(end) == int
-                ):
-                    freq_step = cudf.Scalar(step_input, dtype=int).device_value
-                else:
-                    freq_step = cudf.Scalar(
-                        (end - start) / periods
-                    ).device_value
+                freq_step = cudf.Scalar((end - start) / periods).device_value
             else:
-                if (
-                    quotient % 1 == 0
-                    and type(start) == int
-                    and type(end) == int
-                ):
-                    freq_step = cudf.Scalar(quotient, dtype=int).device_value
-                else:
-                    freq_step = cudf.Scalar(quotient).device_value
-            if (
-                type(start) == int
-                and type(end) == int
-                and freq_step.dtype == int
-            ):
-                start = cudf.Scalar(start, dtype=int).device_value
-            else:
-                start = cudf.Scalar(start, dtype=float).device_value
+                freq_step = cudf.Scalar(quotient).device_value
+            if type(start) == freq_step.dtype:
+                start = cudf.Scalar(start).device_value
+            elif type(start) != freq_step.dtype:
+                start = cudf.Scalar(
+                    cudf.Scalar(start)._host_value.astype(freq_step.dtype)
+                ).device_value
             bin_edges = sequence(size=periods + 1, init=start, step=freq_step,)
             left_col = bin_edges[:-1]
             right_col = bin_edges[1:]
