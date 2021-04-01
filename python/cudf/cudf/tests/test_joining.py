@@ -3,7 +3,6 @@
 import numpy as np
 import pandas as pd
 import pytest
-import re
 
 import cudf
 from cudf.core._compat import PANDAS_GE_120
@@ -1278,10 +1277,8 @@ def test_mixed_decimal_typecast(dtype_l, dtype_r):
 
     with pytest.raises(
         TypeError,
-        match=re.escape(
-            "Decimal columns can only be merged with decimal columns "
-            "of the same precision and scale"
-        ),
+        match="Decimal columns can only be merged with decimal columns "
+        "of the same precision and scale",
     ):
         gdf_l.merge(gdf_r, on="join_col", how="inner")
 
