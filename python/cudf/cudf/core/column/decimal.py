@@ -1,24 +1,24 @@
 # Copyright (c) 2021, NVIDIA CORPORATION.
 
-import cudf
+from decimal import Decimal
+from typing import cast
+
 import cupy as cp
 import numpy as np
 import pyarrow as pa
-from typing import cast
+from pandas.api.types import is_integer_dtype
 
+import cudf
 from cudf import _lib as libcudf
-from cudf.core.buffer import Buffer
-from cudf.core.column import ColumnBase
-from cudf.core.dtypes import Decimal64Dtype
-from cudf.utils.utils import pa_mask_buffer_to_mask
-
-from cudf._typing import Dtype
 from cudf._lib.strings.convert.convert_fixed_point import (
     from_decimal as cpp_from_decimal,
 )
-from cudf.core.column import as_column
-from decimal import Decimal
+from cudf._typing import Dtype
+from cudf.core.buffer import Buffer
+from cudf.core.column import ColumnBase, as_column
+from cudf.core.dtypes import Decimal64Dtype
 from cudf.utils.dtypes import is_scalar
+from cudf.utils.utils import pa_mask_buffer_to_mask
 
 
 class DecimalColumn(ColumnBase):
@@ -65,17 +65,47 @@ class DecimalColumn(ColumnBase):
     def binary_operator(self, op, other, reflect=False):
         if reflect:
             self, other = other, self
-        scale = _binop_scale(self.dtype, other.dtype, op)
-        output_type = Decimal64Dtype(
-            scale=scale, precision=Decimal64Dtype.MAX_PRECISION
-        )  # precision will be ignored, libcudf has no notion of precision
-        result = libcudf.binaryop.binaryop(self, other, op, output_type)
-        result.dtype.precision = _binop_precision(self.dtype, other.dtype, op)
+
+        # Binary Arithmatics between decimal columns. `Scale` and `precision`
+        # are computed outside of libcudf
+        if op in ("add", "sub", "mul"):
+            scale = _binop_scale(self.dtype, other.dtype, op)
+            output_type = Decimal64Dtype(
+                scale=scale, precision=Decimal64Dtype.MAX_PRECISION
+            )  # precision will be ignored, libcudf has no notion of precision
+            result = libcudf.binaryop.binaryop(self, other, op, output_type)
+            result.dtype.precision = _binop_precision(
+                self.dtype, other.dtype, op
+            )
+        elif op in ("eq", "lt", "gt", "le", "ge"):
+            if not isinstance(
+                other,
+                (DecimalColumn, cudf.core.column.NumericalColumn, cudf.Scalar),
+            ):
+                raise TypeError(
+                    f"Operator {op} not supported between"
+                    f"{str(type(self))} and {str(type(other))}"
+                )
+            if isinstance(
+                other, cudf.core.column.NumericalColumn
+            ) and not is_integer_dtype(other.dtype):
+                raise TypeError(
+                    f"Only decimal and integer column is supported for {op}."
+                )
+            if isinstance(other, cudf.core.column.NumericalColumn):
+                other = other.as_decimal_column(
+                    Decimal64Dtype(Decimal64Dtype.MAX_PRECISION, 0)
+                )
+            result = libcudf.binaryop.binaryop(self, other, op, bool)
         return result
 
     def normalize_binop_value(self, other):
         if is_scalar(other) and isinstance(other, (int, np.int, Decimal)):
             return cudf.Scalar(Decimal(other))
+        elif isinstance(other, cudf.Scalar) and isinstance(
+            other.dtype, cudf.Decimal64Dtype
+        ):
+            return other
         else:
             raise TypeError(f"cannot normalize {type(other)}")
 
