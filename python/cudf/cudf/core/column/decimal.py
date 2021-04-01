@@ -139,6 +139,37 @@ class DecimalColumn(ColumnBase):
                 "cudf.core.column.StringColumn", as_column([], dtype="object")
             )
 
+    def reduce(self, op: str, skipna: bool = None, **kwargs) -> Decimal:
+        min_count = kwargs.pop("min_count", 0)
+        preprocessed = self._process_for_reduction(
+            skipna=skipna, min_count=min_count
+        )
+        if isinstance(preprocessed, ColumnBase):
+            return libcudf.reduce.reduce(op, preprocessed, **kwargs)
+        else:
+            return preprocessed
+
+    def sum(
+        self, skipna: bool = None, dtype: Dtype = None, min_count: int = 0
+    ) -> Decimal:
+        return self.reduce(
+            "sum", skipna=skipna, dtype=dtype, min_count=min_count
+        )
+
+    def product(
+        self, skipna: bool = None, dtype: Dtype = None, min_count: int = 0
+    ) -> Decimal:
+        return self.reduce(
+            "product", skipna=skipna, dtype=dtype, min_count=min_count
+        )
+
+    def sum_of_squares(
+        self, skipna: bool = None, dtype: Dtype = None, min_count: int = 0
+    ) -> Decimal:
+        return self.reduce(
+            "sum_of_squares", skipna=skipna, dtype=dtype, min_count=min_count
+        )
+
 
 def _binop_scale(l_dtype, r_dtype, op):
     # This should at some point be hooked up to libcudf's
