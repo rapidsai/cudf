@@ -3,6 +3,7 @@
 from collections import defaultdict
 
 import numpy as np
+import rmm
 
 from libcpp.pair cimport pair
 from libcpp.memory cimport unique_ptr

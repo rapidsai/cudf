@@ -20,6 +20,7 @@
 #include <cudf/detail/utilities/assert.cuh>
 #include <cudf/fixed_point/fixed_point.hpp>
 #include <cudf/strings/string_view.cuh>
+#include <cudf/types.hpp>
 #include <hash/hash_constants.hpp>
 
 using hash_value_type = uint32_t;
@@ -231,6 +232,9 @@ MD5ListHasher::operator()<string_view>(column_device_view data_col,
 }
 
 struct MD5Hash {
+  MD5Hash() = default;
+  constexpr MD5Hash(uint32_t seed) : m_seed(seed) {}
+
   void __device__ finalize(md5_intermediate_data* hash_state, char* result_location) const
   {
     auto const full_length = (static_cast<uint64_t>(hash_state->message_length)) << 3;
@@ -302,6 +306,9 @@ struct MD5Hash {
   {
     md5_process(col.element<T>(row_index), hash_state);
   }
+
+ private:
+  uint32_t m_seed{cudf::DEFAULT_HASH_SEED};
 };
 
 template <>
@@ -372,7 +379,7 @@ struct MurmurHash3_32 {
   using result_type   = hash_value_type;
 
   MurmurHash3_32() = default;
-  CUDA_HOST_DEVICE_CALLABLE MurmurHash3_32(uint32_t seed) : m_seed(seed) {}
+  constexpr MurmurHash3_32(uint32_t seed) : m_seed(seed) {}
 
   CUDA_DEVICE_CALLABLE uint32_t rotl32(uint32_t x, int8_t r) const
   {
@@ -469,7 +476,7 @@ struct MurmurHash3_32 {
   }
 
  private:
-  uint32_t m_seed{0};
+  uint32_t m_seed{cudf::DEFAULT_HASH_SEED};
 };
 
 template <>
@@ -542,13 +549,29 @@ hash_value_type CUDA_DEVICE_CALLABLE MurmurHash3_32<double>::operator()(double c
   return this->compute_floating_point(key);
 }
 
+template <>
+hash_value_type CUDA_DEVICE_CALLABLE
+MurmurHash3_32<cudf::list_view>::operator()(cudf::list_view const& key) const
+{
+  cudf_assert(false && "List column hashing is not supported");
+  return 0;
+}
+
+template <>
+hash_value_type CUDA_DEVICE_CALLABLE
+MurmurHash3_32<cudf::struct_view>::operator()(cudf::struct_view const& key) const
+{
+  cudf_assert(false && "Direct hashing of struct_view is not supported");
+  return 0;
+}
+
 template <typename Key>
 struct SparkMurmurHash3_32 {
   using argument_type = Key;
   using result_type   = hash_value_type;
 
   SparkMurmurHash3_32() = default;
-  CUDA_HOST_DEVICE_CALLABLE SparkMurmurHash3_32(uint32_t seed) : m_seed(seed) {}
+  constexpr SparkMurmurHash3_32(uint32_t seed) : m_seed(seed) {}
 
   CUDA_DEVICE_CALLABLE uint32_t rotl32(uint32_t x, int8_t r) const
   {
@@ -620,7 +643,7 @@ struct SparkMurmurHash3_32 {
   }
 
  private:
-  uint32_t m_seed{0};
+  uint32_t m_seed{cudf::DEFAULT_HASH_SEED};
 };
 
 template <>
@@ -669,6 +692,22 @@ hash_value_type CUDA_DEVICE_CALLABLE
 SparkMurmurHash3_32<numeric::decimal64>::operator()(numeric::decimal64 const& key) const
 {
   return this->compute<uint64_t>(key.value());
+}
+
+template <>
+hash_value_type CUDA_DEVICE_CALLABLE
+SparkMurmurHash3_32<cudf::list_view>::operator()(cudf::list_view const& key) const
+{
+  cudf_assert(false && "List column hashing is not supported");
+  return 0;
+}
+
+template <>
+hash_value_type CUDA_DEVICE_CALLABLE
+SparkMurmurHash3_32<cudf::struct_view>::operator()(cudf::struct_view const& key) const
+{
+  cudf_assert(false && "Direct hashing of struct_view is not supported");
+  return 0;
 }
 
 /**
@@ -740,6 +779,8 @@ SparkMurmurHash3_32<double>::operator()(double const& key) const
 template <typename Key>
 struct IdentityHash {
   using result_type = hash_value_type;
+  IdentityHash()    = default;
+  constexpr IdentityHash(uint32_t seed) : m_seed(seed) {}
 
   /**
    * @brief  Combines two hash values into a new single hash value. Called
@@ -752,7 +793,7 @@ struct IdentityHash {
    *
    * @returns A hash value that intelligently combines the lhs and rhs hash values
    */
-  CUDA_HOST_DEVICE_CALLABLE result_type hash_combine(result_type lhs, result_type rhs) const
+  constexpr result_type hash_combine(result_type lhs, result_type rhs) const
   {
     result_type combined{lhs};
 
@@ -762,19 +803,22 @@ struct IdentityHash {
   }
 
   template <typename return_type = result_type>
-  CUDA_HOST_DEVICE_CALLABLE std::enable_if_t<!std::is_arithmetic<Key>::value, return_type>
-  operator()(Key const& key) const
+  constexpr std::enable_if_t<!std::is_arithmetic<Key>::value, return_type> operator()(
+    Key const& key) const
   {
     cudf_assert(false && "IdentityHash does not support this data type");
     return 0;
   }
 
   template <typename return_type = result_type>
-  CUDA_HOST_DEVICE_CALLABLE std::enable_if_t<std::is_arithmetic<Key>::value, return_type>
-  operator()(Key const& key) const
+  constexpr std::enable_if_t<std::is_arithmetic<Key>::value, return_type> operator()(
+    Key const& key) const
   {
     return static_cast<result_type>(key);
   }
+
+ private:
+  uint32_t m_seed{cudf::DEFAULT_HASH_SEED};
 };
 
 template <typename Key>
