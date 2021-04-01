@@ -52,6 +52,7 @@ from cudf.utils.dtypes import (
     is_struct_dtype,
     numeric_normalize_types,
 )
+from cudf.utils.utils import GetAttrGetItemMixin
 
 T = TypeVar("T", bound="DataFrame")
 
@@ -109,7 +110,7 @@ _cupy_nan_methods_map = {
 }
 
 
-class DataFrame(Frame, Serializable):
+class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
 
     _internal_names = {"_data", "_index"}
 
@@ -657,12 +658,6 @@ class DataFrame(Frame, Serializable):
                 pass
 
         object.__setattr__(self, key, col)
-
-    def __getattr__(self, key):
-        try:
-            return self[key]
-        except:
-            raise AttributeError(f"{type(self)} object has no attribute {key}")
 
     @annotate("DATAFRAME_GETITEM", color="blue", domain="cudf_python")
     def __getitem__(self, arg):

@@ -280,6 +280,28 @@ class cached_property:
             return value
 
 
+class GetAttrGetItemMixin:
+    """This mixin handles trying __getitem__ in __getattr__ before erroring.
+
+    Subclasses may define a `_PROTECTED_KEYS` set as a class attribute to
+    indicate any keys that may be accessed by __getitem__. Testing for these
+    keys allows this class to prevent recursion errors when subclasses are
+    copied (see below for more details.
+    """
+    _PROTECTED_KEYS = frozenset()
+
+    def __getattr__(self, key):
+        # Without this check, copying can trigger a RecursionError. See
+        # https://nedbatchelder.com/blog/201010/surprising_getattr_recursion.html  # noqa: E501
+        # for an explanation.
+        if key in self._PROTECTED_KEYS:
+            raise AttributeError
+        try:
+            return self[key]
+        except KeyError:
+            raise AttributeError(f"{type(self)} object has no attribute {key}")
+
+
 class NestedMappingMixin:
     """
     Make missing values of a mapping empty instances

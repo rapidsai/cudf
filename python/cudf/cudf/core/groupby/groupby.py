@@ -10,7 +10,7 @@ from nvtx import annotate
 import cudf
 from cudf._lib import groupby as libgroupby
 from cudf.core.abc import Serializable
-from cudf.utils.utils import cached_property
+from cudf.utils.utils import GetAttrGetItemMixin, cached_property
 
 
 # Note that all valid aggregation methods (e.g. GroupBy.min) are bound to the
@@ -613,7 +613,9 @@ for key in _VALID_GROUPBY_AGGS:
     )
 
 
-class DataFrameGroupBy(GroupBy):
+class DataFrameGroupBy(GroupBy, GetAttrGetItemMixin):
+    _PROTECTED_KEYS = frozenset(("obj", ))
+
     def __init__(
         self, obj, by=None, level=None, sort=False, as_index=True, dropna=True
     ):
@@ -707,17 +709,6 @@ class DataFrameGroupBy(GroupBy):
             as_index=as_index,
             dropna=dropna,
         )
-
-    def __getattr__(self, key):
-        # Without this check, copying can trigger a RecursionError. See
-        # https://nedbatchelder.com/blog/201010/surprising_getattr_recursion.html  # noqa: E501
-        # for an explanation.
-        if key == "obj":
-            raise AttributeError
-        try:
-            return self[key]
-        except KeyError:
-            raise AttributeError
 
     def __getitem__(self, key):
         return self.obj[key].groupby(
