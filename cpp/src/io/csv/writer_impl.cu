@@ -465,7 +465,7 @@ void writer::impl::write(table_view const& table,
       n_rows_per_chunk += 8 - (n_rows_per_chunk % 8);
 
     CUDF_EXPECTS(n_rows_per_chunk >= 8, "write_csv: invalid chunk_rows; must be at least 8");
-  
+
     auto num_rows = table.num_rows();
     std::vector<table_view> vector_views;
 
@@ -475,10 +475,11 @@ void writer::impl::write(table_view const& table,
       auto const n_chunks = num_rows / n_rows_per_chunk;
       std::vector<size_type> splits;
       splits.reserve(n_chunks);
-      std::transform(thrust::make_counting_iterator(1),
-                     thrust::make_counting_iterator(n_chunks + 1),
-                     std::back_inserter(splits),
-                     [n_rows_per_chunk](auto const& chunk_idx) { return chunk_idx * n_rows_per_chunk; });
+      std::transform(
+        thrust::make_counting_iterator(1),
+        thrust::make_counting_iterator(n_chunks + 1),
+        std::back_inserter(splits),
+        [n_rows_per_chunk](auto const& chunk_idx) { return chunk_idx * n_rows_per_chunk; });
 
       // split table_view into chunks:
       vector_views = cudf::split(table, splits);

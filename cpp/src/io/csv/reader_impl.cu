@@ -422,7 +422,10 @@ reader::impl::load_data_and_gather_row_offsets(host_span<char const> data,
   // previous row terminator is within the given range
   range_end += (range_end < data.size());
 
-  rmm::device_uvector<char> d_data{0, stream};
+  // Reserve memory by allocating and then resetting the size
+  rmm::device_uvector<char> d_data{
+    (load_whole_file) ? data.size() : std::min(buffer_size * 2, data.size()), stream};
+  d_data.resize(0, stream);
   rmm::device_uvector<uint64_t> all_row_offsets{0, stream};
   do {
     size_t target_pos = std::min(pos + max_chunk_bytes, data.size());
