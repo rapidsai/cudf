@@ -576,7 +576,14 @@ install(DIRECTORY
         DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/libcudf)
 
 install(DIRECTORY ${Thrust_SOURCE_DIR}/
-  DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/libcudf/Thrust)
+  DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/libcudf/Thrust
+  PATTERN "*.py" EXCLUDE
+  PATTERN "benchmark" EXCLUDE
+  PATTERN "build" EXCLUDE
+  PATTERN "doc" EXCLUDE
+  PATTERN "examples" EXCLUDE
+  PATTERN "test" EXCLUDE
+  PATTERN "testing" EXCLUDE)
 
 include(CMakePackageConfigHelpers)
 
