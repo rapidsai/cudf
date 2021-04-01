@@ -2815,7 +2815,7 @@ def interval_range(
             "Of the four parameters: start, end, periods, and "
             "freq, exactly three must be specified"
         )
-    if not isinstance(start or freq or end, int or float):
+    if not isinstance(start or freq or end, int) and not isinstance(start or freq or end, float):
         raise NotImplementedError("Non-numeric values not yet supported")
     elif periods and not freq:
         # if statement for mypy to pass
@@ -2823,10 +2823,20 @@ def interval_range(
             # determine if periods are float or integer
             quotient, remainder = divmod((end - start), periods)
             if remainder:
-                freq_step = cudf.Scalar((end - start) / periods).device_value
+                step_input = (end - start) / periods
+                if step_input%1 == 0 and type(start) == int and type(end) == int:
+                    freq_step = cudf.Scalar(step_input, dtype=int).device_value
+                else:
+                    freq_step = cudf.Scalar((end - start) / periods).device_value
             else:
-                freq_step = cudf.Scalar(quotient).device_value
-            start = cudf.Scalar(start, dtype=freq_step.dtype).device_value
+                if quotient%1 == 0 and type(start) == int and type(end) == int:
+                    freq_step = cudf.Scalar(quotient, dtype=int).device_value
+                else:
+                    freq_step = cudf.Scalar(quotient).device_value
+            if type(start) == int and type(end) == int and freq_step.dtype == int:
+                start = cudf.Scalar(start, dtype=int).device_value
+            else:
+                start = cudf.Scalar(start, dtype=float).device_value
             bin_edges = sequence(size=periods + 1, init=start, step=freq_step,)
             left_col = bin_edges[:-1]
             right_col = bin_edges[1:]
