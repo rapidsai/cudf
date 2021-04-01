@@ -473,13 +473,10 @@ void writer::impl::write(table_view const& table,
       vector_views.push_back(table);
     } else {
       auto const n_chunks = num_rows / n_rows_per_chunk;
-      std::vector<size_type> splits;
-      splits.reserve(n_chunks);
-      std::transform(
-        thrust::make_counting_iterator(1),
-        thrust::make_counting_iterator(n_chunks + 1),
-        std::back_inserter(splits),
-        [n_rows_per_chunk](auto const& chunk_idx) { return chunk_idx * n_rows_per_chunk; });
+      std::vector<size_type> splits(n_chunks);
+      thrust::tabulate(splits.begin(), splits.end(), [n_rows_per_chunk](auto idx) {
+        return (idx + 1) * n_rows_per_chunk;
+      });
 
       // split table_view into chunks:
       vector_views = cudf::split(table, splits);
