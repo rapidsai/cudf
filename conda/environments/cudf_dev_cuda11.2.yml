@@ -42,7 +42,7 @@ dependencies:
   - mypy=0.782
   - typing_extensions
   - pre_commit
-  - dask>=2.22.0
+  - dask>=2021.3.1
   - distributed>=2.22.0
   - streamz
   - dlpack
