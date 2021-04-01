@@ -465,31 +465,22 @@ void writer::impl::write(table_view const& table,
       n_rows_per_chunk += 8 - (n_rows_per_chunk % 8);
 
     CUDF_EXPECTS(n_rows_per_chunk >= 8, "write_csv: invalid chunk_rows; must be at least 8");
-
+  
     auto num_rows = table.num_rows();
     std::vector<table_view> vector_views;
 
     if (num_rows <= n_rows_per_chunk) {
       vector_views.push_back(table);
     } else {
+      auto const n_chunks = num_rows / n_rows_per_chunk;
       std::vector<size_type> splits;
-      auto n_chunks = num_rows / n_rows_per_chunk;
-      splits.resize(n_chunks);
-
-      rmm::device_vector<size_type> d_splits(n_chunks, n_rows_per_chunk);
-      thrust::inclusive_scan(
-        rmm::exec_policy(stream), d_splits.begin(), d_splits.end(), d_splits.begin());
-
-      CUDA_TRY(cudaMemcpyAsync(splits.data(),
-                               d_splits.data().get(),
-                               n_chunks * sizeof(size_type),
-                               cudaMemcpyDeviceToHost,
-                               stream.value()));
-
-      stream.synchronize();
+      splits.reserve(n_chunks);
+      std::transform(thrust::make_counting_iterator(1),
+                     thrust::make_counting_iterator(n_chunks + 1),
+                     std::back_inserter(splits),
+                     [n_rows_per_chunk](auto const& chunk_idx) { return chunk_idx * n_rows_per_chunk; });
 
       // split table_view into chunks:
-      //
       vector_views = cudf::split(table, splits);
     }
 
