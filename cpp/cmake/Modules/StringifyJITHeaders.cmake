@@ -34,6 +34,7 @@ add_custom_command(WORKING_DIRECTORY ${CUDF_SOURCE_DIR}/include
                           ${CUDF_GENERATED_INCLUDE_DIR}/include/jit/timestamps.hpp.jit
                           ${CUDF_GENERATED_INCLUDE_DIR}/include/jit/fixed_point.hpp.jit
                           ${CUDF_GENERATED_INCLUDE_DIR}/include/jit/durations.hpp.jit
+                          ${CUDF_GENERATED_INCLUDE_DIR}/include/jit/assert.cuh.jit
                           ${CUDF_GENERATED_INCLUDE_DIR}/include/jit/libcudacxx/cuda/std/chrono.jit
                           ${CUDF_GENERATED_INCLUDE_DIR}/include/jit/libcudacxx/cuda/std/climits.jit
                           ${CUDF_GENERATED_INCLUDE_DIR}/include/jit/libcudacxx/cuda/std/cstddef.jit
@@ -65,6 +66,7 @@ add_custom_command(WORKING_DIRECTORY ${CUDF_SOURCE_DIR}/include
                                    ${CUDF_SOURCE_DIR}/include/cudf/wrappers/timestamps.hpp
                                    ${CUDF_SOURCE_DIR}/include/cudf/fixed_point/fixed_point.hpp
                                    ${CUDF_SOURCE_DIR}/include/cudf/wrappers/durations.hpp
+                                   ${CUDF_SOURCE_DIR}/include/cudf/detail/utilities/assert.cuh
                                    ${LIBCUDACXX_INCLUDE_DIR}/cuda/std/chrono
                                    ${LIBCUDACXX_INCLUDE_DIR}/cuda/std/climits
                                    ${LIBCUDACXX_INCLUDE_DIR}/cuda/std/cstddef
@@ -99,6 +101,7 @@ add_custom_command(WORKING_DIRECTORY ${CUDF_SOURCE_DIR}/include
                    COMMAND ${CUDF_BINARY_DIR}/stringify cudf/wrappers/timestamps.hpp > ${CUDF_GENERATED_INCLUDE_DIR}/include/jit/timestamps.hpp.jit
                    COMMAND ${CUDF_BINARY_DIR}/stringify cudf/fixed_point/fixed_point.hpp > ${CUDF_GENERATED_INCLUDE_DIR}/include/jit/fixed_point.hpp.jit
                    COMMAND ${CUDF_BINARY_DIR}/stringify cudf/wrappers/durations.hpp > ${CUDF_GENERATED_INCLUDE_DIR}/include/jit/durations.hpp.jit
+                   COMMAND ${CUDF_BINARY_DIR}/stringify cudf/detail/utilities/assert.cuh > ${CUDF_GENERATED_INCLUDE_DIR}/include/jit/assert.cuh.jit
                    COMMAND ${CUDF_BINARY_DIR}/stringify ${LIBCUDACXX_INCLUDE_DIR}/cuda/std/chrono cuda_std_chrono > ${CUDF_GENERATED_INCLUDE_DIR}/include/jit/libcudacxx/cuda/std/chrono.jit
                    COMMAND ${CUDF_BINARY_DIR}/stringify ${LIBCUDACXX_INCLUDE_DIR}/cuda/std/climits cuda_std_climits > ${CUDF_GENERATED_INCLUDE_DIR}/include/jit/libcudacxx/cuda/std/climits.jit
                    COMMAND ${CUDF_BINARY_DIR}/stringify ${LIBCUDACXX_INCLUDE_DIR}/cuda/std/cstddef cuda_std_cstddef > ${CUDF_GENERATED_INCLUDE_DIR}/include/jit/libcudacxx/cuda/std/cstddef.jit
@@ -133,6 +136,7 @@ add_custom_target(stringify_run DEPENDS
                   ${CUDF_GENERATED_INCLUDE_DIR}/include/jit/timestamps.hpp.jit
                   ${CUDF_GENERATED_INCLUDE_DIR}/include/jit/fixed_point.hpp.jit
                   ${CUDF_GENERATED_INCLUDE_DIR}/include/jit/durations.hpp.jit
+                  ${CUDF_GENERATED_INCLUDE_DIR}/include/jit/assert.cuh.jit
                   ${CUDF_GENERATED_INCLUDE_DIR}/include/jit/libcudacxx/cuda/std/chrono.jit
                   ${CUDF_GENERATED_INCLUDE_DIR}/include/jit/libcudacxx/cuda/std/climits.jit
                   ${CUDF_GENERATED_INCLUDE_DIR}/include/jit/libcudacxx/cuda/std/cstddef.jit
