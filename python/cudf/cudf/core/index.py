@@ -39,6 +39,7 @@ from cudf.utils.dtypes import (
     is_scalar,
     numeric_normalize_types,
     is_interval_dtype,
+    find_common_type
 )
 from cudf.utils.utils import cached_property, search_range
 
@@ -2821,22 +2822,20 @@ def interval_range(
     ):
         raise NotImplementedError("Non-numeric values not yet supported")
     elif periods and not freq:
-        if periods is not int:
-            periods = int(periods)
         # if statement for mypy to pass
         if end is not None and start is not None:
             # determine if periods are float or integer
+            periods = int(periods)
             quotient, remainder = divmod((end - start), periods)
             if remainder:
                 freq_step = cudf.Scalar((end - start) / periods).device_value
             else:
                 freq_step = cudf.Scalar(quotient).device_value
-            if type(start) == freq_step.dtype:
-                start = cudf.Scalar(start).device_value
-            elif type(start) != freq_step.dtype:
-                start = cudf.Scalar(
-                    cudf.Scalar(start)._host_value.astype(freq_step.dtype)
-                ).device_value
+            start = cudf.Scalar(start).device_value
+            periods = cudf.Scalar(periods)
+            overall_dtype = find_common_type([freq_step.dtype, start.dtype, periods.dtype])
+            if start.dtype != overall_dtype:
+                start = cudf.Scalar(start.value.astype(overall_dtype)).device_value
             bin_edges = sequence(size=periods + 1, init=start, step=freq_step,)
             left_col = bin_edges[:-1]
             right_col = bin_edges[1:]
