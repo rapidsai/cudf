@@ -1,5 +1,5 @@
 #=============================================================================
-# Copyright (c) 2018-2021, NVIDIA CORPORATION.
+# Copyright (c) 2021, NVIDIA CORPORATION.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -24,8 +24,6 @@ add_executable(jitify_preprocess "${JITIFY_INCLUDE_DIR}/jitify2_preprocess.cpp")
 
 target_link_libraries(jitify_preprocess CUDA::cudart ${CMAKE_DL_LIBS})
 
-set(JIT_PREPROCESSED_FILES)
-
 function(jit_preprocess_files)
     cmake_parse_arguments(ARG
                           ""
@@ -36,12 +34,12 @@ function(jit_preprocess_files)
 
     foreach(ARG_FILE ${ARG_FILES})
         set(ARG_OUTPUT ${CUDF_GENERATED_INCLUDE_DIR}/include/jit_preprocessed_files/${ARG_FILE}.jit)
-        set(JIT_PREPROCESSED_FILES "${ARG_OUTPUT};${JIT_PREPROCESSED_FILES}")
+        list(APPEND JIT_PREPROCESSED_FILES "${ARG_OUTPUT}")
         add_custom_command(WORKING_DIRECTORY ${ARG_SOURCE_DIRECTORY}
                            DEPENDS jitify_preprocess
                            OUTPUT ${ARG_OUTPUT}
                            VERBATIM
-                           COMMAND ${CUDF_BINARY_DIR}/jitify_preprocess ${ARG_FILE}
+                           COMMAND jitify_preprocess ${ARG_FILE}
                                     -o ${CUDF_GENERATED_INCLUDE_DIR}/include/jit_preprocessed_files
                                     -v
                                     -i
@@ -52,7 +50,7 @@ function(jit_preprocess_files)
                                     -I${CUDF_SOURCE_DIR}/include
                                     -I${CUDF_SOURCE_DIR}/src
                                     -I${LIBCUDACXX_INCLUDE_DIR}
-                                    -I${CUDAToolkit_INCLUDE_DIR}
+                                    -I${CUDAToolkit_INCLUDE_DIRS}
                                     --no-preinclude-workarounds
                                     --no-replace-pragma-once
                            )
