@@ -570,7 +570,13 @@ class GroupBy(Serializable):
         return cudf.core.window.rolling.RollingGroupby(self, *args, **kwargs)
 
     def count(self, dropna=True):
-        """Compute the sizes of each column."""
+        """Compute the sizes of each column.
+
+        Parameters
+        ----------
+        dropna : bool
+            If ``True``, don't include null values in the count.
+        """
         def func(x):
             return getattr(x, "count")(dropna=dropna)
 
@@ -605,21 +611,44 @@ class GroupBy(Serializable):
         return self.agg("median")
 
     def var(self, ddof=1):
-        """Compute the variance of the data in each column."""
+        """Compute the variance of the data in each column.
+
+        Parameters
+        ----------
+        ddof : int
+            The delta degrees of freedom. N - ddof is the divisor used to
+            normalize the variance.
+        """
         def func(x):
             return getattr(x, "var")(ddof=ddof)
 
         return self.agg(func)
 
     def std(self, ddof=1):
-        """Compute the standard deviation of the data in each column."""
+        """Compute the standard deviation of the data in each column.
+
+        Parameters
+        ----------
+        ddof : int
+            The delta degrees of freedom. N - ddof is the divisor used to
+            normalize the standard deviation.
+        """
         def func(x):
             return getattr(x, "std")(ddof=ddof)
 
         return self.agg(func)
 
     def quantile(self, q=0.5, interpolation="linear"):
-        """Compute the quantiles of each column."""
+        """Compute the quantiles of each column.
+
+        Parameters
+        ----------
+        q : float or array-like
+            The quantiles to compute.
+        interpolation : {"linear", "lower", "higher", "midpoint", "nearest"}
+            The interpolation method to use when the desired quantile lies
+            between two data points. Defaults to "linear".
+       """
         def func(x):
             return getattr(x, "quantile")(q=q, interpolation=interpolation)
 
