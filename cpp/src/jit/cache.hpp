@@ -16,12 +16,14 @@
 
 #pragma once
 
-#include <jitiy2.hpp>
+#include <jitify2.hpp>
+#include <memory>
 
 namespace cudf {
 namespace jit {
 
-boost::filesystem::path get_program_cache();
+std::unique_ptr<jitify2::ProgramCache<>> get_program_cache(
+  jitify2::PreprocessedProgramData preprog);
 
 }  // namespace jit
 }  // namespace cudf

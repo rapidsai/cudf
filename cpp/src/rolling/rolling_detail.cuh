@@ -42,6 +42,7 @@
 #include <cudf/utilities/error.hpp>
 #include <cudf/utilities/traits.hpp>
 
+#include <jit/cache.hpp>
 #include <jit/parser.hpp>
 #include <jit/type.hpp>
 
@@ -59,6 +60,8 @@
 #include <thrust/transform.h>
 
 #include <memory>
+
+static auto rolling_program_cache = cudf::jit::get_program_cache(*rolling_jit_kernel_cu_jit);
 
 namespace cudf {
 
@@ -1285,9 +1288,6 @@ std::unique_ptr<column> rolling_window_udf(column_view const& input,
   auto output_view = output->mutable_view();
   rmm::device_scalar<size_type> device_valid_count{0, stream};
 
-  jitify2::ProgramCache<> rolling_program_cache(
-    /*max_size = */ 100, *rolling_jit_kernel_cu_jit);
-
   std::string kernel_name =
     jitify2::reflection::Template("cudf::rolling::jit::gpu_rolling_new")  //
       .instantiate(cudf::jit::get_type_name(input.type()),  // list of template arguments
@@ -1297,8 +1297,8 @@ std::unique_ptr<column> rolling_window_udf(column_view const& input,
                    following_window_str.c_str());
 
   rolling_program_cache
-    .get_kernel(kernel_name, {}, {{"rolling/jit/operation-udf.hpp", cuda_source}})  //
-    ->configure_1d_max_occupancy(0, 0, 0, stream.value())                           //
+    ->get_kernel(kernel_name, {}, {{"rolling/jit/operation-udf.hpp", cuda_source}})  //
+    ->configure_1d_max_occupancy(0, 0, 0, stream.value())                            //
     ->launch(input.size(),
              cudf::jit::get_data_ptr(input),
              input.null_mask(),
