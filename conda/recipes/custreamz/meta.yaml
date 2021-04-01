@@ -23,15 +23,15 @@ requirements:
   host:
     - python
     - python-confluent-kafka
-    - cudf_kafka {{ version }}=*_{{ GIT_DESCRIBE_NUMBER }}
+    - cudf_kafka {{ version }}
   run:
     - python
-    - streamz
-    - cudf {{ version }}=*_{{ GIT_DESCRIBE_NUMBER }}
+    - streamz 
+    - cudf {{ version }}
     - dask >=2.22.0
     - distributed >=2.22.0
     - python-confluent-kafka
-    - cudf_kafka {{ version }}=*_{{ GIT_DESCRIBE_NUMBER }}
+    - cudf_kafka {{ version }}
 
 test:
   requires:
