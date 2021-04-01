@@ -2644,7 +2644,8 @@ class TimedeltaIndex(GenericIndex):
 
 
 class CategoricalIndex(GenericIndex):
-    """A categorical of orderable values that represent the indices of another
+    """
+    A categorical of orderable values that represent the indices of another
     Column
 
     Parameters
@@ -2815,7 +2816,9 @@ def interval_range(
             "Of the four parameters: start, end, periods, and "
             "freq, exactly three must be specified"
         )
-    if not isinstance(start or freq or end, int) and not isinstance(start or freq or end, float):
+    if not isinstance(start or freq or end, int) and not isinstance(
+        start or freq or end, float
+    ):
         raise NotImplementedError("Non-numeric values not yet supported")
     elif periods and not freq:
         # if statement for mypy to pass
@@ -2824,16 +2827,30 @@ def interval_range(
             quotient, remainder = divmod((end - start), periods)
             if remainder:
                 step_input = (end - start) / periods
-                if step_input%1 == 0 and type(start) == int and type(end) == int:
+                if (
+                    step_input % 1 == 0
+                    and type(start) == int
+                    and type(end) == int
+                ):
                     freq_step = cudf.Scalar(step_input, dtype=int).device_value
                 else:
-                    freq_step = cudf.Scalar((end - start) / periods).device_value
+                    freq_step = cudf.Scalar(
+                        (end - start) / periods
+                    ).device_value
             else:
-                if quotient%1 == 0 and type(start) == int and type(end) == int:
+                if (
+                    quotient % 1 == 0
+                    and type(start) == int
+                    and type(end) == int
+                ):
                     freq_step = cudf.Scalar(quotient, dtype=int).device_value
                 else:
                     freq_step = cudf.Scalar(quotient).device_value
-            if type(start) == int and type(end) == int and freq_step.dtype == int:
+            if (
+                type(start) == int
+                and type(end) == int
+                and freq_step.dtype == int
+            ):
                 start = cudf.Scalar(start, dtype=int).device_value
             else:
                 start = cudf.Scalar(start, dtype=float).device_value
@@ -2908,7 +2925,7 @@ class IntervalIndex(GenericIndex):
     """
 
     def __new__(
-        cls, data=None, closed=None, dtype=None, copy=False, name=None,
+        cls, data, closed=None, dtype=None, copy=False, name=None,
     ) -> "IntervalIndex":
         if copy:
             data = column.as_column(data, dtype=dtype).copy()

@@ -1397,7 +1397,7 @@ def test_interval_range_freq_basic(start, end, freq, closed):
 @pytest.mark.parametrize("closed", ["left", "right", "both", "neither"])
 @pytest.mark.parametrize("periods", [1, 1.0, 2, 2.0, 3, 3.0])
 @pytest.mark.parametrize("start", [0, 0.0, 1.0, 1, 2, 2.0, 3.0, 3])
-@pytest.mark.parametrize("end", [4,4.0,5.0, 5, 6, 6.0, 7.0, 7])
+@pytest.mark.parametrize("end", [4, 4.0, 5.0, 5, 6, 6.0, 7.0, 7])
 def test_interval_range_periods_basic(start, end, periods, closed):
     pindex = pd.interval_range(
         start=start, end=end, periods=periods, closed=closed
