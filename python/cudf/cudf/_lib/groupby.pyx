@@ -1,6 +1,15 @@
 # Copyright (c) 2020, NVIDIA CORPORATION.
 
 from collections import defaultdict
+from pandas.core.groupby.groupby import DataError
+from cudf.utils.dtypes import (
+    is_categorical_dtype,
+    is_string_dtype,
+    is_list_dtype,
+    is_interval_dtype,
+    is_struct_dtype,
+    is_decimal_dtype,
+)
 
 import numpy as np
 import rmm
@@ -19,15 +28,6 @@ from cudf._lib.cpp.table.table cimport table, table_view
 cimport cudf._lib.cpp.types as libcudf_types
 cimport cudf._lib.cpp.groupby as libcudf_groupby
 
-from pandas.core.groupby.groupby import DataError
-from cudf.utils.dtypes import (
-    is_categorical_dtype,
-    is_string_dtype,
-    is_list_dtype,
-    is_interval_dtype,
-    is_struct_dtype,
-    is_decimal_dtype,
-)
 
 
 # The sets below define the possible aggregations that can be performed on
@@ -35,7 +35,7 @@ from cudf.utils.dtypes import (
 _CATEGORICAL_AGGS = {"COUNT", "SIZE", "NUNIQUE", "UNIQUE"}
 _STRING_AGGS = {"COUNT", "SIZE", "MAX", "MIN", "NUNIQUE", "NTH", "COLLECT",
                 "UNIQUE"}
-_LIST_AGGS = {"COLLECT" }
+_LIST_AGGS = {"COLLECT"}
 _STRUCT_AGGS = set()
 _INTERVAL_AGGS = set()
 _DECIMAL_AGGS = {"COUNT", "SUM", "ARGMIN", "ARGMAX", "MIN", "MAX", "NUNIQUE",
@@ -127,10 +127,10 @@ cdef class GroupBy:
                 else _STRING_AGGS if is_struct_dtype(dtype)
                 else _INTERVAL_AGGS if is_interval_dtype(dtype)
                 else _DECIMAL_AGGS if is_decimal_dtype(dtype)
-                else None
+                else "ALL"
             )
             if (valid_aggregations is _DECIMAL_AGGS
-                and rmm._cuda.gpu.runtimeGetVersion() < 11000):
+                    and rmm._cuda.gpu.runtimeGetVersion() < 11000):
                 raise RuntimeError(
                     "Decimal aggregations are only supported on CUDA >= 11 "
                     "due to an nvcc compiler bug."
@@ -141,7 +141,8 @@ cdef class GroupBy:
             )
             for agg in aggs:
                 agg_obj = make_aggregation(agg)
-                if valid_aggregations is None or agg_obj.kind in valid_aggregations:
+                if (valid_aggregations == "ALL"
+                        or agg_obj.kind in valid_aggregations):
                     included_aggregations[col_name].append(agg)
                     c_agg_requests[idx].aggregations.push_back(
                         move(agg_obj.c_obj)
