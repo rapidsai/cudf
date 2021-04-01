@@ -112,7 +112,7 @@ _cupy_nan_methods_map = {
 
 class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
 
-    _internal_names = {"_data", "_index"}
+    _PROTECTED_KEYS = {"_data", "_index"}
 
     @annotate("DATAFRAME_INIT", color="blue", domain="cudf_python")
     def __init__(self, data=None, index=None, columns=None, dtype=None):
@@ -639,25 +639,16 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
         return list(o)
 
     def __setattr__(self, key, col):
-
-        # if an attribute already exists, set it.
-        try:
-            object.__getattribute__(self, key)
-            object.__setattr__(self, key, col)
-            return
-        except AttributeError:
-            pass
-
-        # if a column already exists, set it.
-        if key not in self._internal_names:
-            try:
-                self[key]  # __getitem__ to verify key exists
-                self[key] = col
-                return
-            except KeyError:
-                pass
-
-        object.__setattr__(self, key, col)
+        # Default set keys corresponding to internal attributes
+        if key in self._PROTECTED_KEYS:
+            super().__setattr__(key, col)
+        # Existing columns can be reset. Check is deferred to after the
+        # PROTECTED_KEYS lookup for speed in the most common cases (setting
+        # _data or _index). Bypass __getitem__ and check self._data for speed.
+        elif key in self._data:
+            self[key] = col
+        else:
+            super().__setattr__(key, col)
 
     @annotate("DATAFRAME_GETITEM", color="blue", domain="cudf_python")
     def __getitem__(self, arg):
