@@ -68,7 +68,7 @@ def reduce(reduction_op, Column incol, dtype=None, **kwargs):
             c_out_dtype
         ))
 
-    py_result = DeviceScalar.from_unique_ptr(move(c_result))
+    py_result = DeviceScalar.from_unique_ptr(move(c_result), dtype=col_dtype)
     return py_result.value
 
 
