@@ -37,17 +37,10 @@ def test_struct_of_struct_loc():
 
 
 @pytest.mark.parametrize(
-    "data, index, expect",
-    [
-        ([{"a": 1, "b": 2}, {"a": 3, "b": 4}], 0, [1, 3]),
-        ([{"a": 1, "b": 2}, {"a": 3, "b": 4}], 1, [2, 4]),
-        # (),
-        # (),
-        # (),
-    ],
+    "key, expect", [(0, [1, 3]), (1, [2, 4]), ("a", [1, 3]), ("b", [2, 4])]
 )
-def test_struct_for_field(data, index, expect):
-    sr = cudf.Series(data)
+def test_struct_for_field(key, expect):
+    sr = cudf.Series([{"a": 1, "b": 2}, {"a": 3, "b": 4}])
     expect = cudf.Series(expect)
-    got = sr.struct.field(index)
+    got = sr.struct.field(key)
     assert_eq(expect, got)

@@ -11,10 +11,10 @@ from cudf.utils.dtypes import is_struct_dtype
 
 class StructColumn(ColumnBase):
     """
-    Column that stores dict-like values
+    Column that stores fields of values.
 
-    Every colummn has n children, where n is
-    number of entries in each dictionary
+    Every column has n children, where n is
+    the number of fields in the Struct Dtype.
 
     """
 
@@ -118,7 +118,7 @@ class StructMethods(ColumnMethodsMixin):
             )
         super().__init__(column=column, parent=parent)
 
-    def field(self, index):
+    def field(self, key):
         """
         Extract children of the specified struct column
         in the Series
@@ -139,5 +139,9 @@ class StructMethods(ColumnMethodsMixin):
         1    3
         dtype: int64
         """
-
-        return self._return_or_inplace(self._column.children[index])
+        fields = list(self._column.dtype.fields.keys())
+        if key in fields:
+            pos = fields.index(key)
+            return self._return_or_inplace(self._column.children[pos])
+        else:
+            return self._return_or_inplace(self._column.children[key])
