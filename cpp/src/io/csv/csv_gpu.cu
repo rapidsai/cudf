@@ -988,7 +988,7 @@ size_t __host__ count_blank_rows(const cudf::io::parse_options_view &opts,
 }
 
 device_span<uint64_t> __host__ remove_blank_rows(cudf::io::parse_options_view const &options,
-                                                 device_span<char const> const data,
+                                                 device_span<char const> data,
                                                  device_span<uint64_t> row_offsets,
                                                  rmm::cuda_stream_view stream)
 {

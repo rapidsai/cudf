@@ -91,6 +91,11 @@ class reader::impl {
   table_with_metadata read(rmm::cuda_stream_view stream);
 
  private:
+  /**
+   * @brief Offsets of CSV rows in device memory, accessed through a shrinkable span.
+   * 
+   * Row offsets are stored this way to avoid reallocation/copies when discarding front or back elements. 
+   */
   class selected_rows_offsets {
     rmm::device_uvector<uint64_t> all;
     device_span<uint64_t const> selected;
