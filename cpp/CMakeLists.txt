@@ -415,7 +415,7 @@ target_compile_definitions(cudf
 )
 
 # Disable Jitify log printing. See https://github.com/NVIDIA/jitify/issues/79
-target_compile_definitions(cudf PRIVATE "JITIFY_PRINT_LOG=1")
+target_compile_definitions(cudf PRIVATE "JITIFY_PRINT_LOG=0")
 
 # Specify include paths for the current target and dependents
 target_include_directories(cudf

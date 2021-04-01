@@ -104,14 +104,7 @@ std::string get_program_cache_dir()
 
 std::unique_ptr<jitify2::ProgramCache<>> get_program_cache(jitify2::PreprocessedProgramData preprog)
 {
-  return std::make_unique<jitify2::ProgramCache<>>(100, preprog, nullptr);
-
-  // // need to determine why jitify can't acquire a file lock:
-  // // determine whiC++ exception with description "Failed to acquire file lock" thrown in the test
-  // body.
-
-  // return std::make_unique<jitify2::ProgramCache<>>(100, preprog, nullptr,
-  // get_program_cache_dir());
+  return std::make_unique<jitify2::ProgramCache<>>(100, preprog, nullptr, get_program_cache_dir());
 }
 
 }  // namespace jit
