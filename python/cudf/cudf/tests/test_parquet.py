@@ -19,7 +19,7 @@ from pyarrow import parquet as pq
 import cudf
 from cudf.io.parquet import ParquetWriter, merge_parquet_filemetadata
 from cudf.tests import dataset_generator as dg
-from cudf.tests.utils import assert_eq
+from cudf.tests.utils import assert_eq, assert_exceptions_equal
 
 
 @pytest.fixture(scope="module")
@@ -1937,3 +1937,15 @@ def test_parquet_writer_decimal(tmpdir):
 
     got = pd.read_parquet(fname)
     assert_eq(gdf, got)
+
+
+def test_parquet_writer_column_validation():
+    df = cudf.DataFrame({1: [1, 2, 3], "1": ["a", "b", "c"]})
+    pdf = df.to_pandas()
+
+    assert_exceptions_equal(
+        lfunc=df.to_parquet,
+        rfunc=pdf.to_parquet,
+        lfunc_args_and_kwargs=(["cudf.parquet"],),
+        rfunc_args_and_kwargs=(["pandas.parquet"],),
+    )

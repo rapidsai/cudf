@@ -22,6 +22,7 @@ from cudf.core.column import (
     column,
     string,
 )
+from cudf.core.dtypes import Decimal64Dtype
 from cudf.utils import cudautils, utils
 from cudf.utils.dtypes import (
     min_column_type,
@@ -103,11 +104,23 @@ class NumericalColumn(ColumnBase):
             out_dtype = self.dtype
         else:
             if not (
-                isinstance(rhs, (NumericalColumn, cudf.Scalar,),)
+                isinstance(
+                    rhs,
+                    (
+                        NumericalColumn,
+                        cudf.Scalar,
+                        cudf.core.column.DecimalColumn,
+                    ),
+                )
                 or np.isscalar(rhs)
             ):
                 msg = "{!r} operator not supported between {} and {}"
                 raise TypeError(msg.format(binop, type(self), type(rhs)))
+            if isinstance(rhs, cudf.core.column.DecimalColumn):
+                lhs = self.as_decimal_column(
+                    Decimal64Dtype(Decimal64Dtype.MAX_PRECISION, 0)
+                )
+                return lhs.binary_operator(binop, rhs)
             out_dtype = np.result_type(self.dtype, rhs.dtype)
             if binop in ["mod", "floordiv"]:
                 tmp = self if reflect else rhs

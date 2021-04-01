@@ -426,6 +426,8 @@ class ColumnBase(Column, Serializable):
             array.type, pd.core.arrays._arrow_utils.ArrowIntervalType
         ):
             return cudf.core.column.IntervalColumn.from_arrow(array)
+        elif isinstance(array.type, pa.Decimal128Type):
+            return cudf.core.column.DecimalColumn.from_arrow(array)
 
         return libcudf.interop.from_arrow(data, data.column_names)._data[
             "None"
@@ -1412,8 +1414,8 @@ class ColumnBase(Column, Serializable):
           of `other`  and the categories of `self`.
         * when both `self` and `other` are StructColumns, rename the fields
           of `other` to the field names of `self`.
-        * when `self` and `other` are DecimalColumns, copy the precision
-          over from `self` to `other`.
+        * when both `self` and `other` are DecimalColumns, copy the precision
+          from self.dtype to other.dtype
         * when `self` and `other` are nested columns of the same type,
           recursively apply this function on the children of `self` to the
           and the children of `other`.
@@ -1437,8 +1439,8 @@ class ColumnBase(Column, Serializable):
         ):
             other = other._rename_fields(self.dtype.fields.keys())
 
-        if isinstance(self.dtype, cudf.Decimal64Dtype) and isinstance(
-            other.dtype, cudf.Decimal64Dtype
+        if isinstance(other, cudf.core.column.DecimalColumn) and isinstance(
+            self, cudf.core.column.DecimalColumn
         ):
             other.dtype.precision = self.dtype.precision
 
@@ -1517,7 +1519,7 @@ def column_empty(
                 dtype="int32",
             ),
         )
-    elif dtype.kind in "OU":
+    elif dtype.kind in "OU" and not is_decimal_dtype(dtype):
         data = None
         children = (
             full(row_count + 1, 0, dtype="int32"),
@@ -1648,6 +1650,7 @@ def build_column(
         return cudf.core.column.DecimalColumn(
             data=data,
             size=size,
+            offset=offset,
             dtype=dtype,
             mask=mask,
             null_count=null_count,
@@ -1853,10 +1856,14 @@ def as_column(
                 cupy.asarray(arbitrary), nan_as_null=nan_as_null, dtype=dtype
             )
         else:
-            data = as_column(
-                pa.array(arbitrary, from_pandas=nan_as_null),
-                dtype=arbitrary.dtype,
-            )
+            pyarrow_array = pa.array(arbitrary, from_pandas=nan_as_null)
+            if isinstance(pyarrow_array.type, pa.Decimal128Type):
+                pyarrow_type = cudf.Decimal64Dtype.from_arrow(
+                    pyarrow_array.type
+                )
+            else:
+                pyarrow_type = arbitrary.dtype
+            data = as_column(pyarrow_array, dtype=pyarrow_type)
         if dtype is not None:
             data = data.astype(dtype)
 

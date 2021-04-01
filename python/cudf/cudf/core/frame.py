@@ -6,7 +6,7 @@ import copy
 import functools
 import warnings
 from collections import OrderedDict, abc as abc
-from typing import TYPE_CHECKING, Any, Dict, Tuple, TypeVar, Union, overload
+from typing import TYPE_CHECKING, Any, Dict, Optional, Tuple, TypeVar, Union
 
 import cupy
 import numpy as np
@@ -14,7 +14,6 @@ import pandas as pd
 import pyarrow as pa
 from nvtx import annotate
 from pandas.api.types import is_dict_like, is_dtype_equal
-from typing_extensions import Literal
 
 import cudf
 from cudf import _lib as libcudf
@@ -53,19 +52,9 @@ class Frame(libcudf.table.Table):
     def _from_table(cls, table: Frame):
         return cls(table._data, index=table._index)
 
-    @overload
-    def _mimic_inplace(self, result: Frame) -> Frame:
-        ...
-
-    @overload
-    def _mimic_inplace(self, result: Frame, inplace: Literal[True]):
-        ...
-
-    @overload
-    def _mimic_inplace(self, result: Frame, inplace: Literal[False]) -> Frame:
-        ...
-
-    def _mimic_inplace(self, result, inplace=False):
+    def _mimic_inplace(
+        self: T, result: Frame, inplace: bool = False
+    ) -> Optional[Frame]:
         if inplace:
             for col in self._data:
                 if col in result._data:
@@ -74,6 +63,7 @@ class Frame(libcudf.table.Table):
                     )
             self._data = result._data
             self._index = result._index
+            return None
         else:
             return result
 
@@ -796,87 +786,6 @@ class Frame(libcudf.table.Table):
 
         return self._mimic_inplace(output, inplace=inplace)
 
-    def _normalize_scalars(self, other):
-        """
-        Try to normalizes scalar values as per self dtype
-        """
-        if (
-            other is not None
-            and (isinstance(other, float) and not np.isnan(other))
-        ) and (self.dtype.type(other) != other):
-            raise TypeError(
-                f"Cannot safely cast non-equivalent "
-                f"{type(other).__name__} to {self.dtype.name}"
-            )
-
-        return (
-            self.dtype.type(other)
-            if (
-                other is not None
-                and (isinstance(other, float) and not np.isnan(other))
-            )
-            else other
-        )
-
-    def _normalize_columns_and_scalars_type(self, other):
-        """
-        Try to normalize the other's dtypes as per self.
-
-        Parameters
-        ----------
-
-        self : Can be a DataFrame or Series or Index
-        other : Can be a DataFrame, Series, Index, Array
-            like object or a scalar value
-
-            if self is DataFrame, other can be only a
-            scalar or array like with size of number of columns
-            in DataFrame or a DataFrame with same dimension
-
-            if self is Series, other can be only a scalar or
-            a series like with same length as self
-
-        Returns:
-        --------
-        A dataframe/series/list/scalar form of normalized other
-        """
-        if isinstance(self, cudf.DataFrame) and isinstance(
-            other, cudf.DataFrame
-        ):
-            return [
-                other[self_col].astype(self._data[self_col].dtype)._column
-                for self_col in self._data.names
-            ]
-
-        elif isinstance(self, (cudf.Series, cudf.Index)) and not is_scalar(
-            other
-        ):
-            other = as_column(other)
-            return other.astype(self.dtype)
-
-        else:
-            # Handles scalar or list/array like scalars
-            if isinstance(self, (cudf.Series, cudf.Index)) and is_scalar(
-                other
-            ):
-                return self._normalize_scalars(other)
-
-            elif isinstance(self, cudf.DataFrame):
-                out = []
-                if is_scalar(other):
-                    other = [other for i in range(len(self._data.names))]
-                out = [
-                    self[in_col_name]._normalize_scalars(sclr)
-                    for in_col_name, sclr in zip(self._data.names, other)
-                ]
-
-                return out
-            else:
-                raise ValueError(
-                    f"Inappropriate input {type(self)} "
-                    f"and other {type(other)} combination"
-                )
-
     def where(self, cond, other=None, inplace=False):
         """
         Replace values where the condition is False.
@@ -930,133 +839,9 @@ class Frame(libcudf.table.Table):
         dtype: int64
         """
 
-        if isinstance(self, cudf.DataFrame):
-            if hasattr(cond, "__cuda_array_interface__"):
-                cond = cudf.DataFrame(
-                    cond, columns=self._data.names, index=self.index
-                )
-            elif not isinstance(cond, cudf.DataFrame):
-                cond = self.from_pandas(pd.DataFrame(cond))
-
-            common_cols = set(self._data.names).intersection(
-                set(cond._data.names)
-            )
-            if len(common_cols) > 0:
-                # If `self` and `cond` are having unequal index,
-                # then re-index `cond`.
-                if not self.index.equals(cond.index):
-                    cond = cond.reindex(self.index)
-            else:
-                if cond.shape != self.shape:
-                    raise ValueError(
-                        """Array conditional must be same shape as self"""
-                    )
-                # Setting `self` column names to `cond`
-                # as `cond` has no column names.
-                cond.columns = self.columns
-
-            other = self._normalize_columns_and_scalars_type(other)
-            out_df = cudf.DataFrame(index=self.index)
-            if len(self._columns) != len(other):
-                raise ValueError(
-                    """Replacement list length or number of dataframe columns
-                    should be equal to Number of columns of dataframe"""
-                )
-
-            for column_name, other_column in zip(self._data.names, other):
-                input_col = self._data[column_name]
-                if column_name in cond._data:
-                    if isinstance(
-                        input_col, cudf.core.column.CategoricalColumn
-                    ):
-                        if np.isscalar(other_column):
-                            try:
-                                other_column = input_col._encode(other_column)
-                            except ValueError:
-                                # When other is not present in categories,
-                                # fill with Null.
-                                other_column = None
-                        elif hasattr(other_column, "codes"):
-                            other_column = other_column.codes
-                        input_col = input_col.codes
-
-                    result = libcudf.copying.copy_if_else(
-                        input_col, other_column, cond._data[column_name]
-                    )
-
-                    if isinstance(
-                        self._data[column_name],
-                        cudf.core.column.CategoricalColumn,
-                    ):
-                        result = build_categorical_column(
-                            categories=self._data[column_name].categories,
-                            codes=as_column(
-                                result.base_data, dtype=result.dtype
-                            ),
-                            mask=result.base_mask,
-                            size=result.size,
-                            offset=result.offset,
-                            ordered=self._data[column_name].ordered,
-                        )
-                else:
-                    from cudf._lib.null_mask import MaskState, create_null_mask
-
-                    out_mask = create_null_mask(
-                        len(input_col), state=MaskState.ALL_NULL
-                    )
-                    result = input_col.set_mask(out_mask)
-                out_df[column_name] = self[column_name].__class__(result)
-
-            return self._mimic_inplace(out_df, inplace=inplace)
-
-        else:
-
-            if isinstance(other, cudf.DataFrame):
-                raise NotImplementedError(
-                    "cannot align with a higher dimensional Frame"
-                )
-
-            other = self._normalize_columns_and_scalars_type(other)
-
-            cond = as_column(cond)
-            if len(cond) != len(self):
-                raise ValueError(
-                    """Array conditional must be same shape as self"""
-                )
-            input_col = self._data[self.name]
-            if isinstance(input_col, cudf.core.column.CategoricalColumn):
-                if np.isscalar(other):
-                    try:
-                        other = input_col._encode(other)
-                    except ValueError:
-                        # When other is not present in categories,
-                        # fill with Null.
-                        other = None
-                elif hasattr(other, "codes"):
-                    other = other.codes
-
-                input_col = input_col.codes
-
-            result = libcudf.copying.copy_if_else(input_col, other, cond)
-
-            if is_categorical_dtype(self.dtype):
-                result = build_categorical_column(
-                    categories=self._data[self.name].categories,
-                    codes=as_column(result.base_data, dtype=result.dtype),
-                    mask=result.base_mask,
-                    size=result.size,
-                    offset=result.offset,
-                    ordered=self._data[self.name].ordered,
-                )
-
-            if isinstance(self, cudf.Index):
-                from cudf.core.index import as_index
-
-                result = as_index(result, name=self.name)
-            else:
-                result = self._copy_construct(data=result)
-
-            return self._mimic_inplace(result, inplace=inplace)
+        return cudf.core._internals.where(
+            frame=self, cond=cond, other=other, inplace=inplace
+        )
 
     def mask(self, cond, other=None, inplace=False):
         """
@@ -2735,7 +2520,6 @@ class Frame(libcudf.table.Table):
         array([4, 4, 4, 0], dtype=int32)
         """
         # Call libcudf++ search_sorted primitive
-        from cudf.utils.dtypes import is_scalar
 
         scalar_flag = None
         if is_scalar(values):
