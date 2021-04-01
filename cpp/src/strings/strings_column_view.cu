@@ -85,7 +85,7 @@ std::pair<rmm::device_uvector<char>, rmm::device_uvector<size_type>> create_offs
   // bytes -= first;
   const char* d_chars = strings.chars().data<char>() + chars_offset;
   rmm::device_uvector<char> chars(bytes, stream);
-  CUDA_TRY(cudaMemcpyAsync(chars.data(), d_chars, bytes, cudaMemcpyDeviceToHost, stream.value()));
+  CUDA_TRY(cudaMemcpyAsync(chars.data(), d_chars, bytes, cudaMemcpyDefault, stream.value()));
   // return offsets and chars
   return std::make_pair(std::move(chars), std::move(offsets));
 }
