@@ -41,13 +41,14 @@ static void BM_extract(benchmark::State& state, int groups)
   std::vector<std::string> samples(100);  // 100 unique rows of data to reuse
   std::generate(samples.begin(), samples.end(), [&]() {
     std::string row;  // build a row of random tokens
-    while (static_cast<int>(row.size()) < n_length)
+    while (static_cast<int>(row.size()) < n_length) {
       row += std::to_string(words_dist(generator)) + " ";
+    }
     return row;
   });
 
   std::string pattern;
-  while (static_cast<int>(pattern.size()) < groups) pattern += "(\\d+) ";
+  while (static_cast<int>(pattern.size()) < groups) { pattern += "(\\d+) "; }
 
   std::uniform_int_distribution<int> distribution(0, samples.size() - 1);
   auto elements = cudf::detail::make_counting_transform_iterator(
