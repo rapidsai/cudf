@@ -112,11 +112,7 @@ cdef class GroupBy:
         cdef Column col
         cdef Aggregation agg_obj
 
-        # TODO: Is allowing users to provide empty aggregations something we do
-        # to support pandas semantics? Whereas we need to throw an error if
-        # some aggregations are requested when in fact none are possible?
         allow_empty = all(len(v) == 0 for v in aggregations.values())
-        empty_aggs = True
 
         included_aggregations = defaultdict(list)
         idx = 0
@@ -143,20 +139,19 @@ cdef class GroupBy:
             c_agg_requests.push_back(
                 move(libcudf_groupby.aggregation_request())
             )
-            c_agg_requests[idx].values = col.view()
             for agg in aggs:
                 agg_obj = make_aggregation(agg)
                 if valid_aggregations is None or agg_obj.kind in valid_aggregations:
-                    empty_aggs = False
                     included_aggregations[col_name].append(agg)
                     c_agg_requests[idx].aggregations.push_back(
                         move(agg_obj.c_obj)
                     )
-            if not c_agg_requests[idx].aggregations.size():
+            if c_agg_requests[idx].aggregations.empty():
                 c_agg_requests.pop_back()
             else:
+                c_agg_requests[idx].values = col.view()
                 idx += 1
-        if empty_aggs and not allow_empty:
+        if c_agg_requests.empty() and not allow_empty:
             raise DataError("No numeric types to aggregate")
 
         cdef pair[
@@ -188,6 +183,8 @@ cdef class GroupBy:
         )
 
         result_data = ColumnAccessor(multiindex=True)
+        # Note: This loop relies on the included_aggregations dict being
+        # insertion ordered to map results to requested aggregations by index.
         for i, col_name in enumerate(included_aggregations):
             for j, agg_name in enumerate(included_aggregations[col_name]):
                 if callable(agg_name):
@@ -196,5 +193,4 @@ cdef class GroupBy:
                     Column.from_unique_ptr(move(c_result.second[i].results[j]))
                 )
 
-        result = Table(data=result_data, index=grouped_keys)
-        return result
+        return Table(data=result_data, index=grouped_keys)

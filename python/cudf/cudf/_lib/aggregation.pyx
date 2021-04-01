@@ -273,7 +273,7 @@ cdef Aggregation make_aggregation(op, kwargs=None):
 
     Returns
     -------
-    unique_ptr[aggregation]
+    Aggregation
     """
     if kwargs is None:
         kwargs = {}
