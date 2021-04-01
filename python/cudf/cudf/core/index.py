@@ -39,7 +39,6 @@ from cudf.utils.dtypes import (
     is_scalar,
     numeric_normalize_types,
     is_interval_dtype,
-    find_common_type,
 )
 from cudf.utils.utils import cached_property, search_range
 
@@ -2764,12 +2763,7 @@ class CategoricalIndex(GenericIndex):
 
 
 def interval_range(
-    start = None,
-    end = None,
-    periods = None,
-    freq = None,
-    name: str = None,
-    closed: str = "right",
+    start=None, end=None, periods=None, freq=None, name=None, closed="right",
 ) -> "IntervalIndex":
     """
     Returns a fixed frequency IntervalIndex.
@@ -2828,18 +2822,14 @@ def interval_range(
             periods = int(periods)
             quotient, remainder = divmod((end - start), periods)
             if remainder:
-                freq_step = cudf.Scalar((end - start) / periods).device_value
+                freq_step = cudf.Scalar((end - start) / periods)
             else:
-                freq_step = cudf.Scalar(quotient).device_value
-            start = cudf.Scalar(start).device_value
-            periods = cudf.Scalar(periods)
-            overall_dtype = find_common_type(
-                [freq_step.dtype, start.dtype, periods.dtype]
-            )
-            if start.dtype != overall_dtype:
-                start = cudf.Scalar(
-                    start.value.astype(overall_dtype)
-                ).device_value
+                freq_step = cudf.Scalar(quotient)
+            start = cudf.Scalar(start)
+            if start.dtype != freq_step.dtype:
+                start = cudf.Scalar(start.value.astype(freq_step.dtype))
+            start = start.device_value
+            freq_step = freq_step.device_value
             bin_edges = sequence(size=periods + 1, init=start, step=freq_step,)
             left_col = bin_edges[:-1]
             right_col = bin_edges[1:]
