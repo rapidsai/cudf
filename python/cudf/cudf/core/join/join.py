@@ -237,50 +237,28 @@ class Merge(object):
         elif self.on:
             on_names = _coerce_to_tuple(self.on)
             for on in on_names:
-                # If `on` if provided, checks whether merging on
+                # If `on` is provided, checks whether merging on
                 # columns, indexes or merging  index with column
-                if (
-                    on in self.lhs._data.keys()
-                    and on not in self.rhs._data.keys()
-                ):
+                if on in self.lhs._data and on not in self.rhs._data:
                     # case1: merge on lhs column with rhs index
-                    if on in self.rhs.index.names:
-                        left_keys.extend([_Indexer(name=on, column=True)])
-                        right_keys.extend([_Indexer(name=on, index=True)])
+                    left_keys.append(_Indexer(name=on, column=True))
+                    right_keys.append(_Indexer(name=on, index=True))
 
-                elif (
-                    on not in self.lhs._data.keys()
-                    and on in self.rhs._data.keys()
-                ):
+                elif on not in self.lhs._data and on in self.rhs._data:
                     # case2: merge on rhs column with lhs index
-                    if on in self.lhs.index.names:
-                        left_keys.extend([_Indexer(name=on, index=True)])
-                        right_keys.extend([_Indexer(name=on, column=True)])
+                    left_keys.append(_Indexer(name=on, index=True))
+                    right_keys.append(_Indexer(name=on, column=True))
 
-                elif (
-                    on not in self.lhs._data.keys()
-                    and on not in self.rhs._data.keys()
-                ):
+                elif on not in self.lhs._data and on not in self.rhs._data:
                     # case3: merge on lhs index with rhs index
-                    if (
-                        on in self.lhs.index.names
-                        and on in self.rhs.index.names
-                    ):
-                        left_keys.extend([_Indexer(name=on, index=True)])
-                        right_keys.extend([_Indexer(name=on, index=True)])
-                    else:
-                        # if none of the cases, then invalid key "on"
-                        # not found in both frames
-                        raise KeyError(on)
+                    left_keys.append(_Indexer(name=on, index=True))
+                    right_keys.append(_Indexer(name=on, index=True))
 
                 else:
                     # case4: merge on lhs column with rhs column
-                    left_keys = [
-                        _Indexer(name=on, column=True) for on in on_names
-                    ]
-                    right_keys = [
-                        _Indexer(name=on, column=True) for on in on_names
-                    ]
+                    left_keys.append(_Indexer(name=on, column=True))
+                    right_keys.append(_Indexer(name=on, column=True))
+
         else:
             # if `on` not provided and not merging index with column or on
             # both indexes, then use intersection  of columns in both frames
@@ -427,12 +405,16 @@ class Merge(object):
         if how not in {"left", "inner", "outer", "leftanti", "leftsemi"}:
             raise NotImplementedError(f"{how} merge not supported yet")
 
-        # Passing 'on' with 'left_on' or 'right_on' is ambiguous
-        if on and (left_on or right_on):
-            raise ValueError(
-                'Can only pass argument "on" OR "left_on" '
-                'and "right_on", not a combination of both.'
-            )
+        if on:
+            if left_on or right_on:
+                # Passing 'on' with 'left_on' or 'right_on' is ambiguous
+                raise ValueError(
+                    'Can only pass argument "on" OR "left_on" '
+                    'and "right_on", not a combination of both.'
+                )
+            else:
+                # the validity of 'on' being checked by _Indexer
+                return
 
         # Can't merge on unnamed Series
         if (isinstance(lhs, cudf.Series) and not lhs.name) or (
