@@ -6,7 +6,7 @@ import copy
 import functools
 import warnings
 from collections import OrderedDict, abc as abc
-from typing import TYPE_CHECKING, Any, Dict, Tuple, TypeVar, Union, overload
+from typing import TYPE_CHECKING, Any, Dict, Optional, Tuple, TypeVar, Union
 
 import cupy
 import numpy as np
@@ -14,12 +14,12 @@ import pandas as pd
 import pyarrow as pa
 from nvtx import annotate
 from pandas.api.types import is_dict_like, is_dtype_equal
-from typing_extensions import Literal
 
 import cudf
 from cudf import _lib as libcudf
 from cudf._typing import ColumnLike, DataFrameOrSeries
 from cudf.core.column import as_column, build_categorical_column, column_empty
+from cudf.core.join import merge
 from cudf.utils.dtypes import (
     is_categorical_dtype,
     is_column_like,
@@ -52,19 +52,9 @@ class Frame(libcudf.table.Table):
     def _from_table(cls, table: Frame):
         return cls(table._data, index=table._index)
 
-    @overload
-    def _mimic_inplace(self, result: Frame) -> Frame:
-        ...
-
-    @overload
-    def _mimic_inplace(self, result: Frame, inplace: Literal[True]):
-        ...
-
-    @overload
-    def _mimic_inplace(self, result: Frame, inplace: Literal[False]) -> Frame:
-        ...
-
-    def _mimic_inplace(self, result, inplace=False):
+    def _mimic_inplace(
+        self: T, result: Frame, inplace: bool = False
+    ) -> Optional[Frame]:
         if inplace:
             for col in self._data:
                 if col in result._data:
@@ -73,6 +63,7 @@ class Frame(libcudf.table.Table):
                     )
             self._data = result._data
             self._index = result._index
+            return None
         else:
             return result
 
@@ -595,7 +586,7 @@ class Frame(libcudf.table.Table):
             res.index.names = self._index.names
         return res
 
-    def _get_columns_by_label(self, labels, downcast):
+    def _get_columns_by_label(self, labels, downcast=False):
         """
         Returns columns of the Frame specified by `labels`
 
@@ -612,15 +603,18 @@ class Frame(libcudf.table.Table):
             data, columns=data.to_pandas_index(), index=self.index
         )
 
-    def _gather(self, gather_map, keep_index=True):
+    def _gather(self, gather_map, keep_index=True, nullify=False):
         if not pd.api.types.is_integer_dtype(gather_map.dtype):
             gather_map = gather_map.astype("int32")
         result = self.__class__._from_table(
             libcudf.copying.gather(
-                self, as_column(gather_map), keep_index=keep_index
+                self,
+                as_column(gather_map),
+                keep_index=keep_index,
+                nullify=nullify,
             )
         )
-        result._copy_type_metadata(self)
+        result._copy_type_metadata(self, include_index=keep_index)
         if keep_index and self._index is not None:
             result._index.names = self._index.names
         return result
@@ -792,87 +786,6 @@ class Frame(libcudf.table.Table):
 
         return self._mimic_inplace(output, inplace=inplace)
 
-    def _normalize_scalars(self, other):
-        """
-        Try to normalizes scalar values as per self dtype
-        """
-        if (
-            other is not None
-            and (isinstance(other, float) and not np.isnan(other))
-        ) and (self.dtype.type(other) != other):
-            raise TypeError(
-                f"Cannot safely cast non-equivalent "
-                f"{type(other).__name__} to {self.dtype.name}"
-            )
-
-        return (
-            self.dtype.type(other)
-            if (
-                other is not None
-                and (isinstance(other, float) and not np.isnan(other))
-            )
-            else other
-        )
-
-    def _normalize_columns_and_scalars_type(self, other):
-        """
-        Try to normalize the other's dtypes as per self.
-
-        Parameters
-        ----------
-
-        self : Can be a DataFrame or Series or Index
-        other : Can be a DataFrame, Series, Index, Array
-            like object or a scalar value
-
-            if self is DataFrame, other can be only a
-            scalar or array like with size of number of columns
-            in DataFrame or a DataFrame with same dimension
-
-            if self is Series, other can be only a scalar or
-            a series like with same length as self
-
-        Returns:
-        --------
-        A dataframe/series/list/scalar form of normalized other
-        """
-        if isinstance(self, cudf.DataFrame) and isinstance(
-            other, cudf.DataFrame
-        ):
-            return [
-                other[self_col].astype(self._data[self_col].dtype)._column
-                for self_col in self._data.names
-            ]
-
-        elif isinstance(self, (cudf.Series, cudf.Index)) and not is_scalar(
-            other
-        ):
-            other = as_column(other)
-            return other.astype(self.dtype)
-
-        else:
-            # Handles scalar or list/array like scalars
-            if isinstance(self, (cudf.Series, cudf.Index)) and is_scalar(
-                other
-            ):
-                return self._normalize_scalars(other)
-
-            elif isinstance(self, cudf.DataFrame):
-                out = []
-                if is_scalar(other):
-                    other = [other for i in range(len(self._data.names))]
-                out = [
-                    self[in_col_name]._normalize_scalars(sclr)
-                    for in_col_name, sclr in zip(self._data.names, other)
-                ]
-
-                return out
-            else:
-                raise ValueError(
-                    f"Inappropriate input {type(self)} "
-                    f"and other {type(other)} combination"
-                )
-
     def where(self, cond, other=None, inplace=False):
         """
         Replace values where the condition is False.
@@ -926,133 +839,9 @@ class Frame(libcudf.table.Table):
         dtype: int64
         """
 
-        if isinstance(self, cudf.DataFrame):
-            if hasattr(cond, "__cuda_array_interface__"):
-                cond = cudf.DataFrame(
-                    cond, columns=self._data.names, index=self.index
-                )
-            elif not isinstance(cond, cudf.DataFrame):
-                cond = self.from_pandas(pd.DataFrame(cond))
-
-            common_cols = set(self._data.names).intersection(
-                set(cond._data.names)
-            )
-            if len(common_cols) > 0:
-                # If `self` and `cond` are having unequal index,
-                # then re-index `cond`.
-                if not self.index.equals(cond.index):
-                    cond = cond.reindex(self.index)
-            else:
-                if cond.shape != self.shape:
-                    raise ValueError(
-                        """Array conditional must be same shape as self"""
-                    )
-                # Setting `self` column names to `cond`
-                # as `cond` has no column names.
-                cond.columns = self.columns
-
-            other = self._normalize_columns_and_scalars_type(other)
-            out_df = cudf.DataFrame(index=self.index)
-            if len(self._columns) != len(other):
-                raise ValueError(
-                    """Replacement list length or number of dataframe columns
-                    should be equal to Number of columns of dataframe"""
-                )
-
-            for column_name, other_column in zip(self._data.names, other):
-                input_col = self._data[column_name]
-                if column_name in cond._data:
-                    if isinstance(
-                        input_col, cudf.core.column.CategoricalColumn
-                    ):
-                        if np.isscalar(other_column):
-                            try:
-                                other_column = input_col._encode(other_column)
-                            except ValueError:
-                                # When other is not present in categories,
-                                # fill with Null.
-                                other_column = None
-                        elif hasattr(other_column, "codes"):
-                            other_column = other_column.codes
-                        input_col = input_col.codes
-
-                    result = libcudf.copying.copy_if_else(
-                        input_col, other_column, cond._data[column_name]
-                    )
-
-                    if isinstance(
-                        self._data[column_name],
-                        cudf.core.column.CategoricalColumn,
-                    ):
-                        result = build_categorical_column(
-                            categories=self._data[column_name].categories,
-                            codes=as_column(
-                                result.base_data, dtype=result.dtype
-                            ),
-                            mask=result.base_mask,
-                            size=result.size,
-                            offset=result.offset,
-                            ordered=self._data[column_name].ordered,
-                        )
-                else:
-                    from cudf._lib.null_mask import MaskState, create_null_mask
-
-                    out_mask = create_null_mask(
-                        len(input_col), state=MaskState.ALL_NULL
-                    )
-                    result = input_col.set_mask(out_mask)
-                out_df[column_name] = self[column_name].__class__(result)
-
-            return self._mimic_inplace(out_df, inplace=inplace)
-
-        else:
-
-            if isinstance(other, cudf.DataFrame):
-                raise NotImplementedError(
-                    "cannot align with a higher dimensional Frame"
-                )
-
-            other = self._normalize_columns_and_scalars_type(other)
-
-            cond = as_column(cond)
-            if len(cond) != len(self):
-                raise ValueError(
-                    """Array conditional must be same shape as self"""
-                )
-            input_col = self._data[self.name]
-            if isinstance(input_col, cudf.core.column.CategoricalColumn):
-                if np.isscalar(other):
-                    try:
-                        other = input_col._encode(other)
-                    except ValueError:
-                        # When other is not present in categories,
-                        # fill with Null.
-                        other = None
-                elif hasattr(other, "codes"):
-                    other = other.codes
-
-                input_col = input_col.codes
-
-            result = libcudf.copying.copy_if_else(input_col, other, cond)
-
-            if is_categorical_dtype(self.dtype):
-                result = build_categorical_column(
-                    categories=self._data[self.name].categories,
-                    codes=as_column(result.base_data, dtype=result.dtype),
-                    mask=result.base_mask,
-                    size=result.size,
-                    offset=result.offset,
-                    ordered=self._data[self.name].ordered,
-                )
-
-            if isinstance(self, cudf.Index):
-                from cudf.core.index import as_index
-
-                result = as_index(result, name=self.name)
-            else:
-                result = self._copy_construct(data=result)
-
-            return self._mimic_inplace(result, inplace=inplace)
+        return cudf.core._internals.where(
+            frame=self, cond=cond, other=other, inplace=inplace
+        )
 
     def mask(self, cond, other=None, inplace=False):
         """
@@ -2731,7 +2520,6 @@ class Frame(libcudf.table.Table):
         array([4, 4, 4, 0], dtype=int32)
         """
         # Call libcudf++ search_sorted primitive
-        from cudf.utils.dtypes import is_scalar
 
         scalar_flag = None
         if is_scalar(values):
@@ -2754,12 +2542,15 @@ class Frame(libcudf.table.Table):
         else:
             return result
 
-    def _get_sorted_inds(self, ascending=True, na_position="last"):
+    def _get_sorted_inds(self, by=None, ascending=True, na_position="last"):
         """
         Sort by the values.
 
         Parameters
         ----------
+        by: list, optional
+            Labels specifying columns to sort by. By default,
+            sort by all columns of `self`
         ascending : bool or list of bool, default True
             If True, sort values in ascending order, otherwise descending.
         na_position : {‘first’ or ‘last’}, default ‘last’
@@ -2794,11 +2585,17 @@ class Frame(libcudf.table.Table):
             )
             na_position = 0
 
+        to_sort = (
+            self
+            if by is None
+            else self._get_columns_by_label(by, downcast=False)
+        )
+
         # If given a scalar need to construct a sequence of length # of columns
         if np.isscalar(ascending):
-            ascending = [ascending] * self._num_columns
+            ascending = [ascending] * to_sort._num_columns
 
-        return libcudf.sort.order_by(self, ascending, na_position)
+        return libcudf.sort.order_by(to_sort, ascending, na_position)
 
     def sin(self):
         """
@@ -3329,77 +3126,6 @@ class Frame(libcudf.table.Table):
         """
         return self._unaryop("sqrt")
 
-    @staticmethod
-    def _validate_merge_cfg(
-        lhs,
-        rhs,
-        left_on,
-        right_on,
-        on,
-        how,
-        left_index=False,
-        right_index=False,
-        lsuffix=None,
-        rsuffix=None,
-    ):
-        """
-        Error for various combinations of merge input parameters
-        """
-        len_left_on = len(left_on) if left_on is not None else 0
-        len_right_on = len(right_on) if right_on is not None else 0
-
-        # must actually support the requested merge type
-        if how not in ["left", "inner", "outer", "leftanti", "leftsemi"]:
-            raise NotImplementedError(f"{how} merge not supported yet")
-
-        # Passing 'on' with 'left_on' or 'right_on' is potentially ambiguous
-        if on:
-            if left_on or right_on:
-                raise ValueError(
-                    'Can only pass argument "on" OR "left_on" '
-                    'and "right_on", not a combination of both.'
-                )
-
-        # Require same total number of columns to join on in both operands
-        if not (len_left_on + left_index * len(lhs.index.names)) == (
-            len_right_on + right_index * len(rhs.index.names)
-        ):
-            raise ValueError(
-                "Merge operands must have same number of join key columns"
-            )
-
-        # If nothing specified, must have common cols to use implicitly
-        same_named_columns = set(lhs._data.keys()) & set(rhs._data.keys())
-        if not (left_index or right_index):
-            if not (left_on or right_on):
-                if len(same_named_columns) == 0:
-                    raise ValueError("No common columns to perform merge on")
-
-        for name in same_named_columns:
-            if not (
-                name in left_on
-                and name in right_on
-                and (left_on.index(name) == right_on.index(name))
-            ):
-                if not (lsuffix or rsuffix):
-                    raise ValueError(
-                        "there are overlapping columns but "
-                        "lsuffix and rsuffix are not defined"
-                    )
-
-        if on:
-            on_keys = [on] if not isinstance(on, list) else on
-            for key in on_keys:
-                if not (key in lhs._data.keys() and key in rhs._data.keys()):
-                    raise KeyError(f"Key {on} not in both operands")
-        else:
-            for key in left_on:
-                if key not in lhs._data.keys():
-                    raise KeyError(f'Key "{key}" not in left operand')
-            for key in right_on:
-                if key not in rhs._data.keys():
-                    raise KeyError(f'Key "{key}" not in right operand')
-
     def _merge(
         self,
         right,
@@ -3410,84 +3136,33 @@ class Frame(libcudf.table.Table):
         right_index=False,
         how="inner",
         sort=False,
-        lsuffix=None,
-        rsuffix=None,
         method="hash",
         indicator=False,
         suffixes=("_x", "_y"),
     ):
-        # Merge doesn't support right, so just swap
+        lhs, rhs = self, right
         if how == "right":
-            return right._merge(
-                self,
-                on=on,
-                left_on=right_on,
-                right_on=left_on,
-                left_index=right_index,
-                right_index=left_index,
-                how="left",
-                sort=sort,
-                lsuffix=rsuffix,
-                rsuffix=lsuffix,
-                method=method,
-                indicator=indicator,
-                suffixes=suffixes,
-            )
+            # Merge doesn't support right, so just swap
+            how = "left"
+            lhs, rhs = right, self
+            left_on, right_on = right_on, left_on
+            left_index, right_index = right_index, left_index
+            suffixes = (suffixes[1], suffixes[0])
 
-        lhs = self
-        rhs = right
-
-        from cudf.core.join import Merge
-
-        mergeop = Merge(
+        return merge(
             lhs,
             rhs,
-            on,
-            left_on,
-            right_on,
-            left_index,
-            right_index,
-            how,
-            sort,
-            lsuffix,
-            rsuffix,
-            method,
-            indicator,
-            suffixes,
+            on=on,
+            left_on=left_on,
+            right_on=right_on,
+            left_index=left_index,
+            right_index=right_index,
+            how=how,
+            sort=sort,
+            method=method,
+            indicator=indicator,
+            suffixes=suffixes,
         )
-        to_return = mergeop.perform_merge()
-
-        # If sort=True, Pandas would sort on the key columns in the
-        # same order as given in 'on'. If the indices are used as
-        # keys, the index will be sorted. If one index is specified,
-        # the key column on the other side will be used to sort.
-        # If no index is specified, return a new RangeIndex
-        if sort:
-            to_sort = cudf.DataFrame()
-            if left_index and right_index:
-                by = list(to_return._index._data.columns)
-                if left_on and right_on:
-                    by.extend(to_return[mergeop.left_on]._data.columns)
-            elif left_index:
-                by = list(to_return[mergeop.right_on]._data.columns)
-            elif right_index:
-                by = list(to_return[mergeop.left_on]._data.columns)
-            else:
-                # left_on == right_on, or different names but same columns
-                # in both cases we can sort by either
-                by = [to_return._data[name] for name in mergeop.left_on]
-            for i, col in enumerate(by):
-                to_sort[i] = col
-            inds = to_sort.argsort()
-            if isinstance(to_return, cudf.Index):
-                to_return = to_return.take(inds)
-            else:
-                to_return = to_return.take(
-                    inds, keep_index=(left_index or right_index)
-                )
-            return to_return
-        else:
-            return to_return
 
     def _is_sorted(self, ascending=None, null_position=None):
         """

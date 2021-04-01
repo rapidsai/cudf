@@ -8216,9 +8216,6 @@ def test_agg_for_dataframe_with_string_columns(aggs):
     "overwrite", [True, False],
 )
 @pytest.mark.parametrize(
-    "filter_func", [None],
-)
-@pytest.mark.parametrize(
     "errors", ["ignore"],
 )
 @pytest.mark.parametrize(
@@ -8262,19 +8259,17 @@ def test_agg_for_dataframe_with_string_columns(aggs):
         },
     ],
 )
-def test_update_for_dataframes(
-    data, data2, join, overwrite, filter_func, errors
-):
+def test_update_for_dataframes(data, data2, join, overwrite, errors):
     pdf = pd.DataFrame(data)
     gdf = cudf.DataFrame(data)
 
     other_pd = pd.DataFrame(data2)
     other_gd = cudf.DataFrame(data2)
 
-    expect = pdf.update(other_pd, join, overwrite, filter_func, errors)
-    got = gdf.update(other_gd, join, overwrite, filter_func, errors)
+    pdf.update(other=other_pd, join=join, overwrite=overwrite, errors=errors)
+    gdf.update(other=other_gd, join=join, overwrite=overwrite, errors=errors)
 
-    assert_eq(expect, got)
+    assert_eq(pdf, gdf, check_dtype=False)
 
 
 @pytest.mark.parametrize(

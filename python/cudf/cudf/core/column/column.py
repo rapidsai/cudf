@@ -426,6 +426,8 @@ class ColumnBase(Column, Serializable):
             array.type, pd.core.arrays._arrow_utils.ArrowIntervalType
         ):
             return cudf.core.column.IntervalColumn.from_arrow(array)
+        elif isinstance(array.type, pa.Decimal128Type):
+            return cudf.core.column.DecimalColumn.from_arrow(array)
 
         return libcudf.interop.from_arrow(data, data.column_names)._data[
             "None"
@@ -827,7 +829,12 @@ class ColumnBase(Column, Serializable):
     def median(self, skipna: bool = None) -> ScalarLike:
         raise TypeError(f"cannot perform median with type {self.dtype}")
 
-    def take(self: T, indices: ColumnBase, keep_index: bool = True) -> T:
+    def take(
+        self: T,
+        indices: ColumnBase,
+        keep_index: bool = True,
+        nullify: bool = False,
+    ) -> T:
         """Return Column by taking values from the corresponding *indices*.
         """
         # Handle zero size
@@ -836,7 +843,7 @@ class ColumnBase(Column, Serializable):
         try:
             return (
                 self.as_frame()
-                ._gather(indices, keep_index=keep_index)
+                ._gather(indices, keep_index=keep_index, nullify=nullify)
                 ._as_column()
             )
         except RuntimeError as e:
@@ -1004,7 +1011,9 @@ class ColumnBase(Column, Serializable):
         ascending: bool = True,
         na_position: builtins.str = "last",
     ) -> Tuple[ColumnBase, "cudf.core.column.NumericalColumn"]:
-        col_inds = self.as_frame()._get_sorted_inds(ascending, na_position)
+        col_inds = self.as_frame()._get_sorted_inds(
+            ascending=ascending, na_position=na_position
+        )
         col_keys = self.take(col_inds)
         return col_keys, col_inds
 
@@ -1015,6 +1024,9 @@ class ColumnBase(Column, Serializable):
             msg = "non sort based distinct_count() not implemented yet"
             raise NotImplementedError(msg)
         return cpp_distinct_count(self, ignore_nulls=dropna)
+
+    def can_cast_safely(self, to_dtype: Dtype) -> bool:
+        raise NotImplementedError()
 
     def astype(self, dtype: Dtype, **kwargs) -> ColumnBase:
         if is_numerical_dtype(dtype):
@@ -1836,10 +1848,14 @@ def as_column(
                 cupy.asarray(arbitrary), nan_as_null=nan_as_null, dtype=dtype
             )
         else:
-            data = as_column(
-                pa.array(arbitrary, from_pandas=nan_as_null),
-                dtype=arbitrary.dtype,
-            )
+            pyarrow_array = pa.array(arbitrary, from_pandas=nan_as_null)
+            if isinstance(pyarrow_array.type, pa.Decimal128Type):
+                pyarrow_type = cudf.Decimal64Dtype.from_arrow(
+                    pyarrow_array.type
+                )
+            else:
+                pyarrow_type = arbitrary.dtype
+            data = as_column(pyarrow_array, dtype=pyarrow_type)
         if dtype is not None:
             data = data.astype(dtype)
 
