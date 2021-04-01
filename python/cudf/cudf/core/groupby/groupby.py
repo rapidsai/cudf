@@ -638,48 +638,6 @@ class GroupBy(Serializable):
         return self.agg("unique")
 
 
-# Set of valid groupby aggregations that are monkey-patched into the GroupBy
-# namespace.
-_VALID_GROUPBY_AGGS = {
-    "count",
-    "sum",
-    "idxmin",
-    "idxmax",
-    "min",
-    "max",
-    "mean",
-    "var",
-    "std",
-    "quantile",
-    "median",
-    "nunique",
-    "collect",
-    "unique",
-}
-
-
-# Dynamically bind the different aggregation methods.
-def _agg_func_name_with_args(self, func_name, *args, **kwargs):
-    """
-    Aggregate given an aggregate function name and arguments to the
-    function, e.g., `_agg_func_name_with_args("quantile", 0.5)`. The named
-    aggregations must be members of _AggregationFactory.
-    """
-
-    def func(x):
-        """Compute the {} of the group.""".format(func_name)
-        return getattr(x, func_name)(*args, **kwargs)
-
-    func.__name__ = func_name
-    return self.agg(func)
-
-
-for key in _VALID_GROUPBY_AGGS:
-    setattr(
-        GroupBy, key, functools.partialmethod(_agg_func_name_with_args, key)
-    )
-
-
 class DataFrameGroupBy(GroupBy):
     def __init__(
         self, obj, by=None, level=None, sort=False, as_index=True, dropna=True
