@@ -14,11 +14,11 @@
  * limitations under the License.
  */
 
-#include <cudf/types.hpp>
-#include <cudf/utilities/bit.hpp>
+#include <rolling/jit/operation.hpp>
 #include <rolling/rolling_jit_detail.hpp>
 
-#include <rolling/jit/operation.hpp>
+#include <cudf/types.hpp>
+#include <cudf/utilities/bit.hpp>
 
 namespace cudf {
 namespace rolling {
