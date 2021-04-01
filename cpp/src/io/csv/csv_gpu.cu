@@ -196,7 +196,7 @@ __global__ void __launch_bounds__(csvparse_block_dim)
       } else if (serialized_trie_contains(opts.trie_true, {field_start, field_len}) ||
                  serialized_trie_contains(opts.trie_false, {field_start, field_len})) {
         atomicAdd(&d_columnData[actual_col].bool_count, 1);
-      } else if (cudf::io::gpu::is_infinity(field_start, next_delimiter)) {
+      } else if (cudf::io::is_infinity(field_start, next_delimiter)) {
         atomicAdd(&d_columnData[actual_col].float_count, 1);
       } else {
         long countNumber   = 0;
@@ -277,7 +277,7 @@ __inline__ __device__ T decode_value(char const *begin,
                                      char const *end,
                                      parse_options_view const &opts)
 {
-  return cudf::io::gpu::parse_numeric<T, base>(begin, end, opts);
+  return cudf::io::parse_numeric<T, base>(begin, end, opts);
 }
 
 template <typename T>
@@ -285,7 +285,7 @@ __inline__ __device__ T decode_value(char const *begin,
                                      char const *end,
                                      parse_options_view const &opts)
 {
-  return cudf::io::gpu::parse_numeric<T>(begin, end, opts);
+  return cudf::io::parse_numeric<T>(begin, end, opts);
 }
 
 template <>

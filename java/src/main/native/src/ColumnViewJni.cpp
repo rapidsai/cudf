@@ -54,6 +54,7 @@
 #include <cudf/strings/split/split.hpp>
 #include <cudf/strings/strip.hpp>
 #include <cudf/strings/substring.hpp>
+#include <cudf/strings/json.hpp>
 #include <cudf/transform.hpp>
 #include <cudf/unary.hpp>
 #include <cudf/utilities/bit.hpp>
@@ -65,6 +66,8 @@
 
 #include "cudf_jni_apis.hpp"
 #include "dtype_utils.hpp"
+#include "jni.h"
+#include "jni_utils.hpp"
 
 namespace {
 
@@ -1834,5 +1837,25 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_copyColumnViewToCV(JNIEnv
     return reinterpret_cast<jlong>(ret.release());
   }
   CATCH_STD(env, 0)
+}
+
+JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_getJSONObject(JNIEnv *env, jclass, 
+                                                                     jlong j_view_handle, jlong j_scalar_handle) {
+
+   JNI_NULL_CHECK(env, j_view_handle, "view cannot be null", 0);
+   JNI_NULL_CHECK(env, j_scalar_handle, "path cannot be null", 0);
+
+  try {
+    cudf::jni::auto_set_device(env);
+    cudf::column_view* n_column_view = reinterpret_cast<cudf::column_view*>(j_view_handle);
+    cudf::strings_column_view n_strings_col_view(*n_column_view);
+    cudf::string_scalar *n_scalar_path = reinterpret_cast<cudf::string_scalar *>(j_scalar_handle);
+
+    auto result = cudf::strings::get_json_object(n_strings_col_view, *n_scalar_path);
+
+    return reinterpret_cast<jlong>(result.release());
+  }
+  CATCH_STD(env, 0)
+
 }
 } // extern "C"
