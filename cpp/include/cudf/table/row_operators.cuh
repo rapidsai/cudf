@@ -468,16 +468,17 @@ class row_hasher {
 
   __device__ auto operator()(size_type row_index) const
   {
-    auto hash_combiner = [=](hash_value_type lhs, hash_value_type rhs) {
+    auto hash_combiner = [](hash_value_type lhs, hash_value_type rhs) {
       return hash_function<hash_value_type>{}.hash_combine(lhs, rhs);
     };
 
     // Hash the first column w/ the seed
     auto const initial_hash =
-      type_dispatcher(_table.column(0).type(),
-                      element_hasher_with_seed<hash_function, has_nulls>{_seed},
-                      _table.column(0),
-                      row_index);
+      hash_combiner(hash_value_type{0},
+                    type_dispatcher(_table.column(0).type(),
+                                    element_hasher_with_seed<hash_function, has_nulls>{_seed},
+                                    _table.column(0),
+                                    row_index));
 
     // Hashes an element in a column
     auto hasher = [=](size_type column_index) {
