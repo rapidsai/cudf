@@ -17,6 +17,8 @@
  * limitations under the License.
  */
 
+#include <cudf/types.hpp>
+
 #include <binaryop/jit/operation-udf.hpp>
 #include <binaryop/jit/traits.hpp>
 
