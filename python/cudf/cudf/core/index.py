@@ -2821,6 +2821,8 @@ def interval_range(
     ):
         raise NotImplementedError("Non-numeric values not yet supported")
     elif periods and not freq:
+        if periods is not int:
+            periods = int(periods)
         # if statement for mypy to pass
         if end is not None and start is not None:
             # determine if periods are float or integer
