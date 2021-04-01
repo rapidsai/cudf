@@ -3,6 +3,7 @@
 from collections import defaultdict
 
 import numpy as np
+import rmm
 
 from libcpp.pair cimport pair
 from libcpp.memory cimport unique_ptr
@@ -20,25 +21,9 @@ cimport cudf._lib.cpp.groupby as libcudf_groupby
 cimport cudf._lib.cpp.aggregation as libcudf_aggregation
 
 
-_GROUPBY_AGGS = {
-    "count",
-    "size",
-    "sum",
-    "idxmin",
-    "idxmax",
-    "min",
-    "max",
-    "mean",
-    "var",
-    "std",
-    "quantile",
-    "median",
-    "nunique",
-    "nth",
-    "collect",
-    "unique",
-}
-
+# The sets below define the possible aggregations that can be performed on
+# different dtypes. The uppercased versions of these strings correspond to
+# elements of the AggregationKind enum.
 _CATEGORICAL_AGGS = {
     "count",
     "size",
@@ -59,6 +44,24 @@ _STRING_AGGS = {
 
 _LIST_AGGS = {
     "collect",
+}
+
+_STRUCT_AGGS = {
+}
+
+_INTERVAL_AGGS = {
+}
+
+_DECIMAL_AGGS = {
+    "count",
+    "sum",
+    "argmin",
+    "argmax",
+    "min",
+    "max",
+    "nunique",
+    "nth",
+    "collect"
 }
 
 
@@ -197,7 +200,10 @@ def _drop_unsupported_aggs(Table values, aggs):
     from cudf.utils.dtypes import (
         is_categorical_dtype,
         is_string_dtype,
-        is_list_dtype
+        is_list_dtype,
+        is_interval_dtype,
+        is_struct_dtype,
+        is_decimal_dtype,
     )
     result = aggs.copy()
 
@@ -219,6 +225,29 @@ def _drop_unsupported_aggs(Table values, aggs):
         ):
             for i, agg_name in enumerate(aggs[col_name]):
                 if Aggregation(agg_name).kind not in _CATEGORICAL_AGGS:
+                    del result[col_name][i]
+        elif (
+                is_struct_dtype(values._data[col_name].dtype)
+        ):
+            for i, agg_name in enumerate(aggs[col_name]):
+                if Aggregation(agg_name).kind not in _STRUCT_AGGS:
+                    del result[col_name][i]
+        elif (
+                is_interval_dtype(values._data[col_name].dtype)
+        ):
+            for i, agg_name in enumerate(aggs[col_name]):
+                if Aggregation(agg_name).kind not in _INTERVAL_AGGS:
+                    del result[col_name][i]
+        elif (
+                is_decimal_dtype(values._data[col_name].dtype)
+        ):
+            if rmm._cuda.gpu.runtimeGetVersion() < 11000:
+                raise RuntimeError(
+                    "Decimal aggregations are only supported on CUDA >= 11 "
+                    "due to an nvcc compiler bug."
+                )
+            for i, agg_name in enumerate(aggs[col_name]):
+                if Aggregation(agg_name).kind not in _DECIMAL_AGGS:
                     del result[col_name][i]
 
     if all(len(v) == 0 for v in result.values()):
