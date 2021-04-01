@@ -19,12 +19,13 @@ Here are some guidelines to help the review process go smoothly.
    noted here: https://help.github.com/articles/closing-issues-using-keywords/
 
 5. If your pull request is not ready for review but you want to make use of the
-   continuous integration testing facilities please [mark your pull request as 
-   Draft](https://docs.github.com/en/github/collaborating-with-issues-and-pull-requests/changing-the-stage-of-a-pull-request#converting-a-pull-request-to-a-draft).
+   continuous integration testing facilities please mark your pull request as Draft.
+   https://docs.github.com/en/github/collaborating-with-issues-and-pull-requests/changing-the-stage-of-a-pull-request#converting-a-pull-request-to-a-draft
 
 6. If your pull request is ready to be reviewed without requiring additional
-   work on top of it, then remove it from "Draft" and [make it "Ready for 
-   Review"](https://docs.github.com/en/github/collaborating-with-issues-and-pull-requests/changing-the-stage-of-a-pull-request#marking-a-pull-request-as-ready-for-review).
+   work on top of it, then remove it from "Draft" and make it "Ready for Review".
+   https://docs.github.com/en/github/collaborating-with-issues-and-pull-requests/changing-the-stage-of-a-pull-request#marking-a-pull-request-as-ready-for-review
+
    If assistance is required to complete the functionality, for example when the
    C/C++ code of a feature is complete but Python bindings are still required,
    then add the label `help wanted` so that others can triage and assist.
