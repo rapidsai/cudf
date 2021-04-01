@@ -22,6 +22,8 @@ from cudf.utils.utils import pa_mask_buffer_to_mask
 
 
 class DecimalColumn(ColumnBase):
+    dtype: Decimal64Dtype
+
     @classmethod
     def from_arrow(cls, data: pa.Array):
         dtype = Decimal64Dtype.from_arrow(data.type)
@@ -112,7 +114,8 @@ class DecimalColumn(ColumnBase):
             raise TypeError(f"cannot normalize {type(other)}")
 
     def _apply_scan_op(self, op: str) -> ColumnBase:
-        return libcudf.reduce.scan(op, self, True)
+        result = libcudf.reduce.scan(op, self, True)
+        return self._copy_type_metadata(result)
 
     def as_decimal_column(
         self, dtype: Dtype, **kwargs
