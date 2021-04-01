@@ -448,6 +448,7 @@ std::pair<std::unique_ptr<table>, std::vector<size_type>> hash_partition_table(
   table_view const& input,
   table_view const& table_to_hash,
   size_type num_partitions,
+  uint32_t seed,
   rmm::cuda_stream_view stream,
   rmm::mr::device_memory_resource* mr)
 {
@@ -481,7 +482,7 @@ std::pair<std::unique_ptr<table>, std::vector<size_type>> hash_partition_table(
   auto row_partition_offset = rmm::device_vector<size_type>(num_rows);
 
   auto const device_input = table_device_view::create(table_to_hash, stream);
-  auto const hasher       = row_hasher<hash_function, hash_has_nulls>(*device_input);
+  auto const hasher       = row_hasher<hash_function, hash_has_nulls>(*device_input, seed);
 
   // If the number of partitions is a power of two, we can compute the partition
   // number of each row more efficiently with bitwise operations
@@ -725,6 +726,7 @@ std::pair<std::unique_ptr<table>, std::vector<size_type>> hash_partition(
   table_view const& input,
   std::vector<size_type> const& columns_to_hash,
   int num_partitions,
+  uint32_t seed,
   rmm::cuda_stream_view stream,
   rmm::mr::device_memory_resource* mr)
 {
@@ -737,10 +739,10 @@ std::pair<std::unique_ptr<table>, std::vector<size_type>> hash_partition(
 
   if (has_nulls(table_to_hash)) {
     return hash_partition_table<hash_function, true>(
-      input, table_to_hash, num_partitions, stream, mr);
+      input, table_to_hash, num_partitions, seed, stream, mr);
   } else {
     return hash_partition_table<hash_function, false>(
-      input, table_to_hash, num_partitions, stream, mr);
+      input, table_to_hash, num_partitions, seed, stream, mr);
   }
 }
 }  // namespace local
@@ -771,6 +773,7 @@ std::pair<std::unique_ptr<table>, std::vector<size_type>> hash_partition(
   std::vector<size_type> const& columns_to_hash,
   int num_partitions,
   hash_id hash_function,
+  uint32_t seed,
   rmm::cuda_stream_view stream,
   rmm::mr::device_memory_resource* mr)
 {
@@ -783,10 +786,10 @@ std::pair<std::unique_ptr<table>, std::vector<size_type>> hash_partition(
           CUDF_FAIL("IdentityHash does not support this data type");
       }
       return detail::local::hash_partition<IdentityHash>(
-        input, columns_to_hash, num_partitions, stream, mr);
+        input, columns_to_hash, num_partitions, seed, stream, mr);
     case (hash_id::HASH_MURMUR3):
       return detail::local::hash_partition<MurmurHash3_32>(
-        input, columns_to_hash, num_partitions, stream, mr);
+        input, columns_to_hash, num_partitions, seed, stream, mr);
     default: CUDF_FAIL("Unsupported hash function in hash_partition");
   }
 }
