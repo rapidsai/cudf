@@ -8,6 +8,7 @@ import pandas as pd
 import pytest
 from numba import cuda
 from numpy.testing import assert_array_equal
+from decimal import Decimal
 
 import cudf
 from cudf.core import DataFrame, Series
@@ -19,6 +20,8 @@ from cudf.tests.utils import (
     assert_eq,
     assert_exceptions_equal,
 )
+
+import rmm
 
 _now = np.datetime64("now")
 _tomorrow = _now + np.timedelta64(1, "D")
@@ -146,26 +149,6 @@ def test_groupby_agg_min_max_dictlist(nelem):
         .agg({"a": ["min", "max"], "b": ["min", "max"]})
     )
     assert_eq(got_df, expect_df)
-
-
-@pytest.mark.parametrize("nelem", [2, 3, 100, 1000])
-@pytest.mark.parametrize(
-    "func", ["mean", "min", "max", "idxmin", "idxmax", "count", "sum"]
-)
-def test_groupby_2keys_agg(nelem, func):
-    # gdf (Note: lack of multiIndex)
-    expect_df = (
-        make_frame(pd.DataFrame, nelem=nelem)
-        .groupby(["x", "y"], sort=True)
-        .agg(func)
-    )
-    got_df = (
-        make_frame(DataFrame, nelem=nelem)
-        .groupby(["x", "y"], sort=True)
-        .agg(func)
-    )
-    check_dtype = False if func in _index_type_aggs else True
-    assert_eq(got_df, expect_df, check_dtype=check_dtype)
 
 
 @pytest.mark.parametrize("as_index", [True, False])
@@ -331,26 +314,88 @@ def test_groupby_apply_grouped():
     assert_eq(expect, got)
 
 
-@pytest.mark.parametrize("nelem", [100, 500])
+@pytest.mark.parametrize("nelem", [2, 3, 100, 500, 1000])
 @pytest.mark.parametrize(
     "func",
     ["mean", "std", "var", "min", "max", "idxmin", "idxmax", "count", "sum"],
 )
-def test_groupby_cudf_2keys_agg(nelem, func):
+def test_groupby_2keys_agg(nelem, func):
+    # gdf (Note: lack of multiIndex)
+    expect_df = (
+        make_frame(pd.DataFrame, nelem=nelem)
+        .groupby(["x", "y"], sort=True)
+        .agg(func)
+    )
     got_df = (
         make_frame(DataFrame, nelem=nelem)
         .groupby(["x", "y"], sort=True)
         .agg(func)
     )
 
-    # pandas
-    expect_df = (
-        make_frame(pd.DataFrame, nelem=nelem)
-        .groupby(["x", "y"], sort=True)
-        .agg(func)
-    )
     check_dtype = False if func in _index_type_aggs else True
     assert_eq(got_df, expect_df, check_dtype=check_dtype)
+
+
+@pytest.mark.parametrize("num_groups", [2, 3, 10, 50, 100])
+@pytest.mark.parametrize("nelem_per_group", [1, 10, 100])
+@pytest.mark.parametrize(
+    "func",
+    ["min", "max", "count", "sum"],
+    # TODO: Replace the above line with the one below once
+    # https://github.com/pandas-dev/pandas/issues/40685 is resolved.
+    # "func", ["min", "max", "idxmin", "idxmax", "count", "sum"],
+)
+def test_groupby_agg_decimal(num_groups, nelem_per_group, func):
+    # The number of digits after the decimal to use.
+    decimal_digits = 2
+    # The number of digits before the decimal to use.
+    whole_digits = 2
+
+    scale = 10 ** whole_digits
+    nelem = num_groups * nelem_per_group
+
+    # The unique is necessary because otherwise if there are duplicates idxmin
+    # and idxmax may return different results than pandas (see
+    # https://github.com/rapidsai/cudf/issues/7756). This is not relevant to
+    # the current version of the test, because idxmin and idxmax simply don't
+    # work with pandas Series composed of Decimal objects (see
+    # https://github.com/pandas-dev/pandas/issues/40685). However, if that is
+    # ever enabled, then this issue will crop up again so we may as well have
+    # it fixed now.
+    x = np.unique((np.random.rand(nelem) * scale).round(decimal_digits))
+    y = np.unique((np.random.rand(nelem) * scale).round(decimal_digits))
+
+    if x.size < y.size:
+        total_elements = x.size
+        y = y[: x.size]
+    else:
+        total_elements = y.size
+        x = x[: y.size]
+
+    # Note that this filtering can lead to one group with fewer elements, but
+    # that shouldn't be a problem and is probably useful to test.
+    idx_col = np.tile(np.arange(num_groups), nelem_per_group)[:total_elements]
+
+    decimal_x = pd.Series([Decimal(str(d)) for d in x])
+    decimal_y = pd.Series([Decimal(str(d)) for d in y])
+
+    pdf = pd.DataFrame({"idx": idx_col, "x": decimal_x, "y": decimal_y})
+    gdf = DataFrame(
+        {
+            "idx": idx_col,
+            "x": cudf.Series(decimal_x),
+            "y": cudf.Series(decimal_y),
+        }
+    )
+
+    expect_df = pdf.groupby("idx", sort=True).agg(func)
+    if rmm._cuda.gpu.runtimeGetVersion() < 11000:
+        with pytest.raises(RuntimeError):
+            got_df = gdf.groupby("idx", sort=True).agg(func)
+    else:
+        got_df = gdf.groupby("idx", sort=True).agg(func)
+        assert_eq(expect_df["x"], got_df["x"], check_dtype=False)
+        assert_eq(expect_df["y"], got_df["y"], check_dtype=False)
 
 
 @pytest.mark.parametrize(
