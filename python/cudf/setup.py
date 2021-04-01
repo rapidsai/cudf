@@ -91,8 +91,10 @@ install_requires.append(
 
 CUDF_ROOT = os.environ.get(
     "CUDF_ROOT",
-    os.path.join(
-        os.path.dirname(os.path.abspath(__file__)), "../../cpp/build/"
+    os.path.abspath(
+        os.path.join(
+            os.path.dirname(os.path.abspath(__file__)), "../../cpp/build/"
+        )
     ),
 )
 
@@ -159,9 +161,9 @@ extensions = [
         "*",
         sources=cython_files,
         include_dirs=[
-            os.path.join(CUDF_ROOT, "../include/cudf"),
-            os.path.join(CUDF_ROOT, "../include"),
-            os.path.join(CUDF_ROOT, "include"),
+            os.path.abspath(os.path.join(CUDF_ROOT, "../include/cudf")),
+            os.path.abspath(os.path.join(CUDF_ROOT, "../include")),
+            os.path.abspath(os.path.join(CUDF_ROOT, "include")),
             os.path.join(CUDF_ROOT, "_deps/libcudacxx-src/include"),
             os.path.join(CUDF_ROOT, "_deps/dlpack-src/include"),
             os.path.join(
