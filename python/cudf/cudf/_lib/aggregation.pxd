@@ -7,6 +7,4 @@ from cudf._lib.cpp.aggregation cimport aggregation
 cdef class Aggregation:
     cdef unique_ptr[aggregation] c_obj
 
-# TODO: the old version of this function was declared as except *, I'm not sure
-# why but I should figure that out before calling this done.
 cdef Aggregation make_aggregation(op, kwargs=*)
