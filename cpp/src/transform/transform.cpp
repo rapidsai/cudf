@@ -16,6 +16,7 @@
 
 #include <jit_preprocessed_files/transform/jit/kernel.cu.jit.hpp>
 
+#include <jit/cache.hpp>
 #include <jit/parser.hpp>
 #include <jit/type.hpp>
 
@@ -40,9 +41,6 @@ void unary_operation(mutable_column_view output,
                      bool is_ptx,
                      rmm::cuda_stream_view stream)
 {
-  jitify2::ProgramCache<> transform_program_cache(
-    /*max_size = */ 100, *transform_jit_kernel_cu_jit);
-
   std::string kernel_name =
     jitify2::reflection::Template("cudf::transformation::jit::kernel")  //
       .instantiate(cudf::jit::get_type_name(output.type()),  // list of template arguments
@@ -56,10 +54,10 @@ void unary_operation(mutable_column_view output,
            : cudf::jit::parse_single_function_cuda(udf,  //
                                                    "GENERIC_UNARY_OP");
 
-  transform_program_cache
-    .get_kernel(kernel_name, {}, {{"transform/jit/operation-udf.hpp", cuda_source}})  //
-    ->configure_1d_max_occupancy(0, 0, 0, stream.value())                             //
-    ->launch(output.size(),                                                           //
+  cudf::jit::get_program_cache(*transform_jit_kernel_cu_jit)
+    ->get_kernel(kernel_name, {}, {{"transform/jit/operation-udf.hpp", cuda_source}})  //
+    ->configure_1d_max_occupancy(0, 0, 0, stream.value())                              //
+    ->launch(output.size(),                                                            //
              cudf::jit::get_data_ptr(output),
              cudf::jit::get_data_ptr(input));
 }

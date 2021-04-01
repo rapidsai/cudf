@@ -22,6 +22,7 @@
 
 #include <jit_preprocessed_files/binaryop/jit/kernel.cu.jit.hpp>
 
+#include <jit/cache.hpp>
 #include <jit/parser.hpp>
 #include <jit/type.hpp>
 
@@ -79,9 +80,6 @@ void binary_operation(mutable_column_view& out,
                       OperatorType op_type,
                       rmm::cuda_stream_view stream)
 {
-  jitify2::ProgramCache<> binaryop_program_cache(
-    /*max_size = */ 100, *binaryop_jit_kernel_cu_jit);
-
   if (is_null_dependent(op)) {
     std::string kernel_name =
       jitify2::reflection::Template("cudf::binops::jit::kernel_v_s_with_validity")  //
@@ -90,7 +88,8 @@ void binary_operation(mutable_column_view& out,
                      cudf::jit::get_type_name(rhs.type()),
                      get_operator_name(op, op_type));
 
-    binaryop_program_cache.get_kernel(kernel_name)
+    cudf::jit::get_program_cache(*binaryop_jit_kernel_cu_jit)
+      ->get_kernel(kernel_name)                              //
       ->configure_1d_max_occupancy(0, 0, 0, stream.value())  //
       ->launch(out.size(),
                cudf::jit::get_data_ptr(out),
@@ -108,8 +107,8 @@ void binary_operation(mutable_column_view& out,
                      cudf::jit::get_type_name(rhs.type()),
                      get_operator_name(op, op_type));
 
-    binaryop_program_cache
-      .get_kernel(kernel_name)                               //
+    cudf::jit::get_program_cache(*binaryop_jit_kernel_cu_jit)
+      ->get_kernel(kernel_name)                              //
       ->configure_1d_max_occupancy(0, 0, 0, stream.value())  //
       ->launch(out.size(),
                cudf::jit::get_data_ptr(out),
@@ -142,9 +141,6 @@ void binary_operation(mutable_column_view& out,
                       binary_operator op,
                       rmm::cuda_stream_view stream)
 {
-  jitify2::ProgramCache<> binaryop_program_cache(
-    /*max_size = */ 100, *binaryop_jit_kernel_cu_jit);
-
   if (is_null_dependent(op)) {
     std::string kernel_name =
       jitify2::reflection::Template("cudf::binops::jit::kernel_v_v_with_validity")  //
@@ -153,8 +149,8 @@ void binary_operation(mutable_column_view& out,
                      cudf::jit::get_type_name(rhs.type()),
                      get_operator_name(op, OperatorType::Direct));
 
-    binaryop_program_cache
-      .get_kernel(kernel_name)                               //
+    cudf::jit::get_program_cache(*binaryop_jit_kernel_cu_jit)
+      ->get_kernel(kernel_name)                              //
       ->configure_1d_max_occupancy(0, 0, 0, stream.value())  //
       ->launch(out.size(),
                cudf::jit::get_data_ptr(out),
@@ -173,8 +169,8 @@ void binary_operation(mutable_column_view& out,
                      cudf::jit::get_type_name(rhs.type()),
                      get_operator_name(op, OperatorType::Direct));
 
-    binaryop_program_cache
-      .get_kernel(kernel_name)                               //
+    cudf::jit::get_program_cache(*binaryop_jit_kernel_cu_jit)
+      ->get_kernel(kernel_name)                              //
       ->configure_1d_max_occupancy(0, 0, 0, stream.value())  //
       ->launch(out.size(),
                cudf::jit::get_data_ptr(out),
@@ -189,9 +185,6 @@ void binary_operation(mutable_column_view& out,
                       const std::string& ptx,
                       rmm::cuda_stream_view stream)
 {
-  jitify2::ProgramCache<> binaryop_program_cache(
-    /*max_size = */ 100, *binaryop_jit_kernel_cu_jit);
-
   std::string const output_type_name = cudf::jit::get_type_name(out.type());
 
   std::string ptx_hash =
@@ -206,9 +199,9 @@ void binary_operation(mutable_column_view& out,
                    cudf::jit::get_type_name(rhs.type()),
                    get_operator_name(binary_operator::GENERIC_BINARY, OperatorType::Direct));
 
-  binaryop_program_cache
-    .get_kernel(kernel_name, {}, {{"binaryop/jit/operation-udf.hpp", cuda_source}})  //
-    ->configure_1d_max_occupancy(0, 0, 0, stream.value())                            //
+  cudf::jit::get_program_cache(*binaryop_jit_kernel_cu_jit)
+    ->get_kernel(kernel_name, {}, {{"binaryop/jit/operation-udf.hpp", cuda_source}})  //
+    ->configure_1d_max_occupancy(0, 0, 0, stream.value())                             //
     ->launch(out.size(),
              cudf::jit::get_data_ptr(out),
              cudf::jit::get_data_ptr(lhs),
