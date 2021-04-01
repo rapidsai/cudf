@@ -14,6 +14,8 @@
  * limitations under the License.
  */
 
+#include <cudf/types.hpp>
+
 #include <rolling/jit/operation-udf.hpp>
 
 #pragma once
