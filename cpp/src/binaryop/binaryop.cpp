@@ -22,8 +22,8 @@
 
 #include <jit_preprocessed_files/binaryop/jit/kernel.cu.jit.hpp>
 
-#include <jit/parser.h>
-#include <jit/type.h>
+#include <jit/parser.hpp>
+#include <jit/type.hpp>
 
 #include <cudf/binaryop.hpp>
 #include <cudf/column/column_factories.hpp>

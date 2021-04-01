@@ -42,8 +42,8 @@
 #include <cudf/utilities/error.hpp>
 #include <cudf/utilities/traits.hpp>
 
-#include <jit/parser.h>
-#include <jit/type.h>
+#include <jit/parser.hpp>
+#include <jit/type.hpp>
 
 #include <jit_preprocessed_files/rolling/jit/kernel.cu.jit.hpp>
 

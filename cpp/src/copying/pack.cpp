@@ -17,7 +17,7 @@
 #include <cudf/detail/copy.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
 
-#include <jit/type.h>
+#include <jit/type.hpp>
 
 namespace cudf {
 namespace detail {

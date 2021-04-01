@@ -14,14 +14,16 @@
  * limitations under the License.
  */
 
+#include "parser.hpp"
+
+#include <cudf/utilities/error.hpp>
+
 #include <algorithm>
 #include <cctype>
-#include <cudf/utilities/error.hpp>
 #include <map>
+#include <set>
 #include <string>
 #include <vector>
-
-#include "parser.h"
 
 namespace cudf {
 namespace jit {

@@ -252,6 +252,7 @@ add_library(cudf
     src/io/utilities/file_io_utilities.cpp
     src/io/utilities/parsing_utils.cu
     src/io/utilities/type_conversion.cpp
+    src/jit/cache.cpp
     src/jit/parser.cpp
     src/jit/type.cpp
     src/join/cross_join.cu
@@ -468,9 +469,9 @@ target_link_libraries(cudf
                   rmm::rmm)
 
 if(CUDA_STATIC_RUNTIME)
-    target_link_libraries(cudf PUBLIC CUDA::nvrtc CUDA::cudart_static CUDA::cuda_driver)
+    target_link_libraries(cudf PUBLIC CUDA::cudart_static CUDA::cuda_driver)
 else()
-    target_link_libraries(cudf PUBLIC CUDA::nvrtc CUDA::cudart CUDA::cuda_driver)
+    target_link_libraries(cudf PUBLIC CUDA::cudart CUDA::cuda_driver)
 endif()
 
 # Add cuFile interface if available
