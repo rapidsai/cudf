@@ -32,7 +32,12 @@ if not os.path.isdir(CUDA_HOME):
 
 cuda_include_dir = os.path.join(CUDA_HOME, "include")
 
-CUDF_ROOT = os.environ.get("CUDF_ROOT", "../../cpp/build/")
+CUDF_ROOT = os.environ.get(
+    "CUDF_ROOT",
+    os.path.join(
+        os.path.dirname(os.path.abspath(__file__)), "../../cpp/build/"
+    ),
+)
 CUDF_KAFKA_ROOT = os.environ.get(
     "CUDF_KAFKA_ROOT", "../../libcudf_kafka/build"
 )

@@ -89,7 +89,12 @@ install_requires.append(
     "cupy-cuda" + get_cuda_version_from_header(cuda_include_dir)
 )
 
-CUDF_ROOT = os.environ.get("CUDF_ROOT", "../../cpp/build/")
+CUDF_ROOT = os.environ.get(
+    "CUDF_ROOT",
+    os.path.join(
+        os.path.dirname(os.path.abspath(__file__)), "../../cpp/build/"
+    ),
+)
 
 try:
     nthreads = int(os.environ.get("PARALLEL_LEVEL", "0") or "0")
