@@ -192,24 +192,25 @@ ConfigureTest(SORT_TEST
 ###################################################################################################
 # - copying tests ---------------------------------------------------------------------------------
 ConfigureTest(COPYING_TEST
-    copying/utility_tests.cpp
+    copying/concatenate_tests.cu
+    copying/copy_range_tests.cpp
+    copying/copy_tests.cu    
+    copying/detail_gather_tests.cu
+    copying/gather_struct_tests.cu        
     copying/gather_tests.cu
     copying/gather_str_tests.cu
     copying/gather_list_tests.cu
-    copying/segmented_gather_list_tests.cpp
-    copying/gather_struct_tests.cu
-    copying/detail_gather_tests.cu
+    copying/get_value_tests.cpp
+    copying/pack_tests.cu
+    copying/sample_tests.cpp
     copying/scatter_tests.cpp
     copying/scatter_list_tests.cu
-    copying/copy_range_tests.cpp
+    copying/scatter_struct_tests.cu
+    copying/segmented_gather_list_tests.cpp
+    copying/shift_tests.cpp
     copying/slice_tests.cpp
     copying/split_tests.cpp
-    copying/copy_tests.cu
-    copying/shift_tests.cpp
-    copying/get_value_tests.cpp
-    copying/sample_tests.cpp
-    copying/concatenate_tests.cu
-    copying/pack_tests.cu)
+    copying/utility_tests.cpp)
 
 ###################################################################################################
 # - utilities tests -------------------------------------------------------------------------------

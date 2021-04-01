@@ -1414,6 +1414,8 @@ class ColumnBase(Column, Serializable):
           of `other`  and the categories of `self`.
         * when both `self` and `other` are StructColumns, rename the fields
           of `other` to the field names of `self`.
+        * when both `self` and `other` are DecimalColumns, copy the precision
+          from self.dtype to other.dtype
         * when `self` and `other` are nested columns of the same type,
           recursively apply this function on the children of `self` to the
           and the children of `other`.
@@ -1436,6 +1438,11 @@ class ColumnBase(Column, Serializable):
             self, cudf.core.column.StructColumn
         ):
             other = other._rename_fields(self.dtype.fields.keys())
+
+        if isinstance(other, cudf.core.column.DecimalColumn) and isinstance(
+            self, cudf.core.column.DecimalColumn
+        ):
+            other.dtype.precision = self.dtype.precision
 
         if type(self) is type(other):
             if self.base_children and other.base_children:
