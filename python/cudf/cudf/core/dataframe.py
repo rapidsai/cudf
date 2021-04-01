@@ -659,13 +659,10 @@ class DataFrame(Frame, Serializable):
         object.__setattr__(self, key, col)
 
     def __getattr__(self, key):
-        if key in self._internal_names:
-            return object.__getattribute__(self, key)
-        else:
-            if key in self:
-                return self[key]
-
-        raise AttributeError("'DataFrame' object has no attribute %r" % key)
+        try:
+            return self[key]
+        except:
+            raise AttributeError(f"{type(self)} object has no attribute {key}")
 
     @annotate("DATAFRAME_GETITEM", color="blue", domain="cudf_python")
     def __getitem__(self, arg):
