@@ -14,7 +14,6 @@ from cudf.utils.utils import GetAttrGetItemMixin
 
 
 class Rolling(GetAttrGetItemMixin):
-    _PROTECTED_KEYS = frozenset("obj", )
     """
     Rolling window calculations.
 
@@ -155,6 +154,8 @@ class Rolling(GetAttrGetItemMixin):
     2019-01-01T09:00:08.000    17.0
     dtype: float64
     """
+
+    _PROTECTED_KEYS = frozenset("obj", )
 
     _time_window = False
 

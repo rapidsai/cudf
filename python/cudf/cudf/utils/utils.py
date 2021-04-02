@@ -281,12 +281,16 @@ class cached_property:
 
 
 class GetAttrGetItemMixin:
-    """This mixin handles trying __getitem__ in __getattr__ before erroring.
+    """This mixin changes `__getattr__` to attempt a `__getitem__` call.
 
     Subclasses may define a `_PROTECTED_KEYS` set as a class attribute to
     indicate any keys that may be accessed by __getitem__. Testing for these
     keys allows this class to prevent recursion errors when subclasses are
-    copied (see below for more details.
+    copied (see below for more details). Note that a cleaner solution for this
+    problem would be to override one of the serialization protocols (e.g.
+    `__reduce__` or `__setstate__`, but this class may be used in complex
+    multiple inheritance hierarchies that might also override serialization.
+    The solution here is a minimally invasive change to simplify such patterns.
     """
     _PROTECTED_KEYS = frozenset()
 
