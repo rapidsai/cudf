@@ -504,7 +504,7 @@ struct parquet_column_view {
                       rmm::cuda_stream_view stream);
 
   column_view leaf_column_view() const;
-  gpu::parquet_column_device_view get_device_view();
+  gpu::parquet_column_device_view get_device_view(rmm::cuda_stream_view stream);
 
   column_view cudf_column_view() const { return cudf_col; }
   parquet::Type physical_type() const { return schema_node.type; }
@@ -517,21 +517,21 @@ struct parquet_column_view {
   bool is_list() const noexcept { return _is_list; }
 
   // Dictionary related member functions
-  uint32_t *get_dict_data() { return (_dict_data.size()) ? _dict_data.data().get() : nullptr; }
-  uint32_t *get_dict_index() { return (_dict_index.size()) ? _dict_index.data().get() : nullptr; }
+  uint32_t *get_dict_data() { return (_dict_data.size()) ? _dict_data.data() : nullptr; }
+  uint32_t *get_dict_index() { return (_dict_index.size()) ? _dict_index.data() : nullptr; }
   void use_dictionary(bool use_dict) { _dictionary_used = use_dict; }
-  void alloc_dictionary(size_t max_num_rows)
+  void alloc_dictionary(size_t max_num_rows, rmm::cuda_stream_view stream)
   {
-    _dict_data.resize(max_num_rows);
-    _dict_index.resize(max_num_rows);
+    _dict_data.resize(max_num_rows, stream);
+    _dict_index.resize(max_num_rows, stream);
   }
-  bool check_dictionary_used()
+  bool check_dictionary_used(rmm::cuda_stream_view stream)
   {
     if (!_dictionary_used) {
-      _dict_data.resize(0);
-      _dict_data.shrink_to_fit();
-      _dict_index.resize(0);
-      _dict_index.shrink_to_fit();
+      _dict_data.resize(0, stream);
+      _dict_data.shrink_to_fit(stream);
+      _dict_index.resize(0, stream);
+      _dict_index.shrink_to_fit(stream);
     }
     return _dictionary_used;
   }
@@ -558,8 +558,8 @@ struct parquet_column_view {
 
   // Dictionary related members
   bool _dictionary_used = false;
-  rmm::device_vector<uint32_t> _dict_data;
-  rmm::device_vector<uint32_t> _dict_index;
+  rmm::device_uvector<uint32_t> _dict_data;
+  rmm::device_uvector<uint32_t> _dict_index;
 };
 
 parquet_column_view::parquet_column_view(schema_tree_node const &schema_node,
@@ -569,7 +569,9 @@ parquet_column_view::parquet_column_view(schema_tree_node const &schema_node,
     _d_nullability(0, stream),
     _dremel_offsets(0, stream),
     _rep_level(0, stream),
-    _def_level(0, stream)
+    _def_level(0, stream),
+    _dict_data(0, stream),
+    _dict_index(0, stream)
 {
   // Construct single inheritance column_view from linked_column_view
   auto curr_col                           = schema_node.leaf_column.get();
@@ -680,16 +682,17 @@ column_view parquet_column_view::leaf_column_view() const
   return col;
 }
 
-gpu::parquet_column_device_view parquet_column_view::get_device_view()
+gpu::parquet_column_device_view parquet_column_view::get_device_view(rmm::cuda_stream_view stream)
 {
   column_view col  = leaf_column_view();
   auto desc        = gpu::parquet_column_device_view{};  // Zero out all fields
   desc.stats_dtype = schema_node.stats_dtype;
   desc.ts_scale    = schema_node.ts_scale;
 
-  // TODO (dm): Enable dictionary for list after refactor
-  if (physical_type() != BOOLEAN && physical_type() != UNDEFINED_TYPE && !is_list()) {
-    alloc_dictionary(_data_count);
+  // TODO (dm): Enable dictionary for list and struct after refactor
+  if (physical_type() != BOOLEAN && physical_type() != UNDEFINED_TYPE &&
+      !is_nested(cudf_col.type())) {
+    alloc_dictionary(_data_count, stream);
     desc.dict_index = get_dict_index();
     desc.dict_data  = get_dict_data();
   }
@@ -977,8 +980,8 @@ void writer::impl::write(table_view const &table)
   // This should've been `auto const&` but isn't since dictionary space is allocated when calling
   // get_device_view(). Fix during dictionary refactor.
   std::transform(
-    parquet_columns.begin(), parquet_columns.end(), col_desc.host_ptr(), [](auto &pcol) {
-      return pcol.get_device_view();
+    parquet_columns.begin(), parquet_columns.end(), col_desc.host_ptr(), [&](auto &pcol) {
+      return pcol.get_device_view(stream);
     });
 
   // Init page fragments
@@ -1112,7 +1115,7 @@ void writer::impl::write(table_view const &table)
   }
 
   // Free unused dictionaries
-  for (auto &col : parquet_columns) { col.check_dictionary_used(); }
+  for (auto &col : parquet_columns) { col.check_dictionary_used(stream); }
 
   // Build chunk dictionaries and count pages
   if (num_chunks != 0) {
