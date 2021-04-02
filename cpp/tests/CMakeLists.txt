@@ -289,9 +289,9 @@ ConfigureTest(FILLING_TEST
 ###################################################################################################
 # - search test -----------------------------------------------------------------------------------
 ConfigureTest(SEARCH_TEST
-    search/search_test.cpp
-    search/dictionary_search_test.cpp
-    search/struct_search_test.cpp)
+    search/search_dictionary_test.cpp
+    search/search_struct_test.cpp
+    search/search_test.cpp)
 
 ###################################################################################################
 # - reshape test ----------------------------------------------------------------------------------

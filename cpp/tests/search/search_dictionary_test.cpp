@@ -19,10 +19,9 @@
 #include <cudf_test/column_wrapper.hpp>
 #include <cudf_test/type_lists.hpp>
 
-#include <cudf/fixed_point/fixed_point.hpp>
 #include <cudf/search.hpp>
 
-struct StructSearchTest : public cudf::test::BaseFixture {
+struct DictionarySearchTest : public cudf::test::BaseFixture {
 };
 
 using cudf::numeric_scalar;
@@ -30,7 +29,7 @@ using cudf::size_type;
 using cudf::string_scalar;
 using cudf::test::fixed_width_column_wrapper;
 
-TEST_F(StructSearchTest, search_dictionary)
+TEST_F(DictionarySearchTest, search_dictionary)
 {
   cudf::test::dictionary_column_wrapper<std::string> input(
     {"", "", "10", "10", "20", "20", "30", "40"}, {0, 0, 1, 1, 1, 1, 1, 1});
@@ -52,7 +51,7 @@ TEST_F(StructSearchTest, search_dictionary)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*result, expect_lower);
 }
 
-TEST_F(StructSearchTest, search_table_dictionary)
+TEST_F(DictionarySearchTest, search_table_dictionary)
 {
   fixed_width_column_wrapper<int32_t> column_0{{10, 10, 20, 20, 20, 20, 20, 20, 20, 50, 30},
                                                {1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0}};
@@ -81,7 +80,7 @@ TEST_F(StructSearchTest, search_table_dictionary)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*result, expect_upper);
 }
 
-TEST_F(StructSearchTest, contains_dictionary)
+TEST_F(DictionarySearchTest, contains_dictionary)
 {
   cudf::test::dictionary_column_wrapper<std::string> column(
     {"00", "00", "17", "17", "23", "23", "29"});
@@ -94,7 +93,7 @@ TEST_F(StructSearchTest, contains_dictionary)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*result, expect);
 }
 
-TEST_F(StructSearchTest, contains_nullable_dictionary)
+TEST_F(DictionarySearchTest, contains_nullable_dictionary)
 {
   cudf::test::dictionary_column_wrapper<int64_t> column({0, 0, 17, 17, 23, 23, 29},
                                                         {1, 0, 1, 1, 1, 1, 1});
