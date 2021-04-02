@@ -1,7 +1,7 @@
 # Copyright (c) 2021, NVIDIA CORPORATION.
 
 from decimal import Decimal
-from typing import cast
+from typing import cast, Any
 
 import cupy as cp
 import numpy as np
@@ -22,6 +22,8 @@ from cudf.utils.utils import pa_mask_buffer_to_mask
 
 
 class DecimalColumn(ColumnBase):
+    dtype: Decimal64Dtype
+
     @classmethod
     def from_arrow(cls, data: pa.Array):
         dtype = Decimal64Dtype.from_arrow(data.type)
@@ -37,6 +39,7 @@ class DecimalColumn(ColumnBase):
             data=Buffer(data_64.view("uint8")),
             size=len(data),
             dtype=dtype,
+            offset=data.offset,
             mask=mask,
         )
 
@@ -58,6 +61,7 @@ class DecimalColumn(ColumnBase):
         )
         return pa.Array.from_buffers(
             type=self.dtype.to_arrow(),
+            offset=self._offset,
             length=self.size,
             buffers=[mask_buf, data_buf],
         )
@@ -110,7 +114,8 @@ class DecimalColumn(ColumnBase):
             raise TypeError(f"cannot normalize {type(other)}")
 
     def _apply_scan_op(self, op: str) -> ColumnBase:
-        return libcudf.reduce.scan(op, self, True)
+        result = libcudf.reduce.scan(op, self, True)
+        return self._copy_type_metadata(result)
 
     def as_decimal_column(
         self, dtype: Dtype, **kwargs
@@ -133,6 +138,49 @@ class DecimalColumn(ColumnBase):
             return cast(
                 "cudf.core.column.StringColumn", as_column([], dtype="object")
             )
+
+    def reduce(self, op: str, skipna: bool = None, **kwargs) -> Decimal:
+        min_count = kwargs.pop("min_count", 0)
+        preprocessed = self._process_for_reduction(
+            skipna=skipna, min_count=min_count
+        )
+        if isinstance(preprocessed, ColumnBase):
+            return libcudf.reduce.reduce(op, preprocessed, **kwargs)
+        else:
+            return preprocessed
+
+    def sum(
+        self, skipna: bool = None, dtype: Dtype = None, min_count: int = 0
+    ) -> Decimal:
+        return self.reduce(
+            "sum", skipna=skipna, dtype=dtype, min_count=min_count
+        )
+
+    def product(
+        self, skipna: bool = None, dtype: Dtype = None, min_count: int = 0
+    ) -> Decimal:
+        return self.reduce(
+            "product", skipna=skipna, dtype=dtype, min_count=min_count
+        )
+
+    def sum_of_squares(
+        self, skipna: bool = None, dtype: Dtype = None, min_count: int = 0
+    ) -> Decimal:
+        return self.reduce(
+            "sum_of_squares", skipna=skipna, dtype=dtype, min_count=min_count
+        )
+
+    def fillna(
+        self, value: Any = None, method: str = None, dtype: Dtype = None
+    ):
+        """Fill null values with ``value``.
+
+        Returns a copy with null filled.
+        """
+        result = libcudf.replace.replace_nulls(
+            input_col=self, replacement=value, method=method, dtype=dtype
+        )
+        return self._copy_type_metadata(result)
 
 
 def _binop_scale(l_dtype, r_dtype, op):

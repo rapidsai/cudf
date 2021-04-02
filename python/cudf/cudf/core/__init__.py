@@ -5,6 +5,8 @@ from cudf.core.buffer import Buffer
 from cudf.core.dataframe import DataFrame, from_pandas, merge
 from cudf.core.index import (
     CategoricalIndex,
+    interval_range,
+    IntervalIndex,
     DatetimeIndex,
     Float32Index,
     Float64Index,

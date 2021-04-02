@@ -25,6 +25,7 @@
 #include <jit/parser.h>
 #include <jit/type.h>
 
+#include <jit/assert.cuh.jit>
 #include <jit/bit.hpp.jit>
 #include <jit/common_headers.hpp>
 #include <jit/durations.hpp.jit>
@@ -86,7 +87,8 @@ const std::vector<std::string> header_names{"operation.h",
                                             cudf_utilities_bit_hpp,
                                             cudf_wrappers_timestamps_hpp,
                                             cudf_wrappers_durations_hpp,
-                                            cudf_fixed_point_fixed_point_hpp};
+                                            cudf_fixed_point_fixed_point_hpp,
+                                            cudf_detail_utilities_assert_cuh};
 
 std::istream* headers_code(std::string filename, std::iostream& stream)
 {
