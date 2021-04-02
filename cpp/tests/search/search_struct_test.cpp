@@ -38,7 +38,7 @@ template <typename T>
 struct TypedStructSearchTest : public cudf::test::BaseFixture {
 };
 
-using TestTypes = cudf::test::Concat<cudf::test::IntegralTypes,
+using TestTypes = cudf::test::Concat<cudf::test::IntegralTypesNotBool,
                                      cudf::test::FloatingPointTypes,
                                      cudf::test::DurationTypes,
                                      cudf::test::TimestampTypes>;
@@ -79,8 +79,7 @@ TYPED_TEST(TypedStructSearchTest, EmptyInputTest)
   test_search(structs_t, structs_values, expected, expected);
 }
 
-// Test case when only the scatter map is empty
-TYPED_TEST(TypedStructSearchTest, TrivialTest)
+TYPED_TEST(TypedStructSearchTest, TrivialInputTests)
 {
   using col_wrapper = cudf::test::fixed_width_column_wrapper<TypeParam, int32_t>;
 
@@ -94,70 +93,12 @@ TYPED_TEST(TypedStructSearchTest, TrivialTest)
   auto const structs_values2 = structs_col{{child_col_values2}}.release();
 
   auto const expected1 = int32s_col{0, 0, 0, 0, 0};
-  auto const expected2 = int32s_col{4, 4, 4, 4, 4};
+  auto const expected2 = int32s_col{5, 5, 5, 5, 5};
   test_search(structs_t, structs_values1, expected1, expected1);
   test_search(structs_t, structs_values2, expected2, expected2);
 }
 
-#if 0
-TYPED_TEST(TypedStructSearchTest, ScatterAsCopyTest)
-{
-  using col_wrapper = cudf::test::fixed_width_column_wrapper<TypeParam, int32_t>;
-
-  auto child_col_t =
-    col_wrapper{{0, 1, 2, 3, null, XXX},
-                cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i != 4; })};
-  auto const structs_t = structs_col{
-    {child_col_t}, cudf::detail::make_counting_transform_iterator(0, [](auto i) {
-      return i != 5;
-    })}.release();
-
-  auto child_col_values =
-    col_wrapper{{50, null, 70, XXX, 90, 100},
-                cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i != 1; })};
-  auto const structs_values = structs_col{
-    {child_col_values}, cudf::detail::make_counting_transform_iterator(0, [](auto i) {
-      return i != 3;
-    })}.release();
-
-  // Scatter as copy: the target should be the same as source
-  auto const scatter_map = int32s_col{0, 1, 2, 3, 4, 5}.release();
-  test_search(structs_t, structs_values, structs_t, scatter_map);
-}
-
-TYPED_TEST(TypedStructSearchTest, ScatterAsLeftShiftTest)
-{
-  using col_wrapper = cudf::test::fixed_width_column_wrapper<TypeParam, int32_t>;
-
-  auto child_col_t =
-    col_wrapper{{0, 1, 2, 3, null, XXX},
-                cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i != 4; })};
-  auto const structs_t = structs_col{
-    {child_col_t}, cudf::detail::make_counting_transform_iterator(0, [](auto i) {
-      return i != 5;
-    })}.release();
-
-  auto child_col_values =
-    col_wrapper{{50, null, 70, XXX, 90, 100},
-                cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i != 1; })};
-  auto const structs_values = structs_col{
-    {child_col_values}, cudf::detail::make_counting_transform_iterator(0, [](auto i) {
-      return i != 3;
-    })}.release();
-
-  auto child_col_expected =
-    col_wrapper{{2, 3, null, XXX, 0, 1},
-                cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i != 2; })};
-  auto structs_expected = structs_col{
-    {child_col_expected}, cudf::detail::make_counting_transform_iterator(0, [](auto i) {
-      return i != 3;
-    })}.release();
-
-  auto const scatter_map = int32s_col{-2, -1, 0, 1, 2, 3}.release();
-  test_search(structs_t, structs_values, structs_expected, scatter_map);
-}
-
-TYPED_TEST(TypedStructSearchTest, SimpleScatterTests)
+TYPED_TEST(TypedStructSearchTest, SimpleInputWithNullsTests)
 {
   using col_wrapper = cudf::test::fixed_width_column_wrapper<TypeParam, int32_t>;
 
@@ -201,6 +142,8 @@ TYPED_TEST(TypedStructSearchTest, SimpleScatterTests)
   auto const scatter_map2 = int32s_col{-2, 0, 5, 3}.release();
   test_search(structs_t, structs_values, structs_expected2, scatter_map2);
 }
+#if 0
+
 
 TYPED_TEST(TypedStructSearchTest, ComplexDataScatterTest)
 {
