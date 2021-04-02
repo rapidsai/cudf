@@ -54,7 +54,7 @@ class _NestedGetItemDict(dict):
         return reduce(dict.__getitem__, key, self)
 
 
-def to_flat_dict(d):
+def _to_flat_dict(d):
     """
     Convert the given nested dictionary to a flat dictionary
     with tuple keys.
@@ -393,7 +393,7 @@ class ColumnAccessor(MutableMapping):
 
     def _select_by_label_list_like(self, key: Any) -> ColumnAccessor:
         return self.__class__(
-            to_flat_dict({k: self._grouped_data[k] for k in key}),
+            _to_flat_dict({k: self._grouped_data[k] for k in key}),
             multiindex=self.multiindex,
             level_names=self.level_names,
         )
@@ -403,7 +403,7 @@ class ColumnAccessor(MutableMapping):
         if isinstance(result, cudf.core.column.ColumnBase):
             return self.__class__({key: result})
         else:
-            result = to_flat_dict(result)
+            result = _to_flat_dict(result)
             if not isinstance(key, tuple):
                 key = (key,)
             return self.__class__(
