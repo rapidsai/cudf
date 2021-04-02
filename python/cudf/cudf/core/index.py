@@ -2818,10 +2818,8 @@ def interval_range(
         for x in (start, end, freq, periods)
     ]
     if any(
-        [
-            not is_numerical_dtype(x.dtype) if x is not None else False
-            for x in args
-        ]
+        not is_numerical_dtype(x.dtype) if x is not None else False
+        for x in args
     ):
         raise ValueError("start, end, freq must be numeric values.")
     *rargs, periods = args
