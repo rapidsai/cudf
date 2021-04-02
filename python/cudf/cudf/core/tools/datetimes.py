@@ -495,12 +495,6 @@ class DateOffset(pd.DateOffset, metaclass=_UndoOffsetMeta):
         # such as +1 year, -12 months
         return all([i == 0 for i in self.kwds.values()])
 
-    def __setattr__(self, name, value):
-        if not isinstance(value, _DateOffsetScalars):
-            raise AttributeError("DateOffset objects are immutable.")
-        else:
-            object.__setattr__(self, name, value)
-
 
 def _isin_datetimelike(
     lhs: Union[column.TimeDeltaColumn, column.DatetimeColumn], values: Sequence
