@@ -19,7 +19,7 @@
  * @brief cuDF-IO parquet writer class implementation
  */
 
-#include "writer_impl.hpp"
+#include <io/parquet/writer_impl.hpp>
 
 #include <io/parquet/compact_protocol_writer.hpp>
 #include <io/utilities/column_utils.cuh>

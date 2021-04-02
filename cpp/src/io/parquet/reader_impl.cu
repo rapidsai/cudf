@@ -19,7 +19,7 @@
  * @brief cuDF-IO Parquet reader class implementation
  */
 
-#include "reader_impl.hpp"
+#include <io/parquet/reader_impl.hpp>
 
 #include <io/comp/gpuinflate.h>
 

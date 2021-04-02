@@ -19,7 +19,7 @@
  * @brief cuDF-IO JSON reader class implementation
  */
 
-#include "reader_impl.hpp"
+#include <io/json/reader_impl.hpp>
 
 #include <io/comp/io_uncomp.h>
 #include <io/utilities/parsing_utils.cuh>

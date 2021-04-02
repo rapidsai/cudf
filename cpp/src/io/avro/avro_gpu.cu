@@ -13,7 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-#include "avro_gpu.h"
+#include <io/avro/avro_gpu.h>
 
 #include <io/utilities/block_utils.cuh>
 

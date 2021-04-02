@@ -14,9 +14,9 @@
  * limitations under the License.
  */
 
-#include "csv_common.h"
-#include "csv_gpu.h"
-#include "datetime.cuh"
+#include <io/csv/csv_common.h>
+#include <io/csv/csv_gpu.h>
+#include <io/csv/datetime.cuh>
 
 #include <io/utilities/block_utils.cuh>
 #include <io/utilities/parsing_utils.cuh>

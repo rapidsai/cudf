@@ -19,8 +19,8 @@
  * @brief cuDF-IO ORC reader class implementation
  */
 
-#include "reader_impl.hpp"
-#include "timezone.cuh"
+#include <io/orc/reader_impl.hpp>
+#include <io/orc/timezone.cuh>
 
 #include <io/comp/gpuinflate.h>
 #include <io/orc/orc.h>

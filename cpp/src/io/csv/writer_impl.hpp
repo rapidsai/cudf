@@ -16,8 +16,8 @@
 
 #pragma once
 
-#include "csv.h"
-#include "csv_gpu.h"
+#include <io/csv/csv.h>
+#include <io/csv/csv_gpu.h>
 
 #include <cudf/strings/strings_column_view.hpp>
 #include <io/utilities/hostdevice_vector.hpp>

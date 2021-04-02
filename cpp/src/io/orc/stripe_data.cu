@@ -17,8 +17,8 @@
 #include <cub/cub.cuh>
 #include <io/utilities/block_utils.cuh>
 #include <rmm/cuda_stream_view.hpp>
-#include "orc_common.h"
-#include "orc_gpu.h"
+#include <io/orc/orc_common.h>
+#include <io/orc/orc_gpu.h>
 
 namespace cudf {
 namespace io {

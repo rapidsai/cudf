@@ -15,7 +15,7 @@
  */
 #pragma once
 
-#include "avro_common.h"
+#include <io/avro/avro_common.h>
 
 #include <cudf/utilities/span.hpp>
 

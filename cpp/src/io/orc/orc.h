@@ -28,7 +28,7 @@
 #include <io/comp/io_uncomp.h>
 #include <cudf/io/datasource.hpp>
 #include <cudf/io/orc_metadata.hpp>
-#include "orc_common.h"
+#include <io/orc/orc_common.h>
 
 namespace cudf {
 namespace io {

@@ -21,8 +21,8 @@
 
 #pragma once
 
-#include "avro.h"
-#include "avro_gpu.h"
+#include <io/avro/avro.h>
+#include <io/avro/avro_gpu.h>
 
 #include <cudf/utilities/span.hpp>
 #include <io/utilities/column_buffer.hpp>

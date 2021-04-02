@@ -16,7 +16,7 @@
 
 #pragma once
 
-#include "thrust/reduce.h"
+#include <thrust/reduce.h>
 
 #include <cudf/wrappers/durations.hpp>
 #include <io/utilities/parsing_utils.cuh>

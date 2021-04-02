@@ -14,8 +14,8 @@
  * limitations under the License.
  */
 
-#include "io_uncomp.h"
-#include "unbz2.h"  // bz2 uncompress
+#include <io/comp/io_uncomp.h>
+#include <io/comp/unbz2.h>  // bz2 uncompress
 
 #include <cudf/utilities/error.hpp>
 #include <cudf/utilities/span.hpp>

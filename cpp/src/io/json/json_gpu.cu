@@ -14,8 +14,8 @@
  * limitations under the License.
  */
 
-#include "json_common.h"
-#include "json_gpu.h"
+#include <io/json/json_common.h>
+#include <io/json/json_gpu.h>
 
 #include <io/csv/datetime.cuh>
 #include <io/utilities/parsing_utils.cuh>

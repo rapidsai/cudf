@@ -82,8 +82,8 @@ For more information on these sources, see the manual.
 #include <stdio.h>
 #include <stdlib.h>
 #include <vector>
-#include "io_uncomp.h"
-#include "unbz2.h"
+#include <io/comp/io_uncomp.h>
+#include <io/comp/unbz2.h>
 
 namespace cudf {
 namespace io {

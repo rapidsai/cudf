@@ -21,8 +21,8 @@
 
 #pragma once
 
-#include "json.h"
-#include "json_gpu.h"
+#include <io/json/json.h>
+#include <io/json/json_gpu.h>
 
 #include <io/utilities/column_buffer.hpp>
 

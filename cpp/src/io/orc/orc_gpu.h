@@ -16,7 +16,7 @@
 
 #pragma once
 
-#include "timezone.cuh"
+#include <io/orc/timezone.cuh>
 
 #include <io/comp/gpuinflate.h>
 #include <io/orc/orc_common.h>

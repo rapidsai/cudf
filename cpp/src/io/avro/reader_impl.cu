@@ -19,7 +19,7 @@
  * @brief cuDF-IO Avro reader class implementation
  */
 
-#include "reader_impl.hpp"
+#include <io/avro/reader_impl.hpp>
 
 #include <io/comp/gpuinflate.h>
 
