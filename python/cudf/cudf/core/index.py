@@ -2813,10 +2813,10 @@ def interval_range(
             "Of the four parameters: start, end, periods, and "
             "freq, exactly three must be specified"
         )
-    args = (
+    args = [
         cudf.Scalar(x) if x is not None else None
         for x in (start, end, freq, periods)
-    )
+    ]
     if any(
         [
             not is_numerical_dtype(x.dtype) if x is not None else False
@@ -2827,12 +2827,11 @@ def interval_range(
     *rargs, periods = args
     common_dtype = find_common_type([x.dtype for x in rargs if x])
     start, end, freq = rargs
+    periods = periods.astype("int64") if periods is not None else None
 
     if periods and not freq:
         # if statement for mypy to pass
         if end is not None and start is not None:
-            # determine if periods are float or integer
-            periods = periods.astype("int64")
             # divmod only supported on host side scalars
             quotient, remainder = divmod((end - start).value, periods.value)
             if remainder:
