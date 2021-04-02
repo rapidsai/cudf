@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import itertools
 from collections.abc import MutableMapping
+from functools import reduce
 from typing import (
     TYPE_CHECKING,
     Any,
@@ -19,10 +20,45 @@ import pandas as pd
 
 import cudf
 from cudf.core import column
-from cudf.utils.utils import cached_property, to_flat_dict, to_nested_dict
+from cudf.utils.utils import cached_property
 
 if TYPE_CHECKING:
     from cudf.core.column import ColumnBase
+
+
+class _NestedGetItemDict(dict):
+    """A dictionary whose __getitem__ method accesses nested dicts.
+
+    For performance, this class directly subclasses dict and only modifies the
+    `__getitem__` method. Therefore, calls to any other accessor method will
+    fail to perform nested lookups. Moreover, nested mappings will not exhibit
+    the same behavior (they will be raw dictionaries unless explicitly created
+    to be of this class).
+    """
+
+    def __getitem__(self, key):
+        """Recursively apply dict.__getitem__ to get nested elements of d."""
+        return reduce(dict.__getitem__, key, self)
+
+
+def to_flat_dict(d):
+    """
+    Convert the given nested dictionary to a flat dictionary
+    with tuple keys.
+    """
+
+    def _inner(d, parents=None):
+        if parents is None:
+            parents = []
+        for k, v in d.items():
+            if not isinstance(v, d.__class__):
+                if parents:
+                    k = tuple(parents + [k])
+                yield (k, v)
+            else:
+                yield from _inner(d=v, parents=parents + [k])
+
+    return {k: v for k, v in _inner(d)}
 
 
 class ColumnAccessor(MutableMapping):
@@ -166,7 +202,7 @@ class ColumnAccessor(MutableMapping):
         return the underlying mapping as a nested mapping.
         """
         if self.multiindex:
-            return to_nested_dict(dict(zip(self.names, self.columns)))
+            return _NestedGetItemDict(zip(self.names, self.columns))
         else:
             return self._data
 
