@@ -18,6 +18,8 @@ from cudf.api.extensions import (
 from cudf.core import (
     NA,
     CategoricalIndex,
+    interval_range,
+    IntervalIndex,
     DataFrame,
     DatetimeIndex,
     Float32Index,
@@ -40,7 +42,12 @@ from cudf.core import (
     merge,
 )
 from cudf.core.algorithms import factorize
-from cudf.core.dtypes import CategoricalDtype, Decimal64Dtype
+from cudf.core.dtypes import (
+    CategoricalDtype,
+    Decimal64Dtype,
+    ListDtype,
+    StructDtype,
+)
 from cudf.core.groupby import Grouper
 from cudf.core.ops import (
     add,
