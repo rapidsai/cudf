@@ -250,6 +250,7 @@ add_library(cudf
     src/io/parquet/reader_impl.cu
     src/io/parquet/writer_impl.cu
     src/io/statistics/column_stats.cu
+    src/io/utilities/column_buffer.cpp
     src/io/utilities/data_sink.cpp
     src/io/utilities/datasource.cpp
     src/io/utilities/file_io_utilities.cpp

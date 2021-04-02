@@ -18,6 +18,7 @@
 
 #include <stdint.h>
 #include <stdio.h>
+#include <io/utilities/column_buffer.hpp>
 
 namespace cudf {
 namespace io {
@@ -55,6 +56,8 @@ enum type_kind_e {
   type_union,
   type_array,
 };
+
+using string_pair = cudf::io::detail::column_buffer::str_pair;
 
 }  // namespace avro
 }  // namespace io

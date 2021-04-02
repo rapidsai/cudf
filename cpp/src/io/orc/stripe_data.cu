@@ -25,6 +25,8 @@ namespace io {
 namespace orc {
 namespace gpu {
 
+using string_pair = cudf::io::detail::column_buffer::str_pair;
+
 // Must be able to handle 512x 8-byte values. These values are base 128 encoded
 // so 8 byte value is expanded to 10 bytes.
 constexpr int bytestream_buffer_size = 512 * 8 * 2;
@@ -1683,7 +1685,7 @@ __global__ void __launch_bounds__(block_size)
             case BINARY:
             case VARCHAR:
             case CHAR: {
-              nvstrdesc_s *strdesc = &static_cast<nvstrdesc_s *>(data_out)[row];
+              string_pair *strdesc = &static_cast<string_pair *>(data_out)[row];
               void const *ptr      = nullptr;
               uint32_t count       = 0;
               if (is_dictionary(s->chunk.encoding_kind)) {
@@ -1703,8 +1705,8 @@ __global__ void __launch_bounds__(block_size)
                   count = secondary_val;
                 }
               }
-              strdesc->ptr   = static_cast<char const *>(ptr);
-              strdesc->count = count;
+              strdesc->first  = static_cast<char const *>(ptr);
+              strdesc->second = count;
               break;
             }
             case TIMESTAMP: {

@@ -447,7 +447,7 @@ extern "C" __global__ void __launch_bounds__(128)
   if (chunk >= num_chunks) { return; }
   if (!lane_id && ck->num_dict_pages > 0 && ck->str_dict_index) {
     // Data type to describe a string
-    nvstrdesc_s *dict_index = ck->str_dict_index;
+    string_pair *dict_index = ck->str_dict_index;
     const uint8_t *dict     = ck->page_info[0].page_data;
     int dict_size           = ck->page_info[0].uncompressed_page_size;
     int num_entries         = ck->page_info[0].num_input_values;
@@ -464,8 +464,8 @@ extern "C" __global__ void __launch_bounds__(128)
         }
       }
       // TODO: Could store 8 entries in shared mem, then do a single warp-wide store
-      dict_index[i].ptr   = reinterpret_cast<const char *>(dict + pos + 4);
-      dict_index[i].count = len;
+      dict_index[i].first  = reinterpret_cast<const char *>(dict + pos + 4);
+      dict_index[i].second = len;
     }
   }
 }

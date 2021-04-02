@@ -27,7 +27,7 @@ namespace io {
 namespace orc {
 namespace gpu {
 
-using detail::device_2dspan;
+using cudf::detail::device_2dspan;
 
 constexpr int scratch_buffer_size = 512 * 4;
 
@@ -1226,8 +1226,8 @@ void CompressOrcDataStreams(uint8_t *compressed_data,
                             uint32_t num_compressed_blocks,
                             CompressionKind compression,
                             uint32_t comp_blk_size,
-                            detail::device_2dspan<StripeStream> strm_desc,
-                            detail::device_2dspan<encoder_chunk_streams> enc_streams,
+                            device_2dspan<StripeStream> strm_desc,
+                            device_2dspan<encoder_chunk_streams> enc_streams,
                             gpu_inflate_input_s *comp_in,
                             gpu_inflate_status_s *comp_out,
                             rmm::cuda_stream_view stream)
