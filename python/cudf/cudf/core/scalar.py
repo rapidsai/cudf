@@ -360,6 +360,9 @@ class Scalar(object):
     def astype(self, dtype):
         return Scalar(self.device_value, dtype)
 
+    def _as_host_type(self, dtype):
+        return Scalar(self.value, dtype)
+
 
 class _NAType(object):
     def __init__(self):
