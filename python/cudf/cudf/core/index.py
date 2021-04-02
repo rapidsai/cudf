@@ -2813,7 +2813,7 @@ def interval_range(
             "Of the four parameters: start, end, periods, and "
             "freq, exactly three must be specified"
         )
-    args = [start, end, freq, periods]
+    args = (start, end, freq, periods)
     *args, periods = [cudf.Scalar(x) if x is not None else None for x in args]
     if any(
         [
