@@ -29,12 +29,25 @@ if TYPE_CHECKING:
 class _NestedGetItemDict(dict):
     """A dictionary whose __getitem__ method accesses nested dicts.
 
-    For performance, this class directly subclasses dict and only modifies the
-    `__getitem__` method. Therefore, calls to any other accessor method will
-    fail to perform nested lookups. Moreover, nested mappings will not exhibit
-    the same behavior (they will be raw dictionaries unless explicitly created
-    to be of this class).
+    This class directly subclasses dict for performance, so there are a number
+    of gotchas: 1) the only safe accessor for nested elements is
+    `__getitem__` (all other accessors will fail to perform nested lookups), 2)
+    nested mappings will not exhibit the same behavior (they will be raw
+    dictionaries unless explicitly created to be of this class), and 3) to
+    construct this class you _must_ use `from_zip` to get appropriate treatment
+    of tuple keys.
     """
+
+    @classmethod
+    def from_zip(cls, data):
+        """Create from zip, specialized factory for nesting."""
+        obj = cls()
+        for key, value in data:
+            d = obj
+            for k in key[:-1]:
+                d = d.setdefault(k, {})
+            d[key[-1]] = value
+        return obj
 
     def __getitem__(self, key):
         """Recursively apply dict.__getitem__ to get nested elements of d."""
@@ -202,7 +215,7 @@ class ColumnAccessor(MutableMapping):
         return the underlying mapping as a nested mapping.
         """
         if self.multiindex:
-            return _NestedGetItemDict(zip(self.names, self.columns))
+            return _NestedGetItemDict.from_zip(zip(self.names, self.columns))
         else:
             return self._data
 
