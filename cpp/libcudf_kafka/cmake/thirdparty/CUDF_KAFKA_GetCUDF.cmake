@@ -42,5 +42,5 @@ function(find_and_configure_cudf VERSION)
     cudfkafka_restore_if_enabled(BUILD_BENCHMARKS)
 endfunction()
 
-set(CUDF_KAFKA_MIN_VERSION_cudf 0.19)
+set(CUDF_KAFKA_MIN_VERSION_cudf 0.20)
 find_and_configure_cudf(${CUDF_KAFKA_MIN_VERSION_cudf})
