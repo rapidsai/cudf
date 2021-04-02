@@ -1,7 +1,7 @@
 # Copyright (c) 2021, NVIDIA CORPORATION.
 
 from decimal import Decimal
-from typing import cast
+from typing import cast, Any
 
 import cupy as cp
 import numpy as np
@@ -169,6 +169,18 @@ class DecimalColumn(ColumnBase):
         return self.reduce(
             "sum_of_squares", skipna=skipna, dtype=dtype, min_count=min_count
         )
+
+    def fillna(
+        self, value: Any = None, method: str = None, dtype: Dtype = None
+    ):
+        """Fill null values with ``value``.
+
+        Returns a copy with null filled.
+        """
+        result = libcudf.replace.replace_nulls(
+            input_col=self, replacement=value, method=method, dtype=dtype
+        )
+        return self._copy_type_metadata(result)
 
 
 def _binop_scale(l_dtype, r_dtype, op):
