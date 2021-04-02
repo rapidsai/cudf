@@ -22,8 +22,7 @@
 namespace cudf {
 namespace jit {
 
-std::unique_ptr<jitify2::ProgramCache<>> get_program_cache(
-  jitify2::PreprocessedProgramData preprog);
+jitify2::ProgramCache<>& get_program_cache(jitify2::PreprocessedProgramData preprog);
 
 }  // namespace jit
 }  // namespace cudf
