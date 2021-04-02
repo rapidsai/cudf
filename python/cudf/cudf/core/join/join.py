@@ -237,31 +237,21 @@ class Merge(object):
         elif self.on:
             on_names = _coerce_to_tuple(self.on)
             for on in on_names:
-                # If `on` is provided, checks whether merging on
-                # columns, indexes or merging  index with column
-                if on in self.lhs._data and on not in self.rhs._data:
-                    # case1: merge on lhs column with rhs index
+                # If `on` is provided, Merge on columns if present,
+                # otherwise default to indexes.
+                if on in self.lhs._data:
                     left_keys.append(_Indexer(name=on, column=True))
-                    right_keys.append(_Indexer(name=on, index=True))
-
-                elif on not in self.lhs._data and on in self.rhs._data:
-                    # case2: merge on rhs column with lhs index
-                    left_keys.append(_Indexer(name=on, index=True))
-                    right_keys.append(_Indexer(name=on, column=True))
-
-                elif on not in self.lhs._data and on not in self.rhs._data:
-                    # case3: merge on lhs index with rhs index
-                    left_keys.append(_Indexer(name=on, index=True))
-                    right_keys.append(_Indexer(name=on, index=True))
-
                 else:
-                    # case4: merge on lhs column with rhs column
-                    left_keys.append(_Indexer(name=on, column=True))
+                    left_keys.append(_Indexer(name=on, index=True))
+                if on in self.rhs._data:
                     right_keys.append(_Indexer(name=on, column=True))
+                else:
+                    right_keys.append(_Indexer(name=on, index=True))
 
         else:
-            # if `on` not provided and not merging index with column or on
-            # both indexes, then use intersection  of columns in both frames
+            # if `on` is not provided and we're not merging
+            # index with column or on both indexes, then use
+            # the intersection  of columns in both frames
             on_names = set(self.lhs._data) & set(self.rhs._data)
             left_keys = [_Indexer(name=on, column=True) for on in on_names]
             right_keys = [_Indexer(name=on, column=True) for on in on_names]
