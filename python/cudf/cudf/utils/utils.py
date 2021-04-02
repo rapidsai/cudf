@@ -4,6 +4,7 @@ import functools
 from collections import OrderedDict
 from collections.abc import Sequence
 from math import floor, isinf, isnan
+from typing import FrozenSet, Set, Union
 
 import cupy as cp
 import numpy as np
@@ -292,7 +293,8 @@ class GetAttrGetItemMixin:
     multiple inheritance hierarchies that might also override serialization.
     The solution here is a minimally invasive change to simplify such patterns.
     """
-    _PROTECTED_KEYS = frozenset()
+
+    _PROTECTED_KEYS: Union[FrozenSet[str], Set[str]] = frozenset()
 
     def __getattr__(self, key):
         # Without this check, copying can trigger a RecursionError. See

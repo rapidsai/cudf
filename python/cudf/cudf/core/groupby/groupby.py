@@ -614,7 +614,7 @@ for key in _VALID_GROUPBY_AGGS:
 
 
 class DataFrameGroupBy(GroupBy, GetAttrGetItemMixin):
-    _PROTECTED_KEYS = frozenset(("obj", ))
+    _PROTECTED_KEYS = frozenset(("obj",))
 
     def __init__(
         self, obj, by=None, level=None, sort=False, as_index=True, dropna=True

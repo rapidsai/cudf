@@ -155,7 +155,7 @@ class Rolling(GetAttrGetItemMixin):
     dtype: float64
     """
 
-    _PROTECTED_KEYS = frozenset("obj", )
+    _PROTECTED_KEYS = frozenset(("obj",))
 
     _time_window = False
 
