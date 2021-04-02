@@ -17,11 +17,13 @@
 #include <tests/strings/utilities.h>
 #include <cudf/column/column_factories.hpp>
 #include <cudf/copying.hpp>
+#include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/scalar/scalar.hpp>
 #include <cudf/scalar/scalar_factories.hpp>
 #include <cudf/strings/string_view.cuh>
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/types.hpp>
+#include <cudf/utilities/span.hpp>
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_utilities.hpp>
 #include <cudf_test/column_wrapper.hpp>
@@ -33,14 +35,6 @@
 
 #include <cstring>
 #include <vector>
-
-template <typename T>
-std::vector<T> make_std_vector(rmm::device_uvector<T> const& v)
-{
-  std::vector<T> result(v.size());
-  CUDA_TRY(cudaMemcpy(result.data(), v.data(), v.size() * sizeof(T), cudaMemcpyDeviceToHost));
-  return result;
-}
 
 struct StringsFactoriesTest : public cudf::test::BaseFixture {
 };
@@ -99,8 +93,8 @@ TEST_F(StringsFactoriesTest, CreateColumnFromPair)
 
   // check string data
   auto strings_data   = cudf::strings::create_offsets(strings_view);
-  auto h_chars_data   = make_std_vector(strings_data.first);
-  auto h_offsets_data = make_std_vector(strings_data.second);
+  auto h_chars_data   = cudf::detail::make_std_vector_sync(strings_data.first);
+  auto h_offsets_data = cudf::detail::make_std_vector_sync(strings_data.second);
   EXPECT_EQ(memcmp(h_buffer.data(), h_chars_data.data(), h_buffer.size()), 0);
   EXPECT_EQ(
     memcmp(h_offsets.data(), h_offsets_data.data(), h_offsets.size() * sizeof(cudf::size_type)), 0);
@@ -155,8 +149,8 @@ TEST_F(StringsFactoriesTest, CreateColumnFromOffsets)
 
   // check string data
   auto strings_data   = cudf::strings::create_offsets(strings_view);
-  auto h_chars_data   = make_std_vector(strings_data.first);
-  auto h_offsets_data = make_std_vector(strings_data.second);
+  auto h_chars_data   = cudf::detail::make_std_vector_sync(strings_data.first);
+  auto h_offsets_data = cudf::detail::make_std_vector_sync(strings_data.second);
   EXPECT_EQ(memcmp(h_buffer.data(), h_chars_data.data(), h_buffer.size()), 0);
   EXPECT_EQ(
     memcmp(h_offsets.data(), h_offsets_data.data(), h_offsets.size() * sizeof(cudf::size_type)), 0);
@@ -201,8 +195,8 @@ TEST_F(StringsFactoriesTest, CreateOffsets)
   };
   for (size_t idx = 0; idx < result.size(); idx++) {
     auto strings_data     = cudf::strings::create_offsets(cudf::strings_column_view(result[idx]));
-    auto h_chars          = make_std_vector(strings_data.first);
-    auto h_offsets        = make_std_vector(strings_data.second);
+    auto h_chars          = cudf::detail::make_std_vector_sync(strings_data.first);
+    auto h_offsets        = cudf::detail::make_std_vector_sync(strings_data.second);
     auto expected_strings = expecteds[idx];
     for (size_t jdx = 0; jdx < h_offsets.size() - 1; ++jdx) {
       auto offset = h_offsets[jdx];
