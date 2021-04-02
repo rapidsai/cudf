@@ -25,6 +25,7 @@
 #include <cudf/table/row_operators.cuh>
 #include <cudf/table/table_device_view.cuh>
 #include <cudf/table/table_view.hpp>
+#include <structs/utilities.hpp>
 
 #include <hash/unordered_multiset.cuh>
 
@@ -100,13 +101,22 @@ std::unique_ptr<column> search_ordered(table_view const& t,
 
   // This utility will ensure all corresponding dictionary columns have matching keys.
   // It will return any new dictionary columns created as well as updated table_views.
-  auto matched  = dictionary::detail::match_dictionaries({t, values}, stream);
-  auto d_t      = table_device_view::create(matched.second.front(), stream);
-  auto d_values = table_device_view::create(matched.second.back(), stream);
+  auto matched = dictionary::detail::match_dictionaries({t, values}, stream);
+
+  // 0-table_view, 1-column_order, 2-null_precedence, 3-validity_columns
+  auto flattened_t =
+    structs::detail::flatten_nested_columns(matched.second.front(), column_order, null_precedence);
+  auto flattened_values =
+    structs::detail::flatten_nested_columns(matched.second.back(), column_order, null_precedence);
+
+  auto d_t      = table_device_view::create(std::get<0>(flattened_t), stream);
+  auto d_values = table_device_view::create(std::get<0>(flattened_values), stream);
   auto count_it = thrust::make_counting_iterator<size_type>(0);
 
-  rmm::device_vector<order> d_column_order(column_order.begin(), column_order.end());
-  rmm::device_vector<null_order> d_null_precedence(null_precedence.begin(), null_precedence.end());
+  rmm::device_vector<order> d_column_order(std::get<1>(flattened_t).begin(),
+                                           std::get<1>(flattened_t).end());
+  rmm::device_vector<null_order> d_null_precedence(std::get<2>(flattened_t).begin(),
+                                                   std::get<2>(flattened_t).end());
 
   if (has_nulls(t) or has_nulls(values)) {
     auto ineq_op =
