@@ -2829,7 +2829,7 @@ def interval_range(
         # if statement for mypy to pass
         if end is not None and start is not None:
             # determine if periods are float or integer
-            periods = periods._as_host_type("int64")
+            periods = periods.astype("int64")
             # divmod only supported on host side scalars
             quotient, remainder = divmod((end - start).value, periods.value)
             if remainder:
@@ -2838,7 +2838,7 @@ def interval_range(
                 freq_step = cudf.Scalar(quotient)
             common_dtype = find_common_type([common_dtype, freq_step.dtype])
             if start.dtype != freq_step.dtype:
-                start = start._as_host_type(freq_step.dtype)
+                start = start.astype(freq_step.dtype)
             bin_edges = sequence(
                 size=periods + 1,
                 init=start.device_value,
