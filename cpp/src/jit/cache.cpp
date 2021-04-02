@@ -107,25 +107,18 @@ jitify2::ProgramCache<>& get_program_cache(jitify2::PreprocessedProgramData prep
   static std::mutex caches_mutex{};
   static std::unordered_map<std::string, std::unique_ptr<jitify2::ProgramCache<>>> caches{};
 
+  std::lock_guard<std::mutex> caches_lock(caches_mutex);
+
   auto existing_cache = caches.find(preprog.name());
 
   if (existing_cache == caches.end()) {
-    // if the program cache was not found, lock and search for it again
-    std::lock_guard<std::mutex> caches_lock(caches_mutex);
+    auto res = caches.insert(
+      {preprog.name(),
+       std::make_unique<jitify2::ProgramCache<>>(100, preprog, nullptr, get_program_cache_dir())});
 
-    existing_cache = caches.find(preprog.name());
-
-    if (existing_cache == caches.end()) {
-      // if the program cache still wasn't found, we're first in line to create it.
-      auto res = caches.insert({preprog.name(),
-                                std::make_unique<jitify2::ProgramCache<>>(
-                                  100, preprog, nullptr, get_program_cache_dir())});
-
-      existing_cache = res.first;
-    }
+    existing_cache = res.first;
   }
 
-  // return the found / created cache.
   return *(existing_cache->second);
 }
 
