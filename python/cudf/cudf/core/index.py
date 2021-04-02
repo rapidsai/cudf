@@ -2821,7 +2821,7 @@ def interval_range(
         not is_numerical_dtype(x.dtype) if x is not None else False
         for x in args
     ):
-        raise ValueError("start, end, freq must be numeric values.")
+        raise ValueError("start, end, periods, freq must be numeric values.")
     *rargs, periods = args
     common_dtype = find_common_type([x.dtype for x in rargs if x])
     start, end, freq = rargs
