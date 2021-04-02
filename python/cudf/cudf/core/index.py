@@ -2892,7 +2892,9 @@ def interval_range(
             "freq, at least two must be specified"
         )
     if len(right_col) == 0 or len(left_col) == 0:
-        return cudf.IntervalIndex([], closed=closed)
+        dtype = IntervalDtype("int64", closed)
+        data = column.column_empty_like_same_mask(left_col, dtype)
+        return cudf.IntervalIndex(data, closed=closed)
 
     interval_col = column.build_interval_column(
         left_col, right_col, closed=closed
