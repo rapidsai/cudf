@@ -2,7 +2,6 @@
 
 import cudf
 
-from collections import OrderedDict
 from itertools import chain
 
 from libcpp.memory cimport unique_ptr, make_unique

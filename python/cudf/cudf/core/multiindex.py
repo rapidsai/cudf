@@ -5,7 +5,6 @@ import itertools
 import numbers
 import pickle
 import warnings
-from collections import OrderedDict
 from collections.abc import Sequence
 from typing import Any, List, Tuple, Union
 
@@ -1248,7 +1247,7 @@ class MultiIndex(Index):
         if not ilevels:
             return None
 
-        popped_data = OrderedDict({})
+        popped_data = {}
         popped_names = []
         names = list(self.names)
 
