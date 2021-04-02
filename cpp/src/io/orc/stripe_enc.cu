@@ -14,13 +14,13 @@
  * limitations under the License.
  */
 
+#include <io/orc/orc_common.h>
+#include <io/orc/orc_gpu.h>
 #include <cub/cub.cuh>
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/utilities/bit.hpp>
 #include <io/utilities/block_utils.cuh>
 #include <rmm/cuda_stream_view.hpp>
-#include <io/orc/orc_common.h>
-#include <io/orc/orc_gpu.h>
 
 namespace cudf {
 namespace io {

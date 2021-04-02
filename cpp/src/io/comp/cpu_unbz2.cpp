@@ -79,11 +79,11 @@ Jon L. Bentley
 For more information on these sources, see the manual.
 --*/
 
+#include <io/comp/io_uncomp.h>
+#include <io/comp/unbz2.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <vector>
-#include <io/comp/io_uncomp.h>
-#include <io/comp/unbz2.h>
 
 namespace cudf {
 namespace io {

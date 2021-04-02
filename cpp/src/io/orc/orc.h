@@ -26,9 +26,9 @@
 #include <cudf/utilities/error.hpp>
 
 #include <io/comp/io_uncomp.h>
+#include <io/orc/orc_common.h>
 #include <cudf/io/datasource.hpp>
 #include <cudf/io/orc_metadata.hpp>
-#include <io/orc/orc_common.h>
 
 namespace cudf {
 namespace io {
