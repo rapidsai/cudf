@@ -1869,3 +1869,56 @@ def test_join_renamed_index():
     )
     got = df.merge(df, left_index=True, right_index=True, how="inner")
     assert_join_results_equal(expect, got, how="inner")
+
+
+@pytest.mark.parametrize(
+    "lhs_col, lhs_idx, rhs_col, rhs_idx, on",
+    [
+        (["A", "B"], "L0", ["B", "C"], "L0", ["B"]),
+        (["A", "B"], "L0", ["B", "C"], "L0", ["L0"]),
+        (["A", "B"], "L0", ["B", "C"], "L0", ["B", "L0"]),
+        (["A", "B"], "L0", ["C", "L0"], "A", ["A"]),
+        (["A", "B"], "L0", ["C", "L0"], "A", ["L0"]),
+        (["A", "B"], "L0", ["C", "L0"], "A", ["A", "L0"]),
+    ],
+)
+@pytest.mark.parametrize(
+    "how", ["left", "inner", "right", "outer", "leftanti", "leftsemi"]
+)
+def test_join_merge_with_on(lhs_col, lhs_idx, rhs_col, rhs_idx, on, how):
+    lhs_data = {col_name: [4, 5, 6] for col_name in lhs_col}
+    lhs_index = cudf.Index([0, 1, 2], name=lhs_idx)
+
+    rhs_data = {col_name: [4, 5, 6] for col_name in rhs_col}
+    rhs_index = cudf.Index([2, 3, 4], name=rhs_idx)
+
+    gd_left = cudf.DataFrame(lhs_data, lhs_index)
+    gd_right = cudf.DataFrame(rhs_data, rhs_index)
+    pd_left = gd_left.to_pandas()
+    pd_right = gd_right.to_pandas()
+
+    expect = pd_left.merge(pd_right, on=on).sort_index(axis=1, ascending=False)
+    got = gd_left.merge(gd_right, on=on).sort_index(axis=1, ascending=False)
+
+    assert_join_results_equal(expect, got, how=how)
+
+
+@pytest.mark.parametrize(
+    "on", ["A", "L0"],
+)
+@pytest.mark.parametrize(
+    "how", ["left", "inner", "right", "outer", "leftanti", "leftsemi"]
+)
+def test_join_merge_invalid_keys(on, how):
+    gd_left = cudf.DataFrame(
+        {"A": [1, 2, 3], "B": [4, 5, 6]}, index=cudf.Index([0, 1, 2], name="C")
+    )
+    gd_right = cudf.DataFrame(
+        {"D": [2, 3, 4], "E": [7, 8, 0]}, index=cudf.Index([0, 2, 4], name="F")
+    )
+    pd_left = gd_left.to_pandas()
+    pd_right = gd_right.to_pandas()
+
+    with pytest.raises(KeyError):
+        pd_left.merge(pd_right, on=on)
+        gd_left.merge(gd_right, on=on)
