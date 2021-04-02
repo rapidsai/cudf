@@ -742,9 +742,9 @@ void writer::impl::gather_fragment_statistics(
   uint32_t num_fragments,
   uint32_t fragment_size)
 {
-  rmm::device_vector<statistics_group> frag_stats_group(num_fragments * num_columns);
+  rmm::device_uvector<statistics_group> frag_stats_group(num_fragments * num_columns, stream);
 
-  gpu::InitFragmentStatistics(frag_stats_group.data().get(),
+  gpu::InitFragmentStatistics(frag_stats_group.data(),
                               frag.device_ptr(),
                               col_desc.device_ptr(),
                               num_fragments,
@@ -752,7 +752,7 @@ void writer::impl::gather_fragment_statistics(
                               fragment_size,
                               stream);
   GatherColumnStatistics(
-    frag_stats_chunk, frag_stats_group.data().get(), num_fragments * num_columns, stream);
+    frag_stats_chunk, frag_stats_group.data(), num_fragments * num_columns, stream);
   stream.synchronize();
 }
 
