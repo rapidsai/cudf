@@ -109,15 +109,24 @@ jitify2::ProgramCache<>& get_program_cache(jitify2::PreprocessedProgramData prep
 
   auto existing_cache = caches.find(preprog.name());
 
-  if (existing_cache != caches.end()) { return *(existing_cache->second); }
+  if (existing_cache == caches.end()) {
+    // if the program cache was not found, lock and search for it again
+    std::lock_guard<std::mutex> caches_lock(caches_mutex);
 
-  std::lock_guard<std::mutex> caches_lock(caches_mutex);
+    existing_cache = caches.find(preprog.name());
 
-  caches.insert(
-    {preprog.name(),
-     std::make_unique<jitify2::ProgramCache<>>(100, preprog, nullptr, get_program_cache_dir())});
+    if (existing_cache == caches.end()) {
+      // if the program cache still wasn't found, we're first in line to create it.
+      auto res = caches.insert({preprog.name(),
+                                std::make_unique<jitify2::ProgramCache<>>(
+                                  100, preprog, nullptr, get_program_cache_dir())});
 
-  return *(caches.find(preprog.name())->second);
+      existing_cache = res.first;
+    }
+  }
+
+  // return the found / created cache.
+  return *(existing_cache->second);
 }
 
 }  // namespace jit
