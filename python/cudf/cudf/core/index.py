@@ -2814,7 +2814,7 @@ def interval_range(
             "freq, exactly three must be specified"
         )
     args = (start, end, freq, periods)
-    *args, periods = [cudf.Scalar(x) if x is not None else None for x in args]
+    *args, periods = (cudf.Scalar(x) if x is not None else None for x in args)
     if any(
         [
             not is_numerical_dtype(x.dtype) if x is not None else False
