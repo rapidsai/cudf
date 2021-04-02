@@ -95,16 +95,3 @@ TEST_F(StructSearchTest, contains_dictionary)
   auto result = cudf::contains(column, needles);
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*result, expect);
 }
-
-TEST_F(StructSearchTest, contains_nullable_dictionary)
-{
-  cudf::test::dictionary_column_wrapper<int64_t> column({0, 0, 17, 17, 23, 23, 29},
-                                                        {1, 0, 1, 1, 1, 1, 1});
-  EXPECT_TRUE(cudf::contains(column, numeric_scalar<int64_t>{23}));
-  EXPECT_FALSE(cudf::contains(column, numeric_scalar<int64_t>{28}));
-
-  cudf::test::dictionary_column_wrapper<int64_t> needles({0, 17, 23, 27});
-  fixed_width_column_wrapper<bool> expect({1, 0, 1, 1, 1, 1, 0}, {1, 0, 1, 1, 1, 1, 1});
-  auto result = cudf::contains(column, needles);
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*result, expect);
-}
