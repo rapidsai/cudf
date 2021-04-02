@@ -2813,8 +2813,10 @@ def interval_range(
             "Of the four parameters: start, end, periods, and "
             "freq, exactly three must be specified"
         )
-    args = (start, end, freq, periods)
-    *args, periods = (cudf.Scalar(x) if x is not None else None for x in args)
+    args = (
+        cudf.Scalar(x) if x is not None else None
+        for x in (start, end, freq, periods)
+    )
     if any(
         [
             not is_numerical_dtype(x.dtype) if x is not None else False
@@ -2822,8 +2824,9 @@ def interval_range(
         ]
     ):
         raise ValueError("start, end, freq must be numeric values.")
-    common_dtype = find_common_type([x.dtype for x in args if x])
-    start, end, freq = args
+    *rargs, periods = args
+    common_dtype = find_common_type([x.dtype for x in rargs if x])
+    start, end, freq = rargs
 
     if periods and not freq:
         # if statement for mypy to pass
@@ -2836,7 +2839,6 @@ def interval_range(
                 freq_step = cudf.Scalar((end - start) / periods)
             else:
                 freq_step = cudf.Scalar(quotient)
-            common_dtype = find_common_type([common_dtype, freq_step.dtype])
             if start.dtype != freq_step.dtype:
                 start = start.astype(freq_step.dtype)
             bin_edges = sequence(
@@ -2844,8 +2846,8 @@ def interval_range(
                 init=start.device_value,
                 step=freq_step.device_value,
             )
-            left_col = bin_edges[:-1].astype(common_dtype)
-            right_col = bin_edges[1:].astype(common_dtype)
+            left_col = bin_edges[:-1]
+            right_col = bin_edges[1:]
     elif freq and periods:
         if end:
             start = end - (freq * periods)
