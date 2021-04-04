@@ -39,7 +39,7 @@ namespace cudf {
 namespace io {
 namespace parquet {
 
-using string_pair = cudf::io::detail::column_buffer::str_pair;
+using cudf::io::detail::string_index_pair;
 
 /**
  * @brief Struct representing an input column in the file.
@@ -205,7 +205,7 @@ struct ColumnChunkDesc {
   int32_t max_num_pages;                      // size of page_info array
   PageInfo *page_info;                        // output page info for up to num_dict_pages +
                                               // num_data_pages (dictionary pages first)
-  string_pair *str_dict_index;                // index for string dictionary
+  string_index_pair *str_dict_index;          // index for string dictionary
   uint32_t **valid_map_base;                  // base pointers of valid bit map for this column
   void **column_data_base;                    // base pointers of column data
   int8_t codec;                               // compressed codec enum

@@ -62,13 +62,13 @@ inline rmm::device_buffer create_data(
   return data;
 }
 
+using string_index_pair = thrust::pair<const char*, size_type>;
+
 /**
  * @brief Class for holding device memory buffers to column data that eventually
  * will be used to create a column.
  */
 struct column_buffer {
-  using str_pair = thrust::pair<const char*, size_type>;
-
   column_buffer() = default;
 
   // construct without a known size. call create() later to actually
@@ -81,7 +81,7 @@ struct column_buffer {
                 bool _is_nullable                   = true,
                 rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
                 rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
-    : _null_count(0), type(_type), is_nullable(_is_nullable)
+    : type(_type), is_nullable(_is_nullable)
   {
     create(_size, stream, mr);
   }
@@ -112,7 +112,7 @@ struct column_buffer {
 
   auto& null_count() { return _null_count; }
 
-  std::unique_ptr<rmm::device_uvector<str_pair>> _strings;
+  std::unique_ptr<rmm::device_uvector<string_index_pair>> _strings;
   rmm::device_buffer _data{};
   rmm::device_buffer _null_mask{};
   size_type _null_count{0};

@@ -46,7 +46,7 @@ namespace json {
 namespace gpu {
 using namespace ::cudf;
 
-using string_pair = std::pair<const char *, size_t>;
+using string_index_pair = std::pair<const char *, size_t>;
 
 namespace {
 /**
@@ -516,7 +516,7 @@ __global__ void convert_data_to_columns_kernel(parse_options_view opts,
     if (!serialized_trie_contains(opts.trie_na, {desc.value_begin, value_len})) {
       // Type dispatcher does not handle strings
       if (column_types[desc.column].id() == type_id::STRING) {
-        auto str_list           = static_cast<string_pair *>(output_columns[desc.column]);
+        auto str_list           = static_cast<string_index_pair *>(output_columns[desc.column]);
         str_list[rec_id].first  = desc.value_begin;
         str_list[rec_id].second = value_len;
 
@@ -537,7 +537,7 @@ __global__ void convert_data_to_columns_kernel(parse_options_view opts,
         }
       }
     } else if (column_types[desc.column].id() == type_id::STRING) {
-      auto str_list           = static_cast<string_pair *>(output_columns[desc.column]);
+      auto str_list           = static_cast<string_index_pair *>(output_columns[desc.column]);
       str_list[rec_id].first  = nullptr;
       str_list[rec_id].second = 0;
     }

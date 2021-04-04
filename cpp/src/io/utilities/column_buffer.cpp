@@ -33,8 +33,8 @@ void column_buffer::create(size_type _size,
 
   switch (type.id()) {
     case type_id::STRING:
-      _strings = std::make_unique<rmm::device_uvector<str_pair>>(size, stream);
-      cudaMemsetAsync(_strings->data(), 0, size * sizeof(str_pair), stream.value());
+      _strings = std::make_unique<rmm::device_uvector<string_index_pair>>(size, stream);
+      cudaMemsetAsync(_strings->data(), 0, size * sizeof(string_index_pair), stream.value());
       break;
 
     // list columns store a buffer of int32's as offsets to represent

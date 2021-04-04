@@ -235,7 +235,7 @@ rmm::device_buffer reader::impl::decompress_data(const rmm::device_buffer &comp_
 
 void reader::impl::decode_data(const rmm::device_buffer &block_data,
                                const std::vector<std::pair<uint32_t, uint32_t>> &dict,
-                               device_span<string_pair> global_dictionary,
+                               device_span<string_index_pair> global_dictionary,
                                size_t num_rows,
                                std::vector<std::pair<int, std::string>> selection,
                                std::vector<column_buffer> &out_buffers,
@@ -393,10 +393,10 @@ table_with_metadata reader::impl::read(avro_reader_options const &options,
         for (const auto &sym : col_schema.symbols) { dictionary_data_size += sym.length(); }
       }
 
-      rmm::device_uvector<string_pair> d_global_dict(total_dictionary_entries, stream);
+      rmm::device_uvector<string_index_pair> d_global_dict(total_dictionary_entries, stream);
       rmm::device_uvector<char> d_global_dict_data(dictionary_data_size, stream);
       if (total_dictionary_entries > 0) {
-        std::vector<string_pair> h_global_dict(total_dictionary_entries);
+        std::vector<string_index_pair> h_global_dict(total_dictionary_entries);
         std::vector<char> h_global_dict_data(dictionary_data_size);
         size_t dict_pos = 0;
         for (size_t i = 0; i < column_types.size(); ++i) {
@@ -418,7 +418,7 @@ table_with_metadata reader::impl::read(avro_reader_options const &options,
 
         CUDA_TRY(cudaMemcpyAsync(d_global_dict.data(),
                                  h_global_dict.data(),
-                                 h_global_dict.size() * sizeof(string_pair),
+                                 h_global_dict.size() * sizeof(string_index_pair),
                                  cudaMemcpyDefault,
                                  stream.value()));
         CUDA_TRY(cudaMemcpyAsync(d_global_dict_data.data(),

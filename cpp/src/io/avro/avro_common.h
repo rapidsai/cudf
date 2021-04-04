@@ -57,7 +57,7 @@ enum type_kind_e {
   type_array,
 };
 
-using string_pair = cudf::io::detail::column_buffer::str_pair;
+using cudf::io::detail::string_index_pair;
 
 }  // namespace avro
 }  // namespace io

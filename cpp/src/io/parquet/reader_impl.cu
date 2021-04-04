@@ -1199,7 +1199,7 @@ void reader::impl::decode_page_data(hostdevice_vector<gpu::ColumnChunkDesc> &chu
 
   // Build index for string dictionaries since they can't be indexed
   // directly due to variable-sized elements
-  rmm::device_vector<string_pair> str_dict_index;
+  rmm::device_vector<string_index_pair> str_dict_index;
   if (total_str_dict_indexes > 0) { str_dict_index.resize(total_str_dict_indexes); }
 
   // TODO (dm): hd_vec should have begin and end iterator members
