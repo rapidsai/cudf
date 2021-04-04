@@ -1579,6 +1579,7 @@ def test_csv_writer_multiindex(tmpdir):
     pdf_df_fname = tmpdir.join("pdf_df_3.csv")
     gdf_df_fname = tmpdir.join("gdf_df_3.csv")
 
+    np.random.seed(0)
     gdf = cudf.DataFrame(
         {
             "a": np.random.randint(0, 5, 20),
@@ -1601,28 +1602,15 @@ def test_csv_writer_multiindex(tmpdir):
 
 
 @pytest.mark.parametrize("chunksize", [None, 9, 1000])
-def test_csv_writer_chunksize(chunksize, tmpdir):
-    pdf_df_fname = tmpdir.join("pdf_df_4.csv")
-    gdf_df_fname = tmpdir.join("gdf_df_4.csv")
+@pytest.mark.parametrize("dtype", dtypes)
+def test_csv_writer_chunksize(chunksize, dtype):
+    cu_df = cudf.from_pandas(make_numeric_dataframe(100, dtype))
 
-    pdf = make_numpy_mixed_dataframe()
-    pdf["Date"] = pdf["Date"].astype("datetime64")
-    # Increase the df len as chunked logic only gets applied from chunksize >=8
-    pdf = pd.concat([pdf] * 5)
-    gdf = cudf.from_pandas(pdf)
-    gdf["Date"] = gdf["Date"].astype("datetime64[s]")
+    buffer = BytesIO()
+    cu_df.to_csv(buffer, chunksize=chunksize, index=False)
 
-    pdf.to_csv(
-        pdf_df_fname, date_format="%Y-%m-%dT%H:%M:%SZ", chunksize=chunksize,
-    )
-    gdf.to_csv(gdf_df_fname, chunksize=chunksize)
-
-    assert os.path.exists(pdf_df_fname)
-    assert os.path.exists(gdf_df_fname)
-
-    expect = pd.read_csv(pdf_df_fname)
-    got = pd.read_csv(gdf_df_fname)
-    assert_eq(expect, got)
+    got = cudf.read_csv(buffer, dtype=[dtype])
+    assert_eq(cu_df, got)
 
 
 @pytest.mark.parametrize(
