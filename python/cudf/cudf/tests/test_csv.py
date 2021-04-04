@@ -1523,7 +1523,8 @@ def test_csv_writer_multichar_terminator(line_terminator):
     default_terminator_csv = StringIO()
     df.to_csv(default_terminator_csv)
 
-    # Need to check manually since readers don't support multicharacter line terminators
+    # Need to check manually since readers don't support
+    # multicharacter line terminators
     expected = default_terminator_csv.getvalue().replace("\n", line_terminator)
 
     buffer = StringIO()
@@ -1554,10 +1555,15 @@ def test_csv_writer_column_and_header_options(columns, header, index):
     cudf_buffer = BytesIO()
     df.to_csv(cudf_buffer, columns=columns, header=header, index=index)
     pd_buffer = BytesIO()
-    df.to_csv(pd_buffer, columns=columns, header=header, index=index)
+    pdf.to_csv(pd_buffer, columns=columns, header=header, index=index)
 
     expected = cudf.read_csv(pd_buffer, header=0 if header else None)
     got = cudf.read_csv(cudf_buffer, header=0 if header else None)
+
+    expected_column_cnt = (
+        (1 if index else 0) + len(columns) if columns else got.shape[1]
+    )
+    assert_eq(expected_column_cnt, got.shape[1])
     assert_eq(expected, got)
 
 
