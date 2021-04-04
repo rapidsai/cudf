@@ -17,6 +17,8 @@
 #pragma once
 
 #include <cudf/types.hpp>
+#include <io/utilities/column_buffer.hpp>
 #include <io/utilities/column_type_histogram.hpp>
 
 class SerialTrieNode;
+using cudf::io::detail::string_index_pair;

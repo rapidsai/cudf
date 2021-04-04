@@ -46,8 +46,6 @@ namespace json {
 namespace gpu {
 using namespace ::cudf;
 
-using string_index_pair = std::pair<const char *, size_t>;
-
 namespace {
 /**
  * @brief CUDA Kernel that adjusts the row range to exclude the character outside of the top level
