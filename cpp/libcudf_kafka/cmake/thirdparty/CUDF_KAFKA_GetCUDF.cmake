@@ -40,7 +40,16 @@ function(find_and_configure_cudf VERSION)
                         "BUILD_BENCHMARKS OFF")
     cudfkafka_restore_if_enabled(BUILD_TESTS)
     cudfkafka_restore_if_enabled(BUILD_BENCHMARKS)
+    if(cudf_ADDED)
+        set(cudf_ADDED TRUE PARENT_SCOPE)
+    endif()
 endfunction()
 
 set(CUDF_KAFKA_MIN_VERSION_cudf "${CUDF_KAFKA_VERSION_MAJOR}.${CUDF_KAFKA_VERSION_MINOR}")
 find_and_configure_cudf(${CUDF_KAFKA_MIN_VERSION_cudf})
+
+if(cudf_ADDED)
+    # Since we are building cudf as part of ourselves we need
+    # to enable the CUDA language in the top-most scope
+    enable_language(CUDA)
+endif()
