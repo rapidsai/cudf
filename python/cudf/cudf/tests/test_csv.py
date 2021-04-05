@@ -1,6 +1,5 @@
 # Copyright (c) 2018-2021, NVIDIA CORPORATION.
 
-import csv
 import gzip
 import os
 import re
