@@ -358,7 +358,7 @@ class Scalar(object):
         return getattr(self.value, op)()
 
     def astype(self, dtype):
-        return Scalar(self.device_value, dtype)
+        return Scalar(self.value, dtype)
 
 
 class _NAType(object):

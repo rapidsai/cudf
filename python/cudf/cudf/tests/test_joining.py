@@ -6,7 +6,7 @@ import pytest
 
 import cudf
 from cudf.core._compat import PANDAS_GE_120
-from cudf.core.dtypes import CategoricalDtype
+from cudf.core.dtypes import CategoricalDtype, Decimal64Dtype
 from cudf.tests.utils import (
     INTEGER_TYPES,
     NUMERIC_TYPES,
@@ -89,7 +89,7 @@ def assert_join_results_equal(expect, got, how, **kwargs):
         ):  # can't sort_values() on a df without columns
             return assert_eq(expect, got, **kwargs)
 
-        return assert_eq(
+        assert_eq(
             expect.sort_values(expect.columns.to_list()).reset_index(
                 drop=True
             ),
@@ -1153,6 +1153,137 @@ def test_typecast_on_join_overflow_unsafe(dtypes):
 
 
 @pytest.mark.parametrize(
+    "dtype",
+    [Decimal64Dtype(5, 2), Decimal64Dtype(7, 5), Decimal64Dtype(12, 7)],
+)
+def test_decimal_typecast_inner(dtype):
+    other_data = ["a", "b", "c", "d", "e"]
+
+    join_data_l = cudf.Series(["1.6", "9.5", "7.2", "8.7", "2.3"]).astype(
+        dtype
+    )
+    join_data_r = cudf.Series(["1.6", "9.5", "7.2", "4.5", "2.3"]).astype(
+        dtype
+    )
+
+    gdf_l = cudf.DataFrame({"join_col": join_data_l, "B": other_data})
+    gdf_r = cudf.DataFrame({"join_col": join_data_r, "B": other_data})
+
+    exp_join_data = ["1.6", "9.5", "7.2", "2.3"]
+    exp_other_data = ["a", "b", "c", "e"]
+
+    exp_join_col = cudf.Series(exp_join_data).astype(dtype)
+
+    expected = cudf.DataFrame(
+        {
+            "join_col": exp_join_col,
+            "B_x": exp_other_data,
+            "B_y": exp_other_data,
+        }
+    )
+
+    got = gdf_l.merge(gdf_r, on="join_col", how="inner")
+
+    assert_join_results_equal(expected, got, how="inner")
+    assert_eq(dtype, got["join_col"].dtype)
+
+
+@pytest.mark.parametrize(
+    "dtype",
+    [Decimal64Dtype(7, 3), Decimal64Dtype(9, 5), Decimal64Dtype(14, 10)],
+)
+def test_decimal_typecast_left(dtype):
+    other_data = ["a", "b", "c", "d"]
+
+    join_data_l = cudf.Series(["95.05", "384.26", "74.22", "1456.94"]).astype(
+        dtype
+    )
+    join_data_r = cudf.Series(
+        ["95.05", "62.4056", "74.22", "1456.9472"]
+    ).astype(dtype)
+
+    gdf_l = cudf.DataFrame({"join_col": join_data_l, "B": other_data})
+    gdf_r = cudf.DataFrame({"join_col": join_data_r, "B": other_data})
+
+    exp_join_data = ["95.05", "74.22", "384.26", "1456.94"]
+    exp_other_data_x = ["a", "c", "b", "d"]
+    exp_other_data_y = ["a", "c", None, None]
+
+    exp_join_col = cudf.Series(exp_join_data).astype(dtype)
+
+    expected = cudf.DataFrame(
+        {
+            "join_col": exp_join_col,
+            "B_x": exp_other_data_x,
+            "B_y": exp_other_data_y,
+        }
+    )
+
+    got = gdf_l.merge(gdf_r, on="join_col", how="left")
+
+    assert_join_results_equal(expected, got, how="left")
+    assert_eq(dtype, got["join_col"].dtype)
+
+
+@pytest.mark.parametrize(
+    "dtype",
+    [Decimal64Dtype(7, 3), Decimal64Dtype(10, 5), Decimal64Dtype(18, 9)],
+)
+def test_decimal_typecast_outer(dtype):
+    other_data = ["a", "b", "c"]
+    join_data_l = cudf.Series(["741.248", "1029.528", "3627.292"]).astype(
+        dtype
+    )
+    join_data_r = cudf.Series(["9284.103", "1029.528", "948.637"]).astype(
+        dtype
+    )
+    gdf_l = cudf.DataFrame({"join_col": join_data_l, "B": other_data})
+    gdf_r = cudf.DataFrame({"join_col": join_data_r, "B": other_data})
+    exp_join_data = ["9284.103", "948.637", "1029.528", "741.248", "3627.292"]
+    exp_other_data_x = [None, None, "b", "a", "c"]
+    exp_other_data_y = ["a", "c", "b", None, None]
+    exp_join_col = cudf.Series(exp_join_data).astype(dtype)
+    expected = cudf.DataFrame(
+        {
+            "join_col": exp_join_col,
+            "B_x": exp_other_data_x,
+            "B_y": exp_other_data_y,
+        }
+    )
+    got = gdf_l.merge(gdf_r, on="join_col", how="outer")
+
+    assert_join_results_equal(expected, got, how="outer")
+    assert_eq(dtype, got["join_col"].dtype)
+
+
+@pytest.mark.parametrize(
+    "dtype_l", [Decimal64Dtype(7, 3), Decimal64Dtype(9, 5)],
+)
+@pytest.mark.parametrize(
+    "dtype_r", [Decimal64Dtype(8, 3), Decimal64Dtype(11, 6)],
+)
+def test_mixed_decimal_typecast(dtype_l, dtype_r):
+    other_data = ["a", "b", "c", "d"]
+
+    join_data_l = cudf.Series(["95.05", "34.6", "74.22", "14.94"]).astype(
+        dtype_r
+    )
+    join_data_r = cudf.Series(["95.05", "62.4056", "74.22", "1.42"]).astype(
+        dtype_l
+    )
+
+    gdf_l = cudf.DataFrame({"join_col": join_data_l, "B": other_data})
+    gdf_r = cudf.DataFrame({"join_col": join_data_r, "B": other_data})
+
+    with pytest.raises(
+        TypeError,
+        match="Decimal columns can only be merged with decimal columns "
+        "of the same precision and scale",
+    ):
+        gdf_l.merge(gdf_r, on="join_col", how="inner")
+
+
+@pytest.mark.parametrize(
     "dtype_l",
     ["datetime64[s]", "datetime64[ms]", "datetime64[us]", "datetime64[ns]"],
 )
@@ -1738,3 +1869,56 @@ def test_join_renamed_index():
     )
     got = df.merge(df, left_index=True, right_index=True, how="inner")
     assert_join_results_equal(expect, got, how="inner")
+
+
+@pytest.mark.parametrize(
+    "lhs_col, lhs_idx, rhs_col, rhs_idx, on",
+    [
+        (["A", "B"], "L0", ["B", "C"], "L0", ["B"]),
+        (["A", "B"], "L0", ["B", "C"], "L0", ["L0"]),
+        (["A", "B"], "L0", ["B", "C"], "L0", ["B", "L0"]),
+        (["A", "B"], "L0", ["C", "L0"], "A", ["A"]),
+        (["A", "B"], "L0", ["C", "L0"], "A", ["L0"]),
+        (["A", "B"], "L0", ["C", "L0"], "A", ["A", "L0"]),
+    ],
+)
+@pytest.mark.parametrize(
+    "how", ["left", "inner", "right", "outer", "leftanti", "leftsemi"]
+)
+def test_join_merge_with_on(lhs_col, lhs_idx, rhs_col, rhs_idx, on, how):
+    lhs_data = {col_name: [4, 5, 6] for col_name in lhs_col}
+    lhs_index = cudf.Index([0, 1, 2], name=lhs_idx)
+
+    rhs_data = {col_name: [4, 5, 6] for col_name in rhs_col}
+    rhs_index = cudf.Index([2, 3, 4], name=rhs_idx)
+
+    gd_left = cudf.DataFrame(lhs_data, lhs_index)
+    gd_right = cudf.DataFrame(rhs_data, rhs_index)
+    pd_left = gd_left.to_pandas()
+    pd_right = gd_right.to_pandas()
+
+    expect = pd_left.merge(pd_right, on=on).sort_index(axis=1, ascending=False)
+    got = gd_left.merge(gd_right, on=on).sort_index(axis=1, ascending=False)
+
+    assert_join_results_equal(expect, got, how=how)
+
+
+@pytest.mark.parametrize(
+    "on", ["A", "L0"],
+)
+@pytest.mark.parametrize(
+    "how", ["left", "inner", "right", "outer", "leftanti", "leftsemi"]
+)
+def test_join_merge_invalid_keys(on, how):
+    gd_left = cudf.DataFrame(
+        {"A": [1, 2, 3], "B": [4, 5, 6]}, index=cudf.Index([0, 1, 2], name="C")
+    )
+    gd_right = cudf.DataFrame(
+        {"D": [2, 3, 4], "E": [7, 8, 0]}, index=cudf.Index([0, 2, 4], name="F")
+    )
+    pd_left = gd_left.to_pandas()
+    pd_right = gd_right.to_pandas()
+
+    with pytest.raises(KeyError):
+        pd_left.merge(pd_right, on=on)
+        gd_left.merge(gd_right, on=on)

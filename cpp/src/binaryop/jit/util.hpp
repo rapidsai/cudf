@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -72,11 +72,15 @@ std::string inline get_operator_name(binary_operator op, OperatorType type)
       case binary_operator::NULL_EQUALS:          return "NullEquals";
       case binary_operator::NULL_MAX:             return "NullMax";
       case binary_operator::NULL_MIN:             return "NullMin";
-      default:                              return "None";
+      default:                                    return "";
     }
     // clang-format on
   }();
-  return type == OperatorType::Direct ? operator_name : 'R' + operator_name;
+
+  if (operator_name == "") { return "None"; }
+
+  return "cudf::binops::jit::" +
+         (type == OperatorType::Direct ? operator_name : 'R' + operator_name);
 }
 
 }  // namespace jit
