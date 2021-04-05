@@ -201,29 +201,34 @@ def concat(objs, axis=0, join="outer", ignore_index=False, sort=None):
     1      b       2  monkey  george
     """
 
+    # TODO: Do we really need to have different error messages for an empty
+    # list and a list of None?
     if not objs:
         raise ValueError("No objects to concatenate")
 
     objs = [obj for obj in objs if obj is not None]
+
+    if not objs:
+        raise ValueError("All objects passed were None")
+
     # Return for single object
     if len(objs) == 1:
+        obj = objs[0]
+
         if ignore_index:
             if axis == 1:
-                result = cudf.DataFrame(
-                    data=objs[0]._data.copy(deep=True),
-                    index=objs[0].index.copy(deep=True),
-                )
-                # TODO: Move following columns setting into
-                # above constructor after following issue is fixed:
-                # https://github.com/rapidsai/cudf/issues/6821
-                result.columns = pd.RangeIndex(len(objs[0]._data.names))
+                index = obj.index.copy(deep=True)
+                columns = pd.RangeIndex(len(obj._data.names))
             elif axis == 0:
-                result = cudf.DataFrame(
-                    data=objs[0]._data.copy(deep=True),
-                    index=cudf.RangeIndex(len(objs[0])),
-                )
+                # TODO: This will disagree with pandas when the input object is
+                # a Series, it will upcast.
+                index = cudf.RangeIndex(len(obj))
+                columns = None
+            result = cudf.DataFrame(data=obj._data.copy(deep=True),
+                                    index=index, columns=columns)
         else:
-            result = objs[0].copy()
+            result = obj.copy()
+
         if sort:
             if axis == 0:
                 return result.sort_index()
@@ -236,9 +241,6 @@ def concat(objs, axis=0, join="outer", ignore_index=False, sort=None):
                 )
         else:
             return result
-
-    if len(objs) == 0:
-        raise ValueError("All objects passed were None")
 
     # Retrieve the base types of `objs`. In order to support sub-types
     # and object wrappers, we use `isinstance()` instead of comparing
