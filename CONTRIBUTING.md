@@ -138,7 +138,7 @@ Compiler requirements:
 CUDA/GPU requirements:
 
 * CUDA 11.0+
-* NVIDIA driver 450.51+
+* NVIDIA driver 450.80.02+
 * Pascal architecture or better
 
 You can obtain CUDA from [https://developer.nvidia.com/cuda-downloads](https://developer.nvidia.com/cuda-downloads).
