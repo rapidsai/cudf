@@ -129,10 +129,8 @@ class writer::impl {
    * @param num_rows Total number of rows
    * @param fragment_size Number of rows per fragment
    */
-  void init_page_fragments(hostdevice_vector<gpu::PageFragment>& frag,
+  void init_page_fragments(cudf::detail::hostdevice_2dvector<gpu::PageFragment>& frag,
                            hostdevice_vector<gpu::parquet_column_device_view>& col_desc,
-                           uint32_t num_columns,
-                           uint32_t num_fragments,
                            uint32_t num_rows,
                            uint32_t fragment_size);
 
@@ -147,7 +145,7 @@ class writer::impl {
    * @param fragment_size Number of rows per fragment
    */
   void gather_fragment_statistics(statistics_chunk* dst_stats,
-                                  hostdevice_vector<gpu::PageFragment>& frag,
+                                  gpu::PageFragment* frag,
                                   hostdevice_vector<gpu::parquet_column_device_view>& col_desc,
                                   uint32_t num_columns,
                                   uint32_t num_fragments,

@@ -26,6 +26,7 @@
 #include <cudf/lists/lists_column_view.hpp>
 #include <cudf/table/table_device_view.cuh>
 #include <cudf/types.hpp>
+#include <cudf/utilities/span.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_scalar.hpp>
@@ -452,10 +453,8 @@ dremel_data get_dremel_data(column_view h_col,
  * @param[in] num_rows Number of rows per column
  * @param[in] stream CUDA stream to use, default 0
  */
-void InitPageFragments(PageFragment *frag,
+void InitPageFragments(cudf::detail::device_2dspan<PageFragment> frag,
                        const parquet_column_device_view *col_desc,
-                       int32_t num_fragments,
-                       int32_t num_columns,
                        uint32_t fragment_size,
                        uint32_t num_rows,
                        rmm::cuda_stream_view stream);

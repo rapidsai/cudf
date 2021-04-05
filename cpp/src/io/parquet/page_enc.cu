@@ -114,10 +114,8 @@ inline __device__ uint32_t uint64_init_hash(uint64_t v)
 // blockDim {512,1,1}
 template <int block_size>
 __global__ void __launch_bounds__(block_size)
-  gpuInitPageFragments(PageFragment *frag,
+  gpuInitPageFragments(cudf::detail::device_2dspan<PageFragment> frag,
                        const parquet_column_device_view *col_desc,
-                       int32_t num_fragments,
-                       int32_t num_columns,
                        uint32_t fragment_size,
                        uint32_t max_num_rows)
 {
@@ -377,7 +375,7 @@ __global__ void __launch_bounds__(block_size)
     }
   }
   __syncthreads();
-  if (t == 0) frag[blockIdx.x * num_fragments + blockIdx.y] = s->frag;
+  if (t == 0) frag[blockIdx.x][blockIdx.y] = s->frag;
 }
 
 // blockDim {128,1,1}
@@ -2090,17 +2088,17 @@ dremel_data get_dremel_data(column_view h_col,
  * @param[in] num_columns Number of columns
  * @param[in] stream CUDA stream to use, default 0
  */
-void InitPageFragments(PageFragment *frag,
+void InitPageFragments(cudf::detail::device_2dspan<PageFragment> frag,
                        const parquet_column_device_view *col_desc,
-                       int32_t num_fragments,
-                       int32_t num_columns,
                        uint32_t fragment_size,
                        uint32_t num_rows,
                        rmm::cuda_stream_view stream)
 {
+  auto num_columns   = frag.size().first;
+  auto num_fragments = frag.size().second;
   dim3 dim_grid(num_columns, num_fragments);  // 1 threadblock per fragment
-  gpuInitPageFragments<512><<<dim_grid, 512, 0, stream.value()>>>(
-    frag, col_desc, num_fragments, num_columns, fragment_size, num_rows);
+  gpuInitPageFragments<512>
+    <<<dim_grid, 512, 0, stream.value()>>>(frag, col_desc, fragment_size, num_rows);
 }
 
 /**

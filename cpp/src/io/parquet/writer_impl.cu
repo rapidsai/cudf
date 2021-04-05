@@ -717,26 +717,18 @@ gpu::parquet_column_device_view parquet_column_view::get_device_view(rmm::cuda_s
   return desc;
 }
 
-void writer::impl::init_page_fragments(hostdevice_vector<gpu::PageFragment> &frag,
+void writer::impl::init_page_fragments(cudf::detail::hostdevice_2dvector<gpu::PageFragment> &frag,
                                        hostdevice_vector<gpu::parquet_column_device_view> &col_desc,
-                                       uint32_t num_columns,
-                                       uint32_t num_fragments,
                                        uint32_t num_rows,
                                        uint32_t fragment_size)
 {
-  gpu::InitPageFragments(frag.device_ptr(),
-                         col_desc.device_ptr(),
-                         num_fragments,
-                         num_columns,
-                         fragment_size,
-                         num_rows,
-                         stream);
+  gpu::InitPageFragments(frag, col_desc.device_ptr(), fragment_size, num_rows, stream);
   frag.device_to_host(stream, true);
 }
 
 void writer::impl::gather_fragment_statistics(
   statistics_chunk *frag_stats_chunk,
-  hostdevice_vector<gpu::PageFragment> &frag,
+  gpu::PageFragment *frag,  // const
   hostdevice_vector<gpu::parquet_column_device_view> &col_desc,
   uint32_t num_columns,
   uint32_t num_fragments,
@@ -745,7 +737,7 @@ void writer::impl::gather_fragment_statistics(
   rmm::device_uvector<statistics_group> frag_stats_group(num_fragments * num_columns, stream);
 
   gpu::InitFragmentStatistics(frag_stats_group.data(),
-                              frag.device_ptr(),
+                              frag,
                               col_desc.device_ptr(),
                               num_fragments,
                               num_columns,
@@ -997,15 +989,16 @@ void writer::impl::write(table_view const &table)
                 "fragment size cannot be greater than max_page_fragment_size");
 
   uint32_t num_fragments = (uint32_t)((num_rows + fragment_size - 1) / fragment_size);
-  hostdevice_vector<gpu::PageFragment> fragments(num_columns * num_fragments, stream);
+  cudf::detail::hostdevice_2dvector<gpu::PageFragment> fragments(
+    num_columns, num_fragments, stream);
 
-  if (fragments.size() != 0) {
+  if (fragments.size().second != 0) {
     // Move column info to device
     col_desc.host_to_device(stream);
     leaf_column_views = create_leaf_column_device_views<gpu::parquet_column_device_view>(
       col_desc, *parent_column_table_device_view, stream);
 
-    init_page_fragments(fragments, col_desc, num_columns, num_fragments, num_rows, fragment_size);
+    init_page_fragments(fragments, col_desc, num_rows, fragment_size);
   }
 
   size_t global_rowgroup_base = md.row_groups.size();
@@ -1018,7 +1011,7 @@ void writer::impl::write(table_view const &table)
     size_t fragment_data_size = 0;
     // Replace with STL algorithm to transform and sum
     for (auto i = 0; i < num_columns; i++) {
-      fragment_data_size += fragments[i * num_fragments + f].fragment_data_size;
+      fragment_data_size += fragments[i][f].fragment_data_size;
     }
     if (f > rowgroup_start && (rowgroup_size + fragment_data_size > max_rowgroup_size_ ||
                                (f + 1 - rowgroup_start) * fragment_size > max_rowgroup_rows_)) {
@@ -1044,7 +1037,13 @@ void writer::impl::write(table_view const &table)
     frag_stats.resize(num_fragments * num_columns, stream);
     if (frag_stats.size() != 0) {
       gather_fragment_statistics(
-        frag_stats.data(), fragments, col_desc, num_columns, num_fragments, fragment_size);
+        frag_stats.data(),
+        // This is ugly; need a .host_view/device_view member
+        static_cast<cudf::detail::device_2dspan<gpu::PageFragment>>(fragments).data(),
+        col_desc,
+        num_columns,
+        num_fragments,
+        fragment_size);
     }
   }
   // Initialize row groups and column chunks
@@ -1066,23 +1065,25 @@ void writer::impl::write(table_view const &table)
       ck->compressed_bfr   = nullptr;
       ck->bfr_size         = 0;
       ck->compressed_size  = 0;
-      ck->fragments        = fragments.device_ptr() + i * num_fragments + f;
+      // TODO: Next, make the chunk member a span
+      ck->fragments = &static_cast<cudf::detail::device_2dspan<gpu::PageFragment>>(fragments)[i][f];
       ck->stats = (frag_stats.size() != 0) ? frag_stats.data() + i * num_fragments + f : nullptr;
-      ck->start_row      = start_row;
-      ck->num_rows       = (uint32_t)md.row_groups[global_r].num_rows;
-      ck->first_fragment = i * num_fragments + f;
+      ck->start_row        = start_row;
+      ck->num_rows         = (uint32_t)md.row_groups[global_r].num_rows;
+      ck->first_fragment   = i * num_fragments + f;
+      auto chunk_fragments = fragments[i].subspan(f, fragments_in_chunk);
       ck->num_values =
-        std::accumulate(fragments.host_ptr(i * num_fragments + f),
-                        fragments.host_ptr(i * num_fragments + f) + fragments_in_chunk,
-                        0,
-                        [](uint32_t l, auto r) { return l + r.num_values; });
+        std::accumulate(chunk_fragments.begin(), chunk_fragments.end(), 0, [](uint32_t l, auto r) {
+          return l + r.num_values;
+        });
       ck->first_page    = 0;
       ck->num_pages     = 0;
       ck->is_compressed = 0;
       ck->dictionary_id = num_dictionaries;
       ck->ck_stat_size  = 0;
       if (col_desc[i].dict_data) {
-        const gpu::PageFragment *ck_frag = &fragments[i * num_fragments + f];
+        // TODO: turn it into subspan
+        const gpu::PageFragment *ck_frag = &fragments[i][f];
         size_t plain_size                = 0;
         size_t dict_size                 = 1;
         uint32_t num_dict_vals           = 0;
