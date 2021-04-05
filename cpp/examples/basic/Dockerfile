@@ -1,5 +1,4 @@
 FROM nvidia/cuda:11.1.1-devel-ubuntu18.04
-ARG PARALLEL_LEVEL=8
 
 # Install basic cudf dependencies
 RUN GCC_VERSION=9 \
@@ -32,6 +31,7 @@ RUN GCC_VERSION=9 \
  && update-alternatives --set gcc /usr/bin/gcc-${GCC_VERSION}
 
 ARG CMAKE_VERSION=3.18.5
+ARG PARALLEL_LEVEL=8
 
 # Install CMake
 RUN cd /tmp \
