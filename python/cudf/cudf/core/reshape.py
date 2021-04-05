@@ -225,10 +225,12 @@ def concat(objs, axis=0, join="outer", ignore_index=False, sort=None):
                 # after construction.
                 result.columns = pd.RangeIndex(len(obj._data.names))
             elif axis == 0:
-                # TODO: This will disagree with pandas when the input object is
-                # a Series, it will upcast.
-                result = cudf.DataFrame(data=obj._data.copy(deep=True),
-                                        index=cudf.RangeIndex(len(obj)))
+                if isinstance(obj, (pd.Series, cudf.Series)):
+                    result = cudf.Series(data=obj._data.copy(deep=True),
+                                         index=cudf.RangeIndex(len(obj)))
+                else:
+                    result = cudf.DataFrame(data=obj._data.copy(deep=True),
+                                            index=cudf.RangeIndex(len(obj)))
         else:
             result = obj.copy()
 
