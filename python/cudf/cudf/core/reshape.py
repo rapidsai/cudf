@@ -7,7 +7,7 @@ import pandas as pd
 
 import cudf
 
-_axis_map = {0: 0, 1: 1, "index": 0, "columns": 1}
+_AXIS_MAP = {0: 0, 1: 1, "index": 0, "columns": 1}
 
 
 def _align_objs(objs, how="outer"):
@@ -71,6 +71,8 @@ def _align_objs(objs, how="outer"):
 
 
 def _normalize_series_and_dataframe(objs, axis):
+    """Convert any cudf.Series objects in objs to DataFrames in place."""
+    # Default to naming series by a numerical id if they are not named.
     sr_name = 0
     for idx, o in enumerate(objs):
         if isinstance(o, cudf.Series):
@@ -243,8 +245,7 @@ def concat(objs, axis=0, join="outer", ignore_index=False, sort=None):
     for o in objs:
         if isinstance(o, cudf.MultiIndex):
             typs.add(cudf.MultiIndex)
-        # TODO: Why is this not an isinstance check?
-        if issubclass(type(o), cudf.Index):
+        elif isinstance(o, cudf.Index):
             typs.add(type(o))
         elif isinstance(o, cudf.DataFrame):
             typs.add(cudf.DataFrame)
@@ -255,7 +256,7 @@ def concat(objs, axis=0, join="outer", ignore_index=False, sort=None):
 
     allowed_typs = {cudf.Series, cudf.DataFrame}
 
-    axis = _axis_map.get(axis, None)
+    axis = _AXIS_MAP.get(axis, None)
     if axis is None:
         raise ValueError(
             f'`axis` must be 0 / "index" or 1 / "columns", got: {axis}'
@@ -270,17 +271,14 @@ def concat(objs, axis=0, join="outer", ignore_index=False, sort=None):
         df = cudf.DataFrame()
         _normalize_series_and_dataframe(objs, axis=axis)
 
-        old_objs = objs
+        # Inner joins involving empty data frames always return empty dfs, but
+        # We must delay returning until we have set the column names.
+        empty_inner = any(obj.empty for obj in objs) and join == "inner"
+
         objs = [obj for obj in objs if obj.shape != (0, 0)]
 
         if len(objs) == 0:
             return df
-
-        empty_inner = False
-        if join == "inner":
-            # don't filter out empty df's
-            if any(obj.empty for obj in old_objs):
-                empty_inner = True
 
         objs, match_index = _align_objs(objs, how=join)
 
@@ -296,7 +294,6 @@ def concat(objs, axis=0, join="outer", ignore_index=False, sort=None):
                     )
                 df[col] = o._data[col]
 
-        # result_columns = [obj.columns for obj in objs]
         result_columns = objs[0].columns.append(
             [obj.columns for obj in objs[1:]])
 
@@ -322,8 +319,8 @@ def concat(objs, axis=0, join="outer", ignore_index=False, sort=None):
         else:
             return df
 
+    # If we get here, we are always concatenating along axis 0 (the rows).
     typ = list(typs)[0]
-
     if len(typs) > 1:
         if allowed_typs == typs:
             # This block of code will run when `objs` has
