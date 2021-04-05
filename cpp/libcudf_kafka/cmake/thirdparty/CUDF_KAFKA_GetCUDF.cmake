@@ -45,8 +45,8 @@ function(find_and_configure_cudf VERSION)
     endif()
 endfunction()
 
-set(CUDF_KAFKA_MIN_VERSION_cudf "${CUDF_KAFKA_VERSION_MAJOR}.${CUDF_KAFKA_VERSION_MINOR}")
-find_and_configure_cudf(${CUDF_KAFKA_MIN_VERSION_cudf})
+set(CUDA_KAFKA_MIN_VERSION_cudf "${CUDA_KAFKA_VERSION_MAJOR}.${CUDA_KAFKA_VERSION_MINOR}")
+find_and_configure_cudf(${CUDA_KAFKA_MIN_VERSION_cudf})
 
 if(cudf_ADDED)
     # Since we are building cudf as part of ourselves we need
