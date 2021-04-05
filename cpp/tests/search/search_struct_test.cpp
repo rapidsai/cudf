@@ -182,22 +182,12 @@ TYPED_TEST(TypedStructSearchTest, ComplexStructTest)
   // Testing on struct<string, numeric, bool>.
   using col_wrapper = cudf::test::fixed_width_column_wrapper<TypeParam, int32_t>;
 
-  auto names_column_values = strings_col{nullptr, "Bagel", "Lemonade", "Donut", "Butter"};
-  auto ages_column_values =
-    col_wrapper{{15, null, 10, 21, 17},
-                cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i != 1; })};
-  auto is_human_col_values  = bools_col{false, false, false, false, false};
-  auto const structs_values = structs_col{
-    {names_column_values, ages_column_values, is_human_col_values},
-    cudf::detail::make_counting_transform_iterator(0, [](auto i) {
-      return i != 2;
-    })}.release();
-
-  auto names_column_t = strings_col{"Cherry", "Kiwi", "Lemon", "Newton", "Tomato", "Washington"};
+  auto names_column_t =
+    strings_col{"Cherry", "Kiwi", "Lemon", "Newton", "Tomato", /*NULL*/ "Washington"};
   auto ages_column_t =
-    col_wrapper{{5, 10, 15, 20, null, 30},
+    col_wrapper{{5, 10, 15, 20, null, XXX},
                 cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i != 4; })};
-  auto is_human_col_t = bools_col{false, false, false, false, false, true};
+  auto is_human_col_t = bools_col{false, false, false, false, false, /*NULL*/ true};
 
   auto const structs_t = structs_col{
     {names_column_t, ages_column_t, is_human_col_t},
@@ -205,10 +195,21 @@ TYPED_TEST(TypedStructSearchTest, ComplexStructTest)
       return i != 5;
     })}.release();
 
-  auto results =
-    search_bounds(structs_t, structs_values, {cudf::order::ASCENDING}, {cudf::null_order::BEFORE});
-  auto expected_lower_bound = int32s_col{3, 1, 11, 0, 4, 11};
-  auto expected_upper_bound = int32s_col{4, 2, 11, 1, 8, 11};
+  auto names_column_values = strings_col{"Bagel", "Tomato", "Lemonade", /*NULL*/ "Donut", "Butter"};
+  auto ages_column_values =
+    col_wrapper{{10, 15, null, XXX, 17},
+                cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i != 1; })};
+  auto is_human_col_values  = bools_col{false, false, true, /*NULL*/ true, true};
+  auto const structs_values = structs_col{
+    {names_column_values, ages_column_values, is_human_col_values},
+    cudf::detail::make_counting_transform_iterator(0, [](auto i) {
+      return i != 3;
+    })}.release();
+
+  auto const results =
+    search_bounds(structs_t, structs_values, {cudf::order::ASCENDING}, {cudf::null_order::AFTER});
+  auto const expected_lower_bound = int32s_col{0, 4, 3, 5, 0};
+  auto const expected_upper_bound = int32s_col{0, 5, 3, 6, 0};
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_lower_bound, results.first->view(), print_all);
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_upper_bound, results.second->view(), print_all);
 }
