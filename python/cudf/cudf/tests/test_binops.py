@@ -2064,6 +2064,143 @@ def test_binops_decimal_comp_mixed_integer(args, integer_dtype, reflected):
     utils.assert_eq(expected, actual)
 
 
+def generate_test_binops_decimal_integer_column_test_cases():
+    # these are just reimplementations of the formulas found in
+    # decimal.py - however we want this test to fail if something
+    # happens to those, so we need to avoid calling them directly
+    # here, else the same code is being used to generate both
+    # "expect" and "got"
+
+    def _binop_scale(s1, s2, op):
+        if op in ("add", "sub"):
+            return max(s1, s2)
+        elif op == "mul":
+            return s1 + s2
+
+    def _binop_precision(p1, s1, p2, s2, op):
+        if op in ("add", "sub"):
+            return max(s1, s2) + max(p1 - s1, p2 - s2) + 1
+        elif op == "mul":
+            return p1 + p2 + 1
+
+    def make_expect_dtype(p1, s1, p2, s2, op):
+        exp_precision = _binop_precision(p1, s1, p2, s2, op.__name__)
+        exp_scale = _binop_scale(s1, s2, op.__name__)
+        return cudf.Decimal64Dtype(exp_precision, exp_scale)
+
+    # integer dtype -> digits in max integer
+    int_lengths = {
+        np.dtype("int8"): 3,
+        np.dtype("int16"): 5,
+        np.dtype("int32"): 10,
+        np.dtype("uint8"): 3,
+        np.dtype("uint16"): 5,
+        np.dtype("uint32"): 10,
+    }
+
+    test_cases = []
+
+    # Basic integer tests
+    ldata = ["1", "2", "3"]
+    rdata = ["1", "2", "3"]
+
+    for rdtype in int_lengths:
+        # result from implicit conversion to decimal
+        p1, s1 = 1, 0
+        p2, s2 = int_lengths[rdtype], 0
+        ldtype = cudf.Decimal64Dtype(p1, s1)
+
+        # add cases
+        op = operator.add
+        expect_dtype = make_expect_dtype(p1, s1, p2, s2, op)
+        expect = ["2", "4", "6"]
+        test_cases.append(
+            (ldata, rdata, ldtype, rdtype, op, expect, expect_dtype)
+        )
+
+        # mul cases
+        op = operator.mul
+        expect_dtype = make_expect_dtype(p1, s1, p2, s2, op)
+        expect = ["1", "4", "9"]
+        test_cases.append(
+            (ldata, rdata, ldtype, rdtype, op, expect, expect_dtype)
+        )
+
+        # sub cases
+        op = operator.sub
+        expect_dtype = make_expect_dtype(p1, s1, p2, s2, op)
+        expect = ["0", "0", "0"]
+        test_cases.append(
+            (ldata, rdata, ldtype, rdtype, op, expect, expect_dtype)
+        )
+
+    # extra scale
+    ldata = ["1.1", "2.1", "3.1"]
+    rdata = ["1", "2", "3"]  # same as above
+
+    for rdtype in int_lengths:
+        # result from implicit conversion to decimal
+        p1, s1 = 2, 1
+        p2, s2 = int_lengths[rdtype], 0
+        ldtype = cudf.Decimal64Dtype(p1, s1)
+
+        # add cases
+        op = operator.add
+        expect_dtype = make_expect_dtype(p1, s1, p2, s2, op)
+        expect = ["2.1", "4.1", "6.1"]
+        test_cases.append(
+            (ldata, rdata, ldtype, rdtype, op, expect, expect_dtype)
+        )
+
+        # mul cases
+        op = operator.mul
+        expect_dtype = make_expect_dtype(p1, s1, p2, s2, op)
+        expect = ["1.1", "4.2", "9.3"]
+        test_cases.append(
+            (ldata, rdata, ldtype, rdtype, op, expect, expect_dtype)
+        )
+
+        # sub cases
+        op = operator.sub
+        expect_dtype = make_expect_dtype(p1, s1, p2, s2, op)
+        expect = ["0.1", "0.1", "0.1"]
+        test_cases.append(
+            (ldata, rdata, ldtype, rdtype, op, expect, expect_dtype)
+        )
+
+    # invalid integer dtypes
+    ldata = ["1", "2", "3"]
+    rdata = ["1", "2", "3"]
+    ldtype = cudf.Decimal64Dtype(1, 0)
+    for rdtype in {np.dtype("int64"), np.dtype("uint64")}:
+        for op in (operator.add, operator.sub, operator.mul):
+            error = TypeError
+            test_cases.append((ldata, rdata, ldtype, rdtype, op, error, None))
+
+    return test_cases
+
+
+@pytest.mark.parametrize(
+    "ldata,rdata,ldtype,rdtype,op,expect,expect_dtype",
+    generate_test_binops_decimal_integer_column_test_cases(),
+)
+def test_binops_decimal_integer_column(
+    ldata, rdata, ldtype, rdtype, op, expect, expect_dtype
+):
+
+    lhs = _decimal_series(ldata, ldtype)
+    rhs = cudf.core.column.as_column(rdata, dtype=rdtype)
+
+    if expect == TypeError:
+        with pytest.raises(expect):
+            op(lhs, rhs)
+
+    else:
+        expect = _decimal_series(expect, dtype=expect_dtype)
+        got = op(lhs, rhs)
+        utils.assert_eq(expect, got)
+
+
 @pytest.mark.parametrize(
     "args",
     [

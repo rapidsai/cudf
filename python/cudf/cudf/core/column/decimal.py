@@ -62,7 +62,46 @@ class DecimalColumn(ColumnBase):
             buffers=[mask_buf, data_buf],
         )
 
+    def _from_integer_column(
+        self, other: "cudf.core.column.NumericalColumn"
+    ) -> "cudf.core.column.DecimalColumn":
+        """
+        Cast a NumericalColumn to a Decimal64Dtype that can be
+        used in a binary op. The scale will always be zero due
+        to integers by definition not having any digits to the
+        right of the decimal point, and the precision will be
+        based off the numerical limits of the dtype. Thus:
+
+        uint8  -> Decimal64Dtype(3, 1)  ✓
+        uint16 -> Decimal64Dtype(5, 1)  ✓
+        uint32 -> Decimal64Dtype(10, 1) ✓
+        uint64 -> Decimal64Dtype(20, 1) x
+        int8   -> Decimal64Dtype(3, 1)  ✓
+        int16  -> Decimal64Dtype(5, 1)  ✓
+        int32  -> Decimal64Dtype(10, 1) ✓
+        int64  -> Decimal64Dtype(19, 1) x
+
+        """
+        if other.dtype.kind not in "ui":
+            raise TypeError("`other` must be of integral dtype.")
+
+        if other.dtype in {np.dtype("int64"), np.dtype("uint64")}:
+            raise TypeError(
+                f"Can not implicitly cast integer column of "
+                f"dtype {other.dtype} to Decimal64Dtype, as "
+                f"integers could contain more than 18 digits"
+            )
+        dtype = cudf.Decimal64Dtype._from_decimal(
+            Decimal(np.iinfo(other.dtype).max)
+        )
+        return other.astype(dtype)
+
     def binary_operator(self, op, other, reflect=False):
+        if (
+            isinstance(other, cudf.core.column.NumericalColumn)
+            and other.dtype.kind in "ui"
+        ):
+            other = self._from_integer_column(other)
         if reflect:
             self, other = other, self
 
@@ -74,8 +113,9 @@ class DecimalColumn(ColumnBase):
                 scale=scale, precision=Decimal64Dtype.MAX_PRECISION
             )  # precision will be ignored, libcudf has no notion of precision
             result = libcudf.binaryop.binaryop(self, other, op, output_type)
-            result.dtype.precision = _binop_precision(
-                self.dtype, other.dtype, op
+            result_precision = _binop_precision(self.dtype, other.dtype, op)
+            result.dtype.precision = min(
+                result_precision, Decimal64Dtype.MAX_PRECISION
             )
         elif op in ("eq", "lt", "gt", "le", "ge"):
             if not isinstance(
