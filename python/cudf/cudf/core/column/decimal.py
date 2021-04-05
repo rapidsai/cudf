@@ -94,7 +94,7 @@ class DecimalColumn(ColumnBase):
         dtype = cudf.Decimal64Dtype._from_decimal(
             Decimal(np.iinfo(other.dtype).max)
         )
-        return other.astype(dtype)
+        return other.as_decimal_column(dtype)
 
     def binary_operator(self, op, other, reflect=False):
         if (
@@ -113,7 +113,9 @@ class DecimalColumn(ColumnBase):
                 scale=scale, precision=Decimal64Dtype.MAX_PRECISION
             )  # precision will be ignored, libcudf has no notion of precision
             result = libcudf.binaryop.binaryop(self, other, op, output_type)
-            result.dtype.precision = _binop_precision(self.dtype, other.dtype, op)
+            result.dtype.precision = _binop_precision(
+                self.dtype, other.dtype, op
+            )
         elif op in ("eq", "lt", "gt", "le", "ge"):
             if not isinstance(
                 other,
