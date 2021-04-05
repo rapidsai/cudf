@@ -233,6 +233,8 @@ def concat(objs, axis=0, join="outer", ignore_index=False, sort=None):
             if axis == 0:
                 return result.sort_index()
             elif not result.columns.is_monotonic:
+                # TODO: The below TODO should be addressable now, need to
+                # determine how to sort the columns.
                 # TODO: Sorting by columns can be done
                 # once the following issue is fixed:
                 # https://github.com/rapidsai/cudf/issues/6821
@@ -249,6 +251,7 @@ def concat(objs, axis=0, join="outer", ignore_index=False, sort=None):
     for o in objs:
         if isinstance(o, cudf.MultiIndex):
             typs.add(cudf.MultiIndex)
+        # TODO: Why is this not an isinstance check?
         if issubclass(type(o), cudf.Index):
             typs.add(type(o))
         elif isinstance(o, cudf.DataFrame):
@@ -260,13 +263,11 @@ def concat(objs, axis=0, join="outer", ignore_index=False, sort=None):
 
     allowed_typs = {cudf.Series, cudf.DataFrame}
 
-    param_axis = _axis_map.get(axis, None)
-    if param_axis is None:
+    axis = _axis_map.get(axis, None)
+    if axis is None:
         raise ValueError(
-            f'`axis` must be 0 / "index" or 1 / "columns", got: {param_axis}'
+            f'`axis` must be 0 / "index" or 1 / "columns", got: {axis}'
         )
-    else:
-        axis = param_axis
 
     # when axis is 1 (column) we can concat with Series and Dataframes
     if axis == 1:
@@ -279,8 +280,10 @@ def concat(objs, axis=0, join="outer", ignore_index=False, sort=None):
 
         old_objs = objs
         objs = [obj for obj in objs if obj.shape != (0, 0)]
+
         if len(objs) == 0:
             return df
+
         empty_inner = False
         if join == "inner":
             # don't filter out empty df's
@@ -301,20 +304,24 @@ def concat(objs, axis=0, join="outer", ignore_index=False, sort=None):
                     )
                 df[col] = o._data[col]
 
-        result_columns = objs[0].columns
-        for o in objs[1:]:
-            result_columns = result_columns.append(o.columns)
+        # result_columns = [obj.columns for obj in objs]
+        result_columns = objs[0].columns.append(
+            [obj.columns for obj in objs[1:]])
+
         if ignore_index:
             # with ignore_index the column names change to numbers
             df.columns = pd.RangeIndex(len(result_columns.unique()))
         else:
             df.columns = result_columns.unique()
+
         if empty_inner:
             # if join is inner and it contains an empty df
             # we return an empty df
             return df.head(0)
+
         if not match_index and sort is not False:
             return df.sort_index()
+
         if sort or join == "inner":
             # when join='outer' and sort=False string indexes
             # are returned unsorted. Everything else seems
