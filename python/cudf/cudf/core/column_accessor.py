@@ -58,10 +58,10 @@ def _to_flat_dict_inner(d, parents=()):
     for k, v in d.items():
         if not isinstance(v, d.__class__):
             if parents:
-                k = parents + (k, )
+                k = parents + (k,)
             yield (k, v)
         else:
-            yield from _to_flat_dict_inner(d=v, parents=parents + (k, ))
+            yield from _to_flat_dict_inner(d=v, parents=parents + (k,))
 
 
 def _to_flat_dict(d):
@@ -394,9 +394,7 @@ class ColumnAccessor(MutableMapping):
         if self.multiindex:
             data = _to_flat_dict(data)
         return self.__class__(
-            data,
-            multiindex=self.multiindex,
-            level_names=self.level_names,
+            data, multiindex=self.multiindex, level_names=self.level_names,
         )
 
     def _select_by_label_grouped(self, key: Any) -> ColumnAccessor:

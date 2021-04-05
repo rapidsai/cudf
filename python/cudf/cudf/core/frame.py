@@ -3257,15 +3257,18 @@ class Frame(libcudf.table.Table):
 
         index = index if index is not None else df.index
         names = columns if columns is not None else list(df.columns)
-        cols = {name: (df._data[name].copy(deep=deep)
-                       if name in df._data
-                       else column_empty(
-                           dtype=dtypes.get(name, np.float64),
-                           masked=True,
-                           row_count=len(index)
-                       ))
-                for name in names
-                }
+        cols = {
+            name: (
+                df._data[name].copy(deep=deep)
+                if name in df._data
+                else column_empty(
+                    dtype=dtypes.get(name, np.float64),
+                    masked=True,
+                    row_count=len(index),
+                )
+            )
+            for name in names
+        }
 
         result = self.__class__._from_table(
             Frame(

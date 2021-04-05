@@ -527,8 +527,10 @@ def melt(
     mdata = {col: _tile(frame[col], K) for col in id_vars}
 
     # Step 2: add variable
-    var_cols = [cudf.Series(cudf.core.column.full(N, i, dtype=np.int8))
-                for i in range(len(value_vars))]
+    var_cols = [
+        cudf.Series(cudf.core.column.full(N, i, dtype=np.int8))
+        for i in range(len(value_vars))
+    ]
     temp = cudf.Series._concat(objs=var_cols, index=None)
 
     if not var_name:
