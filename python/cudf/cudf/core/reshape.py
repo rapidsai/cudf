@@ -282,17 +282,16 @@ def concat(objs, axis=0, join="outer", ignore_index=False, sort=None):
 
         objs, match_index = _align_objs(objs, how=join)
 
-        for idx, o in enumerate(objs):
-            if idx == 0:
-                df.index = o.index
-            for col in o._data.names:
-                if col in df._data:
+        df.index = objs[0].index
+        for o in objs:
+            for name, col in o._data.items():
+                if name in df._data:
                     raise NotImplementedError(
-                        f"A Column with duplicate name found: {col}, cuDF "
+                        f"A Column with duplicate name found: {name}, cuDF "
                         f"doesn't support having multiple columns with "
                         f"same names yet."
                     )
-                df[col] = o._data[col]
+                df[name] = col
 
         result_columns = objs[0].columns.append(
             [obj.columns for obj in objs[1:]])
@@ -345,15 +344,12 @@ def concat(objs, axis=0, join="outer", ignore_index=False, sort=None):
             # objs are empty dataframes.
             return cudf.DataFrame()
         elif len(objs) == 1:
-            if join == "inner":
-                data = None
-            else:
-                data = objs[0]._data.copy(deep=True)
+            obj = objs[0]
             result = cudf.DataFrame(
-                data=data,
-                index=cudf.RangeIndex(len(objs[0]))
+                data=None if join == "inner" else obj._data.copy(deep=True),
+                index=cudf.RangeIndex(len(obj))
                 if ignore_index
-                else objs[0].index.copy(deep=True),
+                else obj.index.copy(deep=True),
             )
             return result
         else:
