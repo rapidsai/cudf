@@ -308,6 +308,10 @@ def concat(objs, axis=0, join="outer", ignore_index=False, sort=None):
             # we return an empty df
             return df.head(0)
 
+        # This check uses `sort is not False` rather than just `sort=True`
+        # to differentiate between a user-provided `False` value and the
+        # default `None`. This is necessary for pandas compatibility, even
+        # though `True` and `False` are the only valid options from the user.
         if not match_index and sort is not False:
             return df.sort_index()
 
@@ -361,7 +365,8 @@ def concat(objs, axis=0, join="outer", ignore_index=False, sort=None):
                 axis=axis,
                 join=join,
                 ignore_index=ignore_index,
-                sort=sort,
+                # Explicitly cast rather than relying on None being falsy.
+                sort=bool(sort),
             )
         return result
 
