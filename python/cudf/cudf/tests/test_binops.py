@@ -2194,7 +2194,6 @@ def test_binops_decimal_integer_column(
     if expect == TypeError:
         with pytest.raises(expect):
             op(lhs, rhs)
-
     else:
         expect = _decimal_series(expect, dtype=expect_dtype)
         got = op(lhs, rhs)
